@@ -37,8 +37,8 @@ class RepRap
   public:
       
     RepRap();
-    init();
-    spin();
+    void init();
+    void spin();
     
   private:
   

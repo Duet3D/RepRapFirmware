@@ -37,7 +37,7 @@ class Heat
   public:
   
     Heat();
-    ControlHeaters();
+    void ControlHeaters();
     
   private:
   

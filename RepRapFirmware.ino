@@ -22,7 +22,7 @@ General design principles:
   * Don't abhor floats - they work fast enough if you're clever,
   * Don't avoid arrays and structs/classes,
   * Don't avoid pointers,
-  * Use operator and function overloading where appropriate, particulary for vector algebra.
+  * Use operator and function overloading where appropriate, particularly for vector algebra.
 
 -----------------------------------------------------------------------------------------------------
 
@@ -41,6 +41,16 @@ Licence: GPL
 #include "RepRapFirmware.h"
 
 RepRap* reprap;
+
+void RepRap::init()
+{
+  
+}
+
+void RepRap::spin()
+{
+  
+}
 
 
   

@@ -119,12 +119,12 @@ class Platform
   
   // Communications and data storage; opening something unsupported returns -1.
   
-  char* FileList() // Returns a comma-separated?? list of all the files on local storage (for example on an SD card).
-  int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
+  char* FileList(); // Returns a comma-separated?? list of all the files on local storage (for example on an SD card).
+  int OpenFile(char* fileName, bool write); // Open a local file (for example on an SD card).
   int OpenHost();           // Open a pseudofile that gives read/write communications to the host computer.
   int OpenMessage();        // Open a pseudofile that writes to the message system.  Messages may simply flash an LED, or, 
                             // say, display the messages on an LCD. This may also transmit the messages to the host. 
-  int OpenStore(boolean write); // Non-volatile non-removable storage such as EEPROM.
+  int OpenStore(bool write); // Non-volatile non-removable storage such as EEPROM.
   void Read(int file, char* string);     // Read printable characters from a file into the string up to the next \n or \r, 
                                          // which are not returned.  Return string[0] == 0 if there's nothing there.
   void Write(int file, char* string);  // Write the 0-terminated string to a file.  End the string with \n or \r if you want them.
@@ -132,7 +132,7 @@ class Platform
   
   // Movement
   
-  void setDirection(int drive, boolean forwards);
+  void setDirection(int drive, bool forwards);
   void step(int drive);
   void disable(int drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void home(int axis);
@@ -146,14 +146,14 @@ class Platform
   
   private:
   
-
+/*
   
   int8_t stepPins[DRIVES] = STEP_PINS;
   int8_t directionPins[DRIVES] = DIRECTION_PINS;
 #define ENABLE_PINS {9, 10,11,12}
 #define LOW_STOP_PINS {13, 14, 15, 16}
 #define HIGH_STOP_PINS {17, 18, 19, 20}
-  
+ */ 
 };
 
 extern "C" 
