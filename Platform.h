@@ -1,6 +1,6 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Mendel with Melzi controller; Arduino/Sanguino toolchain
+RepRapFirmware - Platform: RepRapPro Mendel with Prototype Arduino Due controller
 
 Platform contains all the code and definitons to deal with machine-dependent things such as control 
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
@@ -51,9 +51,9 @@ Licence: GPL
 
 // DRIVES
 
-#define STEP_PINS {1, 2, 3, 4}
-#define DIRECTION_PINS {5, 6, 7, 8}
-#define ENABLE_PINS {9, 10, 11, 12}
+#define STEP_PINS {54, 60, 46, 26}
+#define DIRECTION_PINS {55, 61, 48, 28}
+#define ENABLE_PINS {38, 38, 62, 38}
 #define ENABLE_ON {0, 0, 0, 0} // For inverting stepper enable pins (active low) use 0, non inverting (active high) use 1.
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
@@ -64,20 +64,20 @@ Licence: GPL
 
 // AXES
 
-#define LOW_STOP_PINS {13, 14, 15}
-#define HIGH_STOP_PINS {16, 17, 18}
+#define LOW_STOP_PINS {3, 14, 17}
+#define HIGH_STOP_PINS {-1, -1, -1}
 #define ENDSTOPS_INVERTING {false, false, false} // set to true to invert the logic of the endstops; assumes LOW and HIGH behave the same 
-#define AXIS_LENGTHS {210, 210, 140} // mm
+#define AXIS_LENGTHS {210, 210, 120} // mm
 #define FAST_HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
 
 #define X_AXIS 0  // The index of the X axis
 #define Y_AXIS 1  // The index of the Y axis
 #define Z_AXIS 2  // The index of the Z axis
 
-// HEATERS
+// HEATERS - Bed is assumed to be the first
 
-#define TEMP_SENSE_PINS {21, 22}
-#define HEAT_ON_PINS {23, 24}
+#define TEMP_SENSE_PINS {10, 9}  // Analogue numbering
+#define HEAT_ON_PINS {8, 9}
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {4700, 4700} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
@@ -97,9 +97,9 @@ Licence: GPL
 
 // Miscellaneous...
 
-#define LED_PIN 0 // Indicator LED
+#define LED_PIN 13 // Indicator LED
 
-#define BAUD_RATE 250000 // Communication speed of the USB if needed.
+#define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
 /****************************************************************************************************/
 
@@ -125,9 +125,9 @@ class Platform
   int OpenMessage();        // Open a pseudofile that writes to the message system.  Messages may simply flash an LED, or, 
                             // say, display the messages on an LCD. This may also transmit the messages to the host. 
   int OpenStore(bool write); // Non-volatile non-removable storage such as EEPROM.
-  void Read(int file, char* string);     // Read printable characters from a file into the string up to the next \n or \r, 
-                                         // which are not returned.  Return string[0] == 0 if there's nothing there.
-  void Write(int file, char* string);  // Write the 0-terminated string to a file.  End the string with \n or \r if you want them.
+  bool Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
+                                             // returned value is false for EoF, true otherwise
+  void Write(int file, char b);  // Write the byte b to a file.
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
   
   // Movement
@@ -146,15 +146,9 @@ class Platform
   
   private:
   
-/*
-  
-  int8_t stepPins[DRIVES] = STEP_PINS;
-  int8_t directionPins[DRIVES] = DIRECTION_PINS;
-#define ENABLE_PINS {9, 10,11,12}
-#define LOW_STOP_PINS {13, 14, 15, 16}
-#define HIGH_STOP_PINS {17, 18, 19, 20}
- */ 
 };
+
+
 
 extern "C" 
 {

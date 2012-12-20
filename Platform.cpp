@@ -1,6 +1,6 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Mendel with Melzi controller; Arduino/Sanguino toolchain
+RepRapFirmware - Platform: RepRapPro Mendel with Prototype Arduino Due controller
 
 Platform contains all the code and definitons to deal with machine-dependent things such as control 
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
@@ -20,6 +20,21 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
+
+Platform::Platform()
+{
+  
+}
+
+void Platform::setDirection(int drive, bool forwards)
+{
+  
+}
+
+void Platform::step(int drive)
+{
+  
+}
 
 extern "C" 
 {

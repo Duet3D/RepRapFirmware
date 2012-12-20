@@ -40,16 +40,26 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-RepRap* reprap;
 
-void RepRap::init()
+
+RepRap* reprap = new RepRap();
+Platform* p;
+
+RepRap::RepRap()
 {
   
 }
 
+void RepRap::init()
+{
+  p = new Platform();
+  p->setDirection(X_AXIS, true);
+}
+
 void RepRap::spin()
 {
-  
+  p->step(X_AXIS);
+  delay(5);
 }
 
 
