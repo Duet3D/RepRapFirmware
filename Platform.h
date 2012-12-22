@@ -38,6 +38,10 @@ Licence: GPL
 
 #include <stdio.h>
 
+// Platform specific includes
+
+#include <Arduino.h>
+
 /**************************************************************************************************/
 
 // The physical capabilities of the machine
@@ -53,6 +57,8 @@ Licence: GPL
 
 #define STEP_PINS {54, 60, 46, 26}
 #define DIRECTION_PINS {55, 61, 48, 28}
+#define FORWARDS 1
+#define BACKWARDS 0
 #define ENABLE_PINS {38, 38, 62, 38}
 #define ENABLE_ON {0, 0, 0, 0} // For inverting stepper enable pins (active low) use 0, non inverting (active high) use 1.
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
@@ -116,6 +122,11 @@ class Platform
   void init(); // Set the machine up after a restart.  If called subsequently this should set the machine up as if
                // it has just been restarted; it can do this by executing an actual restart if you like, but beware the 
                // loop of death...
+  void spin(); // This gets called in the main loop and should do any housekeeping needed
+  
+  // Timing
+  
+  unsigned long time(); // Returns elapsed microseconds since some arbitrary time
   
   // Communications and data storage; opening something unsupported returns -1.
   
@@ -132,28 +143,57 @@ class Platform
   
   // Movement
   
-  void setDirection(int drive, bool forwards);
-  void step(int drive);
-  void disable(int drive); // There is no drive enable; drives get enabled automatically the first time they are used.
-  void home(int axis);
+  void setDirection(uint8_t drive, bool direction);
+  void step(uint8_t drive);
+  void disable(uint8_t drive); // There is no drive enable; drives get enabled automatically the first time they are used.
+  void home(uint8_t axis);
   
   // Heat and temperature
   
-  float getTemperature(int heater);
-  void setTemperature(int heater, float temperature);
+  float getTemperature(uint8_t heater);
+  void setTemperature(uint8_t heater, float temperature);
 
 //-------------------------------------------------------------------------------------------------------
   
   private:
   
+  // Load settings from local storage
+  
+  bool loadFromStore();
+  
+  int8_t stepPins[DRIVES];
+  int8_t directionPins[DRIVES];
+  int8_t enablePins[DRIVES];
+  int8_t enableOn[DRIVES];
+  bool disableDrives[DRIVES];
+  float maxFeedrates[DRIVES];  
+  float maxAccelerations[DRIVES];
+  float driveStepsPerUnit[DRIVES];
+  float jerks[DRIVES];
+  bool driveRelativeModes[DRIVES];
+
+// AXES
+
+  int8_t lowStopPins[AXES];
+  int8_t highStopPins[AXES];
+  bool endstopsInverting[AXES];
+  float axisLengths[AXES];
+  float fastHomeFeedrates[AXES];
+
+// HEATERS - Bed is assumed to be the first
+
+  int8_t tempSensePins[HEATERS];
+  int8_t heatOnPins[HEATERS];
+  float thermistorBetas[HEATERS];
+  float thermistorSeriesRs[HEATERS];
+  float thermistor25Rs[HEATERS];
+  bool usePid[HEATERS];
+  float pidKis[HEATERS];
+  float pidKds[HEATERS];
+  float pidKps[HEATERS];
+  float pidILimits[HEATERS];
+  
 };
 
-
-
-extern "C" 
-{
-  void setup(void);
-  void loop(void);
-}
 
 #endif

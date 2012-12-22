@@ -40,26 +40,25 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+// We just need one instance of RepRap; everything else is contaied within it and hidden
 
+RepRap reprap;
 
-RepRap* reprap = new RepRap();
-Platform* p;
+//*************************************************************************************************
 
-RepRap::RepRap()
-{
-  
-}
 
 void RepRap::init()
 {
-  p = new Platform();
-  p->setDirection(X_AXIS, true);
+  platform = new Platform();
+  move = new Move(platform);
+  heat = new Heat(platform);
 }
 
 void RepRap::spin()
 {
-  p->step(X_AXIS);
-  delay(5);
+  platform->spin();
+  move->spin();
+  heat->spin();
 }
 
 

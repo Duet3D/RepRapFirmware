@@ -36,10 +36,13 @@ class Heat
     
   public:
   
-    Heat();
-    void ControlHeaters();
+    Heat(Platform* p);
+    void spin();
     
   private:
+  
+  Platform* platform;
+  unsigned long time;
   
 };
 

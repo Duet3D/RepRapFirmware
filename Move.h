@@ -25,9 +25,13 @@ class Move
 {   
   public:
   
-    Move();
+    Move(Platform* p);
+    void spin();
     
   private:
+  
+    Platform* platform;
+    unsigned long time;
   
 };
 

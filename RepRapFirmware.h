@@ -45,10 +45,12 @@ class RepRap
     Platform* platform;
     Move* move;
     Heat* heat;
-    
-
 };
 
-extern RepRap* reprap;
+// Do nothing in the constructor; put what you want in RepRap:init()
+
+inline RepRap::RepRap() {}
+
+extern RepRap reprap;
 
 #endif

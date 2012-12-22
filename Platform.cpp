@@ -21,36 +21,124 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+// Arduino initialise and loop functions
+// Put nothing in these other than calls to the RepRap equivalents
+
+void setup()
+{
+  reprap.init();  
+}
+  
+void loop()
+{
+  reprap.spin();
+}
+
+//*************************************************************************************************
+
 Platform::Platform()
 {
+  Serial.begin(9600);
+  Serial.println("Platform constructor");
   
-}
+  if(loadFromStore())
+    return;
+  
+  uint8_t i;
+ 
+// DRIVES
 
-void Platform::setDirection(int drive, bool forwards)
-{
+  stepPins = STEP_PINS;
+  directionPins = DIRECTION_PINS;
+  enablePins = ENABLE_PINS;
+  enableOn = ENABLE_ON;
+  disableDrives = DISABLE_DRIVES;
+  maxFeedrates = MAX_FEEDRATES;
+  maxAccelerations = MAX_ACCELERATIONS;
+  driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
+  jerks = JERKS;
+  driveRelativeModes = DRIVE_RELATIVE_MODES;
   
-}
-
-void Platform::step(int drive)
-{
-  
-}
-
-extern "C" 
-{
-  // Don't put anything else in here; put it in
-  // the Platform constructor (m/c dependent), reprap->init() (m/c independent);
-  // or reprap->spin() and the other functions it calls.
-  
-  void setup()
+  for(i = 0; i < DRIVES; i++)
   {
-    reprap->init();  
+    if(stepPins[i] >= 0)
+      pinMode(stepPins[i], OUTPUT);
+    if(directionPins[i] >= 0)  
+      pinMode(directionPins[i], OUTPUT);
+    if(enablePins[i] >= 0)  
+      pinMode(enablePins[i], OUTPUT);
   }
-  
-  void loop()
+
+// AXES
+
+  lowStopPins = LOW_STOP_PINS;
+  highStopPins = HIGH_STOP_PINS;
+  endstopsInverting = ENDSTOPS_INVERTING;
+  axisLengths = AXIS_LENGTHS;
+  fastHomeFeedrates = FAST_HOME_FEEDRATES;
+
+  for(i = 0; i < AXES; i++)
   {
-    reprap->spin();
-  }
+    if(lowStopPins[i] >= 0)
+    {
+      pinMode(lowStopPins[i], INPUT);
+      digitalWrite(lowStopPins[i], HIGH); // Turn on pullup
+    }
+    if(highStopPins[i] >= 0)
+    {
+      pinMode(highStopPins[i], INPUT);
+      digitalWrite(highStopPins[i], HIGH); // Turn on pullup
+    }
+  }  
+  
+// HEATERS - Bed is assumed to be the first
+
+  tempSensePins = TEMP_SENSE_PINS;
+  heatOnPins = HEAT_ON_PINS;
+  thermistorBetas = THERMISTOR_BETAS;
+  thermistorSeriesRs = THERMISTOR_SERIES_RS;
+  thermistor25Rs = THERMISTOR_25_RS;
+  usePid = USE_PID;
+  pidKis = PID_KIS;
+  pidKds = PID_KDS;
+  pidKps = PID_KPS;
+  pidILimits = PID_I_LIMITS;
+  
+  for(i = 0; i < HEATERS; i++)
+  {
+    if(tempSensePins[i] >= 0)
+      pinMode(tempSensePins[i], INPUT);
+    if(heatOnPins[i] >= 0)
+      pinMode(heatOnPins[i], OUTPUT);
+  }    
+
+}
+
+// Load settings from local storage; return true if successful, false otherwise
+
+bool Platform::loadFromStore()
+{
+  return false;
+}
+
+void Platform::spin()
+{
+  
+}
+
+unsigned long Platform::time()
+{
+  return micros();
+}
+
+void Platform::setDirection(uint8_t drive, bool direction)
+{
+  digitalWrite(directionPins[drive], direction);  
+}
+
+void Platform::step(uint8_t drive)
+{
+  digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
 }
 
 

@@ -20,4 +20,14 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+Heat::Heat(Platform* p)
+{
+  Serial.println("Heat constructor"); 
+  platform = p;
+  time = platform->time();
+}
 
+void Heat::spin()
+{
+  
+}
