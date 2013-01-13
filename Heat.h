@@ -42,7 +42,7 @@ class Heat
   private:
   
   Platform* platform;
-  unsigned long time;
+  unsigned long lastTime;
   
 };
 

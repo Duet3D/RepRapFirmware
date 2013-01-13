@@ -49,7 +49,7 @@ RepRap reprap;
 
 void RepRap::init()
 {
-  platform = new Platform();
+  platform = new Platform(this);
   move = new Move(platform);
   heat = new Heat(platform);
 }
@@ -59,6 +59,11 @@ void RepRap::spin()
   platform->spin();
   move->spin();
   heat->spin();
+}
+
+void RepRap::interrupt()
+{
+  
 }
 
 

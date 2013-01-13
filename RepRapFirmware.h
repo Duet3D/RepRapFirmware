@@ -27,10 +27,9 @@ Licence: GPL
 #define DATE "2012-11-18"
 #define LAST_AUTHOR "reprappro.com"
 
-#include "Configuration.h"
-#include "Platform.h"
-#include "Move.h"
-#include "Heat.h"
+class Platform;
+class Move;
+class Heat;
 
 class RepRap
 {    
@@ -39,6 +38,7 @@ class RepRap
     RepRap();
     void init();
     void spin();
+    void interrupt();
     
   private:
   
@@ -46,6 +46,11 @@ class RepRap
     Move* move;
     Heat* heat;
 };
+
+#include "Configuration.h"
+#include "Platform.h"
+#include "Move.h"
+#include "Heat.h"
 
 // Do nothing in the constructor; put what you want in RepRap:init()
 

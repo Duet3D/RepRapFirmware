@@ -24,16 +24,22 @@ Move::Move(Platform* p)
 {
   Serial.println("Move constructor"); 
   platform = p;
-  time = platform->time();
+  lastTime = platform->time();
   platform->setDirection(X_AXIS, FORWARDS);
+  platform->setDirection(Y_AXIS, FORWARDS);
+  platform->setDirection(Z_AXIS, FORWARDS);
+  platform->setDirection(3, FORWARDS);
 }
 
 void Move::spin()
 {
    unsigned long t = platform->time();
-   if(t - time < 3000000)
+   if(t - lastTime < 300)
      return;
-   time = t;
-   Serial.println("tick");
+   lastTime = t;
+   //Serial.println("tick");
    platform->step(X_AXIS);
+   platform->step(Y_AXIS);
+   platform->step(Z_AXIS);
+   platform->step(3);
 }

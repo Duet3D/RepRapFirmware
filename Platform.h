@@ -57,10 +57,11 @@ Licence: GPL
 
 #define STEP_PINS {54, 60, 46, 26}
 #define DIRECTION_PINS {55, 61, 48, 28}
-#define FORWARDS 1
-#define BACKWARDS 0
-#define ENABLE_PINS {38, 38, 62, 38}
-#define ENABLE_ON {0, 0, 0, 0} // For inverting stepper enable pins (active low) use 0, non inverting (active high) use 1.
+#define FORWARDS 1     // What to send to go... 
+#define BACKWARDS 0    // ...in each direction
+#define ENABLE_PINS {38, -1, 62, -1}
+#define ENABLE 0       // What to send to enable... 
+#define DISABELE 1     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
 #define MAX_ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2?? Maximum start speed for accelerated moves.
@@ -72,7 +73,7 @@ Licence: GPL
 
 #define LOW_STOP_PINS {3, 14, 17}
 #define HIGH_STOP_PINS {-1, -1, -1}
-#define ENDSTOPS_INVERTING {false, false, false} // set to true to invert the logic of the endstops; assumes LOW and HIGH behave the same 
+#define ENDSTOPS_INVERTING false // set to true to invert the logic of the endstops (i.e. 0 = hit)
 #define AXIS_LENGTHS {210, 210, 120} // mm
 #define FAST_HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
 
@@ -82,7 +83,7 @@ Licence: GPL
 
 // HEATERS - Bed is assumed to be the first
 
-#define TEMP_SENSE_PINS {10, 9}  // Analogue numbering
+#define TEMP_SENSE_PINS {10, 9}  // Analogue pin numbers
 #define HEAT_ON_PINS {8, 9}
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {4700, 4700} // Ohms in series with the thermistors
@@ -109,11 +110,13 @@ Licence: GPL
 
 /****************************************************************************************************/
 
+class RepRap;
+
 class Platform
 {   
   public:
   
-  Platform();
+  Platform(RepRap* r);
   
 //-------------------------------------------------------------------------------------------------------------
 
@@ -127,6 +130,10 @@ class Platform
   // Timing
   
   unsigned long time(); // Returns elapsed microseconds since some arbitrary time
+  
+  void setInterrupt(long t); // Set a regular interrupt going every t microseconds; if t is -ve turn interrupt off
+  
+  void interrupt(); // The function that the interrupt calls
   
   // Communications and data storage; opening something unsupported returns -1.
   
@@ -161,10 +168,13 @@ class Platform
   
   bool loadFromStore();
   
+  RepRap* reprap;
+  
+// DIRIVES
+
   int8_t stepPins[DRIVES];
   int8_t directionPins[DRIVES];
   int8_t enablePins[DRIVES];
-  int8_t enableOn[DRIVES];
   bool disableDrives[DRIVES];
   float maxFeedrates[DRIVES];  
   float maxAccelerations[DRIVES];
@@ -176,7 +186,6 @@ class Platform
 
   int8_t lowStopPins[AXES];
   int8_t highStopPins[AXES];
-  bool endstopsInverting[AXES];
   float axisLengths[AXES];
   float fastHomeFeedrates[AXES];
 
@@ -195,5 +204,35 @@ class Platform
   
 };
 
+inline unsigned long Platform::time()
+{
+  return micros();
+}
+
+inline void Platform::spin()
+{
+  
+}
+
+inline void Platform::setInterrupt(long t)
+{
+  
+}
+
+inline void Platform::interrupt()
+{
+  reprap->interrupt();  // Put nothing else in here
+}
+
+
+inline void Platform::setDirection(uint8_t drive, bool direction)
+{
+  digitalWrite(directionPins[drive], direction);  
+}
+
+inline void Platform::step(uint8_t drive)
+{
+  digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
+}
 
 #endif
