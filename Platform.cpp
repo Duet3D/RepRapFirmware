@@ -76,7 +76,7 @@ void Platform::init()
     heatOnPins = HEAT_ON_PINS;
     thermistorBetas = THERMISTOR_BETAS;
     thermistorSeriesRs = THERMISTOR_SERIES_RS;
-    thermistor25Rs = THERMISTOR_25_RS;
+    thermistorInfRs = THERMISTOR_25_RS;
     usePid = USE_PID;
     pidKis = PID_KIS;
     pidKds = PID_KDS;
@@ -114,10 +114,11 @@ void Platform::init()
   
   for(i = 0; i < HEATERS; i++)
   {
-    if(tempSensePins[i] >= 0)
-      pinMode(tempSensePins[i], INPUT);
     if(heatOnPins[i] >= 0)
       pinMode(heatOnPins[i], OUTPUT);
+    Serial.println(thermistorInfRs[i]);
+    thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
+    Serial.println(thermistorInfRs[i]);
   }    
 
 }
@@ -129,6 +130,37 @@ bool Platform::loadFromStore()
   return false;
 }
 
+
+
+// Result is in degrees celsius
+
+float Platform::getTemperature(uint8_t heater)
+{
+  float r = (float)getRawTemperature(heater);
+  //Serial.println(r);
+  return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/(AD_RANGE - r))/thermistorInfRs[heater] );
+}
+
+
+// power is a fraction in [0,1]
+
+void Platform::setHeater(uint8_t heater, const float& power)
+{
+  if(power <= 0)
+  {
+     digitalWrite(heatOnPins[heater], 0);
+     return;
+  }
+  
+  if(power >= 1.0)
+  {
+     digitalWrite(heatOnPins[heater], 1);
+     return;
+  }
+  
+  uint8_t p = (uint8_t)(255.0*power);
+  analogWrite(heatOnPins[heater], p);
+}
 
 
 

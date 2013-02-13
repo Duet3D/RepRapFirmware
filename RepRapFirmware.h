@@ -30,6 +30,8 @@ Licence: GPL
 class Platform;
 class Move;
 class Heat;
+class GCodes;
+class Webserver;
 
 class RepRap
 {    
@@ -45,12 +47,16 @@ class RepRap
     Platform* platform;
     Move* move;
     Heat* heat;
+    GCodes* gcodes;
+    Webserver* webserver;
 };
 
 #include "Configuration.h"
 #include "Platform.h"
 #include "Move.h"
 #include "Heat.h"
+#include "GCodes.h"
+#include "Webserver.h"
 
 // Do nothing in the constructor; put what you want in RepRap:init()
 

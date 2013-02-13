@@ -1,14 +1,15 @@
 /****************************************************************************************************
 
-RepRapFirmware - Heat
+RepRapFirmware - G Codes
 
-This is all the code to deal with heat and temperature.
+This class interprets G Codes from one or more sources, and calls the functions in Move, Heat etc
+that drive the machine to do what the G Codes command.
 
 -----------------------------------------------------------------------------------------------------
 
 Version 0.1
 
-18 November 2012
+13 February 2013
 
 Adrian Bowyer
 RepRap Professional Ltd
@@ -18,35 +19,21 @@ Licence: GPL
 
 ****************************************************************************************************/
 
-#ifndef HEAT_H
-#define HEAT_H
+#ifndef GCODES_H
+#define GCODES_H
 
-class PID
-{
+class GCodes
+{   
   public:
   
-    PID();
-    
-  private:
-  
-};
-
-class Heat
-{
-    
-  public:
-  
-    Heat(Platform* p);
+    GCodes(Platform* p);
     void spin();
     
   private:
   
-  Platform* platform;
-  unsigned long lastTime;
-  float frac;
-  float inc;
+    Platform* platform;
+    unsigned long lastTime;
   
 };
-
 
 #endif

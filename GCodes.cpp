@@ -1,14 +1,15 @@
 /****************************************************************************************************
 
-RepRapFirmware - Heat
+RepRapFirmware - G Codes
 
-This is all the code to deal with heat and temperature.
+This class interprets G Codes from one or more sources, and calls the functions in Move, Heat etc
+that drive the machine to do what the G Codes command.
 
 -----------------------------------------------------------------------------------------------------
 
 Version 0.1
 
-18 November 2012
+13 February 2013
 
 Adrian Bowyer
 RepRap Professional Ltd
@@ -18,35 +19,17 @@ Licence: GPL
 
 ****************************************************************************************************/
 
-#ifndef HEAT_H
-#define HEAT_H
+#include "RepRapFirmware.h"
 
-class PID
+GCodes::GCodes(Platform* p)
 {
-  public:
-  
-    PID();
-    
-  private:
-  
-};
+  Serial.println("GCodes constructor"); 
+  platform = p;
+  lastTime = platform->time();
+}
 
-class Heat
+void GCodes::spin()
 {
-    
-  public:
-  
-    Heat(Platform* p);
-    void spin();
-    
-  private:
-  
-  Platform* platform;
-  unsigned long lastTime;
-  float frac;
-  float inc;
-  
-};
 
+}
 
-#endif

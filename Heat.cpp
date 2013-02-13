@@ -25,9 +25,25 @@ Heat::Heat(Platform* p)
   Serial.println("Heat constructor"); 
   platform = p;
   lastTime = platform->time();
+  frac = 0;
+  inc = 0.01;
 }
 
 void Heat::spin()
 {
-  
+   unsigned long t = platform->time();
+   if(t - lastTime < 3000)
+     return;
+   lastTime = t;
+   if(frac > 1 || frac < 0)
+   {
+     inc = -inc;
+     Serial.print("Temps: ");
+     Serial.print(platform->getTemperature(0));
+     Serial.print(", ");
+     Serial.println(platform->getTemperature(1));
+   }
+   platform->setHeater(0, frac);
+   platform->setHeater(1, 1 - frac);
+   frac += inc;
 }

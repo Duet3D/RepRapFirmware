@@ -41,6 +41,9 @@ Licence: GPL
 // Platform specific includes
 
 #include <Arduino.h>
+#include <SPI.h>
+#include <Ethernet.h>
+#include <SD.h>
 
 /**************************************************************************************************/
 
@@ -95,7 +98,7 @@ Licence: GPL
 #define PID_I_LIMITS {-1, 100} // ... to here
 #define TEMP_INTERVAL 0.5 // secs - check and control temperatures this often
 
-#define AD_RANGE 16383 // The A->D converter that measures temperatures gives an int this big as its max value
+#define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
 #define HOT_BED 0 // The index of the heated bed; set to -1 if there is no heated bed
 
@@ -115,6 +118,8 @@ class RepRap;
 class Platform
 {   
   public:
+  
+  friend class Heat;
   
   Platform(RepRap* r);
   
@@ -157,8 +162,8 @@ class Platform
   
   // Heat and temperature
   
-  float getTemperature(uint8_t heater);
-  void setTemperature(uint8_t heater, float temperature);
+  float getTemperature(uint8_t heater); // Result is in degrees celsius
+  void setHeater(uint8_t heater, const float& power); // power is a fraction in [0,1]
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -167,6 +172,8 @@ class Platform
   // Load settings from local storage
   
   bool loadFromStore();
+  
+  int getRawTemperature(uint8_t heater);
   
   RepRap* reprap;
   
@@ -195,7 +202,7 @@ class Platform
   int8_t heatOnPins[HEATERS];
   float thermistorBetas[HEATERS];
   float thermistorSeriesRs[HEATERS];
-  float thermistor25Rs[HEATERS];
+  float thermistorInfRs[HEATERS];
   bool usePid[HEATERS];
   float pidKis[HEATERS];
   float pidKds[HEATERS];
@@ -233,6 +240,11 @@ inline void Platform::setDirection(uint8_t drive, bool direction)
 inline void Platform::step(uint8_t drive)
 {
   digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
+}
+
+inline int Platform::getRawTemperature(uint8_t heater)
+{
+  return analogRead(tempSensePins[heater]);
 }
 
 #endif
