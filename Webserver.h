@@ -33,8 +33,13 @@ class Webserver
     
   private:
   
+    boolean parseLine();
+  
     Platform* platform;
     unsigned long lastTime;
+    char line[1000];
+    char page[1000];
+    int lp;
   
 };
 

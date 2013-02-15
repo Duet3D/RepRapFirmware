@@ -119,7 +119,42 @@ void Platform::init()
     Serial.println(thermistorInfRs[i]);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
     Serial.println(thermistorInfRs[i]);
-  }    
+  }  
+
+  // Files
+  
+  files = new File[MAX_FILES];
+  inUse = new boolean[MAX_FILES];
+  for(i=0; i < MAX_FILES; i++)
+    inUse[i] = false;
+  
+  // Ethernet
+
+  mac = MAC;
+  ip = new IPAddress(IP0, IP1, IP2, IP3);
+  // Initialize the Ethernet server library
+  // with the IP address and port you want to use 
+  // (port 80 is default for HTTP):
+  server = new EthernetServer(HTTP_PORT);
+  
+  // disable SD SPI while starting w5100
+  // or you will have trouble
+  pinMode(SD_SPI, OUTPUT);
+  digitalWrite(SD_SPI,HIGH);   
+
+  Ethernet.begin(mac, *ip);
+  server.begin();
+  
+  Serial.print("server is at ");
+  Serial.println(Ethernet.localIP());
+  
+  // this corrects a bug in the Ethernet.begin() function
+  // even tho the call to Ethernet.localIP() does the same thing
+  digitalWrite(ETH_B_PIN,HIGH);
+ 
+  if (!SD.begin(SD_SPI)) 
+     Serial.println("SD initialization failed.");
+  // SD.begin() returns with the SPI disabled, so you need not disable it here 
 
 }
 
@@ -163,6 +198,65 @@ void Platform::setHeater(uint8_t heater, const float& power)
 }
 
 
+/*********************************************************************************
+
+  Files
+  
+*/
+
+// Open a local file (for example on an SD card).
+
+int Platform::OpenFile(char* fileName, boolean write)
+{
+  int result = -1;
+  for(int i=0; i < MAX_FILES; i++)
+    if(!inUse[i])
+    {
+      result = i;
+      break;
+    }
+  if(result < 0)
+  {
+      error("Max open file count exceeded.");
+      return -1;    
+  }
+  
+  if(!SD.exists(fileName))
+  {
+    if(!write)
+    {
+      error("File not found for reading");
+      return -1;
+    }
+    files[result] = SD.open(fileName, FILE_WRITE);
+  } else
+  {
+    if(write)
+      files[result] = SD.open(fileName, FILE_WRITE);
+    else
+      files[result] = SD.open(fileName, FILE_READ);
+  }
+
+  inUse[result] = true;
+  return result;
+}
+
+void Platform::Close(int file)
+{
+    files[file].close();
+    inUse[file] = false;
+}
+
+boolean Platform::Read(int file, unsigned char& b)
+{
+  if(!files[file].available())
+    return false;
+  b = (unsigned char) files[file].read();
+  return true;
+}
+
+
+
 
 //===========================================================================
 //=============================Thermal Settings  ============================
@@ -181,3 +275,23 @@ void Platform::setHeater(uint8_t heater, const float& power)
 // and the temperature, T = BETA/ln(R/R_INF)
 // To get degrees celsius (instead of kelvin) add -273.15 to T
 //#define THERMISTOR_R_INFS ( THERMISTOR_25_RS*exp(-THERMISTOR_BETAS/298.15) ) // Compute in Platform constructor
+
+
+/************************************************************************************************
+
+Webserver Platform-specific code
+
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+

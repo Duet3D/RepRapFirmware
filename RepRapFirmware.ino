@@ -38,6 +38,10 @@ Licence: GPL
 
 ****************************************************************************************************/
 
+// If this goes in the right place (Platform.h) the compile fails. Why? - AB
+
+#include <SD.h>
+
 #include "RepRapFirmware.h"
 
 // We just need one instance of RepRap; everything else is contaied within it and hidden

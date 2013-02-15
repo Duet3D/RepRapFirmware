@@ -34,16 +34,19 @@ Licence: GPL
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-// System #includes
+// Language-specific includes
 
 #include <stdio.h>
 
-// Platform specific includes
+// Platform-specific includes
 
 #include <Arduino.h>
-#include <SPI.h>
-#include <Ethernet.h>
-#include <SD.h>
+
+// This is very nasty...
+
+#include <../../../../libraries/SPI/SPI.h>
+#include <../../../../libraries/Ethernet/Ethernet.h>
+//#include <./libraries/SD/SD.h>
 
 /**************************************************************************************************/
 
@@ -102,6 +105,32 @@ Licence: GPL
 
 #define HOT_BED 0 // The index of the heated bed; set to -1 if there is no heated bed
 
+/****************************************************************************************************/
+
+// File handling
+
+#define MAX_FILES 5
+#define SD_SPI 4 //Pin
+
+/****************************************************************************************************/
+
+// Ethernet
+
+// Enter a MAC address and IP address for your controller below.
+// The IP address will be dependent on your local network:
+#define MAC { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+
+#define IP0 192
+#define IP1 168
+#define IP2 1
+#define IP3 9
+
+#define ETH_B_PIN 10
+
+// port 80 is default for HTTP
+  
+#define HTTP_PORT 80
+
 
 /****************************************************************************************************/
 
@@ -143,12 +172,12 @@ class Platform
   // Communications and data storage; opening something unsupported returns -1.
   
   char* FileList(); // Returns a comma-separated?? list of all the files on local storage (for example on an SD card).
-  int OpenFile(char* fileName, bool write); // Open a local file (for example on an SD card).
+  int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
   int OpenHost();           // Open a pseudofile that gives read/write communications to the host computer.
   int OpenMessage();        // Open a pseudofile that writes to the message system.  Messages may simply flash an LED, or, 
                             // say, display the messages on an LCD. This may also transmit the messages to the host. 
   int OpenStore(bool write); // Non-volatile non-removable storage such as EEPROM.
-  bool Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
+  boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
                                              // returned value is false for EoF, true otherwise
   void Write(int file, char b);  // Write the byte b to a file.
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
@@ -208,6 +237,17 @@ class Platform
   float pidKds[HEATERS];
   float pidKps[HEATERS];
   float pidILimits[HEATERS];
+
+// Files
+
+  File files[];
+  boolean inUse[];
+  
+// Ethernet
+
+  byte* mac;
+  IPAddress* ip;
+  EthernetServer* server;
   
 };
 
@@ -228,7 +268,7 @@ inline void Platform::setInterrupt(long t)
 
 inline void Platform::interrupt()
 {
-  reprap->interrupt();  // Put nothing else in here
+  reprap->interrupt();  // Put nothing else in this function
 }
 
 

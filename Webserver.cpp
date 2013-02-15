@@ -28,67 +28,9 @@ Webserver::Webserver(Platform* p)
   Serial.println("Webserver constructor"); 
   platform = p;
   lastTime = platform->time();
-}
-
-void Webserver::spin()
-{
-
-}
-
-
-/*
-
-// Enter a MAC address and IP address for your controller below.
-// The IP address will be dependent on your local network:
-byte mac[] = { 
-  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-IPAddress ip(192,168,1,9);
-
-// Initialize the Ethernet server library
-// with the IP address and port you want to use 
-// (port 80 is default for HTTP):
-EthernetServer server(80);
-
-#define MAX_FILES 5
-
-#define null 0
-
-File files[MAX_FILES];
-bool inUse[MAX_FILES];
-
-char line[1000];
-char page[1000];
-int lp;
-
-void setup() // Thanks to SurferTim: http://arduino.cc/forum/index.php?action=profile;u=49379
-{
+  
   lp = 0;
-  for(int i=0; i < MAX_FILES; i++)
-    inUse[i] = false;
-
-  Serial.begin(9600);
-
-  // disable SD SPI while starting w5100
-  // or you will have trouble
-  pinMode(4, OUTPUT);
-  digitalWrite(4,HIGH);   
-
-  Ethernet.begin(mac, ip);
-  server.begin();
-  
-  Serial.print("server is at ");
-  Serial.println(Ethernet.localIP());
-  
-  // this corrects a bug in the Ethernet.begin() function
-  // even tho the call to Ethernet.localIP() does the same thing
-  digitalWrite(10,HIGH);
- 
-  if (!SD.begin(4)) 
-     Serial.println("SD initialization failed.");
-  // SD.begin() returns with the SPI disabled, so you need not disable it here  
 }
-
-
 
 void error(char* s)
 {
@@ -100,59 +42,9 @@ void comment(char* s)
   Serial.println(s); 
 }
 
-// Open a local file (for example on an SD card).
-
-int OpenFile(char* fileName, bool write)
-{
-  int result = -1;
-  for(int i=0; i < MAX_FILES; i++)
-    if(!inUse[i])
-    {
-      result = i;
-      break;
-    }
-  if(result < 0)
-  {
-      error("Max open file count exceeded.");
-      return -1;    
-  }
-  
-  if(!SD.exists(fileName))
-  {
-    if(!write)
-    {
-      error("File not found for reading");
-      return -1;
-    }
-    files[result] = SD.open(fileName, FILE_WRITE);
-  } else
-  {
-    if(write)
-      files[result] = SD.open(fileName, FILE_WRITE);
-    else
-      files[result] = SD.open(fileName, FILE_READ);
-  }
-
-  inUse[result] = true;
-  return result;
-}
-
-void Close(int file)
-{
-    files[file].close();
-    inUse[file] = false;
-}
-
-bool Read(int file, unsigned char* b)
-{
-  if(!files[file].available())
-    return false;
-  *b = (unsigned char) files[file].read();
-  return true;
-}
 
 
-bool parseLine()
+boolean Webserver::parseLine()
 {
   if(!(line[0] == 'G' && line[1] == 'E' && line[2] == 'T'))
     return false;
@@ -172,10 +64,10 @@ bool parseLine()
 }
 
 
-void loop() 
+void Webserver::spin()
 {
   int htmlFile;
-  bool loadingImage;
+  boolean loadingImage;
   // listen for incoming clients
   EthernetClient client = server.available();
   if (client) 
@@ -239,5 +131,7 @@ void loop()
     Serial.println("client disonnected");
   }
 }
-*/
+
+
+
 
