@@ -42,11 +42,6 @@ Licence: GPL
 
 #include <Arduino.h>
 
-// This is very nasty...
-
-#include <../../../../libraries/SPI/SPI.h>
-#include <../../../../libraries/Ethernet/Ethernet.h>
-//#include <./libraries/SD/SD.h>
 
 /**************************************************************************************************/
 
@@ -109,8 +104,10 @@ Licence: GPL
 
 // File handling
 
-#define MAX_FILES 5
+#define MAX_FILES 7
 #define SD_SPI 4 //Pin
+#define ETHER 0 // Special file
+#define EEPROM 1 // Special file
 
 /****************************************************************************************************/
 
@@ -119,6 +116,7 @@ Licence: GPL
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
 #define MAC { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+#define MAC_BYTES 6
 
 #define IP0 192
 #define IP1 168
@@ -148,9 +146,9 @@ class Platform
 {   
   public:
   
-  friend class Heat;
-  
   Platform(RepRap* r);
+  
+  RepRap* getRepRap();
   
 //-------------------------------------------------------------------------------------------------------------
 
@@ -174,13 +172,17 @@ class Platform
   char* FileList(); // Returns a comma-separated?? list of all the files on local storage (for example on an SD card).
   int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
   int OpenHost();           // Open a pseudofile that gives read/write communications to the host computer.
-  int OpenMessage();        // Open a pseudofile that writes to the message system.  Messages may simply flash an LED, or, 
-                            // say, display the messages on an LCD. This may also transmit the messages to the host. 
+  
   int OpenStore(bool write); // Non-volatile non-removable storage such as EEPROM.
   boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
+  void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
+                            // say, display the messages on an LCD. This may also transmit the messages to the host. 
+  
                                              // returned value is false for EoF, true otherwise
+  void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
+  
   
   // Movement
   
@@ -240,15 +242,20 @@ class Platform
 
 // Files
 
-  File files[];
-  boolean inUse[];
+  File* files;
+  boolean* inUse;
   
 // Ethernet
 
-  byte* mac;
+  byte mac[MAC_BYTES];
   IPAddress* ip;
   EthernetServer* server;
-  
+  EthernetClient client;
+  boolean EtherRead(unsigned char& b);
+
+// EEPROM
+
+  boolean EepromRead(unsigned char& b);
 };
 
 inline unsigned long Platform::time()

@@ -42,6 +42,11 @@ Platform::Platform(RepRap* r)
   init();
 }
 
+RepRap* Platform::getRepRap()
+{
+  return reprap;
+}
+
 void Platform::init()
 { 
   uint8_t i;
@@ -122,12 +127,14 @@ void Platform::init()
   }  
 
   // Files
-  
+ 
   files = new File[MAX_FILES];
   inUse = new boolean[MAX_FILES];
   for(i=0; i < MAX_FILES; i++)
     inUse[i] = false;
-  
+  inUse[ETHER] = true;
+  inUse[EEPROM] = true;
+
   // Ethernet
 
   mac = MAC;
@@ -143,7 +150,7 @@ void Platform::init()
   digitalWrite(SD_SPI,HIGH);   
 
   Ethernet.begin(mac, *ip);
-  server.begin();
+  server->begin();
   
   Serial.print("server is at ");
   Serial.println(Ethernet.localIP());
@@ -158,14 +165,13 @@ void Platform::init()
 
 }
 
+
 // Load settings from local storage; return true if successful, false otherwise
 
 bool Platform::loadFromStore()
 {
   return false;
 }
-
-
 
 // Result is in degrees celsius
 
@@ -204,6 +210,11 @@ void Platform::setHeater(uint8_t heater, const float& power)
   
 */
 
+int Platform::OpenHost()
+{
+  return ETHER;
+}
+
 // Open a local file (for example on an SD card).
 
 int Platform::OpenFile(char* fileName, boolean write)
@@ -217,7 +228,7 @@ int Platform::OpenFile(char* fileName, boolean write)
     }
   if(result < 0)
   {
-      error("Max open file count exceeded.");
+      Message(HOST_MESSAGE, "Max open file count exceeded.");
       return -1;    
   }
   
@@ -225,7 +236,7 @@ int Platform::OpenFile(char* fileName, boolean write)
   {
     if(!write)
     {
-      error("File not found for reading");
+      Message(HOST_MESSAGE, "File not found for reading");
       return -1;
     }
     files[result] = SD.open(fileName, FILE_WRITE);
@@ -243,17 +254,137 @@ int Platform::OpenFile(char* fileName, boolean write)
 
 void Platform::Close(int file)
 {
-    files[file].close();
-    inUse[file] = false;
+  if(file == ETHER)
+  {
+    if(client)
+    {
+      client.stop();
+      client = 0;
+    }
+    // ? inUse[file] = false;
+    return;
+  }
+  
+  if(file == EEPROM)
+  {
+    // ? inUse[file] = false;
+    return;
+  }
+    
+  files[file].close();
+  inUse[file] = false;
+}
+
+boolean Platform::EtherRead(unsigned char& b)
+{
+  if(!client)
+  {
+    client = server->available();
+    if(!client)
+      return false;
+  }
+  if(client.connected())
+  {
+      if (client.available())
+      { 
+        b = client.read();
+        return true;
+      } else
+        return false;
+  }  
+  return false;
+}
+
+boolean Platform::EepromRead(unsigned char& b)
+{
+  return false;
 }
 
 boolean Platform::Read(int file, unsigned char& b)
 {
+  if(!inUse[file])
+  {
+    Message(HOST_MESSAGE, "Attempt to read from a non-open file.");
+    return false;
+  }
+  
+  if(file == ETHER)
+    return EtherRead(b);
+  if(file == EEPROM)
+    return EepromRead(b);
+    
   if(!files[file].available())
     return false;
   b = (unsigned char) files[file].read();
   return true;
 }
+
+void Platform::Write(int file, char b)
+{
+  if(!inUse[file])
+  {
+    Message(HOST_MESSAGE, "Attempt to write to a non-open file.");
+    return;
+  }
+  
+  if(file == ETHER)
+  {
+    client.print(b);
+    return;
+  }
+  
+  if(file == EEPROM)
+  {
+    // Do something here
+    return;
+  }
+    
+  files[file].print(b);
+}
+
+void Platform::WriteString(int file, char* b)
+{
+  if(!inUse[file])
+  {
+    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.");
+    return;
+  }
+  
+  if(file == ETHER)
+  {
+    client.print(b);
+    return;
+  }
+  
+  if(file == EEPROM)
+  {
+    // Do something here
+    return;
+  }
+  
+  files[file].print(b);
+}
+
+
+void Platform::Message(char type, char* message)
+{
+  switch(type)
+  {
+  case FLASH_LED:
+  // Message that is to flash an LED; the next two bytes define 
+  // the frequency and M/S ratio.
+  
+    break;
+  
+  case DISPLAY_MESSAGE:  
+  // Message that is to appear on a local display;  \f and \n should be supported.
+  case HOST_MESSAGE:
+  default:
+    Serial.println(message);
+    
+  }
+}
+
 
 
 

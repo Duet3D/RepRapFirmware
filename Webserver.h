@@ -34,13 +34,22 @@ class Webserver
   private:
   
     boolean parseLine();
-  
+    void Read(unsigned char b);
+    void SendFile();
+    void Write();
+    
     Platform* platform;
     unsigned long lastTime;
+    int client;
+    int htmlFile;
+    boolean writing;
+    boolean loadingImage;
     char line[1000];
     char page[1000];
     int lp;
-  
+    boolean currentLineIsBlank;
+    unsigned long clientCloseTime;
+    boolean needToCloseClient;
 };
 
 #endif

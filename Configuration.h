@@ -25,11 +25,11 @@ Licence: GPL
 
 #define ABS_ZERO -273.15
 
-#define FLASH_LED 'F' // First byte of a message that is to flash an LED; the next two bytes define 
+#define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
                       // the frequency and M/S ratio.
-#define DISPLAY_MESSAGE 'L'  // First byte of a message that is to appear on a local display; the L is 
+#define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
                              // not displayed; \f and \n should be supported.
-#define HOST_MESSAGE 'H' // First byte of a message that is to be sent to the host; the H is not sent.
+#define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
 
 
 #endif

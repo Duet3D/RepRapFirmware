@@ -40,6 +40,8 @@ Licence: GPL
 
 // If this goes in the right place (Platform.h) the compile fails. Why? - AB
 
+#include <SPI.h>
+#include <Ethernet.h>
 #include <SD.h>
 
 #include "RepRapFirmware.h"
@@ -56,6 +58,8 @@ void RepRap::init()
   platform = new Platform(this);
   move = new Move(platform);
   heat = new Heat(platform);
+  gcodes = new GCodes(platform);
+  webserver = new Webserver(platform);
 }
 
 void RepRap::spin()
@@ -63,6 +67,8 @@ void RepRap::spin()
   platform->spin();
   move->spin();
   heat->spin();
+  gcodes->spin();
+  webserver->spin();
 }
 
 void RepRap::interrupt()
