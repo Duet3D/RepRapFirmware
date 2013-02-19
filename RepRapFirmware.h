@@ -40,7 +40,13 @@ class RepRap
     RepRap();
     void init();
     void spin();
+    Platform* getPlatform();
+    Move* getMove();
+    Heat* getHeat();
+    GCodes* getGcodes();
+    Webserver* getWebserver();    
     void interrupt();
+    
     
   private:
   
@@ -61,6 +67,12 @@ class RepRap
 // Do nothing in the constructor; put what you want in RepRap:init()
 
 inline RepRap::RepRap() {}
+
+inline Platform* RepRap::getPlatform() { return platform; }
+inline Move* RepRap::getMove() { return move; }
+inline Heat* RepRap::getHeat() { return heat; }
+inline GCodes* RepRap::getGcodes() { return gcodes; }
+inline Webserver* RepRap::getWebserver() { return webserver; }  
 
 extern RepRap reprap;
 

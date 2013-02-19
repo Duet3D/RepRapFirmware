@@ -28,113 +28,137 @@ Webserver::Webserver(Platform* p)
   Serial.println("Webserver constructor"); 
   platform = p;
   lastTime = platform->time();
-  client = platform->OpenHost();
-  lp = 0;
   writing = false;
-  loadingImage = false;
-  currentLineIsBlank = false;
+  clientLineIsBlank = true;
   needToCloseClient = false;
+  clientLinePointer = 0;
+  clientLine[0] = 0;
+  clientRequest[0] = 0;
 }
 
-
-boolean Webserver::parseLine()
+boolean Webserver::fileHasExtension(char* fileName, char* extension)
 {
-  if(!(line[0] == 'G' && line[1] == 'E' && line[2] == 'T'))
+  int j = strlen(fileName);
+  int k = strlen(extension);
+  if(k > j)
     return false;
-  int i = 5;
-  int j = 0;
-  while(line[i] != ' ')
-  {
-    page[j] = line[i];
-    j++;
-    i++;
-  }
-  page[j] = 0;
-  if(!page[0])
-    strcpy(page, "index.htm");
-  j = strlen(page);
-  return(page[j-3] == 'g' && page[j-2] == 'i' && page[j-1] == 'f');
+  
+  return(!strcmp(&fileName[j - k], extension));
 }
 
-void Webserver::SendFile()
+void Webserver::SendFile(char* nameOfFileToSend)
 {
-    platform->WriteString(client, "HTTP/1.1 200 OK\n");
-    platform->WriteString(client, "Content-Type: text/html\n");
-    platform->WriteString(client, "Connnection: close\n");
+    platform->SendToClient("HTTP/1.1 200 OK\n");
+    if(fileHasExtension(nameOfFileToSend, ".png"))
+      platform->SendToClient("Content-Type: image/png\n");
+    else
+      platform->SendToClient("Content-Type: text/html\n");
+    platform->SendToClient("Connnection: close\n");
 //          if(loadingImage)
 //          {
-//           platform->WriteString(client, "Cache-Control: max-age=3600\n");
+//           platform->SendToHost("Cache-Control: max-age=3600\n");
 //           Serial.println("Image requested");
 //          }
-    platform->Write(client, '\n');
-    htmlFile = platform->OpenFile(page,false);
-    page[0] = 0;
-    lp = 0;    
+    platform->SendToClient('\n');
+    //Serial.print("File requested: ");
+    //Serial.println(nameOfFileToSend);
+    fileBeingSent = platform->OpenFile(nameOfFileToSend, false);
+    if(fileBeingSent < 0)
+        fileBeingSent = platform->OpenFile("html404.htm", false);
     writing = true; 
 }
 
-void Webserver::Write()
+void Webserver::WriteByte()
 {
     unsigned char b;
-    if(platform->Read(htmlFile, b))
-      platform->Write(client, b);
+    if(platform->Read(fileBeingSent, b))
+      platform->SendToClient(b);
     else
     {     
-      platform->Close(htmlFile);    
+      platform->Close(fileBeingSent);    
       writing = false;
-      clientCloseTime = platform->time() + 1000;
-      needToCloseClient = true;
+      clientCloseTime = platform->time();
+      needToCloseClient = true; 
     }  
 }
 
-
-void Webserver::Read(unsigned char b)
-{
-  Serial.write(b);
-  // if you've gotten to the end of the line (received a newline
-  // character) and the line is blank, the http request has ended,
-  // so you can send a reply
-  if (b == '\n' && currentLineIsBlank) 
-    SendFile();
+void Webserver::CheckClientLine()
+{   
+  if(!(clientLine[0] == 'G' && clientLine[1] == 'E' && clientLine[2] == 'T'))
+    return;
     
-  if (b == '\n') 
+  int i = 5;
+  int j = 0;
+  clientRequest[j] = 0;
+  while(clientLine[i] != ' ')
   {
-    line[lp] = 0;
-    if(parseLine())
-      loadingImage = true;
-    // you're starting a new line
-    currentLineIsBlank = true;
-    lp = 0;
-  } else if (b != '\r') 
-  {
-    // you've gotten a character on the current line
-    currentLineIsBlank = false;
-    line[lp]=b;
-    lp++;
-  } 
+    clientRequest[j] = clientLine[i];
+    j++;
+    i++;
+  }
+  clientRequest[j] = 0;
+  if(!clientRequest[0])
+    strcpy(clientRequest, "index.htm");
 }
-
 
 
 void Webserver::spin()
 {
-  unsigned char b; 
-  
-  if(platform->Read(client, b)) 
-    Read(b);
-  
-  if(writing) 
-    Write();
-  
-  if(needToCloseClient)
+  if(writing)
   {
-    if(platform->time() - clientCloseTime > 0)
+    WriteByte();
+    return;         
+  }
+  
+  if(platform->ClientStatus() & CONNECTED)
+  {
+    if (platform->ClientStatus() & AVAILABLE) 
     {
-      platform->Close(client); // NB this stops the connection, but we can still read from client.
-      needToCloseClient = false;
+      char c = platform->ClientRead();
+      //Serial.write(c);
+      // if you've gotten to the end of the line (received a newline
+      // character) and the line is blank, the http request has ended,
+      // so you can send a reply
+      if (c == '\n' && clientLineIsBlank) 
+      {
+        clientLine[clientLinePointer] = 0;
+        clientLinePointer = 0;
+        SendFile(clientRequest);
+        clientRequest[0] = 0;
+        return;
+      }
+      if (c == '\n') 
+      {
+        clientLine[clientLinePointer] = 0;
+        CheckClientLine();
+          // you're starting a new line
+        clientLineIsBlank = true;
+        clientLinePointer = 0;
+      } else if (c != '\r') 
+      {
+        // you've gotten a character on the current line
+        clientLineIsBlank = false;
+        clientLine[clientLinePointer] = c;
+        clientLinePointer++;
+      }
     }
+    //return;
+  }  
+   
+  if (platform->ClientStatus() & CLIENT) 
+  {
+    if(needToCloseClient)
+    {
+      if(platform->time() - clientCloseTime < CLIENT_CLOSE_DELAY)
+        return;
+      needToCloseClient = false;  
+      platform->DisconnectClient();
+    }   
   }
 }
+
+
+
 
 
 

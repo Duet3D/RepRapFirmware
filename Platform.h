@@ -106,12 +106,11 @@ Licence: GPL
 
 #define MAX_FILES 7
 #define SD_SPI 4 //Pin
-#define ETHER 0 // Special file
-#define EEPROM 1 // Special file
+#define EEPROM -2 // Special file
 
 /****************************************************************************************************/
 
-// Ethernet
+// Networking
 
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
@@ -121,13 +120,19 @@ Licence: GPL
 #define IP0 192
 #define IP1 168
 #define IP2 1
-#define IP3 9
+#define IP3 14
 
 #define ETH_B_PIN 10
 
 // port 80 is default for HTTP
   
 #define HTTP_PORT 80
+
+// Connection statuses - ORed
+
+#define CLIENT 1
+#define CONNECTED 2
+#define AVAILABLE 4
 
 
 /****************************************************************************************************/
@@ -171,66 +176,71 @@ class Platform
   
   char* FileList(); // Returns a comma-separated?? list of all the files on local storage (for example on an SD card).
   int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
-  int OpenHost();           // Open a pseudofile that gives read/write communications to the host computer.
-  
   int OpenStore(bool write); // Non-volatile non-removable storage such as EEPROM.
   boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
-  void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
-                            // say, display the messages on an LCD. This may also transmit the messages to the host. 
-  
                                              // returned value is false for EoF, true otherwise
   void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
   
+  unsigned char ClientRead(); // Read a byte from the client
+  void SendToClient(char* message); // Send string to the host
+  void SendToClient(unsigned char b); // Send byte to the host
+  int ClientStatus(); // Check client's status
+  void DisconnectClient(); //Disconnect the client  
+  
+  void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
+                            // say, display the messages on an LCD. This may also transmit the messages to the host. 
   
   // Movement
   
-  void setDirection(uint8_t drive, bool direction);
-  void step(uint8_t drive);
-  void disable(uint8_t drive); // There is no drive enable; drives get enabled automatically the first time they are used.
-  void home(uint8_t axis);
+  void setDirection(byte drive, bool direction);
+  void step(byte drive);
+  void disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
+  void home(byte axis);
   
   // Heat and temperature
   
-  float getTemperature(uint8_t heater); // Result is in degrees celsius
-  void setHeater(uint8_t heater, const float& power); // power is a fraction in [0,1]
+  float getTemperature(byte heater); // Result is in degrees celsius
+  void setHeater(byte heater, const float& power); // power is a fraction in [0,1]
 
 //-------------------------------------------------------------------------------------------------------
   
   private:
   
+  unsigned long lastTime;
+  
   // Load settings from local storage
   
   bool loadFromStore();
   
-  int getRawTemperature(uint8_t heater);
+  int getRawTemperature(byte heater);
   
   RepRap* reprap;
   
-// DIRIVES
+// DRIVES
 
-  int8_t stepPins[DRIVES];
-  int8_t directionPins[DRIVES];
-  int8_t enablePins[DRIVES];
-  bool disableDrives[DRIVES];
+  char stepPins[DRIVES];
+  char directionPins[DRIVES];
+  char enablePins[DRIVES];
+  boolean disableDrives[DRIVES];
   float maxFeedrates[DRIVES];  
   float maxAccelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float jerks[DRIVES];
-  bool driveRelativeModes[DRIVES];
+  boolean driveRelativeModes[DRIVES];
 
 // AXES
 
-  int8_t lowStopPins[AXES];
-  int8_t highStopPins[AXES];
+  char lowStopPins[AXES];
+  char highStopPins[AXES];
   float axisLengths[AXES];
   float fastHomeFeedrates[AXES];
 
 // HEATERS - Bed is assumed to be the first
 
-  int8_t tempSensePins[HEATERS];
-  int8_t heatOnPins[HEATERS];
+  char tempSensePins[HEATERS];
+  char heatOnPins[HEATERS];
   float thermistorBetas[HEATERS];
   float thermistorSeriesRs[HEATERS];
   float thermistorInfRs[HEATERS];
@@ -245,13 +255,15 @@ class Platform
   File* files;
   boolean* inUse;
   
-// Ethernet
+// Network connection
 
+  void ClientMonitor();
+  
   byte mac[MAC_BYTES];
   IPAddress* ip;
   EthernetServer* server;
   EthernetClient client;
-  boolean EtherRead(unsigned char& b);
+  int clientStatus;
 
 // EEPROM
 
@@ -263,10 +275,73 @@ inline unsigned long Platform::time()
   return micros();
 }
 
-inline void Platform::spin()
+//***************************************************************************************
+
+// Network connection
+
+inline int Platform::ClientStatus()
 {
-  
+  return clientStatus;
 }
+
+inline void Platform::SendToClient(unsigned char b)
+{
+  if(client)
+  {
+    client.write(b);
+    //Serial.write(b);
+  } else
+    Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
+}
+
+inline unsigned char Platform::ClientRead()
+{
+  if(client)
+    return client.read();
+    
+  Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
+  return '\n'; // good idea?? 
+}
+
+inline void Platform::ClientMonitor()
+{
+  clientStatus = 0;
+  
+  if(!client)
+  {
+    client = server->available();
+    if(!client)
+      return;
+    //else
+      //Serial.println("new client");
+  }
+    
+  clientStatus |= CLIENT;
+    
+  if(!client.connected())
+    return;
+    
+  clientStatus |= CONNECTED;
+    
+  if (!client.available())
+    return;
+    
+  clientStatus |= AVAILABLE;
+}
+
+inline void Platform::DisconnectClient()
+{
+  if (client)
+  {
+    client.stop();
+    //Serial.println("client disconnected");
+  } else
+      Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
+}
+
+//*****************************************************************************************************************
+
+// Interrupts
 
 inline void Platform::setInterrupt(long t)
 {
@@ -278,18 +353,21 @@ inline void Platform::interrupt()
   reprap->interrupt();  // Put nothing else in this function
 }
 
+//*****************************************************************************************************************
 
-inline void Platform::setDirection(uint8_t drive, bool direction)
+// Drive the RepRap machine
+
+inline void Platform::setDirection(byte drive, bool direction)
 {
   digitalWrite(directionPins[drive], direction);  
 }
 
-inline void Platform::step(uint8_t drive)
+inline void Platform::step(byte drive)
 {
   digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
 }
 
-inline int Platform::getRawTemperature(uint8_t heater)
+inline int Platform::getRawTemperature(byte heater)
 {
   return analogRead(tempSensePins[heater]);
 }

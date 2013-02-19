@@ -24,6 +24,8 @@ Licence: GPL
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
+#define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
+
 class Webserver
 {   
   public:
@@ -33,23 +35,23 @@ class Webserver
     
   private:
   
-    boolean parseLine();
-    void Read(unsigned char b);
-    void SendFile();
-    void Write();
+    void CheckClientLine();
+    void IncomingByte(unsigned char b);
+    void SendFile(char* nameOfFileToSend);
+    void WriteByte();
+    boolean fileHasExtension(char* fileName, char* extension);
     
     Platform* platform;
     unsigned long lastTime;
-    int client;
-    int htmlFile;
+    int fileBeingSent;
     boolean writing;
-    boolean loadingImage;
-    char line[1000];
-    char page[1000];
-    int lp;
-    boolean currentLineIsBlank;
+    boolean clientLineIsBlank;
     unsigned long clientCloseTime;
     boolean needToCloseClient;
+    char clientLine[1000];
+    char clientRequest[1000];
+    int clientLinePointer;
 };
+
 
 #endif

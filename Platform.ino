@@ -49,10 +49,12 @@ RepRap* Platform::getRepRap()
 
 void Platform::init()
 { 
-  uint8_t i;
+  byte i;
   
-  Serial.begin(9600);
-  Serial.println("Platform constructor");
+  Serial.begin(BAUD_RATE);
+  Serial.println("\n\n\nPlatform constructor");
+  
+  lastTime = time();
   
   if(!loadFromStore())
   {     
@@ -132,10 +134,9 @@ void Platform::init()
   inUse = new boolean[MAX_FILES];
   for(i=0; i < MAX_FILES; i++)
     inUse[i] = false;
-  inUse[ETHER] = true;
   inUse[EEPROM] = true;
 
-  // Ethernet
+  // Network
 
   mac = MAC;
   ip = new IPAddress(IP0, IP1, IP2, IP3);
@@ -152,16 +153,20 @@ void Platform::init()
   Ethernet.begin(mac, *ip);
   server->begin();
   
-  Serial.print("server is at ");
-  Serial.println(Ethernet.localIP());
+  //Serial.print("server is at ");
+  //Serial.println(Ethernet.localIP());
   
   // this corrects a bug in the Ethernet.begin() function
   // even tho the call to Ethernet.localIP() does the same thing
-  digitalWrite(ETH_B_PIN,HIGH);
+  digitalWrite(ETH_B_PIN, HIGH);
+  
+  clientStatus = 0;
+  client = 0;
  
   if (!SD.begin(SD_SPI)) 
      Serial.println("SD initialization failed.");
-  // SD.begin() returns with the SPI disabled, so you need not disable it here 
+  // SD.begin() returns with the SPI disabled, so you need not disable it here
+  
 
 }
 
@@ -173,9 +178,27 @@ bool Platform::loadFromStore()
   return false;
 }
 
+//===========================================================================
+//=============================Thermal Settings  ============================
+//===========================================================================
+
+// See http://en.wikipedia.org/wiki/Thermistor#B_or_.CE.B2_parameter_equation
+
+// BETA is the B value
+// RS is the value of the series resistor in ohms
+// R_INF is R0.exp(-BETA/T0), where R0 is the thermistor resistance at T0 (T0 is in kelvin)
+// Normally T0 is 298.15K (25 C).  If you write that expression in brackets in the #define the compiler 
+// should compute it for you (i.e. it won't need to be calculated at run time).
+
+// If the A->D converter has a range of 0..1023 and the measured voltage is V (between 0 and 1023)
+// then the thermistor resistance, R = V.RS/(1023 - V)
+// and the temperature, T = BETA/ln(R/R_INF)
+// To get degrees celsius (instead of kelvin) add -273.15 to T
+//#define THERMISTOR_R_INFS ( THERMISTOR_25_RS*exp(-THERMISTOR_BETAS/298.15) ) // Compute in Platform constructor
+
 // Result is in degrees celsius
 
-float Platform::getTemperature(uint8_t heater)
+float Platform::getTemperature(byte heater)
 {
   float r = (float)getRawTemperature(heater);
   //Serial.println(r);
@@ -185,7 +208,7 @@ float Platform::getTemperature(uint8_t heater)
 
 // power is a fraction in [0,1]
 
-void Platform::setHeater(uint8_t heater, const float& power)
+void Platform::setHeater(byte heater, const float& power)
 {
   if(power <= 0)
   {
@@ -199,21 +222,16 @@ void Platform::setHeater(uint8_t heater, const float& power)
      return;
   }
   
-  uint8_t p = (uint8_t)(255.0*power);
+  byte p = (byte)(255.0*power);
   analogWrite(heatOnPins[heater], p);
 }
 
 
 /*********************************************************************************
 
-  Files
+  Files & Communication
   
 */
-
-int Platform::OpenHost()
-{
-  return ETHER;
-}
 
 // Open a local file (for example on an SD card).
 
@@ -253,18 +271,7 @@ int Platform::OpenFile(char* fileName, boolean write)
 }
 
 void Platform::Close(int file)
-{
-  if(file == ETHER)
-  {
-    if(client)
-    {
-      client.stop();
-      client = 0;
-    }
-    // ? inUse[file] = false;
-    return;
-  }
-  
+{ 
   if(file == EEPROM)
   {
     // ? inUse[file] = false;
@@ -275,25 +282,7 @@ void Platform::Close(int file)
   inUse[file] = false;
 }
 
-boolean Platform::EtherRead(unsigned char& b)
-{
-  if(!client)
-  {
-    client = server->available();
-    if(!client)
-      return false;
-  }
-  if(client.connected())
-  {
-      if (client.available())
-      { 
-        b = client.read();
-        return true;
-      } else
-        return false;
-  }  
-  return false;
-}
+
 
 boolean Platform::EepromRead(unsigned char& b)
 {
@@ -307,9 +296,7 @@ boolean Platform::Read(int file, unsigned char& b)
     Message(HOST_MESSAGE, "Attempt to read from a non-open file.");
     return false;
   }
-  
-  if(file == ETHER)
-    return EtherRead(b);
+
   if(file == EEPROM)
     return EepromRead(b);
     
@@ -323,13 +310,7 @@ void Platform::Write(int file, char b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write to a non-open file.");
-    return;
-  }
-  
-  if(file == ETHER)
-  {
-    client.print(b);
+    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.");
     return;
   }
   
@@ -339,7 +320,7 @@ void Platform::Write(int file, char b)
     return;
   }
     
-  files[file].print(b);
+  files[file].write(b);
 }
 
 void Platform::WriteString(int file, char* b)
@@ -347,12 +328,6 @@ void Platform::WriteString(int file, char* b)
   if(!inUse[file])
   {
     Message(HOST_MESSAGE, "Attempt to write string to a non-open file.");
-    return;
-  }
-  
-  if(file == ETHER)
-  {
-    client.print(b);
     return;
   }
   
@@ -380,39 +355,44 @@ void Platform::Message(char type, char* message)
   // Message that is to appear on a local display;  \f and \n should be supported.
   case HOST_MESSAGE:
   default:
+  
     Serial.println(message);
     
   }
+}
+
+// Send something to the network client
+
+void Platform::SendToClient(char* message)
+{
+  if(client)
+  {
+    client.print(message);
+    //Serial.print("Sent: ");
+    //Serial.print(message);
+  } else
+    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.");
+}
+
+//***************************************************************************************************
+
+
+
+
+void Platform::spin()
+{
+   ClientMonitor();
+   if(time() - lastTime < 2000000)
+     return;
+   lastTime = time();
+   //Serial.print("Client status: ");
+   //Serial.println(clientStatus);
 }
 
 
 
 
 
-//===========================================================================
-//=============================Thermal Settings  ============================
-//===========================================================================
-
-// See http://en.wikipedia.org/wiki/Thermistor#B_or_.CE.B2_parameter_equation
-
-// BETA is the B value
-// RS is the value of the series resistor in ohms
-// R_INF is R0.exp(-BETA/T0), where R0 is the thermistor resistance at T0 (T0 is in kelvin)
-// Normally T0 is 298.15K (25 C).  If you write that expression in brackets in the #define the compiler 
-// should compute it for you (i.e. it won't need to be calculated at run time).
-
-// If the A->D converter has a range of 0..1023 and the measured voltage is V (between 0 and 1023)
-// then the thermistor resistance, R = V.RS/(1023 - V)
-// and the temperature, T = BETA/ln(R/R_INF)
-// To get degrees celsius (instead of kelvin) add -273.15 to T
-//#define THERMISTOR_R_INFS ( THERMISTOR_25_RS*exp(-THERMISTOR_BETAS/298.15) ) // Compute in Platform constructor
-
-
-/************************************************************************************************
-
-Webserver Platform-specific code
-
-*/
 
 
 
