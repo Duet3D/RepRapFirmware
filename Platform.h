@@ -260,7 +260,6 @@ class Platform
   void ClientMonitor();
   
   byte mac[MAC_BYTES];
-  IPAddress* ip;
   EthernetServer* server;
   EthernetClient client;
   int clientStatus;

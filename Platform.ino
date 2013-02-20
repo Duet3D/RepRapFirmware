@@ -139,10 +139,6 @@ void Platform::init()
   // Network
 
   mac = MAC;
-  ip = new IPAddress(IP0, IP1, IP2, IP3);
-  // Initialize the Ethernet server library
-  // with the IP address and port you want to use 
-  // (port 80 is default for HTTP):
   server = new EthernetServer(HTTP_PORT);
   
   // disable SD SPI while starting w5100
@@ -150,7 +146,7 @@ void Platform::init()
   pinMode(SD_SPI, OUTPUT);
   digitalWrite(SD_SPI,HIGH);   
 
-  Ethernet.begin(mac, *ip);
+  Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
   server->begin();
   
   //Serial.print("server is at ");
