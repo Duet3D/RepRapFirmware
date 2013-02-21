@@ -25,7 +25,7 @@ Licence: GPL
 
 Webserver::Webserver(Platform* p)
 {
-  Serial.println("Webserver constructor"); 
+  //Serial.println("Webserver constructor"); 
   platform = p;
   lastTime = platform->time();
   writing = false;
@@ -87,6 +87,8 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
         c = '+';
       else if(StringStartsWith(&gc[gcp], "20"))
         c = ' ';
+      else if(StringStartsWith(&gc[gcp], "0A"))
+        c = '\n';
       else
       {
         platform->Message(HOST_MESSAGE, "Webserver: Dud web-form byte: ");
@@ -131,9 +133,12 @@ boolean Webserver::StringStartsWith(char* string, char* starting)
 }
 
 
-void Webserver::InternalHead(boolean sendTab, int noLink)
+void Webserver::InternalHead(boolean sendTab, int noLink, char* headString)
 {
-  platform->SendToClient("<!DOCTYPE HTML>\n<html><h2>RepRap: ");
+  platform->SendToClient("<!DOCTYPE HTML><head>");
+  if(headString)
+    platform->SendToClient(headString);
+  platform->SendToClient("</head><html><h2>RepRap: ");
   platform->SendToClient(myName);
   if(gotPassword)
     platform->SendToClient("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href=\"http://reprappro.com\" target=\"_blank\"><img src=\"logo.png\" alt=\"RepRapPro logo\"></a>");
@@ -181,35 +186,133 @@ void Webserver::InternalTail()
 
 void Webserver::SendControlPage()
 {
-   InternalHead(true, 0);
-   platform->SendToClient("<button type=\"button\" onclick=\"return xp01mm()\">0.1mm -&gt;</button>");
+   InternalHead(true, 0, "<style type=\"text/css\">td { text-align: center; } </style>");
    
-   platform->SendToClient("<br><br><form name=\"input\" action=\"gather.asp\" method=\"get\">Send a G Code: <input type=\"text\" name=\"gcode\"><input type=\"submit\" value=\"Execute\"></form>\n");
+   platform->SendToClient("<table border=\"1\"><div align=\"center\">");
+   
+   
+   platform->SendToClient("<tr>");
+   platform->SendToClient("<th colspan=\"9\">Move X Y Z</th>");
+   platform->SendToClient("</tr>");
+   
+   platform->SendToClient("<tr>");
+   platform->SendToClient("<td rowspan=\"2\"><button type=\"button\" onclick=\"return homea()\">Home<br>All</button></td>");
+   platform->SendToClient("<td colspan=\"4\">- mm</td>");
+   platform->SendToClient("<td colspan=\"4\">+ mm</td>");
+   platform->SendToClient("</tr>");
+   
+   platform->SendToClient("<tr>");
+   platform->SendToClient("<td>-100</td>");
+   platform->SendToClient("<td>-10</td>");
+   platform->SendToClient("<td>-1</td>");
+   platform->SendToClient("<td>-0.1</td>");
+   platform->SendToClient("<td>0.1</td>");
+   platform->SendToClient("<td>1</td>");
+   platform->SendToClient("<td>10</td>");
+   platform->SendToClient("<td>100</td>");
+   platform->SendToClient("</tr>");
+   
+   platform->SendToClient("<tr>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return homex()\">Home X</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return xm100mm()\">&lt;- X</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return xm10mm()\">&lt;- X</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return xm1mm()\">&lt;- X</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return xm01mm()\">&lt;- X</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return xp01mm()\">X -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return xp1mm()\">X -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return xp10mm()\">X -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return xp100mm()\">X -&gt;</button></td>");
+   platform->SendToClient("</tr>");
+   
+   platform->SendToClient("<tr>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return homey()\">Home Y</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return ym100mm()\">&lt;- Y</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return ym10mm()\">&lt;- Y</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return ym1mm()\">&lt;- Y</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return ym01mm()\">&lt;- Y</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return yp01mm()\">Y -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return yp1mm()\">Y -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return yp10mm()\">Y -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return yp100mm()\">Y -&gt;</button></td>");
+   platform->SendToClient("</tr>");
+   
+   platform->SendToClient("<tr>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return homez()\">Home Z</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return zm100mm()\">&lt;- Z</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return zm10mm()\">&lt;- Z</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return zm1mm()\">&lt;- Z</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return zm01mm()\">&lt;- Z</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return zp01mm()\">Z -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return zp1mm()\">Z -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return zp10mm()\">Z -&gt;</button></td>");
+   platform->SendToClient("<td><button type=\"button\" onclick=\"return zp100mm()\">Z -&gt;</button></td>");
+   platform->SendToClient("</tr>");
+    
+   platform->SendToClient("</div></table>");
+   
+   platform->SendToClient("<br><br><form name=\"input\" action=\"gather.asp\" method=\"get\">Send a G Code: <input type=\"text\" name=\"gcode\"><input type=\"submit\" value=\"Send\"></form>\n");
    
    platform->SendToClient("<script language=\"javascript\" type=\"text/javascript\">");
-   platform->SendToClient("function xp01mm(){ window.location.href = \"control.htm?gcode=G92 G1 X0.1 G91\";}");
+   
+   // FIXME - this lot can be be easily generated by a single function
+   
+   platform->SendToClient("function homea(){ window.location.href = \"control.htm?gcode=G28\";}");
+   platform->SendToClient("function homex(){ window.location.href = \"control.htm?gcode=G28 X0\";}");
+   platform->SendToClient("function homey(){ window.location.href = \"control.htm?gcode=G28 Y0\";}");
+   platform->SendToClient("function homez(){ window.location.href = \"control.htm?gcode=G28 Z0\";}");
+   
+   platform->SendToClient("function xp01mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 X0.1%0AG90\";}");
+   platform->SendToClient("function xp1mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 X1%0AG90\";}");
+   platform->SendToClient("function xp10mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 X10%0AG90\";}");
+   platform->SendToClient("function xp100mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 X100%0AG90\";}");
+   
+   platform->SendToClient("function xm01mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 X-0.1%0AG90\";}");
+   platform->SendToClient("function xm1mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 X-1%0AG90\";}");
+   platform->SendToClient("function xm10mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 X10%0AG90\";}");
+   platform->SendToClient("function xm100mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 X100%0AG90\";}");
+   
+   platform->SendToClient("function yp01mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Y0.1%0AG90\";}");
+   platform->SendToClient("function yp1mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Y1%0AG90\";}");
+   platform->SendToClient("function yp10mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Y10%0AG90\";}");
+   platform->SendToClient("function yp100mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Y100%0AG90\";}");
+   
+   platform->SendToClient("function ym01mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Y-0.1%0AG90\";}");
+   platform->SendToClient("function ym1mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Y-1%0AG90\";}");
+   platform->SendToClient("function ym10mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Y10%0AG90\";}");
+   platform->SendToClient("function ym100mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Y100%0AG90\";}");
+   
+   platform->SendToClient("function zp01mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Z0.1%0AG90\";}");
+   platform->SendToClient("function zp1mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Z1%0AG90\";}");
+   platform->SendToClient("function zp10mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Z10%0AG90\";}");
+   platform->SendToClient("function zp100mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Z100%0AG90\";}");
+   
+   platform->SendToClient("function zm01mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Z-0.1%0AG90\";}");
+   platform->SendToClient("function zm1mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Z-1%0AG90\";}");
+   platform->SendToClient("function zm10mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Z10%0AG90\";}");
+   platform->SendToClient("function zm100mm(){ window.location.href = \"control.htm?gcode=G91%0AG1 Z100%0AG90\";}");
+   
    platform->SendToClient("</script>"); 
    InternalTail();  
 }
 
 void Webserver::SendPrintPage()
 {
-   InternalHead(true, 1);
-   platform->SendToClient("Print Page\n");
+   InternalHead(true, 1, 0);
+   platform->SendToClient("Print Page - List files in a table: click one to print it; upload a file; delete a file\n");
    InternalTail();  
 }
 
 void Webserver::SendHelpPage()
 {
-   InternalHead(true, 2);
+   InternalHead(true, 2, 0);
    platform->SendToClient("Help Page");
    InternalTail();  
 }
 
 void Webserver::SendSettingsPage()
 {
-   InternalHead(true, 3);
-   platform->SendToClient("Settings Page");
+   InternalHead(true, 3, 0);
+   platform->SendToClient("Settings Page - Change things and save the result: machine name, password, e steps/mm etc etc");
    InternalTail();  
 }
 
@@ -221,14 +324,14 @@ void Webserver::SendLogoutPage()
 
 void Webserver::SendPasswordPage()
 {
-   InternalHead(false, -1);
+   InternalHead(false, -1, 0);
    platform->SendToClient("<form name=\"input\" action=\"gather.asp\" method=\"get\">Password: <input type=\"password\" name=\"pwd\"><input type=\"submit\" value=\"Submit\">");
    InternalTail();  
 }
 
 void Webserver::Send404Page()
 {
-   InternalHead(false, -1);
+   InternalHead(false, -1, 0);
    platform->SendToClient("<h3><br><br>404 Error: page not found.</h3>");
    InternalTail();  
 }

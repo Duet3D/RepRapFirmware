@@ -22,7 +22,7 @@ Licence: GPL
 
 Move::Move(Platform* p)
 {
-  Serial.println("Move constructor"); 
+  //Serial.println("Move constructor"); 
   platform = p;
   lastTime = platform->time();
   platform->setDirection(X_AXIS, FORWARDS);
@@ -38,8 +38,9 @@ void Move::spin()
      return;
    lastTime = t;
    //Serial.println("tick");
-   platform->step(X_AXIS);
+/*  platform->step(X_AXIS);
    platform->step(Y_AXIS);
    platform->step(Z_AXIS);
    platform->step(3);
+   */
 }

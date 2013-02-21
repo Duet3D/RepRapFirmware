@@ -50,7 +50,7 @@ class Webserver
     void CheckPassword();
     boolean LoadGcodeBuffer(char* gc, boolean convertWeb);
     boolean InternalFile(char* nameOfFileToSend);
-    void InternalHead(boolean sendTab, int noLink);
+    void InternalHead(boolean sendTab, int noLink, char* headString);
     void InternalTail();
     void CloseClient();
     void SendControlPage();

@@ -60,6 +60,7 @@ void RepRap::init()
   heat = new Heat(platform);
   webserver = new Webserver(platform);
   gcodes = new GCodes(platform, move, heat, webserver);
+  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware Started\n\n");
 }
 
 void RepRap::spin()

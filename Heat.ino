@@ -22,11 +22,11 @@ Licence: GPL
 
 Heat::Heat(Platform* p)
 {
-  Serial.println("Heat constructor"); 
+  //Serial.println("Heat constructor"); 
   platform = p;
   lastTime = platform->time();
-  frac = 0;
-  inc = 0.01;
+  //frac = 0;
+  //inc = 0.01;
 }
 
 void Heat::spin()
@@ -35,7 +35,7 @@ void Heat::spin()
    if(t - lastTime < 3000)
      return;
    lastTime = t;
-   if(frac > 1 || frac < 0)
+/*   if(frac > 1 || frac < 0)
    {
      inc = -inc;
      //Serial.print("Temps: ");
@@ -45,5 +45,5 @@ void Heat::spin()
    }
    platform->setHeater(0, frac);
    platform->setHeater(1, 1 - frac);
-   frac += inc;
+   frac += inc;*/
 }

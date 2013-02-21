@@ -43,8 +43,8 @@ class Heat
   
   Platform* platform;
   unsigned long lastTime;
-  float frac;
-  float inc;
+  //float frac;
+  //float inc;
   
 };
 

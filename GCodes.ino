@@ -23,7 +23,7 @@ Licence: GPL
 
 GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
 {
-  Serial.println("GCodes constructor"); 
+  //Serial.println("GCodes constructor"); 
   platform = p;
   move = m;
   heat = h;
@@ -34,9 +34,9 @@ GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
 
 void GCodes::ActOnGcode()
 {
-  platform->Message(HOST_MESSAGE, "GCode: ");
+  platform->Message(HOST_MESSAGE, "\nGCode: ");
   platform->Message(HOST_MESSAGE, gcodeBuffer);
-  platform->Message(HOST_MESSAGE, "\n\n");
+  platform->Message(HOST_MESSAGE, "\n");
 }
 
 void GCodes::spin()
@@ -44,13 +44,21 @@ void GCodes::spin()
   if(webserver->Available())
   {
     gcodeBuffer[gcodePointer] = webserver->Read();
-    if(!gcodeBuffer[gcodePointer])
+    if(gcodeBuffer[gcodePointer] == '\n' || !gcodeBuffer[gcodePointer])
     {
+      gcodeBuffer[gcodePointer] = 0;
       gcodePointer = 0;
       ActOnGcode();
       gcodeBuffer[0] = 0;
     } else
       gcodePointer++;
+    
+    if(gcodePointer >= GCODE_LENGTH)
+    {
+      platform->Message(HOST_MESSAGE, "GCodes: G Code buffer length overflow.");
+      gcodePointer = 0;
+      gcodeBuffer[0] = 0;
+    }
   }
 }
 

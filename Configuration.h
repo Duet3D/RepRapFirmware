@@ -33,6 +33,6 @@ Licence: GPL
 
 #define DEFAULT_PASSWORD "reprap"
 
-#define DEFAULT_NAME "Adrian's RepRap 1"
+#define DEFAULT_NAME "My RepRap 1"
 
 #endif

@@ -52,7 +52,7 @@ void Platform::init()
   byte i;
   
   Serial.begin(BAUD_RATE);
-  Serial.println("\n\n\nPlatform constructor");
+  //Serial.println("\n\n\nPlatform constructor");
   
   lastTime = time();
   
@@ -123,9 +123,9 @@ void Platform::init()
   {
     if(heatOnPins[i] >= 0)
       pinMode(heatOnPins[i], OUTPUT);
-    Serial.println(thermistorInfRs[i]);
+    //Serial.println(thermistorInfRs[i]);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
-    Serial.println(thermistorInfRs[i]);
+    //Serial.println(thermistorInfRs[i]);
   }  
 
   // Files

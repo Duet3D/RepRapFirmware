@@ -40,11 +40,11 @@ class RepRap
     RepRap();
     void init();
     void spin();
-    Platform* getPlatform();
-    Move* getMove();
-    Heat* getHeat();
-    GCodes* getGcodes();
-    Webserver* getWebserver();    
+//    Platform* getPlatform();
+//    Move* getMove();
+//    Heat* getHeat();
+//    GCodes* getGcodes();
+//    Webserver* getWebserver();    
     void interrupt();
     
     
@@ -68,11 +68,11 @@ class RepRap
 
 inline RepRap::RepRap() {}
 
-inline Platform* RepRap::getPlatform() { return platform; }
-inline Move* RepRap::getMove() { return move; }
-inline Heat* RepRap::getHeat() { return heat; }
-inline GCodes* RepRap::getGcodes() { return gcodes; }
-inline Webserver* RepRap::getWebserver() { return webserver; }  
+//inline Platform* RepRap::getPlatform() { return platform; }
+//inline Move* RepRap::getMove() { return move; }
+//inline Heat* RepRap::getHeat() { return heat; }
+//inline GCodes* RepRap::getGcodes() { return gcodes; }
+//inline Webserver* RepRap::getWebserver() { return webserver; }  
 
 extern RepRap reprap;
 
