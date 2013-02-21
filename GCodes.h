@@ -26,14 +26,20 @@ class GCodes
 {   
   public:
   
-    GCodes(Platform* p);
+    GCodes(Platform* p, Move* m, Heat* h, Webserver* w);
     void spin();
     
   private:
   
-    Platform* platform;
-    unsigned long lastTime;
+    void ActOnGcode();
   
+    Platform* platform;
+    Move* move;
+    Heat* heat;
+    Webserver* webserver;
+    unsigned long lastTime;
+    char gcodeBuffer[GCODE_LENGTH];
+    int gcodePointer;
 };
 
 #endif

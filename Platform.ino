@@ -242,7 +242,7 @@ int Platform::OpenFile(char* fileName, boolean write)
     }
   if(result < 0)
   {
-      Message(HOST_MESSAGE, "Max open file count exceeded.");
+      Message(HOST_MESSAGE, "Max open file count exceeded.\n");
       return -1;    
   }
   
@@ -250,7 +250,7 @@ int Platform::OpenFile(char* fileName, boolean write)
   {
     if(!write)
     {
-      Message(HOST_MESSAGE, "File not found for reading");
+      Message(HOST_MESSAGE, "File not found for reading.\n");
       return -1;
     }
     files[result] = SD.open(fileName, FILE_WRITE);
@@ -289,7 +289,7 @@ boolean Platform::Read(int file, unsigned char& b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to read from a non-open file.");
+    Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
     return false;
   }
 
@@ -306,7 +306,7 @@ void Platform::Write(int file, char b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.");
+    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
     return;
   }
   
@@ -323,7 +323,7 @@ void Platform::WriteString(int file, char* b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.");
+    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.\n");
     return;
   }
   
@@ -352,7 +352,7 @@ void Platform::Message(char type, char* message)
   case HOST_MESSAGE:
   default:
   
-    Serial.println(message);
+    Serial.print(message);
     
   }
 }
@@ -367,7 +367,7 @@ void Platform::SendToClient(char* message)
     //Serial.print("Sent: ");
     //Serial.print(message);
   } else
-    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.");
+    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
 }
 
 //***************************************************************************************************

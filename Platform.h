@@ -143,6 +143,8 @@ Licence: GPL
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
+#define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
+
 /****************************************************************************************************/
 
 class RepRap;

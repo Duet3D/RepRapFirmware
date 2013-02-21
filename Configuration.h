@@ -31,5 +31,8 @@ Licence: GPL
                              // not displayed; \f and \n should be supported.
 #define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
 
+#define DEFAULT_PASSWORD "reprap"
+
+#define DEFAULT_NAME "Adrian's RepRap 1"
 
 #endif

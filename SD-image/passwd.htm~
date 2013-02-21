@@ -7,7 +7,7 @@ RepRap Web Interface
 </h3>
 
 
-<form name="input" action="passwd.asp" method="get">
+<form name="input" action="gather.asp" method="get">
 Password: <input type="password" name="pwd">
 <input type="submit" value="Submit">
 </form>

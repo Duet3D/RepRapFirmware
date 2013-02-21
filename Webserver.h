@@ -26,7 +26,6 @@ Licence: GPL
 
 #define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
 
-#define DEFAULT_PASSWORD "reprap"
 #define PASSWORD_PAGE "passwd.htm"
 #define STRING_LENGTH 1000
 
@@ -35,6 +34,8 @@ class Webserver
   public:
   
     Webserver(Platform* p);
+    boolean Available();
+    byte Read();
     void spin();
     
   private:
@@ -47,6 +48,18 @@ class Webserver
     boolean StringStartsWith(char* string, char* starting);
     void ParseQualifier();
     void CheckPassword();
+    boolean LoadGcodeBuffer(char* gc, boolean convertWeb);
+    boolean InternalFile(char* nameOfFileToSend);
+    void InternalHead(boolean sendTab, int noLink);
+    void InternalTail();
+    void CloseClient();
+    void SendControlPage();
+    void SendPrintPage();
+    void SendHelpPage();
+    void SendSettingsPage();
+    void SendLogoutPage();
+    void SendPasswordPage();
+    void Send404Page();
     
     Platform* platform;
     unsigned long lastTime;
@@ -58,9 +71,13 @@ class Webserver
     char clientLine[STRING_LENGTH];
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];
+    char gcodeBuffer[GCODE_LENGTH];
+    boolean gcodeAvailable;
+    int gcodePointer;
     int clientLinePointer;
     boolean gotPassword;
     char* password;
+    char* myName;
 };
 
 

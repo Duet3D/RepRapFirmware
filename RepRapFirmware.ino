@@ -58,8 +58,8 @@ void RepRap::init()
   platform = new Platform(this);
   move = new Move(platform);
   heat = new Heat(platform);
-  gcodes = new GCodes(platform);
   webserver = new Webserver(platform);
+  gcodes = new GCodes(platform, move, heat, webserver);
 }
 
 void RepRap::spin()

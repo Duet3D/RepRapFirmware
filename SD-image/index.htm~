@@ -1,0 +1,11 @@
+<!DOCTYPE HTML>
+<html>
+RepRap Web Interface
+
+<form name="input" action="gather.asp" method="get">
+Send a G Code: <input type="text" name="gcode">
+<input type="submit" value="Execute">
+</form> 
+
+<p><a href="page2.htm">Load second test page</a>
+</html>
