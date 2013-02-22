@@ -37,6 +37,7 @@ Licence: GPL
 // Language-specific includes
 
 #include <stdio.h>
+#include <ctype.h>
 
 // Platform-specific includes
 

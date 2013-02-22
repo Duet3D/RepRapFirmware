@@ -1,18 +1,11 @@
 <!DOCTYPE HTML>
 <html>
-<head>
-<title>404 Error</title>
-</head>
-<body>
+<center>
+
+<h3><br><br>404 Error: page not found.</h3>
+
 
 <center>
-<h3>
-RepRap Web Interface
-<br><br><br>
 
-RepRapPro Firmware - 404 Error: page not found.
-</h3>
+</html>
 
-</center>
-
-</body></html>

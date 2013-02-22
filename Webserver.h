@@ -7,6 +7,15 @@ RepRap machine.  It interprests returned values from those pages and uses them t
 which it sends to the RepRap.  It also collects values from the RepRap like temperature and uses
 those to construct the web pages.
 
+It implements very very restricted PHP.  It can do:
+
+   <?php print(myStringFunction()); ?>
+   <?php if(myBooleanFunction()) print(myOtherStringFunction()); ?>
+   <?php if(myOtherBooleanFunction()) echo 'Some arbitrarily long string of HTML including newlines up to this quote:'; ?>
+
+Note that by printing a function that returns "" you can just call 
+that function in this C++ code with no effect on the loaded web page.
+
 -----------------------------------------------------------------------------------------------------
 
 Version 0.1
@@ -26,8 +35,13 @@ Licence: GPL
 
 #define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
 
-#define PASSWORD_PAGE "passwd.htm"
+#define PASSWORD_PAGE "passwd.php"
 #define STRING_LENGTH 1000
+#define PHP_TAG_LENGTH 200
+#define PHP_IF 1
+#define PHP_ECHO 2
+#define PHP_PRINT 3
+#define NO_PHP 99
 
 class Webserver
 {   
@@ -49,22 +63,21 @@ class Webserver
     void ParseQualifier();
     void CheckPassword();
     boolean LoadGcodeBuffer(char* gc, boolean convertWeb);
-    boolean InternalFile(char* nameOfFileToSend);
-    void InternalHead(boolean sendTab, int noLink, char* headString);
-    void InternalTail();
     void CloseClient();
-    void SendControlPage();
-    void SendPrintPage();
-    void SendHelpPage();
-    void SendSettingsPage();
-    void SendLogoutPage();
-    void SendPasswordPage();
-    void Send404Page();
+    void initialisePHP();
+    char PHPParse(char* phpString);
+    boolean printHeadString();
+    boolean printLinkTable();
+    boolean callPHPBoolean(char* phpRecord);
+    char* callPHPString(char* phpRecord);  
+    void ProcessPHPByte(char b);
+    void WritePHPByte();
     
     Platform* platform;
     unsigned long lastTime;
     int fileBeingSent;
     boolean writing;
+    boolean inPHPFile;
     boolean clientLineIsBlank;
     unsigned long clientCloseTime;
     boolean needToCloseClient;
@@ -78,6 +91,20 @@ class Webserver
     boolean gotPassword;
     char* password;
     char* myName;
+    char phpTag[PHP_TAG_LENGTH];
+    char phpRecord[PHP_TAG_LENGTH];
+    int inPHPString;
+    int phpPointer;
+    boolean phpEchoing;
+    boolean phpIfing;
+    boolean phpPrinting;
+    boolean eatInput;
+    boolean recordInput;
+    boolean ifWasTrue;
+    boolean sendTable;
+    char eatInputChar;
+    int phpRecordPointer;
+    boolean ifwasTrue;
 };
 
 
