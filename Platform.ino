@@ -135,6 +135,8 @@ void Platform::init()
   for(i=0; i < MAX_FILES; i++)
     inUse[i] = false;
   inUse[EEPROM] = true;
+  webDir = WEB_DIR;
+  gcodeDir = GCODE_DIR;
 
   // Network
 
@@ -368,6 +370,20 @@ void Platform::SendToClient(char* message)
     //Serial.print(message);
   } else
     Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
+}
+
+// Where the php/htm etc files are
+
+char* Platform::getWebDir()
+{
+  return webDir;
+}
+
+// Where the gcodes are
+
+char* Platform::getGcodeDir()
+{
+  return gcodeDir;
 }
 
 //***************************************************************************************************

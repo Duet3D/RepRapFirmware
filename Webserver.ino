@@ -53,6 +53,7 @@ Webserver::Webserver(Platform* p)
   gcodePointer = 0;
   sendTable = true;
   phpRecordPointer = 0;
+  ignoreExtensions = IGNORE_FILE_EXTENSIONS;
 }
 
 boolean Webserver::Available()
@@ -151,6 +152,12 @@ void Webserver::CloseClient()
   needToCloseClient = true;   
 }
 
+char* Webserver::prependRoot(char* fileName)
+{
+  strcpy(scratchString, platform->getWebDir());
+  return strcat(scratchString, fileName);
+}
+
 
 void Webserver::SendFile(char* nameOfFileToSend)
 {
@@ -184,12 +191,12 @@ void Webserver::SendFile(char* nameOfFileToSend)
   //Serial.print("File requested: ");
   //Serial.println(nameOfFileToSend);
   
-  fileBeingSent = platform->OpenFile(nameOfFileToSend, false);
+  fileBeingSent = platform->OpenFile(prependRoot(nameOfFileToSend), false);
   if(fileBeingSent < 0)
   {
     sendTable = false;
     nameOfFileToSend = "html404.htm";
-    fileBeingSent = platform->OpenFile(nameOfFileToSend, false);
+    fileBeingSent = platform->OpenFile(prependRoot(nameOfFileToSend), false);
   }
   
   inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
@@ -258,10 +265,19 @@ boolean Webserver::callPHPBoolean(char* phpRecord)
   return true; // Best default
 }
 
+char* Webserver::getGCodeTable()
+{
+  
+  return "GCodeTable here";
+}
+
 char* Webserver::callPHPString(char* phpRecord)
 {
   if(!strcmp(phpRecord, "getMyName("))
     return myName;
+    
+  if(!strcmp(phpRecord, "getGCodeTable("))
+    return getGCodeTable();    
     
   if(!strcmp(phpRecord, "logout("))
   {
@@ -559,7 +575,7 @@ void Webserver::ParseQualifier()
   {
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
       platform->Message(HOST_MESSAGE, "Webserver: buffer not free!");
-    strcpy(clientRequest, "control.php"); // FIXME
+    strcpy(clientRequest, "control.php");
   } 
 }
 

@@ -108,6 +108,8 @@ Licence: GPL
 #define MAX_FILES 7
 #define SD_SPI 4 //Pin
 #define EEPROM -2 // Special file
+#define WEB_DIR "www/" // Place to find web files on the server
+#define GCODE_DIR "gcodes/" // Ditto - g-codes
 
 /****************************************************************************************************/
 
@@ -184,6 +186,8 @@ class Platform
                                              // returned value is false for EoF, true otherwise
   void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
+  char* getWebDir(); // Where the php/htm etc files are
+  char* getGcodeDir(); // Where the gcodes are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
   
   unsigned char ClientRead(); // Read a byte from the client
@@ -257,6 +261,8 @@ class Platform
 
   File* files;
   boolean* inUse;
+  char* webDir;
+  char* gcodeDir;
   
 // Network connection
 

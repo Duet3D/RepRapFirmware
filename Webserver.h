@@ -42,6 +42,8 @@ Licence: GPL
 #define PHP_ECHO 2
 #define PHP_PRINT 3
 #define NO_PHP 99
+#define IGNORE_FILE_EXTENSIONS { "php", "htm", "png", "prf" } // User won't want to print or delete these
+#define IGNORE_LENGTH 4
 
 class Webserver
 {   
@@ -68,10 +70,12 @@ class Webserver
     char PHPParse(char* phpString);
     boolean printHeadString();
     boolean printLinkTable();
+    char* getGCodeTable();
     boolean callPHPBoolean(char* phpRecord);
     char* callPHPString(char* phpRecord);  
     void ProcessPHPByte(char b);
     void WritePHPByte();
+    char* prependRoot(char* fileName);
     
     Platform* platform;
     unsigned long lastTime;
@@ -81,6 +85,7 @@ class Webserver
     boolean clientLineIsBlank;
     unsigned long clientCloseTime;
     boolean needToCloseClient;
+    char scratchString[STRING_LENGTH];
     char clientLine[STRING_LENGTH];
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];
@@ -105,6 +110,7 @@ class Webserver
     char eatInputChar;
     int phpRecordPointer;
     boolean ifwasTrue;
+    char* ignoreExtensions[IGNORE_LENGTH];
 };
 
 
