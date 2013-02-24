@@ -13,8 +13,6 @@
       <td>&nbsp;&nbsp;&nbsp;<a href="control.php">Control</a>&nbsp;&nbsp;&nbsp;</td>
 
       <td>&nbsp;&nbsp;&nbsp;<a href="print.php">Print</a>&nbsp;&nbsp;&nbsp;</td>
-
-<td>&nbsp;&nbsp;&nbsp;<a href="files.php">Files</a>&nbsp;&nbsp;&nbsp;</td>
  
     <td>&nbsp;&nbsp;&nbsp;<a href="http://reprap.org/wiki/RepRapPro_RepRap_Firmware" target="_blank">Help</a>&nbsp;&nbsp;&nbsp;</td>
  
@@ -26,9 +24,7 @@
     </tr></table>
   <br><br>'; ?>
 
-<br><br>Print: allow user to click a file to print it.  Also pause and cancel buttons.
-<br>
-<?php print(getGCodeTable()); ?>
+<br><br>Settings: allow user to rename machine, set password, set steps/mm etc etc and record the lot.
 
 </html>
 

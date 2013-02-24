@@ -13,6 +13,8 @@
       <td>&nbsp;&nbsp;&nbsp;<a href="control.php">Control</a>&nbsp;&nbsp;&nbsp;</td>
 
       <td>&nbsp;&nbsp;&nbsp;<a href="print.php">Print</a>&nbsp;&nbsp;&nbsp;</td>
+
+<td>&nbsp;&nbsp;&nbsp;<a href="files.php">Files</a>&nbsp;&nbsp;&nbsp;</td>
  
     <td>&nbsp;&nbsp;&nbsp;<a href="http://reprap.org/wiki/RepRapPro_RepRap_Firmware" target="_blank">Help</a>&nbsp;&nbsp;&nbsp;</td>
  

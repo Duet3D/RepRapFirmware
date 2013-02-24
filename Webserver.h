@@ -72,7 +72,7 @@ class Webserver
     boolean printLinkTable();
     char* getGCodeTable();
     boolean callPHPBoolean(char* phpRecord);
-    char* callPHPString(char* phpRecord);  
+    void callPHPString(char* phpRecord);  
     void ProcessPHPByte(char b);
     void WritePHPByte();
     char* prependRoot(char* fileName);

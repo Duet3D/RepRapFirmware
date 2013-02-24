@@ -27,8 +27,6 @@
   <br><br>'; ?>
 
 <br><br>Print: allow user to click a file to print it.  Also pause and cancel buttons.
-<br>
-<?php print(getGCodeTable()); ?>
 
 </html>
 

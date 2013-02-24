@@ -268,28 +268,33 @@ boolean Webserver::callPHPBoolean(char* phpRecord)
 char* Webserver::getGCodeTable()
 {
   
-  return "GCodeTable here";
+  platform->SendToClient("Put a GCodeTable here");
 }
 
-char* Webserver::callPHPString(char* phpRecord)
+void Webserver::callPHPString(char* phpRecord)
 {
   if(!strcmp(phpRecord, "getMyName("))
-    return myName;
+  {
+    platform->SendToClient(myName);
+    return;
+  }
     
   if(!strcmp(phpRecord, "getGCodeTable("))
-    return getGCodeTable();    
+  {
+    getGCodeTable();
+    return;
+  }   
     
   if(!strcmp(phpRecord, "logout("))
   {
     gotPassword = false;
-    return "<meta http-equiv=\"REFRESH\" content=\"0;url=passwd.php\"></HEAD>";
+    platform->SendToClient("<meta http-equiv=\"REFRESH\" content=\"0;url=passwd.php\"></HEAD>");
+    return;
   }
     
   platform->Message(HOST_MESSAGE, "callPHPString(): non-existent function - ");
   platform->Message(HOST_MESSAGE, phpRecord);
-  platform->Message(HOST_MESSAGE, "\n");
-  
-  return "";  
+  platform->Message(HOST_MESSAGE, "\n"); 
 }
 
 void Webserver::ProcessPHPByte(char b)
@@ -351,8 +356,7 @@ void Webserver::ProcessPHPByte(char b)
   
   if(phpPrinting)
   {
-    char* thingToSend = callPHPString(phpRecord);
-    platform->SendToClient(thingToSend);
+    callPHPString(phpRecord);
     initialisePHP();
     eatInput = true;
     eatInputChar = '>';    

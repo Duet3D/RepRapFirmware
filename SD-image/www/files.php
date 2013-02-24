@@ -14,7 +14,7 @@
 
       <td>&nbsp;&nbsp;&nbsp;<a href="print.php">Print</a>&nbsp;&nbsp;&nbsp;</td>
 
-<td>&nbsp;&nbsp;&nbsp;<a href="files.php">Files</a>&nbsp;&nbsp;&nbsp;</td>
+	<td>&nbsp;&nbsp;&nbsp;<a href="files.php">Files</a>&nbsp;&nbsp;&nbsp;</td>
  
     <td>&nbsp;&nbsp;&nbsp;<a href="http://reprap.org/wiki/RepRapPro_RepRap_Firmware" target="_blank">Help</a>&nbsp;&nbsp;&nbsp;</td>
  
@@ -26,7 +26,7 @@
     </tr></table>
   <br><br>'; ?>
 
-<br><br>Print: allow user to click a file to print it.  Also pause and cancel buttons.
+<br><br>Allow user to upload, download or delete files.  Special buttons to upload and download the settings file.
 <br>
 <?php print(getGCodeTable()); ?>
 
