@@ -112,9 +112,34 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
     }
     gcodeBuffer[gcodePointer++] = c;
   }
-  
   gcodeBuffer[gcodePointer] = 0;
   gcodePointer = 0;  
+  
+// We intercept two G Codes so we can deal with file manipulation.  That
+// way things don't get out of sync.
+  
+/*  if(StringStartsWith(gc, "M28")) // Upload file?
+  {
+    uploadFile(&gc[4]);
+    return;
+  }*/
+  
+  if(StringStartsWith(gcodeBuffer, "M30")) // Delete file?
+  {
+    if(!platform->deleteFile(&gcodeBuffer[4]))
+    {
+      platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
+      platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
+      platform->Message(HOST_MESSAGE, "\n");
+    }
+    gcodePointer = 0;
+    gcodeBuffer[gcodePointer] = 0;
+    gcodeAvailable = false;
+    return true;
+  }
+
+// Otherwise, send them to the G Code interpreter
+
   gcodeAvailable = true;
   return true;
 }
@@ -339,7 +364,13 @@ void Webserver::callPHPString(char* phpRecord)
   {
     printGCodeTable("printFile");
     return;
-  }   
+  }  
+ 
+  if(!strcmp(phpRecord, "deleteGCodeTable("))
+  {
+    printGCodeTable("deleteFile");
+    return;
+  } 
     
   if(!strcmp(phpRecord, "logout("))
   {

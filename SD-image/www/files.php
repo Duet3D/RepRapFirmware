@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <head>
-
+<style type="text/css">td { text-align: center; } </style>
 </head>
 
 <html>
@@ -14,7 +14,7 @@
 
       <td>&nbsp;&nbsp;&nbsp;<a href="print.php">Print</a>&nbsp;&nbsp;&nbsp;</td>
 
-	<td>&nbsp;&nbsp;&nbsp;<a href="files.php">Files</a>&nbsp;&nbsp;&nbsp;</td>
+<td>&nbsp;&nbsp;&nbsp;<a href="files.php">Files</a>&nbsp;&nbsp;&nbsp;</td>
  
     <td>&nbsp;&nbsp;&nbsp;<a href="http://reprap.org/wiki/RepRapPro_RepRap_Firmware" target="_blank">Help</a>&nbsp;&nbsp;&nbsp;</td>
  
@@ -26,9 +26,34 @@
     </tr></table>
   <br><br>'; ?>
 
-<br><br>Allow user to upload, download or delete files.  Special buttons to upload and download the settings file.
-<br>
-<?php print(getGCodeTable()); ?>
+<button type="button" onclick="return uploadFile()">Upload a G Code file</button>
+<br><br>
+<br><br>Click a file to delete it:
+<br><br>
+
+<?php print(deleteGCodeTable()); ?>
+
+<br><br>
+
+
+   <script language="javascript" type="text/javascript">
+   
+   
+function deleteFile(filetodelete)
+{
+	var temp = new Array();
+	temp = filetodelete.split('/');
+	var r=confirm("Delete the file " + temp[temp.length - 1] + " ?");
+	if(r == true)
+		window.location.href = "files.php?gcode=M30%20" + filetodelete;
+	else
+		window.location.href = "files.php";		
+}
+
+   function uploadFile(){ window.location.href = "files.php?gcode=M28";}
+
+
+</script> 
 
 </html>
 

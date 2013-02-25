@@ -192,6 +192,7 @@ class Platform
   char* getWebDir(); // Where the php/htm etc files are
   char* getGcodeDir(); // Where the gcodes are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
+  boolean deleteFile(char* fileName); // Delete a file
   
   unsigned char ClientRead(); // Read a byte from the client
   void SendToClient(char* message); // Send string to the host

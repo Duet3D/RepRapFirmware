@@ -260,6 +260,12 @@ char* Platform::FileList(char* directory)
   return fileList;
 }
 
+// Delete a file
+boolean Platform::deleteFile(char* fileName)
+{
+  return SD.remove(fileName);
+}
+
 // Open a local file (for example on an SD card).
 
 int Platform::OpenFile(char* fileName, boolean write)
