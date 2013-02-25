@@ -110,6 +110,7 @@ Licence: GPL
 #define EEPROM -2 // Special file
 #define WEB_DIR "www/" // Place to find web files on the server
 #define GCODE_DIR "gcodes/" // Ditto - g-codes
+#define FILE_LIST_SEPARATOR ';'
 
 /****************************************************************************************************/
 
@@ -148,6 +149,8 @@ Licence: GPL
 
 #define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
 
+#define FILE_LIST_LENGTH 1000 // Maximum lenght of file list
+
 /****************************************************************************************************/
 
 class RepRap;
@@ -179,7 +182,7 @@ class Platform
   
   // Communications and data storage; opening something unsupported returns -1.
   
-  char* FileList(); // Returns a comma-separated?? list of all the files on local storage (for example on an SD card).
+  char* FileList(char* directory); // Returns a ;-separated list of all the files in the named directory (for example on an SD card).
   int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
   int OpenStore(bool write); // Non-volatile non-removable storage such as EEPROM.
   boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
@@ -263,6 +266,7 @@ class Platform
   boolean* inUse;
   char* webDir;
   char* gcodeDir;
+  char fileList[FILE_LIST_LENGTH];
   
 // Network connection
 

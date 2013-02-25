@@ -163,9 +163,7 @@ void Platform::init()
  
   if (!SD.begin(SD_SPI)) 
      Serial.println("SD initialization failed.");
-  // SD.begin() returns with the SPI disabled, so you need not disable it here
-  
-
+  // SD.begin() returns with the SPI disabled, so you need not disable it here  
 }
 
 
@@ -230,6 +228,37 @@ void Platform::setHeater(byte heater, const float& power)
   Files & Communication
   
 */
+
+// List the flat files in a directory.  No sub-directories or recursion.
+
+char* Platform::FileList(char* directory)
+{
+  File dir, entry;
+  dir = SD.open(directory);
+  int p = 0;
+  int q;
+  while(entry = dir.openNextFile())
+  {
+    q = 0;
+    while(entry.name()[q])
+    {
+      fileList[p++] = entry.name()[q];
+      q++;
+      if(p >= FILE_LIST_LENGTH)
+      {
+        Message(HOST_MESSAGE, "FileList - directory: ");
+        Message(HOST_MESSAGE, directory);
+        Message(HOST_MESSAGE, " has too many files!");
+        return "";
+      }
+    }
+    fileList[p++] = FILE_LIST_SEPARATOR;
+    entry.close();
+  }
+  fileList[p++] = 0;
+  dir.close();
+  return fileList;
+}
 
 // Open a local file (for example on an SD card).
 

@@ -70,12 +70,13 @@ class Webserver
     char PHPParse(char* phpString);
     boolean printHeadString();
     boolean printLinkTable();
-    char* getGCodeTable();
+    void printGCodeTable();
     boolean callPHPBoolean(char* phpRecord);
     void callPHPString(char* phpRecord);  
     void ProcessPHPByte(char b);
     void WritePHPByte();
     char* prependRoot(char* fileName);
+    int fileCount(char* list);
     
     Platform* platform;
     unsigned long lastTime;

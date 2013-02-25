@@ -265,10 +265,61 @@ boolean Webserver::callPHPBoolean(char* phpRecord)
   return true; // Best default
 }
 
-char* Webserver::getGCodeTable()
+int Webserver::fileCount(char* list)
 {
+  int p = 0;
+  int count = 0;
+  while(list[p])
+  {
+    if(list[p] == FILE_LIST_SEPARATOR)
+      count++;
+    p++;
+  }
+  return count;
+}
+
+void Webserver::printGCodeTable()
+{
+  char* list = platform->FileList(platform->getGcodeDir());
+  int count = fileCount(list);
   
-  platform->SendToClient("Put a GCodeTable here");
+  if(count <= 0)
+  {
+    platform->SendToClient("<br>No GCode files present.<br>");
+    return;
+  }
+  
+  int cols = (int)(sqrt((float)count)) + 1;
+  int rows = count/cols + 1;
+  
+  platform->SendToClient("<table>");
+  
+  int k = 0;
+  int p = 0;
+  char* fileName;
+  for(int i = 0; i < cols; i++)
+  {
+    platform->SendToClient("<tr>");
+    for(int j = 0; j < rows; j++)
+    {
+      fileName = &list[p];
+      while(list[p] != FILE_LIST_SEPARATOR)
+        p++;
+      list[p++] = 0;
+      platform->SendToClient("<td>&nbsp;<button type=\"button\" onclick=\"return printFile('");
+      platform->SendToClient(fileName);
+      platform->SendToClient("')\">");
+      platform->SendToClient(fileName);
+      platform->SendToClient("</button>&nbsp;</td>");
+      k++;
+      if(k >= count)
+        break;
+    }
+    platform->SendToClient("</tr>");
+    if(k >= count)
+        break;
+  }
+  platform->SendToClient("</table>");
 }
 
 void Webserver::callPHPString(char* phpRecord)
@@ -279,9 +330,9 @@ void Webserver::callPHPString(char* phpRecord)
     return;
   }
     
-  if(!strcmp(phpRecord, "getGCodeTable("))
+  if(!strcmp(phpRecord, "printGCodeTable("))
   {
-    getGCodeTable();
+    printGCodeTable();
     return;
   }   
     

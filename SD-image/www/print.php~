@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <head>
-
+<style type="text/css">td { text-align: center; } </style>
 </head>
 
 <html>
@@ -26,7 +26,23 @@
     </tr></table>
   <br><br>'; ?>
 
-<br><br>Print: allow user to click a file to print it.  Also pause and cancel buttons.
+<br><br>Click a file to print it:
+<br><br>
+
+<?php print(printGCodeTable()); ?>
+
+<br><br>
+<button type="button" onclick="return pausePrint()">Pause the print</button>
+
+   <script language="javascript" type="text/javascript">
+   
+   
+   function printFile(filetoprint){ window.location.href = "control.php?gcode=M23%20" + filetoprint + "%0AM24";}
+
+   function pausePrint(){ window.location.href = "control.php?gcode=M25";}
+
+
+</script> 
 
 </html>
 
