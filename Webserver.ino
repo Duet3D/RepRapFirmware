@@ -39,6 +39,9 @@ Webserver::Webserver(Platform* p)
   platform = p;
   lastTime = platform->time();
   writing = false;
+  posting = false;
+  postSeen = false;
+  postLength = 0L;
   inPHPFile = false;
   initialisePHP();
   clientLineIsBlank = true;
@@ -608,7 +611,23 @@ GET /gather.asp?pwd=my_pwd HTTP/1.1
 void Webserver::ParseClientLine()
 { 
   if(!StringStartsWith(clientLine, "GET"))
-    return;
+  {
+    if(!StringStartsWith(clientLine, "POST"))
+    {
+      if(!StringStartsWith(clientLine, "Content-Length:"))
+        return;
+      else
+      {
+        if(!postSeen)
+          platform->Message(HOST_MESSAGE, "Setting post length without POST request seen.");
+        postLength = atol(&clientLine[16]);
+        return;
+      }
+ 
+    } else
+      postSeen = true;
+  }
+  
     
   Serial.print("HTTP request: ");
   Serial.println(clientLine);
@@ -671,7 +690,14 @@ void Webserver::ParseQualifier()
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
       platform->Message(HOST_MESSAGE, "Webserver: buffer not free!");
     //strcpy(clientRequest, "control.php");
-  } 
+  }
+  
+  if(StringStartsWith(clientQualifier, "upload="))
+  {
+    Serial.println("Got an upload request.");
+  }
+  
+  
 }
 
 
@@ -693,7 +719,19 @@ void Webserver::spin()
     if (platform->ClientStatus() & AVAILABLE) 
     {
       char c = platform->ClientRead();
-      //Serial.write(c);
+      Serial.write(c);      
+      if(posting)
+      {
+        postLength--;
+        if(postLength <= 0)
+        {
+          posting = false;
+          postLength = 0;
+          SendFile(clientRequest);
+        }
+        return;
+      }
+
       // if you've gotten to the end of the line (received a newline
       // character) and the line is blank, the http request has ended,
       // so you can send a reply
@@ -702,6 +740,12 @@ void Webserver::spin()
         clientLine[clientLinePointer] = 0;
         clientLinePointer = 0;
         ParseQualifier();
+        if(postSeen)
+        {
+          posting = true;
+          postSeen = false;
+          return;
+        }
         SendFile(clientRequest);
         clientRequest[0] = 0;
         return;

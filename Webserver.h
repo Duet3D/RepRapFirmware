@@ -82,6 +82,9 @@ class Webserver
     unsigned long lastTime;
     int fileBeingSent;
     boolean writing;
+    boolean posting;
+    boolean postSeen;
+    long postLength;
     boolean inPHPFile;
     boolean clientLineIsBlank;
     unsigned long clientCloseTime;

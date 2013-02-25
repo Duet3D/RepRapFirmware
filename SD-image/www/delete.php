@@ -14,7 +14,6 @@
 
       <td>&nbsp;&nbsp;&nbsp;<a href="print.php">Print</a>&nbsp;&nbsp;&nbsp;</td>
 
-<td>&nbsp;&nbsp;&nbsp;<a href="files.php">Files</a>&nbsp;&nbsp;&nbsp;</td>
  
     <td>&nbsp;&nbsp;&nbsp;<a href="http://reprap.org/wiki/RepRapPro_RepRap_Firmware" target="_blank">Help</a>&nbsp;&nbsp;&nbsp;</td>
  
@@ -26,7 +25,9 @@
     </tr></table>
   <br><br>'; ?>
 
-<button type="button" onclick="return uploadFile()">Upload a G Code file</button>
+
+
+
 <br><br>
 <br><br>Click a file to delete it:
 <br><br>
@@ -36,7 +37,7 @@
 <br><br>
 
 
-   <script language="javascript" type="text/javascript">
+<script language="javascript" type="text/javascript">
    
    
 function deleteFile(filetodelete)
@@ -45,12 +46,11 @@ function deleteFile(filetodelete)
 	temp = filetodelete.split('/');
 	var r=confirm("Delete the file " + temp[temp.length - 1] + " ?");
 	if(r == true)
-		window.location.href = "files.php?gcode=M30%20" + filetodelete;
+		window.location.href = "delete.php?gcode=M30%20" + filetodelete;
 	else
-		window.location.href = "files.php";		
+		window.location.href = "delete.php";		
 }
 
-   function uploadFile(){ window.location.href = "files.php?gcode=M28";}
 
 
 </script> 

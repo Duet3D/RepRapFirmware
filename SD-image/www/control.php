@@ -13,8 +13,6 @@
       <td>&nbsp;&nbsp;&nbsp;<a href="control.php">Control</a>&nbsp;&nbsp;&nbsp;</td>
 
       <td>&nbsp;&nbsp;&nbsp;<a href="print.php">Print</a>&nbsp;&nbsp;&nbsp;</td>
-
-<td>&nbsp;&nbsp;&nbsp;<a href="files.php">Files</a>&nbsp;&nbsp;&nbsp;</td>
  
     <td>&nbsp;&nbsp;&nbsp;<a href="http://reprap.org/wiki/RepRapPro_RepRap_Firmware" target="_blank">Help</a>&nbsp;&nbsp;&nbsp;</td>
  
@@ -52,38 +50,38 @@
    
    <tr>
    <td><button type="button" onclick="return homex()">Home X</button></td>
-   <td><button type="button" onclick="return xm100mm()">&lt;- X</button></td>
-   <td><button type="button" onclick="return xm10mm()">&lt;- X</button></td>
+   <td><button type="button" onclick="return xm100mm()">&lt;--- X</button></td>
+   <td><button type="button" onclick="return xm10mm()">&lt;-- X</button></td>
    <td><button type="button" onclick="return xm1mm()">&lt;- X</button></td>
-   <td><button type="button" onclick="return xm01mm()">&lt;- X</button></td>
-   <td><button type="button" onclick="return xp01mm()">X -&gt;</button></td>
-   <td><button type="button" onclick="return xp1mm()">X -&gt;</button></td>
-   <td><button type="button" onclick="return xp10mm()">X -&gt;</button></td>
-   <td><button type="button" onclick="return xp100mm()">X -&gt;</button></td>
+   <td><button type="button" onclick="return xm01mm()">&lt; X</button></td>
+   <td><button type="button" onclick="return xp01mm()">X &gt;</button></td>
+   <td><button type="button" onclick="return xp1mm()">X --&gt;</button></td>
+   <td><button type="button" onclick="return xp10mm()">X --&gt;</button></td>
+   <td><button type="button" onclick="return xp100mm()">X ---&gt;</button></td>
    </tr>
    
    <tr>
    <td><button type="button" onclick="return homey()">Home Y</button></td>
-   <td><button type="button" onclick="return ym100mm()">&lt;- Y</button></td>
-   <td><button type="button" onclick="return ym10mm()">&lt;- Y</button></td>
+   <td><button type="button" onclick="return ym100mm()">&lt;--- Y</button></td>
+   <td><button type="button" onclick="return ym10mm()">&lt;-- Y</button></td>
    <td><button type="button" onclick="return ym1mm()">&lt;- Y</button></td>
-   <td><button type="button" onclick="return ym01mm()">&lt;- Y</button></td>
-   <td><button type="button" onclick="return yp01mm()">Y -&gt;</button></td>
+   <td><button type="button" onclick="return ym01mm()">&lt; Y</button></td>
+   <td><button type="button" onclick="return yp01mm()">Y &gt;</button></td>
    <td><button type="button" onclick="return yp1mm()">Y -&gt;</button></td>
-   <td><button type="button" onclick="return yp10mm()">Y -&gt;</button></td>
-   <td><button type="button" onclick="return yp100mm()">Y -&gt;</button></td>
+   <td><button type="button" onclick="return yp10mm()">Y --&gt;</button></td>
+   <td><button type="button" onclick="return yp100mm()">Y ---&gt;</button></td>
    </tr>
    
    <tr>
    <td><button type="button" onclick="return homez()">Home Z</button></td>
-   <td><button type="button" onclick="return zm100mm()">&lt;- Z</button></td>
-   <td><button type="button" onclick="return zm10mm()">&lt;- Z</button></td>
+   <td><button type="button" onclick="return zm100mm()">&lt;--- Z</button></td>
+   <td><button type="button" onclick="return zm10mm()">&lt;-- Z</button></td>
    <td><button type="button" onclick="return zm1mm()">&lt;- Z</button></td>
-   <td><button type="button" onclick="return zm01mm()">&lt;- Z</button></td>
-   <td><button type="button" onclick="return zp01mm()">Z -&gt;</button></td>
+   <td><button type="button" onclick="return zm01mm()">&lt; Z</button></td>
+   <td><button type="button" onclick="return zp01mm()">Z &gt;</button></td>
    <td><button type="button" onclick="return zp1mm()">Z -&gt;</button></td>
-   <td><button type="button" onclick="return zp10mm()">Z -&gt;</button></td>
-   <td><button type="button" onclick="return zp100mm()">Z -&gt;</button></td>
+   <td><button type="button" onclick="return zp10mm()">Z --&gt;</button></td>
+   <td><button type="button" onclick="return zp100mm()">Z ---&gt;</button></td>
    </tr>
     
    </div></table>
