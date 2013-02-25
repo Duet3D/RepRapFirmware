@@ -152,15 +152,18 @@ void Webserver::CloseClient()
   needToCloseClient = true;   
 }
 
-char* Webserver::prependRoot(char* fileName)
+char* Webserver::prependRoot(char* root, char* fileName)
 {
-  strcpy(scratchString, platform->getWebDir());
+  strcpy(scratchString, root);
   return strcat(scratchString, fileName);
 }
 
 
 void Webserver::SendFile(char* nameOfFileToSend)
 {
+//  Serial.print("Sending: ");
+//  Serial.println(nameOfFileToSend);
+  
   if(!gotPassword)
   {
     sendTable = false;
@@ -191,12 +194,12 @@ void Webserver::SendFile(char* nameOfFileToSend)
   //Serial.print("File requested: ");
   //Serial.println(nameOfFileToSend);
   
-  fileBeingSent = platform->OpenFile(prependRoot(nameOfFileToSend), false);
+  fileBeingSent = platform->OpenFile(prependRoot(platform->getWebDir(), nameOfFileToSend), false);
   if(fileBeingSent < 0)
   {
     sendTable = false;
     nameOfFileToSend = "html404.htm";
-    fileBeingSent = platform->OpenFile(prependRoot(nameOfFileToSend), false);
+    fileBeingSent = platform->OpenFile(prependRoot(platform->getWebDir(), nameOfFileToSend), false);
   }
   
   inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
@@ -278,7 +281,7 @@ int Webserver::fileCount(char* list)
   return count;
 }
 
-void Webserver::printGCodeTable()
+void Webserver::printGCodeTable(char* function)
 {
   char* list = platform->FileList(platform->getGcodeDir());
   int count = fileCount(list);
@@ -306,8 +309,10 @@ void Webserver::printGCodeTable()
       while(list[p] != FILE_LIST_SEPARATOR)
         p++;
       list[p++] = 0;
-      platform->SendToClient("<td>&nbsp;<button type=\"button\" onclick=\"return printFile('");
-      platform->SendToClient(fileName);
+      platform->SendToClient("<td>&nbsp;<button type=\"button\" onclick=\"return ");
+      platform->SendToClient(function);
+      platform->SendToClient("('");
+      platform->SendToClient(prependRoot(platform->getGcodeDir(), fileName));
       platform->SendToClient("')\">");
       platform->SendToClient(fileName);
       platform->SendToClient("</button>&nbsp;</td>");
@@ -332,7 +337,7 @@ void Webserver::callPHPString(char* phpRecord)
     
   if(!strcmp(phpRecord, "printGCodeTable("))
   {
-    printGCodeTable();
+    printGCodeTable("printFile");
     return;
   }   
     
@@ -601,7 +606,11 @@ void Webserver::ParseClientLine()
     clientQualifier[j] = 0;
   }
 
-  
+/*  Serial.print("Request:");
+  Serial.println(clientRequest);
+  Serial.print("Qualifier:");
+  Serial.println(clientQualifier);  
+*/  
   if(!clientRequest[0])
     strcpy(clientRequest, "control.php");
 }
@@ -630,7 +639,7 @@ void Webserver::ParseQualifier()
   {
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
       platform->Message(HOST_MESSAGE, "Webserver: buffer not free!");
-    strcpy(clientRequest, "control.php");
+    //strcpy(clientRequest, "control.php");
   } 
 }
 
