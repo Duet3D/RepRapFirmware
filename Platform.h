@@ -110,6 +110,8 @@ Licence: GPL
 #define EEPROM -2 // Special file
 #define WEB_DIR "www/" // Place to find web files on the server
 #define GCODE_DIR "gcodes/" // Ditto - g-codes
+#define SYS_DIR "sys/" // Ditto - system files
+#define TEMP_DIR "tmp/" // Ditto - temporary files
 #define FILE_LIST_SEPARATOR ';'
 
 /****************************************************************************************************/
@@ -191,6 +193,8 @@ class Platform
   void Write(int file, char b);  // Write the byte b to a file.
   char* getWebDir(); // Where the php/htm etc files are
   char* getGcodeDir(); // Where the gcodes are
+  char* getSystemDir();  // Where the system files are
+  char* getTemporaryDir(); // Where temporary files are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
   boolean deleteFile(char* fileName); // Delete a file
   

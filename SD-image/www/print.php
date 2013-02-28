@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <head>
-<style type="text/css">td { text-align: center; } </style>
+<style type="text/css">td { text-align: left; } </style>
 </head>
 
 <html>
@@ -27,11 +27,11 @@
 <form action="print.php?upload=myFile"
 enctype="multipart/form-data" method="post">
 <p>
-Upload a G Code file:<br>
+Upload a G Code file to <?php print(getMyName()); ?>:<br>
 <input type="file" name="datafile" size="40">
 </p>
 <div>
-<input type="submit" value="Send">
+<input type="submit" value="Upload">
 </div>
 </form>
 

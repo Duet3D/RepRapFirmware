@@ -38,12 +38,11 @@ Licence: GPL
 #define PASSWORD_PAGE "passwd.php"
 #define STRING_LENGTH 1000
 #define PHP_TAG_LENGTH 200
+#define POST_LENGTH 200
 #define PHP_IF 1
 #define PHP_ECHO 2
 #define PHP_PRINT 3
 #define NO_PHP 99
-#define IGNORE_FILE_EXTENSIONS { "php", "htm", "png", "prf" } // User won't want to print or delete these
-#define IGNORE_LENGTH 4
 
 class Webserver
 {   
@@ -57,7 +56,6 @@ class Webserver
   private:
   
     void ParseClientLine();
-    void IncomingByte(unsigned char b);
     void SendFile(char* nameOfFileToSend);
     void WriteByte();
     boolean StringEndsWith(char* string, char* ending);
@@ -77,13 +75,24 @@ class Webserver
     void WritePHPByte();
     char* prependRoot(char* root, char* fileName);
     int fileCount(char* list);
+    void ParseGetPost();
+    void CharFromClient(char c);
+    void BlankLineFromClient();
+    void InitialisePost();
+    int StringContains(char* string, char* match);
+    boolean MatchBoundary(char c);
     
     Platform* platform;
     unsigned long lastTime;
     int fileBeingSent;
     boolean writing;
-    boolean posting;
+    boolean receivingPost;
+    char postBoundary[POST_LENGTH];
+    int boundaryCount;  
+    char postFileName[POST_LENGTH];
+    int postFile;
     boolean postSeen;
+    boolean getSeen;
     long postLength;
     boolean inPHPFile;
     boolean clientLineIsBlank;
@@ -113,8 +122,6 @@ class Webserver
     boolean sendTable;
     char eatInputChar;
     int phpRecordPointer;
-    boolean ifwasTrue;
-    char* ignoreExtensions[IGNORE_LENGTH];
 };
 
 

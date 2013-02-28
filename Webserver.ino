@@ -33,31 +33,86 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-Webserver::Webserver(Platform* p)
+//***************************************************************************************************
+
+// String manipulation
+
+boolean Webserver::StringEndsWith(char* string, char* ending)
 {
-  //Serial.println("Webserver constructor"); 
-  platform = p;
-  lastTime = platform->time();
-  writing = false;
-  posting = false;
-  postSeen = false;
-  postLength = 0L;
-  inPHPFile = false;
-  initialisePHP();
-  clientLineIsBlank = true;
-  needToCloseClient = false;
-  clientLinePointer = 0;
-  clientLine[0] = 0;
-  clientRequest[0] = 0;
-  password = DEFAULT_PASSWORD;
-  myName = DEFAULT_NAME;
-  gotPassword = false;
-  gcodeAvailable = false;
-  gcodePointer = 0;
-  sendTable = true;
-  phpRecordPointer = 0;
-  ignoreExtensions = IGNORE_FILE_EXTENSIONS;
+  int j = strlen(string);
+  int k = strlen(ending);
+  if(k > j)
+    return false;
+  
+  return(!strcmp(&string[j - k], ending));
 }
+
+boolean Webserver::StringStartsWith(char* string, char* starting)
+{ 
+  int j = strlen(string);
+  int k = strlen(starting);
+  if(k > j)
+    return false;
+  
+  for(int i = 0; i < k; i++)
+    if(string[i] != starting[i])
+      return false;
+      
+  return true;
+}
+
+int Webserver::StringContains(char* string, char* match)
+{ 
+  int i = 0;
+  int count = 0;
+  
+  while(string[i])
+  {
+    if(string[i++] == match[count])
+    {
+      count++;
+      if(!match[count])
+        return i;
+    } else
+      count = 0;
+  }
+      
+  return -1;
+}
+
+boolean Webserver::MatchBoundary(char c)
+{
+  if(!postBoundary[0])
+    return false;
+    
+  if(c == postBoundary[boundaryCount])
+  {
+    boundaryCount++;
+    if(!postBoundary[boundaryCount])
+    {
+      boundaryCount = 0;
+      return true;
+    }
+  } else
+  {
+    for(int i = 0; i < boundaryCount; i++)
+      platform->Write(postFile, postBoundary[i]);
+    platform->Write(postFile, c);
+    boundaryCount = 0;
+  }
+  return false;  
+}
+
+char* Webserver::prependRoot(char* root, char* fileName)
+{
+  strcpy(scratchString, root);
+  return strcat(scratchString, fileName);
+}
+
+
+//****************************************************************************************************
+
+// Handling G Codes for the rest of the software
 
 boolean Webserver::Available()
 {
@@ -147,29 +202,13 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   return true;
 }
 
-boolean Webserver::StringEndsWith(char* string, char* ending)
-{
-  int j = strlen(string);
-  int k = strlen(ending);
-  if(k > j)
-    return false;
-  
-  return(!strcmp(&string[j - k], ending));
-}
+//********************************************************************************************
 
-boolean Webserver::StringStartsWith(char* string, char* starting)
-{ 
-  int j = strlen(string);
-  int k = strlen(starting);
-  if(k > j)
-    return false;
-  
-  for(int i = 0; i < k; i++)
-    if(string[i] != starting[i])
-      return false;
-      
-  return true;
-}
+// Communications with the client
+
+//--------------------------------------------------------------------------------------------
+
+// Output to the client
 
 void Webserver::CloseClient()
 {
@@ -178,12 +217,6 @@ void Webserver::CloseClient()
   initialisePHP();
   clientCloseTime = platform->time();
   needToCloseClient = true;   
-}
-
-char* Webserver::prependRoot(char* root, char* fileName)
-{
-  strcpy(scratchString, root);
-  return strcat(scratchString, fileName);
 }
 
 
@@ -248,6 +281,282 @@ void Webserver::WriteByte()
     }  
 }
 
+//----------------------------------------------------------------------------------------------------
+
+// Input from the client
+
+void Webserver::CheckPassword()
+{
+  if(!StringEndsWith(clientQualifier, password))
+    return;
+    
+  gotPassword = true;
+  strcpy(clientRequest, "control.php");
+}
+
+/*
+
+Parse a string in clientLine[] from the user's web browser
+
+Simple requests have the form:
+
+GET /page2.htm HTTP/1.1
+     ^  Start clientRequest[] at clientLine[5]; stop at the blank or...
+
+...fancier ones with arguments after a '?' go:
+
+GET /gather.asp?pwd=my_pwd HTTP/1.1
+     ^ Start clientRequest[]
+                ^ Start clientQualifier[]
+*/
+
+void Webserver::ParseGetPost()
+{
+//    Serial.print("HTTP request: ");
+//    Serial.println(clientLine);
+  
+    int i = 5;
+    int j = 0;
+    clientRequest[j] = 0;
+    clientQualifier[0] = 0;
+    while(clientLine[i] != ' ' && clientLine[i] != '?')
+    {
+      clientRequest[j] = clientLine[i];
+      j++;
+      i++;
+    }
+    clientRequest[j] = 0;
+    if(clientLine[i] == '?')
+    {
+      i++;
+      j = 0;
+      while(clientLine[i] != ' ')
+      {
+        clientQualifier[j] = clientLine[i];
+        j++;
+        i++;      
+      }
+      clientQualifier[j] = 0;
+    } 
+}
+
+void Webserver::InitialisePost()
+{
+  postSeen = false;
+  receivingPost = false;
+  boundaryCount = 0; 
+  postBoundary[0] = 0;
+  postFileName[0] = 0;
+  postFile = -1;
+}
+
+void Webserver::ParseClientLine()
+{ 
+  if(StringStartsWith(clientLine, "GET"))
+  {
+    ParseGetPost();
+    postSeen = false;
+    getSeen = true;
+    if(!clientRequest[0])
+      strcpy(clientRequest, "control.php");
+    return;
+  }
+  
+  if(StringStartsWith(clientLine, "POST"))
+  {
+    ParseGetPost();
+    InitialisePost();
+    postSeen = true;
+    getSeen = false;
+    if(!clientRequest[0])
+      strcpy(clientRequest, "print.php");
+    return;
+  }
+  
+  int bnd;
+  
+  if(postSeen && ( (bnd = StringContains(clientLine, "boundary=")) >= 0) )
+  {
+    if(strlen(&clientLine[bnd]) >= POST_LENGTH - 4)
+    {
+      platform->Message(HOST_MESSAGE, "Post boundary buffer overflow.\n");
+      return;
+    }
+    postBoundary[0] = '-';
+    postBoundary[1] = '-';
+    strcpy(&postBoundary[2], &clientLine[bnd]);
+    strcat(postBoundary, "--");
+    //Serial.print("Got boundary: ");
+    //Serial.println(postBoundary);
+    return;
+  }
+  
+  if(receivingPost && StringStartsWith(clientLine, "Content-Disposition:"))
+  {
+    bnd = StringContains(clientLine, "filename=\"");
+    if(bnd < 0)
+    {
+      platform->Message(HOST_MESSAGE, "Post disposition gives no filename.\n");
+      return;
+    }
+    int i = 0;
+    while(clientLine[bnd] && clientLine[bnd] != '"')
+    {
+      postFileName[i++] = clientLine[bnd++];
+      if(i >= POST_LENGTH)
+      {
+        i = 0;
+        platform->Message(HOST_MESSAGE, "Post filename buffer overflow.\n");
+      }
+    }
+    postFileName[i] = 0;
+    //Serial.print("Got file name: ");
+    //Serial.println(postFileName);    
+    return;
+  }  
+}
+  
+
+void Webserver::ParseQualifier()
+{
+  if(!clientQualifier[0])
+    return;
+    
+  if(StringStartsWith(clientQualifier, "pwd="))
+    CheckPassword();
+  if(!gotPassword) //Doan work fur nuffink
+    return;
+    
+  if(StringStartsWith(clientQualifier, "gcode="))
+  {
+    if(!LoadGcodeBuffer(&clientQualifier[6], true))
+      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!\n");
+    //strcpy(clientRequest, "control.php");
+  } 
+}
+
+// if you've gotten to the end of the line (received a newline
+// character) and the line is blank, the http request has ended,
+// so you can send a reply
+void Webserver::BlankLineFromClient()
+{
+  clientLine[clientLinePointer] = 0;
+  clientLinePointer = 0;
+  ParseQualifier();
+  
+  //Serial.println("End of header.");
+  
+  if(getSeen)
+  {
+   SendFile(clientRequest);
+   clientRequest[0] = 0;
+   return;
+  }
+  
+  if(postSeen)
+  {
+    receivingPost = true;
+    postSeen = false;
+    return;
+  }
+  
+  if(receivingPost)
+  {
+    postFile = platform->OpenFile(prependRoot(platform->getGcodeDir(), postFileName), true);
+    if(postFile < 0  || !postBoundary[0])
+    {
+      platform->Message(HOST_MESSAGE, "Can't open file for write or no post boundary: ");
+      platform->Message(HOST_MESSAGE, prependRoot(platform->getGcodeDir(), postFileName));
+      platform->Message(HOST_MESSAGE, "\n");
+      InitialisePost();
+    }
+  }  
+
+  
+}
+
+void Webserver::CharFromClient(char c)
+{
+  if(c == '\n' && clientLineIsBlank) 
+  {
+    BlankLineFromClient();
+    return;
+  }
+  
+  if(c == '\n') 
+  {
+    clientLine[clientLinePointer] = 0;
+    ParseClientLine();
+    // you're starting a new line
+    clientLineIsBlank = true;
+    clientLinePointer = 0;
+  } else if(c != '\r') 
+  {
+    // you've gotten a character on the current line
+    clientLineIsBlank = false;
+    clientLine[clientLinePointer] = c;
+    clientLinePointer++;
+    if(clientLinePointer >= STRING_LENGTH)
+    {
+      platform->Message(HOST_MESSAGE,"Client read buffer overflow.\n");
+      clientLinePointer = 0;
+      clientLine[clientLinePointer] = 0; 
+    }
+  }  
+}
+
+// Deal with input/output from/to the client (if any) one byte at a time.
+
+void Webserver::spin()
+{ 
+  if(writing)
+  {
+    if(inPHPFile)
+      WritePHPByte();
+    else
+      WriteByte();
+    return;         
+  }
+  
+  if(platform->ClientStatus() & CONNECTED)
+  {
+    if(platform->ClientStatus() & AVAILABLE) 
+    {
+      char c = platform->ClientRead();
+      Serial.write(c); 
+ 
+      if(receivingPost && postFile >= 0)
+      {
+        if(MatchBoundary(c))
+        {
+          //Serial.println("Got to end of file.");
+          platform->Close(postFile);
+          SendFile(clientRequest);
+          clientRequest[0] = 0;
+          InitialisePost();       
+        }
+        return;
+      }  
+      
+      CharFromClient(c);
+    }
+  }  
+   
+  if (platform->ClientStatus() & CLIENT) 
+  {
+    if(needToCloseClient)
+    {
+      if(platform->time() - clientCloseTime < CLIENT_CLOSE_DELAY)
+        return;
+      needToCloseClient = false;  
+      platform->DisconnectClient();
+    }   
+  }
+}
+
+//**********************************************************************************************
+
+// PHP interpreter
 
 void Webserver::initialisePHP()
 {
@@ -419,7 +728,7 @@ void Webserver::ProcessPHPByte(char b)
   {
      if(b != '\'')
      {
-       if(ifwasTrue)
+       if(ifWasTrue)
          platform->SendToClient(b);
      } else
      {
@@ -572,7 +881,7 @@ void Webserver::ProcessPHPByte(char b)
   // Should never get here...
   
   default:
-     platform->Message(HOST_MESSAGE, "ProcessPHPByte: PHP tag runout.");
+     platform->Message(HOST_MESSAGE, "ProcessPHPByte: PHP tag runout.\n");
      platform->SendToClient(b);
      initialisePHP();
   }   
@@ -591,196 +900,36 @@ void Webserver::WritePHPByte()
     }  
 }
 
+//******************************************************************************************
 
-/*
+// Constructor and initialisation
 
-Parse a string in clientLine[] from the user's web browser
-
-Simple requests have the form:
-
-GET /page2.htm HTTP/1.1
-     ^  Start clientRequest[] at clientLine[5]; stop at the blank or...
-
-...fancier ones with arguments after a '?' go:
-
-GET /gather.asp?pwd=my_pwd HTTP/1.1
-     ^ Start clientRequest[]
-                ^ Start clientQualifier[]
-*/
-
-void Webserver::ParseClientLine()
-{ 
-  if(!StringStartsWith(clientLine, "GET"))
-  {
-    if(!StringStartsWith(clientLine, "POST"))
-    {
-      if(!StringStartsWith(clientLine, "Content-Length:"))
-        return;
-      else
-      {
-        if(!postSeen)
-          platform->Message(HOST_MESSAGE, "Setting post length without POST request seen.");
-        postLength = atol(&clientLine[16]);
-        return;
-      }
- 
-    } else
-      postSeen = true;
-  }
-  
-    
-  Serial.print("HTTP request: ");
-  Serial.println(clientLine);
-  
-  int i = 5;
-  int j = 0;
-  clientRequest[j] = 0;
-  clientQualifier[0] = 0;
-  while(clientLine[i] != ' ' && clientLine[i] != '?')
-  {
-    clientRequest[j] = clientLine[i];
-    j++;
-    i++;
-  }
-  clientRequest[j] = 0;
-  if(clientLine[i] == '?')
-  {
-    i++;
-    j = 0;
-    while(clientLine[i] != ' ')
-    {
-      clientQualifier[j] = clientLine[i];
-      j++;
-      i++;      
-    }
-    clientQualifier[j] = 0;
-  }
-
-/*  Serial.print("Request:");
-  Serial.println(clientRequest);
-  Serial.print("Qualifier:");
-  Serial.println(clientQualifier);  
-*/  
-  if(!clientRequest[0])
-    strcpy(clientRequest, "control.php");
-}
-
-void Webserver::CheckPassword()
+Webserver::Webserver(Platform* p)
 {
-  if(!StringEndsWith(clientQualifier, password))
-    return;
-    
-  gotPassword = true;
-  strcpy(clientRequest, "control.php");
+  //Serial.println("Webserver constructor"); 
+  platform = p;
+  lastTime = platform->time();
+  writing = false;
+  receivingPost = false;
+  postSeen = false;
+  getSeen = false;
+  postLength = 0L;
+  inPHPFile = false;
+  initialisePHP();
+  clientLineIsBlank = true;
+  needToCloseClient = false;
+  clientLinePointer = 0;
+  clientLine[0] = 0;
+  clientRequest[0] = 0;
+  password = DEFAULT_PASSWORD;
+  myName = DEFAULT_NAME;
+  gotPassword = false;
+  gcodeAvailable = false;
+  gcodePointer = 0;
+  sendTable = true;
+  phpRecordPointer = 0;
+  InitialisePost();
 }
-  
-
-void Webserver::ParseQualifier()
-{
-  if(!clientQualifier[0])
-    return;
-    
-  if(StringStartsWith(clientQualifier, "pwd="))
-    CheckPassword();
-  if(!gotPassword) //Doan work fur nuffink
-    return;
-    
-  if(StringStartsWith(clientQualifier, "gcode="))
-  {
-    if(!LoadGcodeBuffer(&clientQualifier[6], true))
-      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!");
-    //strcpy(clientRequest, "control.php");
-  }
-  
-  if(StringStartsWith(clientQualifier, "upload="))
-  {
-    Serial.println("Got an upload request.");
-  }
-  
-  
-}
-
-
-
-void Webserver::spin()
-{
-    
-  if(writing)
-  {
-    if(inPHPFile)
-      WritePHPByte();
-    else
-      WriteByte();
-    return;         
-  }
-  
-  if(platform->ClientStatus() & CONNECTED)
-  {
-    if (platform->ClientStatus() & AVAILABLE) 
-    {
-      char c = platform->ClientRead();
-      Serial.write(c);      
-      if(posting)
-      {
-        postLength--;
-        if(postLength <= 0)
-        {
-          posting = false;
-          postLength = 0;
-          SendFile(clientRequest);
-        }
-        return;
-      }
-
-      // if you've gotten to the end of the line (received a newline
-      // character) and the line is blank, the http request has ended,
-      // so you can send a reply
-      if (c == '\n' && clientLineIsBlank) 
-      {
-        clientLine[clientLinePointer] = 0;
-        clientLinePointer = 0;
-        ParseQualifier();
-        if(postSeen)
-        {
-          posting = true;
-          postSeen = false;
-          return;
-        }
-        SendFile(clientRequest);
-        clientRequest[0] = 0;
-        return;
-      }
-      if (c == '\n') 
-      {
-        clientLine[clientLinePointer] = 0;
-        ParseClientLine();
-        // you're starting a new line
-        clientLineIsBlank = true;
-        clientLinePointer = 0;
-      } else if (c != '\r') 
-      {
-        // you've gotten a character on the current line
-        clientLineIsBlank = false;
-        clientLine[clientLinePointer] = c;
-        clientLinePointer++;
-      }
-    }
-    //return;
-  }  
-   
-  if (platform->ClientStatus() & CLIENT) 
-  {
-    if(needToCloseClient)
-    {
-      if(platform->time() - clientCloseTime < CLIENT_CLOSE_DELAY)
-        return;
-      needToCloseClient = false;  
-      platform->DisconnectClient();
-    }   
-  }
-}
-
-
 
 
 
