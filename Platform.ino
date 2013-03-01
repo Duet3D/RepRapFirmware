@@ -237,14 +237,17 @@ char* Platform::FileList(char* directory)
   dir = SD.open(directory);
   int p = 0;
   int q;
+  int count = 0;
   while(entry = dir.openNextFile())
   {
     q = 0;
+    count++;
+    fileList[p++] = FILE_LIST_BRACKET;
     while(entry.name()[q])
     {
       fileList[p++] = entry.name()[q];
       q++;
-      if(p >= FILE_LIST_LENGTH)
+      if(p >= FILE_LIST_LENGTH - 10) // Caution...
       {
         Message(HOST_MESSAGE, "FileList - directory: ");
         Message(HOST_MESSAGE, directory);
@@ -252,11 +255,16 @@ char* Platform::FileList(char* directory)
         return "";
       }
     }
+    fileList[p++] = FILE_LIST_BRACKET;
     fileList[p++] = FILE_LIST_SEPARATOR;
     entry.close();
   }
-  fileList[p++] = 0;
   dir.close();
+  
+  if(count <= 0)
+    return "";
+  
+  fileList[--p] = 0; // Get rid of the last separator
   return fileList;
 }
 

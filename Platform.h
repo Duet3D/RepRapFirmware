@@ -112,7 +112,9 @@ Licence: GPL
 #define GCODE_DIR "gcodes/" // Ditto - g-codes
 #define SYS_DIR "sys/" // Ditto - system files
 #define TEMP_DIR "tmp/" // Ditto - temporary files
-#define FILE_LIST_SEPARATOR ';'
+#define FILE_LIST_SEPARATOR ','
+#define FILE_LIST_BRACKET '"'
+#define FILE_LIST_LENGTH 1000 // Maximum lenght of file list
 
 /****************************************************************************************************/
 
@@ -151,7 +153,6 @@ Licence: GPL
 
 #define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
 
-#define FILE_LIST_LENGTH 1000 // Maximum lenght of file list
 
 /****************************************************************************************************/
 

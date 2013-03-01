@@ -605,63 +605,9 @@ boolean Webserver::callPHPBoolean(char* phpRecord)
   return true; // Best default
 }
 
-int Webserver::fileCount(char* list)
+void Webserver::getGCodeList()
 {
-  int p = 0;
-  int count = 0;
-  while(list[p])
-  {
-    if(list[p] == FILE_LIST_SEPARATOR)
-      count++;
-    p++;
-  }
-  return count;
-}
-
-void Webserver::printGCodeTable(char* function)
-{
-  char* list = platform->FileList(platform->getGcodeDir());
-  int count = fileCount(list);
-  
-  if(count <= 0)
-  {
-    platform->SendToClient("<br>No GCode files present.<br>");
-    return;
-  }
-  
-  int cols = (int)(sqrt((float)count)) + 1;
-  int rows = count/cols + 1;
-  
-  platform->SendToClient("<table>");
-  
-  int k = 0;
-  int p = 0;
-  char* fileName;
-  for(int i = 0; i < cols; i++)
-  {
-    platform->SendToClient("<tr>");
-    for(int j = 0; j < rows; j++)
-    {
-      fileName = &list[p];
-      while(list[p] != FILE_LIST_SEPARATOR)
-        p++;
-      list[p++] = 0;
-      platform->SendToClient("<td>&nbsp;<button type=\"button\" onclick=\"return ");
-      platform->SendToClient(function);
-      platform->SendToClient("('");
-      platform->SendToClient(prependRoot(platform->getGcodeDir(), fileName));
-      platform->SendToClient("')\">");
-      platform->SendToClient(fileName);
-      platform->SendToClient("</button>&nbsp;</td>");
-      k++;
-      if(k >= count)
-        break;
-    }
-    platform->SendToClient("</tr>");
-    if(k >= count)
-        break;
-  }
-  platform->SendToClient("</table>");
+  platform->SendToClient(platform->FileList(platform->getGcodeDir()));
 }
 
 void Webserver::callPHPString(char* phpRecord)
@@ -672,17 +618,11 @@ void Webserver::callPHPString(char* phpRecord)
     return;
   }
     
-  if(!strcmp(phpRecord, "printGCodeTable("))
+  if(!strcmp(phpRecord, "getGCodeList("))
   {
-    printGCodeTable("printFile");
+    getGCodeList();
     return;
   }  
- 
-  if(!strcmp(phpRecord, "deleteGCodeTable("))
-  {
-    printGCodeTable("deleteFile");
-    return;
-  } 
     
   if(!strcmp(phpRecord, "logout("))
   {

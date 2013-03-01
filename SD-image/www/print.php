@@ -24,10 +24,10 @@
     </tr></table>
   <br><br>'; ?>
 
-<form action="print.php?upload=myFile"
+<form onSubmit="return checkFileName(this)" action="print.php"
 enctype="multipart/form-data" method="post">
 <p>
-Upload a G Code file to <?php print(getMyName()); ?>:<br>
+Upload a G Code file :<br>
 <input type="file" name="datafile" size="40">
 </p>
 <div>
@@ -38,7 +38,59 @@ Upload a G Code file to <?php print(getMyName()); ?>:<br>
 <br><br>Click a file to print it:
 <br><br>
 
-<?php print(printGCodeTable()); ?>
+<script language="javascript" type="text/javascript">
+function fileList()
+{
+	var files = [<?php print(getGCodeList()); ?>];
+	return files;
+}
+
+
+function printGCodeTable()
+{
+  var list = fileList();
+
+  var count = list.length;
+  
+  if(count <= 0)
+  	return "<br>No GCode files present.<br>";
+
+  
+  var cols = Math.floor(Math.sqrt(count)) + 1;
+  var rows = Math.floor(count/cols) + 1;
+  
+  var result = "<table>";
+  
+  var k = 0;
+
+  for(var i = 0; i < cols; i++)
+  {
+    result += "<tr>";
+    for(var j = 0; j < rows; j++)
+    {
+      var fileName = list[i*rows + j];
+      result += "<td>&nbsp;<button type=\"button\" onclick=\"return printFile('";
+      result += "gcodes/" + fileName; // Need PHP in here
+      result += "')\">";
+      result += fileName;
+      result += "</button>&nbsp;</td>";
+      k++;
+      if(k >= count)
+        break;
+    }
+    result += "</tr>";
+    if(k >= count)
+        break;
+  }
+  result += "</table>";
+  return result;
+}
+
+
+document.write(printGCodeTable());
+</script>
+<br><br>
+
 
 <br><br>
 <button type="button" onclick="return pausePrint()">Pause the print</button>
@@ -56,6 +108,24 @@ function printFile(filetoprint){ window.location.href = "print.php?gcode=M23%20"
 function pausePrint(){ window.location.href = "print.php?gcode=M25";}
 
 function deleteFile(){ window.location.href = "delete.php";}
+
+function checkFileName(uploadForm)
+{
+
+  var list = fileList();
+  for(var i = 0; i < list.length; i++)
+  {
+	if(list[i].toUpperCase() == uploadForm.datafile.value.toUpperCase())
+	{
+		return confirm("This will overwrite the file " + 
+			list[i] + " on  <?php print(getMyName()); ?>." +
+				"Continue?");
+	}
+  }
+
+return true;
+
+}
 
 
 </script> 

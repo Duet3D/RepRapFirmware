@@ -29,12 +29,62 @@
 
 
 <br><br>
-<br><br>Click a file to delete it:
+Click a file to delete it:
+<br>
+<script language="javascript" type="text/javascript">
+function fileList()
+{
+	var files = [<?php print(getGCodeList()); ?>];
+	return files;
+}
+
+
+function printGCodeTable()
+{
+  var list = fileList();
+
+  var count = list.length;
+  
+  if(count <= 0)
+  	return "<br>No GCode files present.<br>";
+
+  
+  var cols = Math.floor(Math.sqrt(count)) + 1;
+  var rows = Math.floor(count/cols) + 1;
+  
+  var result = "<table>";
+  
+  var k = 0;
+
+  for(var i = 0; i < cols; i++)
+  {
+    result += "<tr>";
+    for(var j = 0; j < rows; j++)
+    {
+      var fileName = list[i*rows + j];
+      result += "<td>&nbsp;<button type=\"button\" onclick=\"return deleteFile('";
+      result += "gcodes/" + fileName; // Need PHP in here
+      result += "')\">";
+      result += fileName;
+      result += "</button>&nbsp;</td>";
+      k++;
+      if(k >= count)
+        break;
+    }
+    result += "</tr>";
+    if(k >= count)
+        break;
+  }
+  result += "</table>";
+  return result;
+}
+
+
+document.write(printGCodeTable());
+</script>
 <br><br>
 
-<?php print(deleteGCodeTable()); ?>
 
-<br><br>
 
 
 <script language="javascript" type="text/javascript">

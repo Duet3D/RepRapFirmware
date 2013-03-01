@@ -68,13 +68,12 @@ class Webserver
     char PHPParse(char* phpString);
     boolean printHeadString();
     boolean printLinkTable();
-    void printGCodeTable(char* function);
+    void getGCodeList();
     boolean callPHPBoolean(char* phpRecord);
     void callPHPString(char* phpRecord);  
     void ProcessPHPByte(char b);
     void WritePHPByte();
     char* prependRoot(char* root, char* fileName);
-    int fileCount(char* list);
     void ParseGetPost();
     void CharFromClient(char c);
     void BlankLineFromClient();
