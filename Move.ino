@@ -29,16 +29,16 @@ Move::Move(Platform* p)
 
 void Move::Init()
 {
-  lastTime = platform->time();
-  platform->setDirection(X_AXIS, FORWARDS);
-  platform->setDirection(Y_AXIS, FORWARDS);
-  platform->setDirection(Z_AXIS, FORWARDS);
-  platform->setDirection(3, FORWARDS);  
+  lastTime = platform->Time();
+  platform->SetDirection(X_AXIS, FORWARDS);
+  platform->SetDirection(Y_AXIS, FORWARDS);
+  platform->SetDirection(Z_AXIS, FORWARDS);
+  platform->SetDirection(3, FORWARDS);  
 }
 
 void Move::Spin()
 {
-   unsigned long t = platform->time();
+   unsigned long t = platform->Time();
    if(t - lastTime < 300)
      return;
    lastTime = t;

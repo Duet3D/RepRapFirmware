@@ -33,7 +33,7 @@ GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
 
 void GCodes::Init()
 {
-  lastTime = platform->time();
+  lastTime = platform->Time();
   gcodePointer = 0;
 }
 

@@ -29,14 +29,14 @@ Heat::Heat(Platform* p)
 
 void Heat::Init()
 {
-  lastTime = platform->time();
+  lastTime = platform->Time();
   //frac = 0;
   //inc = 0.01;  
 }
 
 void Heat::Spin()
 {
-   unsigned long t = platform->time();
+   unsigned long t = platform->Time();
    if(t - lastTime < 3000)
      return;
    lastTime = t;

@@ -65,7 +65,7 @@ void RepRap::Init()
 
 void RepRap::Spin()
 {
-  platform->spin();
+  platform->Spin();
   move->Spin();
   heat->Spin();
   gcodes->Spin();

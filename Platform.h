@@ -164,24 +164,24 @@ class Platform
   
   Platform(RepRap* r);
   
-  RepRap* getRepRap();
+  RepRap* GetRepRap();
   
 //-------------------------------------------------------------------------------------------------------------
 
 // These are the functions that form the interface between Platform and the rest of the firmware.
 
-  void init(); // Set the machine up after a restart.  If called subsequently this should set the machine up as if
+  void Init(); // Set the machine up after a restart.  If called subsequently this should set the machine up as if
                // it has just been restarted; it can do this by executing an actual restart if you like, but beware the 
                // loop of death...
-  void spin(); // This gets called in the main loop and should do any housekeeping needed
+  void Spin(); // This gets called in the main loop and should do any housekeeping needed
   
   // Timing
   
-  unsigned long time(); // Returns elapsed microseconds since some arbitrary time
+  unsigned long Time(); // Returns elapsed microseconds since some arbitrary time
   
-  void setInterrupt(long t); // Set a regular interrupt going every t microseconds; if t is -ve turn interrupt off
+  void SetInterrupt(long t); // Set a regular interrupt going every t microseconds; if t is -ve turn interrupt off
   
-  void interrupt(); // The function that the interrupt calls
+  void Interrupt(); // The function that the interrupt calls
   
   // Communications and data storage; opening something unsupported returns -1.
   
@@ -192,12 +192,12 @@ class Platform
                                              // returned value is false for EoF, true otherwise
   void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
-  char* getWebDir(); // Where the php/htm etc files are
-  char* getGcodeDir(); // Where the gcodes are
-  char* getSystemDir();  // Where the system files are
-  char* getTemporaryDir(); // Where temporary files are
+  char* GetWebDir(); // Where the php/htm etc files are
+  char* GetGcodeDir(); // Where the gcodes are
+  char* GetSystemDir();  // Where the system files are
+  char* GetTemporaryDir(); // Where temporary files are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
-  boolean deleteFile(char* fileName); // Delete a file
+  boolean DeleteFile(char* fileName); // Delete a file
   
   unsigned char ClientRead(); // Read a byte from the client
   void SendToClient(char* message); // Send string to the host
@@ -210,15 +210,15 @@ class Platform
   
   // Movement
   
-  void setDirection(byte drive, bool direction);
-  void step(byte drive);
-  void disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
-  void home(byte axis);
+  void SetDirection(byte drive, bool direction);
+  void Step(byte drive);
+  void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
+  void Home(byte axis);
   
   // Heat and temperature
   
-  float getTemperature(byte heater); // Result is in degrees celsius
-  void setHeater(byte heater, const float& power); // power is a fraction in [0,1]
+  float GetTemperature(byte heater); // Result is in degrees celsius
+  void SetHeater(byte heater, const float& power); // power is a fraction in [0,1]
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -228,9 +228,9 @@ class Platform
   
   // Load settings from local storage
   
-  bool loadFromStore();
+  bool LoadFromStore();
   
-  int getRawTemperature(byte heater);
+  int GetRawTemperature(byte heater);
   
   RepRap* reprap;
   
@@ -288,7 +288,7 @@ class Platform
   boolean EepromRead(unsigned char& b);
 };
 
-inline unsigned long Platform::time()
+inline unsigned long Platform::Time()
 {
   return micros();
 }
@@ -361,12 +361,12 @@ inline void Platform::DisconnectClient()
 
 // Interrupts
 
-inline void Platform::setInterrupt(long t)
+inline void Platform::SetInterrupt(long t)
 {
   
 }
 
-inline void Platform::interrupt()
+inline void Platform::Interrupt()
 {
   reprap->Interrupt();  // Put nothing else in this function
 }
@@ -375,17 +375,17 @@ inline void Platform::interrupt()
 
 // Drive the RepRap machine
 
-inline void Platform::setDirection(byte drive, bool direction)
+inline void Platform::SetDirection(byte drive, bool direction)
 {
   digitalWrite(directionPins[drive], direction);  
 }
 
-inline void Platform::step(byte drive)
+inline void Platform::Step(byte drive)
 {
   digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
 }
 
-inline int Platform::getRawTemperature(byte heater)
+inline int Platform::GetRawTemperature(byte heater)
 {
   return analogRead(tempSensePins[heater]);
 }

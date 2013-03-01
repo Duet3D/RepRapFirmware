@@ -22,6 +22,7 @@ Licence: GPL
 #ifndef REPRAPFIRMWARE_H
 #define REPRAPFIRMWARE_H
 
+
 #define NAME "RepRapFirmware"
 #define VERSION "0.1"
 #define DATE "2012-11-18"
@@ -64,7 +65,7 @@ class RepRap
 #include "GCodes.h"
 #include "Webserver.h"
 
-// Do nothing in the constructor; put what you want in RepRap:init()
+// Do nothing in the constructor; put what you want in RepRap:Init()
 
 inline RepRap::RepRap() {}
 
@@ -76,4 +77,7 @@ inline RepRap::RepRap() {}
 
 extern RepRap reprap;
 
+
 #endif
+
+

@@ -39,24 +39,24 @@ void loop()
 Platform::Platform(RepRap* r)
 {
   reprap = r;
-  init();
+  Init();
 }
 
-RepRap* Platform::getRepRap()
+RepRap* Platform::GetRepRap()
 {
   return reprap;
 }
 
-void Platform::init()
+void Platform::Init()
 { 
   byte i;
   
   Serial.begin(BAUD_RATE);
   //Serial.println("\n\n\nPlatform constructor");
   
-  lastTime = time();
+  lastTime = Time();
   
-  if(!loadFromStore())
+  if(!LoadFromStore())
   {     
   // DRIVES
   
@@ -169,7 +169,7 @@ void Platform::init()
 
 // Load settings from local storage; return true if successful, false otherwise
 
-bool Platform::loadFromStore()
+bool Platform::LoadFromStore()
 {
   return false;
 }
@@ -194,9 +194,9 @@ bool Platform::loadFromStore()
 
 // Result is in degrees celsius
 
-float Platform::getTemperature(byte heater)
+float Platform::GetTemperature(byte heater)
 {
-  float r = (float)getRawTemperature(heater);
+  float r = (float)GetRawTemperature(heater);
   //Serial.println(r);
   return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/(AD_RANGE - r))/thermistorInfRs[heater] );
 }
@@ -204,7 +204,7 @@ float Platform::getTemperature(byte heater)
 
 // power is a fraction in [0,1]
 
-void Platform::setHeater(byte heater, const float& power)
+void Platform::SetHeater(byte heater, const float& power)
 {
   if(power <= 0)
   {
@@ -269,7 +269,7 @@ char* Platform::FileList(char* directory)
 }
 
 // Delete a file
-boolean Platform::deleteFile(char* fileName)
+boolean Platform::DeleteFile(char* fileName)
 {
   return SD.remove(fileName);
 }
@@ -417,14 +417,14 @@ void Platform::SendToClient(char* message)
 
 // Where the php/htm etc files are
 
-char* Platform::getWebDir()
+char* Platform::GetWebDir()
 {
   return webDir;
 }
 
 // Where the gcodes are
 
-char* Platform::getGcodeDir()
+char* Platform::GetGcodeDir()
 {
   return gcodeDir;
 }
@@ -434,12 +434,12 @@ char* Platform::getGcodeDir()
 
 
 
-void Platform::spin()
+void Platform::Spin()
 {
    ClientMonitor();
-   if(time() - lastTime < 2000000)
+   if(Time() - lastTime < 2000000)
      return;
-   lastTime = time();
+   lastTime = Time();
    //Serial.print("Client status: ");
    //Serial.println(clientStatus);
 }

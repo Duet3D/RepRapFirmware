@@ -184,7 +184,7 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   
   if(StringStartsWith(gcodeBuffer, "M30")) // Delete file?
   {
-    if(!platform->deleteFile(&gcodeBuffer[4]))
+    if(!platform->DeleteFile(&gcodeBuffer[4]))
     {
       platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
       platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
@@ -215,7 +215,7 @@ void Webserver::CloseClient()
   writing = false;
   inPHPFile = false;
   initialisePHP();
-  clientCloseTime = platform->time();
+  clientCloseTime = platform->Time();
   needToCloseClient = true;   
 }
 
@@ -255,12 +255,12 @@ void Webserver::SendFile(char* nameOfFileToSend)
   //Serial.print("File requested: ");
   //Serial.println(nameOfFileToSend);
   
-  fileBeingSent = platform->OpenFile(prependRoot(platform->getWebDir(), nameOfFileToSend), false);
+  fileBeingSent = platform->OpenFile(prependRoot(platform->GetWebDir(), nameOfFileToSend), false);
   if(fileBeingSent < 0)
   {
     sendTable = false;
     nameOfFileToSend = "html404.htm";
-    fileBeingSent = platform->OpenFile(prependRoot(platform->getWebDir(), nameOfFileToSend), false);
+    fileBeingSent = platform->OpenFile(prependRoot(platform->GetWebDir(), nameOfFileToSend), false);
   }
   
   inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
@@ -462,11 +462,11 @@ void Webserver::BlankLineFromClient()
   
   if(receivingPost)
   {
-    postFile = platform->OpenFile(prependRoot(platform->getGcodeDir(), postFileName), true);
+    postFile = platform->OpenFile(prependRoot(platform->GetGcodeDir(), postFileName), true);
     if(postFile < 0  || !postBoundary[0])
     {
       platform->Message(HOST_MESSAGE, "Can't open file for write or no post boundary: ");
-      platform->Message(HOST_MESSAGE, prependRoot(platform->getGcodeDir(), postFileName));
+      platform->Message(HOST_MESSAGE, prependRoot(platform->GetGcodeDir(), postFileName));
       platform->Message(HOST_MESSAGE, "\n");
       InitialisePost();
     }
@@ -546,7 +546,7 @@ void Webserver::spin()
   {
     if(needToCloseClient)
     {
-      if(platform->time() - clientCloseTime < CLIENT_CLOSE_DELAY)
+      if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY)
         return;
       needToCloseClient = false;  
       platform->DisconnectClient();
@@ -607,7 +607,7 @@ boolean Webserver::callPHPBoolean(char* phpRecord)
 
 void Webserver::getGCodeList()
 {
-  platform->SendToClient(platform->FileList(platform->getGcodeDir()));
+  platform->SendToClient(platform->FileList(platform->GetGcodeDir()));
 }
 
 void Webserver::callPHPString(char* phpRecord)
@@ -848,7 +848,7 @@ Webserver::Webserver(Platform* p)
 {
   //Serial.println("Webserver constructor"); 
   platform = p;
-  lastTime = platform->time();
+  lastTime = platform->Time();
   writing = false;
   receivingPost = false;
   postSeen = false;
