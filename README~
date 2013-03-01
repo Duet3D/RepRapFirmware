@@ -31,7 +31,7 @@ the RepRapPro Ltd Arduino DUE to Sanguinololu Adaptor.
 
 (See https://github.com/reprappro/ARMadaptor)
 
-Test compiling was with Arduino 1.5.2.
+Test compiling is with Arduino 1.5.2.
 
 Upload it to your Due, put the ether shield on it, plug in a
 network cable, and copy the files in the SD-image folder onto the SD.
