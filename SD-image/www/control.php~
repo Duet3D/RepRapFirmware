@@ -103,8 +103,8 @@
    
    function xm01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X-0.1%0AG90";}
    function xm1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X-1%0AG90";}
-   function xm10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X10%0AG90";}
-   function xm100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X100%0AG90";}
+   function xm10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X-10%0AG90";}
+   function xm100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X-100%0AG90";}
    
    function yp01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y0.1%0AG90";}
    function yp1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y1%0AG90";}
@@ -113,8 +113,8 @@
    
    function ym01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y-0.1%0AG90";}
    function ym1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y-1%0AG90";}
-   function ym10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y10%0AG90";}
-   function ym100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y100%0AG90";}
+   function ym10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y-10%0AG90";}
+   function ym100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y-100%0AG90";}
    
    function zp01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z0.1%0AG90";}
    function zp1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z1%0AG90";}
@@ -123,8 +123,8 @@
    
    function zm01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z-0.1%0AG90";}
    function zm1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z-1%0AG90";}
-   function zm10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z10%0AG90";}
-   function zm100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z100%0AG90";}
+   function zm10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z-10%0AG90";}
+   function zm100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z-100%0AG90";}
    
    </script> 
 <br><br></html>

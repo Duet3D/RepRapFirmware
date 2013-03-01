@@ -51,7 +51,7 @@ class Webserver
     Webserver(Platform* p);
     boolean Available();
     byte Read();
-    void spin();
+    void Spin();
     
   private:
   
@@ -64,16 +64,16 @@ class Webserver
     void CheckPassword();
     boolean LoadGcodeBuffer(char* gc, boolean convertWeb);
     void CloseClient();
-    void initialisePHP();
+    void InitialisePHP();
     char PHPParse(char* phpString);
-    boolean printHeadString();
-    boolean printLinkTable();
-    void getGCodeList();
-    boolean callPHPBoolean(char* phpRecord);
-    void callPHPString(char* phpRecord);  
+    boolean PrintHeadString();
+    boolean PrintLinkTable();
+    void GetGCodeList();
+    boolean CallPHPBoolean(char* phpRecord);
+    void CallPHPString(char* phpRecord);  
     void ProcessPHPByte(char b);
     void WritePHPByte();
-    char* prependRoot(char* root, char* fileName);
+    char* PrependRoot(char* root, char* fileName);
     void ParseGetPost();
     void CharFromClient(char c);
     void BlankLineFromClient();

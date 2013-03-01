@@ -69,7 +69,7 @@ void RepRap::Spin()
   move->Spin();
   heat->Spin();
   gcodes->Spin();
-  webserver->spin();
+  webserver->Spin();
 }
 
 void RepRap::Interrupt()

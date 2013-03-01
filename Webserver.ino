@@ -103,7 +103,7 @@ boolean Webserver::MatchBoundary(char c)
   return false;  
 }
 
-char* Webserver::prependRoot(char* root, char* fileName)
+char* Webserver::PrependRoot(char* root, char* fileName)
 {
   strcpy(scratchString, root);
   return strcat(scratchString, fileName);
@@ -214,7 +214,7 @@ void Webserver::CloseClient()
 {
   writing = false;
   inPHPFile = false;
-  initialisePHP();
+  InitialisePHP();
   clientCloseTime = platform->Time();
   needToCloseClient = true;   
 }
@@ -255,17 +255,17 @@ void Webserver::SendFile(char* nameOfFileToSend)
   //Serial.print("File requested: ");
   //Serial.println(nameOfFileToSend);
   
-  fileBeingSent = platform->OpenFile(prependRoot(platform->GetWebDir(), nameOfFileToSend), false);
+  fileBeingSent = platform->OpenFile(PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
   if(fileBeingSent < 0)
   {
     sendTable = false;
     nameOfFileToSend = "html404.htm";
-    fileBeingSent = platform->OpenFile(prependRoot(platform->GetWebDir(), nameOfFileToSend), false);
+    fileBeingSent = platform->OpenFile(PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
   }
   
   inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
   if(inPHPFile)
-    initialisePHP();
+    InitialisePHP();
   writing = true; 
 }
 
@@ -462,11 +462,11 @@ void Webserver::BlankLineFromClient()
   
   if(receivingPost)
   {
-    postFile = platform->OpenFile(prependRoot(platform->GetGcodeDir(), postFileName), true);
+    postFile = platform->OpenFile(PrependRoot(platform->GetGcodeDir(), postFileName), true);
     if(postFile < 0  || !postBoundary[0])
     {
       platform->Message(HOST_MESSAGE, "Can't open file for write or no post boundary: ");
-      platform->Message(HOST_MESSAGE, prependRoot(platform->GetGcodeDir(), postFileName));
+      platform->Message(HOST_MESSAGE, PrependRoot(platform->GetGcodeDir(), postFileName));
       platform->Message(HOST_MESSAGE, "\n");
       InitialisePost();
     }
@@ -507,7 +507,7 @@ void Webserver::CharFromClient(char c)
 
 // Deal with input/output from/to the client (if any) one byte at a time.
 
-void Webserver::spin()
+void Webserver::Spin()
 { 
   if(writing)
   {
@@ -558,7 +558,7 @@ void Webserver::spin()
 
 // PHP interpreter
 
-void Webserver::initialisePHP()
+void Webserver::InitialisePHP()
 {
   phpTag[0] = 0;
   inPHPString = 0;
@@ -588,15 +588,15 @@ char Webserver::PHPParse(char* phpString)
 }
 
 
-boolean Webserver::printLinkTable() { boolean r = sendTable; sendTable = true; return r; }
+boolean Webserver::PrintLinkTable() { boolean r = sendTable; sendTable = true; return r; }
 
-boolean Webserver::callPHPBoolean(char* phpRecord)
+boolean Webserver::CallPHPBoolean(char* phpRecord)
 { 
   if(!strcmp(phpRecord, "gotPassword("))
     return gotPassword;
     
   if(!strcmp(phpRecord, "printLinkTable("))
-    return printLinkTable();
+    return PrintLinkTable();
     
   platform->Message(HOST_MESSAGE, "callPHPBoolean(): non-existent function - ");
   platform->Message(HOST_MESSAGE, phpRecord);
@@ -605,12 +605,12 @@ boolean Webserver::callPHPBoolean(char* phpRecord)
   return true; // Best default
 }
 
-void Webserver::getGCodeList()
+void Webserver::GetGCodeList()
 {
   platform->SendToClient(platform->FileList(platform->GetGcodeDir()));
 }
 
-void Webserver::callPHPString(char* phpRecord)
+void Webserver::CallPHPString(char* phpRecord)
 {
   if(!strcmp(phpRecord, "getMyName("))
   {
@@ -620,7 +620,7 @@ void Webserver::callPHPString(char* phpRecord)
     
   if(!strcmp(phpRecord, "getGCodeList("))
   {
-    getGCodeList();
+    GetGCodeList();
     return;
   }  
     
@@ -658,7 +658,7 @@ void Webserver::ProcessPHPByte(char b)
     if(phpRecordPointer >= PHP_TAG_LENGTH)
     {
       platform->Message(HOST_MESSAGE, "ProcessPHPByte: PHP record buffer overflow.\n");
-      initialisePHP();
+      InitialisePHP();
     }
     phpRecord[phpRecordPointer] = 0;
     return;
@@ -672,7 +672,7 @@ void Webserver::ProcessPHPByte(char b)
          platform->SendToClient(b);
      } else
      {
-       initialisePHP();
+       InitialisePHP();
        eatInput = true;
        eatInputChar = '>';
      }
@@ -681,8 +681,8 @@ void Webserver::ProcessPHPByte(char b)
   
   if(phpIfing)
   {
-    boolean ifWas = callPHPBoolean(phpRecord);
-    initialisePHP();
+    boolean ifWas = CallPHPBoolean(phpRecord);
+    InitialisePHP();
     ifWasTrue = ifWas;
     inPHPString = 5;
     if(b != ')')
@@ -695,8 +695,8 @@ void Webserver::ProcessPHPByte(char b)
   
   if(phpPrinting)
   {
-    callPHPString(phpRecord);
-    initialisePHP();
+    CallPHPString(phpRecord);
+    InitialisePHP();
     eatInput = true;
     eatInputChar = '>';    
     return;
@@ -715,7 +715,7 @@ void Webserver::ProcessPHPByte(char b)
       platform->Message(HOST_MESSAGE, "ProcessPHPByte: PHP buffer overflow: ");
       platform->Message(HOST_MESSAGE, phpTag);
       platform->Message(HOST_MESSAGE, "\n");
-      initialisePHP();
+      InitialisePHP();
       return;
     }
     
@@ -823,7 +823,7 @@ void Webserver::ProcessPHPByte(char b)
   default:
      platform->Message(HOST_MESSAGE, "ProcessPHPByte: PHP tag runout.\n");
      platform->SendToClient(b);
-     initialisePHP();
+     InitialisePHP();
   }   
 }
 
@@ -835,7 +835,7 @@ void Webserver::WritePHPByte()
     else
     {     
       platform->Close(fileBeingSent);
-      initialisePHP();    
+      InitialisePHP();    
       CloseClient(); 
     }  
 }
@@ -855,7 +855,7 @@ Webserver::Webserver(Platform* p)
   getSeen = false;
   postLength = 0L;
   inPHPFile = false;
-  initialisePHP();
+  InitialisePHP();
   clientLineIsBlank = true;
   needToCloseClient = false;
   clientLinePointer = 0;

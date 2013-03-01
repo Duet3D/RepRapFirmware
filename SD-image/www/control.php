@@ -49,39 +49,39 @@
    </tr>
    
    <tr>
-   <td><button type="button" onclick="return homex()">Home X</button></td>
-   <td><button type="button" onclick="return xm100mm()">&lt;--- X</button></td>
-   <td><button type="button" onclick="return xm10mm()">&lt;-- X</button></td>
-   <td><button type="button" onclick="return xm1mm()">&lt;- X</button></td>
-   <td><button type="button" onclick="return xm01mm()">&lt; X</button></td>
-   <td><button type="button" onclick="return xp01mm()">X &gt;</button></td>
-   <td><button type="button" onclick="return xp1mm()">X --&gt;</button></td>
-   <td><button type="button" onclick="return xp10mm()">X --&gt;</button></td>
-   <td><button type="button" onclick="return xp100mm()">X ---&gt;</button></td>
+   <td><button type="button" onclick="return home('X')">Home X</button></td>
+   <td><button type="button" onclick="return move('X', -100)">&lt;--- X</button></td>
+   <td><button type="button" onclick="return move('X', -10)">&lt;-- X</button></td>
+   <td><button type="button" onclick="return move('X', -1)">&lt;- X</button></td>
+   <td><button type="button" onclick="return move('X', -0.1)">&lt; X</button></td>
+   <td><button type="button" onclick="return move('X', 0.1)">X &gt;</button></td>
+   <td><button type="button" onclick="return move('X', 1)">X --&gt;</button></td>
+   <td><button type="button" onclick="return move('X', 10)">X --&gt;</button></td>
+   <td><button type="button" onclick="return move('X', 100)">X ---&gt;</button></td>
    </tr>
    
    <tr>
-   <td><button type="button" onclick="return homey()">Home Y</button></td>
-   <td><button type="button" onclick="return ym100mm()">&lt;--- Y</button></td>
-   <td><button type="button" onclick="return ym10mm()">&lt;-- Y</button></td>
-   <td><button type="button" onclick="return ym1mm()">&lt;- Y</button></td>
-   <td><button type="button" onclick="return ym01mm()">&lt; Y</button></td>
-   <td><button type="button" onclick="return yp01mm()">Y &gt;</button></td>
-   <td><button type="button" onclick="return yp1mm()">Y -&gt;</button></td>
-   <td><button type="button" onclick="return yp10mm()">Y --&gt;</button></td>
-   <td><button type="button" onclick="return yp100mm()">Y ---&gt;</button></td>
+   <td><button type="button" onclick="return home('Y')">Home Y</button></td>
+   <td><button type="button" onclick="return move('Y', -100)">&lt;--- Y</button></td>
+   <td><button type="button" onclick="return move('Y', -10)">&lt;-- Y</button></td>
+   <td><button type="button" onclick="return move('Y', -1)">&lt;- Y</button></td>
+   <td><button type="button" onclick="return move('Y', -0.1)">&lt; Y</button></td>
+   <td><button type="button" onclick="return move('Y', 0.1)">Y &gt;</button></td>
+   <td><button type="button" onclick="return move('Y', 1)">Y -&gt;</button></td>
+   <td><button type="button" onclick="return move('Y', 10)">Y --&gt;</button></td>
+   <td><button type="button" onclick="return move('Y', 100)">Y ---&gt;</button></td>
    </tr>
    
    <tr>
-   <td><button type="button" onclick="return homez()">Home Z</button></td>
-   <td><button type="button" onclick="return zm100mm()">&lt;--- Z</button></td>
-   <td><button type="button" onclick="return zm10mm()">&lt;-- Z</button></td>
-   <td><button type="button" onclick="return zm1mm()">&lt;- Z</button></td>
-   <td><button type="button" onclick="return zm01mm()">&lt; Z</button></td>
-   <td><button type="button" onclick="return zp01mm()">Z &gt;</button></td>
-   <td><button type="button" onclick="return zp1mm()">Z -&gt;</button></td>
-   <td><button type="button" onclick="return zp10mm()">Z --&gt;</button></td>
-   <td><button type="button" onclick="return zp100mm()">Z ---&gt;</button></td>
+   <td><button type="button" onclick="return home('Z')">Home Z</button></td>
+   <td><button type="button" onclick="return move('Z', -100)">&lt;--- Z</button></td>
+   <td><button type="button" onclick="return move('Z', -10)">&lt;-- Z</button></td>
+   <td><button type="button" onclick="return move('Z', -1)">&lt;- Z</button></td>
+   <td><button type="button" onclick="return move('Z', -0.1)">&lt; Z</button></td>
+   <td><button type="button" onclick="return move('Z', 0.1)">Z &gt;</button></td>
+   <td><button type="button" onclick="return move('Z', 1)">Z -&gt;</button></td>
+   <td><button type="button" onclick="return move('Z', 10)">Z --&gt;</button></td>
+   <td><button type="button" onclick="return move('Z', 100)">Z ---&gt;</button></td>
    </tr>
     
    </div></table>
@@ -92,39 +92,8 @@
    
    
    function homea(){ window.location.href = "control.php?gcode=G28";}
-   function homex(){ window.location.href = "control.php?gcode=G28%20X0";}
-   function homey(){ window.location.href = "control.php?gcode=G28%20Y0";}
-   function homez(){ window.location.href = "control.php?gcode=G28%20Z0";}
-   
-   function xp01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X0.1%0AG90";}
-   function xp1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X1%0AG90";}
-   function xp10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X10%0AG90";}
-   function xp100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X100%0AG90";}
-   
-   function xm01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X-0.1%0AG90";}
-   function xm1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X-1%0AG90";}
-   function xm10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X10%0AG90";}
-   function xm100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20X100%0AG90";}
-   
-   function yp01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y0.1%0AG90";}
-   function yp1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y1%0AG90";}
-   function yp10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y10%0AG90";}
-   function yp100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y100%0AG90";}
-   
-   function ym01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y-0.1%0AG90";}
-   function ym1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y-1%0AG90";}
-   function ym10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y10%0AG90";}
-   function ym100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Y100%0AG90";}
-   
-   function zp01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z0.1%0AG90";}
-   function zp1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z1%0AG90";}
-   function zp10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z10%0AG90";}
-   function zp100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z100%0AG90";}
-   
-   function zm01mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z-0.1%0AG90";}
-   function zm1mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z-1%0AG90";}
-   function zm10mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z10%0AG90";}
-   function zm100mm(){ window.location.href = "control.php?gcode=G91%0AG1%20Z100%0AG90";}
+   function home(axis){ window.location.href = "control.php?gcode=G28%20" + axis + "0";}
+   function move(axis, d){ window.location.href = "control.php?gcode=G91%0AG1%20" + axis + d + "%0AG90";}
    
    </script> 
 <br><br></html>
