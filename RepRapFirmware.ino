@@ -53,7 +53,7 @@ RepRap reprap;
 //*************************************************************************************************
 
 
-void RepRap::init()
+void RepRap::Init()
 {
   platform = new Platform(this);
   move = new Move(platform);
@@ -63,16 +63,16 @@ void RepRap::init()
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware Started\n\n");
 }
 
-void RepRap::spin()
+void RepRap::Spin()
 {
   platform->spin();
-  move->spin();
-  heat->spin();
-  gcodes->spin();
+  move->Spin();
+  heat->Spin();
+  gcodes->Spin();
   webserver->spin();
 }
 
-void RepRap::interrupt()
+void RepRap::Interrupt()
 {
   
 }

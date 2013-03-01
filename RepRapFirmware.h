@@ -38,14 +38,14 @@ class RepRap
   public:
       
     RepRap();
-    void init();
-    void spin();
+    void Init();
+    void Spin();
 //    Platform* getPlatform();
 //    Move* getMove();
 //    Heat* getHeat();
 //    GCodes* getGcodes();
 //    Webserver* getWebserver();    
-    void interrupt();
+    void Interrupt();
     
     
   private:

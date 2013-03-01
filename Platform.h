@@ -368,7 +368,7 @@ inline void Platform::setInterrupt(long t)
 
 inline void Platform::interrupt()
 {
-  reprap->interrupt();  // Put nothing else in this function
+  reprap->Interrupt();  // Put nothing else in this function
 }
 
 //*****************************************************************************************************************

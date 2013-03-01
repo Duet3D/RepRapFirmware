@@ -28,6 +28,11 @@ GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
   move = m;
   heat = h;
   webserver = w;
+  Init();
+}
+
+void GCodes::Init()
+{
   lastTime = platform->time();
   gcodePointer = 0;
 }
@@ -39,7 +44,9 @@ void GCodes::ActOnGcode()
   platform->Message(HOST_MESSAGE, "\n");
 }
 
-void GCodes::spin()
+
+
+void GCodes::Spin()
 {
   if(webserver->Available())
   {

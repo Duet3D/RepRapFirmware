@@ -24,14 +24,19 @@ Move::Move(Platform* p)
 {
   //Serial.println("Move constructor"); 
   platform = p;
+  Init();
+}
+
+void Move::Init()
+{
   lastTime = platform->time();
   platform->setDirection(X_AXIS, FORWARDS);
   platform->setDirection(Y_AXIS, FORWARDS);
   platform->setDirection(Z_AXIS, FORWARDS);
-  platform->setDirection(3, FORWARDS);
+  platform->setDirection(3, FORWARDS);  
 }
 
-void Move::spin()
+void Move::Spin()
 {
    unsigned long t = platform->time();
    if(t - lastTime < 300)

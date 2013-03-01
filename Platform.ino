@@ -26,12 +26,12 @@ Licence: GPL
 
 void setup()
 {
-  reprap.init();  
+  reprap.Init();  
 }
   
 void loop()
 {
-  reprap.spin();
+  reprap.Spin();
 }
 
 //*************************************************************************************************

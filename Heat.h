@@ -37,7 +37,8 @@ class Heat
   public:
   
     Heat(Platform* p);
-    void spin();
+    void Spin();
+    void Init();
     
   private:
   
