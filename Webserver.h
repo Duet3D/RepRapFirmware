@@ -33,16 +33,6 @@ Licence: GPL
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
-#define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
-
-#define PASSWORD_PAGE "passwd.php"
-#define STRING_LENGTH 1000
-#define PHP_TAG_LENGTH 200
-#define POST_LENGTH 200
-#define PHP_IF 1
-#define PHP_ECHO 2
-#define PHP_PRINT 3
-#define NO_PHP 99
 
 class Webserver
 {   
@@ -51,6 +41,7 @@ class Webserver
     Webserver(Platform* p);
     boolean Available();
     byte Read();
+    void Init();
     void Spin();
     
   private:
@@ -92,7 +83,7 @@ class Webserver
     int postFile;
     boolean postSeen;
     boolean getSeen;
-    long postLength;
+    //long postLength;
     boolean inPHPFile;
     boolean clientLineIsBlank;
     unsigned long clientCloseTime;

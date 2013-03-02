@@ -62,8 +62,8 @@ Licence: GPL
 #define FORWARDS 1     // What to send to go... 
 #define BACKWARDS 0    // ...in each direction
 #define ENABLE_PINS {38, -1, 62, -1}
-#define ENABLE 0       // What to send to enable... 
-#define DISABELE 1     // ...and disable a drive
+#define ENABLE 0      // What to send to enable... 
+#define DISABLE 1     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
 #define MAX_ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2?? Maximum start speed for accelerated moves.
@@ -75,7 +75,7 @@ Licence: GPL
 
 #define LOW_STOP_PINS {3, 14, 17}
 #define HIGH_STOP_PINS {-1, -1, -1}
-#define ENDSTOPS_INVERTING false // set to true to invert the logic of the endstops (i.e. 0 = hit)
+#define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define AXIS_LENGTHS {210, 210, 120} // mm
 #define FAST_HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
 
@@ -107,7 +107,6 @@ Licence: GPL
 
 #define MAX_FILES 7
 #define SD_SPI 4 //Pin
-#define EEPROM -2 // Special file
 #define WEB_DIR "www/" // Place to find web files on the server
 #define GCODE_DIR "gcodes/" // Ditto - g-codes
 #define SYS_DIR "sys/" // Ditto - system files
@@ -187,15 +186,14 @@ class Platform
   
   char* FileList(char* directory); // Returns a ;-separated list of all the files in the named directory (for example on an SD card).
   int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
-  int OpenStore(bool write); // Non-volatile non-removable storage such as EEPROM.
   boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
                                              // returned value is false for EoF, true otherwise
   void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
   char* GetWebDir(); // Where the php/htm etc files are
   char* GetGcodeDir(); // Where the gcodes are
-  char* GetSystemDir();  // Where the system files are
-  char* GetTemporaryDir(); // Where temporary files are
+  char* GetSysDir();  // Where the system files are
+  char* GetTempDir(); // Where temporary files are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
   boolean DeleteFile(char* fileName); // Delete a file
   
@@ -214,6 +212,9 @@ class Platform
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void Home(byte axis);
+  
+  float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
+  void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
   
   // Heat and temperature
   
@@ -260,7 +261,7 @@ class Platform
   float thermistorBetas[HEATERS];
   float thermistorSeriesRs[HEATERS];
   float thermistorInfRs[HEATERS];
-  bool usePid[HEATERS];
+  boolean usePid[HEATERS];
   float pidKis[HEATERS];
   float pidKds[HEATERS];
   float pidKps[HEATERS];
@@ -272,6 +273,8 @@ class Platform
   boolean* inUse;
   char* webDir;
   char* gcodeDir;
+  char* sysDir;
+  char* tempDir;
   char fileList[FILE_LIST_LENGTH];
   
 // Network connection
@@ -282,10 +285,6 @@ class Platform
   EthernetServer* server;
   EthernetClient client;
   int clientStatus;
-
-// EEPROM
-
-  boolean EepromRead(unsigned char& b);
 };
 
 inline unsigned long Platform::Time()

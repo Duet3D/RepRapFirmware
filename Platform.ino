@@ -39,7 +39,6 @@ void loop()
 Platform::Platform(RepRap* r)
 {
   reprap = r;
-  Init();
 }
 
 RepRap* Platform::GetRepRap()
@@ -89,6 +88,10 @@ void Platform::Init()
     pidKds = PID_KDS;
     pidKps = PID_KPS;
     pidILimits = PID_I_LIMITS;
+    webDir = WEB_DIR;
+    gcodeDir = GCODE_DIR;
+    sysDir = SYS_DIR;
+    tempDir = TEMP_DIR;
   }
   
   for(i = 0; i < DRIVES; i++)
@@ -134,10 +137,7 @@ void Platform::Init()
   inUse = new boolean[MAX_FILES];
   for(i=0; i < MAX_FILES; i++)
     inUse[i] = false;
-  inUse[EEPROM] = true;
-  webDir = WEB_DIR;
-  gcodeDir = GCODE_DIR;
-
+  
   // Network
 
   mac = MAC;
@@ -312,23 +312,11 @@ int Platform::OpenFile(char* fileName, boolean write)
 }
 
 void Platform::Close(int file)
-{ 
-  if(file == EEPROM)
-  {
-    // ? inUse[file] = false;
-    return;
-  }
-    
+{  
   files[file].close();
   inUse[file] = false;
 }
 
-
-
-boolean Platform::EepromRead(unsigned char& b)
-{
-  return false;
-}
 
 boolean Platform::Read(int file, unsigned char& b)
 {
@@ -337,9 +325,6 @@ boolean Platform::Read(int file, unsigned char& b)
     Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
     return false;
   }
-
-  if(file == EEPROM)
-    return EepromRead(b);
     
   if(!files[file].available())
     return false;
@@ -354,12 +339,6 @@ void Platform::Write(int file, char b)
     Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
     return;
   }
-  
-  if(file == EEPROM)
-  {
-    // Do something here
-    return;
-  }
     
   files[file].write(b);
 }
@@ -369,12 +348,6 @@ void Platform::WriteString(int file, char* b)
   if(!inUse[file])
   {
     Message(HOST_MESSAGE, "Attempt to write string to a non-open file.\n");
-    return;
-  }
-  
-  if(file == EEPROM)
-  {
-    // Do something here
     return;
   }
   
@@ -428,6 +401,21 @@ char* Platform::GetGcodeDir()
 {
   return gcodeDir;
 }
+
+// Where the system files are
+
+char* Platform::GetSysDir()
+{
+  return sysDir;
+}
+
+// Where the temporary files are
+
+char* Platform::GetTempDir()
+{
+  return tempDir;
+}
+
 
 //***************************************************************************************************
 

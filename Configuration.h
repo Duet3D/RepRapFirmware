@@ -31,8 +31,24 @@ Licence: GPL
                              // not displayed; \f and \n should be supported.
 #define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
 
+
+// Webserver stuff
+
 #define DEFAULT_PASSWORD "reprap"
 
 #define DEFAULT_NAME "My RepRap 1"
+
+#define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
+
+#define PASSWORD_PAGE "passwd.php"
+#define INDEX_PAGE "control.php"
+#define PRINT_PAGE "print.php"
+#define STRING_LENGTH 1000
+#define PHP_TAG_LENGTH 200
+#define POST_LENGTH 200
+#define PHP_IF 1
+#define PHP_ECHO 2
+#define PHP_PRINT 3
+#define NO_PHP 99
 
 #endif

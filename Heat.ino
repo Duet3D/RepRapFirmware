@@ -24,7 +24,6 @@ Heat::Heat(Platform* p)
 {
   //Serial.println("Heat constructor"); 
   platform = p;
-  Init();
 }
 
 void Heat::Init()

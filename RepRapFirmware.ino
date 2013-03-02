@@ -55,12 +55,12 @@ RepRap reprap;
 
 void RepRap::Init()
 {
-  platform = new Platform(this);
-  move = new Move(platform);
-  heat = new Heat(platform);
-  webserver = new Webserver(platform);
-  gcodes = new GCodes(platform, move, heat, webserver);
-  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware Started\n\n");
+  platform->Init();
+  move->Init();
+  heat->Init();
+  gcodes->Init();
+  webserver->Init();
+  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n\n");
 }
 
 void RepRap::Spin()

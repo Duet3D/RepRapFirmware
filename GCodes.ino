@@ -28,7 +28,6 @@ GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
   move = m;
   heat = h;
   webserver = w;
-  Init();
 }
 
 void GCodes::Init()

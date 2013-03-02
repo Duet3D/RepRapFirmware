@@ -65,9 +65,16 @@ class RepRap
 #include "GCodes.h"
 #include "Webserver.h"
 
-// Do nothing in the constructor; put what you want in RepRap:Init()
+// Do nothing more in the constructor; put what you want in RepRap:Init()
 
-inline RepRap::RepRap() {}
+inline RepRap::RepRap() 
+{
+  platform = new Platform(this);
+  move = new Move(platform);
+  heat = new Heat(platform);
+  webserver = new Webserver(platform);
+  gcodes = new GCodes(platform, move, heat, webserver);
+}
 
 //inline Platform* RepRap::getPlatform() { return platform; }
 //inline Move* RepRap::getMove() { return move; }

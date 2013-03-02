@@ -848,12 +848,16 @@ Webserver::Webserver(Platform* p)
 {
   //Serial.println("Webserver constructor"); 
   platform = p;
+}
+
+void Webserver::Init()
+{
   lastTime = platform->Time();
   writing = false;
   receivingPost = false;
   postSeen = false;
   getSeen = false;
-  postLength = 0L;
+  //postLength = 0L;
   inPHPFile = false;
   InitialisePHP();
   clientLineIsBlank = true;
@@ -868,9 +872,8 @@ Webserver::Webserver(Platform* p)
   gcodePointer = 0;
   sendTable = true;
   phpRecordPointer = 0;
-  InitialisePost();
+  InitialisePost();  
 }
-
 
 
 

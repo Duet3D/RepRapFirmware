@@ -24,7 +24,6 @@ Move::Move(Platform* p)
 {
   //Serial.println("Move constructor"); 
   platform = p;
-  Init();
 }
 
 void Move::Init()
