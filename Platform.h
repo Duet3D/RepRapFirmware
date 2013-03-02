@@ -174,6 +174,8 @@ class Platform
                // loop of death...
   void Spin(); // This gets called in the main loop and should do any housekeeping needed
   
+  void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
+  
   // Timing
   
   unsigned long Time(); // Returns elapsed microseconds since some arbitrary time

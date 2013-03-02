@@ -43,6 +43,7 @@ class Webserver
     byte Read();
     void Init();
     void Spin();
+    void Exit();
     
   private:
   

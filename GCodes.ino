@@ -30,11 +30,18 @@ GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
   webserver = w;
 }
 
+void GCodes::Exit()
+{
+  
+}
+
 void GCodes::Init()
 {
   lastTime = platform->Time();
   gcodePointer = 0;
 }
+
+
 
 void GCodes::ActOnGcode()
 {

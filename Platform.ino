@@ -166,6 +166,11 @@ void Platform::Init()
   // SD.begin() returns with the SPI disabled, so you need not disable it here  
 }
 
+void Platform::Exit()
+{
+  
+}
+
 
 // Load settings from local storage; return true if successful, false otherwise
 

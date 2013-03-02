@@ -28,6 +28,7 @@ class Move
     Move(Platform* p);
     void Init();
     void Spin();
+    void Exit();
     
   private:
   

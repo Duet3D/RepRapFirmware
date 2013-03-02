@@ -33,6 +33,11 @@ void Heat::Init()
   //inc = 0.01;  
 }
 
+void Heat::Exit()
+{
+  
+}
+
 void Heat::Spin()
 {
    unsigned long t = platform->Time();

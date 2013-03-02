@@ -41,6 +41,8 @@ class RepRap
     RepRap();
     void Init();
     void Spin();
+    void Exit();
+    
 //    Platform* getPlatform();
 //    Move* getMove();
 //    Heat* getHeat();

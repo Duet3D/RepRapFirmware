@@ -29,6 +29,7 @@ class GCodes
     GCodes(Platform* p, Move* m, Heat* h, Webserver* w);
     void Spin();
     void Init();
+    void Exit();
     
   private:
   

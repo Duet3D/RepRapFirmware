@@ -63,6 +63,15 @@ void RepRap::Init()
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n\n");
 }
 
+void RepRap::Exit()
+{
+  webserver->Exit();
+  gcodes->Exit();
+  heat->Exit();
+  move->Exit();
+  platform->Exit();  
+}
+
 void RepRap::Spin()
 {
   platform->Spin();
@@ -71,6 +80,8 @@ void RepRap::Spin()
   gcodes->Spin();
   webserver->Spin();
 }
+
+
 
 void RepRap::Interrupt()
 {

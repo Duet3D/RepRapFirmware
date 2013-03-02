@@ -35,6 +35,11 @@ void Move::Init()
   platform->SetDirection(3, FORWARDS);  
 }
 
+void Move::Exit()
+{
+  
+}
+
 void Move::Spin()
 {
    unsigned long t = platform->Time();
