@@ -43,6 +43,8 @@ Licence: GPL
 #define PASSWORD_PAGE "passwd.php"
 #define INDEX_PAGE "control.php"
 #define PRINT_PAGE "print.php"
+#define MESSAGE_FILE "messages.php"
+#define MESSAGE_TEMPLATE "messages.txt"
 #define STRING_LENGTH 1000
 #define PHP_TAG_LENGTH 200
 #define POST_LENGTH 200

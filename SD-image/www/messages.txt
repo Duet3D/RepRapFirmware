@@ -1,6 +1,6 @@
 <!DOCTYPE HTML>
 <head>
-
+<style type="text/css">td { text-align: center; } </style>
 </head>
 
 <html>
@@ -18,15 +18,13 @@
  
 
       <td>&nbsp;&nbsp;&nbsp;<a href="settings.php">Settings</a>&nbsp;&nbsp;&nbsp;</td>
- 
-	<td>&nbsp;&nbsp;&nbsp;<a href="messages.php">Messages</a>&nbsp;&nbsp;&nbsp;</td>
 
+	<td>&nbsp;&nbsp;&nbsp;<a href="messages.php">Messages</a>&nbsp;&nbsp;&nbsp;</td>
+ 
     <td>&nbsp;&nbsp;&nbsp;<a href="logout.php">Logout</a>&nbsp;&nbsp;&nbsp;</td>
       
     </tr></table>
   <br><br>'; ?>
 
-<br><br>Settings: allow user to rename machine, set password, set steps/mm etc etc and record the lot.
-
-</html>
+<H3>Messages:</H3><br><br>
 

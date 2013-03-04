@@ -19,6 +19,8 @@
  
 
       <td>&nbsp;&nbsp;&nbsp;<a href="settings.php">Settings</a>&nbsp;&nbsp;&nbsp;</td>
+
+	<td>&nbsp;&nbsp;&nbsp;<a href="messages.php">Messages</a>&nbsp;&nbsp;&nbsp;</td>
  
     <td>&nbsp;&nbsp;&nbsp;<a href="logout.php">Logout</a>&nbsp;&nbsp;&nbsp;</td>
       

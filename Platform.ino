@@ -39,11 +39,7 @@ void loop()
 Platform::Platform(RepRap* r)
 {
   reprap = r;
-}
-
-RepRap* Platform::GetRepRap()
-{
-  return reprap;
+  active = false;
 }
 
 void Platform::Init()
@@ -164,11 +160,36 @@ void Platform::Init()
   if (!SD.begin(SD_SPI)) 
      Serial.println("SD initialization failed.");
   // SD.begin() returns with the SPI disabled, so you need not disable it here  
+  
+    // Reinitialise the message file
+  
+  DeleteFile(PrependRoot(GetWebDir(), MESSAGE_FILE));
+  int m = OpenFile(PrependRoot(GetWebDir(), MESSAGE_TEMPLATE), false);
+  int n = OpenFile(PrependRoot(GetWebDir(), MESSAGE_FILE), true);
+  byte b;
+  while (Read(m, b))
+    Write(n,b);
+  Close(m);  
+  Close(n);
+  
+  active = true;
 }
 
 void Platform::Exit()
 {
-  
+  active = false;
+}
+
+RepRap* Platform::GetRepRap()
+{
+  return reprap;
+}
+
+
+char* Platform::PrependRoot(char* root, char* fileName)
+{
+  strcpy(scratchString, root);
+  return strcat(scratchString, fileName);
 }
 
 
@@ -256,7 +277,7 @@ char* Platform::FileList(char* directory)
       {
         Message(HOST_MESSAGE, "FileList - directory: ");
         Message(HOST_MESSAGE, directory);
-        Message(HOST_MESSAGE, " has too many files!");
+        Message(HOST_MESSAGE, " has too many files!<br>\n");
         return "";
       }
     }
@@ -284,7 +305,7 @@ boolean Platform::DeleteFile(char* fileName)
 int Platform::OpenFile(char* fileName, boolean write)
 {
   int result = -1;
-  for(int i=0; i < MAX_FILES; i++)
+  for(int i = 0; i < MAX_FILES; i++)
     if(!inUse[i])
     {
       result = i;
@@ -292,7 +313,7 @@ int Platform::OpenFile(char* fileName, boolean write)
     }
   if(result < 0)
   {
-      Message(HOST_MESSAGE, "Max open file count exceeded.\n");
+      Message(HOST_MESSAGE, "Max open file count exceeded.<br>\n");
       return -1;    
   }
   
@@ -300,20 +321,32 @@ int Platform::OpenFile(char* fileName, boolean write)
   {
     if(!write)
     {
-      Message(HOST_MESSAGE, "File not found for reading.\n");
+      Message(HOST_MESSAGE, "File not found for reading.<br>\n");
       return -1;
     }
     files[result] = SD.open(fileName, FILE_WRITE);
   } else
   {
     if(write)
+    {
       files[result] = SD.open(fileName, FILE_WRITE);
-    else
+    }else
       files[result] = SD.open(fileName, FILE_READ);
   }
 
   inUse[result] = true;
   return result;
+}
+
+void Platform::GoToEnd(int file)
+{
+  if(!inUse[file])
+  {
+    Message(HOST_MESSAGE, "Attempt to seek on a non-open file.<br>\n");
+    return;
+  }
+  unsigned long e = files[file].size();
+  files[file].seek(e);
 }
 
 void Platform::Close(int file)
@@ -327,7 +360,7 @@ boolean Platform::Read(int file, unsigned char& b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
+    Message(HOST_MESSAGE, "Attempt to read from a non-open file.<br>\n");
     return false;
   }
     
@@ -341,7 +374,7 @@ void Platform::Write(int file, char b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
+    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.<br>\n");
     return;
   }
     
@@ -352,7 +385,7 @@ void Platform::WriteString(int file, char* b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.\n");
+    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.<br>\n");
     return;
   }
   
@@ -375,7 +408,12 @@ void Platform::Message(char type, char* message)
   case HOST_MESSAGE:
   default:
   
+  
+    int m = OpenFile(PrependRoot(GetWebDir(), MESSAGE_FILE), true);
+    GoToEnd(m);
+    WriteString(m, message);
     Serial.print(message);
+    Close(m);
     
   }
 }
@@ -390,7 +428,7 @@ void Platform::SendToClient(char* message)
     //Serial.print("Sent: ");
     //Serial.print(message);
   } else
-    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
+    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.<br>\n");
 }
 
 // Where the php/htm etc files are
@@ -429,6 +467,9 @@ char* Platform::GetTempDir()
 
 void Platform::Spin()
 {
+  if(!active)
+    return;
+    
    ClientMonitor();
    if(Time() - lastTime < 2000000)
      return;

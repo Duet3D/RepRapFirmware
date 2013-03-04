@@ -60,11 +60,13 @@ void RepRap::Init()
   heat->Init();
   gcodes->Init();
   webserver->Init();
-  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n\n");
+  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started<br>\n");
+  active = true;
 }
 
 void RepRap::Exit()
 {
+  active = false;
   webserver->Exit();
   gcodes->Exit();
   heat->Exit();
@@ -74,6 +76,9 @@ void RepRap::Exit()
 
 void RepRap::Spin()
 {
+  if(!active)
+    return;
+    
   platform->Spin();
   move->Spin();
   heat->Spin();

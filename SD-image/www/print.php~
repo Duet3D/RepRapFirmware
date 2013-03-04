@@ -115,7 +115,7 @@ function checkFileName(uploadForm)
   var list = fileList();
   for(var i = 0; i < list.length; i++)
   {
-	if(list[i] == uploadForm.datafile.value)
+	if(list[i].toUpperCase() == uploadForm.datafile.value.toUpperCase())
 	{
 		return confirm("This will overwrite the file " + 
 			list[i] + " on  <?php print(getMyName()); ?>." +

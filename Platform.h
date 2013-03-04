@@ -188,6 +188,7 @@ class Platform
   
   char* FileList(char* directory); // Returns a ;-separated list of all the files in the named directory (for example on an SD card).
   int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
+  void GoToEnd(int file); // Position the file at the end (so you can write on the end).
   boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
                                              // returned value is false for EoF, true otherwise
   void WriteString(int file, char* s);  // Write the string to a file.
@@ -198,6 +199,7 @@ class Platform
   char* GetTempDir(); // Where temporary files are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
   boolean DeleteFile(char* fileName); // Delete a file
+  char* PrependRoot(char* root, char* fileName);
   
   unsigned char ClientRead(); // Read a byte from the client
   void SendToClient(char* message); // Send string to the host
@@ -228,6 +230,8 @@ class Platform
   private:
   
   unsigned long lastTime;
+  
+  boolean active;
   
   // Load settings from local storage
   
@@ -278,6 +282,7 @@ class Platform
   char* sysDir;
   char* tempDir;
   char fileList[FILE_LIST_LENGTH];
+  char scratchString[STRING_LENGTH];
   
 // Network connection
 

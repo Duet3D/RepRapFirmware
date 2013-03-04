@@ -36,6 +36,7 @@ class GCodes
     void ActOnGcode();
   
     Platform* platform;
+    boolean active;
     Move* move;
     Heat* heat;
     Webserver* webserver;

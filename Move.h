@@ -34,7 +34,7 @@ class Move
   
     Platform* platform;
     unsigned long lastTime;
-  
+    boolean active;
 };
 
 #endif

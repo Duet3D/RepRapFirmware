@@ -23,6 +23,7 @@ Licence: GPL
 
 GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
 {
+  active = false;
   //Serial.println("GCodes constructor"); 
   platform = p;
   move = m;
@@ -32,28 +33,32 @@ GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
 
 void GCodes::Exit()
 {
-  
+   active = false;
 }
 
 void GCodes::Init()
 {
   lastTime = platform->Time();
   gcodePointer = 0;
+  active = true;
 }
 
 
 
 void GCodes::ActOnGcode()
 {
-  platform->Message(HOST_MESSAGE, "\nGCode: ");
+  platform->Message(HOST_MESSAGE, "GCode: ");
   platform->Message(HOST_MESSAGE, gcodeBuffer);
-  platform->Message(HOST_MESSAGE, "\n");
+  platform->Message(HOST_MESSAGE, "<br>\n");
 }
 
 
 
 void GCodes::Spin()
 {
+  if(!active)
+    return;
+    
   if(webserver->Available())
   {
     gcodeBuffer[gcodePointer] = webserver->Read();

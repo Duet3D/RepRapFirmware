@@ -54,6 +54,7 @@ class RepRap
   private:
   
     Platform* platform;
+    boolean active;
     Move* move;
     Heat* heat;
     GCodes* gcodes;
@@ -71,6 +72,7 @@ class RepRap
 
 inline RepRap::RepRap() 
 {
+  active = false;
   platform = new Platform(this);
   move = new Move(platform);
   heat = new Heat(platform);

@@ -18,15 +18,13 @@
  
 
       <td>&nbsp;&nbsp;&nbsp;<a href="settings.php">Settings</a>&nbsp;&nbsp;&nbsp;</td>
-
-	<td>&nbsp;&nbsp;&nbsp;<a href="messages.php">Messages</a>&nbsp;&nbsp;&nbsp;</td>
  
     <td>&nbsp;&nbsp;&nbsp;<a href="logout.php">Logout</a>&nbsp;&nbsp;&nbsp;</td>
       
     </tr></table>
   <br><br>'; ?>
 
-   <table border="1"><div align="center">
+<H3>Messages:</H3><br><br>
    
    
    <tr>
@@ -88,7 +86,7 @@
     
    </div></table>
    
-   <br><br><form name="input" action="control.php" method="get">Send a G Code: <input type="text" name="gcode"><input type="submit" value="Send"></form>
+   <br><br><form name="input" action="gather.asp" method="get">Send a G Code: <input type="text" name="gcode"><input type="submit" value="Send"></form>
    
    <script language="javascript" type="text/javascript">
    

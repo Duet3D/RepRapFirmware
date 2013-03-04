@@ -44,6 +44,7 @@ class Heat
   private:
   
   Platform* platform;
+  boolean active;
   unsigned long lastTime;
   //float frac;
   //float inc;

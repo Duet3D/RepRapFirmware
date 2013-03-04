@@ -52,6 +52,7 @@ class Webserver
     void WriteByte();
     boolean StringEndsWith(char* string, char* ending);
     boolean StringStartsWith(char* string, char* starting);
+    boolean StringEquals(char* s1, char* s2);
     void ParseQualifier();
     void CheckPassword();
     boolean LoadGcodeBuffer(char* gc, boolean convertWeb);
@@ -65,7 +66,6 @@ class Webserver
     void CallPHPString(char* phpRecord);  
     void ProcessPHPByte(char b);
     void WritePHPByte();
-    char* PrependRoot(char* root, char* fileName);
     void ParseGetPost();
     void CharFromClient(char c);
     void BlankLineFromClient();
@@ -74,6 +74,7 @@ class Webserver
     boolean MatchBoundary(char c);
     
     Platform* platform;
+    boolean active;
     unsigned long lastTime;
     int fileBeingSent;
     boolean writing;
@@ -89,7 +90,7 @@ class Webserver
     boolean clientLineIsBlank;
     unsigned long clientCloseTime;
     boolean needToCloseClient;
-    char scratchString[STRING_LENGTH];
+
     char clientLine[STRING_LENGTH];
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];

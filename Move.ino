@@ -24,6 +24,7 @@ Move::Move(Platform* p)
 {
   //Serial.println("Move constructor"); 
   platform = p;
+  active = false;
 }
 
 void Move::Init()
@@ -32,16 +33,20 @@ void Move::Init()
   platform->SetDirection(X_AXIS, FORWARDS);
   platform->SetDirection(Y_AXIS, FORWARDS);
   platform->SetDirection(Z_AXIS, FORWARDS);
-  platform->SetDirection(3, FORWARDS);  
+  platform->SetDirection(3, FORWARDS);
+  active = true;  
 }
 
 void Move::Exit()
 {
-  
+  active = false;
 }
 
 void Move::Spin()
 {
+  if(!active)
+    return;
+    
    unsigned long t = platform->Time();
    if(t - lastTime < 300)
      return;

@@ -24,22 +24,27 @@ Heat::Heat(Platform* p)
 {
   //Serial.println("Heat constructor"); 
   platform = p;
+  active = false;
 }
 
 void Heat::Init()
 {
   lastTime = platform->Time();
   //frac = 0;
-  //inc = 0.01;  
+  //inc = 0.01;
+  active = true; 
 }
 
 void Heat::Exit()
 {
-  
+  active = false;
 }
 
 void Heat::Spin()
 {
+  if(!active)
+    return;
+    
    unsigned long t = platform->Time();
    if(t - lastTime < 3000)
      return;
