@@ -106,6 +106,7 @@ Licence: GPL
 // File handling
 
 #define MAX_FILES 7
+#define FILE_BUF_LEN 256
 #define SD_SPI 4 //Pin
 #define WEB_DIR "www/" // Place to find web files on the server
 #define GCODE_DIR "gcodes/" // Ditto - g-codes
@@ -281,6 +282,8 @@ class Platform
   char* gcodeDir;
   char* sysDir;
   char* tempDir;
+  byte* buf[MAX_FILES];
+  int bPointer[MAX_FILES];
   char fileList[FILE_LIST_LENGTH];
   char scratchString[STRING_LENGTH];
   

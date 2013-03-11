@@ -132,7 +132,11 @@ void Platform::Init()
   files = new File[MAX_FILES];
   inUse = new boolean[MAX_FILES];
   for(i=0; i < MAX_FILES; i++)
+  {
+    buf[i] = new byte[FILE_BUF_LEN];
+    bPointer[i] = 0;
     inUse[i] = false;
+  }
   
   // Network
 
@@ -325,12 +329,14 @@ int Platform::OpenFile(char* fileName, boolean write)
       return -1;
     }
     files[result] = SD.open(fileName, FILE_WRITE);
+    bPointer[result] = 0;
   } else
   {
     if(write)
     {
       files[result] = SD.open(fileName, FILE_WRITE);
-    }else
+      bPointer[result] = 0;
+    } else
       files[result] = SD.open(fileName, FILE_READ);
   }
 
@@ -350,7 +356,10 @@ void Platform::GoToEnd(int file)
 }
 
 void Platform::Close(int file)
-{  
+{ 
+  if(bPointer[file] != 0)
+    files[file].write(buf[file], bPointer[file]);
+  bPointer[file] = 0;
   files[file].close();
   inUse[file] = false;
 }
@@ -377,8 +386,14 @@ void Platform::Write(int file, char b)
     Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.<br>\n");
     return;
   }
-    
-  files[file].write(b);
+  (buf[file])[bPointer[file]] = b;
+  bPointer[file]++;
+  if(bPointer[file] >= FILE_BUF_LEN)
+  {
+    files[file].write(buf[file], FILE_BUF_LEN);
+    bPointer[file] = 0;
+  } 
+  //files[file].write(b);
 }
 
 void Platform::WriteString(int file, char* b)
@@ -388,8 +403,10 @@ void Platform::WriteString(int file, char* b)
     Message(HOST_MESSAGE, "Attempt to write string to a non-open file.<br>\n");
     return;
   }
-  
-  files[file].print(b);
+  int i = 0;
+  while(b[i])
+    Write(file, b[i++]); 
+  //files[file].print(b);
 }
 
 
