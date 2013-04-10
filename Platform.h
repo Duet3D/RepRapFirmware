@@ -57,14 +57,16 @@ Licence: GPL
 
 // DRIVES
 
-#define STEP_PINS {54, 60, 46, 26}
-#define DIRECTION_PINS {55, 61, 48, 28}
+#define STEP_PINS {14, 25, 5, 69}
+#define DIRECTION_PINS {15, 26, 4, 68}
 #define FORWARDS 1     // What to send to go... 
 #define BACKWARDS 0    // ...in each direction
-#define ENABLE_PINS {38, -1, 62, -1}
+#define ENABLE_PINS {29, 27, X138, X25}
 #define ENABLE 0      // What to send to enable... 
 #define DISABLE 1     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
+#define LOW_STOP_PINS {11, 28, 60, 31}
+#define HIGH_STOP_PINS {-1, -1, -1, -1}
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
 #define MAX_ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2?? Maximum start speed for accelerated moves.
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
@@ -73,8 +75,6 @@ Licence: GPL
 
 // AXES
 
-#define LOW_STOP_PINS {3, 14, 17}
-#define HIGH_STOP_PINS {-1, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define AXIS_LENGTHS {210, 210, 120} // mm
 #define FAST_HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
@@ -85,8 +85,8 @@ Licence: GPL
 
 // HEATERS - Bed is assumed to be the first
 
-#define TEMP_SENSE_PINS {10, 9}  // Analogue pin numbers
-#define HEAT_ON_PINS {8, 9}
+#define TEMP_SENSE_PINS {5, 4}  // Analogue pin numbers
+#define HEAT_ON_PINS {40, X66}
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {4700, 4700} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
@@ -147,7 +147,7 @@ Licence: GPL
 
 // Miscellaneous...
 
-#define LED_PIN 13 // Indicator LED
+#define LED_PIN X // Indicator LED
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
@@ -247,6 +247,8 @@ class Platform
   char stepPins[DRIVES];
   char directionPins[DRIVES];
   char enablePins[DRIVES];
+  char lowStopPins[DRIVES];
+  char highStopPins[DRIVES];
   boolean disableDrives[DRIVES];
   float maxFeedrates[DRIVES];  
   float maxAccelerations[DRIVES];
@@ -256,8 +258,6 @@ class Platform
 
 // AXES
 
-  char lowStopPins[AXES];
-  char highStopPins[AXES];
   float axisLengths[AXES];
   float fastHomeFeedrates[AXES];
 
