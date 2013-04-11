@@ -1,15 +1,15 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Mendel with Prototype Arduino Due controller
+RepRapFirmware - Platform: RepRapPro Mendel/Huxley with Prototype Duet controller
 
 Platform contains all the code and definitons to deal with machine-dependent things such as control 
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
 
 -----------------------------------------------------------------------------------------------------
 
-Version 0.1
+Version 0.2
 
-18 November 2012
+11 April 2013
 
 Adrian Bowyer
 RepRap Professional Ltd

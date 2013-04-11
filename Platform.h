@@ -1,6 +1,6 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Mendel with Prototype Arduino Due controller
+RepRapFirmware - Platform: RepRapPro Mendel/Huxley with Prototype Duet controller
 
 Platform contains all the code and definitons to deal with machine-dependent things such as control 
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
@@ -19,9 +19,9 @@ also needs to go here.
 
 -----------------------------------------------------------------------------------------------------
 
-Version 0.1
+Version 0.2
 
-18 November 2012
+11 April 2013
 
 Adrian Bowyer
 RepRap Professional Ltd
@@ -57,11 +57,11 @@ Licence: GPL
 
 // DRIVES
 
-#define STEP_PINS {14, 25, 5, 69}
-#define DIRECTION_PINS {15, 26, 4, 68}
+#define STEP_PINS {14, 25, 5, 68}
+#define DIRECTION_PINS {15, 26, 4, 69}
 #define FORWARDS 1     // What to send to go... 
 #define BACKWARDS 0    // ...in each direction
-#define ENABLE_PINS {29, 27, X138, X25}
+#define ENABLE_PINS {29, 27, 138, 25} // * * X X WRONG
 #define ENABLE 0      // What to send to enable... 
 #define DISABLE 1     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
@@ -86,7 +86,7 @@ Licence: GPL
 // HEATERS - Bed is assumed to be the first
 
 #define TEMP_SENSE_PINS {5, 4}  // Analogue pin numbers
-#define HEAT_ON_PINS {40, X66}
+#define HEAT_ON_PINS {53, 40}
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {4700, 4700} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
@@ -107,7 +107,7 @@ Licence: GPL
 
 #define MAX_FILES 7
 #define FILE_BUF_LEN 256
-#define SD_SPI 4 //Pin
+#define SD_SPI 4 //Pin X WRONG
 #define WEB_DIR "www/" // Place to find web files on the server
 #define GCODE_DIR "gcodes/" // Ditto - g-codes
 #define SYS_DIR "sys/" // Ditto - system files
@@ -147,7 +147,7 @@ Licence: GPL
 
 // Miscellaneous...
 
-#define LED_PIN X // Indicator LED
+#define LED_PIN -1 // Indicator LED
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
