@@ -26,10 +26,12 @@ class GCodes
 {   
   public:
   
-    GCodes(Platform* p, Move* m, Heat* h, Webserver* w);
+    GCodes(Platform* p, Webserver* w);
     void Spin();
     void Init();
     void Exit();
+    boolean ReadMove(float* m);
+    boolean ReadHeat(float* h);
     
   private:
   
@@ -37,12 +39,13 @@ class GCodes
   
     Platform* platform;
     boolean active;
-    Move* move;
-    Heat* heat;
     Webserver* webserver;
     unsigned long lastTime;
     char gcodeBuffer[GCODE_LENGTH];
     int gcodePointer;
+    boolean moveAvailable;
+    boolean heatAvailable;
+    float moveBuffer[DRIVES];
 };
 
 #endif

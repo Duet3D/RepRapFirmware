@@ -119,7 +119,7 @@ boolean Webserver::MatchBoundary(char c)
 
 //****************************************************************************************************
 
-// Handling G Codes for the rest of the software
+// Feeding G Codes to the GCodes class
 
 boolean Webserver::Available()
 {
@@ -182,14 +182,8 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   gcodeBuffer[gcodePointer] = 0;
   gcodePointer = 0;  
   
-// We intercept two G Codes so we can deal with file manipulation.  That
+// We intercept a G Code so we can deal with file manipulation.  That
 // way things don't get out of sync.
-  
-/*  if(StringStartsWith(gc, "M28")) // Upload file?
-  {
-    uploadFile(&gc[4]);
-    return;
-  }*/
   
   if(StringStartsWith(gcodeBuffer, "M30 ")) // Delete file?
   {

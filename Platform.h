@@ -65,6 +65,9 @@ Licence: GPL
 #define ENABLE 0      // What to send to enable... 
 #define DISABLE 1     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
+#define LOW_STOP_PINS {3, 14, 17, -1}
+#define HIGH_STOP_PINS {-1, -1, -1, -1}
+#define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
 #define MAX_ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2?? Maximum start speed for accelerated moves.
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
@@ -73,9 +76,7 @@ Licence: GPL
 
 // AXES
 
-#define LOW_STOP_PINS {3, 14, 17}
-#define HIGH_STOP_PINS {-1, -1, -1}
-#define ENDSTOP_HIT 1 // when a stop == this it is hit
+
 #define AXIS_LENGTHS {210, 210, 120} // mm
 #define FAST_HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
 
@@ -161,6 +162,8 @@ class RepRap;
 class Platform
 {   
   public:
+  
+  friend class Move;
   
   Platform(RepRap* r);
   
@@ -248,6 +251,8 @@ class Platform
   char directionPins[DRIVES];
   char enablePins[DRIVES];
   boolean disableDrives[DRIVES];
+  char lowStopPins[DRIVES];
+  char highStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
   float maxAccelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
@@ -256,8 +261,6 @@ class Platform
 
 // AXES
 
-  char lowStopPins[AXES];
-  char highStopPins[AXES];
   float axisLengths[AXES];
   float fastHomeFeedrates[AXES];
 

@@ -20,20 +20,19 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-Move::Move(Platform* p)
+Move::Move(Platform* p, GCodes* g)
 {
   //Serial.println("Move constructor"); 
   platform = p;
+  gCodes = g;
   active = false;
 }
 
 void Move::Init()
 {
   lastTime = platform->Time();
-  platform->SetDirection(X_AXIS, FORWARDS);
-  platform->SetDirection(Y_AXIS, FORWARDS);
-  platform->SetDirection(Z_AXIS, FORWARDS);
-  platform->SetDirection(3, FORWARDS);
+  for(char i = 0; i < DRIVES; i++)
+    platform->SetDirection(i, FORWARDS);
   active = true;  
 }
 
@@ -46,15 +45,13 @@ void Move::Spin()
 {
   if(!active)
     return;
-    
-   unsigned long t = platform->Time();
-   if(t - lastTime < 300)
-     return;
-   lastTime = t;
-   //Serial.println("tick");
-/*  platform->step(X_AXIS);
-   platform->step(Y_AXIS);
-   platform->step(Z_AXIS);
-   platform->step(3);
-   */
+  Qmove();
+}
+
+
+void Move::Qmove()
+{
+  if(!gCodes->ReadMove(nextMove))
+    return;
+  
 }

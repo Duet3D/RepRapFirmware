@@ -47,7 +47,6 @@ void Platform::Init()
   byte i;
   
   Serial.begin(BAUD_RATE);
-  //Serial.println("\n\n\nPlatform constructor");
   
   lastTime = Time();
   
@@ -59,6 +58,8 @@ void Platform::Init()
     directionPins = DIRECTION_PINS;
     enablePins = ENABLE_PINS;
     disableDrives = DISABLE_DRIVES;
+    lowStopPins = LOW_STOP_PINS;
+    highStopPins = HIGH_STOP_PINS;
     maxFeedrates = MAX_FEEDRATES;
     maxAccelerations = MAX_ACCELERATIONS;
     driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
@@ -67,8 +68,6 @@ void Platform::Init()
     
   // AXES
   
-    lowStopPins = LOW_STOP_PINS;
-    highStopPins = HIGH_STOP_PINS;
     axisLengths = AXIS_LENGTHS;
     fastHomeFeedrates = FAST_HOME_FEEDRATES;
    
@@ -491,8 +490,6 @@ void Platform::Spin()
    if(Time() - lastTime < 2000000)
      return;
    lastTime = Time();
-   //Serial.print("Client status: ");
-   //Serial.println(clientStatus);
 }
 
 

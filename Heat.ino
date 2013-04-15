@@ -20,10 +20,10 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-Heat::Heat(Platform* p)
+Heat::Heat(Platform* p, GCodes* g)
 {
-  //Serial.println("Heat constructor"); 
   platform = p;
+  gCodes = g;
   active = false;
 }
 
@@ -49,15 +49,4 @@ void Heat::Spin()
    if(t - lastTime < 3000)
      return;
    lastTime = t;
-/*   if(frac > 1 || frac < 0)
-   {
-     inc = -inc;
-     //Serial.print("Temps: ");
-     //Serial.print(platform->getTemperature(0));
-    // Serial.print(", ");
-     //Serial.println(platform->getTemperature(1));
-   }
-   platform->setHeater(0, frac);
-   platform->setHeater(1, 1 - frac);
-   frac += inc;*/
 }

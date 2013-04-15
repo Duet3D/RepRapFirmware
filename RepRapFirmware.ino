@@ -52,14 +52,25 @@ RepRap reprap;
 
 //*************************************************************************************************
 
+// Do nothing more in the constructor; put what you want in RepRap:Init()
+
+RepRap::RepRap() 
+{
+  active = false;
+  platform = new Platform(this);
+  webserver = new Webserver(platform);
+  gCodes = new GCodes(platform, webserver);
+  move = new Move(platform, gCodes);
+  heat = new Heat(platform, gCodes);
+}
 
 void RepRap::Init()
 {
   platform->Init();
+  gCodes->Init();
+  webserver->Init();
   move->Init();
   heat->Init();
-  gcodes->Init();
-  webserver->Init();
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started<br>\n");
   active = true;
 }
@@ -67,10 +78,10 @@ void RepRap::Init()
 void RepRap::Exit()
 {
   active = false;
-  webserver->Exit();
-  gcodes->Exit();
   heat->Exit();
   move->Exit();
+  gCodes->Exit();
+  webserver->Exit();
   platform->Exit();  
 }
 
@@ -80,10 +91,10 @@ void RepRap::Spin()
     return;
     
   platform->Spin();
+  webserver->Spin();
+  gCodes->Spin();
   move->Spin();
   heat->Spin();
-  gcodes->Spin();
-  webserver->Spin();
 }
 
 

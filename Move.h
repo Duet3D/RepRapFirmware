@@ -21,20 +21,29 @@ Licence: GPL
 #ifndef MOVE_H
 #define MOVE_H
 
+#define BUFFER_LENGTH 10
+
 class Move
 {   
   public:
   
-    Move(Platform* p);
+    Move(Platform* p, GCodes* g);
     void Init();
     void Spin();
     void Exit();
+    void Qmove();
     
   private:
   
     Platform* platform;
+    GCodes* gCodes;
     unsigned long lastTime;
     boolean active;
+    float currentPosition[AXES]; // Note - drives above AXES are always relative moves
+    float nextMove[DRIVES];
 };
+
+
+
 
 #endif

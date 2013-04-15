@@ -42,12 +42,7 @@ class RepRap
     void Init();
     void Spin();
     void Exit();
-    
-//    Platform* getPlatform();
-//    Move* getMove();
-//    Heat* getHeat();
-//    GCodes* getGcodes();
-//    Webserver* getWebserver();    
+       
     void Interrupt();
     
     
@@ -57,34 +52,18 @@ class RepRap
     boolean active;
     Move* move;
     Heat* heat;
-    GCodes* gcodes;
+    GCodes* gCodes;
     Webserver* webserver;
 };
 
 #include "Configuration.h"
 #include "Platform.h"
+#include "Webserver.h" 
+#include "GCodes.h"
 #include "Move.h"
 #include "Heat.h"
-#include "GCodes.h"
-#include "Webserver.h"
 
-// Do nothing more in the constructor; put what you want in RepRap:Init()
 
-inline RepRap::RepRap() 
-{
-  active = false;
-  platform = new Platform(this);
-  move = new Move(platform);
-  heat = new Heat(platform);
-  webserver = new Webserver(platform);
-  gcodes = new GCodes(platform, move, heat, webserver);
-}
-
-//inline Platform* RepRap::getPlatform() { return platform; }
-//inline Move* RepRap::getMove() { return move; }
-//inline Heat* RepRap::getHeat() { return heat; }
-//inline GCodes* RepRap::getGcodes() { return gcodes; }
-//inline Webserver* RepRap::getWebserver() { return webserver; }  
 
 extern RepRap reprap;
 

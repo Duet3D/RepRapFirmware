@@ -21,13 +21,11 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-GCodes::GCodes(Platform* p, Move* m, Heat* h, Webserver* w)
+GCodes::GCodes(Platform* p, Webserver* w)
 {
   active = false;
   //Serial.println("GCodes constructor"); 
   platform = p;
-  move = m;
-  heat = h;
   webserver = w;
 }
 
@@ -41,6 +39,8 @@ void GCodes::Init()
   lastTime = platform->Time();
   gcodePointer = 0;
   active = true;
+  moveAvailable = false;
+  heatAvailable = false;
 }
 
 
@@ -79,4 +79,21 @@ void GCodes::Spin()
     }
   }
 }
+
+
+boolean GCodes::ReadMove(float* m)
+{
+    if(!moveAvailable)
+      return false; 
+    for(char i = 0; i < DRIVES; i++)
+      m[i] = moveBuffer[i];
+    moveAvailable = false;
+}
+
+
+boolean GCodes::ReadHeat(float* h)
+{
+
+}
+
 

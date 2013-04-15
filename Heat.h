@@ -36,19 +36,17 @@ class Heat
     
   public:
   
-    Heat(Platform* p);
+    Heat(Platform* p, GCodes* g);
     void Spin();
     void Init();
     void Exit();
     
   private:
   
-  Platform* platform;
-  boolean active;
-  unsigned long lastTime;
-  //float frac;
-  //float inc;
-  
+    Platform* platform;
+    GCodes* gCodes;
+    boolean active;
+    unsigned long lastTime;
 };
 
 
