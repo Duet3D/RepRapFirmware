@@ -23,6 +23,13 @@ Licence: GPL
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
+class RepRap;
+class Platform;
+class Move;
+class Heat;
+class GCodes;
+class Webserver;
+
 #define ABS_ZERO -273.15
 
 #define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
@@ -52,5 +59,6 @@ Licence: GPL
 #define PHP_ECHO 2
 #define PHP_PRINT 3
 #define NO_PHP 99
+#define START_FEED_RATE 200
 
 #endif

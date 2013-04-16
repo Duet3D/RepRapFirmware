@@ -42,6 +42,107 @@ Platform::Platform(RepRap* r)
   active = false;
 }
 
+//*****************************************************************************************************************
+
+// Interrupts
+
+inline void Platform::SetInterrupt(long t)
+{
+  
+}
+
+inline void Platform::Interrupt()
+{
+  reprap->Interrupt();  // Put nothing else in this function
+}
+
+//***************************************************************************************
+
+// Network connection
+
+inline int Platform::ClientStatus()
+{
+  return clientStatus;
+}
+
+inline void Platform::SendToClient(unsigned char b)
+{
+  if(client)
+  {
+    client.write(b);
+    //Serial.write(b);
+  } else
+    Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
+}
+
+inline unsigned char Platform::ClientRead()
+{
+  if(client)
+    return client.read();
+    
+  Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
+  return '\n'; // good idea?? 
+}
+
+inline void Platform::ClientMonitor()
+{
+  clientStatus = 0;
+  
+  if(!client)
+  {
+    client = server->available();
+    if(!client)
+      return;
+    //else
+      //Serial.println("new client");
+  }
+    
+  clientStatus |= CLIENT;
+    
+  if(!client.connected())
+    return;
+    
+  clientStatus |= CONNECTED;
+    
+  if (!client.available())
+    return;
+    
+  clientStatus |= AVAILABLE;
+}
+
+inline void Platform::DisconnectClient()
+{
+  if (client)
+  {
+    client.stop();
+    //Serial.println("client disconnected");
+  } else
+      Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
+}
+
+
+
+//*****************************************************************************************************************
+
+// Drive the RepRap machine
+
+inline void Platform::SetDirection(byte drive, bool direction)
+{
+  digitalWrite(directionPins[drive], direction);  
+}
+
+inline void Platform::Step(byte drive)
+{
+  digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
+}
+
+inline int Platform::GetRawTemperature(byte heater)
+{
+  return analogRead(tempSensePins[heater]);
+}
+
+//*******************************************************************************************************************
+
 void Platform::Init()
 { 
   byte i;

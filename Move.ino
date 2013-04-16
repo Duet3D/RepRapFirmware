@@ -22,7 +22,6 @@ Licence: GPL
 
 Move::Move(Platform* p, GCodes* g)
 {
-  //Serial.println("Move constructor"); 
   platform = p;
   gCodes = g;
   active = false;
@@ -33,7 +32,10 @@ void Move::Init()
   lastTime = platform->Time();
   for(char i = 0; i < DRIVES; i++)
     platform->SetDirection(i, FORWARDS);
-  active = true;  
+  for(char i = 0; i <= AXES; i++)
+    currentPosition[i] = 0.0;  
+  active = true;
+  currentFeedrate = START_FEED_RATE;  
 }
 
 void Move::Exit()
@@ -53,5 +55,29 @@ void Move::Qmove()
 {
   if(!gCodes->ReadMove(nextMove))
     return;
+  platform->Message(HOST_MESSAGE, "Move - got a move:");
+  for(char i = 0; i <= DRIVES; i++)
+  {
+    ftoa(scratchString, nextMove[i], 3);
+    platform->Message(HOST_MESSAGE, scratchString);
+    platform->Message(HOST_MESSAGE, ", ");
+  }
+  platform->Message(HOST_MESSAGE, "<br>\n");
   
+  // Make it so
+  
+  for(char i = 0; i <= AXES; i++)
+    currentPosition[i] = nextMove[i]; 
+}
+
+void Move::GetCurrentState(float m[])
+{
+  for(char i = 0; i < DRIVES; i++)
+  {
+    if(i < AXES)
+      m[i] = currentPosition[i];
+    else
+      m[i] = 0.0;
+  }
+  m[DRIVES] = currentFeedrate;
 }

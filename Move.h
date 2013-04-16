@@ -32,6 +32,7 @@ class Move
     void Spin();
     void Exit();
     void Qmove();
+    void GetCurrentState(float m[]);
     
   private:
   
@@ -39,8 +40,10 @@ class Move
     GCodes* gCodes;
     unsigned long lastTime;
     boolean active;
+    float currentFeedrate;
     float currentPosition[AXES]; // Note - drives above AXES are always relative moves
-    float nextMove[DRIVES];
+    float nextMove[DRIVES + 1];  // Extra is for feedrate
+    char scratchString[STRING_LENGTH];
 };
 
 

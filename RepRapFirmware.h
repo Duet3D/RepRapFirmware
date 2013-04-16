@@ -28,11 +28,8 @@ Licence: GPL
 #define DATE "2012-11-18"
 #define LAST_AUTHOR "reprappro.com"
 
-class Platform;
-class Move;
-class Heat;
-class GCodes;
-class Webserver;
+#include "Configuration.h"
+#include "Platform.h"
 
 class RepRap
 {    
@@ -42,9 +39,12 @@ class RepRap
     void Init();
     void Spin();
     void Exit();
-       
     void Interrupt();
-    
+    Platform* GetPlatform();
+    Move* GetMove();
+    Heat* GetHeat();
+    GCodes* GetGCodes();
+    Webserver* GetWebserver();  
     
   private:
   
@@ -56,17 +56,14 @@ class RepRap
     Webserver* webserver;
 };
 
-#include "Configuration.h"
-#include "Platform.h"
 #include "Webserver.h" 
 #include "GCodes.h"
 #include "Move.h"
 #include "Heat.h"
 
-
+char* ftoa(char *a, const float& f, int prec);
 
 extern RepRap reprap;
-
 
 #endif
 

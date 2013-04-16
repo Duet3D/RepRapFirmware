@@ -64,6 +64,12 @@ RepRap::RepRap()
   heat = new Heat(platform, gCodes);
 }
 
+inline Platform* RepRap::GetPlatform() { return platform; }
+inline Move* RepRap::GetMove() { return move; }
+inline Heat* RepRap::GetHeat() { return heat; }
+inline GCodes* RepRap::GetGCodes() { return gCodes; }
+inline Webserver* RepRap::GetWebserver() { return webserver; }
+
 void RepRap::Init()
 {
   platform->Init();
@@ -98,11 +104,35 @@ void RepRap::Spin()
 }
 
 
-
 void RepRap::Interrupt()
 {
   
 }
+
+//*************************************************************************************************
+
+// Utilities and storage not part of any class
+
+static long precision[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
+
+char* ftoa(char *a, const float& f, int prec)
+{
+  char *ret = a;
+  long whole = (long)f;
+  sprintf(a,"%d",whole);
+  while (*a != '\0') a++;
+  *a++ = '.';
+  long decimal = abs((long)((f - (float)whole) * precision[prec]));
+  sprintf(a,"%d",decimal);
+  return ret;
+}
+
+
+
+
+
+
+
 
 
   
