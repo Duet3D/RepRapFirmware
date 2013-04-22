@@ -32,6 +32,8 @@ class Webserver;
 
 #define ABS_ZERO -273.15
 
+#define INCH_TO_MM 25.4
+
 #define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
                       // the frequency and M/S ratio.
 #define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
