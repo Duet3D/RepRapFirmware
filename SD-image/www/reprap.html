@@ -1,0 +1,106 @@
+<!DOCTYPE HTML>
+<head>
+
+<style type="text/css">
+.pages 
+{
+	background-color: green; 
+		list-style-type: none; 
+		padding: 0; 
+		margin: 0; 
+		border-radius: 7px;
+		background-image: -webkit-gradient(linear, left top, 
+			left bottom, color-stop(0, #d6d6d6), 
+			color-stop(0.4, #c0c0c0), color-stop(1,#a4a4a4)); 
+    		margin: 10px 0 16px 0;
+    		font-size: 0px;
+}
+.pages li:hover { background-color: grey; }    
+.pages li:first-child { border-left: none; border-radius: 7px 0 0 7px; }
+.pages li 
+{
+	font-size: 16px; 
+	font-weight: bold; 
+	display: inline-block; 
+	padding: 0.5em 1.5em; 
+	cursor: pointer; 
+	color: white;  
+	border-left: 1px solid #ddd; 
+	border-right: 1px solid #888; 
+}
+.pages li { *display: inline !important; } /* IE7 only */
+.pages .selected 
+{
+	background-color: #444 !important;
+	color: white; 
+	text-shadow:none; 
+	border-right-color: #aaa; 
+	border-left: none; 
+	box-shadow:inset 1px 2px 6px #070707; 
+}    
+
+</style>
+
+</head>
+
+<html>
+
+<script src="knockout-2.2.1.js" type="text/javascript"></script>
+
+
+<ul class="pages" data-bind="foreach: pages">
+    <li data-bind="text: $data, css: 
+		{ 
+			selected: $data == $root.chosenPageId() 
+		}, 
+		click: $root.goToPage">
+    </li>
+</ul>
+
+<!-- Grid --> 
+
+<table class="mails" data-bind="with: chosenPageData">     
+<thead>
+ <tr>
+  <th>From</th>
+  <th>To</th>
+  <th>Subject</th>
+  <th>Date</th>
+ </tr>
+</thead>     
+<tbody data-bind="foreach: mails">
+ <tr>             
+  <td data-bind="text: from"></td>
+  <td data-bind="text: to"></td>
+  <td data-bind="text: subject"></td>
+  <td data-bind="text: date"></td>
+ </tr>          
+</tbody> </table>
+
+
+<script>
+
+function WebmailViewModel() 
+{
+    // Data
+    var self = this;
+    self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
+    self.chosenPageId = ko.observable();
+    self.chosenPageData = ko.observable();
+
+    // Behaviours
+    self.goToPage = function(page) 
+    {
+	self.chosenPageId(page);
+    	$.get('/mail', { page: page }, self.chosenPageData);
+    };
+};
+
+ko.applyBindings(new WebmailViewModel());
+
+</script>
+
+
+
+
+</html>
