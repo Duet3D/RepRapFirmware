@@ -94,21 +94,22 @@ function RepRap()
     self.chosenPageId = ko.observable();
     self.chosenPageData = ko.observable();
     self.machineName = ko.observable('<click here>');
-    var nameData = '{"myName":"RRR 5"}';
-    var parsed;
+    //var nameData = '{"myName":"RRR 5"}';
+    //var parsed;
     // Behaviours
     self.getName = function() 
     {
-	parsed = JSON.parse(nameData);
-	alert(parsed.myName);
-	$.getJSON('/rr_name', function(nameData) {
-		alert(nameData);
-    		parsed = JSON.parse(nameData);
-		self.machineName(parsed.myName);
-		});
+	//alert(nameData);
+	//parsed = JSON.parse(nameData);
+	//alert(parsed.myName);
+	//$.getJSON('/rr_name', function(nameData) {
+	//	alert(nameData);
+    	//	parsed = JSON.parse(nameData);
+	//	self.machineName(parsed.myName);
+	//	});
 	
-   	//$.get('/rr_name', { qual: 'null' }, self.machineName);
-	alert(parsed.myName);
+   	$.get('/rr_name', { qual: 'null' }, self.machineName);
+	//alert(parsed.myName);
     };
 
     self.goToPage = function(page) 

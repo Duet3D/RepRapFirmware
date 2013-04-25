@@ -233,34 +233,37 @@ void Webserver::SendFile(char* nameOfFileToSend)
     sendTable = true;
     
   if(StringStartsWith(nameOfFileToSend, KO_START))
-  {
     GetKOString(&nameOfFileToSend[KO_FIRST]);
-    return;
-  }
     
   platform->SendToClient("HTTP/1.1 200 OK\n");
   
+  platform->SendToClient("Content-Type: ");
   if(StringEndsWith(nameOfFileToSend, ".png"))
-    platform->SendToClient("Content-Type: image/png\n");
+    platform->SendToClient("image/png\n");
+  else if (koPointer >=0)
+    platform->SendToClient("application/json\n");
   else
-    platform->SendToClient("Content-Type: text/html\n");
+    platform->SendToClient("text/html\n");
     
   platform->SendToClient("Connnection: close\n");
 
   platform->SendToClient('\n');
   
-  fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
-  if(fileBeingSent < 0)
+  if(koPointer < 0)
   {
-    sendTable = false;
-    nameOfFileToSend = FOUR04_FILE;
     fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
-  }
+    if(fileBeingSent < 0)
+    {
+      sendTable = false;
+      nameOfFileToSend = FOUR04_FILE;
+      fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
+    }
   
-  inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
-  if(inPHPFile)
-    InitialisePHP();
-  writing = true; 
+    inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
+    if(inPHPFile)
+      InitialisePHP();
+    writing = true;
+  } 
 }
 
 void Webserver::WriteByte()
@@ -309,16 +312,15 @@ void Webserver::GetKOString(char* request)
 {
   koPointer = 0;
   writing = true;
+  boolean ok = false;
   
   if(StringStartsWith(request, "name"))
   {
-    strcpy(clientRequest, "{\"myName\":\"");
+    //strcpy(clientRequest, "{\"myName\":\"");
+    strcpy(clientRequest, "{\"");
     strcat(clientRequest, myName);
     strcat(clientRequest, "\"}");
-    platform->Message(HOST_MESSAGE, "KnockOut response: ");
-    platform->Message(HOST_MESSAGE, clientRequest);
-    platform->Message(HOST_MESSAGE, " queued<br>\n");
-    return;
+    ok = true;
   }
   
   if(StringStartsWith(request, "page"))
@@ -326,18 +328,21 @@ void Webserver::GetKOString(char* request)
     strcpy(clientRequest, "{\"page\":\"");
     strcat(clientRequest, myName);  //FIXME
     strcat(clientRequest, "\"}");
+    ok = true;
+  }
+  
+  if(ok)
+  {
     platform->Message(HOST_MESSAGE, "KnockOut response: ");
     platform->Message(HOST_MESSAGE, clientRequest);
     platform->Message(HOST_MESSAGE, " queued<br>\n");
-    return;
+  } else
+  { 
+    platform->Message(HOST_MESSAGE, "KnockOut request: ");
+    platform->Message(HOST_MESSAGE, request);
+    platform->Message(HOST_MESSAGE, " not recognised<br>\n");
+    clientRequest[0] = 0;
   }
-    
-    
-  platform->Message(HOST_MESSAGE, "KnockOut request: ");
-  platform->Message(HOST_MESSAGE, request);
-  platform->Message(HOST_MESSAGE, " not recognised<br>\n");
-  koPointer = -1;
-  writing = false; 
 }
 
 /*
