@@ -62,6 +62,7 @@ class Webserver
     boolean PrintHeadString();
     boolean PrintLinkTable();
     void GetGCodeList();
+    void GetKOString(char* request);
     boolean CallPHPBoolean(char* phpRecord);
     void CallPHPString(char* phpRecord);  
     void ProcessPHPByte(char b);
@@ -95,6 +96,7 @@ class Webserver
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];
     char gcodeBuffer[GCODE_LENGTH];
+    int koPointer;
     boolean gcodeAvailable;
     int gcodePointer;
     int clientLinePointer;

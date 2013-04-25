@@ -425,7 +425,9 @@ int Platform::OpenFile(char* fileName, boolean write)
   {
     if(!write)
     {
-      Message(HOST_MESSAGE, "File not found for reading.<br>\n");
+      Message(HOST_MESSAGE, "File: ");
+      Message(HOST_MESSAGE, fileName);
+      Message(HOST_MESSAGE, " not found for reading.<br>\n");
       return -1;
     }
     files[result] = SD.open(fileName, FILE_WRITE);

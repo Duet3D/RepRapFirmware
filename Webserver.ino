@@ -224,16 +224,19 @@ void Webserver::CloseClient()
 
 
 void Webserver::SendFile(char* nameOfFileToSend)
-{
-//  Serial.print("Sending: ");
-//  Serial.println(nameOfFileToSend);
-  
+{  
   if(!gotPassword)
   {
     sendTable = false;
     nameOfFileToSend = PASSWORD_PAGE;
   } else
     sendTable = true;
+    
+  if(StringStartsWith(nameOfFileToSend, KO_START))
+  {
+    GetKOString(&nameOfFileToSend[KO_FIRST]);
+    return;
+  }
     
   platform->SendToClient("HTTP/1.1 200 OK\n");
   
@@ -243,26 +246,14 @@ void Webserver::SendFile(char* nameOfFileToSend)
     platform->SendToClient("Content-Type: text/html\n");
     
   platform->SendToClient("Connnection: close\n");
-  
-//          if(loadingImage)
-//          {
-//           platform->SendToHost("Cache-Control: max-age=3600\n");
-//           Serial.println("Image requested");
-//          }
 
   platform->SendToClient('\n');
-  
-//  if(InternalFile(nameOfFileToSend))
-//    return;
-  
-  //Serial.print("File requested: ");
-  //Serial.println(nameOfFileToSend);
   
   fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
   if(fileBeingSent < 0)
   {
     sendTable = false;
-    nameOfFileToSend = "html404.htm";
+    nameOfFileToSend = FOUR04_FILE;
     fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
   }
   
@@ -275,13 +266,27 @@ void Webserver::SendFile(char* nameOfFileToSend)
 void Webserver::WriteByte()
 {
     unsigned char b;
-    if(platform->Read(fileBeingSent, b))
-      platform->SendToClient(b);
-    else
-    { 
-      platform->Close(fileBeingSent);    
-      CloseClient(); 
-    }  
+    
+    if(koPointer >= 0)
+    {
+      if(clientRequest[koPointer])
+        platform->SendToClient(clientRequest[koPointer++]);
+      else
+      {
+        koPointer = -1;
+        clientRequest[0] = 0;
+        CloseClient();
+      }
+    } else
+    {
+      if(platform->Read(fileBeingSent, b))
+        platform->SendToClient(b);
+      else
+      { 
+        platform->Close(fileBeingSent);    
+        CloseClient(); 
+      } 
+    } 
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -295,6 +300,44 @@ void Webserver::CheckPassword()
     
   gotPassword = true;
   strcpy(clientRequest, INDEX_PAGE);
+}
+
+
+
+
+void Webserver::GetKOString(char* request)
+{
+  koPointer = 0;
+  writing = true;
+  
+  if(StringStartsWith(request, "name"))
+  {
+    strcpy(clientRequest, "{\"myName\":\"");
+    strcat(clientRequest, myName);
+    strcat(clientRequest, "\"}");
+    platform->Message(HOST_MESSAGE, "KnockOut response: ");
+    platform->Message(HOST_MESSAGE, clientRequest);
+    platform->Message(HOST_MESSAGE, " queued<br>\n");
+    return;
+  }
+  
+  if(StringStartsWith(request, "page"))
+  {
+    strcpy(clientRequest, "{\"page\":\"");
+    strcat(clientRequest, myName);  //FIXME
+    strcat(clientRequest, "\"}");
+    platform->Message(HOST_MESSAGE, "KnockOut response: ");
+    platform->Message(HOST_MESSAGE, clientRequest);
+    platform->Message(HOST_MESSAGE, " queued<br>\n");
+    return;
+  }
+    
+    
+  platform->Message(HOST_MESSAGE, "KnockOut request: ");
+  platform->Message(HOST_MESSAGE, request);
+  platform->Message(HOST_MESSAGE, " not recognised<br>\n");
+  koPointer = -1;
+  writing = false; 
 }
 
 /*
@@ -366,9 +409,6 @@ void Webserver::ParseClientLine()
     getSeen = true;
     if(!clientRequest[0])
       strcpy(clientRequest, INDEX_PAGE);
-//    Serial.println(MESSAGE_FILE);
-//    Serial.println(clientRequest);
-//   Serial.println(gettingMessages);
     return;
   }
   
@@ -458,9 +498,9 @@ void Webserver::BlankLineFromClient()
   
   if(getSeen)
   {
-   SendFile(clientRequest);
-   clientRequest[0] = 0;
-   return;
+    SendFile(clientRequest);
+    clientRequest[0] = 0;
+    return;
   }
   
   if(postSeen)
@@ -873,6 +913,7 @@ void Webserver::Init()
   receivingPost = false;
   postSeen = false;
   getSeen = false;
+  koPointer = -1;
   //postLength = 0L;
   inPHPFile = false;
   InitialisePHP();

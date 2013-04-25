@@ -4,7 +4,7 @@
 <style type="text/css">
 .pages 
 {
-	background-color: green; 
+	background-color: #00a403; 
 		list-style-type: none; 
 		padding: 0; 
 		margin: 0; 
@@ -44,9 +44,15 @@
 </head>
 
 <html>
+<script src="jquery.js" type="text/javascript"></script>
+<script src="knockout.js" type="text/javascript"></script>
 
-<script src="knockout-2.2.1.js" type="text/javascript"></script>
 
+<a href="http://reprappro.com" target="_blank"><img src="logo.png" alt="RepRapPro logo" align="right"></a>
+
+<div style="font-size:20px">RepRap: <strong data-bind="text: machineName, click: $root.getName"></strong></div>
+
+<br clear = "all">
 
 <ul class="pages" data-bind="foreach: pages">
     <li data-bind="text: $data, css: 
@@ -57,7 +63,7 @@
     </li>
 </ul>
 
-<!-- Grid --> 
+<!-- Grid
 
 <table class="mails" data-bind="with: chosenPageData">     
 <thead>
@@ -76,27 +82,44 @@
   <td data-bind="text: date"></td>
  </tr>          
 </tbody> </table>
-
+ --> 
 
 <script>
 
-function WebmailViewModel() 
+function RepRap() 
 {
     // Data
     var self = this;
     self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
     self.chosenPageId = ko.observable();
     self.chosenPageData = ko.observable();
-
+    self.machineName = ko.observable('<click here>');
+    var nameData = '{"myName":"RRR 5"}';
+    var parsed;
     // Behaviours
+    self.getName = function() 
+    {
+	parsed = JSON.parse(nameData);
+	alert(parsed.myName);
+	$.getJSON('/rr_name', function(nameData) {
+		alert(nameData);
+    		parsed = JSON.parse(nameData);
+		self.machineName(parsed.myName);
+		});
+	
+   	//$.get('/rr_name', { qual: 'null' }, self.machineName);
+	alert(parsed.myName);
+    };
+
     self.goToPage = function(page) 
     {
 	self.chosenPageId(page);
-    	$.get('/mail', { page: page }, self.chosenPageData);
+    	$.get('/rr_page', { page: page }, self.chosenPageData);
+	alert(self.chosenPageData);
     };
 };
 
-ko.applyBindings(new WebmailViewModel());
+ko.applyBindings(new RepRap());
 
 </script>
 
