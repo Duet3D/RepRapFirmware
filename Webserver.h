@@ -50,9 +50,6 @@ class Webserver
     void ParseClientLine();
     void SendFile(char* nameOfFileToSend);
     void WriteByte();
-    boolean StringEndsWith(char* string, char* ending);
-    boolean StringStartsWith(char* string, char* starting);
-    boolean StringEquals(char* s1, char* s2);
     void ParseQualifier();
     void CheckPassword();
     boolean LoadGcodeBuffer(char* gc, boolean convertWeb);
@@ -71,7 +68,6 @@ class Webserver
     void CharFromClient(char c);
     void BlankLineFromClient();
     void InitialisePost();
-    int StringContains(char* string, char* match);
     boolean MatchBoundary(char c);
     
     Platform* platform;

@@ -56,12 +56,24 @@ class RepRap
     Webserver* webserver;
 };
 
+inline Platform* RepRap::GetPlatform() { return platform; }
+inline Move* RepRap::GetMove() { return move; }
+inline Heat* RepRap::GetHeat() { return heat; }
+inline GCodes* RepRap::GetGCodes() { return gCodes; }
+inline Webserver* RepRap::GetWebserver() { return webserver; }
+
+// Functions and globals not part of any class
+
+char* ftoa(char *a, const float& f, int prec);
+boolean StringEndsWith(char* string, char* ending);
+boolean StringStartsWith(char* string, char* starting);
+boolean StringEquals(char* s1, char* s2);
+int StringContains(char* string, char* match);
+
 #include "Webserver.h" 
 #include "GCodes.h"
 #include "Move.h"
 #include "Heat.h"
-
-char* ftoa(char *a, const float& f, int prec);
 
 extern RepRap reprap;
 

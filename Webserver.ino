@@ -35,63 +35,7 @@ Licence: GPL
 
 //***************************************************************************************************
 
-// String manipulation
 
-boolean Webserver::StringEndsWith(char* string, char* ending)
-{
-  int j = strlen(string);
-  int k = strlen(ending);
-  if(k > j)
-    return false;
-  
-  return(StringEquals(&string[j - k], ending));
-}
-
-boolean Webserver::StringEquals(char* s1, char* s2)
-{
-  int i = 0;
-  while(s1[i] && s2[i])
-  {
-     if(tolower(s1[i]) != tolower(s2[i]))
-       return false;
-     i++;
-  }
-  
-  return !(s1[i] || s2[i]);
-}
-
-boolean Webserver::StringStartsWith(char* string, char* starting)
-{ 
-  int j = strlen(string);
-  int k = strlen(starting);
-  if(k > j)
-    return false;
-  
-  for(int i = 0; i < k; i++)
-    if(string[i] != starting[i])
-      return false;
-      
-  return true;
-}
-
-int Webserver::StringContains(char* string, char* match)
-{ 
-  int i = 0;
-  int count = 0;
-  
-  while(string[i])
-  {
-    if(string[i++] == match[count])
-    {
-      count++;
-      if(!match[count])
-        return i;
-    } else
-      count = 0;
-  }
-      
-  return -1;
-}
 
 boolean Webserver::MatchBoundary(char c)
 {

@@ -64,12 +64,6 @@ RepRap::RepRap()
   heat = new Heat(platform, gCodes);
 }
 
-inline Platform* RepRap::GetPlatform() { return platform; }
-inline Move* RepRap::GetMove() { return move; }
-inline Heat* RepRap::GetHeat() { return heat; }
-inline GCodes* RepRap::GetGCodes() { return gCodes; }
-inline Webserver* RepRap::GetWebserver() { return webserver; }
-
 void RepRap::Init()
 {
   platform->Init();
@@ -127,6 +121,63 @@ char* ftoa(char *a, const float& f, int prec)
   return ret;
 }
 
+// String testing
+
+boolean StringEndsWith(char* string, char* ending)
+{
+  int j = strlen(string);
+  int k = strlen(ending);
+  if(k > j)
+    return false;
+  
+  return(StringEquals(&string[j - k], ending));
+}
+
+boolean StringEquals(char* s1, char* s2)
+{
+  int i = 0;
+  while(s1[i] && s2[i])
+  {
+     if(tolower(s1[i]) != tolower(s2[i]))
+       return false;
+     i++;
+  }
+  
+  return !(s1[i] || s2[i]);
+}
+
+boolean StringStartsWith(char* string, char* starting)
+{ 
+  int j = strlen(string);
+  int k = strlen(starting);
+  if(k > j)
+    return false;
+  
+  for(int i = 0; i < k; i++)
+    if(string[i] != starting[i])
+      return false;
+      
+  return true;
+}
+
+int StringContains(char* string, char* match)
+{ 
+  int i = 0;
+  int count = 0;
+  
+  while(string[i])
+  {
+    if(string[i++] == match[count])
+    {
+      count++;
+      if(!match[count])
+        return i;
+    } else
+      count = 0;
+  }
+      
+  return -1;
+}
 
 
 
