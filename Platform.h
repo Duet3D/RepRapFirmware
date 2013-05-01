@@ -199,6 +199,7 @@ class Platform
                                              // returned value is false for EoF, true otherwise
   void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
+  unsigned long Length(int file); // File size in bytes
   char* GetWebDir(); // Where the php/htm etc files are
   char* GetGcodeDir(); // Where the gcodes are
   char* GetSysDir();  // Where the system files are

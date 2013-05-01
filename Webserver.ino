@@ -168,7 +168,10 @@ void Webserver::CloseClient()
 
 
 void Webserver::SendFile(char* nameOfFileToSend)
-{  
+{
+  char sLen[POST_LENGTH];
+  int len = -1;
+  
   if(!gotPassword)
   {
     sendTable = false;
@@ -176,23 +179,18 @@ void Webserver::SendFile(char* nameOfFileToSend)
   } else
     sendTable = true;
     
+/*  if(StringEndsWith(nameOfFileToSend, ".js"))
+  {
+    len = strlen(nameOfFileToSend);
+    nameOfFileToSend[len-2] = 'z';
+    nameOfFileToSend[len-1] = 'i';
+    nameOfFileToSend[len] = 'p';
+    nameOfFileToSend[len+1] = 0;
+  }*/
+    
   if(StringStartsWith(nameOfFileToSend, KO_START))
     GetKOString(&nameOfFileToSend[KO_FIRST]);
     
-  platform->SendToClient("HTTP/1.1 200 OK\n");
-  
-  platform->SendToClient("Content-Type: ");
-  if(StringEndsWith(nameOfFileToSend, ".png"))
-    platform->SendToClient("image/png\n");
-  else if (koPointer >=0)
-    platform->SendToClient("application/json\n");
-  else
-    platform->SendToClient("text/html\n");
-    
-  platform->SendToClient("Connnection: close\n");
-
-  platform->SendToClient('\n');
-  
   if(koPointer < 0)
   {
     fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
@@ -208,6 +206,45 @@ void Webserver::SendFile(char* nameOfFileToSend)
       InitialisePHP();
     writing = true;
   } 
+  
+  if(koPointer >=0)
+    platform->SendToClient("HTTP/1.1 201 OK\n");
+  else
+    platform->SendToClient("HTTP/1.1 200 OK\n");
+  
+  platform->SendToClient("Content-Type: ");
+  
+  if(StringEndsWith(nameOfFileToSend, ".png"))
+    platform->SendToClient("image/png\n");
+  else if (koPointer >=0)
+    platform->SendToClient("application/json\n");
+  else if(StringEndsWith(nameOfFileToSend, ".js"))
+    platform->SendToClient("application/javascript\n");
+  else
+    platform->SendToClient("text/html\n");
+    
+  if (koPointer >=0)
+  {
+    platform->SendToClient("Content-Length: ");
+    sprintf(sLen, "%d", strlen(clientRequest));
+    platform->SendToClient(sLen);
+    platform->SendToClient("\n");
+  }
+    
+  if(len > 0)
+  {
+    platform->SendToClient("Content-Encoding: gzip\n");
+    platform->SendToClient("Content-Length: ");
+    sprintf(sLen, "%llu", platform->Length(fileBeingSent));
+    platform->SendToClient(sLen);
+    platform->SendToClient("\n");    
+  }
+    
+  platform->SendToClient("Connnection: close\n");
+
+  platform->SendToClient('\n');
+  
+
 }
 
 void Webserver::WriteByte()
@@ -260,8 +297,8 @@ void Webserver::GetKOString(char* request)
   
   if(StringStartsWith(request, "name"))
   {
-    //strcpy(clientRequest, "{\"myName\":\"");
-    strcpy(clientRequest, "{\"");
+    strcpy(clientRequest, "{\"myName\":\"");
+    //strcpy(clientRequest, "{\"");
     strcat(clientRequest, myName);
     strcat(clientRequest, "\"}");
     ok = true;
@@ -525,7 +562,7 @@ void Webserver::Spin()
     if(platform->ClientStatus() & AVAILABLE) 
     {
       char c = platform->ClientRead();
-      //Serial.write(c); 
+      Serial.write(c); 
  
       if(receivingPost && postFile >= 0)
       {

@@ -457,6 +457,16 @@ void Platform::GoToEnd(int file)
   files[file].seek(e);
 }
 
+unsigned long Platform::Length(int file)
+{
+  if(!inUse[file])
+  {
+    Message(HOST_MESSAGE, "Attempt to size non-open file.<br>\n");
+    return 0;
+  }
+  return files[file].size();  
+}
+
 void Platform::Close(int file)
 { 
   if(bPointer[file] != 0)
