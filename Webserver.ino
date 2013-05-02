@@ -191,7 +191,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
   if(StringStartsWith(nameOfFileToSend, KO_START))
     GetKOString(&nameOfFileToSend[KO_FIRST]);
     
-  if(koPointer < 0)
+  if(jsonPointer < 0)
   {
     fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
     if(fileBeingSent < 0)
@@ -207,7 +207,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
     writing = true;
   } 
   
-  if(koPointer >=0)
+  if(jsonPointer >=0)
     platform->SendToClient("HTTP/1.1 201 OK\n");
   else
     platform->SendToClient("HTTP/1.1 200 OK\n");
@@ -216,17 +216,17 @@ void Webserver::SendFile(char* nameOfFileToSend)
   
   if(StringEndsWith(nameOfFileToSend, ".png"))
     platform->SendToClient("image/png\n");
-  else if (koPointer >=0)
+  else if (jsonPointer >=0)
     platform->SendToClient("application/json\n");
   else if(StringEndsWith(nameOfFileToSend, ".js"))
     platform->SendToClient("application/javascript\n");
   else
     platform->SendToClient("text/html\n");
     
-  if (koPointer >=0)
+  if (jsonPointer >=0)
   {
     platform->SendToClient("Content-Length: ");
-    sprintf(sLen, "%d", strlen(clientRequest));
+    sprintf(sLen, "%d", strlen(jsonResponse));
     platform->SendToClient(sLen);
     platform->SendToClient("\n");
   }
@@ -251,14 +251,14 @@ void Webserver::WriteByte()
 {
     unsigned char b;
     
-    if(koPointer >= 0)
+    if(jsonPointer >= 0)
     {
-      if(clientRequest[koPointer])
-        platform->SendToClient(clientRequest[koPointer++]);
+      if(jsonResponse[jsonPointer])
+        platform->SendToClient(jsonResponse[jsonPointer++]);
       else
       {
-        koPointer = -1;
-        clientRequest[0] = 0;
+        jsonPointer = -1;
+        jsonResponse[0] = 0;
         CloseClient();
       }
     } else
@@ -291,31 +291,31 @@ void Webserver::CheckPassword()
 
 void Webserver::GetKOString(char* request)
 {
-  koPointer = 0;
+  jsonPointer = 0;
   writing = true;
   boolean ok = false;
   
   if(StringStartsWith(request, "name"))
   {
-    strcpy(clientRequest, "{\"myName\":\"");
+    strcpy(jsonResponse, "{\"myName\":\"");
     //strcpy(clientRequest, "{\"");
-    strcat(clientRequest, myName);
-    strcat(clientRequest, "\"}");
+    strcat(jsonResponse, myName);
+    strcat(jsonResponse, "\"}");
     ok = true;
   }
   
   if(StringStartsWith(request, "page"))
   {
-    strcpy(clientRequest, "{\"page\":\"");
-    strcat(clientRequest, myName);  //FIXME
-    strcat(clientRequest, "\"}");
+    strcpy(jsonResponse, "{\"page\":\"");
+    strcat(jsonResponse, myName);  //FIXME
+    strcat(jsonResponse, "\"}");
     ok = true;
   }
   
   if(ok)
   {
     platform->Message(HOST_MESSAGE, "KnockOut response: ");
-    platform->Message(HOST_MESSAGE, clientRequest);
+    platform->Message(HOST_MESSAGE, jsonResponse);
     platform->Message(HOST_MESSAGE, " queued<br>\n");
   } else
   { 
@@ -347,9 +347,9 @@ void Webserver::ParseGetPost()
 //    Serial.print("HTTP request: ");
 //    Serial.println(clientLine);
   
-    platform->Message(HOST_MESSAGE, "HTTP request: ");
-    platform->Message(HOST_MESSAGE, clientLine);
-    platform->Message(HOST_MESSAGE, "<br>\n");
+    //platform->Message(HOST_MESSAGE, "HTTP request: ");
+    //platform->Message(HOST_MESSAGE, clientLine);
+    //platform->Message(HOST_MESSAGE, "<br>\n");
     
     int i = 5;
     int j = 0;
@@ -545,6 +545,7 @@ void Webserver::CharFromClient(char c)
 
 void Webserver::Spin()
 {
+  char sw[2];
   if(!active)
     return;
     
@@ -562,7 +563,15 @@ void Webserver::Spin()
     if(platform->ClientStatus() & AVAILABLE) 
     {
       char c = platform->ClientRead();
-      Serial.write(c); 
+      if(echoInput)
+      {
+        Serial.print(c);
+        //sw[0] = c;
+       // sw[1] = 0;
+        //platform->Message(HOST_MESSAGE, sw);
+        //if(c == '\n')
+        // platform->Message(HOST_MESSAGE, "i: ");
+      } 
  
       if(receivingPost && postFile >= 0)
       {
@@ -899,7 +908,7 @@ void Webserver::Init()
   receivingPost = false;
   postSeen = false;
   getSeen = false;
-  koPointer = -1;
+  jsonPointer = -1;
   //postLength = 0L;
   inPHPFile = false;
   InitialisePHP();
@@ -915,6 +924,8 @@ void Webserver::Init()
   gcodePointer = 0;
   sendTable = true;
   phpRecordPointer = 0;
+  echoInput = false;
+  echoOutput = false;
   InitialisePost();
   active = true; 
 }

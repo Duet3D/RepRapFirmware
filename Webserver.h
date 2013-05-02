@@ -40,6 +40,7 @@ class Webserver
   
     Webserver(Platform* p);
     boolean Available();
+    boolean EchoOutput();
     byte Read();
     void Init();
     void Spin();
@@ -91,8 +92,9 @@ class Webserver
     char clientLine[STRING_LENGTH];
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];
+    char jsonResponse[STRING_LENGTH];
     char gcodeBuffer[GCODE_LENGTH];
-    int koPointer;
+    int jsonPointer;
     boolean gcodeAvailable;
     int gcodePointer;
     int clientLinePointer;
@@ -112,7 +114,11 @@ class Webserver
     boolean sendTable;
     char eatInputChar;
     int phpRecordPointer;
+    boolean echoInput;
+    boolean echoOutput;
 };
+
+inline boolean Webserver::EchoOutput() { return echoOutput; }
 
 
 #endif

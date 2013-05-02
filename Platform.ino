@@ -70,6 +70,13 @@ inline void Platform::SendToClient(unsigned char b)
   if(client)
   {
     client.write(b);
+    if(reprap->GetWebserver()->EchoOutput())
+    {
+      Serial.write(b);
+      //Message(HOST_MESSAGE, message);
+      //if(StringEndsWith(message, "\n"))
+      //  Message(HOST_MESSAGE, "o: ");
+    }
     //Serial.write(b);
   } else
     Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
@@ -521,6 +528,25 @@ void Platform::WriteString(int file, char* b)
   //files[file].print(b);
 }
 
+// Send something to the network client
+
+void Platform::SendToClient(char* message)
+{
+  if(client)
+  {
+    client.print(message);
+    if(reprap->GetWebserver()->EchoOutput())
+    {
+      Serial.print(message);
+      //Message(HOST_MESSAGE, message);
+      //if(StringEndsWith(message, "\n"))
+      //  Message(HOST_MESSAGE, "o: ");
+    }
+  } else
+    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.<br>\n");
+}
+
+
 
 void Platform::Message(char type, char* message)
 {
@@ -545,19 +571,6 @@ void Platform::Message(char type, char* message)
     Close(m);
     
   }
-}
-
-// Send something to the network client
-
-void Platform::SendToClient(char* message)
-{
-  if(client)
-  {
-    client.print(message);
-    //Serial.print("Sent: ");
-    //Serial.print(message);
-  } else
-    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.<br>\n");
 }
 
 // Where the php/htm etc files are
