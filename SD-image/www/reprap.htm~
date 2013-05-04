@@ -50,7 +50,7 @@
 
 <a href="http://reprappro.com" target="_blank"><img src="logo.png" alt="RepRapPro logo" align="right"></a>
 
-<div style="font-size:20px">RepRap: <strong data-bind="text: machineName, click: $root.getName"></strong></div>
+<div style="font-size:20px">RepRap: <strong data-bind="text: machineName"></strong></div>
 
 <br clear = "all">
 
@@ -93,23 +93,20 @@ function RepRap()
     self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
     self.chosenPageId = ko.observable();
     self.chosenPageData = ko.observable();
-    self.machineName = ko.observable('<click here>');
-    //var nameData = '{"myName":"RRR 5"}';
-    //var parsed;
+    self.machineName = ko.computed(
+	function() 
+	{
+		var n = ko.observable('r');
+		$.get('/rr_name', {}, n);
+		alert(n());
+		return n().myName;
+    	}
+    );
+
     // Behaviours
     self.getName = function() 
     {
-	//alert(nameData);
-	//parsed = JSON.parse(nameData);
-	//alert(parsed.myName);
-	//$.getJSON('/rr_name', function(nameData) {
-	//	alert(nameData);
-    	//	parsed = JSON.parse(nameData);
-	//	self.machineName(parsed.myName);
-	//	});
-	
-   	$.get('/rr_name', { qual: 'null' }, self.machineName);
-	//alert(parsed.myName);
+   	$.get('/rr_name', {}, self.machineName);
     };
 
     self.goToPage = function(page) 

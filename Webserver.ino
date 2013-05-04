@@ -207,9 +207,9 @@ void Webserver::SendFile(char* nameOfFileToSend)
     writing = true;
   } 
   
-  if(jsonPointer >=0)
-    platform->SendToClient("HTTP/1.1 201 OK\n");
-  else
+  //if(jsonPointer >=0)
+  //  platform->SendToClient("HTTP/1.1 201 OK\n");
+  //else
     platform->SendToClient("HTTP/1.1 200 OK\n");
   
   platform->SendToClient("Content-Type: ");
@@ -347,9 +347,9 @@ void Webserver::ParseGetPost()
 //    Serial.print("HTTP request: ");
 //    Serial.println(clientLine);
   
-    //platform->Message(HOST_MESSAGE, "HTTP request: ");
-    //platform->Message(HOST_MESSAGE, clientLine);
-    //platform->Message(HOST_MESSAGE, "<br>\n");
+    platform->Message(HOST_MESSAGE, "HTTP request: ");
+    platform->Message(HOST_MESSAGE, clientLine);
+    platform->Message(HOST_MESSAGE, "<br>\n");
     
     int i = 5;
     int j = 0;
