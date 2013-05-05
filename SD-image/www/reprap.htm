@@ -50,7 +50,7 @@
 
 <a href="http://reprappro.com" target="_blank"><img src="logo.png" alt="RepRapPro logo" align="right"></a>
 
-<div style="font-size:20px">RepRap: <strong data-bind="text: machineName"></strong></div>
+<div style="font-size:20px" data-bind="with: machineName">RepRap: <strong data-bind="text: myName"></strong></div>
 
 <br clear = "all">
 
@@ -63,45 +63,27 @@
     </li>
 </ul>
 
-<!-- Grid
+<br>
 
-<table class="mails" data-bind="with: chosenPageData">     
-<thead>
- <tr>
-  <th>From</th>
-  <th>To</th>
-  <th>Subject</th>
-  <th>Date</th>
- </tr>
-</thead>     
-<tbody data-bind="foreach: mails">
- <tr>             
-  <td data-bind="text: from"></td>
-  <td data-bind="text: to"></td>
-  <td data-bind="text: subject"></td>
-  <td data-bind="text: date"></td>
- </tr>          
-</tbody> </table>
- --> 
+<div data-bind="text: chosenPageHtml"></div>
 
 <script>
 
-function RepRap() 
+
+function viewModel() 
 {
     // Data
     var self = this;
     self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
     self.chosenPageId = ko.observable();
-    self.chosenPageData = ko.observable();
-    self.machineName = ko.computed(
-	function() 
-	{
-		var n = ko.observable('r');
-		$.get('/rr_name', {}, n);
-		alert(n()); // Without this line it does not work...
-		return n().myName;
-    	}
-    );
+    self.chosenPageHtml = ko.observable();
+    self.machineName = ko.observable();
+    self.n = ko.computed(
+	  function() 
+	  {
+		$.get('/rr_name', {}, self.machineName);
+    	  }
+     );
 
     // Behaviours
     self.getName = function() 
@@ -112,12 +94,33 @@ function RepRap()
     self.goToPage = function(page) 
     {
 	self.chosenPageId(page);
-    	$.get('/rr_page', { page: page }, self.chosenPageData);
-	alert(self.chosenPageData);
+	switch (page) 
+	{
+    	case 'Control':
+        	self.chosenPageHtml('Control Page');
+        	break;
+    	case 'Print':
+        	self.chosenPageHtml('Print Page');
+        	break;
+	case 'Help':
+		self.chosenPageHtml('Help Page');
+		break;
+	case 'Settings':
+		self.chosenPageHtml('Settings Page');
+		break;
+	case 'Messages':
+		self.chosenPageHtml('Messages Page');
+		break;
+	case 'Logout':
+		self.chosenPageHtml('Logout Page');
+		break;
+	}
+
+    	//$.get('/rr_page', { page: page }, self.chosenPageData);
     };
 };
 
-ko.applyBindings(new RepRap());
+ko.applyBindings(new viewModel());
 
 </script>
 

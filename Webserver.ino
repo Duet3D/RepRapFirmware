@@ -312,9 +312,16 @@ void Webserver::GetKOString(char* request)
     ok = true;
   }
   
+  if(StringStartsWith(request, "gcode"))
+  {
+    
+    strcpy(jsonResponse, "{}");
+    ok = true;
+  }
+  
   if(ok)
   {
-    platform->Message(HOST_MESSAGE, "KnockOut response: ");
+    platform->Message(HOST_MESSAGE, "JSON response: ");
     platform->Message(HOST_MESSAGE, jsonResponse);
     platform->Message(HOST_MESSAGE, " queued<br>\n");
   } else
