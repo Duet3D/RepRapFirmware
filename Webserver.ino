@@ -314,7 +314,7 @@ void Webserver::GetKOString(char* request)
   
   if(StringStartsWith(request, "gcode"))
   {
-    
+    // TODO put something here
     strcpy(jsonResponse, "{}");
     ok = true;
   }

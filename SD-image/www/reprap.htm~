@@ -65,10 +65,100 @@
 
 <br>
 
-<div data-bind="text: chosenPageHtml"></div>
+
+<div data-bind="if: chosenPageId() == pages[0]">
+   <table border="1"><div align="center">
+   
+   
+   <tr>
+   <th colspan="9">Move X Y Z</th>
+   </tr>
+   
+   <tr>
+   <td rowspan="2"><button type="button" onclick="return homea()">Home<br>All</button></td>
+   <td colspan="4">- mm</td>
+   <td colspan="4">+ mm</td>
+   </tr>
+   
+   <tr>
+   <td>-100</td>
+   <td>-10</td>
+   <td>-1</td>
+   <td>-0.1</td>
+   <td>0.1</td>
+   <td>1</td>
+   <td>10</td>
+   <td>100</td>
+   </tr>
+   
+   <tr>
+   <td><button type="button" onclick="return home('X')">Home X</button></td>
+   <td><button type="button" onclick="return move('X', -100)">&lt;--- X</button></td>
+   <td><button type="button" onclick="return move('X', -10)">&lt;-- X</button></td>
+   <td><button type="button" onclick="return move('X', -1)">&lt;- X</button></td>
+   <td><button type="button" onclick="return move('X', -0.1)">&lt; X</button></td>
+   <td><button type="button" onclick="return move('X', 0.1)">X &gt;</button></td>
+   <td><button type="button" onclick="return move('X', 1)">X --&gt;</button></td>
+   <td><button type="button" onclick="return move('X', 10)">X --&gt;</button></td>
+   <td><button type="button" onclick="return move('X', 100)">X ---&gt;</button></td>
+   </tr>
+   
+   <tr>
+   <td><button type="button" onclick="return home('Y')">Home Y</button></td>
+   <td><button type="button" onclick="return move('Y', -100)">&lt;--- Y</button></td>
+   <td><button type="button" onclick="return move('Y', -10)">&lt;-- Y</button></td>
+   <td><button type="button" onclick="return move('Y', -1)">&lt;- Y</button></td>
+   <td><button type="button" onclick="return move('Y', -0.1)">&lt; Y</button></td>
+   <td><button type="button" onclick="return move('Y', 0.1)">Y &gt;</button></td>
+   <td><button type="button" onclick="return move('Y', 1)">Y -&gt;</button></td>
+   <td><button type="button" onclick="return move('Y', 10)">Y --&gt;</button></td>
+   <td><button type="button" onclick="return move('Y', 100)">Y ---&gt;</button></td>
+   </tr>
+   
+   <tr>
+   <td><button type="button" onclick="return home('Z')">Home Z</button></td>
+   <td><button type="button" onclick="return move('Z', -100)">&lt;--- Z</button></td>
+   <td><button type="button" onclick="return move('Z', -10)">&lt;-- Z</button></td>
+   <td><button type="button" onclick="return move('Z', -1)">&lt;- Z</button></td>
+   <td><button type="button" onclick="return move('Z', -0.1)">&lt; Z</button></td>
+   <td><button type="button" onclick="return move('Z', 0.1)">Z &gt;</button></td>
+   <td><button type="button" onclick="return move('Z', 1)">Z -&gt;</button></td>
+   <td><button type="button" onclick="return move('Z', 10)">Z --&gt;</button></td>
+   <td><button type="button" onclick="return move('Z', 100)">Z ---&gt;</button></td>
+   </tr>
+    
+   </div></table>
+
+</div>
+
+<div data-bind="if: chosenPageId() == pages[1]">
+Print
+</div>
+
+
+<div data-bind="if: chosenPageId() == pages[2]">
+Help
+</div>
+
+<div data-bind="if: chosenPageId() == pages[3]">
+Settings
+</div>
+
+<div data-bind="if: chosenPageId() == pages[4]">
+Messages
+</div>
+
+<div data-bind="if: chosenPageId() == pages[5]">
+Logout
+</div>
+
+
 
 <script>
 
+function homea(){ window.location.href = "control.php?gcode=G28";}
+function home(axis){ window.location.href = "control.php?gcode=G28%20" + axis + "0";}
+function move(axis, d){ window.location.href = "control.php?gcode=G91%0AG1%20" + axis + d + "%0AG90";}
 
 function viewModel() 
 {
@@ -76,14 +166,7 @@ function viewModel()
     var self = this;
     self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
     self.chosenPageId = ko.observable();
-    self.chosenPageHtml = ko.observable();
     self.machineName = ko.observable();
-    self.n = ko.computed(
-	  function() 
-	  {
-		$.get('/rr_name', {}, self.machineName);
-    	  }
-     );
 
     // Behaviours
     self.getName = function() 
@@ -94,30 +177,11 @@ function viewModel()
     self.goToPage = function(page) 
     {
 	self.chosenPageId(page);
-	switch (page) 
-	{
-    	case 'Control':
-        	self.chosenPageHtml('Control Page');
-        	break;
-    	case 'Print':
-        	self.chosenPageHtml('Print Page');
-        	break;
-	case 'Help':
-		self.chosenPageHtml('Help Page');
-		break;
-	case 'Settings':
-		self.chosenPageHtml('Settings Page');
-		break;
-	case 'Messages':
-		self.chosenPageHtml('Messages Page');
-		break;
-	case 'Logout':
-		self.chosenPageHtml('Logout Page');
-		break;
-	}
-
-    	//$.get('/rr_page', { page: page }, self.chosenPageData);
     };
+
+    self.getName();
+    self.goToPage(self.pages[0]);
+    
 };
 
 ko.applyBindings(new viewModel());
