@@ -172,11 +172,11 @@ void Webserver::SendFile(char* nameOfFileToSend)
   char sLen[POST_LENGTH];
   int len = -1;
   
-  if(!gotPassword)
-  {
-    sendTable = false;
-    nameOfFileToSend = PASSWORD_PAGE;
-  } else
+//  if(!gotPassword)
+//  {
+//    sendTable = false;
+//    nameOfFileToSend = PASSWORD_PAGE;
+//  } else
     sendTable = true;
     
 /*  if(StringEndsWith(nameOfFileToSend, ".js"))
@@ -279,11 +279,9 @@ void Webserver::WriteByte()
 
 void Webserver::CheckPassword()
 {
-  if(!StringEndsWith(clientQualifier, password))
-    return;
-    
-  gotPassword = true;
-  strcpy(clientRequest, INDEX_PAGE);
+  gotPassword = StringEndsWith(clientQualifier, password);
+
+  //strcpy(clientRequest, INDEX_PAGE);
 }
 
 
@@ -312,9 +310,21 @@ void Webserver::GetKOString(char* request)
     ok = true;
   }
   
+  if(StringStartsWith(request, "password"))
+  {
+    CheckPassword();
+    strcpy(jsonResponse, "{\"password\":\"");
+    if(gotPassword)
+      strcat(jsonResponse, "right");
+    else
+      strcat(jsonResponse, "wrong");
+    strcat(jsonResponse, "\"}");   
+    ok = true;
+  }
+  
   if(StringStartsWith(request, "gcode"))
   {
-    // TODO put something here
+    // TODO interpret GCode here, not in parse qual.
     strcpy(jsonResponse, "{}");
     ok = true;
   }

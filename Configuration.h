@@ -49,7 +49,8 @@ class Webserver;
 
 #define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
 
-#define PASSWORD_PAGE "passwd.php"
+//#define PASSWORD_PAGE "passwd.php"
+#define PASSWORD_PAGE "reprap.htm"
 #define INDEX_PAGE "reprap.htm"
 #define PRINT_PAGE "print.php"
 #define MESSAGE_FILE "messages.php"

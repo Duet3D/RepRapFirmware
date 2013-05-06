@@ -54,6 +54,7 @@
 
 <br clear = "all">
 
+<div data-bind="if: gotPassword().password == 'right'">
 <ul class="pages" data-bind="foreach: pages">
     <li data-bind="text: $data, css: 
 		{ 
@@ -62,6 +63,7 @@
 		click: $root.goToPage">
     </li>
 </ul>
+</div>
 
 <br>
 
@@ -129,6 +131,12 @@
     
    </div></table>
 
+   <br><br>
+<form data-bind="submit: sendGCode">
+    Send a G Code: <input type="text" id="gcode" value="" data-bind="value: gcode" />
+    <button type="submit">Send</button>
+</form>
+
 </div>
 
 <div data-bind="if: chosenPageId() == pages[1]">
@@ -148,8 +156,11 @@ Settings
 Messages
 </div>
 
-<div data-bind="if: chosenPageId() == pages[5]">
-Logout
+<div data-bind="if: (chosenPageId() == pages[5] && gotPassword().password != 'right')">
+<form data-bind="submit: sendPassword">
+    Password: <input type="password" id="pwd" value="" data-bind="value: pwd" />
+    <button type="submit">Submit</button>
+</form>
 </div>
 
 
@@ -167,6 +178,10 @@ function viewModel()
     self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
     self.chosenPageId = ko.observable();
     self.machineName = ko.observable();
+    self.gotPassword = ko.observable();
+    self.pwd = ko.observable();
+    self.gcode = ko.observable();
+    self.dummy = ko.observable();
 
     // Behaviours
     self.getName = function() 
@@ -174,14 +189,34 @@ function viewModel()
    	$.get('/rr_name', {}, self.machineName);
     };
 
+    self.sendPassword = function() 
+    {
+            $.get('/rr_password', {pwd: self.pwd()}, self.gotPassword);
+	    //self.chosenPageId(self.pages[0]);
+    };
+
+    self.sendGCode = function() 
+    {
+            $.get('/rr_gcode', {gcode: self.gcode()}, self.dummy);
+    };
+
     self.goToPage = function(page) 
     {
-	self.chosenPageId(page);
+	if(page == self.pages[5])
+		self.gotPassword(JSON.parse('{"password":"wrong"}'));	
+
+	if(self.gotPassword().password != "right")
+	{
+		self.chosenPageId(self.pages[5]);
+		return;
+	}
+
+	self.chosenPageId(page);	
     };
 
     self.getName();
-    self.goToPage(self.pages[0]);
-    
+    self.goToPage(self.pages[5]);
+    self.gotPassword(JSON.parse('{"password":"wrong"}'));
 };
 
 ko.applyBindings(new viewModel());
