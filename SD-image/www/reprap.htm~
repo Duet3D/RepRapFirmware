@@ -37,7 +37,9 @@
 	border-right-color: #aaa; 
 	border-left: none; 
 	box-shadow:inset 1px 2px 6px #070707; 
-}    
+}
+
+td { text-align: center; } 
 
 </style>
 
@@ -77,7 +79,7 @@
    </tr>
    
    <tr>
-   <td rowspan="2"><button type="button" onclick="return homea()">Home<br>All</button></td>
+   <td rowspan="2"><button data-bind="click: function(data, event) { sendHome('', data, event) }">Home<br>All</button></td>
    <td colspan="4">- mm</td>
    <td colspan="4">+ mm</td>
    </tr>
@@ -94,19 +96,21 @@
    </tr>
    
    <tr>
-   <td><button type="button" onclick="return home('X')">Home X</button></td>
-   <td><button type="button" onclick="return move('X', -100)">&lt;--- X</button></td>
-   <td><button type="button" onclick="return move('X', -10)">&lt;-- X</button></td>
-   <td><button type="button" onclick="return move('X', -1)">&lt;- X</button></td>
-   <td><button type="button" onclick="return move('X', -0.1)">&lt; X</button></td>
-   <td><button type="button" onclick="return move('X', 0.1)">X &gt;</button></td>
-   <td><button type="button" onclick="return move('X', 1)">X --&gt;</button></td>
-   <td><button type="button" onclick="return move('X', 10)">X --&gt;</button></td>
-   <td><button type="button" onclick="return move('X', 100)">X ---&gt;</button></td>
+   <td><button data-bind="click: function(data, event) { sendHome('X', data, event) }">Home X</button></td>
+
+   <td><button data-bind="click: function(data, event) { sendJog('X', -100, data, event) }">&lt;--- X</button></td>
+   <td><button data-bind="click: function(data, event) { sendJog('X', -10, data, event) }">&lt;-- X</button></td>
+   <td><button data-bind="click: function(data, event) { sendJog('X', -1, data, event) }">&lt;- X</button></td>
+   <td><button data-bind="click: function(data, event) { sendJog('X', -0.1, data, event) }">&lt; X</button></td>
+   <td><button data-bind="click: function(data, event) { sendJog('X', 0.1, data, event) }">X &gt;</button></td>
+   <td><button data-bind="click: function(data, event) { sendJog('X', 1, data, event) }">X --&gt;</button></td>
+   <td><button data-bind="click: function(data, event) { sendJog('X', 10, data, event) }">X --&gt;</button></td>
+   <td><button data-bind="click: function(data, event) { sendJog('X', 100, data, event) }">X ---&gt;</button></td>
    </tr>
    
    <tr>
-   <td><button type="button" onclick="return home('Y')">Home Y</button></td>
+   <td><button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Home Y</button></td>
+
    <td><button type="button" onclick="return move('Y', -100)">&lt;--- Y</button></td>
    <td><button type="button" onclick="return move('Y', -10)">&lt;-- Y</button></td>
    <td><button type="button" onclick="return move('Y', -1)">&lt;- Y</button></td>
@@ -118,7 +122,8 @@
    </tr>
    
    <tr>
-   <td><button type="button" onclick="return home('Z')">Home Z</button></td>
+   <td><button data-bind="click: function(data, event) { sendHome('Z', data, event) }">Home Z</button></td>
+
    <td><button type="button" onclick="return move('Z', -100)">&lt;--- Z</button></td>
    <td><button type="button" onclick="return move('Z', -10)">&lt;-- Z</button></td>
    <td><button type="button" onclick="return move('Z', -1)">&lt;- Z</button></td>
@@ -167,10 +172,6 @@ Messages
 
 <script>
 
-function homea(){ window.location.href = "control.php?gcode=G28";}
-function home(axis){ window.location.href = "control.php?gcode=G28%20" + axis + "0";}
-function move(axis, d){ window.location.href = "control.php?gcode=G91%0AG1%20" + axis + d + "%0AG90";}
-
 function viewModel() 
 {
     // Data
@@ -193,6 +194,19 @@ function viewModel()
     {
             $.get('/rr_password', {pwd: self.pwd()}, self.gotPassword);
 	    //self.chosenPageId(self.pages[0]);
+    };
+
+    self.sendHome = function(axis, data, event) 
+    {
+	if(axis != '')
+            $.get('/rr_gcode', {gcode: "G28 " + axis + "0"}, self.dummy);
+	else
+	    $.get('/rr_gcode', {gcode: "G28"}, self.dummy);
+    };
+
+    self.sendJog = function(axis, d, data, event) 
+    {
+	$.get('/rr_gcode', {gcode: "G91\nG1 " + axis + d + "\nG90\nM83"}, self.dummy);
     };
 
     self.sendGCode = function() 

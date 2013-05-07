@@ -216,6 +216,8 @@ void Webserver::SendFile(char* nameOfFileToSend)
   
   if(StringEndsWith(nameOfFileToSend, ".png"))
     platform->SendToClient("image/png\n");
+  else if(StringEndsWith(nameOfFileToSend, ".ico"))
+    platform->SendToClient("image/x-icon\n");
   else if (jsonPointer >=0)
     platform->SendToClient("application/json\n");
   else if(StringEndsWith(nameOfFileToSend, ".js"))
