@@ -282,8 +282,6 @@ void Webserver::WriteByte()
 void Webserver::CheckPassword()
 {
   gotPassword = StringEndsWith(clientQualifier, password);
-
-  //strcpy(clientRequest, INDEX_PAGE);
 }
 
 
@@ -326,7 +324,8 @@ void Webserver::GetKOString(char* request)
   
   if(StringStartsWith(request, "gcode"))
   {
-    // TODO interpret GCode here, not in parse qual.
+    if(!LoadGcodeBuffer(&clientQualifier[6], true))
+      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!<br>\n");
     strcpy(jsonResponse, "{}");
     ok = true;
   }
@@ -482,12 +481,14 @@ void Webserver::ParseQualifier()
   if(!gotPassword) //Doan work fur nuffink
     return;
     
-  if(StringStartsWith(clientQualifier, "gcode="))
+/*
+if(StringStartsWith(clientQualifier, "gcode="))
   {
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
       platform->Message(HOST_MESSAGE, "Webserver: buffer not free!<br>\n");
     //strcpy(clientRequest, INDEX_PAGE);
   } 
+  */
 }
 
 // if you've gotten to the end of the line (received a newline

@@ -48,6 +48,37 @@ td { text-align: center; }
 <html>
 <script src="jquery.js" type="text/javascript"></script>
 <script src="knockout.js" type="text/javascript"></script>
+<script>
+function jogRowHTML(axis)
+{
+  var result = "";
+  
+  for(var i = -1; i < 3; i++)
+  {
+    var k = Math.pow(10.0, i);
+    var pos = '<td><button data-bind="click: function(data, event) { sendJog(';
+    pos += "'" + axis + "', ";
+    var neg = pos;
+    pos += '' + k;
+    neg += '' + (-k);
+    pos += ', data, event) }">' + axis + ' ';
+    neg += ', data, event) }">&lt;';
+    for(var j = -1; j < i; j++)
+    {
+	pos += '-';
+        neg += '-';
+    }
+    pos += '&gt;';
+    neg += ' ' + axis;
+    pos += '</button></td>';
+    neg += '</button></td>';
+    result += pos;
+    neg += result;
+    result = neg;
+  }
+  return result;
+}
+</script>
 
 
 <a href="http://reprappro.com" target="_blank"><img src="logo.png" alt="RepRapPro logo" align="right"></a>
@@ -96,42 +127,27 @@ td { text-align: center; }
    </tr>
    
    <tr>
-   <td><button data-bind="click: function(data, event) { sendHome('X', data, event) }">Home X</button></td>
-
-   <td><button data-bind="click: function(data, event) { sendJog('X', -100, data, event) }">&lt;--- X</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('X', -10, data, event) }">&lt;-- X</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('X', -1, data, event) }">&lt;- X</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('X', -0.1, data, event) }">&lt; X</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('X', 0.1, data, event) }">X &gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('X', 1, data, event) }">X --&gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('X', 10, data, event) }">X --&gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('X', 100, data, event) }">X ---&gt;</button></td>
+   <td><button data-bind="click: function(data, event) { sendHome('X', data, event) }">Home X
+	</button></td>
+	<script>
+		document.write(jogRowHTML('X'));
+	</script>
    </tr>
    
    <tr>
-   <td><button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Home Y</button></td>
-
-   <td><button data-bind="click: function(data, event) { sendJog('Y', -100, data, event) }">&lt;--- Y</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Y', -10, data, event) }">&lt;-- Y</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Y', -1, data, event) }">&lt;- Y</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Y', -0.1, data, event) }">&lt; Y</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Y', 0.1, data, event) }">Y &gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Y', 1, data, event) }">Y --&gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Y', 10, data, event) }">Y --&gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Y', 100, data, event) }">Y ---&gt;</button></td>   
+   <td><button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Home Y
+	</button></td>
+	<script>
+		document.write(jogRowHTML('Y'));
+	</script>
    </tr>
    
    <tr>
-   <td><button data-bind="click: function(data, event) { sendHome('Z', data, event) }">Home Z</button></td>
-
-   <td><button data-bind="click: function(data, event) { sendJog('Z', -100, data, event) }">&lt;--- Z</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Z', -10, data, event) }">&lt;-- Z</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Z', -1, data, event) }">&lt;- Z</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Z', -0.1, data, event) }">&lt; Z</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Z', 0.1, data, event) }">Z &gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Z', 1, data, event) }">Z --&gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Z', 10, data, event) }">Z --&gt;</button></td>
-   <td><button data-bind="click: function(data, event) { sendJog('Z', 100, data, event) }">Z ---&gt;</button></td>
+   <td><button data-bind="click: function(data, event) { sendHome('Z', data, event) }">Home Z
+	</button></td>
+	<script>
+		document.write(jogRowHTML('Z'));
+	</script>
    </tr>
     
    </div></table>
@@ -193,7 +209,6 @@ function viewModel()
     self.sendPassword = function() 
     {
             $.get('/rr_password', {pwd: self.pwd()}, self.gotPassword);
-	    //self.chosenPageId(self.pages[0]);
     };
 
     self.sendHome = function(axis, data, event) 
