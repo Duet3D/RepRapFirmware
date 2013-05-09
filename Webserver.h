@@ -60,7 +60,7 @@ class Webserver
     boolean PrintHeadString();
     boolean PrintLinkTable();
     void GetGCodeList();
-    void GetKOString(char* request);
+    void GetJsonResponse(char* request);
     boolean CallPHPBoolean(char* phpRecord);
     void CallPHPString(char* phpRecord);  
     void ProcessPHPByte(char b);

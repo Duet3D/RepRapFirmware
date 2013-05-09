@@ -50,6 +50,7 @@ class GCodes
     void Exit();
     boolean ReadMove(float* m);
     boolean ReadHeat(float* h);
+    void QueueFileToPrint(char* fileName);
     
   private:
   

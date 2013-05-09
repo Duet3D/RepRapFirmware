@@ -12,10 +12,10 @@
 		background-image: -webkit-gradient(linear, left top, 
 			left bottom, color-stop(0, #d6d6d6), 
 			color-stop(0.4, #c0c0c0), color-stop(1,#a4a4a4)); 
-    		margin: 10px 0 16px 0;
-    		font-size: 0px;
+		margin: 10px 0 16px 0;
+		font-size: 0px;
 }
-.pages li:hover { background-color: grey; }    
+.pages li:hover { background-color: grey; }
 .pages li:first-child { border-left: none; border-radius: 7px 0 0 7px; }
 .pages li 
 {
@@ -39,6 +39,27 @@
 	box-shadow:inset 1px 2px 6px #070707; 
 }
 
+
+
+.files 
+{
+	background-color: white; 
+}
+.files li:hover { background-color: grey; }
+.files li:first-child { border-left: none; border-radius: 7px 0 0 7px; }
+.files li 
+{
+	cursor: pointer; 
+	color: black;
+	list-style-type: none;  
+}
+.files li { *display: inline !important; } /* IE7 only */
+.files .selected 
+{
+	background-color: #00a403 !important;
+	color: white; 
+}
+
 td { text-align: center; } 
 
 </style>
@@ -53,34 +74,35 @@ function jogRowHTML(axis)
 {
   var result = "";
   
-  for(var i = -1; i < 3; i++)
-  {
-    var k = Math.pow(10.0, i);
-    var pos = '<td><button data-bind="click: function(data, event) { sendJog(';
-    pos += "'" + axis + "', ";
-    var neg = pos;
-    pos += '' + k;
-    neg += '' + (-k);
-    pos += ', data, event) }">' + axis + ' ';
-    neg += ', data, event) }">&lt;';
-    for(var j = -1; j < i; j++)
-    {
-	pos += '-';
-        neg += '-';
-    }
-    pos += '&gt;';
-    neg += ' ' + axis;
-    pos += '</button></td>';
-    neg += '</button></td>';
-    result += pos;
-    neg += result;
-    result = neg;
-  }
-  return result;
+	for(var i = -1; i < 3; i++)
+	{
+		var k = Math.pow(10.0, i);
+		var pos = '<td><button data-bind="click: function(data, event) { sendJog(';
+		pos += "'" + axis + "', ";
+		var neg = pos;
+		pos += '' + k;
+		neg += '' + (-k);
+		pos += ', data, event) }">' + axis + ' ';
+		neg += ', data, event) }">&lt;';
+		for(var j = -1; j < i; j++)
+		{
+			pos += '-';
+			neg += '-';
+		}
+		pos += '&gt;';
+		neg += ' ' + axis;
+		pos += '</button></td>';
+		neg += '</button></td>';
+		result += pos;
+		neg += result;
+		result = neg;
+	}
+	return result;
 }
+
 </script>
 
-
+<!-- HEADER -->
 <a href="http://reprappro.com" target="_blank"><img src="logo.png" alt="RepRapPro logo" align="right"></a>
 
 <div style="font-size:20px" data-bind="with: machineName">RepRap: <strong data-bind="text: myName"></strong></div>
@@ -89,18 +111,20 @@ function jogRowHTML(axis)
 
 <div data-bind="if: gotPassword().password == 'right'">
 <ul class="pages" data-bind="foreach: pages">
-    <li data-bind="text: $data, css: 
+	<li data-bind="text: $data, css: 
 		{ 
 			selected: $data == $root.chosenPageId() 
 		}, 
 		click: $root.goToPage">
-    </li>
+	</li>
 </ul>
 </div>
 
 <br>
 
+<!-- PAGES -->
 
+<!-- CONTROL PAGE -->
 <div data-bind="if: chosenPageId() == pages[0]">
    <table border="1"><div align="center">
    
@@ -149,110 +173,196 @@ function jogRowHTML(axis)
 		document.write(jogRowHTML('Z'));
 	</script>
    </tr>
-    
+
    </div></table>
 
    <br><br>
 <form data-bind="submit: sendGCode">
-    Send a G Code: <input type="text" id="gcode" value="" data-bind="value: gcode" />
-    <button type="submit">Send</button>
+	Send a G Code: <input type="text" id="gcode" value="" data-bind="value: gcode" />
+	<button type="submit">Send</button>
 </form>
 
 </div>
 
+<!-- PRINT PAGE -->
 <div data-bind="if: chosenPageId() == pages[1]">
-Print
+
+<form data-bind="submit: function(data, event) { uploadGCode(data, event) }">
+<p>
+Upload a G Code file :<br>
+<input type="file" name="datafile" size="40">
+</p>
+<div>
+<button type="submit">Upload</button>
+</div>
+</form>
+<br>
+Click a file to <span data-bind="text: fileAction">:</span><br>
+
+<ol class="files" data-bind="foreach: files().files">
+	<li data-bind="text: $data, css: 
+		{
+			selected: $data == $root.chosenFileId()
+		}, 
+		click: $root.actionOnFile">
+	</li>
+</ol>
+
+<hr>
+<button data-bind="click: function(data, event) { deleteFile(data, event) }">Delete a file</button>
 </div>
 
 
+<!-- HELP PAGE -->
 <div data-bind="if: chosenPageId() == pages[2]">
 Help
 </div>
 
+<!-- SETTINGS PAGE -->
 <div data-bind="if: chosenPageId() == pages[3]">
 Settings
 </div>
 
+<!-- MESSAGES PAGE -->
 <div data-bind="if: chosenPageId() == pages[4]">
 Messages
 </div>
 
+<!-- LOGOUT/LOGIN PAGE -->
 <div data-bind="if: (chosenPageId() == pages[5] && gotPassword().password != 'right')">
 <form data-bind="submit: sendPassword">
-    Password: <input type="password" id="pwd" value="" data-bind="value: pwd" />
-    <button type="submit">Submit</button>
+	Password: <input type="password" id="pwd" value="" data-bind="value: pwd" />
+	<button type="submit">Submit</button>
 </form>
 </div>
 
 
-
 <script>
-
 function viewModel() 
 {
-    // Data
-    var self = this;
-    self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
-    self.chosenPageId = ko.observable();
-    self.machineName = ko.observable();
-    self.gotPassword = ko.observable();
-    self.pwd = ko.observable();
-    self.gcode = ko.observable();
-    self.dummy = ko.observable();
+	// Data
+	var self = this;
+	self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
+	self.chosenPageId = ko.observable('');
+	self.chosenFileId = ko.observable('');
+	self.machineName = ko.observable();
+	self.gotPassword = ko.observable();
+	self.fileAction = ko.observable('print it');
+	self.pwd = ko.observable();
+	self.gcode = ko.observable();
+	self.files = ko.observable();
+	self.dummy = ko.observable();
 
-    // Behaviours
-    self.getName = function() 
-    {
-   	$.get('/rr_name', {}, self.machineName);
-    };
+	// Behaviours
 
-    self.sendPassword = function() 
-    {
-            $.get('/rr_password', {pwd: self.pwd()}, self.gotPassword);
-    };
-
-    self.sendHome = function(axis, data, event) 
-    {
-	if(axis != '')
-            $.get('/rr_gcode', {gcode: "G28 " + axis + "0"}, self.dummy);
-	else
-	    $.get('/rr_gcode', {gcode: "G28"}, self.dummy);
-    };
-
-    self.sendJog = function(axis, d, data, event) 
-    {
-	$.get('/rr_gcode', {gcode: "G91\nG1 " + axis + d + "\nG90\nM83"}, self.dummy);
-    };
-
-    self.sendGCode = function() 
-    {
-            $.get('/rr_gcode', {gcode: self.gcode()}, self.dummy);
-    };
-
-    self.goToPage = function(page) 
-    {
-	if(page == self.pages[5])
-		self.gotPassword(JSON.parse('{"password":"wrong"}'));	
-
-	if(self.gotPassword().password != "right")
+	self.fileList = function()
 	{
-		self.chosenPageId(self.pages[5]);
-		return;
+		$.get('/rr_files', {}, self.files);
+	}
+	
+	self.getName = function() 
+	{
+   	$.get('/rr_name', {}, self.machineName);
+	};
+
+	self.sendPassword = function() 
+	{
+		$.get('/rr_password', {pwd: self.pwd()}, self.gotPassword);
+	};
+
+	self.sendHome = function(axis, data, event) 
+	{
+		if(axis != '')
+			$.get('/rr_gcode', {gcode: "G28 " + axis + "0"}, self.dummy);
+	else
+		$.get('/rr_gcode', {gcode: "G28"}, self.dummy);
+	};
+
+	self.deleteFile = function(data, event)
+	{
+		self.fileAction('delete it (delete can be cancelled)');
 	}
 
-	self.chosenPageId(page);	
-    };
+	self.sendJog = function(axis, d, data, event) 
+	{
+		$.get('/rr_gcode', {gcode: "G91\nG1 " + axis + d + "\nG90\nM83"}, self.dummy);
+ 	};
 
-    self.getName();
-    self.goToPage(self.pages[5]);
-    self.gotPassword(JSON.parse('{"password":"wrong"}'));
+	self.actionOnFile = function(file) 
+	{
+		if(self.fileAction() == 'print it')
+		{
+			self.chosenFileId(file);
+			$.get('/rr_gcode', {gcode: "M23 " + file + "\nM24"}, self.dummy);
+		} else
+		{
+			if(confirm("Delete the file " + file + " on " + self.machineName().myName + "?"))
+				$.get('/rr_gcode', {gcode: "M30 " + file}, self.dummy);
+			self.resetFileAction();
+		}
+	};
+
+	self.sendGCode = function() 
+	{
+		$.get('/rr_gcode', {gcode: self.gcode()}, self.dummy);
+	};
+
+	self.resetFileAction = function()
+	{
+		self.chosenFileId('');
+		self.fileAction('print it');
+		self.fileList();
+	}
+
+	self.goToPage = function(page) 
+	{
+		if(page == self.pages[5])
+			self.gotPassword(JSON.parse('{"password":"wrong"}'));	
+
+		if(self.gotPassword().password != "right")
+		{
+			self.chosenPageId(self.pages[5]);
+			return;
+		}
+
+		self.resetFileAction();
+		self.chosenPageId(page);	
+	};
+
+	self.checkFileName = function(uploadForm)
+	{
+  		var list = self.files().files;
+  		for(var i = 0; i < list.length; i++)
+  		{
+			if(list[i].toUpperCase() == uploadForm.datafile.value.toUpperCase())
+			{
+				return confirm("This will overwrite the file " + 
+					list[i] + " on " + self.machineName().myName + ". " +
+						"Continue?");
+			}
+  		}
+
+		return true;
+	}
+
+	self.uploadGCode = function(uploadForm, event)
+	{
+		if(self.checkFileName(uploadForm))
+		{
+			alert('upload ' + uploadForm.datafile.value);
+			// TODO put post upload here
+		}
+	}
+
+	self.getName();
+	self.fileList();
+	self.goToPage(self.pages[5]);
+	self.gotPassword(JSON.parse('{"password":"wrong"}'));
 };
 
-ko.applyBindings(new viewModel());
-
+window.vm = new viewModel();
+ko.applyBindings(vm);
 </script>
-
-
 
 
 </html>

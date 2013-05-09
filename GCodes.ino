@@ -99,6 +99,11 @@ void GCodes::SetUpMove(GCodeBuffer *gb)
   moveAvailable = true;  
 }
 
+void GCodes::QueueFileToPrint(char* fileName)
+{
+  platform->Message(HOST_MESSAGE, "File queued for printing.<br>\n");
+}
+
 void GCodes::ActOnGcode(GCodeBuffer *gb)
 {
   int code;
@@ -114,9 +119,11 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 4: // Dwell
+      platform->Message(HOST_MESSAGE, "Dwell received<br>\n");
       break;
       
     case 10: // Set offsets
+      platform->Message(HOST_MESSAGE, "Set offsets received<br>\n");
       break;
     
     case 20: // Inches (which century are we living in, here?)
@@ -128,6 +135,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
     
     case 28: // Home
+      platform->Message(HOST_MESSAGE, "Home received<br>\n");
       break;
       
     case 90: // Absolute coordinates
@@ -141,6 +149,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 92: // Set position
+      platform->Message(HOST_MESSAGE, "Set position received<br>\n");
       break;
       
     default:
@@ -158,9 +167,19 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
     {
     case 0: // Stop
     case 1: // Sleep
+      platform->Message(HOST_MESSAGE, "Stop/sleep received<br>\n");
       break;
     
     case 18: // Motors off ???
+      platform->Message(HOST_MESSAGE, "Motors off received<br>\n");
+      break;
+      
+    case 23: // Set file to print
+      platform->Message(HOST_MESSAGE, "M code for file selected erroneously received.<br>\n");
+      break;
+      
+    case 24: // Print selected file
+      platform->Message(HOST_MESSAGE, "Print started<br>\n");
       break;
       
     case 82:
@@ -172,12 +191,15 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
    
     case 106: // Fan on
+      platform->Message(HOST_MESSAGE, "Fan on received<br>\n");
       break;
     
     case 107: // Fan off
+      platform->Message(HOST_MESSAGE, "Fan off received<br>\n");
       break;
     
     case 116: // Wait for everything
+      platform->Message(HOST_MESSAGE, "Wait for all temperatures received<br>\n");
       break;
     
     case 126: // Valve open
@@ -189,6 +211,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 140: // Set bed temperature
+      platform->Message(HOST_MESSAGE, "Set bed temp received<br>\n");
       break;
     
     case 141: // Chamber temperature
@@ -206,10 +229,18 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
   if(gb->Seen('T'))
   {
     code = gb->GetIValue();
-    switch(code)
+    boolean ok = false;
+    for(char i = AXES; i < DRIVES; i++)
     {
-     
-    default:
+      if(code == i - AXES)
+      {
+        platform->Message(HOST_MESSAGE, "Tool selection received<br>\n");
+        ok = true;
+      }
+    }
+
+    if(!ok)
+    {
       platform->Message(HOST_MESSAGE, "GCodes - invalid T Code: ");
       platform->Message(HOST_MESSAGE, gb->Buffer());
       platform->Message(HOST_MESSAGE, "<br>\n");

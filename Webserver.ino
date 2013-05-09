@@ -126,16 +126,37 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   gcodeBuffer[gcodePointer] = 0;
   gcodePointer = 0;  
   
-// We intercept a G Code so we can deal with file manipulation.  That
-// way things don't get out of sync.
+// We intercept two G Codes so we can deal with file manipulation.  That
+// way things don't get out of sync, and - as a file name can contain
+// a valid G code (!) - confusion is avoided.
   
-  if(StringStartsWith(gcodeBuffer, "M30 ")) // Delete file?
+  char fileAct = 0;
+  if(StringStartsWith(gcodeBuffer, "M30 ")) fileAct |= 1;
+  if(StringStartsWith(gcodeBuffer, "M23 ")) fileAct |= 2;
+  
+  if(fileAct) // Delete file?
   {
-    if(!platform->DeleteFile(&gcodeBuffer[4]))
+    if(fileAct == 1)
     {
-      platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
-      platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
-      platform->Message(HOST_MESSAGE, "<br>\n");
+      if(!platform->DeleteFile(platform->PrependRoot(platform->GetGcodeDir(), &gcodeBuffer[4])))
+      {
+        platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
+        platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
+        platform->Message(HOST_MESSAGE, "<br>\n");
+      } 
+    } else
+    {
+      reprap.GetGCodes()->QueueFileToPrint(platform->PrependRoot(platform->GetGcodeDir(), &gcodeBuffer[4])); 
+    }    
+    gcodePointer = 0;
+    while(gcodeBuffer[gcodePointer])
+    {
+       if(gcodeBuffer[gcodePointer] == '\n')
+       {
+         gcodeAvailable = true;
+         return true;
+       }
+       gcodePointer++;
     }
     gcodePointer = 0;
     gcodeBuffer[gcodePointer] = 0;
@@ -189,7 +210,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
   }*/
     
   if(StringStartsWith(nameOfFileToSend, KO_START))
-    GetKOString(&nameOfFileToSend[KO_FIRST]);
+    GetJsonResponse(&nameOfFileToSend[KO_FIRST]);
     
   if(jsonPointer < 0)
   {
@@ -287,7 +308,7 @@ void Webserver::CheckPassword()
 
 
 
-void Webserver::GetKOString(char* request)
+void Webserver::GetJsonResponse(char* request)
 {
   jsonPointer = 0;
   writing = true;
@@ -296,16 +317,7 @@ void Webserver::GetKOString(char* request)
   if(StringStartsWith(request, "name"))
   {
     strcpy(jsonResponse, "{\"myName\":\"");
-    //strcpy(clientRequest, "{\"");
     strcat(jsonResponse, myName);
-    strcat(jsonResponse, "\"}");
-    ok = true;
-  }
-  
-  if(StringStartsWith(request, "page"))
-  {
-    strcpy(jsonResponse, "{\"page\":\"");
-    strcat(jsonResponse, myName);  //FIXME
     strcat(jsonResponse, "\"}");
     ok = true;
   }
@@ -327,6 +339,15 @@ void Webserver::GetKOString(char* request)
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
       platform->Message(HOST_MESSAGE, "Webserver: buffer not free!<br>\n");
     strcpy(jsonResponse, "{}");
+    ok = true;
+  }
+  
+  if(StringStartsWith(request, "files"))
+  {
+    char* fileList = platform->FileList(platform->GetGcodeDir());
+    strcpy(jsonResponse, "{\"files\":[");
+    strcat(jsonResponse, fileList);
+    strcat(jsonResponse, "]}");    
     ok = true;
   }
   
