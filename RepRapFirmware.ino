@@ -71,6 +71,7 @@ void RepRap::Init()
   webserver->Init();
   move->Init();
   heat->Init();
+  dbg = true;
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started<br>\n");
   active = true;
 }

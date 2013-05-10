@@ -2,26 +2,22 @@
 
 RepRapFirmware - Webserver
 
-This class serves web pages to the attached network.  These pages form the user's interface with the
-RepRap machine.  It interprests returned values from those pages and uses them to Generate G Codes,
-which it sends to the RepRap.  It also collects values from the RepRap like temperature and uses
-those to construct the web pages.
+This class serves a single-page web applications to the attached network.  This page forms the user's 
+interface with the RepRap machine.  This software interprests returned values from the page and uses it
+to Generate G Codes, which it sends to the RepRap.  It also collects values from the RepRap like 
+temperature and uses those to construct the web page.
 
-It implements very very restricted PHP.  It can do:
+The page itself - reprap.htm - uses Knockout.js and Jquery.js.  See:
 
-   <?php print(myStringFunction()); ?>
-   <?php if(myBooleanFunction()) print(myOtherStringFunction()); ?>
-   <?php if(myOtherBooleanFunction()) echo 'Some arbitrarily long string of HTML including newlines up to this quote:'; ?>
+http://knockoutjs.com/
 
-Note that by printing a function that returns "" you can just call 
-that function in this C++ code with no effect on the loaded web page.
-
+http://jquery.com/
 
 -----------------------------------------------------------------------------------------------------
 
-Version 0.1
+Version 0.2
 
-13 February 2013
+10 May 2013
 
 Adrian Bowyer
 RepRap Professional Ltd
@@ -134,9 +130,9 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   if(StringStartsWith(gcodeBuffer, "M30 ")) fileAct |= 1;
   if(StringStartsWith(gcodeBuffer, "M23 ")) fileAct |= 2;
   
-  if(fileAct) // Delete file?
+  if(fileAct) // Delete or print a file?
   {
-    if(fileAct == 1)
+    if(fileAct == 1) // Delete?
     {
       if(!platform->DeleteFile(platform->PrependRoot(platform->GetGcodeDir(), &gcodeBuffer[4])))
       {
@@ -144,10 +140,13 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
         platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
         platform->Message(HOST_MESSAGE, "<br>\n");
       } 
-    } else
+    } else // Print it
     {
       reprap.GetGCodes()->QueueFileToPrint(platform->PrependRoot(platform->GetGcodeDir(), &gcodeBuffer[4])); 
-    }    
+    }
+    
+    // Check for further G Codes in the string
+    
     gcodePointer = 0;
     while(gcodeBuffer[gcodePointer])
     {
@@ -181,8 +180,8 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
 void Webserver::CloseClient()
 {
   writing = false;
-  inPHPFile = false;
-  InitialisePHP();
+  //inPHPFile = false;
+  //InitialisePHP();
   clientCloseTime = platform->Time();
   needToCloseClient = true;   
 }
@@ -191,7 +190,7 @@ void Webserver::CloseClient()
 void Webserver::SendFile(char* nameOfFileToSend)
 {
   char sLen[POST_LENGTH];
-  int len = -1;
+  boolean zip = false;
   
 //  if(!gotPassword)
 //  {
@@ -222,16 +221,16 @@ void Webserver::SendFile(char* nameOfFileToSend)
       fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
     }
   
-    inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
-    if(inPHPFile)
-      InitialisePHP();
+    //inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
+    //if(inPHPFile)
+    //  InitialisePHP();
     writing = true;
   } 
   
   //if(jsonPointer >=0)
   //  platform->SendToClient("HTTP/1.1 201 OK\n");
   //else
-    platform->SendToClient("HTTP/1.1 200 OK\n");
+  platform->SendToClient("HTTP/1.1 200 OK\n");
   
   platform->SendToClient("Content-Type: ");
   
@@ -243,7 +242,11 @@ void Webserver::SendFile(char* nameOfFileToSend)
     platform->SendToClient("application/json\n");
   else if(StringEndsWith(nameOfFileToSend, ".js"))
     platform->SendToClient("application/javascript\n");
-  else
+  else if(StringEndsWith(nameOfFileToSend, ".zip"))
+  {
+    platform->SendToClient("application/zip\n");
+    zip = true;
+  } else
     platform->SendToClient("text/html\n");
     
   if (jsonPointer >=0)
@@ -254,7 +257,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
     platform->SendToClient("\n");
   }
     
-  if(len > 0)
+  if(zip)
   {
     platform->SendToClient("Content-Encoding: gzip\n");
     platform->SendToClient("Content-Length: ");
@@ -266,8 +269,6 @@ void Webserver::SendFile(char* nameOfFileToSend)
   platform->SendToClient("Connnection: close\n");
 
   platform->SendToClient('\n');
-  
-
 }
 
 void Webserver::WriteByte()
@@ -304,8 +305,6 @@ void Webserver::CheckPassword()
 {
   gotPassword = StringEndsWith(clientQualifier, password);
 }
-
-
 
 
 void Webserver::GetJsonResponse(char* request)
@@ -383,12 +382,12 @@ GET /gather.asp?pwd=my_pwd HTTP/1.1
 
 void Webserver::ParseGetPost()
 {
-//    Serial.print("HTTP request: ");
-//    Serial.println(clientLine);
-  
-    platform->Message(HOST_MESSAGE, "HTTP request: ");
-    platform->Message(HOST_MESSAGE, clientLine);
-    platform->Message(HOST_MESSAGE, "<br>\n");
+    if(reprap.debug())
+    {
+      platform->Message(HOST_MESSAGE, "HTTP request: ");
+      platform->Message(HOST_MESSAGE, clientLine);
+      platform->Message(HOST_MESSAGE, "<br>\n");
+    }
     
     int i = 5;
     int j = 0;
@@ -444,7 +443,7 @@ void Webserver::ParseClientLine()
     postSeen = true;
     getSeen = false;
     if(!clientRequest[0])
-      strcpy(clientRequest, PRINT_PAGE);
+      strcpy(clientRequest, INDEX_PAGE);
     return;
   }
   
@@ -491,26 +490,27 @@ void Webserver::ParseClientLine()
   }  
 }
   
-
+/*
 void Webserver::ParseQualifier()
 {
   if(!clientQualifier[0])
     return;
     
-  if(StringStartsWith(clientQualifier, "pwd="))
-    CheckPassword();
-  if(!gotPassword) //Doan work fur nuffink
-    return;
+//  if(StringStartsWith(clientQualifier, "pwd="))
+//    CheckPassword();
+//  if(!gotPassword) //Doan work fur nuffink
+//    return;
     
-/*
+
 if(StringStartsWith(clientQualifier, "gcode="))
   {
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
       platform->Message(HOST_MESSAGE, "Webserver: buffer not free!<br>\n");
     //strcpy(clientRequest, INDEX_PAGE);
   } 
-  */
+  
 }
+*/
 
 // if you've gotten to the end of the line (received a newline
 // character) and the line is blank, the http request has ended,
@@ -519,7 +519,7 @@ void Webserver::BlankLineFromClient()
 {
   clientLine[clientLinePointer] = 0;
   clientLinePointer = 0;
-  ParseQualifier();
+  //ParseQualifier();
   
   //Serial.println("End of header.");
   
@@ -592,9 +592,9 @@ void Webserver::Spin()
     
   if(writing)
   {
-    if(inPHPFile)
-      WritePHPByte();
-    else
+ //   if(inPHPFile)
+ //     WritePHPByte();
+ //   else
       WriteByte();
     return;         
   }
@@ -604,15 +604,15 @@ void Webserver::Spin()
     if(platform->ClientStatus() & AVAILABLE) 
     {
       char c = platform->ClientRead();
-      if(echoInput)
-      {
-        Serial.print(c);
+//      if(echoInput)
+//      {
+//        Serial.print(c);
         //sw[0] = c;
        // sw[1] = 0;
         //platform->Message(HOST_MESSAGE, sw);
         //if(c == '\n')
         // platform->Message(HOST_MESSAGE, "i: ");
-      } 
+//      } 
  
       if(receivingPost && postFile >= 0)
       {
@@ -644,7 +644,7 @@ void Webserver::Spin()
 }
 
 //**********************************************************************************************
-
+/*
 // PHP interpreter
 
 void Webserver::InitialisePHP()
@@ -930,7 +930,7 @@ void Webserver::WritePHPByte()
       CloseClient(); 
     }  
 }
-
+*/
 //******************************************************************************************
 
 // Constructor and initialisation
@@ -951,8 +951,8 @@ void Webserver::Init()
   getSeen = false;
   jsonPointer = -1;
   //postLength = 0L;
-  inPHPFile = false;
-  InitialisePHP();
+  //inPHPFile = false;
+  //InitialisePHP();
   clientLineIsBlank = true;
   needToCloseClient = false;
   clientLinePointer = 0;
@@ -964,7 +964,7 @@ void Webserver::Init()
   gcodeAvailable = false;
   gcodePointer = 0;
   sendTable = true;
-  phpRecordPointer = 0;
+  //phpRecordPointer = 0;
   echoInput = false;
   echoOutput = false;
   InitialisePost();

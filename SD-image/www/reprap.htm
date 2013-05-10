@@ -197,7 +197,7 @@ Upload a G Code file :<br>
 </div>
 </form>
 <br>
-Click a file to <span data-bind="text: fileAction">:</span><br>
+Click a file to <span data-bind="text: fileAction"></span><br>
 
 <ol class="files" data-bind="foreach: files().files">
 	<li data-bind="text: $data, css: 
@@ -209,7 +209,7 @@ Click a file to <span data-bind="text: fileAction">:</span><br>
 </ol>
 
 <hr>
-<button data-bind="click: function(data, event) { deleteFile(data, event) }">Delete a file</button>
+<button data-bind="text: deleteButton, click: function(data, event) { deleteFile(data, event) }"></button>
 </div>
 
 
@@ -251,6 +251,7 @@ function viewModel()
 	self.pwd = ko.observable();
 	self.gcode = ko.observable();
 	self.files = ko.observable();
+	self.deleteButton = ko.observable('Delete a file');
 	self.dummy = ko.observable();
 
 	// Behaviours
@@ -274,13 +275,21 @@ function viewModel()
 	{
 		if(axis != '')
 			$.get('/rr_gcode', {gcode: "G28 " + axis + "0"}, self.dummy);
-	else
-		$.get('/rr_gcode', {gcode: "G28"}, self.dummy);
+		else
+			$.get('/rr_gcode', {gcode: "G28"}, self.dummy);
 	};
 
 	self.deleteFile = function(data, event)
 	{
-		self.fileAction('delete it (delete can be cancelled)');
+		if(self.deleteButton() == 'Print a file')
+		{
+			self.fileAction('print it');
+			self.deleteButton('Delete a file');
+		} else
+		{
+			self.fileAction('delete it');
+			self.deleteButton('Print a file');
+		}
 	}
 
 	self.sendJog = function(axis, d, data, event) 
@@ -311,6 +320,7 @@ function viewModel()
 	{
 		self.chosenFileId('');
 		self.fileAction('print it');
+		self.deleteButton('Delete a file');
 		self.fileList();
 	}
 
