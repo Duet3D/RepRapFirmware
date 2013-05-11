@@ -49,22 +49,15 @@ class Webserver;
 
 #define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
 
-//#define PASSWORD_PAGE "passwd.php"
-#define PASSWORD_PAGE "reprap.htm"
+
 #define INDEX_PAGE "reprap.htm"
 #define PRINT_PAGE "print.php"
-#define MESSAGE_FILE "messages.php"
-#define MESSAGE_TEMPLATE "messages.txt"
+#define MESSAGE_FILE "messages.txt"
 #define FOUR04_FILE "html404.htm"
 #define KO_START "rr_"
 #define KO_FIRST 3
 #define STRING_LENGTH 1000
-#define PHP_TAG_LENGTH 200
 #define POST_LENGTH 200
-#define PHP_IF 1
-#define PHP_ECHO 2
-#define PHP_PRINT 3
-#define NO_PHP 99
 #define START_FEED_RATE 200
 
 #endif

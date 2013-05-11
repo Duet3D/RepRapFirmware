@@ -62,7 +62,7 @@ void Move::Qmove()
     platform->Message(HOST_MESSAGE, scratchString);
     platform->Message(HOST_MESSAGE, ", ");
   }
-  platform->Message(HOST_MESSAGE, "<br>\n");
+  platform->Message(HOST_MESSAGE, "\n");
   
   // Make it so
   

@@ -101,7 +101,7 @@ void GCodes::SetUpMove(GCodeBuffer *gb)
 
 void GCodes::QueueFileToPrint(char* fileName)
 {
-  platform->Message(HOST_MESSAGE, "File queued for printing.<br>\n");
+  platform->Message(HOST_MESSAGE, "File queued for printing.\n");
 }
 
 void GCodes::ActOnGcode(GCodeBuffer *gb)
@@ -119,11 +119,11 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 4: // Dwell
-      platform->Message(HOST_MESSAGE, "Dwell received<br>\n");
+      platform->Message(HOST_MESSAGE, "Dwell received\n");
       break;
       
     case 10: // Set offsets
-      platform->Message(HOST_MESSAGE, "Set offsets received<br>\n");
+      platform->Message(HOST_MESSAGE, "Set offsets received\n");
       break;
     
     case 20: // Inches (which century are we living in, here?)
@@ -135,7 +135,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
     
     case 28: // Home
-      platform->Message(HOST_MESSAGE, "Home received<br>\n");
+      platform->Message(HOST_MESSAGE, "Home received\n");
       break;
       
     case 90: // Absolute coordinates
@@ -149,13 +149,13 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 92: // Set position
-      platform->Message(HOST_MESSAGE, "Set position received<br>\n");
+      platform->Message(HOST_MESSAGE, "Set position received\n");
       break;
       
     default:
       platform->Message(HOST_MESSAGE, "GCodes - invalid G Code: ");
       platform->Message(HOST_MESSAGE, gb->Buffer());
-      platform->Message(HOST_MESSAGE, "<br>\n");
+      platform->Message(HOST_MESSAGE, "\n");
     }
     return;
   }
@@ -167,19 +167,19 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
     {
     case 0: // Stop
     case 1: // Sleep
-      platform->Message(HOST_MESSAGE, "Stop/sleep received<br>\n");
+      platform->Message(HOST_MESSAGE, "Stop/sleep received\n");
       break;
     
     case 18: // Motors off ???
-      platform->Message(HOST_MESSAGE, "Motors off received<br>\n");
+      platform->Message(HOST_MESSAGE, "Motors off received\n");
       break;
       
     case 23: // Set file to print
-      platform->Message(HOST_MESSAGE, "M code for file selected erroneously received.<br>\n");
+      platform->Message(HOST_MESSAGE, "M code for file selected erroneously received.\n");
       break;
       
     case 24: // Print selected file
-      platform->Message(HOST_MESSAGE, "Print started<br>\n");
+      platform->Message(HOST_MESSAGE, "Print started\n");
       break;
       
     case 82:
@@ -191,37 +191,37 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
    
     case 106: // Fan on
-      platform->Message(HOST_MESSAGE, "Fan on received<br>\n");
+      platform->Message(HOST_MESSAGE, "Fan on received\n");
       break;
     
     case 107: // Fan off
-      platform->Message(HOST_MESSAGE, "Fan off received<br>\n");
+      platform->Message(HOST_MESSAGE, "Fan off received\n");
       break;
     
     case 116: // Wait for everything
-      platform->Message(HOST_MESSAGE, "Wait for all temperatures received<br>\n");
+      platform->Message(HOST_MESSAGE, "Wait for all temperatures received\n");
       break;
     
     case 126: // Valve open
-      platform->Message(HOST_MESSAGE, "M126 - valves not yet implemented<br>\n");
+      platform->Message(HOST_MESSAGE, "M126 - valves not yet implemented\n");
       break;
       
     case 127: // Valve closed
-      platform->Message(HOST_MESSAGE, "M127 - valves not yet implemented<br>\n");
+      platform->Message(HOST_MESSAGE, "M127 - valves not yet implemented\n");
       break;
       
     case 140: // Set bed temperature
-      platform->Message(HOST_MESSAGE, "Set bed temp received<br>\n");
+      platform->Message(HOST_MESSAGE, "Set bed temp received\n");
       break;
     
     case 141: // Chamber temperature
-      platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented<br>\n");
+      platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
       break;    
      
     default:
       platform->Message(HOST_MESSAGE, "GCodes - invalid M Code: ");
       platform->Message(HOST_MESSAGE, gb->Buffer());
-      platform->Message(HOST_MESSAGE, "<br>\n");
+      platform->Message(HOST_MESSAGE, "\n");
     }
     return;
   }
@@ -234,7 +234,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
     {
       if(code == i - AXES)
       {
-        platform->Message(HOST_MESSAGE, "Tool selection received<br>\n");
+        platform->Message(HOST_MESSAGE, "Tool selection received\n");
         ok = true;
       }
     }
@@ -243,7 +243,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
     {
       platform->Message(HOST_MESSAGE, "GCodes - invalid T Code: ");
       platform->Message(HOST_MESSAGE, gb->Buffer());
-      platform->Message(HOST_MESSAGE, "<br>\n");
+      platform->Message(HOST_MESSAGE, "\n");
     }
   }
   
@@ -307,7 +307,7 @@ boolean GCodeBuffer::Put(char c)
   
   if(gcodePointer >= GCODE_LENGTH)
   {
-    platform->Message(HOST_MESSAGE, "G Code buffer length overflow.<br>\n");
+    platform->Message(HOST_MESSAGE, "G Code buffer length overflow.\n");
     gcodePointer = 0;
     gcodeBuffer[0] = 0;
   }
@@ -337,7 +337,7 @@ float GCodeBuffer::GetFValue()
 {
   if(readPointer < 0)
   {
-     platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float before a search.<br>\n");
+     platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
      return 0.0;
   }
   float result = (float)strtod(&gcodeBuffer[readPointer + 1], NULL);
@@ -351,7 +351,7 @@ int GCodeBuffer::GetIValue()
 {
   if(readPointer < 0)
   {
-    platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode int before a search.<br>\n");
+    platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
     return 0;
   }
   int result = (int)strtol(&gcodeBuffer[readPointer + 1], NULL, 0);

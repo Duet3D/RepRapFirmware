@@ -87,7 +87,7 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   
   if(strlen(gc) > GCODE_LENGTH-1)
   {
-    platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.<br>\n");
+    platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
     return false;  
   }
   
@@ -138,7 +138,7 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
       {
         platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
         platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
-        platform->Message(HOST_MESSAGE, "<br>\n");
+        platform->Message(HOST_MESSAGE, "\n");
       } 
     } else // Print it
     {
@@ -191,22 +191,6 @@ void Webserver::SendFile(char* nameOfFileToSend)
 {
   char sLen[POST_LENGTH];
   boolean zip = false;
-  
-//  if(!gotPassword)
-//  {
-//    sendTable = false;
-//    nameOfFileToSend = PASSWORD_PAGE;
-//  } else
-    sendTable = true;
-    
-/*  if(StringEndsWith(nameOfFileToSend, ".js"))
-  {
-    len = strlen(nameOfFileToSend);
-    nameOfFileToSend[len-2] = 'z';
-    nameOfFileToSend[len-1] = 'i';
-    nameOfFileToSend[len] = 'p';
-    nameOfFileToSend[len+1] = 0;
-  }*/
     
   if(StringStartsWith(nameOfFileToSend, KO_START))
     GetJsonResponse(&nameOfFileToSend[KO_FIRST]);
@@ -216,20 +200,12 @@ void Webserver::SendFile(char* nameOfFileToSend)
     fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
     if(fileBeingSent < 0)
     {
-      sendTable = false;
       nameOfFileToSend = FOUR04_FILE;
       fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
     }
-  
-    //inPHPFile = StringEndsWith(nameOfFileToSend, ".php");
-    //if(inPHPFile)
-    //  InitialisePHP();
     writing = true;
   } 
   
-  //if(jsonPointer >=0)
-  //  platform->SendToClient("HTTP/1.1 201 OK\n");
-  //else
   platform->SendToClient("HTTP/1.1 200 OK\n");
   
   platform->SendToClient("Content-Type: ");
@@ -336,7 +312,7 @@ void Webserver::GetJsonResponse(char* request)
   if(StringStartsWith(request, "gcode"))
   {
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
-      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!<br>\n");
+      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!\n");
     strcpy(jsonResponse, "{}");
     ok = true;
   }
@@ -354,12 +330,12 @@ void Webserver::GetJsonResponse(char* request)
   {
     platform->Message(HOST_MESSAGE, "JSON response: ");
     platform->Message(HOST_MESSAGE, jsonResponse);
-    platform->Message(HOST_MESSAGE, " queued<br>\n");
+    platform->Message(HOST_MESSAGE, " queued\n");
   } else
   { 
     platform->Message(HOST_MESSAGE, "KnockOut request: ");
     platform->Message(HOST_MESSAGE, request);
-    platform->Message(HOST_MESSAGE, " not recognised<br>\n");
+    platform->Message(HOST_MESSAGE, " not recognised\n");
     clientRequest[0] = 0;
   }
 }
@@ -386,7 +362,7 @@ void Webserver::ParseGetPost()
     {
       platform->Message(HOST_MESSAGE, "HTTP request: ");
       platform->Message(HOST_MESSAGE, clientLine);
-      platform->Message(HOST_MESSAGE, "<br>\n");
+      platform->Message(HOST_MESSAGE, "\n");
     }
     
     int i = 5;
@@ -453,7 +429,7 @@ void Webserver::ParseClientLine()
   {
     if(strlen(&clientLine[bnd]) >= POST_LENGTH - 4)
     {
-      platform->Message(HOST_MESSAGE, "Post boundary buffer overflow.<br>\n");
+      platform->Message(HOST_MESSAGE, "Post boundary buffer overflow.\n");
       return;
     }
     postBoundary[0] = '-';
@@ -470,7 +446,7 @@ void Webserver::ParseClientLine()
     bnd = StringContains(clientLine, "filename=\"");
     if(bnd < 0)
     {
-      platform->Message(HOST_MESSAGE, "Post disposition gives no filename.<br>\n");
+      platform->Message(HOST_MESSAGE, "Post disposition gives no filename.\n");
       return;
     }
     int i = 0;
@@ -480,7 +456,7 @@ void Webserver::ParseClientLine()
       if(i >= POST_LENGTH)
       {
         i = 0;
-        platform->Message(HOST_MESSAGE, "Post filename buffer overflow.<br>\n");
+        platform->Message(HOST_MESSAGE, "Post filename buffer overflow.\n");
       }
     }
     postFileName[i] = 0;
@@ -489,28 +465,6 @@ void Webserver::ParseClientLine()
     return;
   }  
 }
-  
-/*
-void Webserver::ParseQualifier()
-{
-  if(!clientQualifier[0])
-    return;
-    
-//  if(StringStartsWith(clientQualifier, "pwd="))
-//    CheckPassword();
-//  if(!gotPassword) //Doan work fur nuffink
-//    return;
-    
-
-if(StringStartsWith(clientQualifier, "gcode="))
-  {
-    if(!LoadGcodeBuffer(&clientQualifier[6], true))
-      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!<br>\n");
-    //strcpy(clientRequest, INDEX_PAGE);
-  } 
-  
-}
-*/
 
 // if you've gotten to the end of the line (received a newline
 // character) and the line is blank, the http request has ended,
@@ -544,7 +498,7 @@ void Webserver::BlankLineFromClient()
     {
       platform->Message(HOST_MESSAGE, "Can't open file for write or no post boundary: ");
       platform->Message(HOST_MESSAGE, platform->PrependRoot(platform->GetGcodeDir(), postFileName));
-      platform->Message(HOST_MESSAGE, "<br>\n");
+      platform->Message(HOST_MESSAGE, "\n");
       InitialisePost();
     }
   }  
@@ -575,7 +529,7 @@ void Webserver::CharFromClient(char c)
     clientLinePointer++;
     if(clientLinePointer >= STRING_LENGTH)
     {
-      platform->Message(HOST_MESSAGE,"Client read buffer overflow.<br>\n");
+      platform->Message(HOST_MESSAGE,"Client read buffer overflow.\n");
       clientLinePointer = 0;
       clientLine[clientLinePointer] = 0; 
     }
@@ -604,16 +558,8 @@ void Webserver::Spin()
     if(platform->ClientStatus() & AVAILABLE) 
     {
       char c = platform->ClientRead();
-//      if(echoInput)
-//      {
 //        Serial.print(c);
-        //sw[0] = c;
-       // sw[1] = 0;
-        //platform->Message(HOST_MESSAGE, sw);
-        //if(c == '\n')
-        // platform->Message(HOST_MESSAGE, "i: ");
-//      } 
- 
+
       if(receivingPost && postFile >= 0)
       {
         if(MatchBoundary(c))
@@ -643,301 +589,12 @@ void Webserver::Spin()
   }
 }
 
-//**********************************************************************************************
-/*
-// PHP interpreter
-
-void Webserver::InitialisePHP()
-{
-  phpTag[0] = 0;
-  inPHPString = 0;
-  phpPointer = 0;
-  phpEchoing = false;
-  phpIfing = false;
-  phpPrinting = false;
-  eatInput = false;
-  recordInput = false;
-  phpRecordPointer = 0;
-  phpRecord[phpRecordPointer] = 0;
-  ifWasTrue = true;
-}
-
-char Webserver::PHPParse(char* phpString)
-{
-  if(StringEquals(phpString, "if("))
-    return PHP_IF;
-    
-  if(StringEquals(phpString, "echo"))
-    return PHP_ECHO;   
-  
-  if(StringEquals(phpString, "print("))
-    return PHP_PRINT;
-  
-  return NO_PHP;
-}
-
-
-boolean Webserver::PrintLinkTable() { boolean r = sendTable; sendTable = true; return r; }
-
-boolean Webserver::CallPHPBoolean(char* phpRecord)
-{ 
-  if(StringEquals(phpRecord, "gotPassword("))
-    return gotPassword;
-    
-  if(StringEquals(phpRecord, "printLinkTable("))
-    return PrintLinkTable();
-    
-  platform->Message(HOST_MESSAGE, "callPHPBoolean(): non-existent function - ");
-  platform->Message(HOST_MESSAGE, phpRecord);
-  platform->Message(HOST_MESSAGE, "<br>\n");
-  
-  return true; // Best default
-}
-
-void Webserver::GetGCodeList()
-{
-  platform->SendToClient(platform->FileList(platform->GetGcodeDir()));
-}
-
-void Webserver::CallPHPString(char* phpRecord)
-{
-  if(StringEquals(phpRecord, "getMyName("))
-  {
-    platform->SendToClient(myName);
-    return;
-  }
-    
-  if(StringEquals(phpRecord, "getGCodeList("))
-  {
-    GetGCodeList();
-    return;
-  }  
-    
-  if(StringEquals(phpRecord, "logout("))
-  {
-    gotPassword = false;
-    platform->SendToClient("<meta http-equiv=\"REFRESH\" content=\"0;url=");
-    platform->SendToClient(PASSWORD_PAGE);
-    platform->SendToClient("\"></HEAD>");
-    return;
-  }
-    
-  platform->Message(HOST_MESSAGE, "callPHPString(): non-existent function - ");
-  platform->Message(HOST_MESSAGE, phpRecord);
-  platform->Message(HOST_MESSAGE, "<br>\n"); 
-}
-
-void Webserver::ProcessPHPByte(char b)
-{
-  if(eatInput)
-  {
-    if(b == eatInputChar)  
-      eatInput = false;
-    return;
-  }
-  
-  if(recordInput)
-  {
-    if(b == eatInputChar)
-    {
-      recordInput = false;
-      phpRecordPointer = 0;
-      return;
-    }
-    
-    phpRecord[phpRecordPointer++] = b;
-    if(phpRecordPointer >= PHP_TAG_LENGTH)
-    {
-      platform->Message(HOST_MESSAGE, "ProcessPHPByte: PHP record buffer overflow.<br>\n");
-      InitialisePHP();
-    }
-    phpRecord[phpRecordPointer] = 0;
-    return;
-  }
-  
-  if(phpEchoing)
-  {
-     if(b != '\'')
-     {
-       if(ifWasTrue)
-         platform->SendToClient(b);
-     } else
-     {
-       InitialisePHP();
-       eatInput = true;
-       eatInputChar = '>';
-     }
-     return;
-  }
-  
-  if(phpIfing)
-  {
-    boolean ifWas = CallPHPBoolean(phpRecord);
-    InitialisePHP();
-    ifWasTrue = ifWas;
-    inPHPString = 5;
-    if(b != ')')
-    {
-      eatInput = true;
-      eatInputChar = ')';
-    }
-    return;
-  }
-  
-  if(phpPrinting)
-  {
-    CallPHPString(phpRecord);
-    InitialisePHP();
-    eatInput = true;
-    eatInputChar = '>';    
-    return;
-  }  
-  
-  if(inPHPString >= 5)
-  {
-  // We are in a PHP expression
-  
-    if(isspace(b))
-      return;    
-    phpTag[phpPointer++] = b;
-    phpTag[phpPointer] = 0;
-    if(phpPointer >= PHP_TAG_LENGTH)
-    {
-      platform->Message(HOST_MESSAGE, "ProcessPHPByte: PHP buffer overflow: ");
-      platform->Message(HOST_MESSAGE, phpTag);
-      platform->Message(HOST_MESSAGE, "<br>\n");
-      InitialisePHP();
-      return;
-    }
-    
-    switch(PHPParse(phpTag))
-    {
-    case PHP_ECHO:
-      phpEchoing = true;
-      eatInput = true;
-      eatInputChar = '\'';
-      break;
-      
-    case PHP_IF:
-      phpIfing = true;
-      recordInput = true;
-      phpRecordPointer = 0;
-      phpRecord[phpRecordPointer] = 0;
-      eatInputChar = ')';
-      break;
-    
-    case PHP_PRINT:
-      phpPrinting = true;
-      recordInput = true;
-      phpRecordPointer = 0;
-      phpRecord[phpRecordPointer] = 0;
-      eatInputChar = ')';
-      break;     
-     
-    default:
-      break;
-    }
-
-    return; 
-  }
-  
-  // We are not in a PHP expression
-  
-  phpTag[inPHPString] = b;
-  
-  switch(inPHPString)
-  {
-  case 0:
-    if(b == '<')
-    {
-      inPHPString = 1;
-    } else
-    {
-      phpTag[1] = 0;
-      inPHPString = 0;
-      platform->SendToClient(phpTag); 
-    }       
-    return;
-    
-  case 1:
-    if(b == '?')
-    {
-      inPHPString = 2;
-    } else
-    {
-      phpTag[2] = 0;
-      inPHPString = 0;
-      platform->SendToClient(phpTag); 
-    }
-    return;
-    
-  case 2:
-    if(b == 'p')
-    {
-      inPHPString = 3;
-    } else
-    {
-      phpTag[3] = 0;
-      inPHPString = 0;
-      platform->SendToClient(phpTag); 
-    }
-    return;  
-  
-  case 3:
-    if(b == 'h')
-    {
-      inPHPString = 4;
-    } else
-    {
-      phpTag[4] = 0;
-      inPHPString = 0;
-      platform->SendToClient(phpTag); 
-    }
-    return;
-
-  case 4:
-    if(b == 'p')
-    {
-      inPHPString = 5;
-      phpTag[0] = 0;
-      phpPointer = 0;
-    } else
-    {
-      phpTag[5] = 0;
-      inPHPString = 0;
-      platform->SendToClient(phpTag); 
-    }
-    return;
-  
-  // Should never get here...
-  
-  default:
-     platform->Message(HOST_MESSAGE, "ProcessPHPByte: PHP tag runout.<br>\n");
-     platform->SendToClient(b);
-     InitialisePHP();
-  }   
-}
-
-void Webserver::WritePHPByte()
-{
-    unsigned char b;
-    if(platform->Read(fileBeingSent, b))
-      ProcessPHPByte(b);
-    else
-    {     
-      platform->Close(fileBeingSent);
-      InitialisePHP();    
-      CloseClient(); 
-    }  
-}
-*/
 //******************************************************************************************
 
 // Constructor and initialisation
 
 Webserver::Webserver(Platform* p)
-{
-  //Serial.println("Webserver constructor"); 
+{ 
   platform = p;
   active = false;
 }
@@ -950,9 +607,6 @@ void Webserver::Init()
   postSeen = false;
   getSeen = false;
   jsonPointer = -1;
-  //postLength = 0L;
-  //inPHPFile = false;
-  //InitialisePHP();
   clientLineIsBlank = true;
   needToCloseClient = false;
   clientLinePointer = 0;
@@ -963,12 +617,12 @@ void Webserver::Init()
   gotPassword = false;
   gcodeAvailable = false;
   gcodePointer = 0;
-  sendTable = true;
-  //phpRecordPointer = 0;
-  echoInput = false;
-  echoOutput = false;
   InitialisePost();
   active = true; 
+  
+  // Reinitialise the message file
+  
+  platform->DeleteFile(platform->PrependRoot(platform->GetWebDir(), MESSAGE_FILE));
 }
 
 void Webserver::Exit()

@@ -70,14 +70,6 @@ inline void Platform::SendToClient(unsigned char b)
   if(client)
   {
     client.write(b);
-    if(reprap->GetWebserver()->EchoOutput())
-    {
-      Serial.write(b);
-      //Message(HOST_MESSAGE, message);
-      //if(StringEndsWith(message, "\n"))
-      //  Message(HOST_MESSAGE, "o: ");
-    }
-    //Serial.write(b);
   } else
     Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
 }
@@ -272,17 +264,6 @@ void Platform::Init()
      Serial.println("SD initialization failed.");
   // SD.begin() returns with the SPI disabled, so you need not disable it here  
   
-    // Reinitialise the message file
-  
-  DeleteFile(PrependRoot(GetWebDir(), MESSAGE_FILE));
-  int m = OpenFile(PrependRoot(GetWebDir(), MESSAGE_TEMPLATE), false);
-  int n = OpenFile(PrependRoot(GetWebDir(), MESSAGE_FILE), true);
-  byte b;
-  while (Read(m, b))
-    Write(n,b);
-  Close(m);  
-  Close(n);
-  
   active = true;
 }
 
@@ -388,7 +369,7 @@ char* Platform::FileList(char* directory)
       {
         Message(HOST_MESSAGE, "FileList - directory: ");
         Message(HOST_MESSAGE, directory);
-        Message(HOST_MESSAGE, " has too many files!<br>\n");
+        Message(HOST_MESSAGE, " has too many files!\n");
         return "";
       }
     }
@@ -424,7 +405,7 @@ int Platform::OpenFile(char* fileName, boolean write)
     }
   if(result < 0)
   {
-      Message(HOST_MESSAGE, "Max open file count exceeded.<br>\n");
+      Message(HOST_MESSAGE, "Max open file count exceeded.\n");
       return -1;    
   }
   
@@ -434,7 +415,7 @@ int Platform::OpenFile(char* fileName, boolean write)
     {
       Message(HOST_MESSAGE, "File: ");
       Message(HOST_MESSAGE, fileName);
-      Message(HOST_MESSAGE, " not found for reading.<br>\n");
+      Message(HOST_MESSAGE, " not found for reading.\n");
       return -1;
     }
     files[result] = SD.open(fileName, FILE_WRITE);
@@ -457,7 +438,7 @@ void Platform::GoToEnd(int file)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to seek on a non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
     return;
   }
   unsigned long e = files[file].size();
@@ -468,7 +449,7 @@ unsigned long Platform::Length(int file)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to size non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to size non-open file.\n");
     return 0;
   }
   return files[file].size();  
@@ -488,7 +469,7 @@ boolean Platform::Read(int file, unsigned char& b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to read from a non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
     return false;
   }
     
@@ -502,7 +483,7 @@ void Platform::Write(int file, char b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
     return;
   }
   (buf[file])[bPointer[file]] = b;
@@ -519,7 +500,7 @@ void Platform::WriteString(int file, char* b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.\n");
     return;
   }
   int i = 0;
@@ -535,15 +516,8 @@ void Platform::SendToClient(char* message)
   if(client)
   {
     client.print(message);
-    if(reprap->GetWebserver()->EchoOutput())
-    {
-      Serial.print(message);
-      //Message(HOST_MESSAGE, message);
-      //if(StringEndsWith(message, "\n"))
-      //  Message(HOST_MESSAGE, "o: ");
-    }
   } else
-    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
 }
 
 

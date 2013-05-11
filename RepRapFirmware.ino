@@ -72,7 +72,7 @@ void RepRap::Init()
   move->Init();
   heat->Init();
   dbg = true;
-  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started<br>\n");
+  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
   active = true;
 }
 
