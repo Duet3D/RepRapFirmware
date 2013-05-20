@@ -23,6 +23,26 @@ Licence: GPL
 
 #define BUFFER_LENGTH 10
 
+class DDA
+{
+  public:
+    DDA(Move* m, Platform* p);
+    boolean Init(float currentPosition[], float targetPosition[]);
+    void Start();
+    void Step();
+    boolean Active();
+
+  private:        
+    Move* move;
+    Platform* platform;
+    long counter[DRIVES+1];
+    long delta[DRIVES+1];
+    boolean directions[DRIVES+1];
+    long totalSteps;
+    long stepCountDown;
+    boolean active;
+};
+
 class Move
 {   
   public:
@@ -33,20 +53,25 @@ class Move
     void Exit();
     void Qmove();
     void GetCurrentState(float m[]);
+
+
     
   private:
   
     Platform* platform;
     GCodes* gCodes;
+    DDA* dda;
     unsigned long lastTime;
     boolean active;
     float currentFeedrate;
     float currentPosition[AXES]; // Note - drives above AXES are always relative moves
     float nextMove[DRIVES + 1];  // Extra is for feedrate
-    char scratchString[STRING_LENGTH];
 };
 
-
+inline boolean DDA::Active()
+{
+  return active;
+}
 
 
 #endif

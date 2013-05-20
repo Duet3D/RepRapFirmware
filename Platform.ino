@@ -120,26 +120,6 @@ inline void Platform::DisconnectClient()
 }
 
 
-
-//*****************************************************************************************************************
-
-// Drive the RepRap machine
-
-inline void Platform::SetDirection(byte drive, bool direction)
-{
-  digitalWrite(directionPins[drive], direction);  
-}
-
-inline void Platform::Step(byte drive)
-{
-  digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
-}
-
-inline int Platform::GetRawTemperature(byte heater)
-{
-  return analogRead(tempSensePins[heater]);
-}
-
 //*******************************************************************************************************************
 
 void Platform::Init()
@@ -164,7 +144,6 @@ void Platform::Init()
     maxAccelerations = MAX_ACCELERATIONS;
     driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
     jerks = JERKS;
-    driveRelativeModes = DRIVE_RELATIVE_MODES;
     
   // AXES
   
@@ -267,21 +246,11 @@ void Platform::Init()
   active = true;
 }
 
-void Platform::Exit()
-{
-  active = false;
-}
 
-RepRap* Platform::GetRepRap()
+char* Platform::PrependRoot(char* result, char* root, char* fileName)
 {
-  return reprap;
-}
-
-
-char* Platform::PrependRoot(char* root, char* fileName)
-{
-  strcpy(scratchString, root);
-  return strcat(scratchString, fileName);
+  strcpy(result, root);
+  return strcat(result, fileName);
 }
 
 
@@ -312,7 +281,7 @@ bool Platform::LoadFromStore()
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(byte heater)
+float Platform::GetTemperature(char heater)
 {
   float r = (float)GetRawTemperature(heater);
   //Serial.println(r);
@@ -322,7 +291,7 @@ float Platform::GetTemperature(byte heater)
 
 // power is a fraction in [0,1]
 
-void Platform::SetHeater(byte heater, const float& power)
+void Platform::SetHeater(char heater, const float& power)
 {
   if(power <= 0)
   {
@@ -524,6 +493,7 @@ void Platform::SendToClient(char* message)
 
 void Platform::Message(char type, char* message)
 {
+  char scratchString[STRING_LENGTH];
   switch(type)
   {
   case FLASH_LED:
@@ -538,7 +508,7 @@ void Platform::Message(char type, char* message)
   default:
   
   
-    int m = OpenFile(PrependRoot(GetWebDir(), MESSAGE_FILE), true);
+    int m = OpenFile(PrependRoot(scratchString, GetWebDir(), MESSAGE_FILE), true);
     GoToEnd(m);
     WriteString(m, message);
     Serial.print(message);
@@ -547,33 +517,7 @@ void Platform::Message(char type, char* message)
   }
 }
 
-// Where the php/htm etc files are
 
-char* Platform::GetWebDir()
-{
-  return webDir;
-}
-
-// Where the gcodes are
-
-char* Platform::GetGcodeDir()
-{
-  return gcodeDir;
-}
-
-// Where the system files are
-
-char* Platform::GetSysDir()
-{
-  return sysDir;
-}
-
-// Where the temporary files are
-
-char* Platform::GetTempDir()
-{
-  return tempDir;
-}
 
 
 //***************************************************************************************************

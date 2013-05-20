@@ -82,6 +82,7 @@ byte Webserver::Read()
 
 boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
 {
+  char scratchString[STRING_LENGTH];
   if(gcodeAvailable)
     return false;
   
@@ -134,7 +135,7 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   {
     if(fileAct == 1) // Delete?
     {
-      if(!platform->DeleteFile(platform->PrependRoot(platform->GetGcodeDir(), &gcodeBuffer[4])))
+      if(!platform->DeleteFile(platform->PrependRoot(scratchString, platform->GetGcodeDir(), &gcodeBuffer[4])))
       {
         platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
         platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
@@ -142,7 +143,7 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
       } 
     } else // Print it
     {
-      reprap.GetGCodes()->QueueFileToPrint(platform->PrependRoot(platform->GetGcodeDir(), &gcodeBuffer[4])); 
+      reprap.GetGCodes()->QueueFileToPrint(platform->PrependRoot(scratchString, platform->GetGcodeDir(), &gcodeBuffer[4])); 
     }
     
     // Check for further G Codes in the string
@@ -189,6 +190,7 @@ void Webserver::CloseClient()
 
 void Webserver::SendFile(char* nameOfFileToSend)
 {
+  char scratchString[STRING_LENGTH];
   char sLen[POST_LENGTH];
   boolean zip = false;
     
@@ -197,11 +199,11 @@ void Webserver::SendFile(char* nameOfFileToSend)
     
   if(jsonPointer < 0)
   {
-    fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
+    fileBeingSent = platform->OpenFile(platform->PrependRoot(scratchString, platform->GetWebDir(), nameOfFileToSend), false);
     if(fileBeingSent < 0)
     {
       nameOfFileToSend = FOUR04_FILE;
-      fileBeingSent = platform->OpenFile(platform->PrependRoot(platform->GetWebDir(), nameOfFileToSend), false);
+      fileBeingSent = platform->OpenFile(platform->PrependRoot(scratchString, platform->GetWebDir(), nameOfFileToSend), false);
     }
     writing = true;
   } 
@@ -471,6 +473,7 @@ void Webserver::ParseClientLine()
 // so you can send a reply
 void Webserver::BlankLineFromClient()
 {
+  char scratchString[STRING_LENGTH];
   clientLine[clientLinePointer] = 0;
   clientLinePointer = 0;
   //ParseQualifier();
@@ -493,11 +496,11 @@ void Webserver::BlankLineFromClient()
   
   if(receivingPost)
   {
-    postFile = platform->OpenFile(platform->PrependRoot(platform->GetGcodeDir(), postFileName), true);
+    postFile = platform->OpenFile(platform->PrependRoot(scratchString, platform->GetGcodeDir(), postFileName), true);
     if(postFile < 0  || !postBoundary[0])
     {
       platform->Message(HOST_MESSAGE, "Can't open file for write or no post boundary: ");
-      platform->Message(HOST_MESSAGE, platform->PrependRoot(platform->GetGcodeDir(), postFileName));
+      platform->Message(HOST_MESSAGE, platform->PrependRoot(scratchString, platform->GetGcodeDir(), postFileName));
       platform->Message(HOST_MESSAGE, "\n");
       InitialisePost();
     }
@@ -601,6 +604,7 @@ Webserver::Webserver(Platform* p)
 
 void Webserver::Init()
 {
+  char scratchString[STRING_LENGTH];
   lastTime = platform->Time();
   writing = false;
   receivingPost = false;
@@ -622,7 +626,7 @@ void Webserver::Init()
   
   // Reinitialise the message file
   
-  platform->DeleteFile(platform->PrependRoot(platform->GetWebDir(), MESSAGE_FILE));
+  platform->DeleteFile(platform->PrependRoot(scratchString, platform->GetWebDir(), MESSAGE_FILE));
 }
 
 void Webserver::Exit()

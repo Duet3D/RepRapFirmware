@@ -72,7 +72,6 @@ Licence: GPL
 #define MAX_ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2?? Maximum start speed for accelerated moves.
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
 #define JERKS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
-#define DRIVE_RELATIVE_MODES {false, false, false, true} // false for default absolute movement, true for relative to last position
 
 #define GCODE_LETTERS {'X', 'Y', 'Z', 'E', 'F' }
 
@@ -206,7 +205,7 @@ class Platform
   char* GetTempDir(); // Where temporary files are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
   boolean DeleteFile(char* fileName); // Delete a file
-  char* PrependRoot(char* root, char* fileName);
+  char* PrependRoot(char* result, char* root, char* fileName);
   
   unsigned char ClientRead(); // Read a byte from the client
   void SendToClient(char* message); // Send string to the host
@@ -223,14 +222,15 @@ class Platform
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void Home(byte axis);
+  float DriveStepsPerUnit(char drive);
   
   float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
   void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
   
   // Heat and temperature
   
-  float GetTemperature(byte heater); // Result is in degrees celsius
-  void SetHeater(byte heater, const float& power); // power is a fraction in [0,1]
+  float GetTemperature(char heater); // Result is in degrees celsius
+  void SetHeater(char heater, const float& power); // power is a fraction in [0,1]
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -260,7 +260,6 @@ class Platform
   float maxAccelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float jerks[DRIVES];
-  boolean driveRelativeModes[DRIVES];
 
 // AXES
 
@@ -291,7 +290,6 @@ class Platform
   byte* buf[MAX_FILES];
   int bPointer[MAX_FILES];
   char fileList[FILE_LIST_LENGTH];
-  char scratchString[STRING_LENGTH];
   
 // Network connection
 
@@ -308,5 +306,66 @@ inline unsigned long Platform::Time()
   return micros();
 }
 
+inline float Platform::DriveStepsPerUnit(char drive)
+{
+  return driveStepsPerUnit[drive]; 
+}
+
+inline void Platform::Exit()
+{
+  active = false;
+}
+
+inline RepRap* Platform::GetRepRap()
+{
+  return reprap;
+}
+
+// Where the htm etc files are
+
+inline char* Platform::GetWebDir()
+{
+  return webDir;
+}
+
+// Where the gcodes are
+
+inline char* Platform::GetGcodeDir()
+{
+  return gcodeDir;
+}
+
+// Where the system files are
+
+inline char* Platform::GetSysDir()
+{
+  return sysDir;
+}
+
+// Where the temporary files are
+
+inline char* Platform::GetTempDir()
+{
+  return tempDir;
+}
+
+//*****************************************************************************************************************
+
+// Drive the RepRap machine
+
+inline void Platform::SetDirection(byte drive, bool direction)
+{
+  digitalWrite(directionPins[drive], direction);  
+}
+
+inline void Platform::Step(byte drive)
+{
+  digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
+}
+
+inline int Platform::GetRawTemperature(byte heater)
+{
+  return analogRead(tempSensePins[heater]);
+}
 
 #endif

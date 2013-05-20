@@ -22,9 +22,10 @@ Licence: GPL
 
 Move::Move(Platform* p, GCodes* g)
 {
+  active = false;
   platform = p;
   gCodes = g;
-  active = false;
+  dda = new DDA(this, platform);
 }
 
 void Move::Init()
@@ -34,8 +35,9 @@ void Move::Init()
     platform->SetDirection(i, FORWARDS);
   for(char i = 0; i <= AXES; i++)
     currentPosition[i] = 0.0;  
-  active = true;
-  currentFeedrate = START_FEED_RATE;  
+  lastTime = platform->Time();
+  currentFeedrate = START_FEED_RATE;
+  active = true;  
 }
 
 void Move::Exit()
@@ -48,11 +50,18 @@ void Move::Spin()
   if(!active)
     return;
   Qmove();
+  unsigned long t = platform->Time();
+  if(t - lastTime > 1000)
+  {
+    lastTime = t;
+    dda->Step();
+  }
 }
 
 
 void Move::Qmove()
 {
+  char scratchString[STRING_LENGTH];
   if(!gCodes->ReadMove(nextMove))
     return;
   platform->Message(HOST_MESSAGE, "Move - got a move:");
@@ -64,10 +73,12 @@ void Move::Qmove()
   }
   platform->Message(HOST_MESSAGE, "\n");
   
-  // Make it so
+  dda->Init(currentPosition, nextMove);
   
   for(char i = 0; i <= AXES; i++)
-    currentPosition[i] = nextMove[i]; 
+    currentPosition[i] = nextMove[i];
+    
+  dda->Start();
 }
 
 void Move::GetCurrentState(float m[])
@@ -80,4 +91,66 @@ void Move::GetCurrentState(float m[])
       m[i] = 0.0;
   }
   m[DRIVES] = currentFeedrate;
+}
+
+//****************************************************************************************************
+
+DDA::DDA(Move* m, Platform* p)
+{
+  active = false;
+  move = m;
+  platform = p;
+}
+
+boolean DDA::Init(float currentPosition[], float targetPosition[])
+{
+  char drive;
+  active = false;
+  totalSteps = -1;
+  for(drive = 0; drive < DRIVES; drive++)
+  {
+    if(drive < AXES)
+      delta[drive] = (long)((targetPosition[drive] - currentPosition[drive])*platform->DriveStepsPerUnit(drive));  //Absolute
+    else
+      delta[drive] = (long)(targetPosition[drive]*platform->DriveStepsPerUnit(drive));  // Relative
+    directions[drive] = (delta[drive] >= 0);
+    delta[drive] = abs(delta[drive]);
+    if(delta[drive] > totalSteps)
+      totalSteps = delta[drive];    
+  }
+  if(totalSteps <= 0)
+    return false;
+  counter[0] = totalSteps/2;
+  for(drive = 1; drive < DRIVES; drive++)
+    counter[drive] = counter[0];
+  stepCountDown = totalSteps;
+  return true;
+}
+
+void DDA::Start()
+{
+  for(char drive = 0; drive < DRIVES; drive++)
+    platform->SetDirection(drive, directions[drive]);
+  active = true;  
+}
+
+void DDA::Step()
+{
+  if(!active)
+    return;
+    
+  for(char drive = 0; drive < DRIVES; drive++)
+  {
+    counter[drive] += delta[drive];
+    if(counter[drive] > 0)
+    {
+      platform->Step(drive);
+      counter[drive] -= totalSteps;
+    }
+  }
+  
+  // Deal with feedrates here
+  
+  stepCountDown--;
+  active = stepCountDown > 0;
 }
