@@ -246,6 +246,8 @@ class Platform
   
   int GetRawTemperature(byte heater);
   
+  void InitialiseInterrupts();
+  
   RepRap* reprap;
   
 // DRIVES
@@ -360,7 +362,9 @@ inline void Platform::SetDirection(byte drive, bool direction)
 
 inline void Platform::Step(byte drive)
 {
-  digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
+  //digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
+  digitalWrite(stepPins[drive], 0);
+  digitalWrite(stepPins[drive], 1);
 }
 
 inline int Platform::GetRawTemperature(byte heater)

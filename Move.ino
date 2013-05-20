@@ -50,12 +50,6 @@ void Move::Spin()
   if(!active)
     return;
   Qmove();
-  unsigned long t = platform->Time();
-  if(t - lastTime > 1000)
-  {
-    lastTime = t;
-    dda->Step();
-  }
 }
 
 
@@ -131,6 +125,7 @@ void DDA::Start()
 {
   for(char drive = 0; drive < DRIVES; drive++)
     platform->SetDirection(drive, directions[drive]);
+  platform->SetInterrupt(300);
   active = true;  
 }
 

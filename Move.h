@@ -53,6 +53,7 @@ class Move
     void Exit();
     void Qmove();
     void GetCurrentState(float m[]);
+    void Interrupt();
 
 
     
@@ -71,6 +72,11 @@ class Move
 inline boolean DDA::Active()
 {
   return active;
+}
+
+inline void Move::Interrupt()
+{
+  dda->Step();
 }
 
 

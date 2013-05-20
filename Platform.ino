@@ -46,9 +46,51 @@ Platform::Platform(RepRap* r)
 
 // Interrupts
 
+void TC3_Handler()
+{
+  TC_GetStatus(TC1, 0);
+  reprap.GetPlatform()->Interrupt();
+}
+
+/*
+void startTimer(Tc *tc, uint32_t channel, IRQn_Type irq, uint32_t frequency) 
+{
+  pmc_set_writeprotect(false);
+  pmc_enable_periph_clk((uint32_t)irq);
+  TC_Configure(tc, channel, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
+  // VARIANT_MCK = 84x10^6 for the Due
+  uint32_t rc = VARIANT_MCK/128/frequency; //128 because we selected TIMER_CLOCK4 above
+  TC_SetRA(tc, channel, rc/2); //50% high, 50% low
+  TC_SetRC(tc, channel, rc);
+  TC_Start(tc, channel);
+  tc->TC_CHANNEL[channel].TC_IER=TC_IER_CPCS;
+  tc->TC_CHANNEL[channel].TC_IDR=~TC_IER_CPCS;
+  NVIC_EnableIRQ(irq);
+}
+*/
+
+void Platform::InitialiseInterrupts()
+{
+  pmc_set_writeprotect(false);
+  pmc_enable_periph_clk((uint32_t)TC3_IRQn);
+  TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
+  TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
+  TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
+  NVIC_DisableIRQ(TC3_IRQn);  
+}
+
 inline void Platform::SetInterrupt(long t)
 {
-  
+  if(t <= 0)
+  {
+    NVIC_DisableIRQ(TC3_IRQn);
+    return;
+  }
+  uint32_t rc = (uint32_t)(t*84)/128;
+  TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
+  TC_SetRC(TC1, 0, rc);
+  TC_Start(TC1, 0);
+  NVIC_EnableIRQ(TC3_IRQn);
 }
 
 inline void Platform::Interrupt()
@@ -242,6 +284,8 @@ void Platform::Init()
   if (!SD.begin(SD_SPI)) 
      Serial.println("SD initialization failed.");
   // SD.begin() returns with the SPI disabled, so you need not disable it here  
+  
+  InitialiseInterrupts();
   
   active = true;
 }
