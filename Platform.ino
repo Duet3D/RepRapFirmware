@@ -26,7 +26,8 @@ Licence: GPL
 
 void setup()
 {
-  reprap.Init();  
+  reprap.Init();
+  //reprap.InterruptTime();  // Uncomment this line to time the interrupt routine on startup
 }
   
 void loop()
@@ -99,7 +100,7 @@ void Platform::Init()
     lowStopPins = LOW_STOP_PINS;
     highStopPins = HIGH_STOP_PINS;
     maxFeedrates = MAX_FEEDRATES;
-    maxAccelerations = MAX_ACCELERATIONS;
+    accelerations = ACCELERATIONS;
     driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
     jerks = JERKS;
     

@@ -30,13 +30,26 @@ Move::Move(Platform* p, GCodes* g)
 
 void Move::Init()
 {
-  lastTime = platform->Time();
-  for(char i = 0; i < DRIVES; i++)
+  char i;
+  
+  for(i = 0; i < DRIVES; i++)
     platform->SetDirection(i, FORWARDS);
-  for(char i = 0; i <= AXES; i++)
+  for(i = 0; i <= AXES; i++)
     currentPosition[i] = 0.0;  
   lastTime = platform->Time();
   currentFeedrate = START_FEED_RATE;
+  float dx = 1.0/platform->DriveStepsPerUnit(X_AXIS);
+  float dy = 1.0/platform->DriveStepsPerUnit(Y_AXIS);
+  float dz = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
+  stepDistances[0] = dx; // Should never be used.  Wrong, but safer than 0.0...
+  stepDistances[1] = dx;
+  stepDistances[2] = dy;
+  stepDistances[3] = sqrt(dx*dx + dy*dy);
+  stepDistances[4] = dz;
+  stepDistances[5] = sqrt(dx*dx + dz*dz);
+  stepDistances[6] = sqrt(dy*dy + dz*dz);
+  stepDistances[7] = sqrt(dx*dx + dy*dy + dz*dz);
+
   active = true;  
 }
 
@@ -73,7 +86,7 @@ void Move::Qmove()
     currentPosition[i] = nextMove[i];
     
   if(work)
-    dda->Start();
+    dda->Start(true);
 }
 
 void Move::GetCurrentState(float m[])
@@ -102,14 +115,29 @@ boolean DDA::Init(float currentPosition[], float targetPosition[])
   char drive;
   active = false;
   totalSteps = -1;
+  float dist = 0; // X+Y+Z
+  float d;
+  char axesMoving = 0;
   for(drive = 0; drive < DRIVES; drive++)
   {
     if(drive < AXES)
-      delta[drive] = (long)((targetPosition[drive] - currentPosition[drive])*platform->DriveStepsPerUnit(drive));  //Absolute
-    else
+    {
+      d = targetPosition[drive] - currentPosition[drive];
+      delta[drive] = (long)(d*platform->DriveStepsPerUnit(drive));  //Absolute
+      dist += d*d;
+    } else
       delta[drive] = (long)(targetPosition[drive]*platform->DriveStepsPerUnit(drive));  // Relative
-    directions[drive] = (delta[drive] >= 0);
+    if(delta[drive] >= 0)
+      directions[drive] = FORWARDS;
+    else
+      directions[drive] = BACKWARDS;
     delta[drive] = abs(delta[drive]);
+    if(drive == X_AXIS && delta[drive] > 0)
+      axesMoving |= 1;
+    if(drive == Y_AXIS && delta[drive] > 0)
+      axesMoving |= 2;
+    if(drive == Z_AXIS && delta[drive] > 0)
+      axesMoving |= 4;      
     if(delta[drive] > totalSteps)
       totalSteps = delta[drive];    
   }
@@ -118,35 +146,112 @@ boolean DDA::Init(float currentPosition[], float targetPosition[])
   counter[0] = totalSteps/2;
   for(drive = 1; drive < DRIVES; drive++)
     counter[drive] = counter[0];
-  stepCountDown = totalSteps;
+  dist = sqrt(dist);
+  float acc;
+  if(axesMoving|4)
+  {
+    acc = platform->Acceleration(Z_AXIS);
+    velocity = platform->Jerk(Z_AXIS);
+  } else
+  {
+    acc = platform->Acceleration(X_AXIS);
+    velocity = platform->Jerk(X_AXIS);
+  }
+  
+  timeStep = move->stepDistances[1]/velocity;
+  d = 0.5*(targetPosition[DRIVES]*targetPosition[DRIVES] - velocity*velocity)/acc; // d = (v^2 - u^2)/2a
+  stopAStep = (long)((d*totalSteps)/dist);
+  startDStep = totalSteps - stopAStep;
+  if(stopAStep > startDStep)
+  {
+      stopAStep = totalSteps/2;
+      startDStep = stopAStep + 1;
+  }
+  stepCount = 0;
   return true;
 }
 
-void DDA::Start()
+void DDA::Start(boolean noTest)
 {
   for(char drive = 0; drive < DRIVES; drive++)
     platform->SetDirection(drive, directions[drive]);
-  platform->SetInterrupt(300);
+  if(noTest)
+    platform->SetInterrupt((long)(1.0e6*timeStep));
   active = true;  
 }
 
-void DDA::Step()
+void DDA::Step(boolean noTest)
 {
-  if(!active)
+  if(!active && noTest)
     return;
+  
+  char axesMoving = 0;
+  
+  counter[X_AXIS] += delta[X_AXIS];
+  if(counter[X_AXIS] > 0)
+  {
+    if(noTest)
+      platform->Step(X_AXIS);
+    axesMoving |= 1;
+    counter[X_AXIS] -= totalSteps;
+  }  
+  
+  counter[Y_AXIS] += delta[Y_AXIS];
+  if(counter[Y_AXIS] > 0)
+  {
+    if(noTest)
+      platform->Step(Y_AXIS);
+    axesMoving |= 2;
+    counter[Y_AXIS] -= totalSteps;
+  }  
+  
+  counter[Z_AXIS] += delta[Z_AXIS];
+  if(counter[Z_AXIS] > 0)
+  {
+    if(noTest)
+      platform->Step(Z_AXIS);
+    axesMoving |= 4;
+    counter[Z_AXIS] -= totalSteps;
+  }  
+  
     
-  for(char drive = 0; drive < DRIVES; drive++)
+  for(char drive = AXES; drive < DRIVES; drive++)
   {
     counter[drive] += delta[drive];
     if(counter[drive] > 0)
     {
-      platform->Step(drive);
+      if(noTest)
+        platform->Step(drive);
       counter[drive] -= totalSteps;
     }
   }
   
-  // Deal with feedrates here
+  if(axesMoving)
+  {
+    if(stepCount < stopAStep)
+    {
+      timeStep = move->stepDistances[axesMoving]/velocity;
+      if(axesMoving & 4)
+        velocity += platform->Acceleration(Z_AXIS)*timeStep;
+      else
+        velocity += platform->Acceleration(X_AXIS)*timeStep;
+      if(noTest)
+        platform->SetInterrupt((long)(1.0e6*timeStep));
+    }
+    if(stepCount >= startDStep)
+    {
+      timeStep = move->stepDistances[axesMoving]/velocity;
+      if(axesMoving & 4)
+        velocity -= platform->Acceleration(Z_AXIS)*timeStep;
+      else
+        velocity -= platform->Acceleration(X_AXIS)*timeStep;
+      if(noTest)
+        platform->SetInterrupt((long)(1.0e6*timeStep));
+    }
+  }
   
-  stepCountDown--;
-  active = stepCountDown > 0;
+  stepCount++;
+  active = stepCount < totalSteps;
+  if(!active && noTest)
+    platform->SetInterrupt(-1);
 }

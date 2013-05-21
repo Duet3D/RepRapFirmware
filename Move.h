@@ -24,23 +24,27 @@ Licence: GPL
 #define BUFFER_LENGTH 10
 
 class DDA
-{
+{  
   public:
     DDA(Move* m, Platform* p);
     boolean Init(float currentPosition[], float targetPosition[]);
-    void Start();
-    void Step();
+    void Start(boolean noTest);
+    void Step(boolean noTest);
     boolean Active();
 
-  private:        
+  private:  
     Move* move;
     Platform* platform;
     long counter[DRIVES+1];
     long delta[DRIVES+1];
-    boolean directions[DRIVES+1];
+    char directions[DRIVES+1];
     long totalSteps;
-    long stepCountDown;
-    boolean active;
+    long stepCount;
+    float timeStep;
+    float velocity;
+    long stopAStep;
+    long startDStep;
+    volatile boolean active;
 };
 
 class Move
@@ -55,7 +59,7 @@ class Move
     void GetCurrentState(float m[]);
     void Interrupt();
 
-
+  friend class DDA;
     
   private:
   
@@ -67,6 +71,7 @@ class Move
     float currentFeedrate;
     float currentPosition[AXES]; // Note - drives above AXES are always relative moves
     float nextMove[DRIVES + 1];  // Extra is for feedrate
+    float stepDistances[8]; // Index bits: lsb -> dx, dy, dz <- msb
 };
 
 inline boolean DDA::Active()
@@ -76,7 +81,7 @@ inline boolean DDA::Active()
 
 inline void Move::Interrupt()
 {
-  dda->Step();
+  dda->Step(true);
 }
 
 

@@ -41,6 +41,9 @@ boolean StringStartsWith(char* string, char* starting);
 boolean StringEquals(char* s1, char* s2);
 int StringContains(char* string, char* match);
 
+//#include <stdio.h>
+//#include <stdlib.h>
+
 #include "Configuration.h"
 #include "Platform.h"
 #include "Webserver.h" 

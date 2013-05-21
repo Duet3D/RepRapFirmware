@@ -88,7 +88,7 @@ void GCodes::SetUpMove(GCodeBuffer *gb)
   // Deal with feedrate
   
   if(gb->Seen(gCodeLetters[DRIVES]))
-    moveBuffer[DRIVES] = gb->GetFValue()*distanceScale;
+    moveBuffer[DRIVES] = gb->GetFValue()*distanceScale/60.0; // Feedrates are in mm/minute; we need mm/sec
     
   // Remember for next time if we are switched
   // to absolute drive moves

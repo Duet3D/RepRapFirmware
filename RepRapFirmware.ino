@@ -100,6 +100,24 @@ void RepRap::Spin()
   heat->Spin();
 }
 
+void RepRap::InterruptTime()
+{
+  char buffer[50];
+  DDA* dda = new DDA(move, platform);
+  float a[] = {1.0, 2.0, 3.0, 4.0, 5.0};
+  float b[] = {2.0, 3.0, 4.0, 5.0, 6.0};
+  dda->Init(a, b);
+  dda->Start(false);
+  unsigned long t = platform->Time();
+  for(long i = 0; i < 100000; i++) 
+    dda->Step(false);
+  t = platform->Time() - t;
+  platform->Message(HOST_MESSAGE, "Time for 100000 calls of the interrupt function: ");
+  sprintf(buffer, "%ld", t);
+  platform->Message(HOST_MESSAGE, buffer);
+  platform->Message(HOST_MESSAGE, " microseconds.\n");
+}
+
 
 //*************************************************************************************************
 

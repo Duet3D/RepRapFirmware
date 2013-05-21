@@ -69,10 +69,11 @@ Licence: GPL
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
-#define MAX_ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2?? Maximum start speed for accelerated moves.
+#define ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2??
+//#define ACCELERATIONS {80, 80, 3, 25}
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
 #define JERKS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
-
+//#define JERKS {5.0, 5.0, 0.1, 5.0}    // (mm/sec)
 // AXES
 
 
@@ -219,6 +220,8 @@ class Platform
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void Home(byte axis);
   float DriveStepsPerUnit(char drive);
+  float Acceleration(char drive);
+  float Jerk(char drive);
   
   float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
   void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
@@ -255,7 +258,7 @@ class Platform
   char lowStopPins[DRIVES];
   char highStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
-  float maxAccelerations[DRIVES];
+  float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float jerks[DRIVES];
 
@@ -304,11 +307,6 @@ inline unsigned long Platform::Time()
   return micros();
 }
 
-inline float Platform::DriveStepsPerUnit(char drive)
-{
-  return driveStepsPerUnit[drive]; 
-}
-
 inline void Platform::Exit()
 {
   active = false;
@@ -345,6 +343,21 @@ inline char* Platform::GetTempDir()
 //*****************************************************************************************************************
 
 // Drive the RepRap machine
+
+inline float Platform::DriveStepsPerUnit(char drive)
+{
+  return driveStepsPerUnit[drive]; 
+}
+
+inline float Platform::Acceleration(char drive)
+{
+  return accelerations[drive]; 
+}
+
+inline float Platform::Jerk(char drive)
+{
+  return jerks[drive]; 
+}
 
 inline void Platform::SetDirection(byte drive, bool direction)
 {
