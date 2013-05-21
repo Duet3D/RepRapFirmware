@@ -55,24 +55,25 @@ void Move::Spin()
 
 void Move::Qmove()
 {
-  char scratchString[STRING_LENGTH];
+  //char scratchString[STRING_LENGTH];
   if(!gCodes->ReadMove(nextMove))
     return;
-  platform->Message(HOST_MESSAGE, "Move - got a move:");
+/*  platform->Message(HOST_MESSAGE, "Move - got a move:");
   for(char i = 0; i <= DRIVES; i++)
   {
     ftoa(scratchString, nextMove[i], 3);
     platform->Message(HOST_MESSAGE, scratchString);
     platform->Message(HOST_MESSAGE, ", ");
   }
-  platform->Message(HOST_MESSAGE, "\n");
+  platform->Message(HOST_MESSAGE, "\n");*/
   
-  dda->Init(currentPosition, nextMove);
+  boolean work = dda->Init(currentPosition, nextMove);
   
   for(char i = 0; i <= AXES; i++)
     currentPosition[i] = nextMove[i];
     
-  dda->Start();
+  if(work)
+    dda->Start();
 }
 
 void Move::GetCurrentState(float m[])

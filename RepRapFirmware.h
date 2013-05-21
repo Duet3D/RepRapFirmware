@@ -2,8 +2,8 @@
 
 RepRapFirmware - Main Include
 
-This defines versions etc, includes all the other include files in the right order and defines the 
-master RepRap class.  No other definitions or information should be in here.
+This includes all the other include files in the right order and defines some globals.  
+No other definitions or information should be in here.
 
 -----------------------------------------------------------------------------------------------------
 
@@ -22,50 +22,16 @@ Licence: GPL
 #ifndef REPRAPFIRMWARE_H
 #define REPRAPFIRMWARE_H
 
+// Warn of what's to come, so we can use pointers to classes...
 
-#define NAME "RepRapFirmware"
-#define VERSION "0.1"
-#define DATE "2012-11-18"
-#define LAST_AUTHOR "reprappro.com"
+class Platform;
+class Webserver;
+class GCodes;
+class Move;
+class Heat;
+class RepRap;
 
-#include "Configuration.h"
-#include "Platform.h"
-
-class RepRap
-{    
-  public:
-      
-    RepRap();
-    void Init();
-    void Spin();
-    void Exit();
-    void Interrupt();
-    boolean debug();
-    void debug(boolean d);
-    Platform* GetPlatform();
-    Move* GetMove();
-    Heat* GetHeat();
-    GCodes* GetGCodes();
-    Webserver* GetWebserver();  
-    
-  private:
-  
-    Platform* platform;
-    boolean active;
-    Move* move;
-    Heat* heat;
-    GCodes* gCodes;
-    Webserver* webserver;
-    boolean dbg;
-};
-
-inline Platform* RepRap::GetPlatform() { return platform; }
-inline Move* RepRap::GetMove() { return move; }
-inline Heat* RepRap::GetHeat() { return heat; }
-inline GCodes* RepRap::GetGCodes() { return gCodes; }
-inline Webserver* RepRap::GetWebserver() { return webserver; }
-inline boolean RepRap::debug() { return dbg; }
-inline void RepRap::debug(boolean d) { dbg = d; }
+extern RepRap reprap;
 
 // Functions and globals not part of any class
 
@@ -75,12 +41,15 @@ boolean StringStartsWith(char* string, char* starting);
 boolean StringEquals(char* s1, char* s2);
 int StringContains(char* string, char* match);
 
+#include "Configuration.h"
+#include "Platform.h"
 #include "Webserver.h" 
 #include "GCodes.h"
 #include "Move.h"
 #include "Heat.h"
+#include "Reprap.h"
 
-extern RepRap reprap;
+
 
 #endif
 

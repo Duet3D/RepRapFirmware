@@ -23,12 +23,10 @@ Licence: GPL
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
-class RepRap;
-class Platform;
-class Move;
-class Heat;
-class GCodes;
-class Webserver;
+#define NAME "RepRapFirmware"
+#define VERSION "0.1"
+#define DATE "2012-11-18"
+#define LAST_AUTHOR "reprappro.com"
 
 #define ABS_ZERO -273.15
 
@@ -49,7 +47,6 @@ class Webserver;
 
 #define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
 
-
 #define INDEX_PAGE "reprap.htm"
 #define PRINT_PAGE "print.php"
 #define MESSAGE_FILE "messages.txt"
@@ -59,5 +56,9 @@ class Webserver;
 #define STRING_LENGTH 1000
 #define POST_LENGTH 200
 #define START_FEED_RATE 200
+
+// The axes etc in a GCode
+
+#define GCODE_LETTERS {'X', 'Y', 'Z', 'E', 'F' }
 
 #endif

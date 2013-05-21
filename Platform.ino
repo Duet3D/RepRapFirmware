@@ -52,6 +52,12 @@ void TC3_Handler()
   reprap.GetPlatform()->Interrupt();
 }
 
+inline void Platform::Interrupt()
+{
+  reprap->Interrupt();  // Put nothing else in this function
+}
+
+
 /*
 void startTimer(Tc *tc, uint32_t channel, IRQn_Type irq, uint32_t frequency) 
 {
@@ -69,97 +75,7 @@ void startTimer(Tc *tc, uint32_t channel, IRQn_Type irq, uint32_t frequency)
 }
 */
 
-void Platform::InitialiseInterrupts()
-{
-  pmc_set_writeprotect(false);
-  pmc_enable_periph_clk((uint32_t)TC3_IRQn);
-  TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
-  TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
-  TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
-  NVIC_DisableIRQ(TC3_IRQn);  
-}
 
-inline void Platform::SetInterrupt(long t)
-{
-  if(t <= 0)
-  {
-    NVIC_DisableIRQ(TC3_IRQn);
-    return;
-  }
-  uint32_t rc = (uint32_t)(t*84)/128;
-  TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
-  TC_SetRC(TC1, 0, rc);
-  TC_Start(TC1, 0);
-  NVIC_EnableIRQ(TC3_IRQn);
-}
-
-inline void Platform::Interrupt()
-{
-  reprap->Interrupt();  // Put nothing else in this function
-}
-
-//***************************************************************************************
-
-// Network connection
-
-inline int Platform::ClientStatus()
-{
-  return clientStatus;
-}
-
-inline void Platform::SendToClient(unsigned char b)
-{
-  if(client)
-  {
-    client.write(b);
-  } else
-    Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
-}
-
-inline unsigned char Platform::ClientRead()
-{
-  if(client)
-    return client.read();
-    
-  Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
-  return '\n'; // good idea?? 
-}
-
-inline void Platform::ClientMonitor()
-{
-  clientStatus = 0;
-  
-  if(!client)
-  {
-    client = server->available();
-    if(!client)
-      return;
-    //else
-      //Serial.println("new client");
-  }
-    
-  clientStatus |= CLIENT;
-    
-  if(!client.connected())
-    return;
-    
-  clientStatus |= CONNECTED;
-    
-  if (!client.available())
-    return;
-    
-  clientStatus |= AVAILABLE;
-}
-
-inline void Platform::DisconnectClient()
-{
-  if (client)
-  {
-    client.stop();
-    //Serial.println("client disconnected");
-  } else
-      Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
-}
 
 
 //*******************************************************************************************************************

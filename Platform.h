@@ -73,8 +73,6 @@ Licence: GPL
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
 #define JERKS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
 
-#define GCODE_LETTERS {'X', 'Y', 'Z', 'E', 'F' }
-
 // AXES
 
 
@@ -158,17 +156,15 @@ Licence: GPL
 
 /****************************************************************************************************/
 
-class RepRap;
+//class RepRap;
+
+void TC3_Handler();
 
 class Platform
 {   
   public:
   
-  friend class Move;
-  
   Platform(RepRap* r);
-  
-  RepRap* GetRepRap();
   
 //-------------------------------------------------------------------------------------------------------------
 
@@ -191,7 +187,7 @@ class Platform
   
   // Communications and data storage; opening something unsupported returns -1.
   
-  char* FileList(char* directory); // Returns a ;-separated list of all the files in the named directory (for example on an SD card).
+  char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory (for example on an SD card).
   int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
   void GoToEnd(int file); // Position the file at the end (so you can write on the end).
   boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
@@ -199,7 +195,7 @@ class Platform
   void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
   unsigned long Length(int file); // File size in bytes
-  char* GetWebDir(); // Where the php/htm etc files are
+  char* GetWebDir(); // Where the htm etc files are
   char* GetGcodeDir(); // Where the gcodes are
   char* GetSysDir();  // Where the system files are
   char* GetTempDir(); // Where temporary files are
@@ -318,11 +314,6 @@ inline void Platform::Exit()
   active = false;
 }
 
-inline RepRap* Platform::GetRepRap()
-{
-  return reprap;
-}
-
 // Where the htm etc files are
 
 inline char* Platform::GetWebDir()
@@ -371,5 +362,99 @@ inline int Platform::GetRawTemperature(byte heater)
 {
   return analogRead(tempSensePins[heater]);
 }
+
+//*********************************************************************************************************
+
+// Interrupts
+
+
+void Platform::InitialiseInterrupts()
+{
+  pmc_set_writeprotect(false);
+  pmc_enable_periph_clk((uint32_t)TC3_IRQn);
+  TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
+  TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
+  TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
+  NVIC_DisableIRQ(TC3_IRQn);  
+}
+
+inline void Platform::SetInterrupt(long t)
+{
+  if(t <= 0)
+  {
+    NVIC_DisableIRQ(TC3_IRQn);
+    return;
+  }
+  uint32_t rc = (uint32_t)(t*84)/128;
+  TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
+  TC_SetRC(TC1, 0, rc);
+  TC_Start(TC1, 0);
+  NVIC_EnableIRQ(TC3_IRQn);
+}
+
+//***************************************************************************************
+
+// Network connection
+
+inline int Platform::ClientStatus()
+{
+  return clientStatus;
+}
+
+inline void Platform::SendToClient(unsigned char b)
+{
+  if(client)
+  {
+    client.write(b);
+  } else
+    Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
+}
+
+inline unsigned char Platform::ClientRead()
+{
+  if(client)
+    return client.read();
+    
+  Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
+  return '\n'; // good idea?? 
+}
+
+inline void Platform::ClientMonitor()
+{
+  clientStatus = 0;
+  
+  if(!client)
+  {
+    client = server->available();
+    if(!client)
+      return;
+    //else
+      //Serial.println("new client");
+  }
+    
+  clientStatus |= CLIENT;
+    
+  if(!client.connected())
+    return;
+    
+  clientStatus |= CONNECTED;
+    
+  if (!client.available())
+    return;
+    
+  clientStatus |= AVAILABLE;
+}
+
+inline void Platform::DisconnectClient()
+{
+  if (client)
+  {
+    client.stop();
+    //Serial.println("client disconnected");
+  } else
+      Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
+}
+
+
 
 #endif

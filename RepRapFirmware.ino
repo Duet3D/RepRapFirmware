@@ -52,6 +52,8 @@ RepRap reprap;
 
 //*************************************************************************************************
 
+// RepRap member functions.
+
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
 RepRap::RepRap() 
@@ -98,11 +100,6 @@ void RepRap::Spin()
   heat->Spin();
 }
 
-
-void RepRap::Interrupt()
-{
-  move->Interrupt();
-}
 
 //*************************************************************************************************
 

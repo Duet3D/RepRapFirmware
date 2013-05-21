@@ -22,6 +22,8 @@ Licence: GPL
 #ifndef GCODES_H
 #define GCODES_H
 
+// Small class to hold an individual GCode
+
 class GCodeBuffer
 {
   public:
@@ -39,6 +41,8 @@ class GCodeBuffer
     int gcodePointer;
     int readPointer; 
 };
+
+// The GCode interpreter
 
 class GCodes
 {   
