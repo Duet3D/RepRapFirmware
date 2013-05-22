@@ -30,26 +30,56 @@ Move::Move(Platform* p, GCodes* g)
 
 void Move::Init()
 {
-  char i;
+  unsigned char i, j;
   
   for(i = 0; i < DRIVES; i++)
     platform->SetDirection(i, FORWARDS);
   for(i = 0; i <= AXES; i++)
     currentPosition[i] = 0.0;  
+
+  float d, e;
+  
+  // The stepDistances arrays are look-up tables of the Euclidean distance 
+  // between the start and end of a step.  If the step is just along one axis,
+  // it's just that axis's step length.  If it's more, it is a Pythagoran 
+  // sum of all the axis steps that take part.
+  
+  for(i = 0; i < (1<<AXES); i++)
+  {
+    d = 0.0;
+    for(j = 0; j < AXES; j++)
+    {
+       if(i & (1<<j))
+       {
+          e = 1.0/platform->DriveStepsPerUnit(j);
+          d += e*e;
+       }
+    }
+    stepDistances[i] = sqrt(d);
+  }
+  
+  for(i = 0; i < (1<<(DRIVES-AXES)); i++)
+  {
+    d = 0.0;
+    for(j = 0; j < (DRIVES-AXES); j++)
+    {
+       if(i & (1<<j))
+       {
+          e = 1.0/platform->DriveStepsPerUnit(AXES + j);
+          d += e*e;
+       }
+    }
+    extruderStepDistances[i] = sqrt(d);
+  }
+  
+  // We don't want 0.  If no axes/extruders are moving these should never be used.
+  // But try to be safe.
+  
+  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
+  extruderStepDistances[0] = stepDistances[0];
+  
   lastTime = platform->Time();
   currentFeedrate = START_FEED_RATE;
-  float dx = 1.0/platform->DriveStepsPerUnit(X_AXIS);
-  float dy = 1.0/platform->DriveStepsPerUnit(Y_AXIS);
-  float dz = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
-  stepDistances[0] = dx; // Should never be used.  Wrong, but safer than 0.0...
-  stepDistances[1] = dx;
-  stepDistances[2] = dy;
-  stepDistances[3] = sqrt(dx*dx + dy*dy);
-  stepDistances[4] = dz;
-  stepDistances[5] = sqrt(dx*dx + dz*dz);
-  stepDistances[6] = sqrt(dy*dy + dz*dz);
-  stepDistances[7] = sqrt(dx*dx + dy*dy + dz*dz);
-
   active = true;  
 }
 
@@ -72,8 +102,8 @@ void Move::Qmove()
     return;
     
   //FIXME
-  float u = platform->Jerk(X_AXIS);
-  float v = u;
+  float u = 0.0; // This will provoke the code to select the jerk values.
+  float v = 0.0;
   
   boolean work = dda->Init(currentPosition, nextMove, u, v);
   
@@ -107,7 +137,9 @@ DDA::DDA(Move* m, Platform* p)
 
 /*
 
-This sets up the DDA to take us between two positions and extrude states.
+DDA::Init(...) 
+
+Sets up the DDA to take us between two positions and extrude states.
 The start velocity is u, and the end one is v.  The requested maximum feedrate
 is in targetPosition[DRIVES].
 
@@ -119,16 +151,49 @@ are passed by reference.
 
 The return value is true for an actual move, false for a zero-length (i.e. null) move.
 
+Every drive has an acceleration associated with it, so when more than one drive is
+moving there have to be rules of precedence that say which acceleration (and which
+jerk value) to use.
+
+The rules are these:
+
+  if Z is moving
+    Use Z acceleration
+  else if X and/or Y are moving
+    Use X acceleration
+  else
+    Use the acceleration for the extruder that's moving.
+
+In the case of multiple extruders moving at once, their minimum acceleration (and its
+associated jerk) are used.  The variables axesMoving and extrudersMoving track what's 
+going on.  The bits in the char axesMoving are ORed:
+
+  msb -> 00000ZYX <- lsb
+  
+a 1 meaning that that axis is moving.  The bits of extrudersMoving contain a similar
+pattern for the moving extruders.
+    
+Note that all this assumes that X and Y accelerations are equal, though in fact there is a 
+value stored for each.
+
+In the case of only extruders moving, the distance moved is taken to be the Pythagoran distance in
+the configuration space of the extruders.
+
+TODO: Worry about having more than eight extruders...
+
 */
+
 boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, float& v)
 {
   char drive;
   active = false;
   velocitiesAltered = false;
   totalSteps = -1;
-  distance = 0; // X+Y+Z
+  distance = 0.0; // X+Y+Z
+  float eDistance = 0.0;
   float d;
-  char axesMoving = 0;
+  unsigned char axesMoving = 0;
+  unsigned char extrudersMoving = 0;
   
   // How far are we going, both in steps and in mm?
   
@@ -136,25 +201,24 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
   {
     if(drive < AXES)
     {
-      d = targetPosition[drive] - currentPosition[drive];
-      delta[drive] = (long)(d*platform->DriveStepsPerUnit(drive));  //Absolute
+      d = targetPosition[drive] - currentPosition[drive];  //Absolute
       distance += d*d;
+      delta[drive] = (long)(d*platform->DriveStepsPerUnit(drive));
+      if(delta[drive])
+        axesMoving |= 1<<drive;
     } else
+    {
       delta[drive] = (long)(targetPosition[drive]*platform->DriveStepsPerUnit(drive));  // Relative
+      eDistance += targetPosition[drive]*targetPosition[drive];
+      if(delta[drive])
+        extrudersMoving |= 1<<(drive - AXES);
+    }
+    
     if(delta[drive] >= 0)
       directions[drive] = FORWARDS;
     else
       directions[drive] = BACKWARDS;
-    delta[drive] = abs(delta[drive]);
-    
-    // Which axes (if any) are moving?
-    
-    if(drive == X_AXIS && delta[drive] > 0)
-      axesMoving |= 1;
-    if(drive == Y_AXIS && delta[drive] > 0)
-      axesMoving |= 2;
-    if(drive == Z_AXIS && delta[drive] > 0)
-      axesMoving |= 4;   
+    delta[drive] = abs(delta[drive]);  
     
     // Keep track of the biggest drive move in totalSteps
     
@@ -176,33 +240,48 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
   // Acceleration and velocity calculations
   
   distance = sqrt(distance);
-  float acc;
   
-  if(axesMoving|4) // Z involved?
+  if(axesMoving&4) // Z involved?
   {
-    acc = platform->Acceleration(Z_AXIS);
-    velocity = platform->Jerk(Z_AXIS);
-  } else // No - only X, Y and Es
+    acceleration = platform->Acceleration(Z_AXIS);
+    jerk = platform->Jerk(Z_AXIS);
+  } else if(axesMoving) // X or Y involved?
   {
-    acc = platform->Acceleration(X_AXIS);
-    velocity = platform->Jerk(X_AXIS);
+    acceleration = platform->Acceleration(X_AXIS);
+    jerk = platform->Jerk(X_AXIS);
+  } else // Must be extruders only
+  {
+    acceleration = FLT_MAX; // Slight hack
+    distance = sqrt(eDistance);
+    for(drive = AXES; drive < DRIVES; drive++)
+    {
+      if(extrudersMoving & (1<<(drive - AXES)))
+      {
+        if(platform->Acceleration(drive) < acceleration)
+        {
+          acceleration = platform->Acceleration(drive);
+          jerk = platform->Jerk(drive);
+        }
+      }
+    }    
   }
  
   // If velocities requested are (almost) zero, set them to the jerk
   
   if(v < 0.01)
-    v = velocity; 
+    v = jerk; 
   if(u < 0.01)
-    u = velocity;
+    u = jerk;
 
-  // At which DDA step should we stop accelerating?
+  // At which DDA step should we stop accelerating?  targetPosition[DRIVES] contains
+  // the desired feedrate.
   
-  d = 0.5*(targetPosition[DRIVES]*targetPosition[DRIVES] - u*u)/acc; // d = (v1^2 - v0^2)/2a
+  d = 0.5*(targetPosition[DRIVES]*targetPosition[DRIVES] - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
   stopAStep = (long)((d*totalSteps)/distance);
   
   // At which DDA step should we start decelerating?
   
-  d = 0.5*(v*v - targetPosition[DRIVES]*targetPosition[DRIVES])/acc;  // This should be 0 or negative...
+  d = 0.5*(v*v - targetPosition[DRIVES]*targetPosition[DRIVES])/acceleration;  // This should be 0 or negative...
   startDStep = totalSteps + (long)((d*totalSteps)/distance);
   
   // If acceleration stop is at or after deceleration start, then the distance moved
@@ -213,7 +292,7 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
     // Work out the point at which to stop accelerating and then
     // immediately start decelerating.
     
-    dCross = 0.5*(0.5*(v*v - u*u)/acc + distance);
+    dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
     
     if(dCross < 0.0 || dCross > distance)
     {
@@ -225,7 +304,7 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
       // from one to the other.
       
       float k = v/u;
-      u = 2.0*acc*distance/(k*k - 1);
+      u = 2.0*acceleration*distance/(k*k - 1);
       if(u >= 0.0)
       {
         u = sqrt(u);
@@ -236,7 +315,7 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
         u = v/k;
       }
       
-      dCross = 0.5*(0.5*(v*v - u*u)/acc + distance);
+      dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
       velocitiesAltered = true;
     }
     
@@ -285,37 +364,10 @@ void DDA::Step(boolean noTest)
   if(!active && noTest)
     return;
   
-  char axesMoving = 0;
+  unsigned char axesMoving = 0;
+  unsigned char extrudersMoving = 0;
   
-  counter[X_AXIS] += delta[X_AXIS];
-  if(counter[X_AXIS] > 0)
-  {
-    if(noTest)
-      platform->Step(X_AXIS);
-    axesMoving |= 1;
-    counter[X_AXIS] -= totalSteps;
-  }  
-  
-  counter[Y_AXIS] += delta[Y_AXIS];
-  if(counter[Y_AXIS] > 0)
-  {
-    if(noTest)
-      platform->Step(Y_AXIS);
-    axesMoving |= 2;
-    counter[Y_AXIS] -= totalSteps;
-  }  
-  
-  counter[Z_AXIS] += delta[Z_AXIS];
-  if(counter[Z_AXIS] > 0)
-  {
-    if(noTest)
-      platform->Step(Z_AXIS);
-    axesMoving |= 4;
-    counter[Z_AXIS] -= totalSteps;
-  }  
-  
-    
-  for(char drive = AXES; drive < DRIVES; drive++)
+  for(char drive = 0; drive < DRIVES; drive++)
   {
     counter[drive] += delta[drive];
     if(counter[drive] > 0)
@@ -323,35 +375,42 @@ void DDA::Step(boolean noTest)
       if(noTest)
         platform->Step(drive);
       counter[drive] -= totalSteps;
+      
+      if(drive < AXES)
+        axesMoving |= 1<<drive;
+      else
+        extrudersMoving |= 1<<(drive - AXES);
     }
   }
   
-  if(axesMoving)
+  // Simple Euler integration to get velocities.
+  // Maybe one day do a Runge-Kutta?
+  
+  if(stepCount < stopAStep)
   {
-    if(stepCount < stopAStep)
-    {
+    if(axesMoving)
       timeStep = move->stepDistances[axesMoving]/velocity;
-      if(axesMoving & 4)
-        velocity += platform->Acceleration(Z_AXIS)*timeStep;
-      else
-        velocity += platform->Acceleration(X_AXIS)*timeStep;
-      if(noTest)
+    else
+      timeStep = move->extruderStepDistances[extrudersMoving]/velocity;
+    velocity += acceleration*timeStep;
+    if(noTest)
         platform->SetInterrupt((long)(1.0e6*timeStep));
-    }
-    if(stepCount >= startDStep)
-    {
+  }
+  
+  if(stepCount >= startDStep)
+  {
+    if(axesMoving)
       timeStep = move->stepDistances[axesMoving]/velocity;
-      if(axesMoving & 4)
-        velocity -= platform->Acceleration(Z_AXIS)*timeStep;
-      else
-        velocity -= platform->Acceleration(X_AXIS)*timeStep;
-      if(noTest)
-        platform->SetInterrupt((long)(1.0e6*timeStep));
-    }
+    else
+      timeStep = move->extruderStepDistances[extrudersMoving]/velocity;
+    velocity -= acceleration*timeStep;
+    if(noTest)
+      platform->SetInterrupt((long)(1.0e6*timeStep));
   }
   
   stepCount++;
   active = stepCount < totalSteps;
-  if(!active && noTest)
+  
+  if(!active && noTest)           //???
     platform->SetInterrupt(-1);
 }

@@ -31,6 +31,7 @@ class DDA
     void Start(boolean noTest);
     void Step(boolean noTest);
     boolean Active();
+    boolean VelocitiesAltered();
 
   private:  
     Move* move;
@@ -46,6 +47,8 @@ class DDA
     long startDStep;
     float distance;
     float dCross;
+    float acceleration;
+    float jerk;
     boolean velocitiesAltered;
     volatile boolean active;
 };
@@ -74,12 +77,18 @@ class Move
     float currentFeedrate;
     float currentPosition[AXES]; // Note - drives above AXES are always relative moves
     float nextMove[DRIVES + 1];  // Extra is for feedrate
-    float stepDistances[8]; // Index bits: lsb -> dx, dy, dz <- msb
+    float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
+    float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
 };
 
 inline boolean DDA::Active()
 {
   return active;
+}
+
+inline boolean DDA::VelocitiesAltered()
+{
+  return velocitiesAltered;
 }
 
 inline void Move::Interrupt()

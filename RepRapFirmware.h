@@ -44,6 +44,8 @@ int StringContains(char* string, char* match);
 //#include <stdio.h>
 //#include <stdlib.h>
 
+#include <float.h>
+
 #include "Configuration.h"
 #include "Platform.h"
 #include "Webserver.h" 
