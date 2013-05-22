@@ -59,23 +59,22 @@ Licence: GPL
 
 #define STEP_PINS {54, 60, 46, 26}
 #define DIRECTION_PINS {55, 61, 48, 28}
-#define FORWARDS 1     // What to send to go... 
-#define BACKWARDS 0    // ...in each direction
+#define FORWARDS true     // What to send to go... 
+#define BACKWARDS false    // ...in each direction
 #define ENABLE_PINS {38, -1, 62, -1}
-#define ENABLE 0      // What to send to enable... 
-#define DISABLE 1     // ...and disable a drive
+#define ENABLE false      // What to send to enable... 
+#define DISABLE true     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
 #define LOW_STOP_PINS {3, 14, 17, -1}
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
 #define ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2??
-//#define ACCELERATIONS {80, 80, 3, 25}
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
 #define JERKS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
-//#define JERKS {5.0, 5.0, 0.1, 5.0}    // (mm/sec)
-// AXES
 
+
+// AXES
 
 #define AXIS_LENGTHS {210, 210, 120} // mm
 #define FAST_HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
@@ -83,6 +82,7 @@ Licence: GPL
 #define X_AXIS 0  // The index of the X axis
 #define Y_AXIS 1  // The index of the Y axis
 #define Z_AXIS 2  // The index of the Z axis
+
 
 // HEATERS - Bed is assumed to be the first
 
@@ -152,7 +152,7 @@ Licence: GPL
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
-#define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
+
 
 
 /****************************************************************************************************/

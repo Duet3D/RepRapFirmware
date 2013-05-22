@@ -255,9 +255,9 @@ void GCodes::Spin()
   if(!active)
     return;
     
-  if(webserver->Available())
+  if(webserver->GCodeAvailable())
   {
-    if(webGCode->Put(webserver->Read()))
+    if(webGCode->Put(webserver->ReadGCode()))
       ActOnGcode(webGCode);
   }
   

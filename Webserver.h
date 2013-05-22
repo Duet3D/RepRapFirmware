@@ -36,8 +36,8 @@ class Webserver
   public:
   
     Webserver(Platform* p);
-    boolean Available();
-    byte Read();
+    boolean GCodeAvailable();
+    byte ReadGCode();
     void Init();
     void Spin();
     void Exit();

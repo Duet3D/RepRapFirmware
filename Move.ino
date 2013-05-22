@@ -68,19 +68,14 @@ void Move::Spin()
 
 void Move::Qmove()
 {
-  //char scratchString[STRING_LENGTH];
   if(!gCodes->ReadMove(nextMove))
     return;
-/*  platform->Message(HOST_MESSAGE, "Move - got a move:");
-  for(char i = 0; i <= DRIVES; i++)
-  {
-    ftoa(scratchString, nextMove[i], 3);
-    platform->Message(HOST_MESSAGE, scratchString);
-    platform->Message(HOST_MESSAGE, ", ");
-  }
-  platform->Message(HOST_MESSAGE, "\n");*/
+    
+  //FIXME
+  float u = platform->Jerk(X_AXIS);
+  float v = u;
   
-  boolean work = dda->Init(currentPosition, nextMove);
+  boolean work = dda->Init(currentPosition, nextMove, u, v);
   
   for(char i = 0; i <= AXES; i++)
     currentPosition[i] = nextMove[i];
@@ -110,21 +105,40 @@ DDA::DDA(Move* m, Platform* p)
   platform = p;
 }
 
-boolean DDA::Init(float currentPosition[], float targetPosition[])
+/*
+
+This sets up the DDA to take us between two positions and extrude states.
+The start velocity is u, and the end one is v.  The requested maximum feedrate
+is in targetPosition[DRIVES].
+
+Almost everything that needs to be done to set this up is also useful
+for GCode look-ahead, so this one function is used for both.  It flags when
+u and v cannot be satisfied with the distance available and reduces them 
+proportionately to give values that can just be achieved, which is why they
+are passed by reference.
+
+The return value is true for an actual move, false for a zero-length (i.e. null) move.
+
+*/
+boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, float& v)
 {
   char drive;
   active = false;
+  velocitiesAltered = false;
   totalSteps = -1;
-  float dist = 0; // X+Y+Z
+  distance = 0; // X+Y+Z
   float d;
   char axesMoving = 0;
+  
+  // How far are we going, both in steps and in mm?
+  
   for(drive = 0; drive < DRIVES; drive++)
   {
     if(drive < AXES)
     {
       d = targetPosition[drive] - currentPosition[drive];
       delta[drive] = (long)(d*platform->DriveStepsPerUnit(drive));  //Absolute
-      dist += d*d;
+      distance += d*d;
     } else
       delta[drive] = (long)(targetPosition[drive]*platform->DriveStepsPerUnit(drive));  // Relative
     if(delta[drive] >= 0)
@@ -132,42 +146,128 @@ boolean DDA::Init(float currentPosition[], float targetPosition[])
     else
       directions[drive] = BACKWARDS;
     delta[drive] = abs(delta[drive]);
+    
+    // Which axes (if any) are moving?
+    
     if(drive == X_AXIS && delta[drive] > 0)
       axesMoving |= 1;
     if(drive == Y_AXIS && delta[drive] > 0)
       axesMoving |= 2;
     if(drive == Z_AXIS && delta[drive] > 0)
-      axesMoving |= 4;      
+      axesMoving |= 4;   
+    
+    // Keep track of the biggest drive move in totalSteps
+    
     if(delta[drive] > totalSteps)
       totalSteps = delta[drive];    
   }
+  
+  // Not going anywhere?
+  
   if(totalSteps <= 0)
     return false;
+  
+  // Set up the DDA
+  
   counter[0] = totalSteps/2;
   for(drive = 1; drive < DRIVES; drive++)
     counter[drive] = counter[0];
-  dist = sqrt(dist);
+  
+  // Acceleration and velocity calculations
+  
+  distance = sqrt(distance);
   float acc;
-  if(axesMoving|4)
+  
+  if(axesMoving|4) // Z involved?
   {
     acc = platform->Acceleration(Z_AXIS);
     velocity = platform->Jerk(Z_AXIS);
-  } else
+  } else // No - only X, Y and Es
   {
     acc = platform->Acceleration(X_AXIS);
     velocity = platform->Jerk(X_AXIS);
   }
+ 
+  // If velocities requested are (almost) zero, set them to the jerk
   
-  timeStep = move->stepDistances[1]/velocity;
-  d = 0.5*(targetPosition[DRIVES]*targetPosition[DRIVES] - velocity*velocity)/acc; // d = (v^2 - u^2)/2a
-  stopAStep = (long)((d*totalSteps)/dist);
-  startDStep = totalSteps - stopAStep;
-  if(stopAStep > startDStep)
+  if(v < 0.01)
+    v = velocity; 
+  if(u < 0.01)
+    u = velocity;
+
+  // At which DDA step should we stop accelerating?
+  
+  d = 0.5*(targetPosition[DRIVES]*targetPosition[DRIVES] - u*u)/acc; // d = (v1^2 - v0^2)/2a
+  stopAStep = (long)((d*totalSteps)/distance);
+  
+  // At which DDA step should we start decelerating?
+  
+  d = 0.5*(v*v - targetPosition[DRIVES]*targetPosition[DRIVES])/acc;  // This should be 0 or negative...
+  startDStep = totalSteps + (long)((d*totalSteps)/distance);
+  
+  // If acceleration stop is at or after deceleration start, then the distance moved
+  // is not enough to get to full speed.
+  
+  if(stopAStep >= startDStep)
   {
-      stopAStep = totalSteps/2;
-      startDStep = stopAStep + 1;
+    // Work out the point at which to stop accelerating and then
+    // immediately start decelerating.
+    
+    dCross = 0.5*(0.5*(v*v - u*u)/acc + distance);
+    
+    if(dCross < 0.0 || dCross > distance)
+    {
+      // With the acceleration available, it is not possible
+      // to satisfy u and v within the distance; reduce u and v 
+      // proportionately to get ones that work and flag the fact.  
+      // The result is two velocities that can just be accelerated
+      // or decelerated between over the distance to get
+      // from one to the other.
+      
+      float k = v/u;
+      u = 2.0*acc*distance/(k*k - 1);
+      if(u >= 0.0)
+      {
+        u = sqrt(u);
+        v = k*u;
+      } else
+      {
+        v = sqrt(-u);
+        u = v/k;
+      }
+      
+      dCross = 0.5*(0.5*(v*v - u*u)/acc + distance);
+      velocitiesAltered = true;
+    }
+    
+    // The DDA steps at which acceleration stops and deceleration starts
+    
+    stopAStep = (long)((dCross*totalSteps)/distance);
+    startDStep = stopAStep + 1;
   }
+  
+  // The initial velocity
+  
+  velocity = u;
+  
+  // Sanity check
+  
+  if(velocity <= 0.0)
+  {
+    velocity = 1.0;
+    platform->Message(HOST_MESSAGE, "DDA.Init(): Zero or negative initial velocity!");
+  }
+  
+  // How far have we gone?
+  
   stepCount = 0;
+  
+  // Guess that the first DDA move will be in roughly the direction 
+  // recorded in axesMoving.  This is a simple heuristic, and any
+  // small error will be forgotten with the very next step.
+  
+  timeStep = move->stepDistances[axesMoving]/velocity;
+  
   return true;
 }
 

@@ -106,7 +106,9 @@ void RepRap::InterruptTime()
   DDA* dda = new DDA(move, platform);
   float a[] = {1.0, 2.0, 3.0, 4.0, 5.0};
   float b[] = {2.0, 3.0, 4.0, 5.0, 6.0};
-  dda->Init(a, b);
+  float u = 50;
+  float v = 50;
+  dda->Init(a, b, u, v);
   dda->Start(false);
   unsigned long t = platform->Time();
   for(long i = 0; i < 100000; i++) 

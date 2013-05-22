@@ -27,7 +27,7 @@ class DDA
 {  
   public:
     DDA(Move* m, Platform* p);
-    boolean Init(float currentPosition[], float targetPosition[]);
+    boolean Init(float currentPosition[], float targetPosition[], float& u, float& v);
     void Start(boolean noTest);
     void Step(boolean noTest);
     boolean Active();
@@ -37,13 +37,16 @@ class DDA
     Platform* platform;
     long counter[DRIVES+1];
     long delta[DRIVES+1];
-    char directions[DRIVES+1];
+    boolean directions[DRIVES+1];
     long totalSteps;
     long stepCount;
     float timeStep;
     float velocity;
     long stopAStep;
     long startDStep;
+    float distance;
+    float dCross;
+    boolean velocitiesAltered;
     volatile boolean active;
 };
 

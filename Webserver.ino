@@ -61,12 +61,12 @@ boolean Webserver::MatchBoundary(char c)
 
 // Feeding G Codes to the GCodes class
 
-boolean Webserver::Available()
+boolean Webserver::GCodeAvailable()
 {
   return gcodeAvailable;
 }
 
-byte Webserver::Read()
+byte Webserver::ReadGCode()
 {
   byte c = gcodeBuffer[gcodePointer];
   if(!c)

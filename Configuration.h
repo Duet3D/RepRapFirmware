@@ -56,9 +56,10 @@ Licence: GPL
 #define STRING_LENGTH 1000
 #define POST_LENGTH 200
 #define START_FEED_RATE 200
+#define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
 
 // The axes etc in a GCode
 
-#define GCODE_LETTERS {'X', 'Y', 'Z', 'E', 'F' }
+#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' }
 
 #endif
