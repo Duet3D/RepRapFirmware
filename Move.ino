@@ -107,7 +107,7 @@ void Move::Qmove()
   
   boolean work = dda->Init(currentPosition, nextMove, u, v);
   
-  for(char i = 0; i <= AXES; i++)
+  for(char i = 0; i < AXES; i++)
     currentPosition[i] = nextMove[i];
     
   if(work)
@@ -241,7 +241,7 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
   
   distance = sqrt(distance);
   
-  if(axesMoving&4) // Z involved?
+  if(axesMoving & (1<<Z_AXIS)) // Z involved?
   {
     acceleration = platform->Acceleration(Z_AXIS);
     jerk = platform->Jerk(Z_AXIS);

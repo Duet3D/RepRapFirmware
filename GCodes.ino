@@ -43,7 +43,7 @@ void GCodes::Init()
   active = true;
   moveAvailable = false;
   heatAvailable = false;
-  drivesRelative = false;
+  drivesRelative = true;
   axesRelative = false;
   gCodeLetters = GCODE_LETTERS;
   distanceScale = 1.0;
