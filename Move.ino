@@ -414,3 +414,16 @@ void DDA::Step(boolean noTest)
   if(!active && noTest)           //???
     platform->SetInterrupt(-1);
 }
+
+//****************************************************************************************************
+
+DDARingBuffer::DDARingBuffer(Move* m, Platform* p)
+{
+  platform = p;
+  for(addPointer = 0; addPointer < RING_LENGTH; addPointer++)
+   ring[addPointer] = new DDA(m, p);
+  addPointer = 0;
+  getPointer = 0;
+  locked = false; 
+}
+

@@ -53,6 +53,64 @@ class DDA
     volatile boolean active;
 };
 
+//*********************************************************************************************
+
+/*
+
+  To call the RingBuffer functions the sequences are:
+  
+  Get:
+  
+    if(ringBuffer->getLock())
+    {
+      if(ringBuffer->Empty())
+      {
+        ringBuffer->releaseLock();
+        // Nothing there - go and do something else...
+      }
+      d = Get();
+      ringBuffer->releaseLock();
+      // Do something with d and don't do another Get until you have finished with d...
+    }
+  
+  Add:
+  
+    if(ringBuffer->getLock())
+    {
+      if(ringBuffer->Full())
+      {
+        ringBuffer->releaseLock();
+        // No room - come back later...
+      }
+      ringBuffer->Add(...);
+      ringBuffer->releaseLock();
+    }
+  
+  
+
+*/
+
+class DDARingBuffer
+{
+  public:
+   DDARingBuffer(Move* m, Platform* p);
+   void Add(float currentPosition[], float targetPosition[], float& u, float& v);
+   DDA* Get();
+   boolean Empty();
+   boolean Full();
+   boolean getLock();
+   void releaseLock();
+   
+  private:
+   Platform* platform;
+   DDA* ring[RING_LENGTH];
+   volatile char addPointer;
+   volatile char getPointer;
+   volatile boolean locked;
+};
+
+//**************************************************************************************************
+
 class Move
 {   
   public:
@@ -81,6 +139,8 @@ class Move
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
 };
 
+//********************************************************************************************************
+
 inline boolean DDA::Active()
 {
   return active;
@@ -90,6 +150,70 @@ inline boolean DDA::VelocitiesAltered()
 {
   return velocitiesAltered;
 }
+
+//*****************************************************************************************************
+
+inline boolean DDARingBuffer::getLock()
+{
+  if(locked)
+    return false;
+  locked = true;
+  return true;
+}
+
+inline void DDARingBuffer::releaseLock()
+{
+  if(!locked)
+    platform->Message(HOST_MESSAGE, "Attempt to unlock already unlocked ring buffer.\n");
+  locked = false;
+  return;
+}
+
+inline void DDARingBuffer::Add(float currentPosition[], float targetPosition[], float& u, float& v)
+{    
+  if(Full())
+  {
+    platform->Message(HOST_MESSAGE, "Attempt to overfill ring buffer.\n");
+    return;
+  }
+
+  ring[addPointer]->Init(currentPosition, targetPosition, u, v);
+  addPointer++;
+  if(addPointer >= RING_LENGTH)
+    addPointer = 0;
+}
+
+inline DDA* DDARingBuffer::Get()
+{
+  if(Empty())
+  {
+    platform->Message(HOST_MESSAGE, "Attempt to use empty ring buffer.\n");
+    return ring[getPointer]; // Safer than NULL
+  }
+  DDA* d = ring[getPointer];
+  getPointer++;
+  if(getPointer >= RING_LENGTH)
+    getPointer = 0;
+  return d;
+}
+
+inline boolean DDARingBuffer::Empty()
+{
+  return getPointer == addPointer;
+}
+
+// Leave a gap of 2 as the last Get result may still be being processed
+
+inline boolean DDARingBuffer::Full()
+{
+  if(getPointer == 0)
+    return addPointer == RING_LENGTH - 2;
+  if(getPointer == 1)
+    return addPointer == RING_LENGTH - 1;    
+  return addPointer == getPointer - 2;
+}
+
+//**********************************************************************************************
 
 inline void Move::Interrupt()
 {

@@ -58,5 +58,8 @@ Licence: GPL
 #define START_FEED_RATE 200
 #define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
 
+// Movement stuff
+
+#define RING_LENGTH 10
 
 #endif

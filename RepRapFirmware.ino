@@ -100,6 +100,10 @@ void RepRap::Spin()
   heat->Spin();
 }
 
+// This function is never normally called.  It is a test to time
+// the interrupt function.  To activate it, uncomment the line that calls
+// this in Platform.ino.
+
 void RepRap::InterruptTime()
 {
   char buffer[50];
@@ -124,6 +128,9 @@ void RepRap::InterruptTime()
 //*************************************************************************************************
 
 // Utilities and storage not part of any class
+
+
+// Float to a string.
 
 static long precision[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
 
