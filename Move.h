@@ -55,53 +55,19 @@ class DDA
 
 //*********************************************************************************************
 
-/*
-
-  To call the RingBuffer functions the sequences are:
-  
-  Get:
-  
-    if(ringBuffer->getLock())
-    {
-      if(ringBuffer->Empty())
-      {
-        ringBuffer->releaseLock();
-        // Nothing there - go and do something else...
-      }
-      d = Get();
-      ringBuffer->releaseLock();
-      // Do something with d and don't do another Get until you have finished with d...
-    }
-  
-  Add:
-  
-    if(ringBuffer->getLock())
-    {
-      if(ringBuffer->Full())
-      {
-        ringBuffer->releaseLock();
-        // No room - come back later...
-      }
-      ringBuffer->Add(...);
-      ringBuffer->releaseLock();
-    }
-  
-  
-
-*/
-
 class DDARingBuffer
 {
   public:
    DDARingBuffer(Move* m, Platform* p);
-   void Add(float currentPosition[], float targetPosition[], float& u, float& v);
+   boolean Add(float currentPosition[], float targetPosition[], float& u, float& v);
    DDA* Get();
+
+  private:
    boolean Empty();
    boolean Full();
    boolean getLock();
    void releaseLock();
    
-  private:
    Platform* platform;
    DDA* ring[RING_LENGTH];
    volatile char addPointer;
@@ -130,8 +96,10 @@ class Move
     Platform* platform;
     GCodes* gCodes;
     DDA* dda;
+    DDARingBuffer* ddaRingBuffer;
     unsigned long lastTime;
     boolean active;
+    boolean moveWaiting;
     float currentFeedrate;
     float currentPosition[AXES]; // Note - drives above AXES are always relative moves
     float nextMove[DRIVES + 1];  // Extra is for feedrate
@@ -164,37 +132,60 @@ inline boolean DDARingBuffer::getLock()
 inline void DDARingBuffer::releaseLock()
 {
   if(!locked)
-    platform->Message(HOST_MESSAGE, "Attempt to unlock already unlocked ring buffer.\n");
+    platform->Message(HOST_MESSAGE, "Attempt to unlock an already unlocked ring buffer!\n");
   locked = false;
   return;
 }
 
-inline void DDARingBuffer::Add(float currentPosition[], float targetPosition[], float& u, float& v)
-{    
-  if(Full())
+inline boolean DDARingBuffer::Add(float currentPosition[], float targetPosition[], float& u, float& v)
+{
+  if(getLock())
   {
-    platform->Message(HOST_MESSAGE, "Attempt to overfill ring buffer.\n");
-    return;
+    if(Full())
+    {
+      releaseLock();
+      return false;
+    }
+    if(ring[addPointer]->Active())
+    {
+      platform->Message(HOST_MESSAGE, "Attempt to alter an active ring buffer entry!\n");
+      releaseLock();
+      return false;
+    }
+    if(!ring[addPointer]->Init(currentPosition, targetPosition, u, v))
+    {
+      // Throw it away
+      releaseLock();
+      return true;
+    }
+    addPointer++;
+    if(addPointer >= RING_LENGTH)
+      addPointer = 0;
+    releaseLock();
+    return true;
   }
-
-  ring[addPointer]->Init(currentPosition, targetPosition, u, v);
-  addPointer++;
-  if(addPointer >= RING_LENGTH)
-    addPointer = 0;
+  return false;
 }
+
 
 inline DDA* DDARingBuffer::Get()
 {
-  if(Empty())
+  DDA* result = NULL;
+  if(getLock())
   {
-    platform->Message(HOST_MESSAGE, "Attempt to use empty ring buffer.\n");
-    return ring[getPointer]; // Safer than NULL
+    if(Empty())
+    {
+      releaseLock();
+      return NULL;
+    }
+    result = ring[getPointer];
+    getPointer++;
+    if(getPointer >= RING_LENGTH)
+      getPointer = 0;
+    releaseLock();
+    return result;
   }
-  DDA* d = ring[getPointer];
-  getPointer++;
-  if(getPointer >= RING_LENGTH)
-    getPointer = 0;
-  return d;
+  return NULL;
 }
 
 inline boolean DDARingBuffer::Empty()
@@ -217,7 +208,21 @@ inline boolean DDARingBuffer::Full()
 
 inline void Move::Interrupt()
 {
-  dda->Step(true);
+  if(dda == NULL)
+  {
+    dda = ddaRingBuffer->Get();
+    if(dda != NULL)
+      dda->Start(true);
+    return;   
+  }
+  
+  if(dda->Active())
+  {
+    dda->Step(true);
+    return;
+  }
+  
+  dda = NULL;
 }
 
 

@@ -25,7 +25,8 @@ Move::Move(Platform* p, GCodes* g)
   active = false;
   platform = p;
   gCodes = g;
-  dda = new DDA(this, platform);
+  dda = NULL;
+  ddaRingBuffer = new DDARingBuffer(this, platform);
 }
 
 void Move::Init()
@@ -80,6 +81,7 @@ void Move::Init()
   
   lastTime = platform->Time();
   currentFeedrate = START_FEED_RATE;
+  moveWaiting = false;
   active = true;  
 }
 
@@ -98,20 +100,23 @@ void Move::Spin()
 
 void Move::Qmove()
 {
-  if(!gCodes->ReadMove(nextMove))
-    return;
-    
   //FIXME
   float u = 0.0; // This will provoke the code to select the jerk values.
   float v = 0.0;
   
-  boolean work = dda->Init(currentPosition, nextMove, u, v);
-  
-  for(char i = 0; i < AXES; i++)
-    currentPosition[i] = nextMove[i];
+  if(moveWaiting)
+  {
+    if(ddaRingBuffer->Add(currentPosition, nextMove, u, v))
+    {
+      for(char i = 0; i < AXES; i++)
+        currentPosition[i] = nextMove[i];
+      currentFeedrate = nextMove[DRIVES];
+      moveWaiting = false;
+    }
+    return;
+  }
     
-  if(work)
-    dda->Start(true);
+  moveWaiting = gCodes->ReadMove(nextMove);
 }
 
 void Move::GetCurrentState(float m[])
@@ -411,8 +416,8 @@ void DDA::Step(boolean noTest)
   stepCount++;
   active = stepCount < totalSteps;
   
-  if(!active && noTest)           //???
-    platform->SetInterrupt(-1);
+  if(!active && noTest)
+    platform->SetInterrupt(STANDBY_INTERRUPT_RATE);
 }
 
 //****************************************************************************************************

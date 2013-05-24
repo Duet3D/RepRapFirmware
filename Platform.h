@@ -152,14 +152,9 @@ Licence: GPL
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
-
-
+#define STANDBY_INTERRUPT_RATE 200 // Microseconds
 
 /****************************************************************************************************/
-
-//class RepRap;
-
-void TC3_Handler();
 
 class Platform
 {   
@@ -388,7 +383,7 @@ void Platform::InitialiseInterrupts()
   TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
   TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
   TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
-  NVIC_DisableIRQ(TC3_IRQn);  
+  SetInterrupt(STANDBY_INTERRUPT_RATE); 
 }
 
 inline void Platform::SetInterrupt(long t)
