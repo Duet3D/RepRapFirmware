@@ -100,29 +100,6 @@ void RepRap::Spin()
   heat->Spin();
 }
 
-// This function is never normally called.  It is a test to time
-// the interrupt function.  To activate it, uncomment the line that calls
-// this in Platform.ino.
-
-void RepRap::InterruptTime()
-{
-  char buffer[50];
-  DDA* dda = new DDA(move, platform);
-  float a[] = {1.0, 2.0, 3.0, 4.0, 5.0};
-  float b[] = {2.0, 3.0, 4.0, 5.0, 6.0};
-  float u = 50;
-  float v = 50;
-  dda->Init(a, b, u, v);
-  dda->Start(false);
-  unsigned long t = platform->Time();
-  for(long i = 0; i < 100000; i++) 
-    dda->Step(false);
-  t = platform->Time() - t;
-  platform->Message(HOST_MESSAGE, "Time for 100000 calls of the interrupt function: ");
-  sprintf(buffer, "%ld", t);
-  platform->Message(HOST_MESSAGE, buffer);
-  platform->Message(HOST_MESSAGE, " microseconds.\n");
-}
 
 
 //*************************************************************************************************

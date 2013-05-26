@@ -27,7 +27,7 @@ Licence: GPL
 void setup()
 {
   reprap.Init();
-  //reprap.InterruptTime();  // Uncomment this line to time the interrupt routine on startup
+  //reprap.GetMove()->InterruptTime();  // Uncomment this line to time the interrupt routine on startup
 }
   
 void loop()

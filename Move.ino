@@ -25,8 +25,16 @@ Move::Move(Platform* p, GCodes* g)
   active = false;
   platform = p;
   gCodes = g;
+  
+  // Build the DDA ring
+  
+  ddaRingAddPointer = new DDA(this, platform, NULL);
+  dda = ddaRingAddPointer;
+  for(char i = 1; i < RING_LENGTH; i++)
+    dda = new DDA(this, platform, dda);
+  ddaRingAddPointer->next = dda;
+  
   dda = NULL;
-  ddaRingBuffer = new DDARingBuffer(this, platform);
 }
 
 void Move::Init()
@@ -36,14 +44,19 @@ void Move::Init()
   for(i = 0; i < DRIVES; i++)
     platform->SetDirection(i, FORWARDS);
   for(i = 0; i <= AXES; i++)
-    currentPosition[i] = 0.0;  
-
-  float d, e;
+    currentPosition[i] = 0.0;
+   
+  // Empty the ring
+  
+  ddaRingGetPointer = ddaRingAddPointer; 
+  ddaRingLocked = false;
   
   // The stepDistances arrays are look-up tables of the Euclidean distance 
   // between the start and end of a step.  If the step is just along one axis,
   // it's just that axis's step length.  If it's more, it is a Pythagoran 
   // sum of all the axis steps that take part.
+  
+  float d, e;
   
   for(i = 0; i < (1<<AXES); i++)
   {
@@ -106,7 +119,7 @@ void Move::Qmove()
   
   if(moveWaiting)
   {
-    if(ddaRingBuffer->Add(currentPosition, nextMove, u, v))
+    if(DDARingAdd(currentPosition, nextMove, u, v))
     {
       for(char i = 0; i < AXES; i++)
         currentPosition[i] = nextMove[i];
@@ -131,13 +144,117 @@ void Move::GetCurrentState(float m[])
   m[DRIVES] = currentFeedrate;
 }
 
+boolean Move::DDARingAdd(float currentPosition[], float targetPosition[], float& u, float& v)
+{
+  if(GetDDARingLock())
+  {
+    if(DDARingFull())
+    {
+      ReleaseDDARingLock();
+      return false;
+    }
+    if(ddaRingAddPointer->Active())
+    {
+      platform->Message(HOST_MESSAGE, "Attempt to alter an active ring buffer entry!\n");
+      ReleaseDDARingLock();
+      return false;
+    }
+    if(ddaRingAddPointer->Init(currentPosition, targetPosition, u, v) == nothing)
+    {
+      // Throw it away
+      ReleaseDDARingLock();
+      return true;
+    }
+    ddaRingAddPointer = ddaRingAddPointer->Next();
+    ReleaseDDARingLock();
+    return true;
+  }
+  return false;
+}
+
+
+DDA* Move::DDARingGet()
+{
+  DDA* result = NULL;
+  if(GetDDARingLock())
+  {
+    if(DDARingEmpty())
+    {
+      ReleaseDDARingLock();
+      return NULL;
+    }
+    result = ddaRingGetPointer;
+    ddaRingGetPointer = ddaRingGetPointer->Next();
+    ReleaseDDARingLock();
+    return result;
+  }
+  return NULL;
+}
+
+
+void Move::Interrupt()
+{
+  // Have we got a live DDA?
+  
+  if(dda == NULL)
+  {
+    // No - see if a new one is available.
+    
+    dda = DDARingGet();    
+    if(dda != NULL)
+      dda->Start(true);  // Yes - got it.  So fire it up.
+    return;   
+  }
+  
+  // We have a DDA.  Has it finished?
+  
+  if(dda->Active())
+  {
+    // No - it's still live.  Step it and return.
+    
+    dda->Step(true);
+    return;
+  }
+  
+  // Yes - it's finished.  Throw it away so the code above will then find a new one.
+  // (N.B. This is not a memory leak.  The DDAs are stored in the ring buffer, initialised
+  // on boot, and never renewed or overwritten.  dda is just a copied pointer.)
+  
+  dda = NULL;
+}
+
+// This function is never normally called.  It is a test to time
+// the interrupt function.  To activate it, uncomment the line that calls
+// this in Platform.ino.
+
+void Move::InterruptTime()
+{
+  char buffer[50];
+  DDA* ddax = new DDA(this, platform, NULL);
+  float a[] = {1.0, 2.0, 3.0, 4.0, 5.0};
+  float b[] = {2.0, 3.0, 4.0, 5.0, 6.0};
+  float u = 50;
+  float v = 50;
+  ddax->Init(a, b, u, v);
+  ddax->Start(false);
+  unsigned long t = platform->Time();
+  for(long i = 0; i < 100000; i++) 
+    ddax->Step(false);
+  t = platform->Time() - t;
+  platform->Message(HOST_MESSAGE, "Time for 100000 calls of the interrupt function: ");
+  sprintf(buffer, "%ld", t);
+  platform->Message(HOST_MESSAGE, buffer);
+  platform->Message(HOST_MESSAGE, " microseconds.\n");
+}
+
 //****************************************************************************************************
 
-DDA::DDA(Move* m, Platform* p)
+DDA::DDA(Move* m, Platform* p, DDA* n)
 {
   active = false;
   move = m;
   platform = p;
+  next = n;
 }
 
 /*
@@ -188,11 +305,11 @@ TODO: Worry about having more than eight extruders...
 
 */
 
-boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, float& v)
+MovementProfile DDA::Init(float currentPosition[], float targetPosition[], float& u, float& v)
 {
   char drive;
   active = false;
-  velocitiesAltered = false;
+  MovementProfile result = nothing;
   totalSteps = -1;
   distance = 0.0; // X+Y+Z
   float eDistance = 0.0;
@@ -234,9 +351,11 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
   // Not going anywhere?
   
   if(totalSteps <= 0)
-    return false;
+    return result;
   
   // Set up the DDA
+  
+  result = moving;
   
   counter[0] = totalSteps/2;
   for(drive = 1; drive < DRIVES; drive++)
@@ -273,7 +392,7 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
  
   // If velocities requested are (almost) zero, set them to the jerk
   
-  if(v < 0.01)
+  if(v < 0.01) // Set change here?
     v = jerk; 
   if(u < 0.01)
     u = jerk;
@@ -294,6 +413,8 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
   
   if(stopAStep >= startDStep)
   {
+    result = noFlat;
+    
     // Work out the point at which to stop accelerating and then
     // immediately start decelerating.
     
@@ -308,6 +429,8 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
       // or decelerated between over the distance to get
       // from one to the other.
       
+      result = change;
+      
       float k = v/u;
       u = 2.0*acceleration*distance/(k*k - 1);
       if(u >= 0.0)
@@ -321,7 +444,6 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
       }
       
       dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
-      velocitiesAltered = true;
     }
     
     // The DDA steps at which acceleration stops and deceleration starts
@@ -352,7 +474,7 @@ boolean DDA::Init(float currentPosition[], float targetPosition[], float& u, flo
   
   timeStep = move->stepDistances[axesMoving]/velocity;
   
-  return true;
+  return result;
 }
 
 void DDA::Start(boolean noTest)
@@ -420,15 +542,5 @@ void DDA::Step(boolean noTest)
     platform->SetInterrupt(STANDBY_INTERRUPT_RATE);
 }
 
-//****************************************************************************************************
 
-DDARingBuffer::DDARingBuffer(Move* m, Platform* p)
-{
-  platform = p;
-  for(addPointer = 0; addPointer < RING_LENGTH; addPointer++)
-   ring[addPointer] = new DDA(m, p);
-  addPointer = 0;
-  getPointer = 0;
-  locked = false; 
-}
 
