@@ -132,10 +132,10 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   if(StringStartsWith(gcodeBuffer, "M23 ")) fileAct |= 2;
   
   if(fileAct) // Delete or print a file?
-  {
+  { 
     if(fileAct == 1) // Delete?
     {
-      if(!platform->DeleteFile(platform->PrependRoot(scratchString, platform->GetGcodeDir(), &gcodeBuffer[4])))
+      if(!platform->DeleteFile(platform->GetGCodeDir(), &gcodeBuffer[4]))
       {
         platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
         platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
@@ -143,12 +143,11 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
       } 
     } else // Print it
     {
-      reprap.GetGCodes()->QueueFileToPrint(platform->PrependRoot(scratchString, platform->GetGcodeDir(), &gcodeBuffer[4])); 
+      reprap.GetGCodes()->QueueFileToPrint(&gcodeBuffer[4]);
     }
     
     // Check for further G Codes in the string
     
-    gcodePointer = 0;
     while(gcodeBuffer[gcodePointer])
     {
        if(gcodeBuffer[gcodePointer] == '\n')
@@ -199,11 +198,11 @@ void Webserver::SendFile(char* nameOfFileToSend)
     
   if(jsonPointer < 0)
   {
-    fileBeingSent = platform->OpenFile(platform->PrependRoot(scratchString, platform->GetWebDir(), nameOfFileToSend), false);
+    fileBeingSent = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, false);
     if(fileBeingSent < 0)
     {
       nameOfFileToSend = FOUR04_FILE;
-      fileBeingSent = platform->OpenFile(platform->PrependRoot(scratchString, platform->GetWebDir(), nameOfFileToSend), false);
+      fileBeingSent = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, false);
     }
     writing = true;
   } 
@@ -321,7 +320,7 @@ void Webserver::GetJsonResponse(char* request)
   
   if(StringStartsWith(request, "files"))
   {
-    char* fileList = platform->FileList(platform->GetGcodeDir());
+    char* fileList = platform->FileList(platform->GetGCodeDir());
     strcpy(jsonResponse, "{\"files\":[");
     strcat(jsonResponse, fileList);
     strcat(jsonResponse, "]}");    
@@ -496,11 +495,11 @@ void Webserver::BlankLineFromClient()
   
   if(receivingPost)
   {
-    postFile = platform->OpenFile(platform->PrependRoot(scratchString, platform->GetGcodeDir(), postFileName), true);
+    postFile = platform->OpenFile(platform->GetGCodeDir(), postFileName, true);
     if(postFile < 0  || !postBoundary[0])
     {
       platform->Message(HOST_MESSAGE, "Can't open file for write or no post boundary: ");
-      platform->Message(HOST_MESSAGE, platform->PrependRoot(scratchString, platform->GetGcodeDir(), postFileName));
+      platform->Message(HOST_MESSAGE, postFileName);
       platform->Message(HOST_MESSAGE, "\n");
       InitialisePost();
     }
@@ -626,7 +625,7 @@ void Webserver::Init()
   
   // Reinitialise the message file
   
-  platform->DeleteFile(platform->PrependRoot(scratchString, platform->GetWebDir(), MESSAGE_FILE));
+  platform->DeleteFile(platform->GetWebDir(), MESSAGE_FILE);
 }
 
 void Webserver::Exit()

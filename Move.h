@@ -74,6 +74,7 @@ class Move
     void Qmove();
     void GetCurrentState(float m[]);
     void Interrupt();
+    boolean AllMovesFinished();
     void InterruptTime();
 
   friend class DDA;

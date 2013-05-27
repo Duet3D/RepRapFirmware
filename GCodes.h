@@ -33,6 +33,7 @@ class GCodeBuffer
     boolean Seen(char c);
     float GetFValue();
     int GetIValue();
+    long GetLValue();
     char* Buffer();
     
   private:
@@ -58,14 +59,18 @@ class GCodes
     
   private:
   
-    void ActOnGcode(GCodeBuffer* gb);
+    boolean ActOnGcode(GCodeBuffer* gb);
     void SetUpMove(GCodeBuffer* gb);
+    boolean doDwell(GCodeBuffer *gb);
     Platform* platform;
     boolean active;
     Webserver* webserver;
-    unsigned long lastTime;
+    unsigned long dwellTime;
+    boolean dwellWaiting;
     GCodeBuffer* webGCode;
     GCodeBuffer* fileGCode;
+    boolean webGCodePending;
+    boolean fileGCodePending;
     boolean moveAvailable;
     boolean heatAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
@@ -74,6 +79,8 @@ class GCodes
     char gCodeLetters[DRIVES + 1]; // Extra is for F
     float lastPos[DRIVES - AXES]; // Just needed for relative moves.
     float distanceScale;
+    int fileBeingPrinted;
+    int fileToPrint;
 };
 
 #endif

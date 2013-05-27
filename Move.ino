@@ -223,6 +223,12 @@ void Move::Interrupt()
   dda = NULL;
 }
 
+boolean Move::AllMovesFinished()
+{
+  // TODO - put some code in here
+  return true; 
+}
+
 // This function is never normally called.  It is a test to time
 // the interrupt function.  To activate it, uncomment the line that calls
 // this in Platform.ino.

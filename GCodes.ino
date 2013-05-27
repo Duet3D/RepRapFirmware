@@ -37,9 +37,10 @@ void GCodes::Exit()
 
 void GCodes::Init()
 {
-  lastTime = platform->Time();
   webGCode->Init();
   fileGCode->Init();
+  webGCodePending = false;
+  fileGCodePending = false;
   active = true;
   moveAvailable = false;
   heatAvailable = false;
@@ -49,6 +50,49 @@ void GCodes::Init()
   distanceScale = 1.0;
   for(char i = 0; i < DRIVES - AXES; i++)
     lastPos[i] = 0.0;
+  fileBeingPrinted = -1;
+  fileToPrint = -1;
+  dwellWaiting = false;
+  dwellTime = platform->Time();
+}
+
+void GCodes::Spin()
+{
+  if(!active)
+    return;
+    
+  if(webGCodePending)
+  {
+    webGCodePending = !ActOnGcode(webGCode);
+    return;
+  }
+
+  if(fileGCodePending)
+  {
+    fileGCodePending = !ActOnGcode(fileGCode);
+    return;
+  }  
+    
+  if(webserver->GCodeAvailable())
+  {
+    if(webGCode->Put(webserver->ReadGCode()))
+      webGCodePending = !ActOnGcode(webGCode);
+    return;
+  }
+  
+  if(fileBeingPrinted >= 0)
+  {
+     unsigned char b;
+     if(platform->Read(fileBeingPrinted, b))
+     {
+       if(fileGCode->Put(b))
+         fileGCodePending = !ActOnGcode(fileGCode);
+     } else
+     {
+        platform->Close(fileBeingPrinted);
+        fileBeingPrinted = -1;
+     }
+  }
 }
 
 // Move expects all axis movements to be absolute, and all
@@ -101,12 +145,51 @@ void GCodes::SetUpMove(GCodeBuffer *gb)
 
 void GCodes::QueueFileToPrint(char* fileName)
 {
-  platform->Message(HOST_MESSAGE, "File queued for printing.\n");
+  fileToPrint = platform->OpenFile(platform->GetGCodeDir(), fileName, false);
 }
 
-void GCodes::ActOnGcode(GCodeBuffer *gb)
+
+// Function to handle dwell delays.  Return true for
+// Dwell finished, false otherwise.
+
+boolean GCodes::doDwell(GCodeBuffer *gb)
+{
+  unsigned long dwell;
+  
+  if(gb->Seen('P'))
+    dwell = 1000ul*(unsigned long)gb->GetLValue(); // P values are in milliseconds; we need microseconds
+  else
+    return true;  // No time given - throw it away
+      
+  // Wait for all the queued moves to stop
+      
+  if(!reprap.GetMove()->AllMovesFinished())
+    return false;
+      
+  // Are we already in a dwell?
+      
+  if(dwellWaiting)
+  {
+    if((long)(platform->Time() - dwellTime) >= 0)
+    {
+      dwellWaiting = false;
+      return true;
+    }
+    return false;
+  }
+      
+  // New dwell - set it up
+      
+  dwellWaiting = true;
+  dwellTime = platform->Time() + dwell;
+  return false;
+}
+
+boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 {
   int code;
+  boolean result = true;
+  unsigned long dwell;
   
   if(gb->Seen('G'))
   {
@@ -119,7 +202,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 4: // Dwell
-      platform->Message(HOST_MESSAGE, "Dwell received\n");
+      result = doDwell(gb);
       break;
       
     case 10: // Set offsets
@@ -157,7 +240,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, gb->Buffer());
       platform->Message(HOST_MESSAGE, "\n");
     }
-    return;
+    return result;
   }
   
   if(gb->Seen('M'))
@@ -179,7 +262,8 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 24: // Print selected file
-      platform->Message(HOST_MESSAGE, "Print started\n");
+      fileBeingPrinted = fileToPrint;
+      fileToPrint = -1;
       break;
       
     case 82:
@@ -223,7 +307,7 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, gb->Buffer());
       platform->Message(HOST_MESSAGE, "\n");
     }
-    return;
+    return result;
   }
   
   if(gb->Seen('T'))
@@ -247,23 +331,9 @@ void GCodes::ActOnGcode(GCodeBuffer *gb)
     }
   }
   
+  return result;
 }
 
-
-void GCodes::Spin()
-{
-  if(!active)
-    return;
-    
-  if(webserver->GCodeAvailable())
-  {
-    if(webGCode->Put(webserver->ReadGCode()))
-      ActOnGcode(webGCode);
-  }
-  
-  // TODO - Add processing of GCodes from file
-  
-}
 
 
 boolean GCodes::ReadMove(float* m)
@@ -280,6 +350,8 @@ boolean GCodes::ReadHeat(float* h)
 {
 
 }
+
+//*************************************************************************************
 
 GCodeBuffer::GCodeBuffer(Platform* p)
 { 
@@ -345,18 +417,26 @@ float GCodeBuffer::GetFValue()
   return result; 
 }
 
-// Get an Int after a G Code letter
 
-int GCodeBuffer::GetIValue()
+// Get an long after a G Code letter
+
+long GCodeBuffer::GetLValue()
 {
   if(readPointer < 0)
   {
     platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
     return 0;
   }
-  int result = (int)strtol(&gcodeBuffer[readPointer + 1], NULL, 0);
+  long result = strtol(&gcodeBuffer[readPointer + 1], NULL, 0);
   readPointer = -1;
   return result;  
+}
+
+// Get an Int after a G Code letter
+
+int GCodeBuffer::GetIValue()
+{
+  return (int)GetLValue();
 }
 
 char* GCodeBuffer::Buffer()

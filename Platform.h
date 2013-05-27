@@ -184,7 +184,8 @@ class Platform
   // Communications and data storage; opening something unsupported returns -1.
   
   char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory (for example on an SD card).
-  int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
+  //int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
+  int OpenFile(char* directory, char* fileName, boolean write); // Open a local file (for example on an SD card).
   void GoToEnd(int file); // Position the file at the end (so you can write on the end).
   boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
                                              // returned value is false for EoF, true otherwise
@@ -192,12 +193,11 @@ class Platform
   void Write(int file, char b);  // Write the byte b to a file.
   unsigned long Length(int file); // File size in bytes
   char* GetWebDir(); // Where the htm etc files are
-  char* GetGcodeDir(); // Where the gcodes are
+  char* GetGCodeDir(); // Where the gcodes are
   char* GetSysDir();  // Where the system files are
   char* GetTempDir(); // Where temporary files are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
-  boolean DeleteFile(char* fileName); // Delete a file
-  char* PrependRoot(char* result, char* root, char* fileName);
+  boolean DeleteFile(char* directory, char* fileName); // Delete a file
   
   unsigned char ClientRead(); // Read a byte from the client
   void SendToClient(char* message); // Send string to the host
@@ -241,6 +241,8 @@ class Platform
   int GetRawTemperature(byte heater);
   
   void InitialiseInterrupts();
+  
+  char* CombineName(char* result, char* directory, char* fileName);
   
   RepRap* reprap;
   
@@ -286,6 +288,7 @@ class Platform
   byte* buf[MAX_FILES];
   int bPointer[MAX_FILES];
   char fileList[FILE_LIST_LENGTH];
+  char scratchString[STRING_LENGTH];
   
 // Network connection
 
@@ -316,7 +319,7 @@ inline char* Platform::GetWebDir()
 
 // Where the gcodes are
 
-inline char* Platform::GetGcodeDir()
+inline char* Platform::GetGCodeDir()
 {
   return gcodeDir;
 }
