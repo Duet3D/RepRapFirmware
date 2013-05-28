@@ -48,7 +48,6 @@ Licence: GPL
 #define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
 
 #define INDEX_PAGE "reprap.htm"
-#define PRINT_PAGE "print.php"
 #define MESSAGE_FILE "messages.txt"
 #define FOUR04_FILE "html404.htm"
 #define KO_START "rr_"
@@ -62,4 +61,7 @@ Licence: GPL
 
 #define RING_LENGTH 10
 
+#define LOOK_AHEAD_LENGTH 25
+#define LOOK_AHEAD_FLUSH 5
+#define LOOK_AHEAD_FUTURE 15
 #endif

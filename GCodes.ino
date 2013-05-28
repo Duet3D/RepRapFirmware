@@ -39,8 +39,8 @@ void GCodes::Init()
 {
   webGCode->Init();
   fileGCode->Init();
-  webGCodePending = false;
-  fileGCodePending = false;
+  webGCodeFinished = true;
+  fileGCodeFinished = true;
   active = true;
   moveAvailable = false;
   heatAvailable = false;
@@ -61,22 +61,22 @@ void GCodes::Spin()
   if(!active)
     return;
     
-  if(webGCodePending)
+  if(!webGCodeFinished)
   {
-    webGCodePending = !ActOnGcode(webGCode);
+    webGCodeFinished = ActOnGcode(webGCode);
     return;
   }
 
-  if(fileGCodePending)
+  if(!fileGCodeFinished)
   {
-    fileGCodePending = !ActOnGcode(fileGCode);
+    fileGCodeFinished = ActOnGcode(fileGCode);
     return;
   }  
     
   if(webserver->GCodeAvailable())
   {
     if(webGCode->Put(webserver->ReadGCode()))
-      webGCodePending = !ActOnGcode(webGCode);
+      webGCodeFinished = ActOnGcode(webGCode);
     return;
   }
   
@@ -86,9 +86,11 @@ void GCodes::Spin()
      if(platform->Read(fileBeingPrinted, b))
      {
        if(fileGCode->Put(b))
-         fileGCodePending = !ActOnGcode(fileGCode);
+         fileGCodeFinished = ActOnGcode(fileGCode);
      } else
      {
+        if(fileGCode->Put('\n')) // In case there wasn't one in the file
+         fileGCodeFinished = ActOnGcode(fileGCode);
         platform->Close(fileBeingPrinted);
         fileBeingPrinted = -1;
      }
@@ -97,6 +99,8 @@ void GCodes::Spin()
 
 // Move expects all axis movements to be absolute, and all
 // extruder drive moves to be relative.  This function serves that.
+// If the Move class can't receive the move (i.e. things have to wait)
+// this returns false, otherwise true.
 
 boolean GCodes::SetUpMove(GCodeBuffer *gb)
 {
@@ -154,7 +158,7 @@ void GCodes::QueueFileToPrint(char* fileName)
 // Function to handle dwell delays.  Return true for
 // Dwell finished, false otherwise.
 
-boolean GCodes::doDwell(GCodeBuffer *gb)
+boolean GCodes::DoDwell(GCodeBuffer *gb)
 {
   unsigned long dwell;
   
@@ -187,6 +191,9 @@ boolean GCodes::doDwell(GCodeBuffer *gb)
   return false;
 }
 
+// If the GCode to act on is completed, this returns true,
+// otherwise false.
+
 boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 {
   int code;
@@ -204,7 +211,7 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 4: // Dwell
-      result = doDwell(gb);
+      result = DoDwell(gb);
       break;
       
     case 10: // Set offsets
@@ -333,6 +340,8 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
     }
   }
   
+  // An empty buffer jumps straight here and gets disgarded
+  
   return result;
 }
 
@@ -434,16 +443,6 @@ long GCodeBuffer::GetLValue()
   return result;  
 }
 
-// Get an Int after a G Code letter
 
-int GCodeBuffer::GetIValue()
-{
-  return (int)GetLValue();
-}
-
-char* GCodeBuffer::Buffer()
-{
-  return gcodeBuffer;
-}
 
 

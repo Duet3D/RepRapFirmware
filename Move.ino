@@ -22,6 +22,7 @@ Licence: GPL
 
 Move::Move(Platform* p, GCodes* g)
 {
+  char i;
   active = false;
   platform = p;
   gCodes = g;
@@ -30,11 +31,28 @@ Move::Move(Platform* p, GCodes* g)
   
   ddaRingAddPointer = new DDA(this, platform, NULL);
   dda = ddaRingAddPointer;
-  for(char i = 1; i < RING_LENGTH; i++)
+  for(i = 1; i < RING_LENGTH; i++)
     dda = new DDA(this, platform, dda);
   ddaRingAddPointer->next = dda;
   
   dda = NULL;
+  
+  lookAheadRingAddPointer = new LookAhead(this, platform, NULL);
+  lookAheadRingGetPointer = lookAheadRingAddPointer;
+  for(i = 1; i < RING_LENGTH; i++)
+    lookAheadRingGetPointer = new LookAhead(this, platform, lookAheadRingGetPointer);
+  lookAheadRingAddPointer->next = lookAheadRingGetPointer;
+  
+  lookAheadRingGetPointer = lookAheadRingAddPointer; 
+  for(i = 0; i < RING_LENGTH; i++)
+  {
+    lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
+    lookAheadRingAddPointer->previous = lookAheadRingGetPointer;
+    lookAheadRingGetPointer = lookAheadRingAddPointer;
+  }    
+  
+  lookAheadDDA = new DDA(this, platform, NULL);
+  
 }
 
 void Move::Init()
@@ -46,10 +64,12 @@ void Move::Init()
   for(i = 0; i <= AXES; i++)
     currentPosition[i] = 0.0;
    
-  // Empty the ring
+  // Empty the rings
   
   ddaRingGetPointer = ddaRingAddPointer; 
   ddaRingLocked = false;
+  
+  lookAheadRingGetPointer = lookAheadRingAddPointer;
   
   // The stepDistances arrays are look-up tables of the Euclidean distance 
   // between the start and end of a step.  If the step is just along one axis,
@@ -227,6 +247,27 @@ void Move::Interrupt()
   dda = NULL;
 }
 
+boolean Move::LookAheadRingAdd(float m[], float uu, float vv)
+{
+    if(LookAheadRingFull())
+      return false;
+    lookAheadRingAddPointer->Init(m, uu, vv);
+    lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
+    return true;
+}
+
+
+LookAhead* Move::LookAheadRingGet()
+{
+  LookAhead* result;
+  if(LookAheadRingEmpty())
+    return NULL;
+  result = lookAheadRingGetPointer;
+  lookAheadRingGetPointer = lookAheadRingGetPointer->Next();
+  return result;
+}
+
+
 boolean Move::AllMovesFinished()
 {
   // TODO - put some code in here
@@ -240,16 +281,15 @@ boolean Move::AllMovesFinished()
 void Move::InterruptTime()
 {
   char buffer[50];
-  DDA* ddax = new DDA(this, platform, NULL);
   float a[] = {1.0, 2.0, 3.0, 4.0, 5.0};
   float b[] = {2.0, 3.0, 4.0, 5.0, 6.0};
   float u = 50;
   float v = 50;
-  ddax->Init(a, b, u, v);
-  ddax->Start(false);
+  lookAheadDDA->Init(a, b, u, v);
+  lookAheadDDA->Start(false);
   unsigned long t = platform->Time();
   for(long i = 0; i < 100000; i++) 
-    ddax->Step(false);
+    lookAheadDDA->Step(false);
   t = platform->Time() - t;
   platform->Message(HOST_MESSAGE, "Time for 100000 calls of the interrupt function: ");
   sprintf(buffer, "%ld", t);
@@ -551,6 +591,52 @@ void DDA::Step(boolean noTest)
   if(!active && noTest)
     platform->SetInterrupt(STANDBY_INTERRUPT_RATE);
 }
+
+//***************************************************************************************************
+
+LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
+{
+  move = m;
+  platform = p;
+  next = n;
+}
+
+void LookAhead::Init(float m[], float uu, float vv)
+{
+  u = uu;
+  v = vv;
+  for(char i = 0; i <= DRIVES; i++)
+    movement[i] = m[i];
+}
+
+// This returns the cosine of the angle between
+// the movement starting at start, and the movement
+// starting at the end of that.  Note that it
+// includes Z movements, though Z values will almost always 
+// not change.
+
+float LookAhead::Cosine(LookAhead* start)
+{
+  LookAhead* n1 = start->Next();
+  LookAhead* n2 = n1->Next();
+  float sum = 0.0;
+  float a2 = 0.0;
+  float b2 = 0.0;
+  float m1;
+  float m2;
+  for(char i = 0; i < AXES; i++)
+  {
+    m1 = n1->movement[i] - start->movement[i];
+    m2 = n2->movement[i] - n1->movement[i];
+    a2 += m1*m1;
+    b2 += m2*m2;
+    sum += m1*m2;
+  }
+  sum = sum/( (float)sqrt(a2) * (float)sqrt(b2) );
+  return sum;
+}
+
+
 
 
 

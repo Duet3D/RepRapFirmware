@@ -62,6 +62,30 @@ class DDA
     volatile boolean active;
 };
 
+class LookAhead
+{
+  friend class Move;
+  
+  public:
+    LookAhead(Move* m, Platform* p, LookAhead* n);
+    LookAhead* Next();
+    LookAhead* Previous();
+    void Init(float m[], float uu, float vv);
+    void SetUV(float uu, float vv);
+    float* Movement();
+    float U();
+    float V();
+    
+  private:
+    Move* move;
+    Platform* platform;
+    LookAhead* next;
+    LookAhead* previous;
+    float Cosine(LookAhead* a);
+    float movement[DRIVES+1]; // Last is feedrate
+    float u, v;
+};
+
 
 class Move
 {   
@@ -87,6 +111,10 @@ class Move
     boolean DDARingFull();
     boolean GetDDARingLock();
     void ReleaseDDARingLock();
+    boolean LookAheadRingEmpty();
+    boolean LookAheadRingFull();
+    boolean LookAheadRingAdd(float m[], float uu, float vv);
+    LookAhead* LookAheadRingGet();
     
     Platform* platform;
     GCodes* gCodes;
@@ -95,6 +123,10 @@ class Move
     DDA* ddaRingAddPointer;
     DDA* ddaRingGetPointer;
     volatile boolean ddaRingLocked;
+    
+    LookAhead* lookAheadRingAddPointer;
+    LookAhead* lookAheadRingGetPointer;
+    DDA* lookAheadDDA;
 
     unsigned long lastTime;
     boolean active;
@@ -118,6 +150,37 @@ inline DDA* DDA::Next()
   return next;
 }
 
+inline LookAhead* LookAhead::Next()
+{
+  return next;
+}
+
+inline LookAhead* LookAhead::Previous()
+{
+  return previous;
+}
+
+inline void LookAhead::SetUV(float uu, float vv)
+{
+  u = uu;
+  v = vv;
+}
+
+inline float* LookAhead::Movement() 
+{
+  return movement;
+}
+
+inline float LookAhead::U() 
+{
+  return u;
+}
+
+inline float LookAhead::V() 
+{
+  return v;
+}
+
 inline boolean Move::DDARingEmpty()
 {
   return ddaRingGetPointer == ddaRingAddPointer;
@@ -128,6 +191,18 @@ inline boolean Move::DDARingEmpty()
 inline boolean Move::DDARingFull()
 {
   return ddaRingGetPointer->Next()->Next() == ddaRingAddPointer;
+}
+
+inline boolean Move::LookAheadRingEmpty()
+{
+  return lookAheadRingGetPointer == lookAheadRingAddPointer;
+}
+
+// Leave a gap of 2 as the last Get result may still be being processed
+
+inline boolean Move::LookAheadRingFull()
+{
+  return lookAheadRingGetPointer->Next()->Next() == lookAheadRingAddPointer;
 }
 
 inline boolean Move::GetDDARingLock()

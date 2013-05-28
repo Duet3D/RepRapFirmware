@@ -43,6 +43,8 @@ class GCodeBuffer
     int readPointer; 
 };
 
+//****************************************************************************************************
+
 // The GCode interpreter
 
 class GCodes
@@ -61,7 +63,7 @@ class GCodes
   
     boolean ActOnGcode(GCodeBuffer* gb);
     boolean SetUpMove(GCodeBuffer* gb);
-    boolean doDwell(GCodeBuffer *gb);
+    boolean DoDwell(GCodeBuffer *gb);
     Platform* platform;
     boolean active;
     Webserver* webserver;
@@ -69,8 +71,8 @@ class GCodes
     boolean dwellWaiting;
     GCodeBuffer* webGCode;
     GCodeBuffer* fileGCode;
-    boolean webGCodePending;
-    boolean fileGCodePending;
+    boolean webGCodeFinished;
+    boolean fileGCodeFinished;
     boolean moveAvailable;
     boolean heatAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
@@ -82,5 +84,19 @@ class GCodes
     int fileBeingPrinted;
     int fileToPrint;
 };
+
+//*****************************************************************************************************
+
+// Get an Int after a G Code letter
+
+inline int GCodeBuffer::GetIValue()
+{
+  return (int)GetLValue();
+}
+
+inline char* GCodeBuffer::Buffer()
+{
+  return gcodeBuffer;
+}
 
 #endif

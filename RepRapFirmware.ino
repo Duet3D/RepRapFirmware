@@ -7,6 +7,7 @@ RepRap self-replicating 3D printers.
 
 It owes a lot to Marlin and to the original RepRap FiveD_GCode.
 
+
 General design principles:
 
   * Control by RepRap G Codes.  These are taken to be machine independent, though some may be unsupported.
@@ -23,6 +24,76 @@ General design principles:
   * Don't avoid arrays and structs/classes,
   * Don't avoid pointers,
   * Use operator and function overloading where appropriate, particularly for vector algebra.
+  
+  
+Naming conventions:
+
+  * #defines are all capitals with optional underscores between words
+  * No underscores in other names - make readable with capitalisation: MakeReadableWithCapitalisation
+  * Classes and functions start with a capital letter
+  * Variables start with a lower case letter
+  
+  
+Structure:
+
+There are six main classes:
+
+  * RepRap
+  * GCodes
+  * Heat
+  * Move
+  * Platform, and
+  * Webserver    
+
+RepRap:
+
+This is just a container class for the single instances of all the others, and otherwise does very little.
+
+GCodes:
+
+This class is fed GCodes, either from the web interface or from GCode files, interprests them, and requests
+actions from the RepRap machine via the other classes.
+
+Heat:
+
+This class imlements all heating and temperature control in the RepRap machine.
+
+Move:
+
+This class controls all movement of the RepRap machine, both along its axes, and in its extruder drives.
+
+Platform:
+
+This is the only class that knows anything about the physical setup of the RepRap machine and its
+controlling electronics.  It implements the interface between all the other classes and the RepRap machine.
+All the other classes are completely machine-independent (though they may declare arrays dimensioned
+to values #defined in Platform.h).
+
+Webserver:
+
+This class talks to the network (via Platform) and implements a simple webserver to give an interactive
+interface to the RepRap machine.  It uses the Knockout and Jquery Javascript libraries to achieve this.
+
+
+
+When the software is running there is one single instance of each class, and all the memory allocation is
+done on initialisation.  new/malloc should not be used in the general running code, and delete is never
+used.  Each class has an Init() function that resets it to its boot-up state; the constructors merely handle
+that memory allocation on startup.  Calling RepRap.Init() calls all the other Init()s in the right sequence.
+
+There are other ancilliary classes that are declared in the .h files for the master classes that use them.  For
+example, Move has a DDA class that implements a Bresenham/digital differential analyser.
+
+All the main classes have a Spin() function.  These are called in a loop by the RepRap.Spin() function and implement 
+simple timesharing.  No class does, or ever should, wait inside one of its functions for anything to happen or call 
+any sort of delay() function.  The general rule is:
+
+  Can I do a thing?
+    Yes - do it
+    No - set a flag/timer to remind me to do it next-time-I'm-called/at-a-future-time and return.
+    
+Note that it is simple to raise the "priority" of any class's activities relative to the others by calling its 
+Spin() function more than once from RepRap.Spin().
 
 -----------------------------------------------------------------------------------------------------
 
