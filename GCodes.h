@@ -60,7 +60,7 @@ class GCodes
   private:
   
     boolean ActOnGcode(GCodeBuffer* gb);
-    void SetUpMove(GCodeBuffer* gb);
+    boolean SetUpMove(GCodeBuffer* gb);
     boolean doDwell(GCodeBuffer *gb);
     Platform* platform;
     boolean active;

@@ -98,11 +98,12 @@ void GCodes::Spin()
 // Move expects all axis movements to be absolute, and all
 // extruder drive moves to be relative.  This function serves that.
 
-void GCodes::SetUpMove(GCodeBuffer *gb)
+boolean GCodes::SetUpMove(GCodeBuffer *gb)
 {
   // Load the last position
   
-  reprap.GetMove()->GetCurrentState(moveBuffer);
+  if(!reprap.GetMove()->GetCurrentState(moveBuffer))
+    return false;
   
   // What does the G Code say?
   
@@ -140,7 +141,8 @@ void GCodes::SetUpMove(GCodeBuffer *gb)
   for(char i = AXES; i < DRIVES; i++)
     lastPos[i - AXES] = moveBuffer[i];
     
-  moveAvailable = true;  
+  moveAvailable = true;
+  return true; 
 }
 
 void GCodes::QueueFileToPrint(char* fileName)
@@ -198,7 +200,7 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
     {
     case 0: // There are no rapid moves...
     case 1: // Ordinary move
-      SetUpMove(gb);
+      result = SetUpMove(gb);
       break;
       
     case 4: // Dwell

@@ -72,7 +72,7 @@ class Move
     void Spin();
     void Exit();
     void Qmove();
-    void GetCurrentState(float m[]);
+    boolean GetCurrentState(float m[]);
     void Interrupt();
     boolean AllMovesFinished();
     void InterruptTime();

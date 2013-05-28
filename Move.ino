@@ -132,8 +132,11 @@ void Move::Qmove()
   moveWaiting = gCodes->ReadMove(nextMove);
 }
 
-void Move::GetCurrentState(float m[])
+boolean Move::GetCurrentState(float m[])
 {
+  if(DDARingFull())
+    return false;
+    
   for(char i = 0; i < DRIVES; i++)
   {
     if(i < AXES)
@@ -142,6 +145,7 @@ void Move::GetCurrentState(float m[])
       m[i] = 0.0;
   }
   m[DRIVES] = currentFeedrate;
+  return true;
 }
 
 boolean Move::DDARingAdd(float currentPosition[], float targetPosition[], float& u, float& v)
