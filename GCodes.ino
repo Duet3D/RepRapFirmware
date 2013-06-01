@@ -104,7 +104,12 @@ void GCodes::Spin()
 
 boolean GCodes::SetUpMove(GCodeBuffer *gb)
 {
-  // Load the last position
+  // Last one gone yet?
+  
+  if(moveAvailable)
+    return false;
+    
+  // Load the last position; If Move can't accept more, return false
   
   if(!reprap.GetMove()->GetCurrentState(moveBuffer))
     return false;
@@ -169,7 +174,7 @@ boolean GCodes::DoDwell(GCodeBuffer *gb)
       
   // Wait for all the queued moves to stop
       
-  if(!reprap.GetMove()->AllMovesFinished())
+  if(!reprap.GetMove()->AllMovesAreFinished())
     return false;
       
   // Are we already in a dwell?
@@ -179,6 +184,7 @@ boolean GCodes::DoDwell(GCodeBuffer *gb)
     if((long)(platform->Time() - dwellTime) >= 0)
     {
       dwellWaiting = false;
+      reprap.GetMove()->ResumeMoving();
       return true;
     }
     return false;

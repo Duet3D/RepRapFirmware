@@ -58,6 +58,7 @@ class GCodes
     boolean ReadMove(float* m);
     boolean ReadHeat(float* h);
     void QueueFileToPrint(char* fileName);
+    boolean PrintingAFile();
     
   private:
   
@@ -97,6 +98,11 @@ inline int GCodeBuffer::GetIValue()
 inline char* GCodeBuffer::Buffer()
 {
   return gcodeBuffer;
+}
+
+inline boolean GCodes::PrintingAFile()
+{
+  return fileBeingPrinted >= 0;
 }
 
 #endif

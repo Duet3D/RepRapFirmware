@@ -32,8 +32,6 @@ enum MovementProfile
 
 class DDA
 {
-  friend class Move;
-  
   public: 
     DDA(Move* m, Platform* p, DDA* n);
     MovementProfile Init(float currentPosition[], float targetPosition[], float& u, float& v);
@@ -41,6 +39,8 @@ class DDA
     void Step(boolean noTest);
     boolean Active();
     DDA* Next();
+    
+  friend class Move;
 
   private:
     Move* move;
@@ -63,9 +63,7 @@ class DDA
 };
 
 class LookAhead
-{
-  friend class Move;
-  
+{  
   public:
     LookAhead(Move* m, Platform* p, LookAhead* n);
     LookAhead* Next();
@@ -75,6 +73,10 @@ class LookAhead
     float* Movement();
     float U();
     float V();
+    boolean Processed();
+    void SetProcessed();
+    
+  friend class Move;
     
   private:
     Move* move;
@@ -84,6 +86,7 @@ class LookAhead
     float Cosine(LookAhead* a);
     float movement[DRIVES+1]; // Last is feedrate
     float u, v;
+    boolean processed;
 };
 
 
@@ -95,12 +98,12 @@ class Move
     void Init();
     void Spin();
     void Exit();
-    void Qmove();
     boolean GetCurrentState(float m[]);
     void Interrupt();
-    boolean AllMovesFinished();
     void InterruptTime();
-
+    boolean AllMovesAreFinished();
+    void ResumeMoving();
+    
   friend class DDA;
     
   private:
@@ -126,9 +129,12 @@ class Move
     
     LookAhead* lookAheadRingAddPointer;
     LookAhead* lookAheadRingGetPointer;
+    LookAhead* larWaiting;
     DDA* lookAheadDDA;
+    int lookAheadRingCount;
 
     unsigned long lastTime;
+    boolean addNoMoreMoves;
     boolean active;
     boolean moveWaiting;
     float currentFeedrate;
@@ -181,6 +187,16 @@ inline float LookAhead::V()
   return v;
 }
 
+inline boolean LookAhead::Processed() 
+{
+  return processed;
+}
+
+inline void LookAhead::SetProcessed() 
+{
+  processed = true;
+}
+
 inline boolean Move::DDARingEmpty()
 {
   return ddaRingGetPointer == ddaRingAddPointer;
@@ -195,7 +211,7 @@ inline boolean Move::DDARingFull()
 
 inline boolean Move::LookAheadRingEmpty()
 {
-  return lookAheadRingGetPointer == lookAheadRingAddPointer;
+  return lookAheadRingCount == 0;
 }
 
 // Leave a gap of 2 as the last Get result may still be being processed
@@ -216,6 +232,23 @@ inline boolean Move::GetDDARingLock()
 inline void Move::ReleaseDDARingLock()
 {
   ddaRingLocked = false;
+}
+
+// To wait until all the current moves in the buffers are
+// complete, call this function repeatedly and wait for it to
+// return true.  Then do whatever you wanted to do after all
+// current moves have finished.  THEN CALL THE ResumeMoving() FUNCTION
+// OTHERWISE NOTHING MORE WILL EVER HAPPEN.
+
+inline boolean Move::AllMovesAreFinished()
+{
+  addNoMoreMoves = true;
+  return LookAheadRingEmpty() && DDARingEmpty();
+}
+
+inline void Move::ResumeMoving()
+{
+  addNoMoreMoves = false;
 }
 
 

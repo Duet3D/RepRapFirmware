@@ -54,7 +54,7 @@ Licence: GPL
 #define KO_FIRST 3
 #define STRING_LENGTH 1000
 #define POST_LENGTH 200
-#define START_FEED_RATE 200
+#define START_FEED_RATE 200.0
 #define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
 
 // Movement stuff

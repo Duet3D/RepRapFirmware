@@ -43,8 +43,10 @@ Move::Move(Platform* p, GCodes* g)
     lookAheadRingGetPointer = new LookAhead(this, platform, lookAheadRingGetPointer);
   lookAheadRingAddPointer->next = lookAheadRingGetPointer;
   
+  // Set the backwards pointers
+  
   lookAheadRingGetPointer = lookAheadRingAddPointer; 
-  for(i = 0; i < RING_LENGTH; i++)
+  for(i = 0; i <= RING_LENGTH; i++)
   {
     lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
     lookAheadRingAddPointer->previous = lookAheadRingGetPointer;
@@ -63,13 +65,31 @@ void Move::Init()
     platform->SetDirection(i, FORWARDS);
   for(i = 0; i <= AXES; i++)
     currentPosition[i] = 0.0;
-   
+  currentFeedrate = START_FEED_RATE;
+  
   // Empty the rings
   
   ddaRingGetPointer = ddaRingAddPointer; 
   ddaRingLocked = false;
   
   lookAheadRingGetPointer = lookAheadRingAddPointer;
+  lookAheadRingCount = 0;
+  
+  addNoMoreMoves = false;
+  larWaiting = NULL;
+  
+  // Put the origin on the lookahead ring so it corresponds with currentPosition
+  
+  for(i = 0; i < DRIVES; i++)
+    nextMove[i] = 0.0;
+  nextMove[DRIVES] = currentFeedrate;
+  LookAheadRingAdd(nextMove, 0.0, 0.0);
+  
+  // Now remove it from the ring; it will remain as what is now the
+  // previous move, so the first real move will see that as
+  // the place to move from.
+  
+  LookAheadRingGet();
   
   // The stepDistances arrays are look-up tables of the Euclidean distance 
   // between the start and end of a step.  If the step is just along one axis,
@@ -112,9 +132,10 @@ void Move::Init()
   stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
   extruderStepDistances[0] = stepDistances[0];
   
-  lastTime = platform->Time();
+
   currentFeedrate = START_FEED_RATE;
   moveWaiting = false;
+  lastTime = platform->Time();
   active = true;  
 }
 
@@ -127,29 +148,39 @@ void Move::Spin()
 {
   if(!active)
     return;
-  Qmove();
-}
-
-
-void Move::Qmove()
-{
+    
   //FIXME
   float u = 0.0; // This will provoke the code to select the jerk values.
   float v = 0.0;
   
+  if(larWaiting != NULL)
+  {
+     u = larWaiting->U();
+     v = larWaiting->V();
+     if(DDARingAdd(larWaiting->Previous()->Movement(), larWaiting->Movement(), u, v))
+       larWaiting = NULL;
+  } else 
+  {
+      larWaiting = LookAheadRingGet();
+  }
+
+  
   if(moveWaiting)
   {
-    if(DDARingAdd(currentPosition, nextMove, u, v))
+    if(!addNoMoreMoves)
     {
-      for(char i = 0; i < AXES; i++)
-        currentPosition[i] = nextMove[i];
-      currentFeedrate = nextMove[DRIVES];
-      moveWaiting = false;
+      if(LookAheadRingAdd(nextMove, u, v))
+      {
+        for(char i = 0; i < AXES; i++)
+          currentPosition[i] = nextMove[i];
+        currentFeedrate = nextMove[DRIVES];
+        moveWaiting = false;
+      }
     }
-    return;
+  } else
+  {  
+    moveWaiting = gCodes->ReadMove(nextMove);
   }
-    
-  moveWaiting = gCodes->ReadMove(nextMove);
 }
 
 boolean Move::GetCurrentState(float m[])
@@ -167,6 +198,7 @@ boolean Move::GetCurrentState(float m[])
   m[DRIVES] = currentFeedrate;
   return true;
 }
+
 
 boolean Move::DDARingAdd(float currentPosition[], float targetPosition[], float& u, float& v)
 {
@@ -247,12 +279,14 @@ void Move::Interrupt()
   dda = NULL;
 }
 
+
 boolean Move::LookAheadRingAdd(float m[], float uu, float vv)
 {
     if(LookAheadRingFull())
       return false;
     lookAheadRingAddPointer->Init(m, uu, vv);
     lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
+    lookAheadRingCount++;
     return true;
 }
 
@@ -263,16 +297,13 @@ LookAhead* Move::LookAheadRingGet()
   if(LookAheadRingEmpty())
     return NULL;
   result = lookAheadRingGetPointer;
+  if(!result->Processed())
+    return NULL;
   lookAheadRingGetPointer = lookAheadRingGetPointer->Next();
+  lookAheadRingCount--;
   return result;
 }
 
-
-boolean Move::AllMovesFinished()
-{
-  // TODO - put some code in here
-  return true; 
-}
 
 // This function is never normally called.  It is a test to time
 // the interrupt function.  To activate it, uncomment the line that calls
@@ -605,6 +636,7 @@ void LookAhead::Init(float m[], float uu, float vv)
 {
   u = uu;
   v = vv;
+  processed = true; // Fixme
   for(char i = 0; i <= DRIVES; i++)
     movement[i] = m[i];
 }
