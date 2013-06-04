@@ -46,12 +46,14 @@ void GCodes::Init()
   heatAvailable = false;
   drivesRelative = true;
   axesRelative = false;
+  checkEndStops = false;
   gCodeLetters = GCODE_LETTERS;
   distanceScale = 1.0;
   for(char i = 0; i < DRIVES - AXES; i++)
     lastPos[i] = 0.0;
   fileBeingPrinted = -1;
   fileToPrint = -1;
+  homeToDo = 0;
   dwellWaiting = false;
   dwellTime = platform->Time();
 }
@@ -154,6 +156,42 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
   return true; 
 }
 
+boolean GCodes::DoHome()
+{
+  // Treat more or less like any other move
+  
+  // Last one gone yet?
+  
+  if(moveAvailable)
+    return false;
+  
+  // Wait for all the queued moves to stop
+      
+  if(!reprap.GetMove()->AllMovesAreFinished())
+    return false;
+  reprap.GetMove()->ResumeMoving();
+    
+  // Load the last position; If Move can't accept more, return false
+  
+  if(!reprap.GetMove()->GetCurrentState(moveBuffer))
+    return false;
+  
+  for(char i = 0; i < AXES; i++)
+  {
+    if(homeToDo & 1<<i)
+    {
+      moveBuffer[i] = -2.0*platform->AxisLength(i);
+      moveBuffer[DRIVES] = platform->HomeFeedRate(i)/60.0;
+      homeToDo &= ~(1<<i);
+      break;
+    }
+  }
+    
+  moveAvailable = true;
+  
+  return homeToDo == 0; 
+}
+
 void GCodes::QueueFileToPrint(char* fileName)
 {
   fileToPrint = platform->OpenFile(platform->GetGCodeDir(), fileName, false);
@@ -233,7 +271,17 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
     
     case 28: // Home
-      platform->Message(HOST_MESSAGE, "Home received\n");
+      if(homeToDo == 0)
+      {
+        for(char i = 0; i < AXES; i++)
+        {
+          if(gb->Seen(gCodeLetters[i]))
+            homeToDo |= 1<<i;
+        }
+        if(homeToDo == 0)
+          homeToDo = 7;
+      }
+      result = DoHome();
       break;
       
     case 90: // Absolute coordinates
@@ -353,12 +401,13 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 
 
 
-boolean GCodes::ReadMove(float* m)
+boolean GCodes::ReadMove(float* m, boolean& ce)
 {
     if(!moveAvailable)
       return false; 
     for(char i = 0; i <= DRIVES; i++) // 1 more for F
       m[i] = moveBuffer[i];
+    ce = checkEndStops;
     moveAvailable = false;
 }
 
@@ -377,8 +426,9 @@ GCodeBuffer::GCodeBuffer(Platform* p)
 
 void GCodeBuffer::Init()
 {
-   gcodePointer = 0;
-   readPointer = -1;   
+  gcodePointer = 0;
+  readPointer = -1;
+  inComment = false;   
 }
 
 boolean GCodeBuffer::Put(char c)
@@ -386,13 +436,20 @@ boolean GCodeBuffer::Put(char c)
   boolean result = false;
   
   gcodeBuffer[gcodePointer] = c;
-  if(gcodeBuffer[gcodePointer] == '\n' || !gcodeBuffer[gcodePointer])
+  
+  if(c == ';')
+    inComment = true;
+    
+  if(c == '\n' || !c)
   {
     gcodeBuffer[gcodePointer] = 0;
-    gcodePointer = 0;
+    Init();
     result = true;
   } else
-    gcodePointer++;
+  {
+    if(!inComment)
+      gcodePointer++;
+  }
   
   if(gcodePointer >= GCODE_LENGTH)
   {

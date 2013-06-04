@@ -81,12 +81,12 @@ void Platform::Init()
     maxFeedrates = MAX_FEEDRATES;
     accelerations = ACCELERATIONS;
     driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
-    jerks = JERKS;
+    instantDvs = INSTANT_DVS;
     
   // AXES
   
     axisLengths = AXIS_LENGTHS;
-    fastHomeFeedrates = FAST_HOME_FEEDRATES;
+    homeFeedrates = HOME_FEEDRATES;
    
   // HEATERS - Bed is assumed to be the first
   

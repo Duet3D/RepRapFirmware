@@ -46,6 +46,14 @@ Licence: GPL
 
 /**************************************************************************************************/
 
+// Some numbers...
+
+#define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
+#define STRING_LENGTH 1000
+
+
+/**************************************************************************************************/
+
 // The physical capabilities of the machine
 
 #define DRIVES 4  // The number of drives in the machine, including X, Y, and Z plus extruder drives
@@ -69,15 +77,18 @@ Licence: GPL
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
-#define ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2??
+//#define ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2??
+#define ACCELERATIONS {80, 80, 3, 25} 
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
-#define JERKS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
+#define INSTANT_DVS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
 // AXES
 
+#define START_FEED_RATE 200.0
+
 #define AXIS_LENGTHS {210, 210, 120} // mm
-#define FAST_HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
+#define HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
 
 #define X_AXIS 0  // The index of the X axis
 #define Y_AXIS 1  // The index of the Y axis
@@ -117,6 +128,12 @@ Licence: GPL
 #define FILE_LIST_BRACKET '"'
 #define FILE_LIST_LENGTH 1000 // Maximum lenght of file list
 
+#define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
+                      // the frequency and M/S ratio.
+#define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
+                             // not displayed; \f and \n should be supported.
+#define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
+
 /****************************************************************************************************/
 
 // Networking
@@ -155,6 +172,13 @@ Licence: GPL
 #define STANDBY_INTERRUPT_RATE 200 // Microseconds
 
 /****************************************************************************************************/
+
+enum EndStopHit
+{
+  noStop = 0,
+  lowHit = 1,
+  highHit = 2
+};
 
 class Platform
 {   
@@ -213,10 +237,12 @@ class Platform
   void SetDirection(byte drive, bool direction);
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
-  void Home(byte axis);
   float DriveStepsPerUnit(char drive);
   float Acceleration(char drive);
-  float Jerk(char drive);
+  float InstantDv(char drive);
+  float HomeFeedRate(char drive);
+  EndStopHit Stopped(char drive);
+  float AxisLength(char drive);
   
   float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
   void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
@@ -257,12 +283,12 @@ class Platform
   float maxFeedrates[DRIVES];  
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
-  float jerks[DRIVES];
+  float instantDvs[DRIVES];
 
 // AXES
 
   float axisLengths[AXES];
-  float fastHomeFeedrates[AXES];
+  float homeFeedrates[AXES];
 
 // HEATERS - Bed is assumed to be the first
 
@@ -352,9 +378,9 @@ inline float Platform::Acceleration(char drive)
   return accelerations[drive]; 
 }
 
-inline float Platform::Jerk(char drive)
+inline float Platform::InstantDv(char drive)
 {
-  return jerks[drive]; 
+  return instantDvs[drive]; 
 }
 
 inline void Platform::SetDirection(byte drive, bool direction)
@@ -367,6 +393,31 @@ inline void Platform::Step(byte drive)
   //digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
   digitalWrite(stepPins[drive], 0);
   digitalWrite(stepPins[drive], 1);
+}
+
+inline float Platform::HomeFeedRate(char drive)
+{
+  return homeFeedrates[drive];
+}
+
+inline EndStopHit Platform::Stopped(char drive)
+{
+  if(lowStopPins[drive] >= 0)
+  {
+    if(digitalRead(lowStopPins[drive]) == ENDSTOP_HIT)
+      return lowHit;
+  }
+  if(highStopPins[drive] >= 0)
+  {
+    if(digitalRead(highStopPins[drive]) == ENDSTOP_HIT)
+      return highHit;
+  }
+  return noStop; 
+}
+
+inline float Platform::AxisLength(char drive)
+{
+  return axisLengths[drive];
 }
 
 inline int Platform::GetRawTemperature(byte heater)

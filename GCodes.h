@@ -22,6 +22,7 @@ Licence: GPL
 #ifndef GCODES_H
 #define GCODES_H
 
+
 // Small class to hold an individual GCode
 
 class GCodeBuffer
@@ -40,7 +41,8 @@ class GCodeBuffer
     Platform* platform;
     char gcodeBuffer[GCODE_LENGTH];
     int gcodePointer;
-    int readPointer; 
+    int readPointer;
+    boolean inComment;
 };
 
 //****************************************************************************************************
@@ -55,7 +57,7 @@ class GCodes
     void Spin();
     void Init();
     void Exit();
-    boolean ReadMove(float* m);
+    boolean ReadMove(float* m, boolean& ce);
     boolean ReadHeat(float* h);
     void QueueFileToPrint(char* fileName);
     boolean PrintingAFile();
@@ -65,6 +67,7 @@ class GCodes
     boolean ActOnGcode(GCodeBuffer* gb);
     boolean SetUpMove(GCodeBuffer* gb);
     boolean DoDwell(GCodeBuffer *gb);
+    boolean DoHome();
     Platform* platform;
     boolean active;
     Webserver* webserver;
@@ -77,6 +80,7 @@ class GCodes
     boolean moveAvailable;
     boolean heatAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
+    boolean checkEndStops;
     boolean drivesRelative; // All except X, Y and Z
     boolean axesRelative;   // X, Y and Z
     char gCodeLetters[DRIVES + 1]; // Extra is for F
@@ -84,6 +88,7 @@ class GCodes
     float distanceScale;
     int fileBeingPrinted;
     int fileToPrint;
+    char homeToDo;
 };
 
 //*****************************************************************************************************

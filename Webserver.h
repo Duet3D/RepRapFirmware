@@ -31,6 +31,14 @@ Licence: GPL
 #define WEBSERVER_H
 
 
+#define INDEX_PAGE "reprap.htm"
+#define MESSAGE_FILE "messages.txt"
+#define FOUR04_FILE "html404.htm"
+#define KO_START "rr_"
+#define KO_FIRST 3
+#define POST_LENGTH 200
+#define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
+
 class Webserver
 {   
   public:

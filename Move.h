@@ -21,12 +21,63 @@ Licence: GPL
 #ifndef MOVE_H
 #define MOVE_H
 
+#define DDA_RING_LENGTH 5
+#define LOOK_AHEAD_RING_LENGTH 20
+#define LOOK_AHEAD 7
+
 enum MovementProfile
 {
-  nothing = 0, // No movement (i.e. end-position == start).
-  moving = 1,  // Ordinary trapezoidal-velocity-profile movement
-  noFlat = 2,  // Triangular profile movement
-  change = 3   // To make this movement, the initial and final velocities must change
+  moving = 0,  // Ordinary trapezoidal-velocity-profile movement
+  noFlat = 1,  // Triangular profile movement
+  change = 2   // To make this movement, the initial and final velocities must change
+};
+
+enum MovementState
+{
+  unprocessed = 0,
+  vCosineSet = 1,
+  upPass = 2,
+  complete = 4,
+  released = 8
+};
+
+enum MovementType
+{
+  noMove = 0,
+  xyMove = 1,
+  zMove = 2,
+  eMove = 4 
+};
+
+class LookAhead
+{  
+  public:
+    LookAhead(Move* m, Platform* p, LookAhead* n);
+    LookAhead* Next();
+    LookAhead* Previous();
+    void Init(float ep[], float vv, boolean ce);
+    float* EndPoint();
+    float V();
+    void SetV(float vv);
+    char Processed();
+    void SetProcessed(MovementState ms);
+    boolean CheckEndStops();
+    void Release();
+    
+  friend class Move;
+    
+  private:
+    Move* move;
+    Platform* platform;
+    LookAhead* next;
+    LookAhead* previous;
+    float endPoint[DRIVES+1];
+    float Cosine();
+    boolean checkEndStops;
+    float cosine;
+    float endPosition[DRIVES+1]; // Last is feedrate
+    float v;
+    char processed;
 };
 
 
@@ -34,7 +85,7 @@ class DDA
 {
   public: 
     DDA(Move* m, Platform* p, DDA* n);
-    MovementProfile Init(float currentPosition[], float targetPosition[], float& u, float& v);
+    MovementProfile Init(LookAhead* lookAhead, float& u, float& v);
     void Start(boolean noTest);
     void Step(boolean noTest);
     boolean Active();
@@ -46,11 +97,12 @@ class DDA
     Move* move;
     Platform* platform;
     DDA* next;
-    long counter[DRIVES+1];
-    long delta[DRIVES+1];
-    boolean directions[DRIVES+1];
+    long counter[DRIVES];
+    long delta[DRIVES];
+    boolean directions[DRIVES];
     long totalSteps;
     long stepCount;
+    boolean checkEndStops;
     float timeStep;
     float velocity;
     long stopAStep;
@@ -58,36 +110,11 @@ class DDA
     float distance;
     float dCross;
     float acceleration;
-    float jerk;
+    float instantDv;
     volatile boolean active;
 };
 
-class LookAhead
-{  
-  public:
-    LookAhead(Move* m, Platform* p, LookAhead* n);
-    LookAhead* Next();
-    LookAhead* Previous();
-    void Init(float m[], float uu, float vv);
-    void SetUV(float uu, float vv);
-    float* Movement();
-    float U();
-    float V();
-    boolean Processed();
-    void SetProcessed();
-    
-  friend class Move;
-    
-  private:
-    Move* move;
-    Platform* platform;
-    LookAhead* next;
-    LookAhead* previous;
-    float Cosine(LookAhead* a);
-    float movement[DRIVES+1]; // Last is feedrate
-    float u, v;
-    boolean processed;
-};
+
 
 
 class Move
@@ -103,12 +130,15 @@ class Move
     void InterruptTime();
     boolean AllMovesAreFinished();
     void ResumeMoving();
+    void DoLookAhead();
+    void HitLowStop(char drive);
+    void HitHighStop(char drive);
     
   friend class DDA;
     
   private:
   
-    boolean DDARingAdd(float currentPosition[], float targetPosition[], float& u, float& v);
+    boolean DDARingAdd(LookAhead* lookAhead);
     DDA* DDARingGet();
     boolean DDARingEmpty();
     boolean DDARingFull();
@@ -116,8 +146,10 @@ class Move
     void ReleaseDDARingLock();
     boolean LookAheadRingEmpty();
     boolean LookAheadRingFull();
-    boolean LookAheadRingAdd(float m[], float uu, float vv);
+    boolean LookAheadRingAdd(float ep[], float vv, boolean ce);
     LookAhead* LookAheadRingGet();
+    char GetMovementType(float sp[], float ep[]);
+
     
     Platform* platform;
     GCodes* gCodes;
@@ -137,6 +169,7 @@ class Move
     boolean addNoMoreMoves;
     boolean active;
     boolean moveWaiting;
+    boolean checkEndStopsOnNextMove;
     float currentFeedrate;
     float currentPosition[AXES]; // Note - drives above AXES are always relative moves
     float nextMove[DRIVES + 1];  // Extra is for feedrate
@@ -145,16 +178,6 @@ class Move
 };
 
 //********************************************************************************************************
-
-inline boolean DDA::Active()
-{
-  return active;
-}
-
-inline DDA* DDA::Next()
-{
-  return next;
-}
 
 inline LookAhead* LookAhead::Next()
 {
@@ -166,36 +189,60 @@ inline LookAhead* LookAhead::Previous()
   return previous;
 }
 
-inline void LookAhead::SetUV(float uu, float vv)
+
+inline void LookAhead::SetV(float vv)
 {
-  u = uu;
   v = vv;
 }
 
-inline float* LookAhead::Movement() 
+inline float* LookAhead::EndPoint() 
 {
-  return movement;
+  return endPoint;
 }
 
-inline float LookAhead::U() 
-{
-  return u;
-}
 
 inline float LookAhead::V() 
 {
   return v;
 }
 
-inline boolean LookAhead::Processed() 
+inline char LookAhead::Processed() 
 {
   return processed;
 }
 
-inline void LookAhead::SetProcessed() 
+inline void LookAhead::SetProcessed(MovementState ms)
 {
-  processed = true;
+  if(ms == 0)
+    processed = 0;
+  else
+    processed |= ms;
 }
+
+inline void LookAhead::Release()
+{
+  processed = released;
+}
+
+inline boolean LookAhead::CheckEndStops() 
+{
+  return checkEndStops;
+}
+
+//******************************************************************************************************
+
+inline boolean DDA::Active()
+{
+  return active;
+}
+
+inline DDA* DDA::Next()
+{
+  return next;
+}
+
+
+//***************************************************************************************
 
 inline boolean Move::DDARingEmpty()
 {
@@ -249,6 +296,16 @@ inline boolean Move::AllMovesAreFinished()
 inline void Move::ResumeMoving()
 {
   addNoMoreMoves = false;
+}
+
+inline void Move::HitLowStop(char drive)
+{
+  // Put some code here
+}
+
+inline void Move::HitHighStop(char drive)
+{
+  // and here
 }
 
 

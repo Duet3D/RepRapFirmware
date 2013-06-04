@@ -32,36 +32,9 @@ Licence: GPL
 
 #define INCH_TO_MM 25.4
 
-#define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
-                      // the frequency and M/S ratio.
-#define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
-                             // not displayed; \f and \n should be supported.
-#define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
-
-
 // Webserver stuff
 
 #define DEFAULT_PASSWORD "reprap"
-
 #define DEFAULT_NAME "My RepRap 1"
 
-#define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
-
-#define INDEX_PAGE "reprap.htm"
-#define MESSAGE_FILE "messages.txt"
-#define FOUR04_FILE "html404.htm"
-#define KO_START "rr_"
-#define KO_FIRST 3
-#define STRING_LENGTH 1000
-#define POST_LENGTH 200
-#define START_FEED_RATE 200.0
-#define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
-
-// Movement stuff
-
-#define RING_LENGTH 10
-
-#define LOOK_AHEAD_LENGTH 25
-#define LOOK_AHEAD_FLUSH 5
-#define LOOK_AHEAD_FUTURE 15
 #endif

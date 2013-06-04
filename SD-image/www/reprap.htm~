@@ -1,6 +1,8 @@
 <!DOCTYPE HTML>
 <head>
 
+<link rel="shortcut icon" href="https://github.com/reprappro/RepRapFirmware/raw/due/SD-image/www/favicon.ico" />
+
 <style type="text/css">
 .pages 
 {
@@ -67,8 +69,8 @@ td { text-align: center; }
 </head>
 
 <html>
-<script src="jquery.js" type="text/javascript"></script>
-<script src="knockout.js" type="text/javascript"></script>
+<script src="https://raw.github.com/reprappro/RepRapFirmware/due/SD-image/www/jquery.js" type="text/javascript"></script>
+<script src="https://raw.github.com/reprappro/RepRapFirmware/due/SD-image/www/knockout.js" type="text/javascript"></script>
 <script>
 function jogRowHTML(axis)
 {
