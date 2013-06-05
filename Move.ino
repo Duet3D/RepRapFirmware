@@ -50,7 +50,6 @@ Move::Move(Platform* p, GCodes* g)
   lookAheadRingGetPointer = lookAheadRingAddPointer; 
   for(i = 0; i <= LOOK_AHEAD_RING_LENGTH; i++)
   {
-    lookAheadRingAddPointer->SetProcessed(released);
     lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
     lookAheadRingAddPointer->previous = lookAheadRingGetPointer;
     lookAheadRingGetPointer = lookAheadRingAddPointer;
@@ -74,6 +73,12 @@ void Move::Init()
   
   ddaRingGetPointer = ddaRingAddPointer; 
   ddaRingLocked = false;
+  
+  for(i = 0; i <= LOOK_AHEAD_RING_LENGTH; i++)
+  {
+    lookAheadRingAddPointer->Release();
+    lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
+  }
   
   lookAheadRingGetPointer = lookAheadRingAddPointer;
   lookAheadRingCount = 0;
@@ -294,8 +299,7 @@ void Move::DoLookAhead()
   
   float u, v;
     
-//  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount >= LOOK_AHEAD)
-//  {
+
 /*    n2 = lookAheadRingAddPointer->Previous();
     n1 = n2->Previous();
     n0 = n1->Previous();
@@ -316,38 +320,41 @@ void Move::DoLookAhead()
       n0 = n0->Previous();
     } 
   }*/
-  
-  n1 = lookAheadRingGetPointer;
-  n0 = n1->Previous();
-  n2 = n1->Next();
-  while(n2 != lookAheadRingAddPointer)
-  {
-    if(n1->Processed() == unprocessed)
+  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > 1)
+  {  
+    n1 = lookAheadRingGetPointer;
+    n0 = n1->Previous();
+    n2 = n1->Next();
+    while(n2 != lookAheadRingAddPointer)
     {
-      float c = n1->Cosine();
-      c = n1->EndPoint()[DRIVES]*c;
-      if(c <= 0)
+      if(n1->Processed() == unprocessed)
       {
-        char mt = GetMovementType(n0->EndPoint(), n1->EndPoint());
-        if(mt & zMove)
-          c = platform->InstantDv(Z_AXIS);
-        else if (mt & xyMove)
-          c = platform->InstantDv(X_AXIS);
-        else
-          c = platform->InstantDv(AXES); // value for first extruder - slight hack
+        float c = n1->Cosine();
+        c = n1->EndPoint()[DRIVES]*c;
+        if(c <= 0)
+        {
+          char mt = GetMovementType(n0->EndPoint(), n1->EndPoint());
+          if(mt & zMove)
+            c = platform->InstantDv(Z_AXIS);
+          else if (mt & xyMove)
+            c = platform->InstantDv(X_AXIS);
+          else
+            c = platform->InstantDv(AXES); // value for first extruder - slight hack
+        }
+        n1->SetV(c);
+        //n1->SetProcessed(vCosineSet);
+        n1->SetProcessed(complete);
       }
-      Serial.print("End V: ");
-      Serial.println(c);
-      n1->SetV(c);
-      //n1->SetProcessed(vCosineSet);
+      n0 = n1;
+      n1 = n2;
+      n2 = n2->Next();
+    }
+    if(addNoMoreMoves || !gCodes->PrintingAFile())
+    {
+      n1->SetV(0);
       n1->SetProcessed(complete);
     }
-    n0 = n1;
-    n1 = n2;
-    n2 = n2->Next();
   }
-  n1->SetProcessed(complete);
-//}
 }
 
 
@@ -398,7 +405,7 @@ LookAhead* Move::LookAheadRingGet()
   if(LookAheadRingEmpty())
     return NULL;
   result = lookAheadRingGetPointer;
-  if(!(result->Processed() & released))
+  if(!(result->Processed() & complete))
     return NULL;
   lookAheadRingGetPointer = lookAheadRingGetPointer->Next();
   lookAheadRingCount--;
@@ -695,32 +702,31 @@ void DDA::Step(boolean noTest)
     if(counter[drive] > 0)
     {
       if(noTest)
-      {
         platform->Step(drive);
-        
-        // Hit anything?
-  
-        if(checkEndStops)
-        {
-          EndStopHit esh = platform->Stopped(drive);
-          if(esh == lowHit)
-          {
-            move->HitLowStop(drive);
-            active = false;
-          }
-          if(esh == highHit)
-          {
-            move->HitHighStop(drive);
-            active = false;
-          }
-        }        
-      }
+
       counter[drive] -= totalSteps;
       
       if(drive < AXES)
         axesMoving |= 1<<drive;
       else
         extrudersMoving |= 1<<(drive - AXES);
+        
+      // Hit anything?
+  
+      if(checkEndStops)
+      {
+        EndStopHit esh = platform->Stopped(drive);
+        if(esh == lowHit)
+        {
+          move->HitLowStop(drive);
+          active = false;
+        }
+        if(esh == highHit)
+        {
+          move->HitHighStop(drive);
+          active = false;
+        }
+      }        
     }
   }
   
@@ -811,12 +817,13 @@ float LookAhead::Cosine()
   float m2;
   for(char i = 0; i < AXES; i++)
   {
-    m1 = endPosition[i] - Previous()->endPosition[i];
-    m2 = Next()->endPosition[i] - endPosition[i];
+    m1 = endPoint[i] - Previous()->endPoint[i];
+    m2 = Next()->endPoint[i] - endPoint[i];
     a2 += m1*m1;
     b2 += m2*m2;
     cosine += m1*m2;
   }
+  
   cosine = cosine/( (float)sqrt(a2) * (float)sqrt(b2) );
   return cosine;
 }

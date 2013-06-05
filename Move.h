@@ -53,9 +53,9 @@ class LookAhead
 {  
   public:
     LookAhead(Move* m, Platform* p, LookAhead* n);
+    void Init(float ep[], float vv, boolean ce);
     LookAhead* Next();
     LookAhead* Previous();
-    void Init(float ep[], float vv, boolean ce);
     float* EndPoint();
     float V();
     void SetV(float vv);
@@ -75,7 +75,6 @@ class LookAhead
     float Cosine();
     boolean checkEndStops;
     float cosine;
-    float endPosition[DRIVES+1]; // Last is feedrate
     float v;
     char processed;
 };
@@ -253,7 +252,7 @@ inline boolean Move::DDARingEmpty()
 
 inline boolean Move::DDARingFull()
 {
-  return ddaRingGetPointer->Next()->Next() == ddaRingAddPointer;
+  return ddaRingAddPointer->Next()->Next() == ddaRingGetPointer;
 }
 
 inline boolean Move::LookAheadRingEmpty()
@@ -265,7 +264,7 @@ inline boolean Move::LookAheadRingEmpty()
 
 inline boolean Move::LookAheadRingFull()
 {
-  return lookAheadRingGetPointer->Next()->Next() == lookAheadRingAddPointer;
+  return lookAheadRingAddPointer->Next()->Next() == lookAheadRingGetPointer;
 }
 
 inline boolean Move::GetDDARingLock()

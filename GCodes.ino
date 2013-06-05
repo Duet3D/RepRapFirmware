@@ -151,9 +151,28 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
   
   for(char i = AXES; i < DRIVES; i++)
     lastPos[i - AXES] = moveBuffer[i];
-    
+  
+  checkEndStops = false;
+  
   moveAvailable = true;
   return true; 
+}
+
+boolean GCodes::ReadMove(float* m, boolean& ce)
+{
+    if(!moveAvailable)
+      return false; 
+    for(char i = 0; i <= DRIVES; i++) // 1 more for F
+      m[i] = moveBuffer[i];
+    ce = checkEndStops;
+    moveAvailable = false;
+    return true;
+}
+
+
+boolean GCodes::ReadHeat(float* h)
+{
+
 }
 
 boolean GCodes::DoHome()
@@ -320,9 +339,9 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, "Motors off received\n");
       break;
       
-    case 23: // Set file to print
-      platform->Message(HOST_MESSAGE, "M code for file selected erroneously received.\n");
-      break;
+//    case 23: // Set file to print
+//      platform->Message(HOST_MESSAGE, "M code for file selected erroneously received.\n");
+//      break;
       
     case 24: // Print selected file
       fileBeingPrinted = fileToPrint;
@@ -400,22 +419,6 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 }
 
 
-
-boolean GCodes::ReadMove(float* m, boolean& ce)
-{
-    if(!moveAvailable)
-      return false; 
-    for(char i = 0; i <= DRIVES; i++) // 1 more for F
-      m[i] = moveBuffer[i];
-    ce = checkEndStops;
-    moveAvailable = false;
-}
-
-
-boolean GCodes::ReadHeat(float* h)
-{
-
-}
 
 //*************************************************************************************
 
