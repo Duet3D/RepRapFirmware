@@ -88,7 +88,7 @@ class GCodes
     float distanceScale;
     int fileBeingPrinted;
     int fileToPrint;
-    char homeToDo;
+    int8_t homeToDo;
 };
 
 //*****************************************************************************************************

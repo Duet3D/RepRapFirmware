@@ -221,7 +221,7 @@ bool Platform::LoadFromStore()
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(char heater)
+float Platform::GetTemperature(int8_t heater)
 {
   float r = (float)GetRawTemperature(heater);
   //Serial.println(r);
@@ -231,7 +231,7 @@ float Platform::GetTemperature(char heater)
 
 // power is a fraction in [0,1]
 
-void Platform::SetHeater(char heater, const float& power)
+void Platform::SetHeater(int8_t heater, const float& power)
 {
   if(power <= 0)
   {
@@ -411,7 +411,7 @@ void Platform::Close(int file)
 }
 
 
-boolean Platform::Read(int file, unsigned char& b)
+boolean Platform::Read(int file, char& b)
 {
   if(!inUse[file])
   {
@@ -421,7 +421,7 @@ boolean Platform::Read(int file, unsigned char& b)
     
   if(!files[file].available())
     return false;
-  b = (unsigned char) files[file].read();
+  b = (char) files[file].read();
   return true;
 }
 

@@ -49,7 +49,7 @@ void GCodes::Init()
   checkEndStops = false;
   gCodeLetters = GCODE_LETTERS;
   distanceScale = 1.0;
-  for(char i = 0; i < DRIVES - AXES; i++)
+  for(int8_t i = 0; i < DRIVES - AXES; i++)
     lastPos[i] = 0.0;
   fileBeingPrinted = -1;
   fileToPrint = -1;
@@ -84,7 +84,7 @@ void GCodes::Spin()
   
   if(fileBeingPrinted >= 0)
   {
-     unsigned char b;
+     char b;
      if(platform->Read(fileBeingPrinted, b))
      {
        if(fileGCode->Put(b))
@@ -118,7 +118,7 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
   
   // What does the G Code say?
   
-  for(char i = 0; i < DRIVES; i++)
+  for(int8_t i = 0; i < DRIVES; i++)
   {
     if(i < AXES)
     {
@@ -149,7 +149,7 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
   // Remember for next time if we are switched
   // to absolute drive moves
   
-  for(char i = AXES; i < DRIVES; i++)
+  for(int8_t i = AXES; i < DRIVES; i++)
     lastPos[i - AXES] = moveBuffer[i];
   
   checkEndStops = false;
@@ -162,10 +162,11 @@ boolean GCodes::ReadMove(float* m, boolean& ce)
 {
     if(!moveAvailable)
       return false; 
-    for(char i = 0; i <= DRIVES; i++) // 1 more for F
+    for(int8_t i = 0; i <= DRIVES; i++) // 1 more for F
       m[i] = moveBuffer[i];
     ce = checkEndStops;
     moveAvailable = false;
+    checkEndStops = false;
     return true;
 }
 
@@ -195,7 +196,7 @@ boolean GCodes::DoHome()
   if(!reprap.GetMove()->GetCurrentState(moveBuffer))
     return false;
   
-  for(char i = 0; i < AXES; i++)
+  for(int8_t i = 0; i < AXES; i++)
   {
     if(homeToDo & 1<<i)
     {
@@ -205,7 +206,8 @@ boolean GCodes::DoHome()
       break;
     }
   }
-    
+  
+  checkEndStops = true;
   moveAvailable = true;
   
   return homeToDo == 0; 
@@ -292,7 +294,7 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
     case 28: // Home
       if(homeToDo == 0)
       {
-        for(char i = 0; i < AXES; i++)
+        for(int8_t i = 0; i < AXES; i++)
         {
           if(gb->Seen(gCodeLetters[i]))
             homeToDo |= 1<<i;
@@ -396,7 +398,7 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
   {
     code = gb->GetIValue();
     boolean ok = false;
-    for(char i = AXES; i < DRIVES; i++)
+    for(int8_t i = AXES; i < DRIVES; i++)
     {
       if(code == i - AXES)
       {

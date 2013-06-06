@@ -211,7 +211,7 @@ class Platform
   //int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
   int OpenFile(char* directory, char* fileName, boolean write); // Open a local file (for example on an SD card).
   void GoToEnd(int file); // Position the file at the end (so you can write on the end).
-  boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
+  boolean Read(int file, char& b);     // Read a single byte from a file into b, 
                                              // returned value is false for EoF, true otherwise
   void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
@@ -223,9 +223,9 @@ class Platform
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
   boolean DeleteFile(char* directory, char* fileName); // Delete a file
   
-  unsigned char ClientRead(); // Read a byte from the client
+  char ClientRead(); // Read a byte from the client
   void SendToClient(char* message); // Send string to the host
-  void SendToClient(unsigned char b); // Send byte to the host
+  void SendToClient(char b); // Send byte to the host
   int ClientStatus(); // Check client's status
   void DisconnectClient(); //Disconnect the client  
   
@@ -237,20 +237,20 @@ class Platform
   void SetDirection(byte drive, bool direction);
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
-  float DriveStepsPerUnit(char drive);
-  float Acceleration(char drive);
-  float InstantDv(char drive);
-  float HomeFeedRate(char drive);
-  EndStopHit Stopped(char drive);
-  float AxisLength(char drive);
+  float DriveStepsPerUnit(int8_t drive);
+  float Acceleration(int8_t drive);
+  float InstantDv(int8_t drive);
+  float HomeFeedRate(int8_t drive);
+  EndStopHit Stopped(int8_t drive);
+  float AxisLength(int8_t drive);
   
   float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
   void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
   
   // Heat and temperature
   
-  float GetTemperature(char heater); // Result is in degrees celsius
-  void SetHeater(char heater, const float& power); // power is a fraction in [0,1]
+  float GetTemperature(int8_t heater); // Result is in degrees celsius
+  void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -274,12 +274,12 @@ class Platform
   
 // DRIVES
 
-  char stepPins[DRIVES];
-  char directionPins[DRIVES];
-  char enablePins[DRIVES];
+  int8_t stepPins[DRIVES];
+  int8_t directionPins[DRIVES];
+  int8_t enablePins[DRIVES];
   boolean disableDrives[DRIVES];
-  char lowStopPins[DRIVES];
-  char highStopPins[DRIVES];
+  int8_t lowStopPins[DRIVES];
+  int8_t highStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
@@ -292,8 +292,8 @@ class Platform
 
 // HEATERS - Bed is assumed to be the first
 
-  char tempSensePins[HEATERS];
-  char heatOnPins[HEATERS];
+  int8_t tempSensePins[HEATERS];
+  int8_t heatOnPins[HEATERS];
   float thermistorBetas[HEATERS];
   float thermistorSeriesRs[HEATERS];
   float thermistorInfRs[HEATERS];
@@ -368,17 +368,17 @@ inline char* Platform::GetTempDir()
 
 // Drive the RepRap machine
 
-inline float Platform::DriveStepsPerUnit(char drive)
+inline float Platform::DriveStepsPerUnit(int8_t drive)
 {
   return driveStepsPerUnit[drive]; 
 }
 
-inline float Platform::Acceleration(char drive)
+inline float Platform::Acceleration(int8_t drive)
 {
   return accelerations[drive]; 
 }
 
-inline float Platform::InstantDv(char drive)
+inline float Platform::InstantDv(int8_t drive)
 {
   return instantDvs[drive]; 
 }
@@ -395,12 +395,12 @@ inline void Platform::Step(byte drive)
   digitalWrite(stepPins[drive], 1);
 }
 
-inline float Platform::HomeFeedRate(char drive)
+inline float Platform::HomeFeedRate(int8_t drive)
 {
   return homeFeedrates[drive];
 }
 
-inline EndStopHit Platform::Stopped(char drive)
+inline EndStopHit Platform::Stopped(int8_t drive)
 {
   if(lowStopPins[drive] >= 0)
   {
@@ -415,7 +415,7 @@ inline EndStopHit Platform::Stopped(char drive)
   return noStop; 
 }
 
-inline float Platform::AxisLength(char drive)
+inline float Platform::AxisLength(int8_t drive)
 {
   return axisLengths[drive];
 }
@@ -463,7 +463,7 @@ inline int Platform::ClientStatus()
   return clientStatus;
 }
 
-inline void Platform::SendToClient(unsigned char b)
+inline void Platform::SendToClient(char b)
 {
   if(client)
   {
@@ -472,7 +472,7 @@ inline void Platform::SendToClient(unsigned char b)
     Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
 }
 
-inline unsigned char Platform::ClientRead()
+inline char Platform::ClientRead()
 {
   if(client)
     return client.read();

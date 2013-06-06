@@ -59,7 +59,7 @@ class LookAhead
     float* EndPoint();
     float V();
     void SetV(float vv);
-    char Processed();
+    int8_t Processed();
     void SetProcessed(MovementState ms);
     boolean CheckEndStops();
     void Release();
@@ -76,7 +76,7 @@ class LookAhead
     boolean checkEndStops;
     float cosine;
     float v;
-    char processed;
+    int8_t processed;
 };
 
 
@@ -130,8 +130,8 @@ class Move
     boolean AllMovesAreFinished();
     void ResumeMoving();
     void DoLookAhead();
-    void HitLowStop(char drive);
-    void HitHighStop(char drive);
+    void HitLowStop(int8_t drive);
+    void HitHighStop(int8_t drive);
     
   friend class DDA;
     
@@ -147,7 +147,7 @@ class Move
     boolean LookAheadRingFull();
     boolean LookAheadRingAdd(float ep[], float vv, boolean ce);
     LookAhead* LookAheadRingGet();
-    char GetMovementType(float sp[], float ep[]);
+    int8_t GetMovementType(float sp[], float ep[]);
 
     
     Platform* platform;
@@ -205,7 +205,7 @@ inline float LookAhead::V()
   return v;
 }
 
-inline char LookAhead::Processed() 
+inline int8_t LookAhead::Processed() 
 {
   return processed;
 }
@@ -297,14 +297,14 @@ inline void Move::ResumeMoving()
   addNoMoreMoves = false;
 }
 
-inline void Move::HitLowStop(char drive)
+inline void Move::HitLowStop(int8_t drive)
 {
-  // Put some code here
+  currentPosition[drive] = 0.0;
 }
 
-inline void Move::HitHighStop(char drive)
+inline void Move::HitHighStop(int8_t drive)
 {
-  // and here
+  currentPosition[drive] = platform->AxisLength(drive);
 }
 
 

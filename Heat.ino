@@ -30,7 +30,7 @@ Heat::Heat(Platform* p, GCodes* g)
 void Heat::Init()
 {
   lastTime = platform->Time();
-  for(char heater=0; heater < HEATERS; heater++)
+  for(int8_t heater=0; heater < HEATERS; heater++)
     platform->SetHeater(heater, -1);
   active = true; 
 }

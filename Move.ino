@@ -22,7 +22,7 @@ Licence: GPL
 
 Move::Move(Platform* p, GCodes* g)
 {
-  char i;
+  int8_t i;
   active = false;
   platform = p;
   gCodes = g;
@@ -61,7 +61,7 @@ Move::Move(Platform* p, GCodes* g)
 
 void Move::Init()
 {
-  unsigned char i, j;
+  int8_t i, j;
   
   for(i = 0; i < DRIVES; i++)
     platform->SetDirection(i, FORWARDS);
@@ -180,7 +180,7 @@ void Move::Spin()
     {
       if(LookAheadRingAdd(nextMove, v, checkEndStopsOnNextMove))
       {
-        for(char i = 0; i < AXES; i++)
+        for(int8_t i = 0; i < AXES; i++)
           currentPosition[i] = nextMove[i];
         currentFeedrate = nextMove[DRIVES];
         moveWaiting = false;
@@ -205,7 +205,7 @@ boolean Move::GetCurrentState(float m[])
   if(LookAheadRingFull())
     return false;
     
-  for(char i = 0; i < DRIVES; i++)
+  for(int8_t i = 0; i < DRIVES; i++)
   {
     if(i < AXES)
       m[i] = currentPosition[i];
@@ -216,10 +216,10 @@ boolean Move::GetCurrentState(float m[])
   return true;
 }
 
-char Move::GetMovementType(float p0[], float p1[])
+int8_t Move::GetMovementType(float p0[], float p1[])
 {
-  char result = noMove;
-  for(char drive = 0; drive < DRIVES; drive++)
+  int8_t result = noMove;
+  for(int8_t drive = 0; drive < DRIVES; drive++)
   {
     if(drive < AXES)
     {
@@ -333,7 +333,7 @@ void Move::DoLookAhead()
         c = n1->EndPoint()[DRIVES]*c;
         if(c <= 0)
         {
-          char mt = GetMovementType(n0->EndPoint(), n1->EndPoint());
+          int8_t mt = GetMovementType(n0->EndPoint(), n1->EndPoint());
           if(mt & zMove)
             c = platform->InstantDv(Z_AXIS);
           else if (mt & xyMove)
@@ -479,7 +479,7 @@ The rules are these:
 
 In the case of multiple extruders moving at once, their minimum acceleration (and its
 associated instantDv) are used.  The variables axesMoving and extrudersMoving track what's 
-going on.  The bits in the char axesMoving are ORed:
+going on.  The bits in the int8_t axesMoving are ORed:
 
   msb -> 00000ZYX <- lsb
   
@@ -498,7 +498,7 @@ TODO: Worry about having more than eight extruders...
 
 MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 {
-  char drive;
+  int8_t drive;
   active = false;
   MovementProfile result = moving;
   totalSteps = -1;
@@ -681,7 +681,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 
 void DDA::Start(boolean noTest)
 {
-  for(char drive = 0; drive < DRIVES; drive++)
+  for(int8_t drive = 0; drive < DRIVES; drive++)
     platform->SetDirection(drive, directions[drive]);
   if(noTest)
     platform->SetInterrupt((long)(1.0e6*timeStep)); // microseconds
@@ -693,10 +693,10 @@ void DDA::Step(boolean noTest)
   if(!active && noTest)
     return;
   
-  unsigned char axesMoving = 0;
-  unsigned char extrudersMoving = 0;
+  uint8_t axesMoving = 0;
+  uint8_t extrudersMoving = 0;
   
-  for(char drive = 0; drive < DRIVES; drive++)
+  for(int8_t drive = 0; drive < DRIVES; drive++)
   {
     counter[drive] += delta[drive];
     if(counter[drive] > 0)
@@ -779,7 +779,7 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
 void LookAhead::Init(float ep[], float vv, boolean ce)
 {
   v = vv;
-  for(char i = 0; i <= DRIVES; i++)
+  for(int8_t i = 0; i <= DRIVES; i++)
     endPoint[i] = ep[i];
   
   checkEndStops = ce;
@@ -815,7 +815,7 @@ float LookAhead::Cosine()
   float b2 = 0.0;
   float m1;
   float m2;
-  for(char i = 0; i < AXES; i++)
+  for(int8_t i = 0; i < AXES; i++)
   {
     m1 = endPoint[i] - Previous()->endPoint[i];
     m2 = Next()->endPoint[i] - endPoint[i];

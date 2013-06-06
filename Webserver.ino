@@ -127,7 +127,7 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
 // way things don't get out of sync, and - as a file name can contain
 // a valid G code (!) - confusion is avoided.
   
-  char fileAct = 0;
+  int8_t fileAct = 0;
   if(StringStartsWith(gcodeBuffer, "M30 ")) fileAct |= 1;
   if(StringStartsWith(gcodeBuffer, "M23 ")) fileAct |= 2;
   
@@ -250,7 +250,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
 
 void Webserver::WriteByte()
 {
-    unsigned char b;
+    char b;
     
     if(jsonPointer >= 0)
     {
@@ -542,7 +542,7 @@ void Webserver::CharFromClient(char c)
 
 void Webserver::Spin()
 {
-  char sw[2];
+  //char sw[2];
   if(!active)
     return;
     
