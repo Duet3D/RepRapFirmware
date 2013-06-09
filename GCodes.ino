@@ -53,7 +53,9 @@ void GCodes::Init()
     lastPos[i] = 0.0;
   fileBeingPrinted = -1;
   fileToPrint = -1;
-  homeToDo = 0;
+  homeX = false;
+  homeY = false;
+  homeZ = false;
   dwellWaiting = false;
   dwellTime = platform->Time();
 }
@@ -91,7 +93,7 @@ void GCodes::Spin()
          fileGCodeFinished = ActOnGcode(fileGCode);
      } else
      {
-        if(fileGCode->Put('\n')) // In case there wasn't one in the file
+        if(fileGCode->Put('\n')) // In case there wasn't one ending the file
          fileGCodeFinished = ActOnGcode(fileGCode);
         platform->Close(fileBeingPrinted);
         fileBeingPrinted = -1;
@@ -179,6 +181,7 @@ boolean GCodes::ReadHeat(float* h)
 boolean GCodes::DoHome()
 {
   // Treat more or less like any other move
+  // Do one axis at a time, starting with X.
   
   // Last one gone yet?
   
@@ -191,26 +194,44 @@ boolean GCodes::DoHome()
     return false;
   reprap.GetMove()->ResumeMoving();
     
-  // Load the last position; If Move can't accept more, return false
+  // Load the last position; If Move can't accept more, return false - should never happen
   
   if(!reprap.GetMove()->GetCurrentState(moveBuffer))
     return false;
+    
+  checkEndStops = true;
+  moveAvailable = true; 
   
-  for(int8_t i = 0; i < AXES; i++)
+  if(homeX)
   {
-    if(homeToDo & 1<<i)
-    {
-      moveBuffer[i] = -2.0*platform->AxisLength(i);
-      moveBuffer[DRIVES] = platform->HomeFeedRate(i)/60.0;
-      homeToDo &= ~(1<<i);
-      break;
-    }
+    moveBuffer[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+    moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)/60.0;
+    homeX = false;
+    return NoHome();
   }
   
-  checkEndStops = true;
-  moveAvailable = true;
+  if(homeY)
+  {
+    moveBuffer[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
+    moveBuffer[DRIVES] = platform->HomeFeedRate(Y_AXIS)/60.0;
+    homeY = false;
+    return NoHome();
+  }
+     
+  if(homeZ)
+  {
+    moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+    moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)/60.0;
+    homeZ = false;
+    return NoHome();
+  }
   
-  return homeToDo == 0; 
+  // Should never get here
+  
+  checkEndStops = false;
+  moveAvailable = false;
+
+  return true;
 }
 
 void GCodes::QueueFileToPrint(char* fileName)
@@ -292,15 +313,17 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
     
     case 28: // Home
-      if(homeToDo == 0)
+      if(NoHome())
       {
-        for(int8_t i = 0; i < AXES; i++)
+        homeX = gb->Seen(gCodeLetters[X_AXIS]);
+        homeY = gb->Seen(gCodeLetters[Y_AXIS]);
+        homeZ = gb->Seen(gCodeLetters[Z_AXIS]);
+        if(NoHome())
         {
-          if(gb->Seen(gCodeLetters[i]))
-            homeToDo |= 1<<i;
+          homeX = true;
+          homeY = true;
+          homeZ = true;
         }
-        if(homeToDo == 0)
-          homeToDo = 7;
       }
       result = DoHome();
       break;

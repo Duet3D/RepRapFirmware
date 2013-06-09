@@ -68,6 +68,7 @@ class GCodes
     boolean SetUpMove(GCodeBuffer* gb);
     boolean DoDwell(GCodeBuffer *gb);
     boolean DoHome();
+    boolean NoHome();
     Platform* platform;
     boolean active;
     Webserver* webserver;
@@ -88,7 +89,9 @@ class GCodes
     float distanceScale;
     int fileBeingPrinted;
     int fileToPrint;
-    int8_t homeToDo;
+    boolean homeX;
+    boolean homeY;
+    boolean homeZ;
 };
 
 //*****************************************************************************************************
@@ -108,6 +111,11 @@ inline char* GCodeBuffer::Buffer()
 inline boolean GCodes::PrintingAFile()
 {
   return fileBeingPrinted >= 0;
+}
+
+inline boolean GCodes::NoHome()
+{
+   return !(homeX || homeY || homeZ); 
 }
 
 #endif

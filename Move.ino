@@ -65,6 +65,9 @@ void Move::Init()
   
   for(i = 0; i < DRIVES; i++)
     platform->SetDirection(i, FORWARDS);
+    
+  // Set the current position to the origin
+  
   for(i = 0; i <= AXES; i++)
     currentPosition[i] = 0.0;
   currentFeedrate = START_FEED_RATE;
@@ -84,9 +87,8 @@ void Move::Init()
   lookAheadRingCount = 0;
   
   addNoMoreMoves = false;
-  larWaiting = NULL;
   
-  // Put the origin on the lookahead ring so it corresponds with currentPosition
+  // Put the origin on the lookahead ring with zero velocity so it corresponds with the currentPosition
   
   for(i = 0; i < DRIVES; i++)
     nextMove[i] = 0.0;
@@ -98,7 +100,7 @@ void Move::Init()
   // previous move, so the first real move will see that as
   // the place to move from.  Flag it as fully processed.
   
-  LookAheadRingGet()->SetProcessed(released);
+  LookAheadRingGet()->Release();
   
   // The stepDistances arrays are look-up tables of the Euclidean distance 
   // between the start and end of a step.  If the step is just along one axis,
@@ -143,7 +145,6 @@ void Move::Init()
   
 
   currentFeedrate = START_FEED_RATE;
-  moveWaiting = false;
   lastTime = platform->Time();
   active = true;  
 }
@@ -159,44 +160,32 @@ void Move::Spin()
     return;
     
   DoLookAhead();
-    
-  //FIXME
-  float u = 0.0; // This will provoke the code to select the instantDv values.
-  float v = 0.0;
-  
-  if(larWaiting != NULL)
+ 
+  if(!DDARingFull())
   {
-     if(DDARingAdd(larWaiting))
-       larWaiting = NULL;
-  } else 
-  {
-      larWaiting = LookAheadRingGet();
+     LookAhead* nextFromLookAhead = LookAheadRingGet();
+     if(nextFromLookAhead != NULL)
+     {
+       if(!DDARingAdd(nextFromLookAhead))
+         platform->Message(HOST_MESSAGE, "Can't add to non-full DDA ring!\n"); // Should never happen...
+     }
   }
-
   
-  if(moveWaiting)
+  if(addNoMoreMoves || LookAheadRingFull())
+   return;
+    
+  if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
-    if(!addNoMoreMoves)
+    if(GetMovementType(currentPosition, nextMove) == noMove)
     {
-      if(LookAheadRingAdd(nextMove, v, checkEndStopsOnNextMove))
-      {
-        for(int8_t i = 0; i < AXES; i++)
-          currentPosition[i] = nextMove[i];
-        currentFeedrate = nextMove[DRIVES];
-        moveWaiting = false;
-      }
+      currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
+      return;
     }
-  } else
-  {  
-    moveWaiting = gCodes->ReadMove(nextMove, checkEndStopsOnNextMove);
-    if(moveWaiting)
-    {
-      if(GetMovementType(currentPosition, nextMove) == noMove)
-      {
-        currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
-        moveWaiting = false; // Throw it away
-      }
-    }
+    if(!LookAheadRingAdd(nextMove, 0.0, checkEndStopsOnNextMove))
+      platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
+    for(int8_t i = 0; i < AXES; i++)
+      currentPosition[i] = nextMove[i];
+    currentFeedrate = nextMove[DRIVES];
   }
 }
 
@@ -507,7 +496,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   float d;
   float* targetPosition = lookAhead->EndPoint();
   v = lookAhead->V();
-  float* currentPosition = lookAhead->Previous()->EndPoint();
+  float* positionNow = lookAhead->Previous()->EndPoint();
   u = lookAhead->Previous()->V();
   checkEndStops = lookAhead->CheckEndStops();
   
@@ -517,7 +506,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   {
     if(drive < AXES)
     {
-      d = targetPosition[drive] - currentPosition[drive];  //Absolute
+      d = targetPosition[drive] - positionNow[drive];  //Absolute
       distance += d*d;
       delta[drive] = (long)roundf(d*platform->DriveStepsPerUnit(drive));
     } else
@@ -550,7 +539,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   result = moving;
   
-  counter[0] = totalSteps/2;
+  counter[0] = -totalSteps/2;
   for(drive = 1; drive < DRIVES; drive++)
     counter[drive] = counter[0];
   
@@ -730,7 +719,7 @@ void DDA::Step(boolean noTest)
     }
   }
   
-  // May have hit a stop
+  // May have hit a stop, so test active here
   
   if(active) 
   {

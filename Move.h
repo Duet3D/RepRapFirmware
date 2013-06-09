@@ -140,6 +140,7 @@ class Move
     boolean DDARingAdd(LookAhead* lookAhead);
     DDA* DDARingGet();
     boolean DDARingEmpty();
+    boolean NoLiveMovement();
     boolean DDARingFull();
     boolean GetDDARingLock();
     void ReleaseDDARingLock();
@@ -160,14 +161,13 @@ class Move
     
     LookAhead* lookAheadRingAddPointer;
     LookAhead* lookAheadRingGetPointer;
-    LookAhead* larWaiting;
+    //LookAhead* larWaiting;
     DDA* lookAheadDDA;
     int lookAheadRingCount;
 
     unsigned long lastTime;
     boolean addNoMoreMoves;
     boolean active;
-    boolean moveWaiting;
     boolean checkEndStopsOnNextMove;
     float currentFeedrate;
     float currentPosition[AXES]; // Note - drives above AXES are always relative moves
@@ -248,6 +248,13 @@ inline boolean Move::DDARingEmpty()
   return ddaRingGetPointer == ddaRingAddPointer;
 }
 
+inline boolean Move::NoLiveMovement()
+{
+  if(dda != NULL)
+    return false;
+  return DDARingEmpty();
+}
+
 // Leave a gap of 2 as the last Get result may still be being processed
 
 inline boolean Move::DDARingFull()
@@ -289,7 +296,7 @@ inline void Move::ReleaseDDARingLock()
 inline boolean Move::AllMovesAreFinished()
 {
   addNoMoreMoves = true;
-  return LookAheadRingEmpty() && DDARingEmpty();
+  return LookAheadRingEmpty() && NoLiveMovement();
 }
 
 inline void Move::ResumeMoving()
@@ -299,12 +306,20 @@ inline void Move::ResumeMoving()
 
 inline void Move::HitLowStop(int8_t drive)
 {
-  currentPosition[drive] = 0.0;
+  GetCurrentState(nextMove);
+  nextMove[drive] = 0.0;
+  currentPosition[drive] = 0.0;  
+  LookAheadRingAdd(nextMove, 0.0, false);
+  LookAheadRingGet()->Release();
 }
 
 inline void Move::HitHighStop(int8_t drive)
 {
+  GetCurrentState(nextMove);
+  nextMove[drive] = platform->AxisLength(drive);
   currentPosition[drive] = platform->AxisLength(drive);
+  LookAheadRingAdd(nextMove, 0.0, false);
+  LookAheadRingGet()->Release();
 }
 
 
