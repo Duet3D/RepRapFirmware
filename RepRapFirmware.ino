@@ -29,9 +29,10 @@ General design principles:
 Naming conventions:
 
   * #defines are all capitals with optional underscores between words
-  * No underscores in other names - make readable with capitalisation: MakeReadableWithCapitalisation
-  * Classes and functions start with a capital letter
-  * Variables start with a lower case letter
+  * No underscores in other names - MakeReadableWithCapitalisation
+  * Class names and functions start with a CapitalLetter
+  * Variables start with a lowerCaseLetter
+  * Use veryLongDescriptiveNames
   
   
 Structure:

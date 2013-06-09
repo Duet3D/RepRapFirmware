@@ -278,7 +278,8 @@ boolean GCodes::DoDwell(GCodeBuffer *gb)
 }
 
 // If the GCode to act on is completed, this returns true,
-// otherwise false.
+// otherwise false.  It is called repeatedly for a given
+// GCode until it returns true for that code.
 
 boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 {

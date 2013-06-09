@@ -288,27 +288,54 @@ void Move::DoLookAhead()
   
   float u, v;
     
-
-/*    n2 = lookAheadRingAddPointer->Previous();
-    n1 = n2->Previous();
+  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
+  {  
+    n1 = lookAheadRingGetPointer;
     n0 = n1->Previous();
-    while(n1 != lookAheadRingGetPointer)
+    n2 = n1->Next();
+    while(n2 != lookAheadRingAddPointer)
     {
-      if(n1->Processed() & vCosineSet)
+      if(!(n1->Processed() & complete))
       {
-        u = n0->V();
-        v = n1->V();
-        if(lookAheadDDA->Init(n0->EndPosition(), n1->EndPosition(), u, v) & change)
+        if(n1->Processed() & vCosineSet)
         {
-          n0->SetV(u);
-          n1->SetV(v); 
+          u = n0->V();
+          v = n1->V();
+          if(lookAheadDDA->Init(n1, u, v) & change)
+          {
+            n0->SetV(u);
+            n1->SetV(v); 
+          }
+        }
+      }
+      n0 = n1;
+      n1 = n2;
+      n2 = n2->Next();
+    }
+    
+    do
+    { 
+      if(!(n1->Processed() & complete))
+      {
+        if(n1->Processed() & vCosineSet)
+        {
+          u = n0->V();
+          v = n1->V();
+          if(lookAheadDDA->Init(n1, u, v) & change)
+          {
+            n0->SetV(u);
+            n1->SetV(v); 
+          }
+          n1->SetProcessed(complete);
         }
       }
       n2 = n1;
       n1 = n0;
-      n0 = n0->Previous();
-    } 
-  }*/
+      n0 = n0->Previous();      
+    }while(n0 != lookAheadRingGetPointer);
+    n0->SetProcessed(complete);
+  }
+
   if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > 1)
   {  
     n1 = lookAheadRingGetPointer;
@@ -331,13 +358,13 @@ void Move::DoLookAhead()
             c = platform->InstantDv(AXES); // value for first extruder - slight hack
         }
         n1->SetV(c);
-        //n1->SetProcessed(vCosineSet);
-        n1->SetProcessed(complete);
+        n1->SetProcessed(vCosineSet);
       }
       n0 = n1;
       n1 = n2;
       n2 = n2->Next();
     }
+    
     if(addNoMoreMoves || !gCodes->PrintingAFile())
     {
       n1->SetV(0);
@@ -723,30 +750,21 @@ void DDA::Step(boolean noTest)
   
   if(active) 
   {
+    if(axesMoving)
+      timeStep = move->stepDistances[axesMoving]/velocity;
+    else
+      timeStep = move->extruderStepDistances[extrudersMoving]/velocity;
+      
     // Simple Euler integration to get velocities.
     // Maybe one day do a Runge-Kutta?
   
     if(stepCount < stopAStep)
-    {
-      if(axesMoving)
-        timeStep = move->stepDistances[axesMoving]/velocity;
-      else
-        timeStep = move->extruderStepDistances[extrudersMoving]/velocity;
       velocity += acceleration*timeStep;
-      if(noTest)
-          platform->SetInterrupt((long)(1.0e6*timeStep));
-    }
-    
     if(stepCount >= startDStep)
-    {
-      if(axesMoving)
-        timeStep = move->stepDistances[axesMoving]/velocity;
-      else
-        timeStep = move->extruderStepDistances[extrudersMoving]/velocity;
       velocity -= acceleration*timeStep;
-      if(noTest)
-        platform->SetInterrupt((long)(1.0e6*timeStep));
-    }
+      
+    if(noTest)
+      platform->SetInterrupt((long)(1.0e6*timeStep));
     
     stepCount++;
     active = stepCount < totalSteps;
