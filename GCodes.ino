@@ -26,8 +26,8 @@ GCodes::GCodes(Platform* p, Webserver* w)
   active = false;
   platform = p;
   webserver = w;
-  webGCode = new GCodeBuffer(platform);
-  fileGCode = new GCodeBuffer(platform);
+  webGCode = new GCodeBuffer(platform, "web: ");
+  fileGCode = new GCodeBuffer(platform, "file: ");
 }
 
 void GCodes::Exit()
@@ -393,6 +393,11 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
     case 116: // Wait for everything
       platform->Message(HOST_MESSAGE, "Wait for all temperatures received\n");
       break;
+      
+    case 111: // Debug level
+      if(gb->Seen('S'))
+        reprap.debug(gb->GetIValue());
+      break;
     
     case 126: // Valve open
       platform->Message(HOST_MESSAGE, "M126 - valves not yet implemented\n");
@@ -448,9 +453,10 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 
 //*************************************************************************************
 
-GCodeBuffer::GCodeBuffer(Platform* p)
+GCodeBuffer::GCodeBuffer(Platform* p, char* id)
 { 
-  platform = p; 
+  platform = p;
+  identity = id; 
 }
 
 void GCodeBuffer::Init()
@@ -473,6 +479,12 @@ boolean GCodeBuffer::Put(char c)
   {
     gcodeBuffer[gcodePointer] = 0;
     Init();
+    if(reprap.debug() && gcodeBuffer[0]) // Don't bother with blank/comment lines
+    {
+      platform->Message(HOST_MESSAGE, identity);
+      platform->Message(HOST_MESSAGE, gcodeBuffer);
+      platform->Message(HOST_MESSAGE, "\n"); 
+    }
     result = true;
   } else
   {

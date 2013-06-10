@@ -329,9 +329,12 @@ void Webserver::GetJsonResponse(char* request)
   
   if(ok)
   {
-    platform->Message(HOST_MESSAGE, "JSON response: ");
-    platform->Message(HOST_MESSAGE, jsonResponse);
-    platform->Message(HOST_MESSAGE, " queued\n");
+    if(reprap.debug())
+    {
+      platform->Message(HOST_MESSAGE, "JSON response: ");
+      platform->Message(HOST_MESSAGE, jsonResponse);
+      platform->Message(HOST_MESSAGE, " queued\n");
+    }
   } else
   { 
     platform->Message(HOST_MESSAGE, "KnockOut request: ");

@@ -28,7 +28,7 @@ Licence: GPL
 class GCodeBuffer
 {
   public:
-    GCodeBuffer(Platform* p);
+    GCodeBuffer(Platform* p, char* id);
     void Init();
     boolean Put(char c);
     boolean Seen(char c);
@@ -40,6 +40,7 @@ class GCodeBuffer
   private:
     Platform* platform;
     char gcodeBuffer[GCODE_LENGTH];
+    char* identity;
     int gcodePointer;
     int readPointer;
     boolean inComment;
