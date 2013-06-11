@@ -88,19 +88,14 @@ void Move::Init()
   
   addNoMoreMoves = false;
   
-  // Put the origin on the lookahead ring with zero velocity so it corresponds with the currentPosition
+  // Put the origin on the lookahead ring with zero velocity in the previous
+  // position to the first one that will be used.
   
   for(i = 0; i < DRIVES; i++)
-    nextMove[i] = 0.0;
-  nextMove[DRIVES] = currentFeedrate;
+    lookAheadRingGetPointer->Previous()->SetDriveZeroEndSpeed(0.0, i);
+  lookAheadRingGetPointer->Previous()->SetDriveZeroEndSpeed(currentFeedrate, DRIVES);  
+
   checkEndStopsOnNextMove = false;
-  LookAheadRingAdd(nextMove, 0.0, false);
-  
-  // Now remove it from the ring; it will remain as what is now the
-  // previous move, so the first real move will see that as
-  // the place to move from.  Flag it as fully processed.
-  
-  LookAheadRingGet()->Release();
   
   // The stepDistances arrays are look-up tables of the Euclidean distance 
   // between the start and end of a step.  If the step is just along one axis,

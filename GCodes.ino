@@ -442,9 +442,11 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, gb->Buffer());
       platform->Message(HOST_MESSAGE, "\n");
     }
+    
+    return result;
   }
   
-  // An empty buffer jumps straight here and gets disgarded
+  // An empty buffer jumps to here and gets disgarded
   
   return result;
 }

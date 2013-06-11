@@ -61,6 +61,7 @@ class LookAhead
     void SetV(float vv);
     int8_t Processed();
     void SetProcessed(MovementState ms);
+    void SetDriveZeroEndSpeed(float a, int8_t drive);
     boolean CheckEndStops();
     void Release();
     
@@ -228,6 +229,12 @@ inline boolean LookAhead::CheckEndStops()
   return checkEndStops;
 }
 
+inline void LookAhead::SetDriveZeroEndSpeed(float a, int8_t drive)
+{
+  endPoint[drive] = a;
+  v = 0.0; 
+}
+
 //******************************************************************************************************
 
 inline boolean DDA::Active()
@@ -306,20 +313,14 @@ inline void Move::ResumeMoving()
 
 inline void Move::HitLowStop(int8_t drive)
 {
-  GetCurrentState(nextMove);
-  nextMove[drive] = 0.0;
-  currentPosition[drive] = 0.0;  
-  LookAheadRingAdd(nextMove, 0.0, false);
-  LookAheadRingGet()->Release();
+  currentPosition[drive] = 0.0;
+  lookAheadRingGetPointer->Previous()->SetDriveZeroEndSpeed(0.0, drive);
 }
 
 inline void Move::HitHighStop(int8_t drive)
 {
-  GetCurrentState(nextMove);
-  nextMove[drive] = platform->AxisLength(drive);
   currentPosition[drive] = platform->AxisLength(drive);
-  LookAheadRingAdd(nextMove, 0.0, false);
-  LookAheadRingGet()->Release();
+  lookAheadRingGetPointer->Previous()->SetDriveZeroEndSpeed(currentPosition[drive], drive);
 }
 
 
