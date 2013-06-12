@@ -45,7 +45,7 @@ Move::Move(Platform* p, GCodes* g)
     lookAheadRingGetPointer = new LookAhead(this, platform, lookAheadRingGetPointer);
   lookAheadRingAddPointer->next = lookAheadRingGetPointer;
   
-  // Set the backwards pointers and flag them all as free
+  // Set the backwards pointers
   
   lookAheadRingGetPointer = lookAheadRingAddPointer; 
   for(i = 0; i <= LOOK_AHEAD_RING_LENGTH; i++)
@@ -65,12 +65,6 @@ void Move::Init()
   
   for(i = 0; i < DRIVES; i++)
     platform->SetDirection(i, FORWARDS);
-    
-  // Set the current position to the origin
-  
-  for(i = 0; i <= AXES; i++)
-    currentPosition[i] = 0.0;
-  currentFeedrate = START_FEED_RATE;
   
   // Empty the rings
   
@@ -91,10 +85,13 @@ void Move::Init()
   // Put the origin on the lookahead ring with zero velocity in the previous
   // position to the first one that will be used.
   
+  lastMove = lookAheadRingAddPointer->Previous();
+  
   for(i = 0; i < DRIVES; i++)
-    lookAheadRingGetPointer->Previous()->SetDriveZeroEndSpeed(0.0, i);
-  lookAheadRingGetPointer->Previous()->SetDriveZeroEndSpeed(currentFeedrate, DRIVES);  
-
+    lastMove->SetDriveZeroEndSpeed(0.0, i);
+    
+  lastMove->SetDriveZeroEndSpeed(START_FEED_RATE, DRIVES);
+  
   checkEndStopsOnNextMove = false;
   
   // The stepDistances arrays are look-up tables of the Euclidean distance 
@@ -138,8 +135,8 @@ void Move::Init()
   stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
   extruderStepDistances[0] = stepDistances[0];
   
-
-  currentFeedrate = START_FEED_RATE;
+  currentFeedrate = -1.0;
+  
   lastTime = platform->Time();
   active = true;  
 }
@@ -171,18 +168,19 @@ void Move::Spin()
     
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
-    if(GetMovementType(currentPosition, nextMove) == noMove)
-    {
-      currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
+    currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
+    if(GetMovementType(lastMove->EndPoint(), nextMove) == noMove) // Throw it away if there's no real movement.
       return;
-    }
+    currentFeedrate = -1.0; // Real move - record its feedrate with it, not here.
     if(!LookAheadRingAdd(nextMove, 0.0, checkEndStopsOnNextMove))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
-    for(int8_t i = 0; i < AXES; i++)
-      currentPosition[i] = nextMove[i];
-    currentFeedrate = nextMove[DRIVES];
   }
 }
+
+// This returns false if it is not possible
+// to use the result as the basis for the
+// next move because the look ahead ring
+// is full.  True otherwise.
 
 boolean Move::GetCurrentState(float m[])
 {
@@ -192,11 +190,15 @@ boolean Move::GetCurrentState(float m[])
   for(int8_t i = 0; i < DRIVES; i++)
   {
     if(i < AXES)
-      m[i] = currentPosition[i];
+      m[i] = lastMove->EndPoint()[i];
     else
       m[i] = 0.0;
   }
-  m[DRIVES] = currentFeedrate;
+  if(currentFeedrate >= 0.0)
+    m[DRIVES] = currentFeedrate;
+  else
+    m[DRIVES] = lastMove->EndPoint()[DRIVES];
+  currentFeedrate = -1.0;
   return true;
 }
 
@@ -233,9 +235,9 @@ boolean Move::DDARingAdd(LookAhead* lookAhead)
       ReleaseDDARingLock();
       return false;
     }
-    if(ddaRingAddPointer->Active())
+    if(ddaRingAddPointer->Active())  // Should never happen...
     {
-      platform->Message(HOST_MESSAGE, "Attempt to alter an active ring buffer entry!\n"); // Should never happen...
+      platform->Message(HOST_MESSAGE, "Attempt to alter an active ring buffer entry!\n");
       ReleaseDDARingLock();
       return false;
     }
@@ -276,14 +278,14 @@ void Move::DoLookAhead()
 {
   if(LookAheadRingEmpty())
     return;
-    
+  
   LookAhead* n0;
   LookAhead* n1;
   LookAhead* n2;
   
   float u, v;
     
-  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
+/*  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
   {  
     n1 = lookAheadRingGetPointer;
     n0 = n1->Previous();
@@ -330,7 +332,7 @@ void Move::DoLookAhead()
     }while(n0 != lookAheadRingGetPointer);
     n0->SetProcessed(complete);
   }
-
+*/
   if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > 1)
   {  
     n1 = lookAheadRingGetPointer;
@@ -340,8 +342,8 @@ void Move::DoLookAhead()
     {
       if(n1->Processed() == unprocessed)
       {
-        float c = n1->Cosine();
-        c = n1->EndPoint()[DRIVES]*c;
+        float c = fmin(n1->EndPoint()[DRIVES], n2->EndPoint()[DRIVES]);
+        c = c*n1->Cosine();
         if(c <= 0)
         {
           int8_t mt = GetMovementType(n0->EndPoint(), n1->EndPoint());
@@ -353,8 +355,9 @@ void Move::DoLookAhead()
             c = platform->InstantDv(AXES); // value for first extruder - slight hack
         }
         n1->SetV(c);
-        n1->SetProcessed(vCosineSet);
-      }
+        //n1->SetProcessed(vCosineSet);
+        n1->SetProcessed(complete);
+      } 
       n0 = n1;
       n1 = n2;
       n2 = n2->Next();
@@ -403,7 +406,10 @@ boolean Move::LookAheadRingAdd(float ep[], float vv, boolean ce)
 {
     if(LookAheadRingFull())
       return false;
+    if(!(lookAheadRingAddPointer->Processed() & released))
+      platform->Message(HOST_MESSAGE, "Attempt to alter a non-released lookahead ring entry!\n"); // Should never happen...
     lookAheadRingAddPointer->Init(ep, vv, ce);
+    lastMove = lookAheadRingAddPointer;
     lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
     lookAheadRingCount++;
     return true;
@@ -511,14 +517,15 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 {
   int8_t drive;
   active = false;
+  myLookAheadEntry = lookAhead;
   MovementProfile result = moving;
   totalSteps = -1;
   distance = 0.0; // X+Y+Z
   float eDistance = 0.0;
   float d;
-  float* targetPosition = lookAhead->EndPoint();
+  float* targetPosition = myLookAheadEntry->EndPoint();
   v = lookAhead->V();
-  float* positionNow = lookAhead->Previous()->EndPoint();
+  float* positionNow = myLookAheadEntry->Previous()->EndPoint();
   u = lookAhead->Previous()->V();
   checkEndStops = lookAhead->CheckEndStops();
   
@@ -554,12 +561,11 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   if(totalSteps <= 0)
   {
     platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement!\n");
+    myLookAheadEntry->Release();
     return result;
   }
   
   // Set up the DDA
-  
-  result = moving;
   
   counter[0] = -totalSteps/2;
   for(drive = 1; drive < DRIVES; drive++)
@@ -685,8 +691,6 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   timeStep = timeStep/velocity;
   
-  lookAhead->Release();
-  
   return result;
 }
 
@@ -729,12 +733,12 @@ void DDA::Step(boolean noTest)
         EndStopHit esh = platform->Stopped(drive);
         if(esh == lowHit)
         {
-          move->HitLowStop(drive);
+          move->HitLowStop(drive, myLookAheadEntry);
           active = false;
         }
         if(esh == highHit)
         {
-          move->HitHighStop(drive);
+          move->HitHighStop(drive, myLookAheadEntry);
           active = false;
         }
       }        
@@ -758,15 +762,18 @@ void DDA::Step(boolean noTest)
     if(stepCount >= startDStep)
       velocity -= acceleration*timeStep;
       
-    if(noTest)
-      platform->SetInterrupt((long)(1.0e6*timeStep));
-    
     stepCount++;
     active = stepCount < totalSteps;
+    
+    if(noTest)
+      platform->SetInterrupt((long)(1.0e6*timeStep));
   }
   
   if(!active && noTest)
+  {
+    myLookAheadEntry->Release();
     platform->SetInterrupt(STANDBY_INTERRUPT_RATE);
+  }
 }
 
 //***************************************************************************************************

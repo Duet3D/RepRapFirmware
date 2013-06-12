@@ -77,13 +77,20 @@ interface to the RepRap machine.  It uses the Knockout and Jquery Javascript lib
 
 
 
-When the software is running there is one single instance of each class, and all the memory allocation is
+When the software is running there is one single instance of each main class, and all the memory allocation is
 done on initialisation.  new/malloc should not be used in the general running code, and delete is never
 used.  Each class has an Init() function that resets it to its boot-up state; the constructors merely handle
 that memory allocation on startup.  Calling RepRap.Init() calls all the other Init()s in the right sequence.
 
 There are other ancilliary classes that are declared in the .h files for the master classes that use them.  For
 example, Move has a DDA class that implements a Bresenham/digital differential analyser.
+
+
+Timing:
+
+There is a single interrupt chain entered via Platform.Interrupt().  This controls movement step timing, and 
+this chain of code should be the only place that volatile declarations and structure/variable-locking are 
+required.  All the rest of the code is called sequentially and repeatedly as follows:
 
 All the main classes have a Spin() function.  These are called in a loop by the RepRap.Spin() function and implement 
 simple timesharing.  No class does, or ever should, wait inside one of its functions for anything to happen or call 
@@ -93,6 +100,26 @@ any sort of delay() function.  The general rule is:
     Yes - do it
     No - set a flag/timer to remind me to do it next-time-I'm-called/at-a-future-time and return.
     
+The restriction this strategy places on almost all the code in the firmware (that it must execute quickly and 
+never cause waits or delays) is balanced by the fact that none of that code needs to worry about synchronicity, 
+locking, or other areas of code accessing items upon which it is working.  As mentioned, only the interrupt 
+chain needs to concern itself with such problems.  Unlike movement, heating (including PID controllers) does 
+not need the fast precision of timing that interrupts alone can offer.  Indeed, most heating code only needs 
+to execute a couple of times a second.
+
+Most data is transferred bytewise, with classes typically containg code like this:
+
+  Is a byte available for me?
+    Yes
+      read it and add it to my buffer
+      Is my buffer complete?
+         Yes
+           Act on the contents of my buffer
+         No
+           Return
+    No
+     Return
+      
 Note that it is simple to raise the "priority" of any class's activities relative to the others by calling its 
 Spin() function more than once from RepRap.Spin().
 

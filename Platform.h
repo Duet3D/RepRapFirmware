@@ -77,8 +77,8 @@ Licence: GPL
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
-//#define ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2??
-#define ACCELERATIONS {80, 80, 3, 25} 
+#define ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2??
+//#define ACCELERATIONS {80, 80, 3, 25} 
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
 #define INSTANT_DVS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode

@@ -77,7 +77,7 @@ class LookAhead
     boolean checkEndStops;
     float cosine;
     float v;
-    int8_t processed;
+    volatile int8_t processed;
 };
 
 
@@ -97,6 +97,7 @@ class DDA
     Move* move;
     Platform* platform;
     DDA* next;
+    LookAhead* myLookAheadEntry;
     long counter[DRIVES];
     long delta[DRIVES];
     boolean directions[DRIVES];
@@ -131,8 +132,8 @@ class Move
     boolean AllMovesAreFinished();
     void ResumeMoving();
     void DoLookAhead();
-    void HitLowStop(int8_t drive);
-    void HitHighStop(int8_t drive);
+    void HitLowStop(int8_t drive, LookAhead* la);
+    void HitHighStop(int8_t drive, LookAhead* la);
     
   friend class DDA;
     
@@ -162,7 +163,7 @@ class Move
     
     LookAhead* lookAheadRingAddPointer;
     LookAhead* lookAheadRingGetPointer;
-    //LookAhead* larWaiting;
+    LookAhead* lastMove;
     DDA* lookAheadDDA;
     int lookAheadRingCount;
 
@@ -171,7 +172,6 @@ class Move
     boolean active;
     boolean checkEndStopsOnNextMove;
     float currentFeedrate;
-    float currentPosition[AXES]; // Note - drives above AXES are always relative moves
     float nextMove[DRIVES + 1];  // Extra is for feedrate
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
@@ -213,15 +213,15 @@ inline int8_t LookAhead::Processed()
 
 inline void LookAhead::SetProcessed(MovementState ms)
 {
-  if(ms == 0)
-    processed = 0;
+  if(ms == unprocessed)
+    processed = unprocessed;
   else
     processed |= ms;
 }
 
 inline void LookAhead::Release()
 {
-  processed = released;
+  SetProcessed(released);
 }
 
 inline boolean LookAhead::CheckEndStops() 
@@ -232,6 +232,7 @@ inline boolean LookAhead::CheckEndStops()
 inline void LookAhead::SetDriveZeroEndSpeed(float a, int8_t drive)
 {
   endPoint[drive] = a;
+  cosine = 2.0;
   v = 0.0; 
 }
 
@@ -278,7 +279,9 @@ inline boolean Move::LookAheadRingEmpty()
 
 inline boolean Move::LookAheadRingFull()
 {
-  return lookAheadRingAddPointer->Next()->Next() == lookAheadRingGetPointer;
+  if(!(lookAheadRingAddPointer->Processed() & released))
+    return true;
+  return lookAheadRingAddPointer->Next()->Next() == lookAheadRingGetPointer;  // probably not needed; just return the boolean in the if above
 }
 
 inline boolean Move::GetDDARingLock()
@@ -311,16 +314,14 @@ inline void Move::ResumeMoving()
   addNoMoreMoves = false;
 }
 
-inline void Move::HitLowStop(int8_t drive)
+inline void Move::HitLowStop(int8_t drive, LookAhead* la)
 {
-  currentPosition[drive] = 0.0;
-  lookAheadRingGetPointer->Previous()->SetDriveZeroEndSpeed(0.0, drive);
+  la->SetDriveZeroEndSpeed(0.0, drive);
 }
 
-inline void Move::HitHighStop(int8_t drive)
+inline void Move::HitHighStop(int8_t drive, LookAhead* la)
 {
-  currentPosition[drive] = platform->AxisLength(drive);
-  lookAheadRingGetPointer->Previous()->SetDriveZeroEndSpeed(currentPosition[drive], drive);
+  la->SetDriveZeroEndSpeed(platform->AxisLength(drive), drive);
 }
 
 
