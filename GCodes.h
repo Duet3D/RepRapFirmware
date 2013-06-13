@@ -93,6 +93,9 @@ class GCodes
     boolean homeX;
     boolean homeY;
     boolean homeZ;
+    boolean homeXQueued;
+    boolean homeYQueued;
+    boolean homeZQueued;
 };
 
 //*****************************************************************************************************

@@ -165,7 +165,9 @@ void Move::Spin()
   
   if(addNoMoreMoves || LookAheadRingFull())
    return;
-    
+  
+  boolean waitForThisToFinish;
+  
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
     currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
@@ -354,6 +356,7 @@ void Move::DoLookAhead()
           else
             c = platform->InstantDv(AXES); // value for first extruder - slight hack
         }
+        //Serial.println(c);
         n1->SetV(c);
         //n1->SetProcessed(vCosineSet);
         n1->SetProcessed(complete);
@@ -833,6 +836,12 @@ float LookAhead::Cosine()
     cosine += m1*m2;
   }
   
+  if(a2 <= 0.0 || b2 <= 0.0)
+  {
+    cosine = 0.5; // Why not?
+    return cosine;
+  }
+ 
   cosine = cosine/( (float)sqrt(a2) * (float)sqrt(b2) );
   return cosine;
 }

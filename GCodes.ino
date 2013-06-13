@@ -56,6 +56,9 @@ void GCodes::Init()
   homeX = false;
   homeY = false;
   homeZ = false;
+  homeXQueued = false;
+  homeYQueued = false;
+  homeZQueued = false;
   dwellWaiting = false;
   dwellTime = platform->Time();
 }
@@ -198,32 +201,69 @@ boolean GCodes::DoHome()
   
   if(!reprap.GetMove()->GetCurrentState(moveBuffer))
     return false;
-    
-  checkEndStops = true;
-  moveAvailable = true; 
+
   
   if(homeX)
   {
-    moveBuffer[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-    moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)/60.0;
-    homeX = false;
-    return NoHome();
+    if(homeXQueued)
+    {
+      if(!reprap.GetMove()->AllMovesAreFinished())
+        return false;
+      reprap.GetMove()->ResumeMoving();
+      homeX = false;
+      homeXQueued = false;
+      return NoHome();
+    } else
+    {
+      moveBuffer[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+      moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)/60.0;
+      homeXQueued = true;
+      checkEndStops = true;
+      moveAvailable = true; 
+      return false;
+    }
   }
   
   if(homeY)
   {
-    moveBuffer[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-    moveBuffer[DRIVES] = platform->HomeFeedRate(Y_AXIS)/60.0;
-    homeY = false;
-    return NoHome();
+    if(homeYQueued)
+    {
+      if(!reprap.GetMove()->AllMovesAreFinished())
+        return false;
+      reprap.GetMove()->ResumeMoving();
+      homeY = false;
+      homeYQueued = false;
+      return NoHome();
+    } else
+    {
+      moveBuffer[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
+      moveBuffer[DRIVES] = platform->HomeFeedRate(Y_AXIS)/60.0;
+      homeYQueued = true;
+      checkEndStops = true;
+      moveAvailable = true; 
+      return false;
+    }
   }
-     
+  
   if(homeZ)
   {
-    moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-    moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)/60.0;
-    homeZ = false;
-    return NoHome();
+    if(homeZQueued)
+    {
+      if(!reprap.GetMove()->AllMovesAreFinished())
+        return false;
+      reprap.GetMove()->ResumeMoving();
+      homeZ = false;
+      homeZQueued = false;
+      return NoHome();
+    } else
+    {
+      moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+      moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)/60.0;
+      homeZQueued = true;
+      checkEndStops = true;
+      moveAvailable = true; 
+      return false;
+    }
   }
   
   // Should never get here
