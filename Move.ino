@@ -287,7 +287,7 @@ void Move::DoLookAhead()
   
   float u, v;
     
-/*  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
+  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
   {  
     n1 = lookAheadRingGetPointer;
     n0 = n1->Previous();
@@ -334,7 +334,7 @@ void Move::DoLookAhead()
     }while(n0 != lookAheadRingGetPointer);
     n0->SetProcessed(complete);
   }
-*/
+
   if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > 1)
   {  
     n1 = lookAheadRingGetPointer;
@@ -356,10 +356,9 @@ void Move::DoLookAhead()
           else
             c = platform->InstantDv(AXES); // value for first extruder - slight hack
         }
-        //Serial.println(c);
         n1->SetV(c);
-        //n1->SetProcessed(vCosineSet);
-        n1->SetProcessed(complete);
+        n1->SetProcessed(vCosineSet);
+        //n1->SetProcessed(complete);
       } 
       n0 = n1;
       n1 = n2;
