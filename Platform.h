@@ -253,6 +253,12 @@ class Platform
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
+  float pidKp(int8_t heater);
+  float pidKi(int8_t heater);
+  float pidKd(int8_t heater);
+  float pidKw(int8_t heater);
+  boolean pidBangBang(int8_t heater);
+  float HeatSampleTime();
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -304,6 +310,7 @@ class Platform
   float pidKds[HEATERS];
   float pidKps[HEATERS];
   float pidILimits[HEATERS];
+  float heatSampleTime;
 
 // Files
 
@@ -369,7 +376,7 @@ inline char* Platform::GetTempDir()
 
 //*****************************************************************************************************************
 
-// Drive the RepRap machine
+// Drive the RepRap machine - Movement
 
 inline float Platform::DriveStepsPerUnit(int8_t drive)
 {
@@ -423,9 +430,18 @@ inline float Platform::AxisLength(int8_t drive)
   return axisLengths[drive];
 }
 
+//********************************************************************************************************
+
+// Drive the RepRap machine - Heat and temperature
+
 inline int Platform::GetRawTemperature(byte heater)
 {
   return analogRead(tempSensePins[heater]);
+}
+
+inline float Platform::HeatSampleTime()
+{
+  return heatSampleTime; 
 }
 
 //*********************************************************************************************************

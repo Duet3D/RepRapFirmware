@@ -107,6 +107,7 @@ void Platform::Init()
     gcodeDir = GCODE_DIR;
     sysDir = SYS_DIR;
     tempDir = TEMP_DIR;
+    heatSampleTime = HEAT_SAMPLE_TIME;
   }
   
   for(i = 0; i < DRIVES; i++)

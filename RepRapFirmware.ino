@@ -172,7 +172,7 @@ void RepRap::Init()
   gCodes->Init();
   webserver->Init();
   move->Init();
-  heat->Init(HEAT_SAMPLE_TIME);
+  heat->Init();
   dbg = false;
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
   active = true;

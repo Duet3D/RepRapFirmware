@@ -22,6 +22,8 @@ Licence: GPL
 #ifndef GCODES_H
 #define GCODES_H
 
+#define STACK 5
+
 
 // Small class to hold an individual GCode
 
@@ -65,11 +67,14 @@ class GCodes
     
   private:
   
+    boolean AllMovesAreFinishedAndMoveBufferIsLoaded();
     boolean ActOnGcode(GCodeBuffer* gb);
     boolean SetUpMove(GCodeBuffer* gb);
     boolean DoDwell(GCodeBuffer *gb);
     boolean DoHome();
     boolean NoHome();
+    boolean Push();
+    boolean Pop();
     Platform* platform;
     boolean active;
     Webserver* webserver;
@@ -85,6 +90,10 @@ class GCodes
     boolean checkEndStops;
     boolean drivesRelative; // All except X, Y and Z
     boolean axesRelative;   // X, Y and Z
+    boolean drivesRelativeStack[STACK];
+    boolean axesRelativeStack[STACK];
+    float feedrateStack[STACK];
+    int8_t stackPointer;
     char gCodeLetters[DRIVES + 1]; // Extra is for F
     float lastPos[DRIVES - AXES]; // Just needed for relative moves.
     float distanceScale;

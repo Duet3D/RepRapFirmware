@@ -60,6 +60,7 @@ void GCodes::Init()
   homeYQueued = false;
   homeZQueued = false;
   dwellWaiting = false;
+  stackPointer = 0;
   dwellTime = platform->Time();
 }
 
@@ -102,6 +103,76 @@ void GCodes::Spin()
         fileBeingPrinted = -1;
      }
   }
+}
+
+boolean GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
+{
+  // Last one gone?
+  
+  if(moveAvailable)
+    return false;
+  
+  // Wait for all the queued moves to stop so we get the actual last position and feedrate
+      
+  if(!reprap.GetMove()->AllMovesAreFinished())
+    return false;
+  reprap.GetMove()->ResumeMoving();
+    
+  // Load the last position; If Move can't accept more, return false - should never happen
+  
+  if(!reprap.GetMove()->GetCurrentState(moveBuffer))
+    return false;
+  
+  return true;  
+}
+
+boolean GCodes::Push()
+{
+  if(stackPointer >= STACK)
+  {
+    platform->Message(HOST_MESSAGE, "Push(): stack overflow!\n");
+    return true;
+  }
+  
+  if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+    return false;
+  
+  drivesRelativeStack[stackPointer] = drivesRelative;
+  axesRelativeStack[stackPointer] = axesRelative;
+  feedrateStack[stackPointer] = moveBuffer[DRIVES];
+  stackPointer++;
+  
+  return true;
+}
+
+boolean GCodes::Pop()
+{
+  if(stackPointer <= 0)
+  {
+    platform->Message(HOST_MESSAGE, "Push(): stack underflow!\n");
+    return true;  
+  }
+  
+  if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+    return false;
+    
+  stackPointer--;
+  drivesRelative = drivesRelativeStack[stackPointer];
+  axesRelative = axesRelativeStack[stackPointer];
+  
+  // Remember for next time if we have just been switched
+  // to absolute drive moves
+  
+  for(int8_t i = AXES; i < DRIVES; i++)
+    lastPos[i - AXES] = moveBuffer[i];
+  
+  // Do a null move to set the correct feedrate
+  
+  moveBuffer[DRIVES] = feedrateStack[stackPointer];
+  
+  checkEndStops = false;
+  moveAvailable = true;
+  return true;
 }
 
 // Move expects all axis movements to be absolute, and all
@@ -158,7 +229,6 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
     lastPos[i - AXES] = moveBuffer[i];
   
   checkEndStops = false;
-  
   moveAvailable = true;
   return true; 
 }
@@ -186,22 +256,8 @@ boolean GCodes::DoHome()
   // Treat more or less like any other move
   // Do one axis at a time, starting with X.
   
-  // Last one gone yet?
-  
-  if(moveAvailable)
+  if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
     return false;
-  
-  // Wait for all the queued moves to stop
-      
-  if(!reprap.GetMove()->AllMovesAreFinished())
-    return false;
-  reprap.GetMove()->ResumeMoving();
-    
-  // Load the last position; If Move can't accept more, return false - should never happen
-  
-  if(!reprap.GetMove()->GetCurrentState(moveBuffer))
-    return false;
-
   
   if(homeX)
   {
@@ -436,6 +492,14 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
     case 111: // Debug level
       if(gb->Seen('S'))
         reprap.debug(gb->GetIValue());
+      break;
+      
+    case 120:
+      result = Push();
+      break;
+      
+    case 121:
+      result = Pop();
       break;
     
     case 126: // Valve open
