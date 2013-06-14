@@ -296,7 +296,10 @@ function viewModel()
 
 	self.sendJog = function(axis, d, data, event) 
 	{
-		$.get('/rr_gcode', {gcode: "G91\nG1 " + axis + d + "\nG90\nM83"}, self.dummy);
+		var feed = " F2000";
+		if(axis == 'Z')
+			feed = " F200";
+		$.get('/rr_gcode', {gcode: "M120\nG91\nG1 " + axis + d + feed + "\nM121"}, self.dummy);
  	};
 
 	self.actionOnFile = function(file) 

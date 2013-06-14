@@ -255,22 +255,22 @@ boolean GCodes::DoHome()
 {
   // Treat more or less like any other move
   // Do one axis at a time, starting with X.
-  
-  if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-    return false;
-  
+     
   if(homeX)
   {
     if(homeXQueued)
     {
-      if(!reprap.GetMove()->AllMovesAreFinished())
+      if(!Pop())
         return false;
-      reprap.GetMove()->ResumeMoving();
       homeX = false;
       homeXQueued = false;
       return NoHome();
     } else
     {
+      // Push() has the side effect of finishing all queued moves and loading moveBuffer correctly
+        
+      if(!Push())
+        return false;
       moveBuffer[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
       moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)/60.0;
       homeXQueued = true;
@@ -284,14 +284,15 @@ boolean GCodes::DoHome()
   {
     if(homeYQueued)
     {
-      if(!reprap.GetMove()->AllMovesAreFinished())
+      if(!Pop())
         return false;
-      reprap.GetMove()->ResumeMoving();
       homeY = false;
       homeYQueued = false;
       return NoHome();
     } else
     {
+      if(!Push())
+        return false;
       moveBuffer[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
       moveBuffer[DRIVES] = platform->HomeFeedRate(Y_AXIS)/60.0;
       homeYQueued = true;
@@ -305,14 +306,15 @@ boolean GCodes::DoHome()
   {
     if(homeZQueued)
     {
-      if(!reprap.GetMove()->AllMovesAreFinished())
+      if(!Pop())
         return false;
-      reprap.GetMove()->ResumeMoving();
       homeZ = false;
       homeZQueued = false;
       return NoHome();
     } else
     {
+      if(!Push())
+        return false;
       moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
       moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)/60.0;
       homeZQueued = true;
