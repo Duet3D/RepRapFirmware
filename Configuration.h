@@ -28,9 +28,13 @@ Licence: GPL
 #define DATE "2012-11-18"
 #define LAST_AUTHOR "reprappro.com"
 
-#define ABS_ZERO -273.15
+#define ABS_ZERO -273.15  // Celsius
 
 #define INCH_TO_MM 25.4
+
+#define HEAT_SAMPLE_TIME 0.5 // Seconds
+
+#define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
 // Webserver stuff
 

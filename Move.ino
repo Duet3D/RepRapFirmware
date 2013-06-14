@@ -702,7 +702,7 @@ void DDA::Start(boolean noTest)
   for(int8_t drive = 0; drive < DRIVES; drive++)
     platform->SetDirection(drive, directions[drive]);
   if(noTest)
-    platform->SetInterrupt((long)(1.0e6*timeStep)); // microseconds
+    platform->SetInterrupt(timeStep); // seconds
   active = true;  
 }
 
@@ -769,7 +769,7 @@ void DDA::Step(boolean noTest)
     active = stepCount < totalSteps;
     
     if(noTest)
-      platform->SetInterrupt((long)(1.0e6*timeStep));
+      platform->SetInterrupt(timeStep);
   }
   
   if(!active && noTest)

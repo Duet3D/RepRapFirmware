@@ -73,7 +73,7 @@ class GCodes
     Platform* platform;
     boolean active;
     Webserver* webserver;
-    unsigned long dwellTime;
+    float dwellTime;
     boolean dwellWaiting;
     GCodeBuffer* webGCode;
     GCodeBuffer* fileGCode;

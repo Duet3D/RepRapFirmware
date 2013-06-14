@@ -71,7 +71,7 @@ class Webserver
     
     Platform* platform;
     boolean active;
-    unsigned long lastTime;
+    float lastTime;
     int fileBeingSent;
     boolean writing;
     boolean receivingPost;

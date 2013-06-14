@@ -30,7 +30,7 @@ class RepRap
     void Spin();
     void Exit();
     void Interrupt();
-    void InterruptTime();
+//    void InterruptTime();
     boolean debug();
     void debug(boolean d);
     Platform* GetPlatform();

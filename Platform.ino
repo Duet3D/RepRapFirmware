@@ -40,6 +40,16 @@ void loop()
 Platform::Platform(RepRap* r)
 {
   reprap = r;
+  
+  // Files
+ 
+  files = new File[MAX_FILES];
+  inUse = new boolean[MAX_FILES];
+  for(int8_t i=0; i < MAX_FILES; i++)
+    buf[i] = new byte[FILE_BUF_LEN];
+  
+  server = new EthernetServer(HTTP_PORT);
+  
   active = false;
 }
 
@@ -50,12 +60,7 @@ Platform::Platform(RepRap* r)
 void TC3_Handler()
 {
   TC_GetStatus(TC1, 0);
-  reprap.GetPlatform()->Interrupt();
-}
-
-inline void Platform::Interrupt()
-{
-  reprap->Interrupt();  // Put nothing else in this function
+  reprap.Interrupt();
 }
 
 //*******************************************************************************************************************
@@ -65,8 +70,6 @@ void Platform::Init()
   byte i;
   
   Serial.begin(BAUD_RATE);
-  
-  lastTime = Time();
   
   if(!LoadFromStore())
   {     
@@ -145,11 +148,8 @@ void Platform::Init()
 
   // Files
  
-  files = new File[MAX_FILES];
-  inUse = new boolean[MAX_FILES];
   for(i=0; i < MAX_FILES; i++)
   {
-    buf[i] = new byte[FILE_BUF_LEN];
     bPointer[i] = 0;
     inUse[i] = false;
   }
@@ -157,14 +157,16 @@ void Platform::Init()
   // Network
 
   mac = MAC;
-  server = new EthernetServer(HTTP_PORT);
+  //server = new EthernetServer(HTTP_PORT);
   
   // disable SD SPI while starting w5100
   // or you will have trouble
   pinMode(SD_SPI, OUTPUT);
   digitalWrite(SD_SPI,HIGH);   
 
-  Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
+  ipAddress = { IP0, IP1, IP2, IP3 };
+  //Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
+  Ethernet.begin(mac, ipAddress);
   server->begin();
   
   //Serial.print("server is at ");
@@ -182,6 +184,8 @@ void Platform::Init()
   // SD.begin() returns with the SPI disabled, so you need not disable it here  
   
   InitialiseInterrupts();
+  
+  lastTime = Time();
   
   active = true;
 }
@@ -508,7 +512,7 @@ void Platform::Spin()
     return;
     
    ClientMonitor();
-   if(Time() - lastTime < 2000000)
+   if(Time() - lastTime < 2.0)
      return;
    lastTime = Time();
 }

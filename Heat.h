@@ -25,10 +25,19 @@ class PID
 {
   public:
   
-    PID();
-    
+    PID(int8_t h);
+    void Init(float st, float p, float i, float d, float w);
+    void Spin();
+    void SetTemperature(float t);
+  
   private:
   
+    float temperature;
+    float kp;
+    float ki;
+    float kd;
+    float kw;
+    int8_t heater;
 };
 
 class Heat
@@ -38,7 +47,7 @@ class Heat
   
     Heat(Platform* p, GCodes* g);
     void Spin();
-    void Init();
+    void Init(float st);
     void Exit();
     
   private:
@@ -46,8 +55,19 @@ class Heat
     Platform* platform;
     GCodes* gCodes;
     boolean active;
-    unsigned long lastTime;
+    PID* pids[HEATERS];
+    float lastTime;
+    float sampleTime;
 };
+
+
+//***********************************************************************************************************
+
+inline void PID::SetTemperature(float t)
+{
+  temperature = t;
+}
+
 
 
 #endif

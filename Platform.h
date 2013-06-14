@@ -48,9 +48,9 @@ Licence: GPL
 
 // Some numbers...
 
-#define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
 #define STRING_LENGTH 1000
-
+#define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
+#define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
 
 /**************************************************************************************************/
 
@@ -148,6 +148,8 @@ Licence: GPL
 #define IP2 1
 #define IP3 14
 
+#define IP_BYTES 4
+
 #define ETH_B_PIN 10
 
 // port 80 is default for HTTP
@@ -160,6 +162,10 @@ Licence: GPL
 #define CONNECTED 2
 #define AVAILABLE 4
 
+// Seconds to wait after serving a page
+ 
+#define CLIENT_CLOSE_DELAY 0.001
+
 
 /****************************************************************************************************/
 
@@ -168,8 +174,6 @@ Licence: GPL
 #define LED_PIN 13 // Indicator LED
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
-
-#define STANDBY_INTERRUPT_RATE 200 // Microseconds
 
 /****************************************************************************************************/
 
@@ -199,11 +203,9 @@ class Platform
   
   // Timing
   
-  unsigned long Time(); // Returns elapsed microseconds since some arbitrary time
+  float Time(); // Returns elapsed seconds since some arbitrary time
   
-  void SetInterrupt(long t); // Set a regular interrupt going every t microseconds; if t is -ve turn interrupt off
-  
-  void Interrupt(); // The function that the interrupt calls
+  void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
   
   // Communications and data storage; opening something unsupported returns -1.
   
@@ -256,7 +258,7 @@ class Platform
   
   private:
   
-  unsigned long lastTime;
+  float lastTime;
   
   boolean active;
   
@@ -321,14 +323,15 @@ class Platform
   void ClientMonitor();
   
   byte mac[MAC_BYTES];
+  byte ipAddress[IP_BYTES];
   EthernetServer* server;
   EthernetClient client;
   int clientStatus;
 };
 
-inline unsigned long Platform::Time()
+inline float Platform::Time()
 {
-  return micros();
+  return TIME_FROM_REPRAP*(float)micros();
 }
 
 inline void Platform::Exit()
@@ -440,14 +443,14 @@ void Platform::InitialiseInterrupts()
   SetInterrupt(STANDBY_INTERRUPT_RATE); 
 }
 
-inline void Platform::SetInterrupt(long t)
+inline void Platform::SetInterrupt(float s) // Seconds
 {
-  if(t <= 0)
+  if(s <= 0.0)
   {
     NVIC_DisableIRQ(TC3_IRQn);
     return;
   }
-  uint32_t rc = (uint32_t)(t*84)/128;
+  uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
   TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
   TC_SetRC(TC1, 0, rc);
   TC_Start(TC1, 0);

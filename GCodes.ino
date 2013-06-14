@@ -288,7 +288,7 @@ boolean GCodes::DoDwell(GCodeBuffer *gb)
   unsigned long dwell;
   
   if(gb->Seen('P'))
-    dwell = 1000ul*(unsigned long)gb->GetLValue(); // P values are in milliseconds; we need microseconds
+    dwell = 0.001*(float)gb->GetLValue(); // P values are in milliseconds; we need seconds
   else
     return true;  // No time given - throw it away
       
@@ -301,7 +301,7 @@ boolean GCodes::DoDwell(GCodeBuffer *gb)
       
   if(dwellWaiting)
   {
-    if((long)(platform->Time() - dwellTime) >= 0)
+    if(platform->Time() - dwellTime >= 0.0)
     {
       dwellWaiting = false;
       reprap.GetMove()->ResumeMoving();
@@ -325,7 +325,6 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 {
   int code;
   boolean result = true;
-  unsigned long dwell;
   
   if(gb->Seen('G'))
   {

@@ -18,6 +18,7 @@ General design principles:
        forking the repository to make a new branch - let the repository take the strain,
   * Concentration of all machine-dependent defintions and code in Platform.h and Platform.cpp,
   * No specials for (X,Y) or (Z) - all movement is 3-dimensional,
+  * Except in Platform.h, use real units (mm, seconds etc) throughout the rest of the code wherever possible,
   * Try to be efficient in memory use, but this is not critical,
   * Labour hard to be efficient in time use, and this is  critical,
   * Don't abhor floats - they work fast enough if you're clever,
@@ -171,7 +172,7 @@ void RepRap::Init()
   gCodes->Init();
   webserver->Init();
   move->Init();
-  heat->Init();
+  heat->Init(HEAT_SAMPLE_TIME);
   dbg = false;
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
   active = true;

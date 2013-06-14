@@ -24,14 +24,21 @@ Heat::Heat(Platform* p, GCodes* g)
 {
   platform = p;
   gCodes = g;
+  for(int8_t heater=0; heater < HEATERS; heater++)
+    pids[heater] = new PID(heater);
   active = false;
 }
 
-void Heat::Init()
+void Heat::Init(float st)
 {
-  lastTime = platform->Time();
+  sampleTime = st;
+
   for(int8_t heater=0; heater < HEATERS; heater++)
+  {
     platform->SetHeater(heater, -1);
+//    pids[heater]->Init();
+  }
+  lastTime = platform->Time();
   active = true; 
 }
 
@@ -46,7 +53,19 @@ void Heat::Spin()
     return;
     
    unsigned long t = platform->Time();
-   if(t - lastTime < 3000)
+   if(t - lastTime < sampleTime)
      return;
    lastTime = t;
 }
+
+//******************************************************************************************************
+
+PID::PID(int8_t h)
+{
+  heater = h;
+}
+ /* 
+    kp = p;
+  ki = i;
+  kd = d;
+  kw = w;*/

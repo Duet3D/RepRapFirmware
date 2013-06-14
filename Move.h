@@ -167,7 +167,7 @@ class Move
     DDA* lookAheadDDA;
     int lookAheadRingCount;
 
-    unsigned long lastTime;
+    float lastTime;
     boolean addNoMoreMoves;
     boolean active;
     boolean checkEndStopsOnNextMove;
