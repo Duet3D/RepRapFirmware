@@ -102,6 +102,32 @@ function jogRowHTML(axis)
 	return result;
 }
 
+function heatRowHTML(heater)
+{
+  	var result = "";
+
+	result += "<td>" + heater + "</td>";
+	result += "<td>" + "57" + "<sup>o</sup>C" + "</td>";
+	result +=  '<td>' + 
+	'<form data-bind="submit: sendGCode"><input type="text" size="4" id="temperature" value="" data-bind="value: temperature" />' +
+	'<button type="submit">set</button>' +
+	'</form>' +
+	"</td>";
+
+	if(heater == "Bed")
+		return result;
+
+	result += "<td>" + "<button>" + "Extrude:" + "</button>" +"</td>";
+	result += "<td>" + "<button>" + "1mm" + "</button>" +"</td>";
+	result += "<td>" + "<button>" + "5mm" + "</button>" +"</td>";
+	result += "<td>" + "<button>" + "10mm" + "</button>" +"</td>";
+	result += "<td>" + "<button>" + "50mm" + "</button>" +"</td>";
+   result += "<td>" + "<button>" + "100mm" + "</button>" +"</td>";
+
+	
+	return result;
+}
+
 </script>
 
 <!-- HEADER -->
@@ -132,13 +158,15 @@ function jogRowHTML(axis)
    
    
    <tr>
-   <th colspan="9">Move X Y Z</th>
+   <th colspan="10">Move X Y Z</th>
    </tr>
    
    <tr>
    <td rowspan="2"><button data-bind="click: function(data, event) { sendHome('', data, event) }">Home<br>All</button></td>
    <td colspan="4">- mm</td>
    <td colspan="4">+ mm</td>
+	<td rowspan="2"><button data-bind="click: function(data, event) { sendHome('X', data, event) }">Motors<br>off
+	</button></td>
    </tr>
    
    <tr>
@@ -158,6 +186,8 @@ function jogRowHTML(axis)
 	<script>
 		document.write(jogRowHTML('X'));
 	</script>
+	<td><button data-bind="click: function(data, event) { sendHome('X', data, event) }">Max X
+	</button></td>
    </tr>
    
    <tr>
@@ -166,6 +196,8 @@ function jogRowHTML(axis)
 	<script>
 		document.write(jogRowHTML('Y'));
 	</script>
+	<td><button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Max Y
+	</button></td>
    </tr>
    
    <tr>
@@ -174,11 +206,39 @@ function jogRowHTML(axis)
 	<script>
 		document.write(jogRowHTML('Z'));
 	</script>
+   <td><button data-bind="click: function(data, event) { sendHome('Z', data, event) }">Max Z
+	</button></td>
    </tr>
 
    </div></table>
 
    <br><br>
+
+ 	<table border="1"><div align="center">
+
+   	<tr>
+   		<td colspan="9"><b>Heaters</b> <small>(click "Extrude:" to flip it to "Reverse:")</small></td>
+   	</tr>
+   
+   	<tr>
+			<script>
+				document.write(heatRowHTML("Bed"));
+			</script>
+   	</tr>
+
+   	<tr>
+			<script>
+				document.write(heatRowHTML("Extruder 0"));
+			</script>
+   	</tr>
+   
+   </div></table> 
+
+<br><br>
+<button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Fan on
+</button>
+
+<br><br>
 <form data-bind="submit: sendGCode">
 	Send a G Code: <input type="text" id="gcode" value="" data-bind="value: gcode" />
 	<button type="submit">Send</button>
@@ -189,16 +249,12 @@ function jogRowHTML(axis)
 <!-- PRINT PAGE -->
 <div data-bind="if: chosenPageId() == pages[1]">
 
-<form data-bind="submit: function(data, event) { uploadGCode(data, event) }">
-<p>
-Upload a G Code file :<br>
-<input type="file" name="datafile" size="40">
-</p>
-<div>
-<button type="submit">Upload</button>
-</div>
-</form>
-<br>
+<button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Pause print
+</button>
+
+<br><br>
+
+
 Click a file to <span data-bind="text: fileAction"></span><br>
 
 <ol class="files" data-bind="foreach: files().files">
@@ -211,6 +267,12 @@ Click a file to <span data-bind="text: fileAction"></span><br>
 </ol>
 
 <hr>
+
+<form data-bind="submit: function(data, event) { uploadGCode(data, event) }">
+Upload a G Code file :
+<input type="file" name="datafile" size="30"><button type="submit">Upload</button>
+</form>
+<br>
 <button data-bind="text: deleteButton, click: function(data, event) { deleteFile(data, event) }"></button>
 </div>
 
