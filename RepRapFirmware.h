@@ -41,6 +41,8 @@ boolean StringStartsWith(char* string, char* starting);
 boolean StringEquals(char* s1, char* s2);
 int StringContains(char* string, char* match);
 
+extern char scratchString[30];
+
 //#include <stdio.h>
 //#include <stdlib.h>
 

@@ -29,10 +29,12 @@ class PID
     void Init();
     void Spin();
     void SetTemperature(float t);
+    float GetTemperature();
   
   private:
   
     Platform* platform;
+    float setTemperature;
     float temperature;
     int8_t heater;
 };
@@ -46,6 +48,7 @@ class Heat
     void Spin();
     void Init();
     void Exit();
+    float GetTemperature(int8_t heater);
     
   private:
   
@@ -61,9 +64,17 @@ class Heat
 
 inline void PID::SetTemperature(float t)
 {
-  temperature = t;
+  setTemperature = t;
 }
 
+inline float PID::GetTemperature()
+{
+  return temperature;
+}
 
+inline float Heat::GetTemperature(int8_t heater)
+{
+  return pids[heater]->GetTemperature();
+}
 
 #endif

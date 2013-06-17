@@ -168,12 +168,12 @@ RepRap::RepRap()
 
 void RepRap::Init()
 {
+  dbg = false;
   platform->Init();
   gCodes->Init();
   webserver->Init();
   move->Init();
   heat->Init();
-  dbg = false;
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
   active = true;
 }
@@ -210,9 +210,12 @@ void RepRap::Spin()
 // Float to a string.
 
 static long precision[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
+char scratchString[30];
 
 char* ftoa(char *a, const float& f, int prec)
 {
+  if(a == NULL)
+    a = scratchString;
   char *ret = a;
   long whole = (long)f;
   sprintf(a,"%d",whole);

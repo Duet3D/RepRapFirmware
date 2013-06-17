@@ -283,50 +283,8 @@ void Webserver::CheckPassword()
   gotPassword = StringEndsWith(clientQualifier, password);
 }
 
-
-void Webserver::GetJsonResponse(char* request)
+void Webserver::JsonReport(boolean ok, char* request)
 {
-  jsonPointer = 0;
-  writing = true;
-  boolean ok = false;
-  
-  if(StringStartsWith(request, "name"))
-  {
-    strcpy(jsonResponse, "{\"myName\":\"");
-    strcat(jsonResponse, myName);
-    strcat(jsonResponse, "\"}");
-    ok = true;
-  }
-  
-  if(StringStartsWith(request, "password"))
-  {
-    CheckPassword();
-    strcpy(jsonResponse, "{\"password\":\"");
-    if(gotPassword)
-      strcat(jsonResponse, "right");
-    else
-      strcat(jsonResponse, "wrong");
-    strcat(jsonResponse, "\"}");   
-    ok = true;
-  }
-  
-  if(StringStartsWith(request, "gcode"))
-  {
-    if(!LoadGcodeBuffer(&clientQualifier[6], true))
-      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!\n");
-    strcpy(jsonResponse, "{}");
-    ok = true;
-  }
-  
-  if(StringStartsWith(request, "files"))
-  {
-    char* fileList = platform->FileList(platform->GetGCodeDir());
-    strcpy(jsonResponse, "{\"files\":[");
-    strcat(jsonResponse, fileList);
-    strcat(jsonResponse, "]}");    
-    ok = true;
-  }
-  
   if(ok)
   {
     if(reprap.debug())
@@ -341,7 +299,92 @@ void Webserver::GetJsonResponse(char* request)
     platform->Message(HOST_MESSAGE, request);
     platform->Message(HOST_MESSAGE, " not recognised\n");
     clientRequest[0] = 0;
+  } 
+}
+
+void Webserver::GetJsonResponse(char* request)
+{
+  jsonPointer = 0;
+  writing = true;
+  
+  if(StringStartsWith(request, "temps"))
+  {
+    strcpy(jsonResponse, "{\"temps\":[");
+    for(int8_t heater = 0; heater < HEATERS; heater++)
+    {
+      strcat(jsonResponse, "\"");
+      strcat(jsonResponse, ftoa(NULL, reprap.GetHeat()->GetTemperature(heater), 1));
+      //sprintf(scratchString, "%d", (int)reprap.GetHeat()->GetTemperature(heater));
+      //strcat(jsonResponse, scratchString);
+      if(heater < HEATERS-1)
+        strcat(jsonResponse, "\",");
+      else
+        strcat(jsonResponse, "\"");
+    }
+    strcat(jsonResponse, "]}");    
+    JsonReport(true, request);
+    return;
   }
+  
+  if(StringStartsWith(request, "gcode"))
+  {
+    if(!LoadGcodeBuffer(&clientQualifier[6], true))
+      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!\n");
+    strcpy(jsonResponse, "{}");
+    JsonReport(true, request);
+    return;
+  }
+  
+  if(StringStartsWith(request, "files"))
+  {
+    char* fileList = platform->FileList(platform->GetGCodeDir());
+    strcpy(jsonResponse, "{\"files\":[");
+    strcat(jsonResponse, fileList);
+    strcat(jsonResponse, "]}");    
+    JsonReport(true, request);
+    return;
+  }
+  
+  if(StringStartsWith(request, "name"))
+  {
+    strcpy(jsonResponse, "{\"myName\":\"");
+    strcat(jsonResponse, myName);
+    strcat(jsonResponse, "\"}");
+    JsonReport(true, request);
+    return;
+  }
+  
+  if(StringStartsWith(request, "password"))
+  {
+    CheckPassword();
+    strcpy(jsonResponse, "{\"password\":\"");
+    if(gotPassword)
+      strcat(jsonResponse, "right");
+    else
+      strcat(jsonResponse, "wrong");
+    strcat(jsonResponse, "\"}");   
+    JsonReport(true, request);
+    return;
+  }
+  
+  if(StringStartsWith(request, "axes"))
+  {
+    strcpy(jsonResponse, "{\"axes\":[");
+    for(int8_t drive = 0; drive < AXES; drive++)
+    {
+      strcat(jsonResponse, "\"");
+      strcat(jsonResponse, ftoa(NULL, platform->AxisLength(drive), 1));
+      if(drive < AXES-1)
+        strcat(jsonResponse, "\",");
+      else
+        strcat(jsonResponse, "\"");
+    }
+    strcat(jsonResponse, "]}");    
+    JsonReport(true, request);
+    return;
+  }
+  
+  JsonReport(false, request);
 }
 
 /*

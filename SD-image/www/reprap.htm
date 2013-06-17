@@ -69,8 +69,12 @@ td { text-align: center; }
 </head>
 
 <html>
+<!--
 <script src="https://raw.github.com/reprappro/RepRapFirmware/due/SD-image/www/jquery.js" type="text/javascript"></script>
 <script src="https://raw.github.com/reprappro/RepRapFirmware/due/SD-image/www/knockout.js" type="text/javascript"></script>
+-->
+<script src="http://reprappro.com/scripts/jquery.js" type="application/javascript"></script>
+<script src="http://reprappro.com/scripts/knockout.js" type="application/javascript"></script>
 <script>
 function jogRowHTML(axis)
 {
@@ -102,17 +106,16 @@ function jogRowHTML(axis)
 	return result;
 }
 
-function heatRowHTML(heater)
+function heatRowHTML(heater, hNumber)
 {
   	var result = "";
 
 	result += "<td>" + heater + "</td>";
-	result += "<td>" + "57" + "<sup>o</sup>C" + "</td>";
+	result += "<td>" + '<span data-bind="text: temps().temps[' + hNumber + ']"></span>' + "<sup>o</sup>C" + "</td>";
 	result +=  '<td>' + 
-	'<form data-bind="submit: sendGCode"><input type="text" size="4" id="temperature" value="" data-bind="value: temperature" />' +
-	'<button type="submit">set</button>' +
-	'</form>' +
-	"</td>";
+	'<form data-bind="submit: function(data, event) { setTemperature(' + hNumber + ', data, event) }">' +
+	'<button type="submit">set to -&gt;</button><input type="text" size="4" id="setTemp" data-bind="value: setTemp" />' + '</form>' + 
+	'</td>';
 
 	if(heater == "Bed")
 		return result;
@@ -222,13 +225,13 @@ function heatRowHTML(heater)
    
    	<tr>
 			<script>
-				document.write(heatRowHTML("Bed"));
+				document.write(heatRowHTML("Bed", 0));
 			</script>
    	</tr>
 
    	<tr>
 			<script>
-				document.write(heatRowHTML("Extruder 0"));
+				document.write(heatRowHTML("Extruder 0", 1));
 			</script>
    	</tr>
    
@@ -306,16 +309,19 @@ function viewModel()
 {
 	// Data
 	var self = this;
+	var onControlPage = new Boolean();
 	self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
 	self.chosenPageId = ko.observable('');
 	self.chosenFileId = ko.observable('');
 	self.machineName = ko.observable();
 	self.gotPassword = ko.observable();
+	self.deleteButton = ko.observable();
 	self.fileAction = ko.observable('print it');
 	self.pwd = ko.observable();
 	self.gcode = ko.observable();
 	self.files = ko.observable();
-	self.deleteButton = ko.observable('Delete a file');
+	self.temps = ko.observable(JSON.parse('{"temps":["0.0","0.0"]}'));
+	self.setTemp = ko.observable();
 	self.dummy = ko.observable();
 
 	// Behaviours
@@ -323,7 +329,13 @@ function viewModel()
 	self.fileList = function()
 	{
 		$.get('/rr_files', {}, self.files);
-	}
+	};
+
+	self.getTemps = function()
+	{
+		if(onControlPage)
+			$.get('/rr_temps', {}, self.temps);
+	};
 	
 	self.getName = function() 
 	{
@@ -354,7 +366,7 @@ function viewModel()
 			self.fileAction('delete it');
 			self.deleteButton('Print a file');
 		}
-	}
+	};
 
 	self.sendJog = function(axis, d, data, event) 
 	{
@@ -383,13 +395,22 @@ function viewModel()
 		$.get('/rr_gcode', {gcode: self.gcode()}, self.dummy);
 	};
 
+	self.setTemperature = function(heater, data, event)
+	{
+		if(heater == 0)
+			$.get('/rr_gcode', {gcode: "M140 S" + self.setTemp()}, self.dummy);
+		else
+			$.get('/rr_gcode', {gcode: "G10 P" + (heater-1) + " S" + self.setTemp() +"\nT" + (heater-1)}, self.dummy);
+	};
+
 	self.resetFileAction = function()
 	{
 		self.chosenFileId('');
 		self.fileAction('print it');
 		self.deleteButton('Delete a file');
 		self.fileList();
-	}
+		self.getTemps();
+	};
 
 	self.goToPage = function(page) 
 	{
@@ -402,6 +423,7 @@ function viewModel()
 			return;
 		}
 
+		onControlPage = (page == self.pages[0]);
 		self.resetFileAction();
 		self.chosenPageId(page);	
 	};
@@ -420,7 +442,7 @@ function viewModel()
   		}
 
 		return true;
-	}
+	};
 
 	self.uploadGCode = function(uploadForm, event)
 	{
@@ -429,16 +451,29 @@ function viewModel()
 			alert('upload ' + uploadForm.datafile.value);
 			// TODO put post upload here
 		}
-	}
+	};
 
+	onControlPage = false;
 	self.getName();
 	self.fileList();
+	self.getTemps();
 	self.goToPage(self.pages[5]);
 	self.gotPassword(JSON.parse('{"password":"wrong"}'));
 };
 
+function poll()
+{
+   setTimeout(function()
+	{
+      vm.getTemps();
+      poll();
+   }, 3000)
+}
+
+
 window.vm = new viewModel();
 ko.applyBindings(vm);
+poll();
 </script>
 
 

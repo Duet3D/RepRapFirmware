@@ -68,10 +68,10 @@ PID::PID(Platform* p, int8_t h)
 
 void PID::Init()
 {
-  
+  temperature = 5*(heater + 1);
 }
 
 void PID::Spin()
 {
-  
+  temperature += 1;
 }

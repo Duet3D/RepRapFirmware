@@ -68,6 +68,8 @@ class Webserver
     void BlankLineFromClient();
     void InitialisePost();
     boolean MatchBoundary(char c);
+    void JsonReport(boolean ok, char* request);
+
     
     Platform* platform;
     boolean active;
