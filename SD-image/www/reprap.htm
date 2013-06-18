@@ -114,18 +114,18 @@ function heatRowHTML(heater, hNumber)
 	result += "<td>" + '<span data-bind="text: temps().temps[' + hNumber + ']"></span>' + "<sup>o</sup>C" + "</td>";
 	result +=  '<td>' + 
 	'<form data-bind="submit: function(data, event) { setTemperature(' + hNumber + ', data, event) }">' +
-	'<button type="submit">set to -&gt;</button><input type="text" size="4" id="setTemp" data-bind="value: setTemp" />' + '</form>' + 
+	'<button type="submit">set to -&gt;</button><input type="text" size="4" data-bind="value: setTemp" />' + '</form>' + 
 	'</td>';
 
 	if(heater == "Bed")
 		return result;
 
-	result += "<td>" + "<button>" + "Extrude:" + "</button>" +"</td>";
-	result += "<td>" + "<button>" + "1mm" + "</button>" +"</td>";
-	result += "<td>" + "<button>" + "5mm" + "</button>" +"</td>";
-	result += "<td>" + "<button>" + "10mm" + "</button>" +"</td>";
-	result += "<td>" + "<button>" + "50mm" + "</button>" +"</td>";
-   result += "<td>" + "<button>" + "100mm" + "</button>" +"</td>";
+	result += '<td>' + '<button data-bind="text: extrudeButton, click: function(data, event) { extrude(data, event) }"></button>' + '</td>';
+	result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(1, data, event) }">1mm</button>' + '</td>';
+	result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(5, data, event) }">5mm</button>' + '</td>';
+	result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(10, data, event) }">10mm</button>' + '</td>';
+	result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(50, data, event) }">50mm</button>' + '</td>';
+   result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(100, data, event) }">100mm</button>' + '</td>';
 
 	
 	return result;
@@ -168,7 +168,7 @@ function heatRowHTML(heater, hNumber)
    <td rowspan="2"><button data-bind="click: function(data, event) { sendHome('', data, event) }">Home<br>All</button></td>
    <td colspan="4">- mm</td>
    <td colspan="4">+ mm</td>
-	<td rowspan="2"><button data-bind="click: function(data, event) { sendHome('X', data, event) }">Motors<br>off
+	<td rowspan="2"><button data-bind="click: function(data, event) { motorsOff(data, event) }">Motors<br>off
 	</button></td>
    </tr>
    
@@ -189,7 +189,7 @@ function heatRowHTML(heater, hNumber)
 	<script>
 		document.write(jogRowHTML('X'));
 	</script>
-	<td><button data-bind="click: function(data, event) { sendHome('X', data, event) }">Max X
+	<td><button data-bind="click: function(data, event) { maxX(data, event) }">Max X
 	</button></td>
    </tr>
    
@@ -199,7 +199,7 @@ function heatRowHTML(heater, hNumber)
 	<script>
 		document.write(jogRowHTML('Y'));
 	</script>
-	<td><button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Max Y
+	<td><button data-bind="click: function(data, event) { maxY(data, event) }">Max Y
 	</button></td>
    </tr>
    
@@ -209,7 +209,7 @@ function heatRowHTML(heater, hNumber)
 	<script>
 		document.write(jogRowHTML('Z'));
 	</script>
-   <td><button data-bind="click: function(data, event) { sendHome('Z', data, event) }">Max Z
+   <td><button data-bind="click: function(data, event) { maxZ(data, event) }">Max Z
 	</button></td>
    </tr>
 
@@ -238,8 +238,7 @@ function heatRowHTML(heater, hNumber)
    </div></table> 
 
 <br><br>
-<button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Fan on
-</button>
+<button data-bind="text: fanButton, click: function(data, event) { fanChange(data, event) }"></button>
 
 <br><br>
 <form data-bind="submit: sendGCode">
@@ -252,8 +251,7 @@ function heatRowHTML(heater, hNumber)
 <!-- PRINT PAGE -->
 <div data-bind="if: chosenPageId() == pages[1]">
 
-<button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Pause print
-</button>
+<button data-bind="text: pauseButton, click: function(data, event) { pausePrint(data, event) }"></button>
 
 <br><br>
 
@@ -316,11 +314,15 @@ function viewModel()
 	self.machineName = ko.observable();
 	self.gotPassword = ko.observable();
 	self.deleteButton = ko.observable();
+	self.extrudeButton = ko.observable('Extrude:');
+	self.fanButton = ko.observable('Fan on');
+	self.pauseButton = ko.observable('Pause print');
 	self.fileAction = ko.observable('print it');
 	self.pwd = ko.observable();
 	self.gcode = ko.observable();
 	self.files = ko.observable();
 	self.temps = ko.observable(JSON.parse('{"temps":["0.0","0.0"]}'));
+	self.axisLengths = ko.observable(JSON.parse('{"axes":["140.0", "140.0", "100.0"]}'));
 	self.setTemp = ko.observable();
 	self.dummy = ko.observable();
 
@@ -335,6 +337,11 @@ function viewModel()
 	{
 		if(onControlPage)
 			$.get('/rr_temps', {}, self.temps);
+	};
+
+	self.getAxes = function()
+	{
+		$.get('/rr_axes', {}, self.axisLengths);
 	};
 	
 	self.getName = function() 
@@ -368,6 +375,72 @@ function viewModel()
 		}
 	};
 
+	self.motorsOff = function(data, event)
+	{
+		$.get('/rr_gcode', {gcode: "M18"}, self.dummy);
+	};
+
+	self.maxX = function(data, event)
+	{
+		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 X" + self.axisLengths().axes[0] + " F2000\nM121"}, self.dummy);
+	};
+
+	self.maxY = function(data, event)
+	{
+		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 Y" + self.axisLengths().axes[1] + " F2000\nM121"}, self.dummy);
+	};
+
+	self.maxZ = function(data, event)
+	{
+		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 Z" + self.axisLengths().axes[2] + " F200\nM121"}, self.dummy);
+	};
+
+	self.fanChange = function(data, event)
+	{
+		if(self.fanButton() == 'Fan on')
+		{
+			$.get('/rr_gcode', {gcode: "M106 S255"}, self.dummy);
+			self.fanButton('Fan off');
+		} else
+		{
+			$.get('/rr_gcode', {gcode: "M107"}, self.dummy);
+			self.fanButton('Fan on');
+		}
+	};
+
+	self.pausePrint = function(data, event)
+	{
+		if(self.pauseButton() == 'Pause print')
+		{
+			$.get('/rr_gcode', {gcode: "M25"}, self.dummy);
+			self.pauseButton('Resume print');
+		} else
+		{
+			$.get('/rr_gcode', {gcode: "M24"}, self.dummy);
+			self.pauseButton('Pause print');
+		}
+	};	
+
+
+	self.extrude = function(data, event)
+	{
+		if(self.extrudeButton() == 'Extrude:')
+		{
+			self.extrudeButton('Reverse:');
+		} else
+		{
+			self.extrudeButton('Extrude:');
+		}
+	};
+
+	self.extrudeFilament = function(length, data, event)
+	{
+		if(self.extrudeButton() == 'Extrude:')
+			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E" + length + " F200\nM121"}, self.dummy);
+		else
+			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E-" + length + " F800\nM121"}, self.dummy);
+	};
+
 	self.sendJog = function(axis, d, data, event) 
 	{
 		var feed = " F2000";
@@ -397,10 +470,11 @@ function viewModel()
 
 	self.setTemperature = function(heater, data, event)
 	{
+		var t = self.setTemp();
 		if(heater == 0)
-			$.get('/rr_gcode', {gcode: "M140 S" + self.setTemp()}, self.dummy);
+			$.get('/rr_gcode', {gcode: "M140 S" + t}, self.dummy);
 		else
-			$.get('/rr_gcode', {gcode: "G10 P" + (heater-1) + " S" + self.setTemp() +"\nT" + (heater-1)}, self.dummy);
+			$.get('/rr_gcode', {gcode: "G10 P" + (heater-1) + " S" + t +"\nT" + (heater-1)}, self.dummy);
 	};
 
 	self.resetFileAction = function()
@@ -457,6 +531,7 @@ function viewModel()
 	self.getName();
 	self.fileList();
 	self.getTemps();
+	self.getAxes();
 	self.goToPage(self.pages[5]);
 	self.gotPassword(JSON.parse('{"password":"wrong"}'));
 };

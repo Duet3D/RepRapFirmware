@@ -471,6 +471,11 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       fileToPrint = -1;
       break;
       
+    case 25: // Pause the print
+      fileToPrint = fileBeingPrinted;
+      fileBeingPrinted = -1;
+      break;
+      
     case 82:
       drivesRelative = false;
       break;
