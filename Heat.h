@@ -28,7 +28,7 @@ class PID
     PID(Platform* p, int8_t h);
     void Init();
     void Spin();
-    void SetTemperature(float t);
+    void SetTemperature(const float& t);
     float GetTemperature();
   
   private:
@@ -48,6 +48,7 @@ class Heat
     void Spin();
     void Init();
     void Exit();
+    void SetTemperature(int8_t heater, const float& t);
     float GetTemperature(int8_t heater);
     
   private:
@@ -62,7 +63,7 @@ class Heat
 
 //***********************************************************************************************************
 
-inline void PID::SetTemperature(float t)
+inline void PID::SetTemperature(const float& t)
 {
   setTemperature = t;
 }
@@ -70,6 +71,11 @@ inline void PID::SetTemperature(float t)
 inline float PID::GetTemperature()
 {
   return temperature;
+}
+
+inline void Heat::SetTemperature(int8_t heater, const float& t)
+{
+  pids[heater]->SetTemperature(t);
 }
 
 inline float Heat::GetTemperature(int8_t heater)

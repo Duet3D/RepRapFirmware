@@ -76,10 +76,10 @@ Licence: GPL
 #define LOW_STOP_PINS {3, 14, 17, -1}
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
-#define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
-#define ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2??
+#define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
+#define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
 //#define ACCELERATIONS {80, 80, 3, 25} 
-#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
+#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 929.0}
 #define INSTANT_DVS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
@@ -87,8 +87,9 @@ Licence: GPL
 
 #define START_FEED_RATE 200.0
 
-#define AXIS_LENGTHS {210, 210, 120} // mm
-#define HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
+#define AXIS_LENGTHS {210, 200, 120} // mm
+#define HOME_FEEDRATES {50.0*60.0, 50.0*60.0, 1.0*60.0}  // mm/min
+#define HEAD_OFFSETS {0.0, 0.0, 0.0}
 
 #define X_AXIS 0  // The index of the X axis
 #define Y_AXIS 1  // The index of the Y axis
@@ -102,12 +103,14 @@ Licence: GPL
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {4700, 4700} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
-#define USE_PID {false, true} // PID or bang-bang for this heater?
+#define USE_PID {false, false} // PID or bang-bang for this heater?
 #define PID_KIS {-1, 100} // PID constants...
 #define PID_KDS {-1, 100}
 #define PID_KPS {-1, 100}
 #define PID_I_LIMITS {-1, 100} // ... to here
 #define TEMP_INTERVAL 0.5 // secs - check and control temperatures this often
+#define STANDBY_TEMPERATURES {0.0, 0.0} // We specify one for the bed, though it's not needed
+#define ACTIVE_TEMPERATURES {0.0, 0.0}
 
 #define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
@@ -253,11 +256,15 @@ class Platform
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
+  void SetStandbyTemperature(int8_t heater, const float& t);
+  void SetActiveTemperature(int8_t heater, const float& t);
+  float StandbyTemperature(int8_t heater);
+  float ActiveTemperature(int8_t heater);  
   float pidKp(int8_t heater);
   float pidKi(int8_t heater);
   float pidKd(int8_t heater);
   float pidKw(int8_t heater);
-  boolean pidBangBang(int8_t heater);
+  boolean UsePID(int8_t heater);
   float HeatSampleTime();
 
 //-------------------------------------------------------------------------------------------------------
@@ -297,7 +304,8 @@ class Platform
 
   float axisLengths[AXES];
   float homeFeedrates[AXES];
-
+  float headOffsets[AXES]; // FIXME - needs a 2D array
+  
 // HEATERS - Bed is assumed to be the first
 
   int8_t tempSensePins[HEATERS];
@@ -305,12 +313,14 @@ class Platform
   float thermistorBetas[HEATERS];
   float thermistorSeriesRs[HEATERS];
   float thermistorInfRs[HEATERS];
-  boolean usePid[HEATERS];
+  boolean usePID[HEATERS];
   float pidKis[HEATERS];
   float pidKds[HEATERS];
   float pidKps[HEATERS];
   float pidILimits[HEATERS];
   float heatSampleTime;
+  float standbyTemperatures[HEATERS];
+  float activeTemperatures[HEATERS];
 
 // Files
 
@@ -442,6 +452,31 @@ inline int Platform::GetRawTemperature(byte heater)
 inline float Platform::HeatSampleTime()
 {
   return heatSampleTime; 
+}
+
+inline boolean Platform::UsePID(int8_t heater)
+{
+  return usePID[heater];
+}
+
+inline void Platform::SetStandbyTemperature(int8_t heater, const float& t)
+{
+  standbyTemperatures[heater] = t;  
+}
+
+inline void Platform::SetActiveTemperature(int8_t heater, const float& t)
+{
+  activeTemperatures[heater] = t;  
+}
+
+inline float Platform::StandbyTemperature(int8_t heater)
+{
+  return standbyTemperatures[heater];
+}
+
+inline float Platform::ActiveTemperature(int8_t heater)
+{
+  return activeTemperatures[heater];
 }
 
 //*********************************************************************************************************

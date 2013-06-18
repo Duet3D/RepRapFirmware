@@ -90,6 +90,7 @@ void Platform::Init()
   
     axisLengths = AXIS_LENGTHS;
     homeFeedrates = HOME_FEEDRATES;
+    headOffsets = HEAD_OFFSETS;
    
   // HEATERS - Bed is assumed to be the first
   
@@ -98,7 +99,7 @@ void Platform::Init()
     thermistorBetas = THERMISTOR_BETAS;
     thermistorSeriesRs = THERMISTOR_SERIES_RS;
     thermistorInfRs = THERMISTOR_25_RS;
-    usePid = USE_PID;
+    usePID = USE_PID;
     pidKis = PID_KIS;
     pidKds = PID_KDS;
     pidKps = PID_KPS;
@@ -108,6 +109,8 @@ void Platform::Init()
     sysDir = SYS_DIR;
     tempDir = TEMP_DIR;
     heatSampleTime = HEAT_SAMPLE_TIME;
+    standbyTemperatures = STANDBY_TEMPERATURES;
+    activeTemperatures = ACTIVE_TEMPERATURES;
   }
   
   for(i = 0; i < DRIVES; i++)
@@ -238,7 +241,7 @@ float Platform::GetTemperature(int8_t heater)
 
 void Platform::SetHeater(int8_t heater, const float& power)
 {
-  if(power <= 0)
+  if(power <= 0.0)
   {
      digitalWrite(heatOnPins[heater], 0);
      return;

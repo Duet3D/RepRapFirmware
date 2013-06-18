@@ -72,6 +72,7 @@ class GCodes
     boolean SetUpMove(GCodeBuffer* gb);
     boolean DoDwell(GCodeBuffer *gb);
     boolean DoHome();
+    boolean SetOffsets(GCodeBuffer *gb);
     boolean NoHome();
     boolean Push();
     boolean Pop();
@@ -99,6 +100,7 @@ class GCodes
     float distanceScale;
     int fileBeingPrinted;
     int fileToPrint;
+    int8_t selectedHead;
     boolean homeX;
     boolean homeY;
     boolean homeZ;

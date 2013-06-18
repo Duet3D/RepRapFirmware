@@ -68,10 +68,20 @@ PID::PID(Platform* p, int8_t h)
 
 void PID::Init()
 {
-  temperature = 5*(heater + 1);
+  temperature = platform->GetTemperature(heater);
+  setTemperature = 0.0;
+  platform->SetHeater(heater, -1.0);
 }
 
 void PID::Spin()
 {
-  temperature += 1;
+  temperature = platform->GetTemperature(heater);
+  if(!platform->UsePID(heater))
+  {
+    if(temperature < setTemperature)
+      platform->SetHeater(heater, 1.0);
+    else
+      platform->SetHeater(heater, 0.0);
+    return; 
+  }
 }

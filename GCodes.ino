@@ -61,6 +61,7 @@ void GCodes::Init()
   homeZQueued = false;
   dwellWaiting = false;
   stackPointer = 0;
+  selectedHead = -1;
   dwellTime = platform->Time();
 }
 
@@ -375,6 +376,20 @@ boolean GCodes::DoDwell(GCodeBuffer *gb)
   return false;
 }
 
+boolean GCodes::SetOffsets(GCodeBuffer *gb)
+{
+  int8_t head;
+  if(gb->Seen('P'))
+  {
+    head = gb->GetIValue();
+    if(gb->Seen('R'))
+      platform->SetStandbyTemperature(head+1, gb->GetFValue());
+    if(gb->Seen('S'))
+      platform->SetActiveTemperature(head+1, gb->GetFValue());
+  }
+  return true;  
+}
+
 // If the GCode to act on is completed, this returns true,
 // otherwise false.  It is called repeatedly for a given
 // GCode until it returns true for that code.
@@ -382,6 +397,7 @@ boolean GCodes::DoDwell(GCodeBuffer *gb)
 boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 {
   int code;
+  float value;
   boolean result = true;
   
   if(gb->Seen('G'))
@@ -399,7 +415,7 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 10: // Set offsets
-      platform->Message(HOST_MESSAGE, "Set offsets received\n");
+      result = SetOffsets(gb);
       break;
     
     case 20: // Inches (which century are we living in, here?)
@@ -518,7 +534,8 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 140: // Set bed temperature
-      platform->Message(HOST_MESSAGE, "Set bed temp received\n");
+      if(gb->Seen('S'))
+        reprap.GetHeat()->SetTemperature(0, gb->GetFValue());
       break;
     
     case 141: // Chamber temperature
@@ -539,9 +556,14 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
     boolean ok = false;
     for(int8_t i = AXES; i < DRIVES; i++)
     {
+      if(selectedHead == i - AXES)
+      {
+        reprap.GetHeat()->SetTemperature(selectedHead+1, platform->StandbyTemperature(selectedHead+1));
+      }
       if(code == i - AXES)
       {
-        platform->Message(HOST_MESSAGE, "Tool selection received\n");
+        reprap.GetHeat()->SetTemperature(code+1, platform->ActiveTemperature(code+1));
+        selectedHead = code;
         ok = true;
       }
     }
