@@ -381,11 +381,13 @@ boolean GCodes::SetOffsets(GCodeBuffer *gb)
   int8_t head;
   if(gb->Seen('P'))
   {
-    head = gb->GetIValue();
+    head = gb->GetIValue() + 1;  // 0 is the Bed
     if(gb->Seen('R'))
-      platform->SetStandbyTemperature(head+1, gb->GetFValue());
+      reprap.GetHeat()->SetStandbyTemperature(head, gb->GetFValue());
+      
     if(gb->Seen('S'))
-      platform->SetActiveTemperature(head+1, gb->GetFValue());
+      reprap.GetHeat()->SetActiveTemperature(head, gb->GetFValue());
+    // FIXME - do X, Y and Z
   }
   return true;  
 }
@@ -535,7 +537,10 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       
     case 140: // Set bed temperature
       if(gb->Seen('S'))
-        reprap.GetHeat()->SetTemperature(0, gb->GetFValue());
+      {
+        reprap.GetHeat()->SetActiveTemperature(0, gb->GetFValue());
+        reprap.GetHeat()->Activate(0);
+      }
       break;
     
     case 141: // Chamber temperature
@@ -553,17 +558,21 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
   if(gb->Seen('T'))
   {
     code = gb->GetIValue();
+    if(code == selectedHead)
+      return result;
+      
     boolean ok = false;
     for(int8_t i = AXES; i < DRIVES; i++)
     {
       if(selectedHead == i - AXES)
-      {
-        reprap.GetHeat()->SetTemperature(selectedHead+1, platform->StandbyTemperature(selectedHead+1));
-      }
+        reprap.GetHeat()->Standby(selectedHead + 1); // 0 is the Bed
+    }
+    for(int8_t i = AXES; i < DRIVES; i++)
+    {    
       if(code == i - AXES)
       {
-        reprap.GetHeat()->SetTemperature(code+1, platform->ActiveTemperature(code+1));
         selectedHead = code;
+        reprap.GetHeat()->Activate(selectedHead + 1); // 0 is the Bed
         ok = true;
       }
     }

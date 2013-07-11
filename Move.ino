@@ -151,7 +151,12 @@ void Move::Spin()
   if(!active)
     return;
     
+  // Do some look-ahead work, if there's any to do
+    
   DoLookAhead();
+  
+  // If there's space in the DDA ring, and there are completed
+  // moves in the look-ahead ring, transfer them.
  
   if(!DDARingFull())
   {
@@ -163,10 +168,15 @@ void Move::Spin()
      }
   }
   
+  // If we either don't want to, or can't, add to the look-ahead ring, go home.
+  
   if(addNoMoreMoves || LookAheadRingFull())
    return;
   
-  boolean waitForThisToFinish;
+ // boolean waitForThisToFinish;
+ 
+  // If there's a G Code move available, add it to the look-ahead
+  // ring for proicessing.
   
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
@@ -204,6 +214,12 @@ boolean Move::GetCurrentState(float m[])
   return true;
 }
 
+// Classify a move between to points.
+// Is it (a combination of):
+//   A Z movement?
+//   An XY movement?
+//   Extruder movements?
+
 int8_t Move::GetMovementType(float p0[], float p1[])
 {
   int8_t result = noMove;
@@ -227,6 +243,8 @@ int8_t Move::GetMovementType(float p0[], float p1[])
   return result;
 }
 
+// Take an item from the look-ahead ring and add it to the DDA ring, if
+// possible.
 
 boolean Move::DDARingAdd(LookAhead* lookAhead)
 {
@@ -256,6 +274,7 @@ boolean Move::DDARingAdd(LookAhead* lookAhead)
   return false;
 }
 
+// Get a movement from the DDA ring, if we can.
 
 DDA* Move::DDARingGet()
 {
@@ -275,6 +294,7 @@ DDA* Move::DDARingGet()
   return NULL;
 }
 
+// Do the look-ahead calculations
 
 void Move::DoLookAhead()
 {
@@ -286,9 +306,18 @@ void Move::DoLookAhead()
   LookAhead* n2;
   
   float u, v;
+  
+  // If there are a reasonable number of moves in there (LOOK_AHEAD), or if we are
+  // doing single moves with no other move immediately following on, run up and down
+  // the moves using the DDA Init() function to reduce the start or the end speed
+  // or both to the maximum that can be achieved because of the requirements of
+  // the adjacent moves. 
     
   if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
-  {  
+  { 
+    
+    // Run up the moves
+    
     n1 = lookAheadRingGetPointer;
     n0 = n1->Previous();
     n2 = n1->Next();
@@ -311,6 +340,8 @@ void Move::DoLookAhead()
       n1 = n2;
       n2 = n2->Next();
     }
+    
+    // Now run down
     
     do
     { 
@@ -335,6 +366,9 @@ void Move::DoLookAhead()
     n0->SetProcessed(complete);
   }
 
+  // If there are any new unprocessed moves in there, set their end speeds
+  // according to the cosine of the angle between them.
+  
   if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > 1)
   {  
     n1 = lookAheadRingGetPointer;
@@ -365,6 +399,8 @@ void Move::DoLookAhead()
       n2 = n2->Next();
     }
     
+    // If we are just doing one isolated move, set its end velocity to 0.
+    
     if(addNoMoreMoves || !gCodes->PrintingAFile())
     {
       n1->SetV(0);
@@ -373,6 +409,7 @@ void Move::DoLookAhead()
   }
 }
 
+// This is the function that's called by the timer interrupt to step the motors.
 
 void Move::Interrupt()
 {

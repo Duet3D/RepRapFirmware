@@ -103,14 +103,18 @@ void Platform::Init()
     pidKis = PID_KIS;
     pidKds = PID_KDS;
     pidKps = PID_KPS;
-    pidILimits = PID_I_LIMITS;
+    fullPidBand = FULL_PID_BAND;
+    pidMin = PID_MIN;
+    pidMax = PID_MAX;
+    dMix = D_MIX;
+    heatSampleTime = HEAT_SAMPLE_TIME;
+    standbyTemperatures = STANDBY_TEMPERATURES;
+    activeTemperatures = ACTIVE_TEMPERATURES;   
+    
     webDir = WEB_DIR;
     gcodeDir = GCODE_DIR;
     sysDir = SYS_DIR;
     tempDir = TEMP_DIR;
-    heatSampleTime = HEAT_SAMPLE_TIME;
-    standbyTemperatures = STANDBY_TEMPERATURES;
-    activeTemperatures = ACTIVE_TEMPERATURES;
   }
   
   for(i = 0; i < DRIVES; i++)
@@ -229,11 +233,26 @@ bool Platform::LoadFromStore()
 
 // Result is in degrees celsius
 
+/*
+#define A 100000.0
+#define B 150000.0
+#define RS 4700
+#define VLOW 3.362
+#define VT 4.65
+*/
+
 float Platform::GetTemperature(int8_t heater)
 {
   float r = (float)GetRawTemperature(heater);
   //Serial.println(r);
   return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/(AD_RANGE - r))/thermistorInfRs[heater] );
+/*  float v = VLOW*(float)GetRawTemperature(heater)/AD_RANGE;
+  Serial.print(v); Serial.print(' ');
+  float k = (A + B)*v/(B*VT);
+  float rp = RS*k/(1 - k);
+  float r = rp*(A+B)/(A + B - rp);   
+  Serial.println(r);
+  return ABS_ZERO + thermistorBetas[heater]/log( r/thermistorInfRs[heater] );*/
 }
 
 
@@ -241,15 +260,15 @@ float Platform::GetTemperature(int8_t heater)
 
 void Platform::SetHeater(int8_t heater, const float& power)
 {
-  if(power <= 0.0)
+  if(power <= 0.00)
   {
-     digitalWrite(heatOnPins[heater], 0);
+     analogWrite(heatOnPins[heater], 0);
      return;
   }
   
   if(power >= 1.0)
   {
-     digitalWrite(heatOnPins[heater], 1);
+     analogWrite(heatOnPins[heater], 255);
      return;
   }
   

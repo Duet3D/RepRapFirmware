@@ -79,7 +79,7 @@ Licence: GPL
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
 //#define ACCELERATIONS {80, 80, 3, 25} 
-#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 929.0}
+#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 948.0}
 #define INSTANT_DVS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
@@ -103,14 +103,17 @@ Licence: GPL
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {4700, 4700} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
-#define USE_PID {false, false} // PID or bang-bang for this heater?
-#define PID_KIS {-1, 100} // PID constants...
-#define PID_KDS {-1, 100}
-#define PID_KPS {-1, 100}
-#define PID_I_LIMITS {-1, 100} // ... to here
-#define TEMP_INTERVAL 0.5 // secs - check and control temperatures this often
-#define STANDBY_TEMPERATURES {0.0, 0.0} // We specify one for the bed, though it's not needed
-#define ACTIVE_TEMPERATURES {0.0, 0.0}
+#define USE_PID {false, true} // PID or bang-bang for this heater?
+#define PID_KIS {-1, 2.2} // PID constants...
+#define PID_KDS {-1, 80}
+#define PID_KPS {-1, 12}
+#define FULL_PID_BAND {-1, 150.0}
+#define PID_MIN {-1, 0.0}
+#define PID_MAX {-1, 125.0}
+#define D_MIX {-1, 0.95}
+#define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
+#define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
+#define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
 
 #define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
@@ -256,14 +259,17 @@ class Platform
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
-  void SetStandbyTemperature(int8_t heater, const float& t);
-  void SetActiveTemperature(int8_t heater, const float& t);
-  float StandbyTemperature(int8_t heater);
-  float ActiveTemperature(int8_t heater);  
-  float pidKp(int8_t heater);
-  float pidKi(int8_t heater);
-  float pidKd(int8_t heater);
-  float pidKw(int8_t heater);
+  //void SetStandbyTemperature(int8_t heater, const float& t);
+  //void SetActiveTemperature(int8_t heater, const float& t);
+  //float StandbyTemperature(int8_t heater);
+  //float ActiveTemperature(int8_t heater);  
+  float PidKp(int8_t heater);
+  float PidKi(int8_t heater);
+  float PidKd(int8_t heater);
+  float FullPidBand(int8_t heater);
+  float PidMin(int8_t heater);
+  float PidMax(int8_t heater);
+  float DMix(int8_t heater);
   boolean UsePID(int8_t heater);
   float HeatSampleTime();
 
@@ -317,7 +323,10 @@ class Platform
   float pidKis[HEATERS];
   float pidKds[HEATERS];
   float pidKps[HEATERS];
-  float pidILimits[HEATERS];
+  float fullPidBand[HEATERS];
+  float pidMin[HEATERS];
+  float pidMax[HEATERS];
+  float dMix[HEATERS];
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
@@ -459,25 +468,42 @@ inline boolean Platform::UsePID(int8_t heater)
   return usePID[heater];
 }
 
-inline void Platform::SetStandbyTemperature(int8_t heater, const float& t)
+
+inline float Platform::PidKi(int8_t heater)
 {
-  standbyTemperatures[heater] = t;  
+  return pidKis[heater]*heatSampleTime;
 }
 
-inline void Platform::SetActiveTemperature(int8_t heater, const float& t)
+inline float Platform::PidKd(int8_t heater)
 {
-  activeTemperatures[heater] = t;  
+  return pidKds[heater]/heatSampleTime;
 }
 
-inline float Platform::StandbyTemperature(int8_t heater)
+inline float Platform::PidKp(int8_t heater)
 {
-  return standbyTemperatures[heater];
+  return pidKps[heater];
 }
 
-inline float Platform::ActiveTemperature(int8_t heater)
+inline float Platform::FullPidBand(int8_t heater)
 {
-  return activeTemperatures[heater];
+  return fullPidBand[heater];
 }
+
+inline float Platform::PidMin(int8_t heater)
+{
+  return pidMin[heater];  
+}
+
+inline float Platform::PidMax(int8_t heater)
+{
+  return pidMax[heater]/PidKi(heater);
+}
+
+inline float Platform::DMix(int8_t heater)
+{
+  return dMix[heater];  
+}
+
 
 //*********************************************************************************************************
 

@@ -76,6 +76,7 @@ class GCodes
     boolean NoHome();
     boolean Push();
     boolean Pop();
+    int8_t Heater(int8_t head);
     Platform* platform;
     boolean active;
     Webserver* webserver;
@@ -131,6 +132,14 @@ inline boolean GCodes::PrintingAFile()
 inline boolean GCodes::NoHome()
 {
    return !(homeX || homeY || homeZ); 
+}
+
+// This function takes care of the fact that the heater and head indices 
+// don't match because the bed is heater 0.
+
+inline int8_t GCodes::Heater(int8_t head)
+{
+   return head+1; 
 }
 
 #endif
