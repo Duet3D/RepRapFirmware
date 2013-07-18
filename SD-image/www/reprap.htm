@@ -69,12 +69,10 @@ td { text-align: center; }
 </head>
 
 <html>
-<!--
-<script src="https://raw.github.com/reprappro/RepRapFirmware/due/SD-image/www/jquery.js" type="text/javascript"></script>
-<script src="https://raw.github.com/reprappro/RepRapFirmware/due/SD-image/www/knockout.js" type="text/javascript"></script>
--->
+
 <script src="http://reprappro.com/scripts/jquery.js" type="application/javascript"></script>
 <script src="http://reprappro.com/scripts/knockout.js" type="application/javascript"></script>
+
 <script>
 function jogRowHTML(axis)
 {
@@ -220,7 +218,7 @@ function heatRowHTML(heater, hNumber)
  	<table border="1"><div align="center">
 
    	<tr>
-   		<td colspan="9"><b>Heaters</b> <small>(click "Extrude:" to flip it to "Reverse:")</small></td>
+   		<td colspan="9"><b>Heaters</b></td>
    	</tr>
    
    	<tr>
@@ -314,7 +312,7 @@ function viewModel()
 	self.machineName = ko.observable();
 	self.gotPassword = ko.observable();
 	self.deleteButton = ko.observable();
-	self.extrudeButton = ko.observable('Extrude:');
+	self.extrudeButton = ko.observable('Feed');
 	self.fanButton = ko.observable('Fan on');
 	self.pauseButton = ko.observable('Pause print');
 	self.fileAction = ko.observable('print it');
@@ -424,21 +422,26 @@ function viewModel()
 
 	self.extrude = function(data, event)
 	{
-		if(self.extrudeButton() == 'Extrude:')
+		if(self.extrudeButton() == 'Feed:')
+		{
+			self.extrudeButton('Fast:');
+		} else if(self.extrudeButton() == 'Fast:')
 		{
 			self.extrudeButton('Reverse:');
 		} else
 		{
-			self.extrudeButton('Extrude:');
+			self.extrudeButton('Feed:');
 		}
 	};
 
 	self.extrudeFilament = function(length, data, event)
 	{
-		if(self.extrudeButton() == 'Extrude:')
+		if(self.extrudeButton() == 'Feed:')
 			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E" + length + " F60\nM121"}, self.dummy);
+		else if(self.extrudeButton() == 'Fast:')
+			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E" + length + " F240\nM121"}, self.dummy);
 		else
-			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E-" + length + " F800\nM121"}, self.dummy);
+			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E-" + length + " F240\nM121"}, self.dummy);
 	};
 
 	self.sendJog = function(axis, d, data, event) 
@@ -455,6 +458,7 @@ function viewModel()
 		{
 			self.chosenFileId(file);
 			$.get('/rr_gcode', {gcode: "M23 " + file + "\nM24"}, self.dummy);
+			self.pauseButton('Pause print');
 		} else
 		{
 			if(confirm("Delete the file " + file + " on " + self.machineName().myName + "?"))

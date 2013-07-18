@@ -110,6 +110,7 @@ class GCodes
     boolean homeXQueued;
     boolean homeYQueued;
     boolean homeZQueued;
+    float gFeedRate;
 };
 
 //*****************************************************************************************************

@@ -62,6 +62,7 @@ void GCodes::Init()
   dwellWaiting = false;
   stackPointer = 0;
   selectedHead = -1;
+  gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
   dwellTime = platform->Time();
 }
 
@@ -226,8 +227,10 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
   // Deal with feedrate
   
   if(gb->Seen(gCodeLetters[DRIVES]))
-    moveBuffer[DRIVES] = gb->GetFValue()*distanceScale*0.016666667; // Feedrates are in mm/minute; we need mm/sec
+    gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // Feedrates are in mm/minute; we need mm/sec
     
+  moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
+  
   // Remember for next time if we are switched
   // to absolute drive moves
   
