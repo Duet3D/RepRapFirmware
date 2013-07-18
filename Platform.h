@@ -58,7 +58,7 @@ Licence: GPL
 
 #define DRIVES 4  // The number of drives in the machine, including X, Y, and Z plus extruder drives
 #define AXES 3    // The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
-#define HEATERS 2 // The number of heaters in the machine, including the heated bed if any.
+#define HEATERS 2 // The number of heaters in the machine; 0 is the heated bed even if there isn't one.
 
 // The numbers of entries in each array must correspond with the values of DRIVES,
 // AXES, or HEATERS.  Set values to -1 to flag unavailability.
@@ -80,12 +80,11 @@ Licence: GPL
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
 //#define ACCELERATIONS {80, 80, 3, 25} 
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 948.0}
-#define INSTANT_DVS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
-#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
+#define INSTANT_DVS {1.0, 1.0, 0.3, 1.0}    // (mm/sec) - Bit high? AB
 
 // AXES
 
-#define START_FEED_RATE 200.0
+#define START_FEED_RATE 200.0  // Default.  mm/min
 
 #define AXIS_LENGTHS {210, 200, 120} // mm
 #define HOME_FEEDRATES {50.0*60.0, 50.0*60.0, 1.0*60.0}  // mm/min
@@ -96,7 +95,7 @@ Licence: GPL
 #define Z_AXIS 2  // The index of the Z axis
 
 
-// HEATERS - Bed is assumed to be the first
+// HEATERS - The bed is assumed to be the first
 
 #define TEMP_SENSE_PINS {10, 9}  // Analogue pin numbers
 #define HEAT_ON_PINS {8, 9}
@@ -207,6 +206,8 @@ class Platform
   
   void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
   
+  void Diagnostics();
+  
   // Timing
   
   float Time(); // Returns elapsed seconds since some arbitrary time
@@ -247,6 +248,7 @@ class Platform
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   float DriveStepsPerUnit(int8_t drive);
   float Acceleration(int8_t drive);
+  float MaxFeedrate(int8_t drive);
   float InstantDv(int8_t drive);
   float HomeFeedRate(int8_t drive);
   EndStopHit Stopped(int8_t drive);
@@ -449,6 +451,12 @@ inline float Platform::AxisLength(int8_t drive)
   return axisLengths[drive];
 }
 
+inline float Platform::MaxFeedrate(int8_t drive)
+{
+  return maxFeedrates[drive];
+}
+
+
 //********************************************************************************************************
 
 // Drive the RepRap machine - Heat and temperature
@@ -524,8 +532,9 @@ inline void Platform::SetInterrupt(float s) // Seconds
 {
   if(s <= 0.0)
   {
-    NVIC_DisableIRQ(TC3_IRQn);
-    return;
+    //NVIC_DisableIRQ(TC3_IRQn);
+    Message(HOST_MESSAGE, "Negative interrupt!\n");
+    s = STANDBY_INTERRUPT_RATE;
   }
   uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
   TC_SetRA(TC1, 0, rc/2); //50% high, 50% low

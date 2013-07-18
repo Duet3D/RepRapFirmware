@@ -24,6 +24,7 @@ Licence: GPL
 
 #define STACK 5
 
+#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
 // Small class to hold an individual GCode
 
@@ -64,6 +65,7 @@ class GCodes
     boolean ReadHeat(float* h);
     void QueueFileToPrint(char* fileName);
     boolean PrintingAFile();
+    void Diagnostics();
     
   private:
   

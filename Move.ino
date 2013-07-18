@@ -45,7 +45,7 @@ Move::Move(Platform* p, GCodes* g)
     lookAheadRingGetPointer = new LookAhead(this, platform, lookAheadRingGetPointer);
   lookAheadRingAddPointer->next = lookAheadRingGetPointer;
   
-  // Set the backwards pointers
+  // Set the lookahead backwards pointers
   
   lookAheadRingGetPointer = lookAheadRingAddPointer; 
   for(i = 0; i <= LOOK_AHEAD_RING_LENGTH; i++)
@@ -82,7 +82,7 @@ void Move::Init()
   
   addNoMoreMoves = false;
   
-  // Put the origin on the lookahead ring with zero velocity in the previous
+  // Put the origin on the lookahead ring with default velocity in the previous
   // position to the first one that will be used.
   
   lastMove = lookAheadRingAddPointer->Previous();
@@ -172,21 +172,79 @@ void Move::Spin()
   
   if(addNoMoreMoves || LookAheadRingFull())
    return;
-  
- // boolean waitForThisToFinish;
  
   // If there's a G Code move available, add it to the look-ahead
-  // ring for proicessing.
+  // ring for processing.
   
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
     currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
-    if(GetMovementType(lastMove->EndPoint(), nextMove) == noMove) // Throw it away if there's no real movement.
-      return;
-    currentFeedrate = -1.0; // Real move - record its feedrate with it, not here.
+    
+    int8_t mt = GetMovementType(lastMove->EndPoint(), nextMove);
+    
+    // Throw it away if there's no real movement.
+    
+    if(mt == noMove) 
+       return;
+     
+    // Real move - record its feedrate with it, not here.
+    
+    currentFeedrate = -1.0;
+    
+    // Promote minimum feedrates
+    
+    if(mt & xyMove)
+      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(X_AXIS));
+    else if(mt & eMove) 
+      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(AXES));
+    else
+      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
+      
+    // Restrict maximum feedrates; assumes z < e < xy FIXME?? 
+    
+    if(mt & zMove)
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
+    else if(mt & eMove)
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
+    else // Must be xy
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
+    
     if(!LookAheadRingAdd(nextMove, 0.0, checkEndStopsOnNextMove))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
   }
+}
+
+
+void Move::Diagnostics() 
+{
+  platform->Message(HOST_MESSAGE, "Move Diagnostics:\n");
+/*  if(active)
+    platform->Message(HOST_MESSAGE, " active\n");
+  else
+    platform->Message(HOST_MESSAGE, " not active\n");
+  
+  platform->Message(HOST_MESSAGE, " look ahead ring count: ");
+  sprintf(scratchString, "%d\n", lookAheadRingCount);
+  platform->Message(HOST_MESSAGE, scratchString);
+  if(dda == NULL)
+    platform->Message(HOST_MESSAGE, " dda: NULL\n");
+  else
+  {
+    if(dda->Active())
+      platform->Message(HOST_MESSAGE, " dda: active\n");
+    else
+      platform->Message(HOST_MESSAGE, " dda: not active\n");
+    
+  }
+  if(ddaRingLocked)
+    platform->Message(HOST_MESSAGE, " dda ring is locked\n");
+  else
+    platform->Message(HOST_MESSAGE, " dda ring is not locked\n");
+  if(addNoMoreMoves)
+    platform->Message(HOST_MESSAGE, " addNoMoreMoves is true\n\n");
+  else
+    platform->Message(HOST_MESSAGE, " addNoMoreMoves is false\n\n"); 
+    */
 }
 
 // This returns false if it is not possible
@@ -388,7 +446,7 @@ void Move::DoLookAhead()
           else if (mt & xyMove)
             c = platform->InstantDv(X_AXIS);
           else
-            c = platform->InstantDv(AXES); // value for first extruder - slight hack
+            c = platform->InstantDv(AXES); // value for first extruder FIXME??
         }
         n1->SetV(c);
         n1->SetProcessed(vCosineSet);
@@ -649,10 +707,12 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
  
   // If velocities requested are (almost) zero, set them to instantDv
   
-  if(v < 0.01) // Set change here?
+  if(v < instantDv) // Set change here?
     v = instantDv; 
-  if(u < 0.01)
+  if(u < instantDv)
     u = instantDv;
+  if(targetPosition[DRIVES] < instantDv)
+    targetPosition[DRIVES] = instantDv;
 
   // At which DDA step should we stop accelerating?  targetPosition[DRIVES] contains
   // the desired feedrate.
@@ -800,6 +860,11 @@ void DDA::Step(boolean noTest)
       velocity += acceleration*timeStep;
     if(stepCount >= startDStep)
       velocity -= acceleration*timeStep;
+    
+    // Euler is only approximate.
+    
+    if(velocity < instantDv)
+      velocity = instantDv;
       
     stepCount++;
     active = stepCount < totalSteps;

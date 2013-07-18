@@ -49,6 +49,7 @@ class Webserver
     void Init();
     void Spin();
     void Exit();
+    void Diagnostics();
     
   private:
   

@@ -55,6 +55,11 @@ void Heat::Spin()
     pids[heater]->Spin();
 }
 
+void Heat::Diagnostics() 
+{
+  platform->Message(HOST_MESSAGE, "Heat Diagnostics:\n"); 
+}
+
 //******************************************************************************************************
 
 PID::PID(Platform* p, int8_t h)

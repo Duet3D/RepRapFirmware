@@ -30,6 +30,7 @@ class RepRap
     void Spin();
     void Exit();
     void Interrupt();
+    void Diagnostics();
 //    void InterruptTime();
     boolean debug();
     void debug(boolean d);
@@ -58,6 +59,7 @@ inline Webserver* RepRap::GetWebserver() { return webserver; }
 inline boolean RepRap::debug() { return dbg; }
 inline void RepRap::debug(boolean d) { dbg = d; }
 inline void RepRap::Interrupt() { move->Interrupt(); }
+
 
 #endif
 

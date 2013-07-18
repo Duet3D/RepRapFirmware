@@ -679,5 +679,10 @@ void Webserver::Exit()
   active = false;
 }
 
+void Webserver::Diagnostics() 
+{
+  platform->Message(HOST_MESSAGE, "Webserver Diagnostics:\n"); 
+}
+
 
 

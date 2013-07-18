@@ -24,7 +24,7 @@ General design principles:
   * Don't abhor floats - they work fast enough if you're clever,
   * Don't avoid arrays and structs/classes,
   * Don't avoid pointers,
-  * Use operator and function overloading where appropriate, particularly for vector algebra.
+  * Use operator and function overloading where appropriate.
   
   
 Naming conventions:
@@ -198,6 +198,15 @@ void RepRap::Spin()
   gCodes->Spin();
   move->Spin();
   heat->Spin();
+}
+
+void RepRap::Diagnostics() 
+{
+  platform->Diagnostics(); 
+  move->Diagnostics(); 
+  heat->Diagnostics(); 
+  gCodes->Diagnostics(); 
+  webserver->Diagnostics(); 
 }
 
 

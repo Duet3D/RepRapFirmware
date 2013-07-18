@@ -198,13 +198,10 @@ void Platform::Init()
   active = true;
 }
 
-/*
-char* Platform::PrependRoot(char* result, char* root, char* fileName)
+void Platform::Diagnostics() 
 {
-  strcpy(result, root);
-  return strcat(result, fileName);
+  Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
-*/
 
 // Load settings from local storage; return true if successful, false otherwise
 
@@ -233,26 +230,10 @@ bool Platform::LoadFromStore()
 
 // Result is in degrees celsius
 
-/*
-#define A 100000.0
-#define B 150000.0
-#define RS 4700
-#define VLOW 3.362
-#define VT 4.65
-*/
-
 float Platform::GetTemperature(int8_t heater)
 {
   float r = (float)GetRawTemperature(heater);
-  //Serial.println(r);
   return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/(AD_RANGE - r))/thermistorInfRs[heater] );
-/*  float v = VLOW*(float)GetRawTemperature(heater)/AD_RANGE;
-  Serial.print(v); Serial.print(' ');
-  float k = (A + B)*v/(B*VT);
-  float rp = RS*k/(1 - k);
-  float r = rp*(A+B)/(A + B - rp);   
-  Serial.println(r);
-  return ABS_ZERO + thermistorBetas[heater]/log( r/thermistorInfRs[heater] );*/
 }
 
 

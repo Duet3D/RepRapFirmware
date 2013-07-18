@@ -77,6 +77,7 @@ class LookAhead
     boolean checkEndStops;
     float cosine;
     float v;
+    float instantDv;
     volatile int8_t processed;
 };
 
@@ -90,6 +91,7 @@ class DDA
     void Step(boolean noTest);
     boolean Active();
     DDA* Next();
+    float InstantDv();
     
   friend class Move;
 
@@ -134,6 +136,7 @@ class Move
     void DoLookAhead();
     void HitLowStop(int8_t drive, LookAhead* la);
     void HitHighStop(int8_t drive, LookAhead* la);
+    void Diagnostics();
     
   friend class DDA;
     
@@ -246,6 +249,11 @@ inline boolean DDA::Active()
 inline DDA* DDA::Next()
 {
   return next;
+}
+
+inline float DDA::InstantDv()
+{
+  return instantDv;
 }
 
 

@@ -436,7 +436,7 @@ function viewModel()
 	self.extrudeFilament = function(length, data, event)
 	{
 		if(self.extrudeButton() == 'Extrude:')
-			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E" + length + " F200\nM121"}, self.dummy);
+			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E" + length + " F60\nM121"}, self.dummy);
 		else
 			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E-" + length + " F800\nM121"}, self.dummy);
 	};

@@ -106,6 +106,11 @@ void GCodes::Spin()
   }
 }
 
+void GCodes::Diagnostics() 
+{
+  platform->Message(HOST_MESSAGE, "GCodes Diagnostics:\n");
+}
+
 boolean GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
 {
   // Last one gone?
@@ -221,7 +226,7 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
   // Deal with feedrate
   
   if(gb->Seen(gCodeLetters[DRIVES]))
-    moveBuffer[DRIVES] = gb->GetFValue()*distanceScale/60.0; // Feedrates are in mm/minute; we need mm/sec
+    moveBuffer[DRIVES] = gb->GetFValue()*distanceScale*0.016666667; // Feedrates are in mm/minute; we need mm/sec
     
   // Remember for next time if we are switched
   // to absolute drive moves
@@ -527,6 +532,10 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       result = Pop();
       break;
     
+    case 122:
+      reprap.Diagnostics();
+      break;
+      
     case 126: // Valve open
       platform->Message(HOST_MESSAGE, "M126 - valves not yet implemented\n");
       break;

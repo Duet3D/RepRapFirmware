@@ -61,6 +61,7 @@ class Heat
     void Activate(int8_t heater);
     void Standby(int8_t heater);
     float GetTemperature(int8_t heater);
+    void Diagnostics();
     
   private:
   
