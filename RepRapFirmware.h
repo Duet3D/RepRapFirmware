@@ -27,12 +27,22 @@ Licence: GPL
 #define VERSION "0.1"
 #define DATE "2012-11-18"
 #define LAST_AUTHOR "reprappro.com"
+<<<<<<< duet
 
 class Platform;
 class Move;
 class Heat;
 class GCodes;
 class Webserver;
+=======
+/*
+#include <SPI.h>
+#include <Ethernet.h>
+#include <SD.h>
+*/
+#include "Configuration.h"
+#include "Platform.h"
+>>>>>>> local
 
 class RepRap
 {    

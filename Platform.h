@@ -43,6 +43,21 @@ Licence: GPL
 
 #include <Arduino.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+void loop();
+void setup();
+#ifdef __cplusplus
+} // extern "C"
+#endif
+
+
+#include <SPI.h>
+#include <Ethernet.h>
+#include <SD.h>
+
+
 
 /**************************************************************************************************/
 
