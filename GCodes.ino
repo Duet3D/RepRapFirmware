@@ -41,7 +41,6 @@ void GCodes::Init()
   fileGCode->Init();
   webGCodeFinished = true;
   fileGCodeFinished = true;
-  active = true;
   moveAvailable = false;
   heatAvailable = false;
   drivesRelative = true;
@@ -63,6 +62,7 @@ void GCodes::Init()
   stackPointer = 0;
   selectedHead = -1;
   gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
+  active = true;
   dwellTime = platform->Time();
 }
 
@@ -146,7 +146,7 @@ boolean GCodes::Push()
   
   drivesRelativeStack[stackPointer] = drivesRelative;
   axesRelativeStack[stackPointer] = axesRelative;
-  feedrateStack[stackPointer] = moveBuffer[DRIVES];
+  feedrateStack[stackPointer] = gFeedRate; 
   stackPointer++;
   
   return true;
@@ -175,7 +175,8 @@ boolean GCodes::Pop()
   
   // Do a null move to set the correct feedrate
   
-  moveBuffer[DRIVES] = feedrateStack[stackPointer];
+  gFeedRate = feedrateStack[stackPointer];
+  moveBuffer[DRIVES] = gFeedRate;
   
   checkEndStops = false;
   moveAvailable = true;
@@ -242,6 +243,8 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
   return true; 
 }
 
+// The Move class calls this function to find what to do next.
+
 boolean GCodes::ReadMove(float* m, boolean& ce)
 {
     if(!moveAvailable)
@@ -267,9 +270,9 @@ boolean GCodes::DoHome()
      
   if(homeX)
   {
-    if(homeXQueued)
+    if(homeXQueued) // If this is true we are in the middle of homeing X
     {
-      if(!Pop())
+      if(!Pop())  // Pop will only be true when the home is finished
         return false;
       homeX = false;
       homeXQueued = false;
@@ -281,7 +284,7 @@ boolean GCodes::DoHome()
       if(!Push())
         return false;
       moveBuffer[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-      moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)/60.0;
+      moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)*0.016666667;
       homeXQueued = true;
       checkEndStops = true;
       moveAvailable = true; 
@@ -303,7 +306,7 @@ boolean GCodes::DoHome()
       if(!Push())
         return false;
       moveBuffer[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-      moveBuffer[DRIVES] = platform->HomeFeedRate(Y_AXIS)/60.0;
+      moveBuffer[DRIVES] = platform->HomeFeedRate(Y_AXIS)*0.016666667;
       homeYQueued = true;
       checkEndStops = true;
       moveAvailable = true; 
@@ -325,7 +328,7 @@ boolean GCodes::DoHome()
       if(!Push())
         return false;
       moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-      moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)/60.0;
+      moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
       homeZQueued = true;
       checkEndStops = true;
       moveAvailable = true; 
@@ -492,7 +495,7 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
 //      platform->Message(HOST_MESSAGE, "M code for file selected erroneously received.\n");
 //      break;
       
-    case 24: // Print selected file
+    case 24: // Print/resume-printing the selected file
       fileBeingPrinted = fileToPrint;
       fileToPrint = -1;
       break;
