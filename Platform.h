@@ -1,6 +1,6 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Mendel/Huxley with Prototype Duet controller
+RepRapFirmware - Platform: RepRapPro Mendel with Prototype Arduino Due controller
 
 Platform contains all the code and definitons to deal with machine-dependent things such as control 
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
@@ -34,11 +34,6 @@ Licence: GPL
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-// Language-specific includes
-
-#include <stdio.h>
-#include <ctype.h>
-
 // Platform-specific includes
 
 #include <Arduino.h>
@@ -53,11 +48,14 @@ void setup();
 #endif
 
 
-#include <SPI.h>
+#include <SamNonDuePin.h>
+//#include <string.h>
 #include <Ethernet.h>
-#include <SD.h>
+#include <SD_HSMCI.h>
 
-
+#define STRING_LENGTH 1000
+#define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
+#define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
 
 /**************************************************************************************************/
 
@@ -65,52 +63,61 @@ void setup();
 
 #define DRIVES 4  // The number of drives in the machine, including X, Y, and Z plus extruder drives
 #define AXES 3    // The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
-#define HEATERS 2 // The number of heaters in the machine, including the heated bed if any.
+#define HEATERS 2 // The number of heaters in the machine; 0 is the heated bed even if there isn't one.
 
 // The numbers of entries in each array must correspond with the values of DRIVES,
 // AXES, or HEATERS.  Set values to -1 to flag unavailability.
 
 // DRIVES
 
-#define STEP_PINS {14, 25, 5, 68}
-#define DIRECTION_PINS {15, 26, 4, 69}
-#define FORWARDS 1     // What to send to go... 
-#define BACKWARDS 0    // ...in each direction
-#define ENABLE_PINS {29, 27, 138, 25} // * * X X WRONG
-#define ENABLE 0      // What to send to enable... 
-#define DISABLE 1     // ...and disable a drive
+#define STEP_PINS {54, 60, 46, 26}
+#define DIRECTION_PINS {55, 61, 48, 28}
+#define FORWARDS true     // What to send to go... 
+#define BACKWARDS false    // ...in each direction
+#define ENABLE_PINS {38, -1, 62, -1}
+#define ENABLE false      // What to send to enable... 
+#define DISABLE true     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
-#define LOW_STOP_PINS {11, 28, 60, 31}
+#define LOW_STOP_PINS {3, 14, 17, -1}
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
-#define MAX_FEEDRATES {300, 300, 3, 45}    // mm/sec   
-#define MAX_ACCELERATIONS {800, 800, 30, 250}    // mm/sec^2?? Maximum start speed for accelerated moves.
-#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000, 929}
-#define JERKS {15.0, 15.0, 0.4, 15.0}    // (mm/sec)
-#define DRIVE_RELATIVE_MODES {false, false, false, true} // false for default absolute movement, true for relative to last position
+#define ENDSTOP_HIT 1 // when a stop == this it is hit
+#define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
+#define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
+//#define ACCELERATIONS {80, 80, 3, 25} 
+#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 948.0}
+#define INSTANT_DVS {15.0, 15.0, 0.4, 15}    // (mm/sec) - Bit high? AB
 
 // AXES
 
-#define ENDSTOP_HIT 1 // when a stop == this it is hit
-#define AXIS_LENGTHS {210, 210, 120} // mm
-#define FAST_HOME_FEEDRATES {50*60, 50*60, 1*60}  // mm/min
+#define START_FEED_RATE 200.0  // Default.  mm/min
+
+#define AXIS_LENGTHS {210, 200, 120} // mm
+#define HOME_FEEDRATES {50.0*60.0, 50.0*60.0, 1.0*60.0}  // mm/min
+#define HEAD_OFFSETS {0.0, 0.0, 0.0}
 
 #define X_AXIS 0  // The index of the X axis
 #define Y_AXIS 1  // The index of the Y axis
 #define Z_AXIS 2  // The index of the Z axis
 
-// HEATERS - Bed is assumed to be the first
 
-#define TEMP_SENSE_PINS {5, 4}  // Analogue pin numbers
-#define HEAT_ON_PINS {53, 40}
+// HEATERS - The bed is assumed to be the first
+
+#define TEMP_SENSE_PINS {10, 9}  // Analogue pin numbers
+#define HEAT_ON_PINS {8, 9}
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {4700, 4700} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
 #define USE_PID {false, true} // PID or bang-bang for this heater?
-#define PID_KIS {-1, 100} // PID constants...
-#define PID_KDS {-1, 100}
-#define PID_KPS {-1, 100}
-#define PID_I_LIMITS {-1, 100} // ... to here
-#define TEMP_INTERVAL 0.5 // secs - check and control temperatures this often
+#define PID_KIS {-1, 2.2} // PID constants...
+#define PID_KDS {-1, 80}
+#define PID_KPS {-1, 12}
+#define FULL_PID_BAND {-1, 150.0}
+#define PID_MIN {-1, 0.0}
+#define PID_MAX {-1, 125.0}
+#define D_MIX {-1, 0.95}
+#define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
+#define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
+#define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
 
 #define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
@@ -122,14 +129,23 @@ void setup();
 
 #define MAX_FILES 7
 #define FILE_BUF_LEN 256
-#define SD_SPI 4 //Pin X WRONG
+#define SD_SPI 4 //Pin
 #define WEB_DIR "www/" // Place to find web files on the server
 #define GCODE_DIR "gcodes/" // Ditto - g-codes
 #define SYS_DIR "sys/" // Ditto - system files
 #define TEMP_DIR "tmp/" // Ditto - temporary files
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
-#define FILE_LIST_LENGTH 1000 // Maximum lenght of file list
+#define FILE_LIST_LENGTH 1000 // Maximum length of file list
+
+#define FILE_WRITE FA_WRITE
+#define FILE_READ FA_READ
+
+#define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
+                      // the frequency and M/S ratio.
+#define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
+                             // not displayed; \f and \n should be supported.
+#define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
 
 /****************************************************************************************************/
 
@@ -145,6 +161,8 @@ void setup();
 #define IP2 1
 #define IP3 14
 
+#define IP_BYTES 4
+
 #define ETH_B_PIN 10
 
 // port 80 is default for HTTP
@@ -157,29 +175,33 @@ void setup();
 #define CONNECTED 2
 #define AVAILABLE 4
 
+// Seconds to wait after serving a page
+ 
+#define CLIENT_CLOSE_DELAY 0.001
+
 
 /****************************************************************************************************/
 
 // Miscellaneous...
 
-#define LED_PIN -1 // Indicator LED
+#define LED_PIN 13 // Indicator LED
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
-#define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
-
-
 /****************************************************************************************************/
 
-class RepRap;
+enum EndStopHit
+{
+  noStop = 0,
+  lowHit = 1,
+  highHit = 2
+};
 
 class Platform
 {   
   public:
   
   Platform(RepRap* r);
-  
-  RepRap* GetRepRap();
   
 //-------------------------------------------------------------------------------------------------------------
 
@@ -192,34 +214,35 @@ class Platform
   
   void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
   
+  void Diagnostics();
+  
   // Timing
   
-  unsigned long Time(); // Returns elapsed microseconds since some arbitrary time
+  float Time(); // Returns elapsed seconds since some arbitrary time
   
-  void SetInterrupt(long t); // Set a regular interrupt going every t microseconds; if t is -ve turn interrupt off
-  
-  void Interrupt(); // The function that the interrupt calls
+  void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
   
   // Communications and data storage; opening something unsupported returns -1.
   
-  char* FileList(char* directory); // Returns a ;-separated list of all the files in the named directory (for example on an SD card).
-  int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
+  char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory (for example on an SD card).
+  //int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
+  int OpenFile(char* directory, char* fileName, boolean write); // Open a local file (for example on an SD card).
   void GoToEnd(int file); // Position the file at the end (so you can write on the end).
-  boolean Read(int file, unsigned char& b);     // Read a single byte from a file into b, 
+  boolean Read(int file, char& b);     // Read a single byte from a file into b, 
                                              // returned value is false for EoF, true otherwise
   void WriteString(int file, char* s);  // Write the string to a file.
   void Write(int file, char b);  // Write the byte b to a file.
-  char* GetWebDir(); // Where the php/htm etc files are
-  char* GetGcodeDir(); // Where the gcodes are
+  unsigned long Length(int file); // File size in bytes
+  char* GetWebDir(); // Where the htm etc files are
+  char* GetGCodeDir(); // Where the gcodes are
   char* GetSysDir();  // Where the system files are
   char* GetTempDir(); // Where temporary files are
   void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
-  boolean DeleteFile(char* fileName); // Delete a file
-  char* PrependRoot(char* root, char* fileName);
+  boolean DeleteFile(char* directory, char* fileName); // Delete a file
   
-  unsigned char ClientRead(); // Read a byte from the client
+  char ClientRead(); // Read a byte from the client
   void SendToClient(char* message); // Send string to the host
-  void SendToClient(unsigned char b); // Send byte to the host
+  void SendToClient(char b); // Send byte to the host
   int ClientStatus(); // Check client's status
   void DisconnectClient(); //Disconnect the client  
   
@@ -231,21 +254,40 @@ class Platform
   void SetDirection(byte drive, bool direction);
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
-  void Home(byte axis);
+  float DriveStepsPerUnit(int8_t drive);
+  float Acceleration(int8_t drive);
+  float MaxFeedrate(int8_t drive);
+  float InstantDv(int8_t drive);
+  float HomeFeedRate(int8_t drive);
+  EndStopHit Stopped(int8_t drive);
+  float AxisLength(int8_t drive);
   
   float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
   void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
   
   // Heat and temperature
   
-  float GetTemperature(byte heater); // Result is in degrees celsius
-  void SetHeater(byte heater, const float& power); // power is a fraction in [0,1]
+  float GetTemperature(int8_t heater); // Result is in degrees celsius
+  void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
+  //void SetStandbyTemperature(int8_t heater, const float& t);
+  //void SetActiveTemperature(int8_t heater, const float& t);
+  //float StandbyTemperature(int8_t heater);
+  //float ActiveTemperature(int8_t heater);  
+  float PidKp(int8_t heater);
+  float PidKi(int8_t heater);
+  float PidKd(int8_t heater);
+  float FullPidBand(int8_t heater);
+  float PidMin(int8_t heater);
+  float PidMax(int8_t heater);
+  float DMix(int8_t heater);
+  boolean UsePID(int8_t heater);
+  float HeatSampleTime();
 
 //-------------------------------------------------------------------------------------------------------
   
   private:
   
-  unsigned long lastTime;
+  float lastTime;
   
   boolean active;
   
@@ -255,43 +297,53 @@ class Platform
   
   int GetRawTemperature(byte heater);
   
+  void InitialiseInterrupts();
+  
+  char* CombineName(char* result, char* directory, char* fileName);
+  
   RepRap* reprap;
   
 // DRIVES
 
-  char stepPins[DRIVES];
-  char directionPins[DRIVES];
-  char enablePins[DRIVES];
-  char lowStopPins[DRIVES];
-  char highStopPins[DRIVES];
+  int8_t stepPins[DRIVES];
+  int8_t directionPins[DRIVES];
+  int8_t enablePins[DRIVES];
   boolean disableDrives[DRIVES];
+  int8_t lowStopPins[DRIVES];
+  int8_t highStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
-  float maxAccelerations[DRIVES];
+  float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
-  float jerks[DRIVES];
-  boolean driveRelativeModes[DRIVES];
+  float instantDvs[DRIVES];
 
 // AXES
 
   float axisLengths[AXES];
-  float fastHomeFeedrates[AXES];
+  float homeFeedrates[AXES];
+  float headOffsets[AXES]; // FIXME - needs a 2D array
 
 // HEATERS - Bed is assumed to be the first
 
-  char tempSensePins[HEATERS];
-  char heatOnPins[HEATERS];
+  int8_t tempSensePins[HEATERS];
+  int8_t heatOnPins[HEATERS];
   float thermistorBetas[HEATERS];
   float thermistorSeriesRs[HEATERS];
   float thermistorInfRs[HEATERS];
-  boolean usePid[HEATERS];
+  boolean usePID[HEATERS];
   float pidKis[HEATERS];
   float pidKds[HEATERS];
   float pidKps[HEATERS];
-  float pidILimits[HEATERS];
+  float fullPidBand[HEATERS];
+  float pidMin[HEATERS];
+  float pidMax[HEATERS];
+  float dMix[HEATERS];
+  float heatSampleTime;
+  float standbyTemperatures[HEATERS];
+  float activeTemperatures[HEATERS];
 
 // Files
 
-  File* files;
+  FIL* files;
   boolean* inUse;
   char* webDir;
   char* gcodeDir;
@@ -307,14 +359,196 @@ class Platform
   void ClientMonitor();
   
   byte mac[MAC_BYTES];
+  byte ipAddress[IP_BYTES];
   EthernetServer* server;
   EthernetClient client;
   int clientStatus;
 };
 
-inline unsigned long Platform::Time()
+inline float Platform::Time()
 {
-  return micros();
+  return TIME_FROM_REPRAP*(float)micros();
+}
+
+inline void Platform::Exit()
+{
+  active = false;
+}
+
+// Where the htm etc files are
+
+inline char* Platform::GetWebDir()
+{
+  return webDir;
+}
+
+// Where the gcodes are
+
+inline char* Platform::GetGCodeDir()
+{
+  return gcodeDir;
+}
+
+// Where the system files are
+
+inline char* Platform::GetSysDir()
+{
+  return sysDir;
+}
+
+// Where the temporary files are
+
+inline char* Platform::GetTempDir()
+{
+  return tempDir;
+}
+
+//*****************************************************************************************************************
+
+// Drive the RepRap machine - Movement
+
+inline float Platform::DriveStepsPerUnit(int8_t drive)
+{
+  return driveStepsPerUnit[drive]; 
+}
+
+inline float Platform::Acceleration(int8_t drive)
+{
+  return accelerations[drive]; 
+}
+
+inline float Platform::InstantDv(int8_t drive)
+{
+  return instantDvs[drive]; 
+}
+
+inline void Platform::SetDirection(byte drive, bool direction)
+{
+  digitalWrite(directionPins[drive], direction);  
+}
+
+inline void Platform::Step(byte drive)
+{
+  //digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
+  digitalWrite(stepPins[drive], 0);
+  digitalWrite(stepPins[drive], 1);
+}
+
+inline float Platform::HomeFeedRate(int8_t drive)
+{
+  return homeFeedrates[drive];
+}
+
+inline EndStopHit Platform::Stopped(int8_t drive)
+{
+  if(lowStopPins[drive] >= 0)
+  {
+    if(digitalRead(lowStopPins[drive]) == ENDSTOP_HIT)
+      return lowHit;
+  }
+  if(highStopPins[drive] >= 0)
+  {
+    if(digitalRead(highStopPins[drive]) == ENDSTOP_HIT)
+      return highHit;
+  }
+  return noStop; 
+}
+
+inline float Platform::AxisLength(int8_t drive)
+{
+  return axisLengths[drive];
+}
+
+inline float Platform::MaxFeedrate(int8_t drive)
+{
+  return maxFeedrates[drive];
+}
+
+
+//********************************************************************************************************
+
+// Drive the RepRap machine - Heat and temperature
+
+inline int Platform::GetRawTemperature(byte heater)
+{
+  return analogRead(tempSensePins[heater]);
+}
+
+inline float Platform::HeatSampleTime()
+{
+  return heatSampleTime; 
+}
+
+inline boolean Platform::UsePID(int8_t heater)
+{
+  return usePID[heater];
+}
+
+
+inline float Platform::PidKi(int8_t heater)
+{
+  return pidKis[heater]*heatSampleTime;
+}
+
+inline float Platform::PidKd(int8_t heater)
+{
+  return pidKds[heater]/heatSampleTime;
+}
+
+inline float Platform::PidKp(int8_t heater)
+{
+  return pidKps[heater];
+}
+
+inline float Platform::FullPidBand(int8_t heater)
+{
+  return fullPidBand[heater];
+}
+
+inline float Platform::PidMin(int8_t heater)
+{
+  return pidMin[heater];  
+}
+
+inline float Platform::PidMax(int8_t heater)
+{
+  return pidMax[heater]/PidKi(heater);
+}
+
+inline float Platform::DMix(int8_t heater)
+{
+  return dMix[heater];  
+}
+
+
+//*********************************************************************************************************
+
+// Interrupts
+
+
+void Platform::InitialiseInterrupts()
+{
+  pmc_set_writeprotect(false);
+  pmc_enable_periph_clk((uint32_t)TC3_IRQn);
+  TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
+  TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
+  TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
+  SetInterrupt(STANDBY_INTERRUPT_RATE); 
+}
+
+inline void Platform::SetInterrupt(float s) // Seconds
+{
+  if(s <= 0.0)
+  {
+    //NVIC_DisableIRQ(TC3_IRQn);
+    Message(HOST_MESSAGE, "Negative interrupt!\n");
+    s = STANDBY_INTERRUPT_RATE;
+  }
+  uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
+  TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
+  TC_SetRC(TC1, 0, rc);
+  TC_Start(TC1, 0);
+  NVIC_EnableIRQ(TC3_IRQn);
 }
 
 //***************************************************************************************
@@ -326,17 +560,16 @@ inline int Platform::ClientStatus()
   return clientStatus;
 }
 
-inline void Platform::SendToClient(unsigned char b)
+inline void Platform::SendToClient(char b)
 {
   if(client)
   {
     client.write(b);
-    //Serial.write(b);
   } else
     Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
 }
 
-inline unsigned char Platform::ClientRead()
+inline char Platform::ClientRead()
 {
   if(client)
     return client.read();
@@ -381,37 +614,6 @@ inline void Platform::DisconnectClient()
       Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
 }
 
-//*****************************************************************************************************************
 
-// Interrupts
-
-inline void Platform::SetInterrupt(long t)
-{
-  
-}
-
-inline void Platform::Interrupt()
-{
-  reprap->Interrupt();  // Put nothing else in this function
-}
-
-//*****************************************************************************************************************
-
-// Drive the RepRap machine
-
-inline void Platform::SetDirection(byte drive, bool direction)
-{
-  digitalWrite(directionPins[drive], direction);  
-}
-
-inline void Platform::Step(byte drive)
-{
-  digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
-}
-
-inline int Platform::GetRawTemperature(byte heater)
-{
-  return analogRead(tempSensePins[heater]);
-}
 
 #endif

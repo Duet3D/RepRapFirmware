@@ -33,9 +33,9 @@ arduino/variant \
 arduino/core \
 arduino/core/USB \
 . \
+Libraries/SamNonDuePin \
 Libraries/SPI \
-Libraries/SD/utility \
-Libraries/SD \
+Libraries/SD_HSMCI/utility \
 Libraries/Ethernet/utility \
 Libraries/Ethernet \
 

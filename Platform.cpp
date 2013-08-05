@@ -39,6 +39,16 @@ void loop()
 Platform::Platform(RepRap* r)
 {
   reprap = r;
+
+  // Files
+
+  FIL * files = new FIL[MAX_FILES];
+  inUse = new boolean[MAX_FILES];
+  for(int8_t i=0; i < MAX_FILES; i++)
+    buf[i] = new byte[FILE_BUF_LEN];
+
+  server = new EthernetServer(HTTP_PORT);
+
   active = false;
 }
 
@@ -46,99 +56,10 @@ Platform::Platform(RepRap* r)
 
 // Interrupts
 
-inline void Platform::SetInterrupt(long t)
+void TC3_Handler()
 {
-  
-}
-
-inline void Platform::Interrupt()
-{
-  reprap->Interrupt();  // Put nothing else in this function
-}
-
-//***************************************************************************************
-
-// Network connection
-
-inline int Platform::ClientStatus()
-{
-  return clientStatus;
-}
-
-inline void Platform::SendToClient(unsigned char b)
-{
-  if(client)
-  {
-    client.write(b);
-    //Serial.write(b);
-  } else
-    Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
-}
-
-inline unsigned char Platform::ClientRead()
-{
-  if(client)
-    return client.read();
-    
-  Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
-  return '\n'; // good idea?? 
-}
-
-inline void Platform::ClientMonitor()
-{
-  clientStatus = 0;
-  
-  if(!client)
-  {
-    client = server->available();
-    if(!client)
-      return;
-    //else
-      //Serial.println("new client");
-  }
-    
-  clientStatus |= CLIENT;
-    
-  if(!client.connected())
-    return;
-    
-  clientStatus |= CONNECTED;
-    
-  if (!client.available())
-    return;
-    
-  clientStatus |= AVAILABLE;
-}
-
-inline void Platform::DisconnectClient()
-{
-  if (client)
-  {
-    client.stop();
-    //Serial.println("client disconnected");
-  } else
-      Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
-}
-
-
-
-//*****************************************************************************************************************
-
-// Drive the RepRap machine
-
-inline void Platform::SetDirection(byte drive, bool direction)
-{
-  digitalWrite(directionPins[drive], direction);  
-}
-
-inline void Platform::Step(byte drive)
-{
-  digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
-}
-
-inline int Platform::GetRawTemperature(byte heater)
-{
-  return analogRead(tempSensePins[heater]);
+  TC_GetStatus(TC1, 0);
+  reprap.Interrupt();
 }
 
 //*******************************************************************************************************************
@@ -148,8 +69,6 @@ void Platform::Init()
   byte i;
   
   Serial.begin(BAUD_RATE);
-  
-  lastTime = Time();
   
   if(!LoadFromStore())
   {     
@@ -162,15 +81,15 @@ void Platform::Init()
     lowStopPins = LOW_STOP_PINS;
     highStopPins = HIGH_STOP_PINS;
     maxFeedrates = MAX_FEEDRATES;
-    maxAccelerations = MAX_ACCELERATIONS;
+    accelerations = ACCELERATIONS;
     driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
-    jerks = JERKS;
-    driveRelativeModes = DRIVE_RELATIVE_MODES;
+    instantDvs = INSTANT_DVS;
     
   // AXES
   
     axisLengths = AXIS_LENGTHS;
-    fastHomeFeedrates = FAST_HOME_FEEDRATES;
+    homeFeedrates = HOME_FEEDRATES;
+    headOffsets = HEAD_OFFSETS;
    
   // HEATERS - Bed is assumed to be the first
   
@@ -179,11 +98,18 @@ void Platform::Init()
     thermistorBetas = THERMISTOR_BETAS;
     thermistorSeriesRs = THERMISTOR_SERIES_RS;
     thermistorInfRs = THERMISTOR_25_RS;
-    usePid = USE_PID;
+    usePID = USE_PID;
     pidKis = PID_KIS;
     pidKds = PID_KDS;
     pidKps = PID_KPS;
-    pidILimits = PID_I_LIMITS;
+    fullPidBand = FULL_PID_BAND;
+    pidMin = PID_MIN;
+    pidMax = PID_MAX;
+    dMix = D_MIX;
+    heatSampleTime = HEAT_SAMPLE_TIME;
+    standbyTemperatures = STANDBY_TEMPERATURES;
+    activeTemperatures = ACTIVE_TEMPERATURES;   
+    
     webDir = WEB_DIR;
     gcodeDir = GCODE_DIR;
     sysDir = SYS_DIR;
@@ -229,11 +155,8 @@ void Platform::Init()
 
   // Files
  
-  files = new File[MAX_FILES];
-  inUse = new boolean[MAX_FILES];
   for(i=0; i < MAX_FILES; i++)
   {
-    buf[i] = new byte[FILE_BUF_LEN];
     bPointer[i] = 0;
     inUse[i] = false;
   }
@@ -248,7 +171,9 @@ void Platform::Init()
   pinMode(SD_SPI, OUTPUT);
   digitalWrite(SD_SPI,HIGH);   
 
-  Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
+  ipAddress = { IP0, IP1, IP2, IP3 };
+  //Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
+  Ethernet.begin(mac, ipAddress);
   server->begin();
   
   //Serial.print("server is at ");
@@ -260,42 +185,34 @@ void Platform::Init()
   
   clientStatus = 0;
   client = 0;
- 
-  if (!SD.begin(SD_SPI)) 
-     Serial.println("SD initialization failed.");
-  // SD.begin() returns with the SPI disabled, so you need not disable it here  
+
+  /* Configure HSMCI pins */
+  hsmciPinsinit();
+
+  // Initialize SD MMC stack
+  sd_mmc_init();
+
+  FATFS fs;
+
+  memset(&fs, 0, sizeof(FATFS));
+  //u_mount SD card
+  f_mount (LUN_ID_SD_MMC_0_MEM, NULL);
+  //mount SD card
+
+  if (f_mount(LUN_ID_SD_MMC_0_MEM, &fs) != FR_INVALID_DRIVE) {
+     Serial.println("SD initialisation failed.");
+  }
+  InitialiseInterrupts();
   
-    // Reinitialise the message file
-  
-  DeleteFile(PrependRoot(GetWebDir(), MESSAGE_FILE));
-  int m = OpenFile(PrependRoot(GetWebDir(), MESSAGE_TEMPLATE), false);
-  int n = OpenFile(PrependRoot(GetWebDir(), MESSAGE_FILE), true);
-  byte b;
-  while (Read(m, b))
-    Write(n,b);
-  Close(m);  
-  Close(n);
+  lastTime = Time();
   
   active = true;
 }
 
-void Platform::Exit()
+void Platform::Diagnostics() 
 {
-  active = false;
+  Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
-
-RepRap* Platform::GetRepRap()
-{
-  return reprap;
-}
-
-
-char* Platform::PrependRoot(char* root, char* fileName)
-{
-  strcpy(scratchString, root);
-  return strcat(scratchString, fileName);
-}
-
 
 // Load settings from local storage; return true if successful, false otherwise
 
@@ -324,27 +241,26 @@ bool Platform::LoadFromStore()
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(byte heater)
+float Platform::GetTemperature(int8_t heater)
 {
   float r = (float)GetRawTemperature(heater);
-  //Serial.println(r);
   return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/(AD_RANGE - r))/thermistorInfRs[heater] );
 }
 
 
 // power is a fraction in [0,1]
 
-void Platform::SetHeater(byte heater, const float& power)
+void Platform::SetHeater(int8_t heater, const float& power)
 {
-  if(power <= 0)
+  if(power <= 0.00)
   {
-     digitalWrite(heatOnPins[heater], 0);
+     analogWrite(heatOnPins[heater], 0);
      return;
   }
   
   if(power >= 1.0)
   {
-     digitalWrite(heatOnPins[heater], 1);
+     analogWrite(heatOnPins[heater], 255);
      return;
   }
   
@@ -359,37 +275,68 @@ void Platform::SetHeater(byte heater, const float& power)
   
 */
 
+char* Platform::CombineName(char* result, char* directory, char* fileName)
+{
+  int out = 0;
+  int in = 0;
+  
+  result[out] = '/';
+  out++;
+  
+  if(directory != NULL)
+  {
+    if(directory[in] == '/')
+      in++;
+    while(directory[in] != 0 && directory[in] != '\n' && directory[in] != '/')
+    {
+      result[out] = directory[in];
+      out++;
+      in++;
+    }
+  }
+  
+  result[out] = '/';
+  out++;
+  
+  in = 0;
+  while(fileName[in] != 0 && fileName[in] != '\n' && fileName[in] != '/')
+  {
+    result[out] = fileName[in];
+    out++;
+    in++;
+  }
+  result[out] = 0;
+  
+  return result;
+}
+
 // List the flat files in a directory.  No sub-directories or recursion.
 
 char* Platform::FileList(char* directory)
 {
-  File dir, entry;
-  dir = SD.open(directory);
+  FILINFO entry;
+  DIR dir;
+  f_opendir(&dir, directory);
   int p = 0;
   int q;
   int count = 0;
-  while(entry = dir.openNextFile())
+  while(f_readdir(&dir, &entry)==FR_OK)
   {
     q = 0;
     count++;
     fileList[p++] = FILE_LIST_BRACKET;
-    while(entry.name()[q])
-    {
-      fileList[p++] = entry.name()[q];
-      q++;
-      if(p >= FILE_LIST_LENGTH - 10) // Caution...
-      {
-        Message(HOST_MESSAGE, "FileList - directory: ");
-        Message(HOST_MESSAGE, directory);
-        Message(HOST_MESSAGE, " has too many files!<br>\n");
-        return "";
-      }
-    }
+	fileList[p++] = *entry.fname;
+	q++;
+	if(p >= FILE_LIST_LENGTH - 10) // Caution...
+	{
+		Message(HOST_MESSAGE, "FileList - directory: ");
+		Message(HOST_MESSAGE, directory);
+		Message(HOST_MESSAGE, " has too many files!\n");
+		return "";
+	}
     fileList[p++] = FILE_LIST_BRACKET;
     fileList[p++] = FILE_LIST_SEPARATOR;
-    entry.close();
   }
-  dir.close();
   
   if(count <= 0)
     return "";
@@ -399,15 +346,17 @@ char* Platform::FileList(char* directory)
 }
 
 // Delete a file
-boolean Platform::DeleteFile(char* fileName)
+boolean Platform::DeleteFile(char* directory, char* fileName)
 {
-  return SD.remove(fileName);
+  CombineName(scratchString, directory, fileName);
+  return f_unlink(scratchString);
 }
 
 // Open a local file (for example on an SD card).
 
-int Platform::OpenFile(char* fileName, boolean write)
+int Platform::OpenFile(char* directory, char* fileName, boolean write)
 {
+  CombineName(scratchString, directory, fileName);
   int result = -1;
   for(int i = 0; i < MAX_FILES; i++)
     if(!inUse[i])
@@ -417,29 +366,31 @@ int Platform::OpenFile(char* fileName, boolean write)
     }
   if(result < 0)
   {
-      Message(HOST_MESSAGE, "Max open file count exceeded.<br>\n");
+      Message(HOST_MESSAGE, "Max open file count exceeded.\n");
       return -1;    
   }
   
-  if(!SD.exists(fileName))
+  int res = f_open(&files[result], scratchString, FILE_READ);
+  f_close(&files[result]);
+  if(res != FR_OK)
   {
     if(!write)
     {
       Message(HOST_MESSAGE, "File: ");
       Message(HOST_MESSAGE, fileName);
-      Message(HOST_MESSAGE, " not found for reading.<br>\n");
+      Message(HOST_MESSAGE, " not found for reading.\n");
       return -1;
     }
-    files[result] = SD.open(fileName, FILE_WRITE);
+    f_open(&files[result], scratchString, FILE_WRITE);
     bPointer[result] = 0;
   } else
   {
     if(write)
     {
-      files[result] = SD.open(fileName, FILE_WRITE);
+    	f_open(&files[result], scratchString, FILE_WRITE);
       bPointer[result] = 0;
     } else
-      files[result] = SD.open(fileName, FILE_READ);
+    	f_open(&files[result], scratchString, FILE_WRITE);
   }
 
   inUse[result] = true;
@@ -450,34 +401,46 @@ void Platform::GoToEnd(int file)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to seek on a non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
     return;
   }
-  unsigned long e = files[file].size();
-  files[file].seek(e);
+  unsigned long e = files[file].fsize;
+  f_lseek(&files[file],e);
+}
+
+unsigned long Platform::Length(int file)
+{
+  if(!inUse[file])
+  {
+    Message(HOST_MESSAGE, "Attempt to size non-open file.\n");
+    return 0;
+  }
+  return files[file].fsize;
 }
 
 void Platform::Close(int file)
 { 
+  UINT* bWrit;
   if(bPointer[file] != 0)
-    files[file].write(buf[file], bPointer[file]);
+    f_write(&files[file],&buf[file],bPointer[file],bWrit);
   bPointer[file] = 0;
-  files[file].close();
+  f_close(&files[file]);
   inUse[file] = false;
 }
 
 
-boolean Platform::Read(int file, unsigned char& b)
+boolean Platform::Read(int file, char& b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to read from a non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
     return false;
   }
-    
-  if(!files[file].available())
+  UINT* rBuf;
+  if(f_read(&files[file],&b,1,rBuf) != FR_OK)
+//  if(!files[file].available())
     return false;
-  b = (unsigned char) files[file].read();
+//  b = (char) files[file].read();
   return true;
 }
 
@@ -485,14 +448,16 @@ void Platform::Write(int file, char b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
     return;
   }
   (buf[file])[bPointer[file]] = b;
   bPointer[file]++;
   if(bPointer[file] >= FILE_BUF_LEN)
   {
-    files[file].write(buf[file], FILE_BUF_LEN);
+	  UINT* wBuf;
+    f_write(&files[file],&b,1,wBuf);
+//  files[file].write(buf[file], FILE_BUF_LEN);
     bPointer[file] = 0;
   } 
   //files[file].write(b);
@@ -502,7 +467,7 @@ void Platform::WriteString(int file, char* b)
 {
   if(!inUse[file])
   {
-    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.<br>\n");
+    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.\n");
     return;
   }
   int i = 0;
@@ -511,9 +476,22 @@ void Platform::WriteString(int file, char* b)
   //files[file].print(b);
 }
 
+// Send something to the network client
+
+void Platform::SendToClient(char* message)
+{
+  if(client)
+  {
+    client.print(message);
+  } else
+    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
+}
+
+
 
 void Platform::Message(char type, char* message)
 {
+  char scratchString[STRING_LENGTH];
   switch(type)
   {
   case FLASH_LED:
@@ -528,7 +506,7 @@ void Platform::Message(char type, char* message)
   default:
   
   
-    int m = OpenFile(PrependRoot(GetWebDir(), MESSAGE_FILE), true);
+    int m = OpenFile(GetWebDir(), MESSAGE_FILE, true);
     GoToEnd(m);
     WriteString(m, message);
     Serial.print(message);
@@ -537,46 +515,7 @@ void Platform::Message(char type, char* message)
   }
 }
 
-// Send something to the network client
 
-void Platform::SendToClient(char* message)
-{
-  if(client)
-  {
-    client.print(message);
-    //Serial.print("Sent: ");
-    //Serial.print(message);
-  } else
-    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.<br>\n");
-}
-
-// Where the php/htm etc files are
-
-char* Platform::GetWebDir()
-{
-  return webDir;
-}
-
-// Where the gcodes are
-
-char* Platform::GetGcodeDir()
-{
-  return gcodeDir;
-}
-
-// Where the system files are
-
-char* Platform::GetSysDir()
-{
-  return sysDir;
-}
-
-// Where the temporary files are
-
-char* Platform::GetTempDir()
-{
-  return tempDir;
-}
 
 
 //***************************************************************************************************
@@ -590,7 +529,7 @@ void Platform::Spin()
     return;
     
    ClientMonitor();
-   if(Time() - lastTime < 2000000)
+   if(Time() - lastTime < 2.0)
      return;
    lastTime = Time();
 }

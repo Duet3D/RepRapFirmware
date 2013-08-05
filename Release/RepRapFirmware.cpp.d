@@ -1,6 +1,5 @@
 RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
- /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries/SPI/SPI.h \
- /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/variants/arduino_due_x/variant.h \
+ ../RepRapFirmware.h ../Configuration.h ../Platform.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Arduino.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/binary.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/system/libsam/chip.h \
@@ -114,14 +113,16 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Print.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Printable.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/wiring_pulse.h \
- /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBDesc.h \
- /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBCore.h \
- /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBAPI.h \
- /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/RingBuffer.h \
+ /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/variants/arduino_due_x/variant.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/UARTClass.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/RingBuffer.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USARTClass.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/syscalls.h \
+ /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBDesc.h \
+ /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBCore.h \
+ /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBAPI.h \
+ /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/RingBuffer.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SamNonDuePin/SamNonDuePin.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries/Ethernet/Ethernet.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/IPAddress.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Printable.h \
@@ -135,19 +136,38 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries/Ethernet/EthernetUdp.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Udp.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Stream.h \
- /home/jeanmarc/arduino-1.5.2/libraries/SD/SD.h \
- /home/jeanmarc/arduino-1.5.2/libraries/SD/utility/SdFat.h \
- /home/jeanmarc/arduino-1.5.2/libraries/SD/utility/Sd2Card.h \
- /home/jeanmarc/arduino-1.5.2/libraries/SD/utility/Sd2PinMap.h \
- /home/jeanmarc/arduino-1.5.2/libraries/SD/utility/SdInfo.h \
- /home/jeanmarc/arduino-1.5.2/libraries/SD/utility/FatStructs.h \
- /home/jeanmarc/arduino-1.5.2/libraries/SD/utility/SdFatUtil.h \
- ../RepRapFirmware.h ../Configuration.h ../Platform.h ../Webserver.h \
- ../GCodes.h ../Move.h ../Heat.h
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/SD_HSMCI.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/compiler.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/preprocessor.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/tpaste.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/stringz.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/mrepeat.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/status_codes.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/preprocessor.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_access.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/compiler.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ctrl_access.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_access.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_mem.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ctrl_access.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_protocol.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/hsmci.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_protocol.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/dmac.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/diskio.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/integer.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ff.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_fatfs.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ffconf.h \
+ /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/rtc.h \
+ ../Webserver.h ../GCodes.h ../Move.h ../Heat.h ../Reprap.h
 
-/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries/SPI/SPI.h:
+../RepRapFirmware.h:
 
-/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/variants/arduino_due_x/variant.h:
+../Configuration.h:
+
+../Platform.h:
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Arduino.h:
 
@@ -375,13 +395,7 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/wiring_pulse.h:
 
-/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBDesc.h:
-
-/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBCore.h:
-
-/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBAPI.h:
-
-/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/RingBuffer.h:
+/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/variants/arduino_due_x/variant.h:
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/UARTClass.h:
 
@@ -390,6 +404,16 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USARTClass.h:
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/syscalls.h:
+
+/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBDesc.h:
+
+/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBCore.h:
+
+/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBAPI.h:
+
+/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/RingBuffer.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SamNonDuePin/SamNonDuePin.h:
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries/Ethernet/Ethernet.h:
 
@@ -417,25 +441,55 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Stream.h:
 
-/home/jeanmarc/arduino-1.5.2/libraries/SD/SD.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/SD_HSMCI.h:
 
-/home/jeanmarc/arduino-1.5.2/libraries/SD/utility/SdFat.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/compiler.h:
 
-/home/jeanmarc/arduino-1.5.2/libraries/SD/utility/Sd2Card.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/preprocessor.h:
 
-/home/jeanmarc/arduino-1.5.2/libraries/SD/utility/Sd2PinMap.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/tpaste.h:
 
-/home/jeanmarc/arduino-1.5.2/libraries/SD/utility/SdInfo.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/stringz.h:
 
-/home/jeanmarc/arduino-1.5.2/libraries/SD/utility/FatStructs.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/mrepeat.h:
 
-/home/jeanmarc/arduino-1.5.2/libraries/SD/utility/SdFatUtil.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/status_codes.h:
 
-../RepRapFirmware.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/preprocessor.h:
 
-../Configuration.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_access.h:
 
-../Platform.h:
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/compiler.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ctrl_access.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_access.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_mem.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ctrl_access.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_protocol.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/hsmci.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_protocol.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/dmac.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/diskio.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/integer.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ff.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_fatfs.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ffconf.h:
+
+/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/rtc.h:
 
 ../Webserver.h:
 
@@ -444,3 +498,5 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
 ../Move.h:
 
 ../Heat.h:
+
+../Reprap.h:

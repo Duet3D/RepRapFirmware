@@ -7,6 +7,7 @@ RepRap self-replicating 3D printers.
 
 It owes a lot to Marlin and to the original RepRap FiveD_GCode.
 
+
 General design principles:
 
   * Control by RepRap G Codes.  These are taken to be machine independent, though some may be unsupported.
@@ -17,12 +18,111 @@ General design principles:
        forking the repository to make a new branch - let the repository take the strain,
   * Concentration of all machine-dependent defintions and code in Platform.h and Platform.cpp,
   * No specials for (X,Y) or (Z) - all movement is 3-dimensional,
+  * Except in Platform.h, use real units (mm, seconds etc) throughout the rest of the code wherever possible,
   * Try to be efficient in memory use, but this is not critical,
   * Labour hard to be efficient in time use, and this is  critical,
   * Don't abhor floats - they work fast enough if you're clever,
   * Don't avoid arrays and structs/classes,
   * Don't avoid pointers,
-  * Use operator and function overloading where appropriate, particularly for vector algebra.
+  * Use operator and function overloading where appropriate.
+  
+  
+Naming conventions:
+
+  * #defines are all capitals with optional underscores between words
+  * No underscores in other names - MakeReadableWithCapitalisation
+  * Class names and functions start with a CapitalLetter
+  * Variables start with a lowerCaseLetter
+  * Use veryLongDescriptiveNames
+  
+  
+Structure:
+
+There are six main classes:
+
+  * RepRap
+  * GCodes
+  * Heat
+  * Move
+  * Platform, and
+  * Webserver    
+
+RepRap:
+
+This is just a container class for the single instances of all the others, and otherwise does very little.
+
+GCodes:
+
+This class is fed GCodes, either from the web interface or from GCode files, interprests them, and requests
+actions from the RepRap machine via the other classes.
+
+Heat:
+
+This class imlements all heating and temperature control in the RepRap machine.
+
+Move:
+
+This class controls all movement of the RepRap machine, both along its axes, and in its extruder drives.
+
+Platform:
+
+This is the only class that knows anything about the physical setup of the RepRap machine and its
+controlling electronics.  It implements the interface between all the other classes and the RepRap machine.
+All the other classes are completely machine-independent (though they may declare arrays dimensioned
+to values #defined in Platform.h).
+
+Webserver:
+
+This class talks to the network (via Platform) and implements a simple webserver to give an interactive
+interface to the RepRap machine.  It uses the Knockout and Jquery Javascript libraries to achieve this.
+
+
+
+When the software is running there is one single instance of each main class, and all the memory allocation is
+done on initialisation.  new/malloc should not be used in the general running code, and delete is never
+used.  Each class has an Init() function that resets it to its boot-up state; the constructors merely handle
+that memory allocation on startup.  Calling RepRap.Init() calls all the other Init()s in the right sequence.
+
+There are other ancilliary classes that are declared in the .h files for the master classes that use them.  For
+example, Move has a DDA class that implements a Bresenham/digital differential analyser.
+
+
+Timing:
+
+There is a single interrupt chain entered via Platform.Interrupt().  This controls movement step timing, and 
+this chain of code should be the only place that volatile declarations and structure/variable-locking are 
+required.  All the rest of the code is called sequentially and repeatedly as follows:
+
+All the main classes have a Spin() function.  These are called in a loop by the RepRap.Spin() function and implement 
+simple timesharing.  No class does, or ever should, wait inside one of its functions for anything to happen or call 
+any sort of delay() function.  The general rule is:
+
+  Can I do a thing?
+    Yes - do it
+    No - set a flag/timer to remind me to do it next-time-I'm-called/at-a-future-time and return.
+    
+The restriction this strategy places on almost all the code in the firmware (that it must execute quickly and 
+never cause waits or delays) is balanced by the fact that none of that code needs to worry about synchronicity, 
+locking, or other areas of code accessing items upon which it is working.  As mentioned, only the interrupt 
+chain needs to concern itself with such problems.  Unlike movement, heating (including PID controllers) does 
+not need the fast precision of timing that interrupts alone can offer.  Indeed, most heating code only needs 
+to execute a couple of times a second.
+
+Most data is transferred bytewise, with classes typically containg code like this:
+
+  Is a byte available for me?
+    Yes
+      read it and add it to my buffer
+      Is my buffer complete?
+         Yes
+           Act on the contents of my buffer
+         No
+           Return
+    No
+     Return
+      
+Note that it is simple to raise the "priority" of any class's activities relative to the others by calling its 
+Spin() function more than once from RepRap.Spin().
 
 -----------------------------------------------------------------------------------------------------
 
@@ -40,11 +140,10 @@ Licence: GPL
 
 // If this goes in the right place (Platform.h) the compile fails. Why? - AB
 
-
-#include <SPI.h>
+/*
 #include <Ethernet.h>
-#include <SD.h>
-
+#include <SD_HSMCI.h>
+*/
 #include "RepRapFirmware.h"
 
 // We just need one instance of RepRap; everything else is contaied within it and hidden
@@ -52,6 +151,8 @@ Licence: GPL
 RepRap reprap;
 
 //*************************************************************************************************
+
+// RepRap member functions.
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
@@ -65,20 +166,15 @@ RepRap::RepRap()
   heat = new Heat(platform, gCodes);
 }
 
-inline Platform* RepRap::GetPlatform() { return platform; }
-inline Move* RepRap::GetMove() { return move; }
-inline Heat* RepRap::GetHeat() { return heat; }
-inline GCodes* RepRap::GetGCodes() { return gCodes; }
-inline Webserver* RepRap::GetWebserver() { return webserver; }
-
 void RepRap::Init()
 {
+  dbg = false;
   platform->Init();
   gCodes->Init();
   webserver->Init();
   move->Init();
   heat->Init();
-  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started<br>\n");
+  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
   active = true;
 }
 
@@ -104,20 +200,31 @@ void RepRap::Spin()
   heat->Spin();
 }
 
-
-void RepRap::Interrupt()
+void RepRap::Diagnostics() 
 {
-  
+  platform->Diagnostics(); 
+  move->Diagnostics(); 
+  heat->Diagnostics(); 
+  gCodes->Diagnostics(); 
+  webserver->Diagnostics(); 
 }
+
+
 
 //*************************************************************************************************
 
 // Utilities and storage not part of any class
 
+
+// Float to a string.
+
 static long precision[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
+char scratchString[30];
 
 char* ftoa(char *a, const float& f, int prec)
 {
+  if(a == NULL)
+    a = scratchString;
   char *ret = a;
   long whole = (long)f;
   sprintf(a,"%d",whole);
@@ -128,6 +235,63 @@ char* ftoa(char *a, const float& f, int prec)
   return ret;
 }
 
+// String testing
+
+bool StringEndsWith(char* string, char* ending)
+{
+  int j = strlen(string);
+  int k = strlen(ending);
+  if(k > j)
+    return false;
+  
+  return(StringEquals(&string[j - k], ending));
+}
+
+bool StringEquals(char* s1, char* s2)
+{
+  int i = 0;
+  while(s1[i] && s2[i])
+  {
+     if(tolower(s1[i]) != tolower(s2[i]))
+       return false;
+     i++;
+  }
+  
+  return !(s1[i] || s2[i]);
+}
+
+bool StringStartsWith(char* string, char* starting)
+{ 
+  int j = strlen(string);
+  int k = strlen(starting);
+  if(k > j)
+    return false;
+  
+  for(int i = 0; i < k; i++)
+    if(string[i] != starting[i])
+      return false;
+      
+  return true;
+}
+
+int StringContains(char* string, char* match)
+{ 
+  int i = 0;
+  int count = 0;
+  
+  while(string[i])
+  {
+    if(string[i++] == match[count])
+    {
+      count++;
+      if(!match[count])
+        return i;
+    } else
+      count = 0;
+  }
+      
+  return -1;
+}
 
 
 
