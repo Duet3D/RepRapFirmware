@@ -149,9 +149,7 @@ void Platform::Init()
   {
     if(heatOnPins[i] >= 0)
       pinMode(heatOnPins[i], OUTPUT);
-    //Serial.println(thermistorInfRs[i]);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
-    //Serial.println(thermistorInfRs[i]);
   }  
 
   // Files
@@ -188,7 +186,7 @@ void Platform::Init()
   client = 0;
  
   if (!SD.begin(SD_SPI)) 
-     Serial.println("SD initialization failed.");
+     Message(HOST_MESSAGE, "SD initialization failed.");
   // SD.begin() returns with the SPI disabled, so you need not disable it here  
   
   InitialiseInterrupts();
@@ -241,6 +239,9 @@ float Platform::GetTemperature(int8_t heater)
 
 void Platform::SetHeater(int8_t heater, const float& power)
 {
+  if(heatOnPins[heater] < 0)
+    return;
+    
   if(power <= 0.00)
   {
      analogWrite(heatOnPins[heater], 0);

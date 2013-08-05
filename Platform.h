@@ -416,14 +416,17 @@ inline float Platform::InstantDv(int8_t drive)
 
 inline void Platform::SetDirection(byte drive, bool direction)
 {
-  digitalWrite(directionPins[drive], direction);  
+  if(directionPins[drive] >= 0)
+    digitalWrite(directionPins[drive], direction);  
 }
 
 inline void Platform::Step(byte drive)
 {
-  //digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
-  digitalWrite(stepPins[drive], 0);
-  digitalWrite(stepPins[drive], 1);
+  if(stepPins[drive] >= 0)
+  {
+    digitalWrite(stepPins[drive], 0);
+    digitalWrite(stepPins[drive], 1);
+  }
 }
 
 inline float Platform::HomeFeedRate(int8_t drive)
@@ -463,7 +466,9 @@ inline float Platform::MaxFeedrate(int8_t drive)
 
 inline int Platform::GetRawTemperature(byte heater)
 {
-  return analogRead(tempSensePins[heater]);
+  if(tempSensePins[heater] >= 0)
+    return analogRead(tempSensePins[heater]);
+  return 0;
 }
 
 inline float Platform::HeatSampleTime()
