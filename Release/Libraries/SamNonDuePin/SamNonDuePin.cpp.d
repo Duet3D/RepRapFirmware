@@ -1,7 +1,7 @@
 Libraries/SamNonDuePin/SamNonDuePin.cpp.d \
  Libraries/SamNonDuePin/SamNonDuePin.cpp.o: \
- /home/jeanmarc/Documents/sketchbook/libraries/SamNonDuePin/SamNonDuePin.cpp \
- /home/jeanmarc/Documents/sketchbook/libraries/SamNonDuePin/SamNonDuePin.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SamNonDuePin/SamNonDuePin.cpp \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SamNonDuePin/SamNonDuePin.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Arduino.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/binary.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/system/libsam/chip.h \
@@ -125,7 +125,7 @@ Libraries/SamNonDuePin/SamNonDuePin.cpp.d \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBAPI.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/RingBuffer.h
 
-/home/jeanmarc/Documents/sketchbook/libraries/SamNonDuePin/SamNonDuePin.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SamNonDuePin/SamNonDuePin.h:
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Arduino.h:
 

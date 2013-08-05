@@ -526,7 +526,7 @@ inline float Platform::DMix(int8_t heater)
 // Interrupts
 
 
-void Platform::InitialiseInterrupts()
+inline void Platform::InitialiseInterrupts()
 {
   pmc_set_writeprotect(false);
   pmc_enable_periph_clk((uint32_t)TC3_IRQn);

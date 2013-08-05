@@ -122,7 +122,7 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBCore.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/USB/USBAPI.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/RingBuffer.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SamNonDuePin/SamNonDuePin.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SamNonDuePin/SamNonDuePin.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries/Ethernet/Ethernet.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/IPAddress.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Printable.h \
@@ -136,31 +136,31 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries/Ethernet/EthernetUdp.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Udp.h \
  /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Stream.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/SD_HSMCI.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/compiler.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/preprocessor.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/tpaste.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/stringz.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/mrepeat.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/status_codes.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/preprocessor.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_access.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/compiler.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ctrl_access.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_access.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_mem.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ctrl_access.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_protocol.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/hsmci.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_protocol.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/dmac.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/diskio.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/integer.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ff.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_fatfs.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ffconf.h \
- /home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/rtc.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/SD_HSMCI.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/compiler.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/preprocessor.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/tpaste.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/stringz.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/mrepeat.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/status_codes.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/preprocessor.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/conf_access.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/compiler.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/ctrl_access.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/conf_access.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/sd_mmc_mem.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/ctrl_access.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/sd_mmc.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/sd_mmc_protocol.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/hsmci.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/sd_mmc_protocol.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/dmac.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/diskio.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/integer.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/ff.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/conf_fatfs.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/ffconf.h \
+ /home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/rtc.h \
  ../Webserver.h ../GCodes.h ../Move.h ../Heat.h ../Reprap.h
 
 ../RepRapFirmware.h:
@@ -413,7 +413,7 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/RingBuffer.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SamNonDuePin/SamNonDuePin.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SamNonDuePin/SamNonDuePin.h:
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries/Ethernet/Ethernet.h:
 
@@ -441,55 +441,55 @@ RepRapFirmware.cpp.d RepRapFirmware.cpp.o: ../RepRapFirmware.cpp \
 
 /home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/cores/arduino/Stream.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/SD_HSMCI.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/SD_HSMCI.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/compiler.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/compiler.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/preprocessor.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/preprocessor.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/tpaste.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/tpaste.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/stringz.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/stringz.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/mrepeat.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/mrepeat.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/status_codes.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/status_codes.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/preprocessor.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/preprocessor.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_access.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/conf_access.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/compiler.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/compiler.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ctrl_access.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/ctrl_access.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_access.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/conf_access.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_mem.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/sd_mmc_mem.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ctrl_access.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/ctrl_access.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/sd_mmc.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_protocol.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/sd_mmc_protocol.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/hsmci.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/hsmci.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/sd_mmc_protocol.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/sd_mmc_protocol.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/dmac.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/dmac.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/diskio.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/diskio.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/integer.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/integer.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ff.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/ff.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/conf_fatfs.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/conf_fatfs.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/ffconf.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/ffconf.h:
 
-/home/jeanmarc/Documents/sketchbook/libraries/SD_HSMCI/utility/rtc.h:
+/home/jeanmarc/workspace/RepRapFirmware/Libraries/SD_HSMCI/utility/rtc.h:
 
 ../Webserver.h:
 
