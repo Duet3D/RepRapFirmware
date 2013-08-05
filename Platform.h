@@ -239,7 +239,9 @@ class Platform
   void DisconnectClient(); //Disconnect the client  
   
   void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
-                            // say, display the messages on an LCD. This may also transmit the messages to the host. 
+                            // say, display the messages on an LCD. This may also transmit the messages to the host.
+  boolean SerialAvailable();  // Byte available from (for example) USB?
+  boolean SerialRead(char& b); // Read a serial byte into b; result is true unless no byte is available 
   
   // Movement
   
@@ -395,6 +397,28 @@ inline char* Platform::GetTempDir()
   return tempDir;
 }
 
+//****************************************************************************************************************
+
+// Serial input
+
+// Byte available from (for example) USB?
+
+inline boolean Platform::SerialAvailable()
+{
+  return Serial.available() > 0;
+}
+
+// Read a serial byte into b; result is true unless no byte is available
+
+inline boolean Platform::SerialRead(char& b)
+{
+  int incomingByte = Serial.read();
+  if(incomingByte < 0)
+    return false;
+  b = (char)incomingByte;
+  return true;
+}
+
 //*****************************************************************************************************************
 
 // Drive the RepRap machine - Movement
@@ -523,7 +547,7 @@ inline float Platform::DMix(int8_t heater)
 // Interrupts
 
 
-void Platform::InitialiseInterrupts()
+inline void Platform::InitialiseInterrupts()
 {
   pmc_set_writeprotect(false);
   pmc_enable_periph_clk((uint32_t)TC3_IRQn);
