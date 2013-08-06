@@ -39,16 +39,16 @@ void loop()
 Platform::Platform(RepRap* r)
 {
   reprap = r;
-
+  
   // Files
-
+ 
   FIL * files = new FIL[MAX_FILES];
   inUse = new boolean[MAX_FILES];
   for(int8_t i=0; i < MAX_FILES; i++)
     buf[i] = new byte[FILE_BUF_LEN];
-
+  
   server = new EthernetServer(HTTP_PORT);
-
+  
   active = false;
 }
 
@@ -148,9 +148,7 @@ void Platform::Init()
   {
     if(heatOnPins[i] >= 0)
       pinMode(heatOnPins[i], OUTPUT);
-    //Serial.println(thermistorInfRs[i]);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
-    //Serial.println(thermistorInfRs[i]);
   }  
 
   // Files
@@ -164,7 +162,7 @@ void Platform::Init()
   // Network
 
   mac = MAC;
-  server = new EthernetServer(HTTP_PORT);
+//  server = new EthernetServer(HTTP_PORT);
   
   // disable SD SPI while starting w5100
   // or you will have trouble
@@ -185,15 +183,15 @@ void Platform::Init()
   
   clientStatus = 0;
   client = 0;
-
+ 
   /* Configure HSMCI pins */
   hsmciPinsinit();
-
+  
   // Initialize SD MMC stack
   sd_mmc_init();
-
+  
   FATFS fs;
-
+  
   memset(&fs, 0, sizeof(FATFS));
   //u_mount SD card
   f_mount (LUN_ID_SD_MMC_0_MEM, NULL);
@@ -201,9 +199,9 @@ void Platform::Init()
 
   if (f_mount(LUN_ID_SD_MMC_0_MEM, &fs) != FR_INVALID_DRIVE) {
      Serial.println("SD initialisation failed.");
-  }
+}
   InitialiseInterrupts();
-  
+
   lastTime = Time();
   
   active = true;
@@ -252,6 +250,9 @@ float Platform::GetTemperature(int8_t heater)
 
 void Platform::SetHeater(int8_t heater, const float& power)
 {
+  if(heatOnPins[heater] < 0)
+    return;
+    
   if(power <= 0.00)
   {
      analogWrite(heatOnPins[heater], 0);
@@ -326,14 +327,14 @@ char* Platform::FileList(char* directory)
     count++;
     fileList[p++] = FILE_LIST_BRACKET;
 	fileList[p++] = *entry.fname;
-	q++;
-	if(p >= FILE_LIST_LENGTH - 10) // Caution...
-	{
-		Message(HOST_MESSAGE, "FileList - directory: ");
-		Message(HOST_MESSAGE, directory);
+      q++;
+      if(p >= FILE_LIST_LENGTH - 10) // Caution...
+      {
+        Message(HOST_MESSAGE, "FileList - directory: ");
+        Message(HOST_MESSAGE, directory);
 		Message(HOST_MESSAGE, " has too many files!\n");
-		return "";
-	}
+        return "";
+    }
     fileList[p++] = FILE_LIST_BRACKET;
     fileList[p++] = FILE_LIST_SEPARATOR;
   }

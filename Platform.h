@@ -34,6 +34,11 @@ Licence: GPL
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+// Language-specific includes
+
+#include <stdio.h>
+#include <ctype.h>
+
 // Platform-specific includes
 
 #include <Arduino.h>
@@ -248,6 +253,8 @@ class Platform
   
   void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
                             // say, display the messages on an LCD. This may also transmit the messages to the host. 
+  boolean SerialAvailable();  // Byte available from (for example) USB?
+  boolean SerialRead(char& b); // Read a serial byte into b; result is true unless no byte is available 
   
   // Movement
   
@@ -403,6 +410,28 @@ inline char* Platform::GetTempDir()
   return tempDir;
 }
 
+//****************************************************************************************************************
+
+// Serial input
+
+// Byte available from (for example) USB?
+
+inline boolean Platform::SerialAvailable()
+{
+  return Serial.available() > 0;
+}
+
+// Read a serial byte into b; result is true unless no byte is available
+
+inline boolean Platform::SerialRead(char& b)
+{
+  int incomingByte = Serial.read();
+  if(incomingByte < 0)
+    return false;
+  b = (char)incomingByte;
+  return true;
+}
+
 //*****************************************************************************************************************
 
 // Drive the RepRap machine - Movement
@@ -424,14 +453,17 @@ inline float Platform::InstantDv(int8_t drive)
 
 inline void Platform::SetDirection(byte drive, bool direction)
 {
+  if(directionPins[drive] >= 0)
   digitalWrite(directionPins[drive], direction);  
 }
 
 inline void Platform::Step(byte drive)
 {
-  //digitalWrite(stepPins[drive], !digitalRead(stepPins[drive]));
+  if(stepPins[drive] >= 0)
+  {
   digitalWrite(stepPins[drive], 0);
   digitalWrite(stepPins[drive], 1);
+  }
 }
 
 inline float Platform::HomeFeedRate(int8_t drive)
@@ -471,7 +503,9 @@ inline float Platform::MaxFeedrate(int8_t drive)
 
 inline int Platform::GetRawTemperature(byte heater)
 {
+  if(tempSensePins[heater] >= 0)
   return analogRead(tempSensePins[heater]);
+  return 0;
 }
 
 inline float Platform::HeatSampleTime()

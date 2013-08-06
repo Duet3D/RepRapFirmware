@@ -28,6 +28,7 @@ GCodes::GCodes(Platform* p, Webserver* w)
   webserver = w;
   webGCode = new GCodeBuffer(platform, "web: ");
   fileGCode = new GCodeBuffer(platform, "file: ");
+  serialGCode = new GCodeBuffer(platform, "serial: ");
 }
 
 void GCodes::Exit()
@@ -39,8 +40,10 @@ void GCodes::Init()
 {
   webGCode->Init();
   fileGCode->Init();
-  webGCodeFinished = true;
-  fileGCodeFinished = true;
+  serialGCode->Init();
+  webGCode->SetFinished(true);
+  fileGCode->SetFinished(true);
+  serialGCode->SetFinished(true);
   moveAvailable = false;
   heatAvailable = false;
   drivesRelative = true;
@@ -71,36 +74,51 @@ void GCodes::Spin()
   if(!active)
     return;
 
-  if(!webGCodeFinished)
+  char b;
+    
+  if(!webGCode->Finished())
   {
-    webGCodeFinished = ActOnGcode(webGCode);
+    webGCode->SetFinished(ActOnGcode(webGCode));
     return;
   }
 
-  if(!fileGCodeFinished)
+  if(!serialGCode->Finished())
 {
-    fileGCodeFinished = ActOnGcode(fileGCode);
+    serialGCode->SetFinished(ActOnGcode(serialGCode));
+    return;
+  }  
+
+  if(!fileGCode->Finished())
+  {
+    fileGCode->SetFinished(ActOnGcode(fileGCode));
     return;
 }
 
   if(webserver->GCodeAvailable())
   {
     if(webGCode->Put(webserver->ReadGCode()))
-      webGCodeFinished = ActOnGcode(webGCode);
+      webGCode->SetFinished(ActOnGcode(webGCode));
+    return;
+  }
+  
+  if(platform->SerialAvailable())
+  {
+    platform->SerialRead(b);
+    if(serialGCode->Put(b))
+      serialGCode->SetFinished(ActOnGcode(serialGCode));
     return;
   }
 
   if(fileBeingPrinted >= 0)
   {
-     char b;
      if(platform->Read(fileBeingPrinted, b))
      {
        if(fileGCode->Put(b))
-         fileGCodeFinished = ActOnGcode(fileGCode);
+         fileGCode->SetFinished(ActOnGcode(fileGCode));
      } else
      {
         if(fileGCode->Put('\n')) // In case there wasn't one ending the file
-         fileGCodeFinished = ActOnGcode(fileGCode);
+         fileGCode->SetFinished(ActOnGcode(fileGCode));
         platform->Close(fileBeingPrinted);
         fileBeingPrinted = -1;
      }

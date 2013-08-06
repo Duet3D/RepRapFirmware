@@ -39,6 +39,8 @@ class GCodeBuffer
     int GetIValue();
     long GetLValue();
     char* Buffer();
+    boolean Finished();
+    void SetFinished(boolean f);
     
   private:
     Platform* platform;
@@ -47,6 +49,7 @@ class GCodeBuffer
     int gcodePointer;
     int readPointer;
     boolean inComment;
+    boolean finished;
 };
 
 //****************************************************************************************************
@@ -86,8 +89,9 @@ class GCodes
     boolean dwellWaiting;
     GCodeBuffer* webGCode;
     GCodeBuffer* fileGCode;
-    boolean webGCodeFinished;
-    boolean fileGCodeFinished;
+    GCodeBuffer* serialGCode;
+//    boolean webGCodeFinished;
+//    boolean fileGCodeFinished;
     boolean moveAvailable;
     boolean heatAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
@@ -125,6 +129,16 @@ inline int GCodeBuffer::GetIValue()
 inline char* GCodeBuffer::Buffer()
 {
   return gcodeBuffer;
+}
+
+inline boolean GCodeBuffer::Finished()
+{
+  return finished;
+}
+
+inline void GCodeBuffer::SetFinished(boolean f)
+{
+  finished = f;
 }
 
 inline boolean GCodes::PrintingAFile()

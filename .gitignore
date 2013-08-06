@@ -4,3 +4,5 @@ Release/*.o
 Release/*.d
 Release/*.elf
 Release/*.ar
+*~
+*orig

@@ -30,9 +30,9 @@ class GCodes;
 class Move;
 class Heat;
 class RepRap;
-      
+
 extern RepRap reprap;
-    
+      
 // Functions and globals not part of any class
     
 char* ftoa(char *a, const float& f, int prec);
@@ -42,10 +42,10 @@ bool StringEquals(char* s1, char* s2);
 int StringContains(char* string, char* match);
     
 extern char scratchString[30];
-  
+    
 //#include <stdio.h>
 //#include <stdlib.h>
-
+  
 #include <float.h>
 
 #include "Configuration.h"
