@@ -528,7 +528,7 @@ void Platform::Spin()
   if(!active)
     return;
     
-   ClientMonitor();
+   //ClientMonitor();
    if(Time() - lastTime < 2.0)
      return;
    lastTime = Time();
