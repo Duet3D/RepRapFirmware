@@ -68,7 +68,7 @@ void Platform::Init()
 { 
   byte i;
   
-  Serial.begin(BAUD_RATE);
+  SerialUSB.begin(BAUD_RATE);
   
   if(!LoadFromStore())
   {     
@@ -198,7 +198,7 @@ void Platform::Init()
   //mount SD card
 
   if (f_mount(LUN_ID_SD_MMC_0_MEM, &fs) != FR_INVALID_DRIVE) {
-     Serial.println("SD initialisation failed.");
+     SerialUSB.println("SD initialisation failed.");
 }
   InitialiseInterrupts();
 
@@ -506,13 +506,12 @@ void Platform::Message(char type, char* message)
   case HOST_MESSAGE:
   default:
   
-  
-    int m = OpenFile(GetWebDir(), MESSAGE_FILE, true);
-    GoToEnd(m);
-    WriteString(m, message);
-    Serial.print(message);
-    Close(m);
-    
+	SerialUSB.println(message);
+//    int m = OpenFile(GetWebDir(), MESSAGE_FILE, true);
+//	int m = 0;
+//    GoToEnd(m);
+//    WriteString(m, message);
+//    Close(m);
   }
 }
 

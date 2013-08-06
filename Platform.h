@@ -152,6 +152,8 @@ void setup();
                              // not displayed; \f and \n should be supported.
 #define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
 
+#define SERIAL_MESSAGE 'S' // Type byte of a message that is to be sent to the SerialUSB port; the S is not sent.
+
 /****************************************************************************************************/
 
 // Networking
@@ -189,7 +191,7 @@ void setup();
 
 // Miscellaneous...
 
-#define LED_PIN 13 // Indicator LED
+#define LED_PIN 11 // Indicator LED
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
@@ -418,14 +420,14 @@ inline char* Platform::GetTempDir()
 
 inline boolean Platform::SerialAvailable()
 {
-  return Serial.available() > 0;
+  return SerialUSB.available() > 0;
 }
 
 // Read a serial byte into b; result is true unless no byte is available
 
 inline boolean Platform::SerialRead(char& b)
 {
-  int incomingByte = Serial.read();
+  int incomingByte = SerialUSB.read();
   if(incomingByte < 0)
     return false;
   b = (char)incomingByte;

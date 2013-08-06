@@ -232,7 +232,7 @@ environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.
 environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.BOARD_NAME/value=Arduino Due (Native USB Port)
 environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.COM_PORT/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.COM_PORT/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.COM_PORT/value=/dev/ttyACM0
+environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.COM_PORT/value=/dev/ttyACM2
 environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.EXTRA.C.COMPILE/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.EXTRA.C.COMPILE/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.1832049082/JANTJE.EXTRA.C.COMPILE/value=
