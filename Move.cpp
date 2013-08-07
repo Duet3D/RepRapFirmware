@@ -218,7 +218,7 @@ void Move::Spin()
 void Move::Diagnostics() 
 {
   platform->Message(HOST_MESSAGE, "Move Diagnostics:\n");
-/*  if(active)
+  if(active)
     platform->Message(HOST_MESSAGE, " active\n");
   else
     platform->Message(HOST_MESSAGE, " not active\n");
@@ -244,7 +244,7 @@ void Move::Diagnostics()
     platform->Message(HOST_MESSAGE, " addNoMoreMoves is true\n\n");
   else
     platform->Message(HOST_MESSAGE, " addNoMoreMoves is false\n\n"); 
-   */
+
 }
 
 // This returns false if it is not possible
