@@ -42,7 +42,7 @@ Platform::Platform(RepRap* r)
   
   // Files
  
-  FIL * files = new FIL[MAX_FILES];
+  files = new FIL[MAX_FILES];
   inUse = new boolean[MAX_FILES];
   for(int8_t i=0; i < MAX_FILES; i++)
     buf[i] = new byte[FILE_BUF_LEN];
