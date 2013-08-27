@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <?fileVersion 4.0.0?><cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
 	<storageModule moduleId="org.eclipse.cdt.core.settings">
-		<cconfiguration id="it.baeyens.arduino.core.toolChain.release.1832049082">
-			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="it.baeyens.arduino.core.toolChain.release.1832049082" moduleId="org.eclipse.cdt.core.settings" name="Release">
-				<externalSettings/>
+		<cconfiguration id="it.baeyens.arduino.core.toolChain.release.436205591">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="it.baeyens.arduino.core.toolChain.release.436205591" moduleId="org.eclipse.cdt.core.settings" name="Release">
+				<externalSettings>
+					<externalSetting/>
+				</externalSettings>
 				<extensions>
 					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
 					<extension id="org.eclipse.cdt.core.MakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
@@ -12,44 +14,48 @@
 				</extensions>
 			</storageModule>
 			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactName="${ProjName}" buildProperties="" description="" id="it.baeyens.arduino.core.toolChain.release.1832049082" name="Release" parent="org.eclipse.cdt.build.core.emptycfg">
-					<folderInfo id="it.baeyens.arduino.core.toolChain.release.1832049082.1147389088" name="/" resourcePath="">
-						<toolChain id="it.baeyens.arduino.core.toolChain.release.1033353268" name="it.baeyens.arduino.core.toolChain.release" superClass="it.baeyens.arduino.core.toolChain.release">
-							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="it.baeyens.arduino.targetplatform.1231916765" name="Arduino Target" osList="all" superClass="it.baeyens.arduino.targetplatform"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware/Release}" id="it.baeyens.arduino.sketch.builder.2145486696" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Arduino sketch builder" superClass="it.baeyens.arduino.sketch.builder"/>
-							<tool id="it.baeyens.arduino.tool.sketch.compiler.cpp.604372293" name="Arduino C++ Compiler" superClass="it.baeyens.arduino.tool.sketch.compiler.cpp">
-								<option id="it.baeyens.arduino.compiler.cpp.sketch.option.incpath.742224729" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.cpp.sketch.option.incpath" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
-									<listOptionValue builtIn="false" value="/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Ethernet}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Ethernet/utility}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SPI}&quot;"/>
+				<configuration artifactName="${ProjName}" buildProperties="" description="" id="it.baeyens.arduino.core.toolChain.release.436205591" name="Release" parent="org.eclipse.cdt.build.core.emptycfg">
+					<folderInfo id="it.baeyens.arduino.core.toolChain.release.436205591.122032277" name="/" resourcePath="">
+						<toolChain id="it.baeyens.arduino.core.toolChain.release.979067026" name="it.baeyens.arduino.core.toolChain.release" superClass="it.baeyens.arduino.core.toolChain.release">
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="it.baeyens.arduino.targetplatform.1886687780" name="Arduino Target" osList="all" superClass="it.baeyens.arduino.targetplatform"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="it.baeyens.arduino.sketch.builder.903772766" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Arduino sketch builder" superClass="it.baeyens.arduino.sketch.builder"/>
+							<tool id="it.baeyens.arduino.tool.sketch.compiler.cpp.870237841" name="Arduino C++ Compiler" superClass="it.baeyens.arduino.tool.sketch.compiler.cpp">
+								<option id="it.baeyens.arduino.compiler.cpp.sketch.option.incpath.1613716064" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.cpp.sketch.option.incpath" valueType="includePath">
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/libraries"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SamNonDuePin}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI/utility}&quot;"/>
-								</option>
-								<inputType id="it.baeyens.arduino.compiler.cpp.sketch.input.787090777" name="CPP source files" superClass="it.baeyens.arduino.compiler.cpp.sketch.input"/>
-							</tool>
-							<tool id="it.baeyens.arduino.tool.compiler.c.2068651855" name="Arduino C Compiler" superClass="it.baeyens.arduino.tool.compiler.c">
-								<option id="it.baeyens.arduino.compiler.c.sketch.option.incpath.338675134" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.c.sketch.option.incpath" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
-									<listOptionValue builtIn="false" value="/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/libraries"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/cores/arduino/"/>
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/variants/arduino_due_x/"/>
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/libraries/Ethernet/"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Ethernet}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Ethernet/utility}&quot;"/>
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/libraries/SPI/"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SPI}&quot;"/>
+								</option>
+								<inputType id="it.baeyens.arduino.compiler.cpp.sketch.input.385927596" name="CPP source files" superClass="it.baeyens.arduino.compiler.cpp.sketch.input"/>
+							</tool>
+							<tool id="it.baeyens.arduino.tool.compiler.c.1493449521" name="Arduino C Compiler" superClass="it.baeyens.arduino.tool.compiler.c">
+								<option id="it.baeyens.arduino.compiler.c.sketch.option.incpath.683855921" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.c.sketch.option.incpath" valueType="includePath">
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/libraries"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SamNonDuePin}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI/utility}&quot;"/>
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/cores/arduino/"/>
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/variants/arduino_due_x/"/>
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/libraries/Ethernet/"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Ethernet}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Ethernet/utility}&quot;"/>
+									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.2/hardware/arduino/sam/libraries/SPI/"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SPI}&quot;"/>
 								</option>
-								<inputType id="it.baeyens.arduino.compiler.c.sketch.input.2075628648" name="C Source Files" superClass="it.baeyens.arduino.compiler.c.sketch.input"/>
+								<inputType id="it.baeyens.arduino.compiler.c.sketch.input.458175211" name="C Source Files" superClass="it.baeyens.arduino.compiler.c.sketch.input"/>
 							</tool>
-							<tool id="it.baeyens.arduino.tool.ar.2118756478" name="Arduino archiver" superClass="it.baeyens.arduino.tool.ar"/>
-							<tool id="it.baeyens.arduino.tool.combine.335661012" name="Arduino combiner" superClass="it.baeyens.arduino.tool.combine"/>
-							<tool id="it.baeyens.arduino.tool.objcopy.eep.1065426951" name="Arduino tool Create eeprom" superClass="it.baeyens.arduino.tool.objcopy.eep"/>
-							<tool id="it.baeyens.arduino.tool.objcopy.flash.1686024404" name="Arduino tool Create hex" superClass="it.baeyens.arduino.tool.objcopy.flash"/>
-							<tool id="it.baeyens.arduino.tool.size.1133691521" name="Arduino tool Print Size" superClass="it.baeyens.arduino.tool.size"/>
+							<tool id="it.baeyens.arduino.tool.ar.1891755688" name="Arduino archiver" superClass="it.baeyens.arduino.tool.ar"/>
+							<tool id="it.baeyens.arduino.tool.combine.1593136430" name="Arduino combiner" superClass="it.baeyens.arduino.tool.combine"/>
+							<tool id="it.baeyens.arduino.tool.objcopy.eep.191185941" name="Arduino tool Create eeprom" superClass="it.baeyens.arduino.tool.objcopy.eep"/>
+							<tool id="it.baeyens.arduino.tool.objcopy.flash.746859504" name="Arduino tool Create hex" superClass="it.baeyens.arduino.tool.objcopy.flash"/>
+							<tool id="it.baeyens.arduino.tool.size.1571585458" name="Arduino tool Print Size" superClass="it.baeyens.arduino.tool.size"/>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
@@ -61,17 +67,11 @@
 		</cconfiguration>
 	</storageModule>
 	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-		<project id="RepRapFirmware.null.1448348010" name="RepRapFirmware"/>
+		<project id="RepRapFirmware.null.115941266" name="RepRapFirmware"/>
 	</storageModule>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
-	<storageModule moduleId="refreshScope" versionNumber="2">
-		<configuration configurationName="Release">
-			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
-		</configuration>
-	</storageModule>
-	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
-	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
+	<storageModule moduleId="refreshScope"/>
 </cproject>
