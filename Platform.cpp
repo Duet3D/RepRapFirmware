@@ -75,6 +75,8 @@ void Platform::Init()
 { 
   byte i;
   
+  delay(4000); // Not needed in production...
+
   if(!LoadFromStore())
   {     
   // DRIVES
@@ -159,12 +161,6 @@ void Platform::Init()
   
   for(i=0; i < MAX_FILES; i++)
     files[i]->Init();
- 
-//  for(i=0; i < MAX_FILES; i++)
-//  {
-//    bPointer[i] = 0;
-//    inUse[i] = false;
-//  }
   
   line->Init();
 
@@ -255,9 +251,9 @@ MassStorage::MassStorage(Platform* p)
 
 void MassStorage::Init()
 {
-  if (!SD.begin(SD_SPI)) 
-     platform->Message(HOST_MESSAGE, "SD initialization failed.\n");
-  // SD.begin() returns with the SPI disabled, so you need not disable it here  
+//  if (!SD.begin(SD_SPI))
+//     platform->Message(HOST_MESSAGE, "SD initialization failed.\n");
+//  // SD.begin() returns with the SPI disabled, so you need not disable it here
 }
 
 char* MassStorage::CombineName(char* directory, char* fileName)
@@ -309,45 +305,46 @@ char* MassStorage::CombineName(char* directory, char* fileName)
 
 char* MassStorage::FileList(char* directory)
 {
-  File dir, entry;
-  dir = SD.open(directory);
-  int p = 0;
-  int q;
-  int count = 0;
-  while(entry = dir.openNextFile())
-  {
-    q = 0;
-    count++;
-    fileList[p++] = FILE_LIST_BRACKET;
-    while(entry.name()[q])
-    {
-      fileList[p++] = entry.name()[q];
-      q++;
-      if(p >= FILE_LIST_LENGTH - 10) // Caution...
-      {
-        platform->Message(HOST_MESSAGE, "FileList - directory: ");
-        platform->Message(HOST_MESSAGE, directory);
-        platform->Message(HOST_MESSAGE, " has too many files!\n");
-        return "";
-      }
-    }
-    fileList[p++] = FILE_LIST_BRACKET;
-    fileList[p++] = FILE_LIST_SEPARATOR;
-    entry.close();
-  }
-  dir.close();
-  
-  if(count <= 0)
-    return "";
-  
-  fileList[--p] = 0; // Get rid of the last separator
-  return fileList;
+//  File dir, entry;
+//  dir = SD.open(directory);
+//  int p = 0;
+//  int q;
+//  int count = 0;
+//  while(entry = dir.openNextFile())
+//  {
+//    q = 0;
+//    count++;
+//    fileList[p++] = FILE_LIST_BRACKET;
+//    while(entry.name()[q])
+//    {
+//      fileList[p++] = entry.name()[q];
+//      q++;
+//      if(p >= FILE_LIST_LENGTH - 10) // Caution...
+//      {
+//        platform->Message(HOST_MESSAGE, "FileList - directory: ");
+//        platform->Message(HOST_MESSAGE, directory);
+//        platform->Message(HOST_MESSAGE, " has too many files!\n");
+//        return "";
+//      }
+//    }
+//    fileList[p++] = FILE_LIST_BRACKET;
+//    fileList[p++] = FILE_LIST_SEPARATOR;
+//    entry.close();
+//  }
+//  dir.close();
+//
+//  if(count <= 0)
+//    return "";
+//
+//  fileList[--p] = 0; // Get rid of the last separator
+//  return fileList;
+	return "";
 }
 
 // Delete a file
 bool MassStorage::Delete(char* directory, char* fileName)
 {
-  return SD.remove(CombineName(directory, fileName));
+//  return SD.remove(CombineName(directory, fileName));
 }
 
 //------------------------------------------------------------------------------------------------
@@ -368,10 +365,10 @@ void FileStore::Init()
 
 void FileStore::Close()
 {
-  if(bPointer != 0)
-    file.write(buf, bPointer);
+//  if(bPointer != 0)
+//    file.write(buf, bPointer);
   bPointer = 0;
-  file.close();
+//  file.close();
   platform->ReturnFileStore(this);
   inUse = false;
 }
@@ -383,26 +380,26 @@ bool FileStore::Open(char* directory, char* fileName, bool write)
 {
   char* location = platform->GetMassStorage()->CombineName(directory, fileName);
   
-  if(!SD.exists(location))
-  {
-    if(!write)
-    {
-      platform->Message(HOST_MESSAGE, "File: ");
-      platform->Message(HOST_MESSAGE, fileName);
-      platform->Message(HOST_MESSAGE, " not found for reading.\n");
-      return false;
-    }
-    file = SD.open(location, FILE_WRITE);
-    bPointer = 0;
-  } else
-  {
-    if(write)
-    {
-      file = SD.open(location, FILE_WRITE);
-      bPointer = 0;
-    } else
-      file = SD.open(location, FILE_READ);
-  }
+//  if(!SD.exists(location))
+//  {
+//    if(!write)
+//    {
+//      platform->Message(HOST_MESSAGE, "File: ");
+//      platform->Message(HOST_MESSAGE, fileName);
+//      platform->Message(HOST_MESSAGE, " not found for reading.\n");
+//      return false;
+//    }
+//    file = SD.open(location, FILE_WRITE);
+//    bPointer = 0;
+//  } else
+//  {
+//    if(write)
+//    {
+//      file = SD.open(location, FILE_WRITE);
+//      bPointer = 0;
+//    } else
+//      file = SD.open(location, FILE_READ);
+//  }
 
   inUse = true;
   return true;
@@ -415,8 +412,8 @@ void FileStore::GoToEnd()
     platform->Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
     return;
   }
-  unsigned long e = file.size();
-  file.seek(e);
+//  unsigned long e = file.size();
+//  file.seek(e);
 }
 
 unsigned long FileStore::Length()
@@ -426,7 +423,7 @@ unsigned long FileStore::Length()
     platform->Message(HOST_MESSAGE, "Attempt to size non-open file.\n");
     return 0;
   }
-  return file.size();  
+//  return file.size();
 }
 
 int8_t FileStore::Status()
@@ -434,8 +431,8 @@ int8_t FileStore::Status()
   if(!inUse)
     return nothing;
     
-  if(file.available())
-    return byteAvailable;
+//  if(file.available())
+//    return byteAvailable;
     
   return nothing;
 }
@@ -450,11 +447,11 @@ bool FileStore::Read(char& b)
     
   if(!(Status() & byteAvailable))
     return false;
-  int c = file.read();
-  if(c < 0)
+//  int c = file.read();
+//  if(c < 0)
     return false;
     
-  b = (char) c;
+//  b = (char) c;
   return true;
 }
 
@@ -469,7 +466,7 @@ void FileStore::Write(char b)
   bPointer++;
   if(bPointer >= FILE_BUF_LEN)
   {
-    file.write(buf, FILE_BUF_LEN);
+//    file.write(buf, FILE_BUF_LEN);
     bPointer = 0;
   } 
 }

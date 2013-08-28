@@ -301,7 +301,7 @@ protected:
   
 private:
 
-  File file;
+//  File file;
   Platform* platform;
 };
 
