@@ -42,8 +42,8 @@ Licence: GPL
 // Platform-specific includes
 
 #include <Arduino.h>
-#include <Ethernet.h>
-#include <SD.h>
+//#include <Ethernet.h>
+//#include <SD.h>
 
 /**************************************************************************************************/
 
@@ -232,8 +232,8 @@ protected:
 private:
 	byte mac[MAC_BYTES];
 	byte ipAddress[IP_BYTES];
-	EthernetServer* server;
-	EthernetClient client;
+//	EthernetServer* server;
+//	EthernetClient client;
 	int8_t clientStatus;
 };
 
@@ -548,7 +548,7 @@ inline int8_t Line::Status()
 //	if(alternateInput != NULL)
 //		return alternateInput->Status();
 
-	if(Serial.available() > 0)
+	if(SerialUSB.available() > 0)
 		return byteAvailable;
 	return nothing;
 }
@@ -558,7 +558,7 @@ inline int Line::Read(char& b)
 //  if(alternateInput != NULL)
 //	return alternateInput->Read(b);
 
-  int incomingByte = Serial.read();
+  int incomingByte = SerialUSB.read();
   if(incomingByte < 0)
     return 0;
   b = (char)incomingByte;
@@ -567,12 +567,12 @@ inline int Line::Read(char& b)
 
 inline void Line::Write(char b)
 {
-	Serial.print(b);
+	SerialUSB.print(b);
 }
 
 inline void Line::Write(char* b)
 {
-	Serial.print(b);
+	SerialUSB.print(b);
 }
 
 
@@ -585,26 +585,26 @@ inline void Network::Spin()
 {
   clientStatus = 0;
 
-  if(!client)
-  {
-    client = server->available();
-    if(!client)
-      return;
-    //else
-      //Serial.println("new client");
-  }
-
-  clientStatus |= clientLive;
-
-  if(!client.connected())
-    return;
-
-  clientStatus |= clientConnected;
-
-  if (!client.available())
-    return;
-
-  clientStatus |= byteAvailable;
+//  if(!client)
+//  {
+//    client = server->available();
+//    if(!client)
+//      return;
+//    //else
+//      //Serial.println("new client");
+//  }
+//
+//  clientStatus |= clientLive;
+//
+//  if(!client.connected())
+//    return;
+//
+//  clientStatus |= clientConnected;
+//
+//  if (!client.available())
+//    return;
+//
+//  clientStatus |= byteAvailable;
 }
 
 
