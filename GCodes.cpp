@@ -53,8 +53,8 @@ void GCodes::Init()
   distanceScale = 1.0;
   for(int8_t i = 0; i < DRIVES - AXES; i++)
     lastPos[i] = 0.0;
-  fileBeingPrinted = -1;
-  fileToPrint = -1;
+  fileBeingPrinted = NULL;
+  fileToPrint = NULL;
   homeX = false;
   homeY = false;
   homeZ = false;
@@ -73,7 +73,7 @@ void GCodes::Spin()
 {
   if(!active)
     return;
-
+    
   char b;
     
   if(!webGCode->Finished())
@@ -81,9 +81,9 @@ void GCodes::Spin()
     webGCode->SetFinished(ActOnGcode(webGCode));
     return;
   }
-
+  
   if(!serialGCode->Finished())
-{
+  {
     serialGCode->SetFinished(ActOnGcode(serialGCode));
     return;
   }  
@@ -92,8 +92,8 @@ void GCodes::Spin()
   {
     fileGCode->SetFinished(ActOnGcode(fileGCode));
     return;
-}
-
+  }  
+    
   if(webserver->GCodeAvailable())
   {
     if(webGCode->Put(webserver->ReadGCode()))
@@ -101,17 +101,17 @@ void GCodes::Spin()
     return;
   }
   
-  if(platform->SerialAvailable())
+  if(platform->GetLine()->Status() & byteAvailable)
   {
-    platform->SerialRead(b);
+	  platform->GetLine()->Read(b);
     if(serialGCode->Put(b))
       serialGCode->SetFinished(ActOnGcode(serialGCode));
     return;
-  }
-
-  if(fileBeingPrinted >= 0)
+  }  
+  
+  if(fileBeingPrinted != NULL)
   {
-     if(platform->Read(fileBeingPrinted, b))
+     if(fileBeingPrinted->Read(b))
      {
        if(fileGCode->Put(b))
          fileGCode->SetFinished(ActOnGcode(fileGCode));
@@ -119,8 +119,8 @@ void GCodes::Spin()
      {
         if(fileGCode->Put('\n')) // In case there wasn't one ending the file
          fileGCode->SetFinished(ActOnGcode(fileGCode));
-        platform->Close(fileBeingPrinted);
-        fileBeingPrinted = -1;
+        fileBeingPrinted->Close();
+        fileBeingPrinted = NULL;
      }
   }
 }
@@ -129,9 +129,9 @@ void GCodes::Diagnostics()
 {
   platform->Message(HOST_MESSAGE, "GCodes Diagnostics:\n");
 }
-    
-boolean GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
-  {
+
+bool GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
+{
   // Last one gone?
   
   if(moveAvailable)
@@ -151,8 +151,8 @@ boolean GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
   return true;  
 }
 
-boolean GCodes::Push()
-    {
+bool GCodes::Push()
+{
   if(stackPointer >= STACK)
   {
     platform->Message(HOST_MESSAGE, "Push(): stack overflow!\n");
@@ -170,7 +170,7 @@ boolean GCodes::Push()
   return true;
 }
 
-boolean GCodes::Pop()
+bool GCodes::Pop()
 {
   if(stackPointer <= 0)
   {
@@ -206,7 +206,7 @@ boolean GCodes::Pop()
 // If the Move class can't receive the move (i.e. things have to wait)
 // this returns false, otherwise true.
 
-boolean GCodes::SetUpMove(GCodeBuffer *gb)
+bool GCodes::SetUpMove(GCodeBuffer *gb)
 {
   // Last one gone yet?
   
@@ -263,7 +263,7 @@ boolean GCodes::SetUpMove(GCodeBuffer *gb)
 
 // The Move class calls this function to find what to do next.
 
-boolean GCodes::ReadMove(float* m, boolean& ce)
+bool GCodes::ReadMove(float* m, bool& ce)
 {
     if(!moveAvailable)
       return false; 
@@ -276,12 +276,12 @@ boolean GCodes::ReadMove(float* m, boolean& ce)
 }
 
 
-boolean GCodes::ReadHeat(float* h)
+bool GCodes::ReadHeat(float* h)
 {
 
 }
 
-boolean GCodes::DoHome()
+bool GCodes::DoHome()
 {
   // Treat more or less like any other move
   // Do one axis at a time, starting with X.
@@ -364,14 +364,16 @@ boolean GCodes::DoHome()
 
 void GCodes::QueueFileToPrint(char* fileName)
 {
-  fileToPrint = platform->OpenFile(platform->GetGCodeDir(), fileName, false);
+  fileToPrint = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
+  if(fileToPrint == NULL)
+	  platform->Message(HOST_MESSAGE, "GCode file not found\n");
 }
 
 
 // Function to handle dwell delays.  Return true for
 // Dwell finished, false otherwise.
 
-boolean GCodes::DoDwell(GCodeBuffer *gb)
+bool GCodes::DoDwell(GCodeBuffer *gb)
 {
   unsigned long dwell;
   
@@ -405,7 +407,7 @@ boolean GCodes::DoDwell(GCodeBuffer *gb)
   return false;
 }
 
-boolean GCodes::SetOffsets(GCodeBuffer *gb)
+bool GCodes::SetOffsets(GCodeBuffer *gb)
 {
   int8_t head;
   if(gb->Seen('P'))
@@ -425,11 +427,11 @@ boolean GCodes::SetOffsets(GCodeBuffer *gb)
 // otherwise false.  It is called repeatedly for a given
 // GCode until it returns true for that code.
 
-boolean GCodes::ActOnGcode(GCodeBuffer *gb)
+bool GCodes::ActOnGcode(GCodeBuffer *gb)
 {
   int code;
   float value;
-  boolean result = true;
+  bool result = true;
   
   if(gb->Seen('G'))
   {
@@ -509,18 +511,18 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, "Motors off received\n");
       break;
       
-//    case 23: // Set file to print
-//      platform->Message(HOST_MESSAGE, "M code for file selected erroneously received.\n");
-//      break;
+    case 23: // Set file to print
+      QueueFileToPrint(gb->GetString());
+      break;
       
     case 24: // Print/resume-printing the selected file
       fileBeingPrinted = fileToPrint;
-      fileToPrint = -1;
+      fileToPrint = NULL;
       break;
       
     case 25: // Pause the print
       fileToPrint = fileBeingPrinted;
-      fileBeingPrinted = -1;
+      fileBeingPrinted = NULL;
       break;
       
     case 82:
@@ -529,6 +531,15 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
       
     case 83:
       drivesRelative = true;
+      break;
+
+    case 105: // Depricated...
+      for(int8_t i = 0; i < HEATERS; i++)
+      {
+    	  platform->GetLine()->Write(ftoa(NULL, reprap.GetHeat()->GetTemperature(i), 1));
+    	  platform->GetLine()->Write(" ");
+      }
+      platform->GetLine()->Write('\n');
       break;
    
     case 106: // Fan on
@@ -594,7 +605,7 @@ boolean GCodes::ActOnGcode(GCodeBuffer *gb)
     if(code == selectedHead)
       return result;
       
-    boolean ok = false;
+    bool ok = false;
     for(int8_t i = AXES; i < DRIVES; i++)
     {
       if(selectedHead == i - AXES)
@@ -637,14 +648,14 @@ GCodeBuffer::GCodeBuffer(Platform* p, char* id)
 
 void GCodeBuffer::Init()
 {
-      gcodePointer = 0;
+  gcodePointer = 0;
   readPointer = -1;
   inComment = false;   
 }
 
-boolean GCodeBuffer::Put(char c)
+bool GCodeBuffer::Put(char c)
 {
-  boolean result = false;
+  bool result = false;
   
   gcodeBuffer[gcodePointer] = c;
   
@@ -662,26 +673,26 @@ boolean GCodeBuffer::Put(char c)
       platform->Message(HOST_MESSAGE, "\n"); 
     }
     result = true;
-    } else
+  } else
   {
     if(!inComment)
       gcodePointer++;
   }
-    
-    if(gcodePointer >= GCODE_LENGTH)
-    {
+  
+  if(gcodePointer >= GCODE_LENGTH)
+  {
     platform->Message(HOST_MESSAGE, "G Code buffer length overflow.\n");
-      gcodePointer = 0;
-      gcodeBuffer[0] = 0;
-    }
+    gcodePointer = 0;
+    gcodeBuffer[0] = 0;
+  }
   
   return result;
-  }
+}   
 
 // Is 'c' in the G Code string?
 // Leave the pointer there for a subsequent read.
 
-boolean GCodeBuffer::Seen(char c)
+bool GCodeBuffer::Seen(char c)
 {
   readPointer = 0;
   while(gcodeBuffer[readPointer])
@@ -689,7 +700,7 @@ boolean GCodeBuffer::Seen(char c)
     if(gcodeBuffer[readPointer] == c)
       return true;
     readPointer++;
-}
+  }
   readPointer = -1;
   return false;
 }
@@ -706,6 +717,29 @@ float GCodeBuffer::GetFValue()
   float result = (float)strtod(&gcodeBuffer[readPointer + 1], NULL);
   readPointer = -1;
   return result; 
+}
+
+// This returns a pointer to the end of the buffer where a
+// string starts.  It assumes that an M or G search has
+// been done followed by a GetIValue(), so readPointer will
+// be -1.  It absorbs "M/Gnnn " (including the space) from the
+// start and returns a pointer to the next location.
+
+char* GCodeBuffer::GetString()
+{
+  readPointer = 0;
+  while(gcodeBuffer[readPointer] && gcodeBuffer[readPointer] != ' ')
+	  readPointer++;
+
+  if(!gcodeBuffer[readPointer])
+  {
+     platform->Message(HOST_MESSAGE, "GCodes: String expected but not seen.\n");
+     return gcodeBuffer; // Good idea?
+  }
+
+  char* result = &gcodeBuffer[readPointer+1];
+  readPointer = -1;
+  return result;
 }
 
 

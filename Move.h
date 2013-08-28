@@ -53,7 +53,7 @@ class LookAhead
 {  
   public:
     LookAhead(Move* m, Platform* p, LookAhead* n);
-    void Init(float ep[], float vv, boolean ce);
+    void Init(float ep[], float vv, bool ce);
     LookAhead* Next();
     LookAhead* Previous();
     float* EndPoint();
@@ -62,7 +62,7 @@ class LookAhead
     int8_t Processed();
     void SetProcessed(MovementState ms);
     void SetDriveZeroEndSpeed(float a, int8_t drive);
-    boolean CheckEndStops();
+    bool CheckEndStops();
     void Release();
     
   friend class Move;
@@ -74,7 +74,7 @@ class LookAhead
     LookAhead* previous;
     float endPoint[DRIVES+1];
     float Cosine();
-    boolean checkEndStops;
+    bool checkEndStops;
     float cosine;
     float v;
     float instantDv;
@@ -87,9 +87,9 @@ class DDA
   public: 
     DDA(Move* m, Platform* p, DDA* n);
     MovementProfile Init(LookAhead* lookAhead, float& u, float& v);
-    void Start(boolean noTest);
-    void Step(boolean noTest);
-    boolean Active();
+    void Start(bool noTest);
+    void Step(bool noTest);
+    bool Active();
     DDA* Next();
     float InstantDv();
     
@@ -102,10 +102,10 @@ class DDA
     LookAhead* myLookAheadEntry;
     long counter[DRIVES];
     long delta[DRIVES];
-    boolean directions[DRIVES];
+    bool directions[DRIVES];
     long totalSteps;
     long stepCount;
-    boolean checkEndStops;
+    bool checkEndStops;
     float timeStep;
     float velocity;
     long stopAStep;
@@ -114,7 +114,7 @@ class DDA
     float dCross;
     float acceleration;
     float instantDv;
-    volatile boolean active;
+    volatile bool active;
 };
 
 
@@ -128,10 +128,10 @@ class Move
     void Init();
     void Spin();
     void Exit();
-    boolean GetCurrentState(float m[]);
+    bool GetCurrentState(float m[]);
     void Interrupt();
     void InterruptTime();
-    boolean AllMovesAreFinished();
+    bool AllMovesAreFinished();
     void ResumeMoving();
     void DoLookAhead();
     void HitLowStop(int8_t drive, LookAhead* la);
@@ -142,16 +142,16 @@ class Move
     
   private:
   
-    boolean DDARingAdd(LookAhead* lookAhead);
+    bool DDARingAdd(LookAhead* lookAhead);
     DDA* DDARingGet();
-    boolean DDARingEmpty();
-    boolean NoLiveMovement();
-    boolean DDARingFull();
-    boolean GetDDARingLock();
+    bool DDARingEmpty();
+    bool NoLiveMovement();
+    bool DDARingFull();
+    bool GetDDARingLock();
     void ReleaseDDARingLock();
-    boolean LookAheadRingEmpty();
-    boolean LookAheadRingFull();
-    boolean LookAheadRingAdd(float ep[], float vv, boolean ce);
+    bool LookAheadRingEmpty();
+    bool LookAheadRingFull();
+    bool LookAheadRingAdd(float ep[], float vv, bool ce);
     LookAhead* LookAheadRingGet();
     int8_t GetMovementType(float sp[], float ep[]);
 
@@ -162,7 +162,7 @@ class Move
     DDA* dda;
     DDA* ddaRingAddPointer;
     DDA* ddaRingGetPointer;
-    volatile boolean ddaRingLocked;
+    volatile bool ddaRingLocked;
     
     LookAhead* lookAheadRingAddPointer;
     LookAhead* lookAheadRingGetPointer;
@@ -171,9 +171,9 @@ class Move
     int lookAheadRingCount;
 
     float lastTime;
-    boolean addNoMoreMoves;
-    boolean active;
-    boolean checkEndStopsOnNextMove;
+    bool addNoMoreMoves;
+    bool active;
+    bool checkEndStopsOnNextMove;
     float currentFeedrate;
     float nextMove[DRIVES + 1];  // Extra is for feedrate
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
@@ -227,7 +227,7 @@ inline void LookAhead::Release()
   SetProcessed(released);
 }
 
-inline boolean LookAhead::CheckEndStops() 
+inline bool LookAhead::CheckEndStops()
 {
   return checkEndStops;
 }
@@ -241,7 +241,7 @@ inline void LookAhead::SetDriveZeroEndSpeed(float a, int8_t drive)
 
 //******************************************************************************************************
 
-inline boolean DDA::Active()
+inline bool DDA::Active()
 {
   return active;
 }
@@ -259,12 +259,12 @@ inline float DDA::InstantDv()
 
 //***************************************************************************************
 
-inline boolean Move::DDARingEmpty()
+inline bool Move::DDARingEmpty()
 {
   return ddaRingGetPointer == ddaRingAddPointer;
 }
 
-inline boolean Move::NoLiveMovement()
+inline bool Move::NoLiveMovement()
 {
   if(dda != NULL)
     return false;
@@ -273,26 +273,26 @@ inline boolean Move::NoLiveMovement()
 
 // Leave a gap of 2 as the last Get result may still be being processed
 
-inline boolean Move::DDARingFull()
+inline bool Move::DDARingFull()
 {
   return ddaRingAddPointer->Next()->Next() == ddaRingGetPointer;
 }
 
-inline boolean Move::LookAheadRingEmpty()
+inline bool Move::LookAheadRingEmpty()
 {
   return lookAheadRingCount == 0;
 }
 
 // Leave a gap of 2 as the last Get result may still be being processed
 
-inline boolean Move::LookAheadRingFull()
+inline bool Move::LookAheadRingFull()
 {
   if(!(lookAheadRingAddPointer->Processed() & released))
     return true;
-  return lookAheadRingAddPointer->Next()->Next() == lookAheadRingGetPointer;  // probably not needed; just return the boolean in the if above
+  return lookAheadRingAddPointer->Next()->Next() == lookAheadRingGetPointer;  // probably not needed; just return the bool in the if above
 }
 
-inline boolean Move::GetDDARingLock()
+inline bool Move::GetDDARingLock()
 {
   if(ddaRingLocked)
     return false;
@@ -311,7 +311,7 @@ inline void Move::ReleaseDDARingLock()
 // current moves have finished.  THEN CALL THE ResumeMoving() FUNCTION
 // OTHERWISE NOTHING MORE WILL EVER HAPPEN.
 
-inline boolean Move::AllMovesAreFinished()
+inline bool Move::AllMovesAreFinished()
 {
   addNoMoreMoves = true;
   return LookAheadRingEmpty() && NoLiveMovement();

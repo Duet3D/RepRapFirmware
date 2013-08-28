@@ -2,7 +2,7 @@
 
 RepRapFirmware - Main Include
 
-This includes all the other include files in the right order and defines some globals.  
+This includes all the other include files in the right order and defines some globals.
 No other definitions or information should be in here.
 
 -----------------------------------------------------------------------------------------------------
@@ -32,25 +32,25 @@ class Heat;
 class RepRap;
 
 extern RepRap reprap;
-      
+
 // Functions and globals not part of any class
-    
+
 char* ftoa(char *a, const float& f, int prec);
 bool StringEndsWith(char* string, char* ending);
 bool StringStartsWith(char* string, char* starting);
 bool StringEquals(char* s1, char* s2);
 int StringContains(char* string, char* match);
-    
+
 extern char scratchString[30];
-    
+
 //#include <stdio.h>
 //#include <stdlib.h>
-  
+
 #include <float.h>
 
 #include "Configuration.h"
 #include "Platform.h"
-#include "Webserver.h" 
+#include "Webserver.h"
 #include "GCodes.h"
 #include "Move.h"
 #include "Heat.h"
@@ -59,5 +59,6 @@ extern char scratchString[30];
 
 
 #endif
+
 
 

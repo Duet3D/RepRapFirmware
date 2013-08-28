@@ -32,8 +32,8 @@ class RepRap
     void Interrupt();
     void Diagnostics();
 //    void InterruptTime();
-    boolean debug();
-    void debug(boolean d);
+    bool debug();
+    void debug(bool d);
     Platform* GetPlatform();
     Move* GetMove();
     Heat* GetHeat();
@@ -43,12 +43,12 @@ class RepRap
   private:
   
     Platform* platform;
-    boolean active;
+    bool active;
     Move* move;
     Heat* heat;
     GCodes* gCodes;
     Webserver* webserver;
-    boolean dbg;
+    bool dbg;
 };
 
 inline Platform* RepRap::GetPlatform() { return platform; }
@@ -56,8 +56,8 @@ inline Move* RepRap::GetMove() { return move; }
 inline Heat* RepRap::GetHeat() { return heat; }
 inline GCodes* RepRap::GetGCodes() { return gCodes; }
 inline Webserver* RepRap::GetWebserver() { return webserver; }
-inline boolean RepRap::debug() { return dbg; }
-inline void RepRap::debug(boolean d) { dbg = d; }
+inline bool RepRap::debug() { return dbg; }
+inline void RepRap::debug(bool d) { dbg = d; }
 inline void RepRap::Interrupt() { move->Interrupt(); }
 
 

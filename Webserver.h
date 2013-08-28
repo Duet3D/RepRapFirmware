@@ -44,7 +44,7 @@ class Webserver
   public:
   
     Webserver(Platform* p);
-    boolean GCodeAvailable();
+    bool GCodeAvailable();
     byte ReadGCode();
     void Init();
     void Spin();
@@ -58,35 +58,35 @@ class Webserver
     void WriteByte();
     void ParseQualifier();
     void CheckPassword();
-    boolean LoadGcodeBuffer(char* gc, boolean convertWeb);
+    bool LoadGcodeBuffer(char* gc, bool convertWeb);
     void CloseClient();
-    boolean PrintHeadString();
-    boolean PrintLinkTable();
+    bool PrintHeadString();
+    bool PrintLinkTable();
     void GetGCodeList();
     void GetJsonResponse(char* request);
     void ParseGetPost();
     void CharFromClient(char c);
     void BlankLineFromClient();
     void InitialisePost();
-    boolean MatchBoundary(char c);
-    void JsonReport(boolean ok, char* request);
+    bool MatchBoundary(char c);
+    void JsonReport(bool ok, char* request);
 
     
     Platform* platform;
-    boolean active;
+    bool active;
     float lastTime;
-    int fileBeingSent;
-    boolean writing;
-    boolean receivingPost;
+    FileStore* fileBeingSent;
+    bool writing;
+    bool receivingPost;
     char postBoundary[POST_LENGTH];
     int boundaryCount;  
     char postFileName[POST_LENGTH];
-    int postFile;
-    boolean postSeen;
-    boolean getSeen;
-    boolean clientLineIsBlank;
+    FileStore* postFile;
+    bool postSeen;
+    bool getSeen;
+    bool clientLineIsBlank;
     unsigned long clientCloseTime;
-    boolean needToCloseClient;
+    bool needToCloseClient;
 
     char clientLine[STRING_LENGTH];
     char clientRequest[STRING_LENGTH];
@@ -94,10 +94,10 @@ class Webserver
     char jsonResponse[STRING_LENGTH];
     char gcodeBuffer[GCODE_LENGTH];
     int jsonPointer;
-    boolean gcodeAvailable;
+    bool gcodeAvailable;
     int gcodePointer;
     int clientLinePointer;
-    boolean gotPassword;
+    bool gotPassword;
     char* password;
     char* myName;
 };

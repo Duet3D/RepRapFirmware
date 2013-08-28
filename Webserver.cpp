@@ -33,7 +33,7 @@ Licence: GPL
 
 
 
-boolean Webserver::MatchBoundary(char c)
+bool Webserver::MatchBoundary(char c)
 {
   if(!postBoundary[0])
     return false;
@@ -49,8 +49,8 @@ boolean Webserver::MatchBoundary(char c)
   } else
   {
     for(int i = 0; i < boundaryCount; i++)
-      platform->Write(postFile, postBoundary[i]);
-    platform->Write(postFile, c);
+      postFile->Write(postBoundary[i]);
+    postFile->Write(c);
     boundaryCount = 0;
   }
   return false;  
@@ -61,7 +61,7 @@ boolean Webserver::MatchBoundary(char c)
 
 // Feeding G Codes to the GCodes class
 
-boolean Webserver::GCodeAvailable()
+bool Webserver::GCodeAvailable()
 {
   return gcodeAvailable;
 }
@@ -80,7 +80,7 @@ byte Webserver::ReadGCode()
 }
 
 
-boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
+bool Webserver::LoadGcodeBuffer(char* gc, bool convertWeb)
 {
   char scratchString[STRING_LENGTH];
   if(gcodeAvailable)
@@ -132,13 +132,13 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
   if(StringStartsWith(gcodeBuffer, "M23 ")) fileAct |= 2;
   
   if(fileAct) // Delete or print a file?
-  {
+  { 
     if(fileAct == 1) // Delete?
     {
-      if(!platform->DeleteFile(platform->GetGCodeDir(), &gcodeBuffer[4]))
-    {
-      platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
-      platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
+      if(!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), &gcodeBuffer[4]))
+      {
+        platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
+        platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
         platform->Message(HOST_MESSAGE, "\n");
       } 
     } else // Print it
@@ -180,6 +180,8 @@ boolean Webserver::LoadGcodeBuffer(char* gc, boolean convertWeb)
 void Webserver::CloseClient()
 {
   writing = false;
+  //inPHPFile = false;
+  //InitialisePHP();
   clientCloseTime = platform->Time();
   needToCloseClient = true;   
 }
@@ -189,61 +191,61 @@ void Webserver::SendFile(char* nameOfFileToSend)
 {
   char scratchString[STRING_LENGTH];
   char sLen[POST_LENGTH];
-  boolean zip = false;
-  
+  bool zip = false;
+    
   if(StringStartsWith(nameOfFileToSend, KO_START))
     GetJsonResponse(&nameOfFileToSend[KO_FIRST]);
     
   if(jsonPointer < 0)
   {
-    fileBeingSent = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, false);
-    if(fileBeingSent < 0)
+    fileBeingSent = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
+    if(fileBeingSent == NULL)
     {
       nameOfFileToSend = FOUR04_FILE;
-      fileBeingSent = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, false);
+      fileBeingSent = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
     }
-    writing = true;
+    writing = fileBeingSent != NULL;
   } 
-    
-  platform->SendToClient("HTTP/1.1 200 OK\n");
   
-  platform->SendToClient("Content-Type: ");
+  platform->GetNetwork()->Write("HTTP/1.1 200 OK\n");
+  
+  platform->GetNetwork()->Write("Content-Type: ");
   
   if(StringEndsWith(nameOfFileToSend, ".png"))
-    platform->SendToClient("image/png\n");
+	  platform->GetNetwork()->Write("image/png\n");
   else if(StringEndsWith(nameOfFileToSend, ".ico"))
-    platform->SendToClient("image/x-icon\n");
+	  platform->GetNetwork()->Write("image/x-icon\n");
   else if (jsonPointer >=0)
-    platform->SendToClient("application/json\n");
+	  platform->GetNetwork()->Write("application/json\n");
   else if(StringEndsWith(nameOfFileToSend, ".js"))
-    platform->SendToClient("application/javascript\n");
+	  platform->GetNetwork()->Write("application/javascript\n");
   else if(StringEndsWith(nameOfFileToSend, ".zip"))
   {
-    platform->SendToClient("application/zip\n");
+	  platform->GetNetwork()->Write("application/zip\n");
     zip = true;
   } else
-    platform->SendToClient("text/html\n");
+	  platform->GetNetwork()->Write("text/html\n");
     
   if (jsonPointer >=0)
   {
-    platform->SendToClient("Content-Length: ");
+	  platform->GetNetwork()->Write("Content-Length: ");
     sprintf(sLen, "%d", strlen(jsonResponse));
-    platform->SendToClient(sLen);
-    platform->SendToClient("\n");
+    platform->GetNetwork()->Write(sLen);
+    platform->GetNetwork()->Write("\n");
   }
-  
+    
   if(zip)
   {
-    platform->SendToClient("Content-Encoding: gzip\n");
-    platform->SendToClient("Content-Length: ");
-    sprintf(sLen, "%llu", platform->Length(fileBeingSent));
-    platform->SendToClient(sLen);
-    platform->SendToClient("\n");    
+	platform->GetNetwork()->Write("Content-Encoding: gzip\n");
+	platform->GetNetwork()->Write("Content-Length: ");
+    sprintf(sLen, "%llu", fileBeingSent->Length());
+    platform->GetNetwork()->Write(sLen);
+    platform->GetNetwork()->Write("\n");
   }
-  
-  platform->SendToClient("Connnection: close\n");
+    
+  platform->GetNetwork()->Write("Connnection: close\n");
 
-  platform->SendToClient('\n');
+  platform->GetNetwork()->Write('\n');
 }
 
 void Webserver::WriteByte()
@@ -253,7 +255,7 @@ void Webserver::WriteByte()
     if(jsonPointer >= 0)
     {
       if(jsonResponse[jsonPointer])
-        platform->SendToClient(jsonResponse[jsonPointer++]);
+    	  platform->GetNetwork()->Write(jsonResponse[jsonPointer++]);
       else
       {
         jsonPointer = -1;
@@ -262,14 +264,14 @@ void Webserver::WriteByte()
       }
     } else
     {
-    if(platform->Read(fileBeingSent, b))
-      platform->SendToClient(b);
-    else
-    { 
-      platform->Close(fileBeingSent);    
-      CloseClient(); 
+      if(fileBeingSent->Read(b))
+    	  platform->GetNetwork()->Write(b);
+      else
+      { 
+        fileBeingSent->Close();    
+        CloseClient(); 
       } 
-    }  
+    } 
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -281,7 +283,7 @@ void Webserver::CheckPassword()
   gotPassword = StringEndsWith(clientQualifier, password);
 }
 
-void Webserver::JsonReport(boolean ok, char* request)
+void Webserver::JsonReport(bool ok, char* request)
 {
   if(ok)
   {
@@ -323,7 +325,7 @@ void Webserver::GetJsonResponse(char* request)
     JsonReport(true, request);
     return;
   }
-    
+  
   if(StringStartsWith(request, "gcode"))
   {
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
@@ -335,7 +337,7 @@ void Webserver::GetJsonResponse(char* request)
   
   if(StringStartsWith(request, "files"))
   {
-    char* fileList = platform->FileList(platform->GetGCodeDir());
+    char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir());
     strcpy(jsonResponse, "{\"files\":[");
     strcat(jsonResponse, fileList);
     strcat(jsonResponse, "]}");    
@@ -405,8 +407,8 @@ void Webserver::ParseGetPost()
 {
     if(reprap.debug())
     {
-    platform->Message(HOST_MESSAGE, "HTTP request: ");
-    platform->Message(HOST_MESSAGE, clientLine);
+      platform->Message(HOST_MESSAGE, "HTTP request: ");
+      platform->Message(HOST_MESSAGE, clientLine);
       platform->Message(HOST_MESSAGE, "\n");
     }
     
@@ -442,7 +444,7 @@ void Webserver::InitialisePost()
   boundaryCount = 0; 
   postBoundary[0] = 0;
   postFileName[0] = 0;
-  postFile = -1;
+  postFile = NULL;
 }
 
 void Webserver::ParseClientLine()
@@ -508,7 +510,7 @@ void Webserver::ParseClientLine()
     //Serial.print("Got file name: ");
     //Serial.println(postFileName);    
     return;
-  } 
+  }  
 }
 
 // if you've gotten to the end of the line (received a newline
@@ -519,14 +521,15 @@ void Webserver::BlankLineFromClient()
   char scratchString[STRING_LENGTH];
   clientLine[clientLinePointer] = 0;
   clientLinePointer = 0;
+  //ParseQualifier();
   
   //Serial.println("End of header.");
   
   if(getSeen)
   {
-   SendFile(clientRequest);
-   clientRequest[0] = 0;
-   return;
+    SendFile(clientRequest);
+    clientRequest[0] = 0;
+    return;
   }
   
   if(postSeen)
@@ -538,13 +541,15 @@ void Webserver::BlankLineFromClient()
   
   if(receivingPost)
   {
-    postFile = platform->OpenFile(platform->GetGCodeDir(), postFileName, true);
-    if(postFile < 0  || !postBoundary[0])
+    postFile = platform->GetFileStore(platform->GetGCodeDir(), postFileName, true);
+    if(postFile == NULL  || !postBoundary[0])
     {
       platform->Message(HOST_MESSAGE, "Can't open file for write or no post boundary: ");
       platform->Message(HOST_MESSAGE, postFileName);
       platform->Message(HOST_MESSAGE, "\n");
       InitialisePost();
+      if(postFile != NULL)
+        postFile->Close();
     }
   }  
 
@@ -585,27 +590,34 @@ void Webserver::CharFromClient(char c)
 
 void Webserver::Spin()
 {
+  //char sw[2];
   if(!active)
     return;
     
   if(writing)
   {
+ //   if(inPHPFile)
+ //     WritePHPByte();
+ //   else
       WriteByte();
     return;         
   }
   
-  if(platform->ClientStatus() & CONNECTED)
+  char c;
+
+  if(platform->GetNetwork()->Status() & clientConnected)
   {
-    if(platform->ClientStatus() & AVAILABLE) 
+    if(platform->GetNetwork()->Status() & byteAvailable)
     {
-      char c = platform->ClientRead();
- 
-      if(receivingPost && postFile >= 0)
+    	platform->GetNetwork()->Read(c);
+//        Serial.print(c);
+
+      if(receivingPost && postFile != NULL)
       {
         if(MatchBoundary(c))
         {
           //Serial.println("Got to end of file.");
-          platform->Close(postFile);
+          postFile->Close();
           SendFile(clientRequest);
           clientRequest[0] = 0;
           InitialisePost();       
@@ -617,16 +629,16 @@ void Webserver::Spin()
     }
   }  
    
-  if (platform->ClientStatus() & CLIENT) 
+  if (platform->GetNetwork()->Status() & clientLive)
   {
     if(needToCloseClient)
     {
       if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY)
         return;
       needToCloseClient = false;  
-      platform->DisconnectClient();
+      platform->GetNetwork()->Close();
     }   
-    }  
+  }
 }
 
 //******************************************************************************************
@@ -634,7 +646,7 @@ void Webserver::Spin()
 // Constructor and initialisation
 
 Webserver::Webserver(Platform* p)
-{
+{ 
   platform = p;
   active = false;
 }
@@ -663,7 +675,7 @@ void Webserver::Init()
   
   // Reinitialise the message file
   
-  platform->DeleteFile(platform->GetWebDir(), MESSAGE_FILE);
+  platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }
 
 void Webserver::Exit()
