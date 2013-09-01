@@ -38,12 +38,13 @@ Licence: GPL
 
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 
 // Platform-specific includes
 
-#include <Arduino.h>
-//#include <Ethernet.h>
-//#include <SD.h>
+#include "Arduino.h"
+#include "Libraries/SamNonDuePin/SamNonDuePin.h"
+#include "Libraries/SD_HSMCI/SD_HSMCI.h"
 
 /**************************************************************************************************/
 
@@ -126,10 +127,10 @@ Licence: GPL
 #define MAX_FILES 7
 #define FILE_BUF_LEN 256
 #define SD_SPI 4 //Pin
-#define WEB_DIR "www/" // Place to find web files on the server
-#define GCODE_DIR "gcodes/" // Ditto - g-codes
-#define SYS_DIR "sys/" // Ditto - system files
-#define TEMP_DIR "tmp/" // Ditto - temporary files
+#define WEB_DIR "0:/www/" // Place to find web files on the server
+#define GCODE_DIR "0:/gcodes/" // Ditto - g-codes
+#define SYS_DIR "0:/sys/" // Ditto - system files
+#define TEMP_DIR "0:/tmp/" // Ditto - temporary files
 #define CONFIG_FILE "config.g" // The file that sets the machine's parameters
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
@@ -273,6 +274,7 @@ private:
   char fileList[FILE_LIST_LENGTH];
   char scratchString[STRING_LENGTH];
   Platform* platform;
+  FATFS fileSystem;
 };
 
 // This class handles input from, and output to, files.
@@ -297,12 +299,17 @@ protected:
         
   bool inUse;
   byte buf[FILE_BUF_LEN];
-  int bPointer;
+  int bufferPointer;
   
 private:
 
-//  File file;
+  void ReadBuffer();
+  void WriteBuffer();
+
+  FIL file;
   Platform* platform;
+  bool writing;
+  unsigned int lastBufferEntry;
 };
 
 
@@ -467,6 +474,7 @@ class Platform
 
   MassStorage* massStorage;
   FileStore* files[MAX_FILES];
+  bool fileStructureInitialised;
   //bool* inUse;
   char* webDir;
   char* gcodeDir;

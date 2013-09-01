@@ -11,7 +11,9 @@ RM := rm -rf
 -include arduino/variant/subdir.mk
 -include arduino/core/USB/subdir.mk
 -include arduino/core/subdir.mk
+-include Libraries/SamNonDuePin/subdir.mk
 -include Libraries/SPI/subdir.mk
+-include Libraries/SD_HSMCI/utility/subdir.mk
 -include Libraries/SD/utility/subdir.mk
 -include Libraries/SD/subdir.mk
 -include Libraries/Ethernet/utility/subdir.mk

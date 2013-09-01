@@ -40,20 +40,17 @@ void loop()
 Platform::Platform(RepRap* r)
 {
   reprap = r;
+  fileStructureInitialised = false;
   
+  line = new Line();
+
   // Files
- 
-  //files = new File[MAX_FILES];
-  //inUse = new bool[MAX_FILES];
   
   massStorage = new MassStorage(this);
   
   for(int8_t i=0; i < MAX_FILES; i++)
     files[i] = new FileStore(this);
-    
-    //buf[i] = new byte[FILE_BUF_LEN];
   
-  line = new Line();
   network = new Network();
   
   active = false;
@@ -74,8 +71,17 @@ void TC3_Handler()
 void Platform::Init()
 { 
   byte i;
-  
-  delay(4000); // Not needed in production...
+
+  line->Init();
+
+  network->Init();
+
+  massStorage->Init();
+
+  for(i=0; i < MAX_FILES; i++)
+    files[i]->Init();
+
+  fileStructureInitialised = true;
 
   if(!LoadFromStore())
   {     
@@ -158,15 +164,6 @@ void Platform::Init()
       pinMode(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
   }  
-  
-  for(i=0; i < MAX_FILES; i++)
-    files[i]->Init();
-  
-  line->Init();
-
-  network->Init();
-
-  massStorage->Init();
   
   InitialiseInterrupts();
   
@@ -251,9 +248,45 @@ MassStorage::MassStorage(Platform* p)
 
 void MassStorage::Init()
 {
-//  if (!SD.begin(SD_SPI))
-//     platform->Message(HOST_MESSAGE, "SD initialization failed.\n");
-//  // SD.begin() returns with the SPI disabled, so you need not disable it here
+	hsmciPinsinit();
+	// Initialize SD MMC stack
+	sd_mmc_init();
+
+	int sdPresentCount = 0;
+	while ((CTRL_NO_PRESENT == sd_mmc_check(0)) && (sdPresentCount < 5))
+	{
+		//platform->Message(HOST_MESSAGE, "Please plug in the SD card.\n");
+		//delay(1000);
+	}
+
+	if(sdPresentCount >= 5)
+	{
+		platform->Message(HOST_MESSAGE, "Can't find the SD card.\n");
+		return;
+	}
+
+	//print card info
+
+//	SerialUSB.print("sd_mmc_card->capacity: ");
+//	SerialUSB.print(sd_mmc_get_capacity(0));
+//	SerialUSB.print(" bytes\n");
+//	SerialUSB.print("sd_mmc_card->clock: ");
+//	SerialUSB.print(sd_mmc_get_bus_clock(0));
+//	SerialUSB.print(" Hz\n");
+//	SerialUSB.print("sd_mmc_card->bus_width: ");
+//	SerialUSB.println(sd_mmc_get_bus_width(0));
+
+	memset(&fileSystem, 0, sizeof(FATFS));
+	//f_mount (LUN_ID_SD_MMC_0_MEM, NULL);
+	//int mounted = f_mount(LUN_ID_SD_MMC_0_MEM, &fileSystem);
+	int mounted = f_mount(0, &fileSystem);
+	if (mounted != FR_OK)
+	{
+		platform->Message(HOST_MESSAGE, "Can't mount filesystem 0: code ");
+		sprintf(scratchString, "%d", mounted);
+		platform->Message(HOST_MESSAGE, scratchString);
+		platform->Message(HOST_MESSAGE, "\n");
+	}
 }
 
 char* MassStorage::CombineName(char* directory, char* fileName)
@@ -261,14 +294,14 @@ char* MassStorage::CombineName(char* directory, char* fileName)
   int out = 0;
   int in = 0;
   
-  scratchString[out] = '/';
-  out++;
+//  scratchString[out] = '/';
+//  out++;
   
   if(directory != NULL)
   {
-    if(directory[in] == '/')
-      in++;
-    while(directory[in] != 0 && directory[in] != '\n' && directory[in] != '/')
+    //if(directory[in] == '/')
+    //  in++;
+    while(directory[in] != 0 && directory[in] != '\n')// && directory[in] != '/')
     {
       scratchString[out] = directory[in];
       in++;
@@ -281,11 +314,11 @@ char* MassStorage::CombineName(char* directory, char* fileName)
     }
   }
   
-  scratchString[out] = '/';
-  out++;
+  //scratchString[out] = '/';
+ // out++;
   
   in = 0;
-  while(fileName[in] != 0 && fileName[in] != '\n' && fileName[in] != '/')
+  while(fileName[in] != 0 && fileName[in] != '\n')// && fileName[in] != '/')
   {
     scratchString[out] = fileName[in];
     in++;
@@ -344,7 +377,15 @@ char* MassStorage::FileList(char* directory)
 // Delete a file
 bool MassStorage::Delete(char* directory, char* fileName)
 {
-//  return SD.remove(CombineName(directory, fileName));
+	char* location = platform->GetMassStorage()->CombineName(directory, fileName);
+	if( f_unlink (location) != FR_OK)
+	{
+		platform->Message(HOST_MESSAGE, "Can't delete file ");
+		platform->Message(HOST_MESSAGE, location);
+		platform->Message(HOST_MESSAGE, "\n");
+		return false;
+	}
+	return true;
 }
 
 //------------------------------------------------------------------------------------------------
@@ -358,20 +399,12 @@ FileStore::FileStore(Platform* p)
 
 void FileStore::Init()
 {
-  bPointer = 0;
-  inUse = false;  
-}
-
-
-void FileStore::Close()
-{
-//  if(bPointer != 0)
-//    file.write(buf, bPointer);
-  bPointer = 0;
-//  file.close();
-  platform->ReturnFileStore(this);
+  bufferPointer = 0;
   inUse = false;
+  writing = false;
+  lastBufferEntry = 0;
 }
+
 
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
@@ -379,30 +412,55 @@ void FileStore::Close()
 bool FileStore::Open(char* directory, char* fileName, bool write)
 {
   char* location = platform->GetMassStorage()->CombineName(directory, fileName);
-  
-//  if(!SD.exists(location))
-//  {
-//    if(!write)
-//    {
-//      platform->Message(HOST_MESSAGE, "File: ");
-//      platform->Message(HOST_MESSAGE, fileName);
-//      platform->Message(HOST_MESSAGE, " not found for reading.\n");
-//      return false;
-//    }
-//    file = SD.open(location, FILE_WRITE);
-//    bPointer = 0;
-//  } else
-//  {
-//    if(write)
-//    {
-//      file = SD.open(location, FILE_WRITE);
-//      bPointer = 0;
-//    } else
-//      file = SD.open(location, FILE_READ);
-//  }
+//  SerialUSB.print("Opening: ");
+//  SerialUSB.println(location);
+  writing = write;
+  lastBufferEntry = FILE_BUF_LEN - 1;
+  FRESULT openReturn;
+
+  if(writing)
+  {
+	  openReturn = f_open(&file, location, FA_CREATE_ALWAYS | FA_WRITE);
+	  if (openReturn != FR_OK)
+	  {
+		  platform->Message(HOST_MESSAGE, "Can't open ");
+		  platform->Message(HOST_MESSAGE, location);
+		  platform->Message(HOST_MESSAGE, " to write to.  Error code: ");
+		  sprintf(scratchString, "%d", openReturn);
+		  platform->Message(HOST_MESSAGE, scratchString);
+		  platform->Message(HOST_MESSAGE, "\n");
+		  return false;
+	  }
+	  bufferPointer = 0;
+  } else
+  {
+	  openReturn = f_open(&file, location, FA_OPEN_EXISTING | FA_READ);
+	  if (openReturn != FR_OK)
+	  {
+		  platform->Message(HOST_MESSAGE, "Can't open ");
+		  platform->Message(HOST_MESSAGE, location);
+		  platform->Message(HOST_MESSAGE, " to read from.  Error code: ");
+		  sprintf(scratchString, "%d", openReturn);
+		  platform->Message(HOST_MESSAGE, scratchString);
+		  platform->Message(HOST_MESSAGE, "\n");
+		  return false;
+	  }
+	  bufferPointer = FILE_BUF_LEN;
+  }
 
   inUse = true;
   return true;
+}
+
+void FileStore::Close()
+{
+  if(writing)
+	  WriteBuffer();
+  f_close(&file);
+  platform->ReturnFileStore(this);
+  inUse = false;
+  writing = false;
+  lastBufferEntry = 0;
 }
 
 void FileStore::GoToEnd()
@@ -412,8 +470,8 @@ void FileStore::GoToEnd()
     platform->Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
     return;
   }
-//  unsigned long e = file.size();
-//  file.seek(e);
+  unsigned long e = Length();
+  f_lseek(&file, e);
 }
 
 unsigned long FileStore::Length()
@@ -423,18 +481,33 @@ unsigned long FileStore::Length()
     platform->Message(HOST_MESSAGE, "Attempt to size non-open file.\n");
     return 0;
   }
-//  return file.size();
+  return file.fsize;
+	return 0;
 }
 
 int8_t FileStore::Status()
 {
   if(!inUse)
     return nothing;
-    
-//  if(file.available())
-//    return byteAvailable;
+
+  if(lastBufferEntry == FILE_BUF_LEN)
+	return byteAvailable;
+
+  if(bufferPointer < lastBufferEntry)
+    return byteAvailable;
     
   return nothing;
+}
+
+void FileStore::ReadBuffer()
+{
+	FRESULT readStatus;
+	readStatus = f_read(&file, buf, FILE_BUF_LEN, &lastBufferEntry);	// Read a chunk of file
+	if (readStatus)
+	{
+		platform->Message(HOST_MESSAGE, "Error reading file.\n");
+	}
+	bufferPointer = 0;
 }
 
 bool FileStore::Read(char& b)
@@ -444,16 +517,33 @@ bool FileStore::Read(char& b)
     platform->Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
     return false;
   }
-    
-  if(!(Status() & byteAvailable))
-    return false;
-//  int c = file.read();
-//  if(c < 0)
-    return false;
-    
-//  b = (char) c;
+
+  if(bufferPointer >= FILE_BUF_LEN)
+	  ReadBuffer();
+
+  if(bufferPointer >= lastBufferEntry)
+  {
+	  b = 0;  // Good idea?
+	  return false;
+  }
+
+  b = (char)buf[bufferPointer];
+  bufferPointer++;
+
   return true;
 }
+
+void FileStore::WriteBuffer()
+{
+	FRESULT writeStatus;
+	writeStatus = f_write(&file, buf, bufferPointer, &lastBufferEntry);
+	if((writeStatus != FR_OK) || (lastBufferEntry != bufferPointer))
+	{
+		platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
+	}
+	bufferPointer = 0;
+}
+
 
 void FileStore::Write(char b)
 {
@@ -462,13 +552,10 @@ void FileStore::Write(char b)
     platform->Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
     return;
   }
-  buf[bPointer] = b;
-  bPointer++;
-  if(bPointer >= FILE_BUF_LEN)
-  {
-//    file.write(buf, FILE_BUF_LEN);
-    bPointer = 0;
-  } 
+  buf[bufferPointer] = b;
+  bufferPointer++;
+  if(bufferPointer >= FILE_BUF_LEN)
+	  WriteBuffer();
 }
 
 void FileStore::Write(char* b)
@@ -480,17 +567,19 @@ void FileStore::Write(char* b)
   }
   int i = 0;
   while(b[i])
-    Write(b[i++]); 
-  //files[file].print(b);
+    Write(b[i++]);
 }
 
 
 //-----------------------------------------------------------------------------------------------------
 
-
 FileStore* Platform::GetFileStore(char* directory, char* fileName, bool write)
 {
   FileStore* result = NULL;
+
+  if(!fileStructureInitialised)
+	  return NULL;
+
   for(int i = 0; i < MAX_FILES; i++)
     if(!files[i]->inUse)
     {
@@ -539,10 +628,14 @@ void Platform::Message(char type, char* message)
   case HOST_MESSAGE:
   default:
   
-    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
-    m->GoToEnd();
-    m->Write(message);
-    m->Close();
+//    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
+//    if(m != NULL)
+//    {
+//    	m->GoToEnd();
+//    	m->Write(message);
+//    	m->Close();
+//    } else
+//    	line->Write("Can't open message file.\n");
     line->Write(message);
   }
 }
@@ -575,6 +668,7 @@ void Line::Init()
 	alternateInput = NULL;
 	alternateOutput = NULL;
 	SerialUSB.begin(BAUD_RATE);
+	while (!SerialUSB.available());
 }
 
 Network::Network()
