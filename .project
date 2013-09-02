@@ -42,6 +42,11 @@
 			<locationURI>ArduinoHardwareLibPath/SPI</locationURI>
 		</link>
 		<link>
+			<name>Libraries/Wire</name>
+			<type>2</type>
+			<locationURI>ArduinoHardwareLibPath/Wire</locationURI>
+		</link>
+		<link>
 			<name>arduino/core</name>
 			<type>2</type>
 			<locationURI>ArduinoPlatformPath/cores/arduino</locationURI>

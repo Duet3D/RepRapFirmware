@@ -83,6 +83,11 @@ void Platform::Init()
 
   fileStructureInitialised = true;
 
+  mcp.begin();
+
+  sysDir = SYS_DIR;
+  configFile = CONFIG_FILE;
+
   if(!LoadFromStore())
   {     
   // DRIVES
@@ -97,6 +102,9 @@ void Platform::Init()
     accelerations = ACCELERATIONS;
     driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
     instantDvs = INSTANT_DVS;
+    potWipes = POT_WIPES;
+    senseResistor = SENSE_RESISTOR;
+    maxAtoDVoltage = MAX_A_TO_D_VOLTAGE;
     
   // AXES
   
@@ -125,9 +133,7 @@ void Platform::Init()
     
     webDir = WEB_DIR;
     gcodeDir = GCODE_DIR;
-    sysDir = SYS_DIR;
     tempDir = TEMP_DIR;
-    configFile = CONFIG_FILE;
   }
   
   for(i = 0; i < DRIVES; i++)

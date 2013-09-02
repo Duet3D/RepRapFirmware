@@ -33,11 +33,13 @@ arduino/variant \
 arduino/core \
 arduino/core/USB \
 . \
+Libraries/Wire \
 Libraries/SamNonDuePin \
 Libraries/SPI \
 Libraries/SD_HSMCI/utility \
 Libraries/SD/utility \
 Libraries/SD \
+Libraries/MCP4461 \
 Libraries/Ethernet/utility \
 Libraries/Ethernet \
 

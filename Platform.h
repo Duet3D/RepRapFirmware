@@ -45,6 +45,7 @@ Licence: GPL
 #include "Arduino.h"
 #include "Libraries/SamNonDuePin/SamNonDuePin.h"
 #include "Libraries/SD_HSMCI/SD_HSMCI.h"
+#include "Libraries/MCP4461/MCP4461.h"
 
 /**************************************************************************************************/
 
@@ -78,6 +79,9 @@ Licence: GPL
 #define LOW_STOP_PINS {11, 28, 60, 31}
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
+#define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
+#define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
+#define MAX_A_TO_D_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
 //#define ACCELERATIONS {80, 80, 3, 25} 
@@ -376,6 +380,7 @@ class Platform
   void SetDirection(byte drive, bool direction);
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
+  void SetMotorCurrent(byte drive, float current);
   float DriveStepsPerUnit(int8_t drive);
   float Acceleration(int8_t drive);
   float MaxFeedrate(int8_t drive);
@@ -438,6 +443,10 @@ class Platform
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float instantDvs[DRIVES];
+  MCP4461 mcp;
+  int8_t potWipes[DRIVES];
+  float senseResistor;
+  float maxAtoDVoltage;
 
 // AXES
 
@@ -677,6 +686,20 @@ inline void Platform::Step(byte drive)
     digitalWrite(stepPins[drive], 0);
     digitalWrite(stepPins[drive], 1);
   }
+}
+
+// current is in mA
+
+inline void Platform::SetMotorCurrent(byte drive, float current)
+{
+	if(potWipes[drive] < 0)
+		return;
+	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxAtoDVoltage);
+	Message(HOST_MESSAGE, "Set pot to: ");
+	sprintf(scratchString, "%d", pot);
+	Message(HOST_MESSAGE, scratchString);
+	Message(HOST_MESSAGE, "\n");
+	mcp.setNonVolatileWiper(potWipes[drive], pot);
 }
 
 inline float Platform::HomeFeedRate(int8_t drive)

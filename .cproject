@@ -26,6 +26,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SPI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD/utility}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Wire}&quot;"/>
 								</option>
 								<inputType id="it.baeyens.arduino.compiler.cpp.sketch.input.1531738210" name="CPP source files" superClass="it.baeyens.arduino.compiler.cpp.sketch.input"/>
 							</tool>
@@ -38,6 +39,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SPI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD/utility}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Wire}&quot;"/>
 								</option>
 								<inputType id="it.baeyens.arduino.compiler.c.sketch.input.1546791595" name="C Source Files" superClass="it.baeyens.arduino.compiler.c.sketch.input"/>
 							</tool>

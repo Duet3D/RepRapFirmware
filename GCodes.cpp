@@ -511,6 +511,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, "Motors off received\n");
       break;
       
+    case 20:
+      platform->Message(HOST_MESSAGE, "List files received\n");
+      break;
+
     case 23: // Set file to print
       QueueFileToPrint(gb->GetString());
       break;
@@ -589,7 +593,18 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     
     case 141: // Chamber temperature
       platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
-      break;    
+      break;
+
+    case 906: // Motor currents
+    	for(uint8_t i = 0; i < DRIVES; i++)
+    	{
+    		if(gb->Seen(gCodeLetters[i]))
+    		{
+    			value = gb->GetFValue();
+    			platform->SetMotorCurrent(i, value);
+    		}
+    	}
+    	break;
      
     default:
       platform->Message(HOST_MESSAGE, "GCodes - invalid M Code: ");
