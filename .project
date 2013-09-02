@@ -32,9 +32,9 @@
 			<locationURI>ArduinoHardwareLibPath/Ethernet</locationURI>
 		</link>
 		<link>
-			<name>Libraries/SD_HSMCI</name>
+			<name>Libraries/SD</name>
 			<type>2</type>
-			<locationURI>ArduinoPivateLibPath/SD_HSMCI</locationURI>
+			<locationURI>ArduinoLibPath/SD</locationURI>
 		</link>
 		<link>
 			<name>Libraries/SPI</name>
@@ -42,9 +42,9 @@
 			<locationURI>ArduinoHardwareLibPath/SPI</locationURI>
 		</link>
 		<link>
-			<name>Libraries/SamNonDuePin</name>
+			<name>Libraries/Wire</name>
 			<type>2</type>
-			<locationURI>ArduinoPivateLibPath/SamNonDuePin</locationURI>
+			<locationURI>ArduinoHardwareLibPath/Wire</locationURI>
 		</link>
 		<link>
 			<name>arduino/core</name>

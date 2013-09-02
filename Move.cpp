@@ -171,7 +171,7 @@ void Move::Spin()
   // If we either don't want to, or can't, add to the look-ahead ring, go home.
   
   if(addNoMoreMoves || LookAheadRingFull())
-     return;
+   return;
  
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
@@ -218,7 +218,7 @@ void Move::Spin()
 void Move::Diagnostics() 
 {
   platform->Message(HOST_MESSAGE, "Move Diagnostics:\n");
-  if(active)
+/*  if(active)
     platform->Message(HOST_MESSAGE, " active\n");
   else
     platform->Message(HOST_MESSAGE, " not active\n");
@@ -244,7 +244,7 @@ void Move::Diagnostics()
     platform->Message(HOST_MESSAGE, " addNoMoreMoves is true\n\n");
   else
     platform->Message(HOST_MESSAGE, " addNoMoreMoves is false\n\n"); 
-
+    */
 }
 
 // This returns false if it is not possible
@@ -252,7 +252,7 @@ void Move::Diagnostics()
 // next move because the look ahead ring
 // is full.  True otherwise.
 
-boolean Move::GetCurrentState(float m[])
+bool Move::GetCurrentState(float m[])
 {
   if(LookAheadRingFull())
     return false;
@@ -304,7 +304,7 @@ int8_t Move::GetMovementType(float p0[], float p1[])
 // Take an item from the look-ahead ring and add it to the DDA ring, if
 // possible.
 
-boolean Move::DDARingAdd(LookAhead* lookAhead)
+bool Move::DDARingAdd(LookAhead* lookAhead)
 {
   if(GetDDARingLock())
   {
@@ -499,7 +499,7 @@ void Move::Interrupt()
 }
 
 
-boolean Move::LookAheadRingAdd(float ep[], float vv, boolean ce)
+bool Move::LookAheadRingAdd(float ep[], float vv, bool ce)
 {
     if(LookAheadRingFull())
       return false;
@@ -793,7 +793,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   return result;
 }
 
-void DDA::Start(boolean noTest)
+void DDA::Start(bool noTest)
 {
   for(int8_t drive = 0; drive < DRIVES; drive++)
     platform->SetDirection(drive, directions[drive]);
@@ -802,7 +802,7 @@ void DDA::Start(boolean noTest)
   active = true;  
 }
 
-void DDA::Step(boolean noTest)
+void DDA::Step(bool noTest)
 {
   if(!active && noTest)
     return;
@@ -889,7 +889,7 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
   next = n;
 }
 
-void LookAhead::Init(float ep[], float vv, boolean ce)
+void LookAhead::Init(float ep[], float vv, bool ce)
 {
   v = vv;
   for(int8_t i = 0; i <= DRIVES; i++)

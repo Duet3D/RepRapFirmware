@@ -33,7 +33,7 @@ class PID
     void Activate();
     void Standby();
     float GetTemperature();
-    
+  
   private:
   
     Platform* platform;
@@ -43,7 +43,7 @@ class PID
     float lastTemperature;
     float temp_iState;
     float temp_dState;
-    boolean active;
+    bool active;
     int8_t heater;
 };
 
@@ -65,9 +65,9 @@ class Heat
     
   private:
   
-  Platform* platform;
+    Platform* platform;
     GCodes* gCodes;
-  boolean active;
+    bool active;
     PID* pids[HEATERS];
     float lastTime;
 };

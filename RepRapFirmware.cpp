@@ -1,8 +1,9 @@
+
 /****************************************************************************************************
 
 RepRapFirmware - Main Program
 
-This firmware is intended to be a fully object-oriented highly modular control program for 
+This firmware is intended to be a fully object-oriented highly modular control program for
 RepRap self-replicating 3D printers.
 
 It owes a lot to Marlin and to the original RepRap FiveD_GCode.
@@ -25,8 +26,8 @@ General design principles:
   * Don't avoid arrays and structs/classes,
   * Don't avoid pointers,
   * Use operator and function overloading where appropriate.
-  
-  
+
+
 Naming conventions:
 
   * #defines are all capitals with optional underscores between words
@@ -34,8 +35,8 @@ Naming conventions:
   * Class names and functions start with a CapitalLetter
   * Variables start with a lowerCaseLetter
   * Use veryLongDescriptiveNames
-  
-  
+
+
 Structure:
 
 There are six main classes:
@@ -45,7 +46,7 @@ There are six main classes:
   * Heat
   * Move
   * Platform, and
-  * Webserver    
+  * Webserver
 
 RepRap:
 
@@ -89,23 +90,23 @@ example, Move has a DDA class that implements a Bresenham/digital differential a
 
 Timing:
 
-There is a single interrupt chain entered via Platform.Interrupt().  This controls movement step timing, and 
-this chain of code should be the only place that volatile declarations and structure/variable-locking are 
+There is a single interrupt chain entered via Platform.Interrupt().  This controls movement step timing, and
+this chain of code should be the only place that volatile declarations and structure/variable-locking are
 required.  All the rest of the code is called sequentially and repeatedly as follows:
 
-All the main classes have a Spin() function.  These are called in a loop by the RepRap.Spin() function and implement 
-simple timesharing.  No class does, or ever should, wait inside one of its functions for anything to happen or call 
+All the main classes have a Spin() function.  These are called in a loop by the RepRap.Spin() function and implement
+simple timesharing.  No class does, or ever should, wait inside one of its functions for anything to happen or call
 any sort of delay() function.  The general rule is:
 
   Can I do a thing?
     Yes - do it
     No - set a flag/timer to remind me to do it next-time-I'm-called/at-a-future-time and return.
-    
-The restriction this strategy places on almost all the code in the firmware (that it must execute quickly and 
-never cause waits or delays) is balanced by the fact that none of that code needs to worry about synchronicity, 
-locking, or other areas of code accessing items upon which it is working.  As mentioned, only the interrupt 
-chain needs to concern itself with such problems.  Unlike movement, heating (including PID controllers) does 
-not need the fast precision of timing that interrupts alone can offer.  Indeed, most heating code only needs 
+
+The restriction this strategy places on almost all the code in the firmware (that it must execute quickly and
+never cause waits or delays) is balanced by the fact that none of that code needs to worry about synchronicity,
+locking, or other areas of code accessing items upon which it is working.  As mentioned, only the interrupt
+chain needs to concern itself with such problems.  Unlike movement, heating (including PID controllers) does
+not need the fast precision of timing that interrupts alone can offer.  Indeed, most heating code only needs
 to execute a couple of times a second.
 
 Most data is transferred bytewise, with classes typically containg code like this:
@@ -120,8 +121,8 @@ Most data is transferred bytewise, with classes typically containg code like thi
            Return
     No
      Return
-      
-Note that it is simple to raise the "priority" of any class's activities relative to the others by calling its 
+
+Note that it is simple to raise the "priority" of any class's activities relative to the others by calling its
 Spin() function more than once from RepRap.Spin().
 
 -----------------------------------------------------------------------------------------------------
@@ -140,10 +141,10 @@ Licence: GPL
 
 // If this goes in the right place (Platform.h) the compile fails. Why? - AB
 
-/*
+#include <SPI.h>
 #include <Ethernet.h>
-#include <SD_HSMCI.h>
-*/
+#include <SD.h>
+
 #include "RepRapFirmware.h"
 
 // We just need one instance of RepRap; everything else is contaied within it and hidden
@@ -156,7 +157,7 @@ RepRap reprap;
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() 
+RepRap::RepRap()
 {
   active = false;
   platform = new Platform(this);
@@ -185,14 +186,14 @@ void RepRap::Exit()
   move->Exit();
   gCodes->Exit();
   webserver->Exit();
-  platform->Exit();  
+  platform->Exit();
 }
 
 void RepRap::Spin()
 {
   if(!active)
     return;
-    
+
   platform->Spin();
   webserver->Spin();
   gCodes->Spin();
@@ -200,13 +201,13 @@ void RepRap::Spin()
   heat->Spin();
 }
 
-void RepRap::Diagnostics() 
+void RepRap::Diagnostics()
 {
-  platform->Diagnostics(); 
-  move->Diagnostics(); 
-  heat->Diagnostics(); 
-  gCodes->Diagnostics(); 
-  webserver->Diagnostics(); 
+  platform->Diagnostics();
+  move->Diagnostics();
+  heat->Diagnostics();
+  gCodes->Diagnostics();
+  webserver->Diagnostics();
 }
 
 
@@ -243,7 +244,7 @@ bool StringEndsWith(char* string, char* ending)
   int k = strlen(ending);
   if(k > j)
     return false;
-  
+
   return(StringEquals(&string[j - k], ending));
 }
 
@@ -256,29 +257,29 @@ bool StringEquals(char* s1, char* s2)
        return false;
      i++;
   }
-  
+
   return !(s1[i] || s2[i]);
 }
 
 bool StringStartsWith(char* string, char* starting)
-{ 
+{
   int j = strlen(string);
   int k = strlen(starting);
   if(k > j)
     return false;
-  
+
   for(int i = 0; i < k; i++)
     if(string[i] != starting[i])
       return false;
-      
+
   return true;
 }
 
 int StringContains(char* string, char* match)
-{ 
+{
   int i = 0;
   int count = 0;
-  
+
   while(string[i])
   {
     if(string[i++] == match[count])
@@ -289,7 +290,7 @@ int StringContains(char* string, char* match)
     } else
       count = 0;
   }
-      
+
   return -1;
 }
 
@@ -300,6 +301,6 @@ int StringContains(char* string, char* match)
 
 
 
-  
+
 
 

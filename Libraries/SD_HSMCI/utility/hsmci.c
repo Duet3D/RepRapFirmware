@@ -41,7 +41,7 @@
  *
  */
 
-#include "SD_HSMCI.h"
+#include "../SD_HSMCI.h"
 #include "hsmci.h"
 
 /**

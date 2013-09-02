@@ -26,7 +26,8 @@ Licence: GPL
 
 void setup()
 {
-  reprap.Init();  
+  reprap.Init();
+  //reprap.GetMove()->InterruptTime();  // Uncomment this line to time the interrupt routine on startup
 }
   
 void loop()
@@ -39,15 +40,18 @@ void loop()
 Platform::Platform(RepRap* r)
 {
   reprap = r;
+  fileStructureInitialised = false;
   
+  line = new Line();
+
   // Files
- 
-  files = new FIL[MAX_FILES];
-  inUse = new boolean[MAX_FILES];
-  for(int8_t i=0; i < MAX_FILES; i++)
-    buf[i] = new byte[FILE_BUF_LEN];
   
-  server = new EthernetServer(HTTP_PORT);
+  massStorage = new MassStorage(this);
+  
+  for(int8_t i=0; i < MAX_FILES; i++)
+    files[i] = new FileStore(this);
+  
+  network = new Network();
   
   active = false;
 }
@@ -67,9 +71,23 @@ void TC3_Handler()
 void Platform::Init()
 { 
   byte i;
-  
-  SerialUSB.begin(BAUD_RATE);
-  
+
+  line->Init();
+
+  network->Init();
+
+  massStorage->Init();
+
+  for(i=0; i < MAX_FILES; i++)
+    files[i]->Init();
+
+  fileStructureInitialised = true;
+
+  mcp.begin();
+
+  sysDir = SYS_DIR;
+  configFile = CONFIG_FILE;
+
   if(!LoadFromStore())
   {     
   // DRIVES
@@ -84,6 +102,9 @@ void Platform::Init()
     accelerations = ACCELERATIONS;
     driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
     instantDvs = INSTANT_DVS;
+    potWipes = POT_WIPES;
+    senseResistor = SENSE_RESISTOR;
+    maxAtoDVoltage = MAX_A_TO_D_VOLTAGE;
     
   // AXES
   
@@ -112,7 +133,6 @@ void Platform::Init()
     
     webDir = WEB_DIR;
     gcodeDir = GCODE_DIR;
-    sysDir = SYS_DIR;
     tempDir = TEMP_DIR;
   }
   
@@ -150,58 +170,9 @@ void Platform::Init()
       pinMode(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
   }  
-
-  // Files
- 
-  for(i=0; i < MAX_FILES; i++)
-  {
-    bPointer[i] = 0;
-    inUse[i] = false;
-  }
   
-  // Network
-
-  mac = MAC;
-//  server = new EthernetServer(HTTP_PORT);
-  
-  // disable SD SPI while starting w5100
-  // or you will have trouble
-  pinMode(SD_SPI, OUTPUT);
-  digitalWrite(SD_SPI,HIGH);   
-
-  ipAddress = { IP0, IP1, IP2, IP3 };
-  //Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
-  Ethernet.begin(mac, ipAddress);
-  server->begin();
-  
-  //Serial.print("server is at ");
-  //Serial.println(Ethernet.localIP());
-  
-  // this corrects a bug in the Ethernet.begin() function
-  // even tho the call to Ethernet.localIP() does the same thing
-  digitalWrite(ETH_B_PIN, HIGH);
-  
-  clientStatus = 0;
-  client = 0;
- 
-  /* Configure HSMCI pins */
-  hsmciPinsinit();
-  
-  // Initialize SD MMC stack
-  sd_mmc_init();
-  
-  FATFS fs;
-  
-  memset(&fs, 0, sizeof(FATFS));
-  //u_mount SD card
-  f_mount (LUN_ID_SD_MMC_0_MEM, NULL);
-  //mount SD card
-
-  if (f_mount(LUN_ID_SD_MMC_0_MEM, &fs) != FR_INVALID_DRIVE) {
-     SerialUSB.println("SD initialisation failed.");
-}
   InitialiseInterrupts();
-
+  
   lastTime = Time();
   
   active = true;
@@ -276,223 +247,380 @@ void Platform::SetHeater(int8_t heater, const float& power)
   
 */
 
-char* Platform::CombineName(char* result, char* directory, char* fileName)
+MassStorage::MassStorage(Platform* p)
+{
+   platform = p;
+}
+
+void MassStorage::Init()
+{
+	hsmciPinsinit();
+	// Initialize SD MMC stack
+	sd_mmc_init();
+
+	int sdPresentCount = 0;
+	while ((CTRL_NO_PRESENT == sd_mmc_check(0)) && (sdPresentCount < 5))
+	{
+		//platform->Message(HOST_MESSAGE, "Please plug in the SD card.\n");
+		//delay(1000);
+	}
+
+	if(sdPresentCount >= 5)
+	{
+		platform->Message(HOST_MESSAGE, "Can't find the SD card.\n");
+		return;
+	}
+
+	//print card info
+
+//	SerialUSB.print("sd_mmc_card->capacity: ");
+//	SerialUSB.print(sd_mmc_get_capacity(0));
+//	SerialUSB.print(" bytes\n");
+//	SerialUSB.print("sd_mmc_card->clock: ");
+//	SerialUSB.print(sd_mmc_get_bus_clock(0));
+//	SerialUSB.print(" Hz\n");
+//	SerialUSB.print("sd_mmc_card->bus_width: ");
+//	SerialUSB.println(sd_mmc_get_bus_width(0));
+
+	memset(&fileSystem, 0, sizeof(FATFS));
+	//f_mount (LUN_ID_SD_MMC_0_MEM, NULL);
+	//int mounted = f_mount(LUN_ID_SD_MMC_0_MEM, &fileSystem);
+	int mounted = f_mount(0, &fileSystem);
+	if (mounted != FR_OK)
+	{
+		platform->Message(HOST_MESSAGE, "Can't mount filesystem 0: code ");
+		sprintf(scratchString, "%d", mounted);
+		platform->Message(HOST_MESSAGE, scratchString);
+		platform->Message(HOST_MESSAGE, "\n");
+	}
+}
+
+char* MassStorage::CombineName(char* directory, char* fileName)
 {
   int out = 0;
   int in = 0;
   
-  result[out] = '/';
-  out++;
+//  scratchString[out] = '/';
+//  out++;
   
   if(directory != NULL)
   {
-    if(directory[in] == '/')
-      in++;
-    while(directory[in] != 0 && directory[in] != '\n' && directory[in] != '/')
+    //if(directory[in] == '/')
+    //  in++;
+    while(directory[in] != 0 && directory[in] != '\n')// && directory[in] != '/')
     {
-      result[out] = directory[in];
-      out++;
+      scratchString[out] = directory[in];
       in++;
+      out++;
+      if(out >= STRING_LENGTH)
+      {
+         platform->Message(HOST_MESSAGE, "CombineName() buffer overflow.");
+         out = 0;
+      }
     }
   }
   
-  result[out] = '/';
-  out++;
+  //scratchString[out] = '/';
+ // out++;
   
   in = 0;
-  while(fileName[in] != 0 && fileName[in] != '\n' && fileName[in] != '/')
+  while(fileName[in] != 0 && fileName[in] != '\n')// && fileName[in] != '/')
   {
-    result[out] = fileName[in];
-    out++;
+    scratchString[out] = fileName[in];
     in++;
+    out++;
+    if(out >= STRING_LENGTH)
+    {
+       platform->Message(HOST_MESSAGE, "CombineName() buffer overflow.");
+       out = 0;
+    }
   }
-  result[out] = 0;
+  scratchString[out] = 0;
   
-  return result;
+  return scratchString;
 }
 
 // List the flat files in a directory.  No sub-directories or recursion.
 
-char* Platform::FileList(char* directory)
+char* MassStorage::FileList(char* directory)
 {
-  FILINFO entry;
-  DIR dir;
-  f_opendir(&dir, directory);
-  int p = 0;
-  int q;
-  int count = 0;
-  while(f_readdir(&dir, &entry)==FR_OK)
-  {
-    q = 0;
-    count++;
-    fileList[p++] = FILE_LIST_BRACKET;
-	fileList[p++] = *entry.fname;
-      q++;
-      if(p >= FILE_LIST_LENGTH - 10) // Caution...
-      {
-        Message(HOST_MESSAGE, "FileList - directory: ");
-        Message(HOST_MESSAGE, directory);
-		Message(HOST_MESSAGE, " has too many files!\n");
-        return "";
-    }
-    fileList[p++] = FILE_LIST_BRACKET;
-    fileList[p++] = FILE_LIST_SEPARATOR;
-  }
-  
-  if(count <= 0)
-    return "";
-  
-  fileList[--p] = 0; // Get rid of the last separator
-  return fileList;
+//  File dir, entry;
+//  dir = SD.open(directory);
+//  int p = 0;
+//  int q;
+//  int count = 0;
+//  while(entry = dir.openNextFile())
+//  {
+//    q = 0;
+//    count++;
+//    fileList[p++] = FILE_LIST_BRACKET;
+//    while(entry.name()[q])
+//    {
+//      fileList[p++] = entry.name()[q];
+//      q++;
+//      if(p >= FILE_LIST_LENGTH - 10) // Caution...
+//      {
+//        platform->Message(HOST_MESSAGE, "FileList - directory: ");
+//        platform->Message(HOST_MESSAGE, directory);
+//        platform->Message(HOST_MESSAGE, " has too many files!\n");
+//        return "";
+//      }
+//    }
+//    fileList[p++] = FILE_LIST_BRACKET;
+//    fileList[p++] = FILE_LIST_SEPARATOR;
+//    entry.close();
+//  }
+//  dir.close();
+//
+//  if(count <= 0)
+//    return "";
+//
+//  fileList[--p] = 0; // Get rid of the last separator
+//  return fileList;
+	return "";
 }
 
 // Delete a file
-boolean Platform::DeleteFile(char* directory, char* fileName)
+bool MassStorage::Delete(char* directory, char* fileName)
 {
-  CombineName(scratchString, directory, fileName);
-  return f_unlink(scratchString);
+	char* location = platform->GetMassStorage()->CombineName(directory, fileName);
+	if( f_unlink (location) != FR_OK)
+	{
+		platform->Message(HOST_MESSAGE, "Can't delete file ");
+		platform->Message(HOST_MESSAGE, location);
+		platform->Message(HOST_MESSAGE, "\n");
+		return false;
+	}
+	return true;
 }
+
+//------------------------------------------------------------------------------------------------
+
+
+FileStore::FileStore(Platform* p)
+{
+   platform = p;  
+}
+
+
+void FileStore::Init()
+{
+  bufferPointer = 0;
+  inUse = false;
+  writing = false;
+  lastBufferEntry = 0;
+}
+
 
 // Open a local file (for example on an SD card).
+// This is protected - only Platform can access it.
 
-int Platform::OpenFile(char* directory, char* fileName, boolean write)
+bool FileStore::Open(char* directory, char* fileName, bool write)
 {
-  CombineName(scratchString, directory, fileName);
-  int result = -1;
-  for(int i = 0; i < MAX_FILES; i++)
-    if(!inUse[i])
-    {
-      result = i;
-      break;
-    }
-  if(result < 0)
+  char* location = platform->GetMassStorage()->CombineName(directory, fileName);
+//  SerialUSB.print("Opening: ");
+//  SerialUSB.println(location);
+  writing = write;
+  lastBufferEntry = FILE_BUF_LEN - 1;
+  FRESULT openReturn;
+
+  if(writing)
   {
-      Message(HOST_MESSAGE, "Max open file count exceeded.\n");
-      return -1;    
-  }
-  
-  int res = f_open(&files[result], scratchString, FILE_READ);
-  f_close(&files[result]);
-  if(res != FR_OK)
-  {
-    if(!write)
-    {
-      Message(HOST_MESSAGE, "File: ");
-      Message(HOST_MESSAGE, fileName);
-      Message(HOST_MESSAGE, " not found for reading.\n");
-      return -1;
-    }
-    f_open(&files[result], scratchString, FILE_WRITE);
-    bPointer[result] = 0;
+	  openReturn = f_open(&file, location, FA_CREATE_ALWAYS | FA_WRITE);
+	  if (openReturn != FR_OK)
+	  {
+		  platform->Message(HOST_MESSAGE, "Can't open ");
+		  platform->Message(HOST_MESSAGE, location);
+		  platform->Message(HOST_MESSAGE, " to write to.  Error code: ");
+		  sprintf(scratchString, "%d", openReturn);
+		  platform->Message(HOST_MESSAGE, scratchString);
+		  platform->Message(HOST_MESSAGE, "\n");
+		  return false;
+	  }
+	  bufferPointer = 0;
   } else
   {
-    if(write)
-    {
-    	f_open(&files[result], scratchString, FILE_WRITE);
-      bPointer[result] = 0;
-    } else
-    	f_open(&files[result], scratchString, FILE_WRITE);
+	  openReturn = f_open(&file, location, FA_OPEN_EXISTING | FA_READ);
+	  if (openReturn != FR_OK)
+	  {
+		  platform->Message(HOST_MESSAGE, "Can't open ");
+		  platform->Message(HOST_MESSAGE, location);
+		  platform->Message(HOST_MESSAGE, " to read from.  Error code: ");
+		  sprintf(scratchString, "%d", openReturn);
+		  platform->Message(HOST_MESSAGE, scratchString);
+		  platform->Message(HOST_MESSAGE, "\n");
+		  return false;
+	  }
+	  bufferPointer = FILE_BUF_LEN;
   }
 
-  inUse[result] = true;
-  return result;
-}
-
-void Platform::GoToEnd(int file)
-{
-  if(!inUse[file])
-  {
-    Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
-    return;
-  }
-  unsigned long e = files[file].fsize;
-  f_lseek(&files[file],e);
-}
-
-unsigned long Platform::Length(int file)
-{
-  if(!inUse[file])
-  {
-    Message(HOST_MESSAGE, "Attempt to size non-open file.\n");
-    return 0;
-  }
-  return files[file].fsize;
-}
-
-void Platform::Close(int file)
-{ 
-  UINT* bWrit;
-  if(bPointer[file] != 0)
-    f_write(&files[file],&buf[file],bPointer[file],bWrit);
-  bPointer[file] = 0;
-  f_close(&files[file]);
-  inUse[file] = false;
-}
-
-
-boolean Platform::Read(int file, char& b)
-{
-  if(!inUse[file])
-  {
-    Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
-    return false;
-  }
-  UINT* rBuf;
-  if(f_read(&files[file],&b,1,rBuf) != FR_OK)
-//  if(!files[file].available())
-    return false;
-//  b = (char) files[file].read();
+  inUse = true;
   return true;
 }
 
-void Platform::Write(int file, char b)
+void FileStore::Close()
 {
-  if(!inUse[file])
-  {
-    Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
-    return;
-  }
-  (buf[file])[bPointer[file]] = b;
-  bPointer[file]++;
-  if(bPointer[file] >= FILE_BUF_LEN)
-  {
-	  UINT* wBuf;
-    f_write(&files[file],&b,1,wBuf);
-//  files[file].write(buf[file], FILE_BUF_LEN);
-    bPointer[file] = 0;
-  } 
-  //files[file].write(b);
+  if(writing)
+	  WriteBuffer();
+  f_close(&file);
+  platform->ReturnFileStore(this);
+  inUse = false;
+  writing = false;
+  lastBufferEntry = 0;
 }
 
-void Platform::WriteString(int file, char* b)
+void FileStore::GoToEnd()
 {
-  if(!inUse[file])
+  if(!inUse)
   {
-    Message(HOST_MESSAGE, "Attempt to write string to a non-open file.\n");
+    platform->Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
+    return;
+  }
+  unsigned long e = Length();
+  f_lseek(&file, e);
+}
+
+unsigned long FileStore::Length()
+{
+  if(!inUse)
+  {
+    platform->Message(HOST_MESSAGE, "Attempt to size non-open file.\n");
+    return 0;
+  }
+  return file.fsize;
+	return 0;
+}
+
+int8_t FileStore::Status()
+{
+  if(!inUse)
+    return nothing;
+
+  if(lastBufferEntry == FILE_BUF_LEN)
+	return byteAvailable;
+
+  if(bufferPointer < lastBufferEntry)
+    return byteAvailable;
+    
+  return nothing;
+}
+
+void FileStore::ReadBuffer()
+{
+	FRESULT readStatus;
+	readStatus = f_read(&file, buf, FILE_BUF_LEN, &lastBufferEntry);	// Read a chunk of file
+	if (readStatus)
+	{
+		platform->Message(HOST_MESSAGE, "Error reading file.\n");
+	}
+	bufferPointer = 0;
+}
+
+bool FileStore::Read(char& b)
+{
+  if(!inUse)
+  {
+    platform->Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
+    return false;
+  }
+
+  if(bufferPointer >= FILE_BUF_LEN)
+	  ReadBuffer();
+
+  if(bufferPointer >= lastBufferEntry)
+  {
+	  b = 0;  // Good idea?
+	  return false;
+  }
+
+  b = (char)buf[bufferPointer];
+  bufferPointer++;
+
+  return true;
+}
+
+void FileStore::WriteBuffer()
+{
+	FRESULT writeStatus;
+	writeStatus = f_write(&file, buf, bufferPointer, &lastBufferEntry);
+	if((writeStatus != FR_OK) || (lastBufferEntry != bufferPointer))
+	{
+		platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
+	}
+	bufferPointer = 0;
+}
+
+
+void FileStore::Write(char b)
+{
+  if(!inUse)
+  {
+    platform->Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
+    return;
+  }
+  buf[bufferPointer] = b;
+  bufferPointer++;
+  if(bufferPointer >= FILE_BUF_LEN)
+	  WriteBuffer();
+}
+
+void FileStore::Write(char* b)
+{
+  if(!inUse)
+  {
+    platform->Message(HOST_MESSAGE, "Attempt to write string to a non-open file.\n");
     return;
   }
   int i = 0;
   while(b[i])
-    Write(file, b[i++]); 
-  //files[file].print(b);
+    Write(b[i++]);
 }
 
-// Send something to the network client
 
-void Platform::SendToClient(char* message)
+//-----------------------------------------------------------------------------------------------------
+
+FileStore* Platform::GetFileStore(char* directory, char* fileName, bool write)
 {
-  if(client)
-  {
-    client.print(message);
-  } else
-    Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
+  FileStore* result = NULL;
+
+  if(!fileStructureInitialised)
+	  return NULL;
+
+  for(int i = 0; i < MAX_FILES; i++)
+    if(!files[i]->inUse)
+    {
+      files[i]->inUse = true;
+      if(files[i]->Open(directory, fileName, write))
+        return files[i];
+      else
+      {
+        files[i]->inUse = false;
+        return NULL;
+      }
+    }
+  Message(HOST_MESSAGE, "Max open file count exceeded.\n");
+  return NULL;
 }
 
+
+MassStorage* Platform::GetMassStorage()
+{
+  return massStorage;
+}
+
+void Platform::ReturnFileStore(FileStore* fs)
+{
+  for(int i = 0; i < MAX_FILES; i++)
+      if(files[i] == fs)
+        {
+          files[i]->inUse = false;
+          return;
+        }
+}
 
 
 void Platform::Message(char type, char* message)
 {
-  char scratchString[STRING_LENGTH];
   switch(type)
   {
   case FLASH_LED:
@@ -506,12 +634,15 @@ void Platform::Message(char type, char* message)
   case HOST_MESSAGE:
   default:
   
-	SerialUSB.println(message);
-//    int m = OpenFile(GetWebDir(), MESSAGE_FILE, true);
-//	int m = 0;
-//    GoToEnd(m);
-//    WriteString(m, message);
-//    Close(m);
+//    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
+//    if(m != NULL)
+//    {
+//    	m->GoToEnd();
+//    	m->Write(message);
+//    	m->Close();
+//    } else
+//    	line->Write("Can't open message file.\n");
+    line->Write(message);
   }
 }
 
@@ -521,18 +652,106 @@ void Platform::Message(char type, char* message)
 //***************************************************************************************************
 
 
-
-
 void Platform::Spin()
 {
-  if(!active)
-    return;
+   if(!active)
+     return;
     
-   //ClientMonitor();
+   network->Spin();
+   line->Spin();
+
    if(Time() - lastTime < 2.0)
      return;
    lastTime = Time();
 }
+
+Line::Line()
+{
+}
+
+void Line::Init()
+{
+	alternateInput = NULL;
+	alternateOutput = NULL;
+	SerialUSB.begin(BAUD_RATE);
+	while (!SerialUSB.available());
+}
+
+Network::Network()
+{
+//	server = new EthernetServer(HTTP_PORT);
+}
+
+void Network::Init()
+{
+	alternateInput = NULL;
+	alternateOutput = NULL;
+
+	mac = MAC;
+
+//	// disable SD SPI while starting w5100
+//	// or you will have trouble
+//	pinMode(SD_SPI, OUTPUT);
+//	digitalWrite(SD_SPI,HIGH);
+
+	ipAddress = { IP0, IP1, IP2, IP3 };
+	//Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
+//	Ethernet.begin(mac, ipAddress);
+//	server->begin();
+//
+//	//Serial.print("server is at ");
+//	//Serial.println(Ethernet.localIP());
+//
+//	// this corrects a bug in the Ethernet.begin() function
+//	// even tho the call to Ethernet.localIP() does the same thing
+//	digitalWrite(ETH_B_PIN, HIGH);
+
+	clientStatus = 0;
+//	client = 0;
+}
+
+void Network::Write(char b)
+{
+//  if(client)
+//  {
+//    client.write(b);
+//  } else
+    reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
+}
+
+void Network::Write(char* s)
+{
+//  if(client)
+//  {
+//    client.print(s);
+//  } else
+	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
+}
+
+int Network::Read(char& b)
+{
+//  if(client)
+//  {
+//    b = client.read();
+//    return true;
+//  }
+//
+//  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
+//  b = '\n'; // good idea??
+  return 0;
+}
+
+
+void Network::Close()
+{
+//  if (client)
+//  {
+//    client.stop();
+//    //Serial.println("client disconnected");
+//  } else
+	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
+}
+
 
 
 

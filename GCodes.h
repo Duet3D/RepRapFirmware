@@ -33,14 +33,15 @@ class GCodeBuffer
   public:
     GCodeBuffer(Platform* p, char* id);
     void Init();
-    boolean Put(char c);
-    boolean Seen(char c);
+    bool Put(char c);
+    bool Seen(char c);
     float GetFValue();
     int GetIValue();
     long GetLValue();
+    char* GetString();
     char* Buffer();
-    boolean Finished();
-    void SetFinished(boolean f);
+    bool Finished();
+    void SetFinished(bool f);
     
   private:
     Platform* platform;
@@ -48,8 +49,8 @@ class GCodeBuffer
     char* identity;
     int gcodePointer;
     int readPointer;
-    boolean inComment;
-    boolean finished;
+    bool inComment;
+    bool finished;
 };
 
 //****************************************************************************************************
@@ -64,56 +65,56 @@ class GCodes
     void Spin();
     void Init();
     void Exit();
-    boolean ReadMove(float* m, boolean& ce);
-    boolean ReadHeat(float* h);
+    bool ReadMove(float* m, bool& ce);
+    bool ReadHeat(float* h);
     void QueueFileToPrint(char* fileName);
-    boolean PrintingAFile();
+    bool PrintingAFile();
     void Diagnostics();
     
   private:
   
-    boolean AllMovesAreFinishedAndMoveBufferIsLoaded();
-    boolean ActOnGcode(GCodeBuffer* gb);
-    boolean SetUpMove(GCodeBuffer* gb);
-    boolean DoDwell(GCodeBuffer *gb);
-    boolean DoHome();
-    boolean SetOffsets(GCodeBuffer *gb);
-    boolean NoHome();
-    boolean Push();
-    boolean Pop();
+    bool AllMovesAreFinishedAndMoveBufferIsLoaded();
+    bool ActOnGcode(GCodeBuffer* gb);
+    bool SetUpMove(GCodeBuffer* gb);
+    bool DoDwell(GCodeBuffer *gb);
+    bool DoHome();
+    bool SetOffsets(GCodeBuffer *gb);
+    bool NoHome();
+    bool Push();
+    bool Pop();
     int8_t Heater(int8_t head);
     Platform* platform;
-    boolean active;
+    bool active;
     Webserver* webserver;
     float dwellTime;
-    boolean dwellWaiting;
+    bool dwellWaiting;
     GCodeBuffer* webGCode;
     GCodeBuffer* fileGCode;
     GCodeBuffer* serialGCode;
-//    boolean webGCodeFinished;
-//    boolean fileGCodeFinished;
-    boolean moveAvailable;
-    boolean heatAvailable;
+//    bool webGCodeFinished;
+//    bool fileGCodeFinished;
+    bool moveAvailable;
+    bool heatAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
-    boolean checkEndStops;
-    boolean drivesRelative; // All except X, Y and Z
-    boolean axesRelative;   // X, Y and Z
-    boolean drivesRelativeStack[STACK];
-    boolean axesRelativeStack[STACK];
+    bool checkEndStops;
+    bool drivesRelative; // All except X, Y and Z
+    bool axesRelative;   // X, Y and Z
+    bool drivesRelativeStack[STACK];
+    bool axesRelativeStack[STACK];
     float feedrateStack[STACK];
     int8_t stackPointer;
     char gCodeLetters[DRIVES + 1]; // Extra is for F
     float lastPos[DRIVES - AXES]; // Just needed for relative moves.
     float distanceScale;
-    int fileBeingPrinted;
-    int fileToPrint;
+    FileStore* fileBeingPrinted;
+    FileStore* fileToPrint;
     int8_t selectedHead;
-    boolean homeX;
-    boolean homeY;
-    boolean homeZ;
-    boolean homeXQueued;
-    boolean homeYQueued;
-    boolean homeZQueued;
+    bool homeX;
+    bool homeY;
+    bool homeZ;
+    bool homeXQueued;
+    bool homeYQueued;
+    bool homeZQueued;
     float gFeedRate;
 };
 
@@ -131,22 +132,22 @@ inline char* GCodeBuffer::Buffer()
   return gcodeBuffer;
 }
 
-inline boolean GCodeBuffer::Finished()
+inline bool GCodeBuffer::Finished()
 {
   return finished;
 }
 
-inline void GCodeBuffer::SetFinished(boolean f)
+inline void GCodeBuffer::SetFinished(bool f)
 {
   finished = f;
 }
 
-inline boolean GCodes::PrintingAFile()
+inline bool GCodes::PrintingAFile()
 {
-  return fileBeingPrinted >= 0;
+  return fileBeingPrinted != NULL;
 }
 
-inline boolean GCodes::NoHome()
+inline bool GCodes::NoHome()
 {
    return !(homeX || homeY || homeZ); 
 }

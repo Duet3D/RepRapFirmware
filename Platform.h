@@ -1,6 +1,6 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Mendel with Prototype Arduino Due controller
+RepRapFirmware - Platform: RepRapPro Mendel with Duet controller
 
 Platform contains all the code and definitons to deal with machine-dependent things such as control 
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
@@ -19,9 +19,9 @@ also needs to go here.
 
 -----------------------------------------------------------------------------------------------------
 
-Version 0.2
+Version 0.3
 
-11 April 2013
+28 August 2013
 
 Adrian Bowyer
 RepRap Professional Ltd
@@ -38,25 +38,18 @@ Licence: GPL
 
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 
 // Platform-specific includes
 
-#include <Arduino.h>
+#include "Arduino.h"
+#include "Libraries/SamNonDuePin/SamNonDuePin.h"
+#include "Libraries/SD_HSMCI/SD_HSMCI.h"
+#include "Libraries/MCP4461/MCP4461.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-void loop();
-void setup();
-#ifdef __cplusplus
-} // extern "C"
-#endif
+/**************************************************************************************************/
 
-
-#include <SamNonDuePin.h>
-//#include <string.h>
-#include <Ethernet.h>
-#include <SD_HSMCI.h>
+// Some numbers...
 
 #define STRING_LENGTH 1000
 #define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
@@ -75,17 +68,20 @@ void setup();
 
 // DRIVES
 
-#define STEP_PINS {54, 60, 46, 26}
-#define DIRECTION_PINS {55, 61, 48, 28}
+#define STEP_PINS {14, 25, 5, 68}
+#define DIRECTION_PINS {15, 26, 4, 69}
 #define FORWARDS true     // What to send to go... 
 #define BACKWARDS false    // ...in each direction
-#define ENABLE_PINS {38, -1, 62, -1}
+#define ENABLE_PINS {29, 27, 138, 25}
 #define ENABLE false      // What to send to enable... 
 #define DISABLE true     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
-#define LOW_STOP_PINS {3, 14, 17, -1}
+#define LOW_STOP_PINS {11, 28, 60, 31}
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
+#define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
+#define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
+#define MAX_A_TO_D_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
 //#define ACCELERATIONS {80, 80, 3, 25} 
@@ -107,10 +103,10 @@ void setup();
 
 // HEATERS - The bed is assumed to be the first
 
-#define TEMP_SENSE_PINS {10, 9}  // Analogue pin numbers
-#define HEAT_ON_PINS {8, 9}
+#define TEMP_SENSE_PINS {5, 4}   // Analogue pin numbers
+#define HEAT_ON_PINS {53, 40}
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
-#define THERMISTOR_SERIES_RS {4700, 4700} // Ohms in series with the thermistors
+#define THERMISTOR_SERIES_RS {1000, 1000} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
 #define USE_PID {false, true} // PID or bang-bang for this heater?
 #define PID_KIS {-1, 2.2} // PID constants...
@@ -135,24 +131,20 @@ void setup();
 #define MAX_FILES 7
 #define FILE_BUF_LEN 256
 #define SD_SPI 4 //Pin
-#define WEB_DIR "www/" // Place to find web files on the server
-#define GCODE_DIR "gcodes/" // Ditto - g-codes
-#define SYS_DIR "sys/" // Ditto - system files
-#define TEMP_DIR "tmp/" // Ditto - temporary files
+#define WEB_DIR "0:/www/" // Place to find web files on the server
+#define GCODE_DIR "0:/gcodes/" // Ditto - g-codes
+#define SYS_DIR "0:/sys/" // Ditto - system files
+#define TEMP_DIR "0:/tmp/" // Ditto - temporary files
+#define CONFIG_FILE "config.g" // The file that sets the machine's parameters
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
 #define FILE_LIST_LENGTH 1000 // Maximum length of file list
-
-#define FILE_WRITE FA_WRITE
-#define FILE_READ FA_READ
 
 #define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
                       // the frequency and M/S ratio.
 #define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
                              // not displayed; \f and \n should be supported.
 #define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
-
-#define SERIAL_MESSAGE 'S' // Type byte of a message that is to be sent to the SerialUSB port; the S is not sent.
 
 /****************************************************************************************************/
 
@@ -176,12 +168,6 @@ void setup();
   
 #define HTTP_PORT 80
 
-// Connection statuses - ORed
-
-#define CLIENT 1
-#define CONNECTED 2
-#define AVAILABLE 4
-
 // Seconds to wait after serving a page
  
 #define CLIENT_CLOSE_DELAY 0.001
@@ -191,7 +177,7 @@ void setup();
 
 // Miscellaneous...
 
-#define LED_PIN 11 // Indicator LED
+#define LED_PIN 13 // Indicator LED
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
@@ -203,6 +189,137 @@ enum EndStopHit
   lowHit = 1,
   highHit = 2
 };
+
+/***************************************************************************************************/
+
+// Input and output - these are ORed into an int8_t
+// By the Status() functions of the IO classes.
+
+enum IOStatus
+{
+  nothing = 0,
+  byteAvailable = 1,
+  atEoF = 2,
+  clientLive = 4,
+  clientConnected = 8
+};
+
+// All IO is done by classes derived from this class.
+
+class InputOutput
+{
+public:
+	void TakeInputFrom(InputOutput* altIp);
+	void SendOutputTo(InputOutput* altOp);
+
+protected:
+	InputOutput* alternateInput;
+	InputOutput* alternateOutput;
+};
+
+// This class handles the network - typically an ethernet.
+
+class Network: public InputOutput
+{
+public:
+	int8_t Status(); // Returns OR of IOStatus
+	int Read(char& b);
+	void Write(char b);
+	void Write(char* s);
+	void Close();
+
+friend class Platform;
+
+protected:
+	Network();
+	void Init();
+	void Spin();
+private:
+	byte mac[MAC_BYTES];
+	byte ipAddress[IP_BYTES];
+//	EthernetServer* server;
+//	EthernetClient client;
+	int8_t clientStatus;
+};
+
+// This class handles serial I/O - typically via USB
+
+class Line: public InputOutput
+{
+public:
+	int8_t Status(); // Returns OR of IOStatus
+	int Read(char& b);
+	void Write(char b);
+	void Write(char* s);
+
+friend class Platform;
+
+protected:
+	Line();
+	void Init();
+	void Spin();
+
+private:
+};
+
+class MassStorage
+{
+public:
+  char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory
+  char* CombineName(char* directory, char* fileName);
+  bool Delete(char* directory, char* fileName);
+friend class Platform;
+
+protected:
+  MassStorage(Platform* p);
+  void Init();
+
+private:
+  char fileList[FILE_LIST_LENGTH];
+  char scratchString[STRING_LENGTH];
+  Platform* platform;
+  FATFS fileSystem;
+};
+
+// This class handles input from, and output to, files.
+
+class FileStore: public InputOutput
+{
+public:
+	int8_t Status(); // Returns OR of IOStatus
+	bool Read(char& b);
+	void Write(char b);
+	void Write(char* s);
+	void Close();
+	void GoToEnd(); // Position the file at the end (so you can write on the end).
+	unsigned long Length(); // File size in bytes
+
+friend class Platform;
+
+protected:
+	FileStore(Platform* p);
+	void Init();
+        bool Open(char* directory, char* fileName, bool write);
+        
+  bool inUse;
+  byte buf[FILE_BUF_LEN];
+  int bufferPointer;
+  
+private:
+
+  void ReadBuffer();
+  void WriteBuffer();
+
+  FIL file;
+  Platform* platform;
+  bool writing;
+  unsigned int lastBufferEntry;
+};
+
+
+/***************************************************************************************************************/
+
+// The main class that defines the RepRap machine for the benefit of the other classes
 
 class Platform
 {   
@@ -231,38 +348,39 @@ class Platform
   
   // Communications and data storage; opening something unsupported returns -1.
   
-  char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory (for example on an SD card).
-  //int OpenFile(char* fileName, boolean write); // Open a local file (for example on an SD card).
-  int OpenFile(char* directory, char* fileName, boolean write); // Open a local file (for example on an SD card).
-  void GoToEnd(int file); // Position the file at the end (so you can write on the end).
-  boolean Read(int file, char& b);     // Read a single byte from a file into b, 
+  Network* GetNetwork();
+  Line* GetLine();
+  
+  friend class FileStore;
+  
+  MassStorage* GetMassStorage();
+  FileStore* GetFileStore(char* directory, char* fileName, bool write);
+
+//  char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory (for example on an SD card).
+//  int OpenFile(char* directory, char* fileName, bool write); // Open a local file (for example on an SD card).
+//  void GoToEnd(int file); // Position the file at the end (so you can write on the end).
+//  bool Read(int file, char& b);     // Read a single byte from a file into b,
                                              // returned value is false for EoF, true otherwise
-  void WriteString(int file, char* s);  // Write the string to a file.
-  void Write(int file, char b);  // Write the byte b to a file.
-  unsigned long Length(int file); // File size in bytes
+//  void Write(int file, char* s);  // Write the string to a file.
+//  void Write(int file, char b);  // Write the byte b to a file.
+//  unsigned long Length(int file); // File size in bytes
   char* GetWebDir(); // Where the htm etc files are
   char* GetGCodeDir(); // Where the gcodes are
   char* GetSysDir();  // Where the system files are
   char* GetTempDir(); // Where temporary files are
-  void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
-  boolean DeleteFile(char* directory, char* fileName); // Delete a file
-  
-  char ClientRead(); // Read a byte from the client
-  void SendToClient(char* message); // Send string to the host
-  void SendToClient(char b); // Send byte to the host
-  int ClientStatus(); // Check client's status
-  void DisconnectClient(); //Disconnect the client  
+  char* GetConfigFile(); // Where the configuration is stored (in the system dir).
+//  void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
+//  bool DeleteFile(char* directory, char* fileName); // Delete a file
   
   void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
-                            // say, display the messages on an LCD. This may also transmit the messages to the host. 
-  boolean SerialAvailable();  // Byte available from (for example) USB?
-  boolean SerialRead(char& b); // Read a serial byte into b; result is true unless no byte is available 
+                            // say, display the messages on an LCD. This may also transmit the messages to the host.
   
   // Movement
   
   void SetDirection(byte drive, bool direction);
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
+  void SetMotorCurrent(byte drive, float current);
   float DriveStepsPerUnit(int8_t drive);
   float Acceleration(int8_t drive);
   float MaxFeedrate(int8_t drive);
@@ -289,22 +407,23 @@ class Platform
   float PidMin(int8_t heater);
   float PidMax(int8_t heater);
   float DMix(int8_t heater);
-  boolean UsePID(int8_t heater);
+  bool UsePID(int8_t heater);
   float HeatSampleTime();
 
 //-------------------------------------------------------------------------------------------------------
+  protected:
+  
+  void ReturnFileStore(FileStore* f);  
   
   private:
   
   float lastTime;
   
-  boolean active;
+  bool active;
   
   // Load settings from local storage
   
   bool LoadFromStore();
-  
-  int GetRawTemperature(byte heater);
   
   void InitialiseInterrupts();
   
@@ -317,28 +436,34 @@ class Platform
   int8_t stepPins[DRIVES];
   int8_t directionPins[DRIVES];
   int8_t enablePins[DRIVES];
-  boolean disableDrives[DRIVES];
+  bool disableDrives[DRIVES];
   int8_t lowStopPins[DRIVES];
   int8_t highStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float instantDvs[DRIVES];
+  MCP4461 mcp;
+  int8_t potWipes[DRIVES];
+  float senseResistor;
+  float maxAtoDVoltage;
 
 // AXES
 
   float axisLengths[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
-
+  
 // HEATERS - Bed is assumed to be the first
+
+  int GetRawTemperature(byte heater);
 
   int8_t tempSensePins[HEATERS];
   int8_t heatOnPins[HEATERS];
   float thermistorBetas[HEATERS];
   float thermistorSeriesRs[HEATERS];
   float thermistorInfRs[HEATERS];
-  boolean usePID[HEATERS];
+  bool usePID[HEATERS];
   float pidKis[HEATERS];
   float pidKds[HEATERS];
   float pidKps[HEATERS];
@@ -350,28 +475,29 @@ class Platform
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
 
+// Serial/USB
+
+  Line* line;
+
 // Files
 
-  FIL* files;
-  boolean* inUse;
+  MassStorage* massStorage;
+  FileStore* files[MAX_FILES];
+  bool fileStructureInitialised;
+  //bool* inUse;
   char* webDir;
   char* gcodeDir;
   char* sysDir;
   char* tempDir;
-  byte* buf[MAX_FILES];
-  int bPointer[MAX_FILES];
-  char fileList[FILE_LIST_LENGTH];
-  char scratchString[STRING_LENGTH];
+  char* configFile;
+  //byte* buf[MAX_FILES];
+  //int bPointer[MAX_FILES];
+  //char fileList[FILE_LIST_LENGTH];
+  //char scratchString[STRING_LENGTH];
   
 // Network connection
 
-  void ClientMonitor();
-  
-  byte mac[MAC_BYTES];
-  byte ipAddress[IP_BYTES];
-  EthernetServer* server;
-  EthernetClient client;
-  int clientStatus;
+  Network* network;
 };
 
 inline float Platform::Time()
@@ -412,27 +538,121 @@ inline char* Platform::GetTempDir()
   return tempDir;
 }
 
+
+inline char* Platform::GetConfigFile()
+{
+  return configFile;
+}
+
 //****************************************************************************************************************
+
+inline Network* Platform::GetNetwork()
+{
+	return network;
+}
+
+inline Line* Platform::GetLine()
+{
+	return line;
+}
+
+inline void Line::Spin()
+{
+}
+
+inline int8_t Line::Status()
+{
+//	if(alternateInput != NULL)
+//		return alternateInput->Status();
+
+	if(SerialUSB.available() > 0)
+		return byteAvailable;
+	return nothing;
+}
+
+inline int Line::Read(char& b)
+{
+//  if(alternateInput != NULL)
+//	return alternateInput->Read(b);
+
+  int incomingByte = SerialUSB.read();
+  if(incomingByte < 0)
+    return 0;
+  b = (char)incomingByte;
+  return true;
+}
+
+inline void Line::Write(char b)
+{
+	SerialUSB.print(b);
+}
+
+inline void Line::Write(char* b)
+{
+	SerialUSB.print(b);
+}
+
+
+inline int8_t Network::Status()
+{
+  return clientStatus;
+}
+
+inline void Network::Spin()
+{
+  clientStatus = 0;
+
+//  if(!client)
+//  {
+//    client = server->available();
+//    if(!client)
+//      return;
+//    //else
+//      //Serial.println("new client");
+//  }
+//
+//  clientStatus |= clientLive;
+//
+//  if(!client.connected())
+//    return;
+//
+//  clientStatus |= clientConnected;
+//
+//  if (!client.available())
+//    return;
+//
+//  clientStatus |= byteAvailable;
+}
+
+
+
+
+
+
+
+
+
+
 
 // Serial input
 
 // Byte available from (for example) USB?
 
-inline boolean Platform::SerialAvailable()
-{
-  return SerialUSB.available() > 0;
-}
+//inline bool Platform::SerialAvailable()
+//{
+//  return Serial.available() > 0;
+//}
 
 // Read a serial byte into b; result is true unless no byte is available
 
-inline boolean Platform::SerialRead(char& b)
-{
-  int incomingByte = SerialUSB.read();
-  if(incomingByte < 0)
-    return false;
-  b = (char)incomingByte;
-  return true;
-}
+//inline bool Platform::SerialRead(char& b)
+//{
+//  int incomingByte = Serial.read();
+//  if(incomingByte < 0)
+//    return false;
+//  b = (char)incomingByte;
+//  return true;
+//}
 
 //*****************************************************************************************************************
 
@@ -456,16 +676,30 @@ inline float Platform::InstantDv(int8_t drive)
 inline void Platform::SetDirection(byte drive, bool direction)
 {
   if(directionPins[drive] >= 0)
-  digitalWrite(directionPins[drive], direction);  
+    digitalWrite(directionPins[drive], direction);  
 }
 
 inline void Platform::Step(byte drive)
 {
   if(stepPins[drive] >= 0)
   {
-  digitalWrite(stepPins[drive], 0);
-  digitalWrite(stepPins[drive], 1);
+    digitalWrite(stepPins[drive], 0);
+    digitalWrite(stepPins[drive], 1);
   }
+}
+
+// current is in mA
+
+inline void Platform::SetMotorCurrent(byte drive, float current)
+{
+	if(potWipes[drive] < 0)
+		return;
+	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxAtoDVoltage);
+	Message(HOST_MESSAGE, "Set pot to: ");
+	sprintf(scratchString, "%d", pot);
+	Message(HOST_MESSAGE, scratchString);
+	Message(HOST_MESSAGE, "\n");
+	mcp.setNonVolatileWiper(potWipes[drive], pot);
 }
 
 inline float Platform::HomeFeedRate(int8_t drive)
@@ -506,7 +740,7 @@ inline float Platform::MaxFeedrate(int8_t drive)
 inline int Platform::GetRawTemperature(byte heater)
 {
   if(tempSensePins[heater] >= 0)
-  return analogRead(tempSensePins[heater]);
+    return analogRead(tempSensePins[heater]);
   return 0;
 }
 
@@ -515,7 +749,7 @@ inline float Platform::HeatSampleTime()
   return heatSampleTime; 
 }
 
-inline boolean Platform::UsePID(int8_t heater)
+inline bool Platform::UsePID(int8_t heater)
 {
   return usePID[heater];
 }
@@ -591,64 +825,64 @@ inline void Platform::SetInterrupt(float s) // Seconds
 
 // Network connection
 
-inline int Platform::ClientStatus()
-{
-  return clientStatus;
-}
-
-inline void Platform::SendToClient(char b)
-{
-  if(client)
-  {
-    client.write(b);
-  } else
-    Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
-}
-
-inline char Platform::ClientRead()
-{
-  if(client)
-    return client.read();
-    
-  Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
-  return '\n'; // good idea?? 
-}
-
-inline void Platform::ClientMonitor()
-{
-  clientStatus = 0;
-  
-  if(!client)
-  {
-    client = server->available();
-    if(!client)
-      return;
-    //else
-      //Serial.println("new client");
-  }
-    
-  clientStatus |= CLIENT;
-    
-  if(!client.connected())
-    return;
-    
-  clientStatus |= CONNECTED;
-    
-  if (!client.available())
-    return;
-    
-  clientStatus |= AVAILABLE;
-}
-
-inline void Platform::DisconnectClient()
-{
-  if (client)
-  {
-    client.stop();
-    //Serial.println("client disconnected");
-  } else
-      Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
-}
+//inline int Platform::ClientStatus()
+//{
+//  return clientStatus;
+//}
+//
+//inline void Platform::SendToClient(char b)
+//{
+//  if(client)
+//  {
+//    client.write(b);
+//  } else
+//    Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
+//}
+//
+//inline char Platform::ClientRead()
+//{
+//  if(client)
+//    return client.read();
+//
+//  Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
+//  return '\n'; // good idea??
+//}
+//
+//inline void Platform::ClientMonitor()
+//{
+//  clientStatus = 0;
+//
+//  if(!client)
+//  {
+//    client = server->available();
+//    if(!client)
+//      return;
+//    //else
+//      //Serial.println("new client");
+//  }
+//
+//  clientStatus |= CLIENT;
+//
+//  if(!client.connected())
+//    return;
+//
+//  clientStatus |= CONNECTED;
+//
+//  if (!client.available())
+//    return;
+//
+//  clientStatus |= AVAILABLE;
+//}
+//
+//inline void Platform::DisconnectClient()
+//{
+//  if (client)
+//  {
+//    client.stop();
+//    //Serial.println("client disconnected");
+//  } else
+//      Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
+//}
 
 
 

@@ -24,36 +24,36 @@
 
 
 // From module: Common SAM compiler driver
-#include <utility/compiler.h>
-#include <utility/status_codes.h>
-#include <utility/preprocessor.h>
+#include "utility/compiler.h"
+#include "utility/status_codes.h"
+#include "utility/preprocessor.h"
 // From module: Memory Control Access Interface
-#include <utility/conf_access.h>
-#include <utility/ctrl_access.h>
+#include "utility/conf_access.h"
+#include "utility/ctrl_access.h"
 
 
 // From module: SD/MMC stack on Multimedia Card interface
-#include <utility/sd_mmc_mem.h>
-#include <utility/sd_mmc.h>
-#include <utility/sd_mmc_protocol.h>
+#include "utility/sd_mmc_mem.h"
+#include "utility/sd_mmc.h"
+#include "utility/sd_mmc_protocol.h"
 
 // From module: High Speed Multimedia Card Interface
-#include <utility/hsmci.h>
+#include "utility/hsmci.h"
 
 // From module: DMAC - DMAC Controller
-#include <utility/dmac.h>
+#include "utility/dmac.h"
 
 // From module: FatFS file system
-#include <utility/diskio.h>
-#include <utility/ff.h>
+#include "utility/diskio.h"
+#include "utility/ff.h"
 
 
 // From module: Part identification macros
-#include <sam.h>
+#include "sam.h"
 
 // From module: RTC - Real Time Clock
 // Does not work right now
-#include <utility/rtc.h>
+#include "utility/rtc.h"
 
 /** Enable SD MMC interface pins through HSMCI */
 #define CONF_BOARD_SD_MMC_HSMCI

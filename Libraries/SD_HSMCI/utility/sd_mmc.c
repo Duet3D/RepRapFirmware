@@ -43,7 +43,7 @@
 
 #include <Arduino.h>
 #include <string.h>
-#include <SD_HSMCI.h>
+#include "../SD_HSMCI.h"
 #include "sd_mmc_protocol.h"
 #include "sd_mmc.h"
 

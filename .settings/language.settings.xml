@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <project>
-	<configuration id="it.baeyens.arduino.core.toolChain.release.436205591" name="Release">
+	<configuration id="it.baeyens.arduino.core.toolChain.release.674980254" name="Release">
 		<extension point="org.eclipse.cdt.core.LanguageSettingsProvider">
 			<provider copy-of="extension" id="org.eclipse.cdt.ui.UserLanguageSettingsProvider"/>
 			<provider class="it.baeyens.arduino.toolchain.ArduinoLanguageProvider" console="false" id="it.baeyens.arduino.languageSettingsProvider" keep-relative-paths="false" name="Arduino Compiler Settings" parameter="${COMMAND} -E -P -v -dD ${INPUTS}" prefer-non-shared="true">

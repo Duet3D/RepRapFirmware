@@ -47,18 +47,18 @@ void Heat::Spin()
   if(!active)
     return;
     
-   unsigned long t = platform->Time();
+  unsigned long t = platform->Time();
   if(t - lastTime < platform->HeatSampleTime())
-     return;
-   lastTime = t;
+    return;
+  lastTime = t;
   for(int8_t heater=0; heater < HEATERS; heater++)
     pids[heater]->Spin();
 }
 
 void Heat::Diagnostics() 
-   {
+{
   platform->Message(HOST_MESSAGE, "Heat Diagnostics:\n"); 
-   }
+}
 
 //******************************************************************************************************
 

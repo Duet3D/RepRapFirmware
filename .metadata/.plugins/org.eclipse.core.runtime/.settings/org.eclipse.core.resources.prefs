@@ -1,6 +1,0 @@
-description.autobuilding=false
-eclipse.preferences.version=1
-pathvariable.ArduinoLibPath=/usr/local/arduino-1.5.2/libraries
-pathvariable.ArduinoPath=/usr/local/arduino-1.5.2
-pathvariable.ArduinoPivateLibPath=/home/ensab/workspace/RepRapFirmware/Libraries
-version=1

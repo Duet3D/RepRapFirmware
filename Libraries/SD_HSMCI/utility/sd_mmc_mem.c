@@ -41,7 +41,7 @@
  *
  */
 
-#include <SD_HSMCI.h>
+#include "../SD_HSMCI.h"
 #include "conf_access.h"
 
 #if (SD_MMC_0_MEM == ENABLE) || (SD_MMC_1_MEM == ENABLE)
