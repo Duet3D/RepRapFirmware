@@ -369,6 +369,18 @@ void GCodes::QueueFileToPrint(char* fileName)
 	  platform->Message(HOST_MESSAGE, "GCode file not found\n");
 }
 
+void GCodes::RunConfigurationGCodes()
+{
+	  fileToPrint = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
+	  if(fileToPrint == NULL)
+	  {
+		  platform->Message(HOST_MESSAGE, "Configuration file not found\n");
+		  return;
+	  }
+      fileBeingPrinted = fileToPrint;
+      fileToPrint = NULL;
+}
+
 
 // Function to handle dwell delays.  Return true for
 // Dwell finished, false otherwise.

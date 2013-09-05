@@ -175,8 +175,9 @@ void RepRap::Init()
   webserver->Init();
   move->Init();
   heat->Init();
-  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
   active = true;
+  gCodes->RunConfigurationGCodes();
+  platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
 }
 
 void RepRap::Exit()
