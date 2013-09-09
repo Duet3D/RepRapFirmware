@@ -135,15 +135,30 @@ void Platform::Init()
 
   for(i = 0; i < DRIVES; i++)
   {
+
 	  if(stepPins[i] >= 0)
-		  pinMode(stepPins[i], OUTPUT);
+	  {
+		  if(i > Z_AXIS)
+			  pinModeNonDue(stepPins[i], OUTPUT);
+		  else
+			  pinMode(stepPins[i], OUTPUT);
+	  }
 	  if(directionPins[i] >= 0)
-		  pinMode(directionPins[i], OUTPUT);
+	  {
+		  if(i > Z_AXIS)
+			  pinModeNonDue(directionPins[i], OUTPUT);
+		  else
+			  pinMode(directionPins[i], OUTPUT);
+	  }
 	  if(enablePins[i] >= 0)
 	  {
-		  pinMode(enablePins[i], OUTPUT);
-		  digitalWrite(enablePins[i], ENABLE);
+		  if(i >= Z_AXIS)
+			  pinModeNonDue(enablePins[i], OUTPUT);
+		  else
+			  pinMode(enablePins[i], OUTPUT);
 	  }
+	  Disable(i);
+	  driveEnabled[i] = false;
   }
 
   for(i = 0; i < AXES; i++)
@@ -154,17 +169,17 @@ void Platform::Init()
 		  digitalWrite(lowStopPins[i], HIGH); // Turn on pullup
 	  }
 	  if(highStopPins[i] >= 0)
-    {
-      pinMode(highStopPins[i], INPUT);
-      digitalWrite(highStopPins[i], HIGH); // Turn on pullup
-    }
+	  {
+		  pinMode(highStopPins[i], INPUT);
+		  digitalWrite(highStopPins[i], HIGH); // Turn on pullup
+	  }
   }  
   
   
   for(i = 0; i < HEATERS; i++)
   {
     if(heatOnPins[i] >= 0)
-      pinMode(heatOnPins[i], OUTPUT);
+      pinModeNonDue(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
   }  
   
@@ -180,12 +195,6 @@ void Platform::Diagnostics()
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
 
-// Load settings from local storage; return true if successful, false otherwise
-
-bool Platform::LoadFromStore()
-{
-  return false;
-}
 
 //===========================================================================
 //=============================Thermal Settings  ============================
@@ -221,20 +230,20 @@ void Platform::SetHeater(int8_t heater, const float& power)
   if(heatOnPins[heater] < 0)
     return;
     
-  if(power <= 0.00)
+  if(power <= 0.0)
   {
-     analogWrite(heatOnPins[heater], 0);
+     analogWriteNonDue(heatOnPins[heater], 0);
      return;
   }
   
   if(power >= 1.0)
   {
-     analogWrite(heatOnPins[heater], 255);
+     analogWriteNonDue(heatOnPins[heater], 255);
      return;
   }
   
   byte p = (byte)(255.0*power);
-  analogWrite(heatOnPins[heater], p);
+  analogWriteNonDue(heatOnPins[heater], p);
 }
 
 
