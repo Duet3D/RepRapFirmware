@@ -68,11 +68,11 @@ Licence: GPL
 
 // DRIVES
 
-#define STEP_PINS {14, 25, 5, 68}
-#define DIRECTION_PINS {15, 26, 4, 69}
+#define STEP_PINS {14, 25, 5, X2}
+#define DIRECTION_PINS {15, 26, 4, X3}
 #define FORWARDS true     // What to send to go... 
 #define BACKWARDS false    // ...in each direction
-#define ENABLE_PINS {29, 27, 138, 25}
+#define ENABLE_PINS {29, 27, X1, X0}
 #define ENABLE false      // What to send to enable... 
 #define DISABLE true     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
@@ -99,12 +99,12 @@ Licence: GPL
 #define X_AXIS 0  // The index of the X axis
 #define Y_AXIS 1  // The index of the Y axis
 #define Z_AXIS 2  // The index of the Z axis
-
+#define E_AXIS 3  // The index of the extruder
 
 // HEATERS - The bed is assumed to be the first
 
 #define TEMP_SENSE_PINS {5, 4}   // Analogue pin numbers
-#define HEAT_ON_PINS {53, 40}
+#define HEAT_ON_PINS {X7, X5}
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {1000, 1000} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
@@ -355,22 +355,11 @@ class Platform
   
   MassStorage* GetMassStorage();
   FileStore* GetFileStore(char* directory, char* fileName, bool write);
-
-//  char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory (for example on an SD card).
-//  int OpenFile(char* directory, char* fileName, bool write); // Open a local file (for example on an SD card).
-//  void GoToEnd(int file); // Position the file at the end (so you can write on the end).
-//  bool Read(int file, char& b);     // Read a single byte from a file into b,
-                                             // returned value is false for EoF, true otherwise
-//  void Write(int file, char* s);  // Write the string to a file.
-//  void Write(int file, char b);  // Write the byte b to a file.
-//  unsigned long Length(int file); // File size in bytes
   char* GetWebDir(); // Where the htm etc files are
   char* GetGCodeDir(); // Where the gcodes are
   char* GetSysDir();  // Where the system files are
   char* GetTempDir(); // Where temporary files are
   char* GetConfigFile(); // Where the configuration is stored (in the system dir).
-//  void Close(int file); // Close a file or device, writing any unwritten buffer contents first.
-//  bool DeleteFile(char* directory, char* fileName); // Delete a file
   
   void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
                             // say, display the messages on an LCD. This may also transmit the messages to the host.
@@ -421,10 +410,6 @@ class Platform
   
   bool active;
   
-  // Load settings from local storage
-  
-  bool LoadFromStore();
-  
   void InitialiseInterrupts();
   
   char* CombineName(char* result, char* directory, char* fileName);
@@ -437,6 +422,7 @@ class Platform
   int8_t directionPins[DRIVES];
   int8_t enablePins[DRIVES];
   bool disableDrives[DRIVES];
+  bool driveEnabled[DRIVES];
   int8_t lowStopPins[DRIVES];
   int8_t highStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
@@ -625,35 +611,6 @@ inline void Network::Spin()
 }
 
 
-
-
-
-
-
-
-
-
-
-// Serial input
-
-// Byte available from (for example) USB?
-
-//inline bool Platform::SerialAvailable()
-//{
-//  return Serial.available() > 0;
-//}
-
-// Read a serial byte into b; result is true unless no byte is available
-
-//inline bool Platform::SerialRead(char& b)
-//{
-//  int incomingByte = Serial.read();
-//  if(incomingByte < 0)
-//    return false;
-//  b = (char)incomingByte;
-//  return true;
-//}
-
 //*****************************************************************************************************************
 
 // Drive the RepRap machine - Movement
@@ -675,17 +632,46 @@ inline float Platform::InstantDv(int8_t drive)
 
 inline void Platform::SetDirection(byte drive, bool direction)
 {
-  if(directionPins[drive] >= 0)
-    digitalWrite(directionPins[drive], direction);  
+	if(directionPins[drive] < 0)
+		return;
+	if(drive == AXES)
+		digitalWriteNonDue(directionPins[drive], direction);
+	else
+		digitalWrite(directionPins[drive], direction);
+}
+
+inline void Platform::Disable(byte drive)
+{
+	if(enablePins[drive] < 0)
+		  return;
+	if(drive >= Z_AXIS)
+		digitalWriteNonDue(enablePins[drive], DISABLE);
+	else
+		digitalWrite(enablePins[drive], DISABLE);
+	driveEnabled[drive] = false;
 }
 
 inline void Platform::Step(byte drive)
 {
-  if(stepPins[drive] >= 0)
-  {
-    digitalWrite(stepPins[drive], 0);
-    digitalWrite(stepPins[drive], 1);
-  }
+	if(stepPins[drive] < 0)
+		return;
+	if(!driveEnabled[drive] && enablePins[drive] >= 0)
+	{
+		if(drive >= Z_AXIS)
+			digitalWriteNonDue(enablePins[drive], ENABLE);
+		else
+			digitalWrite(enablePins[drive], ENABLE);
+		driveEnabled[drive] = true;
+	}
+	if(drive == AXES)
+	{
+		digitalWriteNonDue(stepPins[drive], 0);
+		digitalWriteNonDue(stepPins[drive], 1);
+	} else
+	{
+		digitalWrite(stepPins[drive], 0);
+		digitalWrite(stepPins[drive], 1);
+	}
 }
 
 // current is in mA
@@ -694,12 +680,24 @@ inline void Platform::SetMotorCurrent(byte drive, float current)
 {
 	if(potWipes[drive] < 0)
 		return;
-	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxAtoDVoltage);
+	if(drive<2)
+	{
+		mcp.setNonVolatileWiper(potWipes[drive], 0x55);
+		mcp.setVolatileWiper(potWipes[drive], 0x55);
+	} else
+	{
+		mcp.setNonVolatileWiper(potWipes[drive], 0xAA);
+		mcp.setVolatileWiper(potWipes[drive], 0xAA);
+	}
+/*	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxAtoDVoltage);
+	//if(drive < Z_AXIS)
+	//	pot = 256 - pot;
 	Message(HOST_MESSAGE, "Set pot to: ");
 	sprintf(scratchString, "%d", pot);
 	Message(HOST_MESSAGE, scratchString);
 	Message(HOST_MESSAGE, "\n");
 	mcp.setNonVolatileWiper(potWipes[drive], pot);
+	mcp.setVolatileWiper(potWipes[drive], pot);*/
 }
 
 inline float Platform::HomeFeedRate(int8_t drive)
