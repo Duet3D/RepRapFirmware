@@ -175,8 +175,11 @@ void Platform::Init()
 	  }
   }  
   
+  if(heatOnPins[0] >= 0)
+        pinMode(heatOnPins[0], OUTPUT);
+      thermistorInfRs[0] = ( thermistorInfRs[0]*exp(-thermistorBetas[0]/(25.0 - ABS_ZERO)) );
   
-  for(i = 0; i < HEATERS; i++)
+  for(i = 1; i < HEATERS; i++)
   {
     if(heatOnPins[i] >= 0)
       pinModeNonDue(heatOnPins[i], OUTPUT);
@@ -229,21 +232,13 @@ void Platform::SetHeater(int8_t heater, const float& power)
 {
   if(heatOnPins[heater] < 0)
     return;
-    
-  if(power <= 0.0)
-  {
-     analogWriteNonDue(heatOnPins[heater], 0);
-     return;
-  }
   
-  if(power >= 1.0)
-  {
-     analogWriteNonDue(heatOnPins[heater], 255);
-     return;
-  }
   
-  byte p = (byte)(255.0*power);
-  analogWriteNonDue(heatOnPins[heater], p);
+  byte p = (byte)(255.0*fmin(1.0, fmax(0.0, power)));
+  if(heater == 0)
+	  analogWrite(heatOnPins[heater], p);
+  else
+	  analogWriteNonDue(heatOnPins[heater], p);
 }
 
 
