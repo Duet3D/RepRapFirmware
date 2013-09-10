@@ -104,7 +104,7 @@ Licence: GPL
 // HEATERS - The bed is assumed to be the first
 
 #define TEMP_SENSE_PINS {5, 4}   // Analogue pin numbers
-#define HEAT_ON_PINS {X7, X5}
+#define HEAT_ON_PINS {6, X5}
 #define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
 #define THERMISTOR_SERIES_RS {1000, 1000} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
@@ -678,26 +678,13 @@ inline void Platform::Step(byte drive)
 
 inline void Platform::SetMotorCurrent(byte drive, float current)
 {
-	if(potWipes[drive] < 0)
-		return;
-	if(drive<2)
-	{
-		mcp.setNonVolatileWiper(potWipes[drive], 0x55);
-		mcp.setVolatileWiper(potWipes[drive], 0x55);
-	} else
-	{
-		mcp.setNonVolatileWiper(potWipes[drive], 0xAA);
-		mcp.setVolatileWiper(potWipes[drive], 0xAA);
-	}
-/*	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxAtoDVoltage);
-	//if(drive < Z_AXIS)
-	//	pot = 256 - pot;
+	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxAtoDVoltage);
 	Message(HOST_MESSAGE, "Set pot to: ");
 	sprintf(scratchString, "%d", pot);
 	Message(HOST_MESSAGE, scratchString);
 	Message(HOST_MESSAGE, "\n");
 	mcp.setNonVolatileWiper(potWipes[drive], pot);
-	mcp.setVolatileWiper(potWipes[drive], pot);*/
+	mcp.setVolatileWiper(potWipes[drive], pot);
 }
 
 inline float Platform::HomeFeedRate(int8_t drive)
