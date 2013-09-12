@@ -1,8 +1,5 @@
 *.d
 *.o
-Release/*.o
-Release/*.d
-Release/*.elf
-Release/*.ar
+Release/
 *~
 *orig
