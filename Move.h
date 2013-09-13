@@ -338,7 +338,7 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la)
 {
   if(drive = Z_AXIS)
   {
-	  //lastZHit = xxx;
+	  lastZHit = 0.0;
   }
   la->SetDriveZeroEndSpeed(0.0, drive);
 }

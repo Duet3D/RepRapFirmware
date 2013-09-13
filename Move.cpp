@@ -549,6 +549,19 @@ void Move::InverseTransform(float move[])
 	move[2] = move[2] - (aX*move[0] + aY*move[1] + aC);
 }
 
+void Move::SetProbedBedPlane()
+{
+	float x, y, z;
+	for(int i = 0; i < NUMBER_OF_PROBE_POINTS; i++)
+	{
+		if(!reprap.GetGCodes()->GetProbeCoordinates(i, x, y, z))
+			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
+	}
+	aX = 0.0;
+	aY = 0.0;
+	aC = 0.0;
+}
+
 
 // FIXME
 // This function is never normally called.  It is a test to time
