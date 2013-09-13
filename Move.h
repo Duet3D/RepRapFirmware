@@ -24,6 +24,7 @@ Licence: GPL
 #define DDA_RING_LENGTH 5
 #define LOOK_AHEAD_RING_LENGTH 20
 #define LOOK_AHEAD 7
+#define SMALL_Z_MOVE 0.03 // If a Z movement is less than this fraction of an XY move, the movement is classed as XY
 
 enum MovementProfile
 {
@@ -136,6 +137,9 @@ class Move
     void DoLookAhead();
     void HitLowStop(int8_t drive, LookAhead* la);
     void HitHighStop(int8_t drive, LookAhead* la);
+    void SetBedPlane();
+    void Transform(float move[]);
+    void InverseTransform(float move[]);
     void Diagnostics();
     
   friend class DDA;
@@ -178,6 +182,7 @@ class Move
     float nextMove[DRIVES + 1];  // Extra is for feedrate
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
+    float aX, aY, aC;
 };
 
 //********************************************************************************************************

@@ -86,7 +86,7 @@ Licence: GPL
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
 //#define ACCELERATIONS {80, 80, 3, 25} 
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 948.0}
-#define INSTANT_DVS {15.0, 15.0, 0.4, 15}    // (mm/sec) - Bit high? AB
+#define INSTANT_DVS {15.0, 15.0, 0.4, 0.5}    // (mm/sec) - Bit high? AB
 
 // AXES
 
