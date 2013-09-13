@@ -69,6 +69,7 @@ class GCodes
     bool ReadMove(float* m, bool& ce);
     bool ReadHeat(float* h);
     void QueueFileToPrint(char* fileName);
+    bool GetProbeCoordinates(int count, float& x, float& y, float& z);
     bool PrintingAFile();
     void Diagnostics();
     
@@ -79,6 +80,8 @@ class GCodes
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
     bool DoHome();
+    bool DoSingleZProbe();
+    bool DoMultipleZProbe();
     bool SetOffsets(GCodeBuffer *gb);
     bool NoHome();
     bool Push();
@@ -117,6 +120,11 @@ class GCodes
     bool homeYQueued;
     bool homeZQueued;
     float gFeedRate;
+    int probeCount;
+    int8_t probeMoveCount;
+    bool probeMoveQueued;
+    float bedZs[NUMBER_OF_PROBE_POINTS];
+    bool zProbesSet;
 };
 
 //*****************************************************************************************************

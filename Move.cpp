@@ -140,6 +140,7 @@ void Move::Init()
   aX = 0.0;
   aY = 0.0;
   aC = 0.0;
+  lastZHit = 0.0;
 
   lastTime = platform->Time();
   active = true;  

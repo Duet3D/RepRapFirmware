@@ -14,7 +14,7 @@ General design principles:
   * Control by RepRap G Codes.  These are taken to be machine independent, though some may be unsupported.
   * Full use of C++ OO techniques,
   * Make classes hide their data,
-  * Make everything as stateless as possible,
+  * Make everything except the Platform class (see below) as stateless as possible,
   * No use of conditional compilation except for #include guards - if you need that, you should be
        forking the repository to make a new branch - let the repository take the strain,
   * Concentration of all machine-dependent defintions and code in Platform.h and Platform.cpp,
@@ -30,7 +30,7 @@ General design principles:
 
 Naming conventions:
 
-  * #defines are all capitals with optional underscores between words
+  * #defines are all CAPITALS_WITH_OPTIONAL_UNDERSCORES_BETWEEN_WORDS
   * No underscores in other names - MakeReadableWithCapitalisation
   * Class names and functions start with a CapitalLetter
   * Variables start with a lowerCaseLetter
@@ -54,12 +54,12 @@ This is just a container class for the single instances of all the others, and o
 
 GCodes:
 
-This class is fed GCodes, either from the web interface or from GCode files, interprests them, and requests
-actions from the RepRap machine via the other classes.
+This class is fed GCodes, either from the web interface, or from GCode files, or from a serial interface,
+Interprets them, and requests actions from the RepRap machine via the other classes.
 
 Heat:
 
-This class imlements all heating and temperature control in the RepRap machine.
+This class implements all heating and temperature control in the RepRap machine.
 
 Move:
 
@@ -80,11 +80,11 @@ interface to the RepRap machine.  It uses the Knockout and Jquery Javascript lib
 
 
 When the software is running there is one single instance of each main class, and all the memory allocation is
-done on initialisation.  new/malloc should not be used in the general running code, and delete is never
+done on initialization.  new/malloc should not be used in the general running code, and delete is never
 used.  Each class has an Init() function that resets it to its boot-up state; the constructors merely handle
 that memory allocation on startup.  Calling RepRap.Init() calls all the other Init()s in the right sequence.
 
-There are other ancilliary classes that are declared in the .h files for the master classes that use them.  For
+There are other ancillary classes that are declared in the .h files for the master classes that use them.  For
 example, Move has a DDA class that implements a Bresenham/digital differential analyser.
 
 
@@ -103,13 +103,13 @@ any sort of delay() function.  The general rule is:
     No - set a flag/timer to remind me to do it next-time-I'm-called/at-a-future-time and return.
 
 The restriction this strategy places on almost all the code in the firmware (that it must execute quickly and
-never cause waits or delays) is balanced by the fact that none of that code needs to worry about synchronicity,
+never cause waits or delays) is balanced by the fact that none of that code needs to worry about synchronization,
 locking, or other areas of code accessing items upon which it is working.  As mentioned, only the interrupt
 chain needs to concern itself with such problems.  Unlike movement, heating (including PID controllers) does
 not need the fast precision of timing that interrupts alone can offer.  Indeed, most heating code only needs
 to execute a couple of times a second.
 
-Most data is transferred bytewise, with classes typically containg code like this:
+Most data is transferred bytewise, with classes' Spin() functions typically containing code like this:
 
   Is a byte available for me?
     Yes
@@ -119,8 +119,8 @@ Most data is transferred bytewise, with classes typically containg code like thi
            Act on the contents of my buffer
          No
            Return
-    No
-     Return
+  No
+    Return
 
 Note that it is simple to raise the "priority" of any class's activities relative to the others by calling its
 Spin() function more than once from RepRap.Spin().

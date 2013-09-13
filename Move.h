@@ -30,7 +30,7 @@ enum MovementProfile
 {
   moving = 0,  // Ordinary trapezoidal-velocity-profile movement
   noFlat = 1,  // Triangular profile movement
-  change = 2   // To make this movement, the initial and final velocities must change
+  change = 2   // To make this movement, the initial and/or final velocities must change
 };
 
 enum MovementState
@@ -137,7 +137,8 @@ class Move
     void DoLookAhead();
     void HitLowStop(int8_t drive, LookAhead* la);
     void HitHighStop(int8_t drive, LookAhead* la);
-    void SetBedPlane();
+    void SetProbedBedPlane();
+    float GetLastProbedZ();
     void Transform(float move[]);
     void InverseTransform(float move[]);
     void Diagnostics();
@@ -183,6 +184,7 @@ class Move
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
     float aX, aY, aC;
+    float lastZHit;
 };
 
 //********************************************************************************************************
@@ -327,8 +329,17 @@ inline void Move::ResumeMoving()
   addNoMoreMoves = false;
 }
 
+inline float Move::GetLastProbedZ()
+{
+	return lastZHit;
+}
+
 inline void Move::HitLowStop(int8_t drive, LookAhead* la)
 {
+  if(drive = Z_AXIS)
+  {
+	  //lastZHit = xxx;
+  }
   la->SetDriveZeroEndSpeed(0.0, drive);
 }
 

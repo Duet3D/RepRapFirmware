@@ -36,6 +36,9 @@ Licence: GPL
 
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
+#define NUMBER_OF_PROBE_POINTS 3
+#define Z_DIVE 5.0  // Height from which to probe the bed (mm)
+
 // Webserver stuff
 
 #define DEFAULT_PASSWORD "reprap"
