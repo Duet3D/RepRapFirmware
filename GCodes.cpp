@@ -372,6 +372,10 @@ bool GCodes::DoHome()
 bool GCodes::DoSingleZProbe()
 {
 	float x, y, z;
+
+	reprap.GetMove()->SetIdentityTransform();  // It doesn't matter if these are called repeatedly
+	reprap.GetMove()->SetZProbing(true);
+
 	if(probeMoveQueued)
 	{
 		// Doing a move
@@ -431,6 +435,7 @@ bool GCodes::DoMultipleZProbe()
 	{
 		probeCount = 0;
 		zProbesSet = true;
+		reprap.GetMove()->SetZProbing(false);
 		reprap.GetMove()->SetProbedBedPlane();
 		return true;
 	}

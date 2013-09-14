@@ -135,13 +135,16 @@ class Move
     bool AllMovesAreFinished();
     void ResumeMoving();
     void DoLookAhead();
-    void HitLowStop(int8_t drive, LookAhead* la);
-    void HitHighStop(int8_t drive, LookAhead* la);
+    void HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA);
+    void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
+    void SetZProbing(bool probing);
     void SetProbedBedPlane();
     float GetLastProbedZ();
+    void SetIdentityTransform();
     void Transform(float move[]);
     void InverseTransform(float move[]);
     void Diagnostics();
+    float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
     
   friend class DDA;
     
@@ -185,6 +188,7 @@ class Move
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
     float aX, aY, aC;
     float lastZHit;
+    bool zProbing;
 };
 
 //********************************************************************************************************
@@ -329,23 +333,37 @@ inline void Move::ResumeMoving()
   addNoMoreMoves = false;
 }
 
+inline void Move::SetZProbing(bool probing)
+{
+	zProbing = probing;
+}
+
 inline float Move::GetLastProbedZ()
 {
 	return lastZHit;
 }
 
-inline void Move::HitLowStop(int8_t drive, LookAhead* la)
+inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
-  if(drive = Z_AXIS)
+  float hitPoint = 0.0;
+  if(drive == Z_AXIS && zProbing)
   {
-	  lastZHit = 0.0;
+	  lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
+	  hitPoint = lastZHit;
   }
-  la->SetDriveZeroEndSpeed(0.0, drive);
+  la->SetDriveZeroEndSpeed(hitPoint, drive);
 }
 
-inline void Move::HitHighStop(int8_t drive, LookAhead* la)
+inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
   la->SetDriveZeroEndSpeed(platform->AxisLength(drive), drive);
+}
+
+inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)
+{
+	float r = la->Previous()->endPoint[drive] + (la->endPoint[drive] - la->Previous()->endPoint[drive])*(float)runningDDA->stepCount/(float)runningDDA->totalSteps;
+	SerialUSB.println(r);
+	return r;
 }
 
 

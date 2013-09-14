@@ -137,10 +137,10 @@ void Move::Init()
 
   currentFeedrate = -1.0;
 
-  aX = 0.0;
-  aY = 0.0;
-  aC = 0.0;
+  SetIdentityTransform();
+
   lastZHit = 0.0;
+  zProbing = false;
 
   lastTime = platform->Time();
   active = true;  
@@ -539,6 +539,13 @@ LookAhead* Move::LookAheadRingGet()
   return result;
 }
 
+void Move::SetIdentityTransform()
+{
+	aX = 0.0;
+	aY = 0.0;
+	aC = 0.0;
+}
+
 void Move::Transform(float move[])
 {
 	move[2] = move[2] + aX*move[0] + aY*move[1] + aC;
@@ -551,17 +558,33 @@ void Move::InverseTransform(float move[])
 
 void Move::SetProbedBedPlane()
 {
-	float x, y, z;
-	for(int i = 0; i < NUMBER_OF_PROBE_POINTS; i++)
-	{
-		if(!reprap.GetGCodes()->GetProbeCoordinates(i, x, y, z))
-			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
-	}
-	aX = 0.0;
-	aY = 0.0;
-	aC = 0.0;
-}
+	float xj, yj, zj;
+	float xk, yk, zk;
+	float xl, yl, zl;
+	float xkj, ykj, zkj;
+	float xlj, ylj, zlj;
+	float a, b, c, d;   // Implicit plane equation - what we need to do a proper job
 
+	if(!reprap.GetGCodes()->GetProbeCoordinates(0, xj, yj, zj))
+		platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
+	if(!reprap.GetGCodes()->GetProbeCoordinates(1, xk, yk, zk))
+			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
+	if(!reprap.GetGCodes()->GetProbeCoordinates(2, xl, yl, zl))
+			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
+	xkj = xk - xj;
+	ykj = yk - yj;
+	zkj = zk - zj;
+	xlj = xl - xj;
+	ylj = yl - yj;
+	zlj = zl - zj;
+	a = ykj*zlj - zkj*ylj;
+	b = zkj*xlj - xkj*zlj;
+	c = xkj*ylj - ykj*xlj;
+	d = -(xk*a + yk*b + zk*c);
+	aX = -a/c;
+	aY = -b/c;
+	aC = -d/c;
+}
 
 // FIXME
 // This function is never normally called.  It is a test to time
@@ -868,12 +891,12 @@ void DDA::Step(bool noTest)
         EndStopHit esh = platform->Stopped(drive);
         if(esh == lowHit)
         {
-          move->HitLowStop(drive, myLookAheadEntry);
+          move->HitLowStop(drive, myLookAheadEntry, this);
           active = false;
         }
         if(esh == highHit)
         {
-          move->HitHighStop(drive, myLookAheadEntry);
+          move->HitHighStop(drive, myLookAheadEntry, this);
           active = false;
         }
       }        
