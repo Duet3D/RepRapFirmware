@@ -361,9 +361,9 @@ inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 
 inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)
 {
-	float r = la->Previous()->endPoint[drive] + (la->endPoint[drive] - la->Previous()->endPoint[drive])*(float)runningDDA->stepCount/(float)runningDDA->totalSteps;
-	SerialUSB.println(r);
-	return r;
+	if(runningDDA->totalSteps <= 0)
+		return 0.0;
+	return la->Previous()->endPoint[drive] + (la->endPoint[drive] - la->Previous()->endPoint[drive])*(float)runningDDA->stepCount/(float)runningDDA->totalSteps;
 }
 
 

@@ -81,7 +81,10 @@ Licence: GPL
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
-#define MAX_A_TO_D_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
+#define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
+#define Z_PROBE_GRADIENT -0.01039
+#define Z_PROBE_CONSTANT 3.5661
+#define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
 //#define ACCELERATIONS {80, 80, 3, 25} 
@@ -93,7 +96,7 @@ Licence: GPL
 #define START_FEED_RATE 200.0  // Default.  mm/min
 
 #define AXIS_LENGTHS {210, 200, 120} // mm
-#define HOME_FEEDRATES {50.0*60.0, 50.0*60.0, 1.0*60.0}  // mm/min
+#define HOME_FEEDRATES {50.0*60.0, 50.0*60.0, 0.4*60.0}  // mm/min
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}
 
 #define X_AXIS 0  // The index of the X axis
@@ -412,8 +415,6 @@ class Platform
   
   void InitialiseInterrupts();
   
-  char* CombineName(char* result, char* directory, char* fileName);
-  
   RepRap* reprap;
   
 // DRIVES
@@ -432,9 +433,16 @@ class Platform
   MCP4461 mcp;
   int8_t potWipes[DRIVES];
   float senseResistor;
-  float maxAtoDVoltage;
+  float maxStepperDigipotVoltage;
+  float zProbeGradient;
+  float zProbeConstant;
+  float zProbeValue;
+  int8_t zProbePin;
 
 // AXES
+
+  int GetRawZHeight();
+  float PollZHeight();
 
   float axisLengths[AXES];
   float homeFeedrates[AXES];
@@ -678,11 +686,11 @@ inline void Platform::Step(byte drive)
 
 inline void Platform::SetMotorCurrent(byte drive, float current)
 {
-	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxAtoDVoltage);
-	Message(HOST_MESSAGE, "Set pot to: ");
-	sprintf(scratchString, "%d", pot);
-	Message(HOST_MESSAGE, scratchString);
-	Message(HOST_MESSAGE, "\n");
+	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxStepperDigipotVoltage);
+//	Message(HOST_MESSAGE, "Set pot to: ");
+//	sprintf(scratchString, "%d", pot);
+//	Message(HOST_MESSAGE, scratchString);
+//	Message(HOST_MESSAGE, "\n");
 	mcp.setNonVolatileWiper(potWipes[drive], pot);
 	mcp.setVolatileWiper(potWipes[drive], pot);
 }
@@ -694,6 +702,13 @@ inline float Platform::HomeFeedRate(int8_t drive)
 
 inline EndStopHit Platform::Stopped(int8_t drive)
 {
+  if(drive == Z_AXIS)
+  {
+	  if(ZProbe() < 0)
+		  return lowHit;
+	  else
+		  return noStop;
+  }
   if(lowStopPins[drive] >= 0)
   {
     if(digitalRead(lowStopPins[drive]) == ENDSTOP_HIT)
@@ -717,6 +732,25 @@ inline float Platform::MaxFeedrate(int8_t drive)
   return maxFeedrates[drive];
 }
 
+inline int Platform::GetRawZHeight()
+{
+  if(zProbePin >= 0)
+    return analogRead(zProbePin);
+  return 0;
+}
+
+inline float Platform::ZProbe()
+{
+	return zProbeValue;
+}
+
+inline float Platform::PollZHeight()
+{
+	long s = 0;
+	for(uint8_t i = 0; i < 5; i++)
+		s += GetRawZHeight();
+	zProbeValue = zProbeGradient*0.2*(float)s + zProbeConstant;
+}
 
 //********************************************************************************************************
 
