@@ -102,7 +102,10 @@ void Platform::Init()
   instantDvs = INSTANT_DVS;
   potWipes = POT_WIPES;
   senseResistor = SENSE_RESISTOR;
-  maxAtoDVoltage = MAX_A_TO_D_VOLTAGE;
+  maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
+  zProbeGradient = Z_PROBE_GRADIENT;
+  zProbeConstant = Z_PROBE_CONSTANT;
+  zProbePin = Z_PROBE_PIN;
 
   // AXES
 
@@ -652,6 +655,7 @@ void Platform::Message(char type, char* message)
 
 //***************************************************************************************************
 
+// int zcount; // NASTY - FIX ME - uncomment to calibrate z probe
 
 void Platform::Spin()
 {
@@ -661,9 +665,18 @@ void Platform::Spin()
    network->Spin();
    line->Spin();
 
-   if(Time() - lastTime < 2.0)
+   if(Time() - lastTime < 0.03)
      return;
+   PollZHeight();
    lastTime = Time();
+
+// uncomment to calibrate z probe
+//   zcount++;
+//   if(zcount > 30)
+//   {
+//	   zcount = 0;
+//	   SerialUSB.println(GetRawZHeight());
+//   }
 }
 
 Line::Line()

@@ -65,6 +65,12 @@ void GCodes::Init()
   stackPointer = 0;
   selectedHead = -1;
   gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
+  for(int i = 0; i < NUMBER_OF_PROBE_POINTS; i++)
+	  bedZs[i] = 0.0;
+  zProbesSet = false;
+  probeCount = 0;
+  probeMoveCount = 0;
+  probeMoveQueued = false;
   active = true;
   dwellTime = platform->Time();
 }
@@ -362,6 +368,105 @@ bool GCodes::DoHome()
   return true;
 }
 
+
+bool GCodes::DoSingleZProbe()
+{
+	float x, y, z;
+
+	reprap.GetMove()->SetIdentityTransform();  // It doesn't matter if these are called repeatedly
+	reprap.GetMove()->SetZProbing(true);
+
+	if(probeMoveQueued)
+	{
+		// Doing a move
+
+		if(!Pop()) // Wait for the move to finish
+			return false;
+		probeMoveQueued = false;
+		if(probeMoveCount > 2)
+		{
+			probeMoveCount = 0;
+			bedZs[probeCount] = reprap.GetMove()->GetLastProbedZ();
+			return true;
+		}
+		return false;
+	} else
+	{
+		// Not doing a move
+
+		if(!Push()) // Wait for the RepRap to finish whatever it was doing
+			return false;
+
+		switch(probeMoveCount)
+		{
+		case 0:
+			moveBuffer[Z_AXIS] = Z_DIVE;
+			moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+			checkEndStops = false;
+			break;
+		case 1:
+			GetProbeCoordinates(probeCount, x, y, z);
+			moveBuffer[X_AXIS] = x;
+			moveBuffer[Y_AXIS] = y;
+			moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)*0.016666667;
+			checkEndStops = false;
+			break;
+		case 2:
+			moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+			moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+			checkEndStops = true;
+			break;
+		default:
+			platform->Message(HOST_MESSAGE, "probeMoveCount beyond maximum requested.\n");
+			break;
+		}
+		probeMoveQueued = true;
+		moveAvailable = true;
+		probeMoveCount++;
+	}
+	return false;
+}
+
+bool GCodes::DoMultipleZProbe()
+{
+	if(DoSingleZProbe())
+		probeCount++;
+	if(probeCount >= NUMBER_OF_PROBE_POINTS)
+	{
+		probeCount = 0;
+		zProbesSet = true;
+		reprap.GetMove()->SetZProbing(false);
+		reprap.GetMove()->SetProbedBedPlane();
+		return true;
+	}
+	return false;
+}
+
+bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z)
+{
+	switch(count)
+	{
+	case 0:
+		x = 0.2*platform->AxisLength(X_AXIS);
+		y = 0.2*platform->AxisLength(Y_AXIS);
+		break;
+	case 1:
+		x = 0.8*platform->AxisLength(X_AXIS);
+		y = 0.2*platform->AxisLength(Y_AXIS);
+		break;
+	case 2:
+		x = 0.5*platform->AxisLength(X_AXIS);
+		y = 0.8*platform->AxisLength(Y_AXIS);
+		break;
+	default:
+		platform->Message(HOST_MESSAGE, "probeCount beyond maximum requested.\n");
+		break;
+	}
+	z = bedZs[count];
+	return zProbesSet;
+}
+
+
 void GCodes::QueueFileToPrint(char* fileName)
 {
   fileToPrint = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
@@ -486,7 +591,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       }
       result = DoHome();
       break;
-      
+
+    case 32: // Probe Z at multiple positions and generate the bed transform
+    	result = DoMultipleZProbe();
+    	break;
+
     case 90: // Absolute coordinates
       drivesRelative = false;
       axesRelative = false;

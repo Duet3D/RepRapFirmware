@@ -134,9 +134,14 @@ void Move::Init()
   
   stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
   extruderStepDistances[0] = stepDistances[0];
-  
+
   currentFeedrate = -1.0;
-  
+
+  SetIdentityTransform();
+
+  lastZHit = 0.0;
+  zProbing = false;
+
   lastTime = platform->Time();
   active = true;  
 }
@@ -178,6 +183,8 @@ void Move::Spin()
   
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
+	Transform(nextMove);
+
     currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
     
     int8_t mt = GetMovementType(lastMove->EndPoint(), nextMove);
@@ -200,14 +207,14 @@ void Move::Spin()
     else
       nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
       
-    // Restrict maximum feedrates; assumes z < e < xy FIXME?? 
+    // Restrict maximum feedrates; assumes xy overrides e overrides z FIXME??
     
-    if(mt & zMove)
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
+    if(mt & xyMove)
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));
     else if(mt & eMove)
       nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
-    else // Must be xy
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
+    else // Must be z
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));  // Assumes X and Y are equal.  FIXME?
     
     if(!LookAheadRingAdd(nextMove, 0.0, checkEndStopsOnNextMove))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
@@ -269,10 +276,11 @@ bool Move::GetCurrentState(float m[])
   else
     m[DRIVES] = lastMove->EndPoint()[DRIVES];
   currentFeedrate = -1.0;
+  InverseTransform(m);
   return true;
 }
 
-// Classify a move between to points.
+// Classify a move between two points.
 // Is it (a combination of):
 //   A Z movement?
 //   An XY movement?
@@ -281,6 +289,7 @@ bool Move::GetCurrentState(float m[])
 int8_t Move::GetMovementType(float p0[], float p1[])
 {
   int8_t result = noMove;
+
   for(int8_t drive = 0; drive < DRIVES; drive++)
   {
     if(drive < AXES)
@@ -298,6 +307,7 @@ int8_t Move::GetMovementType(float p0[], float p1[])
         result |= eMove;
     }
   }
+
   return result;
 }
 
@@ -441,9 +451,12 @@ void Move::DoLookAhead()
         if(c <= 0)
         {
           int8_t mt = GetMovementType(n0->EndPoint(), n1->EndPoint());
-          if(mt & zMove)
+
+          // Assumes xy overrides z overrides e
+
+          if(mt & xyMove)
             c = platform->InstantDv(Z_AXIS);
-          else if (mt & xyMove)
+          else if (mt & zMove)
             c = platform->InstantDv(X_AXIS);
           else
             c = platform->InstantDv(AXES); // value for first extruder FIXME??
@@ -526,6 +539,52 @@ LookAhead* Move::LookAheadRingGet()
   return result;
 }
 
+void Move::SetIdentityTransform()
+{
+	aX = 0.0;
+	aY = 0.0;
+	aC = 0.0;
+}
+
+void Move::Transform(float move[])
+{
+	move[2] = move[2] + aX*move[0] + aY*move[1] + aC;
+}
+
+void Move::InverseTransform(float move[])
+{
+	move[2] = move[2] - (aX*move[0] + aY*move[1] + aC);
+}
+
+void Move::SetProbedBedPlane()
+{
+	float xj, yj, zj;
+	float xk, yk, zk;
+	float xl, yl, zl;
+	float xkj, ykj, zkj;
+	float xlj, ylj, zlj;
+	float a, b, c, d;   // Implicit plane equation - what we need to do a proper job
+
+	if(!reprap.GetGCodes()->GetProbeCoordinates(0, xj, yj, zj))
+		platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
+	if(!reprap.GetGCodes()->GetProbeCoordinates(1, xk, yk, zk))
+			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
+	if(!reprap.GetGCodes()->GetProbeCoordinates(2, xl, yl, zl))
+			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
+	xkj = xk - xj;
+	ykj = yk - yj;
+	zkj = zk - zj;
+	xlj = xl - xj;
+	ylj = yl - yj;
+	zlj = zl - zj;
+	a = ykj*zlj - zkj*ylj;
+	b = zkj*xlj - xkj*zlj;
+	c = xkj*ylj - ykj*xlj;
+	d = -(xk*a + yk*b + zk*c);
+	aX = -a/c;
+	aY = -b/c;
+	aC = -d/c;
+}
 
 // FIXME
 // This function is never normally called.  It is a test to time
@@ -584,10 +643,10 @@ instantDv value) to use.
 
 The rules are these:
 
-  if Z is moving
-    Use Z acceleration
-  else if X and/or Y are moving
+  if X and/or Y are moving
     Use X acceleration
+  else if Z is moving
+  	  Use Z acceleration
   else
     Use the acceleration for the extruder that's moving.
 
@@ -606,7 +665,7 @@ value stored for each.
 In the case of only extruders moving, the distance moved is taken to be the Pythagoran distance in
 the configuration space of the extruders.
 
-TODO: Worry about having more than eight extruders...
+TODO: Worry about having more than eight extruders; X and Y behaving radically differently...
 
 */
 
@@ -677,16 +736,16 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   // corresponding axis step.  It will be divided
   // by a velocity later. 
 
-  if(delta[Z_AXIS]) // Z involved?
+  if(delta[X_AXIS] || delta[Y_AXIS]) // X or Y involved?
+  {
+    acceleration = platform->Acceleration(X_AXIS);
+    instantDv = platform->InstantDv(X_AXIS);
+    timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);  // Slight hack
+  } else if (delta[Z_AXIS])// Z involved?
   {
     acceleration = platform->Acceleration(Z_AXIS);
     instantDv = platform->InstantDv(Z_AXIS);
     timeStep = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
-  } else if(delta[X_AXIS] || delta[Y_AXIS]) // X or Y involved?
-  {
-    acceleration = platform->Acceleration(X_AXIS);
-    instantDv = platform->InstantDv(X_AXIS);
-    timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS); // Slight hack
   } else // Must be extruders only
   {
     acceleration = FLT_MAX; // Slight hack
@@ -832,12 +891,12 @@ void DDA::Step(bool noTest)
         EndStopHit esh = platform->Stopped(drive);
         if(esh == lowHit)
         {
-          move->HitLowStop(drive, myLookAheadEntry);
+          move->HitLowStop(drive, myLookAheadEntry, this);
           active = false;
         }
         if(esh == highHit)
         {
-          move->HitHighStop(drive, myLookAheadEntry);
+          move->HitHighStop(drive, myLookAheadEntry, this);
           active = false;
         }
       }        

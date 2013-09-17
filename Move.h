@@ -24,12 +24,13 @@ Licence: GPL
 #define DDA_RING_LENGTH 5
 #define LOOK_AHEAD_RING_LENGTH 20
 #define LOOK_AHEAD 7
+#define SMALL_Z_MOVE 0.03 // If a Z movement is less than this fraction of an XY move, the movement is classed as XY
 
 enum MovementProfile
 {
   moving = 0,  // Ordinary trapezoidal-velocity-profile movement
   noFlat = 1,  // Triangular profile movement
-  change = 2   // To make this movement, the initial and final velocities must change
+  change = 2   // To make this movement, the initial and/or final velocities must change
 };
 
 enum MovementState
@@ -134,9 +135,16 @@ class Move
     bool AllMovesAreFinished();
     void ResumeMoving();
     void DoLookAhead();
-    void HitLowStop(int8_t drive, LookAhead* la);
-    void HitHighStop(int8_t drive, LookAhead* la);
+    void HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA);
+    void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
+    void SetZProbing(bool probing);
+    void SetProbedBedPlane();
+    float GetLastProbedZ();
+    void SetIdentityTransform();
+    void Transform(float move[]);
+    void InverseTransform(float move[]);
     void Diagnostics();
+    float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
     
   friend class DDA;
     
@@ -178,6 +186,9 @@ class Move
     float nextMove[DRIVES + 1];  // Extra is for feedrate
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
+    float aX, aY, aC;
+    float lastZHit;
+    bool zProbing;
 };
 
 //********************************************************************************************************
@@ -322,14 +333,37 @@ inline void Move::ResumeMoving()
   addNoMoreMoves = false;
 }
 
-inline void Move::HitLowStop(int8_t drive, LookAhead* la)
+inline void Move::SetZProbing(bool probing)
 {
-  la->SetDriveZeroEndSpeed(0.0, drive);
+	zProbing = probing;
 }
 
-inline void Move::HitHighStop(int8_t drive, LookAhead* la)
+inline float Move::GetLastProbedZ()
+{
+	return lastZHit;
+}
+
+inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
+{
+  float hitPoint = 0.0;
+  if(drive == Z_AXIS && zProbing)
+  {
+	  lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
+	  hitPoint = lastZHit;
+  }
+  la->SetDriveZeroEndSpeed(hitPoint, drive);
+}
+
+inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
   la->SetDriveZeroEndSpeed(platform->AxisLength(drive), drive);
+}
+
+inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)
+{
+	if(runningDDA->totalSteps <= 0)
+		return 0.0;
+	return la->Previous()->endPoint[drive] + (la->endPoint[drive] - la->Previous()->endPoint[drive])*(float)runningDDA->stepCount/(float)runningDDA->totalSteps;
 }
 
 

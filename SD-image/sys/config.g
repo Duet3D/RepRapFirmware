@@ -5,7 +5,7 @@ G21 ; mm
 G90 ; Absolute positioning
 M83 ; Extrusion relative
 M107; Fan off
-M906 X250 Y250 Z250 E250 ; Motor currents (mA)
+M906 X400 Y400 Z400 E400 ; Motor currents (mA)
 T0 ; Extruder 0
 
 
