@@ -99,13 +99,15 @@ void GCodes::Spin()
     fileGCode->SetFinished(ActOnGcode(fileGCode));
     return;
   }  
-    
+
+#if ETHERNET
   if(webserver->GCodeAvailable())
   {
     if(webGCode->Put(webserver->ReadGCode()))
       webGCode->SetFinished(ActOnGcode(webGCode));
     return;
   }
+#endif //ETHERNET
   
   if(platform->GetLine()->Status() & byteAvailable)
   {

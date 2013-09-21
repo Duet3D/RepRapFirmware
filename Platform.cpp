@@ -50,9 +50,11 @@ Platform::Platform(RepRap* r)
   
   for(int8_t i=0; i < MAX_FILES; i++)
     files[i] = new FileStore(this);
-  
+
+#if ETHERNET
   network = new Network();
-  
+#endif //ETHERNET
+
   active = false;
 }
 
@@ -73,9 +75,9 @@ void Platform::Init()
   byte i;
 
   line->Init();
-
+#if ETHERNET
   network->Init();
-
+#endif
   massStorage->Init();
 
   for(i=0; i < MAX_FILES; i++)
@@ -638,15 +640,17 @@ void Platform::Message(char type, char* message)
   case HOST_MESSAGE:
   default:
   
-//    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
-//    if(m != NULL)
-//    {
-//    	m->GoToEnd();
-//    	m->Write(message);
-//    	m->Close();
-//    } else
-//    	line->Write("Can't open message file.\n");
-    line->Write(message);
+#if ETHERNET
+    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
+    if(m != NULL)
+    {
+    	m->GoToEnd();
+    	m->Write(message);
+    	m->Close();
+    } else
+   	line->Write("Can't open message file.\n");
+#endif
+	  line->Write(message);
   }
 }
 
@@ -661,8 +665,11 @@ void Platform::Spin()
 {
    if(!active)
      return;
-    
+
+#if ETHERNET
    network->Spin();
+#endif //ETHERNET
+
    line->Spin();
 
    if(Time() - lastTime < 0.03)
@@ -691,9 +698,10 @@ void Line::Init()
 	while (!SerialUSB.available());
 }
 
+#if ETHERNET
 Network::Network()
 {
-//	server = new EthernetServer(HTTP_PORT);
+	server = new EthernetServer(HTTP_PORT);
 }
 
 void Network::Init()
@@ -703,69 +711,70 @@ void Network::Init()
 
 	mac = MAC;
 
-//	// disable SD SPI while starting w5100
-//	// or you will have trouble
-//	pinMode(SD_SPI, OUTPUT);
-//	digitalWrite(SD_SPI,HIGH);
+	// disable SD SPI while starting w5100
+	// or you will have trouble
+	pinMode(SD_SPI, OUTPUT);
+	digitalWrite(SD_SPI,HIGH);
 
 	ipAddress = { IP0, IP1, IP2, IP3 };
 	//Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
-//	Ethernet.begin(mac, ipAddress);
-//	server->begin();
-//
-//	//Serial.print("server is at ");
-//	//Serial.println(Ethernet.localIP());
-//
-//	// this corrects a bug in the Ethernet.begin() function
-//	// even tho the call to Ethernet.localIP() does the same thing
-//	digitalWrite(ETH_B_PIN, HIGH);
+	Ethernet.begin(mac, ipAddress);
+	server->begin();
+
+	//Serial.print("server is at ");
+	//Serial.println(Ethernet.localIP());
+
+	// this corrects a bug in the Ethernet.begin() function
+	// even tho the call to Ethernet.localIP() does the same thing
+	digitalWrite(ETH_B_PIN, HIGH);
 
 	clientStatus = 0;
-//	client = 0;
+	client = 0;
 }
+
 
 void Network::Write(char b)
 {
-//  if(client)
-//  {
-//    client.write(b);
-//  } else
+  if(client)
+  {
+    client.write(b);
+  } else
     reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
 }
 
 void Network::Write(char* s)
 {
-//  if(client)
-//  {
-//    client.print(s);
-//  } else
+  if(client)
+  {
+    client.print(s);
+  } else
 	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
 }
 
 int Network::Read(char& b)
 {
-//  if(client)
-//  {
-//    b = client.read();
-//    return true;
-//  }
-//
-//  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
-//  b = '\n'; // good idea??
+  if(client)
+  {
+    b = client.read();
+    return true;
+  }
+
+  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
+  b = '\n'; // good idea??
   return 0;
 }
 
 
 void Network::Close()
 {
-//  if (client)
-//  {
-//    client.stop();
-//    //Serial.println("client disconnected");
-//  } else
+  if (client)
+  {
+    client.stop();
+    //Serial.println("client disconnected");
+  } else
 	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
 }
-
+#endif
 
 
 

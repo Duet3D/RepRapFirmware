@@ -44,4 +44,9 @@ Licence: GPL
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
 
+/* ETHERNET
+ * Set = 0 to disable Network and use only SerialUSB
+ */
+#define	ETHERNET	0
+
 #endif

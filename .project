@@ -27,19 +27,19 @@
 	</natures>
 	<linkedResources>
 		<link>
-			<name>Libraries/Ethernet</name>
+			<name>Libraries/MCP4461</name>
 			<type>2</type>
-			<locationURI>ArduinoHardwareLibPath/Ethernet</locationURI>
+			<locationURI>ArduinoPivateLibPath/MCP4461</locationURI>
 		</link>
 		<link>
-			<name>Libraries/SD</name>
+			<name>Libraries/SD_HSMCI</name>
 			<type>2</type>
-			<locationURI>ArduinoLibPath/SD</locationURI>
+			<locationURI>ArduinoPivateLibPath/SD_HSMCI</locationURI>
 		</link>
 		<link>
-			<name>Libraries/SPI</name>
+			<name>Libraries/SamNonDuePin</name>
 			<type>2</type>
-			<locationURI>ArduinoHardwareLibPath/SPI</locationURI>
+			<locationURI>ArduinoPivateLibPath/SamNonDuePin</locationURI>
 		</link>
 		<link>
 			<name>Libraries/Wire</name>
