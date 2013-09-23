@@ -351,38 +351,63 @@ char* MassStorage::CombineName(char* directory, char* fileName)
 char* MassStorage::FileList(char* directory)
 {
 //  File dir, entry;
-//  dir = SD.open(directory);
-//  int p = 0;
+  DIR dir;
+  FILINFO entry;
+  FRESULT res;
+  char loc[64];
+  int len = 0;
+
+  len = strlen(directory);
+  strncpy(loc,directory,len-1);
+  loc[len - 1 ] = '\0';
+
+  if(reprap.debug()) {
+	  SerialUSB.print("Opening: ");
+	  SerialUSB.println(loc);
+  }
+
+  res = f_opendir(&dir,loc);
+  if(FR_OK == res) {
+
+	  if(reprap.debug()) {
+		  SerialUSB.println("Directory open");
+	  }
+
+	  int p = 0;
 //  int q;
-//  int count = 0;
-//  while(entry = dir.openNextFile())
-//  {
-//    q = 0;
-//    count++;
-//    fileList[p++] = FILE_LIST_BRACKET;
-//    while(entry.name()[q])
-//    {
-//      fileList[p++] = entry.name()[q];
-//      q++;
-//      if(p >= FILE_LIST_LENGTH - 10) // Caution...
-//      {
-//        platform->Message(HOST_MESSAGE, "FileList - directory: ");
-//        platform->Message(HOST_MESSAGE, directory);
-//        platform->Message(HOST_MESSAGE, " has too many files!\n");
-//        return "";
-//      }
-//    }
-//    fileList[p++] = FILE_LIST_BRACKET;
-//    fileList[p++] = FILE_LIST_SEPARATOR;
-//    entry.close();
-//  }
-//  dir.close();
-//
-//  if(count <= 0)
-//    return "";
-//
-//  fileList[--p] = 0; // Get rid of the last separator
-//  return fileList;
+	  int foundFiles = 0;
+
+	  f_readdir(&dir,0);
+	  while(FR_OK == f_readdir(&dir,&entry) && foundFiles < 24)
+	  {
+		  foundFiles++;
+		  if(strlen(entry.fname) > 0) {
+			int q = 0;
+			fileList[p++] = FILE_LIST_BRACKET;
+			while(entry.fname[q])
+			{
+			  fileList[p++] = entry.fname[q];
+			  q++;
+			  if(p >= FILE_LIST_LENGTH - 10) // Caution...
+			  {
+				platform->Message(HOST_MESSAGE, "FileList - directory: ");
+				platform->Message(HOST_MESSAGE, directory);
+				platform->Message(HOST_MESSAGE, " has too many files!\n");
+				return "";
+			  }
+			}
+			fileList[p++] = FILE_LIST_BRACKET;
+			fileList[p++] = FILE_LIST_SEPARATOR;
+		  }
+	  }
+
+	  if(foundFiles <= 0)
+		return "NONE";
+
+	  fileList[--p] = 0; // Get rid of the last separator
+	  return fileList;
+  }
+  SerialUSB.println(res);
 	return "";
 }
 
@@ -658,10 +683,11 @@ void Platform::Message(char type, char* message)
 
 
 //***************************************************************************************************
+#if CALIB_Z
+ int zcount; // NASTY - FIX ME
+#endif
 
-// int zcount; // NASTY - FIX ME - uncomment to calibrate z probe
-
-void Platform::Spin()
+ void Platform::Spin()
 {
    if(!active)
      return;
@@ -677,13 +703,14 @@ void Platform::Spin()
    PollZHeight();
    lastTime = Time();
 
-// uncomment to calibrate z probe
-//   zcount++;
-//   if(zcount > 30)
-//   {
-//	   zcount = 0;
-//	   SerialUSB.println(GetRawZHeight());
-//   }
+#if CALIB_Z
+   zcount++;
+   if(zcount > 30)
+   {
+	   zcount = 0;
+	   SerialUSB.println(GetRawZHeight());
+   }
+#endif
 }
 
 Line::Line()

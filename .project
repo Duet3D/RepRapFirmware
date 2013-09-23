@@ -27,6 +27,16 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>Libraries/EMAC</name>
+			<type>2</type>
+			<locationURI>ArduinoPivateLibPath/EMAC</locationURI>
+		</link>
+		<link>
+			<name>Libraries/Lwip</name>
+			<type>2</type>
+			<locationURI>ArduinoPivateLibPath/Lwip</locationURI>
+		</link>
+		<link>
 			<name>Libraries/MCP4461</name>
 			<type>2</type>
 			<locationURI>ArduinoPivateLibPath/MCP4461</locationURI>
@@ -60,15 +70,15 @@
 	<variableList>
 		<variable>
 			<name>ArduinoHardwareLibPath</name>
-			<value>file:/usr/local/arduino-1.5.2/hardware/arduino/sam/libraries</value>
+			<value>file:/usr/local/arduino-1.5.4/hardware/arduino/sam/libraries</value>
 		</variable>
 		<variable>
 			<name>ArduinoPinPath</name>
-			<value>file:/usr/local/arduino-1.5.2/hardware/arduino/sam/variants</value>
+			<value>file:/usr/local/arduino-1.5.4/hardware/arduino/sam/variants</value>
 		</variable>
 		<variable>
 			<name>ArduinoPlatformPath</name>
-			<value>file:/usr/local/arduino-1.5.2/hardware/arduino/sam</value>
+			<value>file:/usr/local/arduino-1.5.4/hardware/arduino/sam</value>
 		</variable>
 	</variableList>
 </projectDescription>

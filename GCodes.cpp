@@ -635,7 +635,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 20:
-      platform->Message(HOST_MESSAGE, "List files received\n");
+      platform->GetLine()->Write("GCode files:\n");
+      platform->GetLine()->Write(platform->GetMassStorage()->FileList(platform->GetGCodeDir()));
       break;
 
     case 23: // Set file to print
@@ -660,12 +661,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       drivesRelative = true;
       break;
 
-    case 105: // Depricated...
-      for(int8_t i = 0; i < HEATERS; i++)
+    case 105: // Deprecated...
+    	platform->GetLine()->Write("ok T:");
+      for(int8_t i = HEATERS - 1; i > 0; i--)
       {
     	  platform->GetLine()->Write(ftoa(NULL, reprap.GetHeat()->GetTemperature(i), 1));
     	  platform->GetLine()->Write(" ");
       }
+	  platform->GetLine()->Write("B:");
+	  platform->GetLine()->Write(ftoa(NULL, reprap.GetHeat()->GetTemperature(0), 1));
       platform->GetLine()->Write('\n');
       break;
    
@@ -686,6 +690,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
         reprap.debug(gb->GetIValue());
       break;
       
+    case 114: // Deprecated
+      platform->GetLine()->Write("ok\n");
+      break;
+
     case 120:
       result = Push();
       break;
