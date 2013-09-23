@@ -44,11 +44,6 @@ Licence: GPL
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
 
-/* ETHERNET
- * Set = 0 to disable Network and use only SerialUSB
- */
-#define	ETHERNET	0
-
 /* Z PROBE CALIBRATION
  * Set = 1 to enable Z probe ADC output on SerialUSb
  */

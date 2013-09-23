@@ -32,7 +32,6 @@ Licence: GPL
 //***************************************************************************************************
 
 
-#if ETHERNET
 bool Webserver::MatchBoundary(char c)
 {
   if(!postBoundary[0])
@@ -687,6 +686,5 @@ void Webserver::Diagnostics()
 {
   platform->Message(HOST_MESSAGE, "Webserver Diagnostics:\n"); 
 }
-#endif //ETHERNET
 
 

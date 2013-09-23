@@ -47,6 +47,14 @@ Licence: GPL
 #include "SD_HSMCI.h"
 #include "MCP4461.h"
 
+#include "lwip/src/include/lwip/netif.h"
+#include "lwip/src/sam/include/netif/ethernetif.h"
+#include "lwip/src/include/lwip/init.h"
+#include "httpd.h"
+#include "ethernet_sam.h"
+#include "timer_mgt_sam.h"
+
+
 /**************************************************************************************************/
 
 // Some numbers...
@@ -82,8 +90,8 @@ Licence: GPL
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define Z_PROBE_GRADIENT -0.01039
-#define Z_PROBE_CONSTANT 3.5661
+#define Z_PROBE_GRADIENT -0.00492704
+#define Z_PROBE_CONSTANT 3.65062
 #define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
@@ -152,7 +160,7 @@ Licence: GPL
 /****************************************************************************************************/
 
 // Networking
-#if ETHERNET
+
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
 #define MAC { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
@@ -175,7 +183,6 @@ Licence: GPL
  
 #define CLIENT_CLOSE_DELAY 0.001
 
-#endif //ETHERNET
 
 /****************************************************************************************************/
 
@@ -222,7 +229,7 @@ protected:
 };
 
 // This class handles the network - typically an ethernet.
-#if ETHERNET
+
 class Network: public InputOutput
 {
 public:
@@ -241,11 +248,11 @@ protected:
 private:
 	byte mac[MAC_BYTES];
 	byte ipAddress[IP_BYTES];
-	EthernetServer* server;
-	EthernetClient client;
+	//struct netif* netConfiguration;
+//	EthernetServer* server;
+//	EthernetClient client;
 	int8_t clientStatus;
 };
-#endif //ETHERNET
 
 // This class handles serial I/O - typically via USB
 
@@ -352,10 +359,8 @@ class Platform
   void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
   
   // Communications and data storage; opening something unsupported returns -1.
-#if ETHERNET
+  
   Network* GetNetwork();
-#endif //ETHERNET
-
   Line* GetLine();
   
   friend class FileStore;
@@ -442,6 +447,8 @@ class Platform
   float zProbeConstant;
   float zProbeValue;
   int8_t zProbePin;
+  int8_t zProbeCount;
+  long zProbeSum;
 
 // AXES
 
@@ -494,10 +501,8 @@ class Platform
   //char scratchString[STRING_LENGTH];
   
 // Network connection
-#if ETHERNET
-  Network* network;
-#endif //ETHERNET
 
+  Network* network;
 };
 
 inline float Platform::Time()
@@ -545,12 +550,11 @@ inline char* Platform::GetConfigFile()
 }
 
 //****************************************************************************************************************
-#if ETHERNET
+
 inline Network* Platform::GetNetwork()
 {
 	return network;
 }
-#endif //ETHERNET
 
 inline Line* Platform::GetLine()
 {
@@ -594,38 +598,7 @@ inline void Line::Write(char* b)
 }
 
 
-#if ETHERNET
-inline int8_t Network::Status()
-{
-  return clientStatus;
-}
 
-inline void Network::Spin()
-{
-  clientStatus = 0;
-
-  if(!client)
-  {
-    client = server->available();
-    if(!client)
-      return;
-    //else
-      //Serial.println("new client");
-  }
-
-  clientStatus |= clientLive;
-
-  if(!client.connected())
-    return;
-
-  clientStatus |= clientConnected;
-
-  if (!client.available())
-    return;
-
-  clientStatus |= byteAvailable;
-}
-#endif //ETHERNET
 
 //*****************************************************************************************************************
 
@@ -754,10 +727,14 @@ inline float Platform::ZProbe()
 
 inline float Platform::PollZHeight()
 {
-	long s = 0;
-	for(uint8_t i = 0; i < 5; i++)
-		s += GetRawZHeight();
-	zProbeValue = zProbeGradient*0.2*(float)s + zProbeConstant;
+	if(zProbeCount >= 5)
+	{
+		zProbeValue = zProbeGradient*0.2*(float)zProbeSum + zProbeConstant;
+		zProbeSum = 0;
+		zProbeCount = 0;
+	}
+	zProbeSum += GetRawZHeight();
+	zProbeCount++;
 }
 
 //********************************************************************************************************

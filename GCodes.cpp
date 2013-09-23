@@ -100,18 +100,16 @@ void GCodes::Spin()
     return;
   }  
 
-#if ETHERNET
   if(webserver->GCodeAvailable())
   {
     if(webGCode->Put(webserver->ReadGCode()))
       webGCode->SetFinished(ActOnGcode(webGCode));
     return;
   }
-#endif //ETHERNET
   
   if(platform->GetLine()->Status() & byteAvailable)
   {
-	  platform->GetLine()->Read(b);
+	platform->GetLine()->Read(b);
     if(serialGCode->Put(b))
       serialGCode->SetFinished(ActOnGcode(serialGCode));
     return;
@@ -551,7 +549,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
   int code;
   float value;
   bool result = true;
-  
+
   if(gb->Seen('G'))
   {
     code = gb->GetIValue();
@@ -634,7 +632,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, "Motors off received\n");
       break;
       
-    case 20:
+    case 20:  // Deprecated...
       platform->GetLine()->Write("GCode files:\n");
       platform->GetLine()->Write(platform->GetMassStorage()->FileList(platform->GetGCodeDir()));
       break;
@@ -663,15 +661,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 105: // Deprecated...
     	platform->GetLine()->Write("ok T:");
-      for(int8_t i = HEATERS - 1; i > 0; i--)
-      {
-    	  platform->GetLine()->Write(ftoa(NULL, reprap.GetHeat()->GetTemperature(i), 1));
-    	  platform->GetLine()->Write(" ");
-      }
-	  platform->GetLine()->Write("B:");
-	  platform->GetLine()->Write(ftoa(NULL, reprap.GetHeat()->GetTemperature(0), 1));
-      platform->GetLine()->Write('\n');
-      break;
+    	for(int8_t i = HEATERS - 1; i > 0; i--)
+    	{
+    		platform->GetLine()->Write(ftoa(0, reprap.GetHeat()->GetTemperature(i), 1));
+    		platform->GetLine()->Write(" ");
+    	}
+    	platform->GetLine()->Write("B:");
+    	platform->GetLine()->Write(ftoa(0, reprap.GetHeat()->GetTemperature(0), 1));
+    	platform->GetLine()->Write('\n');
+    	break;
    
     case 106: // Fan on
       platform->Message(HOST_MESSAGE, "Fan on received\n");
@@ -802,7 +800,6 @@ void GCodeBuffer::Init()
 bool GCodeBuffer::Put(char c)
 {
   bool result = false;
-  
   gcodeBuffer[gcodePointer] = c;
   
   if(c == ';')
@@ -860,7 +857,7 @@ float GCodeBuffer::GetFValue()
      platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
      return 0.0;
   }
-  float result = (float)strtod(&gcodeBuffer[readPointer + 1], NULL);
+  float result = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
   readPointer = -1;
   return result; 
 }
@@ -898,7 +895,7 @@ long GCodeBuffer::GetLValue()
     platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
     return 0;
   }
-  long result = strtol(&gcodeBuffer[readPointer + 1], NULL, 0);
+  long result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
   readPointer = -1;
   return result;  
 }

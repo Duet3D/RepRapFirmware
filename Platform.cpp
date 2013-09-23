@@ -50,11 +50,9 @@ Platform::Platform(RepRap* r)
   
   for(int8_t i=0; i < MAX_FILES; i++)
     files[i] = new FileStore(this);
-
-#if ETHERNET
+  
   network = new Network();
-#endif //ETHERNET
-
+  
   active = false;
 }
 
@@ -75,9 +73,9 @@ void Platform::Init()
   byte i;
 
   line->Init();
-#if ETHERNET
+
   network->Init();
-#endif
+
   massStorage->Init();
 
   for(i=0; i < MAX_FILES; i++)
@@ -108,6 +106,8 @@ void Platform::Init()
   zProbeGradient = Z_PROBE_GRADIENT;
   zProbeConstant = Z_PROBE_CONSTANT;
   zProbePin = Z_PROBE_PIN;
+  zProbeCount = 0;
+  zProbeSum = 0;
 
   // AXES
 
@@ -351,63 +351,38 @@ char* MassStorage::CombineName(char* directory, char* fileName)
 char* MassStorage::FileList(char* directory)
 {
 //  File dir, entry;
-  DIR dir;
-  FILINFO entry;
-  FRESULT res;
-  char loc[64];
-  int len = 0;
-
-  len = strlen(directory);
-  strncpy(loc,directory,len-1);
-  loc[len - 1 ] = '\0';
-
-  if(reprap.debug()) {
-	  SerialUSB.print("Opening: ");
-	  SerialUSB.println(loc);
-  }
-
-  res = f_opendir(&dir,loc);
-  if(FR_OK == res) {
-
-	  if(reprap.debug()) {
-		  SerialUSB.println("Directory open");
-	  }
-
-	  int p = 0;
+//  dir = SD.open(directory);
+//  int p = 0;
 //  int q;
-	  int foundFiles = 0;
-
-	  f_readdir(&dir,0);
-	  while(FR_OK == f_readdir(&dir,&entry) && foundFiles < 24)
-	  {
-		  foundFiles++;
-		  if(strlen(entry.fname) > 0) {
-			int q = 0;
-			fileList[p++] = FILE_LIST_BRACKET;
-			while(entry.fname[q])
-			{
-			  fileList[p++] = entry.fname[q];
-			  q++;
-			  if(p >= FILE_LIST_LENGTH - 10) // Caution...
-			  {
-				platform->Message(HOST_MESSAGE, "FileList - directory: ");
-				platform->Message(HOST_MESSAGE, directory);
-				platform->Message(HOST_MESSAGE, " has too many files!\n");
-				return "";
-			  }
-			}
-			fileList[p++] = FILE_LIST_BRACKET;
-			fileList[p++] = FILE_LIST_SEPARATOR;
-		  }
-	  }
-
-	  if(foundFiles <= 0)
-		return "NONE";
-
-	  fileList[--p] = 0; // Get rid of the last separator
-	  return fileList;
-  }
-  SerialUSB.println(res);
+//  int count = 0;
+//  while(entry = dir.openNextFile())
+//  {
+//    q = 0;
+//    count++;
+//    fileList[p++] = FILE_LIST_BRACKET;
+//    while(entry.name()[q])
+//    {
+//      fileList[p++] = entry.name()[q];
+//      q++;
+//      if(p >= FILE_LIST_LENGTH - 10) // Caution...
+//      {
+//        platform->Message(HOST_MESSAGE, "FileList - directory: ");
+//        platform->Message(HOST_MESSAGE, directory);
+//        platform->Message(HOST_MESSAGE, " has too many files!\n");
+//        return "";
+//      }
+//    }
+//    fileList[p++] = FILE_LIST_BRACKET;
+//    fileList[p++] = FILE_LIST_SEPARATOR;
+//    entry.close();
+//  }
+//  dir.close();
+//
+//  if(count <= 0)
+//    return "";
+//
+//  fileList[--p] = 0; // Get rid of the last separator
+//  return fileList;
 	return "";
 }
 
@@ -665,17 +640,15 @@ void Platform::Message(char type, char* message)
   case HOST_MESSAGE:
   default:
   
-#if ETHERNET
-    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
-    if(m != NULL)
-    {
-    	m->GoToEnd();
-    	m->Write(message);
-    	m->Close();
-    } else
-   	line->Write("Can't open message file.\n");
-#endif
-	  line->Write(message);
+//    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
+//    if(m != NULL)
+//    {
+//    	m->GoToEnd();
+//    	m->Write(message);
+//    	m->Close();
+//    } else
+//    	line->Write("Can't open message file.\n");
+    line->Write(message);
   }
 }
 
@@ -683,34 +656,29 @@ void Platform::Message(char type, char* message)
 
 
 //***************************************************************************************************
-#if CALIB_Z
- int zcount; // NASTY - FIX ME
-#endif
 
- void Platform::Spin()
+//int zcount; // NASTY - FIX ME - uncomment to calibrate z probe
+
+void Platform::Spin()
 {
    if(!active)
      return;
-
-#if ETHERNET
+    
    network->Spin();
-#endif //ETHERNET
-
    line->Spin();
 
-   if(Time() - lastTime < 0.03)
+   if(Time() - lastTime < 0.006)
      return;
    PollZHeight();
    lastTime = Time();
 
-#if CALIB_Z
-   zcount++;
-   if(zcount > 30)
-   {
-	   zcount = 0;
-	   SerialUSB.println(GetRawZHeight());
-   }
-#endif
+ // uncomment to calibrate z probe
+//   zcount++;
+//   if(zcount > 30)
+//   {
+//	   zcount = 0;
+//	   SerialUSB.println(GetRawZHeight());
+//   }
 }
 
 Line::Line()
@@ -725,83 +693,125 @@ void Line::Init()
 	while (!SerialUSB.available());
 }
 
-#if ETHERNET
 Network::Network()
 {
-	server = new EthernetServer(HTTP_PORT);
+	ethPinsInit();
+	//lwip_init();
+	//httpd_init();
+
+
 }
 
 void Network::Init()
 {
 	alternateInput = NULL;
 	alternateOutput = NULL;
+	init_ethernet();
+	//netConfiguration = GetConfiguration();
+//	mac = MAC;
 
-	mac = MAC;
+//	// disable SD SPI while starting w5100
+//	// or you will have trouble
+//	pinMode(SD_SPI, OUTPUT);
+//	digitalWrite(SD_SPI,HIGH);
 
-	// disable SD SPI while starting w5100
-	// or you will have trouble
-	pinMode(SD_SPI, OUTPUT);
-	digitalWrite(SD_SPI,HIGH);
-
-	ipAddress = { IP0, IP1, IP2, IP3 };
+//	ipAddress = { IP0, IP1, IP2, IP3 };
 	//Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
-	Ethernet.begin(mac, ipAddress);
-	server->begin();
-
-	//Serial.print("server is at ");
-	//Serial.println(Ethernet.localIP());
-
-	// this corrects a bug in the Ethernet.begin() function
-	// even tho the call to Ethernet.localIP() does the same thing
-	digitalWrite(ETH_B_PIN, HIGH);
+//	Ethernet.begin(mac, ipAddress);
+//	server->begin();
+//
+//	//Serial.print("server is at ");
+//	//Serial.println(Ethernet.localIP());
+//
+//	// this corrects a bug in the Ethernet.begin() function
+//	// even tho the call to Ethernet.localIP() does the same thing
+//	digitalWrite(ETH_B_PIN, HIGH);
 
 	clientStatus = 0;
-	client = 0;
+//	client = 0;
+}
+
+void Network::Spin()
+{
+  clientStatus = 0;
+	//ethernetif_input(netConfiguration);
+
+	/* Run periodic tasks */
+	//timers_update();
+
+  ethernet_task();
+//  if(!client)
+//  {
+//    client = server->available();
+//    if(!client)
+//      return;
+//    //else
+//      //Serial.println("new client");
+//  }
+//
+//  clientStatus |= clientLive;
+//
+//  if(!client.connected())
+//    return;
+//
+//  clientStatus |= clientConnected;
+//
+//  if (!client.available())
+//    return;
+//
+//  clientStatus |= byteAvailable;
 }
 
 
 void Network::Write(char b)
 {
-  if(client)
-  {
-    client.write(b);
-  } else
+//  if(client)
+//  {
+//    client.write(b);
+//  } else
     reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
 }
 
 void Network::Write(char* s)
 {
-  if(client)
-  {
-    client.print(s);
-  } else
+//  if(client)
+//  {
+//    client.print(s);
+//  } else
 	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
 }
 
 int Network::Read(char& b)
 {
-  if(client)
-  {
-    b = client.read();
-    return true;
-  }
-
-  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
-  b = '\n'; // good idea??
+//  if(client)
+//  {
+//    b = client.read();
+//    return true;
+//  }
+//
+//  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
+//  b = '\n'; // good idea??
   return 0;
 }
 
 
 void Network::Close()
 {
-  if (client)
-  {
-    client.stop();
-    //Serial.println("client disconnected");
-  } else
+//  if (client)
+//  {
+//    client.stop();
+//    //Serial.println("client disconnected");
+//  } else
 	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
 }
-#endif
+
+int8_t Network::Status()
+{
+  return clientStatus;
+}
+
+
+
 
 
 

@@ -70,13 +70,18 @@
 #include "lwip/src/sam/include/netif/ethernetif.h"
 
 #if defined(HTTP_RAW_USED)
-#include "httpserver_raw/httpd.h"
+#include "httpd.h"
 #endif
 
 #include "lwip_test.h"
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
+
+struct netif* GetConfiguration()
+{
+	return &gs_net_if;
+}
 
 /* Timer for calling lwIP tmr functions without system */
 typedef struct timers_info {
@@ -221,6 +226,50 @@ void status_callback(struct netif *netif)
 //		printf("Network down\r\n");
 	}
 }
+
+/**
+ * \brief This function should be called when a packet is ready to be
+ * read from the interface. It uses the function low_level_input()
+ * that should handle the actual reception of bytes from the network
+ * interface. Then the type of the received packet is determined and
+ * the appropriate input function is called.
+ *
+ * \param pv_parameters the lwip network interface structure for this
+ * ethernetif.
+ */
+void my_ethernetif_input(void * pvParameters)
+{
+
+	struct netif      *netif = (struct netif *)pvParameters;
+	struct pbuf       *p;
+
+//#ifdef FREERTOS_USED
+//	for( ;; ) {
+//		do {
+//#endif
+			/* move received packet into a new pbuf */
+			p = low_level_input( netif );
+			if( p == NULL ) {
+//#ifdef FREERTOS_USED
+//				/* No packet could be read.  Wait a for an interrupt to tell us
+//				there is more data available. */
+//				vTaskDelay(100);
+//			}
+//		}while( p == NULL );
+//#else
+				return;
+			}
+//#endif
+
+		if( ERR_OK != netif->input( p, netif ) ) {
+			pbuf_free(p);
+			p = NULL;
+		}
+//#ifdef FREERTOS_USED
+//	}
+//#endif
+}
+
 
 /**0
  *  \brief Manage the Ethernet packets, if any received process them.

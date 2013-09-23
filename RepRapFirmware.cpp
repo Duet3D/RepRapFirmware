@@ -161,9 +161,7 @@ RepRap::RepRap()
 {
   active = false;
   platform = new Platform(this);
-#if ETHERNET
   webserver = new Webserver(platform);
-#endif //ETHERNET
   gCodes = new GCodes(platform, webserver);
   move = new Move(platform, gCodes);
   heat = new Heat(platform, gCodes);
@@ -174,9 +172,7 @@ void RepRap::Init()
   dbg = false;
   platform->Init();
   gCodes->Init();
-#if ETHERNET
   webserver->Init();
-#endif //ETHERNET
   move->Init();
   heat->Init();
   active = true;
@@ -200,9 +196,7 @@ void RepRap::Spin()
     return;
 
   platform->Spin();
-#if ETHERNET
   webserver->Spin();
-#endif //ETHERNET
   gCodes->Spin();
   move->Spin();
   heat->Spin();
@@ -214,9 +208,7 @@ void RepRap::Diagnostics()
   move->Diagnostics();
   heat->Diagnostics();
   gCodes->Diagnostics();
-#if ETHERNET
   webserver->Diagnostics();
-#endif //ETHERNET
 }
 
 

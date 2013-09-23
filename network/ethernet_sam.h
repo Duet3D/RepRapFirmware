@@ -60,6 +60,10 @@ extern "C" {
  */
 void init_ethernet(void);
 
+struct netif* GetConfiguration();
+
+static void timers_update(void);
+
 /**
  * \brief Status callback used to print address given by DHCP.
  *
