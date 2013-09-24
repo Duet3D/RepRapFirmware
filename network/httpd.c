@@ -141,64 +141,189 @@ http_sent(void *arg, struct tcp_pcb *pcb, uint16_t len)
   return ERR_OK;
 }
 /*-----------------------------------------------------------------------------------*/
+//static err_t
+//http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
+//{
+//	int i;
+//	char *data;
+//	struct fs_file file;
+//	struct http_state *hs;
+//
+//	hs = arg;
+//
+//	if (err == ERR_OK && p != NULL)
+//	{
+//
+//		/* Inform TCP that we have taken the data. */
+//		tcp_recved(pcb, p->tot_len);
+//
+//		if (hs->file == NULL)
+//		{
+//			data = p->payload;
+//
+//			if (strncmp(data, "GET ", 4) == 0)
+//			{
+//				for(i = 0; i < 40; i++) {
+//					if (((char *)data + 4)[i] == ' ' ||
+//							((char *)data + 4)[i] == '\r' ||
+//							((char *)data + 4)[i] == '\n')
+//					{
+//						((char *)data + 4)[i] = 0;
+//					}
+//				}
+//
+//				if (*(char *)(data + 4) == '/' && *(char *)(data + 5) == 0)
+//				{
+//					fs_open("/index.html", &file);
+//				} else if (!fs_open((char *)data + 4, &file))
+//				{
+//					fs_open("/404.html", &file);
+//				}
+//
+//				hs->file = file.data;
+//				hs->left = file.len;
+//				/* printf("data %p len %ld\n", hs->file, hs->left);*/
+//
+//				pbuf_free(p);
+//				send_data(pcb, hs);
+//
+//				/* Tell TCP that we wish be to informed of data that has been
+//           successfully sent by a call to the http_sent() function. */
+//				tcp_sent(pcb, http_sent);
+//			} else
+//			{
+//				pbuf_free(p);
+//				close_conn(pcb, hs);
+//			}
+//		} else
+//		{
+//			pbuf_free(p);
+//		}
+//	}
+//
+//	if (err == ERR_OK && p == NULL)
+//	{
+//		close_conn(pcb, hs);
+//	}
+//	return ERR_OK;
+//}
+
+static struct tcp_pcb* activePcb;
+static struct pbuf* activePbuf;
+static struct http_state* activeHttpState;
+
+static void FreeBuffer()
+{
+	if(activePbuf != 0)
+	{
+		pbuf_free(activePbuf);
+		activePbuf = 0;
+	}
+}
+
+static void CloseConnection()
+{
+	if(activePcb != 0 && activeHttpState != 0)
+	{
+		close_conn(activePcb, activeHttpState);
+		activePcb = 0;
+		activeHttpState = 0;
+	}
+}
+
+static void CloseConnectionAndFreeBuffer()
+{
+	FreeBuffer();
+	CloseConnection();
+}
+
 static err_t
 http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 {
-  int i;
-  char *data;
-  struct fs_file file;
-  struct http_state *hs;
+	int i;
+	char *data;
+	struct fs_file file;
+	struct http_state *hs;
 
-  hs = arg;
+	hs = arg;
 
-  if (err == ERR_OK && p != NULL) {
+	activePcb = pcb;
+	activePbuf = p;
+	activeHttpState = hs;
 
-    /* Inform TCP that we have taken the data. */
-    tcp_recved(pcb, p->tot_len);
+	if (err == ERR_OK && p != NULL)
+	{
 
-    if (hs->file == NULL) {
-      data = p->payload;
+		/* Inform TCP that we have taken the data. */
+		tcp_recved(pcb, p->tot_len);
 
-      if (strncmp(data, "GET ", 4) == 0) {
-        for(i = 0; i < 40; i++) {
-          if (((char *)data + 4)[i] == ' ' ||
-             ((char *)data + 4)[i] == '\r' ||
-             ((char *)data + 4)[i] == '\n') {
-            ((char *)data + 4)[i] = 0;
-          }
-        }
+		if (hs->file == NULL)
+		{
+			data = p->payload;
 
-        if (*(char *)(data + 4) == '/' &&
-           *(char *)(data + 5) == 0) {
-          fs_open("/index.html", &file);
-        } else if (!fs_open((char *)data + 4, &file)) {
-          fs_open("/404.html", &file);
-        }
+			// Deal with data received
 
-        hs->file = file.data;
-        hs->left = file.len;
-        /* printf("data %p len %ld\n", hs->file, hs->left);*/
+			// Free the buffer
 
-        pbuf_free(p);
-        send_data(pcb, hs);
+			// Send any data to reply
 
-        /* Tell TCP that we wish be to informed of data that has been
+			// Flag transmission completion with the http_sent() function
+
+			if (strncmp(data, "GET ", 4) == 0)
+			{
+				for(i = 0; i < 40; i++) {
+					if (((char *)data + 4)[i] == ' ' ||
+							((char *)data + 4)[i] == '\r' ||
+							((char *)data + 4)[i] == '\n')
+					{
+						((char *)data + 4)[i] = 0;
+					}
+				}
+
+				if (*(char *)(data + 4) == '/' && *(char *)(data + 5) == 0)
+				{
+					fs_open("/index.html", &file);
+				} else if (!fs_open((char *)data + 4, &file))
+				{
+					fs_open("/404.html", &file);
+				}
+
+				hs->file = file.data;
+				hs->left = file.len;
+				/* printf("data %p len %ld\n", hs->file, hs->left);*/
+
+				//pbuf_free(p);
+				FreeBuffer();
+				send_data(pcb, hs);
+
+				/* Tell TCP that we wish be to informed of data that has been
            successfully sent by a call to the http_sent() function. */
-        tcp_sent(pcb, http_sent);
-      } else {
-        pbuf_free(p);
-        close_conn(pcb, hs);
-      }
-    } else {
-      pbuf_free(p);
-    }
-  }
+				tcp_sent(pcb, http_sent);
+			} else
+			{
+				CloseConnectionAndFreeBuffer();
+				//pbuf_free(p);
+				//close_conn(pcb, hs);
+			}
+		} else
+		{
+			FreeBuffer();
+			//pbuf_free(p);
+		}
+	}
 
-  if (err == ERR_OK && p == NULL) {
-    close_conn(pcb, hs);
-  }
-  return ERR_OK;
+	if (err == ERR_OK && p == NULL)
+	{
+		CloseConnection();
+		//close_conn(pcb, hs);
+	}
+	return ERR_OK;
 }
+
+
+
+
+
 /*-----------------------------------------------------------------------------------*/
 static err_t
 http_accept(void *arg, struct tcp_pcb *pcb, err_t err)

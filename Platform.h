@@ -238,6 +238,8 @@ public:
 	void Write(char b);
 	void Write(char* s);
 	void Close();
+	void SetOutputNotGone(bool g);
+	void ReceiveInput(char* ip, int length);
 
 friend class Platform;
 
@@ -246,12 +248,11 @@ protected:
 	void Init();
 	void Spin();
 private:
-	byte mac[MAC_BYTES];
-	byte ipAddress[IP_BYTES];
-	//struct netif* netConfiguration;
-//	EthernetServer* server;
-//	EthernetClient client;
-	int8_t clientStatus;
+	char* inputBuffer;
+	char outputBuffer[256];
+	int inputPointer, inputLength;
+	int outputPointer, outputLength;
+	bool outputNotGone;
 };
 
 // This class handles serial I/O - typically via USB

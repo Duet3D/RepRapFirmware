@@ -696,10 +696,6 @@ void Line::Init()
 Network::Network()
 {
 	ethPinsInit();
-	//lwip_init();
-	//httpd_init();
-
-
 }
 
 void Network::Init()
@@ -707,59 +703,53 @@ void Network::Init()
 	alternateInput = NULL;
 	alternateOutput = NULL;
 	init_ethernet();
-	//netConfiguration = GetConfiguration();
-//	mac = MAC;
-
-//	// disable SD SPI while starting w5100
-//	// or you will have trouble
-//	pinMode(SD_SPI, OUTPUT);
-//	digitalWrite(SD_SPI,HIGH);
-
-//	ipAddress = { IP0, IP1, IP2, IP3 };
-	//Ethernet.begin(mac, *(new IPAddress(IP0, IP1, IP2, IP3)));
-//	Ethernet.begin(mac, ipAddress);
-//	server->begin();
-//
-//	//Serial.print("server is at ");
-//	//Serial.println(Ethernet.localIP());
-//
-//	// this corrects a bug in the Ethernet.begin() function
-//	// even tho the call to Ethernet.localIP() does the same thing
-//	digitalWrite(ETH_B_PIN, HIGH);
-
-	clientStatus = 0;
-//	client = 0;
+	inputPointer = 0;
+	inputLength = -1;
+	outputPointer = 0;
+	outputLength = -1;
+	outputNotGone = false;
 }
+
+// Look for CloseConnectionAndFreeBuffer
 
 void Network::Spin()
 {
-  clientStatus = 0;
-	//ethernetif_input(netConfiguration);
+	// Transmit any data that's to be sent.
 
-	/* Run periodic tasks */
-	//timers_update();
+	if(outputNotGone)
+		return;
 
-  ethernet_task();
-//  if(!client)
-//  {
-//    client = server->available();
-//    if(!client)
-//      return;
-//    //else
-//      //Serial.println("new client");
-//  }
-//
-//  clientStatus |= clientLive;
-//
-//  if(!client.connected())
-//    return;
-//
-//  clientStatus |= clientConnected;
-//
-//  if (!client.available())
-//    return;
-//
-//  clientStatus |= byteAvailable;
+	// Read any data that's been received.
+
+	if(inputPointer < inputLength)
+		return;
+
+	// Anything new come in?
+
+	ethernet_task();
+
+}
+
+void Network::SetOutputNotGone(bool g)
+{
+	outputNotGone = g;
+}
+
+void RepRapNetworkSetOutputNotGone(bool g)
+{
+	reprap.GetPlatform()->GetNetwork()->SetOutputNotGone(g);
+}
+
+void Network::ReceiveInput(char* ip, int length)
+{
+	inputBuffer = ip;
+	inputLength = length;
+	inputPointer = 0;
+}
+
+void RepRapNetworkReceiveInput(char* ip, int length)
+{
+	reprap.GetPlatform()->GetNetwork()->ReceiveInput(ip, length);
 }
 
 
@@ -807,7 +797,7 @@ void Network::Close()
 
 int8_t Network::Status()
 {
-  return clientStatus;
+  return 0;
 }
 
 
