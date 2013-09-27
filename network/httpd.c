@@ -231,7 +231,7 @@ static void CloseConnection()
 	}
 }
 
-static void CloseConnectionAndFreeBuffer()
+static void FreeBufferAndCloseConnection()
 {
 	FreeBuffer();
 	CloseConnection();
@@ -262,6 +262,8 @@ http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 			data = p->payload;
 
 			// Deal with data received
+
+			RepRapNetworkReceiveInput(data, p->len);
 
 			// Free the buffer
 
@@ -301,7 +303,7 @@ http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 				tcp_sent(pcb, http_sent);
 			} else
 			{
-				CloseConnectionAndFreeBuffer();
+				FreeBufferAndCloseConnection();
 				//pbuf_free(p);
 				//close_conn(pcb, hs);
 			}

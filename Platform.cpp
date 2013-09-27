@@ -721,8 +721,8 @@ void Network::Spin()
 
 	// Read any data that's been received.
 
-	if(inputPointer < inputLength)
-		return;
+	//if(inputPointer < inputLength)
+	//	return;
 
 	// Anything new come in?
 
@@ -744,12 +744,19 @@ void Network::ReceiveInput(char* ip, int length)
 {
 	inputBuffer = ip;
 	inputLength = length;
+	//reprap.GetPlatform()->Message(HOST_MESSAGE, "Length: ");
+	//sprintf(scratchString, "%d", inputLength);
+	//reprap.GetPlatform()->Message(HOST_MESSAGE, scratchString);
+	//reprap.GetPlatform()->Message(HOST_MESSAGE, "\n");
+	reprap.GetPlatform()->Message(HOST_MESSAGE, inputBuffer);
 	inputPointer = 0;
 }
 
+extern "C" {
 void RepRapNetworkReceiveInput(char* ip, int length)
 {
 	reprap.GetPlatform()->GetNetwork()->ReceiveInput(ip, length);
+}
 }
 
 
