@@ -207,8 +207,6 @@ bool GCodes::Pop()
   return true;
 }
 
-// Move expects all axis movements to be absolute, and all
-// extruder drive moves to be relative.  This function serves that.
 // If the Move class can't receive the move (i.e. things have to wait)
 // this returns false, otherwise true.
 
@@ -224,43 +222,7 @@ bool GCodes::SetUpMove(GCodeBuffer *gb)
   if(!reprap.GetMove()->GetCurrentState(moveBuffer))
     return false;
   
-  // What does the G Code say?
-  
-  for(int8_t i = 0; i < DRIVES; i++)
-  {
-    if(i < AXES)
-    {
-      if(gb->Seen(gCodeLetters[i]))
-      {
-        if(axesRelative)
-          moveBuffer[i] += gb->GetFValue()*distanceScale;
-        else
-          moveBuffer[i] = gb->GetFValue()*distanceScale;
-      }
-    } else
-    {
-      if(gb->Seen(gCodeLetters[i]))
-      {
-        if(drivesRelative)
-          moveBuffer[i] = gb->GetFValue()*distanceScale;
-        else
-          moveBuffer[i] = gb->GetFValue()*distanceScale - lastPos[i - AXES];
-      }
-    }
-  }
-  
-  // Deal with feedrate
-  
-  if(gb->Seen(gCodeLetters[DRIVES]))
-    gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // Feedrates are in mm/minute; we need mm/sec
-    
-  moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
-  
-  // Remember for next time if we are switched
-  // to absolute drive moves
-  
-  for(int8_t i = AXES; i < DRIVES; i++)
-    lastPos[i - AXES] = moveBuffer[i];
+  LoadMoveBufferFromGCode(gb);
   
   checkEndStops = false;
   moveAvailable = true;
@@ -540,6 +502,61 @@ bool GCodes::SetOffsets(GCodeBuffer *gb)
   return true;  
 }
 
+
+// Move expects all axis movements to be absolute, and all
+// extruder drive moves to be relative.  This function serves that.
+
+void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
+{
+	for(uint8_t i = 0; i < DRIVES; i++)
+	{
+	    if(i < AXES)
+	    {
+	      if(gb->Seen(gCodeLetters[i]))
+	      {
+	        if(axesRelative)
+	          moveBuffer[i] += gb->GetFValue()*distanceScale;
+	        else
+	          moveBuffer[i] = gb->GetFValue()*distanceScale;
+	      }
+	    } else
+	    {
+	      if(gb->Seen(gCodeLetters[i]))
+	      {
+	        if(drivesRelative)
+	          moveBuffer[i] = gb->GetFValue()*distanceScale;
+	        else
+	          moveBuffer[i] = gb->GetFValue()*distanceScale - lastPos[i - AXES];
+	      }
+	    }
+	}
+
+	// Deal with feedrate
+
+	if(gb->Seen(gCodeLetters[DRIVES]))
+	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // Feedrates are in mm/minute; we need mm/sec
+
+	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
+
+	// Remember for next time if we are switched
+	// to absolute drive moves
+
+	for(int8_t i = AXES; i < DRIVES; i++)
+	  lastPos[i - AXES] = moveBuffer[i];
+}
+
+bool GCodes::SetPositions(GCodeBuffer *gb)
+{
+	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		return false;
+
+	LoadMoveBufferFromGCode(gb);
+
+	reprap.GetMove()->SetPositions(moveBuffer);
+
+	return true;
+}
+
 // If the GCode to act on is completed, this returns true,
 // otherwise false.  It is called repeatedly for a given
 // GCode until it returns true for that code.
@@ -607,7 +624,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 92: // Set position
-      platform->Message(HOST_MESSAGE, "Set position received\n");
+      result = SetPositions(gb);
       break;
       
     default:

@@ -137,6 +137,7 @@ class Move
     void DoLookAhead();
     void HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
+    void SetPositions(float move[]);
     void SetZProbing(bool probing);
     void SetProbedBedPlane();
     float GetLastProbedZ();

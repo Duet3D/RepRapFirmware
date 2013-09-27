@@ -83,6 +83,8 @@ class GCodes
     bool DoSingleZProbe();
     bool DoMultipleZProbe();
     bool SetOffsets(GCodeBuffer *gb);
+    bool SetPositions(GCodeBuffer *gb);
+    void LoadMoveBufferFromGCode(GCodeBuffer *gb);
     bool NoHome();
     bool Push();
     bool Pop();

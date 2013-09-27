@@ -221,6 +221,14 @@ void Move::Spin()
   }
 }
 
+void Move::SetPositions(float move[])
+{
+	Transform(move);
+
+	for(uint8_t drive = 0; drive <= DRIVES; drive++)
+		lastMove->SetDriveZeroEndSpeed(move[drive], drive);
+}
+
 
 void Move::Diagnostics() 
 {
