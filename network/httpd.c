@@ -47,32 +47,19 @@ struct http_state {
 };
 
 /*-----------------------------------------------------------------------------------*/
-static void
-conn_err(void *arg, err_t err)
-{
-  struct http_state *hs;
 
-  LWIP_UNUSED_ARG(err);
-
-  hs = arg;
-  mem_free(hs);
-}
-/*-----------------------------------------------------------------------------------*/
-static void
-close_conn(struct tcp_pcb *pcb, struct http_state *hs)
-{
-  tcp_arg(pcb, NULL);
-  tcp_sent(pcb, NULL);
-  tcp_recv(pcb, NULL);
-  mem_free(hs);
-  tcp_close(pcb);
-}
-/*-----------------------------------------------------------------------------------*/
 static void
 send_data(struct tcp_pcb *pcb, struct http_state *hs)
 {
   err_t err;
   uint16_t len;
+  int i;
+
+//  if(hs->left <= 0)
+//  {
+//	  hs->left = GetRepRapNetworkDataToSendLength();
+//	  hs->file = GetRepRapNetworkDataToSend();
+//  }
 
   /* We cannot send more data than space available in the send
      buffer. */
@@ -96,6 +83,29 @@ send_data(struct tcp_pcb *pcb, struct http_state *hs)
     printf("send_data: error %s len %d %d\n", lwip_strerr(err), len, tcp_sndbuf(pcb));*/
   }
 }
+
+/*-----------------------------------------------------------------------------------*/
+static void
+conn_err(void *arg, err_t err)
+{
+  struct http_state *hs;
+
+  LWIP_UNUSED_ARG(err);
+
+  hs = arg;
+  mem_free(hs);
+}
+/*-----------------------------------------------------------------------------------*/
+static void
+close_conn(struct tcp_pcb *pcb, struct http_state *hs)
+{
+  tcp_arg(pcb, NULL);
+  tcp_sent(pcb, NULL);
+  tcp_recv(pcb, NULL);
+  mem_free(hs);
+  tcp_close(pcb);
+}
+
 /*-----------------------------------------------------------------------------------*/
 static err_t
 http_poll(void *arg, struct tcp_pcb *pcb)
@@ -120,26 +130,7 @@ http_poll(void *arg, struct tcp_pcb *pcb)
 
   return ERR_OK;
 }
-/*-----------------------------------------------------------------------------------*/
-static err_t
-http_sent(void *arg, struct tcp_pcb *pcb, uint16_t len)
-{
-  struct http_state *hs;
 
-  LWIP_UNUSED_ARG(len);
-
-  hs = arg;
-
-  hs->retries = 0;
-
-  if (hs->left > 0) {
-    send_data(pcb, hs);
-  } else {
-    close_conn(pcb, hs);
-  }
-
-  return ERR_OK;
-}
 /*-----------------------------------------------------------------------------------*/
 //static err_t
 //http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
@@ -208,9 +199,42 @@ http_sent(void *arg, struct tcp_pcb *pcb, uint16_t len)
 //	return ERR_OK;
 //}
 
-static struct tcp_pcb* activePcb;
-static struct pbuf* activePbuf;
-static struct http_state* activeHttpState;
+static struct tcp_pcb* activePcb = 0;
+static struct pbuf* activePbuf = 0;
+static struct http_state* activeHttpState = 0;
+static char* dataPayload = 0;
+static char outputBuffer[1200];
+
+int GetRepRapNetworkDataToSendLength();
+char* GetRepRapNetworkDataToSend();
+
+int SetDataToSend()
+{
+	int i;
+
+	if(activeHttpState == 0)
+		return -1;
+
+	if(activeHttpState->left > 0)
+		return 0;
+
+	activeHttpState->left = GetRepRapNetworkDataToSendLength();
+	activeHttpState->file = outputBuffer;
+
+	if(activeHttpState->left > 0)
+	{
+		i = 0;
+		while(i < activeHttpState->left)
+		{
+			outputBuffer[i] = GetRepRapNetworkDataToSend()[i];
+			i++;
+		}
+		outputBuffer[i] = 0;
+	} else
+		outputBuffer[0] = 0;
+
+	return 1;
+}
 
 static void FreeBuffer()
 {
@@ -218,6 +242,7 @@ static void FreeBuffer()
 	{
 		pbuf_free(activePbuf);
 		activePbuf = 0;
+		dataPayload = 0;
 	}
 }
 
@@ -226,8 +251,8 @@ static void CloseConnection()
 	if(activePcb != 0 && activeHttpState != 0)
 	{
 		close_conn(activePcb, activeHttpState);
-		activePcb = 0;
-		activeHttpState = 0;
+		//activePcb = 0;
+		//activeHttpState = 0;
 	}
 }
 
@@ -237,12 +262,112 @@ static void FreeBufferAndCloseConnection()
 	CloseConnection();
 }
 
+/*-----------------------------------------------------------------------------------*/
+
+static err_t
+http_sent(void *arg, struct tcp_pcb *pcb, uint16_t len)
+{
+  struct http_state *hs;
+
+  LWIP_UNUSED_ARG(len);
+
+  hs = arg;
+
+  activePcb = pcb;
+  activeHttpState = hs;
+
+  hs->retries = 0;
+
+  if (hs->left > 0)
+  {
+    send_data(pcb, hs);
+  } else
+	  SetDataToSend();
+
+  if (hs->left <= 0)
+  {
+	 CloseConnection();
+   // close_conn(pcb, hs);
+  }
+
+  return ERR_OK;
+}
+
+int HttpSend()
+{
+	if(activePcb != 0 && activeHttpState != 0)
+	{
+		send_data(activePcb, activeHttpState);
+
+		/* Tell TCP that we wish be to informed of data that has been
+	   successfully sent by a call to the http_sent() function. */
+		tcp_sent(activePcb, http_sent);
+	}
+}
+
+
+
+//static int InterpretAndSend()
+//{
+//	if(dataPayload == 0)
+//		return false;
+//
+//	int i;
+//
+//	struct fs_file file;
+//
+//	if (strncmp(dataPayload, "GET ", 4) == 0)
+//	//if(GetRepRapNetworkDataToSendLength() > 0)
+//	{
+//		for(i = 0; i < 40; i++) {
+//			if (((char *)dataPayload + 4)[i] == ' ' ||
+//					((char *)dataPayload + 4)[i] == '\r' ||
+//					((char *)dataPayload + 4)[i] == '\n')
+//			{
+//				((char *)dataPayload + 4)[i] = 0;
+//			}
+//		}
+//
+//		if (*(char *)(dataPayload + 4) == '/' && *(char *)(dataPayload + 5) == 0)
+//		{
+//			fs_open("/index.html", &file);
+//		} else if (!fs_open((char *)dataPayload + 4, &file))
+//		{
+//			fs_open("/404.html", &file);
+//		}
+//
+//		activeHttpState->file = file.data;
+//		activeHttpState->left = file.len;
+//
+//		//activeHttpState->file = GetRepRapNetworkDataToSend();
+//		//activeHttpState->left = GetRepRapNetworkDataToSendLength();
+//
+//		/* printf("data %p len %ld\n", hs->file, hs->left);*/
+//
+//		//pbuf_free(p);
+//		FreeBuffer();
+////		send_data(activePcb, activeHttpState);
+////
+////		/* Tell TCP that we wish be to informed of data that has been
+////   successfully sent by a call to the http_sent() function. */
+////		tcp_sent(activePcb, http_sent);
+//
+//		//HttpSend();
+//	} else
+//	{
+//		FreeBufferAndCloseConnection();
+//		//pbuf_free(p);
+//		//close_conn(pcb, hs);
+//	}
+//	return true;
+//}
+
 static err_t
 http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 {
 	int i;
 	char *data;
-	struct fs_file file;
+
 	struct http_state *hs;
 
 	hs = arg;
@@ -257,62 +382,26 @@ http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 		/* Inform TCP that we have taken the data. */
 		tcp_recved(pcb, p->tot_len);
 
-		if (hs->file == NULL)
+		//if (hs->file == NULL)
+		if(GetRepRapNetworkDataToSendLength() <= 0)
 		{
 			data = p->payload;
+			dataPayload = data;
 
 			// Deal with data received
 
 			RepRapNetworkReceiveInput(data, p->len);
 
-			// Free the buffer
+			//InterpretAndSend();
 
-			// Send any data to reply
-
-			// Flag transmission completion with the http_sent() function
-
-			if (strncmp(data, "GET ", 4) == 0)
-			{
-				for(i = 0; i < 40; i++) {
-					if (((char *)data + 4)[i] == ' ' ||
-							((char *)data + 4)[i] == '\r' ||
-							((char *)data + 4)[i] == '\n')
-					{
-						((char *)data + 4)[i] = 0;
-					}
-				}
-
-				if (*(char *)(data + 4) == '/' && *(char *)(data + 5) == 0)
-				{
-					fs_open("/index.html", &file);
-				} else if (!fs_open((char *)data + 4, &file))
-				{
-					fs_open("/404.html", &file);
-				}
-
-				hs->file = file.data;
-				hs->left = file.len;
-				/* printf("data %p len %ld\n", hs->file, hs->left);*/
-
-				//pbuf_free(p);
-				FreeBuffer();
-				send_data(pcb, hs);
-
-				/* Tell TCP that we wish be to informed of data that has been
-           successfully sent by a call to the http_sent() function. */
-				tcp_sent(pcb, http_sent);
-			} else
-			{
-				FreeBufferAndCloseConnection();
-				//pbuf_free(p);
-				//close_conn(pcb, hs);
-			}
-		} else
+		} /*else
 		{
 			FreeBuffer();
 			//pbuf_free(p);
-		}
+		}*/
+		FreeBuffer();
 	}
+
 
 	if (err == ERR_OK && p == NULL)
 	{
@@ -368,12 +457,12 @@ http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 void
 httpd_init(void)
 {
-  struct tcp_pcb *pcb;
+  //struct tcp_pcb *pcb;
 
-  pcb = tcp_new();
-  tcp_bind(pcb, IP_ADDR_ANY, 80);
-  pcb = tcp_listen(pcb);
-  tcp_accept(pcb, http_accept);
+  activePcb = tcp_new();
+  tcp_bind(activePcb, IP_ADDR_ANY, 80);
+  activePcb = tcp_listen(activePcb);
+  tcp_accept(activePcb, http_accept);
 }
 /*-----------------------------------------------------------------------------------*/
 

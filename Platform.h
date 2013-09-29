@@ -234,12 +234,14 @@ class Network: public InputOutput
 {
 public:
 	int8_t Status(); // Returns OR of IOStatus
-	int Read(char& b);
+	bool Read(char& b);
 	void Write(char b);
 	void Write(char* s);
 	void Close();
 	void SetOutputNotGone(bool g);
 	void ReceiveInput(char* ip, int length);
+	int OutputBufferLength();
+	char* OutputBuffer();
 
 friend class Platform;
 
@@ -248,8 +250,8 @@ protected:
 	void Init();
 	void Spin();
 private:
-	char* inputBuffer;
-	char outputBuffer[256];
+	char inputBuffer[STRING_LENGTH];
+	char outputBuffer[STRING_LENGTH];
 	int inputPointer, inputLength;
 	int outputPointer, outputLength;
 	bool outputNotGone;

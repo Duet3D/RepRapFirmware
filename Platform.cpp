@@ -693,6 +693,28 @@ void Line::Init()
 	while (!SerialUSB.available());
 }
 
+extern "C"
+{
+
+ int SetDataToSend();
+
+ void RepRapNetworkReceiveInput(char* ip, int length)
+ {
+	reprap.GetPlatform()->GetNetwork()->ReceiveInput(ip, length);
+ }
+
+ int GetRepRapNetworkDataToSendLength()
+ {
+	 return reprap.GetPlatform()->GetNetwork()->OutputBufferLength();
+ }
+
+ char* GetRepRapNetworkDataToSend()
+ {
+	 return reprap.GetPlatform()->GetNetwork()->OutputBuffer();
+ }
+
+}
+
 Network::Network()
 {
 	ethPinsInit();
@@ -712,19 +734,48 @@ void Network::Init()
 
 // Look for CloseConnectionAndFreeBuffer
 
+//static void FreeBuffer();
+
 void Network::Spin()
 {
-	// Transmit any data that's to be sent.
-
-	if(outputNotGone)
-		return;
-
-	// Read any data that's been received.
+	// Finish reading any data that's been received.
 
 	if(inputPointer < inputLength)
+	{
+		reprap.GetWebserver()->Spin(); // Is this sensible?
 		return;
+	}
 
-	// Anything new come in?
+	if(outputLength > 0)
+	{
+		switch(SetDataToSend())
+		{
+		case -1:
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: no ether location for output data!\n");
+			break;
+		case 0:
+			//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: output busy.\n");
+			break;
+		default:
+			outputLength = -1;
+			outputPointer = 0;
+		}
+		return;
+	}
+
+	if(!reprap.GetWebserver()->WebserverIsWriting())
+	{
+		if(outputPointer > 0)
+			outputLength = outputPointer;
+		outputPointer = 0;
+		return;
+	}
+
+	//while(reprap.GetWebserver()->WebserverIsWriting() && )
+//	if(outputPointer >= outputLength)
+//		return;
+
+	// Anything new come in or anything to send?
 
 	ethernet_task();
 
@@ -742,53 +793,83 @@ void RepRapNetworkSetOutputNotGone(bool g)
 
 void Network::ReceiveInput(char* ip, int length)
 {
-	inputBuffer = ip;
-	inputLength = length;
-	//reprap.GetPlatform()->Message(HOST_MESSAGE, "Length: ");
-	//sprintf(scratchString, "%d", inputLength);
-	//reprap.GetPlatform()->Message(HOST_MESSAGE, scratchString);
-	//reprap.GetPlatform()->Message(HOST_MESSAGE, "\n");
-	//reprap.GetPlatform()->Message(HOST_MESSAGE, inputBuffer);
+	if(length > STRING_LENGTH)
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network input buffer overflow.\n");
+		inputLength = STRING_LENGTH;
+	} else
+		inputLength = length;
+	for(int i = 0; i < inputLength; i++)
+	{
+		inputBuffer[i] = ip[i];
+		//SerialUSB.print(inputBuffer[i]);
+	}
+//	inputBuffer = ip;
+//	inputLength = length;
 	inputPointer = 0;
+	//while(Status() != nothing)
+	//	reprap.GetWebserver()->Spin(); // Nasty...
 }
 
-extern "C" {
-void RepRapNetworkReceiveInput(char* ip, int length)
+
+int Network::OutputBufferLength()
 {
-	reprap.GetPlatform()->GetNetwork()->ReceiveInput(ip, length);
+	if(outputLength <= 0)
+		return 0;
+	return outputLength;
 }
+
+char* Network::OutputBuffer()
+{
+	return outputBuffer;
 }
 
 
 void Network::Write(char b)
 {
-//  if(client)
-//  {
-//    client.write(b);
-//  } else
-    reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
+	if(outputLength > 0)
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write to unflushed buffer.\n");
+		return;
+	}
+
+	if(outputPointer >= STRING_LENGTH)
+	{
+		outputBuffer[STRING_LENGTH - 1] = 0;
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Output buffer overflow: \n");
+		reprap.GetPlatform()->Message(HOST_MESSAGE, outputBuffer);
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "\n");
+		return;
+	}
+
+	outputBuffer[outputPointer] = b;
+	outputPointer++;
+
+	if(outputPointer >= STRING_LENGTH - 5) // 5 is for safety
+	{
+		outputLength = outputPointer;
+		outputPointer = 0;
+	} else
+		outputLength = -1;
 }
 
 void Network::Write(char* s)
 {
-//  if(client)
-//  {
-//    client.print(s);
-//  } else
-	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to send string to disconnected client.\n");
+	int i = 0;
+	while(s[i]) Write(s[i++]);
 }
 
-int Network::Read(char& b)
+bool Network::Read(char& b)
 {
-//  if(client)
-//  {
-//    b = client.read();
-//    return true;
-//  }
-//
-//  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
-//  b = '\n'; // good idea??
-  return 0;
+	if(inputPointer >= inputLength)
+	{
+		inputLength = -1;
+		inputPointer = 0;
+		return false;
+	}
+	b = inputBuffer[inputPointer];
+	inputPointer++;
+	return true;
 }
 
 
@@ -804,7 +885,9 @@ void Network::Close()
 
 int8_t Network::Status()
 {
-  return 0;
+	if(inputPointer >= inputLength)
+		return nothing;
+	return clientConnected | byteAvailable;
 }
 
 

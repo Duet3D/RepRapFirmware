@@ -46,6 +46,7 @@ class Webserver
     Webserver(Platform* p);
     bool GCodeAvailable();
     byte ReadGCode();
+    bool WebserverIsWriting();
     void Init();
     void Spin();
     void Exit();
@@ -85,7 +86,7 @@ class Webserver
     bool postSeen;
     bool getSeen;
     bool clientLineIsBlank;
-    unsigned long clientCloseTime;
+    float clientCloseTime;
     bool needToCloseClient;
 
     char clientLine[STRING_LENGTH];

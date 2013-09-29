@@ -185,6 +185,11 @@ void Webserver::CloseClient()
   needToCloseClient = true;   
 }
 
+bool Webserver::WebserverIsWriting()
+{
+	return writing;
+}
+
 
 void Webserver::SendFile(char* nameOfFileToSend)
 {
@@ -312,7 +317,7 @@ void Webserver::GetJsonResponse(char* request)
     for(int8_t heater = 0; heater < HEATERS; heater++)
     {
       strcat(jsonResponse, "\"");
-      strcat(jsonResponse, ftoa(NULL, reprap.GetHeat()->GetTemperature(heater), 1));
+      strcat(jsonResponse, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1));
       //sprintf(scratchString, "%d", (int)reprap.GetHeat()->GetTemperature(heater));
       //strcat(jsonResponse, scratchString);
       if(heater < HEATERS-1)
@@ -372,7 +377,7 @@ void Webserver::GetJsonResponse(char* request)
     for(int8_t drive = 0; drive < AXES; drive++)
     {
       strcat(jsonResponse, "\"");
-      strcat(jsonResponse, ftoa(NULL, platform->AxisLength(drive), 1));
+      strcat(jsonResponse, ftoa(0, platform->AxisLength(drive), 1));
       if(drive < AXES-1)
         strcat(jsonResponse, "\",");
       else
@@ -557,6 +562,7 @@ void Webserver::BlankLineFromClient()
 
 void Webserver::CharFromClient(char c)
 {
+
   if(c == '\n' && clientLineIsBlank) 
   {
     BlankLineFromClient();
@@ -609,7 +615,7 @@ void Webserver::Spin()
     if(platform->GetNetwork()->Status() & byteAvailable)
     {
     	platform->GetNetwork()->Read(c);
-//        Serial.print(c);
+        //SerialUSB.print(c);
 
       if(receivingPost && postFile != NULL)
       {
