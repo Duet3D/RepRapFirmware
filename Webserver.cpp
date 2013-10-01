@@ -269,8 +269,9 @@ void Webserver::WriteByte()
     } else
     {
       if(fileBeingSent->Read(b))
+      {
     	  platform->GetNetwork()->Write(b);
-      else
+      } else
       { 
         fileBeingSent->Close();    
         CloseClient(); 
@@ -601,11 +602,12 @@ void Webserver::Spin()
     
   if(writing)
   {
- //   if(inPHPFile)
- //     WritePHPByte();
- //   else
-      WriteByte();
-    return;         
+	  //   if(inPHPFile)
+	  //     WritePHPByte();
+	  //   else
+	  if(platform->GetNetwork()->CanWrite())
+		  WriteByte();
+	  return;
   }
   
   char c;
@@ -615,7 +617,7 @@ void Webserver::Spin()
     if(platform->GetNetwork()->Status() & byteAvailable)
     {
     	platform->GetNetwork()->Read(c);
-        //SerialUSB.print(c);
+        SerialUSB.print(c);
 
       if(receivingPost && postFile != NULL)
       {
@@ -634,11 +636,11 @@ void Webserver::Spin()
     }
   }  
    
-  if (platform->GetNetwork()->Status() & clientLive)
+//  if (platform->GetNetwork()->Status() & clientLive)
   {
     if(needToCloseClient)
     {
-      if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY)
+      if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY || !platform->GetNetwork()->CanWrite())
         return;
       needToCloseClient = false;  
       platform->GetNetwork()->Close();

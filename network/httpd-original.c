@@ -29,31 +29,16 @@
  * Author: Adam Dunkels <adam@sics.se>
  *
  */
-
-//#include "lwipopts.h"
-//#if defined(HTTP_RAW_USED)
-//
-//#include <string.h>
-//#include "lwip/debug.h"
-//#include "lwip/stats.h"
-//#include "httpd.h"
-//#include "lwip/tcp.h"
-//#include "fs.h"
-
+#if 0
 #include "lwipopts.h"
 #if defined(HTTP_RAW_USED)
 
 #include <string.h>
-#include "lwip/src/include/lwip/debug.h"
-#include "lwip/src/include/lwip/stats.h"
+#include "lwip/debug.h"
+#include "lwip/stats.h"
 #include "httpd.h"
-#include "lwip/src/include/lwip/tcp.h"
+#include "lwip/tcp.h"
 #include "fs.h"
-
-void RepRapNetworkReceiveInput(char* ip, int length);
-void RepRapNetworkMessage(char* s);
-void RepRapNetworkAllowWriting();
-//void NWSetNetworkDataToSend(char* data, int length);
 
 struct http_state {
   char *file;
@@ -61,50 +46,27 @@ struct http_state {
   u8_t retries;
 };
 
-static struct tcp_pcb* activePcb;
-static struct tcp_pcb* pcbToClose = 0;
-static struct http_state* activeHttpState;
-
 /*-----------------------------------------------------------------------------------*/
 static void
 conn_err(void *arg, err_t err)
 {
-  //struct http_state *hs;
+  struct http_state *hs;
 
   LWIP_UNUSED_ARG(err);
 
-  //hs = arg;
-  //mem_free(hs);
+  hs = arg;
+  mem_free(hs);
 }
 /*-----------------------------------------------------------------------------------*/
-
-void CloseConnection()
-{
-	RepRapNetworkMessage("CloseConnection() called.\n");
-	if(pcbToClose == 0)
-		return;
-	RepRapNetworkMessage("Got a pcb.\n");
-
-	  tcp_arg(pcbToClose, NULL);
-	  tcp_sent(pcbToClose, NULL);
-	  tcp_recv(pcbToClose, NULL);
-	  //mem_free(hs);
-	  tcp_close(pcbToClose);
-	  pcbToClose = 0;
-}
-
 static void
 close_conn(struct tcp_pcb *pcb, struct http_state *hs)
 {
-	RepRapNetworkMessage("Internal close_conn called.\n");
-//	CloseConnection();
   tcp_arg(pcb, NULL);
   tcp_sent(pcb, NULL);
   tcp_recv(pcb, NULL);
-  //mem_free(hs);
+  mem_free(hs);
   tcp_close(pcb);
 }
-
 /*-----------------------------------------------------------------------------------*/
 static void
 send_data(struct tcp_pcb *pcb, struct http_state *hs)
@@ -164,8 +126,6 @@ http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
   struct http_state *hs;
 
-  //RepRapNetworkAllowWriting();
-
   LWIP_UNUSED_ARG(len);
 
   hs = arg;
@@ -175,101 +135,67 @@ http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
   if (hs->left > 0) {
     send_data(pcb, hs);
   } else {
-	  RepRapNetworkAllowWriting();
-	  pcbToClose = pcb;
-    //close_conn(pcb, hs);
+    close_conn(pcb, hs);
   }
 
   return ERR_OK;
 }
 /*-----------------------------------------------------------------------------------*/
-
-static struct pbuf* pbufToFree = 0;
-static struct tcp_pcb* sendingPcb = 0;
-
-void SetNetworkDataToSend(char* data, int length)
-{
-	//RepRapNetworkMessage("Some data arrived.\n");
-	activeHttpState->file = data;
-	activeHttpState->left = length;
-	/* printf("data %p len %ld\n", hs->file, hs->left);*/
-
-	if(pbufToFree != 0)
-	{
-		pbuf_free(pbufToFree);
-		pbufToFree = 0;
-	}
-
-	send_data(sendingPcb, activeHttpState);
-
-	/* Tell TCP that we wish be to informed of data that has been
-	           successfully sent by a call to the http_sent() function. */
-	tcp_sent(sendingPcb, http_sent);
-}
-
 static err_t
 http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 {
   int i;
   char *data;
-  //struct fs_file file;
-  //struct http_state *hs;
+  struct fs_file file;
+  struct http_state *hs;
 
-  //hs = arg;
+  hs = arg;
 
   if (err == ERR_OK && p != NULL) {
 
     /* Inform TCP that we have taken the data. */
     tcp_recved(pcb, p->tot_len);
 
-    if (activeHttpState->file == NULL) {
+    if (hs->file == NULL) {
       data = p->payload;
 
-      RepRapNetworkReceiveInput(data, p->len);
+      if (strncmp(data, "GET ", 4) == 0) {
+        for(i = 0; i < 40; i++) {
+          if (((char *)data + 4)[i] == ' ' ||
+             ((char *)data + 4)[i] == '\r' ||
+             ((char *)data + 4)[i] == '\n') {
+            ((char *)data + 4)[i] = 0;
+          }
+        }
 
-//      if (strncmp(data, "GET ", 4) == 0) {
-//        for(i = 0; i < 40; i++) {
-//          if (((char *)data + 4)[i] == ' ' ||
-//             ((char *)data + 4)[i] == '\r' ||
-//             ((char *)data + 4)[i] == '\n') {
-//            ((char *)data + 4)[i] = 0;
-//          }
-//        }
-//
-//        if (*(char *)(data + 4) == '/' &&
-//           *(char *)(data + 5) == 0) {
-//          fs_open("/index.html", &file);
-//        } else if (!fs_open((char *)data + 4, &file)) {
-//          fs_open("/404.html", &file);
-//        }
+        if (*(char *)(data + 4) == '/' &&
+           *(char *)(data + 5) == 0) {
+          fs_open("/index.html", &file);
+        } else if (!fs_open((char *)data + 4, &file)) {
+          fs_open("/404.html", &file);
+        }
 
-        pbufToFree = p;
-        sendingPcb = pcb;
+        hs->file = file.data;
+        hs->left = file.len;
+        /* printf("data %p len %ld\n", hs->file, hs->left);*/
 
-        //NWSetNetworkDataToSend(file.data, file.len);
+        pbuf_free(p);
+        send_data(pcb, hs);
 
-//        activeHttpState->file = file.data;
-//        activeHttpState->left = file.len;
-//        /* printf("data %p len %ld\n", hs->file, hs->left);*/
-//
-//        pbuf_free(pbufToFree);
-//
-//        send_data(sendingPcb, activeHttpState);
-//
-//        /* Tell TCP that we wish be to informed of data that has been
-//           successfully sent by a call to the http_sent() function. */
-//        tcp_sent(sendingPcb, http_sent);
-//      } else {
-//        pbuf_free(p);
-//        close_conn(pcb, activeHttpState);
-//      }
+        /* Tell TCP that we wish be to informed of data that has been
+           successfully sent by a call to the http_sent() function. */
+        tcp_sent(pcb, http_sent);
+      } else {
+        pbuf_free(p);
+        close_conn(pcb, hs);
+      }
     } else {
       pbuf_free(p);
     }
   }
 
   if (err == ERR_OK && p == NULL) {
-    close_conn(pcb, activeHttpState);
+    close_conn(pcb, hs);
   }
   return ERR_OK;
 }
@@ -286,9 +212,7 @@ http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 
   /* Allocate memory for the structure that holds the state of the
      connection. */
-  //hs = (struct http_state *)mem_malloc(sizeof(struct http_state));
-
-  hs = activeHttpState;
+  hs = (struct http_state *)mem_malloc(sizeof(struct http_state));
 
   if (hs == NULL) {
     //printf("http_accept: Out of memory\n");
@@ -314,20 +238,18 @@ http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
   return ERR_OK;
 }
 /*-----------------------------------------------------------------------------------*/
-
-// This function is called once at the start.
-
 void
 httpd_init(void)
 {
-  activeHttpState = (struct http_state *)mem_malloc(sizeof(struct http_state));
-  activePcb = tcp_new();
-  tcp_bind(activePcb, IP_ADDR_ANY, 80);
-  activePcb = tcp_listen(activePcb);
-  tcp_accept(activePcb, http_accept);
+  struct tcp_pcb *pcb;
+
+  pcb = tcp_new();
+  tcp_bind(pcb, IP_ADDR_ANY, 80);
+  pcb = tcp_listen(pcb);
+  tcp_accept(pcb, http_accept);
 }
 /*-----------------------------------------------------------------------------------*/
 
 #endif
 
-
+#endif

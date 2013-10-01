@@ -233,11 +233,11 @@ void status_callback(struct netif *netif)
  *  \brief Manage the Ethernet packets, if any received process them.
  *  After processing any packets, manage the lwIP timers.
  */
-int HttpSend();
+//int HttpSend();
 
 void ethernet_task(void)
 {
-	HttpSend();
+	//HttpSend();
 	/* Run polling tasks */
 	ethernetif_input(&gs_net_if);
 

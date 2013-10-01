@@ -696,24 +696,50 @@ void Line::Init()
 extern "C"
 {
 
- int SetDataToSend();
+static char* hdat = 0;
+static int hlen = 0;
+//static float nwtime = 100000.0;
 
- void RepRapNetworkReceiveInput(char* ip, int length)
- {
+void SetNetworkDataToSend(char* data, int length);
+void CloseConnection();
+
+void NWSetNetworkDataToSend(char* data, int length)
+{
+	hdat = data;
+	hlen = length;
+//	nwtime = reprap.GetPlatform()->Time() + 3.0;
+}
+
+void RepRapNetworkMessage(char* s)
+{
+	reprap.GetPlatform()->Message(HOST_MESSAGE, s);
+}
+
+void RepRapNetworkReceiveInput(char* ip, int length)
+{
 	reprap.GetPlatform()->GetNetwork()->ReceiveInput(ip, length);
- }
+}
 
- int GetRepRapNetworkDataToSendLength()
- {
-	 return reprap.GetPlatform()->GetNetwork()->OutputBufferLength();
- }
+void RepRapNetworkAllowWriting()
+{
+	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(true);
+}
 
- char* GetRepRapNetworkDataToSend()
- {
-	 return reprap.GetPlatform()->GetNetwork()->OutputBuffer();
- }
+void SendDataFromRepRapNetwork()
+{
+	if(!reprap.GetPlatform()->GetNetwork()->DataToSendAvailable())
+		return;
+
+	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(false);
+	char* data = reprap.GetPlatform()->GetNetwork()->OutputBuffer();
+	int length = reprap.GetPlatform()->GetNetwork()->OutputBufferLength();
+	SetNetworkDataToSend(data, length);
+	reprap.GetPlatform()->GetNetwork()->ClearWriteBuffer();
+}
 
 }
+
+
 
 Network::Network()
 {
@@ -729,7 +755,7 @@ void Network::Init()
 	inputLength = -1;
 	outputPointer = 0;
 	outputLength = -1;
-	outputNotGone = false;
+	writeEnabled = true;
 }
 
 // Look for CloseConnectionAndFreeBuffer
@@ -742,54 +768,30 @@ void Network::Spin()
 
 	if(inputPointer < inputLength)
 	{
-		reprap.GetWebserver()->Spin(); // Is this sensible?
+		//reprap.GetWebserver()->Spin(); // Is this sensible?
 		return;
 	}
 
-	if(outputLength > 0)
-	{
-		switch(SetDataToSend())
-		{
-		case -1:
-			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: no ether location for output data!\n");
-			break;
-		case 0:
-			//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: output busy.\n");
-			break;
-		default:
-			outputLength = -1;
-			outputPointer = 0;
-		}
-		return;
-	}
+	SendDataFromRepRapNetwork();
+
+	ethernet_task();
 
 	if(!reprap.GetWebserver()->WebserverIsWriting())
 	{
 		if(outputPointer > 0)
+		{
 			outputLength = outputPointer;
-		outputPointer = 0;
-		return;
+			outputPointer = 0;
+		}
 	}
 
-	//while(reprap.GetWebserver()->WebserverIsWriting() && )
-//	if(outputPointer >= outputLength)
-//		return;
-
-	// Anything new come in or anything to send?
-
-	ethernet_task();
-
+//	if(reprap.GetPlatform()->Time() > nwtime && hdat != 0)
+//	{
+//		SetNetworkDataToSend(hdat, hlen);
+//		hdat = 0;
+//	}
 }
 
-void Network::SetOutputNotGone(bool g)
-{
-	outputNotGone = g;
-}
-
-void RepRapNetworkSetOutputNotGone(bool g)
-{
-	reprap.GetPlatform()->GetNetwork()->SetOutputNotGone(g);
-}
 
 void Network::ReceiveInput(char* ip, int length)
 {
@@ -824,9 +826,20 @@ char* Network::OutputBuffer()
 	return outputBuffer;
 }
 
+void Network::ClearWriteBuffer()
+{
+	outputPointer = 0;
+	outputLength = -1;
+}
 
 void Network::Write(char b)
 {
+	if(!writeEnabled)
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write when disabled.\n");
+		return;
+	}
+
 	if(outputLength > 0)
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write to unflushed buffer.\n");
@@ -853,6 +866,26 @@ void Network::Write(char b)
 		outputLength = -1;
 }
 
+bool Network::DataToSendAvailable()
+{
+	return (outputLength > 0);
+}
+
+bool Network::CanWrite()
+{
+	return writeEnabled;
+}
+
+void Network::SetWriteEnable(bool enable)
+{
+	writeEnabled = enable;
+	if(writeEnabled && outputLength > 0)
+	{
+		outputLength = -1;
+		outputPointer = 0;
+	}
+}
+
 void Network::Write(char* s)
 {
 	int i = 0;
@@ -875,12 +908,13 @@ bool Network::Read(char& b)
 
 void Network::Close()
 {
+	CloseConnection();
 //  if (client)
 //  {
 //    client.stop();
 //    //Serial.println("client disconnected");
 //  } else
-	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
+//	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
 }
 
 int8_t Network::Status()

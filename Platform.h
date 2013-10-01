@@ -235,10 +235,13 @@ class Network: public InputOutput
 public:
 	int8_t Status(); // Returns OR of IOStatus
 	bool Read(char& b);
+	bool CanWrite();
+	bool DataToSendAvailable();
+	void SetWriteEnable(bool enable);
+	void ClearWriteBuffer();
 	void Write(char b);
 	void Write(char* s);
 	void Close();
-	void SetOutputNotGone(bool g);
 	void ReceiveInput(char* ip, int length);
 	int OutputBufferLength();
 	char* OutputBuffer();
@@ -254,7 +257,7 @@ private:
 	char outputBuffer[STRING_LENGTH];
 	int inputPointer, inputLength;
 	int outputPointer, outputLength;
-	bool outputNotGone;
+	bool writeEnabled;
 };
 
 // This class handles serial I/O - typically via USB
