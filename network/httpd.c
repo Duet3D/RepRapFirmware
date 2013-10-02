@@ -73,6 +73,7 @@ struct http_state {
 void RepRapNetworkReceiveInput(char* ip, int length);
 void RepRapNetworkMessage(char* s);
 void RepRapNetworkAllowWriting();
+bool NoMoreData();
 
 // Static storage for pointers that need to be saved when we go
 // out to the RepRap firmware for when it calls back in again.
@@ -85,7 +86,6 @@ static struct http_state* activeHttpState;
 static struct pbuf* pbufToFree = 0;
 static struct tcp_pcb* sendingPcb = 0;
 static int initCount = 0;
-bool alreadySending = false;
 
 /*-----------------------------------------------------------------------------------*/
 static void
@@ -106,14 +106,13 @@ void CloseConnection()
 {
 	if(pcbToClose == 0)
 		return;
-	RepRapNetworkMessage("CloseConnection() called.\n");
 	tcp_arg(pcbToClose, NULL);
 	tcp_sent(pcbToClose, NULL);
 	tcp_recv(pcbToClose, NULL);
 	//mem_free(hs);
 	tcp_close(pcbToClose);
 	pcbToClose = 0;
-	alreadySending = false;
+	RepRapNetworkMessage("CloseConnection() called.\n");
 }
 
 // httpd.c's close function, slightly mashed...
@@ -127,7 +126,6 @@ close_conn(struct tcp_pcb *pcb, struct http_state *hs)
   tcp_recv(pcb, NULL);
   //mem_free(hs);
   tcp_close(pcb);
-  alreadySending = false;
 }
 
 char scratch[40];
@@ -158,6 +156,8 @@ send_data(struct tcp_pcb *pcb, struct http_state *hs)
       len /= 2;
     }
   } while (err == ERR_MEM && len > 1);
+
+  tcp_output(pcb);
 
   if (err == ERR_OK) {
     hs->file += len;
@@ -210,15 +210,12 @@ http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
     send_data(pcb, hs);
   } else
   {
-	  // See if there is more to send, and remember the
-	  // pcb for when the connection is closed.
+	  // See if there is more to send
 	  // TODO - possible memory leak?
 	  RepRapNetworkAllowWriting();
-	  sendingPcb = pcb;
-	  pcbToClose = pcb;
-	  tcp_sent(pcb, http_sent);
-    //close_conn(pcb, hs);
   }
+
+  pcbToClose = pcb;
 
   return ERR_OK;
 }
@@ -244,16 +241,11 @@ void SetNetworkDataToSend(char* data, int length)
 
 	send_data(sendingPcb, activeHttpState);
 
-	if(alreadySending)
-			return;
-
 	/* Tell TCP that we wish be to informed of data that has been
 	           successfully sent by a call to the http_sent() function. */
 
 
 	tcp_sent(sendingPcb, http_sent);
-
-	alreadySending = true;
 }
 
 static err_t

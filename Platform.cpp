@@ -716,6 +716,11 @@ void SetNetworkDataToSend(char* data, int length);
 
 void CloseConnection();
 
+bool NoMoreData()
+{
+	return !reprap.GetWebserver()->WebserverIsWriting();
+}
+
 // Called to put out a message via the RepRap firmware.
 
 void RepRapNetworkMessage(char* s)
@@ -806,10 +811,6 @@ void Network::Spin()
 
 	SendDataFromRepRapNetwork();
 
-	// Poll the network, and update its timers.
-
-	ethernet_task();
-
 	// If we've finished generating data, queue up the
 	// last bytes recorded (which may not fill the
 	// buffer) to send.
@@ -822,6 +823,7 @@ void Network::Spin()
 			outputPointer = 0;
 		}
 	}
+
 }
 
 
@@ -862,7 +864,7 @@ void Network::Write(char b)
 		return;
 	}
 
-	if(outputLength > 0)
+	if(outputLength >= 0)
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write to unflushed buffer.\n");
 		return;
@@ -897,7 +899,7 @@ void Network::Write(char b)
 
 bool Network::DataToSendAvailable()
 {
-	return (outputLength > 0);
+	return (outputLength >= 0);
 }
 
 bool Network::CanWrite()
@@ -911,7 +913,7 @@ void Network::SetWriteEnable(bool enable)
 
 	// Reset the write buffer if needs be.
 
-	if(writeEnabled && outputLength > 0)
+	if(writeEnabled && outputLength >= 0)
 	{
 		outputLength = -1;
 		outputPointer = 0;
@@ -945,7 +947,8 @@ bool Network::Read(char& b)
 
 void Network::Close()
 {
-	CloseConnection();
+	if(Status() && clientLive)
+		CloseConnection();
 	Reset();
 }
 
