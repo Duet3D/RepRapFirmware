@@ -681,6 +681,10 @@ void Platform::Spin()
 //   }
 }
 
+//*************************************************************************************************
+
+// Serial/USB class
+
 Line::Line()
 {
 }
@@ -693,47 +697,70 @@ void Line::Init()
 	while (!SerialUSB.available());
 }
 
+//***************************************************************************************************
+
+// Network/Ethernet class
+
+// C calls to interface with LWIP (http://savannah.nongnu.org/projects/lwip/)
+// These are implemented in, and called from, a modified version of httpd.c
+// in the network directory.
+
 extern "C"
 {
 
-static char* hdat = 0;
-static int hlen = 0;
-//static float nwtime = 100000.0;
+// Transmit data to the Network
 
 void SetNetworkDataToSend(char* data, int length);
+
+// Close the connection
+
 void CloseConnection();
 
-void NWSetNetworkDataToSend(char* data, int length)
-{
-	hdat = data;
-	hlen = length;
-//	nwtime = reprap.GetPlatform()->Time() + 3.0;
-}
+// Called to put out a message via the RepRap firmware.
 
 void RepRapNetworkMessage(char* s)
 {
 	reprap.GetPlatform()->Message(HOST_MESSAGE, s);
 }
 
+// Called to push data into the RepRap firmware.
+
 void RepRapNetworkReceiveInput(char* ip, int length)
 {
 	reprap.GetPlatform()->GetNetwork()->ReceiveInput(ip, length);
 }
+
+// Called when transmission of outgoing data is complete to allow
+// the RepRap firmware to write more.
 
 void RepRapNetworkAllowWriting()
 {
 	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(true);
 }
 
+// Called by the RepRap firmware to transmit data, if there is
+// any to send.
+
 void SendDataFromRepRapNetwork()
 {
 	if(!reprap.GetPlatform()->GetNetwork()->DataToSendAvailable())
 		return;
 
+	// Stop the generation of more data.
+
 	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(false);
+
+	// Find where the data is.
+
 	char* data = reprap.GetPlatform()->GetNetwork()->OutputBuffer();
 	int length = reprap.GetPlatform()->GetNetwork()->OutputBufferLength();
+
+	// Send it.
+
 	SetNetworkDataToSend(data, length);
+
+	// Prepare to write more, when writing is re-enabled.
+
 	reprap.GetPlatform()->GetNetwork()->ClearWriteBuffer();
 }
 
@@ -746,35 +773,46 @@ Network::Network()
 	ethPinsInit();
 }
 
-void Network::Init()
+// Reset the network to its disconnected and ready state.
+
+void Network::Reset()
 {
-	alternateInput = NULL;
-	alternateOutput = NULL;
-	init_ethernet();
 	inputPointer = 0;
 	inputLength = -1;
 	outputPointer = 0;
 	outputLength = -1;
 	writeEnabled = true;
+	status = nothing;
 }
 
-// Look for CloseConnectionAndFreeBuffer
-
-//static void FreeBuffer();
+void Network::Init()
+{
+	alternateInput = NULL;
+	alternateOutput = NULL;
+	init_ethernet();
+	Reset();
+}
 
 void Network::Spin()
 {
 	// Finish reading any data that's been received.
 
 	if(inputPointer < inputLength)
-	{
-		//reprap.GetWebserver()->Spin(); // Is this sensible?
 		return;
-	}
+
+	ethernet_task();
+
+	// Send any data that's available
 
 	SendDataFromRepRapNetwork();
 
+	// Poll the network, and update its timers.
+
 	ethernet_task();
+
+	// If we've finished generating data, queue up the
+	// last bytes recorded (which may not fill the
+	// buffer) to send.
 
 	if(!reprap.GetWebserver()->WebserverIsWriting())
 	{
@@ -784,33 +822,15 @@ void Network::Spin()
 			outputPointer = 0;
 		}
 	}
-
-//	if(reprap.GetPlatform()->Time() > nwtime && hdat != 0)
-//	{
-//		SetNetworkDataToSend(hdat, hlen);
-//		hdat = 0;
-//	}
 }
 
 
 void Network::ReceiveInput(char* ip, int length)
 {
-	if(length > STRING_LENGTH)
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network input buffer overflow.\n");
-		inputLength = STRING_LENGTH;
-	} else
-		inputLength = length;
-	for(int i = 0; i < inputLength; i++)
-	{
-		inputBuffer[i] = ip[i];
-		//SerialUSB.print(inputBuffer[i]);
-	}
-//	inputBuffer = ip;
-//	inputLength = length;
+	status = clientLive;
+	inputBuffer = ip;
+	inputLength = length;
 	inputPointer = 0;
-	//while(Status() != nothing)
-	//	reprap.GetWebserver()->Spin(); // Nasty...
 }
 
 
@@ -834,6 +854,8 @@ void Network::ClearWriteBuffer()
 
 void Network::Write(char b)
 {
+	// Check for horrible things...
+
 	if(!writeEnabled)
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write when disabled.\n");
@@ -855,8 +877,12 @@ void Network::Write(char b)
 		return;
 	}
 
+	// Add the byte to the buffer
+
 	outputBuffer[outputPointer] = b;
 	outputPointer++;
+
+	// Buffer full?  If so, flag it to send.
 
 	if(outputPointer >= STRING_LENGTH - 5) // 5 is for safety
 	{
@@ -865,6 +891,9 @@ void Network::Write(char b)
 	} else
 		outputLength = -1;
 }
+
+// If outputLength has been set, there's some data ready
+// to send.
 
 bool Network::DataToSendAvailable()
 {
@@ -879,12 +908,20 @@ bool Network::CanWrite()
 void Network::SetWriteEnable(bool enable)
 {
 	writeEnabled = enable;
+
+	// Reset the write buffer if needs be.
+
 	if(writeEnabled && outputLength > 0)
 	{
 		outputLength = -1;
 		outputPointer = 0;
 	}
 }
+
+// This is not called for data, only for internally-
+// generated short strings at the start of a transmission,
+// so it should never overflow the buffer (which is checked
+// anyway).
 
 void Network::Write(char* s)
 {
@@ -909,19 +946,14 @@ bool Network::Read(char& b)
 void Network::Close()
 {
 	CloseConnection();
-//  if (client)
-//  {
-//    client.stop();
-//    //Serial.println("client disconnected");
-//  } else
-//	  reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
+	Reset();
 }
 
 int8_t Network::Status()
 {
 	if(inputPointer >= inputLength)
-		return nothing;
-	return clientConnected | byteAvailable;
+		return status;
+	return status | clientConnected | byteAvailable;
 }
 
 

@@ -636,12 +636,14 @@ void Webserver::Spin()
     }
   }  
    
-//  if (platform->GetNetwork()->Status() & clientLive)
+  if (platform->GetNetwork()->Status() & clientLive)
   {
     if(needToCloseClient)
     {
       if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY || !platform->GetNetwork()->CanWrite())
         return;
+      //if(!platform->GetNetwork()->CanWrite())
+    	//  return;
       needToCloseClient = false;  
       platform->GetNetwork()->Close();
     }   

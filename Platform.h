@@ -252,12 +252,16 @@ protected:
 	Network();
 	void Init();
 	void Spin();
+
 private:
-	char inputBuffer[STRING_LENGTH];
+
+	void Reset();
+	char* inputBuffer;
 	char outputBuffer[STRING_LENGTH];
 	int inputPointer, inputLength;
 	int outputPointer, outputLength;
 	bool writeEnabled;
+	int8_t status;
 };
 
 // This class handles serial I/O - typically via USB

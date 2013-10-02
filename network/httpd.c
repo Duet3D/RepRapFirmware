@@ -30,6 +30,17 @@
  *
  */
 
+
+/*
+ * Heavily modified by Adrian
+ *
+ * RepRapPro Ltd
+ * http://reprappro.com
+ *
+ * 2 October 2013
+ *
+ */
+
 //#include "lwipopts.h"
 //#if defined(HTTP_RAW_USED)
 //
@@ -50,20 +61,31 @@
 #include "lwip/src/include/lwip/tcp.h"
 #include "fs.h"
 
-void RepRapNetworkReceiveInput(char* ip, int length);
-void RepRapNetworkMessage(char* s);
-void RepRapNetworkAllowWriting();
-//void NWSetNetworkDataToSend(char* data, int length);
-
 struct http_state {
   char *file;
   u16_t left;
   u8_t retries;
 };
 
+// Prototypes for the RepRap functions in Platform.cpp that we
+// need to call.
+
+void RepRapNetworkReceiveInput(char* ip, int length);
+void RepRapNetworkMessage(char* s);
+void RepRapNetworkAllowWriting();
+
+// Static storage for pointers that need to be saved when we go
+// out to the RepRap firmware for when it calls back in again.
+// Note that this means that the code is not reentrant, but in
+// our context it doesn't need to be.
+
 static struct tcp_pcb* activePcb;
 static struct tcp_pcb* pcbToClose = 0;
 static struct http_state* activeHttpState;
+static struct pbuf* pbufToFree = 0;
+static struct tcp_pcb* sendingPcb = 0;
+static int initCount = 0;
+bool alreadySending = false;
 
 /*-----------------------------------------------------------------------------------*/
 static void
@@ -78,32 +100,37 @@ conn_err(void *arg, err_t err)
 }
 /*-----------------------------------------------------------------------------------*/
 
+// Added to allow RepRap to close the connection.
+
 void CloseConnection()
 {
-	RepRapNetworkMessage("CloseConnection() called.\n");
 	if(pcbToClose == 0)
 		return;
-	RepRapNetworkMessage("Got a pcb.\n");
-
-	  tcp_arg(pcbToClose, NULL);
-	  tcp_sent(pcbToClose, NULL);
-	  tcp_recv(pcbToClose, NULL);
-	  //mem_free(hs);
-	  tcp_close(pcbToClose);
-	  pcbToClose = 0;
+	RepRapNetworkMessage("CloseConnection() called.\n");
+	tcp_arg(pcbToClose, NULL);
+	tcp_sent(pcbToClose, NULL);
+	tcp_recv(pcbToClose, NULL);
+	//mem_free(hs);
+	tcp_close(pcbToClose);
+	pcbToClose = 0;
+	alreadySending = false;
 }
+
+// httpd.c's close function, slightly mashed...
 
 static void
 close_conn(struct tcp_pcb *pcb, struct http_state *hs)
 {
-	RepRapNetworkMessage("Internal close_conn called.\n");
-//	CloseConnection();
+  RepRapNetworkMessage("Internal close_conn called.\n");
   tcp_arg(pcb, NULL);
   tcp_sent(pcb, NULL);
   tcp_recv(pcb, NULL);
   //mem_free(hs);
   tcp_close(pcb);
+  alreadySending = false;
 }
+
+char scratch[40];
 
 /*-----------------------------------------------------------------------------------*/
 static void
@@ -119,6 +146,11 @@ send_data(struct tcp_pcb *pcb, struct http_state *hs)
   } else {
     len = hs->left;
   }
+
+  RepRapNetworkMessage("Sending ");
+  sprintf(scratch, "%d", len);
+  RepRapNetworkMessage(scratch);
+  RepRapNetworkMessage("..");
 
   do {
     err = tcp_write(pcb, hs->file, len, 0);
@@ -158,13 +190,12 @@ http_poll(void *arg, struct tcp_pcb *pcb)
 
   return ERR_OK;
 }
+
 /*-----------------------------------------------------------------------------------*/
 static err_t
 http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
   struct http_state *hs;
-
-  //RepRapNetworkAllowWriting();
 
   LWIP_UNUSED_ARG(len);
 
@@ -172,11 +203,20 @@ http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
 
   hs->retries = 0;
 
-  if (hs->left > 0) {
+  RepRapNetworkMessage("..sent\n");
+
+  if (hs->left > 0)
+  {
     send_data(pcb, hs);
-  } else {
+  } else
+  {
+	  // See if there is more to send, and remember the
+	  // pcb for when the connection is closed.
+	  // TODO - possible memory leak?
 	  RepRapNetworkAllowWriting();
+	  sendingPcb = pcb;
 	  pcbToClose = pcb;
+	  tcp_sent(pcb, http_sent);
     //close_conn(pcb, hs);
   }
 
@@ -184,8 +224,10 @@ http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
 }
 /*-----------------------------------------------------------------------------------*/
 
-static struct pbuf* pbufToFree = 0;
-static struct tcp_pcb* sendingPcb = 0;
+// ReoRap calls this with data to send.
+// It has the side effect of freeing the input buffer
+// that prompted the transmission, as that must now have been fully read.
+// If RepRap ignores input, is this another potential memory leak?
 
 void SetNetworkDataToSend(char* data, int length)
 {
@@ -202,76 +244,45 @@ void SetNetworkDataToSend(char* data, int length)
 
 	send_data(sendingPcb, activeHttpState);
 
+	if(alreadySending)
+			return;
+
 	/* Tell TCP that we wish be to informed of data that has been
 	           successfully sent by a call to the http_sent() function. */
+
+
 	tcp_sent(sendingPcb, http_sent);
+
+	alreadySending = true;
 }
 
 static err_t
 http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 {
-  int i;
-  char *data;
-  //struct fs_file file;
-  //struct http_state *hs;
+	int i;
+	char *data;
 
-  //hs = arg;
+	if (err == ERR_OK && p != NULL)
+	{
+		/* Inform TCP that we have taken the data. */
+		tcp_recved(pcb, p->tot_len);
 
-  if (err == ERR_OK && p != NULL) {
+		if (activeHttpState->file == NULL)
+		{
+			data = p->payload;
+			RepRapNetworkReceiveInput(data, p->len);
+			pbufToFree = p;
+			sendingPcb = pcb;
+		} else
+		{
+			pbuf_free(p);
+		}
+	}
 
-    /* Inform TCP that we have taken the data. */
-    tcp_recved(pcb, p->tot_len);
-
-    if (activeHttpState->file == NULL) {
-      data = p->payload;
-
-      RepRapNetworkReceiveInput(data, p->len);
-
-//      if (strncmp(data, "GET ", 4) == 0) {
-//        for(i = 0; i < 40; i++) {
-//          if (((char *)data + 4)[i] == ' ' ||
-//             ((char *)data + 4)[i] == '\r' ||
-//             ((char *)data + 4)[i] == '\n') {
-//            ((char *)data + 4)[i] = 0;
-//          }
-//        }
-//
-//        if (*(char *)(data + 4) == '/' &&
-//           *(char *)(data + 5) == 0) {
-//          fs_open("/index.html", &file);
-//        } else if (!fs_open((char *)data + 4, &file)) {
-//          fs_open("/404.html", &file);
-//        }
-
-        pbufToFree = p;
-        sendingPcb = pcb;
-
-        //NWSetNetworkDataToSend(file.data, file.len);
-
-//        activeHttpState->file = file.data;
-//        activeHttpState->left = file.len;
-//        /* printf("data %p len %ld\n", hs->file, hs->left);*/
-//
-//        pbuf_free(pbufToFree);
-//
-//        send_data(sendingPcb, activeHttpState);
-//
-//        /* Tell TCP that we wish be to informed of data that has been
-//           successfully sent by a call to the http_sent() function. */
-//        tcp_sent(sendingPcb, http_sent);
-//      } else {
-//        pbuf_free(p);
-//        close_conn(pcb, activeHttpState);
-//      }
-    } else {
-      pbuf_free(p);
-    }
-  }
-
-  if (err == ERR_OK && p == NULL) {
-    close_conn(pcb, activeHttpState);
-  }
-  return ERR_OK;
+	if (err == ERR_OK && p == NULL) {
+		close_conn(pcb, activeHttpState);
+	}
+	return ERR_OK;
 }
 /*-----------------------------------------------------------------------------------*/
 static err_t
@@ -284,9 +295,7 @@ http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 
   tcp_setprio(pcb, TCP_PRIO_MIN);
 
-  /* Allocate memory for the structure that holds the state of the
-     connection. */
-  //hs = (struct http_state *)mem_malloc(sizeof(struct http_state));
+  // Ignore arg; we know it must be our static activeHttpState
 
   hs = activeHttpState;
 
@@ -315,11 +324,15 @@ http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 }
 /*-----------------------------------------------------------------------------------*/
 
-// This function is called once at the start.
+// This function (is)x should be called only once at the start.
 
 void
 httpd_init(void)
 {
+  initCount++;
+  if(initCount > 1)
+	  RepRapNetworkMessage("httpd_init() called more than once.\n");
+
   activeHttpState = (struct http_state *)mem_malloc(sizeof(struct http_state));
   activePcb = tcp_new();
   tcp_bind(activePcb, IP_ADDR_ANY, 80);
