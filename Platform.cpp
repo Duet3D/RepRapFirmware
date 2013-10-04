@@ -710,16 +710,11 @@ extern "C"
 
 // Transmit data to the Network
 
-void SetNetworkDataToSend(char* data, int length);
+void RepRapNetworkSendOutput(char* data, int length, void* https);
 
 // Close the connection
 
-void CloseConnection();
-
-bool NoMoreData()
-{
-	return !reprap.GetWebserver()->WebserverIsWriting();
-}
+void CloseConnection(void* https);
 
 // Called to put out a message via the RepRap firmware.
 
@@ -730,8 +725,9 @@ void RepRapNetworkMessage(char* s)
 
 // Called to push data into the RepRap firmware.
 
-void RepRapNetworkReceiveInput(char* ip, int length)
+void RepRapNetworkReceiveInput(char* ip, int length, void* https)
 {
+	reprap.GetPlatform()->GetNetwork()->PushHttp(https);
 	reprap.GetPlatform()->GetNetwork()->ReceiveInput(ip, length);
 }
 
@@ -741,32 +737,6 @@ void RepRapNetworkReceiveInput(char* ip, int length)
 void RepRapNetworkAllowWriting()
 {
 	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(true);
-}
-
-// Called by the RepRap firmware to transmit data, if there is
-// any to send.
-
-void SendDataFromRepRapNetwork()
-{
-	if(!reprap.GetPlatform()->GetNetwork()->DataToSendAvailable())
-		return;
-
-	// Stop the generation of more data.
-
-	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(false);
-
-	// Find where the data is.
-
-	char* data = reprap.GetPlatform()->GetNetwork()->OutputBuffer();
-	int length = reprap.GetPlatform()->GetNetwork()->OutputBufferLength();
-
-	// Send it.
-
-	SetNetworkDataToSend(data, length);
-
-	// Prepare to write more, when writing is re-enabled.
-
-	reprap.GetPlatform()->GetNetwork()->ClearWriteBuffer();
 }
 
 }
@@ -782,11 +752,12 @@ Network::Network()
 
 void Network::Reset()
 {
+	reprap.GetPlatform()->Message(HOST_MESSAGE, "Reset.\n");
 	inputPointer = 0;
 	inputLength = -1;
 	outputPointer = 0;
-	outputLength = -1;
 	writeEnabled = true;
+	reading = true;
 	status = nothing;
 }
 
@@ -805,27 +776,53 @@ void Network::Spin()
 	if(inputPointer < inputLength)
 		return;
 
+	// Check for more input or send more output
+
 	ethernet_task();
-
-	// Send any data that's available
-
-	SendDataFromRepRapNetwork();
-
-	// If we've finished generating data, queue up the
-	// last bytes recorded (which may not fill the
-	// buffer) to send.
-
-	if(!reprap.GetWebserver()->WebserverIsWriting())
-	{
-		if(outputPointer > 0)
-		{
-			outputLength = outputPointer;
-			outputPointer = 0;
-		}
-	}
-
 }
 
+void Network::PushHttp(void* h)
+{
+	if(httpStateStackPointer >= HTTP_STATE_STACK_SIZE)
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "httpStateStack overflow.\n");
+		return;
+	}
+	httpStateStack[httpStateStackPointer] = h;
+	httpStateStackPointer++;
+}
+
+void* Network::PopHttp()
+{
+	httpStateStackPointer--;
+	if(httpStateStackPointer < 0)
+		{
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "httpStateStack underflow.\n");
+			return 0;
+		}
+	return httpStateStack[httpStateStackPointer];
+}
+
+
+void Network::SetReading(bool r)
+{
+	reading = r;
+
+	// If we've just STOPPED writing (i.e. if reading has just been
+	// set to true) check if there's anything
+	// Left in the buffer to send.  If we've already done this,
+	// outputPointer will be 0.
+
+	if(!reading)
+		return;
+
+	if(outputPointer > 0)
+	{
+		SetWriteEnable(false);
+		RepRapNetworkSendOutput(outputBuffer, outputPointer, PopHttp());
+		outputPointer = 0;
+	}
+}
 
 void Network::ReceiveInput(char* ip, int length)
 {
@@ -836,24 +833,6 @@ void Network::ReceiveInput(char* ip, int length)
 }
 
 
-int Network::OutputBufferLength()
-{
-	if(outputLength <= 0)
-		return 0;
-	return outputLength;
-}
-
-char* Network::OutputBuffer()
-{
-	return outputBuffer;
-}
-
-void Network::ClearWriteBuffer()
-{
-	outputPointer = 0;
-	outputLength = -1;
-}
-
 void Network::Write(char b)
 {
 	// Check for horrible things...
@@ -861,12 +840,6 @@ void Network::Write(char b)
 	if(!writeEnabled)
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write when disabled.\n");
-		return;
-	}
-
-	if(outputLength >= 0)
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write to unflushed buffer.\n");
 		return;
 	}
 
@@ -888,19 +861,12 @@ void Network::Write(char b)
 
 	if(outputPointer >= STRING_LENGTH - 5) // 5 is for safety
 	{
-		outputLength = outputPointer;
+		SetWriteEnable(false);  // Stop further input
+		RepRapNetworkSendOutput(outputBuffer, outputPointer, PopHttp());
 		outputPointer = 0;
-	} else
-		outputLength = -1;
+	}
 }
 
-// If outputLength has been set, there's some data ready
-// to send.
-
-bool Network::DataToSendAvailable()
-{
-	return (outputLength >= 0);
-}
 
 bool Network::CanWrite()
 {
@@ -910,14 +876,6 @@ bool Network::CanWrite()
 void Network::SetWriteEnable(bool enable)
 {
 	writeEnabled = enable;
-
-	// Reset the write buffer if needs be.
-
-	if(writeEnabled && outputLength >= 0)
-	{
-		outputLength = -1;
-		outputPointer = 0;
-	}
 }
 
 // This is not called for data, only for internally-
@@ -928,7 +886,8 @@ void Network::SetWriteEnable(bool enable)
 void Network::Write(char* s)
 {
 	int i = 0;
-	while(s[i]) Write(s[i++]);
+	while(s[i])
+		Write(s[i++]);
 }
 
 bool Network::Read(char& b)
@@ -948,7 +907,7 @@ bool Network::Read(char& b)
 void Network::Close()
 {
 	if(Status() && clientLive)
-		CloseConnection();
+		CloseConnection(PopHttp());
 	Reset();
 }
 

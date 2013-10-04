@@ -59,7 +59,7 @@ Licence: GPL
 
 // Some numbers...
 
-#define STRING_LENGTH 1000
+#define STRING_LENGTH 1029
 #define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
 
@@ -181,7 +181,9 @@ Licence: GPL
 
 // Seconds to wait after serving a page
  
-#define CLIENT_CLOSE_DELAY 0.001
+#define CLIENT_CLOSE_DELAY 0.002
+
+#define HTTP_STATE_STACK_SIZE 5
 
 
 /****************************************************************************************************/
@@ -236,15 +238,14 @@ public:
 	int8_t Status(); // Returns OR of IOStatus
 	bool Read(char& b);
 	bool CanWrite();
-	bool DataToSendAvailable();
 	void SetWriteEnable(bool enable);
-	void ClearWriteBuffer();
 	void Write(char b);
 	void Write(char* s);
 	void Close();
 	void ReceiveInput(char* ip, int length);
-	int OutputBufferLength();
-	char* OutputBuffer();
+	void SetReading(bool r);
+	void PushHttp(void* h);
+	void* PopHttp();
 
 friend class Platform;
 
@@ -258,10 +259,14 @@ private:
 	void Reset();
 	char* inputBuffer;
 	char outputBuffer[STRING_LENGTH];
-	int inputPointer, inputLength;
-	int outputPointer, outputLength;
+	int inputPointer;
+	int inputLength;
+	int outputPointer;
 	bool writeEnabled;
+	bool reading;
 	int8_t status;
+	void* httpStateStack[HTTP_STATE_STACK_SIZE];
+	int8_t httpStateStackPointer;
 };
 
 // This class handles serial I/O - typically via USB

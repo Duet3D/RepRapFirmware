@@ -179,6 +179,7 @@ bool Webserver::LoadGcodeBuffer(char* gc, bool convertWeb)
 void Webserver::CloseClient()
 {
   writing = false;
+  reprap.GetPlatform()->GetNetwork()->SetReading(!writing);
   //inPHPFile = false;
   //InitialisePHP();
   clientCloseTime = platform->Time();
@@ -209,6 +210,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
       fileBeingSent = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
     }
     writing = fileBeingSent != NULL;
+    reprap.GetPlatform()->GetNetwork()->SetReading(!writing);
   } 
   
   platform->GetNetwork()->Write("HTTP/1.1 200 OK\n");
@@ -311,6 +313,7 @@ void Webserver::GetJsonResponse(char* request)
 {
   jsonPointer = 0;
   writing = true;
+  reprap.GetPlatform()->GetNetwork()->SetReading(!writing);
   
   if(StringStartsWith(request, "temps"))
   {
@@ -642,8 +645,6 @@ void Webserver::Spin()
     {
       if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY || !platform->GetNetwork()->CanWrite())
         return;
-      //if(!platform->GetNetwork()->CanWrite())
-    	//  return;
       needToCloseClient = false;  
       platform->GetNetwork()->Close();
     }   
@@ -665,6 +666,7 @@ void Webserver::Init()
   char scratchString[STRING_LENGTH];
   lastTime = platform->Time();
   writing = false;
+  reprap.GetPlatform()->GetNetwork()->SetReading(!writing);
   receivingPost = false;
   postSeen = false;
   getSeen = false;
