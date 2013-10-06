@@ -183,7 +183,7 @@ Licence: GPL
  
 #define CLIENT_CLOSE_DELAY 0.002
 
-#define HTTP_STATE_STACK_SIZE 5
+#define HTTP_STATE_SIZE 5
 
 
 /****************************************************************************************************/
@@ -232,6 +232,45 @@ protected:
 
 // This class handles the network - typically an ethernet.
 
+// Start with a ring buffer to hold input from the network
+// that needs to be responded to.
+
+class NetRing
+{
+public:
+	friend class Network;
+
+protected:
+	NetRing(NetRing* n);
+	NetRing* Next();
+	bool Set(char* d, int l, void* pb, void* pc, void* h);
+	char* Data();
+	int Length();
+	bool Read();
+	void SetRead();
+	void* Pbuf();
+	void* Pcb();
+	void* Hs();
+	bool Active();
+	void Free();
+	void SetNext(NetRing* n);
+	void ReleasePbuf();
+	void ReleaseHs();
+
+private:
+	void Reset();
+	void* pbuf;
+	void* pcb;
+	void* hs;
+	char* data;
+	int length;
+	bool read;
+	bool active;
+	NetRing* next;
+};
+
+// The main network class that drives the network.
+
 class Network: public InputOutput
 {
 public:
@@ -242,10 +281,9 @@ public:
 	void Write(char b);
 	void Write(char* s);
 	void Close();
-	void ReceiveInput(char* ip, int length);
-	void SetReading(bool r);
-	void PushHttp(void* h);
-	void* PopHttp();
+	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
+	void InputBufferReleased(void* pb);
+	void HttpStateReleased(void* h);
 
 friend class Platform;
 
@@ -263,10 +301,10 @@ private:
 	int inputLength;
 	int outputPointer;
 	bool writeEnabled;
-	bool reading;
+	bool closePending;
 	int8_t status;
-	void* httpStateStack[HTTP_STATE_STACK_SIZE];
-	int8_t httpStateStackPointer;
+	NetRing* netRingGetPointer;
+	NetRing* netRingAddPointer;
 };
 
 // This class handles serial I/O - typically via USB

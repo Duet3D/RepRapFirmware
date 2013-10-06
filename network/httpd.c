@@ -70,24 +70,17 @@ struct http_state {
 // Prototypes for the RepRap functions in Platform.cpp that we
 // need to call.
 
-void RepRapNetworkReceiveInput(char* ip, int length, void* https);
+void RepRapNetworkReceiveInput(char* ip, int length, void* pbuf, void* pcb, void* hs);
+void RepRapNetworkInputBufferReleased(void* pbuf);
+void RepRapNetworkHttpStateReleased(void* h);
 void RepRapNetworkMessage(char* s);
 void RepRapNetworkAllowWriting();
 
-// Static storage for pointers that need to be saved when we go
-// out to the RepRap firmware for when it calls back in again.
-// Note that this means that the code is not reentrant, but in
-// our context it doesn't need to be.
+// Sanity check on initialisations.
 
-static struct tcp_pcb* pcbToClose = 0;
-//static struct http_state* activeHttpState;
-static struct pbuf* pbufToFree = 0;
-static struct tcp_pcb* sendingPcb = 0;
 static int initCount = 0;
 
 /*-----------------------------------------------------------------------------------*/
-
-// ******** Called from outside.
 
 static void
 conn_err(void *arg, err_t err)
@@ -98,32 +91,15 @@ conn_err(void *arg, err_t err)
 
   hs = arg;
   mem_free(hs);
+  RepRapNetworkHttpStateReleased(hs);
+  RepRapNetworkMessage("Network connection error.\n");
 }
 /*-----------------------------------------------------------------------------------*/
-
-// Added to allow RepRap to close the connection.
-
-void CloseConnection(void *arg)
-{
-	if(pcbToClose == 0)
-		return;
-	struct http_state *hs;
-	hs = arg;
-	tcp_arg(pcbToClose, NULL);
-	tcp_sent(pcbToClose, NULL);
-	tcp_recv(pcbToClose, NULL);
-	mem_free(hs);
-	tcp_close(pcbToClose);
-	pcbToClose = 0;
-	RepRapNetworkMessage("CloseConnection() called.\n");
-}
-
-// httpd.c's close function, slightly mashed...
 
 static void
 close_conn(struct tcp_pcb *pcb, struct http_state *hs)
 {
-  RepRapNetworkMessage("Internal close_conn called.\n");
+  RepRapNetworkMessage("close_conn called.\n");
   tcp_arg(pcb, NULL);
   tcp_sent(pcb, NULL);
   tcp_recv(pcb, NULL);
@@ -134,6 +110,7 @@ close_conn(struct tcp_pcb *pcb, struct http_state *hs)
 char scratch[40];
 
 /*-----------------------------------------------------------------------------------*/
+
 static void
 send_data(struct tcp_pcb *pcb, struct http_state *hs)
 {
@@ -162,16 +139,16 @@ send_data(struct tcp_pcb *pcb, struct http_state *hs)
 
   if (err == ERR_OK)
   {
-	tcp_output(pcb);
-    hs->file += len;
-    hs->left -= len;
-    /*  } else {
-    printf("send_data: error %s len %d %d\n", lwip_strerr(err), len, tcp_sndbuf(pcb));*/
+	  tcp_output(pcb);
+	  hs->file += len;
+	  hs->left -= len;
+  } else
+  {
+	  RepRapNetworkMessage("send_data: error\n");
+	  //%s len %d %d\n", lwip_strerr(err), len, tcp_sndbuf(pcb));
   }
 }
 /*-----------------------------------------------------------------------------------*/
-
-// ******** Called from outside.
 
 static err_t
 http_poll(void *arg, struct tcp_pcb *pcb)
@@ -198,6 +175,7 @@ http_poll(void *arg, struct tcp_pcb *pcb)
 }
 
 /*-----------------------------------------------------------------------------------*/
+
 static err_t
 http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
@@ -217,47 +195,57 @@ http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
   } else
   {
 	  // See if there is more to send
-	  // TODO - possible memory leak? cf original program
 	  RepRapNetworkAllowWriting();
   }
-
-  pcbToClose = pcb;
 
   return ERR_OK;
 }
 /*-----------------------------------------------------------------------------------*/
 
+
 // ReoRap calls this with data to send.
-// It has the side effect of freeing the input buffer
-// that prompted the transmission, as that must now have been fully read.
-// If RepRap ignores input, is this another potential memory leak?
+// A null transmission implies the end of the data to be sent.
 
-void RepRapNetworkSendOutput(char* data, int length, void* https)
+void RepRapNetworkSendOutput(char* data, int length, void* pb, void* pc, void* h)
 {
-	struct http_state *hs;
+	struct pbuf* p = pb;
+	struct tcp_pcb* pcb = pc;
+	struct http_state* hs = h;
 
-	hs = https;
-
-	//RepRapNetworkMessage("Some data arrived.\n");
-	hs->file = data;
-	hs->left = length;
-	/* printf("data %p len %ld\n", hs->file, hs->left);*/
-
-	if(pbufToFree != 0)
+	if(length <= 0)
 	{
-		pbuf_free(pbufToFree);
-		pbufToFree = 0;
+		//tcp_output(pcb);
+		//pbuf_free(p);
+		close_conn(pcb, hs);
+		return;
 	}
 
-	send_data(sendingPcb, hs);
+	if(hs == 0)
+	{
+		RepRapNetworkMessage("Attempt to write with null structure.\n");
+		return;
+	}
+
+	hs->file = data;
+	hs->left = length;
+	hs->retries = 0;
+
+	if(pb != 0)
+	{
+		RepRapNetworkInputBufferReleased(p);
+		pbuf_free(p);
+	}
+	send_data(pcb, hs);
+
+	//if(hs->left <= 0)
+		//RepRapNetworkAllowWriting();
 
 	/* Tell TCP that we wish be to informed of data that has been
 	           successfully sent by a call to the http_sent() function. */
 
-	tcp_sent(sendingPcb, http_sent);
+	tcp_sent(pcb, http_sent);
 }
 
-// ******** Called from outside.
 
 static err_t
 http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
@@ -274,9 +262,7 @@ http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 
 		if (hs->file == NULL)
 		{
-			RepRapNetworkReceiveInput(p->payload, p->len, hs);
-			pbufToFree = p;
-			sendingPcb = pcb;
+			RepRapNetworkReceiveInput(p->payload, p->len, p, pcb, hs);
 		} else
 		{
 			pbuf_free(p);
@@ -289,8 +275,6 @@ http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
 	return ERR_OK;
 }
 /*-----------------------------------------------------------------------------------*/
-
-// ******** Called from outside.
 
 static err_t
 http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
@@ -336,17 +320,16 @@ http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 void
 httpd_init(void)
 {
-  struct tcp_pcb* activePcb;
+  struct tcp_pcb* pcb;
 
   initCount++;
   if(initCount > 1)
 	  RepRapNetworkMessage("httpd_init() called more than once.\n");
 
-  //activeHttpState = (struct http_state *)mem_malloc(sizeof(struct http_state));
-  activePcb = tcp_new();
-  tcp_bind(activePcb, IP_ADDR_ANY, 80);
-  activePcb = tcp_listen(activePcb);
-  tcp_accept(activePcb, http_accept);
+  pcb = tcp_new();
+  tcp_bind(pcb, IP_ADDR_ANY, 80);
+  pcb = tcp_listen(pcb);
+  tcp_accept(pcb, http_accept);
 }
 /*-----------------------------------------------------------------------------------*/
 

@@ -710,11 +710,20 @@ extern "C"
 
 // Transmit data to the Network
 
-void RepRapNetworkSendOutput(char* data, int length, void* https);
+void RepRapNetworkSendOutput(char* data, int length, void* pbuf, void* pcb, void* hs);
 
-// Close the connection
+// When lwip releases storage, set the local copy of the pointer to 0 to stop
+// it being used again.
 
-void CloseConnection(void* https);
+void RepRapNetworkInputBufferReleased(void* pb)
+{
+	reprap.GetPlatform()->GetNetwork()->InputBufferReleased(pb);
+}
+
+void RepRapNetworkHttpStateReleased(void* h)
+{
+	reprap.GetPlatform()->GetNetwork()->HttpStateReleased(h);
+}
 
 // Called to put out a message via the RepRap firmware.
 
@@ -725,10 +734,9 @@ void RepRapNetworkMessage(char* s)
 
 // Called to push data into the RepRap firmware.
 
-void RepRapNetworkReceiveInput(char* ip, int length, void* https)
+void RepRapNetworkReceiveInput(char* data, int length, void* pbuf, void* pcb, void* hs)
 {
-	reprap.GetPlatform()->GetNetwork()->PushHttp(https);
-	reprap.GetPlatform()->GetNetwork()->ReceiveInput(ip, length);
+	reprap.GetPlatform()->GetNetwork()->ReceiveInput(data, length, pbuf, pcb, hs);
 }
 
 // Called when transmission of outgoing data is complete to allow
@@ -746,6 +754,14 @@ void RepRapNetworkAllowWriting()
 Network::Network()
 {
 	ethPinsInit();
+
+	// Construct the ring buffer
+
+	netRingAddPointer = new NetRing(NULL);
+	netRingGetPointer = netRingAddPointer;
+	for(int8_t i = 1; i < HTTP_STATE_SIZE; i++)
+		netRingGetPointer = new NetRing(netRingGetPointer);
+	netRingAddPointer->SetNext(netRingGetPointer);
 }
 
 // Reset the network to its disconnected and ready state.
@@ -756,8 +772,8 @@ void Network::Reset()
 	inputPointer = 0;
 	inputLength = -1;
 	outputPointer = 0;
-	writeEnabled = true;
-	reading = true;
+	writeEnabled = false;
+	closePending = false;
 	status = nothing;
 }
 
@@ -767,71 +783,36 @@ void Network::Init()
 	alternateOutput = NULL;
 	init_ethernet();
 	Reset();
-}
 
-void Network::Spin()
-{
-	// Finish reading any data that's been received.
+	// Clean out the ring buffer.
 
-	if(inputPointer < inputLength)
-		return;
-
-	// Check for more input or send more output
-
-	ethernet_task();
-}
-
-void Network::PushHttp(void* h)
-{
-	if(httpStateStackPointer >= HTTP_STATE_STACK_SIZE)
+	for(int8_t i = 0; i <= HTTP_STATE_SIZE; i++)
 	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "httpStateStack overflow.\n");
-		return;
+		netRingGetPointer->Free();
+		netRingGetPointer = netRingGetPointer->Next();
 	}
-	httpStateStack[httpStateStackPointer] = h;
-	httpStateStackPointer++;
+	netRingAddPointer = netRingGetPointer;
 }
 
-void* Network::PopHttp()
+// Webserver calls this to read bytes that have come in from the network
+
+bool Network::Read(char& b)
 {
-	httpStateStackPointer--;
-	if(httpStateStackPointer < 0)
-		{
-			reprap.GetPlatform()->Message(HOST_MESSAGE, "httpStateStack underflow.\n");
-			return 0;
-		}
-	return httpStateStack[httpStateStackPointer];
-}
-
-
-void Network::SetReading(bool r)
-{
-	reading = r;
-
-	// If we've just STOPPED writing (i.e. if reading has just been
-	// set to true) check if there's anything
-	// Left in the buffer to send.  If we've already done this,
-	// outputPointer will be 0.
-
-	if(!reading)
-		return;
-
-	if(outputPointer > 0)
+	if(inputPointer >= inputLength)
 	{
-		SetWriteEnable(false);
-		RepRapNetworkSendOutput(outputBuffer, outputPointer, PopHttp());
-		outputPointer = 0;
+		inputLength = -1;
+		inputPointer = 0;
+		netRingGetPointer->SetRead();
+		SetWriteEnable(true);
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - data read.\n");
+		return false;
 	}
+	b = inputBuffer[inputPointer];
+	inputPointer++;
+	return true;
 }
 
-void Network::ReceiveInput(char* ip, int length)
-{
-	status = clientLive;
-	inputBuffer = ip;
-	inputLength = length;
-	inputPointer = 0;
-}
-
+// Webserver calls this to write bytes that need to go out to the network
 
 void Network::Write(char b)
 {
@@ -845,10 +826,7 @@ void Network::Write(char b)
 
 	if(outputPointer >= STRING_LENGTH)
 	{
-		outputBuffer[STRING_LENGTH - 1] = 0;
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Output buffer overflow: \n");
-		reprap.GetPlatform()->Message(HOST_MESSAGE, outputBuffer);
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "\n");
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Output buffer overflow! \n");
 		return;
 	}
 
@@ -857,15 +835,79 @@ void Network::Write(char b)
 	outputBuffer[outputPointer] = b;
 	outputPointer++;
 
-	// Buffer full?  If so, flag it to send.
+	// Buffer full?  If so, send it.
 
 	if(outputPointer >= STRING_LENGTH - 5) // 5 is for safety
 	{
-		SetWriteEnable(false);  // Stop further input
-		RepRapNetworkSendOutput(outputBuffer, outputPointer, PopHttp());
+		SetWriteEnable(false);  // Stop further writing from Webserver until the network tells us that this has gone
+		RepRapNetworkSendOutput(outputBuffer, outputPointer, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(), netRingGetPointer->Hs());
 		outputPointer = 0;
 	}
 }
+
+
+void Network::Spin()
+{
+	// Keep the Ether running
+
+	ethernet_task();
+
+	// Anything come in from the network to act on?
+
+	if(!netRingGetPointer->Active())
+		return;
+
+	// Finished reading the active ring element?
+
+	if(!netRingGetPointer->Read())
+	{
+		// No - Finish reading any data that's been received.
+
+		if(inputPointer < inputLength)
+			return;
+
+		// Haven't started reading it yet - set that up.
+
+		inputPointer = 0;
+		inputLength = netRingGetPointer->Length();
+		inputBuffer = netRingGetPointer->Data();
+	}
+}
+
+void Network::InputBufferReleased(void* pb)
+{
+	if(netRingGetPointer->Pbuf() != pb)
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::InputBufferReleased() - Pointers don't match!\n");
+		return;
+	}
+	netRingGetPointer->ReleasePbuf();
+}
+
+void Network::HttpStateReleased(void* h)
+{
+	if(netRingGetPointer->Hs() != h)
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::HttpStateReleased() - Pointers don't match!\n");
+		return;
+	}
+	netRingGetPointer->ReleaseHs();
+}
+
+
+void Network::ReceiveInput(char* data, int length, void* pbuf, void* pcb, void* hs)
+{
+	status = clientLive;
+	if(netRingAddPointer->Active())
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ReceiveInput() - Ring buffer full!\n");
+		return;
+	}
+	netRingAddPointer->Set(data, length, pbuf, pcb, hs);
+	netRingAddPointer = netRingAddPointer->Next();
+	reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - input received.\n");
+}
+
 
 
 bool Network::CanWrite()
@@ -876,6 +918,10 @@ bool Network::CanWrite()
 void Network::SetWriteEnable(bool enable)
 {
 	writeEnabled = enable;
+	if(!writeEnabled)
+		return;
+	if(closePending)
+		Close();
 }
 
 // This is not called for data, only for internally-
@@ -890,25 +936,29 @@ void Network::Write(char* s)
 		Write(s[i++]);
 }
 
-bool Network::Read(char& b)
-{
-	if(inputPointer >= inputLength)
-	{
-		inputLength = -1;
-		inputPointer = 0;
-		return false;
-	}
-	b = inputBuffer[inputPointer];
-	inputPointer++;
-	return true;
-}
 
 
 void Network::Close()
 {
 	if(Status() && clientLive)
-		CloseConnection(PopHttp());
-	Reset();
+	{
+		if(outputPointer > 0)
+		{
+			SetWriteEnable(false);
+			RepRapNetworkSendOutput(outputBuffer, outputPointer, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(), netRingGetPointer->Hs());
+			outputPointer = 0;
+			closePending = true;
+			return;
+		}
+		RepRapNetworkSendOutput((char*)NULL, 0, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(), netRingGetPointer->Hs());
+		netRingGetPointer->Free();
+		netRingGetPointer = netRingGetPointer->Next();
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - output sent and closed.\n");
+	} else
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Close() - Attempt to close a closed connection!\n");
+	closePending = false;
+	status = nothing;
+	//Reset();
 }
 
 int8_t Network::Status()
@@ -919,6 +969,96 @@ int8_t Network::Status()
 }
 
 
+NetRing::NetRing(NetRing* n)
+{
+	next = n;
+	Free();
+}
+
+void NetRing::Free()
+{
+	pbuf = 0;
+	pcb = 0;
+	hs = 0;
+	data = "";
+	length = 0;
+	read = false;
+	active = false;
+}
+
+bool NetRing::Set(char* d, int l, void* pb, void* pc, void* h)
+{
+	if(active)
+		return false;
+	pbuf = pb;
+	pcb = pc;
+	hs = h;
+	data = d;
+	length = l;
+	read = false;
+	active = true;
+	return true;
+}
+
+NetRing* NetRing::Next()
+{
+	return next;
+}
+
+char* NetRing::Data()
+{
+	return data;
+}
+
+int NetRing::Length()
+{
+	return length;
+}
+
+bool NetRing::Read()
+{
+	return read;
+}
+
+void NetRing::SetRead()
+{
+	read = true;
+}
+
+bool NetRing::Active()
+{
+	return active;
+}
+
+void NetRing::SetNext(NetRing* n)
+{
+	next = n;
+}
+
+void* NetRing::Pbuf()
+{
+	return pbuf;
+}
+
+void NetRing::ReleasePbuf()
+{
+	pbuf = 0;
+}
+
+void* NetRing::Pcb()
+{
+	return pcb;
+}
+
+void* NetRing::Hs()
+{
+	return hs;
+}
+
+void NetRing::ReleaseHs()
+{
+	hs = 0;
+}
 
 
 

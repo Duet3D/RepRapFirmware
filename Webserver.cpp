@@ -179,16 +179,10 @@ bool Webserver::LoadGcodeBuffer(char* gc, bool convertWeb)
 void Webserver::CloseClient()
 {
   writing = false;
-  reprap.GetPlatform()->GetNetwork()->SetReading(!writing);
   //inPHPFile = false;
   //InitialisePHP();
   clientCloseTime = platform->Time();
   needToCloseClient = true;   
-}
-
-bool Webserver::WebserverIsWriting()
-{
-	return writing;
 }
 
 
@@ -210,7 +204,6 @@ void Webserver::SendFile(char* nameOfFileToSend)
       fileBeingSent = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
     }
     writing = fileBeingSent != NULL;
-    reprap.GetPlatform()->GetNetwork()->SetReading(!writing);
   } 
   
   platform->GetNetwork()->Write("HTTP/1.1 200 OK\n");
@@ -249,7 +242,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
     platform->GetNetwork()->Write("\n");
   }
     
-  platform->GetNetwork()->Write("Connnection: close\n");
+  platform->GetNetwork()->Write("Connection: close\n");
 
   platform->GetNetwork()->Write('\n');
 }
@@ -271,14 +264,13 @@ void Webserver::WriteByte()
     } else
     {
       if(fileBeingSent->Read(b))
-      {
     	  platform->GetNetwork()->Write(b);
-      } else
-      { 
-        fileBeingSent->Close();    
-        CloseClient(); 
-      } 
-    } 
+      else
+      {
+        fileBeingSent->Close();
+        CloseClient();
+      }
+    }
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -313,7 +305,6 @@ void Webserver::GetJsonResponse(char* request)
 {
   jsonPointer = 0;
   writing = true;
-  reprap.GetPlatform()->GetNetwork()->SetReading(!writing);
   
   if(StringStartsWith(request, "temps"))
   {
@@ -533,6 +524,12 @@ void Webserver::BlankLineFromClient()
   
   //Serial.println("End of header.");
   
+  // Soak up any rubbish on the end.
+
+  char c;
+  while(platform->GetNetwork()->Read(c));
+
+
   if(getSeen)
   {
     SendFile(clientRequest);
@@ -566,7 +563,6 @@ void Webserver::BlankLineFromClient()
 
 void Webserver::CharFromClient(char c)
 {
-
   if(c == '\n' && clientLineIsBlank) 
   {
     BlankLineFromClient();
@@ -605,12 +601,12 @@ void Webserver::Spin()
     
   if(writing)
   {
-	  //   if(inPHPFile)
-	  //     WritePHPByte();
-	  //   else
-	  if(platform->GetNetwork()->CanWrite())
-		  WriteByte();
-	  return;
+ //   if(inPHPFile)
+ //     WritePHPByte();
+ //   else
+	if(platform->GetNetwork()->CanWrite())
+      WriteByte();
+    return;
   }
   
   char c;
@@ -643,7 +639,7 @@ void Webserver::Spin()
   {
     if(needToCloseClient)
     {
-      if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY || !platform->GetNetwork()->CanWrite())
+      if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY)
         return;
       needToCloseClient = false;  
       platform->GetNetwork()->Close();
@@ -666,7 +662,6 @@ void Webserver::Init()
   char scratchString[STRING_LENGTH];
   lastTime = platform->Time();
   writing = false;
-  reprap.GetPlatform()->GetNetwork()->SetReading(!writing);
   receivingPost = false;
   postSeen = false;
   getSeen = false;
@@ -698,5 +693,7 @@ void Webserver::Diagnostics()
 {
   platform->Message(HOST_MESSAGE, "Webserver Diagnostics:\n"); 
 }
+
+
 
 
