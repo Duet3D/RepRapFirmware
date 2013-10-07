@@ -100,7 +100,7 @@ conn_err(void *arg, err_t err)
 static void
 close_conn(struct tcp_pcb *pcb, struct http_state *hs)
 {
-  RepRapNetworkMessage("close_conn called.\n");
+  //RepRapNetworkMessage("close_conn called.\n");
   tcp_arg(pcb, NULL);
   tcp_sent(pcb, NULL);
   tcp_recv(pcb, NULL);
@@ -126,10 +126,10 @@ send_data(struct tcp_pcb *pcb, struct http_state *hs)
     len = hs->left;
   }
 
-  RepRapNetworkMessage("Sending ");
-  sprintf(scratch, "%d", len);
-  RepRapNetworkMessage(scratch);
-  RepRapNetworkMessage("..");
+//  RepRapNetworkMessage("Sending ");
+//  sprintf(scratch, "%d", len);
+//  RepRapNetworkMessage(scratch);
+//  RepRapNetworkMessage("..");
 
   do {
     err = tcp_write(pcb, hs->file, len, 0); // Final arg - 1 means make a copy
@@ -190,7 +190,7 @@ http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
 
   hs->retries = 0;
 
-  RepRapNetworkMessage("..sent\n");
+  //RepRapNetworkMessage("..sent\n");
 
   if (hs->left > 0)
   {
@@ -295,7 +295,7 @@ http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 
   tcp_setprio(pcb, TCP_PRIO_MIN);
 
-  RepRapNetworkMessage("http_accept\n");
+  //RepRapNetworkMessage("http_accept\n");
 
   hs = (struct http_state *)mem_malloc(sizeof(struct http_state));
 

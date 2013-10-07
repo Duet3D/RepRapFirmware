@@ -773,7 +773,7 @@ Network::Network()
 
 void Network::Reset()
 {
-	reprap.GetPlatform()->Message(HOST_MESSAGE, "Reset.\n");
+	//reprap.GetPlatform()->Message(HOST_MESSAGE, "Reset.\n");
 	inputPointer = 0;
 	inputLength = -1;
 	outputPointer = 0;
@@ -811,7 +811,7 @@ bool Network::Read(char& b)
 		inputPointer = 0;
 		netRingGetPointer->SetRead();
 		SetWriteEnable(true);
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - data read.\n");
+		//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - data read.\n");
 		return false;
 	}
 	b = inputBuffer[inputPointer];
@@ -855,7 +855,7 @@ void Network::Write(char b)
 
 void Network::Spin()
 {
-	// Keep the Ether running
+	// Keep the Ethernet running
 
 	ethernet_task();
 
@@ -912,7 +912,7 @@ void Network::ReceiveInput(char* data, int length, void* pbuf, void* pcb, void* 
 	}
 	netRingAddPointer->Set(data, length, pbuf, pcb, hs);
 	netRingAddPointer = netRingAddPointer->Next();
-	reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - input received.\n");
+	//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - input received.\n");
 }
 
 
@@ -960,7 +960,7 @@ void Network::Close()
 		RepRapNetworkSendOutput((char*)NULL, 0, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(), netRingGetPointer->Hs());
 		netRingGetPointer->Free();
 		netRingGetPointer = netRingGetPointer->Next();
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - output sent and closed.\n");
+		//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - output sent and closed.\n");
 	} else
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Close() - Attempt to close a closed connection!\n");
 	closePending = false;

@@ -616,7 +616,7 @@ void Webserver::Spin()
     if(platform->GetNetwork()->Status() & byteAvailable)
     {
     	platform->GetNetwork()->Read(c);
-        SerialUSB.print(c);
+        //SerialUSB.print(c);
 
       if(receivingPost && postFile != NULL)
       {
