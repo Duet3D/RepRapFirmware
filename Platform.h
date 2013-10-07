@@ -295,6 +295,7 @@ protected:
 private:
 
 	void Reset();
+	void CleanRing();
 	char* inputBuffer;
 	char outputBuffer[STRING_LENGTH];
 	int inputPointer;

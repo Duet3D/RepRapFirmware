@@ -75,6 +75,7 @@ void RepRapNetworkInputBufferReleased(void* pbuf);
 void RepRapNetworkHttpStateReleased(void* h);
 void RepRapNetworkMessage(char* s);
 void RepRapNetworkAllowWriting();
+bool RepRapNetworkHasALiveClient();
 
 // Sanity check on initialisations.
 
@@ -91,7 +92,7 @@ conn_err(void *arg, err_t err)
 
   hs = arg;
   mem_free(hs);
-  RepRapNetworkHttpStateReleased(hs);
+  //RepRapNetworkHttpStateReleased(hs);
   RepRapNetworkMessage("Network connection error.\n");
 }
 /*-----------------------------------------------------------------------------------*/
@@ -131,7 +132,7 @@ send_data(struct tcp_pcb *pcb, struct http_state *hs)
   RepRapNetworkMessage("..");
 
   do {
-    err = tcp_write(pcb, hs->file, len, 0);
+    err = tcp_write(pcb, hs->file, len, 0); // Final arg - 1 means make a copy
     if (err == ERR_MEM) {
       len /= 2;
     }
@@ -142,6 +143,8 @@ send_data(struct tcp_pcb *pcb, struct http_state *hs)
 	  tcp_output(pcb);
 	  hs->file += len;
 	  hs->left -= len;
+	  //if(hs->left <= 0)
+	  //		RepRapNetworkAllowWriting();
   } else
   {
 	  RepRapNetworkMessage("send_data: error\n");
@@ -280,6 +283,12 @@ static err_t
 http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
 {
   struct http_state *hs;
+
+  // This is a bit nasty.  Fake an out of memory error to prevent new page
+  // requests coming in while we are still sending the old ones.
+
+  if(RepRapNetworkHasALiveClient())
+	  return ERR_MEM;
 
   LWIP_UNUSED_ARG(arg);
   LWIP_UNUSED_ARG(err);

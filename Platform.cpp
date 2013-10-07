@@ -747,6 +747,11 @@ void RepRapNetworkAllowWriting()
 	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(true);
 }
 
+bool RepRapNetworkHasALiveClient()
+{
+	return reprap.GetPlatform()->GetNetwork()->Status() & clientLive;
+}
+
 }
 
 
@@ -777,21 +782,23 @@ void Network::Reset()
 	status = nothing;
 }
 
-void Network::Init()
+void Network::CleanRing()
 {
-	alternateInput = NULL;
-	alternateOutput = NULL;
-	init_ethernet();
-	Reset();
-
-	// Clean out the ring buffer.
-
 	for(int8_t i = 0; i <= HTTP_STATE_SIZE; i++)
 	{
 		netRingGetPointer->Free();
 		netRingGetPointer = netRingGetPointer->Next();
 	}
 	netRingAddPointer = netRingGetPointer;
+}
+
+void Network::Init()
+{
+	alternateInput = NULL;
+	alternateOutput = NULL;
+	init_ethernet();
+	CleanRing();
+	Reset();
 }
 
 // Webserver calls this to read bytes that have come in from the network

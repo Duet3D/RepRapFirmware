@@ -655,11 +655,11 @@ Webserver::Webserver(Platform* p)
 { 
   platform = p;
   active = false;
+  gotPassword = false;
 }
 
 void Webserver::Init()
 {
-  char scratchString[STRING_LENGTH];
   lastTime = platform->Time();
   writing = false;
   receivingPost = false;
@@ -673,7 +673,7 @@ void Webserver::Init()
   clientRequest[0] = 0;
   password = DEFAULT_PASSWORD;
   myName = DEFAULT_NAME;
-  gotPassword = false;
+  //gotPassword = false;
   gcodeAvailable = false;
   gcodePointer = 0;
   InitialisePost();
