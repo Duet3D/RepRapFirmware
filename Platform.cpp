@@ -694,7 +694,7 @@ void Line::Init()
 	alternateInput = NULL;
 	alternateOutput = NULL;
 	SerialUSB.begin(BAUD_RATE);
-	while (!SerialUSB.available());
+	//while (!SerialUSB.available());
 }
 
 //***************************************************************************************************

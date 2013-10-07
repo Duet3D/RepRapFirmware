@@ -742,7 +742,7 @@ inline EndStopHit Platform::Stopped(int8_t drive)
 	  if(ZProbe() < 0)
 		  return lowHit;
 	  else
-		  return noStop;
+	  	  return noStop;
   }
   if(lowStopPins[drive] >= 0)
   {
