@@ -96,7 +96,7 @@ Licence: GPL
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
 //#define ACCELERATIONS {80, 80, 3, 25} 
-#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 948.0}
+#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 660.0}
 #define INSTANT_DVS {15.0, 15.0, 0.4, 0.5}    // (mm/sec) - Bit high? AB
 
 // AXES
@@ -437,7 +437,7 @@ class Platform
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void SetMotorCurrent(byte drive, float current);
   float DriveStepsPerUnit(int8_t drive);
-  float Acceleration(int8_t drive);
+  float Acceleration(int8_t drive, float value);
   float MaxFeedrate(int8_t drive);
   float InstantDv(int8_t drive);
   float HomeFeedRate(int8_t drive);
@@ -446,6 +446,7 @@ class Platform
   
   float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
   void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
+  int GetRawZHeight();
   
   // Heat and temperature
   
@@ -506,7 +507,6 @@ class Platform
 
 // AXES
 
-  int GetRawZHeight();
   float PollZHeight();
 
   float axisLengths[AXES];
@@ -663,8 +663,10 @@ inline float Platform::DriveStepsPerUnit(int8_t drive)
   return driveStepsPerUnit[drive]; 
 }
 
-inline float Platform::Acceleration(int8_t drive)
+inline float Platform::Acceleration(int8_t drive, float value = -1)
 {
+  if(drive >= 0 && drive < DRIVES && value > 0)
+	  accelerations[drive] = value;
   return accelerations[drive]; 
 }
 

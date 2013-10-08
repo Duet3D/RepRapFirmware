@@ -30,7 +30,7 @@
  *
  */
 
-#include "../lwipopts.h"
+#include "lwipopts.h"
 #if defined(HTTP_RAW_USED)
 
 #include <string.h>

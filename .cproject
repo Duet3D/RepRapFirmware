@@ -22,7 +22,6 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
 									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.4/hardware/arduino/sam/system/libsam/include"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network/httpserver_raw}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/EMAC}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Lwip}&quot;"/>
@@ -38,9 +37,8 @@
 								<option id="it.baeyens.arduino.compiler.c.sketch.option.incpath.1536622716" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.c.sketch.option.incpath" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network/httpserver_raw}&quot;"/>
 									<listOptionValue builtIn="false" value="/usr/local/arduino-1.5.4/hardware/arduino/sam/system/libsam/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/EMAC}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Lwip}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/MCP4461}&quot;"/>

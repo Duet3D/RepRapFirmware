@@ -147,7 +147,7 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-// We just need one instance of RepRap; everything else is contaied within it and hidden
+// We just need one instance of RepRap; everything else is contained within it and hidden
 
 RepRap reprap;
 

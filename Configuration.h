@@ -47,7 +47,7 @@ Licence: GPL
 /* Z PROBE CALIBRATION
  * Set = 1 to enable Z probe ADC output on SerialUSb
  */
-#define	CALIB_Z		1
+#define	CALIB_Z		0
 
 
 #endif

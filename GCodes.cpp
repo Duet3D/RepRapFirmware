@@ -609,6 +609,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       result = DoHome();
       break;
 
+    case 31:
+    	platform->GetLine()->Write(ftoa(NULL,platform->GetRawZHeight(),0));
+    	platform->GetLine()->Write(" ;");
+    	platform->GetLine()->Write(ftoa(NULL,platform->ZProbe(),0));
+    	platform->GetLine()->Write("mm\n");
+    	break;
     case 32: // Probe Z at multiple positions and generate the bed transform
     	result = DoMultipleZProbe();
     	break;
@@ -676,6 +682,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       drivesRelative = true;
       break;
 
+    case 92:
+        platform->Message(HOST_MESSAGE, "Set steps/mm received\n");
+    	break;
+
     case 105: // Deprecated...
     	platform->GetLine()->Write("ok T:");
     	for(int8_t i = HEATERS - 1; i > 0; i--)
@@ -706,6 +716,13 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 114: // Deprecated
+      float mBuf[DRIVES];
+      platform->GetLine()->Write("bufX");
+   	  platform->GetLine()->Write(ftoa(NULL,moveBuffer[X_AXIS],3));
+      platform->GetLine()->Write(" bufY");
+   	  platform->GetLine()->Write(ftoa(NULL,moveBuffer[Y_AXIS],3));
+      platform->GetLine()->Write(" bufZ");
+   	  platform->GetLine()->Write(ftoa(NULL,moveBuffer[Z_AXIS],3));
       platform->GetLine()->Write("ok\n");
       break;
 
@@ -741,6 +758,28 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
       break;
 
+    case 201: // Set axis accelerations
+		if(reprap.debug())
+			platform->GetLine()->Write("Accelerations: ");
+    	for(uint8_t i = 0; i < DRIVES; i++)
+    	{
+    		if(gb->Seen(gCodeLetters[i]))
+    		{
+    			value = gb->GetFValue();
+    		}else{
+    			value = -1;
+    		}
+    		float accel = platform->Acceleration(i,value);
+    		if(reprap.debug())
+    		{
+    			platform->GetLine()->Write(gCodeLetters[i]);
+    			platform->GetLine()->Write(ftoa(NULL,accel,1));
+    			platform->GetLine()->Write(" ");
+    		}
+    	}
+		if(reprap.debug())
+			platform->GetLine()->Write("\n");
+    	break;
     case 906: // Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
