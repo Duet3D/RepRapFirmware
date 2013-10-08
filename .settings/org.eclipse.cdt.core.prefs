@@ -37,7 +37,7 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USE_ARCHIVER/value=true
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.VARIANT.PATH/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.VARIANT.PATH/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.VARIANT.PATH/value=/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/variants/${A.BUILD.VARIANT}
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.VARIANT.PATH/value=/usr/local/arduino-1.5.4/hardware/arduino/sam/variants/${A.BUILD.VARIANT}
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.VARIANT/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.VARIANT/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.VARIANT/value=arduino_due_x
@@ -181,10 +181,10 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RECIPE
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RECIPE.SIZE.REGEX/value=\\.text\\s+([0-9]+).*
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RUNTIME.IDE.PATH/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RUNTIME.IDE.PATH/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RUNTIME.IDE.PATH/value=/home/jeanmarc/arduino-1.5.2
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RUNTIME.IDE.PATH/value=/usr/local/arduino-1.5.4
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RUNTIME.IDE.VERSION/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RUNTIME.IDE.VERSION/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RUNTIME.IDE.VERSION/value=152
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.RUNTIME.IDE.VERSION/value=154
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.SOFTWARE/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.SOFTWARE/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.SOFTWARE/value=ARDUINO
@@ -226,7 +226,7 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.UPLOAD
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.UPLOAD.WAIT_FOR_UPLOAD_PORT/value=true
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.BOARDS_FILE/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.BOARDS_FILE/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.BOARDS_FILE/value=/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/boards.txt
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.BOARDS_FILE/value=/usr/local/arduino-1.5.4/hardware/arduino/sam/boards.txt
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.BOARD_NAME/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.BOARD_NAME/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.BOARD_NAME/value=Arduino Due (Native USB Port)
@@ -244,7 +244,7 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.E
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.CPP.COMPILE/value=
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.PLATFORM_FILE/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.PLATFORM_FILE/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.PLATFORM_FILE/value=/home/jeanmarc/arduino-1.5.2/hardware/arduino/sam/platform.txt
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.PLATFORM_FILE/value=/usr/local/arduino-1.5.4/hardware/arduino/sam/platform.txt
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.Processor/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.Processor/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.Processor/value=
