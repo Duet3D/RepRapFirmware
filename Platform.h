@@ -436,7 +436,7 @@ class Platform
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void SetMotorCurrent(byte drive, float current);
-  float DriveStepsPerUnit(int8_t drive);
+  float DriveStepsPerUnit(int8_t drive, float value);
   float Acceleration(int8_t drive, float value);
   float MaxFeedrate(int8_t drive);
   float InstantDv(int8_t drive);
@@ -658,8 +658,10 @@ inline void Line::Write(char* b)
 
 // Drive the RepRap machine - Movement
 
-inline float Platform::DriveStepsPerUnit(int8_t drive)
+inline float Platform::DriveStepsPerUnit(int8_t drive, float value = -1)
 {
+	  if(drive >= 0 && drive < DRIVES && value > 0)
+		  driveStepsPerUnit[drive] = value;
   return driveStepsPerUnit[drive]; 
 }
 
@@ -739,13 +741,14 @@ inline float Platform::HomeFeedRate(int8_t drive)
 
 inline EndStopHit Platform::Stopped(int8_t drive)
 {
-  if(drive == Z_AXIS)
-  {
-	  if(ZProbe() < 0)
-		  return lowHit;
-	  else
-	  	  return noStop;
-  }
+//  if(drive == Z_AXIS && reprap.GetMove()->zProbing)
+	//	if(drive == Z_AXIS)
+	//  {
+	//	  if(ZProbe() < 0)
+	//		  return lowHit;
+	//	  else
+	//	  	  return noStop;
+	//  }
   if(lowStopPins[drive] >= 0)
   {
     if(digitalRead(lowStopPins[drive]) == ENDSTOP_HIT)

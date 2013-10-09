@@ -146,6 +146,7 @@ class Move
     void InverseTransform(float move[]);
     void Diagnostics();
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
+    bool zProbing;
     
   friend class DDA;
     
@@ -189,7 +190,6 @@ class Move
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
     float aX, aY, aC;
     float lastZHit;
-    bool zProbing;
 };
 
 //********************************************************************************************************

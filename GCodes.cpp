@@ -682,9 +682,28 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       drivesRelative = true;
       break;
 
-    case 92:
-        platform->Message(HOST_MESSAGE, "Set steps/mm received\n");
-    	break;
+    case 92: // Set steps/mm for each axis
+		if(reprap.debug())
+			platform->GetLine()->Write("Steps/mm: ");
+    	for(uint8_t i = 0; i < DRIVES; i++)
+    	{
+    		if(gb->Seen(gCodeLetters[i]))
+    		{
+    			value = gb->GetFValue();
+    		}else{
+    			value = -1;
+    		}
+    		float stepsPerUnit = platform->DriveStepsPerUnit(i,value);
+    		if(reprap.debug())
+    		{
+    			platform->GetLine()->Write(gCodeLetters[i]);
+    			platform->GetLine()->Write(ftoa(NULL,stepsPerUnit,3));
+    			platform->GetLine()->Write(" ");
+    		}
+    	}
+		if(reprap.debug())
+			platform->GetLine()->Write("\n");
+        break;
 
     case 105: // Deprecated...
     	platform->GetLine()->Write("ok T:");
