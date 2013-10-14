@@ -139,7 +139,7 @@ function heatRowHTML(heater, hNumber)
 </script>
 
 <!-- HEADER -->
-<a href="http://reprappro.com" target="_blank"><img src="logo.png" alt="RepRapPro logo" align="right"></a>
+<a href="http://reprappro.com" target="_blank"><img src="https://github.com/reprappro/RepRapFirmware/raw/due/SD-image/www/logo.png" alt="RepRapPro logo" align="right"></a>
 
 <div style="font-size:20px" data-bind="with: machineName">RepRap: <strong data-bind="text: myName"></strong></div>
 
@@ -540,7 +540,7 @@ function viewModel()
 
 	onControlPage = false;
 	self.getName();
-	self.fileList();
+	//self.fileList();
 	self.getTemps();
 	self.getAxes();
 	self.goToPage(self.pages[5]);

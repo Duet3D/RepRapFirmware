@@ -615,6 +615,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	platform->GetLine()->Write(ftoa(NULL,platform->ZProbe(),0));
     	platform->GetLine()->Write("mm\n");
     	break;
+
     case 32: // Probe Z at multiple positions and generate the bed transform
     	result = DoMultipleZProbe();
     	break;

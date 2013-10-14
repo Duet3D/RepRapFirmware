@@ -47,9 +47,9 @@ Licence: GPL
 #include "SD_HSMCI.h"
 #include "MCP4461.h"
 
-#include "lwip/src/include/lwip/netif.h"
-#include "lwip/src/sam/include/netif/ethernetif.h"
-#include "lwip/src/include/lwip/init.h"
+//#include "lwip/src/include/lwip/netif.h"
+//#include "lwip/src/sam/include/netif/ethernetif.h"
+//#include "lwip/src/include/lwip/init.h"
 #include "httpd.h"
 #include "ethernet_sam.h"
 #include "timer_mgt_sam.h"
