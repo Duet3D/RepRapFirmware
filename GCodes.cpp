@@ -71,6 +71,7 @@ void GCodes::Init()
   probeCount = 0;
   probeMoveCount = 0;
   probeMoveQueued = false;
+  internalMoveQueued = false;
   active = true;
   dwellTime = platform->Time();
 }
@@ -315,6 +316,7 @@ bool GCodes::DoHome()
         return false;
       moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
       moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+      reprap.GetMove()->SetZProbing(true);
       homeZQueued = true;
       checkEndStops = true;
       moveAvailable = true; 
@@ -330,13 +332,39 @@ bool GCodes::DoHome()
   return true;
 }
 
+// To execute any move, call this until it returns true.
+// false entries in action[] will be ignored.
+
+bool GCodes::DoInternalMove(float moveToDo[], bool action[], bool ce)
+{
+	if(internalMoveQueued)
+	{
+		if(!Pop()) // Wait for the move to finish
+			return false;
+		internalMoveQueued = false;
+		return true;
+	} else
+	{
+		if(!Push()) // Wait for the RepRap to finish whatever it was doing
+			return false;
+		for(int8_t drive = 0; drive <= DRIVES; drive++)
+		{
+			if(action[drive])
+				moveBuffer[drive] = moveToDo[drive];
+		}
+		checkEndStops = ce;
+		internalMoveQueued = true;
+		moveAvailable = true;
+	}
+	return false;
+}
+
 
 bool GCodes::DoSingleZProbe()
 {
 	float x, y, z;
 
 	reprap.GetMove()->SetIdentityTransform();  // It doesn't matter if these are called repeatedly
-	reprap.GetMove()->SetZProbing(true);
 
 	if(probeMoveQueued)
 	{
@@ -376,6 +404,7 @@ bool GCodes::DoSingleZProbe()
 		case 2:
 			moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
 			moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+			reprap.GetMove()->SetZProbing(true);
 			checkEndStops = true;
 			break;
 		default:

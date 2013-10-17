@@ -108,6 +108,9 @@ void Platform::Init()
   zProbePin = Z_PROBE_PIN;
   zProbeCount = 0;
   zProbeSum = 0;
+  zProbeStarting = false;
+  zProbeHigh = Z_PROBE_HIGH;
+  zProbeLow = Z_PROBE_LOW;
 
   // AXES
 
@@ -198,6 +201,32 @@ void Platform::Init()
   active = true;
 }
 
+
+//int zcount; // NASTY - FIX ME
+
+void Platform::Spin()
+{
+  if(!active)
+    return;
+
+  network->Spin();
+  line->Spin();
+
+  if(Time() - lastTime < 0.006)
+    return;
+  PollZHeight();
+  lastTime = Time();
+
+//  zcount++;
+//  if(zcount > 30)
+//  {
+//	   zcount = 0;
+//	   SerialUSB.println(GetRawZHeight());
+//  }
+}
+
+//*************************************************************************************************
+
 void Platform::Diagnostics() 
 {
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
@@ -244,6 +273,48 @@ void Platform::SetHeater(int8_t heater, const float& power)
 	  analogWrite(heatOnPins[heater], p);
   else
 	  analogWriteNonDue(heatOnPins[heater], p);
+}
+
+inline void Platform::PollZHeight()
+{
+	if(!reprap->GetMove()->ZProbing())
+		return;
+
+	if(zProbeCount >= 5)
+	{
+		zProbeValue = zProbeGradient*0.2*(float)zProbeSum + zProbeConstant;
+		zProbeSum = 0;
+		zProbeCount = 0;
+	}
+	zProbeSum += GetRawZHeight();
+	zProbeCount++;
+}
+
+
+EndStopHit Platform::Stopped(int8_t drive)
+{
+	if(drive == Z_AXIS && reprap->GetMove()->ZProbing())
+	{
+		if(zProbeStarting && zProbeValue > zProbeHigh)
+			zProbeStarting = false;
+
+		if(!zProbeStarting && ZProbe() < zProbeLow)
+			return lowHit;
+		else
+			return noStop;
+	}
+
+	if(lowStopPins[drive] >= 0)
+	{
+		if(digitalRead(lowStopPins[drive]) == ENDSTOP_HIT)
+			return lowHit;
+	}
+	if(highStopPins[drive] >= 0)
+	{
+		if(digitalRead(highStopPins[drive]) == ENDSTOP_HIT)
+			return highHit;
+	}
+	return noStop;
 }
 
 
@@ -681,31 +752,6 @@ void Platform::Message(char type, char* message)
 
 
 //***************************************************************************************************
-
-// int zcount; // NASTY - FIX ME
-
-void Platform::Spin()
-{
-   if(!active)
-     return;
-    
-   network->Spin();
-   line->Spin();
-
-   if(Time() - lastTime < 0.006)
-     return;
-   PollZHeight();
-   lastTime = Time();
-
-//   zcount++;
-//   if(zcount > 30)
-//   {
-//	   zcount = 0;
-//	   SerialUSB.println(GetRawZHeight());
-//   }
-}
-
-//*************************************************************************************************
 
 // Serial/USB class
 

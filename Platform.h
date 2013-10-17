@@ -90,8 +90,10 @@ Licence: GPL
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define Z_PROBE_GRADIENT -0.00492704
-#define Z_PROBE_CONSTANT 3.65062
+#define Z_PROBE_GRADIENT 0.00092498
+#define Z_PROBE_CONSTANT -0.456179
+#define Z_PROBE_HIGH 0.3 // mm
+#define Z_PROBE_LOW 0.2 // mm
 #define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
@@ -447,6 +449,7 @@ class Platform
   
   float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
   void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
+  void StartZProbing();
   int GetRawZHeight();
   
   // Heat and temperature
@@ -508,11 +511,14 @@ class Platform
 
 // AXES
 
-  float PollZHeight();
+  void PollZHeight();
 
   float axisLengths[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
+  bool zProbeStarting;
+  float zProbeHigh;
+  float zProbeLow;
   
 // HEATERS - Bed is assumed to be the first
 
@@ -743,27 +749,9 @@ inline float Platform::HomeFeedRate(int8_t drive)
   return homeFeedrates[drive];
 }
 
-inline EndStopHit Platform::Stopped(int8_t drive)
+inline void Platform::StartZProbing()
 {
-//  if(drive == Z_AXIS && reprap.GetMove()->zProbing)
-	//	if(drive == Z_AXIS)
-	//  {
-	//	  if(ZProbe() < 0)
-	//		  return lowHit;
-	//	  else
-	//	  	  return noStop;
-	//  }
-  if(lowStopPins[drive] >= 0)
-  {
-    if(digitalRead(lowStopPins[drive]) == ENDSTOP_HIT)
-      return lowHit;
-  }
-  if(highStopPins[drive] >= 0)
-  {
-    if(digitalRead(highStopPins[drive]) == ENDSTOP_HIT)
-      return highHit;
-  }
-  return noStop; 
+	zProbeStarting = true;
 }
 
 inline float Platform::AxisLength(int8_t drive)
@@ -788,17 +776,6 @@ inline float Platform::ZProbe()
 	return zProbeValue;
 }
 
-inline float Platform::PollZHeight()
-{
-	if(zProbeCount >= 5)
-	{
-		zProbeValue = zProbeGradient*0.2*(float)zProbeSum + zProbeConstant;
-		zProbeSum = 0;
-		zProbeCount = 0;
-	}
-	zProbeSum += GetRawZHeight();
-	zProbeCount++;
-}
 
 //********************************************************************************************************
 

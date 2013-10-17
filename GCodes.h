@@ -76,6 +76,7 @@ class GCodes
   private:
   
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
+    bool DoInternalMove(float moveToDo[], bool action[], bool ce);
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
@@ -121,6 +122,7 @@ class GCodes
     bool homeXQueued;
     bool homeYQueued;
     bool homeZQueued;
+    bool internalMoveQueued;
     float gFeedRate;
     int probeCount;
     int8_t probeMoveCount;
