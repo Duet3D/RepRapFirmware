@@ -89,9 +89,10 @@ void Move::Init()
   
   for(i = 0; i < DRIVES; i++)
     lastMove->SetDriveZeroEndSpeed(0.0, i);
-    
-  lastMove->SetDriveZeroEndSpeed(START_FEED_RATE, DRIVES);
   
+  lastMove->SetFeedRate(START_FEED_RATE);
+  //lastMove->SetDriveZeroEndSpeed(START_FEED_RATE, DRIVES);
+
   checkEndStopsOnNextMove = false;
   
   // The stepDistances arrays are look-up tables of the Euclidean distance 
@@ -180,15 +181,18 @@ void Move::Spin()
  
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
-  
+
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
 	Transform(nextMove);
 
     currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
-    
-    int8_t mt = GetMovementType(lastMove->EndPoint(), nextMove);
-    
+
+    for(int8_t drive = 0; drive < DRIVES; drive++)
+    	nextMachineEndPoints[drive] = LookAhead::EndPointToMachine(drive, nextMove[drive]);
+
+    int8_t mt = GetMovementType(lastMove->MachineEndPoints(), nextMachineEndPoints);
+
     // Throw it away if there's no real movement.
     
     if(mt == noMove) 
@@ -216,7 +220,7 @@ void Move::Spin()
     else // Must be z
       nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));  // Assumes X and Y are equal.  FIXME?
     
-    if(!LookAheadRingAdd(nextMove, 0.0, checkEndStopsOnNextMove))
+    if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
   }
 }
@@ -225,8 +229,9 @@ void Move::SetPositions(float move[])
 {
 	Transform(move);
 
-	for(uint8_t drive = 0; drive <= DRIVES; drive++)
+	for(uint8_t drive = 0; drive < DRIVES; drive++)
 		lastMove->SetDriveZeroEndSpeed(move[drive], drive);
+	lastMove->SetFeedRate(move[DRIVES]);
 }
 
 
@@ -275,14 +280,14 @@ bool Move::GetCurrentState(float m[])
   for(int8_t i = 0; i < DRIVES; i++)
   {
     if(i < AXES)
-      m[i] = lastMove->EndPoint()[i];
+      m[i] = lastMove->MachineToEndPoint(i);
     else
       m[i] = 0.0;
   }
   if(currentFeedrate >= 0.0)
     m[DRIVES] = currentFeedrate;
   else
-    m[DRIVES] = lastMove->EndPoint()[DRIVES];
+    m[DRIVES] = lastMove->FeedRate();
   currentFeedrate = -1.0;
   InverseTransform(m);
   return true;
@@ -294,7 +299,7 @@ bool Move::GetCurrentState(float m[])
 //   An XY movement?
 //   Extruder movements?
 
-int8_t Move::GetMovementType(float p0[], float p1[])
+int8_t Move::GetMovementType(long p0[], long p1[])
 {
   int8_t result = noMove;
 
@@ -302,7 +307,7 @@ int8_t Move::GetMovementType(float p0[], float p1[])
   {
     if(drive < AXES)
     {
-      if( (long)roundf((p1[drive] - p0[drive])*platform->DriveStepsPerUnit(drive)) )
+      if( (p1[drive] - p0[drive]) )
       {
         if(drive == Z_AXIS)
           result |= zMove;
@@ -311,7 +316,7 @@ int8_t Move::GetMovementType(float p0[], float p1[])
       }
     } else
     {
-      if( (long)roundf(p1[drive]*platform->DriveStepsPerUnit(drive)) )
+      if( p1[drive] )
         result |= eMove;
     }
   }
@@ -337,7 +342,7 @@ bool Move::DDARingAdd(LookAhead* lookAhead)
       ReleaseDDARingLock();
       return false;
     }
-    
+
     // We don't care about Init()'s return value - that should all have been sorted
     // out by LookAhead.
     
@@ -454,18 +459,18 @@ void Move::DoLookAhead()
     {
       if(n1->Processed() == unprocessed)
       {
-        float c = fmin(n1->EndPoint()[DRIVES], n2->EndPoint()[DRIVES]);
+        float c = fmin(n1->FeedRate(), n2->FeedRate());
         c = c*n1->Cosine();
         if(c <= 0)
         {
-          int8_t mt = GetMovementType(n0->EndPoint(), n1->EndPoint());
+          int8_t mt = GetMovementType(n0->MachineEndPoints(), n1->MachineEndPoints());
 
           // Assumes xy overrides z overrides e
 
           if(mt & xyMove)
-            c = platform->InstantDv(Z_AXIS);
-          else if (mt & zMove)
             c = platform->InstantDv(X_AXIS);
+          else if (mt & zMove)
+            c = platform->InstantDv(Z_AXIS);
           else
             c = platform->InstantDv(AXES); // value for first extruder FIXME??
         }
@@ -520,13 +525,13 @@ void Move::Interrupt()
 }
 
 
-bool Move::LookAheadRingAdd(float ep[], float vv, bool ce)
+bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce)
 {
     if(LookAheadRingFull())
       return false;
     if(!(lookAheadRingAddPointer->Processed() & released))
       platform->Message(HOST_MESSAGE, "Attempt to alter a non-released lookahead ring entry!\n"); // Should never happen...
-    lookAheadRingAddPointer->Init(ep, vv, ce);
+    lookAheadRingAddPointer->Init(ep, feedRate, vv, ce);
     lastMove = lookAheadRingAddPointer;
     lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
     lookAheadRingCount++;
@@ -687,25 +692,26 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   distance = 0.0; // X+Y+Z
   float eDistance = 0.0;
   float d;
-  float* targetPosition = myLookAheadEntry->EndPoint();
+  long* targetPosition = myLookAheadEntry->MachineEndPoints();
   v = lookAhead->V();
-  float* positionNow = myLookAheadEntry->Previous()->EndPoint();
+  long* positionNow = myLookAheadEntry->Previous()->MachineEndPoints();
   u = lookAhead->Previous()->V();
   checkEndStops = lookAhead->CheckEndStops();
-  
+
   // How far are we going, both in steps and in mm?
   
   for(drive = 0; drive < DRIVES; drive++)
   {
     if(drive < AXES)
     {
-      d = targetPosition[drive] - positionNow[drive];  //Absolute
+      delta[drive] = targetPosition[drive] - positionNow[drive];  //Absolute
+      d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
       distance += d*d;
-      delta[drive] = (long)roundf(d*platform->DriveStepsPerUnit(drive));
     } else
     {
-      delta[drive] = (long)roundf(targetPosition[drive]*platform->DriveStepsPerUnit(drive));  // Relative
-      eDistance += targetPosition[drive]*targetPosition[drive];
+      delta[drive] = targetPosition[drive];  // Relative
+      d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
+      eDistance += d*d;
     }
     
     if(delta[drive] >= 0)
@@ -724,7 +730,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   if(totalSteps <= 0)
   {
-    platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement!\n");
+    platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement.\n");
     myLookAheadEntry->Release();
     return result;
   }
@@ -748,8 +754,8 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   {
     acceleration = platform->Acceleration(X_AXIS);
     instantDv = platform->InstantDv(X_AXIS);
-    timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);  // Slight hack
-  } else if (delta[Z_AXIS])// Z involved?
+    timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);  // Slight hack - assumes dY = dX
+  } else if (delta[Z_AXIS]) // Z involved?
   {
     acceleration = platform->Acceleration(Z_AXIS);
     instantDv = platform->InstantDv(Z_AXIS);
@@ -778,18 +784,18 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
     v = instantDv; 
   if(u < instantDv)
     u = instantDv;
-  if(targetPosition[DRIVES] < instantDv)
-    targetPosition[DRIVES] = instantDv;
+  if(myLookAheadEntry->FeedRate() < instantDv)
+	  myLookAheadEntry->SetFeedRate(instantDv);
 
-  // At which DDA step should we stop accelerating?  targetPosition[DRIVES] contains
+  // At which DDA step should we stop accelerating?  myLookAheadEntry->FeedRate() gives
   // the desired feedrate.
   
-  d = 0.5*(targetPosition[DRIVES]*targetPosition[DRIVES] - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
+  d = 0.5*(myLookAheadEntry->FeedRate()*myLookAheadEntry->FeedRate() - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
   stopAStep = (long)roundf((d*totalSteps)/distance);
   
   // At which DDA step should we start decelerating?
   
-  d = 0.5*(v*v - targetPosition[DRIVES]*targetPosition[DRIVES])/acceleration;  // This should be 0 or negative...
+  d = 0.5*(v*v - myLookAheadEntry->FeedRate()*myLookAheadEntry->FeedRate())/acceleration;  // This should be 0 or negative...
   startDStep = totalSteps + (long)roundf((d*totalSteps)/distance);
   
   // If acceleration stop is at or after deceleration start, then the distance moved
@@ -956,10 +962,11 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
   next = n;
 }
 
-void LookAhead::Init(float ep[], float vv, bool ce)
+void LookAhead::Init(long ep[], float f, float vv, bool ce)
 {
   v = vv;
-  for(int8_t i = 0; i <= DRIVES; i++)
+  feedRate = f;
+  for(int8_t i = 0; i < DRIVES; i++)
     endPoint[i] = ep[i];
   
   checkEndStops = ce;
@@ -979,6 +986,7 @@ void LookAhead::Init(float ep[], float vv, bool ce)
     processed = complete|vCosineSet|upPass;
 }
 
+
 // This returns the cosine of the angle between
 // the movement up to this, and the movement
 // away from this.  Note that it
@@ -997,8 +1005,9 @@ float LookAhead::Cosine()
   float m2;
   for(int8_t i = 0; i < AXES; i++)
   {
-    m1 = endPoint[i] - Previous()->endPoint[i];
-    m2 = Next()->endPoint[i] - endPoint[i];
+	m1 = MachineToEndPoint(i);
+    m2 = Next()->MachineToEndPoint(i) - m1;
+    m1 = m1 - Previous()->MachineToEndPoint(i);
     a2 += m1*m1;
     b2 += m2*m2;
     cosine += m1*m2;
@@ -1012,6 +1021,16 @@ float LookAhead::Cosine()
  
   cosine = cosine/( (float)sqrt(a2) * (float)sqrt(b2) );
   return cosine;
+}
+
+float LookAhead::MachineToEndPoint(int8_t drive, long coord)
+{
+	return ((float)coord)/reprap.GetPlatform()->DriveStepsPerUnit(drive);
+}
+
+long LookAhead::EndPointToMachine(int8_t drive, float coord)
+{
+	return  (long)roundf(coord*reprap.GetPlatform()->DriveStepsPerUnit(drive));
 }
 
 

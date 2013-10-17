@@ -436,7 +436,8 @@ class Platform
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void SetMotorCurrent(byte drive, float current);
-  float DriveStepsPerUnit(int8_t drive, float value);
+  float DriveStepsPerUnit(int8_t drive);
+  void SetDriveStepsPerUnit(int8_t drive, float value);
   float Acceleration(int8_t drive, float value);
   float MaxFeedrate(int8_t drive);
   float InstantDv(int8_t drive);
@@ -658,11 +659,14 @@ inline void Line::Write(char* b)
 
 // Drive the RepRap machine - Movement
 
-inline float Platform::DriveStepsPerUnit(int8_t drive, float value = -1)
+inline float Platform::DriveStepsPerUnit(int8_t drive)
 {
-	  if(drive >= 0 && drive < DRIVES && value > 0)
-		  driveStepsPerUnit[drive] = value;
   return driveStepsPerUnit[drive]; 
+}
+
+inline void Platform::SetDriveStepsPerUnit(int8_t drive, float value)
+{
+  driveStepsPerUnit[drive] = value;
 }
 
 inline float Platform::Acceleration(int8_t drive, float value = -1)

@@ -50,34 +50,45 @@ enum MovementType
   eMove = 4 
 };
 
+
 class LookAhead
 {  
-  public:
-    LookAhead(Move* m, Platform* p, LookAhead* n);
-    void Init(float ep[], float vv, bool ce);
-    LookAhead* Next();
-    LookAhead* Previous();
-    float* EndPoint();
-    float V();
-    void SetV(float vv);
-    int8_t Processed();
-    void SetProcessed(MovementState ms);
-    void SetDriveZeroEndSpeed(float a, int8_t drive);
-    bool CheckEndStops();
-    void Release();
-    
-  friend class Move;
-    
-  private:
-    Move* move;
-    Platform* platform;
-    LookAhead* next;
-    LookAhead* previous;
-    float endPoint[DRIVES+1];
-    float Cosine();
+public:
+
+	friend class Move;
+	friend class DDA;
+
+protected:
+	LookAhead(Move* m, Platform* p, LookAhead* n);
+	void Init(long ep[], float feedRate, float vv, bool ce);
+	LookAhead* Next();
+	LookAhead* Previous();
+	long* MachineEndPoints();
+	float MachineToEndPoint(int8_t drive);
+	static float MachineToEndPoint(int8_t drive, long coord);
+	static long EndPointToMachine(int8_t drive, float coord);
+	float FeedRate();
+	float V();
+	void SetV(float vv);
+	void SetFeedRate(float f);
+	int8_t Processed();
+	void SetProcessed(MovementState ms);
+	void SetDriveZeroEndSpeed(float a, int8_t drive);
+	bool CheckEndStops();
+	void Release();
+
+private:
+
+	Move* move;
+	Platform* platform;
+	LookAhead* next;
+	LookAhead* previous;
+	long endPoint[DRIVES+1];  // Should never use the +1, but safety first
+	float Cosine();
     bool checkEndStops;
     float cosine;
-    float v;
+    float v;        // The feedrate we can actually do
+    float feedRate; // The requested feedrate
     float instantDv;
     volatile int8_t processed;
 };
@@ -85,28 +96,31 @@ class LookAhead
 
 class DDA
 {
-  public: 
-    DDA(Move* m, Platform* p, DDA* n);
-    MovementProfile Init(LookAhead* lookAhead, float& u, float& v);
-    void Start(bool noTest);
-    void Step(bool noTest);
-    bool Active();
-    DDA* Next();
-    float InstantDv();
-    
-  friend class Move;
+public:
 
-  private:
-    Move* move;
-    Platform* platform;
-    DDA* next;
-    LookAhead* myLookAheadEntry;
-    long counter[DRIVES];
-    long delta[DRIVES];
-    bool directions[DRIVES];
-    long totalSteps;
-    long stepCount;
-    bool checkEndStops;
+	friend class Move;
+	friend class LookAhead;
+
+protected:
+	DDA(Move* m, Platform* p, DDA* n);
+	MovementProfile Init(LookAhead* lookAhead, float& u, float& v);
+	void Start(bool noTest);
+	void Step(bool noTest);
+	bool Active();
+	DDA* Next();
+	float InstantDv();
+
+private:
+	Move* move;
+	Platform* platform;
+	DDA* next;
+	LookAhead* myLookAheadEntry;
+	long counter[DRIVES];
+	long delta[DRIVES];
+	bool directions[DRIVES];
+	long totalSteps;
+	long stepCount;
+	bool checkEndStops;
     float timeStep;
     float velocity;
     long stopAStep;
@@ -146,7 +160,6 @@ class Move
     void InverseTransform(float move[]);
     void Diagnostics();
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
-    bool zProbing;
     
   friend class DDA;
     
@@ -161,9 +174,9 @@ class Move
     void ReleaseDDARingLock();
     bool LookAheadRingEmpty();
     bool LookAheadRingFull();
-    bool LookAheadRingAdd(float ep[], float vv, bool ce);
+    bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce);
     LookAhead* LookAheadRingGet();
-    int8_t GetMovementType(float sp[], float ep[]);
+    int8_t GetMovementType(long sp[], long ep[]);
 
     
     Platform* platform;
@@ -188,8 +201,10 @@ class Move
     float nextMove[DRIVES + 1];  // Extra is for feedrate
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
+    long nextMachineEndPoints[DRIVES+1];
     float aX, aY, aC;
     float lastZHit;
+    bool zProbing;
 };
 
 //********************************************************************************************************
@@ -210,15 +225,27 @@ inline void LookAhead::SetV(float vv)
   v = vv;
 }
 
-inline float* LookAhead::EndPoint() 
-{
-  return endPoint;
-}
-
-
 inline float LookAhead::V() 
 {
   return v;
+}
+
+inline float LookAhead::MachineToEndPoint(int8_t drive)
+{
+	if(drive >= DRIVES)
+		platform->Message(HOST_MESSAGE, "MachineToEndPoint() called for feedrate!\n");
+	return ((float)(endPoint[drive]))/platform->DriveStepsPerUnit(drive);
+}
+
+
+inline float LookAhead::FeedRate()
+{
+	return feedRate;
+}
+
+inline void LookAhead::SetFeedRate(float f)
+{
+	feedRate = f;
 }
 
 inline int8_t LookAhead::Processed() 
@@ -246,9 +273,14 @@ inline bool LookAhead::CheckEndStops()
 
 inline void LookAhead::SetDriveZeroEndSpeed(float a, int8_t drive)
 {
-  endPoint[drive] = a;
+  endPoint[drive] = EndPointToMachine(drive, a);
   cosine = 2.0;
   v = 0.0; 
+}
+
+inline long* LookAhead::MachineEndPoints()
+{
+	return endPoint;
 }
 
 //******************************************************************************************************
@@ -362,9 +394,10 @@ inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 
 inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)
 {
+	float previous = la->Previous()->MachineToEndPoint(drive);
 	if(runningDDA->totalSteps <= 0)
-		return 0.0;
-	return la->Previous()->endPoint[drive] + (la->endPoint[drive] - la->Previous()->endPoint[drive])*(float)runningDDA->stepCount/(float)runningDDA->totalSteps;
+		return previous;
+	return previous + (la->MachineToEndPoint(drive) - previous)*(float)runningDDA->stepCount/(float)runningDDA->totalSteps;
 }
 
 

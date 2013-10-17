@@ -694,11 +694,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		}else{
     			value = -1;
     		}
-    		float stepsPerUnit = platform->DriveStepsPerUnit(i,value);
+    		platform->SetDriveStepsPerUnit(i, value);
     		if(reprap.debug())
     		{
     			platform->GetLine()->Write(gCodeLetters[i]);
-    			platform->GetLine()->Write(ftoa(NULL,stepsPerUnit,3));
+    			platform->GetLine()->Write(ftoa(NULL, value, 3));
     			platform->GetLine()->Write(" ");
     		}
     	}

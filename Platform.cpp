@@ -362,15 +362,16 @@ char* MassStorage::FileList(char* directory)
   loc[len - 1 ] = '\0';
 
   if(reprap.debug()) {
-	  SerialUSB.print("Opening: ");
-	  SerialUSB.println(loc);
+	  platform->Message(HOST_MESSAGE, "Opening: ");
+	  platform->Message(HOST_MESSAGE, loc);
+	  platform->Message(HOST_MESSAGE, "\n");
   }
 
   res = f_opendir(&dir,loc);
   if(FR_OK == res) {
 
 	  if(reprap.debug()) {
-		  SerialUSB.println("Directory open");
+		  platform->Message(HOST_MESSAGE, "Directory open\n");
 	  }
 
 	  int p = 0;
@@ -407,7 +408,7 @@ char* MassStorage::FileList(char* directory)
 	  fileList[--p] = 0; // Get rid of the last separator
 	  return fileList;
   }
-  SerialUSB.println(res);
+
 	return "";
 }
 
@@ -449,8 +450,7 @@ void FileStore::Init()
 bool FileStore::Open(char* directory, char* fileName, bool write)
 {
   char* location = platform->GetMassStorage()->CombineName(directory, fileName);
-//  SerialUSB.print("Opening: ");
-//  SerialUSB.println(location);
+
   writing = write;
   lastBufferEntry = FILE_BUF_LEN - 1;
   FRESULT openReturn;
@@ -681,9 +681,8 @@ void Platform::Message(char type, char* message)
 
 
 //***************************************************************************************************
-#if CALIB_Z
- int zcount; // NASTY - FIX ME
-#endif
+
+// int zcount; // NASTY - FIX ME
 
 void Platform::Spin()
 {
@@ -698,14 +697,12 @@ void Platform::Spin()
    PollZHeight();
    lastTime = Time();
 
-#if CALIB_Z
-   zcount++;
-   if(zcount > 30)
-   {
-	   zcount = 0;
-	   SerialUSB.println(GetRawZHeight());
-   }
-#endif
+//   zcount++;
+//   if(zcount > 30)
+//   {
+//	   zcount = 0;
+//	   SerialUSB.println(GetRawZHeight());
+//   }
 }
 
 //*************************************************************************************************
