@@ -250,88 +250,6 @@ bool GCodes::ReadHeat(float* h)
 
 }
 
-bool GCodes::DoHome()
-{
-  // Treat more or less like any other move
-  // Do one axis at a time, starting with X.
-     
-  if(homeX)
-  {
-    if(homeXQueued) // If this is true we are in the middle of homeing X
-    {
-      if(!Pop())  // Pop will only be true when the home is finished
-        return false;
-      homeX = false;
-      homeXQueued = false;
-      return NoHome();
-    } else
-    {
-      // Push() has the side effect of finishing all queued moves and loading moveBuffer correctly
-        
-      if(!Push())
-        return false;
-      moveBuffer[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-      moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)*0.016666667;
-      homeXQueued = true;
-      checkEndStops = true;
-      moveAvailable = true; 
-      return false;
-    }
-  }
-  
-  if(homeY)
-  {
-    if(homeYQueued)
-    {
-      if(!Pop())
-        return false;
-      homeY = false;
-      homeYQueued = false;
-      return NoHome();
-    } else
-    {
-      if(!Push())
-        return false;
-      moveBuffer[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-      moveBuffer[DRIVES] = platform->HomeFeedRate(Y_AXIS)*0.016666667;
-      homeYQueued = true;
-      checkEndStops = true;
-      moveAvailable = true; 
-      return false;
-    }
-  }
-  
-  if(homeZ)
-  {
-    if(homeZQueued)
-    {
-      if(!Pop())
-        return false;
-      homeZ = false;
-      homeZQueued = false;
-      return NoHome();
-    } else
-    {
-      if(!Push())
-        return false;
-      moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-      moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
-      reprap.GetMove()->SetZProbing(true);
-      homeZQueued = true;
-      checkEndStops = true;
-      moveAvailable = true; 
-      return false;
-    }
-  }
-  
-  // Should never get here
-  
-  checkEndStops = false;
-  moveAvailable = false;
-
-  return true;
-}
-
 // To execute any move, call this until it returns true.
 // false entries in action[] will be ignored.
 
@@ -357,6 +275,60 @@ bool GCodes::DoInternalMove(float moveToDo[], bool action[], bool ce)
 		moveAvailable = true;
 	}
 	return false;
+}
+
+bool GCodes::DoHome()
+{
+	// Treat more or less like any other move
+	// Do one axis at a time, starting with X.
+
+	float moveToDo[DRIVES+1];
+	bool action[DRIVES+1];
+	for(int8_t drive = 0; drive <= DRIVES; drive++)
+		action[drive] = false;
+
+	if(homeX)
+	{
+		action[X_AXIS] = true;
+		moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+		if(DoInternalMove(moveToDo, action, true))
+		{
+			homeX = false;
+			return NoHome();
+		}
+		return false;
+	}
+
+	if(homeY)
+	{
+		action[Y_AXIS] = true;
+		moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
+		if(DoInternalMove(moveToDo, action, true))
+		{
+			homeY = false;
+			return NoHome();
+		}
+		return false;
+	}
+
+	if(homeZ)
+	{
+		action[Z_AXIS] = true;
+		moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+		if(DoInternalMove(moveToDo, action, true))
+		{
+			homeZ = false;
+			return NoHome();
+		}
+		return false;
+	}
+
+	// Should never get here
+
+	checkEndStops = false;
+	moveAvailable = false;
+
+	return true;
 }
 
 
@@ -639,10 +611,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
 
     case 31:
-    	platform->GetLine()->Write(ftoa(NULL,platform->GetRawZHeight(),0));
-    	platform->GetLine()->Write(" ;");
-    	platform->GetLine()->Write(ftoa(NULL,platform->ZProbe(),0));
-    	platform->GetLine()->Write("mm\n");
+    	sprintf(scratchString, "%d", platform->ZProbe());
+    	platform->GetLine()->Write(scratchString);
+//    	platform->GetLine()->Write(" ;");
+//    	platform->GetLine()->Write(ftoa(NULL,platform->ZProbe(),0));
+    	platform->GetLine()->Write("\n");
     	break;
 
     case 32: // Probe Z at multiple positions and generate the bed transform
@@ -688,6 +661,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 20:  // Deprecated...
       platform->GetLine()->Write("GCode files:\n");
       platform->GetLine()->Write(platform->GetMassStorage()->FileList(platform->GetGCodeDir()));
+      platform->GetLine()->Write("\n");
       break;
 
     case 23: // Set file to print

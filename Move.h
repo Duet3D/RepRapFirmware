@@ -153,7 +153,7 @@ class Move
     void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void SetPositions(float move[]);
     void SetZProbing(bool probing);
-    bool ZProbing();
+   // bool ZProbing();
     void SetProbedBedPlane();
     float GetLastProbedZ();
     void SetIdentityTransform();
@@ -367,11 +367,14 @@ inline void Move::ResumeMoving()
   addNoMoreMoves = false;
 }
 
+//inline bool Move::ZProbing()
+//{
+//	return zProbing;
+//}
+
 inline void Move::SetZProbing(bool probing)
 {
 	zProbing = probing;
-	if(zProbing)
-		platform->StartZProbing();
 }
 
 inline float Move::GetLastProbedZ()
@@ -382,9 +385,12 @@ inline float Move::GetLastProbedZ()
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
   float hitPoint = 0.0;
-  if(drive == Z_AXIS && zProbing)
+  if(drive == Z_AXIS)
   {
-	  lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
+	  if(zProbing)
+		  lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
+	  else
+		  lastZHit = platform->GetZProbeStopHeight();
 	  hitPoint = lastZHit;
   }
   la->SetDriveZeroEndSpeed(hitPoint, drive);
@@ -403,10 +409,6 @@ inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* ru
 	return previous + (la->MachineToEndPoint(drive) - previous)*(float)runningDDA->stepCount/(float)runningDDA->totalSteps;
 }
 
-inline bool Move::ZProbing()
-{
-	return zProbing;
-}
 
 
 #endif

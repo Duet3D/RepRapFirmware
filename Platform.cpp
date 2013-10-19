@@ -56,16 +56,6 @@ Platform::Platform(RepRap* r)
   active = false;
 }
 
-//*****************************************************************************************************************
-
-// Interrupts
-
-void TC3_Handler()
-{
-  TC_GetStatus(TC1, 0);
-  reprap.Interrupt();
-}
-
 //*******************************************************************************************************************
 
 void Platform::Init()
@@ -103,14 +93,17 @@ void Platform::Init()
   potWipes = POT_WIPES;
   senseResistor = SENSE_RESISTOR;
   maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-  zProbeGradient = Z_PROBE_GRADIENT;
-  zProbeConstant = Z_PROBE_CONSTANT;
+//  zProbeGradient = Z_PROBE_GRADIENT;
+//  zProbeConstant = Z_PROBE_CONSTANT;
   zProbePin = Z_PROBE_PIN;
   zProbeCount = 0;
   zProbeSum = 0;
-  zProbeStarting = false;
-  zProbeHigh = Z_PROBE_HIGH;
-  zProbeLow = Z_PROBE_LOW;
+  zProbeValue = 0;
+//  zProbeStarting = false;
+//  zProbeHigh = Z_PROBE_HIGH;
+//  zProbeLow = Z_PROBE_LOW;
+  zProbeADValue = Z_PROBE_AD_VALUE;
+  zProbeStopHeight = Z_PROBE_STOP_HEIGHT;
 
   // AXES
 
@@ -192,7 +185,10 @@ void Platform::Init()
     if(heatOnPins[i] >= 0)
       pinModeNonDue(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
-  }  
+  }
+
+  if(zProbePin >= 0)
+	  pinMode(zProbePin, INPUT);
   
   InitialiseInterrupts();
   
@@ -224,6 +220,27 @@ void Platform::Spin()
 //	   SerialUSB.println(GetRawZHeight());
 //  }
 }
+
+//*****************************************************************************************************************
+
+// Interrupts
+
+void TC3_Handler()
+{
+  TC_GetStatus(TC1, 0);
+  reprap.Interrupt();
+}
+
+void Platform::InitialiseInterrupts()
+{
+  pmc_set_writeprotect(false);
+  pmc_enable_periph_clk((uint32_t)TC3_IRQn);
+  TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
+  TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
+  TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
+  SetInterrupt(STANDBY_INTERRUPT_RATE);
+}
+
 
 //*************************************************************************************************
 
@@ -277,12 +294,9 @@ void Platform::SetHeater(int8_t heater, const float& power)
 
 inline void Platform::PollZHeight()
 {
-	if(!reprap->GetMove()->ZProbing())
-		return;
-
 	if(zProbeCount >= 5)
 	{
-		zProbeValue = zProbeGradient*0.2*(float)zProbeSum + zProbeConstant;
+		zProbeValue = zProbeSum/5;
 		zProbeSum = 0;
 		zProbeCount = 0;
 	}
@@ -293,12 +307,9 @@ inline void Platform::PollZHeight()
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
-	if(drive == Z_AXIS && reprap->GetMove()->ZProbing())
+	if(drive == Z_AXIS)
 	{
-		if(zProbeStarting && zProbeValue > zProbeHigh)
-			zProbeStarting = false;
-
-		if(!zProbeStarting && ZProbe() < zProbeLow)
+		if(ZProbe() > zProbeADValue)
 			return lowHit;
 		else
 			return noStop;
@@ -430,27 +441,27 @@ char* MassStorage::FileList(char* directory)
 
   len = strlen(directory);
   strncpy(loc,directory,len-1);
-  loc[len - 1 ] = '\0';
+  loc[len - 1 ] = 0;
 
-  if(reprap.debug()) {
-	  platform->Message(HOST_MESSAGE, "Opening: ");
-	  platform->Message(HOST_MESSAGE, loc);
-	  platform->Message(HOST_MESSAGE, "\n");
-  }
+//  if(reprap.debug()) {
+//	  platform->Message(HOST_MESSAGE, "Opening: ");
+//	  platform->Message(HOST_MESSAGE, loc);
+//	  platform->Message(HOST_MESSAGE, "\n");
+//  }
 
   res = f_opendir(&dir,loc);
-  if(FR_OK == res) {
+  if(res == FR_OK) {
 
-	  if(reprap.debug()) {
-		  platform->Message(HOST_MESSAGE, "Directory open\n");
-	  }
+//	  if(reprap.debug()) {
+//		  platform->Message(HOST_MESSAGE, "Directory open\n");
+//	  }
 
 	  int p = 0;
 //  int q;
 	  int foundFiles = 0;
 
 	  f_readdir(&dir,0);
-	  while(FR_OK == f_readdir(&dir,&entry) && foundFiles < 24)
+	  while(f_readdir(&dir,&entry) == FR_OK && foundFiles < 24)
 	  {
 		  foundFiles++;
 		  if(strlen(entry.fname) > 0) {
@@ -459,6 +470,7 @@ char* MassStorage::FileList(char* directory)
 			while(entry.fname[q])
 			{
 			  fileList[p++] = entry.fname[q];
+			  //SerialUSB.print(entry.fname[q]);
 			  q++;
 			  if(p >= FILE_LIST_LENGTH - 10) // Caution...
 			  {
@@ -761,8 +773,8 @@ Line::Line()
 
 void Line::Init()
 {
-	alternateInput = NULL;
-	alternateOutput = NULL;
+//	alternateInput = NULL;
+//	alternateOutput = NULL;
 	SerialUSB.begin(BAUD_RATE);
 	//while (!SerialUSB.available());
 }
@@ -864,8 +876,8 @@ void Network::CleanRing()
 
 void Network::Init()
 {
-	alternateInput = NULL;
-	alternateOutput = NULL;
+//	alternateInput = NULL;
+//	alternateOutput = NULL;
 	init_ethernet();
 	CleanRing();
 	Reset();

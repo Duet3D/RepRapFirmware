@@ -46,14 +46,7 @@ Licence: GPL
 #include "SamNonDuePin.h"
 #include "SD_HSMCI.h"
 #include "MCP4461.h"
-
-//#include "lwip/src/include/lwip/netif.h"
-//#include "lwip/src/sam/include/netif/ethernetif.h"
-//#include "lwip/src/include/lwip/init.h"
-#include "httpd.h"
 #include "ethernet_sam.h"
-#include "timer_mgt_sam.h"
-
 
 /**************************************************************************************************/
 
@@ -90,14 +83,15 @@ Licence: GPL
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define Z_PROBE_GRADIENT 0.00092498
-#define Z_PROBE_CONSTANT -0.456179
-#define Z_PROBE_HIGH 0.3 // mm
-#define Z_PROBE_LOW 0.2 // mm
+//#define Z_PROBE_GRADIENT 0.00092498
+//#define Z_PROBE_CONSTANT -0.456179
+//#define Z_PROBE_HIGH 0.3 // mm
+//#define Z_PROBE_LOW 0.2 // mm
+#define Z_PROBE_AD_VALUE 800
+#define Z_PROBE_STOP_HEIGHT 1.3 // mm
 #define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
-//#define ACCELERATIONS {80, 80, 3, 25} 
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 660.0}
 #define INSTANT_DVS {15.0, 15.0, 0.4, 0.5}    // (mm/sec) - Bit high? AB
 
@@ -112,7 +106,7 @@ Licence: GPL
 #define X_AXIS 0  // The index of the X axis
 #define Y_AXIS 1  // The index of the Y axis
 #define Z_AXIS 2  // The index of the Z axis
-#define E_AXIS 3  // The index of the extruder
+//#define E_AXIS 3  // The index of the extruder
 
 // HEATERS - The bed is assumed to be the first
 
@@ -165,21 +159,21 @@ Licence: GPL
 
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
-#define MAC { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-#define MAC_BYTES 6
+//#define MAC { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+//#define MAC_BYTES 6
+//
+//#define IP0 192
+//#define IP1 168
+//#define IP2 1
+//#define IP3 14
+//
+//#define IP_BYTES 4
 
-#define IP0 192
-#define IP1 168
-#define IP2 1
-#define IP3 14
-
-#define IP_BYTES 4
-
-#define ETH_B_PIN 10
+//#define ETH_B_PIN 10
 
 // port 80 is default for HTTP
   
-#define HTTP_PORT 80
+//#define HTTP_PORT 80
 
 // Seconds to wait after serving a page
  
@@ -192,7 +186,7 @@ Licence: GPL
 
 // Miscellaneous...
 
-#define LED_PIN 13 // Indicator LED
+//#define LED_PIN 13 // Indicator LED
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
@@ -219,18 +213,18 @@ enum IOStatus
   clientConnected = 8
 };
 
-// All IO is done by classes derived from this class.
-
-class InputOutput
-{
-public:
-	void TakeInputFrom(InputOutput* altIp);
-	void SendOutputTo(InputOutput* altOp);
-
-protected:
-	InputOutput* alternateInput;
-	InputOutput* alternateOutput;
-};
+//// All IO is done by classes derived from this class.
+//
+//class InputOutput
+//{
+//public:
+//	void TakeInputFrom(InputOutput* altIp);
+//	void SendOutputTo(InputOutput* altOp);
+//
+//protected:
+//	InputOutput* alternateInput;
+//	InputOutput* alternateOutput;
+//};
 
 // This class handles the network - typically an ethernet.
 
@@ -273,9 +267,10 @@ private:
 
 // The main network class that drives the network.
 
-class Network: public InputOutput
+class Network //: public InputOutput
 {
 public:
+
 	int8_t Status(); // Returns OR of IOStatus
 	bool Read(char& b);
 	bool CanWrite();
@@ -290,6 +285,7 @@ public:
 friend class Platform;
 
 protected:
+
 	Network();
 	void Init();
 	void Spin();
@@ -312,9 +308,10 @@ private:
 
 // This class handles serial I/O - typically via USB
 
-class Line: public InputOutput
+class Line //: public InputOutput
 {
 public:
+
 	int8_t Status(); // Returns OR of IOStatus
 	int Read(char& b);
 	void Write(char b);
@@ -323,6 +320,7 @@ public:
 friend class Platform;
 
 protected:
+
 	Line();
 	void Init();
 	void Spin();
@@ -333,16 +331,20 @@ private:
 class MassStorage
 {
 public:
+
   char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory
   char* CombineName(char* directory, char* fileName);
   bool Delete(char* directory, char* fileName);
+
 friend class Platform;
 
 protected:
+
   MassStorage(Platform* p);
   void Init();
 
 private:
+
   char fileList[FILE_LIST_LENGTH];
   char scratchString[STRING_LENGTH];
   Platform* platform;
@@ -351,9 +353,10 @@ private:
 
 // This class handles input from, and output to, files.
 
-class FileStore: public InputOutput
+class FileStore //: public InputOutput
 {
 public:
+
 	int8_t Status(); // Returns OR of IOStatus
 	bool Read(char& b);
 	void Write(char b);
@@ -365,6 +368,7 @@ public:
 friend class Platform;
 
 protected:
+
 	FileStore(Platform* p);
 	void Init();
         bool Open(char* directory, char* fileName, bool write);
@@ -414,7 +418,7 @@ class Platform
   
   void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
   
-  // Communications and data storage; opening something unsupported returns -1.
+  // Communications and data storage
   
   Network* GetNetwork();
   Line* GetLine();
@@ -447,10 +451,13 @@ class Platform
   EndStopHit Stopped(int8_t drive);
   float AxisLength(int8_t drive);
   
-  float ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
-  void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
-  void StartZProbing();
   int GetRawZHeight();
+  float GetZProbeStopHeight();
+
+  long ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
+//  void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
+//  void StartZProbing();
+
   
   // Heat and temperature
   
@@ -482,7 +489,7 @@ class Platform
   bool active;
   
   void InitialiseInterrupts();
-  
+
   RepRap* reprap;
   
 // DRIVES
@@ -502,12 +509,14 @@ class Platform
   int8_t potWipes[DRIVES];
   float senseResistor;
   float maxStepperDigipotVoltage;
-  float zProbeGradient;
-  float zProbeConstant;
-  float zProbeValue;
+//  float zProbeGradient;
+//  float zProbeConstant;
+  long zProbeValue;
   int8_t zProbePin;
   int8_t zProbeCount;
   long zProbeSum;
+  int zProbeADValue;
+  float zProbeStopHeight;
 
 // AXES
 
@@ -516,9 +525,9 @@ class Platform
   float axisLengths[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
-  bool zProbeStarting;
-  float zProbeHigh;
-  float zProbeLow;
+//  bool zProbeStarting;
+//  float zProbeHigh;
+//  float zProbeLow;
   
 // HEATERS - Bed is assumed to be the first
 
@@ -610,55 +619,6 @@ inline char* Platform::GetConfigFile()
   return configFile;
 }
 
-//****************************************************************************************************************
-
-inline Network* Platform::GetNetwork()
-{
-	return network;
-}
-
-inline Line* Platform::GetLine()
-{
-	return line;
-}
-
-inline void Line::Spin()
-{
-}
-
-inline int8_t Line::Status()
-{
-//	if(alternateInput != NULL)
-//		return alternateInput->Status();
-
-	if(SerialUSB.available() > 0)
-		return byteAvailable;
-	return nothing;
-}
-
-inline int Line::Read(char& b)
-{
-//  if(alternateInput != NULL)
-//	return alternateInput->Read(b);
-
-  int incomingByte = SerialUSB.read();
-  if(incomingByte < 0)
-    return 0;
-  b = (char)incomingByte;
-  return true;
-}
-
-inline void Line::Write(char b)
-{
-	SerialUSB.print(b);
-}
-
-inline void Line::Write(char* b)
-{
-	SerialUSB.print(b);
-}
-
-
 
 
 //*****************************************************************************************************************
@@ -749,10 +709,10 @@ inline float Platform::HomeFeedRate(int8_t drive)
   return homeFeedrates[drive];
 }
 
-inline void Platform::StartZProbing()
-{
-	zProbeStarting = true;
-}
+//inline void Platform::StartZProbing()
+//{
+//	zProbeStarting = true;
+//}
 
 inline float Platform::AxisLength(int8_t drive)
 {
@@ -771,9 +731,14 @@ inline int Platform::GetRawZHeight()
   return 0;
 }
 
-inline float Platform::ZProbe()
+inline long Platform::ZProbe()
 {
 	return zProbeValue;
+}
+
+inline float Platform::GetZProbeStopHeight()
+{
+	return zProbeStopHeight;
 }
 
 
@@ -839,17 +804,6 @@ inline float Platform::DMix(int8_t heater)
 
 // Interrupts
 
-
-inline void Platform::InitialiseInterrupts()
-{
-  pmc_set_writeprotect(false);
-  pmc_enable_periph_clk((uint32_t)TC3_IRQn);
-  TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
-  TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
-  TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
-  SetInterrupt(STANDBY_INTERRUPT_RATE); 
-}
-
 inline void Platform::SetInterrupt(float s) // Seconds
 {
   if(s <= 0.0)
@@ -865,68 +819,60 @@ inline void Platform::SetInterrupt(float s) // Seconds
   NVIC_EnableIRQ(TC3_IRQn);
 }
 
+//****************************************************************************************************************
+
+inline Network* Platform::GetNetwork()
+{
+	return network;
+}
+
+inline Line* Platform::GetLine()
+{
+	return line;
+}
+
+inline void Line::Spin()
+{
+}
+
+inline int8_t Line::Status()
+{
+//	if(alternateInput != NULL)
+//		return alternateInput->Status();
+
+	if(SerialUSB.available() > 0)
+		return byteAvailable;
+	return nothing;
+}
+
+inline int Line::Read(char& b)
+{
+//  if(alternateInput != NULL)
+//	return alternateInput->Read(b);
+
+  int incomingByte = SerialUSB.read();
+  if(incomingByte < 0)
+    return 0;
+  b = (char)incomingByte;
+  return true;
+}
+
+inline void Line::Write(char b)
+{
+	SerialUSB.print(b);
+}
+
+inline void Line::Write(char* b)
+{
+	SerialUSB.print(b);
+}
+
+
+
+
 //***************************************************************************************
 
-// Network connection
 
-//inline int Platform::ClientStatus()
-//{
-//  return clientStatus;
-//}
-//
-//inline void Platform::SendToClient(char b)
-//{
-//  if(client)
-//  {
-//    client.write(b);
-//  } else
-//    Message(HOST_MESSAGE, "Attempt to send byte to disconnected client.");
-//}
-//
-//inline char Platform::ClientRead()
-//{
-//  if(client)
-//    return client.read();
-//
-//  Message(HOST_MESSAGE, "Attempt to read from disconnected client.");
-//  return '\n'; // good idea??
-//}
-//
-//inline void Platform::ClientMonitor()
-//{
-//  clientStatus = 0;
-//
-//  if(!client)
-//  {
-//    client = server->available();
-//    if(!client)
-//      return;
-//    //else
-//      //Serial.println("new client");
-//  }
-//
-//  clientStatus |= CLIENT;
-//
-//  if(!client.connected())
-//    return;
-//
-//  clientStatus |= CONNECTED;
-//
-//  if (!client.available())
-//    return;
-//
-//  clientStatus |= AVAILABLE;
-//}
-//
-//inline void Platform::DisconnectClient()
-//{
-//  if (client)
-//  {
-//    client.stop();
-//    //Serial.println("client disconnected");
-//  } else
-//      Message(HOST_MESSAGE, "Attempt to disconnect non-existent client.");
-//}
 
 
 
