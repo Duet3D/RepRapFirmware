@@ -221,7 +221,7 @@ void RepRap::Diagnostics()
 // Float to a string.
 
 static long precision[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
-char scratchString[30];
+char scratchString[STRING_LENGTH];
 
 char* ftoa(char *a, const float& f, int prec)
 {

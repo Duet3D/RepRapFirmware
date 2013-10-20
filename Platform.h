@@ -88,7 +88,7 @@ Licence: GPL
 //#define Z_PROBE_HIGH 0.3 // mm
 //#define Z_PROBE_LOW 0.2 // mm
 #define Z_PROBE_AD_VALUE 800
-#define Z_PROBE_STOP_HEIGHT 1.3 // mm
+#define Z_PROBE_STOP_HEIGHT 0.9 // mm
 #define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
 #define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
@@ -451,13 +451,10 @@ class Platform
   EndStopHit Stopped(int8_t drive);
   float AxisLength(int8_t drive);
   
-  int GetRawZHeight();
-  float GetZProbeStopHeight();
-
-  long ZProbe();  // Return the height above the bed.  Returned value is negative if probing isn't implemented
-//  void ZProbe(float h); // Move to height h above the bed using the probe (if there is one).  h should be non-negative.
-//  void StartZProbing();
-
+  float ZProbeStopHeight();
+  void SetZProbeStopHeight(float z);
+  long ZProbe();
+  void SetZProbe(int iZ);
   
   // Heat and temperature
   
@@ -489,6 +486,7 @@ class Platform
   bool active;
   
   void InitialiseInterrupts();
+  int GetRawZHeight();
 
   RepRap* reprap;
   
@@ -736,9 +734,19 @@ inline long Platform::ZProbe()
 	return zProbeValue;
 }
 
-inline float Platform::GetZProbeStopHeight()
+inline float Platform::ZProbeStopHeight()
 {
 	return zProbeStopHeight;
+}
+
+inline void Platform::SetZProbeStopHeight(float z)
+{
+	zProbeStopHeight = z;
+}
+
+inline void Platform::SetZProbe(int iZ)
+{
+	zProbeADValue = iZ;
 }
 
 

@@ -41,10 +41,6 @@ bool StringStartsWith(char* string, char* starting);
 bool StringEquals(char* s1, char* s2);
 int StringContains(char* string, char* match);
 
-extern char scratchString[30];
-
-//#include <stdio.h>
-//#include <stdlib.h>
 
 #include <float.h>
 
@@ -56,7 +52,7 @@ extern char scratchString[30];
 #include "Heat.h"
 #include "Reprap.h"
 
-
+extern char scratchString[STRING_LENGTH];
 
 #endif
 

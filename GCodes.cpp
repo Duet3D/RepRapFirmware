@@ -45,7 +45,7 @@ void GCodes::Init()
   fileGCode->SetFinished(true);
   serialGCode->SetFinished(true);
   moveAvailable = false;
-  heatAvailable = false;
+ // heatAvailable = false;
   drivesRelative = true;
   axesRelative = false;
   checkEndStops = false;
@@ -58,9 +58,9 @@ void GCodes::Init()
   homeX = false;
   homeY = false;
   homeZ = false;
-  homeXQueued = false;
-  homeYQueued = false;
-  homeZQueued = false;
+//  homeXQueued = false;
+//  homeYQueued = false;
+//  homeZQueued = false;
   dwellWaiting = false;
   stackPointer = 0;
   selectedHead = -1;
@@ -69,9 +69,9 @@ void GCodes::Init()
 	  bedZs[i] = 0.0;
   zProbesSet = false;
   probeCount = 0;
-  probeMoveCount = 0;
-  probeMoveQueued = false;
-  internalMoveQueued = false;
+  cannedCycleMoveCount = 0;
+//  probeMoveQueued = false;
+  cannedCycleMoveQueued = false;
   active = true;
   dwellTime = platform->Time();
 }
@@ -253,13 +253,13 @@ bool GCodes::ReadHeat(float* h)
 // To execute any move, call this until it returns true.
 // false entries in action[] will be ignored.
 
-bool GCodes::DoInternalMove(float moveToDo[], bool action[], bool ce)
+bool GCodes::DoCannedCycleMove(float moveToDo[], bool action[], bool ce)
 {
-	if(internalMoveQueued)
+	if(cannedCycleMoveQueued)
 	{
 		if(!Pop()) // Wait for the move to finish
 			return false;
-		internalMoveQueued = false;
+		cannedCycleMoveQueued = false;
 		return true;
 	} else
 	{
@@ -271,7 +271,7 @@ bool GCodes::DoInternalMove(float moveToDo[], bool action[], bool ce)
 				moveBuffer[drive] = moveToDo[drive];
 		}
 		checkEndStops = ce;
-		internalMoveQueued = true;
+		cannedCycleMoveQueued = true;
 		moveAvailable = true;
 	}
 	return false;
@@ -291,7 +291,7 @@ bool GCodes::DoHome()
 	{
 		action[X_AXIS] = true;
 		moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-		if(DoInternalMove(moveToDo, action, true))
+		if(DoCannedCycleMove(moveToDo, action, true))
 		{
 			homeX = false;
 			return NoHome();
@@ -303,7 +303,7 @@ bool GCodes::DoHome()
 	{
 		action[Y_AXIS] = true;
 		moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-		if(DoInternalMove(moveToDo, action, true))
+		if(DoCannedCycleMove(moveToDo, action, true))
 		{
 			homeY = false;
 			return NoHome();
@@ -315,7 +315,7 @@ bool GCodes::DoHome()
 	{
 		action[Z_AXIS] = true;
 		moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-		if(DoInternalMove(moveToDo, action, true))
+		if(DoCannedCycleMove(moveToDo, action, true))
 		{
 			homeZ = false;
 			return NoHome();
@@ -331,6 +331,9 @@ bool GCodes::DoHome()
 	return true;
 }
 
+// This lifts Z a bit, moves to the probe XY coordinates (obtained by a call to GetProbeCoordinates() ),
+// probes the bed height, and records the Z coordinate probed.  If you want to program any general
+// internal canned cycle, this shows how to do it.
 
 bool GCodes::DoSingleZProbe()
 {
@@ -338,56 +341,50 @@ bool GCodes::DoSingleZProbe()
 
 	reprap.GetMove()->SetIdentityTransform();  // It doesn't matter if these are called repeatedly
 
-	if(probeMoveQueued)
-	{
-		// Doing a move
+	float moveToDo[DRIVES+1];
+	bool action[DRIVES+1];
+	for(int8_t drive = 0; drive <= DRIVES; drive++)
+		action[drive] = false;
 
-		if(!Pop()) // Wait for the move to finish
-			return false;
-		probeMoveQueued = false;
-		if(probeMoveCount > 2)
-		{
-			probeMoveCount = 0;
-			bedZs[probeCount] = reprap.GetMove()->GetLastProbedZ();
-			return true;
-		}
+	switch(cannedCycleMoveCount)
+	{
+	case 0:
+		moveToDo[Z_AXIS] = Z_DIVE;
+		action[Z_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+		action[DRIVES] = true;
+		reprap.GetMove()->SetZProbing(false);
+		if(DoCannedCycleMove(moveToDo, action, false))
+			cannedCycleMoveCount++;
 		return false;
-	} else
-	{
-		// Not doing a move
 
-		if(!Push()) // Wait for the RepRap to finish whatever it was doing
-			return false;
+	case 1:
+		GetProbeCoordinates(probeCount, moveToDo[X_AXIS], moveToDo[Y_AXIS], moveToDo[Z_AXIS]);
+		action[X_AXIS] = true;
+		action[Y_AXIS] = true;
+		// NB - we don't use the Z value
+		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS)*0.016666667;
+		action[DRIVES] = true;
+		reprap.GetMove()->SetZProbing(false);
+		if(DoCannedCycleMove(moveToDo, action, false))
+			cannedCycleMoveCount++;
+		return false;
 
-		switch(probeMoveCount)
-		{
-		case 0:
-			moveBuffer[Z_AXIS] = Z_DIVE;
-			moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
-			checkEndStops = false;
-			break;
-		case 1:
-			GetProbeCoordinates(probeCount, x, y, z);
-			moveBuffer[X_AXIS] = x;
-			moveBuffer[Y_AXIS] = y;
-			moveBuffer[DRIVES] = platform->HomeFeedRate(X_AXIS)*0.016666667;
-			checkEndStops = false;
-			break;
-		case 2:
-			moveBuffer[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-			moveBuffer[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
-			reprap.GetMove()->SetZProbing(true);
-			checkEndStops = true;
-			break;
-		default:
-			platform->Message(HOST_MESSAGE, "probeMoveCount beyond maximum requested.\n");
-			break;
-		}
-		probeMoveQueued = true;
-		moveAvailable = true;
-		probeMoveCount++;
+	case 2:
+		moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+		action[Z_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+		action[DRIVES] = true;
+		reprap.GetMove()->SetZProbing(true);
+		if(DoCannedCycleMove(moveToDo, action, true))
+			cannedCycleMoveCount++;
+		return false;
+
+	default:
+		cannedCycleMoveCount = 0;
+		bedZs[probeCount] = reprap.GetMove()->GetLastProbedZ();
+		return true;
 	}
-	return false;
 }
 
 bool GCodes::DoMultipleZProbe()
@@ -427,6 +424,17 @@ bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z)
 	}
 	z = bedZs[count];
 	return zProbesSet;
+}
+
+// FIXME - needs to deal with multiple extruders
+
+char* GCodes::GetCurrentCoordinates()
+{
+	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+	    return 0;
+
+	sprintf(scratchString, "X:%f Y:%f Z:%f E:%f", moveBuffer[X_AXIS], moveBuffer[Y_AXIS], moveBuffer[Z_AXIS], moveBuffer[DRIVES]);
+	return scratchString;
 }
 
 
@@ -566,6 +574,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 {
   int code;
   float value;
+  char* str;
   bool result = true;
 
   if(gb->Seen('G'))
@@ -611,11 +620,20 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
 
     case 31:
-    	sprintf(scratchString, "%d", platform->ZProbe());
-    	platform->GetLine()->Write(scratchString);
-//    	platform->GetLine()->Write(" ;");
-//    	platform->GetLine()->Write(ftoa(NULL,platform->ZProbe(),0));
-    	platform->GetLine()->Write("\n");
+    	if(gb->Seen(gCodeLetters[Z_AXIS]))
+    	{
+    		platform->SetZProbeStopHeight(gb->GetFValue());
+    		if(gb->Seen('P'))
+    		{
+    			platform->SetZProbe(gb->GetIValue());
+    		}
+
+    	} else
+    	{
+    		sprintf(scratchString, "%d", platform->ZProbe());
+    		platform->GetLine()->Write(scratchString);
+    		platform->GetLine()->Write("\n");
+    	}
     	break;
 
     case 32: // Probe Z at multiple positions and generate the bed transform
@@ -734,24 +752,23 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 111: // Debug level
-      if(gb->Seen('S'))
-        reprap.debug(gb->GetIValue());
-      break;
-      
+    	if(gb->Seen('S'))
+    		reprap.debug(gb->GetIValue());
+    	break;
+
     case 114: // Deprecated
-      float mBuf[DRIVES];
-      platform->GetLine()->Write("bufX");
-   	  platform->GetLine()->Write(ftoa(NULL,moveBuffer[X_AXIS],3));
-      platform->GetLine()->Write(" bufY");
-   	  platform->GetLine()->Write(ftoa(NULL,moveBuffer[Y_AXIS],3));
-      platform->GetLine()->Write(" bufZ");
-   	  platform->GetLine()->Write(ftoa(NULL,moveBuffer[Z_AXIS],3));
-      platform->GetLine()->Write("ok\n");
-      break;
+    	str = GetCurrentCoordinates();
+    	if(str != 0)
+    	{
+    		platform->GetLine()->Write(str);
+    		platform->GetLine()->Write("\n");
+    	} else
+    		result = false;
+    	break;
 
     case 120:
-      result = Push();
-      break;
+    	result = Push();
+    	break;
       
     case 121:
       result = Pop();

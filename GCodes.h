@@ -70,13 +70,14 @@ class GCodes
     bool ReadHeat(float* h);
     void QueueFileToPrint(char* fileName);
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);
+    char* GetCurrentCoordinates();
     bool PrintingAFile();
     void Diagnostics();
     
   private:
   
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
-    bool DoInternalMove(float moveToDo[], bool action[], bool ce);
+    bool DoCannedCycleMove(float moveToDo[], bool action[], bool ce);
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
@@ -98,10 +99,8 @@ class GCodes
     GCodeBuffer* webGCode;
     GCodeBuffer* fileGCode;
     GCodeBuffer* serialGCode;
-//    bool webGCodeFinished;
-//    bool fileGCodeFinished;
     bool moveAvailable;
-    bool heatAvailable;
+    //bool heatAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
     bool checkEndStops;
     bool drivesRelative; // All except X, Y and Z
@@ -119,14 +118,14 @@ class GCodes
     bool homeX;
     bool homeY;
     bool homeZ;
-    bool homeXQueued;
-    bool homeYQueued;
-    bool homeZQueued;
-    bool internalMoveQueued;
+//    bool homeXQueued;
+//    bool homeYQueued;
+//    bool homeZQueued;
     float gFeedRate;
     int probeCount;
-    int8_t probeMoveCount;
-    bool probeMoveQueued;
+    int8_t cannedCycleMoveCount;
+    bool cannedCycleMoveQueued;
+//    bool probeMoveQueued;
     float bedZs[NUMBER_OF_PROBE_POINTS];
     bool zProbesSet;
 };

@@ -390,7 +390,7 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 	  if(zProbing)
 		  lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
 	  else
-		  lastZHit = platform->GetZProbeStopHeight();
+		  lastZHit = platform->ZProbeStopHeight();
 	  hitPoint = lastZHit;
   }
   la->SetDriveZeroEndSpeed(hitPoint, drive);
