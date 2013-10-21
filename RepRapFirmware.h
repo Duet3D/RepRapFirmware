@@ -46,13 +46,16 @@ int StringContains(char* string, char* match);
 
 #include "Configuration.h"
 #include "Platform.h"
+
+extern char scratchString[STRING_LENGTH];
+
 #include "Webserver.h"
 #include "GCodes.h"
 #include "Move.h"
 #include "Heat.h"
 #include "Reprap.h"
 
-extern char scratchString[STRING_LENGTH];
+
 
 #endif
 

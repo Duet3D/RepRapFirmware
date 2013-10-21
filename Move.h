@@ -73,7 +73,7 @@ protected:
 	void SetFeedRate(float f);
 	int8_t Processed();
 	void SetProcessed(MovementState ms);
-	void SetDriveZeroEndSpeed(float a, int8_t drive);
+	void SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive);
 	bool CheckEndStops();
 	void Release();
 
@@ -272,7 +272,7 @@ inline bool LookAhead::CheckEndStops()
   return checkEndStops;
 }
 
-inline void LookAhead::SetDriveZeroEndSpeed(float a, int8_t drive)
+inline void LookAhead::SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive)
 {
   endPoint[drive] = EndPointToMachine(drive, a);
   cosine = 2.0;
@@ -384,21 +384,27 @@ inline float Move::GetLastProbedZ()
 
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
-  float hitPoint = 0.0;
-  if(drive == Z_AXIS)
-  {
-	  if(zProbing)
-		  lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
-	  else
-		  lastZHit = platform->ZProbeStopHeight();
-	  hitPoint = lastZHit;
-  }
-  la->SetDriveZeroEndSpeed(hitPoint, drive);
+	float hitPoint = 0.0;
+	if(drive == Z_AXIS)
+	{
+		if(zProbing)
+		{
+			lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
+			la->SetDriveCoordinateAndZeroEndSpeed(lastZHit, drive);
+			lastZHit = lastZHit - platform->ZProbeStopHeight();
+			return;
+		} else
+		{
+			lastZHit = platform->ZProbeStopHeight(); // Should never be used.
+			hitPoint = lastZHit;
+		}
+	}
+	la->SetDriveCoordinateAndZeroEndSpeed(hitPoint, drive);
 }
 
 inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
-  la->SetDriveZeroEndSpeed(platform->AxisLength(drive), drive);
+  la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisLength(drive), drive);
 }
 
 inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)

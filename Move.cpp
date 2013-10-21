@@ -88,7 +88,7 @@ void Move::Init()
   lastMove = lookAheadRingAddPointer->Previous();
   
   for(i = 0; i < DRIVES; i++)
-    lastMove->SetDriveZeroEndSpeed(0.0, i);
+    lastMove->SetDriveCoordinateAndZeroEndSpeed(0.0, i);
   
   lastMove->SetFeedRate(START_FEED_RATE);
   //lastMove->SetDriveZeroEndSpeed(START_FEED_RATE, DRIVES);
@@ -230,7 +230,7 @@ void Move::SetPositions(float move[])
 	Transform(move);
 
 	for(uint8_t drive = 0; drive < DRIVES; drive++)
-		lastMove->SetDriveZeroEndSpeed(move[drive], drive);
+		lastMove->SetDriveCoordinateAndZeroEndSpeed(move[drive], drive);
 	lastMove->SetFeedRate(move[DRIVES]);
 }
 

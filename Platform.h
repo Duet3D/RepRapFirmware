@@ -83,10 +83,6 @@ Licence: GPL
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-//#define Z_PROBE_GRADIENT 0.00092498
-//#define Z_PROBE_CONSTANT -0.456179
-//#define Z_PROBE_HIGH 0.3 // mm
-//#define Z_PROBE_LOW 0.2 // mm
 #define Z_PROBE_AD_VALUE 800
 #define Z_PROBE_STOP_HEIGHT 0.9 // mm
 #define Z_PROBE_PIN 0 // Analogue pin number
@@ -100,7 +96,7 @@ Licence: GPL
 #define START_FEED_RATE 200.0  // Default.  mm/min
 
 #define AXIS_LENGTHS {210, 200, 120} // mm
-#define HOME_FEEDRATES {50.0*60.0, 50.0*60.0, 0.4*60.0}  // mm/min
+#define HOME_FEEDRATES {50.0*60.0, 50.0*60.0, 60.0}  // mm/min
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}
 
 #define X_AXIS 0  // The index of the X axis

@@ -377,7 +377,11 @@ bool GCodes::DoSingleZProbe()
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(true);
 		if(DoCannedCycleMove(moveToDo, action, true))
+		{
+//			sprintf(scratchString,"%d\n",platform->ZProbe());
+//			platform->GetLine()->Write(scratchString);
 			cannedCycleMoveCount++;
+		}
 		return false;
 
 	default:
