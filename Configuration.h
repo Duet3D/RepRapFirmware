@@ -34,6 +34,9 @@ Licence: GPL
 
 #define HEAT_SAMPLE_TIME 0.5 // Seconds
 
+#define TEMPERATURE_CLOSE_ENOUGH 5.0 // Celsius
+#define TEMPERATURE_LOW_SO_DONT_CARE 40.0 // Celsius
+
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
 #define NUMBER_OF_PROBE_POINTS 3

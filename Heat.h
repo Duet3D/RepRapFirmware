@@ -29,9 +29,12 @@ class PID
     void Init();
     void Spin();
     void SetActiveTemperature(const float& t);
+    float GetActiveTemperature();
     void SetStandbyTemperature(const float& t);
+    float GetStandbyTemperature();
     void Activate();
     void Standby();
+    bool Active();
     float GetTemperature();
   
   private:
@@ -57,10 +60,13 @@ class Heat
     void Init();
     void Exit();
     void SetActiveTemperature(int8_t heater, const float& t);
+    float GetActiveTemperature(int8_t heater);
     void SetStandbyTemperature(int8_t heater, const float& t);
+    float GetStandbyTemperature(int8_t heater);
     void Activate(int8_t heater);
     void Standby(int8_t heater);
     float GetTemperature(int8_t heater);
+    bool AllHeatersAtSetTemperatures();
     void Diagnostics();
     
   private:
@@ -75,14 +81,29 @@ class Heat
 
 //***********************************************************************************************************
 
+inline bool PID::Active()
+{
+	return active;
+}
+
 inline void PID::SetActiveTemperature(const float& t)
 {
   activeTemperature = t;
 }
 
+inline float PID::GetActiveTemperature()
+{
+  return activeTemperature;
+}
+
 inline void PID::SetStandbyTemperature(const float& t)
 {
   standbyTemperature = t;
+}
+
+inline float PID::GetStandbyTemperature()
+{
+  return standbyTemperature;
 }
 
 inline float PID::GetTemperature()
@@ -105,9 +126,19 @@ inline void Heat::SetActiveTemperature(int8_t heater, const float& t)
   pids[heater]->SetActiveTemperature(t);
 }
 
+inline float Heat::GetActiveTemperature(int8_t heater)
+{
+  return pids[heater]->GetActiveTemperature();
+}
+
 inline void Heat::SetStandbyTemperature(int8_t heater, const float& t)
 {
   pids[heater]->SetStandbyTemperature(t);
+}
+
+inline float Heat::GetStandbyTemperature(int8_t heater)
+{
+  return pids[heater]->GetStandbyTemperature();
 }
 
 inline float Heat::GetTemperature(int8_t heater)
@@ -123,6 +154,31 @@ inline void Heat::Activate(int8_t heater)
 inline void Heat::Standby(int8_t heater)
 {
   pids[heater]->Standby();
+}
+
+inline bool Heat::AllHeatersAtSetTemperatures()
+{
+	float dt;
+	for(int8_t heater = 0; heater < HEATERS; heater++)
+	{
+		dt = GetTemperature(heater);
+		if(pids[heater]->Active())
+		{
+			if(GetActiveTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
+				dt = 0;
+			else
+				dt = fabs(dt - GetActiveTemperature(heater));
+		} else
+		{
+			if(GetStandbyTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
+				dt = 0;
+			else
+				dt = fabs(dt - GetStandbyTemperature(heater));
+		}
+		if(dt > TEMPERATURE_CLOSE_ENOUGH)
+			return false;
+	}
+	return true;
 }
 
 #endif

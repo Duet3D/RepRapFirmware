@@ -238,8 +238,8 @@ protected:
 	bool Set(char* d, int l, void* pb, void* pc, void* h);
 	char* Data();
 	int Length();
-	bool Read();
-	void SetRead();
+	bool ReadFinished();
+	void SetReadFinished();
 	void* Pbuf();
 	void* Pcb();
 	void* Hs();
@@ -408,6 +408,8 @@ class Platform
   
   void Diagnostics();
   
+  // long GetFreeMemory();
+
   // Timing
   
   float Time(); // Returns elapsed seconds since some arbitrary time

@@ -108,7 +108,7 @@ close_conn(struct tcp_pcb *pcb, struct http_state *hs)
   tcp_close(pcb);
 }
 
-char scratch[40];
+//char scratch[40];
 
 /*-----------------------------------------------------------------------------------*/
 

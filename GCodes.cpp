@@ -58,6 +58,7 @@ void GCodes::Init()
   homeX = false;
   homeY = false;
   homeZ = false;
+  homeZFinalMove = false;
 //  homeXQueued = false;
 //  homeYQueued = false;
 //  homeZQueued = false;
@@ -284,13 +285,15 @@ bool GCodes::DoHome()
 
 	float moveToDo[DRIVES+1];
 	bool action[DRIVES+1];
-	for(int8_t drive = 0; drive <= DRIVES; drive++)
+	for(int8_t drive = 0; drive < DRIVES; drive++)
 		action[drive] = false;
+	action[DRIVES] = true;
 
 	if(homeX)
 	{
 		action[X_AXIS] = true;
 		moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS)*0.016666667;
 		if(DoCannedCycleMove(moveToDo, action, true))
 		{
 			homeX = false;
@@ -303,6 +306,7 @@ bool GCodes::DoHome()
 	{
 		action[Y_AXIS] = true;
 		moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
+		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS)*0.016666667;
 		if(DoCannedCycleMove(moveToDo, action, true))
 		{
 			homeY = false;
@@ -314,13 +318,24 @@ bool GCodes::DoHome()
 	if(homeZ)
 	{
 		action[Z_AXIS] = true;
-		moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-		if(DoCannedCycleMove(moveToDo, action, true))
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+		if(homeZFinalMove)
 		{
-			homeZ = false;
-			return NoHome();
+			moveToDo[Z_AXIS] = 0.0;
+			if(DoCannedCycleMove(moveToDo, action, false))
+			{
+				homeZFinalMove = false;
+				homeZ = false;
+				return NoHome();
+			}
+			return false;
+		}else
+		{
+			moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+			if(DoCannedCycleMove(moveToDo, action, true))
+				homeZFinalMove = true;
+			return false;
 		}
-		return false;
 	}
 
 	// Should never get here
@@ -708,6 +723,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       drivesRelative = true;
       break;
 
+    case 84:
+    	platform->Message(HOST_MESSAGE, "Motors off received\n");
+    	break;
+
     case 92: // Set steps/mm for each axis
 		if(reprap.debug())
 			platform->GetLine()->Write("Steps/mm: ");
@@ -752,7 +771,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
     
     case 116: // Wait for everything
-      platform->Message(HOST_MESSAGE, "Wait for all temperatures received\n");
+      if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+    	    return false;
+      result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
       break;
       
     case 111: // Debug level
@@ -813,7 +834,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		}else{
     			value = -1;
     		}
-    		float accel = platform->Acceleration(i,value);
+    		float accel = platform->Acceleration(i, value);
     		if(reprap.debug())
     		{
     			platform->GetLine()->Write(gCodeLetters[i]);
@@ -824,6 +845,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		if(reprap.debug())
 			platform->GetLine()->Write("\n");
     	break;
+
     case 906: // Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{

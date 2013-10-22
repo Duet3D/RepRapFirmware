@@ -249,6 +249,21 @@ void Platform::Diagnostics()
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
 
+//extern int __bss_end; // void? long?
+//extern void *__brkval;
+//
+//long Platform::GetFreeMemory()
+//{
+//	long free_memory;
+//
+//  if((long)__brkval == 0)
+//    free_memory = ((long)&free_memory) - ((long)&__bss_end);
+//  else
+//    free_memory = ((long)&free_memory) - ((long)__brkval);
+//
+//  return free_memory;
+//}
+
 
 //===========================================================================
 //=============================Thermal Settings  ============================
@@ -351,6 +366,7 @@ void MassStorage::Init()
 	{
 		//platform->Message(HOST_MESSAGE, "Please plug in the SD card.\n");
 		//delay(1000);
+		sdPresentCount++;
 	}
 
 	if(sdPresentCount >= 5)
@@ -883,6 +899,34 @@ void Network::Init()
 	Reset();
 }
 
+void Network::Spin()
+{
+	// Keep the Ethernet running
+
+	ethernet_task();
+
+	// Anything come in from the network to act on?
+
+	if(!netRingGetPointer->Active())
+		return;
+
+	// Finished reading the active ring element?
+
+	if(!netRingGetPointer->ReadFinished())
+	{
+		// No - Finish reading any data that's been received.
+
+		if(inputPointer < inputLength)
+			return;
+
+		// Haven't started reading it yet - set that up.
+
+		inputPointer = 0;
+		inputLength = netRingGetPointer->Length();
+		inputBuffer = netRingGetPointer->Data();
+	}
+}
+
 // Webserver calls this to read bytes that have come in from the network
 
 bool Network::Read(char& b)
@@ -891,7 +935,7 @@ bool Network::Read(char& b)
 	{
 		inputLength = -1;
 		inputPointer = 0;
-		netRingGetPointer->SetRead();
+		netRingGetPointer->SetReadFinished(); // Past tense...
 		SetWriteEnable(true);
 		//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - data read.\n");
 		return false;
@@ -935,33 +979,7 @@ void Network::Write(char b)
 }
 
 
-void Network::Spin()
-{
-	// Keep the Ethernet running
 
-	ethernet_task();
-
-	// Anything come in from the network to act on?
-
-	if(!netRingGetPointer->Active())
-		return;
-
-	// Finished reading the active ring element?
-
-	if(!netRingGetPointer->Read())
-	{
-		// No - Finish reading any data that's been received.
-
-		if(inputPointer < inputLength)
-			return;
-
-		// Haven't started reading it yet - set that up.
-
-		inputPointer = 0;
-		inputLength = netRingGetPointer->Length();
-		inputBuffer = netRingGetPointer->Data();
-	}
-}
 
 void Network::InputBufferReleased(void* pb)
 {
@@ -1104,12 +1122,12 @@ int NetRing::Length()
 	return length;
 }
 
-bool NetRing::Read()
+bool NetRing::ReadFinished()
 {
 	return read;
 }
 
-void NetRing::SetRead()
+void NetRing::SetReadFinished()
 {
 	read = true;
 }

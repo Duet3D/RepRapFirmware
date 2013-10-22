@@ -178,6 +178,9 @@ void RepRap::Init()
   active = true;
   gCodes->RunConfigurationGCodes();
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
+//  platform->Message(HOST_MESSAGE, "Free memory: ");
+//  sprintf(scratchString,"%d\n",platform->GetFreeMemory());
+//  platform->Message(HOST_MESSAGE, scratchString);
 }
 
 void RepRap::Exit()

@@ -16,14 +16,22 @@
 ; infill extrusion width = 0.80mm
 ; first layer extrusion width = 0.48mm
 
-M107
-M104 S205 ; set temperature
-G28 ; home all axes
-G1 Z5 F200 ; lift nozzle
-M109 S205 ; wait for temperature to be reached
-G90 ; use absolute coordinates
 G21 ; set units to millimeters
+G90 ; use absolute coordinates
 M83 ; use relative distances for extrusion
+M107
+G10 P0 S205 R205 ; Set extruder temperature
+T0
+M140 S55; Set bed temperature
+G1 Z5 F200 ; lift nozzle
+G28 X0 Y0; home X and Y axes
+G1 X30 Y30 F2000
+G28 Z0
+G1 Z0 F200
+G32 ; Probe bed
+G1 X0 Y0 F2000
+G1 Z0 F200
+M116; Wait for all temperatures
 G1 F1800.000 E-2.00000
 G1 Z0.240 F3600.000
 G1 X68.609 Y91.575
@@ -7584,8 +7592,8 @@ G1 X72.284 Y102.512 E0.02412
 G1 X72.512 Y102.283 E0.01333
 G1 F1800.000 E-2.00000
 M107
-M104 S0 ; turn off temperature
+G10 P0 S0 R0; Turn off heater
 M140 S0
-G28 X2 Y180  ; home X axis
+G1 X2 Y180  ; 
 M84     ; disable motors
 ; filament used = 1425.9mm (3.4cm3)

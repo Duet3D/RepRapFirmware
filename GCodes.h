@@ -118,6 +118,7 @@ class GCodes
     bool homeX;
     bool homeY;
     bool homeZ;
+    bool homeZFinalMove;
 //    bool homeXQueued;
 //    bool homeYQueued;
 //    bool homeZQueued;
@@ -161,7 +162,7 @@ inline bool GCodes::PrintingAFile()
 
 inline bool GCodes::NoHome()
 {
-   return !(homeX || homeY || homeZ); 
+   return !(homeX || homeY || homeZ || homeZFinalMove);
 }
 
 // This function takes care of the fact that the heater and head indices 
