@@ -62,6 +62,7 @@ Move::Move(Platform* p, GCodes* g)
 void Move::Init()
 {
   int8_t i, j;
+  long ep[DRIVES];
   
   for(i = 0; i < DRIVES; i++)
     platform->SetDirection(i, FORWARDS);
@@ -88,10 +89,9 @@ void Move::Init()
   lastMove = lookAheadRingAddPointer->Previous();
   
   for(i = 0; i < DRIVES; i++)
-    lastMove->SetDriveCoordinateAndZeroEndSpeed(0.0, i);
-  
-  lastMove->SetFeedRate(START_FEED_RATE);
-  //lastMove->SetDriveZeroEndSpeed(START_FEED_RATE, DRIVES);
+	  ep[i] = 0;
+  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false, zMove);  // Typically Z is the slowest Axis
+  lastMove->Release();
 
   checkEndStopsOnNextMove = false;
   
@@ -191,11 +191,11 @@ void Move::Spin()
     for(int8_t drive = 0; drive < DRIVES; drive++)
     	nextMachineEndPoints[drive] = LookAhead::EndPointToMachine(drive, nextMove[drive]);
 
-    int8_t mt = GetMovementType(lastMove->MachineEndPoints(), nextMachineEndPoints);
+    int8_t movementType = GetMovementType(lastMove->MachineEndPoints(), nextMachineEndPoints);
 
     // Throw it away if there's no real movement.
     
-    if(mt == noMove) 
+    if(movementType == noMove)
        return;
      
     // Real move - record its feedrate with it, not here.
@@ -204,23 +204,23 @@ void Move::Spin()
     
     // Promote minimum feedrates
     
-    if(mt & xyMove)
+    if(movementType & xyMove)
       nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(X_AXIS));
-    else if(mt & eMove) 
+    else if(movementType & eMove)
       nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(AXES));
     else
       nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
       
     // Restrict maximum feedrates; assumes xy overrides e overrides z FIXME??
     
-    if(mt & xyMove)
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));
-    else if(mt & eMove)
+    if(movementType & xyMove)
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
+    else if(movementType & eMove)
       nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
     else // Must be z
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));  // Assumes X and Y are equal.  FIXME?
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
     
-    if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove))
+    if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove, movementType))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
   }
 }
@@ -298,28 +298,38 @@ bool Move::GetCurrentState(float m[])
 //   A Z movement?
 //   An XY movement?
 //   Extruder movements?
+// It treats XY moves and Z moves as mutually exclusive, though all may happen together
+// of course.  The reason is that they all happen together as a result of the compensation
+// for the bed's plane, which means that a move is MAINLY and XY move, or MAINLY a Z move. It
+// is the main type of move that is returned.
 
 int8_t Move::GetMovementType(long p0[], long p1[])
 {
   int8_t result = noMove;
+  long dxy = 0;
+  long dz = 0;
+  long d;
 
   for(int8_t drive = 0; drive < DRIVES; drive++)
   {
-    if(drive < AXES)
-    {
-      if( (p1[drive] - p0[drive]) )
-      {
-        if(drive == Z_AXIS)
-          result |= zMove;
-        else
-          result |= xyMove;
-      }
-    } else
-    {
-      if( p1[drive] )
-        result |= eMove;
-    }
+	  if(drive < AXES)
+	  {
+		  d = llabs(p1[drive] - p0[drive]);
+		  if(drive == Z_AXIS)
+			  dz = d;
+		  else if(d > dxy)
+			  dxy = d;
+	  } else
+	  {
+		  if( p1[drive] )
+			  result |= eMove;
+	  }
   }
+  dxy *= (long)roundf(platform->DriveStepsPerUnit(Z_AXIS)/platform->DriveStepsPerUnit(X_AXIS));
+  if(dxy > dz)
+	  result |= xyMove;
+  else if(dz)
+	  result |= zMove;
 
   return result;
 }
@@ -461,9 +471,9 @@ void Move::DoLookAhead()
       {
         float c = fmin(n1->FeedRate(), n2->FeedRate());
         c = c*n1->Cosine();
-        if(c <= 0)
+        if(c < platform->InstantDv(Z_AXIS))  // Z is typically the slowest.
         {
-          int8_t mt = GetMovementType(n0->MachineEndPoints(), n1->MachineEndPoints());
+          int8_t mt = n1->GetMovementType();
 
           // Assumes xy overrides z overrides e
 
@@ -476,18 +486,17 @@ void Move::DoLookAhead()
         }
         n1->SetV(c);
         n1->SetProcessed(vCosineSet);
-        //n1->SetProcessed(complete);
       } 
       n0 = n1;
       n1 = n2;
       n2 = n2->Next();
     }
     
-    // If we are just doing one isolated move, set its end velocity to 0.
+    // If we are just doing one isolated move, set its end velocity to InstantDv(Z_AXIS).
     
     if(addNoMoreMoves || !gCodes->PrintingAFile())
     {
-      n1->SetV(0);
+      n1->SetV(platform->InstantDv(Z_AXIS));
       n1->SetProcessed(complete);
     }
   }
@@ -525,13 +534,13 @@ void Move::Interrupt()
 }
 
 
-bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce)
+bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t mt)
 {
     if(LookAheadRingFull())
       return false;
     if(!(lookAheadRingAddPointer->Processed() & released))
       platform->Message(HOST_MESSAGE, "Attempt to alter a non-released lookahead ring entry!\n"); // Should never happen...
-    lookAheadRingAddPointer->Init(ep, feedRate, vv, ce);
+    lookAheadRingAddPointer->Init(ep, feedRate, vv, ce, mt);
     lastMove = lookAheadRingAddPointer;
     lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
     lookAheadRingCount++;
@@ -639,7 +648,7 @@ DDA::Init(...)
 
 Sets up the DDA to take us between two positions and extrude states.
 The start velocity is u, and the end one is v.  The requested maximum feedrate
-is in targetPosition[DRIVES].
+is in myLookAheadEntry->FeedRate().
 
 Almost everything that needs to be done to set this up is also useful
 for GCode look-ahead, so this one function is used for both.  It flags when
@@ -693,10 +702,10 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   float eDistance = 0.0;
   float d;
   long* targetPosition = myLookAheadEntry->MachineEndPoints();
-  v = lookAhead->V();
+  v = myLookAheadEntry->V();
   long* positionNow = myLookAheadEntry->Previous()->MachineEndPoints();
-  u = lookAhead->Previous()->V();
-  checkEndStops = lookAhead->CheckEndStops();
+  u = myLookAheadEntry->Previous()->V();
+  checkEndStops = myLookAheadEntry->CheckEndStops();
 
   // How far are we going, both in steps and in mm?
   
@@ -748,14 +757,16 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   // Decide the appropriate acceleration and instantDv values
   // timeStep is set here to the distance of the
   // corresponding axis step.  It will be divided
-  // by a velocity later. 
+  // by a velocity later.
 
-  if(delta[X_AXIS] || delta[Y_AXIS]) // X or Y involved?
+  int8_t mt = myLookAheadEntry->GetMovementType();
+
+  if(mt & xyMove) // X or Y involved?
   {
     acceleration = platform->Acceleration(X_AXIS);
     instantDv = platform->InstantDv(X_AXIS);
     timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);  // Slight hack - assumes dY = dX
-  } else if (delta[Z_AXIS]) // Z involved?
+  } else if (mt & zMove) // Z involved?
   {
     acceleration = platform->Acceleration(Z_AXIS);
     instantDv = platform->InstantDv(Z_AXIS);
@@ -777,13 +788,37 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
       }
     }    
   }
+
+  // If we are going from an XY move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
+
+  if((myLookAheadEntry->Previous()->GetMovementType() & xyMove) && (mt & zMove))
+  {
+	  u = platform->InstantDv(Z_AXIS);
+	  result = change;
+  }
+
+  // if we are going from a Z move to an XY move, v needs to be platform->InstantDv(Z_AXIS),
+  // as does instantDv.
+
+  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & xyMove))
+  {
+	  v = platform->InstantDv(Z_AXIS);
+	  instantDv = v;
+	  result = change;
+  }
  
   // If velocities requested are (almost) zero, set them to instantDv
   
   if(v < instantDv) // Set change here?
-    v = instantDv; 
-  if(u < instantDv)
-    u = instantDv;
+  {
+    v = instantDv;
+    result = change;
+  }
+//  if(u < instantDv)
+//  {
+//    u = instantDv;
+//    result = change;
+//  }
   if(myLookAheadEntry->FeedRate() < instantDv)
 	  myLookAheadEntry->SetFeedRate(instantDv);
 
@@ -962,9 +997,10 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
   next = n;
 }
 
-void LookAhead::Init(long ep[], float f, float vv, bool ce)
+void LookAhead::Init(long ep[], float f, float vv, bool ce, int8_t mt)
 {
   v = vv;
+  movementType = mt;
   feedRate = f;
   for(int8_t i = 0; i < DRIVES; i++)
     endPoint[i] = ep[i];

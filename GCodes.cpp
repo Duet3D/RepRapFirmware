@@ -293,7 +293,7 @@ bool GCodes::DoHome()
 	{
 		action[X_AXIS] = true;
 		moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS)*0.016666667;
+		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 		if(DoCannedCycleMove(moveToDo, action, true))
 		{
 			homeX = false;
@@ -306,7 +306,7 @@ bool GCodes::DoHome()
 	{
 		action[Y_AXIS] = true;
 		moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS)*0.016666667;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
 		if(DoCannedCycleMove(moveToDo, action, true))
 		{
 			homeY = false;
@@ -318,7 +318,7 @@ bool GCodes::DoHome()
 	if(homeZ)
 	{
 		action[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		if(homeZFinalMove)
 		{
 			moveToDo[Z_AXIS] = 0.0;
@@ -366,7 +366,7 @@ bool GCodes::DoSingleZProbe()
 	case 0:
 		moveToDo[Z_AXIS] = Z_DIVE;
 		action[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
 		if(DoCannedCycleMove(moveToDo, action, false))
@@ -378,7 +378,7 @@ bool GCodes::DoSingleZProbe()
 		action[X_AXIS] = true;
 		action[Y_AXIS] = true;
 		// NB - we don't use the Z value
-		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS)*0.016666667;
+		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
 		if(DoCannedCycleMove(moveToDo, action, false))
@@ -388,13 +388,12 @@ bool GCodes::DoSingleZProbe()
 	case 2:
 		moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
 		action[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS)*0.016666667;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(true);
 		if(DoCannedCycleMove(moveToDo, action, true))
 		{
-//			sprintf(scratchString,"%d\n",platform->ZProbe());
-//			platform->GetLine()->Write(scratchString);
+//			platform->GetLine()->Write(platform->ZProbe());
 			cannedCycleMoveCount++;
 		}
 		return false;
@@ -449,6 +448,11 @@ bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z)
 
 char* GCodes::GetCurrentCoordinates()
 {
+	if(fileBeingPrinted != NULL)
+	{
+		return "Can't request coordinates while printing a G Code file"; // FIXME
+	}
+
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
 	    return 0;
 
@@ -562,7 +566,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
 	// Deal with feedrate
 
 	if(gb->Seen(gCodeLetters[DRIVES]))
-	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // Feedrates are in mm/minute; we need mm/sec
+	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec
 
 	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
 
@@ -646,11 +650,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		{
     			platform->SetZProbe(gb->GetIValue());
     		}
-
     	} else
     	{
-    		sprintf(scratchString, "%d", platform->ZProbe());
-    		platform->GetLine()->Write(scratchString);
+    		platform->GetLine()->Write(platform->ZProbe());
     		platform->GetLine()->Write("\n");
     	}
     	break;
@@ -722,10 +724,6 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 83:
       drivesRelative = true;
       break;
-
-    case 84:
-    	platform->Message(HOST_MESSAGE, "Motors off received\n");
-    	break;
 
     case 92: // Set steps/mm for each axis
 		if(reprap.debug())

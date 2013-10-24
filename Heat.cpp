@@ -60,6 +60,31 @@ void Heat::Diagnostics()
   platform->Message(HOST_MESSAGE, "Heat Diagnostics:\n"); 
 }
 
+bool Heat::AllHeatersAtSetTemperatures()
+{
+	float dt;
+	for(int8_t heater = 0; heater < HEATERS; heater++)
+	{
+		dt = GetTemperature(heater);
+		if(pids[heater]->Active())
+		{
+			if(GetActiveTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
+				dt = 0.0;
+			else
+				dt = fabs(dt - GetActiveTemperature(heater));
+		} else
+		{
+			if(GetStandbyTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
+				dt = 0.0;
+			else
+				dt = fabs(dt - GetStandbyTemperature(heater));
+		}
+		if(dt > TEMPERATURE_CLOSE_ENOUGH)
+			return false;
+	}
+	return true;
+}
+
 //******************************************************************************************************
 
 PID::PID(Platform* p, int8_t h)

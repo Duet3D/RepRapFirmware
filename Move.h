@@ -24,7 +24,6 @@ Licence: GPL
 #define DDA_RING_LENGTH 5
 #define LOOK_AHEAD_RING_LENGTH 20
 #define LOOK_AHEAD 7
-#define SMALL_Z_MOVE 0.03 // If a Z movement is less than this fraction of an XY move, the movement is classed as XY
 
 enum MovementProfile
 {
@@ -32,6 +31,9 @@ enum MovementProfile
   noFlat = 1,  // Triangular profile movement
   change = 2   // To make this movement, the initial and/or final velocities must change
 };
+
+// The possible states of a movement in the look-ahead ring as the look-ahead is
+// being done.
 
 enum MovementState
 {
@@ -60,13 +62,14 @@ public:
 
 protected:
 	LookAhead(Move* m, Platform* p, LookAhead* n);
-	void Init(long ep[], float feedRate, float vv, bool ce);
+	void Init(long ep[], float feedRate, float vv, bool ce, int8_t mt);
 	LookAhead* Next();
 	LookAhead* Previous();
 	long* MachineEndPoints();
 	float MachineToEndPoint(int8_t drive);
 	static float MachineToEndPoint(int8_t drive, long coord);
 	static long EndPointToMachine(int8_t drive, float coord);
+	int8_t GetMovementType();
 	float FeedRate();
 	float V();
 	void SetV(float vv);
@@ -84,6 +87,7 @@ private:
 	LookAhead* next;
 	LookAhead* previous;
 	long endPoint[DRIVES+1];  // Should never use the +1, but safety first
+	int8_t movementType;
 	float Cosine();
     bool checkEndStops;
     float cosine;
@@ -153,7 +157,6 @@ class Move
     void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void SetPositions(float move[]);
     void SetZProbing(bool probing);
-   // bool ZProbing();
     void SetProbedBedPlane();
     float GetLastProbedZ();
     void SetIdentityTransform();
@@ -175,7 +178,7 @@ class Move
     void ReleaseDDARingLock();
     bool LookAheadRingEmpty();
     bool LookAheadRingFull();
-    bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce);
+    bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t movementType);
     LookAhead* LookAheadRingGet();
     int8_t GetMovementType(long sp[], long ep[]);
 
@@ -264,7 +267,8 @@ inline void LookAhead::SetProcessed(MovementState ms)
 
 inline void LookAhead::Release()
 {
-  SetProcessed(released);
+  //SetProcessed(released);
+	 processed = released;
 }
 
 inline bool LookAhead::CheckEndStops()
@@ -282,6 +286,11 @@ inline void LookAhead::SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive)
 inline long* LookAhead::MachineEndPoints()
 {
 	return endPoint;
+}
+
+inline int8_t LookAhead::GetMovementType()
+{
+	return movementType;
 }
 
 //******************************************************************************************************

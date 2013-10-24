@@ -83,26 +83,24 @@ Licence: GPL
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define Z_PROBE_AD_VALUE 800
-#define Z_PROBE_STOP_HEIGHT 0.9 // mm
+#define Z_PROBE_AD_VALUE 400
+#define Z_PROBE_STOP_HEIGHT 0.7 // mm
 #define Z_PROBE_PIN 0 // Analogue pin number
-#define MAX_FEEDRATES {300.0, 300.0, 3.0, 45.0}    // mm/sec   
-#define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2??
-#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 660.0}
-#define INSTANT_DVS {15.0, 15.0, 0.4, 0.5}    // (mm/sec) - Bit high? AB
+#define MAX_FEEDRATES {50.0, 50.0, 3.0, 25.0}    // mm/sec
+#define ACCELERATIONS {800.0, 800.0, 30.0, 250.0}    // mm/sec^2
+#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 910.0}
+#define INSTANT_DVS {15.0, 15.0, 0.4, 5.0}    // (mm/sec)
 
 // AXES
 
-#define START_FEED_RATE 200.0  // Default.  mm/min
-
 #define AXIS_LENGTHS {210, 200, 120} // mm
-#define HOME_FEEDRATES {50.0*60.0, 50.0*60.0, 60.0}  // mm/min
+#define HOME_FEEDRATES {50.0, 50.0, 1.0}  // mm/sec
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}
 
 #define X_AXIS 0  // The index of the X axis
 #define Y_AXIS 1  // The index of the Y axis
 #define Z_AXIS 2  // The index of the Z axis
-//#define E_AXIS 3  // The index of the extruder
+
 
 // HEATERS - The bed is assumed to be the first
 
@@ -312,6 +310,8 @@ public:
 	int Read(char& b);
 	void Write(char b);
 	void Write(char* s);
+	void Write(float f);
+	void Write(long l);
 
 friend class Platform;
 
@@ -872,6 +872,20 @@ inline void Line::Write(char* b)
 {
 	SerialUSB.print(b);
 }
+
+inline void Line::Write(float f)
+{
+	sprintf(scratchString, "%f", f);
+	SerialUSB.print(scratchString);
+}
+
+inline void Line::Write(long l)
+{
+	sprintf(scratchString, "%d", l);
+	SerialUSB.print(scratchString);
+}
+
+
 
 
 

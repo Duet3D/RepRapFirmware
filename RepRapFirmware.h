@@ -44,11 +44,10 @@ int StringContains(char* string, char* match);
 
 #include <float.h>
 
+extern char scratchString[];
+
 #include "Configuration.h"
 #include "Platform.h"
-
-extern char scratchString[STRING_LENGTH];
-
 #include "Webserver.h"
 #include "GCodes.h"
 #include "Move.h"
