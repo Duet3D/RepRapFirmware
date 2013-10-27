@@ -115,6 +115,9 @@ protected:
 	float InstantDv();
 
 private:
+	MovementProfile AccelerationCalculation(float& u, float& v, MovementProfile result);
+	void SetXYAcceleration();
+	void SetEAcceleration(float eDistance);
 	Move* move;
 	Platform* platform;
 	DDA* next;
@@ -130,7 +133,6 @@ private:
     long stopAStep;
     long startDStep;
     float distance;
-    float dCross;
     float acceleration;
     float instantDv;
     volatile bool active;

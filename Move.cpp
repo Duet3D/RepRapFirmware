@@ -691,6 +691,93 @@ TODO: Worry about having more than eight extruders; X and Y behaving radically d
 
 */
 
+MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile result)
+{
+
+	// At which DDA step should we stop accelerating?  myLookAheadEntry->FeedRate() gives
+	// the desired feedrate.
+
+	float d = 0.5*(myLookAheadEntry->FeedRate()*myLookAheadEntry->FeedRate() - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
+	stopAStep = (long)roundf((d*totalSteps)/distance);
+
+	// At which DDA step should we start decelerating?
+
+	d = 0.5*(v*v - myLookAheadEntry->FeedRate()*myLookAheadEntry->FeedRate())/acceleration;  // This should be 0 or negative...
+	startDStep = totalSteps + (long)roundf((d*totalSteps)/distance);
+
+	// If acceleration stop is at or after deceleration start, then the distance moved
+	// is not enough to get to full speed.
+
+	if(stopAStep >= startDStep)
+	{
+		result = noFlat;
+
+		// Work out the point at which to stop accelerating and then
+		// immediately start decelerating.
+
+		float dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
+
+		if(dCross < 0.0 || dCross > distance)
+		{
+			// With the acceleration available, it is not possible
+			// to satisfy u and v within the distance; reduce u and v
+			// proportionately to get ones that work and flag the fact.
+			// The result is two velocities that can just be accelerated
+			// or decelerated between over the distance to get
+			// from one to the other.
+
+			result = change;
+
+			float k = v/u;
+			u = 2.0*acceleration*distance/(k*k - 1);
+			if(u >= 0.0)
+			{
+				u = sqrt(u);
+				v = k*u;
+			} else
+			{
+				v = sqrt(-u);
+				u = v/k;
+			}
+
+			dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
+		}
+
+		// The DDA steps at which acceleration stops and deceleration starts
+
+		stopAStep = (long)((dCross*totalSteps)/distance);
+		startDStep = stopAStep + 1;
+	}
+
+	return result;
+}
+
+
+void DDA::SetXYAcceleration() // Slight hack - assumes dY = dX
+{
+	acceleration = platform->Acceleration(X_AXIS);
+	instantDv = platform->InstantDv(X_AXIS);
+	timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);
+}
+
+void DDA::SetEAcceleration(float eDistance)
+{
+    acceleration = FLT_MAX; // Slight hack
+    distance = eDistance;
+    for(int8_t drive = AXES; drive < DRIVES; drive++)
+    {
+      if(delta[drive])
+      {
+        if(platform->Acceleration(drive) < acceleration)
+        {
+          acceleration = platform->Acceleration(drive);
+          instantDv = platform->InstantDv(drive);
+          timeStep = 1.0/platform->DriveStepsPerUnit(drive);
+        }
+      }
+    }
+}
+
 MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 {
   int8_t drive;
@@ -711,13 +798,13 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   for(drive = 0; drive < DRIVES; drive++)
   {
-    if(drive < AXES)
+    if(drive < AXES) // XY, Z
     {
       delta[drive] = targetPosition[drive] - positionNow[drive];  //Absolute
       d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
       distance += d*d;
     } else
-    {
+    {  // E
       delta[drive] = targetPosition[drive];  // Relative
       d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
       eDistance += d*d;
@@ -753,6 +840,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   // Acceleration and velocity calculations
   
   distance = sqrt(distance);
+  eDistance = sqrt(eDistance);
   
   // Decide the appropriate acceleration and instantDv values
   // timeStep is set here to the distance of the
@@ -763,31 +851,27 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 
   if(mt & xyMove) // X or Y involved?
   {
-    acceleration = platform->Acceleration(X_AXIS);
-    instantDv = platform->InstantDv(X_AXIS);
-    timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);  // Slight hack - assumes dY = dX
+	  // If XY (or Z) are moving, then the extruder won't be considered in the
+	  // acceleration calculation.  Usually this is OK.  But check that we are not asking
+	  // the extruder to accelerate, decelerate, or move too fast.  The common place
+	  // for this to happen is when it is moving back from a previous retraction during
+	  // an XY move.
+
+	  if(mt & eMove)
+	  {
+		  if(eDistance > distance)
+			  SetEAcceleration(eDistance);
+		  else
+			  SetXYAcceleration();
+	  } else
+		  SetXYAcceleration();
   } else if (mt & zMove) // Z involved?
   {
     acceleration = platform->Acceleration(Z_AXIS);
     instantDv = platform->InstantDv(Z_AXIS);
     timeStep = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
   } else // Must be extruders only
-  {
-    acceleration = FLT_MAX; // Slight hack
-    distance = sqrt(eDistance);
-    for(drive = AXES; drive < DRIVES; drive++)
-    {
-      if(delta[drive])
-      {
-        if(platform->Acceleration(drive) < acceleration)
-        {
-          acceleration = platform->Acceleration(drive);
-          instantDv = platform->InstantDv(drive);
-          timeStep = 1.0/platform->DriveStepsPerUnit(drive);
-        }
-      }
-    }    
-  }
+	  SetEAcceleration(eDistance);
 
   // If we are going from an XY move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
 
@@ -807,75 +891,18 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 	  result = change;
   }
  
-  // If velocities requested are (almost) zero, set them to instantDv
+  // If velocity requested is (almost) zero, set it to instantDv
   
   if(v < instantDv) // Set change here?
   {
     v = instantDv;
     result = change;
   }
-//  if(u < instantDv)
-//  {
-//    u = instantDv;
-//    result = change;
-//  }
+
   if(myLookAheadEntry->FeedRate() < instantDv)
 	  myLookAheadEntry->SetFeedRate(instantDv);
 
-  // At which DDA step should we stop accelerating?  myLookAheadEntry->FeedRate() gives
-  // the desired feedrate.
-  
-  d = 0.5*(myLookAheadEntry->FeedRate()*myLookAheadEntry->FeedRate() - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
-  stopAStep = (long)roundf((d*totalSteps)/distance);
-  
-  // At which DDA step should we start decelerating?
-  
-  d = 0.5*(v*v - myLookAheadEntry->FeedRate()*myLookAheadEntry->FeedRate())/acceleration;  // This should be 0 or negative...
-  startDStep = totalSteps + (long)roundf((d*totalSteps)/distance);
-  
-  // If acceleration stop is at or after deceleration start, then the distance moved
-  // is not enough to get to full speed.
-  
-  if(stopAStep >= startDStep)
-  {
-    result = noFlat;
-    
-    // Work out the point at which to stop accelerating and then
-    // immediately start decelerating.
-    
-    dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
-    
-    if(dCross < 0.0 || dCross > distance)
-    {
-      // With the acceleration available, it is not possible
-      // to satisfy u and v within the distance; reduce u and v 
-      // proportionately to get ones that work and flag the fact.  
-      // The result is two velocities that can just be accelerated
-      // or decelerated between over the distance to get
-      // from one to the other.
-      
-      result = change;
-      
-      float k = v/u;
-      u = 2.0*acceleration*distance/(k*k - 1);
-      if(u >= 0.0)
-      {
-        u = sqrt(u);
-        v = k*u;
-      } else
-      {
-        v = sqrt(-u);
-        u = v/k;
-      }
-      
-      dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
-    }
-    
-    // The DDA steps at which acceleration stops and deceleration starts
-    
-    stopAStep = (long)((dCross*totalSteps)/distance);
-    startDStep = stopAStep + 1;
-  }
+  result = AccelerationCalculation(u, v, result);
   
   // The initial velocity
   
