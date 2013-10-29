@@ -466,7 +466,8 @@ char* MassStorage::FileList(char* directory)
 //  }
 
   res = f_opendir(&dir,loc);
-  if(res == FR_OK) {
+  if(res == FR_OK)
+  {
 
 //	  if(reprap.debug()) {
 //		  platform->Message(HOST_MESSAGE, "Directory open\n");
@@ -477,10 +478,13 @@ char* MassStorage::FileList(char* directory)
 	  int foundFiles = 0;
 
 	  f_readdir(&dir,0);
-	  while(f_readdir(&dir,&entry) == FR_OK && foundFiles < 24)
+
+	  while((f_readdir(&dir,&entry) == FR_OK) && (foundFiles < 24))
 	  {
 		  foundFiles++;
-		  if(strlen(entry.fname) > 0) {
+
+		  if(strlen(entry.fname) > 0)
+		  {
 			int q = 0;
 			fileList[p++] = FILE_LIST_BRACKET;
 			while(entry.fname[q])

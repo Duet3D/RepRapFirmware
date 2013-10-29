@@ -333,11 +333,6 @@ function viewModel()
 
 	// Behaviours
 
-	self.fileList = function()
-	{
-		//$.get('/rr_files', {}, self.files);
-	};
-
 	self.getTemps = function()
 	{
 		if(onControlPage)
@@ -493,14 +488,17 @@ function viewModel()
 		self.chosenFileId('');
 		self.fileAction('print it');
 		self.deleteButton('Delete a file');
-		self.fileList();
+		$.get('/rr_files', {}, self.files);
 		self.getTemps();
 	};
 
 	self.goToPage = function(page) 
 	{
 		if(page == self.pages[5])
-			self.gotPassword(JSON.parse('{"password":"wrong"}'));	
+			self.gotPassword(JSON.parse('{"password":"wrong"}'));
+
+		if(page == self.pages[1])
+			self.resetFileAction();
 
 		if(self.gotPassword().password != "right")
 		{
@@ -509,7 +507,6 @@ function viewModel()
 		}
 
 		onControlPage = (page == self.pages[0]);
-		self.resetFileAction();
 		self.chosenPageId(page);	
 	};
 
@@ -540,8 +537,7 @@ function viewModel()
 
 	onControlPage = false;
 	self.getName();
-	//self.fileList();
-	self.getTemps();
+	//self.getTemps();
 	self.getAxes();
 	self.goToPage(self.pages[5]);
 	self.gotPassword(JSON.parse('{"password":"wrong"}'));
