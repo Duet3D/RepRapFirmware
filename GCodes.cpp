@@ -589,6 +589,18 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 	return true;
 }
 
+void GCodes::DisableDrives()
+{
+	for(int8_t drive = 0; drive < DRIVES; drive++)
+		platform->Disable(drive);
+}
+
+void GCodes::StandbyHeaters()
+{
+	for(int8_t heater = 0; heater < DRIVES; heater++)
+		reprap.GetHeat()->Standby(heater);
+}
+
 // If the GCode to act on is completed, this returns true,
 // otherwise false.  It is called repeatedly for a given
 // GCode until it returns true for that code.
@@ -690,11 +702,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     {
     case 0: // Stop
     case 1: // Sleep
-      platform->Message(HOST_MESSAGE, "Stop/sleep received\n");
+      if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+    	  return false;
+      DisableDrives();
+      StandbyHeaters();
       break;
     
-    case 18: // Motors off ???
-      platform->Message(HOST_MESSAGE, "Motors off received\n");
+    case 18: // Motors off
+      if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+    	   return false;
+      DisableDrives();
       break;
       
     case 20:  // Deprecated...
@@ -895,7 +912,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     return result;
   }
   
-  // An empty buffer jumps to here and gets disgarded
+  // An empty buffer jumps to here and gets discarded
   
   return result;
 }

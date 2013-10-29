@@ -325,13 +325,19 @@ function viewModel()
 	self.fileAction = ko.observable('print it');
 	self.pwd = ko.observable();
 	self.gcode = ko.observable();
-	self.files = ko.observable();
+	self.files = ko.observable(JSON.parse('{"files":[""]}'));
+   self.files().files = ko.observableArray([""]);
 	self.temps = ko.observable(JSON.parse('{"temps":["0.0","0.0"]}'));
 	self.axisLengths = ko.observable(JSON.parse('{"axes":["140.0", "140.0", "100.0"]}'));
 	self.setTemp = ko.observable();
 	self.dummy = ko.observable();
 
 	// Behaviours
+
+	self.getFiles = function()
+	{
+		$.get('/rr_files', {}, self.files);
+	};
 
 	self.getTemps = function()
 	{
@@ -464,8 +470,11 @@ function viewModel()
 		} else
 		{
 			if(confirm("Delete the file " + file + " on " + self.machineName().myName + "?"))
+			{
 				$.get('/rr_gcode', {gcode: "M30 " + file}, self.dummy);
-			self.resetFileAction();
+				//self.goToPage(self.pages[1]);
+				self.resetFileAction();
+			}
 		}
 	};
 
@@ -485,11 +494,12 @@ function viewModel()
 
 	self.resetFileAction = function()
 	{
+		setTimeout(function() {
 		self.chosenFileId('');
+		}, 100);
+		self.getFiles();
 		self.fileAction('print it');
 		self.deleteButton('Delete a file');
-		$.get('/rr_files', {}, self.files);
-		self.getTemps();
 	};
 
 	self.goToPage = function(page) 
@@ -538,9 +548,19 @@ function viewModel()
 	onControlPage = false;
 	self.getName();
 	//self.getTemps();
+	setTimeout(function() {
+	onControlPage = false;
+	}, 300);
+	self.getFiles();
+	setTimeout(function() {
+	onControlPage = false;
+	}, 300);
 	self.getAxes();
+	setTimeout(function() {
+	onControlPage = false;
+	}, 300);
 	self.goToPage(self.pages[5]);
-	self.gotPassword(JSON.parse('{"password":"wrong"}'));
+	//self.gotPassword(JSON.parse('{"password":"wrong"}'));
 };
 
 function poll()

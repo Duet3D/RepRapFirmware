@@ -90,6 +90,9 @@ class GCodes
     bool NoHome();
     bool Push();
     bool Pop();
+    void DisableDrives();
+    void StandbyHeaters();
+
     int8_t Heater(int8_t head);
     Platform* platform;
     bool active;
