@@ -524,6 +524,13 @@ function viewModel()
 		if(page == self.pages[1])
 			self.resetFileAction();
 
+		if(page == self.pages[2])
+		{
+			var win=window.open("http://www.reprappro.com/documentation/RepRapPro_Firmware", '_blank');
+  			win.focus();
+			return;
+		}
+
 		if(self.gotPassword().password != "right")
 		{
 			self.chosenPageId(self.pages[5]);
