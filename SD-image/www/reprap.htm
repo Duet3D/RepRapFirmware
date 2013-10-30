@@ -116,7 +116,7 @@ function heatRowHTML(heater, hNumber)
   	var result = "";
 
 	result += "<td>" + heater + "</td>";
-	result += "<td>" + '<span data-bind="text: temps().temps[' + hNumber + ']"></span>' + "<sup>o</sup>C" + "</td>";
+	result += "<td>" + '<span data-bind="text: poll().poll[' + hNumber + ']"></span>' + "<sup>o</sup>C" + "</td>";
 	result +=  '<td>' + 
 	'<form data-bind="submit: function(data, event) { setTemperature(' + hNumber + ', data, event) }">' +
 	'<button type="submit">set to -&gt;</button><input type="text" size="4" data-bind="value: setTemp" />' + '</form>' + 
@@ -219,6 +219,20 @@ function heatRowHTML(heater, hNumber)
    </tr>
 
    </div></table>
+
+   <br><br>
+
+<table border="1"><div align="center">
+<tr>
+<th colspan="8">Current position (mm)</th>
+</tr>
+<tr>
+<td> X: </td><td><span data-bind="text: poll().poll[2]"></span></td>
+<td> Y: </td><td><span data-bind="text: poll().poll[3]"></span></td>
+<td> Z: </td><td><span data-bind="text: poll().poll[4]"></span></td>
+<td> E: </td><td><span data-bind="text: poll().poll[5]"></span></td>
+</tr>
+</div></table>
 
    <br><br>
 
@@ -327,7 +341,7 @@ function viewModel()
 	self.gcode = ko.observable();
 	self.files = ko.observable(JSON.parse('{"files":[""]}'));
    self.files().files = ko.observableArray([""]);
-	self.temps = ko.observable(JSON.parse('{"temps":["0.0","0.0"]}'));
+	self.poll = ko.observable(JSON.parse('{"poll":["0.0","0.0","0.0","0.0","0.0","0.0"]}'));
 	self.axisLengths = ko.observable(JSON.parse('{"axes":["140.0", "140.0", "100.0"]}'));
 	self.setTemp = ko.observable();
 	self.dummy = ko.observable();
@@ -339,10 +353,10 @@ function viewModel()
 		$.get('/rr_files', {}, self.files);
 	};
 
-	self.getTemps = function()
+	self.getPoll = function()
 	{
 		if(onControlPage)
-			$.get('/rr_temps', {}, self.temps);
+			$.get('/rr_poll', {}, self.poll);
 	};
 
 	self.getAxes = function()
@@ -547,7 +561,7 @@ function viewModel()
 
 	onControlPage = false;
 	self.getName();
-	//self.getTemps();
+	//self.getPoll();
 	setTimeout(function() {
 	onControlPage = false;
 	}, 300);
@@ -567,7 +581,7 @@ function poll()
 {
    setTimeout(function()
 	{
-      vm.getTemps();
+      vm.getPoll();
       poll();
    }, 3000)
 }

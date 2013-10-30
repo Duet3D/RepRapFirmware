@@ -149,7 +149,8 @@ class Move
     void Init();
     void Spin();
     void Exit();
-    bool GetCurrentState(float m[]);
+    bool GetCurrentState(float m[]); // takes account of all the reings and delays
+    void LiveCoordinates(float m[]); // Just gives the last point at the end of the last DDA
     void Interrupt();
     void InterruptTime();
     bool AllMovesAreFinished();
@@ -168,6 +169,9 @@ class Move
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
     
   friend class DDA;
+
+  protected:
+    float liveCoordinates[DRIVES + 1];
     
   private:
   
@@ -359,6 +363,13 @@ inline bool Move::GetDDARingLock()
 inline void Move::ReleaseDDARingLock()
 {
   ddaRingLocked = false;
+}
+
+inline void Move::LiveCoordinates(float m[])
+{
+	for(int8_t drive = 0; drive <= DRIVES; drive++)
+		m[drive] = liveCoordinates[drive];
+	InverseTransform(m);
 }
 
 // To wait until all the current moves in the buffers are

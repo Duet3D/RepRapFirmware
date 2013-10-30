@@ -82,16 +82,21 @@ void Move::Init()
   lookAheadRingCount = 0;
   
   addNoMoreMoves = false;
-  
+
   // Put the origin on the lookahead ring with default velocity in the previous
   // position to the first one that will be used.
   
   lastMove = lookAheadRingAddPointer->Previous();
   
   for(i = 0; i < DRIVES; i++)
+  {
 	  ep[i] = 0;
+	  liveCoordinates[i] = 0.0;
+  }
+
   lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false, zMove);  // Typically Z is the slowest Axis
   lastMove->Release();
+  liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 
   checkEndStopsOnNextMove = false;
   
@@ -1010,6 +1015,9 @@ void DDA::Step(bool noTest)
   
   if(!active && noTest)
   {
+	for(int8_t drive = 0; drive < DRIVES; drive++)
+		move->liveCoordinates[drive] = myLookAheadEntry->MachineToEndPoint(drive);
+	move->liveCoordinates[DRIVES] = myLookAheadEntry->FeedRate();
     myLookAheadEntry->Release();
     platform->SetInterrupt(STANDBY_INTERRUPT_RATE);
   }

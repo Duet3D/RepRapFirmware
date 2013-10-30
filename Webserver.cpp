@@ -306,20 +306,26 @@ void Webserver::GetJsonResponse(char* request)
   jsonPointer = 0;
   writing = true;
   
-  if(StringStartsWith(request, "temps"))
+  if(StringStartsWith(request, "poll"))
   {
-    strcpy(jsonResponse, "{\"temps\":[");
+    strcpy(jsonResponse, "{\"poll\":[");
     for(int8_t heater = 0; heater < HEATERS; heater++)
     {
       strcat(jsonResponse, "\"");
       strcat(jsonResponse, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1));
-      //sprintf(scratchString, "%d", (int)reprap.GetHeat()->GetTemperature(heater));
-      //strcat(jsonResponse, scratchString);
-      if(heater < HEATERS-1)
-        strcat(jsonResponse, "\",");
-      else
-        strcat(jsonResponse, "\"");
+      strcat(jsonResponse, "\",");
     }
+    float liveCoordinates[DRIVES+1];
+    reprap.GetMove()->LiveCoordinates(liveCoordinates);
+    for(int8_t drive = 0; drive < AXES; drive++)
+    {
+    	strcat(jsonResponse, "\"");
+    	strcat(jsonResponse, ftoa(0, liveCoordinates[drive], 2));
+    	strcat(jsonResponse, "\",");
+    }
+    strcat(jsonResponse, "\"");
+    strcat(jsonResponse, ftoa(0, liveCoordinates[AXES], 4));
+    strcat(jsonResponse, "\"");
     strcat(jsonResponse, "]}");    
     JsonReport(true, request);
     return;

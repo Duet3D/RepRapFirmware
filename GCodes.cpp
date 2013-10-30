@@ -448,15 +448,10 @@ bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z)
 
 char* GCodes::GetCurrentCoordinates()
 {
-	if(fileBeingPrinted != NULL)
-	{
-		return "Can't request coordinates while printing a G Code file"; // FIXME
-	}
+	float liveCoordinates[DRIVES+1];
+	reprap.GetMove()->LiveCoordinates(liveCoordinates);
 
-	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-	    return 0;
-
-	sprintf(scratchString, "X:%f Y:%f Z:%f E:%f", moveBuffer[X_AXIS], moveBuffer[Y_AXIS], moveBuffer[Z_AXIS], moveBuffer[DRIVES]);
+	sprintf(scratchString, "X:%f Y:%f Z:%f E:%f", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS], liveCoordinates[AXES]);
 	return scratchString;
 }
 
