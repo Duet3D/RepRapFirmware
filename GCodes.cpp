@@ -535,6 +535,8 @@ bool GCodes::SetOffsets(GCodeBuffer *gb)
 
 void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
 {
+	float absE;
+
 	for(uint8_t i = 0; i < DRIVES; i++)
 	{
 	    if(i < AXES)
@@ -553,7 +555,11 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
 	        if(drivesRelative)
 	          moveBuffer[i] = gb->GetFValue()*distanceScale;
 	        else
-	          moveBuffer[i] = gb->GetFValue()*distanceScale - lastPos[i - AXES];
+	        {
+	          absE = gb->GetFValue()*distanceScale;
+	          moveBuffer[i] = absE - lastPos[i - AXES];
+	          lastPos[i - AXES] = absE;
+	        }
 	      }
 	    }
 	}
@@ -564,12 +570,6 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
 	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec
 
 	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
-
-	// Remember for next time if we are switched
-	// to absolute drive moves
-
-	for(int8_t i = AXES; i < DRIVES; i++)
-	  lastPos[i - AXES] = moveBuffer[i];
 }
 
 bool GCodes::SetPositions(GCodeBuffer *gb)
@@ -725,21 +725,28 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 25: // Pause the print
-      fileToPrint = fileBeingPrinted;
-      fileBeingPrinted = NULL;
-      break;
-      
+    	fileToPrint = fileBeingPrinted;
+    	fileBeingPrinted = NULL;
+    	break;
+
     case 82:
-      drivesRelative = false;
-      break;
-      
+    	if(drivesRelative)
+    		for(uint8_t i = AXES; i < DRIVES; i++)
+    		    lastPos[i - AXES] = 0.0;
+    	drivesRelative = false;
+    	break;
+
     case 83:
-      drivesRelative = true;
-      break;
+    	if(!drivesRelative)
+    		for(uint8_t i = AXES; i < DRIVES; i++)
+    			lastPos[i - AXES] = 0.0;
+    	drivesRelative = true;
+
+    	break;
 
     case 92: // Set steps/mm for each axis
-		if(reprap.debug())
-			platform->GetLine()->Write("Steps/mm: ");
+    	if(reprap.debug())
+    		platform->GetLine()->Write("Steps/mm: ");
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
     		if(gb->Seen(gCodeLetters[i]))

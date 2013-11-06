@@ -309,6 +309,10 @@ void Webserver::GetJsonResponse(char* request)
   if(StringStartsWith(request, "poll"))
   {
     strcpy(jsonResponse, "{\"poll\":[");
+    if(reprap.GetGCodes()->PrintingAFile())
+    	strcat(jsonResponse, "\"P\","); // Printing
+    else
+    	strcat(jsonResponse, "\"I\","); // Idle
     for(int8_t heater = 0; heater < HEATERS; heater++)
     {
       strcat(jsonResponse, "\"");

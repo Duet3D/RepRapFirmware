@@ -103,7 +103,6 @@ class GCodes
     GCodeBuffer* fileGCode;
     GCodeBuffer* serialGCode;
     bool moveAvailable;
-    //bool heatAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
     bool checkEndStops;
     bool drivesRelative; // All except X, Y and Z
@@ -122,14 +121,10 @@ class GCodes
     bool homeY;
     bool homeZ;
     bool homeZFinalMove;
-//    bool homeXQueued;
-//    bool homeYQueued;
-//    bool homeZQueued;
     float gFeedRate;
     int probeCount;
     int8_t cannedCycleMoveCount;
     bool cannedCycleMoveQueued;
-//    bool probeMoveQueued;
     float bedZs[NUMBER_OF_PROBE_POINTS];
     bool zProbesSet;
 };

@@ -116,7 +116,7 @@ function heatRowHTML(heater, hNumber)
   	var result = "";
 
 	result += "<td>" + heater + "</td>";
-	result += "<td>" + '<span data-bind="text: poll().poll[' + hNumber + ']"></span>' + "<sup>o</sup>C" + "</td>";
+	result += "<td>" + '<span data-bind="text: poll().poll[' + (hNumber+1) + ']"></span>' + "<sup>o</sup>C" + "</td>"; //+1 is cos poll[0] is the file print flag
 	result +=  '<td>' + 
 	'<form data-bind="submit: function(data, event) { setTemperature(' + hNumber + ', data, event) }">' +
 	'<button type="submit">set to -&gt;</button><input type="text" size="4" data-bind="value: setTemp" />' + '</form>' + 
@@ -227,10 +227,10 @@ function heatRowHTML(heater, hNumber)
 <th colspan="8">Current position (mm)</th>
 </tr>
 <tr>
-<td> X: </td><td><span data-bind="text: poll().poll[2]"></span></td>
-<td> Y: </td><td><span data-bind="text: poll().poll[3]"></span></td>
-<td> Z: </td><td><span data-bind="text: poll().poll[4]"></span></td>
-<td> E: </td><td><span data-bind="text: poll().poll[5]"></span></td>
+<td> X: </td><td><span data-bind="text: poll().poll[3]"></span></td>
+<td> Y: </td><td><span data-bind="text: poll().poll[4]"></span></td>
+<td> Z: </td><td><span data-bind="text: poll().poll[5]"></span></td>
+<td> E: </td><td><span data-bind="text: poll().poll[6]"></span></td>
 </tr>
 </div></table>
 
@@ -322,11 +322,25 @@ Messages
 
 
 <script>
+
+var printingAFile = false;
+var onControlPage = false;
+
+function dontInterruptFilePrint()
+{
+	if(!printingAFile)
+	{
+		//alert("printingAFile == false");
+		return false;
+	}
+	alert("You must pause the print on the Print page first.");
+	return true;
+}
+
 function viewModel() 
 {
-	// Data
 	var self = this;
-	var onControlPage = new Boolean();
+	
 	self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
 	self.chosenPageId = ko.observable('');
 	self.chosenFileId = ko.observable('');
@@ -341,12 +355,11 @@ function viewModel()
 	self.gcode = ko.observable();
 	self.files = ko.observable(JSON.parse('{"files":[""]}'));
    self.files().files = ko.observableArray([""]);
-	self.poll = ko.observable(JSON.parse('{"poll":["0.0","0.0","0.0","0.0","0.0","0.0"]}'));
+	self.poll = ko.observable(JSON.parse('{"poll":["I", "0.0", "0.0", "0.0", "0.0", "0.0", "0.0"]}'));
+   self.poll().poll = ko.observableArray(["I", "0.0", "0.0", "0.0", "0.0", "0.0", "0.0"]);
 	self.axisLengths = ko.observable(JSON.parse('{"axes":["140.0", "140.0", "100.0"]}'));
 	self.setTemp = ko.observable();
 	self.dummy = ko.observable();
-
-	// Behaviours
 
 	self.getFiles = function()
 	{
@@ -355,8 +368,10 @@ function viewModel()
 
 	self.getPoll = function()
 	{
-		if(onControlPage)
-			$.get('/rr_poll', {}, self.poll);
+		if(!onControlPage)
+			return;
+		$.get('/rr_poll', {}, self.poll);
+      printingAFile = (self.poll().poll[0] == 'P') 
 	};
 
 	self.getAxes = function()
@@ -376,6 +391,8 @@ function viewModel()
 
 	self.sendHome = function(axis, data, event) 
 	{
+		if(dontInterruptFilePrint())
+			return;
 		if(axis != '')
 			$.get('/rr_gcode', {gcode: "G28 " + axis + "0"}, self.dummy);
 		else
@@ -397,26 +414,36 @@ function viewModel()
 
 	self.motorsOff = function(data, event)
 	{
+		if(dontInterruptFilePrint())
+			return;
 		$.get('/rr_gcode', {gcode: "M18"}, self.dummy);
 	};
 
 	self.maxX = function(data, event)
 	{
+		if(dontInterruptFilePrint())
+			return;
 		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 X" + self.axisLengths().axes[0] + " F2000\nM121"}, self.dummy);
 	};
 
 	self.maxY = function(data, event)
 	{
+		if(dontInterruptFilePrint())
+			return;
 		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 Y" + self.axisLengths().axes[1] + " F2000\nM121"}, self.dummy);
 	};
 
 	self.maxZ = function(data, event)
 	{
+		if(dontInterruptFilePrint())
+			return;
 		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 Z" + self.axisLengths().axes[2] + " F200\nM121"}, self.dummy);
 	};
 
 	self.fanChange = function(data, event)
 	{
+		if(dontInterruptFilePrint())
+			return;
 		if(self.fanButton() == 'Fan on')
 		{
 			$.get('/rr_gcode', {gcode: "M106 S255"}, self.dummy);
@@ -434,10 +461,12 @@ function viewModel()
 		{
 			$.get('/rr_gcode', {gcode: "M25"}, self.dummy);
 			self.pauseButton('Resume print');
+			printingAFile = false;
 		} else
 		{
 			$.get('/rr_gcode', {gcode: "M24"}, self.dummy);
 			self.pauseButton('Pause print');
+			printingAFile = true;
 		}
 	};	
 
@@ -458,6 +487,8 @@ function viewModel()
 
 	self.extrudeFilament = function(length, data, event)
 	{
+		if(dontInterruptFilePrint())
+			return;
 		if(self.extrudeButton() == 'Feed:')
 			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E" + length + " F60\nM121"}, self.dummy);
 		else if(self.extrudeButton() == 'Fast:')
@@ -468,6 +499,8 @@ function viewModel()
 
 	self.sendJog = function(axis, d, data, event) 
 	{
+		if(dontInterruptFilePrint())
+			return;
 		var feed = " F2000";
 		if(axis == 'Z')
 			feed = " F200";
@@ -478,7 +511,10 @@ function viewModel()
 	{
 		if(self.fileAction() == 'print it')
 		{
+			if(dontInterruptFilePrint())
+				return;
 			self.chosenFileId(file);
+			printingAFile = true;
 			$.get('/rr_gcode', {gcode: "M23 " + file + "\nM24"}, self.dummy);
 			self.pauseButton('Pause print');
 		} else
@@ -494,11 +530,15 @@ function viewModel()
 
 	self.sendGCode = function() 
 	{
+		if(dontInterruptFilePrint())
+			return;
 		$.get('/rr_gcode', {gcode: self.gcode()}, self.dummy);
 	};
 
 	self.setTemperature = function(heater, data, event)
 	{
+		if(dontInterruptFilePrint())
+			return;
 		var t = self.setTemp();
 		if(heater == 0)
 			$.get('/rr_gcode', {gcode: "M140 S" + t}, self.dummy);
@@ -580,9 +620,10 @@ function viewModel()
 	setTimeout(function() {
 	onControlPage = false;
 	}, 300);
+	printingAFile = false;
 	self.goToPage(self.pages[5]);
 	//self.gotPassword(JSON.parse('{"password":"wrong"}'));
-};
+}
 
 function poll()
 {
@@ -593,7 +634,7 @@ function poll()
    }, 3000)
 }
 
-
+printingAFile = false;
 window.vm = new viewModel();
 ko.applyBindings(vm);
 poll();
