@@ -86,6 +86,7 @@ void Platform::Init()
   disableDrives = DISABLE_DRIVES;
   lowStopPins = LOW_STOP_PINS;
   highStopPins = HIGH_STOP_PINS;
+  homeDirection = HOME_DIRECTION;
   maxFeedrates = MAX_FEEDRATES;
   accelerations = ACCELERATIONS;
   driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;

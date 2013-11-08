@@ -79,6 +79,7 @@ Licence: GPL
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
 #define LOW_STOP_PINS {11, 28, 60, 31}
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
+#define HOME_DIRECTION {1,1,1,1} // 1 for Max/High, -1 for Min/ Low TODO replace with logic based on low/high pin allocations
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
@@ -150,7 +151,7 @@ Licence: GPL
 /****************************************************************************************************/
 
 // Networking
-
+//FIXME does not currently override the default in \libraries\EMAC\conf_eth.h
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
 //#define MAC { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
@@ -448,7 +449,7 @@ class Platform
   float HomeFeedRate(int8_t drive);
   EndStopHit Stopped(int8_t drive);
   float AxisLength(int8_t drive);
-  
+  int8_t HomeDirection(int8_t drive);
   float ZProbeStopHeight();
   void SetZProbeStopHeight(float z);
   long ZProbe();
@@ -497,6 +498,7 @@ class Platform
   bool driveEnabled[DRIVES];
   int8_t lowStopPins[DRIVES];
   int8_t highStopPins[DRIVES];
+  int8_t homeDirection[DRIVES];
   float maxFeedrates[DRIVES];  
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
@@ -713,6 +715,11 @@ inline float Platform::HomeFeedRate(int8_t drive)
 inline float Platform::AxisLength(int8_t drive)
 {
   return axisLengths[drive];
+}
+
+inline int8_t Platform::HomeDirection(int8_t drive)
+{
+  return homeDirection[drive];
 }
 
 inline float Platform::MaxFeedrate(int8_t drive)

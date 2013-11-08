@@ -292,7 +292,7 @@ bool GCodes::DoHome()
 	if(homeX)
 	{
 		action[X_AXIS] = true;
-		moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+		moveToDo[X_AXIS] = platform->HomeDirection(X_AXIS)*2.0*platform->AxisLength(X_AXIS);
 		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 		if(DoCannedCycleMove(moveToDo, action, true))
 		{
@@ -305,7 +305,7 @@ bool GCodes::DoHome()
 	if(homeY)
 	{
 		action[Y_AXIS] = true;
-		moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
+		moveToDo[Y_AXIS] = platform->HomeDirection(Y_AXIS)*2.0*platform->AxisLength(Y_AXIS);
 		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
 		if(DoCannedCycleMove(moveToDo, action, true))
 		{
@@ -331,7 +331,7 @@ bool GCodes::DoHome()
 			return false;
 		}else
 		{
-			moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+			moveToDo[Z_AXIS] = platform->HomeDirection(Z_AXIS)*2.0*platform->AxisLength(Z_AXIS);
 			if(DoCannedCycleMove(moveToDo, action, true))
 				homeZFinalMove = true;
 			return false;
