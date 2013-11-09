@@ -96,6 +96,7 @@ void Platform::Init()
   maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
 //  zProbeGradient = Z_PROBE_GRADIENT;
 //  zProbeConstant = Z_PROBE_CONSTANT;
+  zProbeEnable = Z_PROBE_ENABLE;
   zProbePin = Z_PROBE_PIN;
   zProbeCount = 0;
   zProbeSum = 0;
@@ -323,7 +324,7 @@ inline void Platform::PollZHeight()
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
-	if(drive == Z_AXIS)
+	if(zProbeEnable && drive == Z_AXIS)
 	{
 		if(ZProbe() > zProbeADValue)
 			return lowHit;

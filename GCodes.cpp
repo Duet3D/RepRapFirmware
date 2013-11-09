@@ -319,7 +319,7 @@ bool GCodes::DoHome()
 	{
 		action[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-		if(homeZFinalMove)
+		if(platform->IsZProbeEnabled() && homeZFinalMove)
 		{
 			moveToDo[Z_AXIS] = 0.0;
 			if(DoCannedCycleMove(moveToDo, action, false))
@@ -334,6 +334,11 @@ bool GCodes::DoHome()
 			moveToDo[Z_AXIS] = platform->HomeDirection(Z_AXIS)*2.0*platform->AxisLength(Z_AXIS);
 			if(DoCannedCycleMove(moveToDo, action, true))
 				homeZFinalMove = true;
+			if(!platform->IsZProbeEnabled())
+			{
+				homeZ = false;
+				return NoHome();
+			}
 			return false;
 		}
 	}
@@ -650,6 +655,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
 
     case 31:
+      if(!platform->IsZProbeEnabled())
+      {
+        platform->Message(HOST_MESSAGE, "Z Probe not supported\n");
+        break;
+      }
     	if(gb->Seen(gCodeLetters[Z_AXIS]))
     	{
     		platform->SetZProbeStopHeight(gb->GetFValue());
@@ -665,6 +675,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 32: // Probe Z at multiple positions and generate the bed transform
+      if(!platform->IsZProbeEnabled())
+      {
+        platform->Message(HOST_MESSAGE, "Z Probe not supported\n");
+        break;
+      }
     	result = DoMultipleZProbe();
     	break;
 

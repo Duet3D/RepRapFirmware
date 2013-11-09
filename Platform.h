@@ -84,6 +84,7 @@ Licence: GPL
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
+#define Z_PROBE_ENABLE false
 #define Z_PROBE_AD_VALUE 400
 #define Z_PROBE_STOP_HEIGHT 0.7 // mm
 #define Z_PROBE_PIN 0 // Analogue pin number
@@ -454,7 +455,8 @@ class Platform
   void SetZProbeStopHeight(float z);
   long ZProbe();
   void SetZProbe(int iZ);
-  
+  void EnableZProbe(bool enableZ);
+  bool IsZProbeEnabled();
   // Heat and temperature
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
@@ -515,7 +517,7 @@ class Platform
   long zProbeSum;
   int zProbeADValue;
   float zProbeStopHeight;
-
+  bool zProbeEnable;
 // AXES
 
   void PollZHeight();
@@ -751,7 +753,19 @@ inline void Platform::SetZProbeStopHeight(float z)
 
 inline void Platform::SetZProbe(int iZ)
 {
+	if(!zProbeEnable)
+		zProbeEnable=true;
 	zProbeADValue = iZ;
+}
+
+inline void Platform::EnableZProbe(bool enableZ)
+{
+	zProbeEnable=enableZ;
+}
+
+inline bool Platform::IsZProbeEnabled()
+{
+	return zProbeEnable;
 }
 
 
