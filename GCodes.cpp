@@ -744,6 +744,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	fileBeingPrinted = NULL;
     	break;
 
+    case 31: //toggle the Z probe enable, M31 with nothing reports the status, M31 S0 = disable, M31 S1 = enable
+    	if(gb->Seen('S'))
+    		platform->EnableZProbe((bool)gb->GetIValue());
+    	if(platform->IsZProbeEnabled())
+    		platform->Message(HOST_MESSAGE, "Z Probe enabled \n");
+    	else
+    		platform->Message(HOST_MESSAGE, "Z Probe disabled \n");
+    	break;
     case 82:
     	if(drivesRelative)
     		for(uint8_t i = AXES; i < DRIVES; i++)
