@@ -327,6 +327,9 @@ void Webserver::GetJsonResponse(char* request)
     	strcat(jsonResponse, ftoa(0, liveCoordinates[drive], 2));
     	strcat(jsonResponse, "\",");
     }
+
+    // FIXME: should loop through all Es
+
     strcat(jsonResponse, "\"");
     strcat(jsonResponse, ftoa(0, liveCoordinates[AXES], 4));
     strcat(jsonResponse, "\"");

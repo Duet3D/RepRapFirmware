@@ -288,10 +288,36 @@ Click a file to <span data-bind="text: fileAction"></span><br>
 
 <hr>
 
+<form action="reprap.htm?upload=myFile"
+enctype="multipart/form-data" method="post">
+<p>
+Upload a G Code file: <br>
+<input type="file" name="datafile" size="40">
+</p>
+<div>
+<input type="submit" value="Upload">
+</div>
+</form>
+
+<!--
+<form onSubmit="return checkFileName(this)" action="upload.htm"
+enctype="multipart/form-data" method="post">
+<p>
+Upload a G Code file :<br>
+<input type="file" name="datafile" size="40">
+</p>
+<div>
+<input type="submit" value="Upload">
+</div>
+</form>
+-->
+<!-- 
 <form data-bind="submit: function(data, event) { uploadGCode(data, event) }">
 Upload a G Code file :
 <input type="file" name="datafile" size="30"><button type="submit">Upload</button>
 </form>
+-->
+
 <br>
 <button data-bind="text: deleteButton, click: function(data, event) { deleteFile(data, event) }"></button>
 </div>

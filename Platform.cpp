@@ -64,7 +64,7 @@ void Platform::Init()
 
   line->Init();
 
-  network->Init();
+  //network->Init();
 
   massStorage->Init();
 
@@ -93,15 +93,10 @@ void Platform::Init()
   potWipes = POT_WIPES;
   senseResistor = SENSE_RESISTOR;
   maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-//  zProbeGradient = Z_PROBE_GRADIENT;
-//  zProbeConstant = Z_PROBE_CONSTANT;
   zProbePin = Z_PROBE_PIN;
   zProbeCount = 0;
   zProbeSum = 0;
   zProbeValue = 0;
-//  zProbeStarting = false;
-//  zProbeHigh = Z_PROBE_HIGH;
-//  zProbeLow = Z_PROBE_LOW;
   zProbeADValue = Z_PROBE_AD_VALUE;
   zProbeStopHeight = Z_PROBE_STOP_HEIGHT;
 
@@ -195,6 +190,11 @@ void Platform::Init()
   lastTime = Time();
   
   active = true;
+}
+
+void Platform::StartNetwork()
+{
+	network->Init();
 }
 
 

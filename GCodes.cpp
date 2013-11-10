@@ -5,6 +5,10 @@ RepRapFirmware - G Codes
 This class interprets G Codes from one or more sources, and calls the functions in Move, Heat etc
 that drive the machine to do what the G Codes command.
 
+Most of the functions in here are designed not to wait, and they return a boolean.  When you want them to do
+something, you call them.  If they return false, the machine can't do what you want yet.  So you go away
+and do something else.  Then you try again.  If they return true, the thing you wanted done has been done.
+
 -----------------------------------------------------------------------------------------------------
 
 Version 0.1
@@ -45,7 +49,6 @@ void GCodes::Init()
   fileGCode->SetFinished(true);
   serialGCode->SetFinished(true);
   moveAvailable = false;
- // heatAvailable = false;
   drivesRelative = true;
   axesRelative = false;
   checkEndStops = false;
@@ -59,9 +62,6 @@ void GCodes::Init()
   homeY = false;
   homeZ = false;
   homeZFinalMove = false;
-//  homeXQueued = false;
-//  homeYQueued = false;
-//  homeZQueued = false;
   dwellWaiting = false;
   stackPointer = 0;
   selectedHead = -1;
@@ -71,7 +71,6 @@ void GCodes::Init()
   zProbesSet = false;
   probeCount = 0;
   cannedCycleMoveCount = 0;
-//  probeMoveQueued = false;
   cannedCycleMoveQueued = false;
   active = true;
   dwellTime = platform->Time();
@@ -83,7 +82,15 @@ void GCodes::Spin()
     return;
     
   char b;
-    
+
+  // Check each of the sources of G Codes (web, serial, and file) to
+  // see if what they are doing has been done.  If it hasn't, return without
+  // looking at anything else.
+  //
+  // Note the order establishes a priority: web first, then serial, and file
+  // last.  If file weren't last, then the others would never get a look in when
+  // a file was being printed.
+
   if(!webGCode->Finished())
   {
     webGCode->SetFinished(ActOnGcode(webGCode));
@@ -101,6 +108,9 @@ void GCodes::Spin()
     fileGCode->SetFinished(ActOnGcode(fileGCode));
     return;
   }  
+
+  // Now check if a G Code byte is available from each of the sources
+  // in the same order for the same reason.
 
   if(webserver->GCodeAvailable())
   {
@@ -138,6 +148,11 @@ void GCodes::Diagnostics()
   platform->Message(HOST_MESSAGE, "GCodes Diagnostics:\n");
 }
 
+// The wait till everything's done function.  If you need the machine to
+// be idle before you do something (for example homeing an axis, or shutting down) call this
+// until it returns true.  As a side-effect it loads moveBuffer with the last
+// position and feedrate for you.
+
 bool GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
 {
   // Last one gone?
@@ -159,6 +174,9 @@ bool GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
   return true;  
 }
 
+// Save (some of) the state of the machine for recovery in the future.
+// Call repeatedly till it returns true.
+
 bool GCodes::Push()
 {
   if(stackPointer >= STACK)
@@ -177,6 +195,8 @@ bool GCodes::Push()
   
   return true;
 }
+
+// Recover a saved state.  Call repeatedly till it returns true.
 
 bool GCodes::Pop()
 {
@@ -209,6 +229,7 @@ bool GCodes::Pop()
   return true;
 }
 
+// This function is called for a G Code that makes a move.
 // If the Move class can't receive the move (i.e. things have to wait)
 // this returns false, otherwise true.
 
@@ -245,26 +266,24 @@ bool GCodes::ReadMove(float* m, bool& ce)
     return true;
 }
 
-
-bool GCodes::ReadHeat(float* h)
-{
-
-}
-
 // To execute any move, call this until it returns true.
-// false entries in action[] will be ignored.
+// moveToDo[] entries corresponding with false entries in action[] will
+// be ignored.  Recall that moveToDo[DRIVES] should contain the feedrate
+// you want (if action[DRIVES] is true).
 
 bool GCodes::DoCannedCycleMove(float moveToDo[], bool action[], bool ce)
 {
+	// Is the move already running?
+
 	if(cannedCycleMoveQueued)
-	{
-		if(!Pop()) // Wait for the move to finish
+	{ // Yes.
+		if(!Pop()) // Wait for the move to finish then restore the state
 			return false;
 		cannedCycleMoveQueued = false;
 		return true;
 	} else
-	{
-		if(!Push()) // Wait for the RepRap to finish whatever it was doing
+	{ // No.
+		if(!Push()) // Wait for the RepRap to finish whatever it was doing and save it's state
 			return false;
 		for(int8_t drive = 0; drive <= DRIVES; drive++)
 		{
@@ -277,6 +296,9 @@ bool GCodes::DoCannedCycleMove(float moveToDo[], bool action[], bool ce)
 	}
 	return false;
 }
+
+// Home one or more of the axes.  Which ones are decided by the
+// booleans homeX, homeY and homeZ.
 
 bool GCodes::DoHome()
 {
@@ -405,6 +427,10 @@ bool GCodes::DoSingleZProbe()
 	}
 }
 
+// This probes multiple points on the bed (usually three in a
+// triangle), then sets the bed transformation to compensate
+// for the bed not quite being the plane Z = 0.
+
 bool GCodes::DoMultipleZProbe()
 {
 	if(DoSingleZProbe())
@@ -419,6 +445,10 @@ bool GCodes::DoMultipleZProbe()
 	}
 	return false;
 }
+
+// This returns the (X, Y) points to probe the bed at probe point count.  When probing,
+// it returns false.  If called after probing has ended it returns true, and the Z coordinate
+// probed is also returned.
 
 bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z)
 {
@@ -444,6 +474,10 @@ bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z)
 	return zProbesSet;
 }
 
+// Return the current coordinates as a printable string.  Coordinates
+// are updated at the end of each movement, so this won't tell you
+// where you are mid-movement.
+
 // FIXME - needs to deal with multiple extruders
 
 char* GCodes::GetCurrentCoordinates()
@@ -455,6 +489,7 @@ char* GCodes::GetCurrentCoordinates()
 	return scratchString;
 }
 
+// Set up a file to print, but don't print it yet.
 
 void GCodes::QueueFileToPrint(char* fileName)
 {
@@ -462,6 +497,9 @@ void GCodes::QueueFileToPrint(char* fileName)
   if(fileToPrint == NULL)
 	  platform->Message(HOST_MESSAGE, "GCode file not found\n");
 }
+
+// Run the configuration G Code file to set up the machine.  Usually just called once
+// on re-boot.
 
 void GCodes::RunConfigurationGCodes()
 {
@@ -477,11 +515,11 @@ void GCodes::RunConfigurationGCodes()
 
 
 // Function to handle dwell delays.  Return true for
-// Dwell finished, false otherwise.
+// dwell finished, false otherwise.
 
 bool GCodes::DoDwell(GCodeBuffer *gb)
 {
-  unsigned long dwell;
+  float dwell;
   
   if(gb->Seen('P'))
     dwell = 0.001*(float)gb->GetLValue(); // P values are in milliseconds; we need seconds
@@ -493,7 +531,7 @@ bool GCodes::DoDwell(GCodeBuffer *gb)
   if(!reprap.GetMove()->AllMovesAreFinished())
     return false;
       
-  // Are we already in a dwell?
+  // Are we already in the dwell?
       
   if(dwellWaiting)
   {
@@ -512,6 +550,9 @@ bool GCodes::DoDwell(GCodeBuffer *gb)
   dwellTime = platform->Time() + dwell;
   return false;
 }
+
+// Set distance offsets and working and standby temperatures for
+// an extruder.  I.e. handle a G10.
 
 bool GCodes::SetOffsets(GCodeBuffer *gb)
 {
@@ -572,6 +613,8 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
 	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
 }
 
+// This sets positions.  I.e. it handles G92.
+
 bool GCodes::SetPositions(GCodeBuffer *gb)
 {
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
@@ -584,16 +627,26 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 	return true;
 }
 
-void GCodes::DisableDrives()
+// Does what it says.
+
+bool GCodes::DisableDrives()
 {
+	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+	   return false;
 	for(int8_t drive = 0; drive < DRIVES; drive++)
 		platform->Disable(drive);
+	return true;
 }
 
-void GCodes::StandbyHeaters()
+// Does what it says.
+
+bool GCodes::StandbyHeaters()
 {
+	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		return false;
 	for(int8_t heater = 0; heater < DRIVES; heater++)
 		reprap.GetHeat()->Standby(heater);
+	return true;
 }
 
 // If the GCode to act on is completed, this returns true,
@@ -649,7 +702,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       result = DoHome();
       break;
 
-    case 31:
+    case 31: // Return the probe value, or set probe variables
     	if(gb->Seen(gCodeLetters[Z_AXIS]))
     	{
     		platform->SetZProbeStopHeight(gb->GetFValue());
@@ -674,8 +727,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 91: // Relative coordinates
-      drivesRelative = true;
-      axesRelative = true;
+      drivesRelative = true; // Non-axis movements (i.e. extruders)
+      axesRelative = true;   // Axis movements (i.e. X, Y and Z)
       break;
       
     case 92: // Set position
@@ -697,16 +750,19 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     {
     case 0: // Stop
     case 1: // Sleep
-      if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+      if(fileBeingPrinted != NULL)
+      {
+    	  fileToPrint = fileBeingPrinted;
+    	  fileBeingPrinted = NULL;
+      }
+      if(!DisableDrives())
     	  return false;
-      DisableDrives();
-      StandbyHeaters();
+      if(!StandbyHeaters())
+    	  return false; // Should never happen
       break;
     
     case 18: // Motors off
-      if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-    	   return false;
-      DisableDrives();
+      result = DisableDrives();
       break;
       
     case 20:  // Deprecated...
@@ -742,6 +798,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     			lastPos[i - AXES] = 0.0;
     	drivesRelative = true;
 
+    	break;
+
+    case 85: // Set inactive time
     	break;
 
     case 92: // Set steps/mm for each axis
@@ -786,13 +845,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 107: // Fan off
       platform->Message(HOST_MESSAGE, "Fan off received\n");
       break;
-    
-    case 116: // Wait for everything
-      if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-    	    return false;
-      result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
-      break;
       
+    case 112: // Emergency stop
+    	break;
+
     case 111: // Debug level
     	if(gb->Seen('S'))
     		reprap.debug(gb->GetIValue());
@@ -807,6 +863,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	} else
     		result = false;
     	break;
+
+    case 116: // Wait for everything, especially set temperatures
+       if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+     	    return false;
+       result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
+       break;
 
     case 120:
     	result = Push();
@@ -828,6 +890,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       platform->Message(HOST_MESSAGE, "M127 - valves not yet implemented\n");
       break;
       
+    case 135: // Set PID sample interval
+    	break;
+
     case 140: // Set bed temperature
       if(gb->Seen('S'))
       {
@@ -851,11 +916,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		}else{
     			value = -1;
     		}
-    		float accel = platform->Acceleration(i, value);
+    		platform->SetAcceleration(i, value);
     		if(reprap.debug())
     		{
     			platform->GetLine()->Write(gCodeLetters[i]);
-    			platform->GetLine()->Write(ftoa(NULL,accel,1));
+    			platform->GetLine()->Write(ftoa(NULL,platform->Acceleration(i),1));
     			platform->GetLine()->Write(" ");
     		}
     	}
@@ -863,12 +928,42 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			platform->GetLine()->Write("\n");
     	break;
 
-    case 906: // Motor currents
+    case 203: // Set maximum feedrates
+    	break;
+
+    case 205:  //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
+    	break;
+
+    case 208: // Set maximum axis lengths
+    	break;
+
+    case 210: // Set homing feedrates
+    	break;
+
+    case 301: // Set PID values
+    	break;
+
+    case 302: // Allow cold extrudes
+    	break;
+
+    case 304: // Set thermistor parameters
+    	break;
+
+    case 500: // Set password
+    	break;
+
+    case 501: // Set machine name
+    	break;
+
+    case 502: // Set IP address
+    	break;
+
+    case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
     		if(gb->Seen(gCodeLetters[i]))
     		{
-    			value = gb->GetFValue();
+    			value = gb->GetFValue(); // mA
     			platform->SetMotorCurrent(i, value);
     		}
     	}
@@ -892,7 +987,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     for(int8_t i = AXES; i < DRIVES; i++)
     {
       if(selectedHead == i - AXES)
-        reprap.GetHeat()->Standby(selectedHead + 1); // 0 is the Bed
+        reprap.GetHeat()->Standby(selectedHead + 1); // + 1 because 0 is the Bed
     }
     for(int8_t i = AXES; i < DRIVES; i++)
     {    
@@ -923,6 +1018,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
 //*************************************************************************************
 
+// This class stores a single G Code and provides functions to allow it to be parsed
+
 GCodeBuffer::GCodeBuffer(Platform* p, char* id)
 { 
   platform = p;
@@ -935,6 +1032,9 @@ void GCodeBuffer::Init()
   readPointer = -1;
   inComment = false;   
 }
+
+// Add a byte to the code being assembled.  If false is returned, the code is
+// not yet complete.  If true, it is complete and ready to be acted upon.
 
 bool GCodeBuffer::Put(char c)
 {
@@ -987,7 +1087,7 @@ bool GCodeBuffer::Seen(char c)
   return false;
 }
 
-// Get a float after a G Code letter
+// Get a float after a G Code letter found by a call to Seen()
 
 float GCodeBuffer::GetFValue()
 {
@@ -1006,6 +1106,10 @@ float GCodeBuffer::GetFValue()
 // been done followed by a GetIValue(), so readPointer will
 // be -1.  It absorbs "M/Gnnn " (including the space) from the
 // start and returns a pointer to the next location.
+
+// It would be nice if the string was preceded by (say) 'S', but
+// for legacy compatibility (M code to queue a file) that can't
+// be done.
 
 char* GCodeBuffer::GetString()
 {

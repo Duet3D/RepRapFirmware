@@ -151,24 +151,6 @@ Licence: GPL
 
 // Networking
 
-// Enter a MAC address and IP address for your controller below.
-// The IP address will be dependent on your local network:
-//#define MAC { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-//#define MAC_BYTES 6
-//
-//#define IP0 192
-//#define IP1 168
-//#define IP2 1
-//#define IP3 14
-//
-//#define IP_BYTES 4
-
-//#define ETH_B_PIN 10
-
-// port 80 is default for HTTP
-  
-//#define HTTP_PORT 80
-
 // Seconds to wait after serving a page
  
 #define CLIENT_CLOSE_DELAY 0.002
@@ -425,6 +407,7 @@ class Platform
   
   MassStorage* GetMassStorage();
   FileStore* GetFileStore(char* directory, char* fileName, bool write);
+  void StartNetwork();
   char* GetWebDir(); // Where the htm etc files are
   char* GetGCodeDir(); // Where the gcodes are
   char* GetSysDir();  // Where the system files are
@@ -442,7 +425,8 @@ class Platform
   void SetMotorCurrent(byte drive, float current);
   float DriveStepsPerUnit(int8_t drive);
   void SetDriveStepsPerUnit(int8_t drive, float value);
-  float Acceleration(int8_t drive, float value);
+  float Acceleration(int8_t drive);
+  void SetAcceleration(int8_t drive, float value);
   float MaxFeedrate(int8_t drive);
   float InstantDv(int8_t drive);
   float HomeFeedRate(int8_t drive);
@@ -458,10 +442,6 @@ class Platform
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
-  //void SetStandbyTemperature(int8_t heater, const float& t);
-  //void SetActiveTemperature(int8_t heater, const float& t);
-  //float StandbyTemperature(int8_t heater);
-  //float ActiveTemperature(int8_t heater);  
   float PidKp(int8_t heater);
   float PidKi(int8_t heater);
   float PidKd(int8_t heater);
@@ -631,11 +611,14 @@ inline void Platform::SetDriveStepsPerUnit(int8_t drive, float value)
   driveStepsPerUnit[drive] = value;
 }
 
-inline float Platform::Acceleration(int8_t drive, float value = -1)
+inline float Platform::Acceleration(int8_t drive)
 {
-  if(drive >= 0 && drive < DRIVES && value > 0)
-	  accelerations[drive] = value;
-  return accelerations[drive]; 
+	return accelerations[drive];
+}
+
+inline void Platform::SetAcceleration(int8_t drive, float value)
+{
+	accelerations[drive] = value;
 }
 
 inline float Platform::InstantDv(int8_t drive)

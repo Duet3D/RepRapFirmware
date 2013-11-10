@@ -45,7 +45,7 @@ Move::Move(Platform* p, GCodes* g)
     lookAheadRingGetPointer = new LookAhead(this, platform, lookAheadRingGetPointer);
   lookAheadRingAddPointer->next = lookAheadRingGetPointer;
   
-  // Set the lookahead backwards pointers
+  // Set the lookahead backwards pointers (some oxymoron, surely?)
   
   lookAheadRingGetPointer = lookAheadRingAddPointer; 
   for(i = 0; i <= LOOK_AHEAD_RING_LENGTH; i++)

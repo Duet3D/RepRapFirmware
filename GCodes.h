@@ -26,7 +26,7 @@ Licence: GPL
 
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
-// Small class to hold an individual GCode
+// Small class to hold an individual GCode and provide functions to allow it to be parsed
 
 class GCodeBuffer
 {
@@ -67,7 +67,6 @@ class GCodes
     void Exit();
     void RunConfigurationGCodes();
     bool ReadMove(float* m, bool& ce);
-    bool ReadHeat(float* h);
     void QueueFileToPrint(char* fileName);
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);
     char* GetCurrentCoordinates();
@@ -90,8 +89,8 @@ class GCodes
     bool NoHome();
     bool Push();
     bool Pop();
-    void DisableDrives();
-    void StandbyHeaters();
+    bool DisableDrives();
+    bool StandbyHeaters();
 
     int8_t Heater(int8_t head);
     Platform* platform;

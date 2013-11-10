@@ -177,6 +177,7 @@ void RepRap::Init()
   heat->Init();
   active = true;
   gCodes->RunConfigurationGCodes();
+  platform->StartNetwork(); // Need to do this hare, as the configuration GCodes may set IP address etc.
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
 //  platform->Message(HOST_MESSAGE, "Free memory: ");
 //  sprintf(scratchString,"%d\n",platform->GetFreeMemory());
