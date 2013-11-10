@@ -37,9 +37,8 @@ void loop()
 
 //*************************************************************************************************
 
-Platform::Platform(RepRap* r)
+Platform::Platform()
 {
-  reprap = r;
   fileStructureInitialised = false;
   
   line = new Line();
@@ -239,6 +238,11 @@ void Platform::InitialiseInterrupts()
   TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
   TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
   SetInterrupt(STANDBY_INTERRUPT_RATE);
+}
+
+void Platform::DisableInterrupts()
+{
+	NVIC_DisableIRQ(TC3_IRQn);
 }
 
 

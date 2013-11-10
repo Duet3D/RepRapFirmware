@@ -37,7 +37,7 @@ Licence: GPL
 #define KO_START "rr_"
 #define KO_FIRST 3
 #define POST_LENGTH 200
-#define GCODE_LENGTH 100 // Maximum lenght of internally-generated G Code string
+#define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
 class Webserver
 {   
@@ -51,6 +51,8 @@ class Webserver
     void Spin();
     void Exit();
     void Diagnostics();
+    void SetPassword(char* pw);
+    void SetName(char* nm);
     
   private:
   
@@ -99,8 +101,8 @@ class Webserver
     int gcodePointer;
     int clientLinePointer;
     bool gotPassword;
-    char* password;
-    char* myName;
+    char password[SHORT_STRING_LENGTH+1];
+    char myName[SHORT_STRING_LENGTH+1];
 };
 
 

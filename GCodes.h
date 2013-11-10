@@ -38,6 +38,7 @@ class GCodeBuffer
     float GetFValue();
     int GetIValue();
     long GetLValue();
+    char* GetUnprecedentedString();
     char* GetString();
     char* Buffer();
     bool Finished();

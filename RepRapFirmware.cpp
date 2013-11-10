@@ -160,7 +160,7 @@ RepRap reprap;
 RepRap::RepRap()
 {
   active = false;
-  platform = new Platform(this);
+  platform = new Platform();
   webserver = new Webserver(platform);
   gCodes = new GCodes(platform, webserver);
   move = new Move(platform, gCodes);
@@ -169,7 +169,7 @@ RepRap::RepRap()
 
 void RepRap::Init()
 {
-  dbg = false;
+  debug = false;
   platform->Init();
   gCodes->Init();
   webserver->Init();
@@ -213,6 +213,28 @@ void RepRap::Diagnostics()
   heat->Diagnostics();
   gCodes->Diagnostics();
   webserver->Diagnostics();
+}
+
+// Disable interrupts, turn off the heaters, disable the motors, and
+// deactivate the Heat and Move classes.  Leave everything else
+// working.
+
+void RepRap::EmergencyStop()
+{
+	int8_t i;
+
+	platform->DisableInterrupts();
+
+	for(i = 0; i < HEATERS; i++)
+		platform->SetHeater(i, 0.0);
+	heat->Exit();
+
+	for(i = 0; i < DRIVES; i++)
+	{
+		platform->SetMotorCurrent(i, 0.0);
+		platform->Disable(i);
+	}
+	move->Exit();
 }
 
 

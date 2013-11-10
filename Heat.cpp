@@ -102,14 +102,36 @@ void PID::Init()
   lastTemperature = temperature;
   temp_iState = 0.0;
   temp_dState = 0.0;
+  badTemperatureCount = 0;
+  temperatureFault = false;
   active = false;
 }
 
 
 void PID::Spin()
 {
+  if(temperatureFault)
+	  return;
+
   temperature = platform->GetTemperature(heater);
   
+  if(temperature < BAD_LOW_TEMPERATURE || temperature > BAD_HIGH_TEMPERATURE)
+  {
+	  badTemperatureCount++;
+	  if(badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+	  {
+		  platform->SetHeater(heater, 0.0);
+		  temperatureFault = true;
+		  platform->Message(HOST_MESSAGE, "Temperature measurement fault on heater ");
+		  sprintf(scratchString, "%d", heater);
+		  platform->Message(HOST_MESSAGE, scratchString);
+		  platform->Message(HOST_MESSAGE, ", T = ");
+		  platform->Message(HOST_MESSAGE, ftoa(scratchString, temperature, 1));
+		  platform->Message(HOST_MESSAGE, "\n");
+	  }
+  } else
+	  badTemperatureCount = 0;
+
   float error;
   if(active)
     error = activeTemperature - temperature;

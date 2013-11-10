@@ -53,6 +53,7 @@ Licence: GPL
 // Some numbers...
 
 #define STRING_LENGTH 1029
+#define SHORT_STRING_LENGTH 40
 #define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
 
@@ -375,7 +376,7 @@ class Platform
 {   
   public:
   
-  Platform(RepRap* r);
+  Platform();
   
 //-------------------------------------------------------------------------------------------------------------
 
@@ -398,6 +399,8 @@ class Platform
   
   void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
   
+  void DisableInterrupts();
+
   // Communications and data storage
   
   Network* GetNetwork();
@@ -419,6 +422,7 @@ class Platform
   
   // Movement
   
+  void EmergencyStop();
   void SetDirection(byte drive, bool direction);
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
@@ -428,10 +432,13 @@ class Platform
   float Acceleration(int8_t drive);
   void SetAcceleration(int8_t drive, float value);
   float MaxFeedrate(int8_t drive);
+  void SetMaxFeedrate(int8_t drive, float value);
   float InstantDv(int8_t drive);
-  float HomeFeedRate(int8_t drive);
+  float HomeFeedRate(int8_t axis);
+  void SetHomeFeedRate(int8_t axis, float value);
   EndStopHit Stopped(int8_t drive);
-  float AxisLength(int8_t drive);
+  float AxisLength(int8_t axis);
+  void SetAxisLength(int8_t axis, float value);
   
   float ZProbeStopHeight();
   void SetZProbeStopHeight(float z);
@@ -465,8 +472,6 @@ class Platform
   
   void InitialiseInterrupts();
   int GetRawZHeight();
-
-  RepRap* reprap;
   
 // DRIVES
 
@@ -683,24 +688,34 @@ inline void Platform::SetMotorCurrent(byte drive, float current)
 	mcp.setVolatileWiper(potWipes[drive], pot);
 }
 
-inline float Platform::HomeFeedRate(int8_t drive)
+inline float Platform::HomeFeedRate(int8_t axis)
 {
-  return homeFeedrates[drive];
+  return homeFeedrates[axis];
 }
 
-//inline void Platform::StartZProbing()
-//{
-//	zProbeStarting = true;
-//}
-
-inline float Platform::AxisLength(int8_t drive)
+inline void Platform::SetHomeFeedRate(int8_t axis, float value)
 {
-  return axisLengths[drive];
+   homeFeedrates[axis] = value;
+}
+
+inline float Platform::AxisLength(int8_t axis)
+{
+  return axisLengths[axis];
+}
+
+inline void Platform::SetAxisLength(int8_t axis, float value)
+{
+  axisLengths[axis] = value;
 }
 
 inline float Platform::MaxFeedrate(int8_t drive)
 {
   return maxFeedrates[drive];
+}
+
+inline void Platform::SetMaxFeedrate(int8_t drive, float value)
+{
+	maxFeedrates[drive] = value;
 }
 
 inline int Platform::GetRawZHeight()

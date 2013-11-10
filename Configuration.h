@@ -37,6 +37,13 @@ Licence: GPL
 #define TEMPERATURE_CLOSE_ENOUGH 5.0 // Celsius
 #define TEMPERATURE_LOW_SO_DONT_CARE 40.0 // Celsius
 
+// If temperatures fall outside this range, something
+// nasty has happened.
+
+#define BAD_LOW_TEMPERATURE -30.0
+#define BAD_HIGH_TEMPERATURE 300.0
+#define MAX_BAD_TEMPERATURE_COUNT 3
+
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
 #define NUMBER_OF_PROBE_POINTS 3

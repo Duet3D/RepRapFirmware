@@ -286,7 +286,7 @@ void Webserver::JsonReport(bool ok, char* request)
 {
   if(ok)
   {
-    if(reprap.debug())
+    if(reprap.Debug())
     {
       platform->Message(HOST_MESSAGE, "JSON response: ");
       platform->Message(HOST_MESSAGE, jsonResponse);
@@ -417,7 +417,7 @@ GET /gather.asp?pwd=my_pwd HTTP/1.1
 
 void Webserver::ParseGetPost()
 {
-    if(reprap.debug())
+    if(reprap.Debug())
     {
       platform->Message(HOST_MESSAGE, "HTTP request: ");
       platform->Message(HOST_MESSAGE, clientLine);
@@ -684,8 +684,8 @@ void Webserver::Init()
   clientLinePointer = 0;
   clientLine[0] = 0;
   clientRequest[0] = 0;
-  password = DEFAULT_PASSWORD;
-  myName = DEFAULT_NAME;
+  SetPassword(DEFAULT_PASSWORD);
+  SetName(DEFAULT_NAME);
   //gotPassword = false;
   gcodeAvailable = false;
   gcodePointer = 0;
@@ -705,6 +705,18 @@ void Webserver::Exit()
 void Webserver::Diagnostics() 
 {
   platform->Message(HOST_MESSAGE, "Webserver Diagnostics:\n"); 
+}
+
+void Webserver::SetPassword(char* pw)
+{
+	strncpy(password, pw, SHORT_STRING_LENGTH);
+	password[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
+}
+
+void Webserver::SetName(char* nm)
+{
+	strncpy(myName, nm, SHORT_STRING_LENGTH);
+	myName[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
 }
 
 

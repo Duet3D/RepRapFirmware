@@ -772,7 +772,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
 
     case 23: // Set file to print
-      QueueFileToPrint(gb->GetString());
+      QueueFileToPrint(gb->GetUnprecedentedString());
       break;
       
     case 24: // Print/resume-printing the selected file
@@ -804,7 +804,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 92: // Set steps/mm for each axis
-    	if(reprap.debug())
+    	if(reprap.Debug())
     		platform->GetLine()->Write("Steps/mm: ");
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
@@ -815,14 +815,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     			value = -1;
     		}
     		platform->SetDriveStepsPerUnit(i, value);
-    		if(reprap.debug())
+    		if(reprap.Debug())
     		{
     			platform->GetLine()->Write(gCodeLetters[i]);
     			platform->GetLine()->Write(ftoa(NULL, value, 3));
     			platform->GetLine()->Write(" ");
     		}
     	}
-		if(reprap.debug())
+		if(reprap.Debug())
 			platform->GetLine()->Write("\n");
         break;
 
@@ -847,11 +847,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 112: // Emergency stop
+    	reprap.EmergencyStop();
     	break;
 
     case 111: // Debug level
     	if(gb->Seen('S'))
-    		reprap.debug(gb->GetIValue());
+    		reprap.SetDebug(gb->GetIValue());
     	break;
 
     case 114: // Deprecated
@@ -906,7 +907,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
 
     case 201: // Set axis accelerations
-		if(reprap.debug())
+		if(reprap.Debug())
 			platform->GetLine()->Write("Accelerations: ");
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
@@ -917,27 +918,51 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     			value = -1;
     		}
     		platform->SetAcceleration(i, value);
-    		if(reprap.debug())
+    		if(reprap.Debug())
     		{
     			platform->GetLine()->Write(gCodeLetters[i]);
     			platform->GetLine()->Write(ftoa(NULL,platform->Acceleration(i),1));
     			platform->GetLine()->Write(" ");
     		}
     	}
-		if(reprap.debug())
+		if(reprap.Debug())
 			platform->GetLine()->Write("\n");
     	break;
 
     case 203: // Set maximum feedrates
+    	for(uint8_t i = 0; i < DRIVES; i++)
+    	{
+    		if(gb->Seen(gCodeLetters[i]))
+    		{
+    			value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+    			platform->SetMaxFeedrate(i, value);
+    		}
+    	}
     	break;
 
     case 205:  //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
     	break;
 
     case 208: // Set maximum axis lengths
+    	for(uint8_t i = 0; i < AXES; i++)
+    	{
+    		if(gb->Seen(gCodeLetters[i]))
+    		{
+    			value = gb->GetFValue()*distanceScale;
+    			platform->SetAxisLength(i, value);
+    		}
+    	}
     	break;
 
     case 210: // Set homing feedrates
+    	for(uint8_t i = 0; i < AXES; i++)
+    	{
+    		if(gb->Seen(gCodeLetters[i]))
+    		{
+    			value = gb->GetFValue()*distanceScale*0.016666667;
+    			platform->SetHomeFeedRate(i, value);
+    		}
+    	}
     	break;
 
     case 301: // Set PID values
@@ -950,9 +975,13 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 500: // Set password
+    	if(gb->Seen('P'))
+    		reprap.GetWebserver()->SetPassword(gb->GetString());
     	break;
 
     case 501: // Set machine name
+    	if(gb->Seen('P'))
+    		reprap.GetWebserver()->SetName(gb->GetString());
     	break;
 
     case 502: // Set IP address
@@ -1048,7 +1077,7 @@ bool GCodeBuffer::Put(char c)
   {
     gcodeBuffer[gcodePointer] = 0;
     Init();
-    if(reprap.debug() && gcodeBuffer[0]) // Don't bother with blank/comment lines
+    if(reprap.Debug() && gcodeBuffer[0]) // Don't bother with blank/comment lines
     {
       platform->Message(HOST_MESSAGE, identity);
       platform->Message(HOST_MESSAGE, gcodeBuffer);
@@ -1101,17 +1130,34 @@ float GCodeBuffer::GetFValue()
   return result; 
 }
 
+// Get a string after a G Code letter found by a call to Seen().
+// It will be the whole of the rest of the GCode string, so strings
+// should always be the last parameter.
+
+char* GCodeBuffer::GetString()
+{
+	if(readPointer < 0)
+	{
+		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode string before a search.\n");
+		return "";
+	}
+	char* result = &gcodeBuffer[readPointer+1];
+	readPointer = -1;
+	return result;
+}
+
 // This returns a pointer to the end of the buffer where a
 // string starts.  It assumes that an M or G search has
 // been done followed by a GetIValue(), so readPointer will
 // be -1.  It absorbs "M/Gnnn " (including the space) from the
 // start and returns a pointer to the next location.
 
-// It would be nice if the string was preceded by (say) 'S', but
-// for legacy compatibility (M code to queue a file) that can't
-// be done.
+// This is provided for legacy use, in particular in the M23
+// command that sets the name of a file to be printed.  In
+// preference use GetString() which requires the string to have
+// been preceded by a tag letter.
 
-char* GCodeBuffer::GetString()
+char* GCodeBuffer::GetUnprecedentedString()
 {
   readPointer = 0;
   while(gcodeBuffer[readPointer] && gcodeBuffer[readPointer] != ' ')
