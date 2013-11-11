@@ -485,7 +485,7 @@ char* GCodes::GetCurrentCoordinates()
 	float liveCoordinates[DRIVES+1];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates);
 
-	sprintf(scratchString, "X:%f Y:%f Z:%f E:%f", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS], liveCoordinates[AXES]);
+	snprintf(scratchString, STRING_LENGTH, "X:%f Y:%f Z:%f E:%f", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS], liveCoordinates[AXES]);
 	return scratchString;
 }
 
@@ -649,6 +649,16 @@ bool GCodes::StandbyHeaters()
 	return true;
 }
 
+void GCodes::HandleReply(bool error, bool fromLine, char* reply)
+{
+	if(!reply[0])
+		return;
+	if(error)
+		platform->GetLine()->Write("Error: ");
+	platform->GetLine()->Write(reply);
+	platform->GetLine()->Write("\n");
+}
+
 // If the GCode to act on is completed, this returns true,
 // otherwise false.  It is called repeatedly for a given
 // GCode until it returns true for that code.
@@ -659,6 +669,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
   float value;
   char* str;
   bool result = true;
+  bool error = false;
+  char reply[STRING_LENGTH];
+
+  reply[0] = 0;
 
   if(gb->Seen('G'))
   {
@@ -711,10 +725,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     			platform->SetZProbe(gb->GetIValue());
     		}
     	} else
-    	{
-    		platform->GetLine()->Write(platform->ZProbe());
-    		platform->GetLine()->Write("\n");
-    	}
+    		snprintf(reply, STRING_LENGTH, "%d", platform->ZProbe());
     	break;
 
     case 32: // Probe Z at multiple positions and generate the bed transform
@@ -736,10 +747,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     default:
-      platform->Message(HOST_MESSAGE, "GCodes - invalid G Code: ");
-      platform->Message(HOST_MESSAGE, gb->Buffer());
-      platform->Message(HOST_MESSAGE, "\n");
+    	error = true;
+    	snprintf(reply, STRING_LENGTH, "invalid G Code: %s", gb->Buffer());
     }
+    if(result == true)
+    	HandleReply(error, gb == serialGCode, reply);
     return result;
   }
   
@@ -766,9 +778,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 20:  // Deprecated...
-      platform->GetLine()->Write("GCode files:\n");
-      platform->GetLine()->Write(platform->GetMassStorage()->FileList(platform->GetGCodeDir()));
-      platform->GetLine()->Write("\n");
+      snprintf(reply, STRING_LENGTH, "GCode files:\n%s", platform->GetMassStorage()->FileList(platform->GetGCodeDir()));
       break;
 
     case 23: // Set file to print
@@ -804,8 +814,6 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 92: // Set steps/mm for each axis
-    	if(reprap.Debug())
-    		platform->GetLine()->Write("Steps/mm: ");
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
     		if(gb->Seen(gCodeLetters[i]))
@@ -815,27 +823,18 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     			value = -1;
     		}
     		platform->SetDriveStepsPerUnit(i, value);
-    		if(reprap.Debug())
-    		{
-    			platform->GetLine()->Write(gCodeLetters[i]);
-    			platform->GetLine()->Write(ftoa(NULL, value, 3));
-    			platform->GetLine()->Write(" ");
-    		}
     	}
-		if(reprap.Debug())
-			platform->GetLine()->Write("\n");
         break;
 
     case 105: // Deprecated...
-    	platform->GetLine()->Write("ok T:");
+    	strncpy(reply, "T:", STRING_LENGTH);
     	for(int8_t i = HEATERS - 1; i > 0; i--)
     	{
-    		platform->GetLine()->Write(ftoa(0, reprap.GetHeat()->GetTemperature(i), 1));
-    		platform->GetLine()->Write(" ");
+    		strncat(reply, ftoa(0, reprap.GetHeat()->GetTemperature(i), 1), STRING_LENGTH);
+    		strncat(reply, " ", STRING_LENGTH);
     	}
-    	platform->GetLine()->Write("B:");
-    	platform->GetLine()->Write(ftoa(0, reprap.GetHeat()->GetTemperature(0), 1));
-    	platform->GetLine()->Write('\n');
+    	strncat(reply, "B:", STRING_LENGTH);
+    	strncat(reply, ftoa(0, reprap.GetHeat()->GetTemperature(0), 1), STRING_LENGTH);
     	break;
    
     case 106: // Fan on
@@ -859,8 +858,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	str = GetCurrentCoordinates();
     	if(str != 0)
     	{
-    		platform->GetLine()->Write(str);
-    		platform->GetLine()->Write("\n");
+    		strncpy(reply, str, STRING_LENGTH);
     	} else
     		result = false;
     	break;
@@ -907,8 +905,6 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
 
     case 201: // Set axis accelerations
-		if(reprap.Debug())
-			platform->GetLine()->Write("Accelerations: ");
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
     		if(gb->Seen(gCodeLetters[i]))
@@ -918,15 +914,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     			value = -1;
     		}
     		platform->SetAcceleration(i, value);
-    		if(reprap.Debug())
-    		{
-    			platform->GetLine()->Write(gCodeLetters[i]);
-    			platform->GetLine()->Write(ftoa(NULL,platform->Acceleration(i),1));
-    			platform->GetLine()->Write(" ");
-    		}
     	}
-		if(reprap.Debug())
-			platform->GetLine()->Write("\n");
     	break;
 
     case 203: // Set maximum feedrates
@@ -987,6 +975,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 502: // Set IP address
     	break;
 
+    case 503: // Set firmware type to emulate
+    	if(gb->Seen('P'))
+    		platform->SetEmulating((Compatibility)gb->GetIValue());
+    	break;
+
     case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
@@ -999,10 +992,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
      
     default:
-      platform->Message(HOST_MESSAGE, "GCodes - invalid M Code: ");
-      platform->Message(HOST_MESSAGE, gb->Buffer());
-      platform->Message(HOST_MESSAGE, "\n");
+      error = true;
+      snprintf(reply, STRING_LENGTH, "invalid M Code: %s", gb->Buffer());
     }
+    if(result == true)
+    	HandleReply(error, gb == serialGCode, reply);
     return result;
   }
   
@@ -1012,7 +1006,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     if(code == selectedHead)
       return result;
       
-    bool ok = false;
+    error = true;
     for(int8_t i = AXES; i < DRIVES; i++)
     {
       if(selectedHead == i - AXES)
@@ -1024,22 +1018,23 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       {
         selectedHead = code;
         reprap.GetHeat()->Activate(selectedHead + 1); // 0 is the Bed
-        ok = true;
+        error = false;
       }
     }
 
-    if(!ok)
-    {
-      platform->Message(HOST_MESSAGE, "GCodes - invalid T Code: ");
-      platform->Message(HOST_MESSAGE, gb->Buffer());
-      platform->Message(HOST_MESSAGE, "\n");
-    }
-    
+    if(error)
+      snprintf(reply, STRING_LENGTH, "invalid T Code: %s", gb->Buffer());
+
+    if(result == true)
+    	HandleReply(error, gb == serialGCode, reply);
     return result;
   }
   
   // An empty buffer jumps to here and gets discarded
-  
+
+  if(result == true)
+  	HandleReply(error, gb == serialGCode, reply);
+
   return result;
 }
 

@@ -180,7 +180,7 @@ void RepRap::Init()
   platform->StartNetwork(); // Need to do this hare, as the configuration GCodes may set IP address etc.
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
 //  platform->Message(HOST_MESSAGE, "Free memory: ");
-//  sprintf(scratchString,"%d\n",platform->GetFreeMemory());
+//  snprintf(scratchString,STRING_LENGTH,"%d\n",platform->GetFreeMemory());
 //  platform->Message(HOST_MESSAGE, scratchString);
 }
 
@@ -255,11 +255,11 @@ char* ftoa(char *a, const float& f, int prec)
     a = scratchString;
   char *ret = a;
   long whole = (long)f;
-  sprintf(a,"%d",whole);
+  snprintf(a, STRING_LENGTH, "%d", whole);
   while (*a != '\0') a++;
   *a++ = '.';
   long decimal = abs((long)((f - (float)whole) * precision[prec]));
-  sprintf(a,"%d",decimal);
+  snprintf(a, STRING_LENGTH, "%d", decimal);
   return ret;
 }
 

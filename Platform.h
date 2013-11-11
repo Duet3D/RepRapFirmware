@@ -167,6 +167,18 @@ Licence: GPL
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
+// Other firmware that we might switch to be compatible with.
+
+enum Compatibility
+{
+	me = 0,
+	reprapFirmware = 1,
+	marlin = 2,
+	teacup = 3,
+	sprinter = 4,
+	repetier = 5
+};
+
 /****************************************************************************************************/
 
 enum EndStopHit
@@ -389,6 +401,10 @@ class Platform
   
   void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
   
+  Compatibility Emulating();
+
+  void SetEmulating(Compatibility c);
+
   void Diagnostics();
   
   // long GetFreeMemory();
@@ -470,6 +486,8 @@ class Platform
   
   bool active;
   
+  Compatibility compatibility;
+
   void InitialiseInterrupts();
   int GetRawZHeight();
   
@@ -564,6 +582,25 @@ inline float Platform::Time()
 inline void Platform::Exit()
 {
   active = false;
+}
+
+inline Compatibility Platform::Emulating()
+{
+	if(compatibility == reprapFirmware)
+		return me;
+	return compatibility;
+}
+
+inline void Platform::SetEmulating(Compatibility c)
+{
+	if(c != me && c != reprapFirmware && c != marlin)
+	{
+		Message(HOST_MESSAGE, "Attempt to emulate unsupported firmware.\n");
+		return;
+	}
+	if(c == reprapFirmware)
+		c = me;
+	compatibility = c;
 }
 
 // Where the htm etc files are
@@ -681,7 +718,7 @@ inline void Platform::SetMotorCurrent(byte drive, float current)
 {
 	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxStepperDigipotVoltage);
 //	Message(HOST_MESSAGE, "Set pot to: ");
-//	sprintf(scratchString, "%d", pot);
+//	snprintf(scratchString, STRING_LENGTH, "%d", pot);
 //	Message(HOST_MESSAGE, scratchString);
 //	Message(HOST_MESSAGE, "\n");
 	mcp.setNonVolatileWiper(potWipes[drive], pot);
@@ -873,13 +910,13 @@ inline void Line::Write(char* b)
 
 inline void Line::Write(float f)
 {
-	sprintf(scratchString, "%f", f);
+	snprintf(scratchString, STRING_LENGTH, "%f", f);
 	SerialUSB.print(scratchString);
 }
 
 inline void Line::Write(long l)
 {
-	sprintf(scratchString, "%d", l);
+	snprintf(scratchString, STRING_LENGTH, "%d", l);
 	SerialUSB.print(scratchString);
 }
 

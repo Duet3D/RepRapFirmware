@@ -61,6 +61,8 @@ void Platform::Init()
 { 
   byte i;
 
+  compatibility = me;
+
   line->Init();
 
   //network->Init();
@@ -397,7 +399,7 @@ void MassStorage::Init()
 	if (mounted != FR_OK)
 	{
 		platform->Message(HOST_MESSAGE, "Can't mount filesystem 0: code ");
-		sprintf(scratchString, "%d", mounted);
+		snprintf(scratchString, STRING_LENGTH, "%d", mounted);
 		platform->Message(HOST_MESSAGE, scratchString);
 		platform->Message(HOST_MESSAGE, "\n");
 	}
@@ -570,7 +572,7 @@ bool FileStore::Open(char* directory, char* fileName, bool write)
 		  platform->Message(HOST_MESSAGE, "Can't open ");
 		  platform->Message(HOST_MESSAGE, location);
 		  platform->Message(HOST_MESSAGE, " to write to.  Error code: ");
-		  sprintf(scratchString, "%d", openReturn);
+		  snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
 		  platform->Message(HOST_MESSAGE, scratchString);
 		  platform->Message(HOST_MESSAGE, "\n");
 		  return false;
@@ -584,7 +586,7 @@ bool FileStore::Open(char* directory, char* fileName, bool write)
 		  platform->Message(HOST_MESSAGE, "Can't open ");
 		  platform->Message(HOST_MESSAGE, location);
 		  platform->Message(HOST_MESSAGE, " to read from.  Error code: ");
-		  sprintf(scratchString, "%d", openReturn);
+		  snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
 		  platform->Message(HOST_MESSAGE, scratchString);
 		  platform->Message(HOST_MESSAGE, "\n");
 		  return false;

@@ -123,7 +123,7 @@ void PID::Spin()
 		  platform->SetHeater(heater, 0.0);
 		  temperatureFault = true;
 		  platform->Message(HOST_MESSAGE, "Temperature measurement fault on heater ");
-		  sprintf(scratchString, "%d", heater);
+		  snprintf(scratchString, STRING_LENGTH, "%d", heater);
 		  platform->Message(HOST_MESSAGE, scratchString);
 		  platform->Message(HOST_MESSAGE, ", T = ");
 		  platform->Message(HOST_MESSAGE, ftoa(scratchString, temperature, 1));

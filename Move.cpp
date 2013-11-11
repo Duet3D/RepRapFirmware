@@ -249,7 +249,7 @@ void Move::Diagnostics()
     platform->Message(HOST_MESSAGE, " not active\n");
   
   platform->Message(HOST_MESSAGE, " look ahead ring count: ");
-  sprintf(scratchString, "%d\n", lookAheadRingCount);
+  snprintf(scratchString, STRING_LENGTH, "%d\n", lookAheadRingCount);
   platform->Message(HOST_MESSAGE, scratchString);
   if(dda == NULL)
     platform->Message(HOST_MESSAGE, " dda: NULL\n");
@@ -632,7 +632,7 @@ void Move::InterruptTime()
     lookAheadDDA->Step(false);
   t = platform->Time() - t;
   platform->Message(HOST_MESSAGE, "Time for 100000 calls of the interrupt function: ");
-  sprintf(buffer, "%ld", t);
+  snprintf(buffer, 50, "%ld", t);
   platform->Message(HOST_MESSAGE, buffer);
   platform->Message(HOST_MESSAGE, " microseconds.\n");*/
 }
