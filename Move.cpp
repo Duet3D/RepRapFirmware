@@ -144,6 +144,9 @@ void Move::Init()
   currentFeedrate = -1.0;
 
   SetIdentityTransform();
+  tanXY = 0.0;
+  tanYZ = 0.0;
+  tanXZ = 0.0;
 
   lastZHit = 0.0;
   zProbing = false;
@@ -566,6 +569,13 @@ LookAhead* Move::LookAheadRingGet()
   return result;
 }
 
+// Note that we don't set the tan values to 0 here.  This means that the bed probe
+// values will be a fraction of a millimeter out in X and Y, which, as the bed should
+// be nearly flat (and the probe doesn't coincide with the nozzle anyway), won't matter.
+// But it means that the tan values can be set for the machine
+// at the start in the configuration file and be retained, without having to know and reset
+// them after every Z probe of the bed.
+
 void Move::SetIdentityTransform()
 {
 	aX = 0.0;
@@ -573,14 +583,18 @@ void Move::SetIdentityTransform()
 	aC = 0.0;
 }
 
-void Move::Transform(float move[])
+void Move::Transform(float xyzPoint[])
 {
-	move[2] = move[2] + aX*move[0] + aY*move[1] + aC;
+	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
+	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] + tanYZ*xyzPoint[Z_AXIS];
+	xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
 }
 
-void Move::InverseTransform(float move[])
+void Move::InverseTransform(float xyzPoint[])
 {
-	move[2] = move[2] - (aX*move[0] + aY*move[1] + aC);
+	xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
+	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] - tanYZ*xyzPoint[Z_AXIS];
+	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] - (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
 }
 
 void Move::SetProbedBedPlane()

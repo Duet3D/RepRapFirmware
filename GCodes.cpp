@@ -797,15 +797,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 82:
     	if(drivesRelative)
-    		for(uint8_t i = AXES; i < DRIVES; i++)
-    		    lastPos[i - AXES] = 0.0;
+    		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
+    		    lastPos[extruder - AXES] = 0.0;
     	drivesRelative = false;
     	break;
 
     case 83:
     	if(!drivesRelative)
-    		for(uint8_t i = AXES; i < DRIVES; i++)
-    			lastPos[i - AXES] = 0.0;
+    		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
+    			lastPos[extruder - AXES] = 0.0;
     	drivesRelative = true;
 
     	break;
@@ -814,23 +814,23 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 92: // Set steps/mm for each axis
-    	for(uint8_t i = 0; i < DRIVES; i++)
+    	for(int8_t drive = 0; drive < DRIVES; drive++)
     	{
-    		if(gb->Seen(gCodeLetters[i]))
+    		if(gb->Seen(gCodeLetters[drive]))
     		{
     			value = gb->GetFValue();
     		}else{
     			value = -1;
     		}
-    		platform->SetDriveStepsPerUnit(i, value);
+    		platform->SetDriveStepsPerUnit(drive, value);
     	}
         break;
 
     case 105: // Deprecated...
     	strncpy(reply, "T:", STRING_LENGTH);
-    	for(int8_t i = HEATERS - 1; i > 0; i--)
+    	for(int8_t heater = HEATERS - 1; heater > 0; heater--)
     	{
-    		strncat(reply, ftoa(0, reprap.GetHeat()->GetTemperature(i), 1), STRING_LENGTH);
+    		strncat(reply, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1), STRING_LENGTH);
     		strncat(reply, " ", STRING_LENGTH);
     	}
     	strncat(reply, "B:", STRING_LENGTH);
@@ -906,25 +906,25 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
 
     case 201: // Set axis accelerations
-    	for(uint8_t i = 0; i < DRIVES; i++)
+    	for(int8_t drive = 0; drive < DRIVES; drive++)
     	{
-    		if(gb->Seen(gCodeLetters[i]))
+    		if(gb->Seen(gCodeLetters[drive]))
     		{
     			value = gb->GetFValue();
     		}else{
     			value = -1;
     		}
-    		platform->SetAcceleration(i, value);
+    		platform->SetAcceleration(drive, value);
     	}
     	break;
 
     case 203: // Set maximum feedrates
-    	for(uint8_t i = 0; i < DRIVES; i++)
+    	for(int8_t drive = 0; drive < DRIVES; drive++)
     	{
-    		if(gb->Seen(gCodeLetters[i]))
+    		if(gb->Seen(gCodeLetters[drive]))
     		{
     			value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
-    			platform->SetMaxFeedrate(i, value);
+    			platform->SetMaxFeedrate(drive, value);
     		}
     	}
     	break;
@@ -933,23 +933,23 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 208: // Set maximum axis lengths
-    	for(uint8_t i = 0; i < AXES; i++)
+    	for(int8_t axis = 0; axis < AXES; axis++)
     	{
-    		if(gb->Seen(gCodeLetters[i]))
+    		if(gb->Seen(gCodeLetters[axis]))
     		{
     			value = gb->GetFValue()*distanceScale;
-    			platform->SetAxisLength(i, value);
+    			platform->SetAxisLength(axis, value);
     		}
     	}
     	break;
 
     case 210: // Set homing feedrates
-    	for(uint8_t i = 0; i < AXES; i++)
+    	for(int8_t axis = 0; axis < AXES; axis++)
     	{
-    		if(gb->Seen(gCodeLetters[i]))
+    		if(gb->Seen(gCodeLetters[axis]))
     		{
     			value = gb->GetFValue()*distanceScale*0.016666667;
-    			platform->SetHomeFeedRate(i, value);
+    			platform->SetHomeFeedRate(axis, value);
     		}
     	}
     	break;
@@ -982,6 +982,13 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 504: // Axis compensation
+    	if(gb->Seen('S'))
+    	{
+    		value = gb->GetFValue();
+    		for(int8_t axis = 0; axis < AXES; axis++)
+    			if(gb->Seen(gCodeLetters[axis]))
+    				reprap.GetMove()->SetAxisCompensation(axis, gb->GetFValue()/value);
+    	}
     	break;
 
     case 906: // Set Motor currents

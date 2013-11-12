@@ -162,6 +162,7 @@ class Move
     void SetZProbing(bool probing);
     void SetProbedBedPlane();
     float GetLastProbedZ();
+    void SetAxisCompensation(int8_t axis, float tangent);
     void SetIdentityTransform();
     void Transform(float move[]);
     void InverseTransform(float move[]);
@@ -212,7 +213,8 @@ class Move
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
     long nextMachineEndPoints[DRIVES+1];
-    float aX, aY, aC;
+    float aX, aY, aC; // Bed plane explicit equation z' = z + aX*x + aY*y + aC
+    float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
     float lastZHit;
     bool zProbing;
 };
@@ -402,6 +404,24 @@ inline void Move::SetZProbing(bool probing)
 inline float Move::GetLastProbedZ()
 {
 	return lastZHit;
+}
+
+inline void Move::SetAxisCompensation(int8_t axis, float tangent)
+{
+	switch(axis)
+	{
+	case X_AXIS:
+		tanXY = tangent;
+		break;
+	case Y_AXIS:
+		tanYZ = tangent;
+		break;
+	case Z_AXIS:
+		tanXZ = tangent;
+		break;
+	default:
+		platform->Message(HOST_MESSAGE, "SetAxisCompensation: dud axis.\n");
+	}
 }
 
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)

@@ -215,7 +215,7 @@ void RepRap::Diagnostics()
   webserver->Diagnostics();
 }
 
-// Disable interrupts, turn off the heaters, disable the motors, and
+// Turn off the heaters, disable the motors, and
 // deactivate the Heat and Move classes.  Leave everything else
 // working.
 
@@ -223,18 +223,25 @@ void RepRap::EmergencyStop()
 {
 	int8_t i;
 
-	platform->DisableInterrupts();
+	//platform->DisableInterrupts();
 
+	heat->Exit();
 	for(i = 0; i < HEATERS; i++)
 		platform->SetHeater(i, 0.0);
-	heat->Exit();
 
-	for(i = 0; i < DRIVES; i++)
+	// We do this twice, to avoid an interrupt switching
+	// a drive back on.  move->Exit() should prevent
+	// interrupts doing this.
+
+	for(int8_t i = 0; i < 2; i++)
 	{
-		platform->SetMotorCurrent(i, 0.0);
-		platform->Disable(i);
+		move->Exit();
+		for(i = 0; i < DRIVES; i++)
+		{
+			platform->SetMotorCurrent(i, 0.0);
+			platform->Disable(i);
+		}
 	}
-	move->Exit();
 }
 
 
