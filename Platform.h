@@ -121,6 +121,7 @@ Licence: GPL
 #define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
+#define COOLING_FAN_PIN 34
 
 #define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
@@ -474,6 +475,7 @@ class Platform
   float DMix(int8_t heater);
   bool UsePID(int8_t heater);
   float HeatSampleTime();
+  void CoolingFan(float speed);
 
 //-------------------------------------------------------------------------------------------------------
   protected:
@@ -548,6 +550,7 @@ class Platform
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
+  int8_t coolingFanPin;
 
 // Serial/USB
 
@@ -838,6 +841,13 @@ inline float Platform::PidMax(int8_t heater)
 inline float Platform::DMix(int8_t heater)
 {
   return dMix[heater];  
+}
+
+inline void Platform::CoolingFan(float speed)
+{
+	if(coolingFanPin < 0)
+		return;
+	analogWrite(coolingFanPin, (uint8_t)(speed*255.0));
 }
 
 

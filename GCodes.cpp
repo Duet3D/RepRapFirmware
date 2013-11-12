@@ -838,11 +838,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
    
     case 106: // Fan on
-      platform->Message(HOST_MESSAGE, "Fan on received\n");
+    	if(gb->Seen('S'))
+    		platform->CoolingFan(gb->GetFValue());
       break;
     
-    case 107: // Fan off
-      platform->Message(HOST_MESSAGE, "Fan off received\n");
+    case 107: // Fan off - depricated
+    	platform->CoolingFan(0.0);
       break;
       
     case 112: // Emergency stop
@@ -978,6 +979,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 503: // Set firmware type to emulate
     	if(gb->Seen('P'))
     		platform->SetEmulating((Compatibility)gb->GetIValue());
+    	break;
+
+    case 504: // Axis compensation
     	break;
 
     case 906: // Set Motor currents

@@ -125,6 +125,7 @@ void Platform::Init()
   heatSampleTime = HEAT_SAMPLE_TIME;
   standbyTemperatures = STANDBY_TEMPERATURES;
   activeTemperatures = ACTIVE_TEMPERATURES;
+  coolingFanPin = COOLING_FAN_PIN;
 
   webDir = WEB_DIR;
   gcodeDir = GCODE_DIR;
@@ -186,6 +187,12 @@ void Platform::Init()
   if(zProbePin >= 0)
 	  pinMode(zProbePin, INPUT);
   
+  if(coolingFanPin >= 0)
+  {
+	  pinMode(coolingFanPin, OUTPUT);
+	  analogWrite(coolingFanPin, 0);
+  }
+
   InitialiseInterrupts();
   
   lastTime = Time();
