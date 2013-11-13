@@ -153,6 +153,7 @@ void Move::Init()
   zProbing = false;
 
   lastTime = platform->Time();
+  longWait = lastTime;
   active = true;  
 }
 
@@ -187,7 +188,10 @@ void Move::Spin()
   // If we either don't want to, or can't, add to the look-ahead ring, go home.
   
   if(addNoMoreMoves || LookAheadRingFull())
-   return;
+  {
+	  platform->ClassReport("Move", longWait);
+	  return;
+  }
  
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
@@ -206,7 +210,10 @@ void Move::Spin()
     // Throw it away if there's no real movement.
     
     if(movementType == noMove)
+    {
+       platform->ClassReport("Move", longWait);
        return;
+    }
      
     // Real move - record its feedrate with it, not here.
     
@@ -233,6 +240,7 @@ void Move::Spin()
     if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove, movementType))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
   }
+  platform->ClassReport("Move", longWait);
 }
 
 void Move::SetPositions(float move[])

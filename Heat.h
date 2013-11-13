@@ -78,6 +78,7 @@ class Heat
     bool active;
     PID* pids[HEATERS];
     float lastTime;
+    float longWait;
 };
 
 

@@ -128,6 +128,7 @@ class GCodes
     bool cannedCycleMoveQueued;
     float bedZs[NUMBER_OF_PROBE_POINTS];
     bool zProbesSet;
+    float longWait;
 };
 
 //*****************************************************************************************************

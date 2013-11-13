@@ -619,6 +619,7 @@ void Webserver::Spin()
  //   else
 	if(platform->GetNetwork()->CanWrite())
       WriteByte();
+	platform->ClassReport("Webserver", longWait);
     return;
   }
   
@@ -641,6 +642,7 @@ void Webserver::Spin()
           clientRequest[0] = 0;
           InitialisePost();       
         }
+        platform->ClassReport("Webserver", longWait);
         return;
       }  
       
@@ -653,11 +655,15 @@ void Webserver::Spin()
     if(needToCloseClient)
     {
       if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY)
+      {
+    	platform->ClassReport("Webserver", longWait);
         return;
+      }
       needToCloseClient = false;  
       platform->GetNetwork()->Close();
     }   
   }
+  platform->ClassReport("Webserver", longWait);
 }
 
 //******************************************************************************************
@@ -673,7 +679,6 @@ Webserver::Webserver(Platform* p)
 
 void Webserver::Init()
 {
-  lastTime = platform->Time();
   writing = false;
   receivingPost = false;
   postSeen = false;
@@ -690,6 +695,8 @@ void Webserver::Init()
   gcodeAvailable = false;
   gcodePointer = 0;
   InitialisePost();
+  lastTime = platform->Time();
+  longWait = lastTime;
   active = true; 
   
   // Reinitialise the message file

@@ -218,6 +218,7 @@ class Move
     float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
     float lastZHit;
     bool zProbing;
+    float longWait;
 };
 
 //********************************************************************************************************

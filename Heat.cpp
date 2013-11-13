@@ -34,6 +34,7 @@ void Heat::Init()
   for(int8_t heater=0; heater < HEATERS; heater++)
     pids[heater]->Init();
   lastTime = platform->Time();
+  longWait = lastTime;
   active = true; 
 }
 
@@ -54,6 +55,7 @@ void Heat::Spin()
   lastTime = t;
   for(int8_t heater=0; heater < HEATERS; heater++)
     pids[heater]->Spin();
+  platform->ClassReport("Heat", longWait);
 }
 
 void Heat::Diagnostics() 

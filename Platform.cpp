@@ -195,7 +195,10 @@ void Platform::Init()
 
   InitialiseInterrupts();
   
+  addToTime = 0.0;
+  lastTimeCall = 0;
   lastTime = Time();
+  longWait = lastTime;
   
   active = true;
 }
@@ -220,6 +223,7 @@ void Platform::Spin()
     return;
   PollZHeight();
   lastTime = Time();
+  ClassReport("Platform", longWait);
 
 //  zcount++;
 //  if(zcount > 30)
@@ -272,13 +276,24 @@ void Platform::PrintMemoryUsage()
     char *heapend=sbrk(0);
 	register char * stack_ptr asm ("sp");
 	struct mallinfo mi=mallinfo();
-	snprintf(scratchString, STRING_LENGTH, "\nMemory usage:\nDynamic ram used: %d\n",mi.uordblks);
+	snprintf(scratchString, STRING_LENGTH, "\nMemory usage\nDynamic ram used: %d\n",mi.uordblks);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Program static ram used %d\n",&_end - ramstart);
+	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n",&_end - ramstart);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Stack ram used %d\n",ramend - stack_ptr);
+	snprintf(scratchString, STRING_LENGTH, "Stack ram used: %d\n",ramend - stack_ptr);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "My guess at free mem: %d\n\n",stack_ptr - heapend + mi.fordblks);
+	snprintf(scratchString, STRING_LENGTH, "Guess at free mem: %d\n\n",stack_ptr - heapend + mi.fordblks);
+	Message(HOST_MESSAGE, scratchString);
+}
+
+void Platform::ClassReport(char* className, float &lastTime)
+{
+	if(!reprap.Debug())
+		return;
+	if(Time() - lastTime < LONG_TIME)
+		return;
+	lastTime = Time();
+	snprintf(scratchString, STRING_LENGTH, "Class %s spinning.\n", className);
 	Message(HOST_MESSAGE, scratchString);
 }
 

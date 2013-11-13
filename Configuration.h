@@ -59,5 +59,7 @@ Licence: GPL
  */
 #define	CALIB_Z		0
 
+#define LONG_TIME 60.0 // Seconds
+
 
 #endif

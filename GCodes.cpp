@@ -74,7 +74,8 @@ void GCodes::Init()
   cannedCycleMoveCount = 0;
   cannedCycleMoveQueued = false;
   active = true;
-  dwellTime = platform->Time();
+  longWait = platform->Time();
+  dwellTime = longWait;
 }
 
 void GCodes::Spin()
@@ -95,18 +96,21 @@ void GCodes::Spin()
   if(!webGCode->Finished())
   {
     webGCode->SetFinished(ActOnGcode(webGCode));
+    platform->ClassReport("GCodes", longWait);
     return;
   }
   
   if(!serialGCode->Finished())
   {
     serialGCode->SetFinished(ActOnGcode(serialGCode));
+    platform->ClassReport("GCodes", longWait);
     return;
   }  
 
   if(!fileGCode->Finished())
   {
     fileGCode->SetFinished(ActOnGcode(fileGCode));
+    platform->ClassReport("GCodes", longWait);
     return;
   }  
 
@@ -117,6 +121,7 @@ void GCodes::Spin()
   {
     if(webGCode->Put(webserver->ReadGCode()))
       webGCode->SetFinished(ActOnGcode(webGCode));
+    platform->ClassReport("GCodes", longWait);
     return;
   }
   
@@ -125,6 +130,7 @@ void GCodes::Spin()
 	platform->GetLine()->Read(b);
     if(serialGCode->Put(b))
       serialGCode->SetFinished(ActOnGcode(serialGCode));
+    platform->ClassReport("GCodes", longWait);
     return;
   }  
   
@@ -142,6 +148,7 @@ void GCodes::Spin()
         fileBeingPrinted = NULL;
      }
   }
+  platform->ClassReport("GCodes", longWait);
 }
 
 void GCodes::Diagnostics() 

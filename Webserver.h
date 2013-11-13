@@ -78,6 +78,7 @@ class Webserver
     Platform* platform;
     bool active;
     float lastTime;
+    float longWait;
     FileStore* fileBeingSent;
     bool writing;
     bool receivingPost;

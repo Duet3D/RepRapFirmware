@@ -41,6 +41,7 @@ Licence: GPL
 #include <string.h>
 #include <malloc.h>
 #include <stdlib.h>
+#include <limits.h>
 
 // Platform-specific includes
 
@@ -412,9 +413,7 @@ class Platform
   
   void PrintMemoryUsage();  // Print memory stats for debugging
 
-  void GetMemoryPointers(unsigned long& heap, unsigned long& stack);
-
-  int FreeMemory();
+  void ClassReport(char* className, float &lastTime);  // Called on return to check everything's live.
 
   // Timing
   
@@ -491,6 +490,9 @@ class Platform
   private:
   
   float lastTime;
+  float longWait;
+  float addToTime;
+  unsigned long lastTimeCall;
   
   bool active;
   
@@ -585,7 +587,11 @@ class Platform
 
 inline float Platform::Time()
 {
-  return TIME_FROM_REPRAP*(float)micros();
+  unsigned long now = micros();
+  if(now < lastTimeCall) // Has timer overflowed?
+	  addToTime += ((float)ULONG_MAX)*TIME_FROM_REPRAP;
+  lastTimeCall = now;
+  return addToTime + TIME_FROM_REPRAP*(float)now;
 }
 
 inline void Platform::Exit()
