@@ -37,6 +37,7 @@ GCodes::GCodes(Platform* p, Webserver* w)
 
 void GCodes::Exit()
 {
+   platform->Message(HOST_MESSAGE, "GCodes class exited.\n");
    active = false;
 }
 

@@ -262,20 +262,25 @@ void Platform::Diagnostics()
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
 
-//extern int __bss_end; // void? long?
-//extern void *__brkval;
-//
-//long Platform::GetFreeMemory()
-//{
-//	long free_memory;
-//
-//  if((long)__brkval == 0)
-//    free_memory = ((long)&free_memory) - ((long)&__bss_end);
-//  else
-//    free_memory = ((long)&free_memory) - ((long)__brkval);
-//
-//  return free_memory;
-//}
+extern char _end;
+extern "C" char *sbrk(int i);
+
+void Platform::PrintMemoryUsage()
+{
+	char *ramstart=(char *)0x20070000;
+	char *ramend=(char *)0x20088000;
+    char *heapend=sbrk(0);
+	register char * stack_ptr asm ("sp");
+	struct mallinfo mi=mallinfo();
+	snprintf(scratchString, STRING_LENGTH, "\nMemory usage:\nDynamic ram used: %d\n",mi.uordblks);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Program static ram used %d\n",&_end - ramstart);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Stack ram used %d\n",ramend - stack_ptr);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "My guess at free mem: %d\n\n",stack_ptr - heapend + mi.fordblks);
+	Message(HOST_MESSAGE, scratchString);
+}
 
 
 //===========================================================================

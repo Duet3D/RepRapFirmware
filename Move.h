@@ -214,6 +214,7 @@ class Move
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
     long nextMachineEndPoints[DRIVES+1];
     float aX, aY, aC; // Bed plane explicit equation z' = z + aX*x + aY*y + aC
+    bool zPlaneSet;
     float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
     float lastZHit;
     bool zProbing;

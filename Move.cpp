@@ -147,6 +147,7 @@ void Move::Init()
   tanXY = 0.0;
   tanYZ = 0.0;
   tanXZ = 0.0;
+  zPlaneSet = false;
 
   lastZHit = 0.0;
   zProbing = false;
@@ -157,6 +158,7 @@ void Move::Init()
 
 void Move::Exit()
 {
+  platform->Message(HOST_MESSAGE, "Move class exited.\n");
   active = false;
 }
 
@@ -625,6 +627,7 @@ void Move::SetProbedBedPlane()
 	aX = -a/c;
 	aY = -b/c;
 	aC = -d/c;
+	zPlaneSet = true;
 }
 
 // FIXME

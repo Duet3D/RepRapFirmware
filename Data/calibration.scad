@@ -8,6 +8,9 @@ module Gauge()
 		 union()
 		 {
 			cube([long,8,8]);
+			translate([3, 5, 0])
+			rotate([0,0,45])
+			cube([8,5,8]);
 			rotate([0,0,5])
 			cube([8,long,8]);
 		 }
@@ -57,6 +60,6 @@ module TestPiece()
 
 //TestPiece();
 
-//Gauge();
+Gauge();
 
-ThumbWheel();
+//ThumbWheel();

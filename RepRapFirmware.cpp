@@ -191,6 +191,7 @@ void RepRap::Exit()
   move->Exit();
   gCodes->Exit();
   webserver->Exit();
+  platform->Message(HOST_MESSAGE, "RepRap class exited.\n");
   platform->Exit();
 }
 

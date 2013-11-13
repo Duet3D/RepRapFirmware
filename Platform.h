@@ -39,6 +39,8 @@ Licence: GPL
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <malloc.h>
+#include <stdlib.h>
 
 // Platform-specific includes
 
@@ -408,7 +410,11 @@ class Platform
 
   void Diagnostics();
   
-  // long GetFreeMemory();
+  void PrintMemoryUsage();  // Print memory stats for debugging
+
+  void GetMemoryPointers(unsigned long& heap, unsigned long& stack);
+
+  int FreeMemory();
 
   // Timing
   
@@ -584,6 +590,7 @@ inline float Platform::Time()
 
 inline void Platform::Exit()
 {
+  Message(HOST_MESSAGE, "Platform class exited.\n");
   active = false;
 }
 

@@ -699,6 +699,7 @@ void Webserver::Init()
 
 void Webserver::Exit()
 {
+  platform->Message(HOST_MESSAGE, "Webserver class exited.\n");
   active = false;
 }
 

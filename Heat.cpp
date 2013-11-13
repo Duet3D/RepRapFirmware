@@ -39,6 +39,7 @@ void Heat::Init()
 
 void Heat::Exit()
 {
+  platform->Message(HOST_MESSAGE, "Heat class exited.\n");
   active = false;
 }
 
@@ -110,9 +111,6 @@ void PID::Init()
 
 void PID::Spin()
 {
-  if(temperatureFault)
-	  return;
-
   temperature = platform->GetTemperature(heater);
   
   if(temperature < BAD_LOW_TEMPERATURE || temperature > BAD_HIGH_TEMPERATURE)
@@ -174,5 +172,7 @@ void PID::Spin()
   if (result < 0.0) result = 0.0;
   if (result > 255.0) result = 255.0;
   result = result/255.0;
-  platform->SetHeater(heater, result);
+
+  if(!temperatureFault)
+	  platform->SetHeater(heater, result);
 }
