@@ -92,7 +92,7 @@ class GCodes
     bool Pop();
     bool DisableDrives();
     bool StandbyHeaters();
-    void HandleReply(bool error, bool fromLine, char* reply);
+    void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code);
 
     int8_t Heater(int8_t head);
     Platform* platform;

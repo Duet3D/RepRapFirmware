@@ -171,18 +171,6 @@ Licence: GPL
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
-// Other firmware that we might switch to be compatible with.
-
-enum Compatibility
-{
-	me = 0,
-	reprapFirmware = 1,
-	marlin = 2,
-	teacup = 3,
-	sprinter = 4,
-	repetier = 5
-};
-
 /****************************************************************************************************/
 
 enum EndStopHit
@@ -327,7 +315,7 @@ class MassStorage
 {
 public:
 
-  char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory
+  char* FileList(char* directory, bool fromLine); // Returns a list of all the files in the named directory
   char* CombineName(char* directory, char* fileName);
   bool Delete(char* directory, char* fileName);
 

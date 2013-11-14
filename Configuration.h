@@ -28,6 +28,20 @@ Licence: GPL
 #define DATE "2012-11-18"
 #define LAST_AUTHOR "reprappro.com"
 
+// Other firmware that we might switch to be compatible with.
+
+enum Compatibility
+{
+	me = 0,
+	reprapFirmware = 1,
+	marlin = 2,
+	teacup = 3,
+	sprinter = 4,
+	repetier = 5
+};
+
+// Some numbers...
+
 #define ABS_ZERO -273.15  // Celsius
 
 #define INCH_TO_MM 25.4
@@ -59,7 +73,7 @@ Licence: GPL
  */
 #define	CALIB_Z		0
 
-#define LONG_TIME 60.0 // Seconds
+#define LONG_TIME 300.0 // Seconds
 
 
 #endif

@@ -113,6 +113,9 @@ void PID::Init()
 
 void PID::Spin()
 {
+  if(temperatureFault)
+	  return;
+
   temperature = platform->GetTemperature(heater);
   
   if(temperature < BAD_LOW_TEMPERATURE || temperature > BAD_HIGH_TEMPERATURE)

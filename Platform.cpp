@@ -479,7 +479,7 @@ char* MassStorage::CombineName(char* directory, char* fileName)
 
 // List the flat files in a directory.  No sub-directories or recursion.
 
-char* MassStorage::FileList(char* directory)
+char* MassStorage::FileList(char* directory, bool fromLine)
 {
 //  File dir, entry;
   DIR dir;
@@ -487,6 +487,17 @@ char* MassStorage::FileList(char* directory)
   FRESULT res;
   char loc[64];
   int len = 0;
+  char fileListBracket = FILE_LIST_BRACKET;
+  char fileListSeparator = FILE_LIST_SEPARATOR;
+
+  if(fromLine)
+  {
+	  if(platform->Emulating() == marlin)
+	  {
+		  fileListBracket = 0;
+		  fileListSeparator = '\n';
+	  }
+  }
 
   len = strlen(directory);
   strncpy(loc,directory,len-1);
@@ -519,7 +530,8 @@ char* MassStorage::FileList(char* directory)
 		  if(strlen(entry.fname) > 0)
 		  {
 			int q = 0;
-			fileList[p++] = FILE_LIST_BRACKET;
+			if(fileListBracket)
+				fileList[p++] = fileListBracket;
 			while(entry.fname[q])
 			{
 			  fileList[p++] = entry.fname[q];
@@ -533,8 +545,9 @@ char* MassStorage::FileList(char* directory)
 				return "";
 			  }
 			}
-			fileList[p++] = FILE_LIST_BRACKET;
-			fileList[p++] = FILE_LIST_SEPARATOR;
+			if(fileListBracket)
+				fileList[p++] = fileListBracket;
+			fileList[p++] = fileListSeparator;
 		  }
 	  }
 

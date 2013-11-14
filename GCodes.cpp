@@ -657,14 +657,70 @@ bool GCodes::StandbyHeaters()
 	return true;
 }
 
-void GCodes::HandleReply(bool error, bool fromLine, char* reply)
+void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code)
 {
-	if(!reply[0])
-		return;
-	if(error)
-		platform->GetLine()->Write("Error: ");
-	platform->GetLine()->Write(reply);
-	platform->GetLine()->Write("\n");
+	Compatibility c = platform->Emulating();
+	if(!fromLine)
+		c = me;
+	char* s = 0;
+
+	switch(c)
+	{
+	case me:
+	case reprapFirmware:
+		if(!reply[0])
+			return;
+		if(error)
+			platform->GetLine()->Write("Error: ");
+		platform->GetLine()->Write(reply);
+		platform->GetLine()->Write("\n");
+		break;
+
+	case marlin:
+
+		if(gMOrT == 'M' && code == 20)
+		{
+			platform->GetLine()->Write("Begin file list\n");
+			platform->GetLine()->Write(reply);
+			platform->GetLine()->Write("\nEnd file list\nok\n");
+			return;
+		}
+
+		if(gMOrT == 'M' && code == 105)
+		{
+			platform->GetLine()->Write("ok ");
+			platform->GetLine()->Write(reply);
+			platform->GetLine()->Write("\n");
+			return;
+		}
+
+		if(reply[0])
+		{
+			platform->GetLine()->Write(reply);
+			platform->GetLine()->Write("\n");
+		}
+		platform->GetLine()->Write("ok\n");
+		break;
+
+	case teacup:
+		s = "teacup";
+		break;
+	case sprinter:
+		s = "sprinter";
+		break;
+	case repetier:
+		s = "repetier";
+		break;
+	default:
+		s = "unknown";
+	}
+
+	if(s != 0)
+	{
+		snprintf(scratchString, STRING_LENGTH, "Emulation of %s is not yet supported.\n", s);
+		platform->Message(HOST_MESSAGE, scratchString);
+	}
+
 }
 
 // If the GCode to act on is completed, this returns true,
@@ -759,7 +815,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	snprintf(reply, STRING_LENGTH, "invalid G Code: %s", gb->Buffer());
     }
     if(result == true)
-    	HandleReply(error, gb == serialGCode, reply);
+    	HandleReply(error, gb == serialGCode, reply, 'G', code);
     return result;
   }
   
@@ -786,8 +842,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 20:  // Deprecated...
-      snprintf(reply, STRING_LENGTH, "GCode files:\n%s", platform->GetMassStorage()->FileList(platform->GetGCodeDir()));
+      if(platform->Emulating() == me || platform->Emulating() == reprapFirmware)
+    	  snprintf(reply, STRING_LENGTH, "GCode files:\n%s", platform->GetMassStorage()->FileList(platform->GetGCodeDir(), gb == serialGCode));
+      else
+    	  snprintf(reply, STRING_LENGTH, "%s", platform->GetMassStorage()->FileList(platform->GetGCodeDir(), gb == serialGCode));
       break;
+
+    case 21: // Initialise SD - ignore
+    	break;
 
     case 23: // Set file to print
       QueueFileToPrint(gb->GetUnprecedentedString());
@@ -834,6 +896,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
         break;
 
+    case 104: // Depricated
+    	if(gb->Seen('S'))
+    	{
+    		reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
+    		reprap.GetHeat()->Activate(1);
+    	}
+    	break;
+
     case 105: // Deprecated...
     	strncpy(reply, "T:", STRING_LENGTH);
     	for(int8_t heater = HEATERS - 1; heater > 0; heater--)
@@ -872,16 +942,22 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		result = false;
     	break;
 
+    case 109: // Depricated
+    	if(gb->Seen('S'))
+    	{
+    		reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
+    		reprap.GetHeat()->Activate(1);
+    	}
     case 116: // Wait for everything, especially set temperatures
-       if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-     	    return false;
-       result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
-       break;
+    	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+    		return false;
+    	result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
+    	break;
 
     case 120:
     	result = Push();
     	break;
-      
+
     case 121:
       result = Pop();
       break;
@@ -1015,7 +1091,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       snprintf(reply, STRING_LENGTH, "invalid M Code: %s", gb->Buffer());
     }
     if(result == true)
-    	HandleReply(error, gb == serialGCode, reply);
+    	HandleReply(error, gb == serialGCode, reply, 'M', code);
     return result;
   }
   
@@ -1045,14 +1121,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       snprintf(reply, STRING_LENGTH, "invalid T Code: %s", gb->Buffer());
 
     if(result == true)
-    	HandleReply(error, gb == serialGCode, reply);
+    	HandleReply(error, gb == serialGCode, reply, 'T', code);
     return result;
   }
   
   // An empty buffer jumps to here and gets discarded
 
   if(result == true)
-  	HandleReply(error, gb == serialGCode, reply);
+  	HandleReply(error, gb == serialGCode, reply, 'X', code);
 
   return result;
 }
