@@ -152,6 +152,15 @@ void Move::Init()
   lastZHit = 0.0;
   zProbing = false;
 
+  xBedProbePoints[0] = 0.2*platform->AxisLength(X_AXIS);
+  yBedProbePoints[0] = 0.2*platform->AxisLength(Y_AXIS);
+
+  xBedProbePoints[1] = 0.8*platform->AxisLength(X_AXIS);
+  yBedProbePoints[1] = 0.2*platform->AxisLength(Y_AXIS);
+
+  xBedProbePoints[2] = 0.5*platform->AxisLength(X_AXIS);
+  yBedProbePoints[2] = 0.8*platform->AxisLength(Y_AXIS);
+
   lastTime = platform->Time();
   longWait = lastTime;
   active = true;  

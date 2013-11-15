@@ -355,12 +355,15 @@ inline void Platform::PollZHeight()
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
-	if(drive == Z_AXIS)
+	if(zProbePin >= 0)
 	{
-		if(ZProbe() > zProbeADValue)
-			return lowHit;
-		else
-			return noStop;
+		if(drive == Z_AXIS)
+		{
+			if(ZProbe() > zProbeADValue)
+				return lowHit;
+			else
+				return noStop;
+		}
 	}
 
 	if(lowStopPins[drive] >= 0)

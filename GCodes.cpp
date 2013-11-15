@@ -393,7 +393,7 @@ bool GCodes::DoSingleZProbe()
 
 	switch(cannedCycleMoveCount)
 	{
-	case 0:
+	case 0:  // This only does anything on the first move; on all the others Z is already there
 		moveToDo[Z_AXIS] = Z_DIVE;
 		action[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
@@ -422,10 +422,17 @@ bool GCodes::DoSingleZProbe()
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(true);
 		if(DoCannedCycleMove(moveToDo, action, true))
-		{
-//			platform->GetLine()->Write(platform->ZProbe());
 			cannedCycleMoveCount++;
-		}
+		return false;
+
+	case 3:
+		moveToDo[Z_AXIS] = Z_DIVE;
+		action[Z_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+		action[DRIVES] = true;
+		reprap.GetMove()->SetZProbing(false);
+		if(DoCannedCycleMove(moveToDo, action, false))
+			cannedCycleMoveCount++;
 		return false;
 
 	default:
@@ -460,24 +467,8 @@ bool GCodes::DoMultipleZProbe()
 
 bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z)
 {
-	switch(count)
-	{
-	case 0:
-		x = 0.2*platform->AxisLength(X_AXIS);
-		y = 0.2*platform->AxisLength(Y_AXIS);
-		break;
-	case 1:
-		x = 0.8*platform->AxisLength(X_AXIS);
-		y = 0.2*platform->AxisLength(Y_AXIS);
-		break;
-	case 2:
-		x = 0.5*platform->AxisLength(X_AXIS);
-		y = 0.8*platform->AxisLength(Y_AXIS);
-		break;
-	default:
-		platform->Message(HOST_MESSAGE, "probeCount beyond maximum requested.\n");
-		break;
-	}
+	x = reprap.GetMove()->xBedProbePoint(count);
+	y = reprap.GetMove()->yBedProbePoint(count);
 	z = bedZs[count];
 	return zProbesSet;
 }
@@ -652,7 +643,7 @@ bool GCodes::StandbyHeaters()
 {
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
-	for(int8_t heater = 0; heater < DRIVES; heater++)
+	for(int8_t heater = 0; heater < HEATERS; heater++)
 		reprap.GetHeat()->Standby(heater);
 	return true;
 }
@@ -731,6 +722,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 {
   int code;
   float value;
+  int iValue;
   char* str;
   bool result = true;
   bool error = false;
@@ -814,7 +806,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	error = true;
     	snprintf(reply, STRING_LENGTH, "invalid G Code: %s", gb->Buffer());
     }
-    if(result == true)
+    if(result)
     	HandleReply(error, gb == serialGCode, reply, 'G', code);
     return result;
   }
@@ -1077,6 +1069,17 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	break;
 
+    case 505: // Set Z probe point coordinates
+    	if(gb->Seen('P'))
+    	{
+    		iValue = gb->GetIValue();
+    		if(gb->Seen(gCodeLetters[X_AXIS]))
+    			reprap.GetMove()->SetXBedProbePoint(iValue, gb->GetFValue());
+    		if(gb->Seen(gCodeLetters[Y_AXIS]))
+    		    reprap.GetMove()->SetYBedProbePoint(iValue, gb->GetFValue());
+    	}
+    	break;
+
     case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
@@ -1092,7 +1095,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       error = true;
       snprintf(reply, STRING_LENGTH, "invalid M Code: %s", gb->Buffer());
     }
-    if(result == true)
+    if(result)
     	HandleReply(error, gb == serialGCode, reply, 'M', code);
     return result;
   }
@@ -1122,14 +1125,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     if(error)
       snprintf(reply, STRING_LENGTH, "invalid T Code: %s", gb->Buffer());
 
-    if(result == true)
+    if(result)
     	HandleReply(error, gb == serialGCode, reply, 'T', code);
     return result;
   }
   
   // An empty buffer jumps to here and gets discarded
 
-  if(result == true)
+  if(result)
   	HandleReply(error, gb == serialGCode, reply, 'X', code);
 
   return result;
