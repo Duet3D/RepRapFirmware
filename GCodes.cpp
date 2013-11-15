@@ -853,6 +853,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 23: // Set file to print
       QueueFileToPrint(gb->GetUnprecedentedString());
+      if(platform->Emulating() == marlin)
+    	  snprintf(reply, STRING_LENGTH, "%s", "File opened\nFile selected\n");
       break;
       
     case 24: // Print/resume-printing the selected file
