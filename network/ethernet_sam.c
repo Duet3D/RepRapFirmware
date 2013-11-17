@@ -148,7 +148,71 @@ static void timers_update(void)
 //err_t ethernetif_init_(struct netif *netif){return ERR_OK;};
 //err_t ethernet_input_(struct pbuf *p, struct netif *netif){return ERR_OK;};
 
-static void ethernet_configure_interface(void)
+//static void ethernet_configure_interface(void)
+//{
+//	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
+//	extern err_t ethernetif_init(struct netif *netif);
+//
+//#if defined(DHCP_USED)
+//	x_ip_addr.addr = 0;
+//	x_net_mask.addr = 0;
+//#else
+//	/* Default ip addr */
+//	IP4_ADDR(&x_ip_addr, ETHERNET_CONF_IPADDR0, ETHERNET_CONF_IPADDR1, ETHERNET_CONF_IPADDR2, ETHERNET_CONF_IPADDR3);
+//
+//	/* Default subnet mask */
+//	IP4_ADDR(&x_net_mask, ETHERNET_CONF_NET_MASK0, ETHERNET_CONF_NET_MASK1, ETHERNET_CONF_NET_MASK2, ETHERNET_CONF_NET_MASK3);
+//
+//	/* Default gateway addr */
+//	IP4_ADDR(&x_gateway, ETHERNET_CONF_GATEWAY_ADDR0, ETHERNET_CONF_GATEWAY_ADDR1, ETHERNET_CONF_GATEWAY_ADDR2, ETHERNET_CONF_GATEWAY_ADDR3);
+//#endif
+//
+//	/* Add data to netif */
+//	netif_add(&gs_net_if, &x_ip_addr, &x_net_mask, &x_gateway, NULL,
+//			ethernetif_init, ethernet_input);
+//
+//	/* Make it the default interface */
+//	netif_set_default(&gs_net_if);
+//
+//	/* Setup callback function for netif status change */
+//	netif_set_status_callback(&gs_net_if, status_callback);
+//
+//	/* Bring it up */
+//#if defined(DHCP_USED)
+//	printf("LwIP: DHCP Started");
+//	dhcp_start(&gs_net_if);
+//#else
+////	printf("LwIP: Static IP Address Assigned\r\n");
+//	netif_set_up(&gs_net_if);
+//#endif
+//}
+//
+///** \brief Create ethernet task, for ethernet management.
+// *
+// */
+//void init_ethernet(void)
+//{
+//	/* Initialize lwIP */
+//	lwip_init();
+//
+//	/* Set hw and IP parameters, initialize MAC too */
+//	ethernet_configure_interface();
+//
+//	/* Init timer service */
+//	sys_init_timing();
+//
+//#if defined(HTTP_RAW_USED)
+//	/* Bring up the web server */
+//	httpd_init();
+//#endif
+//}
+
+
+//************************************************************************************************************
+
+// Added by AB.
+
+static void ethernet_configure_interface(unsigned char ipAddress[])
 {
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	extern err_t ethernetif_init(struct netif *netif);
@@ -158,7 +222,9 @@ static void ethernet_configure_interface(void)
 	x_net_mask.addr = 0;
 #else
 	/* Default ip addr */
-	IP4_ADDR(&x_ip_addr, ETHERNET_CONF_IPADDR0, ETHERNET_CONF_IPADDR1, ETHERNET_CONF_IPADDR2, ETHERNET_CONF_IPADDR3);
+	//IP4_ADDR(&x_ip_addr, ETHERNET_CONF_IPADDR0, ETHERNET_CONF_IPADDR1, ETHERNET_CONF_IPADDR2, ETHERNET_CONF_IPADDR3);
+
+	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 
 	/* Default subnet mask */
 	IP4_ADDR(&x_net_mask, ETHERNET_CONF_NET_MASK0, ETHERNET_CONF_NET_MASK1, ETHERNET_CONF_NET_MASK2, ETHERNET_CONF_NET_MASK3);
@@ -190,13 +256,13 @@ static void ethernet_configure_interface(void)
 /** \brief Create ethernet task, for ethernet management.
  *
  */
-void init_ethernet(void)
+void init_ethernet(unsigned char ipAddress[])
 {
 	/* Initialize lwIP */
 	lwip_init();
 
 	/* Set hw and IP parameters, initialize MAC too */
-	ethernet_configure_interface();
+	ethernet_configure_interface(ipAddress);
 
 	/* Init timer service */
 	sys_init_timing();
@@ -207,6 +273,9 @@ void init_ethernet(void)
 #endif
 }
 
+
+
+//*************************************************************************************************************
 /**
  *  \brief Status callback used to print address given by DHCP.
  *

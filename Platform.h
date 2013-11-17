@@ -162,6 +162,8 @@ Licence: GPL
 
 #define HTTP_STATE_SIZE 5
 
+#define IP_ADDRESS { 192, 168, 1, 10 } // Need some sort of default...
+
 
 /****************************************************************************************************/
 
@@ -415,6 +417,8 @@ class Platform
   
   Network* GetNetwork();
   Line* GetLine();
+  void SetIPAddress(byte ip[]);
+  byte* IPAddress();
   
   friend class FileStore;
   
@@ -571,6 +575,7 @@ class Platform
 // Network connection
 
   Network* network;
+  byte ipAddress[4];
 };
 
 inline float Platform::Time()
@@ -876,6 +881,17 @@ inline void Platform::SetInterrupt(float s) // Seconds
 inline Network* Platform::GetNetwork()
 {
 	return network;
+}
+
+inline void Platform::SetIPAddress(byte ip[])
+{
+	for(uint8_t i = 0; i < 4; i++)
+		ipAddress[i] = ip[i];
+}
+
+inline byte* Platform::IPAddress()
+{
+	return ipAddress;
 }
 
 inline Line* Platform::GetLine()

@@ -648,6 +648,44 @@ bool GCodes::StandbyHeaters()
 	return true;
 }
 
+void GCodes::SetIPAddress(GCodeBuffer *gb)
+{
+	byte ip[4];
+	char* ipString = gb->GetString();
+	uint8_t sp = 0;
+	uint8_t spp = 0;
+	uint8_t ipp = 0;
+	while(ipString[sp])
+	{
+		if(ipString[sp] == '.')
+		{
+			ipString[sp] = 0;
+			ip[ipp] = atoi(&ipString[spp]);
+			ipString[sp] = '.';
+			ipp++;
+			if(ipp > 3)
+			{
+				platform->Message(HOST_MESSAGE, "Dud IP address: ");
+				platform->Message(HOST_MESSAGE, gb->Buffer());
+				platform->Message(HOST_MESSAGE, "\n");
+				return;
+			}
+			sp++;
+			spp = sp;
+		}else
+			sp++;
+	}
+	ip[ipp] = atoi(&ipString[spp]);
+	if(ipp == 3)
+		platform->SetIPAddress(ip);
+	else
+	{
+		platform->Message(HOST_MESSAGE, "Dud IP address: ");
+		platform->Message(HOST_MESSAGE, gb->Buffer());
+		platform->Message(HOST_MESSAGE, "\n");
+	}
+}
+
 void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code)
 {
 	Compatibility c = platform->Emulating();
@@ -1051,7 +1089,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		reprap.GetWebserver()->SetName(gb->GetString());
     	break;
 
-    case 502: // Set IP address
+    case 502: // Set/Get IP address
+    	if(gb->Seen('P'))
+    		SetIPAddress(gb);
+    	else
+    	{
+    		byte *ip = platform->IPAddress();
+    		snprintf(reply, STRING_LENGTH, "IP address: %d.%d.%d.%d\n ", ip[0], ip[1], ip[2], ip[3]);
+    	}
     	break;
 
     case 503: // Set firmware type to emulate

@@ -79,6 +79,8 @@ void Platform::Init()
   sysDir = SYS_DIR;
   configFile = CONFIG_FILE;
 
+  ipAddress = IP_ADDRESS;
+
   // DRIVES
 
   stepPins = STEP_PINS;
@@ -906,7 +908,6 @@ bool RepRapNetworkHasALiveClient()
 }
 
 
-
 Network::Network()
 {
 	ethPinsInit();
@@ -947,7 +948,7 @@ void Network::Init()
 {
 //	alternateInput = NULL;
 //	alternateOutput = NULL;
-	init_ethernet();
+	init_ethernet(reprap.GetPlatform()->IPAddress());
 	CleanRing();
 	Reset();
 }
