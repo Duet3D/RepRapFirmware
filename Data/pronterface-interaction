@@ -51,3 +51,42 @@ SENT:  M104 S205
 Setting hotend temperature to 205.000000 degrees Celsius.
 RECV:  ok
 
+
+SENT:  M21
+echo:SD card ok
+RECV:  echo:SD card ok
+SENT:  M28 square.g
+RECV:  ok
+Writing to file: square.g
+RECV:  Writing to file: square.g
+Print Started at: 20:33:34
+SENT:  N-1 M110*15
+RECV:  ok
+SENT:  N0 G1 X55 Y5 F2000*120
+RECV:  ok
+SENT:  N1 G1 Y55*80
+RECV:  ok
+SENT:  N2 G1 X5*103
+RECV:  ok
+SENT:  RECV: N3 G1 Y5*103 ok
+SENT:  N4 G1 X30*87
+RECV:  ok
+SENT:  N5 G1 X55*85
+RECV:  ok
+SENT:  N6 G1 Y55 *119
+RECV:  ok
+SENT:  N7 G1 Y55*86
+RECV:  ok
+SENT:  N8 G1 X5*109
+RECV:  ok
+SENT:  N9 G1 Y5*109
+RECV:  ok
+SENT:  N-1 M110*15
+RECV:  ok
+SENT:  M29 
+RECV:  ok
+Done saving file.
+RECV:  Done saving file.
+
+
+

@@ -1,9 +1,9 @@
 ; RepRapPro Ormerod
 ; Standard configuration G Codes
 M111 S1; Debug on
-M500 Preprap; Set the password
-M501 POrmerod; Set the machine's name
-M502 P192.168.1.14; Set the IP address
+M550 POrmerod; Set the machine's name
+M551 Preprap; Set the password
+M552 P192.168.1.14; Set the IP address
 G21 ; Work in mm
 G90 ; Absolute positioning
 M83 ; Extrusions relative

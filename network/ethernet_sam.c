@@ -212,7 +212,7 @@ static void timers_update(void)
 
 // Added by AB.
 
-static void ethernet_configure_interface(unsigned char ipAddress[])
+static void ethernet_configure_interface(unsigned char ipAddress[], unsigned char netMask[], unsigned char gateWay[])
 {
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	extern err_t ethernetif_init(struct netif *netif);
@@ -227,10 +227,14 @@ static void ethernet_configure_interface(unsigned char ipAddress[])
 	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 
 	/* Default subnet mask */
-	IP4_ADDR(&x_net_mask, ETHERNET_CONF_NET_MASK0, ETHERNET_CONF_NET_MASK1, ETHERNET_CONF_NET_MASK2, ETHERNET_CONF_NET_MASK3);
+	//IP4_ADDR(&x_net_mask, ETHERNET_CONF_NET_MASK0, ETHERNET_CONF_NET_MASK1, ETHERNET_CONF_NET_MASK2, ETHERNET_CONF_NET_MASK3);
+
+	IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);
 
 	/* Default gateway addr */
-	IP4_ADDR(&x_gateway, ETHERNET_CONF_GATEWAY_ADDR0, ETHERNET_CONF_GATEWAY_ADDR1, ETHERNET_CONF_GATEWAY_ADDR2, ETHERNET_CONF_GATEWAY_ADDR3);
+	//IP4_ADDR(&x_gateway, ETHERNET_CONF_GATEWAY_ADDR0, ETHERNET_CONF_GATEWAY_ADDR1, ETHERNET_CONF_GATEWAY_ADDR2, ETHERNET_CONF_GATEWAY_ADDR3);
+
+	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);
 #endif
 
 	/* Add data to netif */
@@ -256,13 +260,13 @@ static void ethernet_configure_interface(unsigned char ipAddress[])
 /** \brief Create ethernet task, for ethernet management.
  *
  */
-void init_ethernet(unsigned char ipAddress[])
+void init_ethernet(unsigned char ipAddress[], unsigned char netMask[], unsigned char gateWay[])
 {
 	/* Initialize lwIP */
 	lwip_init();
 
 	/* Set hw and IP parameters, initialize MAC too */
-	ethernet_configure_interface(ipAddress);
+	ethernet_configure_interface(ipAddress, netMask, gateWay);
 
 	/* Init timer service */
 	sys_init_timing();

@@ -648,9 +648,9 @@ bool GCodes::StandbyHeaters()
 	return true;
 }
 
-void GCodes::SetIPAddress(GCodeBuffer *gb)
+void GCodes::SetIPAddress(GCodeBuffer *gb, int mCode)
 {
-	byte ip[4];
+	byte eth[4];
 	char* ipString = gb->GetString();
 	uint8_t sp = 0;
 	uint8_t spp = 0;
@@ -660,7 +660,7 @@ void GCodes::SetIPAddress(GCodeBuffer *gb)
 		if(ipString[sp] == '.')
 		{
 			ipString[sp] = 0;
-			ip[ipp] = atoi(&ipString[spp]);
+			eth[ipp] = atoi(&ipString[spp]);
 			ipString[sp] = '.';
 			ipp++;
 			if(ipp > 3)
@@ -675,10 +675,25 @@ void GCodes::SetIPAddress(GCodeBuffer *gb)
 		}else
 			sp++;
 	}
-	ip[ipp] = atoi(&ipString[spp]);
+	eth[ipp] = atoi(&ipString[spp]);
 	if(ipp == 3)
-		platform->SetIPAddress(ip);
-	else
+	{
+		switch(mCode)
+		{
+		case 552:
+			platform->SetIPAddress(eth);
+			break;
+		case 553:
+			platform->SetNetMask(eth);
+			break;
+		case 554:
+			platform->SetGateWay(eth);
+			break;
+
+		default:
+			platform->Message(HOST_MESSAGE, "Setting ether parameter - dud code.");
+		}
+	} else
 	{
 		platform->Message(HOST_MESSAGE, "Dud IP address: ");
 		platform->Message(HOST_MESSAGE, gb->Buffer());
@@ -686,9 +701,14 @@ void GCodes::SetIPAddress(GCodeBuffer *gb)
 	}
 }
 
-void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code)
+void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend)
 {
 	Compatibility c = platform->Emulating();
+
+	char* response = "ok";
+	if(resend)
+		response = "rs ";
+
 	if(!fromLine)
 		c = me;
 	char* s = 0;
@@ -711,13 +731,15 @@ void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int
 		{
 			platform->GetLine()->Write("Begin file list\n");
 			platform->GetLine()->Write(reply);
-			platform->GetLine()->Write("\nEnd file list\nok\n");
+			platform->GetLine()->Write("\nEnd file list\n");
+			platform->GetLine()->Write(response);
+			platform->GetLine()->Write("\n");
 			return;
 		}
 
-		if(gMOrT == 'M' && code == 105)
+		if( (gMOrT == 'M' && code == 105) || (gMOrT == 'M' && code == 998) )
 		{
-			platform->GetLine()->Write("ok ");
+			platform->GetLine()->Write(response);
 			platform->GetLine()->Write(reply);
 			platform->GetLine()->Write("\n");
 			return;
@@ -728,7 +750,8 @@ void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int
 			platform->GetLine()->Write(reply);
 			platform->GetLine()->Write("\n");
 		}
-		platform->GetLine()->Write("ok\n");
+		platform->GetLine()->Write(response);
+		platform->GetLine()->Write("\n");
 		break;
 
 	case teacup:
@@ -764,6 +787,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
   char* str;
   bool result = true;
   bool error = false;
+  bool resend = false;
   char reply[STRING_LENGTH];
 
   reply[0] = 0;
@@ -845,7 +869,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	snprintf(reply, STRING_LENGTH, "invalid G Code: %s", gb->Buffer());
     }
     if(result)
-    	HandleReply(error, gb == serialGCode, reply, 'G', code);
+    	HandleReply(error, gb == serialGCode, reply, 'G', code, resend);
     return result;
   }
   
@@ -1079,19 +1103,19 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 304: // Set thermistor parameters
     	break;
 
-    case 500: // Set password
+    case 550: // Set machine name
+        	if(gb->Seen('P'))
+        		reprap.GetWebserver()->SetName(gb->GetString());
+        	break;
+
+    case 551: // Set password
     	if(gb->Seen('P'))
     		reprap.GetWebserver()->SetPassword(gb->GetString());
     	break;
 
-    case 501: // Set machine name
+    case 552: // Set/Get IP address
     	if(gb->Seen('P'))
-    		reprap.GetWebserver()->SetName(gb->GetString());
-    	break;
-
-    case 502: // Set/Get IP address
-    	if(gb->Seen('P'))
-    		SetIPAddress(gb);
+    		SetIPAddress(gb, code);
     	else
     	{
     		byte *ip = platform->IPAddress();
@@ -1099,12 +1123,32 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	break;
 
-    case 503: // Set firmware type to emulate
+    case 553: // Set/Get netmask
+    	if(gb->Seen('P'))
+    		SetIPAddress(gb, code);
+    	else
+    	{
+    		byte *nm = platform->NetMask();
+    		snprintf(reply, STRING_LENGTH, "Net mask: %d.%d.%d.%d\n ", nm[0], nm[1], nm[2], nm[3]);
+    	}
+    	break;
+
+    case 554: // Set/Get gateway
+    	if(gb->Seen('P'))
+    		SetIPAddress(gb, code);
+    	else
+    	{
+    		byte *gw = platform->GateWay();
+    		snprintf(reply, STRING_LENGTH, "Gateway: %d.%d.%d.%d\n ", gw[0], gw[1], gw[2], gw[3]);
+    	}
+    	break;
+
+    case 555: // Set firmware type to emulate
     	if(gb->Seen('P'))
     		platform->SetEmulating((Compatibility)gb->GetIValue());
     	break;
 
-    case 504: // Axis compensation
+    case 556: // Axis compensation
     	if(gb->Seen('S'))
     	{
     		value = gb->GetFValue();
@@ -1114,7 +1158,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	break;
 
-    case 505: // Set Z probe point coordinates
+    case 557: // Set Z probe point coordinates
     	if(gb->Seen('P'))
     	{
     		iValue = gb->GetIValue();
@@ -1135,13 +1179,21 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		}
     	}
     	break;
+
+    case 998:
+    	if(gb->Seen('P'))
+    	{
+    	    snprintf(reply, STRING_LENGTH, "%s", gb->GetIValue());
+    	    resend = true;
+    	}
+    	break;
      
     default:
       error = true;
       snprintf(reply, STRING_LENGTH, "invalid M Code: %s", gb->Buffer());
     }
     if(result)
-    	HandleReply(error, gb == serialGCode, reply, 'M', code);
+    	HandleReply(error, gb == serialGCode, reply, 'M', code, resend);
     return result;
   }
   
@@ -1171,14 +1223,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       snprintf(reply, STRING_LENGTH, "invalid T Code: %s", gb->Buffer());
 
     if(result)
-    	HandleReply(error, gb == serialGCode, reply, 'T', code);
+    	HandleReply(error, gb == serialGCode, reply, 'T', code, resend);
     return result;
   }
   
   // An empty buffer jumps to here and gets discarded
 
   if(result)
-  	HandleReply(error, gb == serialGCode, reply, 'X', code);
+  	HandleReply(error, gb == serialGCode, reply, 'X', code, resend);
 
   return result;
 }
@@ -1202,6 +1254,15 @@ void GCodeBuffer::Init()
   inComment = false;   
 }
 
+int GCodeBuffer::CheckSum()
+{
+	int cs = 0;
+	for(int i = 0; gcodeBuffer[i] != '*' && gcodeBuffer[i] != NULL; i++)
+	   cs = cs ^ gcodeBuffer[i];
+	cs &= 0xff;  // Defensive programming...
+	return cs;
+}
+
 // Add a byte to the code being assembled.  If false is returned, the code is
 // not yet complete.  If true, it is complete and ready to be acted upon.
 
@@ -1223,6 +1284,51 @@ bool GCodeBuffer::Put(char c)
       platform->Message(HOST_MESSAGE, gcodeBuffer);
       platform->Message(HOST_MESSAGE, "\n"); 
     }
+
+    // Deal with line numbers and checksums
+
+    if(Seen('*'))
+    {
+    	int csSent = GetIValue();
+    	int csHere = CheckSum();
+    	Seen('N');
+    	if(csSent != csHere)
+    	{
+    		snprintf(gcodeBuffer, GCODE_LENGTH, "M998 P%d", GetIValue());
+    		Init();
+    		result = true;
+    		return result;
+    	}
+
+    	// Strip out the line number and checksum
+
+    	while(gcodeBuffer[gcodePointer] != ' ' && gcodeBuffer[gcodePointer])
+    		gcodePointer++;
+
+    	// Anything there?
+
+    	if(!gcodeBuffer[gcodePointer])
+    	{
+    		// No...
+    		gcodeBuffer[0] = 0;
+    		Init();
+    		result = true;
+    		return result;
+    	}
+
+    	// Yes...
+
+    	gcodePointer++;
+    	int gp2 = 0;
+    	while(gcodeBuffer[gcodePointer] != '*' && gcodeBuffer[gcodePointer])
+    	{
+    		gcodeBuffer[gp2] = gcodeBuffer[gcodePointer++];
+    		gp2++;
+    	}
+    	gcodeBuffer[gp2] = 0;
+    	Init();
+    }
+
     result = true;
   } else
   {

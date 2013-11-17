@@ -162,7 +162,9 @@ Licence: GPL
 
 #define HTTP_STATE_SIZE 5
 
-#define IP_ADDRESS { 192, 168, 1, 10 } // Need some sort of default...
+#define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
+#define NET_MASK {255, 255, 255, 0}
+#define GATE_WAY {192, 168, 1, 1}
 
 
 /****************************************************************************************************/
@@ -419,6 +421,10 @@ class Platform
   Line* GetLine();
   void SetIPAddress(byte ip[]);
   byte* IPAddress();
+  void SetNetMask(byte nm[]);
+  byte* NetMask();
+  void SetGateWay(byte gw[]);
+  byte* GateWay();
   
   friend class FileStore;
   
@@ -576,6 +582,8 @@ class Platform
 
   Network* network;
   byte ipAddress[4];
+  byte netMask[4];
+  byte gateWay[4];
 };
 
 inline float Platform::Time()
@@ -892,6 +900,28 @@ inline void Platform::SetIPAddress(byte ip[])
 inline byte* Platform::IPAddress()
 {
 	return ipAddress;
+}
+
+inline void Platform::SetNetMask(byte nm[])
+{
+	for(uint8_t i = 0; i < 4; i++)
+		netMask[i] = nm[i];
+}
+
+inline byte* Platform::NetMask()
+{
+	return netMask;
+}
+
+inline void Platform::SetGateWay(byte gw[])
+{
+	for(uint8_t i = 0; i < 4; i++)
+		gateWay[i] = gw[i];
+}
+
+inline byte* Platform::GateWay()
+{
+	return gateWay;
 }
 
 inline Line* Platform::GetLine()

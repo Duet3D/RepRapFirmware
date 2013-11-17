@@ -60,7 +60,7 @@ extern "C" {
  */
 //void init_ethernet(void);
 
-void init_ethernet(unsigned char *ipAddress);
+void init_ethernet(unsigned char ipAddress[], unsigned char netMask[], unsigned char gateWay[]);
 
 struct netif* GetConfiguration();
 

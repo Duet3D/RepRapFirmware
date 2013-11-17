@@ -45,6 +45,7 @@ class GCodeBuffer
     void SetFinished(bool f);
     
   private:
+    int CheckSum();
     Platform* platform;
     char gcodeBuffer[GCODE_LENGTH];
     char* identity;
@@ -92,8 +93,8 @@ class GCodes
     bool Pop();
     bool DisableDrives();
     bool StandbyHeaters();
-    void SetIPAddress(GCodeBuffer *gb);
-    void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code);
+    void SetIPAddress(GCodeBuffer *gb, int mCode);
+    void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
 
     int8_t Heater(int8_t head);
     Platform* platform;

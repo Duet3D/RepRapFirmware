@@ -80,6 +80,8 @@ void Platform::Init()
   configFile = CONFIG_FILE;
 
   ipAddress = IP_ADDRESS;
+  netMask = NET_MASK;
+  gateWay = GATE_WAY;
 
   // DRIVES
 
@@ -948,7 +950,7 @@ void Network::Init()
 {
 //	alternateInput = NULL;
 //	alternateOutput = NULL;
-	init_ethernet(reprap.GetPlatform()->IPAddress());
+	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 	CleanRing();
 	Reset();
 }
