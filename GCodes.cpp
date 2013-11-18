@@ -59,6 +59,7 @@ void GCodes::Init()
     lastPos[i] = 0.0;
   fileBeingPrinted = NULL;
   fileToPrint = NULL;
+  fileBeingWritten = NULL;
   homeX = false;
   homeY = false;
   homeZ = false;
@@ -129,7 +130,12 @@ void GCodes::Spin()
   {
 	platform->GetLine()->Read(b);
     if(serialGCode->Put(b))
-      serialGCode->SetFinished(ActOnGcode(serialGCode));
+    {
+      if(fileBeingWritten)
+    	  WriteGCodeToFile(serialGCode);
+      else
+    	  serialGCode->SetFinished(ActOnGcode(serialGCode));
+    }
     platform->ClassReport("GCodes", longWait);
     return;
   }  
@@ -488,6 +494,61 @@ char* GCodes::GetCurrentCoordinates()
 	return scratchString;
 }
 
+char* GCodes::OpenFileToWrite(char* fileName)
+{
+	fileBeingWritten = platform->GetFileStore(platform->GetGCodeDir(), fileName, true);
+	if(fileBeingWritten == NULL)
+		  platform->Message(HOST_MESSAGE, "Can't open GCode file for writing.\n");
+}
+
+
+void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
+{
+	char reply[1];
+	reply[0] = 0;
+
+	if(fileBeingWritten == NULL)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to write to a null file.\n");
+		return;
+	}
+
+	// End of file?
+
+	if(gb->Seen('M'))
+	{
+		if(gb->GetIValue() == 29)
+		{
+			fileBeingWritten->Close();
+			fileBeingWritten = NULL;
+			char* r = reply;
+			if(platform->Emulating() == marlin)
+				r = "Done saving file.";
+			HandleReply(false, gb == serialGCode , r, 'M', 29, false);
+			return;
+		}
+	}
+
+	// Resend request?
+
+	if(gb->Seen('G'))
+	{
+		if(gb->GetIValue() == 998)
+		{
+			if(gb->Seen('P'))
+			{
+				snprintf(scratchString, STRING_LENGTH, "%s", gb->GetIValue());
+				HandleReply(false, gb == serialGCode , scratchString, 'G', 998, true);
+				return;
+			}
+		}
+	}
+
+	fileBeingWritten->Write(gb->Buffer());
+	fileBeingWritten->Write('\n');
+	HandleReply(false, gb == serialGCode , reply, 'G', 1, false);
+}
+
 // Set up a file to print, but don't print it yet.
 
 void GCodes::QueueFileToPrint(char* fileName)
@@ -648,7 +709,7 @@ bool GCodes::StandbyHeaters()
 	return true;
 }
 
-void GCodes::SetIPAddress(GCodeBuffer *gb, int mCode)
+void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 {
 	byte eth[4];
 	char* ipString = gb->GetString();
@@ -704,13 +765,13 @@ void GCodes::SetIPAddress(GCodeBuffer *gb, int mCode)
 void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend)
 {
 	Compatibility c = platform->Emulating();
+	if(!fromLine)
+		c = me;
 
 	char* response = "ok";
 	if(resend)
 		response = "rs ";
 
-	if(!fromLine)
-		c = me;
 	char* s = 0;
 
 	switch(c)
@@ -723,7 +784,7 @@ void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int
 			platform->GetLine()->Write("Error: ");
 		platform->GetLine()->Write(reply);
 		platform->GetLine()->Write("\n");
-		break;
+		return;
 
 	case marlin:
 
@@ -737,7 +798,16 @@ void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int
 			return;
 		}
 
-		if( (gMOrT == 'M' && code == 105) || (gMOrT == 'M' && code == 998) )
+		if(gMOrT == 'M' && code == 28)
+		{
+			platform->GetLine()->Write(response);
+			platform->GetLine()->Write("\n");
+			platform->GetLine()->Write(reply);
+			platform->GetLine()->Write("\n");
+			return;
+		}
+
+		if( (gMOrT == 'M' && code == 105) || (gMOrT == 'G' && code == 998) )
 		{
 			platform->GetLine()->Write(response);
 			platform->GetLine()->Write(reply);
@@ -752,7 +822,7 @@ void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int
 		}
 		platform->GetLine()->Write(response);
 		platform->GetLine()->Write("\n");
-		break;
+		return;
 
 	case teacup:
 		s = "teacup";
@@ -921,6 +991,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	fileBeingPrinted = NULL;
     	break;
 
+    case 28: // Write to file
+    	str = gb->GetUnprecedentedString();
+    	OpenFileToWrite(str);
+    	snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+    	break;
+
+    case 29: // End of file being written; should be intercepted before getting here
+    	platform->Message(HOST_MESSAGE, "GCode end-of-file being interpreted.\n");
+    	break;
+
     case 82:
     	if(drivesRelative)
     		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
@@ -971,7 +1051,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	strncat(reply, ftoa(0, reprap.GetHeat()->GetTemperature(0), 1), STRING_LENGTH);
     	break;
    
-    case 106: // Fan on
+    case 106: // Fan on or off
     	if(gb->Seen('S'))
     		platform->CoolingFan(gb->GetFValue());
       break;
@@ -980,13 +1060,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	platform->CoolingFan(0.0);
       break;
       
-    case 112: // Emergency stop
-    	reprap.EmergencyStop();
+    case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
     	break;
 
     case 111: // Debug level
     	if(gb->Seen('S'))
     		reprap.SetDebug(gb->GetIValue());
+    	break;
+
+    case 112: // Emergency stop
+    	reprap.EmergencyStop();
     	break;
 
     case 114: // Deprecated
@@ -1115,7 +1198,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 552: // Set/Get IP address
     	if(gb->Seen('P'))
-    		SetIPAddress(gb, code);
+    		SetEthernetAddress(gb, code);
     	else
     	{
     		byte *ip = platform->IPAddress();
@@ -1125,7 +1208,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 553: // Set/Get netmask
     	if(gb->Seen('P'))
-    		SetIPAddress(gb, code);
+    		SetEthernetAddress(gb, code);
     	else
     	{
     		byte *nm = platform->NetMask();
@@ -1135,7 +1218,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 554: // Set/Get gateway
     	if(gb->Seen('P'))
-    		SetIPAddress(gb, code);
+    		SetEthernetAddress(gb, code);
     	else
     	{
     		byte *gw = platform->GateWay();

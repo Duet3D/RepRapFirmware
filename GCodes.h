@@ -93,8 +93,10 @@ class GCodes
     bool Pop();
     bool DisableDrives();
     bool StandbyHeaters();
-    void SetIPAddress(GCodeBuffer *gb, int mCode);
+    void SetEthernetAddress(GCodeBuffer *gb, int mCode);
     void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
+    char* OpenFileToWrite(char* fileName);
+    void WriteGCodeToFile(GCodeBuffer *gb);
 
     int8_t Heater(int8_t head);
     Platform* platform;
@@ -119,6 +121,7 @@ class GCodes
     float distanceScale;
     FileStore* fileBeingPrinted;
     FileStore* fileToPrint;
+    FileStore* fileBeingWritten;
     int8_t selectedHead;
     bool homeX;
     bool homeY;
