@@ -120,10 +120,15 @@ void GCodes::Spin()
 
   if(webserver->GCodeAvailable())
   {
-    if(webGCode->Put(webserver->ReadGCode()))
-      webGCode->SetFinished(ActOnGcode(webGCode));
-    platform->ClassReport("GCodes", longWait);
-    return;
+	  if(webGCode->Put(webserver->ReadGCode()))
+	  {
+		  if(webGCode->WritingFile())
+			  WriteGCodeToFile(webGCode);
+		  else
+			  webGCode->SetFinished(ActOnGcode(webGCode));
+	  }
+	  platform->ClassReport("GCodes", longWait);
+	  return;
   }
   
   if(platform->GetLine()->Status() & byteAvailable)
@@ -131,7 +136,7 @@ void GCodes::Spin()
 	platform->GetLine()->Read(b);
     if(serialGCode->Put(b))
     {
-      if(fileBeingWritten)
+      if(serialGCode->WritingFile())
     	  WriteGCodeToFile(serialGCode);
       else
     	  serialGCode->SetFinished(ActOnGcode(serialGCode));
@@ -494,11 +499,13 @@ char* GCodes::GetCurrentCoordinates()
 	return scratchString;
 }
 
-char* GCodes::OpenFileToWrite(char* fileName)
+char* GCodes::OpenFileToWrite(char* fileName, GCodeBuffer *gb)
 {
 	fileBeingWritten = platform->GetFileStore(platform->GetGCodeDir(), fileName, true);
 	if(fileBeingWritten == NULL)
 		  platform->Message(HOST_MESSAGE, "Can't open GCode file for writing.\n");
+	else
+		gb->SetWritingFile(true);
 }
 
 
@@ -521,6 +528,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 		{
 			fileBeingWritten->Close();
 			fileBeingWritten = NULL;
+			gb->SetWritingFile(false);
 			char* r = reply;
 			if(platform->Emulating() == marlin)
 				r = "Done saving file.";
@@ -993,7 +1001,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 28: // Write to file
     	str = gb->GetUnprecedentedString();
-    	OpenFileToWrite(str);
+    	OpenFileToWrite(str, gb);
     	snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
     	break;
 
@@ -1327,7 +1335,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 GCodeBuffer::GCodeBuffer(Platform* p, char* id)
 { 
   platform = p;
-  identity = id; 
+  identity = id;
+  writingFile = false;  // Has to be done here as Init() is called every line.
 }
 
 void GCodeBuffer::Init()

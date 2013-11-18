@@ -43,6 +43,8 @@ class GCodeBuffer
     char* Buffer();
     bool Finished();
     void SetFinished(bool f);
+    bool WritingFile();
+    void SetWritingFile(bool wf);
     
   private:
     int CheckSum();
@@ -53,6 +55,7 @@ class GCodeBuffer
     int readPointer;
     bool inComment;
     bool finished;
+    bool writingFile;
 };
 
 //****************************************************************************************************
@@ -95,7 +98,7 @@ class GCodes
     bool StandbyHeaters();
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);
     void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
-    char* OpenFileToWrite(char* fileName);
+    char* OpenFileToWrite(char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);
 
     int8_t Heater(int8_t head);
@@ -158,6 +161,16 @@ inline bool GCodeBuffer::Finished()
 inline void GCodeBuffer::SetFinished(bool f)
 {
   finished = f;
+}
+
+inline bool GCodeBuffer::WritingFile()
+{
+	return writingFile;
+}
+
+inline void GCodeBuffer::SetWritingFile(bool wf)
+{
+	writingFile = wf;
 }
 
 inline bool GCodes::PrintingAFile()
