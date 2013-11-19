@@ -100,6 +100,7 @@ class GCodes
     void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
     char* OpenFileToWrite(char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);
+    bool SendConfigToLine();
 
     int8_t Heater(int8_t head);
     Platform* platform;
@@ -125,6 +126,7 @@ class GCodes
     FileStore* fileBeingPrinted;
     FileStore* fileToPrint;
     FileStore* fileBeingWritten;
+    FileStore* configFile;
     int8_t selectedHead;
     bool homeX;
     bool homeY;

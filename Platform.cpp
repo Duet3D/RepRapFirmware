@@ -622,6 +622,7 @@ bool FileStore::Open(char* directory, char* fileName, bool write)
 		  snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
 		  platform->Message(HOST_MESSAGE, scratchString);
 		  platform->Message(HOST_MESSAGE, "\n");
+		  Close();
 		  return false;
 	  }
 	  bufferPointer = 0;
@@ -636,9 +637,10 @@ bool FileStore::Open(char* directory, char* fileName, bool write)
 		  snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
 		  platform->Message(HOST_MESSAGE, scratchString);
 		  platform->Message(HOST_MESSAGE, "\n");
+		  Close();
 		  return false;
-	  }
-	  bufferPointer = FILE_BUF_LEN;
+	  } else
+		  ReadBuffer();
   }
 
   inUse = true;

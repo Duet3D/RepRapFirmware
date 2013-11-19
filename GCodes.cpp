@@ -60,6 +60,7 @@ void GCodes::Init()
   fileBeingPrinted = NULL;
   fileToPrint = NULL;
   fileBeingWritten = NULL;
+  configFile = NULL;
   homeX = false;
   homeY = false;
   homeZ = false;
@@ -579,6 +580,44 @@ void GCodes::RunConfigurationGCodes()
 	  }
       fileBeingPrinted = fileToPrint;
       fileToPrint = NULL;
+}
+
+bool GCodes::SendConfigToLine()
+{
+	if(configFile == NULL)
+	{
+		configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
+		if(configFile == NULL)
+		{
+			platform->Message(HOST_MESSAGE, "Configuration file not found\n");
+			return true;
+		}
+		platform->GetLine()->Write('\n');
+	}
+
+	char b;
+
+	while(configFile->Status() & byteAvailable)
+	{
+		if(configFile->Read(b))
+		{
+			platform->GetLine()->Write(b);
+			if(b == '\n')
+				return false;
+		} else
+		{
+			platform->GetLine()->Write('\n');
+			configFile->Close();
+			configFile = NULL;
+			return true;
+		}
+	}
+
+	// Should never get here
+
+	configFile->Close();
+	configFile = NULL;
+	return true;
 }
 
 
@@ -1192,6 +1231,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 304: // Set thermistor parameters
+    	break;
+
+    case 503: // Print parameters
+    	result = SendConfigToLine();
     	break;
 
     case 550: // Set machine name
