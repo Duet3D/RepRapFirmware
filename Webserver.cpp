@@ -701,7 +701,7 @@ void Webserver::Init()
   
   // Reinitialise the message file
   
-  platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
+  //platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }
 
 void Webserver::Exit()
