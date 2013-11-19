@@ -89,7 +89,7 @@ Licence: GPL
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
 #define Z_PROBE_AD_VALUE 400
 #define Z_PROBE_STOP_HEIGHT 0.7 // mm
-#define Z_PROBE_PIN -1 // Analogue pin number
+#define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 910.0}
@@ -464,6 +464,7 @@ class Platform
   void SetZProbeStopHeight(float z);
   long ZProbe();
   void SetZProbe(int iZ);
+  void SetZProbeType(int iZ);
   
   // Heat and temperature
   
@@ -797,6 +798,14 @@ inline void Platform::SetZProbeStopHeight(float z)
 inline void Platform::SetZProbe(int iZ)
 {
 	zProbeADValue = iZ;
+}
+
+inline void Platform::SetZProbeType(int pt)
+{
+	if(pt != 0)
+		zProbePin = Z_PROBE_PIN;
+	else
+		zProbePin = -1;
 }
 
 

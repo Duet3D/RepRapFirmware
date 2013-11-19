@@ -1260,6 +1260,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	break;
 
+    case 558: // Set Z probe type
+    	if(gb->Seen('P'))
+    		platform->SetZProbeType(gb->GetIValue());
+    	break;
+
     case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{

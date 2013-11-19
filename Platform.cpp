@@ -98,7 +98,7 @@ void Platform::Init()
   potWipes = POT_WIPES;
   senseResistor = SENSE_RESISTOR;
   maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-  zProbePin = Z_PROBE_PIN;
+  zProbePin = -1; // Default is to use the switch
   zProbeCount = 0;
   zProbeSum = 0;
   zProbeValue = 0;
