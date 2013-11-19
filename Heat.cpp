@@ -49,7 +49,7 @@ void Heat::Spin()
   if(!active)
     return;
     
-  unsigned long t = platform->Time();
+  float t = platform->Time();
   if(t - lastTime < platform->HeatSampleTime())
     return;
   lastTime = t;

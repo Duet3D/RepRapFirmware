@@ -661,7 +661,7 @@ void Move::InterruptTime()
   float v = 50;
   lookAheadDDA->Init(a, b, u, v);
   lookAheadDDA->Start(false);
-  unsigned long t = platform->Time();
+  float t = platform->Time();
   for(long i = 0; i < 100000; i++) 
     lookAheadDDA->Step(false);
   t = platform->Time() - t;
