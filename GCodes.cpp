@@ -597,24 +597,14 @@ bool GCodes::SendConfigToLine()
 
 	char b;
 
-	while(configFile->Status() & byteAvailable)
+	while(configFile->Read(b))
 	{
-		if(configFile->Read(b))
-		{
-			platform->GetLine()->Write(b);
-			if(b == '\n')
-				return false;
-		} else
-		{
-			platform->GetLine()->Write('\n');
-			configFile->Close();
-			configFile = NULL;
-			return true;
-		}
+		platform->GetLine()->Write(b);
+		if(b == '\n')
+			return false;
 	}
 
-	// Should never get here
-
+	platform->GetLine()->Write('\n');
 	configFile->Close();
 	configFile = NULL;
 	return true;
@@ -1233,7 +1223,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 304: // Set thermistor parameters
     	break;
 
-    case 503: // Print parameters
+    case 503: // list variable settings
     	result = SendConfigToLine();
     	break;
 
