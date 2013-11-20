@@ -1059,17 +1059,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 85: // Set inactive time
     	break;
 
-    case 92: // Set steps/mm for each axis
+    case 92: // Set steps/mm for some axes
     	for(int8_t drive = 0; drive < DRIVES; drive++)
-    	{
     		if(gb->Seen(gCodeLetters[drive]))
-    		{
-    			value = gb->GetFValue();
-    		}else{
-    			value = -1;
-    		}
-    		platform->SetDriveStepsPerUnit(drive, value);
-    	}
+    			platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
         break;
 
     case 104: // Depricated
