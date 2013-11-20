@@ -43,8 +43,8 @@ class GCodeBuffer
     char* Buffer();
     bool Finished();
     void SetFinished(bool f);
-    bool WritingFile();
-    void SetWritingFile(bool wf);
+    char* WritingFileDirectory();
+    void SetWritingFileDirectory(char* wfd);
     
   private:
     int CheckSum();
@@ -55,7 +55,7 @@ class GCodeBuffer
     int readPointer;
     bool inComment;
     bool finished;
-    bool writingFile;
+    char* writingFileDirectory;
 };
 
 //****************************************************************************************************
@@ -98,9 +98,10 @@ class GCodes
     bool StandbyHeaters();
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);
     void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
-    char* OpenFileToWrite(char* fileName, GCodeBuffer *gb, bool configFile);
+    char* OpenFileToWrite(char* directory, char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);
     bool SendConfigToLine();
+    void WriteHTMLToFile(char b, GCodeBuffer *gb);
 
     int8_t Heater(int8_t head);
     Platform* platform;
@@ -127,6 +128,9 @@ class GCodes
     FileStore* fileToPrint;
     FileStore* fileBeingWritten;
     FileStore* configFile;
+    char* eofString;
+    uint8_t eofStringCounter;
+    uint8_t eofStringLength;
     int8_t selectedHead;
     bool homeX;
     bool homeY;
@@ -165,14 +169,14 @@ inline void GCodeBuffer::SetFinished(bool f)
   finished = f;
 }
 
-inline bool GCodeBuffer::WritingFile()
+inline char* GCodeBuffer::WritingFileDirectory()
 {
-	return writingFile;
+	return writingFileDirectory;
 }
 
-inline void GCodeBuffer::SetWritingFile(bool wf)
+inline void GCodeBuffer::SetWritingFileDirectory(char* wfd)
 {
-	writingFile = wf;
+	writingFileDirectory = wfd;
 }
 
 inline bool GCodes::PrintingAFile()

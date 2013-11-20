@@ -67,13 +67,13 @@ enum Compatibility
 
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
-
-/* Z PROBE CALIBRATION
- * Set = 1 to enable Z probe ADC output on SerialUSb
- */
-#define	CALIB_Z		0
+#define INDEX_PAGE "reprap.htm"
+#define MESSAGE_FILE "messages.txt"
+#define FOUR04_FILE "html404.htm"
 
 #define LONG_TIME 300.0 // Seconds
+
+#define EOF_STRING "<!-- **EoF** -->"
 
 
 #endif
