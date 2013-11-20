@@ -1,8 +1,11 @@
 <!DOCTYPE HTML>
 <head>
 
+<!--
 <link rel="shortcut icon" href="https://github.com/reprappro/RepRapFirmware/raw/due/SD-image/www/favicon.ico" /> 
-<!-- <link rel="shortcut icon" href="favicon.ico" /> -->
+-->
+
+<link rel="shortcut icon" href="favicon.ico" />
 
 <style type="text/css">
 .pages 
@@ -111,6 +114,10 @@ function jogRowHTML(axis)
 	return result;
 }
 
+
+
+
+
 function heatRowHTML(heater, hNumber)
 {
   	var result = "";
@@ -136,10 +143,18 @@ function heatRowHTML(heater, hNumber)
 	return result;
 }
 
+
 </script>
 
+
+
 <!-- HEADER -->
-<a href="http://reprappro.com" target="_blank"><img src="https://github.com/reprappro/RepRapFirmware/raw/due/SD-image/www/logo.png" alt="RepRapPro logo" align="right"></a>
+
+<a href="http://reprappro.com" target="_blank"><img src="https://github.com/reprappro/RepRapFirmware/raw/duet/SD-image/www/logo.png" alt="RepRapPro logo" align="right"></a>
+
+<!--
+<a href="http://reprappro.com" target="_blank"><img src="logo.png" alt="RepRapPro logo" align="right"></a>
+-->
 
 <div style="font-size:20px" data-bind="with: machineName">RepRap: <strong data-bind="text: myName"></strong></div>
 
@@ -287,11 +302,82 @@ Click a file to <span data-bind="text: fileAction"></span><br>
 </ol>
 
 <hr>
+<!--
+Upload a G Code file: <br>
+<input type="file" id="fileinput" />
+-->
+<script>
+function uploadGCode (evt) 
+{
+    //Retrieve the first (and only!) File from the FileList object
+    var f = evt.target.files[0]; 
+	 //alert("Starting.");
+    if (f) 
+    {
+      var r = new FileReader();
+      r.onload = function(e) 
+      { 
+	     var contents = e.target.result;
+		  window.vm.gcode("M28 " + f.name);
+		  window.vm.sendGCode();
+		  var nextNL = contents.indexOf("\n");
+		  window.vm.gcode(contents.substr(0, nextNL));
+		  setTimeout(function() {}, 300);
+		  window.vm.sendGCode();
+		  window.vm.gcode("M29");
+		  setTimeout(function() {}, 300);
+		  window.vm.sendGCode();
 
+//        alert( "Got the file.\n" 
+//              +"name: " + f.name + "\n"
+//              +"type: " + f.type + "\n"
+//              +"size: " + f.size + " bytes\n"
+//              + "starts with: " + contents.substr(1, contents.indexOf("\n"))
+//        );  
+      };
+      r.readAsText(f);
+		//alert("Read file");
+    } else 
+    { 
+      alert("Failed to load file");
+    }
+}
+
+</script>
+<!--
+<form action="reprap.htm?upload=myFile"
+enctype="multipart/form-data" method="post">
+<p>
+Upload a G Code file: <br>
+<input type="file" name="datafile" size="40">
+</p>
+<div>
+<input type="submit" value="Upload">
+</div>
+</form>
+-->
+
+
+
+<!--
+<form onSubmit="return checkFileName(this)" action="upload.htm"
+enctype="multipart/form-data" method="post">
+<p>
+Upload a G Code file :<br>
+<input type="file" name="datafile" size="40">
+</p>
+<div>
+<input type="submit" value="Upload">
+</div>
+</form>
+-->
+<!-- 
 <form data-bind="submit: function(data, event) { uploadGCode(data, event) }">
 Upload a G Code file :
 <input type="file" name="datafile" size="30"><button type="submit">Upload</button>
 </form>
+-->
+
 <br>
 <button data-bind="text: deleteButton, click: function(data, event) { deleteFile(data, event) }"></button>
 </div>
@@ -302,18 +388,19 @@ Upload a G Code file :
 Help
 </div>
 
-<!-- SETTINGS PAGE -->
+<!-- SETTINGS PAGE 
 <div data-bind="if: chosenPageId() == pages[3]">
 Settings
 </div>
 
-<!-- MESSAGES PAGE -->
+ MESSAGES PAGE
 <div data-bind="if: chosenPageId() == pages[4]">
 Messages
 </div>
+-->
 
 <!-- LOGOUT/LOGIN PAGE -->
-<div data-bind="if: (chosenPageId() == pages[5] && gotPassword().password != 'right')">
+<div data-bind="if: (chosenPageId() == pages[3] && gotPassword().password != 'right')">
 <form data-bind="submit: sendPassword">
 	Password: <input type="password" id="pwd" value="" data-bind="value: pwd" />
 	<button type="submit">Submit</button>
@@ -341,7 +428,8 @@ function viewModel()
 {
 	var self = this;
 	
-	self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
+	//self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
+	self.pages = ['Control', 'Print', 'Help', 'Logout'];
 	self.chosenPageId = ko.observable('');
 	self.chosenFileId = ko.observable('');
 	self.machineName = ko.observable();
@@ -450,7 +538,7 @@ function viewModel()
 			self.fanButton('Fan off');
 		} else
 		{
-			$.get('/rr_gcode', {gcode: "M107"}, self.dummy);
+			$.get('/rr_gcode', {gcode: "M106 S0"}, self.dummy);
 			self.fanButton('Fan on');
 		}
 	};
@@ -535,6 +623,7 @@ function viewModel()
 		$.get('/rr_gcode', {gcode: self.gcode()}, self.dummy);
 	};
 
+
 	self.setTemperature = function(heater, data, event)
 	{
 		if(dontInterruptFilePrint())
@@ -555,7 +644,7 @@ function viewModel()
 		self.fileAction('print it');
 		self.deleteButton('Delete a file');
 	};
-
+/*
 	self.goToPage = function(page) 
 	{
 		if(page == self.pages[5])
@@ -578,7 +667,45 @@ function viewModel()
 		}
 
 		onControlPage = (page == self.pages[0]);
-		self.chosenPageId(page);	
+		self.chosenPageId(page);
+
+    	if(page == self.pages[1])
+		{
+      	try
+      	{
+				//alert("attaching");
+            document.getElementById('fileinput').addEventListener('change', uploadGCode, false);
+     		}    
+      	catch(e)
+      	{
+            alert(e);
+      	}
+		}
+*/	
+
+	self.goToPage = function(page) 
+	{
+		if(page == self.pages[3])
+			self.gotPassword(JSON.parse('{"password":"wrong"}'));
+
+		if(page == self.pages[1])
+			self.resetFileAction();
+
+		if(page == self.pages[2])
+		{
+			var win=window.open("http://www.reprappro.com/documentation/RepRapPro_Firmware", '_blank');
+  			win.focus();
+			return;
+		}
+
+		if(self.gotPassword().password != "right")
+		{
+			self.chosenPageId(self.pages[3]);
+			return;
+		}
+
+		onControlPage = (page == self.pages[0]);
+		self.chosenPageId(page);
 	};
 
 	self.checkFileName = function(uploadForm)
@@ -597,15 +724,19 @@ function viewModel()
 		return true;
 	};
 
-	self.uploadGCode = function(uploadForm, event)
-	{
-		if(self.checkFileName(uploadForm))
-		{
-			alert('upload ' + uploadForm.datafile.value);
-			// TODO put post upload here
-		}
-	};
 
+/*
+	if (window.File && window.FileReader && window.FileList && window.Blob) 
+	{
+		setTimeout(function() {
+	onControlPage = false;
+	}, 1000);
+		//AttachEventListener();
+	} else 
+	{
+  		alert('The File APIs are not fully supported by your browser.  GCode upload may not work.');
+	}
+*/
 	onControlPage = false;
 	self.getName();
 	//self.getPoll();
@@ -621,7 +752,7 @@ function viewModel()
 	onControlPage = false;
 	}, 300);
 	printingAFile = false;
-	self.goToPage(self.pages[5]);
+	self.goToPage(self.pages[3]);
 	//self.gotPassword(JSON.parse('{"password":"wrong"}'));
 }
 
@@ -634,11 +765,15 @@ function poll()
    }, 3000)
 }
 
+
+
 printingAFile = false;
 window.vm = new viewModel();
 ko.applyBindings(vm);
 poll();
 </script>
+
+
 
 
 </html>

@@ -26,7 +26,7 @@ Licence: GPL
 
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
-// Small class to hold an individual GCode
+// Small class to hold an individual GCode and provide functions to allow it to be parsed
 
 class GCodeBuffer
 {
@@ -38,12 +38,16 @@ class GCodeBuffer
     float GetFValue();
     int GetIValue();
     long GetLValue();
+    char* GetUnprecedentedString();
     char* GetString();
     char* Buffer();
     bool Finished();
     void SetFinished(bool f);
+    bool WritingFile();
+    void SetWritingFile(bool wf);
     
   private:
+    int CheckSum();
     Platform* platform;
     char gcodeBuffer[GCODE_LENGTH];
     char* identity;
@@ -51,6 +55,7 @@ class GCodeBuffer
     int readPointer;
     bool inComment;
     bool finished;
+    bool writingFile;
 };
 
 //****************************************************************************************************
@@ -67,7 +72,6 @@ class GCodes
     void Exit();
     void RunConfigurationGCodes();
     bool ReadMove(float* m, bool& ce);
-    bool ReadHeat(float* h);
     void QueueFileToPrint(char* fileName);
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);
     char* GetCurrentCoordinates();
@@ -90,8 +94,13 @@ class GCodes
     bool NoHome();
     bool Push();
     bool Pop();
-    void DisableDrives();
-    void StandbyHeaters();
+    bool DisableDrives();
+    bool StandbyHeaters();
+    void SetEthernetAddress(GCodeBuffer *gb, int mCode);
+    void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
+    char* OpenFileToWrite(char* fileName, GCodeBuffer *gb, bool configFile);
+    void WriteGCodeToFile(GCodeBuffer *gb);
+    bool SendConfigToLine();
 
     int8_t Heater(int8_t head);
     Platform* platform;
@@ -116,6 +125,8 @@ class GCodes
     float distanceScale;
     FileStore* fileBeingPrinted;
     FileStore* fileToPrint;
+    FileStore* fileBeingWritten;
+    FileStore* configFile;
     int8_t selectedHead;
     bool homeX;
     bool homeY;
@@ -127,6 +138,7 @@ class GCodes
     bool cannedCycleMoveQueued;
     float bedZs[NUMBER_OF_PROBE_POINTS];
     bool zProbesSet;
+    float longWait;
 };
 
 //*****************************************************************************************************
@@ -151,6 +163,16 @@ inline bool GCodeBuffer::Finished()
 inline void GCodeBuffer::SetFinished(bool f)
 {
   finished = f;
+}
+
+inline bool GCodeBuffer::WritingFile()
+{
+	return writingFile;
+}
+
+inline void GCodeBuffer::SetWritingFile(bool wf)
+{
+	writingFile = wf;
 }
 
 inline bool GCodes::PrintingAFile()

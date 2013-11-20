@@ -58,7 +58,9 @@ extern "C" {
  * \brief Initialize the ethernet interface.
  *
  */
-void init_ethernet(void);
+//void init_ethernet(void);
+
+void init_ethernet(unsigned char ipAddress[], unsigned char netMask[], unsigned char gateWay[]);
 
 struct netif* GetConfiguration();
 

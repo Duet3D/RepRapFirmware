@@ -34,11 +34,13 @@ void Heat::Init()
   for(int8_t heater=0; heater < HEATERS; heater++)
     pids[heater]->Init();
   lastTime = platform->Time();
+  longWait = lastTime;
   active = true; 
 }
 
 void Heat::Exit()
 {
+  platform->Message(HOST_MESSAGE, "Heat class exited.\n");
   active = false;
 }
 
@@ -47,12 +49,13 @@ void Heat::Spin()
   if(!active)
     return;
     
-  unsigned long t = platform->Time();
+  float t = platform->Time();
   if(t - lastTime < platform->HeatSampleTime())
     return;
   lastTime = t;
   for(int8_t heater=0; heater < HEATERS; heater++)
     pids[heater]->Spin();
+  platform->ClassReport("Heat", longWait);
 }
 
 void Heat::Diagnostics() 
@@ -102,14 +105,36 @@ void PID::Init()
   lastTemperature = temperature;
   temp_iState = 0.0;
   temp_dState = 0.0;
+  badTemperatureCount = 0;
+  temperatureFault = false;
   active = false;
 }
 
 
 void PID::Spin()
 {
+  if(temperatureFault)
+	  return;
+
   temperature = platform->GetTemperature(heater);
   
+  if(temperature < BAD_LOW_TEMPERATURE || temperature > BAD_HIGH_TEMPERATURE)
+  {
+	  badTemperatureCount++;
+	  if(badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+	  {
+		  platform->SetHeater(heater, 0.0);
+		  temperatureFault = true;
+		  platform->Message(HOST_MESSAGE, "Temperature measurement fault on heater ");
+		  snprintf(scratchString, STRING_LENGTH, "%d", heater);
+		  platform->Message(HOST_MESSAGE, scratchString);
+		  platform->Message(HOST_MESSAGE, ", T = ");
+		  platform->Message(HOST_MESSAGE, ftoa(scratchString, temperature, 1));
+		  platform->Message(HOST_MESSAGE, "\n");
+	  }
+  } else
+	  badTemperatureCount = 0;
+
   float error;
   if(active)
     error = activeTemperature - temperature;
@@ -152,5 +177,7 @@ void PID::Spin()
   if (result < 0.0) result = 0.0;
   if (result > 255.0) result = 255.0;
   result = result/255.0;
-  platform->SetHeater(heater, result);
+
+  if(!temperatureFault)
+	  platform->SetHeater(heater, result);
 }

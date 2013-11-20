@@ -37,9 +37,8 @@ void loop()
 
 //*************************************************************************************************
 
-Platform::Platform(RepRap* r)
+Platform::Platform()
 {
-  reprap = r;
   fileStructureInitialised = false;
   
   line = new Line();
@@ -62,9 +61,11 @@ void Platform::Init()
 { 
   byte i;
 
+  compatibility = me;
+
   line->Init();
 
-  network->Init();
+  //network->Init();
 
   massStorage->Init();
 
@@ -78,6 +79,10 @@ void Platform::Init()
   sysDir = SYS_DIR;
   configFile = CONFIG_FILE;
 
+  ipAddress = IP_ADDRESS;
+  netMask = NET_MASK;
+  gateWay = GATE_WAY;
+
   // DRIVES
 
   stepPins = STEP_PINS;
@@ -86,7 +91,6 @@ void Platform::Init()
   disableDrives = DISABLE_DRIVES;
   lowStopPins = LOW_STOP_PINS;
   highStopPins = HIGH_STOP_PINS;
-  homeDirection = HOME_DIRECTION;
   maxFeedrates = MAX_FEEDRATES;
   accelerations = ACCELERATIONS;
   driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
@@ -94,16 +98,10 @@ void Platform::Init()
   potWipes = POT_WIPES;
   senseResistor = SENSE_RESISTOR;
   maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-//  zProbeGradient = Z_PROBE_GRADIENT;
-//  zProbeConstant = Z_PROBE_CONSTANT;
-  zProbeEnable = Z_PROBE_ENABLE;
-  zProbePin = Z_PROBE_PIN;
+  zProbePin = -1; // Default is to use the switch
   zProbeCount = 0;
   zProbeSum = 0;
   zProbeValue = 0;
-//  zProbeStarting = false;
-//  zProbeHigh = Z_PROBE_HIGH;
-//  zProbeLow = Z_PROBE_LOW;
   zProbeADValue = Z_PROBE_AD_VALUE;
   zProbeStopHeight = Z_PROBE_STOP_HEIGHT;
 
@@ -131,6 +129,7 @@ void Platform::Init()
   heatSampleTime = HEAT_SAMPLE_TIME;
   standbyTemperatures = STANDBY_TEMPERATURES;
   activeTemperatures = ACTIVE_TEMPERATURES;
+  coolingFanPin = COOLING_FAN_PIN;
 
   webDir = WEB_DIR;
   gcodeDir = GCODE_DIR;
@@ -192,11 +191,25 @@ void Platform::Init()
   if(zProbePin >= 0)
 	  pinMode(zProbePin, INPUT);
   
+  if(coolingFanPin >= 0)
+  {
+	  pinMode(coolingFanPin, OUTPUT);
+	  analogWrite(coolingFanPin, 0);
+  }
+
   InitialiseInterrupts();
   
+  addToTime = 0.0;
+  lastTimeCall = 0;
   lastTime = Time();
+  longWait = lastTime;
   
   active = true;
+}
+
+void Platform::StartNetwork()
+{
+	network->Init();
 }
 
 
@@ -214,6 +227,7 @@ void Platform::Spin()
     return;
   PollZHeight();
   lastTime = Time();
+  ClassReport("Platform", longWait);
 
 //  zcount++;
 //  if(zcount > 30)
@@ -243,6 +257,11 @@ void Platform::InitialiseInterrupts()
   SetInterrupt(STANDBY_INTERRUPT_RATE);
 }
 
+void Platform::DisableInterrupts()
+{
+	NVIC_DisableIRQ(TC3_IRQn);
+}
+
 
 //*************************************************************************************************
 
@@ -251,20 +270,36 @@ void Platform::Diagnostics()
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
 
-//extern int __bss_end; // void? long?
-//extern void *__brkval;
-//
-//long Platform::GetFreeMemory()
-//{
-//	long free_memory;
-//
-//  if((long)__brkval == 0)
-//    free_memory = ((long)&free_memory) - ((long)&__bss_end);
-//  else
-//    free_memory = ((long)&free_memory) - ((long)__brkval);
-//
-//  return free_memory;
-//}
+extern char _end;
+extern "C" char *sbrk(int i);
+
+void Platform::PrintMemoryUsage()
+{
+	char *ramstart=(char *)0x20070000;
+	char *ramend=(char *)0x20088000;
+    char *heapend=sbrk(0);
+	register char * stack_ptr asm ("sp");
+	struct mallinfo mi=mallinfo();
+	snprintf(scratchString, STRING_LENGTH, "\nMemory usage\nDynamic ram used: %d\n",mi.uordblks);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n",&_end - ramstart);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Stack ram used: %d\n",ramend - stack_ptr);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Guess at free mem: %d\n\n",stack_ptr - heapend + mi.fordblks);
+	Message(HOST_MESSAGE, scratchString);
+}
+
+void Platform::ClassReport(char* className, float &lastTime)
+{
+	if(!reprap.Debug())
+		return;
+	if(Time() - lastTime < LONG_TIME)
+		return;
+	lastTime = Time();
+	snprintf(scratchString, STRING_LENGTH, "Class %s spinning.\n", className);
+	Message(HOST_MESSAGE, scratchString);
+}
 
 
 //===========================================================================
@@ -324,12 +359,15 @@ inline void Platform::PollZHeight()
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
-	if(zProbeEnable && drive == Z_AXIS)
+	if(zProbePin >= 0)
 	{
-		if(ZProbe() > zProbeADValue)
-			return lowHit;
-		else
-			return noStop;
+		if(drive == Z_AXIS)
+		{
+			if(ZProbe() > zProbeADValue)
+				return lowHit;
+			else
+				return noStop;
+		}
 	}
 
 	if(lowStopPins[drive] >= 0)
@@ -395,7 +433,7 @@ void MassStorage::Init()
 	if (mounted != FR_OK)
 	{
 		platform->Message(HOST_MESSAGE, "Can't mount filesystem 0: code ");
-		sprintf(scratchString, "%d", mounted);
+		snprintf(scratchString, STRING_LENGTH, "%d", mounted);
 		platform->Message(HOST_MESSAGE, scratchString);
 		platform->Message(HOST_MESSAGE, "\n");
 	}
@@ -448,7 +486,7 @@ char* MassStorage::CombineName(char* directory, char* fileName)
 
 // List the flat files in a directory.  No sub-directories or recursion.
 
-char* MassStorage::FileList(char* directory)
+char* MassStorage::FileList(char* directory, bool fromLine)
 {
 //  File dir, entry;
   DIR dir;
@@ -456,6 +494,17 @@ char* MassStorage::FileList(char* directory)
   FRESULT res;
   char loc[64];
   int len = 0;
+  char fileListBracket = FILE_LIST_BRACKET;
+  char fileListSeparator = FILE_LIST_SEPARATOR;
+
+  if(fromLine)
+  {
+	  if(platform->Emulating() == marlin)
+	  {
+		  fileListBracket = 0;
+		  fileListSeparator = '\n';
+	  }
+  }
 
   len = strlen(directory);
   strncpy(loc,directory,len-1);
@@ -488,7 +537,8 @@ char* MassStorage::FileList(char* directory)
 		  if(strlen(entry.fname) > 0)
 		  {
 			int q = 0;
-			fileList[p++] = FILE_LIST_BRACKET;
+			if(fileListBracket)
+				fileList[p++] = fileListBracket;
 			while(entry.fname[q])
 			{
 			  fileList[p++] = entry.fname[q];
@@ -502,8 +552,9 @@ char* MassStorage::FileList(char* directory)
 				return "";
 			  }
 			}
-			fileList[p++] = FILE_LIST_BRACKET;
-			fileList[p++] = FILE_LIST_SEPARATOR;
+			if(fileListBracket)
+				fileList[p++] = fileListBracket;
+			fileList[p++] = fileListSeparator;
 		  }
 	  }
 
@@ -568,7 +619,7 @@ bool FileStore::Open(char* directory, char* fileName, bool write)
 		  platform->Message(HOST_MESSAGE, "Can't open ");
 		  platform->Message(HOST_MESSAGE, location);
 		  platform->Message(HOST_MESSAGE, " to write to.  Error code: ");
-		  sprintf(scratchString, "%d", openReturn);
+		  snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
 		  platform->Message(HOST_MESSAGE, scratchString);
 		  platform->Message(HOST_MESSAGE, "\n");
 		  return false;
@@ -582,7 +633,7 @@ bool FileStore::Open(char* directory, char* fileName, bool write)
 		  platform->Message(HOST_MESSAGE, "Can't open ");
 		  platform->Message(HOST_MESSAGE, location);
 		  platform->Message(HOST_MESSAGE, " to read from.  Error code: ");
-		  sprintf(scratchString, "%d", openReturn);
+		  snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
 		  platform->Message(HOST_MESSAGE, scratchString);
 		  platform->Message(HOST_MESSAGE, "\n");
 		  return false;
@@ -859,7 +910,6 @@ bool RepRapNetworkHasALiveClient()
 }
 
 
-
 Network::Network()
 {
 	ethPinsInit();
@@ -900,7 +950,7 @@ void Network::Init()
 {
 //	alternateInput = NULL;
 //	alternateOutput = NULL;
-	init_ethernet();
+	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 	CleanRing();
 	Reset();
 }

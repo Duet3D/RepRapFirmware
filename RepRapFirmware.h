@@ -31,6 +31,8 @@ class Move;
 class Heat;
 class RepRap;
 
+// A single instace of the RepRap class contains all the others
+
 extern RepRap reprap;
 
 // Functions and globals not part of any class

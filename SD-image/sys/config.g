@@ -1,13 +1,14 @@
 ; RepRapPro Ormerod
 ; Standard configuration G Codes
 M111 S1; Debug on
-G21 ; mm
+M550 POrmerod; Set the machine's name
+M551 Preprap; Set the password
+M552 P192.168.0.14; Set the IP address
+M555 P2
+M92 E420
+G21 ; Work in mm
 G90 ; Absolute positioning
-M83 ; Extrusion relative
-M107; Fan off
-G31 Z0.7 P344 ; Set Z probe height and threshold
-M906 X500 Y500 Z500 E500 ; Motor currents (mA)
-;M201 X4000 Y4000 E4000 ; Accelerations (mms-2)
-T0 ; Extruder 0
-
-
+M83 ; Extrusions relative
+G31 Z0.0 P500 ; Set Z probe height and threshold
+M906 X800 Y800 Z800 E800 ; Motor currents (mA)
+T0 ; Select extruder 0

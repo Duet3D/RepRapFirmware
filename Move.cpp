@@ -45,7 +45,7 @@ Move::Move(Platform* p, GCodes* g)
     lookAheadRingGetPointer = new LookAhead(this, platform, lookAheadRingGetPointer);
   lookAheadRingAddPointer->next = lookAheadRingGetPointer;
   
-  // Set the lookahead backwards pointers
+  // Set the lookahead backwards pointers (some oxymoron, surely?)
   
   lookAheadRingGetPointer = lookAheadRingAddPointer; 
   for(i = 0; i <= LOOK_AHEAD_RING_LENGTH; i++)
@@ -144,16 +144,31 @@ void Move::Init()
   currentFeedrate = -1.0;
 
   SetIdentityTransform();
+  tanXY = 0.0;
+  tanYZ = 0.0;
+  tanXZ = 0.0;
+  zPlaneSet = false;
 
   lastZHit = 0.0;
   zProbing = false;
 
+  xBedProbePoints[0] = 0.2*platform->AxisLength(X_AXIS);
+  yBedProbePoints[0] = 0.2*platform->AxisLength(Y_AXIS);
+
+  xBedProbePoints[1] = 0.8*platform->AxisLength(X_AXIS);
+  yBedProbePoints[1] = 0.2*platform->AxisLength(Y_AXIS);
+
+  xBedProbePoints[2] = 0.5*platform->AxisLength(X_AXIS);
+  yBedProbePoints[2] = 0.8*platform->AxisLength(Y_AXIS);
+
   lastTime = platform->Time();
+  longWait = lastTime;
   active = true;  
 }
 
 void Move::Exit()
 {
+  platform->Message(HOST_MESSAGE, "Move class exited.\n");
   active = false;
 }
 
@@ -182,7 +197,10 @@ void Move::Spin()
   // If we either don't want to, or can't, add to the look-ahead ring, go home.
   
   if(addNoMoreMoves || LookAheadRingFull())
-   return;
+  {
+	  platform->ClassReport("Move", longWait);
+	  return;
+  }
  
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
@@ -201,7 +219,10 @@ void Move::Spin()
     // Throw it away if there's no real movement.
     
     if(movementType == noMove)
+    {
+       platform->ClassReport("Move", longWait);
        return;
+    }
      
     // Real move - record its feedrate with it, not here.
     
@@ -228,6 +249,7 @@ void Move::Spin()
     if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove, movementType))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
   }
+  platform->ClassReport("Move", longWait);
 }
 
 void Move::SetPositions(float move[])
@@ -249,7 +271,7 @@ void Move::Diagnostics()
     platform->Message(HOST_MESSAGE, " not active\n");
   
   platform->Message(HOST_MESSAGE, " look ahead ring count: ");
-  sprintf(scratchString, "%d\n", lookAheadRingCount);
+  snprintf(scratchString, STRING_LENGTH, "%d\n", lookAheadRingCount);
   platform->Message(HOST_MESSAGE, scratchString);
   if(dda == NULL)
     platform->Message(HOST_MESSAGE, " dda: NULL\n");
@@ -566,6 +588,13 @@ LookAhead* Move::LookAheadRingGet()
   return result;
 }
 
+// Note that we don't set the tan values to 0 here.  This means that the bed probe
+// values will be a fraction of a millimeter out in X and Y, which, as the bed should
+// be nearly flat (and the probe doesn't coincide with the nozzle anyway), won't matter.
+// But it means that the tan values can be set for the machine
+// at the start in the configuration file and be retained, without having to know and reset
+// them after every Z probe of the bed.
+
 void Move::SetIdentityTransform()
 {
 	aX = 0.0;
@@ -573,14 +602,18 @@ void Move::SetIdentityTransform()
 	aC = 0.0;
 }
 
-void Move::Transform(float move[])
+void Move::Transform(float xyzPoint[])
 {
-	move[2] = move[2] + aX*move[0] + aY*move[1] + aC;
+	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
+	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] + tanYZ*xyzPoint[Z_AXIS];
+	xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
 }
 
-void Move::InverseTransform(float move[])
+void Move::InverseTransform(float xyzPoint[])
 {
-	move[2] = move[2] - (aX*move[0] + aY*move[1] + aC);
+	xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
+	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] - tanYZ*xyzPoint[Z_AXIS];
+	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] - (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
 }
 
 void Move::SetProbedBedPlane()
@@ -611,6 +644,7 @@ void Move::SetProbedBedPlane()
 	aX = -a/c;
 	aY = -b/c;
 	aC = -d/c;
+	zPlaneSet = true;
 }
 
 // FIXME
@@ -627,12 +661,12 @@ void Move::InterruptTime()
   float v = 50;
   lookAheadDDA->Init(a, b, u, v);
   lookAheadDDA->Start(false);
-  unsigned long t = platform->Time();
+  float t = platform->Time();
   for(long i = 0; i < 100000; i++) 
     lookAheadDDA->Step(false);
   t = platform->Time() - t;
   platform->Message(HOST_MESSAGE, "Time for 100000 calls of the interrupt function: ");
-  sprintf(buffer, "%ld", t);
+  snprintf(buffer, 50, "%ld", t);
   platform->Message(HOST_MESSAGE, buffer);
   platform->Message(HOST_MESSAGE, " microseconds.\n");*/
 }

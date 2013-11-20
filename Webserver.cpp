@@ -228,7 +228,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
   if (jsonPointer >=0)
   {
 	  platform->GetNetwork()->Write("Content-Length: ");
-    sprintf(sLen, "%d", strlen(jsonResponse));
+    snprintf(sLen, POST_LENGTH, "%d", strlen(jsonResponse));
     platform->GetNetwork()->Write(sLen);
     platform->GetNetwork()->Write("\n");
   }
@@ -237,7 +237,7 @@ void Webserver::SendFile(char* nameOfFileToSend)
   {
 	platform->GetNetwork()->Write("Content-Encoding: gzip\n");
 	platform->GetNetwork()->Write("Content-Length: ");
-    sprintf(sLen, "%llu", fileBeingSent->Length());
+    snprintf(sLen, POST_LENGTH, "%llu", fileBeingSent->Length());
     platform->GetNetwork()->Write(sLen);
     platform->GetNetwork()->Write("\n");
   }
@@ -286,7 +286,7 @@ void Webserver::JsonReport(bool ok, char* request)
 {
   if(ok)
   {
-    if(reprap.debug())
+    if(reprap.Debug())
     {
       platform->Message(HOST_MESSAGE, "JSON response: ");
       platform->Message(HOST_MESSAGE, jsonResponse);
@@ -308,29 +308,32 @@ void Webserver::GetJsonResponse(char* request)
   
   if(StringStartsWith(request, "poll"))
   {
-    strcpy(jsonResponse, "{\"poll\":[");
+    strncpy(jsonResponse, "{\"poll\":[", STRING_LENGTH);
     if(reprap.GetGCodes()->PrintingAFile())
-    	strcat(jsonResponse, "\"P\","); // Printing
+    	strncat(jsonResponse, "\"P\",", STRING_LENGTH); // Printing
     else
-    	strcat(jsonResponse, "\"I\","); // Idle
+    	strncat(jsonResponse, "\"I\",", STRING_LENGTH); // Idle
     for(int8_t heater = 0; heater < HEATERS; heater++)
     {
-      strcat(jsonResponse, "\"");
-      strcat(jsonResponse, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1));
-      strcat(jsonResponse, "\",");
+      strncat(jsonResponse, "\"", STRING_LENGTH);
+      strncat(jsonResponse, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1), STRING_LENGTH);
+      strncat(jsonResponse, "\",", STRING_LENGTH);
     }
     float liveCoordinates[DRIVES+1];
     reprap.GetMove()->LiveCoordinates(liveCoordinates);
     for(int8_t drive = 0; drive < AXES; drive++)
     {
-    	strcat(jsonResponse, "\"");
-    	strcat(jsonResponse, ftoa(0, liveCoordinates[drive], 2));
-    	strcat(jsonResponse, "\",");
+    	strncat(jsonResponse, "\"", STRING_LENGTH);
+    	strncat(jsonResponse, ftoa(0, liveCoordinates[drive], 2), STRING_LENGTH);
+    	strncat(jsonResponse, "\",", STRING_LENGTH);
     }
-    strcat(jsonResponse, "\"");
-    strcat(jsonResponse, ftoa(0, liveCoordinates[AXES], 4));
-    strcat(jsonResponse, "\"");
-    strcat(jsonResponse, "]}");    
+
+    // FIXME: should loop through all Es
+
+    strncat(jsonResponse, "\"", STRING_LENGTH);
+    strncat(jsonResponse, ftoa(0, liveCoordinates[AXES], 4), STRING_LENGTH);
+    strncat(jsonResponse, "\"", STRING_LENGTH);
+    strncat(jsonResponse, "]}", STRING_LENGTH);
     JsonReport(true, request);
     return;
   }
@@ -339,26 +342,26 @@ void Webserver::GetJsonResponse(char* request)
   {
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
       platform->Message(HOST_MESSAGE, "Webserver: buffer not free!\n");
-    strcpy(jsonResponse, "{}");
+    strncpy(jsonResponse, "{}", STRING_LENGTH);
     JsonReport(true, request);
     return;
   }
   
   if(StringStartsWith(request, "files"))
   {
-    char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir());
-    strcpy(jsonResponse, "{\"files\":[");
-    strcat(jsonResponse, fileList);
-    strcat(jsonResponse, "]}");    
+    char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir(), false);
+    strncpy(jsonResponse, "{\"files\":[", STRING_LENGTH);
+    strncat(jsonResponse, fileList, STRING_LENGTH);
+    strncat(jsonResponse, "]}", STRING_LENGTH);
     JsonReport(true, request);
     return;
   }
   
   if(StringStartsWith(request, "name"))
   {
-    strcpy(jsonResponse, "{\"myName\":\"");
-    strcat(jsonResponse, myName);
-    strcat(jsonResponse, "\"}");
+    strncpy(jsonResponse, "{\"myName\":\"", STRING_LENGTH);
+    strncat(jsonResponse, myName, STRING_LENGTH);
+    strncat(jsonResponse, "\"}", STRING_LENGTH);
     JsonReport(true, request);
     return;
   }
@@ -366,29 +369,29 @@ void Webserver::GetJsonResponse(char* request)
   if(StringStartsWith(request, "password"))
   {
     CheckPassword();
-    strcpy(jsonResponse, "{\"password\":\"");
+    strncpy(jsonResponse, "{\"password\":\"", STRING_LENGTH);
     if(gotPassword)
-      strcat(jsonResponse, "right");
+      strncat(jsonResponse, "right", STRING_LENGTH);
     else
-      strcat(jsonResponse, "wrong");
-    strcat(jsonResponse, "\"}");   
+      strncat(jsonResponse, "wrong", STRING_LENGTH);
+    strncat(jsonResponse, "\"}", STRING_LENGTH);
     JsonReport(true, request);
     return;
   }
   
   if(StringStartsWith(request, "axes"))
   {
-    strcpy(jsonResponse, "{\"axes\":[");
+    strncpy(jsonResponse, "{\"axes\":[", STRING_LENGTH);
     for(int8_t drive = 0; drive < AXES; drive++)
     {
-      strcat(jsonResponse, "\"");
-      strcat(jsonResponse, ftoa(0, platform->AxisLength(drive), 1));
+      strncat(jsonResponse, "\"", STRING_LENGTH);
+      strncat(jsonResponse, ftoa(0, platform->AxisLength(drive), 1), STRING_LENGTH);
       if(drive < AXES-1)
-        strcat(jsonResponse, "\",");
+        strncat(jsonResponse, "\",", STRING_LENGTH);
       else
-        strcat(jsonResponse, "\"");
+        strncat(jsonResponse, "\"", STRING_LENGTH);
     }
-    strcat(jsonResponse, "]}");    
+    strncat(jsonResponse, "]}", STRING_LENGTH);
     JsonReport(true, request);
     return;
   }
@@ -414,7 +417,7 @@ GET /gather.asp?pwd=my_pwd HTTP/1.1
 
 void Webserver::ParseGetPost()
 {
-    if(reprap.debug())
+    if(reprap.Debug())
     {
       platform->Message(HOST_MESSAGE, "HTTP request: ");
       platform->Message(HOST_MESSAGE, clientLine);
@@ -464,7 +467,7 @@ void Webserver::ParseClientLine()
     postSeen = false;
     getSeen = true;
     if(!clientRequest[0])
-      strcpy(clientRequest, INDEX_PAGE);
+      strncpy(clientRequest, INDEX_PAGE, STRING_LENGTH);
     return;
   }
   
@@ -475,7 +478,7 @@ void Webserver::ParseClientLine()
     postSeen = true;
     getSeen = false;
     if(!clientRequest[0])
-      strcpy(clientRequest, INDEX_PAGE);
+      strncpy(clientRequest, INDEX_PAGE, STRING_LENGTH);
     return;
   }
   
@@ -490,8 +493,8 @@ void Webserver::ParseClientLine()
     }
     postBoundary[0] = '-';
     postBoundary[1] = '-';
-    strcpy(&postBoundary[2], &clientLine[bnd]);
-    strcat(postBoundary, "--");
+    strncpy(&postBoundary[2], &clientLine[bnd], POST_LENGTH - 3);
+    strncat(postBoundary, "--", POST_LENGTH);
     //Serial.print("Got boundary: ");
     //Serial.println(postBoundary);
     return;
@@ -616,6 +619,7 @@ void Webserver::Spin()
  //   else
 	if(platform->GetNetwork()->CanWrite())
       WriteByte();
+	platform->ClassReport("Webserver", longWait);
     return;
   }
   
@@ -638,6 +642,7 @@ void Webserver::Spin()
           clientRequest[0] = 0;
           InitialisePost();       
         }
+        platform->ClassReport("Webserver", longWait);
         return;
       }  
       
@@ -650,11 +655,15 @@ void Webserver::Spin()
     if(needToCloseClient)
     {
       if(platform->Time() - clientCloseTime < CLIENT_CLOSE_DELAY)
+      {
+    	platform->ClassReport("Webserver", longWait);
         return;
+      }
       needToCloseClient = false;  
       platform->GetNetwork()->Close();
     }   
   }
+  platform->ClassReport("Webserver", longWait);
 }
 
 //******************************************************************************************
@@ -670,7 +679,6 @@ Webserver::Webserver(Platform* p)
 
 void Webserver::Init()
 {
-  lastTime = platform->Time();
   writing = false;
   receivingPost = false;
   postSeen = false;
@@ -681,27 +689,42 @@ void Webserver::Init()
   clientLinePointer = 0;
   clientLine[0] = 0;
   clientRequest[0] = 0;
-  password = DEFAULT_PASSWORD;
-  myName = DEFAULT_NAME;
+  SetPassword(DEFAULT_PASSWORD);
+  SetName(DEFAULT_NAME);
   //gotPassword = false;
   gcodeAvailable = false;
   gcodePointer = 0;
   InitialisePost();
+  lastTime = platform->Time();
+  longWait = lastTime;
   active = true; 
   
   // Reinitialise the message file
   
-  platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
+  //platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }
 
 void Webserver::Exit()
 {
+  platform->Message(HOST_MESSAGE, "Webserver class exited.\n");
   active = false;
 }
 
 void Webserver::Diagnostics() 
 {
   platform->Message(HOST_MESSAGE, "Webserver Diagnostics:\n"); 
+}
+
+void Webserver::SetPassword(char* pw)
+{
+	strncpy(password, pw, SHORT_STRING_LENGTH);
+	password[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
+}
+
+void Webserver::SetName(char* nm)
+{
+	strncpy(myName, nm, SHORT_STRING_LENGTH);
+	myName[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
 }
 
 

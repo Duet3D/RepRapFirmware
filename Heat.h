@@ -48,6 +48,8 @@ class PID
     float temp_dState;
     bool active;
     int8_t heater;
+    int8_t badTemperatureCount;
+    bool temperatureFault;
 };
 
 class Heat
@@ -76,6 +78,7 @@ class Heat
     bool active;
     PID* pids[HEATERS];
     float lastTime;
+    float longWait;
 };
 
 
@@ -120,6 +123,7 @@ inline void PID::Standby()
 {
   active = false;
 }
+
 
 inline void Heat::SetActiveTemperature(int8_t heater, const float& t)
 {

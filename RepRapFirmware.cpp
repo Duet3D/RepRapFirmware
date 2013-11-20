@@ -160,7 +160,7 @@ RepRap reprap;
 RepRap::RepRap()
 {
   active = false;
-  platform = new Platform(this);
+  platform = new Platform();
   webserver = new Webserver(platform);
   gCodes = new GCodes(platform, webserver);
   move = new Move(platform, gCodes);
@@ -169,7 +169,7 @@ RepRap::RepRap()
 
 void RepRap::Init()
 {
-  dbg = false;
+  debug = false;
   platform->Init();
   gCodes->Init();
   webserver->Init();
@@ -177,10 +177,10 @@ void RepRap::Init()
   heat->Init();
   active = true;
   gCodes->RunConfigurationGCodes();
+  while(gCodes->PrintingAFile()) // Wait till the file is finished
+	  Spin();
+  platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
   platform->Message(HOST_MESSAGE, "RepRapPro RepRap Firmware (Re)Started\n");
-//  platform->Message(HOST_MESSAGE, "Free memory: ");
-//  sprintf(scratchString,"%d\n",platform->GetFreeMemory());
-//  platform->Message(HOST_MESSAGE, scratchString);
 }
 
 void RepRap::Exit()
@@ -190,6 +190,7 @@ void RepRap::Exit()
   move->Exit();
   gCodes->Exit();
   webserver->Exit();
+  platform->Message(HOST_MESSAGE, "RepRap class exited.\n");
   platform->Exit();
 }
 
@@ -214,6 +215,35 @@ void RepRap::Diagnostics()
   webserver->Diagnostics();
 }
 
+// Turn off the heaters, disable the motors, and
+// deactivate the Heat and Move classes.  Leave everything else
+// working.
+
+void RepRap::EmergencyStop()
+{
+	int8_t i;
+
+	//platform->DisableInterrupts();
+
+	heat->Exit();
+	for(i = 0; i < HEATERS; i++)
+		platform->SetHeater(i, 0.0);
+
+	// We do this twice, to avoid an interrupt switching
+	// a drive back on.  move->Exit() should prevent
+	// interrupts doing this.
+
+	for(int8_t i = 0; i < 2; i++)
+	{
+		move->Exit();
+		for(i = 0; i < DRIVES; i++)
+		{
+			platform->SetMotorCurrent(i, 0.0);
+			platform->Disable(i);
+		}
+	}
+}
+
 
 
 //*************************************************************************************************
@@ -232,11 +262,11 @@ char* ftoa(char *a, const float& f, int prec)
     a = scratchString;
   char *ret = a;
   long whole = (long)f;
-  sprintf(a,"%d",whole);
+  snprintf(a, STRING_LENGTH, "%d", whole);
   while (*a != '\0') a++;
   *a++ = '.';
   long decimal = abs((long)((f - (float)whole) * precision[prec]));
-  sprintf(a,"%d",decimal);
+  snprintf(a, STRING_LENGTH, "%d", decimal);
   return ret;
 }
 

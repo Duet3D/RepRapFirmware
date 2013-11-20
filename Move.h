@@ -159,9 +159,14 @@ class Move
     void HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void SetPositions(float move[]);
+    void SetXBedProbePoint(int index, float x);
+    void SetYBedProbePoint(int index, float y);
+    float xBedProbePoint(int index);
+    float yBedProbePoint(int index);
     void SetZProbing(bool probing);
     void SetProbedBedPlane();
     float GetLastProbedZ();
+    void SetAxisCompensation(int8_t axis, float tangent);
     void SetIdentityTransform();
     void Transform(float move[]);
     void InverseTransform(float move[]);
@@ -212,9 +217,14 @@ class Move
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
     float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
     long nextMachineEndPoints[DRIVES+1];
-    float aX, aY, aC;
+    float xBedProbePoints[NUMBER_OF_PROBE_POINTS];
+    float yBedProbePoints[NUMBER_OF_PROBE_POINTS];
+    float aX, aY, aC; // Bed plane explicit equation z' = z + aX*x + aY*y + aC
+    bool zPlaneSet;
+    float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
     float lastZHit;
     bool zProbing;
+    float longWait;
 };
 
 //********************************************************************************************************
@@ -389,10 +399,35 @@ inline void Move::ResumeMoving()
   addNoMoreMoves = false;
 }
 
-//inline bool Move::ZProbing()
-//{
-//	return zProbing;
-//}
+inline void Move::SetXBedProbePoint(int index, float x)
+{
+	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	{
+		platform->Message(HOST_MESSAGE, "Z probe point  X index out of range.\n");
+		return;
+	}
+	xBedProbePoints[index] = x;
+}
+
+inline void Move::SetYBedProbePoint(int index, float y)
+{
+	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	{
+		platform->Message(HOST_MESSAGE, "Z probe point Y index out of range.\n");
+		return;
+	}
+	yBedProbePoints[index] = y;
+}
+
+inline float Move::xBedProbePoint(int index)
+{
+	return xBedProbePoints[index];
+}
+
+inline float Move::yBedProbePoint(int index)
+{
+	return yBedProbePoints[index];
+}
 
 inline void Move::SetZProbing(bool probing)
 {
@@ -402,6 +437,24 @@ inline void Move::SetZProbing(bool probing)
 inline float Move::GetLastProbedZ()
 {
 	return lastZHit;
+}
+
+inline void Move::SetAxisCompensation(int8_t axis, float tangent)
+{
+	switch(axis)
+	{
+	case X_AXIS:
+		tanXY = tangent;
+		break;
+	case Y_AXIS:
+		tanYZ = tangent;
+		break;
+	case Z_AXIS:
+		tanXZ = tangent;
+		break;
+	default:
+		platform->Message(HOST_MESSAGE, "SetAxisCompensation: dud axis.\n");
+	}
 }
 
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)

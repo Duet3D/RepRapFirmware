@@ -39,6 +39,9 @@ Licence: GPL
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <malloc.h>
+#include <stdlib.h>
+#include <limits.h>
 
 // Platform-specific includes
 
@@ -53,6 +56,7 @@ Licence: GPL
 // Some numbers...
 
 #define STRING_LENGTH 1029
+#define SHORT_STRING_LENGTH 40
 #define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
 
@@ -79,12 +83,10 @@ Licence: GPL
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
 #define LOW_STOP_PINS {11, 28, 60, 31}
 #define HIGH_STOP_PINS {-1, -1, -1, -1}
-#define HOME_DIRECTION {1,1,1,1} // 1 for Max/High, -1 for Min/ Low TODO replace with logic based on low/high pin allocations
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define Z_PROBE_ENABLE false
 #define Z_PROBE_AD_VALUE 400
 #define Z_PROBE_STOP_HEIGHT 0.7 // mm
 #define Z_PROBE_PIN 0 // Analogue pin number
@@ -122,6 +124,7 @@ Licence: GPL
 #define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
+#define COOLING_FAN_PIN 34
 
 #define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
@@ -152,30 +155,16 @@ Licence: GPL
 /****************************************************************************************************/
 
 // Networking
-//FIXME does not currently override the default in \libraries\EMAC\conf_eth.h
-// Enter a MAC address and IP address for your controller below.
-// The IP address will be dependent on your local network:
-//#define MAC { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
-//#define MAC_BYTES 6
-//
-//#define IP0 192
-//#define IP1 168
-//#define IP2 1
-//#define IP3 14
-//
-//#define IP_BYTES 4
-
-//#define ETH_B_PIN 10
-
-// port 80 is default for HTTP
-  
-//#define HTTP_PORT 80
 
 // Seconds to wait after serving a page
  
 #define CLIENT_CLOSE_DELAY 0.002
 
 #define HTTP_STATE_SIZE 5
+
+#define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
+#define NET_MASK {255, 255, 255, 0}
+#define GATE_WAY {192, 168, 1, 1}
 
 
 /****************************************************************************************************/
@@ -330,7 +319,7 @@ class MassStorage
 {
 public:
 
-  char* FileList(char* directory); // Returns a ,-separated list of all the files in the named directory
+  char* FileList(char* directory, bool fromLine); // Returns a list of all the files in the named directory
   char* CombineName(char* directory, char* fileName);
   bool Delete(char* directory, char* fileName);
 
@@ -395,7 +384,7 @@ class Platform
 {   
   public:
   
-  Platform(RepRap* r);
+  Platform();
   
 //-------------------------------------------------------------------------------------------------------------
 
@@ -408,9 +397,15 @@ class Platform
   
   void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
   
+  Compatibility Emulating();
+
+  void SetEmulating(Compatibility c);
+
   void Diagnostics();
   
-  // long GetFreeMemory();
+  void PrintMemoryUsage();  // Print memory stats for debugging
+
+  void ClassReport(char* className, float &lastTime);  // Called on return to check everything's live.
 
   // Timing
   
@@ -418,15 +413,24 @@ class Platform
   
   void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
   
+  void DisableInterrupts();
+
   // Communications and data storage
   
   Network* GetNetwork();
   Line* GetLine();
+  void SetIPAddress(byte ip[]);
+  byte* IPAddress();
+  void SetNetMask(byte nm[]);
+  byte* NetMask();
+  void SetGateWay(byte gw[]);
+  byte* GateWay();
   
   friend class FileStore;
   
   MassStorage* GetMassStorage();
   FileStore* GetFileStore(char* directory, char* fileName, bool write);
+  void StartNetwork();
   char* GetWebDir(); // Where the htm etc files are
   char* GetGCodeDir(); // Where the gcodes are
   char* GetSysDir();  // Where the system files are
@@ -438,33 +442,34 @@ class Platform
   
   // Movement
   
+  void EmergencyStop();
   void SetDirection(byte drive, bool direction);
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void SetMotorCurrent(byte drive, float current);
   float DriveStepsPerUnit(int8_t drive);
   void SetDriveStepsPerUnit(int8_t drive, float value);
-  float Acceleration(int8_t drive, float value);
+  float Acceleration(int8_t drive);
+  void SetAcceleration(int8_t drive, float value);
   float MaxFeedrate(int8_t drive);
+  void SetMaxFeedrate(int8_t drive, float value);
   float InstantDv(int8_t drive);
-  float HomeFeedRate(int8_t drive);
+  float HomeFeedRate(int8_t axis);
+  void SetHomeFeedRate(int8_t axis, float value);
   EndStopHit Stopped(int8_t drive);
-  float AxisLength(int8_t drive);
-  int8_t HomeDirection(int8_t drive);
+  float AxisLength(int8_t axis);
+  void SetAxisLength(int8_t axis, float value);
+  
   float ZProbeStopHeight();
   void SetZProbeStopHeight(float z);
   long ZProbe();
   void SetZProbe(int iZ);
-  void EnableZProbe(bool enableZ);
-  bool IsZProbeEnabled();
+  void SetZProbeType(int iZ);
+  
   // Heat and temperature
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
-  //void SetStandbyTemperature(int8_t heater, const float& t);
-  //void SetActiveTemperature(int8_t heater, const float& t);
-  //float StandbyTemperature(int8_t heater);
-  //float ActiveTemperature(int8_t heater);  
   float PidKp(int8_t heater);
   float PidKi(int8_t heater);
   float PidKd(int8_t heater);
@@ -474,6 +479,7 @@ class Platform
   float DMix(int8_t heater);
   bool UsePID(int8_t heater);
   float HeatSampleTime();
+  void CoolingFan(float speed);
 
 //-------------------------------------------------------------------------------------------------------
   protected:
@@ -483,13 +489,16 @@ class Platform
   private:
   
   float lastTime;
+  float longWait;
+  float addToTime;
+  unsigned long lastTimeCall;
   
   bool active;
   
+  Compatibility compatibility;
+
   void InitialiseInterrupts();
   int GetRawZHeight();
-
-  RepRap* reprap;
   
 // DRIVES
 
@@ -500,7 +509,6 @@ class Platform
   bool driveEnabled[DRIVES];
   int8_t lowStopPins[DRIVES];
   int8_t highStopPins[DRIVES];
-  int8_t homeDirection[DRIVES];
   float maxFeedrates[DRIVES];  
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
@@ -549,6 +557,7 @@ class Platform
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
+  int8_t coolingFanPin;
 
 // Serial/USB
 
@@ -573,16 +582,43 @@ class Platform
 // Network connection
 
   Network* network;
+  byte ipAddress[4];
+  byte netMask[4];
+  byte gateWay[4];
 };
 
 inline float Platform::Time()
 {
-  return TIME_FROM_REPRAP*(float)micros();
+  unsigned long now = micros();
+  if(now < lastTimeCall) // Has timer overflowed?
+	  addToTime += ((float)ULONG_MAX)*TIME_FROM_REPRAP;
+  lastTimeCall = now;
+  return addToTime + TIME_FROM_REPRAP*(float)now;
 }
 
 inline void Platform::Exit()
 {
+  Message(HOST_MESSAGE, "Platform class exited.\n");
   active = false;
+}
+
+inline Compatibility Platform::Emulating()
+{
+	if(compatibility == reprapFirmware)
+		return me;
+	return compatibility;
+}
+
+inline void Platform::SetEmulating(Compatibility c)
+{
+	if(c != me && c != reprapFirmware && c != marlin)
+	{
+		Message(HOST_MESSAGE, "Attempt to emulate unsupported firmware.\n");
+		return;
+	}
+	if(c == reprapFirmware)
+		c = me;
+	compatibility = c;
 }
 
 // Where the htm etc files are
@@ -635,11 +671,14 @@ inline void Platform::SetDriveStepsPerUnit(int8_t drive, float value)
   driveStepsPerUnit[drive] = value;
 }
 
-inline float Platform::Acceleration(int8_t drive, float value = -1)
+inline float Platform::Acceleration(int8_t drive)
 {
-  if(drive >= 0 && drive < DRIVES && value > 0)
-	  accelerations[drive] = value;
-  return accelerations[drive]; 
+	return accelerations[drive];
+}
+
+inline void Platform::SetAcceleration(int8_t drive, float value)
+{
+	accelerations[drive] = value;
 }
 
 inline float Platform::InstantDv(int8_t drive)
@@ -697,36 +736,41 @@ inline void Platform::SetMotorCurrent(byte drive, float current)
 {
 	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxStepperDigipotVoltage);
 //	Message(HOST_MESSAGE, "Set pot to: ");
-//	sprintf(scratchString, "%d", pot);
+//	snprintf(scratchString, STRING_LENGTH, "%d", pot);
 //	Message(HOST_MESSAGE, scratchString);
 //	Message(HOST_MESSAGE, "\n");
 	mcp.setNonVolatileWiper(potWipes[drive], pot);
 	mcp.setVolatileWiper(potWipes[drive], pot);
 }
 
-inline float Platform::HomeFeedRate(int8_t drive)
+inline float Platform::HomeFeedRate(int8_t axis)
 {
-  return homeFeedrates[drive];
+  return homeFeedrates[axis];
 }
 
-//inline void Platform::StartZProbing()
-//{
-//	zProbeStarting = true;
-//}
-
-inline float Platform::AxisLength(int8_t drive)
+inline void Platform::SetHomeFeedRate(int8_t axis, float value)
 {
-  return axisLengths[drive];
+   homeFeedrates[axis] = value;
 }
 
-inline int8_t Platform::HomeDirection(int8_t drive)
+inline float Platform::AxisLength(int8_t axis)
 {
-  return homeDirection[drive];
+  return axisLengths[axis];
+}
+
+inline void Platform::SetAxisLength(int8_t axis, float value)
+{
+  axisLengths[axis] = value;
 }
 
 inline float Platform::MaxFeedrate(int8_t drive)
 {
   return maxFeedrates[drive];
+}
+
+inline void Platform::SetMaxFeedrate(int8_t drive, float value)
+{
+	maxFeedrates[drive] = value;
 }
 
 inline int Platform::GetRawZHeight()
@@ -753,19 +797,15 @@ inline void Platform::SetZProbeStopHeight(float z)
 
 inline void Platform::SetZProbe(int iZ)
 {
-	if(!zProbeEnable)
-		zProbeEnable=true;
 	zProbeADValue = iZ;
 }
 
-inline void Platform::EnableZProbe(bool enableZ)
+inline void Platform::SetZProbeType(int pt)
 {
-	zProbeEnable=enableZ;
-}
-
-inline bool Platform::IsZProbeEnabled()
-{
-	return zProbeEnable;
+	if(pt != 0)
+		zProbePin = Z_PROBE_PIN;
+	else
+		zProbePin = -1;
 }
 
 
@@ -826,6 +866,13 @@ inline float Platform::DMix(int8_t heater)
   return dMix[heater];  
 }
 
+inline void Platform::CoolingFan(float speed)
+{
+	if(coolingFanPin < 0)
+		return;
+	analogWrite(coolingFanPin, (uint8_t)(speed*255.0));
+}
+
 
 //*********************************************************************************************************
 
@@ -851,6 +898,39 @@ inline void Platform::SetInterrupt(float s) // Seconds
 inline Network* Platform::GetNetwork()
 {
 	return network;
+}
+
+inline void Platform::SetIPAddress(byte ip[])
+{
+	for(uint8_t i = 0; i < 4; i++)
+		ipAddress[i] = ip[i];
+}
+
+inline byte* Platform::IPAddress()
+{
+	return ipAddress;
+}
+
+inline void Platform::SetNetMask(byte nm[])
+{
+	for(uint8_t i = 0; i < 4; i++)
+		netMask[i] = nm[i];
+}
+
+inline byte* Platform::NetMask()
+{
+	return netMask;
+}
+
+inline void Platform::SetGateWay(byte gw[])
+{
+	for(uint8_t i = 0; i < 4; i++)
+		gateWay[i] = gw[i];
+}
+
+inline byte* Platform::GateWay()
+{
+	return gateWay;
 }
 
 inline Line* Platform::GetLine()
@@ -896,13 +976,13 @@ inline void Line::Write(char* b)
 
 inline void Line::Write(float f)
 {
-	sprintf(scratchString, "%f", f);
+	snprintf(scratchString, STRING_LENGTH, "%f", f);
 	SerialUSB.print(scratchString);
 }
 
 inline void Line::Write(long l)
 {
-	sprintf(scratchString, "%d", l);
+	snprintf(scratchString, STRING_LENGTH, "%d", l);
 	SerialUSB.print(scratchString);
 }
 
