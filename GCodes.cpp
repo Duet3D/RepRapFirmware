@@ -500,9 +500,12 @@ char* GCodes::GetCurrentCoordinates()
 	return scratchString;
 }
 
-char* GCodes::OpenFileToWrite(char* fileName, GCodeBuffer *gb)
+char* GCodes::OpenFileToWrite(char* fileName, GCodeBuffer *gb, bool configFile)
 {
-	fileBeingWritten = platform->GetFileStore(platform->GetGCodeDir(), fileName, true);
+	if(configFile)
+		fileBeingWritten = platform->GetFileStore(platform->GetSysDir(), fileName, true);
+	else
+		fileBeingWritten = platform->GetFileStore(platform->GetGCodeDir(), fileName, true);
 	if(fileBeingWritten == NULL)
 		  platform->Message(HOST_MESSAGE, "Can't open GCode file for writing.\n");
 	else
@@ -1030,7 +1033,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 28: // Write to file
     	str = gb->GetUnprecedentedString();
-    	OpenFileToWrite(str, gb);
+    	OpenFileToWrite(str, gb, false);
     	snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
     	break;
 
@@ -1296,6 +1299,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 558: // Set Z probe type
     	if(gb->Seen('P'))
     		platform->SetZProbeType(gb->GetIValue());
+    	break;
+
+    case 559: // Upload config.g
+       	str = platform->GetConfigFile();
+        OpenFileToWrite(str, gb, true);
+        snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
     	break;
 
     case 906: // Set Motor currents

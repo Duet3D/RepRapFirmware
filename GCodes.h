@@ -98,7 +98,7 @@ class GCodes
     bool StandbyHeaters();
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);
     void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
-    char* OpenFileToWrite(char* fileName, GCodeBuffer *gb);
+    char* OpenFileToWrite(char* fileName, GCodeBuffer *gb, bool configFile);
     void WriteGCodeToFile(GCodeBuffer *gb);
     bool SendConfigToLine();
 
