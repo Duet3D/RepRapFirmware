@@ -1042,14 +1042,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 82:
-    	if(drivesRelative)
+//    	if(drivesRelative)
     		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
     		    lastPos[extruder - AXES] = 0.0;
     	drivesRelative = false;
     	break;
 
     case 83:
-    	if(!drivesRelative)
+//    	if(!drivesRelative)
     		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
     			lastPos[extruder - AXES] = 0.0;
     	drivesRelative = true;
