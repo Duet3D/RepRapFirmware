@@ -1106,6 +1106,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     	break;
 
+    case 84: // Motors off - deprecated, use M18
+        result = DisableDrives();
+        break;
+
     case 85: // Set inactive time
     	break;
 
