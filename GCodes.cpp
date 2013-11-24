@@ -61,6 +61,9 @@ void GCodes::Init()
   fileToPrint = NULL;
   fileBeingWritten = NULL;
   configFile = NULL;
+  eofString = EOF_STRING;
+  eofStringCounter = 0;
+  eofStringLength = strlen(eofString);
   homeX = false;
   homeY = false;
   homeZ = false;
@@ -114,16 +117,17 @@ void GCodes::Spin()
     fileGCode->SetFinished(ActOnGcode(fileGCode));
     platform->ClassReport("GCodes", longWait);
     return;
-  }  
+  }
 
   // Now check if a G Code byte is available from each of the sources
   // in the same order for the same reason.
 
   if(webserver->GCodeAvailable())
   {
-	  if(webGCode->Put(webserver->ReadGCode()))
+	  b = webserver->ReadGCode();
+	  if(webGCode->Put(b))
 	  {
-		  if(webGCode->WritingFile())
+		  if(webGCode->WritingFileDirectory())
 			  WriteGCodeToFile(webGCode);
 		  else
 			  webGCode->SetFinished(ActOnGcode(webGCode));
@@ -132,19 +136,36 @@ void GCodes::Spin()
 	  return;
   }
   
-  if(platform->GetLine()->Status() & byteAvailable)
+  // Now the serial interface.  First check the special case of our
+  // uploading the reprap.htm file
+
+  if(serialGCode->WritingFileDirectory() == platform->GetWebDir())
   {
-	platform->GetLine()->Read(b);
-    if(serialGCode->Put(b))
-    {
-      if(serialGCode->WritingFile())
-    	  WriteGCodeToFile(serialGCode);
-      else
-    	  serialGCode->SetFinished(ActOnGcode(serialGCode));
-    }
-    platform->ClassReport("GCodes", longWait);
-    return;
-  }  
+	  if(platform->GetLine()->Status() & byteAvailable)
+	  {
+		  platform->GetLine()->Read(b);
+		  WriteHTMLToFile(b, serialGCode);
+	  }
+  } else
+  {
+	  // Otherwise just deal in general with incoming bytes from the serial interface
+
+	  if(platform->GetLine()->Status() & byteAvailable)
+	  {
+		  platform->GetLine()->Read(b);
+		  if(serialGCode->Put(b))
+		  {
+			  if(serialGCode->WritingFileDirectory())
+				  WriteGCodeToFile(serialGCode);
+			  else
+				  serialGCode->SetFinished(ActOnGcode(serialGCode));
+		  }
+		  platform->ClassReport("GCodes", longWait);
+		  return;
+	  }
+  }
+
+
   
   if(fileBeingPrinted != NULL)
   {
@@ -500,18 +521,47 @@ char* GCodes::GetCurrentCoordinates()
 	return scratchString;
 }
 
-char* GCodes::OpenFileToWrite(char* fileName, GCodeBuffer *gb, bool configFile)
+char* GCodes::OpenFileToWrite(char* directory, char* fileName, GCodeBuffer *gb)
 {
-	if(configFile)
-		fileBeingWritten = platform->GetFileStore(platform->GetSysDir(), fileName, true);
-	else
-		fileBeingWritten = platform->GetFileStore(platform->GetGCodeDir(), fileName, true);
+	fileBeingWritten = platform->GetFileStore(directory, fileName, true);
 	if(fileBeingWritten == NULL)
 		  platform->Message(HOST_MESSAGE, "Can't open GCode file for writing.\n");
 	else
-		gb->SetWritingFile(true);
+		gb->SetWritingFileDirectory(directory);
+
+	eofStringCounter = 0;
 }
 
+void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
+{
+	char reply[1];
+	reply[0] = 0;
+
+	if(fileBeingWritten == NULL)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to write to a null file.\n");
+		return;
+	}
+
+	fileBeingWritten->Write(b);
+
+	if(b == eofString[eofStringCounter])
+	{
+		eofStringCounter++;
+		if(eofStringCounter >= eofStringLength)
+		{
+			fileBeingWritten->Close();
+			fileBeingWritten = NULL;
+			gb->SetWritingFileDirectory(NULL);
+			char* r = reply;
+			if(platform->Emulating() == marlin)
+				r = "Done saving file.";
+			HandleReply(false, gb == serialGCode , r, 'M', 560, false);
+			return;
+		}
+	} else
+		eofStringCounter = 0;
+}
 
 void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 {
@@ -532,7 +582,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 		{
 			fileBeingWritten->Close();
 			fileBeingWritten = NULL;
-			gb->SetWritingFile(false);
+			gb->SetWritingFileDirectory(NULL);
 			char* r = reply;
 			if(platform->Emulating() == marlin)
 				r = "Done saving file.";
@@ -1033,7 +1083,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 28: // Write to file
     	str = gb->GetUnprecedentedString();
-    	OpenFileToWrite(str, gb, false);
+    	OpenFileToWrite(platform->GetGCodeDir(), str, gb);
     	snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
     	break;
 
@@ -1042,19 +1092,23 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 82:
-    	if(drivesRelative)
+//    	if(drivesRelative)
     		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
     		    lastPos[extruder - AXES] = 0.0;
     	drivesRelative = false;
     	break;
 
     case 83:
-    	if(!drivesRelative)
+//    	if(!drivesRelative)
     		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
     			lastPos[extruder - AXES] = 0.0;
     	drivesRelative = true;
 
     	break;
+
+    case 84: // Motors off - deprecated, use M18
+        result = DisableDrives();
+        break;
 
     case 85: // Set inactive time
     	break;
@@ -1296,9 +1350,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 559: // Upload config.g
        	str = platform->GetConfigFile();
-        OpenFileToWrite(str, gb, true);
+        OpenFileToWrite(platform->GetSysDir(), str, gb);
         snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
     	break;
+
+    case 560: // Upload reprap.htm
+         str = INDEX_PAGE;
+         OpenFileToWrite(platform->GetWebDir(), str, gb);
+         snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+     	break;
 
     case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
@@ -1376,7 +1436,7 @@ GCodeBuffer::GCodeBuffer(Platform* p, char* id)
 { 
   platform = p;
   identity = id;
-  writingFile = false;  // Has to be done here as Init() is called every line.
+  writingFileDirectory = NULL;  // Has to be done here as Init() is called every line.
 }
 
 void GCodeBuffer::Init()
