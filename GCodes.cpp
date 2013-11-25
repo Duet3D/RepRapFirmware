@@ -127,7 +127,7 @@ void GCodes::Spin()
 	  b = webserver->ReadGCode();
 	  if(webGCode->Put(b))
 	  {
-		  if(webGCode->WritingFileDirectory())
+		  if(webGCode->WritingFileDirectory() != NULL)
 			  WriteGCodeToFile(webGCode);
 		  else
 			  webGCode->SetFinished(ActOnGcode(webGCode));
@@ -155,7 +155,7 @@ void GCodes::Spin()
 		  platform->GetLine()->Read(b);
 		  if(serialGCode->Put(b))
 		  {
-			  if(serialGCode->WritingFileDirectory())
+			  if(serialGCode->WritingFileDirectory() != NULL)
 				  WriteGCodeToFile(serialGCode);
 			  else
 				  serialGCode->SetFinished(ActOnGcode(serialGCode));

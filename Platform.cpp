@@ -360,8 +360,8 @@ inline void Platform::PollZHeight()
 EndStopHit Platform::Stopped(int8_t drive)
 {
 	if(zProbePin >= 0)
-	{
-		if(drive == Z_AXIS)
+	{  // Z probe is used for both X and Z.
+		if(drive != Y_AXIS)
 		{
 			if(ZProbe() > zProbeADValue)
 				return lowHit;
