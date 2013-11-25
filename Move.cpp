@@ -865,7 +865,8 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   if(totalSteps <= 0)
   {
-    platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement.\n");
+	if(reprap.Debug())
+		platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement.\n");
     myLookAheadEntry->Release();
     return result;
   }
@@ -952,7 +953,8 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   if(velocity <= 0.0)
   {
     velocity = 1.0;
-    platform->Message(HOST_MESSAGE, "DDA.Init(): Zero or negative initial velocity!\n");
+    if(reprap.Debug())
+    	platform->Message(HOST_MESSAGE, "DDA.Init(): Zero or negative initial velocity!\n");
   }
   
   // How far have we gone?

@@ -338,6 +338,8 @@ void Platform::SetHeater(int8_t heater, const float& power)
   
   
   byte p = (byte)(255.0*fmin(1.0, fmax(0.0, power)));
+  if(HEAT_ON == 0)
+	  p = 255 - p;
   if(heater == 0)
 	  analogWrite(heatOnPins[heater], p);
   else
