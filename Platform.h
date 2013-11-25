@@ -81,8 +81,8 @@ Licence: GPL
 #define ENABLE false      // What to send to enable... 
 #define DISABLE true     // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
-#define LOW_STOP_PINS {11, 28, 60, 31}
-#define HIGH_STOP_PINS {-1, -1, -1, -1}
+#define LOW_STOP_PINS {11, -1, 60, 31}
+#define HIGH_STOP_PINS {-1, 28, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 #define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
@@ -459,6 +459,7 @@ class Platform
   EndStopHit Stopped(int8_t drive);
   float AxisLength(int8_t axis);
   void SetAxisLength(int8_t axis, float value);
+  bool HighStopButNotLow(int8_t axis);
   
   float ZProbeStopHeight();
   void SetZProbeStopHeight(float z);
@@ -684,6 +685,11 @@ inline void Platform::SetAcceleration(int8_t drive, float value)
 inline float Platform::InstantDv(int8_t drive)
 {
   return instantDvs[drive]; 
+}
+
+inline bool Platform::HighStopButNotLow(int8_t axis)
+{
+	return (lowStopPins[axis] < 0)  && (highStopPins[axis] >= 0);
 }
 
 inline void Platform::SetDirection(byte drive, bool direction)

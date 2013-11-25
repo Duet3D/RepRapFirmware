@@ -67,7 +67,7 @@ void GCodes::Init()
   homeX = false;
   homeY = false;
   homeZ = false;
-  homeZFinalMove = false;
+  homeAxisFinalMove = false;
   dwellWaiting = false;
   stackPointer = 0;
   selectedHead = -1;
@@ -355,12 +355,32 @@ bool GCodes::DoHome()
 	if(homeX)
 	{
 		action[X_AXIS] = true;
-		moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
-		if(DoCannedCycleMove(moveToDo, action, true))
+		if(platform->HighStopButNotLow(X_AXIS))
 		{
-			homeX = false;
-			return NoHome();
+			if(homeAxisFinalMove)
+			{
+				moveToDo[X_AXIS] = 0.0;
+				if(DoCannedCycleMove(moveToDo, action, false))
+				{
+					homeAxisFinalMove = false;
+					homeX = false;
+					return NoHome();
+				}
+			}else
+			{
+				moveToDo[X_AXIS] = 2.0*platform->AxisLength(X_AXIS);
+				if(DoCannedCycleMove(moveToDo, action, true))
+					homeAxisFinalMove = true;
+			}
+		} else
+		{
+			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+			moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
+			if(DoCannedCycleMove(moveToDo, action, true))
+			{
+				homeX = false;
+				return NoHome();
+			}
 		}
 		return false;
 	}
@@ -368,12 +388,32 @@ bool GCodes::DoHome()
 	if(homeY)
 	{
 		action[Y_AXIS] = true;
-		moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
-		if(DoCannedCycleMove(moveToDo, action, true))
+		if(platform->HighStopButNotLow(Y_AXIS))
 		{
-			homeY = false;
-			return NoHome();
+			if(homeAxisFinalMove)
+			{
+				moveToDo[Y_AXIS] = 0.0;
+				if(DoCannedCycleMove(moveToDo, action, false))
+				{
+					homeAxisFinalMove = false;
+					homeY = false;
+					return NoHome();
+				}
+			}else
+			{
+				moveToDo[Y_AXIS] = 2.0*platform->AxisLength(Y_AXIS);
+				if(DoCannedCycleMove(moveToDo, action, true))
+					homeAxisFinalMove = true;
+			}
+		} else
+		{
+			moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
+			moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
+			if(DoCannedCycleMove(moveToDo, action, true))
+			{
+				homeY = false;
+				return NoHome();
+			}
 		}
 		return false;
 	}
@@ -382,23 +422,22 @@ bool GCodes::DoHome()
 	{
 		action[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-		if(homeZFinalMove)
+		if(homeAxisFinalMove)
 		{
 			moveToDo[Z_AXIS] = 0.0;
 			if(DoCannedCycleMove(moveToDo, action, false))
 			{
-				homeZFinalMove = false;
+				homeAxisFinalMove = false;
 				homeZ = false;
 				return NoHome();
 			}
-			return false;
 		}else
 		{
 			moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
 			if(DoCannedCycleMove(moveToDo, action, true))
-				homeZFinalMove = true;
-			return false;
+				homeAxisFinalMove = true;
 		}
+		return false;
 	}
 
 	// Should never get here

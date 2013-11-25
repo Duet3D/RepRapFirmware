@@ -135,7 +135,7 @@ class GCodes
     bool homeX;
     bool homeY;
     bool homeZ;
-    bool homeZFinalMove;
+    bool homeAxisFinalMove;
     float gFeedRate;
     int probeCount;
     int8_t cannedCycleMoveCount;
@@ -186,7 +186,7 @@ inline bool GCodes::PrintingAFile()
 
 inline bool GCodes::NoHome()
 {
-   return !(homeX || homeY || homeZ || homeZFinalMove);
+   return !(homeX || homeY || homeZ || homeAxisFinalMove);
 }
 
 // This function takes care of the fact that the heater and head indices 
