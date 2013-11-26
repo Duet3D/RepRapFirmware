@@ -803,11 +803,6 @@ void Platform::ReturnFileStore(FileStore* fs)
         }
 }
 
-void Platform::SetMessageIndent(uint8_t i)
-{
-	messageIndent = i;
-}
-
 void Platform::Message(char type, char* message)
 {
   switch(type)
@@ -960,6 +955,10 @@ void Network::Init()
 {
 	CleanRing();
 	Reset();
+//	if(LinkIsUp())
+//		reprap.GetPlatform()->SetHeater(0,1.0);
+//	else
+//		reprap.GetPlatform()->SetHeater(0,0.0);
 	if(!NETWORK) // NETWORK needs to be true to turn on the ethernet.  It is defined in Configuration.h
 		return;
 	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
@@ -1017,6 +1016,8 @@ bool Network::Read(char& b)
 	inputPointer++;
 	return true;
 }
+
+
 
 // Webserver calls this to write bytes that need to go out to the network
 

@@ -267,6 +267,8 @@ public:
 	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
 	void InputBufferReleased(void* pb);
 	void HttpStateReleased(void* h);
+	bool Active();
+	bool LinkIsUp();
 
 friend class Platform;
 
@@ -441,7 +443,8 @@ class Platform
   
   void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
                             // say, display the messages on an LCD. This may also transmit the messages to the host.
-  void SetMessageIndent(uint8_t i);
+  void PushMessageIndent();
+  void PopMessageIndent();
   
   // Movement
   
@@ -996,14 +999,29 @@ inline void Line::Write(long l)
 	SerialUSB.print(scratchString);
 }
 
+inline void Platform::PushMessageIndent()
+{
+	messageIndent += 2;
+}
 
-
-
+inline void Platform::PopMessageIndent()
+{
+	messageIndent -= 2;
+}
 
 
 //***************************************************************************************
 
+//queries the PHY for link status, true = link is up, false, link is down or there is some other error
+inline bool Network::LinkIsUp()
+{
+	return status_link_up();
+}
 
+inline bool Network::Active()
+{
+	return active;
+}
 
 
 
