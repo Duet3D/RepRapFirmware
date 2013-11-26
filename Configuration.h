@@ -65,6 +65,8 @@ enum Compatibility
 
 // Webserver stuff
 
+#define NETWORK true // Set true to turn the ethernet on
+
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
 #define INDEX_PAGE "reprap.htm"
@@ -74,8 +76,6 @@ enum Compatibility
 #define LONG_TIME 300.0 // Seconds
 
 #define EOF_STRING "<!-- **EoF** -->"
-
-#define NETWORK false // Set true to turn the ethernet on
 
 
 #endif

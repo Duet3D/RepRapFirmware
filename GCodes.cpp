@@ -244,7 +244,7 @@ bool GCodes::Pop()
 {
   if(stackPointer <= 0)
   {
-    platform->Message(HOST_MESSAGE, "Push(): stack underflow!\n");
+    platform->Message(HOST_MESSAGE, "Pop(): stack underflow!\n");
     return true;  
   }
   
@@ -271,6 +271,80 @@ bool GCodes::Pop()
   return true;
 }
 
+// Move expects all axis movements to be absolute, and all
+// extruder drive moves to be relative.  This function serves that.
+
+void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
+{
+	float absE;
+
+	for(uint8_t i = 0; i < DRIVES; i++)
+	{
+	    if(i < AXES)
+	    {
+	      if(gb->Seen(gCodeLetters[i]))
+	      {
+	        if(axesRelative)
+	          moveBuffer[i] += gb->GetFValue()*distanceScale;
+	        else
+	          moveBuffer[i] = gb->GetFValue()*distanceScale;
+	      }
+	    } else
+	    {
+	      if(gb->Seen(gCodeLetters[i]))
+	      {
+	        if(drivesRelative)
+	          moveBuffer[i] = gb->GetFValue()*distanceScale;
+	        else
+	        {
+	          absE = gb->GetFValue()*distanceScale;
+	          moveBuffer[i] = absE - lastPos[i - AXES];
+	          lastPos[i - AXES] = absE;
+	        }
+	      }
+	    }
+	}
+
+	// Deal with feedrate
+
+	if(gb->Seen(gCodeLetters[DRIVES]))
+	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec
+
+	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
+}
+
+void GCodes::LoadMoveBufferFromArray(float m[])
+{
+	float absE;
+
+	for(uint8_t i = 0; i < DRIVES; i++)
+	{
+		if(i < AXES)
+		{
+			if(axesRelative)
+				moveBuffer[i] += m[i];
+			else
+				moveBuffer[i] = m[i];
+
+		} else
+		{
+			if(drivesRelative)
+				moveBuffer[i] = m[i];
+			else
+			{
+				absE = m[i];
+				moveBuffer[i] = absE - lastPos[i - AXES];
+				lastPos[i - AXES] = absE;
+			}
+		}
+	}
+
+	// Deal with feedrate
+
+	moveBuffer[DRIVES] = m[DRIVES];  // We always set it, as Move may have modified the last one.
+}
+
+
 // This function is called for a G Code that makes a move.
 // If the Move class can't receive the move (i.e. things have to wait)
 // this returns false, otherwise true.
@@ -296,11 +370,11 @@ bool GCodes::SetUpMove(GCodeBuffer *gb)
 
 // The Move class calls this function to find what to do next.
 
-bool GCodes::ReadMove(float* m, bool& ce)
+bool GCodes::ReadMove(float m[], bool& ce)
 {
     if(!moveAvailable)
       return false; 
-    for(int8_t i = 0; i <= DRIVES; i++) // 1 more for F
+    for(int8_t i = 0; i <= DRIVES; i++) // 1 more for feedrate
       m[i] = moveBuffer[i];
     ce = checkEndStops;
     moveAvailable = false;
@@ -325,7 +399,7 @@ bool GCodes::DoCannedCycleMove(bool ce)
 		return true;
 	} else
 	{ // No.
-		if(!Push()) // Wait for the RepRap to finish whatever it was doing and save it's state
+		if(!Push()) // Wait for the RepRap to finish whatever it was doing, save it's state, and load moveBuffer[] with the current position.
 			return false;
 		for(int8_t drive = 0; drive <= DRIVES; drive++)
 		{
@@ -365,7 +439,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 		    return false;
 		for(int8_t drive = 0; drive <= DRIVES; drive++)
 		{
-			if(drive < AXES)
+			if(drive < AXES || drive == DRIVES)
 			{
 				record[drive] = moveBuffer[drive];
 				moveToDo[drive] = moveBuffer[drive];
@@ -386,7 +460,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 			}
 		}
 
-		if(gb->Seen(gCodeLetters[DRIVES]))
+		if(gb->Seen(gCodeLetters[DRIVES])) // Has the user specified a feedrate?
 		{
 			moveToDo[DRIVES] = gb->GetFValue();
 			action[DRIVES] = true;
@@ -398,7 +472,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 
 	if(DoCannedCycleMove(false))
 	{
-		platform->GetLine()->Write(record[0]);
+		LoadMoveBufferFromArray(record);
 		reprap.GetMove()->SetLiveCoordinates(record);  // This doesn't transform record
 		reprap.GetMove()->SetPositions(record);        // This does
 		offSetSet = false;
@@ -418,11 +492,12 @@ bool GCodes::DoHome()
 
 	for(int8_t drive = 0; drive < DRIVES; drive++)
 		action[drive] = false;
-	action[DRIVES] = true;
+	action[DRIVES] = true; // Always set the feedrate
 
 	if(homeX)
 	{
 		action[X_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 		if(platform->HighStopButNotLow(X_AXIS))
 		{
 			if(homeAxisFinalMove)
@@ -443,7 +518,6 @@ bool GCodes::DoHome()
 		} else
 		{
 			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-			moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 			if(DoCannedCycleMove(true))
 			{
 				homeX = false;
@@ -456,6 +530,7 @@ bool GCodes::DoHome()
 	if(homeY)
 	{
 		action[Y_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
 		if(platform->HighStopButNotLow(Y_AXIS))
 		{
 			if(homeAxisFinalMove)
@@ -476,7 +551,6 @@ bool GCodes::DoHome()
 		} else
 		{
 			moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-			moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
 			if(DoCannedCycleMove(true))
 			{
 				homeY = false;
@@ -823,49 +897,6 @@ bool GCodes::SetOffsets(GCodeBuffer *gb)
     // FIXME - do X, Y and Z
   }
   return true;  
-}
-
-
-// Move expects all axis movements to be absolute, and all
-// extruder drive moves to be relative.  This function serves that.
-
-void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
-{
-	float absE;
-
-	for(uint8_t i = 0; i < DRIVES; i++)
-	{
-	    if(i < AXES)
-	    {
-	      if(gb->Seen(gCodeLetters[i]))
-	      {
-	        if(axesRelative)
-	          moveBuffer[i] += gb->GetFValue()*distanceScale;
-	        else
-	          moveBuffer[i] = gb->GetFValue()*distanceScale;
-	      }
-	    } else
-	    {
-	      if(gb->Seen(gCodeLetters[i]))
-	      {
-	        if(drivesRelative)
-	          moveBuffer[i] = gb->GetFValue()*distanceScale;
-	        else
-	        {
-	          absE = gb->GetFValue()*distanceScale;
-	          moveBuffer[i] = absE - lastPos[i - AXES];
-	          lastPos[i - AXES] = absE;
-	        }
-	      }
-	    }
-	}
-
-	// Deal with feedrate
-
-	if(gb->Seen(gCodeLetters[DRIVES]))
-	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec
-
-	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
 }
 
 // Does what it says.
