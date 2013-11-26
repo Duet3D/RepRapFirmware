@@ -75,5 +75,7 @@ enum Compatibility
 
 #define EOF_STRING "<!-- **EoF** -->"
 
+#define NETWORK false // Set true to turn the ethernet on
+
 
 #endif

@@ -172,11 +172,12 @@ class Move
     void InverseTransform(float move[]);
     void Diagnostics();
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
+    void SetLiveCoordinates(float coords[]);
     
-  friend class DDA;
+    friend class DDA;
 
-  protected:
-    float liveCoordinates[DRIVES + 1];
+//  protected:
+
     
   private:
   
@@ -193,6 +194,7 @@ class Move
     LookAhead* LookAheadRingGet();
     int8_t GetMovementType(long sp[], long ep[]);
 
+    float liveCoordinates[DRIVES + 1];
     
     Platform* platform;
     GCodes* gCodes;
@@ -380,6 +382,13 @@ inline void Move::LiveCoordinates(float m[])
 	for(int8_t drive = 0; drive <= DRIVES; drive++)
 		m[drive] = liveCoordinates[drive];
 	InverseTransform(m);
+}
+
+inline void Move::SetLiveCoordinates(float coords[])
+{
+	for(int8_t drive = 0; drive <= DRIVES; drive++)
+		liveCoordinates[drive] = coords[drive];
+	Transform(liveCoordinates);
 }
 
 // To wait until all the current moves in the buffers are

@@ -81,7 +81,7 @@ class GCodes
   private:
   
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
-    bool DoCannedCycleMove(float moveToDo[], bool action[], bool ce);
+    bool DoCannedCycleMove(bool ce);
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
@@ -102,6 +102,7 @@ class GCodes
     void WriteGCodeToFile(GCodeBuffer *gb);
     bool SendConfigToLine();
     void WriteHTMLToFile(char b, GCodeBuffer *gb);
+    bool OffsetAxes(GCodeBuffer *gb);
 
     int8_t Heater(int8_t head);
     Platform* platform;
@@ -123,6 +124,10 @@ class GCodes
     int8_t stackPointer;
     char gCodeLetters[DRIVES + 1]; // Extra is for F
     float lastPos[DRIVES - AXES]; // Just needed for relative moves.
+	float record[DRIVES+1];
+	float moveToDo[DRIVES+1];
+	bool action[DRIVES+1];
+	bool offSetSet;
     float distanceScale;
     FileStore* fileBeingPrinted;
     FileStore* fileToPrint;

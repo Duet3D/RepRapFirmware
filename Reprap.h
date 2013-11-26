@@ -57,7 +57,17 @@ inline Heat* RepRap::GetHeat() { return heat; }
 inline GCodes* RepRap::GetGCodes() { return gCodes; }
 inline Webserver* RepRap::GetWebserver() { return webserver; }
 inline bool RepRap::Debug() { return debug; }
-inline void RepRap::SetDebug(bool d) { debug = d; if(debug) platform->PrintMemoryUsage(); }
+
+inline void RepRap::SetDebug(bool d)
+{
+	debug = d;
+	if(debug)
+	{
+		platform->Message(HOST_MESSAGE, "Debugging enabled\n");
+		platform->PrintMemoryUsage();
+	}
+}
+
 inline void RepRap::Interrupt() { move->Interrupt(); }
 
 

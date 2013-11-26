@@ -176,16 +176,28 @@ void RepRap::Init()
   move->Init();
   heat->Init();
   active = true;
+
+  platform->StartNetwork();
+
+  platform->Message(HOST_MESSAGE, NAME);
+  platform->Message(HOST_MESSAGE, " Version ");
+  platform->Message(HOST_MESSAGE, VERSION);
+  platform->Message(HOST_MESSAGE, ", dated ");
+  platform->Message(HOST_MESSAGE, DATE);
+  platform->Message(HOST_MESSAGE, ".\n\nExecuting ");
+  platform->Message(HOST_MESSAGE, platform->GetConfigFile());
+  platform->Message(HOST_MESSAGE, ":\n\n");
+  platform->SetMessageIndent(2);
   gCodes->RunConfigurationGCodes();
   while(gCodes->PrintingAFile()) // Wait till the file is finished
 	  Spin();
-  platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
+
+//  platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
+
+  platform->Message(HOST_MESSAGE, "\n");
+  platform->SetMessageIndent(0);
   platform->Message(HOST_MESSAGE, NAME);
-  platform->Message(HOST_MESSAGE, " version: ");
-  platform->Message(HOST_MESSAGE, VERSION);
-  platform->Message(HOST_MESSAGE, " dated: ");
-  platform->Message(HOST_MESSAGE, DATE);
-  platform->Message(HOST_MESSAGE, " Started\n");
+  platform->Message(HOST_MESSAGE, " is up and running.\n");
 }
 
 void RepRap::Exit()
