@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.1"
-#define DATE "2012-11-18"
+#define VERSION "0.23"
+#define DATE "2013-11-26"
 #define LAST_AUTHOR "reprappro.com"
 
 // Other firmware that we might switch to be compatible with.
@@ -64,6 +64,8 @@ enum Compatibility
 #define Z_DIVE 5.0  // Height from which to probe the bed (mm)
 
 // Webserver stuff
+
+#define NETWORK true // Set true to turn the ethernet on
 
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"

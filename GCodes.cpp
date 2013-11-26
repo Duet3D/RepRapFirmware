@@ -67,7 +67,8 @@ void GCodes::Init()
   homeX = false;
   homeY = false;
   homeZ = false;
-  homeZFinalMove = false;
+  homeAxisFinalMove = false;
+  offSetSet = false;
   dwellWaiting = false;
   stackPointer = 0;
   selectedHead = -1;
@@ -127,7 +128,7 @@ void GCodes::Spin()
 	  b = webserver->ReadGCode();
 	  if(webGCode->Put(b))
 	  {
-		  if(webGCode->WritingFileDirectory())
+		  if(webGCode->WritingFileDirectory() != NULL)
 			  WriteGCodeToFile(webGCode);
 		  else
 			  webGCode->SetFinished(ActOnGcode(webGCode));
@@ -155,7 +156,7 @@ void GCodes::Spin()
 		  platform->GetLine()->Read(b);
 		  if(serialGCode->Put(b))
 		  {
-			  if(serialGCode->WritingFileDirectory())
+			  if(serialGCode->WritingFileDirectory() != NULL)
 				  WriteGCodeToFile(serialGCode);
 			  else
 				  serialGCode->SetFinished(ActOnGcode(serialGCode));
@@ -243,7 +244,7 @@ bool GCodes::Pop()
 {
   if(stackPointer <= 0)
   {
-    platform->Message(HOST_MESSAGE, "Push(): stack underflow!\n");
+    platform->Message(HOST_MESSAGE, "Pop(): stack underflow!\n");
     return true;  
   }
   
@@ -270,6 +271,80 @@ bool GCodes::Pop()
   return true;
 }
 
+// Move expects all axis movements to be absolute, and all
+// extruder drive moves to be relative.  This function serves that.
+
+void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
+{
+	float absE;
+
+	for(uint8_t i = 0; i < DRIVES; i++)
+	{
+	    if(i < AXES)
+	    {
+	      if(gb->Seen(gCodeLetters[i]))
+	      {
+	        if(axesRelative)
+	          moveBuffer[i] += gb->GetFValue()*distanceScale;
+	        else
+	          moveBuffer[i] = gb->GetFValue()*distanceScale;
+	      }
+	    } else
+	    {
+	      if(gb->Seen(gCodeLetters[i]))
+	      {
+	        if(drivesRelative)
+	          moveBuffer[i] = gb->GetFValue()*distanceScale;
+	        else
+	        {
+	          absE = gb->GetFValue()*distanceScale;
+	          moveBuffer[i] = absE - lastPos[i - AXES];
+	          lastPos[i - AXES] = absE;
+	        }
+	      }
+	    }
+	}
+
+	// Deal with feedrate
+
+	if(gb->Seen(gCodeLetters[DRIVES]))
+	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec
+
+	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
+}
+
+void GCodes::LoadMoveBufferFromArray(float m[])
+{
+	float absE;
+
+	for(uint8_t i = 0; i < DRIVES; i++)
+	{
+		if(i < AXES)
+		{
+			if(axesRelative)
+				moveBuffer[i] += m[i];
+			else
+				moveBuffer[i] = m[i];
+
+		} else
+		{
+			if(drivesRelative)
+				moveBuffer[i] = m[i];
+			else
+			{
+				absE = m[i];
+				moveBuffer[i] = absE - lastPos[i - AXES];
+				lastPos[i - AXES] = absE;
+			}
+		}
+	}
+
+	// Deal with feedrate
+
+	moveBuffer[DRIVES] = m[DRIVES];  // We always set it, as Move may have modified the last one.
+}
+
+
 // This function is called for a G Code that makes a move.
 // If the Move class can't receive the move (i.e. things have to wait)
 // this returns false, otherwise true.
@@ -295,11 +370,11 @@ bool GCodes::SetUpMove(GCodeBuffer *gb)
 
 // The Move class calls this function to find what to do next.
 
-bool GCodes::ReadMove(float* m, bool& ce)
+bool GCodes::ReadMove(float m[], bool& ce)
 {
     if(!moveAvailable)
       return false; 
-    for(int8_t i = 0; i <= DRIVES; i++) // 1 more for F
+    for(int8_t i = 0; i <= DRIVES; i++) // 1 more for feedrate
       m[i] = moveBuffer[i];
     ce = checkEndStops;
     moveAvailable = false;
@@ -312,7 +387,7 @@ bool GCodes::ReadMove(float* m, bool& ce)
 // be ignored.  Recall that moveToDo[DRIVES] should contain the feedrate
 // you want (if action[DRIVES] is true).
 
-bool GCodes::DoCannedCycleMove(float moveToDo[], bool action[], bool ce)
+bool GCodes::DoCannedCycleMove(bool ce)
 {
 	// Is the move already running?
 
@@ -324,7 +399,7 @@ bool GCodes::DoCannedCycleMove(float moveToDo[], bool action[], bool ce)
 		return true;
 	} else
 	{ // No.
-		if(!Push()) // Wait for the RepRap to finish whatever it was doing and save it's state
+		if(!Push()) // Wait for the RepRap to finish whatever it was doing, save it's state, and load moveBuffer[] with the current position.
 			return false;
 		for(int8_t drive = 0; drive <= DRIVES; drive++)
 		{
@@ -338,6 +413,75 @@ bool GCodes::DoCannedCycleMove(float moveToDo[], bool action[], bool ce)
 	return false;
 }
 
+// This sets positions.  I.e. it handles G92.
+
+bool GCodes::SetPositions(GCodeBuffer *gb)
+{
+	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		return false;
+
+	LoadMoveBufferFromGCode(gb);
+	reprap.GetMove()->SetLiveCoordinates(moveBuffer);
+	reprap.GetMove()->SetPositions(moveBuffer);
+
+	return true;
+}
+
+// Offset the axes by the X, Y, and Z amounts in the M code in gb.  Say the machine is at [10, 20, 30] and
+// the offsets specified are [8, 2, -5].  The machine will move to [18, 22, 25] and henceforth consider that point
+// to be [10, 20, 30].
+
+bool GCodes::OffsetAxes(GCodeBuffer* gb)
+{
+	if(!offSetSet)
+	{
+		if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		    return false;
+		for(int8_t drive = 0; drive <= DRIVES; drive++)
+		{
+			if(drive < AXES || drive == DRIVES)
+			{
+				record[drive] = moveBuffer[drive];
+				moveToDo[drive] = moveBuffer[drive];
+			} else
+			{
+				record[drive] = 0.0;
+				moveToDo[drive] = 0.0;
+			}
+			action[drive] = false;
+		}
+
+		for(int8_t axis = 0; axis < AXES; axis++)
+		{
+			if(gb->Seen(gCodeLetters[axis]))
+			{
+				moveToDo[axis] += gb->GetFValue();
+				action[axis] = true;
+			}
+		}
+
+		if(gb->Seen(gCodeLetters[DRIVES])) // Has the user specified a feedrate?
+		{
+			moveToDo[DRIVES] = gb->GetFValue();
+			action[DRIVES] = true;
+		}
+
+		offSetSet = true;
+	}
+
+
+	if(DoCannedCycleMove(false))
+	{
+		LoadMoveBufferFromArray(record);
+		reprap.GetMove()->SetLiveCoordinates(record);  // This doesn't transform record
+		reprap.GetMove()->SetPositions(record);        // This does
+		offSetSet = false;
+		return true;
+	}
+
+	return false;
+}
+
 // Home one or more of the axes.  Which ones are decided by the
 // booleans homeX, homeY and homeZ.
 
@@ -346,21 +490,39 @@ bool GCodes::DoHome()
 	// Treat more or less like any other move
 	// Do one axis at a time, starting with X.
 
-	float moveToDo[DRIVES+1];
-	bool action[DRIVES+1];
 	for(int8_t drive = 0; drive < DRIVES; drive++)
 		action[drive] = false;
-	action[DRIVES] = true;
+	action[DRIVES] = true; // Always set the feedrate
 
 	if(homeX)
 	{
 		action[X_AXIS] = true;
-		moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
 		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
-		if(DoCannedCycleMove(moveToDo, action, true))
+		if(platform->HighStopButNotLow(X_AXIS))
 		{
-			homeX = false;
-			return NoHome();
+			if(homeAxisFinalMove)
+			{
+				moveToDo[X_AXIS] = 0.0;
+				if(DoCannedCycleMove(false))
+				{
+					homeAxisFinalMove = false;
+					homeX = false;
+					return NoHome();
+				}
+			}else
+			{
+				moveToDo[X_AXIS] = 2.0*platform->AxisLength(X_AXIS);
+				if(DoCannedCycleMove(true))
+					homeAxisFinalMove = true;
+			}
+		} else
+		{
+			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+			if(DoCannedCycleMove(true))
+			{
+				homeX = false;
+				return NoHome();
+			}
 		}
 		return false;
 	}
@@ -368,12 +530,32 @@ bool GCodes::DoHome()
 	if(homeY)
 	{
 		action[Y_AXIS] = true;
-		moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
 		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
-		if(DoCannedCycleMove(moveToDo, action, true))
+		if(platform->HighStopButNotLow(Y_AXIS))
 		{
-			homeY = false;
-			return NoHome();
+			if(homeAxisFinalMove)
+			{
+				moveToDo[Y_AXIS] = 0.0;
+				if(DoCannedCycleMove(false))
+				{
+					homeAxisFinalMove = false;
+					homeY = false;
+					return NoHome();
+				}
+			}else
+			{
+				moveToDo[Y_AXIS] = 2.0*platform->AxisLength(Y_AXIS);
+				if(DoCannedCycleMove(true))
+					homeAxisFinalMove = true;
+			}
+		} else
+		{
+			moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
+			if(DoCannedCycleMove(true))
+			{
+				homeY = false;
+				return NoHome();
+			}
 		}
 		return false;
 	}
@@ -382,23 +564,22 @@ bool GCodes::DoHome()
 	{
 		action[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-		if(homeZFinalMove)
+		if(homeAxisFinalMove)
 		{
 			moveToDo[Z_AXIS] = 0.0;
-			if(DoCannedCycleMove(moveToDo, action, false))
+			if(DoCannedCycleMove(false))
 			{
-				homeZFinalMove = false;
+				homeAxisFinalMove = false;
 				homeZ = false;
 				return NoHome();
 			}
-			return false;
 		}else
 		{
 			moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-			if(DoCannedCycleMove(moveToDo, action, true))
-				homeZFinalMove = true;
-			return false;
+			if(DoCannedCycleMove(true))
+				homeAxisFinalMove = true;
 		}
+		return false;
 	}
 
 	// Should never get here
@@ -419,8 +600,6 @@ bool GCodes::DoSingleZProbe()
 
 	reprap.GetMove()->SetIdentityTransform();  // It doesn't matter if these are called repeatedly
 
-	float moveToDo[DRIVES+1];
-	bool action[DRIVES+1];
 	for(int8_t drive = 0; drive <= DRIVES; drive++)
 		action[drive] = false;
 
@@ -432,7 +611,7 @@ bool GCodes::DoSingleZProbe()
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if(DoCannedCycleMove(moveToDo, action, false))
+		if(DoCannedCycleMove(false))
 			cannedCycleMoveCount++;
 		return false;
 
@@ -444,7 +623,7 @@ bool GCodes::DoSingleZProbe()
 		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if(DoCannedCycleMove(moveToDo, action, false))
+		if(DoCannedCycleMove(false))
 			cannedCycleMoveCount++;
 		return false;
 
@@ -454,7 +633,7 @@ bool GCodes::DoSingleZProbe()
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(true);
-		if(DoCannedCycleMove(moveToDo, action, true))
+		if(DoCannedCycleMove(true))
 			cannedCycleMoveCount++;
 		return false;
 
@@ -464,7 +643,7 @@ bool GCodes::DoSingleZProbe()
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		action[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if(DoCannedCycleMove(moveToDo, action, false))
+		if(DoCannedCycleMove(false))
 			cannedCycleMoveCount++;
 		return false;
 
@@ -718,63 +897,6 @@ bool GCodes::SetOffsets(GCodeBuffer *gb)
     // FIXME - do X, Y and Z
   }
   return true;  
-}
-
-
-// Move expects all axis movements to be absolute, and all
-// extruder drive moves to be relative.  This function serves that.
-
-void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
-{
-	float absE;
-
-	for(uint8_t i = 0; i < DRIVES; i++)
-	{
-	    if(i < AXES)
-	    {
-	      if(gb->Seen(gCodeLetters[i]))
-	      {
-	        if(axesRelative)
-	          moveBuffer[i] += gb->GetFValue()*distanceScale;
-	        else
-	          moveBuffer[i] = gb->GetFValue()*distanceScale;
-	      }
-	    } else
-	    {
-	      if(gb->Seen(gCodeLetters[i]))
-	      {
-	        if(drivesRelative)
-	          moveBuffer[i] = gb->GetFValue()*distanceScale;
-	        else
-	        {
-	          absE = gb->GetFValue()*distanceScale;
-	          moveBuffer[i] = absE - lastPos[i - AXES];
-	          lastPos[i - AXES] = absE;
-	        }
-	      }
-	    }
-	}
-
-	// Deal with feedrate
-
-	if(gb->Seen(gCodeLetters[DRIVES]))
-	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec
-
-	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
-}
-
-// This sets positions.  I.e. it handles G92.
-
-bool GCodes::SetPositions(GCodeBuffer *gb)
-{
-	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-		return false;
-
-	LoadMoveBufferFromGCode(gb);
-
-	reprap.GetMove()->SetPositions(moveBuffer);
-
-	return true;
 }
 
 // Does what it says.
@@ -1240,6 +1362,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 205:  //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
+    	break;
+
+    case 206:  // Offset axes
+    	result = OffsetAxes(gb);
     	break;
 
     case 208: // Set maximum axis lengths

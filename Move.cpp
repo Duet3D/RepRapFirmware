@@ -255,7 +255,6 @@ void Move::Spin()
 void Move::SetPositions(float move[])
 {
 	Transform(move);
-
 	for(uint8_t drive = 0; drive < DRIVES; drive++)
 		lastMove->SetDriveCoordinateAndZeroEndSpeed(move[drive], drive);
 	lastMove->SetFeedRate(move[DRIVES]);
@@ -865,7 +864,8 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   if(totalSteps <= 0)
   {
-    platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement.\n");
+	if(reprap.Debug())
+		platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement.\n");
     myLookAheadEntry->Release();
     return result;
   }
@@ -952,7 +952,8 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   if(velocity <= 0.0)
   {
     velocity = 1.0;
-    platform->Message(HOST_MESSAGE, "DDA.Init(): Zero or negative initial velocity!\n");
+//    if(reprap.Debug())
+//    	platform->Message(HOST_MESSAGE, "DDA.Init(): Zero or negative initial velocity!\n");
   }
   
   // How far have we gone?
@@ -1050,7 +1051,7 @@ void DDA::Step(bool noTest)
   if(!active && noTest)
   {
 	for(int8_t drive = 0; drive < DRIVES; drive++)
-		move->liveCoordinates[drive] = myLookAheadEntry->MachineToEndPoint(drive);
+		move->liveCoordinates[drive] = myLookAheadEntry->MachineToEndPoint(drive); // Don't use SetLiveCoordinates because that applies the transform
 	move->liveCoordinates[DRIVES] = myLookAheadEntry->FeedRate();
     myLookAheadEntry->Release();
     platform->SetInterrupt(STANDBY_INTERRUPT_RATE);

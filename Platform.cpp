@@ -64,6 +64,7 @@ void Platform::Init()
   compatibility = me;
 
   line->Init();
+  messageIndent = 0;
 
   //network->Init();
 
@@ -179,7 +180,7 @@ void Platform::Init()
   
   if(heatOnPins[0] >= 0)
         pinMode(heatOnPins[0], OUTPUT);
-      thermistorInfRs[0] = ( thermistorInfRs[0]*exp(-thermistorBetas[0]/(25.0 - ABS_ZERO)) );
+  thermistorInfRs[0] = ( thermistorInfRs[0]*exp(-thermistorBetas[0]/(25.0 - ABS_ZERO)) );
   
   for(i = 1; i < HEATERS; i++)
   {
@@ -213,7 +214,6 @@ void Platform::StartNetwork()
 }
 
 
-//int zcount; // NASTY - FIX ME
 
 void Platform::Spin()
 {
@@ -229,12 +229,6 @@ void Platform::Spin()
   lastTime = Time();
   ClassReport("Platform", longWait);
 
-//  zcount++;
-//  if(zcount > 30)
-//  {
-//	   zcount = 0;
-//	   SerialUSB.println(GetRawZHeight());
-//  }
 }
 
 //*****************************************************************************************************************
@@ -280,7 +274,9 @@ void Platform::PrintMemoryUsage()
     char *heapend=sbrk(0);
 	register char * stack_ptr asm ("sp");
 	struct mallinfo mi=mallinfo();
-	snprintf(scratchString, STRING_LENGTH, "\nMemory usage\nDynamic ram used: %d\n",mi.uordblks);
+	Message(HOST_MESSAGE, "\n");
+	Message(HOST_MESSAGE, "Memory usage:\n\n");
+	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n",mi.uordblks);
 	Message(HOST_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n",&_end - ramstart);
 	Message(HOST_MESSAGE, scratchString);
@@ -338,6 +334,8 @@ void Platform::SetHeater(int8_t heater, const float& power)
   
   
   byte p = (byte)(255.0*fmin(1.0, fmax(0.0, power)));
+  if(HEAT_ON == 0)
+	  p = 255 - p;
   if(heater == 0)
 	  analogWrite(heatOnPins[heater], p);
   else
@@ -360,8 +358,8 @@ inline void Platform::PollZHeight()
 EndStopHit Platform::Stopped(int8_t drive)
 {
 	if(zProbePin >= 0)
-	{
-		if(drive == Z_AXIS)
+	{  // Z probe is used for both X and Z.
+		if(drive != Y_AXIS)
 		{
 			if(ZProbe() > zProbeADValue)
 				return lowHit;
@@ -805,6 +803,10 @@ void Platform::ReturnFileStore(FileStore* fs)
         }
 }
 
+void Platform::SetMessageIndent(uint8_t i)
+{
+	messageIndent = i;
+}
 
 void Platform::Message(char type, char* message)
 {
@@ -829,6 +831,8 @@ void Platform::Message(char type, char* message)
 //    	m->Close();
 //    } else
 //    	line->Write("Can't open message file.\n");
+	for(uint8_t i = 0; i < messageIndent; i++)
+		line->Write(' ');
     line->Write(message);
   }
 }
@@ -862,6 +866,8 @@ void Line::Init()
 
 extern "C"
 {
+
+//void ResetEther();
 
 // Transmit data to the Network
 
@@ -912,7 +918,11 @@ bool RepRapNetworkHasALiveClient()
 
 Network::Network()
 {
+	active = false;
+
 	ethPinsInit();
+
+	//ResetEther();
 
 	// Construct the ring buffer
 
@@ -948,15 +958,22 @@ void Network::CleanRing()
 
 void Network::Init()
 {
-//	alternateInput = NULL;
-//	alternateOutput = NULL;
-	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 	CleanRing();
 	Reset();
+	if(!NETWORK) // NETWORK needs to be true to turn on the ethernet.  It is defined in Configuration.h
+		return;
+	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
+	active = true;
 }
 
 void Network::Spin()
 {
+	if(!active)
+	{
+		//ResetEther();
+		return;
+	}
+
 	// Keep the Ethernet running
 
 	ethernet_task();
