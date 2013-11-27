@@ -624,12 +624,10 @@ void Move::SetProbedBedPlane()
 	float xlj, ylj, zlj;
 	float a, b, c, d;   // Implicit plane equation - what we need to do a proper job
 
-	if(!reprap.GetGCodes()->GetProbeCoordinates(0, xj, yj, zj))
-		platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
-	if(!reprap.GetGCodes()->GetProbeCoordinates(1, xk, yk, zk))
-			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
-	if(!reprap.GetGCodes()->GetProbeCoordinates(2, xl, yl, zl))
-			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
+	if(!reprap.GetGCodes()->GetProbeCoordinates(0, xj, yj, zj) ||
+			!reprap.GetGCodes()->GetProbeCoordinates(1, xk, yk, zk) ||
+			!reprap.GetGCodes()->GetProbeCoordinates(2, xl, yl, zl))
+				platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
 	xkj = xk - xj;
 	ykj = yk - yj;
 	zkj = zk - zj;

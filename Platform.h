@@ -163,7 +163,7 @@ Licence: GPL
 
 #define HTTP_STATE_SIZE 5
 
-#define IP_ADDRESS {192, 168, 1, 14} // Need some sort of default...
+#define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
 
