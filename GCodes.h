@@ -87,7 +87,7 @@ class GCodes
     bool DoDwell(GCodeBuffer *gb);
     bool DoHome();
     bool DoSingleZProbe();
-    bool DoSingleZProbeAtCurrentPosition(int  probePointIndex, bool setPlane);
+    bool DoSingleZProbeAtCurrentPosition(int  probePointIndex, bool setPlane, float z, bool setZ);
     bool DoMultipleZProbe();
     bool SetPrintZProbe(GCodeBuffer *gb, char *reply);
     bool SetOffsets(GCodeBuffer *gb);
@@ -148,7 +148,6 @@ class GCodes
     int probeCount;
     int8_t cannedCycleMoveCount;
     bool cannedCycleMoveQueued;
-    float bedZs[NUMBER_OF_PROBE_POINTS];
     bool zProbesSet;
     float longWait;
 };

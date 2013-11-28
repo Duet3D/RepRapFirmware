@@ -73,8 +73,6 @@ void GCodes::Init()
   stackPointer = 0;
   selectedHead = -1;
   gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
-  for(int i = 0; i < NUMBER_OF_PROBE_POINTS; i++)
-	  bedZs[i] = 0.0;
   zProbesSet = false;
   probeCount = 0;
   cannedCycleMoveCount = 0;
@@ -649,7 +647,7 @@ bool GCodes::DoSingleZProbe()
 
 	default:
 		cannedCycleMoveCount = 0;
-		bedZs[probeCount] = reprap.GetMove()->GetLastProbedZ();
+		reprap.GetMove()->SetZBedProbePoint(probeCount, reprap.GetMove()->GetLastProbedZ());
 		return true;
 	}
 }
@@ -657,7 +655,7 @@ bool GCodes::DoSingleZProbe()
 // This sets wherever we are as the probe point probePointIndex
 // then probes the bed.
 
-bool GCodes::DoSingleZProbeAtCurrentPosition(int  probePointIndex, bool setPlane)
+bool GCodes::DoSingleZProbeAtCurrentPosition(int  probePointIndex, bool setPlane, float z, bool setZ)
 {
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
@@ -666,16 +664,33 @@ bool GCodes::DoSingleZProbeAtCurrentPosition(int  probePointIndex, bool setPlane
 	reprap.GetMove()->SetXBedProbePoint(probeCount, moveBuffer[X_AXIS]);
 	reprap.GetMove()->SetYBedProbePoint(probeCount, moveBuffer[Y_AXIS]);
 
-	if(DoSingleZProbe())
+	if(setZ)
 	{
+		if(z < SILLY_Z_VALUE)
+			reprap.GetMove()->SetZBedProbePoint(probeCount, moveBuffer[Z_AXIS]);
+		else
+			reprap.GetMove()->SetZBedProbePoint(probeCount, z);
+		reprap.GetMove()->SetZProbing(false); // Not really needed, but let's be safe
 		probeCount = 0;
-		reprap.GetMove()->SetZProbing(false);
 		if(setPlane)
 		{
 			zProbesSet = true;
 			reprap.GetMove()->SetProbedBedPlane();
 		}
 		return true;
+	} else
+	{
+		if(DoSingleZProbe())
+		{
+			probeCount = 0;
+			reprap.GetMove()->SetZProbing(false);
+			if(setPlane)
+			{
+				zProbesSet = true;
+				reprap.GetMove()->SetProbedBedPlane();
+			}
+			return true;
+		}
 	}
 
 	return false;
@@ -708,7 +723,7 @@ bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z)
 {
 	x = reprap.GetMove()->xBedProbePoint(count);
 	y = reprap.GetMove()->yBedProbePoint(count);
-	z = bedZs[count];
+	z = reprap.GetMove()->zBedProbePoint(count);
 	return zProbesSet;
 }
 
@@ -1161,7 +1176,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 30: // Z probe at the current position and set that as point P
     	if(gb->Seen('P'))
-    		result = DoSingleZProbeAtCurrentPosition(gb->GetIValue(), gb->Seen('S'));
+    	{
+    		iValue =gb->GetIValue();
+    		if(gb->Seen('Z'))
+    		{
+    			value = gb->GetFValue();
+    			result = DoSingleZProbeAtCurrentPosition(iValue, gb->Seen('S'), value, true);
+    		} else
+    			result = DoSingleZProbeAtCurrentPosition(iValue, gb->Seen('S'), 0.0, false);
+    	}
     	break;
 
     case 31: // Return the probe value, or set probe variables
