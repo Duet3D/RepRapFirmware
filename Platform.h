@@ -92,7 +92,7 @@ Licence: GPL
 #define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
-#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 910.0}
+#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 420.0}
 #define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    // (mm/sec)
 
 // AXES

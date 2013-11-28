@@ -652,27 +652,48 @@ bool GCodes::DoSingleZProbe()
 	}
 }
 
-// This sets wherever we are as the probe point probePointIndex
-// then probes the bed.
+// This sets wherever we are as the probe point P (probePointIndex)
+// then probes the bed, or gets all its parameters from the arguments.
+// If X or Y are specified, use those; otherwise use the machine's
+// coordinates.  If no Z is specified use the machine's coordinates.  If it
+// is specified and is greater than SILLY_Z_VALUE (i.e. greater than -9999.0)
+// then that value is used.  If it's less than SILLY_Z_VALUE the bed is
+// probed and that value is used.
 
-bool GCodes::DoSingleZProbeAtCurrentPosition(int  probePointIndex, bool setPlane, float z, bool setZ)
+bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 {
+	if(!gb->Seen('P'))
+		return true;
+
+	int probePointIndex = gb->GetIValue();
+
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
 
-	probeCount = probePointIndex;
-	reprap.GetMove()->SetXBedProbePoint(probeCount, moveBuffer[X_AXIS]);
-	reprap.GetMove()->SetYBedProbePoint(probeCount, moveBuffer[Y_AXIS]);
+	float x, y, z;
+	if(gb->Seen(gCodeLetters[X_AXIS]))
+		x = gb->GetFValue();
+	else
+		x = moveBuffer[X_AXIS];
+	if(gb->Seen(gCodeLetters[Y_AXIS]))
+		y = gb->GetFValue();
+	else
+		y = moveBuffer[Y_AXIS];
+	if(gb->Seen(gCodeLetters[Z_AXIS]))
+		z = gb->GetFValue();
+	else
+		z = moveBuffer[Z_AXIS];
 
-	if(setZ)
+	probeCount = probePointIndex;
+	reprap.GetMove()->SetXBedProbePoint(probeCount, x);
+	reprap.GetMove()->SetYBedProbePoint(probeCount, y);
+
+	if(z > SILLY_Z_VALUE)
 	{
-		if(z < SILLY_Z_VALUE)
-			reprap.GetMove()->SetZBedProbePoint(probeCount, moveBuffer[Z_AXIS]);
-		else
-			reprap.GetMove()->SetZBedProbePoint(probeCount, z);
+		reprap.GetMove()->SetZBedProbePoint(probeCount, z);
 		reprap.GetMove()->SetZProbing(false); // Not really needed, but let's be safe
 		probeCount = 0;
-		if(setPlane)
+		if(gb->Seen('S'))
 		{
 			zProbesSet = true;
 			reprap.GetMove()->SetProbedBedPlane();
@@ -684,7 +705,7 @@ bool GCodes::DoSingleZProbeAtCurrentPosition(int  probePointIndex, bool setPlane
 		{
 			probeCount = 0;
 			reprap.GetMove()->SetZProbing(false);
-			if(setPlane)
+			if(gb->Seen('S'))
 			{
 				zProbesSet = true;
 				reprap.GetMove()->SetProbedBedPlane();
@@ -1174,17 +1195,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       result = DoHome();
       break;
 
-    case 30: // Z probe at the current position and set that as point P
-    	if(gb->Seen('P'))
-    	{
-    		iValue =gb->GetIValue();
-    		if(gb->Seen('Z'))
-    		{
-    			value = gb->GetFValue();
-    			result = DoSingleZProbeAtCurrentPosition(iValue, gb->Seen('S'), value, true);
-    		} else
-    			result = DoSingleZProbeAtCurrentPosition(iValue, gb->Seen('S'), 0.0, false);
-    	}
+    case 30: // Z probe/manually set at a position and set that as point P
+    	result = SetSingleZProbeAtAPosition(gb);
     	break;
 
     case 31: // Return the probe value, or set probe variables

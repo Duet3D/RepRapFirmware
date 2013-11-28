@@ -87,7 +87,7 @@ class GCodes
     bool DoDwell(GCodeBuffer *gb);
     bool DoHome();
     bool DoSingleZProbe();
-    bool DoSingleZProbeAtCurrentPosition(int  probePointIndex, bool setPlane, float z, bool setZ);
+    bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);
     bool DoMultipleZProbe();
     bool SetPrintZProbe(GCodeBuffer *gb, char *reply);
     bool SetOffsets(GCodeBuffer *gb);
