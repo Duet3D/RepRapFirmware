@@ -258,9 +258,11 @@ void Move::Spin()
   platform->ClassReport("Move", longWait);
 }
 
+// These are the actual numbers we want in the positions, so don't transform them.
+
 void Move::SetPositions(float move[])
 {
-	Transform(move);
+	//Transform(move);
 	for(uint8_t drive = 0; drive < DRIVES; drive++)
 		lastMove->SetDriveCoordinateAndZeroEndSpeed(move[drive], drive);
 	lastMove->SetFeedRate(move[DRIVES]);

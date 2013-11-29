@@ -519,6 +519,7 @@ bool GCodes::DoHome()
 			if(DoCannedCycleMove(true))
 			{
 				homeX = false;
+				homeAxisFinalMove = false;
 				return NoHome();
 			}
 		}
@@ -552,6 +553,7 @@ bool GCodes::DoHome()
 			if(DoCannedCycleMove(true))
 			{
 				homeY = false;
+				homeAxisFinalMove = false;
 				return NoHome();
 			}
 		}
@@ -584,6 +586,7 @@ bool GCodes::DoHome()
 
 	checkEndStops = false;
 	moveAvailable = false;
+	homeAxisFinalMove = false;
 
 	return true;
 }
@@ -1182,6 +1185,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 28: // Home
       if(NoHome())
       {
+    	homeAxisFinalMove = false;
         homeX = gb->Seen(gCodeLetters[X_AXIS]);
         homeY = gb->Seen(gCodeLetters[Y_AXIS]);
         homeZ = gb->Seen(gCodeLetters[Z_AXIS]);
@@ -1560,6 +1564,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
          OpenFileToWrite(platform->GetWebDir(), str, gb);
          snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
      	break;
+
+    case 561:
+    	reprap.GetMove()->SetIdentityTransform();
+    	break;
 
     case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)

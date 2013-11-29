@@ -159,6 +159,7 @@ class Move
     void HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void SetPositions(float move[]);
+    void SetLiveCoordinates(float coords[]);
     void SetXBedProbePoint(int index, float x);
     void SetYBedProbePoint(int index, float y);
     void SetZBedProbePoint(int index, float z);
@@ -174,8 +175,8 @@ class Move
     void InverseTransform(float move[]);
     void Diagnostics();
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
-    void SetLiveCoordinates(float coords[]);
     
+
     friend class DDA;
 
 //  protected:
@@ -388,11 +389,15 @@ inline void Move::LiveCoordinates(float m[])
 	InverseTransform(m);
 }
 
+
+// These are the actual numbers that we want to be the coordinates, so
+// don't transform them.
+
 inline void Move::SetLiveCoordinates(float coords[])
 {
 	for(int8_t drive = 0; drive <= DRIVES; drive++)
 		liveCoordinates[drive] = coords[drive];
-	Transform(liveCoordinates);
+	//Transform(liveCoordinates);
 }
 
 // To wait until all the current moves in the buffers are
