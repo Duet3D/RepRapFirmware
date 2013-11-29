@@ -93,7 +93,7 @@ class GCodes
     bool SetOffsets(GCodeBuffer *gb);
     bool SetPositions(GCodeBuffer *gb);
     void LoadMoveBufferFromGCode(GCodeBuffer *gb);
-    void LoadMoveBufferFromArray(float m[]);
+    //void LoadMoveBufferFromArray(float m[]);
     bool NoHome();
     bool Push();
     bool Pop();

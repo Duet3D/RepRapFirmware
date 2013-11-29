@@ -311,36 +311,36 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
 	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
 }
 
-void GCodes::LoadMoveBufferFromArray(float m[])
-{
-	float absE;
-
-	for(uint8_t i = 0; i < DRIVES; i++)
-	{
-		if(i < AXES)
-		{
-			if(axesRelative)
-				moveBuffer[i] += m[i];
-			else
-				moveBuffer[i] = m[i];
-
-		} else
-		{
-			if(drivesRelative)
-				moveBuffer[i] = m[i];
-			else
-			{
-				absE = m[i];
-				moveBuffer[i] = absE - lastPos[i - AXES];
-				lastPos[i - AXES] = absE;
-			}
-		}
-	}
-
-	// Deal with feedrate
-
-	moveBuffer[DRIVES] = m[DRIVES];  // We always set it, as Move may have modified the last one.
-}
+//void GCodes::LoadMoveBufferFromArray(float m[])
+//{
+//	float absE;
+//
+//	for(uint8_t i = 0; i < DRIVES; i++)
+//	{
+//		if(i < AXES)
+//		{
+//			if(axesRelative)
+//				moveBuffer[i] += m[i];
+//			else
+//				moveBuffer[i] = m[i];
+//
+//		} else
+//		{
+//			if(drivesRelative)
+//				moveBuffer[i] = m[i];
+//			else
+//			{
+//				absE = m[i];
+//				moveBuffer[i] = absE - lastPos[i - AXES];
+//				lastPos[i - AXES] = absE;
+//			}
+//		}
+//	}
+//
+//	// Deal with feedrate
+//
+//	moveBuffer[DRIVES] = m[DRIVES];  // We always set it, as Move may have modified the last one.
+//}
 
 
 // This function is called for a G Code that makes a move.
@@ -470,7 +470,9 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 
 	if(DoCannedCycleMove(false))
 	{
-		LoadMoveBufferFromArray(record);
+		//LoadMoveBufferFromArray(record);
+		for(int drive = 0; drive <= DRIVES; drive++)
+			moveBuffer[drive] = record[drive];
 		reprap.GetMove()->SetLiveCoordinates(record);  // This doesn't transform record
 		reprap.GetMove()->SetPositions(record);        // This does
 		offSetSet = false;
