@@ -154,12 +154,18 @@ void Move::Init()
 
   xBedProbePoints[0] = 0.2*platform->AxisLength(X_AXIS);
   yBedProbePoints[0] = 0.2*platform->AxisLength(Y_AXIS);
+  zBedProbePoints[0] = 0.0;
+  probePointSet[0] = false;
 
   xBedProbePoints[1] = 0.8*platform->AxisLength(X_AXIS);
   yBedProbePoints[1] = 0.2*platform->AxisLength(Y_AXIS);
+  zBedProbePoints[1] = 0.0;
+  probePointSet[1] = false;
 
   xBedProbePoints[2] = 0.5*platform->AxisLength(X_AXIS);
   yBedProbePoints[2] = 0.8*platform->AxisLength(Y_AXIS);
+  zBedProbePoints[2] = 0.0;
+  probePointSet[2] = false;
 
   lastTime = platform->Time();
   longWait = lastTime;
@@ -252,9 +258,11 @@ void Move::Spin()
   platform->ClassReport("Move", longWait);
 }
 
+// These are the actual numbers we want in the positions, so don't transform them.
+
 void Move::SetPositions(float move[])
 {
-	Transform(move);
+	//Transform(move);
 	for(uint8_t drive = 0; drive < DRIVES; drive++)
 		lastMove->SetDriveCoordinateAndZeroEndSpeed(move[drive], drive);
 	lastMove->SetFeedRate(move[DRIVES]);
@@ -617,29 +625,22 @@ void Move::InverseTransform(float xyzPoint[])
 
 void Move::SetProbedBedPlane()
 {
-	float xj, yj, zj;
-	float xk, yk, zk;
-	float xl, yl, zl;
 	float xkj, ykj, zkj;
 	float xlj, ylj, zlj;
 	float a, b, c, d;   // Implicit plane equation - what we need to do a proper job
 
-	if(!reprap.GetGCodes()->GetProbeCoordinates(0, xj, yj, zj))
+	if(!probePointSet[0] || !probePointSet[1] || !probePointSet[2])
 		platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
-	if(!reprap.GetGCodes()->GetProbeCoordinates(1, xk, yk, zk))
-			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
-	if(!reprap.GetGCodes()->GetProbeCoordinates(2, xl, yl, zl))
-			platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
-	xkj = xk - xj;
-	ykj = yk - yj;
-	zkj = zk - zj;
-	xlj = xl - xj;
-	ylj = yl - yj;
-	zlj = zl - zj;
+	xkj = xBedProbePoints[1] - xBedProbePoints[0];
+	ykj = yBedProbePoints[1] - yBedProbePoints[0];
+	zkj = zBedProbePoints[1] - zBedProbePoints[0];
+	xlj = xBedProbePoints[2] - xBedProbePoints[0];
+	ylj = yBedProbePoints[2] - yBedProbePoints[0];
+	zlj = zBedProbePoints[2] - zBedProbePoints[0];
 	a = ykj*zlj - zkj*ylj;
 	b = zkj*xlj - xkj*zlj;
 	c = xkj*ylj - ykj*xlj;
-	d = -(xk*a + yk*b + zk*c);
+	d = -(xBedProbePoints[1]*a + yBedProbePoints[1]*b + zBedProbePoints[1]*c);
 	aX = -a/c;
 	aY = -b/c;
 	aC = -d/c;

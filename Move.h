@@ -159,10 +159,13 @@ class Move
     void HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void SetPositions(float move[]);
+    void SetLiveCoordinates(float coords[]);
     void SetXBedProbePoint(int index, float x);
     void SetYBedProbePoint(int index, float y);
+    void SetZBedProbePoint(int index, float z);
     float xBedProbePoint(int index);
     float yBedProbePoint(int index);
+    float zBedProbePoint(int index);
     void SetZProbing(bool probing);
     void SetProbedBedPlane();
     float GetLastProbedZ();
@@ -172,8 +175,8 @@ class Move
     void InverseTransform(float move[]);
     void Diagnostics();
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
-    void SetLiveCoordinates(float coords[]);
     
+
     friend class DDA;
 
 //  protected:
@@ -221,6 +224,8 @@ class Move
     long nextMachineEndPoints[DRIVES+1];
     float xBedProbePoints[NUMBER_OF_PROBE_POINTS];
     float yBedProbePoints[NUMBER_OF_PROBE_POINTS];
+    float zBedProbePoints[NUMBER_OF_PROBE_POINTS];
+    bool probePointSet[NUMBER_OF_PROBE_POINTS];
     float aX, aY, aC; // Bed plane explicit equation z' = z + aX*x + aY*y + aC
     bool zPlaneSet;
     float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
@@ -384,11 +389,15 @@ inline void Move::LiveCoordinates(float m[])
 	InverseTransform(m);
 }
 
+
+// These are the actual numbers that we want to be the coordinates, so
+// don't transform them.
+
 inline void Move::SetLiveCoordinates(float coords[])
 {
 	for(int8_t drive = 0; drive <= DRIVES; drive++)
 		liveCoordinates[drive] = coords[drive];
-	Transform(liveCoordinates);
+	//Transform(liveCoordinates);
 }
 
 // To wait until all the current moves in the buffers are
@@ -428,6 +437,17 @@ inline void Move::SetYBedProbePoint(int index, float y)
 	yBedProbePoints[index] = y;
 }
 
+inline void Move::SetZBedProbePoint(int index, float z)
+{
+	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	{
+		platform->Message(HOST_MESSAGE, "Z probe point Z index out of range.\n");
+		return;
+	}
+	zBedProbePoints[index] = z;
+	probePointSet[index] = true;
+}
+
 inline float Move::xBedProbePoint(int index)
 {
 	return xBedProbePoints[index];
@@ -436,6 +456,11 @@ inline float Move::xBedProbePoint(int index)
 inline float Move::yBedProbePoint(int index)
 {
 	return yBedProbePoints[index];
+}
+
+inline float Move::zBedProbePoint(int index)
+{
+	return zBedProbePoints[index];
 }
 
 inline void Move::SetZProbing(bool probing)

@@ -625,30 +625,33 @@ void Webserver::Spin()
   
   char c;
 
-  if(platform->GetNetwork()->Status() & clientConnected)
+  if(platform->GetNetwork()->Active())
   {
-    if(platform->GetNetwork()->Status() & byteAvailable)
-    {
-    	platform->GetNetwork()->Read(c);
-        //SerialUSB.print(c);
+	  if(platform->GetNetwork()->Status() & clientConnected)
+	  {
+		  if(platform->GetNetwork()->Status() & byteAvailable)
+		  {
+			  platform->GetNetwork()->Read(c);
+			  //SerialUSB.print(c);
 
-      if(receivingPost && postFile != NULL)
-      {
-        if(MatchBoundary(c))
-        {
-          //Serial.println("Got to end of file.");
-          postFile->Close();
-          SendFile(clientRequest);
-          clientRequest[0] = 0;
-          InitialisePost();       
-        }
-        platform->ClassReport("Webserver", longWait);
-        return;
-      }  
-      
-      CharFromClient(c);
-    }
-  }  
+			  if(receivingPost && postFile != NULL)
+			  {
+				  if(MatchBoundary(c))
+				  {
+					  //Serial.println("Got to end of file.");
+					  postFile->Close();
+					  SendFile(clientRequest);
+					  clientRequest[0] = 0;
+					  InitialisePost();
+				  }
+				  platform->ClassReport("Webserver", longWait);
+				  return;
+			  }
+
+			  CharFromClient(c);
+		  }
+	  }
+  }
    
   if (platform->GetNetwork()->Status() & clientLive)
   {

@@ -78,6 +78,16 @@
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
 
+//*****************************AB
+//Pass through function for interface status
+//by including ethernetif.h directly and calling ethernetif_phy_link_status(); this function is not required
+bool status_link_up()
+{
+return ethernetif_phy_link_status();
+}
+//*****************************AB
+
+
 struct netif* GetConfiguration()
 {
 	return &gs_net_if;

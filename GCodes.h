@@ -87,11 +87,13 @@ class GCodes
     bool DoDwell(GCodeBuffer *gb);
     bool DoHome();
     bool DoSingleZProbe();
+    bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);
     bool DoMultipleZProbe();
+    bool SetPrintZProbe(GCodeBuffer *gb, char *reply);
     bool SetOffsets(GCodeBuffer *gb);
     bool SetPositions(GCodeBuffer *gb);
     void LoadMoveBufferFromGCode(GCodeBuffer *gb);
-    void LoadMoveBufferFromArray(float m[]);
+    //void LoadMoveBufferFromArray(float m[]);
     bool NoHome();
     bool Push();
     bool Pop();
@@ -127,7 +129,7 @@ class GCodes
     float lastPos[DRIVES - AXES]; // Just needed for relative moves.
 	float record[DRIVES+1];
 	float moveToDo[DRIVES+1];
-	bool action[DRIVES+1];
+	bool activeDrive[DRIVES+1];
 	bool offSetSet;
     float distanceScale;
     FileStore* fileBeingPrinted;
@@ -146,7 +148,6 @@ class GCodes
     int probeCount;
     int8_t cannedCycleMoveCount;
     bool cannedCycleMoveQueued;
-    float bedZs[NUMBER_OF_PROBE_POINTS];
     bool zProbesSet;
     float longWait;
 };

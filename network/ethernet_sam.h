@@ -54,6 +54,8 @@ extern "C" {
 /**INDENT-ON**/
 /// @endcond
 
+bool status_link_up();//*****************************AB
+
 /**
  * \brief Initialize the ethernet interface.
  *

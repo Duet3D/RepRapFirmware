@@ -92,7 +92,7 @@ Licence: GPL
 #define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
-#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 910.0}
+#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 420.0}
 #define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    // (mm/sec)
 
 // AXES
@@ -125,7 +125,7 @@ Licence: GPL
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
 #define COOLING_FAN_PIN 34
-#define HEAT_ON 1 // 0 for inverted heater (eg Duet v0.6)
+#define HEAT_ON 0 // 0 for inverted heater (eg Duet v0.6)
 
 #define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
@@ -163,7 +163,7 @@ Licence: GPL
 
 #define HTTP_STATE_SIZE 5
 
-#define IP_ADDRESS {192, 168, 1, 14} // Need some sort of default...
+#define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
 
@@ -267,6 +267,8 @@ public:
 	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
 	void InputBufferReleased(void* pb);
 	void HttpStateReleased(void* h);
+	bool Active();
+	bool LinkIsUp();
 
 friend class Platform;
 
@@ -441,7 +443,8 @@ class Platform
   
   void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
                             // say, display the messages on an LCD. This may also transmit the messages to the host.
-  void SetMessageIndent(uint8_t i);
+  void PushMessageIndent();
+  void PopMessageIndent();
   
   // Movement
   
@@ -996,14 +999,29 @@ inline void Line::Write(long l)
 	SerialUSB.print(scratchString);
 }
 
+inline void Platform::PushMessageIndent()
+{
+	messageIndent += 2;
+}
 
-
-
+inline void Platform::PopMessageIndent()
+{
+	messageIndent -= 2;
+}
 
 
 //***************************************************************************************
 
+//queries the PHY for link status, true = link is up, false, link is down or there is some other error
+inline bool Network::LinkIsUp()
+{
+	return status_link_up();
+}
 
+inline bool Network::Active()
+{
+	return active;
+}
 
 
 

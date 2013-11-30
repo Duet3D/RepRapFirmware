@@ -177,8 +177,6 @@ void RepRap::Init()
   heat->Init();
   active = true;
 
-  platform->StartNetwork();
-
   platform->Message(HOST_MESSAGE, NAME);
   platform->Message(HOST_MESSAGE, " Version ");
   platform->Message(HOST_MESSAGE, VERSION);
@@ -186,16 +184,18 @@ void RepRap::Init()
   platform->Message(HOST_MESSAGE, DATE);
   platform->Message(HOST_MESSAGE, ".\n\nExecuting ");
   platform->Message(HOST_MESSAGE, platform->GetConfigFile());
-  platform->Message(HOST_MESSAGE, ":\n\n");
-  platform->SetMessageIndent(2);
+  platform->Message(HOST_MESSAGE, "...\n\n");
+
+  platform->PushMessageIndent();
   gCodes->RunConfigurationGCodes();
   while(gCodes->PrintingAFile()) // Wait till the file is finished
-	  Spin();
+	  gCodes->Spin();
+  platform->PopMessageIndent();
 
-//  platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
+  platform->Message(HOST_MESSAGE, "\nStarting network...\n");
+  platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
 
   platform->Message(HOST_MESSAGE, "\n");
-  platform->SetMessageIndent(0);
   platform->Message(HOST_MESSAGE, NAME);
   platform->Message(HOST_MESSAGE, " is up and running.\n");
 }
@@ -279,6 +279,11 @@ char* ftoa(char *a, const float& f, int prec)
     a = scratchString;
   char *ret = a;
   long whole = (long)f;
+  if(!whole && f < 0.0)
+  {
+	  a[0] = '-';
+	  a++;
+  }
   snprintf(a, STRING_LENGTH, "%d", whole);
   while (*a != '\0') a++;
   *a++ = '.';
