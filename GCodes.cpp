@@ -272,7 +272,7 @@ bool GCodes::Pop()
 // Move expects all axis movements to be absolute, and all
 // extruder drive moves to be relative.  This function serves that.
 
-void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
+void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92)
 {
 	float absE;
 
@@ -282,16 +282,16 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
 	    {
 	      if(gb->Seen(gCodeLetters[i]))
 	      {
-	        if(axesRelative)
-	          moveBuffer[i] += gb->GetFValue()*distanceScale;
+	        if(!axesRelative || doingG92)
+	        	moveBuffer[i] = gb->GetFValue()*distanceScale;
 	        else
-	          moveBuffer[i] = gb->GetFValue()*distanceScale;
+	        	moveBuffer[i] += gb->GetFValue()*distanceScale;
 	      }
 	    } else
 	    {
 	      if(gb->Seen(gCodeLetters[i]))
 	      {
-	        if(drivesRelative)
+	        if(drivesRelative || doingG92)
 	          moveBuffer[i] = gb->GetFValue()*distanceScale;
 	        else
 	        {
@@ -311,37 +311,6 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb)
 	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
 }
 
-//void GCodes::LoadMoveBufferFromArray(float m[])
-//{
-//	float absE;
-//
-//	for(uint8_t i = 0; i < DRIVES; i++)
-//	{
-//		if(i < AXES)
-//		{
-//			if(axesRelative)
-//				moveBuffer[i] += m[i];
-//			else
-//				moveBuffer[i] = m[i];
-//
-//		} else
-//		{
-//			if(drivesRelative)
-//				moveBuffer[i] = m[i];
-//			else
-//			{
-//				absE = m[i];
-//				moveBuffer[i] = absE - lastPos[i - AXES];
-//				lastPos[i - AXES] = absE;
-//			}
-//		}
-//	}
-//
-//	// Deal with feedrate
-//
-//	moveBuffer[DRIVES] = m[DRIVES];  // We always set it, as Move may have modified the last one.
-//}
-
 
 // This function is called for a G Code that makes a move.
 // If the Move class can't receive the move (i.e. things have to wait)
@@ -359,7 +328,7 @@ bool GCodes::SetUpMove(GCodeBuffer *gb)
   if(!reprap.GetMove()->GetCurrentState(moveBuffer))
     return false;
   
-  LoadMoveBufferFromGCode(gb);
+  LoadMoveBufferFromGCode(gb, false);
   
   checkEndStops = false;
   moveAvailable = true;
@@ -418,7 +387,7 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
 
-	LoadMoveBufferFromGCode(gb);
+	LoadMoveBufferFromGCode(gb, true);
 	reprap.GetMove()->SetLiveCoordinates(moveBuffer);
 	reprap.GetMove()->SetPositions(moveBuffer);
 

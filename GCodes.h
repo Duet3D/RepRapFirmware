@@ -92,8 +92,7 @@ class GCodes
     bool SetPrintZProbe(GCodeBuffer *gb, char *reply);
     bool SetOffsets(GCodeBuffer *gb);
     bool SetPositions(GCodeBuffer *gb);
-    void LoadMoveBufferFromGCode(GCodeBuffer *gb);
-    //void LoadMoveBufferFromArray(float m[]);
+    void LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92);
     bool NoHome();
     bool Push();
     bool Pop();
