@@ -670,7 +670,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 		if(gb->Seen('S'))
 		{
 			zProbesSet = true;
-			reprap.GetMove()->SetProbedBedPlane();
+			reprap.GetMove()->SetProbedBedEquation();
 		}
 		return true;
 	} else
@@ -682,7 +682,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 			if(gb->Seen('S'))
 			{
 				zProbesSet = true;
-				reprap.GetMove()->SetProbedBedPlane();
+				reprap.GetMove()->SetProbedBedEquation();
 			}
 			return true;
 		}
@@ -691,20 +691,20 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 	return false;
 }
 
-// This probes multiple points on the bed (usually three in a
-// triangle), then sets the bed transformation to compensate
+// This probes multiple points on the bed (three in a
+// triangle or four in the corners), then sets the bed transformation to compensate
 // for the bed not quite being the plane Z = 0.
 
 bool GCodes::DoMultipleZProbe()
 {
 	if(DoSingleZProbe())
 		probeCount++;
-	if(probeCount >= NUMBER_OF_PROBE_POINTS)
+	if(probeCount >= reprap.GetMove()->NumberOfProbePoints())
 	{
 		probeCount = 0;
 		zProbesSet = true;
 		reprap.GetMove()->SetZProbing(false);
-		reprap.GetMove()->SetProbedBedPlane();
+		reprap.GetMove()->SetProbedBedEquation();
 		return true;
 	}
 	return false;
@@ -1072,9 +1072,10 @@ void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int
 			return;
 		}
 
-		if( (gMOrT == 'M' && code == 105) || (gMOrT == 'G' && code == 998) )
+		if( (gMOrT == 'M' && code == 105) || (gMOrT == 'G' && code == 998))
 		{
 			platform->GetLine()->Write(response);
+			platform->GetLine()->Write(" ");
 			platform->GetLine()->Write(reply);
 			platform->GetLine()->Write("\n");
 			return;
@@ -1338,6 +1339,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		strncpy(reply, str, STRING_LENGTH);
     	} else
     		result = false;
+    	break;
+
+    case 115: // Print firmware version
+    	snprintf(reply, STRING_LENGTH, "FIRMWARE_NAME:%s FIRMWARE_VERSION:%s ELECTRONICS:%s DATE:%s", NAME, VERSION, ELECTRONICS, DATE);
     	break;
 
     case 109: // Depricated

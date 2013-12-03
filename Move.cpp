@@ -147,25 +147,20 @@ void Move::Init()
   tanXY = 0.0;
   tanYZ = 0.0;
   tanXZ = 0.0;
-  zPlaneSet = false;
+  zEquationSet = false;
 
   lastZHit = 0.0;
   zProbing = false;
 
-  xBedProbePoints[0] = 0.2*platform->AxisLength(X_AXIS);
-  yBedProbePoints[0] = 0.2*platform->AxisLength(Y_AXIS);
-  zBedProbePoints[0] = 0.0;
-  probePointSet[0] = false;
+  for(uint8_t point = 0; point < NUMBER_OF_PROBE_POINTS; point++)
+  {
+	  xBedProbePoints[point] = (0.2 + 0.6*(float)(point%2))*platform->AxisLength(X_AXIS);
+	  yBedProbePoints[point] = (0.2 + 0.6*(float)(point/2))*platform->AxisLength(Y_AXIS);
+	  zBedProbePoints[point] = 0.0;
+	  probePointSet[point] = unset;
+  }
 
-  xBedProbePoints[1] = 0.8*platform->AxisLength(X_AXIS);
-  yBedProbePoints[1] = 0.2*platform->AxisLength(Y_AXIS);
-  zBedProbePoints[1] = 0.0;
-  probePointSet[1] = false;
-
-  xBedProbePoints[2] = 0.5*platform->AxisLength(X_AXIS);
-  yBedProbePoints[2] = 0.8*platform->AxisLength(Y_AXIS);
-  zBedProbePoints[2] = 0.0;
-  probePointSet[2] = false;
+  secondDegreeCompensation = false;
 
   lastTime = platform->Time();
   longWait = lastTime;
@@ -609,28 +604,64 @@ void Move::SetIdentityTransform()
 	aC = 0.0;
 }
 
+
 void Move::Transform(float xyzPoint[])
 {
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
 	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] + tanYZ*xyzPoint[Z_AXIS];
-	xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
+	if(secondDegreeCompensation)
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+	else
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
+//	platform->GetLine()->Write(xyzPoint[Y_AXIS]);
+//	platform->GetLine()->Write('\n');
 }
 
 void Move::InverseTransform(float xyzPoint[])
 {
-	xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
+	if(secondDegreeCompensation)
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+	else
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
 	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] - tanYZ*xyzPoint[Z_AXIS];
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] - (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
 }
 
-void Move::SetProbedBedPlane()
+void Move::SetProbedBedEquation()
 {
+	if(AllProbeCoordinatesSet(0) && AllProbeCoordinatesSet(1) && AllProbeCoordinatesSet(2))
+	{
+		secondDegreeCompensation = AllProbeCoordinatesSet(3);
+		if(secondDegreeCompensation)
+		{
+			/*
+			 * Transform to a ruled-surface quadratic.  The corner points for interpolation are indexed:
+			 *
+			 *   ^  [1]      [2]
+			 *   |
+			 *   Y
+			 *   |
+			 *   |  [0]      [3]
+			 *      -----X---->
+			 *
+			 *   These are the scaling factors to apply to x and y coordinates to get them into the
+			 *   unit interval [0, 1].
+			 */
+			aX = 1.0/(xBedProbePoints[3] - xBedProbePoints[0]);
+			aY = 1.0/(yBedProbePoints[1] - yBedProbePoints[0]);
+			zEquationSet = true;
+			return;
+		}
+	} else
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to set bed compensation before all probe points have been recorded.");
+		return;
+	}
+
 	float xkj, ykj, zkj;
 	float xlj, ylj, zlj;
 	float a, b, c, d;   // Implicit plane equation - what we need to do a proper job
 
-	if(!probePointSet[0] || !probePointSet[1] || !probePointSet[2])
-		platform->Message(HOST_MESSAGE, "Attempt to set bed plane when probing is incomplete!\n");
 	xkj = xBedProbePoints[1] - xBedProbePoints[0];
 	ykj = yBedProbePoints[1] - yBedProbePoints[0];
 	zkj = zBedProbePoints[1] - zBedProbePoints[0];
@@ -644,7 +675,7 @@ void Move::SetProbedBedPlane()
 	aX = -a/c;
 	aY = -b/c;
 	aC = -d/c;
-	zPlaneSet = true;
+	zEquationSet = true;
 }
 
 // FIXME

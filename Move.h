@@ -52,6 +52,14 @@ enum MovementType
   eMove = 4 
 };
 
+enum PointCoordinateSet
+{
+	unset = 0,
+	xSet = 1,
+	ySet = 2,
+	zSet = 4
+};
+
 
 class LookAhead
 {  
@@ -166,8 +174,11 @@ class Move
     float xBedProbePoint(int index);
     float yBedProbePoint(int index);
     float zBedProbePoint(int index);
+    int NumberOfProbePoints();
+    bool AllProbeCoordinatesSet(int index);
     void SetZProbing(bool probing);
-    void SetProbedBedPlane();
+    void SetProbedBedEquation();
+    float SecondDegreeTransformZ(float x, float y);
     float GetLastProbedZ();
     void SetAxisCompensation(int8_t axis, float tangent);
     void SetIdentityTransform();
@@ -225,12 +236,13 @@ class Move
     float xBedProbePoints[NUMBER_OF_PROBE_POINTS];
     float yBedProbePoints[NUMBER_OF_PROBE_POINTS];
     float zBedProbePoints[NUMBER_OF_PROBE_POINTS];
-    bool probePointSet[NUMBER_OF_PROBE_POINTS];
+    uint8_t probePointSet[NUMBER_OF_PROBE_POINTS];
     float aX, aY, aC; // Bed plane explicit equation z' = z + aX*x + aY*y + aC
-    bool zPlaneSet;
+    bool zEquationSet;
     float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
     float lastZHit;
     bool zProbing;
+    bool secondDegreeCompensation;
     float longWait;
 };
 
@@ -425,6 +437,7 @@ inline void Move::SetXBedProbePoint(int index, float x)
 		return;
 	}
 	xBedProbePoints[index] = x;
+	probePointSet[index] |= xSet;
 }
 
 inline void Move::SetYBedProbePoint(int index, float y)
@@ -435,6 +448,7 @@ inline void Move::SetYBedProbePoint(int index, float y)
 		return;
 	}
 	yBedProbePoints[index] = y;
+	probePointSet[index] |= ySet;
 }
 
 inline void Move::SetZBedProbePoint(int index, float z)
@@ -445,7 +459,7 @@ inline void Move::SetZBedProbePoint(int index, float z)
 		return;
 	}
 	zBedProbePoints[index] = z;
-	probePointSet[index] = true;
+	probePointSet[index] |= zSet;
 }
 
 inline float Move::xBedProbePoint(int index)
@@ -472,6 +486,31 @@ inline float Move::GetLastProbedZ()
 {
 	return lastZHit;
 }
+
+inline bool Move::AllProbeCoordinatesSet(int index)
+{
+	return probePointSet[index] == xSet | ySet | zSet;
+}
+
+/*
+ * Transform to a ruled-surface quadratic.  The corner points for interpolation are indexed:
+ *
+ *   ^  [1]      [2]
+ *   |
+ *   Y
+ *   |
+ *   |  [0]      [3]
+ *      -----X---->
+ *
+ *   The values of x and y are transformed to put them in the interval [0, 1].
+ */
+inline float Move::SecondDegreeTransformZ(float x, float y)
+{
+	x = (x - xBedProbePoints[0])*aX;
+	y = (y - yBedProbePoints[0])*aY;
+	return (1.0 - x)*(1.0 - y)*zBedProbePoints[0] + x*(1.0 - y)*zBedProbePoints[3] + (1.0 - x)*y*zBedProbePoints[1] + x*y*zBedProbePoints[2];
+}
+
 
 inline void Move::SetAxisCompensation(int8_t axis, float tangent)
 {

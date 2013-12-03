@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.29"
-#define DATE "2013-12-01"
+#define VERSION "0.30"
+#define DATE "2013-12-03"
 #define LAST_AUTHOR "reprappro.com"
 
 // Other firmware that we might switch to be compatible with.
@@ -60,7 +60,7 @@ enum Compatibility
 
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
-#define NUMBER_OF_PROBE_POINTS 3
+#define NUMBER_OF_PROBE_POINTS 4
 #define Z_DIVE 5.0  // Height from which to probe the bed (mm)
 
 #define SILLY_Z_VALUE -9999.0

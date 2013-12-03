@@ -34,6 +34,10 @@ Licence: GPL
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+// What are we supposed to be running on
+
+#define ELECTRONICS "Duet"
+
 // Language-specific includes
 
 #include <stdio.h>
