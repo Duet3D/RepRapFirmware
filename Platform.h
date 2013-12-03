@@ -125,7 +125,7 @@ Licence: GPL
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
 #define COOLING_FAN_PIN 34
-#define HEAT_ON 1 // 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define HEAT_ON 0 // 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 #define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
