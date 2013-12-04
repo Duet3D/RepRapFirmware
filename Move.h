@@ -117,7 +117,7 @@ protected:
 	DDA(Move* m, Platform* p, DDA* n);
 	MovementProfile Init(LookAhead* lookAhead, float& u, float& v);
 	void Start(bool noTest);
-	void Step(bool noTest);
+	void Step();
 	bool Active();
 	DDA* Next();
 	float InstantDv();
@@ -189,9 +189,6 @@ class Move
     
 
     friend class DDA;
-
-//  protected:
-
     
   private:
   

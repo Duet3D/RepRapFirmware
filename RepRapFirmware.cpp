@@ -246,6 +246,7 @@ void RepRap::EmergencyStop()
 	for(i = 0; i < HEATERS; i++)
 		platform->SetHeater(i, 0.0);
 
+
 	// We do this twice, to avoid an interrupt switching
 	// a drive back on.  move->Exit() should prevent
 	// interrupts doing this.
@@ -259,6 +260,7 @@ void RepRap::EmergencyStop()
 			platform->Disable(i);
 		}
 	}
+	platform->Message(HOST_MESSAGE, "Emergency Stop! Reset the controller to continue.");
 }
 
 

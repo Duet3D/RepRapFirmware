@@ -553,7 +553,7 @@ void Move::Interrupt()
   {
     // No - it's still live.  Step it and return.
     
-    dda->Step(true);
+    dda->Step();
     return;
   }
   
@@ -1009,11 +1009,14 @@ void DDA::Start(bool noTest)
   active = true;  
 }
 
-void DDA::Step(bool noTest)
+void DDA::Step()
 {
-  if(!active && noTest)
+  if(!active)
     return;
   
+  if(!move->active)
+	  return;
+
   uint8_t axesMoving = 0;
   uint8_t extrudersMoving = 0;
   
@@ -1022,7 +1025,6 @@ void DDA::Step(bool noTest)
     counter[drive] += delta[drive];
     if(counter[drive] > 0)
     {
-      if(noTest)
         platform->Step(drive);
 
       counter[drive] -= totalSteps;
@@ -1076,11 +1078,10 @@ void DDA::Step(bool noTest)
     stepCount++;
     active = stepCount < totalSteps;
     
-    if(noTest)
-      platform->SetInterrupt(timeStep);
+    platform->SetInterrupt(timeStep);
   }
   
-  if(!active && noTest)
+  if(!active)
   {
 	for(int8_t drive = 0; drive < DRIVES; drive++)
 		move->liveCoordinates[drive] = myLookAheadEntry->MachineToEndPoint(drive); // Don't use SetLiveCoordinates because that applies the transform
