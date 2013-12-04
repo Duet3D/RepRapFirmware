@@ -29,11 +29,7 @@ T0; Select extruder
 M140 S65; Set bed temperature
 G1 Z5 F200 ; lift nozzle
 G28 X0 Y0; home X and Y axes
-G1 X55 F2000; move to bed probe point
-G28 Z0; zero Z
-G32 ; Probe bed
 G1 X2 Y50 F2000; Go to wait for warm position
-G1 Z0 F200
 M116; Wait for all temperatures
 ;M109 S205 ; wait for temperature to be reached
 G90 ; use absolute coordinates
