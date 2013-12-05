@@ -18,29 +18,18 @@
 ; first layer extrusion width = 0.48mm
 
 G21 ; set units to millimeters
-M107
-M104 S205 ; set temperature
-G21 ; set units to millimeters
 G90 ; use absolute coordinates
 M83 ; use relative distances for extrusion
-M107; Fan off
-G10 P0 S205 R205 ; Set extruder temperature
-T0; Select extruder
 M140 S55; Set bed temperature
 G1 Z5 F200 ; lift nozzle
-G28 X0 Y0; home X and Y axes
-G1 X55 F2000; move to bed probe point
-G28 Z0; zero Z
-G32 ; Probe bed
-G1 X0 Y0 F2000; Go to wait for warm position
-G1 Z0 F200
+G1 X2 Y50 F2000; Go to wait for warm position
 M116; Wait for all temperatures
-M109 S205 ; wait for temperature to be reached
-G90 ; use absolute coordinates
-M83 ; use relative distances for extrusion
+G10 P0 S205 R205 ; Set extruder temperature
+T0; Select extruder
+M116; Wait for all temperatures
 G1 F1800.000 E-1.00000
-G1 Z0.240 F3600.000
 G1 X83.244 Y72.792
+G1 Z0.240 F3600.000
 G1 F1800.000 E1.00000
 G1 X99.024 Y56.882 F600.000 E1.08284
 G1 X100.014 Y56.062 E0.06212

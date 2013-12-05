@@ -697,7 +697,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 
 bool GCodes::DoMultipleZProbe()
 {
-	if(reprap.GetMove()->NumberOfProbePoints() < 3)
+	if(reprap.GetMove()->NumberOfXYProbePoints() < 3)
 	{
 		platform->Message(HOST_MESSAGE, "Bed probing: there needs to be 3 or more points set.\n");
 		return true;
@@ -705,7 +705,7 @@ bool GCodes::DoMultipleZProbe()
 
 	if(DoSingleZProbe())
 		probeCount++;
-	if(probeCount >= reprap.GetMove()->NumberOfProbePoints())
+	if(probeCount >= reprap.GetMove()->NumberOfXYProbePoints())
 	{
 		probeCount = 0;
 		zProbesSet = true;

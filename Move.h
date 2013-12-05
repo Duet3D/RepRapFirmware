@@ -175,7 +175,9 @@ class Move
     float yBedProbePoint(int index);
     float zBedProbePoint(int index);
     int NumberOfProbePoints();
+    int NumberOfXYProbePoints();
     bool AllProbeCoordinatesSet(int index);
+    bool XYProbeCoordinatesSet(int index);
     void SetZProbing(bool probing);
     void SetProbedBedEquation();
     float SecondDegreeTransformZ(float x, float y);
@@ -487,7 +489,12 @@ inline float Move::GetLastProbedZ()
 
 inline bool Move::AllProbeCoordinatesSet(int index)
 {
-	return probePointSet[index] == xSet | ySet | zSet;
+	return probePointSet[index] == (xSet | ySet | zSet);
+}
+
+inline bool Move::XYProbeCoordinatesSet(int index)
+{
+	return (probePointSet[index]  & xSet) &&  (probePointSet[index]  & ySet);
 }
 
 inline int Move::NumberOfProbePoints()
@@ -495,6 +502,18 @@ inline int Move::NumberOfProbePoints()
 	if(AllProbeCoordinatesSet(0) && AllProbeCoordinatesSet(1) && AllProbeCoordinatesSet(2))
 	{
 		if(AllProbeCoordinatesSet(3))
+			return 4;
+		else
+			return 3;
+	}
+	return 0;
+}
+
+inline int Move::NumberOfXYProbePoints()
+{
+	if(XYProbeCoordinatesSet(0) && XYProbeCoordinatesSet(1) && XYProbeCoordinatesSet(2))
+	{
+		if(XYProbeCoordinatesSet(3))
 			return 4;
 		else
 			return 3;

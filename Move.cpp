@@ -605,6 +605,7 @@ void Move::SetIdentityTransform()
 	aX = 0.0;
 	aY = 0.0;
 	aC = 0.0;
+	secondDegreeCompensation = false;
 }
 
 
