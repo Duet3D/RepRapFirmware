@@ -160,6 +160,9 @@ void Move::Init()
 	  probePointSet[point] = unset;
   }
 
+  xRectangle = 1.0/(0.8*platform->AxisLength(X_AXIS));
+  yRectangle = xRectangle;
+
   secondDegreeCompensation = false;
 
   lastTime = platform->Time();
@@ -629,9 +632,9 @@ void Move::InverseTransform(float xyzPoint[])
 
 void Move::SetProbedBedEquation()
 {
-	if(AllProbeCoordinatesSet(0) && AllProbeCoordinatesSet(1) && AllProbeCoordinatesSet(2))
+	if(NumberOfProbePoints() >= 3)
 	{
-		secondDegreeCompensation = AllProbeCoordinatesSet(3);
+		secondDegreeCompensation = (NumberOfProbePoints() == 4);
 		if(secondDegreeCompensation)
 		{
 			/*
@@ -647,8 +650,8 @@ void Move::SetProbedBedEquation()
 			 *   These are the scaling factors to apply to x and y coordinates to get them into the
 			 *   unit interval [0, 1].
 			 */
-			aX = 1.0/(xBedProbePoints[3] - xBedProbePoints[0]);
-			aY = 1.0/(yBedProbePoints[1] - yBedProbePoints[0]);
+			xRectangle = 1.0/(xBedProbePoints[3] - xBedProbePoints[0]);
+			yRectangle = 1.0/(yBedProbePoints[1] - yBedProbePoints[0]);
 			zEquationSet = true;
 			return;
 		}
@@ -1025,7 +1028,7 @@ void DDA::Step()
     counter[drive] += delta[drive];
     if(counter[drive] > 0)
     {
-        platform->Step(drive);
+      platform->Step(drive);
 
       counter[drive] -= totalSteps;
       

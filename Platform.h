@@ -101,7 +101,7 @@ Licence: GPL
 
 // AXES
 
-#define AXIS_LENGTHS {210, 195, 140} // mm
+#define AXIS_LENGTHS {210, 200, 140} // mm
 #define HOME_FEEDRATES {50.0, 50.0, 1.0}  // mm/sec
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}
 

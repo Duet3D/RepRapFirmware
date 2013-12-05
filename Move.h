@@ -237,6 +237,7 @@ class Move
     float aX, aY, aC; // Bed plane explicit equation z' = z + aX*x + aY*y + aC
     bool zEquationSet;
     float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
+    float xRectangle, yRectangle;
     float lastZHit;
     bool zProbing;
     bool secondDegreeCompensation;
@@ -489,6 +490,18 @@ inline bool Move::AllProbeCoordinatesSet(int index)
 	return probePointSet[index] == xSet | ySet | zSet;
 }
 
+inline int Move::NumberOfProbePoints()
+{
+	if(AllProbeCoordinatesSet(0) && AllProbeCoordinatesSet(1) && AllProbeCoordinatesSet(2))
+	{
+		if(AllProbeCoordinatesSet(3))
+			return 4;
+		else
+			return 3;
+	}
+	return 0;
+}
+
 /*
  * Transform to a ruled-surface quadratic.  The corner points for interpolation are indexed:
  *
@@ -503,8 +516,8 @@ inline bool Move::AllProbeCoordinatesSet(int index)
  */
 inline float Move::SecondDegreeTransformZ(float x, float y)
 {
-	x = (x - xBedProbePoints[0])*aX;
-	y = (y - yBedProbePoints[0])*aY;
+	x = (x - xBedProbePoints[0])*xRectangle;
+	y = (y - yBedProbePoints[0])*yRectangle;
 	return (1.0 - x)*(1.0 - y)*zBedProbePoints[0] + x*(1.0 - y)*zBedProbePoints[3] + (1.0 - x)*y*zBedProbePoints[1] + x*y*zBedProbePoints[2];
 }
 
