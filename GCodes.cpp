@@ -1130,6 +1130,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
   bool result = true;
   bool error = false;
   bool resend = false;
+  bool seen;
   char reply[STRING_LENGTH];
 
   reply[0] = 0;
@@ -1292,10 +1293,18 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 85: // Set inactive time
     	break;
 
-    case 92: // Set steps/mm for some axes
+    case 92: // Set/report steps/mm for some axes
+    	seen = false;
     	for(int8_t drive = 0; drive < DRIVES; drive++)
     		if(gb->Seen(gCodeLetters[drive]))
+    		{
     			platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
+    			seen = true;
+    		}
+    	if(!seen)
+    		snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: %d",
+    				(int)platform->DriveStepsPerUnit(X_AXIS), (int)platform->DriveStepsPerUnit(Y_AXIS),
+    				(int)platform->DriveStepsPerUnit(Z_AXIS), (int)platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
         break;
 
     case 104: // Depricated
@@ -1548,6 +1557,17 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 561:
     	reprap.GetMove()->SetIdentityTransform();
+    	break;
+
+    case 876: // TEMPORARY - this will go away...
+    	if(gb->Seen('P'))
+    	{
+    		iValue = gb->GetIValue();
+    		if(iValue != 1)
+    			platform->SetHeatOn(0);
+    		else
+    			platform->SetHeatOn(1);
+    	}
     	break;
 
     case 906: // Set Motor currents
