@@ -188,6 +188,7 @@ class Move
     void InverseTransform(float move[]);
     void Diagnostics();
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
+    void SetStepHypotenuse();
     
 
     friend class DDA;

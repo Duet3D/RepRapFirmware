@@ -99,47 +99,8 @@ void Move::Init()
   liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 
   checkEndStopsOnNextMove = false;
-  
-  // The stepDistances arrays are look-up tables of the Euclidean distance 
-  // between the start and end of a step.  If the step is just along one axis,
-  // it's just that axis's step length.  If it's more, it is a Pythagoran 
-  // sum of all the axis steps that take part.
-  
-  float d, e;
-  
-  for(i = 0; i < (1<<AXES); i++)
-  {
-    d = 0.0;
-    for(j = 0; j < AXES; j++)
-    {
-       if(i & (1<<j))
-       {
-          e = 1.0/platform->DriveStepsPerUnit(j);
-          d += e*e;
-       }
-    }
-    stepDistances[i] = sqrt(d);
-  }
-  
-  for(i = 0; i < (1<<(DRIVES-AXES)); i++)
-  {
-    d = 0.0;
-    for(j = 0; j < (DRIVES-AXES); j++)
-    {
-       if(i & (1<<j))
-       {
-          e = 1.0/platform->DriveStepsPerUnit(AXES + j);
-          d += e*e;
-       }
-    }
-    extruderStepDistances[i] = sqrt(d);
-  }
-  
-  // We don't want 0.  If no axes/extruders are moving these should never be used.
-  // But try to be safe.
-  
-  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
-  extruderStepDistances[0] = stepDistances[0];
+
+  SetStepHypotenuse();
 
   currentFeedrate = -1.0;
 
@@ -364,6 +325,51 @@ int8_t Move::GetMovementType(long p0[], long p1[])
 	  result |= zMove;
 
   return result;
+}
+
+void Move::SetStepHypotenuse()
+{
+	 // The stepDistances arrays are look-up tables of the Euclidean distance
+	  // between the start and end of a step.  If the step is just along one axis,
+	  // it's just that axis's step length.  If it's more, it is a Pythagoran
+	  // sum of all the axis steps that take part.
+
+	  float d, e;
+	  int8_t i, j;
+
+	  for(i = 0; i < (1<<AXES); i++)
+	  {
+	    d = 0.0;
+	    for(j = 0; j < AXES; j++)
+	    {
+	       if(i & (1<<j))
+	       {
+	          e = 1.0/platform->DriveStepsPerUnit(j);
+	          d += e*e;
+	       }
+	    }
+	    stepDistances[i] = sqrt(d);
+	  }
+
+	  for(i = 0; i < (1<<(DRIVES-AXES)); i++)
+	  {
+	    d = 0.0;
+	    for(j = 0; j < (DRIVES-AXES); j++)
+	    {
+	       if(i & (1<<j))
+	       {
+	          e = 1.0/platform->DriveStepsPerUnit(AXES + j);
+	          d += e*e;
+	       }
+	    }
+	    extruderStepDistances[i] = sqrt(d);
+	  }
+
+	  // We don't want 0.  If no axes/extruders are moving these should never be used.
+	  // But try to be safe.
+
+	  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
+	  extruderStepDistances[0] = stepDistances[0];
 }
 
 // Take an item from the look-ahead ring and add it to the DDA ring, if

@@ -1272,16 +1272,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 82:
-//    	if(drivesRelative)
-    		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
-    		    lastPos[extruder - AXES] = 0.0;
+    	for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
+    		lastPos[extruder - AXES] = 0.0;
     	drivesRelative = false;
     	break;
 
     case 83:
-//    	if(!drivesRelative)
-    		for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
-    			lastPos[extruder - AXES] = 0.0;
+    	for(int8_t extruder = AXES; extruder < DRIVES; extruder++)
+    		lastPos[extruder - AXES] = 0.0;
     	drivesRelative = true;
 
     	break;
@@ -1301,6 +1299,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     			platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
     			seen = true;
     		}
+    	reprap.GetMove()->SetStepHypotenuse();
     	if(!seen)
     		snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: %d",
     				(int)platform->DriveStepsPerUnit(X_AXIS), (int)platform->DriveStepsPerUnit(Y_AXIS),

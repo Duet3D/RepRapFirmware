@@ -88,7 +88,7 @@ Licence: GPL
 #define LOW_STOP_PINS {11, -1, 60, 31}
 #define HIGH_STOP_PINS {-1, 28, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
-#define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
+#define POT_WIPES {1, 3, 2, 0} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
 #define Z_PROBE_AD_VALUE 400
