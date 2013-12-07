@@ -34,6 +34,10 @@ Licence: GPL
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+// What are we supposed to be running on
+
+#define ELECTRONICS "Duet"
+
 // Language-specific includes
 
 #include <stdio.h>
@@ -97,7 +101,7 @@ Licence: GPL
 
 // AXES
 
-#define AXIS_LENGTHS {210, 195, 140} // mm
+#define AXIS_LENGTHS {210, 200, 140} // mm
 #define HOME_FEEDRATES {50.0, 50.0, 1.0}  // mm/sec
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}
 
@@ -487,6 +491,7 @@ class Platform
   bool UsePID(int8_t heater);
   float HeatSampleTime();
   void CoolingFan(float speed);
+  void SetHeatOn(int8_t ho); //TEMPORARY - this will go away...
 
 //-------------------------------------------------------------------------------------------------------
   protected:
@@ -565,6 +570,7 @@ class Platform
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
   int8_t coolingFanPin;
+  int8_t turnHeatOn;
 
 // Serial/USB
 
@@ -886,6 +892,11 @@ inline void Platform::CoolingFan(float speed)
 	if(coolingFanPin < 0)
 		return;
 	analogWrite(coolingFanPin, (uint8_t)(speed*255.0));
+}
+
+inline void Platform::SetHeatOn(int8_t ho)
+{
+	turnHeatOn = ho;
 }
 
 

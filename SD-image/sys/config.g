@@ -11,6 +11,7 @@ M92 E420; Set extruder steps/mm
 G21 ; Work in mm
 G90 ; Absolute positioning
 M83 ; Extrusions relative
+M558 P1 ; Turn Z Probe on
 G31 Z0.5 P500 ; Set Z probe height and threshold
 M906 X800 Y800 Z800 E800 ; Motor currents (mA)
 T0 ; Select extruder 0

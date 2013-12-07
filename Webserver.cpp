@@ -122,17 +122,18 @@ bool Webserver::LoadGcodeBuffer(char* gc, bool convertWeb)
   gcodeBuffer[gcodePointer] = 0;
   gcodePointer = 0;  
   
-// We intercept two G Codes so we can deal with file manipulation.  That
+// We intercept three G/M Codes so we can deal with file manipulation and emergencies.  That
 // way things don't get out of sync, and - as a file name can contain
 // a valid G code (!) - confusion is avoided.
   
-  int8_t fileAct = 0;
-  if(StringStartsWith(gcodeBuffer, "M30 ")) fileAct |= 1;
-  if(StringStartsWith(gcodeBuffer, "M23 ")) fileAct |= 2;
+  int8_t specialAction = 0;
+  if(StringStartsWith(gcodeBuffer, "M30 ")) specialAction = 1;
+  if(StringStartsWith(gcodeBuffer, "M23 ")) specialAction = 2;
+  if(StringStartsWith(gcodeBuffer, "M112")) specialAction = 3;  // FIXME - suppose we ever have an M1121 ??
   
-  if(fileAct) // Delete or print a file?
+  if(specialAction) // Delete or print a file?
   { 
-    if(fileAct == 1) // Delete?
+    if(specialAction == 1) // Delete?
     {
       if(!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), &gcodeBuffer[4]))
       {
@@ -140,9 +141,12 @@ bool Webserver::LoadGcodeBuffer(char* gc, bool convertWeb)
         platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
         platform->Message(HOST_MESSAGE, "\n");
       } 
-    } else // Print it
+    } else if (specialAction == 2)
     {
       reprap.GetGCodes()->QueueFileToPrint(&gcodeBuffer[4]);
+    } else
+    {
+    	reprap.EmergencyStop();
     }
     
     // Check for further G Codes in the string

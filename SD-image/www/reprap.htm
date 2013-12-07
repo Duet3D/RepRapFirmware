@@ -185,7 +185,7 @@ function heatRowHTML(heater, hNumber)
    </tr>
    
    <tr>
-   <td rowspan="2"><button data-bind="click: function(data, event) { sendHome('', data, event) }">Home<br>All</button></td>
+   <td rowspan="2"><button style="background-color:red" data-bind="click: function(data, event) { sendStop(data, event) }"><br>STOP<br></button></td>
    <td colspan="4">- mm</td>
    <td colspan="4">+ mm</td>
 	<td rowspan="2"><button data-bind="click: function(data, event) { motorsOff(data, event) }">Motors<br>off
@@ -485,6 +485,11 @@ function viewModel()
 			$.get('/rr_gcode', {gcode: "G28 " + axis + "0"}, self.dummy);
 		else
 			$.get('/rr_gcode', {gcode: "G28"}, self.dummy);
+	};
+
+	self.sendStop = function(data, event) 
+	{
+			$.get('/rr_gcode', {gcode: "M112"}, self.dummy);
 	};
 
 	self.deleteFile = function(data, event)

@@ -670,7 +670,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 		if(gb->Seen('S'))
 		{
 			zProbesSet = true;
-			reprap.GetMove()->SetProbedBedPlane();
+			reprap.GetMove()->SetProbedBedEquation();
 		}
 		return true;
 	} else
@@ -682,7 +682,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 			if(gb->Seen('S'))
 			{
 				zProbesSet = true;
-				reprap.GetMove()->SetProbedBedPlane();
+				reprap.GetMove()->SetProbedBedEquation();
 			}
 			return true;
 		}
@@ -691,20 +691,26 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 	return false;
 }
 
-// This probes multiple points on the bed (usually three in a
-// triangle), then sets the bed transformation to compensate
+// This probes multiple points on the bed (three in a
+// triangle or four in the corners), then sets the bed transformation to compensate
 // for the bed not quite being the plane Z = 0.
 
 bool GCodes::DoMultipleZProbe()
 {
+	if(reprap.GetMove()->NumberOfXYProbePoints() < 3)
+	{
+		platform->Message(HOST_MESSAGE, "Bed probing: there needs to be 3 or more points set.\n");
+		return true;
+	}
+
 	if(DoSingleZProbe())
 		probeCount++;
-	if(probeCount >= NUMBER_OF_PROBE_POINTS)
+	if(probeCount >= reprap.GetMove()->NumberOfXYProbePoints())
 	{
 		probeCount = 0;
 		zProbesSet = true;
 		reprap.GetMove()->SetZProbing(false);
-		reprap.GetMove()->SetProbedBedPlane();
+		reprap.GetMove()->SetProbedBedEquation();
 		return true;
 	}
 	return false;
@@ -1072,9 +1078,10 @@ void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int
 			return;
 		}
 
-		if( (gMOrT == 'M' && code == 105) || (gMOrT == 'G' && code == 998) )
+		if( (gMOrT == 'M' && code == 105) || (gMOrT == 'G' && code == 998))
 		{
 			platform->GetLine()->Write(response);
+			platform->GetLine()->Write(" ");
 			platform->GetLine()->Write(reply);
 			platform->GetLine()->Write("\n");
 			return;
@@ -1123,6 +1130,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
   bool result = true;
   bool error = false;
   bool resend = false;
+  bool seen;
   char reply[STRING_LENGTH];
 
   reply[0] = 0;
@@ -1285,10 +1293,18 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 85: // Set inactive time
     	break;
 
-    case 92: // Set steps/mm for some axes
+    case 92: // Set/report steps/mm for some axes
+    	seen = false;
     	for(int8_t drive = 0; drive < DRIVES; drive++)
     		if(gb->Seen(gCodeLetters[drive]))
+    		{
     			platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
+    			seen = true;
+    		}
+    	if(!seen)
+    		snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: %d",
+    				(int)platform->DriveStepsPerUnit(X_AXIS), (int)platform->DriveStepsPerUnit(Y_AXIS),
+    				(int)platform->DriveStepsPerUnit(Z_AXIS), (int)platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
         break;
 
     case 104: // Depricated
@@ -1327,8 +1343,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		reprap.SetDebug(gb->GetIValue());
     	break;
 
-    case 112: // Emergency stop
-    	reprap.EmergencyStop();
+    case 112: // Emergency stop - aced upon in Webserver
     	break;
 
     case 114: // Deprecated
@@ -1338,6 +1353,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		strncpy(reply, str, STRING_LENGTH);
     	} else
     		result = false;
+    	break;
+
+    case 115: // Print firmware version
+    	snprintf(reply, STRING_LENGTH, "FIRMWARE_NAME:%s FIRMWARE_VERSION:%s ELECTRONICS:%s DATE:%s", NAME, VERSION, ELECTRONICS, DATE);
     	break;
 
     case 109: // Depricated
@@ -1538,6 +1557,17 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 561:
     	reprap.GetMove()->SetIdentityTransform();
+    	break;
+
+    case 876: // TEMPORARY - this will go away...
+    	if(gb->Seen('P'))
+    	{
+    		iValue = gb->GetIValue();
+    		if(iValue != 1)
+    			platform->SetHeatOn(0);
+    		else
+    			platform->SetHeatOn(1);
+    	}
     	break;
 
     case 906: // Set Motor currents
