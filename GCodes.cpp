@@ -1558,6 +1558,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	reprap.GetMove()->SetIdentityTransform();
     	break;
 
+    case 562: // Reset temperature fault - use with great caution
+    	if(gb->Seen('P'))
+    	{
+    	    iValue = gb->GetIValue();
+    	    reprap.GetHeat()->ResetFault(iValue);
+    	}
+    	break;
+
     case 876: // TEMPORARY - this will go away...
     	if(gb->Seen('P'))
     	{

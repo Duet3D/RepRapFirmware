@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.35"
-#define DATE "2013-12-06"
+#define VERSION "0.36"
+#define DATE "2013-12-11"
 #define LAST_AUTHOR "reprappro.com"
 
 // Other firmware that we might switch to be compatible with.
@@ -56,7 +56,7 @@ enum Compatibility
 
 #define BAD_LOW_TEMPERATURE -30.0
 #define BAD_HIGH_TEMPERATURE 300.0
-#define MAX_BAD_TEMPERATURE_COUNT 3
+#define MAX_BAD_TEMPERATURE_COUNT 6
 
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 

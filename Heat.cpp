@@ -114,7 +114,10 @@ void PID::Init()
 void PID::Spin()
 {
   if(temperatureFault)
+  {
+	  platform->SetHeater(heater, 0.0); // Make sure...
 	  return;
+  }
 
   temperature = platform->GetTemperature(heater);
   
