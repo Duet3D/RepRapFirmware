@@ -1609,13 +1609,17 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
   {
     code = gb->GetIValue();
     if(code == selectedHead)
-      return result;
-      
+    {
+    	if(result)
+    		HandleReply(error, gb == serialGCode, reply, 'T', code, resend);
+    	return result;
+    }
+
     error = true;
     for(int8_t i = AXES; i < DRIVES; i++)
     {
-      if(selectedHead == i - AXES)
-        reprap.GetHeat()->Standby(selectedHead + 1); // + 1 because 0 is the Bed
+    	if(selectedHead == i - AXES)
+    		reprap.GetHeat()->Standby(selectedHead + 1); // + 1 because 0 is the Bed
     }
     for(int8_t i = AXES; i < DRIVES; i++)
     {    
@@ -1628,7 +1632,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     }
 
     if(error)
-      snprintf(reply, STRING_LENGTH, "invalid T Code: %s", gb->Buffer());
+      snprintf(reply, STRING_LENGTH, "Invalid T Code: %s", gb->Buffer());
 
     if(result)
     	HandleReply(error, gb == serialGCode, reply, 'T', code, resend);
