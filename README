@@ -3,7 +3,7 @@ RepRap self-replicating 3D printers.
 
 It owes a lot to Marlin and to the original RepRap FiveD_GCode.
 
-This is the version for the RepRap Duet: 
+This is the Master version, which at the moment is also the version for the RepRap Duet: 
 
   http://blog.think3dprint3d.com/2013/12/Duet-Arduino-Due-compatible-3DPrinter-controller.html  
 
@@ -135,10 +135,10 @@ Spin() function more than once from RepRap.Spin().
 
 -------------
 
-Version 0.3n beta
+Version 0.nm beta
 
 Started: 2012-11-18
-This README dated: 2013-12-06
+This README dated: 2013-12-14
 
 Adrian Bowyer
 RepRap Professional Ltd
