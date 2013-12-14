@@ -1,20 +1,12 @@
+
+/****************************************************************************************************
+
+RepRapFirmware - Main Program
+
 This firmware is intended to be a fully object-oriented highly modular control program for
 RepRap self-replicating 3D printers.
 
 It owes a lot to Marlin and to the original RepRap FiveD_GCode.
-
-This is the version for the RepRap Duet: 
-
-  http://blog.think3dprint3d.com/2013/12/Duet-Arduino-Due-compatible-3DPrinter-controller.html  
-
-To edit and compile this you will also need the libraries in this repository:
-
-  https://github.com/jmgiacalone/Arduino-libraries
-
-A complete uploadable executable version is in the directory Release/RepRapFirmware.bin in this
-repository.  For details of how to flash it to a Duet see here:
-
-  http://www.reprappro.com/documentation/RepRapPro_Firmware#Flashing_the_Firmware
 
 
 General design principles:
@@ -133,15 +125,240 @@ Most data is transferred bytewise, with classes' Spin() functions typically cont
 Note that it is simple to raise the "priority" of any class's activities relative to the others by calling its
 Spin() function more than once from RepRap.Spin().
 
--------------
+-----------------------------------------------------------------------------------------------------
 
-Version 0.3n beta
+Version 0.1
 
-Started: 2012-11-18
-This README dated: 2013-12-06
+18 November 2012
 
 Adrian Bowyer
 RepRap Professional Ltd
 http://reprappro.com
 
 Licence: GPL
+
+****************************************************************************************************/
+
+// If this goes in the right place (Platform.h) the compile fails. Why? - AB
+
+//#include <SPI.h>
+//#include <Ethernet.h>
+//#include <SD.h>
+
+#include "RepRapFirmware.h"
+
+// We just need one instance of RepRap; everything else is contained within it and hidden
+
+RepRap reprap;
+
+//*************************************************************************************************
+
+// RepRap member functions.
+
+// Do nothing more in the constructor; put what you want in RepRap:Init()
+
+RepRap::RepRap()
+{
+  active = false;
+  platform = new Platform();
+  webserver = new Webserver(platform);
+  gCodes = new GCodes(platform, webserver);
+  move = new Move(platform, gCodes);
+  heat = new Heat(platform, gCodes);
+}
+
+void RepRap::Init()
+{
+  debug = false;
+  platform->Init();
+  gCodes->Init();
+  webserver->Init();
+  move->Init();
+  heat->Init();
+  active = true;
+
+  platform->Message(HOST_MESSAGE, NAME);
+  platform->Message(HOST_MESSAGE, " Version ");
+  platform->Message(HOST_MESSAGE, VERSION);
+  platform->Message(HOST_MESSAGE, ", dated ");
+  platform->Message(HOST_MESSAGE, DATE);
+  platform->Message(HOST_MESSAGE, ".\n\nExecuting ");
+  platform->Message(HOST_MESSAGE, platform->GetConfigFile());
+  platform->Message(HOST_MESSAGE, "...\n\n");
+
+  platform->PushMessageIndent();
+  gCodes->RunConfigurationGCodes();
+  while(gCodes->PrintingAFile()) // Wait till the file is finished
+	  gCodes->Spin();
+  platform->PopMessageIndent();
+
+  platform->Message(HOST_MESSAGE, "\nStarting network...\n");
+  platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
+
+  platform->Message(HOST_MESSAGE, "\n");
+  platform->Message(HOST_MESSAGE, NAME);
+  platform->Message(HOST_MESSAGE, " is up and running.\n");
+}
+
+void RepRap::Exit()
+{
+  active = false;
+  heat->Exit();
+  move->Exit();
+  gCodes->Exit();
+  webserver->Exit();
+  platform->Message(HOST_MESSAGE, "RepRap class exited.\n");
+  platform->Exit();
+}
+
+void RepRap::Spin()
+{
+  if(!active)
+    return;
+
+  platform->Spin();
+  webserver->Spin();
+  gCodes->Spin();
+  move->Spin();
+  heat->Spin();
+}
+
+void RepRap::Diagnostics()
+{
+  platform->Diagnostics();
+  move->Diagnostics();
+  heat->Diagnostics();
+  gCodes->Diagnostics();
+  webserver->Diagnostics();
+}
+
+// Turn off the heaters, disable the motors, and
+// deactivate the Heat and Move classes.  Leave everything else
+// working.
+
+void RepRap::EmergencyStop()
+{
+	int8_t i;
+
+	//platform->DisableInterrupts();
+
+	heat->Exit();
+	for(i = 0; i < HEATERS; i++)
+		platform->SetHeater(i, 0.0);
+
+
+	// We do this twice, to avoid an interrupt switching
+	// a drive back on.  move->Exit() should prevent
+	// interrupts doing this.
+
+	for(int8_t i = 0; i < 2; i++)
+	{
+		move->Exit();
+		for(i = 0; i < DRIVES; i++)
+		{
+			platform->SetMotorCurrent(i, 0.0);
+			platform->Disable(i);
+		}
+	}
+	platform->Message(HOST_MESSAGE, "Emergency Stop! Reset the controller to continue.");
+}
+
+
+
+//*************************************************************************************************
+
+// Utilities and storage not part of any class
+
+
+// Float to a string.
+
+static long precision[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
+char scratchString[STRING_LENGTH];
+
+char* ftoa(char *a, const float& f, int prec)
+{
+  if(a == NULL)
+    a = scratchString;
+  char *ret = a;
+  long whole = (long)f;
+  if(!whole && f < 0.0)
+  {
+	  a[0] = '-';
+	  a++;
+  }
+  snprintf(a, STRING_LENGTH, "%d", whole);
+  while (*a != '\0') a++;
+  *a++ = '.';
+  long decimal = abs((long)((f - (float)whole) * precision[prec]));
+  snprintf(a, STRING_LENGTH, "%d", decimal);
+  return ret;
+}
+
+// String testing
+
+bool StringEndsWith(char* string, char* ending)
+{
+  int j = strlen(string);
+  int k = strlen(ending);
+  if(k > j)
+    return false;
+
+  return(StringEquals(&string[j - k], ending));
+}
+
+bool StringEquals(char* s1, char* s2)
+{
+  int i = 0;
+  while(s1[i] && s2[i])
+  {
+     if(tolower(s1[i]) != tolower(s2[i]))
+       return false;
+     i++;
+  }
+
+  return !(s1[i] || s2[i]);
+}
+
+bool StringStartsWith(char* string, char* starting)
+{
+  int j = strlen(string);
+  int k = strlen(starting);
+  if(k > j)
+    return false;
+
+  for(int i = 0; i < k; i++)
+    if(string[i] != starting[i])
+      return false;
+
+  return true;
+}
+
+int StringContains(char* string, char* match)
+{
+  int i = 0;
+  int count = 0;
+
+  while(string[i])
+  {
+    if(string[i++] == match[count])
+    {
+      count++;
+      if(!match[count])
+        return i;
+    } else
+      count = 0;
+  }
+
+  return -1;
+}
+
+
+
+
+
+
+
+
+
+
+

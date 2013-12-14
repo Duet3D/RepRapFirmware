@@ -2,8 +2,8 @@
 
 RepRapFirmware - Main Include
 
-This defines versions etc, includes all the other include files in the right order and defines the 
-master RepRap class.  No other definitions or information should be in here.
+This includes all the other include files in the right order and defines some globals.
+No other definitions or information should be in here.
 
 -----------------------------------------------------------------------------------------------------
 
@@ -22,73 +22,43 @@ Licence: GPL
 #ifndef REPRAPFIRMWARE_H
 #define REPRAPFIRMWARE_H
 
-
-#define NAME "RepRapFirmware"
-#define VERSION "0.1"
-#define DATE "2012-11-18"
-#define LAST_AUTHOR "reprappro.com"
+// Warn of what's to come, so we can use pointers to classes...
 
 class Platform;
+class Webserver;
+class GCodes;
 class Move;
 class Heat;
-class GCodes;
-class Webserver;
+class RepRap;
 
-class RepRap
-{    
-  public:
-      
-    RepRap();
-    void Init();
-    void Spin();
-    void Exit();
-    
-//    Platform* getPlatform();
-//    Move* getMove();
-//    Heat* getHeat();
-//    GCodes* getGcodes();
-//    Webserver* getWebserver();    
-    void Interrupt();
-    
-    
-  private:
-  
-    Platform* platform;
-    boolean active;
-    Move* move;
-    Heat* heat;
-    GCodes* gcodes;
-    Webserver* webserver;
-};
-
-#include "Configuration.h"
-#include "Platform.h"
-#include "Move.h"
-#include "Heat.h"
-#include "GCodes.h"
-#include "Webserver.h"
-
-// Do nothing more in the constructor; put what you want in RepRap:Init()
-
-inline RepRap::RepRap() 
-{
-  active = false;
-  platform = new Platform(this);
-  move = new Move(platform);
-  heat = new Heat(platform);
-  webserver = new Webserver(platform);
-  gcodes = new GCodes(platform, move, heat, webserver);
-}
-
-//inline Platform* RepRap::getPlatform() { return platform; }
-//inline Move* RepRap::getMove() { return move; }
-//inline Heat* RepRap::getHeat() { return heat; }
-//inline GCodes* RepRap::getGcodes() { return gcodes; }
-//inline Webserver* RepRap::getWebserver() { return webserver; }  
+// A single instace of the RepRap class contains all the others
 
 extern RepRap reprap;
 
+// Functions and globals not part of any class
+
+char* ftoa(char *a, const float& f, int prec);
+bool StringEndsWith(char* string, char* ending);
+bool StringStartsWith(char* string, char* starting);
+bool StringEquals(char* s1, char* s2);
+int StringContains(char* string, char* match);
+
+
+#include <float.h>
+
+extern char scratchString[];
+
+#include "Configuration.h"
+#include "Platform.h"
+#include "Webserver.h"
+#include "GCodes.h"
+#include "Move.h"
+#include "Heat.h"
+#include "Reprap.h"
+
+
 
 #endif
+
 
 

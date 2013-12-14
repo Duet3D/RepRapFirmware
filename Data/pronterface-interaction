@@ -1,0 +1,92 @@
+SENT:  M105
+ok T:108.4 /-273.1 B:38.5 /-273.1 @:0
+
+SENT:  G31
+RECV:  ok
+
+SENDING:M20
+SENT:  M20
+Begin file list
+RECV:  Begin file list
+PS-COV~3.GCO
+RECV:  PS-COV~3.GCO
+BIGCIRC.G
+RECV:  BIGCIRC.G
+CIRCLE.G
+RECV:  CIRCLE.G
+CROCCLIP.G
+RECV:  CROCCLIP.G
+KNIGHT7.G
+RECV:  KNIGHT7.G
+KTST.G
+RECV:  KTST.G
+SQUARE.G
+RECV:  SQUARE.G
+End file list
+RECV:  End file list
+RECV:  ok
+
+
+SENT:  M23 circle.g
+File opened:circle.g Size:1030
+RECV:  File opened:circle.g Size:1030
+File selected
+RECV:  File selected
+RECV:  ok
+SENT:  M24
+Print Started at: 17:03:28
+RECV:  ok
+
+SENDING:M114
+SENT:  M114
+X:0.000Y:0.000Z:0.000E:0.000 Count X:0.000Y:0.000Z:0.000
+RECV:  X:0.000Y:0.000Z:0.000E:0.000 Count X:0.000Y:0.000Z:0.000
+RECV:  ok
+
+SENT:  M140 S55.0
+Setting bed temperature to 55.000000 degrees Celsius.
+RECV:  ok
+
+SENT:  M104 S205
+Setting hotend temperature to 205.000000 degrees Celsius.
+RECV:  ok
+
+
+SENT:  M21
+echo:SD card ok
+RECV:  echo:SD card ok
+SENT:  M28 square.g
+RECV:  ok
+Writing to file: square.g
+RECV:  Writing to file: square.g
+Print Started at: 20:33:34
+SENT:  N-1 M110*15
+RECV:  ok
+SENT:  N0 G1 X55 Y5 F2000*120
+RECV:  ok
+SENT:  N1 G1 Y55*80
+RECV:  ok
+SENT:  N2 G1 X5*103
+RECV:  ok
+SENT:  RECV: N3 G1 Y5*103 ok
+SENT:  N4 G1 X30*87
+RECV:  ok
+SENT:  N5 G1 X55*85
+RECV:  ok
+SENT:  N6 G1 Y55 *119
+RECV:  ok
+SENT:  N7 G1 Y55*86
+RECV:  ok
+SENT:  N8 G1 X5*109
+RECV:  ok
+SENT:  N9 G1 Y5*109
+RECV:  ok
+SENT:  N-1 M110*15
+RECV:  ok
+SENT:  M29 
+RECV:  ok
+Done saving file.
+RECV:  Done saving file.
+
+
+

@@ -23,34 +23,61 @@ Licence: GPL
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
-#define ABS_ZERO -273.15
+#define NAME "RepRapFirmware"
+#define VERSION "0.39"
+#define DATE "2013-12-14"
+#define LAST_AUTHOR "reprappro.com"
 
-#define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
-                      // the frequency and M/S ratio.
-#define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
-                             // not displayed; \f and \n should be supported.
-#define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
+// Other firmware that we might switch to be compatible with.
 
+enum Compatibility
+{
+	me = 0,
+	reprapFirmware = 1,
+	marlin = 2,
+	teacup = 3,
+	sprinter = 4,
+	repetier = 5
+};
+
+// Some numbers...
+
+#define ABS_ZERO -273.15  // Celsius
+
+#define INCH_TO_MM 25.4
+
+#define HEAT_SAMPLE_TIME 0.5 // Seconds
+
+#define TEMPERATURE_CLOSE_ENOUGH 5.0 // Celsius
+#define TEMPERATURE_LOW_SO_DONT_CARE 40.0 // Celsius
+
+// If temperatures fall outside this range, something
+// nasty has happened.
+
+#define BAD_LOW_TEMPERATURE -30.0
+#define BAD_HIGH_TEMPERATURE 300.0
+#define MAX_BAD_TEMPERATURE_COUNT 6
+
+#define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
+
+#define NUMBER_OF_PROBE_POINTS 4
+#define Z_DIVE 5.0  // Height from which to probe the bed (mm)
+
+#define SILLY_Z_VALUE -9999.0
 
 // Webserver stuff
 
+#define NETWORK true // Set true to turn the ethernet on
+
 #define DEFAULT_PASSWORD "reprap"
-
 #define DEFAULT_NAME "My RepRap 1"
+#define INDEX_PAGE "reprap.htm"
+#define MESSAGE_FILE "messages.txt"
+#define FOUR04_FILE "html404.htm"
 
-#define CLIENT_CLOSE_DELAY 1000 // Microseconds to wait after serving a page
+#define LONG_TIME 300.0 // Seconds
 
-#define PASSWORD_PAGE "passwd.php"
-#define INDEX_PAGE "control.php"
-#define PRINT_PAGE "print.php"
-#define MESSAGE_FILE "messages.php"
-#define MESSAGE_TEMPLATE "messages.txt"
-#define STRING_LENGTH 1000
-#define PHP_TAG_LENGTH 200
-#define POST_LENGTH 200
-#define PHP_IF 1
-#define PHP_ECHO 2
-#define PHP_PRINT 3
-#define NO_PHP 99
+#define EOF_STRING "<!-- **EoF** -->"
+
 
 #endif
