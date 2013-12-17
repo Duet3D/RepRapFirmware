@@ -977,6 +977,7 @@ bool GCodes::StandbyHeaters()
 		return false;
 	for(int8_t heater = 0; heater < HEATERS; heater++)
 		reprap.GetHeat()->Standby(heater);
+	selectedHead = -1;
 	return true;
 }
 
