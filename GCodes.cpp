@@ -1262,6 +1262,13 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	fileBeingPrinted = NULL;
     	break;
 
+    case 27: // Report print status
+    	if(this->PrintingAFile())
+    		strncpy(reply, "SD printing.", STRING_LENGTH);
+    	else
+    		strncpy(reply, "Not SD printing.", STRING_LENGTH);
+    	break;
+
     case 28: // Write to file
     	str = gb->GetUnprecedentedString();
     	OpenFileToWrite(platform->GetGCodeDir(), str, gb);
