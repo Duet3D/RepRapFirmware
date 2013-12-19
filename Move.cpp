@@ -115,8 +115,8 @@ void Move::Init()
 
   for(uint8_t point = 0; point < NUMBER_OF_PROBE_POINTS; point++)
   {
-	  xBedProbePoints[point] = (0.2 + 0.6*(float)(point%2))*platform->AxisLength(X_AXIS);
-	  yBedProbePoints[point] = (0.2 + 0.6*(float)(point/2))*platform->AxisLength(Y_AXIS);
+	  xBedProbePoints[point] = (0.3 + 0.6*(float)(point%2))*platform->AxisLength(X_AXIS);
+	  yBedProbePoints[point] = (0.0 + 0.9*(float)(point/2))*platform->AxisLength(Y_AXIS);
 	  zBedProbePoints[point] = 0.0;
 	  probePointSet[point] = unset;
   }

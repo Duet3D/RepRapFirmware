@@ -67,7 +67,7 @@ void GCodes::Init()
   homeX = false;
   homeY = false;
   homeZ = false;
-  homeAxisFinalMove = false;
+  homeAxisMoveCount = 0;
   offSetSet = false;
   dwellWaiting = false;
   stackPointer = 0;
@@ -465,37 +465,70 @@ bool GCodes::DoHome()
 
 	if(homeX)
 	{
-		activeDrive[X_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
-		if(platform->HighStopButNotLow(X_AXIS))
+
+		// FIXME Need to reinstate this to deal with high endstop on X.
+
+//		activeDrive[X_AXIS] = true;
+//		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
+//		if(platform->HighStopButNotLow(X_AXIS))
+//		{
+//			if(homeAxisFinalMove)
+//			{
+//				moveToDo[X_AXIS] = 0.0;
+//				if(DoCannedCycleMove(false))
+//				{
+//					homeAxisFinalMove = false;
+//					homeX = false;
+//					return NoHome();
+//				}
+//			}else
+//			{
+//				moveToDo[X_AXIS] = 2.0*platform->AxisLength(X_AXIS);
+//				if(DoCannedCycleMove(true))
+//					homeAxisFinalMove = true;
+//			}
+//		} else
+//		{
+//			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+//			if(DoCannedCycleMove(true))
+//			{
+//				homeX = false;
+//				homeAxisFinalMove = false;
+//				return NoHome();
+//			}
+//		}
+//		return false;
+
+		switch(homeAxisMoveCount)
 		{
-			if(homeAxisFinalMove)
-			{
-				moveToDo[X_AXIS] = 0.0;
-				if(DoCannedCycleMove(false))
-				{
-					homeAxisFinalMove = false;
-					homeX = false;
-					return NoHome();
-				}
-			}else
-			{
-				moveToDo[X_AXIS] = 2.0*platform->AxisLength(X_AXIS);
-				if(DoCannedCycleMove(true))
-					homeAxisFinalMove = true;
-			}
-		} else
-		{
+		case 0:
+			if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+				return false;
+			activeDrive[Z_AXIS] = true;
+			moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+			moveToDo[Z_AXIS] = 5.0 + moveBuffer[Z_AXIS];
+			if(DoCannedCycleMove(false))
+				homeAxisMoveCount = 1;
+			return false;
+
+		case 1:
+			activeDrive[X_AXIS] = true;
+			moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
 			if(DoCannedCycleMove(true))
 			{
+				homeAxisMoveCount = 0;
 				homeX = false;
-				homeAxisFinalMove = false;
 				return NoHome();
 			}
+			return false;
+
+		default:
+			platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
+			return true;
 		}
-		return false;
 	}
+
 
 	if(homeY)
 	{
@@ -503,20 +536,27 @@ bool GCodes::DoHome()
 		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
 		if(platform->HighStopButNotLow(Y_AXIS))
 		{
-			if(homeAxisFinalMove)
+			switch(homeAxisMoveCount)
 			{
+			case 0:
+				moveToDo[Y_AXIS] = 2.0*platform->AxisLength(Y_AXIS);
+				if(DoCannedCycleMove(true))
+					homeAxisMoveCount = 1;
+				return false;
+
+			case 1:
 				moveToDo[Y_AXIS] = 0.0;
 				if(DoCannedCycleMove(false))
 				{
-					homeAxisFinalMove = false;
+					homeAxisMoveCount = 0;
 					homeY = false;
 					return NoHome();
 				}
-			}else
-			{
-				moveToDo[Y_AXIS] = 2.0*platform->AxisLength(Y_AXIS);
-				if(DoCannedCycleMove(true))
-					homeAxisFinalMove = true;
+				return false;
+
+			default:
+				platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
+				return true;
 			}
 		} else
 		{
@@ -524,40 +564,61 @@ bool GCodes::DoHome()
 			if(DoCannedCycleMove(true))
 			{
 				homeY = false;
-				homeAxisFinalMove = false;
+				homeAxisMoveCount = 0;
 				return NoHome();
 			}
 		}
 		return false;
 	}
 
+
 	if(homeZ)
 	{
-		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-		if(homeAxisFinalMove)
+		switch(homeAxisMoveCount)
 		{
+		case 0:
+			if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+				return false;
+			activeDrive[X_AXIS] = true;
+			activeDrive[Y_AXIS] = true;
+			moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
+			moveToDo[X_AXIS] = reprap.GetMove()->xBedProbePoint(0);
+			moveToDo[Y_AXIS] = reprap.GetMove()->yBedProbePoint(0);
+			if(DoCannedCycleMove(false))
+				homeAxisMoveCount = 1;
+			return false;
+
+		case 1:
+			activeDrive[Z_AXIS] = true;
+			moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+			moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+			if(DoCannedCycleMove(true))
+				homeAxisMoveCount = 2;
+			return false;
+
+		case 2:
+			activeDrive[Z_AXIS] = true;
+			moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 			moveToDo[Z_AXIS] = 0.0;
 			if(DoCannedCycleMove(false))
 			{
-				homeAxisFinalMove = false;
+				homeAxisMoveCount = 0;
 				homeZ = false;
 				return NoHome();
 			}
-		}else
-		{
-			moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-			if(DoCannedCycleMove(true))
-				homeAxisFinalMove = true;
+			return false;
+
+		default:
+			platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
+			return true;
 		}
-		return false;
 	}
 
 	// Should never get here
 
 	checkEndStops = false;
 	moveAvailable = false;
-	homeAxisFinalMove = false;
+	homeAxisMoveCount = 0;
 
 	return true;
 }
@@ -1165,7 +1226,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 28: // Home
       if(NoHome())
       {
-    	homeAxisFinalMove = false;
+    	homeAxisMoveCount = 0;
         homeX = gb->Seen(gCodeLetters[X_AXIS]);
         homeY = gb->Seen(gCodeLetters[Y_AXIS]);
         homeZ = gb->Seen(gCodeLetters[Z_AXIS]);
