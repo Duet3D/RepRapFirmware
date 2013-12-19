@@ -80,8 +80,10 @@ class GCodes
     
   private:
   
+    void doFilePrint(GCodeBuffer* gb);
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
     bool DoCannedCycleMove(bool ce);
+    bool DoFileCannedCycles(char* fileName);
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
@@ -115,6 +117,7 @@ class GCodes
     GCodeBuffer* webGCode;
     GCodeBuffer* fileGCode;
     GCodeBuffer* serialGCode;
+    GCodeBuffer* cannedCycleGCode;
     bool moveAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
     bool checkEndStops;
@@ -132,9 +135,11 @@ class GCodes
 	bool offSetSet;
     float distanceScale;
     FileStore* fileBeingPrinted;
+    FileStore* saveFileBeingPrinted;
     FileStore* fileToPrint;
     FileStore* fileBeingWritten;
     FileStore* configFile;
+    bool doingCannedCycleFile;
     char* eofString;
     uint8_t eofStringCounter;
     uint8_t eofStringLength;

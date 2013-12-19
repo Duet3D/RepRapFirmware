@@ -33,6 +33,7 @@ GCodes::GCodes(Platform* p, Webserver* w)
   webGCode = new GCodeBuffer(platform, "web: ");
   fileGCode = new GCodeBuffer(platform, "file: ");
   serialGCode = new GCodeBuffer(platform, "serial: ");
+  cannedCycleGCode = new GCodeBuffer(platform, "canned: ");
 }
 
 void GCodes::Exit()
@@ -46,9 +47,11 @@ void GCodes::Init()
   webGCode->Init();
   fileGCode->Init();
   serialGCode->Init();
+  cannedCycleGCode->Init();
   webGCode->SetFinished(true);
   fileGCode->SetFinished(true);
   serialGCode->SetFinished(true);
+  cannedCycleGCode->SetFinished(true);
   moveAvailable = false;
   drivesRelative = true;
   axesRelative = false;
@@ -58,9 +61,11 @@ void GCodes::Init()
   for(int8_t i = 0; i < DRIVES - AXES; i++)
     lastPos[i] = 0.0;
   fileBeingPrinted = NULL;
+  saveFileBeingPrinted = NULL;
   fileToPrint = NULL;
   fileBeingWritten = NULL;
   configFile = NULL;
+  doingCannedCycleFile = false;
   eofString = EOF_STRING;
   eofStringCounter = 0;
   eofStringLength = strlen(eofString);
@@ -80,6 +85,26 @@ void GCodes::Init()
   active = true;
   longWait = platform->Time();
   dwellTime = longWait;
+}
+
+void GCodes::doFilePrint(GCodeBuffer* gb)
+{
+	char b;
+
+	if(fileBeingPrinted != NULL)
+	{
+		if(fileBeingPrinted->Read(b))
+		{
+			if(gb->Put(b))
+				gb->SetFinished(ActOnGcode(gb));
+		} else
+		{
+			if(gb->Put('\n')) // In case there wasn't one ending the file
+				gb->SetFinished(ActOnGcode(gb));
+			fileBeingPrinted->Close();
+			fileBeingPrinted = NULL;
+		}
+	}
 }
 
 void GCodes::Spin()
@@ -164,22 +189,8 @@ void GCodes::Spin()
 	  }
   }
 
+  doFilePrint(fileGCode);
 
-  
-  if(fileBeingPrinted != NULL)
-  {
-     if(fileBeingPrinted->Read(b))
-     {
-       if(fileGCode->Put(b))
-         fileGCode->SetFinished(ActOnGcode(fileGCode));
-     } else
-     {
-        if(fileGCode->Put('\n')) // In case there wasn't one ending the file
-         fileGCode->SetFinished(ActOnGcode(fileGCode));
-        fileBeingPrinted->Close();
-        fileBeingPrinted = NULL;
-     }
-  }
   platform->ClassReport("GCodes", longWait);
 }
 
@@ -331,6 +342,12 @@ bool GCodes::SetUpMove(GCodeBuffer *gb)
   LoadMoveBufferFromGCode(gb, false);
   
   checkEndStops = false;
+  if(gb->Seen('S'))
+  {
+	  if(gb->GetIValue() == 1)
+		  checkEndStops = true;
+  }
+
   moveAvailable = true;
   return true; 
 }
@@ -347,6 +364,75 @@ bool GCodes::ReadMove(float m[], bool& ce)
     moveAvailable = false;
     checkEndStops = false;
     return true;
+}
+
+
+bool GCodes::DoFileCannedCycles(char* fileName)
+{
+	// Have we started the file?
+
+	if(!doingCannedCycleFile)
+	{
+		// No
+
+		if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+			return false;
+
+		if(fileBeingPrinted != NULL)
+		{
+			if(saveFileBeingPrinted != NULL)
+			{
+				platform->Message(HOST_MESSAGE, "Canned cycle files cannot be recursive!\n");
+				return true;
+			}
+			saveFileBeingPrinted = fileBeingPrinted;
+		}
+
+		fileBeingPrinted = platform->GetFileStore(platform->GetSysDir(), fileName, false);
+		if(fileBeingPrinted == NULL)
+		{
+			platform->Message(HOST_MESSAGE, "Canned cycle GCode file not found - ");
+			platform->Message(HOST_MESSAGE, fileName);
+			platform->Message(HOST_MESSAGE, "\n");
+			if(saveFileBeingPrinted != NULL)
+			{
+				fileBeingPrinted = saveFileBeingPrinted;
+				saveFileBeingPrinted = NULL;
+			}
+			return true;
+		}
+		doingCannedCycleFile = true;
+		cannedCycleGCode->Init();
+		return false;
+	}
+
+	// Have we finished the file?
+
+	if(fileBeingPrinted == NULL)
+	{
+		// Yes
+
+		doingCannedCycleFile = false;
+		cannedCycleGCode->Init();
+		if(saveFileBeingPrinted != NULL)
+		{
+			fileBeingPrinted = saveFileBeingPrinted;
+			saveFileBeingPrinted = NULL;
+		}
+		return true;
+	}
+
+	// Do more of the file
+
+	if(!cannedCycleGCode->Finished())
+	{
+		cannedCycleGCode->SetFinished(ActOnGcode(cannedCycleGCode));
+	    return false;
+	}
+
+	doFilePrint(cannedCycleGCode);
+
+	return false;
 }
 
 // To execute any move, call this until it returns true.
@@ -1323,7 +1409,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	fileBeingPrinted = NULL;
     	break;
 
-    case 27: // Report print status
+    case 27: // Report print status - Depricated
     	if(this->PrintingAFile())
     		strncpy(reply, "SD printing.", STRING_LENGTH);
     	else
@@ -1411,7 +1497,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		reprap.SetDebug(gb->GetIValue());
     	break;
 
-    case 112: // Emergency stop - aced upon in Webserver
+    case 112: // Emergency stop - acted upon in Webserver
     	break;
 
     case 114: // Deprecated
@@ -1645,6 +1731,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     			platform->SetHeatOn(1);
     	}
     	break;
+
+    case 900:
+    	result = DoFileCannedCycles("homex.g");
+    	break;
+
+    case 901:
+    	result = DoFileCannedCycles("homey.g");
+    	break;
+
+
 
     case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
