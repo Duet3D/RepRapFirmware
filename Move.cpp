@@ -108,7 +108,6 @@ void Move::Init()
   tanXY = 0.0;
   tanYZ = 0.0;
   tanXZ = 0.0;
-  zEquationSet = false;
 
   lastZHit = 0.0;
   zProbing = false;
@@ -617,14 +616,26 @@ void Move::SetIdentityTransform()
 
 void Move::Transform(float xyzPoint[])
 {
+	for(int i = 0; i < AXES; i++)
+	{
+		platform->GetLine()->Write(xyzPoint[i]);
+		platform->GetLine()->Write(' ');
+	}
+	platform->GetLine()->Write(':');
+
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
 	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] + tanYZ*xyzPoint[Z_AXIS];
 	if(secondDegreeCompensation)
 		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
 	else
 		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
-//	platform->GetLine()->Write(xyzPoint[Y_AXIS]);
-//	platform->GetLine()->Write('\n');
+
+	for(int i = 0; i < AXES; i++)
+	{
+		platform->GetLine()->Write(xyzPoint[i]);
+		platform->GetLine()->Write(' ');
+	}
+	platform->GetLine()->Write('\n');
 }
 
 void Move::InverseTransform(float xyzPoint[])
@@ -637,8 +648,43 @@ void Move::InverseTransform(float xyzPoint[])
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] - (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
 }
 
+
+void Move::SetAxisCompensation(int8_t axis, float tangent)
+{
+	float currentPositions[DRIVES+1];
+	if(!GetCurrentState(currentPositions))
+	{
+		platform->Message(HOST_MESSAGE, "Setting bed equation - can't get position!");
+		return;
+	}
+
+	switch(axis)
+	{
+	case X_AXIS:
+		tanXY = tangent;
+		break;
+	case Y_AXIS:
+		tanYZ = tangent;
+		break;
+	case Z_AXIS:
+		tanXZ = tangent;
+		break;
+	default:
+		platform->Message(HOST_MESSAGE, "SetAxisCompensation: dud axis.\n");
+	}
+	Transform(currentPositions);
+	SetPositions(currentPositions);
+}
+
 void Move::SetProbedBedEquation()
 {
+	float currentPositions[DRIVES+1];
+	if(!GetCurrentState(currentPositions))
+	{
+		platform->Message(HOST_MESSAGE, "Setting bed equation - can't get position!");
+		return;
+	}
+
 	if(NumberOfProbePoints() >= 3)
 	{
 		secondDegreeCompensation = (NumberOfProbePoints() == 4);
@@ -659,7 +705,8 @@ void Move::SetProbedBedEquation()
 			 */
 			xRectangle = 1.0/(xBedProbePoints[3] - xBedProbePoints[0]);
 			yRectangle = 1.0/(yBedProbePoints[1] - yBedProbePoints[0]);
-			zEquationSet = true;
+			Transform(currentPositions);
+			SetPositions(currentPositions);
 			return;
 		}
 	} else
@@ -685,7 +732,8 @@ void Move::SetProbedBedEquation()
 	aX = -a/c;
 	aY = -b/c;
 	aC = -d/c;
-	zEquationSet = true;
+	Transform(currentPositions);
+	SetPositions(currentPositions);
 }
 
 // FIXME

@@ -551,7 +551,13 @@ bool GCodes::DoHome()
 
 	if(homeX)
 	{
-
+		if(DoFileCannedCycles("homex.g"))
+		{
+			homeAxisMoveCount = 0;
+			homeX = false;
+			return NoHome();
+		}
+		return false;
 		// FIXME Need to reinstate this to deal with high endstop on X.
 
 //		activeDrive[X_AXIS] = true;
@@ -585,76 +591,84 @@ bool GCodes::DoHome()
 //		}
 //		return false;
 
-		switch(homeAxisMoveCount)
-		{
-		case 0:
-			if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-				return false;
-			activeDrive[Z_AXIS] = true;
-			moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-			moveToDo[Z_AXIS] = 5.0 + moveBuffer[Z_AXIS];
-			if(DoCannedCycleMove(false))
-				homeAxisMoveCount = 1;
-			return false;
-
-		case 1:
-			activeDrive[X_AXIS] = true;
-			moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
-			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-			if(DoCannedCycleMove(true))
-			{
-				homeAxisMoveCount = 0;
-				homeX = false;
-				return NoHome();
-			}
-			return false;
-
-		default:
-			platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
-			return true;
-		}
+//		switch(homeAxisMoveCount)
+//		{
+//		case 0:
+//			if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+//				return false;
+//			activeDrive[Z_AXIS] = true;
+//			moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+//			moveToDo[Z_AXIS] = 5.0 + moveBuffer[Z_AXIS];
+//			if(DoCannedCycleMove(false))
+//				homeAxisMoveCount = 1;
+//			return false;
+//
+//		case 1:
+//			activeDrive[X_AXIS] = true;
+//			moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
+//			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
+//			if(DoCannedCycleMove(true))
+//			{
+//				homeAxisMoveCount = 0;
+//				homeX = false;
+//				return NoHome();
+//			}
+//			return false;
+//
+//		default:
+//			platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
+//			return true;
+//		}
 	}
 
 
 	if(homeY)
 	{
-		activeDrive[Y_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
-		if(platform->HighStopButNotLow(Y_AXIS))
+		if(DoFileCannedCycles("homey.g"))
 		{
-			switch(homeAxisMoveCount)
-			{
-			case 0:
-				moveToDo[Y_AXIS] = 2.0*platform->AxisLength(Y_AXIS);
-				if(DoCannedCycleMove(true))
-					homeAxisMoveCount = 1;
-				return false;
-
-			case 1:
-				moveToDo[Y_AXIS] = 0.0;
-				if(DoCannedCycleMove(false))
-				{
-					homeAxisMoveCount = 0;
-					homeY = false;
-					return NoHome();
-				}
-				return false;
-
-			default:
-				platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
-				return true;
-			}
-		} else
-		{
-			moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-			if(DoCannedCycleMove(true))
-			{
-				homeY = false;
-				homeAxisMoveCount = 0;
-				return NoHome();
-			}
+			homeAxisMoveCount = 0;
+			homeY = false;
+			return NoHome();
 		}
 		return false;
+
+//		activeDrive[Y_AXIS] = true;
+//		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
+//		if(platform->HighStopButNotLow(Y_AXIS))
+//		{
+//			switch(homeAxisMoveCount)
+//			{
+//			case 0:
+//				moveToDo[Y_AXIS] = 2.0*platform->AxisLength(Y_AXIS);
+//				if(DoCannedCycleMove(true))
+//					homeAxisMoveCount = 1;
+//				return false;
+//
+//			case 1:
+//				moveToDo[Y_AXIS] = 0.0;
+//				if(DoCannedCycleMove(false))
+//				{
+//					homeAxisMoveCount = 0;
+//					homeY = false;
+//					return NoHome();
+//				}
+//				return false;
+//
+//			default:
+//				platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
+//				return true;
+//			}
+//		} else
+//		{
+//			moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
+//			if(DoCannedCycleMove(true))
+//			{
+//				homeY = false;
+//				homeAxisMoveCount = 0;
+//				return NoHome();
+//			}
+//		}
+//		return false;
 	}
 
 
