@@ -80,12 +80,15 @@ class GCodes
     
   private:
   
+    void doFilePrint(GCodeBuffer* gb);
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
     bool DoCannedCycleMove(bool ce);
+    bool DoFileCannedCycles(char* fileName);
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
     bool DoHome();
+    bool DoSingleZProbeAtPoint();
     bool DoSingleZProbe();
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);
     bool DoMultipleZProbe();
@@ -115,6 +118,7 @@ class GCodes
     GCodeBuffer* webGCode;
     GCodeBuffer* fileGCode;
     GCodeBuffer* serialGCode;
+    GCodeBuffer* cannedCycleGCode;
     bool moveAvailable;
     float moveBuffer[DRIVES+1]; // Last is feedrate
     bool checkEndStops;
@@ -132,9 +136,11 @@ class GCodes
 	bool offSetSet;
     float distanceScale;
     FileStore* fileBeingPrinted;
+    FileStore* saveFileBeingPrinted;
     FileStore* fileToPrint;
     FileStore* fileBeingWritten;
     FileStore* configFile;
+    bool doingCannedCycleFile;
     char* eofString;
     uint8_t eofStringCounter;
     uint8_t eofStringLength;
@@ -142,7 +148,7 @@ class GCodes
     bool homeX;
     bool homeY;
     bool homeZ;
-    bool homeAxisFinalMove;
+    int8_t homeAxisMoveCount;
     float gFeedRate;
     int probeCount;
     int8_t cannedCycleMoveCount;
@@ -192,7 +198,7 @@ inline bool GCodes::PrintingAFile()
 
 inline bool GCodes::NoHome()
 {
-   return !(homeX || homeY || homeZ || homeAxisFinalMove);
+   return !(homeX || homeY || homeZ || homeAxisMoveCount);
 }
 
 // This function takes care of the fact that the heater and head indices 

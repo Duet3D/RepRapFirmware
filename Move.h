@@ -157,7 +157,7 @@ class Move
     void Init();
     void Spin();
     void Exit();
-    bool GetCurrentState(float m[]); // takes account of all the reings and delays
+    bool GetCurrentState(float m[]); // takes account of all the rings and delays
     void LiveCoordinates(float m[]); // Just gives the last point at the end of the last DDA
     void Interrupt();
     void InterruptTime();
@@ -238,7 +238,6 @@ class Move
     float zBedProbePoints[NUMBER_OF_PROBE_POINTS];
     uint8_t probePointSet[NUMBER_OF_PROBE_POINTS];
     float aX, aY, aC; // Bed plane explicit equation z' = z + aX*x + aY*y + aC
-    bool zEquationSet;
     float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
     float xRectangle, yRectangle;
     float lastZHit;
@@ -542,23 +541,6 @@ inline float Move::SecondDegreeTransformZ(float x, float y)
 }
 
 
-inline void Move::SetAxisCompensation(int8_t axis, float tangent)
-{
-	switch(axis)
-	{
-	case X_AXIS:
-		tanXY = tangent;
-		break;
-	case Y_AXIS:
-		tanYZ = tangent;
-		break;
-	case Z_AXIS:
-		tanXZ = tangent;
-		break;
-	default:
-		platform->Message(HOST_MESSAGE, "SetAxisCompensation: dud axis.\n");
-	}
-}
 
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
