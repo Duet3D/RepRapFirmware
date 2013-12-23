@@ -616,26 +616,12 @@ void Move::SetIdentityTransform()
 
 void Move::Transform(float xyzPoint[])
 {
-	for(int i = 0; i < AXES; i++)
-	{
-		platform->GetLine()->Write(xyzPoint[i]);
-		platform->GetLine()->Write(' ');
-	}
-	platform->GetLine()->Write(':');
-
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
 	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] + tanYZ*xyzPoint[Z_AXIS];
 	if(secondDegreeCompensation)
 		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
 	else
 		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
-
-	for(int i = 0; i < AXES; i++)
-	{
-		platform->GetLine()->Write(xyzPoint[i]);
-		platform->GetLine()->Write(' ');
-	}
-	platform->GetLine()->Write('\n');
 }
 
 void Move::InverseTransform(float xyzPoint[])

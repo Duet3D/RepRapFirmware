@@ -24,7 +24,7 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.45"
+#define VERSION "0.46"
 #define DATE "2013-12-23"
 #define LAST_AUTHOR "reprappro.com"
 
@@ -78,6 +78,7 @@ enum Compatibility
 #define HOME_X_G "homex.g"
 #define HOME_Y_G "homey.g"
 #define HOME_Z_G "homez.g"
+#define HOME_ALL_G "homeall.g"
 
 #define LONG_TIME 300.0 // Seconds
 

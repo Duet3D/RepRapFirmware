@@ -542,12 +542,18 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 
 bool GCodes::DoHome()
 {
-	// Treat more or less like any other move
-	// Do one axis at a time, starting with X.
-
-	for(int8_t drive = 0; drive < DRIVES; drive++)
-		activeDrive[drive] = false;
-	activeDrive[DRIVES] = true; // Always set the feedrate
+	if(homeX && homeY && homeZ)
+	{
+		if(DoFileCannedCycles(HOME_ALL_G))
+		{
+			homeAxisMoveCount = 0;
+			homeX = false;
+			homeY = false;
+			homeZ = false;
+			return true;
+		}
+		return false;
+	}
 
 	if(homeX)
 	{

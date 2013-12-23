@@ -21,6 +21,7 @@ G21 ; set units to millimeters
 G90 ; use absolute coordinates
 M83 ; use relative distances for extrusion
 M140 S65; Set bed temperature
+G28 ; Home all axes
 G1 Z5 F200 ; lift nozzle
 G1 X2 Y50 F2000; Go to wait for warm position
 M116; Wait for all temperatures
