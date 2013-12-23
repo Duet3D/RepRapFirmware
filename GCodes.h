@@ -88,6 +88,7 @@ class GCodes
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
     bool DoHome();
+    bool DoSingleZProbeAtPoint();
     bool DoSingleZProbe();
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);
     bool DoMultipleZProbe();

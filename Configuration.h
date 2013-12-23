@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.44"
-#define DATE "2013-12-21"
+#define VERSION "0.45"
+#define DATE "2013-12-23"
 #define LAST_AUTHOR "reprappro.com"
 
 // Other firmware that we might switch to be compatible with.
@@ -74,6 +74,10 @@ enum Compatibility
 #define INDEX_PAGE "reprap.htm"
 #define MESSAGE_FILE "messages.txt"
 #define FOUR04_FILE "html404.htm"
+#define CONFIG_FILE "config.g" // The file that sets the machine's parameters
+#define HOME_X_G "homex.g"
+#define HOME_Y_G "homey.g"
+#define HOME_Z_G "homez.g"
 
 #define LONG_TIME 300.0 // Seconds
 

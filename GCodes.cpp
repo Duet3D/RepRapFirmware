@@ -551,167 +551,37 @@ bool GCodes::DoHome()
 
 	if(homeX)
 	{
-		if(DoFileCannedCycles("homex.g"))
+		if(DoFileCannedCycles(HOME_X_G))
 		{
 			homeAxisMoveCount = 0;
 			homeX = false;
 			return NoHome();
 		}
 		return false;
-		// FIXME Need to reinstate this to deal with high endstop on X.
-
-//		activeDrive[X_AXIS] = true;
-//		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
-//		if(platform->HighStopButNotLow(X_AXIS))
-//		{
-//			if(homeAxisFinalMove)
-//			{
-//				moveToDo[X_AXIS] = 0.0;
-//				if(DoCannedCycleMove(false))
-//				{
-//					homeAxisFinalMove = false;
-//					homeX = false;
-//					return NoHome();
-//				}
-//			}else
-//			{
-//				moveToDo[X_AXIS] = 2.0*platform->AxisLength(X_AXIS);
-//				if(DoCannedCycleMove(true))
-//					homeAxisFinalMove = true;
-//			}
-//		} else
-//		{
-//			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-//			if(DoCannedCycleMove(true))
-//			{
-//				homeX = false;
-//				homeAxisFinalMove = false;
-//				return NoHome();
-//			}
-//		}
-//		return false;
-
-//		switch(homeAxisMoveCount)
-//		{
-//		case 0:
-//			if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-//				return false;
-//			activeDrive[Z_AXIS] = true;
-//			moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-//			moveToDo[Z_AXIS] = 5.0 + moveBuffer[Z_AXIS];
-//			if(DoCannedCycleMove(false))
-//				homeAxisMoveCount = 1;
-//			return false;
-//
-//		case 1:
-//			activeDrive[X_AXIS] = true;
-//			moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
-//			moveToDo[X_AXIS] = -2.0*platform->AxisLength(X_AXIS);
-//			if(DoCannedCycleMove(true))
-//			{
-//				homeAxisMoveCount = 0;
-//				homeX = false;
-//				return NoHome();
-//			}
-//			return false;
-//
-//		default:
-//			platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
-//			return true;
-//		}
 	}
 
 
 	if(homeY)
 	{
-		if(DoFileCannedCycles("homey.g"))
+		if(DoFileCannedCycles(HOME_Y_G))
 		{
 			homeAxisMoveCount = 0;
 			homeY = false;
 			return NoHome();
 		}
 		return false;
-
-//		activeDrive[Y_AXIS] = true;
-//		moveToDo[DRIVES] = platform->HomeFeedRate(Y_AXIS);
-//		if(platform->HighStopButNotLow(Y_AXIS))
-//		{
-//			switch(homeAxisMoveCount)
-//			{
-//			case 0:
-//				moveToDo[Y_AXIS] = 2.0*platform->AxisLength(Y_AXIS);
-//				if(DoCannedCycleMove(true))
-//					homeAxisMoveCount = 1;
-//				return false;
-//
-//			case 1:
-//				moveToDo[Y_AXIS] = 0.0;
-//				if(DoCannedCycleMove(false))
-//				{
-//					homeAxisMoveCount = 0;
-//					homeY = false;
-//					return NoHome();
-//				}
-//				return false;
-//
-//			default:
-//				platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
-//				return true;
-//			}
-//		} else
-//		{
-//			moveToDo[Y_AXIS] = -2.0*platform->AxisLength(Y_AXIS);
-//			if(DoCannedCycleMove(true))
-//			{
-//				homeY = false;
-//				homeAxisMoveCount = 0;
-//				return NoHome();
-//			}
-//		}
-//		return false;
 	}
 
 
 	if(homeZ)
 	{
-		switch(homeAxisMoveCount)
+		if(DoFileCannedCycles(HOME_Z_G))
 		{
-		case 0:
-			if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-				return false;
-			activeDrive[X_AXIS] = true;
-			activeDrive[Y_AXIS] = true;
-			moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
-			moveToDo[X_AXIS] = reprap.GetMove()->xBedProbePoint(0);
-			moveToDo[Y_AXIS] = reprap.GetMove()->yBedProbePoint(0);
-			if(DoCannedCycleMove(false))
-				homeAxisMoveCount = 1;
-			return false;
-
-		case 1:
-			activeDrive[Z_AXIS] = true;
-			moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-			moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
-			if(DoCannedCycleMove(true))
-				homeAxisMoveCount = 2;
-			return false;
-
-		case 2:
-			activeDrive[Z_AXIS] = true;
-			moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-			moveToDo[Z_AXIS] = 0.0;
-			if(DoCannedCycleMove(false))
-			{
-				homeAxisMoveCount = 0;
-				homeZ = false;
-				return NoHome();
-			}
-			return false;
-
-		default:
-			platform->Message(HOST_MESSAGE, "DoHome(): illegal move count.\n");
-			return true;
+			homeAxisMoveCount = 0;
+			homeZ = false;
+			return NoHome();
 		}
+		return false;
 	}
 
 	// Should never get here
@@ -727,7 +597,7 @@ bool GCodes::DoHome()
 // probes the bed height, and records the Z coordinate probed.  If you want to program any general
 // internal canned cycle, this shows how to do it.
 
-bool GCodes::DoSingleZProbe()
+bool GCodes::DoSingleZProbeAtPoint()
 {
 	float x, y, z;
 
@@ -787,6 +657,30 @@ bool GCodes::DoSingleZProbe()
 	}
 }
 
+
+// This simply moves down till the Z probe/switch is triggered.
+
+bool GCodes::DoSingleZProbe()
+{
+	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+			return false;
+
+	for(int8_t drive = 0; drive <= DRIVES; drive++)
+		activeDrive[drive] = false;
+
+	moveToDo[Z_AXIS] = -1.1*platform->AxisLength(Z_AXIS);
+	activeDrive[Z_AXIS] = true;
+	moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+	activeDrive[DRIVES] = true;
+	if(DoCannedCycleMove(true))
+	{
+		cannedCycleMoveCount = 0;
+		probeCount = 0;
+		return true;
+	}
+	return false;
+}
+
 // This sets wherever we are as the probe point P (probePointIndex)
 // then probes the bed, or gets all its parameters from the arguments.
 // If X or Y are specified, use those; otherwise use the machine's
@@ -797,13 +691,13 @@ bool GCodes::DoSingleZProbe()
 
 bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 {
-	if(!gb->Seen('P'))
-		return true;
-
-	int probePointIndex = gb->GetIValue();
-
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
+
+	if(!gb->Seen('P'))
+		return DoSingleZProbe();
+
+	int probePointIndex = gb->GetIValue();
 
 	float x, y, z;
 	if(gb->Seen(gCodeLetters[X_AXIS]))
@@ -836,7 +730,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb)
 		return true;
 	} else
 	{
-		if(DoSingleZProbe())
+		if(DoSingleZProbeAtPoint())
 		{
 			probeCount = 0;
 			reprap.GetMove()->SetZProbing(false);
@@ -864,7 +758,7 @@ bool GCodes::DoMultipleZProbe()
 		return true;
 	}
 
-	if(DoSingleZProbe())
+	if(DoSingleZProbeAtPoint())
 		probeCount++;
 	if(probeCount >= reprap.GetMove()->NumberOfXYProbePoints())
 	{

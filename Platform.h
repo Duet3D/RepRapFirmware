@@ -146,7 +146,6 @@ Licence: GPL
 #define GCODE_DIR "0:/gcodes/" // Ditto - g-codes
 #define SYS_DIR "0:/sys/" // Ditto - system files
 #define TEMP_DIR "0:/tmp/" // Ditto - temporary files
-#define CONFIG_FILE "config.g" // The file that sets the machine's parameters
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
 #define FILE_LIST_LENGTH 1000 // Maximum length of file list
