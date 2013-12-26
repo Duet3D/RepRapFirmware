@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.46"
-#define DATE "2013-12-23"
+#define VERSION "0.47"
+#define DATE "2013-12-26"
 #define LAST_AUTHOR "reprappro.com"
 
 // Other firmware that we might switch to be compatible with.

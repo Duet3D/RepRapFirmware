@@ -398,7 +398,7 @@ void MassStorage::Init()
 	hsmciPinsinit();
 	// Initialize SD MMC stack
 	sd_mmc_init();
-
+	delay(5);
 	int sdPresentCount = 0;
 	while ((CTRL_NO_PRESENT == sd_mmc_check(0)) && (sdPresentCount < 5))
 	{
