@@ -84,6 +84,7 @@ class GCodes
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
     bool DoCannedCycleMove(bool ce);
     bool DoFileCannedCycles(char* fileName);
+    bool FileCannedCyclesReturn();
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);

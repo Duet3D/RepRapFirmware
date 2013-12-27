@@ -1,0 +1,11 @@
+*.d
+*.o
+Release/*
+<<<<<<< HEAD
+!Release/RepRapFirmware.bin
+=======
+!Release/RepRapFirmware*.bin
+>>>>>>> duet
+*~
+*orig
+/Release
