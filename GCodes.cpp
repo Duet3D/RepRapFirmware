@@ -382,7 +382,7 @@ bool GCodes::DoFileCannedCycles(char* fileName)
 		{
 			if(saveFileBeingPrinted != NULL)
 			{
-				platform->Message(HOST_MESSAGE, "Canned cycle files cannot be recursive!\n");
+				platform->Message(HOST_MESSAGE, "Canned cycle files cannot be nested!\n");
 				return true;
 			}
 			saveFileBeingPrinted = fileBeingPrinted;
@@ -422,7 +422,7 @@ bool GCodes::DoFileCannedCycles(char* fileName)
 		return true;
 	}
 
-	// Do more of the file
+	// No - Do more of the file
 
 	if(!cannedCycleGCode->Finished())
 	{
@@ -433,6 +433,29 @@ bool GCodes::DoFileCannedCycles(char* fileName)
 	doFilePrint(cannedCycleGCode);
 
 	return false;
+}
+
+bool GCodes::FileCannedCyclesReturn()
+{
+	if(!doingCannedCycleFile)
+		return true;
+
+	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		return false;
+
+	doingCannedCycleFile = false;
+	cannedCycleGCode->Init();
+
+	if(fileBeingPrinted != NULL)
+		fileBeingPrinted->Close();
+
+	fileBeingPrinted = NULL;
+	if(saveFileBeingPrinted != NULL)
+	{
+		fileBeingPrinted = saveFileBeingPrinted;
+		saveFileBeingPrinted = NULL;
+	}
+	return true;
 }
 
 // To execute any move, call this until it returns true.
@@ -1374,6 +1397,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     				(int)platform->DriveStepsPerUnit(X_AXIS), (int)platform->DriveStepsPerUnit(Y_AXIS),
     				(int)platform->DriveStepsPerUnit(Z_AXIS), (int)platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
         break;
+
+
+    case 98:
+    	if(gb->Seen('P'))
+    		result = DoFileCannedCycles(gb->GetString());
+    	break;
+
+    case 99:
+    	result = FileCannedCyclesReturn();
+    	break;
 
     case 104: // Depricated
     	if(gb->Seen('S'))
