@@ -1647,7 +1647,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 559: // Upload config.g
-       	str = platform->GetConfigFile();
+    	if(gb->Seen('P'))
+    		str = gb->GetString();
+    	else
+    		str = platform->GetConfigFile();
         OpenFileToWrite(platform->GetSysDir(), str, gb);
         snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
     	break;
