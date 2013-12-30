@@ -1337,6 +1337,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
       break;
       
     case 24: // Print/resume-printing the selected file
+      if(fileBeingPrinted != NULL)
+    	  break;
       fileBeingPrinted = fileToPrint;
       fileToPrint = NULL;
       break;
