@@ -828,6 +828,18 @@ inline void Platform::SetZProbeType(int pt)
 		zProbePin = -1;
 }
 
+inline void Platform::PollZHeight()
+{
+	if(zProbeCount >= 5)
+	{
+		zProbeValue = zProbeSum/5;
+		zProbeSum = 0;
+		zProbeCount = 0;
+	}
+	zProbeSum += GetRawZHeight();
+	zProbeCount++;
+}
+
 
 //********************************************************************************************************
 
