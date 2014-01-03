@@ -342,18 +342,6 @@ void Platform::SetHeater(int8_t heater, const float& power)
 	  analogWriteNonDue(heatOnPins[heater], p);
 }
 
-inline void Platform::PollZHeight()
-{
-	if(zProbeCount >= 5)
-	{
-		zProbeValue = zProbeSum/5;
-		zProbeSum = 0;
-		zProbeCount = 0;
-	}
-	zProbeSum += GetRawZHeight();
-	zProbeCount++;
-}
-
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
@@ -398,7 +386,7 @@ void MassStorage::Init()
 	hsmciPinsinit();
 	// Initialize SD MMC stack
 	sd_mmc_init();
-
+	delay(5);
 	int sdPresentCount = 0;
 	while ((CTRL_NO_PRESENT == sd_mmc_check(0)) && (sdPresentCount < 5))
 	{

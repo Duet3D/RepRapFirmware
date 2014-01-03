@@ -35,6 +35,7 @@ class PID
     void Activate();
     void Standby();
     bool Active();
+    void ResetFault();
     float GetTemperature();
   
   private:
@@ -68,6 +69,7 @@ class Heat
     void Activate(int8_t heater);
     void Standby(int8_t heater);
     float GetTemperature(int8_t heater);
+    void ResetFault(int8_t heater);
     bool AllHeatersAtSetTemperatures();
     void Diagnostics();
     
@@ -124,6 +126,12 @@ inline void PID::Standby()
   active = false;
 }
 
+inline void PID::ResetFault()
+{
+	temperatureFault = false;
+	badTemperatureCount = 0;
+}
+
 
 inline void Heat::SetActiveTemperature(int8_t heater, const float& t)
 {
@@ -159,6 +167,12 @@ inline void Heat::Standby(int8_t heater)
 {
   pids[heater]->Standby();
 }
+
+inline void Heat::ResetFault(int8_t heater)
+{
+  pids[heater]->ResetFault();
+}
+
 
 
 #endif

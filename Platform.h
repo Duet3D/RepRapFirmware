@@ -88,7 +88,7 @@ Licence: GPL
 #define LOW_STOP_PINS {11, -1, 60, 31}
 #define HIGH_STOP_PINS {-1, 28, -1, -1}
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
-#define POT_WIPES {0, 1, 2, 3} // Indices for motor current digipots (if any)
+#define POT_WIPES {1, 3, 2, 0} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
 #define Z_PROBE_AD_VALUE 400
@@ -96,12 +96,12 @@ Licence: GPL
 #define Z_PROBE_PIN 0 // Analogue pin number
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
-#define DRIVE_STEPS_PER_UNIT {91.4286, 91.4286, 4000.0, 420.0}
+#define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
 #define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    // (mm/sec)
 
 // AXES
 
-#define AXIS_LENGTHS {210, 200, 140} // mm
+#define AXIS_LENGTHS {220, 200, 200} // mm
 #define HOME_FEEDRATES {50.0, 50.0, 1.0}  // mm/sec
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}
 
@@ -146,7 +146,6 @@ Licence: GPL
 #define GCODE_DIR "0:/gcodes/" // Ditto - g-codes
 #define SYS_DIR "0:/sys/" // Ditto - system files
 #define TEMP_DIR "0:/tmp/" // Ditto - temporary files
-#define CONFIG_FILE "config.g" // The file that sets the machine's parameters
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
 #define FILE_LIST_LENGTH 1000 // Maximum length of file list
@@ -827,6 +826,18 @@ inline void Platform::SetZProbeType(int pt)
 		zProbePin = Z_PROBE_PIN;
 	else
 		zProbePin = -1;
+}
+
+inline void Platform::PollZHeight()
+{
+	if(zProbeCount >= 5)
+	{
+		zProbeValue = zProbeSum/5;
+		zProbeSum = 0;
+		zProbeCount = 0;
+	}
+	zProbeSum += GetRawZHeight();
+	zProbeCount++;
 }
 
 

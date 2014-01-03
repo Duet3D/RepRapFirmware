@@ -1,6 +1,5 @@
 *.d
 *.o
-.*
 Release/*
 !Release/RepRapFirmware*.bin
 *~

@@ -1,8 +1,7 @@
 *.d
 *.o
-.*
 Release/*
-!Release/RepRapFirmware*.bin
+!Release/RepRapFirmware.bin
 *~
 *orig
 /Release
