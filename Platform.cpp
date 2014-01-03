@@ -342,18 +342,6 @@ void Platform::SetHeater(int8_t heater, const float& power)
 	  analogWriteNonDue(heatOnPins[heater], p);
 }
 
-inline void Platform::PollZHeight()
-{
-	if(zProbeCount >= 5)
-	{
-		zProbeValue = zProbeSum/5;
-		zProbeSum = 0;
-		zProbeCount = 0;
-	}
-	zProbeSum += GetRawZHeight();
-	zProbeCount++;
-}
-
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
