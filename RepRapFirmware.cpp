@@ -187,9 +187,9 @@ void RepRap::Init()
   platform->Message(HOST_MESSAGE, "...\n\n");
 
   platform->PushMessageIndent();
-  gCodes->RunConfigurationGCodes();
-  while(gCodes->PrintingAFile()) // Wait till the file is finished
-	  gCodes->Spin();
+
+  while(gCodes->RunConfigurationGCodes()); // Wait till the file is finished
+
   platform->PopMessageIndent();
 
   platform->Message(HOST_MESSAGE, "\nStarting network...\n");
