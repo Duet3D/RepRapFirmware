@@ -114,9 +114,13 @@ Licence: GPL
 
 #define TEMP_SENSE_PINS {5, 4}   // Analogue pin numbers
 #define HEAT_ON_PINS {6, X5}
-#define THERMISTOR_BETAS {3480.0, 3960.0} // Bed thermistor: RS 484-0149; EPCOS B57550G103J; Extruder thermistor: RS 198-961
+
+// Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
+// Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
+#define THERMISTOR_BETAS {3988.0, 4138.0}
 #define THERMISTOR_SERIES_RS {1000, 1000} // Ohms in series with the thermistors
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
+
 #define USE_PID {false, true} // PID or bang-bang for this heater?
 #define PID_KIS {-1, 2.2} // PID constants...
 #define PID_KDS {-1, 80}
