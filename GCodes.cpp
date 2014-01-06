@@ -1438,7 +1438,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	platform->CoolingFan(0.0);
       break;
       
-    case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
+    case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class, so ignore
     	break;
 
     case 111: // Debug level
