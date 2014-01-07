@@ -711,6 +711,30 @@ void Webserver::Init()
   //platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }
 
+// This is called when the connection has been lost.
+// In particular, we must cancel any pending writes.
+void Webserver::ConnectionError()
+{
+	  writing = false;
+	  receivingPost = false;
+	  postSeen = false;
+	  getSeen = false;
+	  jsonPointer = -1;
+	  clientLineIsBlank = true;
+	  needToCloseClient = false;
+	  clientLinePointer = 0;
+	  clientLine[0] = 0;
+	  clientRequest[0] = 0;
+	  gotPassword = false;
+	  gcodeAvailable = false;
+	  gcodePointer = 0;
+	  InitialisePost();
+	  lastTime = platform->Time();
+	  longWait = lastTime;
+	  active = true;
+
+}
+
 void Webserver::Exit()
 {
   platform->Message(HOST_MESSAGE, "Webserver class exited.\n");

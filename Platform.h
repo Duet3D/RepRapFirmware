@@ -273,7 +273,7 @@ public:
 	void Close();
 	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
 	void InputBufferReleased(void* pb);
-	void HttpStateReleased(void* h);
+	void ConnectionError(void* h);
 	bool Active();
 	bool LinkIsUp();
 
