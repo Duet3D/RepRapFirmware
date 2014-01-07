@@ -70,7 +70,7 @@ class GCodes
     void Spin();
     void Init();
     void Exit();
-    void RunConfigurationGCodes();
+    bool RunConfigurationGCodes();
     bool ReadMove(float* m, bool& ce);
     void QueueFileToPrint(char* fileName);
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);
@@ -128,6 +128,7 @@ class GCodes
     bool drivesRelativeStack[STACK];
     bool axesRelativeStack[STACK];
     float feedrateStack[STACK];
+    FileStore* fileStack[STACK];
     int8_t stackPointer;
     char gCodeLetters[DRIVES + 1]; // Extra is for F
     float lastPos[DRIVES - AXES]; // Just needed for relative moves.
@@ -137,7 +138,6 @@ class GCodes
 	bool offSetSet;
     float distanceScale;
     FileStore* fileBeingPrinted;
-    FileStore* saveFileBeingPrinted;
     FileStore* fileToPrint;
     FileStore* fileBeingWritten;
     FileStore* configFile;
@@ -208,6 +208,14 @@ inline bool GCodes::NoHome()
 inline int8_t GCodes::Heater(int8_t head)
 {
    return head+1; 
+}
+
+// Run the configuration G Code file to set up the machine.  Usually just called once
+// on re-boot.
+
+inline bool GCodes::RunConfigurationGCodes()
+{
+	return !DoFileCannedCycles(platform->GetConfigFile());
 }
 
 #endif
