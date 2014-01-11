@@ -137,7 +137,7 @@ bool Webserver::LoadGcodeBuffer(char* gc, bool convertWeb)
     {
       if(!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), &gcodeBuffer[4]))
       {
-        platform->Message(HOST_MESSAGE, "Unsuccsessful attempt to delete: ");
+        platform->Message(HOST_MESSAGE, "Unsuccessful attempt to delete: ");
         platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
         platform->Message(HOST_MESSAGE, "\n");
       } 
