@@ -441,7 +441,7 @@ void Move::DoLookAhead()
   // or both to the maximum that can be achieved because of the requirements of
   // the adjacent moves. 
     
-  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
+  if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > LOOK_AHEAD)
   { 
     
     // Run up the moves
@@ -497,7 +497,7 @@ void Move::DoLookAhead()
   // If there are any new unprocessed moves in there, set their end speeds
   // according to the cosine of the angle between them.
   
-  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > 1)
+  if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > 1)
   {  
     n1 = lookAheadRingGetPointer;
     n0 = n1->Previous();
@@ -531,7 +531,7 @@ void Move::DoLookAhead()
     
     // If we are just doing one isolated move, set its end velocity to InstantDv(Z_AXIS).
     
-    if(addNoMoreMoves || !gCodes->PrintingAFile())
+    if(addNoMoreMoves || !gCodes->HaveIncomingData())
     {
       n1->SetV(platform->InstantDv(Z_AXIS));
       n1->SetProcessed(complete);
@@ -1163,7 +1163,7 @@ void LookAhead::Init(long ep[], float f, float vv, bool ce, int8_t mt)
   // are printing a file, so set processed
   // complete when we aren't.
   
-  if(reprap.GetGCodes()->PrintingAFile())
+  if(reprap.GetGCodes()->HaveIncomingData())
     processed = unprocessed;
   else
     processed = complete|vCosineSet|upPass;

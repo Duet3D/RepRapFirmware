@@ -835,6 +835,8 @@ Line::Line()
 
 void Line::Init()
 {
+	getIndex = 0;
+	numChars = 0;
 //	alternateInput = NULL;
 //	alternateOutput = NULL;
 	SerialUSB.begin(BAUD_RATE);
@@ -1087,7 +1089,7 @@ void Network::ReceiveInput(char* data, int length, void* pbuf, void* pcb, void* 
 
 
 
-bool Network::CanWrite()
+bool Network::CanWrite() const
 {
 	return writeEnabled;
 }
@@ -1138,7 +1140,7 @@ void Network::Close()
 	//Reset();
 }
 
-int8_t Network::Status()
+int8_t Network::Status() const
 {
 	if(inputPointer >= inputLength)
 		return status;
