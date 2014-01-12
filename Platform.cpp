@@ -1239,6 +1239,27 @@ void NetRing::ReleaseHs()
 	hs = 0;
 }
 
+void Line::Spin()
+{
+	// Read the serial data in blocks to avoid excessive flow control
+	if (numChars <= lineBufsize/2)
+	{
+		int16_t target = SerialUSB.available() + (int16_t)numChars;
+		if (target > lineBufsize)
+		{
+			target = lineBufsize;
+		}
+		while ((int16_t)numChars < target)
+		{
+			int incomingByte = SerialUSB.read();
+			if (incomingByte < 0) break;
+			buffer[(getIndex + numChars) % lineBufsize] = (char)incomingByte;
+			++numChars;
+		}
+	}
+}
+
+
 
 
 

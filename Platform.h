@@ -984,21 +984,6 @@ inline Line* Platform::GetLine()
 	return line;
 }
 
-inline void Line::Spin()
-{
-	// Read the serial data in blocks to avoid excessive flow control
-	if (numChars <= lineBufsize/2)
-	{
-		while (SerialUSB.available() > 0 && numChars < lineBufsize)
-		{
-			int incomingByte = SerialUSB.read();
-			if (incomingByte < 0) break;
-			buffer[(getIndex + numChars) % lineBufsize] = (char)incomingByte;
-			++numChars;
-		}
-	}
-}
-
 inline int8_t Line::Status() const
 {
 //	if(alternateInput != NULL)
