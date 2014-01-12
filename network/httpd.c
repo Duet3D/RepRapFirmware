@@ -72,7 +72,7 @@ struct http_state {
 
 void RepRapNetworkReceiveInput(char* ip, int length, void* pbuf, void* pcb, void* hs);
 void RepRapNetworkInputBufferReleased(void* pbuf);
-void RepRapNetworkHttpStateReleased(void* h);
+void RepRapNetworkConnectionError(void* h);
 void RepRapNetworkMessage(char* s);
 void RepRapNetworkAllowWriting();
 bool RepRapNetworkHasALiveClient();
@@ -86,15 +86,19 @@ static int initCount = 0;
 static void
 conn_err(void *arg, err_t err)
 {
-  struct http_state *hs;
+  // Report the error to the monitor
+  RepRapNetworkMessage("Network connection error, code ");
+  {
+	char tempBuf[10];
+	snprintf(tempBuf, sizeof(tempBuf)/sizeof(char), "%d\n", err);
+	RepRapNetworkMessage(tempBuf);
+  }
 
-  LWIP_UNUSED_ARG(err);
-
-  hs = arg;
-  mem_free(hs);
-  //RepRapNetworkHttpStateReleased(hs);
-  RepRapNetworkMessage("Network connection error.\n");
+  struct http_state *hs = arg;
+  RepRapNetworkConnectionError(hs);		// tell the higher levels about the error
+  mem_free(hs);							// release the state data
 }
+
 /*-----------------------------------------------------------------------------------*/
 
 static void

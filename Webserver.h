@@ -50,6 +50,7 @@ class Webserver
     void Diagnostics();
     void SetPassword(char* pw);
     void SetName(char* nm);
+    void ConnectionError();
     
   private:
   

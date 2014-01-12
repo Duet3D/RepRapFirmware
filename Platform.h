@@ -183,13 +183,15 @@ Licence: GPL
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
+const uint16_t lineBufsize = 256;	// use a power of 2 for good performance
+
 /****************************************************************************************************/
 
 enum EndStopHit
 {
-  noStop = 0,
-  lowHit = 1,
-  highHit = 2
+  noStop = 0,		// no enstop hit
+  lowHit = 1,		// low switch hit, or Z-probe in use and above threshold
+  highHit = 2		// high stop hit
 };
 
 /***************************************************************************************************/
@@ -264,17 +266,17 @@ class Network //: public InputOutput
 {
 public:
 
-	int8_t Status(); // Returns OR of IOStatus
+	int8_t Status() const; // Returns OR of IOStatus
 	bool Read(char& b);
-	bool CanWrite();
+	bool CanWrite() const;
 	void SetWriteEnable(bool enable);
 	void Write(char b);
 	void Write(char* s);
 	void Close();
 	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
 	void InputBufferReleased(void* pb);
-	void HttpStateReleased(void* h);
-	bool Active();
+	void ConnectionError(void* h);
+	bool Active() const;
 	bool LinkIsUp();
 
 friend class Platform;
@@ -308,7 +310,7 @@ class Line //: public InputOutput
 {
 public:
 
-	int8_t Status(); // Returns OR of IOStatus
+	int8_t Status() const; // Returns OR of IOStatus
 	int Read(char& b);
 	void Write(char b);
 	void Write(char* s);
@@ -324,6 +326,9 @@ protected:
 	void Spin();
 
 private:
+	char buffer[lineBufsize];
+	uint16_t getIndex;
+	uint16_t numChars;
 };
 
 class MassStorage
@@ -979,18 +984,11 @@ inline Line* Platform::GetLine()
 	return line;
 }
 
-inline void Line::Spin()
-{
-}
-
-inline int8_t Line::Status()
+inline int8_t Line::Status() const
 {
 //	if(alternateInput != NULL)
 //		return alternateInput->Status();
-
-	if(SerialUSB.available() > 0)
-		return byteAvailable;
-	return nothing;
+	return numChars == 0 ? nothing : byteAvailable;
 }
 
 inline int Line::Read(char& b)
@@ -998,11 +996,11 @@ inline int Line::Read(char& b)
 //  if(alternateInput != NULL)
 //	return alternateInput->Read(b);
 
-  int incomingByte = SerialUSB.read();
-  if(incomingByte < 0)
-    return 0;
-  b = (char)incomingByte;
-  return true;
+  if (numChars == 0) return 0;
+  b = buffer[getIndex];
+  getIndex = (getIndex + 1) % lineBufsize;
+  --numChars;
+  return 1;
 }
 
 inline void Line::Write(char b)
@@ -1046,7 +1044,7 @@ inline bool Network::LinkIsUp()
 	return status_link_up();
 }
 
-inline bool Network::Active()
+inline bool Network::Active() const
 {
 	return active;
 }

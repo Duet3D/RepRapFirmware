@@ -111,8 +111,6 @@ void GCodes::Spin()
   if(!active)
     return;
     
-  char b;
-
   // Check each of the sources of G Codes (web, serial, and file) to
   // see if what they are doing has been done.  If it hasn't, return without
   // looking at anything else.
@@ -147,7 +145,7 @@ void GCodes::Spin()
 
   if(webserver->GCodeAvailable())
   {
-	  b = webserver->ReadGCode();
+	  char b = webserver->ReadGCode();
 	  if(webGCode->Put(b))
 	  {
 		  if(webGCode->WritingFileDirectory() != NULL)
@@ -166,6 +164,7 @@ void GCodes::Spin()
   {
 	  if(platform->GetLine()->Status() & byteAvailable)
 	  {
+		  char b;
 		  platform->GetLine()->Read(b);
 		  WriteHTMLToFile(b, serialGCode);
 	  }
@@ -175,14 +174,27 @@ void GCodes::Spin()
 
 	  if(platform->GetLine()->Status() & byteAvailable)
 	  {
-		  platform->GetLine()->Read(b);
-		  if(serialGCode->Put(b))
+		  // Read several bytes instead of just one. This is mainly to speed up file uploading.
+		  int8_t i = 0;
+		  do
 		  {
-			  if(serialGCode->WritingFileDirectory() != NULL)
-				  WriteGCodeToFile(serialGCode);
-			  else
-				  serialGCode->SetFinished(ActOnGcode(serialGCode));
-		  }
+			  char b;
+			  platform->GetLine()->Read(b);
+			  if(serialGCode->Put(b))	// add char to buffer and test whether the gcode is complete
+			  {
+				  // we have a complete gcode
+				  if(serialGCode->WritingFileDirectory() != NULL)
+				  {
+					  WriteGCodeToFile(serialGCode);
+				  }
+				  else
+				  {
+					  serialGCode->SetFinished(ActOnGcode(serialGCode));
+				  }
+				  break;	// stop after receiving a complete gcode in case we haven't finished processing it
+			  }
+			  ++i;
+		  } while (i < 16 && (platform->GetLine()->Status() & byteAvailable));
 		  platform->ClassReport("GCodes", longWait);
 		  return;
 	  }

@@ -441,7 +441,7 @@ void Move::DoLookAhead()
   // or both to the maximum that can be achieved because of the requirements of
   // the adjacent moves. 
     
-  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
+  if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > LOOK_AHEAD)
   { 
     
     // Run up the moves
@@ -497,7 +497,7 @@ void Move::DoLookAhead()
   // If there are any new unprocessed moves in there, set their end speeds
   // according to the cosine of the angle between them.
   
-  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > 1)
+  if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > 1)
   {  
     n1 = lookAheadRingGetPointer;
     n0 = n1->Previous();
@@ -531,7 +531,7 @@ void Move::DoLookAhead()
     
     // If we are just doing one isolated move, set its end velocity to InstantDv(Z_AXIS).
     
-    if(addNoMoreMoves || !gCodes->PrintingAFile())
+    if(addNoMoreMoves || !gCodes->HaveIncomingData())
     {
       n1->SetV(platform->InstantDv(Z_AXIS));
       n1->SetProcessed(complete);
@@ -988,18 +988,18 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   } else // Must be extruders only
 	  SetEAcceleration(eDistance);
 
-  // If we are going from an XY move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
+  // If we are going from an XY move or extruder move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
 
-  if((myLookAheadEntry->Previous()->GetMovementType() & xyMove) && (mt & zMove))
+  if((myLookAheadEntry->Previous()->GetMovementType() & (xyMove | eMove)) && (mt & zMove))
   {
 	  u = platform->InstantDv(Z_AXIS);
 	  result = change;
   }
 
-  // if we are going from a Z move to an XY move, v needs to be platform->InstantDv(Z_AXIS),
+  // if we are going from a Z move to an XY move or E move, v needs to be platform->InstantDv(Z_AXIS),
   // as does instantDv.
 
-  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & xyMove))
+  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & (xyMove | eMove)))
   {
 	  v = platform->InstantDv(Z_AXIS);
 	  instantDv = v;
@@ -1163,7 +1163,7 @@ void LookAhead::Init(long ep[], float f, float vv, bool ce, int8_t mt)
   // are printing a file, so set processed
   // complete when we aren't.
   
-  if(reprap.GetGCodes()->PrintingAFile())
+  if(reprap.GetGCodes()->HaveIncomingData())
     processed = unprocessed;
   else
     processed = complete|vCosineSet|upPass;
@@ -1198,7 +1198,7 @@ float LookAhead::Cosine()
   
   if(a2 <= 0.0 || b2 <= 0.0)
   {
-    cosine = 0.5; // Why not?
+	cosine = 0.0;		// one of the moves is just an extruder move (probably a retraction), so orthogonal (in 4D space!) to XYZ moves
     return cosine;
   }
  
