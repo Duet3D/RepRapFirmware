@@ -302,7 +302,6 @@ inline void LookAhead::SetProcessed(MovementState ms)
 
 inline void LookAhead::Release()
 {
-  //SetProcessed(released);
 	 processed = released;
 }
 
@@ -409,7 +408,6 @@ inline void Move::SetLiveCoordinates(float coords[])
 {
 	for(int8_t drive = 0; drive <= DRIVES; drive++)
 		liveCoordinates[drive] = coords[drive];
-	//Transform(liveCoordinates);
 }
 
 // To wait until all the current moves in the buffers are

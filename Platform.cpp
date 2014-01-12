@@ -66,8 +66,6 @@ void Platform::Init()
   line->Init();
   messageIndent = 0;
 
-  //network->Init();
-
   massStorage->Init();
 
   for(i=0; i < MAX_FILES; i++)
@@ -386,7 +384,7 @@ void MassStorage::Init()
 	hsmciPinsinit();
 	// Initialize SD MMC stack
 	sd_mmc_init();
-	delay(5);
+	delay(20);
 	int sdPresentCount = 0;
 	while ((CTRL_NO_PRESENT == sd_mmc_check(0)) && (sdPresentCount < 5))
 	{
@@ -943,12 +941,7 @@ void Network::Init()
 {
 	CleanRing();
 	Reset();
-//	if(LinkIsUp())
-//		reprap.GetPlatform()->SetHeater(0,1.0);
-//	else
-//		reprap.GetPlatform()->SetHeater(0,0.0);
-	if(!NETWORK) // NETWORK needs to be true to turn on the ethernet.  It is defined in Configuration.h
-		return;
+
 	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 	active = true;
 }

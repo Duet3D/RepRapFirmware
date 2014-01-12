@@ -67,7 +67,7 @@ enum Compatibility
 
 // Webserver stuff
 
-#define NETWORK true // Set true to turn the ethernet on
+//#define NETWORK true // Set true to turn the ethernet on
 
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
