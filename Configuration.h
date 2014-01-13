@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.53"
-#define DATE "2014-01-06"
+#define VERSION "0.57"
+#define DATE "2014-01-13"
 #define LAST_AUTHOR "reprappro.com"
 
 // Other firmware that we might switch to be compatible with.
@@ -67,7 +67,7 @@ enum Compatibility
 
 // Webserver stuff
 
-#define NETWORK true // Set true to turn the ethernet on
+//#define NETWORK true // Set true to turn the ethernet on
 
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"

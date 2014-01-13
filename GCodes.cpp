@@ -33,7 +33,7 @@ GCodes::GCodes(Platform* p, Webserver* w)
   webGCode = new GCodeBuffer(platform, "web: ");
   fileGCode = new GCodeBuffer(platform, "file: ");
   serialGCode = new GCodeBuffer(platform, "serial: ");
-  cannedCycleGCode = new GCodeBuffer(platform, "canned: ");
+  cannedCycleGCode = new GCodeBuffer(platform, "macro: ");
 }
 
 void GCodes::Exit()
@@ -61,7 +61,6 @@ void GCodes::Init()
   for(int8_t i = 0; i < DRIVES - AXES; i++)
     lastPos[i] = 0.0;
   fileBeingPrinted = NULL;
-  saveFileBeingPrinted = NULL;
   fileToPrint = NULL;
   fileBeingWritten = NULL;
   configFile = NULL;
@@ -112,8 +111,6 @@ void GCodes::Spin()
   if(!active)
     return;
     
-  char b;
-
   // Check each of the sources of G Codes (web, serial, and file) to
   // see if what they are doing has been done.  If it hasn't, return without
   // looking at anything else.
@@ -148,7 +145,7 @@ void GCodes::Spin()
 
   if(webserver->GCodeAvailable())
   {
-	  b = webserver->ReadGCode();
+	  char b = webserver->ReadGCode();
 	  if(webGCode->Put(b))
 	  {
 		  if(webGCode->WritingFileDirectory() != NULL)
@@ -167,6 +164,7 @@ void GCodes::Spin()
   {
 	  if(platform->GetLine()->Status() & byteAvailable)
 	  {
+		  char b;
 		  platform->GetLine()->Read(b);
 		  WriteHTMLToFile(b, serialGCode);
 	  }
@@ -176,14 +174,27 @@ void GCodes::Spin()
 
 	  if(platform->GetLine()->Status() & byteAvailable)
 	  {
-		  platform->GetLine()->Read(b);
-		  if(serialGCode->Put(b))
+		  // Read several bytes instead of just one. This is mainly to speed up file uploading.
+		  int8_t i = 0;
+		  do
 		  {
-			  if(serialGCode->WritingFileDirectory() != NULL)
-				  WriteGCodeToFile(serialGCode);
-			  else
-				  serialGCode->SetFinished(ActOnGcode(serialGCode));
-		  }
+			  char b;
+			  platform->GetLine()->Read(b);
+			  if(serialGCode->Put(b))	// add char to buffer and test whether the gcode is complete
+			  {
+				  // we have a complete gcode
+				  if(serialGCode->WritingFileDirectory() != NULL)
+				  {
+					  WriteGCodeToFile(serialGCode);
+				  }
+				  else
+				  {
+					  serialGCode->SetFinished(ActOnGcode(serialGCode));
+				  }
+				  break;	// stop after receiving a complete gcode in case we haven't finished processing it
+			  }
+			  ++i;
+		  } while (i < 16 && (platform->GetLine()->Status() & byteAvailable));
 		  platform->ClassReport("GCodes", longWait);
 		  return;
 	  }
@@ -242,8 +253,9 @@ bool GCodes::Push()
   drivesRelativeStack[stackPointer] = drivesRelative;
   axesRelativeStack[stackPointer] = axesRelative;
   feedrateStack[stackPointer] = gFeedRate; 
+  fileStack[stackPointer] = fileBeingPrinted;
   stackPointer++;
-  
+  platform->PushMessageIndent();
   return true;
 }
 
@@ -263,7 +275,8 @@ bool GCodes::Pop()
   stackPointer--;
   drivesRelative = drivesRelativeStack[stackPointer];
   axesRelative = axesRelativeStack[stackPointer];
-  
+  fileBeingPrinted = fileStack[stackPointer];
+  platform->PopMessageIndent();
   // Remember for next time if we have just been switched
   // to absolute drive moves
   
@@ -375,18 +388,8 @@ bool GCodes::DoFileCannedCycles(char* fileName)
 	{
 		// No
 
-		if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		if(!Push())
 			return false;
-
-		if(fileBeingPrinted != NULL)
-		{
-			if(saveFileBeingPrinted != NULL)
-			{
-				platform->Message(HOST_MESSAGE, "Canned cycle files cannot be nested!\n");
-				return true;
-			}
-			saveFileBeingPrinted = fileBeingPrinted;
-		}
 
 		fileBeingPrinted = platform->GetFileStore(platform->GetSysDir(), fileName, false);
 		if(fileBeingPrinted == NULL)
@@ -394,11 +397,8 @@ bool GCodes::DoFileCannedCycles(char* fileName)
 			platform->Message(HOST_MESSAGE, "Canned cycle GCode file not found - ");
 			platform->Message(HOST_MESSAGE, fileName);
 			platform->Message(HOST_MESSAGE, "\n");
-			if(saveFileBeingPrinted != NULL)
-			{
-				fileBeingPrinted = saveFileBeingPrinted;
-				saveFileBeingPrinted = NULL;
-			}
+			if(!Pop())
+				platform->Message(HOST_MESSAGE, "Cannot pop the stack.\n");
 			return true;
 		}
 		doingCannedCycleFile = true;
@@ -412,13 +412,10 @@ bool GCodes::DoFileCannedCycles(char* fileName)
 	{
 		// Yes
 
+		if(!Pop())
+			return false;
 		doingCannedCycleFile = false;
 		cannedCycleGCode->Init();
-		if(saveFileBeingPrinted != NULL)
-		{
-			fileBeingPrinted = saveFileBeingPrinted;
-			saveFileBeingPrinted = NULL;
-		}
 		return true;
 	}
 
@@ -450,11 +447,6 @@ bool GCodes::FileCannedCyclesReturn()
 		fileBeingPrinted->Close();
 
 	fileBeingPrinted = NULL;
-	if(saveFileBeingPrinted != NULL)
-	{
-		fileBeingPrinted = saveFileBeingPrinted;
-		saveFileBeingPrinted = NULL;
-	}
 	return true;
 }
 
@@ -942,20 +934,6 @@ void GCodes::QueueFileToPrint(char* fileName)
 	  platform->Message(HOST_MESSAGE, "GCode file not found\n");
 }
 
-// Run the configuration G Code file to set up the machine.  Usually just called once
-// on re-boot.
-
-void GCodes::RunConfigurationGCodes()
-{
-	  fileToPrint = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
-	  if(fileToPrint == NULL)
-	  {
-		  platform->Message(HOST_MESSAGE, "Configuration file not found\n");
-		  return;
-	  }
-      fileBeingPrinted = fileToPrint;
-      fileToPrint = NULL;
-}
 
 bool GCodes::SendConfigToLine()
 {
@@ -1438,7 +1416,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	platform->CoolingFan(0.0);
       break;
       
-    case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class, so ignore
+    case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
     	break;
 
     case 111: // Debug level
@@ -1673,16 +1651,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	break;
 
-    case 876: // TEMPORARY - this will go away...
-    	if(gb->Seen('P'))
-    	{
-    		iValue = gb->GetIValue();
-    		if(iValue != 1)
-    			platform->SetHeatOn(0);
-    		else
-    			platform->SetHeatOn(1);
-    	}
-    	break;
+//    case 876: // TEMPORARY - this will go away...
+//    	if(gb->Seen('P'))
+//    	{
+//    		iValue = gb->GetIValue();
+//    		if(iValue != 1)
+//    			platform->SetHeatOn(0);
+//    		else
+//    			platform->SetHeatOn(1);
+//    	}
+//    	break;
 
     case 900:
     	result = DoFileCannedCycles("homex.g");

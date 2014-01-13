@@ -186,11 +186,7 @@ void RepRap::Init()
   platform->Message(HOST_MESSAGE, platform->GetConfigFile());
   platform->Message(HOST_MESSAGE, "...\n\n");
 
-  platform->PushMessageIndent();
-  gCodes->RunConfigurationGCodes();
-  while(gCodes->PrintingAFile()) // Wait till the file is finished
-	  gCodes->Spin();
-  platform->PopMessageIndent();
+  while(gCodes->RunConfigurationGCodes()); // Wait till the file is finished
 
   platform->Message(HOST_MESSAGE, "\nStarting network...\n");
   platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
@@ -290,7 +286,7 @@ char* ftoa(char *a, const float& f, int prec)
   while (*a != '\0') a++;
   *a++ = '.';
   long decimal = abs((long)((f - (float)whole) * precision[prec]));
-  snprintf(a, STRING_LENGTH, "%d", decimal);
+  snprintf(a, STRING_LENGTH, "%0*d", prec, decimal);
   return ret;
 }
 
