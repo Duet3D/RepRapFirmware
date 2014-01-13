@@ -129,7 +129,7 @@ void Platform::Init()
   standbyTemperatures = STANDBY_TEMPERATURES;
   activeTemperatures = ACTIVE_TEMPERATURES;
   coolingFanPin = COOLING_FAN_PIN;
-  turnHeatOn = HEAT_ON;
+  //turnHeatOn = HEAT_ON;
 
   webDir = WEB_DIR;
   gcodeDir = GCODE_DIR;
@@ -334,7 +334,7 @@ void Platform::SetHeater(int8_t heater, const float& power)
     return;
   
   byte p = (byte)(255.0*fmin(1.0, fmax(0.0, power)));
-  if(turnHeatOn == 0)
+  if(HEAT_ON == 0)
 	  p = 255 - p;
   if(heater == 0)
 	  analogWrite(heatOnPins[heater], p);

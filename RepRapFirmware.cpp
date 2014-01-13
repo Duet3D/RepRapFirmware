@@ -186,11 +186,7 @@ void RepRap::Init()
   platform->Message(HOST_MESSAGE, platform->GetConfigFile());
   platform->Message(HOST_MESSAGE, "...\n\n");
 
-  platform->PushMessageIndent();
-
   while(gCodes->RunConfigurationGCodes()); // Wait till the file is finished
-
-  platform->PopMessageIndent();
 
   platform->Message(HOST_MESSAGE, "\nStarting network...\n");
   platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.

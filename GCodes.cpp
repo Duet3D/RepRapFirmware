@@ -1651,16 +1651,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	break;
 
-    case 876: // TEMPORARY - this will go away...
-    	if(gb->Seen('P'))
-    	{
-    		iValue = gb->GetIValue();
-    		if(iValue != 1)
-    			platform->SetHeatOn(0);
-    		else
-    			platform->SetHeatOn(1);
-    	}
-    	break;
+//    case 876: // TEMPORARY - this will go away...
+//    	if(gb->Seen('P'))
+//    	{
+//    		iValue = gb->GetIValue();
+//    		if(iValue != 1)
+//    			platform->SetHeatOn(0);
+//    		else
+//    			platform->SetHeatOn(1);
+//    	}
+//    	break;
 
     case 900:
     	result = DoFileCannedCycles("homex.g");

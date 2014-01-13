@@ -499,7 +499,7 @@ class Platform
   bool UsePID(int8_t heater);
   float HeatSampleTime();
   void CoolingFan(float speed);
-  void SetHeatOn(int8_t ho); //TEMPORARY - this will go away...
+  //void SetHeatOn(int8_t ho); //TEMPORARY - this will go away...
 
 //-------------------------------------------------------------------------------------------------------
   protected:
@@ -578,7 +578,7 @@ class Platform
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
   int8_t coolingFanPin;
-  int8_t turnHeatOn;
+  //int8_t turnHeatOn;
 
 // Serial/USB
 
@@ -914,10 +914,10 @@ inline void Platform::CoolingFan(float speed)
 	analogWrite(coolingFanPin, (uint8_t)(speed*255.0));
 }
 
-inline void Platform::SetHeatOn(int8_t ho)
-{
-	turnHeatOn = ho;
-}
+//inline void Platform::SetHeatOn(int8_t ho)
+//{
+//	turnHeatOn = ho;
+//}
 
 
 //*********************************************************************************************************
