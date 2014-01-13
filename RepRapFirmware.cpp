@@ -290,7 +290,7 @@ char* ftoa(char *a, const float& f, int prec)
   while (*a != '\0') a++;
   *a++ = '.';
   long decimal = abs((long)((f - (float)whole) * precision[prec]));
-  snprintf(a, STRING_LENGTH, "%d", decimal);
+  snprintf(a, STRING_LENGTH, "%0*d", prec, decimal);
   return ret;
 }
 
