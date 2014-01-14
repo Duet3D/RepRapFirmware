@@ -174,7 +174,7 @@ void GCodes::Spin()
 
 	  if(platform->GetLine()->Status() & byteAvailable)
 	  {
-		  // Read several bytes instead of just one. This is mainly to speed up file uploading.
+		  // Read several bytes instead of just one. This approximately doubles the speed of file uploading.
 		  int8_t i = 0;
 		  do
 		  {
@@ -815,8 +815,14 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, char* reply)
 		{
 			platform->SetZProbe(gb->GetIValue());
 		}
-	} else
+	} else if (platform->GetZProbeType() == 2)
+	{
+		snprintf(reply, STRING_LENGTH, "%d (%d)", platform->ZProbe(), platform->ZProbeOnVal());
+	}
+	else
+	{
 		snprintf(reply, STRING_LENGTH, "%d", platform->ZProbe());
+	}
 	return true;
 }
 
@@ -1621,7 +1627,13 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 558: // Set Z probe type
     	if(gb->Seen('P'))
+    	{
     		platform->SetZProbeType(gb->GetIValue());
+    	}
+    	else
+    	{
+    		snprintf(reply, STRING_LENGTH, "%d", platform->GetZProbeType());
+    	}
     	break;
 
     case 559: // Upload config.g
