@@ -94,7 +94,8 @@ void Move::Init()
 	  liveCoordinates[i] = 0.0;
   }
 
-  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false, zMove);  // Typically Z is the slowest Axis
+  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false,
+		  platform->InstantDv(Z_AXIS), platform->MaxFeedrate(Z_AXIS), platform->Acceleration(Z_AXIS), platform->DriveStepsPerUnit(Z_AXIS));  // Typically Z is the slowest Axis
   lastMove->Release();
   liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 
@@ -192,25 +193,36 @@ void Move::Spin()
     
     currentFeedrate = -1.0;
     
-    // Promote minimum feedrates
+    // Promote minimum feedrates and restrict maximum feedrates; assumes xy overrides e overrides z FIXME??
+    
+    float minS, maxS, maxA, steps;
     
     if(movementType & xyMove)
-      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(X_AXIS));
-    else if(movementType & eMove)
-      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(AXES));
-    else
-      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
-      
-    // Restrict maximum feedrates; assumes xy overrides e overrides z FIXME??
+    {
+    	minS = platform->InstantDv(X_AXIS);
+    	maxS = platform->MaxFeedrate(X_AXIS);  // Assumes X and Y are equal.  FIXME?
+    	maxA = platform->Acceleration(X_AXIS);
+    	steps = platform->DriveStepsPerUnit(X_AXIS);
+    	//platform->Message(HOST_MESSAGE, " xyMove\n");
+    } else if(movementType & eMove)
+    {
+    	minS = platform->InstantDv(AXES);
+    	maxS = platform->MaxFeedrate(AXES); // Picks up the value for the first extruder.  FIXME?
+    	maxA = platform->Acceleration(AXES);
+    	steps = platform->DriveStepsPerUnit(AXES);
+    	//platform->Message(HOST_MESSAGE, " eMove\n");
+    } else // Must be z
+    {
+    	minS = platform->InstantDv(Z_AXIS);
+    	maxS = platform->MaxFeedrate(Z_AXIS);
+    	maxA = platform->Acceleration(Z_AXIS);
+    	steps = platform->DriveStepsPerUnit(Z_AXIS);
+    	//platform->Message(HOST_MESSAGE, " zMove\n");
+    }
+
+    nextMove[DRIVES] = fmax(fmin(nextMove[DRIVES], maxS), minS);
     
-    if(movementType & xyMove)
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
-    else if(movementType & eMove)
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
-    else // Must be z
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
-    
-    if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove, movementType))
+    if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove, minS, maxS, maxA, steps))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
   }
   platform->ClassReport("Move", longWait);
@@ -509,18 +521,7 @@ void Move::DoLookAhead()
         float c = fmin(n1->FeedRate(), n2->FeedRate());
         c = c*n1->Cosine();
         if(c < platform->InstantDv(Z_AXIS))  // Z is typically the slowest.
-        {
-          int8_t mt = n1->GetMovementType();
-
-          // Assumes xy overrides z overrides e
-
-          if(mt & xyMove)
-            c = platform->InstantDv(X_AXIS);
-          else if (mt & zMove)
-            c = platform->InstantDv(Z_AXIS);
-          else
-            c = platform->InstantDv(AXES); // value for first extruder FIXME??
-        }
+        	c = n1->MinSpeed();
         n1->SetV(c);
         n1->SetProcessed(vCosineSet);
       } 
@@ -571,13 +572,13 @@ void Move::Interrupt()
 }
 
 
-bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t mt)
+bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, float minS, float maxS, float maxA, float s)
 {
     if(LookAheadRingFull())
       return false;
     if(!(lookAheadRingAddPointer->Processed() & released))
       platform->Message(HOST_MESSAGE, "Attempt to alter a non-released lookahead ring entry!\n"); // Should never happen...
-    lookAheadRingAddPointer->Init(ep, feedRate, vv, ce, mt);
+    lookAheadRingAddPointer->Init(ep, feedRate, vv, ce, minS, maxS, maxA, s);
     lastMove = lookAheadRingAddPointer;
     lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
     lookAheadRingCount++;
@@ -867,30 +868,30 @@ MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile
 }
 
 
-void DDA::SetXYAcceleration() // Slight hack - assumes dY = dX
-{
-	acceleration = platform->Acceleration(X_AXIS);
-	instantDv = platform->InstantDv(X_AXIS);
-	timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);
-}
-
-void DDA::SetEAcceleration(float eDistance)
-{
-    acceleration = FLT_MAX; // Slight hack
-    distance = eDistance;
-    for(int8_t drive = AXES; drive < DRIVES; drive++)
-    {
-      if(delta[drive])
-      {
-        if(platform->Acceleration(drive) < acceleration)
-        {
-          acceleration = platform->Acceleration(drive);
-          instantDv = platform->InstantDv(drive);
-          timeStep = 1.0/platform->DriveStepsPerUnit(drive);
-        }
-      }
-    }
-}
+//void DDA::SetXYAcceleration() // Slight hack - assumes dY = dX
+//{
+//	acceleration = platform->Acceleration(X_AXIS);
+//	instantDv = platform->InstantDv(X_AXIS);
+//	timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);
+//}
+//
+//void DDA::SetEAcceleration(float eDistance)
+//{
+//    acceleration = FLT_MAX; // Slight hack
+//    distance = eDistance;
+//    for(int8_t drive = AXES; drive < DRIVES; drive++)
+//    {
+//      if(delta[drive])
+//      {
+//        if(platform->Acceleration(drive) < acceleration)
+//        {
+//          acceleration = platform->Acceleration(drive);
+//          instantDv = platform->InstantDv(drive);
+//          timeStep = 1.0/platform->DriveStepsPerUnit(drive);
+//        }
+//      }
+//    }
+//}
 
 MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 {
@@ -910,15 +911,19 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 
   // How far are we going, both in steps and in mm?
   
+  bool noXYZ = true;
+
   for(drive = 0; drive < DRIVES; drive++)
   {
     if(drive < AXES) // XY, Z
     {
       delta[drive] = targetPosition[drive] - positionNow[drive];  //Absolute
+      if(delta[drive] != 0)
+    	  noXYZ = false;
       d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
       distance += d*d;
     } else
-    {  // E
+    {  // Extruder
       delta[drive] = targetPosition[drive];  // Relative
       d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
       eDistance += d*d;
@@ -956,55 +961,95 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   distance = sqrt(distance);
   eDistance = sqrt(eDistance);
-  
+
+  if(noXYZ)
+	  distance = eDistance;
+
   // Decide the appropriate acceleration and instantDv values
   // timeStep is set here to the distance of the
   // corresponding axis step.  It will be divided
   // by a velocity later.
 
-  int8_t mt = myLookAheadEntry->GetMovementType();
+//  int8_t mt = myLookAheadEntry->GetMovementType();
+//
+//  if(mt & xyMove) // X or Y involved?
+//  {
+//	  // If XY (or Z) are moving, then the extruder won't be considered in the
+//	  // acceleration calculation.  Usually this is OK.  But check that we are not asking
+//	  // the extruder to accelerate, decelerate, or move too fast.  The common place
+//	  // for this to happen is when it is moving back from a previous retraction during
+//	  // an XY move.
+//
+//	  if(mt & eMove)
+//	  {
+//		  if(eDistance > distance)
+//			  SetEAcceleration(eDistance);
+//		  else
+//			  SetXYAcceleration();
+//	  } else
+//		  SetXYAcceleration();
+//  } else if (mt & zMove) // Z involved?
+//  {
+//    acceleration = platform->Acceleration(Z_AXIS);
+//    instantDv = platform->InstantDv(Z_AXIS);
+//    timeStep = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
+//  } else // Must be extruders only
+//	  SetEAcceleration(eDistance);
 
-  if(mt & xyMove) // X or Y involved?
+  acceleration = myLookAheadEntry->MaxAcceleration();
+  instantDv = myLookAheadEntry->MinSpeed();
+  timeStep = 1.0/myLookAheadEntry->StepsPerUnit();
+
+  if(u < myLookAheadEntry->Previous()->MinSpeed())
   {
-	  // If XY (or Z) are moving, then the extruder won't be considered in the
-	  // acceleration calculation.  Usually this is OK.  But check that we are not asking
-	  // the extruder to accelerate, decelerate, or move too fast.  The common place
-	  // for this to happen is when it is moving back from a previous retraction during
-	  // an XY move.
-
-	  if(mt & eMove)
-	  {
-		  if(eDistance > distance)
-			  SetEAcceleration(eDistance);
-		  else
-			  SetXYAcceleration();
-	  } else
-		  SetXYAcceleration();
-  } else if (mt & zMove) // Z involved?
-  {
-    acceleration = platform->Acceleration(Z_AXIS);
-    instantDv = platform->InstantDv(Z_AXIS);
-    timeStep = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
-  } else // Must be extruders only
-	  SetEAcceleration(eDistance);
-
-  // If we are going from an XY move or extruder move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
-
-  if((myLookAheadEntry->Previous()->GetMovementType() & (xyMove | eMove)) && (mt & zMove))
-  {
-	  u = platform->InstantDv(Z_AXIS);
+	  u = myLookAheadEntry->Previous()->MinSpeed();
 	  result = change;
   }
 
-  // if we are going from a Z move to an XY move or E move, v needs to be platform->InstantDv(Z_AXIS),
-  // as does instantDv.
-
-  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & (xyMove | eMove)))
+  if(u > myLookAheadEntry->Previous()->MaxSpeed())
   {
-	  v = platform->InstantDv(Z_AXIS);
-	  instantDv = v;
+	  u = myLookAheadEntry->Previous()->MaxSpeed();
 	  result = change;
   }
+
+  if(u > myLookAheadEntry->MaxSpeed())
+  {
+	  u = myLookAheadEntry->MaxSpeed();
+	  result = change;
+  }
+
+  if(v < myLookAheadEntry->MinSpeed())
+  {
+	  v = myLookAheadEntry->MinSpeed();
+	  result = change;
+  }
+
+  if(v > myLookAheadEntry->MaxSpeed())
+  {
+	  v = myLookAheadEntry->MaxSpeed();
+	  result = change;
+  }
+
+
+
+//  // If we are going from an XY move or extruder move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
+//
+//  if((myLookAheadEntry->Previous()->GetMovementType() & (xyMove | eMove)) && (mt & zMove))
+//  {
+//	  u = platform->InstantDv(Z_AXIS);
+//	  result = change;
+//  }
+//
+//  // if we are going from a Z move to an XY move or E move, v needs to be platform->InstantDv(Z_AXIS),
+//  // as does instantDv.
+//
+//  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & (xyMove | eMove)))
+//  {
+//	  v = platform->InstantDv(Z_AXIS);
+//	  instantDv = v;
+//	  result = change;
+//  }
+
  
   // If velocity requested is (almost) zero, set it to instantDv
   
@@ -1144,10 +1189,14 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
   next = n;
 }
 
-void LookAhead::Init(long ep[], float f, float vv, bool ce, int8_t mt)
+void LookAhead::Init(long ep[], float f, float vv, bool ce, float minS, float maxS, float maxA, float s)
 {
   v = vv;
-  movementType = mt;
+  //movementType = mt;
+  minSpeed = minS;
+  maxSpeed = maxS;
+  maxAcceleration = maxA;
+  stepsPerUnit = s;
   feedRate = f;
   for(int8_t i = 0; i < DRIVES; i++)
     endPoint[i] = ep[i];

@@ -70,15 +70,19 @@ public:
 
 protected:
 	LookAhead(Move* m, Platform* p, LookAhead* n);
-	void Init(long ep[], float feedRate, float vv, bool ce, int8_t mt);
+	void Init(long ep[], float feedRate, float vv, bool ce, float minS, float maxS, float maxA, float s);
 	LookAhead* Next();
 	LookAhead* Previous();
 	long* MachineEndPoints();
 	float MachineToEndPoint(int8_t drive);
 	static float MachineToEndPoint(int8_t drive, long coord);
 	static long EndPointToMachine(int8_t drive, float coord);
-	int8_t GetMovementType();
+	//int8_t GetMovementType();
+	float MinSpeed();
+	float MaxSpeed();
+	float MaxAcceleration();
 	float FeedRate();
+	float StepsPerUnit();
 	float V();
 	void SetV(float vv);
 	void SetFeedRate(float f);
@@ -95,7 +99,8 @@ private:
 	LookAhead* next;
 	LookAhead* previous;
 	long endPoint[DRIVES+1];  // Should never use the +1, but safety first
-	int8_t movementType;
+	float minSpeed, maxSpeed, maxAcceleration, stepsPerUnit;
+	//int8_t movementType;
 	float Cosine();
     bool checkEndStops;
     float cosine;
@@ -124,8 +129,8 @@ protected:
 
 private:
 	MovementProfile AccelerationCalculation(float& u, float& v, MovementProfile result);
-	void SetXYAcceleration();
-	void SetEAcceleration(float eDistance);
+//	void SetXYAcceleration();
+//	void SetEAcceleration(float eDistance);
 	Move* move;
 	Platform* platform;
 	DDA* next;
@@ -204,7 +209,7 @@ class Move
     void ReleaseDDARingLock();
     bool LookAheadRingEmpty();
     bool LookAheadRingFull();
-    bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t movementType);
+    bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, float minS, float maxS, float maxA, float s);
     LookAhead* LookAheadRingGet();
     int8_t GetMovementType(long sp[], long ep[]);
 
@@ -322,10 +327,30 @@ inline long* LookAhead::MachineEndPoints()
 	return endPoint;
 }
 
-inline int8_t LookAhead::GetMovementType()
+inline float LookAhead::MinSpeed()
 {
-	return movementType;
+	return minSpeed;
 }
+
+inline float LookAhead::MaxSpeed()
+{
+	return maxSpeed;
+}
+
+inline float LookAhead::MaxAcceleration()
+{
+	return maxAcceleration;
+}
+
+inline float LookAhead::StepsPerUnit()
+{
+	return stepsPerUnit;
+}
+
+//inline int8_t LookAhead::GetMovementType()
+//{
+//	return movementType;
+//}
 
 //******************************************************************************************************
 
