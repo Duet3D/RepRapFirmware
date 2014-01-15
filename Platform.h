@@ -91,9 +91,10 @@ Licence: GPL
 #define POT_WIPES {1, 3, 2, 0} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define Z_PROBE_AD_VALUE 400
-#define Z_PROBE_STOP_HEIGHT 0.7 // mm
-#define Z_PROBE_PIN 0 // Analogue pin number
+#define Z_PROBE_AD_VALUE (400)
+#define Z_PROBE_STOP_HEIGHT (0.7) // mm
+#define Z_PROBE_PIN (0) 		// Analogue pin number
+#define Z_PROBE_MOD_PIN (61)	// Digital pin number to turn the IR LED on (high) or off (low)
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
@@ -183,7 +184,8 @@ Licence: GPL
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
-const uint16_t lineBufsize = 256;	// use a power of 2 for good performance
+const uint16_t lineBufsize = 256;				// use a power of 2 for good performance
+const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, preferably a power of 2 for performance, and no greater than 64
 
 /****************************************************************************************************/
 
@@ -326,6 +328,8 @@ protected:
 	void Spin();
 
 private:
+	// Although the sam3x usb interface code already has a 512-byte buffer, adding this extra 256-byte buffer
+	// increases the speed of uploading to the SD card by 10%
 	char buffer[lineBufsize];
 	uint16_t getIndex;
 	uint16_t numChars;
@@ -481,10 +485,12 @@ class Platform
   
   float ZProbeStopHeight();
   void SetZProbeStopHeight(float z);
-  long ZProbe();
+  int ZProbe() const;
+  int ZProbeOnVal() const;
   void SetZProbe(int iZ);
   void SetZProbeType(int iZ);
-  
+  int GetZProbeType() const;
+
   // Heat and temperature
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
@@ -539,15 +545,19 @@ class Platform
   float maxStepperDigipotVoltage;
 //  float zProbeGradient;
 //  float zProbeConstant;
-  long zProbeValue;
   int8_t zProbePin;
-  int8_t zProbeCount;
-  long zProbeSum;
+  int8_t zProbeModulationPin;
+  int8_t zProbeType;
+  uint8_t zProbeCount;
+  long zProbeOnSum;		// sum of readings taken when IR led is on
+  long zProbeOffSum;	// sum of readings taken when IR led is on
+  uint16_t zProbeReadings[NumZProbeReadingsAveraged];
   int zProbeADValue;
   float zProbeStopHeight;
 
 // AXES
 
+  void InitZProbe();
   void PollZHeight();
 
   float axisLengths[AXES];
@@ -804,14 +814,25 @@ inline void Platform::SetMaxFeedrate(int8_t drive, float value)
 
 inline int Platform::GetRawZHeight()
 {
-  if(zProbePin >= 0)
-    return analogRead(zProbePin);
-  return 0;
+  return (zProbeType != 0) ? analogRead(zProbePin) : 0;
 }
 
-inline long Platform::ZProbe()
+inline int Platform::ZProbe() const
 {
-	return zProbeValue;
+	return (zProbeType == 1)
+			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged		// non-modulated mode
+			: (zProbeType == 2)
+			  ? (zProbeOnSum - zProbeOffSum)/(NumZProbeReadingsAveraged/2)	// modulated mode
+			    : 0;														// z-probe disabled
+}
+
+inline int Platform::ZProbeOnVal() const
+{
+	return (zProbeType == 1)
+			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged
+			: (zProbeType == 2)
+			  ? zProbeOnSum/(NumZProbeReadingsAveraged/2)
+				: 0;
 }
 
 inline float Platform::ZProbeStopHeight()
@@ -831,22 +852,33 @@ inline void Platform::SetZProbe(int iZ)
 
 inline void Platform::SetZProbeType(int pt)
 {
-	if(pt != 0)
-		zProbePin = Z_PROBE_PIN;
-	else
-		zProbePin = -1;
+	zProbeType = (pt >= 0 && pt <= 2) ? pt : 0;
+	InitZProbe();
+}
+
+inline int Platform::GetZProbeType() const
+{
+	return zProbeType;
 }
 
 inline void Platform::PollZHeight()
 {
-	if(zProbeCount >= 5)
+	uint16_t currentReading = GetRawZHeight();
+	if (zProbeType == 2)
 	{
-		zProbeValue = zProbeSum/5;
-		zProbeSum = 0;
-		zProbeCount = 0;
+		// Reverse the modulation, ready for next time
+		digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
 	}
-	zProbeSum += GetRawZHeight();
-	zProbeCount++;
+	if (zProbeCount & 1)
+	{
+		zProbeOffSum = zProbeOffSum - zProbeReadings[zProbeCount] + currentReading;
+	}
+	else
+	{
+		zProbeOnSum = zProbeOnSum - zProbeReadings[zProbeCount] + currentReading;
+	}
+	zProbeReadings[zProbeCount] = currentReading;
+	zProbeCount = (zProbeCount + 1) % NumZProbeReadingsAveraged;
 }
 
 
@@ -996,11 +1028,11 @@ inline int Line::Read(char& b)
 //  if(alternateInput != NULL)
 //	return alternateInput->Read(b);
 
-  if (numChars == 0) return 0;
-  b = buffer[getIndex];
-  getIndex = (getIndex + 1) % lineBufsize;
-  --numChars;
-  return 1;
+	  if (numChars == 0) return 0;
+	  b = buffer[getIndex];
+	  getIndex = (getIndex + 1) % lineBufsize;
+	  --numChars;
+	  return 1;
 }
 
 inline void Line::Write(char b)

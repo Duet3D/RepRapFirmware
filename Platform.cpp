@@ -97,12 +97,15 @@ void Platform::Init()
   potWipes = POT_WIPES;
   senseResistor = SENSE_RESISTOR;
   maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-  zProbePin = -1; // Default is to use the switch
-  zProbeCount = 0;
-  zProbeSum = 0;
-  zProbeValue = 0;
+
+  // Z PROBE
+
+  zProbePin = Z_PROBE_PIN;
+  zProbeModulationPin = Z_PROBE_MOD_PIN;
+  zProbeType = 0;	// Default is to use the switch
   zProbeADValue = Z_PROBE_AD_VALUE;
   zProbeStopHeight = Z_PROBE_STOP_HEIGHT;
+  InitZProbe();
 
   // AXES
 
@@ -188,9 +191,6 @@ void Platform::Init()
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
   }
 
-  if(zProbePin >= 0)
-	  pinMode(zProbePin, INPUT);
-  
   if(coolingFanPin >= 0)
   {
 	  pinMode(coolingFanPin, OUTPUT);
@@ -207,12 +207,27 @@ void Platform::Init()
   active = true;
 }
 
+void Platform::InitZProbe()
+{
+  zProbeCount = 0;
+  zProbeOnSum = 0;
+  zProbeOffSum = 0;
+  for (uint8_t i = 0; i < NumZProbeReadingsAveraged; ++i)
+  {
+	  zProbeReadings[i] = 0;
+  }
+
+  if (zProbeType != 0)
+  {
+	pinMode(zProbeModulationPin, OUTPUT);
+	digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
+  }
+}
+
 void Platform::StartNetwork()
 {
 	network->Init();
 }
-
-
 
 void Platform::Spin()
 {
@@ -319,9 +334,15 @@ void Platform::ClassReport(char* className, float &lastTime)
 
 float Platform::GetTemperature(int8_t heater)
 {
-  // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(ADC_RANGE + 1) and less than (N + 1)/(ADC_RANGE + 1), times the analog reference.
-  // So we add 0.5 to to the reading to get a better estimate of the input. We don't care whether or not we get exactly zero with the thermistor disconnected.
-  float r = (float)GetRawTemperature(heater) + 0.5;
+  // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
+  // So we add 0.5 to to the reading to get a better estimate of the input. But first, recognise the special case of thermistor disconnected.
+  int rawTemp = GetRawTemperature(heater);
+  if (rawTemp == AD_RANGE)
+  {
+	  // Thermistor is disconnected
+	  return ABS_ZERO;
+  }
+  float r = (float)rawTemp + 0.5;
   return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
 }
 
@@ -345,7 +366,7 @@ void Platform::SetHeater(int8_t heater, const float& power)
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
-	if(zProbePin >= 0)
+	if(zProbeType > 0)
 	{  // Z probe is used for both X and Z.
 		if(drive != Y_AXIS)
 		{
@@ -841,6 +862,26 @@ void Line::Init()
 	//while (!SerialUSB.available());
 }
 
+void Line::Spin()
+{
+	// Read the serial data in blocks to avoid excessive flow control
+	if (numChars <= lineBufsize/2)
+	{
+		int16_t target = SerialUSB.available() + (int16_t)numChars;
+		if (target > lineBufsize)
+		{
+			target = lineBufsize;
+		}
+		while ((int16_t)numChars < target)
+		{
+			int incomingByte = SerialUSB.read();
+			if (incomingByte < 0) break;
+			buffer[(getIndex + numChars) % lineBufsize] = (char)incomingByte;
+			++numChars;
+		}
+	}
+}
+
 //***************************************************************************************************
 
 // Network/Ethernet class
@@ -1231,27 +1272,6 @@ void NetRing::ReleaseHs()
 {
 	hs = 0;
 }
-
-void Line::Spin()
-{
-	// Read the serial data in blocks to avoid excessive flow control
-	if (numChars <= lineBufsize/2)
-	{
-		int16_t target = SerialUSB.available() + (int16_t)numChars;
-		if (target > lineBufsize)
-		{
-			target = lineBufsize;
-		}
-		while ((int16_t)numChars < target)
-		{
-			int incomingByte = SerialUSB.read();
-			if (incomingByte < 0) break;
-			buffer[(getIndex + numChars) % lineBufsize] = (char)incomingByte;
-			++numChars;
-		}
-	}
-}
-
 
 
 
