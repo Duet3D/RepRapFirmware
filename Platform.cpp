@@ -317,13 +317,22 @@ void Platform::ClassReport(char* className, float &lastTime)
 
 // Result is in degrees celsius
 
+
 float Platform::GetTemperature(int8_t heater)
 {
-  // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(ADC_RANGE + 1) and less than (N + 1)/(ADC_RANGE + 1), times the analog reference.
-  // So we add 0.5 to to the reading to get a better estimate of the input. We don't care whether or not we get exactly zero with the thermistor disconnected.
-  float r = (float)GetRawTemperature(heater) + 0.5;
+  // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
+  // So we add 0.5 to to the reading to get a better estimate of the input. But first, recognise the special case of thermistor disconnected.
+  int rawTemp = GetRawTemperature(heater);
+  if (rawTemp == AD_RANGE)
+  {
+         // Thermistor is disconnected
+         return ABS_ZERO;
+  }
+  float r = (float)rawTemp + 0.5;
   return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
 }
+
+
 
 
 // power is a fraction in [0,1]
@@ -386,7 +395,7 @@ void MassStorage::Init()
 	hsmciPinsinit();
 	// Initialize SD MMC stack
 	sd_mmc_init();
-	delay(20);
+	delay(7);
 	int sdPresentCount = 0;
 	while ((CTRL_NO_PRESENT == sd_mmc_check(0)) && (sdPresentCount < 5))
 	{
