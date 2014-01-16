@@ -507,10 +507,15 @@ class Platform
   void CoolingFan(float speed);
   //void SetHeatOn(int8_t ho); //TEMPORARY - this will go away...
 
+  friend class Move;
+
 //-------------------------------------------------------------------------------------------------------
   protected:
   
-  void ReturnFileStore(FileStore* f);  
+  void ReturnFileStore(FileStore* f);
+  float* Acceleration();
+  float* MaxFeedrate();
+  float* InstantDv();
   
   private:
   
@@ -718,6 +723,21 @@ inline void Platform::SetAcceleration(int8_t drive, float value)
 inline float Platform::InstantDv(int8_t drive)
 {
   return instantDvs[drive]; 
+}
+
+inline float* Platform::Acceleration()
+{
+	return accelerations;
+}
+
+inline float* Platform::MaxFeedrate()
+{
+	return maxFeedrates;
+}
+
+inline float* Platform::InstantDv()
+{
+	return instantDvs;
 }
 
 inline bool Platform::HighStopButNotLow(int8_t axis)

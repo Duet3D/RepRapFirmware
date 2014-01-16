@@ -194,7 +194,7 @@ class Move
     void Diagnostics();
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
     void SetStepHypotenuse();
-    
+    float MachineToPoint(long steps, int8_t drive);
 
     friend class DDA;
     
@@ -211,7 +211,7 @@ class Move
     bool LookAheadRingFull();
     bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, float minS, float maxS, float maxA, float s);
     LookAhead* LookAheadRingGet();
-    int8_t GetMovementType(long sp[], long ep[]);
+    bool MaxTruncatedProjection(long sp[], long ep[], float box[], float& length, int8_t& axis);
 
     float liveCoordinates[DRIVES + 1];
     
@@ -276,9 +276,7 @@ inline float LookAhead::V()
 
 inline float LookAhead::MachineToEndPoint(int8_t drive)
 {
-	if(drive >= DRIVES)
-		platform->Message(HOST_MESSAGE, "MachineToEndPoint() called for feedrate!\n");
-	return ((float)(endPoint[drive]))/platform->DriveStepsPerUnit(drive);
+	return move->MachineToPoint(endPoint[drive], drive);
 }
 
 
@@ -423,6 +421,13 @@ inline void Move::LiveCoordinates(float m[])
 	for(int8_t drive = 0; drive <= DRIVES; drive++)
 		m[drive] = liveCoordinates[drive];
 	InverseTransform(m);
+}
+
+inline float Move::MachineToPoint(long steps, int8_t drive)
+{
+	if(drive >= DRIVES)
+		platform->Message(HOST_MESSAGE, "MachineToPoint() called for feedrate!\n");
+	return ((float)(steps))/platform->DriveStepsPerUnit(drive);
 }
 
 

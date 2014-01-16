@@ -179,15 +179,34 @@ void Move::Spin()
     for(int8_t drive = 0; drive < DRIVES; drive++)
     	nextMachineEndPoints[drive] = LookAhead::EndPointToMachine(drive, nextMove[drive]);
 
-    int8_t movementType = GetMovementType(lastMove->MachineEndPoints(), nextMachineEndPoints);
+    float minS, maxS, maxA, steps;
+    int8_t axis;
+
+    //int8_t movementType = GetMovementType(lastMove->MachineEndPoints(), nextMachineEndPoints);
 
     // Throw it away if there's no real movement.
     
-    if(movementType == noMove)
+    if(!MaxTruncatedProjection(lastMove->MachineEndPoints(),  nextMachineEndPoints,  platform->MaxFeedrate(), maxS, axis))
     {
        platform->ClassReport("Move", longWait);
        return;
     }
+
+    MaxTruncatedProjection(lastMove->MachineEndPoints(),  nextMachineEndPoints,  platform->InstantDv(), minS, axis);
+
+    MaxTruncatedProjection(lastMove->MachineEndPoints(),  nextMachineEndPoints,  platform->Acceleration(), maxA, axis);
+
+    steps = platform->DriveStepsPerUnit(axis);
+
+    SerialUSB.print("min, max, a and s: ");
+    SerialUSB.print(minS);
+    SerialUSB.print(" ");
+    SerialUSB.print(maxS);
+    SerialUSB.print(" ");
+    SerialUSB.print(maxA);
+    SerialUSB.print(" ");
+    SerialUSB.print(steps);
+    SerialUSB.print("\n");
      
     // Real move - record its feedrate with it, not here.
     
@@ -195,30 +214,30 @@ void Move::Spin()
     
     // Promote minimum feedrates and restrict maximum feedrates; assumes xy overrides e overrides z FIXME??
     
-    float minS, maxS, maxA, steps;
-    
-    if(movementType & xyMove)
-    {
-    	minS = platform->InstantDv(X_AXIS);
-    	maxS = platform->MaxFeedrate(X_AXIS);  // Assumes X and Y are equal.  FIXME?
-    	maxA = platform->Acceleration(X_AXIS);
-    	steps = platform->DriveStepsPerUnit(X_AXIS);
-    	//platform->Message(HOST_MESSAGE, " xyMove\n");
-    } else if(movementType & eMove)
-    {
-    	minS = platform->InstantDv(AXES);
-    	maxS = platform->MaxFeedrate(AXES); // Picks up the value for the first extruder.  FIXME?
-    	maxA = platform->Acceleration(AXES);
-    	steps = platform->DriveStepsPerUnit(AXES);
-    	//platform->Message(HOST_MESSAGE, " eMove\n");
-    } else // Must be z
-    {
-    	minS = platform->InstantDv(Z_AXIS);
-    	maxS = platform->MaxFeedrate(Z_AXIS);
-    	maxA = platform->Acceleration(Z_AXIS);
-    	steps = platform->DriveStepsPerUnit(Z_AXIS);
-    	//platform->Message(HOST_MESSAGE, " zMove\n");
-    }
+//
+//
+//    if(movementType & xyMove)
+//    {
+//    	minS = platform->InstantDv(X_AXIS);
+//    	maxS = platform->MaxFeedrate(X_AXIS);  // Assumes X and Y are equal.  FIXME?
+//    	maxA = platform->Acceleration(X_AXIS);
+//
+//    	//platform->Message(HOST_MESSAGE, " xyMove\n");
+//    } else if(movementType & eMove)
+//    {
+//    	minS = platform->InstantDv(AXES);
+//    	maxS = platform->MaxFeedrate(AXES); // Picks up the value for the first extruder.  FIXME?
+//    	maxA = platform->Acceleration(AXES);
+//    	steps = platform->DriveStepsPerUnit(AXES);
+//    	//platform->Message(HOST_MESSAGE, " eMove\n");
+//    } else // Must be z
+//    {
+//    	minS = platform->InstantDv(Z_AXIS);
+//    	maxS = platform->MaxFeedrate(Z_AXIS);
+//    	maxA = platform->Acceleration(Z_AXIS);
+//    	steps = platform->DriveStepsPerUnit(Z_AXIS);
+//    	//platform->Message(HOST_MESSAGE, " zMove\n");
+//    }
 
     nextMove[DRIVES] = fmax(fmin(nextMove[DRIVES], maxS), minS);
     
@@ -271,6 +290,70 @@ void Move::Diagnostics()
     */
 }
 
+/*
+ * Box[] is a constraint on a vector - say a list of maximum speeds for
+ * each axis.  sp[] and ep[] are the start and end points of that vector.
+ * This finds the length of that vector such that it extends to the surface
+ * of the box.  It then sets the length of the resulting vector.  It also
+ * returns the axis corresponding to the longest component of vector.
+ *
+ * If the machine moves along the vector at that speed, then all the speeds along
+ * all the other directions are guaranteed not to lie outside the box.
+ *
+ * Note that this means that for, say, a diagonal move in X and Y with equal
+ * maxima along each axis, then the maximum speed returned will be sqrt(2) times
+ * that speed.
+ *
+ * The function returns true if input vector is not of 0 length.
+ */
+bool Move::MaxTruncatedProjection(long sp[], long ep[], float box[], float& length, int8_t& axis)
+{
+	float vector[DRIVES];
+	long lVector;
+	float s;
+	float t = FLT_MAX;  // Slight hack
+	int8_t drive;
+
+	for(drive = 0; drive < DRIVES; drive++)
+	{
+		lVector = labs(ep[drive] - sp[drive]);
+		if(lVector)
+		{
+			vector[drive] = MachineToPoint(lVector, drive);
+			s = box[drive]/vector[drive];
+			if(s < t)
+				t = s;
+		} else
+			vector[drive] = 0.0;
+	}
+
+	if(t == FLT_MAX) // No movement, so result doesn't matter.  But safest not to set it to 0.
+	{
+		length = box[0];
+		return false;
+	}
+
+	length = 0.0;
+
+	s = vector[0];
+	axis = 0;
+
+	for(drive = 0; drive < DRIVES; drive++)
+	{
+		length += vector[drive]*vector[drive];
+
+		if(vector[drive] > s)
+		{
+			s = vector[drive];
+			axis = drive;
+		}
+	}
+
+	length = sqrt(length)*t;
+
+	return true;
+}
+
 // This returns false if it is not possible
 // to use the result as the basis for the
 // next move because the look ahead ring
@@ -307,36 +390,36 @@ bool Move::GetCurrentState(float m[])
 // for the bed's plane, which means that a move is MAINLY and XY move, or MAINLY a Z move. It
 // is the main type of move that is returned.
 
-int8_t Move::GetMovementType(long p0[], long p1[])
-{
-  int8_t result = noMove;
-  long dxy = 0;
-  long dz = 0;
-  long d;
-
-  for(int8_t drive = 0; drive < DRIVES; drive++)
-  {
-	  if(drive < AXES)
-	  {
-		  d = llabs(p1[drive] - p0[drive]);
-		  if(drive == Z_AXIS)
-			  dz = d;
-		  else if(d > dxy)
-			  dxy = d;
-	  } else
-	  {
-		  if( p1[drive] )
-			  result |= eMove;
-	  }
-  }
-  dxy *= (long)roundf(platform->DriveStepsPerUnit(Z_AXIS)/platform->DriveStepsPerUnit(X_AXIS));
-  if(dxy > dz)
-	  result |= xyMove;
-  else if(dz)
-	  result |= zMove;
-
-  return result;
-}
+//int8_t Move::GetMovementType(long p0[], long p1[])
+//{
+//  int8_t result = noMove;
+//  long dxy = 0;
+//  long dz = 0;
+//  long d;
+//
+//  for(int8_t drive = 0; drive < DRIVES; drive++)
+//  {
+//	  if(drive < AXES)
+//	  {
+//		  d = llabs(p1[drive] - p0[drive]);
+//		  if(drive == Z_AXIS)
+//			  dz = d;
+//		  else if(d > dxy)
+//			  dxy = d;
+//	  } else
+//	  {
+//		  if( p1[drive] )
+//			  result |= eMove;
+//	  }
+//  }
+//  dxy *= (long)roundf(platform->DriveStepsPerUnit(Z_AXIS)/platform->DriveStepsPerUnit(X_AXIS));
+//  if(dxy > dz)
+//	  result |= xyMove;
+//  else if(dz)
+//	  result |= zMove;
+//
+//  return result;
+//}
 
 void Move::SetStepHypotenuse()
 {
