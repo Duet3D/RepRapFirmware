@@ -153,7 +153,8 @@ Licence: GPL
 #define TEMP_DIR "0:/tmp/" // Ditto - temporary files
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
-#define FILE_LIST_LENGTH 1000 // Maximum length of file list
+#define FILE_LIST_LENGTH (1000) // Maximum length of file list
+#define MAX_FILES (42)			// Maximum number of files displayed
 
 #define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
                       // the frequency and M/S ratio.
@@ -315,7 +316,7 @@ public:
 	int8_t Status() const; // Returns OR of IOStatus
 	int Read(char& b);
 	void Write(char b);
-	void Write(char* s);
+	void Write(const char* s);
 	void Write(float f);
 	void Write(long l);
 
@@ -339,9 +340,9 @@ class MassStorage
 {
 public:
 
-  char* FileList(char* directory, bool fromLine); // Returns a list of all the files in the named directory
-  char* CombineName(char* directory, char* fileName);
-  bool Delete(char* directory, char* fileName);
+  char* FileList(const char* directory, bool fromLine); // Returns a list of all the files in the named directory
+  char* CombineName(const char* directory, const char* fileName);
+  bool Delete(const char* directory, const char* fileName);
 
 friend class Platform;
 
@@ -378,7 +379,7 @@ protected:
 
 	FileStore(Platform* p);
 	void Init();
-        bool Open(char* directory, char* fileName, bool write);
+    bool Open(const char* directory, const char* fileName, bool write);
         
   bool inUse;
   byte buf[FILE_BUF_LEN];
@@ -449,7 +450,7 @@ class Platform
   friend class FileStore;
   
   MassStorage* GetMassStorage();
-  FileStore* GetFileStore(char* directory, char* fileName, bool write);
+  FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
   void StartNetwork();
   char* GetWebDir(); // Where the htm etc files are
   char* GetGCodeDir(); // Where the gcodes are
@@ -457,7 +458,7 @@ class Platform
   char* GetTempDir(); // Where temporary files are
   char* GetConfigFile(); // Where the configuration is stored (in the system dir).
   
-  void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
+  void Message(char type, const char* message);        // Send a message.  Messages may simply flash an LED, or,
                             // say, display the messages on an LCD. This may also transmit the messages to the host.
   void PushMessageIndent();
   void PopMessageIndent();
@@ -1040,7 +1041,7 @@ inline void Line::Write(char b)
 	SerialUSB.print(b);
 }
 
-inline void Line::Write(char* b)
+inline void Line::Write(const char* b)
 {
 	SerialUSB.print(b);
 }

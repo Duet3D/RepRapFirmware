@@ -38,10 +38,10 @@ extern RepRap reprap;
 // Functions and globals not part of any class
 
 char* ftoa(char *a, const float& f, int prec);
-bool StringEndsWith(char* string, char* ending);
-bool StringStartsWith(char* string, char* starting);
-bool StringEquals(char* s1, char* s2);
-int StringContains(char* string, char* match);
+bool StringEndsWith(const char* string, const char* ending);
+bool StringStartsWith(const char* string, const char* starting);
+bool StringEquals(const char* s1, const char* s2);
+int StringContains(const char* string, const char* match);
 
 
 #include <float.h>

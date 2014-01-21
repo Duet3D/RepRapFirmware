@@ -446,7 +446,7 @@ void MassStorage::Init()
 	}
 }
 
-char* MassStorage::CombineName(char* directory, char* fileName)
+char* MassStorage::CombineName(const char* directory, const char* fileName)
 {
   int out = 0;
   int in = 0;
@@ -493,7 +493,7 @@ char* MassStorage::CombineName(char* directory, char* fileName)
 
 // List the flat files in a directory.  No sub-directories or recursion.
 
-char* MassStorage::FileList(char* directory, bool fromLine)
+char* MassStorage::FileList(const char* directory, bool fromLine)
 {
 //  File dir, entry;
   DIR dir;
@@ -537,7 +537,7 @@ char* MassStorage::FileList(char* directory, bool fromLine)
 
 	  f_readdir(&dir,0);
 
-	  while((f_readdir(&dir,&entry) == FR_OK) && (foundFiles < 24))
+	  while((f_readdir(&dir,&entry) == FR_OK) && (foundFiles < MAX_FILES))
 	  {
 		  foundFiles++;
 
@@ -576,7 +576,7 @@ char* MassStorage::FileList(char* directory, bool fromLine)
 }
 
 // Delete a file
-bool MassStorage::Delete(char* directory, char* fileName)
+bool MassStorage::Delete(const char* directory, const char* fileName)
 {
 	char* location = platform->GetMassStorage()->CombineName(directory, fileName);
 	if( f_unlink (location) != FR_OK)
@@ -610,7 +610,7 @@ void FileStore::Init()
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
 
-bool FileStore::Open(char* directory, char* fileName, bool write)
+bool FileStore::Open(const char* directory, const char* fileName, bool write)
 {
   char* location = platform->GetMassStorage()->CombineName(directory, fileName);
 
@@ -773,7 +773,7 @@ void FileStore::Write(char* b)
 
 //-----------------------------------------------------------------------------------------------------
 
-FileStore* Platform::GetFileStore(char* directory, char* fileName, bool write)
+FileStore* Platform::GetFileStore(const char* directory, const char* fileName, bool write)
 {
   FileStore* result = NULL;
 
@@ -812,7 +812,7 @@ void Platform::ReturnFileStore(FileStore* fs)
         }
 }
 
-void Platform::Message(char type, char* message)
+void Platform::Message(char type, const char* message)
 {
   switch(type)
   {

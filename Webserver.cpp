@@ -79,7 +79,7 @@ byte Webserver::ReadGCode()
 }
 
 
-bool Webserver::LoadGcodeBuffer(char* gc, bool convertWeb)
+bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 {
   char scratchString[STRING_LENGTH];
   if(gcodeAvailable)
@@ -190,7 +190,7 @@ void Webserver::CloseClient()
 }
 
 
-void Webserver::SendFile(char* nameOfFileToSend)
+void Webserver::SendFile(const char* nameOfFileToSend)
 {
   char scratchString[STRING_LENGTH];
   char sLen[POST_LENGTH];
@@ -286,7 +286,7 @@ void Webserver::CheckPassword()
   gotPassword = StringEndsWith(clientQualifier, password);
 }
 
-void Webserver::JsonReport(bool ok, char* request)
+void Webserver::JsonReport(bool ok, const char* request)
 {
   if(ok)
   {
@@ -305,7 +305,7 @@ void Webserver::JsonReport(bool ok, char* request)
   } 
 }
 
-void Webserver::GetJsonResponse(char* request)
+void Webserver::GetJsonResponse(const char* request)
 {
   jsonPointer = 0;
   writing = true;
@@ -337,7 +337,28 @@ void Webserver::GetJsonResponse(char* request)
     strncat(jsonResponse, "\"", STRING_LENGTH);
     strncat(jsonResponse, ftoa(0, liveCoordinates[AXES], 4), STRING_LENGTH);
     strncat(jsonResponse, "\"", STRING_LENGTH);
-    strncat(jsonResponse, "]}", STRING_LENGTH);
+    strncat(jsonResponse, "]", STRING_LENGTH);
+
+    // Send the Z probe value
+    strncat(jsonResponse, ",\"probe\":\"", STRING_LENGTH);
+    char scratch[SHORT_STRING_LENGTH+1];
+    if (platform->GetZProbeType() == 2)
+    {
+    	snprintf(scratch, SHORT_STRING_LENGTH, "%d (%d)\"", (int)platform->ZProbe(), platform->ZProbeOnVal());
+    }
+    else
+    {
+    	snprintf(scratch, SHORT_STRING_LENGTH, "%d\"", (int)platform->ZProbe());
+    }
+    scratch[SHORT_STRING_LENGTH] = 0;
+    strncat(jsonResponse, scratch, STRING_LENGTH);
+
+    // Send the response to the last command
+    strncat(jsonResponse, ",\"resp\":\"", STRING_LENGTH);
+    strncat(jsonResponse, gcodeReply, STRING_LENGTH);	// we ar assuming that the response doesn't contain any double-quote characters
+    strncat(jsonResponse, "\"}", STRING_LENGTH);
+
+    jsonResponse[STRING_LENGTH] = 0;
     JsonReport(true, request);
     return;
   }
@@ -704,7 +725,8 @@ void Webserver::Init()
   InitialisePost();
   lastTime = platform->Time();
   longWait = lastTime;
-  active = true; 
+  active = true;
+  gcodeReply[0] = 0;
   
   // Reinitialise the message file
   
@@ -746,18 +768,37 @@ void Webserver::Diagnostics()
   platform->Message(HOST_MESSAGE, "Webserver Diagnostics:\n"); 
 }
 
-void Webserver::SetPassword(char* pw)
+void Webserver::SetPassword(const char* pw)
 {
 	strncpy(password, pw, SHORT_STRING_LENGTH);
 	password[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
 }
 
-void Webserver::SetName(char* nm)
+void Webserver::SetName(const char* nm)
 {
 	strncpy(myName, nm, SHORT_STRING_LENGTH);
 	myName[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
 }
 
-
+void Webserver::HandleReply(const char *s, bool error)
+{
+	if (strlen(s) == 0 && !error)
+	{
+		strcpy(gcodeReply, "ok");
+	}
+	else
+	{
+		if (error)
+		{
+			strcpy(gcodeReply, "Error: ");
+			strncat(gcodeReply, s, STRING_LENGTH);
+		}
+		else
+		{
+			strncpy(gcodeReply, s, STRING_LENGTH);
+		}
+		gcodeReply[STRING_LENGTH] = 0;	// array is dimensioned to STRING_LENGTH+1
+	}
+}
 
 

@@ -72,7 +72,7 @@ class GCodes
     void Exit();
     bool RunConfigurationGCodes();
     bool ReadMove(float* m, bool& ce);
-    void QueueFileToPrint(char* fileName);
+    void QueueFileToPrint(const char* fileName);
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);
     char* GetCurrentCoordinates();
     bool PrintingAFile() const;
@@ -84,7 +84,7 @@ class GCodes
     void doFilePrint(GCodeBuffer* gb);
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
     bool DoCannedCycleMove(bool ce);
-    bool DoFileCannedCycles(char* fileName);
+    bool DoFileCannedCycles(const char* fileName);
     bool FileCannedCyclesReturn();
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
@@ -104,7 +104,7 @@ class GCodes
     bool DisableDrives();
     bool StandbyHeaters();
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);
-    void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
+    void HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend);
     char* OpenFileToWrite(char* directory, char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);
     bool SendConfigToLine();
@@ -122,7 +122,7 @@ class GCodes
     GCodeBuffer* serialGCode;
     GCodeBuffer* cannedCycleGCode;
     bool moveAvailable;
-    float moveBuffer[DRIVES+1]; // Last is feedrate
+    float moveBuffer[DRIVES+1]; // Last is feed rate
     bool checkEndStops;
     bool drivesRelative; // All except X, Y and Z
     bool axesRelative;   // X, Y and Z

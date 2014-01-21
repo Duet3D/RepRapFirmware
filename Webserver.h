@@ -48,29 +48,30 @@ class Webserver
     void Spin();
     void Exit();
     void Diagnostics();
-    void SetPassword(char* pw);
-    void SetName(char* nm);
+    void SetPassword(const char* pw);
+    void SetName(const char* nm);
     void ConnectionError();
+    void HandleReply(const char *s, bool error);
     
   private:
   
     void ParseClientLine();
-    void SendFile(char* nameOfFileToSend);
+    void SendFile(const char* nameOfFileToSend);
     void WriteByte();
     void ParseQualifier();
     void CheckPassword();
-    bool LoadGcodeBuffer(char* gc, bool convertWeb);
+    bool LoadGcodeBuffer(const char* gc, bool convertWeb);
     void CloseClient();
     bool PrintHeadString();
     bool PrintLinkTable();
     void GetGCodeList();
-    void GetJsonResponse(char* request);
+    void GetJsonResponse(const char* request);
     void ParseGetPost();
     void CharFromClient(char c);
     void BlankLineFromClient();
     void InitialisePost();
     bool MatchBoundary(char c);
-    void JsonReport(bool ok, char* request);
+    void JsonReport(bool ok, const char* request);
 
     
     Platform* platform;
@@ -93,7 +94,7 @@ class Webserver
     char clientLine[STRING_LENGTH];
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];
-    char jsonResponse[STRING_LENGTH];
+    char jsonResponse[STRING_LENGTH+1];
     char gcodeBuffer[GCODE_LENGTH];
     int jsonPointer;
     bool gcodeAvailable;
@@ -102,6 +103,7 @@ class Webserver
     bool gotPassword;
     char password[SHORT_STRING_LENGTH+1];
     char myName[SHORT_STRING_LENGTH+1];
+    char gcodeReply[STRING_LENGTH+1];
 };
 
 

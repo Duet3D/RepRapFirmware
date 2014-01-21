@@ -380,7 +380,7 @@ bool GCodes::ReadMove(float m[], bool& ce)
 }
 
 
-bool GCodes::DoFileCannedCycles(char* fileName)
+bool GCodes::DoFileCannedCycles(const char* fileName)
 {
 	// Have we started the file?
 
@@ -933,7 +933,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 
 // Set up a file to print, but don't print it yet.
 
-void GCodes::QueueFileToPrint(char* fileName)
+void GCodes::QueueFileToPrint(const char* fileName)
 {
   fileToPrint = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
   if(fileToPrint == NULL)
@@ -1102,17 +1102,19 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 	}
 }
 
-void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend)
+void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend)
 {
+	webserver->HandleReply(reply, error);
+
 	Compatibility c = platform->Emulating();
 	if(!fromLine)
 		c = me;
 
-	char* response = "ok";
+	const char* response = "ok";
 	if(resend)
 		response = "rs ";
 
-	char* s = 0;
+	const char* s = 0;
 
 	switch(c)
 	{
@@ -1183,7 +1185,6 @@ void GCodes::HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int
 		snprintf(scratchString, STRING_LENGTH, "Emulation of %s is not yet supported.\n", s);
 		platform->Message(HOST_MESSAGE, scratchString);
 	}
-
 }
 
 // If the GCode to act on is completed, this returns true,
@@ -1332,7 +1333,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	fileBeingPrinted = NULL;
     	break;
 
-    case 27: // Report print status - Depricated
+    case 27: // Report print status - Deprecated
     	if(this->PrintingAFile())
     		strncpy(reply, "SD printing.", STRING_LENGTH);
     	else
@@ -1394,7 +1395,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	result = FileCannedCyclesReturn();
     	break;
 
-    case 104: // Depricated
+    case 104: // Deprecated
     	if(gb->Seen('S'))
     	{
     		reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
@@ -1418,7 +1419,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		platform->CoolingFan(gb->GetFValue());
       break;
     
-    case 107: // Fan off - depricated
+    case 107: // Fan off - deprecated
     	platform->CoolingFan(0.0);
       break;
       
@@ -1446,12 +1447,13 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	snprintf(reply, STRING_LENGTH, "FIRMWARE_NAME:%s FIRMWARE_VERSION:%s ELECTRONICS:%s DATE:%s", NAME, VERSION, ELECTRONICS, DATE);
     	break;
 
-    case 109: // Depricated
+    case 109: // Deprecated
     	if(gb->Seen('S'))
     	{
     		reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
     		reprap.GetHeat()->Activate(1);
     	}
+    	// Deliberate fall-through to case 116 here to wait for temperatures
     case 116: // Wait for everything, especially set temperatures
     	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
     		return false;
