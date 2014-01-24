@@ -304,6 +304,9 @@ void Move::Diagnostics()
  * maxima along each axis, then the maximum speed returned will be sqrt(2) times
  * that speed.
  *
+ * Without loss of generality, this function works in entirely the positive hyperquadrant,
+ * and assumes that all values in box[] are positive.
+ *
  * The function returns true if input vector is not of 0 length.
  */
 bool Move::MaxTruncatedProjection(long sp[], long ep[], float box[], float& length, int8_t& axis)
@@ -313,6 +316,9 @@ bool Move::MaxTruncatedProjection(long sp[], long ep[], float box[], float& leng
 	float s;
 	float t = FLT_MAX;  // Slight hack
 	int8_t drive;
+
+	// Find which limit is the one that the movement vector hits and so is
+	// constrained by.
 
 	for(drive = 0; drive < DRIVES; drive++)
 	{
@@ -332,6 +338,9 @@ bool Move::MaxTruncatedProjection(long sp[], long ep[], float box[], float& leng
 		length = box[0];
 		return false;
 	}
+
+	// Find the length of the vector where it hits the box.  This is the constrained
+	// amount.  Also find the dominant axis.
 
 	length = 0.0;
 
