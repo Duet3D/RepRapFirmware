@@ -81,13 +81,13 @@ byte Webserver::ReadGCode()
 
 bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 {
-  char scratchString[STRING_LENGTH];
   if(gcodeAvailable)
     return false;
   
-  if(strlen(gc) > GCODE_LENGTH-1)
+  if(strlen(gc) > WEB_GCODE_LENGTH)
   {
     platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
+    HandleReply("Webserver: GCode buffer overflow", true);
     return false;  
   }
   
@@ -97,11 +97,13 @@ bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
   
   char c;
   
-  while(c = gc[gcp++])
+  while((c = gc[gcp++]) != 0)
   {
     if(c == '+' && convertWeb)
+    {
       c = ' ';
-    if(c == '%'&& convertWeb)
+    }
+    else if(c == '%' && convertWeb)
     {
       c = 0;
       if(isalpha(gc[gcp]))
@@ -117,48 +119,82 @@ bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
     }
     gcodeBuffer[gcodePointer++] = c;
   }
-  while(isspace(gcodeBuffer[gcodePointer - 1]) && gcodePointer > 0)  // Kill any trailing space
+  while(gcodePointer > 0 && isspace(gcodeBuffer[gcodePointer - 1]))  // Kill any trailing space
+  {
     gcodePointer--;
+  }
   gcodeBuffer[gcodePointer] = 0;
   gcodePointer = 0;  
   
-// We intercept three G/M Codes so we can deal with file manipulation and emergencies.  That
+// We intercept four G/M Codes so we can deal with file manipulation and emergencies.  That
 // way things don't get out of sync, and - as a file name can contain
 // a valid G code (!) - confusion is avoided.
   
   int8_t specialAction = 0;
-  if(StringStartsWith(gcodeBuffer, "M30 ")) specialAction = 1;
-  if(StringStartsWith(gcodeBuffer, "M23 ")) specialAction = 2;
-  if(StringStartsWith(gcodeBuffer, "M112")) specialAction = 3;  // FIXME - suppose we ever have an M1121 ??
+  if(StringStartsWith(gcodeBuffer, "M30 "))
+  {
+	  specialAction = 1;
+  }
+  else if(StringStartsWith(gcodeBuffer, "M23 "))
+  {
+	  specialAction = 2;
+  }
+  else if(StringStartsWith(gcodeBuffer, "M112") && !isdigit(gcodeBuffer[4]))
+  {
+	  specialAction = 3;
+  }
+  else if(StringStartsWith(gcodeBuffer, "M503") && !isdigit(gcodeBuffer[4]))
+  {
+	  specialAction = 4;
+  }
   
-  if(specialAction) // Delete or print a file?
+  if(specialAction != 0) // Delete or print a file?
   { 
-    if(specialAction == 1) // Delete?
+    switch (specialAction)
     {
-      if(!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), &gcodeBuffer[4]))
-      {
-        platform->Message(HOST_MESSAGE, "Unsuccessful attempt to delete: ");
-        platform->Message(HOST_MESSAGE, &gcodeBuffer[4]);
-        platform->Message(HOST_MESSAGE, "\n");
-      } 
-    } else if (specialAction == 2)
-    {
+    case 1: // Delete
+      reprap.GetGCodes()->DeleteFile(&gcodeBuffer[4]);
+      break;
+
+    case 2:	// print
       reprap.GetGCodes()->QueueFileToPrint(&gcodeBuffer[4]);
-    } else
-    {
-    	reprap.EmergencyStop();
+      break;
+
+    case 3:
+      reprap.EmergencyStop();
+      break;
+
+    case 4:
+	  {
+		FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
+		if(configFile == NULL)
+		{
+		  HandleReply("Configuration file not found", true);
+		}
+		else
+		{
+		  char c;
+		  size_t i = 0;
+		  while(i < STRING_LENGTH && configFile->Read(c))
+		  {
+			gcodeReply[i++] = c;
+		  }
+		  configFile->Close();
+		  gcodeReply[i] = 0;
+		  ++seq;
+		}
+	  }
+	  break;
     }
     
     // Check for further G Codes in the string
-    
-    while(gcodeBuffer[gcodePointer])
+    while((c = gcodeBuffer[gcodePointer++]) != 0)
     {
-       if(gcodeBuffer[gcodePointer] == '\n')
+       if(c == '\n')
        {
          gcodeAvailable = true;
          return true;
        }
-       gcodePointer++;
     }
     gcodePointer = 0;
     gcodeBuffer[gcodePointer] = 0;
@@ -342,6 +378,7 @@ void Webserver::GetJsonResponse(const char* request)
     // Send the Z probe value
     strncat(jsonResponse, ",\"probe\":\"", STRING_LENGTH);
     char scratch[SHORT_STRING_LENGTH+1];
+    scratch[SHORT_STRING_LENGTH] = 0;
     if (platform->GetZProbeType() == 2)
     {
     	snprintf(scratch, SHORT_STRING_LENGTH, "%d (%d)\"", (int)platform->ZProbe(), platform->ZProbeOnVal());
@@ -350,12 +387,60 @@ void Webserver::GetJsonResponse(const char* request)
     {
     	snprintf(scratch, SHORT_STRING_LENGTH, "%d\"", (int)platform->ZProbe());
     }
-    scratch[SHORT_STRING_LENGTH] = 0;
     strncat(jsonResponse, scratch, STRING_LENGTH);
+
+    // Send the amount of buffer space available for gcodes
+    strncat(jsonResponse, ",\"buff\":", STRING_LENGTH);
+    if (gcodeAvailable)
+    {
+    	strncat(jsonResponse, "0", STRING_LENGTH);	// buffer is in use so return 0
+    }
+    else
+    {
+    	snprintf(scratch, SHORT_STRING_LENGTH, "%d", WEB_GCODE_LENGTH);
+    	strncat(jsonResponse, scratch, STRING_LENGTH);
+    }
+
+    // Send the response sequence number
+    strncat(jsonResponse, ",\"seq\":", STRING_LENGTH);
+	snprintf(scratch, SHORT_STRING_LENGTH, "%d", seq);
+	strncat(jsonResponse, scratch, STRING_LENGTH);
 
     // Send the response to the last command
     strncat(jsonResponse, ",\"resp\":\"", STRING_LENGTH);
-    strncat(jsonResponse, gcodeReply, STRING_LENGTH);	// we ar assuming that the response doesn't contain any double-quote characters
+    size_t jp = strnlen(jsonResponse, STRING_LENGTH);
+    const char *p = gcodeReply;
+    while (*p != 0 && jp < STRING_LENGTH - 2)	// leave room for the final '"}'
+    {
+    	char c = *p++;
+    	char esc;
+    	switch(c)
+    	{
+    	case '\r':
+    		esc = 'r'; break;
+    	case '\n':
+    		esc = 'n'; break;
+    	case '\t':
+    		esc = 't'; break;
+    	case '"':
+    		esc = '"'; break;
+    	case '\\':
+    		esc = '\\'; break;
+    	default:
+    		esc = 0; break;
+    	}
+    	if (esc)
+    	{
+    		if (jp == STRING_LENGTH - 3)
+    			break;
+   			jsonResponse[jp++] = '\\';
+   			jsonResponse[jp++] = esc;
+    	}
+    	else
+    	{
+    		jsonResponse[jp++] = c;
+    	}
+    }
     strncat(jsonResponse, "\"}", STRING_LENGTH);
 
     jsonResponse[STRING_LENGTH] = 0;
@@ -594,9 +679,7 @@ void Webserver::BlankLineFromClient()
       if(postFile != NULL)
         postFile->Close();
     }
-  }  
-
-  
+  }
 }
 
 void Webserver::CharFromClient(char c)
@@ -727,6 +810,7 @@ void Webserver::Init()
   longWait = lastTime;
   active = true;
   gcodeReply[0] = 0;
+  seq = 0;
   
   // Reinitialise the message file
   
@@ -799,6 +883,11 @@ void Webserver::HandleReply(const char *s, bool error)
 		}
 		gcodeReply[STRING_LENGTH] = 0;	// array is dimensioned to STRING_LENGTH+1
 	}
+	++seq;
 }
 
+void Webserver::AppendReply(const char *s)
+{
+	strncat(gcodeReply, s, STRING_LENGTH);
+}
 

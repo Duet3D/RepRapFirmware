@@ -937,10 +937,25 @@ void GCodes::QueueFileToPrint(const char* fileName)
 {
   fileToPrint = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
   if(fileToPrint == NULL)
-	  platform->Message(HOST_MESSAGE, "GCode file not found\n");
+  {
+	webserver->HandleReply("GCode file not found", true);
+	platform->Message(HOST_MESSAGE, "GCode file not found\n");
+  }
 }
 
+void GCodes::DeleteFile(const char* fileName)
+{
+  if(!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), fileName))
+  {
+	platform->Message(HOST_MESSAGE, "Unsuccessful attempt to delete: ");
+	platform->Message(HOST_MESSAGE, fileName);
+	platform->Message(HOST_MESSAGE, "\n");
+	webserver->HandleReply("Failed to delete file", true);
+  }
+}
 
+// Send the config file to USB in response to an M503 command.
+// This is not used for processing M503 requests received via the webserver.
 bool GCodes::SendConfigToLine()
 {
 	if(configFile == NULL)
@@ -955,7 +970,6 @@ bool GCodes::SendConfigToLine()
 	}
 
 	char b;
-
 	while(configFile->Read(b))
 	{
 		platform->GetLine()->Write(b);
@@ -975,12 +989,10 @@ bool GCodes::SendConfigToLine()
 
 bool GCodes::DoDwell(GCodeBuffer *gb)
 {
-  float dwell;
-  
-  if(gb->Seen('P'))
-    dwell = 0.001*(float)gb->GetLValue(); // P values are in milliseconds; we need seconds
-  else
+  if(!gb->Seen('P'))
     return true;  // No time given - throw it away
+  
+  float dwell = 0.001*(float)gb->GetLValue(); // P values are in milliseconds; we need seconds
       
   // Wait for all the queued moves to stop
       
@@ -1104,7 +1116,10 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 
 void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend)
 {
-	webserver->HandleReply(reply, error);
+	if (gMOrT != 'M' || code != 111)	// web server reply for M111 is handled before we get here
+	{
+		webserver->HandleReply(reply, error);
+	}
 
 	Compatibility c = platform->Emulating();
 	if(!fromLine)
@@ -1348,6 +1363,10 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 29: // End of file being written; should be intercepted before getting here
     	platform->Message(HOST_MESSAGE, "GCode end-of-file being interpreted.\n");
+    	break;
+
+    case 30:	// Delete file
+    	DeleteFile(gb->GetUnprecedentedString());
     	break;
 
     case 82:

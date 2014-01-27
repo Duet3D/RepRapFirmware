@@ -281,22 +281,27 @@ void Platform::Diagnostics()
 extern char _end;
 extern "C" char *sbrk(int i);
 
+// Print memory stats to USB and append them to the current webserver reply
 void Platform::PrintMemoryUsage()
 {
 	char *ramstart=(char *)0x20070000;
 	char *ramend=(char *)0x20088000;
     char *heapend=sbrk(0);
 	register char * stack_ptr asm ("sp");
-	struct mallinfo mi=mallinfo();
+	struct mallinfo mi = mallinfo();
 	Message(HOST_MESSAGE, "\n");
 	Message(HOST_MESSAGE, "Memory usage:\n\n");
-	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n",mi.uordblks);
+	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
+	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n",&_end - ramstart);
+	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
+	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Stack ram used: %d\n",ramend - stack_ptr);
+	snprintf(scratchString, STRING_LENGTH, "Stack ram used: %d\n", ramend - stack_ptr);
+	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Guess at free mem: %d\n\n",stack_ptr - heapend + mi.fordblks);
+	snprintf(scratchString, STRING_LENGTH, "Guess at free mem: %d\n\n", stack_ptr - heapend + mi.fordblks);
+	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 }
 

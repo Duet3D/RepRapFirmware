@@ -64,7 +64,12 @@ inline void RepRap::SetDebug(bool d)
 	if(debug)
 	{
 		platform->Message(HOST_MESSAGE, "Debugging enabled\n");
+		webserver->HandleReply("Debugging enabled\n", false);
 		platform->PrintMemoryUsage();
+	}
+	else
+	{
+		webserver->HandleReply("", false);
 	}
 }
 

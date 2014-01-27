@@ -23,6 +23,7 @@ Licence: GPL
 #define GCODES_H
 
 #define STACK 5
+#define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
@@ -73,6 +74,7 @@ class GCodes
     bool RunConfigurationGCodes();
     bool ReadMove(float* m, bool& ce);
     void QueueFileToPrint(const char* fileName);
+    void DeleteFile(const char* fileName);
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);
     char* GetCurrentCoordinates();
     bool PrintingAFile() const;

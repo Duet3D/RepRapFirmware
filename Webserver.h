@@ -34,7 +34,7 @@ Licence: GPL
 #define KO_START "rr_"
 #define KO_FIRST 3
 #define POST_LENGTH 200
-#define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
+#define WEB_GCODE_LENGTH	(1200)		// max total length of gcodes we can accept in a single web request
 
 class Webserver
 {   
@@ -52,7 +52,8 @@ class Webserver
     void SetName(const char* nm);
     void ConnectionError();
     void HandleReply(const char *s, bool error);
-    
+    void AppendReply(const char* s);
+
   private:
   
     void ParseClientLine();
@@ -95,7 +96,7 @@ class Webserver
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];
     char jsonResponse[STRING_LENGTH+1];
-    char gcodeBuffer[GCODE_LENGTH];
+    char gcodeBuffer[WEB_GCODE_LENGTH+1];
     int jsonPointer;
     bool gcodeAvailable;
     int gcodePointer;
@@ -104,6 +105,7 @@ class Webserver
     char password[SHORT_STRING_LENGTH+1];
     char myName[SHORT_STRING_LENGTH+1];
     char gcodeReply[STRING_LENGTH+1];
+    uint16_t seq;	// reply sequence number, so that the client can tell if a reply is new or not
 };
 
 

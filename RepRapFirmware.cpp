@@ -257,6 +257,7 @@ void RepRap::EmergencyStop()
 		}
 	}
 	platform->Message(HOST_MESSAGE, "Emergency Stop! Reset the controller to continue.");
+	webserver->HandleReply("Emergency Stop! Reset the controller to continue.", false);
 }
 
 
