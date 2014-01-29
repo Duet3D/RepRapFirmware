@@ -122,8 +122,7 @@ a lot of data that needs to be copied, this should be set high. */
 /* ---------- Pbuf options ---------- */
 /* PBUF_POOL_SIZE: the number of buffers in the pbuf pool. */
 #define PBUF_POOL_SIZE          6
-/* PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool. */
-#define PBUF_POOL_BUFSIZE       512
+/* PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool. DO NOT DEFINE IT HERE, the correct value needs to be calculated from TCP_MSS. */
 
 /** ETH_PAD_SIZE: number of bytes added before the ethernet header to ensure
  * alignment of payload after that header. Since the header is 14 bytes long,
