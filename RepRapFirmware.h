@@ -43,6 +43,8 @@ bool StringStartsWith(const char* string, const char* starting);
 bool StringEquals(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
 
+// Macro to give us the number of elements in an array
+#define ARRAY_SIZE(_x) (sizeof(_x)/sizeof(_x[0]))
 
 #include <float.h>
 
