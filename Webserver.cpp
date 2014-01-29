@@ -62,88 +62,117 @@ bool Webserver::MatchBoundary(char c)
 
 bool Webserver::GCodeAvailable()
 {
-  return gcodeAvailable;
+  return gcodeReadIndex != gcodeWriteIndex;
 }
 
 byte Webserver::ReadGCode()
 {
-  byte c = gcodeBuffer[gcodePointer];
-  if(!c)
+  byte c;
+  if (gcodeReadIndex == gcodeWriteIndex)
   {
-     gcodeAvailable = false;
-     gcodePointer = 0;
-     gcodeBuffer[gcodePointer] = 0;
-  } else
-    gcodePointer++;
+	  c = 0;
+  }
+  else
+  {
+	  c = gcodeBuffer[gcodeReadIndex];
+	  gcodeReadIndex = (gcodeReadIndex + 1u) % gcodeBufLength;
+  }
   return c;
 }
 
-
+// Process a received string of gcodes
 bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 {
-  if(gcodeAvailable)
-    return false;
-  
-  if(strlen(gc) > WEB_GCODE_LENGTH)
-  {
-    platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
-    HandleReply("Webserver: GCode buffer overflow", true);
-    return false;  
-  }
-  
-  int gcp = 0;
-  gcodePointer = 0;
-  gcodeBuffer[gcodePointer] = 0;
-  
-  char c;
-  
-  while((c = gc[gcp++]) != 0)
-  {
-    if(c == '+' && convertWeb)
-    {
-      c = ' ';
-    }
-    else if(c == '%' && convertWeb)
-    {
-      c = 0;
-      if(isalpha(gc[gcp]))
-        c += 16*(gc[gcp] - 'A' + 10);
-      else
-        c += 16*(gc[gcp] - '0');
-      gcp++;
-      if(isalpha(gc[gcp]))
-        c += gc[gcp] - 'A' + 10;
-      else
-        c += gc[gcp] - '0';
-      gcp++;
-    }
-    gcodeBuffer[gcodePointer++] = c;
-  }
-  while(gcodePointer > 0 && isspace(gcodeBuffer[gcodePointer - 1]))  // Kill any trailing space
-  {
-    gcodePointer--;
-  }
-  gcodeBuffer[gcodePointer] = 0;
-  gcodePointer = 0;  
-  
+	char gcodeTempBuf[GCODE_LENGTH];
+	uint16_t gtp = 0;
+	char c;
+	do
+	{
+		c = *gc++;
+		if(c == 0)
+		{
+			gcodeTempBuf[gtp] = 0;
+			ProcessGcode(gcodeTempBuf);
+			gtp = 0;
+		}
+		else if(gtp == ARRAY_SIZE(gcodeTempBuf) - 1)
+		{
+			// gcode is too long, we haven't room for another character and a null
+		    platform->Message(HOST_MESSAGE, "Webserver: GCode local buffer overflow.\n");
+		    HandleReply("Webserver: GCode local buffer overflow", true);
+		    return false;
+		}
+		else if(c == '+' && convertWeb)
+	    {
+			gcodeTempBuf[gtp++] = ' ';
+	    }
+	    else if(c == '%' && convertWeb)
+	    {
+	    	c = *gc++;
+	    	if (c != 0)
+	    	{
+	    		unsigned char uc;
+	    		if(isalpha(c))
+	    		{
+	    			uc = 16*(c - 'A' + 10);
+	    		}
+	    		else
+	    		{
+	    			uc = 16*(c - '0');
+	    		}
+	    		c = *gc++;
+	    		if (c != 0)
+	    		{
+	    			if(isalpha(c))
+	    			{
+	    				uc += c - 'A' + 10;
+	    			}
+	    			else
+	    			{
+	    				uc += c - '0';
+	    			}
+	    			if (uc == '\n')
+	    			{
+	    				gcodeTempBuf[gtp] = 0;
+	    				ProcessGcode(gcodeTempBuf);
+	    				gtp = 0;
+	    			}
+	    			else
+	    			{
+	    				gcodeTempBuf[gtp++] = uc;
+	    			}
+	    		}
+	    	}
+	    }
+	    else
+	    {
+	    	gcodeTempBuf[gtp++] = c;
+	    }
+	}
+	while (c != 0);
+}
+
+// Process a null-terminated gcode
 // We intercept four G/M Codes so we can deal with file manipulation and emergencies.  That
 // way things don't get out of sync, and - as a file name can contain
 // a valid G code (!) - confusion is avoided.
-  
+
+void Webserver::ProcessGcode(const char* gc)
+{
   int8_t specialAction = 0;
-  if(StringStartsWith(gcodeBuffer, "M30 "))
+  if(StringStartsWith(gc, "M30 "))
   {
 	  specialAction = 1;
   }
-  else if(StringStartsWith(gcodeBuffer, "M23 "))
+  else if(StringStartsWith(gc, "M23 "))
   {
 	  specialAction = 2;
   }
-  else if(StringStartsWith(gcodeBuffer, "M112") && !isdigit(gcodeBuffer[4]))
+  else if(StringStartsWith(gc, "M112") && !isdigit(gc[4]))
   {
 	  specialAction = 3;
   }
-  else if(StringStartsWith(gcodeBuffer, "M503") && !isdigit(gcodeBuffer[4]))
+  else if(StringStartsWith(gc, "M503") && !isdigit(gc[4]))
   {
 	  specialAction = 4;
   }
@@ -153,11 +182,11 @@ bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
     switch (specialAction)
     {
     case 1: // Delete
-      reprap.GetGCodes()->DeleteFile(&gcodeBuffer[4]);
+      reprap.GetGCodes()->DeleteFile(&gc[4]);
       break;
 
     case 2:	// print
-      reprap.GetGCodes()->QueueFileToPrint(&gcodeBuffer[4]);
+      reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
       break;
 
     case 3:
@@ -186,26 +215,23 @@ bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 	  }
 	  break;
     }
-    
-    // Check for further G Codes in the string
-    while((c = gcodeBuffer[gcodePointer++]) != 0)
-    {
-       if(c == '\n')
-       {
-         gcodeAvailable = true;
-         return true;
-       }
-    }
-    gcodePointer = 0;
-    gcodeBuffer[gcodePointer] = 0;
-    gcodeAvailable = false;
-    return true;
   }
-
-// Otherwise, send them to the G Code interpreter
-
-  gcodeAvailable = true;
-  return true;
+  else if(strlen(gc) + 1 > GetGcodeBufferSpace())
+  {
+	  platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
+	  HandleReply("Webserver: GCode buffer overflow", true);
+  }
+  else
+  {
+	  char c;
+	  do
+	  {
+		  c = *gc++;
+		gcodeBuffer[gcodeWriteIndex] = c;
+		gcodeWriteIndex = (gcodeWriteIndex + 1u) % gcodeBufLength;
+	  }
+	  while (c != 0);
+  }
 }
 
 //********************************************************************************************
@@ -228,8 +254,7 @@ void Webserver::CloseClient()
 
 void Webserver::SendFile(const char* nameOfFileToSend)
 {
-  char scratchString[STRING_LENGTH];
-  char sLen[POST_LENGTH];
+  char sLen[SHORT_STRING_LENGTH];
   bool zip = false;
     
   if(StringStartsWith(nameOfFileToSend, KO_START))
@@ -268,7 +293,7 @@ void Webserver::SendFile(const char* nameOfFileToSend)
   if (jsonPointer >=0)
   {
 	  platform->GetNetwork()->Write("Content-Length: ");
-    snprintf(sLen, POST_LENGTH, "%d", strlen(jsonResponse));
+    snprintf(sLen, SHORT_STRING_LENGTH, "%d", strlen(jsonResponse));
     platform->GetNetwork()->Write(sLen);
     platform->GetNetwork()->Write("\n");
   }
@@ -277,7 +302,7 @@ void Webserver::SendFile(const char* nameOfFileToSend)
   {
 	platform->GetNetwork()->Write("Content-Encoding: gzip\n");
 	platform->GetNetwork()->Write("Content-Length: ");
-    snprintf(sLen, POST_LENGTH, "%llu", fileBeingSent->Length());
+    snprintf(sLen, SHORT_STRING_LENGTH, "%llu", fileBeingSent->Length());
     platform->GetNetwork()->Write(sLen);
     platform->GetNetwork()->Write("\n");
   }
@@ -289,12 +314,12 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 
 void Webserver::WriteByte()
 {
-    char b;
-    
     if(jsonPointer >= 0)
     {
       if(jsonResponse[jsonPointer])
+      {
     	  platform->GetNetwork()->Write(jsonResponse[jsonPointer++]);
+      }
       else
       {
         jsonPointer = -1;
@@ -303,8 +328,11 @@ void Webserver::WriteByte()
       }
     } else
     {
+      char b;
       if(fileBeingSent->Read(b))
+      {
     	  platform->GetNetwork()->Write(b);
+      }
       else
       {
         fileBeingSent->Close();
@@ -376,37 +404,36 @@ void Webserver::GetJsonResponse(const char* request)
     strncat(jsonResponse, "]", STRING_LENGTH);
 
     // Send the Z probe value
-    strncat(jsonResponse, ",\"probe\":\"", STRING_LENGTH);
     char scratch[SHORT_STRING_LENGTH+1];
     scratch[SHORT_STRING_LENGTH] = 0;
     if (platform->GetZProbeType() == 2)
     {
-    	snprintf(scratch, SHORT_STRING_LENGTH, "%d (%d)\"", (int)platform->ZProbe(), platform->ZProbeOnVal());
+    	snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d (%d)\"", (int)platform->ZProbe(), platform->ZProbeOnVal());
     }
     else
     {
-    	snprintf(scratch, SHORT_STRING_LENGTH, "%d\"", (int)platform->ZProbe());
+    	snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d\"", (int)platform->ZProbe());
     }
     strncat(jsonResponse, scratch, STRING_LENGTH);
 
     // Send the amount of buffer space available for gcodes
-    strncat(jsonResponse, ",\"buff\":", STRING_LENGTH);
-    if (gcodeAvailable)
-    {
-    	strncat(jsonResponse, "0", STRING_LENGTH);	// buffer is in use so return 0
-    }
-    else
-    {
-    	snprintf(scratch, SHORT_STRING_LENGTH, "%d", WEB_GCODE_LENGTH);
-    	strncat(jsonResponse, scratch, STRING_LENGTH);
-    }
+   	snprintf(scratch, SHORT_STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
+   	strncat(jsonResponse, scratch, STRING_LENGTH);
+
+    // Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
+    strncat(jsonResponse, ",\"hx\":", STRING_LENGTH);
+    strncat(jsonResponse, (reprap.GetGCodes()->GetAxisIsHomed(0)) ? "1" : "0", STRING_LENGTH);
+    strncat(jsonResponse, ",\"hy\":", STRING_LENGTH);
+    strncat(jsonResponse, (reprap.GetGCodes()->GetAxisIsHomed(1)) ? "1" : "0", STRING_LENGTH);
+    strncat(jsonResponse, ",\"hz\":", STRING_LENGTH);
+    strncat(jsonResponse, (reprap.GetGCodes()->GetAxisIsHomed(2)) ? "1" : "0", STRING_LENGTH);
 
     // Send the response sequence number
     strncat(jsonResponse, ",\"seq\":", STRING_LENGTH);
-	snprintf(scratch, SHORT_STRING_LENGTH, "%d", seq);
+	snprintf(scratch, SHORT_STRING_LENGTH, "%u", (unsigned int)seq);
 	strncat(jsonResponse, scratch, STRING_LENGTH);
 
-    // Send the response to the last command
+    // Send the response to the last command. Do this last because it is long and may need to be truncated.
     strncat(jsonResponse, ",\"resp\":\"", STRING_LENGTH);
     size_t jp = strnlen(jsonResponse, STRING_LENGTH);
     const char *p = gcodeReply;
@@ -451,8 +478,13 @@ void Webserver::GetJsonResponse(const char* request)
   if(StringStartsWith(request, "gcode"))
   {
     if(!LoadGcodeBuffer(&clientQualifier[6], true))
+    {
       platform->Message(HOST_MESSAGE, "Webserver: buffer not free!\n");
-    strncpy(jsonResponse, "{}", STRING_LENGTH);
+    }
+    char scratch[SHORT_STRING_LENGTH+1];
+    scratch[SHORT_STRING_LENGTH] = 0;
+    snprintf(scratch, SHORT_STRING_LENGTH, "{\"buff\":%u}", GetReportedGcodeBufferSpace());
+   	strncat(jsonResponse, scratch, STRING_LENGTH);
     JsonReport(true, request);
     return;
   }
@@ -640,7 +672,6 @@ void Webserver::ParseClientLine()
 // so you can send a reply
 void Webserver::BlankLineFromClient()
 {
-  char scratchString[STRING_LENGTH];
   clientLine[clientLinePointer] = 0;
   clientLinePointer = 0;
   //ParseQualifier();
@@ -705,9 +736,14 @@ void Webserver::CharFromClient(char c)
     clientLinePointer++;
     if(clientLinePointer >= STRING_LENGTH)
     {
-      platform->Message(HOST_MESSAGE,"Client read buffer overflow.\n");
+      platform->Message(HOST_MESSAGE, "Client read buffer overflow. Data:\n");
+      clientLine[STRING_LENGTH] = '\n';		// note that clientLine is now STRING_LENGTH+2 characters long to make room for these
+      clientLine[STRING_LENGTH+1] = 0;
+      platform->Message(HOST_MESSAGE, clientLine);
+
       clientLinePointer = 0;
       clientLine[clientLinePointer] = 0; 
+      clientLineIsBlank = true;
     }
   }  
 }
@@ -725,8 +761,11 @@ void Webserver::Spin()
  //   if(inPHPFile)
  //     WritePHPByte();
  //   else
-	if(platform->GetNetwork()->CanWrite())
+	// Write several bytes at a time, otherwise the web server is unbearably slow
+	for (uint8_t i = 0; i < 10 && writing && platform->GetNetwork()->CanWrite(); ++i)
+	{
       WriteByte();
+	}
 	platform->ClassReport("Webserver", longWait);
     return;
   }
@@ -803,8 +842,7 @@ void Webserver::Init()
   SetPassword(DEFAULT_PASSWORD);
   SetName(DEFAULT_NAME);
   //gotPassword = false;
-  gcodeAvailable = false;
-  gcodePointer = 0;
+  gcodeReadIndex = gcodeWriteIndex = 0;
   InitialisePost();
   lastTime = platform->Time();
   longWait = lastTime;
@@ -832,8 +870,7 @@ void Webserver::ConnectionError()
 	  clientLine[0] = 0;
 	  clientRequest[0] = 0;
 	  gotPassword = false;
-	  gcodeAvailable = false;
-	  gcodePointer = 0;
+	  gcodeReadIndex = gcodeWriteIndex = 0;
 	  InitialisePost();
 	  lastTime = platform->Time();
 	  longWait = lastTime;
@@ -889,5 +926,20 @@ void Webserver::HandleReply(const char *s, bool error)
 void Webserver::AppendReply(const char *s)
 {
 	strncat(gcodeReply, s, STRING_LENGTH);
+}
+
+// Get the actual amount of gcode buffer space we have
+unsigned int Webserver::GetGcodeBufferSpace() const
+{
+	return (gcodeReadIndex - gcodeWriteIndex - 1u) % gcodeBufLength;
+}
+
+// Get the amount of gcode buffer space we are going to report
+unsigned int Webserver::GetReportedGcodeBufferSpace() const
+{
+	unsigned int temp = GetGcodeBufferSpace();
+	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf
+			: (temp < minReportedFreeBuf) ? 0
+				: temp;
 }
 

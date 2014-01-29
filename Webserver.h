@@ -33,8 +33,11 @@ Licence: GPL
 
 #define KO_START "rr_"
 #define KO_FIRST 3
-#define POST_LENGTH 200
-#define WEB_GCODE_LENGTH	(1200)		// max total length of gcodes we can accept in a single web request
+#define POST_LENGTH				(1300)			// max amount of POST data we can accept
+
+const unsigned int gcodeBufLength = 1024;		// size of our gcode ring buffer, ideally a power of 2
+const unsigned int minReportedFreeBuf = 100;	// the minimum free buffer we report if not zero
+const unsigned int maxReportedFreeBuf = 800;	// the max we own up to having free, to avoid overlong messages
 
 class Webserver
 {   
@@ -73,8 +76,10 @@ class Webserver
     void InitialisePost();
     bool MatchBoundary(char c);
     void JsonReport(bool ok, const char* request);
+    unsigned int GetGcodeBufferSpace() const;
+    unsigned int GetReportedGcodeBufferSpace() const;
+    void ProcessGcode(const char* gc);
 
-    
     Platform* platform;
     bool active;
     float lastTime;
@@ -92,14 +97,13 @@ class Webserver
     float clientCloseTime;
     bool needToCloseClient;
 
-    char clientLine[STRING_LENGTH];
+    char clientLine[STRING_LENGTH+2];	// 2 chars extra so we can append \n\0
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];
     char jsonResponse[STRING_LENGTH+1];
-    char gcodeBuffer[WEB_GCODE_LENGTH+1];
+    char gcodeBuffer[gcodeBufLength];
+    unsigned int gcodeReadIndex, gcodeWriteIndex;		// head and tail indices into gcodeBuffer
     int jsonPointer;
-    bool gcodeAvailable;
-    int gcodePointer;
     int clientLinePointer;
     bool gotPassword;
     char password[SHORT_STRING_LENGTH+1];
