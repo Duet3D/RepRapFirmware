@@ -80,6 +80,7 @@ class GCodes
     bool PrintingAFile() const;
     void Diagnostics();
     bool HaveIncomingData() const;
+    bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; }
     
   private:
   
@@ -91,7 +92,7 @@ class GCodes
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
-    bool DoHome();
+    bool DoHome(char *reply, bool& error);
     bool DoSingleZProbeAtPoint();
     bool DoSingleZProbe();
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);
@@ -99,7 +100,7 @@ class GCodes
     bool SetPrintZProbe(GCodeBuffer *gb, char *reply);
     bool SetOffsets(GCodeBuffer *gb);
     bool SetPositions(GCodeBuffer *gb);
-    void LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92);
+    void LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyLimits);
     bool NoHome() const;
     bool Push();
     bool Pop();
@@ -159,6 +160,7 @@ class GCodes
     bool cannedCycleMoveQueued;
     bool zProbesSet;
     float longWait;
+    bool axisIsHomed[3];	// these record which of the axes have been homed
 };
 
 //*****************************************************************************************************

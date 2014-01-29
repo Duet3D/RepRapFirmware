@@ -84,6 +84,7 @@ void GCodes::Init()
   active = true;
   longWait = platform->Time();
   dwellTime = longWait;
+  axisIsHomed[0] = axisIsHomed[1] = axisIsHomed[2] = false;
 }
 
 void GCodes::doFilePrint(GCodeBuffer* gb)
@@ -295,8 +296,9 @@ bool GCodes::Pop()
 
 // Move expects all axis movements to be absolute, and all
 // extruder drive moves to be relative.  This function serves that.
+// If applyLimits is true and we have homed the relevant axes, then we don't allow movement beyond the bed.
 
-void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92)
+void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyLimits)
 {
 	float absE;
 
@@ -306,20 +308,38 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92)
 	    {
 	      if(gb->Seen(gCodeLetters[i]))
 	      {
-	        if(!axesRelative || doingG92)
-	        	moveBuffer[i] = gb->GetFValue()*distanceScale;
-	        else
-	        	moveBuffer[i] += gb->GetFValue()*distanceScale;
+	    	float moveArg = gb->GetFValue()*distanceScale;
+	    	if (axesRelative && !doingG92)
+	    	{
+	    		moveArg += moveBuffer[i];
+	    	}
+	    	if (applyLimits && axisIsHomed[i] & !doingG92)
+	    	{
+	    		if (moveArg < (i == 2 ? -5.0 : 0.0))		// limits are 0 for X, Y and -5mm for Z
+	    		{
+	    			moveArg = 0.0;
+	    		}
+	    		else if (moveArg > platform->AxisLength(i))
+	    		{
+	    			moveArg = platform->AxisLength(i);
+	    		}
+	    	}
+        	moveBuffer[i] = moveArg;
+        	if (doingG92)
+        	{
+        		axisIsHomed[i] = true;		// doing a G92 is equivalent to homing the axis
+        	}
 	      }
 	    } else
 	    {
 	      if(gb->Seen(gCodeLetters[i]))
 	      {
+		    float moveArg = gb->GetFValue()*distanceScale;
 	        if(drivesRelative || doingG92)
-	          moveBuffer[i] = gb->GetFValue()*distanceScale;
+	          moveBuffer[i] = moveArg;
 	        else
 	        {
-	          absE = gb->GetFValue()*distanceScale;
+	          absE = moveArg;
 	          moveBuffer[i] = absE - lastPos[i - AXES];
 	          lastPos[i - AXES] = absE;
 	        }
@@ -352,14 +372,14 @@ bool GCodes::SetUpMove(GCodeBuffer *gb)
   if(!reprap.GetMove()->GetCurrentState(moveBuffer))
     return false;
   
-  LoadMoveBufferFromGCode(gb, false);
-  
   checkEndStops = false;
   if(gb->Seen('S'))
   {
 	  if(gb->GetIValue() == 1)
 		  checkEndStops = true;
   }
+
+  LoadMoveBufferFromGCode(gb, false, !checkEndStops);
 
   moveAvailable = true;
   return true; 
@@ -488,7 +508,7 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
 
-	LoadMoveBufferFromGCode(gb, true);
+	LoadMoveBufferFromGCode(gb, true, false);
 	reprap.GetMove()->SetLiveCoordinates(moveBuffer);
 	reprap.GetMove()->SetPositions(moveBuffer);
 
@@ -554,8 +574,11 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 
 // Home one or more of the axes.  Which ones are decided by the
 // booleans homeX, homeY and homeZ.
-
-bool GCodes::DoHome()
+// Returns true if completed, false if needs to be called again.
+// 'reply' is only written if there is an error.
+// 'error' is false on entry, gets changed to true iff there is an error.
+bool GCodes::DoHome(char* reply, bool& error)
+//pre(reply.upb == STRING_LENGTH)
 {
 	if(homeX && homeY && homeZ)
 	{
@@ -565,6 +588,7 @@ bool GCodes::DoHome()
 			homeX = false;
 			homeY = false;
 			homeZ = false;
+			axisIsHomed[0] = axisIsHomed[1] = axisIsHomed[2] = true;
 			return true;
 		}
 		return false;
@@ -576,6 +600,7 @@ bool GCodes::DoHome()
 		{
 			homeAxisMoveCount = 0;
 			homeX = false;
+			axisIsHomed[0] = true;
 			return NoHome();
 		}
 		return false;
@@ -588,6 +613,7 @@ bool GCodes::DoHome()
 		{
 			homeAxisMoveCount = 0;
 			homeY = false;
+			axisIsHomed[1] = true;
 			return NoHome();
 		}
 		return false;
@@ -596,10 +622,19 @@ bool GCodes::DoHome()
 
 	if(homeZ)
 	{
+		if (!(axisIsHomed[0] && axisIsHomed[1]))
+		{
+			// We can only home Z if X and Y have already been homed. Possibly this should only be if we are using an IR probe.
+			strncpy(reply, "Must home X and Y before homing Z", STRING_LENGTH);
+			error = true;
+			homeZ = false;
+			return true;
+		}
 		if(DoFileCannedCycles(HOME_Z_G))
 		{
 			homeAxisMoveCount = 0;
 			homeZ = false;
+			axisIsHomed[2] = true;
 			return NoHome();
 		}
 		return false;
@@ -1260,7 +1295,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
           homeZ = true;
         }
       }
-      result = DoHome();
+      result = DoHome(reply, error);
       break;
 
     case 30: // Z probe/manually set at a position and set that as point P
@@ -1272,7 +1307,17 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 32: // Probe Z at multiple positions and generate the bed transform
-    	result = DoMultipleZProbe();
+		if (!(axisIsHomed[0] && axisIsHomed[1]))
+		{
+			// We can only do a Z probe if X and Y have already been homed
+			strncpy(reply, "Must home X and Y before bed probing", STRING_LENGTH);
+			error = true;
+			result = true;
+		}
+		else
+		{
+			result = DoMultipleZProbe();
+		}
     	break;
 
     case 90: // Absolute coordinates
