@@ -150,6 +150,7 @@ bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 	    }
 	}
 	while (c != 0);
+	return true;
 }
 
 // Process a null-terminated gcode

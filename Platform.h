@@ -368,7 +368,7 @@ public:
 	int8_t Status(); // Returns OR of IOStatus
 	bool Read(char& b);
 	void Write(char b);
-	void Write(char* s);
+	void Write(const char* s);
 	void Close();
 	void GoToEnd(); // Position the file at the end (so you can write on the end).
 	unsigned long Length(); // File size in bytes
@@ -418,7 +418,7 @@ class Platform
   
   void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
   
-  Compatibility Emulating();
+  Compatibility Emulating() const;
 
   void SetEmulating(Compatibility c);
 
@@ -439,24 +439,24 @@ class Platform
   // Communications and data storage
   
   Network* GetNetwork();
-  Line* GetLine();
+  Line* GetLine() const;
   void SetIPAddress(byte ip[]);
-  byte* IPAddress();
+  const byte* IPAddress() const;
   void SetNetMask(byte nm[]);
-  byte* NetMask();
+  const byte* NetMask() const;
   void SetGateWay(byte gw[]);
-  byte* GateWay();
+  const byte* GateWay() const;
   
   friend class FileStore;
   
   MassStorage* GetMassStorage();
   FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
   void StartNetwork();
-  char* GetWebDir(); // Where the htm etc files are
-  char* GetGCodeDir(); // Where the gcodes are
-  char* GetSysDir();  // Where the system files are
-  char* GetTempDir(); // Where temporary files are
-  char* GetConfigFile(); // Where the configuration is stored (in the system dir).
+  const char* GetWebDir() const; // Where the htm etc files are
+  const char* GetGCodeDir() const; // Where the gcodes are
+  const char* GetSysDir() const;  // Where the system files are
+  const char* GetTempDir() const; // Where temporary files are
+  const char* GetConfigFile() const; // Where the configuration is stored (in the system dir).
   
   void Message(char type, const char* message);        // Send a message.  Messages may simply flash an LED, or,
                             // say, display the messages on an LCD. This may also transmit the messages to the host.
@@ -470,21 +470,21 @@ class Platform
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void SetMotorCurrent(byte drive, float current);
-  float DriveStepsPerUnit(int8_t drive);
+  float DriveStepsPerUnit(int8_t drive) const;
   void SetDriveStepsPerUnit(int8_t drive, float value);
-  float Acceleration(int8_t drive);
+  float Acceleration(int8_t drive) const;
   void SetAcceleration(int8_t drive, float value);
-  float MaxFeedrate(int8_t drive);
+  float MaxFeedrate(int8_t drive) const;
   void SetMaxFeedrate(int8_t drive, float value);
-  float InstantDv(int8_t drive);
-  float HomeFeedRate(int8_t axis);
+  float InstantDv(int8_t drive) const;
+  float HomeFeedRate(int8_t axis) const;
   void SetHomeFeedRate(int8_t axis, float value);
   EndStopHit Stopped(int8_t drive);
-  float AxisLength(int8_t axis);
+  float AxisLength(int8_t axis) const;
   void SetAxisLength(int8_t axis, float value);
-  bool HighStopButNotLow(int8_t axis);
+  bool HighStopButNotLow(int8_t axis) const;
   
-  float ZProbeStopHeight();
+  float ZProbeStopHeight() const;
   void SetZProbeStopHeight(float z);
   int ZProbe() const;
   int ZProbeOnVal() const;
@@ -496,15 +496,15 @@ class Platform
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
-  float PidKp(int8_t heater);
-  float PidKi(int8_t heater);
-  float PidKd(int8_t heater);
-  float FullPidBand(int8_t heater);
-  float PidMin(int8_t heater);
-  float PidMax(int8_t heater);
-  float DMix(int8_t heater);
-  bool UsePID(int8_t heater);
-  float HeatSampleTime();
+  float PidKp(int8_t heater) const;
+  float PidKi(int8_t heater) const;
+  float PidKd(int8_t heater) const;
+  float FullPidBand(int8_t heater) const;
+  float PidMin(int8_t heater) const;
+  float PidMax(int8_t heater) const;
+  float DMix(int8_t heater) const;
+  bool UsePID(int8_t heater) const;
+  float HeatSampleTime() const;
   void CoolingFan(float speed);
   //void SetHeatOn(int8_t ho); //TEMPORARY - this will go away...
 
@@ -525,7 +525,7 @@ class Platform
   Compatibility compatibility;
 
   void InitialiseInterrupts();
-  int GetRawZHeight();
+  int GetRawZHeight() const;
   
 // DRIVES
 
@@ -570,7 +570,7 @@ class Platform
   
 // HEATERS - Bed is assumed to be the first
 
-  int GetRawTemperature(byte heater);
+  int GetRawTemperature(byte heater) const;
 
   int8_t tempSensePins[HEATERS];
   int8_t heatOnPins[HEATERS];
@@ -637,7 +637,7 @@ inline void Platform::Exit()
   active = false;
 }
 
-inline Compatibility Platform::Emulating()
+inline Compatibility Platform::Emulating() const
 {
 	if(compatibility == reprapFirmware)
 		return me;
@@ -658,34 +658,34 @@ inline void Platform::SetEmulating(Compatibility c)
 
 // Where the htm etc files are
 
-inline char* Platform::GetWebDir()
+inline const char* Platform::GetWebDir() const
 {
   return webDir;
 }
 
 // Where the gcodes are
 
-inline char* Platform::GetGCodeDir()
+inline const char* Platform::GetGCodeDir() const
 {
   return gcodeDir;
 }
 
 // Where the system files are
 
-inline char* Platform::GetSysDir()
+inline const char* Platform::GetSysDir() const
 {
   return sysDir;
 }
 
 // Where the temporary files are
 
-inline char* Platform::GetTempDir()
+inline const char* Platform::GetTempDir() const
 {
   return tempDir;
 }
 
 
-inline char* Platform::GetConfigFile()
+inline const char* Platform::GetConfigFile() const
 {
   return configFile;
 }
@@ -696,7 +696,7 @@ inline char* Platform::GetConfigFile()
 
 // Drive the RepRap machine - Movement
 
-inline float Platform::DriveStepsPerUnit(int8_t drive)
+inline float Platform::DriveStepsPerUnit(int8_t drive) const
 {
   return driveStepsPerUnit[drive]; 
 }
@@ -706,7 +706,7 @@ inline void Platform::SetDriveStepsPerUnit(int8_t drive, float value)
   driveStepsPerUnit[drive] = value;
 }
 
-inline float Platform::Acceleration(int8_t drive)
+inline float Platform::Acceleration(int8_t drive) const
 {
 	return accelerations[drive];
 }
@@ -716,14 +716,14 @@ inline void Platform::SetAcceleration(int8_t drive, float value)
 	accelerations[drive] = value;
 }
 
-inline float Platform::InstantDv(int8_t drive)
+inline float Platform::InstantDv(int8_t drive) const
 {
   return instantDvs[drive]; 
 }
 
-inline bool Platform::HighStopButNotLow(int8_t axis)
+inline bool Platform::HighStopButNotLow(int8_t axis) const
 {
-	return (lowStopPins[axis] < 0)  && (highStopPins[axis] >= 0);
+	return (lowStopPins[axis] < 0) && (highStopPins[axis] >= 0);
 }
 
 inline void Platform::SetDirection(byte drive, bool direction)
@@ -783,7 +783,7 @@ inline void Platform::SetMotorCurrent(byte drive, float current)
 	mcp.setVolatileWiper(potWipes[drive], pot);
 }
 
-inline float Platform::HomeFeedRate(int8_t axis)
+inline float Platform::HomeFeedRate(int8_t axis) const
 {
   return homeFeedrates[axis];
 }
@@ -793,7 +793,7 @@ inline void Platform::SetHomeFeedRate(int8_t axis, float value)
    homeFeedrates[axis] = value;
 }
 
-inline float Platform::AxisLength(int8_t axis)
+inline float Platform::AxisLength(int8_t axis) const
 {
   return axisLengths[axis];
 }
@@ -803,7 +803,7 @@ inline void Platform::SetAxisLength(int8_t axis, float value)
   axisLengths[axis] = value;
 }
 
-inline float Platform::MaxFeedrate(int8_t drive)
+inline float Platform::MaxFeedrate(int8_t drive) const
 {
   return maxFeedrates[drive];
 }
@@ -813,7 +813,7 @@ inline void Platform::SetMaxFeedrate(int8_t drive, float value)
 	maxFeedrates[drive] = value;
 }
 
-inline int Platform::GetRawZHeight()
+inline int Platform::GetRawZHeight() const
 {
   return (zProbeType != 0) ? analogRead(zProbePin) : 0;
 }
@@ -836,7 +836,7 @@ inline int Platform::ZProbeOnVal() const
 				: 0;
 }
 
-inline float Platform::ZProbeStopHeight()
+inline float Platform::ZProbeStopHeight() const
 {
 	return zProbeStopHeight;
 }
@@ -887,55 +887,55 @@ inline void Platform::PollZHeight()
 
 // Drive the RepRap machine - Heat and temperature
 
-inline int Platform::GetRawTemperature(byte heater)
+inline int Platform::GetRawTemperature(byte heater) const
 {
   if(tempSensePins[heater] >= 0)
     return analogRead(tempSensePins[heater]);
   return 0;
 }
 
-inline float Platform::HeatSampleTime()
+inline float Platform::HeatSampleTime() const
 {
   return heatSampleTime; 
 }
 
-inline bool Platform::UsePID(int8_t heater)
+inline bool Platform::UsePID(int8_t heater) const
 {
   return usePID[heater];
 }
 
 
-inline float Platform::PidKi(int8_t heater)
+inline float Platform::PidKi(int8_t heater) const
 {
   return pidKis[heater]*heatSampleTime;
 }
 
-inline float Platform::PidKd(int8_t heater)
+inline float Platform::PidKd(int8_t heater) const
 {
   return pidKds[heater]/heatSampleTime;
 }
 
-inline float Platform::PidKp(int8_t heater)
+inline float Platform::PidKp(int8_t heater) const
 {
   return pidKps[heater];
 }
 
-inline float Platform::FullPidBand(int8_t heater)
+inline float Platform::FullPidBand(int8_t heater) const
 {
   return fullPidBand[heater];
 }
 
-inline float Platform::PidMin(int8_t heater)
+inline float Platform::PidMin(int8_t heater) const
 {
   return pidMin[heater];  
 }
 
-inline float Platform::PidMax(int8_t heater)
+inline float Platform::PidMax(int8_t heater) const
 {
   return pidMax[heater]/PidKi(heater);
 }
 
-inline float Platform::DMix(int8_t heater)
+inline float Platform::DMix(int8_t heater) const
 {
   return dMix[heater];  
 }
@@ -985,7 +985,7 @@ inline void Platform::SetIPAddress(byte ip[])
 		ipAddress[i] = ip[i];
 }
 
-inline byte* Platform::IPAddress()
+inline const byte* Platform::IPAddress() const
 {
 	return ipAddress;
 }
@@ -996,7 +996,7 @@ inline void Platform::SetNetMask(byte nm[])
 		netMask[i] = nm[i];
 }
 
-inline byte* Platform::NetMask()
+inline const byte* Platform::NetMask() const
 {
 	return netMask;
 }
@@ -1007,12 +1007,12 @@ inline void Platform::SetGateWay(byte gw[])
 		gateWay[i] = gw[i];
 }
 
-inline byte* Platform::GateWay()
+inline const byte* Platform::GateWay() const
 {
 	return gateWay;
 }
 
-inline Line* Platform::GetLine()
+inline Line* Platform::GetLine() const
 {
 	return line;
 }

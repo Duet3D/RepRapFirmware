@@ -31,7 +31,7 @@ class Move;
 class Heat;
 class RepRap;
 
-// A single instace of the RepRap class contains all the others
+// A single instance of the RepRap class contains all the others
 
 extern RepRap reprap;
 

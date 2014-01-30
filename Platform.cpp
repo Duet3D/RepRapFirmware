@@ -763,7 +763,7 @@ void FileStore::Write(char b)
 	  WriteBuffer();
 }
 
-void FileStore::Write(char* b)
+void FileStore::Write(const char* b)
 {
   if(!inUse)
   {

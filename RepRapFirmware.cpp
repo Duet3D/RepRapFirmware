@@ -157,9 +157,8 @@ RepRap reprap;
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap()
+RepRap::RepRap() : active(false), debug(false)
 {
-  active = false;
   platform = new Platform();
   webserver = new Webserver(platform);
   gCodes = new GCodes(platform, webserver);

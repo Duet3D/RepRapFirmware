@@ -156,10 +156,7 @@ inline void Heat::SetStandbyTemperature(int8_t heater, const float& t)
 
 inline float Heat::GetStandbyTemperature(int8_t heater)
 {
-  if (heater >= 0 && heater < HEATERS)
-  {
-    return pids[heater]->GetStandbyTemperature();
-  }
+  return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
 }
 
 inline float Heat::GetTemperature(int8_t heater)

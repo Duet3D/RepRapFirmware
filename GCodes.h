@@ -32,31 +32,31 @@ Licence: GPL
 class GCodeBuffer
 {
   public:
-    GCodeBuffer(Platform* p, char* id);
+    GCodeBuffer(Platform* p, const char* id);
     void Init();
     bool Put(char c);
     bool Seen(char c);
     float GetFValue();
     int GetIValue();
     long GetLValue();
-    char* GetUnprecedentedString();
-    char* GetString();
-    char* Buffer();
+    const char* GetUnprecedentedString();
+    const char* GetString();
+    const char* Buffer();
     bool Finished() const;
     void SetFinished(bool f);
-    char* WritingFileDirectory() const;
-    void SetWritingFileDirectory(char* wfd);
+    const char* WritingFileDirectory() const;
+    void SetWritingFileDirectory(const char* wfd);
     
   private:
     int CheckSum();
     Platform* platform;
     char gcodeBuffer[GCODE_LENGTH];
-    char* identity;
+    const char* identity;
     int gcodePointer;
     int readPointer;
     bool inComment;
     bool finished;
-    char* writingFileDirectory;
+    const char* writingFileDirectory;
 };
 
 //****************************************************************************************************
@@ -108,7 +108,7 @@ class GCodes
     bool StandbyHeaters();
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);
     void HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend);
-    char* OpenFileToWrite(char* directory, char* fileName, GCodeBuffer *gb);
+    void OpenFileToWrite(const char* directory, const char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);
     bool SendConfigToLine();
     void WriteHTMLToFile(char b, GCodeBuffer *gb);
@@ -172,7 +172,7 @@ inline int GCodeBuffer::GetIValue()
   return (int)GetLValue();
 }
 
-inline char* GCodeBuffer::Buffer()
+inline const char* GCodeBuffer::Buffer()
 {
   return gcodeBuffer;
 }
@@ -187,12 +187,12 @@ inline void GCodeBuffer::SetFinished(bool f)
   finished = f;
 }
 
-inline char* GCodeBuffer::WritingFileDirectory() const
+inline const char* GCodeBuffer::WritingFileDirectory() const
 {
 	return writingFileDirectory;
 }
 
-inline void GCodeBuffer::SetWritingFileDirectory(char* wfd)
+inline void GCodeBuffer::SetWritingFileDirectory(const char* wfd)
 {
 	writingFileDirectory = wfd;
 }
