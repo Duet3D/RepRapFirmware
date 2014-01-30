@@ -217,21 +217,29 @@ void Webserver::ProcessGcode(const char* gc)
 	  break;
     }
   }
-  else if(strlen(gc) + 1 > GetGcodeBufferSpace())
-  {
-	  platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
-	  HandleReply("Webserver: GCode buffer overflow", true);
-  }
   else
   {
-	  char c;
-	  do
+	  // Copy the gcode to the buffer
+	  size_t len = strlen(gc) + 1;		// number of characters to copy
+	  if (len > GetGcodeBufferSpace())
 	  {
-		  c = *gc++;
-		gcodeBuffer[gcodeWriteIndex] = c;
-		gcodeWriteIndex = (gcodeWriteIndex + 1u) % gcodeBufLength;
+		  platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
+		  HandleReply("Webserver: GCode buffer overflow", true);
 	  }
-	  while (c != 0);
+	  else
+	  {
+		  size_t remaining = gcodeBufLength - gcodeWriteIndex;
+		  if (len <= remaining)
+		  {
+			  memcpy(&gcodeBuffer[gcodeWriteIndex], gc, len);
+		  }
+		  else
+		  {
+			  memcpy(&gcodeBuffer[gcodeWriteIndex], gc, remaining);
+			  memcpy(gcodeBuffer, gc + remaining, len - remaining);
+		  }
+		  gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufLength;
+	  }
   }
 }
 
@@ -714,12 +722,13 @@ void Webserver::BlankLineFromClient()
   }
 }
 
-void Webserver::CharFromClient(char c)
+// Process a character from the client, returning true if we did more than just store it
+bool Webserver::CharFromClient(char c)
 {
   if(c == '\n' && clientLineIsBlank) 
   {
     BlankLineFromClient();
-    return;
+    return true;
   }
   
   if(c == '\n') 
@@ -729,6 +738,7 @@ void Webserver::CharFromClient(char c)
     // you're starting a new line
     clientLineIsBlank = true;
     clientLinePointer = 0;
+    return true;
   } else if(c != '\r') 
   {
     // you've gotten a character on the current line
@@ -745,8 +755,10 @@ void Webserver::CharFromClient(char c)
       clientLinePointer = 0;
       clientLine[clientLinePointer] = 0; 
       clientLineIsBlank = true;
+      return true;
     }
-  }  
+  }
+  return false;
 }
 
 // Deal with input/output from/to the client (if any) one byte at a time.
@@ -763,7 +775,7 @@ void Webserver::Spin()
  //     WritePHPByte();
  //   else
 	// Write several bytes at a time, otherwise the web server is unbearably slow
-	for (uint8_t i = 0; i < 10 && writing && platform->GetNetwork()->CanWrite(); ++i)
+	for (uint8_t i = 0; i < 32 && writing && platform->GetNetwork()->CanWrite(); ++i)
 	{
       WriteByte();
 	}
@@ -771,33 +783,32 @@ void Webserver::Spin()
     return;
   }
   
-  char c;
-
   if(platform->GetNetwork()->Active())
   {
-	  if(platform->GetNetwork()->Status() & clientConnected)
+	  for(uint8_t i = 0;
+		   i < 16 && (platform->GetNetwork()->Status() & (clientConnected | byteAvailable)) == (clientConnected | byteAvailable);
+	  	     ++i)
 	  {
-		  if(platform->GetNetwork()->Status() & byteAvailable)
+		  char c;
+		  platform->GetNetwork()->Read(c);
+		  //SerialUSB.print(c);
+
+		  if(receivingPost && postFile != NULL)
 		  {
-			  platform->GetNetwork()->Read(c);
-			  //SerialUSB.print(c);
-
-			  if(receivingPost && postFile != NULL)
+			  if(MatchBoundary(c))
 			  {
-				  if(MatchBoundary(c))
-				  {
-					  //Serial.println("Got to end of file.");
-					  postFile->Close();
-					  SendFile(clientRequest);
-					  clientRequest[0] = 0;
-					  InitialisePost();
-				  }
-				  platform->ClassReport("Webserver", longWait);
-				  return;
+				  //Serial.println("Got to end of file.");
+				  postFile->Close();
+				  SendFile(clientRequest);
+				  clientRequest[0] = 0;
+				  InitialisePost();
 			  }
-
-			  CharFromClient(c);
+			  platform->ClassReport("Webserver", longWait);
+			  return;
 		  }
+
+		  if (CharFromClient(c))
+			  break;	// break if we did more than just store the character
 	  }
   }
    

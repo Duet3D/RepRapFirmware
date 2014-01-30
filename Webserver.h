@@ -35,9 +35,9 @@ Licence: GPL
 #define KO_FIRST 3
 #define POST_LENGTH				(1300)			// max amount of POST data we can accept
 
-const unsigned int gcodeBufLength = 1024;		// size of our gcode ring buffer, ideally a power of 2
+const unsigned int gcodeBufLength = 2048;		// size of our gcode ring buffer, ideally a power of 2
 const unsigned int minReportedFreeBuf = 100;	// the minimum free buffer we report if not zero
-const unsigned int maxReportedFreeBuf = 800;	// the max we own up to having free, to avoid overlong messages
+const unsigned int maxReportedFreeBuf = 1024;	// the max we own up to having free, to avoid overlong messages
 
 class Webserver
 {   
@@ -71,7 +71,7 @@ class Webserver
     void GetGCodeList();
     void GetJsonResponse(const char* request);
     void ParseGetPost();
-    void CharFromClient(char c);
+    bool CharFromClient(char c);
     void BlankLineFromClient();
     void InitialisePost();
     bool MatchBoundary(char c);

@@ -1935,7 +1935,7 @@ bool GCodeBuffer::Put(char c)
     result = true;
   } else
   {
-    if(!inComment)
+    if(!inComment || writingFileDirectory)
       gcodePointer++;
   }
   
