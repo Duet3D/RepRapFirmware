@@ -300,7 +300,10 @@ void Platform::PrintMemoryUsage()
 	snprintf(scratchString, STRING_LENGTH, "Stack ram used: %d\n", ramend - stack_ptr);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Guess at free mem: %d\n\n", stack_ptr - heapend + mi.fordblks);
+	snprintf(scratchString, STRING_LENGTH, "Recycled heap: %d\n\n", mi.fordblks);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Guess at free mem: %d\n\n", stack_ptr - heapend);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 }

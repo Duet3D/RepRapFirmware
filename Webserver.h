@@ -37,7 +37,7 @@ Licence: GPL
 
 const unsigned int gcodeBufLength = 2048;		// size of our gcode ring buffer, ideally a power of 2
 const unsigned int minReportedFreeBuf = 100;	// the minimum free buffer we report if not zero
-const unsigned int maxReportedFreeBuf = 1024;	// the max we own up to having free, to avoid overlong messages
+const unsigned int maxReportedFreeBuf = 900;	// the max we own up to having free, to avoid overlong messages
 
 class Webserver
 {   
