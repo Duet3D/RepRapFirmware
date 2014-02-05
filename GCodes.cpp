@@ -741,6 +741,7 @@ bool GCodes::DoSingleZProbe()
 	{
 		cannedCycleMoveCount = 0;
 		probeCount = 0;
+		axisIsHomed[2] = true;	// we have homed the Z axis
 		return true;
 	}
 	return false;
