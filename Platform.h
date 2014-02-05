@@ -273,8 +273,9 @@ public:
 	bool Read(char& b);
 	bool CanWrite() const;
 	void SetWriteEnable(bool enable);
+	void SentPacketAcknowledged();
 	void Write(char b);
-	void Write(char* s);
+	void Write(const char* s);
 	void Close();
 	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
 	void InputBufferReleased(void* pb);
@@ -295,7 +296,7 @@ private:
 	void Reset();
 	void CleanRing();
 	char* inputBuffer;
-	char outputBuffer[STRING_LENGTH];
+	char outputBuffer[1460];			// use 1460 bytes because that matches our 1500 byte MTU size and keeps things fast
 	int inputPointer;
 	int inputLength;
 	int outputPointer;
@@ -305,6 +306,7 @@ private:
 	NetRing* netRingGetPointer;
 	NetRing* netRingAddPointer;
 	bool active;
+	uint8_t sentPacketsOutstanding;		// count of TCP packets we have sent that have not been acknowledged
 };
 
 // This class handles serial I/O - typically via USB

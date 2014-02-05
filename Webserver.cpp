@@ -31,7 +31,6 @@ Licence: GPL
 
 //***************************************************************************************************
 
-
 bool Webserver::MatchBoundary(char c)
 {
   if(!postBoundary[0])
@@ -81,35 +80,29 @@ byte Webserver::ReadGCode()
 }
 
 // Process a received string of gcodes
-bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
+void Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 {
 	char gcodeTempBuf[GCODE_LENGTH];
 	uint16_t gtp = 0;
-	char c;
-	do
+	bool inComment = false;
+	for (;;)
 	{
-		c = *gc++;
+		char c = *gc++;
 		if(c == 0)
 		{
 			gcodeTempBuf[gtp] = 0;
 			ProcessGcode(gcodeTempBuf);
-			gtp = 0;
+			return;
 		}
-		else if(gtp == ARRAY_SIZE(gcodeTempBuf) - 1)
-		{
-			// gcode is too long, we haven't room for another character and a null
-		    platform->Message(HOST_MESSAGE, "Webserver: GCode local buffer overflow.\n");
-		    HandleReply("Webserver: GCode local buffer overflow", true);
-		    return false;
-		}
-		else if(c == '+' && convertWeb)
+
+		if(c == '+' && convertWeb)
 	    {
-			gcodeTempBuf[gtp++] = ' ';
+			c = ' ';
 	    }
 	    else if(c == '%' && convertWeb)
 	    {
 	    	c = *gc++;
-	    	if (c != 0)
+	    	if(c != 0)
 	    	{
 	    		unsigned char uc;
 	    		if(isalpha(c))
@@ -121,7 +114,7 @@ bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 	    			uc = 16*(c - '0');
 	    		}
 	    		c = *gc++;
-	    		if (c != 0)
+	    		if(c != 0)
 	    		{
 	    			if(isalpha(c))
 	    			{
@@ -131,26 +124,45 @@ bool Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 	    			{
 	    				uc += c - '0';
 	    			}
-	    			if (uc == '\n')
-	    			{
-	    				gcodeTempBuf[gtp] = 0;
-	    				ProcessGcode(gcodeTempBuf);
-	    				gtp = 0;
-	    			}
-	    			else
-	    			{
-	    				gcodeTempBuf[gtp++] = uc;
-	    			}
+	    			c = uc;
 	    		}
 	    	}
 	    }
-	    else
-	    {
-	    	gcodeTempBuf[gtp++] = c;
-	    }
+
+		if (c == '\n')
+		{
+			gcodeTempBuf[gtp] = 0;
+			ProcessGcode(gcodeTempBuf);
+			gtp = 0;
+			inComment = false;
+		}
+		else
+		{
+			if (c == ';')
+			{
+				inComment = true;
+			}
+
+			if(gtp == ARRAY_SIZE(gcodeTempBuf) - 1)
+			{
+				// gcode is too long, we haven't room for another character and a null
+				if (c != ' ' && !inComment)
+				{
+					platform->Message(HOST_MESSAGE, "Webserver: GCode local buffer overflow.\n");
+					HandleReply("Webserver: GCode local buffer overflow", true);
+					return;
+				}
+				// else we're either in a comment or the current character is a space.
+				// If we're in a comment, we'll silently truncate it.
+				// If the current character is a space, we'll wait until we see a non-comment character before reporting an error,
+				// in case the next character is end-of-line or the start of a comment.
+			}
+			else
+			{
+				gcodeTempBuf[gtp++] = c;
+			}
+		}
 	}
-	while (c != 0);
-	return true;
 }
 
 // Process a null-terminated gcode
@@ -277,77 +289,90 @@ void Webserver::SendFile(const char* nameOfFileToSend)
       nameOfFileToSend = FOUR04_FILE;
       fileBeingSent = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
     }
-    writing = fileBeingSent != NULL;
+    writing = (fileBeingSent != NULL);
   } 
   
-  platform->GetNetwork()->Write("HTTP/1.1 200 OK\n");
-  
-  platform->GetNetwork()->Write("Content-Type: ");
+  Network *net = platform->GetNetwork();
+  net->Write("HTTP/1.1 200 OK\n");
+  net->Write("Content-Type: ");
   
   if(StringEndsWith(nameOfFileToSend, ".png"))
-	  platform->GetNetwork()->Write("image/png\n");
+	  net->Write("image/png\n");
   else if(StringEndsWith(nameOfFileToSend, ".ico"))
-	  platform->GetNetwork()->Write("image/x-icon\n");
-  else if (jsonPointer >=0)
-	  platform->GetNetwork()->Write("application/json\n");
+	  net->Write("image/x-icon\n");
+  else if (jsonPointer >= 0)
+	  net->Write("application/json\n");
   else if(StringEndsWith(nameOfFileToSend, ".js"))
-	  platform->GetNetwork()->Write("application/javascript\n");
+	  net->Write("application/javascript\n");
+  else if(StringEndsWith(nameOfFileToSend, ".css"))
+	  net->Write("text/css\n");
+  else if(StringEndsWith(nameOfFileToSend, ".htm") || StringEndsWith(nameOfFileToSend, ".html"))
+	  net->Write("text/html\n");
   else if(StringEndsWith(nameOfFileToSend, ".zip"))
   {
-	  platform->GetNetwork()->Write("application/zip\n");
-    zip = true;
+	  net->Write("application/zip\n");
+	  zip = true;
   } else
-	  platform->GetNetwork()->Write("text/html\n");
-    
+	  net->Write("application/octet-stream\n");
+
   if (jsonPointer >=0)
   {
-	  platform->GetNetwork()->Write("Content-Length: ");
+	net->Write("Content-Length: ");
     snprintf(sLen, SHORT_STRING_LENGTH, "%d", strlen(jsonResponse));
-    platform->GetNetwork()->Write(sLen);
-    platform->GetNetwork()->Write("\n");
+    net->Write(sLen);
+    net->Write("\n");
   }
     
   if(zip)
   {
-	platform->GetNetwork()->Write("Content-Encoding: gzip\n");
-	platform->GetNetwork()->Write("Content-Length: ");
+	net->Write("Content-Encoding: gzip\n");
+	net->Write("Content-Length: ");
     snprintf(sLen, SHORT_STRING_LENGTH, "%llu", fileBeingSent->Length());
-    platform->GetNetwork()->Write(sLen);
-    platform->GetNetwork()->Write("\n");
+    net->Write(sLen);
+    net->Write("\n");
   }
     
-  platform->GetNetwork()->Write("Connection: close\n");
-
-  platform->GetNetwork()->Write('\n');
+  net->Write("Connection: close\n");
+  net->Write('\n');
 }
 
-void Webserver::WriteByte()
+// Write a number of bytes if we can, returning true if we wrote anything
+bool Webserver::WriteBytes()
 {
-    if(jsonPointer >= 0)
-    {
-      if(jsonResponse[jsonPointer])
-      {
-    	  platform->GetNetwork()->Write(jsonResponse[jsonPointer++]);
-      }
-      else
-      {
-        jsonPointer = -1;
-        jsonResponse[0] = 0;
-        CloseClient();
-      }
-    } else
-    {
-      char b;
-      if(fileBeingSent->Read(b))
-      {
-    	  platform->GetNetwork()->Write(b);
-      }
-      else
-      {
-        fileBeingSent->Close();
-        CloseClient();
-      }
-    }
+	Network *net = platform->GetNetwork();
+	uint8_t i;
+	for (i = 0; i < 50 && writing && net->CanWrite(); )
+	{
+		++i;
+		if(jsonPointer >= 0)
+		{
+		  if(jsonResponse[jsonPointer])
+		  {
+			  net->Write(jsonResponse[jsonPointer++]);
+		  }
+		  else
+		  {
+			jsonPointer = -1;
+			jsonResponse[0] = 0;
+			CloseClient();
+			break;
+		  }
+		} else
+		{
+		  char b;
+		  if(fileBeingSent->Read(b))
+		  {
+			  net->Write(b);
+		  }
+		  else
+		  {
+			fileBeingSent->Close();
+			CloseClient();
+			break;
+		  }
+		}
+	}
+	return i != 0;
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -486,10 +511,7 @@ void Webserver::GetJsonResponse(const char* request)
   
   if(StringStartsWith(request, "gcode"))
   {
-    if(!LoadGcodeBuffer(&clientQualifier[6], true))
-    {
-      platform->Message(HOST_MESSAGE, "Webserver: buffer not free!\n");
-    }
+    LoadGcodeBuffer(&clientQualifier[6], true);
     char scratch[SHORT_STRING_LENGTH+1];
     scratch[SHORT_STRING_LENGTH] = 0;
     snprintf(scratch, SHORT_STRING_LENGTH, "{\"buff\":%u}", GetReportedGcodeBufferSpace());
@@ -774,13 +796,11 @@ void Webserver::Spin()
  //   if(inPHPFile)
  //     WritePHPByte();
  //   else
-	// Write several bytes at a time, otherwise the web server is unbearably slow
-	for (uint8_t i = 0; i < 32 && writing && platform->GetNetwork()->CanWrite(); ++i)
-	{
-      WriteByte();
-	}
-	platform->ClassReport("Webserver", longWait);
-    return;
+	  if (WriteBytes())		// if we wrote something
+	  {
+		  platform->ClassReport("Webserver", longWait);
+		  return;
+	  }
   }
   
   if(platform->GetNetwork()->Active())

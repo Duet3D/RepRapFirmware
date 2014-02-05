@@ -21,6 +21,13 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+#define WINDOWED_SEND_PACKETS	(2)
+
+extern char _end;
+extern "C" char *sbrk(int i);
+
+const uint8_t memPattern = 0xA5;
+
 // Arduino initialise and loop functions
 // Put nothing in these other than calls to the RepRap equivalents
 
@@ -28,6 +35,14 @@ void setup()
 {
   reprap.Init();
   //reprap.GetMove()->InterruptTime();  // Uncomment this line to time the interrupt routine on startup
+
+  // Fill the free memory with a pattern so that we can check for stack usage and memory corruption
+  char* heapend = sbrk(0);
+  register const char * stack_ptr asm ("sp");
+  while (heapend + 16 < stack_ptr)
+  {
+	  *heapend++ = memPattern;
+  }
 }
   
 void loop()
@@ -278,32 +293,37 @@ void Platform::Diagnostics()
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
 
-extern char _end;
-extern "C" char *sbrk(int i);
-
 // Print memory stats to USB and append them to the current webserver reply
 void Platform::PrintMemoryUsage()
 {
-	char *ramstart=(char *)0x20070000;
-	char *ramend=(char *)0x20088000;
-    char *heapend=sbrk(0);
-	register char * stack_ptr asm ("sp");
-	struct mallinfo mi = mallinfo();
+	const char *ramstart=(char *)0x20070000;
+	const char *ramend=(char *)0x20088000;
+    const char *heapend=sbrk(0);
+	register const char * stack_ptr asm ("sp");
+	const struct mallinfo mi = mallinfo();
 	Message(HOST_MESSAGE, "\n");
 	Message(HOST_MESSAGE, "Memory usage:\n\n");
-	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Stack ram used: %d\n", ramend - stack_ptr);
+	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Recycled heap: %d\n\n", mi.fordblks);
+	snprintf(scratchString, STRING_LENGTH, "Recycled dynamic ram: %d\n", mi.fordblks);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Guess at free mem: %d\n\n", stack_ptr - heapend);
+	snprintf(scratchString, STRING_LENGTH, "Current stack ram used: %d\n", ramend - stack_ptr);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
+	const char* stack_lwm = heapend;
+	while (stack_lwm < stack_ptr && *stack_lwm == memPattern)
+	{
+		++stack_lwm;
+	}
+	snprintf(scratchString, STRING_LENGTH, "Maximum stack ram used: %d\n", ramend - stack_lwm);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", stack_lwm - heapend);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 }
@@ -938,9 +958,9 @@ void RepRapNetworkReceiveInput(char* data, int length, void* pbuf, void* pcb, vo
 // Called when transmission of outgoing data is complete to allow
 // the RepRap firmware to write more.
 
-void RepRapNetworkAllowWriting()
+void RepRapNetworkSentPacketAcknowledged()
 {
-	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(true);
+	reprap.GetPlatform()->GetNetwork()->SentPacketAcknowledged();
 }
 
 bool RepRapNetworkHasALiveClient()
@@ -948,13 +968,12 @@ bool RepRapNetworkHasALiveClient()
 	return reprap.GetPlatform()->GetNetwork()->Status() & clientLive;
 }
 
-}
+}	// extern "C"
 
 
 Network::Network()
 {
 	active = false;
-
 	ethPinsInit();
 
 	//ResetEther();
@@ -979,6 +998,7 @@ void Network::Reset()
 	writeEnabled = false;
 	closePending = false;
 	status = nothing;
+	sentPacketsOutstanding = 0;
 }
 
 void Network::CleanRing()
@@ -998,6 +1018,7 @@ void Network::Init()
 
 	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 	active = true;
+	sentPacketsOutstanding = 0;
 }
 
 void Network::Spin()
@@ -1052,21 +1073,19 @@ bool Network::Read(char& b)
 	return true;
 }
 
-
-
 // Webserver calls this to write bytes that need to go out to the network
 
 void Network::Write(char b)
 {
 	// Check for horrible things...
 
-	if(!writeEnabled)
+	if(!CanWrite())
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write when disabled.\n");
 		return;
 	}
 
-	if(outputPointer >= STRING_LENGTH)
+	if(outputPointer >= ARRAY_SIZE(outputBuffer))
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Output buffer overflow! \n");
 		return;
@@ -1079,16 +1098,17 @@ void Network::Write(char b)
 
 	// Buffer full?  If so, send it.
 
-	if(outputPointer >= STRING_LENGTH - 5) // 5 is for safety
+	if(outputPointer == ARRAY_SIZE(outputBuffer))
 	{
+#if WINDOWED_SEND_PACKETS > 1
+		++sentPacketsOutstanding;
+#else
 		SetWriteEnable(false);  // Stop further writing from Webserver until the network tells us that this has gone
+#endif
 		RepRapNetworkSendOutput(outputBuffer, outputPointer, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(), netRingGetPointer->Hs());
 		outputPointer = 0;
 	}
 }
-
-
-
 
 void Network::InputBufferReleased(void* pb)
 {
@@ -1111,7 +1131,7 @@ void Network::ConnectionError(void* h)
 	}
 
 	// Reset the network layer. In particular, this clears the output buffer to make sure nothing more gets sent,
-	// and sets statue to 'nothing' so that we can accept another connection attempt.
+	// and sets status to 'nothing' so that we can accept another connection attempt.
 	Reset();
 }
 
@@ -1130,10 +1150,13 @@ void Network::ReceiveInput(char* data, int length, void* pbuf, void* pcb, void* 
 }
 
 
-
 bool Network::CanWrite() const
 {
+#if WINDOWED_SEND_PACKETS > 1
+	return writeEnabled && sentPacketsOutstanding < WINDOWED_SEND_PACKETS;
+#else
 	return writeEnabled;
+#endif
 }
 
 void Network::SetWriteEnable(bool enable)
@@ -1145,18 +1168,34 @@ void Network::SetWriteEnable(bool enable)
 		Close();
 }
 
+void Network::SentPacketAcknowledged()
+{
+#if WINDOWED_SEND_PACKETS > 1
+	if (sentPacketsOutstanding != 0)
+	{
+		--sentPacketsOutstanding;
+	}
+	if (closePending && sentPacketsOutstanding == 0)
+	{
+		Close();
+	}
+#else
+	SetWriteEnable(true);
+#endif
+}
+
+
 // This is not called for data, only for internally-
 // generated short strings at the start of a transmission,
 // so it should never overflow the buffer (which is checked
 // anyway).
 
-void Network::Write(char* s)
+void Network::Write(const char* s)
 {
 	int i = 0;
 	while(s[i])
 		Write(s[i++]);
 }
-
 
 
 void Network::Close()

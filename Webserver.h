@@ -61,10 +61,10 @@ class Webserver
   
     void ParseClientLine();
     void SendFile(const char* nameOfFileToSend);
-    void WriteByte();
+    bool WriteBytes();
     void ParseQualifier();
     void CheckPassword();
-    bool LoadGcodeBuffer(const char* gc, bool convertWeb);
+    void LoadGcodeBuffer(const char* gc, bool convertWeb);
     void CloseClient();
     bool PrintHeadString();
     bool PrintLinkTable();
