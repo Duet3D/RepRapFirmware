@@ -176,6 +176,15 @@ Licence: GPL
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
 
+// The size of the http output buffer is critical to getting fast load times in the browser.
+// If this value is less than the TCP MSS, then Chrome under Windows will delay ack messages by about 120ms,
+// which results in very slow page loading. Any value higher than that will cause the TCP packet to be split
+// into multiple transmissions, which avoids this behaviour. Using a value of twice the MSS is most efficient because
+// each TCP packet will be full.
+// Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
+// and therefore avoids additional memory use and fragmentation.
+const unsigned int httpOutputBufferSize = 2 * 1432;
+
 
 /****************************************************************************************************/
 
@@ -296,7 +305,7 @@ private:
 	void Reset();
 	void CleanRing();
 	char* inputBuffer;
-	char outputBuffer[1460];			// use 1460 bytes because that matches our 1500 byte MTU size and keeps things fast
+	char outputBuffer[httpOutputBufferSize];
 	int inputPointer;
 	int inputLength;
 	int outputPointer;
