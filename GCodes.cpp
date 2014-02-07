@@ -84,7 +84,7 @@ void GCodes::Init()
   active = true;
   longWait = platform->Time();
   dwellTime = longWait;
-  axisIsHomed[0] = axisIsHomed[1] = axisIsHomed[2] = false;
+  axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
 }
 
 void GCodes::doFilePrint(GCodeBuffer* gb)
@@ -518,6 +518,9 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 		return false;
 
 	LoadMoveBufferFromGCode(gb, true, false);
+	// Transform the position so that e.g. if the user does G92 Z0,
+	// the position we report (which gets inverse-transformed) really is Z=0 afterwards
+	reprap.GetMove()->Transform(moveBuffer);
 	reprap.GetMove()->SetLiveCoordinates(moveBuffer);
 	reprap.GetMove()->SetPositions(moveBuffer);
 
@@ -597,7 +600,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 			homeX = false;
 			homeY = false;
 			homeZ = false;
-			axisIsHomed[0] = axisIsHomed[1] = axisIsHomed[2] = true;
+			axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = true;
 			return true;
 		}
 		return false;
@@ -609,7 +612,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 		{
 			homeAxisMoveCount = 0;
 			homeX = false;
-			axisIsHomed[0] = true;
+			axisIsHomed[X_AXIS] = true;
 			return NoHome();
 		}
 		return false;
@@ -622,7 +625,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 		{
 			homeAxisMoveCount = 0;
 			homeY = false;
-			axisIsHomed[1] = true;
+			axisIsHomed[Y_AXIS] = true;
 			return NoHome();
 		}
 		return false;
@@ -631,7 +634,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 
 	if(homeZ)
 	{
-		if (!(axisIsHomed[0] && axisIsHomed[1]))
+		if (!(axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS]))
 		{
 			// We can only home Z if X and Y have already been homed. Possibly this should only be if we are using an IR probe.
 			strncpy(reply, "Must home X and Y before homing Z", STRING_LENGTH);
@@ -643,7 +646,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 		{
 			homeAxisMoveCount = 0;
 			homeZ = false;
-			axisIsHomed[2] = true;
+			axisIsHomed[Z_AXIS] = true;
 			return NoHome();
 		}
 		return false;
@@ -702,7 +705,10 @@ bool GCodes::DoSingleZProbeAtPoint()
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(true);
 		if(DoCannedCycleMove(true))
+		{
 			cannedCycleMoveCount++;
+			axisIsHomed[Z_AXIS] = true;		// we now home the Z-axis in Move.cpp it is wasn't already
+		}
 		return false;
 
 	case 3:
@@ -728,7 +734,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 bool GCodes::DoSingleZProbe()
 {
 	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
-			return false;
+		return false;
 
 	for(int8_t drive = 0; drive <= DRIVES; drive++)
 		activeDrive[drive] = false;
@@ -741,7 +747,7 @@ bool GCodes::DoSingleZProbe()
 	{
 		cannedCycleMoveCount = 0;
 		probeCount = 0;
-		axisIsHomed[2] = true;	// we have homed the Z axis
+		axisIsHomed[Z_AXIS] = true;	// we have homed the Z axis
 		return true;
 	}
 	return false;
@@ -1315,7 +1321,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 32: // Probe Z at multiple positions and generate the bed transform
-		if (!(axisIsHomed[0] && axisIsHomed[1]))
+		if (!(axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS]))
 		{
 			// We can only do a Z probe if X and Y have already been homed
 			strncpy(reply, "Must home X and Y before bed probing", STRING_LENGTH);

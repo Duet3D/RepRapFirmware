@@ -98,8 +98,6 @@ void Move::Init()
   lastMove->Release();
   liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 
-  checkEndStopsOnNextMove = false;
-
   SetStepHypotenuse();
 
   currentFeedrate = -1.0;
@@ -169,6 +167,7 @@ void Move::Spin()
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
 
+  bool checkEndStopsOnNextMove;
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
 	Transform(nextMove);

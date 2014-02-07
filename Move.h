@@ -227,7 +227,6 @@ class Move
     float lastTime;
     bool addNoMoreMoves;
     bool active;
-    bool checkEndStopsOnNextMove;
     float currentFeedrate;
     float nextMove[DRIVES + 1];  // Extra is for feedrate
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
@@ -547,13 +546,25 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 	{
 		if(zProbing)
 		{
-			lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
-			la->SetDriveCoordinateAndZeroEndSpeed(lastZHit, drive);
-			lastZHit = lastZHit - platform->ZProbeStopHeight();
+			// Executing G32, so record the Z position at which we hit the end stop
+			if (gCodes->GetAxisIsHomed(drive))
+			{
+				// Z-axis has already been homed, so just record the height of the bed at this point
+				lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
+				la->SetDriveCoordinateAndZeroEndSpeed(lastZHit, drive);
+				lastZHit = lastZHit - platform->ZProbeStopHeight();
+			}
+			else
+			{
+				// Z axis has not yet been homed, so treat this probe as a homing command
+				la->SetDriveCoordinateAndZeroEndSpeed(platform->ZProbeStopHeight(), drive);
+				lastZHit = 0.0;
+			}
 			return;
 		} else
 		{
-			lastZHit = platform->ZProbeStopHeight(); // Should never be used.
+			// Executing G30, so set the current Z height to the value at which the end stop is triggered
+			lastZHit = platform->ZProbeStopHeight();
 			hitPoint = lastZHit;
 		}
 	}
