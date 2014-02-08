@@ -135,21 +135,17 @@ void PID::Spin()
 		  platform->Message(HOST_MESSAGE, ftoa(scratchString, temperature, 1));
 		  platform->Message(HOST_MESSAGE, "\n");
 	  }
-  } else
-	  badTemperatureCount = 0;
-
-  float error;
-  if(active)
-    error = activeTemperature - temperature;
+  }
   else
-    error = standbyTemperature - temperature;
+  {
+	  badTemperatureCount = 0;
+  }
+
+  float error = ((active) ? activeTemperature : standbyTemperature) - temperature;
   
   if(!platform->UsePID(heater))
   {
-    if(error > 0.0)
-      platform->SetHeater(heater, 1.0);
-    else
-      platform->SetHeater(heater, 0.0);
+    platform->SetHeater(heater, (error > 0.0) ? 1.0 : 0.0);
     return; 
   }
   
@@ -157,30 +153,36 @@ void PID::Spin()
   {
      temp_iState = 0.0;
      platform->SetHeater(heater, 0.0);
+     lastTemperature = temperature;
      return;
   }
   if(error > platform->FullPidBand(heater))
   {
      temp_iState = 0.0;
      platform->SetHeater(heater, 1.0);
+     lastTemperature = temperature;
      return;
   }  
    
-  temp_iState += error;
+  temp_iState += error * platform->PidKi(heater);
   
   if (temp_iState < platform->PidMin(heater)) temp_iState = platform->PidMin(heater);
-  if (temp_iState > platform->PidMax(heater)) temp_iState = platform->PidMax(heater);
+  else if (temp_iState > platform->PidMax(heater)) temp_iState = platform->PidMax(heater);
    
   temp_dState =  platform->PidKd(heater)*(temperature - lastTemperature)*(1.0 - platform->DMix(heater)) + platform->DMix(heater)*temp_dState; 
 
-  float result = platform->PidKp(heater)*error + platform->PidKi(heater)*temp_iState - temp_dState;
+  float result = platform->PidKp(heater)*error + temp_iState - temp_dState;
 
   lastTemperature = temperature;
 
   if (result < 0.0) result = 0.0;
-  if (result > 255.0) result = 255.0;
+  else if (result > 255.0) result = 255.0;
   result = result/255.0;
 
   if(!temperatureFault)
 	  platform->SetHeater(heater, result);
+
+  char buffer[100];
+  snprintf(buffer, ARRAY_SIZE(buffer), "Heat: e=%f, P=%f, I=%f, d=%f, r=%f\n", error, platform->PidKp(heater)*error, temp_iState, temp_dState, result);
+  platform->Message(HOST_MESSAGE, buffer);
 }

@@ -24,9 +24,9 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.57l-dc42"
-#define DATE "2014-02-07"
-#define LAST_AUTHOR "reprappro.com"
+#define VERSION "0.57m-dc42"
+#define DATE "2014-02-08"
+#define LAST_AUTHOR "dc42"
 
 // Other firmware that we might switch to be compatible with.
 
@@ -42,14 +42,14 @@ enum Compatibility
 
 // Some numbers...
 
-#define ABS_ZERO -273.15  // Celsius
+#define ABS_ZERO (-273.15)  // Celsius
 
-#define INCH_TO_MM 25.4
+#define INCH_TO_MM (25.4)
 
-#define HEAT_SAMPLE_TIME 0.5 // Seconds
+#define HEAT_SAMPLE_TIME (0.5) // Seconds
 
-#define TEMPERATURE_CLOSE_ENOUGH 5.0 // Celsius
-#define TEMPERATURE_LOW_SO_DONT_CARE 40.0 // Celsius
+#define TEMPERATURE_CLOSE_ENOUGH (2.0) 		// Celsius
+#define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
 
 // If temperatures fall outside this range, something
 // nasty has happened.

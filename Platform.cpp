@@ -869,6 +869,15 @@ void Platform::Message(char type, const char* message)
   }
 }
 
+void Platform::SetPidValues(size_t heater, float pVal, float iVal, float dVal)
+{
+	if (heater < HEATERS)
+	{
+		pidKps[heater] = pVal;
+		pidKis[heater] = iVal / heatSampleTime;
+		pidKds[heater] = dVal * heatSampleTime;
+	}
+}
 
 
 

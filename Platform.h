@@ -123,13 +123,13 @@ Licence: GPL
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
 
 #define USE_PID {false, true} // PID or bang-bang for this heater?
-#define PID_KIS {-1, 2.2} // PID constants...
-#define PID_KDS {-1, 80}
-#define PID_KPS {-1, 12}
-#define FULL_PID_BAND {-1, 150.0}
-#define PID_MIN {-1, 0.0}
-#define PID_MAX {-1, 125.0}
-#define D_MIX {-1, 0.95}
+#define PID_KIS {-1, 0.027 / HEAT_SAMPLE_TIME} 	// PID constants, adjusted by dc42 for Ormerod hot end
+#define PID_KDS {-1, 100 * HEAT_SAMPLE_TIME}
+#define PID_KPS {-1, 20}
+#define FULL_PID_BAND {-1, 150.0}	// errors larger than this cause heater to be on or off and I-term set to zero
+#define PID_MIN {-1, 0.0}	// minimum value of I-term
+#define PID_MAX {-1, 180}	// maximum value of I-term, must be high enough to reach 245C for ABS printing
+#define D_MIX {-1, 0.5}		// higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
 #define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
@@ -517,7 +517,7 @@ class Platform
   bool UsePID(int8_t heater) const;
   float HeatSampleTime() const;
   void CoolingFan(float speed);
-  //void SetHeatOn(int8_t ho); //TEMPORARY - this will go away...
+  void SetPidValues(size_t heater, float pVal, float iVal, float dVal);
 
 //-------------------------------------------------------------------------------------------------------
   protected:
@@ -943,7 +943,7 @@ inline float Platform::PidMin(int8_t heater) const
 
 inline float Platform::PidMax(int8_t heater) const
 {
-  return pidMax[heater]/PidKi(heater);
+  return pidMax[heater];
 }
 
 inline float Platform::DMix(int8_t heater) const

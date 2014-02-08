@@ -1631,7 +1631,47 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	break;
 
-    case 301: // Set PID values
+    case 301: // Set hot end PID values
+    	{
+    		float pValue, iValue, dValue;
+    		bool seen = false;
+    		if (gb->Seen('P'))
+    		{
+    			pValue = gb->GetFValue();
+    			seen = true;
+    		}
+    		else
+    		{
+    			pValue = platform->PidKp(1);
+    		}
+    		if (gb->Seen('I'))
+    		{
+    			iValue = gb->GetFValue();
+    			seen = true;
+    		}
+    		else
+    		{
+    			iValue = platform->PidKi(1);
+    		}
+    		if (gb->Seen('D'))
+    		{
+    			dValue = gb->GetFValue();
+    			seen = true;
+    		}
+    		else
+    		{
+    			dValue = platform->PidKd(1);
+    		}
+
+    		if (seen)
+    		{
+    			platform->SetPidValues(1, pValue, iValue, dValue);
+    		}
+    		else
+    		{
+        		snprintf(reply, STRING_LENGTH, "P:%f I:%f D: %f\n", pValue, iValue, dValue);
+    		}
+    	}
     	break;
 
     case 302: // Allow cold extrudes
