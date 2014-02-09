@@ -182,7 +182,9 @@ void PID::Spin()
   if(!temperatureFault)
 	  platform->SetHeater(heater, result);
 
+#if 0 // debug
   char buffer[100];
   snprintf(buffer, ARRAY_SIZE(buffer), "Heat: e=%f, P=%f, I=%f, d=%f, r=%f\n", error, platform->PidKp(heater)*error, temp_iState, temp_dState, result);
   platform->Message(HOST_MESSAGE, buffer);
+#endif
 }
