@@ -32,13 +32,13 @@ class RepRap
     void Exit();
     void Interrupt();
     void Diagnostics();
-    bool Debug();
+    bool Debug() const;
     void SetDebug(bool d);
-    Platform* GetPlatform();
-    Move* GetMove();
-    Heat* GetHeat();
-    GCodes* GetGCodes();
-    Webserver* GetWebserver();  
+    Platform* GetPlatform() const;
+    Move* GetMove() const;
+    Heat* GetHeat() const;
+    GCodes* GetGCodes() const;
+    Webserver* GetWebserver() const;
     
   private:
   
@@ -51,12 +51,12 @@ class RepRap
     bool debug;
 };
 
-inline Platform* RepRap::GetPlatform() { return platform; }
-inline Move* RepRap::GetMove() { return move; }
-inline Heat* RepRap::GetHeat() { return heat; }
-inline GCodes* RepRap::GetGCodes() { return gCodes; }
-inline Webserver* RepRap::GetWebserver() { return webserver; }
-inline bool RepRap::Debug() { return debug; }
+inline Platform* RepRap::GetPlatform() const { return platform; }
+inline Move* RepRap::GetMove() const { return move; }
+inline Heat* RepRap::GetHeat() const { return heat; }
+inline GCodes* RepRap::GetGCodes() const { return gCodes; }
+inline Webserver* RepRap::GetWebserver() const { return webserver; }
+inline bool RepRap::Debug() const { return debug; }
 
 inline void RepRap::SetDebug(bool d)
 {
@@ -64,7 +64,12 @@ inline void RepRap::SetDebug(bool d)
 	if(debug)
 	{
 		platform->Message(HOST_MESSAGE, "Debugging enabled\n");
+		webserver->HandleReply("Debugging enabled\n", false);
 		platform->PrintMemoryUsage();
+	}
+	else
+	{
+		webserver->HandleReply("", false);
 	}
 }
 

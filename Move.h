@@ -70,19 +70,15 @@ public:
 
 protected:
 	LookAhead(Move* m, Platform* p, LookAhead* n);
-	void Init(long ep[], float feedRate, float vv, bool ce, float minS, float maxS, float maxA, float s);
+	void Init(long ep[], float feedRate, float vv, bool ce, int8_t mt);
 	LookAhead* Next();
 	LookAhead* Previous();
 	long* MachineEndPoints();
 	float MachineToEndPoint(int8_t drive);
 	static float MachineToEndPoint(int8_t drive, long coord);
 	static long EndPointToMachine(int8_t drive, float coord);
-	//int8_t GetMovementType();
-	float MinSpeed();
-	float MaxSpeed();
-	float MaxAcceleration();
+	int8_t GetMovementType();
 	float FeedRate();
-	float StepsPerUnit();
 	float V();
 	void SetV(float vv);
 	void SetFeedRate(float f);
@@ -99,8 +95,7 @@ private:
 	LookAhead* next;
 	LookAhead* previous;
 	long endPoint[DRIVES+1];  // Should never use the +1, but safety first
-	float minSpeed, maxSpeed, maxAcceleration, stepsPerUnit;
-	//int8_t movementType;
+	int8_t movementType;
 	float Cosine();
     bool checkEndStops;
     float cosine;
@@ -129,8 +124,8 @@ protected:
 
 private:
 	MovementProfile AccelerationCalculation(float& u, float& v, MovementProfile result);
-//	void SetXYAcceleration();
-//	void SetEAcceleration(float eDistance);
+	void SetXYAcceleration();
+	void SetEAcceleration(float eDistance);
 	Move* move;
 	Platform* platform;
 	DDA* next;
@@ -194,7 +189,7 @@ class Move
     void Diagnostics();
     float ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA);
     void SetStepHypotenuse();
-    float MachineToPoint(long steps, int8_t drive);
+    
 
     friend class DDA;
     
@@ -209,9 +204,9 @@ class Move
     void ReleaseDDARingLock();
     bool LookAheadRingEmpty();
     bool LookAheadRingFull();
-    bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, float minS, float maxS, float maxA, float s);
+    bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t movementType);
     LookAhead* LookAheadRingGet();
-    bool MaxTruncatedProjection(long sp[], long ep[], float box[], float& length, int8_t& axis);
+    int8_t GetMovementType(long sp[], long ep[]);
 
     float liveCoordinates[DRIVES + 1];
     
@@ -232,7 +227,6 @@ class Move
     float lastTime;
     bool addNoMoreMoves;
     bool active;
-    bool checkEndStopsOnNextMove;
     float currentFeedrate;
     float nextMove[DRIVES + 1];  // Extra is for feedrate
     float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
@@ -276,7 +270,9 @@ inline float LookAhead::V()
 
 inline float LookAhead::MachineToEndPoint(int8_t drive)
 {
-	return move->MachineToPoint(endPoint[drive], drive);
+	if(drive >= DRIVES)
+		platform->Message(HOST_MESSAGE, "MachineToEndPoint() called for feedrate!\n");
+	return ((float)(endPoint[drive]))/platform->DriveStepsPerUnit(drive);
 }
 
 
@@ -325,30 +321,10 @@ inline long* LookAhead::MachineEndPoints()
 	return endPoint;
 }
 
-inline float LookAhead::MinSpeed()
+inline int8_t LookAhead::GetMovementType()
 {
-	return minSpeed;
+	return movementType;
 }
-
-inline float LookAhead::MaxSpeed()
-{
-	return maxSpeed;
-}
-
-inline float LookAhead::MaxAcceleration()
-{
-	return maxAcceleration;
-}
-
-inline float LookAhead::StepsPerUnit()
-{
-	return stepsPerUnit;
-}
-
-//inline int8_t LookAhead::GetMovementType()
-//{
-//	return movementType;
-//}
 
 //******************************************************************************************************
 
@@ -421,13 +397,6 @@ inline void Move::LiveCoordinates(float m[])
 	for(int8_t drive = 0; drive <= DRIVES; drive++)
 		m[drive] = liveCoordinates[drive];
 	InverseTransform(m);
-}
-
-inline float Move::MachineToPoint(long steps, int8_t drive)
-{
-	if(drive >= DRIVES)
-		platform->Message(HOST_MESSAGE, "MachineToPoint() called for feedrate!\n");
-	return ((float)(steps))/platform->DriveStepsPerUnit(drive);
 }
 
 
@@ -577,13 +546,25 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 	{
 		if(zProbing)
 		{
-			lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
-			la->SetDriveCoordinateAndZeroEndSpeed(lastZHit, drive);
-			lastZHit = lastZHit - platform->ZProbeStopHeight();
+			// Executing G32, so record the Z position at which we hit the end stop
+			if (gCodes->GetAxisIsHomed(drive))
+			{
+				// Z-axis has already been homed, so just record the height of the bed at this point
+				lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
+				la->SetDriveCoordinateAndZeroEndSpeed(lastZHit, drive);
+				lastZHit = lastZHit - platform->ZProbeStopHeight();
+			}
+			else
+			{
+				// Z axis has not yet been homed, so treat this probe as a homing command
+				la->SetDriveCoordinateAndZeroEndSpeed(platform->ZProbeStopHeight(), drive);
+				lastZHit = 0.0;
+			}
 			return;
 		} else
 		{
-			lastZHit = platform->ZProbeStopHeight(); // Should never be used.
+			// Executing G30, so set the current Z height to the value at which the end stop is triggered
+			lastZHit = platform->ZProbeStopHeight();
 			hitPoint = lastZHit;
 		}
 	}

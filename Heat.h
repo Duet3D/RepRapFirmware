@@ -135,42 +135,57 @@ inline void PID::ResetFault()
 
 inline void Heat::SetActiveTemperature(int8_t heater, const float& t)
 {
-  pids[heater]->SetActiveTemperature(t);
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->SetActiveTemperature(t);
+  }
 }
 
 inline float Heat::GetActiveTemperature(int8_t heater)
 {
-  return pids[heater]->GetActiveTemperature();
+	return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetActiveTemperature() : ABS_ZERO;
 }
 
 inline void Heat::SetStandbyTemperature(int8_t heater, const float& t)
 {
-  pids[heater]->SetStandbyTemperature(t);
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->SetStandbyTemperature(t);
+  }
 }
 
 inline float Heat::GetStandbyTemperature(int8_t heater)
 {
-  return pids[heater]->GetStandbyTemperature();
+  return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
 }
 
 inline float Heat::GetTemperature(int8_t heater)
 {
-  return pids[heater]->GetTemperature();
+  return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetTemperature() : ABS_ZERO;
 }
 
 inline void Heat::Activate(int8_t heater)
 {
-  pids[heater]->Activate();
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->Activate();
+  }
 }
 
 inline void Heat::Standby(int8_t heater)
 {
-  pids[heater]->Standby();
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->Standby();
+  }
 }
 
 inline void Heat::ResetFault(int8_t heater)
 {
-  pids[heater]->ResetFault();
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->ResetFault();
+  }
 }
 
 

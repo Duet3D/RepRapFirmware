@@ -23,6 +23,7 @@ Licence: GPL
 #define GCODES_H
 
 #define STACK 5
+#define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
@@ -31,31 +32,31 @@ Licence: GPL
 class GCodeBuffer
 {
   public:
-    GCodeBuffer(Platform* p, char* id);
+    GCodeBuffer(Platform* p, const char* id);
     void Init();
     bool Put(char c);
     bool Seen(char c);
     float GetFValue();
     int GetIValue();
     long GetLValue();
-    char* GetUnprecedentedString();
-    char* GetString();
-    char* Buffer();
+    const char* GetUnprecedentedString();
+    const char* GetString();
+    const char* Buffer();
     bool Finished() const;
     void SetFinished(bool f);
-    char* WritingFileDirectory() const;
-    void SetWritingFileDirectory(char* wfd);
+    const char* WritingFileDirectory() const;
+    void SetWritingFileDirectory(const char* wfd);
     
   private:
     int CheckSum();
     Platform* platform;
     char gcodeBuffer[GCODE_LENGTH];
-    char* identity;
+    const char* identity;
     int gcodePointer;
     int readPointer;
     bool inComment;
     bool finished;
-    char* writingFileDirectory;
+    const char* writingFileDirectory;
 };
 
 //****************************************************************************************************
@@ -72,24 +73,26 @@ class GCodes
     void Exit();
     bool RunConfigurationGCodes();
     bool ReadMove(float* m, bool& ce);
-    void QueueFileToPrint(char* fileName);
+    void QueueFileToPrint(const char* fileName);
+    void DeleteFile(const char* fileName);
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);
     char* GetCurrentCoordinates();
     bool PrintingAFile() const;
     void Diagnostics();
     bool HaveIncomingData() const;
+    bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; }
     
   private:
   
     void doFilePrint(GCodeBuffer* gb);
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
     bool DoCannedCycleMove(bool ce);
-    bool DoFileCannedCycles(char* fileName);
+    bool DoFileCannedCycles(const char* fileName);
     bool FileCannedCyclesReturn();
     bool ActOnGcode(GCodeBuffer* gb);
     bool SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
-    bool DoHome();
+    bool DoHome(char *reply, bool& error);
     bool DoSingleZProbeAtPoint();
     bool DoSingleZProbe();
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);
@@ -97,15 +100,15 @@ class GCodes
     bool SetPrintZProbe(GCodeBuffer *gb, char *reply);
     bool SetOffsets(GCodeBuffer *gb);
     bool SetPositions(GCodeBuffer *gb);
-    void LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92);
+    void LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyLimits);
     bool NoHome() const;
     bool Push();
     bool Pop();
     bool DisableDrives();
     bool StandbyHeaters();
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);
-    void HandleReply(bool error, bool fromLine, char* reply, char gMOrT, int code, bool resend);
-    char* OpenFileToWrite(char* directory, char* fileName, GCodeBuffer *gb);
+    void HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend);
+    void OpenFileToWrite(const char* directory, const char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);
     bool SendConfigToLine();
     void WriteHTMLToFile(char b, GCodeBuffer *gb);
@@ -122,7 +125,7 @@ class GCodes
     GCodeBuffer* serialGCode;
     GCodeBuffer* cannedCycleGCode;
     bool moveAvailable;
-    float moveBuffer[DRIVES+1]; // Last is feedrate
+    float moveBuffer[DRIVES+1]; // Last is feed rate
     bool checkEndStops;
     bool drivesRelative; // All except X, Y and Z
     bool axesRelative;   // X, Y and Z
@@ -157,6 +160,7 @@ class GCodes
     bool cannedCycleMoveQueued;
     bool zProbesSet;
     float longWait;
+    bool axisIsHomed[3];	// these record which of the axes have been homed
 };
 
 //*****************************************************************************************************
@@ -168,7 +172,7 @@ inline int GCodeBuffer::GetIValue()
   return (int)GetLValue();
 }
 
-inline char* GCodeBuffer::Buffer()
+inline const char* GCodeBuffer::Buffer()
 {
   return gcodeBuffer;
 }
@@ -183,12 +187,12 @@ inline void GCodeBuffer::SetFinished(bool f)
   finished = f;
 }
 
-inline char* GCodeBuffer::WritingFileDirectory() const
+inline const char* GCodeBuffer::WritingFileDirectory() const
 {
 	return writingFileDirectory;
 }
 
-inline void GCodeBuffer::SetWritingFileDirectory(char* wfd)
+inline void GCodeBuffer::SetWritingFileDirectory(const char* wfd)
 {
 	writingFileDirectory = wfd;
 }

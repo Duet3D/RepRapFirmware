@@ -157,9 +157,8 @@ RepRap reprap;
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap()
+RepRap::RepRap() : active(false), debug(false)
 {
-  active = false;
   platform = new Platform();
   webserver = new Webserver(platform);
   gCodes = new GCodes(platform, webserver);
@@ -257,6 +256,7 @@ void RepRap::EmergencyStop()
 		}
 	}
 	platform->Message(HOST_MESSAGE, "Emergency Stop! Reset the controller to continue.");
+	webserver->HandleReply("Emergency Stop! Reset the controller to continue.", false);
 }
 
 
@@ -292,7 +292,7 @@ char* ftoa(char *a, const float& f, int prec)
 
 // String testing
 
-bool StringEndsWith(char* string, char* ending)
+bool StringEndsWith(const char* string, const char* ending)
 {
   int j = strlen(string);
   int k = strlen(ending);
@@ -302,7 +302,7 @@ bool StringEndsWith(char* string, char* ending)
   return(StringEquals(&string[j - k], ending));
 }
 
-bool StringEquals(char* s1, char* s2)
+bool StringEquals(const char* s1, const char* s2)
 {
   int i = 0;
   while(s1[i] && s2[i])
@@ -315,7 +315,7 @@ bool StringEquals(char* s1, char* s2)
   return !(s1[i] || s2[i]);
 }
 
-bool StringStartsWith(char* string, char* starting)
+bool StringStartsWith(const char* string, const char* starting)
 {
   int j = strlen(string);
   int k = strlen(starting);
@@ -329,7 +329,7 @@ bool StringStartsWith(char* string, char* starting)
   return true;
 }
 
-int StringContains(char* string, char* match)
+int StringContains(const char* string, const char* match)
 {
   int i = 0;
   int count = 0;

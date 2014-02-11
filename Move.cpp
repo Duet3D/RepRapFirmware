@@ -94,12 +94,9 @@ void Move::Init()
 	  liveCoordinates[i] = 0.0;
   }
 
-  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false,
-		  platform->InstantDv(Z_AXIS), platform->MaxFeedrate(Z_AXIS), platform->Acceleration(Z_AXIS), platform->DriveStepsPerUnit(Z_AXIS));  // Typically Z is the slowest Axis
+  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false, zMove);  // Typically Z is the slowest Axis
   lastMove->Release();
   liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-
-  checkEndStopsOnNextMove = false;
 
   SetStepHypotenuse();
 
@@ -170,6 +167,7 @@ void Move::Spin()
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
 
+  bool checkEndStopsOnNextMove;
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
 	Transform(nextMove);
@@ -179,69 +177,39 @@ void Move::Spin()
     for(int8_t drive = 0; drive < DRIVES; drive++)
     	nextMachineEndPoints[drive] = LookAhead::EndPointToMachine(drive, nextMove[drive]);
 
-    float minS, maxS, maxA, steps;
-    int8_t axis;
-
-    //int8_t movementType = GetMovementType(lastMove->MachineEndPoints(), nextMachineEndPoints);
+    int8_t movementType = GetMovementType(lastMove->MachineEndPoints(), nextMachineEndPoints);
 
     // Throw it away if there's no real movement.
     
-    if(!MaxTruncatedProjection(lastMove->MachineEndPoints(),  nextMachineEndPoints,  platform->MaxFeedrate(), maxS, axis))
+    if(movementType == noMove)
     {
        platform->ClassReport("Move", longWait);
        return;
     }
-
-    MaxTruncatedProjection(lastMove->MachineEndPoints(),  nextMachineEndPoints,  platform->InstantDv(), minS, axis);
-
-    MaxTruncatedProjection(lastMove->MachineEndPoints(),  nextMachineEndPoints,  platform->Acceleration(), maxA, axis);
-
-    steps = platform->DriveStepsPerUnit(axis);
-
-    SerialUSB.print("min, max, a and s: ");
-    SerialUSB.print(minS);
-    SerialUSB.print(" ");
-    SerialUSB.print(maxS);
-    SerialUSB.print(" ");
-    SerialUSB.print(maxA);
-    SerialUSB.print(" ");
-    SerialUSB.print(steps);
-    SerialUSB.print("\n");
      
     // Real move - record its feedrate with it, not here.
     
     currentFeedrate = -1.0;
     
-    // Promote minimum feedrates and restrict maximum feedrates; assumes xy overrides e overrides z FIXME??
+    // Promote minimum feedrates
     
-//
-//
-//    if(movementType & xyMove)
-//    {
-//    	minS = platform->InstantDv(X_AXIS);
-//    	maxS = platform->MaxFeedrate(X_AXIS);  // Assumes X and Y are equal.  FIXME?
-//    	maxA = platform->Acceleration(X_AXIS);
-//
-//    	//platform->Message(HOST_MESSAGE, " xyMove\n");
-//    } else if(movementType & eMove)
-//    {
-//    	minS = platform->InstantDv(AXES);
-//    	maxS = platform->MaxFeedrate(AXES); // Picks up the value for the first extruder.  FIXME?
-//    	maxA = platform->Acceleration(AXES);
-//    	steps = platform->DriveStepsPerUnit(AXES);
-//    	//platform->Message(HOST_MESSAGE, " eMove\n");
-//    } else // Must be z
-//    {
-//    	minS = platform->InstantDv(Z_AXIS);
-//    	maxS = platform->MaxFeedrate(Z_AXIS);
-//    	maxA = platform->Acceleration(Z_AXIS);
-//    	steps = platform->DriveStepsPerUnit(Z_AXIS);
-//    	//platform->Message(HOST_MESSAGE, " zMove\n");
-//    }
-
-    nextMove[DRIVES] = fmax(fmin(nextMove[DRIVES], maxS), minS);
+    if(movementType & xyMove)
+      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(X_AXIS));
+    else if(movementType & eMove)
+      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(AXES));
+    else
+      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
+      
+    // Restrict maximum feedrates; assumes xy overrides e overrides z FIXME??
     
-    if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove, minS, maxS, maxA, steps))
+    if(movementType & xyMove)
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
+    else if(movementType & eMove)
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
+    else // Must be z
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
+    
+    if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove, movementType))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
   }
   platform->ClassReport("Move", longWait);
@@ -290,79 +258,6 @@ void Move::Diagnostics()
     */
 }
 
-/*
- * Box[] is a constraint on a vector - say a list of maximum speeds for
- * each axis.  sp[] and ep[] are the start and end points of that vector.
- * This finds the length of that vector such that it extends to the surface
- * of the box.  It then sets the length of the resulting vector.  It also
- * returns the axis corresponding to the longest component of vector.
- *
- * If the machine moves along the vector at that speed, then all the speeds along
- * all the other directions are guaranteed not to lie outside the box.
- *
- * Note that this means that for, say, a diagonal move in X and Y with equal
- * maxima along each axis, then the maximum speed returned will be sqrt(2) times
- * that speed.
- *
- * Without loss of generality, this function works in entirely the positive hyperquadrant,
- * and assumes that all values in box[] are positive.
- *
- * The function returns true if input vector is not of 0 length.
- */
-bool Move::MaxTruncatedProjection(long sp[], long ep[], float box[], float& length, int8_t& axis)
-{
-	float vector[DRIVES];
-	long lVector;
-	float s;
-	float t = FLT_MAX;  // Slight hack
-	int8_t drive;
-
-	// Find which limit is the one that the movement vector hits and so is
-	// constrained by.
-
-	for(drive = 0; drive < DRIVES; drive++)
-	{
-		lVector = labs(ep[drive] - sp[drive]);
-		if(lVector)
-		{
-			vector[drive] = MachineToPoint(lVector, drive);
-			s = box[drive]/vector[drive];
-			if(s < t)
-				t = s;
-		} else
-			vector[drive] = 0.0;
-	}
-
-	if(t == FLT_MAX) // No movement, so result doesn't matter.  But safest not to set it to 0.
-	{
-		length = box[0];
-		return false;
-	}
-
-	// Find the length of the vector where it hits the box.  This is the constrained
-	// amount.  Also find the dominant axis.
-
-	length = 0.0;
-
-	s = vector[0];
-	axis = 0;
-
-	for(drive = 0; drive < DRIVES; drive++)
-	{
-		length += vector[drive]*vector[drive];
-
-		if(vector[drive] > s)
-		{
-			s = vector[drive];
-			axis = drive;
-		}
-	}
-
-	length = sqrt(length)*t;
-
-	return true;
-}
-
 // This returns false if it is not possible
 // to use the result as the basis for the
 // next move because the look ahead ring
@@ -399,36 +294,36 @@ bool Move::GetCurrentState(float m[])
 // for the bed's plane, which means that a move is MAINLY and XY move, or MAINLY a Z move. It
 // is the main type of move that is returned.
 
-//int8_t Move::GetMovementType(long p0[], long p1[])
-//{
-//  int8_t result = noMove;
-//  long dxy = 0;
-//  long dz = 0;
-//  long d;
-//
-//  for(int8_t drive = 0; drive < DRIVES; drive++)
-//  {
-//	  if(drive < AXES)
-//	  {
-//		  d = llabs(p1[drive] - p0[drive]);
-//		  if(drive == Z_AXIS)
-//			  dz = d;
-//		  else if(d > dxy)
-//			  dxy = d;
-//	  } else
-//	  {
-//		  if( p1[drive] )
-//			  result |= eMove;
-//	  }
-//  }
-//  dxy *= (long)roundf(platform->DriveStepsPerUnit(Z_AXIS)/platform->DriveStepsPerUnit(X_AXIS));
-//  if(dxy > dz)
-//	  result |= xyMove;
-//  else if(dz)
-//	  result |= zMove;
-//
-//  return result;
-//}
+int8_t Move::GetMovementType(long p0[], long p1[])
+{
+  int8_t result = noMove;
+  long dxy = 0;
+  long dz = 0;
+  long d;
+
+  for(int8_t drive = 0; drive < DRIVES; drive++)
+  {
+	  if(drive < AXES)
+	  {
+		  d = llabs(p1[drive] - p0[drive]);
+		  if(drive == Z_AXIS)
+			  dz = d;
+		  else if(d > dxy)
+			  dxy = d;
+	  } else
+	  {
+		  if( p1[drive] )
+			  result |= eMove;
+	  }
+  }
+  dxy *= (long)roundf(platform->DriveStepsPerUnit(Z_AXIS)/platform->DriveStepsPerUnit(X_AXIS));
+  if(dxy > dz)
+	  result |= xyMove;
+  else if(dz)
+	  result |= zMove;
+
+  return result;
+}
 
 void Move::SetStepHypotenuse()
 {
@@ -613,7 +508,18 @@ void Move::DoLookAhead()
         float c = fmin(n1->FeedRate(), n2->FeedRate());
         c = c*n1->Cosine();
         if(c < platform->InstantDv(Z_AXIS))  // Z is typically the slowest.
-        	c = n1->MinSpeed();
+        {
+          int8_t mt = n1->GetMovementType();
+
+          // Assumes xy overrides z overrides e
+
+          if(mt & xyMove)
+            c = platform->InstantDv(X_AXIS);
+          else if (mt & zMove)
+            c = platform->InstantDv(Z_AXIS);
+          else
+            c = platform->InstantDv(AXES); // value for first extruder FIXME??
+        }
         n1->SetV(c);
         n1->SetProcessed(vCosineSet);
       } 
@@ -664,13 +570,13 @@ void Move::Interrupt()
 }
 
 
-bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, float minS, float maxS, float maxA, float s)
+bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t mt)
 {
     if(LookAheadRingFull())
       return false;
     if(!(lookAheadRingAddPointer->Processed() & released))
       platform->Message(HOST_MESSAGE, "Attempt to alter a non-released lookahead ring entry!\n"); // Should never happen...
-    lookAheadRingAddPointer->Init(ep, feedRate, vv, ce, minS, maxS, maxA, s);
+    lookAheadRingAddPointer->Init(ep, feedRate, vv, ce, mt);
     lastMove = lookAheadRingAddPointer;
     lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
     lookAheadRingCount++;
@@ -960,30 +866,30 @@ MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile
 }
 
 
-//void DDA::SetXYAcceleration() // Slight hack - assumes dY = dX
-//{
-//	acceleration = platform->Acceleration(X_AXIS);
-//	instantDv = platform->InstantDv(X_AXIS);
-//	timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);
-//}
-//
-//void DDA::SetEAcceleration(float eDistance)
-//{
-//    acceleration = FLT_MAX; // Slight hack
-//    distance = eDistance;
-//    for(int8_t drive = AXES; drive < DRIVES; drive++)
-//    {
-//      if(delta[drive])
-//      {
-//        if(platform->Acceleration(drive) < acceleration)
-//        {
-//          acceleration = platform->Acceleration(drive);
-//          instantDv = platform->InstantDv(drive);
-//          timeStep = 1.0/platform->DriveStepsPerUnit(drive);
-//        }
-//      }
-//    }
-//}
+void DDA::SetXYAcceleration() // Slight hack - assumes dY = dX
+{
+	acceleration = platform->Acceleration(X_AXIS);
+	instantDv = platform->InstantDv(X_AXIS);
+	timeStep = 1.0/platform->DriveStepsPerUnit(X_AXIS);
+}
+
+void DDA::SetEAcceleration(float eDistance)
+{
+    acceleration = FLT_MAX; // Slight hack
+    distance = eDistance;
+    for(int8_t drive = AXES; drive < DRIVES; drive++)
+    {
+      if(delta[drive])
+      {
+        if(platform->Acceleration(drive) < acceleration)
+        {
+          acceleration = platform->Acceleration(drive);
+          instantDv = platform->InstantDv(drive);
+          timeStep = 1.0/platform->DriveStepsPerUnit(drive);
+        }
+      }
+    }
+}
 
 MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 {
@@ -1003,19 +909,15 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 
   // How far are we going, both in steps and in mm?
   
-  bool noXYZ = true;
-
   for(drive = 0; drive < DRIVES; drive++)
   {
     if(drive < AXES) // XY, Z
     {
       delta[drive] = targetPosition[drive] - positionNow[drive];  //Absolute
-      if(delta[drive] != 0)
-    	  noXYZ = false;
       d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
       distance += d*d;
     } else
-    {  // Extruder
+    {  // E
       delta[drive] = targetPosition[drive];  // Relative
       d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
       eDistance += d*d;
@@ -1053,95 +955,55 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   distance = sqrt(distance);
   eDistance = sqrt(eDistance);
-
-  if(noXYZ)
-	  distance = eDistance;
-
+  
   // Decide the appropriate acceleration and instantDv values
   // timeStep is set here to the distance of the
   // corresponding axis step.  It will be divided
   // by a velocity later.
 
-//  int8_t mt = myLookAheadEntry->GetMovementType();
-//
-//  if(mt & xyMove) // X or Y involved?
-//  {
-//	  // If XY (or Z) are moving, then the extruder won't be considered in the
-//	  // acceleration calculation.  Usually this is OK.  But check that we are not asking
-//	  // the extruder to accelerate, decelerate, or move too fast.  The common place
-//	  // for this to happen is when it is moving back from a previous retraction during
-//	  // an XY move.
-//
-//	  if(mt & eMove)
-//	  {
-//		  if(eDistance > distance)
-//			  SetEAcceleration(eDistance);
-//		  else
-//			  SetXYAcceleration();
-//	  } else
-//		  SetXYAcceleration();
-//  } else if (mt & zMove) // Z involved?
-//  {
-//    acceleration = platform->Acceleration(Z_AXIS);
-//    instantDv = platform->InstantDv(Z_AXIS);
-//    timeStep = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
-//  } else // Must be extruders only
-//	  SetEAcceleration(eDistance);
+  int8_t mt = myLookAheadEntry->GetMovementType();
 
-  acceleration = myLookAheadEntry->MaxAcceleration();
-  instantDv = myLookAheadEntry->MinSpeed();
-  timeStep = 1.0/myLookAheadEntry->StepsPerUnit();
-
-  if(u < myLookAheadEntry->Previous()->MinSpeed())
+  if(mt & xyMove) // X or Y involved?
   {
-	  u = myLookAheadEntry->Previous()->MinSpeed();
+	  // If XY (or Z) are moving, then the extruder won't be considered in the
+	  // acceleration calculation.  Usually this is OK.  But check that we are not asking
+	  // the extruder to accelerate, decelerate, or move too fast.  The common place
+	  // for this to happen is when it is moving back from a previous retraction during
+	  // an XY move.
+
+	  if(mt & eMove)
+	  {
+		  if(eDistance > distance)
+			  SetEAcceleration(eDistance);
+		  else
+			  SetXYAcceleration();
+	  } else
+		  SetXYAcceleration();
+  } else if (mt & zMove) // Z involved?
+  {
+    acceleration = platform->Acceleration(Z_AXIS);
+    instantDv = platform->InstantDv(Z_AXIS);
+    timeStep = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
+  } else // Must be extruders only
+	  SetEAcceleration(eDistance);
+
+  // If we are going from an XY move or extruder move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
+
+  if((myLookAheadEntry->Previous()->GetMovementType() & (xyMove | eMove)) && (mt & zMove))
+  {
+	  u = platform->InstantDv(Z_AXIS);
 	  result = change;
   }
 
-  if(u > myLookAheadEntry->Previous()->MaxSpeed())
+  // if we are going from a Z move to an XY move or E move, v needs to be platform->InstantDv(Z_AXIS),
+  // as does instantDv.
+
+  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & (xyMove | eMove)))
   {
-	  u = myLookAheadEntry->Previous()->MaxSpeed();
+	  v = platform->InstantDv(Z_AXIS);
+	  instantDv = v;
 	  result = change;
   }
-
-  if(u > myLookAheadEntry->MaxSpeed())
-  {
-	  u = myLookAheadEntry->MaxSpeed();
-	  result = change;
-  }
-
-  if(v < myLookAheadEntry->MinSpeed())
-  {
-	  v = myLookAheadEntry->MinSpeed();
-	  result = change;
-  }
-
-  if(v > myLookAheadEntry->MaxSpeed())
-  {
-	  v = myLookAheadEntry->MaxSpeed();
-	  result = change;
-  }
-
-
-
-//  // If we are going from an XY move or extruder move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
-//
-//  if((myLookAheadEntry->Previous()->GetMovementType() & (xyMove | eMove)) && (mt & zMove))
-//  {
-//	  u = platform->InstantDv(Z_AXIS);
-//	  result = change;
-//  }
-//
-//  // if we are going from a Z move to an XY move or E move, v needs to be platform->InstantDv(Z_AXIS),
-//  // as does instantDv.
-//
-//  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & (xyMove | eMove)))
-//  {
-//	  v = platform->InstantDv(Z_AXIS);
-//	  instantDv = v;
-//	  result = change;
-//  }
-
  
   // If velocity requested is (almost) zero, set it to instantDv
   
@@ -1281,14 +1143,10 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
   next = n;
 }
 
-void LookAhead::Init(long ep[], float f, float vv, bool ce, float minS, float maxS, float maxA, float s)
+void LookAhead::Init(long ep[], float f, float vv, bool ce, int8_t mt)
 {
   v = vv;
-  //movementType = mt;
-  minSpeed = minS;
-  maxSpeed = maxS;
-  maxAcceleration = maxA;
-  stepsPerUnit = s;
+  movementType = mt;
   feedRate = f;
   for(int8_t i = 0; i < DRIVES; i++)
     endPoint[i] = ep[i];

@@ -59,7 +59,7 @@ Licence: GPL
 
 // Some numbers...
 
-#define STRING_LENGTH 1029
+#define STRING_LENGTH 1029	// needs to be long enough to receive web data
 #define SHORT_STRING_LENGTH 40
 #define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
@@ -123,13 +123,13 @@ Licence: GPL
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
 
 #define USE_PID {false, true} // PID or bang-bang for this heater?
-#define PID_KIS {-1, 2.2} // PID constants...
-#define PID_KDS {-1, 80}
-#define PID_KPS {-1, 12}
-#define FULL_PID_BAND {-1, 150.0}
-#define PID_MIN {-1, 0.0}
-#define PID_MAX {-1, 125.0}
-#define D_MIX {-1, 0.95}
+#define PID_KIS {-1, 0.027 / HEAT_SAMPLE_TIME} 	// PID constants, adjusted by dc42 for Ormerod hot end
+#define PID_KDS {-1, 100 * HEAT_SAMPLE_TIME}
+#define PID_KPS {-1, 20}
+#define FULL_PID_BAND {-1, 150.0}	// errors larger than this cause heater to be on or off and I-term set to zero
+#define PID_MIN {-1, 0.0}	// minimum value of I-term
+#define PID_MAX {-1, 180}	// maximum value of I-term, must be high enough to reach 245C for ABS printing
+#define D_MIX {-1, 0.5}		// higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
 #define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
@@ -153,7 +153,8 @@ Licence: GPL
 #define TEMP_DIR "0:/tmp/" // Ditto - temporary files
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
-#define FILE_LIST_LENGTH 1000 // Maximum length of file list
+#define FILE_LIST_LENGTH (1000) // Maximum length of file list
+#define MAX_FILES (42)			// Maximum number of files displayed
 
 #define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
                       // the frequency and M/S ratio.
@@ -174,6 +175,15 @@ Licence: GPL
 #define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
+
+// The size of the http output buffer is critical to getting fast load times in the browser.
+// If this value is less than the TCP MSS, then Chrome under Windows will delay ack messages by about 120ms,
+// which results in very slow page loading. Any value higher than that will cause the TCP packet to be split
+// into multiple transmissions, which avoids this behaviour. Using a value of twice the MSS is most efficient because
+// each TCP packet will be full.
+// Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
+// and therefore avoids additional memory use and fragmentation.
+const unsigned int httpOutputBufferSize = 2 * 1432;
 
 
 /****************************************************************************************************/
@@ -272,8 +282,9 @@ public:
 	bool Read(char& b);
 	bool CanWrite() const;
 	void SetWriteEnable(bool enable);
+	void SentPacketAcknowledged();
 	void Write(char b);
-	void Write(char* s);
+	void Write(const char* s);
 	void Close();
 	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
 	void InputBufferReleased(void* pb);
@@ -294,7 +305,7 @@ private:
 	void Reset();
 	void CleanRing();
 	char* inputBuffer;
-	char outputBuffer[STRING_LENGTH];
+	char outputBuffer[httpOutputBufferSize];
 	int inputPointer;
 	int inputLength;
 	int outputPointer;
@@ -304,6 +315,7 @@ private:
 	NetRing* netRingGetPointer;
 	NetRing* netRingAddPointer;
 	bool active;
+	uint8_t sentPacketsOutstanding;		// count of TCP packets we have sent that have not been acknowledged
 };
 
 // This class handles serial I/O - typically via USB
@@ -315,7 +327,7 @@ public:
 	int8_t Status() const; // Returns OR of IOStatus
 	int Read(char& b);
 	void Write(char b);
-	void Write(char* s);
+	void Write(const char* s);
 	void Write(float f);
 	void Write(long l);
 
@@ -339,9 +351,9 @@ class MassStorage
 {
 public:
 
-  char* FileList(char* directory, bool fromLine); // Returns a list of all the files in the named directory
-  char* CombineName(char* directory, char* fileName);
-  bool Delete(char* directory, char* fileName);
+  char* FileList(const char* directory, bool fromLine); // Returns a list of all the files in the named directory
+  char* CombineName(const char* directory, const char* fileName);
+  bool Delete(const char* directory, const char* fileName);
 
 friend class Platform;
 
@@ -367,7 +379,7 @@ public:
 	int8_t Status(); // Returns OR of IOStatus
 	bool Read(char& b);
 	void Write(char b);
-	void Write(char* s);
+	void Write(const char* s);
 	void Close();
 	void GoToEnd(); // Position the file at the end (so you can write on the end).
 	unsigned long Length(); // File size in bytes
@@ -378,7 +390,7 @@ protected:
 
 	FileStore(Platform* p);
 	void Init();
-        bool Open(char* directory, char* fileName, bool write);
+    bool Open(const char* directory, const char* fileName, bool write);
         
   bool inUse;
   byte buf[FILE_BUF_LEN];
@@ -417,7 +429,7 @@ class Platform
   
   void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
   
-  Compatibility Emulating();
+  Compatibility Emulating() const;
 
   void SetEmulating(Compatibility c);
 
@@ -438,26 +450,26 @@ class Platform
   // Communications and data storage
   
   Network* GetNetwork();
-  Line* GetLine();
+  Line* GetLine() const;
   void SetIPAddress(byte ip[]);
-  byte* IPAddress();
+  const byte* IPAddress() const;
   void SetNetMask(byte nm[]);
-  byte* NetMask();
+  const byte* NetMask() const;
   void SetGateWay(byte gw[]);
-  byte* GateWay();
+  const byte* GateWay() const;
   
   friend class FileStore;
   
   MassStorage* GetMassStorage();
-  FileStore* GetFileStore(char* directory, char* fileName, bool write);
+  FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
   void StartNetwork();
-  char* GetWebDir(); // Where the htm etc files are
-  char* GetGCodeDir(); // Where the gcodes are
-  char* GetSysDir();  // Where the system files are
-  char* GetTempDir(); // Where temporary files are
-  char* GetConfigFile(); // Where the configuration is stored (in the system dir).
+  const char* GetWebDir() const; // Where the htm etc files are
+  const char* GetGCodeDir() const; // Where the gcodes are
+  const char* GetSysDir() const;  // Where the system files are
+  const char* GetTempDir() const; // Where temporary files are
+  const char* GetConfigFile() const; // Where the configuration is stored (in the system dir).
   
-  void Message(char type, char* message);        // Send a message.  Messages may simply flash an LED, or, 
+  void Message(char type, const char* message);        // Send a message.  Messages may simply flash an LED, or,
                             // say, display the messages on an LCD. This may also transmit the messages to the host.
   void PushMessageIndent();
   void PopMessageIndent();
@@ -469,21 +481,21 @@ class Platform
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void SetMotorCurrent(byte drive, float current);
-  float DriveStepsPerUnit(int8_t drive);
+  float DriveStepsPerUnit(int8_t drive) const;
   void SetDriveStepsPerUnit(int8_t drive, float value);
-  float Acceleration(int8_t drive);
+  float Acceleration(int8_t drive) const;
   void SetAcceleration(int8_t drive, float value);
-  float MaxFeedrate(int8_t drive);
+  float MaxFeedrate(int8_t drive) const;
   void SetMaxFeedrate(int8_t drive, float value);
-  float InstantDv(int8_t drive);
-  float HomeFeedRate(int8_t axis);
+  float InstantDv(int8_t drive) const;
+  float HomeFeedRate(int8_t axis) const;
   void SetHomeFeedRate(int8_t axis, float value);
   EndStopHit Stopped(int8_t drive);
-  float AxisLength(int8_t axis);
+  float AxisLength(int8_t axis) const;
   void SetAxisLength(int8_t axis, float value);
-  bool HighStopButNotLow(int8_t axis);
+  bool HighStopButNotLow(int8_t axis) const;
   
-  float ZProbeStopHeight();
+  float ZProbeStopHeight() const;
   void SetZProbeStopHeight(float z);
   int ZProbe() const;
   int ZProbeOnVal() const;
@@ -495,27 +507,22 @@ class Platform
   
   float GetTemperature(int8_t heater); // Result is in degrees celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
-  float PidKp(int8_t heater);
-  float PidKi(int8_t heater);
-  float PidKd(int8_t heater);
-  float FullPidBand(int8_t heater);
-  float PidMin(int8_t heater);
-  float PidMax(int8_t heater);
-  float DMix(int8_t heater);
-  bool UsePID(int8_t heater);
-  float HeatSampleTime();
+  float PidKp(int8_t heater) const;
+  float PidKi(int8_t heater) const;
+  float PidKd(int8_t heater) const;
+  float FullPidBand(int8_t heater) const;
+  float PidMin(int8_t heater) const;
+  float PidMax(int8_t heater) const;
+  float DMix(int8_t heater) const;
+  bool UsePID(int8_t heater) const;
+  float HeatSampleTime() const;
   void CoolingFan(float speed);
-  //void SetHeatOn(int8_t ho); //TEMPORARY - this will go away...
-
-  friend class Move;
+  void SetPidValues(size_t heater, float pVal, float iVal, float dVal);
 
 //-------------------------------------------------------------------------------------------------------
   protected:
   
-  void ReturnFileStore(FileStore* f);
-  float* Acceleration();
-  float* MaxFeedrate();
-  float* InstantDv();
+  void ReturnFileStore(FileStore* f);  
   
   private:
   
@@ -529,7 +536,7 @@ class Platform
   Compatibility compatibility;
 
   void InitialiseInterrupts();
-  int GetRawZHeight();
+  int GetRawZHeight() const;
   
 // DRIVES
 
@@ -574,7 +581,7 @@ class Platform
   
 // HEATERS - Bed is assumed to be the first
 
-  int GetRawTemperature(byte heater);
+  int GetRawTemperature(byte heater) const;
 
   int8_t tempSensePins[HEATERS];
   int8_t heatOnPins[HEATERS];
@@ -641,7 +648,7 @@ inline void Platform::Exit()
   active = false;
 }
 
-inline Compatibility Platform::Emulating()
+inline Compatibility Platform::Emulating() const
 {
 	if(compatibility == reprapFirmware)
 		return me;
@@ -662,34 +669,34 @@ inline void Platform::SetEmulating(Compatibility c)
 
 // Where the htm etc files are
 
-inline char* Platform::GetWebDir()
+inline const char* Platform::GetWebDir() const
 {
   return webDir;
 }
 
 // Where the gcodes are
 
-inline char* Platform::GetGCodeDir()
+inline const char* Platform::GetGCodeDir() const
 {
   return gcodeDir;
 }
 
 // Where the system files are
 
-inline char* Platform::GetSysDir()
+inline const char* Platform::GetSysDir() const
 {
   return sysDir;
 }
 
 // Where the temporary files are
 
-inline char* Platform::GetTempDir()
+inline const char* Platform::GetTempDir() const
 {
   return tempDir;
 }
 
 
-inline char* Platform::GetConfigFile()
+inline const char* Platform::GetConfigFile() const
 {
   return configFile;
 }
@@ -700,7 +707,7 @@ inline char* Platform::GetConfigFile()
 
 // Drive the RepRap machine - Movement
 
-inline float Platform::DriveStepsPerUnit(int8_t drive)
+inline float Platform::DriveStepsPerUnit(int8_t drive) const
 {
   return driveStepsPerUnit[drive]; 
 }
@@ -710,7 +717,7 @@ inline void Platform::SetDriveStepsPerUnit(int8_t drive, float value)
   driveStepsPerUnit[drive] = value;
 }
 
-inline float Platform::Acceleration(int8_t drive)
+inline float Platform::Acceleration(int8_t drive) const
 {
 	return accelerations[drive];
 }
@@ -720,29 +727,14 @@ inline void Platform::SetAcceleration(int8_t drive, float value)
 	accelerations[drive] = value;
 }
 
-inline float Platform::InstantDv(int8_t drive)
+inline float Platform::InstantDv(int8_t drive) const
 {
   return instantDvs[drive]; 
 }
 
-inline float* Platform::Acceleration()
+inline bool Platform::HighStopButNotLow(int8_t axis) const
 {
-	return accelerations;
-}
-
-inline float* Platform::MaxFeedrate()
-{
-	return maxFeedrates;
-}
-
-inline float* Platform::InstantDv()
-{
-	return instantDvs;
-}
-
-inline bool Platform::HighStopButNotLow(int8_t axis)
-{
-	return (lowStopPins[axis] < 0)  && (highStopPins[axis] >= 0);
+	return (lowStopPins[axis] < 0) && (highStopPins[axis] >= 0);
 }
 
 inline void Platform::SetDirection(byte drive, bool direction)
@@ -802,7 +794,7 @@ inline void Platform::SetMotorCurrent(byte drive, float current)
 	mcp.setVolatileWiper(potWipes[drive], pot);
 }
 
-inline float Platform::HomeFeedRate(int8_t axis)
+inline float Platform::HomeFeedRate(int8_t axis) const
 {
   return homeFeedrates[axis];
 }
@@ -812,7 +804,7 @@ inline void Platform::SetHomeFeedRate(int8_t axis, float value)
    homeFeedrates[axis] = value;
 }
 
-inline float Platform::AxisLength(int8_t axis)
+inline float Platform::AxisLength(int8_t axis) const
 {
   return axisLengths[axis];
 }
@@ -822,7 +814,7 @@ inline void Platform::SetAxisLength(int8_t axis, float value)
   axisLengths[axis] = value;
 }
 
-inline float Platform::MaxFeedrate(int8_t drive)
+inline float Platform::MaxFeedrate(int8_t drive) const
 {
   return maxFeedrates[drive];
 }
@@ -832,7 +824,7 @@ inline void Platform::SetMaxFeedrate(int8_t drive, float value)
 	maxFeedrates[drive] = value;
 }
 
-inline int Platform::GetRawZHeight()
+inline int Platform::GetRawZHeight() const
 {
   return (zProbeType != 0) ? analogRead(zProbePin) : 0;
 }
@@ -855,7 +847,7 @@ inline int Platform::ZProbeOnVal() const
 				: 0;
 }
 
-inline float Platform::ZProbeStopHeight()
+inline float Platform::ZProbeStopHeight() const
 {
 	return zProbeStopHeight;
 }
@@ -906,55 +898,55 @@ inline void Platform::PollZHeight()
 
 // Drive the RepRap machine - Heat and temperature
 
-inline int Platform::GetRawTemperature(byte heater)
+inline int Platform::GetRawTemperature(byte heater) const
 {
   if(tempSensePins[heater] >= 0)
     return analogRead(tempSensePins[heater]);
   return 0;
 }
 
-inline float Platform::HeatSampleTime()
+inline float Platform::HeatSampleTime() const
 {
   return heatSampleTime; 
 }
 
-inline bool Platform::UsePID(int8_t heater)
+inline bool Platform::UsePID(int8_t heater) const
 {
   return usePID[heater];
 }
 
 
-inline float Platform::PidKi(int8_t heater)
+inline float Platform::PidKi(int8_t heater) const
 {
   return pidKis[heater]*heatSampleTime;
 }
 
-inline float Platform::PidKd(int8_t heater)
+inline float Platform::PidKd(int8_t heater) const
 {
   return pidKds[heater]/heatSampleTime;
 }
 
-inline float Platform::PidKp(int8_t heater)
+inline float Platform::PidKp(int8_t heater) const
 {
   return pidKps[heater];
 }
 
-inline float Platform::FullPidBand(int8_t heater)
+inline float Platform::FullPidBand(int8_t heater) const
 {
   return fullPidBand[heater];
 }
 
-inline float Platform::PidMin(int8_t heater)
+inline float Platform::PidMin(int8_t heater) const
 {
   return pidMin[heater];  
 }
 
-inline float Platform::PidMax(int8_t heater)
+inline float Platform::PidMax(int8_t heater) const
 {
-  return pidMax[heater]/PidKi(heater);
+  return pidMax[heater];
 }
 
-inline float Platform::DMix(int8_t heater)
+inline float Platform::DMix(int8_t heater) const
 {
   return dMix[heater];  
 }
@@ -1004,7 +996,7 @@ inline void Platform::SetIPAddress(byte ip[])
 		ipAddress[i] = ip[i];
 }
 
-inline byte* Platform::IPAddress()
+inline const byte* Platform::IPAddress() const
 {
 	return ipAddress;
 }
@@ -1015,7 +1007,7 @@ inline void Platform::SetNetMask(byte nm[])
 		netMask[i] = nm[i];
 }
 
-inline byte* Platform::NetMask()
+inline const byte* Platform::NetMask() const
 {
 	return netMask;
 }
@@ -1026,12 +1018,12 @@ inline void Platform::SetGateWay(byte gw[])
 		gateWay[i] = gw[i];
 }
 
-inline byte* Platform::GateWay()
+inline const byte* Platform::GateWay() const
 {
 	return gateWay;
 }
 
-inline Line* Platform::GetLine()
+inline Line* Platform::GetLine() const
 {
 	return line;
 }
@@ -1060,7 +1052,7 @@ inline void Line::Write(char b)
 	SerialUSB.print(b);
 }
 
-inline void Line::Write(char* b)
+inline void Line::Write(const char* b)
 {
 	SerialUSB.print(b);
 }
