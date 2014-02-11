@@ -1,0 +1,785 @@
+<!DOCTYPE HTML>
+<head>
+
+<!--
+<link rel="shortcut icon" href="https://github.com/reprappro/RepRapFirmware/raw/due/SD-image/www/favicon.ico" /> 
+-->
+
+<link rel="shortcut icon" href="favicon.ico" />
+
+<style type="text/css">
+.pages 
+{
+	background-color: #00a403; 
+		list-style-type: none; 
+		padding: 0; 
+		margin: 0; 
+		border-radius: 7px;
+		background-image: -webkit-gradient(linear, left top, 
+			left bottom, color-stop(0, #d6d6d6), 
+			color-stop(0.4, #c0c0c0), color-stop(1,#a4a4a4)); 
+		margin: 10px 0 16px 0;
+		font-size: 0px;
+}
+.pages li:hover { background-color: grey; }
+.pages li:first-child { border-left: none; border-radius: 7px 0 0 7px; }
+.pages li 
+{
+	font-size: 16px; 
+	font-weight: bold; 
+	display: inline-block; 
+	padding: 0.5em 1.5em; 
+	cursor: pointer; 
+	color: white;  
+	border-left: 1px solid #ddd; 
+	border-right: 1px solid #888; 
+}
+.pages li { *display: inline !important; } /* IE7 only */
+.pages .selected 
+{
+	background-color: #444 !important;
+	color: white; 
+	text-shadow:none; 
+	border-right-color: #aaa; 
+	border-left: none; 
+	box-shadow:inset 1px 2px 6px #070707; 
+}
+
+
+
+.files 
+{
+	background-color: white; 
+}
+.files li:hover { background-color: grey; }
+.files li:first-child { border-left: none; border-radius: 7px 0 0 7px; }
+.files li 
+{
+	cursor: pointer; 
+	color: black;
+	list-style-type: none;  
+}
+.files li { *display: inline !important; } /* IE7 only */
+.files .selected 
+{
+	background-color: #00a403 !important;
+	color: white; 
+}
+
+td { text-align: center; } 
+
+</style>
+
+</head>
+
+<html>
+
+
+<script src="http://reprappro.com/scripts/jquery.js" type="application/javascript"></script>
+<script src="http://reprappro.com/scripts/knockout.js" type="application/javascript"></script>
+
+<!--
+<script src="jquery.js" type="application/javascript"></script>
+<script src="knockout.js" type="application/javascript"></script>
+-->
+
+<script>
+function jogRowHTML(axis)
+{
+  var result = "";
+  
+	for(var i = -1; i < 3; i++)
+	{
+		var k = Math.pow(10.0, i);
+		var pos = '<td><button data-bind="click: function(data, event) { sendJog(';
+		pos += "'" + axis + "', ";
+		var neg = pos;
+		pos += '' + k;
+		neg += '' + (-k);
+		pos += ', data, event) }">' + axis + ' ';
+		neg += ', data, event) }">&lt;';
+		for(var j = -1; j < i; j++)
+		{
+			pos += '-';
+			neg += '-';
+		}
+		pos += '&gt;';
+		neg += ' ' + axis;
+		pos += '</button></td>';
+		neg += '</button></td>';
+		result += pos;
+		neg += result;
+		result = neg;
+	}
+	return result;
+}
+
+
+
+
+
+function heatRowHTML(heater, hNumber)
+{
+  	var result = "";
+
+	result += "<td>" + heater + "</td>";
+	result += "<td>" + '<span data-bind="text: poll().poll[' + (hNumber+1) + ']"></span>' + "<sup>o</sup>C" + "</td>"; //+1 is cos poll[0] is the file print flag
+	result +=  '<td>' + 
+	'<form data-bind="submit: function(data, event) { setTemperature(' + hNumber + ', data, event) }">' +
+	'<button type="submit">set to -&gt;</button><input type="text" size="4" data-bind="value: setTemp" />' + '</form>' + 
+	'</td>';
+
+	if(heater == "Bed")
+		return result;
+
+	result += '<td>' + '<button data-bind="text: extrudeButton, click: function(data, event) { extrude(data, event) }"></button>' + '</td>';
+	result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(1, data, event) }">1mm</button>' + '</td>';
+	result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(5, data, event) }">5mm</button>' + '</td>';
+	result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(10, data, event) }">10mm</button>' + '</td>';
+	result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(50, data, event) }">50mm</button>' + '</td>';
+   result += '<td>' + '<button data-bind="click: function(data, event) { extrudeFilament(100, data, event) }">100mm</button>' + '</td>';
+
+	
+	return result;
+}
+
+
+</script>
+
+
+
+<!-- HEADER -->
+
+<a href="http://reprappro.com" target="_blank"><img src="https://github.com/reprappro/RepRapFirmware/raw/duet/SD-image/www/logo.png" alt="RepRapPro logo" align="right"></a>
+
+<!--
+<a href="http://reprappro.com" target="_blank"><img src="logo.png" alt="RepRapPro logo" align="right"></a>
+-->
+
+<div style="font-size:20px" data-bind="with: machineName">RepRap: <strong data-bind="text: myName"></strong></div>
+
+<br clear = "all">
+
+<div data-bind="if: gotPassword().password == 'right'">
+<ul class="pages" data-bind="foreach: pages">
+	<li data-bind="text: $data, css: 
+		{ 
+			selected: $data == $root.chosenPageId() 
+		}, 
+		click: $root.goToPage">
+	</li>
+</ul>
+</div>
+
+<br>
+
+<!-- PAGES -->
+
+<!-- CONTROL PAGE -->
+<div data-bind="if: chosenPageId() == pages[0]">
+   <table border="1"><div align="center">
+   
+   
+   <tr>
+   <th colspan="10">Move X Y Z</th>
+   </tr>
+   
+   <tr>
+   <td rowspan="2"><button style="background-color:red" data-bind="click: function(data, event) { sendStop(data, event) }"><br>STOP<br></button></td>
+   <td colspan="4">- mm</td>
+   <td colspan="4">+ mm</td>
+	<td rowspan="2"><button data-bind="click: function(data, event) { motorsOff(data, event) }">Motors<br>off
+	</button></td>
+   </tr>
+   
+   <tr>
+   <td>-100</td>
+   <td>-10</td>
+   <td>-1</td>
+   <td>-0.1</td>
+   <td>0.1</td>
+   <td>1</td>
+   <td>10</td>
+   <td>100</td>
+   </tr>
+   
+   <tr>
+   <td><button data-bind="click: function(data, event) { sendHome('X', data, event) }">Home X
+	</button></td>
+	<script>
+		document.write(jogRowHTML('X'));
+	</script>
+	<td><button data-bind="click: function(data, event) { maxX(data, event) }">Max X
+	</button></td>
+   </tr>
+   
+   <tr>
+   <td><button data-bind="click: function(data, event) { sendHome('Y', data, event) }">Home Y
+	</button></td>
+	<script>
+		document.write(jogRowHTML('Y'));
+	</script>
+	<td><button data-bind="click: function(data, event) { maxY(data, event) }">Max Y
+	</button></td>
+   </tr>
+   
+   <tr>
+   <td><button data-bind="click: function(data, event) { sendHome('Z', data, event) }">Home Z
+	</button></td>
+	<script>
+		document.write(jogRowHTML('Z'));
+	</script>
+   <td><button data-bind="click: function(data, event) { maxZ(data, event) }">Max Z
+	</button></td>
+   </tr>
+
+   </div></table>
+
+   <br><br>
+
+<table border="1"><div align="center">
+<tr>
+<th colspan="8">Current position (mm)</th>
+</tr>
+<tr>
+<td> X: </td><td><span data-bind="text: poll().poll[3]"></span></td>
+<td> Y: </td><td><span data-bind="text: poll().poll[4]"></span></td>
+<td> Z: </td><td><span data-bind="text: poll().poll[5]"></span></td>
+<td> E: </td><td><span data-bind="text: poll().poll[6]"></span></td>
+</tr>
+</div></table>
+
+   <br><br>
+
+ 	<table border="1"><div align="center">
+
+   	<tr>
+   		<td colspan="9"><b>Heaters</b></td>
+   	</tr>
+   
+   	<tr>
+			<script>
+				document.write(heatRowHTML("Bed", 0));
+			</script>
+   	</tr>
+
+   	<tr>
+			<script>
+				document.write(heatRowHTML("Extruder 0", 1));
+			</script>
+   	</tr>
+   
+   </div></table> 
+
+<br><br>
+<button data-bind="text: fanButton, click: function(data, event) { fanChange(data, event) }"></button>
+
+<br><br>
+<form data-bind="submit: sendGCode">
+	Send a G Code: <input type="text" id="gcode" value="" data-bind="value: gcode" />
+	<button type="submit">Send</button>
+</form>
+
+</div>
+
+<!-- PRINT PAGE -->
+<div data-bind="if: chosenPageId() == pages[1]">
+
+<button data-bind="text: pauseButton, click: function(data, event) { pausePrint(data, event) }"></button>
+
+<br><br>
+
+
+Click a file to <span data-bind="text: fileAction"></span><br>
+
+<ol class="files" data-bind="foreach: files().files">
+	<li data-bind="text: $data, css: 
+		{
+			selected: $data == $root.chosenFileId()
+		}, 
+		click: $root.actionOnFile">
+	</li>
+</ol>
+
+<hr>
+<!--
+Upload a G Code file: <br>
+<input type="file" id="fileinput" />
+-->
+<script>
+function uploadGCode (evt) 
+{
+    //Retrieve the first (and only!) File from the FileList object
+    var f = evt.target.files[0]; 
+	 //alert("Starting.");
+    if (f) 
+    {
+      var r = new FileReader();
+      r.onload = function(e) 
+      { 
+	     var contents = e.target.result;
+		  window.vm.gcode("M28 " + f.name);
+		  window.vm.sendGCode();
+		  var nextNL = contents.indexOf("\n");
+		  window.vm.gcode(contents.substr(0, nextNL));
+		  setTimeout(function() {}, 300);
+		  window.vm.sendGCode();
+		  window.vm.gcode("M29");
+		  setTimeout(function() {}, 300);
+		  window.vm.sendGCode();
+
+//        alert( "Got the file.\n" 
+//              +"name: " + f.name + "\n"
+//              +"type: " + f.type + "\n"
+//              +"size: " + f.size + " bytes\n"
+//              + "starts with: " + contents.substr(1, contents.indexOf("\n"))
+//        );  
+      };
+      r.readAsText(f);
+		//alert("Read file");
+    } else 
+    { 
+      alert("Failed to load file");
+    }
+}
+
+</script>
+<!--
+<form action="reprap.htm?upload=myFile"
+enctype="multipart/form-data" method="post">
+<p>
+Upload a G Code file: <br>
+<input type="file" name="datafile" size="40">
+</p>
+<div>
+<input type="submit" value="Upload">
+</div>
+</form>
+-->
+
+
+
+<!--
+<form onSubmit="return checkFileName(this)" action="upload.htm"
+enctype="multipart/form-data" method="post">
+<p>
+Upload a G Code file :<br>
+<input type="file" name="datafile" size="40">
+</p>
+<div>
+<input type="submit" value="Upload">
+</div>
+</form>
+-->
+<!-- 
+<form data-bind="submit: function(data, event) { uploadGCode(data, event) }">
+Upload a G Code file :
+<input type="file" name="datafile" size="30"><button type="submit">Upload</button>
+</form>
+-->
+
+<br>
+<button data-bind="text: deleteButton, click: function(data, event) { deleteFile(data, event) }"></button>
+</div>
+
+
+<!-- HELP PAGE -->
+<div data-bind="if: chosenPageId() == pages[2]">
+Help
+</div>
+
+<!-- SETTINGS PAGE 
+<div data-bind="if: chosenPageId() == pages[3]">
+Settings
+</div>
+
+ MESSAGES PAGE
+<div data-bind="if: chosenPageId() == pages[4]">
+Messages
+</div>
+-->
+
+<!-- LOGOUT/LOGIN PAGE -->
+<div data-bind="if: (chosenPageId() == pages[3] && gotPassword().password != 'right')">
+<form data-bind="submit: sendPassword">
+	Password: <input type="password" id="pwd" value="" data-bind="value: pwd" />
+	<button type="submit">Submit</button>
+</form>
+</div>
+
+
+<script>
+
+var printingAFile = false;
+var onControlPage = false;
+
+function dontInterruptFilePrint()
+{
+	if(!printingAFile)
+	{
+		//alert("printingAFile == false");
+		return false;
+	}
+	alert("You must pause the print on the Print page first.");
+	return true;
+}
+
+function viewModel() 
+{
+	var self = this;
+	
+	//self.pages = ['Control', 'Print', 'Help', 'Settings', 'Messages', 'Logout'];
+	self.pages = ['Control', 'Print', 'Help', 'Logout'];
+	self.chosenPageId = ko.observable('');
+	self.chosenFileId = ko.observable('');
+	self.machineName = ko.observable();
+	self.gotPassword = ko.observable();
+	self.deleteButton = ko.observable();
+	self.extrudeButton = ko.observable('Feed:');
+	self.fanButton = ko.observable('Fan on');
+	self.pauseButton = ko.observable('Pause print');
+	self.fileAction = ko.observable('print it');
+	self.pwd = ko.observable();
+	self.gcode = ko.observable();
+	self.files = ko.observable(JSON.parse('{"files":[""]}'));
+   self.files().files = ko.observableArray([""]);
+	self.poll = ko.observable(JSON.parse('{"poll":["I", "0.0", "0.0", "0.0", "0.0", "0.0", "0.0"]}'));
+   self.poll().poll = ko.observableArray(["I", "0.0", "0.0", "0.0", "0.0", "0.0", "0.0"]);
+	self.axisLengths = ko.observable(JSON.parse('{"axes":["140.0", "140.0", "100.0"]}'));
+	self.setTemp = ko.observable();
+	self.dummy = ko.observable();
+
+	self.getFiles = function()
+	{
+		$.get('/rr_files', {}, self.files);
+	};
+
+	self.getPoll = function()
+	{
+		if(!onControlPage)
+			return;
+		$.get('/rr_poll', {}, self.poll);
+      printingAFile = (self.poll().poll[0] == 'P') 
+	};
+
+	self.getAxes = function()
+	{
+		$.get('/rr_axes', {}, self.axisLengths);
+	};
+	
+	self.getName = function() 
+	{
+   	$.get('/rr_name', {}, self.machineName);
+	};
+
+	self.sendPassword = function() 
+	{
+		$.get('/rr_password', {pwd: self.pwd()}, self.gotPassword);
+	};
+
+	self.sendHome = function(axis, data, event) 
+	{
+		if(dontInterruptFilePrint())
+			return;
+		if(axis != '')
+			$.get('/rr_gcode', {gcode: "G28 " + axis + "0"}, self.dummy);
+		else
+			$.get('/rr_gcode', {gcode: "G28"}, self.dummy);
+	};
+
+	self.sendStop = function(data, event) 
+	{
+			$.get('/rr_gcode', {gcode: "M112"}, self.dummy);
+	};
+
+	self.deleteFile = function(data, event)
+	{
+		if(self.deleteButton() == 'Print a file')
+		{
+			self.fileAction('print it');
+			self.deleteButton('Delete a file');
+		} else
+		{
+			self.fileAction('delete it');
+			self.deleteButton('Print a file');
+		}
+	};
+
+	self.motorsOff = function(data, event)
+	{
+		if(dontInterruptFilePrint())
+			return;
+		$.get('/rr_gcode', {gcode: "M18"}, self.dummy);
+	};
+
+	self.maxX = function(data, event)
+	{
+		if(dontInterruptFilePrint())
+			return;
+		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 X" + self.axisLengths().axes[0] + " F2000\nM121"}, self.dummy);
+	};
+
+	self.maxY = function(data, event)
+	{
+		if(dontInterruptFilePrint())
+			return;
+		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 Y" + self.axisLengths().axes[1] + " F2000\nM121"}, self.dummy);
+	};
+
+	self.maxZ = function(data, event)
+	{
+		if(dontInterruptFilePrint())
+			return;
+		$.get('/rr_gcode', {gcode: "M120\nG90\nG1 Z" + self.axisLengths().axes[2] + " F200\nM121"}, self.dummy);
+	};
+
+	self.fanChange = function(data, event)
+	{
+		if(dontInterruptFilePrint())
+			return;
+		if(self.fanButton() == 'Fan on')
+		{
+			$.get('/rr_gcode', {gcode: "M106 S255"}, self.dummy);
+			self.fanButton('Fan off');
+		} else
+		{
+			$.get('/rr_gcode', {gcode: "M106 S0"}, self.dummy);
+			self.fanButton('Fan on');
+		}
+	};
+
+	self.pausePrint = function(data, event)
+	{
+		if(self.pauseButton() == 'Pause print')
+		{
+			$.get('/rr_gcode', {gcode: "M25"}, self.dummy);
+			self.pauseButton('Resume print');
+			printingAFile = false;
+		} else
+		{
+			$.get('/rr_gcode', {gcode: "M24"}, self.dummy);
+			self.pauseButton('Pause print');
+			printingAFile = true;
+		}
+	};	
+
+
+	self.extrude = function(data, event)
+	{
+		if(self.extrudeButton() == 'Feed:')
+		{
+			self.extrudeButton('Fast:');
+		} else if(self.extrudeButton() == 'Fast:')
+		{
+			self.extrudeButton('Reverse:');
+		} else
+		{
+			self.extrudeButton('Feed:');
+		}
+	};
+
+	self.extrudeFilament = function(length, data, event)
+	{
+		if(dontInterruptFilePrint())
+			return;
+		if(self.extrudeButton() == 'Feed:')
+			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E" + length + " F60\nM121"}, self.dummy);
+		else if(self.extrudeButton() == 'Fast:')
+			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E" + length + " F240\nM121"}, self.dummy);
+		else
+			$.get('/rr_gcode', {gcode: "M120\nM83\nG1 E-" + length + " F240\nM121"}, self.dummy);
+	};
+
+	self.sendJog = function(axis, d, data, event) 
+	{
+		if(dontInterruptFilePrint())
+			return;
+		var feed = " F2000";
+		if(axis == 'Z')
+			feed = " F200";
+		$.get('/rr_gcode', {gcode: "M120\nG91\nG1 " + axis + d + feed + "\nM121"}, self.dummy);
+ 	};
+
+	self.actionOnFile = function(file) 
+	{
+		if(self.fileAction() == 'print it')
+		{
+			if(dontInterruptFilePrint())
+				return;
+			self.chosenFileId(file);
+			printingAFile = true;
+			$.get('/rr_gcode', {gcode: "M23 " + file + "\nM24"}, self.dummy);
+			self.pauseButton('Pause print');
+		} else
+		{
+			if(confirm("Delete the file " + file + " on " + self.machineName().myName + "?"))
+			{
+				$.get('/rr_gcode', {gcode: "M30 " + file}, self.dummy);
+				//self.goToPage(self.pages[1]);
+				self.resetFileAction();
+			}
+		}
+	};
+
+	self.sendGCode = function() 
+	{
+		if(dontInterruptFilePrint())
+			return;
+		$.get('/rr_gcode', {gcode: self.gcode()}, self.dummy);
+	};
+
+
+	self.setTemperature = function(heater, data, event)
+	{
+		if(dontInterruptFilePrint())
+			return;
+		var t = self.setTemp();
+		if(heater == 0)
+			$.get('/rr_gcode', {gcode: "M140 S" + t}, self.dummy);
+		else
+			$.get('/rr_gcode', {gcode: "G10 P" + (heater-1) + " S" + t +"\nT" + (heater-1)}, self.dummy);
+	};
+
+	self.resetFileAction = function()
+	{
+		setTimeout(function() {
+		self.chosenFileId('');
+		}, 100);
+		self.getFiles();
+		self.fileAction('print it');
+		self.deleteButton('Delete a file');
+	};
+/*
+	self.goToPage = function(page) 
+	{
+		if(page == self.pages[5])
+			self.gotPassword(JSON.parse('{"password":"wrong"}'));
+
+		if(page == self.pages[1])
+			self.resetFileAction();
+
+		if(page == self.pages[2])
+		{
+			var win=window.open("http://www.reprappro.com/documentation/RepRapPro_Firmware", '_blank');
+  			win.focus();
+			return;
+		}
+
+		if(self.gotPassword().password != "right")
+		{
+			self.chosenPageId(self.pages[5]);
+			return;
+		}
+
+		onControlPage = (page == self.pages[0]);
+		self.chosenPageId(page);
+
+    	if(page == self.pages[1])
+		{
+      	try
+      	{
+				//alert("attaching");
+            document.getElementById('fileinput').addEventListener('change', uploadGCode, false);
+     		}    
+      	catch(e)
+      	{
+            alert(e);
+      	}
+		}
+*/	
+
+	self.goToPage = function(page) 
+	{
+		if(page == self.pages[3])
+			self.gotPassword(JSON.parse('{"password":"wrong"}'));
+
+		if(page == self.pages[1])
+			self.resetFileAction();
+
+		if(page == self.pages[2])
+		{
+			var win=window.open("http://www.reprappro.com/documentation/RepRapPro_Firmware", '_blank');
+  			win.focus();
+			return;
+		}
+
+		if(self.gotPassword().password != "right")
+		{
+			self.chosenPageId(self.pages[3]);
+			return;
+		}
+
+		onControlPage = (page == self.pages[0]);
+		self.chosenPageId(page);
+	};
+
+	self.checkFileName = function(uploadForm)
+	{
+  		var list = self.files().files;
+  		for(var i = 0; i < list.length; i++)
+  		{
+			if(list[i].toUpperCase() == uploadForm.datafile.value.toUpperCase())
+			{
+				return confirm("This will overwrite the file " + 
+					list[i] + " on " + self.machineName().myName + ". " +
+						"Continue?");
+			}
+  		}
+
+		return true;
+	};
+
+
+/*
+	if (window.File && window.FileReader && window.FileList && window.Blob) 
+	{
+		setTimeout(function() {
+	onControlPage = false;
+	}, 1000);
+		//AttachEventListener();
+	} else 
+	{
+  		alert('The File APIs are not fully supported by your browser.  GCode upload may not work.');
+	}
+*/
+	onControlPage = false;
+	self.getName();
+	//self.getPoll();
+	setTimeout(function() {
+	onControlPage = false;
+	}, 300);
+	self.getFiles();
+	setTimeout(function() {
+	onControlPage = false;
+	}, 300);
+	self.getAxes();
+	setTimeout(function() {
+	onControlPage = false;
+	}, 300);
+	printingAFile = false;
+	self.goToPage(self.pages[3]);
+	//self.gotPassword(JSON.parse('{"password":"wrong"}'));
+}
+
+function poll()
+{
+   setTimeout(function()
+	{
+      vm.getPoll();
+      poll();
+   }, 3000)
+}
+
+
+
+printingAFile = false;
+window.vm = new viewModel();
+ko.applyBindings(vm);
+poll();
+</script>
+
+
+
+
+</html>
+<!-- **EoF** -->
