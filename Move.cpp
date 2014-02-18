@@ -432,8 +432,6 @@ void Move::DoLookAhead()
   LookAhead* n1;
   LookAhead* n2;
   
-  float u, v;
-  
   // If there are a reasonable number of moves in there (LOOK_AHEAD), or if we are
   // doing single moves with no other move immediately following on, run up and down
   // the moves using the DDA Init() function to reduce the start or the end speed
@@ -454,8 +452,8 @@ void Move::DoLookAhead()
       {
         if(n1->Processed() & vCosineSet)
         {
-          u = n0->V();
-          v = n1->V();
+          float u = n0->V();
+          float v = n1->V();
           if(lookAheadDDA->Init(n1, u, v) & change)
           {
             n0->SetV(u);
@@ -476,8 +474,8 @@ void Move::DoLookAhead()
       {
         if(n1->Processed() & vCosineSet)
         {
-          u = n0->V();
-          v = n1->V();
+          float u = n0->V();
+          float v = n1->V();
           if(lookAheadDDA->Init(n1, u, v) & change)
           {
             n0->SetV(u);
@@ -489,7 +487,7 @@ void Move::DoLookAhead()
       n2 = n1;
       n1 = n0;
       n0 = n0->Previous();      
-    }while(n0 != lookAheadRingGetPointer);
+    } while(n0 != lookAheadRingGetPointer);
     n0->SetProcessed(complete);
   }
 
@@ -833,27 +831,26 @@ MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile
 		if(dCross < 0.0 || dCross > distance)
 		{
 			// With the acceleration available, it is not possible
-			// to satisfy u and v within the distance; reduce u and v
-			// proportionately to get ones that work and flag the fact.
+			// to satisfy u and v within the distance; reduce the greater of u and v
+			// to get ones that work and flag the fact.
 			// The result is two velocities that can just be accelerated
 			// or decelerated between over the distance to get
 			// from one to the other.
 
 			result = change;
-
-			float k = v/u;
-			u = 2.0*acceleration*distance/(k*k - 1);
-			if(u >= 0.0)
+			float temp = 2.0 * acceleration * distance;
+			if (v > u)
 			{
-				u = sqrt(u);
-				v = k*u;
-			} else
-			{
-				v = sqrt(-u);
-				u = v/k;
+				// Accelerating, reduce v
+				v = sqrt((u * u) + temp);
+				dCross = distance;
 			}
-
-			dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
+			else
+			{
+				// Decelerating, reduce u
+				u = sqrt((v * v) + temp);
+				dCross = 0.0;
+			}
 		}
 
 		// The DDA steps at which acceleration stops and deceleration starts
