@@ -60,7 +60,8 @@ void Heat::Spin()
 
 void Heat::Diagnostics() 
 {
-  platform->Message(HOST_MESSAGE, "Heat Diagnostics:\n"); 
+  platform->Message(HOST_MESSAGE, "Heat Diagnostics:\n");
+  // TODO - Put something useful in here
 }
 
 bool Heat::AllHeatersAtSetTemperatures()
@@ -107,7 +108,7 @@ void PID::Init()
   temp_dState = 0.0;
   badTemperatureCount = 0;
   temperatureFault = false;
-  active = false;
+  active = false; 		// Default to standby temperature
 }
 
 
@@ -135,8 +136,7 @@ void PID::Spin()
 		  platform->Message(HOST_MESSAGE, ftoa(scratchString, temperature, 1));
 		  platform->Message(HOST_MESSAGE, "\n");
 	  }
-  }
-  else
+  } else
   {
 	  badTemperatureCount = 0;
   }
@@ -175,6 +175,9 @@ void PID::Spin()
 
   lastTemperature = temperature;
 
+  // Legacy - old RepRap PID parameters were set to give values in [0, 255] for 1 byte PWM control
+  // TODO - maybe change them to give [0.0, 1.0]?
+
   if (result < 0.0) result = 0.0;
   else if (result > 255.0) result = 255.0;
   result = result/255.0;
@@ -182,9 +185,8 @@ void PID::Spin()
   if(!temperatureFault)
 	  platform->SetHeater(heater, result);
 
-#if 0 // debug
-  char buffer[100];
-  snprintf(buffer, ARRAY_SIZE(buffer), "Heat: e=%f, P=%f, I=%f, d=%f, r=%f\n", error, platform->PidKp(heater)*error, temp_iState, temp_dState, result);
-  platform->Message(HOST_MESSAGE, buffer);
-#endif
+//  char buffer[100];
+//  snprintf(buffer, ARRAY_SIZE(buffer), "Heat: e=%f, P=%f, I=%f, d=%f, r=%f\n", error, platform->PidKp(heater)*error, temp_iState, temp_dState, result);
+//  platform->Message(HOST_MESSAGE, buffer);
+
 }
