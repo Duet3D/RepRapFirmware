@@ -87,7 +87,7 @@ void GCodes::Init()
   axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
 }
 
-void GCodes::doFilePrint(GCodeBuffer* gb)
+void GCodes::DoFilePrint(GCodeBuffer* gb)
 {
 	char b;
 
@@ -212,7 +212,7 @@ void GCodes::Spin()
 	  }
   }
 
-  doFilePrint(fileGCode);
+  DoFilePrint(fileGCode);
 
   platform->ClassReport("GCodes", longWait);
 }
@@ -456,7 +456,7 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 	    return false;
 	}
 
-	doFilePrint(cannedCycleGCode);
+	DoFilePrint(cannedCycleGCode);
 
 	return false;
 }
