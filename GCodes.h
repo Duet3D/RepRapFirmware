@@ -80,7 +80,7 @@ class GCodes
     bool PrintingAFile() const;											// Are we in the middle of printing a file?
     void Diagnostics();													// Send helpful information out
     bool HaveIncomingData() const;										// Is there something that we have to do?
-    //bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Not needed on voyage?
+    bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
     
   private:
   
@@ -156,7 +156,7 @@ class GCodes
     bool homeX;									// True to home the X axis this move
     bool homeY;									// True to home the Y axis this move
     bool homeZ;									// True to home the Z axis this move
-    //int8_t homeAxisMoveCount;					// Not needed on voyage?
+    int8_t homeAxisMoveCount;					// Counts homing moves
     float gFeedRate;							// Store for the current feedrate
     int probeCount;								// Counts multiple probe points
     int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
