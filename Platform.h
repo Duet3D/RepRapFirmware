@@ -1,8 +1,8 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Mendel with Duet controller
+RepRapFirmware - Platform: RepRapPro Ormerod with Duet controller
 
-Platform contains all the code and definitons to deal with machine-dependent things such as control 
+Platform contains all the code and definitions to deal with machine-dependent things such as control
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
 
 No definitions that are system-independent should go in here.  Put them in Configuration.h.  Note that
@@ -59,9 +59,9 @@ Licence: GPL
 
 // Some numbers...
 
-#define STRING_LENGTH 1029	// needs to be long enough to receive web data
+#define STRING_LENGTH 1029		// needs to be long enough to receive web data
 #define SHORT_STRING_LENGTH 40
-#define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
+#define TIME_TO_REPRAP 1.0e6 	// Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
 
 /**************************************************************************************************/
@@ -72,107 +72,103 @@ Licence: GPL
 #define AXES 3    // The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
 #define HEATERS 2 // The number of heaters in the machine; 0 is the heated bed even if there isn't one.
 
-// The numbers of entries in each array must correspond with the values of DRIVES,
-// AXES, or HEATERS.  Set values to -1 to flag unavailability.
+// The numbers of entries in each {} array definition must correspond with the values of DRIVES,
+// AXES, or HEATERS.  Set values to -1 to flag unavailability.  Pins are the microcontroller pin numbers.
 
 // DRIVES
 
 #define STEP_PINS {14, 25, 5, X2}
 #define DIRECTION_PINS {15, 26, 4, X3}
-#define FORWARDS true     // What to send to go... 
-#define BACKWARDS false    // ...in each direction
+#define FORWARDS true     						// What to send to go...
+#define BACKWARDS false    						// ...in each direction
 #define ENABLE_PINS {29, 27, X1, X0}
-#define ENABLE false      // What to send to enable... 
-#define DISABLE true     // ...and disable a drive
+#define ENABLE false      						// What to send to enable...
+#define DISABLE true     						// ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
 #define LOW_STOP_PINS {11, -1, 60, 31}
 #define HIGH_STOP_PINS {-1, 28, -1, -1}
-#define ENDSTOP_HIT 1 // when a stop == this it is hit
-#define POT_WIPES {1, 3, 2, 0} // Indices for motor current digipots (if any)
-#define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
+#define ENDSTOP_HIT 1 							// when a stop == this it is hit
+#define POT_WIPES {1, 3, 2, 0} 					// Indices for motor current digipots (if any)
+#define SENSE_RESISTOR 0.1   					// Stepper motor current sense resistor (ohms)
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define Z_PROBE_AD_VALUE (400)
-#define Z_PROBE_STOP_HEIGHT (0.7) // mm
-#define Z_PROBE_PIN (0) 		// Analogue pin number
-#define Z_PROBE_MOD_PIN (61)	// Digital pin number to turn the IR LED on (high) or off (low)
-#define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
+#define Z_PROBE_AD_VALUE (400)					// Default for the Z probe - should be overwritten by experiment
+#define Z_PROBE_STOP_HEIGHT (0.7) 				// mm
+#define Z_PROBE_PIN (0) 						// Analogue pin number
+#define Z_PROBE_MOD_PIN (61)					// Digital pin number to turn the IR LED on (high) or off (low)
+#define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}   // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
-#define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    // (mm/sec)
+#define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    	// (mm/sec)
 
 // AXES
 
-#define AXIS_LENGTHS {220, 200, 200} // mm
-#define HOME_FEEDRATES {50.0, 50.0, 1.0}  // mm/sec
-#define HEAD_OFFSETS {0.0, 0.0, 0.0}
+#define AXIS_LENGTHS {220, 200, 200} 			// mm
+#define HOME_FEEDRATES {50.0, 50.0, 1.0} 		// mm/sec
+#define HEAD_OFFSETS {0.0, 0.0, 0.0}			// mm
 
-#define X_AXIS 0  // The index of the X axis
-#define Y_AXIS 1  // The index of the Y axis
-#define Z_AXIS 2  // The index of the Z axis
+#define X_AXIS 0  								// The index of the X axis in the arrays
+#define Y_AXIS 1  								// The index of the Y axis
+#define Z_AXIS 2  								// The index of the Z axis
 
+// HEATERS - The bed is assumed to be the at index 0
 
-// HEATERS - The bed is assumed to be the first
-
-#define TEMP_SENSE_PINS {5, 4}   // Analogue pin numbers
-#define HEAT_ON_PINS {6, X5}
+#define TEMP_SENSE_PINS {5, 4}  				// Analogue pin numbers
+#define HEAT_ON_PINS {6, X5}					// PWM pins
 
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
-#define THERMISTOR_BETAS {3988.0, 4138.0}
-#define THERMISTOR_SERIES_RS {1000, 1000} // Ohms in series with the thermistors
-#define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
-
-#define USE_PID {false, true} // PID or bang-bang for this heater?
-#define PID_KIS {-1, 0.027 / HEAT_SAMPLE_TIME} 	// PID constants, adjusted by dc42 for Ormerod hot end
-#define PID_KDS {-1, 100 * HEAT_SAMPLE_TIME}
-#define PID_KPS {-1, 20}
-#define FULL_PID_BAND {-1, 150.0}	// errors larger than this cause heater to be on or off and I-term set to zero
-#define PID_MIN {-1, 0.0}	// minimum value of I-term
-#define PID_MAX {-1, 180}	// maximum value of I-term, must be high enough to reach 245C for ABS printing
-#define D_MIX {-1, 0.5}		// higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
-#define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
+#define THERMISTOR_BETAS {3988.0, 4138.0}		// See http://en.wikipedia.org/wiki/Thermistor
+#define THERMISTOR_SERIES_RS {1000, 1000} 		// Ohms in series with the thermistors
+#define THERMISTOR_25_RS {10000.0, 100000.0} 	// Thermistor ohms at 25 C = 298.15 K
+#define USE_PID {false, true} 					// PID or bang-bang for this heater?
+#define PID_KIS {-1, 0.027 / HEAT_SAMPLE_TIME} 	// Integral PID constants, adjusted by dc42 for Ormerod hot end
+#define PID_KDS {-1, 100 * HEAT_SAMPLE_TIME}	// Derivative PID constants
+#define PID_KPS {-1, 20}						// Proportional PID constants
+#define FULL_PID_BAND {-1, 150.0}				// errors larger than this cause heater to be on or off and I-term set to zero
+#define PID_MIN {-1, 0.0}						// minimum value of I-term
+#define PID_MAX {-1, 180}						// maximum value of I-term, must be high enough to reach 245C for ABS printing
+#define D_MIX {-1, 0.5}							// higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
+#define TEMP_INTERVAL 0.122 					// secs - check and control temperatures this often
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
 #define COOLING_FAN_PIN 34
-#define HEAT_ON 0 // 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define HEAT_ON 0 								// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
-#define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
+#define AD_RANGE 1023.0							//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
-#define HOT_BED 0 // The index of the heated bed; set to -1 if there is no heated bed
+#define HOT_BED 0 								// The index of the heated bed; set to -1 if there is no heated bed
 
 /****************************************************************************************************/
 
 // File handling
 
-#define MAX_FILES 7
-#define FILE_BUF_LEN 256
-#define SD_SPI 4 //Pin
-#define WEB_DIR "0:/www/" // Place to find web files on the server
-#define GCODE_DIR "0:/gcodes/" // Ditto - g-codes
-#define SYS_DIR "0:/sys/" // Ditto - system files
-#define TEMP_DIR "0:/tmp/" // Ditto - temporary files
-#define FILE_LIST_SEPARATOR ','
-#define FILE_LIST_BRACKET '"'
-#define FILE_LIST_LENGTH (1000) // Maximum length of file list
-#define MAX_FILES (42)			// Maximum number of files displayed
+#define MAX_FILES 7								// Maximum number of simultaneously open files
+#define FILE_BUF_LEN 256						// File write buffer size
+#define SD_SPI 4 								// Pin for the SD card (if any)
+#define WEB_DIR "0:/www/" 						// Place to find web files on the SD card
+#define GCODE_DIR "0:/gcodes/" 					// Ditto - g-codes
+#define SYS_DIR "0:/sys/" 						// Ditto - system files
+#define TEMP_DIR "0:/tmp/" 						// Ditto - temporary files
+#define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them
+#define FILE_LIST_BRACKET '"'					// Put these round file names when listing them
+#define FILE_LIST_LENGTH (1000) 				// Maximum length of file list
+#define MAX_FILES (42)							// Maximum number of files displayed
 
-#define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
-                      // the frequency and M/S ratio.
-#define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
-                             // not displayed; \f and \n should be supported.
-#define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
+#define FLASH_LED 'F' 							// Type byte of a message that is to flash an LED; the next two bytes define
+                      	  	  	  	  	  	  	// the frequency and M/S ratio.
+#define DISPLAY_MESSAGE 'L'  					// Type byte of a message that is to appear on a local display; the L is
+                             	 	 	 	 	// not displayed; \f and \n should be supported.
+#define HOST_MESSAGE 'H' 						// Type byte of a message that is to be sent to the host; the H is not sent.
 
 /****************************************************************************************************/
 
 // Networking
 
-// Seconds to wait after serving a page
- 
-#define CLIENT_CLOSE_DELAY 0.002
+#define CLIENT_CLOSE_DELAY 0.002				// Seconds to wait after serving a page
 
-#define HTTP_STATE_SIZE 5
+#define HTTP_STATE_SIZE 5						// Size of ring buffer used for HTTP requests
 
-#define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
+#define IP_ADDRESS {192, 168, 1, 10} 			// Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
 
@@ -190,9 +186,7 @@ const unsigned int httpOutputBufferSize = 2 * 1432;
 
 // Miscellaneous...
 
-//#define LED_PIN 13 // Indicator LED
-
-#define BAUD_RATE 115200 // Communication speed of the USB if needed.
+#define BAUD_RATE 115200 						// Communication speed of the USB if needed.
 
 const uint16_t lineBufsize = 256;				// use a power of 2 for good performance
 const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, preferably a power of 2 for performance, and no greater than 64
@@ -201,9 +195,9 @@ const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, prefera
 
 enum EndStopHit
 {
-  noStop = 0,		// no enstop hit
-  lowHit = 1,		// low switch hit, or Z-probe in use and above threshold
-  highHit = 2		// high stop hit
+  noStop = 0,									// no endstop hit
+  lowHit = 1,									// low switch hit, or Z-probe in use and above threshold
+  highHit = 2									// high stop hit
 };
 
 /***************************************************************************************************/
@@ -220,19 +214,6 @@ enum IOStatus
   clientConnected = 8
 };
 
-//// All IO is done by classes derived from this class.
-//
-//class InputOutput
-//{
-//public:
-//	void TakeInputFrom(InputOutput* altIp);
-//	void SendOutputTo(InputOutput* altOp);
-//
-//protected:
-//	InputOutput* alternateInput;
-//	InputOutput* alternateOutput;
-//};
-
 // This class handles the network - typically an ethernet.
 
 // Start with a ring buffer to hold input from the network
@@ -240,7 +221,6 @@ enum IOStatus
 
 class NetRing
 {
-public:
 	friend class Network;
 
 protected:
@@ -274,7 +254,7 @@ private:
 
 // The main network class that drives the network.
 
-class Network //: public InputOutput
+class Network
 {
 public:
 

@@ -68,12 +68,11 @@ enum PointCoordinateSet
  */
 class LookAhead
 {  
-public:
-
 	friend class Move;
 	friend class DDA;
 
 protected:
+
 	LookAhead(Move* m, Platform* p, LookAhead* n);
 	void Init(long ep[], float feedRate, float vv, bool ce, int8_t mt); // Set up this move
 	LookAhead* Next();													// Next one in the ring
@@ -116,12 +115,11 @@ private:
  */
 class DDA
 {
-public:
-
 	friend class Move;
 	friend class LookAhead;
 
 protected:
+
 	DDA(Move* m, Platform* p, DDA* n);
 	MovementProfile Init(LookAhead* lookAhead, float& u, float& v); // Set up the DDA.  Also used experimentally in look ahead.
 	void Start(bool noTest);										// Start executing the DDA.  I.e. move the move.
@@ -131,6 +129,7 @@ protected:
 	float InstantDv();												// The lowest speed that may be used
 
 private:
+
 	MovementProfile AccelerationCalculation(float& u, float& v, 	// Compute acceleration profiles
 			MovementProfile result);
 	void SetXYAcceleration();										// Compute an XY acceleration
@@ -162,7 +161,9 @@ private:
  */
 
 class Move
-{   
+{
+    friend class DDA;
+
   public:
   
     Move(Platform* p, GCodes* g);
@@ -203,61 +204,62 @@ class Move
     void Diagnostics();							// Report useful stuff
     float ComputeCurrentCoordinate(int8_t drive,// Turn a DDA value back into a real world coordinate
     		LookAhead* la, DDA* runningDDA);
-    void SetStepHypotenuse();					// Set up the hypotenuse lengths for multiple axis steps, like step both X and Y
-    
-
-    friend class DDA;
+    void SetStepHypotenuse();					// Set up the hypotenuse lengths for multiple axis steps, like step both X and Y at once
     
   private:
   
-    bool DDARingAdd(LookAhead* lookAhead);
-    DDA* DDARingGet();
-    bool DDARingEmpty();
-    bool NoLiveMovement();
-    bool DDARingFull();
-    bool GetDDARingLock();
-    void ReleaseDDARingLock();
-    bool LookAheadRingEmpty();
-    bool LookAheadRingFull();
-    bool LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t movementType);
-    LookAhead* LookAheadRingGet();
-    int8_t GetMovementType(long sp[], long ep[]);
+    bool DDARingAdd(LookAhead* lookAhead);				// Add a processed look-ahead entry to the DDA ring
+    DDA* DDARingGet();									// Get the next DDA ring entry to be run
+    bool DDARingEmpty();								// Anything there?
+    bool NoLiveMovement();								// Is a move running, or are there any queued?
+    bool DDARingFull();									// Any more room?
+    bool GetDDARingLock();								// Lock the ring so only this function may access it
+    void ReleaseDDARingLock();							// Release the DDA ring lock
+    bool LookAheadRingEmpty();							// Anything there?
+    bool LookAheadRingFull();							// Any more room?
+    bool LookAheadRingAdd(long ep[], float feedRate, 	// Add an entry to the look-ahead ring for processing
+    		float vv, bool ce, int8_t movementType);
+    LookAhead* LookAheadRingGet();						// Get the next entry from the look-ahead ring
+    int8_t GetMovementType(long sp[], long ep[]);		// XY? Z? extruder only?
 
-    float liveCoordinates[DRIVES + 1];
+    Platform* platform;									// The RepRap machine
+    GCodes* gCodes;										// The G Codes processing class
     
-    Platform* platform;
-    GCodes* gCodes;
+    // These implement the DDA ring
     
     DDA* dda;
     DDA* ddaRingAddPointer;
     DDA* ddaRingGetPointer;
     volatile bool ddaRingLocked;
     
+    // These implement the look-ahead ring
+
     LookAhead* lookAheadRingAddPointer;
     LookAhead* lookAheadRingGetPointer;
     LookAhead* lastMove;
     DDA* lookAheadDDA;
     int lookAheadRingCount;
 
-    float lastTime;
-    bool addNoMoreMoves;
-    bool active;
-    float currentFeedrate;
-    float nextMove[DRIVES + 1];  // Extra is for feedrate
-    float stepDistances[(1<<AXES)]; // Index bits: lsb -> dx, dy, dz <- msb
-    float extruderStepDistances[(1<<(DRIVES-AXES))]; // NB - limits us to 5 extruders
-    long nextMachineEndPoints[DRIVES+1];
-    float xBedProbePoints[NUMBER_OF_PROBE_POINTS];
-    float yBedProbePoints[NUMBER_OF_PROBE_POINTS];
-    float zBedProbePoints[NUMBER_OF_PROBE_POINTS];
-    uint8_t probePointSet[NUMBER_OF_PROBE_POINTS];
-    float aX, aY, aC; // Bed plane explicit equation z' = z + aX*x + aY*y + aC
-    float tanXY, tanYZ, tanXZ; // 90 degrees + angle gives angle between axes
-    float xRectangle, yRectangle;
-    float lastZHit;
-    bool zProbing;
-    bool secondDegreeCompensation;
-    float longWait;
+    float lastTime;									// The last time we were called (secs)
+    bool addNoMoreMoves;							// If true, allow no more moves to be added to the look-ahead
+    bool active;									// Are we live and running?
+    float currentFeedrate;							// Err... the current feed rate...
+    float liveCoordinates[DRIVES + 1];				// The last endpoint that the machine moved to
+    float nextMove[DRIVES + 1];  					// The endpoint of the next move to processExtra entry is for feedrate
+    float stepDistances[(1<<AXES)]; 				// The entry for [0b011] is the hypotenuse of an X and Y step together etc. Index bits: lsb -> dx, dy, dz <- msb
+    float extruderStepDistances[(1<<(DRIVES-AXES))];// Same as above for the extruders. NB - may limit us to 5 extruders
+    long nextMachineEndPoints[DRIVES+1];			// The next endpoint in machine coordinates (i.e. steps)
+    float xBedProbePoints[NUMBER_OF_PROBE_POINTS];	// The X coordinates of the points on the bed at which to probe
+    float yBedProbePoints[NUMBER_OF_PROBE_POINTS];	// The X coordinates of the points on the bed at which to probe
+    float zBedProbePoints[NUMBER_OF_PROBE_POINTS];	// The X coordinates of the points on the bed at which to probe
+    uint8_t probePointSet[NUMBER_OF_PROBE_POINTS];	// Has the XY of this point been set?  Has the Z been probed?
+    float aX, aY, aC; 								// Bed plane explicit equation z' = z + aX*x + aY*y + aC
+    float tanXY, tanYZ, tanXZ; 						// Axis compensation - 90 degrees + angle gives angle between axes
+    float xRectangle, yRectangle;					// The side lengths of the rectangle used for second-degree bed compensation
+    float lastZHit;									// The last Z value hit by the probe
+    bool zProbing;									// Are we bed probing as well as moving?
+    bool secondDegreeCompensation;					// Are we using second degree bed compensation.  If not, linear
+    float longWait;									// A long time for things that need to be done occasionally
 };
 
 //********************************************************************************************************
