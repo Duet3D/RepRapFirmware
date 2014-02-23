@@ -1028,6 +1028,7 @@ void Network::Init()
 	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 	active = true;
 	sentPacketsOutstanding = 0;
+	windowedSendPackets = WINDOWED_SEND_PACKETS;
 }
 
 void Network::Spin()
@@ -1109,11 +1110,11 @@ void Network::Write(char b)
 
 	if(outputPointer == ARRAY_SIZE(outputBuffer))
 	{
-#if WINDOWED_SEND_PACKETS > 1
-		++sentPacketsOutstanding;
-#else
-		SetWriteEnable(false);  // Stop further writing from Webserver until the network tells us that this has gone
-#endif
+		if(windowedSendPackets > 1)
+			++sentPacketsOutstanding;
+		else
+			SetWriteEnable(false);  // Stop further writing from Webserver until the network tells us that this has gone
+
 		RepRapNetworkSendOutput(outputBuffer, outputPointer, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(), netRingGetPointer->Hs());
 		outputPointer = 0;
 	}
@@ -1153,7 +1154,7 @@ void Network::ReceiveInput(char* data, int length, void* pbuf, void* pcb, void* 
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ReceiveInput() - Ring buffer full!\n");
 		return;
 	}
-	netRingAddPointer->Set(data, length, pbuf, pcb, hs);
+	netRingAddPointer->Init(data, length, pbuf, pcb, hs);
 	netRingAddPointer = netRingAddPointer->Next();
 	//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - input received.\n");
 }
@@ -1161,11 +1162,9 @@ void Network::ReceiveInput(char* data, int length, void* pbuf, void* pcb, void* 
 
 bool Network::CanWrite() const
 {
-#if WINDOWED_SEND_PACKETS > 1
-	return writeEnabled && sentPacketsOutstanding < WINDOWED_SEND_PACKETS;
-#else
+	if(windowedSendPackets > 1)
+		return writeEnabled && sentPacketsOutstanding < windowedSendPackets;
 	return writeEnabled;
-#endif
 }
 
 void Network::SetWriteEnable(bool enable)
@@ -1179,18 +1178,18 @@ void Network::SetWriteEnable(bool enable)
 
 void Network::SentPacketAcknowledged()
 {
-#if WINDOWED_SEND_PACKETS > 1
-	if (sentPacketsOutstanding != 0)
+	if(windowedSendPackets > 1)
 	{
-		--sentPacketsOutstanding;
-	}
-	if (closePending && sentPacketsOutstanding == 0)
-	{
-		Close();
-	}
-#else
-	SetWriteEnable(true);
-#endif
+		if (sentPacketsOutstanding != 0)
+		{
+			--sentPacketsOutstanding;
+		}
+		if (closePending && sentPacketsOutstanding == 0)
+		{
+			Close();
+		}
+	} else
+		SetWriteEnable(true);
 }
 
 
@@ -1255,7 +1254,7 @@ void NetRing::Free()
 	active = false;
 }
 
-bool NetRing::Set(char* d, int l, void* pb, void* pc, void* h)
+bool NetRing::Init(char* d, int l, void* pb, void* pc, void* h)
 {
 	if(active)
 		return false;

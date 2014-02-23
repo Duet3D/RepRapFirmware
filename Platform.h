@@ -224,32 +224,35 @@ class NetRing
 	friend class Network;
 
 protected:
+
 	NetRing(NetRing* n);
-	NetRing* Next();
-	bool Set(char* d, int l, void* pb, void* pc, void* h);
-	char* Data();
-	int Length();
-	bool ReadFinished();
-	void SetReadFinished();
-	void* Pbuf();
-	void* Pcb();
-	void* Hs();
-	bool Active();
-	void Free();
-	void SetNext(NetRing* n);
-	void ReleasePbuf();
-	void ReleaseHs();
+	NetRing* Next();						// Next ring entry
+	bool Init(char* d, int l,				// Set up a ring entry
+			void* pb, void* pc, void* h);
+	char* Data();							// Pointer to the data
+	int Length();							// How much data
+	bool ReadFinished();					// Have we read the data?
+	void SetReadFinished();					// Set if we've read the data
+	void* Pbuf();							// Ethernet structure pointer that needs to be preserved
+	void* Pcb();							// Ethernet structure pointer that needs to be preserved
+	void* Hs();								// Ethernet structure pointer that needs to be preserved
+	bool Active();							// Is this ring entry live?
+	void Free();							// Is this ring entry in use?
+	void SetNext(NetRing* n);				// Set the next ring entry - only used at the start
+	void ReleasePbuf();						// Set the ethernet structure pointer null
+	void ReleaseHs();						// Set the ethernet structure pointer null
 
 private:
-	void Reset();
-	void* pbuf;
-	void* pcb;
-	void* hs;
-	char* data;
-	int length;
-	bool read;
-	bool active;
-	NetRing* next;
+
+	//void Reset();
+	void* pbuf;								// Ethernet structure pointer that needs to be preserved
+	void* pcb;								// Ethernet structure pointer that needs to be preserved
+	void* hs;								// Ethernet structure pointer that needs to be preserved
+	char* data;								// Pointer to the data
+	int length;								// How much data
+	bool read;								// Have we read the data?
+	bool active;							// Is this ring entry live?
+	NetRing* next;							// Next ring entry
 };
 
 // The main network class that drives the network.
@@ -258,19 +261,20 @@ class Network
 {
 public:
 
-	int8_t Status() const; // Returns OR of IOStatus
-	bool Read(char& b);
-	bool CanWrite() const;
-	void SetWriteEnable(bool enable);
-	void SentPacketAcknowledged();
-	void Write(char b);
-	void Write(const char* s);
-	void Close();
-	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
-	void InputBufferReleased(void* pb);
-	void ConnectionError(void* h);
-	bool Active() const;
-	bool LinkIsUp();
+	int8_t Status() const;					 // Returns OR of IOStatus
+	bool Read(char& b);						 // Called to read a byte from the network
+	bool CanWrite() const;					 // Can we send data?
+	void SetWriteEnable(bool enable);		 // Set the enabling of data writing
+	void SentPacketAcknowledged();			 // Called to tell us a packet has gone
+	void Write(char b);						 // Send a byte to the network
+	void Write(const char* s);				 // Send a string to the network
+	void Close();							 // Close the connection represented by this ring entry
+	void ReceiveInput(char* data, int length,// Called to give us some input
+			void* pb, void* pc, void* h);
+	void InputBufferReleased(void* pb);		 // Called to release the input buffer
+	void ConnectionError(void* h);			 // Called when a network error has occured
+	bool Active() const;					 // Is the network connection live?
+	bool LinkIsUp();						 // Is the network link up?
 
 friend class Platform;
 
@@ -296,6 +300,7 @@ private:
 	NetRing* netRingAddPointer;
 	bool active;
 	uint8_t sentPacketsOutstanding;		// count of TCP packets we have sent that have not been acknowledged
+	uint8_t windowedSendPackets;
 };
 
 // This class handles serial I/O - typically via USB
