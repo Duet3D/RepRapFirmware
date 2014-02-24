@@ -440,14 +440,20 @@ void Webserver::GetJsonResponse(const char* request)
     // Send the Z probe value
     char scratch[SHORT_STRING_LENGTH+1];
     scratch[SHORT_STRING_LENGTH] = 0;
-    if (platform->GetZProbeType() == 2)
-    {
-    	snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d (%d)\"", (int)platform->ZProbe(), platform->ZProbeOnVal());
-    }
-    else
-    {
-    	snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d\"", (int)platform->ZProbe());
-    }
+	int v0 = platform->ZProbe();
+	int v1, v2;
+	switch(platform->GetZProbeSecondaryValues(v1, v2))
+	{
+	case 1:
+		snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d (%d)\"", v0, v1);
+		break;
+	case 2:
+		snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
+		break;
+	default:
+		snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d\"", v0);
+		break;
+	}
     strncat(jsonResponse, scratch, STRING_LENGTH);
 
     // Send the amount of buffer space available for gcodes

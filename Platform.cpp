@@ -20,6 +20,7 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
+#include "DueFlashStorage.h"
 
 #define WINDOWED_SEND_PACKETS	(2)
 
@@ -74,16 +75,29 @@ Platform::Platform()
 
 void Platform::Init()
 { 
-  byte i;
+  DueFlashStorage::init();
+  DueFlashStorage::read(nvAddress, &nvData, sizeof(nvData));
+  if (nvData.magic != FlashData::magicValue)
+  {
+	  // Nonvolatile data has not been initialized since the firmware was last written, so set up default values
+	  nvData.compatibility = me;
+	  nvData.ipAddress = IP_ADDRESS;
+	  nvData.netMask = NET_MASK;
+	  nvData.gateWay = GATE_WAY;
 
-  compatibility = me;
+	  nvData.zProbeType = 0;	// Default is to use the switch
+	  nvData.irZProbeParameters.Init(false);
+	  nvData.ultrasonicZProbeParameters.Init(true);
+
+	  nvData.magic = FlashData::magicValue;
+  }
 
   line->Init();
   messageIndent = 0;
 
   massStorage->Init();
 
-  for(i=0; i < MAX_FILES; i++)
+  for(size_t i=0; i < MAX_FILES; i++)
     files[i]->Init();
 
   fileStructureInitialised = true;
@@ -92,10 +106,6 @@ void Platform::Init()
 
   sysDir = SYS_DIR;
   configFile = CONFIG_FILE;
-
-  ipAddress = IP_ADDRESS;
-  netMask = NET_MASK;
-  gateWay = GATE_WAY;
 
   // DRIVES
 
@@ -117,9 +127,6 @@ void Platform::Init()
 
   zProbePin = Z_PROBE_PIN;
   zProbeModulationPin = Z_PROBE_MOD_PIN;
-  zProbeType = 0;	// Default is to use the switch
-  zProbeADValue = Z_PROBE_AD_VALUE;
-  zProbeStopHeight = Z_PROBE_STOP_HEIGHT;
   InitZProbe();
 
   // AXES
@@ -153,7 +160,7 @@ void Platform::Init()
   gcodeDir = GCODE_DIR;
   tempDir = TEMP_DIR;
 
-  for(i = 0; i < DRIVES; i++)
+  for(size_t i = 0; i < DRIVES; i++)
   {
 
 	  if(stepPins[i] >= 0)
@@ -181,7 +188,7 @@ void Platform::Init()
 	  driveEnabled[i] = false;
   }
 
-  for(i = 0; i < AXES; i++)
+  for(size_t i = 0; i < AXES; i++)
   {
 	  if(lowStopPins[i] >= 0)
 	  {
@@ -199,7 +206,7 @@ void Platform::Init()
         pinMode(heatOnPins[0], OUTPUT);
   thermistorInfRs[0] = ( thermistorInfRs[0]*exp(-thermistorBetas[0]/(25.0 - ABS_ZERO)) );
   
-  for(i = 1; i < HEATERS; i++)
+  for(size_t i = 1; i < HEATERS; i++)
   {
     if(heatOnPins[i] >= 0)
       pinModeNonDue(heatOnPins[i], OUTPUT);
@@ -227,16 +234,259 @@ void Platform::InitZProbe()
   zProbeCount = 0;
   zProbeOnSum = 0;
   zProbeOffSum = 0;
+  zProbeMinSum = 0;
+  zProbeWorking = false;
   for (uint8_t i = 0; i < NumZProbeReadingsAveraged; ++i)
   {
 	  zProbeReadings[i] = 0;
   }
 
-  if (zProbeType != 0)
+  if (nvData.zProbeType == 1 || nvData.zProbeType == 2)
   {
 	pinMode(zProbeModulationPin, OUTPUT);
 	digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
+    SetZProbing(false);
   }
+}
+
+int Platform::GetRawZHeight() const
+{
+  return (nvData.zProbeType != 0) ? analogRead(zProbePin) : 0;
+}
+
+int Platform::ZProbe() const
+{
+	switch(nvData.zProbeType)
+	{
+	case 1:		// simple IR sensor
+		return (int)((zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged);
+	case 2:		// modulated IR sensor
+		return (int)((zProbeOnSum - zProbeOffSum)/(NumZProbeReadingsAveraged/2));
+	case 3:		// ultrasonic sensor
+		return (int)((zProbeOnSum + zProbeOffSum - zProbeMinSum)/(NumZProbeReadingsAveraged/2));
+	default:
+		return 0;
+	}
+}
+
+int Platform::GetZProbeSecondaryValues(int& v1, int& v2) const
+{
+	switch(nvData.zProbeType)
+	{
+	case 2:		// modulated IR sensor
+		v1 = zProbeOnSum/(NumZProbeReadingsAveraged/2);				// pass back the reading with IR turned on
+		return 1;
+	case 3:		// ultrasonic
+		v1 = (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged;	// pass back the raw reading
+		v2 = zProbeMinSum/NumZProbeReadingsAveraged;				// pass back the minimum found
+		return 2;
+	default:
+		return 0;
+	}
+}
+
+int Platform::GetZProbeType() const
+{
+	return nvData.zProbeType;
+}
+
+void Platform::PollZHeight()
+{
+	uint16_t currentReading = GetRawZHeight();
+	if (nvData.zProbeType == 2)
+	{
+		// Reverse the modulation, ready for next time
+		digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
+	}
+	if (zProbeCount & 1)
+	{
+		zProbeOffSum = zProbeOffSum - zProbeReadings[zProbeCount] + currentReading;
+	}
+	else
+	{
+		zProbeOnSum = zProbeOnSum - zProbeReadings[zProbeCount] + currentReading;
+	}
+	zProbeReadings[zProbeCount] = currentReading;
+	++zProbeCount;
+	if (zProbeCount == NumZProbeReadingsAveraged)
+	{
+		zProbeCount = 0;
+		if (!zProbeWorking)
+		{
+			zProbeWorking = true;
+			if (nvData.zProbeType == 3)
+			{
+				zProbeMinSum = zProbeOnSum + zProbeOffSum;
+			}
+		}
+	}
+	if (nvData.zProbeType == 3 && zProbeWorking)
+	{
+		// Update the minimum value seen from the ultrasonic sensor
+		long temp = zProbeOnSum + zProbeOffSum;
+		if (temp < zProbeMinSum)
+		{
+			zProbeMinSum = temp;
+		}
+	}
+}
+
+float Platform::ZProbeStopHeight() const
+{
+	switch(nvData.zProbeType)
+	{
+	case 1:
+	case 2:
+		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
+	case 3:
+		return nvData.ultrasonicZProbeParameters.GetStopHeight(GetTemperature(0));
+	default:
+		return 0;
+	}
+}
+
+void Platform::SetZProbeType(int pt)
+{
+	int newZProbeType = (pt >= 0 && pt <= 3) ? pt : 0;
+	if (newZProbeType != nvData.zProbeType)
+	{
+		nvData.zProbeType = newZProbeType;
+		WriteNvData();
+	}
+	InitZProbe();
+}
+
+bool Platform::GetZProbeParameters(struct ZProbeParameters& params) const
+{
+	switch (nvData.zProbeType)
+	{
+	case 1:
+	case 2:
+		params = nvData.irZProbeParameters;
+		return true;
+	case 3:
+		params = nvData.ultrasonicZProbeParameters;
+		return true;
+	default:
+		return false;
+	}
+}
+
+bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
+{
+	switch (nvData.zProbeType)
+	{
+	case 1:
+	case 2:
+		if (nvData.irZProbeParameters != params)
+		{
+			nvData.irZProbeParameters = params;
+			WriteNvData();
+		}
+		return true;
+	case 3:
+		if (nvData.ultrasonicZProbeParameters != params)
+		{
+			nvData.ultrasonicZProbeParameters = params;
+			WriteNvData();
+		}
+		return true;
+	default:
+		return false;
+	}
+}
+
+// Return true if we must hoe X and U before we home Z (i.e. we are using an IR probe)
+bool Platform::MustHomeXYBeforeZ() const
+{
+	return nvData.zProbeType == 1 || nvData.zProbeType == 2;
+}
+
+void Platform::WriteNvData()
+{
+	DueFlashStorage::write(nvAddress, &nvData, sizeof(nvData));
+}
+
+void Platform::SetZProbing(bool starting)
+{
+	if (starting && nvData.zProbeType == 3)
+	{
+		zProbeMinSum = zProbeOnSum + zProbeOffSum;	//look for a new minimum
+		// Tell the ultrasonic sensor we are starting or have completed a z-probe
+		//digitalWrite(zProbeModulationPin, (starting) ? LOW : HIGH);
+	}
+}
+
+float Platform::Time()
+{
+  unsigned long now = micros();
+  if(now < lastTimeCall) // Has timer overflowed?
+	  addToTime += ((float)ULONG_MAX)*TIME_FROM_REPRAP;
+  lastTimeCall = now;
+  return addToTime + TIME_FROM_REPRAP*(float)now;
+}
+
+void Platform::Exit()
+{
+  Message(HOST_MESSAGE, "Platform class exited.\n");
+  active = false;
+}
+
+Compatibility Platform::Emulating() const
+{
+	if(nvData.compatibility == reprapFirmware)
+		return me;
+	return nvData.compatibility;
+}
+
+void Platform::SetEmulating(Compatibility c)
+{
+	if(c != me && c != reprapFirmware && c != marlin)
+	{
+		Message(HOST_MESSAGE, "Attempt to emulate unsupported firmware.\n");
+		return;
+	}
+	if(c == reprapFirmware)
+	{
+		c = me;
+	}
+	if (nvData.compatibility != c)
+	{
+		nvData.compatibility = c;
+		WriteNvData();
+	}
+}
+
+void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])
+{
+	bool changed = false;
+	for(uint8_t i = 0; i < 4; i++)
+	{
+		if(dst[i] != src[i])
+		{
+			dst[i] = src[i];
+			changed = true;
+		}
+	}
+	if (changed)
+	{
+		WriteNvData();
+	}
+}
+
+void Platform::SetIPAddress(byte ip[])
+{
+	UpdateNetworkAddress(nvData.ipAddress, ip);
+}
+
+void Platform::SetGateWay(byte gw[])
+{
+	UpdateNetworkAddress(nvData.gateWay, gw);
+}
+
+void Platform::SetNetMask(byte nm[])
+{
+	UpdateNetworkAddress(nvData.netMask, nm);
 }
 
 void Platform::StartNetwork()
@@ -360,7 +610,7 @@ void Platform::ClassReport(char* className, float &lastTime)
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(int8_t heater)
+float Platform::GetTemperature(int8_t heater) const
 {
   // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
   // So we add 0.5 to to the reading to get a better estimate of the input. But first, recognise the special case of thermistor disconnected.
@@ -394,12 +644,18 @@ void Platform::SetHeater(int8_t heater, const float& power)
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
-	if(zProbeType > 0)
+	if(nvData.zProbeType > 0)
 	{  // Z probe is used for both X and Z.
 		if(drive != Y_AXIS)
 		{
-			if(ZProbe() > zProbeADValue)
+			int zProbeVal = ZProbe();
+			int zProbeADValue = (nvData.zProbeType == 3)
+								? nvData.ultrasonicZProbeParameters.adcValue
+								: nvData.irZProbeParameters.adcValue;
+			if(zProbeVal >= zProbeADValue)
 				return lowHit;
+			else if (zProbeVal * 10 >= zProbeADValue * 9)	// if we are at/above 90% of the target value
+				return lowNear;
 			else
 				return noStop;
 		}

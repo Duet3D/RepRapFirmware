@@ -203,7 +203,8 @@ enum EndStopHit
 {
   noStop = 0,		// no enstop hit
   lowHit = 1,		// low switch hit, or Z-probe in use and above threshold
-  highHit = 2		// high stop hit
+  highHit = 2,		// high stop hit
+  lowNear = 3		// approaching Z-probe threshold
 };
 
 /***************************************************************************************************/
@@ -410,6 +411,44 @@ private:
 
 /***************************************************************************************************************/
 
+// Struct for holding Z probe parameters
+
+struct ZProbeParameters
+{
+	int adcValue;					// the target ADC value
+	float height;					// the nozzle height at which the target ADC value is returned
+	float calibTemperature;			// the temperature at which we did the calibration
+	float temperatureCoefficient;	// the variation of height with bed temperature
+
+	void Init(bool isUltrasonic)
+	{
+		adcValue = Z_PROBE_AD_VALUE;
+		height = Z_PROBE_STOP_HEIGHT;
+		calibTemperature = 20.0;
+		temperatureCoefficient = (isUltrasonic)
+									? 0.007575		// speed of sound correction assuming half wavelength between sensor and bed
+									: 0.0;			// no default temperature correction for IR sensor
+	}
+
+	float GetStopHeight(float temperature) const
+	{
+		return ((temperature - calibTemperature) * temperatureCoefficient) + height;
+	}
+
+	bool operator==(const ZProbeParameters& other) const
+	{
+		return adcValue == other.adcValue
+				&& height == other.height
+				&& calibTemperature == other.calibTemperature
+				&& temperatureCoefficient == other.temperatureCoefficient;
+	}
+
+	bool operator!=(const ZProbeParameters& other) const
+	{
+		return !operator==(other);
+	}
+};
+
 // The main class that defines the RepRap machine for the benefit of the other classes
 
 class Platform
@@ -495,17 +534,21 @@ class Platform
   void SetAxisLength(int8_t axis, float value);
   bool HighStopButNotLow(int8_t axis) const;
   
+  // Z probe
+
   float ZProbeStopHeight() const;
-  void SetZProbeStopHeight(float z);
   int ZProbe() const;
-  int ZProbeOnVal() const;
-  void SetZProbe(int iZ);
+  int GetZProbeSecondaryValues(int& v1, int& v2) const;
   void SetZProbeType(int iZ);
   int GetZProbeType() const;
+  void SetZProbing(bool starting);
+  bool GetZProbeParameters(struct ZProbeParameters& params) const;
+  bool SetZProbeParameters(const struct ZProbeParameters& params);
+  bool MustHomeXYBeforeZ() const;
 
   // Heat and temperature
   
-  float GetTemperature(int8_t heater); // Result is in degrees celsius
+  float GetTemperature(int8_t heater) const; // Result is in degrees Celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
   float PidKp(int8_t heater) const;
   float PidKi(int8_t heater) const;
@@ -526,6 +569,27 @@ class Platform
   
   private:
   
+  // This is the structure used to hold out non-volatile data.
+  // The SAM3X doesn't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
+  // every time we reprogram the firmware. So there is no need to cater for writing one version of this
+  // struct and reading back another.
+
+  struct FlashData
+  {
+	  static const uint16_t magicValue = 0x59B2;		// value we use to recognise that he flash data has been written
+	  uint16_t magic;
+	  ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
+	  ZProbeParameters ultrasonicZProbeParameters;	// Z probe values for the IR sensor
+	  int zProbeType;								// the type of Z probe we are using
+	  byte ipAddress[4];
+	  byte netMask[4];
+	  byte gateWay[4];
+	  Compatibility compatibility;
+  };
+
+  static const uint32_t nvAddress = 0;				// address in flash where we store the nonvolatile data
+  FlashData nvData;
+
   float lastTime;
   float longWait;
   float addToTime;
@@ -533,8 +597,6 @@ class Platform
   
   bool active;
   
-  Compatibility compatibility;
-
   void InitialiseInterrupts();
   int GetRawZHeight() const;
   
@@ -555,29 +617,25 @@ class Platform
   int8_t potWipes[DRIVES];
   float senseResistor;
   float maxStepperDigipotVoltage;
-//  float zProbeGradient;
-//  float zProbeConstant;
   int8_t zProbePin;
   int8_t zProbeModulationPin;
-  int8_t zProbeType;
   uint8_t zProbeCount;
   long zProbeOnSum;		// sum of readings taken when IR led is on
   long zProbeOffSum;	// sum of readings taken when IR led is on
+  long zProbeMinSum;	// minimum zprobe value seen, used with ultrasonic probe
   uint16_t zProbeReadings[NumZProbeReadingsAveraged];
-  int zProbeADValue;
-  float zProbeStopHeight;
+  bool zProbeWorking;
 
 // AXES
 
   void InitZProbe();
   void PollZHeight();
+  void UpdateNetworkAddress(byte dst[4], const byte src[4]);
+  void WriteNvData();
 
   float axisLengths[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
-//  bool zProbeStarting;
-//  float zProbeHigh;
-//  float zProbeLow;
   
 // HEATERS - Bed is assumed to be the first
 
@@ -612,60 +670,18 @@ class Platform
   MassStorage* massStorage;
   FileStore* files[MAX_FILES];
   bool fileStructureInitialised;
-  //bool* inUse;
   char* webDir;
   char* gcodeDir;
   char* sysDir;
   char* tempDir;
   char* configFile;
-  //byte* buf[MAX_FILES];
-  //int bPointer[MAX_FILES];
-  //char fileList[FILE_LIST_LENGTH];
-  //char scratchString[STRING_LENGTH];
   
 // Network connection
 
   Network* network;
-  byte ipAddress[4];
-  byte netMask[4];
-  byte gateWay[4];
 };
 
 // Seconds
-
-inline float Platform::Time()
-{
-  unsigned long now = micros();
-  if(now < lastTimeCall) // Has timer overflowed?
-	  addToTime += ((float)ULONG_MAX)*TIME_FROM_REPRAP;
-  lastTimeCall = now;
-  return addToTime + TIME_FROM_REPRAP*(float)now;
-}
-
-inline void Platform::Exit()
-{
-  Message(HOST_MESSAGE, "Platform class exited.\n");
-  active = false;
-}
-
-inline Compatibility Platform::Emulating() const
-{
-	if(compatibility == reprapFirmware)
-		return me;
-	return compatibility;
-}
-
-inline void Platform::SetEmulating(Compatibility c)
-{
-	if(c != me && c != reprapFirmware && c != marlin)
-	{
-		Message(HOST_MESSAGE, "Attempt to emulate unsupported firmware.\n");
-		return;
-	}
-	if(c == reprapFirmware)
-		c = me;
-	compatibility = c;
-}
 
 // Where the htm etc files are
 
@@ -824,76 +840,6 @@ inline void Platform::SetMaxFeedrate(int8_t drive, float value)
 	maxFeedrates[drive] = value;
 }
 
-inline int Platform::GetRawZHeight() const
-{
-  return (zProbeType != 0) ? analogRead(zProbePin) : 0;
-}
-
-inline int Platform::ZProbe() const
-{
-	return (zProbeType == 1)
-			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged		// non-modulated mode
-			: (zProbeType == 2)
-			  ? (zProbeOnSum - zProbeOffSum)/(NumZProbeReadingsAveraged/2)	// modulated mode
-			    : 0;														// z-probe disabled
-}
-
-inline int Platform::ZProbeOnVal() const
-{
-	return (zProbeType == 1)
-			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged
-			: (zProbeType == 2)
-			  ? zProbeOnSum/(NumZProbeReadingsAveraged/2)
-				: 0;
-}
-
-inline float Platform::ZProbeStopHeight() const
-{
-	return zProbeStopHeight;
-}
-
-inline void Platform::SetZProbeStopHeight(float z)
-{
-	zProbeStopHeight = z;
-}
-
-inline void Platform::SetZProbe(int iZ)
-{
-	zProbeADValue = iZ;
-}
-
-inline void Platform::SetZProbeType(int pt)
-{
-	zProbeType = (pt >= 0 && pt <= 2) ? pt : 0;
-	InitZProbe();
-}
-
-inline int Platform::GetZProbeType() const
-{
-	return zProbeType;
-}
-
-inline void Platform::PollZHeight()
-{
-	uint16_t currentReading = GetRawZHeight();
-	if (zProbeType == 2)
-	{
-		// Reverse the modulation, ready for next time
-		digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
-	}
-	if (zProbeCount & 1)
-	{
-		zProbeOffSum = zProbeOffSum - zProbeReadings[zProbeCount] + currentReading;
-	}
-	else
-	{
-		zProbeOnSum = zProbeOnSum - zProbeReadings[zProbeCount] + currentReading;
-	}
-	zProbeReadings[zProbeCount] = currentReading;
-	zProbeCount = (zProbeCount + 1) % NumZProbeReadingsAveraged;
-}
-
-
 //********************************************************************************************************
 
 // Drive the RepRap machine - Heat and temperature
@@ -990,37 +936,19 @@ inline Network* Platform::GetNetwork()
 	return network;
 }
 
-inline void Platform::SetIPAddress(byte ip[])
-{
-	for(uint8_t i = 0; i < 4; i++)
-		ipAddress[i] = ip[i];
-}
-
 inline const byte* Platform::IPAddress() const
 {
-	return ipAddress;
-}
-
-inline void Platform::SetNetMask(byte nm[])
-{
-	for(uint8_t i = 0; i < 4; i++)
-		netMask[i] = nm[i];
+	return nvData.ipAddress;
 }
 
 inline const byte* Platform::NetMask() const
 {
-	return netMask;
-}
-
-inline void Platform::SetGateWay(byte gw[])
-{
-	for(uint8_t i = 0; i < 4; i++)
-		gateWay[i] = gw[i];
+	return nvData.netMask;
 }
 
 inline const byte* Platform::GateWay() const
 {
-	return gateWay;
+	return nvData.gateWay;
 }
 
 inline Line* Platform::GetLine() const

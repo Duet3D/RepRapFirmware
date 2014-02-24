@@ -94,7 +94,7 @@ void Move::Init()
 	  liveCoordinates[i] = 0.0;
   }
 
-  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false, zMove);  // Typically Z is the slowest Axis
+  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), noEndstopCheck, zMove);  // Typically Z is the slowest Axis
   lastMove->Release();
   liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 
@@ -167,12 +167,10 @@ void Move::Spin()
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
 
-  bool checkEndStopsOnNextMove;
+  EndstopMode checkEndStopsOnNextMove;
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
 	Transform(nextMove);
-
-    currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
 
     for(int8_t drive = 0; drive < DRIVES; drive++)
     	nextMachineEndPoints[drive] = LookAhead::EndPointToMachine(drive, nextMove[drive]);
@@ -183,12 +181,12 @@ void Move::Spin()
     
     if(movementType == noMove)
     {
+       currentFeedrate = nextMove[DRIVES]; 		// Might be G1 with just an F field
        platform->ClassReport("Move", longWait);
        return;
     }
      
     // Real move - record its feedrate with it, not here.
-    
     currentFeedrate = -1.0;
     
     // Promote minimum feedrates
@@ -294,7 +292,7 @@ bool Move::GetCurrentState(float m[])
 // for the bed's plane, which means that a move is MAINLY and XY move, or MAINLY a Z move. It
 // is the main type of move that is returned.
 
-int8_t Move::GetMovementType(long p0[], long p1[])
+int8_t Move::GetMovementType(const long p0[], const long p1[]) const
 {
   int8_t result = noMove;
   long dxy = 0;
@@ -568,7 +566,7 @@ void Move::Interrupt()
 }
 
 
-bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t mt)
+bool Move::LookAheadRingAdd(const long ep[], float feedRate, float vv, EndstopMode ce, int8_t mt)
 {
     if(LookAheadRingFull())
       return false;
@@ -898,9 +896,9 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   distance = 0.0; // X+Y+Z
   float eDistance = 0.0;
   float d;
-  long* targetPosition = myLookAheadEntry->MachineEndPoints();
+  const long* targetPosition = myLookAheadEntry->MachineEndPoints();
   v = myLookAheadEntry->V();
-  long* positionNow = myLookAheadEntry->Previous()->MachineEndPoints();
+  const long* positionNow = myLookAheadEntry->Previous()->MachineEndPoints();
   u = myLookAheadEntry->Previous()->V();
   checkEndStops = myLookAheadEntry->CheckEndStops();
 
@@ -1004,10 +1002,17 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
  
   // If velocity requested is (almost) zero, set it to instantDv
   
-  if(v < instantDv) // Set change here?
+  if(v < instantDv)
   {
-    v = instantDv;
-    result = change;
+	  v = instantDv;
+	  result = change;
+  }
+
+  // u here may be zero if we recently hit an endstop, in which case we need to set to to instantDv
+  if (u < instantDv)
+  {
+	  u = instantDv;
+	  result = change;
   }
 
   if(myLookAheadEntry->FeedRate() < instantDv)
@@ -1019,11 +1024,11 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   velocity = u;
   
-  // Sanity check
+// Sanity check
   
   if(velocity <= 0.0)
   {
-    velocity = 1.0;
+	  velocity = 1.0;
 //    if(reprap.Debug())
 //    	platform->Message(HOST_MESSAGE, "DDA.Init(): Zero or negative initial velocity!\n");
   }
@@ -1076,18 +1081,27 @@ void DDA::Step()
         
       // Hit anything?
   
-      if(checkEndStops)
+      if(checkEndStops != noEndstopCheck)
       {
-        EndStopHit esh = platform->Stopped(drive);
-        if(esh == lowHit)
+        switch(platform->Stopped(drive))
         {
+        case lowHit:
           move->HitLowStop(drive, myLookAheadEntry, this);
           active = false;
-        }
-        if(esh == highHit)
-        {
+          break;
+        case highHit:
           move->HitHighStop(drive, myLookAheadEntry, this);
           active = false;
+          break;
+        case lowNear:
+          if (checkEndStops == checkApproachingEndstop)
+		  {
+			move->NearLowStop(drive, myLookAheadEntry, this);
+			active = false;
+		  }
+          break;
+        default:
+          break;
         }
       }        
     }
@@ -1095,7 +1109,7 @@ void DDA::Step()
   
   // May have hit a stop, so test active here
   
-  if(active) 
+  if(active)
   {
     if(axesMoving)
       timeStep = move->stepDistances[axesMoving]/velocity;
@@ -1140,7 +1154,7 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
   next = n;
 }
 
-void LookAhead::Init(long ep[], float f, float vv, bool ce, int8_t mt)
+void LookAhead::Init(const long ep[], float f, float vv, EndstopMode ce, int8_t mt)
 {
   v = vv;
   movementType = mt;
