@@ -86,8 +86,8 @@ void Platform::Init()
 	  nvData.gateWay = GATE_WAY;
 
 	  nvData.zProbeType = 0;	// Default is to use the switch
-	  nvData.irZProbeParameters.Init(false);
-	  nvData.ultrasonicZProbeParameters.Init(true);
+	  nvData.irZProbeParameters.Init();
+	  nvData.ultrasonicZProbeParameters.Init();
 
 	  nvData.magic = FlashData::magicValue;
   }

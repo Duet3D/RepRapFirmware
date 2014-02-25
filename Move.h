@@ -564,7 +564,7 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 		{
 			// Executing G30, so set the current Z height to the value at which the end stop is triggered
 			// Transform it first so that the height is correct in user coordinates
-			float xyzPoint[3];
+			float xyzPoint[DRIVES + 1];
 			LiveCoordinates(xyzPoint);
 			xyzPoint[Z_AXIS] = lastZHit = platform->ZProbeStopHeight();
 			Transform(xyzPoint);

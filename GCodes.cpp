@@ -923,7 +923,7 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, char* reply)
 		{
 			params.calibTemperature = gb->GetFValue();
 		}
-		else if (!PrintingAFile())
+		else
 		{
 			// Use the current bed temperature as the calibration temperature if no value was provided
 			params.calibTemperature = platform->GetTemperature(0);
@@ -931,6 +931,10 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, char* reply)
 		if (gb->Seen('C'))
 		{
 			params.temperatureCoefficient = gb->GetFValue();
+		}
+		else
+		{
+			params.temperatureCoefficient = 0.0;
 		}
 		platform->SetZProbeParameters(params);
 	}

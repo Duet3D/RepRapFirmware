@@ -420,14 +420,12 @@ struct ZProbeParameters
 	float calibTemperature;			// the temperature at which we did the calibration
 	float temperatureCoefficient;	// the variation of height with bed temperature
 
-	void Init(bool isUltrasonic)
+	void Init()
 	{
 		adcValue = Z_PROBE_AD_VALUE;
 		height = Z_PROBE_STOP_HEIGHT;
 		calibTemperature = 20.0;
-		temperatureCoefficient = (isUltrasonic)
-									? 0.007575		// speed of sound correction assuming half wavelength between sensor and bed
-									: 0.0;			// no default temperature correction for IR sensor
+		temperatureCoefficient = 0.0;	// no default temperature correction
 	}
 
 	float GetStopHeight(float temperature) const
