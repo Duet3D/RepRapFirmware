@@ -118,8 +118,8 @@ class GCodes
     bool SendConfigToLine();
     void WriteHTMLToFile(char b, GCodeBuffer *gb);
     bool OffsetAxes(GCodeBuffer *gb);
-
     int8_t Heater(int8_t head) const;
+
     Platform* platform;
     bool active;
     Webserver* webserver;
@@ -166,6 +166,7 @@ class GCodes
     bool zProbesSet;
     float longWait;
     bool axisIsHomed[3];	// these record which of the axes have been homed
+    float fanMaxPwm;		// the M106 S value that represents 100% fan speed
 };
 
 //*****************************************************************************************************

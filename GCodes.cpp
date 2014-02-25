@@ -59,7 +59,9 @@ void GCodes::Init()
 	gCodeLetters = GCODE_LETTERS;
 	distanceScale = 1.0;
 	for (int8_t i = 0; i < DRIVES - AXES; i++)
+	{
 		lastPos[i] = 0.0;
+	}
 	fileBeingPrinted = NULL;
 	fileToPrint = NULL;
 	fileBeingWritten = NULL;
@@ -85,6 +87,7 @@ void GCodes::Init()
 	longWait = platform->Time();
 	dwellTime = longWait;
 	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
+	fanMaxPwm = 1.0;
 }
 
 void GCodes::doFilePrint(GCodeBuffer* gb)
@@ -1580,8 +1583,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			break;
 
 		case 106: // Fan on or off
+			if (gb->Seen('P'))
+			{
+				// slic3r and Cura expect PWM values to go from 0 to 255, but we expect PWM value to go from 0.0 to 1.0.
+				// So I've added a P parameter to allow the top end of the range to be set, so we can be compatible with those programs.
+				fanMaxPwm = fmax(gb->GetFValue(), 1.0);
+			}
 			if (gb->Seen('S'))
-				platform->CoolingFan(gb->GetFValue());
+			{
+				platform->CoolingFan(fmax(gb->GetFValue(), 0.0)/fanMaxPwm);
+			}
 			break;
 
 		case 107: // Fan off - deprecated

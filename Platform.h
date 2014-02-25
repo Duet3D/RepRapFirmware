@@ -133,7 +133,7 @@ Licence: GPL
 #define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN_PIN 34
+#define COOLING_FAN_PIN X6
 #define HEAT_ON 0 // 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 #define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
@@ -899,7 +899,8 @@ inline void Platform::CoolingFan(float speed)
 {
 	if(coolingFanPin < 0)
 		return;
-	analogWrite(coolingFanPin, (uint8_t)(speed*255.0));
+	// The cooling fan output pin gets inverted
+	analogWriteNonDue(coolingFanPin, (uint32_t)((1.0 - speed)*255.0));
 }
 
 //inline void Platform::SetHeatOn(int8_t ho)
