@@ -73,7 +73,6 @@ void GCodes::Init()
 	homeX = false;
 	homeY = false;
 	homeZ = false;
-	homeAxisMoveCount = 0;
 	offSetSet = false;
 	dwellWaiting = false;
 	stackPointer = 0;
@@ -88,6 +87,7 @@ void GCodes::Init()
 	dwellTime = longWait;
 	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
 	fanMaxPwm = 1.0;
+	waitingForMoveToComplete = false;
 }
 
 void GCodes::doFilePrint(GCodeBuffer* gb)
@@ -339,9 +339,9 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 					}
 				}
 				moveBuffer[i] = moveArg;
-				if (doingG92)
+				if (doingG92 && !doingCannedCycleFile)
 				{
-					axisIsHomed[i] = true;	// doing a G92 is equivalent to homing the axis
+					axisIsHomed[i] = true;	// doing a manual G92 is equivalent to homing the axis
 				}
 			}
 		}
@@ -371,32 +371,33 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 }
 
 // This function is called for a G Code that makes a move.
-// If the Move class can't receive the move (i.e. things have to wait)
-// this returns false, otherwise true.
+// If the Move class can't receive the move (i.e. things have to wait), return 0.
+// If we have queued the move and the caller doesn't need to wait for it to complete, return 1.
+// If we need to wait for the move to complete before doing another one (because endstops are checked in this move), return 2.
 
-bool GCodes::SetUpMove(GCodeBuffer *gb)
+int GCodes::SetUpMove(GCodeBuffer *gb)
 {
 	// Last one gone yet?
-
 	if (moveAvailable)
-		return false;
+		return 0;
 
-	// Load the last position; If Move can't accept more, return false
-
+	// Load the last position; if Move can't accept more, return 0
 	if (!reprap.GetMove()->GetCurrentState(moveBuffer))
-		return false;
+		return 0;
 
 	checkEndStops = noEndstopCheck;
 	if (gb->Seen('S'))
 	{
 		if (gb->GetIValue() == 1)
+		{
 			checkEndStops = checkAtEndstop;
+		}
 	}
 
-	LoadMoveBufferFromGCode(gb, false, checkEndStops == noEndstopCheck);
-
+	bool doingEndstopCheck = (checkEndStops != noEndstopCheck);
+	LoadMoveBufferFromGCode(gb, false, doingEndstopCheck);
 	moveAvailable = true;
-	return true;
+	return (doingEndstopCheck) ? 2 : 1;
 }
 
 // The Move class calls this function to find what to do next.
@@ -601,11 +602,9 @@ bool GCodes::DoHome(char* reply, bool& error)
 	{
 		if (DoFileCannedCycles(HOME_ALL_G))
 		{
-			homeAxisMoveCount = 0;
 			homeX = false;
 			homeY = false;
 			homeZ = false;
-			axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = true;
 			return true;
 		}
 		return false;
@@ -615,9 +614,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 	{
 		if (DoFileCannedCycles(HOME_X_G))
 		{
-			homeAxisMoveCount = 0;
 			homeX = false;
-			axisIsHomed[X_AXIS] = true;
 			return NoHome();
 		}
 		return false;
@@ -627,9 +624,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 	{
 		if (DoFileCannedCycles(HOME_Y_G))
 		{
-			homeAxisMoveCount = 0;
 			homeY = false;
-			axisIsHomed[Y_AXIS] = true;
 			return NoHome();
 		}
 		return false;
@@ -647,9 +642,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 		}
 		if (DoFileCannedCycles(HOME_Z_G))
 		{
-			homeAxisMoveCount = 0;
 			homeZ = false;
-			axisIsHomed[Z_AXIS] = true;
 			return NoHome();
 		}
 		return false;
@@ -659,7 +652,6 @@ bool GCodes::DoHome(char* reply, bool& error)
 
 	checkEndStops = noEndstopCheck;
 	moveAvailable = false;
-	homeAxisMoveCount = 0;
 
 	return true;
 }
@@ -730,7 +722,6 @@ bool GCodes::DoSingleZProbeAtPoint()
 		if (DoCannedCycleMove(checkAtEndstop))
 		{
 			cannedCycleMoveCount++;
-			axisIsHomed[Z_AXIS] = true;	// we now home the Z-axis in Move.cpp it is wasn't already
 			platform->SetZProbing(false);
 		}
 		return false;
@@ -794,7 +785,6 @@ bool GCodes::DoSingleZProbe()
 		{
 			cannedCycleMoveCount++;
 			probeCount = 0;
-			axisIsHomed[Z_AXIS] = true;		// we have homed the Z axis
 			platform->SetZProbing(false);
 		}
 		return false;
@@ -1363,7 +1353,25 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		{
 		case 0: // There are no rapid moves...
 		case 1: // Ordinary move
-			result = SetUpMove(gb);
+			if (waitingForMoveToComplete)
+			{
+				// We have already set up this move, but it does endstop checks, so wait for it to complete.
+				// Otherwise, if the next move uses relative coordinates, it will be incorrectly calculated.
+				result = AllMovesAreFinishedAndMoveBufferIsLoaded();
+				if (result)
+				{
+					waitingForMoveToComplete = false;
+				}
+			}
+			else
+			{
+				int res = SetUpMove(gb);
+				if (res == 2)
+				{
+					waitingForMoveToComplete = true;
+				}
+				result = (res == 1);
+			}
 			break;
 
 		case 4: // Dwell
@@ -1385,7 +1393,6 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 28: // Home
 			if (NoHome())
 			{
-				homeAxisMoveCount = 0;
 				homeX = gb->Seen(gCodeLetters[X_AXIS]);
 				homeY = gb->Seen(gCodeLetters[Y_AXIS]);
 				homeZ = gb->Seen(gCodeLetters[Z_AXIS]);
@@ -1929,6 +1936,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 				snprintf(reply, STRING_LENGTH, "%s", gb->GetIValue());
 				resend = true;
 			}
+			break;
+
+		case 999:
+			rstc_start_software_reset(RSTC);
+			for(;;) {}
 			break;
 
 		default:

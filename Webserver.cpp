@@ -528,7 +528,7 @@ void Webserver::GetJsonResponse(const char* request)
   
   if(StringStartsWith(request, "files"))
   {
-    char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir(), false);
+    const char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir(), false);
     strncpy(jsonResponse, "{\"files\":[", STRING_LENGTH);
     strncat(jsonResponse, fileList, STRING_LENGTH);
     strncat(jsonResponse, "]}", STRING_LENGTH);

@@ -104,6 +104,9 @@ There is a single interrupt chain entered via Platform.Interrupt().  This contro
 this chain of code should be the only place that volatile declarations and structure/variable-locking are
 required.  All the rest of the code is called sequentially and repeatedly as follows:
 
+As of version 057r-dc42 the tick interrupt (which is set up by the Arduino core) is also used to set up ADC conversions,
+read the result of the last conversion, and shut down heaters when temperature errors are detected.
+
 All the main classes have a Spin() function.  These are called in a loop by the RepRap.Spin() function and implement
 simple timesharing.  No class does, or ever should, wait inside one of its functions for anything to happen or call
 any sort of delay() function.  The general rule is:
@@ -153,6 +156,9 @@ You will also need the Eclipse Arduino support:
 And the Arduino IDE itself (make sure you get the one for the Due/Duet - version 1.5.5 at the time of writing):
 
    http://arduino.cc/en/Main/Software
+
+As of this firmware version 0.57r-dc42, the Arduino IDE must be patched to enable watchdog support. Locate function init()
+inside file variant.cpp (....\hardware\arduino\sam\variants\arduino_due_x) and comment out the call to WDT_disable(WDT).
 
 Finally you will need our libraries for driving the periphearls:
 

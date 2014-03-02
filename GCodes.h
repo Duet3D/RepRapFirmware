@@ -86,6 +86,7 @@ class GCodes
     void Diagnostics();
     bool HaveIncomingData() const;
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; }
+    void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }
     
   private:
   
@@ -95,7 +96,7 @@ class GCodes
     bool DoFileCannedCycles(const char* fileName);
     bool FileCannedCyclesReturn();
     bool ActOnGcode(GCodeBuffer* gb);
-    bool SetUpMove(GCodeBuffer* gb);
+    int SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
     bool DoHome(char *reply, bool& error);
     bool DoSingleZProbeAtPoint();
@@ -158,7 +159,6 @@ class GCodes
     bool homeX;
     bool homeY;
     bool homeZ;
-    int8_t homeAxisMoveCount;
     float gFeedRate;
     int probeCount;
     int8_t cannedCycleMoveCount;
@@ -167,6 +167,7 @@ class GCodes
     float longWait;
     bool axisIsHomed[3];	// these record which of the axes have been homed
     float fanMaxPwm;		// the M106 S value that represents 100% fan speed
+    bool waitingForMoveToComplete;
 };
 
 //*****************************************************************************************************
@@ -215,7 +216,7 @@ inline bool GCodes::HaveIncomingData() const
 
 inline bool GCodes::NoHome() const
 {
-   return !(homeX || homeY || homeZ || homeAxisMoveCount);
+   return !(homeX || homeY || homeZ);
 }
 
 // This function takes care of the fact that the heater and head indices 

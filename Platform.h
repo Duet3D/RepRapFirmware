@@ -123,10 +123,40 @@ Licence: GPL
 #define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
 
 #define USE_PID {false, true} // PID or bang-bang for this heater?
-#define PID_KIS {-1, 0.027 / HEAT_SAMPLE_TIME} 	// PID constants, adjusted by dc42 for Ormerod hot end
-#define PID_KDS {-1, 100 * HEAT_SAMPLE_TIME}
-#define PID_KPS {-1, 20}
+
+// Note on hot end PID parameters:
+// The system is highly nonlinear because the heater power is limited to a maximum value and cannot go negative.
+// If we try to run a traditional PID when there are large temperature errors, this causes the I-accumulator to go out of control,
+// which causes a large amount of overshoot at lower temperatures. There are at least two ways of avoiding this:
+// 1. Allow the PID to operate even with very large errors, but choose a very small I-term, just the right amount so that when heating up
+//    from cold, the I-accumulator is approximately the value needed to maintain the correct power when the target temperature is reached.
+//    This works well most of the time. However if the Duet board is reset when the extruder is hot and is then
+//    commanded to heat up again before the extruder has cooled, the I-accumulator doesn't grow large enough, so the
+//    temperature undershoots. The small value of the I-term then causes it to take a long time to reach the correct temperature.
+// 2. Only allow the PID to operate when the temperature error is small enough for the PID to operate in the linear region.
+//    So we set FULL_PID_BAND to a small value. It needs to be at least 15C because that is how much the temperature overshoots by
+//    when we turn the heater off from full power at about 180C. We set the I-accumulator to zero when the PID is off, and use a
+//    much larger I-term. So the I-accumulator grows from zero to the value needed to maintain the required temperature
+//    much faster, but not so fast as to cause too much overshoot. This works well most of the time, except when we reduce
+//    the temperature by more than FULL_PID_BAND. In this case we turn off the PID and the heater, clear the
+//    I-accumulator, and wait for the temperature to drop before we turn the PID on again. The temperature has to undershoot by 10C
+//    or more in order for the I-accumulator to build up again. However, dropping the temperature by more then 20C is not a normal
+//    operation for a 3D printer, so we don't worry about this case.
+// An improvement on method (2) would be to preset the I-accumulator to an estimate of the value needed to maintain the
+// target temperature when we start using the PID (instead of clearing it to zero), and then reduce the I-term a little.
+
+#if 1 	// if using method 2 above
+#define PID_KIS {-1, 0.2 / HEAT_SAMPLE_TIME}
+#define PID_KDS {-1, 100.0 * HEAT_SAMPLE_TIME}
+#define PID_KPS {-1, 9.0}
+#define FULL_PID_BAND {-1, 20.0}	// errors larger than this cause heater to be on or off and I-term set to zero
+#else	// using method 2 above
+#define PID_KIS {-1, 0.027 / HEAT_SAMPLE_TIME}
+#define PID_KDS {-1, 100.0 * HEAT_SAMPLE_TIME}
+#define PID_KPS {-1, 20.0}
 #define FULL_PID_BAND {-1, 150.0}	// errors larger than this cause heater to be on or off and I-term set to zero
+#endif
+
 #define PID_MIN {-1, 0.0}	// minimum value of I-term
 #define PID_MAX {-1, 180}	// maximum value of I-term, must be high enough to reach 245C for ABS printing
 #define D_MIX {-1, 0.5}		// higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
@@ -136,7 +166,7 @@ Licence: GPL
 #define COOLING_FAN_PIN X6
 #define HEAT_ON 0 // 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
-#define AD_RANGE 1023.0//16383 // The A->D converter that measures temperatures gives an int this big as its max value
+#define AD_RANGE (4095) // The A->D converter that measures temperatures gives an int this big as its max value
 
 #define HOT_BED 0 // The index of the heated bed; set to -1 if there is no heated bed
 
@@ -201,7 +231,7 @@ const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, prefera
 
 enum EndStopHit
 {
-  noStop = 0,		// no enstop hit
+  noStop = 0,		// no endstop hit
   lowHit = 1,		// low switch hit, or Z-probe in use and above threshold
   highHit = 2,		// high stop hit
   lowNear = 3		// approaching Z-probe threshold
@@ -234,7 +264,7 @@ enum IOStatus
 //	InputOutput* alternateOutput;
 //};
 
-// This class handles the network - typically an ethernet.
+// This class handles the network - typically an Ethernet.
 
 // Start with a ring buffer to hold input from the network
 // that needs to be responded to.
@@ -352,8 +382,8 @@ class MassStorage
 {
 public:
 
-  char* FileList(const char* directory, bool fromLine); // Returns a list of all the files in the named directory
-  char* CombineName(const char* directory, const char* fileName);
+  const char* FileList(const char* directory, bool fromLine); // Returns a list of all the files in the named directory
+  const char* CombineName(const char* directory, const char* fileName);
   bool Delete(const char* directory, const char* fileName);
 
 friend class Platform;
@@ -447,11 +477,88 @@ struct ZProbeParameters
 	}
 };
 
+// Class to perform averaging of values read from the ADC
+// We sample each sensor at 250Hz, so we can afford to average 16 readings from each sensor and still produce a value
+// that is only 32ms old on average.
+
+class AveragingFilter
+{
+public:
+	AveragingFilter()
+	{
+		Init();
+	}
+
+	void Init() volatile
+	{
+		sum = 0;
+		index = 0;
+		isValid = false;
+		for(size_t i = 0; i < numAveraged; ++i)
+		{
+			readings[i] = 0;
+		}
+	}
+
+	// Call this to put a new reading into the filter
+	// This is only called by the ISR, so it not declared volatile to make it faster
+	void ProcessReading(uint16_t r)
+	{
+		sum = sum - readings[index] + r;
+		readings[index] = r;
+		++index;
+		if(index == numAveraged)
+		{
+			index = 0;
+			isValid = true;
+		}
+	}
+
+	// Return the averaged value
+	uint16_t GetAverage() const volatile
+	{
+		return (uint16_t)(sum/numAveraged);
+	}
+
+	// Return the raw sum
+	uint32_t GetSum() const volatile
+	{
+		return sum;
+	}
+
+	// Return the number of readings we averaged
+	uint16_t GetNumReadings() const volatile
+	{
+		return numAveraged;
+	}
+
+	// Return true if we have a valid average
+	bool IsValid()  const volatile
+	{
+		return isValid;
+	}
+
+private:
+	static const unsigned int numAveraged = 16;		// use a power of 2 to keep the % operation fast
+	uint16_t readings[numAveraged];
+	size_t index;
+	uint32_t sum;
+	bool isValid;
+	//invariant(sum == + over readings)
+	//invariant(index < numAveraged)
+};
+
+// Enumeration of error condition bits
+enum ErrorCode
+{
+	ErrorBadTemp = 1 << 0
+};
+
 // The main class that defines the RepRap machine for the benefit of the other classes
 
 class Platform
 {   
-  public:
+public:
   
   Platform();
   
@@ -463,26 +570,21 @@ class Platform
                // it has just been restarted; it can do this by executing an actual restart if you like, but beware the 
                // loop of death...
   void Spin(); // This gets called in the main loop and should do any housekeeping needed
-  
   void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
-  
   Compatibility Emulating() const;
-
   void SetEmulating(Compatibility c);
-
   void Diagnostics();
-  
   void PrintMemoryUsage();  // Print memory stats for debugging
-
   void ClassReport(char* className, float &lastTime);  // Called on return to check everything's live.
+  void RecordError(ErrorCode ec) { errorCodeBits |= ec; }
+  void SetDebug(int d);
 
   // Timing
   
   float Time(); // Returns elapsed seconds since some arbitrary time
-  
   void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
-  
   void DisableInterrupts();
+  void Tick();
 
   // Communications and data storage
   
@@ -535,8 +637,8 @@ class Platform
   // Z probe
 
   float ZProbeStopHeight() const;
-  int ZProbe() const;
-  int GetZProbeSecondaryValues(int& v1, int& v2) const;
+  int ZProbe();
+  int GetZProbeSecondaryValues(int& v1, int& v2);
   void SetZProbeType(int iZ);
   int GetZProbeType() const;
   void SetZProbing(bool starting);
@@ -561,11 +663,11 @@ class Platform
   void SetPidValues(size_t heater, float pVal, float iVal, float dVal);
 
 //-------------------------------------------------------------------------------------------------------
-  protected:
+protected:
   
   void ReturnFileStore(FileStore* f);  
   
-  private:
+private:
   
   // This is the structure used to hold out non-volatile data.
   // The SAM3X doesn't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
@@ -594,9 +696,11 @@ class Platform
   unsigned long lastTimeCall;
   
   bool active;
+  uint32_t errorCodeBits;
   
   void InitialiseInterrupts();
   int GetRawZHeight() const;
+  void ResetZProbeMinSum();
   
 // DRIVES
 
@@ -617,17 +721,15 @@ class Platform
   float maxStepperDigipotVoltage;
   int8_t zProbePin;
   int8_t zProbeModulationPin;
-  uint8_t zProbeCount;
-  long zProbeOnSum;		// sum of readings taken when IR led is on
-  long zProbeOffSum;	// sum of readings taken when IR led is on
-  long zProbeMinSum;	// minimum zprobe value seen, used with ultrasonic probe
-  uint16_t zProbeReadings[NumZProbeReadingsAveraged];
-  bool zProbeWorking;
+
+  volatile AveragingFilter zProbeOnFilter;				// Z probe readings we took with the IR turned on
+  volatile AveragingFilter zProbeOffFilter;				// Z probe readings we took with the IR turned off
+  volatile AveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
+  uint32_t zProbeMinSum;								// minimum Z probe sums seen, used with ultrasonic probe
 
 // AXES
 
   void InitZProbe();
-  void PollZHeight();
   void UpdateNetworkAddress(byte dst[4], const byte src[4]);
   void WriteNvData();
 
@@ -677,6 +779,18 @@ class Platform
 // Network connection
 
   Network* network;
+
+// Data used by the tick interrupt handler
+
+  adc_channel_num_t heaterAdcChannels[HEATERS];
+  adc_channel_num_t zProbeAdcChannel;
+  uint32_t thermistorOverheatSums[HEATERS];
+  uint8_t tickState;
+  uint8_t currentHeater;
+
+  static uint16_t GetAdcReading(adc_channel_num_t chan);
+  static void StartAdcConversion(adc_channel_num_t chan);
+  static adc_channel_num_t PinToAdcChannel(int pin);
 };
 
 // Seconds
@@ -844,14 +958,12 @@ inline void Platform::SetMaxFeedrate(int8_t drive, float value)
 
 inline int Platform::GetRawTemperature(byte heater) const
 {
-  if(tempSensePins[heater] >= 0)
-    return analogRead(tempSensePins[heater]);
-  return 0;
+  return (heater < HEATERS) ? thermistorFilters[heater].GetAverage() : 0;
 }
 
 inline float Platform::HeatSampleTime() const
 {
-  return heatSampleTime; 
+  return heatSampleTime;
 }
 
 inline bool Platform::UsePID(int8_t heater) const

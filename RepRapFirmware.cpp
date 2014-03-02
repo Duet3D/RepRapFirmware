@@ -169,7 +169,7 @@ RepRap::RepRap() : active(false), debug(false)
 void RepRap::Init()
 {
   debug = false;
-  platform->Init();
+  platform->Init();		// do this first, it sets up the tick interrupt that stops the watchdog from resetting us
   gCodes->Init();
   webserver->Init();
   move->Init();
@@ -259,6 +259,43 @@ void RepRap::EmergencyStop()
 	webserver->HandleReply("Emergency Stop! Reset the controller to continue.", false);
 }
 
+void RepRap::Tick()
+{
+	if (active)
+	{
+		platform->Tick();
+	}
+}
+
+// Process a M111 command
+// 0 = debug off
+// 1 = debug on
+// other = print stats and run code-specific tests
+void RepRap::SetDebug(int d)
+{
+	switch(d)
+	{
+	case 0:
+		debug = false;
+		platform->Message(HOST_MESSAGE, "Debugging off\n");
+		webserver->HandleReply("Debugging off\n", false);
+		break;
+
+	case 1:
+		debug = true;
+		platform->Message(HOST_MESSAGE, "Debugging enabled\n");
+		webserver->HandleReply("Debugging enabled\n", false);
+		break;
+
+	default:
+		// Print stats
+		platform->PrintMemoryUsage();
+
+		// Do any tests we were asked to do
+		platform->SetDebug(d);
+		break;
+	}
+}
 
 
 //*************************************************************************************************

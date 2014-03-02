@@ -51,12 +51,20 @@ void loop()
   reprap.Spin();
 }
 
+extern "C"
+{
+	// This intercepts the 1ms system tick. It must return 'false', otherwise the Arduino core tick handler will be bypassed.
+	int sysTickHook()
+	{
+		reprap.Tick();
+		return false;
+	}
+}
+
 //*************************************************************************************************
 
-Platform::Platform()
+Platform::Platform() : tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0)
 {
-  fileStructureInitialised = false;
-  
   line = new Line();
 
   // Files
@@ -64,11 +72,11 @@ Platform::Platform()
   massStorage = new MassStorage(this);
   
   for(int8_t i=0; i < MAX_FILES; i++)
+  {
     files[i] = new FileStore(this);
+  }
   
   network = new Network();
-  
-  active = false;
 }
 
 //*******************************************************************************************************************
@@ -98,7 +106,9 @@ void Platform::Init()
   massStorage->Init();
 
   for(size_t i=0; i < MAX_FILES; i++)
+  {
     files[i]->Init();
+  }
 
   fileStructureInitialised = true;
 
@@ -127,6 +137,7 @@ void Platform::Init()
 
   zProbePin = Z_PROBE_PIN;
   zProbeModulationPin = Z_PROBE_MOD_PIN;
+  zProbeAdcChannel = PinToAdcChannel(zProbePin);
   InitZProbe();
 
   // AXES
@@ -154,7 +165,6 @@ void Platform::Init()
   standbyTemperatures = STANDBY_TEMPERATURES;
   activeTemperatures = ACTIVE_TEMPERATURES;
   coolingFanPin = COOLING_FAN_PIN;
-  //turnHeatOn = HEAT_ON;
 
   webDir = WEB_DIR;
   gcodeDir = GCODE_DIR;
@@ -202,15 +212,28 @@ void Platform::Init()
 	  }
   }  
   
-  if(heatOnPins[0] >= 0)
-        pinMode(heatOnPins[0], OUTPUT);
-  thermistorInfRs[0] = ( thermistorInfRs[0]*exp(-thermistorBetas[0]/(25.0 - ABS_ZERO)) );
-  
-  for(size_t i = 1; i < HEATERS; i++)
+  for(size_t i = 0; i < HEATERS; i++)
   {
-    if(heatOnPins[i] >= 0)
-      pinModeNonDue(heatOnPins[i], OUTPUT);
-    thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
+	if(heatOnPins[i] >= 0)
+    {
+    	if (i == 0)		// heater 0 (bed heater) is a standard Arduino PWM pin
+    	{
+    		pinMode(heatOnPins[i], OUTPUT);
+    	}
+    	else
+    	{
+    		pinModeNonDue(heatOnPins[i], OUTPUT);
+    	}
+    }
+
+	thermistorFilters[i].Init();
+	heaterAdcChannels[i] = PinToAdcChannel(tempSensePins[i]);
+	thermistorInfRs[i] = thermistorInfRs[i] * exp(-thermistorBetas[i]/(25.0 - ABS_ZERO));
+
+    // Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check is quickly in the tick ISR
+    float thermistorOverheatResistance = thermistorInfRs[i] * exp(-thermistorBetas[i]/(BAD_HIGH_TEMPERATURE - ABS_ZERO));
+    float thermistorOverheatAdcValue = (AD_RANGE + 1) * thermistorOverheatResistance/(thermistorOverheatResistance + thermistorSeriesRs[i]);
+    thermistorOverheatSums[i] = (uint32_t)(thermistorOverheatAdcValue + 0.9) * thermistorFilters[i].GetNumReadings();
   }
 
   if(coolingFanPin >= 0)
@@ -225,27 +248,25 @@ void Platform::Init()
   lastTimeCall = 0;
   lastTime = Time();
   longWait = lastTime;
-  
-  active = true;
 }
 
 void Platform::InitZProbe()
 {
-  zProbeCount = 0;
-  zProbeOnSum = 0;
-  zProbeOffSum = 0;
-  zProbeMinSum = 0;
-  zProbeWorking = false;
-  for (uint8_t i = 0; i < NumZProbeReadingsAveraged; ++i)
-  {
-	  zProbeReadings[i] = 0;
-  }
+  zProbeOnFilter.Init();
+  zProbeOffFilter.Init();
+  ResetZProbeMinSum();
 
   if (nvData.zProbeType == 1 || nvData.zProbeType == 2)
   {
 	pinMode(zProbeModulationPin, OUTPUT);
 	digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
     SetZProbing(false);
+  }
+  else if (nvData.zProbeType == 3)
+  {
+	pinMode(zProbeModulationPin, OUTPUT);
+	digitalWrite(zProbeModulationPin, LOW);	// enable the ultrasonic sensor
+	SetZProbing(false);
   }
 }
 
@@ -254,81 +275,73 @@ int Platform::GetRawZHeight() const
   return (nvData.zProbeType != 0) ? analogRead(zProbePin) : 0;
 }
 
-int Platform::ZProbe() const
+// Return the Z probe data.
+// The ADC readings are 12 bits, so we convert them to 10-bit readings for compatibility with the old firmware.
+int Platform::ZProbe()
 {
-	switch(nvData.zProbeType)
+	if(zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid())
 	{
-	case 1:		// simple IR sensor
-		return (int)((zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged);
-	case 2:		// modulated IR sensor
-		return (int)((zProbeOnSum - zProbeOffSum)/(NumZProbeReadingsAveraged/2));
-	case 3:		// ultrasonic sensor
-		return (int)((zProbeOnSum + zProbeOffSum - zProbeMinSum)/(NumZProbeReadingsAveraged/2));
-	default:
-		return 0;
+		switch(nvData.zProbeType)
+		{
+		case 1:
+			// Simple IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
+			return (int)((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum())/(8 * zProbeOnFilter.GetNumReadings()));
+
+		case 2:
+			// Modulated IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
+			// Because of noise, it is possible to get a negative reading, so allow for this.
+			return (int)(((int32_t)zProbeOnFilter.GetSum() - (int32_t)zProbeOffFilter.GetSum())/(4 * zProbeOnFilter.GetNumReadings()));
+
+		case 3:
+			// Ultrasonic sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
+			{
+				uint32_t sum = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
+				if (sum < zProbeMinSum)
+				{
+					zProbeMinSum = sum;
+				}
+				uint32_t total = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
+				return (int)((total - zProbeMinSum)/(4 * zProbeOnFilter.GetNumReadings()));
+			}
+
+		default:
+			break;;
+		}
 	}
+	return 0;	// Z probe not turned on or not initialised yet
 }
 
-int Platform::GetZProbeSecondaryValues(int& v1, int& v2) const
+// Return the Z probe secondary values.
+int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 {
-	switch(nvData.zProbeType)
+	if(zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid())
 	{
-	case 2:		// modulated IR sensor
-		v1 = zProbeOnSum/(NumZProbeReadingsAveraged/2);				// pass back the reading with IR turned on
-		return 1;
-	case 3:		// ultrasonic
-		v1 = (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged;	// pass back the raw reading
-		v2 = zProbeMinSum/NumZProbeReadingsAveraged;				// pass back the minimum found
-		return 2;
-	default:
-		return 0;
+		switch(nvData.zProbeType)
+		{
+		case 2:		// modulated IR sensor
+			v1 = (int)(zProbeOnFilter.GetSum()/(4 * zProbeOnFilter.GetNumReadings()));	// pass back the reading with IR turned on
+			return 1;
+		case 3:		// ultrasonic
+			{
+				uint32_t sum = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
+				if (sum < zProbeMinSum)
+				{
+					zProbeMinSum = sum;
+				}
+				v1 = (int)((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum())/(8 * zProbeOnFilter.GetNumReadings()));	// pass back the raw reading
+				v2 = (int)(zProbeMinSum/(8 * zProbeOnFilter.GetNumReadings()));				// pass back the minimum found
+			}
+			return 2;
+		default:
+			break;
+		}
 	}
+	return 0;
 }
 
 int Platform::GetZProbeType() const
 {
 	return nvData.zProbeType;
-}
-
-void Platform::PollZHeight()
-{
-	uint16_t currentReading = GetRawZHeight();
-	if (nvData.zProbeType == 2)
-	{
-		// Reverse the modulation, ready for next time
-		digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
-	}
-	if (zProbeCount & 1)
-	{
-		zProbeOffSum = zProbeOffSum - zProbeReadings[zProbeCount] + currentReading;
-	}
-	else
-	{
-		zProbeOnSum = zProbeOnSum - zProbeReadings[zProbeCount] + currentReading;
-	}
-	zProbeReadings[zProbeCount] = currentReading;
-	++zProbeCount;
-	if (zProbeCount == NumZProbeReadingsAveraged)
-	{
-		zProbeCount = 0;
-		if (!zProbeWorking)
-		{
-			zProbeWorking = true;
-			if (nvData.zProbeType == 3)
-			{
-				zProbeMinSum = zProbeOnSum + zProbeOffSum;
-			}
-		}
-	}
-	if (nvData.zProbeType == 3 && zProbeWorking)
-	{
-		// Update the minimum value seen from the ultrasonic sensor
-		long temp = zProbeOnSum + zProbeOffSum;
-		if (temp < zProbeMinSum)
-		{
-			zProbeMinSum = temp;
-		}
-	}
 }
 
 float Platform::ZProbeStopHeight() const
@@ -411,10 +424,16 @@ void Platform::SetZProbing(bool starting)
 {
 	if (starting && nvData.zProbeType == 3)
 	{
-		zProbeMinSum = zProbeOnSum + zProbeOffSum;	//look for a new minimum
+		ResetZProbeMinSum();	// look for a new minimum
+
 		// Tell the ultrasonic sensor we are starting or have completed a z-probe
 		//digitalWrite(zProbeModulationPin, (starting) ? LOW : HIGH);
 	}
+}
+
+void Platform::ResetZProbeMinSum()
+{
+	zProbeMinSum = 4095 * zProbeOnFilter.GetNumReadings() * 2;
 }
 
 float Platform::Time()
@@ -504,7 +523,6 @@ void Platform::Spin()
 
   if(Time() - lastTime < 0.006)
     return;
-  PollZHeight();
   lastTime = Time();
   ClassReport("Platform", longWait);
 
@@ -522,17 +540,129 @@ void TC3_Handler()
 
 void Platform::InitialiseInterrupts()
 {
+  // Timer interrupt for stepper motors
   pmc_set_writeprotect(false);
   pmc_enable_periph_clk((uint32_t)TC3_IRQn);
   TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
   TC1->TC_CHANNEL[0].TC_IER=TC_IER_CPCS;
   TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
   SetInterrupt(STANDBY_INTERRUPT_RATE);
+
+  // Tick interrupt for ADC conversions
+  tickState = 0;
+  currentHeater = 0;
+
+  const uint32_t wdtTicks = 256;			// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
+  WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);
+  	  	  	  	  	  	  	  	  	  	  	// enable watchdog, reset the mcu if it times out
+  active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
 void Platform::DisableInterrupts()
 {
 	NVIC_DisableIRQ(TC3_IRQn);
+}
+
+// Process a 1ms tick interrupt
+// This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
+// This is what we need to do:
+// 0.  Kick the watchdog.
+// 1.  Kick off a new ADC conversion.
+// 2.  Fetch and process the result of the last ADC conversion.
+// 3a. If the last ADC conversion was for the Z probe, toggle the modulation output if using a modulated IR sensor,
+//     or update the minimum reading if using an ultrasonic sensor.
+// 3b. If the last ADC reading was a thermistor reading, check for an over-temperature situation and turn off the heater if necessary.
+//     We do this here because the usual polling loop sometimes gets stuck trying to send data to the USB port.
+
+//#define TIME_TICK_ISR	1		// define this to store thr tick IST time in errorCodeBits
+
+void Platform::Tick()
+{
+#ifdef TIME_TICK_ISR
+	uint32_t now = micros();
+#endif
+	WDT_Restart(WDT);
+	switch(tickState)
+	{
+	case 1:			// last conversion started was a thermistor
+	case 3:
+		{
+			AveragingFilter& currentFilter = const_cast<AveragingFilter&>(thermistorFilters[currentHeater]);
+			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
+			StartAdcConversion(zProbeAdcChannel);
+			if(currentFilter.IsValid())
+			{
+				uint32_t sum = currentFilter.GetSum();
+				if(sum < thermistorOverheatSums[currentHeater] || sum >= (AD_RANGE - 3) * currentFilter.GetNumReadings())
+				{
+					// We have an over-temperature or bad reading from this thermistor, so turn off the heater
+					// NB - the function we call does floating point maths, but this is an exceptional situation so we allow it
+					SetHeater(currentHeater, 0.0);
+					errorCodeBits |= ErrorBadTemp;
+				}
+			}
+			++currentHeater;
+			if(currentHeater == HEATERS)
+			{
+				currentHeater = 0;
+			}
+		}
+		++tickState;
+		break;
+
+	case 2:			// last conversion started was the IR probe
+		const_cast<AveragingFilter&>(zProbeOnFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
+		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
+		if(nvData.zProbeType == 2)								// if using a modulated IR sensor
+		{
+			digitalWrite(Z_PROBE_MOD_PIN, LOW);					// turn off the IR emitter
+		}
+		++tickState;
+		break;
+
+	case 4:			// last conversion started was the Z probe, with IR LED off if modulation is enabled
+		const_cast<AveragingFilter&>(zProbeOffFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
+		// no break
+	case 0:			// this is the state after initialisation, no conversion has been started
+	default:
+		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
+		if(nvData.zProbeType == 2)								// if using a modulated IR sensor
+		{
+			digitalWrite(Z_PROBE_MOD_PIN, HIGH);				// turn on the IR emitter
+		}
+		tickState = 1;
+		break;
+	}
+#ifdef TIME_TICK_ISR
+	uint32_t now2 = micros();
+	if (now2 - now > errorCodeBits)
+	{
+		errorCodeBits = now2 - now;
+	}
+#endif
+}
+
+/*static*/ uint16_t Platform::GetAdcReading(adc_channel_num_t chan)
+{
+	uint16_t rslt = (uint16_t)adc_get_channel_value(ADC, chan);
+	adc_disable_channel(ADC, chan);
+	return rslt;
+}
+
+/*static*/ void Platform::StartAdcConversion(adc_channel_num_t chan)
+{
+	adc_enable_channel(ADC, chan);
+	adc_start(ADC);
+}
+
+// Convert an Arduino Due pin number to the corresponding ADC channel number
+/*static*/ adc_channel_num_t Platform::PinToAdcChannel(int pin)
+{
+	if (pin < A0)
+	{
+	    pin += A0;
+	}
+	return (adc_channel_num_t)(int)g_APinDescription[pin].ulADCChannelNumber;
 }
 
 
@@ -543,7 +673,19 @@ void Platform::Diagnostics()
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
 
-// Print memory stats to USB and append them to the current webserver reply
+void Platform::SetDebug(int d)
+{
+	switch(d)
+	{
+	case 1001:			// test watchdog
+		SysTick->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);	// disable the system tick interrupt
+		break;
+	default:
+		break;
+	}
+}
+
+// Print memory stats and error codes to USB and copy them to the current webserver reply
 void Platform::PrintMemoryUsage()
 {
 	const char *ramstart=(char *)0x20070000;
@@ -554,7 +696,7 @@ void Platform::PrintMemoryUsage()
 	Message(HOST_MESSAGE, "\n");
 	Message(HOST_MESSAGE, "Memory usage:\n\n");
 	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
-	reprap.GetWebserver()->AppendReply(scratchString);
+	reprap.GetWebserver()->HandleReply(scratchString, false);
 	Message(HOST_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
 	reprap.GetWebserver()->AppendReply(scratchString);
@@ -574,6 +716,17 @@ void Platform::PrintMemoryUsage()
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", stack_lwm - heapend);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
+
+	// Show the reason for the last reset
+	const char* resetReasons[8] = {"power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
+	snprintf(scratchString, STRING_LENGTH, "Last reset reason: %s\n", resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
+
+	// Show the current error codes
+	snprintf(scratchString, STRING_LENGTH, "Error status: %u\n", errorCodeBits);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 }
@@ -615,7 +768,7 @@ float Platform::GetTemperature(int8_t heater) const
   // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
   // So we add 0.5 to to the reading to get a better estimate of the input. But first, recognise the special case of thermistor disconnected.
   int rawTemp = GetRawTemperature(heater);
-  if (rawTemp == AD_RANGE)
+  if (rawTemp >= AD_RANGE - 3)		// the -3 is to allow for noise
   {
 	  // Thermistor is disconnected
 	  return ABS_ZERO;
@@ -641,6 +794,16 @@ void Platform::SetHeater(int8_t heater, const float& power)
 	  analogWriteNonDue(heatOnPins[heater], p);
 }
 
+
+void Platform::SetPidValues(size_t heater, float pVal, float iVal, float dVal)
+{
+	if (heater < HEATERS)
+	{
+		pidKps[heater] = pVal;
+		pidKis[heater] = iVal / heatSampleTime;
+		pidKds[heater] = dVal * heatSampleTime;
+	}
+}
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
@@ -672,6 +835,77 @@ EndStopHit Platform::Stopped(int8_t drive)
 			return highHit;
 	}
 	return noStop;
+}
+
+
+//-----------------------------------------------------------------------------------------------------
+
+FileStore* Platform::GetFileStore(const char* directory, const char* fileName, bool write)
+{
+  FileStore* result = NULL;
+
+  if(!fileStructureInitialised)
+	  return NULL;
+
+  for(int i = 0; i < MAX_FILES; i++)
+    if(!files[i]->inUse)
+    {
+      files[i]->inUse = true;
+      if(files[i]->Open(directory, fileName, write))
+        return files[i];
+      else
+      {
+        files[i]->inUse = false;
+        return NULL;
+      }
+    }
+  Message(HOST_MESSAGE, "Max open file count exceeded.\n");
+  return NULL;
+}
+
+
+MassStorage* Platform::GetMassStorage()
+{
+  return massStorage;
+}
+
+void Platform::ReturnFileStore(FileStore* fs)
+{
+  for(int i = 0; i < MAX_FILES; i++)
+      if(files[i] == fs)
+        {
+          files[i]->inUse = false;
+          return;
+        }
+}
+
+void Platform::Message(char type, const char* message)
+{
+  switch(type)
+  {
+  case FLASH_LED:
+  // Message that is to flash an LED; the next two bytes define
+  // the frequency and M/S ratio.
+
+    break;
+
+  case DISPLAY_MESSAGE:
+  // Message that is to appear on a local display;  \f and \n should be supported.
+  case HOST_MESSAGE:
+  default:
+
+//    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
+//    if(m != NULL)
+//    {
+//    	m->GoToEnd();
+//    	m->Write(message);
+//    	m->Close();
+//    } else
+//    	line->Write("Can't open message file.\n");
+	for(uint8_t i = 0; i < messageIndent; i++)
+		line->Write(' ');
+    line->Write(message);
+  }
 }
 
 
@@ -730,7 +964,7 @@ void MassStorage::Init()
 	}
 }
 
-char* MassStorage::CombineName(const char* directory, const char* fileName)
+const char* MassStorage::CombineName(const char* directory, const char* fileName)
 {
   int out = 0;
   int in = 0;
@@ -777,7 +1011,7 @@ char* MassStorage::CombineName(const char* directory, const char* fileName)
 
 // List the flat files in a directory.  No sub-directories or recursion.
 
-char* MassStorage::FileList(const char* directory, bool fromLine)
+const char* MassStorage::FileList(const char* directory, bool fromLine)
 {
 //  File dir, entry;
   DIR dir;
@@ -862,7 +1096,7 @@ char* MassStorage::FileList(const char* directory, bool fromLine)
 // Delete a file
 bool MassStorage::Delete(const char* directory, const char* fileName)
 {
-	char* location = platform->GetMassStorage()->CombineName(directory, fileName);
+	const char* location = platform->GetMassStorage()->CombineName(directory, fileName);
 	if( f_unlink (location) != FR_OK)
 	{
 		platform->Message(HOST_MESSAGE, "Can't delete file ");
@@ -896,7 +1130,7 @@ void FileStore::Init()
 
 bool FileStore::Open(const char* directory, const char* fileName, bool write)
 {
-  char* location = platform->GetMassStorage()->CombineName(directory, fileName);
+  const char* location = platform->GetMassStorage()->CombineName(directory, fileName);
 
   writing = write;
   lastBufferEntry = FILE_BUF_LEN - 1;
@@ -1053,88 +1287,6 @@ void FileStore::Write(const char* b)
   while(b[i])
     Write(b[i++]);
 }
-
-
-//-----------------------------------------------------------------------------------------------------
-
-FileStore* Platform::GetFileStore(const char* directory, const char* fileName, bool write)
-{
-  FileStore* result = NULL;
-
-  if(!fileStructureInitialised)
-	  return NULL;
-
-  for(int i = 0; i < MAX_FILES; i++)
-    if(!files[i]->inUse)
-    {
-      files[i]->inUse = true;
-      if(files[i]->Open(directory, fileName, write))
-        return files[i];
-      else
-      {
-        files[i]->inUse = false;
-        return NULL;
-      }
-    }
-  Message(HOST_MESSAGE, "Max open file count exceeded.\n");
-  return NULL;
-}
-
-
-MassStorage* Platform::GetMassStorage()
-{
-  return massStorage;
-}
-
-void Platform::ReturnFileStore(FileStore* fs)
-{
-  for(int i = 0; i < MAX_FILES; i++)
-      if(files[i] == fs)
-        {
-          files[i]->inUse = false;
-          return;
-        }
-}
-
-void Platform::Message(char type, const char* message)
-{
-  switch(type)
-  {
-  case FLASH_LED:
-  // Message that is to flash an LED; the next two bytes define 
-  // the frequency and M/S ratio.
-  
-    break;
-  
-  case DISPLAY_MESSAGE:  
-  // Message that is to appear on a local display;  \f and \n should be supported.
-  case HOST_MESSAGE:
-  default:
-  
-//    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
-//    if(m != NULL)
-//    {
-//    	m->GoToEnd();
-//    	m->Write(message);
-//    	m->Close();
-//    } else
-//    	line->Write("Can't open message file.\n");
-	for(uint8_t i = 0; i < messageIndent; i++)
-		line->Write(' ');
-    line->Write(message);
-  }
-}
-
-void Platform::SetPidValues(size_t heater, float pVal, float iVal, float dVal)
-{
-	if (heater < HEATERS)
-	{
-		pidKps[heater] = pVal;
-		pidKis[heater] = iVal / heatSampleTime;
-		pidKds[heater] = dVal * heatSampleTime;
-	}
-}
-
 
 
 //***************************************************************************************************

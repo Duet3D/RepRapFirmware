@@ -557,6 +557,7 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 			{
 				// Z axis has not yet been homed, so treat this probe as a homing command
 				la->SetDriveCoordinateAndZeroEndSpeed(platform->ZProbeStopHeight(), drive);
+				gCodes->SetAxisIsHomed(drive);
 				lastZHit = 0.0;
 			}
 			return;
@@ -572,11 +573,13 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 		}
 	}
 	la->SetDriveCoordinateAndZeroEndSpeed(hitPoint, drive);
+	gCodes->SetAxisIsHomed(drive);
 }
 
 inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
   la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisLength(drive), drive);
+  gCodes->SetAxisIsHomed(drive);
 }
 
 inline void Move::NearLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)

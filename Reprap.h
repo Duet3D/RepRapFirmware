@@ -33,12 +33,13 @@ class RepRap
     void Interrupt();
     void Diagnostics();
     bool Debug() const;
-    void SetDebug(bool d);
+    void SetDebug(int d);
     Platform* GetPlatform() const;
     Move* GetMove() const;
     Heat* GetHeat() const;
     GCodes* GetGCodes() const;
     Webserver* GetWebserver() const;
+    void Tick();
     
   private:
   
@@ -57,22 +58,6 @@ inline Heat* RepRap::GetHeat() const { return heat; }
 inline GCodes* RepRap::GetGCodes() const { return gCodes; }
 inline Webserver* RepRap::GetWebserver() const { return webserver; }
 inline bool RepRap::Debug() const { return debug; }
-
-inline void RepRap::SetDebug(bool d)
-{
-	debug = d;
-	if(debug)
-	{
-		platform->Message(HOST_MESSAGE, "Debugging enabled\n");
-		webserver->HandleReply("Debugging enabled\n", false);
-		platform->PrintMemoryUsage();
-	}
-	else
-	{
-		webserver->HandleReply("", false);
-	}
-}
-
 inline void RepRap::Interrupt() { move->Interrupt(); }
 
 
