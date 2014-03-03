@@ -341,7 +341,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	      }
 	    } else
 	    {
-	      if(gb->Seen('E')&& ((i-AXES) == selectedHead)) //Only affect the selected extruder FIXME update to work with multiple concurrent extruders
+	      if(gb->Seen('E')&& ((i-AXES) == selectedHead)) //Only affect the selected extruder
 	      {
 		    float moveArg = gb->GetFValue()*distanceScale;
 	        if(drivesRelative || doingG92)
