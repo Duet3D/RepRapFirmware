@@ -88,6 +88,10 @@ Licence: GPL
 #define LOW_STOP_PINS {11, -1, 60, 31}
 #define HIGH_STOP_PINS {-1, 28, -1, -1}
 #define ENDSTOP_HIT 1 							// when a stop == this it is hit
+// Indices for motor current digipots (if any)
+//  first 4 are for digipot 1,(on duet)
+//  second 4 for digipot 2(on expansion board)
+//  Full order is {1, 3, 2, 0, 1, 3, 2, 0}, only include as many as you have DRIVES defined
 #define POT_WIPES {1, 3, 2, 0} 					// Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   					// Stepper motor current sense resistor (ohms)
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
@@ -536,7 +540,10 @@ class Platform
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float instantDvs[DRIVES];
-  MCP4461 mcp;
+  MCP4461 mcpDuet;
+  MCP4461 mcpExpansion;
+
+
   int8_t potWipes[DRIVES];
   float senseResistor;
   float maxStepperDigipotVoltage;
@@ -775,8 +782,16 @@ inline void Platform::SetMotorCurrent(byte drive, float current)
 //	snprintf(scratchString, STRING_LENGTH, "%d", pot);
 //	Message(HOST_MESSAGE, scratchString);
 //	Message(HOST_MESSAGE, "\n");
-	mcp.setNonVolatileWiper(potWipes[drive], pot);
-	mcp.setVolatileWiper(potWipes[drive], pot);
+	if(drive < 4)
+	{
+		mcpDuet.setNonVolatileWiper(potWipes[drive], pot);
+		mcpDuet.setVolatileWiper(potWipes[drive], pot);
+	}
+	else
+	{
+		mcpExpansion.setNonVolatileWiper(potWipes[drive], pot);
+		mcpExpansion.setVolatileWiper(potWipes[drive], pot);
+	}
 }
 
 inline float Platform::HomeFeedRate(int8_t axis) const
