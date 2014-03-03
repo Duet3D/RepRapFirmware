@@ -62,7 +62,7 @@ bool status_link_up();//*****************************AB
  */
 //void init_ethernet(void);
 
-void init_ethernet(unsigned char ipAddress[], unsigned char netMask[], unsigned char gateWay[]);
+void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
 
 struct netif* GetConfiguration();
 

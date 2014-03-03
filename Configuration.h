@@ -24,9 +24,9 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.57"
-#define DATE "2014-01-13"
-#define LAST_AUTHOR "reprappro.com"
+#define VERSION "0.60"
+#define DATE "2014-02-20"
+#define LAST_AUTHOR "reprappro"
 
 // Other firmware that we might switch to be compatible with.
 
@@ -42,14 +42,14 @@ enum Compatibility
 
 // Some numbers...
 
-#define ABS_ZERO -273.15  // Celsius
+#define ABS_ZERO (-273.15)  // Celsius
 
-#define INCH_TO_MM 25.4
+#define INCH_TO_MM (25.4)
 
-#define HEAT_SAMPLE_TIME 0.5 // Seconds
+#define HEAT_SAMPLE_TIME (0.5) // Seconds
 
-#define TEMPERATURE_CLOSE_ENOUGH 5.0 // Celsius
-#define TEMPERATURE_LOW_SO_DONT_CARE 40.0 // Celsius
+#define TEMPERATURE_CLOSE_ENOUGH (2.0) 		// Celsius
+#define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
 
 // If temperatures fall outside this range, something
 // nasty has happened.
@@ -61,7 +61,7 @@ enum Compatibility
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
 #define NUMBER_OF_PROBE_POINTS 4
-#define Z_DIVE 5.0  // Height from which to probe the bed (mm)
+#define Z_DIVE 8.0  // Height from which to probe the bed (mm)
 
 #define SILLY_Z_VALUE -9999.0
 
