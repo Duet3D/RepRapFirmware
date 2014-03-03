@@ -158,21 +158,21 @@ void Platform::Init()
 
 	  if(stepPins[i] >= 0)
 	  {
-		  if(i > Z_AXIS)
+		  if(i == E0_DRIVE || i == E3_DRIVE) //STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
 			  pinModeNonDue(stepPins[i], OUTPUT);
 		  else
 			  pinMode(stepPins[i], OUTPUT);
 	  }
 	  if(directionPins[i] >= 0)
 	  {
-		  if(i > Z_AXIS)
+		  if(i == E0_DRIVE) //DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
 			  pinModeNonDue(directionPins[i], OUTPUT);
 		  else
 			  pinMode(directionPins[i], OUTPUT);
 	  }
 	  if(enablePins[i] >= 0)
 	  {
-		  if(i >= Z_AXIS)
+		  if(i == Z_AXIS || i==E0_DRIVE || i==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 			  pinModeNonDue(enablePins[i], OUTPUT);
 		  else
 			  pinMode(enablePins[i], OUTPUT);
@@ -180,8 +180,7 @@ void Platform::Init()
 	  Disable(i);
 	  driveEnabled[i] = false;
   }
-
-  for(i = 0; i < AXES; i++)
+  for(i = 0; i < DRIVES; i++)
   {
 	  if(lowStopPins[i] >= 0)
 	  {
@@ -195,21 +194,20 @@ void Platform::Init()
 	  }
   }  
   
-  if(heatOnPins[0] >= 0)
-        pinMode(heatOnPins[0], OUTPUT);
-  thermistorInfRs[0] = ( thermistorInfRs[0]*exp(-thermistorBetas[0]/(25.0 - ABS_ZERO)) );
-  
-  for(i = 1; i < HEATERS; i++)
+  for(i = 0; i < HEATERS; i++)
   {
     if(heatOnPins[i] >= 0)
-      pinModeNonDue(heatOnPins[i], OUTPUT);
+    	if(i == E0_HEATER || i==E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
+    		pinModeNonDue(heatOnPins[i], OUTPUT);
+    	else
+    		pinMode(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
   }
 
   if(coolingFanPin >= 0)
   {
-	  pinMode(coolingFanPin, OUTPUT);
-	  analogWrite(coolingFanPin, 0);
+	  //pinModeNonDue(coolingFanPin, OUTPUT); //not required as analogwrite does this automatically
+	  analogWriteNonDue(coolingFanPin, 255); //inverse logic for Duet v0.6 this turns it off
   }
 
   InitialiseInterrupts();
@@ -385,10 +383,10 @@ void Platform::SetHeater(int8_t heater, const float& power)
   byte p = (byte)(255.0*fmin(1.0, fmax(0.0, power)));
   if(HEAT_ON == 0)
 	  p = 255 - p;
-  if(heater == 0)
-	  analogWrite(heatOnPins[heater], p);
+  if(heater == E0_HEATER || heater == E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
+	 analogWriteNonDue(heatOnPins[heater], p);
   else
-	  analogWriteNonDue(heatOnPins[heater], p);
+	 analogWrite(heatOnPins[heater], p);
 }
 
 

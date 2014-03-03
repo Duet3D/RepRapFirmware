@@ -75,7 +75,7 @@ void GCodes::Init()
   offSetSet = false;
   dwellWaiting = false;
   stackPointer = 0;
-  selectedHead = -1;
+  selectedHead = 0; //default to zero so parameter setting gcodes (eg M906) work for tools prior to tools being selected
   gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
   zProbesSet = false;
   probeCount = 0;
@@ -341,11 +341,15 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	      }
 	    } else
 	    {
-	      if(gb->Seen(gCodeLetters[i]))
+	      if(gb->Seen('E')&& ((i-AXES) == selectedHead)) //Only affect the selected extruder FIXME update to work with multiple concurrent extruders
 	      {
 		    float moveArg = gb->GetFValue()*distanceScale;
 	        if(drivesRelative || doingG92)
+	        {
 	          moveBuffer[i] = moveArg;
+	        	if(doingG92)
+	        		lastPos[i - AXES] = moveBuffer[i];
+	        }
 	        else
 	        {
 	          float absE = moveArg;
@@ -358,7 +362,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 
 	// Deal with feedrate
 
-	if(gb->Seen(gCodeLetters[DRIVES]))
+	if(gb->Seen(FEEDRATE_LETTER))
 	  gFeedRate = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec
 
 	moveBuffer[DRIVES] = gFeedRate;  // We always set it, as Move may have modified the last one.
@@ -560,7 +564,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 			}
 		}
 
-		if(gb->Seen(gCodeLetters[DRIVES])) // Has the user specified a feedrate?
+		if(gb->Seen(FEEDRATE_LETTER)) // Has the user specified a feedrate?
 		{
 			moveToDo[DRIVES] = gb->GetFValue();
 			activeDrive[DRIVES] = true;
@@ -881,14 +885,20 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, char* reply)
 // are updated at the end of each movement, so this won't tell you
 // where you are mid-movement.
 
-// FIXME - needs to deal with multiple extruders
+//Fixed to deal with multiple extruders
 
 char* GCodes::GetCurrentCoordinates()
 {
 	float liveCoordinates[DRIVES+1];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates);
 
-	snprintf(scratchString, STRING_LENGTH, "X:%f Y:%f Z:%f E:%f", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS], liveCoordinates[AXES]);
+	snprintf(scratchString, STRING_LENGTH, "X:%f Y:%f Z:%f ", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS]);
+	char eString[STRING_LENGTH];
+	for(int i = AXES; i< DRIVES; i++)
+	{
+		snprintf(eString,STRING_LENGTH,"E%d:%f ",i-AXES,liveCoordinates[i]);
+		strncat(scratchString,eString,STRING_LENGTH);
+	}
 	return scratchString;
 }
 
@@ -1088,6 +1098,7 @@ bool GCodes::SetOffsets(GCodeBuffer *gb)
     if(gb->Seen('S'))
       reprap.GetHeat()->SetActiveTemperature(head, gb->GetFValue());
     // FIXME - do X, Y and Z
+	platform->Message(HOST_MESSAGE, "Not Yet fully implemented: Use head offset in slicing software");
   }
   return true;  
 }
@@ -1111,7 +1122,7 @@ bool GCodes::StandbyHeaters()
 		return false;
 	for(int8_t heater = 0; heater < HEATERS; heater++)
 		reprap.GetHeat()->Standby(heater);
-	selectedHead = -1;
+	selectedHead = -1; //FIXME is this behaviour desirable?
 	return true;
 }
 
@@ -1453,11 +1464,20 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 92: // Set/report steps/mm for some axes
     	seen = false;
     	for(int8_t drive = 0; drive < DRIVES; drive++)
-    		if(gb->Seen(gCodeLetters[drive]))
-    		{
-    			platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
-    			seen = true;
-    		}
+    	{
+    		//Do AXES first
+			if(gb->Seen(gCodeLetters[drive])&& drive<AXES)
+			{
+				platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
+				seen = true;
+			}
+			//FIXME handle selectedHead=-1 case
+			else if(gb->Seen('E')&& ((drive-AXES) == selectedHead))//then do active extruder
+			{
+					platform->SetDriveStepsPerUnit(AXES+selectedHead, gb->GetFValue());
+					seen=true;
+			}
+    	}	
     	reprap.GetMove()->SetStepHypotenuse();
     	if(!seen)
     		snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: %d",
@@ -1478,14 +1498,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 104: // Deprecated
     	if(gb->Seen('S'))
     	{
-    		reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
-    		reprap.GetHeat()->Activate(1);
+			//only sets the selected head (As set by T#)
+    		reprap.GetHeat()->SetActiveTemperature(selectedHead+1, gb->GetFValue()); // 0 is the bed
+    		reprap.GetHeat()->Activate(selectedHead+1);
     	}
     	break;
 
     case 105: // Deprecated...
     	strncpy(reply, "T:", STRING_LENGTH);
-    	for(int8_t heater = HEATERS - 1; heater > 0; heater--)
+    	//FIXME - why did this decrement rather than increment through the heaters (odd behaviour)
+    	for(int8_t heater = 1; heater < HEATERS; heater++)
     	{
     		strncat(reply, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1), STRING_LENGTH);
     		strncat(reply, " ", STRING_LENGTH);
@@ -1532,10 +1554,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 109: // Deprecated
     	if(gb->Seen('S'))
     	{
-    		reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
-    		reprap.GetHeat()->Activate(1);
+    		reprap.GetHeat()->SetActiveTemperature(selectedHead+1, gb->GetFValue()); // 0 is the bed
+    		reprap.GetHeat()->Activate(selectedHead+1);
     	}
-    	/* no break */
+    	//check here rather than falling through to M116, we want to just wait for the extruder we specified (otherwise use M116 not M109)
+    	result = reprap.GetHeat()->HeaterAtSetTemperature(selectedHead+1);
+    	break;
     case 116: // Wait for everything, especially set temperatures
     	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
     		return false;
@@ -1580,25 +1604,33 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 201: // Set axis accelerations
     	for(int8_t drive = 0; drive < DRIVES; drive++)
     	{
-    		float value;
-    		if(gb->Seen(gCodeLetters[drive]))
-    		{
-    			value = gb->GetFValue();
-    		}else{
-    			value = -1;
-    		}
-    		platform->SetAcceleration(drive, value);
+    		//Do AXES first
+			if(gb->Seen(gCodeLetters[drive])&& drive<AXES)
+			{
+				platform->SetAcceleration(drive, gb->GetFValue());
+			//then do active extruder
+    		}else if(gb->Seen('E')&& ((drive-AXES) == selectedHead)){
+				platform->SetAcceleration(AXES+selectedHead, gb->GetFValue()); //Set the E acceleration for the currently selected tool
+			}else{
+    			platform->SetAcceleration(drive, -1);
+    		}					
     	}
     	break;
 
     case 203: // Set maximum feedrates
     	for(int8_t drive = 0; drive < DRIVES; drive++)
     	{
-    		if(gb->Seen(gCodeLetters[drive]))
-    		{
-    			float value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+    		//Do AXES first
+			if(gb->Seen(gCodeLetters[drive])&& drive<AXES)
+			{
+				float value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
     			platform->SetMaxFeedrate(drive, value);
-    		}
+			}
+			else if(gb->Seen('E')&& ((drive-AXES) == selectedHead))//then do active extruder
+			{
+				float value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+				platform->SetMaxFeedrate(AXES+selectedHead, value); //Set the E Steps for the currently selected tool
+			}
     	}
     	break;
 
@@ -1817,10 +1849,18 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
     	{
-    		if(gb->Seen(gCodeLetters[i]))
+    		//Do AXES first
+    		if(gb->Seen(gCodeLetters[i])&& i<AXES)
     		{
     			float value = gb->GetFValue(); // mA
     			platform->SetMotorCurrent(i, value);
+    		}
+    		else //do for selected extruder
+    		{
+    			if(gb->Seen(gCodeLetters[i])){
+    				float value = gb->GetFValue(); // mA
+    				platform->SetMotorCurrent(AXES+selectedHead, value);
+    			}
     		}
     	}
     	break;

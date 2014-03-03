@@ -77,15 +77,15 @@ Licence: GPL
 
 // DRIVES
 
-#define STEP_PINS {14, 25, 5, X2}
-#define DIRECTION_PINS {15, 26, 4, X3}
+#define STEP_PINS {14, 25, 5, X2}				// Full array for Duet + Duex4 is {14, 25, 5, X2, 41, 39, X4, 49}
+#define DIRECTION_PINS {15, 26, 4, X3}			// Full array for Duet + Duex4 is {15, 26, 4, X3, 35, 53, 51, 48}
 #define FORWARDS true     						// What to send to go...
 #define BACKWARDS false    						// ...in each direction
-#define ENABLE_PINS {29, 27, X1, X0}
-#define ENABLE false      						// What to send to enable...
+#define ENABLE_PINS {29, 27, X1, X0}            // Full array for Duet + Duex4 is {29, 27, X1, X0, 37, X8, 50, 47}
+#define ENABLE false      						// What to send to enable... 
 #define DISABLE true     						// ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
-#define LOW_STOP_PINS {11, -1, 60, 31}
+#define LOW_STOP_PINS {11, -1, 60, 31}				// Full array endstop pins for Duet + Duex4 is {11, 28, 60, 31, 24, 46, 45, 44}
 #define HIGH_STOP_PINS {-1, 28, -1, -1}
 #define ENDSTOP_HIT 1 							// when a stop == this it is hit
 #define POT_WIPES {1, 3, 2, 0} 					// Indices for motor current digipots (if any)
@@ -110,10 +110,16 @@ Licence: GPL
 #define Y_AXIS 1  								// The index of the Y axis
 #define Z_AXIS 2  								// The index of the Z axis
 
-// HEATERS - The bed is assumed to be the at index 0
+#define E0_DRIVE 3 //the index of the first Extruder drive
+#define E1_DRIVE 4 //the index of the second Extruder drive
+#define E2_DRIVE 5 //the index of the third Extruder drive
+#define E3_DRIVE 6 //the index of the fourth Extruder drive
+#define E4_DRIVE 7 //the index of the fifth Extruder drive
 
-#define TEMP_SENSE_PINS {5, 4}  				// Analogue pin numbers
-#define HEAT_ON_PINS {6, X5}					// PWM pins
+// HEATERS - The bed is assumed to be the first
+
+#define TEMP_SENSE_PINS {5, 4}  				// Analogue pin numbers (full array for Duet+Duex4 = {5, 4, 0, 7, 8, 9} )
+#define HEAT_ON_PINS {6, X5}					// PWM pins (full array for Duet+Duex4 = {6, X5, X7, 7, 8, 9} )
 
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
@@ -131,12 +137,17 @@ Licence: GPL
 #define TEMP_INTERVAL 0.122 					// secs - check and control temperatures this often
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN_PIN 34
+#define COOLING_FAN_PIN X6 										//pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
 #define HEAT_ON 0 								// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 #define AD_RANGE 1023.0							//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
-#define HOT_BED 0 								// The index of the heated bed; set to -1 if there is no heated bed
+#define HOT_BED 0 	// The index of the heated bed; set to -1 if there is no heated bed
+#define E0_HEATER 1 //the index of the first extruder heater
+#define E1_HEATER 2 //the index of the first extruder heater
+#define E2_HEATER 3 //the index of the first extruder heater
+#define E3_HEATER 4 //the index of the first extruder heater
+#define E4_HEATER 5 //the index of the first extruder heater
 
 /****************************************************************************************************/
 
@@ -726,7 +737,7 @@ inline void Platform::SetDirection(byte drive, bool direction)
 {
 	if(directionPins[drive] < 0)
 		return;
-	if(drive == AXES)
+	if(drive == E0_DRIVE) //DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
 		digitalWriteNonDue(directionPins[drive], direction);
 	else
 		digitalWrite(directionPins[drive], direction);
@@ -736,7 +747,7 @@ inline void Platform::Disable(byte drive)
 {
 	if(enablePins[drive] < 0)
 		  return;
-	if(drive >= Z_AXIS)
+	if(drive == Z_AXIS || drive==E0_DRIVE || drive==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 		digitalWriteNonDue(enablePins[drive], DISABLE);
 	else
 		digitalWrite(enablePins[drive], DISABLE);
@@ -749,13 +760,13 @@ inline void Platform::Step(byte drive)
 		return;
 	if(!driveEnabled[drive] && enablePins[drive] >= 0)
 	{
-		if(drive >= Z_AXIS)
+		if(drive == Z_AXIS || drive==E0_DRIVE || drive==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 			digitalWriteNonDue(enablePins[drive], ENABLE);
 		else
 			digitalWrite(enablePins[drive], ENABLE);
 		driveEnabled[drive] = true;
 	}
-	if(drive == AXES)
+	if(drive == E0_DRIVE || drive == E3_DRIVE) //STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
 	{
 		digitalWriteNonDue(stepPins[drive], 0);
 		digitalWriteNonDue(stepPins[drive], 1);

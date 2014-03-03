@@ -81,6 +81,7 @@ class Heat
     float GetTemperature(int8_t heater);						// Get the temperature of a heater
     void ResetFault(int8_t heater);								// Reset a heater fault - oly call this if you know what you are doing
     bool AllHeatersAtSetTemperatures();							// Is everything at temperature within tolerance?
+    bool HeaterAtSetTemperature(int8_t heater);					// Is a specific heater at temperature within tolerance?
     void Diagnostics();											// Output useful information
     
   private:
