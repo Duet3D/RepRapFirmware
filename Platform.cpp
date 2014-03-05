@@ -97,6 +97,19 @@ void Platform::Init()
 	  nvData.irZProbeParameters.Init();
 	  nvData.ultrasonicZProbeParameters.Init();
 
+	  for (size_t i = 0; i < HEATERS; ++i)
+	  {
+		  nvData.pidParams[i].thermistorBeta = defaultThermistorBetas[i];
+		  nvData.pidParams[i].thermistorSeriesR = defaultThermistorSeriesRs[i];
+		  nvData.pidParams[i].thermistorInfR = defaultThermistor25RS[i] * exp(-defaultThermistorBetas[i]/(25.0 - ABS_ZERO));
+		  nvData.pidParams[i].kI = defaultPidKis[i];
+		  nvData.pidParams[i].kD = defaultPidKds[i];
+		  nvData.pidParams[i].kP = defaultPidKps[i];
+		  nvData.pidParams[i].fullBand = defaultFullBand[i];
+		  nvData.pidParams[i].iMin = defaultIMin[i];
+		  nvData.pidParams[i].iMax = defaultIMax[i];
+	  }
+
 	  nvData.magic = FlashData::magicValue;
   }
 
@@ -150,17 +163,6 @@ void Platform::Init()
 
   tempSensePins = TEMP_SENSE_PINS;
   heatOnPins = HEAT_ON_PINS;
-  thermistorBetas = THERMISTOR_BETAS;
-  thermistorSeriesRs = THERMISTOR_SERIES_RS;
-  thermistorInfRs = THERMISTOR_25_RS;
-  usePID = USE_PID;
-  pidKis = PID_KIS;
-  pidKds = PID_KDS;
-  pidKps = PID_KPS;
-  fullPidBand = FULL_PID_BAND;
-  pidMin = PID_MIN;
-  pidMax = PID_MAX;
-  dMix = D_MIX;
   heatSampleTime = HEAT_SAMPLE_TIME;
   standbyTemperatures = STANDBY_TEMPERATURES;
   activeTemperatures = ACTIVE_TEMPERATURES;
@@ -228,18 +230,17 @@ void Platform::Init()
 
 	thermistorFilters[i].Init();
 	heaterAdcChannels[i] = PinToAdcChannel(tempSensePins[i]);
-	thermistorInfRs[i] = thermistorInfRs[i] * exp(-thermistorBetas[i]/(25.0 - ABS_ZERO));
 
     // Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check is quickly in the tick ISR
-    float thermistorOverheatResistance = thermistorInfRs[i] * exp(-thermistorBetas[i]/(BAD_HIGH_TEMPERATURE - ABS_ZERO));
-    float thermistorOverheatAdcValue = (AD_RANGE + 1) * thermistorOverheatResistance/(thermistorOverheatResistance + thermistorSeriesRs[i]);
-    thermistorOverheatSums[i] = (uint32_t)(thermistorOverheatAdcValue + 0.9) * thermistorFilters[i].GetNumReadings();
+    float thermistorOverheatResistance = nvData.pidParams[i].thermistorInfR * exp(-nvData.pidParams[i].thermistorBeta/(BAD_HIGH_TEMPERATURE - ABS_ZERO));
+    float thermistorOverheatAdcValue = (adRangeReal + 1) * thermistorOverheatResistance/(thermistorOverheatResistance + nvData.pidParams[i].thermistorSeriesR);
+    thermistorOverheatSums[i] = (uint32_t)(thermistorOverheatAdcValue + 0.9) * numThermistorReadingsAveraged;
   }
 
   if(coolingFanPin >= 0)
   {
 	  pinMode(coolingFanPin, OUTPUT);
-	  analogWrite(coolingFanPin, 0);
+	  analogWrite(coolingFanPin, (HEAT_ON == 0) ? 255 : 0);		// turn auxiliary cooling fan off
   }
 
   InitialiseInterrupts();
@@ -284,13 +285,13 @@ int Platform::ZProbe()
 		switch(nvData.zProbeType)
 		{
 		case 1:
-			// Simple IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
-			return (int)((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum())/(8 * zProbeOnFilter.GetNumReadings()));
+			// Simple IR sensor
+			return (int)((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum())/(8 * numZProbeReadingsAveraged));
 
 		case 2:
 			// Modulated IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
-			return (int)(((int32_t)zProbeOnFilter.GetSum() - (int32_t)zProbeOffFilter.GetSum())/(4 * zProbeOnFilter.GetNumReadings()));
+			return (int)(((int32_t)zProbeOnFilter.GetSum() - (int32_t)zProbeOffFilter.GetSum())/(4 * numZProbeReadingsAveraged));
 
 		case 3:
 			// Ultrasonic sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
@@ -301,11 +302,11 @@ int Platform::ZProbe()
 					zProbeMinSum = sum;
 				}
 				uint32_t total = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
-				return (int)((total - zProbeMinSum)/(4 * zProbeOnFilter.GetNumReadings()));
+				return (int)((total - zProbeMinSum)/(4 * numZProbeReadingsAveraged));
 			}
 
 		default:
-			break;;
+			break;
 		}
 	}
 	return 0;	// Z probe not turned on or not initialised yet
@@ -319,7 +320,7 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 		switch(nvData.zProbeType)
 		{
 		case 2:		// modulated IR sensor
-			v1 = (int)(zProbeOnFilter.GetSum()/(4 * zProbeOnFilter.GetNumReadings()));	// pass back the reading with IR turned on
+			v1 = (int)(zProbeOnFilter.GetSum()/(4 * numZProbeReadingsAveraged));	// pass back the reading with IR turned on
 			return 1;
 		case 3:		// ultrasonic
 			{
@@ -328,8 +329,8 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 				{
 					zProbeMinSum = sum;
 				}
-				v1 = (int)((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum())/(8 * zProbeOnFilter.GetNumReadings()));	// pass back the raw reading
-				v2 = (int)(zProbeMinSum/(8 * zProbeOnFilter.GetNumReadings()));				// pass back the minimum found
+				v1 = (int)((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum())/(8 * numZProbeReadingsAveraged));	// pass back the raw reading
+				v2 = (int)(zProbeMinSum/(8 * numZProbeReadingsAveraged));				// pass back the minimum found
 			}
 			return 2;
 		default:
@@ -433,7 +434,7 @@ void Platform::SetZProbing(bool starting)
 
 void Platform::ResetZProbeMinSum()
 {
-	zProbeMinSum = 4095 * zProbeOnFilter.GetNumReadings() * 2;
+	zProbeMinSum = adRangeReal * numZProbeReadingsAveraged * 2;
 }
 
 float Platform::Time()
@@ -587,13 +588,13 @@ void Platform::Tick()
 	case 1:			// last conversion started was a thermistor
 	case 3:
 		{
-			AveragingFilter& currentFilter = const_cast<AveragingFilter&>(thermistorFilters[currentHeater]);
+			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
 			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
 			StartAdcConversion(zProbeAdcChannel);
 			if(currentFilter.IsValid())
 			{
 				uint32_t sum = currentFilter.GetSum();
-				if(sum < thermistorOverheatSums[currentHeater] || sum >= (AD_RANGE - 3) * currentFilter.GetNumReadings())
+				if(sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
 				{
 					// We have an over-temperature or bad reading from this thermistor, so turn off the heater
 					// NB - the function we call does floating point maths, but this is an exceptional situation so we allow it
@@ -610,8 +611,8 @@ void Platform::Tick()
 		++tickState;
 		break;
 
-	case 2:			// last conversion started was the IR probe
-		const_cast<AveragingFilter&>(zProbeOnFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
+	case 2:			// last conversion started was the Z probe, with IR LED on
+		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
 		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
 		if(nvData.zProbeType == 2)								// if using a modulated IR sensor
 		{
@@ -621,7 +622,7 @@ void Platform::Tick()
 		break;
 
 	case 4:			// last conversion started was the Z probe, with IR LED off if modulation is enabled
-		const_cast<AveragingFilter&>(zProbeOffFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
+		const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
 		// no break
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
@@ -763,24 +764,25 @@ void Platform::ClassReport(char* className, float &lastTime)
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(int8_t heater) const
+float Platform::GetTemperature(size_t heater) const
 {
   // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
   // So we add 0.5 to to the reading to get a better estimate of the input. But first, recognise the special case of thermistor disconnected.
   int rawTemp = GetRawTemperature(heater);
-  if (rawTemp >= AD_RANGE - 3)		// the -3 is to allow for noise
+  if (rawTemp >= adDisconnectedVirtual)
   {
 	  // Thermistor is disconnected
 	  return ABS_ZERO;
   }
   float r = (float)rawTemp + 0.5;
-  return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
+  const PidParameters& p = nvData.pidParams[heater];
+  return ABS_ZERO + p.thermistorBeta/log( (r * p.thermistorSeriesR/((adRangeVirtual + 1) - r))/p.thermistorInfR );
 }
 
 
 // power is a fraction in [0,1]
 
-void Platform::SetHeater(int8_t heater, const float& power)
+void Platform::SetHeater(size_t heater, const float& power)
 {
   if(heatOnPins[heater] < 0)
     return;
@@ -799,9 +801,39 @@ void Platform::SetPidValues(size_t heater, float pVal, float iVal, float dVal)
 {
 	if (heater < HEATERS)
 	{
-		pidKps[heater] = pVal;
-		pidKis[heater] = iVal / heatSampleTime;
-		pidKds[heater] = dVal * heatSampleTime;
+		PidParameters& p = nvData.pidParams[heater];
+		p.kP = pVal;
+		p.kI = iVal / heatSampleTime;
+		p.kD = dVal * heatSampleTime;
+		WriteNvData();
+	}
+}
+
+float Platform::GetThermistor25CResistance(size_t heater) const
+{
+	if (heater < HEATERS)
+	{
+		const PidParameters& p = nvData.pidParams[heater];
+		return p.thermistorInfR * exp(p.thermistorBeta/(25.0 - ABS_ZERO));
+	}
+	return 0;
+}
+
+float Platform::GetThermistorBeta(size_t heater) const
+{
+	return (heater < HEATERS)
+			? nvData.pidParams[heater].thermistorBeta
+			: 0;
+}
+
+void Platform::SetThermistorParameters(size_t heater, float r25, float beta)
+{
+	if (heater < HEATERS)
+	{
+		PidParameters& p = nvData.pidParams[heater];
+		p.thermistorInfR = r25 * exp(-beta/(25.0 - ABS_ZERO));
+		p.thermistorBeta = beta;
+		WriteNvData();
 	}
 }
 

@@ -385,19 +385,19 @@ int GCodes::SetUpMove(GCodeBuffer *gb)
 	if (!reprap.GetMove()->GetCurrentState(moveBuffer))
 		return 0;
 
-	checkEndStops = noEndstopCheck;
+	bool doEndstopCheck = false;
 	if (gb->Seen('S'))
 	{
 		if (gb->GetIValue() == 1)
 		{
-			checkEndStops = checkAtEndstop;
+			doEndstopCheck = true;
 		}
 	}
 
-	bool doingEndstopCheck = (checkEndStops != noEndstopCheck);
-	LoadMoveBufferFromGCode(gb, false, doingEndstopCheck);
+	checkEndStops = (doEndstopCheck) ? checkAtEndstop : noEndstopCheck;
+	LoadMoveBufferFromGCode(gb, false, !doEndstopCheck);
 	moveAvailable = true;
-	return (doingEndstopCheck) ? 2 : 1;
+	return (doEndstopCheck) ? 2 : 1;
 }
 
 // The Move class calls this function to find what to do next.
@@ -713,7 +713,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 	{
 		float liveCoordinates[DRIVES + 1];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		moveToDo[Z_AXIS] = liveCoordinates[Z_AXIS] - 1.0; // move down at most another 1mm
+		moveToDo[Z_AXIS] = liveCoordinates[Z_AXIS] - 10.0; // move down at most another 10mm
 	}
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS) * 0.2;
@@ -776,7 +776,7 @@ bool GCodes::DoSingleZProbe()
 		{
 			float liveCoordinates[DRIVES + 1];
 			reprap.GetMove()->LiveCoordinates(liveCoordinates);
-			moveToDo[Z_AXIS] = liveCoordinates[Z_AXIS] - 1.0;	// move down at most another 1mm
+			moveToDo[Z_AXIS] = liveCoordinates[Z_AXIS] - 10.0;	// move down at most another 10mm
 		}
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS) * 0.2;
@@ -1331,6 +1331,70 @@ void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOr
 	}
 }
 
+void GCodes::SetHeaterParameters(GCodeBuffer *gb, size_t heater, char reply[STRING_LENGTH])
+{
+	float pValue, iValue, dValue;
+	bool seen = false;
+	if (gb->Seen('P'))
+	{
+		pValue = gb->GetFValue();
+		seen = true;
+	}
+	else
+	{
+		pValue = platform->PidKp(heater);
+	}
+	if (gb->Seen('I'))
+	{
+		iValue = gb->GetFValue();
+		seen = true;
+	}
+	else
+	{
+		iValue = platform->PidKi(heater);
+	}
+	if (gb->Seen('D'))
+	{
+		dValue = gb->GetFValue();
+		seen = true;
+	}
+	else
+	{
+		dValue = platform->PidKd(heater);
+	}
+
+	// We also allow the 25C resistance and beta to be set
+	float r25, beta;
+	if (gb->Seen('R'))
+	{
+		r25 = gb->GetFValue();
+		seen = true;
+	}
+	else
+	{
+		r25 = platform->GetThermistor25CResistance(heater);
+	}
+	if (gb->Seen('B'))
+	{
+		beta = gb->GetFValue();
+		seen = true;
+	}
+	else
+	{
+		beta = platform->GetThermistorBeta(heater);
+	}
+
+	if (seen)
+	{
+		platform->SetPidValues(heater, pValue, iValue, dValue);
+		platform->SetThermistorParameters(heater, r25, beta);
+	}
+	else
+	{
+		snprintf(reply, STRING_LENGTH, "P:%.2f I:%.3f D: %.2f R: %.1f B: %.1f\n", pValue, iValue, dValue, r25, beta);
+	}
+}
+
 // If the GCode to act on is completed, this returns true,
 // otherwise false.  It is called repeatedly for a given
 // GCode until it returns true for that code.
@@ -1739,52 +1803,14 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			break;
 
 		case 301: // Set hot end PID values
-		{
-			float pValue, iValue, dValue;
-			bool seen = false;
-			if (gb->Seen('P'))
-			{
-				pValue = gb->GetFValue();
-				seen = true;
-			}
-			else
-			{
-				pValue = platform->PidKp(1);
-			}
-			if (gb->Seen('I'))
-			{
-				iValue = gb->GetFValue();
-				seen = true;
-			}
-			else
-			{
-				iValue = platform->PidKi(1);
-			}
-			if (gb->Seen('D'))
-			{
-				dValue = gb->GetFValue();
-				seen = true;
-			}
-			else
-			{
-				dValue = platform->PidKd(1);
-			}
-
-			if (seen)
-			{
-				platform->SetPidValues(1, pValue, iValue, dValue);
-			}
-			else
-			{
-				snprintf(reply, STRING_LENGTH, "P:%f I:%f D: %f\n", pValue, iValue, dValue);
-			}
-		}
+			SetHeaterParameters(gb, 1, reply);
 			break;
 
 		case 302: // Allow cold extrudes
 			break;
 
-		case 304: // Set thermistor parameters
+		case 304: // Set heated bed parameters
+			SetHeaterParameters(gb, 0, reply);
 			break;
 
 		case 503: // list variable settings

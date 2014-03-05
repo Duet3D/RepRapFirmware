@@ -119,6 +119,7 @@ class GCodes
     bool SendConfigToLine();
     void WriteHTMLToFile(char b, GCodeBuffer *gb);
     bool OffsetAxes(GCodeBuffer *gb);
+    void SetHeaterParameters(GCodeBuffer *gb, size_t heater, char reply[STRING_LENGTH]);
     int8_t Heater(int8_t head) const;
 
     Platform* platform;

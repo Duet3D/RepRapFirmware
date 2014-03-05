@@ -169,9 +169,9 @@ void PID::Spin()
   if (temp_iState < platform->PidMin(heater)) temp_iState = platform->PidMin(heater);
   else if (temp_iState > platform->PidMax(heater)) temp_iState = platform->PidMax(heater);
    
-  temp_dState =  platform->PidKd(heater)*(temperature - lastTemperature)*(1.0 - platform->DMix(heater)) + platform->DMix(heater)*temp_dState; 
+  temp_dState =  platform->PidKd(heater) * (temperature - lastTemperature);
 
-  float result = platform->PidKp(heater)*error + temp_iState - temp_dState;
+  float result = platform->PidKp(heater) * error + temp_iState - temp_dState;
 
   lastTemperature = temperature;
 

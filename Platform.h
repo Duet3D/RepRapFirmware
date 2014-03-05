@@ -91,10 +91,13 @@ Licence: GPL
 #define POT_WIPES {1, 3, 2, 0} // Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
+
 #define Z_PROBE_AD_VALUE (400)
 #define Z_PROBE_STOP_HEIGHT (0.7) // mm
 #define Z_PROBE_PIN (0) 		// Analogue pin number
 #define Z_PROBE_MOD_PIN (61)	// Digital pin number to turn the IR LED on (high) or off (low)
+const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of readings with IR on, and the same number with IR off
+
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
@@ -118,11 +121,9 @@ Licence: GPL
 
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
-#define THERMISTOR_BETAS {3988.0, 4138.0}
-#define THERMISTOR_SERIES_RS {1000, 1000} // Ohms in series with the thermistors
-#define THERMISTOR_25_RS {10000.0, 100000.0} // Thermistor ohms at 25 C = 298.15 K
-
-#define USE_PID {false, true} // PID or bang-bang for this heater?
+const float defaultThermistorBetas[HEATERS] = {3988.0, 4138.0};
+const float defaultThermistorSeriesRs[HEATERS] = {1000, 1000}; 		// Ohms in series with the thermistors
+const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0};	// Thermistor ohms at 25 C = 298.15 K
 
 // Note on hot end PID parameters:
 // The system is highly nonlinear because the heater power is limited to a maximum value and cannot go negative.
@@ -144,29 +145,40 @@ Licence: GPL
 //    operation for a 3D printer, so we don't worry about this case.
 // An improvement on method (2) would be to preset the I-accumulator to an estimate of the value needed to maintain the
 // target temperature when we start using the PID (instead of clearing it to zero), and then reduce the I-term a little.
+//
+// Note: a negative P, I or D value means do not use PID for this heater, use bang-bang control instead.
+// This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
 #if 1 	// if using method 2 above
-#define PID_KIS {-1, 0.2 / HEAT_SAMPLE_TIME}
-#define PID_KDS {-1, 100.0 * HEAT_SAMPLE_TIME}
-#define PID_KPS {-1, 9.0}
-#define FULL_PID_BAND {-1, 20.0}	// errors larger than this cause heater to be on or off and I-term set to zero
-#else	// using method 2 above
-#define PID_KIS {-1, 0.027 / HEAT_SAMPLE_TIME}
-#define PID_KDS {-1, 100.0 * HEAT_SAMPLE_TIME}
-#define PID_KPS {-1, 20.0}
-#define FULL_PID_BAND {-1, 150.0}	// errors larger than this cause heater to be on or off and I-term set to zero
+const float defaultPidKis[HEATERS] = {5.0 / HEAT_SAMPLE_TIME, 0.2 / HEAT_SAMPLE_TIME};
+const float defaultPidKds[HEATERS] = {500.0 * HEAT_SAMPLE_TIME, 50.0 * HEAT_SAMPLE_TIME};
+const float defaultPidKps[HEATERS] = {-1, 9.0};
+const float defaultFullBand[HEATERS] = {5.0, 20.0};		// errors larger than this cause heater to be on or off and I-term set to zero
+#else	// using method 1 above
+const float defaultPidKis[HEATERS] = {5.0 / HEAT_SAMPLE_TIME, 0.027 / HEAT_SAMPLE_TIME};
+const float defaultPidKds[HEATERS] = {500.0 * HEAT_SAMPLE_TIME, 50.0 * HEAT_SAMPLE_TIME};
+const float defaultPidKps[HEATERS] = {-1, 20.0};
+const float defaultFullBand[HEATERS] = {5.0, 150.0};	// errors larger than this cause heater to be on or off and I-term set to zero
 #endif
 
-#define PID_MIN {-1, 0.0}	// minimum value of I-term
-#define PID_MAX {-1, 180}	// maximum value of I-term, must be high enough to reach 245C for ABS printing
-#define D_MIX {-1, 0.5}		// higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
-#define TEMP_INTERVAL 0.122 // secs - check and control temperatures this often
+const float defaultIMin[HEATERS] = {0.0, 0.0};	// minimum value of I-term
+const float defaultIMax[HEATERS] = {255, 180};	// maximum value of I-term, must be high enough to reach 245C for ABS printing
+
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
 #define COOLING_FAN_PIN X6
-#define HEAT_ON 0 // 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define HEAT_ON 0 // 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
 
-#define AD_RANGE (4095) // The A->D converter that measures temperatures gives an int this big as its max value
+// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
+const unsigned int adOversampleBits = 1;					// number of bits we oversample when reading temperatures
+
+// Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ** adOversampleBits.
+// Keep numThermistorReadingsAveraged * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
+const unsigned int numThermistorReadingsAveraged = (HEATERS > 3) ? 32 : 64;
+const unsigned int adRangeReal = 4095;						// the ADC that measures temperatures gives an int this big as its max value
+const unsigned int adRangeVirtual = ((adRangeReal + 1) << adOversampleBits) - 1;	// the max value we can get using oversampling
+const unsigned int adDisconnectedReal = adRangeReal - 3;	// we consider an ADC reading at/above this value to indicate that the thermistor is disconnected
+const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBits;
 
 #define HOT_BED 0 // The index of the heated bed; set to -1 if there is no heated bed
 
@@ -477,11 +489,17 @@ struct ZProbeParameters
 	}
 };
 
-// Class to perform averaging of values read from the ADC
-// We sample each sensor at 250Hz, so we can afford to average 16 readings from each sensor and still produce a value
-// that is only 32ms old on average.
+struct PidParameters
+{
+	float kI, kD, kP;
+	float fullBand, iMin, iMax;
+	float thermistorBeta, thermistorSeriesR, thermistorInfR;
+};
 
-class AveragingFilter
+// Class to perform averaging of values read from the ADC
+// numAveraged should be a power of 2 for best efficiency
+
+template<size_t numAveraged> class AveragingFilter
 {
 public:
 	AveragingFilter()
@@ -514,22 +532,10 @@ public:
 		}
 	}
 
-	// Return the averaged value
-	uint16_t GetAverage() const volatile
-	{
-		return (uint16_t)(sum/numAveraged);
-	}
-
 	// Return the raw sum
 	uint32_t GetSum() const volatile
 	{
 		return sum;
-	}
-
-	// Return the number of readings we averaged
-	uint16_t GetNumReadings() const volatile
-	{
-		return numAveraged;
 	}
 
 	// Return true if we have a valid average
@@ -539,7 +545,6 @@ public:
 	}
 
 private:
-	static const unsigned int numAveraged = 16;		// use a power of 2 to keep the % operation fast
 	uint16_t readings[numAveraged];
 	size_t index;
 	uint32_t sum;
@@ -547,6 +552,9 @@ private:
 	//invariant(sum == + over readings)
 	//invariant(index < numAveraged)
 };
+
+typedef AveragingFilter<numThermistorReadingsAveraged> ThermistorAveragingFilter;
+typedef AveragingFilter<numZProbeReadingsAveraged> ZProbeAveragingFilter;
 
 // Enumeration of error condition bits
 enum ErrorCode
@@ -648,19 +656,21 @@ public:
 
   // Heat and temperature
   
-  float GetTemperature(int8_t heater) const; // Result is in degrees Celsius
-  void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
-  float PidKp(int8_t heater) const;
-  float PidKi(int8_t heater) const;
-  float PidKd(int8_t heater) const;
-  float FullPidBand(int8_t heater) const;
-  float PidMin(int8_t heater) const;
-  float PidMax(int8_t heater) const;
-  float DMix(int8_t heater) const;
-  bool UsePID(int8_t heater) const;
+  float GetTemperature(size_t heater) const; // Result is in degrees Celsius
+  void SetHeater(size_t heater, const float& power); // power is a fraction in [0,1]
+  float PidKp(size_t heater) const;
+  float PidKi(size_t heater) const;
+  float PidKd(size_t heater) const;
+  float FullPidBand(size_t heater) const;
+  float PidMin(size_t heater) const;
+  float PidMax(size_t heater) const;
+  bool UsePID(size_t heater) const;
   float HeatSampleTime() const;
   void CoolingFan(float speed);
   void SetPidValues(size_t heater, float pVal, float iVal, float dVal);
+  float GetThermistor25CResistance(size_t heater) const;
+  float GetThermistorBeta(size_t heater) const;
+  void SetThermistorParameters(size_t heater, float r25, float beta);
 
 //-------------------------------------------------------------------------------------------------------
 protected:
@@ -676,11 +686,13 @@ private:
 
   struct FlashData
   {
-	  static const uint16_t magicValue = 0x59B2;		// value we use to recognise that he flash data has been written
+	  static const uint16_t magicValue = 0x59B2;	// value we use to recognise that he flash data has been written
+
 	  uint16_t magic;
 	  ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
 	  ZProbeParameters ultrasonicZProbeParameters;	// Z probe values for the IR sensor
 	  int zProbeType;								// the type of Z probe we are using
+	  PidParameters pidParams[HEATERS];
 	  byte ipAddress[4];
 	  byte netMask[4];
 	  byte gateWay[4];
@@ -722,10 +734,10 @@ private:
   int8_t zProbePin;
   int8_t zProbeModulationPin;
 
-  volatile AveragingFilter zProbeOnFilter;				// Z probe readings we took with the IR turned on
-  volatile AveragingFilter zProbeOffFilter;				// Z probe readings we took with the IR turned off
-  volatile AveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
-  uint32_t zProbeMinSum;								// minimum Z probe sums seen, used with ultrasonic probe
+  volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
+  volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
+  volatile ThermistorAveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
+  uint32_t zProbeMinSum;											// minimum Z probe sums seen, used with ultrasonic probe
 
 // AXES
 
@@ -743,22 +755,10 @@ private:
 
   int8_t tempSensePins[HEATERS];
   int8_t heatOnPins[HEATERS];
-  float thermistorBetas[HEATERS];
-  float thermistorSeriesRs[HEATERS];
-  float thermistorInfRs[HEATERS];
-  bool usePID[HEATERS];
-  float pidKis[HEATERS];
-  float pidKds[HEATERS];
-  float pidKps[HEATERS];
-  float fullPidBand[HEATERS];
-  float pidMin[HEATERS];
-  float pidMax[HEATERS];
-  float dMix[HEATERS];
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
   int8_t coolingFanPin;
-  //int8_t turnHeatOn;
 
 // Serial/USB
 
@@ -958,7 +958,9 @@ inline void Platform::SetMaxFeedrate(int8_t drive, float value)
 
 inline int Platform::GetRawTemperature(byte heater) const
 {
-  return (heater < HEATERS) ? thermistorFilters[heater].GetAverage() : 0;
+  return (heater < HEATERS)
+		  ? thermistorFilters[heater].GetSum()/(numThermistorReadingsAveraged >> adOversampleBits)
+		  : 0;
 }
 
 inline float Platform::HeatSampleTime() const
@@ -966,59 +968,49 @@ inline float Platform::HeatSampleTime() const
   return heatSampleTime;
 }
 
-inline bool Platform::UsePID(int8_t heater) const
+inline bool Platform::UsePID(size_t heater) const
 {
-  return usePID[heater];
+	return nvData.pidParams[heater].kP >= 0;
 }
 
-
-inline float Platform::PidKi(int8_t heater) const
+inline float Platform::PidKi(size_t heater) const
 {
-  return pidKis[heater]*heatSampleTime;
+	return nvData.pidParams[heater].kI * heatSampleTime;
 }
 
-inline float Platform::PidKd(int8_t heater) const
+inline float Platform::PidKd(size_t heater) const
 {
-  return pidKds[heater]/heatSampleTime;
+	return nvData.pidParams[heater].kD / heatSampleTime;
 }
 
-inline float Platform::PidKp(int8_t heater) const
+inline float Platform::PidKp(size_t heater) const
 {
-  return pidKps[heater];
+	return nvData.pidParams[heater].kP;
 }
 
-inline float Platform::FullPidBand(int8_t heater) const
+inline float Platform::FullPidBand(size_t heater) const
 {
-  return fullPidBand[heater];
+	return nvData.pidParams[heater].fullBand;
 }
 
-inline float Platform::PidMin(int8_t heater) const
+inline float Platform::PidMin(size_t heater) const
 {
-  return pidMin[heater];  
+	return nvData.pidParams[heater].iMin;
 }
 
-inline float Platform::PidMax(int8_t heater) const
+inline float Platform::PidMax(size_t heater) const
 {
-  return pidMax[heater];
-}
-
-inline float Platform::DMix(int8_t heater) const
-{
-  return dMix[heater];  
+	return nvData.pidParams[heater].iMax;
 }
 
 inline void Platform::CoolingFan(float speed)
 {
-	if(coolingFanPin < 0)
-		return;
-	// The cooling fan output pin gets inverted
-	analogWriteNonDue(coolingFanPin, (uint32_t)((1.0 - speed)*255.0));
+	if(coolingFanPin > 0)
+	{
+		// The cooling fan output pin gets inverted if HEAT_ON == 0
+		analogWriteNonDue(coolingFanPin, (uint32_t)( ((HEAT_ON == 0) ? (1.0 - speed) : speed) * 255.0));
+	}
 }
-
-//inline void Platform::SetHeatOn(int8_t ho)
-//{
-//	turnHeatOn = ho;
-//}
 
 
 //*********************************************************************************************************

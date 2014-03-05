@@ -1065,7 +1065,7 @@ void DDA::Step()
   uint8_t axesMoving = 0;
   uint8_t extrudersMoving = 0;
   
-  for(int8_t drive = 0; drive < DRIVES; drive++)
+  for(size_t drive = 0; drive < DRIVES; drive++)
   {
     counter[drive] += delta[drive];
     if(counter[drive] > 0)
