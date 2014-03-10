@@ -1599,6 +1599,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     
     case 141: // Chamber temperature
       platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
+    case 190: // // Deprecated...
+    	if(gb->Seen('S'))
+    	{
+			float value=gb->GetFValue();
+			reprap.GetHeat()->SetActiveTemperature(0, value);
+			reprap.GetHeat()->SetStandbyTemperature(0, value); // FIXME have to set both?not sure as the bed should always be selected
+			reprap.GetHeat()->Activate(0);
+    	}
+    	result = reprap.GetHeat()->HeaterAtSetTemperature(0);
       break;
 
     case 201: // Set axis accelerations
