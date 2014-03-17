@@ -142,21 +142,22 @@ void PID::Spin()
   }
 
   float error = ((active) ? activeTemperature : standbyTemperature) - temperature;
+  const PidParameters& pp = platform->GetPidParameters(heater);
   
-  if(!platform->UsePID(heater))
+  if(!pp.UsePID())
   {
     platform->SetHeater(heater, (error > 0.0) ? 1.0 : 0.0);
     return; 
   }
   
-  if(error < -platform->FullPidBand(heater))
+  if(error < -pp.fullBand)
   {
      temp_iState = 0.0;
      platform->SetHeater(heater, 0.0);
      lastTemperature = temperature;
      return;
   }
-  if(error > platform->FullPidBand(heater))
+  if(error > pp.fullBand)
   {
      temp_iState = 0.0;
      platform->SetHeater(heater, 1.0);
@@ -164,14 +165,14 @@ void PID::Spin()
      return;
   }  
    
-  temp_iState += error * platform->PidKi(heater);
+  temp_iState += error * pp.kI;
   
-  if (temp_iState < platform->PidMin(heater)) temp_iState = platform->PidMin(heater);
-  else if (temp_iState > platform->PidMax(heater)) temp_iState = platform->PidMax(heater);
+  if (temp_iState < pp.iMin) temp_iState = pp.iMin;
+  else if (temp_iState > pp.iMax) temp_iState = pp.iMax;
    
-  temp_dState =  platform->PidKd(heater) * (temperature - lastTemperature);
+  temp_dState =  pp.kD * (temperature - lastTemperature);
 
-  float result = platform->PidKp(heater) * error + temp_iState - temp_dState;
+  float result = pp.kP * error + temp_iState - temp_dState;
 
   lastTemperature = temperature;
 

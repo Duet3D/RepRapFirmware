@@ -62,6 +62,34 @@ extern "C"
 }
 
 //*************************************************************************************************
+// PidParameters class
+
+bool PidParameters::UsePID() const
+{
+	return kP >= 0;
+}
+
+float PidParameters::GetThermistorR25() const
+{
+	return thermistorInfR * exp(thermistorBeta/(25.0 - ABS_ZERO));
+}
+
+void PidParameters::SetThermistorR25AndBeta(float r25, float beta)
+{
+	thermistorInfR = r25 * exp(-beta/(25.0 - ABS_ZERO));
+	thermistorBeta = beta;
+}
+
+bool PidParameters::operator==(const PidParameters& other) const
+{
+	return kI == other.kI && kD == other.kD && kP == other.kP
+			&& fullBand == other.fullBand && iMin == other.iMin && iMax == other.iMax
+			&& thermistorBeta == other.thermistorBeta && thermistorInfR == other.thermistorInfR && thermistorSeriesR == other.thermistorSeriesR
+			&& adcLowOffset == other.adcLowOffset && adcHighOffset == other.adcHighOffset;
+}
+
+//*************************************************************************************************
+// Platform class
 
 Platform::Platform() : tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0)
 {
@@ -99,15 +127,16 @@ void Platform::Init()
 
 	  for (size_t i = 0; i < HEATERS; ++i)
 	  {
-		  nvData.pidParams[i].thermistorBeta = defaultThermistorBetas[i];
-		  nvData.pidParams[i].thermistorSeriesR = defaultThermistorSeriesRs[i];
-		  nvData.pidParams[i].thermistorInfR = defaultThermistor25RS[i] * exp(-defaultThermistorBetas[i]/(25.0 - ABS_ZERO));
-		  nvData.pidParams[i].kI = defaultPidKis[i];
-		  nvData.pidParams[i].kD = defaultPidKds[i];
-		  nvData.pidParams[i].kP = defaultPidKps[i];
-		  nvData.pidParams[i].fullBand = defaultFullBand[i];
-		  nvData.pidParams[i].iMin = defaultIMin[i];
-		  nvData.pidParams[i].iMax = defaultIMax[i];
+		  PidParameters& pp = nvData.pidParams[i];
+		  pp.thermistorSeriesR = defaultThermistorSeriesRs[i];
+		  pp.SetThermistorR25AndBeta(defaultThermistor25RS[i], defaultThermistorBetas[i]);
+		  pp.kI = defaultPidKis[i];
+		  pp.kD = defaultPidKds[i];
+		  pp.kP = defaultPidKps[i];
+		  pp.fullBand = defaultFullBand[i];
+		  pp.iMin = defaultIMin[i];
+		  pp.iMax = defaultIMax[i];
+		  pp.adcLowOffset = pp.adcHighOffset = 0.0;
 	  }
 
 	  nvData.magic = FlashData::magicValue;
@@ -232,7 +261,7 @@ void Platform::Init()
 	heaterAdcChannels[i] = PinToAdcChannel(tempSensePins[i]);
 
     // Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check is quickly in the tick ISR
-    float thermistorOverheatResistance = nvData.pidParams[i].thermistorInfR * exp(-nvData.pidParams[i].thermistorBeta/(BAD_HIGH_TEMPERATURE - ABS_ZERO));
+    float thermistorOverheatResistance = nvData.pidParams[i].GetRInf() * exp(-nvData.pidParams[i].GetBeta()/(BAD_HIGH_TEMPERATURE - ABS_ZERO));
     float thermistorOverheatAdcValue = (adRangeReal + 1) * thermistorOverheatResistance/(thermistorOverheatResistance + nvData.pidParams[i].thermistorSeriesR);
     thermistorOverheatSums[i] = (uint32_t)(thermistorOverheatAdcValue + 0.9) * numThermistorReadingsAveraged;
   }
@@ -774,11 +803,31 @@ float Platform::GetTemperature(size_t heater) const
 	  // Thermistor is disconnected
 	  return ABS_ZERO;
   }
-  float r = (float)rawTemp + 0.5;
+  float reading = (float)rawTemp + 0.5;
   const PidParameters& p = nvData.pidParams[heater];
-  return ABS_ZERO + p.thermistorBeta/log( (r * p.thermistorSeriesR/((adRangeVirtual + 1) - r))/p.thermistorInfR );
+
+  // Correct for the low and high ADC offsets
+  reading -= p.adcLowOffset;
+  reading *= (adRangeVirtual + 1)/(adRangeVirtual + 1 + p.adcHighOffset - p.adcLowOffset);
+
+  float resistance =  reading * p.thermistorSeriesR/((adRangeVirtual + 1) - reading);
+  return (resistance <= p.GetRInf())
+		  ? 2000.0			// thermistor short circuit, return a high temperature
+		  : ABS_ZERO + p.GetBeta()/log(resistance/p.GetRInf());
 }
 
+void Platform::SetPidParameters(size_t heater, const PidParameters& params)
+{
+	if (heater < HEATERS && params != nvData.pidParams[heater])
+	{
+		nvData.pidParams[heater] = params;
+		WriteNvData();
+	}
+}
+const PidParameters& Platform::GetPidParameters(size_t heater)
+{
+	return nvData.pidParams[heater];
+}
 
 // power is a fraction in [0,1]
 
@@ -796,46 +845,6 @@ void Platform::SetHeater(size_t heater, const float& power)
 	  analogWriteNonDue(heatOnPins[heater], p);
 }
 
-
-void Platform::SetPidValues(size_t heater, float pVal, float iVal, float dVal)
-{
-	if (heater < HEATERS)
-	{
-		PidParameters& p = nvData.pidParams[heater];
-		p.kP = pVal;
-		p.kI = iVal / heatSampleTime;
-		p.kD = dVal * heatSampleTime;
-		WriteNvData();
-	}
-}
-
-float Platform::GetThermistor25CResistance(size_t heater) const
-{
-	if (heater < HEATERS)
-	{
-		const PidParameters& p = nvData.pidParams[heater];
-		return p.thermistorInfR * exp(p.thermistorBeta/(25.0 - ABS_ZERO));
-	}
-	return 0;
-}
-
-float Platform::GetThermistorBeta(size_t heater) const
-{
-	return (heater < HEATERS)
-			? nvData.pidParams[heater].thermistorBeta
-			: 0;
-}
-
-void Platform::SetThermistorParameters(size_t heater, float r25, float beta)
-{
-	if (heater < HEATERS)
-	{
-		PidParameters& p = nvData.pidParams[heater];
-		p.thermistorInfR = r25 * exp(-beta/(25.0 - ABS_ZERO));
-		p.thermistorBeta = beta;
-		WriteNvData();
-	}
-}
 
 EndStopHit Platform::Stopped(int8_t drive)
 {

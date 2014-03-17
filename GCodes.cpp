@@ -320,6 +320,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	{
 		if (i < AXES)
 		{
+			// Doing X, Y or Z
 			if (gb->Seen(gCodeLetters[i]))
 			{
 				float moveArg = gb->GetFValue() * distanceScale;
@@ -349,14 +350,22 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 		{
 			if (gb->Seen(gCodeLetters[i]))
 			{
+				// Doing an extruder. We need to store the relative distance for this move in moveBuffer and the resulting new position in lastPos.
 				float moveArg = gb->GetFValue() * distanceScale;
-				if (drivesRelative || doingG92)
+				if (doingG92)
+				{
+					moveBuffer[i] = 0.0;			// no move required
+					lastPos[i - AXES] = moveArg;	// set new absolute position
+				}
+				else if (drivesRelative)
+				{
 					moveBuffer[i] = moveArg;
+					lastPos[i - AXES] += moveArg;
+				}
 				else
 				{
-					float absE = moveArg;
-					moveBuffer[i] = absE - lastPos[i - AXES];
-					lastPos[i - AXES] = absE;
+					moveBuffer[i] = moveArg - lastPos[i - AXES];
+					lastPos[i - AXES] = moveArg;
 				}
 			}
 		}
@@ -1333,37 +1342,25 @@ void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOr
 
 void GCodes::SetHeaterParameters(GCodeBuffer *gb, size_t heater, char reply[STRING_LENGTH])
 {
-	float pValue, iValue, dValue;
+	PidParameters pp = platform->GetPidParameters(heater);
 	bool seen = false;
 	if (gb->Seen('P'))
 	{
-		pValue = gb->GetFValue();
+		pp.kP = gb->GetFValue();
 		seen = true;
-	}
-	else
-	{
-		pValue = platform->PidKp(heater);
 	}
 	if (gb->Seen('I'))
 	{
-		iValue = gb->GetFValue();
+		pp.kI = gb->GetFValue();
 		seen = true;
-	}
-	else
-	{
-		iValue = platform->PidKi(heater);
 	}
 	if (gb->Seen('D'))
 	{
-		dValue = gb->GetFValue();
+		pp.kD = gb->GetFValue();
 		seen = true;
 	}
-	else
-	{
-		dValue = platform->PidKd(heater);
-	}
 
-	// We also allow the 25C resistance and beta to be set
+	// We also allow the 25C resistance and beta to be set. We must set these together.
 	float r25, beta;
 	if (gb->Seen('R'))
 	{
@@ -1372,8 +1369,9 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, size_t heater, char reply[STRI
 	}
 	else
 	{
-		r25 = platform->GetThermistor25CResistance(heater);
+		r25 = pp.GetThermistorR25();
 	}
+
 	if (gb->Seen('B'))
 	{
 		beta = gb->GetFValue();
@@ -1381,17 +1379,29 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, size_t heater, char reply[STRI
 	}
 	else
 	{
-		beta = platform->GetThermistorBeta(heater);
+		beta = pp.GetBeta();
+	}
+
+	if (gb->Seen('L'))
+	{
+		pp.adcLowOffset = gb->GetFValue();
+		seen = true;
+	}
+	if (gb->Seen('H'))
+	{
+		pp.adcHighOffset = gb->GetFValue();
+		seen = true;
 	}
 
 	if (seen)
 	{
-		platform->SetPidValues(heater, pValue, iValue, dValue);
-		platform->SetThermistorParameters(heater, r25, beta);
+		pp.SetThermistorR25AndBeta(r25, beta);					// recalculate Rinf
+		platform->SetPidParameters(heater, pp);
 	}
 	else
 	{
-		snprintf(reply, STRING_LENGTH, "P:%.2f I:%.3f D: %.2f R: %.1f B: %.1f\n", pValue, iValue, dValue, r25, beta);
+		snprintf(reply, STRING_LENGTH, "P:%.2f I:%.3f D: %.2f R: %.1f B: %.1f L: %.1f H: %.1f\n",
+				pp.kP, pp.kI, pp.kD, r25, beta, pp.adcLowOffset, pp.adcHighOffset);
 	}
 }
 

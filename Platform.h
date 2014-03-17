@@ -489,11 +489,30 @@ struct ZProbeParameters
 	}
 };
 
-struct PidParameters
+class PidParameters
 {
+	// If you add any more variables to this class, don't forget to change the definition of operator== in Platform.cpp!
+private:
+	float thermistorBeta, thermistorInfR;				// private because these must be changed together
+
+public:
 	float kI, kD, kP;
 	float fullBand, iMin, iMax;
-	float thermistorBeta, thermistorSeriesR, thermistorInfR;
+	float thermistorSeriesR;
+	float adcLowOffset, adcHighOffset;
+
+	float GetBeta() const { return thermistorBeta; }
+	float GetRInf() const { return thermistorInfR; }
+
+	bool UsePID() const;
+	float GetThermistorR25() const;
+	void SetThermistorR25AndBeta(float r25, float beta);
+
+	bool operator==(const PidParameters& other) const;
+	bool operator!=(const PidParameters& other) const
+	{
+		return !operator==(other);
+	}
 };
 
 // Class to perform averaging of values read from the ADC
@@ -658,19 +677,10 @@ public:
   
   float GetTemperature(size_t heater) const; // Result is in degrees Celsius
   void SetHeater(size_t heater, const float& power); // power is a fraction in [0,1]
-  float PidKp(size_t heater) const;
-  float PidKi(size_t heater) const;
-  float PidKd(size_t heater) const;
-  float FullPidBand(size_t heater) const;
-  float PidMin(size_t heater) const;
-  float PidMax(size_t heater) const;
-  bool UsePID(size_t heater) const;
   float HeatSampleTime() const;
   void CoolingFan(float speed);
-  void SetPidValues(size_t heater, float pVal, float iVal, float dVal);
-  float GetThermistor25CResistance(size_t heater) const;
-  float GetThermistorBeta(size_t heater) const;
-  void SetThermistorParameters(size_t heater, float r25, float beta);
+  void SetPidParameters(size_t heater, const PidParameters& params);
+  const PidParameters& GetPidParameters(size_t heater);
 
 //-------------------------------------------------------------------------------------------------------
 protected:
@@ -966,41 +976,6 @@ inline int Platform::GetRawTemperature(byte heater) const
 inline float Platform::HeatSampleTime() const
 {
   return heatSampleTime;
-}
-
-inline bool Platform::UsePID(size_t heater) const
-{
-	return nvData.pidParams[heater].kP >= 0;
-}
-
-inline float Platform::PidKi(size_t heater) const
-{
-	return nvData.pidParams[heater].kI * heatSampleTime;
-}
-
-inline float Platform::PidKd(size_t heater) const
-{
-	return nvData.pidParams[heater].kD / heatSampleTime;
-}
-
-inline float Platform::PidKp(size_t heater) const
-{
-	return nvData.pidParams[heater].kP;
-}
-
-inline float Platform::FullPidBand(size_t heater) const
-{
-	return nvData.pidParams[heater].fullBand;
-}
-
-inline float Platform::PidMin(size_t heater) const
-{
-	return nvData.pidParams[heater].iMin;
-}
-
-inline float Platform::PidMax(size_t heater) const
-{
-	return nvData.pidParams[heater].iMax;
 }
 
 inline void Platform::CoolingFan(float speed)
