@@ -921,7 +921,7 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, char* reply)
 		{
 			params.adcValue = gb->GetIValue();
 		}
-		if (gb->Seen('T'))
+		if (gb->Seen('S'))
 		{
 			params.calibTemperature = gb->GetFValue();
 		}

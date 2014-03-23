@@ -820,7 +820,6 @@ MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile
 	if(stopAStep >= startDStep)
 	{
 		result = noFlat;
-
 		// Work out the point at which to stop accelerating and then
 		// immediately start decelerating.
 
@@ -886,6 +885,9 @@ void DDA::SetEAcceleration(float eDistance)
     }
 }
 
+// Initialise this DDA taking the previous move into account
+// u = final velocity of the previous move
+// v = final velocity of this move
 MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 {
   int8_t drive;
@@ -918,16 +920,15 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
       eDistance += d*d;
     }
     
-    if(delta[drive] >= 0)
-      directions[drive] = FORWARDS;
-    else
-      directions[drive] = BACKWARDS;
+    directions[drive] = (delta[drive] >= 0) ? FORWARDS: BACKWARDS;
     delta[drive] = abs(delta[drive]);  
     
     // Keep track of the biggest drive move in totalSteps
     
     if(delta[drive] > totalSteps)
-      totalSteps = delta[drive];    
+    {
+      totalSteps = delta[drive];
+    }
   }
   
   // Not going anywhere?  Should have been chucked away before we got here.
@@ -935,7 +936,9 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   if(totalSteps <= 0)
   {
 	if(reprap.Debug())
+	{
 		platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement.\n");
+	}
     myLookAheadEntry->Release();
     return result;
   }
@@ -944,7 +947,9 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   counter[0] = -totalSteps/2;
   for(drive = 1; drive < DRIVES; drive++)
+  {
     counter[drive] = counter[0];
+  }
   
   // Acceleration and velocity calculations
   
@@ -966,21 +971,23 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 	  // for this to happen is when it is moving back from a previous retraction during
 	  // an XY move.
 
-	  if(mt & eMove)
+	  if((mt & eMove) && eDistance > distance)
 	  {
-		  if(eDistance > distance)
-			  SetEAcceleration(eDistance);
-		  else
-			  SetXYAcceleration();
-	  } else
+		  SetEAcceleration(eDistance);
+	  }
+	  else
+	  {
 		  SetXYAcceleration();
+	  }
   } else if (mt & zMove) // Z involved?
   {
     acceleration = platform->Acceleration(Z_AXIS);
     instantDv = platform->InstantDv(Z_AXIS);
     timeStep = 1.0/platform->DriveStepsPerUnit(Z_AXIS);
   } else // Must be extruders only
+  {
 	  SetEAcceleration(eDistance);
+  }
 
   // If we are going from an XY move or extruder move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
 
@@ -1016,7 +1023,11 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   }
 
   if(myLookAheadEntry->FeedRate() < instantDv)
+  {
 	  myLookAheadEntry->SetFeedRate(instantDv);
+  }
+
+  feedRate = myLookAheadEntry->FeedRate();
 
   result = AccelerationCalculation(u, v, result);
   
@@ -1120,14 +1131,21 @@ void DDA::Step()
     // Maybe one day do a Runge-Kutta?
   
     if(stepCount < stopAStep)
+    {
       velocity += acceleration*timeStep;
-    if(stepCount >= startDStep)
+      if (velocity > feedRate)
+      {
+    	  velocity = feedRate;
+      }
+    }
+    else if(stepCount >= startDStep)
+    {
       velocity -= acceleration*timeStep;
-    
-    // Euler is only approximate.
-    
-    if(velocity < instantDv)
-      velocity = instantDv;
+      if(velocity < instantDv)
+      {
+    	  velocity = instantDv;
+      }
+    }
       
     stepCount++;
     active = stepCount < totalSteps;

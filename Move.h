@@ -143,6 +143,7 @@ private:
     float distance;
     float acceleration;
     float instantDv;
+    float feedRate;
     volatile bool active;
 };
 
