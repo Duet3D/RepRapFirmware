@@ -392,6 +392,12 @@ bool Move::DDARingAdd(LookAhead* lookAhead)
     
     float u, v;
     ddaRingAddPointer->Init(lookAhead, u, v);
+
+    // debug, left here but commented out, because I (dc42) have found it useful more than once
+    //sprintf(scratchString, "u=%f v=%f f=%f a=%f stopA=%ld startD=%ld, steps=%ld\n",
+    //		u, v, ddaRingAddPointer->feedRate, ddaRingAddPointer->acceleration, ddaRingAddPointer->stopAStep, ddaRingAddPointer->startDStep, ddaRingAddPointer->totalSteps);
+    //platform->Message(HOST_MESSAGE, scratchString);
+
     ddaRingAddPointer = ddaRingAddPointer->Next();
     ReleaseDDARingLock();
     return true;
@@ -806,12 +812,14 @@ MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile
 	// At which DDA step should we stop accelerating?  myLookAheadEntry->FeedRate() gives
 	// the desired feedrate.
 
-	float d = 0.5*(myLookAheadEntry->FeedRate()*myLookAheadEntry->FeedRate() - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
+	feedRate = myLookAheadEntry->FeedRate();
+
+	float d = 0.5*(feedRate*feedRate - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
 	stopAStep = (long)roundf((d*totalSteps)/distance);
 
 	// At which DDA step should we start decelerating?
 
-	d = 0.5*(v*v - myLookAheadEntry->FeedRate()*myLookAheadEntry->FeedRate())/acceleration;  // This should be 0 or negative...
+	d = 0.5*(v*v - feedRate*feedRate)/acceleration;  // This should be 0 or negative...
 	startDStep = totalSteps + (long)roundf((d*totalSteps)/distance);
 
 	// If acceleration stop is at or after deceleration start, then the distance moved
@@ -820,6 +828,7 @@ MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile
 	if(stopAStep >= startDStep)
 	{
 		result = noFlat;
+
 		// Work out the point at which to stop accelerating and then
 		// immediately start decelerating.
 
@@ -1027,8 +1036,6 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 	  myLookAheadEntry->SetFeedRate(instantDv);
   }
 
-  feedRate = myLookAheadEntry->FeedRate();
-
   result = AccelerationCalculation(u, v, result);
   
   // The initial velocity
@@ -1123,7 +1130,8 @@ void DDA::Step()
   if(active)
   {
     if(axesMoving)
-      timeStep = move->stepDistances[axesMoving]/velocity;
+//      timeStep = move->stepDistances[axesMoving]/velocity;
+      timeStep = distance/(totalSteps * velocity);	// dc42 use the average distance per step
     else
       timeStep = move->extruderStepDistances[extrudersMoving]/velocity;
       

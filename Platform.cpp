@@ -1,8 +1,8 @@
 /****************************************************************************************************
 
- RepRapFirmware - Platform: RepRapPro Mendel with Prototype Arduino Due controller
+ RepRapFirmware - Platform: RepRapPro Ormerod with Arduino Due controller
 
- Platform contains all the code and definitons to deal with machine-dependent things such as control
+ Platform contains all the code and definitions to deal with machine-dependent things such as control
  pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
 
  -----------------------------------------------------------------------------------------------------
@@ -204,7 +204,6 @@ void Platform::Init()
 
 	for (size_t i = 0; i < DRIVES; i++)
 	{
-
 		if (stepPins[i] >= 0)
 		{
 			if (i > Z_AXIS)
@@ -329,15 +328,15 @@ int Platform::ZProbe()
 
 		case 4:
 			// Ultrasonic sensor in differential mode. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
-		{
-			uint32_t sum = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
-			if (sum < zProbeMinSum)
 			{
-				zProbeMinSum = sum;
+				uint32_t sum = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
+				if (sum < zProbeMinSum)
+				{
+					zProbeMinSum = sum;
+				}
+				uint32_t total = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
+				return (int) ((total - zProbeMinSum) / (4 * numZProbeReadingsAveraged));
 			}
-			uint32_t total = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
-			return (int) ((total - zProbeMinSum) / (4 * numZProbeReadingsAveraged));
-		}
 
 		default:
 			break;
@@ -357,15 +356,15 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 			v1 = (int) (zProbeOnFilter.GetSum() / (4 * numZProbeReadingsAveraged));	// pass back the reading with IR turned on
 			return 1;
 		case 4:		// differential ultrasonic
-		{
-			uint32_t sum = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
-			if (sum < zProbeMinSum)
 			{
-				zProbeMinSum = sum;
+				uint32_t sum = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
+				if (sum < zProbeMinSum)
+				{
+					zProbeMinSum = sum;
+				}
+				v1 = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged)); // pass back the raw reading
+				v2 = (int) (zProbeMinSum / (8 * numZProbeReadingsAveraged));				// pass back the minimum found
 			}
-			v1 = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));// pass back the raw reading
-			v2 = (int) (zProbeMinSum / (8 * numZProbeReadingsAveraged));				// pass back the minimum found
-		}
 			return 2;
 		default:
 			break;
@@ -447,10 +446,10 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 	}
 }
 
-// Return true if we must hoe X and U before we home Z (i.e. we are using an IR probe)
+// Return true if we must home X and Y before we home Z (i.e. we are using a bed probe)
 bool Platform::MustHomeXYBeforeZ() const
 {
-	return nvData.zProbeType == 1 || nvData.zProbeType == 2;
+	return nvData.zProbeType != 0;
 }
 
 void Platform::WriteNvData()
@@ -460,12 +459,9 @@ void Platform::WriteNvData()
 
 void Platform::SetZProbing(bool starting)
 {
-	if (starting && nvData.zProbeType == 3)
+	if (starting && nvData.zProbeType == 4)
 	{
 		ResetZProbeMinSum();	// look for a new minimum
-
-		// Tell the ultrasonic sensor we are starting or have completed a z-probe
-		//digitalWrite(zProbeModulationPin, (starting) ? LOW : HIGH);
 	}
 }
 
@@ -474,6 +470,10 @@ void Platform::ResetZProbeMinSum()
 	zProbeMinSum = adRangeReal * numZProbeReadingsAveraged * 2;
 }
 
+// Note: the use of floating point time will cause the resolution to degrade over time.
+// For example, 1ms time resolution will only be available for about half an hour from startup.
+// Personally, I (dc42) would rather just maintain and provide the time in milliseconds in a uint32_t.
+// This would wrap round after about 49 days, but that isn't difficult to handle.
 float Platform::Time()
 {
 	unsigned long now = micros();
@@ -608,45 +608,45 @@ void Platform::DisableInterrupts()
 // 1.  Kick off a new ADC conversion.
 // 2.  Fetch and process the result of the last ADC conversion.
 // 3a. If the last ADC conversion was for the Z probe, toggle the modulation output if using a modulated IR sensor,
-//     or update the minimum reading if using an ultrasonic sensor.
+//     or update the minimum reading if using an ultrasonic sensor in differential mode.
 // 3b. If the last ADC reading was a thermistor reading, check for an over-temperature situation and turn off the heater if necessary.
 //     We do this here because the usual polling loop sometimes gets stuck trying to send data to the USB port.
 
-//#define TIME_TICK_ISR	1		// define this to store thr tick IST time in errorCodeBits
+//#define TIME_TICK_ISR	1		// define this to store the tick ISR time in errorCodeBits
 
 void Platform::Tick()
 {
 #ifdef TIME_TICK_ISR
 	uint32_t now = micros();
 #endif
-	WDT_Restart(WDT );
+	WDT_Restart(WDT);
 	switch (tickState)
 	{
 	case 1:			// last conversion started was a thermistor
 	case 3:
-	{
-		ThermistorAveragingFilter& currentFilter =
-				const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-		currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
-		StartAdcConversion(zProbeAdcChannel);
-		if (currentFilter.IsValid())
 		{
-			uint32_t sum = currentFilter.GetSum();
-			if (sum < thermistorOverheatSums[currentHeater]
-					|| sum >= adDisconnectedReal * numThermistorReadingsAveraged)
+			ThermistorAveragingFilter& currentFilter =
+					const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
+			StartAdcConversion(zProbeAdcChannel);
+			if (currentFilter.IsValid())
 			{
-				// We have an over-temperature or bad reading from this thermistor, so turn off the heater
-				// NB - the function we call does floating point maths, but this is an exceptional situation so we allow it
-				SetHeater(currentHeater, 0.0);
-				errorCodeBits |= ErrorBadTemp;
+				uint32_t sum = currentFilter.GetSum();
+				if (sum < thermistorOverheatSums[currentHeater]
+						|| sum >= adDisconnectedReal * numThermistorReadingsAveraged)
+				{
+					// We have an over-temperature or bad reading from this thermistor, so turn off the heater
+					// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
+					SetHeater(currentHeater, 0.0);
+					errorCodeBits |= ErrorBadTemp;
+				}
+			}
+			++currentHeater;
+			if (currentHeater == HEATERS)
+			{
+				currentHeater = 0;
 			}
 		}
-		++currentHeater;
-		if (currentHeater == HEATERS)
-		{
-			currentHeater = 0;
-		}
-	}
 		++tickState;
 		break;
 

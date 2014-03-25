@@ -1680,6 +1680,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			platform->CoolingFan(0.0);
 			break;
 
+		// case 109 is later because it falls through to case 116
+
 		case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
 			break;
 
@@ -1692,15 +1694,17 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			break;
 
 		case 114: // Deprecated
-		{
-			const char* str = GetCurrentCoordinates();
-			if (str != 0)
 			{
-				strncpy(reply, str, STRING_LENGTH);
+				const char* str = GetCurrentCoordinates();
+				if (str != 0)
+				{
+					strncpy(reply, str, STRING_LENGTH);
+				}
+				else
+				{
+					result = false;
+				}
 			}
-			else
-				result = false;
-		}
 			break;
 
 		case 115: // Print firmware version
@@ -1720,6 +1724,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 				return false;
 			result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
 			break;
+
+		// case 117 is handled later because it falls through to the default case
 
 		case 120:
 			result = Push();
@@ -1979,12 +1985,20 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			for(;;) {}
 			break;
 
+		case 117: // in Marlin mode this means display message on LCD. We don't have an LCD so just return OK.
+			if (platform->Emulating() == marlin)
+			{
+				break;
+			}
+			// no break
 		default:
 			error = true;
 			snprintf(reply, STRING_LENGTH, "invalid M Code: %s", gb->Buffer());
 		}
 		if (result)
+		{
 			HandleReply(error, gb == serialGCode, reply, 'M', code, resend);
+		}
 		return result;
 	}
 
