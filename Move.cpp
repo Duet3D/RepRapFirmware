@@ -94,7 +94,7 @@ void Move::Init()
 	  liveCoordinates[i] = 0.0;
   }
 
-  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), noEndstopCheck, zMove);  // Typically Z is the slowest Axis
+  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false, zMove);  // Typically Z is the slowest Axis
   lastMove->Release();
   liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 
@@ -167,7 +167,7 @@ void Move::Spin()
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
 
-  EndstopMode checkEndStopsOnNextMove;
+  bool checkEndStopsOnNextMove;
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
 	Transform(nextMove);
@@ -572,7 +572,7 @@ void Move::Interrupt()
 }
 
 
-bool Move::LookAheadRingAdd(const long ep[], float feedRate, float vv, EndstopMode ce, int8_t mt)
+bool Move::LookAheadRingAdd(const long ep[], float feedRate, float vv, bool ce, int8_t mt)
 {
     if(LookAheadRingFull())
       return false;
@@ -600,7 +600,7 @@ LookAhead* Move::LookAheadRingGet()
 }
 
 // Note that we don't set the tan values to 0 here.  This means that the bed probe
-// values will be a fraction of a millimeter out in X and Y, which, as the bed should
+// values will be a fraction of a millimetre out in X and Y, which, as the bed should
 // be nearly flat (and the probe doesn't coincide with the nozzle anyway), won't matter.
 // But it means that the tan values can be set for the machine
 // at the start in the configuration file and be retained, without having to know and reset
@@ -613,7 +613,6 @@ void Move::SetIdentityTransform()
 	aC = 0.0;
 	secondDegreeCompensation = false;
 }
-
 
 void Move::Transform(float xyzPoint[])
 {
@@ -1099,7 +1098,7 @@ void DDA::Step()
         
       // Hit anything?
   
-      if(checkEndStops != noEndstopCheck)
+      if(checkEndStops)
       {
         switch(platform->Stopped(drive))
         {
@@ -1112,11 +1111,7 @@ void DDA::Step()
           active = false;
           break;
         case lowNear:
-          if (checkEndStops == checkApproachingEndstop)
-		  {
-			move->NearLowStop(drive, myLookAheadEntry, this);
-			active = false;
-		  }
+          velocity = instantDv;		// slow down because we are getting close
           break;
         default:
           break;
@@ -1180,7 +1175,7 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
   next = n;
 }
 
-void LookAhead::Init(const long ep[], float f, float vv, EndstopMode ce, int8_t mt)
+void LookAhead::Init(const long ep[], float f, float vv, bool ce, int8_t mt)
 {
   v = vv;
   movementType = mt;

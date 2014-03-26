@@ -390,6 +390,7 @@ void Webserver::JsonReport(bool ok, const char* request)
   {
     if(reprap.Debug())
     {
+      jsonResponse[STRING_LENGTH] = 0;
       platform->Message(HOST_MESSAGE, "JSON response: ");
       platform->Message(HOST_MESSAGE, jsonResponse);
       platform->Message(HOST_MESSAGE, " queued\n");
@@ -410,68 +411,65 @@ void Webserver::GetJsonResponse(const char* request)
   
   if(StringStartsWith(request, "poll"))
   {
+	// The poll response lists the status, then all the heater temperatures, then the XYZ positions, then all the extruder positions.
+	// These are all returned in a single vector called "poll".
+	// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders,
+	// but we're stuck with it if we want to retain compatibility with existing web server javascript files.
     strncpy(jsonResponse, "{\"poll\":[", STRING_LENGTH);
     if(reprap.GetGCodes()->PrintingAFile())
+    {
     	strncat(jsonResponse, "\"P\",", STRING_LENGTH); // Printing
+    }
     else
+    {
     	strncat(jsonResponse, "\"I\",", STRING_LENGTH); // Idle
+    }
     for(int8_t heater = 0; heater < HEATERS; heater++)
     {
-      strncat(jsonResponse, "\"", STRING_LENGTH);
-      strncat(jsonResponse, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1), STRING_LENGTH);
-      strncat(jsonResponse, "\",", STRING_LENGTH);
+      sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
     }
     float liveCoordinates[DRIVES+1];
     reprap.GetMove()->LiveCoordinates(liveCoordinates);
     for(int8_t drive = 0; drive < AXES; drive++)
     {
-    	strncat(jsonResponse, "\"", STRING_LENGTH);
-    	strncat(jsonResponse, ftoa(0, liveCoordinates[drive], 2), STRING_LENGTH);
-    	strncat(jsonResponse, "\",", STRING_LENGTH);
+    	sncatf(jsonResponse, STRING_LENGTH, "\"%.2f\",", liveCoordinates[drive]);
     }
 
-    // FIXME: should loop through all Es
+    for(int8_t drive = AXES; drive < DRIVES; drive++)	// loop through extruders
+    {
+    	char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
+    	sncatf(jsonResponse, STRING_LENGTH, "\"%.f4\"%c", liveCoordinates[drive], ch);
+    }
 
-    strncat(jsonResponse, "\"", STRING_LENGTH);
-    strncat(jsonResponse, ftoa(0, liveCoordinates[AXES], 4), STRING_LENGTH);
-    strncat(jsonResponse, "\"", STRING_LENGTH);
-    strncat(jsonResponse, "]", STRING_LENGTH);
-
+	// All the other values we send back are in separate variables.
     // Send the Z probe value
-    char scratch[SHORT_STRING_LENGTH+1];
-    scratch[SHORT_STRING_LENGTH] = 0;
 	int v0 = platform->ZProbe();
 	int v1, v2;
 	switch(platform->GetZProbeSecondaryValues(v1, v2))
 	{
 	case 1:
-		snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d (%d)\"", v0, v1);
+		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d (%d)\"", v0, v1);
 		break;
 	case 2:
-		snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
+		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
 		break;
 	default:
-		snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d\"", v0);
+		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d\"", v0);
 		break;
 	}
-    strncat(jsonResponse, scratch, STRING_LENGTH);
 
     // Send the amount of buffer space available for gcodes
-   	snprintf(scratch, SHORT_STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
-   	strncat(jsonResponse, scratch, STRING_LENGTH);
+   	sncatf(jsonResponse, STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
 
     // Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-    strncat(jsonResponse, ",\"hx\":", STRING_LENGTH);
-    strncat(jsonResponse, (reprap.GetGCodes()->GetAxisIsHomed(0)) ? "1" : "0", STRING_LENGTH);
-    strncat(jsonResponse, ",\"hy\":", STRING_LENGTH);
-    strncat(jsonResponse, (reprap.GetGCodes()->GetAxisIsHomed(1)) ? "1" : "0", STRING_LENGTH);
-    strncat(jsonResponse, ",\"hz\":", STRING_LENGTH);
-    strncat(jsonResponse, (reprap.GetGCodes()->GetAxisIsHomed(2)) ? "1" : "0", STRING_LENGTH);
+    sncatf(jsonResponse, STRING_LENGTH, ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
+    			(reprap.GetGCodes()->GetAxisIsHomed(0)) ? 1 : 0,
+    			(reprap.GetGCodes()->GetAxisIsHomed(1)) ? 1 : 0,
+    			(reprap.GetGCodes()->GetAxisIsHomed(2)) ? 1 : 0
+    	  );
 
     // Send the response sequence number
-    strncat(jsonResponse, ",\"seq\":", STRING_LENGTH);
-	snprintf(scratch, SHORT_STRING_LENGTH, "%u", (unsigned int)seq);
-	strncat(jsonResponse, scratch, STRING_LENGTH);
+    sncatf(jsonResponse, STRING_LENGTH, ",\"seq\":%u", (unsigned int)seq);
 
     // Send the response to the last command. Do this last because it is long and may need to be truncated.
     strncat(jsonResponse, ",\"resp\":\"", STRING_LENGTH);
@@ -510,7 +508,6 @@ void Webserver::GetJsonResponse(const char* request)
     }
     strncat(jsonResponse, "\"}", STRING_LENGTH);
 
-    jsonResponse[STRING_LENGTH] = 0;
     JsonReport(true, request);
     return;
   }
@@ -518,10 +515,7 @@ void Webserver::GetJsonResponse(const char* request)
   if(StringStartsWith(request, "gcode"))
   {
     LoadGcodeBuffer(&clientQualifier[6], true);
-    char scratch[SHORT_STRING_LENGTH+1];
-    scratch[SHORT_STRING_LENGTH] = 0;
-    snprintf(scratch, SHORT_STRING_LENGTH, "{\"buff\":%u}", GetReportedGcodeBufferSpace());
-   	strncat(jsonResponse, scratch, STRING_LENGTH);
+    sncatf(jsonResponse, STRING_LENGTH, "{\"buff\":%u}", GetReportedGcodeBufferSpace());
     JsonReport(true, request);
     return;
   }
@@ -529,18 +523,14 @@ void Webserver::GetJsonResponse(const char* request)
   if(StringStartsWith(request, "files"))
   {
     const char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir(), false);
-    strncpy(jsonResponse, "{\"files\":[", STRING_LENGTH);
-    strncat(jsonResponse, fileList, STRING_LENGTH);
-    strncat(jsonResponse, "]}", STRING_LENGTH);
+    snprintf(jsonResponse, STRING_LENGTH, "{\"files\":[%s]}", fileList);
     JsonReport(true, request);
     return;
   }
   
   if(StringStartsWith(request, "name"))
   {
-    strncpy(jsonResponse, "{\"myName\":\"", STRING_LENGTH);
-    strncat(jsonResponse, myName, STRING_LENGTH);
-    strncat(jsonResponse, "\"}", STRING_LENGTH);
+    snprintf(jsonResponse, STRING_LENGTH, "{\"myName\":\"%s\"}", myName);
     JsonReport(true, request);
     return;
   }
@@ -548,12 +538,7 @@ void Webserver::GetJsonResponse(const char* request)
   if(StringStartsWith(request, "password"))
   {
     CheckPassword();
-    strncpy(jsonResponse, "{\"password\":\"", STRING_LENGTH);
-    if(gotPassword)
-      strncat(jsonResponse, "right", STRING_LENGTH);
-    else
-      strncat(jsonResponse, "wrong", STRING_LENGTH);
-    strncat(jsonResponse, "\"}", STRING_LENGTH);
+    snprintf(jsonResponse, STRING_LENGTH, "{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
     JsonReport(true, request);
     return;
   }
@@ -563,12 +548,11 @@ void Webserver::GetJsonResponse(const char* request)
     strncpy(jsonResponse, "{\"axes\":[", STRING_LENGTH);
     for(int8_t drive = 0; drive < AXES; drive++)
     {
-      strncat(jsonResponse, "\"", STRING_LENGTH);
-      strncat(jsonResponse, ftoa(0, platform->AxisLength(drive), 1), STRING_LENGTH);
+      sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\"", platform->AxisLength(drive));
       if(drive < AXES-1)
-        strncat(jsonResponse, "\",", STRING_LENGTH);
-      else
-        strncat(jsonResponse, "\"", STRING_LENGTH);
+      {
+        strncat(jsonResponse, ",", STRING_LENGTH);
+      }
     }
     strncat(jsonResponse, "]}", STRING_LENGTH);
     JsonReport(true, request);

@@ -27,10 +27,6 @@ Licence: GPL
 
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
-// Enumeration to define the mode in which we check endstops
-
-enum EndstopMode { noEndstopCheck, checkApproachingEndstop, checkAtEndstop};
-
 
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
@@ -77,7 +73,7 @@ class GCodes
     void Init();
     void Exit();
     bool RunConfigurationGCodes();
-    bool ReadMove(float* m, EndstopMode& ce);
+    bool ReadMove(float* m, bool& ce);
     void QueueFileToPrint(const char* fileName);
     void DeleteFile(const char* fileName);
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);
@@ -92,7 +88,7 @@ class GCodes
   
     void doFilePrint(GCodeBuffer* gb);
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();
-    bool DoCannedCycleMove(EndstopMode ce);
+    bool DoCannedCycleMove(bool ce);
     bool DoFileCannedCycles(const char* fileName);
     bool FileCannedCyclesReturn();
     bool ActOnGcode(GCodeBuffer* gb);
@@ -133,7 +129,7 @@ class GCodes
     GCodeBuffer* cannedCycleGCode;
     bool moveAvailable;
     float moveBuffer[DRIVES+1]; // Last is feed rate
-    EndstopMode checkEndStops;
+    bool checkEndStops;
     bool drivesRelative; // All except X, Y and Z
     bool axesRelative;   // X, Y and Z
     bool drivesRelativeStack[STACK];

@@ -70,7 +70,7 @@ public:
 
 protected:
 	LookAhead(Move* m, Platform* p, LookAhead* n);
-	void Init(const long ep[], float feedRate, float vv, EndstopMode ce, int8_t mt);
+	void Init(const long ep[], float feedRate, float vv, bool ce, int8_t mt);
 	LookAhead* Next();
 	LookAhead* Previous();
 	const long* MachineEndPoints() const;
@@ -85,7 +85,7 @@ protected:
 	int8_t Processed() const;
 	void SetProcessed(MovementState ms);
 	void SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive);
-	EndstopMode CheckEndStops() const;
+	bool CheckEndStops() const;
 	void Release();
 
 private:
@@ -97,7 +97,7 @@ private:
 	long endPoint[DRIVES+1];  // Should never use the +1, but safety first
 	int8_t movementType;
 	float Cosine();
-	EndstopMode checkEndStops;
+	bool checkEndStops;
     float cosine;
     float v;        // The feedrate we can actually do
     float feedRate; // The requested feedrate
@@ -135,7 +135,7 @@ private:
 	bool directions[DRIVES];
 	long totalSteps;
 	long stepCount;
-	EndstopMode checkEndStops;
+	bool checkEndStops;
     float timeStep;
     float velocity;
     long stopAStep;
@@ -164,7 +164,6 @@ class Move
     void ResumeMoving();
     void DoLookAhead();
     void HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA);
-    void NearLowStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA);
     void SetPositions(float move[]);
     void SetLiveCoordinates(float coords[]);
@@ -204,7 +203,7 @@ class Move
     void ReleaseDDARingLock();
     bool LookAheadRingEmpty() const;
     bool LookAheadRingFull() const;
-    bool LookAheadRingAdd(const long ep[], float feedRate, float vv, EndstopMode ce, int8_t movementType);
+    bool LookAheadRingAdd(const long ep[], float feedRate, float vv, bool ce, int8_t movementType);
     LookAhead* LookAheadRingGet();
     int8_t GetMovementType(const long sp[], const long ep[]) const;
 
@@ -304,7 +303,7 @@ inline void LookAhead::Release()
 	 processed = released;
 }
 
-inline EndstopMode LookAhead::CheckEndStops() const
+inline bool LookAhead::CheckEndStops() const
 {
   return checkEndStops;
 }
@@ -581,11 +580,6 @@ inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
   la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisLength(drive), drive);
   gCodes->SetAxisIsHomed(drive);
-}
-
-inline void Move::NearLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
-{
-	la->SetDriveCoordinateAndZeroEndSpeed(1.0, drive);		// say we are at 1mm
 }
 
 inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)

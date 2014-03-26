@@ -770,6 +770,16 @@ void Platform::PrintMemoryUsage()
 	snprintf(scratchString, STRING_LENGTH, "Error status: %u\n", errorCodeBits);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
+
+	// Show the current probe position heights
+	strncpy(scratchString, "Bed probe heights:", STRING_LENGTH);
+	for (size_t i = 0; i < NUMBER_OF_PROBE_POINTS; ++i)
+	{
+		sncatf(scratchString, STRING_LENGTH, " %.3f", reprap.GetMove()->zBedProbePoint(i));
+	}
+	strncat(scratchString, "\n", STRING_LENGTH);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
 }
 
 void Platform::ClassReport(char* className, float &lastTime)

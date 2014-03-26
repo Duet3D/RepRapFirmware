@@ -55,7 +55,7 @@ void GCodes::Init()
 	moveAvailable = false;
 	drivesRelative = true;
 	axesRelative = false;
-	checkEndStops = noEndstopCheck;
+	checkEndStops = false;
 	gCodeLetters = GCODE_LETTERS;
 	distanceScale = 1.0;
 	for (int8_t i = 0; i < DRIVES - AXES; i++)
@@ -305,7 +305,7 @@ bool GCodes::Pop()
 	gFeedRate = feedrateStack[stackPointer];
 	moveBuffer[DRIVES] = gFeedRate;
 
-	checkEndStops = noEndstopCheck;
+	checkEndStops = false;
 	moveAvailable = true;
 	return true;
 }
@@ -394,24 +394,23 @@ int GCodes::SetUpMove(GCodeBuffer *gb)
 	if (!reprap.GetMove()->GetCurrentState(moveBuffer))
 		return 0;
 
-	bool doEndstopCheck = false;
+	checkEndStops = false;
 	if (gb->Seen('S'))
 	{
 		if (gb->GetIValue() == 1)
 		{
-			doEndstopCheck = true;
+			checkEndStops = true;
 		}
 	}
 
-	checkEndStops = (doEndstopCheck) ? checkAtEndstop : noEndstopCheck;
-	LoadMoveBufferFromGCode(gb, false, !doEndstopCheck);
+	LoadMoveBufferFromGCode(gb, false, !checkEndStops);
 	moveAvailable = true;
-	return (doEndstopCheck) ? 2 : 1;
+	return (checkEndStops) ? 2 : 1;
 }
 
 // The Move class calls this function to find what to do next.
 
-bool GCodes::ReadMove(float m[], EndstopMode& ce)
+bool GCodes::ReadMove(float m[], bool& ce)
 {
 	if (!moveAvailable)
 		return false;
@@ -419,7 +418,7 @@ bool GCodes::ReadMove(float m[], EndstopMode& ce)
 		m[i] = moveBuffer[i];
 	ce = checkEndStops;
 	moveAvailable = false;
-	checkEndStops = noEndstopCheck;
+	checkEndStops = false;
 	return true;
 }
 
@@ -498,7 +497,7 @@ bool GCodes::FileCannedCyclesReturn()
 // be ignored.  Recall that moveToDo[DRIVES] should contain the feedrate
 // you want (if action[DRIVES] is true).
 
-bool GCodes::DoCannedCycleMove(EndstopMode ce)
+bool GCodes::DoCannedCycleMove(bool ce)
 {
 	// Is the move already running?
 
@@ -585,7 +584,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 		offSetSet = true;
 	}
 
-	if (DoCannedCycleMove(noEndstopCheck))
+	if (DoCannedCycleMove(false))
 	{
 		//LoadMoveBufferFromArray(record);
 		for (int drive = 0; drive <= DRIVES; drive++)
@@ -659,7 +658,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 
 	// Should never get here
 
-	checkEndStops = noEndstopCheck;
+	checkEndStops = false;
 	moveAvailable = false;
 
 	return true;
@@ -680,19 +679,19 @@ bool GCodes::DoSingleZProbeAtPoint()
 
 	switch (cannedCycleMoveCount)
 	{
-	case 0: // This only does anything on the first move; on all the others Z is already there
+	case 0: // Raise Z to 5mm. This only does anything on the first move; on all the others Z is already there
 		moveToDo[Z_AXIS] = Z_DIVE;
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
-		if (DoCannedCycleMove(noEndstopCheck))
+		reprap.GetMove()->SetZProbing(false);
+		if (DoCannedCycleMove(false))
 		{
 			cannedCycleMoveCount++;
-			reprap.GetMove()->SetZProbing(true);	// we only want to call this once
 		}
 		return false;
 
-	case 1:
+	case 1:	// Move to the correct XY coordinates
 		GetProbeCoordinates(probeCount, moveToDo[X_AXIS], moveToDo[Y_AXIS], moveToDo[Z_AXIS]);
 		activeDrive[X_AXIS] = true;
 		activeDrive[Y_AXIS] = true;
@@ -700,48 +699,33 @@ bool GCodes::DoSingleZProbeAtPoint()
 		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if (DoCannedCycleMove(noEndstopCheck))
+		if (DoCannedCycleMove(false))
 		{
 			cannedCycleMoveCount++;
+			platform->SetZProbing(true);	// do this here because we only want to call it once
 		}
 		return false;
 
-	case 2:
+	case 2:	// Probe the bed
 		moveToDo[Z_AXIS] = -2.0 * platform->AxisLength(Z_AXIS);
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(true);
-		if (DoCannedCycleMove(checkApproachingEndstop))
-		{
-			cannedCycleMoveCount++;
-		}
-		return false;
-
-	case 3:
-	{
-		float liveCoordinates[DRIVES + 1];
-		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		moveToDo[Z_AXIS] = liveCoordinates[Z_AXIS] - 10.0; // move down at most another 10mm
-	}
-		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS) * 0.2;
-		activeDrive[DRIVES] = true;
-		reprap.GetMove()->SetZProbing(true);
-		if (DoCannedCycleMove(checkAtEndstop))
+		if (DoCannedCycleMove(true))
 		{
 			cannedCycleMoveCount++;
 			platform->SetZProbing(false);
 		}
 		return false;
 
-	case 4:
+	case 3:	// Raise the head 5mm
 		moveToDo[Z_AXIS] = Z_DIVE;
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if (DoCannedCycleMove(noEndstopCheck))
+		if (DoCannedCycleMove(false))
 		{
 			cannedCycleMoveCount++;
 		}
@@ -775,22 +759,7 @@ bool GCodes::DoSingleZProbe()
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
-		if (DoCannedCycleMove(checkApproachingEndstop))
-		{
-			cannedCycleMoveCount++;
-		}
-		return false;
-
-	case 2:
-		{
-			float liveCoordinates[DRIVES + 1];
-			reprap.GetMove()->LiveCoordinates(liveCoordinates);
-			moveToDo[Z_AXIS] = liveCoordinates[Z_AXIS] - 10.0;	// move down at most another 10mm
-		}
-		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS) * 0.2;
-		activeDrive[DRIVES] = true;
-		if (DoCannedCycleMove(checkAtEndstop))
+		if (DoCannedCycleMove(true))
 		{
 			cannedCycleMoveCount++;
 			probeCount = 0;
@@ -1656,11 +1625,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			strncpy(reply, "T:", STRING_LENGTH);
 			for (int8_t heater = HEATERS - 1; heater > 0; heater--)
 			{
-				strncat(reply, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1), STRING_LENGTH);
-				strncat(reply, " ", STRING_LENGTH);
+				sncatf(reply, STRING_LENGTH, "%.1f ", reprap.GetHeat()->GetTemperature(heater));
 			}
-			strncat(reply, "B:", STRING_LENGTH);
-			strncat(reply, ftoa(0, reprap.GetHeat()->GetTemperature(0), 1), STRING_LENGTH);
+			sncatf(reply, STRING_LENGTH, "B:%.1f", reprap.GetHeat()->GetTemperature(0));
 			break;
 
 		case 106: // Fan on or off

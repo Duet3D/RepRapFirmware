@@ -302,11 +302,13 @@ void RepRap::SetDebug(int d)
 
 // Utilities and storage not part of any class
 
+char scratchString[STRING_LENGTH];
+
+#if 0	// no longer used, we use snprinf or sncatf instead
 
 // Float to a string.
 
 static long precision[] = {0,10,100,1000,10000,100000,1000000,10000000,100000000};
-char scratchString[STRING_LENGTH];
 
 char* ftoa(char *a, const float& f, int prec)
 {
@@ -325,6 +327,23 @@ char* ftoa(char *a, const float& f, int prec)
   long decimal = abs((long)((f - (float)whole) * precision[prec]));
   snprintf(a, STRING_LENGTH, "%0*d", prec, decimal);
   return ret;
+}
+#endif
+
+// This behaves like snprintf but appends to an existing string
+// The second parameter is the length of the entire destination buffer, not the length remaining
+int sncatf(char *dst, size_t len, const char* fmt, ...)
+{
+	size_t n = strnlen(dst, len);
+	if (n + 1 < len)
+	{
+		va_list p;
+		va_start(p, fmt);
+		int ret = vsnprintf(dst + n, len - n, fmt, p);
+		va_end(p);
+		return ret;
+	}
+	return 0;
 }
 
 // String testing
