@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.57x-dc42"
-#define DATE "2014-03-26"
+#define VERSION "0.57y-dc42"
+#define DATE "2014-03-28"
 #define LAST_AUTHOR "dc42"
 
 // Other firmware that we might switch to be compatible with.
@@ -72,9 +72,9 @@ enum Compatibility
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
 #define INDEX_PAGE "reprap.htm"
-#define MESSAGE_FILE "messages.txt"
+//#define MESSAGE_FILE "messages.txt"	// currently unused
 #define FOUR04_FILE "html404.htm"
-#define CONFIG_FILE "config.g" // The file that sets the machine's parameters
+#define CONFIG_FILE "config.g" 			// The file that sets the machine's parameters
 #define HOME_X_G "homex.g"
 #define HOME_Y_G "homey.g"
 #define HOME_Z_G "homez.g"

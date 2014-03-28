@@ -1732,20 +1732,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 201: // Set axis accelerations
 			for (int8_t drive = 0; drive < DRIVES; drive++)
 			{
-				float value;
 				if (gb->Seen(gCodeLetters[drive]))
 				{
-					value = gb->GetFValue();
+					float value = gb->GetFValue();
+					platform->SetAcceleration(drive, value);
 				}
-				else
-				{
-					value = -1;
-				}
-				platform->SetAcceleration(drive, value);
 			}
 			break;
 
-		case 203: // Set maximum feedrates
+		case 203: // Set maximum feed rates
 			for (int8_t drive = 0; drive < DRIVES; drive++)
 			{
 				if (gb->Seen(gCodeLetters[drive]))

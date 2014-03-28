@@ -1069,12 +1069,6 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 
 const char* MassStorage::FileList(const char* directory, bool fromLine)
 {
-//  File dir, entry;
-	DIR dir;
-	FILINFO entry;
-	FRESULT res;
-	char loc[64];
-	int len = 0;
 	char fileListBracket = FILE_LIST_BRACKET;
 	char fileListSeparator = FILE_LIST_SEPARATOR;
 
@@ -1087,9 +1081,17 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 		}
 	}
 
-	len = strlen(directory);
-	strncpy(loc, directory, len - 1);
-	loc[len - 1] = 0;
+	TCHAR loc[64];
+	size_t len = strnlen(directory, ARRAY_SIZE(loc));
+	if (len == 0)
+	{
+		loc[0] = 0;
+	}
+	else
+	{
+		strncpy(loc, directory, len - 1);
+		loc[len - 1] = 0;
+	}
 
 //  if(reprap.debug()) {
 //	  platform->Message(HOST_MESSAGE, "Opening: ");
@@ -1097,7 +1099,8 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 //	  platform->Message(HOST_MESSAGE, "\n");
 //  }
 
-	res = f_opendir(&dir, loc);
+	DIR dir;
+	FRESULT res = f_opendir(&dir, loc);
 	if (res == FR_OK)
 	{
 
@@ -1106,25 +1109,30 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 //	  }
 
 		int p = 0;
-//  int q;
 		int foundFiles = 0;
 
 		f_readdir(&dir, 0);
+
+		FILINFO entry;
+		TCHAR loclfname[255];
+		entry.lfname = loclfname;
+		entry.lfsize = ARRAY_SIZE(loclfname);
 
 		while ((f_readdir(&dir, &entry) == FR_OK) && (foundFiles < MAX_FILES))
 		{
 			foundFiles++;
 
-			if (strlen(entry.fname) > 0)
+			const TCHAR *fp = (loclfname[0] == 0) ? entry.fname : loclfname;
+			if (*fp != 0)
 			{
-				int q = 0;
 				if (fileListBracket)
-					fileList[p++] = fileListBracket;
-				while (entry.fname[q])
 				{
-					fileList[p++] = entry.fname[q];
+					fileList[p++] = fileListBracket;
+				}
+				while (*fp)
+				{
+					fileList[p++] = *fp++;
 					//SerialUSB.print(entry.fname[q]);
-					q++;
 					if (p >= FILE_LIST_LENGTH - 10) // Caution...
 					{
 						platform->Message(HOST_MESSAGE, "FileList - directory: ");
@@ -1134,7 +1142,9 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 					}
 				}
 				if (fileListBracket)
+				{
 					fileList[p++] = fileListBracket;
+				}
 				fileList[p++] = fileListSeparator;
 			}
 		}
