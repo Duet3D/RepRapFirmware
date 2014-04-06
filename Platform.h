@@ -101,7 +101,7 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
-#define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    // (mm/sec)
+#define INSTANT_DVS {10.0, 10.0, 0.2, 2.0}    // (mm/sec)
 
 // AXES
 
@@ -212,20 +212,11 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
  
 #define CLIENT_CLOSE_DELAY 0.002
 
-#define HTTP_STATE_SIZE 5
+#define HTTP_STATE_SIZE 7
 
 #define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
-
-// The size of the http output buffer is critical to getting fast load times in the browser.
-// If this value is less than the TCP MSS, then Chrome under Windows will delay ack messages by about 120ms,
-// which results in very slow page loading. Any value higher than that will cause the TCP packet to be split
-// into multiple transmissions, which avoids this behaviour. Using a value of twice the MSS is most efficient because
-// each TCP packet will be full.
-// Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
-// and therefore avoids additional memory use and fragmentation.
-const unsigned int httpOutputBufferSize = 2 * 1432;
 
 
 /****************************************************************************************************/
@@ -263,103 +254,6 @@ enum IOStatus
   clientConnected = 8
 };
 
-//// All IO is done by classes derived from this class.
-//
-//class InputOutput
-//{
-//public:
-//	void TakeInputFrom(InputOutput* altIp);
-//	void SendOutputTo(InputOutput* altOp);
-//
-//protected:
-//	InputOutput* alternateInput;
-//	InputOutput* alternateOutput;
-//};
-
-// This class handles the network - typically an Ethernet.
-
-// Start with a ring buffer to hold input from the network
-// that needs to be responded to.
-
-class NetRing
-{
-public:
-	friend class Network;
-
-protected:
-	NetRing(NetRing* n);
-	NetRing* Next();
-	bool Set(char* d, int l, void* pb, void* pc, void* h);
-	char* Data();
-	int Length();
-	bool ReadFinished();
-	void SetReadFinished();
-	void* Pbuf();
-	void* Pcb();
-	void* Hs();
-	bool Active();
-	void Free();
-	void SetNext(NetRing* n);
-	void ReleasePbuf();
-	void ReleaseHs();
-
-private:
-	void Reset();
-	void* pbuf;
-	void* pcb;
-	void* hs;
-	char* data;
-	int length;
-	bool read;
-	bool active;
-	NetRing* next;
-};
-
-// The main network class that drives the network.
-
-class Network //: public InputOutput
-{
-public:
-
-	int8_t Status() const; // Returns OR of IOStatus
-	bool Read(char& b);
-	bool CanWrite() const;
-	void SetWriteEnable(bool enable);
-	void SentPacketAcknowledged();
-	void Write(char b);
-	void Write(const char* s);
-	void Close();
-	void ReceiveInput(char* data, int length, void* pb, void* pc, void* h);
-	void InputBufferReleased(void* pb);
-	void ConnectionError(void* h);
-	bool Active() const;
-	bool LinkIsUp();
-
-friend class Platform;
-
-protected:
-
-	Network();
-	void Init();
-	void Spin();
-
-private:
-
-	void Reset();
-	void CleanRing();
-	char* inputBuffer;
-	char outputBuffer[httpOutputBufferSize];
-	int inputPointer;
-	int inputLength;
-	int outputPointer;
-	bool writeEnabled;
-	bool closePending;
-	int8_t status;
-	NetRing* netRingGetPointer;
-	NetRing* netRingAddPointer;
-	bool active;
-	uint8_t sentPacketsOutstanding;		// count of TCP packets we have sent that have not been acknowledged
-};
 
 // This class handles serial I/O - typically via USB
 
@@ -722,8 +616,7 @@ private:
   
   void InitialiseInterrupts();
   int GetRawZHeight() const;
-  void ResetZProbeMinSum();
-  
+
 // DRIVES
 
   int8_t stepPins[DRIVES];
@@ -747,7 +640,6 @@ private:
   volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
   volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
   volatile ThermistorAveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
-  uint32_t zProbeMinSum;											// minimum Z probe sums seen, used with ultrasonic probe
 
 // AXES
 
@@ -1087,18 +979,6 @@ inline void Platform::PopMessageIndent()
 
 
 //***************************************************************************************
-
-//queries the PHY for link status, true = link is up, false, link is down or there is some other error
-inline bool Network::LinkIsUp()
-{
-	return status_link_up();
-}
-
-inline bool Network::Active() const
-{
-	return active;
-}
-
 
 
 #endif

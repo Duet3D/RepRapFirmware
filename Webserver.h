@@ -53,7 +53,6 @@ class Webserver
     void Diagnostics();
     void SetPassword(const char* pw);
     void SetName(const char* nm);
-    void ConnectionError();
     void HandleReply(const char *s, bool error);
     void AppendReply(const char* s);
 
@@ -61,11 +60,9 @@ class Webserver
   
     void ParseClientLine();
     void SendFile(const char* nameOfFileToSend);
-    bool WriteBytes();
     void ParseQualifier();
     void CheckPassword();
     void LoadGcodeBuffer(const char* gc, bool convertWeb);
-    void CloseClient();
     bool PrintHeadString();
     bool PrintLinkTable();
     void GetGCodeList();
@@ -84,8 +81,6 @@ class Webserver
     bool active;
     float lastTime;
     float longWait;
-    FileStore* fileBeingSent;
-    bool writing;
     bool receivingPost;
     char postBoundary[POST_LENGTH];
     int boundaryCount;  
@@ -94,8 +89,6 @@ class Webserver
     bool postSeen;
     bool getSeen;
     bool clientLineIsBlank;
-    float clientCloseTime;
-    bool needToCloseClient;
 
     char clientLine[STRING_LENGTH+2];	// 2 chars extra so we can append \n\0
     char clientRequest[STRING_LENGTH];
@@ -103,13 +96,12 @@ class Webserver
     char jsonResponse[STRING_LENGTH+1];
     char gcodeBuffer[gcodeBufLength];
     unsigned int gcodeReadIndex, gcodeWriteIndex;		// head and tail indices into gcodeBuffer
-    int jsonPointer;
     int clientLinePointer;
     bool gotPassword;
     char password[SHORT_STRING_LENGTH+1];
     char myName[SHORT_STRING_LENGTH+1];
     char gcodeReply[STRING_LENGTH+1];
-    uint16_t seq;	// reply sequence number, so that the client can tell if a reply is new or not
+    uint16_t seq;	// reply sequence number, so that the client can tell if a json reply is new or not
 };
 
 

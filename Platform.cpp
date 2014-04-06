@@ -286,7 +286,6 @@ void Platform::InitZProbe()
 {
 	zProbeOnFilter.Init();
 	zProbeOffFilter.Init();
-	ResetZProbeMinSum();
 
 	if (nvData.zProbeType == 1 || nvData.zProbeType == 2)
 	{
@@ -294,7 +293,7 @@ void Platform::InitZProbe()
 		digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
 		SetZProbing(false);
 	}
-	else if (nvData.zProbeType == 3 || nvData.zProbeType == 4)
+	else if (nvData.zProbeType == 3)
 	{
 		pinMode(zProbeModulationPin, OUTPUT);
 		digitalWrite(zProbeModulationPin, LOW);	// enable the ultrasonic sensor
@@ -323,20 +322,7 @@ int Platform::ZProbe()
 		case 2:
 			// Modulated IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
-			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
-					/ (4 * numZProbeReadingsAveraged));
-
-		case 4:
-			// Ultrasonic sensor in differential mode. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
-			{
-				uint32_t sum = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
-				if (sum < zProbeMinSum)
-				{
-					zProbeMinSum = sum;
-				}
-				uint32_t total = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
-				return (int) ((total - zProbeMinSum) / (4 * numZProbeReadingsAveraged));
-			}
+			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum()) / (4 * numZProbeReadingsAveraged));
 
 		default:
 			break;
@@ -355,17 +341,6 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 		case 2:		// modulated IR sensor
 			v1 = (int) (zProbeOnFilter.GetSum() / (4 * numZProbeReadingsAveraged));	// pass back the reading with IR turned on
 			return 1;
-		case 4:		// differential ultrasonic
-			{
-				uint32_t sum = zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum();
-				if (sum < zProbeMinSum)
-				{
-					zProbeMinSum = sum;
-				}
-				v1 = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged)); // pass back the raw reading
-				v2 = (int) (zProbeMinSum / (8 * numZProbeReadingsAveraged));				// pass back the minimum found
-			}
-			return 2;
 		default:
 			break;
 		}
@@ -386,7 +361,6 @@ float Platform::ZProbeStopHeight() const
 	case 2:
 		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
 	case 3:
-	case 4:
 		return nvData.ultrasonicZProbeParameters.GetStopHeight(GetTemperature(0));
 	default:
 		return 0;
@@ -395,7 +369,7 @@ float Platform::ZProbeStopHeight() const
 
 void Platform::SetZProbeType(int pt)
 {
-	int newZProbeType = (pt >= 0 && pt <= 4) ? pt : 0;
+	int newZProbeType = (pt >= 0 && pt <= 3) ? pt : 0;
 	if (newZProbeType != nvData.zProbeType)
 	{
 		nvData.zProbeType = newZProbeType;
@@ -413,7 +387,6 @@ bool Platform::GetZProbeParameters(struct ZProbeParameters& params) const
 		params = nvData.irZProbeParameters;
 		return true;
 	case 3:
-	case 4:
 		params = nvData.ultrasonicZProbeParameters;
 		return true;
 	default:
@@ -434,7 +407,6 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 		}
 		return true;
 	case 3:
-	case 4:
 		if (nvData.ultrasonicZProbeParameters != params)
 		{
 			nvData.ultrasonicZProbeParameters = params;
@@ -459,15 +431,6 @@ void Platform::WriteNvData()
 
 void Platform::SetZProbing(bool starting)
 {
-	if (starting && nvData.zProbeType == 4)
-	{
-		ResetZProbeMinSum();	// look for a new minimum
-	}
-}
-
-void Platform::ResetZProbeMinSum()
-{
-	zProbeMinSum = adRangeReal * numZProbeReadingsAveraged * 2;
 }
 
 // Note: the use of floating point time will cause the resolution to degrade over time.
@@ -607,8 +570,7 @@ void Platform::DisableInterrupts()
 // 0.  Kick the watchdog.
 // 1.  Kick off a new ADC conversion.
 // 2.  Fetch and process the result of the last ADC conversion.
-// 3a. If the last ADC conversion was for the Z probe, toggle the modulation output if using a modulated IR sensor,
-//     or update the minimum reading if using an ultrasonic sensor in differential mode.
+// 3a. If the last ADC conversion was for the Z probe, toggle the modulation output if using a modulated IR sensor.
 // 3b. If the last ADC reading was a thermistor reading, check for an over-temperature situation and turn off the heater if necessary.
 //     We do this here because the usual polling loop sometimes gets stuck trying to send data to the USB port.
 
@@ -619,21 +581,19 @@ void Platform::Tick()
 #ifdef TIME_TICK_ISR
 	uint32_t now = micros();
 #endif
-	WDT_Restart(WDT);
+	WDT_Restart(WDT);			// kick the watchdog
 	switch (tickState)
 	{
 	case 1:			// last conversion started was a thermistor
 	case 3:
 		{
-			ThermistorAveragingFilter& currentFilter =
-					const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
 			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
 			StartAdcConversion(zProbeAdcChannel);
 			if (currentFilter.IsValid())
 			{
 				uint32_t sum = currentFilter.GetSum();
-				if (sum < thermistorOverheatSums[currentHeater]
-						|| sum >= adDisconnectedReal * numThermistorReadingsAveraged)
+				if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
 				{
 					// We have an over-temperature or bad reading from this thermistor, so turn off the heater
 					// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
@@ -692,7 +652,7 @@ void Platform::Tick()
 /*static*/void Platform::StartAdcConversion(adc_channel_num_t chan)
 {
 	adc_enable_channel(ADC, chan);
-	adc_start(ADC );
+	adc_start(ADC);
 }
 
 // Convert an Arduino Due pin number to the corresponding ADC channel number
@@ -815,16 +775,25 @@ void Platform::ClassReport(char* className, float &lastTime)
 
 float Platform::GetTemperature(size_t heater) const
 {
-	// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
-	// So we add 0.5 to to the reading to get a better estimate of the input. But first, recognise the special case of thermistor disconnected.
 	int rawTemp = GetRawTemperature(heater);
+
+	// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
+	// So we add 0.5 to to the reading to get a better estimate of the input.
+
+	float reading = (float) rawTemp + 0.5;
+
+	// Recognise the special case of thermistor disconnected.
+	// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
+
+	const PidParameters& p = nvData.pidParams[heater];
+	if (p.adcHighOffset < 0)
+	{
+		rawTemp -= (int)p.adcHighOffset;
+	}
 	if (rawTemp >= adDisconnectedVirtual)
 	{
-		// Thermistor is disconnected
-		return ABS_ZERO;
+		return ABS_ZERO;		// thermistor is disconnected
 	}
-	float reading = (float) rawTemp + 0.5;
-	const PidParameters& p = nvData.pidParams[heater];
 
 	// Correct for the low and high ADC offsets
 	reading -= p.adcLowOffset;
@@ -872,8 +841,8 @@ EndStopHit Platform::Stopped(int8_t drive)
 		{
 			int zProbeVal = ZProbe();
 			int zProbeADValue =
-					(nvData.zProbeType == 3 || nvData.zProbeType == 4) ?
-							nvData.ultrasonicZProbeParameters.adcValue : nvData.irZProbeParameters.adcValue;
+					(nvData.zProbeType == 3) ? nvData.ultrasonicZProbeParameters.adcValue
+							: nvData.irZProbeParameters.adcValue;
 			if (zProbeVal >= zProbeADValue)
 				return lowHit;
 			else if (zProbeVal * 10 >= zProbeADValue * 9)	// if we are at/above 90% of the target value
@@ -1390,411 +1359,4 @@ void Line::Spin()
 	}
 }
 
-//***************************************************************************************************
-
-// Network/Ethernet class
-
-// C calls to interface with LWIP (http://savannah.nongnu.org/projects/lwip/)
-// These are implemented in, and called from, a modified version of httpd.c
-// in the network directory.
-
-extern "C"
-{
-
-//void ResetEther();
-
-// Transmit data to the Network
-
-void RepRapNetworkSendOutput(char* data, int length, void* pbuf, void* pcb, void* hs);
-
-// When lwip releases storage, set the local copy of the pointer to 0 to stop
-// it being used again.
-
-void RepRapNetworkInputBufferReleased(void* pb)
-{
-	reprap.GetPlatform()->GetNetwork()->InputBufferReleased(pb);
-}
-
-void RepRapNetworkConnectionError(void* h)
-{
-	reprap.GetPlatform()->GetNetwork()->ConnectionError(h);
-	reprap.GetWebserver()->ConnectionError();
-}
-
-// Called to put out a message via the RepRap firmware.
-
-void RepRapNetworkMessage(char* s)
-{
-	reprap.GetPlatform()->Message(HOST_MESSAGE, s);
-}
-
-// Called to push data into the RepRap firmware.
-
-void RepRapNetworkReceiveInput(char* data, int length, void* pbuf, void* pcb, void* hs)
-{
-	reprap.GetPlatform()->GetNetwork()->ReceiveInput(data, length, pbuf, pcb, hs);
-}
-
-// Called when transmission of outgoing data is complete to allow
-// the RepRap firmware to write more.
-
-void RepRapNetworkSentPacketAcknowledged()
-{
-	reprap.GetPlatform()->GetNetwork()->SentPacketAcknowledged();
-}
-
-bool RepRapNetworkHasALiveClient()
-{
-	return reprap.GetPlatform()->GetNetwork()->Status() & clientLive;
-}
-
-}	// extern "C"
-
-Network::Network()
-{
-	active = false;
-	ethPinsInit();
-
-	//ResetEther();
-
-	// Construct the ring buffer
-
-	netRingAddPointer = new NetRing(NULL);
-	netRingGetPointer = netRingAddPointer;
-	for (int8_t i = 1; i < HTTP_STATE_SIZE; i++)
-		netRingGetPointer = new NetRing(netRingGetPointer);
-	netRingAddPointer->SetNext(netRingGetPointer);
-}
-
-// Reset the network to its disconnected and ready state.
-
-void Network::Reset()
-{
-	//reprap.GetPlatform()->Message(HOST_MESSAGE, "Reset.\n");
-	inputPointer = 0;
-	inputLength = -1;
-	outputPointer = 0;
-	writeEnabled = false;
-	closePending = false;
-	status = nothing;
-	sentPacketsOutstanding = 0;
-}
-
-void Network::CleanRing()
-{
-	for (int8_t i = 0; i <= HTTP_STATE_SIZE; i++)
-	{
-		netRingGetPointer->Free();
-		netRingGetPointer = netRingGetPointer->Next();
-	}
-	netRingAddPointer = netRingGetPointer;
-}
-
-void Network::Init()
-{
-	CleanRing();
-	Reset();
-
-	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
-	active = true;
-	sentPacketsOutstanding = 0;
-}
-
-void Network::Spin()
-{
-	if (!active)
-	{
-		//ResetEther();
-		return;
-	}
-
-	// Keep the Ethernet running
-
-	ethernet_task();
-
-	// Anything come in from the network to act on?
-
-	if (!netRingGetPointer->Active())
-		return;
-
-	// Finished reading the active ring element?
-
-	if (!netRingGetPointer->ReadFinished())
-	{
-		// No - Finish reading any data that's been received.
-
-		if (inputPointer < inputLength)
-			return;
-
-		// Haven't started reading it yet - set that up.
-
-		inputPointer = 0;
-		inputLength = netRingGetPointer->Length();
-		inputBuffer = netRingGetPointer->Data();
-	}
-}
-
-// Webserver calls this to read bytes that have come in from the network
-
-bool Network::Read(char& b)
-{
-	if (inputPointer >= inputLength)
-	{
-		inputLength = -1;
-		inputPointer = 0;
-		netRingGetPointer->SetReadFinished(); // Past tense...
-		SetWriteEnable(true);
-		//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - data read.\n");
-		return false;
-	}
-	b = inputBuffer[inputPointer];
-	inputPointer++;
-	return true;
-}
-
-// Webserver calls this to write bytes that need to go out to the network
-
-void Network::Write(char b)
-{
-	// Check for horrible things...
-
-	if (!CanWrite())
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write when disabled.\n");
-		return;
-	}
-
-	if (outputPointer >= ARRAY_SIZE(outputBuffer))
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Output buffer overflow! \n");
-		return;
-	}
-
-	// Add the byte to the buffer
-
-	outputBuffer[outputPointer] = b;
-	outputPointer++;
-
-	// Buffer full?  If so, send it.
-
-	if (outputPointer == ARRAY_SIZE(outputBuffer))
-	{
-#if WINDOWED_SEND_PACKETS > 1
-		++sentPacketsOutstanding;
-#else
-		SetWriteEnable(false);  // Stop further writing from Webserver until the network tells us that this has gone
-#endif
-		RepRapNetworkSendOutput(outputBuffer, outputPointer, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(),
-				netRingGetPointer->Hs());
-		outputPointer = 0;
-	}
-}
-
-void Network::InputBufferReleased(void* pb)
-{
-	if (netRingGetPointer->Pbuf() != pb)
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::InputBufferReleased() - Pointers don't match!\n");
-		return;
-	}
-	netRingGetPointer->ReleasePbuf();
-}
-
-void Network::ConnectionError(void* h)
-{
-	// h points to an http state block that the caller is about to release, so we need to stop referring to it.
-	// The state block is usually but not always in use by the current http request being processed, in which case we abandon the current request.
-	if (netRingGetPointer != netRingAddPointer && netRingGetPointer->Hs() == h)
-	{
-		netRingGetPointer->Free();
-		netRingGetPointer = netRingGetPointer->Next();
-	}
-
-	// Reset the network layer. In particular, this clears the output buffer to make sure nothing more gets sent,
-	// and sets status to 'nothing' so that we can accept another connection attempt.
-	Reset();
-}
-
-void Network::ReceiveInput(char* data, int length, void* pbuf, void* pcb, void* hs)
-{
-	status = clientLive;
-	if (netRingAddPointer->Active())
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ReceiveInput() - Ring buffer full!\n");
-		return;
-	}
-	netRingAddPointer->Set(data, length, pbuf, pcb, hs);
-	netRingAddPointer = netRingAddPointer->Next();
-	//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - input received.\n");
-}
-
-bool Network::CanWrite() const
-{
-#if WINDOWED_SEND_PACKETS > 1
-	return writeEnabled && sentPacketsOutstanding < WINDOWED_SEND_PACKETS;
-#else
-	return writeEnabled;
-#endif
-}
-
-void Network::SetWriteEnable(bool enable)
-{
-	writeEnabled = enable;
-	if (!writeEnabled)
-		return;
-	if (closePending)
-		Close();
-}
-
-void Network::SentPacketAcknowledged()
-{
-#if WINDOWED_SEND_PACKETS > 1
-	if (sentPacketsOutstanding != 0)
-	{
-		--sentPacketsOutstanding;
-	}
-	if (closePending && sentPacketsOutstanding == 0)
-	{
-		Close();
-	}
-#else
-	SetWriteEnable(true);
-#endif
-}
-
-// This is not called for data, only for internally-
-// generated short strings at the start of a transmission,
-// so it should never overflow the buffer (which is checked
-// anyway).
-
-void Network::Write(const char* s)
-{
-	int i = 0;
-	while (s[i])
-		Write(s[i++]);
-}
-
-void Network::Close()
-{
-	if (Status() && clientLive)
-	{
-		if (outputPointer > 0)
-		{
-			SetWriteEnable(false);
-			RepRapNetworkSendOutput(outputBuffer, outputPointer, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(),
-					netRingGetPointer->Hs());
-			outputPointer = 0;
-			closePending = true;
-			return;
-		}
-		RepRapNetworkSendOutput((char*) NULL, 0, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(),
-				netRingGetPointer->Hs());
-		netRingGetPointer->Free();
-		netRingGetPointer = netRingGetPointer->Next();
-		//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - output sent and closed.\n");
-	}
-	else
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Close() - Attempt to close a closed connection!\n");
-	closePending = false;
-	status = nothing;
-	//Reset();
-}
-
-int8_t Network::Status() const
-{
-	if (inputPointer >= inputLength)
-		return status;
-	return status | clientConnected | byteAvailable;
-}
-
-NetRing::NetRing(NetRing* n)
-{
-	next = n;
-	Free();
-}
-
-void NetRing::Free()
-{
-	pbuf = 0;
-	pcb = 0;
-	hs = 0;
-	data = "";
-	length = 0;
-	read = false;
-	active = false;
-}
-
-bool NetRing::Set(char* d, int l, void* pb, void* pc, void* h)
-{
-	if (active)
-		return false;
-	pbuf = pb;
-	pcb = pc;
-	hs = h;
-	data = d;
-	length = l;
-	read = false;
-	active = true;
-	return true;
-}
-
-NetRing* NetRing::Next()
-{
-	return next;
-}
-
-char* NetRing::Data()
-{
-	return data;
-}
-
-int NetRing::Length()
-{
-	return length;
-}
-
-bool NetRing::ReadFinished()
-{
-	return read;
-}
-
-void NetRing::SetReadFinished()
-{
-	read = true;
-}
-
-bool NetRing::Active()
-{
-	return active;
-}
-
-void NetRing::SetNext(NetRing* n)
-{
-	next = n;
-}
-
-void* NetRing::Pbuf()
-{
-	return pbuf;
-}
-
-void NetRing::ReleasePbuf()
-{
-	pbuf = 0;
-}
-
-void* NetRing::Pcb()
-{
-	return pcb;
-}
-
-void* NetRing::Hs()
-{
-	return hs;
-}
-
-void NetRing::ReleaseHs()
-{
-	hs = 0;
-}
-
+// End

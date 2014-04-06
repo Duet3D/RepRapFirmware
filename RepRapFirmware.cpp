@@ -304,6 +304,17 @@ void RepRap::SetDebug(int d)
 
 char scratchString[STRING_LENGTH];
 
+// For debug use
+void debugPrintf(const char* fmt, ...)
+{
+	va_list p;
+	va_start(p, fmt);
+	vsnprintf(scratchString, ARRAY_SIZE(scratchString), fmt, p);
+	va_end(p);
+	scratchString[ARRAY_SIZE(scratchString) - 1] = 0;
+	reprap.GetPlatform()->Message(HOST_MESSAGE, scratchString);
+}
+
 #if 0	// no longer used, we use snprinf or sncatf instead
 
 // Float to a string.

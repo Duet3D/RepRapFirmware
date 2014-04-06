@@ -27,12 +27,14 @@ Licence: GPL
 
 // Warn of what's to come, so we can use pointers to classes...
 
+class Network;
 class Platform;
 class Webserver;
 class GCodes;
 class Move;
 class Heat;
 class RepRap;
+class FileStore;
 
 // A single instance of the RepRap class contains all the others
 
@@ -40,8 +42,9 @@ extern RepRap reprap;
 
 // Functions and globals not part of any class
 
+void debugPrintf(const char* fmt, ...);
 int sncatf(char *dst, size_t len, const char* fmt, ...);
-#if 0	// n longer used
+#if 0	// no longer used
 char* ftoa(char *a, const float& f, int prec);
 #endif
 bool StringEndsWith(const char* string, const char* ending);
@@ -55,6 +58,7 @@ int StringContains(const char* string, const char* match);
 extern char scratchString[];
 
 #include "Configuration.h"
+#include "Network.h"
 #include "Platform.h"
 #include "Webserver.h"
 #include "GCodes.h"
