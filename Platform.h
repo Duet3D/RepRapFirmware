@@ -551,7 +551,7 @@ class Platform
   uint16_t zProbeReadings[NumZProbeReadingsAveraged];
   int zProbeADValue;
   float zProbeStopHeight;
-
+  bool zProbeEnable;
 // AXES
 
   void InitZProbe();

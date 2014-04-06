@@ -1512,6 +1512,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 112: // Emergency stop - acted upon in Webserver
+    		reprap.EmergencyStop();
     	break;
 
     case 114: // Deprecated
