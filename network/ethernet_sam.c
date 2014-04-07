@@ -69,10 +69,6 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "lwip/src/sam/include/netif/ethernetif.h"
 
-#if defined(HTTP_RAW_USED)
-#include "httpd.h"
-#endif
-
 #include "lwip_test.h"
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */

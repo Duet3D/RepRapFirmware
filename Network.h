@@ -32,16 +32,31 @@ Separated out from Platform.h by dc42
 // and therefore avoids additional memory use and fragmentation.
 const unsigned int httpOutputBufferSize = 2 * 1432;
 
-// Start with a ring buffer to hold input from the network that needs to be responded to.
+// HttpState structure that we use to track Http connections. This could be combined with class RequestState.
 
-class NetRing
+struct HttpState
+{
+	// Receive fields
+	struct pbuf *pb;
+
+	// Transmit fields
+	char *file;
+	uint16_t left;
+	uint8_t retries;
+
+	bool SendInProgress() const { return left > 0; }
+};
+
+// Start with a class to hold input and output from the network that needs to be responded to.
+
+class RequestState
 {
 public:
 	friend class Network;
 
 protected:
-	NetRing(NetRing* n);
-	void Set(const char* d, int l, void* pc, void* h);
+	RequestState(RequestState* n);
+	void Set(const char* d, int l, void* pc, HttpState* h);
 	bool Read(char& b);
 	void SentPacketAcknowledged();
 	void Write(char b);
@@ -54,9 +69,9 @@ protected:
 private:
 	void Reset();
 	void* pcb;
-	void* hs;
+	HttpState* hs;
 
-	NetRing* next;
+	RequestState* next;
 	const char* inputData;
 	int inputLength;
 	int inputPointer;
@@ -74,10 +89,10 @@ class Network
 {
 public:
 
-	void ReceiveInput(const char* data, int length, void* pc, void* h);
-	void InputBufferReleased(void *hs, void* pb);
-	void SentPacketAcknowledged(void *hs);
-	void ConnectionError(void* h);
+	void ReceiveInput(const char* data, int length, void* pc, HttpState* h);
+	void InputBufferReleased(HttpState *hs, void* pb);
+	void SentPacketAcknowledged(HttpState *hs);
+	void ConnectionError(HttpState* h);
 	bool Active() const;
 	bool LinkIsUp();
 	bool Read(char& b);
@@ -92,12 +107,12 @@ public:
 
 private:
 
-	void AppendTransaction(NetRing** list, NetRing *r);
+	void AppendTransaction(RequestState** list, RequestState *r);
 
-	NetRing *freeTransactions;
-	NetRing *readyTransactions;
-	NetRing *writingTransactions;
-	NetRing *closingTransactions;
+	RequestState *freeTransactions;
+	RequestState *readyTransactions;
+	RequestState *writingTransactions;
+	RequestState *closingTransactions;
 	bool active;
 };
 

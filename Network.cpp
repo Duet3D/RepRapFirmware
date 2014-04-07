@@ -2,38 +2,56 @@
 
  RepRapFirmware - Network: RepRapPro Ormerod with Arduino Due controller
 
-  Separated out from Platform.cpp by dc42, 2014-04-05
+  2014-04-05 Created from portions taken out of Platform.cpp by dc42
+  2014-04-07 Added portions of httpd.c. These portions are subject to the following copyright notice:
+
+ * Copyright (c) 2001-2003 Swedish Institute of Computer Science.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 3. The name of the author may not be used to endorse or promote products
+ *    derived from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT
+ * SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+ * OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+ * OF SUCH DAMAGE.
+ *
+ * This file is part of the lwIP TCP/IP stack.
+ *
+ * Author: Adam Dunkels <adam@sics.se>
+ *
+ * (end httpd.c copyright notice)
 
  ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
 
-const uint8_t windowedSendPackets = 2;
-
-
-//***************************************************************************************************
-
-// Network/Ethernet class
-
-// C calls to interface with LWIP (http://savannah.nongnu.org/projects/lwip/)
-// These are implemented in, and called from, a modified version of httpd.c
-// in the network directory.
-
 extern "C"
 {
 
-// Transmit data to the Network
+#include "lwipopts.h"
+#include "lwip/src/include/lwip/debug.h"
+#include "lwip/src/include/lwip/stats.h"
+#include "lwip/src/include/lwip/tcp.h"
 
-void RepRapNetworkSendOutput(char* data, int length, void* pcb, void* hs);
-
-// Ask whether it is OK to send
-int RepRapNetworkCanSend(void* hs);
-
-void RepRapNetworkConnectionError(void* h)
-{
-	reprap.GetPlatform()->GetNetwork()->ConnectionError(h);
 }
+
+const uint8_t windowedSendPackets = 2;
 
 // Called to put out a message via the RepRap firmware.
 
@@ -42,22 +60,258 @@ void RepRapNetworkMessage(const char* s)
 	reprap.GetPlatform()->Message(HOST_MESSAGE, s);
 }
 
-// Called to push data into the RepRap firmware.
 
-void RepRapNetworkReceiveInput(const char* data, int length, void* pcb, void* hs)
+static void SendData(struct tcp_pcb *pcb, HttpState *hs)
 {
-	reprap.GetPlatform()->GetNetwork()->ReceiveInput(data, length, pcb, hs);
+  err_t err;
+  u16_t len;
+
+  /* We cannot send more data than space available in the send buffer. */
+  if (tcp_sndbuf(pcb) < hs->left)
+  {
+    len = tcp_sndbuf(pcb);
+  }
+  else
+  {
+    len = hs->left;
+  }
+
+//  RepRapNetworkMessage("Sending ");
+//  sprintf(scratch, "%d", len);
+//  RepRapNetworkMessage(scratch);
+//  RepRapNetworkMessage("..");
+
+  do {
+    err = tcp_write(pcb, hs->file, len, 0); // Final arg - 1 means make a copy
+    if (err == ERR_MEM) {
+      len /= 2;
+    }
+  } while (err == ERR_MEM && len > 1);
+
+  if (err == ERR_OK)
+  {
+	  tcp_output(pcb);
+	  hs->file += len;
+	  hs->left -= len;
+  } else
+  {
+	  RepRapNetworkMessage("send_data: error\n");
+	  //%s len %d %d\n", lwip_strerr(err), len, tcp_sndbuf(pcb));
+  }
 }
 
-// Called when transmission of outgoing data is complete to allow
-// the RepRap firmware to write more.
+/*-----------------------------------------------------------------------------------*/
 
-void RepRapNetworkSentPacketAcknowledged(void *hs)
+extern "C"
 {
-	reprap.GetPlatform()->GetNetwork()->SentPacketAcknowledged(hs);
+
+// Callback functions called by LWIP
+
+static void conn_err(void *arg, err_t err)
+{
+  // Report the error to the monitor
+  RepRapNetworkMessage("Network connection error, code ");
+  {
+	char tempBuf[10];
+	snprintf(tempBuf, sizeof(tempBuf)/sizeof(char), "%d\n", err);
+	RepRapNetworkMessage(tempBuf);
+  }
+
+  HttpState *hs = (HttpState*)arg;
+  reprap.GetPlatform()->GetNetwork()->ConnectionError(hs);	// tell the higher levels about the error
+  mem_free(hs);							// release the state data
 }
 
-}	// extern "C"
+/*-----------------------------------------------------------------------------------*/
+
+static err_t http_poll(void *arg, struct tcp_pcb *pcb)
+{
+  HttpState *hs = (HttpState*)arg;
+
+  if (hs == NULL)
+  {
+	RepRapNetworkMessage("Null, abort\n");
+    tcp_abort(pcb);
+    return ERR_ABRT;
+  }
+  else
+  {
+    ++hs->retries;
+    if (hs->retries == 4)
+    {
+      tcp_abort(pcb);
+      return ERR_ABRT;
+    }
+    SendData(pcb, hs);
+  }
+
+  return ERR_OK;
+}
+
+/*-----------------------------------------------------------------------------------*/
+
+static err_t http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
+{
+  HttpState *hs = (HttpState*)arg;
+
+  LWIP_UNUSED_ARG(len);
+
+  hs->retries = 0;
+
+  //RepRapNetworkMessage("..sent\n");
+
+  if (hs->left > 0)
+  {
+	  SendData(pcb, hs);
+  }
+  else
+  {
+	  // See if there is more to send
+	  reprap.GetPlatform()->GetNetwork()->SentPacketAcknowledged(hs);
+  }
+
+  return ERR_OK;
+}
+
+/*-----------------------------------------------------------------------------------*/
+
+static err_t http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err)
+{
+	HttpState *hs = (HttpState*)arg;
+
+	if (err == ERR_OK && p != NULL)
+	{
+		/* Inform TCP that we have taken the data. */
+		tcp_recved(pcb, p->tot_len);
+
+		if (hs->file == NULL)
+		{
+			hs->pb = p;
+			reprap.GetPlatform()->GetNetwork()->ReceiveInput((const char*)(p->payload), p->len, pcb, hs);
+		}
+		else
+		{
+			// We are already sending data on this connection, so not expecting any messages on it
+			pbuf_free(p);
+		}
+	}
+	return ERR_OK;
+}
+
+/*-----------------------------------------------------------------------------------*/
+
+static err_t http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
+{
+  LWIP_UNUSED_ARG(arg);
+  LWIP_UNUSED_ARG(err);
+
+  tcp_setprio(pcb, TCP_PRIO_MIN);
+
+  //RepRapNetworkMessage("http_accept\n");
+
+  HttpState *hs = (HttpState*)mem_malloc(sizeof(HttpState));
+
+  if (hs == NULL)
+  {
+	  RepRapNetworkMessage("Out of memory!\n");
+	  return ERR_MEM;
+  }
+
+  /* Initialize the structure. */
+  hs->pb = NULL;
+  hs->file = NULL;
+  hs->left = 0;
+  hs->retries = 0;
+
+  /* Tell TCP that this is the structure we wish to be passed for our callbacks. */
+  tcp_arg(pcb, hs);
+
+  /* Tell TCP that we wish to be informed of incoming data by a call to the http_recv() function. */
+  tcp_recv(pcb, http_recv);
+
+  tcp_err(pcb, conn_err);
+
+  tcp_poll(pcb, http_poll, 4);
+  return ERR_OK;
+}
+
+/*-----------------------------------------------------------------------------------*/
+
+// This function (is)x should be called only once at the start.
+
+void httpd_init(void)
+{
+  static int initCount = 0;
+
+
+  initCount++;
+  if (initCount > 1)
+  {
+	  RepRapNetworkMessage("httpd_init() called more than once.\n");
+  }
+
+  struct tcp_pcb* pcb = tcp_new();
+  tcp_bind(pcb, IP_ADDR_ANY, 80);
+  pcb = tcp_listen(pcb);
+  tcp_accept(pcb, http_accept);
+}
+
+}	// end extern "C"
+
+/*-----------------------------------------------------------------------------------*/
+
+static void close_conn(struct tcp_pcb *pcb, HttpState *hs)
+{
+//  RepRapNetworkMessage("close_conn called.\n");
+  tcp_arg(pcb, NULL);
+  tcp_sent(pcb, NULL);
+  tcp_recv(pcb, NULL);
+  mem_free(hs);
+  tcp_close(pcb);
+}
+
+/*-----------------------------------------------------------------------------------*/
+// RepRap calls this with data to send.
+// A null transmission implies the end of the data to be sent.
+
+void RepRapNetworkSendOutput(char* data, int length, void* pc, void* h)
+{
+	struct tcp_pcb* pcb = (tcp_pcb*)pc;
+	HttpState* hs = (HttpState*)h;
+
+	if (hs == 0)
+	{
+		RepRapNetworkMessage("Attempt to write with null structure.\n");
+		return;
+	}
+
+	if (hs->pb != NULL)
+	{
+		pbuf_free(hs->pb);
+		hs->pb = NULL;
+	}
+
+	if (length <= 0)
+	{
+		close_conn(pcb, hs);
+		return;
+	}
+
+	hs->file = data;
+	hs->left = length;
+	hs->retries = 0;
+
+	SendData(pcb, hs);
+
+	/* Tell TCP that we wish be to informed of data that has been successfully sent by a call to the http_sent() function. */
+
+	tcp_sent(pcb, http_sent);
+}
+
+
+//***************************************************************************************************
+
+// Network/Ethernet class
 
 Network::Network()
 {
@@ -74,11 +328,11 @@ Network::Network()
 	closingTransactions = NULL;
 	for (int8_t i = 0; i < HTTP_STATE_SIZE; i++)
 	{
-		freeTransactions = new NetRing(freeTransactions);
+		freeTransactions = new RequestState(freeTransactions);
 	}
 }
 
-void Network::AppendTransaction(NetRing** list, NetRing *r)
+void Network::AppendTransaction(RequestState** list, RequestState *r)
 {
 	r->next = NULL;
 	while (*list != NULL)
@@ -102,7 +356,7 @@ void Network::Spin()
 		ethernet_task();			// keep the Ethernet running
 
 		// See if we can send anything
-		NetRing* r = writingTransactions;
+		RequestState* r = writingTransactions;
 		if (r != NULL)
 		{
 			bool doClose = r->TrySendData();	// we must leave r on the list for now because of possible callback to release the input buffer
@@ -163,9 +417,9 @@ void Network::Write(const char* s)
 	}
 }
 
-void Network::SentPacketAcknowledged(void *hs)
+void Network::SentPacketAcknowledged(HttpState *hs)
 {
-	NetRing *r = writingTransactions;
+	RequestState *r = writingTransactions;
 	while (r != NULL && r->hs != hs)
 	{
 		r = r->next;
@@ -189,13 +443,13 @@ void Network::SentPacketAcknowledged(void *hs)
 	debugPrintf("Network SentPacketAcknowledged: didn't find hs=%08x\n", (unsigned int)hs);
 }
 
-void Network::ConnectionError(void* hs)
+void Network::ConnectionError(HttpState* hs)
 {
 	// h points to an http state block that the caller is about to release, so we need to stop referring to it.
 	debugPrintf("Network: ConnectionError\n");
 
 	// See if it's a ready transaction
-	NetRing* r = readyTransactions;
+	RequestState* r = readyTransactions;
 	while (r != NULL && r->hs == hs)
 	{
 		r = r->next;
@@ -234,9 +488,9 @@ void Network::ConnectionError(void* hs)
 	debugPrintf("Network ConnectionError: didn't find hs=%08x\n", (unsigned int)hs);
 }
 
-void Network::ReceiveInput(const char* data, int length, void* pcb, void* hs)
+void Network::ReceiveInput(const char* data, int length, void* pcb, HttpState* hs)
 {
-	NetRing* r = freeTransactions;
+	RequestState* r = freeTransactions;
 	if (r == NULL)
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ReceiveInput() - no free transactions!\n");
@@ -254,7 +508,7 @@ void Network::ReceiveInput(const char* data, int length, void* pcb, void* hs)
 // The file may be too large for our buffer, so we may have to send it in multiple transactions.
 void Network::SendAndClose(FileStore *f)
 {
-	NetRing *r = readyTransactions;
+	RequestState *r = readyTransactions;
 	if (r != NULL)
 	{
 		readyTransactions = r->next;
@@ -291,11 +545,11 @@ bool Network::Active() const
 
 
 // NetRing class members
-NetRing::NetRing(NetRing* n) : next(n)
+RequestState::RequestState(RequestState* n) : next(n)
 {
 }
 
-void NetRing::Set(const char* d, int l, void* pc, void* h)
+void RequestState::Set(const char* d, int l, void* pc, HttpState* h)
 {
 	pcb = pc;
 	hs = h;
@@ -309,7 +563,7 @@ void NetRing::Set(const char* d, int l, void* pc, void* h)
 
 // Webserver calls this to read bytes that have come in from the network
 
-bool NetRing::Read(char& b)
+bool RequestState::Read(char& b)
 {
 	if (LostConnection() || inputPointer >= inputLength)
 	{
@@ -323,7 +577,7 @@ bool NetRing::Read(char& b)
 
 // Webserver calls this to write bytes that need to go out to the network
 
-void NetRing::Write(char b)
+void RequestState::Write(char b)
 {
 	if (LostConnection()) return;
 
@@ -344,7 +598,7 @@ void NetRing::Write(char b)
 // so it should never overflow the buffer (which is checked
 // anyway).
 
-void NetRing::Write(const char* s)
+void RequestState::Write(const char* s)
 {
 	while (*s)
 	{
@@ -353,14 +607,14 @@ void NetRing::Write(const char* s)
 }
 
 // Send some data if we can, returning true if all data has been sent
-bool NetRing::TrySendData()
+bool RequestState::TrySendData()
 {
 	if (LostConnection())
 	{
 		return true;
 	}
 
-	if (!RepRapNetworkCanSend(hs))
+	if (hs->SendInProgress())
 	{
 //		debugPrintf("Send busy\n");
 		return false;
@@ -404,7 +658,7 @@ bool NetRing::TrySendData()
 	}
 }
 
-void NetRing::SentPacketAcknowledged()
+void RequestState::SentPacketAcknowledged()
 {
 	if (sentPacketsOutstanding != 0)
 	{
@@ -413,7 +667,7 @@ void NetRing::SentPacketAcknowledged()
 }
 
 // Close this connection. Return true if it really is closed, false if it needs to go in the deferred close list.
-bool NetRing::Close()
+bool RequestState::Close()
 {
 	if (LostConnection())
 	{
@@ -425,12 +679,12 @@ bool NetRing::Close()
 	return true;		// try not using deferred close for now
 }
 
-void NetRing::SetConnectionLost()
+void RequestState::SetConnectionLost()
 {
 	hs = NULL;
 }
 
-bool NetRing::LostConnection() const
+bool RequestState::LostConnection() const
 {
 	return hs == NULL;
 }
