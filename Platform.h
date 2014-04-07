@@ -573,7 +573,7 @@ class Platform
   uint16_t LastZProbeReading;
   int zProbeADValue;
   float zProbeStopHeight;
-
+  bool zProbeEnable;
   void InitZProbe();
   void PollZHeight();
 
