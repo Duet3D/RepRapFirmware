@@ -25,20 +25,20 @@ class RepRap
 {    
   public:
       
-    RepRap();
-    void EmergencyStop();
-    void Init();
-    void Spin();
-    void Exit();
-    void Interrupt();
-    void Diagnostics();
-    bool Debug() const;
-    void SetDebug(bool d);
-    Platform* GetPlatform() const;
-    Move* GetMove() const;
-    Heat* GetHeat() const;
-    GCodes* GetGCodes() const;
-    Webserver* GetWebserver() const;
+    RepRap();				// Constructor for everything; calls all the other constructors
+    void EmergencyStop();	// Immediately turn off all heaters and motors
+    void Init();			// Initialise everything
+    void Spin();			// Run everything
+    void Exit();			// Stop everything
+    void Interrupt();		// Called by the system interrupt
+    void Diagnostics();		// Print useful stuff
+    bool Debug() const;		// Is debugging enabled?
+    void SetDebug(bool d);	// Turn debugging on and off
+    Platform* GetPlatform() const;		// Get the sysyem specific platform
+    Move* GetMove() const;				// Get the instance of the class that handles all movement
+    Heat* GetHeat() const;				// Get the instance of the class that handles all heat and temperature
+    GCodes* GetGCodes() const;			// Get the instance of the class that handles G Codes from all sources
+    Webserver* GetWebserver() const;	// Get the instance of the class that handles Web traffic
     
   private:
   
@@ -49,6 +49,7 @@ class RepRap
     GCodes* gCodes;
     Webserver* webserver;
     bool debug;
+    float lastTime, fastTime, slowTime;
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }

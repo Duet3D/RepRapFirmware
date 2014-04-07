@@ -218,9 +218,8 @@ void Webserver::ProcessGcode(const char* gc)
 		  char c;
 		  size_t i = 0;
 		  while(i < STRING_LENGTH && configFile->Read(c))
-		  {
 			gcodeReply[i++] = c;
-		  }
+
 		  configFile->Close();
 		  gcodeReply[i] = 0;
 		  ++seq;
@@ -266,8 +265,6 @@ void Webserver::ProcessGcode(const char* gc)
 void Webserver::CloseClient()
 {
   writing = false;
-  //inPHPFile = false;
-  //InitialisePHP();
   clientCloseTime = platform->Time();
   needToCloseClient = true;   
 }
@@ -787,15 +784,11 @@ bool Webserver::CharFromClient(char c)
 
 void Webserver::Spin()
 {
-  //char sw[2];
   if(!active)
     return;
     
   if(writing)
   {
- //   if(inPHPFile)
- //     WritePHPByte();
- //   else
 	  if (WriteBytes())		// if we wrote something
 	  {
 		  platform->ClassReport("Webserver", longWait);

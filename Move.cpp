@@ -94,7 +94,7 @@ void Move::Init()
 	  liveCoordinates[i] = 0.0;
   }
 
-  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), false, zMove);  // Typically Z is the slowest Axis
+  lastMove->Init(ep, platform->HomeFeedRate(Z_AXIS), platform->InstantDv(Z_AXIS), noEndstopCheck, zMove);  // Typically Z is the slowest Axis
   lastMove->Release();
   liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 
@@ -167,7 +167,7 @@ void Move::Spin()
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
 
-  bool checkEndStopsOnNextMove;
+  EndstopMode checkEndStopsOnNextMove;
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
 	Transform(nextMove);
@@ -183,6 +183,7 @@ void Move::Spin()
     
     if(movementType == noMove)
     {
+       currentFeedrate = nextMove[DRIVES]; 		// Might be G1 with just an F field
        platform->ClassReport("Move", longWait);
        return;
     }
@@ -325,13 +326,14 @@ int8_t Move::GetMovementType(long p0[], long p1[])
   return result;
 }
 
+
+// The stepDistances arrays are look-up tables of the Euclidean distance
+// between the start and end of a step.  If the step is just along one axis,
+// it's just that axis's step length.  If it's more, it is a Pythagoran
+// sum of all the axis steps that take part.
+
 void Move::SetStepHypotenuse()
 {
-	 // The stepDistances arrays are look-up tables of the Euclidean distance
-	  // between the start and end of a step.  If the step is just along one axis,
-	  // it's just that axis's step length.  If it's more, it is a Pythagoran
-	  // sum of all the axis steps that take part.
-
 	  float d, e;
 	  int8_t i, j;
 
@@ -570,7 +572,7 @@ void Move::Interrupt()
 }
 
 
-bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t mt)
+bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, EndstopMode ce, int8_t mt)
 {
     if(LookAheadRingFull())
       return false;
@@ -841,19 +843,31 @@ MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile
 
 			result = change;
 
-			float k = v/u;
-			u = 2.0*acceleration*distance/(k*k - 1);
-			if(u >= 0.0)
+			float temp = 2.0 * acceleration * distance;
+			if (v > u)
 			{
-				u = sqrt(u);
-				v = k*u;
+				// Accelerating, reduce v
+				v = sqrt((u * u) + temp);
+				dCross = distance;
 			} else
 			{
-				v = sqrt(-u);
-				u = v/k;
+				// Decelerating, reduce u
+				u = sqrt((v * v) + temp);
+				dCross = 0.0;
 			}
 
-			dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
+//			float k = v/u;
+//			u = 2.0*acceleration*distance/(k*k - 1);
+//			if(u >= 0.0)
+//			{
+//				u = sqrt(u);
+//				v = k*u;
+//			} else
+//			{
+//				v = sqrt(-u);
+//				u = v/k;
+//			}
+//			dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
 		}
 
 		// The DDA steps at which acceleration stops and deceleration starts
@@ -1078,21 +1092,45 @@ void DDA::Step()
         extrudersMoving |= 1<<(drive - AXES);
         
       // Hit anything?
-  
-      if(checkEndStops)
+
+      if(checkEndStops != noEndstopCheck)
       {
-        EndStopHit esh = platform->Stopped(drive);
-        if(esh == lowHit)
+        switch(platform->Stopped(drive))
         {
+        case lowHit:
           move->HitLowStop(drive, myLookAheadEntry, this);
           active = false;
-        }
-        if(esh == highHit)
-        {
+          break;
+        case highHit:
           move->HitHighStop(drive, myLookAheadEntry, this);
           active = false;
+          break;
+//        case lowNear:  // FIXME - Implement this
+//          if (checkEndStops == checkApproachingEndstop)
+//		  {
+//			move->NearLowStop(drive, myLookAheadEntry, this);
+//			active = false;
+//		  }
+          break;
+        default:
+          break;
         }
-      }        
+      }
+
+//      if(checkEndStops == checkAtEndstop)
+//      {
+//        EndStopHit esh = platform->Stopped(drive);
+//        if(esh == lowHit)
+//        {
+//          move->HitLowStop(drive, myLookAheadEntry, this);
+//          active = false;
+//        }
+//        if(esh == highHit)
+//        {
+//          move->HitHighStop(drive, myLookAheadEntry, this);
+//          active = false;
+//        }
+//      }
     }
   }
   
@@ -1122,9 +1160,7 @@ void DDA::Step()
     active = stepCount < totalSteps;
     
     platform->SetInterrupt(timeStep);
-  }
-  
-  if(!active)
+  } else
   {
 	for(int8_t drive = 0; drive < DRIVES; drive++)
 		move->liveCoordinates[drive] = myLookAheadEntry->MachineToEndPoint(drive); // Don't use SetLiveCoordinates because that applies the transform
@@ -1143,7 +1179,7 @@ LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
   next = n;
 }
 
-void LookAhead::Init(long ep[], float f, float vv, bool ce, int8_t mt)
+void LookAhead::Init(long ep[], float f, float vv, EndstopMode ce, int8_t mt)
 {
   v = vv;
   movementType = mt;

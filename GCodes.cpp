@@ -55,7 +55,7 @@ void GCodes::Init()
   moveAvailable = false;
   drivesRelative = true;
   axesRelative = false;
-  checkEndStops = false;
+  checkEndStops = noEndstopCheck;
   gCodeLetters = GCODE_LETTERS;
   distanceScale = 1.0;
   for(int8_t i = 0; i < DRIVES - AXES; i++)
@@ -71,7 +71,7 @@ void GCodes::Init()
   homeX = false;
   homeY = false;
   homeZ = false;
-  homeAxisMoveCount = 0;
+//  homeAxisMoveCount = 0;
   offSetSet = false;
   dwellWaiting = false;
   stackPointer = 0;
@@ -85,6 +85,7 @@ void GCodes::Init()
   longWait = platform->Time();
   dwellTime = longWait;
   axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
+  waitingForMoveToComplete = false;
 }
 
 void GCodes::DoFilePrint(GCodeBuffer* gb)
@@ -300,7 +301,7 @@ bool GCodes::Pop()
   gFeedRate = feedrateStack[stackPointer];
   moveBuffer[DRIVES] = gFeedRate;
   
-  checkEndStops = false;
+  checkEndStops = noEndstopCheck;
   moveAvailable = true;
   return true;
 }
@@ -334,24 +335,44 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	    		}
 	    	}
         	moveBuffer[i] = moveArg;
-        	if (doingG92)
+        	if (doingG92 && moveArg == 0.0)  // Float == is OK for IEEE 0.0
         	{
         		axisIsHomed[i] = true;		// doing a G92 is equivalent to homing the axis
         	}
 	      }
 	    } else
 	    {
-	      if(gb->Seen(gCodeLetters[i]))
-	      {
-		    float moveArg = gb->GetFValue()*distanceScale;
-	        if(drivesRelative || doingG92)
-	          moveBuffer[i] = moveArg;
-	        else
-	        {
-	          float absE = moveArg;
-	          moveBuffer[i] = absE - lastPos[i - AXES];
-	          lastPos[i - AXES] = absE;
-	        }
+	    	if(gb->Seen(gCodeLetters[i]))
+	    	{
+	    		// Doing an extruder. We need to store the relative distance for this move in moveBuffer and the resulting new position in lastPos.
+	    		float moveArg = gb->GetFValue() * distanceScale;
+	    		if (doingG92)
+	    		{
+	    			moveBuffer[i] = 0.0;			// no move required
+	    			lastPos[i - AXES] = moveArg;	// set new absolute position
+	    		}
+	    		else if (drivesRelative)
+	    		{
+	    			moveBuffer[i] = moveArg;
+	    			lastPos[i - AXES] += moveArg;
+	    		}
+	    		else
+	    		{
+	    			moveBuffer[i] = moveArg - lastPos[i - AXES];
+	    			lastPos[i - AXES] = moveArg;
+	    		}
+
+
+
+//		    float moveArg = gb->GetFValue()*distanceScale;
+//	        if(drivesRelative || doingG92)
+//	          moveBuffer[i] = moveArg;
+//	        else
+//	        {
+//	          float absE = moveArg;
+//	          moveBuffer[i] = absE - lastPos[i - AXES];
+//	          lastPos[i - AXES] = absE;
+//	        }
 	      }
 	    }
 	}
@@ -367,36 +388,38 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 
 // This function is called for a G Code that makes a move.
 // If the Move class can't receive the move (i.e. things have to wait)
-// this returns false, otherwise true.
+// If we have queued the move and the caller doesn't need to wait for it to complete, return 1.
+// If we need to wait for the move to complete before doing another one (because endstops are checked in this move), return 2.
 
-bool GCodes::SetUpMove(GCodeBuffer *gb)
+
+int GCodes::SetUpMove(GCodeBuffer *gb)
 {
-  // Last one gone yet?
-  
-  if(moveAvailable)
-    return false;
-    
-  // Load the last position; If Move can't accept more, return false
-  
-  if(!reprap.GetMove()->GetCurrentState(moveBuffer))
-    return false;
-  
-  checkEndStops = false;
-  if(gb->Seen('S'))
-  {
-	  if(gb->GetIValue() == 1)
-		  checkEndStops = true;
-  }
+	// Last one gone yet?
+	if (moveAvailable)
+		return 0;
 
-  LoadMoveBufferFromGCode(gb, false, !checkEndStops);
+	// Load the last position; if Move can't accept more, return 0
+	if (!reprap.GetMove()->GetCurrentState(moveBuffer))
+		return 0;
 
-  moveAvailable = true;
-  return true; 
+	bool doEndstopCheck = false;
+	if (gb->Seen('S'))
+	{
+		if (gb->GetIValue() == 1)
+		{
+			doEndstopCheck = true;
+		}
+	}
+
+	checkEndStops = (doEndstopCheck) ? checkAtEndstop : noEndstopCheck;
+	LoadMoveBufferFromGCode(gb, false, !doEndstopCheck);
+	moveAvailable = true;
+	return (doEndstopCheck) ? 2 : 1;
 }
 
 // The Move class calls this function to find what to do next.
 
-bool GCodes::ReadMove(float m[], bool& ce)
+bool GCodes::ReadMove(float m[], EndstopMode& ce)
 {
     if(!moveAvailable)
       return false; 
@@ -404,7 +427,7 @@ bool GCodes::ReadMove(float m[], bool& ce)
       m[i] = moveBuffer[i];
     ce = checkEndStops;
     moveAvailable = false;
-    checkEndStops = false;
+    checkEndStops = noEndstopCheck;
     return true;
 }
 
@@ -427,7 +450,7 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 			platform->Message(HOST_MESSAGE, fileName);
 			platform->Message(HOST_MESSAGE, "\n");
 			if(!Pop())
-				platform->Message(HOST_MESSAGE, "Cannot pop the stack.\n");
+				platform->Message(HOST_MESSAGE, "Cannot pop the stack!\n");
 			return true;
 		}
 		doingCannedCycleFile = true;
@@ -484,7 +507,7 @@ bool GCodes::FileCannedCyclesReturn()
 // be ignored.  Recall that moveToDo[DRIVES] should contain the feedrate
 // you want (if action[DRIVES] is true).
 
-bool GCodes::DoCannedCycleMove(bool ce)
+bool GCodes::DoCannedCycleMove(EndstopMode ce)
 {
 	// Is the move already running?
 
@@ -570,7 +593,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 	}
 
 
-	if(DoCannedCycleMove(false))
+	if(DoCannedCycleMove(noEndstopCheck))
 	{
 		//LoadMoveBufferFromArray(record);
 		for(int drive = 0; drive <= DRIVES; drive++)
@@ -596,7 +619,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 	{
 		if(DoFileCannedCycles(HOME_ALL_G))
 		{
-			homeAxisMoveCount = 0;
+//			homeAxisMoveCount = 0;
 			homeX = false;
 			homeY = false;
 			homeZ = false;
@@ -610,7 +633,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 	{
 		if(DoFileCannedCycles(HOME_X_G))
 		{
-			homeAxisMoveCount = 0;
+//			homeAxisMoveCount = 0;
 			homeX = false;
 			axisIsHomed[X_AXIS] = true;
 			return NoHome();
@@ -623,7 +646,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 	{
 		if(DoFileCannedCycles(HOME_Y_G))
 		{
-			homeAxisMoveCount = 0;
+//			homeAxisMoveCount = 0;
 			homeY = false;
 			axisIsHomed[Y_AXIS] = true;
 			return NoHome();
@@ -644,7 +667,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 		}
 		if(DoFileCannedCycles(HOME_Z_G))
 		{
-			homeAxisMoveCount = 0;
+//			homeAxisMoveCount = 0;
 			homeZ = false;
 			axisIsHomed[Z_AXIS] = true;
 			return NoHome();
@@ -654,9 +677,9 @@ bool GCodes::DoHome(char* reply, bool& error)
 
 	// Should never get here
 
-	checkEndStops = false;
+	checkEndStops = noEndstopCheck;
 	moveAvailable = false;
-	homeAxisMoveCount = 0;
+//	homeAxisMoveCount = 0;
 
 	return true;
 }
@@ -682,8 +705,11 @@ bool GCodes::DoSingleZProbeAtPoint()
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if(DoCannedCycleMove(false))
+		if (DoCannedCycleMove(noEndstopCheck))
+		{
 			cannedCycleMoveCount++;
+			//reprap.GetMove()->SetZProbing(true);	// we only want to call this once ** dc42 has this line.  Why?
+		}
 		return false;
 
 	case 1:
@@ -694,31 +720,49 @@ bool GCodes::DoSingleZProbeAtPoint()
 		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if(DoCannedCycleMove(false))
+		if(DoCannedCycleMove(noEndstopCheck))
 			cannedCycleMoveCount++;
 		return false;
 
 	case 2:
-		moveToDo[Z_AXIS] = -2.0*platform->AxisLength(Z_AXIS);
+		moveToDo[Z_AXIS] = -2.0 * platform->AxisLength(Z_AXIS);
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(true);
-		if(DoCannedCycleMove(true))
+		if (DoCannedCycleMove(checkApproachingEndstop))
 		{
 			cannedCycleMoveCount++;
-			axisIsHomed[Z_AXIS] = true;		// we now home the Z-axis in Move.cpp it is wasn't already
 		}
 		return false;
 
 	case 3:
+	{
+		float liveCoordinates[DRIVES + 1];
+		reprap.GetMove()->LiveCoordinates(liveCoordinates);
+		moveToDo[Z_AXIS] = liveCoordinates[Z_AXIS] - 10.0; // move down at most another 10mm
+	}
+		activeDrive[Z_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS) * 0.2;
+		activeDrive[DRIVES] = true;
+		reprap.GetMove()->SetZProbing(true);
+		if (DoCannedCycleMove(checkAtEndstop))
+		{
+			cannedCycleMoveCount++;
+			//platform->SetZProbing(false);
+		}
+		return false;
+
+	case 4:
 		moveToDo[Z_AXIS] = Z_DIVE;
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if(DoCannedCycleMove(false))
+		if (DoCannedCycleMove(noEndstopCheck))
+		{
 			cannedCycleMoveCount++;
+		}
 		return false;
 
 	default:
@@ -733,24 +777,72 @@ bool GCodes::DoSingleZProbeAtPoint()
 
 bool GCodes::DoSingleZProbe()
 {
-	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+	for (int8_t drive = 0; drive <= DRIVES; drive++)
+	{
+		activeDrive[drive] = false;
+	}
+
+	switch (cannedCycleMoveCount)
+	{
+	case 0:
+//		platform->SetZProbing(true);	// we only want to call this once
+		++cannedCycleMoveCount;
 		return false;
 
-	for(int8_t drive = 0; drive <= DRIVES; drive++)
-		activeDrive[drive] = false;
+	case 1:
+		moveToDo[Z_AXIS] = -1.1 * platform->AxisLength(Z_AXIS);
+		activeDrive[Z_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+		activeDrive[DRIVES] = true;
+		if (DoCannedCycleMove(checkApproachingEndstop))
+		{
+			cannedCycleMoveCount++;
+		}
+		return false;
 
-	moveToDo[Z_AXIS] = -1.1*platform->AxisLength(Z_AXIS);
-	activeDrive[Z_AXIS] = true;
-	moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-	activeDrive[DRIVES] = true;
-	if(DoCannedCycleMove(true))
-	{
+	case 2:
+		{
+			float liveCoordinates[DRIVES + 1];
+			reprap.GetMove()->LiveCoordinates(liveCoordinates);
+			moveToDo[Z_AXIS] = liveCoordinates[Z_AXIS] - 10.0;	// move down at most another 10mm
+		}
+		activeDrive[Z_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS) * 0.2;
+		activeDrive[DRIVES] = true;
+		if (DoCannedCycleMove(checkAtEndstop))
+		{
+			cannedCycleMoveCount++;
+			probeCount = 0;
+//			platform->SetZProbing(false);
+		}
+		return false;
+
+	default:
 		cannedCycleMoveCount = 0;
-		probeCount = 0;
-		axisIsHomed[Z_AXIS] = true;	// we have homed the Z axis
 		return true;
 	}
-	return false;
+
+
+
+
+//	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+//		return false;
+//
+//	for(int8_t drive = 0; drive <= DRIVES; drive++)
+//		activeDrive[drive] = false;
+//
+//	moveToDo[Z_AXIS] = -1.1*platform->AxisLength(Z_AXIS);
+//	activeDrive[Z_AXIS] = true;
+//	moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+//	activeDrive[DRIVES] = true;
+//	if(DoCannedCycleMove(checkAtEndstop))
+//	{
+//		cannedCycleMoveCount = 0;
+//		probeCount = 0;
+//		axisIsHomed[Z_AXIS] = true;	// we have homed the Z axis
+//		return true;
+//	}
+//	return false;
 }
 
 // This sets wherever we are as the probe point P (probePointIndex)
@@ -1276,9 +1368,27 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     {
     case 0: // There are no rapid moves...
     case 1: // Ordinary move
-      result = SetUpMove(gb);
-      break;
-      
+    	if (waitingForMoveToComplete)
+    	{
+    		// We have already set up this move, but it does endstop checks, so wait for it to complete.
+    		// Otherwise, if the next move uses relative coordinates, it will be incorrectly calculated.
+    		result = AllMovesAreFinishedAndMoveBufferIsLoaded();
+    		if (result)
+    		{
+    			waitingForMoveToComplete = false;
+    		}
+    	}
+    	else
+    	{
+    		int res = SetUpMove(gb);
+    		if (res == 2)
+    		{
+    			waitingForMoveToComplete = true;
+    		}
+    		result = (res == 1);
+    	}
+    	break;
+
     case 4: // Dwell
       result = DoDwell(gb);
       break;
@@ -1298,7 +1408,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     case 28: // Home
       if(NoHome())
       {
-    	homeAxisMoveCount = 0;
+//    	homeAxisMoveCount = 0;
         homeX = gb->Seen(gCodeLetters[X_AXIS]);
         homeY = gb->Seen(gCodeLetters[Y_AXIS]);
         homeZ = gb->Seen(gCodeLetters[Z_AXIS]);
@@ -1415,11 +1525,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 28: // Write to file
-    	{
-			const char* str = gb->GetUnprecedentedString();
-			OpenFileToWrite(platform->GetGCodeDir(), str, gb);
-			snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
-    	}
+    {
+		const char* str = gb->GetUnprecedentedString();
+		OpenFileToWrite(platform->GetGCodeDir(), str, gb);
+		snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+    }
     	break;
 
     case 29: // End of file being written; should be intercepted before getting here
@@ -1496,7 +1606,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
    
     case 106: // Fan on or off
     	if(gb->Seen('S'))
-    		platform->CoolingFan(gb->GetFValue());
+    	{
+    		float speed = gb->GetFValue();
+    		if(speed > 1.9) // Old-style 0..255 PWM?
+    			speed = speed/255.0;
+    		platform->CoolingFan(speed);
+    	}
       break;
     
     case 107: // Fan off - deprecated
@@ -1521,7 +1636,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			{
 				strncpy(reply, str, STRING_LENGTH);
 			} else
-    		result = false;
+				result = false;
     	}
     	break;
 
@@ -1793,26 +1908,6 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	}
     	break;
 
-//    case 876: // TEMPORARY - this will go away...
-//    	if(gb->Seen('P'))
-//    	{
-//    		iValue = gb->GetIValue();
-//    		if(iValue != 1)
-//    			platform->SetHeatOn(0);
-//    		else
-//    			platform->SetHeatOn(1);
-//    	}
-//    	break;
-
-    case 900:
-    	result = DoFileCannedCycles("homex.g");
-    	break;
-
-    case 901:
-    	result = DoFileCannedCycles("homey.g");
-    	break;
-
-
 
     case 906: // Set Motor currents
     	for(uint8_t i = 0; i < DRIVES; i++)
@@ -1832,6 +1927,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	    resend = true;
     	}
     	break;
+
+	case 999:
+		rstc_start_software_reset(RSTC);
+		for(;;) {}
+		break;
      
     default:
       error = true;

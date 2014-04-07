@@ -70,8 +70,6 @@ Platform::Platform()
   active = false;
 }
 
-//*******************************************************************************************************************
-
 void Platform::Init()
 { 
   byte i;
@@ -227,17 +225,15 @@ void Platform::InitZProbe()
   zProbeCount = 0;
   zProbeOnSum = 0;
   zProbeOffSum = 0;
-  for (uint8_t i = 0; i < NumZProbeReadingsAveraged; ++i)
-  {
-	  zProbeReadings[i] = 0;
-  }
 
   if (zProbeType != 0)
   {
 	pinMode(zProbeModulationPin, OUTPUT);
 	digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
   }
+  LastZProbeReading = GetRawZHeight();
 }
+
 
 void Platform::StartNetwork()
 {
@@ -279,12 +275,6 @@ void Platform::InitialiseInterrupts()
   TC1->TC_CHANNEL[0].TC_IDR=~TC_IER_CPCS;
   SetInterrupt(STANDBY_INTERRUPT_RATE);
 }
-
-void Platform::DisableInterrupts()
-{
-	NVIC_DisableIRQ(TC3_IRQn);
-}
-
 
 //*************************************************************************************************
 
@@ -382,9 +372,9 @@ void Platform::SetHeater(int8_t heater, const float& power)
   if(heatOnPins[heater] < 0)
     return;
   
-  byte p = (byte)(255.0*fmin(1.0, fmax(0.0, power)));
-  if(HEAT_ON == 0)
-	  p = 255 - p;
+  byte p = 255 - (byte)(255.0*fmin(1.0, fmax(0.0, power)));
+//  if(HEAT_ON == 0)
+//	  p = 255 - p;
   if(heater == 0)
 	  analogWrite(heatOnPins[heater], p);
   else
@@ -398,8 +388,11 @@ EndStopHit Platform::Stopped(int8_t drive)
 	{  // Z probe is used for both X and Z.
 		if(drive != Y_AXIS)
 		{
-			if(ZProbe() > zProbeADValue)
+			int zp = ZProbe();
+			if(zp >= zProbeADValue)
 				return lowHit;
+			else if (zp * 10 >= zProbeADValue * 9)	// if we are at/above 90% of the target value
+				return lowNear;
 			else
 				return noStop;
 		}
@@ -893,8 +886,6 @@ void Line::Init()
 {
 	getIndex = 0;
 	numChars = 0;
-//	alternateInput = NULL;
-//	alternateOutput = NULL;
 	SerialUSB.begin(BAUD_RATE);
 	//while (!SerialUSB.available());
 }
