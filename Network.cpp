@@ -40,6 +40,7 @@
 
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
+#include "ethernet_sam.h"
 
 extern "C"
 {
@@ -52,6 +53,7 @@ extern "C"
 }
 
 const uint8_t windowedSendPackets = 2;
+const int httpStateSize = MEMP_NUM_TCP_PCB;		// ideally we would have one more, but this should do as we are short of memory
 
 // Called to put out a message via the RepRap firmware.
 
@@ -326,7 +328,7 @@ Network::Network()
 	readyTransactions = NULL;
 	writingTransactions = NULL;
 	closingTransactions = NULL;
-	for (int8_t i = 0; i < HTTP_STATE_SIZE; i++)
+	for (int8_t i = 0; i < httpStateSize; i++)
 	{
 		freeTransactions = new RequestState(freeTransactions);
 	}
@@ -350,7 +352,6 @@ void Network::Init()
 
 void Network::Spin()
 {
-//	debugPrintf("NetSpinEnter\n");
 	if (active)
 	{
 		ethernet_task();			// keep the Ethernet running
@@ -376,7 +377,7 @@ void Network::Spin()
 		r = closingTransactions;
 		if (r != NULL)
 		{
-			if (reprap.GetPlatform()->Time() - r->closeRequestedTime >= CLIENT_CLOSE_DELAY)
+			if (reprap.GetPlatform()->Time() - r->closeRequestedTime >= clientCloseDelay)
 			{
 				r->Close();
 				closingTransactions = r->next;
@@ -384,7 +385,6 @@ void Network::Spin()
 			}
 		}
 	}
-//	debugPrintf("NetSpinExit\n");
 }
 
 bool Network::HaveData() const
@@ -414,6 +414,18 @@ void Network::Write(const char* s)
 	if (readyTransactions != NULL)
 	{
 		readyTransactions->Write(s);
+	}
+}
+
+// Write formatted data to the output buffer
+void Network::Printf(const char* fmt, ...)
+{
+	if (readyTransactions != NULL)
+	{
+		va_list p;
+		va_start(p, fmt);
+		readyTransactions->Vprintf(fmt, p);
+		va_end(p);
 	}
 }
 
@@ -606,6 +618,20 @@ void RequestState::Write(const char* s)
 	}
 }
 
+// Write formatted data to the output buffer
+void RequestState::Vprintf(const char* fmt, va_list v)
+{
+	int spaceLeft = ARRAY_SIZE(outputBuffer) - outputPointer;
+	if (spaceLeft > 0)
+	{
+		int len = vsnprintf(&outputBuffer[outputPointer], spaceLeft, fmt, v);
+		if (len > 0)
+		{
+			outputPointer += min(len, spaceLeft);
+		}
+	}
+}
+
 // Send some data if we can, returning true if all data has been sent
 bool RequestState::TrySendData()
 {
@@ -616,13 +642,11 @@ bool RequestState::TrySendData()
 
 	if (hs->SendInProgress())
 	{
-//		debugPrintf("Send busy\n");
 		return false;
 	}
 
 	if (sentPacketsOutstanding >= windowedSendPackets)
 	{
-//		debugPrintf("Awaiting ack\n");
 		return false;		// still waiting for earlier packets to be acknowledged
 	}
 
@@ -639,18 +663,14 @@ bool RequestState::TrySendData()
 			}
 			++outputPointer;
 		}
-//		debugPrintf("Read from file\n");
 	}
 
 	if (outputPointer == 0)
 	{
-//		debugPrintf("All data sent\n");
 		return true;
-//		return sentPacketsOutstanding == 0;		// no more data to send, so tell caller to close file if all packets acknowledged
 	}
 	else
 	{
-//		debugPrintf("Sending data, hs=%08x,  length=%d\n", (unsigned int)hs, outputPointer);
 		++sentPacketsOutstanding;
 		RepRapNetworkSendOutput(outputBuffer, outputPointer, pcb, hs);
 		outputPointer = 0;
@@ -667,16 +687,13 @@ void RequestState::SentPacketAcknowledged()
 }
 
 // Close this connection. Return true if it really is closed, false if it needs to go in the deferred close list.
-bool RequestState::Close()
+void RequestState::Close()
 {
-	if (LostConnection())
+	if (!LostConnection())
 	{
-		return true;
+//		debugPrintf("Closing connection hs=%08x\n", (unsigned int)hs);
+		RepRapNetworkSendOutput((char*) NULL, 0, pcb, hs);
 	}
-
-//	debugPrintf("Closing connection hs=%08x\n", (unsigned int)hs);
-	RepRapNetworkSendOutput((char*) NULL, 0, pcb, hs);
-	return true;		// try not using deferred close for now
 }
 
 void RequestState::SetConnectionLost()

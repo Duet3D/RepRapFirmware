@@ -157,7 +157,7 @@ RepRap reprap;
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : active(false), debug(false)
+RepRap::RepRap() : active(false), debug(false), stopped(false)
 {
   platform = new Platform();
   webserver = new Webserver(platform);
@@ -233,13 +233,15 @@ void RepRap::Diagnostics()
 
 void RepRap::EmergencyStop()
 {
-	int8_t i;
+	stopped = true;
 
 	//platform->DisableInterrupts();
 
 	heat->Exit();
-	for(i = 0; i < HEATERS; i++)
+	for(int8_t i = 0; i < HEATERS; i++)
+	{
 		platform->SetHeater(i, 0.0);
+	}
 
 
 	// We do this twice, to avoid an interrupt switching

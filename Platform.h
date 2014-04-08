@@ -40,12 +40,11 @@ Licence: GPL
 
 // Language-specific includes
 
-#include <stdio.h>
-#include <ctype.h>
-#include <string.h>
+#include <cctype>
+#include <cstring>
 #include <malloc.h>
-#include <stdlib.h>
-#include <limits.h>
+#include <cstdlib>
+#include <climits>
 
 // Platform-specific includes
 
@@ -53,7 +52,6 @@ Licence: GPL
 #include "SamNonDuePin.h"
 #include "SD_HSMCI.h"
 #include "MCP4461.h"
-#include "ethernet_sam.h"
 
 /**************************************************************************************************/
 
@@ -203,21 +201,6 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 #define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
                              // not displayed; \f and \n should be supported.
 #define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
-
-/****************************************************************************************************/
-
-// Networking
-
-// Seconds to wait after serving a page
- 
-#define CLIENT_CLOSE_DELAY 0.002
-
-#define HTTP_STATE_SIZE 7
-
-#define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
-#define NET_MASK {255, 255, 255, 0}
-#define GATE_WAY {192, 168, 1, 1}
-
 
 /****************************************************************************************************/
 

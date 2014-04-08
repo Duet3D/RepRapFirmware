@@ -40,6 +40,7 @@ class RepRap
     GCodes* GetGCodes() const;
     Webserver* GetWebserver() const;
     void Tick();
+    bool IsStopped() const;
     
   private:
   
@@ -50,6 +51,7 @@ class RepRap
     GCodes* gCodes;
     Webserver* webserver;
     bool debug;
+    bool stopped;
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }
@@ -59,6 +61,7 @@ inline GCodes* RepRap::GetGCodes() const { return gCodes; }
 inline Webserver* RepRap::GetWebserver() const { return webserver; }
 inline bool RepRap::Debug() const { return debug; }
 inline void RepRap::Interrupt() { move->Interrupt(); }
+inline bool RepRap::IsStopped() const { return stopped; }
 
 
 #endif

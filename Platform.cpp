@@ -1233,7 +1233,6 @@ unsigned long FileStore::Length()
 		return 0;
 	}
 	return file.fsize;
-	return 0;
 }
 
 int8_t FileStore::Status()

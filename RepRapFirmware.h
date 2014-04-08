@@ -24,6 +24,8 @@ Licence: GPL
 
 #include <cstddef>		// for size_t
 #include <cfloat>
+#include <cstdarg>
+
 
 // Warn of what's to come, so we can use pointers to classes...
 
@@ -57,6 +59,7 @@ int StringContains(const char* string, const char* match);
 
 extern char scratchString[];
 
+#include "Arduino.h"
 #include "Configuration.h"
 #include "Network.h"
 #include "Platform.h"

@@ -267,20 +267,16 @@ void Webserver::ProcessGcode(const char* gc)
 
 // Start sending a file or a JSON response.
 void Webserver::SendFile(const char* nameOfFileToSend)
-//pre(freeResponses != NULL)
 {
-	char sLen[SHORT_STRING_LENGTH];
-	bool zip = false;
-	bool doingJsonResponse = false;
+	bool doingJsonResponse = StringStartsWith(nameOfFileToSend, KO_START);
+	FileStore *fileToSend;
 
-	if (StringStartsWith(nameOfFileToSend, KO_START))
+	if (doingJsonResponse)
 	{
+		fileToSend = NULL;
 		GetJsonResponse(&nameOfFileToSend[KO_FIRST]);
-		doingJsonResponse = true;
 	}
-
-	FileStore *fileToSend = NULL;
-	if (!doingJsonResponse)
+	else
 	{
 		fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
 		if (fileToSend == NULL)
@@ -292,44 +288,52 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 
 	Network *net = platform->GetNetwork();
 	net->Write("HTTP/1.1 200 OK\n");
-	net->Write("Content-Type: ");
 
+	const char* contentType;
+	bool zip = false;
 	if (StringEndsWith(nameOfFileToSend, ".png"))
-		net->Write("image/png\n");
+	{
+		contentType = "image/png";
+	}
 	else if (StringEndsWith(nameOfFileToSend, ".ico"))
-		net->Write("image/x-icon\n");
+	{
+		contentType = "image/x-icon";
+	}
 	else if (doingJsonResponse)
-		net->Write("application/json\n");
+	{
+		contentType = "application/json";
+	}
 	else if (StringEndsWith(nameOfFileToSend, ".js"))
-		net->Write("application/javascript\n");
+	{
+		contentType = "application/javascript";
+	}
 	else if (StringEndsWith(nameOfFileToSend, ".css"))
-		net->Write("text/css\n");
+	{
+		contentType = "text/css";
+	}
 	else if (StringEndsWith(nameOfFileToSend, ".htm") || StringEndsWith(nameOfFileToSend, ".html"))
-		net->Write("text/html\n");
+	{
+		contentType = "text/html";
+	}
 	else if (StringEndsWith(nameOfFileToSend, ".zip"))
 	{
-		net->Write("application/zip\n");
+		contentType = "application/zip";
 		zip = true;
 	}
 	else
 	{
-		net->Write("application/octet-stream\n");
+		contentType = "application/octet-stream";
 	}
+	net->Printf("Content-Type: %s\n", contentType);
 
 	if (doingJsonResponse)
 	{
-		net->Write("Content-Length: ");
-		snprintf(sLen, SHORT_STRING_LENGTH, "%d", strlen(jsonResponse));
-		net->Write(sLen);
-		net->Write("\n");
+		net->Printf("Content-Length: %u\n", strlen(jsonResponse));
 	}
 	else if (zip && fileToSend != NULL)
 	{
 		net->Write("Content-Encoding: gzip\n");
-		net->Write("Content-Length: ");
-		snprintf(sLen, SHORT_STRING_LENGTH, "%llu", fileToSend->Length());
-		net->Write(sLen);
-		net->Write("\n");
+		net->Printf("Content-Length: %lu", fileToSend->Length());
 	}
 
 	net->Write("Connection: close\n");
@@ -374,25 +378,50 @@ void Webserver::JsonReport(bool ok, const char* request)
 
 void Webserver::GetJsonResponse(const char* request)
 {
-	if (StringStartsWith(request, "poll"))
+	bool newStatusRequest = StringStartsWith(request, "status");
+	if (newStatusRequest || StringStartsWith(request, "poll"))
 	{
-		// The poll response lists the status, then all the heater temperatures, then the XYZ positions, then all the extruder positions.
-		// These are all returned in a single vector called "poll".
-		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders,
-		// but we're stuck with it if we want to retain compatibility with existing web server javascript files.
-		strncpy(jsonResponse, "{\"poll\":[", STRING_LENGTH);
-		if (reprap.GetGCodes()->PrintingAFile())
+		if (newStatusRequest)
 		{
-			strncat(jsonResponse, "\"P\",", STRING_LENGTH); // Printing
+			// New-style status request
+			// Send the printing/idle status
+			strncpy(jsonResponse, "{\"status\":", STRING_LENGTH);
+			{
+				char ch = (reprap.IsStopped()) ? 'S' : (reprap.GetGCodes()->PrintingAFile()) ? 'P' : 'I';
+				sncatf(jsonResponse, STRING_LENGTH, "\"%c\"", ch);
+			}
+
+			// Send the heater temperatures
+			strncat(jsonResponse, ",\"heaters\":[", STRING_LENGTH);
+			for (int8_t heater = 0; heater < HEATERS; heater++)
+			{
+				char ch = (heater == HEATERS - 1) ? ']' : ',';	// append ] to the last one but , to the others
+				sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\"%c", reprap.GetHeat()->GetTemperature(heater), ch);
+			}
+			// Announce the XYZ and extruder positions
+			strncat(jsonResponse, ",\"pos\":[", STRING_LENGTH);
 		}
 		else
 		{
-			strncat(jsonResponse, "\"I\",", STRING_LENGTH); // Idle
+			// The old (deprecated) poll response lists the status, then all the heater temperatures, then the XYZ positions, then all the extruder positions.
+			// These are all returned in a single vector called "poll".
+			// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
+			strncpy(jsonResponse, "{\"poll\":[", STRING_LENGTH);
+			if (reprap.GetGCodes()->PrintingAFile())
+			{
+				strncat(jsonResponse, "\"P\",", STRING_LENGTH); // Printing
+			}
+			else
+			{
+				strncat(jsonResponse, "\"I\",", STRING_LENGTH); // Idle
+			}
+			for (int8_t heater = 0; heater < HEATERS; heater++)
+			{
+				sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
+			}
 		}
-		for (int8_t heater = 0; heater < HEATERS; heater++)
-		{
-			sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
-		}
+
+		// Send XYZ and extruder positions
 		float liveCoordinates[DRIVES + 1];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
 		for (int8_t drive = 0; drive < AXES; drive++)
@@ -403,10 +432,9 @@ void Webserver::GetJsonResponse(const char* request)
 		for (int8_t drive = AXES; drive < DRIVES; drive++)	// loop through extruders
 		{
 			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
-			sncatf(jsonResponse, STRING_LENGTH, "\"%.f4\"%c", liveCoordinates[drive], ch);
+			sncatf(jsonResponse, STRING_LENGTH, "\"%.4f\"%c", liveCoordinates[drive], ch);
 		}
 
-		// All the other values we send back are in separate variables.
 		// Send the Z probe value
 		int v0 = platform->ZProbe();
 		int v1, v2;
@@ -427,9 +455,18 @@ void Webserver::GetJsonResponse(const char* request)
 		sncatf(jsonResponse, STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
 
 		// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-		sncatf(jsonResponse, STRING_LENGTH, ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
-				(reprap.GetGCodes()->GetAxisIsHomed(0)) ? 1 : 0, (reprap.GetGCodes()->GetAxisIsHomed(1)) ? 1 : 0,
-				(reprap.GetGCodes()->GetAxisIsHomed(2)) ? 1 : 0);
+		if (newStatusRequest)
+		{
+			sncatf(jsonResponse, STRING_LENGTH, ",\"homed\":[%d,%d,%d]",
+					(reprap.GetGCodes()->GetAxisIsHomed(0)) ? 1 : 0, (reprap.GetGCodes()->GetAxisIsHomed(1)) ? 1 : 0,
+					(reprap.GetGCodes()->GetAxisIsHomed(2)) ? 1 : 0);
+		}
+		else
+		{
+			sncatf(jsonResponse, STRING_LENGTH, ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
+					(reprap.GetGCodes()->GetAxisIsHomed(0)) ? 1 : 0, (reprap.GetGCodes()->GetAxisIsHomed(1)) ? 1 : 0,
+					(reprap.GetGCodes()->GetAxisIsHomed(2)) ? 1 : 0);
+		}
 
 		// Send the response sequence number
 		sncatf(jsonResponse, STRING_LENGTH, ",\"seq\":%u", (unsigned int) seq);
@@ -722,7 +759,7 @@ bool Webserver::CharFromClient(char c)
 		if (clientLinePointer >= STRING_LENGTH)
 		{
 			platform->Message(HOST_MESSAGE, "Client read buffer overflow. Data:\n");
-			clientLine[STRING_LENGTH] = '\n';// note that clientLine is now STRING_LENGTH+2 characters long to make room for these
+			clientLine[STRING_LENGTH] = '\n';	// note that clientLine is now STRING_LENGTH+2 characters long to make room for these
 			clientLine[STRING_LENGTH + 1] = 0;
 			platform->Message(HOST_MESSAGE, clientLine);
 
@@ -754,8 +791,12 @@ void Webserver::Spin()
 
 			if (!ok)
 			{
-				// We ran out of data before finding a complete request
-				platform->Message(HOST_MESSAGE, "Webserver: incomplete request\n");
+				// We ran out of data before finding a complete request.
+				// This can happen if the network connection was lost, so only report it if debug is enabled
+				if (reprap.Debug())
+				{
+					platform->Message(HOST_MESSAGE, "Webserver: incomplete request\n");
+				}
 				net->SendAndClose(NULL);
 				break;
 			}

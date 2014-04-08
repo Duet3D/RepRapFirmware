@@ -9,17 +9,11 @@ Separated out from Platform.h by dc42
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include <stdio.h>
-#include <ctype.h>
-#include <string.h>
+#include <cctype>
+#include <cstring>
 #include <malloc.h>
-#include <stdlib.h>
-#include <limits.h>
-
-// Platform-specific includes
-
-#include "Arduino.h"
-#include "ethernet_sam.h"
+#include <cstdlib>
+#include <climits>
 
 // This class handles the network - typically an Ethernet.
 
@@ -30,7 +24,17 @@ Separated out from Platform.h by dc42
 // each TCP packet will be full.
 // Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
 // and therefore avoids additional memory use and fragmentation.
+
 const unsigned int httpOutputBufferSize = 2 * 1432;
+
+const float clientCloseDelay = 0.002;	 	// seconds to wait after serving a page
+
+#define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
+#define NET_MASK {255, 255, 255, 0}
+#define GATE_WAY {192, 168, 1, 1}
+
+
+/****************************************************************************************************/
 
 // HttpState structure that we use to track Http connections. This could be combined with class RequestState.
 
@@ -61,7 +65,8 @@ protected:
 	void SentPacketAcknowledged();
 	void Write(char b);
 	void Write(const char* s);
-	bool Close();
+	void Vprintf(const char *fmt, va_list v);
+	void Close();
 	bool TrySendData();
 	void SetConnectionLost();
 	bool LostConnection() const;
@@ -98,6 +103,7 @@ public:
 	bool Read(char& b);
 	void Write(char b);
 	void Write(const char* s);
+	void Printf(const char *fmt, ...);
 	void SendAndClose(FileStore *f);
 	bool HaveData() const;
 
