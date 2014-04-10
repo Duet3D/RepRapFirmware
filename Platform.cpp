@@ -222,7 +222,8 @@ void Platform::Init()
 
 void Platform::InitZProbe()
 {
-  zProbeCount = 0;
+//  zProbeCount = 0;
+  zModOnThisTime = true;
   zProbeOnSum = 0;
   zProbeOffSum = 0;
 
@@ -231,7 +232,7 @@ void Platform::InitZProbe()
 	pinMode(zProbeModulationPin, OUTPUT);
 	digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
   }
-  LastZProbeReading = GetRawZHeight();
+//  LastZProbeReading = GetRawZHeight();
 }
 
 

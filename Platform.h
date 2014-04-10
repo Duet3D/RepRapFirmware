@@ -503,11 +503,11 @@ class Platform
 
   float ZProbeStopHeight() const;		// The height above the bed at which the probe is triggered
   void SetZProbeStopHeight(float z);	// Set the height above the bed at which the probe is triggered
-  int ZProbe() const;					// Get an A->D value from the probe.  This may have been averaged etc
-  int ZProbeOnVal() const;				// Returns on value for a modulated probe; total for non-modulated
-  void SetZProbe(int iZ);				// Set the A->D value corresponding to SetZProbeStopHeight()
-  void SetZProbeType(int iZ);			// None (0), non-modulating (1) or modulating (2)
-  int GetZProbeType() const;			// Get the probe type: None (0), non-modulating (1) or modulating (2)
+  unsigned int ZProbe() const;			// Get an A->D value from the probe.  This may have been averaged etc
+  unsigned int ZProbeOnVal() const;		// Returns on value for a modulated probe; total for non-modulated
+  void SetZProbe(unsigned int iZ);		// Set the A->D value corresponding to SetZProbeStopHeight()
+  void SetZProbeType(int8_t iZ);		// None (0), non-modulating (1) or modulating (2)
+  int8_t GetZProbeType() const;			// Get the probe type: None (0), non-modulating (1) or modulating (2)
 
   // Heat and temperature
   
@@ -564,18 +564,19 @@ class Platform
 
   // Z probe
 
+  void InitZProbe();
+  void PollZHeight();
   int8_t zProbePin;
   int8_t zProbeModulationPin;
   int8_t zProbeType;
-  uint8_t zProbeCount;
-  long zProbeOnSum;		// sum of readings taken when IR led is on
-  long zProbeOffSum;	// sum of readings taken when IR led is on
-  uint16_t LastZProbeReading;
+//  uint8_t zProbeCount;
+  bool zModOnThisTime;
+  unsigned long zProbeOnSum;		// sum of readings taken when IR led is on
+  unsigned long zProbeOffSum;	// sum of readings taken when IR led is on
+//  uint16_t LastZProbeReading;
   int zProbeADValue;
   float zProbeStopHeight;
   bool zProbeEnable;
-  void InitZProbe();
-  void PollZHeight();
 
   // AXES
 
@@ -823,7 +824,7 @@ inline int Platform::GetRawZHeight() const
   return (zProbeType != 0) ? analogRead(zProbePin) : 0;
 }
 
-inline int Platform::ZProbe() const
+inline unsigned int Platform::ZProbe() const
 {
 	return (zProbeType == 1)
 			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged		// non-modulated mode
@@ -832,13 +833,32 @@ inline int Platform::ZProbe() const
 			    : 0;														// z-probe disabled
 }
 
-inline int Platform::ZProbeOnVal() const
+inline unsigned int Platform::ZProbeOnVal() const
 {
 	return (zProbeType == 1)
 			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged
 			: (zProbeType == 2)
 			  ? zProbeOnSum/(NumZProbeReadingsAveraged/2)
 				: 0;
+}
+
+inline void Platform::PollZHeight()
+{
+	uint16_t currentReading = GetRawZHeight();
+	// Compute a moving average
+	if (zModOnThisTime)
+		zProbeOnSum = zProbeOnSum + currentReading - zProbeOnSum/NumZProbeReadingsAveraged;
+	else
+		zProbeOffSum = zProbeOffSum + currentReading - zProbeOffSum/NumZProbeReadingsAveraged;
+//	LastZProbeReading = currentReading;
+//	zProbeCount = (zProbeCount + 1) % NumZProbeReadingsAveraged;
+	zModOnThisTime = !zModOnThisTime;
+	if (zProbeType == 2)
+	{
+		// Reverse the modulation, ready for next time
+		//digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
+		digitalWrite(zProbeModulationPin, zModOnThisTime ? HIGH : LOW);
+	}
 }
 
 inline float Platform::ZProbeStopHeight() const
@@ -851,41 +871,22 @@ inline void Platform::SetZProbeStopHeight(float z)
 	zProbeStopHeight = z;
 }
 
-inline void Platform::SetZProbe(int iZ)
+inline void Platform::SetZProbe(unsigned int iZ)
 {
 	zProbeADValue = iZ;
 }
 
-inline void Platform::SetZProbeType(int pt)
+inline void Platform::SetZProbeType(int8_t pt)
 {
 	zProbeType = (pt >= 0 && pt <= 2) ? pt : 0;
 	InitZProbe();
 }
 
-inline int Platform::GetZProbeType() const
+inline int8_t Platform::GetZProbeType() const
 {
 	return zProbeType;
 }
 
-inline void Platform::PollZHeight()
-{
-	uint16_t currentReading = GetRawZHeight();
-	if (zProbeType == 2)
-	{
-		// Reverse the modulation, ready for next time
-		digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
-	}
-	if (zProbeCount & 1)
-	{
-		zProbeOffSum = zProbeOffSum - LastZProbeReading + currentReading;
-	}
-	else
-	{
-		zProbeOnSum = zProbeOnSum - LastZProbeReading + currentReading;
-	}
-	LastZProbeReading = currentReading;
-	zProbeCount = (zProbeCount + 1) % NumZProbeReadingsAveraged;
-}
 
 
 //********************************************************************************************************
