@@ -204,6 +204,7 @@ void Platform::Init()
     if(heatOnPins[i] >= 0)
       pinModeNonDue(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
+    tempSum[i] = 0;
   }
 
   if(coolingFanPin >= 0)
@@ -211,6 +212,8 @@ void Platform::Init()
 	  pinMode(coolingFanPin, OUTPUT);
 	  analogWrite(coolingFanPin, 0);
   }
+
+  NumAtoDReadingsAveraged = 8;	// must be an even number, preferably a power of 2 for performance, and no greater than 64
 
   InitialiseInterrupts();
   
@@ -251,6 +254,7 @@ void Platform::Spin()
   if(Time() - lastTime < 0.006)
     return;
   PollZHeight();
+  PollTemperatures();
   lastTime = Time();
   ClassReport("Platform", longWait);
 
@@ -359,15 +363,18 @@ void Platform::ClassReport(char* className, float &lastTime)
 float Platform::GetTemperature(int8_t heater)
 {
   // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
-  // So we add 0.5 to to the reading to get a better estimate of the input. But first, recognise the special case of thermistor disconnected.
-  int rawTemp = GetRawTemperature(heater);
-  if (rawTemp == AD_RANGE)
-  {
-	  // Thermistor is disconnected
-	  return ABS_ZERO;
-  }
+  // So we add 0.5 to to the reading to get a better estimate of the input.
+  int rawTemp = tempSum[heater]/NumAtoDReadingsAveraged; //GetRawTemperature(heater);
+
+  // First, recognise the special case of thermistor disconnected.
+//  if (rawTemp == AD_RANGE)
+//  {
+//	  // Thermistor is disconnected
+//	  return ABS_ZERO;
+//  }
   float r = (float)rawTemp + 0.5;
-  return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
+  r = ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
+  return r;
 }
 
 

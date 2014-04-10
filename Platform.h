@@ -189,7 +189,6 @@ const unsigned int httpOutputBufferSize = 2 * 1432;
 #define BAUD_RATE 115200 						// Communication speed of the USB if needed.
 
 const uint16_t lineBufsize = 256;				// use a power of 2 for good performance
-const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, preferably a power of 2 for performance, and no greater than 64
 
 /****************************************************************************************************/
 
@@ -549,6 +548,7 @@ class Platform
   int zProbeADValue;
   float zProbeStopHeight;
   bool zProbeEnable;
+
 // AXES
 
   void InitZProbe();
@@ -557,14 +557,13 @@ class Platform
   float axisLengths[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
-//  bool zProbeStarting;
-//  float zProbeHigh;
-//  float zProbeLow;
   
 // HEATERS - Bed is assumed to be the first
 
   int GetRawTemperature(byte heater) const;
+  void PollTemperatures();
 
+  long tempSum[HEATERS];
   int8_t tempSensePins[HEATERS];
   int8_t heatOnPins[HEATERS];
   float thermistorBetas[HEATERS];
@@ -582,7 +581,8 @@ class Platform
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
   int8_t coolingFanPin;
-  //int8_t turnHeatOn;
+
+  uint16_t NumAtoDReadingsAveraged;  // Smoothing filter on A to D readings
 
 // Serial/USB
 
@@ -815,10 +815,12 @@ inline void Platform::PollZHeight()
 {
 	uint16_t currentReading = GetRawZHeight();
 
+	// We do a moving average of the probe's A to D readings to smooth out noise
+
 	if (zModOnThisTime)
-		zProbeOnSum = zProbeOnSum + currentReading - zProbeOnSum/NumZProbeReadingsAveraged;
+		zProbeOnSum = zProbeOnSum + currentReading - zProbeOnSum/NumAtoDReadingsAveraged;
 	else
-		zProbeOffSum = zProbeOffSum + currentReading - zProbeOffSum/NumZProbeReadingsAveraged;
+		zProbeOffSum = zProbeOffSum + currentReading - zProbeOffSum/NumAtoDReadingsAveraged;
 
 	zModOnThisTime = !zModOnThisTime;
 
@@ -832,18 +834,18 @@ inline void Platform::PollZHeight()
 inline int Platform::ZProbe() const
 {
 	return (zProbeType == 1)
-			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged		// non-modulated mode
+			? (zProbeOnSum + zProbeOffSum)/NumAtoDReadingsAveraged		// non-modulated mode
 			: (zProbeType == 2)
-			  ? (zProbeOnSum - zProbeOffSum)/(NumZProbeReadingsAveraged/2)	// modulated mode
+			  ? (zProbeOnSum - zProbeOffSum)/(NumAtoDReadingsAveraged/2)	// modulated mode
 			    : 0;														// z-probe disabled
 }
 
 inline int Platform::ZProbeOnVal() const
 {
 	return (zProbeType == 1)
-			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged
+			? (zProbeOnSum + zProbeOffSum)/NumAtoDReadingsAveraged
 			: (zProbeType == 2)
-			  ? zProbeOnSum/(NumZProbeReadingsAveraged/2)
+			  ? zProbeOnSum/(NumAtoDReadingsAveraged/2)
 				: 0;
 }
 
@@ -885,6 +887,14 @@ inline int Platform::GetRawTemperature(byte heater) const
   if(tempSensePins[heater] >= 0)
     return analogRead(tempSensePins[heater]);
   return 0;
+}
+
+inline void Platform::PollTemperatures()
+{
+	// We do a moving average of each thermometer's A to D readings to smooth out noise
+
+	for(int8_t heater = 0; heater < HEATERS; heater++)
+		tempSum[heater] = tempSum[heater] + GetRawTemperature(heater) - tempSum[heater]/NumAtoDReadingsAveraged;
 }
 
 inline float Platform::HeatSampleTime() const
