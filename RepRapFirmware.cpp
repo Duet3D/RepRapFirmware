@@ -193,7 +193,8 @@ void RepRap::Init()
   platform->Message(HOST_MESSAGE, "\n");
   platform->Message(HOST_MESSAGE, NAME);
   platform->Message(HOST_MESSAGE, " is up and running.\n");
-  ResetLoopTimers();
+  fastLoop = FLT_MAX;
+  slowLoop = 0.0;
   lastTime = platform->Time();
 }
 
@@ -219,14 +220,14 @@ void RepRap::Spin()
   move->Spin();
   heat->Spin();
 
-  // Track the loop time
+  // Keep track of the loop time
 
-  float t = platform->Time();
-  float d = t - lastTime;
-  if(d < fastTime)
-	  fastTime = d;
-  if(d > slowTime)
-	  slowTime = d;
+  double t = platform->Time();
+  double dt = t - lastTime;
+  if(dt < fastLoop)
+	  fastLoop = dt;
+  if(dt > slowLoop)
+	  slowLoop = dt;
   lastTime = t;
 }
 
@@ -237,9 +238,10 @@ void RepRap::Diagnostics()
   heat->Diagnostics();
   gCodes->Diagnostics();
   webserver->Diagnostics();
-  snprintf(scratchString, STRING_LENGTH, "Slowest loop time was %f secs; fastest was %f secs.\n", slowTime, fastTime);
+  snprintf(scratchString, STRING_LENGTH, "Slow loop secs: %f; fast: %f\n", slowLoop, fastLoop);
   platform->Message(HOST_MESSAGE, scratchString);
-  ResetLoopTimers();
+  fastLoop = FLT_MAX;
+  slowLoop = 0.0;
 }
 
 // Turn off the heaters, disable the motors, and

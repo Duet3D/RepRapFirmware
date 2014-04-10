@@ -44,41 +44,41 @@ class Webserver
   public:
   
     Webserver(Platform* p);
-    bool GCodeAvailable();						// Called by G Codes to see if the webserver has received one
-    byte ReadGCode();							// Return the next byte of a G Code - they are read one by one
-//    bool WebserverIsWriting();
-    void Init();								// Set it all up
-    void Spin();								// Called in a loop to monitor the web input and send output
-    void Exit();								// Shut down
-    void Diagnostics();							// Print useful stuff
-    void SetPassword(const char* pw);			// Set the password to the string
-    void SetName(const char* nm);				// Set the name of this RepRap machine
-    void ConnectionError();						// Called when a connection is lost to tidy up
-    void HandleReply(const char *s, bool error);// Called to send the string as a reply to a G Code
-    void AppendReply(const char* s);			// Stick s on the end of a reply being constructed
+    bool GCodeAvailable();
+    byte ReadGCode();
+    bool WebserverIsWriting();
+    void Init();
+    void Spin();
+    void Exit();
+    void Diagnostics();
+    void SetPassword(const char* pw);
+    void SetName(const char* nm);
+    void ConnectionError();
+    void HandleReply(const char *s, bool error);
+    void AppendReply(const char* s);
 
   private:
   
-    void ParseClientLine();						// Parse an HTTP line
-    void SendFile(const char* nameOfFileToSend);// Send a file to the client
-    bool WriteBytes();							// Send some bytes to the network
-//    void ParseQualifier();
-    void CheckPassword();						// Has the user remembered?
-    void LoadGcodeBuffer(const char* gc, bool convertWeb);  // Put incoming G Code(s) from the client into the buffer
-    void CloseClient();							// Bye!
-//    bool PrintHeadString();						//
-//    bool PrintLinkTable();
-//    void GetGCodeList();
-    void GetJsonResponse(const char* request);	// Compose a response to a JSON request from the client
+    void ParseClientLine();
+    void SendFile(const char* nameOfFileToSend);
+    bool WriteBytes();
+    void ParseQualifier();
+    void CheckPassword();
+    void LoadGcodeBuffer(const char* gc, bool convertWeb);
+    void CloseClient();
+    bool PrintHeadString();
+    bool PrintLinkTable();
+    void GetGCodeList();
+    void GetJsonResponse(const char* request);
     void ParseGetPost();
-    bool CharFromClient(char c);				// Deal with a byte from the client
-    void BlankLineFromClient();					// The client has sent a blank line.  This means its request is finished.
-    void InitialisePost();						// Start receiving a post from the client
-    bool MatchBoundary(char c);					// Have we got to the end of the post?
-    void JsonReport(bool ok, const char* request); // Output debugging information
-    unsigned int GetGcodeBufferSpace() const;	// How much space is really left in the buffer?
-    unsigned int GetReportedGcodeBufferSpace() const; // How much buffer space are we going to admit to (less than above).
-    void ProcessGcode(const char* gc);			// Some special GCodes are intercepted by the webserver before they get to the GCode class for wmergencies etc.
+    bool CharFromClient(char c);
+    void BlankLineFromClient();
+    void InitialisePost();
+    bool MatchBoundary(char c);
+    void JsonReport(bool ok, const char* request);
+    unsigned int GetGcodeBufferSpace() const;
+    unsigned int GetReportedGcodeBufferSpace() const;
+    void ProcessGcode(const char* gc);
 
     Platform* platform;
     bool active;

@@ -27,10 +27,6 @@ Licence: GPL
 
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
-// Enumeration to define the mode in which we check endstops
-
-enum EndstopMode { noEndstopCheck, checkApproachingEndstop, checkAtEndstop};
-
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
 class GCodeBuffer
@@ -76,7 +72,7 @@ class GCodes
     void Init();														// Set it up
     void Exit();														// Shut it down
     bool RunConfigurationGCodes();										// Run the configuration G Code file on reboot
-    bool ReadMove(float* m, EndstopMode& ce);									// Called by the Move class to get a movement set by the last G Code
+    bool ReadMove(float* m, bool& ce);									// Called by the Move class to get a movement set by the last G Code
     void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
     void DeleteFile(const char* fileName);								// Does what it says
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);	// Get pre-recorded probe coordinates
@@ -90,11 +86,11 @@ class GCodes
   
     void DoFilePrint(GCodeBuffer* gb);									// Get G Codes from a file and print them
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();					// Wait for move queue to exhaust and the current position is loaded
-    bool DoCannedCycleMove(EndstopMode ce);									// Do a move from an internally programmed canned cycle
+    bool DoCannedCycleMove(bool ce);									// Do a move from an internally programmed canned cycle
     bool DoFileCannedCycles(const char* fileName);						// Run a GCode macro in a file
     bool FileCannedCyclesReturn();										// End a macro
     bool ActOnGcode(GCodeBuffer* gb);									// Do the G Code
-    int SetUpMove(GCodeBuffer* gb);									// Set up a new movement
+    bool SetUpMove(GCodeBuffer* gb);									// Set up a new movement
     bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
     bool DoHome(char *reply, bool& error);								// Home some axes
     bool DoSingleZProbeAtPoint();										// Probe at a given point
@@ -133,7 +129,7 @@ class GCodes
     GCodeBuffer* cannedCycleGCode;				// ... of G Codes
     bool moveAvailable;							// Have we seen a move G Code and set it up?
     float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
-    EndstopMode checkEndStops;							// Should we check them on the next move?
+    bool checkEndStops;							// Should we check them on the next move?
     bool drivesRelative; 						// Are movements relative - all except X, Y and Z
     bool axesRelative;   						// Are movements relative - X, Y and Z
     bool drivesRelativeStack[STACK];			// For dealing with Push and Pop
@@ -160,7 +156,7 @@ class GCodes
     bool homeX;									// True to home the X axis this move
     bool homeY;									// True to home the Y axis this move
     bool homeZ;									// True to home the Z axis this move
-    //int8_t homeAxisMoveCount;					// Counts homing moves
+    int8_t homeAxisMoveCount;					// Counts homing moves
     float gFeedRate;							// Store for the current feedrate
     int probeCount;								// Counts multiple probe points
     int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
@@ -168,7 +164,6 @@ class GCodes
     bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
     float longWait;								// Timer for things that happen occasionally (seconds)
     bool axisIsHomed[3];						// These record which of the axes have been homed
-    bool waitingForMoveToComplete;				// Used when moving up to an endstop
 };
 
 //*****************************************************************************************************
@@ -217,7 +212,7 @@ inline bool GCodes::HaveIncomingData() const
 
 inline bool GCodes::NoHome() const
 {
-   return !(homeX || homeY || homeZ); // || homeAxisMoveCount);
+   return !(homeX || homeY || homeZ || homeAxisMoveCount);
 }
 
 // This function takes care of the fact that the heater and head indices 

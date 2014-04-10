@@ -74,7 +74,7 @@ class LookAhead
 protected:
 
 	LookAhead(Move* m, Platform* p, LookAhead* n);
-	void Init(long ep[], float feedRate, float vv, EndstopMode ce, int8_t mt); // Set up this move
+	void Init(long ep[], float feedRate, float vv, bool ce, int8_t mt); // Set up this move
 	LookAhead* Next();													// Next one in the ring
 	LookAhead* Previous();												// Previous one in the ring
 	long* MachineEndPoints();											// Endpoints of a move in machine coordinates
@@ -89,7 +89,7 @@ protected:
 	int8_t Processed();													// Where we are in the look-ahead prediction sequence
 	void SetProcessed(MovementState ms);								// Set where we are the the look ahead processing
 	void SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive);		// Force an end ppoint and st its speed to stopped
-	EndstopMode CheckEndStops();										// Are we checking endstops on this move?
+	bool CheckEndStops();												// Are we checking endstops on this move?
 	void Release();														// This move has been processed and executed
 
 private:
@@ -101,7 +101,7 @@ private:
 	long endPoint[DRIVES+1];  		// Machine coordinates of the endpoint.  Should never use the +1, but safety first
 	int8_t movementType;			// XY move, Z move, extruder only etc
 	float Cosine();					// The angle between the previous move and this one
-	EndstopMode checkEndStops;		// Check endstops for this move
+    bool checkEndStops;				// Check endstops for this move
     float cosine;					// Store for the cosine value - the function uses lazy evaluation
     float v;        				// The feedrate we can actually do
     float feedRate; 				// The requested feedrate
@@ -144,7 +144,7 @@ private:
 	bool directions[DRIVES];				// Forwards or backwards?
 	long totalSteps;						// Total number of steps for this move
 	long stepCount;							// How many steps we have already taken
-	EndstopMode checkEndStops;				// Are we checking endstops?
+	bool checkEndStops;						// Are we checking endstops?
     float timeStep;							// The current timestep (seconds)
     float velocity;							// The current velocity
     long stopAStep;							// The stepcount at which we stop accelerating
@@ -162,7 +162,7 @@ private:
 
 class Move
 {
-  friend class DDA;
+    friend class DDA;
 
   public:
   
@@ -218,7 +218,7 @@ class Move
     bool LookAheadRingEmpty();							// Anything there?
     bool LookAheadRingFull();							// Any more room?
     bool LookAheadRingAdd(long ep[], float feedRate, 	// Add an entry to the look-ahead ring for processing
-    		float vv, EndstopMode ce, int8_t movementType);
+    		float vv, bool ce, int8_t movementType);
     LookAhead* LookAheadRingGet();						// Get the next entry from the look-ahead ring
     int8_t GetMovementType(long sp[], long ep[]);		// XY? Z? extruder only?
 
@@ -321,7 +321,7 @@ inline void LookAhead::Release()
 	 processed = released;
 }
 
-inline EndstopMode LookAhead::CheckEndStops()
+inline bool LookAhead::CheckEndStops()
 {
   return checkEndStops;
 }
@@ -581,29 +581,17 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 		} else
 		{
 			// Executing G30, so set the current Z height to the value at which the end stop is triggered
-//			lastZHit = platform->ZProbeStopHeight();
-//			hitPoint = lastZHit;
-			// Transform it first so that the height is correct in user coordinates
-			float xyzPoint[DRIVES + 1];
-			LiveCoordinates(xyzPoint);
-			xyzPoint[Z_AXIS] = lastZHit = platform->ZProbeStopHeight();
-			Transform(xyzPoint);
-			hitPoint = xyzPoint[Z_AXIS];
+			lastZHit = platform->ZProbeStopHeight();
+			hitPoint = lastZHit;
 		}
 	}
 	la->SetDriveCoordinateAndZeroEndSpeed(hitPoint, drive);
-	//gCodes->SetAxisIsHomed(drive);
 }
 
 inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
   la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisLength(drive), drive);
 }
-
-//inline void Move::NearLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
-//{
-//	la->SetDriveCoordinateAndZeroEndSpeed(1.0, drive);		// say we are at 1mm
-//}
 
 inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)
 {

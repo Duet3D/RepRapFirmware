@@ -95,7 +95,6 @@ Licence: GPL
 #define Z_PROBE_STOP_HEIGHT (0.7) 				// mm
 #define Z_PROBE_PIN (0) 						// Analogue pin number
 #define Z_PROBE_MOD_PIN (61)					// Digital pin number to turn the IR LED on (high) or off (low)
-#define NUM_Z_PROBE_READINGS_AVERAGED (8)
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}   // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
@@ -132,9 +131,8 @@ Licence: GPL
 #define TEMP_INTERVAL 0.122 					// secs - check and control temperatures this often
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
-//#define COOLING_FAN_PIN 34
-#define COOLING_FAN_PIN X6
-//#define HEAT_ON 0 								// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define COOLING_FAN_PIN 34
+#define HEAT_ON 0 								// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 #define AD_RANGE 1023.0							//16383 // The A->D converter that measures temperatures gives an int this big as its max value
 
@@ -199,8 +197,7 @@ enum EndStopHit
 {
   noStop = 0,									// no endstop hit
   lowHit = 1,									// low switch hit, or Z-probe in use and above threshold
-  highHit = 2,									// high stop hit
-  lowNear = 3									// approaching Z-probe threshold
+  highHit = 2									// high stop hit
 };
 
 /***************************************************************************************************/
@@ -247,6 +244,7 @@ protected:
 
 private:
 
+	//void Reset();
 	void* pbuf;								// Ethernet structure pointer that needs to be preserved
 	void* pcb;								// Ethernet structure pointer that needs to be preserved
 	void* hs;								// Ethernet structure pointer that needs to be preserved
@@ -307,16 +305,16 @@ private:
 
 // This class handles serial I/O - typically via USB
 
-class Line
+class Line //: public InputOutput
 {
 public:
 
-	int8_t Status() const; 		// Returns OR of IOStatus
-	int Read(char& b);			// Read a single byte into b
-	void Write(char b);			// Write a single byte
-	void Write(const char* s);	// Write a string
-	void Write(float f);		// Write a float
-	void Write(long l);			// Write a long
+	int8_t Status() const; // Returns OR of IOStatus
+	int Read(char& b);
+	void Write(char b);
+	void Write(const char* s);
+	void Write(float f);
+	void Write(long l);
 
 friend class Platform;
 
@@ -334,16 +332,13 @@ private:
 	uint16_t numChars;
 };
 
-
-// This class is a mass storage device, typically an SD card
-
 class MassStorage
 {
 public:
 
-  char* FileList(const char* directory, bool fromLine); 			// Returns a list of all the files in the named directory
-  char* CombineName(const char* directory, const char* fileName);	// Get to the right place in the directory tree for the file
-  bool Delete(const char* directory, const char* fileName);			// Delete a file
+  char* FileList(const char* directory, bool fromLine); // Returns a list of all the files in the named directory
+  char* CombineName(const char* directory, const char* fileName);
+  bool Delete(const char* directory, const char* fileName);
 
 friend class Platform;
 
@@ -362,17 +357,17 @@ private:
 
 // This class handles input from, and output to, files.
 
-class FileStore
+class FileStore //: public InputOutput
 {
 public:
 
-	int8_t Status(); 			// Returns OR of IOStatus
-	bool Read(char& b);			// Read one byte into b
-	void Write(char b);			// Write one byte
-	void Write(const char* s);	// Write a string
-	void Close();				// Close the file
-	void GoToEnd(); 			// Position the file at the end (so you can write on the end).
-	unsigned long Length(); 	// File size in bytes
+	int8_t Status(); // Returns OR of IOStatus
+	bool Read(char& b);
+	void Write(char b);
+	void Write(const char* s);
+	void Close();
+	void GoToEnd(); // Position the file at the end (so you can write on the end).
+	unsigned long Length(); // File size in bytes
 
 friend class Platform;
 
@@ -381,20 +376,20 @@ protected:
 	FileStore(Platform* p);
 	void Init();
     bool Open(const char* directory, const char* fileName, bool write);
-
+        
+  bool inUse;
+  byte buf[FILE_BUF_LEN];
+  int bufferPointer;
+  
 private:
 
-    bool inUse;
-    byte buf[FILE_BUF_LEN];
-    int bufferPointer;
-  
-    void ReadBuffer();
-    void WriteBuffer();
+  void ReadBuffer();
+  void WriteBuffer();
 
-    FIL file;
-    Platform* platform;
-    bool writing;
-    unsigned int lastBufferEntry;
+  FIL file;
+  Platform* platform;
+  bool writing;
+  unsigned int lastBufferEntry;
 };
 
 
@@ -419,11 +414,11 @@ class Platform
   
   void Exit(); // Shut down tidily.  Calling Init after calling this should reset to the beginning
   
-  Compatibility Emulating() const;  // What Firmware are we emulating in Line (I.e. USB) responses?
+  Compatibility Emulating() const;
 
-  void SetEmulating(Compatibility c); // Set what firmware to emulate
+  void SetEmulating(Compatibility c);
 
-  void Diagnostics();		// Print things we might like to know
+  void Diagnostics();
   
   void PrintMemoryUsage();  // Print memory stats for debugging
 
@@ -433,97 +428,81 @@ class Platform
   
   float Time(); // Returns elapsed seconds since some arbitrary time
   
-  void SetInterrupt(float s); // Set a regular interrupt going every s seconds
+  void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
   
-  //void DisableInterrupts();  // Not needed on voyage
+  void DisableInterrupts();
 
-  // Communications
+  // Communications and data storage
   
-  Network* GetNetwork();			// Get the network device (usually ethernet)
-  Line* GetLine() const;			// Get the line device (usually USB)
-  void SetIPAddress(byte ip[]);		// Set the IP address.  Must be done at the start.
-  const byte* IPAddress() const;	// Get the IP address
-  void SetNetMask(byte nm[]);		// Set the mask.  Must be done at the start.
-  const byte* NetMask() const;		// Get the mask
-  void SetGateWay(byte gw[]);		// Set the gateway address.  Must be done at the start.
-  const byte* GateWay() const;		// Get the gateway address
-  void StartNetwork();				// Start the network. Must be called after the above functions
+  Network* GetNetwork();
+  Line* GetLine() const;
+  void SetIPAddress(byte ip[]);
+  const byte* IPAddress() const;
+  void SetNetMask(byte nm[]);
+  const byte* NetMask() const;
+  void SetGateWay(byte gw[]);
+  const byte* GateWay() const;
   
-  // Data storage
-
   friend class FileStore;
   
-  MassStorage* GetMassStorage();	// Get the mass storage device - usually an SD card
-  FileStore* GetFileStore(const char* directory, const char* fileName, bool write); // Get a file
-  const char* GetWebDir() const; 	// Where the htm etc files are
-  const char* GetGCodeDir() const; 	// Where the gcodes are
-  const char* GetSysDir() const;  	// Where the system files are
-  const char* GetTempDir() const; 	// Where temporary files are
-  const char* GetConfigFile() const;// Where the configuration is stored (in the system dir).
+  MassStorage* GetMassStorage();
+  FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
+  void StartNetwork();
+  const char* GetWebDir() const; // Where the htm etc files are
+  const char* GetGCodeDir() const; // Where the gcodes are
+  const char* GetSysDir() const;  // Where the system files are
+  const char* GetTempDir() const; // Where temporary files are
+  const char* GetConfigFile() const; // Where the configuration is stored (in the system dir).
   
-  void Message(char type, const char* message);        // Send a message somewhere.  Messages may simply flash an LED, or,
+  void Message(char type, const char* message);        // Send a message.  Messages may simply flash an LED, or,
                             // say, display the messages on an LCD. This may also transmit the messages to the host.
-  void PushMessageIndent();			// Messages can be indented or not these...
-  void PopMessageIndent();			// ...Push and pop the indent
+  void PushMessageIndent();
+  void PopMessageIndent();
   
   // Movement
   
-  void EmergencyStop();									// Shut down all motors and heaters immediately
-  void SetDirection(byte drive, bool direction);		// Forwards or backwards
-  void Step(byte drive);								// Do a single microstep
-  void Disable(byte drive); 							// There is no drive enable; drives get enabled automatically the first time they are used.
-  void SetMotorCurrent(byte drive, float current); 		// Current is in mA.
-  float DriveStepsPerUnit(int8_t drive) const;			// How many steps move 1mm
-  void SetDriveStepsPerUnit(int8_t drive, float value);	// Set how many steps move 1mm
-  float Acceleration(int8_t drive) const;				// What acceleration can this drive do?
-  void SetAcceleration(int8_t drive, float value); 		// Set what acceleration can this drive do?
-  float MaxFeedrate(int8_t drive) const;				// Maximum speed of this drive
-  void SetMaxFeedrate(int8_t drive, float value); 		// Set the maximum speed of this drive
-  float InstantDv(int8_t drive) const;					// Velocity at standing start for this drive.  Do not set this to 0.0
-  float HomeFeedRate(int8_t axis) const;				// Speed at which to home
-  void SetHomeFeedRate(int8_t axis, float value);		// Set speed at which to home
-  EndStopHit Stopped(int8_t drive);						// Called to check if an endstop hgas been hit
-  float AxisLength(int8_t axis) const;					// How long in mm
-  void SetAxisLength(int8_t axis, float value);			// Set how long in mm
-  bool HighStopButNotLow(int8_t axis) const;			// True if this axis has a high endstop but not a low one
-
-// Stuff from dc42 - not used at the moment
+  void EmergencyStop();
+  void SetDirection(byte drive, bool direction);
+  void Step(byte drive);
+  void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
+  void SetMotorCurrent(byte drive, float current);
+  float DriveStepsPerUnit(int8_t drive) const;
+  void SetDriveStepsPerUnit(int8_t drive, float value);
+  float Acceleration(int8_t drive) const;
+  void SetAcceleration(int8_t drive, float value);
+  float MaxFeedrate(int8_t drive) const;
+  void SetMaxFeedrate(int8_t drive, float value);
+  float InstantDv(int8_t drive) const;
+  float HomeFeedRate(int8_t axis) const;
+  void SetHomeFeedRate(int8_t axis, float value);
+  EndStopHit Stopped(int8_t drive);
+  float AxisLength(int8_t axis) const;
+  void SetAxisLength(int8_t axis, float value);
+  bool HighStopButNotLow(int8_t axis) const;
   
-//  float ZProbeStopHeight() const;
-//  int ZProbe() const;
-//  int GetZProbeSecondaryValues(int& v1, int& v2);
-//  void SetZProbeType(int iZ);
-//  int GetZProbeType() const;
-//  void SetZProbing(bool starting);
-//  bool GetZProbeParameters(struct ZProbeParameters& params) const;
-//  bool SetZProbeParameters(const struct ZProbeParameters& params);
-//  bool MustHomeXYBeforeZ() const;
-
-  // Z probe
-
-  float ZProbeStopHeight() const;		// The height above the bed at which the probe is triggered
-  void SetZProbeStopHeight(float z);	// Set the height above the bed at which the probe is triggered
-  unsigned int ZProbe() const;			// Get an A->D value from the probe.  This may have been averaged etc
-  unsigned int ZProbeOnVal() const;		// Returns on value for a modulated probe; total for non-modulated
-  void SetZProbe(unsigned int iZ);		// Set the A->D value corresponding to SetZProbeStopHeight()
-  void SetZProbeType(int8_t iZ);		// None (0), non-modulating (1) or modulating (2)
-  int8_t GetZProbeType() const;			// Get the probe type: None (0), non-modulating (1) or modulating (2)
+  float ZProbeStopHeight() const;
+  void SetZProbeStopHeight(float z);
+  int ZProbe() const;
+  int ZProbeOnVal() const;
+  void SetZProbe(int iZ);
+  void SetZProbeType(int iZ);
+  int GetZProbeType() const;
 
   // Heat and temperature
   
-  float GetTemperature(int8_t heater); 				 // Result is in degrees celsius
+  float GetTemperature(int8_t heater); // Result is in degrees celsius
   void SetHeater(int8_t heater, const float& power); // power is a fraction in [0,1]
-  float PidKp(int8_t heater) const;					 // PID proportional term
-  float PidKi(int8_t heater) const;					 // PID integral term
-  float PidKd(int8_t heater) const;					 // PID derivative term
-  float FullPidBand(int8_t heater) const;			 // Temp interval over which to apply the PID
+  float PidKp(int8_t heater) const;
+  float PidKi(int8_t heater) const;
+  float PidKd(int8_t heater) const;
+  float FullPidBand(int8_t heater) const;
   float PidMin(int8_t heater) const;
   float PidMax(int8_t heater) const;
-  float DMix(int8_t heater) const;					 // Smooth the last and the current derivative
-  bool UsePID(int8_t heater) const;					 // Use the PID for this heater?
-  float HeatSampleTime() const;						 // How often tems are measured
-  void CoolingFan(float speed);						 // Set the fan running or turn it off
-  void SetPidValues(size_t heater, float pVal, float iVal, float dVal); // Does what it says
+  float DMix(int8_t heater) const;
+  bool UsePID(int8_t heater) const;
+  float HeatSampleTime() const;
+  void CoolingFan(float speed);
+  void SetPidValues(size_t heater, float pVal, float iVal, float dVal);
 
 //-------------------------------------------------------------------------------------------------------
   protected:
@@ -561,28 +540,26 @@ class Platform
   int8_t potWipes[DRIVES];
   float senseResistor;
   float maxStepperDigipotVoltage;
-
-  // Z probe
-
-  void InitZProbe();
-  void PollZHeight();
   int8_t zProbePin;
   int8_t zProbeModulationPin;
   int8_t zProbeType;
-//  uint8_t zProbeCount;
   bool zModOnThisTime;
-  unsigned long zProbeOnSum;		// sum of readings taken when IR led is on
-  unsigned long zProbeOffSum;	// sum of readings taken when IR led is on
-//  uint16_t LastZProbeReading;
+  long zProbeOnSum;		// sum of readings taken when IR led is on
+  long zProbeOffSum;	// sum of readings taken when IR led is on
   int zProbeADValue;
   float zProbeStopHeight;
   bool zProbeEnable;
+// AXES
 
-  // AXES
+  void InitZProbe();
+  void PollZHeight();
 
   float axisLengths[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
+//  bool zProbeStarting;
+//  float zProbeHigh;
+//  float zProbeLow;
   
 // HEATERS - Bed is assumed to be the first
 
@@ -605,6 +582,7 @@ class Platform
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
   int8_t coolingFanPin;
+  //int8_t turnHeatOn;
 
 // Serial/USB
 
@@ -616,11 +594,16 @@ class Platform
   MassStorage* massStorage;
   FileStore* files[MAX_FILES];
   bool fileStructureInitialised;
+  //bool* inUse;
   char* webDir;
   char* gcodeDir;
   char* sysDir;
   char* tempDir;
   char* configFile;
+  //byte* buf[MAX_FILES];
+  //int bPointer[MAX_FILES];
+  //char fileList[FILE_LIST_LENGTH];
+  //char scratchString[STRING_LENGTH];
   
 // Network connection
 
@@ -785,6 +768,10 @@ inline void Platform::Step(byte drive)
 inline void Platform::SetMotorCurrent(byte drive, float current)
 {
 	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxStepperDigipotVoltage);
+//	Message(HOST_MESSAGE, "Set pot to: ");
+//	snprintf(scratchString, STRING_LENGTH, "%d", pot);
+//	Message(HOST_MESSAGE, scratchString);
+//	Message(HOST_MESSAGE, "\n");
 	mcp.setNonVolatileWiper(potWipes[drive], pot);
 	mcp.setVolatileWiper(potWipes[drive], pot);
 }
@@ -824,7 +811,25 @@ inline int Platform::GetRawZHeight() const
   return (zProbeType != 0) ? analogRead(zProbePin) : 0;
 }
 
-inline unsigned int Platform::ZProbe() const
+inline void Platform::PollZHeight()
+{
+	uint16_t currentReading = GetRawZHeight();
+
+	if (zModOnThisTime)
+		zProbeOnSum = zProbeOnSum + currentReading - zProbeOnSum/NumZProbeReadingsAveraged;
+	else
+		zProbeOffSum = zProbeOffSum + currentReading - zProbeOffSum/NumZProbeReadingsAveraged;
+
+	zModOnThisTime = !zModOnThisTime;
+
+	if (zProbeType == 2)
+	{
+		// Reverse the modulation, ready for next time
+		digitalWrite(zProbeModulationPin, zModOnThisTime ? HIGH : LOW);
+	}
+}
+
+inline int Platform::ZProbe() const
 {
 	return (zProbeType == 1)
 			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged		// non-modulated mode
@@ -833,32 +838,13 @@ inline unsigned int Platform::ZProbe() const
 			    : 0;														// z-probe disabled
 }
 
-inline unsigned int Platform::ZProbeOnVal() const
+inline int Platform::ZProbeOnVal() const
 {
 	return (zProbeType == 1)
 			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged
 			: (zProbeType == 2)
 			  ? zProbeOnSum/(NumZProbeReadingsAveraged/2)
 				: 0;
-}
-
-inline void Platform::PollZHeight()
-{
-	uint16_t currentReading = GetRawZHeight();
-	// Compute a moving average
-	if (zModOnThisTime)
-		zProbeOnSum = zProbeOnSum + currentReading - zProbeOnSum/NumZProbeReadingsAveraged;
-	else
-		zProbeOffSum = zProbeOffSum + currentReading - zProbeOffSum/NumZProbeReadingsAveraged;
-//	LastZProbeReading = currentReading;
-//	zProbeCount = (zProbeCount + 1) % NumZProbeReadingsAveraged;
-	zModOnThisTime = !zModOnThisTime;
-	if (zProbeType == 2)
-	{
-		// Reverse the modulation, ready for next time
-		//digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
-		digitalWrite(zProbeModulationPin, zModOnThisTime ? HIGH : LOW);
-	}
 }
 
 inline float Platform::ZProbeStopHeight() const
@@ -871,26 +857,28 @@ inline void Platform::SetZProbeStopHeight(float z)
 	zProbeStopHeight = z;
 }
 
-inline void Platform::SetZProbe(unsigned int iZ)
+inline void Platform::SetZProbe(int iZ)
 {
 	zProbeADValue = iZ;
 }
 
-inline void Platform::SetZProbeType(int8_t pt)
+inline void Platform::SetZProbeType(int pt)
 {
 	zProbeType = (pt >= 0 && pt <= 2) ? pt : 0;
 	InitZProbe();
 }
 
-inline int8_t Platform::GetZProbeType() const
+inline int Platform::GetZProbeType() const
 {
 	return zProbeType;
 }
 
 
 
+
 //********************************************************************************************************
 
+// Drive the RepRap machine - Heat and temperature
 
 inline int Platform::GetRawTemperature(byte heater) const
 {
@@ -977,12 +965,6 @@ inline void Platform::SetInterrupt(float s) // Seconds
   NVIC_EnableIRQ(TC3_IRQn);
 }
 
-//inline void Platform::DisableInterrupts()
-//{
-//	NVIC_DisableIRQ(TC3_IRQn);
-//}
-
-
 //****************************************************************************************************************
 
 inline Network* Platform::GetNetwork()
@@ -1030,11 +1012,16 @@ inline Line* Platform::GetLine() const
 
 inline int8_t Line::Status() const
 {
+//	if(alternateInput != NULL)
+//		return alternateInput->Status();
 	return numChars == 0 ? nothing : byteAvailable;
 }
 
 inline int Line::Read(char& b)
 {
+//  if(alternateInput != NULL)
+//	return alternateInput->Read(b);
+
 	  if (numChars == 0) return 0;
 	  b = buffer[getIndex];
 	  getIndex = (getIndex + 1) % lineBufsize;

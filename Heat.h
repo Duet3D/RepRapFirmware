@@ -29,6 +29,7 @@ class PID
 {
   friend class Heat;
   private:
+  //public:
   
     PID(Platform* p, int8_t h);
     void Init();									// (Re)Set everything to start
@@ -42,6 +43,8 @@ class PID
     bool Active();									// Are we active?
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
     float GetTemperature();							// Get the current temperature
+  
+ // private:
   
     Platform* platform;								// The instance of the class that is the RepRap hardware
     float activeTemperature;						// The required active temperature
