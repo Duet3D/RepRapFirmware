@@ -56,6 +56,7 @@ extern char scratchString[];
 #include "GCodes.h"
 #include "Move.h"
 #include "Heat.h"
+#include "Tool.h"
 #include "Reprap.h"
 
 
