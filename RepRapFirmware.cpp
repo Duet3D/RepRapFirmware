@@ -164,6 +164,7 @@ RepRap::RepRap() : active(false), debug(false)
   gCodes = new GCodes(platform, webserver);
   move = new Move(platform, gCodes);
   heat = new Heat(platform, gCodes);
+  toolList = NULL;
 }
 
 void RepRap::Init()
@@ -254,6 +255,13 @@ void RepRap::EmergencyStop()
 
 	//platform->DisableInterrupts();
 
+	Tool* t = toolList;
+	while(t)
+	{
+		t->Standby();
+		t = t->Next();
+	}
+
 	heat->Exit();
 	for(i = 0; i < HEATERS; i++)
 		platform->SetHeater(i, 0.0);
@@ -272,9 +280,89 @@ void RepRap::EmergencyStop()
 			platform->Disable(i);
 		}
 	}
+
 	platform->Message(HOST_MESSAGE, "Emergency Stop! Reset the controller to continue.");
 	webserver->HandleReply("Emergency Stop! Reset the controller to continue.", false);
 }
+
+void RepRap::AddTool(Tool* t)
+{
+	if(toolList == NULL)
+	{
+		toolList = t;
+		return;
+	}
+
+	toolList->AddTool(t);
+}
+
+void RepRap::SelectTool(int toolNumber)
+{
+	Tool* t = toolList;
+
+	while(t)
+	{
+		if(t->Number() == toolNumber)
+		{
+			t->Activate(currentTool);
+			currentTool = t;
+			return;
+		}
+		t = t->Next();
+	}
+
+	platform->Message(HOST_MESSAGE, "Attempt to select and activate a non-existent tool.\n");
+}
+
+void RepRap::StandbyTool(int toolNumber)
+{
+	Tool* t = toolList;
+
+	while(t)
+	{
+		if(t->Number() == toolNumber)
+		{
+			t->Standby();
+			if(currentTool == t)
+				currentTool = NULL;
+			return;
+		}
+		t = t->Next();
+	}
+
+	platform->Message(HOST_MESSAGE, "Attempt to standby a non-existent tool.\n");
+}
+
+void RepRap::SetToolVariables(int toolNumber, float x, float y, float z, float* standbyTemperatures, float* activeTemperatures)
+{
+	Tool* t = toolList;
+
+	while(t)
+	{
+		if(t->Number() == toolNumber)
+		{
+			t->SetVariables(x, y, z, standbyTemperatures, activeTemperatures);
+			return;
+		}
+		t = t->Next();
+	}
+
+	platform->Message(HOST_MESSAGE, "Attempt to set-up a non-existent tool.\n");
+}
+
+void RepRap::GetCurrentToolOffset(float& x, float& y, float& z)
+{
+	if(currentTool == NULL)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to get offset when no tool selected.\n");
+		x = 0.0;
+		y = 0.0;
+		z = 0.0;
+		return;
+	}
+	currentTool->GetOffset(x, y, z);
+}
+
 
 
 
