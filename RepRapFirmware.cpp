@@ -175,6 +175,7 @@ void RepRap::Init()
   webserver->Init();
   move->Init();
   heat->Init();
+  currentTool = NULL;
   active = true;
 
   platform->Message(HOST_MESSAGE, NAME);

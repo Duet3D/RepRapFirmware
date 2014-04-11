@@ -29,6 +29,7 @@ class Webserver;
 class GCodes;
 class Move;
 class Heat;
+class Tool;
 class RepRap;
 
 // A single instance of the RepRap class contains all the others

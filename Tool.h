@@ -31,12 +31,13 @@ class Tool
 public:
 
 	Tool(int tNum, int d[], int h[]);
-	int Number();
+
 	friend class RepRap;
 
 protected:
 
 	Tool* Next();
+	int Number();
 	void Activate(Tool* currentlyActive);
 	void Standby();
 	void AddTool(Tool* t);
