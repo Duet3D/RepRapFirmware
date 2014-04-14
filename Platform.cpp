@@ -88,8 +88,8 @@ void Platform::Init()
 
   fileStructureInitialised = true;
 
-  mcp.begin();
-
+  mcpDuet.begin(); //only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
+  mcpExpansion.setMCP4461Address(0x2E); //not required for mcpDuet, as this uses the default address
   sysDir = SYS_DIR;
   configFile = CONFIG_FILE;
 
