@@ -103,6 +103,7 @@ Licence: GPL
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
 #define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    	// (mm/sec)
+#define NUM_MIXING_DRIVES 1; //number of mixing drives
 
 // AXES
 
@@ -921,26 +922,6 @@ inline void Platform::SetMixingDrives(int num_drives)
 inline int Platform::GetMixingDrives()
 {
 	return numMixingDrives;
-}
-
-inline void Platform::PollZHeight()
-{
-	uint16_t currentReading = GetRawZHeight();
-	if (zProbeType == 2)
-	{
-		// Reverse the modulation, ready for next time
-		digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
-	}
-	if (zProbeCount & 1)
-	{
-		zProbeOffSum = zProbeOffSum - zProbeReadings[zProbeCount] + currentReading;
-	}
-	else
-	{
-		zProbeOnSum = zProbeOnSum - zProbeReadings[zProbeCount] + currentReading;
-	}
-	zProbeReadings[zProbeCount] = currentReading;
-	zProbeCount = (zProbeCount + 1) % NumZProbeReadingsAveraged;
 }
 
 //********************************************************************************************************
