@@ -196,7 +196,7 @@ void Move::Spin()
     if(movementType & xyMove)
       nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(X_AXIS));
     else if(movementType & eMove)
-      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(AXES));
+      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv((AXES+gCodes->GetSelectedHead())));
     else
       nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
       
@@ -205,7 +205,7 @@ void Move::Spin()
     if(movementType & xyMove)
       nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
     else if(movementType & eMove)
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES+gCodes->GetSelectedHead())); // Fixed
     else // Must be z
       nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
     
@@ -273,7 +273,8 @@ bool Move::GetCurrentState(float m[])
     if(i < AXES)
       m[i] = lastMove->MachineToEndPoint(i);
     else
-      m[i] = 0.0;
+      m[i] = 0.0; //FIXME This resets extruders to 0.0, even the inactive ones (is this behaviour desired?)
+      //m[i] = lastMove->MachineToEndPoint(i); //FIXME TEST alternative that does not reset extruders to 0
   }
   if(currentFeedrate >= 0.0)
     m[DRIVES] = currentFeedrate;
@@ -366,7 +367,7 @@ void Move::SetStepHypotenuse()
 	  // We don't want 0.  If no axes/extruders are moving these should never be used.
 	  // But try to be safe.
 
-	  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
+	  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES); //FIXME this is not multi extruder safe (but we should never get here)
 	  extruderStepDistances[0] = stepDistances[0];
 }
 
@@ -518,7 +519,7 @@ void Move::DoLookAhead()
           else if (mt & zMove)
             c = platform->InstantDv(Z_AXIS);
           else
-            c = platform->InstantDv(AXES); // value for first extruder FIXME??
+            c = platform->InstantDv((AXES+gCodes->GetSelectedHead())); // value for current extruder
         }
         n1->SetV(c);
         n1->SetProcessed(vCosineSet);
