@@ -989,6 +989,8 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 
 void GCodes::QueueFileToPrint(const char* fileName)
 {
+  if(fileToPrint != NULL)
+    fileToPrint->Close();
   fileToPrint = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
   if(fileToPrint == NULL)
   {
@@ -1511,7 +1513,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		reprap.SetDebug(gb->GetIValue());
     	break;
 
-    case 112: // Emergency stop - acted upon in Webserver
+    case 112: // Emergency stop - acted upon in Webserver, but also here in case it comes from USB etc.
+    		reprap.EmergencyStop();
     	break;
 
     case 114: // Deprecated

@@ -164,6 +164,7 @@ RepRap::RepRap() : active(false), debug(false)
   gCodes = new GCodes(platform, webserver);
   move = new Move(platform, gCodes);
   heat = new Heat(platform, gCodes);
+  toolList = NULL;
 }
 
 void RepRap::Init()
@@ -174,6 +175,7 @@ void RepRap::Init()
   webserver->Init();
   move->Init();
   heat->Init();
+  currentTool = NULL;
   active = true;
 
   platform->Message(HOST_MESSAGE, NAME);
@@ -193,6 +195,9 @@ void RepRap::Init()
   platform->Message(HOST_MESSAGE, "\n");
   platform->Message(HOST_MESSAGE, NAME);
   platform->Message(HOST_MESSAGE, " is up and running.\n");
+  fastLoop = FLT_MAX;
+  slowLoop = 0.0;
+  lastTime = platform->Time();
 }
 
 void RepRap::Exit()
@@ -216,6 +221,16 @@ void RepRap::Spin()
   gCodes->Spin();
   move->Spin();
   heat->Spin();
+
+  // Keep track of the loop time
+
+  double t = platform->Time();
+  double dt = t - lastTime;
+  if(dt < fastLoop)
+	  fastLoop = dt;
+  if(dt > slowLoop)
+	  slowLoop = dt;
+  lastTime = t;
 }
 
 void RepRap::Diagnostics()
@@ -225,6 +240,10 @@ void RepRap::Diagnostics()
   heat->Diagnostics();
   gCodes->Diagnostics();
   webserver->Diagnostics();
+  snprintf(scratchString, STRING_LENGTH, "Slow loop secs: %f; fast: %f\n", slowLoop, fastLoop);
+  platform->Message(HOST_MESSAGE, scratchString);
+  fastLoop = FLT_MAX;
+  slowLoop = 0.0;
 }
 
 // Turn off the heaters, disable the motors, and
@@ -236,6 +255,13 @@ void RepRap::EmergencyStop()
 	int8_t i;
 
 	//platform->DisableInterrupts();
+
+	Tool* t = toolList;
+	while(t)
+	{
+		t->Standby();
+		t = t->Next();
+	}
 
 	heat->Exit();
 	for(i = 0; i < HEATERS; i++)
@@ -258,6 +284,85 @@ void RepRap::EmergencyStop()
 	platform->Message(HOST_MESSAGE, "Emergency Stop! Reset the controller to continue.");
 	webserver->HandleReply("Emergency Stop! Reset the controller to continue.", false);
 }
+
+void RepRap::AddTool(Tool* t)
+{
+	if(toolList == NULL)
+	{
+		toolList = t;
+		return;
+	}
+
+	toolList->AddTool(t);
+}
+
+void RepRap::SelectTool(int toolNumber)
+{
+	Tool* t = toolList;
+
+	while(t)
+	{
+		if(t->Number() == toolNumber)
+		{
+			t->Activate(currentTool);
+			currentTool = t;
+			return;
+		}
+		t = t->Next();
+	}
+
+	platform->Message(HOST_MESSAGE, "Attempt to select and activate a non-existent tool.\n");
+}
+
+void RepRap::StandbyTool(int toolNumber)
+{
+	Tool* t = toolList;
+
+	while(t)
+	{
+		if(t->Number() == toolNumber)
+		{
+			t->Standby();
+			if(currentTool == t)
+				currentTool = NULL;
+			return;
+		}
+		t = t->Next();
+	}
+
+	platform->Message(HOST_MESSAGE, "Attempt to standby a non-existent tool.\n");
+}
+
+void RepRap::SetToolVariables(int toolNumber, float x, float y, float z, float* standbyTemperatures, float* activeTemperatures)
+{
+	Tool* t = toolList;
+
+	while(t)
+	{
+		if(t->Number() == toolNumber)
+		{
+			t->SetVariables(x, y, z, standbyTemperatures, activeTemperatures);
+			return;
+		}
+		t = t->Next();
+	}
+
+	platform->Message(HOST_MESSAGE, "Attempt to set-up a non-existent tool.\n");
+}
+
+void RepRap::GetCurrentToolOffset(float& x, float& y, float& z)
+{
+	if(currentTool == NULL)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to get offset when no tool selected.\n");
+		x = 0.0;
+		y = 0.0;
+		z = 0.0;
+		return;
+	}
+	currentTool->GetOffset(x, y, z);
+}
+
 
 
 
