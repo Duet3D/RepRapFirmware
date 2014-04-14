@@ -202,6 +202,7 @@ void Platform::Init()
     	else
     		pinMode(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
+    tempSum[i] = 0;
   }
 
   if(coolingFanPin >= 0)

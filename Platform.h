@@ -150,6 +150,7 @@ Licence: GPL
 												// We hope that the compiler is clever enough to spot that division by this is a >> operation, but it doesn't really matter
 
 #define POLL_TIME 0.006                         // Poll the A to D converters this often (seconds)
+
 #define HOT_BED 0 	// The index of the heated bed; set to -1 if there is no heated bed
 #define E0_HEATER 1 //the index of the first extruder heater
 #define E1_HEATER 2 //the index of the first extruder heater
