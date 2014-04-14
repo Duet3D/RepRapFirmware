@@ -80,6 +80,12 @@ enum Compatibility
 #define HOME_Z_G "homez.g"
 #define HOME_ALL_G "homeall.g"
 
+#define LIST_SEPARATOR ':'						// Lists in G Codes
+#define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them
+#define FILE_LIST_BRACKET '"'					// Put these round file names when listing them
+
+#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
+
 #define LONG_TIME 300.0 // Seconds
 
 #define EOF_STRING "<!-- **EoF** -->"

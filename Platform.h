@@ -158,8 +158,6 @@ Licence: GPL
 #define GCODE_DIR "0:/gcodes/" 					// Ditto - g-codes
 #define SYS_DIR "0:/sys/" 						// Ditto - system files
 #define TEMP_DIR "0:/tmp/" 						// Ditto - temporary files
-#define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them
-#define FILE_LIST_BRACKET '"'					// Put these round file names when listing them
 #define FILE_LIST_LENGTH (1000) 				// Maximum length of file list
 #define MAX_FILES (42)							// Maximum number of files displayed
 

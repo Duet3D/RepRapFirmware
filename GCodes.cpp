@@ -2022,11 +2022,66 @@ float GCodeBuffer::GetFValue()
   if(readPointer < 0)
   {
      platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
+     readPointer = -1;
      return 0.0;
   }
   float result = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
   readPointer = -1;
   return result; 
+}
+
+// Get a :-separated list of floats after a key letter
+
+const void GCodeBuffer::GetFloatArray(float a[], int& length)
+{
+	length = -1;
+	if(readPointer < 0)
+	{
+		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float array before a search.\n");
+		readPointer = -1;
+		return;
+	}
+
+	bool inList = true;
+	while(inList)
+	{
+		length++;
+		a[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
+		readPointer++;
+		while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR))
+			readPointer++;
+		if(gcodeBuffer[readPointer] != LIST_SEPARATOR)
+			inList = false;
+	}
+	length++;
+	readPointer = -1;
+}
+
+// Get a :-separated list of longs after a key letter
+
+const void GCodeBuffer::GetLongArray(long l[], int& length)
+{
+	length = -1;
+	if(readPointer < 0)
+	{
+		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode long array before a search.\n");
+		readPointer = -1;
+		return;
+	}
+
+	bool inList = true;
+	while(inList)
+	{
+		length++;
+		l[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+		readPointer++;
+		while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR))
+			readPointer++;
+		if(gcodeBuffer[readPointer] != LIST_SEPARATOR)
+			inList = false;
+	}
+	length++;
+	readPointer = -1;
 }
 
 // Get a string after a G Code letter found by a call to Seen().
@@ -2038,6 +2093,7 @@ const char* GCodeBuffer::GetString()
 	if(readPointer < 0)
 	{
 		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode string before a search.\n");
+		readPointer = -1;
 		return "";
 	}
 	const char* result = &gcodeBuffer[readPointer+1];
@@ -2065,6 +2121,7 @@ const char* GCodeBuffer::GetUnprecedentedString()
   if(!gcodeBuffer[readPointer])
   {
      platform->Message(HOST_MESSAGE, "GCodes: String expected but not seen.\n");
+     readPointer = -1;
      return gcodeBuffer; // Good idea?
   }
 
@@ -2081,6 +2138,7 @@ long GCodeBuffer::GetLValue()
   if(readPointer < 0)
   {
     platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
+    readPointer = -1;
     return 0;
   }
   long result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);

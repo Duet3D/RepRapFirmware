@@ -25,8 +25,6 @@ Licence: GPL
 #define STACK 5
 #define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
-#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
-
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
 class GCodeBuffer
@@ -41,6 +39,8 @@ class GCodeBuffer
     long GetLValue();									// Get a long integer after a key letter
     const char* GetUnprecedentedString();				// Get a string with no preceeding key letter
     const char* GetString();							// Get a string after a key letter
+    const void GetFloatArray(float a[], int& length);	// Get a :-separated list of floats after a key letter
+    const void GetLongArray(long l[], int& length);		// Get a :-separated list of longs after a key letter
     const char* Buffer();								// All of the G Code itself
     bool Finished() const;								// Has the G Code been executed?
     void SetFinished(bool f);							// Set the G Code executed (or not)
