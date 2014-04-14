@@ -112,6 +112,7 @@ void Platform::Init()
   potWipes = POT_WIPES;
   senseResistor = SENSE_RESISTOR;
   maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
+  numMixingDrives = NUM_MIXING_DRIVES;
 
   // Z PROBE
 
@@ -152,7 +153,11 @@ void Platform::Init()
   webDir = WEB_DIR;
   gcodeDir = GCODE_DIR;
   tempDir = TEMP_DIR;
-
+  /*
+  	FIXME Nasty having to specify individually if a pin is arduino or not.
+    requires a unified variant file. If implemented this would be much better
+	to allow for different hardware in the future
+  */
   for(i = 0; i < DRIVES; i++)
   {
 

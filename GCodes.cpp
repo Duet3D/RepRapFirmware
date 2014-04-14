@@ -341,21 +341,82 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	      }
 	    } else
 	    {
-	      if(gb->Seen('E')&& ((i-AXES) == selectedHead)) //Only affect the selected extruder
+	      /*Fixed to work with multiple concurrent extruder drives:
+	       *  Default or M160 S1 (set use only one extruder drive)
+	       *  		"G1 En.n" adds the float n.n to the move buffer for the selected head
+	       *  There is no change in behaviour for one extruder drive setups, or multiple extruder
+	       *  setups where only one drive is used at any one time.
+	       *
+	       *  M160 Sn (set to use "n" extruder drives) eg
+	       *  		"M160 S3"
+	       *  		"G1 En.n:m.m:o.o" adds the floats to the move buffer in the following way:
+	       *  				moveBuffer[AXES+selectedHead) = n.n
+	       *  				moveBuffer[AXES+selectedHead+1) = m.m
+	       *  				moveBuffer[AXES+selectedHead+2) = o.o
+	       *  		so if selectedHead=0 move buffer ends up looking like this for a 5 extruder drive setup:
+	       *  		{x.x, y.y, z.z, n.n, m.m, o.o, 0.0,0.0, f.f}
+	       *  		where x,y,z are the axes and f is the feedrate.
+	       *  		If selected head > 0 then there is the possibility that more drives can be set than
+	       *  		exist, in that case the last values are discarded e.g:
+	       *  		"T3"
+	       *  		"M160 S3"
+	       *  		"G1 En.n:m.m:o.o"
+	       *  		would leave the move buffer on a 4 extruder drive setup looking like this:
+	       *  		{x.x, y.y, z.z, 0.0, 0.0, 0.0, n.n,m.m, f.f}
+	       */
+	      if(gb->Seen('E')&& ((i-AXES) == selectedHead))
 	      {
-		    float moveArg = gb->GetFValue()*distanceScale;
-	        if(drivesRelative || doingG92)
-	        {
-	          moveBuffer[i] = moveArg;
-	        	if(doingG92)
-	        		lastPos[i - AXES] = moveBuffer[i];
-	        }
-	        else
-	        {
-	          float absE = moveArg;
-	          moveBuffer[i] = absE - lastPos[i - AXES];
-	          lastPos[i - AXES] = absE;
-	        }
+	    	//the number of mixing drives set (by M160)
+	    	int numDrives = platform->GetMixingDrives();
+	    	const char* extruderString = gb->GetString();
+	    	float eArg[numDrives];
+	    	uint8_t sp = 0; //string pointer
+	    	uint8_t fp = 0; //float pointer for the start of each floating point number in turn
+	    	uint8_t hp = 0; //index of the head currently referred to for eArg
+	    	while(extruderString[sp])
+	    	{
+	    		//first check to confirm we have not got to the feedrate setting part of the string
+	    		if(extruderString[sp] == 'F')
+	    		{
+	    			break;
+	    		}
+	    		if(extruderString[sp] == ':')
+	    		{
+	    			eArg[hp] = (atoff(&extruderString[fp]))*distanceScale;
+	    			hp++;
+	    			if(hp >= numDrives)
+	    			{
+						platform->Message(HOST_MESSAGE, "More mixing extruder drives required in G1 string than set with M160: ");
+						platform->Message(HOST_MESSAGE, gb->Buffer());
+						platform->Message(HOST_MESSAGE, "\n");
+						return;
+					}
+    				sp++;
+    				fp = sp;
+	    		}
+	    		else
+	    			sp++;
+	    	}
+	    	//capture the last drive step amount in the string (or the only one in the case of only one extruder)
+	    	eArg[hp] = (atoff(&extruderString[fp]))*distanceScale;
+
+	    	//set the move buffer for each extruder drive
+        	for(int j=0;j<numDrives;j++)
+        	{
+				if(drivesRelative || doingG92)
+				{
+
+						moveBuffer[i+j] = eArg[j]; //Absolute
+						if(doingG92)
+							lastPos[i+j - AXES] = moveBuffer[i+j];
+				}
+				else
+				{
+				  float absE = eArg[j];
+				  moveBuffer[i+j] = absE - lastPos[i+j - AXES];
+				  lastPos[i+j - AXES] = absE;
+				}
+        	}
 	      }
 	    }
 	}
@@ -380,20 +441,22 @@ bool GCodes::SetUpMove(GCodeBuffer *gb)
   if(moveAvailable)
     return false;
     
-  // Load the last position; If Move can't accept more, return false
+  // Load the last position into moveBuffer; If Move can't accept more, return false
   
   if(!reprap.GetMove()->GetCurrentState(moveBuffer))
     return false;
   
+  //check to see if the move is a 'homing' move that endstops are checked on.
   checkEndStops = false;
   if(gb->Seen('S'))
   {
 	  if(gb->GetIValue() == 1)
 		  checkEndStops = true;
   }
-
+    //loads the movebuffer with either the absolute movement required or the
+  //relative movement required
   LoadMoveBufferFromGCode(gb, false, !checkEndStops);
-
+  //There is a new move in the move buffer
   moveAvailable = true;
   return true; 
 }
@@ -592,7 +655,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 // booleans homeX, homeY and homeZ.
 // Returns true if completed, false if needs to be called again.
 // 'reply' is only written if there is an error.
-// 'error' is false on entry, gets changed to true iff there is an error.
+// 'error' is false on entry, gets changed to true if there is an error.
 bool GCodes::DoHome(char* reply, bool& error)
 //pre(reply.upb == STRING_LENGTH)
 {
@@ -638,6 +701,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 
 	if(homeZ)
 	{
+		//FIXME this check should be optional
 		if (!(axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS]))
 		{
 			// We can only home Z if X and Y have already been homed. Possibly this should only be if we are using an IR probe.
@@ -1123,7 +1187,7 @@ bool GCodes::StandbyHeaters()
 		return false;
 	for(int8_t heater = 0; heater < HEATERS; heater++)
 		reprap.GetHeat()->Standby(heater);
-	selectedHead = -1; //FIXME is this behaviour desirable?
+	selectedHead = -1; //FIXME check this does not mess up setters (eg M906) when they are used after this command is called
 	return true;
 }
 
@@ -1473,6 +1537,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 				seen = true;
 			}
 			//FIXME handle selectedHead=-1 case
+			//Just sets the currently selected head.
 			else if(gb->Seen('E')&& ((drive-AXES) == selectedHead))//then do active extruder
 			{
 					platform->SetDriveStepsPerUnit(AXES+selectedHead, gb->GetFValue());
@@ -1480,10 +1545,18 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			}
     	}	
     	reprap.GetMove()->SetStepHypotenuse();
-    	if(!seen)
-    		snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: %d",
+    	if(!seen){
+    		snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: ",
     				(int)platform->DriveStepsPerUnit(X_AXIS), (int)platform->DriveStepsPerUnit(Y_AXIS),
-    				(int)platform->DriveStepsPerUnit(Z_AXIS), (int)platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
+    				(int)platform->DriveStepsPerUnit(Z_AXIS));
+    		// Fixed to do multiple extruders.
+    		char * scratchString;
+        	for(int8_t drive = AXES; drive < DRIVES; drive++)
+        	{
+        		strncat(reply, ftoa(0,platform->DriveStepsPerUnit(drive),2), STRING_LENGTH);
+        		strncat(reply, ":", STRING_LENGTH);
+        	}
+    	}
         break;
 
 
@@ -1568,6 +1641,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
     	break;
 
+    	//TODO M119
+    case 119:
+        platform->Message(HOST_MESSAGE, "M119 - endstop status not yet implemented\n");
+    	break;
+
     case 120:
     	result = Push();
     	break;
@@ -1601,6 +1679,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     
     case 141: // Chamber temperature
       platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
+      break;
+
+    case 160: //number of mixing filament drives
+    	if(gb->Seen('S'))
+		{
+			int iValue=gb->GetIValue();
+			platform->SetMixingDrives(iValue);
+		}
+		break;
     case 190: // Deprecated...
     	if(gb->Seen('S'))
     	{

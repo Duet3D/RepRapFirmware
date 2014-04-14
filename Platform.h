@@ -506,6 +506,9 @@ class Platform
   void SetZProbe(int iZ);
   void SetZProbeType(int iZ);
   int GetZProbeType() const;
+  //Mixing support
+  void SetMixingDrives(int);
+  int GetMixingDrives();
 
   // Heat and temperature
   
@@ -571,6 +574,7 @@ class Platform
   int zProbeADValue;
   float zProbeStopHeight;
   bool zProbeEnable;
+  int8_t numMixingDrives;
 
 // AXES
 
@@ -904,8 +908,40 @@ inline int Platform::GetZProbeType() const
 	return zProbeType;
 }
 
+inline void Platform::SetMixingDrives(int num_drives)
+{
+	if(num_drives>(DRIVES-AXES))
+	{
+		Message(HOST_MESSAGE, "More mixing extruder drives set with M160 than exist in firmware configuration\n");
+		return;
+	}
+	numMixingDrives = num_drives;
+}
 
+inline int Platform::GetMixingDrives()
+{
+	return numMixingDrives;
+}
 
+inline void Platform::PollZHeight()
+{
+	uint16_t currentReading = GetRawZHeight();
+	if (zProbeType == 2)
+	{
+		// Reverse the modulation, ready for next time
+		digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
+	}
+	if (zProbeCount & 1)
+	{
+		zProbeOffSum = zProbeOffSum - zProbeReadings[zProbeCount] + currentReading;
+	}
+	else
+	{
+		zProbeOnSum = zProbeOnSum - zProbeReadings[zProbeCount] + currentReading;
+	}
+	zProbeReadings[zProbeCount] = currentReading;
+	zProbeCount = (zProbeCount + 1) % NumZProbeReadingsAveraged;
+}
 
 //********************************************************************************************************
 
@@ -972,11 +1008,16 @@ inline float Platform::DMix(int8_t heater) const
   return dMix[heater];  
 }
 
+//Changed to be compatible with existing gcode norms
+// M106 S0 = fully off M106 S255 = fully on
 inline void Platform::CoolingFan(float speed)
 {
+	//byte p = (byte)(255.0*fmin(1.0, fmax(0.0, speed))); //this reverts to 0= off, 1 = on if uncommented
+	byte p = (byte)speed;
+	p = 255 - p; //duet v0.6
 	if(coolingFanPin < 0)
 		return;
-	analogWrite(coolingFanPin, (uint8_t)(speed*255.0));
+	analogWriteNonDue(coolingFanPin, p);
 }
 
 //inline void Platform::SetHeatOn(int8_t ho)
