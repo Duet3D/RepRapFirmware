@@ -999,6 +999,8 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 
 void GCodes::QueueFileToPrint(const char* fileName)
 {
+  if(fileToPrint != NULL)
+    fileToPrint->Close();
   fileToPrint = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
   if(fileToPrint == NULL)
   {
@@ -1098,7 +1100,6 @@ bool GCodes::SetOffsets(GCodeBuffer *gb)
     if(gb->Seen('S'))
       reprap.GetHeat()->SetActiveTemperature(head, gb->GetFValue());
     // FIXME - do X, Y and Z
-	platform->Message(HOST_MESSAGE, "Not Yet fully implemented: Use head offset in slicing software");
   }
   return true;  
 }
@@ -1533,7 +1534,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		reprap.SetDebug(gb->GetIValue());
     	break;
 
-    case 112: // Emergency stop - acted upon in Webserver
+    case 112: // Emergency stop - acted upon in Webserver, but also here in case it comes from USB etc.
+    		reprap.EmergencyStop();
     	break;
 
     case 114: // Deprecated
@@ -1599,7 +1601,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     
     case 141: // Chamber temperature
       platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
-    case 190: // // Deprecated...
+    case 190: // Deprecated...
     	if(gb->Seen('S'))
     	{
 			float value=gb->GetFValue();
