@@ -570,7 +570,7 @@ void Move::Interrupt()
   dda = NULL;
 }
 
-
+// creates a new lookahead object adds it to the lookahead ring, returns false if its full
 bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t mt)
 {
     if(LookAheadRingFull())
@@ -1206,11 +1206,13 @@ float LookAhead::Cosine()
   return cosine;
 }
 
+//Returns units (mm) from steps for a particular drive
 float LookAhead::MachineToEndPoint(int8_t drive, long coord)
 {
 	return ((float)coord)/reprap.GetPlatform()->DriveStepsPerUnit(drive);
 }
 
+//Returns steps from units (mm) for a particular drive
 long LookAhead::EndPointToMachine(int8_t drive, float coord)
 {
 	return  (long)roundf(coord*reprap.GetPlatform()->DriveStepsPerUnit(drive));

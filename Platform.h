@@ -103,6 +103,7 @@ Licence: GPL
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
 #define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    	// (mm/sec)
+#define NUM_MIXING_DRIVES 1; //number of mixing drives
 
 // AXES
 
@@ -506,6 +507,9 @@ class Platform
   void SetZProbe(int iZ);
   void SetZProbeType(int iZ);
   int GetZProbeType() const;
+  //Mixing support
+  void SetMixingDrives(int);
+  int GetMixingDrives();
 
   // Heat and temperature
   
@@ -571,6 +575,7 @@ class Platform
   int zProbeADValue;
   float zProbeStopHeight;
   bool zProbeEnable;
+  int8_t numMixingDrives;
 
 // AXES
 
@@ -904,8 +909,20 @@ inline int Platform::GetZProbeType() const
 	return zProbeType;
 }
 
+inline void Platform::SetMixingDrives(int num_drives)
+{
+	if(num_drives>(DRIVES-AXES))
+	{
+		Message(HOST_MESSAGE, "More mixing extruder drives set with M160 than exist in firmware configuration\n");
+		return;
+	}
+	numMixingDrives = num_drives;
+}
 
-
+inline int Platform::GetMixingDrives()
+{
+	return numMixingDrives;
+}
 
 //********************************************************************************************************
 
