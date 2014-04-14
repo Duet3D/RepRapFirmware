@@ -29,6 +29,7 @@ class Webserver;
 class GCodes;
 class Move;
 class Heat;
+class Tool;
 class RepRap;
 
 // A single instance of the RepRap class contains all the others
@@ -56,6 +57,7 @@ extern char scratchString[];
 #include "GCodes.h"
 #include "Move.h"
 #include "Heat.h"
+#include "Tool.h"
 #include "Reprap.h"
 
 

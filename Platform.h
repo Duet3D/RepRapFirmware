@@ -88,6 +88,10 @@ Licence: GPL
 #define LOW_STOP_PINS {11, -1, 60, 31}
 #define HIGH_STOP_PINS {-1, 28, -1, -1}
 #define ENDSTOP_HIT 1 							// when a stop == this it is hit
+// Indices for motor current digipots (if any)
+//  first 4 are for digipot 1,(on duet)
+//  second 4 for digipot 2(on expansion board)
+//  Full order is {1, 3, 2, 0, 1, 3, 2, 0}, only include as many as you have DRIVES defined
 #define POT_WIPES {1, 3, 2, 0} 					// Indices for motor current digipots (if any)
 #define SENSE_RESISTOR 0.1   					// Stepper motor current sense resistor (ohms)
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
@@ -135,6 +139,11 @@ Licence: GPL
 #define HEAT_ON 0 								// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 #define AD_RANGE 1023.0							//16383 // The A->D converter that measures temperatures gives an int this big as its max value
+
+#define NUMBER_OF_A_TO_D_READINGS_AVERAGED 8	// must be an even number, preferably a power of 2 for performance, and no greater than 64
+												// We hope that the compiler is clever enough to spot that division by this is a >> operation, but it doesn't really matter
+
+#define POLL_TIME 0.006                         // Poll the A to D converters this often (seconds)
 
 #define HOT_BED 0 								// The index of the heated bed; set to -1 if there is no heated bed
 
@@ -189,7 +198,6 @@ const unsigned int httpOutputBufferSize = 2 * 1432;
 #define BAUD_RATE 115200 						// Communication speed of the USB if needed.
 
 const uint16_t lineBufsize = 256;				// use a power of 2 for good performance
-const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, preferably a power of 2 for performance, and no greater than 64
 
 /****************************************************************************************************/
 
@@ -536,22 +544,23 @@ class Platform
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float instantDvs[DRIVES];
-  MCP4461 mcp;
+  MCP4461 mcpDuet;
+  MCP4461 mcpExpansion;
+
+
   int8_t potWipes[DRIVES];
   float senseResistor;
   float maxStepperDigipotVoltage;
-//  float zProbeGradient;
-//  float zProbeConstant;
   int8_t zProbePin;
   int8_t zProbeModulationPin;
   int8_t zProbeType;
-  uint8_t zProbeCount;
+  bool zModOnThisTime;
   long zProbeOnSum;		// sum of readings taken when IR led is on
   long zProbeOffSum;	// sum of readings taken when IR led is on
-  uint16_t zProbeReadings[NumZProbeReadingsAveraged];
   int zProbeADValue;
   float zProbeStopHeight;
   bool zProbeEnable;
+
 // AXES
 
   void InitZProbe();
@@ -560,14 +569,13 @@ class Platform
   float axisLengths[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
-//  bool zProbeStarting;
-//  float zProbeHigh;
-//  float zProbeLow;
   
 // HEATERS - Bed is assumed to be the first
 
   int GetRawTemperature(byte heater) const;
+  void PollTemperatures();
 
+  long tempSum[HEATERS];
   int8_t tempSensePins[HEATERS];
   int8_t heatOnPins[HEATERS];
   float thermistorBetas[HEATERS];
@@ -585,7 +593,6 @@ class Platform
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
   int8_t coolingFanPin;
-  //int8_t turnHeatOn;
 
 // Serial/USB
 
@@ -775,8 +782,16 @@ inline void Platform::SetMotorCurrent(byte drive, float current)
 //	snprintf(scratchString, STRING_LENGTH, "%d", pot);
 //	Message(HOST_MESSAGE, scratchString);
 //	Message(HOST_MESSAGE, "\n");
-	mcp.setNonVolatileWiper(potWipes[drive], pot);
-	mcp.setVolatileWiper(potWipes[drive], pot);
+	if(drive < 4)
+	{
+		mcpDuet.setNonVolatileWiper(potWipes[drive], pot);
+		mcpDuet.setVolatileWiper(potWipes[drive], pot);
+	}
+	else
+	{
+		mcpExpansion.setNonVolatileWiper(potWipes[drive], pot);
+		mcpExpansion.setVolatileWiper(potWipes[drive], pot);
+	}
 }
 
 inline float Platform::HomeFeedRate(int8_t axis) const
@@ -814,21 +829,41 @@ inline int Platform::GetRawZHeight() const
   return (zProbeType != 0) ? analogRead(zProbePin) : 0;
 }
 
+inline void Platform::PollZHeight()
+{
+	uint16_t currentReading = GetRawZHeight();
+
+	// We do a moving average of the probe's A to D readings to smooth out noise
+
+	if (zModOnThisTime)
+		zProbeOnSum = zProbeOnSum + currentReading - zProbeOnSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED;
+	else
+		zProbeOffSum = zProbeOffSum + currentReading - zProbeOffSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED;
+
+	if (zProbeType == 2)
+	{
+		zModOnThisTime = !zModOnThisTime;
+		// Reverse the modulation, ready for next time
+		digitalWrite(zProbeModulationPin, zModOnThisTime ? HIGH : LOW);
+	} else
+		zModOnThisTime = true; // Defensive...
+}
+
 inline int Platform::ZProbe() const
 {
 	return (zProbeType == 1)
-			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged		// non-modulated mode
+			? zProbeOnSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED		// non-modulated mode
 			: (zProbeType == 2)
-			  ? (zProbeOnSum - zProbeOffSum)/(NumZProbeReadingsAveraged/2)	// modulated mode
+			  ? (zProbeOnSum - zProbeOffSum)/NUMBER_OF_A_TO_D_READINGS_AVERAGED	// modulated mode
 			    : 0;														// z-probe disabled
 }
 
 inline int Platform::ZProbeOnVal() const
 {
 	return (zProbeType == 1)
-			? (zProbeOnSum + zProbeOffSum)/NumZProbeReadingsAveraged
+			? zProbeOnSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED
 			: (zProbeType == 2)
-			  ? zProbeOnSum/(NumZProbeReadingsAveraged/2)
+			  ? zProbeOnSum/NUMBER_OF_A_TO_D_READINGS_AVERAGED
 				: 0;
 }
 
@@ -858,25 +893,7 @@ inline int Platform::GetZProbeType() const
 	return zProbeType;
 }
 
-inline void Platform::PollZHeight()
-{
-	uint16_t currentReading = GetRawZHeight();
-	if (zProbeType == 2)
-	{
-		// Reverse the modulation, ready for next time
-		digitalWrite(zProbeModulationPin, (zProbeCount & 1) ? HIGH : LOW);
-	}
-	if (zProbeCount & 1)
-	{
-		zProbeOffSum = zProbeOffSum - zProbeReadings[zProbeCount] + currentReading;
-	}
-	else
-	{
-		zProbeOnSum = zProbeOnSum - zProbeReadings[zProbeCount] + currentReading;
-	}
-	zProbeReadings[zProbeCount] = currentReading;
-	zProbeCount = (zProbeCount + 1) % NumZProbeReadingsAveraged;
-}
+
 
 
 //********************************************************************************************************
@@ -888,6 +905,14 @@ inline int Platform::GetRawTemperature(byte heater) const
   if(tempSensePins[heater] >= 0)
     return analogRead(tempSensePins[heater]);
   return 0;
+}
+
+inline void Platform::PollTemperatures()
+{
+	// We do a moving average of each thermometer's A to D readings to smooth out noise
+
+	for(int8_t heater = 0; heater < HEATERS; heater++)
+		tempSum[heater] = tempSum[heater] + GetRawTemperature(heater) - tempSum[heater]/NUMBER_OF_A_TO_D_READINGS_AVERAGED;
 }
 
 inline float Platform::HeatSampleTime() const

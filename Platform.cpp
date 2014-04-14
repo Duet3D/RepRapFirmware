@@ -88,8 +88,8 @@ void Platform::Init()
 
   fileStructureInitialised = true;
 
-  mcp.begin();
-
+  mcpDuet.begin(); //only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
+  mcpExpansion.setMCP4461Address(0x2E); //not required for mcpDuet, as this uses the default address
   sysDir = SYS_DIR;
   configFile = CONFIG_FILE;
 
@@ -204,6 +204,7 @@ void Platform::Init()
     if(heatOnPins[i] >= 0)
       pinModeNonDue(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
+    tempSum[i] = 0;
   }
 
   if(coolingFanPin >= 0)
@@ -224,15 +225,11 @@ void Platform::Init()
 
 void Platform::InitZProbe()
 {
-  zProbeCount = 0;
+  zModOnThisTime = true;
   zProbeOnSum = 0;
   zProbeOffSum = 0;
-  for (uint8_t i = 0; i < NumZProbeReadingsAveraged; ++i)
-  {
-	  zProbeReadings[i] = 0;
-  }
 
-  if (zProbeType != 0)
+  if (zProbeType == 2)
   {
 	pinMode(zProbeModulationPin, OUTPUT);
 	digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
@@ -252,9 +249,10 @@ void Platform::Spin()
   network->Spin();
   line->Spin();
 
-  if(Time() - lastTime < 0.006)
+  if(Time() - lastTime < POLL_TIME)
     return;
   PollZHeight();
+  PollTemperatures();
   lastTime = Time();
   ClassReport("Platform", longWait);
 
@@ -363,15 +361,18 @@ void Platform::ClassReport(char* className, float &lastTime)
 float Platform::GetTemperature(int8_t heater)
 {
   // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
-  // So we add 0.5 to to the reading to get a better estimate of the input. But first, recognise the special case of thermistor disconnected.
-  int rawTemp = GetRawTemperature(heater);
-  if (rawTemp == AD_RANGE)
-  {
-	  // Thermistor is disconnected
-	  return ABS_ZERO;
-  }
+  // So we add 0.5 to to the reading to get a better estimate of the input.
+  int rawTemp = tempSum[heater]/NUMBER_OF_A_TO_D_READINGS_AVERAGED; //GetRawTemperature(heater);
+
+  // First, recognise the special case of thermistor disconnected.
+//  if (rawTemp == AD_RANGE)
+//  {
+//	  // Thermistor is disconnected
+//	  return ABS_ZERO;
+//  }
   float r = (float)rawTemp + 0.5;
-  return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
+  r = ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
+  return r;
 }
 
 

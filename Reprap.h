@@ -34,6 +34,11 @@ class RepRap
     void Diagnostics();
     bool Debug() const;
     void SetDebug(bool d);
+    void AddTool(Tool* t);
+    void SelectTool(int toolNumber);
+    void StandbyTool(int toolNumber);
+    void SetToolVariables(int toolNumber, float x, float y, float z, float* standbyTemperatures, float* activeTemperatures);
+    void GetCurrentToolOffset(float& x, float& y, float& z);
     Platform* GetPlatform() const;
     Move* GetMove() const;
     Heat* GetHeat() const;
@@ -48,7 +53,11 @@ class RepRap
     Heat* heat;
     GCodes* gCodes;
     Webserver* webserver;
+    Tool* toolList;
+    Tool* currentTool;
     bool debug;
+    float fastLoop, slowLoop;
+    float lastTime;
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }
@@ -74,7 +83,6 @@ inline void RepRap::SetDebug(bool d)
 }
 
 inline void RepRap::Interrupt() { move->Interrupt(); }
-
 
 #endif
 
