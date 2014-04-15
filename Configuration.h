@@ -54,9 +54,9 @@ enum Compatibility
 // If temperatures fall outside this range, something
 // nasty has happened.
 
+#define MAX_BAD_TEMPERATURE_COUNT 6
 #define BAD_LOW_TEMPERATURE -10.0
 #define BAD_HIGH_TEMPERATURE 300.0
-#define MAX_BAD_TEMPERATURE_COUNT 6
 
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
