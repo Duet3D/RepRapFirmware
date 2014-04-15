@@ -88,6 +88,28 @@ bool Heat::AllHeatersAtSetTemperatures()
 	}
 	return true;
 }
+//query an individual heater
+bool Heat::HeaterAtSetTemperature(int8_t heater)
+{
+	float dt;
+	dt = GetTemperature(heater);
+	if(pids[heater]->Active())
+	{
+		if(GetActiveTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
+			dt = 0.0;
+		else
+			dt = fabs(dt - GetActiveTemperature(heater));
+	} else
+	{
+		if(GetStandbyTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
+			dt = 0.0;
+		else
+			dt = fabs(dt - GetStandbyTemperature(heater));
+	}
+	if(dt > TEMPERATURE_CLOSE_ENOUGH)
+		return false;
+	return true;
+}
 
 //******************************************************************************************************
 

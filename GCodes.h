@@ -25,6 +25,8 @@ Licence: GPL
 #define STACK 5
 #define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
+#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode //FIXME when working with multiple extruders GCODE_LETTERS[DRIVES] is out of scope
+#define FEEDRATE_LETTER 'F'//FIX to work with multiple extruders without having to re-define GCODE_LETTERS array
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
 class GCodeBuffer
@@ -79,6 +81,7 @@ class GCodes
     char* GetCurrentCoordinates();										// Get where we are as a string
     bool PrintingAFile() const;											// Are we in the middle of printing a file?
     void Diagnostics();													// Send helpful information out
+    int8_t GetSelectedHead();											// return which tool is selected
     bool HaveIncomingData() const;										// Is there something that we have to do?
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
     
@@ -163,6 +166,7 @@ class GCodes
     bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
     bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
     float longWait;								// Timer for things that happen occasionally (seconds)
+    bool limitAxes;								// Don't think outside the box.
     bool axisIsHomed[3];						// These record which of the axes have been homed
 };
 
@@ -229,6 +233,11 @@ inline int8_t GCodes::Heater(int8_t head) const
 inline bool GCodes::RunConfigurationGCodes()
 {
 	return !DoFileCannedCycles(platform->GetConfigFile());
+}
+
+inline int8_t GCodes::GetSelectedHead()
+{
+  return selectedHead;
 }
 
 #endif
