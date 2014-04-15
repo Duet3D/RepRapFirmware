@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.57z-dc42"
-#define DATE "2014-04-08"
+#define VERSION "0.57za-dc42"
+#define DATE "2014-04-15"
 #define LAST_AUTHOR "dc42"
 
 // Other firmware that we might switch to be compatible with.
@@ -66,8 +66,6 @@ enum Compatibility
 #define SILLY_Z_VALUE -9999.0
 
 // Webserver stuff
-
-//#define NETWORK true // Set true to turn the ethernet on
 
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"

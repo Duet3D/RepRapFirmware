@@ -44,6 +44,35 @@ void GCodes::Exit()
 
 void GCodes::Init()
 {
+	Reset();
+	drivesRelative = true;
+	axesRelative = false;
+	gCodeLetters = GCODE_LETTERS;
+	distanceScale = 1.0;
+	for (int8_t i = 0; i < DRIVES - AXES; i++)
+	{
+		lastPos[i] = 0.0;
+	}
+	configFile = NULL;
+	eofString = EOF_STRING;
+	eofStringCounter = 0;
+	eofStringLength = strlen(eofString);
+	homeX = false;
+	homeY = false;
+	homeZ = false;
+	offSetSet = false;
+	selectedHead = -1;
+	zProbesSet = false;
+	active = true;
+	longWait = platform->Time();
+	dwellTime = longWait;
+	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
+	fanMaxPwm = 1.0;
+}
+
+// This is called from Init and when doing an emergency stop
+void GCodes::Reset()
+{
 	webGCode->Init();
 	fileGCode->Init();
 	serialGCode->Init();
@@ -53,41 +82,18 @@ void GCodes::Init()
 	serialGCode->SetFinished(true);
 	cannedCycleGCode->SetFinished(true);
 	moveAvailable = false;
-	drivesRelative = true;
-	axesRelative = false;
-	checkEndStops = false;
-	gCodeLetters = GCODE_LETTERS;
-	distanceScale = 1.0;
-	for (int8_t i = 0; i < DRIVES - AXES; i++)
-	{
-		lastPos[i] = 0.0;
-	}
 	fileBeingPrinted = NULL;
 	fileToPrint = NULL;
 	fileBeingWritten = NULL;
-	configFile = NULL;
+	checkEndStops = false;
 	doingCannedCycleFile = false;
-	eofString = EOF_STRING;
-	eofStringCounter = 0;
-	eofStringLength = strlen(eofString);
-	homeX = false;
-	homeY = false;
-	homeZ = false;
-	offSetSet = false;
 	dwellWaiting = false;
 	stackPointer = 0;
-	selectedHead = -1;
-	gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
-	zProbesSet = false;
+	waitingForMoveToComplete = false;
 	probeCount = 0;
 	cannedCycleMoveCount = 0;
 	cannedCycleMoveQueued = false;
-	active = true;
-	longWait = platform->Time();
-	dwellTime = longWait;
-	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
-	fanMaxPwm = 1.0;
-	waitingForMoveToComplete = false;
+	gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
 }
 
 void GCodes::doFilePrint(GCodeBuffer* gb)
@@ -1943,8 +1949,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			break;
 
 		case 999:
-			rstc_start_software_reset(RSTC);
-			for(;;) {}
+			platform->SoftwareReset(SoftwareResetReason::user);			// doesn't return
 			break;
 
 		case 117: // in Marlin mode this means display message on LCD. We don't have an LCD so just return OK.

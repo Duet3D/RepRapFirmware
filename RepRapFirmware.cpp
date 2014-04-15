@@ -157,9 +157,10 @@ RepRap reprap;
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : active(false), debug(false), stopped(false)
+RepRap::RepRap() : active(false), debug(false), stopped(false), spinState(0), ticksInSpinState(0), resetting(false)
 {
   platform = new Platform();
+  network = new Network();
   webserver = new Webserver(platform);
   gCodes = new GCodes(platform, webserver);
   move = new Move(platform, gCodes);
@@ -169,12 +170,17 @@ RepRap::RepRap() : active(false), debug(false), stopped(false)
 void RepRap::Init()
 {
   debug = false;
-  platform->Init();		// do this first, it sets up the tick interrupt that stops the watchdog from resetting us
+
+  // All of the following init functions must execute reasonably quickly before the watchdog times us out
+  platform->Init();
   gCodes->Init();
   webserver->Init();
   move->Init();
   heat->Init();
-  active = true;
+
+  const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
+  WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);	// enable watchdog, reset the mcu if it times out
+  active = true;		// must do this before we start the network, else the watchdog may time out
 
   platform->Message(HOST_MESSAGE, NAME);
   platform->Message(HOST_MESSAGE, " Version ");
@@ -185,10 +191,10 @@ void RepRap::Init()
   platform->Message(HOST_MESSAGE, platform->GetConfigFile());
   platform->Message(HOST_MESSAGE, "...\n\n");
 
-  while(gCodes->RunConfigurationGCodes()); // Wait till the file is finished
+  while(gCodes->RunConfigurationGCodes()) { } // Wait till the file is finished
 
   platform->Message(HOST_MESSAGE, "\nStarting network...\n");
-  platform->StartNetwork(); // Need to do this here, as the configuration GCodes may set IP address etc.
+  network->Init();
 
   platform->Message(HOST_MESSAGE, "\n");
   platform->Message(HOST_MESSAGE, NAME);
@@ -208,14 +214,35 @@ void RepRap::Exit()
 
 void RepRap::Spin()
 {
-  if(!active)
-    return;
+	if(!active)
+		return;
 
-  platform->Spin();
-  webserver->Spin();
-  gCodes->Spin();
-  move->Spin();
-  heat->Spin();
+	spinState = 1;
+	ticksInSpinState = 0;
+	platform->Spin();
+
+	++spinState;
+	ticksInSpinState = 0;
+	network->Spin();
+
+	++spinState;
+	ticksInSpinState = 0;
+	webserver->Spin();
+
+	++spinState;
+	ticksInSpinState = 0;
+	gCodes->Spin();
+
+	++spinState;
+	ticksInSpinState = 0;
+	move->Spin();
+
+	++spinState;
+	ticksInSpinState = 0;
+	heat->Spin();
+
+	spinState = 0;
+	ticksInSpinState = 0;
 }
 
 void RepRap::Diagnostics()
@@ -251,12 +278,13 @@ void RepRap::EmergencyStop()
 	for(int8_t i = 0; i < 2; i++)
 	{
 		move->Exit();
-		for(i = 0; i < DRIVES; i++)
+		for(int8_t j = 0; j < DRIVES; j++)
 		{
-			platform->SetMotorCurrent(i, 0.0);
-			platform->Disable(i);
+			platform->SetMotorCurrent(j, 0.0);
+			platform->Disable(j);
 		}
 	}
+
 	platform->Message(HOST_MESSAGE, "Emergency Stop! Reset the controller to continue.");
 	webserver->HandleReply("Emergency Stop! Reset the controller to continue.", false);
 }
@@ -265,7 +293,28 @@ void RepRap::Tick()
 {
 	if (active)
 	{
-		platform->Tick();
+		WDT_Restart(WDT);			// kick the watchdog
+		if (!resetting)
+		{
+			platform->Tick();
+			++ticksInSpinState;
+			if (ticksInSpinState >= 20000)	// if we stall for 20 seconds, save diagnostic data and reset
+			{
+				resetting = true;
+				for(uint8_t i = 0; i < HEATERS; i++)
+				{
+					platform->SetHeater(i, 0.0);
+				}
+
+				for(uint8_t i = 0; i < DRIVES; i++)
+				{
+					platform->Disable(i);
+					// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
+				}
+
+				platform->SoftwareReset(SoftwareResetReason::stuckInSpin + spinState);
+			}
+		}
 	}
 }
 
@@ -289,10 +338,12 @@ void RepRap::SetDebug(int d)
 		webserver->HandleReply("Debugging enabled\n", false);
 		break;
 
-	default:
+	case 2:
 		// Print stats
 		platform->PrintMemoryUsage();
+		break;
 
+	default:
 		// Do any tests we were asked to do
 		platform->SetDebug(d);
 		break;

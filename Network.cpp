@@ -53,7 +53,7 @@ extern "C"
 }
 
 const uint8_t windowedSendPackets = 2;
-const int httpStateSize = MEMP_NUM_TCP_PCB;		// ideally we would have one more, but this should do as we are short of memory
+const int httpStateSize = MEMP_NUM_TCP_PCB + 1;		// the +1 is in case of recovering from network errors
 
 // Called to put out a message via the RepRap firmware.
 
@@ -120,7 +120,7 @@ static void conn_err(void *arg, err_t err)
   }
 
   HttpState *hs = (HttpState*)arg;
-  reprap.GetPlatform()->GetNetwork()->ConnectionError(hs);	// tell the higher levels about the error
+  reprap.GetNetwork()->ConnectionError(hs);	// tell the higher levels about the error
   mem_free(hs);							// release the state data
 }
 
@@ -169,7 +169,7 @@ static err_t http_sent(void *arg, struct tcp_pcb *pcb, u16_t len)
   else
   {
 	  // See if there is more to send
-	  reprap.GetPlatform()->GetNetwork()->SentPacketAcknowledged(hs);
+	  reprap.GetNetwork()->SentPacketAcknowledged(hs);
   }
 
   return ERR_OK;
@@ -189,7 +189,7 @@ static err_t http_recv(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t err
 		if (hs->file == NULL)
 		{
 			hs->pb = p;
-			reprap.GetPlatform()->GetNetwork()->ReceiveInput((const char*)(p->payload), p->len, pcb, hs);
+			reprap.GetNetwork()->ReceiveInput((const char*)(p->payload), p->len, pcb, hs);
 		}
 		else
 		{

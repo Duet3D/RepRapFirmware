@@ -184,17 +184,16 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 // File handling
 
-#define MAX_FILES 7
-#define FILE_BUF_LEN 256
-#define SD_SPI 4 //Pin
+#define MAX_FILES (7)
+#define FILE_BUF_LEN (256)
+#define SD_SPI (4) //Pin
 #define WEB_DIR "0:/www/" // Place to find web files on the server
 #define GCODE_DIR "0:/gcodes/" // Ditto - g-codes
 #define SYS_DIR "0:/sys/" // Ditto - system files
 #define TEMP_DIR "0:/tmp/" // Ditto - temporary files
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
-#define FILE_LIST_LENGTH (1000) // Maximum length of file list
-#define MAX_FILES (42)			// Maximum number of files displayed
+#define FILE_LIST_LENGTH (1000) // Maximum length of file list - can't make it much longer unless we also make jsonResponse longer
 
 #define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
                       // the frequency and M/S ratio.
@@ -210,7 +209,8 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
-const uint16_t lineBufsize = 256;				// use a power of 2 for good performance
+const uint16_t lineInBufsize = 256;				// use a power of 2 for good performance
+const uint16_t lineOutBufSize = 1024;
 const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, preferably a power of 2 for performance, and no greater than 64
 
 /****************************************************************************************************/
@@ -237,6 +237,27 @@ enum IOStatus
   clientConnected = 8
 };
 
+// Enumeration describing the reasons for a software reset.
+// The spin state gets or'ed into this, so keep the lower ~4 bits unused.
+namespace SoftwareResetReason
+{
+	enum
+	{
+		user = 0,					// M999 command
+		stuckInSpin = 0x1000,		// we got stuck in a Spin() function for too long
+		inUsbOutput = 0x4000		// this bit is or'ed in if we were in USB otuput at the time
+	};
+}
+
+// Enumeration to describe various tests we do in response to the M111 command
+namespace DiagnosticTest
+{
+	enum
+	{
+		TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
+		TestSpinLockup = 1002			// test that we get a software reset if a Spin() function takes too long
+	};
+}
 
 // This class handles serial I/O - typically via USB
 
@@ -248,8 +269,6 @@ public:
 	int Read(char& b);
 	void Write(char b);
 	void Write(const char* s);
-	void Write(float f);
-	void Write(long l);
 
 friend class Platform;
 
@@ -260,11 +279,18 @@ protected:
 	void Spin();
 
 private:
+	void TryFlushOutput();
+
 	// Although the sam3x usb interface code already has a 512-byte buffer, adding this extra 256-byte buffer
 	// increases the speed of uploading to the SD card by 10%
-	char buffer[lineBufsize];
-	uint16_t getIndex;
-	uint16_t numChars;
+	char inBuffer[lineInBufsize];
+	char outBuffer[lineOutBufSize];
+	uint16_t inputGetIndex;
+	uint16_t inputNumChars;
+	uint16_t outputGetIndex;
+	uint16_t outputNumChars;
+
+	uint8_t inUsbWrite;
 };
 
 class MassStorage
@@ -482,6 +508,7 @@ public:
   void ClassReport(char* className, float &lastTime);  // Called on return to check everything's live.
   void RecordError(ErrorCode ec) { errorCodeBits |= ec; }
   void SetDebug(int d);
+  void SoftwareReset(uint16_t reason);
 
   // Timing
   
@@ -492,7 +519,6 @@ public:
 
   // Communications and data storage
   
-  Network* GetNetwork();
   Line* GetLine() const;
   void SetIPAddress(byte ip[]);
   const byte* IPAddress() const;
@@ -505,7 +531,6 @@ public:
   
   MassStorage* GetMassStorage();
   FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
-  void StartNetwork();
   const char* GetWebDir() const; // Where the htm etc files are
   const char* GetGCodeDir() const; // Where the gcodes are
   const char* GetSysDir() const;  // Where the system files are
@@ -573,12 +598,17 @@ private:
 
   struct FlashData
   {
-	  static const uint16_t magicValue = 0x59B2;	// value we use to recognise that he flash data has been written
+	  static const uint16_t magicValue = 0x59B2;	// value we use to recognise that the flash data has been written
 
 	  uint16_t magic;
+	  uint16_t resetReason;							// this records why we did a software reset, for diagnostic purposes
+	  size_t neverUsedRam;							// the amount of never used RAM at the last abnormal software reset
+
+	  // The remaining data could alternatively be saved to SD card.
+	  // Note however that if we save them as G codes, we need to provide a way of saving IR and ultrasonic G31 parameters separately.
 	  ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
 	  ZProbeParameters ultrasonicZProbeParameters;	// Z probe values for the IR sensor
-	  int zProbeType;								// the type of Z probe we are using
+	  int zProbeType;								// the type of Z probe we are currently using
 	  PidParameters pidParams[HEATERS];
 	  byte ipAddress[4];
 	  byte netMask[4];
@@ -599,6 +629,7 @@ private:
   
   void InitialiseInterrupts();
   int GetRawZHeight() const;
+  void GetStackUsage(size_t* currentStack, size_t* maxStack, size_t* neverUsed) const;
 
 // DRIVES
 
@@ -661,10 +692,6 @@ private:
   char* tempDir;
   char* configFile;
   
-// Network connection
-
-  Network* network;
-
 // Data used by the tick interrupt handler
 
   adc_channel_num_t heaterAdcChannels[HEATERS];
@@ -672,6 +699,7 @@ private:
   uint32_t thermistorOverheatSums[HEATERS];
   uint8_t tickState;
   uint8_t currentHeater;
+  int debugCode;
 
   static uint16_t GetAdcReading(adc_channel_num_t chan);
   static void StartAdcConversion(adc_channel_num_t chan);
@@ -750,63 +778,6 @@ inline bool Platform::HighStopButNotLow(int8_t axis) const
 	return (lowStopPins[axis] < 0) && (highStopPins[axis] >= 0);
 }
 
-inline void Platform::SetDirection(byte drive, bool direction)
-{
-	if(directionPins[drive] < 0)
-		return;
-	if(drive == AXES)
-		digitalWriteNonDue(directionPins[drive], direction);
-	else
-		digitalWrite(directionPins[drive], direction);
-}
-
-inline void Platform::Disable(byte drive)
-{
-	if(enablePins[drive] < 0)
-		  return;
-	if(drive >= Z_AXIS)
-		digitalWriteNonDue(enablePins[drive], DISABLE);
-	else
-		digitalWrite(enablePins[drive], DISABLE);
-	driveEnabled[drive] = false;
-}
-
-inline void Platform::Step(byte drive)
-{
-	if(stepPins[drive] < 0)
-		return;
-	if(!driveEnabled[drive] && enablePins[drive] >= 0)
-	{
-		if(drive >= Z_AXIS)
-			digitalWriteNonDue(enablePins[drive], ENABLE);
-		else
-			digitalWrite(enablePins[drive], ENABLE);
-		driveEnabled[drive] = true;
-	}
-	if(drive == AXES)
-	{
-		digitalWriteNonDue(stepPins[drive], 0);
-		digitalWriteNonDue(stepPins[drive], 1);
-	} else
-	{
-		digitalWrite(stepPins[drive], 0);
-		digitalWrite(stepPins[drive], 1);
-	}
-}
-
-// current is in mA
-
-inline void Platform::SetMotorCurrent(byte drive, float current)
-{
-	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxStepperDigipotVoltage);
-//	Message(HOST_MESSAGE, "Set pot to: ");
-//	snprintf(scratchString, STRING_LENGTH, "%d", pot);
-//	Message(HOST_MESSAGE, scratchString);
-//	Message(HOST_MESSAGE, "\n");
-	mcp.setNonVolatileWiper(potWipes[drive], pot);
-	mcp.setVolatileWiper(potWipes[drive], pot);
-}
-
 inline float Platform::HomeFeedRate(int8_t axis) const
 {
   return homeFeedrates[axis];
@@ -853,41 +824,7 @@ inline float Platform::HeatSampleTime() const
   return heatSampleTime;
 }
 
-inline void Platform::CoolingFan(float speed)
-{
-	if(coolingFanPin > 0)
-	{
-		// The cooling fan output pin gets inverted if HEAT_ON == 0
-		analogWriteNonDue(coolingFanPin, (uint32_t)( ((HEAT_ON == 0) ? (1.0 - speed) : speed) * 255.0));
-	}
-}
-
-
-//*********************************************************************************************************
-
-// Interrupts
-
-inline void Platform::SetInterrupt(float s) // Seconds
-{
-  if(s <= 0.0)
-  {
-    //NVIC_DisableIRQ(TC3_IRQn);
-    Message(HOST_MESSAGE, "Negative interrupt!\n");
-    s = STANDBY_INTERRUPT_RATE;
-  }
-  uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
-  TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
-  TC_SetRC(TC1, 0, rc);
-  TC_Start(TC1, 0);
-  NVIC_EnableIRQ(TC3_IRQn);
-}
-
 //****************************************************************************************************************
-
-inline Network* Platform::GetNetwork()
-{
-	return network;
-}
 
 inline const byte* Platform::IPAddress() const
 {
@@ -907,47 +844,6 @@ inline const byte* Platform::GateWay() const
 inline Line* Platform::GetLine() const
 {
 	return line;
-}
-
-inline int8_t Line::Status() const
-{
-//	if(alternateInput != NULL)
-//		return alternateInput->Status();
-	return numChars == 0 ? nothing : byteAvailable;
-}
-
-inline int Line::Read(char& b)
-{
-//  if(alternateInput != NULL)
-//	return alternateInput->Read(b);
-
-	  if (numChars == 0) return 0;
-	  b = buffer[getIndex];
-	  getIndex = (getIndex + 1) % lineBufsize;
-	  --numChars;
-	  return 1;
-}
-
-inline void Line::Write(char b)
-{
-	SerialUSB.print(b);
-}
-
-inline void Line::Write(const char* b)
-{
-	SerialUSB.print(b);
-}
-
-inline void Line::Write(float f)
-{
-	snprintf(scratchString, STRING_LENGTH, "%f", f);
-	SerialUSB.print(scratchString);
-}
-
-inline void Line::Write(long l)
-{
-	snprintf(scratchString, STRING_LENGTH, "%d", l);
-	SerialUSB.print(scratchString);
 }
 
 inline void Platform::PushMessageIndent()

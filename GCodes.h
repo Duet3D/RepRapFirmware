@@ -72,6 +72,7 @@ class GCodes
     void Spin();
     void Init();
     void Exit();
+    void Reset();
     bool RunConfigurationGCodes();
     bool ReadMove(float* m, bool& ce);
     void QueueFileToPrint(const char* fileName);

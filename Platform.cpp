@@ -34,9 +34,6 @@ const uint8_t memPattern = 0xA5;
 
 void setup()
 {
-	reprap.Init();
-	//reprap.GetMove()->InterruptTime();  // Uncomment this line to time the interrupt routine on startup
-
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
 	char* heapend = sbrk(0);
 	register const char * stack_ptr asm ("sp");
@@ -44,6 +41,9 @@ void setup()
 	{
 		*heapend++ = memPattern;
 	}
+
+	reprap.Init();
+	//reprap.GetMove()->InterruptTime();  // Uncomment this line to time the interrupt routine on startup
 }
 
 void loop()
@@ -53,12 +53,12 @@ void loop()
 
 extern "C"
 {
-// This intercepts the 1ms system tick. It must return 'false', otherwise the Arduino core tick handler will be bypassed.
-int sysTickHook()
-{
-	reprap.Tick();
-	return false;
-}
+	// This intercepts the 1ms system tick. It must return 'false', otherwise the Arduino core tick handler will be bypassed.
+	int sysTickHook()
+	{
+		reprap.Tick();
+		return 0;
+	}
 }
 
 //*************************************************************************************************
@@ -92,7 +92,7 @@ bool PidParameters::operator==(const PidParameters& other) const
 // Platform class
 
 Platform::Platform() :
-		tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0)
+		tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0), debugCode(0)
 {
 	line = new Line();
 
@@ -104,8 +104,6 @@ Platform::Platform() :
 	{
 		files[i] = new FileStore(this);
 	}
-
-	network = new Network();
 }
 
 //*******************************************************************************************************************
@@ -140,7 +138,10 @@ void Platform::Init()
 			pp.adcLowOffset = pp.adcHighOffset = 0.0;
 		}
 
+		nvData.resetReason = 0;
+		GetStackUsage(NULL, NULL, &nvData.neverUsedRam);
 		nvData.magic = FlashData::magicValue;
+		WriteNvData();
 	}
 
 	line->Init();
@@ -322,7 +323,8 @@ int Platform::ZProbe()
 		case 2:
 			// Modulated IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
-			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum()) / (4 * numZProbeReadingsAveraged));
+			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
+					/ (4 * numZProbeReadingsAveraged));
 
 		default:
 			break;
@@ -509,17 +511,16 @@ void Platform::SetNetMask(byte nm[])
 	UpdateNetworkAddress(nvData.netMask, nm);
 }
 
-void Platform::StartNetwork()
-{
-	network->Init();
-}
-
 void Platform::Spin()
 {
 	if (!active)
 		return;
 
-	network->Spin();
+	if (debugCode == DiagnosticTest::TestSpinLockup)
+	{
+		for (;;) {}
+	}
+
 	line->Spin();
 
 	if (Time() - lastTime < 0.006)
@@ -527,6 +528,27 @@ void Platform::Spin()
 	lastTime = Time();
 	ClassReport("Platform", longWait);
 
+}
+
+void Platform::SoftwareReset(uint16_t reason)
+{
+	if (reason != 0)
+	{
+		if (line->inUsbWrite)
+		{
+			reason |= SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
+		}
+	}
+
+	if (reason != 0 || reason != nvData.resetReason)
+	{
+		nvData.resetReason = reason;
+		GetStackUsage(NULL, NULL, &nvData.neverUsedRam);
+		WriteNvData();
+	}
+
+	rstc_start_software_reset(RSTC);
+	for(;;) {}
 }
 
 //*****************************************************************************************************************
@@ -553,9 +575,6 @@ void Platform::InitialiseInterrupts()
 	tickState = 0;
 	currentHeater = 0;
 
-	const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
-	WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);
-	// enable watchdog, reset the mcu if it times out
 	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
@@ -581,32 +600,31 @@ void Platform::Tick()
 #ifdef TIME_TICK_ISR
 	uint32_t now = micros();
 #endif
-	WDT_Restart(WDT);			// kick the watchdog
 	switch (tickState)
 	{
 	case 1:			// last conversion started was a thermistor
 	case 3:
+	{
+		ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+		currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
+		StartAdcConversion(zProbeAdcChannel);
+		if (currentFilter.IsValid())
 		{
-			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
-			StartAdcConversion(zProbeAdcChannel);
-			if (currentFilter.IsValid())
+			uint32_t sum = currentFilter.GetSum();
+			if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
 			{
-				uint32_t sum = currentFilter.GetSum();
-				if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
-				{
-					// We have an over-temperature or bad reading from this thermistor, so turn off the heater
-					// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
-					SetHeater(currentHeater, 0.0);
-					errorCodeBits |= ErrorBadTemp;
-				}
-			}
-			++currentHeater;
-			if (currentHeater == HEATERS)
-			{
-				currentHeater = 0;
+				// We have an over-temperature or bad reading from this thermistor, so turn off the heater
+				// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
+				SetHeater(currentHeater, 0.0);
+				errorCodeBits |= ErrorBadTemp;
 			}
 		}
+		++currentHeater;
+		if (currentHeater == HEATERS)
+		{
+			currentHeater = 0;
+		}
+	}
 		++tickState;
 		break;
 
@@ -652,7 +670,7 @@ void Platform::Tick()
 /*static*/void Platform::StartAdcConversion(adc_channel_num_t chan)
 {
 	adc_enable_channel(ADC, chan);
-	adc_start(ADC);
+	adc_start(ADC );
 }
 
 // Convert an Arduino Due pin number to the corresponding ADC channel number
@@ -676,21 +694,39 @@ void Platform::SetDebug(int d)
 {
 	switch (d)
 	{
-	case 1001:			// test watchdog
-		SysTick ->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);	// disable the system tick interrupt
+	case DiagnosticTest::TestWatchdog:
+		SysTick ->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);	// disable the system tick interrupt so that we get a watchdog timeout reset
 		break;
+
+	case DiagnosticTest::TestSpinLockup:
+		debugCode = d;									// tell the Spin function to loop
+		break;
+
 	default:
 		break;
 	}
+}
+
+// Return the stack usage and amount of memory that has never been used, in bytes
+void Platform::GetStackUsage(size_t* currentStack, size_t* maxStack, size_t* neverUsed) const
+{
+	const char *ramend = (const char *) 0x20088000;
+	register const char * stack_ptr asm ("sp");
+	const char *heapend = sbrk(0);
+	const char* stack_lwm = heapend;
+	while (stack_lwm < stack_ptr && *stack_lwm == memPattern)
+	{
+		++stack_lwm;
+	}
+	if (currentStack) { *currentStack = ramend - stack_ptr; }
+	if (maxStack) { *maxStack = ramend - stack_lwm; }
+	if (neverUsed) { *neverUsed = stack_lwm - heapend; }
 }
 
 // Print memory stats and error codes to USB and copy them to the current webserver reply
 void Platform::PrintMemoryUsage()
 {
 	const char *ramstart = (char *) 0x20070000;
-	const char *ramend = (char *) 0x20088000;
-	const char *heapend = sbrk(0);
-	register const char * stack_ptr asm ("sp");
 	const struct mallinfo mi = mallinfo();
 	Message(HOST_MESSAGE, "\n");
 	Message(HOST_MESSAGE, "Memory usage:\n\n");
@@ -703,26 +739,26 @@ void Platform::PrintMemoryUsage()
 	snprintf(scratchString, STRING_LENGTH, "Recycled dynamic ram: %d\n", mi.fordblks);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Current stack ram used: %d\n", ramend - stack_ptr);
+	size_t currentStack, maxStack, neverUsed;
+	GetStackUsage(&currentStack, &maxStack, &neverUsed);
+	snprintf(scratchString, STRING_LENGTH, "Current stack ram used: %d\n", currentStack);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	const char* stack_lwm = heapend;
-	while (stack_lwm < stack_ptr && *stack_lwm == memPattern)
-	{
-		++stack_lwm;
-	}
-	snprintf(scratchString, STRING_LENGTH, "Maximum stack ram used: %d\n", ramend - stack_lwm);
+	snprintf(scratchString, STRING_LENGTH, "Maximum stack ram used: %d\n", maxStack);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", stack_lwm - heapend);
+	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", neverUsed);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 
 	// Show the reason for the last reset
-	const char* resetReasons[8] =
-	{ "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
-	snprintf(scratchString, STRING_LENGTH, "Last reset reason: %s\n",
-			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk)>> RSTC_SR_RSTTYP_Pos]);
+	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
+	snprintf(scratchString, STRING_LENGTH, "Last reset reason: %s\n", resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
+
+	// Show the error code stored at the last software reset
+	snprintf(scratchString, STRING_LENGTH, "Last software reset code & available RAM: 0x%04x, %u\n", nvData.resetReason, nvData.neverUsedRam);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 
@@ -769,7 +805,6 @@ void Platform::ClassReport(char* className, float &lastTime)
 // then the thermistor resistance, R = V.RS/(1024 - V)
 // and the temperature, T = BETA/ln(R/R_INF)
 // To get degrees celsius (instead of kelvin) add -273.15 to T
-//#define THERMISTOR_R_INFS ( THERMISTOR_25_RS*exp(-THERMISTOR_BETAS/298.15) ) // Compute in Platform constructor
 
 // Result is in degrees celsius
 
@@ -786,9 +821,9 @@ float Platform::GetTemperature(size_t heater) const
 	// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
 
 	const PidParameters& p = nvData.pidParams[heater];
-	if (p.adcHighOffset < 0)
+	if (p.adcHighOffset < 0.0)
 	{
-		rawTemp -= (int)p.adcHighOffset;
+		rawTemp -= (int) p.adcHighOffset;
 	}
 	if (rawTemp >= adDisconnectedVirtual)
 	{
@@ -841,8 +876,8 @@ EndStopHit Platform::Stopped(int8_t drive)
 		{
 			int zProbeVal = ZProbe();
 			int zProbeADValue =
-					(nvData.zProbeType == 3) ? nvData.ultrasonicZProbeParameters.adcValue
-							: nvData.irZProbeParameters.adcValue;
+					(nvData.zProbeType == 3) ?
+							nvData.ultrasonicZProbeParameters.adcValue : nvData.irZProbeParameters.adcValue;
 			if (zProbeVal >= zProbeADValue)
 				return lowHit;
 			else if (zProbeVal * 10 >= zProbeADValue * 9)	// if we are at/above 90% of the target value
@@ -865,27 +900,130 @@ EndStopHit Platform::Stopped(int8_t drive)
 	return noStop;
 }
 
+void Platform::SetDirection(byte drive, bool direction)
+{
+	if(directionPins[drive] < 0)
+		return;
+	if(drive == AXES)
+		digitalWriteNonDue(directionPins[drive], direction);
+	else
+		digitalWrite(directionPins[drive], direction);
+}
+
+void Platform::Disable(byte drive)
+{
+	if(enablePins[drive] < 0)
+		  return;
+	if(drive >= Z_AXIS)
+		digitalWriteNonDue(enablePins[drive], DISABLE);
+	else
+		digitalWrite(enablePins[drive], DISABLE);
+	driveEnabled[drive] = false;
+}
+
+void Platform::Step(byte drive)
+{
+	if(stepPins[drive] < 0)
+		return;
+	if(!driveEnabled[drive] && enablePins[drive] >= 0)
+	{
+		if(drive >= Z_AXIS)
+			digitalWriteNonDue(enablePins[drive], ENABLE);
+		else
+			digitalWrite(enablePins[drive], ENABLE);
+		driveEnabled[drive] = true;
+	}
+	if(drive == AXES)
+	{
+		digitalWriteNonDue(stepPins[drive], 0);
+		digitalWriteNonDue(stepPins[drive], 1);
+	} else
+	{
+		digitalWrite(stepPins[drive], 0);
+		digitalWrite(stepPins[drive], 1);
+	}
+}
+
+// current is in mA
+void Platform::SetMotorCurrent(byte drive, float current)
+{
+	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxStepperDigipotVoltage);
+//	Message(HOST_MESSAGE, "Set pot to: ");
+//	snprintf(scratchString, STRING_LENGTH, "%d", pot);
+//	Message(HOST_MESSAGE, scratchString);
+//	Message(HOST_MESSAGE, "\n");
+	mcp.setNonVolatileWiper(potWipes[drive], pot);
+	mcp.setVolatileWiper(potWipes[drive], pot);
+}
+
+void Platform::CoolingFan(float speed)
+{
+	if(coolingFanPin > 0)
+	{
+		// The cooling fan output pin gets inverted if HEAT_ON == 0
+		analogWriteNonDue(coolingFanPin, (uint32_t)( ((HEAT_ON == 0) ? (1.0 - speed) : speed) * 255.0));
+	}
+}
+
+// Interrupts
+
+void Platform::SetInterrupt(float s) // Seconds
+{
+  if (s <= 0.0)
+  {
+    //NVIC_DisableIRQ(TC3_IRQn);
+    Message(HOST_MESSAGE, "Negative interrupt!\n");
+    s = STANDBY_INTERRUPT_RATE;
+  }
+  uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
+  TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
+  TC_SetRC(TC1, 0, rc);
+  TC_Start(TC1, 0);
+  NVIC_EnableIRQ(TC3_IRQn);
+}
+
+int8_t Line::Status() const
+{
+//	if(alternateInput != NULL)
+//		return alternateInput->Status();
+	return inputNumChars == 0 ? nothing : byteAvailable;
+}
+
+int Line::Read(char& b)
+{
+//  if(alternateInput != NULL)
+//	return alternateInput->Read(b);
+
+	  if (inputNumChars == 0) return 0;
+	  b = inBuffer[inputGetIndex];
+	  inputGetIndex = (inputGetIndex + 1) % lineInBufsize;
+	  --inputNumChars;
+	  return 1;
+}
+
 //-----------------------------------------------------------------------------------------------------
 
 FileStore* Platform::GetFileStore(const char* directory, const char* fileName, bool write)
 {
-	FileStore* result = NULL;
-
 	if (!fileStructureInitialised)
 		return NULL;
 
 	for (int i = 0; i < MAX_FILES; i++)
+	{
 		if (!files[i]->inUse)
 		{
 			files[i]->inUse = true;
 			if (files[i]->Open(directory, fileName, write))
+			{
 				return files[i];
+			}
 			else
 			{
 				files[i]->inUse = false;
 				return NULL;
 			}
 		}
+	}
 	Message(HOST_MESSAGE, "Max open file count exceeded.\n");
 	return NULL;
 }
@@ -898,11 +1036,13 @@ MassStorage* Platform::GetMassStorage()
 void Platform::ReturnFileStore(FileStore* fs)
 {
 	for (int i = 0; i < MAX_FILES; i++)
+	{
 		if (files[i] == fs)
 		{
 			files[i]->inUse = false;
 			return;
 		}
+	}
 }
 
 void Platform::Message(char type, const char* message)
@@ -929,7 +1069,9 @@ void Platform::Message(char type, const char* message)
 //    } else
 //    	line->Write("Can't open message file.\n");
 		for (uint8_t i = 0; i < messageIndent; i++)
+		{
 			line->Write(' ');
+		}
 		line->Write(message);
 	}
 }
@@ -1051,6 +1193,8 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 	}
 
 	TCHAR loc[64];
+
+	// Remove the trailing '/' from the directory name
 	size_t len = strnlen(directory, ARRAY_SIZE(loc));
 	if (len == 0)
 	{
@@ -1062,7 +1206,7 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 		loc[len - 1] = 0;
 	}
 
-//  if(reprap.debug()) {
+//  if(reprap.Debug()) {
 //	  platform->Message(HOST_MESSAGE, "Opening: ");
 //	  platform->Message(HOST_MESSAGE, loc);
 //	  platform->Message(HOST_MESSAGE, "\n");
@@ -1073,43 +1217,43 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 	if (res == FR_OK)
 	{
 
-//	  if(reprap.debug()) {
+//	  if(reprap.Debug()) {
 //		  platform->Message(HOST_MESSAGE, "Directory open\n");
 //	  }
 
-		int p = 0;
-		int foundFiles = 0;
+		size_t p = 0;
+		unsigned int foundFiles = 0;
 
 		f_readdir(&dir, 0);
 
 		FILINFO entry;
-		TCHAR loclfname[255];
+		TCHAR loclfname[255];		// this buffer is used to hold the directory name, and later to hold the long filename
 		entry.lfname = loclfname;
 		entry.lfsize = ARRAY_SIZE(loclfname);
 
-		while ((f_readdir(&dir, &entry) == FR_OK) && (foundFiles < MAX_FILES))
+		// When we reach, the end of the directory, the function we are about to call suppresses the "end of directory" error code and goes on returning FR_OK.
+		// So we need to check the sector number before the call. What idiot wrote that function???
+		while (dir.sect != 0 && f_readdir(&dir, &entry) == FR_OK)
 		{
-			foundFiles++;
-
 			const TCHAR *fp = (loclfname[0] == 0) ? entry.fname : loclfname;
 			if (*fp != 0)
 			{
+				size_t lastFileStart = p;
 				if (fileListBracket)
 				{
 					fileList[p++] = fileListBracket;
 				}
-				while (*fp)
+				while (*fp != 0 && p <= FILE_LIST_LENGTH - 4)	// leave space for this character, bracket, separator, bracket
 				{
 					fileList[p++] = *fp++;
-					//SerialUSB.print(entry.fname[q]);
-					if (p >= FILE_LIST_LENGTH - 10) // Caution...
-					{
-						platform->Message(HOST_MESSAGE, "FileList - directory: ");
-						platform->Message(HOST_MESSAGE, directory);
-						platform->Message(HOST_MESSAGE, " has too many files!\n");
-						return "";
-					}
 				}
+				if (*fp != 0)
+				{
+					// Not enough space to store this filename
+					p = lastFileStart;
+					break;
+				}
+				foundFiles++;
 				if (fileListBracket)
 				{
 					fileList[p++] = fileListBracket;
@@ -1118,7 +1262,7 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 			}
 		}
 
-		if (foundFiles <= 0)
+		if (foundFiles == 0)
 			return "NONE";
 
 		fileList[--p] = 0; // Get rid of the last separator
@@ -1329,32 +1473,71 @@ Line::Line()
 
 void Line::Init()
 {
-	getIndex = 0;
-	numChars = 0;
-//	alternateInput = NULL;
-//	alternateOutput = NULL;
+	inputGetIndex = 0;
+	inputNumChars = 0;
+	outputGetIndex = 0;
+	outputNumChars = 0;
 	SerialUSB.begin(BAUD_RATE);
-	//while (!SerialUSB.available());
+	inUsbWrite = false;
 }
 
 void Line::Spin()
 {
 	// Read the serial data in blocks to avoid excessive flow control
-	if (numChars <= lineBufsize / 2)
+	if (inputNumChars <= lineInBufsize / 2)
 	{
-		int16_t target = SerialUSB.available() + (int16_t) numChars;
-		if (target > lineBufsize)
+		int16_t target = SerialUSB.available() + (int16_t) inputNumChars;
+		if (target > lineInBufsize)
 		{
-			target = lineBufsize;
+			target = lineInBufsize;
 		}
-		while ((int16_t) numChars < target)
+		while ((int16_t) inputNumChars < target)
 		{
 			int incomingByte = SerialUSB.read();
 			if (incomingByte < 0)
 				break;
-			buffer[(getIndex + numChars) % lineBufsize] = (char) incomingByte;
-			++numChars;
+			inBuffer[(inputGetIndex + inputNumChars) % lineInBufsize] = (char) incomingByte;
+			++inputNumChars;
 		}
+	}
+
+	TryFlushOutput();
+}
+
+void Line::Write(char b)
+{
+	TryFlushOutput();
+	if (SerialUSB.canWrite() != 0)
+	{
+		++inUsbWrite;
+		SerialUSB.write(b);
+		--inUsbWrite;
+	}
+	else if (outputNumChars < lineOutBufSize)
+	{
+		outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = b;
+		++outputNumChars;
+	}
+	// else discard the character
+}
+
+void Line::Write(const char* b)
+{
+	while (*b)
+	{
+		Write(*b++);
+	}
+}
+
+void Line::TryFlushOutput()
+{
+	while (outputNumChars != 0 && SerialUSB.canWrite() != 0)
+	{
+		++inUsbWrite;
+		SerialUSB.write(outBuffer[outputGetIndex]);
+		--inUsbWrite;
+		outputGetIndex = (outputGetIndex + 1) % lineOutBufSize;
+		--outputNumChars;
 	}
 }
 

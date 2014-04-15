@@ -192,23 +192,23 @@ void Webserver::ProcessGcode(const char* gc)
 		specialAction = 4;
 	}
 
-	if (specialAction != 0) // Delete or print a file?
+	switch (specialAction)
 	{
-		switch (specialAction)
-		{
-		case 1: // Delete
-			reprap.GetGCodes()->DeleteFile(&gc[4]);
-			break;
+	case 1: // Delete
+		reprap.GetGCodes()->DeleteFile(&gc[4]);
+		break;
 
-		case 2:	// print
-			reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
-			break;
+	case 2:	// print
+		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
+		break;
 
-		case 3:
-			reprap.EmergencyStop();
-			break;
+	case 3:
+		reprap.EmergencyStop();
+		gcodeReadIndex = gcodeWriteIndex;		// clear the buffer
+		reprap.GetGCodes()->Reset();
+		break;
 
-		case 4:
+	case 4:
 		{
 			FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 			if (configFile == NULL)
@@ -228,32 +228,33 @@ void Webserver::ProcessGcode(const char* gc)
 				++seq;
 			}
 		}
-			break;
-		}
-	}
-	else
-	{
-		// Copy the gcode to the buffer
-		size_t len = strlen(gc) + 1;		// number of characters to copy
-		if (len > GetGcodeBufferSpace())
+		break;
+
+	default:
 		{
-			platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
-			HandleReply("Webserver: GCode buffer overflow", true);
-		}
-		else
-		{
-			size_t remaining = gcodeBufLength - gcodeWriteIndex;
-			if (len <= remaining)
+			// Copy the gcode to the buffer
+			size_t len = strlen(gc) + 1;		// number of characters to copy
+			if (len > GetGcodeBufferSpace())
 			{
-				memcpy(&gcodeBuffer[gcodeWriteIndex], gc, len);
+				platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
+				HandleReply("Webserver: GCode buffer overflow", true);
 			}
 			else
 			{
-				memcpy(&gcodeBuffer[gcodeWriteIndex], gc, remaining);
-				memcpy(gcodeBuffer, gc + remaining, len - remaining);
+				size_t remaining = gcodeBufLength - gcodeWriteIndex;
+				if (len <= remaining)
+				{
+					memcpy(&gcodeBuffer[gcodeWriteIndex], gc, len);
+				}
+				else
+				{
+					memcpy(&gcodeBuffer[gcodeWriteIndex], gc, remaining);
+					memcpy(gcodeBuffer, gc + remaining, len - remaining);
+				}
+				gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufLength;
 			}
-			gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufLength;
 		}
+		break;
 	}
 }
 
@@ -286,7 +287,7 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 		}
 	}
 
-	Network *net = platform->GetNetwork();
+	Network *net = reprap.GetNetwork();
 	net->Write("HTTP/1.1 200 OK\n");
 
 	const char* contentType;
@@ -763,7 +764,7 @@ bool Webserver::CharFromClient(char c)
 			clientLine[STRING_LENGTH + 1] = 0;
 			platform->Message(HOST_MESSAGE, clientLine);
 
-			platform->GetNetwork()->SendAndClose(NULL);		// close the connection
+			reprap.GetNetwork()->SendAndClose(NULL);		// close the connection
 
 			clientLinePointer = 0;
 			clientLine[clientLinePointer] = 0;
@@ -781,7 +782,7 @@ void Webserver::Spin()
 	if (!active)
 		return;
 
-	Network *net = platform->GetNetwork();
+	Network *net = reprap.GetNetwork();
 	if (net->HaveData())
 	{
 		for (uint8_t i = 0; i < 16; ++i)
