@@ -1560,11 +1560,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			break;
 
 		case 28: // Write to file
-		{
-			const char* str = gb->GetUnprecedentedString();
-			OpenFileToWrite(platform->GetGCodeDir(), str, gb);
-			snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
-		}
+			{
+				const char* str = gb->GetUnprecedentedString();
+				OpenFileToWrite(platform->GetGCodeDir(), str, gb);
+				snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+			}
 			break;
 
 		case 29: // End of file being written; should be intercepted before getting here
@@ -1575,17 +1575,25 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			DeleteFile(gb->GetUnprecedentedString());
 			break;
 
+		case 80:	// ATX power on
+		case 81:	// ATX power off
+			platform->SetAtxPower(code == 80);
+			break;
+
 		case 82:
 			for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+			{
 				lastPos[extruder - AXES] = 0.0;
+			}
 			drivesRelative = false;
 			break;
 
 		case 83:
 			for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+			{
 				lastPos[extruder - AXES] = 0.0;
+			}
 			drivesRelative = true;
-
 			break;
 
 		case 84: // Motors off - deprecated, use M18
@@ -1598,21 +1606,27 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 92: // Set/report steps/mm for some axes
 			seen = false;
 			for (int8_t drive = 0; drive < DRIVES; drive++)
+			{
 				if (gb->Seen(gCodeLetters[drive]))
 				{
 					platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
 					seen = true;
 				}
+			}
 			reprap.GetMove()->SetStepHypotenuse();
 			if (!seen)
+			{
 				snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: %d",
 						(int) platform->DriveStepsPerUnit(X_AXIS), (int) platform->DriveStepsPerUnit(Y_AXIS),
 						(int) platform->DriveStepsPerUnit(Z_AXIS), (int) platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
+			}
 			break;
 
 		case 98:
 			if (gb->Seen('P'))
+			{
 				result = DoFileCannedCycles(gb->GetString());
+			}
 			break;
 
 		case 99:

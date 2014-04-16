@@ -209,8 +209,11 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 #define BAUD_RATE 115200 // Communication speed of the USB if needed.
 
+const int atxPowerPin = 12;						// Arduino Due pin number that controls the ATX power on/off
+
 const uint16_t lineInBufsize = 256;				// use a power of 2 for good performance
-const uint16_t lineOutBufSize = 1024;
+const uint16_t lineOutBufSize = 2048;			// ideally this should be large enough to hold the results of an M503 command,
+												// but could be reduced if we ever need the memory
 const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, preferably a power of 2 for performance, and no greater than 64
 
 /****************************************************************************************************/
@@ -509,6 +512,7 @@ public:
   void RecordError(ErrorCode ec) { errorCodeBits |= ec; }
   void SetDebug(int d);
   void SoftwareReset(uint16_t reason);
+  void SetAtxPower(bool on);
 
   // Timing
   

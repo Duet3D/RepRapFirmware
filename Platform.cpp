@@ -110,6 +110,9 @@ Platform::Platform() :
 
 void Platform::Init()
 {
+	digitalWrite(atxPowerPin, LOW);		// ensure ATX power is off by default
+	pinMode(atxPowerPin, OUTPUT);
+
 	DueFlashStorage::init();
 	DueFlashStorage::read(nvAddress, &nvData, sizeof(nvData));
 	if (nvData.magic != FlashData::magicValue)
@@ -1076,6 +1079,12 @@ void Platform::Message(char type, const char* message)
 	}
 }
 
+void Platform::SetAtxPower(bool on)
+{
+	digitalWrite(atxPowerPin, (on) ? HIGH : LOW);
+}
+
+
 /*********************************************************************************
 
  Files & Communication
@@ -1507,7 +1516,7 @@ void Line::Spin()
 void Line::Write(char b)
 {
 	TryFlushOutput();
-	if (SerialUSB.canWrite() != 0)
+	if (outputNumChars == 0 && SerialUSB.canWrite() != 0)
 	{
 		++inUsbWrite;
 		SerialUSB.write(b);

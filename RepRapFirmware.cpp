@@ -261,6 +261,7 @@ void RepRap::Diagnostics()
 void RepRap::EmergencyStop()
 {
 	stopped = true;
+	platform->SetAtxPower(false);		// turn off the ATX power if we can
 
 	//platform->DisableInterrupts();
 
