@@ -1,7 +1,7 @@
 /**
  * \file
  *
- * \brief Ethernet management definitions for the Standalone lwIP example.
+ * \brief lwIP abstraction layer for SAM.
  *
  * Copyright (c) 2012 Atmel Corporation. All rights reserved.
  *
@@ -41,55 +41,10 @@
  *
  */
 
-#ifndef ETHERNET_SAM_H_INCLUDED
-#define ETHERNET_SAM_H_INCLUDED
+#ifndef PERF_H_INCLUDED
+#define PERF_H_INCLUDED
 
-#include <lwip/src/include/lwip/netif.h>
+#define PERF_START	/* NULL definition */
+#define PERF_STOP	/* NULL definition */
 
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-extern "C" {
-#endif
-/**INDENT-ON**/
-/// @endcond
-
-bool status_link_up();//*****************************AB
-
-/**
- * \brief Initialize the ethernet interface.
- *
- */
-//void init_ethernet(void);
-
-void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
-
-void start_ethernet(void);
-
-struct netif* GetConfiguration();
-
-static void timers_update(void);
-
-/**
- * \brief Status callback used to print address given by DHCP.
- *
- * \param netif Instance to network interface.
- *
- */
-void status_callback(struct netif *netif);
-
-/**
- * \brief Manage the ethernet packets, if any received process them.
- *
- */
-void ethernet_task(void);
-
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-}
-#endif
-/**INDENT-ON**/
-/// @endcond
-
-#endif /* ETHERNET_SAM_H_INCLUDED */
+#endif /* PERF_H_INCLUDED */

@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.57zb-dc42"
-#define DATE "2014-04-16"
+#define VERSION "0.58alpha1-dc42"
+#define DATE "2014-04-18"
 #define LAST_AUTHOR "dc42"
 
 // Other firmware that we might switch to be compatible with.
@@ -51,8 +51,7 @@ enum Compatibility
 #define TEMPERATURE_CLOSE_ENOUGH (2.5) 		// Celsius
 #define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
 
-// If temperatures fall outside this range, something
-// nasty has happened.
+// If temperatures fall outside this range, something nasty has happened.
 
 #define BAD_LOW_TEMPERATURE -30.0
 #define BAD_HIGH_TEMPERATURE 300.0

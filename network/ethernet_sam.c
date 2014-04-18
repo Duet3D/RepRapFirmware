@@ -79,7 +79,7 @@ struct netif gs_net_if;
 //by including ethernetif.h directly and calling ethernetif_phy_link_status(); this function is not required
 bool status_link_up()
 {
-return ethernetif_phy_link_status();
+	return ethernetif_phy_link_status();
 }
 //*****************************AB
 
@@ -244,8 +244,7 @@ static void ethernet_configure_interface(unsigned char ipAddress[], unsigned cha
 #endif
 
 	/* Add data to netif */
-	netif_add(&gs_net_if, &x_ip_addr, &x_net_mask, &x_gateway, NULL,
-			ethernetif_init, ethernet_input);
+	netif_add(&gs_net_if, &x_ip_addr, &x_net_mask, &x_gateway, NULL, ethernetif_init, ethernet_input);
 
 	/* Make it the default interface */
 	netif_set_default(&gs_net_if);
@@ -271,9 +270,14 @@ void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[
 	/* Initialize lwIP */
 	lwip_init();
 
+	ethernet_hardware_init();
+
 	/* Set hw and IP parameters, initialize MAC too */
 	ethernet_configure_interface(ipAddress, netMask, gateWay);
+}
 
+void start_ethernet(void)
+{
 	/* Init timer service */
 	sys_init_timing();
 

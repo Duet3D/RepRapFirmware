@@ -347,6 +347,7 @@ void Network::AppendTransaction(RequestState** list, RequestState *r)
 void Network::Init()
 {
 	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
+	start_ethernet();
 	active = true;
 }
 
@@ -385,6 +386,10 @@ void Network::Spin()
 			}
 		}
 	}
+//	else
+//	{
+//		active = establish_ethernet_link();
+//	}
 }
 
 bool Network::HaveData() const

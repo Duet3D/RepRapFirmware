@@ -1,9 +1,9 @@
 /**
  * \file
  *
- * \brief Ethernet management definitions for the Standalone lwIP example.
+ * \brief Implementation of low level disk I/O module skeleton for FatFS.
  *
- * Copyright (c) 2012 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2012 - 2013 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -40,56 +40,52 @@
  * \asf_license_stop
  *
  */
+#include "compiler.h"
+#include "rtc.h"
 
-#ifndef ETHERNET_SAM_H_INCLUDED
-#define ETHERNET_SAM_H_INCLUDED
 
-#include <lwip/src/include/lwip/netif.h>
-
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-extern "C" {
-#endif
-/**INDENT-ON**/
-/// @endcond
-
-bool status_link_up();//*****************************AB
-
+uint32_t get_fattime(void);
 /**
- * \brief Initialize the ethernet interface.
+ * \brief Current time returned is packed into a DWORD value.
  *
+ * The bit field is as follows:
+ *
+ * bit31:25  Year from 1980 (0..127)
+ *
+ * bit24:21  Month (1..12)
+ *
+ * bit20:16  Day in month(1..31)
+ *
+ * bit15:11  Hour (0..23)
+ *
+ * bit10:5   Minute (0..59)
+ *
+ * bit4:0    Second (0..59)
+ *
+ * \return Current time.
  */
-//void init_ethernet(void);
+uint32_t get_fattime(void)
+{
+	/**@TODO FIX THIS - real time clock required*/
+	/*
+	uint32_t ul_time;
+	uint32_t ul_hour, ul_minute, ul_second;
+	uint32_t ul_year, ul_month, ul_day, ul_week;
 
-void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
 
-void start_ethernet(void);
+	// Retrieve date and time
+	//rtc_get_time(RTC, &ul_hour, &ul_minute, &ul_second);
+	//rtc_get_date(RTC, &ul_year, &ul_month, &ul_day, &ul_week);
 
-struct netif* GetConfiguration();
+	ul_time = ((ul_year - 1980) << 25)
+			| (ul_month << 21)
+			| (ul_day << 16)
+			| (ul_hour << 11)
+			| (ul_minute << 5)
+			| (ul_second << 0);
 
-static void timers_update(void);
-
-/**
- * \brief Status callback used to print address given by DHCP.
- *
- * \param netif Instance to network interface.
- *
- */
-void status_callback(struct netif *netif);
-
-/**
- * \brief Manage the ethernet packets, if any received process them.
- *
- */
-void ethernet_task(void);
-
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
+	return ul_time;
+	*/
+	return 0x210001; //set datetime
 }
-#endif
-/**INDENT-ON**/
-/// @endcond
 
-#endif /* ETHERNET_SAM_H_INCLUDED */

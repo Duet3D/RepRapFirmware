@@ -1,9 +1,9 @@
 /**
  * \file
  *
- * \brief Ethernet management definitions for the Standalone lwIP example.
+ * \brief Preprocessor stringizing utils.
  *
- * Copyright (c) 2012 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2010-2012 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -41,55 +41,42 @@
  *
  */
 
-#ifndef ETHERNET_SAM_H_INCLUDED
-#define ETHERNET_SAM_H_INCLUDED
-
-#include <lwip/src/include/lwip/netif.h>
-
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-extern "C" {
-#endif
-/**INDENT-ON**/
-/// @endcond
-
-bool status_link_up();//*****************************AB
+#ifndef _STRINGZ_H_
+#define _STRINGZ_H_
 
 /**
- * \brief Initialize the ethernet interface.
+ * \defgroup group_sam_utils_stringz Preprocessor - Stringize
  *
+ * \ingroup group_sam_utils
+ *
+ * \{
  */
-//void init_ethernet(void);
 
-void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
+/*! \brief Stringize.
+ *
+ * Stringize a preprocessing token, this token being allowed to be \#defined.
+ *
+ * May be used only within macros with the token passed as an argument if the token is \#defined.
+ *
+ * For example, writing STRINGZ(PIN) within a macro \#defined by PIN_NAME(PIN)
+ * and invoked as PIN_NAME(PIN0) with PIN0 \#defined as A0 is equivalent to
+ * writing "A0".
+ */
+#define STRINGZ(x)                                #x
 
-void start_ethernet(void);
-
-struct netif* GetConfiguration();
-
-static void timers_update(void);
+/*! \brief Absolute stringize.
+ *
+ * Stringize a preprocessing token, this token being allowed to be \#defined.
+ *
+ * No restriction of use if the token is \#defined.
+ *
+ * For example, writing ASTRINGZ(PIN0) anywhere with PIN0 \#defined as A0 is
+ * equivalent to writing "A0".
+ */
+#define ASTRINGZ(x)                               STRINGZ(x)
 
 /**
- * \brief Status callback used to print address given by DHCP.
- *
- * \param netif Instance to network interface.
- *
+ * \}
  */
-void status_callback(struct netif *netif);
 
-/**
- * \brief Manage the ethernet packets, if any received process them.
- *
- */
-void ethernet_task(void);
-
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-}
-#endif
-/**INDENT-ON**/
-/// @endcond
-
-#endif /* ETHERNET_SAM_H_INCLUDED */
+#endif  // _STRINGZ_H_

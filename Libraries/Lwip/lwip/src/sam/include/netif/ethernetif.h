@@ -1,7 +1,8 @@
 /**
+ *
  * \file
  *
- * \brief Ethernet management definitions for the Standalone lwIP example.
+ * \brief Ethernet Interface Skeleton.
  *
  * Copyright (c) 2012 Atmel Corporation. All rights reserved.
  *
@@ -41,55 +42,20 @@
  *
  */
 
-#ifndef ETHERNET_SAM_H_INCLUDED
-#define ETHERNET_SAM_H_INCLUDED
+#ifndef ETHERNETIF_H_INCLUDED
+#define ETHERNETIF_H_INCLUDED
 
-#include <lwip/src/include/lwip/netif.h>
+#include "lwip/src/include/lwip/netif.h"
+#include "lwip/src/include/ipv4/lwip/ip_addr.h"
+#include "lwip/src/include/lwip/err.h"
+#include "lwip/src/include/netif/etharp.h"
 
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-extern "C" {
-#endif
-/**INDENT-ON**/
-/// @endcond
+bool ethernetif_phy_link_status(void);	//*****************************AB
 
-bool status_link_up();//*****************************AB
+err_t ethernetif_init(struct netif *netif);
 
-/**
- * \brief Initialize the ethernet interface.
- *
- */
-//void init_ethernet(void);
+void ethernetif_input(void *pv_parameters);
 
-void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
+void ethernet_hardware_init(void);
 
-void start_ethernet(void);
-
-struct netif* GetConfiguration();
-
-static void timers_update(void);
-
-/**
- * \brief Status callback used to print address given by DHCP.
- *
- * \param netif Instance to network interface.
- *
- */
-void status_callback(struct netif *netif);
-
-/**
- * \brief Manage the ethernet packets, if any received process them.
- *
- */
-void ethernet_task(void);
-
-/// @cond 0
-/**INDENT-OFF**/
-#ifdef __cplusplus
-}
-#endif
-/**INDENT-ON**/
-/// @endcond
-
-#endif /* ETHERNET_SAM_H_INCLUDED */
+#endif /* ETHERNETIF_H_INCLUDED */
