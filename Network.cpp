@@ -56,8 +56,9 @@ const uint8_t windowedSendPackets = 2;
 const int httpStateSize = MEMP_NUM_TCP_PCB + 1;		// the +1 is in case of recovering from network errors
 
 // Called to put out a message via the RepRap firmware.
+// Can be called from C as well as C++
 
-void RepRapNetworkMessage(const char* s)
+extern "C" void RepRapNetworkMessage(const char* s)
 {
 	reprap.GetPlatform()->Message(HOST_MESSAGE, s);
 }
@@ -237,14 +238,15 @@ static err_t http_accept(void *arg, struct tcp_pcb *pcb, err_t err)
   return ERR_OK;
 }
 
+}	// end extern "C"
+
 /*-----------------------------------------------------------------------------------*/
 
-// This function (is)x should be called only once at the start.
+// This function (is) should be called only once at the start.
 
-void httpd_init(void)
+void httpd_init()
 {
   static int initCount = 0;
-
 
   initCount++;
   if (initCount > 1)
@@ -257,8 +259,6 @@ void httpd_init(void)
   pcb = tcp_listen(pcb);
   tcp_accept(pcb, http_accept);
 }
-
-}	// end extern "C"
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -346,9 +346,7 @@ void Network::AppendTransaction(RequestState** list, RequestState *r)
 
 void Network::Init()
 {
-	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
-	start_ethernet();
-	active = true;
+	init_ethernet();
 }
 
 void Network::Spin()
@@ -386,10 +384,12 @@ void Network::Spin()
 			}
 		}
 	}
-//	else
-//	{
-//		active = establish_ethernet_link();
-//	}
+	else if (establish_ethernet_link())
+	{
+		start_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
+		httpd_init();
+		active = true;
+	}
 }
 
 bool Network::HaveData() const

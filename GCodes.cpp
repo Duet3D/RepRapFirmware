@@ -1315,68 +1315,119 @@ void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOr
 	}
 }
 
-void GCodes::SetHeaterParameters(GCodeBuffer *gb, size_t heater, char reply[STRING_LENGTH])
+// Set PID parameters (M301 or M303 command). 'heater' is the defeault heater number to use.
+void GCodes::SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LENGTH])
 {
-	PidParameters pp = platform->GetPidParameters(heater);
-	bool seen = false;
-	if (gb->Seen('P'))
-	{
-		pp.kP = gb->GetFValue();
-		seen = true;
-	}
-	if (gb->Seen('I'))
-	{
-		pp.kI = gb->GetFValue();
-		seen = true;
-	}
-	if (gb->Seen('D'))
-	{
-		pp.kD = gb->GetFValue();
-		seen = true;
-	}
-
-	// We also allow the 25C resistance and beta to be set. We must set these together.
-	float r25, beta;
-	if (gb->Seen('R'))
-	{
-		r25 = gb->GetFValue();
-		seen = true;
-	}
-	else
-	{
-		r25 = pp.GetThermistorR25();
-	}
-
-	if (gb->Seen('B'))
-	{
-		beta = gb->GetFValue();
-		seen = true;
-	}
-	else
-	{
-		beta = pp.GetBeta();
-	}
-
-	if (gb->Seen('L'))
-	{
-		pp.adcLowOffset = gb->GetFValue();
-		seen = true;
-	}
 	if (gb->Seen('H'))
 	{
-		pp.adcHighOffset = gb->GetFValue();
-		seen = true;
+		heater = gb->GetIValue();
 	}
 
-	if (seen)
+	if (heater >= 0 && heater < HEATERS)
 	{
-		pp.SetThermistorR25AndBeta(r25, beta);					// recalculate Rinf
-		platform->SetPidParameters(heater, pp);
+		PidParameters pp = platform->GetPidParameters(heater);
+		bool seen = false;
+		if (gb->Seen('P'))
+		{
+			pp.kP = gb->GetFValue();
+			seen = true;
+		}
+		if (gb->Seen('I'))
+		{
+			pp.kI = gb->GetFValue();
+			seen = true;
+		}
+		if (gb->Seen('D'))
+		{
+			pp.kD = gb->GetFValue();
+			seen = true;
+		}
+		if (gb->Seen('W'))
+		{
+			pp.pidMax = gb->GetFValue();
+			seen = true;
+		}
+		if (gb->Seen('B'))
+		{
+			pp.fullBand = gb->GetFValue();
+			seen = true;
+		}
+
+		if (seen)
+		{
+			platform->SetPidParameters(heater, pp);
+		}
+		else
+		{
+			snprintf(reply, STRING_LENGTH, "P:%.2f I:%.3f D:%.2f W:%.1f B:%.1f\n", pp.kP, pp.kI, pp.kD, pp.pidMax, pp.fullBand);
+		}
 	}
-	else
+}
+
+void GCodes::SetHeaterParameters(GCodeBuffer *gb, char reply[STRING_LENGTH])
+{
+	if (gb->Seen('P'))
 	{
-		snprintf(reply, STRING_LENGTH, "P:%.2f I:%.3f D: %.2f R: %.1f B: %.1f L: %.1f H: %.1f\n",
-				pp.kP, pp.kI, pp.kD, r25, beta, pp.adcLowOffset, pp.adcHighOffset);
+		int heater = gb->GetIValue();
+		if (heater >= 0 && heater < HEATERS)
+		{
+			PidParameters pp = platform->GetPidParameters(heater);
+			bool seen = false;
+
+			// We must set the 25C resistance and beta together in order to calculate Rinf. Check for these first.
+			float r25, beta;
+			if (gb->Seen('T'))
+			{
+				r25 = gb->GetFValue();
+				seen = true;
+			}
+			else
+			{
+				r25 = pp.GetThermistorR25();
+			}
+
+			if (gb->Seen('B'))
+			{
+				beta = gb->GetFValue();
+				seen = true;
+			}
+			else
+			{
+				beta = pp.GetBeta();
+			}
+
+			if (seen)	// if see R25 or Beta or both
+			{
+				pp.SetThermistorR25AndBeta(r25, beta);					// recalculate Rinf
+			}
+
+			// Now do the other parameters
+			if (gb->Seen('R'))
+			{
+				pp.thermistorSeriesR = gb->GetFValue();
+				seen = true;
+			}
+			if (gb->Seen('L'))
+			{
+				pp.adcLowOffset = gb->GetFValue();
+				seen = true;
+			}
+			if (gb->Seen('H'))
+			{
+				pp.adcHighOffset = gb->GetFValue();
+				seen = true;
+			}
+
+			if (seen)
+			{
+				platform->SetPidParameters(heater, pp);
+			}
+			else
+			{
+				snprintf(reply, STRING_LENGTH, "T:%.1f B:%.1f R:%.1f L:%.1f H:%.1f\n",
+						r25, beta, pp.thermistorSeriesR, pp.adcLowOffset, pp.adcHighOffset);
+			}
+		}
 	}
 }
 
@@ -1801,14 +1852,18 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			break;
 
 		case 301: // Set hot end PID values
-			SetHeaterParameters(gb, 1, reply);
+			SetPidParameters(gb, 1, reply);
 			break;
 
 		case 302: // Allow cold extrudes
 			break;
 
 		case 304: // Set heated bed parameters
-			SetHeaterParameters(gb, 0, reply);
+			SetPidParameters(gb, 0, reply);
+			break;
+
+		case 305:
+			SetHeaterParameters(gb, reply);
 			break;
 
 		case 503: // list variable settings

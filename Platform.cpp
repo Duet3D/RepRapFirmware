@@ -82,8 +82,8 @@ void PidParameters::SetThermistorR25AndBeta(float r25, float beta)
 
 bool PidParameters::operator==(const PidParameters& other) const
 {
-	return kI == other.kI && kD == other.kD && kP == other.kP && fullBand == other.fullBand && iMin == other.iMin
-			&& iMax == other.iMax && thermistorBeta == other.thermistorBeta && thermistorInfR == other.thermistorInfR
+	return kI == other.kI && kD == other.kD && kP == other.kP && fullBand == other.fullBand && pidMin == other.pidMin
+			&& pidMax == other.pidMax && thermistorBeta == other.thermistorBeta && thermistorInfR == other.thermistorInfR
 			&& thermistorSeriesR == other.thermistorSeriesR && adcLowOffset == other.adcLowOffset
 			&& adcHighOffset == other.adcHighOffset;
 }
@@ -136,8 +136,8 @@ void Platform::Init()
 			pp.kD = defaultPidKds[i];
 			pp.kP = defaultPidKps[i];
 			pp.fullBand = defaultFullBand[i];
-			pp.iMin = defaultIMin[i];
-			pp.iMax = defaultIMax[i];
+			pp.pidMin = defaultPidMin[i];
+			pp.pidMax = defaultPidMax[i];
 			pp.adcLowOffset = pp.adcHighOffset = 0.0;
 		}
 

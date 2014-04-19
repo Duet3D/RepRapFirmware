@@ -159,8 +159,8 @@ const float defaultPidKps[HEATERS] = {-1, 20.0};
 const float defaultFullBand[HEATERS] = {5.0, 150.0};	// errors larger than this cause heater to be on or off and I-term set to zero
 #endif
 
-const float defaultIMin[HEATERS] = {0.0, 0.0};	// minimum value of I-term
-const float defaultIMax[HEATERS] = {255, 180};	// maximum value of I-term, must be high enough to reach 245C for ABS printing
+const float defaultPidMin[HEATERS] = {0.0, 0.0};	// minimum value of I-term
+const float defaultPidMax[HEATERS] = {255, 180};	// maximum value of I-term, must be high enough to reach 245C for ABS printing
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
@@ -403,7 +403,7 @@ private:
 
 public:
 	float kI, kD, kP;
-	float fullBand, iMin, iMax;
+	float fullBand, pidMin, pidMax;
 	float thermistorSeriesR;
 	float adcLowOffset, adcHighOffset;
 

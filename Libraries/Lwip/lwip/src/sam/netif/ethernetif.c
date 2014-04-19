@@ -250,21 +250,24 @@ void ethernet_hardware_init(void)
 	NVIC_EnableIRQ(EMAC_IRQn);
 
 	/* Init MAC PHY driver */
-	if (ethernet_phy_init(EMAC, BOARD_EMAC_PHY_ADDR,
-			SystemCoreClock) != EMAC_OK) {
+	if (ethernet_phy_init(EMAC, BOARD_EMAC_PHY_ADDR, SystemCoreClock) != EMAC_OK) {
 		LWIP_DEBUGF(LWIP_DBG_TRACE, ("PHY Initialize ERROR!\r"));
 		return;
 	}
+}
 
+bool ethernet_establish_link(void)
+{
 	/* Auto Negotiate, work in RMII mode */
 	if (ethernet_phy_auto_negotiate(EMAC, BOARD_EMAC_PHY_ADDR) != EMAC_OK) {
 		LWIP_DEBUGF(LWIP_DBG_TRACE, ("Auto Negotiate ERROR!\r"));
-		return;
+		return false;
 	}
 
 	/* Establish ethernet link */
-	while (ethernet_phy_set_link(EMAC, BOARD_EMAC_PHY_ADDR, 1) != EMAC_OK) {
+	if (ethernet_phy_set_link(EMAC, BOARD_EMAC_PHY_ADDR, 1) != EMAC_OK) {
 		LWIP_DEBUGF(LWIP_DBG_TRACE,("Set link ERROR!\r"));
+		return false;
 	}
 	/**@todo debug*/
 
@@ -277,6 +280,7 @@ void ethernet_hardware_init(void)
 			netifINTERFACE_TASK_STACK_SIZE,
 			netifINTERFACE_TASK_PRIORITY );
 #endif
+	return true;
 }
 
 /**

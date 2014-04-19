@@ -46,7 +46,6 @@ class PID
     float temperature;
     float lastTemperature;
     float temp_iState;
-    float temp_dState;
     bool active;
     int8_t heater;
     int8_t badTemperatureCount;

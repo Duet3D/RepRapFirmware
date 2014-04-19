@@ -104,7 +104,6 @@ void PID::Init()
   standbyTemperature = ABS_ZERO;
   lastTemperature = temperature;
   temp_iState = 0.0;
-  temp_dState = 0.0;
   badTemperatureCount = 0;
   temperatureFault = false;
   active = false;
@@ -163,11 +162,10 @@ void PID::Spin()
    
   temp_iState += error * pp.kI;
   
-  if (temp_iState < pp.iMin) temp_iState = pp.iMin;
-  else if (temp_iState > pp.iMax) temp_iState = pp.iMax;
+  if (temp_iState < pp.pidMin) temp_iState = pp.pidMin;
+  else if (temp_iState > pp.pidMax) temp_iState = pp.pidMax;
    
-  temp_dState =  pp.kD * (temperature - lastTemperature);
-
+  float temp_dState =  pp.kD * (temperature - lastTemperature);
   float result = pp.kP * error + temp_iState - temp_dState;
 
   lastTemperature = temperature;
@@ -177,11 +175,9 @@ void PID::Spin()
   result = result/255.0;
 
   if(!temperatureFault)
+  {
 	  platform->SetHeater(heater, result);
+  }
 
-#if 0 // debug
-  char buffer[100];
-  snprintf(buffer, ARRAY_SIZE(buffer), "Heat: e=%f, P=%f, I=%f, d=%f, r=%f\n", error, platform->PidKp(heater)*error, temp_iState, temp_dState, result);
-  platform->Message(HOST_MESSAGE, buffer);
-#endif
+  //debugPrintf("Heat: e=%f, P=%f, I=%f, d=%f, r=%f\n", error, platform->PidKp(heater)*error, temp_iState, temp_dState, result);
 }

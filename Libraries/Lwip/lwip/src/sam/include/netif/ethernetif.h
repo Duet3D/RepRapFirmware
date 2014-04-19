@@ -57,5 +57,6 @@ err_t ethernetif_init(struct netif *netif);
 void ethernetif_input(void *pv_parameters);
 
 void ethernet_hardware_init(void);
+bool ethernet_establish_link(void);
 
 #endif /* ETHERNETIF_H_INCLUDED */
