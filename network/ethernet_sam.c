@@ -270,7 +270,7 @@ static void ethernet_configure_interface(unsigned char ipAddress[], unsigned cha
 /** \brief Create ethernet task, for ethernet management.
  *
  */
-void init_ethernet(unsigned char ipAddress[], unsigned char netMask[], unsigned char gateWay[])
+void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[])
 {
 	/* Initialize lwIP */
 	lwip_init();
