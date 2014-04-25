@@ -60,6 +60,61 @@ class GCodeBuffer
     const char* writingFileDirectory;
 };
 
+// Small struct to hold an open file and data relating to it.
+// This is designed so that files are never left open and we never duplicate a file reference.
+class FileData
+{
+public:
+	FileData() : f(NULL) {}
+
+	// Set this to refer to a newly-opened file
+	void Set(FileStore* pfile)
+	{
+		Close();	// close any existing file
+		f = pfile;
+	}
+
+	bool IsLive() const { return f != NULL; }
+
+	void Close()
+	{
+		if (f != NULL)
+		{
+			f->Close();
+			f = NULL;
+		}
+	}
+
+	bool Read(char& b)
+	{
+		return f->Read(b);
+	}
+
+	// Assignment operator. This clears out the FileData object we are assigning from.
+	FileData& operator=(FileData& other)
+	{
+		Close();
+		f = other.f;
+		other.Init();
+		return *this;
+	}
+
+	// Copy constructor
+	FileData(FileData& other)
+	{
+		f = other.f;
+		other.Init();
+	}
+
+private:
+	FileStore *f;
+
+	void Init()
+	{
+		f = NULL;
+	}
+};
+
 //****************************************************************************************************
 
 // The GCode interpreter
@@ -84,6 +139,7 @@ class GCodes
     bool HaveIncomingData() const;
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; }
     void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }
+    float GetExtruderPosition(uint8_t extruder) const;
     
   private:
   
@@ -137,7 +193,7 @@ class GCodes
     bool drivesRelativeStack[STACK];
     bool axesRelativeStack[STACK];
     float feedrateStack[STACK];
-    FileStore* fileStack[STACK];
+    FileData fileStack[STACK];
     int8_t stackPointer;
     char gCodeLetters[DRIVES + 1]; // Extra is for F
     float lastPos[DRIVES - AXES]; // Just needed for relative moves.
@@ -146,8 +202,8 @@ class GCodes
 	bool activeDrive[DRIVES+1];
 	bool offSetSet;
     float distanceScale;
-    FileStore* fileBeingPrinted;
-    FileStore* fileToPrint;
+    FileData fileBeingPrinted;
+    FileData fileToPrint;
     FileStore* fileBeingWritten;
     FileStore* configFile;
     bool doingCannedCycleFile;
@@ -205,12 +261,12 @@ inline void GCodeBuffer::SetWritingFileDirectory(const char* wfd)
 
 inline bool GCodes::PrintingAFile() const
 {
-  return fileBeingPrinted != NULL;
+	return fileBeingPrinted.IsLive();
 }
 
 inline bool GCodes::HaveIncomingData() const
 {
-	return fileBeingPrinted != NULL || webserver->GCodeAvailable() || (platform->GetLine()->Status() & byteAvailable);
+	return fileBeingPrinted.IsLive() || webserver->GCodeAvailable() || (platform->GetLine()->Status() & byteAvailable);
 }
 
 inline bool GCodes::NoHome() const

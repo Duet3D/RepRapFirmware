@@ -67,6 +67,7 @@ class Webserver
     bool PrintLinkTable();
     void GetGCodeList();
     void GetJsonResponse(const char* request);
+    void GetStatusResponse(uint8_t type);
     void ParseGetPost();
     bool CharFromClient(char c);
     void BlankLineFromClient();
@@ -76,6 +77,9 @@ class Webserver
     unsigned int GetGcodeBufferSpace() const;
     unsigned int GetReportedGcodeBufferSpace() const;
     void ProcessGcode(const char* gc);
+    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed);
+    static bool FindHeight(const char* buf, size_t len, float& height);
+    static bool FindFilamentUsed(const char* buf, size_t len, float& filamentUsed);
 
     Platform* platform;
     bool active;

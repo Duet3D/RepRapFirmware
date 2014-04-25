@@ -327,9 +327,11 @@ public:
 
 	int8_t Status(); // Returns OR of IOStatus
 	bool Read(char& b);
+	int Read(char* buf, unsigned int nBytes);
 	void Write(char b);
 	void Write(const char* s);
 	void Close();
+	void Seek(unsigned long pos);
 	void GoToEnd(); // Position the file at the end (so you can write on the end).
 	unsigned long Length(); // File size in bytes
 

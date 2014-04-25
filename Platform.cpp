@@ -1359,7 +1359,9 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 void FileStore::Close()
 {
 	if (writing)
+	{
 		WriteBuffer();
+	}
 	f_close(&file);
 	platform->ReturnFileStore(this);
 	inUse = false;
@@ -1367,15 +1369,24 @@ void FileStore::Close()
 	lastBufferEntry = 0;
 }
 
-void FileStore::GoToEnd()
+void FileStore::Seek(unsigned long pos)
 {
 	if (!inUse)
 	{
 		platform->Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
 		return;
 	}
-	unsigned long e = Length();
-	f_lseek(&file, e);
+	if (writing)
+	{
+		WriteBuffer();
+	}
+	f_lseek(&file, pos);
+	bufferPointer = (writing) ? 0 : FILE_BUF_LEN;
+}
+
+void FileStore::GoToEnd()
+{
+	Seek(Length());
 }
 
 unsigned long FileStore::Length()
@@ -1404,8 +1415,7 @@ int8_t FileStore::Status()
 
 void FileStore::ReadBuffer()
 {
-	FRESULT readStatus;
-	readStatus = f_read(&file, buf, FILE_BUF_LEN, &lastBufferEntry);	// Read a chunk of file
+	FRESULT readStatus = f_read(&file, buf, FILE_BUF_LEN, &lastBufferEntry);	// Read a chunk of file
 	if (readStatus)
 	{
 		platform->Message(HOST_MESSAGE, "Error reading file.\n");
@@ -1413,6 +1423,7 @@ void FileStore::ReadBuffer()
 	bufferPointer = 0;
 }
 
+// Single character read via the buffer
 bool FileStore::Read(char& b)
 {
 	if (!inUse)
@@ -1422,7 +1433,9 @@ bool FileStore::Read(char& b)
 	}
 
 	if (bufferPointer >= FILE_BUF_LEN)
+	{
 		ReadBuffer();
+	}
 
 	if (bufferPointer >= lastBufferEntry)
 	{
@@ -1436,10 +1449,28 @@ bool FileStore::Read(char& b)
 	return true;
 }
 
+// Block read, doesn't use the buffer
+int FileStore::Read(char* extBuf, unsigned int nBytes)
+{
+	if (!inUse)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to read from a non-open file.\n");
+		return -1;
+	}
+	bufferPointer = FILE_BUF_LEN;	// invalidate the buffer
+	UINT bytesRead;
+	FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytesRead);
+	if (readStatus)
+	{
+		platform->Message(HOST_MESSAGE, "Error reading file.\n");
+		return -1;
+	}
+	return (int)bytesRead;
+}
+
 void FileStore::WriteBuffer()
 {
-	FRESULT writeStatus;
-	writeStatus = f_write(&file, buf, bufferPointer, &lastBufferEntry);
+	FRESULT writeStatus = f_write(&file, buf, bufferPointer, &lastBufferEntry);
 	if ((writeStatus != FR_OK) || (lastBufferEntry != bufferPointer))
 	{
 		platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");

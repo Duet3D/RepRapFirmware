@@ -320,10 +320,6 @@ Network::Network()
 	active = false;
 	ethPinsInit();
 
-	//ResetEther();
-
-	// Construct the free list buffer
-
 	freeTransactions = NULL;
 	readyTransactions = NULL;
 	writingTransactions = NULL;
@@ -336,12 +332,26 @@ Network::Network()
 
 void Network::AppendTransaction(RequestState** list, RequestState *r)
 {
+	irqflags_t flags = cpu_irq_save();
 	r->next = NULL;
 	while (*list != NULL)
 	{
 		list = &((*list)->next);
 	}
 	*list = r;
+	cpu_irq_restore(flags);
+}
+
+RequestState *Network::FindHs(RequestState* const* list, HttpState *hs)
+{
+	irqflags_t flags = cpu_irq_save();
+	RequestState *r = *list;
+	while (r != NULL && r->hs != hs)
+	{
+		r = r->next;
+	}
+	cpu_irq_restore(flags);
+	return r;
 }
 
 void Network::Init()
@@ -359,8 +369,10 @@ void Network::Spin()
 		RequestState* r = writingTransactions;
 		if (r != NULL)
 		{
-			bool doClose = r->TrySendData();	// we must leave r on the list for now because of possible callback to release the input buffer
+			bool doClose = r->TrySendData();
+			irqflags_t flags = cpu_irq_save();
 			writingTransactions = r->next;
+			cpu_irq_restore(flags);
 			if (doClose)
 			{
 				r->closeRequestedTime = reprap.GetPlatform()->Time();
@@ -379,7 +391,9 @@ void Network::Spin()
 			if (reprap.GetPlatform()->Time() - r->closeRequestedTime >= clientCloseDelay)
 			{
 				r->Close();
+				irqflags_t flags = cpu_irq_save();
 				closingTransactions = r->next;
+				cpu_irq_restore(flags);
 				AppendTransaction(&freeTransactions, r);
 			}
 		}
@@ -436,27 +450,20 @@ void Network::Printf(const char* fmt, ...)
 
 void Network::SentPacketAcknowledged(HttpState *hs)
 {
-	RequestState *r = writingTransactions;
-	while (r != NULL && r->hs != hs)
-	{
-		r = r->next;
-	}
+	RequestState *r = FindHs(&writingTransactions, hs);
 	if (r != NULL)
 	{
 		r->SentPacketAcknowledged();
 		return;
 	}
 
-	r = closingTransactions;
-	while (r != NULL && r->hs != hs)
-	{
-		r = r->next;
-	}
+	r = FindHs(&closingTransactions, hs);
 	if (r != NULL)
 	{
 		r->SentPacketAcknowledged();
 		return;
 	}
+
 	debugPrintf("Network SentPacketAcknowledged: didn't find hs=%08x\n", (unsigned int)hs);
 }
 
@@ -466,11 +473,7 @@ void Network::ConnectionError(HttpState* hs)
 	debugPrintf("Network: ConnectionError\n");
 
 	// See if it's a ready transaction
-	RequestState* r = readyTransactions;
-	while (r != NULL && r->hs == hs)
-	{
-		r = r->next;
-	}
+	RequestState* r = FindHs(&readyTransactions, hs);
 	if (r != NULL)
 	{
 		r->SetConnectionLost();
@@ -478,11 +481,7 @@ void Network::ConnectionError(HttpState* hs)
 	}
 
 	// See if we were sending it
-	r = writingTransactions;
-	while (r != NULL && r->hs == hs)
-	{
-		r = r->next;
-	}
+	r = FindHs(&writingTransactions, hs);
 	if (r != NULL)
 	{
 		r->SetConnectionLost();
@@ -490,11 +489,7 @@ void Network::ConnectionError(HttpState* hs)
 	}
 
 	// See if we were closing it
-	r = closingTransactions;
-	while (r != NULL && r->hs == hs)
-	{
-		r = r->next;
-	}
+	r = FindHs(&closingTransactions, hs);
 	if (r != NULL)
 	{
 		r->SetConnectionLost();
@@ -528,7 +523,9 @@ void Network::SendAndClose(FileStore *f)
 	RequestState *r = readyTransactions;
 	if (r != NULL)
 	{
+		irqflags_t flags = cpu_irq_save();
 		readyTransactions = r->next;
+		cpu_irq_restore(flags);
 		if (r->LostConnection())
 		{
 			if (f != NULL)

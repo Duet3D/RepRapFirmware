@@ -114,6 +114,7 @@ public:
 private:
 
 	void AppendTransaction(RequestState** list, RequestState *r);
+	RequestState *FindHs(RequestState* const * list, HttpState *hs);
 
 	RequestState *freeTransactions;
 	RequestState *readyTransactions;

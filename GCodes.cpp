@@ -82,8 +82,8 @@ void GCodes::Reset()
 	serialGCode->SetFinished(true);
 	cannedCycleGCode->SetFinished(true);
 	moveAvailable = false;
-	fileBeingPrinted = NULL;
-	fileToPrint = NULL;
+	fileBeingPrinted.Close();
+	fileToPrint.Close();
 	fileBeingWritten = NULL;
 	checkEndStops = false;
 	doingCannedCycleFile = false;
@@ -100,9 +100,9 @@ void GCodes::doFilePrint(GCodeBuffer* gb)
 {
 	char b;
 
-	if (fileBeingPrinted != NULL)
+	if (fileBeingPrinted.IsLive())
 	{
-		if (fileBeingPrinted->Read(b))
+		if (fileBeingPrinted.Read(b))
 		{
 			if (gb->Put(b))
 				gb->SetFinished(ActOnGcode(gb));
@@ -111,8 +111,7 @@ void GCodes::doFilePrint(GCodeBuffer* gb)
 		{
 			if (gb->Put('\n')) // In case there wasn't one ending the file
 				gb->SetFinished(ActOnGcode(gb));
-			fileBeingPrinted->Close();
-			fileBeingPrinted = NULL;
+			fileBeingPrinted.Close();
 		}
 	}
 }
@@ -439,8 +438,8 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 		if (!Push())
 			return false;
 
-		fileBeingPrinted = platform->GetFileStore(platform->GetSysDir(), fileName, false);
-		if (fileBeingPrinted == NULL)
+		FileStore *f = platform->GetFileStore(platform->GetSysDir(), fileName, false);
+		if (f == NULL)
 		{
 			platform->Message(HOST_MESSAGE, "Canned cycle GCode file not found - ");
 			platform->Message(HOST_MESSAGE, fileName);
@@ -449,6 +448,7 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 				platform->Message(HOST_MESSAGE, "Cannot pop the stack.\n");
 			return true;
 		}
+		fileBeingPrinted.Set(f);
 		doingCannedCycleFile = true;
 		cannedCycleGCode->Init();
 		return false;
@@ -456,7 +456,7 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 
 	// Have we finished the file?
 
-	if (fileBeingPrinted == NULL)
+	if (!fileBeingPrinted.IsLive())
 	{
 		// Yes
 
@@ -491,10 +491,7 @@ bool GCodes::FileCannedCyclesReturn()
 	doingCannedCycleFile = false;
 	cannedCycleGCode->Init();
 
-	if (fileBeingPrinted != NULL)
-		fileBeingPrinted->Close();
-
-	fileBeingPrinted = NULL;
+	fileBeingPrinted.Close();
 	return true;
 }
 
@@ -1049,8 +1046,13 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 
 void GCodes::QueueFileToPrint(const char* fileName)
 {
-	fileToPrint = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
-	if (fileToPrint == NULL)
+	fileToPrint.Close();
+	FileStore *f = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
+	if (f != NULL)
+	{
+		fileToPrint.Set(f);
+	}
+	else
 	{
 		webserver->HandleReply("GCode file not found", true);
 		platform->Message(HOST_MESSAGE, "GCode file not found\n");
@@ -1558,10 +1560,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		{
 		case 0: // Stop
 		case 1: // Sleep
-			if (fileBeingPrinted != NULL)
+			if (fileBeingPrinted.IsLive())
 			{
 				fileToPrint = fileBeingPrinted;
-				fileBeingPrinted = NULL;
 			}
 			if (!DisableDrives())
 				return false;
@@ -1587,24 +1588,24 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
 		case 23: // Set file to print
 			QueueFileToPrint(gb->GetUnprecedentedString());
-			if (platform->Emulating() == marlin)
+			if (fileToPrint.IsLive() && platform->Emulating() == marlin)
+			{
 				snprintf(reply, STRING_LENGTH, "%s", "File opened\nFile selected\n");
+			}
 			break;
 
 		case 24: // Print/resume-printing the selected file
-			if (fileBeingPrinted != NULL)
+			if (fileBeingPrinted.IsLive())
 				break;
 			fileBeingPrinted = fileToPrint;
-			fileToPrint = NULL;
 			break;
 
 		case 25: // Pause the print
 			fileToPrint = fileBeingPrinted;
-			fileBeingPrinted = NULL;
 			break;
 
 		case 27: // Report print status - Deprecated
-			if (this->PrintingAFile())
+			if (fileBeingPrinted.IsLive())
 				strncpy(reply, "SD printing.", STRING_LENGTH);
 			else
 				strncpy(reply, "Not SD printing.", STRING_LENGTH);
@@ -2078,6 +2079,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		HandleReply(error, gb == serialGCode, reply, 'X', code, resend);
 
 	return result;
+}
+
+// Return the amount of filament extruded
+float GCodes::GetExtruderPosition(uint8_t extruder) const
+{
+	return (extruder < (DRIVES - AXES)) ? lastPos[extruder] : 0;
 }
 
 //*************************************************************************************

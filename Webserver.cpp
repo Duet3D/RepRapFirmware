@@ -379,147 +379,21 @@ void Webserver::JsonReport(bool ok, const char* request)
 
 void Webserver::GetJsonResponse(const char* request)
 {
-	bool newStatusRequest = StringStartsWith(request, "status");
-	if (newStatusRequest || StringStartsWith(request, "poll"))
+	if (StringStartsWith(request, "status"))	// web interface v.0.69/0.70 status request
 	{
-		if (newStatusRequest)
-		{
-			// New-style status request
-			// Send the printing/idle status
-			strncpy(jsonResponse, "{\"status\":", STRING_LENGTH);
-			{
-				char ch = (reprap.IsStopped()) ? 'S' : (reprap.GetGCodes()->PrintingAFile()) ? 'P' : 'I';
-				sncatf(jsonResponse, STRING_LENGTH, "\"%c\"", ch);
-			}
-
-			// Send the heater temperatures
-			strncat(jsonResponse, ",\"heaters\":[", STRING_LENGTH);
-			for (int8_t heater = 0; heater < HEATERS; heater++)
-			{
-				char ch = (heater == HEATERS - 1) ? ']' : ',';	// append ] to the last one but , to the others
-				sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\"%c", reprap.GetHeat()->GetTemperature(heater), ch);
-			}
-			// Announce the XYZ and extruder positions
-			strncat(jsonResponse, ",\"pos\":[", STRING_LENGTH);
-		}
-		else
-		{
-			// The old (deprecated) poll response lists the status, then all the heater temperatures, then the XYZ positions, then all the extruder positions.
-			// These are all returned in a single vector called "poll".
-			// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
-			strncpy(jsonResponse, "{\"poll\":[", STRING_LENGTH);
-			if (reprap.GetGCodes()->PrintingAFile())
-			{
-				strncat(jsonResponse, "\"P\",", STRING_LENGTH); // Printing
-			}
-			else
-			{
-				strncat(jsonResponse, "\"I\",", STRING_LENGTH); // Idle
-			}
-			for (int8_t heater = 0; heater < HEATERS; heater++)
-			{
-				sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
-			}
-		}
-
-		// Send XYZ and extruder positions
-		float liveCoordinates[DRIVES + 1];
-		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		for (int8_t drive = 0; drive < AXES; drive++)
-		{
-			sncatf(jsonResponse, STRING_LENGTH, "\"%.2f\",", liveCoordinates[drive]);
-		}
-
-		for (int8_t drive = AXES; drive < DRIVES; drive++)	// loop through extruders
-		{
-			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
-			sncatf(jsonResponse, STRING_LENGTH, "\"%.4f\"%c", liveCoordinates[drive], ch);
-		}
-
-		// Send the Z probe value
-		int v0 = platform->ZProbe();
-		int v1, v2;
-		switch (platform->GetZProbeSecondaryValues(v1, v2))
-		{
-		case 1:
-			sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d (%d)\"", v0, v1);
-			break;
-		case 2:
-			sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
-			break;
-		default:
-			sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d\"", v0);
-			break;
-		}
-
-		// Send the amount of buffer space available for gcodes
-		sncatf(jsonResponse, STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
-
-		// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-		if (newStatusRequest)
-		{
-			sncatf(jsonResponse, STRING_LENGTH, ",\"homed\":[%d,%d,%d]",
-					(reprap.GetGCodes()->GetAxisIsHomed(0)) ? 1 : 0, (reprap.GetGCodes()->GetAxisIsHomed(1)) ? 1 : 0,
-					(reprap.GetGCodes()->GetAxisIsHomed(2)) ? 1 : 0);
-		}
-		else
-		{
-			sncatf(jsonResponse, STRING_LENGTH, ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
-					(reprap.GetGCodes()->GetAxisIsHomed(0)) ? 1 : 0, (reprap.GetGCodes()->GetAxisIsHomed(1)) ? 1 : 0,
-					(reprap.GetGCodes()->GetAxisIsHomed(2)) ? 1 : 0);
-		}
-
-		// Send the response sequence number
-		sncatf(jsonResponse, STRING_LENGTH, ",\"seq\":%u", (unsigned int) seq);
-
-		// Send the response to the last command. Do this last because it is long and may need to be truncated.
-		strncat(jsonResponse, ",\"resp\":\"", STRING_LENGTH);
-		size_t jp = strnlen(jsonResponse, STRING_LENGTH);
-		const char *p = gcodeReply;
-		while (*p != 0 && jp < STRING_LENGTH - 2)	// leave room for the final '"}'
-		{
-			char c = *p++;
-			char esc;
-			switch (c)
-			{
-			case '\r':
-				esc = 'r';
-				break;
-			case '\n':
-				esc = 'n';
-				break;
-			case '\t':
-				esc = 't';
-				break;
-			case '"':
-				esc = '"';
-				break;
-			case '\\':
-				esc = '\\';
-				break;
-			default:
-				esc = 0;
-				break;
-			}
-			if (esc)
-			{
-				if (jp == STRING_LENGTH - 3)
-					break;
-				jsonResponse[jp++] = '\\';
-				jsonResponse[jp++] = esc;
-			}
-			else
-			{
-				jsonResponse[jp++] = c;
-			}
-		}
-		strncat(jsonResponse, "\"}", STRING_LENGTH);
-
+		GetStatusResponse(1);
 		JsonReport(true, request);
 		return;
 	}
 
-	if (StringStartsWith(request, "gcode"))
+	if (StringStartsWith(request, "poll"))		// old style status request
+	{
+		GetStatusResponse(0);
+		JsonReport(true, request);
+		return;
+	}
+
+	if (StringStartsWith(request, "gcode") && StringStartsWith(clientQualifier, "gcode="))
 	{
 		LoadGcodeBuffer(&clientQualifier[6], true);
 		snprintf(jsonResponse, STRING_LENGTH, "{\"buff\":%u}", GetReportedGcodeBufferSpace());
@@ -531,6 +405,23 @@ void Webserver::GetJsonResponse(const char* request)
 	{
 		const char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir(), false);
 		snprintf(jsonResponse, STRING_LENGTH, "{\"files\":[%s]}", fileList);
+		JsonReport(true, request);
+		return;
+	}
+
+	if (StringStartsWith(request, "fileinfo") && StringStartsWith(clientQualifier, "name="))
+	{
+		unsigned long length;
+		float height, filament;
+		bool found = GetFileInfo(clientQualifier + 5, length, height, filament);
+		if (found)
+		{
+			snprintf(jsonResponse, STRING_LENGTH, "{\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\"}", length, height, filament);
+		}
+		else
+		{
+			snprintf(jsonResponse, STRING_LENGTH, "{}");
+		}
 		JsonReport(true, request);
 		return;
 	}
@@ -552,14 +443,12 @@ void Webserver::GetJsonResponse(const char* request)
 
 	if (StringStartsWith(request, "axes"))
 	{
-		strncpy(jsonResponse, "{\"axes\":[", STRING_LENGTH);
+		strncpy(jsonResponse, "{\"axes\":", STRING_LENGTH);
+		char ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\"", platform->AxisLength(drive));
-			if (drive < AXES - 1)
-			{
-				strncat(jsonResponse, ",", STRING_LENGTH);
-			}
+			sncatf(jsonResponse, STRING_LENGTH, "%c\"%.1f\"", ch, platform->AxisLength(drive));
+			ch = ',';
 		}
 		strncat(jsonResponse, "]}", STRING_LENGTH);
 		JsonReport(true, request);
@@ -568,6 +457,151 @@ void Webserver::GetJsonResponse(const char* request)
 
 	jsonResponse[0] = 0;
 	JsonReport(false, request);
+}
+
+void Webserver::GetStatusResponse(uint8_t type)
+{
+	GCodes *gc = reprap.GetGCodes();
+	if (type == 1)
+	{
+		// New-style status request
+		// Send the printing/idle status
+		char ch = (reprap.IsStopped()) ? 'S' : (gc->PrintingAFile()) ? 'P' : 'I';
+		snprintf(jsonResponse, STRING_LENGTH, "{\"status\":\"%c\",\"heaters\":", ch);
+
+		// Send the heater temperatures
+		ch = '[';
+		for (int8_t heater = 0; heater < HEATERS; heater++)
+		{
+			sncatf(jsonResponse, STRING_LENGTH, "%c\"%.1f\"", ch, reprap.GetHeat()->GetTemperature(heater));
+			ch = ',';
+		}
+
+		// Send XYZ and extruder positions
+		float liveCoordinates[DRIVES + 1];
+		reprap.GetMove()->LiveCoordinates(liveCoordinates);
+		strncat(jsonResponse, "],\"pos\":", STRING_LENGTH);		// announce the XYZ position
+		ch = '[';
+		// We currently provide the extruder 0 value here as well as XYZ. This is only expected by V0.69 and V0.70 of the web interface so it can be removed soon.
+		for (int8_t drive = 0; drive < AXES + 1; drive++)
+		//for (int8_t drive = 0; drive < AXES; drive++)
+		{
+			sncatf(jsonResponse, STRING_LENGTH, "%c\"%.2f\"", ch, liveCoordinates[drive]);
+			ch = ',';
+		}
+		sncatf(jsonResponse, STRING_LENGTH, "],\"extr\":");		// announce the extruder positions
+		ch = '[';
+		for (int8_t drive = AXES; drive < DRIVES; drive++)		// loop through extruders
+		{
+			sncatf(jsonResponse, STRING_LENGTH, "%c\"%.3f\"", ch, gc->GetExtruderPosition(drive - AXES));
+			ch = ',';
+		}
+		strncat(jsonResponse, "]", STRING_LENGTH);
+	}
+	else
+	{
+		// The old (deprecated) poll response lists the status, then all the heater temperatures, then the XYZ positions, then all the extruder positions.
+		// These are all returned in a single vector called "poll".
+		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
+		char c = (gc->PrintingAFile()) ? 'P' : 'I';
+		snprintf(jsonResponse, STRING_LENGTH, "{\"poll\":[\"%c\",", c); // Printing
+		for (int8_t heater = 0; heater < HEATERS; heater++)
+		{
+			sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
+		}
+		// Send XYZ and extruder positions
+		float liveCoordinates[DRIVES + 1];
+		reprap.GetMove()->LiveCoordinates(liveCoordinates);
+		for (int8_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
+		{
+			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
+			sncatf(jsonResponse, STRING_LENGTH, "\"%.2f\"%c", liveCoordinates[drive], ch);
+		}
+	}
+
+	// Send the Z probe value
+	int v0 = platform->ZProbe();
+	int v1, v2;
+	switch (platform->GetZProbeSecondaryValues(v1, v2))
+	{
+	case 1:
+		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d (%d)\"", v0, v1);
+		break;
+	case 2:
+		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
+		break;
+	default:
+		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d\"", v0);
+		break;
+	}
+
+	// Send the amount of buffer space available for gcodes
+	sncatf(jsonResponse, STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
+
+	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
+	if (type != 0)
+	{
+		sncatf(jsonResponse, STRING_LENGTH, ",\"homed\":[%d,%d,%d]",
+				(gc->GetAxisIsHomed(0)) ? 1 : 0,
+				(gc->GetAxisIsHomed(1)) ? 1 : 0,
+				(gc->GetAxisIsHomed(2)) ? 1 : 0);
+	}
+	else
+	{
+		sncatf(jsonResponse, STRING_LENGTH, ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
+				(gc->GetAxisIsHomed(0)) ? 1 : 0,
+				(gc->GetAxisIsHomed(1)) ? 1 : 0,
+				(gc->GetAxisIsHomed(2)) ? 1 : 0);
+	}
+
+	// Send the response sequence number
+	sncatf(jsonResponse, STRING_LENGTH, ",\"seq\":%u", (unsigned int) seq);
+
+	// Send the response to the last command. Do this last because it is long and may need to be truncated.
+	strncat(jsonResponse, ",\"resp\":\"", STRING_LENGTH);
+	size_t jp = strnlen(jsonResponse, STRING_LENGTH);
+	const char *p = gcodeReply;
+	while (*p != 0 && jp < STRING_LENGTH - 2)	// leave room for the final '"}'
+	{
+		char c = *p++;
+		char esc;
+		switch (c)
+		{
+		case '\r':
+			esc = 'r';
+			break;
+		case '\n':
+			esc = 'n';
+			break;
+		case '\t':
+			esc = 't';
+			break;
+		case '"':
+			esc = '"';
+			break;
+		case '\\':
+			esc = '\\';
+			break;
+		default:
+			esc = 0;
+			break;
+		}
+		if (esc)
+		{
+			if (jp == STRING_LENGTH - 3)
+			{
+				break;
+			}
+			jsonResponse[jp++] = '\\';
+			jsonResponse[jp++] = esc;
+		}
+		else
+		{
+			jsonResponse[jp++] = c;
+		}
+	}
+	jsonResponse[jp] = 0;
+	strncat(jsonResponse, "\"}", STRING_LENGTH);
 }
 
 /*
@@ -923,3 +957,124 @@ unsigned int Webserver::GetReportedGcodeBufferSpace() const
 	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf : (temp < minReportedFreeBuf) ? 0 : temp;
 }
 
+// Get information for a file on the SD card
+bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed)
+{
+	FileStore *f = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
+	if (f != NULL)
+	{
+		// Try to find the object height by looking for the last G1 Zxxx command in the file
+		length = f->Length();
+		height = 0.0;
+		filamentUsed = 0.0;
+		if (length != 0)
+		{
+			const size_t readSize = 1024;					// read 1K bytes at a time
+			const size_t overlap = 100;
+			size_t sizeToRead;
+			if (length <= sizeToRead + overlap)
+			{
+				sizeToRead = length;							// read the whole file in one go
+			}
+			else
+			{
+				sizeToRead = length % readSize;
+				if (sizeToRead <= overlap)
+				{
+					sizeToRead += readSize;
+				}
+			}
+			unsigned long seekPos = length - sizeToRead;		// read on a 1K boundary
+			size_t sizeToScan = sizeToRead;
+			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
+			bool foundFilamentUsed = false;
+			for (;;)
+			{
+				f->Seek(seekPos);
+//debugPrintf("Reading %u bytes at %lu\n", sizeToRead, seekPos);
+				int nbytes = f->Read(buf, sizeToRead);
+				if (nbytes != (int)sizeToRead)
+				{
+//debugPrintf("Read failed, read %d bytes\n", nbytes);
+					break;									// read failed so give up
+				}
+				buf[sizeToScan] = 0;						// add a null terminator
+				if (!foundFilamentUsed)
+				{
+					foundFilamentUsed = FindFilamentUsed(buf, sizeToScan, filamentUsed);
+//debugPrintf("Found fil: %c\n", foundFilamentUsed ? 'Y' : 'N');
+				}
+				if (FindHeight(buf, sizeToScan, height))
+				{
+//debugPrintf("Found height = %f\n", height);
+					break;		// quit if found height
+				}
+				if (seekPos == 0 || length - seekPos >= 32768)
+				{
+//debugPrintf("Quitting loop at seekPos = %lu\n", seekPos);
+					break;		// quit if reached start of file or already scanned the last 32K of the file
+				}
+				seekPos -= readSize;
+				sizeToRead = readSize;
+				sizeToScan = readSize + overlap;
+				memcpy(buf + sizeToRead, buf, overlap);
+			}
+		}
+		f->Close();
+		//debugPrintf("Setting height %f and filament %f\n", height, filamentUsed);
+		return true;
+	}
+	return false;
+}
+
+// Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
+bool Webserver::FindHeight(const char* buf, size_t len, float& height)
+{
+	if (len >= 5)
+	{
+		size_t i = len - 5;
+		for(;;)
+		{
+			if (buf[i] == 'G' && buf[i + 1] == '1' && buf[i + 2] == ' ' && buf[i + 3] == 'Z' && isDigit(buf[i + 4]))
+			{
+				// Found a command to set the height
+				height = strtod(&buf[i + 4], NULL);
+				return true;
+			}
+			if (i == 0)
+			{
+				break;
+			}
+			--i;
+		}
+	}
+	return false;
+}
+
+// Scan the buffer for the filament used. The buffer is null-terminated.
+bool Webserver::FindFilamentUsed(const char* buf, size_t len, float& filamentUsed)
+{
+	const char* filamentUsedStr = "ilament used";		// comment string used by slic3r, followed by filament used and "mm"
+	const char* p = strstr(buf, filamentUsedStr);
+	if (p != NULL)
+	{
+		p += strlen(filamentUsedStr);
+		while (!isDigit(*p) && *p >= ' ')
+		{
+			++p;	// this allows for " = " from default slic3r comment and ": " from default Cura comment
+		}
+		if (isDigit(*p))
+		{
+			char* q;
+			filamentUsed = strtod(p, &q);
+			if (*q == 'm' && *(q + 1) != 'm')
+			{
+				filamentUsed *= 1000.0;		// Cura outputs filament used in metres not mm
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+// End
