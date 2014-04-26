@@ -223,6 +223,7 @@ class GCodes
     bool axisIsHomed[3];	// these record which of the axes have been homed
     float fanMaxPwm;		// the M106 S value that represents 100% fan speed
     bool waitingForMoveToComplete;
+    bool coolingInverted;
 };
 
 //*****************************************************************************************************
