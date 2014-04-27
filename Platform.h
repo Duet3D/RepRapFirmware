@@ -184,7 +184,7 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 // File handling
 
-#define MAX_FILES (8)		// must be large enough to handle the max number of simultaneous web requests
+#define MAX_FILES (10)		// must be large enough to handle the max number of simultaneous web requests + file being printed
 #define FILE_BUF_LEN (256)
 #define SD_SPI (4) //Pin
 #define WEB_DIR "0:/www/" // Place to find web files on the server

@@ -1037,9 +1037,24 @@ bool Webserver::FindHeight(const char* buf, size_t len, float& height)
 		{
 			if (buf[i] == 'G' && buf[i + 1] == '1' && buf[i + 2] == ' ' && buf[i + 3] == 'Z' && isDigit(buf[i + 4]))
 			{
-				// Found a command to set the height
-				height = strtod(&buf[i + 4], NULL);
-				return true;
+				// Looks like we found a command to set the height, however it could be in a comment, especially when using slic3r 1.1.1
+				size_t j = i;
+				while (j != 0)
+				{
+					--j;
+					char c = buf[j];
+					if (c == '\n' || c == '\r')
+					{
+						// It's not in a comment
+						height = strtod(&buf[i + 4], NULL);
+						return true;
+					}
+					if (c == ';')
+					{
+						// It is in a comment, so give up on this one
+						break;
+					}
+				}
 			}
 			if (i == 0)
 			{
@@ -1059,7 +1074,7 @@ bool Webserver::FindFilamentUsed(const char* buf, size_t len, float& filamentUse
 	if (p != NULL)
 	{
 		p += strlen(filamentUsedStr);
-		while (!isDigit(*p) && *p >= ' ')
+		while(strchr(" :=\t", *p) != NULL)
 		{
 			++p;	// this allows for " = " from default slic3r comment and ": " from default Cura comment
 		}
