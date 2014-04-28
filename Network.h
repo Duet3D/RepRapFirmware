@@ -76,7 +76,7 @@ private:
 	void* pcb;
 	HttpState* hs;
 
-	RequestState* next;
+	RequestState* volatile next;
 	const char* inputData;
 	int inputLength;
 	int inputPointer;
@@ -113,13 +113,13 @@ public:
 
 private:
 
-	void AppendTransaction(RequestState** list, RequestState *r);
-	RequestState *FindHs(RequestState* const * list, HttpState *hs);
+	void AppendTransaction(RequestState* volatile * list, RequestState *r);
+	RequestState *FindHs(RequestState* const volatile * list, HttpState *hs);
 
-	RequestState *freeTransactions;
-	RequestState *readyTransactions;
-	RequestState *writingTransactions;
-	RequestState *closingTransactions;
+	RequestState * volatile freeTransactions;
+	RequestState * volatile readyTransactions;
+	RequestState * volatile writingTransactions;
+	RequestState * volatile closingTransactions;
 	bool active;
 };
 

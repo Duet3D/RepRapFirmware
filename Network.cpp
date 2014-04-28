@@ -330,7 +330,7 @@ Network::Network()
 	}
 }
 
-void Network::AppendTransaction(RequestState** list, RequestState *r)
+void Network::AppendTransaction(RequestState* volatile* list, RequestState *r)
 {
 	irqflags_t flags = cpu_irq_save();
 	r->next = NULL;
@@ -342,7 +342,7 @@ void Network::AppendTransaction(RequestState** list, RequestState *r)
 	cpu_irq_restore(flags);
 }
 
-RequestState *Network::FindHs(RequestState* const* list, HttpState *hs)
+RequestState *Network::FindHs(RequestState* const volatile * list, HttpState *hs)
 {
 	irqflags_t flags = cpu_irq_save();
 	RequestState *r = *list;
@@ -502,14 +502,17 @@ void Network::ConnectionError(HttpState* hs)
 
 void Network::ReceiveInput(const char* data, int length, void* pcb, HttpState* hs)
 {
+	irqflags_t flags = cpu_irq_save();
 	RequestState* r = freeTransactions;
 	if (r == NULL)
 	{
+		cpu_irq_restore(flags);
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ReceiveInput() - no free transactions!\n");
 		return;
 	}
 
 	freeTransactions = r->next;
+	cpu_irq_restore(flags);
 
 	r->Set(data, length, pcb, hs);
 	AppendTransaction(&readyTransactions, r);
@@ -520,10 +523,14 @@ void Network::ReceiveInput(const char* data, int length, void* pcb, HttpState* h
 // The file may be too large for our buffer, so we may have to send it in multiple transactions.
 void Network::SendAndClose(FileStore *f)
 {
+	irqflags_t flags = cpu_irq_save();
 	RequestState *r = readyTransactions;
-	if (r != NULL)
+	if (r == NULL)
 	{
-		irqflags_t flags = cpu_irq_save();
+		cpu_irq_restore(flags);
+	}
+	else
+	{
 		readyTransactions = r->next;
 		cpu_irq_restore(flags);
 		if (r->LostConnection())

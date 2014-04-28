@@ -691,6 +691,7 @@ void Move::SetProbedBedEquation()
 			 */
 			xRectangle = 1.0/(xBedProbePoints[3] - xBedProbePoints[0]);
 			yRectangle = 1.0/(yBedProbePoints[1] - yBedProbePoints[0]);
+//debugPrintf("xr=%f, yr=%f\n", xRectangle, yRectangle);
 			Transform(currentPositions);
 			SetPositions(currentPositions);
 			return;
@@ -715,9 +716,11 @@ void Move::SetProbedBedEquation()
 	b = zkj*xlj - xkj*zlj;
 	c = xkj*ylj - ykj*xlj;
 	d = -(xBedProbePoints[1]*a + yBedProbePoints[1]*b + zBedProbePoints[1]*c);
+//debugPrintf("a=%f, b=%f, c=%f, d=%f\n", a, b, c, d);
 	aX = -a/c;
 	aY = -b/c;
 	aC = -d/c;
+//debugPrintf("aX=%f, aY=%f, aC=%f\n", aX, aY, aC);
 	Transform(currentPositions);
 	SetPositions(currentPositions);
 }

@@ -567,8 +567,10 @@ public:
   EndStopHit Stopped(int8_t drive);
   float AxisLength(int8_t axis) const;
   void SetAxisLength(int8_t axis, float value);
+#if 0	// not used
   bool HighStopButNotLow(int8_t axis) const;
-  
+#endif
+
   // Z probe
 
   float ZProbeStopHeight() const;
@@ -779,10 +781,12 @@ inline float Platform::InstantDv(int8_t drive) const
   return instantDvs[drive]; 
 }
 
+#if 0	// not used
 inline bool Platform::HighStopButNotLow(int8_t axis) const
 {
 	return (lowStopPins[axis] < 0) && (highStopPins[axis] >= 0);
 }
+#endif
 
 inline float Platform::HomeFeedRate(int8_t axis) const
 {

@@ -275,7 +275,7 @@ bool GCodes::Push()
 	drivesRelativeStack[stackPointer] = drivesRelative;
 	axesRelativeStack[stackPointer] = axesRelative;
 	feedrateStack[stackPointer] = gFeedRate;
-	fileStack[stackPointer] = fileBeingPrinted;
+	fileStack[stackPointer].MoveFrom(fileBeingPrinted);
 	stackPointer++;
 	platform->PushMessageIndent();
 	return true;
@@ -297,7 +297,7 @@ bool GCodes::Pop()
 	stackPointer--;
 	drivesRelative = drivesRelativeStack[stackPointer];
 	axesRelative = axesRelativeStack[stackPointer];
-	fileBeingPrinted = fileStack[stackPointer];
+	fileBeingPrinted.MoveFrom(fileStack[stackPointer]);
 	platform->PopMessageIndent();
 	// Remember for next time if we have just been switched
 	// to absolute drive moves
@@ -1562,7 +1562,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 1: // Sleep
 			if (fileBeingPrinted.IsLive())
 			{
-				fileToPrint = fileBeingPrinted;
+				fileToPrint.MoveFrom(fileBeingPrinted);
 			}
 			if (!DisableDrives())
 				return false;
@@ -1597,11 +1597,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 24: // Print/resume-printing the selected file
 			if (fileBeingPrinted.IsLive())
 				break;
-			fileBeingPrinted = fileToPrint;
+			fileBeingPrinted.MoveFrom(fileToPrint);
 			break;
 
 		case 25: // Pause the print
-			fileToPrint = fileBeingPrinted;
+			fileToPrint.MoveFrom(fileBeingPrinted);
 			break;
 
 		case 27: // Report print status - Deprecated

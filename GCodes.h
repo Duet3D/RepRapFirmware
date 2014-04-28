@@ -91,17 +91,9 @@ public:
 	}
 
 	// Assignment operator. This clears out the FileData object we are assigning from.
-	FileData& operator=(FileData& other)
+	void MoveFrom(FileData& other)
 	{
 		Close();
-		f = other.f;
-		other.Init();
-		return *this;
-	}
-
-	// Copy constructor
-	FileData(FileData& other)
-	{
 		f = other.f;
 		other.Init();
 	}
@@ -113,6 +105,12 @@ private:
 	{
 		f = NULL;
 	}
+
+	// Private assignment operator to prevent us assigning these objects
+	FileData& operator=(const FileData&);
+
+	// Private copy constructor to prevent us copying these objects
+	FileData(const FileData&);
 };
 
 //****************************************************************************************************

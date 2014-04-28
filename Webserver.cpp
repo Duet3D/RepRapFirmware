@@ -379,7 +379,7 @@ void Webserver::JsonReport(bool ok, const char* request)
 
 void Webserver::GetJsonResponse(const char* request)
 {
-	if (StringStartsWith(request, "status"))	// web interface v.0.69/0.70 status request
+	if (StringStartsWith(request, "status"))	// new style status request
 	{
 		GetStatusResponse(1);
 		JsonReport(true, request);
@@ -969,12 +969,12 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 		filamentUsed = 0.0;
 		if (length != 0)
 		{
-			const size_t readSize = 1024;					// read 1K bytes at a time
+			const size_t readSize = 512;					// read 512 bytes at a time (tried 1K but it sometimes gives us the wrong data)
 			const size_t overlap = 100;
 			size_t sizeToRead;
 			if (length <= sizeToRead + overlap)
 			{
-				sizeToRead = length;							// read the whole file in one go
+				sizeToRead = length;						// read the whole file in one go
 			}
 			else
 			{
@@ -984,7 +984,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 					sizeToRead += readSize;
 				}
 			}
-			unsigned long seekPos = length - sizeToRead;		// read on a 1K boundary
+			unsigned long seekPos = length - sizeToRead;	// read on a 1K boundary
 			size_t sizeToScan = sizeToRead;
 			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
 			bool foundFilamentUsed = false;
@@ -999,6 +999,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 					break;									// read failed so give up
 				}
 				buf[sizeToScan] = 0;						// add a null terminator
+//debugPrintf("About to scan %u bytes starting: %.40s\n", sizeToScan, buf);
 				if (!foundFilamentUsed)
 				{
 					foundFilamentUsed = FindFilamentUsed(buf, sizeToScan, filamentUsed);
@@ -1021,7 +1022,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 			}
 		}
 		f->Close();
-		//debugPrintf("Setting height %f and filament %f\n", height, filamentUsed);
+//debugPrintf("Set height %f and filament %f\n", height, filamentUsed);
 		return true;
 	}
 	return false;
@@ -1030,6 +1031,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
 bool Webserver::FindHeight(const char* buf, size_t len, float& height)
 {
+//debugPrintf("Scanning %u bytes starting %.100s\n", len, buf);
 	if (len >= 5)
 	{
 		size_t i = len - 5;
@@ -1045,6 +1047,7 @@ bool Webserver::FindHeight(const char* buf, size_t len, float& height)
 					char c = buf[j];
 					if (c == '\n' || c == '\r')
 					{
+//debugPrintf("Found at offset %u text: %.100s\n", i, &buf[i + 4]);
 						// It's not in a comment
 						height = strtod(&buf[i + 4], NULL);
 						return true;
