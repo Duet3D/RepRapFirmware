@@ -34,6 +34,7 @@ GCodes::GCodes(Platform* p, Webserver* w)
 	fileGCode = new GCodeBuffer(platform, "file: ");
 	serialGCode = new GCodeBuffer(platform, "serial: ");
 	cannedCycleGCode = new GCodeBuffer(platform, "macro: ");
+	coolingInverted = false;
 }
 
 void GCodes::Exit()
@@ -1709,14 +1710,21 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 				// So I've added a P parameter to allow the top end of the range to be set, so we can be compatible with those programs.
 				fanMaxPwm = fmax(gb->GetFValue(), 1.0);
 			}
+			if (gb->Seen('I'))
+			{
+				coolingInverted = (gb->GetIValue() != 0);
+			}
 			if (gb->Seen('S'))
 			{
-				platform->CoolingFan(fmax(gb->GetFValue(), 0.0)/fanMaxPwm);
+				if (coolingInverted)
+					platform->CoolingFan(1.0 - fmax(gb->GetFValue(), 0.0)/fanMaxPwm);
+				else
+					platform->CoolingFan(fmax(gb->GetFValue(), 0.0)/fanMaxPwm);
 			}
 			break;
 
 		case 107: // Fan off - deprecated
-			platform->CoolingFan(0.0);
+			platform->CoolingFan(coolingInverted ? 1.0 : 0.0);
 			break;
 
 		// case 109 is later because it falls through to case 116
