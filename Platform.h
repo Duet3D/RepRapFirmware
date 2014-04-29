@@ -334,6 +334,7 @@ public:
 	void Seek(unsigned long pos);
 	void GoToEnd(); // Position the file at the end (so you can write on the end).
 	unsigned long Length(); // File size in bytes
+	void Duplicate();
 
 friend class Platform;
 
@@ -356,6 +357,7 @@ private:
   Platform* platform;
   bool writing;
   unsigned int lastBufferEntry;
+  unsigned int openCount;
 };
 
 
@@ -593,9 +595,6 @@ public:
   const PidParameters& GetPidParameters(size_t heater);
 
 //-------------------------------------------------------------------------------------------------------
-protected:
-  
-  void ReturnFileStore(FileStore* f);  
   
 private:
   

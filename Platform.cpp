@@ -754,9 +754,12 @@ void Platform::PrintMemoryUsage()
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 
-	// Show the reason for the last reset
+	// Show the up time and reason for the last reset
+	const uint32_t now = (uint32_t)Time();		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
-	snprintf(scratchString, STRING_LENGTH, "Last reset reason: %s\n", resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
+	snprintf(scratchString, STRING_LENGTH, "Last reset %02d:%02d:%02d ago, cause: %s\n",
+			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
+			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 
@@ -1036,18 +1039,6 @@ MassStorage* Platform::GetMassStorage()
 	return massStorage;
 }
 
-void Platform::ReturnFileStore(FileStore* fs)
-{
-	for (int i = 0; i < MAX_FILES; i++)
-	{
-		if (files[i] == fs)
-		{
-			files[i]->inUse = false;
-			return;
-		}
-	}
-}
-
 void Platform::Message(char type, const char* message)
 {
 	switch (type)
@@ -1297,9 +1288,8 @@ bool MassStorage::Delete(const char* directory, const char* fileName)
 
 //------------------------------------------------------------------------------------------------
 
-FileStore::FileStore(Platform* p)
+FileStore::FileStore(Platform* p) : platform(p)
 {
-	platform = p;
 }
 
 void FileStore::Init()
@@ -1308,6 +1298,7 @@ void FileStore::Init()
 	inUse = false;
 	writing = false;
 	lastBufferEntry = 0;
+	openCount = 0;
 }
 
 // Open a local file (for example on an SD card).
@@ -1353,20 +1344,39 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 	}
 
 	inUse = true;
+	openCount = 1;
 	return true;
+}
+
+void FileStore::Duplicate()
+{
+	if (!inUse)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to dup a non-open file.\n");
+		return;
+	}
+	++openCount;
 }
 
 void FileStore::Close()
 {
-	if (writing)
+	if (!inUse)
 	{
-		WriteBuffer();
+		platform->Message(HOST_MESSAGE, "Attempt to close a non-open file.\n");
+		return;
 	}
-	f_close(&file);
-	platform->ReturnFileStore(this);
-	inUse = false;
-	writing = false;
-	lastBufferEntry = 0;
+	--openCount;
+	if (openCount == 0)
+	{
+		if (writing)
+		{
+			WriteBuffer();
+		}
+		f_close(&file);
+		inUse = false;
+		writing = false;
+		lastBufferEntry = 0;
+	}
 }
 
 void FileStore::Seek(unsigned long pos)

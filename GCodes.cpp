@@ -34,7 +34,6 @@ GCodes::GCodes(Platform* p, Webserver* w)
 	fileGCode = new GCodeBuffer(platform, "file: ");
 	serialGCode = new GCodeBuffer(platform, "serial: ");
 	cannedCycleGCode = new GCodeBuffer(platform, "macro: ");
-	coolingInverted = false;
 }
 
 void GCodes::Exit()
@@ -69,6 +68,7 @@ void GCodes::Init()
 	dwellTime = longWait;
 	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
 	fanMaxPwm = 1.0;
+	coolingInverted = false;
 }
 
 // This is called from Init and when doing an emergency stop
@@ -106,12 +106,16 @@ void GCodes::doFilePrint(GCodeBuffer* gb)
 		if (fileBeingPrinted.Read(b))
 		{
 			if (gb->Put(b))
+			{
 				gb->SetFinished(ActOnGcode(gb));
+			}
 		}
 		else
 		{
 			if (gb->Put('\n')) // In case there wasn't one ending the file
+			{
 				gb->SetFinished(ActOnGcode(gb));
+			}
 			fileBeingPrinted.Close();
 		}
 	}
@@ -276,7 +280,7 @@ bool GCodes::Push()
 	drivesRelativeStack[stackPointer] = drivesRelative;
 	axesRelativeStack[stackPointer] = axesRelative;
 	feedrateStack[stackPointer] = gFeedRate;
-	fileStack[stackPointer].MoveFrom(fileBeingPrinted);
+	fileStack[stackPointer].CopyFrom(fileBeingPrinted);
 	stackPointer++;
 	platform->PushMessageIndent();
 	return true;
@@ -298,7 +302,7 @@ bool GCodes::Pop()
 	stackPointer--;
 	drivesRelative = drivesRelativeStack[stackPointer];
 	axesRelative = axesRelativeStack[stackPointer];
-	fileBeingPrinted.MoveFrom(fileStack[stackPointer]);
+	fileBeingPrinted.CopyFrom(fileStack[stackPointer]);
 	platform->PopMessageIndent();
 	// Remember for next time if we have just been switched
 	// to absolute drive moves
@@ -686,7 +690,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 	case 0: // Raise Z to 5mm. This only does anything on the first move; on all the others Z is already there
 		moveToDo[Z_AXIS] = Z_DIVE;
 		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
 		if (DoCannedCycleMove(false))
@@ -700,7 +704,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 		activeDrive[X_AXIS] = true;
 		activeDrive[Y_AXIS] = true;
 		// NB - we don't use the Z value
-		moveToDo[DRIVES] = platform->HomeFeedRate(X_AXIS);
+		moveToDo[DRIVES] = platform->MaxFeedrate(X_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
 		if (DoCannedCycleMove(false))
@@ -726,7 +730,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 	case 3:	// Raise the head 5mm
 		moveToDo[Z_AXIS] = Z_DIVE;
 		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
 		if (DoCannedCycleMove(false))
@@ -856,7 +860,9 @@ bool GCodes::DoMultipleZProbe()
 	}
 
 	if (DoSingleZProbeAtPoint())
+	{
 		probeCount++;
+	}
 	if (probeCount >= reprap.GetMove()->NumberOfXYProbePoints())
 	{
 		probeCount = 0;
@@ -1110,11 +1116,16 @@ bool GCodes::DoDwell(GCodeBuffer *gb)
 
 	float dwell = 0.001 * (float) gb->GetLValue(); // P values are in milliseconds; we need seconds
 
-			// Wait for all the queued moves to stop
+	// Wait for all the queued moves to stop
 
 	if (!reprap.GetMove()->AllMovesAreFinished())
 		return false;
 
+	return DoDwellTime(dwell);
+}
+
+bool GCodes::DoDwellTime(float dwell)
+{
 	// Are we already in the dwell?
 
 	if (dwellWaiting)
@@ -1563,7 +1574,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 1: // Sleep
 			if (fileBeingPrinted.IsLive())
 			{
-				fileToPrint.MoveFrom(fileBeingPrinted);
+				fileToPrint.CopyFrom(fileBeingPrinted);
 			}
 			if (!DisableDrives())
 				return false;
@@ -1598,11 +1609,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 24: // Print/resume-printing the selected file
 			if (fileBeingPrinted.IsLive())
 				break;
-			fileBeingPrinted.MoveFrom(fileToPrint);
+			fileBeingPrinted.CopyFrom(fileToPrint);
 			break;
 
 		case 25: // Pause the print
-			fileToPrint.MoveFrom(fileBeingPrinted);
+			fileToPrint.CopyFrom(fileBeingPrinted);
 			break;
 
 		case 27: // Report print status - Deprecated
@@ -1712,14 +1723,18 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			}
 			if (gb->Seen('I'))
 			{
-				coolingInverted = (gb->GetIValue() != 0);
+				coolingInverted = (gb->GetIValue() > 0);
 			}
 			if (gb->Seen('S'))
 			{
 				if (coolingInverted)
+				{
 					platform->CoolingFan(1.0 - fmax(gb->GetFValue(), 0.0)/fanMaxPwm);
+				}
 				else
+				{
 					platform->CoolingFan(fmax(gb->GetFValue(), 0.0)/fanMaxPwm);
+				}
 			}
 			break;
 
@@ -2027,7 +2042,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			break;
 
 		case 999:
-			platform->SoftwareReset(SoftwareResetReason::user);			// doesn't return
+			result = DoDwellTime(0.5);		// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
+			if (result)
+			{
+				platform->SoftwareReset(SoftwareResetReason::user);			// doesn't return
+			}
 			break;
 
 		case 117: // in Marlin mode this means display message on LCD. We don't have an LCD so just return OK.

@@ -90,12 +90,15 @@ public:
 		return f->Read(b);
 	}
 
-	// Assignment operator. This clears out the FileData object we are assigning from.
-	void MoveFrom(FileData& other)
+	// Assignment operator
+	void CopyFrom(const FileData& other)
 	{
 		Close();
 		f = other.f;
-		other.Init();
+		if (f != NULL)
+		{
+			f->Duplicate();
+		}
 	}
 
 private:
@@ -149,6 +152,7 @@ class GCodes
     bool ActOnGcode(GCodeBuffer* gb);
     int SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
+    bool DoDwellTime(float dwell);
     bool DoHome(char *reply, bool& error);
     bool DoSingleZProbeAtPoint();
     bool DoSingleZProbe();
