@@ -613,8 +613,9 @@ private:
 
 	  // The remaining data could alternatively be saved to SD card.
 	  // Note however that if we save them as G codes, we need to provide a way of saving IR and ultrasonic G31 parameters separately.
+	  ZProbeParameters switchZProbeParameters;		// Z probe values for the endstop switch
 	  ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
-	  ZProbeParameters ultrasonicZProbeParameters;	// Z probe values for the IR sensor
+	  ZProbeParameters ultrasonicZProbeParameters;	// Z probe values for the ultrasonic sensor
 	  int zProbeType;								// the type of Z probe we are currently using
 	  PidParameters pidParams[HEATERS];
 	  byte ipAddress[4];
