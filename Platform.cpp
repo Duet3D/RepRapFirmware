@@ -124,6 +124,8 @@ void Platform::Init()
 		nvData.gateWay = GATE_WAY;
 
 		nvData.zProbeType = 0;	// Default is to use the switch
+		nvData.switchZProbeParameters.Init();
+		nvData.switchZProbeParameters.height = 0.0; // Assume the nozzle is at Z=0 when the switch is triggered
 		nvData.irZProbeParameters.Init();
 		nvData.ultrasonicZProbeParameters.Init();
 
@@ -360,8 +362,11 @@ int Platform::GetZProbeType() const
 
 float Platform::ZProbeStopHeight() const
 {
+
 	switch (nvData.zProbeType)
 	{
+	case 0:
+		return nvData.switchZProbeParameters.GetStopHeight(GetTemperature(0));
 	case 1:
 	case 2:
 		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
@@ -387,6 +392,9 @@ bool Platform::GetZProbeParameters(struct ZProbeParameters& params) const
 {
 	switch (nvData.zProbeType)
 	{
+	case 0:
+		params = nvData.switchZProbeParameters;
+		return true;
 	case 1:
 	case 2:
 		params = nvData.irZProbeParameters;
@@ -403,6 +411,12 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 {
 	switch (nvData.zProbeType)
 	{
+	case 0:
+		if (nvData.switchZProbeParameters != params)
+		{
+			nvData.switchZProbeParameters = params;
+			WriteNvData();
+		}
 	case 1:
 	case 2:
 		if (nvData.irZProbeParameters != params)
