@@ -101,6 +101,14 @@ public:
 		}
 	}
 
+	// Move operator
+	void MoveFrom(FileData& other)
+	{
+		Close();
+		f = other.f;
+		other.Init();
+	}
+
 private:
 	FileStore *f;
 

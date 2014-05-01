@@ -42,11 +42,11 @@
 
 #include "lwip/src/include/lwip/opt.h"
 
-#pragma message("Testing LWIP_TCP")
+//#pragma message("Testing LWIP_TCP")
 
 #if LWIP_TCP /* don't build if not configured for use in lwipopts.h */
 
-#pragma message("LWIP_TCP is true")
+//#pragma message("LWIP_TCP is true")
 
 #include "lwip/src/include/lwip/def.h"
 #include "lwip/src/include/lwip/mem.h"

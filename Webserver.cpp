@@ -990,7 +990,11 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 			bool foundFilamentUsed = false;
 			for (;;)
 			{
-				f->Seek(seekPos);
+				if (!f->Seek(seekPos))
+				{
+//debugPrintf("Seek to %lu failed\n", seekPos);
+					break;
+				}
 //debugPrintf("Reading %u bytes at %lu\n", sizeToRead, seekPos);
 				int nbytes = f->Read(buf, sizeToRead);
 				if (nbytes != (int)sizeToRead)
@@ -1010,7 +1014,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 //debugPrintf("Found height = %f\n", height);
 					break;		// quit if found height
 				}
-				if (seekPos == 0 || length - seekPos >= 32768)
+				if (seekPos == 0 || length - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
 				{
 //debugPrintf("Quitting loop at seekPos = %lu\n", seekPos);
 					break;		// quit if reached start of file or already scanned the last 32K of the file

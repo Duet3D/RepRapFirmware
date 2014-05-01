@@ -195,11 +195,12 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 #define FILE_LIST_BRACKET '"'
 #define FILE_LIST_LENGTH (1000) // Maximum length of file list - can't make it much longer unless we also make jsonResponse longer
 
-#define FLASH_LED 'F' // Type byte of a message that is to flash an LED; the next two bytes define 
-                      // the frequency and M/S ratio.
-#define DISPLAY_MESSAGE 'L'  // Type byte of a message that is to appear on a local display; the L is 
-                             // not displayed; \f and \n should be supported.
-#define HOST_MESSAGE 'H' // Type byte of a message that is to be sent to the host; the H is not sent.
+#define FLASH_LED 'F' 		// Type byte of a message that is to flash an LED; the next two bytes define
+                      	  	  // the frequency and M/S ratio.
+#define DISPLAY_MESSAGE 'L'	// Type byte of a message that is to appear on a local display; the L is
+                            // not displayed; \f and \n should be supported.
+#define HOST_MESSAGE 'H'	// Type byte of a message that is to be sent to the host; the H is not sent.
+#define DEBUG_MESSAGE 'D'	// Type byte of a message that is to be sent for debugging; the D is not sent.
 
 /****************************************************************************************************/
 
@@ -270,8 +271,8 @@ public:
 
 	int8_t Status() const; // Returns OR of IOStatus
 	int Read(char& b);
-	void Write(char b);
-	void Write(const char* s);
+	void Write(char b, bool block = false);
+	void Write(const char* s, bool block = false);
 
 friend class Platform;
 
@@ -330,9 +331,9 @@ public:
 	int Read(char* buf, unsigned int nBytes);
 	void Write(char b);
 	void Write(const char* s);
-	void Close();
-	void Seek(unsigned long pos);
-	void GoToEnd(); // Position the file at the end (so you can write on the end).
+	bool Close();
+	bool Seek(unsigned long pos);
+	bool GoToEnd(); // Position the file at the end (so you can write on the end).
 	unsigned long Length(); // File size in bytes
 	void Duplicate();
 
@@ -372,10 +373,10 @@ struct ZProbeParameters
 	float calibTemperature;			// the temperature at which we did the calibration
 	float temperatureCoefficient;	// the variation of height with bed temperature
 
-	void Init()
+	void Init(float h)
 	{
 		adcValue = Z_PROBE_AD_VALUE;
-		height = Z_PROBE_STOP_HEIGHT;
+		height = h;
 		calibTemperature = 20.0;
 		temperatureCoefficient = 0.0;	// no default temperature correction
 	}

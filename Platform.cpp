@@ -124,10 +124,9 @@ void Platform::Init()
 		nvData.gateWay = GATE_WAY;
 
 		nvData.zProbeType = 0;	// Default is to use the switch
-		nvData.switchZProbeParameters.Init();
-		nvData.switchZProbeParameters.height = 0.0; // Assume the nozzle is at Z=0 when the switch is triggered
-		nvData.irZProbeParameters.Init();
-		nvData.ultrasonicZProbeParameters.Init();
+		nvData.switchZProbeParameters.Init(0.0);
+		nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
+		nvData.ultrasonicZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
 
 		for (size_t i = 0; i < HEATERS; ++i)
 		{
@@ -362,7 +361,6 @@ int Platform::GetZProbeType() const
 
 float Platform::ZProbeStopHeight() const
 {
-
 	switch (nvData.zProbeType)
 	{
 	case 0:
@@ -417,6 +415,7 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 			nvData.switchZProbeParameters = params;
 			WriteNvData();
 		}
+		return true;
 	case 1:
 	case 2:
 		if (nvData.irZProbeParameters != params)
@@ -1078,9 +1077,9 @@ void Platform::Message(char type, const char* message)
 //    	line->Write("Can't open message file.\n");
 		for (uint8_t i = 0; i < messageIndent; i++)
 		{
-			line->Write(' ');
+			line->Write(' ', type == DEBUG_MESSAGE);
 		}
-		line->Write(message);
+		line->Write(message, type == DEBUG_MESSAGE);
 	}
 }
 
@@ -1372,45 +1371,48 @@ void FileStore::Duplicate()
 	++openCount;
 }
 
-void FileStore::Close()
+bool FileStore::Close()
 {
 	if (!inUse)
 	{
 		platform->Message(HOST_MESSAGE, "Attempt to close a non-open file.\n");
-		return;
+		return false;
 	}
 	--openCount;
-	if (openCount == 0)
+	if (openCount != 0)
 	{
-		if (writing)
-		{
-			WriteBuffer();
-		}
-		f_close(&file);
-		inUse = false;
-		writing = false;
-		lastBufferEntry = 0;
-	}
-}
-
-void FileStore::Seek(unsigned long pos)
-{
-	if (!inUse)
-	{
-		platform->Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
-		return;
+		return true;
 	}
 	if (writing)
 	{
 		WriteBuffer();
 	}
-	f_lseek(&file, pos);
-	bufferPointer = (writing) ? 0 : FILE_BUF_LEN;
+	FRESULT fr = f_close(&file);
+	inUse = false;
+	writing = false;
+	lastBufferEntry = 0;
+	return fr == FR_OK;
 }
 
-void FileStore::GoToEnd()
+bool FileStore::Seek(unsigned long pos)
 {
-	Seek(Length());
+	if (!inUse)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to seek on a non-open file.\n");
+		return false;
+	}
+	if (writing)
+	{
+		WriteBuffer();
+	}
+	FRESULT fr = f_lseek(&file, pos);
+	bufferPointer = (writing) ? 0 : FILE_BUF_LEN;
+	return fr == FR_OK;
+}
+
+bool FileStore::GoToEnd()
+{
+	return Seek(Length());
 }
 
 unsigned long FileStore::Length()
@@ -1568,28 +1570,33 @@ void Line::Spin()
 	TryFlushOutput();
 }
 
-void Line::Write(char b)
+void Line::Write(char b, bool block)
 {
-	TryFlushOutput();
-	if (outputNumChars == 0 && SerialUSB.canWrite() != 0)
+	do
 	{
-		++inUsbWrite;
-		SerialUSB.write(b);
-		--inUsbWrite;
-	}
-	else if (outputNumChars < lineOutBufSize)
-	{
-		outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = b;
-		++outputNumChars;
-	}
+		TryFlushOutput();
+		if (outputNumChars == 0 && SerialUSB.canWrite() != 0)
+		{
+			++inUsbWrite;
+			SerialUSB.write(b);
+			--inUsbWrite;
+			break;
+		}
+		else if (outputNumChars < lineOutBufSize)
+		{
+			outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = b;
+			++outputNumChars;
+			break;
+		}
+	} while (block);
 	// else discard the character
 }
 
-void Line::Write(const char* b)
+void Line::Write(const char* b, bool block)
 {
 	while (*b)
 	{
-		Write(*b++);
+		Write(*b++, block);
 	}
 }
 

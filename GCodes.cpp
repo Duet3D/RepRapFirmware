@@ -302,7 +302,7 @@ bool GCodes::Pop()
 	stackPointer--;
 	drivesRelative = drivesRelativeStack[stackPointer];
 	axesRelative = axesRelativeStack[stackPointer];
-	fileBeingPrinted.CopyFrom(fileStack[stackPointer]);
+	fileBeingPrinted.MoveFrom(fileStack[stackPointer]);
 	platform->PopMessageIndent();
 	// Remember for next time if we have just been switched
 	// to absolute drive moves
@@ -1089,18 +1089,18 @@ bool GCodes::SendConfigToLine()
 			platform->Message(HOST_MESSAGE, "Configuration file not found\n");
 			return true;
 		}
-		platform->GetLine()->Write('\n');
+		platform->GetLine()->Write('\n', true);
 	}
 
 	char b;
 	while (configFile->Read(b))
 	{
-		platform->GetLine()->Write(b);
+		platform->GetLine()->Write(b, true);
 		if (b == '\n')
 			return false;
 	}
 
-	platform->GetLine()->Write('\n');
+	platform->GetLine()->Write('\n', true);
 	configFile->Close();
 	configFile = NULL;
 	return true;
@@ -1574,7 +1574,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 1: // Sleep
 			if (fileBeingPrinted.IsLive())
 			{
-				fileToPrint.CopyFrom(fileBeingPrinted);
+				fileBeingPrinted.Close();
 			}
 			if (!DisableDrives())
 				return false;
@@ -1609,11 +1609,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 24: // Print/resume-printing the selected file
 			if (fileBeingPrinted.IsLive())
 				break;
-			fileBeingPrinted.CopyFrom(fileToPrint);
+			fileBeingPrinted.MoveFrom(fileToPrint);
 			break;
 
 		case 25: // Pause the print
-			fileToPrint.CopyFrom(fileBeingPrinted);
+			fileToPrint.MoveFrom(fileBeingPrinted);
 			break;
 
 		case 27: // Report print status - Deprecated

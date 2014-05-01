@@ -464,13 +464,14 @@ void Network::SentPacketAcknowledged(HttpState *hs)
 		return;
 	}
 
-	debugPrintf("Network SentPacketAcknowledged: didn't find hs=%08x\n", (unsigned int)hs);
+//	debugPrintf("Network SentPacketAcknowledged: didn't find hs=%08x\n", (unsigned int)hs);
+	RepRapNetworkMessage("Network SentPacketAcknowledged: didn't find hs\n");
 }
 
 void Network::ConnectionError(HttpState* hs)
 {
 	// h points to an http state block that the caller is about to release, so we need to stop referring to it.
-	debugPrintf("Network: ConnectionError\n");
+	//RepRapNetworkMessage("Network: ConnectionError\n");
 
 	// See if it's a ready transaction
 	RequestState* r = FindHs(&readyTransactions, hs);
@@ -497,7 +498,8 @@ void Network::ConnectionError(HttpState* hs)
 	}
 
 	// Else we didn't identify the transaction - maybe we already asked to close it
-	debugPrintf("Network ConnectionError: didn't find hs=%08x\n", (unsigned int)hs);
+	RepRapNetworkMessage("Network ConnectionError: didn't find hs\n");
+//	debugPrintf("Network ConnectionError: didn't find hs=%08x\n", (unsigned int)hs);
 }
 
 void Network::ReceiveInput(const char* data, int length, void* pcb, HttpState* hs)
@@ -540,7 +542,7 @@ void Network::SendAndClose(FileStore *f)
 				f->Close();
 			}
 			AppendTransaction(&freeTransactions, r);
-			debugPrintf("Conn lost before send\n");
+//			debugPrintf("Conn lost before send\n");
 		}
 		else
 		{
