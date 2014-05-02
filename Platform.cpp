@@ -795,6 +795,19 @@ void Platform::PrintMemoryUsage()
 	strncat(scratchString, "\n", STRING_LENGTH);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
+
+	// Show the number of free entries in the file table
+	unsigned int numFreeFiles = 0;
+	for (int8_t i = 0; i < MAX_FILES; i++)
+	{
+		if (!files[i]->inUse)
+		{
+			++numFreeFiles;
+		}
+	}
+	snprintf(scratchString, STRING_LENGTH, "Free file entries: %u\n", numFreeFiles);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
 }
 
 void Platform::ClassReport(char* className, float &lastTime)

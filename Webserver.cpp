@@ -175,19 +175,19 @@ void Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 void Webserver::ProcessGcode(const char* gc)
 {
 	int8_t specialAction = 0;
-	if (StringStartsWith(gc, "M30 "))
+	if (StringStartsWith(gc, "M30 "))		// delete SD card file
 	{
 		specialAction = 1;
 	}
-	else if (StringStartsWith(gc, "M23 "))
+	else if (StringStartsWith(gc, "M23 "))	// select SD card file to print next
 	{
 		specialAction = 2;
 	}
-	else if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))
+	else if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
 	{
 		specialAction = 3;
 	}
-	else if (StringStartsWith(gc, "M503") && !isdigit(gc[4]))
+	else if (StringStartsWith(gc, "M503") && !isdigit(gc[4]))	// echo config.g file
 	{
 		specialAction = 4;
 	}

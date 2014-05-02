@@ -955,18 +955,19 @@ char* GCodes::GetCurrentCoordinates()
 	return scratchString;
 }
 
-void GCodes::OpenFileToWrite(const char* directory, const char* fileName, GCodeBuffer *gb)
+bool GCodes::OpenFileToWrite(const char* directory, const char* fileName, GCodeBuffer *gb)
 {
 	fileBeingWritten = platform->GetFileStore(directory, fileName, true);
+	eofStringCounter = 0;
 	if (fileBeingWritten == NULL)
 	{
-		platform->Message(HOST_MESSAGE, "Can't open GCode file for writing.\n");
+		return false;
 	}
 	else
 	{
 		gb->SetWritingFileDirectory(directory);
+		return true;
 	}
-	eofStringCounter = 0;
 }
 
 void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
@@ -1626,8 +1627,16 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 28: // Write to file
 			{
 				const char* str = gb->GetUnprecedentedString();
-				OpenFileToWrite(platform->GetGCodeDir(), str, gb);
-				snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+				bool ok = OpenFileToWrite(platform->GetGCodeDir(), str, gb);
+				if (ok)
+				{
+					snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+				}
+				else
+				{
+					snprintf(reply, STRING_LENGTH, "Can't open file %s for writing.\n", str);
+					error = true;
+				}
 			}
 			break;
 
@@ -1975,19 +1984,39 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		{
 			const char* str;
 			if (gb->Seen('P'))
+			{
 				str = gb->GetString();
+			}
 			else
+			{
 				str = platform->GetConfigFile();
-			OpenFileToWrite(platform->GetSysDir(), str, gb);
-			snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+			}
+			bool ok = OpenFileToWrite(platform->GetSysDir(), str, gb);
+			if (ok)
+			{
+				snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+			}
+			else
+			{
+				snprintf(reply, STRING_LENGTH, "Can't open file %s for writing.\n", str);
+				error = true;
+			}
 		}
 			break;
 
 		case 560: // Upload reprap.htm
 		{
 			const char* str = INDEX_PAGE;
-			OpenFileToWrite(platform->GetWebDir(), str, gb);
-			snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+			bool ok = OpenFileToWrite(platform->GetWebDir(), str, gb);
+			if (ok)
+			{
+				snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
+			}
+			else
+			{
+				snprintf(reply, STRING_LENGTH, "Can't open file %s for writing.\n", str);
+				error = true;
+			}
 		}
 			break;
 

@@ -648,6 +648,11 @@ bool RequestState::TrySendData()
 {
 	if (LostConnection())
 	{
+		if (fileBeingSent != NULL)
+		{
+			fileBeingSent->Close();
+			fileBeingSent = NULL;
+		}
 		return true;
 	}
 
@@ -678,6 +683,7 @@ bool RequestState::TrySendData()
 
 	if (outputPointer == 0)
 	{
+		// fileBeingSent must already be NULL here
 		return true;
 	}
 	else

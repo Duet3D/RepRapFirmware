@@ -177,7 +177,7 @@ class GCodes
     bool StandbyHeaters();
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);
     void HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend);
-    void OpenFileToWrite(const char* directory, const char* fileName, GCodeBuffer *gb);
+    bool OpenFileToWrite(const char* directory, const char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);
     bool SendConfigToLine();
     void WriteHTMLToFile(char b, GCodeBuffer *gb);
