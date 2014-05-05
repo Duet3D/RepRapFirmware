@@ -644,11 +644,25 @@ void Webserver::ParseGetPost()
 	{
 		i++;
 		j = 0;
-		while (clientLine[i] != ' ')
+		for(;;)
 		{
-			clientQualifier[j] = clientLine[i];
-			j++;
-			i++;
+			char c = clientLine[i++];
+			if (c == ' ')
+			{
+				break;
+			}
+			else if (c == '%' && isalnum(clientLine[i]) && isalnum(clientLine[i + 1]))
+			{
+				c = clientLine[i++];
+				unsigned int v = (isdigit(c)) ? (c - '0') : ((toupper(c) - 'A') + 10);
+				c = clientLine[i++];
+				v = (v << 4) + ((isdigit(c)) ? (c - '0') : ((toupper(c) - 'A') + 10));
+				clientQualifier[j++] = (char)v;
+			}
+			else
+			{
+				clientQualifier[j++] = c;
+			}
 		}
 		clientQualifier[j] = 0;
 	}

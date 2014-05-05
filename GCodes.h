@@ -230,6 +230,7 @@ class GCodes
     bool cannedCycleMoveQueued;
     bool zProbesSet;
     float longWait;
+    bool limitAxes;			// Don't think outside the box.
     bool axisIsHomed[3];	// these record which of the axes have been homed
     float fanMaxPwm;		// the M106 S value that represents 100% fan speed
     bool waitingForMoveToComplete;

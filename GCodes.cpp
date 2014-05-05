@@ -66,6 +66,7 @@ void GCodes::Init()
 	active = true;
 	longWait = platform->Time();
 	dwellTime = longWait;
+	limitAxes = true;
 	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
 	fanMaxPwm = 1.0;
 	coolingInverted = false;
@@ -413,7 +414,7 @@ int GCodes::SetUpMove(GCodeBuffer *gb)
 		}
 	}
 
-	LoadMoveBufferFromGCode(gb, false, !checkEndStops);
+	LoadMoveBufferFromGCode(gb, false, !checkEndStops && limitAxes);
 	moveAvailable = true;
 	return (checkEndStops) ? 2 : 1;
 }
@@ -425,7 +426,9 @@ bool GCodes::ReadMove(float m[], bool& ce)
 	if (!moveAvailable)
 		return false;
 	for (int8_t i = 0; i <= DRIVES; i++) // 1 more for feedrate
+	{
 		m[i] = moveBuffer[i];
+	}
 	ce = checkEndStops;
 	moveAvailable = false;
 	checkEndStops = false;
@@ -450,7 +453,9 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 			platform->Message(HOST_MESSAGE, fileName);
 			platform->Message(HOST_MESSAGE, "\n");
 			if (!Pop())
+			{
 				platform->Message(HOST_MESSAGE, "Cannot pop the stack.\n");
+			}
 			return true;
 		}
 		fileBeingPrinted.Set(f);
@@ -481,7 +486,6 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 	}
 
 	doFilePrint(cannedCycleGCode);
-
 	return false;
 }
 
@@ -1783,16 +1787,20 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 					ELECTRONICS, DATE);
 			break;
 
-		case 109: // Deprecated
+		case 109: 	// Set extruder temperature and wait - deprecated
+		case 190:	// Set bed temperature and wait - deprecated
 			if (gb->Seen('S'))
 			{
-				reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
-				reprap.GetHeat()->Activate(1);
+				uint8_t heater = (code == 190) ? 0 : 1;
+				reprap.GetHeat()->SetActiveTemperature(heater, gb->GetFValue());
+				reprap.GetHeat()->Activate(heater);
 			}
 			/* no break */
 		case 116: // Wait for everything, especially set temperatures
 			if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+			{
 				return false;
+			}
 			result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
 			break;
 
@@ -1832,6 +1840,8 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 		case 141: // Chamber temperature
 			platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
 			break;
+
+		// case 190 is earlier because it falls through to case 116
 
 		case 201: // Set axis accelerations
 			for (int8_t drive = 0; drive < DRIVES; drive++)
@@ -2032,24 +2042,12 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			}
 			break;
 
-//    case 876: // TEMPORARY - this will go away...
-//    	if(gb->Seen('P'))
-//    	{
-//    		iValue = gb->GetIValue();
-//    		if(iValue != 1)
-//    			platform->SetHeatOn(0);
-//    		else
-//    			platform->SetHeatOn(1);
-//    	}
-//    	break;
-
-		case 900:
-			result = DoFileCannedCycles("homex.g");
-			break;
-
-		case 901:
-			result = DoFileCannedCycles("homey.g");
-			break;
+	    case 564: // Think outside the box?
+	    	if(gb->Seen('S'))
+	    	{
+	    	    limitAxes = (gb->GetIValue() != 0);
+	    	}
+	    	break;
 
 		case 906: // Set Motor currents
 			for (uint8_t i = 0; i < DRIVES; i++)

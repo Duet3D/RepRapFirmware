@@ -289,128 +289,200 @@ uint8_t ethernet_phy_set_link(Emac *p_emac, uint8_t uc_phy_addr,
  * \param uc_phy_addr PHY address.
  *
  * Return EMAC_OK if successfully, EMAC_TIMEOUT if timeout (in which case we can keep calling this).
+ * This has been refactored as a state machine, because we must not spend much time calling this when
+ * no network cable is connected, otherwise it slows down printing.
  */
 uint8_t ethernet_phy_auto_negotiate(Emac *p_emac, uint8_t uc_phy_addr)
 {
-	static bool negotiationInProgress = false;
+	static uint8_t state = 0;
+	static uint8_t ul_retry_count;
+	static uint32_t ul_value;
+	static uint32_t ul_phy_anar;
 
-	uint32_t ul_value;
-	uint32_t ul_phy_anar;
-	uint32_t ul_phy_analpar;
-	uint32_t ul_retry_count = 0;
-	uint8_t uc_fd = 0;
-	uint8_t uc_speed = 0;
-	uint8_t uc_rc = EMAC_TIMEOUT;
-
-	if (!negotiationInProgress)
+	switch(state)
 	{
-		emac_enable_management(p_emac, true);
+	case 0:
+		{
+			emac_enable_management(p_emac, true);
 
-		/* Set up control register */
-		uc_rc = emac_phy_read(p_emac, uc_phy_addr, MII_BMCR, &ul_value);
-		if (uc_rc != EMAC_OK) {
-			emac_enable_management(p_emac, false);
-			return uc_rc;
-		}
-	
-		ul_value &= ~MII_AUTONEG; /* Remove auto-negotiation enable */
-		ul_value &= ~(MII_LOOPBACK | MII_POWER_DOWN);
-		ul_value |= MII_ISOLATE; /* Electrically isolate PHY */
-		uc_rc = emac_phy_write(p_emac, uc_phy_addr, MII_BMCR, ul_value);
-		if (uc_rc != EMAC_OK) {
-			emac_enable_management(p_emac, false);
-			return uc_rc;
-		}
+			/* Set up control register */
+			uint8_t uc_rc = emac_phy_read(p_emac, uc_phy_addr, MII_BMCR, &ul_value);
+			if (uc_rc != EMAC_OK)
+			{
+				emac_enable_management(p_emac, false);
+				state = 0;
+				return uc_rc;
+			}
 
-		/*
-		 * Set the Auto_negotiation Advertisement Register.
-		 * MII advertising for Next page.
-		 * 100BaseTxFD and HD, 10BaseTFD and HD, IEEE 802.3.
-		 */
-		ul_phy_anar = MII_TX_FDX | MII_TX_HDX | MII_10_FDX | MII_10_HDX |
-				MII_AN_IEEE_802_3;
-		uc_rc = emac_phy_write(p_emac, uc_phy_addr, MII_ANAR, ul_phy_anar);
-		if (uc_rc != EMAC_OK) {
-			emac_enable_management(p_emac, false);
-			return uc_rc;
+			++state;
 		}
+		break;
 
-		/* Read & modify control register */
-		uc_rc = emac_phy_read(p_emac, uc_phy_addr, MII_BMCR, &ul_value);
-		if (uc_rc != EMAC_OK) {
-			emac_enable_management(p_emac, false);
-			return uc_rc;
+	case 1:
+		{
+			ul_value &= ~MII_AUTONEG; /* Remove auto-negotiation enable */
+			ul_value &= ~(MII_LOOPBACK | MII_POWER_DOWN);
+			ul_value |= MII_ISOLATE; /* Electrically isolate PHY */
+			uint8_t uc_rc = emac_phy_write(p_emac, uc_phy_addr, MII_BMCR, ul_value);
+			if (uc_rc != EMAC_OK)
+			{
+				emac_enable_management(p_emac, false);
+				state = 0;
+				return uc_rc;
+			}
+
+			++state;
 		}
-		ul_value |= MII_SPEED_SELECT | MII_AUTONEG | MII_DUPLEX_MODE;
-		uc_rc = emac_phy_write(p_emac, uc_phy_addr, MII_BMCR, ul_value);
-		if (uc_rc != EMAC_OK) {
-			emac_enable_management(p_emac, false);
-			return uc_rc;
+		break;
+
+	case 2:
+		{
+			/*
+			 * Set the Auto_negotiation Advertisement Register.
+			 * MII advertising for Next page.
+			 * 100BaseTxFD and HD, 10BaseTFD and HD, IEEE 802.3.
+			 */
+			ul_phy_anar = MII_TX_FDX | MII_TX_HDX | MII_10_FDX | MII_10_HDX | MII_AN_IEEE_802_3;
+			uint8_t uc_rc = emac_phy_write(p_emac, uc_phy_addr, MII_ANAR, ul_phy_anar);
+			if (uc_rc != EMAC_OK)
+			{
+				emac_enable_management(p_emac, false);
+				state = 0;
+				return uc_rc;
+			}
+
+			++state;
 		}
-		/* Restart auto negotiation */
-		ul_value |= MII_RESTART_AUTONEG;
-		ul_value &= ~MII_ISOLATE;
-		uc_rc = emac_phy_write(p_emac, uc_phy_addr, MII_BMCR, ul_value);
-		if (uc_rc != EMAC_OK) {
+		break;
+
+	case 3:
+		{
+			/* Read & modify control register */
+			uint8_t uc_rc = emac_phy_read(p_emac, uc_phy_addr, MII_BMCR, &ul_value);
+			if (uc_rc != EMAC_OK)
+			{
+				emac_enable_management(p_emac, false);
+				state = 0;
+				return uc_rc;
+			}
+
+			++state;
+		}
+		break;
+
+	case 4:
+		{
+			ul_value |= MII_SPEED_SELECT | MII_AUTONEG | MII_DUPLEX_MODE;
+			uint8_t uc_rc = emac_phy_write(p_emac, uc_phy_addr, MII_BMCR, ul_value);
+			if (uc_rc != EMAC_OK)
+			{
+				emac_enable_management(p_emac, false);
+				state = 0;
+				return uc_rc;
+			}
+
+			++state;
+		}
+		break;
+
+	case 5:
+		{
+			/* Restart auto negotiation */
+			ul_value |= MII_RESTART_AUTONEG;
+			ul_value &= ~MII_ISOLATE;
+			uint8_t uc_rc = emac_phy_write(p_emac, uc_phy_addr, MII_BMCR, ul_value);
+			if (uc_rc != EMAC_OK)
+			{
+				emac_enable_management(p_emac, false);
+				state = 0;
+				return uc_rc;
+			}
+
+			ul_retry_count = 0;
+			++state;
+		}
+		break;
+
+	case 6:
+		{
+			/* Check if auto negotiation is completed */
+			uint8_t uc_rc = emac_phy_read(p_emac, uc_phy_addr, MII_BMSR, &ul_value);
+			if (uc_rc != EMAC_OK)
+			{
+				emac_enable_management(p_emac, false);
+				state = 0;
+				return uc_rc;
+			}
+
+			/* Done successfully */
+			if (!(ul_value & MII_AUTONEG_COMP))
+			{
+				++ul_retry_count;
+				if (ul_retry_count >= 10000)	// timeout check
+				{
+					state = 0;					// start again
+				}
+				return EMAC_TIMEOUT;
+			}
+			++state;
+		}
+		break;
+
+	case 7:
+		{
+			uint32_t ul_phy_analpar;
+
+			/* Get the auto negotiate link partner base page */
+			uint8_t uc_rc = emac_phy_read(p_emac, uc_phy_addr, MII_ANLPAR, &ul_phy_analpar);
+			if (uc_rc != EMAC_OK)
+			{
+				emac_enable_management(p_emac, false);
+				state = 0;
+				return uc_rc;
+			}
+
+			// The rest only happens once. so we do it all in one go
+			uint8_t uc_fd = false;
+			uint8_t uc_speed = false;
+
+			/* Set up the EMAC link speed */
+			if ((ul_phy_anar & ul_phy_analpar) & MII_TX_FDX)
+			{
+				/* Set MII for 100BaseTX and Full Duplex */
+				uc_speed = true;
+				uc_fd = true;
+			}
+			else if ((ul_phy_anar & ul_phy_analpar) & MII_10_FDX)
+			{
+				/* Set MII for 10BaseT and Full Duplex */
+				uc_speed = false;
+				uc_fd = true;
+			}
+			else if ((ul_phy_anar & ul_phy_analpar) & MII_TX_HDX)
+			{
+				/* Set MII for 100BaseTX and half Duplex */
+				uc_speed = true;
+				uc_fd = false;
+			}
+			else if ((ul_phy_anar & ul_phy_analpar) & MII_10_HDX)
+			{
+				/* Set MII for 10BaseT and half Duplex */
+				uc_speed = false;
+				uc_fd = false;
+			}
+
+			emac_set_speed(p_emac, uc_speed);
+			emac_enable_full_duplex(p_emac, uc_fd);
+			emac_enable_rmii(p_emac, ETH_PHY_MODE);
+			emac_enable_transceiver_clock(p_emac, true);
 			emac_enable_management(p_emac, false);
-			return uc_rc;
+
+			state = 0;			// in case we get called again
+			return EMAC_OK;
 		}
 	}
-	
-	negotiationInProgress = true;		// auto negotiation is in progress
-	
-	/* Check if auto negotiation is completed */
-	while (1) {
-		uc_rc = emac_phy_read(p_emac, uc_phy_addr, MII_BMSR, &ul_value);
-		if (uc_rc != EMAC_OK) {
-			emac_enable_management(p_emac, false);
-			negotiationInProgress = false;
-			return uc_rc;
-		}
-		/* Done successfully */
-		if (ul_value & MII_AUTONEG_COMP) {
-			break;
-		}
 
-		/* Timeout check */
-		if (++ul_retry_count >= 20) {
-			return EMAC_TIMEOUT;
-		}
-	}
-
-	negotiationInProgress = false;
-
-	/* Get the auto negotiate link partner base page */
-	uc_rc = emac_phy_read(p_emac, uc_phy_addr, MII_ANLPAR, &ul_phy_analpar);
-	if (uc_rc != EMAC_OK) {
-		emac_enable_management(p_emac, false);
-		return uc_rc;
-	}
-	
-	/* Set up the EMAC link speed */
-	if ((ul_phy_anar & ul_phy_analpar) & MII_TX_FDX) {
-		/* Set MII for 100BaseTX and Full Duplex */
-		uc_speed = true;
-		uc_fd = true;
-	} else if ((ul_phy_anar & ul_phy_analpar) & MII_10_FDX) {
-		/* Set MII for 10BaseT and Full Duplex */
-		uc_speed = false;
-		uc_fd = true;
-	} else if ((ul_phy_anar & ul_phy_analpar) & MII_TX_HDX) {
-		/* Set MII for 100BaseTX and half Duplex */
-		uc_speed = true;
-		uc_fd = false;
-	} else if ((ul_phy_anar & ul_phy_analpar) & MII_10_HDX) {
-		/* Set MII for 10BaseT and half Duplex */
-		uc_speed = false;
-		uc_fd = false;
-	}
-	emac_set_speed(p_emac, uc_speed);
-	emac_enable_full_duplex(p_emac, uc_fd);
-	emac_enable_rmii(p_emac, ETH_PHY_MODE);
-	emac_enable_transceiver_clock(p_emac, true);
-	emac_enable_management(p_emac, false);
-	return uc_rc;
+	return EMAC_TIMEOUT;	// this just means that we needs to be called again
 }
 
 /**

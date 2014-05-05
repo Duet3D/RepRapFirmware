@@ -260,7 +260,6 @@ bool ethernet_establish_link(void)
 {
 	/* Auto Negotiate, work in RMII mode */
 	if (ethernet_phy_auto_negotiate(EMAC, BOARD_EMAC_PHY_ADDR) != EMAC_OK) {
-		LWIP_DEBUGF(LWIP_DBG_TRACE, ("Auto Negotiate ERROR!\r"));
 		return false;
 	}
 
@@ -269,7 +268,6 @@ bool ethernet_establish_link(void)
 		LWIP_DEBUGF(LWIP_DBG_TRACE,("Set link ERROR!\r"));
 		return false;
 	}
-	/**@todo debug*/
 
 #ifdef FREERTOS_USED
 	/* Restore the priority of the current task. */
