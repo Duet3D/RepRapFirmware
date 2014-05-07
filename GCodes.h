@@ -111,6 +111,7 @@ class GCodes
     bool DisableDrives();												// Turn the motors off
     bool StandbyHeaters();												// Set all heaters to standby temperatures
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);				// Does what it says
+    void SetMACAddress(GCodeBuffer *gb);								// Deals with an M540
     void HandleReply(bool error, bool fromLine, const char* reply, 		// If the GCode is from the serial interface, reply to it
     		char gMOrT, int code, bool resend);
     void OpenFileToWrite(const char* directory,							// Start saving GCodes in a file

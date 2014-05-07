@@ -96,6 +96,7 @@ void Platform::Init()
   ipAddress = IP_ADDRESS;
   netMask = NET_MASK;
   gateWay = GATE_WAY;
+  macAddress = MAC_ADDRESS;
 
   // DRIVES
 
@@ -981,6 +982,10 @@ bool RepRapNetworkHasALiveClient()
 	return reprap.GetPlatform()->GetNetwork()->Status() & clientLive;
 }
 
+// This one is in ethernetif.c
+
+void RepRapNetworkSetMACAddress(const u8_t mac[]);
+
 }	// extern "C"
 
 
@@ -1028,7 +1033,7 @@ void Network::Init()
 {
 	CleanRing();
 	Reset();
-
+	RepRapNetworkSetMACAddress(reprap.GetPlatform()->MACAddress());
 	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 	active = true;
 	sentPacketsOutstanding = 0;

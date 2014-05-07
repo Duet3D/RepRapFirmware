@@ -190,6 +190,7 @@ Licence: GPL
 #define IP_ADDRESS {192, 168, 1, 10} 			// Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
+#define MAC_ADDRESS {0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED}
 
 // The size of the http output buffer is critical to getting fast load times in the browser.
 // If this value is less than the TCP MSS, then Chrome under Windows will delay ack messages by about 120ms,
@@ -460,6 +461,8 @@ class Platform
   const byte* NetMask() const;
   void SetGateWay(byte gw[]);
   const byte* GateWay() const;
+  void SetMACAddress(u8_t mac[]);
+  const u8_t* MACAddress();
   
   friend class FileStore;
   
@@ -635,6 +638,7 @@ class Platform
   byte ipAddress[4];
   byte netMask[4];
   byte gateWay[4];
+  u8_t macAddress[6];
 };
 
 // Seconds
@@ -1062,6 +1066,17 @@ inline void Platform::SetGateWay(byte gw[])
 inline const byte* Platform::GateWay() const
 {
 	return gateWay;
+}
+
+inline void Platform::SetMACAddress(u8_t mac[])
+{
+	for(int8_t i = 0; i < 6; i++)
+		macAddress[i] = mac[i];
+}
+
+inline const byte* Platform::MACAddress()
+{
+	return macAddress;
 }
 
 inline Line* Platform::GetLine() const

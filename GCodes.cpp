@@ -1243,6 +1243,44 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 	}
 }
 
+
+void GCodes::SetMACAddress(GCodeBuffer *gb)
+{
+	u8_t mac[6];
+	const char* ipString = gb->GetString();
+	uint8_t sp = 0;
+	uint8_t spp = 0;
+	uint8_t ipp = 0;
+	while(ipString[sp])
+	{
+		if(ipString[sp] == ':')
+		{
+			mac[ipp] = strtol(&ipString[spp], NULL, 0);
+			ipp++;
+			if(ipp > 5)
+			{
+				platform->Message(HOST_MESSAGE, "Dud MAC address: ");
+				platform->Message(HOST_MESSAGE, gb->Buffer());
+				platform->Message(HOST_MESSAGE, "\n");
+				return;
+			}
+			sp++;
+			spp = sp;
+		}else
+			sp++;
+	}
+	mac[ipp] = strtol(&ipString[spp], NULL, 0);
+	if(ipp == 5)
+	{
+		platform->SetMACAddress(mac);
+	} else
+	{
+		platform->Message(HOST_MESSAGE, "Dud MAC address: ");
+		platform->Message(HOST_MESSAGE, gb->Buffer());
+		platform->Message(HOST_MESSAGE, "\n");
+	}
+}
+
 void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend)
 {
 	if (gMOrT != 'M' || code != 111)	// web server reply for M111 is handled before we get here
@@ -1813,6 +1851,11 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 
     case 503: // list variable settings
     	result = SendConfigToLine();
+    	break;
+
+    case 540:
+    	if(gb->Seen('P'))
+    	    SetMACAddress(gb);
     	break;
 
     case 550: // Set machine name

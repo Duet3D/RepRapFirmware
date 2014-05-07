@@ -3,6 +3,7 @@
 M111 S1; Debug on
 M550 POrmerod; Set the machine's name
 M551 Preprap; Set the password
+M540 P0xBE:0xEF:0xDE:0xAD:0xFE:0xED ; Set the MAC address
 M552 P192.168.1.14; Set the IP address
 M553 P255.255.255.0; Set netmask
 M554 P192.168.1.1; Set the gateway
