@@ -415,12 +415,7 @@ void Webserver::GetJsonResponse(const char* request)
     	strncat(jsonResponse, "\"P\",", STRING_LENGTH); // Printing
     else
     	strncat(jsonResponse, "\"I\",", STRING_LENGTH); // Idle
-    for(int8_t heater = 0; heater < HEATERS; heater++)
-    {
-      strncat(jsonResponse, "\"", STRING_LENGTH);
-      strncat(jsonResponse, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1), STRING_LENGTH);
-      strncat(jsonResponse, "\",", STRING_LENGTH);
-    }
+
     float liveCoordinates[DRIVES+1];
     reprap.GetMove()->LiveCoordinates(liveCoordinates);
     for(int8_t drive = 0; drive < AXES; drive++)
@@ -434,7 +429,18 @@ void Webserver::GetJsonResponse(const char* request)
 
     strncat(jsonResponse, "\"", STRING_LENGTH);
     strncat(jsonResponse, ftoa(0, liveCoordinates[AXES], 4), STRING_LENGTH);
-    strncat(jsonResponse, "\"", STRING_LENGTH);
+    strncat(jsonResponse, "\",", STRING_LENGTH);
+
+    for(int8_t heater = 0; heater < HEATERS; heater++)
+    {
+      strncat(jsonResponse, "\"", STRING_LENGTH);
+      strncat(jsonResponse, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1), STRING_LENGTH);
+      if(heater < HEATERS - 1)
+    	  strncat(jsonResponse, "\",", STRING_LENGTH);
+      else
+    	  strncat(jsonResponse, "\"", STRING_LENGTH);
+    }
+
     strncat(jsonResponse, "]", STRING_LENGTH);
 
     // Send the Z probe value
