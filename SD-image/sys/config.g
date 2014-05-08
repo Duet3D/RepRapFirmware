@@ -8,6 +8,7 @@ M552 P192.168.1.14; Set the IP address
 M553 P255.255.255.0; Set netmask
 M554 P192.168.1.1; Set the gateway
 M555 P2; Emulate Marlin USB output
+T1 ; Select head 1
 M92 E420; Set extruder steps/mm
 G21 ; Work in mm
 G90 ; Absolute positioning
@@ -17,4 +18,4 @@ G31 Z0.5 P500 ; Set Z probe height and threshold
 M906 X800 Y800 Z800 E800 ; Motor currents (mA)
 M201 X1000 Y1000 Z15 E1000; acceleration tweaks for improved finish
 M203 X15000 Y15000 Z300 E3600; speed tweaks for improved finish
-T1 ; Select head 1
+
