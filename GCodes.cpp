@@ -309,6 +309,8 @@ bool GCodes::Pop()
 // Move expects all axis movements to be absolute, and all
 // extruder drive moves to be relative.  This function serves that.
 // If applyLimits is true and we have homed the relevant axes, then we don't allow movement beyond the bed.
+// Note that if no tool is active (i.e. a Tn command hasn't previously been sent) then no E values will
+// be acted upon as there is nothing to apply them to.
 
 void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyLimits)
 {
@@ -1575,8 +1577,15 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 				platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
 				seen = true;
 			}
-			//FIXME handle selectedHead=-1 case
-			//Just sets the currently selected head.
+			else if(selectedHead < 0)
+			{
+				// If no head selected, set the first extruder steps - best we can do
+				if(gb->Seen('E'))
+				{
+					platform->SetDriveStepsPerUnit(AXES, gb->GetFValue());
+					seen=true;
+				}
+			}
 			else if(gb->Seen('E')&& ((drive-AXES) == selectedHead - 1))//then do active extruder
 			{
 					platform->SetDriveStepsPerUnit(AXES+selectedHead - 1, gb->GetFValue());
@@ -1609,7 +1618,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 104: // Deprecated
-    	if(gb->Seen('S'))
+    	if(gb->Seen('S') && selectedHead >= 0)
     	{
 			//only sets the selected head (As set by T#)
     		reprap.GetHeat()->SetActiveTemperature(selectedHead, gb->GetFValue()); // 0 is the bed
@@ -1666,7 +1675,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	break;
 
     case 109: // Deprecated
-    	if(gb->Seen('S'))
+    	if(gb->Seen('S') && selectedHead >= 0)
     	{
     		reprap.GetHeat()->SetActiveTemperature(selectedHead, gb->GetFValue()); // 0 is the bed
     		reprap.GetHeat()->Activate(selectedHead);
@@ -1674,6 +1683,7 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	//check here rather than falling through to M116, we want to just wait for the extruder we specified (otherwise use M116 not M109)
     	result = reprap.GetHeat()->HeaterAtSetTemperature(selectedHead);
     	break;
+
     case 116: // Wait for everything, especially set temperatures
     	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
     		return false;
@@ -1745,31 +1755,46 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 			if(gb->Seen(gCodeLetters[drive])&& drive<AXES)
 			{
 				platform->SetAcceleration(drive, gb->GetFValue());
-			//then do active extruder
-    		}else if(gb->Seen('E')&& ((drive-AXES) == selectedHead-1)){
+    		}else if(selectedHead < 0)
+    		{
+    			if(gb->Seen('E')) // Do first one - best we can do
+    				platform->SetAcceleration(AXES, gb->GetFValue());
+    		}//then do active extruder
+			else if(gb->Seen('E')&& ((drive-AXES) == selectedHead-1)){
 				platform->SetAcceleration(AXES+selectedHead-1, gb->GetFValue()); //Set the E acceleration for the currently selected tool
-			}else{
+			}else
+			{
     			platform->SetAcceleration(drive, -1);
     		}					
     	}
     	break;
 
     case 203: // Set maximum feedrates
+    {
+    	float value;
     	for(int8_t drive = 0; drive < DRIVES; drive++)
     	{
     		//Do AXES first
-			if(gb->Seen(gCodeLetters[drive])&& drive<AXES)
-			{
-				float value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+    		if(gb->Seen(gCodeLetters[drive])&& drive<AXES)
+    		{
+    			value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
     			platform->SetMaxFeedrate(drive, value);
-			}
-			else if(gb->Seen('E')&& ((drive-AXES) == selectedHead-1))//then do active extruder
-			{
-				float value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
-				platform->SetMaxFeedrate(AXES+selectedHead-1, value); //Set the E Steps for the currently selected tool
-			}
+    		}else if(selectedHead < 0)
+    		{
+    			if(gb->Seen('E'))
+    			{
+    				value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+    				platform->SetMaxFeedrate(AXES, value); //Set the E Steps for the first E - best we can do
+    			}
+    		}
+    		else if(gb->Seen('E')&& ((drive-AXES) == selectedHead-1))//then do active extruder
+    		{
+    			value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+    			platform->SetMaxFeedrate(AXES+selectedHead-1, value); //Set the E Steps for the currently selected tool
+    		}
     	}
-    	break;
+    }
+    break;
 
     case 205:  //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
     	break;
@@ -1984,6 +2009,13 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     		{
     			float value = gb->GetFValue(); // mA
     			platform->SetMotorCurrent(i, value);
+    		} else if(selectedHead < 0)
+    		{
+    			if(gb->Seen('E'))
+    			{
+    				float value = gb->GetFValue(); // mA
+    				platform->SetMotorCurrent(AXES, value); // Set first one - best we can do
+    			}
     		}
     		else //do for selected extruder
     		{
@@ -2022,24 +2054,27 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
     	return result;
     }
 
-    error = true;
     for(int8_t i = AXES; i < DRIVES; i++)
     {
     	if(selectedHead == i - AXES + 1)
     		reprap.GetHeat()->Standby(selectedHead);
     }
+
+    bool toolNotFound = true;
     for(int8_t i = AXES; i < DRIVES; i++)
     {    
       if(code == i - AXES + 1)
       {
         selectedHead = code;
         reprap.GetHeat()->Activate(selectedHead);
-        error = false;
+        toolNotFound = false;
       }
     }
 
-    if(error)
-      snprintf(reply, STRING_LENGTH, "Invalid T Code: %s", gb->Buffer());
+    if(toolNotFound)
+    	selectedHead = -1;
+
+//      snprintf(reply, STRING_LENGTH, "Invalid T Code: %s", gb->Buffer());
 
     if(result)
     	HandleReply(error, gb == serialGCode, reply, 'T', code, resend);
