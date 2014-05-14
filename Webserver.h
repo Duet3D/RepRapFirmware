@@ -33,11 +33,13 @@ Licence: GPL
 
 #define KO_START "rr_"
 #define KO_FIRST 3
-#define POST_LENGTH				(1300)			// max amount of POST data we can accept
 
+const unsigned int postLength = 1400;			// max amount of POST data we can accept
+const unsigned int webInputLength = 1400;		// max size of web interface requests and related stuff
 const unsigned int gcodeBufLength = 2048;		// size of our gcode ring buffer, ideally a power of 2
 const unsigned int minReportedFreeBuf = 100;	// the minimum free buffer we report if not zero
-const unsigned int maxReportedFreeBuf = 900;	// the max we own up to having free, to avoid overlong messages
+const unsigned int maxReportedFreeBuf = 1024;	// the max we own up to having free, to avoid overlong messages
+const unsigned int jsopnReplyLength = 1200;		// size of buffer used to hold JSON reply
 
 class Webserver
 {   
@@ -62,7 +64,7 @@ class Webserver
     void SendFile(const char* nameOfFileToSend);
     void ParseQualifier();
     void CheckPassword();
-    void LoadGcodeBuffer(const char* gc, bool convertWeb);
+    void LoadGcodeBuffer(const char* gc);
     bool PrintHeadString();
     bool PrintLinkTable();
     void GetGCodeList();
@@ -86,18 +88,18 @@ class Webserver
     float lastTime;
     float longWait;
     bool receivingPost;
-    char postBoundary[POST_LENGTH];
+    char postBoundary[postLength];
     int boundaryCount;  
-    char postFileName[POST_LENGTH];
+    char postFileName[postLength];
     FileStore* postFile;
     bool postSeen;
     bool getSeen;
     bool clientLineIsBlank;
 
-    char clientLine[STRING_LENGTH+2];	// 2 chars extra so we can append \n\0
-    char clientRequest[STRING_LENGTH];
-    char clientQualifier[STRING_LENGTH];
-    char jsonResponse[STRING_LENGTH+1];
+    char clientLine[webInputLength];
+    char clientRequest[webInputLength];
+    char clientQualifier[webInputLength];
+    char jsonResponse[jsopnReplyLength];
     char gcodeBuffer[gcodeBufLength];
     unsigned int gcodeReadIndex, gcodeWriteIndex;		// head and tail indices into gcodeBuffer
     int clientLinePointer;

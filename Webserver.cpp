@@ -82,7 +82,7 @@ byte Webserver::ReadGCode()
 }
 
 // Process a received string of gcodes
-void Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
+void Webserver::LoadGcodeBuffer(const char* gc)
 {
 	char gcodeTempBuf[GCODE_LENGTH];
 	uint16_t gtp = 0;
@@ -95,40 +95,6 @@ void Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 			gcodeTempBuf[gtp] = 0;
 			ProcessGcode(gcodeTempBuf);
 			return;
-		}
-
-		if (c == '+' && convertWeb)
-		{
-			c = ' ';
-		}
-		else if (c == '%' && convertWeb)
-		{
-			c = *gc++;
-			if (c != 0)
-			{
-				unsigned char uc;
-				if (isalpha(c))
-				{
-					uc = 16 * (c - 'A' + 10);
-				}
-				else
-				{
-					uc = 16 * (c - '0');
-				}
-				c = *gc++;
-				if (c != 0)
-				{
-					if (isalpha(c))
-					{
-						uc += c - 'A' + 10;
-					}
-					else
-					{
-						uc += c - '0';
-					}
-					c = uc;
-				}
-			}
 		}
 
 		if (c == '\n')
@@ -145,7 +111,7 @@ void Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 				inComment = true;
 			}
 
-			if (gtp == ARRAY_SIZE(gcodeTempBuf) - 1)
+			if (gtp == ARRAY_UPB(gcodeTempBuf))
 			{
 				// gcode is too long, we haven't room for another character and a null
 				if (c != ' ' && !inComment)
@@ -219,7 +185,7 @@ void Webserver::ProcessGcode(const char* gc)
 			{
 				char c;
 				size_t i = 0;
-				while (i < STRING_LENGTH && configFile->Read(c))
+				while (i < ARRAY_UPB(gcodeReply) && configFile->Read(c))
 				{
 					gcodeReply[i++] = c;
 				}
@@ -360,7 +326,7 @@ void Webserver::JsonReport(bool ok, const char* request)
 {
 	if (ok)
 	{
-		jsonResponse[STRING_LENGTH] = 0;
+		jsonResponse[ARRAY_UPB(jsonResponse)] = 0;
 		if (reprap.Debug())
 		{
 			platform->Message(HOST_MESSAGE, "JSON response: ");
@@ -395,8 +361,8 @@ void Webserver::GetJsonResponse(const char* request)
 
 	if (StringStartsWith(request, "gcode") && StringStartsWith(clientQualifier, "gcode="))
 	{
-		LoadGcodeBuffer(&clientQualifier[6], true);
-		snprintf(jsonResponse, STRING_LENGTH, "{\"buff\":%u}", GetReportedGcodeBufferSpace());
+		LoadGcodeBuffer(&clientQualifier[6]);
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"buff\":%u}", GetReportedGcodeBufferSpace());
 		JsonReport(true, request);
 		return;
 	}
@@ -404,7 +370,7 @@ void Webserver::GetJsonResponse(const char* request)
 	if (StringStartsWith(request, "files"))
 	{
 		const char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir(), false);
-		snprintf(jsonResponse, STRING_LENGTH, "{\"files\":[%s]}", fileList);
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"files\":[%s]}", fileList);
 		JsonReport(true, request);
 		return;
 	}
@@ -416,11 +382,11 @@ void Webserver::GetJsonResponse(const char* request)
 		bool found = GetFileInfo(clientQualifier + 5, length, height, filament);
 		if (found)
 		{
-			snprintf(jsonResponse, STRING_LENGTH, "{\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\"}", length, height, filament);
+			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\"}", length, height, filament);
 		}
 		else
 		{
-			snprintf(jsonResponse, STRING_LENGTH, "{}");
+			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{}");
 		}
 		JsonReport(true, request);
 		return;
@@ -428,7 +394,7 @@ void Webserver::GetJsonResponse(const char* request)
 
 	if (StringStartsWith(request, "name"))
 	{
-		snprintf(jsonResponse, STRING_LENGTH, "{\"myName\":\"%s\"}", myName);
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"myName\":\"%s\"}", myName);
 		JsonReport(true, request);
 		return;
 	}
@@ -436,21 +402,21 @@ void Webserver::GetJsonResponse(const char* request)
 	if (StringStartsWith(request, "password"))
 	{
 		CheckPassword();
-		snprintf(jsonResponse, STRING_LENGTH, "{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
 		JsonReport(true, request);
 		return;
 	}
 
 	if (StringStartsWith(request, "axes"))
 	{
-		strncpy(jsonResponse, "{\"axes\":", STRING_LENGTH);
+		strncpy(jsonResponse, "{\"axes\":", ARRAY_UPB(jsonResponse));
 		char ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, STRING_LENGTH, "%c\"%.1f\"", ch, platform->AxisLength(drive));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.1f\"", ch, platform->AxisLength(drive));
 			ch = ',';
 		}
-		strncat(jsonResponse, "]}", STRING_LENGTH);
+		strncat(jsonResponse, "]}", ARRAY_UPB(jsonResponse));
 		JsonReport(true, request);
 		return;
 	}
@@ -467,36 +433,36 @@ void Webserver::GetStatusResponse(uint8_t type)
 		// New-style status request
 		// Send the printing/idle status
 		char ch = (reprap.IsStopped()) ? 'S' : (gc->PrintingAFile()) ? 'P' : 'I';
-		snprintf(jsonResponse, STRING_LENGTH, "{\"status\":\"%c\",\"heaters\":", ch);
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"status\":\"%c\",\"heaters\":", ch);
 
 		// Send the heater temperatures
 		ch = '[';
 		for (int8_t heater = 0; heater < HEATERS; heater++)
 		{
-			sncatf(jsonResponse, STRING_LENGTH, "%c\"%.1f\"", ch, reprap.GetHeat()->GetTemperature(heater));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.1f\"", ch, reprap.GetHeat()->GetTemperature(heater));
 			ch = ',';
 		}
 
 		// Send XYZ and extruder positions
 		float liveCoordinates[DRIVES + 1];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		strncat(jsonResponse, "],\"pos\":", STRING_LENGTH);		// announce the XYZ position
+		strncat(jsonResponse, "],\"pos\":", ARRAY_UPB(jsonResponse));		// announce the XYZ position
 		ch = '[';
 		// We currently provide the extruder 0 value here as well as XYZ. This is only expected by V0.69 and V0.70 of the web interface so it can be removed soon.
 		for (int8_t drive = 0; drive < AXES + 1; drive++)
 		//for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, STRING_LENGTH, "%c\"%.2f\"", ch, liveCoordinates[drive]);
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.2f\"", ch, liveCoordinates[drive]);
 			ch = ',';
 		}
-		sncatf(jsonResponse, STRING_LENGTH, "],\"extr\":");		// announce the extruder positions
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "],\"extr\":");		// announce the extruder positions
 		ch = '[';
 		for (int8_t drive = AXES; drive < DRIVES; drive++)		// loop through extruders
 		{
-			sncatf(jsonResponse, STRING_LENGTH, "%c\"%.3f\"", ch, gc->GetExtruderPosition(drive - AXES));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.3f\"", ch, gc->GetExtruderPosition(drive - AXES));
 			ch = ',';
 		}
-		strncat(jsonResponse, "]", STRING_LENGTH);
+		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
 	}
 	else
 	{
@@ -504,10 +470,10 @@ void Webserver::GetStatusResponse(uint8_t type)
 		// These are all returned in a single vector called "poll".
 		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
 		char c = (gc->PrintingAFile()) ? 'P' : 'I';
-		snprintf(jsonResponse, STRING_LENGTH, "{\"poll\":[\"%c\",", c); // Printing
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"poll\":[\"%c\",", c); // Printing
 		for (int8_t heater = 0; heater < HEATERS; heater++)
 		{
-			sncatf(jsonResponse, STRING_LENGTH, "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
 		}
 		// Send XYZ and extruder positions
 		float liveCoordinates[DRIVES + 1];
@@ -515,7 +481,7 @@ void Webserver::GetStatusResponse(uint8_t type)
 		for (int8_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
 		{
 			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
-			sncatf(jsonResponse, STRING_LENGTH, "\"%.2f\"%c", liveCoordinates[drive], ch);
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "\"%.2f\"%c", liveCoordinates[drive], ch);
 		}
 	}
 
@@ -525,43 +491,43 @@ void Webserver::GetStatusResponse(uint8_t type)
 	switch (platform->GetZProbeSecondaryValues(v1, v2))
 	{
 	case 1:
-		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d (%d)\"", v0, v1);
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"probe\":\"%d (%d)\"", v0, v1);
 		break;
 	case 2:
-		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
 		break;
 	default:
-		sncatf(jsonResponse, STRING_LENGTH, ",\"probe\":\"%d\"", v0);
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"probe\":\"%d\"", v0);
 		break;
 	}
 
 	// Send the amount of buffer space available for gcodes
-	sncatf(jsonResponse, STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
+	sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"buff\":%u", GetReportedGcodeBufferSpace());
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	if (type != 0)
 	{
-		sncatf(jsonResponse, STRING_LENGTH, ",\"homed\":[%d,%d,%d]",
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"homed\":[%d,%d,%d]",
 				(gc->GetAxisIsHomed(0)) ? 1 : 0,
 				(gc->GetAxisIsHomed(1)) ? 1 : 0,
 				(gc->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 	else
 	{
-		sncatf(jsonResponse, STRING_LENGTH, ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
 				(gc->GetAxisIsHomed(0)) ? 1 : 0,
 				(gc->GetAxisIsHomed(1)) ? 1 : 0,
 				(gc->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 
 	// Send the response sequence number
-	sncatf(jsonResponse, STRING_LENGTH, ",\"seq\":%u", (unsigned int) seq);
+	sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"seq\":%u", (unsigned int) seq);
 
 	// Send the response to the last command. Do this last because it is long and may need to be truncated.
-	strncat(jsonResponse, ",\"resp\":\"", STRING_LENGTH);
-	size_t jp = strnlen(jsonResponse, STRING_LENGTH);
+	strncat(jsonResponse, ",\"resp\":\"", ARRAY_UPB(jsonResponse));
+	size_t jp = strnlen(jsonResponse, ARRAY_UPB(jsonResponse));
 	const char *p = gcodeReply;
-	while (*p != 0 && jp < STRING_LENGTH - 2)	// leave room for the final '"}'
+	while (*p != 0 && jp < ARRAY_SIZE(jsonResponse) - 3)	// leave room for the final '"}\0'
 	{
 		char c = *p++;
 		char esc;
@@ -588,7 +554,7 @@ void Webserver::GetStatusResponse(uint8_t type)
 		}
 		if (esc)
 		{
-			if (jp == STRING_LENGTH - 3)
+			if (jp == ARRAY_SIZE(jsonResponse) - 4)
 			{
 				break;
 			}
@@ -601,7 +567,7 @@ void Webserver::GetStatusResponse(uint8_t type)
 		}
 	}
 	jsonResponse[jp] = 0;
-	strncat(jsonResponse, "\"}", STRING_LENGTH);
+	strncat(jsonResponse, "\"}", ARRAY_UPB(jsonResponse));
 }
 
 /*
@@ -629,8 +595,8 @@ void Webserver::ParseGetPost()
 		platform->Message(HOST_MESSAGE, "\n");
 	}
 
-	int i = 5;
-	int j = 0;
+	size_t i = 5;
+	size_t j = 0;
 	clientRequest[j] = 0;
 	clientQualifier[0] = 0;
 	while (clientLine[i] != ' ' && clientLine[i] != '?')
@@ -644,12 +610,16 @@ void Webserver::ParseGetPost()
 	{
 		i++;
 		j = 0;
-		for(;;)
+		while(j < ARRAY_UPB(clientQualifier))
 		{
 			char c = clientLine[i++];
 			if (c == ' ')
 			{
 				break;
+			}
+			else if (c == '+')
+			{
+				clientQualifier[j++] = ' ';
 			}
 			else if (c == '%' && isalnum(clientLine[i]) && isalnum(clientLine[i + 1]))
 			{
@@ -686,7 +656,7 @@ void Webserver::ParseClientLine()
 		postSeen = false;
 		getSeen = true;
 		if (!clientRequest[0])
-			strncpy(clientRequest, INDEX_PAGE, STRING_LENGTH);
+			strncpy(clientRequest, INDEX_PAGE, ARRAY_SIZE(clientRequest));
 		return;
 	}
 
@@ -698,7 +668,7 @@ void Webserver::ParseClientLine()
 		getSeen = false;
 		if (!clientRequest[0])
 		{
-			strncpy(clientRequest, INDEX_PAGE, STRING_LENGTH);
+			strncpy(clientRequest, INDEX_PAGE, ARRAY_SIZE(clientRequest));
 		}
 		return;
 	}
@@ -707,15 +677,15 @@ void Webserver::ParseClientLine()
 
 	if (postSeen && ((bnd = StringContains(clientLine, "boundary=")) >= 0))
 	{
-		if (strlen(&clientLine[bnd]) >= POST_LENGTH - 4)
+		if (strlen(&clientLine[bnd]) >= ARRAY_SIZE(postBoundary) - 4)
 		{
 			platform->Message(HOST_MESSAGE, "Post boundary buffer overflow.\n");
 			return;
 		}
 		postBoundary[0] = '-';
 		postBoundary[1] = '-';
-		strncpy(&postBoundary[2], &clientLine[bnd], POST_LENGTH - 3);
-		strncat(postBoundary, "--", POST_LENGTH);
+		strncpy(&postBoundary[2], &clientLine[bnd], ARRAY_SIZE(postBoundary) - 3);
+		strncat(postBoundary, "--", ARRAY_SIZE(postBoundary));
 		return;
 	}
 
@@ -731,10 +701,11 @@ void Webserver::ParseClientLine()
 		while (clientLine[bnd] && clientLine[bnd] != '"')
 		{
 			postFileName[i++] = clientLine[bnd++];
-			if (i >= POST_LENGTH)
+			if (i >= ARRAY_SIZE(postFileName))
 			{
 				i = 0;
 				platform->Message(HOST_MESSAGE, "Post filename buffer overflow.\n");
+				break;
 			}
 		}
 		postFileName[i] = 0;
@@ -805,11 +776,11 @@ bool Webserver::CharFromClient(char c)
 		clientLineIsBlank = false;
 		clientLine[clientLinePointer] = c;
 		clientLinePointer++;
-		if (clientLinePointer >= STRING_LENGTH)
+		if (clientLinePointer + 2 >= ARRAY_SIZE(clientLine))
 		{
 			platform->Message(HOST_MESSAGE, "Client read buffer overflow. Data:\n");
-			clientLine[STRING_LENGTH] = '\n';	// note that clientLine is now STRING_LENGTH+2 characters long to make room for these
-			clientLine[STRING_LENGTH + 1] = 0;
+			clientLine[ARRAY_SIZE(clientLine) - 2] = '\n';
+			clientLine[ARRAY_SIZE(clientLine) - 1] = 0;
 			platform->Message(HOST_MESSAGE, clientLine);
 
 			reprap.GetNetwork()->SendAndClose(NULL);		// close the connection
@@ -942,20 +913,20 @@ void Webserver::HandleReply(const char *s, bool error)
 		if (error)
 		{
 			strcpy(gcodeReply, "Error: ");
-			strncat(gcodeReply, s, STRING_LENGTH);
+			strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
 		}
 		else
 		{
-			strncpy(gcodeReply, s, STRING_LENGTH);
+			strncpy(gcodeReply, s, ARRAY_UPB(gcodeReply));
 		}
-		gcodeReply[STRING_LENGTH] = 0;	// array is dimensioned to STRING_LENGTH+1
+		gcodeReply[ARRAY_UPB(gcodeReply)] = 0;
 	}
 	++seq;
 }
 
 void Webserver::AppendReply(const char *s)
 {
-	strncat(gcodeReply, s, STRING_LENGTH);
+	strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
 }
 
 // Get the actual amount of gcode buffer space we have

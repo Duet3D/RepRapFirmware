@@ -27,7 +27,6 @@ Licence: GPL
 
 #define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
-
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
 class GCodeBuffer
@@ -158,6 +157,9 @@ class GCodes
     bool DoFileCannedCycles(const char* fileName);
     bool FileCannedCyclesReturn();
     bool ActOnGcode(GCodeBuffer* gb);
+    bool HandleGcode(GCodeBuffer* gb);
+    bool HandleMcode(GCodeBuffer* gb);
+    bool HandleTcode(GCodeBuffer* gb);
     int SetUpMove(GCodeBuffer* gb);
     bool DoDwell(GCodeBuffer *gb);
     bool DoDwellTime(float dwell);
@@ -232,9 +234,10 @@ class GCodes
     float longWait;
     bool limitAxes;			// Don't think outside the box.
     bool axisIsHomed[3];	// these record which of the axes have been homed
-    float fanMaxPwm;		// the M106 S value that represents 100% fan speed
     bool waitingForMoveToComplete;
     bool coolingInverted;
+    float speedFactor;		// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
+    float extrusionFactor;	// extrusion factor, normally 1.0
 };
 
 //*****************************************************************************************************

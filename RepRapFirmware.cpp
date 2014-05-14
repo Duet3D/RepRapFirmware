@@ -365,7 +365,7 @@ void debugPrintf(const char* fmt, ...)
 	va_start(p, fmt);
 	vsnprintf(scratchString, ARRAY_SIZE(scratchString), fmt, p);
 	va_end(p);
-	scratchString[ARRAY_SIZE(scratchString) - 1] = 0;
+	scratchString[ARRAY_UPB(scratchString)] = 0;
 	reprap.GetPlatform()->Message(DEBUG_MESSAGE, scratchString);
 }
 

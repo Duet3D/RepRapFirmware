@@ -99,7 +99,7 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 #define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
-#define INSTANT_DVS {10.0, 10.0, 0.2, 2.0}    // (mm/sec)
+#define INSTANT_DVS {10.0, 10.0, 0.2, 2.0}    // (mm/sec) these are also the minimum feed rates which is why I (dc42) decreased X/Y from 15 to 10
 
 // AXES
 
@@ -195,10 +195,8 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 #define FILE_LIST_BRACKET '"'
 #define FILE_LIST_LENGTH (1000) // Maximum length of file list - can't make it much longer unless we also make jsonResponse longer
 
-#define FLASH_LED 'F' 		// Type byte of a message that is to flash an LED; the next two bytes define
-                      	  	  // the frequency and M/S ratio.
-#define DISPLAY_MESSAGE 'L'	// Type byte of a message that is to appear on a local display; the L is
-                            // not displayed; \f and \n should be supported.
+#define FLASH_LED 'F' 		// Type byte of a message that is to flash an LED; the next two bytes define the frequency and M/S ratio.
+#define DISPLAY_MESSAGE 'L'	// Type byte of a message that is to appear on a local display; the L is not displayed; \f and \n should be supported.
 #define HOST_MESSAGE 'H'	// Type byte of a message that is to be sent to the host; the H is not sent.
 #define DEBUG_MESSAGE 'D'	// Type byte of a message that is to be sent for debugging; the D is not sent.
 
@@ -295,6 +293,7 @@ private:
 	uint16_t outputNumChars;
 
 	uint8_t inUsbWrite;
+	bool ignoringOutputLine;
 };
 
 class MassStorage

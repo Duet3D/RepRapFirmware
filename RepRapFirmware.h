@@ -55,7 +55,9 @@ bool StringEquals(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
 
 // Macro to give us the number of elements in an array
-#define ARRAY_SIZE(_x) (sizeof(_x)/sizeof(_x[0]))
+#define ARRAY_SIZE(_x)	(sizeof(_x)/sizeof(_x[0]))
+// Macro to give us the highest valid index into an array i.e. one less than the size
+#define ARRAY_UPB(_x)	(ARRAY_SIZE(_x) - 1)
 
 extern char scratchString[];
 

@@ -988,12 +988,14 @@ void Platform::SetMotorCurrent(byte drive, float current)
 	mcp.setVolatileWiper(potWipes[drive], pot);
 }
 
+//Changed to be compatible with existing gcode norms
+// M106 S0 = fully off M106 S255 = fully on
 void Platform::CoolingFan(float speed)
 {
 	if(coolingFanPin > 0)
 	{
 		// The cooling fan output pin gets inverted if HEAT_ON == 0
-		analogWriteNonDue(coolingFanPin, (uint32_t)( ((HEAT_ON == 0) ? (1.0 - speed) : speed) * 255.0));
+		analogWriteNonDue(coolingFanPin, (uint32_t)( (HEAT_ON == 0) ? (255.0 - speed) : speed));
 	}
 }
 
@@ -1012,25 +1014,6 @@ void Platform::SetInterrupt(float s) // Seconds
   TC_SetRC(TC1, 0, rc);
   TC_Start(TC1, 0);
   NVIC_EnableIRQ(TC3_IRQn);
-}
-
-int8_t Line::Status() const
-{
-//	if(alternateInput != NULL)
-//		return alternateInput->Status();
-	return inputNumChars == 0 ? nothing : byteAvailable;
-}
-
-int Line::Read(char& b)
-{
-//  if(alternateInput != NULL)
-//	return alternateInput->Read(b);
-
-	  if (inputNumChars == 0) return 0;
-	  b = inBuffer[inputGetIndex];
-	  inputGetIndex = (inputGetIndex + 1) % lineInBufsize;
-	  --inputNumChars;
-	  return 1;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -1550,12 +1533,32 @@ Line::Line()
 {
 }
 
+int8_t Line::Status() const
+{
+//	if(alternateInput != NULL)
+//		return alternateInput->Status();
+	return inputNumChars == 0 ? nothing : byteAvailable;
+}
+
+int Line::Read(char& b)
+{
+//  if(alternateInput != NULL)
+//	return alternateInput->Read(b);
+
+	  if (inputNumChars == 0) return 0;
+	  b = inBuffer[inputGetIndex];
+	  inputGetIndex = (inputGetIndex + 1) % lineInBufsize;
+	  --inputNumChars;
+	  return 1;
+}
+
 void Line::Init()
 {
 	inputGetIndex = 0;
 	inputNumChars = 0;
 	outputGetIndex = 0;
 	outputNumChars = 0;
+	ignoringOutputLine = false;
 	SerialUSB.begin(BAUD_RATE);
 	inUsbWrite = false;
 }
@@ -1583,25 +1586,69 @@ void Line::Spin()
 	TryFlushOutput();
 }
 
+// Write a character to USB.
+// If 'block' is true then we don't return until we have either written it to the USB port of put it in the buffer.
+// Otherwise, if the buffer is full then we append ".\n" to the end of it, return immediately and ignore the rest
+// of the data we are asked to print until we get a new line.
 void Line::Write(char b, bool block)
 {
-	do
+	if (block)
 	{
-		TryFlushOutput();
-		if (outputNumChars == 0 && SerialUSB.canWrite() != 0)
+		// We failed to print an unimportant message that (unusually) didn't finish in a newline
+		ignoringOutputLine = false;
+	}
+
+	if (ignoringOutputLine)
+	{
+		// We have already failed to write some characters of this message line, so don't write any of it.
+		// But try to start sending again after this line finishes.
+		if (b == '\n')
 		{
-			++inUsbWrite;
-			SerialUSB.write(b);
-			--inUsbWrite;
-			break;
+			ignoringOutputLine = false;
 		}
-		else if (outputNumChars < lineOutBufSize)
+		TryFlushOutput();		// this may help free things up
+	}
+	else
+	{
+		for(;;)
 		{
-			outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = b;
-			++outputNumChars;
-			break;
+			TryFlushOutput();
+			if (outputNumChars == 0 && SerialUSB.canWrite() != 0)
+			{
+				// We can write the character directly into the USB output buffer
+				++inUsbWrite;
+				SerialUSB.write(b);
+				--inUsbWrite;
+				break;
+			}
+			else if (   outputNumChars + 2 < lineOutBufSize							// save 2 spaces in the output buffer
+					 || (outputNumChars < lineOutBufSize && (block || b == '\n'))	//...unless doing blocking output or writing newline
+					)
+			{
+				outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = b;
+				++outputNumChars;
+				break;
+			}
+			else if (!block)
+			{
+				if (outputNumChars + 2 == lineOutBufSize)
+				{
+					// We still have our 2 free characters, so append ".\n" to the line to indicate it was incomplete
+					outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = '.';
+					++outputNumChars;
+					outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = '\n';
+					++outputNumChars;
+				}
+				else
+				{
+					// As we don't have 2 spare characters in the buffer, we can't have written any of the current line.
+					// So ignore the whole line.
+				}
+				ignoringOutputLine = true;
+				break;
+			}
 		}
-	} while (block);
+	}
 	// else discard the character
 }
 

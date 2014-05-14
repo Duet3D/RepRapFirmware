@@ -68,7 +68,6 @@ void GCodes::Init()
 	dwellTime = longWait;
 	limitAxes = true;
 	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
-	fanMaxPwm = 1.0;
 	coolingInverted = false;
 }
 
@@ -96,6 +95,9 @@ void GCodes::Reset()
 	cannedCycleMoveCount = 0;
 	cannedCycleMoveQueued = false;
 	gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
+    speedFactor = 1.0/60.0;				// default is just to convert from mm/minute to mm/second
+    extrusionFactor = 1.0;
+
 }
 
 void GCodes::doFilePrint(GCodeBuffer* gb)
@@ -362,7 +364,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 			if (gb->Seen(gCodeLetters[i]))
 			{
 				// Doing an extruder. We need to store the relative distance for this move in moveBuffer and the resulting new position in lastPos.
-				float moveArg = gb->GetFValue() * distanceScale;
+				float moveArg = gb->GetFValue() * distanceScale * extrusionFactor;
 				if (doingG92)
 				{
 					moveBuffer[i] = 0.0;			// no move required
@@ -382,10 +384,12 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 		}
 	}
 
-	// Deal with feedrate
+	// Deal with feed rate
 
 	if (gb->Seen(gCodeLetters[DRIVES]))
-		gFeedRate = gb->GetFValue() * distanceScale * 0.016666667; // G Code feedrates are in mm/minute; we need mm/sec
+	{
+		gFeedRate = gb->GetFValue() * distanceScale * speedFactor;
+	}
 
 	moveBuffer[DRIVES] = gFeedRate; // We always set it, as Move may have modified the last one.
 }
@@ -1456,232 +1460,261 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, char reply[STRING_LENGTH])
 
 bool GCodes::ActOnGcode(GCodeBuffer *gb)
 {
-	int code;
+	// M-code parameters might contain letters T and G, e.g. in filenames.
+	// I assume that G-and T-code parameters never contain the letter M.
+	// Therefore we must check for an M-code first.
+	if (gb->Seen('M'))
+	{
+		return HandleMcode(gb);
+	}
+	// I don't think a G-code parameter ever contains letter T, or a T-code ever contains letter G.
+	// So it doesn't matter inn which order we look for them.
+	if (gb->Seen('G'))
+	{
+		return HandleGcode(gb);
+	}
+	if (gb->Seen('T'))
+	{
+		return HandleTcode(gb);
+	}
+
+	// An empty buffer gets discarded
+	HandleReply(false, gb == serialGCode, "", 'X', 0, false);
+	return true;
+}
+
+bool GCodes::HandleGcode(GCodeBuffer* gb)
+{
 	bool result = true;
 	bool error = false;
 	bool resend = false;
-	bool seen;
 	char reply[STRING_LENGTH];
-
 	reply[0] = 0;
 
-	if (gb->Seen('G'))
+	int code = gb->GetIValue();
+	switch (code)
 	{
-		code = gb->GetIValue();
-		switch (code)
+	case 0: // There are no rapid moves...
+	case 1: // Ordinary move
+		if (waitingForMoveToComplete)
 		{
-		case 0: // There are no rapid moves...
-		case 1: // Ordinary move
-			if (waitingForMoveToComplete)
+			// We have already set up this move, but it does endstop checks, so wait for it to complete.
+			// Otherwise, if the next move uses relative coordinates, it will be incorrectly calculated.
+			result = AllMovesAreFinishedAndMoveBufferIsLoaded();
+			if (result)
 			{
-				// We have already set up this move, but it does endstop checks, so wait for it to complete.
-				// Otherwise, if the next move uses relative coordinates, it will be incorrectly calculated.
-				result = AllMovesAreFinishedAndMoveBufferIsLoaded();
-				if (result)
-				{
-					waitingForMoveToComplete = false;
-				}
+				waitingForMoveToComplete = false;
 			}
-			else
+		}
+		else
+		{
+			int res = SetUpMove(gb);
+			if (res == 2)
 			{
-				int res = SetUpMove(gb);
-				if (res == 2)
-				{
-					waitingForMoveToComplete = true;
-				}
-				result = (res == 1);
+				waitingForMoveToComplete = true;
 			}
-			break;
+			result = (res == 1);
+		}
+		break;
 
-		case 4: // Dwell
-			result = DoDwell(gb);
-			break;
+	case 4: // Dwell
+		result = DoDwell(gb);
+		break;
 
-		case 10: // Set offsets
-			result = SetOffsets(gb);
-			break;
+	case 10: // Set offsets
+		result = SetOffsets(gb);
+		break;
 
-		case 20: // Inches (which century are we living in, here?)
-			distanceScale = INCH_TO_MM;
-			break;
+	case 20: // Inches (which century are we living in, here?)
+		distanceScale = INCH_TO_MM;
+		break;
 
-		case 21: // mm
-			distanceScale = 1.0;
-			break;
+	case 21: // mm
+		distanceScale = 1.0;
+		break;
 
-		case 28: // Home
+	case 28: // Home
+		if (NoHome())
+		{
+			homeX = gb->Seen(gCodeLetters[X_AXIS]);
+			homeY = gb->Seen(gCodeLetters[Y_AXIS]);
+			homeZ = gb->Seen(gCodeLetters[Z_AXIS]);
 			if (NoHome())
 			{
-				homeX = gb->Seen(gCodeLetters[X_AXIS]);
-				homeY = gb->Seen(gCodeLetters[Y_AXIS]);
-				homeZ = gb->Seen(gCodeLetters[Z_AXIS]);
-				if (NoHome())
-				{
-					homeX = true;
-					homeY = true;
-					homeZ = true;
-				}
+				homeX = true;
+				homeY = true;
+				homeZ = true;
 			}
-			result = DoHome(reply, error);
-			break;
-
-		case 30: // Z probe/manually set at a position and set that as point P
-			result = SetSingleZProbeAtAPosition(gb);
-			break;
-
-		case 31: // Return the probe value, or set probe variables
-			result = SetPrintZProbe(gb, reply);
-			break;
-
-		case 32: // Probe Z at multiple positions and generate the bed transform
-			if (!(axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS]))
-			{
-				// We can only do bed levelling if X and Y have already been homed
-				strncpy(reply, "Must home X and Y before bed probing", STRING_LENGTH);
-				error = true;
-				result = true;
-			}
-			else
-			{
-				result = DoMultipleZProbe();
-			}
-			break;
-
-		case 90: // Absolute coordinates
-			drivesRelative = false;
-			axesRelative = false;
-			break;
-
-		case 91: // Relative coordinates
-			drivesRelative = true; // Non-axis movements (i.e. extruders)
-			axesRelative = true;   // Axis movements (i.e. X, Y and Z)
-			break;
-
-		case 92: // Set position
-			result = SetPositions(gb);
-			break;
-
-		default:
-			error = true;
-			snprintf(reply, STRING_LENGTH, "invalid G Code: %s", gb->Buffer());
 		}
-		if (result)
-			HandleReply(error, gb == serialGCode, reply, 'G', code, resend);
-		return result;
-	}
+		result = DoHome(reply, error);
+		break;
 
-	if (gb->Seen('M'))
-	{
-		code = gb->GetIValue();
-		switch (code)
+	case 30: // Z probe/manually set at a position and set that as point P
+		result = SetSingleZProbeAtAPosition(gb);
+		break;
+
+	case 31: // Return the probe value, or set probe variables
+		result = SetPrintZProbe(gb, reply);
+		break;
+
+	case 32: // Probe Z at multiple positions and generate the bed transform
+		if (!(axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS]))
 		{
-		case 0: // Stop
-		case 1: // Sleep
-			if (fileBeingPrinted.IsLive())
+			// We can only do bed levelling if X and Y have already been homed
+			strncpy(reply, "Must home X and Y before bed probing", STRING_LENGTH);
+			error = true;
+			result = true;
+		}
+		else
+		{
+			result = DoMultipleZProbe();
+		}
+		break;
+
+	case 90: // Absolute coordinates
+		drivesRelative = false;
+		axesRelative = false;
+		break;
+
+	case 91: // Relative coordinates
+		drivesRelative = true; // Non-axis movements (i.e. extruders)
+		axesRelative = true;   // Axis movements (i.e. X, Y and Z)
+		break;
+
+	case 92: // Set position
+		result = SetPositions(gb);
+		break;
+
+	default:
+		error = true;
+		snprintf(reply, STRING_LENGTH, "invalid G Code: %s", gb->Buffer());
+	}
+	if (result)
+	{
+		HandleReply(error, gb == serialGCode, reply, 'G', code, resend);
+	}
+	return result;
+}
+
+bool GCodes::HandleMcode(GCodeBuffer* gb)
+{
+	bool result = true;
+	bool error = false;
+	bool resend = false;
+	char reply[STRING_LENGTH];
+	reply[0] = 0;
+
+	int code = gb->GetIValue();
+	switch (code)
+	{
+	case 0: // Stop
+	case 1: // Sleep
+		if (fileBeingPrinted.IsLive())
+		{
+			fileBeingPrinted.Close();
+		}
+		if (!DisableDrives())
+			return false;
+		if (!StandbyHeaters())
+			return false; // Should never happen
+		break;
+
+	case 18: // Motors off
+		result = DisableDrives();
+		break;
+
+	case 20:  // Deprecated...
+		if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
+			snprintf(reply, STRING_LENGTH, "GCode files:\n%s",
+					platform->GetMassStorage()->FileList(platform->GetGCodeDir(), gb == serialGCode));
+		else
+			snprintf(reply, STRING_LENGTH, "%s",
+					platform->GetMassStorage()->FileList(platform->GetGCodeDir(), gb == serialGCode));
+		break;
+
+	case 21: // Initialise SD - ignore
+		break;
+
+	case 23: // Set file to print
+		QueueFileToPrint(gb->GetUnprecedentedString());
+		if (fileToPrint.IsLive() && platform->Emulating() == marlin)
+		{
+			snprintf(reply, STRING_LENGTH, "%s", "File opened\nFile selected\n");
+		}
+		break;
+
+	case 24: // Print/resume-printing the selected file
+		if (fileBeingPrinted.IsLive())
+			break;
+		fileBeingPrinted.MoveFrom(fileToPrint);
+		break;
+
+	case 25: // Pause the print
+		fileToPrint.MoveFrom(fileBeingPrinted);
+		break;
+
+	case 27: // Report print status - Deprecated
+		if (fileBeingPrinted.IsLive())
+			strncpy(reply, "SD printing.", STRING_LENGTH);
+		else
+			strncpy(reply, "Not SD printing.", STRING_LENGTH);
+		break;
+
+	case 28: // Write to file
+		{
+			const char* str = gb->GetUnprecedentedString();
+			bool ok = OpenFileToWrite(platform->GetGCodeDir(), str, gb);
+			if (ok)
 			{
-				fileBeingPrinted.Close();
+				snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
 			}
-			if (!DisableDrives())
-				return false;
-			if (!StandbyHeaters())
-				return false; // Should never happen
-			break;
-
-		case 18: // Motors off
-			result = DisableDrives();
-			break;
-
-		case 20:  // Deprecated...
-			if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
-				snprintf(reply, STRING_LENGTH, "GCode files:\n%s",
-						platform->GetMassStorage()->FileList(platform->GetGCodeDir(), gb == serialGCode));
 			else
-				snprintf(reply, STRING_LENGTH, "%s",
-						platform->GetMassStorage()->FileList(platform->GetGCodeDir(), gb == serialGCode));
-			break;
-
-		case 21: // Initialise SD - ignore
-			break;
-
-		case 23: // Set file to print
-			QueueFileToPrint(gb->GetUnprecedentedString());
-			if (fileToPrint.IsLive() && platform->Emulating() == marlin)
 			{
-				snprintf(reply, STRING_LENGTH, "%s", "File opened\nFile selected\n");
+				snprintf(reply, STRING_LENGTH, "Can't open file %s for writing.\n", str);
+				error = true;
 			}
-			break;
+		}
+		break;
 
-		case 24: // Print/resume-printing the selected file
-			if (fileBeingPrinted.IsLive())
-				break;
-			fileBeingPrinted.MoveFrom(fileToPrint);
-			break;
+	case 29: // End of file being written; should be intercepted before getting here
+		platform->Message(HOST_MESSAGE, "GCode end-of-file being interpreted.\n");
+		break;
 
-		case 25: // Pause the print
-			fileToPrint.MoveFrom(fileBeingPrinted);
-			break;
+	case 30:	// Delete file
+		DeleteFile(gb->GetUnprecedentedString());
+		break;
 
-		case 27: // Report print status - Deprecated
-			if (fileBeingPrinted.IsLive())
-				strncpy(reply, "SD printing.", STRING_LENGTH);
-			else
-				strncpy(reply, "Not SD printing.", STRING_LENGTH);
-			break;
+	case 80:	// ATX power on
+	case 81:	// ATX power off
+		platform->SetAtxPower(code == 80);
+		break;
 
-		case 28: // Write to file
-			{
-				const char* str = gb->GetUnprecedentedString();
-				bool ok = OpenFileToWrite(platform->GetGCodeDir(), str, gb);
-				if (ok)
-				{
-					snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
-				}
-				else
-				{
-					snprintf(reply, STRING_LENGTH, "Can't open file %s for writing.\n", str);
-					error = true;
-				}
-			}
-			break;
+	case 82:
+		for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+		{
+			lastPos[extruder - AXES] = 0.0;
+		}
+		drivesRelative = false;
+		break;
 
-		case 29: // End of file being written; should be intercepted before getting here
-			platform->Message(HOST_MESSAGE, "GCode end-of-file being interpreted.\n");
-			break;
+	case 83:
+		for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+		{
+			lastPos[extruder - AXES] = 0.0;
+		}
+		drivesRelative = true;
+		break;
 
-		case 30:	// Delete file
-			DeleteFile(gb->GetUnprecedentedString());
-			break;
+	case 84: // Motors off - deprecated, use M18
+		result = DisableDrives();
+		break;
 
-		case 80:	// ATX power on
-		case 81:	// ATX power off
-			platform->SetAtxPower(code == 80);
-			break;
+	case 85: // Set inactive time
+		break;
 
-		case 82:
-			for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
-			{
-				lastPos[extruder - AXES] = 0.0;
-			}
-			drivesRelative = false;
-			break;
-
-		case 83:
-			for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
-			{
-				lastPos[extruder - AXES] = 0.0;
-			}
-			drivesRelative = true;
-			break;
-
-		case 84: // Motors off - deprecated, use M18
-			result = DisableDrives();
-			break;
-
-		case 85: // Set inactive time
-			break;
-
-		case 92: // Set/report steps/mm for some axes
-			seen = false;
+	case 92: // Set/report steps/mm for some axes
+		{
+			bool seen = false;
 			for (int8_t drive = 0; drive < DRIVES; drive++)
 			{
 				if (gb->Seen(gCodeLetters[drive]))
@@ -1697,300 +1730,319 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 						(int) platform->DriveStepsPerUnit(X_AXIS), (int) platform->DriveStepsPerUnit(Y_AXIS),
 						(int) platform->DriveStepsPerUnit(Z_AXIS), (int) platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
 			}
-			break;
+		}
+		break;
 
-		case 98:
-			if (gb->Seen('P'))
+	case 98:
+		if (gb->Seen('P'))
+		{
+			result = DoFileCannedCycles(gb->GetString());
+		}
+		break;
+
+	case 99:
+		result = FileCannedCyclesReturn();
+		break;
+
+	case 104: // Deprecated
+		if (gb->Seen('S'))
+		{
+			reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
+			reprap.GetHeat()->Activate(1);
+		}
+		break;
+
+	case 105: // Deprecated...
+		strncpy(reply, "T:", STRING_LENGTH);
+		for (int8_t heater = HEATERS - 1; heater > 0; heater--)
+		{
+			sncatf(reply, STRING_LENGTH, "%.1f ", reprap.GetHeat()->GetTemperature(heater));
+		}
+		sncatf(reply, STRING_LENGTH, "B:%.1f", reprap.GetHeat()->GetTemperature(0));
+		break;
+
+	case 106: // Fan on or off
+		if (gb->Seen('I'))
+		{
+			coolingInverted = (gb->GetIValue() > 0);
+		}
+		if (gb->Seen('S'))
+		{
+			float f = gb->GetFValue();
+			f = fmin(f, 255.0);
+			f = fmax(f, 0.0);
+			if (coolingInverted)
 			{
-				result = DoFileCannedCycles(gb->GetString());
+				platform->CoolingFan(255.0 - f);
 			}
-			break;
+			else
+			{
+				platform->CoolingFan(f);
+			}
+		}
+		break;
 
-		case 99:
-			result = FileCannedCyclesReturn();
-			break;
+	case 107: // Fan off - deprecated
+		platform->CoolingFan(coolingInverted ? 255.0 : 0.0);
+		break;
 
-		case 104: // Deprecated
+	case 109: 	// Set extruder temperature and wait - deprecated
+	case 190:	// Set bed temperature and wait - deprecated
+		{
+			int8_t heater = (code == 190) ? 0 : 1;
 			if (gb->Seen('S'))
 			{
-				reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
-				reprap.GetHeat()->Activate(1);
-			}
-			break;
-
-		case 105: // Deprecated...
-			strncpy(reply, "T:", STRING_LENGTH);
-			for (int8_t heater = HEATERS - 1; heater > 0; heater--)
-			{
-				sncatf(reply, STRING_LENGTH, "%.1f ", reprap.GetHeat()->GetTemperature(heater));
-			}
-			sncatf(reply, STRING_LENGTH, "B:%.1f", reprap.GetHeat()->GetTemperature(0));
-			break;
-
-		case 106: // Fan on or off
-			if (gb->Seen('P'))
-			{
-				// slic3r and Cura expect PWM values to go from 0 to 255, but we expect PWM value to go from 0.0 to 1.0.
-				// So I've added a P parameter to allow the top end of the range to be set, so we can be compatible with those programs.
-				fanMaxPwm = fmax(gb->GetFValue(), 1.0);
-			}
-			if (gb->Seen('I'))
-			{
-				coolingInverted = (gb->GetIValue() > 0);
-			}
-			if (gb->Seen('S'))
-			{
-				if (coolingInverted)
-				{
-					platform->CoolingFan(1.0 - fmax(gb->GetFValue(), 0.0)/fanMaxPwm);
-				}
-				else
-				{
-					platform->CoolingFan(fmax(gb->GetFValue(), 0.0)/fanMaxPwm);
-				}
-			}
-			break;
-
-		case 107: // Fan off - deprecated
-			platform->CoolingFan(coolingInverted ? 1.0 : 0.0);
-			break;
-
-		// case 109 is later because it falls through to case 116
-
-		case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
-			break;
-
-		case 111: // Debug level
-			if (gb->Seen('S'))
-				reprap.SetDebug(gb->GetIValue());
-			break;
-
-		case 112: // Emergency stop - acted upon in Webserver
-			break;
-
-		case 114: // Deprecated
-			{
-				const char* str = GetCurrentCoordinates();
-				if (str != 0)
-				{
-					strncpy(reply, str, STRING_LENGTH);
-				}
-				else
-				{
-					result = false;
-				}
-			}
-			break;
-
-		case 115: // Print firmware version
-			snprintf(reply, STRING_LENGTH, "FIRMWARE_NAME:%s FIRMWARE_VERSION:%s ELECTRONICS:%s DATE:%s", NAME, VERSION,
-					ELECTRONICS, DATE);
-			break;
-
-		case 109: 	// Set extruder temperature and wait - deprecated
-		case 190:	// Set bed temperature and wait - deprecated
-			if (gb->Seen('S'))
-			{
-				uint8_t heater = (code == 190) ? 0 : 1;
 				reprap.GetHeat()->SetActiveTemperature(heater, gb->GetFValue());
 				reprap.GetHeat()->Activate(heater);
 			}
-			/* no break */
-		case 116: // Wait for everything, especially set temperatures
 			if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 			{
 				return false;
 			}
-			result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
-			break;
+			result = reprap.GetHeat()->HeaterAtSetTemperature(heater);
+		}
+		break;
 
-		// case 117 is handled later because it falls through to the default case
+	case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
+		break;
 
-		case 120:
-			result = Push();
-			break;
+	case 111: // Debug level
+		if (gb->Seen('S'))
+			reprap.SetDebug(gb->GetIValue());
+		break;
 
-		case 121:
-			result = Pop();
-			break;
+	case 112: // Emergency stop - acted upon in Webserver, but also here in case it comes from USB etc.
+		reprap.EmergencyStop();
+		break;
 
-		case 122:
-			reprap.Diagnostics();
-			break;
-
-		case 126: // Valve open
-			platform->Message(HOST_MESSAGE, "M126 - valves not yet implemented\n");
-			break;
-
-		case 127: // Valve closed
-			platform->Message(HOST_MESSAGE, "M127 - valves not yet implemented\n");
-			break;
-
-		case 135: // Set PID sample interval
-			break;
-
-		case 140: // Set bed temperature
-			if (gb->Seen('S'))
+	case 114: // Deprecated
+		{
+			const char* str = GetCurrentCoordinates();
+			if (str != 0)
 			{
-				reprap.GetHeat()->SetActiveTemperature(0, gb->GetFValue());
-				reprap.GetHeat()->Activate(0);
+				strncpy(reply, str, STRING_LENGTH);
 			}
-			break;
-
-		case 141: // Chamber temperature
-			platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
-			break;
-
-		// case 190 is earlier because it falls through to case 116
-
-		case 201: // Set axis accelerations
-			for (int8_t drive = 0; drive < DRIVES; drive++)
-			{
-				if (gb->Seen(gCodeLetters[drive]))
-				{
-					float value = gb->GetFValue();
-					platform->SetAcceleration(drive, value);
-				}
-			}
-			break;
-
-		case 203: // Set maximum feed rates
-			for (int8_t drive = 0; drive < DRIVES; drive++)
-			{
-				if (gb->Seen(gCodeLetters[drive]))
-				{
-					float value = gb->GetFValue() * distanceScale * 0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
-					platform->SetMaxFeedrate(drive, value);
-				}
-			}
-			break;
-
-		case 205: //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
-			break;
-
-		case 206:  // Offset axes
-			result = OffsetAxes(gb);
-			break;
-
-		case 208: // Set maximum axis lengths
-			for (int8_t axis = 0; axis < AXES; axis++)
-			{
-				if (gb->Seen(gCodeLetters[axis]))
-				{
-					float value = gb->GetFValue() * distanceScale;
-					platform->SetAxisLength(axis, value);
-				}
-			}
-			break;
-
-		case 210: // Set homing feedrates
-			for (int8_t axis = 0; axis < AXES; axis++)
-			{
-				if (gb->Seen(gCodeLetters[axis]))
-				{
-					float value = gb->GetFValue() * distanceScale * 0.016666667;
-					platform->SetHomeFeedRate(axis, value);
-				}
-			}
-			break;
-
-		case 301: // Set hot end PID values
-			SetPidParameters(gb, 1, reply);
-			break;
-
-		case 302: // Allow cold extrudes
-			break;
-
-		case 304: // Set heated bed parameters
-			SetPidParameters(gb, 0, reply);
-			break;
-
-		case 305:
-			SetHeaterParameters(gb, reply);
-			break;
-
-		case 503: // list variable settings
-			result = SendConfigToLine();
-			break;
-
-		case 550: // Set machine name
-			if (gb->Seen('P'))
-				reprap.GetWebserver()->SetName(gb->GetString());
-			break;
-
-		case 551: // Set password
-			if (gb->Seen('P'))
-				reprap.GetWebserver()->SetPassword(gb->GetString());
-			break;
-
-		case 552: // Set/Get IP address
-			if (gb->Seen('P'))
-				SetEthernetAddress(gb, code);
 			else
 			{
-				const byte *ip = platform->IPAddress();
-				snprintf(reply, STRING_LENGTH, "IP address: %d.%d.%d.%d\n ", ip[0], ip[1], ip[2], ip[3]);
+				result = false;
 			}
-			break;
+		}
+		break;
 
-		case 553: // Set/Get netmask
-			if (gb->Seen('P'))
-				SetEthernetAddress(gb, code);
-			else
-			{
-				const byte *nm = platform->NetMask();
-				snprintf(reply, STRING_LENGTH, "Net mask: %d.%d.%d.%d\n ", nm[0], nm[1], nm[2], nm[3]);
-			}
-			break;
+	case 115: // Print firmware version
+		snprintf(reply, STRING_LENGTH, "FIRMWARE_NAME:%s FIRMWARE_VERSION:%s ELECTRONICS:%s DATE:%s", NAME, VERSION,
+				ELECTRONICS, DATE);
+		break;
 
-		case 554: // Set/Get gateway
-			if (gb->Seen('P'))
-				SetEthernetAddress(gb, code);
-			else
-			{
-				const byte *gw = platform->GateWay();
-				snprintf(reply, STRING_LENGTH, "Gateway: %d.%d.%d.%d\n ", gw[0], gw[1], gw[2], gw[3]);
-			}
-			break;
+	case 116: // Wait for everything, especially set temperatures
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		{
+			return false;
+		}
+		result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
+		break;
 
-		case 555: // Set firmware type to emulate
-			if (gb->Seen('P'))
-				platform->SetEmulating((Compatibility) gb->GetIValue());
-			break;
+	// case 117 is handled later because it falls through to the default case
 
-		case 556: // Axis compensation
-			if (gb->Seen('S'))
+	case 120:
+		result = Push();
+		break;
+
+	case 121:
+		result = Pop();
+		break;
+
+	case 122:
+		reprap.Diagnostics();
+		break;
+
+	case 126: // Valve open
+		platform->Message(HOST_MESSAGE, "M126 - valves not yet implemented\n");
+		break;
+
+	case 127: // Valve closed
+		platform->Message(HOST_MESSAGE, "M127 - valves not yet implemented\n");
+		break;
+
+	case 135: // Set PID sample interval
+		break;
+
+	case 140: // Set bed temperature
+		if (gb->Seen('S'))
+		{
+			reprap.GetHeat()->SetActiveTemperature(0, gb->GetFValue());
+			reprap.GetHeat()->Activate(0);
+		}
+		break;
+
+	case 141: // Chamber temperature
+		platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
+		break;
+
+	// case 190 is with case 109 because it used the same code
+
+	case 201: // Set axis accelerations
+		for (int8_t drive = 0; drive < DRIVES; drive++)
+		{
+			if (gb->Seen(gCodeLetters[drive]))
 			{
 				float value = gb->GetFValue();
-				for (int8_t axis = 0; axis < AXES; axis++)
-					if (gb->Seen(gCodeLetters[axis]))
-						reprap.GetMove()->SetAxisCompensation(axis, gb->GetFValue() / value);
+				platform->SetAcceleration(drive, value);
 			}
-			break;
+		}
+		break;
 
-		case 557: // Set Z probe point coordinates
-			if (gb->Seen('P'))
+	case 203: // Set maximum feed rates
+		for (int8_t drive = 0; drive < DRIVES; drive++)
+		{
+			if (gb->Seen(gCodeLetters[drive]))
 			{
-				int iValue = gb->GetIValue();
-				if (gb->Seen(gCodeLetters[X_AXIS]))
-					reprap.GetMove()->SetXBedProbePoint(iValue, gb->GetFValue());
-				if (gb->Seen(gCodeLetters[Y_AXIS]))
-					reprap.GetMove()->SetYBedProbePoint(iValue, gb->GetFValue());
+				float value = gb->GetFValue() * distanceScale * 0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+				platform->SetMaxFeedrate(drive, value);
 			}
-			break;
+		}
+		break;
 
-		case 558: // Set Z probe type
-			if (gb->Seen('P'))
-			{
-				platform->SetZProbeType(gb->GetIValue());
-			}
-			else
-			{
-				snprintf(reply, STRING_LENGTH, "%d", platform->GetZProbeType());
-			}
-			break;
+	case 205: //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
+		break;
 
-		case 559: // Upload config.g
+	case 206:  // Offset axes
+		result = OffsetAxes(gb);
+		break;
+
+	case 208: // Set maximum axis lengths
+		for (int8_t axis = 0; axis < AXES; axis++)
+		{
+			if (gb->Seen(gCodeLetters[axis]))
+			{
+				float value = gb->GetFValue() * distanceScale;
+				platform->SetAxisLength(axis, value);
+			}
+		}
+		break;
+
+	case 210: // Set homing feed rates
+		for (int8_t axis = 0; axis < AXES; axis++)
+		{
+			if (gb->Seen(gCodeLetters[axis]))
+			{
+				float value = gb->GetFValue() * distanceScale * 0.016666667;
+				platform->SetHomeFeedRate(axis, value);
+			}
+		}
+		break;
+
+	case 220:	// set speed factor override percentage
+		if (gb->Seen('S'))
+		{
+			speedFactor = gb->GetFValue()/(60 * 100.0);		// include the conversion from mm/minute to mm/second
+		}
+		break;
+
+	case 221:	// set extrusion factor override percentage
+		if (gb->Seen('S'))
+		{
+			extrusionFactor = gb->GetFValue()/100.0;
+		}
+		break;
+
+	case 301: // Set hot end PID values
+		SetPidParameters(gb, 1, reply);
+		break;
+
+	case 302: // Allow cold extrudes
+		break;
+
+	case 304: // Set heated bed parameters
+		SetPidParameters(gb, 0, reply);
+		break;
+
+	case 305:
+		SetHeaterParameters(gb, reply);
+		break;
+
+	case 503: // list variable settings
+		result = SendConfigToLine();
+		break;
+
+	case 550: // Set machine name
+		if (gb->Seen('P'))
+			reprap.GetWebserver()->SetName(gb->GetString());
+		break;
+
+	case 551: // Set password
+		if (gb->Seen('P'))
+			reprap.GetWebserver()->SetPassword(gb->GetString());
+		break;
+
+	case 552: // Set/Get IP address
+		if (gb->Seen('P'))
+			SetEthernetAddress(gb, code);
+		else
+		{
+			const byte *ip = platform->IPAddress();
+			snprintf(reply, STRING_LENGTH, "IP address: %d.%d.%d.%d\n ", ip[0], ip[1], ip[2], ip[3]);
+		}
+		break;
+
+	case 553: // Set/Get netmask
+		if (gb->Seen('P'))
+			SetEthernetAddress(gb, code);
+		else
+		{
+			const byte *nm = platform->NetMask();
+			snprintf(reply, STRING_LENGTH, "Net mask: %d.%d.%d.%d\n ", nm[0], nm[1], nm[2], nm[3]);
+		}
+		break;
+
+	case 554: // Set/Get gateway
+		if (gb->Seen('P'))
+			SetEthernetAddress(gb, code);
+		else
+		{
+			const byte *gw = platform->GateWay();
+			snprintf(reply, STRING_LENGTH, "Gateway: %d.%d.%d.%d\n ", gw[0], gw[1], gw[2], gw[3]);
+		}
+		break;
+
+	case 555: // Set firmware type to emulate
+		if (gb->Seen('P'))
+			platform->SetEmulating((Compatibility) gb->GetIValue());
+		break;
+
+	case 556: // Axis compensation
+		if (gb->Seen('S'))
+		{
+			float value = gb->GetFValue();
+			for (int8_t axis = 0; axis < AXES; axis++)
+				if (gb->Seen(gCodeLetters[axis]))
+					reprap.GetMove()->SetAxisCompensation(axis, gb->GetFValue() / value);
+		}
+		break;
+
+	case 557: // Set Z probe point coordinates
+		if (gb->Seen('P'))
+		{
+			int iValue = gb->GetIValue();
+			if (gb->Seen(gCodeLetters[X_AXIS]))
+				reprap.GetMove()->SetXBedProbePoint(iValue, gb->GetFValue());
+			if (gb->Seen(gCodeLetters[Y_AXIS]))
+				reprap.GetMove()->SetYBedProbePoint(iValue, gb->GetFValue());
+		}
+		break;
+
+	case 558: // Set Z probe type
+		if (gb->Seen('P'))
+		{
+			platform->SetZProbeType(gb->GetIValue());
+		}
+		else
+		{
+			snprintf(reply, STRING_LENGTH, "%d", platform->GetZProbeType());
+		}
+		break;
+
+	case 559: // Upload config.g
 		{
 			const char* str;
 			if (gb->Seen('P'))
@@ -2012,9 +2064,9 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 				error = true;
 			}
 		}
-			break;
+		break;
 
-		case 560: // Upload reprap.htm
+	case 560: // Upload reprap.htm
 		{
 			const char* str = INDEX_PAGE;
 			bool ok = OpenFileToWrite(platform->GetWebDir(), str, gb);
@@ -2028,111 +2080,109 @@ bool GCodes::ActOnGcode(GCodeBuffer *gb)
 				error = true;
 			}
 		}
-			break;
+		break;
 
-		case 561:
-			reprap.GetMove()->SetIdentityTransform();
-			break;
+	case 561:
+		reprap.GetMove()->SetIdentityTransform();
+		break;
 
-		case 562: // Reset temperature fault - use with great caution
-			if (gb->Seen('P'))
-			{
-				int iValue = gb->GetIValue();
-				reprap.GetHeat()->ResetFault(iValue);
-			}
-			break;
-
-	    case 564: // Think outside the box?
-	    	if(gb->Seen('S'))
-	    	{
-	    	    limitAxes = (gb->GetIValue() != 0);
-	    	}
-	    	break;
-
-		case 906: // Set Motor currents
-			for (uint8_t i = 0; i < DRIVES; i++)
-			{
-				if (gb->Seen(gCodeLetters[i]))
-				{
-					float value = gb->GetFValue(); // mA
-					platform->SetMotorCurrent(i, value);
-				}
-			}
-			break;
-
-		case 998:
-			if (gb->Seen('P'))
-			{
-				snprintf(reply, STRING_LENGTH, "%s", gb->GetIValue());
-				resend = true;
-			}
-			break;
-
-		case 999:
-			result = DoDwellTime(0.5);		// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
-			if (result)
-			{
-				platform->SoftwareReset(SoftwareResetReason::user);			// doesn't return
-			}
-			break;
-
-		case 117: // in Marlin mode this means display message on LCD. We don't have an LCD so just return OK.
-			if (platform->Emulating() == marlin)
-			{
-				break;
-			}
-			// no break
-		default:
-			error = true;
-			snprintf(reply, STRING_LENGTH, "invalid M Code: %s", gb->Buffer());
+	case 562: // Reset temperature fault - use with great caution
+		if (gb->Seen('P'))
+		{
+			int iValue = gb->GetIValue();
+			reprap.GetHeat()->ResetFault(iValue);
 		}
+		break;
+
+	case 564: // Think outside the box?
+		if(gb->Seen('S'))
+		{
+			limitAxes = (gb->GetIValue() != 0);
+		}
+		break;
+
+	case 906: // Set Motor currents
+		for (uint8_t i = 0; i < DRIVES; i++)
+		{
+			if (gb->Seen(gCodeLetters[i]))
+			{
+				float value = gb->GetFValue(); // mA
+				platform->SetMotorCurrent(i, value);
+			}
+		}
+		break;
+
+	case 998:
+		if (gb->Seen('P'))
+		{
+			snprintf(reply, STRING_LENGTH, "%s", gb->GetIValue());
+			resend = true;
+		}
+		break;
+
+	case 999:
+		result = DoDwellTime(0.5);		// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
 		if (result)
 		{
-			HandleReply(error, gb == serialGCode, reply, 'M', code, resend);
+			platform->SoftwareReset(SoftwareResetReason::user);			// doesn't return
 		}
-		return result;
-	}
+		break;
 
-	if (gb->Seen('T'))
-	{
-		code = gb->GetIValue();
-		if (code == selectedHead)
+	case 117: // in Marlin mode this means display message on LCD. We don't have an LCD so just return OK.
+		if (platform->Emulating() == marlin)
 		{
-			if (result)
-				HandleReply(error, gb == serialGCode, reply, 'T', code, resend);
-			return result;
+			break;
 		}
-
+		// no break
+	default:
 		error = true;
-		for (int8_t i = AXES; i < DRIVES; i++)
-		{
-			if (selectedHead == i - AXES)
-				reprap.GetHeat()->Standby(selectedHead + 1); // + 1 because 0 is the Bed
-		}
-		for (int8_t i = AXES; i < DRIVES; i++)
-		{
-			if (code == i - AXES)
-			{
-				selectedHead = code;
-				reprap.GetHeat()->Activate(selectedHead + 1); // 0 is the Bed
-				error = false;
-			}
-		}
+		snprintf(reply, STRING_LENGTH, "invalid M Code: %s", gb->Buffer());
+	}
+	if (result)
+	{
+		HandleReply(error, gb == serialGCode, reply, 'M', code, resend);
+	}
+	return result;
+}
 
-		if (error)
-			snprintf(reply, STRING_LENGTH, "Invalid T Code: %s", gb->Buffer());
+bool GCodes::HandleTcode(GCodeBuffer* gb)
+{
+	bool error = false;
+	char reply[STRING_LENGTH];
+	reply[0] = 0;
 
-		if (result)
-			HandleReply(error, gb == serialGCode, reply, 'T', code, resend);
-		return result;
+	int code = gb->GetIValue();
+	if (code == selectedHead)
+	{
+		HandleReply(error, gb == serialGCode, reply, 'T', code, false);
+		return true;
 	}
 
-	// An empty buffer jumps to here and gets discarded
+	error = true;
+	for (int8_t i = AXES; i < DRIVES; i++)
+	{
+		if (selectedHead == i - AXES)
+		{
+			reprap.GetHeat()->Standby(selectedHead + 1); // + 1 because 0 is the Bed
+		}
+	}
+	for (int8_t i = AXES; i < DRIVES; i++)
+	{
+		if (code == i - AXES)
+		{
+			selectedHead = code;
+			reprap.GetHeat()->Activate(selectedHead + 1); // 0 is the Bed
+			error = false;
+		}
+	}
 
-	if (result)
-		HandleReply(error, gb == serialGCode, reply, 'X', code, resend);
+	if (error)
+	{
+		snprintf(reply, STRING_LENGTH, "Invalid T Code: %s", gb->Buffer());
+	}
 
-	return result;
+	HandleReply(error, gb == serialGCode, reply, 'T', code, false);
+	return true;
 }
 
 // Return the amount of filament extruded
@@ -2321,7 +2371,7 @@ const char* GCodeBuffer::GetUnprecedentedString()
 		return gcodeBuffer; // Good idea?
 	}
 
-	char* result = &gcodeBuffer[readPointer + 1];
+	const char* result = &gcodeBuffer[readPointer + 1];
 	readPointer = -1;
 	return result;
 }

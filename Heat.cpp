@@ -63,29 +63,22 @@ void Heat::Diagnostics()
   platform->Message(HOST_MESSAGE, "Heat Diagnostics:\n"); 
 }
 
-bool Heat::AllHeatersAtSetTemperatures()
+bool Heat::AllHeatersAtSetTemperatures() const
 {
-	float dt;
 	for(int8_t heater = 0; heater < HEATERS; heater++)
 	{
-		dt = GetTemperature(heater);
-		if(pids[heater]->Active())
-		{
-			if(GetActiveTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
-				dt = 0.0;
-			else
-				dt = fabs(dt - GetActiveTemperature(heater));
-		} else
-		{
-			if(GetStandbyTemperature(heater) < TEMPERATURE_LOW_SO_DONT_CARE)
-				dt = 0.0;
-			else
-				dt = fabs(dt - GetStandbyTemperature(heater));
-		}
-		if(dt > TEMPERATURE_CLOSE_ENOUGH)
+		if (!HeaterAtSetTemperature(heater))
 			return false;
 	}
 	return true;
+}
+
+//query an individual heater
+bool Heat::HeaterAtSetTemperature(int8_t heater) const
+{
+	float dt = GetTemperature(heater);
+	float target = (pids[heater]->Active()) ? GetActiveTemperature(heater) : GetStandbyTemperature(heater);
+	return (target < TEMPERATURE_LOW_SO_DONT_CARE) || (fabs(dt - target) <= TEMPERATURE_CLOSE_ENOUGH);
 }
 
 //******************************************************************************************************
