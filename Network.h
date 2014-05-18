@@ -58,14 +58,13 @@ class RequestState
 public:
 	friend class Network;
 
-protected:
 	RequestState(RequestState* n);
 	void Set(const char* d, int l, void* pc, HttpState* h);
 	bool Read(char& b);
 	void SentPacketAcknowledged();
 	void Write(char b);
 	void Write(const char* s);
-	void Vprintf(const char *fmt, va_list v);
+	void Printf(const char *fmt, ...);
 	void Close();
 	bool TrySendData();
 	void SetConnectionLost();
@@ -100,10 +99,7 @@ public:
 	void ConnectionError(HttpState* h);
 	bool Active() const;
 	bool LinkIsUp();
-	bool Read(char& b);
-	void Write(char b);
-	void Write(const char* s);
-	void Printf(const char *fmt, ...);
+	RequestState *GetRequest() const { return readyTransactions; }
 	void SendAndClose(FileStore *f);
 	bool HaveData() const;
 
@@ -122,5 +118,19 @@ private:
 	RequestState * volatile closingTransactions;
 	bool active;
 };
+
+// Webserver calls this to read bytes that have come in from the network.
+// Inlined to improve upload speed.
+
+inline bool RequestState::Read(char& b)
+{
+	if (LostConnection() || inputPointer >= inputLength)
+	{
+		return false;
+	}
+
+	b = inputData[inputPointer++];
+	return true;
+}
 
 #endif

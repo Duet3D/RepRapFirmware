@@ -103,7 +103,8 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 
 // AXES
 
-#define AXIS_LENGTHS {220, 200, 200} // mm
+#define AXIS_MAXIMA {220, 200, 200} 	// mm
+#define AXIS_MINIMA {0, 0, 0}			// mm
 #define HOME_FEEDRATES {50.0, 50.0, 1.0}  // mm/sec
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}
 
@@ -567,11 +568,11 @@ public:
   float HomeFeedRate(int8_t axis) const;
   void SetHomeFeedRate(int8_t axis, float value);
   EndStopHit Stopped(int8_t drive);
-  float AxisLength(int8_t axis) const;
-  void SetAxisLength(int8_t axis, float value);
-#if 0	// not used
-  bool HighStopButNotLow(int8_t axis) const;
-#endif
+  float AxisMaximum(int8_t axis) const;
+  void SetAxisMaximum(int8_t axis, float value);
+  float AxisMinimum(int8_t axis) const;
+  void SetAxisMinimum(int8_t axis, float value);
+  float AxisTotalLength(int8_t axis) const;
 
   // Z probe
 
@@ -669,7 +670,8 @@ private:
   void UpdateNetworkAddress(byte dst[4], const byte src[4]);
   void WriteNvData();
 
-  float axisLengths[AXES];
+  float axisMaxima[AXES];
+  float axisMinima[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
   
@@ -798,14 +800,29 @@ inline void Platform::SetHomeFeedRate(int8_t axis, float value)
    homeFeedrates[axis] = value;
 }
 
-inline float Platform::AxisLength(int8_t axis) const
+inline float Platform::AxisMaximum(int8_t axis) const
 {
-  return axisLengths[axis];
+  return axisMaxima[axis];
 }
 
-inline void Platform::SetAxisLength(int8_t axis, float value)
+inline void Platform::SetAxisMaximum(int8_t axis, float value)
 {
-  axisLengths[axis] = value;
+  axisMaxima[axis] = value;
+}
+
+inline float Platform::AxisMinimum(int8_t axis) const
+{
+  return axisMinima[axis];
+}
+
+inline void Platform::SetAxisMinimum(int8_t axis, float value)
+{
+  axisMinima[axis] = value;
+}
+
+inline float Platform::AxisTotalLength(int8_t axis) const
+{
+	return axisMaxima[axis] - axisMinima[axis];
 }
 
 inline float Platform::MaxFeedrate(int8_t drive) const

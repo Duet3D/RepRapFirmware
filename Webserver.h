@@ -38,7 +38,7 @@ const unsigned int postLength = 1400;			// max amount of POST data we can accept
 const unsigned int webInputLength = 1400;		// max size of web interface requests and related stuff
 const unsigned int gcodeBufLength = 2048;		// size of our gcode ring buffer, ideally a power of 2
 const unsigned int minReportedFreeBuf = 100;	// the minimum free buffer we report if not zero
-const unsigned int maxReportedFreeBuf = 1024;	// the max we own up to having free, to avoid overlong messages
+const unsigned int maxReportedFreeBuf = 950;	// the max we own up to having free, to avoid overlong messages. 1024 is too long for Chrome/Windows 8.1.
 const unsigned int jsopnReplyLength = 1200;		// size of buffer used to hold JSON reply
 
 class Webserver
@@ -65,6 +65,7 @@ class Webserver
     void ParseQualifier();
     void CheckPassword();
     void LoadGcodeBuffer(const char* gc);
+    void LoadFileData(const char* data, size_t len);
     bool PrintHeadString();
     bool PrintLinkTable();
     void GetGCodeList();
@@ -96,7 +97,7 @@ class Webserver
     bool getSeen;
     bool clientLineIsBlank;
 
-    char clientLine[webInputLength];
+    char clientLine[webInputLength + 2];
     char clientRequest[webInputLength];
     char clientQualifier[webInputLength];
     char jsonResponse[jsopnReplyLength];

@@ -190,7 +190,8 @@ void Platform::Init()
 
 	// AXES
 
-	axisLengths = AXIS_LENGTHS;
+	axisMaxima = AXIS_MAXIMA;
+	axisMinima = AXIS_MINIMA;
 	homeFeedrates = HOME_FEEDRATES;
 	headOffsets = HEAD_OFFSETS;
 

@@ -133,6 +133,32 @@ void Webserver::LoadGcodeBuffer(const char* gc)
 	}
 }
 
+// Process a received string of file upload data
+// For now we just copy the data to our large buffer, bypassing the usual checks for specific gcodes.
+// Eventually, the file writing code will be moved here.
+void Webserver::LoadFileData(const char* data, size_t len)
+{
+	if (len > GetGcodeBufferSpace())
+	{
+		platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
+		HandleReply("Webserver: GCode buffer overflow", true);
+	}
+	else
+	{
+		size_t remaining = gcodeBufLength - gcodeWriteIndex;
+		if (len <= remaining)
+		{
+			memcpy(&gcodeBuffer[gcodeWriteIndex], data, len);
+		}
+		else
+		{
+			memcpy(&gcodeBuffer[gcodeWriteIndex], data, remaining);
+			memcpy(gcodeBuffer, data + remaining, len - remaining);
+		}
+		gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufLength;
+	}
+}
+
 // Process a null-terminated gcode
 // We intercept four G/M Codes so we can deal with file manipulation and emergencies.  That
 // way things don't get out of sync, and - as a file name can contain
@@ -197,29 +223,7 @@ void Webserver::ProcessGcode(const char* gc)
 		break;
 
 	default:
-		{
-			// Copy the gcode to the buffer
-			size_t len = strlen(gc) + 1;		// number of characters to copy
-			if (len > GetGcodeBufferSpace())
-			{
-				platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
-				HandleReply("Webserver: GCode buffer overflow", true);
-			}
-			else
-			{
-				size_t remaining = gcodeBufLength - gcodeWriteIndex;
-				if (len <= remaining)
-				{
-					memcpy(&gcodeBuffer[gcodeWriteIndex], gc, len);
-				}
-				else
-				{
-					memcpy(&gcodeBuffer[gcodeWriteIndex], gc, remaining);
-					memcpy(gcodeBuffer, gc + remaining, len - remaining);
-				}
-				gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufLength;
-			}
-		}
+		LoadFileData(gc, strlen(gc) + 1);
 		break;
 	}
 }
@@ -254,7 +258,8 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 	}
 
 	Network *net = reprap.GetNetwork();
-	net->Write("HTTP/1.1 200 OK\n");
+	RequestState *req = net->GetRequest();
+	req->Write("HTTP/1.1 200 OK\n");
 
 	const char* contentType;
 	bool zip = false;
@@ -291,24 +296,24 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 	{
 		contentType = "application/octet-stream";
 	}
-	net->Printf("Content-Type: %s\n", contentType);
+	req->Printf("Content-Type: %s\n", contentType);
 
 	if (doingJsonResponse)
 	{
-		net->Printf("Content-Length: %u\n", strlen(jsonResponse));
+		req->Printf("Content-Length: %u\n", strlen(jsonResponse));
 	}
 	else if (zip && fileToSend != NULL)
 	{
-		net->Write("Content-Encoding: gzip\n");
-		net->Printf("Content-Length: %lu", fileToSend->Length());
+		req->Write("Content-Encoding: gzip\n");
+		req->Printf("Content-Length: %lu", fileToSend->Length());
 	}
 
-	net->Write("Connection: close\n");
-	net->Write('\n');
+	req->Write("Connection: close\n");
+	req->Write('\n');
 
 	if (doingJsonResponse)
 	{
-		net->Write(jsonResponse);
+		req->Write(jsonResponse);
 	}
 	net->SendAndClose(fileToSend);
 }
@@ -361,7 +366,15 @@ void Webserver::GetJsonResponse(const char* request)
 
 	if (StringStartsWith(request, "gcode") && StringStartsWith(clientQualifier, "gcode="))
 	{
-		LoadGcodeBuffer(&clientQualifier[6]);
+		LoadGcodeBuffer(clientQualifier + 6);
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"buff\":%u}", GetReportedGcodeBufferSpace());
+		JsonReport(true, request);
+		return;
+	}
+
+	if (StringStartsWith(request, "data") && StringStartsWith(clientQualifier, "data="))
+	{
+		LoadFileData(clientQualifier + 5, strlen(clientQualifier + 5));
 		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"buff\":%u}", GetReportedGcodeBufferSpace());
 		JsonReport(true, request);
 		return;
@@ -413,7 +426,7 @@ void Webserver::GetJsonResponse(const char* request)
 		char ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.1f\"", ch, platform->AxisLength(drive));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.1f\"", ch, platform->AxisTotalLength(drive));
 			ch = ',';
 		}
 		strncat(jsonResponse, "]}", ARRAY_UPB(jsonResponse));
@@ -656,7 +669,9 @@ void Webserver::ParseClientLine()
 		postSeen = false;
 		getSeen = true;
 		if (!clientRequest[0])
+		{
 			strncpy(clientRequest, INDEX_PAGE, ARRAY_SIZE(clientRequest));
+		}
 		return;
 	}
 
@@ -802,12 +817,14 @@ void Webserver::Spin()
 		return;
 
 	Network *net = reprap.GetNetwork();
-	if (net->HaveData())
+	RequestState *req = net->GetRequest();
+	if (req != NULL)
 	{
-		for (uint8_t i = 0; i < 16; ++i)
+		// To achieve a high upload speed, we try to process a complete request here
+		for (;;)
 		{
 			char c;
-			bool ok = net->Read(c);
+			bool ok = req->Read(c);
 
 			if (!ok)
 			{

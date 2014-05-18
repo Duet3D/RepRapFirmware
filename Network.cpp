@@ -397,54 +397,14 @@ void Network::Spin()
 				AppendTransaction(&freeTransactions, r);
 			}
 		}
+
+		ethernet_task();	// call this again (attempt to speed up file uploading)
 	}
 	else if (establish_ethernet_link())
 	{
 		start_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 		httpd_init();
 		active = true;
-	}
-}
-
-bool Network::HaveData() const
-{
-	return active && readyTransactions != NULL;
-}
-
-bool Network::Read(char& b)
-{
-	if (readyTransactions != NULL)
-	{
-		return readyTransactions->Read(b);
-	}
-	return false;
-}
-
-void Network::Write(char b)
-{
-	if (readyTransactions != NULL)
-	{
-		readyTransactions->Write(b);
-	}
-}
-
-void Network::Write(const char* s)
-{
-	if (readyTransactions != NULL)
-	{
-		readyTransactions->Write(s);
-	}
-}
-
-// Write formatted data to the output buffer
-void Network::Printf(const char* fmt, ...)
-{
-	if (readyTransactions != NULL)
-	{
-		va_list p;
-		va_start(p, fmt);
-		readyTransactions->Vprintf(fmt, p);
-		va_end(p);
 	}
 }
 
@@ -584,20 +544,6 @@ void RequestState::Set(const char* d, int l, void* pc, HttpState* h)
 	fileBeingSent = NULL;
 }
 
-// Webserver calls this to read bytes that have come in from the network
-
-bool RequestState::Read(char& b)
-{
-	if (LostConnection() || inputPointer >= inputLength)
-	{
-		return false;
-	}
-
-	b = inputData[inputPointer];
-	inputPointer++;
-	return true;
-}
-
 // Webserver calls this to write bytes that need to go out to the network
 
 void RequestState::Write(char b)
@@ -630,17 +576,20 @@ void RequestState::Write(const char* s)
 }
 
 // Write formatted data to the output buffer
-void RequestState::Vprintf(const char* fmt, va_list v)
+void RequestState::Printf(const char* fmt, ...)
 {
+	va_list p;
+	va_start(p, fmt);
 	int spaceLeft = ARRAY_SIZE(outputBuffer) - outputPointer;
 	if (spaceLeft > 0)
 	{
-		int len = vsnprintf(&outputBuffer[outputPointer], spaceLeft, fmt, v);
+		int len = vsnprintf(&outputBuffer[outputPointer], spaceLeft, fmt, p);
 		if (len > 0)
 		{
 			outputPointer += min(len, spaceLeft);
 		}
 	}
+	va_end(p);
 }
 
 // Send some data if we can, returning true if all data has been sent

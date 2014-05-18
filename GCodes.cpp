@@ -97,7 +97,7 @@ void GCodes::Reset()
 	gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
     speedFactor = 1.0/60.0;				// default is just to convert from mm/minute to mm/second
     extrusionFactor = 1.0;
-
+    writingWebFile = false;
 }
 
 void GCodes::doFilePrint(GCodeBuffer* gb)
@@ -167,21 +167,32 @@ void GCodes::Spin()
 		do
 		{
 			char b = webserver->ReadGCode();
-			if (webGCode->Put(b))
+			if (webGCode->WritingFileDirectory() == platform->GetWebDir())
 			{
-				// we have a complete gcode
-				if (webGCode->WritingFileDirectory() != NULL)
+				if (b == 0)
 				{
-					WriteGCodeToFile(webGCode);
+					b = '\n';	// webserver replaces newline by null
 				}
-				else
+				WriteHTMLToFile(b, webGCode);
+			}
+			else
+			{
+				if (webGCode->Put(b))
 				{
-					webGCode->SetFinished(ActOnGcode(webGCode));
+					// we have a complete gcode
+					if (webGCode->WritingFileDirectory() != NULL)
+					{
+						WriteGCodeToFile(webGCode);
+					}
+					else
+					{
+						webGCode->SetFinished(ActOnGcode(webGCode));
+					}
+					break;	// stop after receiving a complete gcode in case we haven't finished processing it
 				}
-				break;	// stop after receiving a complete gcode in case we haven't finished processing it
 			}
 			++i;
-		} while (i < 16 && webserver->GCodeAvailable());
+		} while (i < 50 && webserver->GCodeAvailable());
 		platform->ClassReport("GCodes", longWait);
 		return;
 	}
@@ -343,13 +354,13 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 				}
 				if (applyLimits && i < 2 && axisIsHomed[i] && !doingG92)	// limit X and Y moves unless doing G92
 				{
-					if (moveArg < 0.0)
+					if (moveArg < platform->AxisMinimum(i))
 					{
-						moveArg = 0.0;
+						moveArg = platform->AxisMinimum(i);
 					}
-					else if (moveArg > platform->AxisLength(i))
+					else if (moveArg > platform->AxisMaximum(i))
 					{
-						moveArg = platform->AxisLength(i);
+						moveArg = platform->AxisMaximum(i);
 					}
 				}
 				moveBuffer[i] = moveArg;
@@ -723,7 +734,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 		return false;
 
 	case 2:	// Probe the bed
-		moveToDo[Z_AXIS] = -2.0 * platform->AxisLength(Z_AXIS);
+		moveToDo[Z_AXIS] = -2.0 * platform->AxisMaximum(Z_AXIS);
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
@@ -771,7 +782,7 @@ bool GCodes::DoSingleZProbe()
 		return false;
 
 	case 1:
-		moveToDo[Z_AXIS] = -1.1 * platform->AxisLength(Z_AXIS);
+		moveToDo[Z_AXIS] = -1.1 * platform->AxisTotalLength(Z_AXIS);
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
@@ -980,16 +991,20 @@ bool GCodes::OpenFileToWrite(const char* directory, const char* fileName, GCodeB
 
 void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
 {
-	char reply[1];
-	reply[0] = 0;
-
 	if (fileBeingWritten == NULL)
 	{
 		platform->Message(HOST_MESSAGE, "Attempt to write to a null file.\n");
 		return;
 	}
 
-	fileBeingWritten->Write(b);
+	if (eofStringCounter != 0 && b != eofString[eofStringCounter])
+	{
+		for (size_t i = 0; i < eofStringCounter; ++i)
+		{
+			fileBeingWritten->Write(eofString[i]);
+		}
+		eofStringCounter = 0;
+	}
 
 	if (b == eofString[eofStringCounter])
 	{
@@ -999,22 +1014,19 @@ void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
 			fileBeingWritten->Close();
 			fileBeingWritten = NULL;
 			gb->SetWritingFileDirectory(NULL);
-			char* r = reply;
-			if (platform->Emulating() == marlin)
-				r = "Done saving file.";
+			const char* r = (platform->Emulating() == marlin) ? "Done saving file." : "";
 			HandleReply(false, gb == serialGCode, r, 'M', 560, false);
 			return;
 		}
 	}
 	else
-		eofStringCounter = 0;
+	{
+		fileBeingWritten->Write(b);
+	}
 }
 
 void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 {
-	char reply[1];
-	reply[0] = 0;
-
 	if (fileBeingWritten == NULL)
 	{
 		platform->Message(HOST_MESSAGE, "Attempt to write to a null file.\n");
@@ -1030,9 +1042,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 			fileBeingWritten->Close();
 			fileBeingWritten = NULL;
 			gb->SetWritingFileDirectory(NULL);
-			char* r = reply;
-			if (platform->Emulating() == marlin)
-				r = "Done saving file.";
+			const char* r = (platform->Emulating() == marlin) ? "Done saving file." : "";
 			HandleReply(false, gb == serialGCode, r, 'M', 29, false);
 			return;
 		}
@@ -1055,7 +1065,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 
 	fileBeingWritten->Write(gb->Buffer());
 	fileBeingWritten->Write('\n');
-	HandleReply(false, gb == serialGCode, reply, 'G', 1, false);
+	HandleReply(false, gb == serialGCode, "", 'G', 1, false);
 }
 
 // Set up a file to print, but don't print it yet.
@@ -1726,9 +1736,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			reprap.GetMove()->SetStepHypotenuse();
 			if (!seen)
 			{
-				snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: %d",
-						(int) platform->DriveStepsPerUnit(X_AXIS), (int) platform->DriveStepsPerUnit(Y_AXIS),
-						(int) platform->DriveStepsPerUnit(Z_AXIS), (int) platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
+				snprintf(reply, STRING_LENGTH, "Steps/mm: X:%f, Y:%f, Z:%f, E:%f",
+						platform->DriveStepsPerUnit(X_AXIS), platform->DriveStepsPerUnit(Y_AXIS),
+						platform->DriveStepsPerUnit(Z_AXIS), platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
 			}
 		}
 		break;
@@ -1910,13 +1920,43 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		result = OffsetAxes(gb);
 		break;
 
-	case 208: // Set maximum axis lengths
-		for (int8_t axis = 0; axis < AXES; axis++)
+	case 208: // Set maximum axis lengths. If there is an S parameter with value 1 then  we set the min value, alse we set the max value.
 		{
-			if (gb->Seen(gCodeLetters[axis]))
+			bool setMin;
+			if (gb->Seen('S'))
 			{
-				float value = gb->GetFValue() * distanceScale;
-				platform->SetAxisLength(axis, value);
+				setMin = (gb->GetIValue() == 1);
+			}
+			else
+			{
+				setMin = false;
+			}
+
+			bool setSomething = false;
+			for (int8_t axis = 0; axis < AXES; axis++)
+			{
+				if (gb->Seen(gCodeLetters[axis]))
+				{
+					float value = gb->GetFValue() * distanceScale;
+					if (setMin)
+					{
+						platform->SetAxisMinimum(axis, value);
+					}
+					else
+					{
+						platform->SetAxisMaximum(axis, value);
+					}
+					setSomething = true;
+				}
+			}
+
+			if (!setSomething)
+			{
+				snprintf(reply, STRING_LENGTH, "X:%.1f Y:%.1f Z:%.1f",
+							(setMin) ? platform->AxisMinimum(X_AXIS) : platform->AxisMaximum(X_AXIS),
+							(setMin) ? platform->AxisMinimum(Y_AXIS) : platform->AxisMaximum(Y_AXIS),
+							(setMin) ? platform->AxisMinimum(Z_AXIS) : platform->AxisMaximum(Z_AXIS)
+						);
 			}
 		}
 		break;
@@ -2042,7 +2082,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		}
 		break;
 
-	case 559: // Upload config.g
+	case 559: // Upload config.g or another gcode file to put in the sys directory
 		{
 			const char* str;
 			if (gb->Seen('P'))
@@ -2066,12 +2106,21 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		}
 		break;
 
-	case 560: // Upload reprap.htm
+	case 560: // Upload reprap.htm or another web interface file
 		{
-			const char* str = INDEX_PAGE;
+			const char* str;
+			if (gb->Seen('P'))
+			{
+				str = gb->GetString();
+			}
+			else
+			{
+				str = INDEX_PAGE;
+			}
 			bool ok = OpenFileToWrite(platform->GetWebDir(), str, gb);
 			if (ok)
 			{
+				writingWebFile = true;
 				snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
 			}
 			else
@@ -2227,7 +2276,9 @@ bool GCodeBuffer::Put(char c)
 	gcodeBuffer[gcodePointer] = c;
 
 	if (c == ';')
+	{
 		inComment = true;
+	}
 
 	if (c == '\n' || !c)
 	{
@@ -2308,11 +2359,12 @@ bool GCodeBuffer::Put(char c)
 bool GCodeBuffer::Seen(char c)
 {
 	readPointer = 0;
-	while (gcodeBuffer[readPointer])
+	for (;;)
 	{
-		if (gcodeBuffer[readPointer] == c)
-			return true;
-		readPointer++;
+		char b = gcodeBuffer[readPointer];
+		if (b == 0 || b == ';') break;
+		if (b == c) return true;
+		++readPointer;
 	}
 	readPointer = -1;
 	return false;

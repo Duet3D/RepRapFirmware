@@ -540,7 +540,7 @@ inline float Move::SecondDegreeTransformZ(float x, float y) const
 
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
-	float hitPoint = 0.0;
+	float hitPoint = platform->AxisMinimum(drive);
 	if(drive == Z_AXIS)
 	{
 		if(zProbing)
@@ -558,7 +558,7 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 				// Z axis has not yet been homed, so treat this probe as a homing command
 				la->SetDriveCoordinateAndZeroEndSpeed(platform->ZProbeStopHeight(), drive);
 				gCodes->SetAxisIsHomed(drive);
-				lastZHit = 0.0;
+				lastZHit = hitPoint;
 			}
 			return;
 		} else
@@ -578,7 +578,7 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 
 inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
-  la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisLength(drive), drive);
+  la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisMaximum(drive), drive);
   gCodes->SetAxisIsHomed(drive);
 }
 

@@ -238,6 +238,7 @@ class GCodes
     bool coolingInverted;
     float speedFactor;		// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
     float extrusionFactor;	// extrusion factor, normally 1.0
+    bool writingWebFile;
 };
 
 //*****************************************************************************************************

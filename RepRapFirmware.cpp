@@ -231,6 +231,10 @@ void RepRap::Spin()
 
 	++spinState;
 	ticksInSpinState = 0;
+	network->Spin();
+
+	++spinState;
+	ticksInSpinState = 0;
 	gCodes->Spin();
 
 	++spinState;
