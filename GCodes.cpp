@@ -97,7 +97,6 @@ void GCodes::Reset()
 	gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
     speedFactor = 1.0/60.0;				// default is just to convert from mm/minute to mm/second
     extrusionFactor = 1.0;
-    writingWebFile = false;
 }
 
 void GCodes::doFilePrint(GCodeBuffer* gb)
@@ -2120,7 +2119,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			bool ok = OpenFileToWrite(platform->GetWebDir(), str, gb);
 			if (ok)
 			{
-				writingWebFile = true;
 				snprintf(reply, STRING_LENGTH, "Writing to file: %s", str);
 			}
 			else

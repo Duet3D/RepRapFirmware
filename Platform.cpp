@@ -1436,14 +1436,16 @@ int8_t FileStore::Status()
 	return nothing;
 }
 
-void FileStore::ReadBuffer()
+bool FileStore::ReadBuffer()
 {
 	FRESULT readStatus = f_read(&file, buf, FILE_BUF_LEN, &lastBufferEntry);	// Read a chunk of file
 	if (readStatus)
 	{
 		platform->Message(HOST_MESSAGE, "Error reading file.\n");
+		return false;
 	}
 	bufferPointer = 0;
+	return true;
 }
 
 // Single character read via the buffer
@@ -1457,7 +1459,11 @@ bool FileStore::Read(char& b)
 
 	if (bufferPointer >= FILE_BUF_LEN)
 	{
-		ReadBuffer();
+		bool ok = ReadBuffer();
+		if (!ok)
+		{
+			return false;
+		}
 	}
 
 	if (bufferPointer >= lastBufferEntry)
@@ -1491,39 +1497,50 @@ int FileStore::Read(char* extBuf, unsigned int nBytes)
 	return (int)bytesRead;
 }
 
-void FileStore::WriteBuffer()
+bool FileStore::WriteBuffer()
 {
 	FRESULT writeStatus = f_write(&file, buf, bufferPointer, &lastBufferEntry);
 	if ((writeStatus != FR_OK) || (lastBufferEntry != bufferPointer))
 	{
 		platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
+		return false;
 	}
 	bufferPointer = 0;
+	return true;
 }
 
-void FileStore::Write(char b)
+bool FileStore::Write(char b)
 {
 	if (!inUse)
 	{
 		platform->Message(HOST_MESSAGE, "Attempt to write byte to a non-open file.\n");
-		return;
+		return false;
 	}
 	buf[bufferPointer] = b;
 	bufferPointer++;
 	if (bufferPointer >= FILE_BUF_LEN)
-		WriteBuffer();
+	{
+		return WriteBuffer();
+	}
+	return true;
 }
 
-void FileStore::Write(const char* b)
+bool FileStore::Write(const char* b)
 {
 	if (!inUse)
 	{
 		platform->Message(HOST_MESSAGE, "Attempt to write string to a non-open file.\n");
-		return;
+		return false;
 	}
 	int i = 0;
 	while (b[i])
-		Write(b[i++]);
+	{
+		if (!Write(b[i++]))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 //***************************************************************************************************

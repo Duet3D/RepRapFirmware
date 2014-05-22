@@ -25,39 +25,69 @@
 
  Licence: GPL
 
+ -----------------------------------------------------------------------------------------------------
+
+ The supported requests are GET requests for files (for which the root is the www directory on the
+ SD card), and the following. These all start with "/rr_". Ordinary files used for the web interface
+ must not have names starting "/rr_" or they will not be found.
+
+ rr_connect	 Sent by the web interface software to establish an initial connection, indicating that
+ 	 	 	 any state variables relating to the web interface (e.g. file upload in progress) should
+ 	 	 	 be reset. Returns the same response as rr_status.
+
+ rr_poll	 Returns the old-style status response. Not recommended because all the position,
+ 	 	 	 extruder position and temperature variables are returned in a single array, which means
+ 	 	 	 that the web interface has to know in advance how many heaters and extruders there are.
+ 	 	 	 Provided only for backwards compatibility with older web interface software. Likely to
+ 	 	 	 be removed in a future version.
+
+ rr_status	 New-style status response, in which temperatures, axis positions and extruder positions
+ 	 	 	 are returned in separate variables. Another difference is that extruder positions are
+ 	 	 	 returned as absolute positions instead of relative to the previous gcode.
+
+ rr_files?dir=xxx
+ 	 	 	 Returns a listing of the filenames in the /gcode directory of the SD card. 'dir' is a
+ 	 	 	 directory path relative to the root of the SD card. If the 'dir' variable is not present,
+ 	 	 	 it defaults to the /gcode directory.
+
+ rr_axes	 Returns the axis lengths.
+
+ rr_name	 Returns the machine name in variable myname.
+
+ rr_password?password=xxx
+ 	 	 	 Returns variable "password" having value "right" if xxx is the correct password and
+ 	 	 	 "wrong" otherwise.
+
+ rr_upload_begin?name=xxx
+ 	 	 	 Indicates that we wish to upload the specified file. xxx is the filename relative
+ 	 	 	 to the root of the SD card. The directory component of the filename must already
+ 	 	 	 exist. Returns variables ubuff (= max upload data we can accept in the next message)
+ 	 	 	 and err (= 0 if the file was created successfully, nonzero if there was an error).
+
+rr_upload_data?data=xxx
+ 	 	 	 Provides a data block for the file upload. Returns the samwe variables as rr_upload_begin,
+ 	 	 	 except that err is only zero if the file was successfully created and there has not been
+ 	 	 	 a file write error yet. This response is returned before attempting to write this data block.
+
+rr_upload_end
+ 	 	 	 Indicates that we have finished sending upload data. The server closes the file and reports
+ 	 	 	 the overall status in err. It may also return ubuff again.
+
+rr_upload_cancel
+ 	 	 	 Indicates that the user wishes to cancel the current upload. Returns err and ubuff.
+
+rr_delete?name=xxx
+			 Delete file xxx. Returns err (zero if successful).
+
  ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
 
 //***************************************************************************************************
 
-bool Webserver::MatchBoundary(char c)
-{
-	if (!postBoundary[0])
-		return false;
+static const char* overflowResponse = "overflow";
+static const char* badEscapeResponse = "bad escape";
 
-	if (c == postBoundary[boundaryCount])
-	{
-		boundaryCount++;
-		if (!postBoundary[boundaryCount])
-		{
-			boundaryCount = 0;
-			return true;
-		}
-	}
-	else
-	{
-		for (int i = 0; i < boundaryCount; i++)
-		{
-			postFile->Write(postBoundary[i]);
-		}
-		postFile->Write(c);
-		boundaryCount = 0;
-	}
-	return false;
-}
-
-//****************************************************************************************************
 
 // Feeding G Codes to the GCodes class
 
@@ -66,9 +96,9 @@ bool Webserver::GCodeAvailable()
 	return gcodeReadIndex != gcodeWriteIndex;
 }
 
-byte Webserver::ReadGCode()
+char Webserver::ReadGCode()
 {
-	byte c;
+	char c;
 	if (gcodeReadIndex == gcodeWriteIndex)
 	{
 		c = 0;
@@ -133,10 +163,8 @@ void Webserver::LoadGcodeBuffer(const char* gc)
 	}
 }
 
-// Process a received string of file upload data
-// For now we just copy the data to our large buffer, bypassing the usual checks for specific gcodes.
-// Eventually, the file writing code will be moved here.
-void Webserver::LoadFileData(const char* data, size_t len)
+// Process a received string of gcodes
+void Webserver::StoreGcodeData(const char* data, size_t len)
 {
 	if (len > GetGcodeBufferSpace())
 	{
@@ -148,14 +176,38 @@ void Webserver::LoadFileData(const char* data, size_t len)
 		size_t remaining = gcodeBufLength - gcodeWriteIndex;
 		if (len <= remaining)
 		{
-			memcpy(&gcodeBuffer[gcodeWriteIndex], data, len);
+			memcpy(gcodeBuffer + gcodeWriteIndex, data, len);
 		}
 		else
 		{
-			memcpy(&gcodeBuffer[gcodeWriteIndex], data, remaining);
+			memcpy(gcodeBuffer + gcodeWriteIndex, data, remaining);
 			memcpy(gcodeBuffer, data + remaining, len - remaining);
 		}
 		gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufLength;
+	}
+}
+
+// Process a received string of upload data
+void Webserver::StoreUploadData(const char* data, size_t len)
+{
+	if (len > GetUploadBufferSpace())
+	{
+		platform->Message(HOST_MESSAGE, "Webserver: Upload buffer overflow.\n");
+		HandleReply("Webserver: Upload buffer overflow", true);
+	}
+	else
+	{
+		size_t remaining = uploadBufLength - uploadWriteIndex;
+		if (len <= remaining)
+		{
+			memcpy(uploadBuffer + uploadWriteIndex, data, len);
+		}
+		else
+		{
+			memcpy(uploadBuffer + uploadWriteIndex, data, remaining);
+			memcpy(uploadBuffer, data + remaining, len - remaining);
+		}
+		uploadWriteIndex = (uploadWriteIndex + len) % uploadBufLength;
 	}
 }
 
@@ -223,7 +275,7 @@ void Webserver::ProcessGcode(const char* gc)
 		break;
 
 	default:
-		LoadFileData(gc, strlen(gc) + 1);
+		StoreGcodeData(gc, strlen(gc) + 1);
 		break;
 	}
 }
@@ -239,21 +291,19 @@ void Webserver::ProcessGcode(const char* gc)
 // Start sending a file or a JSON response.
 void Webserver::SendFile(const char* nameOfFileToSend)
 {
-	bool doingJsonResponse = StringStartsWith(nameOfFileToSend, KO_START);
-	FileStore *fileToSend;
-
-	if (doingJsonResponse)
+	if (StringEquals(nameOfFileToSend, "/"))
 	{
-		fileToSend = NULL;
-		GetJsonResponse(&nameOfFileToSend[KO_FIRST]);
+		nameOfFileToSend = INDEX_PAGE;
 	}
-	else
+	FileStore *fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
+	if (fileToSend == NULL)
 	{
+		nameOfFileToSend = FOUR04_FILE;
 		fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
 		if (fileToSend == NULL)
 		{
-			nameOfFileToSend = FOUR04_FILE;
-			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
+			RejectMessage("not found", 404);
+			return;
 		}
 	}
 
@@ -270,10 +320,6 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 	else if (StringEndsWith(nameOfFileToSend, ".ico"))
 	{
 		contentType = "image/x-icon";
-	}
-	else if (doingJsonResponse)
-	{
-		contentType = "application/json";
 	}
 	else if (StringEndsWith(nameOfFileToSend, ".js"))
 	{
@@ -298,33 +344,36 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 	}
 	req->Printf("Content-Type: %s\n", contentType);
 
-	if (doingJsonResponse)
-	{
-		req->Printf("Content-Length: %u\n", strlen(jsonResponse));
-	}
-	else if (zip && fileToSend != NULL)
+	if (zip && fileToSend != NULL)
 	{
 		req->Write("Content-Encoding: gzip\n");
 		req->Printf("Content-Length: %lu", fileToSend->Length());
 	}
 
-	req->Write("Connection: close\n");
-	req->Write('\n');
-
-	if (doingJsonResponse)
-	{
-		req->Write(jsonResponse);
-	}
+	req->Write("Connection: close\n\n");
 	net->SendAndClose(fileToSend);
+}
+
+void Webserver::SendJsonResponse(const char* command)
+{
+	Network *net = reprap.GetNetwork();
+	RequestState *req = net->GetRequest();
+	GetJsonResponse(command, ((numQualKeys == 0) ? "" : qualifiers[0].key), ((numQualKeys == 0) ? "" : qualifiers[0].value));
+	req->Write("HTTP/1.1 200 OK\n");
+	req->Write("Content-Type: application/json\n");
+	req->Printf("Content-Length: %u\n", strlen(jsonResponse));
+	req->Write("Connection: close\n\n");
+	req->Write(jsonResponse);
+	net->SendAndClose(NULL);
 }
 
 //----------------------------------------------------------------------------------------------------
 
 // Input from the client
 
-void Webserver::CheckPassword()
+void Webserver::CheckPassword(const char *pw)
 {
-	gotPassword = StringEndsWith(clientQualifier, password);
+	gotPassword = StringEquals(pw, password);
 }
 
 void Webserver::JsonReport(bool ok, const char* request)
@@ -341,58 +390,94 @@ void Webserver::JsonReport(bool ok, const char* request)
 	}
 	else
 	{
+		jsonResponse[0] = 0;
 		platform->Message(HOST_MESSAGE, "KnockOut request: ");
 		platform->Message(HOST_MESSAGE, request);
 		platform->Message(HOST_MESSAGE, " not recognised\n");
-		clientRequest[0] = 0;
 	}
 }
 
-void Webserver::GetJsonResponse(const char* request)
+void Webserver::GetJsonResponse(const char* request, const char* key, const char* value)
 {
-	if (StringStartsWith(request, "status"))	// new style status request
+	bool found = true;	// assume success
+
+	if (StringEquals(request, "status"))	// new style status request
 	{
 		GetStatusResponse(1);
-		JsonReport(true, request);
-		return;
 	}
-
-	if (StringStartsWith(request, "poll"))		// old style status request
+	else if (StringEquals(request, "poll"))		// old style status request
 	{
 		GetStatusResponse(0);
-		JsonReport(true, request);
-		return;
 	}
-
-	if (StringStartsWith(request, "gcode") && StringStartsWith(clientQualifier, "gcode="))
+	else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
 	{
-		LoadGcodeBuffer(clientQualifier + 6);
+		LoadGcodeBuffer(value);
 		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"buff\":%u}", GetReportedGcodeBufferSpace());
-		JsonReport(true, request);
-		return;
 	}
-
-	if (StringStartsWith(request, "data") && StringStartsWith(clientQualifier, "data="))
+	else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
 	{
-		LoadFileData(clientQualifier + 5, strlen(clientQualifier + 5));
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"buff\":%u}", GetReportedGcodeBufferSpace());
-		JsonReport(true, request);
-		return;
+		CancelUpload();
+		FileStore *f = platform->GetFileStore("0:/", value, true);
+		if (f != NULL)
+		{
+			fileBeingUploaded.Set(f);
+			uploadState = uploadOK;
+		}
+		else
+		{
+			uploadState = uploadError;
+		}
+		GetJsonUploadResponse();
 	}
-
-	if (StringStartsWith(request, "files"))
+	else if (StringEquals(request, "upload_data") && StringEquals(key, "data"))
 	{
-		const char* fileList = platform->GetMassStorage()->FileList(platform->GetGCodeDir(), false);
+		if (uploadState == uploadOK)
+		{
+			StoreUploadData(value, strlen(value));
+		}
+		GetJsonUploadResponse();
+	}
+	else if (StringEquals(request, "upload_end"))
+	{
+		// Write the remaining data
+		while (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
+		{
+			char c = uploadBuffer[uploadReadIndex];
+			uploadReadIndex = (uploadReadIndex + 1) % uploadBufLength;
+			if (!fileBeingUploaded.Write(c))
+			{
+				uploadState = uploadError;
+			}
+		}
+
+		// Close the file
+		if (!fileBeingUploaded.Close())
+		{
+			uploadState = uploadError;
+		}
+		GetJsonUploadResponse();
+	}
+	else if (StringEquals(request, "upload_cancel"))
+	{
+		CancelUpload();
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":%d}", 0);
+	}
+	else if (StringEquals(request, "delete") && StringEquals(key, "name"))
+	{
+		bool ok = platform->GetMassStorage()->Delete("0:/", value);
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":%d}", (ok) ? 0 : 1);
+	}
+	else if (StringEquals(request, "files"))
+	{
+		const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
+		const char* fileList = platform->GetMassStorage()->FileList(dir, false);
 		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"files\":[%s]}", fileList);
-		JsonReport(true, request);
-		return;
 	}
-
-	if (StringStartsWith(request, "fileinfo") && StringStartsWith(clientQualifier, "name="))
+	else if (StringEquals(request, "fileinfo") && StringEquals(key, "name"))
 	{
 		unsigned long length;
 		float height, filament;
-		bool found = GetFileInfo(clientQualifier + 5, length, height, filament);
+		bool found = GetFileInfo(value, length, height, filament);
 		if (found)
 		{
 			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\"}", length, height, filament);
@@ -401,26 +486,17 @@ void Webserver::GetJsonResponse(const char* request)
 		{
 			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{}");
 		}
-		JsonReport(true, request);
-		return;
 	}
-
-	if (StringStartsWith(request, "name"))
+	else if (StringEquals(request, "name"))
 	{
 		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"myName\":\"%s\"}", myName);
-		JsonReport(true, request);
-		return;
 	}
-
-	if (StringStartsWith(request, "password"))
+	else if (StringEquals(request, "password") && StringEquals(key, "password"))
 	{
-		CheckPassword();
+		CheckPassword(value);
 		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
-		JsonReport(true, request);
-		return;
 	}
-
-	if (StringStartsWith(request, "axes"))
+	else if (StringEquals(request, "axes"))
 	{
 		strncpy(jsonResponse, "{\"axes\":", ARRAY_UPB(jsonResponse));
 		char ch = '[';
@@ -430,12 +506,23 @@ void Webserver::GetJsonResponse(const char* request)
 			ch = ',';
 		}
 		strncat(jsonResponse, "]}", ARRAY_UPB(jsonResponse));
-		JsonReport(true, request);
-		return;
+	}
+	else if (StringEquals(request, "connect"))
+	{
+		CancelUpload();
+		GetStatusResponse(1);
+	}
+	else
+	{
+		found = false;
 	}
 
-	jsonResponse[0] = 0;
-	JsonReport(false, request);
+	JsonReport(found, request);
+}
+
+void Webserver::GetJsonUploadResponse()
+{
+	snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"ubuff\":%u,\"err\":%d}", GetReportedUploadBufferSpace(), (uploadState == uploadOK) ? 0 : 1);
 }
 
 void Webserver::GetStatusResponse(uint8_t type)
@@ -583,281 +670,401 @@ void Webserver::GetStatusResponse(uint8_t type)
 	strncat(jsonResponse, "\"}", ARRAY_UPB(jsonResponse));
 }
 
-/*
-
- Parse a string in clientLine[] from the user's web browser
-
- Simple requests have the form:
-
- GET /page2.htm HTTP/1.1
- ^  Start clientRequest[] at clientLine[5]; stop at the blank or...
-
- ...fancier ones with arguments after a '?' go:
-
- GET /gather.asp?pwd=my_pwd HTTP/1.1
- ^ Start clientRequest[]
- ^ Start clientQualifier[]
- */
-
-void Webserver::ParseGetPost()
+// Process a character from the client
+// Rewritten as a state machine by dc42 to increase capability and speed, and reduce RAM requirement.
+// On entry:
+//  There is space for at least 1 character in clientMessage.
+// On return:
+//	If we return false:
+//		We want more characters. There is space for at least 1 character in clientMessage.
+//	If we return true:
+//		We have processed the message and sent the reply. No more characters may be read from this message.
+// Whenever this calls ProcessMessage:
+//	The first line has been split up into words. Variables numCommandWords and commandWords give the number of words we found
+//  and the pointers to each word. The second word is treated specially. It is assumed to be a filename followed by an optional
+//  qualifier comprising key/value pairs. Both may include %xx escapes, and the qualifier may include + to mean space. We store
+//  a pointer to the filename without qualifier in commandWords[1]. We store the qualifier key/value pointers in array 'qualifiers'
+//  and the number of them in numQualKeys.
+//  The remaining lines have been parsed as header name/value pairs. Pointers to them are stored in array 'headers' and the number
+//  of them in numHeaders.
+// If one of our arrays is about to overflow, or the message is not in a format we expect, then we call RejectMessage with an
+// appropriate error code and string.
+bool Webserver::CharFromClient(char c)
 {
-	if (reprap.Debug())
+	switch(state)
 	{
-		platform->Message(HOST_MESSAGE, "HTTP request: ");
-		platform->Message(HOST_MESSAGE, clientLine);
-		platform->Message(HOST_MESSAGE, "\n");
-	}
-
-	size_t i = 5;
-	size_t j = 0;
-	clientRequest[j] = 0;
-	clientQualifier[0] = 0;
-	while (clientLine[i] != ' ' && clientLine[i] != '?')
-	{
-		clientRequest[j] = clientLine[i];
-		j++;
-		i++;
-	}
-	clientRequest[j] = 0;
-	if (clientLine[i] == '?')
-	{
-		i++;
-		j = 0;
-		while(j < ARRAY_UPB(clientQualifier))
+	case doingCommandWord:
+		switch(c)
 		{
-			char c = clientLine[i++];
-			if (c == ' ')
+		case '\n':
+			clientMessage[clientPointer++] = 0;
+			++numCommandWords;
+			numHeaderKeys = 0;
+			state = doingHeaderKey;
+			break;
+		case '\r':
+			break;
+		case ' ':
+		case '\t':
+			clientMessage[clientPointer++] = 0;
+			if (numCommandWords < maxCommandWords)
 			{
-				break;
-			}
-			else if (c == '+')
-			{
-				clientQualifier[j++] = ' ';
-			}
-			else if (c == '%' && isalnum(clientLine[i]) && isalnum(clientLine[i + 1]))
-			{
-				c = clientLine[i++];
-				unsigned int v = (isdigit(c)) ? (c - '0') : ((toupper(c) - 'A') + 10);
-				c = clientLine[i++];
-				v = (v << 4) + ((isdigit(c)) ? (c - '0') : ((toupper(c) - 'A') + 10));
-				clientQualifier[j++] = (char)v;
+				++numCommandWords;
+				commandWords[numCommandWords] = clientMessage + clientPointer;
+				if (numCommandWords == 1)
+				{
+					state = doingFilename;
+				}
 			}
 			else
 			{
-				clientQualifier[j++] = c;
+				return RejectMessage("too many command words");
 			}
+			break;
+		default:
+			clientMessage[clientPointer++] = c;
+			break;
 		}
-		clientQualifier[j] = 0;
-	}
-}
+		break;
 
-void Webserver::InitialisePost()
-{
-	postSeen = false;
-	receivingPost = false;
-	boundaryCount = 0;
-	postBoundary[0] = 0;
-	postFileName[0] = 0;
-	postFile = NULL;
-}
-
-void Webserver::ParseClientLine()
-{
-	if (StringStartsWith(clientLine, "GET"))
-	{
-		ParseGetPost();
-		postSeen = false;
-		getSeen = true;
-		if (!clientRequest[0])
+	case doingFilename:
+		switch(c)
 		{
-			strncpy(clientRequest, INDEX_PAGE, ARRAY_SIZE(clientRequest));
-		}
-		return;
-	}
-
-	if (StringStartsWith(clientLine, "POST"))
-	{
-		ParseGetPost();
-		InitialisePost();
-		postSeen = true;
-		getSeen = false;
-		if (!clientRequest[0])
-		{
-			strncpy(clientRequest, INDEX_PAGE, ARRAY_SIZE(clientRequest));
-		}
-		return;
-	}
-
-	int bnd;
-
-	if (postSeen && ((bnd = StringContains(clientLine, "boundary=")) >= 0))
-	{
-		if (strlen(&clientLine[bnd]) >= ARRAY_SIZE(postBoundary) - 4)
-		{
-			platform->Message(HOST_MESSAGE, "Post boundary buffer overflow.\n");
-			return;
-		}
-		postBoundary[0] = '-';
-		postBoundary[1] = '-';
-		strncpy(&postBoundary[2], &clientLine[bnd], ARRAY_SIZE(postBoundary) - 3);
-		strncat(postBoundary, "--", ARRAY_SIZE(postBoundary));
-		return;
-	}
-
-	if (receivingPost && StringStartsWith(clientLine, "Content-Disposition:"))
-	{
-		bnd = StringContains(clientLine, "filename=\"");
-		if (bnd < 0)
-		{
-			platform->Message(HOST_MESSAGE, "Post disposition gives no filename.\n");
-			return;
-		}
-		int i = 0;
-		while (clientLine[bnd] && clientLine[bnd] != '"')
-		{
-			postFileName[i++] = clientLine[bnd++];
-			if (i >= ARRAY_SIZE(postFileName))
+		case '\n':
+			clientMessage[clientPointer++] = 0;
+			++numCommandWords;
+			numQualKeys = 0;
+			numHeaderKeys = 0;
+			state = doingHeaderKey;
+			break;
+		case '?':
+			clientMessage[clientPointer++] = 0;
+			++numCommandWords;
+			numQualKeys = 0;
+			qualifiers[0].key = clientMessage + clientPointer;
+			state = doingQualifierKey;
+			break;
+		case '%':
+			state = doingFilenameEsc1;
+			break;
+		case '\r':
+			break;
+		case ' ':
+		case '\t':
+			clientMessage[clientPointer++] = 0;
+			if (numCommandWords < maxCommandWords)
 			{
-				i = 0;
-				platform->Message(HOST_MESSAGE, "Post filename buffer overflow.\n");
-				break;
+				++numCommandWords;
+				commandWords[numCommandWords] = clientMessage + clientPointer;
+				state = doingCommandWord;
 			}
-		}
-		postFileName[i] = 0;
-		return;
-	}
-}
-
-// if you've gotten to the end of the line (received a newline
-// character) and the line is blank, the http request has ended,
-// so you can send a reply
-void Webserver::BlankLineFromClient()
-{
-	clientLine[clientLinePointer] = 0;
-	clientLinePointer = 0;
-
-	if (getSeen)
-	{
-		SendFile(clientRequest);
-		clientRequest[0] = 0;
-		return;
-	}
-
-	if (postSeen)
-	{
-		receivingPost = true;
-		postSeen = false;
-		return;
-	}
-
-	if (receivingPost)
-	{
-		postFile = platform->GetFileStore(platform->GetGCodeDir(), postFileName, true);
-		if (postFile == NULL || !postBoundary[0])
-		{
-			platform->Message(HOST_MESSAGE, "Can't open file for write or no post boundary: ");
-			platform->Message(HOST_MESSAGE, postFileName);
-			platform->Message(HOST_MESSAGE, "\n");
-			InitialisePost();
-			if (postFile != NULL)
+			else
 			{
-				postFile->Close();
+				return RejectMessage("too many command words");
 			}
+			break;
+		default:
+			clientMessage[clientPointer++] = c;
+			break;
 		}
-	}
-}
+		break;
 
-// Process a character from the client, returning true if we did more than just store it
-bool Webserver::CharFromClient(char c)
-{
-	if (c == '\n' && clientLineIsBlank)
-	{
-		BlankLineFromClient();
-		return true;
-	}
-
-	if (c == '\n')
-	{
-		clientLine[clientLinePointer] = 0;
-		ParseClientLine();
-		// you're starting a new line
-		clientLineIsBlank = true;
-		clientLinePointer = 0;
-		return true;
-	}
-	else if (c != '\r')
-	{
-		// you've gotten a character on the current line
-		clientLineIsBlank = false;
-		clientLine[clientLinePointer] = c;
-		clientLinePointer++;
-		if (clientLinePointer + 2 >= ARRAY_SIZE(clientLine))
+	case doingQualifierKey:
+		switch(c)
 		{
-			platform->Message(HOST_MESSAGE, "Client read buffer overflow. Data:\n");
-			clientLine[ARRAY_SIZE(clientLine) - 2] = '\n';
-			clientLine[ARRAY_SIZE(clientLine) - 1] = 0;
-			platform->Message(HOST_MESSAGE, clientLine);
-
-			reprap.GetNetwork()->SendAndClose(NULL);		// close the connection
-
-			clientLinePointer = 0;
-			clientLine[clientLinePointer] = 0;
-			clientLineIsBlank = true;
-			return true;
+		case '=':
+			clientMessage[clientPointer++] = 0;
+			qualifiers[numQualKeys].value = clientMessage + clientPointer;
+			++numQualKeys;
+			state = doingQualifierValue;
+			break;
+		case '\n':	// key with no value
+		case ' ':
+		case '\t':
+		case '\r':
+		case '%':	// none of our keys needs escaping, so treat an escape within a key as an error
+		case '&':	// key with no value
+			return RejectMessage("bad qualifier key");
+		default:
+			clientMessage[clientPointer++] = c;
+			break;
 		}
+		break;
+
+	case doingQualifierValue:
+		switch(c)
+		{
+		case '\n':
+			clientMessage[clientPointer++] = 0;
+			numHeaderKeys = 0;
+			headers[0].key = clientMessage + clientPointer;
+			state = doingHeaderKey;
+			break;
+		case ' ':
+		case '\t':
+			clientMessage[clientPointer++] = 0;
+			++numCommandWords;
+			commandWords[numCommandWords] = clientMessage + clientPointer;
+			state = doingCommandWord;
+			break;
+		case '\r':
+			break;
+		case '%':
+			state = doingQualifierValueEsc1;
+			break;
+		case '&':
+			// Another variable is coming
+			clientMessage[clientPointer++] = 0;
+			if (numQualKeys < maxQualKeys)
+			{
+				qualifiers[numQualKeys].value = clientMessage + clientPointer;
+				state = doingQualifierKey;
+			}
+			else
+			{
+				return RejectMessage("too many keys in qualifier");
+			}
+			break;
+		case '+':
+			clientMessage[clientPointer++] = ' ';
+			break;
+		default:
+			clientMessage[clientPointer++] = c;
+			break;
+		}
+		break;
+
+	case doingFilenameEsc1:
+	case doingQualifierValueEsc1:
+		if (c >= '0' && c <= '9')
+		{
+			decodeChar = (c - '0') << 4;
+			state = (ServerState)(state + 1);
+		}
+		else if (c >= 'A' && c <= 'F')
+		{
+			decodeChar = (c - ('A' - 10)) << 4;
+			state = (ServerState)(state + 1);
+		}
+		else
+		{
+			return RejectMessage(badEscapeResponse);
+		}
+		break;
+
+	case doingFilenameEsc2:
+	case doingQualifierValueEsc2:
+		if (c >= '0' && c <= '9')
+		{
+			clientMessage[clientPointer++] = decodeChar | (c - '0');
+			state = (ServerState)(state - 2);
+		}
+		else if (c >= 'A' && c <= 'F')
+		{
+			clientMessage[clientPointer++] = decodeChar | c - ('A' - 10);
+			state = (ServerState)(state - 2);
+		}
+		else
+		{
+			return RejectMessage(badEscapeResponse);
+		}
+		break;
+
+	case doingHeaderKey:
+		switch(c)
+		{
+		case '\n':
+			if (clientMessage + clientPointer == headers[numHeaderKeys].key)
+			{
+				return ProcessMessage();
+			}
+			else
+			{
+				return RejectMessage("unexpected newline");
+			}
+			break;
+		case '\r':
+			break;
+		case ':':
+			clientMessage[clientPointer++] = 0;
+			headers[numHeaderKeys].value = clientMessage + clientPointer;
+			++numHeaderKeys;
+			state = expectingHeaderValue;
+			break;
+		default:
+			clientMessage[clientPointer++] = c;
+			break;
+		}
+		break;
+
+	case expectingHeaderValue:
+		if (c == ' ' || c == '\t')
+		{
+			break;		// ignore spaces between header key and value
+		}
+		state = doingHeaderValue;
+		// no break
+
+	case doingHeaderValue:
+		if (c == '\n')
+		{
+			state = doingHeaderContinuation;
+		}
+		else if (c != '\r')
+		{
+			clientMessage[clientPointer++] = c;
+		}
+		break;
+
+	case doingHeaderContinuation:
+		switch(c)
+		{
+		case ' ':
+		case '\t':
+			// It's a continuation of the previous value
+			clientMessage[clientPointer++] = c;
+			state = doingHeaderValue;
+			break;
+		case '\n':
+			// It's the blank line
+			clientMessage[clientPointer] = 0;
+			return ProcessMessage();
+		case '\r':
+			break;
+		default:
+			if (clientPointer + 3 <= ARRAY_SIZE(clientMessage))
+			{
+				clientMessage[clientPointer++] = 0;
+				clientMessage[clientPointer++] = c;
+				state = doingHeaderKey;
+			}
+			else
+			{
+				return RejectMessage(overflowResponse);
+			}
+			break;
+		}
+		break;
+
+	case doingPost:
+		break;
+
+	default:
+		break;
+	}
+
+	if (clientPointer == ARRAY_SIZE(clientMessage))
+	{
+		return RejectMessage(overflowResponse);
 	}
 	return false;
 }
 
-// Deal with input/output from/to the client (if any) one byte at a time.
-
-void Webserver::Spin()
+// Process the message received so far. We have reached the end of the headers.
+// Return true if the message is complete, false if we want to continue receiving data (i.e. postdata)
+bool Webserver::ProcessMessage()
 {
-	if (!active)
-		return;
+	if (numCommandWords < 2)
+	{
+		return RejectMessage("too few command words");
+	}
+
+	if (StringEquals(commandWords[0], "GET"))
+	{
+		if (StringStartsWith(commandWords[1], KO_START))
+		{
+			SendJsonResponse(commandWords[1] + KO_FIRST);
+		}
+		else if (commandWords[1][0] == '/' && StringStartsWith(commandWords[1] + 1, KO_START))
+		{
+			SendJsonResponse(commandWords[1] + 1 + KO_FIRST);
+		}
+		else
+		{
+			SendFile(commandWords[1]);
+		}
+		return true;
+	}
+	else if (StringEquals(commandWords[0], "POST"))
+	{
+		// We don't support POST yet
+		return RejectMessage("POST not supported");
+	}
+	else
+	{
+		return RejectMessage("Unknown message type");
+	}
+}
+
+// Reject the current message. Always returns true to indicate that we should stop reading the message.
+bool Webserver::RejectMessage(const char* response, unsigned int code)
+{
+	platform->Message(HOST_MESSAGE, "Webserver: rejecting message with: ");
+	platform->Message(HOST_MESSAGE, response);
+	platform->Message(HOST_MESSAGE, "\n");
 
 	Network *net = reprap.GetNetwork();
 	RequestState *req = net->GetRequest();
-	if (req != NULL)
+	req->Printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
+	net->SendAndClose(NULL);
+	return true;
+}
+
+// Deal with input/output from/to the client (if any)
+
+void Webserver::Spin()
+{
+	if (state != inactive)
 	{
-		// To achieve a high upload speed, we try to process a complete request here
-		for (;;)
+		if (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
 		{
-			char c;
-			bool ok = req->Read(c);
-
-			if (!ok)
+			// Write some uploaded data to file
+			for (unsigned int i = 0; i < 256 && uploadReadIndex != uploadWriteIndex && uploadState == uploadOK; ++i)
 			{
-				// We ran out of data before finding a complete request.
-				// This can happen if the network connection was lost, so only report it if debug is enabled
-				if (reprap.Debug())
+				char c = uploadBuffer[uploadReadIndex];
+				uploadReadIndex = (uploadReadIndex + 1) % uploadBufLength;
+				if (!fileBeingUploaded.Write(c))
 				{
-					platform->Message(HOST_MESSAGE, "Webserver: incomplete request\n");
+					uploadState = uploadError;
 				}
-				net->SendAndClose(NULL);
-				break;
-			}
-
-			if (receivingPost && postFile != NULL)
-			{
-				if (MatchBoundary(c))
-				{
-					postFile->Close();
-					SendFile(clientRequest);
-					clientRequest[0] = 0;
-					InitialisePost();
-				}
-				break;
-			}
-
-			if (CharFromClient(c))
-			{
-				break;	// break if we did more than just store the character
 			}
 		}
-	}
+		else
+		{
+			Network *net = reprap.GetNetwork();
+			RequestState *req = net->GetRequest();
+			if (req != NULL)
+			{
+				// To achieve a high upload speed, we try to process a complete request here
+				for (;;)
+				{
+					char c;
+					if (req->Read(c))
+					{
+						if (CharFromClient(c))
+						{
+							ResetState();
+							break;	// break if we have read all we want of this message
+						}
+					}
+					else
+					{
+						// We ran out of data before finding a complete request.
+						// This can happen if the network connection was lost, so only report it if debug is enabled
+						if (reprap.Debug())
+						{
+							platform->Message(HOST_MESSAGE, "Webserver: incomplete request\n");
+						}
+						net->SendAndClose(NULL);
+						ResetState();
+						break;
+					}
+				}
+			}
+		}
 
-	platform->ClassReport("Webserver", longWait);
+		platform->ClassReport("Webserver", longWait);
+	}
 }
 
 //******************************************************************************************
@@ -867,39 +1074,50 @@ void Webserver::Spin()
 Webserver::Webserver(Platform* p)
 {
 	platform = p;
-	active = false;
+	state = inactive;
 	gotPassword = false;
 }
 
 void Webserver::Init()
 {
-	receivingPost = false;
-	postSeen = false;
-	getSeen = false;
-	clientLineIsBlank = true;
-	clientLinePointer = 0;
-	clientLine[0] = 0;
-	clientRequest[0] = 0;
 	SetPassword(DEFAULT_PASSWORD);
 	SetName(DEFAULT_NAME);
-	//gotPassword = false;
 	gcodeReadIndex = gcodeWriteIndex = 0;
-	InitialisePost();
+	uploadReadIndex = uploadWriteIndex = 0;
 	lastTime = platform->Time();
 	longWait = lastTime;
-	active = true;
 	gcodeReply[0] = 0;
 	seq = 0;
+	uploadState = notUploading;
+	ResetState();
 
 	// Reinitialise the message file
 
 	//platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }
 
+void Webserver::ResetState()
+{
+	clientPointer = 0;
+	state = doingCommandWord;
+	numCommandWords = 0;
+	numQualKeys = 0;
+	numHeaderKeys = 0;
+	commandWords[0] = clientMessage;
+}
+
+void Webserver::CancelUpload()
+{
+	fileBeingUploaded.Close();		// cancel any pending file upload (TODO: delete the partially-written file)
+	uploadReadIndex = uploadWriteIndex = 0;
+	uploadState = notUploading;
+}
+
 void Webserver::Exit()
 {
+	CancelUpload();
 	platform->Message(HOST_MESSAGE, "Webserver class exited.\n");
-	active = false;
+	state = inactive;
 }
 
 void Webserver::Diagnostics()
@@ -956,7 +1174,20 @@ unsigned int Webserver::GetGcodeBufferSpace() const
 unsigned int Webserver::GetReportedGcodeBufferSpace() const
 {
 	unsigned int temp = GetGcodeBufferSpace();
-	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf : (temp < minReportedFreeBuf) ? 0 : temp;
+	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf : temp;
+}
+
+// Get the actual amount of gcode buffer space we have
+unsigned int Webserver::GetUploadBufferSpace() const
+{
+	return (uploadReadIndex - uploadWriteIndex - 1u) % uploadBufLength;
+}
+
+// Get the amount of gcode buffer space we are going to report
+unsigned int Webserver::GetReportedUploadBufferSpace() const
+{
+	unsigned int temp = GetUploadBufferSpace();
+	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf : temp;
 }
 
 // Get information for a file on the SD card

@@ -652,7 +652,7 @@ void RequestState::SentPacketAcknowledged()
 	}
 }
 
-// Close this connection. Return true if it really is closed, false if it needs to go in the deferred close list.
+// Close this connection
 void RequestState::Close()
 {
 	if (!LostConnection())
