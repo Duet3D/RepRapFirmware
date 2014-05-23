@@ -248,6 +248,7 @@ namespace SoftwareResetReason
 	{
 		user = 0,					// M999 command
 		stuckInSpin = 0x1000,		// we got stuck in a Spin() function for too long
+		inLwipSpin = 0x2000,		// we got stuck in a call to lwip for too long
 		inUsbOutput = 0x4000		// this bit is or'ed in if we were in USB otuput at the time
 	};
 }
@@ -336,6 +337,7 @@ public:
 	bool GoToEnd(); // Position the file at the end (so you can write on the end).
 	unsigned long Length(); // File size in bytes
 	void Duplicate();
+	bool Flush();
 
 friend class Platform;
 
@@ -751,6 +753,16 @@ public:
 	bool Write(char b)
 	{
 		return f->Write(b);
+	}
+
+	bool Flush()
+	{
+		return f->Flush();
+	}
+
+	unsigned long Length()
+	{
+		return f->Length();
 	}
 
 	// Assignment operator

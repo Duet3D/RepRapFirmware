@@ -36,18 +36,21 @@ const float clientCloseDelay = 0.002;	 	// seconds to wait after serving a page
 
 /****************************************************************************************************/
 
+struct tcp_pcb;
+struct pbuf;
+class RequestState;
+
 // HttpState structure that we use to track Http connections. This could be combined with class RequestState.
 
 struct HttpState
 {
-	// Receive fields
-	struct pbuf *pb;
+	tcp_pcb *pcb;				// connection
+	RequestState *sendingRs;	// RequestState that is currently sending via this connection
+	const char *file;			// pointer to data to send
+	uint16_t left;				// amount of data to send
+	uint8_t retries;			// number of retries left
 
-	// Transmit fields
-	char *file;
-	uint16_t left;
-	uint8_t retries;
-
+	// Methods
 	bool SendInProgress() const { return left > 0; }
 };
 
@@ -59,9 +62,9 @@ public:
 	friend class Network;
 
 	RequestState(RequestState* n);
-	void Set(const char* d, int l, void* pc, HttpState* h);
+	void Set(pbuf *p, HttpState* h);
 	bool Read(char& b);
-	void SentPacketAcknowledged();
+	void SentPacketAcknowledged(unsigned int len);
 	void Write(char b);
 	void Write(const char* s);
 	void Printf(const char *fmt, ...);
@@ -69,22 +72,25 @@ public:
 	bool TrySendData();
 	void SetConnectionLost();
 	bool LostConnection() const;
+	bool IsReady() const { return hs == NULL || hs->sendingRs == NULL; }
 
 private:
 	void Reset();
-	void* pcb;
+	void FreePbuf();
+
 	HttpState* hs;
 
 	RequestState* volatile next;
-	const char* inputData;
-	int inputLength;
-	int inputPointer;
-	uint8_t sentPacketsOutstanding;		// count of TCP packets we have sent that have not been acknowledged
+	pbuf *pb;								// linked list of incoming packet buffers
+	unsigned int inputPointer;				// amount of data already taken from the first packet buffer
+
+	unsigned int sentDataOutstanding;		// amount of TCP data we have sent that has not been acknowledged
 	char outputBuffer[httpOutputBufferSize];
-	int outputPointer;
+	unsigned int outputPointer;
 	bool closePending;
 	FileStore *fileBeingSent;
 	float closeRequestedTime;
+	bool persistConnection;
 };
 
 // The main network class that drives the network.
@@ -93,44 +99,29 @@ class Network
 {
 public:
 
-	void ReceiveInput(const char* data, int length, void* pc, HttpState* h);
-	void InputBufferReleased(HttpState *hs, void* pb);
-	void SentPacketAcknowledged(HttpState *hs);
-	void ConnectionError(HttpState* h);
+	void ReceiveInput(pbuf *pb, HttpState* h);
+	void SentPacketAcknowledged(HttpState *hs, unsigned int len);
+	void ConnectionClosing(HttpState* h);
 	bool Active() const;
 	bool LinkIsUp();
 	RequestState *GetRequest() const { return readyTransactions; }
-	void SendAndClose(FileStore *f);
-	bool HaveData() const;
+	void SendAndClose(FileStore *f, bool keepConnectionOpen = false);
 
 	Network();
 	void Init();
 	void Spin();
+	bool InLwip() const { return inLwip; }
 
 private:
 
 	void AppendTransaction(RequestState* volatile * list, RequestState *r);
-	RequestState *FindHs(RequestState* const volatile * list, HttpState *hs);
 
 	RequestState * volatile freeTransactions;
 	RequestState * volatile readyTransactions;
 	RequestState * volatile writingTransactions;
 	RequestState * volatile closingTransactions;
 	bool active;
+	uint8_t inLwip;
 };
-
-// Webserver calls this to read bytes that have come in from the network.
-// Inlined to improve upload speed.
-
-inline bool RequestState::Read(char& b)
-{
-	if (LostConnection() || inputPointer >= inputLength)
-	{
-		return false;
-	}
-
-	b = inputData[inputPointer++];
-	return true;
-}
 
 #endif

@@ -358,13 +358,35 @@ void Webserver::SendJsonResponse(const char* command)
 {
 	Network *net = reprap.GetNetwork();
 	RequestState *req = net->GetRequest();
-	GetJsonResponse(command, ((numQualKeys == 0) ? "" : qualifiers[0].key), ((numQualKeys == 0) ? "" : qualifiers[0].value));
+	bool keepOpen = false;
+	bool mayKeepOpen;
+	if (numQualKeys == 0)
+	{
+		mayKeepOpen = GetJsonResponse(command, "", "", 0);
+	}
+	else
+	{
+		mayKeepOpen = GetJsonResponse(command, qualifiers[0].key, qualifiers[0].value, qualifiers[1].key - qualifiers[0].value - 1);
+	}
+	if (mayKeepOpen)
+	{
+		// Check that the browser wants to persist the connection too
+		for (size_t i = 0; i < numHeaderKeys; ++i)
+		{
+			if (StringEquals(headers[i].key, "Connection"))
+			{
+// Comment out the following line to disable persistent connections
+				keepOpen = StringEquals(headers[i].value, "keep-alive");
+				break;
+			}
+		}
+	}
 	req->Write("HTTP/1.1 200 OK\n");
 	req->Write("Content-Type: application/json\n");
 	req->Printf("Content-Length: %u\n", strlen(jsonResponse));
-	req->Write("Connection: close\n\n");
+	req->Printf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
 	req->Write(jsonResponse);
-	net->SendAndClose(NULL);
+	net->SendAndClose(NULL, keepOpen);
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -397,9 +419,12 @@ void Webserver::JsonReport(bool ok, const char* request)
 	}
 }
 
-void Webserver::GetJsonResponse(const char* request, const char* key, const char* value)
+// Get the Json response for this command.
+// 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matter when uploading files.
+bool Webserver::GetJsonResponse(const char* request, const char* key, const char* value, size_t valueLength)
 {
 	bool found = true;	// assume success
+	bool keepOpen = false;	// assume we don't want to persist the connection
 
 	if (StringEquals(request, "status"))	// new style status request
 	{
@@ -433,11 +458,12 @@ void Webserver::GetJsonResponse(const char* request, const char* key, const char
 	{
 		if (uploadState == uploadOK)
 		{
-			StoreUploadData(value, strlen(value));
+			StoreUploadData(value, valueLength);
 		}
 		GetJsonUploadResponse();
+		keepOpen = true;
 	}
-	else if (StringEquals(request, "upload_end"))
+	else if (StringEquals(request, "upload_end") && StringEquals(key, "size"))
 	{
 		// Write the remaining data
 		while (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
@@ -450,12 +476,30 @@ void Webserver::GetJsonResponse(const char* request, const char* key, const char
 			}
 		}
 
+		if (uploadState == uploadOK && !fileBeingUploaded.Flush())
+		{
+			uploadState = uploadError;
+		}
+
+		// Check the file length is as expected
+		if (uploadState == uploadOK && fileBeingUploaded.Length() != strtoul(value, NULL, 10))
+		{
+			uploadState = uploadError;
+		}
+
 		// Close the file
 		if (!fileBeingUploaded.Close())
 		{
 			uploadState = uploadError;
 		}
+
 		GetJsonUploadResponse();
+
+		if (uploadState != uploadOK && strlen(filenameBeingUploaded) != 0)
+		{
+			platform->GetMassStorage()->Delete("0:/", filenameBeingUploaded);
+		}
+		filenameBeingUploaded[0] = 0;
 	}
 	else if (StringEquals(request, "upload_cancel"))
 	{
@@ -480,11 +524,11 @@ void Webserver::GetJsonResponse(const char* request, const char* key, const char
 		bool found = GetFileInfo(value, length, height, filament);
 		if (found)
 		{
-			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\"}", length, height, filament);
+			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":0,\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\"}", length, height, filament);
 		}
 		else
 		{
-			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{}");
+			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":1}");
 		}
 	}
 	else if (StringEquals(request, "name"))
@@ -518,6 +562,7 @@ void Webserver::GetJsonResponse(const char* request, const char* key, const char
 	}
 
 	JsonReport(found, request);
+	return keepOpen;
 }
 
 void Webserver::GetJsonUploadResponse()
@@ -700,6 +745,7 @@ bool Webserver::CharFromClient(char c)
 			clientMessage[clientPointer++] = 0;
 			++numCommandWords;
 			numHeaderKeys = 0;
+			headers[0].key = clientMessage + clientPointer;
 			state = doingHeaderKey;
 			break;
 		case '\r':
@@ -735,6 +781,7 @@ bool Webserver::CharFromClient(char c)
 			++numCommandWords;
 			numQualKeys = 0;
 			numHeaderKeys = 0;
+			headers[0].key = clientMessage + clientPointer;
 			state = doingHeaderKey;
 			break;
 		case '?':
@@ -796,6 +843,7 @@ bool Webserver::CharFromClient(char c)
 		{
 		case '\n':
 			clientMessage[clientPointer++] = 0;
+			qualifiers[numQualKeys].key = clientMessage + clientPointer;	// so that we can read the whole value even if it contains a null
 			numHeaderKeys = 0;
 			headers[0].key = clientMessage + clientPointer;
 			state = doingHeaderKey;
@@ -803,6 +851,7 @@ bool Webserver::CharFromClient(char c)
 		case ' ':
 		case '\t':
 			clientMessage[clientPointer++] = 0;
+			qualifiers[numQualKeys].key = clientMessage + clientPointer;	// so that we can read the whole value even if it contains a null
 			++numCommandWords;
 			commandWords[numCommandWords] = clientMessage + clientPointer;
 			state = doingCommandWord;
@@ -815,9 +864,9 @@ bool Webserver::CharFromClient(char c)
 		case '&':
 			// Another variable is coming
 			clientMessage[clientPointer++] = 0;
+			qualifiers[numQualKeys].key = clientMessage + clientPointer;	// so that we can read the whole value even if it contains a null
 			if (numQualKeys < maxQualKeys)
 			{
-				qualifiers[numQualKeys].value = clientMessage + clientPointer;
 				state = doingQualifierKey;
 			}
 			else
@@ -932,9 +981,11 @@ bool Webserver::CharFromClient(char c)
 		case '\r':
 			break;
 		default:
+			// It's a new key
 			if (clientPointer + 3 <= ARRAY_SIZE(clientMessage))
 			{
 				clientMessage[clientPointer++] = 0;
+				headers[numHeaderKeys].key = clientMessage + clientPointer;
 				clientMessage[clientPointer++] = c;
 				state = doingHeaderKey;
 			}
@@ -1033,7 +1084,7 @@ void Webserver::Spin()
 		{
 			Network *net = reprap.GetNetwork();
 			RequestState *req = net->GetRequest();
-			if (req != NULL)
+			if (req != NULL && req->IsReady())
 			{
 				// To achieve a high upload speed, we try to process a complete request here
 				for (;;)
@@ -1108,7 +1159,15 @@ void Webserver::ResetState()
 
 void Webserver::CancelUpload()
 {
-	fileBeingUploaded.Close();		// cancel any pending file upload (TODO: delete the partially-written file)
+	if (fileBeingUploaded.IsLive())
+	{
+		fileBeingUploaded.Close();		// cancel any pending file upload
+		if (strlen(filenameBeingUploaded) != 0)
+		{
+			platform->GetMassStorage()->Delete("0:/", filenameBeingUploaded);
+		}
+	}
+	filenameBeingUploaded[0] = 0;
 	uploadReadIndex = uploadWriteIndex = 0;
 	uploadState = notUploading;
 }
@@ -1193,14 +1252,14 @@ unsigned int Webserver::GetReportedUploadBufferSpace() const
 // Get information for a file on the SD card
 bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed)
 {
-	FileStore *f = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
+	FileStore *f = platform->GetFileStore("0:/", fileName, false);
 	if (f != NULL)
 	{
 		// Try to find the object height by looking for the last G1 Zxxx command in the file
 		length = f->Length();
 		height = 0.0;
 		filamentUsed = 0.0;
-		if (length != 0)
+		if (length != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".gc") || StringEndsWith(fileName, ".gco")))
 		{
 			const size_t readSize = 512;					// read 512 bytes at a time (tried 1K but it sometimes gives us the wrong data)
 			const size_t overlap = 100;

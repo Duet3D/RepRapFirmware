@@ -39,6 +39,7 @@ const unsigned int uploadBufLength = 2048;		// size of our file upload buffer, p
 const unsigned int maxReportedFreeBuf = 950;	// the max we own up to having free, to avoid overlong messages. 1024 is too long for Chrome/Windows 8.1.
 
 const unsigned int webMessageLength = 1500;		// maximum length of the web message we accept after decoding, excluding POST data
+const unsigned int maxFilenameLength = 100;		// maximum length of a filename (inc. path from root) that we can upload
 //const unsigned int postBoundaryLength = 100;	// max length of the POST boundary string
 //const unsigned int postFilenameLength = 100;	// max length of the POST filename
 //const unsigned int postDataLength = 1000;		// max amount of POST data
@@ -109,7 +110,7 @@ class Webserver
     void LoadGcodeBuffer(const char* gc);
     void StoreGcodeData(const char* data, size_t len);
     void StoreUploadData(const char* data, size_t len);
-    void GetJsonResponse(const char* request, const char* key, const char* value);
+    bool GetJsonResponse(const char* request, const char* key, const char* value, size_t valueLength);
     void GetJsonUploadResponse();
     void GetStatusResponse(uint8_t type);
     bool CharFromClient(char c);
@@ -130,6 +131,7 @@ class Webserver
     char decodeChar;
     UploadState uploadState;
     FileData fileBeingUploaded;
+    char filenameBeingUploaded[maxFilenameLength + 1];
 
     float lastTime;
     float longWait;
@@ -148,7 +150,7 @@ class Webserver
     unsigned int clientPointer;						// current index into clientMessage
 
     const char* commandWords[maxCommandWords];
-    KeyValueIndices qualifiers[maxQualKeys];		// offsets into clientQualifier of the key/value pairs
+    KeyValueIndices qualifiers[maxQualKeys + 1];	// offsets into clientQualifier of the key/value pairs, the +1 is needed so that values can contain nulls
     KeyValueIndices headers[maxHeaders];			// offsets into clientHeader of the key/value pairs
     unsigned int numCommandWords;
     unsigned int numQualKeys;						// number of qualifier keys we have found, <= maxQualKeys

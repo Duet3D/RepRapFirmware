@@ -555,6 +555,10 @@ void Platform::SoftwareReset(uint16_t reason)
 		{
 			reason |= SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 		}
+		if (reprap.GetNetwork()->InLwip())
+		{
+			reason |= SoftwareResetReason::inLwipSpin;
+		}
 	}
 
 	if (reason != 0 || reason != nvData.resetReason)
@@ -1380,15 +1384,16 @@ bool FileStore::Close()
 	{
 		return true;
 	}
+	bool ok = true;
 	if (writing)
 	{
-		WriteBuffer();
+		ok = Flush();
 	}
 	FRESULT fr = f_close(&file);
 	inUse = false;
 	writing = false;
 	lastBufferEntry = 0;
-	return fr == FR_OK;
+	return ok && fr == FR_OK;
 }
 
 bool FileStore::Seek(unsigned long pos)
@@ -1499,13 +1504,16 @@ int FileStore::Read(char* extBuf, unsigned int nBytes)
 
 bool FileStore::WriteBuffer()
 {
-	FRESULT writeStatus = f_write(&file, buf, bufferPointer, &lastBufferEntry);
-	if ((writeStatus != FR_OK) || (lastBufferEntry != bufferPointer))
+	if (bufferPointer != 0)
 	{
-		platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
-		return false;
+		FRESULT writeStatus = f_write(&file, buf, bufferPointer, &lastBufferEntry);
+		if ((writeStatus != FR_OK) || (lastBufferEntry != bufferPointer))
+		{
+			platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
+			return false;
+		}
+		bufferPointer = 0;
 	}
-	bufferPointer = 0;
 	return true;
 }
 
@@ -1542,6 +1550,21 @@ bool FileStore::Write(const char* b)
 	}
 	return true;
 }
+
+bool FileStore::Flush()
+{
+	if (!inUse)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to flush a non-open file.\n");
+		return false;
+	}
+	if (!WriteBuffer())
+	{
+		return false;
+	}
+	return f_sync(&file) == FR_OK;
+}
+
 
 //***************************************************************************************************
 
@@ -1680,6 +1703,10 @@ void Line::Write(const char* b, bool block)
 
 void Line::TryFlushOutput()
 {
+	//debug
+	//while (SerialUSB.canWrite() == 0) {}
+	//end debug
+
 	while (outputNumChars != 0 && SerialUSB.canWrite() != 0)
 	{
 		++inUsbWrite;
