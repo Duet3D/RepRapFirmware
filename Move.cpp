@@ -192,20 +192,20 @@ void Move::Spin()
     // Promote minimum feedrates
     
     if(movementType & xyMove)
-      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(X_AXIS));
+      nextMove[DRIVES] = max<float>(nextMove[DRIVES], platform->InstantDv(X_AXIS));
     else if(movementType & eMove)
-      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(AXES));
+      nextMove[DRIVES] = max<float>(nextMove[DRIVES], platform->InstantDv(AXES));
     else
-      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
+      nextMove[DRIVES] = max<float>(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
       
     // Restrict maximum feedrates; assumes xy overrides e overrides z FIXME??
     
     if(movementType & xyMove)
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
+      nextMove[DRIVES] = min<float>(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
     else if(movementType & eMove)
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
+      nextMove[DRIVES] = min<float>(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
     else // Must be z
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
+      nextMove[DRIVES] = min<float>(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
     
     if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], 0.0, checkEndStopsOnNextMove, movementType))
       platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
@@ -507,7 +507,7 @@ void Move::DoLookAhead()
     {
       if(n1->Processed() == unprocessed)
       {
-        float c = fmin(n1->FeedRate(), n2->FeedRate());
+        float c = min<float>(n1->FeedRate(), n2->FeedRate());
         c = c*n1->Cosine();
         if(c < platform->InstantDv(Z_AXIS))  // Z is typically the slowest.
         {

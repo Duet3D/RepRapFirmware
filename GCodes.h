@@ -42,12 +42,16 @@ class GCodeBuffer
     const char* GetUnprecedentedString();
     const char* GetString();
     const char* Buffer();
-    bool Finished() const;
+    bool Active() const;
     void SetFinished(bool f);
+    void Pause();
+    void CancelPause();
     const char* WritingFileDirectory() const;
     void SetWritingFileDirectory(const char* wfd);
     
   private:
+
+    enum State { idle, executing, paused };
     int CheckSum();
     Platform* platform;
     char gcodeBuffer[GCODE_LENGTH];
@@ -55,7 +59,7 @@ class GCodeBuffer
     int gcodePointer;
     int readPointer;
     bool inComment;
-    bool finished;
+    State state;
     const char* writingFileDirectory;
 };
 
@@ -84,6 +88,7 @@ class GCodes
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; }
     void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }
     float GetExtruderPosition(uint8_t extruder) const;
+    void PauseSDPrint();
     
   private:
   
@@ -190,14 +195,30 @@ inline const char* GCodeBuffer::Buffer()
   return gcodeBuffer;
 }
 
-inline bool GCodeBuffer::Finished() const
+inline bool GCodeBuffer::Active() const
 {
-  return finished;
+  return state == executing;
 }
 
 inline void GCodeBuffer::SetFinished(bool f)
 {
-  finished = f;
+  state = (f) ? idle : executing;
+}
+
+inline void GCodeBuffer::Pause()
+{
+	if (state == executing)
+	{
+		state = paused;
+	}
+}
+
+inline void GCodeBuffer::CancelPause()
+{
+	if (state == paused)
+	{
+		state = idle;
+	}
 }
 
 inline const char* GCodeBuffer::WritingFileDirectory() const

@@ -27,8 +27,6 @@ Separated out from Platform.h by dc42
 
 const unsigned int httpOutputBufferSize = 2 * 1432;
 
-const float clientCloseDelay = 0.002;	 	// seconds to wait after serving a page
-
 #define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
@@ -68,8 +66,7 @@ public:
 	void Write(char b);
 	void Write(const char* s);
 	void Printf(const char *fmt, ...);
-	void Close();
-	bool TrySendData();
+	bool Send();
 	void SetConnectionLost();
 	bool LostConnection() const;
 	bool IsReady() const { return hs == NULL || hs->sendingRs == NULL; }
@@ -80,17 +77,19 @@ private:
 
 	HttpState* hs;
 
-	RequestState* volatile next;
+	RequestState* volatile next;			// next RequestState in the list we are in
+	RequestState* nextWrite;				// next RequestState queued to write to this hs
 	pbuf *pb;								// linked list of incoming packet buffers
 	unsigned int inputPointer;				// amount of data already taken from the first packet buffer
 
 	unsigned int sentDataOutstanding;		// amount of TCP data we have sent that has not been acknowledged
 	char outputBuffer[httpOutputBufferSize];
+	unsigned int unsentPointer;
 	unsigned int outputPointer;
-	bool closePending;
 	FileStore *fileBeingSent;
-	float closeRequestedTime;
+	float lastWriteTime;
 	bool persistConnection;
+	bool closeRequested;
 };
 
 // The main network class that drives the network.
@@ -119,7 +118,6 @@ private:
 	RequestState * volatile freeTransactions;
 	RequestState * volatile readyTransactions;
 	RequestState * volatile writingTransactions;
-	RequestState * volatile closingTransactions;
 	bool active;
 	uint8_t inLwip;
 };

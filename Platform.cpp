@@ -896,7 +896,7 @@ void Platform::SetHeater(size_t heater, const float& power)
 	if (heatOnPins[heater] < 0)
 		return;
 
-	byte p = (byte) (255.0 * fmin(1.0, fmax(0.0, power)));
+	byte p = (byte) (255.0 * min<float>(1.0, max<float>(0.0, power)));
 	if (HEAT_ON == 0)
 		p = 255 - p;
 	if (heater == 0)

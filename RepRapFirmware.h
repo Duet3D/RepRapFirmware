@@ -71,6 +71,41 @@ extern char scratchString[];
 #include "Heat.h"
 #include "Reprap.h"
 
+// std::min and std::max don't seem to work with this variant of gcc, so define our own ones here
+// We use these only with primitive types, so pass them directly instead of by const reference
+#undef min
+#undef max
+
+template<class X> inline X min(X _a, X _b)
+{
+	return (_a < _b) ? _a : _b;
+}
+
+template<class X> inline X max(X _a, X _b)
+{
+	return (_a > _b) ? _a : _b;
+}
+
+// Specialisations for float and double to handle NANs properly
+template<> inline float min(float _a, float _b)
+{
+	return (isnan(_a) || _a < _b) ? _a : _b;
+}
+
+template<> inline float max(float _a, float _b)
+{
+	return (isnan(_a) || _a > _b) ? _a : _b;
+}
+
+template<> inline double min(double _a, double _b)
+{
+	return (isnan(_a) || _a < _b) ? _a : _b;
+}
+
+template<> inline double max(double _a, double _b)
+{
+	return (isnan(_a) || _a > _b) ? _a : _b;
+}
 
 #endif
 

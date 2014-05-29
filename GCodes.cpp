@@ -136,21 +136,21 @@ void GCodes::Spin()
 	// last.  If file weren't last, then the others would never get a look in when
 	// a file was being printed.
 
-	if (!webGCode->Finished())
+	if (webGCode->Active())
 	{
 		webGCode->SetFinished(ActOnGcode(webGCode));
 		platform->ClassReport("GCodes", longWait);
 		return;
 	}
 
-	if (!serialGCode->Finished())
+	if (serialGCode->Active())
 	{
 		serialGCode->SetFinished(ActOnGcode(serialGCode));
 		platform->ClassReport("GCodes", longWait);
 		return;
 	}
 
-	if (!fileGCode->Finished())
+	if (fileGCode->Active())
 	{
 		fileGCode->SetFinished(ActOnGcode(fileGCode));
 		platform->ClassReport("GCodes", longWait);
@@ -493,7 +493,7 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 
 	// No - Do more of the file
 
-	if (!cannedCycleGCode->Finished())
+	if (cannedCycleGCode->Active())
 	{
 		cannedCycleGCode->SetFinished(ActOnGcode(cannedCycleGCode));
 		return false;
@@ -1072,6 +1072,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 void GCodes::QueueFileToPrint(const char* fileName)
 {
 	fileToPrint.Close();
+	fileGCode->CancelPause();	// if we paused it and then asked to print a new file, cancel any pending command
 	FileStore *f = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
 	if (f != NULL)
 	{
@@ -1778,8 +1779,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		if (gb->Seen('S'))
 		{
 			float f = gb->GetFValue();
-			f = fmin(f, 255.0);
-			f = fmax(f, 0.0);
+			f = min<float>(f, 255.0);
+			f = max<float>(f, 0.0);
 			if (coolingInverted)
 			{
 				platform->CoolingFan(255.0 - f);
@@ -2238,6 +2239,16 @@ float GCodes::GetExtruderPosition(uint8_t extruder) const
 	return (extruder < (DRIVES - AXES)) ? lastPos[extruder] : 0;
 }
 
+// Pause the current SD card print. Called from the web interface.
+void GCodes::PauseSDPrint()
+{
+	if (fileBeingPrinted.IsLive())
+	{
+		fileToPrint.MoveFrom(fileBeingPrinted);
+		fileGCode->Pause();		// if we are executing some sort of wait command, pause it until we restart
+	}
+}
+
 //*************************************************************************************
 
 // This class stores a single G Code and provides functions to allow it to be parsed
@@ -2254,6 +2265,7 @@ void GCodeBuffer::Init()
 	gcodePointer = 0;
 	readPointer = -1;
 	inComment = false;
+	state = idle;
 }
 
 int GCodeBuffer::CheckSum()

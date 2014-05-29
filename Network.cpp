@@ -52,8 +52,8 @@ extern "C"
 
 }
 
-const uint8_t windowSize = 1432;
 const int httpStateSize = MEMP_NUM_TCP_PCB + 1;		// the +1 is in case of recovering from network errors
+const float writeTimeout = 2.0;	 					// seconds to wait for data we have written to be acknowledged
 
 static tcp_pcb *listening_pcb = NULL;
 
@@ -105,7 +105,6 @@ static void SendData(tcp_pcb *pcb, HttpState *hs)
   } else
   {
 	  RepRapNetworkMessage("send_data: error\n");
-	  //%s len %d %d\n", lwip_strerr(err), len, tcp_sndbuf(pcb));
   }
 }
 
@@ -122,7 +121,7 @@ static void conn_err(void *arg, err_t err)
 	RepRapNetworkMessage("Network connection error, code ");
 	{
 		char tempBuf[10];
-		snprintf(tempBuf, sizeof(tempBuf)/sizeof(char), "%d\n", err);
+		snprintf(tempBuf, ARRAY_SIZE(tempBuf), "%d\n", err);
 		RepRapNetworkMessage(tempBuf);
 	}
 
@@ -139,7 +138,6 @@ static void conn_err(void *arg, err_t err)
 static err_t http_poll(void *arg, tcp_pcb *pcb)
 {
   HttpState *hs = (HttpState*)arg;
-
   if (hs != NULL)
   {
     ++hs->retries;
@@ -159,21 +157,21 @@ static err_t http_poll(void *arg, tcp_pcb *pcb)
 static err_t http_sent(void *arg, tcp_pcb *pcb, u16_t len)
 {
   HttpState *hs = (HttpState*)arg;
-
-  LWIP_UNUSED_ARG(len);
-
-  hs->retries = 0;
-
-  //RepRapNetworkMessage("..sent\n");
-
-  if (hs->left > 0)
+  if (hs != NULL)
   {
-	  SendData(pcb, hs);
-  }
-  else
-  {
-	  // See if there is more to send
-	  reprap.GetNetwork()->SentPacketAcknowledged(hs, len);
+	  hs->retries = 0;
+
+	  //RepRapNetworkMessage("..sent\n");
+
+	  if (hs->left > 0)
+	  {
+		  SendData(pcb, hs);
+	  }
+	  else
+	  {
+		  // See if there is more to send
+		  reprap.GetNetwork()->SentPacketAcknowledged(hs, len);
+	  }
   }
   return ERR_OK;
 }
@@ -183,27 +181,29 @@ static err_t http_sent(void *arg, tcp_pcb *pcb, u16_t len)
 static err_t http_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 {
 	HttpState *hs = (HttpState*)arg;
-	if (hs->pcb != pcb)
+	if (hs != NULL)
 	{
-		RepRapNetworkMessage("Network: mismatched pcb\n");
-		return ERR_BUF;
-	}
-
-	if (err == ERR_OK && p != NULL)
-	{
-		tcp_recved(pcb, p->tot_len);		// Inform TCP that we have taken the data
-
-		reprap.GetNetwork()->ReceiveInput(p, hs);
-#if 0	//debug
+		if (hs->pcb != pcb)
 		{
-			char buff[20];
-			strncpy(buff, (const char*)(p->payload), 18);
-			buff[18] = '\n';
-			buff[19] = 0;
-			RepRapNetworkMessage("Network: Accepted data: ");
-			RepRapNetworkMessage(buff);
+			RepRapNetworkMessage("Network: mismatched pcb\n");
+			return ERR_BUF;
 		}
+
+		if (err == ERR_OK && p != NULL)
+		{
+			tcp_recved(pcb, p->tot_len);		// Inform TCP that we have taken the data
+			reprap.GetNetwork()->ReceiveInput(p, hs);
+#if 0	//debug
+			{
+				char buff[20];
+				strncpy(buff, (const char*)(p->payload), 18);
+				buff[18] = '\n';
+				buff[19] = 0;
+				RepRapNetworkMessage("Network: Accepted data: ");
+				RepRapNetworkMessage(buff);
+			}
 #endif
+		}
 	}
 	return ERR_OK;
 }
@@ -295,7 +295,6 @@ Network::Network()
 	freeTransactions = NULL;
 	readyTransactions = NULL;
 	writingTransactions = NULL;
-	closingTransactions = NULL;
 	for (int8_t i = 0; i < httpStateSize; i++)
 	{
 		freeTransactions = new RequestState(freeTransactions);
@@ -333,66 +332,37 @@ void Network::Spin()
 		RequestState* r = writingTransactions;
 		if (r != NULL)
 		{
-//			++inLwip;
-			bool finished = r->TrySendData();
+			bool finished = r->Send();
+
+			// Disable interrupts while we mess around with the lists in case we get a callback from a network ISR
 			irqflags_t flags = cpu_irq_save();
 			writingTransactions = r->next;
-			cpu_irq_restore(flags);
 
 			if (finished)
 			{
-				r->closeRequestedTime = reprap.GetPlatform()->Time();
-				AppendTransaction(&closingTransactions, r);
+				RequestState *rn = r->nextWrite;
+				r->nextWrite = NULL;
+				HttpState *hs = r->hs;
+				AppendTransaction(&freeTransactions, r);
+				if (rn != NULL)
+				{
+					if (hs != NULL)
+					{
+						hs->sendingRs = (rn->hs == hs) ? rn : NULL;
+					}
+					AppendTransaction(&writingTransactions, rn);
+				}
+				else if (hs != NULL)
+				{
+					hs->sendingRs = NULL;
+				}
 			}
 			else
 			{
 				AppendTransaction(&writingTransactions, r);
 			}
-//			--inLwip;
+			cpu_irq_restore(flags);
 		}
-
-		// See if we can close any connections.
-		// Not all connections in closingTransactions need to be closed, some may have the 'persist' flag set.
-		r = closingTransactions;
-		if (r != NULL)
-		{
-			if (r->LostConnection())
-			{
-				irqflags_t flags = cpu_irq_save();
-				closingTransactions = r->next;
-				cpu_irq_restore(flags);
-				AppendTransaction(&freeTransactions, r);
-			}
-			else if (r->persistConnection)
-			{
-				r->hs->sendingRs = NULL;
-				irqflags_t flags = cpu_irq_save();
-				closingTransactions = r->next;
-				cpu_irq_restore(flags);
-				AppendTransaction(&freeTransactions, r);
-			}
-			else if (!(r->persistConnection) && reprap.GetPlatform()->Time() - r->closeRequestedTime >= clientCloseDelay)
-			{
-//				++inLwip;
-				r->Close();			// note that 'r' must still be on the closingTransactions list here, in case of callbacks
-//				--inLwip;
-				irqflags_t flags = cpu_irq_save();
-				closingTransactions = r->next;
-				cpu_irq_restore(flags);
-				AppendTransaction(&freeTransactions, r);
-			}
-			else
-			{
-				irqflags_t flags = cpu_irq_save();
-				closingTransactions = r->next;
-				cpu_irq_restore(flags);
-				AppendTransaction(&closingTransactions, r);
-			}
-		}
-
-//		++inLwip;
-		ethernet_task();	// call this again (attempt to speed up file uploading)
-//		--inLwip;
 	}
 	else if (establish_ethernet_link())
 	{
@@ -435,6 +405,7 @@ void Network::ConnectionClosing(HttpState* hs)
 	if (hs->sendingRs != NULL)
 	{
 		hs->sendingRs->SetConnectionLost();
+		hs->sendingRs = NULL;
 	}
 }
 
@@ -483,13 +454,26 @@ void Network::SendAndClose(FileStore *f, bool keepConnectionOpen)
 		}
 		else
 		{
-			r->hs->sendingRs = r;
+			r->nextWrite = NULL;
 			r->fileBeingSent = f;
 			r->persistConnection = keepConnectionOpen;
-			AppendTransaction(&writingTransactions, r);
+			RequestState *sendingRs = r->hs->sendingRs;
+			if (sendingRs == NULL)
+			{
+				r->hs->sendingRs = r;
+				AppendTransaction(&writingTransactions, r);
 //debug
-//			r->outputBuffer[r->outputPointer] = 0;
-//			debugPrintf("Transaction queued for writing to network, file=%c, data=%s\n", (f ? 'Y' : 'N'), r->outputBuffer);
+// r->outputBuffer[r->outputPointer] = 0;
+// debugPrintf("Transaction queued for writing to network, file=%c, data=%s\n", (f ? 'Y' : 'N'), r->outputBuffer);
+			}
+			else
+			{
+				while (sendingRs->nextWrite != NULL)
+				{
+					sendingRs = sendingRs->nextWrite;
+				}
+				sendingRs->nextWrite = r;
+			}
 		}
 	}
 }
@@ -517,9 +501,12 @@ void RequestState::Set(pbuf *p, HttpState* h)
 	pb = p;
 	inputPointer = 0;
 	outputPointer = 0;
+	unsentPointer = 0;
 	sentDataOutstanding = 0;
 	fileBeingSent = NULL;
 	persistConnection = false;
+	closeRequested = false;
+	nextWrite = NULL;
 }
 
 // Webserver calls this to read bytes that have come in from the network.
@@ -600,8 +587,8 @@ void RequestState::Printf(const char* fmt, ...)
 	va_end(p);
 }
 
-// Send some data if we can, returning true if all data has been sent
-bool RequestState::TrySendData()
+// Send some data or close this connection if we can, returning true if we can free up this object
+bool RequestState::Send()
 {
 	if (LostConnection())
 	{
@@ -618,14 +605,38 @@ bool RequestState::TrySendData()
 		return false;
 	}
 
-	if (sentDataOutstanding >= windowSize)
+	if (sentDataOutstanding != 0)
 	{
-		return false;		// still waiting for earlier packets to be acknowledged
+		float timeNow = reprap.GetPlatform()->Time();
+		if (timeNow - lastWriteTime > writeTimeout)
+		{
+			debugPrintf("Timing out connection hs=%08x\n", (unsigned int)hs);
+
+			HttpState *locHs = hs;		// take a copy because our hs field is about to get cleared
+			reprap.GetNetwork()->ConnectionClosing(locHs);
+			tcp_pcb *pcb = locHs->pcb;
+			tcp_arg(pcb, NULL);
+			tcp_sent(pcb, NULL);
+			tcp_recv(pcb, NULL);
+			tcp_poll(pcb, NULL, 4);
+			tcp_abort(pcb);
+			mem_free(locHs);
+			return false;				// this RS will be freed next time round
+		}
+	}
+
+	if (sentDataOutstanding >= ARRAY_SIZE(outputBuffer)/2)
+	{
+		return false;	// don't send until at least half the output buffer is free
 	}
 
 	if (fileBeingSent != NULL)
 	{
-		while (outputPointer < ARRAY_SIZE(outputBuffer))
+		unsigned int outputLimit = (sentDataOutstanding == 0)
+				? ARRAY_SIZE(outputBuffer)
+						: min<unsigned int>(unsentPointer + ARRAY_SIZE(outputBuffer)/2, ARRAY_SIZE(outputBuffer));
+
+		while (outputPointer < outputLimit)
 		{
 			bool ok = fileBeingSent->Read(outputBuffer[outputPointer]);
 			if (!ok)
@@ -638,17 +649,45 @@ bool RequestState::TrySendData()
 		}
 	}
 
-	if (outputPointer == 0)
+	if (outputPointer == unsentPointer)
 	{
-		// fileBeingSent must already be NULL here
-		tcp_sent(hs->pcb, NULL);		// we are no longer interested in acknowledgements
+		// We have no data to send. fileBeingSent must already be NULL here.
+		if (!persistConnection && !closeRequested && nextWrite == NULL)
+		{
+			tcp_close(hs->pcb);
+			closeRequested = true;
+			// Don't release this RS yet, the write buffer may still be needed to do send retries
+			return false;
+		}
+
+		if (sentDataOutstanding != 0)
+		{
+			return false;
+		}
+
+		// We've finished with this RS
+		if (closeRequested)
+		{
+			// debugPrintf("Closing connection hs=%08x\n", (unsigned int)hs);
+
+			HttpState *locHs = hs;		// take a copy because our hs field is about to get cleared
+			reprap.GetNetwork()->ConnectionClosing(locHs);
+			tcp_pcb *pcb = locHs->pcb;
+			tcp_arg(pcb, NULL);
+			tcp_sent(pcb, NULL);
+			tcp_recv(pcb, NULL);
+			tcp_poll(pcb, NULL, 4);
+			mem_free(locHs);
+		}
 		return true;
 	}
 	else
 	{
-		sentDataOutstanding += outputPointer;
-		RepRapNetworkSendOutput(outputBuffer, outputPointer, hs);
-		outputPointer = 0;
+		sentDataOutstanding += (outputPointer - unsentPointer);
+		RepRapNetworkSendOutput(outputBuffer + unsentPointer, outputPointer - unsentPointer, hs);
+		unsentPointer = (outputPointer == ARRAY_SIZE(outputBuffer)) ? 0 : outputPointer;
+		outputPointer = unsentPointer;
+		lastWriteTime = reprap.GetPlatform()->Time();
 		return false;
 	}
 }
@@ -665,34 +704,14 @@ void RequestState::SentPacketAcknowledged(unsigned int len)
 	}
 }
 
-// Close this connection
-void RequestState::Close()
-{
-	if (!LostConnection())
-	{
-		if (hs->sendingRs == this)
-		{
-			hs->sendingRs = NULL;
-		}
-		reprap.GetNetwork()->ConnectionClosing(hs);
-
-//		debugPrintf("Closing connection hs=%08x\n", (unsigned int)hs);
-		tcp_pcb *pcb = hs->pcb;
-		tcp_arg(pcb, NULL);
-		tcp_sent(pcb, NULL);
-		tcp_recv(pcb, NULL);
-		tcp_poll(pcb, NULL, 4);
-		mem_free(hs);
-		hs = 0;
-		tcp_close(pcb);
-	}
-}
-
 void RequestState::SetConnectionLost()
 {
 	hs = NULL;
-	persistConnection = false;
 	FreePbuf();
+	for (RequestState *rs = nextWrite; rs != NULL; rs = rs->nextWrite)
+	{
+		rs->hs = NULL;
+	}
 }
 
 bool RequestState::LostConnection() const

@@ -218,65 +218,47 @@ void Webserver::StoreUploadData(const char* data, size_t len)
 
 void Webserver::ProcessGcode(const char* gc)
 {
-	int8_t specialAction = 0;
 	if (StringStartsWith(gc, "M30 "))		// delete SD card file
 	{
-		specialAction = 1;
+		reprap.GetGCodes()->DeleteFile(&gc[4]);
 	}
 	else if (StringStartsWith(gc, "M23 "))	// select SD card file to print next
 	{
-		specialAction = 2;
+		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
 	}
 	else if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
 	{
-		specialAction = 3;
-	}
-	else if (StringStartsWith(gc, "M503") && !isdigit(gc[4]))	// echo config.g file
-	{
-		specialAction = 4;
-	}
-
-	switch (specialAction)
-	{
-	case 1: // Delete
-		reprap.GetGCodes()->DeleteFile(&gc[4]);
-		break;
-
-	case 2:	// print
-		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
-		break;
-
-	case 3:
 		reprap.EmergencyStop();
 		gcodeReadIndex = gcodeWriteIndex;		// clear the buffer
 		reprap.GetGCodes()->Reset();
-		break;
-
-	case 4:
+	}
+	else if (StringStartsWith(gc, "M503") && !isdigit(gc[4]))	// echo config.g file
+	{
+		FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
+		if (configFile == NULL)
 		{
-			FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
-			if (configFile == NULL)
-			{
-				HandleReply("Configuration file not found", true);
-			}
-			else
-			{
-				char c;
-				size_t i = 0;
-				while (i < ARRAY_UPB(gcodeReply) && configFile->Read(c))
-				{
-					gcodeReply[i++] = c;
-				}
-				configFile->Close();
-				gcodeReply[i] = 0;
-				++seq;
-			}
+			HandleReply("Configuration file not found", true);
 		}
-		break;
-
-	default:
+		else
+		{
+			char c;
+			size_t i = 0;
+			while (i < ARRAY_UPB(gcodeReply) && configFile->Read(c))
+			{
+				gcodeReply[i++] = c;
+			}
+			configFile->Close();
+			gcodeReply[i] = 0;
+			++seq;
+		}
+	}
+	else if (StringStartsWith(gc, "M25") && !isDigit(gc[3]))	// pause SD card print
+	{
+		reprap.GetGCodes()->PauseSDPrint();
+	}
+	else
+	{
 		StoreGcodeData(gc, strlen(gc) + 1);
-		break;
 	}
 }
 
@@ -1259,7 +1241,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 		length = f->Length();
 		height = 0.0;
 		filamentUsed = 0.0;
-		if (length != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".gc") || StringEndsWith(fileName, ".gco")))
+		if (length != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
 		{
 			const size_t readSize = 512;					// read 512 bytes at a time (tried 1K but it sometimes gives us the wrong data)
 			const size_t overlap = 100;
