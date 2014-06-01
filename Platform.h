@@ -194,7 +194,7 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 #define TEMP_DIR "0:/tmp/" // Ditto - temporary files
 #define FILE_LIST_SEPARATOR ','
 #define FILE_LIST_BRACKET '"'
-#define FILE_LIST_LENGTH (1000) // Maximum length of file list - can't make it much longer unless we also make jsonResponse longer
+#define FILE_LIST_LENGTH (2000) // Maximum length of file list
 
 #define FLASH_LED 'F' 		// Type byte of a message that is to flash an LED; the next two bytes define the frequency and M/S ratio.
 #define DISPLAY_MESSAGE 'L'	// Type byte of a message that is to appear on a local display; the L is not displayed; \f and \n should be supported.
@@ -303,8 +303,14 @@ class MassStorage
 public:
 
   const char* FileList(const char* directory, bool fromLine); // Returns a list of all the files in the named directory
+  const char* UnixFileList(const char* directory); // Returns a UNIX-compatible file list for the specified directory
   const char* CombineName(const char* directory, const char* fileName);
   bool Delete(const char* directory, const char* fileName);
+  bool Delete(const char* fileName);
+  bool MakeDirectory(const char *parentDir, const char *dirName);
+  bool MakeDirectory(const char *directory);
+  bool Rename(const char *oldFilename, const char *newFilename);
+  bool PathExists(const char *path) const;
 
 friend class Platform;
 
@@ -346,6 +352,7 @@ protected:
 	FileStore(Platform* p);
 	void Init();
     bool Open(const char* directory, const char* fileName, bool write);
+    bool Open(const char* fileName, bool write);
         
   bool inUse;
   byte buf[FILE_BUF_LEN];
@@ -542,6 +549,7 @@ public:
   
   MassStorage* GetMassStorage();
   FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
+  FileStore* GetFileStore(const char* fileName, bool write);
   const char* GetWebDir() const; // Where the htm etc files are
   const char* GetGCodeDir() const; // Where the gcodes are
   const char* GetSysDir() const;  // Where the system files are

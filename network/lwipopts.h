@@ -106,7 +106,7 @@ a lot of data that needs to be copied, this should be set high. */
 /* MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections. */
 #define MEMP_NUM_TCP_PCB        6
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections. */
-#define MEMP_NUM_TCP_PCB_LISTEN 1
+#define MEMP_NUM_TCP_PCB_LISTEN 4
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments. */
 #define MEMP_NUM_TCP_SEG        13 //changed from 9 to pass LWIP sanity checks
 /* MEMP_NUM_SYS_TIMEOUT: the number of simultaneously active timeouts. */
