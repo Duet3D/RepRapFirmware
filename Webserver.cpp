@@ -290,7 +290,7 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 	}
 
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	RequestState *req = net->GetRequest(NULL);
 	req->Write("HTTP/1.1 200 OK\n");
 
 	const char* contentType;
@@ -339,7 +339,7 @@ void Webserver::SendFile(const char* nameOfFileToSend)
 void Webserver::SendJsonResponse(const char* command)
 {
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	RequestState *req = net->GetRequest(NULL);
 	bool keepOpen = false;
 	bool mayKeepOpen;
 	if (numQualKeys == 0)
@@ -502,11 +502,14 @@ bool Webserver::GetJsonResponse(const char* request, const char* key, const char
 	else if (StringEquals(request, "fileinfo") && StringEquals(key, "name"))
 	{
 		unsigned long length;
-		float height, filament;
-		bool found = GetFileInfo(value, length, height, filament);
+		float height, filament, layerHeight;
+		char generatedBy[50];
+		bool found = GetFileInfo(value, length, height, filament, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
 		if (found)
 		{
-			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":0,\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\"}", length, height, filament);
+			snprintf(jsonResponse, ARRAY_UPB(jsonResponse),
+					"{\"err\":0,\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\",\"layerHeight\":\"%.2f\",\"generatedBy\":\"%s\"}",
+					length, height, filament, layerHeight, generatedBy);
 		}
 		else
 		{
@@ -905,7 +908,7 @@ bool Webserver::CharFromClient(char c)
 		switch(c)
 		{
 		case '\n':
-			if (clientMessage + clientPointer == headers[numHeaderKeys].key)
+			if (clientMessage + clientPointer == headers[numHeaderKeys].key)	// if the key hasn't started yet, then this is the blank line at the end
 			{
 				return ProcessMessage();
 			}
@@ -1037,7 +1040,7 @@ bool Webserver::RejectMessage(const char* response, unsigned int code)
 	platform->Message(HOST_MESSAGE, "\n");
 
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	RequestState *req = net->GetRequest(NULL);
 	req->Printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
 	net->SendAndClose(NULL);
 	return true;
@@ -1049,6 +1052,7 @@ void Webserver::Spin()
 {
 	if (state != inactive)
 	{
+//#if 0
 		if (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
 		{
 			// Write some uploaded data to file
@@ -1063,39 +1067,51 @@ void Webserver::Spin()
 			}
 		}
 		else
+//#endif
 		{
 			Network *net = reprap.GetNetwork();
-			RequestState *req = net->GetRequest();
+			RequestState *req = net->GetRequest(currentConnection);
 			if (req != NULL && req->IsReady())
 			{
 				// To achieve a high upload speed, we try to process a complete request here
-				for (;;)
+				for (int i = 0; i < 100; ++i)
 				{
 					char c;
 					if (req->Read(c))
 					{
 						if (CharFromClient(c))
 						{
-							ResetState();
+							ResetState(NULL);
 							break;	// break if we have read all we want of this message
 						}
 					}
 					else
 					{
 						// We ran out of data before finding a complete request.
-						// This can happen if the network connection was lost, so only report it if debug is enabled
-						if (reprap.Debug())
-						{
-							platform->Message(HOST_MESSAGE, "Webserver: incomplete request\n");
-						}
-						net->SendAndClose(NULL);
-						ResetState();
+						// This happens when the incoming message length exceeds the TCP MSS. We need to process another packet on the same connection.
+						currentConnection = req->GetConnection();
+						net->SendAndClose(NULL, true);
 						break;
 					}
 				}
 			}
-		}
+#if 0
+			else if (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
+			{
+				// Write some uploaded data to file
+				for (unsigned int i = 0; i < 256 && uploadReadIndex != uploadWriteIndex && uploadState == uploadOK; ++i)
+				{
+					char c = uploadBuffer[uploadReadIndex];
+					uploadReadIndex = (uploadReadIndex + 1) % uploadBufLength;
+					if (!fileBeingUploaded.Write(c))
+					{
+						uploadState = uploadError;
+					}
+				}
+			}
 
+#endif
+		}
 		platform->ClassReport("Webserver", longWait);
 	}
 }
@@ -1122,21 +1138,27 @@ void Webserver::Init()
 	gcodeReply[0] = 0;
 	seq = 0;
 	uploadState = notUploading;
-	ResetState();
+	ResetState(NULL);
 
 	// Reinitialise the message file
 
 	//platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }
 
-void Webserver::ResetState()
+// This is called by the web server to reset the receive state.
+// It is also called by the network when the current connection is lost.
+void Webserver::ResetState(const HttpState *connection)
 {
-	clientPointer = 0;
-	state = doingCommandWord;
-	numCommandWords = 0;
-	numQualKeys = 0;
-	numHeaderKeys = 0;
-	commandWords[0] = clientMessage;
+	if (connection == NULL || connection == currentConnection)
+	{
+		currentConnection = NULL;
+		clientPointer = 0;
+		state = doingCommandWord;
+		numCommandWords = 0;
+		numQualKeys = 0;
+		numHeaderKeys = 0;
+		commandWords[0] = clientMessage;
+	}
 }
 
 void Webserver::CancelUpload()
@@ -1232,7 +1254,7 @@ unsigned int Webserver::GetReportedUploadBufferSpace() const
 }
 
 // Get information for a file on the SD card
-bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed)
+bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength)
 {
 	FileStore *f = platform->GetFileStore("0:/", fileName, false);
 	if (f != NULL)
@@ -1241,62 +1263,112 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 		length = f->Length();
 		height = 0.0;
 		filamentUsed = 0.0;
+		layerHeight = 0.0;
+		generatedBy[0] = 0;
+
 		if (length != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
 		{
-			const size_t readSize = 512;					// read 512 bytes at a time (tried 1K but it sometimes gives us the wrong data)
+			const size_t readSize = 1024;					// read 1K bytes at a time
 			const size_t overlap = 100;
-			size_t sizeToRead;
-			if (length <= sizeToRead + overlap)
-			{
-				sizeToRead = length;						// read the whole file in one go
-			}
-			else
-			{
-				sizeToRead = length % readSize;
-				if (sizeToRead <= overlap)
-				{
-					sizeToRead += readSize;
-				}
-			}
-			unsigned long seekPos = length - sizeToRead;	// read on a 1K boundary
-			size_t sizeToScan = sizeToRead;
 			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
-			bool foundFilamentUsed = false;
-			for (;;)
+
+			// Get slic3r settings by reading from the start of the file. We only read the first 1K or so, everything we are looking for should be there.
 			{
-				if (!f->Seek(seekPos))
-				{
-//debugPrintf("Seek to %lu failed\n", seekPos);
-					break;
-				}
-//debugPrintf("Reading %u bytes at %lu\n", sizeToRead, seekPos);
+				size_t sizeToRead = (size_t)min<unsigned long>(length, readSize + overlap);
 				int nbytes = f->Read(buf, sizeToRead);
-				if (nbytes != (int)sizeToRead)
+				if (nbytes == (int)sizeToRead)
 				{
+					buf[sizeToRead] = 0;
+
+					// Look for layer height
+					const char *pos = strstr(buf, "; layer_height ");
+					if (pos != NULL)
+					{
+						while (strchr(" \t=", *pos))
+						{
+							++pos;
+						}
+						layerHeight = strtod(pos, NULL);
+					}
+
+					pos = strstr(buf, "; generated by ");
+					if (pos != NULL)
+					{
+						while (generatedByLength > 1 && *pos >= ' ')
+						{
+							char c = *pos++;
+							if (c == '"' || c == '\\')
+							{
+								// Need to escape the quote-mark for JSON
+								if (generatedByLength < 3)
+								{
+									break;
+								}
+								*generatedBy++ = '\\';
+							}
+							*generatedBy++ = c;
+						}
+						*generatedBy = 0;
+					}
+
+					// Add code to look for other values here...
+				}
+			}
+
+			// Now get the object height and filament used by reading the end of the file
+			{
+				size_t sizeToRead;
+				if (length <= readSize + overlap)
+				{
+					sizeToRead = length;						// read the whole file in one go
+				}
+				else
+				{
+					sizeToRead = length % readSize;
+					if (sizeToRead <= overlap)
+					{
+						sizeToRead += readSize;
+					}
+				}
+				unsigned long seekPos = length - sizeToRead;	// read on a 1K boundary
+				size_t sizeToScan = sizeToRead;
+				bool foundFilamentUsed = false;
+				for (;;)
+				{
+					if (!f->Seek(seekPos))
+					{
+//debugPrintf("Seek to %lu failed\n", seekPos);
+						break;
+					}
+//debugPrintf("Reading %u bytes at %lu\n", sizeToRead, seekPos);
+					int nbytes = f->Read(buf, sizeToRead);
+					if (nbytes != (int)sizeToRead)
+					{
 //debugPrintf("Read failed, read %d bytes\n", nbytes);
-					break;									// read failed so give up
-				}
-				buf[sizeToScan] = 0;						// add a null terminator
+						break;									// read failed so give up
+					}
+					buf[sizeToScan] = 0;						// add a null terminator
 //debugPrintf("About to scan %u bytes starting: %.40s\n", sizeToScan, buf);
-				if (!foundFilamentUsed)
-				{
-					foundFilamentUsed = FindFilamentUsed(buf, sizeToScan, filamentUsed);
+					if (!foundFilamentUsed)
+					{
+						foundFilamentUsed = FindFilamentUsed(buf, sizeToScan, filamentUsed);
 //debugPrintf("Found fil: %c\n", foundFilamentUsed ? 'Y' : 'N');
-				}
-				if (FindHeight(buf, sizeToScan, height))
-				{
+					}
+					if (FindHeight(buf, sizeToScan, height))
+					{
 //debugPrintf("Found height = %f\n", height);
-					break;		// quit if found height
-				}
-				if (seekPos == 0 || length - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
-				{
+						break;		// quit if found height
+					}
+					if (seekPos == 0 || length - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
+					{
 //debugPrintf("Quitting loop at seekPos = %lu\n", seekPos);
-					break;		// quit if reached start of file or already scanned the last 32K of the file
+						break;		// quit if reached start of file or already scanned the last 32K of the file
+					}
+					seekPos -= readSize;
+					sizeToRead = readSize;
+					sizeToScan = readSize + overlap;
+					memcpy(buf + sizeToRead, buf, overlap);
 				}
-				seekPos -= readSize;
-				sizeToRead = readSize;
-				sizeToScan = readSize + overlap;
-				memcpy(buf + sizeToRead, buf, overlap);
 			}
 		}
 		f->Close();

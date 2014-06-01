@@ -35,10 +35,11 @@ Licence: GPL
 #define KO_FIRST 3
 
 const unsigned int gcodeBufLength = 512;		// size of our gcode ring buffer, preferably a power of 2
-const unsigned int uploadBufLength = 2048;		// size of our file upload buffer, preferably a power of 2
-const unsigned int maxReportedFreeBuf = 950;	// the max we own up to having free, to avoid overlong messages. 1024 is too long for Chrome/Windows 8.1.
+const unsigned int uploadBufLength = 4096;		// size of our file upload buffer, preferably a power of 2
+const unsigned int maxReportedFreeBuf = 2048;	// the max we own up to having free, to avoid overlong messages
 
-const unsigned int webMessageLength = 1500;		// maximum length of the web message we accept after decoding, excluding POST data
+const unsigned int webMessageLength = 3000;		// maximum length of the web message we accept after decoding, excluding POST data.
+												// needs to be maxReportedFreeBuf + lots more to hold the HTTP headers.
 const unsigned int maxFilenameLength = 100;		// maximum length of a filename (inc. path from root) that we can upload
 //const unsigned int postBoundaryLength = 100;	// max length of the POST boundary string
 //const unsigned int postFilenameLength = 100;	// max length of the POST filename
@@ -65,6 +66,7 @@ class Webserver
     void SetName(const char* nm);
     void HandleReply(const char *s, bool error);
     void AppendReply(const char* s);
+    void ResetState(const HttpState *connection);
 
   private:
 
@@ -102,7 +104,6 @@ class Webserver
     	const char* value;
     };
   
-    void ResetState();
     void CancelUpload();
     void SendFile(const char* nameOfFileToSend);
     void SendJsonResponse(const char* command);
@@ -122,7 +123,7 @@ class Webserver
     unsigned int GetUploadBufferSpace() const;
     unsigned int GetReportedUploadBufferSpace() const;
     void ProcessGcode(const char* gc);
-    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed);
+    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength);
     static bool FindHeight(const char* buf, size_t len, float& height);
     static bool FindFilamentUsed(const char* buf, size_t len, float& filamentUsed);
 
@@ -132,6 +133,7 @@ class Webserver
     UploadState uploadState;
     FileData fileBeingUploaded;
     char filenameBeingUploaded[maxFilenameLength + 1];
+    const HttpState *currentConnection;
 
     float lastTime;
     float longWait;

@@ -53,11 +53,16 @@
 /*! EMAC RMII mode */
 #define BOARD_EMAC_MODE_RMII 1
 
+// dc42, 2014-06-01.
+// The following #defines are not used, so I have commented them out.
+// The ones in hardware/arduino/sam/system/libsam/source/emac.c get used instead, and they need to be changed to these values (32 and 16).
+
 /** Number of buffer for RX */
-#define EMAC_RX_BUFFERS  16
+//#define EMAC_RX_BUFFERS  (32)
 
 /** Number of buffer for TX */
-#define EMAC_TX_BUFFERS  8
+//#define EMAC_TX_BUFFERS  (8)
+
 
 /** MAC PHY operation max retry count */
 #define MAC_PHY_RETRY_MAX 1000000

@@ -407,6 +407,8 @@ void Network::ConnectionClosing(HttpState* hs)
 		hs->sendingRs->SetConnectionLost();
 		hs->sendingRs = NULL;
 	}
+
+	reprap.GetWebserver()->ResetState(hs);	// if the webserver is waiting on this connection, it needs to give up
 }
 
 void Network::ReceiveInput(pbuf *pb, HttpState* hs)
@@ -426,6 +428,41 @@ void Network::ReceiveInput(pbuf *pb, HttpState* hs)
 	r->Set(pb, hs);
 	AppendTransaction(&readyTransactions, r);
 //	debugPrintf("Network - input received\n");
+}
+
+// This is called by the web server to get a new received packet.
+// If the connection parameter is NULL, we just return the request at the head of the ready list.
+// Otherwise, we are only interested in packets received from the specified connection. If we find one than
+// we move it to the head of the ready list, so that a subsequent call with a null connection parameter
+// will return the same one.
+RequestState *Network::GetRequest(const HttpState *connection)
+{
+	RequestState *rs = readyTransactions;
+	if (rs == NULL || connection == NULL || rs->hs == connection)
+	{
+		return rs;
+	}
+
+	// There is at least one ready transaction, but it's not on the connection we are looking for
+	for (;;)
+	{
+		RequestState *rsNext = rs->next;
+		if (rsNext == NULL)
+		{
+			return rsNext;
+		}
+		if (rsNext->hs == connection)
+		{
+			irqflags_t flags = cpu_irq_save();
+			rs->next = rsNext->next;		// remove rsNext from the list
+			rsNext->next = readyTransactions;
+			readyTransactions = rsNext;
+			cpu_irq_restore(flags);
+			return rsNext;
+		}
+		rs = rsNext;
+	}
+	return NULL;		// to keep Eclipse happy
 }
 
 // Send the output data we already have, optionally with a file appended, then close the connection unless keepConnectionOpen is true.
@@ -518,7 +555,7 @@ bool RequestState::Read(char& b)
 		return false;
 	}
 
-	if (inputPointer == pb->len)
+	while (inputPointer == pb->len)
 	{
 		// See if there is another pbuf in the chain
 		if (inputPointer < pb->tot_len)
@@ -532,6 +569,10 @@ bool RequestState::Read(char& b)
 				return false;
 			}
 			inputPointer = 0;
+		}
+		else
+		{
+			return false;
 		}
 	}
 

@@ -70,6 +70,7 @@ public:
 	void SetConnectionLost();
 	bool LostConnection() const;
 	bool IsReady() const { return hs == NULL || hs->sendingRs == NULL; }
+	HttpState *GetConnection() const { return hs; }
 
 private:
 	void Reset();
@@ -103,7 +104,7 @@ public:
 	void ConnectionClosing(HttpState* h);
 	bool Active() const;
 	bool LinkIsUp();
-	RequestState *GetRequest() const { return readyTransactions; }
+	RequestState *GetRequest(const HttpState *connection);
 	void SendAndClose(FileStore *f, bool keepConnectionOpen = false);
 
 	Network();
