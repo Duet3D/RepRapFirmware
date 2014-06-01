@@ -55,7 +55,7 @@
 
 // dc42, 2014-06-01.
 // The following #defines are not used, so I have commented them out.
-// The ones in hardware/arduino/sam/system/libsam/source/emac.c get used instead, and they need to be changed to these values (32 and 16).
+// The ones in hardware/arduino/sam/system/libsam/source/emac.c get used instead, and they need to be changed to these values (32 and 8).
 
 /** Number of buffer for RX */
 //#define EMAC_RX_BUFFERS  (32)

@@ -187,30 +187,6 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 	}
 }
 
-// Process a received string of upload data
-void Webserver::StoreUploadData(const char* data, size_t len)
-{
-	if (len > GetUploadBufferSpace())
-	{
-		platform->Message(HOST_MESSAGE, "Webserver: Upload buffer overflow.\n");
-		HandleReply("Webserver: Upload buffer overflow", true);
-	}
-	else
-	{
-		size_t remaining = uploadBufLength - uploadWriteIndex;
-		if (len <= remaining)
-		{
-			memcpy(uploadBuffer + uploadWriteIndex, data, len);
-		}
-		else
-		{
-			memcpy(uploadBuffer + uploadWriteIndex, data, remaining);
-			memcpy(uploadBuffer, data + remaining, len - remaining);
-		}
-		uploadWriteIndex = (uploadWriteIndex + len) % uploadBufLength;
-	}
-}
-
 // Process a null-terminated gcode
 // We intercept four G/M Codes so we can deal with file manipulation and emergencies.  That
 // way things don't get out of sync, and - as a file name can contain
@@ -440,7 +416,8 @@ bool Webserver::GetJsonResponse(const char* request, const char* key, const char
 	{
 		if (uploadState == uploadOK)
 		{
-			StoreUploadData(value, valueLength);
+			uploadPointer = value;
+			uploadLength = valueLength;
 		}
 		GetJsonUploadResponse();
 		keepOpen = true;
@@ -448,15 +425,16 @@ bool Webserver::GetJsonResponse(const char* request, const char* key, const char
 	else if (StringEquals(request, "upload_end") && StringEquals(key, "size"))
 	{
 		// Write the remaining data
-		while (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
+		if (uploadLength != 0)
 		{
-			char c = uploadBuffer[uploadReadIndex];
-			uploadReadIndex = (uploadReadIndex + 1) % uploadBufLength;
-			if (!fileBeingUploaded.Write(c))
+			if (!fileBeingUploaded.Write(uploadPointer, uploadLength))
 			{
 				uploadState = uploadError;
 			}
 		}
+
+		uploadPointer = NULL;
+		uploadLength = 0;
 
 		if (uploadState == uploadOK && !fileBeingUploaded.Flush())
 		{
@@ -1052,29 +1030,25 @@ void Webserver::Spin()
 {
 	if (state != inactive)
 	{
-//#if 0
-		if (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
+		if (uploadState == uploadOK && uploadLength != 0)
 		{
-			// Write some uploaded data to file
-			for (unsigned int i = 0; i < 256 && uploadReadIndex != uploadWriteIndex && uploadState == uploadOK; ++i)
+			// Write some uploaded data to file.
+			// Limiting the amount of data we write improves throughput, probably by allowing lwip time to send ACKs etc.
+			unsigned int len = min<unsigned int>(uploadLength, 256);
+			if (!fileBeingUploaded.Write(uploadPointer, len))
 			{
-				char c = uploadBuffer[uploadReadIndex];
-				uploadReadIndex = (uploadReadIndex + 1) % uploadBufLength;
-				if (!fileBeingUploaded.Write(c))
-				{
-					uploadState = uploadError;
-				}
+				uploadState = uploadError;
 			}
+			uploadPointer += len;
+			uploadLength -= len;
 		}
 		else
-//#endif
 		{
 			Network *net = reprap.GetNetwork();
 			RequestState *req = net->GetRequest(currentConnection);
 			if (req != NULL && req->IsReady())
 			{
-				// To achieve a high upload speed, we try to process a complete request here
-				for (int i = 0; i < 100; ++i)
+				for (int i = 0; i < 500; ++i)
 				{
 					char c;
 					if (req->Read(c))
@@ -1095,22 +1069,6 @@ void Webserver::Spin()
 					}
 				}
 			}
-#if 0
-			else if (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
-			{
-				// Write some uploaded data to file
-				for (unsigned int i = 0; i < 256 && uploadReadIndex != uploadWriteIndex && uploadState == uploadOK; ++i)
-				{
-					char c = uploadBuffer[uploadReadIndex];
-					uploadReadIndex = (uploadReadIndex + 1) % uploadBufLength;
-					if (!fileBeingUploaded.Write(c))
-					{
-						uploadState = uploadError;
-					}
-				}
-			}
-
-#endif
 		}
 		platform->ClassReport("Webserver", longWait);
 	}
@@ -1132,16 +1090,17 @@ void Webserver::Init()
 	SetPassword(DEFAULT_PASSWORD);
 	SetName(DEFAULT_NAME);
 	gcodeReadIndex = gcodeWriteIndex = 0;
-	uploadReadIndex = uploadWriteIndex = 0;
 	lastTime = platform->Time();
 	longWait = lastTime;
 	gcodeReply[0] = 0;
 	seq = 0;
 	uploadState = notUploading;
+	uploadPointer = NULL;
+	uploadLength = 0;
+	filenameBeingUploaded[0] = 0;
 	ResetState(NULL);
 
 	// Reinitialise the message file
-
 	//platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }
 
@@ -1172,7 +1131,8 @@ void Webserver::CancelUpload()
 		}
 	}
 	filenameBeingUploaded[0] = 0;
-	uploadReadIndex = uploadWriteIndex = 0;
+	uploadPointer = NULL;
+	uploadLength = 0;
 	uploadState = notUploading;
 }
 
@@ -1243,7 +1203,7 @@ unsigned int Webserver::GetReportedGcodeBufferSpace() const
 // Get the actual amount of gcode buffer space we have
 unsigned int Webserver::GetUploadBufferSpace() const
 {
-	return (uploadReadIndex - uploadWriteIndex - 1u) % uploadBufLength;
+	return ARRAY_SIZE(clientMessage) - 700;					// we now write directly from the message buffer, but allow 700 bytes for headers etc.
 }
 
 // Get the amount of gcode buffer space we are going to report
@@ -1268,7 +1228,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 
 		if (length != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
 		{
-			const size_t readSize = 1024;					// read 1K bytes at a time
+			const size_t readSize = 512;					// read 512 bytes at a time (1K doesn't seem to work when we read from the end)
 			const size_t overlap = 100;
 			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
 
@@ -1281,9 +1241,11 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 					buf[sizeToRead] = 0;
 
 					// Look for layer height
-					const char *pos = strstr(buf, "; layer_height ");
+					const char* layerHeightString = "; layer_height ";
+					const char *pos = strstr(buf, layerHeightString);
 					if (pos != NULL)
 					{
+						pos += strlen(layerHeightString);
 						while (strchr(" \t=", *pos))
 						{
 							++pos;
@@ -1291,9 +1253,11 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 						layerHeight = strtod(pos, NULL);
 					}
 
-					pos = strstr(buf, "; generated by ");
+					const char* generatedByString = "; generated by ";
+					pos = strstr(buf, generatedByString);
 					if (pos != NULL)
 					{
+						pos += strlen(generatedByString);
 						while (generatedByLength > 1 && *pos >= ' ')
 						{
 							char c = *pos++;
@@ -1330,38 +1294,31 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 						sizeToRead += readSize;
 					}
 				}
-				unsigned long seekPos = length - sizeToRead;	// read on a 1K boundary
+				unsigned long seekPos = length - sizeToRead;	// read on a 512b boundary
 				size_t sizeToScan = sizeToRead;
 				bool foundFilamentUsed = false;
 				for (;;)
 				{
 					if (!f->Seek(seekPos))
 					{
-//debugPrintf("Seek to %lu failed\n", seekPos);
 						break;
 					}
-//debugPrintf("Reading %u bytes at %lu\n", sizeToRead, seekPos);
 					int nbytes = f->Read(buf, sizeToRead);
 					if (nbytes != (int)sizeToRead)
 					{
-//debugPrintf("Read failed, read %d bytes\n", nbytes);
 						break;									// read failed so give up
 					}
 					buf[sizeToScan] = 0;						// add a null terminator
-//debugPrintf("About to scan %u bytes starting: %.40s\n", sizeToScan, buf);
 					if (!foundFilamentUsed)
 					{
 						foundFilamentUsed = FindFilamentUsed(buf, sizeToScan, filamentUsed);
-//debugPrintf("Found fil: %c\n", foundFilamentUsed ? 'Y' : 'N');
 					}
 					if (FindHeight(buf, sizeToScan, height))
 					{
-//debugPrintf("Found height = %f\n", height);
 						break;		// quit if found height
 					}
 					if (seekPos == 0 || length - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
 					{
-//debugPrintf("Quitting loop at seekPos = %lu\n", seekPos);
 						break;		// quit if reached start of file or already scanned the last 32K of the file
 					}
 					seekPos -= readSize;

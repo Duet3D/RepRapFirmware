@@ -110,7 +110,6 @@ class Webserver
     void CheckPassword(const char* pw);
     void LoadGcodeBuffer(const char* gc);
     void StoreGcodeData(const char* data, size_t len);
-    void StoreUploadData(const char* data, size_t len);
     bool GetJsonResponse(const char* request, const char* key, const char* value, size_t valueLength);
     void GetJsonUploadResponse();
     void GetStatusResponse(uint8_t type);
@@ -128,27 +127,20 @@ class Webserver
     static bool FindFilamentUsed(const char* buf, size_t len, float& filamentUsed);
 
     Platform* platform;
+
+    // Web server state machine data
     ServerState state;
     char decodeChar;
-    UploadState uploadState;
-    FileData fileBeingUploaded;
-    char filenameBeingUploaded[maxFilenameLength + 1];
     const HttpState *currentConnection;
 
     float lastTime;
     float longWait;
-//    bool receivingPost;
-//    int boundaryCount;
-//    FileStore* postFile;
-//    bool postSeen;
-//    bool getSeen;
-//    bool clientLineIsBlank;
 
     // Buffers for processing HTTP input
     char clientMessage[webMessageLength];			// holds the command, qualifier, and headers
- //   char postBoundary[postBoundaryLength];			// holds the POST boundary string
-//    char postFileName[postFilenameLength];			// holds the POST filename
-//    char postData[postDataLength];				// holds the POST data
+//  char postBoundary[postBoundaryLength];			// holds the POST boundary string
+//  char postFileName[postFilenameLength];			// holds the POST filename
+//  char postData[postDataLength];					// holds the POST data
     unsigned int clientPointer;						// current index into clientMessage
 
     const char* commandWords[maxCommandWords];
@@ -162,9 +154,12 @@ class Webserver
     char gcodeBuffer[gcodeBufLength];
     unsigned int gcodeReadIndex, gcodeWriteIndex;	// head and tail indices into gcodeBuffer
 
-    // Buffers for file uploading
-    char uploadBuffer[uploadBufLength];
-    unsigned int uploadReadIndex, uploadWriteIndex;	// head and tail indices into gcodeBuffer
+    // Information for file uploading
+    UploadState uploadState;
+    FileData fileBeingUploaded;
+    char filenameBeingUploaded[maxFilenameLength + 1];
+    const char *uploadPointer;						// pointer to start of uploaded data not yet written to file
+    unsigned int uploadLength;						// amount of data not yet written to file
 
     // Buffers to hold reply
     char jsonResponse[jsonReplyLength];

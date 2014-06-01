@@ -1551,6 +1551,29 @@ bool FileStore::Write(const char* b)
 	return true;
 }
 
+// Direct block write that bypasses the buffer. Used when uploading files.
+bool FileStore::Write(const char *s, unsigned int len)
+{
+	if (!inUse)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to write block to a non-open file.\n");
+		return false;
+	}
+	if (!WriteBuffer())
+	{
+		return false;
+	}
+
+	unsigned int bytesWritten;
+	FRESULT writeStatus = f_write(&file, s, len, &bytesWritten);
+	if ((writeStatus != FR_OK) || (bytesWritten != len))
+	{
+		platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
+		return false;
+	}
+	return true;
+}
+
 bool FileStore::Flush()
 {
 	if (!inUse)
