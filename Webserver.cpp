@@ -88,6 +88,7 @@ rr_delete?name=xxx
 static const char* overflowResponse = "overflow";
 static const char* badEscapeResponse = "bad escape";
 
+const float pasvPortTimeout = 10.0;	 					// seconds to wait for the FTP data port
 
 
 //********************************************************************************************
@@ -103,6 +104,7 @@ Webserver::Webserver(Platform* p)
 {
 	platform = p;
 	webserverActive = false;
+	readingConnection = NULL;
 
 	httpInterpreter = new HttpInterpreter(p, this);
 	ftpInterpreter = new FtpInterpreter(p, this);
@@ -140,79 +142,128 @@ void Webserver::Spin()
 {
 	if (webserverActive)
 	{
-		// Flush upload data
-		httpInterpreter->FlushUploadData();
-		ftpInterpreter->FlushUploadData();
-
-		// Process incoming request
 		Network *net = reprap.GetNetwork();
-		RequestState *req = net->GetRequest();
-		if (req != NULL)
+		RequestState *req = net->GetRequest(readingConnection);
+
+		// Make sure the upload buffers are empty before a new request is processed
+		if (httpInterpreter->FlushUploadData() && ftpInterpreter->FlushUploadData() && req != NULL)
 		{
-			// I (zpl) have added support for two more protocols (FTP and Telnet),
-			// so we must take care of the protocol type here.
-			ProtocolInterpreter *interpreter;
-			uint16_t local_port = req->GetLocalPort();
-			switch (local_port)
+			// Process incoming request
+			if (req->IsReady())
 			{
-				case 80: 	/* HTTP */
-					interpreter = httpInterpreter;
-					break;
-
-				case 21: 	/* FTP */
-					interpreter = ftpInterpreter;
-					break;
-
-				case 23: 	/* Telnet */
-					interpreter = telnetInterpreter;
-					break;
-
-				default:	/* FTP data */
-					interpreter = ftpInterpreter;
-					break;
-			}
-
-			// For protocols other than HTTP it is important to send a HELO message
-			if (req->IncomingConnection())
-			{
-				interpreter->ConnectionEstablished();
-
-				if (req == net->GetRequest())
+				// I (zpl) have added support for two more protocols (FTP and Telnet),
+				// so we must take care of the protocol type here.
+				ProtocolInterpreter *interpreter;
+				uint16_t local_port = req->GetLocalPort();
+				bool is_data_port = false;
+				switch (local_port)
 				{
-					net->IgnoreRequest();
-				}
-			}
-			else
-			{
-				char c;
-				for (;;)
-				{
-					// To achieve a high upload speed, we try to process a complete request here
-					if (req->Read(c))
-					{
-						if (interpreter->CharFromClient(c))
-						{
-							break;
-						}
-					}
-					else if (!interpreter->IsUploading())
-					{
-						// We ran out of data before finding a complete request.
-						// This can happen if the network connection was lost, so only report it if debug is enabled
-						if (reprap.Debug())
-						{
-							platform->Message(DEBUG_MESSAGE, "Webserver: incomplete request\n");
-						}
-
-						net->SendAndClose(NULL);
-						interpreter->ResetState();
+					case 80: 	/* HTTP */
+						interpreter = httpInterpreter;
 						break;
+
+					case 21: 	/* FTP */
+						interpreter = ftpInterpreter;
+						break;
+
+					case 23: 	/* Telnet */
+						interpreter = telnetInterpreter;
+						break;
+
+					default:	/* FTP data */
+						interpreter = ftpInterpreter;
+						is_data_port = true;
+						break;
+				}
+
+				// Graceful disconnects are handled here, because prior RequestStates might still contain valid
+				// data. That's why it's a bad idea to close these connections immediately in the Network class.
+				if (req->GetStatus() == disconnected)
+				{
+					readingConnection = NULL;
+					net->CloseRequest();
+				}
+				// Fast upload for FTP connections
+				else if (is_data_port)
+				{
+					if (req->GetStatus() == connected)
+					{
+						interpreter->ConnectionEstablished();
+						if (interpreter->IsUploading())
+						{
+							// keep track of the uploading FTP data connections because we can't
+							// afford delayed data requests
+							readingConnection = req->GetConnection();
+						}
+
+						net->CloseRequest();
+					}
+					else if (interpreter->IsUploading())
+					{
+						char *buffer;
+						unsigned int len;
+						while (req->ReadBuffer(buffer, len))
+						{
+							if (!interpreter->StoreUploadData(buffer, len))
+							{
+								platform->Message(HOST_MESSAGE, "Webserver: Could not store upload data!\n");
+
+								net->SendAndClose(NULL);
+								interpreter->ResetState();
+								break;
+							}
+						}
+
+						net->CloseRequest();
 					}
 					else
 					{
-						break;
+						readingConnection = NULL;
+						net->SendAndClose(NULL);
 					}
 				}
+				// For protocols other than HTTP it is important to send a HELO message
+				else if (req->GetStatus() == connected)
+				{
+					interpreter->ConnectionEstablished();
+
+					// ignore this request unless ConnectionEstablished() has already used it for sending
+					if (req == net->GetRequest(readingConnection))
+					{
+						net->CloseRequest();
+					}
+				}
+				// Process other messages
+				else
+				{
+					char c;
+					for (;;)
+					{
+						if (req->Read(c))
+						{
+							// Each ProtocolInterpreter must take care of the current RequestState and remove
+							// it from the ready transactions by either calling SendAndClose() or CloseRequest().
+							if (interpreter->CharFromClient(c))
+							{
+								readingConnection = NULL;
+								break;
+							}
+						}
+						else
+						{
+							// We ran out of data before finding a complete request.
+							// This happens when the incoming message length exceeds the TCP MSS. We need to process another packet on the same connection.
+							readingConnection = req->GetConnection();
+							net->SendAndClose(NULL, true);
+							break;
+						}
+					}
+				}
+			}
+			else if (req->LostConnection())
+			{
+				platform->Message(HOST_MESSAGE, "Webserver: Skipping zombie request\n");
+				net->CloseRequest();
 			}
 		}
 
@@ -453,13 +504,13 @@ bool Webserver::GetGCodeReply(char *&reply)
 	return gcode_changed;
 }
 
-void Webserver::ConnectionLost(uint16_t local_port)
+void Webserver::ConnectionLost(const ConnectionState *cs)
 {
+	uint16_t local_port = cs->GetLocalPort();
 	if (reprap.Debug())
 	{
-		char buffer[48];
-		snprintf(buffer, 48, "Webserver: ConnectionLost called with port %d\n", local_port);
-		platform->Message(DEBUG_MESSAGE, buffer);
+		snprintf(scratchString, STRING_LENGTH, "Webserver: ConnectionLost called with port %d\n", local_port);
+		platform->Message(DEBUG_MESSAGE, scratchString);
 	}
 
 	ProtocolInterpreter *interpreter;
@@ -482,8 +533,14 @@ void Webserver::ConnectionLost(uint16_t local_port)
 			break;
 	}
 	interpreter->ConnectionLost(local_port);
-}
 
+	// When our reading connection has been lost, it is no longer important which
+	// connection is read from first.
+	if (cs == readingConnection)
+	{
+		readingConnection = NULL;
+	}
+}
 
 
 
@@ -497,8 +554,10 @@ void Webserver::ConnectionLost(uint16_t local_port)
 
 ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws) : platform(p), webserver(ws)
 {
-	uploadReadIndex = uploadWriteIndex = 0;
 	uploadState = notUploading;
+	uploadPointer = NULL;
+	uploadLength = 0;
+	filenameBeingUploaded[0] = 0;
 }
 
 // Start writing to a new file
@@ -519,56 +578,38 @@ bool ProtocolInterpreter::StartUpload(FileStore *file)
 	}
 }
 
-// Process a received string of upload data
-bool ProtocolInterpreter::StoreUploadData(const char* data, size_t len)
+// Process a received buffer of upload data
+bool ProtocolInterpreter::StoreUploadData(const char* data, unsigned int len)
 {
-	if (uploadState != uploadOK)
+	if (uploadState == uploadOK)
 	{
-		return false;
+		uploadPointer = data;
+		uploadLength = len;
+		return true;
 	}
+	return false;
+}
 
-	if (len > GetUploadBufferSpace())
+// Try to flush upload buffer and return true if all data has been flushed
+bool ProtocolInterpreter::FlushUploadData()
+{
+	if (uploadState == uploadOK && uploadLength != 0)
 	{
-		platform->Message(HOST_MESSAGE, "Webserver: Upload buffer overflow.\n");
-		webserver->HandleReply("Webserver: Upload buffer overflow", true);
-		return false;
-	}
-	else
-	{
-		size_t remaining = uploadBufLength - uploadWriteIndex;
-		if (len <= remaining)
+		// Write some uploaded data to file.
+		// Limiting the amount of data we write improves throughput, probably by allowing lwip time to send ACKs etc.
+		unsigned int len = min<unsigned int>(uploadLength, 512);
+		if (!fileBeingUploaded.Write(uploadPointer, len))
 		{
-			memcpy(uploadBuffer + uploadWriteIndex, data, len);
+			uploadState = uploadError;
 		}
-		else
-		{
-			memcpy(uploadBuffer + uploadWriteIndex, data, remaining);
-			memcpy(uploadBuffer, data + remaining, len - remaining);
-		}
-		uploadWriteIndex = (uploadWriteIndex + len) % uploadBufLength;
+
+		uploadPointer += len;
+		uploadLength -= len;
+
+		return (uploadLength == 0);
 	}
 
 	return true;
-}
-
-void ProtocolInterpreter::FlushUploadData()
-{
-	if (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
-	{
-		static char c;
-
-		// Write some uploaded data to file
-		for (unsigned int i = 0; i < 256 && uploadReadIndex != uploadWriteIndex && uploadState == uploadOK; ++i)
-		{
-			c = uploadBuffer[uploadReadIndex];
-			uploadReadIndex = (uploadReadIndex + 1) % uploadBufLength;
-			if (!fileBeingUploaded.Write(c))
-			{
-				uploadState = uploadError;
-				break;
-			}
-		}
-	}
 }
 
 void ProtocolInterpreter::CancelUpload()
@@ -582,22 +623,24 @@ void ProtocolInterpreter::CancelUpload()
 		}
 	}
 	filenameBeingUploaded[0] = 0;
-	uploadReadIndex = uploadWriteIndex = 0;
+	uploadPointer = NULL;
+	uploadLength = 0;
 	uploadState = notUploading;
 }
 
-bool ProtocolInterpreter::FinishUpload(const long file_length)
+void ProtocolInterpreter::FinishUpload(const long file_length)
 {
 	// Write the remaining data
-	while (uploadState == uploadOK && uploadReadIndex != uploadWriteIndex)
+	if (uploadState == uploadOK && uploadLength != 0)
 	{
-		char c = uploadBuffer[uploadReadIndex];
-		uploadReadIndex = (uploadReadIndex + 1) % uploadBufLength;
-		if (!fileBeingUploaded.Write(c))
+		if (!fileBeingUploaded.Write(uploadPointer, uploadLength))
 		{
 			uploadState = uploadError;
 		}
 	}
+
+	uploadPointer = NULL;
+	uploadLength = 0;
 
 	if (uploadState == uploadOK && !fileBeingUploaded.Flush())
 	{
@@ -622,21 +665,6 @@ bool ProtocolInterpreter::FinishUpload(const long file_length)
 		platform->GetMassStorage()->Delete("0:/", filenameBeingUploaded);
 	}
 	filenameBeingUploaded[0] = 0;
-
-	return (uploadState == uploadOK);
-}
-
-// Get the actual amount of upload buffer space we have
-unsigned int ProtocolInterpreter::GetUploadBufferSpace() const
-{
-	return (uploadReadIndex - uploadWriteIndex - 1u) % uploadBufLength;
-}
-
-// Get the amount of gcode buffer space we are going to report
-unsigned int ProtocolInterpreter::GetReportedUploadBufferSpace() const
-{
-	unsigned int temp = GetUploadBufferSpace();
-	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf : temp;
 }
 
 
@@ -805,22 +833,29 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	}
 	else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
 	{
+		CancelUpload();
+
 		FileStore *file = platform->GetFileStore("0:/", value, true);
-		bool success = StartUpload(file);
-		GetJsonUploadResponse(success);
+		StartUpload(file);
+
+		GetJsonUploadResponse();
 	}
 	else if (StringEquals(request, "upload_data") && StringEquals(key, "data"))
 	{
-		bool success = StoreUploadData(value, valueLength);
-		GetJsonUploadResponse(success);
+		if (uploadState == uploadOK)
+		{
+			uploadPointer = value;
+			uploadLength = valueLength;
+		}
+		GetJsonUploadResponse();
 		keepOpen = true;
 	}
 	else if (StringEquals(request, "upload_end") && StringEquals(key, "size"))
 	{
 		long file_length = strtoul(value, NULL, 10);
-		bool success = FinishUpload(file_length);
+		FinishUpload(file_length);
 
-		GetJsonUploadResponse(success);
+		GetJsonUploadResponse();
 	}
 	else if (StringEquals(request, "upload_cancel"))
 	{
@@ -841,11 +876,14 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	else if (StringEquals(request, "fileinfo") && StringEquals(key, "name"))
 	{
 		unsigned long length;
-		float height, filament;
-		bool found = webserver->GetFileInfo(value, length, height, filament);
+		float height, filament, layerHeight;
+		char generatedBy[50];
+		bool found = webserver->GetFileInfo(value, length, height, filament, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
 		if (found)
 		{
-			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":0,\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\"}", length, height, filament);
+			snprintf(jsonResponse, ARRAY_UPB(jsonResponse),
+					"{\"err\":0,\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\",\"layerHeight\":\"%.2f\",\"generatedBy\":\"%s\"}",
+					length, height, filament, layerHeight, generatedBy);
 		}
 		else
 		{
@@ -886,9 +924,9 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	return keepOpen;
 }
 
-void Webserver::HttpInterpreter::GetJsonUploadResponse(const bool upload_successful)
+void Webserver::HttpInterpreter::GetJsonUploadResponse()
 {
-	snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"ubuff\":%u,\"err\":%d}", GetReportedUploadBufferSpace(), upload_successful ? 0 : 1);
+	snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"ubuff\":%u,\"err\":%d}", GetReportedUploadBufferSpace(), (uploadState == uploadOK) ? 0 : 1);
 }
 
 void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
@@ -1040,6 +1078,19 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 	}
 	jsonResponse[jp] = 0;
 	strncat(jsonResponse, "\"}", ARRAY_UPB(jsonResponse));
+}
+
+// Get the actual amount of upload buffer space we have
+unsigned int Webserver::HttpInterpreter::GetUploadBufferSpace() const
+{
+	return ARRAY_SIZE(clientMessage) - 700;					// we now write directly from the message buffer, but allow 700 bytes for headers etc.
+}
+
+// Get the amount of gcode buffer space we are going to report
+unsigned int Webserver::HttpInterpreter::GetReportedUploadBufferSpace() const
+{
+	unsigned int temp = GetUploadBufferSpace();
+	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf : temp;
 }
 
 void Webserver::HttpInterpreter::ResetState()
@@ -1260,7 +1311,7 @@ bool Webserver::HttpInterpreter::CharFromClient(char c)
 		switch(c)
 		{
 		case '\n':
-			if (clientMessage + clientPointer == headers[numHeaderKeys].key)
+			if (clientMessage + clientPointer == headers[numHeaderKeys].key)	// if the key hasn't started yet, then this is the blank line at the end
 			{
 				if (ProcessMessage())
 				{
@@ -1423,12 +1474,15 @@ Webserver::FtpInterpreter::FtpInterpreter(Platform *p, Webserver *ws) : Protocol
 {
 	state = authenticating;
 	clientPointer = 0;
-	strncpy(currentDir, "/", maxFilenameLength);
+	strcpy(currentDir, "/");
 }
 
 void Webserver::FtpInterpreter::ConnectionEstablished()
 {
-	platform->Message(DEBUG_MESSAGE, "Webserver: FTP connection established!\n");
+	if (reprap.Debug())
+	{
+		platform->Message(DEBUG_MESSAGE, "Webserver: FTP connection established!\n");
+	}
 
 	Network *net = reprap.GetNetwork();
 	RequestState *req = net->GetRequest();
@@ -1466,19 +1520,29 @@ void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 {
 	if (local_port != 21)
 	{
+		// Close the data port
 		Network *net = reprap.GetNetwork();
 		net->CloseDataPort();
 
+		// Send response
+		if (net->MakeMainRequest())
+		{
+			if (state == doingPasvIO)
+			{
+				SendReply(226, "Transfer complete.");
+			}
+			else
+			{
+				SendReply(550, "Lost data connection!");
+			}
+		}
+
+		// Do file handling
 		if (IsUploading())
 		{
 			FinishUpload(0);
+			uploadState = notUploading;
 		}
-
-		if (net->MakeMainRequest())
-		{
-			SendReply(226, "Transfer complete.");
-		}
-
 		state = authenticated;
 	}
 }
@@ -1489,18 +1553,6 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 	{
 		platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow in FTP server!\n");
 		return true;
-	}
-
-	if (IsUploading())
-	{
-		if (!StoreUploadData(&c, 1))
-		{
-			Network *net = reprap.GetNetwork();
-			net->SendAndClose(NULL);
-
-			ResetState();
-		}
-		return false;
 	}
 
 	switch (c)
@@ -1544,7 +1596,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 void Webserver::FtpInterpreter::ResetState()
 {
 	clientPointer = 0;
-	strncpy(currentDir, "/", maxFilenameLength);
+	strcpy(currentDir, "/");
 
 	Network *net = reprap.GetNetwork();
 	net->CloseDataPort();
@@ -1552,6 +1604,28 @@ void Webserver::FtpInterpreter::ResetState()
 	CancelUpload();
 
 	state = authenticating;
+}
+
+bool Webserver::FtpInterpreter::StoreUploadData(const char* data, unsigned int len)
+{
+	bool result = true;
+	if (len != 0 && uploadState == uploadOK)
+	{
+		if (len + uploadLength <= uploadBufLength)
+		{
+			memcpy(uploadBuffer + uploadLength, data, len);
+			uploadLength += len;
+			uploadPointer = uploadBuffer;
+		}
+		else
+		{
+			platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow while storing FTP data!\n");
+			uploadState = uploadError;
+			result = false;
+		}
+	}
+
+	return result;
 }
 
 // return true if an error has occured, false otherwise
@@ -1594,7 +1668,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				}
 			}
 			// if this is different, disconnect immediately
-			else
+ 			else
 			{
 				SendReply(500, "Unknown login command.", false);
 			}
@@ -1617,7 +1691,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				snprintf(ftpResponse, ftpResponseLength, "\"%s\"", currentDir);
 				SendReply(257, ftpResponse);
-			}
+ 			}
 			// set current dir
 			else if (StringStartsWith(clientMessage, "CWD"))
 			{
@@ -1659,6 +1733,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				rand();
 				uint16_t pasv_port = random(1024, 65535);
 				net->OpenDataPort(pasv_port);
+				portOpenTime = platform->Time();
 				state = waitingForPasvPort;
 
 				/* send FTP response */
@@ -1668,7 +1743,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				SendReply(227, ftpResponse);
 			}
 			// PASV commands are not supported in this state
-			else if (StringEquals(clientMessage, "LIST") || StringEquals(clientMessage, "RETR") || StringEquals(clientMessage, "STOR"))
+			else if (StringEquals(clientMessage, "LIST") || StringStartsWith(clientMessage, "RETR") || StringStartsWith(clientMessage, "STOR"))
 			{
 				SendReply(425, "Use PASV first.");
 			}
@@ -1767,7 +1842,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				}
 				else
 				{
-					SendReply(550, "Illegal file names.");
+					SendReply(450, "Illegal file names.");
 				}
 			}
 			// no op
@@ -1790,18 +1865,22 @@ void Webserver::FtpInterpreter::ProcessLine()
 			break;
 
 		case waitingForPasvPort:
-			// TODO: add a mechanism to check if connection times out
-			net->RepeatRequest();
+			if (!reprap.Debug() && platform->Time() - portOpenTime > pasvPortTimeout)
+			{
+				SendReply(425, "Failed to establish connection.");
 
-			//SendReply(425, "Failed to establish connection.");
-
-			//net->CloseDataPort();
-			//state = authenticated;
+				net->CloseDataPort();
+				state = authenticated;
+			}
+			else
+			{
+				net->RepeatRequest();
+			}
 
 			break;
 
 		case pasvPortConnected:
-			// save current connection state so we can send '226 Transfer complete.' when UploadFinished() is called
+			// save current connection state so we can send '226 Transfer complete.' when ConnectionLost() is called
 			net->SaveMainConnection();
 
 			// list directory entries
@@ -1819,9 +1898,14 @@ void Webserver::FtpInterpreter::ProcessLine()
 					RequestState *data_req = net->GetRequest();
 					data_req->Write(platform->GetMassStorage()->UnixFileList(currentDir));
 					net->SendAndClose(NULL);
+					state = doingPasvIO;
 				}
 				else
+				{
 					SendReply(500, "Unknown error.");
+					net->CloseDataPort();
+					state = authenticated;
+				}
 			}
 			// upload a file
 			else if (StringStartsWith(clientMessage, "STOR"))
@@ -1837,10 +1921,13 @@ void Webserver::FtpInterpreter::ProcessLine()
 				if (StartUpload(file))
 				{
 					SendReply(150, "OK to send data.");
+					state = doingPasvIO;
 				}
 				else
 				{
 					SendReply(550, "Failed to open file.");
+					net->CloseDataPort();
+					state = authenticated;
 				}
 			}
 			// download a file
@@ -1867,14 +1954,48 @@ void Webserver::FtpInterpreter::ProcessLine()
 					{
 						// send the file via data port
 						net->SendAndClose(fs, false);
+						state = doingPasvIO;
 					}
 					else
+					{
 						SendReply(500, "Unknown error.");
+						net->CloseDataPort();
+						state = authenticated;
+					}
 				}
 			}
+			// unknown command
+			else
+			{
+				SendReply(500, "Unknown command.");
+				net->CloseDataPort();
+				state = authenticated;
+			}
 
-			// one transmission per PASV command
-			state = authenticated;
+			break;
+
+		case doingPasvIO:
+			// abort current transfer
+			if (StringEquals(clientMessage, "ABOR"))
+			{
+				if (IsUploading())
+				{
+					CancelUpload();
+					SendReply(226, "ABOR successful.");
+				}
+				else
+				{
+					net->CloseDataPort();
+					SendReply(226, "ABOR successful.");
+				}
+			}
+			// unknown command
+			else
+			{
+				SendReply(500, "Unknown command.");
+				net->CloseDataPort();
+				state = authenticated;
+			}
 
 			break;
 	}
@@ -2016,19 +2137,18 @@ void Webserver::TelnetInterpreter::ConnectionEstablished()
 {
 	Network *net = reprap.GetNetwork();
 	RequestState *req = net->GetRequest();
-	req->Write("RepRapPro Ormerod Telnet Interface\n\n");
+	/*req->Write("RepRapPro Ormerod Telnet Interface\n\n");
 	req->Write("Please enter your password:\n");
-	req->Write("> ");
-	net->SendAndClose(NULL, true);
+	req->Write("> ");*/
+	req->Write("Sorry, Telnet is not supported yet.\n");
+	req->Write("This feature will be added in a future firmware version.");
+	net->SendAndClose(NULL);
 }
 
 bool Webserver::TelnetInterpreter::CharFromClient(char c)
 {
-	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
-	req->Write(c); // echo for now
-	net->SendAndClose(NULL, true);
-	return (c == '\n');
+	// TODO
+	return true;
 }
 
 void Webserver::TelnetInterpreter::ResetState()
@@ -2047,7 +2167,7 @@ void Webserver::TelnetInterpreter::ResetState()
 
 
 // Get information for a file on the SD card
-bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed)
+bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength)
 {
 	FileStore *f = platform->GetFileStore("0:/", fileName, false);
 	if (f != NULL)
@@ -2056,62 +2176,109 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 		length = f->Length();
 		height = 0.0;
 		filamentUsed = 0.0;
+		layerHeight = 0.0;
+		generatedBy[0] = 0;
+
 		if (length != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
 		{
-			const size_t readSize = 512;					// read 512 bytes at a time (tried 1K but it sometimes gives us the wrong data)
+			const size_t readSize = 512;					// read 512 bytes at a time (1K doesn't seem to work when we read from the end)
 			const size_t overlap = 100;
-			size_t sizeToRead;
-			if (length <= sizeToRead + overlap)
-			{
-				sizeToRead = length;						// read the whole file in one go
-			}
-			else
-			{
-				sizeToRead = length % readSize;
-				if (sizeToRead <= overlap)
-				{
-					sizeToRead += readSize;
-				}
-			}
-			unsigned long seekPos = length - sizeToRead;	// read on a 1K boundary
-			size_t sizeToScan = sizeToRead;
 			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
-			bool foundFilamentUsed = false;
-			for (;;)
+
+			// Get slic3r settings by reading from the start of the file. We only read the first 1K or so, everything we are looking for should be there.
 			{
-				if (!f->Seek(seekPos))
-				{
-//debugPrintf("Seek to %lu failed\n", seekPos);
-					break;
-				}
-//debugPrintf("Reading %u bytes at %lu\n", sizeToRead, seekPos);
+				size_t sizeToRead = (size_t)min<unsigned long>(length, readSize + overlap);
 				int nbytes = f->Read(buf, sizeToRead);
-				if (nbytes != (int)sizeToRead)
+				if (nbytes == (int)sizeToRead)
 				{
-//debugPrintf("Read failed, read %d bytes\n", nbytes);
-					break;									// read failed so give up
+					buf[sizeToRead] = 0;
+
+					// Look for layer height
+					const char* layerHeightString = "; layer_height ";
+					const char *pos = strstr(buf, layerHeightString);
+					if (pos != NULL)
+					{
+						pos += strlen(layerHeightString);
+						while (strchr(" \t=", *pos))
+						{
+							++pos;
+						}
+						layerHeight = strtod(pos, NULL);
+					}
+
+					const char* generatedByString = "; generated by ";
+					pos = strstr(buf, generatedByString);
+					if (pos != NULL)
+					{
+						pos += strlen(generatedByString);
+						while (generatedByLength > 1 && *pos >= ' ')
+						{
+							char c = *pos++;
+							if (c == '"' || c == '\\')
+							{
+								// Need to escape the quote-mark for JSON
+								if (generatedByLength < 3)
+								{
+									break;
+								}
+								*generatedBy++ = '\\';
+							}
+							*generatedBy++ = c;
+						}
+						*generatedBy = 0;
+					}
+
+					// Add code to look for other values here...
 				}
-				buf[sizeToScan] = 0;						// add a null terminator
-//debugPrintf("About to scan %u bytes starting: %.40s\n", sizeToScan, buf);
-				if (!foundFilamentUsed)
+			}
+
+			// Now get the object height and filament used by reading the end of the file
+			{
+				size_t sizeToRead;
+				if (length <= readSize + overlap)
 				{
-					foundFilamentUsed = FindFilamentUsed(buf, sizeToScan, filamentUsed);
-//debugPrintf("Found fil: %c\n", foundFilamentUsed ? 'Y' : 'N');
+					sizeToRead = length;						// read the whole file in one go
 				}
-				if (FindHeight(buf, sizeToScan, height))
+				else
 				{
-//debugPrintf("Found height = %f\n", height);
-					break;		// quit if found height
+					sizeToRead = length % readSize;
+					if (sizeToRead <= overlap)
+					{
+						sizeToRead += readSize;
+					}
 				}
-				if (seekPos == 0 || length - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
+				unsigned long seekPos = length - sizeToRead;	// read on a 512b boundary
+				size_t sizeToScan = sizeToRead;
+				bool foundFilamentUsed = false;
+				for (;;)
 				{
-//debugPrintf("Quitting loop at seekPos = %lu\n", seekPos);
-					break;		// quit if reached start of file or already scanned the last 32K of the file
+					if (!f->Seek(seekPos))
+					{
+						break;
+					}
+					int nbytes = f->Read(buf, sizeToRead);
+					if (nbytes != (int)sizeToRead)
+					{
+						break;									// read failed so give up
+					}
+					buf[sizeToScan] = 0;						// add a null terminator
+					if (!foundFilamentUsed)
+					{
+						foundFilamentUsed = FindFilamentUsed(buf, sizeToScan, filamentUsed);
+					}
+					if (FindHeight(buf, sizeToScan, height))
+					{
+						break;		// quit if found height
+					}
+					if (seekPos == 0 || length - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
+					{
+						break;		// quit if reached start of file or already scanned the last 32K of the file
+					}
+					seekPos -= readSize;
+					sizeToRead = readSize;
+					sizeToScan = readSize + overlap;
+					memcpy(buf + sizeToRead, buf, overlap);
 				}
-				seekPos -= readSize;
-				sizeToRead = readSize;
-				sizeToScan = readSize + overlap;
-				memcpy(buf + sizeToRead, buf, overlap);
 			}
 		}
 		f->Close();

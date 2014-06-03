@@ -1354,6 +1354,11 @@ const char *MassStorage::UnixFileList(const char* directory)
 
 			filename = *entry.lfname ? entry.lfname : entry.fname;
 			day = entry.fdate & 0x1F;
+			if (day == 0)
+			{
+				// This can happen if a transfer hasn't been processed completely.
+				day = 1;
+			}
 			month = (entry.fdate & 0x01E0) >> 5;
 			year = (entry.fdate >> 9) + 1980;
 
@@ -1765,6 +1770,29 @@ bool FileStore::Write(char b)
 	return true;
 }
 
+// Direct block write that bypasses the buffer. Used when uploading files.
+bool FileStore::Write(const char *s, unsigned int len)
+{
+	if (!inUse)
+	{
+		platform->Message(HOST_MESSAGE, "Attempt to write block to a non-open file.\n");
+		return false;
+	}
+	if (!WriteBuffer())
+	{
+		return false;
+	}
+
+	unsigned int bytesWritten;
+	FRESULT writeStatus = f_write(&file, s, len, &bytesWritten);
+	if ((writeStatus != FR_OK) || (bytesWritten != len))
+	{
+		platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
+		return false;
+	}
+	return true;
+}
+
 bool FileStore::Write(const char* b)
 {
 	if (!inUse)
@@ -1885,6 +1913,12 @@ void Line::Write(char b, bool block)
 	{
 		for(;;)
 		{
+			TryFlushOutput();
+			if (block)
+			{
+				SerialUSB.flush();
+			}
+
 			if (outputNumChars == 0 && SerialUSB.canWrite() != 0)
 			{
 				// We can write the character directly into the USB output buffer
@@ -1919,12 +1953,12 @@ void Line::Write(char b, bool block)
 				ignoringOutputLine = true;
 				break;
 			}
+		}
 
-			TryFlushOutput();
-			if (block)
-			{
-				SerialUSB.flush();
-			}
+		TryFlushOutput();
+		if (block)
+		{
+			SerialUSB.flush();
 		}
 	}
 	// else discard the character

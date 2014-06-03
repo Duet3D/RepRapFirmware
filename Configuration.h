@@ -24,7 +24,7 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.59d-zpl"
+#define VERSION "0.59e-zpl"
 #define DATE "2014-06-02"
 #define LAST_AUTHOR "zombiepantslol"
 

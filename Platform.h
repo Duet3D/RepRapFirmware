@@ -148,17 +148,11 @@ const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0};	// Thermistor 
 // Note: a negative P, I or D value means do not use PID for this heater, use bang-bang control instead.
 // This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
-#if 1 	// if using method 2 above
+// We use method 2 (see above)
 const float defaultPidKis[HEATERS] = {5.0 / HEAT_SAMPLE_TIME, 0.2 / HEAT_SAMPLE_TIME};
 const float defaultPidKds[HEATERS] = {500.0 * HEAT_SAMPLE_TIME, 50.0 * HEAT_SAMPLE_TIME};
 const float defaultPidKps[HEATERS] = {-1, 9.0};
 const float defaultFullBand[HEATERS] = {5.0, 20.0};		// errors larger than this cause heater to be on or off and I-term set to zero
-#else	// using method 1 above
-const float defaultPidKis[HEATERS] = {5.0 / HEAT_SAMPLE_TIME, 0.027 / HEAT_SAMPLE_TIME};
-const float defaultPidKds[HEATERS] = {500.0 * HEAT_SAMPLE_TIME, 50.0 * HEAT_SAMPLE_TIME};
-const float defaultPidKps[HEATERS] = {-1, 20.0};
-const float defaultFullBand[HEATERS] = {5.0, 150.0};	// errors larger than this cause heater to be on or off and I-term set to zero
-#endif
 
 const float defaultPidMin[HEATERS] = {0.0, 0.0};	// minimum value of I-term
 const float defaultPidMax[HEATERS] = {255, 180};	// maximum value of I-term, must be high enough to reach 245C for ABS printing
@@ -337,6 +331,7 @@ public:
 	bool Read(char& b);
 	int Read(char* buf, unsigned int nBytes);
 	bool Write(char b);
+	bool Write(const char *s, unsigned int len);
 	bool Write(const char* s);
 	bool Close();
 	bool Seek(unsigned long pos);
@@ -761,6 +756,11 @@ public:
 	bool Write(char b)
 	{
 		return f->Write(b);
+	}
+
+	bool Write(const char *s, unsigned int len)
+	{
+		return f->Write(s, len);
 	}
 
 	bool Flush()

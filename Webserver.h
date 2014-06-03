@@ -37,10 +37,9 @@ Licence: GPL
 /* HTTP */
 
 const unsigned int gcodeBufLength = 512;		// size of our gcode ring buffer, preferably a power of 2
-const unsigned int uploadBufLength = 2048;		// size of our file upload buffer, preferably a power of 2
-const unsigned int maxReportedFreeBuf = 950;	// the max we own up to having free, to avoid overlong messages. 1024 is too long for Chrome/Windows 8.1.
+const unsigned int maxReportedFreeBuf = 2048;	// the max we own up to having free, to avoid overlong messages. 1024 is too long for Chrome/Windows 8.1.
 
-const unsigned int webMessageLength = 1500;		// maximum length of the web message we accept after decoding, excluding POST data
+const unsigned int webMessageLength = 3000;		// maximum length of the web message we accept after decoding, excluding POST data
 const unsigned int maxFilenameLength = 100;		// maximum length of a filename (inc. path from root) that we can upload
 //const unsigned int postBoundaryLength = 100;	// max length of the POST boundary string
 //const unsigned int postFilenameLength = 100;	// max length of the POST filename
@@ -56,6 +55,7 @@ const unsigned int jsonReplyLength = 1000;		// size of buffer used to hold JSON 
 
 const unsigned int ftpMessageLength = 256;		// maximum line length for incoming FTP commands
 const unsigned int ftpResponseLength = 256;		// maximum FTP response length
+const unsigned int uploadBufLength = 2 * 1432;	// size of our file upload buffer
 
 /* Telnet */
 
@@ -77,7 +77,8 @@ class ProtocolInterpreter
 		virtual bool CharFromClient(const char c) = 0;
 		virtual void ResetState() = 0;
 
-	    void FlushUploadData();
+	    virtual bool StoreUploadData(const char* data, unsigned int len);
+	    bool FlushUploadData();
 	    void CancelUpload();
 		bool IsUploading() const { return uploadState != notUploading; }
 
@@ -87,26 +88,22 @@ class ProtocolInterpreter
 	    Platform *platform;
 	    Webserver *webserver;
 
-	    // Upload file handling
+	    // Information for file uploading
 	    enum UploadState
 	    {
-			notUploading,				// no upload in progress
-			uploadOK,					// upload in progress, no error so far
-			uploadError					// upload in progress but had error
+			notUploading,									// no upload in progress
+			uploadOK,										// upload in progress, no error so far
+			uploadError										// upload in progress but had error
 	    };
-	    UploadState uploadState;
 
+	    UploadState uploadState;
 	    FileData fileBeingUploaded;
 	    char filenameBeingUploaded[maxFilenameLength + 1];
-	    char uploadBuffer[uploadBufLength];
-	    unsigned int uploadReadIndex, uploadWriteIndex;	// head and tail indices into uploadBuffer
+	    const char *uploadPointer;							// pointer to start of uploaded data not yet written to file
+	    unsigned int uploadLength;							// amount of data not yet written to file
 
 	    bool StartUpload(FileStore *file);
-	    bool StoreUploadData(const char* data, size_t len);
-	    bool FinishUpload(const long file_length);
-
-	    unsigned int GetUploadBufferSpace() const;
-	    unsigned int GetReportedUploadBufferSpace() const;
+	    void FinishUpload(const long file_length);
 };
 
 class Webserver
@@ -129,7 +126,7 @@ class Webserver
     bool GCodeAvailable();
     char ReadGCode();
 
-    void ConnectionLost(uint16_t local_port);
+    void ConnectionLost(const ConnectionState *cs);
 
   private:
 
@@ -172,26 +169,29 @@ class Webserver
 			void SendFile(const char* nameOfFileToSend);
 			void SendJsonResponse(const char* command);
 			bool GetJsonResponse(const char* request, const char* key, const char* value, size_t valueLength);
-			void GetJsonUploadResponse(const bool upload_successful);
+			void GetJsonUploadResponse();
 			void GetStatusResponse(uint8_t type);
 			bool ProcessMessage();
 			bool RejectMessage(const char* s, unsigned int code = 500);
 			void JsonReport(bool ok, const char* request);
 
+		    unsigned int GetUploadBufferSpace() const;
+		    unsigned int GetReportedUploadBufferSpace() const;
+
 			HttpState state;
 
-			//    bool receivingPost;
-			//    int boundaryCount;
-			//    FileStore* postFile;
-			//    bool postSeen;
-			//    bool getSeen;
-			//    bool clientLineIsBlank;
+//			bool receivingPost;
+//			int boundaryCount;
+//			FileStore* postFile;
+//			bool postSeen;
+//			bool getSeen;
+//			bool clientLineIsBlank;
 
 			// Buffers for processing HTTP input
 			char clientMessage[webMessageLength];			// holds the command, qualifier, and headers
-			//char postBoundary[postBoundaryLength];			// holds the POST boundary string
-			//char postFileName[postFilenameLength];			// holds the POST filename
-			//char postData[postDataLength];			    	// holds the POST data
+//			char postBoundary[postBoundaryLength];			// holds the POST boundary string
+//			char postFileName[postFilenameLength];			// holds the POST filename
+//			char postData[postDataLength];			    	// holds the POST data
 			unsigned int clientPointer;						// current index into clientMessage
 
 			const char* commandWords[maxCommandWords];
@@ -218,7 +218,7 @@ class Webserver
 			bool CharFromClient(const char c);
 			void ResetState();
 
-			void DataPortClosed();
+			bool StoreUploadData(const char* data, unsigned int len);
 
 		private:
 
@@ -228,6 +228,7 @@ class Webserver
 				authenticated,			// logged in
 				waitingForPasvPort,		// waiting for connection to be established on PASV port
 				pasvPortConnected,		// client connected to PASV port, ready to send data
+				doingPasvIO				// client is connected and data is being transferred
 			};
 			FtpState state;
 
@@ -237,6 +238,9 @@ class Webserver
 
 			char currentDir[maxFilenameLength];
 			char filename[maxFilenameLength];
+
+			char uploadBuffer[uploadBufLength];
+			float portOpenTime;
 
 			void ProcessLine();
 			void SendReply(int code, const char *message, bool keepConnection = true);
@@ -258,7 +262,7 @@ class Webserver
 	};
 	TelnetInterpreter *telnetInterpreter;
 
-	// HTTP upload handling
+	// G-Code processing
     unsigned int GetGcodeBufferSpace() const;
     unsigned int GetReportedGcodeBufferSpace() const;
 
@@ -267,7 +271,8 @@ class Webserver
     void StoreGcodeData(const char* data, size_t len);
     bool GetGCodeReply(char *&reply);
 
-    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed);
+    // File info methods
+    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength);
     static bool FindHeight(const char* buf, size_t len, float& height);
     static bool FindFilamentUsed(const char* buf, size_t len, float& filamentUsed);
 
@@ -283,6 +288,7 @@ class Webserver
 
     Platform* platform;
     bool webserverActive;
+    const ConnectionState *readingConnection;
 
     float lastTime;
     float longWait;

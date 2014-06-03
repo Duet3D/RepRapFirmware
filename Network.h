@@ -38,12 +38,11 @@ struct tcp_pcb;
 struct pbuf;
 class RequestState;
 
-// ConnectionState structure that we use to track TCP connections. This could be combined with class RequestState.
 
+// ConnectionState structure that we use to track TCP connections. This could be combined with class RequestState.
 struct ConnectionState
 {
 	tcp_pcb *pcb;				// connection PCB
-	bool justConnected;			// important for protocols other than HTTP
 	RequestState *sendingRs;	// RequestState that is currently sending via this connection
 	const char *file;			// pointer to data to send
 	uint16_t left;				// amount of data to send
@@ -51,33 +50,46 @@ struct ConnectionState
 
 	// Methods
 	bool SendInProgress() const { return left > 0; }
+	uint16_t GetLocalPort() const;
+};
+
+// Assign a status to each RequestState
+enum RequestStatus
+{
+	connected,
+	dataReceiving,
+	dataSending,
+	disconnected
 };
 
 // Start with a class to hold input and output from the network that needs to be responded to.
-
 class RequestState
 {
 public:
 	friend class Network;
 
 	RequestState(RequestState* n);
-	void Set(pbuf *p, ConnectionState* c);
+	void Set(pbuf *p, ConnectionState* c, RequestStatus s);
 	bool Read(char& b);
+	bool ReadBuffer(char *&buffer, unsigned int &len);
 	void SentPacketAcknowledged(unsigned int len);
 	void Write(char b);
 	void Write(const char* s);
 	void Printf(const char *fmt, ...);
 	bool Send();
+
 	void SetConnectionLost();
 	bool LostConnection() const { return cs == NULL; }
+	bool IsReady() const { return cs != NULL && cs->sendingRs == NULL; }
+	ConnectionState *GetConnection() const { return cs; }
 	uint16_t GetLocalPort() const;
-	bool IncomingConnection() const { return cs->justConnected; }
+	RequestStatus GetStatus() const { return status; }
 
 private:
+	void Close();
 	void FreePbuf();
 
 	ConnectionState* cs;
-
 	RequestState* volatile next;			// next RequestState in the list we are in
 	RequestState* nextWrite;				// next RequestState queued to write to this cs
 	pbuf *pb;								// linked list of incoming packet buffers
@@ -88,13 +100,15 @@ private:
 	unsigned int unsentPointer;
 	unsigned int outputPointer;
 	FileStore *fileBeingSent;
+
+	RequestStatus status;
 	float lastWriteTime;
 	bool persistConnection;
 	bool closeRequested;
 };
 
-// The main network class that drives the network.
 
+// The main network class that drives the network.
 class Network
 {
 public:
@@ -102,13 +116,14 @@ public:
 	void ReceiveInput(pbuf *pb, ConnectionState *cs);
 	void SentPacketAcknowledged(ConnectionState *cs, unsigned int len);
 	void ConnectionAccepted(ConnectionState *cs);
-	void ConnectionClosing(ConnectionState* cs);
+	void ConnectionClosed(ConnectionState* cs);
+	void ConnectionClosedGracefully(ConnectionState *cs);
 	bool Active() const;
 	bool LinkIsUp();
-	RequestState *GetRequest() const { return readyTransactions; }
+	RequestState *GetRequest(const ConnectionState *cs = NULL);
 	void SendAndClose(FileStore *f, bool keepConnectionOpen = false);
 
-	void IgnoreRequest();
+	void CloseRequest();
 	void RepeatRequest();
 
 	void OpenDataPort(uint16_t port);
@@ -116,7 +131,7 @@ public:
 	void SaveMainConnection();
 	bool RestoreDataConnection();
 	bool MakeMainRequest();
-	void CloseDataPort();
+	bool CloseDataPort();
 
 	Network();
 	void Init();
