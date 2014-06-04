@@ -50,6 +50,8 @@ extern "C"
 #include "lwip/src/include/lwip/stats.h"
 #include "lwip/src/include/lwip/tcp.h"
 
+void RepRapNetworkSetMACAddress(const u8_t macAddress[]);
+
 }
 
 const int httpStateSize = MEMP_NUM_TCP_PCB + 1;		// the +1 is in case of recovering from network errors
@@ -317,6 +319,7 @@ void Network::AppendTransaction(RequestState* volatile* list, RequestState *r)
 
 void Network::Init()
 {
+	RepRapNetworkSetMACAddress(reprap.GetPlatform()->MACAddress());
 	init_ethernet();
 }
 

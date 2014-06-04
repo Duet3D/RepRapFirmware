@@ -25,7 +25,8 @@ Licence: GPL
 #define STACK 5
 #define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
-#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
+#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode //FIXME when working with multiple extruders GCODE_LETTERS[DRIVES] is out of scope
+#define FEEDRATE_LETTER 'F'//FIX to work with multiple extruders without having to re-define GCODE_LETTERS array
 
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
@@ -33,34 +34,36 @@ class GCodeBuffer
 {
   public:
     GCodeBuffer(Platform* p, const char* id);
-    void Init();
-    bool Put(char c);
-    bool Seen(char c);
-    float GetFValue();
-    int GetIValue();
-    long GetLValue();
-    const char* GetUnprecedentedString();
-    const char* GetString();
+    void Init(); 										// Set it up
+    bool Put(char c);									// Add a character to the end
+    bool Seen(char c);									// Is a character present?
+    float GetFValue();									// Get a float after a key letter
+    int GetIValue();									// Get an integer after a key letter
+    long GetLValue();									// Get a long integer after a key letter
+    const char* GetUnprecedentedString();				// Get a string with no preceding key letter
+    const char* GetString();							// Get a string after a key letter
+    const void GetFloatArray(float a[], int& length);	// Get a :-separated list of floats after a key letter
+    const void GetLongArray(long l[], int& length);		// Get a :-separated list of longs after a key letter
     const char* Buffer();
     bool Active() const;
-    void SetFinished(bool f);
+    void SetFinished(bool f);							// Set the G Code executed (or not)
     void Pause();
     void CancelPause();
-    const char* WritingFileDirectory() const;
-    void SetWritingFileDirectory(const char* wfd);
+    const char* WritingFileDirectory() const;			// If we are writing the G Code to a file, where that file is
+    void SetWritingFileDirectory(const char* wfd);		// Set the directory for the file to write the GCode in
     
   private:
 
     enum State { idle, executing, paused };
-    int CheckSum();
-    Platform* platform;
-    char gcodeBuffer[GCODE_LENGTH];
-    const char* identity;
-    int gcodePointer;
-    int readPointer;
-    bool inComment;
-    State state;
-    const char* writingFileDirectory;
+    int CheckSum();										// Compute the checksum (if any) at the end of the G Code
+    Platform* platform;									// Pointer to the RepRap's controlling class
+    char gcodeBuffer[GCODE_LENGTH];						// The G Code
+    const char* identity;								// Where we are from (web, file, serial line etc)
+    int gcodePointer;									// Index in the buffer
+    int readPointer;									// Where in the buffer to read next
+    bool inComment;										// Are we after a ';' character?
+    State state;										// Idle, executing or paused
+    const char* writingFileDirectory;					// If the G Code is going into a file, where that is
 };
 
 //****************************************************************************************************
@@ -72,113 +75,118 @@ class GCodes
   public:
   
     GCodes(Platform* p, Webserver* w);
-    void Spin();
-    void Init();
-    void Exit();
+    void Spin();														// Called in a tight loop to make this class work
+    void Init();														// Set it up
+    void Exit();														// Shut it down
     void Reset();
-    bool RunConfigurationGCodes();
-    bool ReadMove(float* m, bool& ce);
-    void QueueFileToPrint(const char* fileName);
-    void DeleteFile(const char* fileName);
-    bool GetProbeCoordinates(int count, float& x, float& y, float& z);
-    char* GetCurrentCoordinates();
-    bool PrintingAFile() const;
-    void Diagnostics();
-    bool HaveIncomingData() const;
-    bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; }
+    bool RunConfigurationGCodes();										// Run the configuration G Code file on reboot
+    bool ReadMove(float* m, bool& ce);									// Called by the Move class to get a movement set by the last G Code
+    void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
+    void DeleteFile(const char* fileName);								// Does what it says
+    bool GetProbeCoordinates(int count, float& x, float& y, float& z);	// Get pre-recorded probe coordinates
+    char* GetCurrentCoordinates();										// Get where we are as a string
+    bool PrintingAFile() const;											// Are we in the middle of printing a file?
+    void Diagnostics();													// Send helpful information out
+    int8_t GetSelectedHead() const;										// return which tool is selected
+    bool HaveIncomingData() const;										// Is there something that we have to do?
+    bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
     void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }
     float GetExtruderPosition(uint8_t extruder) const;
     void PauseSDPrint();
     
   private:
   
-    void doFilePrint(GCodeBuffer* gb);
-    bool AllMovesAreFinishedAndMoveBufferIsLoaded();
-    bool DoCannedCycleMove(bool ce);
-    bool DoFileCannedCycles(const char* fileName);
-    bool FileCannedCyclesReturn();
-    bool ActOnGcode(GCodeBuffer* gb);
+    void DoFilePrint(GCodeBuffer* gb);									// Get G Codes from a file and print them
+    bool AllMovesAreFinishedAndMoveBufferIsLoaded();					// Wait for move queue to exhaust and the current position is loaded
+    bool DoCannedCycleMove(bool ce);									// Do a move from an internally programmed canned cycle
+    bool DoFileCannedCycles(const char* fileName);						// Run a GCode macro in a file
+    bool FileCannedCyclesReturn();										// End a macro
+    bool ActOnGcode(GCodeBuffer* gb);									// Do the G Code
     bool HandleGcode(GCodeBuffer* gb);
     bool HandleMcode(GCodeBuffer* gb);
     bool HandleTcode(GCodeBuffer* gb);
     int SetUpMove(GCodeBuffer* gb);
-    bool DoDwell(GCodeBuffer *gb);
+    bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
     bool DoDwellTime(float dwell);
-    bool DoHome(char *reply, bool& error);
-    bool DoSingleZProbeAtPoint();
-    bool DoSingleZProbe();
-    bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);
-    bool DoMultipleZProbe();
-    bool SetPrintZProbe(GCodeBuffer *gb, char *reply);
-    bool SetOffsets(GCodeBuffer *gb);
-    bool SetPositions(GCodeBuffer *gb);
-    void LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyLimits);
-    bool NoHome() const;
-    bool Push();
-    bool Pop();
-    bool DisableDrives();
-    bool StandbyHeaters();
-    void SetEthernetAddress(GCodeBuffer *gb, int mCode);
-    void HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend);
-    bool OpenFileToWrite(const char* directory, const char* fileName, GCodeBuffer *gb);
-    void WriteGCodeToFile(GCodeBuffer *gb);
-    bool SendConfigToLine();
-    void WriteHTMLToFile(char b, GCodeBuffer *gb);
-    bool OffsetAxes(GCodeBuffer *gb);
+    bool DoHome(char *reply, bool& error);								// Home some axes
+    bool DoSingleZProbeAtPoint();										// Probe at a given point
+    bool DoSingleZProbe();												// Probe where we are
+    bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);					// Probes at a given position - see the comment at the head of the function itself
+    bool DoMultipleZProbe();											// Probes a series of points and sets the bed equation
+    bool SetPrintZProbe(GCodeBuffer *gb, char *reply);					// Either return the probe value, or set its threshold
+    bool SetOffsets(GCodeBuffer *gb);									// Deal with a G10
+    bool SetPositions(GCodeBuffer *gb);									// Deal with a G92
+    void LoadMoveBufferFromGCode(GCodeBuffer *gb,  						// Set up a move for the Move class
+    		bool doingG92, bool applyLimits);
+    bool NoHome() const;												// Are we homing and not finished?
+    bool Push();														// Push feedrate etc on the stack
+    bool Pop();															// Pop feedrate etc
+    bool DisableDrives();												// Turn the motors off
+    bool StandbyHeaters();												// Set all heaters to standby temperatures
+    void SetEthernetAddress(GCodeBuffer *gb, int mCode);				// Does what it says
+    void SetMACAddress(GCodeBuffer *gb);								// Deals with an M540
+    void HandleReply(bool error, bool fromLine, const char* reply, 		// If the GCode is from the serial interface, reply to it
+    		char gMOrT, int code, bool resend);
+    bool OpenFileToWrite(const char* directory,							// Start saving GCodes in a file
+    		const char* fileName, GCodeBuffer *gb);
+    void WriteGCodeToFile(GCodeBuffer *gb);								// Write this GCode into a file
+    bool SendConfigToLine();											// Deal with M503
+    void WriteHTMLToFile(char b, GCodeBuffer *gb);						// Save an HTML file (usually to upload a new web interface)
+    bool OffsetAxes(GCodeBuffer *gb);									// Set offsets - deprecated, use G10
     void SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LENGTH]);
     void SetHeaterParameters(GCodeBuffer *gb, char reply[STRING_LENGTH]);
     int8_t Heater(int8_t head) const;
-
-    Platform* platform;
-    bool active;
-    Webserver* webserver;
-    float dwellTime;
-    bool dwellWaiting;
-    GCodeBuffer* webGCode;
-    GCodeBuffer* fileGCode;
-    GCodeBuffer* serialGCode;
-    GCodeBuffer* cannedCycleGCode;
-    bool moveAvailable;
-    float moveBuffer[DRIVES+1]; // Last is feed rate
-    bool checkEndStops;
-    bool drivesRelative; // All except X, Y and Z
-    bool axesRelative;   // X, Y and Z
-    bool drivesRelativeStack[STACK];
-    bool axesRelativeStack[STACK];
-    float feedrateStack[STACK];
+    Platform* platform;							// The RepRap machine
+    bool active;								// Live and running?
+    Webserver* webserver;						// The webserver class
+    float dwellTime;							// How long a pause for a dwell (seconds)?
+    bool dwellWaiting;							// We are in a dwell
+    GCodeBuffer* webGCode;						// The sources...
+    GCodeBuffer* fileGCode;						// ...
+    GCodeBuffer* serialGCode;					// ...
+    GCodeBuffer* cannedCycleGCode;				// ... of G Codes
+    bool moveAvailable;							// Have we seen a move G Code and set it up?
+    float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
+    bool checkEndStops;							// Should we check them on the next move?
+    bool drivesRelative; 						// Are movements relative - all except X, Y and Z
+    bool axesRelative;   						// Are movements relative - X, Y and Z
+    bool drivesRelativeStack[STACK];			// For dealing with Push and Pop
+    bool axesRelativeStack[STACK];				// For dealing with Push and Pop
+    float feedrateStack[STACK];					// For dealing with Push and Pop
     FileData fileStack[STACK];
-    int8_t stackPointer;
-    char gCodeLetters[DRIVES + 1]; // Extra is for F
-    float lastPos[DRIVES - AXES]; // Just needed for relative moves.
-	float record[DRIVES+1];
-	float moveToDo[DRIVES+1];
-	bool activeDrive[DRIVES+1];
-	bool offSetSet;
-    float distanceScale;
+    int8_t stackPointer;						// Push and Pop stack pointer
+    char gCodeLetters[DRIVES + 1]; 				// 'X', 'Y' etc. Extra is for F
+    float lastPos[DRIVES - AXES]; 				// Just needed for relative moves; i.e. not X, Y and Z
+	float record[DRIVES+1];						// Temporary store for move positions
+	float moveToDo[DRIVES+1];					// Where to go set by G1 etc
+	bool activeDrive[DRIVES+1];					// Is this drive involved in a move?
+	bool offSetSet;								// Are any axis offsets non-zero?
+    float distanceScale;						// MM or inches
     FileData fileBeingPrinted;
     FileData fileToPrint;
-    FileStore* fileBeingWritten;
-    FileStore* configFile;
-    bool doingCannedCycleFile;
-    char* eofString;
-    uint8_t eofStringCounter;
-    uint8_t eofStringLength;
-    int8_t selectedHead;
-    bool homeX;
-    bool homeY;
-    bool homeZ;
-    float gFeedRate;
-    int probeCount;
-    int8_t cannedCycleMoveCount;
-    bool cannedCycleMoveQueued;
-    bool zProbesSet;
-    float longWait;
-    bool limitAxes;			// Don't think outside the box.
-    bool axisIsHomed[3];	// these record which of the axes have been homed
+    FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) in
+    FileStore* configFile;						// A file containing a macro
+    bool doingCannedCycleFile;					// Are we executing a macro file?
+    char* eofString;							// What's at the end of an HTML file?
+    uint8_t eofStringCounter;					// Check the...
+    uint8_t eofStringLength;					// ... EoF string as we read.
+    int8_t selectedHead;						// Which extruder is in use
+    bool homeX;									// True to home the X axis this move
+    bool homeY;									// True to home the Y axis this move
+    bool homeZ;									// True to home the Z axis this move
+    int8_t homeAxisMoveCount;					// Counts homing moves
+    float gFeedRate;							// Store for the current feedrate
+    int probeCount;								// Counts multiple probe points
+    int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
+    bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
+    bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
+    float longWait;								// Timer for things that happen occasionally (seconds)
+    bool limitAxes;								// Don't think outside the box.
+    bool axisIsHomed[3];						// These record which of the axes have been homed
     bool waitingForMoveToComplete;
     bool coolingInverted;
-    float speedFactor;		// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
-    float extrusionFactor;	// extrusion factor, normally 1.0
+    float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
+    float extrusionFactor;						// extrusion factor, normally 1.0
 };
 
 //*****************************************************************************************************
@@ -260,6 +268,11 @@ inline int8_t GCodes::Heater(int8_t head) const
 inline bool GCodes::RunConfigurationGCodes()
 {
 	return !DoFileCannedCycles(platform->GetConfigFile());
+}
+
+inline int8_t GCodes::GetSelectedHead() const
+{
+  return selectedHead;
 }
 
 #endif

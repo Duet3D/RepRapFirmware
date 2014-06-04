@@ -78,10 +78,6 @@ void GCodes::Reset()
 	fileGCode->Init();
 	serialGCode->Init();
 	cannedCycleGCode->Init();
-	webGCode->SetFinished(true);
-	fileGCode->SetFinished(true);
-	serialGCode->SetFinished(true);
-	cannedCycleGCode->SetFinished(true);
 	moveAvailable = false;
 	fileBeingPrinted.Close();
 	fileToPrint.Close();
@@ -99,7 +95,7 @@ void GCodes::Reset()
     extrusionFactor = 1.0;
 }
 
-void GCodes::doFilePrint(GCodeBuffer* gb)
+void GCodes::DoFilePrint(GCodeBuffer* gb)
 {
 	char b;
 
@@ -240,7 +236,7 @@ void GCodes::Spin()
 		}
 	}
 
-	doFilePrint(fileGCode);
+	DoFilePrint(fileGCode);
 
 	platform->ClassReport("GCodes", longWait);
 }
@@ -336,6 +332,8 @@ bool GCodes::Pop()
 // Move expects all axis movements to be absolute, and all
 // extruder drive moves to be relative.  This function serves that.
 // If applyLimits is true and we have homed the relevant axes, then we don't allow movement beyond the bed.
+// Note that if no tool is active (i.e. a Tn command hasn't previously been sent) then no E values will
+// be acted upon as there is nothing to apply them to.
 
 void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyLimits)
 {
@@ -371,32 +369,94 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 		}
 		else
 		{
-			if (gb->Seen(gCodeLetters[i]))
-			{
-				// Doing an extruder. We need to store the relative distance for this move in moveBuffer and the resulting new position in lastPos.
-				float moveArg = gb->GetFValue() * distanceScale * extrusionFactor;
-				if (doingG92)
+	      /*Fixed to work with multiple concurrent extruder drives:
+	       *  Default or M160 S1 (set use only one extruder drive)
+	       *  		"G1 En.n" adds the float n.n to the move buffer for the selected head
+	       *  There is no change in behaviour for one extruder drive setups, or multiple extruder
+	       *  setups where only one drive is used at any one time.
+	       *
+	       *  M160 Sn (set to use "n" extruder drives) eg
+	       *  		"M160 S3"
+	       *  		"G1 En.n:m.m:o.o" adds the floats to the move buffer in the following way:
+	       *  				moveBuffer[AXES+selectedHead) = n.n
+	       *  				moveBuffer[AXES+selectedHead+1) = m.m
+	       *  				moveBuffer[AXES+selectedHead+2) = o.o
+	       *  		so if selectedHead=1 move buffer ends up looking like this for a 5 extruder drive setup:
+	       *  		{x.x, y.y, z.z, n.n, m.m, o.o, 0.0,0.0, f.f}
+	       *  		where x,y,z are the axes and f is the feedrate.
+	       *  		If selected head > 0 then there is the possibility that more drives can be set than
+	       *  		exist, in that case the last values are discarded e.g:
+	       *  		"T3"
+	       *  		"M160 S3"
+	       *  		"G1 En.n:m.m:o.o"
+	       *  		would leave the move buffer on a 4 extruder drive setup looking like this:
+	       *  		{x.x, y.y, z.z, 0.0, 0.0, 0.0, n.n,m.m, f.f}
+	       */
+	      if(gb->Seen('E')&& ((i-AXES) == selectedHead-1))
+	      {
+	    	//the number of mixing drives set (by M160)
+	    	int numDrives = platform->GetMixingDrives();
+	    	const char* extruderString = gb->GetString();
+	    	float eArg[numDrives];
+	    	uint8_t sp = 0; //string pointer
+	    	uint8_t fp = 0; //float pointer for the start of each floating point number in turn
+	    	uint8_t hp = 0; //index of the head currently referred to for eArg
+	    	while(extruderString[sp])
+	    	{
+	    		//first check to confirm we have not got to the feedrate setting part of the string
+	    		if(extruderString[sp] == 'F')
+	    		{
+	    			break;
+	    		}
+	    		if(extruderString[sp] == ':')
+	    		{
+	    			eArg[hp] = (atoff(&extruderString[fp]))*distanceScale;
+	    			hp++;
+	    			if(hp >= numDrives)
+	    			{
+						platform->Message(HOST_MESSAGE, "More mixing extruder drives required in G1 string than set with M160: ");
+						platform->Message(HOST_MESSAGE, gb->Buffer());
+						platform->Message(HOST_MESSAGE, "\n");
+						return;
+					}
+    				sp++;
+    				fp = sp;
+	    		}
+	    		else
+	    		{
+	    			sp++;
+	    		}
+	    	}
+	    	//capture the last drive step amount in the string (or the only one in the case of only one extruder)
+	    	eArg[hp] = (atoff(&extruderString[fp]))*distanceScale;
+
+	    	//set the move buffer for each extruder drive
+        	for(int j=0;j<numDrives;j++)
+        	{
+				float moveArg = eArg[j];
+				if(doingG92)
 				{
-					moveBuffer[i] = 0.0;			// no move required
-					lastPos[i - AXES] = moveArg;	// set new absolute position
+					moveBuffer[i+j] = 0.0;			// no move required
+					lastPos[i+j - AXES] = moveArg; 	// set absolute position
 				}
 				else if (drivesRelative)
 				{
-					moveBuffer[i] = moveArg;
-					lastPos[i - AXES] += moveArg;
+					moveBuffer[i+j] = moveArg;
+					lastPos[i+j - AXES] += moveArg;
 				}
 				else
 				{
-					moveBuffer[i] = moveArg - lastPos[i - AXES];
-					lastPos[i - AXES] = moveArg;
+					moveBuffer[i+j] = moveArg - lastPos[i+j - AXES];
+					lastPos[i+j - AXES] = moveArg;
 				}
-			}
+        	}
+	      }
 		}
 	}
 
 	// Deal with feed rate
 
-	if (gb->Seen(gCodeLetters[DRIVES]))
+	if(gb->Seen(FEEDRATE_LETTER))
 	{
 		gFeedRate = gb->GetFValue() * distanceScale * speedFactor;
 	}
@@ -415,10 +475,11 @@ int GCodes::SetUpMove(GCodeBuffer *gb)
 	if (moveAvailable)
 		return 0;
 
-	// Load the last position; if Move can't accept more, return 0
+  // Load the last position into moveBuffer; If Move can't accept more, return false
 	if (!reprap.GetMove()->GetCurrentState(moveBuffer))
 		return 0;
 
+  //check to see if the move is a 'homing' move that endstops are checked on.
 	checkEndStops = false;
 	if (gb->Seen('S'))
 	{
@@ -427,8 +488,10 @@ int GCodes::SetUpMove(GCodeBuffer *gb)
 			checkEndStops = true;
 		}
 	}
-
-	LoadMoveBufferFromGCode(gb, false, !checkEndStops && limitAxes);
+  //loads the movebuffer with either the absolute movement required or the
+  //relative movement required
+  LoadMoveBufferFromGCode(gb, false, !checkEndStops && limitAxes);
+  //There is a new move in the move buffer
 	moveAvailable = true;
 	return (checkEndStops) ? 2 : 1;
 }
@@ -499,7 +562,7 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 		return false;
 	}
 
-	doFilePrint(cannedCycleGCode);
+	DoFilePrint(cannedCycleGCode);
 	return false;
 }
 
@@ -601,7 +664,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 			}
 		}
 
-		if (gb->Seen(gCodeLetters[DRIVES])) // Has the user specified a feedrate?
+		if(gb->Seen(FEEDRATE_LETTER)) // Has the user specified a feedrate?
 		{
 			moveToDo[DRIVES] = gb->GetFValue();
 			activeDrive[DRIVES] = true;
@@ -628,7 +691,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 // booleans homeX, homeY and homeZ.
 // Returns true if completed, false if needs to be called again.
 // 'reply' is only written if there is an error.
-// 'error' is false on entry, gets changed to true iff there is an error.
+// 'error' is false on entry, gets changed to true if there is an error.
 bool GCodes::DoHome(char* reply, bool& error)
 //pre(reply.upb == STRING_LENGTH)
 {
@@ -961,15 +1024,18 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, char* reply)
 // are updated at the end of each movement, so this won't tell you
 // where you are mid-movement.
 
-// FIXME - needs to deal with multiple extruders
+//Fixed to deal with multiple extruders
 
 char* GCodes::GetCurrentCoordinates()
 {
 	float liveCoordinates[DRIVES + 1];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates);
 
-	snprintf(scratchString, STRING_LENGTH, "X:%f Y:%f Z:%f E:%f", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS],
-			liveCoordinates[Z_AXIS], liveCoordinates[AXES]);
+	snprintf(scratchString, STRING_LENGTH, "X:%f Y:%f Z:%f ", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS]);
+	for(int i = AXES; i< DRIVES; i++)
+	{
+		sncatf(scratchString, STRING_LENGTH, "E%d:%f ",i-AXES,liveCoordinates[i]);
+	}
 	return scratchString;
 }
 
@@ -979,6 +1045,7 @@ bool GCodes::OpenFileToWrite(const char* directory, const char* fileName, GCodeB
 	eofStringCounter = 0;
 	if (fileBeingWritten == NULL)
 	{
+		platform->Message(HOST_MESSAGE, "Can't open GCode file for writing.\n");
 		return false;
 	}
 	else
@@ -1087,13 +1154,13 @@ void GCodes::QueueFileToPrint(const char* fileName)
 
 void GCodes::DeleteFile(const char* fileName)
 {
-	if (!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), fileName))
-	{
-		platform->Message(HOST_MESSAGE, "Unsuccessful attempt to delete: ");
-		platform->Message(HOST_MESSAGE, fileName);
-		platform->Message(HOST_MESSAGE, "\n");
-		webserver->HandleReply("Failed to delete file", true);
-	}
+  if(!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), fileName))
+  {
+	platform->Message(HOST_MESSAGE, "Unsuccessful attempt to delete: ");
+	platform->Message(HOST_MESSAGE, fileName);
+	platform->Message(HOST_MESSAGE, "\n");
+	webserver->HandleReply("Failed to delete file", true);
+  }
 }
 
 // Send the config file to USB in response to an M503 command.
@@ -1130,7 +1197,7 @@ bool GCodes::SendConfigToLine()
 
 bool GCodes::DoDwell(GCodeBuffer *gb)
 {
-	if (!gb->Seen('P'))
+  if(!gb->Seen('P'))
 		return true;  // No time given - throw it away
 
 	float dwell = 0.001 * (float) gb->GetLValue(); // P values are in milliseconds; we need seconds
@@ -1173,7 +1240,7 @@ bool GCodes::SetOffsets(GCodeBuffer *gb)
 	int8_t head;
 	if (gb->Seen('P'))
 	{
-		head = gb->GetIValue() + 1;  // 0 is the Bed
+		head = gb->GetIValue();  // 0 is the Bed
 		if (gb->Seen('R'))
 			reprap.GetHeat()->SetStandbyTemperature(head, gb->GetFValue());
 
@@ -1203,7 +1270,7 @@ bool GCodes::StandbyHeaters()
 		return false;
 	for (int8_t heater = 0; heater < HEATERS; heater++)
 		reprap.GetHeat()->Standby(heater);
-	selectedHead = -1;
+	selectedHead = -1; //FIXME check this does not mess up setters (eg M906) when they are used after this command is called
 	return true;
 }
 
@@ -1260,9 +1327,47 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 	}
 }
 
+
+void GCodes::SetMACAddress(GCodeBuffer *gb)
+{
+	uint8_t mac[6];
+	const char* ipString = gb->GetString();
+	uint8_t sp = 0;
+	uint8_t spp = 0;
+	uint8_t ipp = 0;
+	while(ipString[sp])
+	{
+		if(ipString[sp] == ':')
+		{
+			mac[ipp] = strtol(&ipString[spp], NULL, 0);
+			ipp++;
+			if(ipp > 5)
+			{
+				platform->Message(HOST_MESSAGE, "Dud MAC address: ");
+				platform->Message(HOST_MESSAGE, gb->Buffer());
+				platform->Message(HOST_MESSAGE, "\n");
+				return;
+			}
+			sp++;
+			spp = sp;
+		}else
+			sp++;
+	}
+	mac[ipp] = strtol(&ipString[spp], NULL, 0);
+	if(ipp == 5)
+	{
+		platform->SetMACAddress(mac);
+	} else
+	{
+		platform->Message(HOST_MESSAGE, "Dud MAC address: ");
+		platform->Message(HOST_MESSAGE, gb->Buffer());
+		platform->Message(HOST_MESSAGE, "\n");
+	}
+}
+
 void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend)
 {
-	if (gMOrT != 'M' || code != 111) // web server reply for M111 is handled before we get here
+	if (gMOrT != 'M' || code != 111)	// web server reply for M111 is handled before we get here
 	{
 		webserver->HandleReply(reply, error);
 	}
@@ -1418,7 +1523,6 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, char reply[STRING_LENGTH])
 			{
 				r25 = pp.GetThermistorR25();
 			}
-
 			if (gb->Seen('B'))
 			{
 				beta = gb->GetFValue();
@@ -1727,20 +1831,40 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			bool seen = false;
 			for (int8_t drive = 0; drive < DRIVES; drive++)
 			{
-				if (gb->Seen(gCodeLetters[drive]))
+				//Do AXES first
+				if(gb->Seen(gCodeLetters[drive])&& drive<AXES)
 				{
 					platform->SetDriveStepsPerUnit(drive, gb->GetFValue());
 					seen = true;
+				}
+				else if(selectedHead < 0)
+				{
+					// If no head selected, set the first extruder steps - best we can do
+					if(gb->Seen('E'))
+					{
+						platform->SetDriveStepsPerUnit(AXES, gb->GetFValue());
+						seen=true;
+					}
+				}
+				else if(gb->Seen('E')&& ((drive-AXES) == selectedHead - 1))//then do active extruder
+				{
+						platform->SetDriveStepsPerUnit(AXES+selectedHead - 1, gb->GetFValue());
+						seen=true;
 				}
 			}
 			reprap.GetMove()->SetStepHypotenuse();
 			if (!seen)
 			{
-				snprintf(reply, STRING_LENGTH, "Steps/mm: X:%f, Y:%f, Z:%f, E:%f",
+				snprintf(reply, STRING_LENGTH, "Steps/mm: X: %f, Y: %f, Z: %f, E: ",
 						platform->DriveStepsPerUnit(X_AXIS), platform->DriveStepsPerUnit(Y_AXIS),
-						platform->DriveStepsPerUnit(Z_AXIS), platform->DriveStepsPerUnit(AXES)); // FIXME - needs to do multiple extruders
+						platform->DriveStepsPerUnit(Z_AXIS));
+				// Fixed to do multiple extruders.
+				for(int8_t drive = AXES; drive < DRIVES; drive++)
+				{
+					sncatf(reply, STRING_LENGTH, "%.2f:", platform->DriveStepsPerUnit(drive));
+				}
 			}
-		}
+    	}
 		break;
 
 	case 98:
@@ -1755,16 +1879,18 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 104: // Deprecated
-		if (gb->Seen('S'))
+    	if(gb->Seen('S') && selectedHead >= 0)
 		{
-			reprap.GetHeat()->SetActiveTemperature(1, gb->GetFValue()); // 0 is the bed
-			reprap.GetHeat()->Activate(1);
+			//only sets the selected head (As set by T#)
+    		reprap.GetHeat()->SetActiveTemperature(selectedHead, gb->GetFValue()); // 0 is the bed
+    		reprap.GetHeat()->Activate(selectedHead);
 		}
 		break;
 
 	case 105: // Deprecated...
 		strncpy(reply, "T:", STRING_LENGTH);
-		for (int8_t heater = HEATERS - 1; heater > 0; heater--)
+    	//FIXME - why did this decrement rather than increment through the heaters (odd behaviour)
+    	for(int8_t heater = 1; heater < HEATERS; heater++)
 		{
 			sncatf(reply, STRING_LENGTH, "%.1f ", reprap.GetHeat()->GetTemperature(heater));
 		}
@@ -1797,28 +1923,23 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 109: 	// Set extruder temperature and wait - deprecated
-	case 190:	// Set bed temperature and wait - deprecated
-		{
-			int8_t heater = (code == 190) ? 0 : 1;
-			if (gb->Seen('S'))
-			{
-				reprap.GetHeat()->SetActiveTemperature(heater, gb->GetFValue());
-				reprap.GetHeat()->Activate(heater);
-			}
-			if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
-			{
-				return false;
-			}
-			result = reprap.GetHeat()->HeaterAtSetTemperature(heater);
-		}
-		break;
+    	if(gb->Seen('S') && selectedHead >= 0)
+    	{
+    		reprap.GetHeat()->SetActiveTemperature(selectedHead, gb->GetFValue()); // 0 is the bed
+    		reprap.GetHeat()->Activate(selectedHead);
+    	}
+    	//check here rather than falling through to M116, we want to just wait for the extruder we specified (otherwise use M116 not M109)
+    	result = reprap.GetHeat()->HeaterAtSetTemperature(selectedHead);
+    	break;
 
 	case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
 		break;
 
 	case 111: // Debug level
 		if (gb->Seen('S'))
+		{
 			reprap.SetDebug(gb->GetIValue());
+		}
 		break;
 
 	case 112: // Emergency stop - acted upon in Webserver, but also here in case it comes from USB etc.
@@ -1852,7 +1973,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		result = reprap.GetHeat()->AllHeatersAtSetTemperatures();
 		break;
 
-	// case 117 is handled later because it falls through to the default case
+    	//TODO M119
+    case 119:
+        platform->Message(HOST_MESSAGE, "M119 - endstop status not yet implemented\n");
+    	break;
 
 	case 120:
 		result = Push();
@@ -1889,15 +2013,47 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
 		break;
 
-	// case 190 is with case 109 because it used the same code
+    case 160: //number of mixing filament drives
+    	if(gb->Seen('S'))
+		{
+			int iValue=gb->GetIValue();
+			platform->SetMixingDrives(iValue);
+		}
+		break;
+
+    case 190: // Deprecated...
+    	if(gb->Seen('S'))
+    	{
+			float value=gb->GetFValue();
+			reprap.GetHeat()->SetActiveTemperature(0, value);
+			reprap.GetHeat()->SetStandbyTemperature(0, value); // FIXME have to set both?not sure as the bed should always be selected
+			reprap.GetHeat()->Activate(0);
+    	}
+    	result = reprap.GetHeat()->HeaterAtSetTemperature(0);
+    	break;
 
 	case 201: // Set axis accelerations
 		for (int8_t drive = 0; drive < DRIVES; drive++)
 		{
-			if (gb->Seen(gCodeLetters[drive]))
+    		//Do AXES first
+			if(gb->Seen(gCodeLetters[drive]) && drive<AXES)
 			{
-				float value = gb->GetFValue();
-				platform->SetAcceleration(drive, value);
+				platform->SetAcceleration(drive, gb->GetFValue());
+    		}
+			else if(selectedHead < 0)
+    		{
+    			if(gb->Seen('E')) // Do first one - best we can do
+    			{
+    				platform->SetAcceleration(AXES, gb->GetFValue());
+    			}
+    		}//then do active extruder
+			else if(gb->Seen('E') && ((drive-AXES) == selectedHead-1))
+			{
+				platform->SetAcceleration(AXES+selectedHead-1, gb->GetFValue()); //Set the E acceleration for the currently selected tool
+			}
+			else
+			{
+    			platform->SetAcceleration(drive, -1);
 			}
 		}
 		break;
@@ -1905,11 +2061,25 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 	case 203: // Set maximum feed rates
 		for (int8_t drive = 0; drive < DRIVES; drive++)
 		{
-			if (gb->Seen(gCodeLetters[drive]))
+    		//Do AXES first
+    		if(gb->Seen(gCodeLetters[drive]) && drive<AXES)
 			{
 				float value = gb->GetFValue() * distanceScale * 0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
 				platform->SetMaxFeedrate(drive, value);
-			}
+    		}
+    		else if(selectedHead < 0)
+    		{
+    			if(gb->Seen('E'))
+    			{
+    				float value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+    				platform->SetMaxFeedrate(AXES, value); //Set the E Steps for the first E - best we can do
+    			}
+    		}
+    		else if(gb->Seen('E') && ((drive-AXES) == selectedHead-1))//then do active extruder
+    		{
+    			float value = gb->GetFValue()*distanceScale*0.016666667; // G Code feedrates are in mm/minute; we need mm/sec;
+    			platform->SetMaxFeedrate(AXES+selectedHead-1, value); //Set the E Steps for the currently selected tool
+    		}
 		}
 		break;
 
@@ -2005,6 +2175,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		result = SendConfigToLine();
 		break;
 
+    case 540:
+    	if(gb->Seen('P'))
+    	{
+    	    SetMACAddress(gb);
+    	}
+    	break;
+
 	case 550: // Set machine name
 		if (gb->Seen('P'))
 			reprap.GetWebserver()->SetName(gb->GetString());
@@ -2012,12 +2189,16 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
 	case 551: // Set password
 		if (gb->Seen('P'))
+		{
 			reprap.GetWebserver()->SetPassword(gb->GetString());
+		}
 		break;
 
 	case 552: // Set/Get IP address
 		if (gb->Seen('P'))
+		{
 			SetEthernetAddress(gb, code);
+		}
 		else
 		{
 			const byte *ip = platform->IPAddress();
@@ -2027,7 +2208,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
 	case 553: // Set/Get netmask
 		if (gb->Seen('P'))
+		{
 			SetEthernetAddress(gb, code);
+		}
 		else
 		{
 			const byte *nm = platform->NetMask();
@@ -2037,7 +2220,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
 	case 554: // Set/Get gateway
 		if (gb->Seen('P'))
+		{
 			SetEthernetAddress(gb, code);
+		}
 		else
 		{
 			const byte *gw = platform->GateWay();
@@ -2047,7 +2232,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
 	case 555: // Set firmware type to emulate
 		if (gb->Seen('P'))
+		{
 			platform->SetEmulating((Compatibility) gb->GetIValue());
+		}
 		break;
 
 	case 556: // Axis compensation
@@ -2055,8 +2242,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		{
 			float value = gb->GetFValue();
 			for (int8_t axis = 0; axis < AXES; axis++)
+			{
 				if (gb->Seen(gCodeLetters[axis]))
+				{
 					reprap.GetMove()->SetAxisCompensation(axis, gb->GetFValue() / value);
+				}
+			}
 		}
 		break;
 
@@ -2142,20 +2333,41 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		}
 		break;
 
-	case 564: // Think outside the box?
-		if(gb->Seen('S'))
-		{
-			limitAxes = (gb->GetIValue() != 0);
-		}
+    case 563: // Define tool
+
+    	break;
+
+    case 564: // Think outside the box?
+    	if(gb->Seen('S'))
+    	{
+    	    limitAxes = (gb->GetIValue() != 0);
+    	}
 		break;
 
 	case 906: // Set Motor currents
 		for (uint8_t i = 0; i < DRIVES; i++)
 		{
-			if (gb->Seen(gCodeLetters[i]))
+    		//Do AXES first
+    		if(gb->Seen(gCodeLetters[i])&& i<AXES)
 			{
-				float value = gb->GetFValue(); // mA
+    			float value = gb->GetFValue(); // mA
 				platform->SetMotorCurrent(i, value);
+    		}
+    		else if(selectedHead < 0)
+    		{
+    			if(gb->Seen('E'))
+    			{
+    				float value = gb->GetFValue(); // mA
+    				platform->SetMotorCurrent(AXES, value); // Set first one - best we can do
+    			}
+    		}
+    		else //do for selected extruder
+    		{
+    			if(gb->Seen(gCodeLetters[i]))
+    			{
+    				float value = gb->GetFValue(); // mA
+    				platform->SetMotorCurrent(AXES+selectedHead-1, value);
+    			}
 			}
 		}
 		break;
@@ -2195,41 +2407,43 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
 bool GCodes::HandleTcode(GCodeBuffer* gb)
 {
-	bool error = false;
 	char reply[STRING_LENGTH];
 	reply[0] = 0;
 
 	int code = gb->GetIValue();
 	if (code == selectedHead)
 	{
-		HandleReply(error, gb == serialGCode, reply, 'T', code, false);
+		HandleReply(false, gb == serialGCode, reply, 'T', code, false);
 		return true;
 	}
 
-	error = true;
 	for (int8_t i = AXES; i < DRIVES; i++)
 	{
-		if (selectedHead == i - AXES)
-		{
-			reprap.GetHeat()->Standby(selectedHead + 1); // + 1 because 0 is the Bed
+    	if(selectedHead == i - AXES + 1)
+    	{
+    		reprap.GetHeat()->Standby(selectedHead);
 		}
 	}
+
+    bool toolNotFound = true;
 	for (int8_t i = AXES; i < DRIVES; i++)
 	{
-		if (code == i - AXES)
+		if(code == i - AXES + 1)
 		{
 			selectedHead = code;
-			reprap.GetHeat()->Activate(selectedHead + 1); // 0 is the Bed
-			error = false;
+			reprap.GetHeat()->Activate(selectedHead);
+			toolNotFound = false;
 		}
 	}
 
-	if (error)
-	{
-		snprintf(reply, STRING_LENGTH, "Invalid T Code: %s", gb->Buffer());
-	}
+    if(toolNotFound)
+    {
+    	selectedHead = -1;
+    }
 
-	HandleReply(error, gb == serialGCode, reply, 'T', code, false);
+//      snprintf(reply, STRING_LENGTH, "Invalid T Code: %s", gb->Buffer());
+
+	HandleReply(false, gb == serialGCode, reply, 'T', code, false);
 	return true;
 }
 
@@ -2387,11 +2601,72 @@ float GCodeBuffer::GetFValue()
 	if (readPointer < 0)
 	{
 		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
+		readPointer = -1;
 		return 0.0;
 	}
 	float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
 	readPointer = -1;
 	return result;
+}
+
+// Get a :-separated list of floats after a key letter
+
+const void GCodeBuffer::GetFloatArray(float a[], int& length)
+{
+	length = 0;
+	if(readPointer < 0)
+	{
+		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float array before a search.\n");
+		readPointer = -1;
+		return;
+	}
+
+	bool inList = true;
+	while(inList)
+	{
+		a[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
+		length++;
+		readPointer++;
+		while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR))
+		{
+			readPointer++;
+		}
+		if(gcodeBuffer[readPointer] != LIST_SEPARATOR)
+		{
+			inList = false;
+		}
+	}
+	readPointer = -1;
+}
+
+// Get a :-separated list of longs after a key letter
+
+const void GCodeBuffer::GetLongArray(long l[], int& length)
+{
+	length = 0;
+	if(readPointer < 0)
+	{
+		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode long array before a search.\n");
+		readPointer = -1;
+		return;
+	}
+
+	bool inList = true;
+	while(inList)
+	{
+		l[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+		length++;
+		readPointer++;
+		while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR))
+		{
+			readPointer++;
+		}
+		if(gcodeBuffer[readPointer] != LIST_SEPARATOR)
+		{
+			inList = false;
+		}
+	}
+	readPointer = -1;
 }
 
 // Get a string after a G Code letter found by a call to Seen().
@@ -2403,6 +2678,7 @@ const char* GCodeBuffer::GetString()
 	if (readPointer < 0)
 	{
 		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode string before a search.\n");
+		readPointer = -1;
 		return "";
 	}
 	const char* result = &gcodeBuffer[readPointer + 1];
@@ -2425,11 +2701,14 @@ const char* GCodeBuffer::GetUnprecedentedString()
 {
 	readPointer = 0;
 	while (gcodeBuffer[readPointer] && gcodeBuffer[readPointer] != ' ')
+	{
 		readPointer++;
+	}
 
 	if (!gcodeBuffer[readPointer])
 	{
 		platform->Message(HOST_MESSAGE, "GCodes: String expected but not seen.\n");
+		readPointer = -1;
 		return gcodeBuffer; // Good idea?
 	}
 
@@ -2445,6 +2724,7 @@ long GCodeBuffer::GetLValue()
 	if (readPointer < 0)
 	{
 		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
+		readPointer = -1;
 		return 0;
 	}
 	long result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);

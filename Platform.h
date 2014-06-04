@@ -1,8 +1,8 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Mendel with Duet controller
+RepRapFirmware - Platform: RepRapPro Ormerod with Duet controller
 
-Platform contains all the code and definitons to deal with machine-dependent things such as control 
+Platform contains all the code and definitions to deal with machine-dependent things such as control
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
 
 No definitions that are system-independent should go in here.  Put them in Configuration.h.  Note that
@@ -57,9 +57,9 @@ Licence: GPL
 
 // Some numbers...
 
-#define STRING_LENGTH 1029	// needs to be long enough to receive web data
+#define STRING_LENGTH 1029		// needs to be long enough to receive web data
 #define SHORT_STRING_LENGTH 40
-#define TIME_TO_REPRAP 1.0e6 // Convert seconds to the units used by the machine (usually microseconds)
+#define TIME_TO_REPRAP 1.0e6 	// Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
 
 /**************************************************************************************************/
@@ -70,53 +70,64 @@ Licence: GPL
 #define AXES 3    // The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
 #define HEATERS 2 // The number of heaters in the machine; 0 is the heated bed even if there isn't one.
 
-// The numbers of entries in each array must correspond with the values of DRIVES,
-// AXES, or HEATERS.  Set values to -1 to flag unavailability.
+// The numbers of entries in each {} array definition must correspond with the values of DRIVES,
+// AXES, or HEATERS.  Set values to -1 to flag unavailability.  Pins are the microcontroller pin numbers.
 
 // DRIVES
 
-#define STEP_PINS {14, 25, 5, X2}
-#define DIRECTION_PINS {15, 26, 4, X3}
-#define FORWARDS true     // What to send to go... 
-#define BACKWARDS false    // ...in each direction
-#define ENABLE_PINS {29, 27, X1, X0}
-#define ENABLE false      // What to send to enable... 
-#define DISABLE true     // ...and disable a drive
+#define STEP_PINS {14, 25, 5, X2}				// Full array for Duet + Duex4 is {14, 25, 5, X2, 41, 39, X4, 49}
+#define DIRECTION_PINS {15, 26, 4, X3}			// Full array for Duet + Duex4 is {15, 26, 4, X3, 35, 53, 51, 48}
+#define FORWARDS true     						// What to send to go...
+#define BACKWARDS false    						// ...in each direction
+#define ENABLE_PINS {29, 27, X1, X0}            // Full array for Duet + Duex4 is {29, 27, X1, X0, 37, X8, 50, 47}
+#define ENABLE false      						// What to send to enable... 
+#define DISABLE true     						// ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
-#define LOW_STOP_PINS {11, -1, 60, 31}
+#define LOW_STOP_PINS {11, -1, 60, 31}				// Full array endstop pins for Duet + Duex4 is {11, 28, 60, 31, 24, 46, 45, 44}
 #define HIGH_STOP_PINS {-1, 28, -1, -1}
-#define ENDSTOP_HIT 1 // when a stop == this it is hit
-#define POT_WIPES {1, 3, 2, 0} // Indices for motor current digipots (if any)
-#define SENSE_RESISTOR 0.1   // Stepper motor current sense resistor
+#define ENDSTOP_HIT 1 							// when a stop == this it is hit
+
+// Indices for motor current digipots (if any)
+//  first 4 are for digipot 1,(on duet)
+//  second 4 for digipot 2(on expansion board)
+//  Full order is {1, 3, 2, 0, 1, 3, 2, 0}, only include as many as you have DRIVES defined
+#define POT_WIPES {1, 3, 2, 0} 					// Indices for motor current digipots (if any)
+#define SENSE_RESISTOR 0.1   					// Stepper motor current sense resistor (ohms)
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
 
-#define Z_PROBE_AD_VALUE (400)
-#define Z_PROBE_STOP_HEIGHT (0.7) // mm
-#define Z_PROBE_PIN (0) 		// Analogue pin number
-#define Z_PROBE_MOD_PIN (61)	// Digital pin number to turn the IR LED on (high) or off (low)
+#define Z_PROBE_AD_VALUE (400)					// Default for the Z probe - should be overwritten by experiment
+#define Z_PROBE_STOP_HEIGHT (0.7) 				// mm
+#define Z_PROBE_PIN (0) 						// Analogue pin number
+#define Z_PROBE_MOD_PIN (61)					// Digital pin number to turn the IR LED on (high) or off (low)
 const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of readings with IR on, and the same number with IR off
 
-#define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}    // mm/sec
+#define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}   // mm/sec
 #define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
 #define INSTANT_DVS {10.0, 10.0, 0.2, 2.0}    // (mm/sec) these are also the minimum feed rates which is why I (dc42) decreased X/Y from 15 to 10
+#define NUM_MIXING_DRIVES 1; //number of mixing drives
 
 // AXES
 
 #define AXIS_MAXIMA {220, 200, 200} 	// mm
 #define AXIS_MINIMA {0, 0, 0}			// mm
-#define HOME_FEEDRATES {50.0, 50.0, 1.0}  // mm/sec
-#define HEAD_OFFSETS {0.0, 0.0, 0.0}
+#define HOME_FEEDRATES {50.0, 50.0, 1.0} 		// mm/sec
+#define HEAD_OFFSETS {0.0, 0.0, 0.0}			// mm
 
-#define X_AXIS 0  // The index of the X axis
+#define X_AXIS 0  								// The index of the X axis in the arrays
 #define Y_AXIS 1  // The index of the Y axis
 #define Z_AXIS 2  // The index of the Z axis
 
+#define E0_DRIVE 3 //the index of the first Extruder drive
+#define E1_DRIVE 4 //the index of the second Extruder drive
+#define E2_DRIVE 5 //the index of the third Extruder drive
+#define E3_DRIVE 6 //the index of the fourth Extruder drive
+#define E4_DRIVE 7 //the index of the fifth Extruder drive
 
-// HEATERS - The bed is assumed to be the first
+// HEATERS - The bed is assumed to be the at index 0
 
-#define TEMP_SENSE_PINS {5, 4}   // Analogue pin numbers
-#define HEAT_ON_PINS {6, X5}
+#define TEMP_SENSE_PINS {5, 4}  				// Analogue pin numbers (full array for Duet+Duex4 = {5, 4, 0, 7, 8, 9} )
+#define HEAT_ON_PINS {6, X5}					// PWM pins (full array for Duet+Duex4 = {6, X5, X7, 7, 8, 9} )
 
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
@@ -159,8 +170,8 @@ const float defaultPidMax[HEATERS] = {255, 180};	// maximum value of I-term, mus
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN_PIN X6
-#define HEAT_ON 0 // 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define COOLING_FAN_PIN X6 										//pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
+#define HEAT_ON 0 								// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 const unsigned int adOversampleBits = 1;					// number of bits we oversample when reading temperatures
@@ -174,6 +185,11 @@ const unsigned int adDisconnectedReal = adRangeReal - 3;	// we consider an ADC r
 const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBits;
 
 #define HOT_BED 0 // The index of the heated bed; set to -1 if there is no heated bed
+#define E0_HEATER 1 //the index of the first extruder heater
+#define E1_HEATER 2 //the index of the first extruder heater
+#define E2_HEATER 3 //the index of the first extruder heater
+#define E3_HEATER 4 //the index of the first extruder heater
+#define E4_HEATER 5 //the index of the first extruder heater
 
 /****************************************************************************************************/
 
@@ -182,40 +198,39 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 #define MAX_FILES (10)		// must be large enough to handle the max number of simultaneous web requests + file being printed
 #define FILE_BUF_LEN (256)
 #define SD_SPI (4) //Pin
-#define WEB_DIR "0:/www/" // Place to find web files on the server
-#define GCODE_DIR "0:/gcodes/" // Ditto - g-codes
-#define SYS_DIR "0:/sys/" // Ditto - system files
-#define TEMP_DIR "0:/tmp/" // Ditto - temporary files
-#define FILE_LIST_SEPARATOR ','
-#define FILE_LIST_BRACKET '"'
-#define FILE_LIST_LENGTH (1000) // Maximum length of file list - can't make it much longer unless we also make jsonResponse longer
+#define WEB_DIR "0:/www/" 						// Place to find web files on the SD card
+#define GCODE_DIR "0:/gcodes/" 					// Ditto - g-codes
+#define SYS_DIR "0:/sys/" 						// Ditto - system files
+#define TEMP_DIR "0:/tmp/" 						// Ditto - temporary files
+#define FILE_LIST_LENGTH (1000) 				// Maximum length of file list
 
-#define FLASH_LED 'F' 		// Type byte of a message that is to flash an LED; the next two bytes define the frequency and M/S ratio.
-#define DISPLAY_MESSAGE 'L'	// Type byte of a message that is to appear on a local display; the L is not displayed; \f and \n should be supported.
-#define HOST_MESSAGE 'H'	// Type byte of a message that is to be sent to the host; the H is not sent.
+#define FLASH_LED 'F' 							// Type byte of a message that is to flash an LED; the next two bytes define
+                      	  	  	  	  	  	  	// the frequency and M/S ratio.
+#define DISPLAY_MESSAGE 'L'  					// Type byte of a message that is to appear on a local display; the L is
+                             	 	 	 	 	// not displayed; \f and \n should be supported.
+#define HOST_MESSAGE 'H' 						// Type byte of a message that is to be sent to the host; the H is not sent.
 #define DEBUG_MESSAGE 'D'	// Type byte of a message that is to be sent for debugging; the D is not sent.
+#define MAC_ADDRESS {0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED}
+
 
 /****************************************************************************************************/
 
 // Miscellaneous...
 
-//#define LED_PIN 13 // Indicator LED
-
-#define BAUD_RATE 115200 // Communication speed of the USB if needed.
+#define BAUD_RATE 115200 						// Communication speed of the USB if needed.
 
 const int atxPowerPin = 12;						// Arduino Due pin number that controls the ATX power on/off
 
 const uint16_t lineInBufsize = 256;				// use a power of 2 for good performance
 const uint16_t lineOutBufSize = 2048;			// ideally this should be large enough to hold the results of an M503 command,
 												// but could be reduced if we ever need the memory
-const uint16_t NumZProbeReadingsAveraged = 8;	// must be an even number, preferably a power of 2 for performance, and no greater than 64
 
 /****************************************************************************************************/
 
 enum EndStopHit
 {
   noStop = 0,		// no endstop hit
-  lowHit = 1,		// low switch hit, or Z-probe in use and above threshold
+  lowHit = 1,									// low switch hit, or Z-probe in use and above threshold
   highHit = 2,		// high stop hit
   lowNear = 3		// approaching Z-probe threshold
 };
@@ -254,6 +269,7 @@ namespace DiagnosticTest
 	{
 		TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 		TestSpinLockup = 1002			// test that we get a software reset if a Spin() function takes too long
+
 	};
 }
 
@@ -515,14 +531,14 @@ public:
   void SetDebug(int d);
   void SoftwareReset(uint16_t reason);
   void SetAtxPower(bool on);
-
+  
   // Timing
   
   float Time(); // Returns elapsed seconds since some arbitrary time
   void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
   void DisableInterrupts();
   void Tick();
-
+  
   // Communications and data storage
   
   Line* GetLine() const;
@@ -532,6 +548,8 @@ public:
   const byte* NetMask() const;
   void SetGateWay(byte gw[]);
   const byte* GateWay() const;
+  void SetMACAddress(uint8_t mac[]);
+  const uint8_t* MACAddress() const;
   
   friend class FileStore;
   
@@ -544,7 +562,7 @@ public:
   const char* GetConfigFile() const; // Where the configuration is stored (in the system dir).
   
   void Message(char type, const char* message);        // Send a message.  Messages may simply flash an LED, or,
-                            // say, display the messages on an LCD. This may also transmit the messages to the host.
+                            // say, display the messages on an LCD. This may also transmit the messages to the host. 
   void PushMessageIndent();
   void PopMessageIndent();
   
@@ -582,6 +600,11 @@ public:
   bool GetZProbeParameters(struct ZProbeParameters& params) const;
   bool SetZProbeParameters(const struct ZProbeParameters& params);
   bool MustHomeXYBeforeZ() const;
+  
+  // Mixing support
+
+  void SetMixingDrives(int);
+  int GetMixingDrives();
 
   // Heat and temperature
   
@@ -619,6 +642,7 @@ private:
 	  byte ipAddress[4];
 	  byte netMask[4];
 	  byte gateWay[4];
+	  uint8_t macAddress[6];
 	  Compatibility compatibility;
   };
 
@@ -650,7 +674,10 @@ private:
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float instantDvs[DRIVES];
-  MCP4461 mcp;
+  MCP4461 mcpDuet;
+  MCP4461 mcpExpansion;
+
+
   int8_t potWipes[DRIVES];
   float senseResistor;
   float maxStepperDigipotVoltage;
@@ -660,6 +687,7 @@ private:
   volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
   volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
   volatile ThermistorAveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
+  int8_t numMixingDrives;
 
 // AXES
 
@@ -671,7 +699,7 @@ private:
   float axisMinima[AXES];
   float homeFeedrates[AXES];
   float headOffsets[AXES]; // FIXME - needs a 2D array
-  
+
 // HEATERS - Bed is assumed to be the first
 
   int GetRawTemperature(byte heater) const;
@@ -809,7 +837,7 @@ inline const char* Platform::GetWebDir() const
 // Where the gcodes are
 
 inline const char* Platform::GetGCodeDir() const
-{
+  {
   return gcodeDir;
 }
 
@@ -819,7 +847,7 @@ inline const char* Platform::GetSysDir() const
 {
   return sysDir;
 }
-
+    
 // Where the temporary files are
 
 inline const char* Platform::GetTempDir() const
@@ -832,7 +860,7 @@ inline const char* Platform::GetConfigFile() const
 {
   return configFile;
 }
-
+  
 
 
 //*****************************************************************************************************************
@@ -840,15 +868,15 @@ inline const char* Platform::GetConfigFile() const
 // Drive the RepRap machine - Movement
 
 inline float Platform::DriveStepsPerUnit(int8_t drive) const
-{
+  {
   return driveStepsPerUnit[drive]; 
-}
-
+  }
+    
 inline void Platform::SetDriveStepsPerUnit(int8_t drive, float value)
 {
   driveStepsPerUnit[drive] = value;
 }
-
+    
 inline float Platform::Acceleration(int8_t drive) const
 {
 	return accelerations[drive];
@@ -916,6 +944,21 @@ inline void Platform::SetMaxFeedrate(int8_t drive, float value)
 	maxFeedrates[drive] = value;
 }
 
+inline void Platform::SetMixingDrives(int num_drives)
+{
+	if(num_drives>(DRIVES-AXES))
+	{
+		Message(HOST_MESSAGE, "More mixing extruder drives set with M160 than exist in firmware configuration\n");
+		return;
+	}
+	numMixingDrives = num_drives;
+}
+
+inline int Platform::GetMixingDrives()
+{
+	return numMixingDrives;
+}
+
 //********************************************************************************************************
 
 // Drive the RepRap machine - Heat and temperature
@@ -932,8 +975,6 @@ inline float Platform::HeatSampleTime() const
   return heatSampleTime;
 }
 
-//****************************************************************************************************************
-
 inline const byte* Platform::IPAddress() const
 {
 	return nvData.ipAddress;
@@ -947,6 +988,28 @@ inline const byte* Platform::NetMask() const
 inline const byte* Platform::GateWay() const
 {
 	return nvData.gateWay;
+}
+
+inline void Platform::SetMACAddress(uint8_t mac[])
+{
+	bool changed = false;
+	for(int8_t i = 0; i < 6; i++)
+	{
+		if (nvData.macAddress[i] != mac[i])
+		{
+			nvData.macAddress[i] = mac[i];
+			changed = true;
+		}
+	}
+	if (changed)
+	{
+		WriteNvData();
+	}
+}
+
+inline const byte* Platform::MACAddress() const
+{
+	return nvData.macAddress;
 }
 
 inline Line* Platform::GetLine() const

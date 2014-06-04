@@ -43,7 +43,6 @@ void setup()
 	}
 
 	reprap.Init();
-	//reprap.GetMove()->InterruptTime();  // Uncomment this line to time the interrupt routine on startup
 }
 
 void loop()
@@ -122,6 +121,7 @@ void Platform::Init()
 		nvData.ipAddress = IP_ADDRESS;
 		nvData.netMask = NET_MASK;
 		nvData.gateWay = GATE_WAY;
+		nvData.macAddress = MAC_ADDRESS;
 
 		nvData.zProbeType = 0;	// Default is to use the switch
 		nvData.switchZProbeParameters.Init(0.0);
@@ -160,8 +160,8 @@ void Platform::Init()
 
 	fileStructureInitialised = true;
 
-	mcp.begin();
-
+	mcpDuet.begin(); //only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
+	mcpExpansion.setMCP4461Address(0x2E); //not required for mcpDuet, as this uses the default address
 	sysDir = SYS_DIR;
 	configFile = CONFIG_FILE;
 
@@ -180,6 +180,7 @@ void Platform::Init()
 	potWipes = POT_WIPES;
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
+	numMixingDrives = NUM_MIXING_DRIVES;
 
 	// Z PROBE
 
@@ -207,26 +208,30 @@ void Platform::Init()
 	webDir = WEB_DIR;
 	gcodeDir = GCODE_DIR;
 	tempDir = TEMP_DIR;
-
+  /*
+  	FIXME Nasty having to specify individually if a pin is arduino or not.
+    requires a unified variant file. If implemented this would be much better
+	to allow for different hardware in the future
+  */
 	for (size_t i = 0; i < DRIVES; i++)
 	{
 		if (stepPins[i] >= 0)
 		{
-			if (i > Z_AXIS)
+		  if(i == E0_DRIVE || i == E3_DRIVE) //STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
 				pinModeNonDue(stepPins[i], OUTPUT);
 			else
 				pinMode(stepPins[i], OUTPUT);
 		}
 		if (directionPins[i] >= 0)
 		{
-			if (i > Z_AXIS)
+		  if(i == E0_DRIVE) //DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
 				pinModeNonDue(directionPins[i], OUTPUT);
 			else
 				pinMode(directionPins[i], OUTPUT);
 		}
 		if (enablePins[i] >= 0)
 		{
-			if (i >= Z_AXIS)
+		  if(i == Z_AXIS || i==E0_DRIVE || i==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 				pinModeNonDue(enablePins[i], OUTPUT);
 			else
 				pinMode(enablePins[i], OUTPUT);
@@ -234,8 +239,7 @@ void Platform::Init()
 		Disable(i);
 		driveEnabled[i] = false;
 	}
-
-	for (size_t i = 0; i < AXES; i++)
+	for(size_t i = 0; i < DRIVES; i++)
 	{
 		if (lowStopPins[i] >= 0)
 		{
@@ -253,7 +257,7 @@ void Platform::Init()
 	{
 		if (heatOnPins[i] >= 0)
 		{
-			if (i == 0)		// heater 0 (bed heater) is a standard Arduino PWM pin
+    			if(i == E0_HEATER || i==E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
 			{
 				pinMode(heatOnPins[i], OUTPUT);
 			}
@@ -262,7 +266,6 @@ void Platform::Init()
 				pinModeNonDue(heatOnPins[i], OUTPUT);
 			}
 		}
-
 		thermistorFilters[i].Init();
 		heaterAdcChannels[i] = PinToAdcChannel(tempSensePins[i]);
 
@@ -276,8 +279,8 @@ void Platform::Init()
 
 	if (coolingFanPin >= 0)
 	{
-		pinMode(coolingFanPin, OUTPUT);
-		analogWrite(coolingFanPin, (HEAT_ON == 0) ? 255 : 0);		// turn auxiliary cooling fan off
+	  //pinModeNonDue(coolingFanPin, OUTPUT); //not required as analogwrite does this automatically
+	  analogWriteNonDue(coolingFanPin, 255); //inverse logic for Duet v0.6 this turns it off
 	}
 
 	InitialiseInterrupts();
@@ -540,9 +543,6 @@ void Platform::Spin()
 
 	line->Spin();
 
-	if (Time() - lastTime < 0.006)
-		return;
-	lastTime = Time();
 	ClassReport("Platform", longWait);
 
 }
@@ -722,7 +722,6 @@ void Platform::SetDebug(int d)
 	case DiagnosticTest::TestSpinLockup:
 		debugCode = d;									// tell the Spin function to loop
 		break;
-
 	default:
 		break;
 	}
@@ -898,11 +897,17 @@ void Platform::SetHeater(size_t heater, const float& power)
 
 	byte p = (byte) (255.0 * min<float>(1.0, max<float>(0.0, power)));
 	if (HEAT_ON == 0)
+	{
 		p = 255 - p;
-	if (heater == 0)
-		analogWrite(heatOnPins[heater], p);
-	else
-		analogWriteNonDue(heatOnPins[heater], p);
+		if(heater == E0_HEATER || heater == E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
+  		{
+			analogWriteNonDue(heatOnPins[heater], p);
+		}
+		else
+		{
+			analogWrite(heatOnPins[heater], p);
+		}
+	 }
 }
 
 EndStopHit Platform::Stopped(int8_t drive)
@@ -982,6 +987,7 @@ void Platform::Step(byte drive)
 }
 
 // current is in mA
+
 void Platform::SetMotorCurrent(byte drive, float current)
 {
 	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxStepperDigipotVoltage);
@@ -989,18 +995,28 @@ void Platform::SetMotorCurrent(byte drive, float current)
 //	snprintf(scratchString, STRING_LENGTH, "%d", pot);
 //	Message(HOST_MESSAGE, scratchString);
 //	Message(HOST_MESSAGE, "\n");
-	mcp.setNonVolatileWiper(potWipes[drive], pot);
-	mcp.setVolatileWiper(potWipes[drive], pot);
+	if(drive < 4)
+	{
+		mcpDuet.setNonVolatileWiper(potWipes[drive], pot);
+		mcpDuet.setVolatileWiper(potWipes[drive], pot);
+	}
+	else
+	{
+		mcpExpansion.setNonVolatileWiper(potWipes[drive], pot);
+		mcpExpansion.setVolatileWiper(potWipes[drive], pot);
+	}
 }
+
 
 //Changed to be compatible with existing gcode norms
 // M106 S0 = fully off M106 S255 = fully on
 void Platform::CoolingFan(float speed)
 {
-	if(coolingFanPin > 0)
+	if(coolingFanPin >= 0)
 	{
+		byte p =(byte)speed;
 		// The cooling fan output pin gets inverted if HEAT_ON == 0
-		analogWriteNonDue(coolingFanPin, (uint32_t)( (HEAT_ON == 0) ? (255.0 - speed) : speed));
+		analogWriteNonDue(coolingFanPin, (HEAT_ON == 0) ? (255 - p) : p);
 	}
 }
 

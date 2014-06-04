@@ -24,9 +24,9 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.59e-dc42"
-#define DATE "2014-06-01"
-#define LAST_AUTHOR "dc42"
+#define VERSION "0.65e-dc42"
+#define DATE "2014-06-04"
+#define LAST_AUTHOR "reprappro & dc42"
 
 // Other firmware that we might switch to be compatible with.
 
@@ -48,19 +48,19 @@ enum Compatibility
 
 #define HEAT_SAMPLE_TIME (0.5) // Seconds
 
-#define TEMPERATURE_CLOSE_ENOUGH (2.5) 		// Celsius
+#define TEMPERATURE_CLOSE_ENOUGH (2.0) 		// Celsius
 #define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
 
 // If temperatures fall outside this range, something nasty has happened.
 
-#define BAD_LOW_TEMPERATURE -30.0
-#define BAD_HIGH_TEMPERATURE 300.0
 #define MAX_BAD_TEMPERATURE_COUNT 6
+#define BAD_LOW_TEMPERATURE -10.0
+#define BAD_HIGH_TEMPERATURE 300.0
 
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
 #define NUMBER_OF_PROBE_POINTS 4
-#define Z_DIVE 5.0  // Height from which to probe the bed (mm)
+#define Z_DIVE 8.0  // Height from which to probe the bed (mm)
 
 #define SILLY_Z_VALUE -9999.0
 
@@ -76,6 +76,12 @@ enum Compatibility
 #define HOME_Y_G "homey.g"
 #define HOME_Z_G "homez.g"
 #define HOME_ALL_G "homeall.g"
+
+#define LIST_SEPARATOR ':'						// Lists in G Codes
+#define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them
+#define FILE_LIST_BRACKET '"'					// Put these round file names when listing them
+
+#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
 #define LONG_TIME 300.0 // Seconds
 
