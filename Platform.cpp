@@ -1460,6 +1460,7 @@ bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
 		platform->Message(HOST_MESSAGE, "\n");
 		return false;
 	}
+	return true;
 }
 
 bool MassStorage::MakeDirectory(const char *directory)
@@ -1471,6 +1472,7 @@ bool MassStorage::MakeDirectory(const char *directory)
 		platform->Message(HOST_MESSAGE, "\n");
 		return false;
 	}
+	return true;
 }
 
 // Rename a file or directory
@@ -1485,7 +1487,7 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
 		platform->Message(HOST_MESSAGE, "\n");
 		return false;
 	}
-
+	return true;
 }
 
 // Check if the specified directory exists

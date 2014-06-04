@@ -237,7 +237,7 @@ void Webserver::Spin()
 				else
 				{
 					char c;
-					for (;;)
+					for (int i=0; i<500; i++)
 					{
 						if (req->Read(c))
 						{
@@ -245,7 +245,11 @@ void Webserver::Spin()
 							// it from the ready transactions by either calling SendAndClose() or CloseRequest().
 							if (interpreter->CharFromClient(c))
 							{
-								readingConnection = NULL;
+								if (!interpreter->IsUploading())
+								{
+									readingConnection = NULL;
+								}
+
 								break;
 							}
 						}
@@ -542,6 +546,16 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 	}
 }
 
+void Webserver::SetReadingConnection()
+{
+	Network *net = reprap.GetNetwork();
+	RequestState *r = net->GetRequest();
+	if (r != NULL)
+	{
+		readingConnection = r->GetConnection();
+	}
+}
+
 
 
 //********************************************************************************************
@@ -574,6 +588,7 @@ bool ProtocolInterpreter::StartUpload(FileStore *file)
 	else
 	{
 		uploadState = uploadError;
+		platform->Message(HOST_MESSAGE, "Could not open file while starting upload!\n");
 		return false;
 	}
 }
@@ -596,10 +611,12 @@ bool ProtocolInterpreter::FlushUploadData()
 	if (uploadState == uploadOK && uploadLength != 0)
 	{
 		// Write some uploaded data to file.
-		// Limiting the amount of data we write improves throughput, probably by allowing lwip time to send ACKs etc.
-		unsigned int len = min<unsigned int>(uploadLength, 512);
+		// Limiting the amount of data to write is required because the FileStore will cache the data
+		// at a buffer size of 256 bytes. Increasing this value will cause HTTP uploads to stop working.
+		unsigned int len = min<unsigned int>(uploadLength, 256);
 		if (!fileBeingUploaded.Write(uploadPointer, len))
 		{
+			platform->Message(HOST_MESSAGE, "Could not flush upload data!\n");
 			uploadState = uploadError;
 		}
 
@@ -636,6 +653,7 @@ void ProtocolInterpreter::FinishUpload(const long file_length)
 		if (!fileBeingUploaded.Write(uploadPointer, uploadLength))
 		{
 			uploadState = uploadError;
+			platform->Message(HOST_MESSAGE, "Could not write remaining data while finishing upload!\n");
 		}
 	}
 
@@ -645,18 +663,21 @@ void ProtocolInterpreter::FinishUpload(const long file_length)
 	if (uploadState == uploadOK && !fileBeingUploaded.Flush())
 	{
 		uploadState = uploadError;
+		platform->Message(HOST_MESSAGE, "Could not flush remaining data while finishing upload!\n");
 	}
 
 	// Check the file length is as expected
 	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() != file_length)
 	{
 		uploadState = uploadError;
+		platform->Message(HOST_MESSAGE, "Uploaded file size is different!\n");
 	}
 
 	// Close the file
 	if (!fileBeingUploaded.Close())
 	{
 		uploadState = uploadError;
+		platform->Message(HOST_MESSAGE, "Could not close the upload file while finishing upload!\n");
 	}
 
 	// Delete file if an error has occured
@@ -833,20 +854,16 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	}
 	else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
 	{
-		CancelUpload();
-
 		FileStore *file = platform->GetFileStore("0:/", value, true);
 		StartUpload(file);
+		webserver->SetReadingConnection();
 
 		GetJsonUploadResponse();
 	}
 	else if (StringEquals(request, "upload_data") && StringEquals(key, "data"))
 	{
-		if (uploadState == uploadOK)
-		{
-			uploadPointer = value;
-			uploadLength = valueLength;
-		}
+		StoreUploadData(value, valueLength);
+
 		GetJsonUploadResponse();
 		keepOpen = true;
 	}

@@ -604,7 +604,7 @@ RequestState *Network::GetRequest(const ConnectionState *cs)
 
 		rs = rsNext;
 	}
-	return readyTransactions;
+	return NULL;
 }
 
 // Send the output data we already have, optionally with a file appended, then close the connection unless keepConnectionOpen is true.
