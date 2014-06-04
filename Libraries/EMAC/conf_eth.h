@@ -58,10 +58,11 @@
 // The ones in hardware/arduino/sam/system/libsam/source/emac.c get used instead, and they need to be changed to these values (32 and 8).
 
 /** Number of buffer for RX */
-//#define EMAC_RX_BUFFERS  32
+//#define EMAC_RX_BUFFERS  (32)
 
 /** Number of buffer for TX */
-//#define EMAC_TX_BUFFERS  8
+//#define EMAC_TX_BUFFERS  (8)
+
 
 /** MAC PHY operation max retry count */
 #define MAC_PHY_RETRY_MAX 1000000

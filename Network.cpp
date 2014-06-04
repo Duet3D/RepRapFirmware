@@ -50,6 +50,8 @@ extern "C"
 #include "lwip/src/include/lwip/stats.h"
 #include "lwip/src/include/lwip/tcp.h"
 
+void RepRapNetworkSetMACAddress(const u8_t macAddress[]);
+
 }
 
 const int requestStateSize = MEMP_NUM_TCP_PCB +2;			// number of RequestStates that can be used for network IO
@@ -398,6 +400,7 @@ void Network::PrependTransaction(RequestState* volatile* list, RequestState *r)
 
 void Network::Init()
 {
+    RepRapNetworkSetMACAddress(reprap.GetPlatform()->MACAddress());
 	init_ethernet();
 }
 

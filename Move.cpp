@@ -271,7 +271,8 @@ bool Move::GetCurrentState(float m[])
     if(i < AXES)
       m[i] = lastMove->MachineToEndPoint(i);
     else
-      m[i] = 0.0;
+      m[i] = 0.0; //FIXME This resets extruders to 0.0, even the inactive ones (is this behaviour desired?)
+      //m[i] = lastMove->MachineToEndPoint(i); //FIXME TEST alternative that does not reset extruders to 0
   }
   if(currentFeedrate >= 0.0)
     m[DRIVES] = currentFeedrate;
@@ -364,7 +365,7 @@ void Move::SetStepHypotenuse()
 	  // We don't want 0.  If no axes/extruders are moving these should never be used.
 	  // But try to be safe.
 
-	  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
+	  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES); //FIXME this is not multi extruder safe (but we should never get here)
 	  extruderStepDistances[0] = stepDistances[0];
 }
 
@@ -520,7 +521,7 @@ void Move::DoLookAhead()
           else if (mt & zMove)
             c = platform->InstantDv(Z_AXIS);
           else
-            c = platform->InstantDv(AXES); // value for first extruder FIXME??
+            c = platform->InstantDv((AXES+gCodes->GetSelectedHead())); // value for current extruder
         }
         n1->SetV(c);
         n1->SetProcessed(vCosineSet);
@@ -571,7 +572,7 @@ void Move::Interrupt()
   dda = NULL;
 }
 
-
+// creates a new lookahead object adds it to the lookahead ring, returns false if its full
 bool Move::LookAheadRingAdd(const long ep[], float feedRate, float vv, bool ce, int8_t mt)
 {
     if(LookAheadRingFull())
@@ -614,7 +615,7 @@ void Move::SetIdentityTransform()
 	secondDegreeCompensation = false;
 }
 
-void Move::Transform(float xyzPoint[])
+void Move::Transform(float xyzPoint[]) const
 {
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
 	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] + tanYZ*xyzPoint[Z_AXIS];
@@ -624,7 +625,7 @@ void Move::Transform(float xyzPoint[])
 		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
 }
 
-void Move::InverseTransform(float xyzPoint[])
+void Move::InverseTransform(float xyzPoint[]) const
 {
 	if(secondDegreeCompensation)
 		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
@@ -973,15 +974,18 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   // by a velocity later.
 
   int8_t mt = myLookAheadEntry->GetMovementType();
-
-  if(mt & xyMove) // X or Y involved?
-  {
-	  // If XY (or Z) are moving, then the extruder won't be considered in the
 	  // acceleration calculation.  Usually this is OK.  But check that we are not asking
 	  // the extruder to accelerate, decelerate, or move too fast.  The common place
 	  // for this to happen is when it is moving back from a previous retraction during
 	  // an XY move.
 
+  if(mt & xyMove) // X or Y involved?
+	  {
+	  // If XY (or Z) are moving, then the extruder won't be considered in the
+	  // acceleration calculation.  Usually this is OK.  But check that we are not asking
+	  // the extruder to accelerate, decelerate, or move too fast.  The common place
+	  // for this to happen is when it is moving back from a previous retraction during
+	  // an XY move.
 	  if((mt & eMove) && eDistance > distance)
 	  {
 		  SetEAcceleration(eDistance);
@@ -990,7 +994,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 	  {
 		  SetXYAcceleration();
 	  }
-  } else if (mt & zMove) // Z involved?
+ } else if (mt & zMove) // Z involved?
   {
     acceleration = platform->Acceleration(Z_AXIS);
     instantDv = platform->InstantDv(Z_AXIS);
@@ -1240,11 +1244,13 @@ float LookAhead::Cosine()
   return cosine;
 }
 
+//Returns units (mm) from steps for a particular drive
 float LookAhead::MachineToEndPoint(int8_t drive, long coord)
 {
 	return ((float)coord)/reprap.GetPlatform()->DriveStepsPerUnit(drive);
 }
 
+//Returns steps from units (mm) for a particular drive
 long LookAhead::EndPointToMachine(int8_t drive, float coord)
 {
 	return  (long)roundf(coord*reprap.GetPlatform()->DriveStepsPerUnit(drive));

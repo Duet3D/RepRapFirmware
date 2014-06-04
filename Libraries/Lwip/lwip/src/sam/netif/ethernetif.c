@@ -513,6 +513,9 @@ err_t ethernetif_init(struct netif *netif)
 	netif->output = etharp_output;
 	netif->linkoutput = low_level_output;
 
+#if 1
+	// We now require the user to configure the MAC address if the default one is unsuitable, instead of selecting it automatically
+#else
 	// Patch the last 4 bytes of the MAC address to be the IP address, so that we can support multiple Duets on the same subnet
 	{
 		size_t i;
@@ -521,9 +524,19 @@ err_t ethernetif_init(struct netif *netif)
 			gs_uc_mac_address[i + 2] = ((uint8_t*)&(netif->ip_addr))[i];
 		}
 	}
+#endif
 
 	/* Initialize the hardware */
 	low_level_init(netif);
 
 	return ERR_OK;
+}
+
+void RepRapNetworkSetMACAddress(const u8_t macAddress[])
+{
+	size_t i;
+	for (i = 0; i < 8; ++i)
+	{
+		gs_uc_mac_address[i] = macAddress[i];
+	}
 }

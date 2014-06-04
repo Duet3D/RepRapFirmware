@@ -1685,7 +1685,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				}
 			}
 			// if this is different, disconnect immediately
- 			else
+			else
 			{
 				SendReply(500, "Unknown login command.", false);
 			}
@@ -1708,7 +1708,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				snprintf(ftpResponse, ftpResponseLength, "\"%s\"", currentDir);
 				SendReply(257, ftpResponse);
- 			}
+			}
 			// set current dir
 			else if (StringStartsWith(clientMessage, "CWD"))
 			{
