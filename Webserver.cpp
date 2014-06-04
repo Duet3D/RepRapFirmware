@@ -200,21 +200,25 @@ void Webserver::Spin()
 					}
 					else if (interpreter->IsUploading())
 					{
+						bool rs_finished = true;
 						char *buffer;
 						unsigned int len;
 						while (req->ReadBuffer(buffer, len))
 						{
 							if (!interpreter->StoreUploadData(buffer, len))
 							{
-								platform->Message(HOST_MESSAGE, "Webserver: Could not store upload data!\n");
-
-								net->SendAndClose(NULL);
-								interpreter->ResetState();
+								// There's no space left in the upload buffer, so process it the next time
+								// Spin() has been called and after the upload buffer has been flushed.
+								req->ResetInputPointer();
+								rs_finished = false;
 								break;
 							}
 						}
 
-						net->CloseRequest();
+						if (rs_finished)
+						{
+							net->CloseRequest();
+						}
 					}
 					else
 					{
@@ -1625,7 +1629,6 @@ void Webserver::FtpInterpreter::ResetState()
 
 bool Webserver::FtpInterpreter::StoreUploadData(const char* data, unsigned int len)
 {
-	bool result = true;
 	if (len != 0 && uploadState == uploadOK)
 	{
 		if (len + uploadLength <= uploadBufLength)
@@ -1636,13 +1639,12 @@ bool Webserver::FtpInterpreter::StoreUploadData(const char* data, unsigned int l
 		}
 		else
 		{
-			platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow while storing FTP data!\n");
-			uploadState = uploadError;
-			result = false;
+			// There's no room left for our data
+			return false;
 		}
 	}
 
-	return result;
+	return true;
 }
 
 // return true if an error has occured, false otherwise

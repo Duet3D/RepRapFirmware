@@ -954,6 +954,12 @@ bool RequestState::ReadBuffer(char *&buffer, unsigned int &len)
 	return true;
 }
 
+// Reset the RequestState's inputPointer, so it can be read in the next Spin() call
+void RequestState::ResetInputPointer()
+{
+	inputPointer = 0;
+}
+
 // Webserver calls this to write bytes that need to go out to the network
 
 void RequestState::Write(char b)

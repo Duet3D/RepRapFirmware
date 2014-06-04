@@ -72,6 +72,7 @@ public:
 	void Set(pbuf *p, ConnectionState* c, RequestStatus s);
 	bool Read(char& b);
 	bool ReadBuffer(char *&buffer, unsigned int &len);
+	void ResetInputPointer();
 	void SentPacketAcknowledged(unsigned int len);
 	void Write(char b);
 	void Write(const char* s);
