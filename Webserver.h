@@ -55,7 +55,7 @@ const unsigned int jsonReplyLength = 1000;		// size of buffer used to hold JSON 
 
 const unsigned int ftpMessageLength = 256;		// maximum line length for incoming FTP commands
 const unsigned int ftpResponseLength = 256;		// maximum FTP response length
-const unsigned int uploadBufLength = 3000;		// size of our file upload buffer
+const unsigned int uploadBufLength = 4096;		// size for the FTP upload buffer (should be EMAC_RX_BUFFERS * EMAC_RX_UNITSIZE)
 
 /* Telnet */
 
