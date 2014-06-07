@@ -55,7 +55,6 @@ const unsigned int jsonReplyLength = 1000;		// size of buffer used to hold JSON 
 
 const unsigned int ftpMessageLength = 256;		// maximum line length for incoming FTP commands
 const unsigned int ftpResponseLength = 256;		// maximum FTP response length
-const unsigned int uploadBufLength = 4096;		// size for the FTP upload buffer (should be EMAC_RX_BUFFERS * EMAC_RX_UNITSIZE)
 
 /* Telnet */
 
@@ -109,7 +108,7 @@ class ProtocolInterpreter
 class Webserver
 {   
   public:
-  
+
     Webserver(Platform* p);
     void Init();
     void Spin();
@@ -212,14 +211,13 @@ class Webserver
 	class FtpInterpreter : public ProtocolInterpreter
 	{
 		public:
+			friend class Webserver; // this is temporary and will be removed after debugging
 
 			FtpInterpreter(Platform *p, Webserver *ws);
 			void ConnectionEstablished();
 			void ConnectionLost(uint16_t local_port);
 			bool CharFromClient(const char c);
 			void ResetState();
-
-			bool StoreUploadData(const char* data, unsigned int len);
 
 		private:
 
@@ -236,11 +234,11 @@ class Webserver
 			char clientMessage[ftpMessageLength];
 			unsigned int clientPointer;
 			char ftpResponse[ftpResponseLength];
+			unsigned int uploadFileSize;
 
 			char currentDir[maxFilenameLength];
 			char filename[maxFilenameLength];
 
-			char uploadBuffer[uploadBufLength];
 			float portOpenTime;
 
 			void ProcessLine();

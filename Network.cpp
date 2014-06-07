@@ -54,7 +54,7 @@ void RepRapNetworkSetMACAddress(const u8_t macAddress[]);
 
 }
 
-const int requestStateSize = MEMP_NUM_TCP_PCB +2;			// number of RequestStates that can be used for network IO
+const int requestStateSize = MEMP_NUM_TCP_PCB +1;			// number of RequestStates that can be used for network IO
 const float writeTimeout = 4.0;	 							// seconds to wait for data we have written to be acknowledged
 
 static tcp_pcb *http_pcb = NULL;
@@ -191,7 +191,7 @@ static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 {
 	ConnectionState *cs = (ConnectionState*)arg;
-	if (cs != NULL)
+	if (err == ERR_OK && cs != NULL)
 	{
 		if (cs->pcb != pcb)
 		{
@@ -199,12 +199,15 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 			return ERR_BUF;
 		}
 
-		if (err == ERR_OK && p != NULL)
+		if (p != NULL)
 		{
-			// Tell LWIP that we have taken data
-			tcp_recved(pcb, p->tot_len);
+			// Only allow one RequestState per connection
+			if (cs->readingRs != NULL)
+			{
+				return ERR_MEM;
+			}
 
-			// Tell higher levels that we have received data
+			// Tell higher levels that we are receiving data
 			reprap.GetNetwork()->ReceiveInput(p, cs);
 #if 0	//debug
 			{
@@ -217,7 +220,7 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 			}
 #endif
 		}
-		else if (err == ERR_OK)
+		else
 		{
 			// This is called when the connection has been gracefully closed, but LWIP doesn't close these
 			// connections automatically. That's why we must do it once all packets have been read.
@@ -251,6 +254,7 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 	cs->file = NULL;
 	cs->left = 0;
 	cs->retries = 0;
+	cs->readingRs = NULL;
 	cs->sendingRs = NULL;
 
 	switch (pcb->local_port)		// tell LWIP to accept further connections on the listening PCB
@@ -408,13 +412,10 @@ void Network::Spin()
 {
 	if (active)
 	{
-		// We must have at least two free transactions before we can accept new connections or incoming data
-		if (freeTransactions != NULL && freeTransactions->next != NULL)
-		{
-			++inLwip;
-			ethernet_task();
-			--inLwip;
-		}
+		// Fetch incoming data
+		++inLwip;
+		ethernet_task();
+		--inLwip;
 
 		// See if we can send anything
 		RequestState* r = writingTransactions;
@@ -575,6 +576,7 @@ void Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 	cpu_irq_restore(flags);
 
 	r->Set(pb, cs, dataReceiving);
+	cs->readingRs = r;
 	AppendTransaction(&readyTransactions, r);
 //	debugPrintf("Network - input received\n");
 }
@@ -592,22 +594,13 @@ RequestState *Network::GetRequest(const ConnectionState *cs)
 		return rs;
 	}
 
-	// There is at least one ready transaction, but it's not on the connection we are looking for
-	for (RequestState *rsNext = rs->next; rsNext != NULL; rsNext = rs->next)
+	rs = cs->readingRs;
+	if (rs != NULL)
 	{
-		if (rsNext->cs == cs)
-		{
-			irqflags_t flags = cpu_irq_save();
-			rs->next = rsNext->next;		// remove rsNext from the list
-			rsNext->next = readyTransactions;
-			readyTransactions = rsNext;
-			cpu_irq_restore(flags);
-			return rsNext;
-		}
-
-		rs = rsNext;
+		return cs->readingRs;
 	}
-	return NULL;
+
+	return readyTransactions;
 }
 
 // Send the output data we already have, optionally with a file appended, then close the connection unless keepConnectionOpen is true.
@@ -639,6 +632,8 @@ void Network::SendAndClose(FileStore *f, bool keepConnectionOpen)
 			r->nextWrite = NULL;
 			r->fileBeingSent = f;
 			r->persistConnection = keepConnectionOpen;
+			r->cs->readingRs = NULL;
+
 			RequestState *sendingRs = r->cs->sendingRs;
 			if (sendingRs == NULL)
 			{
@@ -685,18 +680,29 @@ void Network::CloseRequest()
 	r->FreePbuf();
 
 	// Terminate this connection if this RequestState indicates a graceful disconnect
-	if (!r->LostConnection() && status == disconnected)
+	if (!r->LostConnection())
 	{
-		ConnectionState *locCs = r->cs;		// take a copy because our cs field is about to get cleared
-//		debugPrintf("Network: CloseRequest is closing connection cs=%08x\n", (unsigned int)locCs);
-		ConnectionClosed(locCs);
-		tcp_pcb *pcb = locCs->pcb;
-		tcp_arg(pcb, NULL);
-		tcp_sent(pcb, NULL);
-		tcp_recv(pcb, NULL);
-		tcp_poll(pcb, NULL, 4);
-		mem_free(locCs);
-		tcp_close(pcb);
+		if (status == disconnected)
+		{
+			ConnectionState *locCs = r->cs;		// take a copy because our cs field is about to get cleared
+			if (locCs == dataCs)
+			{
+				dataCs = NULL;					// Don't close this PCB twice when CloseDataPort() is called
+			}
+//			debugPrintf("Network: CloseRequest is closing connection cs=%08x\n", (unsigned int)locCs);
+			ConnectionClosed(locCs);
+			tcp_pcb *pcb = locCs->pcb;
+			tcp_arg(pcb, NULL);
+			tcp_sent(pcb, NULL);
+			tcp_recv(pcb, NULL);
+			tcp_poll(pcb, NULL, 4);
+			mem_free(locCs);
+			tcp_close(pcb);
+		}
+		else if (status == dataReceiving)
+		{
+			r->cs->readingRs = NULL;
+		}
 	}
 }
 
@@ -874,6 +880,7 @@ void RequestState::Set(pbuf *p, ConnectionState *c, RequestStatus s)
 {
 	cs = c;
 	pb = p;
+	bufferLength = (p == NULL) ? 0 : pb->tot_len;
 	status = s;
 	inputPointer = 0;
 	outputPointer = 0;
@@ -1152,6 +1159,14 @@ void RequestState::Close()
 
 void RequestState::FreePbuf()
 {
+	// Tell LWIP that we have processed data
+	tcp_pcb *pcb = (cs != NULL) ? cs->pcb : NULL;
+	if (bufferLength > 0 && pcb != NULL)
+	{
+		tcp_recved(pcb, bufferLength);
+	}
+
+	// Free pbuf is there's any data left
 	if (pb != NULL)
 	{
 		pbuf_free(pb);

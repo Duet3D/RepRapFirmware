@@ -140,13 +140,13 @@ void Webserver::Init()
 // Deal with input/output from/to the client (if any)
 void Webserver::Spin()
 {
-	if (webserverActive)
+	// Before we process an incoming Request, we must ensure that the webserver
+	// is active and that all upload buffers are empty.
+	if (webserverActive && httpInterpreter->FlushUploadData() && ftpInterpreter->FlushUploadData())
 	{
 		Network *net = reprap.GetNetwork();
 		RequestState *req = net->GetRequest(readingConnection);
-
-		// Make sure the upload buffers are empty before a new request is processed
-		if (httpInterpreter->FlushUploadData() && ftpInterpreter->FlushUploadData() && req != NULL)
+		if (req != NULL)
 		{
 			// Process incoming request
 			if (req->IsReady())
@@ -176,65 +176,62 @@ void Webserver::Spin()
 						break;
 				}
 
+				RequestStatus status = req->GetStatus();
+
+				// For protocols other than HTTP it is important to send a HELO message
+				if (status == connected)
+				{
+					interpreter->ConnectionEstablished();
+
+					// Keep track of the uploading FTP data connections because we can't afford delayed data requests
+					if (is_data_port && interpreter->IsUploading())
+					{
+						readingConnection = req->GetConnection();
+					}
+
+					// Close this request unless ConnectionEstablished() has already used it for sending
+					if (req == net->GetRequest(readingConnection))
+					{
+						net->CloseRequest();
+					}
+				}
 				// Graceful disconnects are handled here, because prior RequestStates might still contain valid
 				// data. That's why it's a bad idea to close these connections immediately in the Network class.
-				if (req->GetStatus() == disconnected)
+				else if (status == disconnected)
 				{
-					readingConnection = NULL;
+					// CloseRequest() will call the disconnect events and close the connection
 					net->CloseRequest();
 				}
 				// Fast upload for FTP connections
 				else if (is_data_port)
 				{
-					if (req->GetStatus() == connected)
-					{
-						interpreter->ConnectionEstablished();
-						if (interpreter->IsUploading())
-						{
-							// keep track of the uploading FTP data connections because we can't
-							// afford delayed data requests
-							readingConnection = req->GetConnection();
-						}
+					bool have_data = false;
 
-						net->CloseRequest();
-					}
-					else if (interpreter->IsUploading())
+					if (interpreter->IsUploading())
 					{
-						bool rs_finished = true;
-						char *buffer;
-						unsigned int len;
-						while (req->ReadBuffer(buffer, len))
+						// Ensure we have data to write
+						while (!have_data && req != NULL)
 						{
-							if (!interpreter->StoreUploadData(buffer, len))
+							char *buffer;
+							unsigned int len;
+							if (req->ReadBuffer(buffer, len))
 							{
-								// There's no space left in the upload buffer, so process it the next time
-								// Spin() has been called and after the upload buffer has been flushed.
-								req->ResetInputPointer();
-								rs_finished = false;
-								break;
+								ftpInterpreter->uploadFileSize += len;
+								interpreter->StoreUploadData(buffer, len);
+								have_data = true;
 							}
-						}
-
-						if (rs_finished)
-						{
-							net->CloseRequest();
+							else
+							{
+								net->CloseRequest();
+								req = net->GetRequest(readingConnection);
+							}
 						}
 					}
 					else
 					{
+						platform->Message(HOST_MESSAGE, "Webserver: Closing invalid data connection\n");
 						readingConnection = NULL;
 						net->SendAndClose(NULL);
-					}
-				}
-				// For protocols other than HTTP it is important to send a HELO message
-				else if (req->GetStatus() == connected)
-				{
-					interpreter->ConnectionEstablished();
-
-					// ignore this request unless ConnectionEstablished() has already used it for sending
-					if (req == net->GetRequest(readingConnection))
-					{
-						net->CloseRequest();
 					}
 				}
 				// Process other messages
@@ -615,9 +612,8 @@ bool ProtocolInterpreter::FlushUploadData()
 	if (uploadState == uploadOK && uploadLength != 0)
 	{
 		// Write some uploaded data to file.
-		// Limiting the amount of data to write is required because the FileStore will cache the data
-		// at a buffer size of 256 bytes. Increasing this value will cause HTTP uploads to stop working.
-		unsigned int len = min<unsigned int>(uploadLength, 256);
+		// Limiting the amount of data we write improves throughput, probably by allowing lwip time to send ACKs etc.
+		unsigned int len = min<unsigned int>(uploadLength, 386);
 		if (!fileBeingUploaded.Write(uploadPointer, len))
 		{
 			platform->Message(HOST_MESSAGE, "Could not flush upload data!\n");
@@ -1550,7 +1546,20 @@ void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 		{
 			if (state == doingPasvIO)
 			{
-				SendReply(226, "Transfer complete.");
+				if (uploadState != uploadError)
+				{
+					if (uploadState == uploadOK)
+					{
+						snprintf(scratchString, STRING_LENGTH, "FTP: Upload file size is %d bytes\n", uploadFileSize);
+						debugPrintf(scratchString);
+					}
+
+					SendReply(226, "Transfer complete.");
+				}
+				else
+				{
+					SendReply(526, "Upload failed!");
+				}
 			}
 			else
 			{
@@ -1625,26 +1634,6 @@ void Webserver::FtpInterpreter::ResetState()
 	CancelUpload();
 
 	state = authenticating;
-}
-
-bool Webserver::FtpInterpreter::StoreUploadData(const char* data, unsigned int len)
-{
-	if (len != 0 && uploadState == uploadOK)
-	{
-		if (len + uploadLength <= uploadBufLength)
-		{
-			memcpy(uploadBuffer + uploadLength, data, len);
-			uploadLength += len;
-			uploadPointer = uploadBuffer;
-		}
-		else
-		{
-			// There's no room left for our data
-			return false;
-		}
-	}
-
-	return true;
 }
 
 // return true if an error has occured, false otherwise
@@ -1930,6 +1919,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else if (StringStartsWith(clientMessage, "STOR"))
 			{
 				FileStore *file;
+				uploadFileSize = 0;
 
 				ReadFilename(4);
 				if (filename[0] == '/')

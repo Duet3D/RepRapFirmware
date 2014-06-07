@@ -43,6 +43,7 @@ class RequestState;
 struct ConnectionState
 {
 	tcp_pcb *pcb;				// connection PCB
+	RequestState *readingRs;	// RequestState that is currently reading via this connection
 	RequestState *sendingRs;	// RequestState that is currently sending via this connection
 	const char *file;			// pointer to data to send
 	uint16_t left;				// amount of data to send
@@ -94,6 +95,7 @@ private:
 	RequestState* volatile next;			// next RequestState in the list we are in
 	RequestState* nextWrite;				// next RequestState queued to write to this cs
 	pbuf *pb;								// linked list of incoming packet buffers
+	unsigned int bufferLength;				// total length of the packet buffer
 	unsigned int inputPointer;				// amount of data already taken from the first packet buffer
 
 	unsigned int sentDataOutstanding;		// amount of TCP data we have sent that has not been acknowledged

@@ -104,7 +104,7 @@ a lot of data that needs to be copied, this should be set high. */
 #define MEMP_NUM_UDP_PCB        4
 
 /* MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections. */
-#define MEMP_NUM_TCP_PCB        6
+#define MEMP_NUM_TCP_PCB        7
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections. */
 #define MEMP_NUM_TCP_PCB_LISTEN 4
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments. */
@@ -188,8 +188,8 @@ a lot of data that needs to be copied, this should be set high. */
 #endif
 
 /* ---------- Statistics options ---------- */
-#define LWIP_STATS 1
-#define LWIP_STATS_DISPLAY 1
+#define LWIP_STATS 0
+//#define LWIP_STATS_DISPLAY 1
 
 #if LWIP_STATS
 #define LINK_STATS 1
@@ -210,21 +210,21 @@ a lot of data that needs to be copied, this should be set high. */
 #define LWIP_NOASSERT 			0
 
 
-#define DBG_TYPES_ON                    0xff
-#define ETHARP_DEBUG                    LWIP_DBG_ON
-#define NETIF_DEBUG                     LWIP_DBG_ON
-#define PBUF_DEBUG                      LWIP_DBG_ON
-#define API_LIB_DEBUG                   LWIP_DBG_ON
-#define API_MSG_DEBUG                   LWIP_DBG_ON
-#define SOCKETS_DEBUG                   LWIP_DBG_ON
-#define ICMP_DEBUG                      LWIP_DBG_ON
-#define INET_DEBUG                      LWIP_DBG_ON
-#define IP_DEBUG                        LWIP_DBG_ON
+#define DBG_TYPES_ON                    0 //0xff
+#define ETHARP_DEBUG                    LWIP_DBG_OFF //LWIP_DBG_ON
+#define NETIF_DEBUG                     LWIP_DBG_OFF //LWIP_DBG_ON
+#define PBUF_DEBUG                      LWIP_DBG_OFF //LWIP_DBG_ON
+#define API_LIB_DEBUG                   LWIP_DBG_OFF //LWIP_DBG_ON
+#define API_MSG_DEBUG                   LWIP_DBG_OFF //LWIP_DBG_ON
+#define SOCKETS_DEBUG                   LWIP_DBG_OFF //LWIP_DBG_ON
+#define ICMP_DEBUG                      LWIP_DBG_OFF //LWIP_DBG_ON
+#define INET_DEBUG                      LWIP_DBG_OFF //LWIP_DBG_ON
+#define IP_DEBUG                        LWIP_DBG_OFF //LWIP_DBG_ON
 #define IP_REASS_DEBUG                  LWIP_DBG_OFF
 #define RAW_DEBUG                       LWIP_DBG_OFF
 #define MEM_DEBUG                       LWIP_DBG_OFF
 #define MEMP_DEBUG                      LWIP_DBG_OFF
-#define SYS_DEBUG                       LWIP_DBG_ON
+#define SYS_DEBUG                       LWIP_DBG_OFF //LWIP_DBG_ON
 #define TCP_DEBUG                       LWIP_DBG_OFF
 #define TCP_INPUT_DEBUG                 LWIP_DBG_OFF
 #define TCP_FR_DEBUG                    LWIP_DBG_OFF
@@ -236,7 +236,7 @@ a lot of data that needs to be copied, this should be set high. */
 #define TCP_QLEN_DEBUG                  LWIP_DBG_OFF
 #define UDP_DEBUG                       LWIP_DBG_OFF
 #define TCPIP_DEBUG                     LWIP_DBG_OFF
-#define DBG_MIN_LEVEL                   LWIP_DBG_LEVEL_ALL
+#define DBG_MIN_LEVEL                   LWIP_DBG_LEVEL_SERIOUS //LWIP_DBG_LEVEL_ALL
 
 
 // \note For a list of all possible lwIP configurations, check http://lwip.wikia.com/wiki/Lwipopts.h
