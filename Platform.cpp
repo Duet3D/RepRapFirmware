@@ -21,6 +21,13 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+#define WINDOWED_SEND_PACKETS	(2)
+
+extern char _end;
+extern "C" char *sbrk(int i);
+
+const uint8_t memPattern = 0xA5;
+
 // Arduino initialise and loop functions
 // Put nothing in these other than calls to the RepRap equivalents
 
@@ -28,6 +35,14 @@ void setup()
 {
   reprap.Init();
   //reprap.GetMove()->InterruptTime();  // Uncomment this line to time the interrupt routine on startup
+
+  // Fill the free memory with a pattern so that we can check for stack usage and memory corruption
+  char* heapend = sbrk(0);
+  register const char * stack_ptr asm ("sp");
+  while (heapend + 16 < stack_ptr)
+  {
+	  *heapend++ = memPattern;
+  }
 }
   
 void loop()
@@ -66,8 +81,6 @@ void Platform::Init()
   line->Init();
   messageIndent = 0;
 
-  //network->Init();
-
   massStorage->Init();
 
   for(i=0; i < MAX_FILES; i++)
@@ -75,14 +88,15 @@ void Platform::Init()
 
   fileStructureInitialised = true;
 
-  mcp.begin();
-
+  mcpDuet.begin(); //only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
+  mcpExpansion.setMCP4461Address(0x2E); //not required for mcpDuet, as this uses the default address
   sysDir = SYS_DIR;
   configFile = CONFIG_FILE;
 
   ipAddress = IP_ADDRESS;
   netMask = NET_MASK;
   gateWay = GATE_WAY;
+  macAddress = MAC_ADDRESS;
 
   // DRIVES
 
@@ -99,12 +113,16 @@ void Platform::Init()
   potWipes = POT_WIPES;
   senseResistor = SENSE_RESISTOR;
   maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-  zProbePin = -1; // Default is to use the switch
-  zProbeCount = 0;
-  zProbeSum = 0;
-  zProbeValue = 0;
+  numMixingDrives = NUM_MIXING_DRIVES;
+
+  // Z PROBE
+
+  zProbePin = Z_PROBE_PIN;
+  zProbeModulationPin = Z_PROBE_MOD_PIN;
+  zProbeType = 0;	// Default is to use the switch
   zProbeADValue = Z_PROBE_AD_VALUE;
   zProbeStopHeight = Z_PROBE_STOP_HEIGHT;
+  InitZProbe();
 
   // AXES
 
@@ -131,32 +149,36 @@ void Platform::Init()
   standbyTemperatures = STANDBY_TEMPERATURES;
   activeTemperatures = ACTIVE_TEMPERATURES;
   coolingFanPin = COOLING_FAN_PIN;
-  turnHeatOn = HEAT_ON;
+  //turnHeatOn = HEAT_ON;
 
   webDir = WEB_DIR;
   gcodeDir = GCODE_DIR;
   tempDir = TEMP_DIR;
-
+  /*
+  	FIXME Nasty having to specify individually if a pin is arduino or not.
+    requires a unified variant file. If implemented this would be much better
+	to allow for different hardware in the future
+  */
   for(i = 0; i < DRIVES; i++)
   {
 
 	  if(stepPins[i] >= 0)
 	  {
-		  if(i > Z_AXIS)
+		  if(i == E0_DRIVE || i == E3_DRIVE) //STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
 			  pinModeNonDue(stepPins[i], OUTPUT);
 		  else
 			  pinMode(stepPins[i], OUTPUT);
 	  }
 	  if(directionPins[i] >= 0)
 	  {
-		  if(i > Z_AXIS)
+		  if(i == E0_DRIVE) //DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
 			  pinModeNonDue(directionPins[i], OUTPUT);
 		  else
 			  pinMode(directionPins[i], OUTPUT);
 	  }
 	  if(enablePins[i] >= 0)
 	  {
-		  if(i >= Z_AXIS)
+		  if(i == Z_AXIS || i==E0_DRIVE || i==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 			  pinModeNonDue(enablePins[i], OUTPUT);
 		  else
 			  pinMode(enablePins[i], OUTPUT);
@@ -164,8 +186,7 @@ void Platform::Init()
 	  Disable(i);
 	  driveEnabled[i] = false;
   }
-
-  for(i = 0; i < AXES; i++)
+  for(i = 0; i < DRIVES; i++)
   {
 	  if(lowStopPins[i] >= 0)
 	  {
@@ -179,24 +200,21 @@ void Platform::Init()
 	  }
   }  
   
-  if(heatOnPins[0] >= 0)
-        pinMode(heatOnPins[0], OUTPUT);
-  thermistorInfRs[0] = ( thermistorInfRs[0]*exp(-thermistorBetas[0]/(25.0 - ABS_ZERO)) );
-  
-  for(i = 1; i < HEATERS; i++)
+  for(i = 0; i < HEATERS; i++)
   {
     if(heatOnPins[i] >= 0)
-      pinModeNonDue(heatOnPins[i], OUTPUT);
+    	if(i == E0_HEATER || i==E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
+    		pinModeNonDue(heatOnPins[i], OUTPUT);
+    	else
+    		pinMode(heatOnPins[i], OUTPUT);
     thermistorInfRs[i] = ( thermistorInfRs[i]*exp(-thermistorBetas[i]/(25.0 - ABS_ZERO)) );
+    tempSum[i] = 0;
   }
 
-  if(zProbePin >= 0)
-	  pinMode(zProbePin, INPUT);
-  
   if(coolingFanPin >= 0)
   {
-	  pinMode(coolingFanPin, OUTPUT);
-	  analogWrite(coolingFanPin, 0);
+	  //pinModeNonDue(coolingFanPin, OUTPUT); //not required as analogwrite does this automatically
+	  analogWriteNonDue(coolingFanPin, 255); //inverse logic for Duet v0.6 this turns it off
   }
 
   InitialiseInterrupts();
@@ -209,12 +227,23 @@ void Platform::Init()
   active = true;
 }
 
+void Platform::InitZProbe()
+{
+  zModOnThisTime = true;
+  zProbeOnSum = 0;
+  zProbeOffSum = 0;
+
+  if (zProbeModulationPin >= 0)
+  {
+	pinMode(zProbeModulationPin, OUTPUT);
+	digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
+  }
+}
+
 void Platform::StartNetwork()
 {
 	network->Init();
 }
-
-
 
 void Platform::Spin()
 {
@@ -224,9 +253,10 @@ void Platform::Spin()
   network->Spin();
   line->Spin();
 
-  if(Time() - lastTime < 0.006)
+  if(Time() - lastTime < POLL_TIME)
     return;
   PollZHeight();
+  PollTemperatures();
   lastTime = Time();
   ClassReport("Platform", longWait);
 
@@ -265,25 +295,38 @@ void Platform::Diagnostics()
   Message(HOST_MESSAGE, "Platform Diagnostics:\n"); 
 }
 
-extern char _end;
-extern "C" char *sbrk(int i);
-
+// Print memory stats to USB and append them to the current webserver reply
 void Platform::PrintMemoryUsage()
 {
-	char *ramstart=(char *)0x20070000;
-	char *ramend=(char *)0x20088000;
-    char *heapend=sbrk(0);
-	register char * stack_ptr asm ("sp");
-	struct mallinfo mi=mallinfo();
+	const char *ramstart=(char *)0x20070000;
+	const char *ramend=(char *)0x20088000;
+    const char *heapend=sbrk(0);
+	register const char * stack_ptr asm ("sp");
+	const struct mallinfo mi = mallinfo();
 	Message(HOST_MESSAGE, "\n");
 	Message(HOST_MESSAGE, "Memory usage:\n\n");
-	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n",mi.uordblks);
+	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
+	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n",&_end - ramstart);
+	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
+	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Stack ram used: %d\n",ramend - stack_ptr);
+	snprintf(scratchString, STRING_LENGTH, "Recycled dynamic ram: %d\n", mi.fordblks);
+	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Guess at free mem: %d\n\n",stack_ptr - heapend + mi.fordblks);
+	snprintf(scratchString, STRING_LENGTH, "Current stack ram used: %d\n", ramend - stack_ptr);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
+	const char* stack_lwm = heapend;
+	while (stack_lwm < stack_ptr && *stack_lwm == memPattern)
+	{
+		++stack_lwm;
+	}
+	snprintf(scratchString, STRING_LENGTH, "Maximum stack ram used: %d\n", ramend - stack_lwm);
+	reprap.GetWebserver()->AppendReply(scratchString);
+	Message(HOST_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", stack_lwm - heapend);
+	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
 }
 
@@ -312,7 +355,7 @@ void Platform::ClassReport(char* className, float &lastTime)
 // should compute it for you (i.e. it won't need to be calculated at run time).
 
 // If the A->D converter has a range of 0..1023 and the measured voltage is V (between 0 and 1023)
-// then the thermistor resistance, R = V.RS/(1023 - V)
+// then the thermistor resistance, R = V.RS/(1024 - V)
 // and the temperature, T = BETA/ln(R/R_INF)
 // To get degrees celsius (instead of kelvin) add -273.15 to T
 //#define THERMISTOR_R_INFS ( THERMISTOR_25_RS*exp(-THERMISTOR_BETAS/298.15) ) // Compute in Platform constructor
@@ -321,8 +364,19 @@ void Platform::ClassReport(char* className, float &lastTime)
 
 float Platform::GetTemperature(int8_t heater)
 {
-  float r = (float)GetRawTemperature(heater);
-  return ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/(AD_RANGE - r))/thermistorInfRs[heater] );
+  // If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
+  // So we add 0.5 to to the reading to get a better estimate of the input.
+  int rawTemp = tempSum[heater]/NUMBER_OF_A_TO_D_READINGS_AVERAGED; //GetRawTemperature(heater);
+
+  // First, recognise the special case of thermistor disconnected.
+//  if (rawTemp == AD_RANGE)
+//  {
+//	  // Thermistor is disconnected
+//	  return ABS_ZERO;
+//  }
+  float r = (float)rawTemp + 0.5;
+  r = ABS_ZERO + thermistorBetas[heater]/log( (r*thermistorSeriesRs[heater]/((AD_RANGE + 1) - r))/thermistorInfRs[heater] );
+  return r;
 }
 
 
@@ -334,18 +388,18 @@ void Platform::SetHeater(int8_t heater, const float& power)
     return;
   
   byte p = (byte)(255.0*fmin(1.0, fmax(0.0, power)));
-  if(turnHeatOn == 0)
+  if(HEAT_ON == 0)
 	  p = 255 - p;
-  if(heater == 0)
-	  analogWrite(heatOnPins[heater], p);
+  if(heater == E0_HEATER || heater == E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
+	 analogWriteNonDue(heatOnPins[heater], p);
   else
-	  analogWriteNonDue(heatOnPins[heater], p);
+	 analogWrite(heatOnPins[heater], p);
 }
 
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
-	if(zProbePin >= 0)
+	if(zProbeType > 0)
 	{  // Z probe is used for both X and Z.
 		if(drive != Y_AXIS)
 		{
@@ -386,7 +440,7 @@ void MassStorage::Init()
 	hsmciPinsinit();
 	// Initialize SD MMC stack
 	sd_mmc_init();
-	delay(5);
+	delay(20);
 	int sdPresentCount = 0;
 	while ((CTRL_NO_PRESENT == sd_mmc_check(0)) && (sdPresentCount < 5))
 	{
@@ -425,7 +479,7 @@ void MassStorage::Init()
 	}
 }
 
-char* MassStorage::CombineName(char* directory, char* fileName)
+char* MassStorage::CombineName(const char* directory, const char* fileName)
 {
   int out = 0;
   int in = 0;
@@ -472,7 +526,7 @@ char* MassStorage::CombineName(char* directory, char* fileName)
 
 // List the flat files in a directory.  No sub-directories or recursion.
 
-char* MassStorage::FileList(char* directory, bool fromLine)
+char* MassStorage::FileList(const char* directory, bool fromLine)
 {
 //  File dir, entry;
   DIR dir;
@@ -516,7 +570,7 @@ char* MassStorage::FileList(char* directory, bool fromLine)
 
 	  f_readdir(&dir,0);
 
-	  while((f_readdir(&dir,&entry) == FR_OK) && (foundFiles < 24))
+	  while((f_readdir(&dir,&entry) == FR_OK) && (foundFiles < MAX_FILES))
 	  {
 		  foundFiles++;
 
@@ -555,7 +609,7 @@ char* MassStorage::FileList(char* directory, bool fromLine)
 }
 
 // Delete a file
-bool MassStorage::Delete(char* directory, char* fileName)
+bool MassStorage::Delete(const char* directory, const char* fileName)
 {
 	char* location = platform->GetMassStorage()->CombineName(directory, fileName);
 	if( f_unlink (location) != FR_OK)
@@ -589,7 +643,7 @@ void FileStore::Init()
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
 
-bool FileStore::Open(char* directory, char* fileName, bool write)
+bool FileStore::Open(const char* directory, const char* fileName, bool write)
 {
   char* location = platform->GetMassStorage()->CombineName(directory, fileName);
 
@@ -737,7 +791,7 @@ void FileStore::Write(char b)
 	  WriteBuffer();
 }
 
-void FileStore::Write(char* b)
+void FileStore::Write(const char* b)
 {
   if(!inUse)
   {
@@ -752,7 +806,7 @@ void FileStore::Write(char* b)
 
 //-----------------------------------------------------------------------------------------------------
 
-FileStore* Platform::GetFileStore(char* directory, char* fileName, bool write)
+FileStore* Platform::GetFileStore(const char* directory, const char* fileName, bool write)
 {
   FileStore* result = NULL;
 
@@ -791,7 +845,7 @@ void Platform::ReturnFileStore(FileStore* fs)
         }
 }
 
-void Platform::Message(char type, char* message)
+void Platform::Message(char type, const char* message)
 {
   switch(type)
   {
@@ -820,6 +874,15 @@ void Platform::Message(char type, char* message)
   }
 }
 
+void Platform::SetPidValues(size_t heater, float pVal, float iVal, float dVal)
+{
+	if (heater < HEATERS)
+	{
+		pidKps[heater] = pVal;
+		pidKis[heater] = iVal / heatSampleTime;
+		pidKds[heater] = dVal * heatSampleTime;
+	}
+}
 
 
 
@@ -833,10 +896,32 @@ Line::Line()
 
 void Line::Init()
 {
+	getIndex = 0;
+	numChars = 0;
 //	alternateInput = NULL;
 //	alternateOutput = NULL;
 	SerialUSB.begin(BAUD_RATE);
 	//while (!SerialUSB.available());
+}
+
+void Line::Spin()
+{
+	// Read the serial data in blocks to avoid excessive flow control
+	if (numChars <= lineBufsize/2)
+	{
+		int16_t target = SerialUSB.available() + (int16_t)numChars;
+		if (target > lineBufsize)
+		{
+			target = lineBufsize;
+		}
+		while ((int16_t)numChars < target)
+		{
+			int incomingByte = SerialUSB.read();
+			if (incomingByte < 0) break;
+			buffer[(getIndex + numChars) % lineBufsize] = (char)incomingByte;
+			++numChars;
+		}
+	}
 }
 
 //***************************************************************************************************
@@ -864,9 +949,10 @@ void RepRapNetworkInputBufferReleased(void* pb)
 	reprap.GetPlatform()->GetNetwork()->InputBufferReleased(pb);
 }
 
-void RepRapNetworkHttpStateReleased(void* h)
+void RepRapNetworkConnectionError(void* h)
 {
-	reprap.GetPlatform()->GetNetwork()->HttpStateReleased(h);
+	reprap.GetPlatform()->GetNetwork()->ConnectionError(h);
+	reprap.GetWebserver()->ConnectionError();
 }
 
 // Called to put out a message via the RepRap firmware.
@@ -886,9 +972,9 @@ void RepRapNetworkReceiveInput(char* data, int length, void* pbuf, void* pcb, vo
 // Called when transmission of outgoing data is complete to allow
 // the RepRap firmware to write more.
 
-void RepRapNetworkAllowWriting()
+void RepRapNetworkSentPacketAcknowledged()
 {
-	reprap.GetPlatform()->GetNetwork()->SetWriteEnable(true);
+	reprap.GetPlatform()->GetNetwork()->SentPacketAcknowledged();
 }
 
 bool RepRapNetworkHasALiveClient()
@@ -896,13 +982,16 @@ bool RepRapNetworkHasALiveClient()
 	return reprap.GetPlatform()->GetNetwork()->Status() & clientLive;
 }
 
-}
+// This one is in ethernetif.c
+
+void RepRapNetworkSetMACAddress(const u8_t mac[]);
+
+}	// extern "C"
 
 
 Network::Network()
 {
 	active = false;
-
 	ethPinsInit();
 
 	//ResetEther();
@@ -927,6 +1016,7 @@ void Network::Reset()
 	writeEnabled = false;
 	closePending = false;
 	status = nothing;
+	sentPacketsOutstanding = 0;
 }
 
 void Network::CleanRing()
@@ -943,14 +1033,11 @@ void Network::Init()
 {
 	CleanRing();
 	Reset();
-//	if(LinkIsUp())
-//		reprap.GetPlatform()->SetHeater(0,1.0);
-//	else
-//		reprap.GetPlatform()->SetHeater(0,0.0);
-	if(!NETWORK) // NETWORK needs to be true to turn on the ethernet.  It is defined in Configuration.h
-		return;
+	RepRapNetworkSetMACAddress(reprap.GetPlatform()->MACAddress());
 	init_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
 	active = true;
+	sentPacketsOutstanding = 0;
+	windowedSendPackets = WINDOWED_SEND_PACKETS;
 }
 
 void Network::Spin()
@@ -1005,21 +1092,19 @@ bool Network::Read(char& b)
 	return true;
 }
 
-
-
 // Webserver calls this to write bytes that need to go out to the network
 
 void Network::Write(char b)
 {
 	// Check for horrible things...
 
-	if(!writeEnabled)
+	if(!CanWrite())
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Attempt to write when disabled.\n");
 		return;
 	}
 
-	if(outputPointer >= STRING_LENGTH)
+	if(outputPointer >= ARRAY_SIZE(outputBuffer))
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Output buffer overflow! \n");
 		return;
@@ -1032,16 +1117,17 @@ void Network::Write(char b)
 
 	// Buffer full?  If so, send it.
 
-	if(outputPointer >= STRING_LENGTH - 5) // 5 is for safety
+	if(outputPointer == ARRAY_SIZE(outputBuffer))
 	{
-		SetWriteEnable(false);  // Stop further writing from Webserver until the network tells us that this has gone
+		if(windowedSendPackets > 1)
+			++sentPacketsOutstanding;
+		else
+			SetWriteEnable(false);  // Stop further writing from Webserver until the network tells us that this has gone
+
 		RepRapNetworkSendOutput(outputBuffer, outputPointer, netRingGetPointer->Pbuf(), netRingGetPointer->Pcb(), netRingGetPointer->Hs());
 		outputPointer = 0;
 	}
 }
-
-
-
 
 void Network::InputBufferReleased(void* pb)
 {
@@ -1053,14 +1139,19 @@ void Network::InputBufferReleased(void* pb)
 	netRingGetPointer->ReleasePbuf();
 }
 
-void Network::HttpStateReleased(void* h)
+void Network::ConnectionError(void* h)
 {
-	if(netRingGetPointer->Hs() != h)
+	// h points to an http state block that the caller is about to release, so we need to stop referring to it.
+	// The state block is usually but not always in use by the current http request being processed, in which case we abandon the current request.
+	if (netRingGetPointer != netRingAddPointer && netRingGetPointer->Hs() == h)
 	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::HttpStateReleased() - Pointers don't match!\n");
-		return;
+		netRingGetPointer->Free();
+		netRingGetPointer = netRingGetPointer->Next();
 	}
-	netRingGetPointer->ReleaseHs();
+
+	// Reset the network layer. In particular, this clears the output buffer to make sure nothing more gets sent,
+	// and sets status to 'nothing' so that we can accept another connection attempt.
+	Reset();
 }
 
 
@@ -1072,15 +1163,16 @@ void Network::ReceiveInput(char* data, int length, void* pbuf, void* pcb, void* 
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ReceiveInput() - Ring buffer full!\n");
 		return;
 	}
-	netRingAddPointer->Set(data, length, pbuf, pcb, hs);
+	netRingAddPointer->Init(data, length, pbuf, pcb, hs);
 	netRingAddPointer = netRingAddPointer->Next();
 	//reprap.GetPlatform()->Message(HOST_MESSAGE, "Network - input received.\n");
 }
 
 
-
-bool Network::CanWrite()
+bool Network::CanWrite() const
 {
+	if(windowedSendPackets > 1)
+		return writeEnabled && sentPacketsOutstanding < windowedSendPackets;
 	return writeEnabled;
 }
 
@@ -1093,18 +1185,34 @@ void Network::SetWriteEnable(bool enable)
 		Close();
 }
 
+void Network::SentPacketAcknowledged()
+{
+	if(windowedSendPackets > 1)
+	{
+		if (sentPacketsOutstanding != 0)
+		{
+			--sentPacketsOutstanding;
+		}
+		if (closePending && sentPacketsOutstanding == 0)
+		{
+			Close();
+		}
+	} else
+		SetWriteEnable(true);
+}
+
+
 // This is not called for data, only for internally-
 // generated short strings at the start of a transmission,
 // so it should never overflow the buffer (which is checked
 // anyway).
 
-void Network::Write(char* s)
+void Network::Write(const char* s)
 {
 	int i = 0;
 	while(s[i])
 		Write(s[i++]);
 }
-
 
 
 void Network::Close()
@@ -1130,7 +1238,7 @@ void Network::Close()
 	//Reset();
 }
 
-int8_t Network::Status()
+int8_t Network::Status() const
 {
 	if(inputPointer >= inputLength)
 		return status;
@@ -1155,7 +1263,7 @@ void NetRing::Free()
 	active = false;
 }
 
-bool NetRing::Set(char* d, int l, void* pb, void* pc, void* h)
+bool NetRing::Init(char* d, int l, void* pb, void* pc, void* h)
 {
 	if(active)
 		return false;

@@ -33,8 +33,11 @@ Licence: GPL
 
 #define KO_START "rr_"
 #define KO_FIRST 3
-#define POST_LENGTH 200
-#define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
+#define POST_LENGTH				(1300)			// max amount of POST data we can accept
+
+const unsigned int gcodeBufLength = 2048;		// size of our gcode ring buffer, ideally a power of 2
+const unsigned int minReportedFreeBuf = 100;	// the minimum free buffer we report if not zero
+const unsigned int maxReportedFreeBuf = 900;	// the max we own up to having free, to avoid overlong messages
 
 class Webserver
 {   
@@ -48,29 +51,34 @@ class Webserver
     void Spin();
     void Exit();
     void Diagnostics();
-    void SetPassword(char* pw);
-    void SetName(char* nm);
+    void SetPassword(const char* pw);
+    void SetName(const char* nm);
+    void ConnectionError();
+    void HandleReply(const char *s, bool error);
+    void AppendReply(const char* s);
     
   private:
   
     void ParseClientLine();
-    void SendFile(char* nameOfFileToSend);
-    void WriteByte();
+    void SendFile(const char* nameOfFileToSend);
+    bool WriteBytes();
     void ParseQualifier();
     void CheckPassword();
-    bool LoadGcodeBuffer(char* gc, bool convertWeb);
+    void LoadGcodeBuffer(const char* gc, bool convertWeb);
     void CloseClient();
     bool PrintHeadString();
     bool PrintLinkTable();
     void GetGCodeList();
-    void GetJsonResponse(char* request);
+    void GetJsonResponse(const char* request);
     void ParseGetPost();
-    void CharFromClient(char c);
+    bool CharFromClient(char c);
     void BlankLineFromClient();
     void InitialisePost();
     bool MatchBoundary(char c);
-    void JsonReport(bool ok, char* request);
-
+    void JsonReport(bool ok, const char* request);
+    unsigned int GetGcodeBufferSpace() const;
+    unsigned int GetReportedGcodeBufferSpace() const;
+    void ProcessGcode(const char* gc);
     
     Platform* platform;
     bool active;
@@ -89,18 +97,19 @@ class Webserver
     float clientCloseTime;
     bool needToCloseClient;
 
-    char clientLine[STRING_LENGTH];
+    char clientLine[STRING_LENGTH+2];	// 2 chars extra so we can append \n\0
     char clientRequest[STRING_LENGTH];
     char clientQualifier[STRING_LENGTH];
-    char jsonResponse[STRING_LENGTH];
-    char gcodeBuffer[GCODE_LENGTH];
+    char jsonResponse[STRING_LENGTH+1];
+    char gcodeBuffer[gcodeBufLength];
+    unsigned int gcodeReadIndex, gcodeWriteIndex;		// head and tail indices into gcodeBuffer
     int jsonPointer;
-    bool gcodeAvailable;
-    int gcodePointer;
     int clientLinePointer;
     bool gotPassword;
     char password[SHORT_STRING_LENGTH+1];
     char myName[SHORT_STRING_LENGTH+1];
+    char gcodeReply[STRING_LENGTH+1];
+    uint16_t seq;	// reply sequence number, so that the client can tell if a reply is new or not
 };
 
 

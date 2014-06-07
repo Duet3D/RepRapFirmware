@@ -121,16 +121,15 @@ a lot of data that needs to be copied, this should be set high. */
 
 /* ---------- Pbuf options ---------- */
 /* PBUF_POOL_SIZE: the number of buffers in the pbuf pool. */
-#define PBUF_POOL_SIZE          6
-/* PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool. */
-#define PBUF_POOL_BUFSIZE       512
+#define PBUF_POOL_SIZE          (8)
+/* PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool. DO NOT DEFINE IT HERE, the correct value needs to be calculated from TCP_MSS. */
 
 /** ETH_PAD_SIZE: number of bytes added before the ethernet header to ensure
  * alignment of payload after that header. Since the header is 14 bytes long,
  * without this padding e.g. addresses in the IP header will not be aligned
  * on a 32-bit boundary, so setting this to 2 can speed up 32-bit-platforms.
  */
-#define ETH_PAD_SIZE			2
+#define ETH_PAD_SIZE			(2)
 
 /* PBUF_LINK_HLEN: the number of bytes that should be allocated for a
    link level header. */
@@ -138,19 +137,18 @@ a lot of data that needs to be copied, this should be set high. */
 
 
 /* ---------- TCP options ---------- */
-#define LWIP_TCP                1
-#define TCP_TTL                 255
+#define LWIP_TCP                (1)
+#define TCP_TTL                 (255)
 /* TCP receive window. */
-#define TCP_WND                 1500
+#define TCP_WND                 (4096)
 /* Controls if TCP should queue segments that arrive out of
    order. Define to 0 if your device is low on memory. */
 #define TCP_QUEUE_OOSEQ         1
 /* TCP Maximum segment size. */
-#define TCP_MSS                 1500
+#define TCP_MSS                 (1432)	// 1432 is optimal for Windows clients
 /* TCP sender buffer space (bytes). */
-#define TCP_SND_BUF             3000  //changed from 2150 to pass LWIP sanity checks
-/* TCP sender buffer space (pbufs). This must be at least = 2 *
-   TCP_SND_BUF/TCP_MSS for things to work. */
+#define TCP_SND_BUF             (4500)  //changed from 2150 to pass LWIP sanity checks
+/* TCP sender buffer space (pbufs). This must be at least = 2 * TCP_SND_BUF/TCP_MSS for things to work. */
 #define TCP_SND_QUEUELEN        ((6 * (TCP_SND_BUF) + (TCP_MSS - 1))/(TCP_MSS))
 /* Maximum number of retransmissions of data segments. */
 // #define TCP_MAXRTX              12
@@ -174,7 +172,7 @@ a lot of data that needs to be copied, this should be set high. */
 
 
 /* ---------- ICMP options ---------- */
-#define ICMP_TTL                255
+#define ICMP_TTL                (255)
 
 
 #if defined(DHCP_USED)

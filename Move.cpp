@@ -98,8 +98,6 @@ void Move::Init()
   lastMove->Release();
   liveCoordinates[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 
-  checkEndStopsOnNextMove = false;
-
   SetStepHypotenuse();
 
   currentFeedrate = -1.0;
@@ -169,6 +167,7 @@ void Move::Spin()
   // If there's a G Code move available, add it to the look-ahead
   // ring for processing.
 
+  bool checkEndStopsOnNextMove;
   if(gCodes->ReadMove(nextMove, checkEndStopsOnNextMove))
   {
 	Transform(nextMove);
@@ -197,7 +196,7 @@ void Move::Spin()
     if(movementType & xyMove)
       nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(X_AXIS));
     else if(movementType & eMove)
-      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(AXES));
+      nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv((AXES+gCodes->GetSelectedHead())));
     else
       nextMove[DRIVES] = fmax(nextMove[DRIVES], platform->InstantDv(Z_AXIS));
       
@@ -206,7 +205,7 @@ void Move::Spin()
     if(movementType & xyMove)
       nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(X_AXIS));  // Assumes X and Y are equal.  FIXME?
     else if(movementType & eMove)
-      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES)); // Picks up the value for the first extruder.  FIXME?
+      nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(AXES+gCodes->GetSelectedHead())); // Fixed
     else // Must be z
       nextMove[DRIVES] = fmin(nextMove[DRIVES], platform->MaxFeedrate(Z_AXIS));
     
@@ -274,7 +273,8 @@ bool Move::GetCurrentState(float m[])
     if(i < AXES)
       m[i] = lastMove->MachineToEndPoint(i);
     else
-      m[i] = 0.0;
+      m[i] = 0.0; //FIXME This resets extruders to 0.0, even the inactive ones (is this behaviour desired?)
+      //m[i] = lastMove->MachineToEndPoint(i); //FIXME TEST alternative that does not reset extruders to 0
   }
   if(currentFeedrate >= 0.0)
     m[DRIVES] = currentFeedrate;
@@ -367,7 +367,7 @@ void Move::SetStepHypotenuse()
 	  // We don't want 0.  If no axes/extruders are moving these should never be used.
 	  // But try to be safe.
 
-	  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES);
+	  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES); //FIXME this is not multi extruder safe (but we should never get here)
 	  extruderStepDistances[0] = stepDistances[0];
 }
 
@@ -441,7 +441,7 @@ void Move::DoLookAhead()
   // or both to the maximum that can be achieved because of the requirements of
   // the adjacent moves. 
     
-  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > LOOK_AHEAD)
+  if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > LOOK_AHEAD)
   { 
     
     // Run up the moves
@@ -497,7 +497,7 @@ void Move::DoLookAhead()
   // If there are any new unprocessed moves in there, set their end speeds
   // according to the cosine of the angle between them.
   
-  if(addNoMoreMoves || !gCodes->PrintingAFile() || lookAheadRingCount > 1)
+  if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > 1)
   {  
     n1 = lookAheadRingGetPointer;
     n0 = n1->Previous();
@@ -519,7 +519,7 @@ void Move::DoLookAhead()
           else if (mt & zMove)
             c = platform->InstantDv(Z_AXIS);
           else
-            c = platform->InstantDv(AXES); // value for first extruder FIXME??
+            c = platform->InstantDv((AXES+gCodes->GetSelectedHead())); // value for current extruder
         }
         n1->SetV(c);
         n1->SetProcessed(vCosineSet);
@@ -531,7 +531,7 @@ void Move::DoLookAhead()
     
     // If we are just doing one isolated move, set its end velocity to InstantDv(Z_AXIS).
     
-    if(addNoMoreMoves || !gCodes->PrintingAFile())
+    if(addNoMoreMoves || !gCodes->HaveIncomingData())
     {
       n1->SetV(platform->InstantDv(Z_AXIS));
       n1->SetProcessed(complete);
@@ -570,7 +570,7 @@ void Move::Interrupt()
   dda = NULL;
 }
 
-
+// creates a new lookahead object adds it to the lookahead ring, returns false if its full
 bool Move::LookAheadRingAdd(long ep[], float feedRate, float vv, bool ce, int8_t mt)
 {
     if(LookAheadRingFull())
@@ -988,18 +988,18 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   } else // Must be extruders only
 	  SetEAcceleration(eDistance);
 
-  // If we are going from an XY move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
+  // If we are going from an XY move or extruder move to a Z move, u needs to be platform->InstantDv(Z_AXIS).
 
-  if((myLookAheadEntry->Previous()->GetMovementType() & xyMove) && (mt & zMove))
+  if((myLookAheadEntry->Previous()->GetMovementType() & (xyMove | eMove)) && (mt & zMove))
   {
 	  u = platform->InstantDv(Z_AXIS);
 	  result = change;
   }
 
-  // if we are going from a Z move to an XY move, v needs to be platform->InstantDv(Z_AXIS),
+  // if we are going from a Z move to an XY move or E move, v needs to be platform->InstantDv(Z_AXIS),
   // as does instantDv.
 
-  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & xyMove))
+  if((myLookAheadEntry->Previous()->GetMovementType() & zMove) && (mt & (xyMove | eMove)))
   {
 	  v = platform->InstantDv(Z_AXIS);
 	  instantDv = v;
@@ -1163,7 +1163,7 @@ void LookAhead::Init(long ep[], float f, float vv, bool ce, int8_t mt)
   // are printing a file, so set processed
   // complete when we aren't.
   
-  if(reprap.GetGCodes()->PrintingAFile())
+  if(reprap.GetGCodes()->HaveIncomingData())
     processed = unprocessed;
   else
     processed = complete|vCosineSet|upPass;
@@ -1198,7 +1198,7 @@ float LookAhead::Cosine()
   
   if(a2 <= 0.0 || b2 <= 0.0)
   {
-    cosine = 0.5; // Why not?
+	cosine = 0.0;		// one of the moves is just an extruder move (probably a retraction), so orthogonal (in 4D space!) to XYZ moves
     return cosine;
   }
  
@@ -1206,11 +1206,13 @@ float LookAhead::Cosine()
   return cosine;
 }
 
+//Returns units (mm) from steps for a particular drive
 float LookAhead::MachineToEndPoint(int8_t drive, long coord)
 {
 	return ((float)coord)/reprap.GetPlatform()->DriveStepsPerUnit(drive);
 }
 
+//Returns steps from units (mm) for a particular drive
 long LookAhead::EndPointToMachine(int8_t drive, float coord)
 {
 	return  (long)roundf(coord*reprap.GetPlatform()->DriveStepsPerUnit(drive));
