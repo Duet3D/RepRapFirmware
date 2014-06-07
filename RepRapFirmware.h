@@ -112,4 +112,3 @@ template<> inline double max(double _a, double _b)
 #endif
 
 
-

@@ -17,7 +17,7 @@ Separated out from Platform.h by dc42
 
 // This class handles the network - typically an Ethernet.
 
-// The size of the http output buffer is critical to getting fast load times in the browser.
+// The size of the TCP output buffer is critical to getting fast load times in the browser.
 // If this value is less than the TCP MSS, then Chrome under Windows will delay ack messages by about 120ms,
 // which results in very slow page loading. Any value higher than that will cause the TCP packet to be split
 // into multiple transmissions, which avoids this behaviour. Using a value of twice the MSS is most efficient because
@@ -25,7 +25,7 @@ Separated out from Platform.h by dc42
 // Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
 // and therefore avoids additional memory use and fragmentation.
 
-const unsigned int httpOutputBufferSize = 2 * 1432;
+const unsigned int tcpOutputBufferSize = 2 * 1432;
 
 #define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
@@ -38,11 +38,12 @@ struct tcp_pcb;
 struct pbuf;
 class RequestState;
 
-// HttpState structure that we use to track Http connections. This could be combined with class RequestState.
 
-struct HttpState
+// ConnectionState structure that we use to track TCP connections. This could be combined with class RequestState.
+struct ConnectionState
 {
-	tcp_pcb *pcb;				// connection
+	tcp_pcb *pcb;				// connection PCB
+	RequestState *readingRs;	// RequestState that is currently reading via this connection
 	RequestState *sendingRs;	// RequestState that is currently sending via this connection
 	const char *file;			// pointer to data to send
 	uint16_t left;				// amount of data to send
@@ -50,77 +51,116 @@ struct HttpState
 
 	// Methods
 	bool SendInProgress() const { return left > 0; }
+	uint16_t GetLocalPort() const;
+};
+
+// Assign a status to each RequestState
+enum RequestStatus
+{
+	connected,
+	dataReceiving,
+	dataSending,
+	disconnected
 };
 
 // Start with a class to hold input and output from the network that needs to be responded to.
-
 class RequestState
 {
 public:
 	friend class Network;
 
 	RequestState(RequestState* n);
-	void Set(pbuf *p, HttpState* h);
+	void Set(pbuf *p, ConnectionState* c, RequestStatus s);
 	bool Read(char& b);
+	bool ReadBuffer(char *&buffer, unsigned int &len);
+	void ResetInputPointer();
 	void SentPacketAcknowledged(unsigned int len);
 	void Write(char b);
 	void Write(const char* s);
 	void Printf(const char *fmt, ...);
 	bool Send();
+
 	void SetConnectionLost();
-	bool LostConnection() const;
-	bool IsReady() const { return hs == NULL || hs->sendingRs == NULL; }
-	HttpState *GetConnection() const { return hs; }
+	bool LostConnection() const { return cs == NULL; }
+	bool IsReady() const { return cs != NULL && cs->sendingRs == NULL; }
+	ConnectionState *GetConnection() const { return cs; }
+	uint16_t GetLocalPort() const;
+	RequestStatus GetStatus() const { return status; }
 
 private:
-	void Reset();
+	void Close();
 	void FreePbuf();
 
-	HttpState* hs;
-
+	ConnectionState* cs;
 	RequestState* volatile next;			// next RequestState in the list we are in
-	RequestState* nextWrite;				// next RequestState queued to write to this hs
+	RequestState* nextWrite;				// next RequestState queued to write to this cs
 	pbuf *pb;								// linked list of incoming packet buffers
+	unsigned int bufferLength;				// total length of the packet buffer
 	unsigned int inputPointer;				// amount of data already taken from the first packet buffer
 
 	unsigned int sentDataOutstanding;		// amount of TCP data we have sent that has not been acknowledged
-	char outputBuffer[httpOutputBufferSize];
+	char outputBuffer[tcpOutputBufferSize];
 	unsigned int unsentPointer;
 	unsigned int outputPointer;
 	FileStore *fileBeingSent;
+
+	RequestStatus status;
 	float lastWriteTime;
 	bool persistConnection;
 	bool closeRequested;
 };
 
-// The main network class that drives the network.
 
+// The main network class that drives the network.
 class Network
 {
 public:
 
-	void ReceiveInput(pbuf *pb, HttpState* h);
-	void SentPacketAcknowledged(HttpState *hs, unsigned int len);
-	void ConnectionClosing(HttpState* h);
+	void ReceiveInput(pbuf *pb, ConnectionState *cs);
+	void SentPacketAcknowledged(ConnectionState *cs, unsigned int len);
+	void ConnectionAccepted(ConnectionState *cs);
+	void ConnectionClosed(ConnectionState* cs);
+	void ConnectionClosedGracefully(ConnectionState *cs);
 	bool Active() const;
 	bool LinkIsUp();
-	RequestState *GetRequest(const HttpState *connection);
+	RequestState *GetRequest(const ConnectionState *cs = NULL);
 	void SendAndClose(FileStore *f, bool keepConnectionOpen = false);
+
+	void CloseRequest();
+	void RepeatRequest();
+
+	void OpenDataPort(uint16_t port);
+	void SaveDataConnection();
+	void SaveMainConnection();
+	bool RestoreDataConnection();
+	bool MakeMainRequest();
+	bool CloseDataPort();
 
 	Network();
 	void Init();
 	void Spin();
+
+	void SetInterpreters(void *http, void *ftp, void *telnet);
 	bool InLwip() const { return inLwip; }
 
 private:
 
 	void AppendTransaction(RequestState* volatile * list, RequestState *r);
+	void PrependTransaction(RequestState* volatile * list, RequestState *r);
 
 	RequestState * volatile freeTransactions;
 	RequestState * volatile readyTransactions;
 	RequestState * volatile writingTransactions;
+
+	void *httpInterpreter;
+	void *ftpInterpreter;
+	void *telnetInterpreter;
+
 	bool active;
 	uint8_t inLwip;
+
+	ConnectionState *dataCs;
+	ConnectionState *mainCs;
 };
 
 #endif
