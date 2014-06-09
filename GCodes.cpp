@@ -428,7 +428,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	    		}
 	    	}
 	    	//capture the last drive step amount in the string (or the only one in the case of only one extruder)
-	    	eArg[hp] = (atoff(&extruderString[fp]))*distanceScale;
+	    	eArg[hp] = (atoff(&extruderString[fp])) * distanceScale * extrusionFactor;
 
 	    	//set the move buffer for each extruder drive
         	for(int j=0;j<numDrives;j++)

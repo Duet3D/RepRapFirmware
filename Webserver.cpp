@@ -1269,8 +1269,10 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 									break;
 								}
 								*generatedBy++ = '\\';
+								--generatedByLength;
 							}
 							*generatedBy++ = c;
+							--generatedByLength;
 						}
 						*generatedBy = 0;
 					}
