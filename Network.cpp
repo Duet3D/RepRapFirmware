@@ -63,6 +63,7 @@ static tcp_pcb *telnet_pcb = NULL;
 
 static bool closingDataPort = false;
 
+
 // Called to put out a message via the RepRap firmware.
 // Can be called from C as well as C++
 
@@ -405,7 +406,9 @@ void Network::Spin()
 	if (active)
 	{
 		// Fetch incoming data
+		// ethernet_task is called twice because the EMAC RX buffers have been increased by dc42's Arduino patch
 		++inLwip;
+		ethernet_task();
 		ethernet_task();
 		--inLwip;
 
@@ -751,7 +754,7 @@ bool Network::RestoreDataConnection()
 	if (r == NULL)
 	{
 		cpu_irq_restore(flags);
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::MakeMainRequest() - no free transactions!\n");
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::RestoreDataConnection() - no free transactions!\n");
 		return false;
 	}
 	freeTransactions = r->next;
@@ -823,19 +826,12 @@ bool Network::CloseDataPort()
 			tcp_recv(pcb, NULL);
 			tcp_poll(pcb, NULL, 4);
 			mem_free(loc_cs);
-			dataCs = NULL;
 			tcp_close(pcb);
-
-			// close listening data port
-			if (ftp_pasv_pcb != NULL)
-			{
-				tcp_accept(ftp_pasv_pcb, NULL);
-				tcp_close(ftp_pasv_pcb);
-				ftp_pasv_pcb = NULL;
-			}
 		}
 	}
-	else if (ftp_pasv_pcb != NULL)
+
+	// close listening data port
+	if (ftp_pasv_pcb != NULL)
 	{
 		tcp_accept(ftp_pasv_pcb, NULL);
 		tcp_close(ftp_pasv_pcb);
@@ -1055,6 +1051,14 @@ bool RequestState::Send()
 	// We've finished with this RS, so close the connection
 	if (closeRequested)
 	{
+		// Close the file if it is still open
+		if (fileBeingSent != NULL)
+		{
+			fileBeingSent->Close();
+			fileBeingSent = NULL;
+		}
+
+		// Close the connection PCB
 		ConnectionState *locCs = cs;		// take a copy because our cs field is about to get cleared
 //		debugPrintf("RequestState is closing connection cs=%08x\n", (unsigned int)cs);
 		reprap.GetNetwork()->ConnectionClosed(locCs);

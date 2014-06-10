@@ -221,11 +221,12 @@ inline void GCodeBuffer::Pause()
 	}
 }
 
+// If we paused a print, cancel printing that file and get ready to print a new one
 inline void GCodeBuffer::CancelPause()
 {
 	if (state == paused)
 	{
-		state = idle;
+		Init();
 	}
 }
 

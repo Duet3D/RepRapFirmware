@@ -77,7 +77,7 @@ class ProtocolInterpreter
 		virtual void ResetState() = 0;
 
 	    virtual bool StoreUploadData(const char* data, unsigned int len);
-	    bool FlushUploadData();
+	    virtual bool FlushUploadData();
 	    void CancelUpload();
 		bool IsUploading() const { return uploadState != notUploading; }
 
@@ -86,9 +86,6 @@ class ProtocolInterpreter
 	    bool gotPassword;
 	    Platform *platform;
 	    Webserver *webserver;
-
-		// debug
-	    unsigned int uploadFileSize;
 
 	    // Information for file uploading
 	    enum UploadState
@@ -140,6 +137,8 @@ class Webserver
 			HttpInterpreter(Platform *p, Webserver *ws);
 			bool CharFromClient(const char c);
 			void ResetState();
+
+			bool FlushUploadData();
 
 		private:
 

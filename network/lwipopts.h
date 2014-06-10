@@ -47,7 +47,8 @@
 #ifndef __LWIPOPTS_H__
 #define __LWIPOPTS_H__
 
-#define LWIP_DEBUG
+/* Uncomment the following line to enable LWIP debugging */
+//#define LWIP_DEBUG
 
 /* Include user defined options first */
  #include "conf_eth.h"
@@ -104,13 +105,13 @@ a lot of data that needs to be copied, this should be set high. */
 #define MEMP_NUM_UDP_PCB        4
 
 /* MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections. */
-#define MEMP_NUM_TCP_PCB        7
+#define MEMP_NUM_TCP_PCB        8
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections. */
 #define MEMP_NUM_TCP_PCB_LISTEN 4
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments. */
 #define MEMP_NUM_TCP_SEG        13 //changed from 9 to pass LWIP sanity checks
 /* MEMP_NUM_SYS_TIMEOUT: the number of simultaneously active timeouts. */
-#define MEMP_NUM_SYS_TIMEOUT    6
+#define MEMP_NUM_SYS_TIMEOUT    8
 
 /* The following four are used only with the sequential API and can be
    set to 0 if the application only will use the raw API. */
@@ -189,7 +190,7 @@ a lot of data that needs to be copied, this should be set high. */
 
 /* ---------- Statistics options ---------- */
 #define LWIP_STATS 0
-//#define LWIP_STATS_DISPLAY 1
+#define LWIP_STATS_DISPLAY 0
 
 #if LWIP_STATS
 #define LINK_STATS 1
@@ -209,8 +210,7 @@ a lot of data that needs to be copied, this should be set high. */
 // 1 == To suppress some errors for now (no debug output)
 #define LWIP_NOASSERT 			0
 
-
-#define DBG_TYPES_ON                    LWIP_DBG_ON
+#ifdef LWIP_DEBUG
 #define ETHARP_DEBUG                    LWIP_DBG_ON
 #define NETIF_DEBUG                     LWIP_DBG_ON
 #define PBUF_DEBUG                      LWIP_DBG_ON
@@ -237,6 +237,34 @@ a lot of data that needs to be copied, this should be set high. */
 #define UDP_DEBUG                       LWIP_DBG_ON
 #define TCPIP_DEBUG                     LWIP_DBG_ON
 #define LWIP_DBG_MIN_LEVEL              LWIP_DBG_LEVEL_WARNING
+#else
+#define ETHARP_DEBUG                    LWIP_DBG_ON
+#define NETIF_DEBUG                     LWIP_DBG_ON
+#define PBUF_DEBUG                      LWIP_DBG_ON
+#define API_LIB_DEBUG                   LWIP_DBG_ON
+#define API_MSG_DEBUG                   LWIP_DBG_ON
+#define SOCKETS_DEBUG                   LWIP_DBG_ON
+#define ICMP_DEBUG                      LWIP_DBG_ON
+#define INET_DEBUG                      LWIP_DBG_ON
+#define IP_DEBUG                        LWIP_DBG_ON
+#define IP_REASS_DEBUG                  LWIP_DBG_OFF
+#define RAW_DEBUG                       LWIP_DBG_OFF
+#define MEM_DEBUG                       LWIP_DBG_OFF
+#define MEMP_DEBUG                      LWIP_DBG_OFF
+#define SYS_DEBUG                       LWIP_DBG_ON
+#define TCP_DEBUG                       LWIP_DBG_OFF
+#define TCP_INPUT_DEBUG                 LWIP_DBG_OFF
+#define TCP_FR_DEBUG                    LWIP_DBG_OFF
+#define TCP_RTO_DEBUG                   LWIP_DBG_OFF
+#define TCP_CWND_DEBUG                  LWIP_DBG_OFF
+#define TCP_WND_DEBUG                   LWIP_DBG_OFF
+#define TCP_OUTPUT_DEBUG                LWIP_DBG_OFF
+#define TCP_RST_DEBUG                   LWIP_DBG_OFF
+#define TCP_QLEN_DEBUG                  LWIP_DBG_OFF
+#define UDP_DEBUG                       LWIP_DBG_OFF
+#define TCPIP_DEBUG                     LWIP_DBG_OFF
+#define LWIP_DBG_MIN_LEVEL              LWIP_DBG_LEVEL_SERIOUS
+#endif
 
 
 // \note For a list of all possible lwIP configurations, check http://lwip.wikia.com/wiki/Lwipopts.h

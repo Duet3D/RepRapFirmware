@@ -590,8 +590,6 @@ bool ProtocolInterpreter::StoreUploadData(const char* data, unsigned int len)
 {
 	if (uploadState == uploadOK)
 	{
-		uploadFileSize += len;
-
 		uploadPointer = data;
 		uploadLength = len;
 		return true;
@@ -604,7 +602,7 @@ bool ProtocolInterpreter::FlushUploadData()
 {
 	if (uploadState == uploadOK && uploadLength != 0)
 	{
-		// Write some uploaded data to file, one sector (512 bytes) at a time
+		// Write some uploaded data to file, if possible one sector (512 bytes) at a time
 		// Limiting the amount of data we write improves throughput, probably by allowing lwip time to send ACKs etc.
 		unsigned int len = min<unsigned int>(uploadLength, 512);
 		if (!fileBeingUploaded.Write(uploadPointer, len))
@@ -1113,6 +1111,27 @@ void Webserver::HttpInterpreter::ResetState()
 	commandWords[0] = clientMessage;
 }
 
+bool Webserver::HttpInterpreter::FlushUploadData()
+{
+	if (uploadState == uploadOK && uploadLength != 0)
+	{
+		// FIXME: This method will fail whenever more than 256 bytes are written at once
+		unsigned int len = min<unsigned int>(uploadLength, 256);
+		if (!fileBeingUploaded.Write(uploadPointer, len))
+		{
+			platform->Message(HOST_MESSAGE, "Could not flush upload data!\n");
+			uploadState = uploadError;
+		}
+
+		uploadPointer += len;
+		uploadLength -= len;
+
+		return (uploadLength == 0);
+	}
+
+	return true;
+}
+
 // Process a character from the client
 // Rewritten as a state machine by dc42 to increase capability and speed, and reduce RAM requirement.
 // On entry:
@@ -1541,12 +1560,6 @@ void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 			{
 				if (uploadState != uploadError)
 				{
-					if (uploadState == uploadOK)
-					{
-						snprintf(scratchString, STRING_LENGTH, "FTP: Upload file size is %u bytes\n", uploadFileSize);
-						debugPrintf(scratchString);
-					}
-
 					SendReply(226, "Transfer complete.");
 				}
 				else
@@ -1912,7 +1925,6 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else if (StringStartsWith(clientMessage, "STOR"))
 			{
 				FileStore *file;
-				uploadFileSize = 0;
 
 				ReadFilename(4);
 				if (filename[0] == '/')
@@ -2224,8 +2236,10 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 									break;
 								}
 								*generatedBy++ = '\\';
+								--generatedByLength;
 							}
 							*generatedBy++ = c;
+							--generatedByLength;
 						}
 						*generatedBy = 0;
 					}

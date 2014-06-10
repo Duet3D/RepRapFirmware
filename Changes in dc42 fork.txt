@@ -1,0 +1,61 @@
+Additional functionality in 0.65e-dc42 release compared to RRP 0.65e:
+
+* The Duet can serve all the files needed by the web interface
+
+* All ADC readings are done in the tick ISR to avoid the processor having to wait for ADC conversions and provide faster thermistor and z-probe response.
+
+* Additional over-temperature protection is done in the tick ISR, and the watchdog timer resets the system if the tick interrupt fails.
+
+* A software watchdog is used to reset the processor if it gets stuck in a spin loop.
+
+* Printing doesn't hang if the USB port is disconnected (or attached PC goes to sleep) during a print.
+
+* The number of bits of temperature resolution is increased ffrom 10 to 13 (i.e. 12-bit ADC + 1-bit oversampling) to increase the temperature resolution
+
+* Thermistor parameters and ADC corrections can be set (M305 command).
+
+* M208 command allow you to set axis minimum positions (e.g. negative x-axis position) as well as maximum positions.
+
+* G1 commands with S1 parameter (i.e. seeking for endstops) do not need to be followed by a G92 command to work properly.
+
+* Long filename support for files on the SD card
+
+* The limit of 42 files in the list of gcode files on the SD card is removed (but there is still a limit of 1000 characters)
+
+* M220 (set speed factor override) and M221 (set extrude factor override) commands are supported.
+
+* Option to invert cooling fan PWM
+
+* Additional z-prove type 2 is supported, for boards that support more than one type of z-probe
+
+* Separate G31 parameters can be saved for z-probe types 0, 1/2, and 3
+
+* Various parameters (G31 values, IP address, MAC address, thermistor parameters, PID parameters) are saved to flash memory (note that these values do not survive a firmware upgrade)
+
+* M111 S2 command added to show additional parameters such as bed compensation heights, last reset reason, and up-time
+
+* Absolute extruder moves work properly
+
+* I believe some movement bugs are fixed. In particular, one acceleration bug is fixed or at least less severe, and my version does not seem to have a problem with high extruder speeds.
+
+* When pausing a print from SD card, if the printer is executing a 'wait' command such as M116, control is returned to the web interface immediately, without waiting for the command to complete (which could take a long time).
+
+Additional functionality in web interface 0.90 compared to RRP 0.65:
+
+* Faster (>6Mbytes/min), more reliable file uploading, with reporting and graceful recovery if an upload fails
+
+* All web files and config files can also be uploaded
+
+* More accurate (usually!) estimate of print completion time, based on filament consumption
+
+* The machine name is displayed
+
+* The filament requirement and object height are fetched automatically from the SD card file being printed, for use in estimating the completion time
+
+* Works with FireFox as well as Chrome
+
+* "Upload & Print" button (replaces direct web print button, uploads to the SD card first for more reliable printing)
+
+* Extruder box reports total filament extruded, not the amount extruded in the last move.
+
+* Additional status Halted is shown (if emergency stop has been used) as well as Ready and Active

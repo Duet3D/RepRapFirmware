@@ -21,8 +21,7 @@
 
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
-
-#define WINDOWED_SEND_PACKETS	(2)
+#include "lwip/src/include/lwip/stats.h"
 
 extern char _end;
 extern "C" char *sbrk(int i);
@@ -812,6 +811,11 @@ void Platform::PrintMemoryUsage()
 	snprintf(scratchString, STRING_LENGTH, "Free file entries: %u\n", numFreeFiles);
 	reprap.GetWebserver()->AppendReply(scratchString);
 	Message(HOST_MESSAGE, scratchString);
+
+#if LWIP_STATS
+	// Print LWIP stats to USB
+	stats_display();
+#endif
 }
 
 void Platform::ClassReport(char* className, float &lastTime)
