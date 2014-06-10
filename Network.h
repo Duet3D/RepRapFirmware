@@ -43,7 +43,6 @@ class RequestState;
 struct ConnectionState
 {
 	tcp_pcb *pcb;				// connection PCB
-	RequestState *readingRs;	// RequestState that is currently reading via this connection
 	RequestState *sendingRs;	// RequestState that is currently sending via this connection
 	const char *file;			// pointer to data to send
 	uint16_t left;				// amount of data to send
@@ -73,7 +72,6 @@ public:
 	void Set(pbuf *p, ConnectionState* c, RequestStatus s);
 	bool Read(char& b);
 	bool ReadBuffer(char *&buffer, unsigned int &len);
-	void ResetInputPointer();
 	void SentPacketAcknowledged(unsigned int len);
 	void Write(char b);
 	void Write(const char* s);

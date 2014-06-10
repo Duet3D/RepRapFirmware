@@ -87,6 +87,9 @@ class ProtocolInterpreter
 	    Platform *platform;
 	    Webserver *webserver;
 
+		// debug
+	    unsigned int uploadFileSize;
+
 	    // Information for file uploading
 	    enum UploadState
 	    {
@@ -211,7 +214,6 @@ class Webserver
 	class FtpInterpreter : public ProtocolInterpreter
 	{
 		public:
-			friend class Webserver; // this is temporary and will be removed after debugging
 
 			FtpInterpreter(Platform *p, Webserver *ws);
 			void ConnectionEstablished();
@@ -234,7 +236,6 @@ class Webserver
 			char clientMessage[ftpMessageLength];
 			unsigned int clientPointer;
 			char ftpResponse[ftpResponseLength];
-			unsigned int uploadFileSize;
 
 			char currentDir[maxFilenameLength];
 			char filename[maxFilenameLength];

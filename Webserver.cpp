@@ -205,26 +205,17 @@ void Webserver::Spin()
 				// Fast upload for FTP connections
 				else if (is_data_port)
 				{
-					bool have_data = false;
-
 					if (interpreter->IsUploading())
 					{
-						// Ensure we have data to write
-						while (!have_data && req != NULL)
+						char *buffer;
+						unsigned int len;
+						if (req->ReadBuffer(buffer, len))
 						{
-							char *buffer;
-							unsigned int len;
-							if (req->ReadBuffer(buffer, len))
-							{
-								ftpInterpreter->uploadFileSize += len;
-								interpreter->StoreUploadData(buffer, len);
-								have_data = true;
-							}
-							else
-							{
-								net->CloseRequest();
-								req = net->GetRequest(readingConnection);
-							}
+							interpreter->StoreUploadData(buffer, len);
+						}
+						else
+						{
+							net->CloseRequest();
 						}
 					}
 					else
@@ -599,6 +590,8 @@ bool ProtocolInterpreter::StoreUploadData(const char* data, unsigned int len)
 {
 	if (uploadState == uploadOK)
 	{
+		uploadFileSize += len;
+
 		uploadPointer = data;
 		uploadLength = len;
 		return true;
@@ -611,9 +604,9 @@ bool ProtocolInterpreter::FlushUploadData()
 {
 	if (uploadState == uploadOK && uploadLength != 0)
 	{
-		// Write some uploaded data to file.
+		// Write some uploaded data to file, one sector (512 bytes) at a time
 		// Limiting the amount of data we write improves throughput, probably by allowing lwip time to send ACKs etc.
-		unsigned int len = min<unsigned int>(uploadLength, 386);
+		unsigned int len = min<unsigned int>(uploadLength, 512);
 		if (!fileBeingUploaded.Write(uploadPointer, len))
 		{
 			platform->Message(HOST_MESSAGE, "Could not flush upload data!\n");
@@ -1550,7 +1543,7 @@ void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 				{
 					if (uploadState == uploadOK)
 					{
-						snprintf(scratchString, STRING_LENGTH, "FTP: Upload file size is %d bytes\n", uploadFileSize);
+						snprintf(scratchString, STRING_LENGTH, "FTP: Upload file size is %u bytes\n", uploadFileSize);
 						debugPrintf(scratchString);
 					}
 

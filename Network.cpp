@@ -44,7 +44,6 @@
 
 extern "C"
 {
-
 #include "lwipopts.h"
 #include "lwip/src/include/lwip/debug.h"
 #include "lwip/src/include/lwip/stats.h"
@@ -146,7 +145,7 @@ static void conn_err(void *arg, err_t err)
 static err_t conn_poll(void *arg, tcp_pcb *pcb)
 {
 	ConnectionState *cs = (ConnectionState*)arg;
-	if (cs != NULL)
+	if (cs != NULL && cs->left > 0)
 	{
 		++cs->retries;
 		if (cs->retries == 4)
@@ -201,12 +200,6 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 
 		if (p != NULL)
 		{
-			// Only allow one RequestState per connection
-			if (cs->readingRs != NULL)
-			{
-				return ERR_MEM;
-			}
-
 			// Tell higher levels that we are receiving data
 			reprap.GetNetwork()->ReceiveInput(p, cs);
 #if 0	//debug
@@ -254,7 +247,6 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 	cs->file = NULL;
 	cs->left = 0;
 	cs->retries = 0;
-	cs->readingRs = NULL;
 	cs->sendingRs = NULL;
 
 	switch (pcb->local_port)		// tell LWIP to accept further connections on the listening PCB
@@ -576,7 +568,6 @@ void Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 	cpu_irq_restore(flags);
 
 	r->Set(pb, cs, dataReceiving);
-	cs->readingRs = r;
 	AppendTransaction(&readyTransactions, r);
 //	debugPrintf("Network - input received\n");
 }
@@ -594,13 +585,26 @@ RequestState *Network::GetRequest(const ConnectionState *cs)
 		return rs;
 	}
 
-	rs = cs->readingRs;
-	if (rs != NULL)
+	// There is at least one ready transaction, but it's not on the connection we are looking for
+	for (;;)
 	{
-		return cs->readingRs;
+		RequestState *rsNext = rs->next;
+		if (rsNext == NULL)
+		{
+			return rsNext;
+		}
+		if (rsNext->cs == cs)
+		{
+			irqflags_t flags = cpu_irq_save();
+			rs->next = rsNext->next;		// remove rsNext from the list
+			rsNext->next = readyTransactions;
+			readyTransactions = rsNext;
+			cpu_irq_restore(flags);
+			return rsNext;
+		}
+		rs = rsNext;
 	}
-
-	return readyTransactions;
+	return NULL;		// to keep Eclipse happy
 }
 
 // Send the output data we already have, optionally with a file appended, then close the connection unless keepConnectionOpen is true.
@@ -632,7 +636,6 @@ void Network::SendAndClose(FileStore *f, bool keepConnectionOpen)
 			r->nextWrite = NULL;
 			r->fileBeingSent = f;
 			r->persistConnection = keepConnectionOpen;
-			r->cs->readingRs = NULL;
 
 			RequestState *sendingRs = r->cs->sendingRs;
 			if (sendingRs == NULL)
@@ -656,7 +659,7 @@ void Network::SendAndClose(FileStore *f, bool keepConnectionOpen)
 	}
 }
 
-// We have no data to read nor to write and we want to keep the current connection alive.
+// We have no data to read nor to write and we want to keep the current connection alive if possible.
 // That way we can speed up freeing the current RequestState.
 void Network::CloseRequest()
 {
@@ -680,29 +683,18 @@ void Network::CloseRequest()
 	r->FreePbuf();
 
 	// Terminate this connection if this RequestState indicates a graceful disconnect
-	if (!r->LostConnection())
+	if (!r->LostConnection() && status == disconnected)
 	{
-		if (status == disconnected)
-		{
-			ConnectionState *locCs = r->cs;		// take a copy because our cs field is about to get cleared
-			if (locCs == dataCs)
-			{
-				dataCs = NULL;					// Don't close this PCB twice when CloseDataPort() is called
-			}
-//			debugPrintf("Network: CloseRequest is closing connection cs=%08x\n", (unsigned int)locCs);
-			ConnectionClosed(locCs);
-			tcp_pcb *pcb = locCs->pcb;
-			tcp_arg(pcb, NULL);
-			tcp_sent(pcb, NULL);
-			tcp_recv(pcb, NULL);
-			tcp_poll(pcb, NULL, 4);
-			mem_free(locCs);
-			tcp_close(pcb);
-		}
-		else if (status == dataReceiving)
-		{
-			r->cs->readingRs = NULL;
-		}
+		ConnectionState *locCs = r->cs;		// take a copy because our cs field is about to get cleared
+//		debugPrintf("Network: CloseRequest is closing connection cs=%08x\n", (unsigned int)locCs);
+		ConnectionClosed(locCs);
+		tcp_pcb *pcb = locCs->pcb;
+		tcp_arg(pcb, NULL);
+		tcp_sent(pcb, NULL);
+		tcp_recv(pcb, NULL);
+		tcp_poll(pcb, NULL, 4);
+		mem_free(locCs);
+		tcp_close(pcb);
 	}
 }
 
@@ -906,11 +898,8 @@ bool RequestState::Read(char& b)
 		// See if there is another pbuf in the chain
 		if (inputPointer < pb->tot_len)
 		{
-			pbuf* next = pb->next;
-			pb->next = NULL;
-			pbuf_free(pb);
-			pb = next;
-			if (next == NULL)
+			pb = pbuf_dechain(pb);
+			if (pb == NULL)
 			{
 				return false;
 			}
@@ -936,13 +925,11 @@ bool RequestState::ReadBuffer(char *&buffer, unsigned int &len)
 
 	if (inputPointer == pb->len)
 	{
+		// See if there is another pbuf in the chain
 		if (inputPointer < pb->tot_len)
 		{
-			pbuf* next = pb->next;
-			pb->next = NULL;
-			pbuf_free(pb);
-			pb = next;
-			if (next == NULL)
+			pb = pbuf_dechain(pb);
+			if (pb == NULL)
 			{
 				return false;
 			}
@@ -959,12 +946,6 @@ bool RequestState::ReadBuffer(char *&buffer, unsigned int &len)
 	inputPointer += len;
 
 	return true;
-}
-
-// Reset the RequestState's inputPointer, so it can be read in the next Spin() call
-void RequestState::ResetInputPointer()
-{
-	inputPointer = 0;
 }
 
 // Webserver calls this to write bytes that need to go out to the network
@@ -1035,7 +1016,7 @@ bool RequestState::Send()
 		return false;
 	}
 
-	if (!closeRequested && sentDataOutstanding != 0 && lastWriteTime != NAN)
+	if (!closeRequested && sentDataOutstanding != 0 && !isnan(lastWriteTime))
 	{
 		float timeNow = reprap.GetPlatform()->Time();
 		if (timeNow - lastWriteTime > writeTimeout)
@@ -1160,13 +1141,13 @@ void RequestState::Close()
 void RequestState::FreePbuf()
 {
 	// Tell LWIP that we have processed data
-	tcp_pcb *pcb = (cs != NULL) ? cs->pcb : NULL;
-	if (bufferLength > 0 && pcb != NULL)
+	if (cs != NULL && bufferLength > 0 && cs->pcb != NULL)
 	{
-		tcp_recved(pcb, bufferLength);
+		tcp_recved(cs->pcb, bufferLength);
+		bufferLength = 0;
 	}
 
-	// Free pbuf is there's any data left
+	// Free pbuf
 	if (pb != NULL)
 	{
 		pbuf_free(pb);
