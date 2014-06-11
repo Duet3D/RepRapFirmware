@@ -26,7 +26,7 @@ Additional functionality in 0.65e-dc42 release compared to RRP 0.65e:
 
 * Option to invert cooling fan PWM
 
-* Additional z-prove type 2 is supported, for boards that support more than one type of z-probe
+* Additional z-probe type 2 is supported, for boards that support more than one type of z-probe
 
 * Separate G31 parameters can be saved for z-probe types 0, 1/2, and 3
 
