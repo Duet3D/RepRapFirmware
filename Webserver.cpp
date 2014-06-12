@@ -336,13 +336,6 @@ unsigned int Webserver::GetGcodeBufferSpace() const
 	return (gcodeReadIndex - gcodeWriteIndex - 1u) % gcodeBufLength;
 }
 
-// Get the amount of gcode buffer space we are going to report
-unsigned int Webserver::GetReportedGcodeBufferSpace() const
-{
-	unsigned int temp = GetGcodeBufferSpace();
-	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf : temp;
-}
-
 // Process a null-terminated gcode
 // We intercept four G/M Codes so we can deal with file manipulation and emergencies.  That
 // way things don't get out of sync, and - as a file name can contain
@@ -841,7 +834,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
 	{
 		webserver->LoadGcodeBuffer(value);
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"buff\":%u}", webserver->GetReportedGcodeBufferSpace());
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"buff\":%u}", webserver->GetGcodeBufferSpace());
 	}
 	else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
 	{
@@ -934,7 +927,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 
 void Webserver::HttpInterpreter::GetJsonUploadResponse()
 {
-	snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"ubuff\":%u,\"err\":%d}", GetReportedUploadBufferSpace(), (uploadState == uploadOK) ? 0 : 1);
+	snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"ubuff\":%u,\"err\":%d}", webUploadBufferSize, (uploadState == uploadOK) ? 0 : 1);
 }
 
 void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
@@ -1014,7 +1007,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 	}
 
 	// Send the amount of buffer space available for gcodes
-	sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"buff\":%u", webserver->GetReportedGcodeBufferSpace());
+	sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"buff\":%u", webserver->GetGcodeBufferSpace());
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	if (type != 0)
@@ -1086,19 +1079,6 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 	}
 	jsonResponse[jp] = 0;
 	strncat(jsonResponse, "\"}", ARRAY_UPB(jsonResponse));
-}
-
-// Get the actual amount of upload buffer space we have
-unsigned int Webserver::HttpInterpreter::GetUploadBufferSpace() const
-{
-	return ARRAY_SIZE(clientMessage) - 700;					// we now write directly from the message buffer, but allow 700 bytes for headers etc.
-}
-
-// Get the amount of gcode buffer space we are going to report
-unsigned int Webserver::HttpInterpreter::GetReportedUploadBufferSpace() const
-{
-	unsigned int temp = GetUploadBufferSpace();
-	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf : temp;
 }
 
 void Webserver::HttpInterpreter::ResetState()

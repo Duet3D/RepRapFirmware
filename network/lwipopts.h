@@ -61,12 +61,8 @@
 #define LWIP_RAW                  	0
 #define LWIP_NETIF_STATUS_CALLBACK	1
 
-/* These options can be configured by the user in the standalone demo default demo */
-//#define HTTP_RAW_USED
-// #undef HTTP_RAW_USED
+/* Enable DHCP */
 #define DHCP_USED					1
-// #undef DHCP_USED
-
 
 /* These are not available when using "NO_SYS" */
 #define LWIP_NETCONN            	0
@@ -87,12 +83,12 @@
 
 /* MEM_SIZE: the size of the heap memory. If the application will send
 a lot of data that needs to be copied, this should be set high. */
-#define MEM_SIZE                4 * 1024
+#define MEM_SIZE                1024
 
 /* MEMP_NUM_PBUF: the number of memp struct pbufs. If the application
    sends a lot of data out of ROM (or other static memory), this
    should be set high. */
-#define MEMP_NUM_PBUF           12
+#define MEMP_NUM_PBUF           8
 
 /* Number of raw connection PCBs */
 #define MEMP_NUM_RAW_PCB        0
@@ -102,14 +98,14 @@ a lot of data that needs to be copied, this should be set high. */
 #define UDP_TTL                 255
 /* MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
  per active UDP "connection". */
-#define MEMP_NUM_UDP_PCB        4
+#define MEMP_NUM_UDP_PCB        1
 
 /* MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections. */
 #define MEMP_NUM_TCP_PCB        8
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections. */
 #define MEMP_NUM_TCP_PCB_LISTEN 4
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments. */
-#define MEMP_NUM_TCP_SEG        13 //changed from 9 to pass LWIP sanity checks
+#define MEMP_NUM_TCP_SEG        8
 /* MEMP_NUM_SYS_TIMEOUT: the number of simultaneously active timeouts. */
 #define MEMP_NUM_SYS_TIMEOUT    8
 
@@ -141,14 +137,14 @@ a lot of data that needs to be copied, this should be set high. */
 #define LWIP_TCP                (1)
 #define TCP_TTL                 (255)
 /* TCP receive window. */
-#define TCP_WND                 (3 * 1432)
+#define TCP_WND                 (2 * 1432)
 /* Controls if TCP should queue segments that arrive out of
    order. Define to 0 if your device is low on memory. */
 #define TCP_QUEUE_OOSEQ         1
 /* TCP Maximum segment size. */
 #define TCP_MSS                 (1432)	// 1432 is optimal for Windows clients
 /* TCP sender buffer space (bytes). */
-#define TCP_SND_BUF             (3 * 1432)  //changed from 2150 to pass LWIP sanity checks
+#define TCP_SND_BUF             (2 * 1432)  //changed from 2150 to pass LWIP sanity checks
 /* TCP sender buffer space (pbufs). This must be at least = 2 * TCP_SND_BUF/TCP_MSS for things to work. */
 #define TCP_SND_QUEUELEN        (2 * TCP_SND_BUF / TCP_MSS)
 /* Maximum number of retransmissions of data segments. */
@@ -189,8 +185,8 @@ a lot of data that needs to be copied, this should be set high. */
 #endif
 
 /* ---------- Statistics options ---------- */
-#define LWIP_STATS 0
-#define LWIP_STATS_DISPLAY 0
+#define LWIP_STATS 1
+#define LWIP_STATS_DISPLAY 1
 
 #if LWIP_STATS
 #define LINK_STATS 1

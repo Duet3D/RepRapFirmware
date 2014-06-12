@@ -30,15 +30,14 @@ Licence: GPL
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
+const unsigned int gcodeBufLength = 512;		// size of our gcode ring buffer, preferably a power of 2
+
+/* HTTP */
 
 #define KO_START "rr_"
 #define KO_FIRST 3
 
-/* HTTP */
-
-const unsigned int gcodeBufLength = 512;		// size of our gcode ring buffer, preferably a power of 2
-const unsigned int maxReportedFreeBuf = 2048;	// the max we own up to having free, to avoid overlong messages. 1024 is too long for Chrome/Windows 8.1.
-
+const unsigned int webUploadBufferSize = 2300;	// maximum size of HTTP upload packets (webMessageLength - 700)
 const unsigned int webMessageLength = 3000;		// maximum length of the web message we accept after decoding, excluding POST data
 const unsigned int maxFilenameLength = 100;		// maximum length of a filename (inc. path from root) that we can upload
 //const unsigned int postBoundaryLength = 100;	// max length of the POST boundary string
@@ -177,9 +176,6 @@ class Webserver
 			bool RejectMessage(const char* s, unsigned int code = 500);
 			void JsonReport(bool ok, const char* request);
 
-		    unsigned int GetUploadBufferSpace() const;
-		    unsigned int GetReportedUploadBufferSpace() const;
-
 			HttpState state;
 
 //			bool receivingPost;
@@ -263,7 +259,6 @@ class Webserver
 
 	// G-Code processing
     unsigned int GetGcodeBufferSpace() const;
-    unsigned int GetReportedGcodeBufferSpace() const;
 
     void ProcessGcode(const char* gc);
     void LoadGcodeBuffer(const char* gc);
