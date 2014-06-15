@@ -370,7 +370,8 @@ Network::Network()
 	}
 
 	dataCs = NULL;
-	mainCs = NULL;
+	ftpCs = NULL;
+	telnetCs = NULL;
 
 	ethPinsInit();
 }
@@ -508,9 +509,13 @@ void Network::ConnectionClosed(ConnectionState* cs)
 	{
 		dataCs = NULL;
 	}
-	if (cs == mainCs)
+	if (cs == ftpCs)
 	{
-		mainCs = NULL;
+		ftpCs = NULL;
+	}
+	if (cs == telnetCs)
+	{
+		telnetCs = NULL;
 	}
 
 	// inform the Webserver that we are about to remove an existing connection
@@ -735,9 +740,14 @@ void Network::SaveDataConnection()
 	dataCs = readyTransactions->cs;
 }
 
-void Network::SaveMainConnection()
+void Network::SaveFTPConnection()
 {
-	mainCs = readyTransactions->cs;
+	ftpCs = readyTransactions->cs;
+}
+
+void Network::SaveTelnetConnection()
+{
+	telnetCs = readyTransactions->cs;
 }
 
 bool Network::RestoreDataConnection()
@@ -767,10 +777,10 @@ bool Network::RestoreDataConnection()
 	return true;
 }
 
-bool Network::MakeMainRequest()
+bool Network::MakeFTPRequest()
 {
 	// Make sure we have a connection
-	if (mainCs == NULL)
+	if (ftpCs == NULL)
 	{
 		return false;
 	}
@@ -781,13 +791,40 @@ bool Network::MakeMainRequest()
 	if (r == NULL)
 	{
 		cpu_irq_restore(flags);
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::MakeMainRequest() - no free transactions!\n");
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::MakeFTPRequest() - no free transactions!\n");
 		return false;
 	}
 	freeTransactions = r->next;
 
 	// Set up the RequestState and replace the first entry of readyTransactions
-	r->Set(NULL, mainCs, dataSending);
+	r->Set(NULL, ftpCs, dataSending);
+	cpu_irq_restore(flags);
+	PrependTransaction(&readyTransactions, r);
+
+	return true;
+}
+
+bool Network::MakeTelnetRequest()
+{
+	// Make sure we have a connection
+	if (telnetCs == NULL)
+	{
+		return false;
+	}
+
+	// Get a free transaction
+	irqflags_t flags = cpu_irq_save();
+	RequestState *r = freeTransactions;
+	if (r == NULL)
+	{
+		cpu_irq_restore(flags);
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::MakeTelnetRequest() - no free transactions!\n");
+		return false;
+	}
+	freeTransactions = r->next;
+
+	// Set up the RequestState and replace the first entry of readyTransactions
+	r->Set(NULL, telnetCs, dataSending);
 	cpu_irq_restore(flags);
 	PrependTransaction(&readyTransactions, r);
 

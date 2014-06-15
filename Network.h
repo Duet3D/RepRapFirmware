@@ -129,9 +129,11 @@ public:
 
 	void OpenDataPort(uint16_t port);
 	void SaveDataConnection();
-	void SaveMainConnection();
+	void SaveFTPConnection();
+	void SaveTelnetConnection();
 	bool RestoreDataConnection();
-	bool MakeMainRequest();
+	bool MakeFTPRequest();
+	bool MakeTelnetRequest();
 	bool CloseDataPort();
 
 	Network();
@@ -158,7 +160,8 @@ private:
 	uint8_t inLwip;
 
 	ConnectionState *dataCs;
-	ConnectionState *mainCs;
+	ConnectionState *ftpCs;
+	ConnectionState *telnetCs;
 };
 
 #endif

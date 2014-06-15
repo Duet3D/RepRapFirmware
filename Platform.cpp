@@ -750,7 +750,7 @@ void Platform::PrintMemoryUsage()
 	Message(HOST_MESSAGE, "\n");
 	Message(HOST_MESSAGE, "Memory usage:\n\n");
 	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
-	reprap.GetWebserver()->HandleReply(scratchString, false);
+	reprap.GetWebserver()->HandleReply(scratchString, false, false);
 	Message(HOST_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
 	reprap.GetWebserver()->AppendReply(scratchString);
@@ -809,7 +809,7 @@ void Platform::PrintMemoryUsage()
 		}
 	}
 	snprintf(scratchString, STRING_LENGTH, "Free file entries: %u\n", numFreeFiles);
-	reprap.GetWebserver()->AppendReply(scratchString);
+	reprap.GetWebserver()->AppendReply(scratchString, true);
 	Message(HOST_MESSAGE, scratchString);
 
 #if LWIP_STATS

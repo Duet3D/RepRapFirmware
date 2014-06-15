@@ -1928,7 +1928,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
     		reprap.GetHeat()->SetActiveTemperature(selectedHead, gb->GetFValue()); // 0 is the bed
     		reprap.GetHeat()->Activate(selectedHead);
     	}
-    	//check here rather than falling through to M116, we want to just wait for the extruder we specified (otherwise use M116 not M109)
     	result = reprap.GetHeat()->HeaterAtSetTemperature(selectedHead);
     	break;
 
@@ -2026,7 +2025,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
     	{
 			float value=gb->GetFValue();
 			reprap.GetHeat()->SetActiveTemperature(0, value);
-			reprap.GetHeat()->SetStandbyTemperature(0, value); // FIXME have to set both?not sure as the bed should always be selected
 			reprap.GetHeat()->Activate(0);
     	}
     	result = reprap.GetHeat()->HeaterAtSetTemperature(0);

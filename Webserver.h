@@ -57,8 +57,7 @@ const unsigned int ftpResponseLength = 256;		// maximum FTP response length
 
 /* Telnet */
 
-// TODO
-
+const unsigned int telnetMessageLength = 256;	// maximum line length for incoming Telnet commands
 
 
 class Webserver;
@@ -119,8 +118,8 @@ class Webserver
     const char *GetName() const;
     bool CheckPassword(const char* pw) const;
 
-    void HandleReply(const char *s, bool error);
-    void AppendReply(const char* s);
+    void HandleReply(const char *s, bool error, bool finished = true);
+    void AppendReply(const char* s, bool finished = false);
     bool GCodeAvailable();
     char ReadGCode();
 
@@ -138,6 +137,7 @@ class Webserver
 			void ResetState();
 
 			bool FlushUploadData();
+			void ReceivedGcodeReply();
 
 		private:
 
@@ -252,8 +252,25 @@ class Webserver
 
 			TelnetInterpreter(Platform *p, Webserver *ws);
 			void ConnectionEstablished();
+			void ConnectionLost(uint16_t local_port);
 			bool CharFromClient(const char c);
 			void ResetState();
+
+			void HandleGcodeReply(const char *reply);
+
+		private:
+
+			enum TelnetState
+			{
+				authenticating,			// not logged in
+				authenticated			// logged in
+			};
+			TelnetState state;
+
+			char clientMessage[telnetMessageLength];
+			unsigned int clientPointer;
+
+			void ProcessLine();
 	};
 	TelnetInterpreter *telnetInterpreter;
 
@@ -272,9 +289,8 @@ class Webserver
 
     // Buffer to hold gcode that is ready for processing
     char gcodeBuffer[gcodeBufLength];
-    char gcodeReply[STRING_LENGTH + 1];
-    bool gcodeReplyChanged;
     unsigned int gcodeReadIndex, gcodeWriteIndex;	// head and tail indices into gcodeBuffer
+    char gcodeReply[STRING_LENGTH + 1];
 
     // Misc
     char password[SHORT_STRING_LENGTH + 1];

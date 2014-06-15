@@ -302,7 +302,7 @@ bool Webserver::CheckPassword(const char *pw) const
 	return StringEquals(pw, password);
 }
 
-void Webserver::HandleReply(const char *s, bool error)
+void Webserver::HandleReply(const char *s, bool error, bool finished)
 {
 	if (strlen(s) == 0 && !error)
 	{
@@ -321,13 +321,23 @@ void Webserver::HandleReply(const char *s, bool error)
 		}
 		gcodeReply[ARRAY_UPB(gcodeReply)] = 0;
 	}
-	gcodeReplyChanged = true;
+
+	if (finished)
+	{
+		httpInterpreter->ReceivedGcodeReply();
+		telnetInterpreter->HandleGcodeReply(gcodeReply);
+	}
 }
 
-void Webserver::AppendReply(const char *s)
+void Webserver::AppendReply(const char *s, bool finished)
 {
 	strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
-	gcodeReplyChanged = true;
+
+	if (finished)
+	{
+		httpInterpreter->ReceivedGcodeReply();
+		telnetInterpreter->HandleGcodeReply(gcodeReply);
+	}
 }
 
 // Get the actual amount of gcode buffer space we have
@@ -373,7 +383,9 @@ void Webserver::ProcessGcode(const char* gc)
 			}
 			configFile->Close();
 			gcodeReply[i] = 0;
-			gcodeReplyChanged = true;
+
+			httpInterpreter->ReceivedGcodeReply();
+			telnetInterpreter->HandleGcodeReply(gcodeReply);
 		}
 	}
 	else if (StringStartsWith(gc, "M25") && !isDigit(gc[3]))	// pause SD card print
@@ -483,16 +495,7 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 	}
 }
 
-// Retrieve gcodeReply and return true if its content has changed
-bool Webserver::GetGCodeReply(char *&reply)
-{
-	reply = &gcodeReply[0];
-
-	bool gcode_changed = gcodeReplyChanged;
-	gcodeReplyChanged = false;
-	return gcode_changed;
-}
-
+// Handle disconnects here
 void Webserver::ConnectionLost(const ConnectionState *cs)
 {
 	uint16_t local_port = cs->GetLocalPort();
@@ -531,6 +534,7 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 	}
 }
 
+// Make sure the current connection is preferred, so uploads are handled quicker
 void Webserver::SetReadingConnection()
 {
 	Network *net = reprap.GetNetwork();
@@ -1025,12 +1029,8 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 				(gc->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 
-	// Retrieve the gcode buffer from Webserver and increase seq if a new reply is available
-	char *p;
-	if (webserver->GetGCodeReply(p))
-	{
-		seq++;
-	}
+	// Retrieve the gcode buffer from Webserver
+	const char *p = webserver->gcodeReply;
 
 	// Send the response sequence number
 	sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"seq\":%u", (unsigned int) seq);
@@ -1110,6 +1110,12 @@ bool Webserver::HttpInterpreter::FlushUploadData()
 	}
 
 	return true;
+}
+
+void Webserver::HttpInterpreter::ReceivedGcodeReply()
+{
+	// We need to increase seq whenever a new G-Code reply is available.
+	seq++;
 }
 
 // Process a character from the client
@@ -1534,7 +1540,7 @@ void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 		net->CloseDataPort();
 
 		// Send response
-		if (net->MakeMainRequest())
+		if (net->MakeFTPRequest())
 		{
 			if (state == doingPasvIO)
 			{
@@ -1567,6 +1573,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 {
 	if (clientPointer == ARRAY_UPB(clientMessage))
 	{
+		clientPointer = 0;
 		platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow in FTP server!\n");
 		return true;
 	}
@@ -1875,7 +1882,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 		case pasvPortConnected:
 			// save current connection state so we can send '226 Transfer complete.' when ConnectionLost() is called
-			net->SaveMainConnection();
+			net->SaveFTPConnection();
 
 			// list directory entries
 			if (StringEquals(clientMessage, "LIST"))
@@ -2124,30 +2131,122 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 
 Webserver::TelnetInterpreter::TelnetInterpreter(Platform *p, Webserver *ws) : ProtocolInterpreter(p, ws)
 {
-	// TODO
+	ResetState();
 }
 
 void Webserver::TelnetInterpreter::ConnectionEstablished()
 {
 	Network *net = reprap.GetNetwork();
 	RequestState *req = net->GetRequest();
-	/*req->Write("RepRapPro Ormerod Telnet Interface\n\n");
+	req->Write("RepRapPro Ormerod Telnet Interface\n\n");
 	req->Write("Please enter your password:\n");
-	req->Write("> ");*/
-	req->Write("Sorry, Telnet is not supported yet.\n");
-	req->Write("This feature will be added in a future firmware version.");
-	net->SendAndClose(NULL);
+	req->Write("> ");
+	net->SendAndClose(NULL, true);
+}
+
+void Webserver::TelnetInterpreter::ConnectionLost(uint16_t local_port)
+{
+	ResetState();
 }
 
 bool Webserver::TelnetInterpreter::CharFromClient(char c)
 {
-	// TODO
-	return true;
+	if (clientPointer == ARRAY_UPB(clientMessage))
+	{
+		clientPointer = 0;
+		platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow in FTP server!\n");
+		return true;
+	}
+
+	switch (c)
+	{
+		case 0:
+			break;
+
+		case '\r':
+		case '\n':
+			if (clientPointer != 0)
+			{
+				clientMessage[clientPointer] = 0;
+				ProcessLine();
+				clientPointer = 0;
+			}
+			return true;
+
+		case '#':
+			// On Linux, the last character of the HELO message sent by Telnet is '#',
+			// so clear the buffer if the user hasn't logged in yet.
+			if (state == authenticating)
+			{
+				clientPointer = 0;
+				break;
+			}
+
+		default:
+			clientMessage[clientPointer++] = c;
+			break;
+	}
+
+	return false;
 }
 
 void Webserver::TelnetInterpreter::ResetState()
 {
-	// nothing yet
+	state = authenticating;
+	clientPointer = 0;
+}
+
+void Webserver::TelnetInterpreter::ProcessLine()
+{
+	Network *net = reprap.GetNetwork();
+	RequestState *req = net->GetRequest();
+
+	switch (state)
+	{
+		case authenticating:
+			debugPrintf("Pass: \"%s\"\n", clientMessage);
+			if (webserver->CheckPassword(clientMessage))
+			{
+				net->SaveTelnetConnection();
+				state = authenticated;
+
+				req->Write("Log in successful!\n");
+				net->SendAndClose(NULL, true);
+			}
+			else
+			{
+				req->Write("Invalid password.\n> ");
+				net->SendAndClose(NULL, true);
+			}
+			break;
+
+		case authenticated:
+			// Special commands for Telnet
+			if (StringEquals(clientMessage, "exit") || StringEquals(clientMessage, "quit"))
+			{
+				req->Write("Goodbye.\n");
+				net->SendAndClose(NULL);
+			}
+			// All other commands are processed by the Webserver
+			else
+			{
+				webserver->ProcessGcode(clientMessage);
+				net->CloseRequest();
+			}
+			break;
+	}
+}
+
+void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
+{
+	Network *net = reprap.GetNetwork();
+	if (state >= authenticated && net->MakeTelnetRequest())
+	{
+		RequestState *req = net->GetRequest();
+		req->Write(reply);
+		req->Write('\n');
+		net->SendAndClose(NULL, true);
+	}
 }
 
 
