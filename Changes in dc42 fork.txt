@@ -1,4 +1,4 @@
-Additional functionality in 0.65e-dc42 release compared to RRP 0.65e:
+Additional functionality in 0.65f-dc42 release compared to RRP 0.65e:
 
 * The Duet can serve all the files needed by the web interface
 
@@ -40,7 +40,10 @@ Additional functionality in 0.65e-dc42 release compared to RRP 0.65e:
 
 * When pausing a print from SD card, if the printer is executing a 'wait' command such as M116, control is returned to the web interface immediately, without waiting for the command to complete (which could take a long time).
 
-Additional functionality in web interface 0.90 compared to RRP 0.65:
+* The USB port is responsive immediately after power up or reset even when no Ethernet cable is connected
+
+
+Additional functionality in web interface 0.91 compared to RRP 0.65:
 
 * Faster (>6Mbytes/min), more reliable file uploading, with reporting and graceful recovery if an upload fails
 
@@ -56,6 +59,6 @@ Additional functionality in web interface 0.90 compared to RRP 0.65:
 
 * "Upload & Print" button (replaces direct web print button, uploads to the SD card first for more reliable printing)
 
-* Extruder box reports total filament extruded, not the amount extruded in the last move.
+* Extruder box reports total filament extruded, not the amount extruded in the last move
 
 * Additional status Halted is shown (if emergency stop has been used) as well as Ready and Active
