@@ -392,7 +392,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	       *  		would leave the move buffer on a 4 extruder drive setup looking like this:
 	       *  		{x.x, y.y, z.z, 0.0, 0.0, 0.0, n.n,m.m, f.f}
 	       */
-	      if(gb->Seen('E')&& ((i-AXES) == selectedHead-1))
+	      if(gb->Seen('E') && ((i-AXES) == selectedHead-1))
 	      {
 	    	//the number of mixing drives set (by M160)
 	    	int numDrives = platform->GetMixingDrives();
@@ -1269,7 +1269,9 @@ bool GCodes::StandbyHeaters()
 	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
 	for (int8_t heater = 0; heater < HEATERS; heater++)
+	{
 		reprap.GetHeat()->Standby(heater);
+	}
 	selectedHead = -1; //FIXME check this does not mess up setters (eg M906) when they are used after this command is called
 	return true;
 }
@@ -1846,7 +1848,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 						seen=true;
 					}
 				}
-				else if(gb->Seen('E')&& ((drive-AXES) == selectedHead - 1))//then do active extruder
+				else if(gb->Seen('E') && ((drive-AXES) == selectedHead - 1))//then do active extruder
 				{
 						platform->SetDriveStepsPerUnit(AXES+selectedHead - 1, gb->GetFValue());
 						seen=true;
@@ -1879,7 +1881,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 104: // Deprecated
-    	if(gb->Seen('S') && selectedHead >= 0)
+    	if(gb->Seen('S') && selectedHead >= 0 && selectedHead < HEATERS)
 		{
 			//only sets the selected head (As set by T#)
     		reprap.GetHeat()->SetActiveTemperature(selectedHead, gb->GetFValue()); // 0 is the bed
@@ -1923,12 +1925,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 109: 	// Set extruder temperature and wait - deprecated
-    	if(gb->Seen('S') && selectedHead >= 0)
+    	if(gb->Seen('S') && selectedHead >= 0 && selectedHead < HEATERS)
     	{
     		reprap.GetHeat()->SetActiveTemperature(selectedHead, gb->GetFValue()); // 0 is the bed
     		reprap.GetHeat()->Activate(selectedHead);
+        	result = reprap.GetHeat()->HeaterAtSetTemperature(selectedHead);
     	}
-    	result = reprap.GetHeat()->HeaterAtSetTemperature(selectedHead);
     	break;
 
 	case 110: // Set line numbers - line numbers are dealt with in the GCodeBuffer class
