@@ -159,7 +159,6 @@ public:
 	void Init();
 	void Spin();
 
-	void SetInterpreters(void *http, void *ftp, void *telnet);
 	bool InLwip() const { return inLwip; }
 
 private:
@@ -173,10 +172,6 @@ private:
 	RequestState * volatile freeTransactions;
 	RequestState * volatile readyTransactions;
 	RequestState * volatile writingTransactions;
-
-	void *httpInterpreter;
-	void *ftpInterpreter;
-	void *telnetInterpreter;
 
 	bool active;
 	uint8_t inLwip;

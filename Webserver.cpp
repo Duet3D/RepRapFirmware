@@ -128,10 +128,6 @@ void Webserver::Init()
 	ftpInterpreter->ResetState();
 	telnetInterpreter->ResetState();
 
-	// forward interpreter instances to Network class
-	Network *net = reprap.GetNetwork();
-	net->SetInterpreters(httpInterpreter, ftpInterpreter, telnetInterpreter);
-
 	// Reinitialise the message file
 	//platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }

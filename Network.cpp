@@ -410,7 +410,7 @@ void Network::PrependTransaction(RequestState* volatile* list, RequestState *r)
 
 void Network::Init()
 {
-    RepRapNetworkSetMACAddress(reprap.GetPlatform()->MACAddress());
+	RepRapNetworkSetMACAddress(reprap.GetPlatform()->MACAddress());
 	init_ethernet();
 }
 
@@ -419,7 +419,7 @@ void Network::Spin()
 	if (active)
 	{
 		// Fetch incoming data
-		// ethernet_task is called twice because the EMAC RX buffers have been increased by dc42's Arduino patch
+		// ethernet_task() is called twice because the EMAC RX buffers have been increased by dc42's Arduino patch.
 		++inLwip;
 		ethernet_task();
 		ethernet_task();
@@ -469,13 +469,6 @@ void Network::Spin()
 		telnetd_init();
 		active = true;
 	}
-}
-
-void Network::SetInterpreters(void *http, void *ftp, void *telnet)
-{
-	httpInterpreter = http;
-	ftpInterpreter = ftp;
-	telnetInterpreter = telnet;
 }
 
 bool Network::AllocateSendBuffer(SendBuffer *&buffer)
