@@ -2138,8 +2138,8 @@ void Webserver::TelnetInterpreter::ConnectionEstablished()
 {
 	Network *net = reprap.GetNetwork();
 	RequestState *req = net->GetRequest();
-	req->Write("RepRapPro Ormerod Telnet Interface\n\n");
-	req->Write("Please enter your password:\n");
+	req->Write("RepRapPro Ormerod Telnet Interface\r\n\r\n");
+	req->Write("Please enter your password:\r\n");
 	req->Write("> ");
 	net->SendAndClose(NULL, true);
 }
@@ -2154,7 +2154,7 @@ bool Webserver::TelnetInterpreter::CharFromClient(char c)
 	if (clientPointer == ARRAY_UPB(clientMessage))
 	{
 		clientPointer = 0;
-		platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow in FTP server!\n");
+		platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow in Telnet server!\n");
 		return true;
 	}
 
@@ -2204,18 +2204,17 @@ void Webserver::TelnetInterpreter::ProcessLine()
 	switch (state)
 	{
 		case authenticating:
-			debugPrintf("Pass: \"%s\"\n", clientMessage);
 			if (webserver->CheckPassword(clientMessage))
 			{
 				net->SaveTelnetConnection();
 				state = authenticated;
 
-				req->Write("Log in successful!\n");
+				req->Write("Log in successful!\r\n");
 				net->SendAndClose(NULL, true);
 			}
 			else
 			{
-				req->Write("Invalid password.\n> ");
+				req->Write("Invalid password.\r\n> ");
 				net->SendAndClose(NULL, true);
 			}
 			break;
@@ -2224,7 +2223,7 @@ void Webserver::TelnetInterpreter::ProcessLine()
 			// Special commands for Telnet
 			if (StringEquals(clientMessage, "exit") || StringEquals(clientMessage, "quit"))
 			{
-				req->Write("Goodbye.\n");
+				req->Write("Goodbye.\r\n");
 				net->SendAndClose(NULL);
 			}
 			// All other commands are processed by the Webserver
@@ -2243,8 +2242,27 @@ void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
 	if (state >= authenticated && net->MakeTelnetRequest())
 	{
 		RequestState *req = net->GetRequest();
-		req->Write(reply);
-		req->Write('\n');
+
+		// Whenever a new line is read, we also need to send a carriage return
+		bool append_line;
+		while (reply[0] != 0)
+		{
+			append_line = true;
+			if (reply[0] == '\n')
+			{
+				req->Write('\r');
+				append_line = false;
+			}
+			req->Write(reply[0]);
+			reply++;
+		}
+
+		// Only append a line break if reply didn't contain one
+		if (append_line)
+		{
+			req->Write("\r\n");
+		}
+
 		net->SendAndClose(NULL, true);
 	}
 }

@@ -53,8 +53,8 @@ void RepRapNetworkSetMACAddress(const u8_t macAddress[]);
 
 }
 
-const int requestStateSize = MEMP_NUM_TCP_PCB +1;			// number of RequestStates that can be used for network IO
-const float writeTimeout = 4.0;	 							// seconds to wait for data we have written to be acknowledged
+const unsigned int requestStateSize = MEMP_NUM_TCP_PCB * 2;		// number of RequestStates that can be used for network IO
+const float writeTimeout = 4.0;	 								// seconds to wait for data we have written to be acknowledged
 
 static tcp_pcb *http_pcb = NULL;
 static tcp_pcb *ftp_main_pcb = NULL;
@@ -335,7 +335,6 @@ void telnetd_init()
 /*-----------------------------------------------------------------------------------*/
 
 // RepRap calls this with data to send.
-
 void RepRapNetworkSendOutput(const char* data, int length, ConnectionState* cs)
 {
 	if (cs == NULL)
@@ -353,6 +352,13 @@ void RepRapNetworkSendOutput(const char* data, int length, ConnectionState* cs)
 }
 
 //***************************************************************************************************
+
+// SendBuffer class
+
+SendBuffer::SendBuffer(SendBuffer *n) : next(n)
+{
+}
+
 
 // Network/Ethernet class
 
@@ -372,6 +378,12 @@ Network::Network()
 	dataCs = NULL;
 	ftpCs = NULL;
 	telnetCs = NULL;
+
+	sendBuffer = NULL;
+	for (int8_t i = 0; i < tcpOutputBufferCount; i++)
+	{
+		sendBuffer = new SendBuffer(sendBuffer);
+	}
 
 	ethPinsInit();
 }
@@ -464,6 +476,41 @@ void Network::SetInterpreters(void *http, void *ftp, void *telnet)
 	httpInterpreter = http;
 	ftpInterpreter = ftp;
 	telnetInterpreter = telnet;
+}
+
+bool Network::AllocateSendBuffer(SendBuffer *&buffer)
+{
+	// Grab another send buffer
+	buffer = sendBuffer;
+	if (buffer == NULL)
+	{
+		debugPrintf("Network: Could not allocate send buffer!\n");
+		return false;
+	}
+
+	// Remove first item from the chain
+	sendBuffer = buffer->next;
+	buffer->next = NULL;
+
+	return true;
+}
+
+void Network::FreeSendBuffer(SendBuffer *buffer)
+{
+	// Append the current send buffer to the free send buffers
+	if (sendBuffer == NULL)
+	{
+		sendBuffer = buffer;
+	}
+	else
+	{
+		SendBuffer *buf = sendBuffer;
+		while (buf->next != NULL)
+		{
+			buf = buf->next;
+		}
+		buf->next = buffer;
+	}
 }
 
 void Network::SentPacketAcknowledged(ConnectionState *cs, unsigned int len)
@@ -636,14 +683,35 @@ void Network::SendAndClose(FileStore *f, bool keepConnectionOpen)
 			{
 				f->Close();
 			}
+			SendBuffer *buf = r->sendBuffer;
+			if (buf != NULL)
+			{
+				FreeSendBuffer(buf);
+			}
 			AppendTransaction(&freeTransactions, r);
 //			debugPrintf("Conn lost before send\n");
 		}
 		else
 		{
+			r->persistConnection = keepConnectionOpen;
 			r->nextWrite = NULL;
 			r->fileBeingSent = f;
-			r->persistConnection = keepConnectionOpen;
+			if (f != NULL && r->sendBuffer == NULL)
+			{
+				SendBuffer *buf;
+				if (AllocateSendBuffer(buf))
+				{
+					r->sendBuffer = buf;
+					r->outputBuffer = r->sendBuffer->tcpOutputBuffer;
+					r->fileBeingSent = f;
+					r->status = dataSending;
+				}
+				else
+				{
+					r->fileBeingSent = NULL;
+					debugPrintf("Could not allocate send buffer for file transfer!\n");
+				}
+			}
 
 			RequestState *sendingRs = r->cs->sendingRs;
 			if (sendingRs == NULL)
@@ -908,6 +976,8 @@ void RequestState::Set(pbuf *p, ConnectionState *c, RequestStatus s)
 	bufferLength = (p == NULL) ? 0 : pb->tot_len;
 	status = s;
 	inputPointer = 0;
+	sendBuffer = NULL;
+	outputBuffer = NULL;
 	outputPointer = 0;
 	unsentPointer = 0;
 	sentDataOutstanding = 0;
@@ -987,7 +1057,22 @@ void RequestState::Write(char b)
 {
 	if (LostConnection() || status == disconnected) return;
 
-	if (outputPointer >= ARRAY_SIZE(outputBuffer))
+	if (sendBuffer == NULL)
+	{
+		Network *net = reprap.GetNetwork();
+		if (net->AllocateSendBuffer(sendBuffer))
+		{
+			status = dataSending;
+			outputBuffer = sendBuffer->tcpOutputBuffer;
+		}
+		else
+		{
+			// We cannot write because there are no more send buffers available.
+			return;
+		}
+	}
+
+	if (outputPointer >= tcpOutputBufferSize)
 	{
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::Write(char b) - Output buffer overflow! \n");
 		return;
@@ -996,9 +1081,6 @@ void RequestState::Write(char b)
 	// Add the byte to the buffer
 	outputBuffer[outputPointer] = b;
 	outputPointer++;
-
-	// Update status
-	status = dataSending;
 }
 
 // This is not called for data, only for internally-
@@ -1017,9 +1099,26 @@ void RequestState::Write(const char* s)
 // Write formatted data to the output buffer
 void RequestState::Printf(const char* fmt, ...)
 {
+	if (LostConnection() || status == disconnected) return;
+
+	if (sendBuffer == NULL)
+	{
+		Network *net = reprap.GetNetwork();
+		if (net->AllocateSendBuffer(sendBuffer))
+		{
+			status = dataSending;
+			outputBuffer = sendBuffer->tcpOutputBuffer;
+		}
+		else
+		{
+			// We cannot write because there are no more send buffers available.
+			return;
+		}
+	}
+
 	va_list p;
 	va_start(p, fmt);
-	int spaceLeft = ARRAY_SIZE(outputBuffer) - outputPointer;
+	int spaceLeft = tcpOutputBufferSize - outputPointer;
 	if (spaceLeft > 0)
 	{
 		int len = vsnprintf(&outputBuffer[outputPointer], spaceLeft, fmt, p);
@@ -1041,6 +1140,12 @@ bool RequestState::Send()
 			fileBeingSent->Close();
 			fileBeingSent = NULL;
 		}
+		if (sendBuffer != NULL)
+		{
+			Network *net = reprap.GetNetwork();
+			net->FreeSendBuffer(sendBuffer);
+		}
+
 		return true;
 	}
 
@@ -1061,7 +1166,7 @@ bool RequestState::Send()
 		}
 	}
 
-	if (sentDataOutstanding >= ARRAY_SIZE(outputBuffer)/2)
+	if (sentDataOutstanding >= tcpOutputBufferSize/2)
 	{
 		return false;		// don't send until at least half the output buffer is free
 	}
@@ -1069,8 +1174,8 @@ bool RequestState::Send()
 	if (fileBeingSent != NULL)
 	{
 		unsigned int outputLimit = (sentDataOutstanding == 0)
-				? ARRAY_SIZE(outputBuffer)
-						: min<unsigned int>(unsentPointer + ARRAY_SIZE(outputBuffer)/2, ARRAY_SIZE(outputBuffer));
+				? tcpOutputBufferSize
+						: min<unsigned int>(unsentPointer + tcpOutputBufferSize/2, tcpOutputBufferSize);
 
 		while (outputPointer < outputLimit)
 		{
@@ -1130,14 +1235,23 @@ bool RequestState::Send()
 		}
 
 		// Send is complete as soon as all data has been sent
-		return (sentDataOutstanding == 0);
+		if (sentDataOutstanding == 0)
+		{
+			if (sendBuffer != NULL)
+			{
+				Network *net = reprap.GetNetwork();
+				net->FreeSendBuffer(sendBuffer);
+			}
+
+			return true;
+		}
 	}
 	// Send remaining data
 	else
 	{
 		sentDataOutstanding += (outputPointer - unsentPointer);
 		RepRapNetworkSendOutput(outputBuffer + unsentPointer, outputPointer - unsentPointer, cs);
-		unsentPointer = (outputPointer == ARRAY_SIZE(outputBuffer)) ? 0 : outputPointer;
+		unsentPointer = (outputPointer == tcpOutputBufferSize) ? 0 : outputPointer;
 		outputPointer = unsentPointer;
 		lastWriteTime = reprap.GetPlatform()->Time();
 	}

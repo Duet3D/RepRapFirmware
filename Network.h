@@ -15,6 +15,8 @@ Separated out from Platform.h by dc42
 #include <cstdlib>
 #include <climits>
 
+#include "lwipopts.h"
+
 // This class handles the network - typically an Ethernet.
 
 // The size of the TCP output buffer is critical to getting fast load times in the browser.
@@ -25,7 +27,8 @@ Separated out from Platform.h by dc42
 // Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
 // and therefore avoids additional memory use and fragmentation.
 
-const unsigned int tcpOutputBufferSize = 2 * 1432;
+const unsigned int tcpOutputBufferCount = MEMP_NUM_TCP_PCB;		// number of send buffers
+const unsigned int tcpOutputBufferSize = 2 * 1432;				// size of each send buffer
 
 #define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
@@ -36,8 +39,9 @@ const unsigned int tcpOutputBufferSize = 2 * 1432;
 
 struct tcp_pcb;
 struct pbuf;
-class RequestState;
 
+class RequestState;
+class SendBuffer;
 
 // ConnectionState structure that we use to track TCP connections. This could be combined with class RequestState.
 struct ConnectionState
@@ -97,7 +101,8 @@ private:
 	unsigned int inputPointer;				// amount of data already taken from the first packet buffer
 
 	unsigned int sentDataOutstanding;		// amount of TCP data we have sent that has not been acknowledged
-	char outputBuffer[tcpOutputBufferSize];
+	SendBuffer *sendBuffer;
+	char *outputBuffer;
 	unsigned int unsentPointer;
 	unsigned int outputPointer;
 	FileStore *fileBeingSent;
@@ -108,11 +113,25 @@ private:
 	bool closeRequested;
 };
 
+class SendBuffer
+{
+	public:
+		friend class Network;
+		friend class RequestState;
+
+		SendBuffer(SendBuffer *n);
+
+	private:
+		char tcpOutputBuffer[tcpOutputBufferSize];
+		SendBuffer *next;
+};
+
 
 // The main network class that drives the network.
 class Network
 {
 public:
+	friend class RequestState;
 
 	void ReceiveInput(pbuf *pb, ConnectionState *cs);
 	void SentPacketAcknowledged(ConnectionState *cs, unsigned int len);
@@ -148,6 +167,9 @@ private:
 	void AppendTransaction(RequestState* volatile * list, RequestState *r);
 	void PrependTransaction(RequestState* volatile * list, RequestState *r);
 
+	bool AllocateSendBuffer(SendBuffer *&buffer);
+	void FreeSendBuffer(SendBuffer *buffer);
+
 	RequestState * volatile freeTransactions;
 	RequestState * volatile readyTransactions;
 	RequestState * volatile writingTransactions;
@@ -162,6 +184,8 @@ private:
 	ConnectionState *dataCs;
 	ConnectionState *ftpCs;
 	ConnectionState *telnetCs;
+
+	SendBuffer * volatile sendBuffer;
 };
 
 #endif

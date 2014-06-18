@@ -1123,9 +1123,9 @@ void Platform::Message(char type, const char* message)
 //    	line->Write("Can't open message file.\n");
 		for (uint8_t i = 0; i < messageIndent; i++)
 		{
-			line->Write(' ', type == DEBUG_MESSAGE);
+			line->Write(' ', type == DEBUG_MESSAGE && reprap.Debug());
 		}
-		line->Write(message, type == DEBUG_MESSAGE);
+		line->Write(message, type == DEBUG_MESSAGE && reprap.Debug());
 	}
 }
 
