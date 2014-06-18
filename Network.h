@@ -123,7 +123,7 @@ class SendBuffer
 
 	private:
 		char tcpOutputBuffer[tcpOutputBufferSize];
-		SendBuffer *next;
+		SendBuffer* volatile next;
 };
 
 
@@ -140,20 +140,21 @@ public:
 	void ConnectionClosedGracefully(ConnectionState *cs);
 	bool Active() const;
 	bool LinkIsUp();
+
 	RequestState *GetRequest(const ConnectionState *cs = NULL);
 	void SendAndClose(FileStore *f, bool keepConnectionOpen = false);
-
 	void CloseRequest();
 	void RepeatRequest();
 
 	void OpenDataPort(uint16_t port);
+	bool CloseDataPort();
+
 	void SaveDataConnection();
 	void SaveFTPConnection();
 	void SaveTelnetConnection();
-	bool RestoreDataConnection();
+	bool MakeDataRequest();
 	bool MakeFTPRequest();
 	bool MakeTelnetRequest();
-	bool CloseDataPort();
 
 	Network();
 	void Init();

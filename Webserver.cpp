@@ -1890,7 +1890,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				net->SendAndClose(NULL, true);
 
 				// send file list via data port
-				if (net->RestoreDataConnection())
+				if (net->MakeDataRequest())
 				{
 					RequestState *data_req = net->GetRequest();
 					data_req->Write(platform->GetMassStorage()->UnixFileList(currentDir));
@@ -1947,7 +1947,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 					snprintf(ftpResponse, ftpResponseLength, "Opening data connection for %s (%lu bytes).", filename, fs->Length());
 					SendReply(150, ftpResponse);
 
-					if (net->RestoreDataConnection())
+					if (net->MakeDataRequest())
 					{
 						// send the file via data port
 						net->SendAndClose(fs, false);

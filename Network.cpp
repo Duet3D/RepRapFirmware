@@ -795,6 +795,53 @@ void Network::OpenDataPort(uint16_t port)
 	tcp_accept(ftp_pasv_pcb, conn_accept);
 }
 
+// Close the data port and return true on success
+bool Network::CloseDataPort()
+{
+	// See if it's already being closed
+	if (closingDataPort)
+	{
+		return false;
+	}
+
+	// Close the open data connection if there is any
+	if (dataCs != NULL && dataCs->pcb != NULL)
+	{
+		RequestState *sendingRs = dataCs->sendingRs;
+		if (sendingRs != NULL)
+		{
+			// we can't close the connection as long as we're sending
+			closingDataPort = true;
+			sendingRs->Close();
+			return false;
+		}
+		else
+		{
+			// close the data connection
+			ConnectionState *loc_cs = dataCs;
+//			debugPrintf("CloseDataPort is closing connection dataCS=%08x\n", (unsigned int)loc_cs);
+			ConnectionClosed(loc_cs);
+			tcp_pcb *pcb = loc_cs->pcb;
+			tcp_arg(pcb, NULL);
+			tcp_sent(pcb, NULL);
+			tcp_recv(pcb, NULL);
+			tcp_poll(pcb, NULL, 4);
+			mem_free(loc_cs);
+			tcp_close(pcb);
+		}
+	}
+
+	// close listening data port
+	if (ftp_pasv_pcb != NULL)
+	{
+		tcp_accept(ftp_pasv_pcb, NULL);
+		tcp_close(ftp_pasv_pcb);
+		ftp_pasv_pcb = NULL;
+	}
+
+	return true;
+}
+
 void Network::SaveDataConnection()
 {
 	// store our data connection so we can identify it again later
@@ -811,7 +858,7 @@ void Network::SaveTelnetConnection()
 	telnetCs = readyTransactions->cs;
 }
 
-bool Network::RestoreDataConnection()
+bool Network::MakeDataRequest()
 {
 	// Make sure we have a connection
 	if (dataCs == NULL)
@@ -825,7 +872,7 @@ bool Network::RestoreDataConnection()
 	if (r == NULL)
 	{
 		cpu_irq_restore(flags);
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::RestoreDataConnection() - no free transactions!\n");
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::MakeDataRequest() - no free transactions!\n");
 		return false;
 	}
 	freeTransactions = r->next;
@@ -891,54 +938,6 @@ bool Network::MakeTelnetRequest()
 
 	return true;
 }
-
-// Close the data port and return true on success
-bool Network::CloseDataPort()
-{
-	// See if it's already being closed
-	if (closingDataPort)
-	{
-		return false;
-	}
-
-	// Close the open data connection if there is any
-	if (dataCs != NULL && dataCs->pcb != NULL)
-	{
-		RequestState *sendingRs = dataCs->sendingRs;
-		if (sendingRs != NULL)
-		{
-			// we can't close the connection as long as we're sending
-			closingDataPort = true;
-			sendingRs->Close();
-			return false;
-		}
-		else
-		{
-			// close the data connection
-			ConnectionState *loc_cs = dataCs;
-//			debugPrintf("CloseDataPort is closing connection dataCS=%08x\n", (unsigned int)loc_cs);
-			ConnectionClosed(loc_cs);
-			tcp_pcb *pcb = loc_cs->pcb;
-			tcp_arg(pcb, NULL);
-			tcp_sent(pcb, NULL);
-			tcp_recv(pcb, NULL);
-			tcp_poll(pcb, NULL, 4);
-			mem_free(loc_cs);
-			tcp_close(pcb);
-		}
-	}
-
-	// close listening data port
-	if (ftp_pasv_pcb != NULL)
-	{
-		tcp_accept(ftp_pasv_pcb, NULL);
-		tcp_close(ftp_pasv_pcb);
-		ftp_pasv_pcb = NULL;
-	}
-
-	return true;
-}
-
 
 //queries the PHY for link status, true = link is up, false, link is down or there is some other error
 bool Network::LinkIsUp()

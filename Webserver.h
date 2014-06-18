@@ -276,11 +276,9 @@ class Webserver
 
 	// G-Code processing
     unsigned int GetGcodeBufferSpace() const;
-
     void ProcessGcode(const char* gc);
     void LoadGcodeBuffer(const char* gc);
     void StoreGcodeData(const char* data, size_t len);
-    bool GetGCodeReply(char *&reply);
 
     // File info methods
     bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength);
