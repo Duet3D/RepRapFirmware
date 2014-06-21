@@ -1,4 +1,4 @@
-Additional functionality in 0.65f-dc42 release compared to RRP 0.65e:
+Additional functionality in 0.65i-dc42 release compared to RRP 0.65e:
 
 * The Duet can serve all the files needed by the web interface
 
@@ -26,7 +26,7 @@ Additional functionality in 0.65f-dc42 release compared to RRP 0.65e:
 
 * Option to invert cooling fan PWM
 
-* Additional z-probe type 2 is supported, for boards that support more than one type of z-probe
+* Additional z-probe type 2 is supported, for z-probe boards that incorporate more than one type of z-probe
 
 * Separate G31 parameters can be saved for z-probe types 0, 1/2, and 3
 
@@ -42,8 +42,12 @@ Additional functionality in 0.65f-dc42 release compared to RRP 0.65e:
 
 * The USB port is responsive immediately after power up or reset even when no Ethernet cable is connected
 
+* Bug fix: uploading file whose name includes an uppercase G now works
 
-Additional functionality in web interface 0.91 compared to RRP 0.65:
+* Bug fix: Setting a machine name that contains a quote or backslash character no longer causes the webserver to return a bad JSON response in response to the rr_name request
+
+
+Additional functionality in web interface 0.95 compared to RRP 0.65:
 
 * Faster (>6Mbytes/min), more reliable file uploading, with reporting and graceful recovery if an upload fails
 
@@ -59,6 +63,8 @@ Additional functionality in web interface 0.91 compared to RRP 0.65:
 
 * "Upload & Print" button (replaces direct web print button, uploads to the SD card first for more reliable printing)
 
-* Extruder box reports total filament extruded, not the amount extruded in the last move
+* The extruder box reports total filament extruded, not the amount extruded in the last move
 
 * Additional status Halted is shown (if emergency stop has been used) as well as Ready and Active
+
+* The Print Status tab includes slider controls to allow the speed and extrusion factor to be adjusted during printing
