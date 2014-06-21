@@ -93,7 +93,7 @@ class GCodes
     void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homes
     float GetExtruderPosition(uint8_t extruder) const;					// Get the amount of filament extruded
     void PauseSDPrint();												// Pause the current print from SD card
-    float GetSpeedFactor() const { return speedFactor; }				// Return the current speed factor
+    float GetSpeedFactor() const { return speedFactor * 60.0; }			// Return the current speed factor
     const float *GetExtrusionFactors() const { return extrusionFactors; } // Return the current extrusion factors
     
   private:

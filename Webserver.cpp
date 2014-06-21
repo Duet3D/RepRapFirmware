@@ -587,11 +587,11 @@ void Webserver::GetStatusResponse(uint8_t type)
 		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
 
 		// Send the speed and extruder override factors
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor());
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor() * 100.0);
 		const float *extrusionFactors = gc->GetExtrusionFactors();
 		for (unsigned int i = 0; i < DRIVES - AXES; ++i)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i]);
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
 		}
 		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
 	}
@@ -1173,14 +1173,30 @@ void Webserver::Diagnostics()
 
 void Webserver::SetPassword(const char* pw)
 {
-	strncpy(password, pw, SHORT_STRING_LENGTH);
-	password[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
+	// Users sometimes put a tab character between the password and the comment, so allow for this
+	CopyParameterText(pw, password, ARRAY_SIZE(password));
 }
 
 void Webserver::SetName(const char* nm)
 {
-	strncpy(myName, nm, SHORT_STRING_LENGTH);
-	myName[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
+	// Users sometimes put a tab character between the machine name and the comment, so allow for this
+	CopyParameterText(nm, myName, ARRAY_SIZE(myName));
+}
+
+// Copy some parameter text, stopping at the first control character or when the destination buffer is full, and removing trailing spaces
+void Webserver::CopyParameterText(const char* src, char *dst, size_t length)
+{
+	size_t i;
+	for (i = 0; i + 1 < length && src[i] >= ' '; ++i)
+	{
+		dst[i] = src[i];
+	}
+	// Remove any trailing spaces
+	while (i > 0 && dst[i - 1] == ' ')
+	{
+		--i;
+	}
+	dst[i] = 0;
 }
 
 void Webserver::HandleReply(const char *s, bool error)

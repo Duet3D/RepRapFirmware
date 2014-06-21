@@ -125,6 +125,7 @@ class Webserver
     bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength);
     static bool FindHeight(const char* buf, size_t len, float& height);
     static bool FindFilamentUsed(const char* buf, size_t len, float& filamentUsed);
+    static void CopyParameterText(const char* src, char *dst, size_t length);
 
     Platform* platform;
 
@@ -164,12 +165,12 @@ class Webserver
     // Buffers to hold reply
     char jsonResponse[jsonReplyLength];
     char gcodeReply[STRING_LENGTH+1];
-    uint16_t seq;	// reply sequence number, so that the client can tell if a json reply is new or not
+    uint16_t seq;									// reply sequence number, so that the client can tell whether a json reply is new or not
 
     // Misc
     bool gotPassword;
-    char password[SHORT_STRING_LENGTH+1];
-    char myName[SHORT_STRING_LENGTH+1];
+    char password[SHORT_STRING_LENGTH + 1];
+    char myName[SHORT_STRING_LENGTH + 1];
 };
 
 
