@@ -46,6 +46,8 @@ Additional functionality in 0.65i-dc42 release compared to RRP 0.65e:
 
 * Bug fix: uploading file whose name includes an uppercase G now works. Simlarly for setting a machine name containing an uppercase G (M550) or password copntaining an uppercase G (M551)
 
+* Bug fix: if the bed temperature was set using M190 at the start of a print, and the bed was not also turned off using M190, then when M1 is executed at the end of the print the bed heats up again.
+
 * Bug fix: if the machine name in an M550 command is followed by a tab character, then the name is assumed to terminate just before the tab character. Similarly for passwords set using M551.
 
 * Bug fix: setting a machine name that contains a quote or backslash character no longer causes the webserver to return a bad JSON response in response to the rr_name request
