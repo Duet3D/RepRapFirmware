@@ -284,6 +284,7 @@ class Webserver
     bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength);
     static bool FindHeight(const char* buf, size_t len, float& height);
     static bool FindFilamentUsed(const char* buf, size_t len, float& filamentUsed);
+    static void CopyParameterText(const char* src, char *dst, size_t length);
 
     // Buffer to hold gcode that is ready for processing
     char gcodeBuffer[gcodeBufLength];

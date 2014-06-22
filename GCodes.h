@@ -78,21 +78,23 @@ class GCodes
     void Spin();														// Called in a tight loop to make this class work
     void Init();														// Set it up
     void Exit();														// Shut it down
-    void Reset();
+    void Reset();														// Reset some parameter to defaults
     bool RunConfigurationGCodes();										// Run the configuration G Code file on reboot
     bool ReadMove(float* m, bool& ce);									// Called by the Move class to get a movement set by the last G Code
     void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
     void DeleteFile(const char* fileName);								// Does what it says
     bool GetProbeCoordinates(int count, float& x, float& y, float& z);	// Get pre-recorded probe coordinates
-    char* GetCurrentCoordinates();										// Get where we are as a string
+    const char* GetCurrentCoordinates();								// Get where we are as a string
     bool PrintingAFile() const;											// Are we in the middle of printing a file?
     void Diagnostics();													// Send helpful information out
     int8_t GetSelectedHead() const;										// return which tool is selected
     bool HaveIncomingData() const;										// Is there something that we have to do?
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
-    void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }
-    float GetExtruderPosition(uint8_t extruder) const;
-    void PauseSDPrint();
+    void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homes
+    float GetExtruderPosition(uint8_t extruder) const;					// Get the amount of filament extruded
+    void PauseSDPrint();												// Pause the current print from SD card
+    float GetSpeedFactor() const { return speedFactor * 60.0; }			// Return the current speed factor
+    const float *GetExtrusionFactors() const { return extrusionFactors; } // Return the current extrusion factors
     
   private:
   
@@ -101,13 +103,13 @@ class GCodes
     bool DoCannedCycleMove(bool ce);									// Do a move from an internally programmed canned cycle
     bool DoFileCannedCycles(const char* fileName);						// Run a GCode macro in a file
     bool FileCannedCyclesReturn();										// End a macro
-    bool ActOnGcode(GCodeBuffer* gb);									// Do the G Code
-    bool HandleGcode(GCodeBuffer* gb);
-    bool HandleMcode(GCodeBuffer* gb);
-    bool HandleTcode(GCodeBuffer* gb);
-    int SetUpMove(GCodeBuffer* gb);
+    bool ActOnGcode(GCodeBuffer* gb);									// Do the G/M/T Code
+    bool HandleGcode(GCodeBuffer* gb);									// Process a G code
+    bool HandleMcode(GCodeBuffer* gb);									// Process a M code
+    bool HandleTcode(GCodeBuffer* gb);									// Process a T code
+    int SetUpMove(GCodeBuffer* gb);										// Pass a move on to the Move module
     bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
-    bool DoDwellTime(float dwell);
+    bool DoDwellTime(float dwell);										// Really wait for a bit
     bool DoHome(char *reply, bool& error);								// Home some axes
     bool DoSingleZProbeAtPoint();										// Probe at a given point
     bool DoSingleZProbe();												// Probe where we are
@@ -133,9 +135,10 @@ class GCodes
     bool SendConfigToLine();											// Deal with M503
     void WriteHTMLToFile(char b, GCodeBuffer *gb);						// Save an HTML file (usually to upload a new web interface)
     bool OffsetAxes(GCodeBuffer *gb);									// Set offsets - deprecated, use G10
-    void SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LENGTH]);
-    void SetHeaterParameters(GCodeBuffer *gb, char reply[STRING_LENGTH]);
-    int8_t Heater(int8_t head) const;
+    void SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LENGTH]);	// Set the P/I/D parameters for a heater
+    void SetHeaterParameters(GCodeBuffer *gb, char reply[STRING_LENGTH]); // Set the thermistor and ADC parameters for a heater
+    int8_t Heater(int8_t head) const;									// Get the heater number for the specified head
+
     Platform* platform;							// The RepRap machine
     bool active;								// Live and running?
     Webserver* webserver;						// The webserver class
@@ -186,7 +189,7 @@ class GCodes
     bool waitingForMoveToComplete;
     bool coolingInverted;
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
-    float extrusionFactor;						// extrusion factor, normally 1.0
+    float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
 };
 
 //*****************************************************************************************************

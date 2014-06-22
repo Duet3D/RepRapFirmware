@@ -92,7 +92,10 @@ void GCodes::Reset()
 	cannedCycleMoveQueued = false;
 	gFeedRate = platform->MaxFeedrate(Z_AXIS); // Typically the slowest
     speedFactor = 1.0/60.0;				// default is just to convert from mm/minute to mm/second
-    extrusionFactor = 1.0;
+    for (size_t i = 0; i < DRIVES - AXES; ++i)
+    {
+    	extrusionFactors[i] = 1.0;
+    }
 }
 
 void GCodes::DoFilePrint(GCodeBuffer* gb)
@@ -410,7 +413,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	    		}
 	    		if(extruderString[sp] == ':')
 	    		{
-	    			eArg[hp] = (atoff(&extruderString[fp]))*distanceScale;
+	    			eArg[hp] = (atoff(&extruderString[fp])) * distanceScale * extrusionFactors[hp];
 	    			hp++;
 	    			if(hp >= numDrives)
 	    			{
@@ -428,7 +431,7 @@ void GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	    		}
 	    	}
 	    	//capture the last drive step amount in the string (or the only one in the case of only one extruder)
-	    	eArg[hp] = (atoff(&extruderString[fp])) * distanceScale * extrusionFactor;
+	    	eArg[hp] = (atoff(&extruderString[fp])) * distanceScale * extrusionFactors[hp];
 
 	    	//set the move buffer for each extruder drive
         	for(int j=0;j<numDrives;j++)
@@ -1026,7 +1029,7 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, char* reply)
 
 //Fixed to deal with multiple extruders
 
-char* GCodes::GetCurrentCoordinates()
+const char* GCodes::GetCurrentCoordinates()
 {
 	float liveCoordinates[DRIVES + 1];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates);
@@ -2145,14 +2148,33 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 	case 220:	// set speed factor override percentage
 		if (gb->Seen('S'))
 		{
-			speedFactor = gb->GetFValue()/(60 * 100.0);		// include the conversion from mm/minute to mm/second
+			float newSpeedFactor = gb->GetFValue()/(60 * 100.0);		// include the conversion from mm/minute to mm/second
+			if (newSpeedFactor > 0)
+			{
+				gFeedRate *= newSpeedFactor/speedFactor;
+				speedFactor = newSpeedFactor;
+			}
 		}
 		break;
 
 	case 221:	// set extrusion factor override percentage
-		if (gb->Seen('S'))
+		//FIXME: need to allow multiple colon-separated parameters for mixing extruders
+		if (gb->Seen('S'))	// S parameter sets the override percentage
 		{
-			extrusionFactor = gb->GetFValue()/100.0;
+			float extrusionFactor = gb->GetFValue()/100.0;
+			int head;
+			if (gb->Seen('P'))	// P parameter (if present) selects the head
+			{
+				head = gb->GetIValue();
+			}
+			else
+			{
+				head = selectedHead;
+			}
+			if (head >= 1 && head < DRIVES - AXES + 1 && extrusionFactor >= 0)
+			{
+				extrusionFactors[head - 1] = extrusionFactor;
+			}
 		}
 		break;
 

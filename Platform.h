@@ -57,7 +57,7 @@ Licence: GPL
 
 // Some numbers...
 
-#define STRING_LENGTH 1029		// needs to be long enough to receive web data
+#define STRING_LENGTH 1029
 #define SHORT_STRING_LENGTH 40
 #define TIME_TO_REPRAP 1.0e6 	// Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds

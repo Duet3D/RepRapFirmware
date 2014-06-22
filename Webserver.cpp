@@ -278,14 +278,30 @@ void Webserver::Diagnostics()
 
 void Webserver::SetPassword(const char* pw)
 {
-	strncpy(password, pw, SHORT_STRING_LENGTH);
-	password[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
+	// Users sometimes put a tab character between the password and the comment, so allow for this
+	CopyParameterText(pw, password, ARRAY_SIZE(password));
 }
 
 void Webserver::SetName(const char* nm)
 {
-	strncpy(myName, nm, SHORT_STRING_LENGTH);
-	myName[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
+	// Users sometimes put a tab character between the machine name and the comment, so allow for this
+	CopyParameterText(nm, myName, ARRAY_SIZE(myName));
+}
+
+// Copy some parameter text, stopping at the first control character or when the destination buffer is full, and removing trailing spaces
+void Webserver::CopyParameterText(const char* src, char *dst, size_t length)
+{
+	size_t i;
+	for (i = 0; i + 1 < length && src[i] >= ' '; ++i)
+	{
+		dst[i] = src[i];
+	}
+	// Remove any trailing spaces
+	while (i > 0 && dst[i - 1] == ' ')
+	{
+		--i;
+	}
+	dst[i] = 0;
 }
 
 const char *Webserver::GetName() const
@@ -883,7 +899,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 		if (found)
 		{
 			snprintf(jsonResponse, ARRAY_UPB(jsonResponse),
-					"{\"err\":0,\"size\":%lu,\"height\":\"%.2f\",\"filament\":\"%.1f\",\"layerHeight\":\"%.2f\",\"generatedBy\":\"%s\"}",
+					"{\"err\":0,\"size\":%lu,\"height\":%.2f,\"filament\":%.1f,\"layerHeight\":%.2f,\"generatedBy\":\"%s\"}",
 					length, height, filament, layerHeight, generatedBy);
 		}
 		else
@@ -893,7 +909,24 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	}
 	else if (StringEquals(request, "name"))
 	{
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"myName\":\"%s\"}", webserver->GetName());
+		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"myName\":\"");
+		size_t j = strlen(jsonResponse);
+		const char *myName = webserver->GetName();
+		for (size_t i = 0; i < SHORT_STRING_LENGTH; ++i)
+		{
+			char c = myName[i];
+			if (c < ' ')	// if null terminator or bad character
+				break;
+			if (c == '"' || c == '\\')
+			{
+				// Need to escape the quote-mark or backslash for JSON
+				jsonResponse[j++] = '\\';
+			}
+			jsonResponse[j++] = c;
+		}
+		jsonResponse[j++] = '"';
+		jsonResponse[j++] = '}';
+		jsonResponse[j] = 0;
 	}
 	else if (StringEquals(request, "password") && StringEquals(key, "password"))
 	{
@@ -906,7 +939,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 		char ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.1f\"", ch, platform->AxisTotalLength(drive));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.1f", ch, platform->AxisTotalLength(drive));
 			ch = ',';
 		}
 		strncat(jsonResponse, "]}", ARRAY_UPB(jsonResponse));
@@ -944,7 +977,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		ch = '[';
 		for (int8_t heater = 0; heater < HEATERS; heater++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.1f\"", ch, reprap.GetHeat()->GetTemperature(heater));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetTemperature(heater));
 			ch = ',';
 		}
 
@@ -953,19 +986,26 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
 		strncat(jsonResponse, "],\"pos\":", ARRAY_UPB(jsonResponse));		// announce the XYZ position
 		ch = '[';
-		// We currently provide the extruder 0 value here as well as XYZ. This is only expected by V0.69 and V0.70 of the web interface so it can be removed soon.
-		for (int8_t drive = 0; drive < AXES + 1; drive++)
-		//for (int8_t drive = 0; drive < AXES; drive++)
+		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.2f\"", ch, liveCoordinates[drive]);
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", ch, liveCoordinates[drive]);
 			ch = ',';
 		}
 		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "],\"extr\":");		// announce the extruder positions
 		ch = '[';
 		for (int8_t drive = AXES; drive < DRIVES; drive++)		// loop through extruders
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\"%.3f\"", ch, gc->GetExtruderPosition(drive - AXES));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.3f", ch, gc->GetExtruderPosition(drive - AXES));
 			ch = ',';
+		}
+		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
+
+		// Send the speed and extruder override factors
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor() * 100.0);
+		const float *extrusionFactors = gc->GetExtrusionFactors();
+		for (unsigned int i = 0; i < DRIVES - AXES; ++i)
+		{
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
 		}
 		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
 	}
