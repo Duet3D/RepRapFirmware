@@ -112,7 +112,9 @@ static void SendData(tcp_pcb *pcb, ConnectionState *cs)
 	}
 	else
 	{
-		RepRapNetworkMessage("send_data: error\n");
+		debugPrintf("send_data: error %d\n", err);
+		tcp_abort(cs->pcb);
+		cs->pcb = NULL;
 	}
 }
 
@@ -1140,50 +1142,8 @@ bool RequestState::Send()
 
 		return true;
 	}
-
-	if (cs->SendInProgress())
-	{
-		return false;
-	}
-
-	if (!closeRequested && sentDataOutstanding != 0 && !isnan(lastWriteTime))
-	{
-		float timeNow = reprap.GetPlatform()->Time();
-		if (timeNow - lastWriteTime > writeTimeout)
-		{
-			debugPrintf("Network: Timing out connection cs=%08x\n", (unsigned int)cs);
-			sentDataOutstanding = 0;
-			Close();
-			return false;	// this RS will be freed next time round
-		}
-	}
-
-	if (sentDataOutstanding >= tcpOutputBufferSize/2)
-	{
-		return false;		// don't send until at least half the output buffer is free
-	}
-
-	if (fileBeingSent != NULL)
-	{
-		unsigned int outputLimit = (sentDataOutstanding == 0)
-				? tcpOutputBufferSize
-						: min<unsigned int>(unsentPointer + tcpOutputBufferSize/2, tcpOutputBufferSize);
-
-		while (outputPointer < outputLimit)
-		{
-			bool ok = fileBeingSent->Read(outputBuffer[outputPointer]);
-			if (!ok)
-			{
-				fileBeingSent->Close();
-				fileBeingSent = NULL;
-				break;
-			}
-			++outputPointer;
-		}
-	}
-
 	// We've finished with this RS, so close the connection
-	if (closeRequested)
+	else if (closeRequested)
 	{
 		// Close the file if it is still open
 		if (fileBeingSent != NULL)
@@ -1215,8 +1175,49 @@ bool RequestState::Send()
 			closingDataPort = false;
 		}
 	}
+
+	if (cs->SendInProgress())
+	{
+		return false;
+	}
+
+	if (sentDataOutstanding != 0 && !isnan(lastWriteTime))
+	{
+		float timeNow = reprap.GetPlatform()->Time();
+		if (timeNow - lastWriteTime > writeTimeout)
+		{
+			debugPrintf("Network: Timing out connection cs=%08x\n", (unsigned int)cs);
+			Close();
+			return false;	// this RS will be freed next time round
+		}
+	}
+
+	if (sentDataOutstanding >= tcpOutputBufferSize / 2)
+	{
+		return false;		// don't send until at least half the output buffer is free
+	}
+
+	if (fileBeingSent != NULL)
+	{
+		unsigned int outputLimit = (sentDataOutstanding == 0)
+				? tcpOutputBufferSize
+						: min<unsigned int>(unsentPointer + tcpOutputBufferSize/2, tcpOutputBufferSize);
+
+		while (outputPointer < outputLimit)
+		{
+			bool ok = fileBeingSent->Read(outputBuffer[outputPointer]);
+			if (!ok)
+			{
+				fileBeingSent->Close();
+				fileBeingSent = NULL;
+				break;
+			}
+			++outputPointer;
+		}
+	}
+
 	// We've finished sending data
-	else if (outputPointer == unsentPointer)
+	if (outputPointer == unsentPointer)
 	{
 		// If we have no data to send and fileBeingSent is NULL, we can close the connection
 		if (!persistConnection && nextWrite == NULL)
