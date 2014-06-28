@@ -1546,17 +1546,17 @@
 
 #else
 
-#define LINK_STATS                      1
-#define IP_STATS                        1
+#define LINK_STATS                      0
+#define IP_STATS                        0
 #define IPFRAG_STATS                    0
-#define ICMP_STATS                      1
+#define ICMP_STATS                      0
 #define IGMP_STATS                      0
 #define UDP_STATS                       0
-#define TCP_STATS                       1
-#define MEM_STATS                       1
+#define TCP_STATS                       0
+#define MEM_STATS                       0
 #define MEMP_STATS                      0
 #define SYS_STATS                       0
-#define LWIP_STATS_DISPLAY              1
+#define LWIP_STATS_DISPLAY              0
 
 #endif /* LWIP_STATS */
 

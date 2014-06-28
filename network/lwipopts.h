@@ -47,6 +47,7 @@
 #ifndef __LWIPOPTS_H__
 #define __LWIPOPTS_H__
 
+/* Uncomment the following line to enable LWIP debugging */
 //#define LWIP_DEBUG
 
 /* Include user defined options first */
@@ -57,15 +58,11 @@
 /* ---------- System options ---------- */
 /* Specify NO_SYS because we are not using an RTOS */
 #define NO_SYS                		1
-#define LWIP_RAW                  	1
+#define LWIP_RAW                  	0
 #define LWIP_NETIF_STATUS_CALLBACK	1
 
-/* These options can be configured by the user in the standalone demo default demo */
-//#define HTTP_RAW_USED
-// #undef HTTP_RAW_USED
+/* Enable DHCP */
 #define DHCP_USED					1
-// #undef DHCP_USED
-
 
 /* These are not available when using "NO_SYS" */
 #define LWIP_NETCONN            	0
@@ -86,31 +83,31 @@
 
 /* MEM_SIZE: the size of the heap memory. If the application will send
 a lot of data that needs to be copied, this should be set high. */
-#define MEM_SIZE                (3 * 1024)
+#define MEM_SIZE                (2048)
 
 /* MEMP_NUM_PBUF: the number of memp struct pbufs. If the application
    sends a lot of data out of ROM (or other static memory), this
    should be set high. */
-#define MEMP_NUM_PBUF           12
+#define MEMP_NUM_PBUF           16
 
 /* Number of raw connection PCBs */
-#define MEMP_NUM_RAW_PCB          2
+#define MEMP_NUM_RAW_PCB        0
 
 /* ---------- UDP options ---------- */
 #define LWIP_UDP                1
 #define UDP_TTL                 255
 /* MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
  per active UDP "connection". */
-#define MEMP_NUM_UDP_PCB        4
+#define MEMP_NUM_UDP_PCB        1
 
 /* MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections. */
-#define MEMP_NUM_TCP_PCB        6
+#define MEMP_NUM_TCP_PCB        8
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections. */
-#define MEMP_NUM_TCP_PCB_LISTEN 1
+#define MEMP_NUM_TCP_PCB_LISTEN 4
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments. */
-#define MEMP_NUM_TCP_SEG        13 //changed from 9 to pass LWIP sanity checks
+#define MEMP_NUM_TCP_SEG        16
 /* MEMP_NUM_SYS_TIMEOUT: the number of simultaneously active timeouts. */
-#define MEMP_NUM_SYS_TIMEOUT    6
+#define MEMP_NUM_SYS_TIMEOUT    8
 
 /* The following four are used only with the sequential API and can be
    set to 0 if the application only will use the raw API. */
@@ -140,16 +137,16 @@ a lot of data that needs to be copied, this should be set high. */
 #define LWIP_TCP                (1)
 #define TCP_TTL                 (255)
 /* TCP receive window. */
-#define TCP_WND                 (4096)
+#define TCP_WND                 (2 * 1432)
 /* Controls if TCP should queue segments that arrive out of
    order. Define to 0 if your device is low on memory. */
 #define TCP_QUEUE_OOSEQ         1
 /* TCP Maximum segment size. */
 #define TCP_MSS                 (1432)	// 1432 is optimal for Windows clients
 /* TCP sender buffer space (bytes). */
-#define TCP_SND_BUF             (4500)  //changed from 2150 to pass LWIP sanity checks
+#define TCP_SND_BUF             (2 * 1432)  //changed from 2150 to pass LWIP sanity checks
 /* TCP sender buffer space (pbufs). This must be at least = 2 * TCP_SND_BUF/TCP_MSS for things to work. */
-#define TCP_SND_QUEUELEN        ((6 * (TCP_SND_BUF) + (TCP_MSS - 1))/(TCP_MSS))
+#define TCP_SND_QUEUELEN        (2 * TCP_SND_BUF / TCP_MSS)
 /* Maximum number of retransmissions of data segments. */
 // #define TCP_MAXRTX              12
 /* Maximum number of retransmissions of SYN segments. */
@@ -209,8 +206,34 @@ a lot of data that needs to be copied, this should be set high. */
 // 1 == To suppress some errors for now (no debug output)
 #define LWIP_NOASSERT 			0
 
-
-#define DBG_TYPES_ON                    0xff
+#ifdef LWIP_DEBUG
+#define ETHARP_DEBUG                    LWIP_DBG_ON
+#define NETIF_DEBUG                     LWIP_DBG_ON
+#define PBUF_DEBUG                      LWIP_DBG_ON
+#define API_LIB_DEBUG                   LWIP_DBG_ON
+#define API_MSG_DEBUG                   LWIP_DBG_ON
+#define SOCKETS_DEBUG                   LWIP_DBG_ON
+#define ICMP_DEBUG                      LWIP_DBG_ON
+#define INET_DEBUG                      LWIP_DBG_ON
+#define IP_DEBUG                        LWIP_DBG_ON
+#define IP_REASS_DEBUG                  LWIP_DBG_ON
+#define RAW_DEBUG                       LWIP_DBG_ON
+#define MEM_DEBUG                       LWIP_DBG_ON
+#define MEMP_DEBUG                      LWIP_DBG_ON
+#define SYS_DEBUG                       LWIP_DBG_ON
+#define TCP_DEBUG                       LWIP_DBG_ON
+#define TCP_INPUT_DEBUG                 LWIP_DBG_ON
+#define TCP_FR_DEBUG                    LWIP_DBG_ON
+#define TCP_RTO_DEBUG                   LWIP_DBG_ON
+#define TCP_CWND_DEBUG                  LWIP_DBG_ON
+#define TCP_WND_DEBUG                   LWIP_DBG_ON
+#define TCP_OUTPUT_DEBUG                LWIP_DBG_ON
+#define TCP_RST_DEBUG                   LWIP_DBG_ON
+#define TCP_QLEN_DEBUG                  LWIP_DBG_ON
+#define UDP_DEBUG                       LWIP_DBG_ON
+#define TCPIP_DEBUG                     LWIP_DBG_ON
+#define LWIP_DBG_MIN_LEVEL              LWIP_DBG_LEVEL_WARNING
+#else
 #define ETHARP_DEBUG                    LWIP_DBG_ON
 #define NETIF_DEBUG                     LWIP_DBG_ON
 #define PBUF_DEBUG                      LWIP_DBG_ON
@@ -236,7 +259,8 @@ a lot of data that needs to be copied, this should be set high. */
 #define TCP_QLEN_DEBUG                  LWIP_DBG_OFF
 #define UDP_DEBUG                       LWIP_DBG_OFF
 #define TCPIP_DEBUG                     LWIP_DBG_OFF
-#define DBG_MIN_LEVEL                   LWIP_DBG_LEVEL_ALL
+#define LWIP_DBG_MIN_LEVEL              LWIP_DBG_LEVEL_SERIOUS
+#endif
 
 
 // \note For a list of all possible lwIP configurations, check http://lwip.wikia.com/wiki/Lwipopts.h

@@ -313,8 +313,14 @@ class MassStorage
 public:
 
   const char* FileList(const char* directory, bool fromLine); // Returns a list of all the files in the named directory
+  const char* UnixFileList(const char* directory); // Returns a UNIX-compatible file list for the specified directory
   const char* CombineName(const char* directory, const char* fileName);
   bool Delete(const char* directory, const char* fileName);
+  bool Delete(const char* fileName);
+  bool MakeDirectory(const char *parentDir, const char *dirName);
+  bool MakeDirectory(const char *directory);
+  bool Rename(const char *oldFilename, const char *newFilename);
+  bool PathExists(const char *path) const;
 
 friend class Platform;
 
@@ -357,6 +363,7 @@ protected:
 	FileStore(Platform* p);
 	void Init();
     bool Open(const char* directory, const char* fileName, bool write);
+    bool Open(const char* fileName, bool write);
         
   bool inUse;
   byte buf[FILE_BUF_LEN];
@@ -555,6 +562,7 @@ public:
   
   MassStorage* GetMassStorage();
   FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
+  FileStore* GetFileStore(const char* fileName, bool write);
   const char* GetWebDir() const; // Where the htm etc files are
   const char* GetGCodeDir() const; // Where the gcodes are
   const char* GetSysDir() const;  // Where the system files are
