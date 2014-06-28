@@ -69,11 +69,9 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "lwip/src/sam/include/netif/ethernetif.h"
 
-#if defined(HTTP_RAW_USED)
-#include "httpd.h"
-#endif
-
 #include "lwip_test.h"
+
+extern void RepRapNetworkMessage(const char*);
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
@@ -83,7 +81,7 @@ struct netif gs_net_if;
 //by including ethernetif.h directly and calling ethernetif_phy_link_status(); this function is not required
 bool status_link_up()
 {
-return ethernetif_phy_link_status();
+	return ethernetif_phy_link_status();
 }
 //*****************************AB
 
@@ -128,11 +126,7 @@ static void timers_update(void)
 	timers_info_t *p_tmr_inf;
 
 	ul_cur_time = sys_get_ms();
-	if (ul_cur_time >= ul_last_time) {
-		ul_time_diff = ul_cur_time - ul_last_time;
-	} else {
-		ul_time_diff = 0xFFFFFFFF - ul_last_time + ul_cur_time;
-	}
+	ul_time_diff = ul_cur_time - ul_last_time;		// we're using unsigned arithmetic, so this handles wrap around
 
 	if (ul_time_diff) {
 		ul_last_time = ul_cur_time;
@@ -152,71 +146,6 @@ static void timers_update(void)
 	}
 }
 
-/**
- *  \brief Set ethernet config.
- */
-//err_t ethernetif_init_(struct netif *netif){return ERR_OK;};
-//err_t ethernet_input_(struct pbuf *p, struct netif *netif){return ERR_OK;};
-
-//static void ethernet_configure_interface(void)
-//{
-//	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
-//	extern err_t ethernetif_init(struct netif *netif);
-//
-//#if defined(DHCP_USED)
-//	x_ip_addr.addr = 0;
-//	x_net_mask.addr = 0;
-//#else
-//	/* Default ip addr */
-//	IP4_ADDR(&x_ip_addr, ETHERNET_CONF_IPADDR0, ETHERNET_CONF_IPADDR1, ETHERNET_CONF_IPADDR2, ETHERNET_CONF_IPADDR3);
-//
-//	/* Default subnet mask */
-//	IP4_ADDR(&x_net_mask, ETHERNET_CONF_NET_MASK0, ETHERNET_CONF_NET_MASK1, ETHERNET_CONF_NET_MASK2, ETHERNET_CONF_NET_MASK3);
-//
-//	/* Default gateway addr */
-//	IP4_ADDR(&x_gateway, ETHERNET_CONF_GATEWAY_ADDR0, ETHERNET_CONF_GATEWAY_ADDR1, ETHERNET_CONF_GATEWAY_ADDR2, ETHERNET_CONF_GATEWAY_ADDR3);
-//#endif
-//
-//	/* Add data to netif */
-//	netif_add(&gs_net_if, &x_ip_addr, &x_net_mask, &x_gateway, NULL,
-//			ethernetif_init, ethernet_input);
-//
-//	/* Make it the default interface */
-//	netif_set_default(&gs_net_if);
-//
-//	/* Setup callback function for netif status change */
-//	netif_set_status_callback(&gs_net_if, status_callback);
-//
-//	/* Bring it up */
-//#if defined(DHCP_USED)
-//	printf("LwIP: DHCP Started");
-//	dhcp_start(&gs_net_if);
-//#else
-////	printf("LwIP: Static IP Address Assigned\r\n");
-//	netif_set_up(&gs_net_if);
-//#endif
-//}
-//
-///** \brief Create ethernet task, for ethernet management.
-// *
-// */
-//void init_ethernet(void)
-//{
-//	/* Initialize lwIP */
-//	lwip_init();
-//
-//	/* Set hw and IP parameters, initialize MAC too */
-//	ethernet_configure_interface();
-//
-//	/* Init timer service */
-//	sys_init_timing();
-//
-//#if defined(HTTP_RAW_USED)
-//	/* Bring up the web server */
-//	httpd_init();
-//#endif
-//}
-
 
 //************************************************************************************************************
 
@@ -227,29 +156,21 @@ static void ethernet_configure_interface(unsigned char ipAddress[], unsigned cha
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	extern err_t ethernetif_init(struct netif *netif);
 
-#if defined(DHCP_USED)
-	x_ip_addr.addr = 0;
-	x_net_mask.addr = 0;
-#else
-	/* Default ip addr */
-	//IP4_ADDR(&x_ip_addr, ETHERNET_CONF_IPADDR0, ETHERNET_CONF_IPADDR1, ETHERNET_CONF_IPADDR2, ETHERNET_CONF_IPADDR3);
+	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);		// set IP address
 
-	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+	if (x_ip_addr.addr == 0)
+	{
+		x_net_mask.addr = 0;	// not sure this is needed, but the demo program does it
+	}
+	else
+	{
+		IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);			// set network mask
+	}
 
-	/* Default subnet mask */
-	//IP4_ADDR(&x_net_mask, ETHERNET_CONF_NET_MASK0, ETHERNET_CONF_NET_MASK1, ETHERNET_CONF_NET_MASK2, ETHERNET_CONF_NET_MASK3);
-
-	IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);
-
-	/* Default gateway addr */
-	//IP4_ADDR(&x_gateway, ETHERNET_CONF_GATEWAY_ADDR0, ETHERNET_CONF_GATEWAY_ADDR1, ETHERNET_CONF_GATEWAY_ADDR2, ETHERNET_CONF_GATEWAY_ADDR3);
-
-	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);
-#endif
+	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);				// set gateway
 
 	/* Add data to netif */
-	netif_add(&gs_net_if, &x_ip_addr, &x_net_mask, &x_gateway, NULL,
-			ethernetif_init, ethernet_input);
+	netif_add(&gs_net_if, &x_ip_addr, &x_net_mask, &x_gateway, NULL, ethernetif_init, ethernet_input);
 
 	/* Make it the default interface */
 	netif_set_default(&gs_net_if);
@@ -258,33 +179,45 @@ static void ethernet_configure_interface(unsigned char ipAddress[], unsigned cha
 	netif_set_status_callback(&gs_net_if, status_callback);
 
 	/* Bring it up */
-#if defined(DHCP_USED)
-	printf("LwIP: DHCP Started");
-	dhcp_start(&gs_net_if);
-#else
-//	printf("LwIP: Static IP Address Assigned\r\n");
-	netif_set_up(&gs_net_if);
-#endif
+	if (x_ip_addr.addr == 0)
+	{
+		RepRapNetworkMessage("Starting DHCP\n");
+		dhcp_start(&gs_net_if);
+	}
+	else
+	{
+		RepRapNetworkMessage("Starting network\n");
+		netif_set_up(&gs_net_if);
+	}
+}
+
+/** \brief Initialize the Ethernet subsystem.
+ *
+ */
+void init_ethernet(void)
+{
+	lwip_init();
+	ethernet_hardware_init();
+}
+
+/** \brief Try to establish a physical link at, returning true if successful.
+ *
+ */
+bool establish_ethernet_link(void)
+{
+	return ethernet_establish_link();		// this is the one that takes a long time
 }
 
 /** \brief Create ethernet task, for ethernet management.
  *
  */
-void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[])
+void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[])
 {
-	/* Initialize lwIP */
-	lwip_init();
-
 	/* Set hw and IP parameters, initialize MAC too */
 	ethernet_configure_interface(ipAddress, netMask, gateWay);
 
 	/* Init timer service */
 	sys_init_timing();
-
-#if defined(HTTP_RAW_USED)
-	/* Bring up the web server */
-	httpd_init();
-#endif
 }
 
 
@@ -297,16 +230,18 @@ void init_ethernet(const unsigned char ipAddress[], const unsigned char netMask[
  */
 void status_callback(struct netif *netif)
 {
-	int8_t c_mess[25];
-	if (netif_is_up(netif)) {
-//		printf("Network up\r\n");
-//		strcpy((char*)c_mess, "IP=");
-//		strcat((char*)c_mess, inet_ntoa(*(struct in_addr *)&(netif->ip_addr)));
-//		printf((char const*)c_mess);
-//		printf("-----------------\r\n");
-		netif->flags |=NETIF_FLAG_LINK_UP;
-	} else {
-//		printf("Network down\r\n");
+	char c_mess[20];		// 15 for IP address, 1 for \n, 1 for null, so 3 spare
+	if (netif_is_up(netif))
+	{
+		RepRapNetworkMessage("Network up, IP=");
+		ipaddr_ntoa_r(&(netif->ip_addr), c_mess, sizeof(c_mess));
+		strncat(c_mess, sizeof(c_mess) - 1, "\n");
+		RepRapNetworkMessage(c_mess);
+		netif->flags |= NETIF_FLAG_LINK_UP;
+	}
+	else
+	{
+		RepRapNetworkMessage("Network down\n");
 	}
 }
 

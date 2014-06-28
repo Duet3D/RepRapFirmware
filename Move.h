@@ -74,22 +74,22 @@ class LookAhead
 protected:
 
 	LookAhead(Move* m, Platform* p, LookAhead* n);
-	void Init(long ep[], float feedRate, float vv, bool ce, int8_t mt); // Set up this move
+	void Init(const long ep[], float feedRate, float vv, bool ce, int8_t mt); // Set up this move
 	LookAhead* Next();													// Next one in the ring
 	LookAhead* Previous();												// Previous one in the ring
-	long* MachineEndPoints();											// Endpoints of a move in machine coordinates
+	const long* MachineEndPoints() const;
 	float MachineToEndPoint(int8_t drive);								// Convert a move endpoint to real mm coordinates
 	static float MachineToEndPoint(int8_t drive, long coord);			// Convert any number to a real coordinate
 	static long EndPointToMachine(int8_t drive, float coord);			// Convert real mm to a machine coordinate
-	int8_t GetMovementType();											// What sort of move is this?
-	float FeedRate();													// How fast is the maximum speed for this move
-	float V();															// The speed at the end of the move
+	int8_t GetMovementType() const;										// What sort of move is this?
+	float FeedRate() const;												// How fast is the maximum speed for this move
+	float V() const;													// The speed at the end of the move
 	void SetV(float vv);												// Set the end speed
 	void SetFeedRate(float f);											// Set the desired feedrate
-	int8_t Processed();													// Where we are in the look-ahead prediction sequence
+	int8_t Processed() const;											// Where we are in the look-ahead prediction sequence
 	void SetProcessed(MovementState ms);								// Set where we are the the look ahead processing
 	void SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive);		// Force an end ppoint and st its speed to stopped
-	bool CheckEndStops();												// Are we checking endstops on this move?
+	bool CheckEndStops() const;											// Are we checking endstops on this move?
 	void Release();														// This move has been processed and executed
 
 private:
@@ -124,9 +124,9 @@ protected:
 	MovementProfile Init(LookAhead* lookAhead, float& u, float& v); // Set up the DDA.  Also used experimentally in look ahead.
 	void Start(bool noTest);										// Start executing the DDA.  I.e. move the move.
 	void Step();													// Take one step of the DDA.  Called by timed interrupt.
-	bool Active();													// Is the DDA running?
+	bool Active() const;
 	DDA* Next();													// Next entry in the ring
-	float InstantDv();												// The lowest speed that may be used
+	float InstantDv() const;
 
 private:
 
@@ -152,14 +152,13 @@ private:
     float distance;							// How long is the move in real distance
     float acceleration;						// The acceleration to use
     float instantDv;						// The lowest possible velocity
+    float feedRate;
     volatile bool active;					// Is the DDA running?
 };
-
 
 /**
  * This is the master movement class.  It controls all movement in the machine.
  */
-
 class Move
 {   
     friend class DDA;
@@ -186,21 +185,21 @@ class Move
     void SetXBedProbePoint(int index, float x);	// Record the X coordinate of a probe point
     void SetYBedProbePoint(int index, float y);	// Record the Y coordinate of a probe point
     void SetZBedProbePoint(int index, float z);	// Record the Z coordinate of a probe point
-    float xBedProbePoint(int index);			// Get the X coordinate of a probe point
-    float yBedProbePoint(int index);			// Get the Y coordinate of a probe point
-    float zBedProbePoint(int index);			// Get the Z coordinate of a probe point
-    int NumberOfProbePoints();					// How many points to probe have been set?  0 if incomplete
-    int NumberOfXYProbePoints();				// How many XY coordinates of probe points have been set (Zs may not have been probed yet)
-    bool AllProbeCoordinatesSet(int index);		// XY, and Z all set for this one?
-    bool XYProbeCoordinatesSet(int index);		// Just XY set for this one?
+    float xBedProbePoint(int index) const;		// Get the X coordinate of a probe point
+    float yBedProbePoint(int index) const;		// Get the Y coordinate of a probe point
+    float zBedProbePoint(int index)const ;		// Get the Z coordinate of a probe point
+    int NumberOfProbePoints() const;				// How many points to probe have been set?  0 if incomplete
+    int NumberOfXYProbePoints() const;			// How many XY coordinates of probe points have been set (Zs may not have been probed yet)
+    bool AllProbeCoordinatesSet(int index) const;	// XY, and Z all set for this one?
+    bool XYProbeCoordinatesSet(int index) const;	// Just XY set for this one?
     void SetZProbing(bool probing);				// Set the Z probe live
     void SetProbedBedEquation();				// When we have a full set of probed points, work out the bed's equation
-    float SecondDegreeTransformZ(float x, float y); // Used for second degree bed equation
-    float GetLastProbedZ();						// What was the Z when the probe last fired?
+    float SecondDegreeTransformZ(float x, float y) const; // Used for second degree bed equation
+    float GetLastProbedZ() const;				// What was the Z when the probe last fired?
     void SetAxisCompensation(int8_t axis, float tangent); // Set an axis-pair compensation angle
     void SetIdentityTransform();				// Cancel the bed equation; does not reset axis angle compensation
-    void Transform(float move[]);				// Take a position and apply the bed and the axis-angle compensations
-    void InverseTransform(float move[]);		// Go from a transformed point back to user coordinates
+    void Transform(float move[]) const;			// Take a position and apply the bed and the axis-angle compensations
+    void InverseTransform(float move[]) const;	// Go from a transformed point back to user coordinates
     void Diagnostics();							// Report useful stuff
     float ComputeCurrentCoordinate(int8_t drive,// Turn a DDA value back into a real world coordinate
     		LookAhead* la, DDA* runningDDA);
@@ -210,17 +209,16 @@ class Move
   
     bool DDARingAdd(LookAhead* lookAhead);				// Add a processed look-ahead entry to the DDA ring
     DDA* DDARingGet();									// Get the next DDA ring entry to be run
-    bool DDARingEmpty();								// Anything there?
-    bool NoLiveMovement();								// Is a move running, or are there any queued?
-    bool DDARingFull();									// Any more room?
+    bool DDARingEmpty() const;
+    bool NoLiveMovement() const;
+    bool DDARingFull() const;
     bool GetDDARingLock();								// Lock the ring so only this function may access it
     void ReleaseDDARingLock();							// Release the DDA ring lock
-    bool LookAheadRingEmpty();							// Anything there?
-    bool LookAheadRingFull();							// Any more room?
-    bool LookAheadRingAdd(long ep[], float feedRate, 	// Add an entry to the look-ahead ring for processing
-    		float vv, bool ce, int8_t movementType);
+    bool LookAheadRingEmpty() const;
+    bool LookAheadRingFull() const;
+    bool LookAheadRingAdd(const long ep[], float feedRate, float vv, bool ce, int8_t movementType);
     LookAhead* LookAheadRingGet();						// Get the next entry from the look-ahead ring
-    int8_t GetMovementType(long sp[], long ep[]);		// XY? Z? extruder only?
+    int8_t GetMovementType(const long sp[], const long ep[]) const;	// XY? Z? extruder only?
 
     Platform* platform;									// The RepRap machine
     GCodes* gCodes;										// The G Codes processing class
@@ -280,7 +278,7 @@ inline void LookAhead::SetV(float vv)
   v = vv;
 }
 
-inline float LookAhead::V() 
+inline float LookAhead::V() const
 {
   return v;
 }
@@ -292,8 +290,7 @@ inline float LookAhead::MachineToEndPoint(int8_t drive)
 	return ((float)(endPoint[drive]))/platform->DriveStepsPerUnit(drive);
 }
 
-
-inline float LookAhead::FeedRate()
+inline float LookAhead::FeedRate() const
 {
 	return feedRate;
 }
@@ -303,7 +300,7 @@ inline void LookAhead::SetFeedRate(float f)
 	feedRate = f;
 }
 
-inline int8_t LookAhead::Processed() 
+inline int8_t LookAhead::Processed() const
 {
   return processed;
 }
@@ -321,7 +318,7 @@ inline void LookAhead::Release()
 	 processed = released;
 }
 
-inline bool LookAhead::CheckEndStops()
+inline bool LookAhead::CheckEndStops() const
 {
   return checkEndStops;
 }
@@ -333,19 +330,19 @@ inline void LookAhead::SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive)
   v = 0.0; 
 }
 
-inline long* LookAhead::MachineEndPoints()
+inline const long* LookAhead::MachineEndPoints() const
 {
 	return endPoint;
 }
 
-inline int8_t LookAhead::GetMovementType()
+inline int8_t LookAhead::GetMovementType() const
 {
 	return movementType;
 }
 
 //******************************************************************************************************
 
-inline bool DDA::Active()
+inline bool DDA::Active() const
 {
   return active;
 }
@@ -355,7 +352,7 @@ inline DDA* DDA::Next()
   return next;
 }
 
-inline float DDA::InstantDv()
+inline float DDA::InstantDv() const
 {
   return instantDv;
 }
@@ -363,12 +360,12 @@ inline float DDA::InstantDv()
 
 //***************************************************************************************
 
-inline bool Move::DDARingEmpty()
+inline bool Move::DDARingEmpty() const
 {
   return ddaRingGetPointer == ddaRingAddPointer;
 }
 
-inline bool Move::NoLiveMovement()
+inline bool Move::NoLiveMovement() const
 {
   if(dda != NULL)
     return false;
@@ -377,19 +374,19 @@ inline bool Move::NoLiveMovement()
 
 // Leave a gap of 2 as the last Get result may still be being processed
 
-inline bool Move::DDARingFull()
+inline bool Move::DDARingFull() const
 {
   return ddaRingAddPointer->Next()->Next() == ddaRingGetPointer;
 }
 
-inline bool Move::LookAheadRingEmpty()
+inline bool Move::LookAheadRingEmpty() const
 {
   return lookAheadRingCount == 0;
 }
 
 // Leave a gap of 2 as the last Get result may still be being processed
 
-inline bool Move::LookAheadRingFull()
+inline bool Move::LookAheadRingFull() const
 {
   if(!(lookAheadRingAddPointer->Processed() & released))
     return true;
@@ -476,17 +473,17 @@ inline void Move::SetZBedProbePoint(int index, float z)
 	probePointSet[index] |= zSet;
 }
 
-inline float Move::xBedProbePoint(int index)
+inline float Move::xBedProbePoint(int index) const
 {
 	return xBedProbePoints[index];
 }
 
-inline float Move::yBedProbePoint(int index)
+inline float Move::yBedProbePoint(int index) const
 {
 	return yBedProbePoints[index];
 }
 
-inline float Move::zBedProbePoint(int index)
+inline float Move::zBedProbePoint(int index) const
 {
 	return zBedProbePoints[index];
 }
@@ -496,22 +493,22 @@ inline void Move::SetZProbing(bool probing)
 	zProbing = probing;
 }
 
-inline float Move::GetLastProbedZ()
+inline float Move::GetLastProbedZ() const
 {
 	return lastZHit;
 }
 
-inline bool Move::AllProbeCoordinatesSet(int index)
+inline bool Move::AllProbeCoordinatesSet(int index) const
 {
 	return probePointSet[index] == (xSet | ySet | zSet);
 }
 
-inline bool Move::XYProbeCoordinatesSet(int index)
+inline bool Move::XYProbeCoordinatesSet(int index) const
 {
 	return (probePointSet[index]  & xSet) &&  (probePointSet[index]  & ySet);
 }
 
-inline int Move::NumberOfProbePoints()
+inline int Move::NumberOfProbePoints() const
 {
 	if(AllProbeCoordinatesSet(0) && AllProbeCoordinatesSet(1) && AllProbeCoordinatesSet(2))
 	{
@@ -523,7 +520,7 @@ inline int Move::NumberOfProbePoints()
 	return 0;
 }
 
-inline int Move::NumberOfXYProbePoints()
+inline int Move::NumberOfXYProbePoints() const
 {
 	if(XYProbeCoordinatesSet(0) && XYProbeCoordinatesSet(1) && XYProbeCoordinatesSet(2))
 	{
@@ -547,7 +544,7 @@ inline int Move::NumberOfXYProbePoints()
  *
  *   The values of x and y are transformed to put them in the interval [0, 1].
  */
-inline float Move::SecondDegreeTransformZ(float x, float y)
+inline float Move::SecondDegreeTransformZ(float x, float y) const
 {
 	x = (x - xBedProbePoints[0])*xRectangle;
 	y = (y - yBedProbePoints[0])*yRectangle;
@@ -558,7 +555,7 @@ inline float Move::SecondDegreeTransformZ(float x, float y)
 
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
-	float hitPoint = 0.0;
+	float hitPoint = platform->AxisMinimum(drive);
 	if(drive == Z_AXIS)
 	{
 		if(zProbing)
@@ -575,22 +572,29 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 			{
 				// Z axis has not yet been homed, so treat this probe as a homing command
 				la->SetDriveCoordinateAndZeroEndSpeed(platform->ZProbeStopHeight(), drive);
-				lastZHit = 0.0;
+				gCodes->SetAxisIsHomed(drive);
+				lastZHit = hitPoint;
 			}
 			return;
 		} else
 		{
 			// Executing G30, so set the current Z height to the value at which the end stop is triggered
-			lastZHit = platform->ZProbeStopHeight();
-			hitPoint = lastZHit;
+			// Transform it first so that the height is correct in user coordinates
+			float xyzPoint[DRIVES + 1];
+			LiveCoordinates(xyzPoint);
+			xyzPoint[Z_AXIS] = lastZHit = platform->ZProbeStopHeight();
+			Transform(xyzPoint);
+			hitPoint = xyzPoint[Z_AXIS];
 		}
 	}
 	la->SetDriveCoordinateAndZeroEndSpeed(hitPoint, drive);
+	gCodes->SetAxisIsHomed(drive);
 }
 
 inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
-  la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisLength(drive), drive);
+  la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisMaximum(drive), drive);
+  gCodes->SetAxisIsHomed(drive);
 }
 
 inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)

@@ -34,15 +34,15 @@ class PID
     PID(Platform* p, int8_t h);
     void Init();									// (Re)Set everything to start
     void Spin();									// Called in a tight loop to keep things running
-    void SetActiveTemperature(const float& t);		// Set the temperature required when working (Celsius)
-    float GetActiveTemperature();					// Get the active temperature
-    void SetStandbyTemperature(const float& t);		// Set the temperature to use when idle (celsius)
-    float GetStandbyTemperature();					// Get the idle temperature
+    void SetActiveTemperature(float t);
+    float GetActiveTemperature() const;
+    void SetStandbyTemperature(float t);
+    float GetStandbyTemperature() const;
     void Activate();								// Switch from idle to active
     void Standby();									// Switch from active to idle
-    bool Active();									// Are we active?
+    bool Active() const;
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
-    float GetTemperature();							// Get the current temperature
+    float GetTemperature() const;
     
  // private:
   
@@ -52,7 +52,6 @@ class PID
     float temperature;								// The current temperature
     float lastTemperature;							// The previous current temperature
     float temp_iState;								// The integral PID component
-    float temp_dState;								// The derivative PID component
     bool active;									// Are we active or standby?
     int8_t heater;									// The index of our heater
     int8_t badTemperatureCount;						// Count of sequential dud readings
@@ -72,16 +71,16 @@ class Heat
     void Spin();												// Called in a tight loop to keep everything going
     void Init();												// Set everything up
     void Exit();												// Shut everything down
-    void SetActiveTemperature(int8_t heater, const float& t);	// Set a heater's active temperature (celsius)
-    float GetActiveTemperature(int8_t heater);					// What is a heater's active temperature?
-    void SetStandbyTemperature(int8_t heater, const float& t);	// Set a heater's standby temperature (celsius)
-    float GetStandbyTemperature(int8_t heater);					// What is a heater's standby temperature?
+    void SetActiveTemperature(int8_t heater, float t);
+    float GetActiveTemperature(int8_t heater) const;
+    void SetStandbyTemperature(int8_t heater, float t);
+    float GetStandbyTemperature(int8_t heater) const;
     void Activate(int8_t heater);								// Turn on a heater
     void Standby(int8_t heater);								// Set a heater idle
-    float GetTemperature(int8_t heater);						// Get the temperature of a heater
+    float GetTemperature(int8_t heater) const;
     void ResetFault(int8_t heater);								// Reset a heater fault - oly call this if you know what you are doing
-    bool AllHeatersAtSetTemperatures();							// Is everything at temperature within tolerance?
-    bool HeaterAtSetTemperature(int8_t heater);					// Is a specific heater at temperature within tolerance?
+    bool AllHeatersAtSetTemperatures() const;
+    bool HeaterAtSetTemperature(int8_t heater) const;			// Is a specific heater at temperature within tolerance?
     void Diagnostics();											// Output useful information
     
   private:
@@ -97,32 +96,32 @@ class Heat
 
 //***********************************************************************************************************
 
-inline bool PID::Active()
+inline bool PID::Active() const
 {
 	return active;
 }
 
-inline void PID::SetActiveTemperature(const float& t)
+inline void PID::SetActiveTemperature(float t)
 {
   activeTemperature = t;
 }
 
-inline float PID::GetActiveTemperature()
+inline float PID::GetActiveTemperature() const
 {
   return activeTemperature;
 }
 
-inline void PID::SetStandbyTemperature(const float& t)
+inline void PID::SetStandbyTemperature(float t)
 {
   standbyTemperature = t;
 }
 
-inline float PID::GetStandbyTemperature()
+inline float PID::GetStandbyTemperature() const
 {
   return standbyTemperature;
 }
 
-inline float PID::GetTemperature()
+inline float PID::GetTemperature() const
 {
   return temperature;
 }
@@ -144,7 +143,7 @@ inline void PID::ResetFault()
 }
 
 
-inline void Heat::SetActiveTemperature(int8_t heater, const float& t)
+inline void Heat::SetActiveTemperature(int8_t heater, float t)
 {
   if (heater >= 0 && heater < HEATERS)
   {
@@ -152,12 +151,12 @@ inline void Heat::SetActiveTemperature(int8_t heater, const float& t)
   }
 }
 
-inline float Heat::GetActiveTemperature(int8_t heater)
+inline float Heat::GetActiveTemperature(int8_t heater) const
 {
 	return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetActiveTemperature() : ABS_ZERO;
 }
 
-inline void Heat::SetStandbyTemperature(int8_t heater, const float& t)
+inline void Heat::SetStandbyTemperature(int8_t heater, float t)
 {
   if (heater >= 0 && heater < HEATERS)
   {
@@ -165,12 +164,12 @@ inline void Heat::SetStandbyTemperature(int8_t heater, const float& t)
   }
 }
 
-inline float Heat::GetStandbyTemperature(int8_t heater)
+inline float Heat::GetStandbyTemperature(int8_t heater) const
 {
   return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
 }
 
-inline float Heat::GetTemperature(int8_t heater)
+inline float Heat::GetTemperature(int8_t heater) const
 {
   return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetTemperature() : ABS_ZERO;
 }
@@ -198,7 +197,6 @@ inline void Heat::ResetFault(int8_t heater)
     pids[heater]->ResetFault();
   }
 }
-
 
 
 #endif

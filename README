@@ -27,11 +27,11 @@ General design principles:
   * Make everything except the Platform class (see below) as stateless as possible,
   * No use of conditional compilation except for #include guards - if you need that, you should be
        forking the repository to make a new branch - let the repository take the strain,
-  * Concentration of all machine-dependent defintions and code in Platform.h and Platform.cpp,
+  * Concentration of all machine-dependent definitions and code in Platform.h and Platform.cpp,
   * No specials for (X,Y) or (Z) - all movement is 3-dimensional,
   * Except in Platform.h, use real units (mm, seconds etc) throughout the rest of the code wherever possible,
   * Try to be efficient in memory use, but this is not critical,
-  * Labour hard to be efficient in time use, and this is  critical,
+  * Labour hard to be efficient in time use, and this is critical,
   * Don't abhor floats - they work fast enough if you're clever,
   * Don't avoid arrays and structs/classes,
   * Don't avoid pointers,
@@ -104,6 +104,9 @@ There is a single interrupt chain entered via Platform.Interrupt().  This contro
 this chain of code should be the only place that volatile declarations and structure/variable-locking are
 required.  All the rest of the code is called sequentially and repeatedly as follows:
 
+As of version 057r-dc42 the tick interrupt (which is set up by the Arduino core) is also used to set up ADC conversions,
+read the result of the last conversion, and shut down heaters when temperature errors are detected.
+
 All the main classes have a Spin() function.  These are called in a loop by the RepRap.Spin() function and implement
 simple timesharing.  No class does, or ever should, wait inside one of its functions for anything to happen or call
 any sort of delay() function.  The general rule is:
@@ -140,7 +143,7 @@ Spin() function more than once from RepRap.Spin().
 Compiling from Source
 
 
-RepRap Frimware was developed using the Eclipse IDE, which is much more powerful for big software projects than the Arduino IDE.
+RepRap Firmware was developed using the Eclipse IDE, which is much more powerful for big software projects than the Arduino IDE.
 
 We use Eclipse Juno, which is available here:
 
@@ -154,7 +157,11 @@ And the Arduino IDE itself (make sure you get the one for the Due/Duet - version
 
    http://arduino.cc/en/Main/Software
 
-Finally you will need our libraries for driving the periphearls:
+As of this firmware version 0.57r-dc42, the Arduino IDE must be patched to enable watchdog support. Locate function init()
+inside file variant.cpp (....\hardware\arduino\sam\variants\arduino_due_x) and comment out the call to WDT_disable(WDT).
+If you don't do this, the firmware will still work but you won't get the benefit of watchdog protection.
+
+Finally you will need our libraries for driving the peripherals:
 
    https://github.com/jmgiacalone/Arduino-libraries
 
@@ -162,7 +169,7 @@ Start by getting the Arduino IDE programming your Duet with a simple Hello World
 
 Then install Eclipse and the Arduino plugin.
 
-Make temporary copise of RepRapFirmware.cpp and RepRapFirmware.h from your download in another folder (you will only need to do this once).
+Make temporary copies of RepRapFirmware.cpp and RepRapFirmware.h from your download in another folder (you will only need to do this once).
 
 Finally use Eclipse to open the Arduino project called RepRapFirmware in the folder where you have downloaded the RepRap Firmware code.  Tell Eclipse to use the Arduino-libraries files you downloaded as the local libraries.  Eclipse will complain that the project already exists (which it does - it is your download).  Ignore this and it will open the project anyway.  
 
@@ -179,6 +186,22 @@ to your project.  Under no circumstances be tempted to add standard Arduino libr
 
 You should now be able to compile the code and upload the result to the Duet.
 
+-------------
+Note on dc42 fork of this firmware:
+
+As well as containing various bug fixes and performance improvements, I have added various functionality compared to the original RepRapPro version.
+The major changes are:
+
+- Z probe reading is included in the web server poll response
+- Homed status (i.e. whether homes since reset) is maintained for all 3 axes and included in the web server poll response
+- Once the X and Y axes have been homed, movement is limited to the range of the axis, except when the G0 or G1 command includes
+  the check endstops (S1) parameter. Use the M208 command to set axis travel if the default values in the firmware are incorrect for your machine.
+- Implemented M301 (hot end PID parameters) and M304 (bed PID parameters) commands. Extended these commands to allow setting of thermistor
+  resistance at 25C (R parameter) and thermistor beta (B parameter). A negative P parameter means don't use PID, use bang-bang control.
+- Implemented M999. This resets the Duet.
+- Added temperature (T) and temperature coefficient of height (C) parameters to the G31 command
+- Added support for modulated IR sensor (M558 P2) and ultrasonic sensor (M558 P3)
+- Various parameters are now saved to flash memory (Z-probe parameters, network parameters, PID parameters)
 
 -------------
 

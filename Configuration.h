@@ -24,9 +24,9 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.65e"
-#define DATE "2014-05-13"
-#define LAST_AUTHOR "reprappro"
+#define VERSION "0.65j-dc42"
+#define DATE "2014-06-21"
+#define LAST_AUTHOR "reprappro & dc42"
 
 // Other firmware that we might switch to be compatible with.
 
@@ -51,8 +51,7 @@ enum Compatibility
 #define TEMPERATURE_CLOSE_ENOUGH (2.0) 		// Celsius
 #define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
 
-// If temperatures fall outside this range, something
-// nasty has happened.
+// If temperatures fall outside this range, something nasty has happened.
 
 #define MAX_BAD_TEMPERATURE_COUNT 6
 #define BAD_LOW_TEMPERATURE -10.0
@@ -67,14 +66,12 @@ enum Compatibility
 
 // Webserver stuff
 
-//#define NETWORK true // Set true to turn the ethernet on
-
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
 #define INDEX_PAGE "reprap.htm"
-#define MESSAGE_FILE "messages.txt"
+//#define MESSAGE_FILE "messages.txt"	// currently unused
 #define FOUR04_FILE "html404.htm"
-#define CONFIG_FILE "config.g" // The file that sets the machine's parameters
+#define CONFIG_FILE "config.g" 			// The file that sets the machine's parameters
 #define HOME_X_G "homex.g"
 #define HOME_Y_G "homey.g"
 #define HOME_Z_G "homez.g"

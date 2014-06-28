@@ -1,6 +1,9 @@
 ; RepRapPro Ormerod
 ; Standard configuration G Codes
+<<<<<<< HEAD
 M111 S0; Debug off
+=======
+>>>>>>> duet
 M550 POrmerod; Set the machine's name
 M551 Preprap; Set the password
 M540 P0xBE:0xEF:0xDE:0xAD:0xFE:0xED ; Set the MAC address
