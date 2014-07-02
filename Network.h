@@ -159,8 +159,10 @@ public:
 	Network();
 	void Init();
 	void Spin();
+	void Interrupt();
 
-	bool InLwip() const { return inLwip; }
+	bool InLwip() const;
+	void ReadPacket();
 
 private:
 
@@ -175,7 +177,7 @@ private:
 	RequestState * volatile writingTransactions;
 
 	bool active;
-	uint8_t inLwip;
+	bool volatile readingData;
 
 	ConnectionState *dataCs;
 	ConnectionState *ftpCs;

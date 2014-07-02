@@ -47,7 +47,6 @@
 #include "ethernet_sam.h"
 //#include "emac.h"
 #include "ethernet_phy.h"
-#include "timer_mgt_sam.h"
 //#include "sysclk.h"
 /* lwIP includes */
 #include "lwip/src/include/lwip/sys.h"
@@ -68,8 +67,7 @@
 #endif
 #include "lwip/src/include/netif/etharp.h"
 #include "lwip/src/sam/include/netif/ethernetif.h"
-
-#include "lwip_test.h"
+#include "emac.h"
 
 extern void RepRapNetworkMessage(const char*);
 
@@ -119,13 +117,13 @@ static timers_info_t gs_timers_table[] = {
 /**
  * \brief Process timing functions.
  */
-static void timers_update(void)
+void ethernet_timers_update(void)
 {
 	static uint32_t ul_last_time;
 	uint32_t ul_cur_time, ul_time_diff, ul_idx_timer;
 	timers_info_t *p_tmr_inf;
 
-	ul_cur_time = sys_get_ms();
+	ul_cur_time = millis();
 	ul_time_diff = ul_cur_time - ul_last_time;		// we're using unsigned arithmetic, so this handles wrap around
 
 	if (ul_time_diff) {
@@ -215,9 +213,6 @@ void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask
 {
 	/* Set hw and IP parameters, initialize MAC too */
 	ethernet_configure_interface(ipAddress, netMask, gateWay);
-
-	/* Init timer service */
-	sys_init_timing();
 }
 
 
@@ -250,15 +245,29 @@ void status_callback(struct netif *netif)
 /**0
  *  \brief Manage the Ethernet packets, if any received process them.
  *  After processing any packets, manage the lwIP timers.
+ *
+ *  \return Returns true if data has been processed.
  */
-//int HttpSend();
-
-void ethernet_task(void)
+bool ethernet_read(void)
 {
-	//HttpSend();
 	/* Run polling tasks */
-	ethernetif_input(&gs_net_if);
+	bool data_read = ethernetif_input(&gs_net_if);
 
 	/* Run periodic tasks */
-	timers_update();
+	ethernet_timers_update();
+
+	return data_read;
+}
+
+/*
+ * \brief Sets the EMAC RX callback. It will be called when a new packet
+ * can be processed and should be called with a NULL parameter inside
+ * the actual callback.
+ *
+ * \param callback The callback to be called when a new packet is ready
+ */
+void ethernet_set_rx_callback(emac_dev_tx_cb_t callback)
+{
+
+	ethernetif_set_rx_callback(callback);
 }

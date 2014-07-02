@@ -416,57 +416,26 @@ static struct pbuf *low_level_input(struct netif *netif)
  *
  * \param pv_parameters the lwip network interface structure for this
  * ethernetif.
+ *
+ * \return Returns true if data has been processed.
  */
 
-//void ethernetif_input(void * pvParameters)
-//{
-//	struct netif      *netif = (struct netif *)pvParameters;
-//	struct pbuf       *p;
-//
-//	/* move received packet into a new pbuf */
-//	p = low_level_input( netif );
-//	if( p == NULL )
-//		return;
-//
-//	if( ERR_OK != netif->input( p, netif ) )
-//	{
-//		pbuf_free(p);
-//		p = NULL;
-//	}
-//}
-
-
-void ethernetif_input(void * pvParameters)
+bool ethernetif_input(void * pvParameters)
 {
-
 	struct netif      *netif = (struct netif *)pvParameters;
 	struct pbuf       *p;
 
-#ifdef FREERTOS_USED
-	for( ;; ) {
-		do {
-#endif
-			/* move received packet into a new pbuf */
-			p = low_level_input( netif );
-			if( p == NULL ) {
-#ifdef FREERTOS_USED
-				/* No packet could be read.  Wait a for an interrupt to tell us
-				there is more data available. */
-				vTaskDelay(100);
-			}
-		}while( p == NULL );
-#else
-				return;
-			}
-#endif
+	/* move received packet into a new pbuf */
+	p = low_level_input( netif );
+	if( p == NULL )
+		return false;
 
-		if( ERR_OK != netif->input( p, netif ) ) {
-			pbuf_free(p);
-			p = NULL;
-		}
-#ifdef FREERTOS_USED
+	if( ERR_OK != netif->input( p, netif ) )
+	{
+		pbuf_free(p);
+		p = NULL;
 	}
-#endif
+	return true;
 }
 
 
@@ -539,4 +508,9 @@ void RepRapNetworkSetMACAddress(const u8_t macAddress[])
 	{
 		gs_uc_mac_address[i] = macAddress[i];
 	}
+}
+
+void ethernetif_set_rx_callback(emac_dev_tx_cb_t callback)
+{
+	emac_dev_set_rx_callback(&gs_emac_dev, callback);
 }

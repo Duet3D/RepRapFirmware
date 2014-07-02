@@ -124,7 +124,6 @@ class Webserver
     char ReadGCode();
 
     void ConnectionLost(const ConnectionState *cs);
-    void SetReadingConnection();
 
   private:
 

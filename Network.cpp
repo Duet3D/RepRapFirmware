@@ -50,7 +50,6 @@ extern "C"
 #include "lwip/src/include/lwip/tcp.h"
 
 void RepRapNetworkSetMACAddress(const u8_t macAddress[]);
-
 }
 
 const unsigned int requestStateSize = MEMP_NUM_TCP_PCB * 2;		// number of RequestStates that can be used for network IO
@@ -62,6 +61,9 @@ static tcp_pcb *ftp_pasv_pcb = NULL;
 static tcp_pcb *telnet_pcb = NULL;
 
 static bool closingDataPort = false;
+
+static bool canReceive = true;
+static uint8_t inLwip = 0;
 
 
 // Called to put out a message via the RepRap firmware.
@@ -122,6 +124,28 @@ static void SendData(tcp_pcb *pcb, ConnectionState *cs)
 
 extern "C"
 {
+
+// Callback functions for the EMAC driver
+
+static void emac_read_packet(uint32_t ul_status)
+{
+	// Because the LWIP stack can become corrupted if we work with it in parallel,
+	// we may have to wait for the next Spin() call to read the next packet.
+	// On this occasion, we can set the RX callback again.
+	if (inLwip)
+	{
+		reprap.GetNetwork()->ReadPacket();
+		ethernet_set_rx_callback(NULL);
+	}
+	else
+	{
+		++inLwip;
+		do {
+			// read all queued packets from the RX buffer
+		} while (ethernet_read());
+		--inLwip;
+	}
+}
 
 // Callback functions called by LWIP
 
@@ -367,7 +391,7 @@ SendBuffer::SendBuffer(SendBuffer *n) : next(n)
 Network::Network()
 {
 	active = false;
-	inLwip = 0;
+	readingData = false;
 
 	freeTransactions = NULL;
 	readyTransactions = NULL;
@@ -392,22 +416,22 @@ Network::Network()
 
 void Network::AppendTransaction(RequestState* volatile* list, RequestState *r)
 {
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	r->next = NULL;
 	while (*list != NULL)
 	{
 		list = &((*list)->next);
 	}
 	*list = r;
-	cpu_irq_restore(flags);
+	--inLwip;
 }
 
 void Network::PrependTransaction(RequestState* volatile* list, RequestState *r)
 {
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	r->next = *list;
 	*list = r;
-	cpu_irq_restore(flags);
+	--inLwip;
 }
 
 void Network::Init()
@@ -420,21 +444,26 @@ void Network::Spin()
 {
 	if (active)
 	{
-		// Fetch incoming data
-		// ethernet_task() is called twice because the EMAC RX buffers have been increased by dc42's Arduino patch.
-		++inLwip;
-		ethernet_task();
-		ethernet_task();
-		--inLwip;
+		// See if we can read any packets
+		if (readingData)
+		{
+			readingData = false;
+
+			++inLwip;
+			do {
+				// read all queued packets from the RX buffer
+			} while (ethernet_read());
+			--inLwip;
+
+			ethernet_set_rx_callback(&emac_read_packet);
+		}
 
 		// See if we can send anything
 		RequestState* r = writingTransactions;
 		if (r != NULL)
 		{
+			++inLwip;
 			bool finished = r->Send();
-
-			// Disable interrupts while we mess around with the lists in case we get a callback from a network ISR
-			irqflags_t flags = cpu_irq_save();
 			writingTransactions = r->next;
 
 			if (finished)
@@ -460,7 +489,7 @@ void Network::Spin()
 			{
 				AppendTransaction(&writingTransactions, r);
 			}
-			cpu_irq_restore(flags);
+			--inLwip;
 		}
 	}
 	else if (establish_ethernet_link())
@@ -469,8 +498,29 @@ void Network::Spin()
 		httpd_init();
 		ftpd_init();
 		telnetd_init();
+		ethernet_set_rx_callback(&emac_read_packet);
 		active = true;
 	}
+}
+
+void Network::Interrupt()
+{
+	if (!inLwip)
+	{
+		++inLwip;
+		ethernet_timers_update();
+		--inLwip;
+	}
+}
+
+bool Network::InLwip() const
+{
+	return (inLwip);
+}
+
+void Network::ReadPacket()
+{
+	readingData = true;
 }
 
 bool Network::AllocateSendBuffer(SendBuffer *&buffer)
@@ -525,19 +575,19 @@ void Network::SentPacketAcknowledged(ConnectionState *cs, unsigned int len)
 // It must set the state of any RequestState that refers to it to connection accepted.
 void Network::ConnectionAccepted(ConnectionState *cs)
 {
-	irqflags_t flags = cpu_irq_save();
+	inLwip++;
 	RequestState* r = freeTransactions;
 	if (r == NULL)
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ConnectionAccepted() - no free transactions!\n");
 		return;
 	}
 
 	freeTransactions = r->next;
-	cpu_irq_restore(flags);
-
 	r->Set(NULL, cs, connected);
+	inLwip--;
+
 	AppendTransaction(&readyTransactions, r);
 //	debugPrintf("Network - connection accepted\n");
 }
@@ -561,10 +611,7 @@ void Network::ConnectionClosed(ConnectionState* cs)
 	}
 
 	// inform the Webserver that we are about to remove an existing connection
-	if (cs->pcb != NULL)
-	{
-		reprap.GetWebserver()->ConnectionLost(cs);
-	}
+	reprap.GetWebserver()->ConnectionLost(cs);
 
 	// cs points to a connection state block that the caller is about to release, so we need to stop referring to it.
 	// There may be one RequestState in the writing or closing list referring to it, and possibly more than one in the ready list.
@@ -588,36 +635,36 @@ void Network::ConnectionClosed(ConnectionState* cs)
 
 void Network::ConnectionClosedGracefully(ConnectionState *cs)
 {
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	RequestState* r = freeTransactions;
 	if (r == NULL)
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ConnectionClosedGracefully() - no free transactions!\n");
 		return;
 	}
 	freeTransactions = r->next;
 	r->Set(NULL, cs, disconnected);
-	cpu_irq_restore(flags);
+	--inLwip;
 
 	AppendTransaction(&readyTransactions, r);
 }
 
 void Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 {
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	RequestState* r = freeTransactions;
 	if (r == NULL)
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::ReceiveInput() - no free transactions!\n");
 		return;
 	}
 
 	freeTransactions = r->next;
-	cpu_irq_restore(flags);
-
 	r->Set(pb, cs, dataReceiving);
+	--inLwip;
+
 	AppendTransaction(&readyTransactions, r);
 //	debugPrintf("Network - input received\n");
 }
@@ -629,48 +676,48 @@ void Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 // will return the same one.
 RequestState *Network::GetRequest(const ConnectionState *cs)
 {
+	++inLwip;
 	RequestState *rs = readyTransactions;
 	if (rs == NULL || cs == NULL || rs->cs == cs)
 	{
+		--inLwip;
 		return rs;
 	}
 
 	// There is at least one ready transaction, but it's not on the connection we are looking for
-	for (;;)
+	for (RequestState *rsNext = rs->next; rsNext != NULL; rsNext = rs->next)
 	{
-		RequestState *rsNext = rs->next;
-		if (rsNext == NULL)
-		{
-			return rsNext;
-		}
 		if (rsNext->cs == cs)
 		{
-			irqflags_t flags = cpu_irq_save();
 			rs->next = rsNext->next;		// remove rsNext from the list
 			rsNext->next = readyTransactions;
 			readyTransactions = rsNext;
-			cpu_irq_restore(flags);
+			--inLwip;
 			return rsNext;
 		}
+
 		rs = rsNext;
 	}
-	return NULL;		// to keep Eclipse happy
+
+	--inLwip;
+	return NULL;
 }
 
 // Send the output data we already have, optionally with a file appended, then close the connection unless keepConnectionOpen is true.
 // The file may be too large for our buffer, so we may have to send it in multiple transactions.
 void Network::SendAndClose(FileStore *f, bool keepConnectionOpen)
 {
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	RequestState *r = readyTransactions;
 	if (r == NULL)
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 	}
 	else
 	{
 		readyTransactions = r->next;
-		cpu_irq_restore(flags);
+		--inLwip;
+
 		r->FreePbuf();
 		if (r->LostConnection())
 		{
@@ -735,20 +782,15 @@ void Network::SendAndClose(FileStore *f, bool keepConnectionOpen)
 void Network::CloseRequest()
 {
 	// Safety check
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	RequestState *r = readyTransactions;
 	RequestStatus status = r->GetStatus();
 	if (status == dataSending)
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 		RepRapNetworkMessage("Network: Cannot close sending request!\n");
 		return;
 	}
-
-	// Free the current transaction
-	readyTransactions = r->next;
-	cpu_irq_restore(flags);
-	AppendTransaction(&freeTransactions, r);
 
 	// Free the current RequestState's data
 	r->FreePbuf();
@@ -767,34 +809,42 @@ void Network::CloseRequest()
 		mem_free(locCs);
 		tcp_close(pcb);
 	}
+
+	// Free the current transaction
+	readyTransactions = r->next;
+	--inLwip;
+
+	AppendTransaction(&freeTransactions, r);
 }
 
 // The current RequestState must be processed again, e.g. because we're still waiting for another
 // data connection.
 void Network::RepeatRequest()
 {
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	RequestState *r = readyTransactions;
 	r->inputPointer = 0; // behave as if this request hasn't been processed yet
 	if (r->next != NULL)
 	{
 		readyTransactions = r->next;
-		cpu_irq_restore(flags);
+		--inLwip;
 
 		AppendTransaction(&readyTransactions, r);
 	}
 	else
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 	}
 }
 
 void Network::OpenDataPort(uint16_t port)
 {
+	++inLwip;
 	tcp_pcb* pcb = tcp_new();
 	tcp_bind(pcb, IP_ADDR_ANY, port);
 	ftp_pasv_pcb = tcp_listen(pcb);
 	tcp_accept(ftp_pasv_pcb, conn_accept);
+	--inLwip;
 }
 
 // Close the data port and return true on success
@@ -823,6 +873,7 @@ bool Network::CloseDataPort()
 			ConnectionState *loc_cs = dataCs;
 //			debugPrintf("CloseDataPort is closing connection dataCS=%08x\n", (unsigned int)loc_cs);
 			ConnectionClosed(loc_cs);
+			++inLwip;
 			tcp_pcb *pcb = loc_cs->pcb;
 			tcp_arg(pcb, NULL);
 			tcp_sent(pcb, NULL);
@@ -830,14 +881,17 @@ bool Network::CloseDataPort()
 			tcp_poll(pcb, NULL, 4);
 			mem_free(loc_cs);
 			tcp_close(pcb);
+			--inLwip;
 		}
 	}
 
 	// close listening data port
 	if (ftp_pasv_pcb != NULL)
 	{
+		++inLwip;
 		tcp_accept(ftp_pasv_pcb, NULL);
 		tcp_close(ftp_pasv_pcb);
+		--inLwip;
 		ftp_pasv_pcb = NULL;
 	}
 
@@ -869,11 +923,11 @@ bool Network::MakeDataRequest()
 	}
 
 	// Get a free transaction
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	RequestState *r = freeTransactions;
 	if (r == NULL)
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::MakeDataRequest() - no free transactions!\n");
 		return false;
 	}
@@ -881,7 +935,8 @@ bool Network::MakeDataRequest()
 
 	// Set up the RequestState and replace the first entry of readyTransactions
 	r->Set(NULL, dataCs, dataSending);
-	cpu_irq_restore(flags);
+	--inLwip;
+
 	PrependTransaction(&readyTransactions, r);
 
 	return true;
@@ -896,11 +951,11 @@ bool Network::MakeFTPRequest()
 	}
 
 	// Get a free transaction
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	RequestState *r = freeTransactions;
 	if (r == NULL)
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::MakeFTPRequest() - no free transactions!\n");
 		return false;
 	}
@@ -908,7 +963,8 @@ bool Network::MakeFTPRequest()
 
 	// Set up the RequestState and replace the first entry of readyTransactions
 	r->Set(NULL, ftpCs, dataSending);
-	cpu_irq_restore(flags);
+	--inLwip;
+
 	PrependTransaction(&readyTransactions, r);
 
 	return true;
@@ -923,11 +979,11 @@ bool Network::MakeTelnetRequest()
 	}
 
 	// Get a free transaction
-	irqflags_t flags = cpu_irq_save();
+	++inLwip;
 	RequestState *r = freeTransactions;
 	if (r == NULL)
 	{
-		cpu_irq_restore(flags);
+		--inLwip;
 		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network::MakeTelnetRequest() - no free transactions!\n");
 		return false;
 	}
@@ -935,7 +991,8 @@ bool Network::MakeTelnetRequest()
 
 	// Set up the RequestState and replace the first entry of readyTransactions
 	r->Set(NULL, telnetCs, dataSending);
-	cpu_irq_restore(flags);
+	--inLwip;
+
 	PrependTransaction(&readyTransactions, r);
 
 	return true;
@@ -1280,9 +1337,11 @@ uint16_t RequestState::GetLocalPort() const
 
 void RequestState::Close()
 {
+	++inLwip;
 	tcp_pcb *pcb = cs->pcb;
 	tcp_poll(pcb, NULL, 4);
 	tcp_recv(pcb, NULL);
+	--inLwip;
 	closeRequested = true;
 }
 
@@ -1291,7 +1350,10 @@ void RequestState::FreePbuf()
 	// Tell LWIP that we have processed data
 	if (cs != NULL && bufferLength > 0 && cs->pcb != NULL)
 	{
+		++inLwip;
 		tcp_recved(cs->pcb, bufferLength);
+		--inLwip;
+
 		bufferLength = 0;
 	}
 

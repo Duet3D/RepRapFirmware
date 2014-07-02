@@ -179,12 +179,6 @@ void Webserver::Spin()
 				{
 					interpreter->ConnectionEstablished();
 
-					// Keep track of the uploading FTP data connections because we can't afford delayed data requests
-					if (is_data_port && interpreter->IsUploading())
-					{
-						readingConnection = req->GetConnection();
-					}
-
 					// Close this request unless ConnectionEstablished() has already used it for sending
 					if (req == net->GetRequest(readingConnection))
 					{
@@ -233,11 +227,7 @@ void Webserver::Spin()
 							// it from the ready transactions by either calling SendAndClose() or CloseRequest().
 							if (interpreter->CharFromClient(c))
 							{
-								if (!interpreter->IsUploading())
-								{
-									readingConnection = NULL;
-								}
-
+								readingConnection = NULL;
 								break;
 							}
 						}
@@ -510,11 +500,11 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 // Handle disconnects here
 void Webserver::ConnectionLost(const ConnectionState *cs)
 {
+	// Inform protcol handlers that this connection has been lost
 	uint16_t local_port = cs->GetLocalPort();
 	if (reprap.Debug())
 	{
-		snprintf(scratchString, STRING_LENGTH, "Webserver: ConnectionLost called with port %d\n", local_port);
-		platform->Message(DEBUG_MESSAGE, scratchString);
+		debugPrintf("Webserver: ConnectionLost called with port %d\n", local_port);
 	}
 
 	ProtocolInterpreter *interpreter;
@@ -538,22 +528,10 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 	}
 	interpreter->ConnectionLost(local_port);
 
-	// When our reading connection has been lost, it is no longer important which
-	// connection is read from first.
+	// If our reading connection is lost, it will be no longer important which connection is read from first.
 	if (cs == readingConnection)
 	{
 		readingConnection = NULL;
-	}
-}
-
-// Make sure the current connection is preferred, so uploads are handled quicker
-void Webserver::SetReadingConnection()
-{
-	Network *net = reprap.GetNetwork();
-	RequestState *r = net->GetRequest();
-	if (r != NULL)
-	{
-		readingConnection = r->GetConnection();
 	}
 }
 
@@ -856,7 +834,6 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	{
 		FileStore *file = platform->GetFileStore("0:/", value, true);
 		StartUpload(file);
-		webserver->SetReadingConnection();
 
 		GetJsonUploadResponse();
 	}
