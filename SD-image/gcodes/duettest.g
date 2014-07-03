@@ -5,7 +5,7 @@ G21 ; mm
 G90 ; Absolute positioning
 M83 ; Extrusion relative
 M906 X800 Y800 Z800 E800 ; Motor currents (mA)
-T1 ; Extruder 0
+T0 ; Extruder 0
 G1 X50 F500
 G1 X0
 G4 P500

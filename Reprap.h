@@ -32,13 +32,15 @@ class RepRap
     void Exit();
     void Interrupt();
     void Diagnostics();
+    void Timing();
     bool Debug() const;
     void SetDebug(bool d);
     void AddTool(Tool* t);
     void SelectTool(int toolNumber);
     void StandbyTool(int toolNumber);
-    void SetToolVariables(int toolNumber, float x, float y, float z, float* standbyTemperatures, float* activeTemperatures);
-    void GetCurrentToolOffset(float& x, float& y, float& z);
+    Tool* GetCurrentTool();
+    Tool* GetTool(int toolNumber);
+    void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures);
     Platform* GetPlatform() const;
     Move* GetMove() const;
     Heat* GetHeat() const;
@@ -66,19 +68,19 @@ inline Heat* RepRap::GetHeat() const { return heat; }
 inline GCodes* RepRap::GetGCodes() const { return gCodes; }
 inline Webserver* RepRap::GetWebserver() const { return webserver; }
 inline bool RepRap::Debug() const { return debug; }
+inline Tool* RepRap::GetCurrentTool() { return currentTool; }
 
 inline void RepRap::SetDebug(bool d)
 {
 	debug = d;
 	if(debug)
 	{
-		platform->Message(HOST_MESSAGE, "Debugging enabled\n");
-		webserver->HandleReply("Debugging enabled\n", false);
+		platform->Message(BOTH_MESSAGE, "Debugging enabled\n");
 		platform->PrintMemoryUsage();
 	}
 	else
 	{
-		webserver->HandleReply("", false);
+		platform->Message(WEB_MESSAGE, "");
 	}
 }
 

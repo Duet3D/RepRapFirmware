@@ -25,8 +25,10 @@ Licence: GPL
 #define STACK 5
 #define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
-#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode //FIXME when working with multiple extruders GCODE_LETTERS[DRIVES] is out of scope
-#define FEEDRATE_LETTER 'F'//FIX to work with multiple extruders without having to re-define GCODE_LETTERS array
+#define GCODE_LETTERS { 'X', 'Y', 'Z' } // The axes in a GCode
+#define FEEDRATE_LETTER 'F'// GCode feedrate
+#define EXTRUDE_LETTER 'E' // GCode extrude
+
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
 class GCodeBuffer
@@ -81,7 +83,7 @@ class GCodes
     char* GetCurrentCoordinates();										// Get where we are as a string
     bool PrintingAFile() const;											// Are we in the middle of printing a file?
     void Diagnostics();													// Send helpful information out
-    int8_t GetSelectedHead();											// return which tool is selected
+    //int8_t GetSelectedHead();											// return which tool is selected
     bool HaveIncomingData() const;										// Is there something that we have to do?
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
     
@@ -103,7 +105,7 @@ class GCodes
     bool SetPrintZProbe(GCodeBuffer *gb, char *reply);					// Either return the probe value, or set its threshold
     bool SetOffsets(GCodeBuffer *gb);									// Deal with a G10
     bool SetPositions(GCodeBuffer *gb);									// Deal with a G92
-    void LoadMoveBufferFromGCode(GCodeBuffer *gb,  						// Set up a move for the Move class
+    bool LoadMoveBufferFromGCode(GCodeBuffer *gb,  						// Set up a move for the Move class
     		bool doingG92, bool applyLimits);
     bool NoHome() const;												// Are we homing and not finished?
     bool Push();														// Push feedrate etc on the stack
@@ -121,7 +123,10 @@ class GCodes
     void WriteHTMLToFile(char b, GCodeBuffer *gb);						// Save an HTML file (usually to upload a new web interface)
     bool OffsetAxes(GCodeBuffer *gb);									// Set offsets - deprecated, use G10
     int8_t Heater(int8_t head) const;									// Legacy G codes start heaters at 0, but we use 0 for the bed.  This sorts that out.
-  
+    void AddNewTool(GCodeBuffer *gb);									// Create a new tool definition
+    void SetToolHeaters(float temperature);								// Set all a tool's heaters to the temperature.  For M104...
+    bool ChangeTool(int newToolNumber);									// Select a new tool
+
     Platform* platform;							// The RepRap machine
     bool active;								// Live and running?
     Webserver* webserver;						// The webserver class
@@ -141,7 +146,7 @@ class GCodes
     float feedrateStack[STACK];					// For dealing with Push and Pop
     FileStore* fileStack[STACK];				// For dealing with Push and Pop
     int8_t stackPointer;						// Push and Pop stack pointer
-    char gCodeLetters[DRIVES + 1]; 				// 'X', 'Y' etc. Extra is for F
+    char gCodeLetters[AXES]; 					// 'X', 'Y', 'Z'
     float lastPos[DRIVES - AXES]; 				// Just needed for relative moves; i.e. not X, Y and Z
 	float record[DRIVES+1];						// Temporary store for move positions
 	float moveToDo[DRIVES+1];					// Where to go set by G1 etc
@@ -156,12 +161,11 @@ class GCodes
     char* eofString;							// What's at the end of an HTML file?
     uint8_t eofStringCounter;					// Check the...
     uint8_t eofStringLength;					// ... EoF string as we read.
-    int8_t selectedHead;						// Which extruder is in use
+    //int8_t selectedHead;						// Which extruder is in use
     bool homeX;									// True to home the X axis this move
     bool homeY;									// True to home the Y axis this move
     bool homeZ;									// True to home the Z axis this move
     int8_t homeAxisMoveCount;					// Counts homing moves
-    float gFeedRate;							// Store for the current feedrate
     int probeCount;								// Counts multiple probe points
     int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
     bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
@@ -169,6 +173,7 @@ class GCodes
     float longWait;								// Timer for things that happen occasionally (seconds)
     bool limitAxes;								// Don't think outside the box.
     bool axisIsHomed[3];						// These record which of the axes have been homed
+    int8_t toolChangeSequence;					// Steps through the tool change procedure
 };
 
 //*****************************************************************************************************
@@ -236,9 +241,9 @@ inline bool GCodes::RunConfigurationGCodes()
 	return !DoFileCannedCycles(platform->GetConfigFile());
 }
 
-inline int8_t GCodes::GetSelectedHead()
-{
-  return selectedHead;
-}
+//inline int8_t GCodes::GetSelectedHead()
+//{
+//  return selectedHead;
+//}
 
 #endif

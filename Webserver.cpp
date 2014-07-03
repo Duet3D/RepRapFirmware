@@ -148,8 +148,7 @@ void Webserver::LoadGcodeBuffer(const char* gc, bool convertWeb)
 				// gcode is too long, we haven't room for another character and a null
 				if (c != ' ' && !inComment)
 				{
-					platform->Message(HOST_MESSAGE, "Webserver: GCode local buffer overflow.\n");
-					HandleReply("Webserver: GCode local buffer overflow", true);
+					platform->Message(BOTH_ERROR_MESSAGE, "Webserver: GCode local buffer overflow.\n");
 					return;
 				}
 				// else we're either in a comment or the current character is a space.
@@ -211,7 +210,7 @@ void Webserver::ProcessGcode(const char* gc)
 		FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 		if(configFile == NULL)
 		{
-		  HandleReply("Configuration file not found", true);
+		  platform->Message(WEB_ERROR_MESSAGE, "Configuration file not found");
 		}
 		else
 		{
@@ -234,10 +233,7 @@ void Webserver::ProcessGcode(const char* gc)
 	  // Copy the gcode to the buffer
 	  size_t len = strlen(gc) + 1;		// number of characters to copy
 	  if (len > GetGcodeBufferSpace())
-	  {
-		  platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
-		  HandleReply("Webserver: GCode buffer overflow", true);
-	  }
+		  platform->Message(BOTH_ERROR_MESSAGE, "Webserver: GCode buffer overflow.\n");
 	  else
 	  {
 		  size_t remaining = gcodeBufLength - gcodeWriteIndex;
@@ -388,7 +384,7 @@ void Webserver::JsonReport(bool ok, const char* request)
 {
   if(ok)
   {
-    if(reprap.Debug())
+    if(webDebug)
     {
       platform->Message(HOST_MESSAGE, "JSON response: ");
       platform->Message(HOST_MESSAGE, jsonResponse);
@@ -401,6 +397,33 @@ void Webserver::JsonReport(bool ok, const char* request)
     platform->Message(HOST_MESSAGE, " not recognised\n");
     clientRequest[0] = 0;
   } 
+}
+
+void Webserver::MessageStringToWebInterface(const char *s, bool error)
+{
+	if (strlen(s) == 0 && !error)
+	{
+		strcpy(gcodeReply, "ok");
+	}
+	else
+	{
+		if (error)
+		{
+			strcpy(gcodeReply, "Error: ");
+			strncat(gcodeReply, s, STRING_LENGTH);
+		}
+		else
+		{
+			strncpy(gcodeReply, s, STRING_LENGTH);
+		}
+		gcodeReply[STRING_LENGTH] = 0;	// array is dimensioned to STRING_LENGTH+1
+	}
+	++seq;
+}
+
+void Webserver::AppendReplyToWebInterface(const char *s, bool error)
+{
+	strncat(gcodeReply, s, STRING_LENGTH);
 }
 
 void Webserver::GetJsonResponse(const char* request)
@@ -421,20 +444,23 @@ void Webserver::GetJsonResponse(const char* request)
     for(int8_t drive = 0; drive < AXES; drive++)
     {
     	strncat(jsonResponse, "\"", STRING_LENGTH);
-    	strncat(jsonResponse, ftoa(0, liveCoordinates[drive], 2), STRING_LENGTH);
+    	snprintf(scratchString, STRING_LENGTH, "%.2f", liveCoordinates[drive]);
+    	strncat(jsonResponse, scratchString, STRING_LENGTH);
     	strncat(jsonResponse, "\",", STRING_LENGTH);
     }
 
     // FIXME: should loop through all Es
 
     strncat(jsonResponse, "\"", STRING_LENGTH);
-    strncat(jsonResponse, ftoa(0, liveCoordinates[AXES], 4), STRING_LENGTH);
+    snprintf(scratchString, STRING_LENGTH, "%.4f", liveCoordinates[AXES]);
+    strncat(jsonResponse, scratchString, STRING_LENGTH);
     strncat(jsonResponse, "\",", STRING_LENGTH);
 
     for(int8_t heater = 0; heater < HEATERS; heater++)
     {
       strncat(jsonResponse, "\"", STRING_LENGTH);
-      strncat(jsonResponse, ftoa(0, reprap.GetHeat()->GetTemperature(heater), 1), STRING_LENGTH);
+      snprintf(scratchString, STRING_LENGTH, "%.1f", reprap.GetHeat()->GetTemperature(heater));
+      strncat(jsonResponse, scratchString, STRING_LENGTH);
       if(heater < HEATERS - 1)
     	  strncat(jsonResponse, "\",", STRING_LENGTH);
       else
@@ -444,21 +470,20 @@ void Webserver::GetJsonResponse(const char* request)
     strncat(jsonResponse, "]", STRING_LENGTH);
 
     // Send the Z probe value
-    char scratch[SHORT_STRING_LENGTH+1];
-    scratch[SHORT_STRING_LENGTH] = 0;
+
     if (platform->GetZProbeType() == 2)
     {
-    	snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d (%d)\"", (int)platform->ZProbe(), platform->ZProbeOnVal());
+    	snprintf(scratchString, STRING_LENGTH, ",\"probe\":\"%d (%d)\"", (int)platform->ZProbe(), platform->ZProbeOnVal());
     }
     else
     {
-    	snprintf(scratch, SHORT_STRING_LENGTH, ",\"probe\":\"%d\"", (int)platform->ZProbe());
+    	snprintf(scratchString, STRING_LENGTH, ",\"probe\":\"%d\"", (int)platform->ZProbe());
     }
-    strncat(jsonResponse, scratch, STRING_LENGTH);
+    strncat(jsonResponse, scratchString, STRING_LENGTH);
 
     // Send the amount of buffer space available for gcodes
-   	snprintf(scratch, SHORT_STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
-   	strncat(jsonResponse, scratch, STRING_LENGTH);
+   	snprintf(scratchString, STRING_LENGTH, ",\"buff\":%u", GetReportedGcodeBufferSpace());
+   	strncat(jsonResponse, scratchString, STRING_LENGTH);
 
     // Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
     strncat(jsonResponse, ",\"hx\":", STRING_LENGTH);
@@ -470,8 +495,8 @@ void Webserver::GetJsonResponse(const char* request)
 
     // Send the response sequence number
     strncat(jsonResponse, ",\"seq\":", STRING_LENGTH);
-	snprintf(scratch, SHORT_STRING_LENGTH, "%u", (unsigned int)seq);
-	strncat(jsonResponse, scratch, STRING_LENGTH);
+	snprintf(scratchString, STRING_LENGTH, "%u", (unsigned int)seq);
+	strncat(jsonResponse, scratchString, STRING_LENGTH);
 
     // Send the response to the last command. Do this last because it is long and may need to be truncated.
     strncat(jsonResponse, ",\"resp\":\"", STRING_LENGTH);
@@ -498,7 +523,7 @@ void Webserver::GetJsonResponse(const char* request)
     	}
     	if (esc)
     	{
-    		if (jp == STRING_LENGTH - 3)
+    		if (jp >= STRING_LENGTH - 3)
     			break;
    			jsonResponse[jp++] = '\\';
    			jsonResponse[jp++] = esc;
@@ -511,6 +536,7 @@ void Webserver::GetJsonResponse(const char* request)
     strncat(jsonResponse, "\"}", STRING_LENGTH);
 
     jsonResponse[STRING_LENGTH] = 0;
+    gcodeReply[0] = 0; // Last one's been copied to jsonResponse; so set up for the next
     JsonReport(true, request);
     return;
   }
@@ -518,10 +544,8 @@ void Webserver::GetJsonResponse(const char* request)
   if(StringStartsWith(request, "gcode"))
   {
     LoadGcodeBuffer(&clientQualifier[6], true);
-    char scratch[SHORT_STRING_LENGTH+1];
-    scratch[SHORT_STRING_LENGTH] = 0;
-    snprintf(scratch, SHORT_STRING_LENGTH, "{\"buff\":%u}", GetReportedGcodeBufferSpace());
-   	strncat(jsonResponse, scratch, STRING_LENGTH);
+    snprintf(scratchString, STRING_LENGTH, "{\"buff\":%u}", GetReportedGcodeBufferSpace());
+   	strncat(jsonResponse, scratchString, STRING_LENGTH);
     JsonReport(true, request);
     return;
   }
@@ -564,7 +588,8 @@ void Webserver::GetJsonResponse(const char* request)
     for(int8_t drive = 0; drive < AXES; drive++)
     {
       strncat(jsonResponse, "\"", STRING_LENGTH);
-      strncat(jsonResponse, ftoa(0, platform->AxisLength(drive), 1), STRING_LENGTH);
+      snprintf(scratchString, STRING_LENGTH, "%.2f", platform->AxisLength(drive));
+      strncat(jsonResponse, scratchString, STRING_LENGTH);
       if(drive < AXES-1)
         strncat(jsonResponse, "\",", STRING_LENGTH);
       else
@@ -596,7 +621,7 @@ GET /gather.asp?pwd=my_pwd HTTP/1.1
 
 void Webserver::ParseGetPost()
 {
-    if(reprap.Debug())
+    if(webDebug)
     {
       platform->Message(HOST_MESSAGE, "HTTP request: ");
       platform->Message(HOST_MESSAGE, clientLine);
@@ -793,15 +818,11 @@ bool Webserver::CharFromClient(char c)
 
 void Webserver::Spin()
 {
-  //char sw[2];
   if(!active)
     return;
     
   if(writing)
   {
- //   if(inPHPFile)
- //     WritePHPByte();
- //   else
 	  if (WriteBytes())		// if we wrote something
 	  {
 		  platform->ClassReport("Webserver", longWait);
@@ -887,10 +908,7 @@ void Webserver::Init()
   active = true;
   gcodeReply[0] = 0;
   seq = 0;
-  
-  // Reinitialise the message file
-  
-  //platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
+  webDebug = false;
 }
 
 // This is called when the connection has been lost.
@@ -939,33 +957,6 @@ void Webserver::SetName(const char* nm)
 	myName[SHORT_STRING_LENGTH] = 0; // NB array is dimensioned to SHORT_STRING_LENGTH+1
 }
 
-void Webserver::HandleReply(const char *s, bool error)
-{
-	if (strlen(s) == 0 && !error)
-	{
-		strcpy(gcodeReply, "ok");
-	}
-	else
-	{
-		if (error)
-		{
-			strcpy(gcodeReply, "Error: ");
-			strncat(gcodeReply, s, STRING_LENGTH);
-		}
-		else
-		{
-			strncpy(gcodeReply, s, STRING_LENGTH);
-		}
-		gcodeReply[STRING_LENGTH] = 0;	// array is dimensioned to STRING_LENGTH+1
-	}
-	++seq;
-}
-
-void Webserver::AppendReply(const char *s)
-{
-	strncat(gcodeReply, s, STRING_LENGTH);
-}
-
 // Get the actual amount of gcode buffer space we have
 unsigned int Webserver::GetGcodeBufferSpace() const
 {
@@ -979,5 +970,10 @@ unsigned int Webserver::GetReportedGcodeBufferSpace() const
 	return (temp > maxReportedFreeBuf) ? maxReportedFreeBuf
 			: (temp < minReportedFreeBuf) ? 0
 				: temp;
+}
+
+void Webserver::WebDebug(bool wdb)
+{
+	webDebug = wdb;
 }
 

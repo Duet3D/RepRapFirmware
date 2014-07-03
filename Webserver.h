@@ -54,9 +54,15 @@ class Webserver
     void SetPassword(const char* pw);
     void SetName(const char* nm);
     void ConnectionError();
-    void HandleReply(const char *s, bool error);
-    void AppendReply(const char* s);
-    
+    void WebDebug(bool wdb);
+
+    friend class Platform;
+
+  protected:
+
+    void MessageStringToWebInterface(const char *s, bool error);
+    void AppendReplyToWebInterface(const char* s, bool error);
+
   private:
   
     void ParseClientLine();
@@ -79,7 +85,7 @@ class Webserver
     unsigned int GetGcodeBufferSpace() const;
     unsigned int GetReportedGcodeBufferSpace() const;
     void ProcessGcode(const char* gc);
-    
+
     Platform* platform;
     bool active;
     float lastTime;
@@ -110,6 +116,7 @@ class Webserver
     char myName[SHORT_STRING_LENGTH+1];
     char gcodeReply[STRING_LENGTH+1];
     uint16_t seq;	// reply sequence number, so that the client can tell if a reply is new or not
+    bool webDebug;
 };
 
 
