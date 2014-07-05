@@ -1300,7 +1300,7 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 				{
 					fileList[p++] = fileListBracket;
 				}
-				while (*fp != 0 && p <= FILE_LIST_LENGTH - 4)	// leave space for this character, bracket, separator, bracket
+				while (*fp != 0 && p <= ARRAY_SIZE(fileList) - 4)	// leave space for this character, bracket, separator, bracket
 				{
 					fileList[p++] = *fp++;
 				}
@@ -1329,13 +1329,16 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 	return "";
 }
 
+// Month names. The first entry is used for invalid month numbers.
+static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
 // Get a UNIX-compatible file list for the specified directory
 const char *MassStorage::UnixFileList(const char* directory)
 {
-	TCHAR loc[64];
+	TCHAR loc[64 + 1];
 
 	// Remove the trailing '/' from the directory name
-	size_t len = strnlen(directory, ARRAY_SIZE(loc));
+	size_t len = strnlen(directory, ARRAY_SIZE(loc) - 1);	// the -1 ensures we have room for a null terminator
 	if (len == 0)
 	{
 		loc[0] = 0;
@@ -1356,15 +1359,11 @@ const char *MassStorage::UnixFileList(const char* directory)
 	if (res == FR_OK)
 	{
 		FILINFO entry;
-		char *filename;
-		char long_filename[64];
-		char line[255];
-		uint16_t day, month, year;
-		char month_str[4];
+		char longFilename[255];
 
 		fileList[0] = 0;
-		entry.lfname = long_filename;
-		entry.lfsize = ARRAY_SIZE(long_filename);
+		entry.lfname = longFilename;
+		entry.lfsize = ARRAY_SIZE(longFilename);
 
 		for(;;)
 		{
@@ -1372,69 +1371,22 @@ const char *MassStorage::UnixFileList(const char* directory)
 			if (res != FR_OK || entry.fname[0] == 0) break;
 			if (StringEquals(entry.fname, ".") || StringEquals(entry.fname, "..")) continue;
 
-			filename = *entry.lfname ? entry.lfname : entry.fname;
-			day = entry.fdate & 0x1F;
+			const char *filename = (longFilename[0] == 0) ? entry.fname : longFilename;
+			uint16_t day = entry.fdate & 0x1F;
 			if (day == 0)
 			{
 				// This can happen if a transfer hasn't been processed completely.
 				day = 1;
 			}
-			month = (entry.fdate & 0x01E0) >> 5;
-			year = (entry.fdate >> 9) + 1980;
-
-			// Convert month to a string
-			switch (month)
-			{
-				case 1:
-					strncpy(month_str, "Jan", 4);
-					break;
-				case 2:
-					strncpy(month_str, "Feb", 4);
-					break;
-				case 3:
-					strncpy(month_str, "Mar", 4);
-					break;
-				case 4:
-					strncpy(month_str, "Apr", 4);
-					break;
-				case 5:
-					strncpy(month_str, "May", 4);
-					break;
-				case 6:
-					strncpy(month_str, "Jun", 4);
-					break;
-				case 7:
-					strncpy(month_str, "Jul", 4);
-					break;
-				case 8:
-					strncpy(month_str, "Aug", 4);
-					break;
-				case 9:
-					strncpy(month_str, "Sep", 4);
-					break;
-				case 10:
-					strncpy(month_str, "Oct", 4);
-					break;
-				case 11:
-					strncpy(month_str, "Nov", 4);
-					break;
-				case 12:
-					strncpy(month_str, "Dec", 4);
-					break;
-			}
+			uint16_t month = (entry.fdate & 0x01E0) >> 5;
+			uint16_t year = (entry.fdate >> 9) + 1980;
+			const char *monthStr = (month <= 12) ? monthNames[month] : monthNames[0];
 
 			// Example for a typical UNIX-like file list:
 			// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
-			if (entry.fattrib & AM_DIR)
-			{
-				snprintf(line, 128, "drw-rw-rw- 1 ftp ftp %13d %s %02d %04d %s\r\n", entry.fsize, month_str, day, year, filename);
-			}
-			else
-			{
-				snprintf(line, 128, "-rw-rw-rw- 1 ftp ftp %13d %s %02d %04d %s\r\n", entry.fsize, month_str, day, year, filename);
-			}
 
-			strncat(fileList, line, FILE_LIST_LENGTH);
+			char dirChar = (entry.fattrib & AM_DIR) ? 'd' : '-';
+			sncatf(fileList, ARRAY_SIZE(fileList), "%crw-rw-rw- 1 ftp ftp %13d %s %02d %04d %s\r\n", dirChar, entry.fsize, monthStr, day, year, filename);
 		}
 
 		return fileList;

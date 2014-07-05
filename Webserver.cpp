@@ -1666,7 +1666,7 @@ void Webserver::FtpInterpreter::ResetState()
 	state = authenticating;
 }
 
-// return true if an error has occured, false otherwise
+// return true if an error has occurred, false otherwise
 void Webserver::FtpInterpreter::ProcessLine()
 {
 	Network *net = reprap.GetNetwork();
@@ -1792,14 +1792,22 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 				bool ok;
 				if (filename[0] == '/')
+				{
 					ok = platform->GetMassStorage()->Delete(filename);
+				}
 				else
+				{
 					ok = platform->GetMassStorage()->Delete(currentDir, filename);
+				}
 
 				if (ok)
+				{
 					SendReply(250, "Delete operation successful.");
+				}
 				else
+				{
 					SendReply(550, "Delete operation failed.");
+				}
 			}
 			// delete directory
 			else if (StringStartsWith(clientMessage, "RMD"))

@@ -202,7 +202,6 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 #define GCODE_DIR "0:/gcodes/" 					// Ditto - g-codes
 #define SYS_DIR "0:/sys/" 						// Ditto - system files
 #define TEMP_DIR "0:/tmp/" 						// Ditto - temporary files
-#define FILE_LIST_LENGTH (1000) 				// Maximum length of file list
 
 #define FLASH_LED 'F' 							// Type byte of a message that is to flash an LED; the next two bytes define
                       	  	  	  	  	  	  	// the frequency and M/S ratio.
@@ -224,6 +223,7 @@ const int atxPowerPin = 12;						// Arduino Due pin number that controls the ATX
 const uint16_t lineInBufsize = 256;				// use a power of 2 for good performance
 const uint16_t lineOutBufSize = 2048;			// ideally this should be large enough to hold the results of an M503 command,
 												// but could be reduced if we ever need the memory
+const uint16_t fileListLength = 2000;			// increased to allow for the larger size of the Unix-compatible list when using FTP
 
 /****************************************************************************************************/
 
@@ -331,7 +331,7 @@ protected:
 
 private:
 
-  char fileList[FILE_LIST_LENGTH];
+  char fileList[fileListLength];
   char scratchString[STRING_LENGTH];
   Platform* platform;
   FATFS fileSystem;
