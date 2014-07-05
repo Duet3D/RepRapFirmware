@@ -21,8 +21,7 @@
 
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
-
-#define WINDOWED_SEND_PACKETS	(2)
+#include "lwip/src/include/lwip/stats.h"
 
 extern char _end;
 extern "C" char *sbrk(int i);
@@ -751,7 +750,7 @@ void Platform::PrintMemoryUsage()
 	Message(HOST_MESSAGE, "\n");
 	Message(HOST_MESSAGE, "Memory usage:\n\n");
 	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
-	reprap.GetWebserver()->HandleReply(scratchString, false);
+	reprap.GetWebserver()->HandleReply(scratchString, false, false);
 	Message(HOST_MESSAGE, scratchString);
 	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
 	reprap.GetWebserver()->AppendReply(scratchString);
@@ -810,8 +809,13 @@ void Platform::PrintMemoryUsage()
 		}
 	}
 	snprintf(scratchString, STRING_LENGTH, "Free file entries: %u\n", numFreeFiles);
-	reprap.GetWebserver()->AppendReply(scratchString);
+	reprap.GetWebserver()->AppendReply(scratchString, true);
 	Message(HOST_MESSAGE, scratchString);
+
+#if LWIP_STATS
+	// Print LWIP stats to USB
+	stats_display();
+#endif
 }
 
 void Platform::ClassReport(char* className, float &lastTime)
@@ -1064,6 +1068,31 @@ FileStore* Platform::GetFileStore(const char* directory, const char* fileName, b
 	return NULL;
 }
 
+FileStore* Platform::GetFileStore(const char* fileName, bool write)
+{
+	if (!fileStructureInitialised)
+		return NULL;
+
+	for (int i = 0; i < MAX_FILES; i++)
+	{
+		if (!files[i]->inUse)
+		{
+			files[i]->inUse = true;
+			if (files[i]->Open(fileName, write))
+			{
+				return files[i];
+			}
+			else
+			{
+				files[i]->inUse = false;
+				return NULL;
+			}
+		}
+	}
+	Message(HOST_MESSAGE, "Max open file count exceeded.\n");
+	return NULL;
+}
+
 MassStorage* Platform::GetMassStorage()
 {
 	return massStorage;
@@ -1094,9 +1123,9 @@ void Platform::Message(char type, const char* message)
 //    	line->Write("Can't open message file.\n");
 		for (uint8_t i = 0; i < messageIndent; i++)
 		{
-			line->Write(' ', type == DEBUG_MESSAGE);
+			line->Write(' ', type == DEBUG_MESSAGE && reprap.Debug());
 		}
-		line->Write(message, type == DEBUG_MESSAGE);
+		line->Write(message, type == DEBUG_MESSAGE && reprap.Debug());
 	}
 }
 
@@ -1166,14 +1195,9 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 	int out = 0;
 	int in = 0;
 
-//  scratchString[out] = '/';
-//  out++;
-
 	if (directory != NULL)
 	{
-		//if(directory[in] == '/')
-		//  in++;
-		while (directory[in] != 0 && directory[in] != '\n')    // && directory[in] != '/')
+		while (directory[in] != 0 && directory[in] != '\n')
 		{
 			scratchString[out] = directory[in];
 			in++;
@@ -1186,11 +1210,14 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 		}
 	}
 
-	//scratchString[out] = '/';
-	// out++;
+	if (in > 0 && directory[in -1] != '/' && out < STRING_LENGTH -1)
+	{
+		scratchString[out] = '/';
+		out++;
+	}
 
 	in = 0;
-	while (fileName[in] != 0 && fileName[in] != '\n') // && fileName[in] != '/')
+	while (fileName[in] != 0 && fileName[in] != '\n')
 	{
 		scratchString[out] = fileName[in];
 		in++;
@@ -1273,7 +1300,7 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 				{
 					fileList[p++] = fileListBracket;
 				}
-				while (*fp != 0 && p <= FILE_LIST_LENGTH - 4)	// leave space for this character, bracket, separator, bracket
+				while (*fp != 0 && p <= ARRAY_SIZE(fileList) - 4)	// leave space for this character, bracket, separator, bracket
 				{
 					fileList[p++] = *fp++;
 				}
@@ -1302,7 +1329,73 @@ const char* MassStorage::FileList(const char* directory, bool fromLine)
 	return "";
 }
 
-// Delete a file
+// Month names. The first entry is used for invalid month numbers.
+static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+// Get a UNIX-compatible file list for the specified directory
+const char *MassStorage::UnixFileList(const char* directory)
+{
+	TCHAR loc[64 + 1];
+
+	// Remove the trailing '/' from the directory name
+	size_t len = strnlen(directory, ARRAY_SIZE(loc) - 1);	// the -1 ensures we have room for a null terminator
+	if (len == 0)
+	{
+		loc[0] = 0;
+	}
+	else if (directory[len - 1] == '/')
+	{
+		strncpy(loc, directory, len - 1);
+		loc[len - 1] = 0;
+	}
+	else
+	{
+		strncpy(loc, directory, len);
+		loc[len] = 0;
+	}
+
+	DIR dir;
+	FRESULT res = f_opendir(&dir, loc);
+	if (res == FR_OK)
+	{
+		FILINFO entry;
+		char longFilename[255];
+
+		fileList[0] = 0;
+		entry.lfname = longFilename;
+		entry.lfsize = ARRAY_SIZE(longFilename);
+
+		for(;;)
+		{
+			res = f_readdir(&dir, &entry);
+			if (res != FR_OK || entry.fname[0] == 0) break;
+			if (StringEquals(entry.fname, ".") || StringEquals(entry.fname, "..")) continue;
+
+			const char *filename = (longFilename[0] == 0) ? entry.fname : longFilename;
+			uint16_t day = entry.fdate & 0x1F;
+			if (day == 0)
+			{
+				// This can happen if a transfer hasn't been processed completely.
+				day = 1;
+			}
+			uint16_t month = (entry.fdate & 0x01E0) >> 5;
+			uint16_t year = (entry.fdate >> 9) + 1980;
+			const char *monthStr = (month <= 12) ? monthNames[month] : monthNames[0];
+
+			// Example for a typical UNIX-like file list:
+			// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
+
+			char dirChar = (entry.fattrib & AM_DIR) ? 'd' : '-';
+			sncatf(fileList, ARRAY_SIZE(fileList), "%crw-rw-rw- 1 ftp ftp %13d %s %02d %04d %s\r\n", dirChar, entry.fsize, monthStr, day, year, filename);
+		}
+
+		return fileList;
+	}
+
+	return "";
+}
+
+// Delete a file or directory
 bool MassStorage::Delete(const char* directory, const char* fileName)
 {
 	const char* location = platform->GetMassStorage()->CombineName(directory, fileName);
@@ -1314,6 +1407,66 @@ bool MassStorage::Delete(const char* directory, const char* fileName)
 		return false;
 	}
 	return true;
+}
+
+bool MassStorage::Delete(const char *fileName)
+{
+	if (f_unlink(fileName) != FR_OK)
+	{
+		platform->Message(HOST_MESSAGE, "Can't delete file ");
+		platform->Message(HOST_MESSAGE, fileName);
+		platform->Message(HOST_MESSAGE, "\n");
+		return false;
+	}
+	return true;
+}
+
+// Create a new directory
+bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
+{
+	const char* location = platform->GetMassStorage()->CombineName(parentDir, dirName);
+	if (f_mkdir(location) != FR_OK)
+	{
+		platform->Message(HOST_MESSAGE, "Can't create directory ");
+		platform->Message(HOST_MESSAGE, location);
+		platform->Message(HOST_MESSAGE, "\n");
+		return false;
+	}
+	return true;
+}
+
+bool MassStorage::MakeDirectory(const char *directory)
+{
+	if (f_mkdir(directory) != FR_OK)
+	{
+		platform->Message(HOST_MESSAGE, "Can't create directory ");
+		platform->Message(HOST_MESSAGE, directory);
+		platform->Message(HOST_MESSAGE, "\n");
+		return false;
+	}
+	return true;
+}
+
+// Rename a file or directory
+bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
+{
+	if (f_rename(oldFilename, newFilename) != FR_OK)
+	{
+		platform->Message(HOST_MESSAGE, "Can't rename file or directory ");
+		platform->Message(HOST_MESSAGE, oldFilename);
+		platform->Message(HOST_MESSAGE, " to ");
+		platform->Message(HOST_MESSAGE, newFilename);
+		platform->Message(HOST_MESSAGE, "\n");
+		return false;
+	}
+	return true;
+}
+
+// Check if the specified directory exists
+bool MassStorage::PathExists(const char *path) const
+{
+	DIR dir;
+	return (f_opendir(&dir, path) == FR_OK);
 }
 
 //------------------------------------------------------------------------------------------------
@@ -1364,6 +1517,48 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 		{
 			platform->Message(HOST_MESSAGE, "Can't open ");
 			platform->Message(HOST_MESSAGE, location);
+			platform->Message(HOST_MESSAGE, " to read from.  Error code: ");
+			snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
+			platform->Message(HOST_MESSAGE, scratchString);
+			platform->Message(HOST_MESSAGE, "\n");
+			return false;
+		}
+		bufferPointer = FILE_BUF_LEN;
+	}
+
+	inUse = true;
+	openCount = 1;
+	return true;
+}
+
+bool FileStore::Open(const char* fileName, bool write)
+{
+	writing = write;
+	lastBufferEntry = FILE_BUF_LEN - 1;
+	FRESULT openReturn;
+
+	if (writing)
+	{
+		openReturn = f_open(&file, fileName, FA_CREATE_ALWAYS | FA_WRITE);
+		if (openReturn != FR_OK)
+		{
+			platform->Message(HOST_MESSAGE, "Can't open ");
+			platform->Message(HOST_MESSAGE, fileName);
+			platform->Message(HOST_MESSAGE, " to write to.  Error code: ");
+			snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
+			platform->Message(HOST_MESSAGE, scratchString);
+			platform->Message(HOST_MESSAGE, "\n");
+			return false;
+		}
+		bufferPointer = 0;
+	}
+	else
+	{
+		openReturn = f_open(&file, fileName, FA_OPEN_EXISTING | FA_READ);
+		if (openReturn != FR_OK)
+		{
+			platform->Message(HOST_MESSAGE, "Can't open ");
+			platform->Message(HOST_MESSAGE, fileName);
 			platform->Message(HOST_MESSAGE, " to read from.  Error code: ");
 			snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
 			platform->Message(HOST_MESSAGE, scratchString);
@@ -1667,7 +1862,7 @@ void Line::Spin()
 }
 
 // Write a character to USB.
-// If 'block' is true then we don't return until we have either written it to the USB port of put it in the buffer.
+// If 'block' is true then we don't return until we have either written it to the USB port or put it in the buffer.
 // Otherwise, if the buffer is full then we append ".\n" to the end of it, return immediately and ignore the rest
 // of the data we are asked to print until we get a new line.
 void Line::Write(char b, bool block)
@@ -1693,6 +1888,11 @@ void Line::Write(char b, bool block)
 		for(;;)
 		{
 			TryFlushOutput();
+			if (block)
+			{
+				SerialUSB.flush();
+			}
+
 			if (outputNumChars == 0 && SerialUSB.canWrite() != 0)
 			{
 				// We can write the character directly into the USB output buffer
@@ -1727,6 +1927,12 @@ void Line::Write(char b, bool block)
 				ignoringOutputLine = true;
 				break;
 			}
+		}
+
+		TryFlushOutput();
+		if (block)
+		{
+			SerialUSB.flush();
 		}
 	}
 	// else discard the character

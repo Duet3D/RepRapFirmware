@@ -39,13 +39,14 @@ Naming conventions:
 
 Structure:
 
-There are six main classes:
+There are seven main classes:
 
   * RepRap
   * GCodes
   * Heat
   * Move
-  * Platform, and
+  * Platform
+  * Network, and
   * Webserver
 
 RepRap:
@@ -72,10 +73,15 @@ controlling electronics.  It implements the interface between all the other clas
 All the other classes are completely machine-independent (though they may declare arrays dimensioned
 to values #defined in Platform.h).
 
+Network:
+
+This class implements a basic TCP interface for the Webserver classes using lwip.
+
 Webserver:
 
 This class talks to the network (via Platform) and implements a simple webserver to give an interactive
 interface to the RepRap machine.  It uses the Knockout and Jquery Javascript libraries to achieve this.
+In addition, FTP and Telnet servers are provided for easier SD card file management and G-Code handling.
 
 
 

@@ -44,8 +44,9 @@ class FileStore;
 extern RepRap reprap;
     
 // Functions and globals not part of any class
-    
-void debugPrintf(const char* fmt, ...);
+
+extern "C" void debugPrintf(const char* fmt, ...);
+
 int sncatf(char *dst, size_t len, const char* fmt, ...);
 #if 0	// no longer used
 char* ftoa(char *a, const float& f, int prec);
@@ -110,6 +111,5 @@ template<> inline double max(double _a, double _b)
 }
 
 #endif
-
 
 
