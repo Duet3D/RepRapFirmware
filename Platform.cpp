@@ -125,7 +125,7 @@ void Platform::Init()
 		nvData.zProbeType = 0;	// Default is to use the switch
 		nvData.switchZProbeParameters.Init(0.0);
 		nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
-		nvData.ultrasonicZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
+		nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
 
 		for (size_t i = 0; i < HEATERS; ++i)
 		{
@@ -195,6 +195,8 @@ void Platform::Init()
 	homeFeedrates = HOME_FEEDRATES;
 	headOffsets = HEAD_OFFSETS;
 
+	SetSlowestDrive();
+
 	// HEATERS - Bed is assumed to be the first
 
 	tempSensePins = TEMP_SENSE_PINS;
@@ -207,6 +209,7 @@ void Platform::Init()
 	webDir = WEB_DIR;
 	gcodeDir = GCODE_DIR;
 	tempDir = TEMP_DIR;
+
   /*
   	FIXME Nasty having to specify individually if a pin is arduino or not.
     requires a unified variant file. If implemented this would be much better
@@ -256,13 +259,13 @@ void Platform::Init()
 	{
 		if (heatOnPins[i] >= 0)
 		{
-    			if(i == E0_HEATER || i==E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
+    		if(i == E0_HEATER || i==E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
 			{
-				pinMode(heatOnPins[i], OUTPUT);
+				pinModeNonDue(heatOnPins[i], OUTPUT);
 			}
 			else
 			{
-				pinModeNonDue(heatOnPins[i], OUTPUT);
+				pinMode(heatOnPins[i], OUTPUT);
 			}
 		}
 		thermistorFilters[i].Init();
@@ -290,6 +293,16 @@ void Platform::Init()
 	longWait = lastTime;
 }
 
+void Platform::SetSlowestDrive()
+{
+	slowestDrive = 0;
+	for(int8_t drive = 1; drive < DRIVES; drive++)
+	{
+		if(InstantDv(drive) < InstantDv(slowestDrive))
+			slowestDrive = drive;
+	}
+}
+
 void Platform::InitZProbe()
 {
 	zProbeOnFilter.Init();
@@ -304,7 +317,7 @@ void Platform::InitZProbe()
 	else if (nvData.zProbeType == 3)
 	{
 		pinMode(zProbeModulationPin, OUTPUT);
-		digitalWrite(zProbeModulationPin, LOW);	// enable the ultrasonic sensor
+		digitalWrite(zProbeModulationPin, LOW);		// enable the alternate sensor
 		SetZProbing(false);
 	}
 }
@@ -316,7 +329,7 @@ int Platform::GetRawZHeight() const
 
 // Return the Z probe data.
 // The ADC readings are 12 bits, so we convert them to 10-bit readings for compatibility with the old firmware.
-int Platform::ZProbe()
+int Platform::ZProbe() const
 {
 	if (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid())
 	{
@@ -372,7 +385,7 @@ float Platform::ZProbeStopHeight() const
 	case 2:
 		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
 	case 3:
-		return nvData.ultrasonicZProbeParameters.GetStopHeight(GetTemperature(0));
+		return nvData.alternateZProbeParameters.GetStopHeight(GetTemperature(0));
 	default:
 		return 0;
 	}
@@ -401,7 +414,7 @@ bool Platform::GetZProbeParameters(struct ZProbeParameters& params) const
 		params = nvData.irZProbeParameters;
 		return true;
 	case 3:
-		params = nvData.ultrasonicZProbeParameters;
+		params = nvData.alternateZProbeParameters;
 		return true;
 	default:
 		return false;
@@ -428,9 +441,9 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 		}
 		return true;
 	case 3:
-		if (nvData.ultrasonicZProbeParameters != params)
+		if (nvData.alternateZProbeParameters != params)
 		{
-			nvData.ultrasonicZProbeParameters = params;
+			nvData.alternateZProbeParameters = params;
 			WriteNvData();
 		}
 		return true;
@@ -475,27 +488,23 @@ void Platform::Exit()
 
 Compatibility Platform::Emulating() const
 {
-	if (nvData.compatibility == reprapFirmware)
+	if(compatibility == reprapFirmware)
 		return me;
-	return nvData.compatibility;
+	return compatibility;
 }
 
 void Platform::SetEmulating(Compatibility c)
 {
-	if (c != me && c != reprapFirmware && c != marlin)
+	if(c != me && c != reprapFirmware && c != marlin)
 	{
 		Message(HOST_MESSAGE, "Attempt to emulate unsupported firmware.\n");
 		return;
 	}
-	if (c == reprapFirmware)
+	if(c == reprapFirmware)
 	{
 		c = me;
 	}
-	if (nvData.compatibility != c)
-	{
-		nvData.compatibility = c;
-		WriteNvData();
-	}
+	compatibility = c;
 }
 
 void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])
@@ -598,10 +607,10 @@ void Platform::InitialiseInterrupts()
 	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
-void Platform::DisableInterrupts()
-{
-	NVIC_DisableIRQ(TC3_IRQn);
-}
+//void Platform::DisableInterrupts()
+//{
+//	NVIC_DisableIRQ(TC3_IRQn);
+//}
 
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
@@ -708,9 +717,72 @@ void Platform::Tick()
 void Platform::Diagnostics()
 {
 	Message(HOST_MESSAGE, "Platform Diagnostics:\n");
+
+	// Print memory stats and error codes to USB and copy them to the current webserver reply
+	const char *ramstart = (char *) 0x20070000;
+	const struct mallinfo mi = mallinfo();
+	Message(BOTH_MESSAGE, "\n");
+	AppendMessage(BOTH_MESSAGE, "Memory usage:\n\n");
+	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Recycled dynamic ram: %d\n", mi.fordblks);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+	size_t currentStack, maxStack, neverUsed;
+	GetStackUsage(&currentStack, &maxStack, &neverUsed);
+	snprintf(scratchString, STRING_LENGTH, "Current stack ram used: %d\n", currentStack);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Maximum stack ram used: %d\n", maxStack);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", neverUsed);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+
+	// Show the up time and reason for the last reset
+	const uint32_t now = (uint32_t)Time();		// get up time in seconds
+	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
+	snprintf(scratchString, STRING_LENGTH, "Last reset %02d:%02d:%02d ago, cause: %s\n",
+			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
+			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+
+	// Show the error code stored at the last software reset
+	snprintf(scratchString, STRING_LENGTH, "Last software reset code & available RAM: 0x%04x, %u\n", nvData.resetReason, nvData.neverUsedRam);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+
+	// Show the current error codes
+	snprintf(scratchString, STRING_LENGTH, "Error status: %u\n", errorCodeBits);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+
+	// Show the current probe position heights
+	strncpy(scratchString, "Bed probe heights:", STRING_LENGTH);
+	for (size_t i = 0; i < NUMBER_OF_PROBE_POINTS; ++i)
+	{
+		sncatf(scratchString, STRING_LENGTH, " %.3f", reprap.GetMove()->zBedProbePoint(i));
+	}
+	strncat(scratchString, "\n", STRING_LENGTH);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+
+	// Show the number of free entries in the file table
+	unsigned int numFreeFiles = 0;
+	for (int8_t i = 0; i < MAX_FILES; i++)
+	{
+		if (!files[i]->inUse)
+		{
+			++numFreeFiles;
+		}
+	}
+	snprintf(scratchString, STRING_LENGTH, "Free file entries: %u\n", numFreeFiles);
+	AppendMessage(BOTH_MESSAGE, scratchString);
+	reprap.Timing();
+
+#if LWIP_STATS
+	// Print LWIP stats to USB
+	stats_display();
+#endif
 }
 
-void Platform::SetDebug(int d)
+void Platform::DiagnosticTest(int d)
 {
 	switch (d)
 	{
@@ -740,82 +812,6 @@ void Platform::GetStackUsage(size_t* currentStack, size_t* maxStack, size_t* nev
 	if (currentStack) { *currentStack = ramend - stack_ptr; }
 	if (maxStack) { *maxStack = ramend - stack_lwm; }
 	if (neverUsed) { *neverUsed = stack_lwm - heapend; }
-}
-
-// Print memory stats and error codes to USB and copy them to the current webserver reply
-void Platform::PrintMemoryUsage()
-{
-	const char *ramstart = (char *) 0x20070000;
-	const struct mallinfo mi = mallinfo();
-	Message(HOST_MESSAGE, "\n");
-	Message(HOST_MESSAGE, "Memory usage:\n\n");
-	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
-	reprap.GetWebserver()->HandleReply(scratchString, false, false);
-	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Recycled dynamic ram: %d\n", mi.fordblks);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-	size_t currentStack, maxStack, neverUsed;
-	GetStackUsage(&currentStack, &maxStack, &neverUsed);
-	snprintf(scratchString, STRING_LENGTH, "Current stack ram used: %d\n", currentStack);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Maximum stack ram used: %d\n", maxStack);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", neverUsed);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-
-	// Show the up time and reason for the last reset
-	const uint32_t now = (uint32_t)Time();		// get up time in seconds
-	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
-	snprintf(scratchString, STRING_LENGTH, "Last reset %02d:%02d:%02d ago, cause: %s\n",
-			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
-			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-
-	// Show the error code stored at the last software reset
-	snprintf(scratchString, STRING_LENGTH, "Last software reset code & available RAM: 0x%04x, %u\n", nvData.resetReason, nvData.neverUsedRam);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-
-	// Show the current error codes
-	snprintf(scratchString, STRING_LENGTH, "Error status: %u\n", errorCodeBits);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-
-	// Show the current probe position heights
-	strncpy(scratchString, "Bed probe heights:", STRING_LENGTH);
-	for (size_t i = 0; i < NUMBER_OF_PROBE_POINTS; ++i)
-	{
-		sncatf(scratchString, STRING_LENGTH, " %.3f", reprap.GetMove()->zBedProbePoint(i));
-	}
-	strncat(scratchString, "\n", STRING_LENGTH);
-	reprap.GetWebserver()->AppendReply(scratchString);
-	Message(HOST_MESSAGE, scratchString);
-
-	// Show the number of free entries in the file table
-	unsigned int numFreeFiles = 0;
-	for (int8_t i = 0; i < MAX_FILES; i++)
-	{
-		if (!files[i]->inUse)
-		{
-			++numFreeFiles;
-		}
-	}
-	snprintf(scratchString, STRING_LENGTH, "Free file entries: %u\n", numFreeFiles);
-	reprap.GetWebserver()->AppendReply(scratchString, true);
-	Message(HOST_MESSAGE, scratchString);
-
-#if LWIP_STATS
-	// Print LWIP stats to USB
-	stats_display();
-#endif
 }
 
 void Platform::ClassReport(char* className, float &lastTime)
@@ -923,7 +919,7 @@ EndStopHit Platform::Stopped(int8_t drive)
 			int zProbeVal = ZProbe();
 			int zProbeADValue =
 					(nvData.zProbeType == 3) ?
-							nvData.ultrasonicZProbeParameters.adcValue : nvData.irZProbeParameters.adcValue;
+							nvData.alternateZProbeParameters.adcValue : nvData.irZProbeParameters.adcValue;
 			if (zProbeVal >= zProbeADValue)
 				return lowHit;
 			else if (zProbeVal * 10 >= zProbeADValue * 9)	// if we are at/above 90% of the target value
@@ -950,7 +946,7 @@ void Platform::SetDirection(byte drive, bool direction)
 {
 	if(directionPins[drive] < 0)
 		return;
-	if(drive == AXES)
+	if(drive == E0_DRIVE) //DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
 		digitalWriteNonDue(directionPins[drive], direction);
 	else
 		digitalWrite(directionPins[drive], direction);
@@ -960,7 +956,7 @@ void Platform::Disable(byte drive)
 {
 	if(enablePins[drive] < 0)
 		  return;
-	if(drive >= Z_AXIS)
+	if(drive == Z_AXIS || drive==E0_DRIVE || drive==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 		digitalWriteNonDue(enablePins[drive], DISABLE);
 	else
 		digitalWrite(enablePins[drive], DISABLE);
@@ -973,13 +969,13 @@ void Platform::Step(byte drive)
 		return;
 	if(!driveEnabled[drive] && enablePins[drive] >= 0)
 	{
-		if(drive >= Z_AXIS)
+		if(drive == Z_AXIS || drive==E0_DRIVE || drive==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 			digitalWriteNonDue(enablePins[drive], ENABLE);
 		else
 			digitalWrite(enablePins[drive], ENABLE);
 		driveEnabled[drive] = true;
 	}
-	if(drive == AXES)
+	if(drive == E0_DRIVE || drive == E3_DRIVE) //STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
 	{
 		digitalWriteNonDue(stepPins[drive], 0);
 		digitalWriteNonDue(stepPins[drive], 1);
@@ -1068,31 +1064,6 @@ FileStore* Platform::GetFileStore(const char* directory, const char* fileName, b
 	return NULL;
 }
 
-FileStore* Platform::GetFileStore(const char* fileName, bool write)
-{
-	if (!fileStructureInitialised)
-		return NULL;
-
-	for (int i = 0; i < MAX_FILES; i++)
-	{
-		if (!files[i]->inUse)
-		{
-			files[i]->inUse = true;
-			if (files[i]->Open(fileName, write))
-			{
-				return files[i];
-			}
-			else
-			{
-				files[i]->inUse = false;
-				return NULL;
-			}
-		}
-	}
-	Message(HOST_MESSAGE, "Max open file count exceeded.\n");
-	return NULL;
-}
-
 MassStorage* Platform::GetMassStorage()
 {
 	return massStorage;
@@ -1100,7 +1071,7 @@ MassStorage* Platform::GetMassStorage()
 
 void Platform::Message(char type, const char* message)
 {
-	switch (type)
+	switch(type)
 	{
 	case FLASH_LED:
 		// Message that is to flash an LED; the next two bytes define
@@ -1110,24 +1081,131 @@ void Platform::Message(char type, const char* message)
 
 	case DISPLAY_MESSAGE:
 		// Message that is to appear on a local display;  \f and \n should be supported.
-	case HOST_MESSAGE:
-	default:
+		break;
 
-//    FileStore* m = GetFileStore(GetWebDir(), MESSAGE_FILE, true);
-//    if(m != NULL)
-//    {
-//    	m->GoToEnd();
-//    	m->Write(message);
-//    	m->Close();
-//    } else
-//    	line->Write("Can't open message file.\n");
-		for (uint8_t i = 0; i < messageIndent; i++)
+	case HOST_MESSAGE:
+	case DEBUG_MESSAGE:
+		// Message that is to be sent to the host via USB; the H is not sent.
+		if (line->GetOutputColumn() == 0)
 		{
-			line->Write(' ', type == DEBUG_MESSAGE && reprap.Debug());
+			for(uint8_t i = 0; i < messageIndent; i++)
+			{
+				line->Write(' ', type == DEBUG_MESSAGE);
+			}
 		}
-		line->Write(message, type == DEBUG_MESSAGE && reprap.Debug());
+		line->Write(message, type == DEBUG_MESSAGE);
+		break;
+
+	case WEB_MESSAGE:
+		// Message that is to be sent to the web
+		reprap.GetWebserver()->MessageStringToWebInterface(message, false);
+		break;
+
+	case WEB_ERROR_MESSAGE:
+		// Message that is to be sent to the web - flags an error
+		reprap.GetWebserver()->MessageStringToWebInterface(message, true);
+		break;
+
+	case BOTH_MESSAGE:
+		// Message that is to be sent to the web & host
+		if (line->GetOutputColumn() == 0)
+		{
+			for(uint8_t i = 0; i < messageIndent; i++)
+			{
+				line->Write(' ');
+			}
+		}
+		line->Write(message);
+		reprap.GetWebserver()->MessageStringToWebInterface(message, false);
+		break;
+
+	case BOTH_ERROR_MESSAGE:
+		// Message that is to be sent to the web & host - flags an error
+		// Make this the default behaviour too.
+
+	default:
+		if (line->GetOutputColumn() == 0)
+		{
+			for(uint8_t i = 0; i < messageIndent; i++)
+			{
+				line->Write(' ');
+			}
+		}
+		line->Write(message);
+		reprap.GetWebserver()->MessageStringToWebInterface(message, true);
+		break;
 	}
 }
+
+void Platform::AppendMessage(char type, const char* message)
+{
+	switch(type)
+	{
+	case FLASH_LED:
+		// Message that is to flash an LED; the next two bytes define
+		// the frequency and M/S ratio.
+
+		break;
+
+	case DISPLAY_MESSAGE:
+		// Message that is to appear on a local display;  \f and \n should be supported.
+
+		break;
+
+	case HOST_MESSAGE:
+	case DEBUG_MESSAGE:
+		// Message that is to be sent to the host via USB; the H is not sent.
+		if (line->GetOutputColumn() == 0)
+		{
+			for(uint8_t i = 0; i < messageIndent; i++)
+			{
+				line->Write(' ', type == DEBUG_MESSAGE);
+			}
+		}
+		line->Write(message, type == DEBUG_MESSAGE);
+		break;
+
+	case WEB_MESSAGE:
+		// Message that is to be sent to the web
+		reprap.GetWebserver()->AppendReplyToWebInterface(message, false);
+		break;
+
+	case WEB_ERROR_MESSAGE:
+		// Message that is to be sent to the web - flags an error
+		reprap.GetWebserver()->AppendReplyToWebInterface(message, true);
+		break;
+
+	case BOTH_MESSAGE:
+		// Message that is to be sent to the web & host
+		if (line->GetOutputColumn() == 0)
+		{
+			for(uint8_t i = 0; i < messageIndent; i++)
+			{
+				line->Write(' ');
+			}
+		}
+		line->Write(message);
+		reprap.GetWebserver()->AppendReplyToWebInterface(message, false);
+		break;
+
+	case BOTH_ERROR_MESSAGE:
+		// Message that is to be sent to the web & host - flags an error
+		// Make this the default behaviour too.
+
+	default:
+		if (line->GetOutputColumn() == 0)
+		{
+			for(uint8_t i = 0; i < messageIndent; i++)
+			{
+				line->Write(' ');
+			}
+		}
+		line->Write(message);
+		reprap.GetWebserver()->AppendReplyToWebInterface(message, true);
+		break;
+	}
+}
+
 
 void Platform::SetAtxPower(bool on)
 {
@@ -1398,23 +1476,13 @@ const char *MassStorage::UnixFileList(const char* directory)
 // Delete a file or directory
 bool MassStorage::Delete(const char* directory, const char* fileName)
 {
-	const char* location = platform->GetMassStorage()->CombineName(directory, fileName);
+	const char* location = (directory != NULL)
+							? platform->GetMassStorage()->CombineName(directory, fileName)
+								: fileName;
 	if (f_unlink(location) != FR_OK)
 	{
 		platform->Message(HOST_MESSAGE, "Can't delete file ");
 		platform->Message(HOST_MESSAGE, location);
-		platform->Message(HOST_MESSAGE, "\n");
-		return false;
-	}
-	return true;
-}
-
-bool MassStorage::Delete(const char *fileName)
-{
-	if (f_unlink(fileName) != FR_OK)
-	{
-		platform->Message(HOST_MESSAGE, "Can't delete file ");
-		platform->Message(HOST_MESSAGE, fileName);
 		platform->Message(HOST_MESSAGE, "\n");
 		return false;
 	}
@@ -1489,7 +1557,9 @@ void FileStore::Init()
 
 bool FileStore::Open(const char* directory, const char* fileName, bool write)
 {
-	const char* location = platform->GetMassStorage()->CombineName(directory, fileName);
+	const char* location = (directory != NULL)
+							? platform->GetMassStorage()->CombineName(directory, fileName)
+								: fileName;
 
 	writing = write;
 	lastBufferEntry = FILE_BUF_LEN - 1;
@@ -1500,11 +1570,12 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 		openReturn = f_open(&file, location, FA_CREATE_ALWAYS | FA_WRITE);
 		if (openReturn != FR_OK)
 		{
+			char errString[10];		// don't use scratch_string for this because that may be holding the original filename
 			platform->Message(HOST_MESSAGE, "Can't open ");
 			platform->Message(HOST_MESSAGE, location);
-			platform->Message(HOST_MESSAGE, " to write to.  Error code: ");
-			snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
-			platform->Message(HOST_MESSAGE, scratchString);
+			platform->Message(HOST_MESSAGE, " to write to, error code ");
+			snprintf(errString, ARRAY_SIZE(errString), "%d", openReturn);
+			platform->Message(HOST_MESSAGE, errString);
 			platform->Message(HOST_MESSAGE, "\n");
 			return false;
 		}
@@ -1515,53 +1586,12 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 		openReturn = f_open(&file, location, FA_OPEN_EXISTING | FA_READ);
 		if (openReturn != FR_OK)
 		{
+			char errString[10];		// don't use scratch_string for this because that may be holding the original filename
 			platform->Message(HOST_MESSAGE, "Can't open ");
 			platform->Message(HOST_MESSAGE, location);
-			platform->Message(HOST_MESSAGE, " to read from.  Error code: ");
-			snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
-			platform->Message(HOST_MESSAGE, scratchString);
-			platform->Message(HOST_MESSAGE, "\n");
-			return false;
-		}
-		bufferPointer = FILE_BUF_LEN;
-	}
-
-	inUse = true;
-	openCount = 1;
-	return true;
-}
-
-bool FileStore::Open(const char* fileName, bool write)
-{
-	writing = write;
-	lastBufferEntry = FILE_BUF_LEN - 1;
-	FRESULT openReturn;
-
-	if (writing)
-	{
-		openReturn = f_open(&file, fileName, FA_CREATE_ALWAYS | FA_WRITE);
-		if (openReturn != FR_OK)
-		{
-			platform->Message(HOST_MESSAGE, "Can't open ");
-			platform->Message(HOST_MESSAGE, fileName);
-			platform->Message(HOST_MESSAGE, " to write to.  Error code: ");
-			snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
-			platform->Message(HOST_MESSAGE, scratchString);
-			platform->Message(HOST_MESSAGE, "\n");
-			return false;
-		}
-		bufferPointer = 0;
-	}
-	else
-	{
-		openReturn = f_open(&file, fileName, FA_OPEN_EXISTING | FA_READ);
-		if (openReturn != FR_OK)
-		{
-			platform->Message(HOST_MESSAGE, "Can't open ");
-			platform->Message(HOST_MESSAGE, fileName);
-			platform->Message(HOST_MESSAGE, " to read from.  Error code: ");
-			snprintf(scratchString, STRING_LENGTH, "%d", openReturn);
-			platform->Message(HOST_MESSAGE, scratchString);
+			platform->Message(HOST_MESSAGE, " to read from, error code ");
+			snprintf(errString, ARRAY_SIZE(errString), "%d", openReturn);
+			platform->Message(HOST_MESSAGE, errString);
 			platform->Message(HOST_MESSAGE, "\n");
 			return false;
 		}
@@ -1815,16 +1845,31 @@ int8_t Line::Status() const
 	return inputNumChars == 0 ? nothing : byteAvailable;
 }
 
+// This is only ever called on initialisation, so we
+// know the buffer won't overflow
+
+void Line::InjectString(char* string)
+{
+	int i = 0;
+	while(string[i])
+	{
+		inBuffer[(inputGetIndex + inputNumChars) % lineInBufsize] = string[i];
+		inputNumChars++;
+		i++;
+	}
+}
+
 int Line::Read(char& b)
 {
 //  if(alternateInput != NULL)
 //	return alternateInput->Read(b);
 
-	  if (inputNumChars == 0) return 0;
-	  b = inBuffer[inputGetIndex];
-	  inputGetIndex = (inputGetIndex + 1) % lineInBufsize;
-	  --inputNumChars;
-	  return 1;
+	if (inputNumChars == 0)
+		return 0;
+	b = inBuffer[inputGetIndex];
+	inputGetIndex = (inputGetIndex + 1) % lineInBufsize;
+	--inputNumChars;
+	return 1;
 }
 
 void Line::Init()
@@ -1836,6 +1881,7 @@ void Line::Init()
 	ignoringOutputLine = false;
 	SerialUSB.begin(BAUD_RATE);
 	inUsbWrite = false;
+	outputColumn = 0;
 }
 
 void Line::Spin()
@@ -1867,6 +1913,15 @@ void Line::Spin()
 // of the data we are asked to print until we get a new line.
 void Line::Write(char b, bool block)
 {
+	if (b == '\n')
+	{
+		outputColumn = 0;
+	}
+	else
+	{
+		++outputColumn;
+	}
+
 	if (block)
 	{
 		// We failed to print an unimportant message that (unusually) didn't finish in a newline

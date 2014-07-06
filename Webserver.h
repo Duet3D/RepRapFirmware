@@ -79,6 +79,8 @@ class ProtocolInterpreter
 	    void CancelUpload();
 		bool IsUploading() const { return uploadState != notUploading; }
 
+		virtual ~ProtocolInterpreter() { }					// to keep Eclipse happy
+
 	protected:
 
 	    bool gotPassword;
@@ -118,13 +120,20 @@ class Webserver
     const char *GetName() const;
     bool CheckPassword(const char* pw) const;
 
-    void HandleReply(const char *s, bool error, bool finished = true);
-    void AppendReply(const char* s, bool finished = false);
     bool GCodeAvailable();
     char ReadGCode();
 
     void ConnectionLost(const ConnectionState *cs);
     void SetReadingConnection();
+    void ConnectionError();
+    void WebDebug(bool wdb);
+
+    friend class Platform;
+
+  protected:
+
+    void MessageStringToWebInterface(const char *s, bool error, bool finished = true);
+    void AppendReplyToWebInterface(const char* s, bool error, bool finished = true);
 
   private:
 
@@ -138,6 +147,7 @@ class Webserver
 
 			bool FlushUploadData();
 			void ReceivedGcodeReply();
+			void SetDebug(bool b) { webDebug = b; }
 
 		private:
 
@@ -203,6 +213,7 @@ class Webserver
 			char jsonResponse[jsonReplyLength];
 			char decodeChar;
 			uint16_t seq;									// reply sequence number, so that the client can tell if a json reply is new or not
+		    bool webDebug;
 	};
 	HttpInterpreter *httpInterpreter;
 

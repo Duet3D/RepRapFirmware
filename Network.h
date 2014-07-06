@@ -138,8 +138,6 @@ public:
 	void ConnectionAccepted(ConnectionState *cs);
 	void ConnectionClosed(ConnectionState* cs);
 	void ConnectionClosedGracefully(ConnectionState *cs);
-	bool Active() const;
-	bool LinkIsUp();
 
 	RequestState *GetRequest(const ConnectionState *cs = NULL);
 	void SendAndClose(FileStore *f, bool keepConnectionOpen = false);
@@ -174,7 +172,7 @@ private:
 	RequestState * volatile readyTransactions;
 	RequestState * volatile writingTransactions;
 
-	bool active;
+	enum { NetworkInactive, NetworkInitializing, NetworkActive } state;
 	uint8_t inLwip;
 
 	ConnectionState *dataCs;

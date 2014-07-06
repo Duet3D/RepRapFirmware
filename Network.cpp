@@ -365,23 +365,16 @@ SendBuffer::SendBuffer(SendBuffer *n) : next(n)
 // Network/Ethernet class
 
 Network::Network()
+	: state(NetworkInactive), inLwip(0),
+	  freeTransactions(NULL), readyTransactions(NULL), writingTransactions(NULL),
+	  dataCs(NULL), ftpCs(NULL), telnetCs(NULL),
+	  sendBuffer(NULL)
 {
-	active = false;
-	inLwip = 0;
-
-	freeTransactions = NULL;
-	readyTransactions = NULL;
-	writingTransactions = NULL;
 	for (int8_t i = 0; i < requestStateSize; i++)
 	{
 		freeTransactions = new RequestState(freeTransactions);
 	}
 
-	dataCs = NULL;
-	ftpCs = NULL;
-	telnetCs = NULL;
-
-	sendBuffer = NULL;
 	for (int8_t i = 0; i < tcpOutputBufferCount; i++)
 	{
 		sendBuffer = new SendBuffer(sendBuffer);
@@ -414,11 +407,12 @@ void Network::Init()
 {
 	RepRapNetworkSetMACAddress(reprap.GetPlatform()->MACAddress());
 	init_ethernet();
+	state = NetworkInitializing;
 }
 
 void Network::Spin()
 {
-	if (active)
+	if (state == NetworkActive)
 	{
 		// Fetch incoming data
 		// ethernet_task() is called twice because the EMAC RX buffers have been increased by dc42's Arduino patch.
@@ -463,13 +457,16 @@ void Network::Spin()
 			cpu_irq_restore(flags);
 		}
 	}
-	else if (establish_ethernet_link())
+	else if (state == NetworkInitializing)
 	{
-		start_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
-		httpd_init();
-		ftpd_init();
-		telnetd_init();
-		active = true;
+		if (establish_ethernet_link())
+		{
+			start_ethernet(reprap.GetPlatform()->IPAddress(), reprap.GetPlatform()->NetMask(), reprap.GetPlatform()->GateWay());
+			httpd_init();
+			ftpd_init();
+			telnetd_init();
+			state = NetworkActive;
+		}
 	}
 }
 
@@ -939,17 +936,6 @@ bool Network::MakeTelnetRequest()
 	PrependTransaction(&readyTransactions, r);
 
 	return true;
-}
-
-//queries the PHY for link status, true = link is up, false, link is down or there is some other error
-bool Network::LinkIsUp()
-{
-	return status_link_up();
-}
-
-bool Network::Active() const
-{
-	return active;
 }
 
 // Get local port from a ConnectionState

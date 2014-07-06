@@ -40,17 +40,15 @@ class RepRap;
 class FileStore;
 
 // A single instance of the RepRap class contains all the others
-      
+
 extern RepRap reprap;
-    
+
 // Functions and globals not part of any class
 
 extern "C" void debugPrintf(const char* fmt, ...);
 
 int sncatf(char *dst, size_t len, const char* fmt, ...);
-#if 0	// no longer used
-char* ftoa(char *a, const float& f, int prec);
-#endif
+
 bool StringEndsWith(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
 bool StringEquals(const char* s1, const char* s2);

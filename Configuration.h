@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.65k-dc42"
-#define DATE "2014-06-28"
+#define VERSION "0.78-dc42"
+#define DATE "2014-07-06"
 #define LAST_AUTHOR "reprappro, dc42. zpl"
 
 // Other firmware that we might switch to be compatible with.
@@ -48,7 +48,7 @@ enum Compatibility
 
 #define HEAT_SAMPLE_TIME (0.5) // Seconds
 
-#define TEMPERATURE_CLOSE_ENOUGH (2.0) 		// Celsius
+#define TEMPERATURE_CLOSE_ENOUGH (3.0) 		// Celsius
 #define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
 
 // If temperatures fall outside this range, something nasty has happened.
@@ -77,6 +77,9 @@ enum Compatibility
 #define HOME_Z_G "homez.g"
 #define HOME_ALL_G "homeall.g"
 
+#define WEB_DEBUG_TRUE 9
+#define WEB_DEBUG_FALSE 8
+
 #define LIST_SEPARATOR ':'						// Lists in G Codes
 #define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them
 #define FILE_LIST_BRACKET '"'					// Put these round file names when listing them
@@ -85,7 +88,16 @@ enum Compatibility
 
 #define LONG_TIME 300.0 // Seconds
 
-#define EOF_STRING "<!-- **EoF** -->"
+#define EOF_STRING "<!-- **EoF** -->"           // For HTML uploads
 
-
+#define FLASH_LED 'F' 							// Type byte of a message that is to flash an LED; the next two bytes define
+                      	  	  	  	  	  	  	// the frequency and M/S ratio.
+#define DISPLAY_MESSAGE 'L'  					// Type byte of a message that is to appear on a local display; the L is
+                             	 	 	 	 	// not displayed; \f and \n should be supported.
+#define HOST_MESSAGE 'H' 						// Type byte of a message that is to be sent to the host via USB; the H is not sent.
+#define WEB_MESSAGE 'W'							// Type byte of message that is to be sent to the web
+#define WEB_ERROR_MESSAGE 'E'					// Type byte of message that is to be sent to the web - flags an error
+#define BOTH_MESSAGE 'B'						// Type byte of message that is to be sent to the web & host
+#define BOTH_ERROR_MESSAGE 'A'					// Type byte of message that is to be sent to the web & host - flags an error
+#define DEBUG_MESSAGE 'D'						// Type byte of debug message to send in blocking mode to USB
 #endif

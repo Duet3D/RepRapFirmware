@@ -32,13 +32,15 @@ class RepRap
     void Exit();
     void Interrupt();
     void Diagnostics();
+    void Timing();
     bool Debug() const;
-    void SetDebug(int d);
+    void SetDebug(bool d);
     void AddTool(Tool* t);
     void SelectTool(int toolNumber);
     void StandbyTool(int toolNumber);
-    void SetToolVariables(int toolNumber, float x, float y, float z, float* standbyTemperatures, float* activeTemperatures);
-    void GetCurrentToolOffset(float& x, float& y, float& z);
+    Tool* GetCurrentTool();
+    Tool* GetTool(int toolNumber);
+    void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures);
     Platform* GetPlatform() const;
     Move* GetMove() const;
     Heat* GetHeat() const;
@@ -76,6 +78,21 @@ inline GCodes* RepRap::GetGCodes() const { return gCodes; }
 inline Network* RepRap::GetNetwork() const { return network; }
 inline Webserver* RepRap::GetWebserver() const { return webserver; }
 inline bool RepRap::Debug() const { return debug; }
+inline Tool* RepRap::GetCurrentTool() { return currentTool; }
+
+inline void RepRap::SetDebug(bool d)
+{
+	debug = d;
+	if(debug)
+	{
+		platform->Message(BOTH_MESSAGE, "Debugging enabled\n");
+	}
+	else
+	{
+		platform->Message(WEB_MESSAGE, "");
+	}
+}
+
 inline void RepRap::Interrupt() { move->Interrupt(); }
 inline bool RepRap::IsStopped() const { return stopped; }
 inline uint16_t RepRap::GetTicksInSpinState() const { return ticksInSpinState; }

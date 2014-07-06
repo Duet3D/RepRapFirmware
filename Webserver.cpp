@@ -314,44 +314,6 @@ bool Webserver::CheckPassword(const char *pw) const
 	return StringEquals(pw, password);
 }
 
-void Webserver::HandleReply(const char *s, bool error, bool finished)
-{
-	if (strlen(s) == 0 && !error)
-	{
-		strcpy(gcodeReply, "ok");
-	}
-	else
-	{
-		if (error)
-		{
-			strcpy(gcodeReply, "Error: ");
-			strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
-		}
-		else
-		{
-			strncpy(gcodeReply, s, ARRAY_UPB(gcodeReply));
-		}
-		gcodeReply[ARRAY_UPB(gcodeReply)] = 0;
-	}
-
-	if (finished)
-	{
-		httpInterpreter->ReceivedGcodeReply();
-		telnetInterpreter->HandleGcodeReply(gcodeReply);
-	}
-}
-
-void Webserver::AppendReply(const char *s, bool finished)
-{
-	strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
-
-	if (finished)
-	{
-		httpInterpreter->ReceivedGcodeReply();
-		telnetInterpreter->HandleGcodeReply(gcodeReply);
-	}
-}
-
 // Get the actual amount of gcode buffer space we have
 unsigned int Webserver::GetGcodeBufferSpace() const
 {
@@ -383,7 +345,7 @@ void Webserver::ProcessGcode(const char* gc)
 		FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 		if (configFile == NULL)
 		{
-			HandleReply("Configuration file not found", true);
+			MessageStringToWebInterface("Configuration file not found", true);
 		}
 		else
 		{
@@ -466,8 +428,7 @@ void Webserver::LoadGcodeBuffer(const char* gc)
 				// gcode is too long, we haven't room for another character and a null
 				if (c != ' ' && !inComment)
 				{
-					platform->Message(HOST_MESSAGE, "Webserver: GCode local buffer overflow.\n");
-					HandleReply("Webserver: GCode local buffer overflow", true);
+					platform->Message(BOTH_ERROR_MESSAGE, "Webserver: GCode local buffer overflow.\n");
 					return;
 				}
 				// else we're either in a comment or the current character is a space.
@@ -489,7 +450,7 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 	if (len > GetGcodeBufferSpace())
 	{
 		platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
-		HandleReply("Webserver: GCode buffer overflow", true);
+		MessageStringToWebInterface("Webserver: GCode buffer overflow", true);
 	}
 	else
 	{
@@ -557,6 +518,43 @@ void Webserver::SetReadingConnection()
 	}
 }
 
+void Webserver::MessageStringToWebInterface(const char *s, bool error, bool finished)
+{
+	if (strlen(s) == 0 && !error)
+	{
+		strcpy(gcodeReply, "ok");
+	}
+	else
+	{
+		if (error)
+		{
+			strcpy(gcodeReply, "Error: ");
+			strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
+		}
+		else
+		{
+			strncpy(gcodeReply, s, ARRAY_UPB(gcodeReply));
+		}
+		gcodeReply[ARRAY_UPB(gcodeReply)] = 0;
+	}
+
+	if (finished)
+	{
+		httpInterpreter->ReceivedGcodeReply();
+		telnetInterpreter->HandleGcodeReply(gcodeReply);
+	}
+}
+
+void Webserver::AppendReplyToWebInterface(const char *s, bool error, bool finished)
+{
+	strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
+
+	if (finished)
+	{
+		httpInterpreter->ReceivedGcodeReply();
+		telnetInterpreter->HandleGcodeReply(gcodeReply);
+	}
+}
 
 
 //********************************************************************************************
@@ -564,8 +562,6 @@ void Webserver::SetReadingConnection()
 //********************** Generic Procotol Interpreter implementation *************************
 //
 //********************************************************************************************
-
-
 
 ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws) : platform(p), webserver(ws)
 {
@@ -698,10 +694,9 @@ void ProtocolInterpreter::FinishUpload(const long file_length)
 
 
 
-Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws) : ProtocolInterpreter(p, ws)
+Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws)
+	: ProtocolInterpreter(p, ws), state(doingCommandWord), seq(0), webDebug(false)
 {
-	state = doingCommandWord;
-	seq = 0;
 }
 
 // Output to the client
@@ -816,7 +811,7 @@ void Webserver::HttpInterpreter::JsonReport(bool ok, const char* request)
 	if (ok)
 	{
 		jsonResponse[ARRAY_UPB(jsonResponse)] = 0;
-		if (reprap.Debug())
+		if (webDebug)
 		{
 			platform->Message(HOST_MESSAGE, "JSON response: ");
 			platform->Message(HOST_MESSAGE, jsonResponse);
@@ -1463,7 +1458,18 @@ bool Webserver::HttpInterpreter::CharFromClient(char c)
 // Return true if the message is complete, false if we want to continue receiving data (i.e. postdata)
 bool Webserver::HttpInterpreter::ProcessMessage()
 {
-	if (numCommandWords < 2)
+    if(webDebug)
+    {
+    	platform->Message(HOST_MESSAGE, "HTTP request:");
+    	for (unsigned int i = 0; i < numCommandWords; ++i)
+    	{
+    		platform->Message(HOST_MESSAGE, " ");
+    		platform->Message(HOST_MESSAGE, commandWords[i]);
+    	}
+    	platform->Message(HOST_MESSAGE, "\n");
+    }
+
+    if (numCommandWords < 2)
 	{
 		return RejectMessage("too few command words");
 	}
@@ -1513,19 +1519,15 @@ bool Webserver::HttpInterpreter::RejectMessage(const char* response, unsigned in
 }
 
 
-
 //********************************************************************************************
 //
 //************************* FTP interpreter for the Webserver class **************************
 //
 //********************************************************************************************
 
-
-
-Webserver::FtpInterpreter::FtpInterpreter(Platform *p, Webserver *ws) : ProtocolInterpreter(p, ws)
+Webserver::FtpInterpreter::FtpInterpreter(Platform *p, Webserver *ws)
+	: ProtocolInterpreter(p, ws), state(authenticating), clientPointer(0)
 {
-	state = authenticating;
-	clientPointer = 0;
 	strcpy(currentDir, "/");
 }
 
@@ -1793,7 +1795,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				bool ok;
 				if (filename[0] == '/')
 				{
-					ok = platform->GetMassStorage()->Delete(filename);
+					ok = platform->GetMassStorage()->Delete(NULL, filename);
 				}
 				else
 				{
@@ -1816,25 +1818,30 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 				bool ok;
 				if (filename[0] == '/')
-					ok = platform->GetMassStorage()->Delete(filename);
+				{
+					ok = platform->GetMassStorage()->Delete(NULL, filename);
+				}
 				else
+				{
 					ok = platform->GetMassStorage()->Delete(currentDir, filename);
+				}
 
 				if (ok)
+				{
 					SendReply(250, "Remove directory operation successful.");
+				}
 				else
+				{
 					SendReply(550, "Remove directory operation failed.");
+				}
 			}
 			// make new directory
 			else if (StringStartsWith(clientMessage, "MKD"))
 			{
 				ReadFilename(3);
-				const char *location;
-
-				if (filename[0] == '/')
-					location = filename;
-				else
-					location = platform->GetMassStorage()->CombineName(currentDir, filename);
+				const char *location = (filename[0] == '/')
+										? filename
+											: platform->GetMassStorage()->CombineName(currentDir, filename);
 
 				if (platform->GetMassStorage()->MakeDirectory(location))
 				{
@@ -1960,9 +1967,13 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 				ReadFilename(4);
 				if (filename[0] == '/')
-					file = platform->GetFileStore(filename, true);
+				{
+					file = platform->GetFileStore(NULL, filename, true);
+				}
 				else
+				{
 					file = platform->GetFileStore(currentDir, filename, true);
+				}
 
 				if (StartUpload(file))
 				{
@@ -1983,9 +1994,13 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 				ReadFilename(4);
 				if (filename[0] == '/')
-					fs = platform->GetFileStore(filename, false);
+				{
+					fs = platform->GetFileStore(NULL, filename, false);
+				}
 				else
+				{
 					fs = platform->GetFileStore(currentDir, filename, false);
+				}
 
 				if (fs == NULL)
 				{
@@ -2081,11 +2096,11 @@ void Webserver::FtpInterpreter::ReadFilename(int start)
 			// skip whitespaces unless the actual filename is being read
 			case ' ':
 			case '\t':
-				if (!readingPath)
+				if (readingPath)
 				{
-					break;
+					filename[filenameLength++] = clientMessage[i];
 				}
-				// no break
+				break;
 
 			// read path name
 			default:
@@ -2166,14 +2181,11 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 }
 
 
-
 //********************************************************************************************
 //
 //*********************** Telnet interpreter for the Webserver class *************************
 //
 //********************************************************************************************
-
-
 
 Webserver::TelnetInterpreter::TelnetInterpreter(Platform *p, Webserver *ws) : ProtocolInterpreter(p, ws)
 {
@@ -2315,14 +2327,11 @@ void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
 }
 
 
-
 //********************************************************************************************
 //
 // ************************ Helper methods for the Webserver class ***************************
 //
 //********************************************************************************************
-
-
 
 // Get information for a file on the SD card
 bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength)
@@ -2515,4 +2524,9 @@ bool Webserver::FindFilamentUsed(const char* buf, size_t len, float& filamentUse
 	return false;
 }
 
-// End
+
+void Webserver::WebDebug(bool wdb)
+{
+	httpInterpreter->SetDebug(wdb);
+}
+

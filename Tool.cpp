@@ -25,35 +25,87 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-Tool::Tool(int tNum, int d[], int h[])
+Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 {
-	myNumber = tNum;
+	myNumber = toolNumber;
 	next = NULL;
 	active = false;
+	driveCount = dCount;
+	heaterCount = hCount;
 
-	for(driveCount = 0; driveCount < DRIVES; driveCount++)
-		if(d[driveCount] < 0)
-			break;
 	if(driveCount > 0)
 	{
+		if(driveCount > DRIVES - AXES)
+		{
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Tool creation: attempt to use more drives than there are in the RepRap...");
+			driveCount = 0;
+			heaterCount = 0;
+			return;
+		}
 		drives = new int[driveCount];
 		for(int8_t drive = 0; drive < driveCount; drive++)
+		{
 			drives[drive] = d[drive];
+		}
 	}
 
-	for(heaterCount = 0; heaterCount < HEATERS; heaterCount++)
-		if(h[heaterCount] < 0)
-			break;
 	if(heaterCount > 0)
 	{
+		if(heaterCount > HEATERS)
+		{
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Tool creation: attempt to use more heaters than there are in the RepRap...");
+			driveCount = 0;
+			heaterCount = 0;
+			return;
+		}
 		heaters = new int[heaterCount];
+		activeTemperatures = new float[heaterCount];
+		standbyTemperatures = new float[heaterCount];
 		for(int8_t heater = 0; heater < heaterCount; heater++)
+		{
 			heaters[heater] = h[heater];
+			activeTemperatures[heater] = ABS_ZERO;
+			standbyTemperatures[heater] = ABS_ZERO;
+		}
 	}
+}
 
-	x = 0.0;
-	y = 0.0;
-	z = 0.0;
+float Tool::MaxFeedrate()
+{
+	if(driveCount <= 0)
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to get maximum feedrate for a tool with no drives.\n");
+		return 1.0;
+	}
+	float result = 0.0;
+	for(int8_t d = 0; d < driveCount; d++)
+	{
+		float mf = reprap.GetPlatform()->MaxFeedrate(drives[d] + AXES);
+		if(mf > result)
+		{
+			result = mf;
+		}
+	}
+	return result;
+}
+
+float Tool::InstantDv()
+{
+	if(driveCount <= 0)
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Attempt to get InstantDv for a tool with no drives.\n");
+		return 1.0;
+	}
+	float result = FLT_MAX;
+	for(int8_t d = 0; d < driveCount; d++)
+	{
+		float idv = reprap.GetPlatform()->InstantDv(drives[d] + AXES);
+		if(idv < result)
+		{
+			result = idv;
+		}
+	}
+	return result;
 }
 
 // Add a tool to the end of the linked list.
@@ -63,10 +115,10 @@ void Tool::AddTool(Tool* t)
 {
 	Tool* last = this;
 	Tool* n = next;
-	while(n)
+	while(n != NULL)
 	{
 		last = n;
-		n = Next();
+		n = n->Next();
 	}
 	t->next = NULL; // Defensive...
 	last->next = t;
@@ -76,10 +128,16 @@ void Tool::Activate(Tool* currentlyActive)
 {
 	if(active)
 		return;
-	if(currentlyActive)
+	if(currentlyActive != NULL && currentlyActive != this)
+	{
 		currentlyActive->Standby();
+	}
 	for(int8_t heater = 0; heater < heaterCount; heater++)
+	{
+		reprap.GetHeat()->SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
+		reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 		reprap.GetHeat()->Activate(heaters[heater]);
+	}
 	active = true;
 }
 
@@ -88,19 +146,30 @@ void Tool::Standby()
 	if(!active)
 		return;
 	for(int8_t heater = 0; heater < heaterCount; heater++)
+	{
+		reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 		reprap.GetHeat()->Standby(heaters[heater]);
+	}
 	active = false;
 }
 
-void Tool::SetVariables(float xx, float yy, float zz, float* standbyTemperatures, float* activeTemperatures)
+void Tool::SetVariables(float* standby, float* active)
 {
-	x = xx;
-	y = yy;
-	z = zz;
 	for(int8_t heater = 0; heater < heaterCount; heater++)
 	{
+		activeTemperatures[heater] = active[heater];
+		standbyTemperatures[heater] = standby[heater];
 		reprap.GetHeat()->SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
 		reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+	}
+}
+
+void Tool::GetVariables(float* standby, float* active)
+{
+	for(int8_t heater = 0; heater < heaterCount; heater++)
+	{
+		active[heater] = activeTemperatures[heater];
+		standby[heater] = standbyTemperatures[heater];
 	}
 }
 
