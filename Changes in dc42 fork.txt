@@ -1,4 +1,4 @@
-Additional functionality in 0.65i-dc42 release compared to RRP 0.65e:
+Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 
 * The Duet can serve all the files needed by the web interface
 
@@ -16,41 +16,45 @@ Additional functionality in 0.65i-dc42 release compared to RRP 0.65e:
 
 * M208 command allow you to set axis minimum positions (e.g. negative x-axis position) as well as maximum positions.
 
-* G1 commands with S1 parameter (i.e. seeking for endstops) do not need to be followed by a G92 command to work properly.
+* G1 commands with S1 parameter (i.e. seeking for endstops) do not need to be followed by a G92 command to work properly. The positions assumed to have been reached when endstops are hit are those set by the M208 command.
 
 * Long filename support for files on the SD card
 
-* The limit of 42 files in the list of gcode files on the SD card is removed (but there is still a limit of 1000 characters)
+* The limit of 42 files in the list of gcode files on the SD card is removed (but there is still a limit of 2000 characters)
 
 * M220 (set speed factor override) and M221 (set extrude factor override) commands are supported.
 
 * Option to invert cooling fan PWM
 
-* Additional z-probe type 2 is supported, for z-probe boards that incorporate more than one type of z-probe
+* Additional z-probe type 3 is supported, for z-probe boards that incorporate more than one type of z-probe
 
 * Separate G31 parameters can be saved for z-probe types 0, 1/2, and 3
 
 * Various parameters (G31 values, IP address, MAC address, thermistor parameters, PID parameters) are saved to flash memory (note that these values do not survive a firmware upgrade)
 
-* M111 S2 command added to show additional parameters such as bed compensation heights, last reset reason, and up-time
-
-* Gcode files that use absolute extruder moves work properly (in particular, G92 commands that reset the assumed extruder position are handled properly)
-
-* I believe some movement bugs are fixed. In particular, one acceleration bug is fixed or at least less severe, and my version does not seem to have a problem with high extruder speeds.
+* M122 diagnostics command shows additional parameters such as bed compensation heights, last reset reason, and up-time
 
 * When pausing a print from SD card, if the printer is executing a 'wait' command such as M116, control is returned to the web interface immediately, without waiting for the command to complete (which could take a long time).
 
 * The USB port is responsive immediately after power up or reset even when no Ethernet cable is connected
 
-* A new file upload protocol supports uploading of any type of file, without a limit on line length, and with a check that the file length is correct when the upload is complete.
+* A new file upload protocol supports much faster uploading of any type of file, without a limit on line length, and with a check that the file length is correct when the upload is complete.
 
-* Bug fix: uploading file whose name includes an uppercase G now works. Simlarly for setting a machine name containing an uppercase G (M550) or password copntaining an uppercase G (M551)
+* M80 and M81 ATX power on/off commands are supported
 
-* Bug fix: if the bed temperature was set using M190 at the start of a print, and the bed was not also turned off using M190, then when M1 is executed at the end of the print the bed heats up again.
+* M999 software reset command is supported
+
+* FTP server supported (thanks zombiepantslol)
+
+* Telnet server supported (thanks zombiepantslol)
+
+* Bug fix: uploading file whose name includes an uppercase G now works. Similarly for setting a machine name containing an uppercase G (M550) or password containing an uppercase G (M551)
 
 * Bug fix: if the machine name in an M550 command is followed by a tab character, then the name is assumed to terminate just before the tab character. Similarly for passwords set using M551.
 
 * Bug fix: setting a machine name that contains a quote or backslash character no longer causes the webserver to return a bad JSON response in response to the rr_name request
+
+* Bug fix: indentation of multipart messages sent to the USB interface now works properly
 
 
 Additional functionality in web interface 0.95 compared to RRP 0.65:
@@ -69,7 +73,7 @@ Additional functionality in web interface 0.95 compared to RRP 0.65:
 
 * "Upload & Print" button (replaces direct web print button, uploads to the SD card first for more reliable printing)
 
-* The extruder box reports total filament extruded, not the amount extruded in the last move
+* The extruder position box reports total filament extruded, instead of the amount extruded in the last move
 
 * Additional status Halted is shown (if emergency stop has been used) as well as Ready and Active
 
