@@ -173,4 +173,23 @@ void Tool::GetVariables(float* standby, float* active)
 	}
 }
 
+// Update the number of active drives and extruders in use to reflect what this tool uses
+void Tool::UpdateExtrudersAndHeaters(uint16_t &numExtruders, uint16_t &numHeaters)
+{
+	for(int8_t drive = 0; drive < driveCount; drive++)
+	{
+		if (drives[drive] >= numExtruders)
+		{
+			numExtruders = drives[drive] + 1;
+		}
+	}
+
+	for(int8_t heater = 0; heater < heaterCount; heater++)
+	{
+		if (heaters[heater] >= numHeaters)
+		{
+			numHeaters = heaters[heater] + 1;
+		}
+	}
+}
 

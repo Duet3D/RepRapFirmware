@@ -62,7 +62,7 @@ void Heat::Spin()
 
 void Heat::Diagnostics() 
 {
-  platform->Message(HOST_MESSAGE, "Heat Diagnostics:\n"); 
+  platform->AppendMessage(BOTH_MESSAGE, "Heat Diagnostics:\n");
   // TODO - Put something useful in here
 }
 

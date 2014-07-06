@@ -177,6 +177,8 @@ RepRap::RepRap() : active(false), debug(false), stopped(false), spinState(0), ti
 void RepRap::Init()
 {
   debug = false;
+  activeExtruders = 1;		// we always report at least 1 extruder to the web interface
+  activeHeaters = 2;		// we always report the bed heater + 1 extruder heater to the web interface
 
   // All of the following init functions must execute reasonably quickly before the watchdog times us out
   platform->Init();
@@ -302,12 +304,11 @@ void RepRap::Timing()
 
 void RepRap::Diagnostics()
 {
-  platform->Diagnostics();
+  platform->Diagnostics();				// this includes a call to our Timing() function
   move->Diagnostics();
   heat->Diagnostics();
   gCodes->Diagnostics();
   webserver->Diagnostics();
-  Timing();
 }
 
 // Turn off the heaters, disable the motors, and
@@ -366,6 +367,7 @@ void RepRap::AddTool(Tool* tool)
 	}
 
 	toolList->AddTool(tool);
+	tool->UpdateExtrudersAndHeaters(activeExtruders, activeHeaters);
 }
 
 void RepRap::SelectTool(int toolNumber)

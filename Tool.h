@@ -50,6 +50,7 @@ protected:
 	void Activate(Tool* currentlyActive);
 	void Standby();
 	void AddTool(Tool* t);
+	void UpdateExtrudersAndHeaters(uint16_t &extruders, uint16_t &heaters);
 
 private:
 

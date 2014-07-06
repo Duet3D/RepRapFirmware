@@ -273,7 +273,7 @@ void Webserver::Exit()
 
 void Webserver::Diagnostics()
 {
-	platform->Message(HOST_MESSAGE, "Webserver Diagnostics:\n");
+	platform->AppendMessage(BOTH_MESSAGE, "Webserver Diagnostics:\n");
 }
 
 void Webserver::SetPassword(const char* pw)
@@ -970,7 +970,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 
 		// Send the heater temperatures
 		ch = '[';
-		for (int8_t heater = 0; heater < HEATERS; heater++)
+		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
 			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetTemperature(heater));
 			ch = ',';
@@ -988,9 +988,9 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		}
 		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "],\"extr\":");		// announce the extruder positions
 		ch = '[';
-		for (int8_t drive = AXES; drive < DRIVES; drive++)		// loop through extruders
+		for (int8_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.3f", ch, gc->GetExtruderPosition(drive - AXES));
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.3f", ch, gc->GetExtruderPosition(drive));
 			ch = ',';
 		}
 		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
@@ -998,7 +998,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		// Send the speed and extruder override factors
 		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor() * 100.0);
 		const float *extrusionFactors = gc->GetExtrusionFactors();
-		for (unsigned int i = 0; i < DRIVES - AXES; ++i)
+		for (unsigned int i = 0; i < reprap.GetExtrudersInUse(); ++i)
 		{
 			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
 		}
@@ -1009,6 +1009,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		// The old (deprecated) poll response lists the status, then all the heater temperatures, then the XYZ positions, then all the extruder positions.
 		// These are all returned in a single vector called "poll".
 		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
+		// RRP reversed the order at version 0.65 to send the positions before the heaters, but we haven't yet done that.
 		char c = (gc->PrintingAFile()) ? 'P' : 'I';
 		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"poll\":[\"%c\",", c); // Printing
 		for (int8_t heater = 0; heater < HEATERS; heater++)

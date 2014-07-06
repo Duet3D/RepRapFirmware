@@ -327,7 +327,7 @@ void Move::SetFeedrate(float feedRate)
 
 void Move::Diagnostics() 
 {
-  platform->Message(HOST_MESSAGE, "Move Diagnostics:\n");
+  platform->AppendMessage(BOTH_MESSAGE, "Move Diagnostics:\n");
 
 /*  if(active)
     platform->Message(HOST_MESSAGE, " active\n");

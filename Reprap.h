@@ -50,6 +50,8 @@ class RepRap
     void Tick();
     bool IsStopped() const;
     uint16_t GetTicksInSpinState() const;
+    uint16_t GetExtrudersInUse() const;
+    uint16_t GetHeatersInUse() const;
     
   private:
   
@@ -69,6 +71,8 @@ class RepRap
     bool stopped;
     bool active;
     bool resetting;
+    uint16_t activeExtruders;
+    uint16_t activeHeaters;
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }
@@ -79,6 +83,8 @@ inline Network* RepRap::GetNetwork() const { return network; }
 inline Webserver* RepRap::GetWebserver() const { return webserver; }
 inline bool RepRap::Debug() const { return debug; }
 inline Tool* RepRap::GetCurrentTool() { return currentTool; }
+inline uint16_t RepRap::GetExtrudersInUse() const { return activeExtruders; }
+inline uint16_t RepRap::GetHeatersInUse() const { return activeHeaters; }
 
 inline void RepRap::SetDebug(bool d)
 {

@@ -191,6 +191,7 @@ class GCodes
     bool waitingForMoveToComplete;
     bool coolingInverted;
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
+    float speedFactorChange;					// factor by which we changed the speed factor since the last move
     float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
     int8_t toolChangeSequence;					// Steps through the tool change procedure
 };

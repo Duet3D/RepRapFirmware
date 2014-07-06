@@ -91,6 +91,7 @@ void GCodes::Reset()
 	cannedCycleMoveCount = 0;
 	cannedCycleMoveQueued = false;
     speedFactor = 1.0/60.0;				// default is just to convert from mm/minute to mm/second
+    speedFactorChange = 1.0;
     for (size_t i = 0; i < DRIVES - AXES; ++i)
     {
     	extrusionFactors[i] = 1.0;
@@ -234,7 +235,7 @@ void GCodes::Spin()
 
 void GCodes::Diagnostics()
 {
-	platform->Message(BOTH_MESSAGE, "GCodes Diagnostics:\n");
+	platform->AppendMessage(BOTH_MESSAGE, "GCodes Diagnostics:\n");
 }
 
 // The wait till everything's done function.  If you need the machine to
@@ -367,12 +368,12 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 			}
 			else if(drivesRelative)
 			{
-				moveBuffer[drive + AXES] = moveArg * extrusionFactors[eDrive];
+				moveBuffer[drive + AXES] = moveArg * extrusionFactors[drive];
 				lastPos[drive] += moveArg;
 			}
 			else
 			{
-				moveBuffer[drive + AXES] = (moveArg - lastPos[drive]) * extrusionFactors[eDrive];
+				moveBuffer[drive + AXES] = (moveArg - lastPos[drive]) * extrusionFactors[drive];
 				lastPos[drive] = moveArg;
 			}
 		}
@@ -430,9 +431,12 @@ int GCodes::SetUpMove(GCodeBuffer *gb)
 	if (moveAvailable)
 		return 0;
 
-	// Load the last position into moveBuffer; If Move can't accept more, return false
+	// Load the last position and feed rate into moveBuffer; If Move can't accept more, return false
 	if (!reprap.GetMove()->GetCurrentUserPosition(moveBuffer))
 		return 0;
+
+	moveBuffer[DRIVES] *= speedFactorChange;		// account for any change in the speed factor since the last move
+	speedFactorChange = 1.0;
 
 	// Check to see if the move is a 'homing' move that endstops are checked on.
 	checkEndStops = false;
@@ -1367,21 +1371,22 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 
 void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend)
 {
-	if (gMOrT != 'M' || code != 111)	// web server reply for M111 is handled before we get here
+	if (gMOrT != 'M' || (code != 111 && code != 122))	// web server reply for M111 and M122 is handled before we get here
 	{
-		if(error)
-			platform->Message(WEB_ERROR_MESSAGE, reply);
-		else
-			platform->Message(WEB_MESSAGE, reply);
+		platform->Message((error) ? WEB_ERROR_MESSAGE : WEB_MESSAGE, reply);
 	}
 
 	Compatibility c = platform->Emulating();
 	if (!fromLine)
+	{
 		c = me;
+	}
 
 	const char* response = "ok";
 	if (resend)
+	{
 		response = "rs ";
+	}
 
 	const char* s = 0;
 
@@ -1392,13 +1397,14 @@ void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOr
 		if (!reply[0])
 			return;
 		if (error)
+		{
 			platform->GetLine()->Write("Error: ");
+		}
 		platform->GetLine()->Write(reply);
 		platform->GetLine()->Write("\n");
 		return;
 
 	case marlin:
-
 		if (gMOrT == 'M' && code == 20)
 		{
 			platform->GetLine()->Write("Begin file list\n");
@@ -2273,7 +2279,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			float newSpeedFactor = gb->GetFValue()/(60 * 100.0);		// include the conversion from mm/minute to mm/second
 			if (newSpeedFactor > 0)
 			{
-				moveBuffer[DRIVES] *= newSpeedFactor/speedFactor;
+				speedFactorChange *= newSpeedFactor/speedFactor;
 				speedFactor = newSpeedFactor;
 			}
 		}
@@ -2283,18 +2289,18 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		if (gb->Seen('S'))	// S parameter sets the override percentage
 		{
 			float extrusionFactor = gb->GetFValue()/100.0;
-			int head;
-			if (gb->Seen('P'))	// P parameter (if present) selects the head
+			int drive;
+			if (gb->Seen('D'))	// D parameter (if present) selects the extruder drive number
 			{
-				head = gb->GetIValue();
+				drive = gb->GetIValue();
 			}
 			else
 			{
-				head = 1;		// default to head 1 if not specified
+				drive = 0;		// default to drive 0 if not specified
 			}
-			if (head >= 1 && head < DRIVES - AXES + 1 && extrusionFactor >= 0)
+			if (drive >= 0 && drive < DRIVES - AXES && extrusionFactor >= 0)
 			{
-				extrusionFactors[head - 1] = extrusionFactor;
+				extrusionFactors[drive] = extrusionFactor;
 			}
 		}
 		break;
