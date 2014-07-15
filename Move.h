@@ -68,7 +68,7 @@ protected:
 
 	LookAhead(Move* m, Platform* p, LookAhead* n);
 	void Init(long ep[], float requsestedFeedRate, float minSpeed, 		// Set up this move
-			float maxSpeed, float acceleration, bool ce);
+			float maxSpeed, float acceleration, uint8_t ce);
 	LookAhead* Next();													// Next one in the ring
 	LookAhead* Previous();												// Previous one in the ring
 	const long* MachineCoordinates() const;								// Endpoints of a move in machine coordinates
@@ -84,8 +84,8 @@ protected:
 	void SetFeedRate(float f);											// Set the desired feedrate
 	int8_t Processed() const;											// Where we are in the look-ahead prediction sequence
 	void SetProcessed(MovementState ms);								// Set where we are the the look ahead processing
-	void SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive);		// Force an end ppoint and st its speed to stopped
-	bool CheckEndStops() const;											// Are we checking endstops on this move?
+	void SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive);		// Force an end point and set its speed to stopped
+	uint8_t EndStopsToCheck() const;									// Which endstops we are checking on this move
 	void Release();														// This move has been processed and executed
 
 private:
@@ -96,7 +96,7 @@ private:
 	LookAhead* previous;			// Previous entry in the ring
 	long endPoint[DRIVES+1];  		// Machine coordinates of the endpoint.  Should never use the +1, but safety first
 	float Cosine();					// The angle between the previous move and this one
-    bool checkEndStops;				// Check endstops for this move
+    uint8_t endStopsToCheck;		// Endstops to check for this move
     float cosine;					// Store for the cosine value - the function uses lazy evaluation
     float v;        				// The feedrate we can actually do
     float requestedFeedrate; 		// The requested feedrate
@@ -139,7 +139,7 @@ private:
 	bool directions[DRIVES];				// Forwards or backwards?
 	long totalSteps;						// Total number of steps for this move
 	long stepCount;							// How many steps we have already taken
-	bool checkEndStops;						// Are we checking endstops?
+	uint8_t endStopsToCheck;				// Which endstops we are checking
     float timeStep;							// The current timestep (seconds)
     float velocity;							// The current velocity
     long stopAStep;							// The stepcount at which we stop accelerating
@@ -228,7 +228,7 @@ class Move
     bool LookAheadRingFull() const;						// Any more room?
     bool LookAheadRingAdd(long ep[], float requestedFeedRate, 	// Add an entry to the look-ahead ring for processing
     		float minSpeed, float maxSpeed,
-    		float acceleration, bool ce);
+    		float acceleration, uint8_t ce);
     void PrintMove(LookAhead* lookAhead);				// For diagnostics
     LookAhead* LookAheadRingGet();						// Get the next entry from the look-ahead ring
 
@@ -349,9 +349,9 @@ inline void LookAhead::Release()
 	 processed = released;
 }
 
-inline bool LookAhead::CheckEndStops() const
+inline uint8_t LookAhead::EndStopsToCheck() const
 {
-  return checkEndStops;
+  return endStopsToCheck;
 }
 
 inline void LookAhead::SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive)

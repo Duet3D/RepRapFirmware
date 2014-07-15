@@ -41,7 +41,7 @@ class PID
     void Standby();									// Switch from active to idle
     bool Active() const;							// Are we active?
     void SwitchOff();								// Not even standby - all heater power off
-    bool SwitchedOff();								// Are we switched off?
+    bool SwitchedOff() const;						// Are we switched off?
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
     float GetTemperature() const;					// Get the current temperature
 
@@ -82,7 +82,8 @@ class Heat
     void Activate(int8_t heater);								// Turn on a heater
     void Standby(int8_t heater);								// Set a heater idle
     float GetTemperature(int8_t heater) const;					// Get the temperature of a heater
-    bool SwitchedOff(int8_t heater);						    // Is this heater in use?
+    bool SwitchedOff(int8_t heater) const;					    // Is this heater in use?
+    void SwitchOffAll();										// Turn all heaters off
     void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
     bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
     bool HeaterAtSetTemperature(int8_t heater) const;			// Is a specific heater at temperature within tolerance?
@@ -159,7 +160,7 @@ inline void PID::SwitchOff()
 }
 
 
-inline bool PID::SwitchedOff()
+inline bool PID::SwitchedOff() const
 {
 	return switchedOff;
 }
@@ -168,9 +169,11 @@ inline bool PID::SwitchedOff()
 
 // Heat
 
-inline bool Heat::SwitchedOff(int8_t heater)
+inline bool Heat::SwitchedOff(int8_t heater) const
 {
-	return pids[heater]->SwitchedOff();
+	return (heater >= 0 && heater < HEATERS)
+				? pids[heater]->SwitchedOff()
+				: true;
 }
 
 inline void Heat::SetActiveTemperature(int8_t heater, float t)
@@ -210,6 +213,14 @@ inline void Heat::Activate(int8_t heater)
   {
     pids[heater]->Activate();
   }
+}
+
+inline void Heat::SwitchOffAll()
+{
+	for (int8_t heater = 0; heater < HEATERS; ++heater)
+	{
+		pids[heater]->SwitchOff();
+	}
 }
 
 inline void Heat::Standby(int8_t heater)

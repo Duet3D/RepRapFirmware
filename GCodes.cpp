@@ -82,7 +82,7 @@ void GCodes::Reset()
 	fileBeingPrinted.Close();
 	fileToPrint.Close();
 	fileBeingWritten = NULL;
-	checkEndStops = false;
+	endStopsToCheck = 0;
 	doingCannedCycleFile = false;
 	dwellWaiting = false;
 	stackPointer = 0;
@@ -317,7 +317,7 @@ bool GCodes::Pop()
   
   moveBuffer[DRIVES] = feedrateStack[stackPointer];
   
-  checkEndStops = false;
+  endStopsToCheck = 0;
   moveAvailable = true;
   return true;
 }
@@ -439,23 +439,29 @@ int GCodes::SetUpMove(GCodeBuffer *gb)
 	speedFactorChange = 1.0;
 
 	// Check to see if the move is a 'homing' move that endstops are checked on.
-	checkEndStops = false;
+	endStopsToCheck = 0;
 	if (gb->Seen('S'))
 	{
 		if (gb->GetIValue() == 1)
 		{
-			checkEndStops = true;
+			for (unsigned int i = 0; i < AXES; ++i)
+			{
+				if (gb->Seen(gCodeLetters[i]))
+				{
+					endStopsToCheck |= (1 << i);
+				}
+			}
 		}
 	}
 
 	// Load the move buffer with either the absolute movement required or the relative movement required
-	moveAvailable = LoadMoveBufferFromGCode(gb, false, !checkEndStops && limitAxes);
-	return (checkEndStops) ? 2 : 1;
+	moveAvailable = LoadMoveBufferFromGCode(gb, false, (endStopsToCheck == 0) && limitAxes);
+	return (endStopsToCheck != 0) ? 2 : 1;
 }
 
 // The Move class calls this function to find what to do next.
 
-bool GCodes::ReadMove(float m[], bool& ce)
+bool GCodes::ReadMove(float m[], uint8_t& ce)
 {
 	if (!moveAvailable)
 		return false;
@@ -463,9 +469,9 @@ bool GCodes::ReadMove(float m[], bool& ce)
 	{
 		m[i] = moveBuffer[i];
 	}
-	ce = checkEndStops;
+	ce = endStopsToCheck;
 	moveAvailable = false;
-	checkEndStops = false;
+	endStopsToCheck = 0;
 	return true;
 }
 
@@ -544,7 +550,7 @@ bool GCodes::FileCannedCyclesReturn()
 // be ignored.  Recall that moveToDo[DRIVES] should contain the feedrate
 // you want (if action[DRIVES] is true).
 
-bool GCodes::DoCannedCycleMove(bool ce)
+bool GCodes::DoCannedCycleMove(uint8_t ce)
 {
 	// Is the move already running?
 
@@ -564,7 +570,7 @@ bool GCodes::DoCannedCycleMove(bool ce)
 			if (activeDrive[drive])
 				moveBuffer[drive] = moveToDo[drive];
 		}
-		checkEndStops = ce;
+		endStopsToCheck = ce;
 		cannedCycleMoveQueued = true;
 		moveAvailable = true;
 	}
@@ -634,7 +640,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 		offSetSet = true;
 	}
 
-	if (DoCannedCycleMove(false))
+	if (DoCannedCycleMove(0))
 	{
 		//LoadMoveBufferFromArray(record);
 		for (int drive = 0; drive <= DRIVES; drive++)
@@ -708,7 +714,7 @@ bool GCodes::DoHome(char* reply, bool& error)
 
 	// Should never get here
 
-	checkEndStops = false;
+	endStopsToCheck = 0;
 	moveAvailable = false;
 
 	return true;
@@ -735,7 +741,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if (DoCannedCycleMove(false))
+		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
 		}
@@ -749,7 +755,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 		moveToDo[DRIVES] = platform->MaxFeedrate(X_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if (DoCannedCycleMove(false))
+		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
 			platform->SetZProbing(true);	// do this here because we only want to call it once
@@ -762,7 +768,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(true);
-		if (DoCannedCycleMove(true))
+		if (DoCannedCycleMove(1 << Z_AXIS))
 		{
 			cannedCycleMoveCount++;
 			platform->SetZProbing(false);
@@ -775,7 +781,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		reprap.GetMove()->SetZProbing(false);
-		if (DoCannedCycleMove(false))
+		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
 		}
@@ -809,7 +815,7 @@ bool GCodes::DoSingleZProbe()
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
-		if (DoCannedCycleMove(true))
+		if (DoCannedCycleMove(1 << Z_AXIS))
 		{
 			cannedCycleMoveCount++;
 			probeCount = 0;
@@ -1193,7 +1199,7 @@ bool GCodes::DoDwellTime(float dwell)
 // Set working and standby temperatures for
 // a tool.  I.e. handle a G10.
 
-bool GCodes::SetOffsets(GCodeBuffer *gb)
+void GCodes::SetOrReportOffsets(char* reply, GCodeBuffer *gb)
 {
   if(gb->Seen('P'))
   {
@@ -1201,24 +1207,42 @@ bool GCodes::SetOffsets(GCodeBuffer *gb)
 	  Tool* tool = reprap.GetTool(toolNumber);
 	  if(tool == NULL)
 	  {
-		  snprintf(scratchString, STRING_LENGTH, "Attempt to set temperatures for non-existent tool: %d\n", toolNumber);
+		  snprintf(scratchString, STRING_LENGTH, "Attempt to set/report offsets and temperatures for non-existent tool: %d\n", toolNumber);
 		  platform->Message(HOST_MESSAGE, scratchString);
-		  return true;
+		  return;
 	  }
 	  float standby[HEATERS];
 	  float active[HEATERS];
+	  tool->GetVariables(standby, active);
+	  bool setting = false;
 	  int hCount = tool->HeaterCount();
-	  if(gb->Seen('R'))
+	  if(hCount > 0)
 	  {
-		  gb->GetFloatArray(standby, hCount);
+		  if(gb->Seen('R'))
+		  {
+			  gb->GetFloatArray(standby, hCount);
+			  setting = true;
+		  }
+		  if(gb->Seen('S'))
+		  {
+			  gb->GetFloatArray(active, hCount);
+			  setting = true;
+		  }
+		  if(setting)
+		  {
+			  tool->SetVariables(standby, active);
+		  }
+		  else
+		  {
+			  reply[0] = 0;
+			  snprintf(reply, STRING_LENGTH, "Tool %d - Active/standby temperature(s): ", toolNumber);
+			  for(int8_t heater = 0; heater < hCount; heater++)
+			  {
+				  sncatf(reply, STRING_LENGTH, "%.1f/%.1f ", active[heater], standby[heater]);
+			  }
+		  }
 	  }
-	  if(gb->Seen('S'))
-	  {
-		  gb->GetFloatArray(active, hCount);
-	  }
-	  tool->SetVariables(standby, active);
   }
-  return true;  
 }
 
 void GCodes::AddNewTool(GCodeBuffer *gb)
@@ -1260,19 +1284,6 @@ bool GCodes::DisableDrives()
 }
 
 // Does what it says.
-
-bool GCodes::StandbyHeaters()
-{
-	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
-		return false;
-	reprap.GetHeat()->Standby(HOT_BED);
-	Tool* tool = reprap.GetCurrentTool();
-	if(tool != NULL)
-	{
-		reprap.StandbyTool(tool->Number());
-	}
-	return true;
-}
 
 void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 {
@@ -1481,12 +1492,17 @@ void GCodes::SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LEN
 		}
 		if (gb->Seen('I'))
 		{
-			pp.kI = gb->GetFValue();
+			pp.kI = gb->GetFValue() / platform->HeatSampleTime();
 			seen = true;
 		}
 		if (gb->Seen('D'))
 		{
-			pp.kD = gb->GetFValue();
+			pp.kD = gb->GetFValue() * platform->HeatSampleTime();
+			seen = true;
+		}
+		if (gb->Seen('T'))
+		{
+			pp.kT = gb->GetFValue();
 			seen = true;
 		}
 		if (gb->Seen('W'))
@@ -1506,7 +1522,8 @@ void GCodes::SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LEN
 		}
 		else
 		{
-			snprintf(reply, STRING_LENGTH, "P:%.2f I:%.3f D:%.2f W:%.1f B:%.1f\n", pp.kP, pp.kI, pp.kD, pp.pidMax, pp.fullBand);
+			snprintf(reply, STRING_LENGTH, "Heater %d P:%.2f I:%.3f D:%.2f T:%.2f W:%.1f B:%.1f\n",
+						heater, pp.kP, pp.kI * platform->HeatSampleTime(), pp.kD/platform->HeatSampleTime(), pp.kT, pp.pidMax, pp.fullBand);
 		}
 	}
 }
@@ -1665,7 +1682,7 @@ bool GCodes::HandleGcode(GCodeBuffer* gb)
 		break;
 
 	case 10: // Set offsets
-		result = SetOffsets(gb);
+		SetOrReportOffsets(reply, gb);
 		break;
 
 	case 20: // Inches (which century are we living in, here?)
@@ -1752,14 +1769,27 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 	{
 	case 0: // Stop
 	case 1: // Sleep
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+			return false;
+
 		if (fileBeingPrinted.IsLive())
 		{
 			fileToPrint.MoveFrom(fileBeingPrinted);
 		}
+
+		// Deselect the active tool
+		{
+			Tool* tool = reprap.GetCurrentTool();
+			if(tool != NULL)
+			{
+				reprap.StandbyTool(tool->Number());
+			}
+		}
+
 		if (!DisableDrives())
 			return false;
-		if (!StandbyHeaters())
-			return false; // Should never happen
+
+		reprap.GetHeat()->SwitchOffAll();
 		break;
 
 	case 18: // Motors off

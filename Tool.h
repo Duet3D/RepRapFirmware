@@ -31,26 +31,26 @@ class Tool
 public:
 
 	Tool(int toolNumber, long d[], int dCount, long h[], int hCount);
-	void GetOffset(float& xx, float& yy, float& zz);
-	int DriveCount();
-	int Drive(int driveNumber);
-	int HeaterCount();
-	int Heater(int heaterNumber);
-	int Number();
+	void GetOffset(float& xx, float& yy, float& zz) const;
+	int DriveCount() const;
+	int Drive(int driveNumber) const;
+	int HeaterCount() const;
+	int Heater(int heaterNumber) const;
+	int Number() const;
 	void SetVariables(float* standby, float* active);
-	void GetVariables(float* standby, float* active);
-	float MaxFeedrate();
-	float InstantDv();
+	void GetVariables(float* standby, float* active) const;
+	float MaxFeedrate() const;
+	float InstantDv() const;
 
 	friend class RepRap;
 
 protected:
 
-	Tool* Next();
+	Tool* Next() const;
 	void Activate(Tool* currentlyActive);
 	void Standby();
 	void AddTool(Tool* t);
-	void UpdateExtrudersAndHeaters(uint16_t &extruders, uint16_t &heaters);
+	void UpdateExtruderAndHeaterCount(uint16_t &extruders, uint16_t &heaters) const;
 
 private:
 
@@ -65,32 +65,32 @@ private:
 	bool active;
 };
 
-inline int Tool::DriveCount()
+inline int Tool::DriveCount() const
 {
 	return driveCount;
 }
 
-inline int Tool::Drive(int driveNumber)
+inline int Tool::Drive(int driveNumber) const
 {
 	return drives[driveNumber];
 }
 
-inline int Tool::HeaterCount()
+inline int Tool::HeaterCount() const
 {
 	return heaterCount;
 }
 
-inline int Tool::Heater(int heaterNumber)
+inline int Tool::Heater(int heaterNumber) const
 {
 	return heaters[heaterNumber];
 }
 
-inline Tool* Tool::Next()
+inline Tool* Tool::Next() const
 {
 	return next;
 }
 
-inline int Tool::Number()
+inline int Tool::Number() const
 {
 	return myNumber;
 }

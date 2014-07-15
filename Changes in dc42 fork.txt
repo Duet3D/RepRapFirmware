@@ -26,7 +26,7 @@ Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 
 * Option to invert cooling fan PWM
 
-* Additional z-probe type 3 is supported, for z-probe boards that incorporate more than one type of z-probe
+* Additional z-probe type 3 is supported, for z-probe boards that incorporate more than one type of z-probe (e.g. my hot end boards)
 
 * Separate G31 parameters can be saved for z-probe types 0, 1/2, and 3
 
@@ -44,6 +44,10 @@ Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 
 * M999 software reset command is supported
 
+* M301 and M304 commands to set PWM parameters now take an additional T parameter. This should be set to the approximate extra PWM value needed (on a scale of 0 to 255) per extra degC of temperature. It is used to preset the I-term to a suitable value when PID kicks in, to enable fast heating with minimum overshoot.
+
+* M0 and M1 commands now turn all heaters off instead of setting them to their standby temperatures
+
 * FTP server supported (thanks zombiepantslol)
 
 * Telnet server supported (thanks zombiepantslol)
@@ -55,6 +59,10 @@ Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 * Bug fix: setting a machine name that contains a quote or backslash character no longer causes the webserver to return a bad JSON response in response to the rr_name request
 
 * Bug fix: indentation of multipart messages sent to the USB interface now works properly
+
+* Bug fix: if G10 was used to set just the active temperature for a tool, then the standby temperature for the same tool was set to an undefined value, and vice versa.
+
+* Bug fix: if bed compensation or axis compensation was in use, then a G1 S1 command to home an axis could be prematurely terminated if the head was already at the endstop position for a different axis.
 
 
 Additional functionality in web interface 0.95 compared to RRP 0.65:

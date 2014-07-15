@@ -56,7 +56,9 @@ void Heat::Spin()
     return;
   lastTime = t;
   for(int8_t heater=0; heater < HEATERS; heater++)
+  {
     pids[heater]->Spin();
+  }
   platform->ClassReport("Heat", longWait);
 }
 
@@ -157,28 +159,31 @@ void PID::Spin()
 	  badTemperatureCount = 0;
   }
 
-  float error = ((active) ? activeTemperature : standbyTemperature) - temperature;
+  float targetTemperature = (active) ? activeTemperature : standbyTemperature;
+  float error = targetTemperature - temperature;
   const PidParameters& pp = platform->GetPidParameters(heater);
   
   if(!pp.UsePID())
   {
-    platform->SetHeater(heater, (error > 0.0) ? 1.0 : 0.0);
-    return; 
+	  platform->SetHeater(heater, (error > 0.0) ? 1.0 : 0.0);
+	  return;
   }
   
   if(error < -pp.fullBand)
   {
-     temp_iState = 0.0;
-     platform->SetHeater(heater, 0.0);
-     lastTemperature = temperature;
-     return;
+	  // actual temperature is well above target
+	  temp_iState = (targetTemperature - 25.0 + pp.fullBand) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
+	  platform->SetHeater(heater, 0.0);
+	  lastTemperature = temperature;
+	  return;
   }
   if(error > pp.fullBand)
   {
-     temp_iState = 0.0;
-     platform->SetHeater(heater, 1.0);
-     lastTemperature = temperature;
-     return;
+	  // actual temperature is well below target
+	  temp_iState = (targetTemperature - 25.0 - pp.fullBand) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
+	  platform->SetHeater(heater, 1.0);
+	  lastTemperature = temperature;
+	  return;
   }  
    
   temp_iState += error * pp.kI;

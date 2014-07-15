@@ -81,7 +81,7 @@ class GCodes
     void Exit();														// Shut it down
     void Reset();														// Reset some parameter to defaults
     bool RunConfigurationGCodes();										// Run the configuration G Code file on reboot
-    bool ReadMove(float* m, bool& ce);									// Called by the Move class to get a movement set by the last G Code
+    bool ReadMove(float* m, uint8_t& ce);								// Called by the Move class to get a movement set by the last G Code
     void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
     void DeleteFile(const char* fileName);								// Does what it says
     bool GetProbeCoordinates(int count, float& x, float& y, float& z) const;	// Get pre-recorded probe coordinates
@@ -101,7 +101,7 @@ class GCodes
   
     void DoFilePrint(GCodeBuffer* gb);									// Get G Codes from a file and print them
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();					// Wait for move queue to exhaust and the current position is loaded
-    bool DoCannedCycleMove(bool ce);									// Do a move from an internally programmed canned cycle
+    bool DoCannedCycleMove(uint8_t ce);									// Do a move from an internally programmed canned cycle
     bool DoFileCannedCycles(const char* fileName);						// Run a GCode macro in a file
     bool FileCannedCyclesReturn();										// End a macro
     bool ActOnGcode(GCodeBuffer* gb);									// Do the G/M/T Code
@@ -117,7 +117,7 @@ class GCodes
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);					// Probes at a given position - see the comment at the head of the function itself
     bool DoMultipleZProbe();											// Probes a series of points and sets the bed equation
     bool SetPrintZProbe(GCodeBuffer *gb, char *reply);					// Either return the probe value, or set its threshold
-    bool SetOffsets(GCodeBuffer *gb);									// Deal with a G10
+    void SetOrReportOffsets(char* reply, GCodeBuffer *gb);				// Deal with a G10
     bool SetPositions(GCodeBuffer *gb);									// Deal with a G92
     bool LoadMoveBufferFromGCode(GCodeBuffer *gb,  						// Set up a move for the Move class
     		bool doingG92, bool applyLimits);
@@ -125,7 +125,6 @@ class GCodes
     bool Push();														// Push feedrate etc on the stack
     bool Pop();															// Pop feedrate etc
     bool DisableDrives();												// Turn the motors off
-    bool StandbyHeaters();												// Set all heaters to standby temperatures
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);				// Does what it says
     void SetMACAddress(GCodeBuffer *gb);								// Deals with an M540
     void HandleReply(bool error, bool fromLine, const char* reply, 		// If the GCode is from the serial interface, reply to it
@@ -154,7 +153,7 @@ class GCodes
     GCodeBuffer* cannedCycleGCode;				// ... of G Codes
     bool moveAvailable;							// Have we seen a move G Code and set it up?
     float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
-    bool checkEndStops;							// Should we check them on the next move?
+    uint8_t endStopsToCheck;					// Which end stops we check them on the next move
     bool drivesRelative; 						// Are movements relative - all except X, Y and Z
     bool axesRelative;   						// Are movements relative - X, Y and Z
     bool drivesRelativeStack[STACK];			// For dealing with Push and Pop
@@ -177,7 +176,6 @@ class GCodes
     char* eofString;							// What's at the end of an HTML file?
     uint8_t eofStringCounter;					// Check the...
     uint8_t eofStringLength;					// ... EoF string as we read.
-    //int8_t selectedHead;						// Which extruder is in use
     bool homeX;									// True to home the X axis this move
     bool homeY;									// True to home the Y axis this move
     bool homeZ;									// True to home the Z axis this move

@@ -367,7 +367,7 @@ void RepRap::AddTool(Tool* tool)
 	}
 
 	toolList->AddTool(tool);
-	tool->UpdateExtrudersAndHeaters(activeExtruders, activeHeaters);
+	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeHeaters);
 }
 
 void RepRap::SelectTool(int toolNumber)

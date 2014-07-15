@@ -167,28 +167,6 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 
 // HEATERS - The bed is assumed to be the at index 0
 
-//#define TEMP_SENSE_PINS {5, 4}  				// Analogue pin numbers (full array for Duet+Duex4 = {5, 4, 0, 7, 8, 9} )
-//#define HEAT_ON_PINS {6, X5}					// PWM pins (full array for Duet+Duex4 = {6, X5, X7, 7, 8, 9} )
-//
-//// Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
-//// Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
-//#define THERMISTOR_BETAS {3988.0, 4138.0}		// See http://en.wikipedia.org/wiki/Thermistor
-//#define THERMISTOR_SERIES_RS {1000, 1000} 		// Ohms in series with the thermistors
-//#define THERMISTOR_25_RS {10000.0, 100000.0} 	// Thermistor ohms at 25 C = 298.15 K
-//#define USE_PID {false, true} 					// PID or bang-bang for this heater?
-//#define PID_KIS {-1, 0.027 / HEAT_SAMPLE_TIME} 	// Integral PID constants, adjusted by dc42 for Ormerod hot end
-//#define PID_KDS {-1, 100 * HEAT_SAMPLE_TIME}	// Derivative PID constants
-//#define PID_KPS {-1, 20}						// Proportional PID constants
-//#define FULL_PID_BAND {-1, 150.0}				// errors larger than this cause heater to be on or off and I-term set to zero
-//#define PID_MIN {-1, 0.0}						// minimum value of I-term
-//#define PID_MAX {-1, 180}						// maximum value of I-term, must be high enough to reach 245C for ABS printing
-//#define D_MIX {-1, 0.5}							// higher values make the PID controller less sensitive to noise in the temperature reading, but too high makes it unstable
-//#define TEMP_INTERVAL 0.122 					// secs - check and control temperatures this often
-//#define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
-//#define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
-//#define COOLING_FAN_PIN X6 										//pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-//#define HEAT_ON 0 								// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
-
 #define TEMP_SENSE_PINS {5, 4, 0, 7, 8, 9} // Analogue pin numbers
 #define HEAT_ON_PINS {6, X5, X7, 7, 8, 9} //pin D38 is PWM capable but not an Arduino PWM pin - //FIXME TEST if E1 PWM works as D38
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
@@ -222,27 +200,27 @@ const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 10000
 // This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
 // We use method 2 (see above)
-const float defaultPidKis[HEATERS] = {2.2, 0.5 / HEAT_SAMPLE_TIME, 0.5 / HEAT_SAMPLE_TIME, 0.5 / HEAT_SAMPLE_TIME, 0.5 / HEAT_SAMPLE_TIME, 0.5 / HEAT_SAMPLE_TIME}; // Integral PID constants
-const float defaultPidKds[HEATERS] = {80, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME};	// Derivative PID constants
-const float defaultPidKps[HEATERS] = {-1, 20, 20, 20, 20, 20}; 							// Proportional PID constants, negative values indicate use bang-bang instead of PID
-const float defaultFullBand[HEATERS] = {150, 150.0, 150.0, 150.0, 150.0, 150.0};		// errors larger than this cause heater to be on or off and I-term set to zero
-
-const float defaultPidMin[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};	// minimum value of I-term
-const float defaultPidMax[HEATERS] = {180, 180, 180, 180, 180, 180};	// maximum value of I-term, must be high enough to reach 245C for ABS printing
+const float defaultPidKis[HEATERS] = {5.0 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME}; // Integral PID constants
+const float defaultPidKds[HEATERS] = {500.0 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME};	// Derivative PID constants
+const float defaultPidKps[HEATERS] = {-1, 5.0, 5.0, 5.0, 5.0, 5.0};				// Proportional PID constants, negative values indicate use bang-bang instead of PID
+const float defaultPidKts[HEATERS] = {2.7, 0.35, 0.35, 0.35, 0.35, 0.35};		// approximate PWM value needed to maintain temperature, per degC above soom temperature
+const float defaultFullBand[HEATERS] = {5.0, 40.0, 40.0, 40.0, 40.0, 40.0};		// errors larger than this cause heater to be on or off
+const float defaultPidMin[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
+const float defaultPidMax[HEATERS] = {255, 100, 100, 100, 100, 100};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN_PIN X6 										//pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-#define HEAT_ON 0 								// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define COOLING_FAN_PIN X6 										// pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
+#define HEAT_ON 0 												// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
 #define COOLING_FAN_PIN X6 //pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-#define HEAT_ON 0 // 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define HEAT_ON 0 // 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 const unsigned int adOversampleBits = 1;					// number of bits we oversample when reading temperatures
-												// We hope that the compiler is clever enough to spot that division by this is a >> operation, but it doesn't really matter
+
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ** adOversampleBits.
 // Keep numThermistorReadingsAveraged * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
 const unsigned int numThermistorReadingsAveraged = (HEATERS > 3) ? 32 : 64;
@@ -490,7 +468,7 @@ private:
 	float thermistorBeta, thermistorInfR;				// private because these must be changed together
 
 public:
-	float kI, kD, kP;
+	float kI, kD, kP, kT;
 	float fullBand, pidMin, pidMax;
 	float thermistorSeriesR;
 	float adcLowOffset, adcHighOffset;
@@ -517,17 +495,17 @@ template<size_t numAveraged> class AveragingFilter
 public:
 	AveragingFilter()
 	{
-		Init();
+		Init(0);
 	}
 
-	void Init() volatile
+	void Init(uint16_t val) volatile
 	{
-		sum = 0;
+		sum = (uint32_t)val * (uint32_t)numAveraged;
 		index = 0;
 		isValid = false;
 		for(size_t i = 0; i < numAveraged; ++i)
 		{
-			readings[i] = 0;
+			readings[i] = val;
 		}
 	}
 
@@ -552,7 +530,7 @@ public:
 	}
 
 	// Return true if we have a valid average
-	bool IsValid()  const volatile
+	bool IsValid() const volatile
 	{
 		return isValid;
 	}

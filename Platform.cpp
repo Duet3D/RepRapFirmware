@@ -80,7 +80,7 @@ void PidParameters::SetThermistorR25AndBeta(float r25, float beta)
 
 bool PidParameters::operator==(const PidParameters& other) const
 {
-	return kI == other.kI && kD == other.kD && kP == other.kP && fullBand == other.fullBand && pidMin == other.pidMin
+	return kI == other.kI && kD == other.kD && kP == other.kP && kT == other.kT && fullBand == other.fullBand && pidMin == other.pidMin
 			&& pidMax == other.pidMax && thermistorBeta == other.thermistorBeta && thermistorInfR == other.thermistorInfR
 			&& thermistorSeriesR == other.thermistorSeriesR && adcLowOffset == other.adcLowOffset
 			&& adcHighOffset == other.adcHighOffset;
@@ -135,6 +135,7 @@ void Platform::Init()
 			pp.kI = defaultPidKis[i];
 			pp.kD = defaultPidKds[i];
 			pp.kP = defaultPidKps[i];
+			pp.kT = defaultPidKts[i];
 			pp.fullBand = defaultFullBand[i];
 			pp.pidMin = defaultPidMin[i];
 			pp.pidMax = defaultPidMax[i];
@@ -261,14 +262,17 @@ void Platform::Init()
 		{
     		if(i == E0_HEATER || i==E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
 			{
+    			digitalWriteNonDue(heatOnPins[i], HIGH);	// turn the heater off
 				pinModeNonDue(heatOnPins[i], OUTPUT);
 			}
 			else
 			{
+    			digitalWrite(heatOnPins[i], HIGH);			// turn the heater off
 				pinMode(heatOnPins[i], OUTPUT);
 			}
 		}
-		thermistorFilters[i].Init();
+		analogReadResolution(12);
+		thermistorFilters[i].Init(analogRead(tempSensePins[i]));
 		heaterAdcChannels[i] = PinToAdcChannel(tempSensePins[i]);
 
 		// Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check is quickly in the tick ISR
@@ -305,8 +309,8 @@ void Platform::SetSlowestDrive()
 
 void Platform::InitZProbe()
 {
-	zProbeOnFilter.Init();
-	zProbeOffFilter.Init();
+	zProbeOnFilter.Init(0);
+	zProbeOffFilter.Init(0);
 
 	if (nvData.zProbeType == 1 || nvData.zProbeType == 2)
 	{
@@ -777,10 +781,11 @@ void Platform::Diagnostics()
 	AppendMessage(BOTH_MESSAGE, scratchString);
 	reprap.Timing();
 
-#if LWIP_STATS
-	// Print LWIP stats to USB only
-	stats_display();
-#endif
+	// Normally we should NOT try to display LWIP stats here, because it uses debugPrintf(), which will hang the system is no USB cable is connected.
+	if (reprap.Debug())
+	{
+		stats_display();
+	}
 }
 
 void Platform::DiagnosticTest(int d)

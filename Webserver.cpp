@@ -1003,6 +1003,11 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
 		}
 		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
+
+		// Send the current tool number
+		Tool* currentTool = reprap.GetCurrentTool();
+		int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
+		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"tool\":%d", toolNumber);
 	}
 	else
 	{
