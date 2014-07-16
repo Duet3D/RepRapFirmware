@@ -150,9 +150,9 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 
 // AXES
 
-#define AXIS_MAXIMA {220, 200, 200} 	// mm
-#define AXIS_MINIMA {0, 0, 0}			// mm
-#define HOME_FEEDRATES {50.0, 50.0, 1.0} 		// mm/sec
+#define AXIS_MAXIMA {220, 200, 200} 			// mm
+#define AXIS_MINIMA {0, 0, 0}					// mm
+#define HOME_FEEDRATES {50.0, 50.0, 100.0/60.0}	// mm/sec (increased Z because we slow down z-homing when approaching the target height)
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}			// mm
 
 #define X_AXIS 0  								// The index of the X axis in the arrays

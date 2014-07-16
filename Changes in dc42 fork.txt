@@ -48,6 +48,18 @@ Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 
 * M0 and M1 commands now turn all heaters off instead of setting them to their standby temperatures
 
+* When using a Z probe, Z homing and bed probing are done in two stages (a fast stage followed by a slow stage) for better accuracy.
+
+* M116 takes an optional P parameter to specify which tool to wait for. If no P parameter is given, it waits for all tools and the bed as before. The main purpose of this is that on a tool change, you can wait for the new tool to heat up to operating temperature but not wait for the old tool to cool down to standby temperature.
+
+* When fetching file info, if the gcode file contains more than one 'filament used' comment, the filament lengths in all of them are returned to the web interface
+
+* The active and standby temperatures of all heaters are included in the status poll response
+
+* The default initial Z homing and bed probing speed has been increased. This is possible because Z homing and bed probing slow down when the probe reading is approaching the target value.
+
+* The M220 and M221 commands now return the override factors if no S parameter is provided
+
 * FTP server supported (thanks zombiepantslol)
 
 * Telnet server supported (thanks zombiepantslol)
@@ -63,6 +75,10 @@ Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 * Bug fix: if G10 was used to set just the active temperature for a tool, then the standby temperature for the same tool was set to an undefined value, and vice versa.
 
 * Bug fix: if bed compensation or axis compensation was in use, then a G1 S1 command to home an axis could be prematurely terminated if the head was already at the endstop position for a different axis.
+
+* Bug fix: if a tool was defined as using zero drives or zero extruders, it would be treated as assuming a collection of drives or extruders according to the vales in an uninitialised array
+
+* Bug fix: the cumulative extruder positions were getting reset (typically to zero) on a tool change or other macro file execution
 
 
 Additional functionality in web interface 0.95 compared to RRP 0.65:

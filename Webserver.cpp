@@ -888,14 +888,29 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	else if (StringEquals(request, "fileinfo") && StringEquals(key, "name"))
 	{
 		unsigned long length;
-		float height, filament, layerHeight;
+		float height, filament[DRIVES - AXES], layerHeight;
+		unsigned int numFilaments = DRIVES - AXES;
 		char generatedBy[50];
-		bool found = webserver->GetFileInfo(value, length, height, filament, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
+		bool found = webserver->GetFileInfo(value, length, height, filament, numFilaments, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
 		if (found)
 		{
 			snprintf(jsonResponse, ARRAY_UPB(jsonResponse),
-					"{\"err\":0,\"size\":%lu,\"height\":%.2f,\"filament\":%.1f,\"layerHeight\":%.2f,\"generatedBy\":\"%s\"}",
-					length, height, filament, layerHeight, generatedBy);
+						"{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
+							length, height, layerHeight);
+			char ch = '[';
+			if (numFilaments == 0)
+			{
+				sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c", ch);
+			}
+			else
+			{
+				for (unsigned int i = 0; i < numFilaments; ++i)
+				{
+					sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.1f", ch, filament[i]);
+					ch = ',';
+				}
+			}
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "],\"generatedBy\":\"%s\"}", generatedBy);
 		}
 		else
 		{
@@ -968,7 +983,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		char ch = (reprap.IsStopped()) ? 'S' : (gc->PrintingAFile()) ? 'P' : 'I';
 		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"status\":\"%c\",\"heaters\":", ch);
 
-		// Send the heater temperatures
+		// Send the heater actual temperatures
 		ch = '[';
 		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
@@ -976,7 +991,25 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 			ch = ',';
 		}
 
-		// Send XYZ and extruder positions
+		// Send the heater active temperatures
+		strncat(jsonResponse, "],\"active\":", ARRAY_UPB(jsonResponse));
+		ch = '[';
+		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+		{
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetActiveTemperature(heater));
+			ch = ',';
+		}
+
+		// Send the heater standby temperatures
+		strncat(jsonResponse, "],\"standby\":", ARRAY_UPB(jsonResponse));
+		ch = '[';
+		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+		{
+			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetStandbyTemperature(heater));
+			ch = ',';
+		}
+
+		// Send XYZ positions
 		float liveCoordinates[DRIVES + 1];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
 		strncat(jsonResponse, "],\"pos\":", ARRAY_UPB(jsonResponse));		// announce the XYZ position
@@ -986,6 +1019,8 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", ch, liveCoordinates[drive]);
 			ch = ',';
 		}
+
+		// Send extruder total extrusion since power up or last G92
 		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "],\"extr\":");		// announce the extruder positions
 		ch = '[';
 		for (int8_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
@@ -2339,8 +2374,8 @@ void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
 //
 //********************************************************************************************
 
-// Get information for a file on the SD card
-bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength)
+// Get information for a file on the SD card.
+bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float *filamentUsed, unsigned int& numFilaments, float& layerHeight, char* generatedBy, size_t generatedByLength)
 {
 	FileStore *f = platform->GetFileStore("0:/", fileName, false);
 	if (f != NULL)
@@ -2348,7 +2383,6 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 		// Try to find the object height by looking for the last G1 Zxxx command in the file
 		length = f->Length();
 		height = 0.0;
-		filamentUsed = 0.0;
 		layerHeight = 0.0;
 		generatedBy[0] = 0;
 
@@ -2424,7 +2458,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 				}
 				unsigned long seekPos = length - sizeToRead;	// read on a 512b boundary
 				size_t sizeToScan = sizeToRead;
-				bool foundFilamentUsed = false;
+				unsigned int filamentsFound = 0;
 				for (;;)
 				{
 					if (!f->Seek(seekPos))
@@ -2437,10 +2471,20 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 						break;									// read failed so give up
 					}
 					buf[sizeToScan] = 0;						// add a null terminator
-					if (!foundFilamentUsed)
+
+					// Search for filament used
+					float filaments[DRIVES - AXES];
+					unsigned int nFilaments = FindFilamentUsed(buf, sizeToScan, filaments, DRIVES - AXES);
+					if (nFilaments != 0 && nFilaments >= filamentsFound)
 					{
-						foundFilamentUsed = FindFilamentUsed(buf, sizeToScan, filamentUsed);
+						filamentsFound = min<unsigned int>(nFilaments, numFilaments);
+						for (unsigned int i = 0; i < filamentsFound; ++i)
+						{
+							filamentUsed[i] = filaments[i];
+						}
 					}
+
+					// Search for object height
 					if (FindHeight(buf, sizeToScan, height))
 					{
 						break;		// quit if found height
@@ -2454,6 +2498,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 					sizeToScan = readSize + overlap;
 					memcpy(buf + sizeToRead, buf, overlap);
 				}
+				numFilaments = filamentsFound;
 			}
 		}
 		f->Close();
@@ -2505,11 +2550,13 @@ bool Webserver::FindHeight(const char* buf, size_t len, float& height)
 }
 
 // Scan the buffer for the filament used. The buffer is null-terminated.
-bool Webserver::FindFilamentUsed(const char* buf, size_t len, float& filamentUsed)
+// Returns the number of filaments found.
+unsigned int Webserver::FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, unsigned int maxFilaments)
 {
 	const char* filamentUsedStr = "ilament used";		// comment string used by slic3r, followed by filament used and "mm"
-	const char* p = strstr(buf, filamentUsedStr);
-	if (p != NULL)
+	unsigned int filamentsFound = 0;
+	const char* p = buf;
+	while (filamentsFound < maxFilaments && (p = strstr(p, filamentUsedStr)) != NULL)
 	{
 		p += strlen(filamentUsedStr);
 		while(strchr(" :=\t", *p) != NULL)
@@ -2519,15 +2566,15 @@ bool Webserver::FindFilamentUsed(const char* buf, size_t len, float& filamentUse
 		if (isDigit(*p))
 		{
 			char* q;
-			filamentUsed = strtod(p, &q);
+			filamentUsed[filamentsFound] = strtod(p, &q);
 			if (*q == 'm' && *(q + 1) != 'm')
 			{
-				filamentUsed *= 1000.0;		// Cura outputs filament used in metres not mm
+				filamentUsed[filamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
 			}
-			return true;
+			++filamentsFound;
 		}
 	}
-	return false;
+	return filamentsFound;
 }
 
 

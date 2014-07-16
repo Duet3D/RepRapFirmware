@@ -292,9 +292,9 @@ class Webserver
     void StoreGcodeData(const char* data, size_t len);
 
     // File info methods
-    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float& filamentUsed, float& layerHeight, char* generatedBy, size_t generatedByLength);
+    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float *filamentUsed, unsigned int& numFilaments, float& layerHeight, char* generatedBy, size_t generatedByLength);
     static bool FindHeight(const char* buf, size_t len, float& height);
-    static bool FindFilamentUsed(const char* buf, size_t len, float& filamentUsed);
+    static unsigned int FindFilamentUsed(const char* buf, size_t len,  float *filamentUsed, unsigned int maxFilaments);
     static void CopyParameterText(const char* src, char *dst, size_t length);
 
     // Buffer to hold gcode that is ready for processing

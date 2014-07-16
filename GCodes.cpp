@@ -305,15 +305,16 @@ bool GCodes::Pop()
   axesRelative = axesRelativeStack[stackPointer];
   fileBeingPrinted.MoveFrom(fileStack[stackPointer]);
   platform->PopMessageIndent();
-  // Remember for next time if we have just been switched
-  // to absolute drive moves
+
+  // Remember for next time if we have just been switched to absolute drive moves
+  // DC 2014-07-16: the following code is wrong, it messes up the absolute extruder position (typically it resets it to zero) and does nothing useful as far as I can see.
+  // So I am commenting it out.
+  //for(int8_t i = AXES; i < DRIVES; i++)
+  //{
+  //  lastPos[i - AXES] = moveBuffer[i];
+  //}
   
-  for(int8_t i = AXES; i < DRIVES; i++)
-  {
-    lastPos[i - AXES] = moveBuffer[i];
-  }
-  
-  // Do a null move to set the correct feedrate
+  // Set the correct feedrate
   
   moveBuffer[DRIVES] = feedrateStack[stackPointer];
   
@@ -644,7 +645,9 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 	{
 		//LoadMoveBufferFromArray(record);
 		for (int drive = 0; drive <= DRIVES; drive++)
+		{
 			moveBuffer[drive] = record[drive];
+		}
 		reprap.GetMove()->SetLiveCoordinates(record); // This doesn't transform record
 		reprap.GetMove()->SetPositions(record);        // This does
 		offSetSet = false;
@@ -1258,12 +1261,20 @@ void GCodes::AddNewTool(GCodeBuffer *gb)
 	{
 		gb->GetLongArray(drives, dCount);
 	}
+	else
+	{
+		dCount = 0;
+	}
 
 	long heaters[HEATERS];
 	int hCount = HEATERS;
 	if(gb->Seen('H'))
 	{
 		gb->GetLongArray(heaters, hCount);
+	}
+	else
+	{
+		hCount = 0;
 	}
 
 	Tool* tool = new Tool(toolNumber, drives, dCount, heaters, hCount);
@@ -1870,7 +1881,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		platform->SetAtxPower(code == 80);
 		break;
 
-	case 82:
+	case 82:	// Use absolute extruder positioning
 		for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
 		{
 			lastPos[extruder - AXES] = 0.0;
@@ -1878,12 +1889,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		drivesRelative = false;
 		break;
 
-	case 83:
-		for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+	case 83:	// Use relative extruder positioning
+		if (!drivesRelative)	// don't reset the absolute extruder position if it was already relative
 		{
-			lastPos[extruder - AXES] = 0.0;
+			for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+			{
+				lastPos[extruder - AXES] = 0.0;
+			}
+			drivesRelative = true;
 		}
-		drivesRelative = true;
 		break;
 
 	case 84: // Motors off - deprecated, use M18
@@ -2060,7 +2074,28 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		{
 			return false;
 		}
-		result = reprap.GetHeat()->AllHeatersAtSetTemperatures(true);
+		if (gb->Seen('P'))
+		{
+			// Wait for the heaters associated with the specified tool to be ready
+			int toolNumber = gb->GetIValue();
+		    Tool* tool = reprap.GetTool(toolNumber);
+		    if (tool != NULL)
+		    {
+				for (int i = 0; i < tool->HeaterCount(); ++i)
+				{
+					if (!reprap.GetHeat()->HeaterAtSetTemperature(tool->Heater(i)))
+					{
+						return false;
+					}
+				}
+		    }
+			result = true;
+		}
+		else
+		{
+			// Wait for all heaters to be ready
+			result = reprap.GetHeat()->AllHeatersAtSetTemperatures(true);
+		}
 		break;
 
     	//TODO M119
@@ -2306,19 +2341,21 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 	case 220:	// set speed factor override percentage
 		if (gb->Seen('S'))
 		{
-			float newSpeedFactor = gb->GetFValue()/(60 * 100.0);		// include the conversion from mm/minute to mm/second
+			float newSpeedFactor = gb->GetFValue()/(60.0 * 100.0);		// include the conversion from mm/minute to mm/second
 			if (newSpeedFactor > 0)
 			{
 				speedFactorChange *= newSpeedFactor/speedFactor;
 				speedFactor = newSpeedFactor;
 			}
 		}
+		else
+		{
+			snprintf(reply, STRING_LENGTH, "Speed factor override: %.1f%%\n", speedFactor * (60.0 * 100.0));
+		}
 		break;
 
 	case 221:	// set extrusion factor override percentage
-		if (gb->Seen('S'))	// S parameter sets the override percentage
 		{
-			float extrusionFactor = gb->GetFValue()/100.0;
 			int drive;
 			if (gb->Seen('D'))	// D parameter (if present) selects the extruder drive number
 			{
@@ -2328,9 +2365,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			{
 				drive = 0;		// default to drive 0 if not specified
 			}
-			if (drive >= 0 && drive < DRIVES - AXES && extrusionFactor >= 0)
+
+			if (gb->Seen('S'))	// S parameter sets the override percentage
 			{
-				extrusionFactors[drive] = extrusionFactor;
+				float extrusionFactor = gb->GetFValue()/100.0;
+				if (drive >= 0 && drive < DRIVES - AXES && extrusionFactor >= 0)
+				{
+					extrusionFactors[drive] = extrusionFactor;
+				}
+			}
+			else
+			{
+				snprintf(reply, STRING_LENGTH, "Extrusion factor override for drive %d: %.1f%%\n", drive, extrusionFactors[drive] * 100.0);
+
 			}
 		}
 		break;
