@@ -65,7 +65,14 @@ void Heat::Spin()
 void Heat::Diagnostics() 
 {
   platform->AppendMessage(BOTH_MESSAGE, "Heat Diagnostics:\n");
-  // TODO - Put something useful in here
+  for(int8_t heater=0; heater < HEATERS; heater++)
+  {
+	  if (pids[heater]->active)
+	  {
+		  snprintf(scratchString, STRING_LENGTH, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->temp_iState);
+		  platform->AppendMessage(BOTH_MESSAGE, scratchString);
+	  }
+  }
 }
 
 bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
@@ -151,7 +158,7 @@ void PID::Spin()
 		  temperatureFault = true;
 		  switchedOff = true;
 		  snprintf(scratchString, STRING_LENGTH, "Temperature measurement fault on heater %d, T = %.1f\n", heater, temperature);
-		  platform->Message(HOST_MESSAGE, scratchString);
+		  platform->Message(BOTH_MESSAGE, scratchString);
 	  }
   }
   else
@@ -165,14 +172,14 @@ void PID::Spin()
   
   if(!pp.UsePID())
   {
-	  platform->SetHeater(heater, (error > 0.0) ? 1.0 : 0.0);
+	  platform->SetHeater(heater, (error > 0.0) ? pp.kS : 0.0);
 	  return;
   }
   
   if(error < -pp.fullBand)
   {
 	  // actual temperature is well above target
-	  temp_iState = (targetTemperature - 25.0 + pp.fullBand) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
+	  temp_iState = (targetTemperature + pp.fullBand - 25.0) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
 	  platform->SetHeater(heater, 0.0);
 	  lastTemperature = temperature;
 	  return;
@@ -180,8 +187,8 @@ void PID::Spin()
   if(error > pp.fullBand)
   {
 	  // actual temperature is well below target
-	  temp_iState = (targetTemperature - 25.0 - pp.fullBand) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
-	  platform->SetHeater(heater, 1.0);
+	  temp_iState = (targetTemperature - pp.fullBand - 25.0) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
+	  platform->SetHeater(heater, pp.kS);
 	  lastTemperature = temperature;
 	  return;
   }  
@@ -191,7 +198,7 @@ void PID::Spin()
   if (temp_iState < pp.pidMin) temp_iState = pp.pidMin;
   else if (temp_iState > pp.pidMax) temp_iState = pp.pidMax;
    
-  float temp_dState =  pp.kD * (temperature - lastTemperature);
+  float temp_dState = pp.kD * (temperature - lastTemperature);
   float result = pp.kP * error + temp_iState - temp_dState;
 
   lastTemperature = temperature;
@@ -205,8 +212,8 @@ void PID::Spin()
 
   if(!temperatureFault)
   {
-	  platform->SetHeater(heater, result);
+	  platform->SetHeater(heater, result * pp.kS);
   }
 
-  //debugPrintf("Heat: e=%f, P=%f, I=%f, d=%f, r=%f\n", error, platform->PidKp(heater)*error, temp_iState, temp_dState, result);
+//  debugPrintf("Heater %d: e=%f, P=%f, I=%f, d=%f, r=%f\n", heater, error, pp.kP*error, temp_iState, temp_dState, result);
 }

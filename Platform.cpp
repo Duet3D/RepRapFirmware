@@ -80,7 +80,8 @@ void PidParameters::SetThermistorR25AndBeta(float r25, float beta)
 
 bool PidParameters::operator==(const PidParameters& other) const
 {
-	return kI == other.kI && kD == other.kD && kP == other.kP && kT == other.kT && fullBand == other.fullBand && pidMin == other.pidMin
+	return kI == other.kI && kD == other.kD && kP == other.kP && kT == other.kT && kS == other.kS
+			&& fullBand == other.fullBand && pidMin == other.pidMin
 			&& pidMax == other.pidMax && thermistorBeta == other.thermistorBeta && thermistorInfR == other.thermistorInfR
 			&& thermistorSeriesR == other.thermistorSeriesR && adcLowOffset == other.adcLowOffset
 			&& adcHighOffset == other.adcHighOffset;
@@ -136,6 +137,7 @@ void Platform::Init()
 			pp.kD = defaultPidKds[i];
 			pp.kP = defaultPidKps[i];
 			pp.kT = defaultPidKts[i];
+			pp.kS = defaultPidKss[i];
 			pp.fullBand = defaultFullBand[i];
 			pp.pidMin = defaultPidMin[i];
 			pp.pidMax = defaultPidMax[i];
@@ -765,7 +767,7 @@ void Platform::Diagnostics()
 	{
 		sncatf(scratchString, STRING_LENGTH, " %.3f", reprap.GetMove()->zBedProbePoint(i));
 	}
-	strncat(scratchString, "\n", STRING_LENGTH);
+	sncatf(scratchString, STRING_LENGTH, "\n");
 	AppendMessage(BOTH_MESSAGE, scratchString);
 
 	// Show the number of free entries in the file table

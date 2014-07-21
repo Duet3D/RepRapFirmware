@@ -1,4 +1,4 @@
-Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
+Additional functionality in 0.78e-dc42 release compared to RRP 0.78:
 
 * The Duet can serve all the files needed by the web interface
 
@@ -44,7 +44,9 @@ Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 
 * M999 software reset command is supported
 
-* M301 and M304 commands to set PWM parameters now take an additional T parameter. This should be set to the approximate extra PWM value needed (on a scale of 0 to 255) per extra degC of temperature. It is used to preset the I-term to a suitable value when PID kicks in, to enable fast heating with minimum overshoot.
+* M301 and M304 commands to set PID parameters now take an additional T parameter. This should be set to the approximate extra PWM value needed (on a scale of 0 to 255) per extra degC of temperature. It is used to preset the I-term to a suitable value when PID kicks in, to enable fast heating with minimum overshoot.
+
+* M301 and M304 commands to set PID parameters now take an additional S parameter. This allows for variations in cartridge heater power and supply voltage to be taken into account more easily.
 
 * M0 and M1 commands now turn all heaters off instead of setting them to their standby temperatures
 
@@ -59,6 +61,12 @@ Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 * The default initial Z homing and bed probing speed has been increased. This is possible because Z homing and bed probing slow down when the probe reading is approaching the target value.
 
 * The M220 and M221 commands now return the override factors if no S parameter is provided
+
+* Temperature errors are reported to the web server as well as to USB
+
+* The Heat section of the M122 diagnostics report now shows the accumulated PID I-term
+
+* G90 and G91 commands now affect only the the axes, not the extruders
 
 * FTP server supported (thanks zombiepantslol)
 
@@ -79,6 +87,10 @@ Additional functionality in 0.78a-dc42 release compared to RRP 0.78:
 * Bug fix: if a tool was defined as using zero drives or zero extruders, it would be treated as assuming a collection of drives or extruders according to the vales in an uninitialised array
 
 * Bug fix: the cumulative extruder positions were getting reset (typically to zero) on a tool change or other macro file execution
+
+* Bug fix: numerous calls to strncat were being made with a 'nchars' parameter that was larger than space available in the destination buffer
+
+* Bug fix: print moves received just prior to an M109 or M190 command were not executed until after the heater had reached temperature instead of before
 
 
 Additional functionality in web interface 0.95 compared to RRP 0.65:

@@ -64,47 +64,6 @@ Licence: GPL
 
 /**************************************************************************************************/
 
-//// The physical capabilities of the machine
-//
-//#define DRIVES 4  // The number of drives in the machine, including X, Y, and Z plus extruder drives
-//#define AXES 3    // The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
-//#define HEATERS 2 // The number of heaters in the machine; 0 is the heated bed even if there isn't one.
-//
-//// The numbers of entries in each {} array definition must correspond with the values of DRIVES,
-//// AXES, or HEATERS.  Set values to -1 to flag unavailability.  Pins are the microcontroller pin numbers.
-//
-//// DRIVES
-//
-//#define STEP_PINS {14, 25, 5, X2}				// Full array for Duet + Duex4 is {14, 25, 5, X2, 41, 39, X4, 49}
-//#define DIRECTION_PINS {15, 26, 4, X3}			// Full array for Duet + Duex4 is {15, 26, 4, X3, 35, 53, 51, 48}
-//#define FORWARDS true     						// What to send to go...
-//#define BACKWARDS false    						// ...in each direction
-//#define ENABLE_PINS {29, 27, X1, X0}            // Full array for Duet + Duex4 is {29, 27, X1, X0, 37, X8, 50, 47}
-//#define ENABLE false      						// What to send to enable...
-//#define DISABLE true     						// ...and disable a drive
-//#define DISABLE_DRIVES {false, false, true, false} // Set true to disable a drive when it becomes idle
-//#define LOW_STOP_PINS {11, -1, 60, 31}				// Full array endstop pins for Duet + Duex4 is {11, 28, 60, 31, 24, 46, 45, 44}
-//#define HIGH_STOP_PINS {-1, 28, -1, -1}
-//#define ENDSTOP_HIT 1 							// when a stop == this it is hit
-//// Indices for motor current digipots (if any)
-////  first 4 are for digipot 1,(on duet)
-////  second 4 for digipot 2(on expansion board)
-////  Full order is {1, 3, 2, 0, 1, 3, 2, 0}, only include as many as you have DRIVES defined
-//#define POT_WIPES {1, 3, 2, 0} 					// Indices for motor current digipots (if any)
-//#define SENSE_RESISTOR 0.1   					// Stepper motor current sense resistor (ohms)
-//#define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-//#define Z_PROBE_AD_VALUE (400)					// Default for the Z probe - should be overwritten by experiment
-//#define Z_PROBE_STOP_HEIGHT (0.7) 				// mm
-////#define Z_PROBE_PIN (0) 						// Analogue pin number
-////#define Z_PROBE_MOD_PIN (61)					// Digital pin number to turn the IR LED on (high) or off (low)
-//#define Z_PROBE_PIN (10) 						// Analogue pin number
-//#define Z_PROBE_MOD_PIN (52)					// Digital pin number to turn the IR LED on (high) or off (low)
-//#define MAX_FEEDRATES {50.0, 50.0, 3.0, 16.0}   // mm/sec
-//#define ACCELERATIONS {800.0, 800.0, 10.0, 250.0}    // mm/sec^2
-//#define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0}
-//#define INSTANT_DVS {15.0, 15.0, 0.2, 2.0}    	// (mm/sec)
-//#define NUM_MIXING_DRIVES 1; //number of mixing drives
-
 // The physical capabilities of the machine
 
 #define DRIVES 8 // The number of drives in the machine, including X, Y, and Z plus extruder drives
@@ -152,7 +111,7 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 
 #define AXIS_MAXIMA {220, 200, 200} 			// mm
 #define AXIS_MINIMA {0, 0, 0}					// mm
-#define HOME_FEEDRATES {50.0, 50.0, 100.0/60.0}	// mm/sec (increased Z because we slow down z-homing when approaching the target height)
+#define HOME_FEEDRATES {50.0, 50.0, 100.0/60.0}	// mm/sec (dc42 increased Z because we slow down z-homing when approaching the target height)
 #define HEAD_OFFSETS {0.0, 0.0, 0.0}			// mm
 
 #define X_AXIS 0  								// The index of the X axis in the arrays
@@ -202,11 +161,12 @@ const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 10000
 // We use method 2 (see above)
 const float defaultPidKis[HEATERS] = {5.0 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME, 0.1 / HEAT_SAMPLE_TIME}; // Integral PID constants
 const float defaultPidKds[HEATERS] = {500.0 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME, 100 * HEAT_SAMPLE_TIME};	// Derivative PID constants
-const float defaultPidKps[HEATERS] = {-1, 5.0, 5.0, 5.0, 5.0, 5.0};				// Proportional PID constants, negative values indicate use bang-bang instead of PID
-const float defaultPidKts[HEATERS] = {2.7, 0.35, 0.35, 0.35, 0.35, 0.35};		// approximate PWM value needed to maintain temperature, per degC above soom temperature
-const float defaultFullBand[HEATERS] = {5.0, 40.0, 40.0, 40.0, 40.0, 40.0};		// errors larger than this cause heater to be on or off
+const float defaultPidKps[HEATERS] = {-1, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
+const float defaultPidKts[HEATERS] = {2.7, 0.25, 0.25, 0.25, 0.25, 0.25};		// approximate PWM value needed to maintain temperature, per degC above room temperature
+const float defaultPidKss[HEATERS] = {1.0, 0.9, 0.9, 0.9, 0.9, 0.9};			// PWM scaling factor, to allow for variation in heater power and supply voltage
+const float defaultFullBand[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0};		// errors larger than this cause heater to be on or off
 const float defaultPidMin[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
-const float defaultPidMax[HEATERS] = {255, 100, 100, 100, 100, 100};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
+const float defaultPidMax[HEATERS] = {255, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
@@ -468,7 +428,7 @@ private:
 	float thermistorBeta, thermistorInfR;				// private because these must be changed together
 
 public:
-	float kI, kD, kP, kT;
+	float kI, kD, kP, kT, kS;
 	float fullBand, pidMin, pidMax;
 	float thermistorSeriesR;
 	float adcLowOffset, adcHighOffset;

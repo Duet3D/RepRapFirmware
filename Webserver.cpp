@@ -528,14 +528,12 @@ void Webserver::MessageStringToWebInterface(const char *s, bool error, bool fini
 	{
 		if (error)
 		{
-			strcpy(gcodeReply, "Error: ");
-			strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
+			snprintf(gcodeReply, ARRAY_SIZE(gcodeReply), "Error: %s", s);
 		}
 		else
 		{
-			strncpy(gcodeReply, s, ARRAY_UPB(gcodeReply));
+			snprintf(gcodeReply, ARRAY_SIZE(gcodeReply), "%s", s);
 		}
-		gcodeReply[ARRAY_UPB(gcodeReply)] = 0;
 	}
 
 	if (finished)
@@ -547,7 +545,7 @@ void Webserver::MessageStringToWebInterface(const char *s, bool error, bool fini
 
 void Webserver::AppendReplyToWebInterface(const char *s, bool error, bool finished)
 {
-	strncat(gcodeReply, s, ARRAY_UPB(gcodeReply));
+	sncatf(gcodeReply, ARRAY_SIZE(gcodeReply), "%s", s);
 
 	if (finished)
 	{
@@ -845,7 +843,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
 	{
 		webserver->LoadGcodeBuffer(value);
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"buff\":%u}", webserver->GetGcodeBufferSpace());
+		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"buff\":%u}", webserver->GetGcodeBufferSpace());
 	}
 	else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
 	{
@@ -872,18 +870,18 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	else if (StringEquals(request, "upload_cancel"))
 	{
 		CancelUpload();
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":%d}", 0);
+		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"err\":%d}", 0);
 	}
 	else if (StringEquals(request, "delete") && StringEquals(key, "name"))
 	{
 		bool ok = platform->GetMassStorage()->Delete("0:/", value);
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":%d}", (ok) ? 0 : 1);
+		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEquals(request, "files"))
 	{
 		const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
 		const char* fileList = platform->GetMassStorage()->FileList(dir, false);
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"files\":[%s]}", fileList);
+		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"files\":[%s]}", fileList);
 	}
 	else if (StringEquals(request, "fileinfo") && StringEquals(key, "name"))
 	{
@@ -894,32 +892,32 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 		bool found = webserver->GetFileInfo(value, length, height, filament, numFilaments, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
 		if (found)
 		{
-			snprintf(jsonResponse, ARRAY_UPB(jsonResponse),
+			snprintf(jsonResponse, ARRAY_SIZE(jsonResponse),
 						"{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
 							length, height, layerHeight);
 			char ch = '[';
 			if (numFilaments == 0)
 			{
-				sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c", ch);
+				sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c", ch);
 			}
 			else
 			{
 				for (unsigned int i = 0; i < numFilaments; ++i)
 				{
-					sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.1f", ch, filament[i]);
+					sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, filament[i]);
 					ch = ',';
 				}
 			}
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "],\"generatedBy\":\"%s\"}", generatedBy);
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"generatedBy\":\"%s\"}", generatedBy);
 		}
 		else
 		{
-			snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"err\":1}");
+			snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"err\":1}");
 		}
 	}
 	else if (StringEquals(request, "name"))
 	{
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"myName\":\"");
+		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"myName\":\"");
 		size_t j = strlen(jsonResponse);
 		const char *myName = webserver->GetName();
 		for (size_t i = 0; i < SHORT_STRING_LENGTH; ++i)
@@ -941,18 +939,18 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	else if (StringEquals(request, "password") && StringEquals(key, "password"))
 	{
 		gotPassword = webserver->CheckPassword(value);
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
+		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
 	}
 	else if (StringEquals(request, "axes"))
 	{
-		strncpy(jsonResponse, "{\"axes\":", ARRAY_UPB(jsonResponse));
+		strncpy(jsonResponse, "{\"axes\":", ARRAY_SIZE(jsonResponse));
 		char ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.1f", ch, platform->AxisTotalLength(drive));
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, platform->AxisTotalLength(drive));
 			ch = ',';
 		}
-		strncat(jsonResponse, "]}", ARRAY_UPB(jsonResponse));
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]}");
 	}
 	else if (StringEquals(request, "connect"))
 	{
@@ -970,7 +968,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 
 void Webserver::HttpInterpreter::GetJsonUploadResponse()
 {
-	snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"ubuff\":%u,\"err\":%d}", webUploadBufferSize, (uploadState == uploadOK) ? 0 : 1);
+	snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"ubuff\":%u,\"err\":%d}", webUploadBufferSize, (uploadState == uploadOK) ? 0 : 1);
 }
 
 void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
@@ -981,68 +979,68 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		// New-style status request
 		// Send the printing/idle status
 		char ch = (reprap.IsStopped()) ? 'S' : (gc->PrintingAFile()) ? 'P' : 'I';
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"status\":\"%c\",\"heaters\":", ch);
+		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"status\":\"%c\",\"heaters\":", ch);
 
 		// Send the heater actual temperatures
 		ch = '[';
 		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetTemperature(heater));
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetTemperature(heater));
 			ch = ',';
 		}
 
 		// Send the heater active temperatures
-		strncat(jsonResponse, "],\"active\":", ARRAY_UPB(jsonResponse));
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"active\":");
 		ch = '[';
 		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetActiveTemperature(heater));
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetActiveTemperature(heater));
 			ch = ',';
 		}
 
 		// Send the heater standby temperatures
-		strncat(jsonResponse, "],\"standby\":", ARRAY_UPB(jsonResponse));
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"standby\":");
 		ch = '[';
 		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetStandbyTemperature(heater));
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c\%.1f", ch, reprap.GetHeat()->GetStandbyTemperature(heater));
 			ch = ',';
 		}
 
 		// Send XYZ positions
 		float liveCoordinates[DRIVES + 1];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		strncat(jsonResponse, "],\"pos\":", ARRAY_UPB(jsonResponse));		// announce the XYZ position
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"pos\":");		// announce the XYZ position
 		ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", ch, liveCoordinates[drive]);
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.2f", ch, liveCoordinates[drive]);
 			ch = ',';
 		}
 
 		// Send extruder total extrusion since power up or last G92
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "],\"extr\":");		// announce the extruder positions
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"extr\":");		// announce the extruder positions
 		ch = '[';
 		for (int8_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.3f", ch, gc->GetExtruderPosition(drive));
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.3f", ch, gc->GetExtruderPosition(drive));
 			ch = ',';
 		}
-		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]");
 
 		// Send the speed and extruder override factors
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor() * 100.0);
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor() * 100.0);
 		const float *extrusionFactors = gc->GetExtrusionFactors();
 		for (unsigned int i = 0; i < reprap.GetExtrudersInUse(); ++i)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
 		}
-		strncat(jsonResponse, "]", ARRAY_UPB(jsonResponse));
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]");
 
 		// Send the current tool number
 		Tool* currentTool = reprap.GetCurrentTool();
 		int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"tool\":%d", toolNumber);
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"tool\":%d", toolNumber);
 	}
 	else
 	{
@@ -1051,10 +1049,10 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
 		// RRP reversed the order at version 0.65 to send the positions before the heaters, but we haven't yet done that.
 		char c = (gc->PrintingAFile()) ? 'P' : 'I';
-		snprintf(jsonResponse, ARRAY_UPB(jsonResponse), "{\"poll\":[\"%c\",", c); // Printing
+		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"poll\":[\"%c\",", c); // Printing
 		for (int8_t heater = 0; heater < HEATERS; heater++)
 		{
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
 		}
 		// Send XYZ and extruder positions
 		float liveCoordinates[DRIVES + 1];
@@ -1062,7 +1060,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		for (int8_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
 		{
 			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
-			sncatf(jsonResponse, ARRAY_UPB(jsonResponse), "\"%.2f\"%c", liveCoordinates[drive], ch);
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "\"%.2f\"%c", liveCoordinates[drive], ch);
 		}
 	}
 
@@ -1072,30 +1070,30 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 	switch (platform->GetZProbeSecondaryValues(v1, v2))
 	{
 	case 1:
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"probe\":\"%d (%d)\"", v0, v1);
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"probe\":\"%d (%d)\"", v0, v1);
 		break;
 	case 2:
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
 		break;
 	default:
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"probe\":\"%d\"", v0);
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"probe\":\"%d\"", v0);
 		break;
 	}
 
 	// Send the amount of buffer space available for gcodes
-	sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"buff\":%u", webserver->GetGcodeBufferSpace());
+	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"buff\":%u", webserver->GetGcodeBufferSpace());
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	if (type != 0)
 	{
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"homed\":[%d,%d,%d]",
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"homed\":[%d,%d,%d]",
 				(gc->GetAxisIsHomed(0)) ? 1 : 0,
 				(gc->GetAxisIsHomed(1)) ? 1 : 0,
 				(gc->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 	else
 	{
-		sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
+		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
 				(gc->GetAxisIsHomed(0)) ? 1 : 0,
 				(gc->GetAxisIsHomed(1)) ? 1 : 0,
 				(gc->GetAxisIsHomed(2)) ? 1 : 0);
@@ -1105,10 +1103,10 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 	const char *p = webserver->gcodeReply;
 
 	// Send the response sequence number
-	sncatf(jsonResponse, ARRAY_UPB(jsonResponse), ",\"seq\":%u", (unsigned int) seq);
+	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"seq\":%u", (unsigned int) seq);
 
 	// Send the response to the last command. Do this last because it is long and may need to be truncated.
-	strncat(jsonResponse, ",\"resp\":\"", ARRAY_UPB(jsonResponse));
+	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"resp\":\"");
 	size_t jp = strnlen(jsonResponse, ARRAY_UPB(jsonResponse));
 	while (*p != 0 && jp < ARRAY_SIZE(jsonResponse) - 3)	// leave room for the final '"}\0'
 	{
@@ -1150,7 +1148,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		}
 	}
 	jsonResponse[jp] = 0;
-	strncat(jsonResponse, "\"}", ARRAY_UPB(jsonResponse));
+	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "\"}");
 }
 
 void Webserver::HttpInterpreter::ResetState()
@@ -2192,9 +2190,9 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 				strncpy(combinedPath, currentDir, maxFilenameLength);
 				if (strlen(currentDir) > 1)
 				{
-					strncat(combinedPath, "/", maxFilenameLength);
+					sncatf(combinedPath, maxFilenameLength, "/");
 				}
-				strncat(combinedPath, newDirectory, maxFilenameLength);
+				sncatf(combinedPath, maxFilenameLength, "%s", newDirectory);
 			}
 		}
 

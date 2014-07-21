@@ -29,6 +29,9 @@ Licence: GPL
 #define FEEDRATE_LETTER 'F'// GCode feedrate
 #define EXTRUDE_LETTER 'E' // GCode extrude
 
+// Type for specifying which endstops we want to check
+typedef uint8_t EndstopChecks;
+
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
 class GCodeBuffer
@@ -81,7 +84,7 @@ class GCodes
     void Exit();														// Shut it down
     void Reset();														// Reset some parameter to defaults
     bool RunConfigurationGCodes();										// Run the configuration G Code file on reboot
-    bool ReadMove(float* m, uint8_t& ce);								// Called by the Move class to get a movement set by the last G Code
+    bool ReadMove(float* m, EndstopChecks& ce);							// Called by the Move class to get a movement set by the last G Code
     void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
     void DeleteFile(const char* fileName);								// Does what it says
     bool GetProbeCoordinates(int count, float& x, float& y, float& z) const;	// Get pre-recorded probe coordinates
@@ -101,7 +104,7 @@ class GCodes
   
     void DoFilePrint(GCodeBuffer* gb);									// Get G Codes from a file and print them
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();					// Wait for move queue to exhaust and the current position is loaded
-    bool DoCannedCycleMove(uint8_t ce);									// Do a move from an internally programmed canned cycle
+    bool DoCannedCycleMove(EndstopChecks ce);							// Do a move from an internally programmed canned cycle
     bool DoFileCannedCycles(const char* fileName);						// Run a GCode macro in a file
     bool FileCannedCyclesReturn();										// End a macro
     bool ActOnGcode(GCodeBuffer* gb);									// Do the G/M/T Code
@@ -153,7 +156,7 @@ class GCodes
     GCodeBuffer* cannedCycleGCode;				// ... of G Codes
     bool moveAvailable;							// Have we seen a move G Code and set it up?
     float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
-    uint8_t endStopsToCheck;					// Which end stops we check them on the next move
+    EndstopChecks endStopsToCheck;				// Which end stops we check them on the next move
     bool drivesRelative; 						// Are movements relative - all except X, Y and Z
     bool axesRelative;   						// Are movements relative - X, Y and Z
     bool drivesRelativeStack[STACK];			// For dealing with Push and Pop

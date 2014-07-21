@@ -500,13 +500,13 @@ void debugPrintf(const char* fmt, ...)
 int sncatf(char *dst, size_t len, const char* fmt, ...)
 {
 	size_t n = strnlen(dst, len);
-	if (n + 1 < len)
+	if (n + 1 < len)		// if room for at least 1 more character and a null
 	{
 		va_list p;
 		va_start(p, fmt);
 		int ret = vsnprintf(dst + n, len - n, fmt, p);
 		va_end(p);
-		return ret;
+		return ret + n;
 	}
 	return 0;
 }

@@ -462,7 +462,7 @@ int GCodes::SetUpMove(GCodeBuffer *gb)
 
 // The Move class calls this function to find what to do next.
 
-bool GCodes::ReadMove(float m[], uint8_t& ce)
+bool GCodes::ReadMove(float m[], EndstopChecks& ce)
 {
 	if (!moveAvailable)
 		return false;
@@ -551,7 +551,7 @@ bool GCodes::FileCannedCyclesReturn()
 // be ignored.  Recall that moveToDo[DRIVES] should contain the feedrate
 // you want (if action[DRIVES] is true).
 
-bool GCodes::DoCannedCycleMove(uint8_t ce)
+bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 {
 	// Is the move already running?
 
@@ -1004,7 +1004,7 @@ const char* GCodes::GetCurrentCoordinates() const
 	snprintf(scratchString, STRING_LENGTH, "X:%f Y:%f Z:%f ", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS]);
 	for(int i = AXES; i< DRIVES; i++)
 	{
-		sncatf(scratchString, STRING_LENGTH, "E%d:%f ",i-AXES,liveCoordinates[i]);
+		sncatf(scratchString, STRING_LENGTH, "E%d:%f ", i-AXES, liveCoordinates[i]);
 	}
 	return scratchString;
 }
@@ -1516,6 +1516,11 @@ void GCodes::SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LEN
 			pp.kT = gb->GetFValue();
 			seen = true;
 		}
+		if (gb->Seen('S'))
+		{
+			pp.kS = gb->GetFValue();
+			seen = true;
+		}
 		if (gb->Seen('W'))
 		{
 			pp.pidMax = gb->GetFValue();
@@ -1533,8 +1538,8 @@ void GCodes::SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LEN
 		}
 		else
 		{
-			snprintf(reply, STRING_LENGTH, "Heater %d P:%.2f I:%.3f D:%.2f T:%.2f W:%.1f B:%.1f\n",
-						heater, pp.kP, pp.kI * platform->HeatSampleTime(), pp.kD/platform->HeatSampleTime(), pp.kT, pp.pidMax, pp.fullBand);
+			snprintf(reply, STRING_LENGTH, "Heater %d P:%.2f I:%.3f D:%.2f T:%.2f S:%.2f W:%.1f B:%.1f\n",
+						heater, pp.kP, pp.kI * platform->HeatSampleTime(), pp.kD/platform->HeatSampleTime(), pp.kT, pp.kS, pp.pidMax, pp.fullBand);
 		}
 	}
 }
@@ -1743,12 +1748,14 @@ bool GCodes::HandleGcode(GCodeBuffer* gb)
 		break;
 
 	case 90: // Absolute coordinates
-		drivesRelative = false;
+		// DC 2014-07-21 we no longer change the extruder settings in response to G90/G91 commands
+		//drivesRelative = false;
 		axesRelative = false;
 		break;
 
 	case 91: // Relative coordinates
-		drivesRelative = true; // Non-axis movements (i.e. extruders)
+		// DC 2014-07-21 we no longer change the extruder settings in response to G90/G91 commands
+		//drivesRelative = true; // Non-axis movements (i.e. extruders)
 		axesRelative = true;   // Axis movements (i.e. X, Y and Z)
 		break;
 
@@ -1882,11 +1889,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 82:	// Use absolute extruder positioning
-		for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+		if (drivesRelative)
 		{
-			lastPos[extruder - AXES] = 0.0;
+			for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+			{
+				lastPos[extruder - AXES] = 0.0;
+			}
+			drivesRelative = false;
 		}
-		drivesRelative = false;
 		break;
 
 	case 83:	// Use relative extruder positioning
@@ -1938,16 +1948,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
 			if(!seen)
 			{
-				snprintf(reply, STRING_LENGTH, "Steps/mm: X: %d, Y: %d, Z: %d, E: ",
-						(int)platform->DriveStepsPerUnit(X_AXIS), (int)platform->DriveStepsPerUnit(Y_AXIS),
-						(int)platform->DriveStepsPerUnit(Z_AXIS));
+				snprintf(reply, STRING_LENGTH, "Steps/mm: X: %.3f, Y: %.3f, Z: %.3f, E: ",
+						platform->DriveStepsPerUnit(X_AXIS), platform->DriveStepsPerUnit(Y_AXIS),
+						platform->DriveStepsPerUnit(Z_AXIS));
 				for(int8_t drive = AXES; drive < DRIVES; drive++)
 				{
-					snprintf(scratchString, STRING_LENGTH, "%f", platform->DriveStepsPerUnit(drive));
-					strncat(reply, scratchString, STRING_LENGTH);
+					sncatf(reply, STRING_LENGTH, "%.3f", platform->DriveStepsPerUnit(drive));
 					if(drive < DRIVES-1)
 					{
-						strncat(reply, ":", STRING_LENGTH);
+						sncatf(reply, STRING_LENGTH, ":");
 					}
 				}
 			} else
@@ -1982,12 +1991,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
     	{
     		if(!reprap.GetHeat()->SwitchedOff(heater))
     		{
-    			snprintf(scratchString, STRING_LENGTH, "%.1f ", reprap.GetHeat()->GetTemperature(heater));
-    			strncat(reply, scratchString, STRING_LENGTH);
+    			sncatf(reply, STRING_LENGTH, "%.1f ", reprap.GetHeat()->GetTemperature(heater));
     		}
     	}
-    	snprintf(scratchString, STRING_LENGTH, "B: %.1f ", reprap.GetHeat()->GetTemperature(0));
-    	strncat(reply, scratchString, STRING_LENGTH);
+    	sncatf(reply, STRING_LENGTH, "B: %.1f ", reprap.GetHeat()->GetTemperature(0));
     	break;
    
 	case 106: // Fan on or off
@@ -2021,6 +2028,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
     		float temperature = gb->GetFValue();
     		SetToolHeaters(temperature);
     	}
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())	// tell Move not to wait for more moves
+		{
+			return false;
+		}
     	result = reprap.GetHeat()->AllHeatersAtSetTemperatures(false);
     	break;
 
@@ -2180,6 +2191,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
     		{
     			reprap.GetHeat()->SetActiveTemperature(HOT_BED, gb->GetFValue());
     			reprap.GetHeat()->Activate(HOT_BED);
+    			if (!AllMovesAreFinishedAndMoveBufferIsLoaded())	// tell Move not to wait for more moves
+    			{
+    				return false;
+    			}
     			result = reprap.GetHeat()->HeaterAtSetTemperature(HOT_BED);
     		}
     	}
@@ -2223,11 +2238,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 						platform->Acceleration(Z_AXIS)/distanceScale);
 				for(int8_t drive = AXES; drive < DRIVES; drive++)
 				{
-					snprintf(scratchString, STRING_LENGTH, "%f", platform->Acceleration(drive)/distanceScale);
-					strncat(reply, scratchString, STRING_LENGTH);
+					sncatf(reply, STRING_LENGTH, "%f", platform->Acceleration(drive)/distanceScale);
 					if(drive < DRIVES-1)
 					{
-						strncat(reply, ":", STRING_LENGTH);
+						sncatf(reply, STRING_LENGTH, ":");
 					}
 				}
 			}
@@ -2271,9 +2285,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				for(int8_t drive = AXES; drive < DRIVES; drive++)
 				{
 					snprintf(scratchString, STRING_LENGTH, "%f", platform->MaxFeedrate(drive)/(distanceScale*0.016666667));
-					strncat(reply, scratchString, STRING_LENGTH);
+					sncatf(reply, STRING_LENGTH, scratchString);
 					if(drive < DRIVES-1)
-						strncat(reply, ":", STRING_LENGTH);
+					{
+						sncatf(reply, STRING_LENGTH, ":");
+					}
 				}
 			}
        	}
@@ -2611,10 +2627,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
         				platform->InstantDv(Z_AXIS)/(distanceScale*0.016666667));
             	for(int8_t drive = AXES; drive < DRIVES; drive++)
             	{
-            		snprintf(scratchString, STRING_LENGTH, "%f", platform->InstantDv(drive)/(distanceScale*0.016666667));
-            		strncat(reply, scratchString, STRING_LENGTH);
+            		sncatf(reply, STRING_LENGTH, "%f", platform->InstantDv(drive)/(distanceScale*0.016666667));
             		if(drive < DRIVES-1)
-            			strncat(reply, ":", STRING_LENGTH);
+            		{
+            			sncatf(reply, STRING_LENGTH, ":");
+            		}
             	}
         	}
        	}
