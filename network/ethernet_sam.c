@@ -235,7 +235,7 @@ void status_callback(struct netif *netif)
 	{
 		RepRapNetworkMessage("Network up, IP=");
 		ipaddr_ntoa_r(&(netif->ip_addr), c_mess, sizeof(c_mess));
-		strncat(c_mess, sizeof(c_mess) - 1, "\n");
+		strncat(c_mess, sizeof(c_mess) - strlen(c_mess) - 1, "\n");
 		RepRapNetworkMessage(c_mess);
 		netif->flags |= NETIF_FLAG_LINK_UP;
 	}
