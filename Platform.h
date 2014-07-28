@@ -366,12 +366,12 @@ protected:
 	void Init();
     bool Open(const char* directory, const char* fileName, bool write);
         
+private:
+
   bool inUse;
   byte buf[FILE_BUF_LEN];
   int bufferPointer;
   
-private:
-
   bool ReadBuffer();
   bool WriteBuffer();
 
@@ -582,6 +582,7 @@ public:
   void Step(byte drive);
   void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
   void SetMotorCurrent(byte drive, float current);
+  float MotorCurrent(byte drive);
   float DriveStepsPerUnit(int8_t drive) const;
   void SetDriveStepsPerUnit(int8_t drive, float value);
   float Acceleration(int8_t drive) const;
@@ -626,6 +627,7 @@ public:
   float GetTemperature(size_t heater) const; // Result is in degrees Celsius
   void SetHeater(size_t heater, const float& power); // power is a fraction in [0,1]
   float HeatSampleTime() const;
+  void SetHeatSampleTime(float st);
   void CoolingFan(float speed);
   void SetPidParameters(size_t heater, const PidParameters& params);
   const PidParameters& GetPidParameters(size_t heater);
@@ -1018,6 +1020,11 @@ inline int Platform::GetRawTemperature(byte heater) const
 inline float Platform::HeatSampleTime() const
 {
   return heatSampleTime;
+}
+
+inline void Platform::SetHeatSampleTime(float st)
+{
+	heatSampleTime = st;
 }
 
 inline const byte* Platform::IPAddress() const

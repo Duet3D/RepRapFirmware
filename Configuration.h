@@ -24,9 +24,9 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.78e-dc42"
-#define DATE "2014-07-21"
-#define LAST_AUTHOR "reprappro, dc42. zpl"
+#define VERSION "0.78f-dc42"
+#define DATE "2014-07-27"
+#define AUTHORS "reprappro, dc42. zpl"
 
 // Other firmware that we might switch to be compatible with.
 
@@ -59,8 +59,9 @@ enum Compatibility
 
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
-#define NUMBER_OF_PROBE_POINTS 4
-#define Z_DIVE 8.0  // Height from which to probe the bed (mm)
+#define NUMBER_OF_PROBE_POINTS 5	// Maximum number of probe points
+#define Z_DIVE 8.0  				// Height from which to probe the bed (mm)
+#define TRIANGLE_0 -0.001			// Slightly less than 0 for point-in-triangle tests
 
 #define SILLY_Z_VALUE -9999.0
 
@@ -83,8 +84,6 @@ enum Compatibility
 #define LIST_SEPARATOR ':'						// Lists in G Codes
 #define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them
 #define FILE_LIST_BRACKET '"'					// Put these round file names when listing them
-
-#define GCODE_LETTERS { 'X', 'Y', 'Z', 'E', 'F' } // The drives and feedrate in a GCode
 
 #define LONG_TIME 300.0 // Seconds
 

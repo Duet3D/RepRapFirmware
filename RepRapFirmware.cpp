@@ -395,6 +395,19 @@ void RepRap::SelectTool(int toolNumber)
 
 }
 
+void RepRap::PrintTool(int toolNumber, char* reply) const
+{
+	for(Tool *tool = toolList; tool != NULL; tool = tool->next)
+	{
+		if(tool->Number() == toolNumber)
+		{
+			tool->Print(reply);
+			return;
+		}
+	}
+	strcpy(reply, "Attempt to print details of non-existent tool.");
+}
+
 void RepRap::StandbyTool(int toolNumber)
 {
 	Tool* tool = toolList;

@@ -70,6 +70,33 @@ Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 	}
 }
 
+void Tool::Print(char* reply) const
+{
+	snprintf(reply, STRING_LENGTH, "Tool %d - drives: ", myNumber);
+	char comma = ',';
+	for(int8_t drive = 0; drive < driveCount; drive++)
+	{
+		if(drive >= driveCount - 1)
+		{
+			comma = ';';
+		}
+		sncatf(reply, STRING_LENGTH, "%d%c", drives[drive], comma);
+	}
+
+	sncatf(reply, STRING_LENGTH, "heaters (active/standby temps): ");
+	comma = ',';
+	for(int8_t heater = 0; heater < heaterCount; heater++)
+	{
+			if(heater >= heaterCount - 1)
+			{
+				comma = ';';
+			}
+			sncatf(reply, STRING_LENGTH, "%d (%.1f/%.1f)%c", heaters[heater],
+					activeTemperatures[heater], standbyTemperatures[heater], comma);
+	}
+
+	sncatf(reply, STRING_LENGTH, " status: %s", active ? "selected" : "standby");
+}
 float Tool::MaxFeedrate() const
 {
 	if(driveCount <= 0)

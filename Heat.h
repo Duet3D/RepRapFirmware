@@ -68,8 +68,9 @@ class PID
 
 class Heat
 {
-    
   public:
+	// Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
+	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2 };
   
     Heat(Platform* p, GCodes* g);
     void Spin();												// Called in a tight loop to keep everything going
@@ -82,7 +83,7 @@ class Heat
     void Activate(int8_t heater);								// Turn on a heater
     void Standby(int8_t heater);								// Set a heater idle
     float GetTemperature(int8_t heater) const;					// Get the temperature of a heater
-    bool SwitchedOff(int8_t heater) const;					    // Is this heater in use?
+    HeaterStatus GetStatus(int8_t heater) const;				// Get the off/standby/active status
     void SwitchOffAll();										// Turn all heaters off
     void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
     bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
@@ -169,11 +170,13 @@ inline bool PID::SwitchedOff() const
 
 // Heat
 
-inline bool Heat::SwitchedOff(int8_t heater) const
+inline Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 {
-	return (heater >= 0 && heater < HEATERS)
-				? pids[heater]->SwitchedOff()
-				: true;
+	if (heater < 0 || heater >= HEATERS)
+		return HS_off;
+	return (pids[heater]->SwitchedOff()) ? HS_off
+			  : (pids[heater]->Active()) ? HS_active
+				  : HS_standby;
 }
 
 inline void Heat::SetActiveTemperature(int8_t heater, float t)

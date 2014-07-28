@@ -25,7 +25,7 @@ Licence: GPL
 #define STACK 5
 #define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
-#define GCODE_LETTERS { 'X', 'Y', 'Z' } // The axes in a GCode
+#define AXIS_LETTERS { 'X', 'Y', 'Z' } // The axes in a GCode
 #define FEEDRATE_LETTER 'F'// GCode feedrate
 #define EXTRUDE_LETTER 'E' // GCode extrude
 
@@ -48,13 +48,15 @@ class GCodeBuffer
     const char* GetString();							// Get a string after a key letter
     const void GetFloatArray(float a[], int& length);	// Get a :-separated list of floats after a key letter
     const void GetLongArray(long l[], int& length);		// Get a :-separated list of longs after a key letter
-    const char* Buffer();
+    const char* Buffer() const;
     bool Active() const;
     void SetFinished(bool f);							// Set the G Code executed (or not)
     void Pause();
     void CancelPause();
     const char* WritingFileDirectory() const;			// If we are writing the G Code to a file, where that file is
     void SetWritingFileDirectory(const char* wfd);		// Set the directory for the file to write the GCode in
+    int GetToolNumberAdjust() const { return toolNumberAdjust; }
+    void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
     
   private:
 
@@ -68,6 +70,7 @@ class GCodeBuffer
     bool inComment;										// Are we after a ';' character?
     State state;										// Idle, executing or paused
     const char* writingFileDirectory;					// If the G Code is going into a file, where that is
+    int toolNumberAdjust;
 };
 
 //****************************************************************************************************
@@ -91,7 +94,6 @@ class GCodes
     const char* GetCurrentCoordinates() const;							// Get where we are as a string
     bool PrintingAFile() const;											// Are we in the middle of printing a file?
     void Diagnostics();													// Send helpful information out
-    //int8_t GetSelectedHead();											// return which tool is selected
     bool HaveIncomingData() const;										// Is there something that we have to do?
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
     void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homes
@@ -107,18 +109,18 @@ class GCodes
     bool DoCannedCycleMove(EndstopChecks ce);							// Do a move from an internally programmed canned cycle
     bool DoFileCannedCycles(const char* fileName);						// Run a GCode macro in a file
     bool FileCannedCyclesReturn();										// End a macro
-    bool ActOnGcode(GCodeBuffer* gb);									// Do the G/M/T Code
-    bool HandleGcode(GCodeBuffer* gb);									// Process a G code
-    bool HandleMcode(GCodeBuffer* gb);									// Process a M code
-    bool HandleTcode(GCodeBuffer* gb);									// Process a T code
+    bool ActOnCode(GCodeBuffer* gb);									// Do a G, M or T Code
+    bool HandleGcode(GCodeBuffer* gb);									// Do a G code
+    bool HandleMcode(GCodeBuffer* gb);									// Do an M code
+    bool HandleTcode(GCodeBuffer* gb);									// Do a T code
     int SetUpMove(GCodeBuffer* gb);										// Pass a move on to the Move module
     bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
     bool DoDwellTime(float dwell);										// Really wait for a bit
     bool DoHome(char *reply, bool& error);								// Home some axes
     bool DoSingleZProbeAtPoint();										// Probe at a given point
     bool DoSingleZProbe();												// Probe where we are
-    bool SetSingleZProbeAtAPosition(GCodeBuffer *gb);					// Probes at a given position - see the comment at the head of the function itself
-    bool DoMultipleZProbe();											// Probes a series of points and sets the bed equation
+    bool SetSingleZProbeAtAPosition(GCodeBuffer *gb, char *reply);		// Probes at a given position - see the comment at the head of the function itself
+    bool DoMultipleZProbe(char *reply);									// Probes a series of points and sets the bed equation
     bool SetPrintZProbe(GCodeBuffer *gb, char *reply);					// Either return the probe value, or set its threshold
     void SetOrReportOffsets(char* reply, GCodeBuffer *gb);				// Deal with a G10
     bool SetPositions(GCodeBuffer *gb);									// Deal with a G92
@@ -141,9 +143,10 @@ class GCodes
     void SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LENGTH]);	// Set the P/I/D parameters for a heater
     void SetHeaterParameters(GCodeBuffer *gb, char reply[STRING_LENGTH]); // Set the thermistor and ADC parameters for a heater
     int8_t Heater(int8_t head) const;									// Legacy G codes start heaters at 0, but we use 0 for the bed.  This sorts that out.
-    void AddNewTool(GCodeBuffer *gb);									// Create a new tool definition
-    void SetToolHeaters(float temperature);								// Set all a tool's heaters to the temperature.  For M104...
+    void AddNewTool(GCodeBuffer *gb, char* reply);						// Create a new tool definition
+    void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
     bool ChangeTool(int newToolNumber);									// Select a new tool
+    bool ToolHeatersAtSetTemperatures(const Tool *tool) const;			// Wait for the heaters associated with the specified tool to reach their set temperatures
 
     Platform* platform;							// The RepRap machine
     bool active;								// Live and running?
@@ -164,7 +167,7 @@ class GCodes
     float feedrateStack[STACK];					// For dealing with Push and Pop
     FileData fileStack[STACK];
     int8_t stackPointer;						// Push and Pop stack pointer
-    char gCodeLetters[AXES]; 					// 'X', 'Y', 'Z'
+    char axisLetters[AXES]; 					// 'X', 'Y', 'Z'
     float lastPos[DRIVES - AXES]; 				// Just needed for relative moves; i.e. not X, Y and Z
 	float record[DRIVES+1];						// Temporary store for move positions
 	float moveToDo[DRIVES+1];					// Where to go set by G1 etc
@@ -206,7 +209,7 @@ inline int GCodeBuffer::GetIValue()
   return (int)GetLValue();
 }
 
-inline const char* GCodeBuffer::Buffer()
+inline const char* GCodeBuffer::Buffer() const
 {
   return gcodeBuffer;
 }

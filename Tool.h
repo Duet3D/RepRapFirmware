@@ -41,6 +41,7 @@ public:
 	void GetVariables(float* standby, float* active) const;
 	float MaxFeedrate() const;
 	float InstantDv() const;
+	void Print(char* reply) const;
 
 	friend class RepRap;
 

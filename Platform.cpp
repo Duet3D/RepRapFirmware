@@ -765,7 +765,7 @@ void Platform::Diagnostics()
 	strncpy(scratchString, "Bed probe heights:", STRING_LENGTH);
 	for (size_t i = 0; i < NUMBER_OF_PROBE_POINTS; ++i)
 	{
-		sncatf(scratchString, STRING_LENGTH, " %.3f", reprap.GetMove()->zBedProbePoint(i));
+		sncatf(scratchString, STRING_LENGTH, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
 	}
 	sncatf(scratchString, STRING_LENGTH, "\n");
 	AppendMessage(BOTH_MESSAGE, scratchString);
@@ -1015,6 +1015,21 @@ void Platform::SetMotorCurrent(byte drive, float current)
 	}
 }
 
+
+float Platform::MotorCurrent(byte drive)
+{
+	unsigned short pot;
+	if (drive < 4)
+	{
+		pot = mcpDuet.getNonVolatileWiper(potWipes[drive]);
+	}
+	else
+	{
+		pot = mcpExpansion.getNonVolatileWiper(potWipes[drive]);
+	}
+
+	return (float)pot * maxStepperDigipotVoltage / (0.256 * 8.0 * senseResistor);
+}
 
 //Changed to be compatible with existing gcode norms
 // M106 S0 = fully off M106 S255 = fully on
