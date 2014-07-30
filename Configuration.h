@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.78f-dc42"
-#define DATE "2014-07-27"
+#define VERSION "0.78g-dc42"
+#define DATE "2014-07-30"
 #define AUTHORS "reprappro, dc42. zpl"
 
 // Other firmware that we might switch to be compatible with.
@@ -60,7 +60,7 @@ enum Compatibility
 #define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
 #define NUMBER_OF_PROBE_POINTS 5	// Maximum number of probe points
-#define Z_DIVE 8.0  				// Height from which to probe the bed (mm)
+#define Z_DIVE 5.0  				// Height from which to probe the bed (mm)
 #define TRIANGLE_0 -0.001			// Slightly less than 0 for point-in-triangle tests
 
 #define SILLY_Z_VALUE -9999.0

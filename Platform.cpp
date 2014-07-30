@@ -113,6 +113,16 @@ void Platform::Init()
 	pinMode(atxPowerPin, OUTPUT);
 
 	DueFlashStorage::init();
+	// We really want to use static_assert here, but the ancient version of gcc used by Arduino doesn't support it
+	//static_assert(sizeof(nvData) <= 1024, "NVData too large");
+	// So instead, create a reference to a non-existent declaration if the condition fails.
+	// We are relying on the compiler optimizing this out if the condition is false
+	// Watch out for the build warning "undefined reference to 'NonExistantFunction()' if this fails.
+	if (!(sizeof(nvData) <= 1024))
+	{
+		extern void BadStaticAssert();
+		BadStaticAssert();
+	}
 	DueFlashStorage::read(nvAddress, &nvData, sizeof(nvData));
 	if (nvData.magic != FlashData::magicValue)
 	{

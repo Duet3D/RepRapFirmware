@@ -76,6 +76,8 @@ class ProtocolInterpreter
 
 	    virtual bool StoreUploadData(const char* data, unsigned int len);
 	    virtual bool FlushUploadData();
+	    virtual bool DebugEnabled() const;
+
 	    void CancelUpload();
 		bool IsUploading() const { return uploadState != notUploading; }
 
@@ -146,6 +148,7 @@ class Webserver
 			void ResetState();
 
 			bool FlushUploadData();
+			virtual bool DebugEnabled() /*override*/ const { return webDebug; }
 			void ReceivedGcodeReply();
 			void SetDebug(bool b) { webDebug = b; }
 

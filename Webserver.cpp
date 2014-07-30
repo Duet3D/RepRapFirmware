@@ -472,12 +472,6 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 void Webserver::ConnectionLost(const ConnectionState *cs)
 {
 	uint16_t local_port = cs->GetLocalPort();
-	if (reprap.Debug())
-	{
-		snprintf(scratchString, STRING_LENGTH, "Webserver: ConnectionLost called with port %d\n", local_port);
-		platform->Message(DEBUG_MESSAGE, scratchString);
-	}
-
 	ProtocolInterpreter *interpreter;
 	switch (local_port)
 	{
@@ -497,6 +491,13 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 			interpreter = ftpInterpreter;
 			break;
 	}
+
+	if (interpreter->DebugEnabled())
+	{
+		debugPrintf("Webserver: ConnectionLost called with port %d\n", local_port);
+		platform->Message(DEBUG_MESSAGE, scratchString);
+	}
+
 	interpreter->ConnectionLost(local_port);
 
 	// When our reading connection has been lost, it is no longer important which
@@ -682,7 +683,11 @@ void ProtocolInterpreter::FinishUpload(const long file_length)
 	filenameBeingUploaded[0] = 0;
 }
 
-
+// This is overridden in class httpInterpreter
+bool ProtocolInterpreter::DebugEnabled() const
+{
+	return reprap.Debug();
+}
 
 //********************************************************************************************
 //
@@ -1582,7 +1587,7 @@ Webserver::FtpInterpreter::FtpInterpreter(Platform *p, Webserver *ws)
 
 void Webserver::FtpInterpreter::ConnectionEstablished()
 {
-	if (reprap.Debug())
+	if (DebugEnabled())
 	{
 		platform->Message(DEBUG_MESSAGE, "Webserver: FTP connection established!\n");
 	}
@@ -1675,7 +1680,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 		case '\n':
 			clientMessage[clientPointer++] = 0;
 
-			if (reprap.Debug())
+			if (DebugEnabled())
 			{
 				snprintf(scratchString, STRING_LENGTH, "FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
 				platform->Message(DEBUG_MESSAGE, scratchString);
@@ -1688,7 +1693,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 				return true;
 			}
 
-			if (reprap.Debug())
+			if (DebugEnabled())
 			{
 				platform->Message(DEBUG_MESSAGE, "FtpInterpreter::ProcessLine call finished.");
 			}
@@ -1967,7 +1972,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			break;
 
 		case waitingForPasvPort:
-			if (!reprap.Debug() && platform->Time() - portOpenTime > pasvPortTimeout)
+			if (!DebugEnabled() && platform->Time() - portOpenTime > pasvPortTimeout)
 			{
 				SendReply(425, "Failed to establish connection.");
 

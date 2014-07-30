@@ -291,7 +291,7 @@ bool GCodes::Push()
 
 bool GCodes::Pop()
 {
-  if(stackPointer <= 0)
+  if(stackPointer < 1)
   {
     platform->Message(BOTH_ERROR_MESSAGE, "Pop(): stack underflow!\n");
     return true;  
@@ -506,6 +506,14 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 		return false;
 	}
 
+	// Complete the current move (must do this before checking whether we have finished the file in case it didn't end in newline)
+
+	if (cannedCycleGCode->Active())
+	{
+		cannedCycleGCode->SetFinished(ActOnCode(cannedCycleGCode));
+		return false;
+	}
+
 	// Have we finished the file?
 
 	if (!fileBeingPrinted.IsLive())
@@ -520,12 +528,6 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 	}
 
 	// No - Do more of the file
-
-	if (cannedCycleGCode->Active())
-	{
-		cannedCycleGCode->SetFinished(ActOnCode(cannedCycleGCode));
-		return false;
-	}
 
 	DoFilePrint(cannedCycleGCode);
 	return false;
@@ -548,7 +550,7 @@ bool GCodes::FileCannedCyclesReturn()
 
 // To execute any move, call this until it returns true.
 // moveToDo[] entries corresponding with false entries in action[] will
-// be ignored.  Recall that moveToDo[DRIVES] should contain the feedrate
+// be ignored.  Recall that moveToDo[DRIVES] should contain the feed rate
 // you want (if action[DRIVES] is true).
 
 bool GCodes::DoCannedCycleMove(EndstopChecks ce)
@@ -569,7 +571,9 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 		for (int8_t drive = 0; drive <= DRIVES; drive++)
 		{
 			if (activeDrive[drive])
+			{
 				moveBuffer[drive] = moveToDo[drive];
+			}
 		}
 		endStopsToCheck = ce;
 		cannedCycleMoveQueued = true;
@@ -850,19 +854,9 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, char *reply)
 
 	int probePointIndex = gb->GetIValue();
 
-	float x, y, z;
-	if (gb->Seen(axisLetters[X_AXIS]))
-		x = gb->GetFValue();
-	else
-		x = moveBuffer[X_AXIS];
-	if (gb->Seen(axisLetters[Y_AXIS]))
-		y = gb->GetFValue();
-	else
-		y = moveBuffer[Y_AXIS];
-	if (gb->Seen(axisLetters[Z_AXIS]))
-		z = gb->GetFValue();
-	else
-		z = moveBuffer[Z_AXIS];
+	float x = (gb->Seen(axisLetters[X_AXIS])) ? gb->GetFValue() : moveBuffer[X_AXIS];
+	float y = (gb->Seen(axisLetters[Y_AXIS])) ? gb->GetFValue() : moveBuffer[Y_AXIS];
+	float z = (gb->Seen(axisLetters[Z_AXIS])) ? gb->GetFValue() : moveBuffer[Z_AXIS];
 
 	probeCount = probePointIndex;
 	reprap.GetMove()->SetXBedProbePoint(probeCount, x);
@@ -906,7 +900,7 @@ bool GCodes::DoMultipleZProbe(char *reply)
 {
 	if (reprap.GetMove()->NumberOfXYProbePoints() < 3)
 	{
-		platform->Message(HOST_MESSAGE, "Bed probing: there needs to be 3 or more points set.\n");
+		strncpy(reply, "Bed probing: there needs to be 3 or more points set.\n", STRING_LENGTH);
 		return true;
 	}
 
