@@ -495,7 +495,6 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 	if (interpreter->DebugEnabled())
 	{
 		debugPrintf("Webserver: ConnectionLost called with port %d\n", local_port);
-		platform->Message(DEBUG_MESSAGE, scratchString);
 	}
 
 	interpreter->ConnectionLost(local_port);

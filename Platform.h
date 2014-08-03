@@ -99,6 +99,7 @@ Licence: GPL
 #define Z_PROBE_STOP_HEIGHT (0.7) // mm
 #define Z_PROBE_PIN (10) 						// Analogue pin number
 #define Z_PROBE_MOD_PIN (52)					// Digital pin number to turn the IR LED on (high) or off (low)
+#define Z_PROBE_AXES {true, false, true}		// Axes for which the Z-probe is normally used
 const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of readings with IR on, and the same number with IR off
 
 #define MAX_FEEDRATES {100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0} // mm/sec
@@ -106,6 +107,12 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0}
 #define INSTANT_DVS {15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0} // (mm/sec)
 #define NUM_MIXING_DRIVES 1; //number of mixing drives
+
+#define E0_DRIVE 3 //the index of the first Extruder drive
+#define E1_DRIVE 4 //the index of the second Extruder drive
+#define E2_DRIVE 5 //the index of the third Extruder drive
+#define E3_DRIVE 6 //the index of the fourth Extruder drive
+#define E4_DRIVE 7 //the index of the fifth Extruder drive
 
 // AXES
 
@@ -117,12 +124,6 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 #define X_AXIS 0  								// The index of the X axis in the arrays
 #define Y_AXIS 1  								// The index of the Y axis
 #define Z_AXIS 2  								// The index of the Z axis
-
-#define E0_DRIVE 3 //the index of the first Extruder drive
-#define E1_DRIVE 4 //the index of the second Extruder drive
-#define E2_DRIVE 5 //the index of the third Extruder drive
-#define E3_DRIVE 6 //the index of the fourth Extruder drive
-#define E4_DRIVE 7 //the index of the fifth Extruder drive
 
 // HEATERS - The bed is assumed to be the at index 0
 
@@ -168,15 +169,10 @@ const float defaultFullBand[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0};		// 
 const float defaultPidMin[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
 const float defaultPidMax[HEATERS] = {255, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
 
-#define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
-#define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN_PIN X6 										// pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-#define HEAT_ON 0 												// 0 for inverted heater (eg Duet v0.6) 1 for not (e.g. Duet v0.4)
-
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN_PIN X6 //pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-#define HEAT_ON 0 // 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define COOLING_FAN_PIN X6 														//pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
+#define HEAT_ON 0 																// 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 const unsigned int adOversampleBits = 1;					// number of bits we oversample when reading temperatures
@@ -191,10 +187,10 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 #define HOT_BED 0 	// The index of the heated bed; set to -1 if there is no heated bed
 #define E0_HEATER 1 //the index of the first extruder heater
-#define E1_HEATER 2 //the index of the first extruder heater
-#define E2_HEATER 3 //the index of the first extruder heater
-#define E3_HEATER 4 //the index of the first extruder heater
-#define E4_HEATER 5 //the index of the first extruder heater
+#define E1_HEATER 2 //the index of the second extruder heater
+#define E2_HEATER 3 //the index of the third extruder heater
+#define E3_HEATER 4 //the index of the fourth extruder heater
+#define E4_HEATER 5 //the index of the fifth extruder heater
 
 /****************************************************************************************************/
 
@@ -346,17 +342,17 @@ class FileStore //: public InputOutput
 public:
 
 	int8_t Status(); // Returns OR of IOStatus
-	bool Read(char& b);
-	int Read(char* buf, unsigned int nBytes);
-	bool Write(char b);
-	bool Write(const char *s, unsigned int len);
-	bool Write(const char* s);
-	bool Close();
-	bool Seek(unsigned long pos);
-	bool GoToEnd(); // Position the file at the end (so you can write on the end).
-	unsigned long Length(); // File size in bytes
-	void Duplicate();
-	bool Flush();
+	bool Read(char& b);								// Read 1 byte
+	int Read(char* buf, unsigned int nBytes);		// Read a block of nBytes length
+	bool Write(char b);								// Write 1 byte
+	bool Write(const char *s, unsigned int len);	// Write a block of len bytes
+	bool Write(const char* s);						// Write a string
+	bool Close();									// Shut the file and tidy up
+	bool Seek(unsigned long pos);					// Jump to pos in the file
+	bool GoToEnd();									// Position the file at the end (so you can write on the end).
+	unsigned long Length();							// File size in bytes
+	void Duplicate();								// Create a second reference to this file
+	bool Flush();									// Write remaining buffer data
 
 friend class Platform;
 
@@ -610,6 +606,8 @@ public:
   int GetZProbeSecondaryValues(int& v1, int& v2);
   void SetZProbeType(int iZ);
   int GetZProbeType() const;
+  void SetZProbeAxes(const bool axes[AXES]);
+  void GetZProbeAxes(bool (&axes)[AXES]);
   void SetZProbing(bool starting);
   bool GetZProbeParameters(struct ZProbeParameters& params) const;
   bool SetZProbeParameters(const struct ZProbeParameters& params);
@@ -617,8 +615,8 @@ public:
   
   // Mixing support
 
-  void SetMixingDrives(int);
-  int GetMixingDrives();
+//  void SetMixingDrives(int);
+//  int GetMixingDrives();
 
   int8_t SlowestDrive() const;
 
@@ -655,6 +653,7 @@ private:
 	  ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
 	  ZProbeParameters alternateZProbeParameters;	// Z probe values for the alternate sensor
 	  int zProbeType;								// the type of Z probe we are currently using
+	  bool zProbeAxes[AXES];						// Z probe is used for these axes
 	  PidParameters pidParams[HEATERS];
 	  byte ipAddress[4];
 	  byte netMask[4];
@@ -989,21 +988,6 @@ inline void Platform::SetAxisMinimum(int8_t axis, float value)
 inline float Platform::AxisTotalLength(int8_t axis) const
 {
 	return axisMaxima[axis] - axisMinima[axis];
-}
-
-inline void Platform::SetMixingDrives(int num_drives)
-{
-	if(num_drives>(DRIVES-AXES))
-	{
-		Message(HOST_MESSAGE, "More mixing extruder drives set with M160 than exist in firmware configuration\n");
-		return;
-	}
-	numMixingDrives = num_drives;
-}
-
-inline int Platform::GetMixingDrives()
-{
-	return numMixingDrives;
 }
 
 //********************************************************************************************************

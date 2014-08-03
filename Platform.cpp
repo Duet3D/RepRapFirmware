@@ -134,6 +134,7 @@ void Platform::Init()
 		nvData.macAddress = MAC_ADDRESS;
 
 		nvData.zProbeType = 0;	// Default is to use the switch
+		nvData.zProbeAxes = Z_PROBE_AXES;
 		nvData.switchZProbeParameters.Init(0.0);
 		nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
 		nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
@@ -232,21 +233,21 @@ void Platform::Init()
 	{
 		if (stepPins[i] >= 0)
 		{
-		  if(i == E0_DRIVE || i == E3_DRIVE) //STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
+		  if(i == E0_DRIVE || i == E3_DRIVE) // STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
 				pinModeNonDue(stepPins[i], OUTPUT);
 			else
 				pinMode(stepPins[i], OUTPUT);
 		}
 		if (directionPins[i] >= 0)
 		{
-		  if(i == E0_DRIVE) //DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
+		  if(i == E0_DRIVE) // DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
 				pinModeNonDue(directionPins[i], OUTPUT);
 			else
 				pinMode(directionPins[i], OUTPUT);
 		}
 		if (enablePins[i] >= 0)
 		{
-		  if(i == Z_AXIS || i==E0_DRIVE || i==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
+		  if(i == Z_AXIS || i == E0_DRIVE || i == E2_DRIVE) // ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 				pinModeNonDue(enablePins[i], OUTPUT);
 			else
 				pinMode(enablePins[i], OUTPUT);
@@ -272,14 +273,14 @@ void Platform::Init()
 	{
 		if (heatOnPins[i] >= 0)
 		{
-    		if(i == E0_HEATER || i==E1_HEATER) //HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
+			if(i == E0_HEATER || i == E1_HEATER) // HEAT_ON_PINS {6, X5, X7, 7, 8, 9}
 			{
-    			digitalWriteNonDue(heatOnPins[i], HIGH);	// turn the heater off
+				digitalWriteNonDue(heatOnPins[i], HIGH);	// turn the heater off
 				pinModeNonDue(heatOnPins[i], OUTPUT);
 			}
 			else
 			{
-    			digitalWrite(heatOnPins[i], HIGH);			// turn the heater off
+				digitalWrite(heatOnPins[i], HIGH);			// turn the heater off
 				pinMode(heatOnPins[i], OUTPUT);
 			}
 		}
@@ -389,6 +390,23 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 int Platform::GetZProbeType() const
 {
 	return nvData.zProbeType;
+}
+
+void Platform::SetZProbeAxes(const bool axes[AXES])
+{
+	for(int axis=0; axis<AXES; axis++)
+	{
+		nvData.zProbeAxes[axis] = axes[axis];
+	}
+	WriteNvData();
+}
+
+void Platform::GetZProbeAxes(bool (&axes)[AXES])
+{
+	for(int axis=0; axis<AXES; axis++)
+	{
+		axes[axis] = nvData.zProbeAxes[axis];
+	}
 }
 
 float Platform::ZProbeStopHeight() const
@@ -793,11 +811,13 @@ void Platform::Diagnostics()
 	AppendMessage(BOTH_MESSAGE, scratchString);
 	reprap.Timing();
 
+#if LWIP_STATS
 	// Normally we should NOT try to display LWIP stats here, because it uses debugPrintf(), which will hang the system is no USB cable is connected.
 	if (reprap.Debug())
 	{
 		stats_display();
 	}
+#endif
 }
 
 void Platform::DiagnosticTest(int d)
@@ -930,21 +950,18 @@ void Platform::SetHeater(size_t heater, const float& power)
 
 EndStopHit Platform::Stopped(int8_t drive)
 {
-	if (nvData.zProbeType > 0)
-	{  // Z probe is used for both X and Z.
-		if (drive != Y_AXIS)
-		{
-			int zProbeVal = ZProbe();
-			int zProbeADValue =
-					(nvData.zProbeType == 3) ?
-							nvData.alternateZProbeParameters.adcValue : nvData.irZProbeParameters.adcValue;
-			if (zProbeVal >= zProbeADValue)
-				return lowHit;
-			else if (zProbeVal * 10 >= zProbeADValue * 9)	// if we are at/above 90% of the target value
-				return lowNear;
-			else
-				return noStop;
-		}
+	if (nvData.zProbeType > 0 && drive < AXES && nvData.zProbeAxes[drive])
+	{
+		int zProbeVal = ZProbe();
+		int zProbeADValue =
+				(nvData.zProbeType == 3) ?
+						nvData.alternateZProbeParameters.adcValue : nvData.irZProbeParameters.adcValue;
+		if (zProbeVal >= zProbeADValue)
+			return lowHit;
+		else if (zProbeVal * 10 >= zProbeADValue * 9)	// if we are at/above 90% of the target value
+			return lowNear;
+		else
+			return noStop;
 	}
 
 	if (lowStopPins[drive] >= 0)
@@ -965,9 +982,13 @@ void Platform::SetDirection(byte drive, bool direction)
 	if(directionPins[drive] < 0)
 		return;
 	if(drive == E0_DRIVE) //DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
+	{
 		digitalWriteNonDue(directionPins[drive], direction);
+	}
 	else
+	{
 		digitalWrite(directionPins[drive], direction);
+	}
 }
 
 void Platform::Disable(byte drive)
@@ -1041,13 +1062,28 @@ float Platform::MotorCurrent(byte drive)
 	return (float)pot * maxStepperDigipotVoltage / (0.256 * 8.0 * senseResistor);
 }
 
-//Changed to be compatible with existing gcode norms
-// M106 S0 = fully off M106 S255 = fully on
+// This is a bit of a compromise - old RepRaps used fan speeds in the range
+// [0, 255], which is very hardware dependent.  It makes much more sense
+// to specify speeds in [0.0, 1.0].  This looks at the value supplied (which
+// the G Code reader will get right for a float or an int) and attempts to
+// do the right thing whichever the user has done.  This will only not work
+// for an old-style fan speed of 1/255...
+
 void Platform::CoolingFan(float speed)
 {
 	if(coolingFanPin >= 0)
 	{
-		byte p =(byte)speed;
+		byte p;
+
+		if(speed <= 1.0)
+		{
+			p = (byte)(255.0 * max<float>(0.0, speed));
+		}
+		else
+		{
+			p = (byte)speed;
+		}
+
 		// The cooling fan output pin gets inverted if HEAT_ON == 0
 		analogWriteNonDue(coolingFanPin, (HEAT_ON == 0) ? (255 - p) : p);
 	}
@@ -1057,17 +1093,17 @@ void Platform::CoolingFan(float speed)
 
 void Platform::SetInterrupt(float s) // Seconds
 {
-  if (s <= 0.0)
-  {
-    //NVIC_DisableIRQ(TC3_IRQn);
-    Message(HOST_MESSAGE, "Negative interrupt!\n");
-    s = STANDBY_INTERRUPT_RATE;
-  }
-  uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
-  TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
-  TC_SetRC(TC1, 0, rc);
-  TC_Start(TC1, 0);
-  NVIC_EnableIRQ(TC3_IRQn);
+	if (s <= 0.0)
+	{
+		//NVIC_DisableIRQ(TC3_IRQn);
+		Message(HOST_MESSAGE, "Negative interrupt!\n");
+		s = STANDBY_INTERRUPT_RATE;
+	}
+	uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
+	TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
+	TC_SetRC(TC1, 0, rc);
+	TC_Start(TC1, 0);
+	NVIC_EnableIRQ(TC3_IRQn);
 }
 
 //-----------------------------------------------------------------------------------------------------

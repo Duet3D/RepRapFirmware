@@ -189,13 +189,12 @@ void RepRap::Init()
   currentTool = NULL;
   const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
   WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);	// enable watchdog, reset the mcu if it times out
-  active = true;		// must do this before we start the network, else the watchdog may time out
+  coldExtrude = true;		// DC42 changed default to true for compatibility because for now we are aiming for copatibility with RRP 0.78
+  active = true;			// must do this before we start the network, else the watchdog may time out
 
-  platform->Message(HOST_MESSAGE, NAME);
-  platform->Message(HOST_MESSAGE, " Version ");
-  platform->Message(HOST_MESSAGE, VERSION);
-  platform->Message(HOST_MESSAGE, ", dated ");
-  platform->Message(HOST_MESSAGE, DATE);
+  snprintf(scratchString, STRING_LENGTH, "%s Version %s dated %s\n", NAME, VERSION, DATE);
+  platform->Message(HOST_MESSAGE, scratchString);
+
   platform->Message(HOST_MESSAGE, ".\n\nExecuting ");
   platform->Message(HOST_MESSAGE, platform->GetConfigFile());
   platform->Message(HOST_MESSAGE, "...\n\n");

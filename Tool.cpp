@@ -32,6 +32,8 @@ Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 	active = false;
 	driveCount = dCount;
 	heaterCount = hCount;
+	heaterFault = false;
+	mixing = false;
 
 	if(driveCount > 0)
 	{
@@ -43,9 +45,12 @@ Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 			return;
 		}
 		drives = new int[driveCount];
+		mix = new float[driveCount];
+		float r = 1.0/(float)driveCount;
 		for(int8_t drive = 0; drive < driveCount; drive++)
 		{
 			drives[drive] = d[drive];
+			mix[drive] = r;
 		}
 	}
 
@@ -70,7 +75,7 @@ Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 	}
 }
 
-void Tool::Print(char* reply) const
+void Tool::Print(char* reply)
 {
 	snprintf(reply, STRING_LENGTH, "Tool %d - drives: ", myNumber);
 	char comma = ',';
@@ -97,6 +102,7 @@ void Tool::Print(char* reply) const
 
 	sncatf(reply, STRING_LENGTH, " status: %s", active ? "selected" : "standby");
 }
+
 float Tool::MaxFeedrate() const
 {
 	if(driveCount <= 0)
@@ -138,17 +144,83 @@ float Tool::InstantDv() const
 // Add a tool to the end of the linked list.
 // (We must already be in it.)
 
-void Tool::AddTool(Tool* t)
+void Tool::AddTool(Tool* tool)
 {
-	Tool* last = this;
-	Tool* n = next;
+	Tool* t = this;
+	Tool* last;
+	while(t != NULL)
+	{
+		if(t->Number() == tool->Number())
+		{
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Add tool: tool number already in use.\n");
+			return;
+		}
+		last = t;
+		t = t->Next();
+	}
+	tool->next = NULL; // Defensive...
+	last->next = tool;
+}
+
+// There is a temperature fault on a heater.
+// Disable all tools using that heater.
+// This function must be called for the first
+// entry in the linked list.
+
+void Tool::FlagTemperatureFault(int8_t heater)
+{
+	Tool* n = this;
 	while(n != NULL)
 	{
-		last = n;
+		n->SetTemperatureFault(heater);
 		n = n->Next();
 	}
-	t->next = NULL; // Defensive...
-	last->next = t;
+}
+
+void Tool::ClearTemperatureFault(int8_t heater)
+{
+	Tool* n = this;
+	while(n != NULL)
+	{
+		n->ResetTemperatureFault(heater);
+		n = n->Next();
+	}
+}
+
+void Tool::SetTemperatureFault(int8_t dudHeater)
+{
+	for(int8_t heater = 0; heater < heaterCount; heater++)
+	{
+		if(dudHeater == heaters[heater])
+		{
+			heaterFault = true;
+			return;
+		}
+	}
+}
+
+void Tool::ResetTemperatureFault(int8_t wasDudHeater)
+{
+	for(int8_t heater = 0; heater < heaterCount; heater++)
+	{
+		if(wasDudHeater == heaters[heater])
+		{
+			heaterFault = false;
+			return;
+		}
+	}
+}
+
+bool Tool::AllHeatersAtHighTemperature() const
+{
+	for(int8_t heater = 0; heater < heaterCount; heater++)
+	{
+		if(reprap.GetHeat()->GetTemperature(heaters[heater]) < HOT_ENOUGH_TO_EXTRUDE)
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 void Tool::Activate(Tool* currentlyActive)
@@ -198,6 +270,17 @@ void Tool::GetVariables(float* standby, float* active) const
 		active[heater] = activeTemperatures[heater];
 		standby[heater] = standbyTemperatures[heater];
 	}
+}
+
+bool Tool::ToolCanDrive() const
+{
+	if(heaterFault)
+		return false;
+
+	if(reprap.ColdExtrude() || AllHeatersAtHighTemperature())
+		return true;
+
+	return false;
 }
 
 // Update the number of active drives and extruders in use to reflect what this tool uses
