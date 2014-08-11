@@ -100,12 +100,9 @@ const float pasvPortTimeout = 10.0;	 					// seconds to wait for the FTP data po
 
 
 // Constructor and initialisation
-Webserver::Webserver(Platform* p)
+Webserver::Webserver(Platform* p) : platform(p), webserverActive(false), readingConnection(NULL),
+		fileInfoDetected(false), filamentCount(DRIVES - AXES), printStartTime(0.0)
 {
-	platform = p;
-	webserverActive = false;
-	readingConnection = NULL;
-
 	httpInterpreter = new HttpInterpreter(p, this);
 	ftpInterpreter = new FtpInterpreter(p, this);
 	telnetInterpreter = new TelnetInterpreter(p, this);
@@ -179,12 +176,6 @@ void Webserver::Spin()
 				{
 					interpreter->ConnectionEstablished();
 
-					// Keep track of the uploading FTP data connections because we can't afford delayed data requests
-					if (is_data_port && interpreter->IsUploading())
-					{
-						readingConnection = req->GetConnection();
-					}
-
 					// Close this request unless ConnectionEstablished() has already used it for sending
 					if (req == net->GetRequest(readingConnection))
 					{
@@ -233,11 +224,7 @@ void Webserver::Spin()
 							// it from the ready transactions by either calling SendAndClose() or CloseRequest().
 							if (interpreter->CharFromClient(c))
 							{
-								if (!interpreter->IsUploading())
-								{
-									readingConnection = NULL;
-								}
-
+								readingConnection = NULL;
 								break;
 							}
 						}
@@ -332,6 +319,9 @@ void Webserver::ProcessGcode(const char* gc)
 	}
 	else if (StringStartsWith(gc, "M23 "))	// select SD card file to print next
 	{
+		fileInfoDetected = GetFileInfo(platform->GetGCodeDir(), &gc[4], length, height, filament, filamentCount, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
+		printStartTime = platform->Time();
+		strncpy(fileBeingPrinted, &gc[4], ARRAY_SIZE(fileBeingPrinted));
 		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
 	}
 	else if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
@@ -351,9 +341,14 @@ void Webserver::ProcessGcode(const char* gc)
 		{
 			char c;
 			size_t i = 0;
+			bool reading_whitespace = false;
 			while (i < ARRAY_UPB(gcodeReply) && configFile->Read(c))
 			{
-				gcodeReply[i++] = c;
+				if (!reading_whitespace || (c != ' ' && c != '\t'))
+				{
+					gcodeReply[i++] = c;
+				}
+				reading_whitespace = (c == ' ' || c == '\t');
 			}
 			configFile->Close();
 			gcodeReply[i] = 0;
@@ -471,6 +466,7 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 // Handle disconnects here
 void Webserver::ConnectionLost(const ConnectionState *cs)
 {
+	// Inform protocol handlers that this connection has been lost
 	uint16_t local_port = cs->GetLocalPort();
 	ProtocolInterpreter *interpreter;
 	switch (local_port)
@@ -499,27 +495,20 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 
 	interpreter->ConnectionLost(local_port);
 
-	// When our reading connection has been lost, it is no longer important which
-	// connection is read from first.
+	// If our reading connection is lost, it will be no longer important which connection is read from first.
 	if (cs == readingConnection)
 	{
 		readingConnection = NULL;
 	}
 }
 
-// Make sure the current connection is preferred, so uploads are handled quicker
-void Webserver::SetReadingConnection()
+void Webserver::MessageStringToWebInterface(const char *s, bool error)
 {
-	Network *net = reprap.GetNetwork();
-	RequestState *r = net->GetRequest();
-	if (r != NULL)
+	if (!webserverActive)
 	{
-		readingConnection = r->GetConnection();
+		return;
 	}
-}
 
-void Webserver::MessageStringToWebInterface(const char *s, bool error, bool finished)
-{
 	if (strlen(s) == 0 && !error)
 	{
 		strcpy(gcodeReply, "ok");
@@ -536,22 +525,20 @@ void Webserver::MessageStringToWebInterface(const char *s, bool error, bool fini
 		}
 	}
 
-	if (finished)
-	{
-		httpInterpreter->ReceivedGcodeReply();
-		telnetInterpreter->HandleGcodeReply(gcodeReply);
-	}
+	httpInterpreter->ReceivedGcodeReply();
+	telnetInterpreter->HandleGcodeReply(s);
 }
 
-void Webserver::AppendReplyToWebInterface(const char *s, bool error, bool finished)
+void Webserver::AppendReplyToWebInterface(const char *s, bool error)
 {
-	sncatf(gcodeReply, ARRAY_SIZE(gcodeReply), "%s", s);
-
-	if (finished)
+	if (!webserverActive)
 	{
-		httpInterpreter->ReceivedGcodeReply();
-		telnetInterpreter->HandleGcodeReply(gcodeReply);
+		return;
 	}
+
+	sncatf(gcodeReply, ARRAY_SIZE(gcodeReply), "%s", s);
+	httpInterpreter->ReceivedGcodeReply();
+	telnetInterpreter->HandleGcodeReply(s);
 }
 
 
@@ -682,7 +669,7 @@ void ProtocolInterpreter::FinishUpload(const long file_length)
 	filenameBeingUploaded[0] = 0;
 }
 
-// This is overridden in class httpInterpreter
+// This is overridden in class HttpInterpreter
 bool ProtocolInterpreter::DebugEnabled() const
 {
 	return reprap.Debug();
@@ -853,8 +840,6 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	{
 		FileStore *file = platform->GetFileStore("0:/", value, true);
 		StartUpload(file);
-		webserver->SetReadingConnection();
-
 		GetJsonUploadResponse();
 	}
 	else if (StringEquals(request, "upload_data") && StringEquals(key, "data"))
@@ -884,35 +869,82 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	else if (StringEquals(request, "files"))
 	{
 		const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
-		const char* fileList = platform->GetMassStorage()->FileList(dir, false);
-		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"files\":[%s]}", fileList);
-	}
-	else if (StringEquals(request, "fileinfo") && StringEquals(key, "name"))
-	{
-		unsigned long length;
-		float height, filament[DRIVES - AXES], layerHeight;
-		unsigned int numFilaments = DRIVES - AXES;
-		char generatedBy[50];
-		bool found = webserver->GetFileInfo(value, length, height, filament, numFilaments, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
-		if (found)
+
+		FileInfo file_info;
+		if (platform->GetMassStorage()->FindFirst(dir, file_info))
 		{
+			strcpy(jsonResponse, "{\"files\":[");
+
+			do {
+				// build the file list here, but keep 2 characters free to terminate the JSON message
+				sncatf(jsonResponse, ARRAY_SIZE(jsonResponse) - 2, "%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
+			} while (platform->GetMassStorage()->FindNext(file_info));
+
+			jsonResponse[strlen(jsonResponse) -1] = 0;
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]}");
+		}
+		else
+		{
+			strcpy(jsonResponse, "{\"files\":[NONE]}");
+		}
+	}
+	else if (StringEquals(request, "fileinfo"))
+	{
+		// Poll file info for a specific file
+		if (StringEquals(key, "name"))
+		{
+			unsigned long length;
+			float height, filament[DRIVES - AXES], layerHeight;
+			unsigned int numFilaments = DRIVES - AXES;
+			char generatedBy[50];
+
+			bool found = webserver->GetFileInfo("0:/", value, length, height, filament, numFilaments, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
+			if (found)
+			{
+				snprintf(jsonResponse, ARRAY_SIZE(jsonResponse),
+							"{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
+								length, height, layerHeight);
+				char ch = '[';
+				if (numFilaments == 0)
+				{
+					sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c", ch);
+				}
+				else
+				{
+					for (unsigned int i = 0; i < numFilaments; ++i)
+					{
+						sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, filament[i]);
+						ch = ',';
+					}
+				}
+				sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"generatedBy\":\"%s\"}", generatedBy);
+			}
+			else
+			{
+				snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"err\":1}");
+			}
+		}
+		else if (reprap.GetGCodes()->PrintingAFile() && webserver->fileInfoDetected)
+		{
+			// Poll file info about a file currently being printed
 			snprintf(jsonResponse, ARRAY_SIZE(jsonResponse),
 						"{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
-							length, height, layerHeight);
+							webserver->length, webserver->height, webserver->layerHeight);
 			char ch = '[';
-			if (numFilaments == 0)
+			if (webserver->filamentCount == 0)
 			{
 				sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c", ch);
 			}
 			else
 			{
-				for (unsigned int i = 0; i < numFilaments; ++i)
+				for (unsigned int i = 0; i < webserver->filamentCount; ++i)
 				{
-					sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, filament[i]);
+					sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, webserver->filament[i]);
 					ch = ',';
 				}
 			}
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"generatedBy\":\"%s\"}", generatedBy);
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"generatedBy\":\"%s\",\"printDuration\":%d,\"fileName\":\"%s\"}",
+					webserver->generatedBy, (int)((platform->Time() - webserver->printStartTime) * 1000.0), webserver->fileBeingPrinted);
 		}
 		else
 		{
@@ -947,11 +979,11 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 	}
 	else if (StringEquals(request, "axes"))
 	{
-		strncpy(jsonResponse, "{\"axes\":", ARRAY_SIZE(jsonResponse));
+		strcpy(jsonResponse, "{\"axes\":");
 		char ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, platform->AxisTotalLength(drive));
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse) - 2, "%c%.1f", ch, platform->AxisTotalLength(drive));
 			ch = ',';
 		}
 		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]}");
@@ -1032,12 +1064,12 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 			ch = ',';
 		}
 
-		// Send extruder total extrusion since power up or last G92
+		// Send extruder total extrusion since power up, last G92 or last M23
 		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"extr\":");		// announce the extruder positions
 		ch = '[';
 		for (int8_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.3f", ch, gc->GetExtruderPosition(drive));
+			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, gc->GetExtruderPosition(drive));
 			ch = ',';
 		}
 		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]");
@@ -1121,7 +1153,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 
 	// Send the response to the last command. Do this last because it is long and may need to be truncated.
 	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"resp\":\"");
-	size_t jp = strnlen(jsonResponse, ARRAY_UPB(jsonResponse));
+	size_t jp = strnlen(jsonResponse, ARRAY_SIZE(jsonResponse));
 	while (*p != 0 && jp < ARRAY_SIZE(jsonResponse) - 3)	// leave room for the final '"}\0'
 	{
 		char c = *p++;
@@ -2001,8 +2033,43 @@ void Webserver::FtpInterpreter::ProcessLine()
 				// send file list via data port
 				if (net->MakeDataRequest())
 				{
-					RequestState *data_req = net->GetRequest();
-					data_req->Write(platform->GetMassStorage()->UnixFileList(currentDir));
+					FileInfo file_info;
+					if (platform->GetMassStorage()->FindFirst(currentDir, file_info))
+					{
+						RequestState *data_req = net->GetRequest();
+						char line[300];
+
+						do {
+							// Example for a typical UNIX-like file list:
+							// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
+							char dirChar = (file_info.isDirectory) ? 'd' : '-';
+							snprintf(line, ARRAY_SIZE(line), "%crw-rw-rw- 1 ftp ftp %13d %s %02d %04d %s\r\n",
+									dirChar, file_info.size, platform->GetMassStorage()->GetMonthName(file_info.month),
+									file_info.day, file_info.year, file_info.fileName);
+
+							// We may have to send the FTP file list in multiple chunks, so check
+							// if there's enough room left to write the current line.
+							if (!data_req->Write(line))
+							{
+								if (net->CanMakeRequest())
+								{
+									net->SendAndClose(NULL, true);
+
+									net->MakeDataRequest();
+									data_req = net->GetRequest();
+									data_req->Write(line);
+								}
+								else
+								{
+//									debugPrintf("Webserver: FTP file list was truncated\n");
+									// Note: If f_closedir() was implemented in FatFs, we'd have to call
+									// FindNext() here until it returns false.
+									break;
+								}
+							}
+
+						} while (platform->GetMassStorage()->FindNext(file_info));
+					}
 					net->SendAndClose(NULL);
 					state = doingPasvIO;
 				}
@@ -2351,7 +2418,7 @@ void Webserver::TelnetInterpreter::ProcessLine()
 void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
 {
 	Network *net = reprap.GetNetwork();
-	if (state >= authenticated && net->MakeTelnetRequest())
+	if (state >= authenticated && net->MakeTelnetRequest(strlen(reply)))
 	{
 		RequestState *req = net->GetRequest();
 
@@ -2386,16 +2453,18 @@ void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
 //
 //********************************************************************************************
 
-// Get information for a file on the SD card.
-bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& height, float *filamentUsed, unsigned int& numFilaments, float& layerHeight, char* generatedBy, size_t generatedByLength)
+// Get information for a file on the SD card
+bool Webserver::GetFileInfo(const char *directory, const char *fileName, unsigned long& length, float& height,
+		float *filamentUsed, unsigned int& numFilaments, float& layerHeight, char* generatedBy, size_t generatedByLength)
 {
-	FileStore *f = platform->GetFileStore("0:/", fileName, false);
+	FileStore *f = platform->GetFileStore(directory, fileName, false);
 	if (f != NULL)
 	{
 		// Try to find the object height by looking for the last G1 Zxxx command in the file
 		length = f->Length();
 		height = 0.0;
 		layerHeight = 0.0;
+		numFilaments = DRIVES - AXES;
 		generatedBy[0] = 0;
 
 		if (length != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
@@ -2403,6 +2472,7 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 			const size_t readSize = 512;					// read 512 bytes at a time (1K doesn't seem to work when we read from the end)
 			const size_t overlap = 100;
 			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
+			bool foundLayerHeight = false;
 
 			// Get slic3r settings by reading from the start of the file. We only read the first 1K or so, everything we are looking for should be there.
 			{
@@ -2413,20 +2483,10 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 					buf[sizeToRead] = 0;
 
 					// Look for layer height
-					const char* layerHeightString = "; layer_height ";
-					const char *pos = strstr(buf, layerHeightString);
-					if (pos != NULL)
-					{
-						pos += strlen(layerHeightString);
-						while (strchr(" \t=", *pos))
-						{
-							++pos;
-						}
-						layerHeight = strtod(pos, NULL);
-					}
+					foundLayerHeight = FindLayerHeight(buf, sizeToRead, layerHeight);
 
 					const char* generatedByString = "; generated by ";
-					pos = strstr(buf, generatedByString);
+					const char* pos = strstr(buf, generatedByString);
 					if (pos != NULL)
 					{
 						pos += strlen(generatedByString);
@@ -2496,6 +2556,12 @@ bool Webserver::GetFileInfo(const char *fileName, unsigned long& length, float& 
 						}
 					}
 
+					// Search for layer height
+					if (!foundLayerHeight)
+					{
+						foundLayerHeight = FindLayerHeight(buf, sizeToScan, layerHeight);
+					}
+
 					// Search for object height
 					if (FindHeight(buf, sizeToScan, height))
 					{
@@ -2557,6 +2623,24 @@ bool Webserver::FindHeight(const char* buf, size_t len, float& height)
 			}
 			--i;
 		}
+	}
+	return false;
+}
+
+// Scan the buffer for the layer height. The buffer is null-terminated.
+bool Webserver::FindLayerHeight(const char *buf, size_t len, float& layerHeight)
+{
+	const char* layerHeightString = "; layer_height ";
+	const char *pos = strstr(buf, layerHeightString);
+	if (pos != NULL)
+	{
+		pos += strlen(layerHeightString);
+		while (strchr(" \t=", *pos))
+		{
+			++pos;
+		}
+		layerHeight = strtod(pos, NULL);
+		return true;
 	}
 	return false;
 }

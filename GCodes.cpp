@@ -25,6 +25,8 @@
 
 #include "RepRapFirmware.h"
 
+const float secondsToMinutes = 1.0/60.0;
+
 GCodes::GCodes(Platform* p, Webserver* w)
 {
 	active = false;
@@ -992,10 +994,10 @@ const char* GCodes::GetCurrentCoordinates() const
 	float liveCoordinates[DRIVES + 1];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates);
 
-	snprintf(scratchString, STRING_LENGTH, "X:%f Y:%f Z:%f ", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS]);
+	snprintf(scratchString, STRING_LENGTH, "X:%.2f Y:%.2f Z:%.2f ", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS]);
 	for(int i = AXES; i< DRIVES; i++)
 	{
-		sncatf(scratchString, STRING_LENGTH, "E%d:%f ", i-AXES, liveCoordinates[i]);
+		sncatf(scratchString, STRING_LENGTH, "E%d:%.1f ", i-AXES, liveCoordinates[i]);
 	}
 	return scratchString;
 }
@@ -1836,17 +1838,44 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 20:  // Deprecated...
-		if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
 		{
-			snprintf(reply, STRING_LENGTH, "GCode files:\n%s",
-					platform->GetMassStorage()->FileList(platform->GetGCodeDir(), gb == serialGCode));
-		}
-		else
-		{
-			snprintf(reply, STRING_LENGTH, "%s",
-					platform->GetMassStorage()->FileList(platform->GetGCodeDir(), gb == serialGCode));
+			bool encapsulate_list;
+			if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
+			{
+				strcpy(reply, "GCode files:\n");
+				encapsulate_list = false;
+			}
+			else
+			{
+				strcpy(reply, "");
+				encapsulate_list = true;
+			}
+
+			FileInfo file_info;
+			if (platform->GetMassStorage()->FindFirst(platform->GetGCodeDir(), file_info))
+			{
+				// iterate through all entries and append each file name
+				do {
+					if (encapsulate_list)
+					{
+						sncatf(reply, STRING_LENGTH -1, "%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
+					}
+					else
+					{
+						sncatf(reply, STRING_LENGTH -1, "%s\n", file_info.fileName);
+					}
+				} while (platform->GetMassStorage()->FindNext(file_info));
+
+				// remove the last character
+				reply[strlen(reply) - 1] = 0;
+			}
+			else
+			{
+				strcat(reply, "NONE");
+			}
 		}
 		break;
+
 
 	case 21: // Initialise SD - ignore
 		break;
@@ -2308,12 +2337,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
 			if(!seen)
 			{
-				snprintf(reply, STRING_LENGTH, "Accelerations: X: %f, Y: %f, Z: %f, E: ",
+				snprintf(reply, STRING_LENGTH, "Accelerations: X: %.1f, Y: %.1f, Z: %.1f, E: ",
 						platform->Acceleration(X_AXIS)/distanceScale, platform->Acceleration(Y_AXIS)/distanceScale,
 						platform->Acceleration(Z_AXIS)/distanceScale);
 				for(int8_t drive = AXES; drive < DRIVES; drive++)
 				{
-					sncatf(reply, STRING_LENGTH, "%f", platform->Acceleration(drive)/distanceScale);
+					sncatf(reply, STRING_LENGTH, "%.1f", platform->Acceleration(drive)/distanceScale);
 					if(drive < DRIVES-1)
 					{
 						sncatf(reply, STRING_LENGTH, ":");
@@ -2330,7 +2359,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			{
 				if(gb->Seen(axisLetters[axis]))
 				{
-					platform->SetMaxFeedrate(axis, gb->GetFValue()*distanceScale*0.016666667); // G Code feedrates are in mm/minute; we need mm/sec
+					platform->SetMaxFeedrate(axis, gb->GetFValue() * distanceScale * secondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
 					seen = true;
 				}
 			}
@@ -2350,19 +2379,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				{
 					for(int8_t e = 0; e < eCount; e++)
 					{
-						platform->SetMaxFeedrate(AXES + e, eVals[e]*distanceScale*0.016666667);
+						platform->SetMaxFeedrate(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
 					}
 				}
 			}
 
 			if(!seen)
 			{
-				snprintf(reply, STRING_LENGTH, "Maximum feedrates: X: %f, Y: %f, Z: %f, E: ",
-						platform->MaxFeedrate(X_AXIS)/(distanceScale*0.016666667), platform->MaxFeedrate(Y_AXIS)/(distanceScale*0.016666667),
-						platform->MaxFeedrate(Z_AXIS)/(distanceScale*0.016666667));
+				snprintf(reply, STRING_LENGTH, "Maximum feedrates: X: %.1f, Y: %.1f, Z: %.1f, E: ",
+						platform->MaxFeedrate(X_AXIS)/(distanceScale * secondsToMinutes), platform->MaxFeedrate(Y_AXIS)/(distanceScale * secondsToMinutes),
+						platform->MaxFeedrate(Z_AXIS)/(distanceScale * secondsToMinutes));
 				for(int8_t drive = AXES; drive < DRIVES; drive++)
 				{
-					sncatf(reply, STRING_LENGTH, "%f", platform->MaxFeedrate(drive)/(distanceScale*0.016666667));
+					sncatf(reply, STRING_LENGTH, "%.1f", platform->MaxFeedrate(drive)/(distanceScale * secondsToMinutes));
 					if(drive < DRIVES-1)
 					{
 						sncatf(reply, STRING_LENGTH, ":");
@@ -2425,7 +2454,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
-					float value = gb->GetFValue() * distanceScale * 0.016666667;
+					float value = gb->GetFValue() * distanceScale * secondsToMinutes;
 					platform->SetHomeFeedRate(axis, value);
 					seen = true;
 				}
@@ -2780,7 +2809,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
         	{
         		if(gb->Seen(axisLetters[axis]))
         		{
-        			platform->SetInstantDv(axis, gb->GetFValue()*distanceScale*0.016666667); // G Code feedrates are in mm/minute; we need mm/sec
+        			platform->SetInstantDv(axis, gb->GetFValue()*distanceScale * secondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
         			seen = true;
         		}
         	}
@@ -2799,18 +2828,18 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
         		{
         			for(int8_t e = 0; e < eCount; e++)
         			{
-        				platform->SetInstantDv(AXES + e, eVals[e]*distanceScale*0.016666667);
+        				platform->SetInstantDv(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
         			}
         		}
         	}
         	else if(!seen)
         	{
-        		snprintf(reply, STRING_LENGTH, "Minimum feedrates: X: %f, Y: %f, Z: %f, E: ",
-        				platform->InstantDv(X_AXIS)/(distanceScale*0.016666667), platform->InstantDv(Y_AXIS)/(distanceScale*0.016666667),
-        				platform->InstantDv(Z_AXIS)/(distanceScale*0.016666667));
+        		snprintf(reply, STRING_LENGTH, "Minimum feedrates: X: %.1f, Y: %.1f, Z: %.1f, E: ",
+        				platform->InstantDv(X_AXIS)/(distanceScale * secondsToMinutes), platform->InstantDv(Y_AXIS)/(distanceScale * secondsToMinutes),
+        				platform->InstantDv(Z_AXIS)/(distanceScale * secondsToMinutes));
             	for(int8_t drive = AXES; drive < DRIVES; drive++)
             	{
-            		sncatf(reply, STRING_LENGTH, "%f", platform->InstantDv(drive)/(distanceScale*0.016666667));
+            		sncatf(reply, STRING_LENGTH, "%.1f", platform->InstantDv(drive)/(distanceScale * secondsToMinutes));
             		if(drive < DRIVES-1)
             		{
             			sncatf(reply, STRING_LENGTH, ":");

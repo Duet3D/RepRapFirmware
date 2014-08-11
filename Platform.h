@@ -85,7 +85,6 @@ Licence: GPL
 #define DISABLE_DRIVES {false, false, true, false, false, false, false, false} // Set true to disable a drive when it becomes idle
 #define LOW_STOP_PINS {11, -1, 60, 31, 24, 46, 45, 44} //E Stops not currently used
 #define HIGH_STOP_PINS {-1, 28, -1, -1, -1, -1, -1, -1}
-//#define HOME_DIRECTION {1, 1, 1, -1, -1, -1, -1, -1} // 1 for Max/High, -1 for Min/ Low
 #define ENDSTOP_HIT 1 // when a stop == this it is hit
 // Indices for motor current digipots (if any)
 // first 4 are for digipot 1,(on duet)
@@ -218,8 +217,6 @@ const int atxPowerPin = 12;						// Arduino Due pin number that controls the ATX
 const uint16_t lineInBufsize = 256;				// use a power of 2 for good performance
 const uint16_t lineOutBufSize = 2048;			// ideally this should be large enough to hold the results of an M503 command,
 												// but could be reduced if we ever need the memory
-const uint16_t fileListLength = 2000;			// increased to allow for the larger size of the Unix-compatible list when using FTP
-
 /****************************************************************************************************/
 
 enum EndStopHit
@@ -307,12 +304,26 @@ private:
 	unsigned int outputColumn;
 };
 
+// Info returned by FindFirst/FindNext calls
+class FileInfo
+{
+public:
+
+	bool isDirectory;
+	unsigned long size;
+	uint8_t day;
+	uint8_t month;
+	uint16_t year;
+	char fileName[255];
+};
+
 class MassStorage
 {
 public:
 
-  const char* FileList(const char* directory, bool fromLine); // Returns a list of all the files in the named directory
-  const char* UnixFileList(const char* directory); // Returns a UNIX-compatible file list for the specified directory
+  bool FindFirst(const char *directory, FileInfo &file_info);
+  bool FindNext(FileInfo &file_info);
+  const char* GetMonthName(const uint8_t month);
   const char* CombineName(const char* directory, const char* fileName);
   bool Delete(const char* directory, const char* fileName);
   bool MakeDirectory(const char *parentDir, const char *dirName);
@@ -329,10 +340,10 @@ protected:
 
 private:
 
-  char fileList[fileListLength];
   char scratchString[STRING_LENGTH];
   Platform* platform;
   FATFS fileSystem;
+  DIR findDir;
 };
 
 // This class handles input from, and output to, files.

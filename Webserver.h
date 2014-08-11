@@ -48,7 +48,7 @@ const unsigned int maxCommandWords = 4;			// max number of space-separated words
 const unsigned int maxQualKeys = 5;				// max number of key/value pairs in the qualifier
 const unsigned int maxHeaders = 10;				// max number of key/value pairs in the headers
 
-const unsigned int jsonReplyLength = 1000;		// size of buffer used to hold JSON reply
+const unsigned int jsonReplyLength = 2000;		// size of buffer used to hold JSON reply
 
 /* FTP */
 
@@ -69,17 +69,17 @@ class ProtocolInterpreter
 	public:
 
 		ProtocolInterpreter(Platform *p, Webserver *ws);
-		virtual void ConnectionEstablished() {}
-		virtual void ConnectionLost(uint16_t local_port) {}
+		virtual void ConnectionEstablished() { }
+		virtual void ConnectionLost(uint16_t local_port) { }
 		virtual bool CharFromClient(const char c) = 0;
 		virtual void ResetState() = 0;
 
 	    virtual bool StoreUploadData(const char* data, unsigned int len);
 	    virtual bool FlushUploadData();
-	    virtual bool DebugEnabled() const;
-
 	    void CancelUpload();
 		bool IsUploading() const { return uploadState != notUploading; }
+
+		virtual bool DebugEnabled() const;
 
 		virtual ~ProtocolInterpreter() { }					// to keep Eclipse happy
 
@@ -126,7 +126,6 @@ class Webserver
     char ReadGCode();
 
     void ConnectionLost(const ConnectionState *cs);
-    void SetReadingConnection();
     void ConnectionError();
     void WebDebug(bool wdb);
 
@@ -134,8 +133,16 @@ class Webserver
 
   protected:
 
-    void MessageStringToWebInterface(const char *s, bool error, bool finished = true);
-    void AppendReplyToWebInterface(const char* s, bool error, bool finished = true);
+	// File information about the file being printed
+	bool fileInfoDetected;
+	unsigned long length;
+	float height, filament[DRIVES - AXES], layerHeight;
+	unsigned int filamentCount;
+	char generatedBy[50], fileBeingPrinted[255];
+	float printStartTime;
+
+    void MessageStringToWebInterface(const char *s, bool error);
+    void AppendReplyToWebInterface(const char* s, bool error);
 
   private:
 
@@ -144,12 +151,12 @@ class Webserver
 		public:
 
 			HttpInterpreter(Platform *p, Webserver *ws);
+
 			bool CharFromClient(const char c);
 			void ResetState();
-
 			bool FlushUploadData();
-			virtual bool DebugEnabled() /*override*/ const { return webDebug; }
 			void ReceivedGcodeReply();
+			virtual bool DebugEnabled() /*override*/ const { return webDebug; }
 			void SetDebug(bool b) { webDebug = b; }
 
 		private:
@@ -295,15 +302,17 @@ class Webserver
     void StoreGcodeData(const char* data, size_t len);
 
     // File info methods
-    bool GetFileInfo(const char *fileName, unsigned long& length, float& height, float *filamentUsed, unsigned int& numFilaments, float& layerHeight, char* generatedBy, size_t generatedByLength);
+    bool GetFileInfo(const char *directory, const char *fileName, unsigned long& length, float& height, float *filamentUsed,
+        unsigned int& numFilaments, float& layerHeight, char* generatedBy, size_t generatedByLength);
     static bool FindHeight(const char* buf, size_t len, float& height);
+    static bool FindLayerHeight(const char* buf, size_t len, float& layerHeight);
     static unsigned int FindFilamentUsed(const char* buf, size_t len,  float *filamentUsed, unsigned int maxFilaments);
     static void CopyParameterText(const char* src, char *dst, size_t length);
 
     // Buffer to hold gcode that is ready for processing
     char gcodeBuffer[gcodeBufLength];
     unsigned int gcodeReadIndex, gcodeWriteIndex;	// head and tail indices into gcodeBuffer
-    char gcodeReply[STRING_LENGTH + 1];
+    char gcodeReply[2048];
 
     // Misc
     char password[SHORT_STRING_LENGTH + 1];

@@ -27,7 +27,7 @@ Separated out from Platform.h by dc42
 // Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
 // and therefore avoids additional memory use and fragmentation.
 
-const unsigned int tcpOutputBufferCount = MEMP_NUM_TCP_PCB;		// number of send buffers
+const unsigned int tcpOutputBufferCount = MEMP_NUM_TCP_PCB - 1;	// number of send buffers
 const unsigned int tcpOutputBufferSize = 2 * 1432;				// size of each send buffer
 
 #define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
@@ -78,7 +78,7 @@ public:
 	bool ReadBuffer(char *&buffer, unsigned int &len);
 	void SentPacketAcknowledged(unsigned int len);
 	void Write(char b);
-	void Write(const char* s);
+	bool Write(const char* s);
 	void Printf(const char *fmt, ...);
 	bool Send();
 
@@ -150,15 +150,19 @@ public:
 	void SaveDataConnection();
 	void SaveFTPConnection();
 	void SaveTelnetConnection();
+
+	bool CanMakeRequest();
+
 	bool MakeDataRequest();
 	bool MakeFTPRequest();
-	bool MakeTelnetRequest();
+	bool MakeTelnetRequest(unsigned int dataLength);
 
 	Network();
 	void Init();
 	void Spin();
 
-	bool InLwip() const { return inLwip; }
+	bool InLwip() const;
+	void ReadPacket();
 
 private:
 
@@ -168,12 +172,14 @@ private:
 	bool AllocateSendBuffer(SendBuffer *&buffer);
 	void FreeSendBuffer(SendBuffer *buffer);
 
+	bool MakeRequest(unsigned int requiredSpace, ConnectionState *cs);
+
 	RequestState * volatile freeTransactions;
 	RequestState * volatile readyTransactions;
 	RequestState * volatile writingTransactions;
 
 	enum { NetworkInactive, NetworkInitializing, NetworkActive } state;
-	uint8_t inLwip;
+	bool volatile readingData;
 
 	ConnectionState *dataCs;
 	ConnectionState *ftpCs;

@@ -1380,107 +1380,8 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 	return scratchString;
 }
 
-// List the flat files in a directory.  No sub-directories or recursion.
-
-const char* MassStorage::FileList(const char* directory, bool fromLine)
-{
-	char fileListBracket = FILE_LIST_BRACKET;
-	char fileListSeparator = FILE_LIST_SEPARATOR;
-
-	if (fromLine)
-	{
-		if (platform->Emulating() == marlin)
-		{
-			fileListBracket = 0;
-			fileListSeparator = '\n';
-		}
-	}
-
-	TCHAR loc[64];
-
-	// Remove the trailing '/' from the directory name
-	size_t len = strnlen(directory, ARRAY_SIZE(loc));
-	if (len == 0)
-	{
-		loc[0] = 0;
-	}
-	else
-	{
-		strncpy(loc, directory, len - 1);
-		loc[len - 1] = 0;
-	}
-
-//  if(reprap.Debug()) {
-//	  platform->Message(HOST_MESSAGE, "Opening: ");
-//	  platform->Message(HOST_MESSAGE, loc);
-//	  platform->Message(HOST_MESSAGE, "\n");
-//  }
-
-	DIR dir;
-	FRESULT res = f_opendir(&dir, loc);
-	if (res == FR_OK)
-	{
-
-//	  if(reprap.Debug()) {
-//		  platform->Message(HOST_MESSAGE, "Directory open\n");
-//	  }
-
-		size_t p = 0;
-		unsigned int foundFiles = 0;
-
-		f_readdir(&dir, 0);
-
-		FILINFO entry;
-		TCHAR loclfname[255];		// this buffer is used to hold the directory name, and later to hold the long filename
-		entry.lfname = loclfname;
-		entry.lfsize = ARRAY_SIZE(loclfname);
-
-		// When we reach, the end of the directory, the function we are about to call suppresses the "end of directory" error code and goes on returning FR_OK.
-		// So we need to check the sector number before the call. What idiot wrote that function???
-		while (dir.sect != 0 && f_readdir(&dir, &entry) == FR_OK)
-		{
-			const TCHAR *fp = (loclfname[0] == 0) ? entry.fname : loclfname;
-			if (*fp != 0)
-			{
-				size_t lastFileStart = p;
-				if (fileListBracket)
-				{
-					fileList[p++] = fileListBracket;
-				}
-				while (*fp != 0 && p <= ARRAY_SIZE(fileList) - 4)	// leave space for this character, bracket, separator, bracket
-				{
-					fileList[p++] = *fp++;
-				}
-				if (*fp != 0)
-				{
-					// Not enough space to store this filename
-					p = lastFileStart;
-					break;
-				}
-				foundFiles++;
-				if (fileListBracket)
-				{
-					fileList[p++] = fileListBracket;
-				}
-				fileList[p++] = fileListSeparator;
-			}
-		}
-
-		if (foundFiles == 0)
-			return "NONE";
-
-		fileList[--p] = 0; // Get rid of the last separator
-		return fileList;
-	}
-
-	return "";
-}
-
-// Month names. The first entry is used for invalid month numbers.
-static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-
-// Get a UNIX-compatible file list for the specified directory
-const char *MassStorage::UnixFileList(const char* directory)
+// Open a directory to read a file list. Returns true if it contains any files, false otherwise.
+bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 {
 	TCHAR loc[64 + 1];
 
@@ -1501,45 +1402,81 @@ const char *MassStorage::UnixFileList(const char* directory)
 		loc[len] = 0;
 	}
 
-	DIR dir;
-	FRESULT res = f_opendir(&dir, loc);
+	FRESULT res = f_opendir(&findDir, loc);
 	if (res == FR_OK)
 	{
 		FILINFO entry;
-		char longFilename[255];
-
-		fileList[0] = 0;
-		entry.lfname = longFilename;
-		entry.lfsize = ARRAY_SIZE(longFilename);
+		entry.lfname = file_info.fileName;
+		entry.lfsize = ARRAY_SIZE(file_info.fileName);
 
 		for(;;)
 		{
-			res = f_readdir(&dir, &entry);
+			res = f_readdir(&findDir, &entry);
 			if (res != FR_OK || entry.fname[0] == 0) break;
 			if (StringEquals(entry.fname, ".") || StringEquals(entry.fname, "..")) continue;
 
-			const char *filename = (longFilename[0] == 0) ? entry.fname : longFilename;
+			file_info.isDirectory = (entry.fattrib & AM_DIR);
+			file_info.size = entry.fsize;
 			uint16_t day = entry.fdate & 0x1F;
 			if (day == 0)
 			{
 				// This can happen if a transfer hasn't been processed completely.
 				day = 1;
 			}
-			uint16_t month = (entry.fdate & 0x01E0) >> 5;
-			uint16_t year = (entry.fdate >> 9) + 1980;
-			const char *monthStr = (month <= 12) ? monthNames[month] : monthNames[0];
+			file_info.day = day;
+			file_info.month = (entry.fdate & 0x01E0) >> 5;
+			file_info.year = (entry.fdate >> 9) + 1980;
+			if (file_info.fileName[0] == 0)
+			{
+				strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
+			}
 
-			// Example for a typical UNIX-like file list:
-			// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
-
-			char dirChar = (entry.fattrib & AM_DIR) ? 'd' : '-';
-			sncatf(fileList, ARRAY_SIZE(fileList), "%crw-rw-rw- 1 ftp ftp %13d %s %02d %04d %s\r\n", dirChar, entry.fsize, monthStr, day, year, filename);
+			return true;
 		}
-
-		return fileList;
 	}
 
-	return "";
+	return false;
+}
+
+// Find the next file in a directory. Returns true if another file has been read.
+bool MassStorage::FindNext(FileInfo &file_info)
+{
+	FILINFO entry;
+	entry.lfname = file_info.fileName;
+	entry.lfsize = ARRAY_SIZE(file_info.fileName);
+
+	if (f_readdir(&findDir, &entry) != FR_OK || entry.fname[0] == 0)
+	{
+		//f_closedir(findDir);
+		return false;
+	}
+
+	file_info.isDirectory = (entry.fattrib & AM_DIR);
+	file_info.size = entry.fsize;
+	uint16_t day = entry.fdate & 0x1F;
+	if (day == 0)
+	{
+		// This can happen if a transfer hasn't been processed completely.
+		day = 1;
+	}
+	file_info.day = day;
+	file_info.month = (entry.fdate & 0x01E0) >> 5;
+	file_info.year = (entry.fdate >> 9) + 1980;
+	if (file_info.fileName[0] == 0)
+	{
+		strncpy(file_info.fileName, entry.fname, ARRAY_UPB(file_info.fileName));
+	}
+
+	return true;
+}
+
+// Month names. The first entry is used for invalid month numbers.
+static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+// Returns the name of the specified month or '???' if the specified value is invalid.
+const char* MassStorage::GetMonthName(const uint8_t month)
+{
+	return (month <= 12) ? monthNames[month] : monthNames[0];
 }
 
 // Delete a file or directory
