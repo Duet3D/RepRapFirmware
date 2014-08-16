@@ -1344,7 +1344,7 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 	{
 		if(ipString[sp] == ':')
 		{
-			mac[ipp] = strtol(&ipString[spp], NULL, 0);
+			mac[ipp] = strtol(&ipString[spp], NULL, 16);
 			ipp++;
 			if(ipp > 5)
 			{
