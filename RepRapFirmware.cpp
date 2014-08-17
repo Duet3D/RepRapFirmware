@@ -192,7 +192,7 @@ void RepRap::Init()
   coldExtrude = true;		// DC42 changed default to true for compatibility because for now we are aiming for copatibility with RRP 0.78
   active = true;			// must do this before we start the network, else the watchdog may time out
 
-  snprintf(scratchString, STRING_LENGTH, "%s Version %s dated %s\n", NAME, VERSION, DATE);
+  scratchString.printf("%s Version %s dated %s\n", NAME, VERSION, DATE);
   platform->Message(HOST_MESSAGE, scratchString);
 
   platform->Message(HOST_MESSAGE, ".\n\nExecuting ");
@@ -201,8 +201,8 @@ void RepRap::Init()
 
   // We inject an M98 into the serial input stream to run the start-up macro
 
-  snprintf(scratchString, STRING_LENGTH, "M98 P%s\n", platform->GetConfigFile());
-  platform->GetLine()->InjectString(scratchString);
+  scratchString.printf("M98 P%s\n", platform->GetConfigFile());
+  platform->GetLine()->InjectString(scratchString.Pointer());
 
   bool runningTheFile = false;
   bool initialisingInProgress = true;
@@ -228,7 +228,7 @@ void RepRap::Init()
   network->Init(); // Need to do this here, as the configuration GCodes may set IP address etc.
 
   platform->Message(HOST_MESSAGE, "\n");
-  snprintf(scratchString, STRING_LENGTH, "%s is up and running.\n", NAME);
+  scratchString.printf("%s is up and running.\n", NAME);
   platform->Message(HOST_MESSAGE, scratchString);
   fastLoop = FLT_MAX;
   slowLoop = 0.0;
@@ -295,7 +295,7 @@ void RepRap::Spin()
 
 void RepRap::Timing()
 {
-	snprintf(scratchString, STRING_LENGTH, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
+	scratchString.printf("Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
 	platform->AppendMessage(BOTH_MESSAGE, scratchString);
 	fastLoop = FLT_MAX;
 	slowLoop = 0.0;
@@ -394,7 +394,7 @@ void RepRap::SelectTool(int toolNumber)
 
 }
 
-void RepRap::PrintTool(int toolNumber, char* reply) const
+void RepRap::PrintTool(int toolNumber, StringRef& reply) const
 {
 	for(Tool *tool = toolList; tool != NULL; tool = tool->next)
 	{
@@ -404,7 +404,7 @@ void RepRap::PrintTool(int toolNumber, char* reply) const
 			return;
 		}
 	}
-	strcpy(reply, "Attempt to print details of non-existent tool.");
+	reply.copy("Attempt to print details of non-existent tool.");
 }
 
 void RepRap::StandbyTool(int toolNumber)
@@ -425,7 +425,7 @@ void RepRap::StandbyTool(int toolNumber)
 		tool = tool->Next();
 	}
 
-	snprintf(scratchString, STRING_LENGTH, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
+	scratchString.printf("Attempt to standby a non-existent tool: %d.\n", toolNumber);
 	platform->Message(HOST_MESSAGE, scratchString);
 }
 
@@ -456,7 +456,7 @@ void RepRap::SetToolVariables(int toolNumber, float* standbyTemperatures, float*
 		tool = tool->Next();
 	}
 
-	snprintf(scratchString, STRING_LENGTH, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
+	scratchString.printf("Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 	platform->Message(HOST_MESSAGE, scratchString);
 }
 
@@ -491,36 +491,76 @@ void RepRap::Tick()
 
 
 //*************************************************************************************************
+// StringRef class member implementations
+
+size_t StringRef::strlen() const
+{
+	return strnlen(p, len - 1);
+}
+
+int StringRef::printf(const char *fmt, ...)
+{
+	va_list vargs;
+	va_start(vargs, fmt);
+	int ret = vsnprintf(p, len, fmt, vargs);
+	va_end(vargs);
+	return ret;
+}
+
+int StringRef::vprintf(const char *fmt, va_list vargs)
+{
+	return vsnprintf(p, len, fmt, vargs);
+}
+
+int StringRef::catf(const char *fmt, ...)
+{
+	size_t n = strlen();
+	if (n + 1 < len)		// if room for at least 1 more character and a null
+	{
+		va_list vargs;
+		va_start(vargs, fmt);
+		int ret = vsnprintf(p + n, len - n, fmt, vargs);
+		va_end(vargs);
+		return ret + n;
+	}
+	return 0;
+}
+
+// This is quicker than printf for printing constant strings
+size_t StringRef::copy(const char* src)
+{
+	size_t length = strnlen(src, len - 1);
+	memcpy(p, src, length);
+	p[length] = 0;
+	return length;
+}
+
+// This is quicker than catf for printing constant strings
+size_t StringRef::cat(const char* src)
+{
+	size_t length = strlen();
+	size_t toCopy = strnlen(src, len - length - 1);
+	memcpy(p + length, src, toCopy);
+	length += toCopy;
+	p[length] = 0;
+	return length;
+}
+
+//*************************************************************************************************
 
 // Utilities and storage not part of any class
 
-char scratchString[STRING_LENGTH];
+static char scratchStringBuffer[STRING_LENGTH];
+StringRef scratchString(scratchStringBuffer, ARRAY_SIZE(scratchStringBuffer));
 
 // For debug use
 void debugPrintf(const char* fmt, ...)
 {
-	va_list p;
-	va_start(p, fmt);
-	vsnprintf(scratchString, ARRAY_SIZE(scratchString), fmt, p);
-	va_end(p);
-	scratchString[ARRAY_UPB(scratchString)] = 0;
+	va_list vargs;
+	va_start(vargs, fmt);
+	scratchString.vprintf(fmt, vargs);
+	va_end(vargs);
 	reprap.GetPlatform()->Message(DEBUG_MESSAGE, scratchString);
-}
-
-// This behaves like snprintf but appends to an existing string
-// The second parameter is the length of the entire destination buffer, not the length remaining
-int sncatf(char *dst, size_t len, const char* fmt, ...)
-{
-	size_t n = strnlen(dst, len);
-	if (n + 1 < len)		// if room for at least 1 more character and a null
-	{
-		va_list p;
-		va_start(p, fmt);
-		int ret = vsnprintf(dst + n, len - n, fmt, p);
-		va_end(p);
-		return ret + n;
-	}
-	return 0;
 }
 
 // String testing

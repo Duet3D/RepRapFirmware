@@ -44,6 +44,9 @@
 #include "../SD_HSMCI.h"
 #include "hsmci.h"
 
+extern debugPrintf(const char *fmt, ...);
+#define hsmci_debug(_fmt, ...)	debugPrintf(_fmt, __VA_ARGS__)
+
 /**
  * \ingroup sam_drivers_hsmci
  * \defgroup sam_drivers_hsmci_internal High Speed MultiMedia Card Interface
@@ -84,7 +87,7 @@
 
 
 #if (SAM3S || SAM4S)
-  // PDC is used for transferts
+  // PDC is used for transfers
 #elif (SAM3U || SAM3XA_SERIES)
   // DMA is used for transferts
 #  include "dmac.h"
@@ -173,7 +176,7 @@ static bool hsmci_wait_busy(void)
 	do {
 		sr = HSMCI->HSMCI_SR;
 		if (busy_wait-- == 0) {
-//			printf("%s: timeout\n\r", __func__);
+			hsmci_debug("%s: timeout\n\r", __func__);
 			hsmci_reset();
 			return false;
 		}
@@ -184,7 +187,7 @@ static bool hsmci_wait_busy(void)
 
 /** \brief Send a command
  *
- * \param cmdr       CMDR resgister bit to use for this command
+ * \param cmdr       CMDR register bit to use for this command
  * \param cmd        Command definition
  * \param arg        Argument of the command
  *
@@ -222,7 +225,7 @@ static bool hsmci_send_cmd_execute(uint32_t cmdr, sdmmc_cmd_def_t cmd,
 			if (sr & (HSMCI_SR_CSTOE | HSMCI_SR_RTOE
 				   | HSMCI_SR_RCRCE
 					| HSMCI_SR_RDIRE)) {
-//				printf("%s: CMD 0x%08x sr 0x%08x CMD 3 error\n\r",__func__, cmd, sr);
+				hsmci_debug("%s: CMD 0x%08x sr 0x%08x CMD 3 error\n\r",__func__, cmd, sr);
 				hsmci_reset();
 				return false;
 		    }				
@@ -230,7 +233,7 @@ static bool hsmci_send_cmd_execute(uint32_t cmdr, sdmmc_cmd_def_t cmd,
 			if (sr & (HSMCI_SR_CSTOE | HSMCI_SR_RTOE
 					| HSMCI_SR_RENDE | HSMCI_SR_RCRCE
 					| HSMCI_SR_RDIRE | HSMCI_SR_RINDE)) {
-//				printf("%s: CMD 0x%08x sr 0x%08x RESP_CRC error\n\r",__func__, cmd, sr);
+				hsmci_debug("%s: CMD 0x%08x sr 0x%08x RESP_CRC error\n\r",__func__, cmd, sr);
 				hsmci_reset();
 				return false;
 			}
@@ -238,7 +241,7 @@ static bool hsmci_send_cmd_execute(uint32_t cmdr, sdmmc_cmd_def_t cmd,
 			if (sr & (HSMCI_SR_CSTOE | HSMCI_SR_RTOE
 					| HSMCI_SR_RENDE
 					| HSMCI_SR_RDIRE | HSMCI_SR_RINDE)) {
-//				printf("%s: CMD 0x%08x sr 0x%08x error\n\r",__func__, cmd, sr);
+				hsmci_debug("%s: CMD 0x%08x sr 0x%08x error\n\r",__func__, cmd, sr);
 				hsmci_reset();
 				return false;
 			}
@@ -485,7 +488,7 @@ bool hsmci_read_word(uint32_t* value)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-//			printf("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
 			hsmci_reset();
 			return false;
 		}
@@ -504,7 +507,7 @@ bool hsmci_read_word(uint32_t* value)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-//			printf("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
 			hsmci_reset();
 			return false;
 		}
@@ -523,7 +526,7 @@ bool hsmci_write_word(uint32_t value)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-//			printf("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
 			hsmci_reset();
 			return false;
 		}
@@ -542,7 +545,7 @@ bool hsmci_write_word(uint32_t value)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-//			printf("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
 			hsmci_reset();
 			return false;
 		}
@@ -617,7 +620,7 @@ bool hsmci_wait_end_of_read_blocks(void)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-//			printf("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
 			hsmci_reset();
 			// Disable DMA
 			dmac_channel_disable(DMAC, CONF_HSMCI_DMA_CHANNEL);
@@ -699,7 +702,7 @@ bool hsmci_wait_end_of_write_blocks(void)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			//printf("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
 			hsmci_reset();
 			// Disable DMA
 			dmac_channel_disable(DMAC, CONF_HSMCI_DMA_CHANNEL);
@@ -749,7 +752,7 @@ bool hsmci_wait_end_of_read_blocks(void)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			//printf("%s: PDC sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: PDC sr 0x%08x error\n\r",__func__, sr);
 			HSMCI->HSMCI_PTCR = HSMCI_PTCR_RXTDIS | HSMCI_PTCR_TXTDIS;
 			hsmci_reset();
 			return false;
@@ -766,7 +769,7 @@ bool hsmci_wait_end_of_read_blocks(void)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			//printf("%s: PDC sr 0x%08x last transfer error\n\r",
+			hsmci_debug("%s: PDC sr 0x%08x last transfer error\n\r",
 					__func__, sr);
 			hsmci_reset();
 			return false;
@@ -805,8 +808,7 @@ bool hsmci_wait_end_of_write_blocks(void)
 		if (sr &
 				(HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			//printf("%s: PDC sr 0x%08x error\n\r",
-					__func__, sr);
+			hsmci_debug("%s: PDC sr 0x%08x error\n\r", __func__, sr);
 			hsmci_reset();
 			HSMCI->HSMCI_PTCR = HSMCI_PTCR_RXTDIS | HSMCI_PTCR_TXTDIS;
 			return false;
@@ -823,7 +825,7 @@ bool hsmci_wait_end_of_write_blocks(void)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			//printf("%s: PDC sr 0x%08x last transfer error\n\r",__func__, sr);
+			hsmci_debug("%s: PDC sr 0x%08x last transfer error\n\r",__func__, sr);
 			hsmci_reset();
 			return false;
 		}

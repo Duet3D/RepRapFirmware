@@ -101,7 +101,8 @@ const float pasvPortTimeout = 10.0;	 					// seconds to wait for the FTP data po
 
 // Constructor and initialisation
 Webserver::Webserver(Platform* p) : platform(p), webserverActive(false), readingConnection(NULL),
-		fileInfoDetected(false), filamentCount(DRIVES - AXES), printStartTime(0.0)
+		fileInfoDetected(false), printStartTime(0.0),
+		gcodeReply(gcodeReplyBuffer, ARRAY_SIZE(gcodeReplyBuffer))
 {
 	httpInterpreter = new HttpInterpreter(p, this);
 	ftpInterpreter = new FtpInterpreter(p, this);
@@ -319,7 +320,7 @@ void Webserver::ProcessGcode(const char* gc)
 	}
 	else if (StringStartsWith(gc, "M23 "))	// select SD card file to print next
 	{
-		fileInfoDetected = GetFileInfo(platform->GetGCodeDir(), &gc[4], length, height, filament, filamentCount, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
+		fileInfoDetected = GetFileInfo(platform->GetGCodeDir(), &gc[4], currentFileInfo);
 		printStartTime = platform->Time();
 		strncpy(fileBeingPrinted, &gc[4], ARRAY_SIZE(fileBeingPrinted));
 		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
@@ -354,7 +355,7 @@ void Webserver::ProcessGcode(const char* gc)
 			gcodeReply[i] = 0;
 
 			httpInterpreter->ReceivedGcodeReply();
-			telnetInterpreter->HandleGcodeReply(gcodeReply);
+			telnetInterpreter->HandleGcodeReply(gcodeReply.Pointer());
 		}
 	}
 	else if (StringStartsWith(gc, "M25") && !isDigit(gc[3]))	// pause SD card print
@@ -511,17 +512,17 @@ void Webserver::MessageStringToWebInterface(const char *s, bool error)
 
 	if (strlen(s) == 0 && !error)
 	{
-		strcpy(gcodeReply, "ok");
+		gcodeReply.copy("ok");
 	}
 	else
 	{
 		if (error)
 		{
-			snprintf(gcodeReply, ARRAY_SIZE(gcodeReply), "Error: %s", s);
+			gcodeReply.printf("Error: %s", s);
 		}
 		else
 		{
-			snprintf(gcodeReply, ARRAY_SIZE(gcodeReply), "%s", s);
+			gcodeReply.printf("%s", s);
 		}
 	}
 
@@ -536,7 +537,7 @@ void Webserver::AppendReplyToWebInterface(const char *s, bool error)
 		return;
 	}
 
-	sncatf(gcodeReply, ARRAY_SIZE(gcodeReply), "%s", s);
+	gcodeReply.cat(s);
 	httpInterpreter->ReceivedGcodeReply();
 	telnetInterpreter->HandleGcodeReply(s);
 }
@@ -762,14 +763,36 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	RequestState *req = net->GetRequest();
 	bool keepOpen = false;
 	bool mayKeepOpen;
+	bool found;
+	char jsonResponseBuffer[jsonReplyLength];
+	StringRef jsonResponse(jsonResponseBuffer, ARRAY_SIZE(jsonResponseBuffer));
 	if (numQualKeys == 0)
 	{
-		mayKeepOpen = GetJsonResponse(command, "", "", 0);
+		found = GetJsonResponse(command, jsonResponse, "", "", 0, mayKeepOpen);
 	}
 	else
 	{
-		mayKeepOpen = GetJsonResponse(command, qualifiers[0].key, qualifiers[0].value, qualifiers[1].key - qualifiers[0].value - 1);
+		found = GetJsonResponse(command, jsonResponse, qualifiers[0].key, qualifiers[0].value, qualifiers[1].key - qualifiers[0].value - 1, mayKeepOpen);
 	}
+
+	if (found)
+	{
+		jsonResponseBuffer[ARRAY_UPB(jsonResponseBuffer)] = 0;
+		if (webDebug)
+		{
+			platform->Message(HOST_MESSAGE, "JSON response: ");
+			platform->Message(HOST_MESSAGE, jsonResponseBuffer);
+			platform->Message(HOST_MESSAGE, " queued\n");
+		}
+	}
+	else
+	{
+		jsonResponseBuffer[0] = 0;
+		platform->Message(HOST_MESSAGE, "KnockOut request: ");
+		platform->Message(HOST_MESSAGE, command);
+		platform->Message(HOST_MESSAGE, " not recognised\n");
+	}
+
 	if (mayKeepOpen)
 	{
 		// Check that the browser wants to persist the connection too
@@ -785,9 +808,9 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	}
 	req->Write("HTTP/1.1 200 OK\n");
 	req->Write("Content-Type: application/json\n");
-	req->Printf("Content-Length: %u\n", strlen(jsonResponse));
+	req->Printf("Content-Length: %u\n", jsonResponse.strlen());
 	req->Printf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
-	req->Write(jsonResponse);
+	req->Write(jsonResponse.Pointer());
 	net->SendAndClose(NULL, keepOpen);
 }
 
@@ -795,58 +818,37 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 
 // Input from the client
 
-void Webserver::HttpInterpreter::JsonReport(bool ok, const char* request)
-{
-	if (ok)
-	{
-		jsonResponse[ARRAY_UPB(jsonResponse)] = 0;
-		if (webDebug)
-		{
-			platform->Message(HOST_MESSAGE, "JSON response: ");
-			platform->Message(HOST_MESSAGE, jsonResponse);
-			platform->Message(HOST_MESSAGE, " queued\n");
-		}
-	}
-	else
-	{
-		jsonResponse[0] = 0;
-		platform->Message(HOST_MESSAGE, "KnockOut request: ");
-		platform->Message(HOST_MESSAGE, request);
-		platform->Message(HOST_MESSAGE, " not recognised\n");
-	}
-}
-
 // Get the Json response for this command.
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matter when uploading files.
-bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char* key, const char* value, size_t valueLength)
+bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef& response, const char* key, const char* value, size_t valueLength, bool& keepOpen)
 {
 	bool found = true;	// assume success
-	bool keepOpen = false;	// assume we don't want to persist the connection
+	keepOpen = false;	// assume we don't want to persist the connection
 
 	if (StringEquals(request, "status"))	// new style status request
 	{
-		GetStatusResponse(1);
+		GetStatusResponse(response, 1);
 	}
 	else if (StringEquals(request, "poll"))		// old style status request
 	{
-		GetStatusResponse(0);
+		GetStatusResponse(response, 0);
 	}
 	else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
 	{
 		webserver->LoadGcodeBuffer(value);
-		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"buff\":%u}", webserver->GetGcodeBufferSpace());
+		response.printf("{\"buff\":%u}", webserver->GetGcodeBufferSpace());
 	}
 	else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
 	{
 		FileStore *file = platform->GetFileStore("0:/", value, true);
 		StartUpload(file);
-		GetJsonUploadResponse();
+		GetJsonUploadResponse(response);
 	}
 	else if (StringEquals(request, "upload_data") && StringEquals(key, "data"))
 	{
 		StoreUploadData(value, valueLength);
 
-		GetJsonUploadResponse();
+		GetJsonUploadResponse(response);
 		keepOpen = true;
 	}
 	else if (StringEquals(request, "upload_end") && StringEquals(key, "size"))
@@ -854,17 +856,17 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 		long file_length = strtoul(value, NULL, 10);
 		FinishUpload(file_length);
 
-		GetJsonUploadResponse();
+		GetJsonUploadResponse(response);
 	}
 	else if (StringEquals(request, "upload_cancel"))
 	{
 		CancelUpload();
-		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"err\":%d}", 0);
+		response.printf("{\"err\":%d}", 0);
 	}
 	else if (StringEquals(request, "delete") && StringEquals(key, "name"))
 	{
 		bool ok = platform->GetMassStorage()->Delete("0:/", value);
-		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"err\":%d}", (ok) ? 0 : 1);
+		response.printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEquals(request, "files"))
 	{
@@ -873,19 +875,20 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 		FileInfo file_info;
 		if (platform->GetMassStorage()->FindFirst(dir, file_info))
 		{
-			strcpy(jsonResponse, "{\"files\":[");
+			response.copy("{\"files\":[");
 
 			do {
 				// build the file list here, but keep 2 characters free to terminate the JSON message
-				sncatf(jsonResponse, ARRAY_SIZE(jsonResponse) - 2, "%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
+				response.catf("%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
 			} while (platform->GetMassStorage()->FindNext(file_info));
 
-			jsonResponse[strlen(jsonResponse) -1] = 0;
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]}");
+			response[response.strlen() - 1] = 0;	// remove last separator
+			response[response.Length() - 3] = 0;	// ensure room for 2 more characters and a null
+			response.cat("]}");
 		}
 		else
 		{
-			strcpy(jsonResponse, "{\"files\":[NONE]}");
+			response.copy("{\"files\":[NONE]}");
 		}
 	}
 	else if (StringEquals(request, "fileinfo"))
@@ -893,68 +896,62 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 		// Poll file info for a specific file
 		if (StringEquals(key, "name"))
 		{
-			unsigned long length;
-			float height, filament[DRIVES - AXES], layerHeight;
-			unsigned int numFilaments = DRIVES - AXES;
-			char generatedBy[50];
-
-			bool found = webserver->GetFileInfo("0:/", value, length, height, filament, numFilaments, layerHeight, generatedBy, ARRAY_SIZE(generatedBy));
+			GcodeFileInfo info;
+			bool found = webserver->GetFileInfo("0:/", value, info);
 			if (found)
 			{
-				snprintf(jsonResponse, ARRAY_SIZE(jsonResponse),
-							"{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
-								length, height, layerHeight);
+				response.printf("{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
+								info.fileSize, info.objectHeight, info.layerHeight);
 				char ch = '[';
-				if (numFilaments == 0)
+				if (info.numFilaments == 0)
 				{
-					sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c", ch);
+					response.catf("%c", ch);
 				}
 				else
 				{
-					for (unsigned int i = 0; i < numFilaments; ++i)
+					for (unsigned int i = 0; i < info.numFilaments; ++i)
 					{
-						sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, filament[i]);
+						response.catf("%c%.1f", ch, info.filamentNeeded[i]);
 						ch = ',';
 					}
 				}
-				sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"generatedBy\":\"%s\"}", generatedBy);
+				response.catf("],\"generatedBy\":\"%s\"}", info.generatedBy);
 			}
 			else
 			{
-				snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"err\":1}");
+				response.printf("{\"err\":1}");
 			}
 		}
 		else if (reprap.GetGCodes()->PrintingAFile() && webserver->fileInfoDetected)
 		{
 			// Poll file info about a file currently being printed
-			snprintf(jsonResponse, ARRAY_SIZE(jsonResponse),
-						"{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
-							webserver->length, webserver->height, webserver->layerHeight);
+			response.printf("{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
+							webserver->currentFileInfo.fileSize, webserver->currentFileInfo.objectHeight, webserver->currentFileInfo.layerHeight);
 			char ch = '[';
-			if (webserver->filamentCount == 0)
+			if (webserver->currentFileInfo.numFilaments == 0)
 			{
-				sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c", ch);
+				response.catf("%c", ch);
 			}
 			else
 			{
-				for (unsigned int i = 0; i < webserver->filamentCount; ++i)
+				for (unsigned int i = 0; i < webserver->currentFileInfo.numFilaments; ++i)
 				{
-					sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, webserver->filament[i]);
+					response.catf("%c%.1f", ch, webserver->currentFileInfo.filamentNeeded[i]);
 					ch = ',';
 				}
 			}
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"generatedBy\":\"%s\",\"printDuration\":%d,\"fileName\":\"%s\"}",
-					webserver->generatedBy, (int)((platform->Time() - webserver->printStartTime) * 1000.0), webserver->fileBeingPrinted);
+			response.catf("],\"generatedBy\":\"%s\",\"printDuration\":%d,\"fileName\":\"%s\"}",
+					webserver->currentFileInfo.generatedBy, (int)((platform->Time() - webserver->printStartTime) * 1000.0), webserver->fileBeingPrinted);
 		}
 		else
 		{
-			snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"err\":1}");
+			response.copy("{\"err\":1}");
 		}
 	}
 	else if (StringEquals(request, "name"))
 	{
-		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"myName\":\"");
-		size_t j = strlen(jsonResponse);
+		response.printf("{\"myName\":\"");
+		size_t j = response.strlen();
 		const char *myName = webserver->GetName();
 		for (size_t i = 0; i < SHORT_STRING_LENGTH; ++i)
 		{
@@ -964,50 +961,49 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, const char
 			if (c == '"' || c == '\\')
 			{
 				// Need to escape the quote-mark or backslash for JSON
-				jsonResponse[j++] = '\\';
+				response[j++] = '\\';
 			}
-			jsonResponse[j++] = c;
+			response[j++] = c;
 		}
-		jsonResponse[j++] = '"';
-		jsonResponse[j++] = '}';
-		jsonResponse[j] = 0;
+		response[j++] = '"';
+		response[j++] = '}';
+		response[j] = 0;
 	}
 	else if (StringEquals(request, "password") && StringEquals(key, "password"))
 	{
 		gotPassword = webserver->CheckPassword(value);
-		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
+		response.printf("{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
 	}
 	else if (StringEquals(request, "axes"))
 	{
-		strcpy(jsonResponse, "{\"axes\":");
+		response.copy("{\"axes\":");
 		char ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse) - 2, "%c%.1f", ch, platform->AxisTotalLength(drive));
+			response.catf("%c%.1f", ch, platform->AxisTotalLength(drive));
 			ch = ',';
 		}
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]}");
+		response.cat("]}");
 	}
 	else if (StringEquals(request, "connect"))
 	{
 		CancelUpload();
-		GetStatusResponse(1);
+		GetStatusResponse(response, 1);
 	}
 	else
 	{
 		found = false;
 	}
 
-	JsonReport(found, request);
-	return keepOpen;
+	return found;
 }
 
-void Webserver::HttpInterpreter::GetJsonUploadResponse()
+void Webserver::HttpInterpreter::GetJsonUploadResponse(StringRef& response)
 {
-	snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"ubuff\":%u,\"err\":%d}", webUploadBufferSize, (uploadState == uploadOK) ? 0 : 1);
+	response.printf("{\"ubuff\":%u,\"err\":%d}", webUploadBufferSize, (uploadState == uploadOK) ? 0 : 1);
 }
 
-void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
+void Webserver::HttpInterpreter::GetStatusResponse(StringRef& response, uint8_t type)
 {
 	GCodes *gc = reprap.GetGCodes();
 	if (type == 1)
@@ -1015,78 +1011,78 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		// New-style status request
 		// Send the printing/idle status
 		char ch = (reprap.IsStopped()) ? 'S' : (gc->PrintingAFile()) ? 'P' : 'I';
-		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"status\":\"%c\",\"heaters\":", ch);
+		response.printf("{\"status\":\"%c\",\"heaters\":", ch);
 
 		// Send the heater actual temperatures
 		const Heat *heat = reprap.GetHeat();
 		ch = '[';
 		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, heat->GetTemperature(heater));
+			response.catf("%c%.1f", ch, heat->GetTemperature(heater));
 			ch = ',';
 		}
 
 		// Send the heater active temperatures
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"active\":");
+		response.catf("],\"active\":");
 		ch = '[';
 		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, heat->GetActiveTemperature(heater));
+			response.catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
 			ch = ',';
 		}
 
 		// Send the heater standby temperatures
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"standby\":");
+		response.catf("],\"standby\":");
 		ch = '[';
 		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, heat->GetStandbyTemperature(heater));
+			response.catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
 			ch = ',';
 		}
 
 		// Send the heater statuses (0=off, 1=standby, 2=active)
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"hstat\":");
+		response.cat("],\"hstat\":");
 		ch = '[';
 		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%d", ch, (int)heat->GetStatus(heater));
+			response.catf("%c%d", ch, (int)heat->GetStatus(heater));
 			ch = ',';
 		}
 
 		// Send XYZ positions
 		float liveCoordinates[DRIVES + 1];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"pos\":");		// announce the XYZ position
+		response.catf("],\"pos\":");		// announce the XYZ position
 		ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.2f", ch, liveCoordinates[drive]);
+			response.catf("%c%.2f", ch, liveCoordinates[drive]);
 			ch = ',';
 		}
 
 		// Send extruder total extrusion since power up, last G92 or last M23
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "],\"extr\":");		// announce the extruder positions
+		response.catf("],\"extr\":");		// announce the extruder positions
 		ch = '[';
 		for (int8_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.1f", ch, gc->GetExtruderPosition(drive));
+			response.catf("%c%.1f", ch, gc->GetExtruderPosition(drive));
 			ch = ',';
 		}
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]");
+		response.cat("]");
 
 		// Send the speed and extruder override factors
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor() * 100.0);
+		response.catf(",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor() * 100.0);
 		const float *extrusionFactors = gc->GetExtrusionFactors();
 		for (unsigned int i = 0; i < reprap.GetExtrudersInUse(); ++i)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
+			response.catf("%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
 		}
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "]");
+		response.cat("]");
 
 		// Send the current tool number
 		Tool* currentTool = reprap.GetCurrentTool();
 		int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"tool\":%d", toolNumber);
+		response.catf(",\"tool\":%d", toolNumber);
 	}
 	else
 	{
@@ -1095,10 +1091,10 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
 		// RRP reversed the order at version 0.65 to send the positions before the heaters, but we haven't yet done that.
 		char c = (gc->PrintingAFile()) ? 'P' : 'I';
-		snprintf(jsonResponse, ARRAY_SIZE(jsonResponse), "{\"poll\":[\"%c\",", c); // Printing
+		response.printf("{\"poll\":[\"%c\",", c); // Printing
 		for (int8_t heater = 0; heater < HEATERS; heater++)
 		{
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
+			response.catf("\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
 		}
 		// Send XYZ and extruder positions
 		float liveCoordinates[DRIVES + 1];
@@ -1106,7 +1102,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		for (int8_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
 		{
 			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
-			sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "\"%.2f\"%c", liveCoordinates[drive], ch);
+			response.catf("\"%.2f\"%c", liveCoordinates[drive], ch);
 		}
 	}
 
@@ -1116,45 +1112,45 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 	switch (platform->GetZProbeSecondaryValues(v1, v2))
 	{
 	case 1:
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"probe\":\"%d (%d)\"", v0, v1);
+		response.catf(",\"probe\":\"%d (%d)\"", v0, v1);
 		break;
 	case 2:
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
+		response.catf(",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
 		break;
 	default:
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"probe\":\"%d\"", v0);
+		response.catf(",\"probe\":\"%d\"", v0);
 		break;
 	}
 
 	// Send the amount of buffer space available for gcodes
-	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"buff\":%u", webserver->GetGcodeBufferSpace());
+	response.catf(",\"buff\":%u", webserver->GetGcodeBufferSpace());
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	if (type != 0)
 	{
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"homed\":[%d,%d,%d]",
+		response.catf(",\"homed\":[%d,%d,%d]",
 				(gc->GetAxisIsHomed(0)) ? 1 : 0,
 				(gc->GetAxisIsHomed(1)) ? 1 : 0,
 				(gc->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 	else
 	{
-		sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"hx\":%d,\"hy\":%d,\"hz\":%d",
+		response.catf(",\"hx\":%d,\"hy\":%d,\"hz\":%d",
 				(gc->GetAxisIsHomed(0)) ? 1 : 0,
 				(gc->GetAxisIsHomed(1)) ? 1 : 0,
 				(gc->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 
 	// Retrieve the gcode buffer from Webserver
-	const char *p = webserver->gcodeReply;
+	const char *p = webserver->gcodeReply.Pointer();
 
 	// Send the response sequence number
-	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"seq\":%u", (unsigned int) seq);
+	response.catf(",\"seq\":%u", (unsigned int) seq);
 
 	// Send the response to the last command. Do this last because it is long and may need to be truncated.
-	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), ",\"resp\":\"");
-	size_t jp = strnlen(jsonResponse, ARRAY_SIZE(jsonResponse));
-	while (*p != 0 && jp < ARRAY_SIZE(jsonResponse) - 3)	// leave room for the final '"}\0'
+	response.cat(",\"resp\":\"");
+	size_t jp = response.strlen();
+	while (*p != 0 && jp < response.Length() - 3)	// leave room for the final '"}\0'
 	{
 		char c = *p++;
 		char esc;
@@ -1181,20 +1177,20 @@ void Webserver::HttpInterpreter::GetStatusResponse(uint8_t type)
 		}
 		if (esc)
 		{
-			if (jp == ARRAY_SIZE(jsonResponse) - 4)
+			if (jp == response.Length() - 4)
 			{
 				break;
 			}
-			jsonResponse[jp++] = '\\';
-			jsonResponse[jp++] = esc;
+			response[jp++] = '\\';
+			response[jp++] = esc;
 		}
 		else
 		{
-			jsonResponse[jp++] = c;
+			response[jp++] = c;
 		}
 	}
-	jsonResponse[jp] = 0;
-	sncatf(jsonResponse, ARRAY_SIZE(jsonResponse), "\"}");
+	response[jp] = 0;
+	response.cat("\"}");
 }
 
 void Webserver::HttpInterpreter::ResetState()
@@ -1713,7 +1709,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 
 			if (DebugEnabled())
 			{
-				snprintf(scratchString, STRING_LENGTH, "FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
+				scratchString.printf("FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
 				platform->Message(DEBUG_MESSAGE, scratchString);
 			}
 
@@ -2271,9 +2267,9 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 				strncpy(combinedPath, currentDir, maxFilenameLength);
 				if (strlen(currentDir) > 1)
 				{
-					sncatf(combinedPath, maxFilenameLength, "/");
+					strncat(combinedPath, "/", maxFilenameLength - strlen(combinedPath) - 1);
 				}
-				sncatf(combinedPath, maxFilenameLength, "%s", newDirectory);
+				strncat(combinedPath, newDirectory, maxFilenameLength - strlen(combinedPath) - 1);
 			}
 		}
 
@@ -2454,20 +2450,19 @@ void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
 //********************************************************************************************
 
 // Get information for a file on the SD card
-bool Webserver::GetFileInfo(const char *directory, const char *fileName, unsigned long& length, float& height,
-		float *filamentUsed, unsigned int& numFilaments, float& layerHeight, char* generatedBy, size_t generatedByLength)
+bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info)
 {
-	FileStore *f = platform->GetFileStore(directory, fileName, false);
+	FileStore *f = reprap.GetPlatform()->GetFileStore(directory, fileName, false);
 	if (f != NULL)
 	{
 		// Try to find the object height by looking for the last G1 Zxxx command in the file
-		length = f->Length();
-		height = 0.0;
-		layerHeight = 0.0;
-		numFilaments = DRIVES - AXES;
-		generatedBy[0] = 0;
+		info.fileSize = f->Length();
+		info.objectHeight = 0.0;
+		info.layerHeight = 0.0;
+		info.numFilaments = DRIVES - AXES;
+		info.generatedBy[0] = 0;
 
-		if (length != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
+		if (info.fileSize != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
 		{
 			const size_t readSize = 512;					// read 512 bytes at a time (1K doesn't seem to work when we read from the end)
 			const size_t overlap = 100;
@@ -2476,37 +2471,37 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, unsigne
 
 			// Get slic3r settings by reading from the start of the file. We only read the first 1K or so, everything we are looking for should be there.
 			{
-				size_t sizeToRead = (size_t)min<unsigned long>(length, readSize + overlap);
+				size_t sizeToRead = (size_t)min<unsigned long>(info.fileSize, readSize + overlap);
 				int nbytes = f->Read(buf, sizeToRead);
 				if (nbytes == (int)sizeToRead)
 				{
 					buf[sizeToRead] = 0;
 
 					// Look for layer height
-					foundLayerHeight = FindLayerHeight(buf, sizeToRead, layerHeight);
+					foundLayerHeight = FindLayerHeight(buf, sizeToRead, info.layerHeight);
 
 					const char* generatedByString = "; generated by ";
 					const char* pos = strstr(buf, generatedByString);
+					size_t generatedByLength = ARRAY_SIZE(info.generatedBy);
 					if (pos != NULL)
 					{
 						pos += strlen(generatedByString);
-						while (generatedByLength > 1 && *pos >= ' ')
+						size_t i = 0;
+						while (i < ARRAY_SIZE(info.generatedBy) - 1 && *pos >= ' ')
 						{
 							char c = *pos++;
 							if (c == '"' || c == '\\')
 							{
 								// Need to escape the quote-mark for JSON
-								if (generatedByLength < 3)
+								if ( i > ARRAY_SIZE(info.generatedBy) - 3)
 								{
 									break;
 								}
-								*generatedBy++ = '\\';
-								--generatedByLength;
+								info.generatedBy[i++] = '\\';
 							}
-							*generatedBy++ = c;
-							--generatedByLength;
+							info.generatedBy[i++] = c;
 						}
-						*generatedBy = 0;
+						info.generatedBy[i] = 0;
 					}
 
 					// Add code to look for other values here...
@@ -2516,19 +2511,19 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, unsigne
 			// Now get the object height and filament used by reading the end of the file
 			{
 				size_t sizeToRead;
-				if (length <= readSize + overlap)
+				if (info.fileSize <= readSize + overlap)
 				{
-					sizeToRead = length;						// read the whole file in one go
+					sizeToRead = info.fileSize;						// read the whole file in one go
 				}
 				else
 				{
-					sizeToRead = length % readSize;
+					sizeToRead = info.fileSize % readSize;
 					if (sizeToRead <= overlap)
 					{
 						sizeToRead += readSize;
 					}
 				}
-				unsigned long seekPos = length - sizeToRead;	// read on a 512b boundary
+				unsigned long seekPos = info.fileSize - sizeToRead;	// read on a 512b boundary
 				size_t sizeToScan = sizeToRead;
 				unsigned int filamentsFound = 0;
 				for (;;)
@@ -2549,25 +2544,25 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, unsigne
 					unsigned int nFilaments = FindFilamentUsed(buf, sizeToScan, filaments, DRIVES - AXES);
 					if (nFilaments != 0 && nFilaments >= filamentsFound)
 					{
-						filamentsFound = min<unsigned int>(nFilaments, numFilaments);
+						filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
 						for (unsigned int i = 0; i < filamentsFound; ++i)
 						{
-							filamentUsed[i] = filaments[i];
+							info.filamentNeeded[i] = filaments[i];
 						}
 					}
 
 					// Search for layer height
 					if (!foundLayerHeight)
 					{
-						foundLayerHeight = FindLayerHeight(buf, sizeToScan, layerHeight);
+						foundLayerHeight = FindLayerHeight(buf, sizeToScan, info.layerHeight);
 					}
 
 					// Search for object height
-					if (FindHeight(buf, sizeToScan, height))
+					if (FindHeight(buf, sizeToScan, info.objectHeight))
 					{
 						break;		// quit if found height
 					}
-					if (seekPos == 0 || length - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
+					if (seekPos == 0 || info.fileSize - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
 					{
 						break;		// quit if reached start of file or already scanned the last 32K of the file
 					}
@@ -2576,7 +2571,7 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, unsigne
 					sizeToScan = readSize + overlap;
 					memcpy(buf + sizeToRead, buf, overlap);
 				}
-				numFilaments = filamentsFound;
+				info.numFilaments = filamentsFound;
 			}
 		}
 		f->Close();

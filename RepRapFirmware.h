@@ -47,8 +47,6 @@ extern RepRap reprap;
 
 extern "C" void debugPrintf(const char* fmt, ...);
 
-int sncatf(char *dst, size_t len, const char* fmt, ...);
-
 bool StringEndsWith(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
 bool StringEquals(const char* s1, const char* s2);
@@ -59,7 +57,33 @@ int StringContains(const char* string, const char* match);
 // Macro to give us the highest valid index into an array i.e. one less than the size
 #define ARRAY_UPB(_x)	(ARRAY_SIZE(_x) - 1)
 
-extern char scratchString[];
+// Class to describe a string buffer, including its length. This saved passing buffer lengths around everywhere.
+class StringRef
+{
+	char *p;		// pointer to the storage
+	size_t len;		// number of characters in the storage
+
+public:
+	StringRef(char *pp, size_t pl) : p(pp), len(pl) { }
+
+	size_t Length() const { return len; }
+	size_t strlen() const;
+	char *Pointer() { return p; }
+	const char *Pointer() const { return p; }
+
+	char& operator[](size_t index) { return p[index]; }
+	char operator[](size_t index) const { return p[index]; }
+
+	void Clear() { p[0] = 0; }
+
+	int printf(const char *fmt, ...);
+	int vprintf(const char *fmt, va_list vargs);
+	int catf(const char *fmt, ...);
+	size_t copy(const char* src);
+	size_t cat(const char *src);
+};
+
+extern StringRef scratchString;
 
 #include "Arduino.h"
 #include "Configuration.h"

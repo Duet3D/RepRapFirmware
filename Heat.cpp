@@ -73,7 +73,7 @@ void Heat::Diagnostics()
   {
 	  if (pids[heater]->active)
 	  {
-		  snprintf(scratchString, STRING_LENGTH, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->temp_iState);
+		  scratchString.printf("Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->temp_iState);
 		  platform->AppendMessage(BOTH_MESSAGE, scratchString);
 	  }
   }
@@ -163,7 +163,7 @@ void PID::Spin()
 		  platform->SetHeater(heater, 0.0);
 		  temperatureFault = true;
 		  switchedOff = true;
-		  snprintf(scratchString, STRING_LENGTH, "Temperature fault on heater %d, T = %.1f\n", heater, temperature);
+		  scratchString.printf("Temperature fault on heater %d, T = %.1f\n", heater, temperature);
 		  platform->Message(BOTH_MESSAGE, scratchString);
 		  reprap.FlagTemperatureFault(heater);
 	  }
@@ -191,8 +191,7 @@ void PID::Spin()
 			  platform->SetHeater(heater, 0.0);
 			  temperatureFault = true;
 			  switchedOff = true;
-			  snprintf(scratchString, STRING_LENGTH, "Heating fault on heater %d, T = %.1f C; still not at temperature after %f seconds.\n",
-					  heater, temperature, tim);
+			  scratchString.printf("Heating fault on heater %d, T = %.1f C; still not at temperature after %f seconds.\n", heater, temperature, tim);
 			  platform->Message(BOTH_MESSAGE, scratchString);
 			  reprap.FlagTemperatureFault(heater);
 		  }

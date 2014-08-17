@@ -191,7 +191,7 @@ class Move
     bool AllProbeCoordinatesSet(int index) const;	// XY, and Z all set for this one?
     bool XYProbeCoordinatesSet(int index) const;	// Just XY set for this one?
     void SetZProbing(bool probing);				// Set the Z probe live
-    void SetProbedBedEquation(char *reply);		// When we have a full set of probed points, work out the bed's equation
+    void SetProbedBedEquation(StringRef& reply);	// When we have a full set of probed points, work out the bed's equation
     float SecondDegreeTransformZ(float x, float y) const; // Used for second degree bed equation
     float GetLastProbedZ() const;				// What was the Z when the probe last fired?
     void SetAxisCompensation(int8_t axis, float tangent); // Set an axis-pair compensation angle

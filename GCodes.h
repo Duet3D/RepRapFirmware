@@ -116,13 +116,13 @@ class GCodes
     int SetUpMove(GCodeBuffer* gb);										// Pass a move on to the Move module
     bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
     bool DoDwellTime(float dwell);										// Really wait for a bit
-    bool DoHome(char *reply, bool& error);								// Home some axes
+    bool DoHome(StringRef& reply, bool& error);							// Home some axes
     bool DoSingleZProbeAtPoint();										// Probe at a given point
     bool DoSingleZProbe();												// Probe where we are
-    bool SetSingleZProbeAtAPosition(GCodeBuffer *gb, char *reply);		// Probes at a given position - see the comment at the head of the function itself
-    bool DoMultipleZProbe(char *reply);									// Probes a series of points and sets the bed equation
-    bool SetPrintZProbe(GCodeBuffer *gb, char *reply);					// Either return the probe value, or set its threshold
-    void SetOrReportOffsets(char* reply, GCodeBuffer *gb);				// Deal with a G10
+    bool SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
+    bool DoMultipleZProbe(StringRef& reply);							// Probes a series of points and sets the bed equation
+    bool SetPrintZProbe(GCodeBuffer *gb, StringRef& reply);				// Either return the probe value, or set its threshold
+    void SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb);			// Deal with a G10
     bool SetPositions(GCodeBuffer *gb);									// Deal with a G92
     bool LoadMoveBufferFromGCode(GCodeBuffer *gb,  						// Set up a move for the Move class
     		bool doingG92, bool applyLimits);
@@ -140,10 +140,10 @@ class GCodes
     bool SendConfigToLine();											// Deal with M503
     void WriteHTMLToFile(char b, GCodeBuffer *gb);						// Save an HTML file (usually to upload a new web interface)
     bool OffsetAxes(GCodeBuffer *gb);									// Set offsets - deprecated, use G10
-    void SetPidParameters(GCodeBuffer *gb, int heater, char reply[STRING_LENGTH]);	// Set the P/I/D parameters for a heater
-    void SetHeaterParameters(GCodeBuffer *gb, char reply[STRING_LENGTH]); // Set the thermistor and ADC parameters for a heater
+    void SetPidParameters(GCodeBuffer *gb, int heater, StringRef& reply);	// Set the P/I/D parameters for a heater
+    void SetHeaterParameters(GCodeBuffer *gb, StringRef& reply);		 // Set the thermistor and ADC parameters for a heater
     int8_t Heater(int8_t head) const;									// Legacy G codes start heaters at 0, but we use 0 for the bed.  This sorts that out.
-    void AddNewTool(GCodeBuffer *gb, char* reply);						// Create a new tool definition
+    void AddNewTool(GCodeBuffer *gb, StringRef& reply);					// Create a new tool definition
     void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
     bool ChangeTool(int newToolNumber);									// Select a new tool
     bool ToolHeatersAtSetTemperatures(const Tool *tool) const;			// Wait for the heaters associated with the specified tool to reach their set temperatures

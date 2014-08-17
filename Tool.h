@@ -47,7 +47,7 @@ public:
 	bool Mixing() const;
 	float MaxFeedrate() const;
 	float InstantDv() const;
-	void Print(char* reply);
+	void Print(StringRef& reply);
 
 	friend class RepRap;
 

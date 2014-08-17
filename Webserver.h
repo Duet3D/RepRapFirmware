@@ -62,6 +62,18 @@ const unsigned int telnetMessageLength = 256;	// maximum line length for incomin
 
 class Webserver;
 
+// Class to hold Gcode file information
+class GcodeFileInfo
+{
+public:
+	unsigned long fileSize;
+	float objectHeight;
+	float filamentNeeded[DRIVES - AXES];
+	unsigned int numFilaments;
+	float layerHeight;
+	char generatedBy[50];
+};
+
 // This is the abstract class for all supported protocols
 // Any inherited class should implement a state machine to increase performance and reduce memory usage.
 class ProtocolInterpreter
@@ -135,10 +147,8 @@ class Webserver
 
 	// File information about the file being printed
 	bool fileInfoDetected;
-	unsigned long length;
-	float height, filament[DRIVES - AXES], layerHeight;
-	unsigned int filamentCount;
-	char generatedBy[50], fileBeingPrinted[255];
+	char fileBeingPrinted[255];
+	GcodeFileInfo currentFileInfo;
 	float printStartTime;
 
     void MessageStringToWebInterface(const char *s, bool error);
@@ -189,12 +199,11 @@ class Webserver
 
 			void SendFile(const char* nameOfFileToSend);
 			void SendJsonResponse(const char* command);
-			bool GetJsonResponse(const char* request, const char* key, const char* value, size_t valueLength);
-			void GetJsonUploadResponse();
-			void GetStatusResponse(uint8_t type);
+			bool GetJsonResponse(const char* request, StringRef& response, const char* key, const char* value, size_t valueLength, bool& keepOpen);
+			void GetJsonUploadResponse(StringRef& response);
+			void GetStatusResponse(StringRef& response, uint8_t type);
 			bool ProcessMessage();
 			bool RejectMessage(const char* s, unsigned int code = 500);
-			void JsonReport(bool ok, const char* request);
 
 			HttpState state;
 
@@ -220,7 +229,6 @@ class Webserver
 			unsigned int numHeaderKeys;						// number of keys we have found, <= maxHeaders
 
 			// Buffers to hold reply
-			char jsonResponse[jsonReplyLength];
 			char decodeChar;
 			uint16_t seq;									// reply sequence number, so that the client can tell if a json reply is new or not
 		    bool webDebug;
@@ -277,7 +285,7 @@ class Webserver
 			bool CharFromClient(const char c);
 			void ResetState();
 
-			void HandleGcodeReply(const char *reply);
+			void HandleGcodeReply(const char* reply);
 
 		private:
 
@@ -302,8 +310,7 @@ class Webserver
     void StoreGcodeData(const char* data, size_t len);
 
     // File info methods
-    bool GetFileInfo(const char *directory, const char *fileName, unsigned long& length, float& height, float *filamentUsed,
-        unsigned int& numFilaments, float& layerHeight, char* generatedBy, size_t generatedByLength);
+    static bool GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info);
     static bool FindHeight(const char* buf, size_t len, float& height);
     static bool FindLayerHeight(const char* buf, size_t len, float& layerHeight);
     static unsigned int FindFilamentUsed(const char* buf, size_t len,  float *filamentUsed, unsigned int maxFilaments);
@@ -312,7 +319,8 @@ class Webserver
     // Buffer to hold gcode that is ready for processing
     char gcodeBuffer[gcodeBufLength];
     unsigned int gcodeReadIndex, gcodeWriteIndex;	// head and tail indices into gcodeBuffer
-    char gcodeReply[2048];
+    char gcodeReplyBuffer[2048];
+    StringRef gcodeReply;
 
     // Misc
     char password[SHORT_STRING_LENGTH + 1];

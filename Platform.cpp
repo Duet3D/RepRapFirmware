@@ -758,44 +758,44 @@ void Platform::Diagnostics()
 	const char *ramstart = (char *) 0x20070000;
 	const struct mallinfo mi = mallinfo();
 	AppendMessage(BOTH_MESSAGE, "Memory usage:\n\n");
-	snprintf(scratchString, STRING_LENGTH, "Program static ram used: %d\n", &_end - ramstart);
+	scratchString.printf("Program static ram used: %d\n", &_end - ramstart);
 	AppendMessage(BOTH_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Dynamic ram used: %d\n", mi.uordblks);
+	scratchString.printf("Dynamic ram used: %d\n", mi.uordblks);
 	AppendMessage(BOTH_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Recycled dynamic ram: %d\n", mi.fordblks);
+	scratchString.printf("Recycled dynamic ram: %d\n", mi.fordblks);
 	AppendMessage(BOTH_MESSAGE, scratchString);
 	size_t currentStack, maxStack, neverUsed;
 	GetStackUsage(&currentStack, &maxStack, &neverUsed);
-	snprintf(scratchString, STRING_LENGTH, "Current stack ram used: %d\n", currentStack);
+	scratchString.printf("Current stack ram used: %d\n", currentStack);
 	AppendMessage(BOTH_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Maximum stack ram used: %d\n", maxStack);
+	scratchString.printf("Maximum stack ram used: %d\n", maxStack);
 	AppendMessage(BOTH_MESSAGE, scratchString);
-	snprintf(scratchString, STRING_LENGTH, "Never used ram: %d\n", neverUsed);
+	scratchString.printf("Never used ram: %d\n", neverUsed);
 	AppendMessage(BOTH_MESSAGE, scratchString);
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)Time();		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
-	snprintf(scratchString, STRING_LENGTH, "Last reset %02d:%02d:%02d ago, cause: %s\n",
+	scratchString.printf("Last reset %02d:%02d:%02d ago, cause: %s\n",
 			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
 	AppendMessage(BOTH_MESSAGE, scratchString);
 
 	// Show the error code stored at the last software reset
-	snprintf(scratchString, STRING_LENGTH, "Last software reset code & available RAM: 0x%04x, %u\n", nvData.resetReason, nvData.neverUsedRam);
+	scratchString.printf("Last software reset code & available RAM: 0x%04x, %u\n", nvData.resetReason, nvData.neverUsedRam);
 	AppendMessage(BOTH_MESSAGE, scratchString);
 
 	// Show the current error codes
-	snprintf(scratchString, STRING_LENGTH, "Error status: %u\n", errorCodeBits);
+	scratchString.printf("Error status: %u\n", errorCodeBits);
 	AppendMessage(BOTH_MESSAGE, scratchString);
 
 	// Show the current probe position heights
-	strncpy(scratchString, "Bed probe heights:", STRING_LENGTH);
+	scratchString.copy("Bed probe heights:");
 	for (size_t i = 0; i < NUMBER_OF_PROBE_POINTS; ++i)
 	{
-		sncatf(scratchString, STRING_LENGTH, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
+		scratchString.catf(" %.3f", reprap.GetMove()->ZBedProbePoint(i));
 	}
-	sncatf(scratchString, STRING_LENGTH, "\n");
+	scratchString.cat("\n");
 	AppendMessage(BOTH_MESSAGE, scratchString);
 
 	// Show the number of free entries in the file table
@@ -807,8 +807,13 @@ void Platform::Diagnostics()
 			++numFreeFiles;
 		}
 	}
-	snprintf(scratchString, STRING_LENGTH, "Free file entries: %u\n", numFreeFiles);
+	scratchString.printf("Free file entries: %u\n", numFreeFiles);
 	AppendMessage(BOTH_MESSAGE, scratchString);
+
+	// Show the longest write time
+	scratchString.printf("Longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
+	AppendMessage(BOTH_MESSAGE, scratchString);
+
 	reprap.Timing();
 
 #if LWIP_STATS
@@ -859,7 +864,7 @@ void Platform::ClassReport(char* className, float &lastTime)
 	if (Time() - lastTime < LONG_TIME)
 		return;
 	lastTime = Time();
-	snprintf(scratchString, STRING_LENGTH, "Class %s spinning.\n", className);
+	scratchString.printf("Class %s spinning.\n", className);
 	Message(HOST_MESSAGE, scratchString);
 }
 
@@ -1753,8 +1758,8 @@ bool FileStore::WriteBuffer()
 {
 	if (bufferPointer != 0)
 	{
-		FRESULT writeStatus = f_write(&file, buf, bufferPointer, &lastBufferEntry);
-		if ((writeStatus != FR_OK) || (lastBufferEntry != bufferPointer))
+		bool ok = InternalWriteBlock((const char*)buf, bufferPointer);
+		if (!ok)
 		{
 			platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
 			return false;
@@ -1810,9 +1815,19 @@ bool FileStore::Write(const char *s, unsigned int len)
 	{
 		return false;
 	}
+	InternalWriteBlock(s, len);
+}
 
+bool FileStore::InternalWriteBlock(const char *s, unsigned int len)
+{
 	unsigned int bytesWritten;
+	uint32_t time = micros();
 	FRESULT writeStatus = f_write(&file, s, len, &bytesWritten);
+	time = micros() - time;
+	if (time > longestWriteTime)
+	{
+		longestWriteTime = time;
+	}
 	if ((writeStatus != FR_OK) || (bytesWritten != len))
 	{
 		platform->Message(HOST_MESSAGE, "Error writing file.  Disc may be full.\n");
@@ -1835,6 +1850,14 @@ bool FileStore::Flush()
 	return f_sync(&file) == FR_OK;
 }
 
+float FileStore::GetAndClearLongestWriteTime()
+{
+	float ret = (float)longestWriteTime/1000.0;
+	longestWriteTime = 0;
+	return ret;
+}
+
+uint32_t FileStore::longestWriteTime = 0;
 
 //***************************************************************************************************
 
