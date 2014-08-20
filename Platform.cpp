@@ -182,6 +182,7 @@ void Platform::Init()
 
 	stepPins = STEP_PINS;
 	directionPins = DIRECTION_PINS;
+	directions = DIRECTIONS;
 	enablePins = ENABLE_PINS;
 	disableDrives = DISABLE_DRIVES;
 	lowStopPins = LOW_STOP_PINS;
@@ -986,13 +987,15 @@ void Platform::SetDirection(byte drive, bool direction)
 {
 	if(directionPins[drive] < 0)
 		return;
+
+	bool d = (direction == FORWARDS) ? directions[drive] : !directions[drive];
 	if(drive == E0_DRIVE) //DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
 	{
-		digitalWriteNonDue(directionPins[drive], direction);
+		digitalWriteNonDue(directionPins[drive], d);
 	}
 	else
 	{
-		digitalWrite(directionPins[drive], direction);
+		digitalWrite(directionPins[drive], d);
 	}
 }
 
@@ -1014,9 +1017,13 @@ void Platform::Step(byte drive)
 	if(!driveEnabled[drive] && enablePins[drive] >= 0)
 	{
 		if(drive == Z_AXIS || drive==E0_DRIVE || drive==E2_DRIVE) //ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
+		{
 			digitalWriteNonDue(enablePins[drive], ENABLE);
+		}
 		else
+		{
 			digitalWrite(enablePins[drive], ENABLE);
+		}
 		driveEnabled[drive] = true;
 	}
 	if(drive == E0_DRIVE || drive == E3_DRIVE) //STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
@@ -1469,7 +1476,7 @@ bool MassStorage::FindNext(FileInfo &file_info)
 	file_info.year = (entry.fdate >> 9) + 1980;
 	if (file_info.fileName[0] == 0)
 	{
-		strncpy(file_info.fileName, entry.fname, ARRAY_UPB(file_info.fileName));
+		strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
 	}
 
 	return true;
@@ -1571,44 +1578,21 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 	const char* location = (directory != NULL)
 							? platform->GetMassStorage()->CombineName(directory, fileName)
 								: fileName;
-
 	writing = write;
 	lastBufferEntry = FILE_BUF_LEN - 1;
-	FRESULT openReturn;
-
-	if (writing)
+	FRESULT openReturn = f_open(&file, location, (writing) ?  FA_CREATE_ALWAYS | FA_WRITE : FA_OPEN_EXISTING | FA_READ);
+	if (openReturn != FR_OK)
 	{
-		openReturn = f_open(&file, location, FA_CREATE_ALWAYS | FA_WRITE);
-		if (openReturn != FR_OK)
-		{
-			char errString[10];		// don't use scratch_string for this because that may be holding the original filename
-			platform->Message(HOST_MESSAGE, "Can't open ");
-			platform->Message(HOST_MESSAGE, location);
-			platform->Message(HOST_MESSAGE, " to write to, error code ");
-			snprintf(errString, ARRAY_SIZE(errString), "%d", openReturn);
-			platform->Message(HOST_MESSAGE, errString);
-			platform->Message(HOST_MESSAGE, "\n");
-			return false;
-		}
-		bufferPointer = 0;
-	}
-	else
-	{
-		openReturn = f_open(&file, location, FA_OPEN_EXISTING | FA_READ);
-		if (openReturn != FR_OK)
-		{
-			char errString[10];		// don't use scratch_string for this because that may be holding the original filename
-			platform->Message(HOST_MESSAGE, "Can't open ");
-			platform->Message(HOST_MESSAGE, location);
-			platform->Message(HOST_MESSAGE, " to read from, error code ");
-			snprintf(errString, ARRAY_SIZE(errString), "%d", openReturn);
-			platform->Message(HOST_MESSAGE, errString);
-			platform->Message(HOST_MESSAGE, "\n");
-			return false;
-		}
-		bufferPointer = FILE_BUF_LEN;
+		char errString[12];		// don't use scratch_string for this because that may be holding the original filename
+		platform->Message(BOTH_MESSAGE, "Can't open ");
+		platform->AppendMessage(BOTH_MESSAGE, location);
+		platform->AppendMessage(BOTH_MESSAGE, (writing) ? " to write to, error code " : " to read from, error code ");
+		snprintf(errString, ARRAY_SIZE(errString), "%d\n", openReturn);
+		platform->AppendMessage(BOTH_MESSAGE, errString);
+		return false;
 	}
 
+	bufferPointer = (writing) ? 0 : FILE_BUF_LEN;
 	inUse = true;
 	openCount = 1;
 	return true;

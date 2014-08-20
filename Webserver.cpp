@@ -343,7 +343,7 @@ void Webserver::ProcessGcode(const char* gc)
 			char c;
 			size_t i = 0;
 			bool reading_whitespace = false;
-			while (i < ARRAY_UPB(gcodeReply) && configFile->Read(c))
+			while (i < gcodeReply.Length() - 1 && configFile->Read(c))
 			{
 				if (!reading_whitespace || (c != ' ' && c != '\t'))
 				{

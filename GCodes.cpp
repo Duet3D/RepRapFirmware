@@ -1877,7 +1877,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		}
 		break;
 
-
 	case 21: // Initialise SD - ignore
 		break;
 
@@ -2848,6 +2847,21 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
         	}
        	}
     	break;
+
+    case 569: // Set/report axis direction
+		if(gb->Seen('P'))
+		{
+			int8_t drive = gb->GetIValue();
+			if(gb->Seen('S'))
+			{
+				platform->SetDirectionValue(drive, gb->GetIValue());
+			}
+			else
+			{
+				reply.printf("A %d sends drive %d forwards.", (int)platform->GetDirectionValue(drive), drive);
+			}
+		}
+		break;
 
     case 906: // Set/report Motor currents
 		{

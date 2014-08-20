@@ -1199,7 +1199,8 @@ void DDA::Step()
   
   if(active)
   {
-      timeStep = move->stepDistances[drivesMoving]/velocity;
+	timeStep = distance/(totalSteps * velocity);	// dc42 use the average distance per step
+	//timeStep = move->stepDistances[drivesMoving]/velocity;
       
     // Simple Euler integration to get velocities.
     // Maybe one day do a Runge-Kutta?
