@@ -323,6 +323,7 @@ void Webserver::ProcessGcode(const char* gc)
 		fileInfoDetected = GetFileInfo(platform->GetGCodeDir(), &gc[4], currentFileInfo);
 		printStartTime = platform->Time();
 		strncpy(fileBeingPrinted, &gc[4], ARRAY_SIZE(fileBeingPrinted));
+		fileBeingPrinted[ARRAY_UPB(fileBeingPrinted)] = 0;
 		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
 	}
 	else if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
