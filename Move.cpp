@@ -103,8 +103,6 @@ void Move::Init()
   lastMove->Release();
   liveCoordinates[DRIVES] = platform->HomeFeedRate(slow);
 
-  SetStepHypotenuse();
-
   currentFeedrate = -1.0;
 
   SetIdentityTransform();
@@ -404,35 +402,6 @@ bool Move::GetCurrentUserPosition(float m[])
 	InverseTransform(m);
 	return true;
 }
-
-
-void Move::SetStepHypotenuse()
-{
-	  // The stepDistances array is a look-up table of the Euclidean distance
-	  // between the start and end of a step.  If the step is just along one axis,
-	  // it's just that axis's step length.  If it's more, it is a Pythagoran
-	  // sum of all the axis steps that take part.
-
-	  for(unsigned int i = 0; i < (1<<DRIVES); i++)
-	  {
-	    float d = 0.0;
-	    for(unsigned int j = 0; j < DRIVES; j++)
-	    {
-	       if(i & (1<<j))
-	       {
-	          float e = 1.0/platform->DriveStepsPerUnit(j);
-	          d += e*e;
-	       }
-	    }
-	    stepDistances[i] = sqrt(d);
-	  }
-
-	  // We don't want 0.  If no axes/extruders are moving these should never be used.
-	  // But try to be safe.
-
-	  stepDistances[0] = 1.0/platform->DriveStepsPerUnit(AXES); //FIXME this is not multi extruder safe (but we should never get here)
-}
-
 
 // Take an item from the look-ahead ring and add it to the DDA ring, if
 // possible.
@@ -1150,6 +1119,8 @@ void DDA::Start()
   active = true;  
 }
 
+// This function is called from the ISR.
+// Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 void DDA::Step()
 {
   if(!active)

@@ -229,12 +229,13 @@ void PID::Spin()
 	  return;
   }  
    
-  temp_iState += error * pp.kI;
+  float sampleInterval = platform->HeatSampleTime();
+  temp_iState += error * pp.kI * sampleInterval;
   
   if (temp_iState < pp.pidMin) temp_iState = pp.pidMin;
   else if (temp_iState > pp.pidMax) temp_iState = pp.pidMax;
    
-  float temp_dState = pp.kD * (temperature - lastTemperature);
+  float temp_dState = pp.kD * (temperature - lastTemperature) / sampleInterval;
   float result = pp.kP * error + temp_iState - temp_dState;
 
   lastTemperature = temperature;

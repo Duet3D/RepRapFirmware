@@ -1071,7 +1071,7 @@ void Webserver::HttpInterpreter::GetStatusResponse(StringRef& response, uint8_t 
 		response.cat("]");
 
 		// Send the speed and extruder override factors
-		response.catf(",\"sfactor\":%.2f,\"efactor:\":", gc->GetSpeedFactor() * 100.0);
+		response.catf(",\"sfactor\":%.2f,\"efactor\":", gc->GetSpeedFactor() * 100.0);
 		const float *extrusionFactors = gc->GetExtrusionFactors();
 		for (unsigned int i = 0; i < reprap.GetExtrudersInUse(); ++i)
 		{

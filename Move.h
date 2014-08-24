@@ -202,7 +202,6 @@ class Move
     void Diagnostics();							// Report useful stuff
     float ComputeCurrentCoordinate(int8_t drive,// Turn a DDA value back into a real world coordinate
     		LookAhead* la, DDA* runningDDA);
-    void SetStepHypotenuse();					// Set up the hypotenuse lengths for multiple axis steps, like step both X and Y at once
     float Normalise(float v[], int8_t dimensions);  // Normalise a vector to unit length
     void Absolute(float v[], int8_t dimensions);	// Put a vector in the positive hyperquadrant
     float Magnitude(const float v[], int8_t dimensions);  // Return the length of a vector
@@ -262,7 +261,6 @@ class Move
     float liveCoordinates[DRIVES + 1];				// The last endpoint that the machine moved to
     float nextMove[DRIVES + 1];  					// The endpoint of the next move to processExtra entry is for feedrate
     float normalisedDirectionVector[DRIVES];		// Used to hold a unit-length vector in the direction of motion
-    float stepDistances[(1<<DRIVES)];				// The length of steps in different numbers of dimensions
     long nextMachineEndPoints[DRIVES+1];			// The next endpoint in machine coordinates (i.e. steps)
     float xBedProbePoints[NUMBER_OF_PROBE_POINTS];	// The X coordinates of the points on the bed at which to probe
     float yBedProbePoints[NUMBER_OF_PROBE_POINTS];	// The Y coordinates of the points on the bed at which to probe
@@ -275,7 +273,7 @@ class Move
     float tanXY, tanYZ, tanXZ; 						// Axis compensation - 90 degrees + angle gives angle between axes
     bool identityBedTransform;						// Is the bed transform in operation?
     float xRectangle, yRectangle;					// The side lengths of the rectangle used for second-degree bed compensation
-    float lastZHit;									// The last Z value hit by the probe
+    volatile float lastZHit;						// The last Z value hit by the probe
     bool zProbing;									// Are we bed probing as well as moving?
     float longWait;									// A long time for things that need to be done occasionally
 };
@@ -362,6 +360,7 @@ inline EndstopChecks LookAhead::EndStopsToCheck() const
   return endStopsToCheck;
 }
 
+// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR should be declared 'volatile'.
 inline void LookAhead::SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive)
 {
   endPoint[drive] = EndPointToMachine(drive, a);
@@ -603,7 +602,7 @@ inline float Move::SecondDegreeTransformZ(float x, float y) const
 }
 
 
-
+// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
 	float hitPoint = platform->AxisMinimum(drive);
@@ -642,6 +641,7 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 	gCodes->SetAxisIsHomed(drive);
 }
 
+// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
   la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisMaximum(drive), drive);

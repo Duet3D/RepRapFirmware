@@ -523,23 +523,27 @@ void Platform::Exit()
 
 Compatibility Platform::Emulating() const
 {
-	if(compatibility == reprapFirmware)
+	if (nvData.compatibility == reprapFirmware)
 		return me;
-	return compatibility;
+	return nvData.compatibility;
 }
 
 void Platform::SetEmulating(Compatibility c)
 {
-	if(c != me && c != reprapFirmware && c != marlin)
+	if (c != me && c != reprapFirmware && c != marlin)
 	{
 		Message(HOST_MESSAGE, "Attempt to emulate unsupported firmware.\n");
 		return;
 	}
-	if(c == reprapFirmware)
+	if (c == reprapFirmware)
 	{
 		c = me;
 	}
-	compatibility = c;
+	if (c != nvData.compatibility)
+	{
+		nvData.compatibility = c;
+		WriteNvData();
+	}
 }
 
 void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])

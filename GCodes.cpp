@@ -1563,7 +1563,7 @@ void GCodes::SetPidParameters(GCodeBuffer *gb, int heater, StringRef& reply)
 		else
 		{
 			reply.printf("Heater %d P:%.2f I:%.3f D:%.2f T:%.2f S:%.2f W:%.1f B:%.1f\n",
-						heater, pp.kP, pp.kI * platform->HeatSampleTime(), pp.kD/platform->HeatSampleTime(), pp.kT, pp.kS, pp.pidMax, pp.fullBand);
+						heater, pp.kP, pp.kI, pp.kD, pp.kT, pp.kS, pp.pidMax, pp.fullBand);
 		}
 	}
 }
@@ -2012,10 +2012,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 						reply.cat(":");
 					}
 				}
-			}
-			else
-			{
-				reprap.GetMove()->SetStepHypotenuse();
 			}
 		}
 		break;
