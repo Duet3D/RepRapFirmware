@@ -1840,18 +1840,20 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
 	case 20:  // Deprecated...
 		{
-			bool encapsulate_list;
+			// To mimic the behaviour of the official RepRapPro firmware:
+			// If we are emulating RepRap then we print "GCode files:\n" at the start, otherwise we don't.
+			// If we are emulating Marlin and the code came via the serial/USB interface, then we don't put quotes around the names and we separate them with newline;
+			// otherwise we put quotes around them and separate them with comma.
 			if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
 			{
 				reply.copy("GCode files:\n");
-				encapsulate_list = false;
 			}
 			else
 			{
 				reply.Clear();
-				encapsulate_list = true;
 			}
 
+			bool encapsulate_list = (gb != serialGCode || platform->Emulating() != marlin);
 			FileInfo file_info;
 			if (platform->GetMassStorage()->FindFirst(platform->GetGCodeDir(), file_info))
 			{
@@ -1867,7 +1869,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 					}
 				} while (platform->GetMassStorage()->FindNext(file_info));
 
-				// remove the last character
+				// remove the last separator
 				reply[reply.strlen() - 1] = 0;
 			}
 			else
