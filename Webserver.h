@@ -114,9 +114,10 @@ class ProtocolInterpreter
 	    char filenameBeingUploaded[maxFilenameLength + 1];
 	    const char *uploadPointer;							// pointer to start of uploaded data not yet written to file
 	    unsigned int uploadLength;							// amount of data not yet written to file
+	    uint32_t numContinuationBytes;						// number of UTF-8 continuation bytes we have received
 
 	    bool StartUpload(FileStore *file);
-	    void FinishUpload(const long file_length);
+	    void FinishUpload(uint32_t file_length);
 };
 
 class Webserver

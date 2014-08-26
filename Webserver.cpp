@@ -555,6 +555,7 @@ ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws) : platform(
 	uploadState = notUploading;
 	uploadPointer = NULL;
 	uploadLength = 0;
+	numContinuationBytes = 0;
 	filenameBeingUploaded[0] = 0;
 }
 
@@ -562,6 +563,7 @@ ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws) : platform(
 bool ProtocolInterpreter::StartUpload(FileStore *file)
 {
 	CancelUpload();
+	numContinuationBytes = 0;
 
 	if (file != NULL)
 	{
@@ -584,6 +586,17 @@ bool ProtocolInterpreter::StoreUploadData(const char* data, unsigned int len)
 	{
 		uploadPointer = data;
 		uploadLength = len;
+
+		// Count the number of UTF8 continuation bytes. We will need it to adjust the expected file length.
+		while (len != 0)
+		{
+			if ((*data & 0xC0) == 0x80)
+			{
+				++numContinuationBytes;
+			}
+			++data;
+			--len;
+		}
 		return true;
 	}
 	return false;
@@ -628,7 +641,7 @@ void ProtocolInterpreter::CancelUpload()
 	uploadState = notUploading;
 }
 
-void ProtocolInterpreter::FinishUpload(const long file_length)
+void ProtocolInterpreter::FinishUpload(uint32_t file_length)
 {
 	// Write the remaining data
 	if (uploadState == uploadOK && uploadLength != 0)
@@ -650,7 +663,7 @@ void ProtocolInterpreter::FinishUpload(const long file_length)
 	}
 
 	// Check the file length is as expected
-	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() != file_length)
+	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() != file_length + numContinuationBytes)
 	{
 		uploadState = uploadError;
 		platform->Message(HOST_MESSAGE, "Uploaded file size is different!\n");
@@ -854,7 +867,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 	}
 	else if (StringEquals(request, "upload_end") && StringEquals(key, "size"))
 	{
-		long file_length = strtoul(value, NULL, 10);
+		uint32_t file_length = strtoul(value, NULL, 10);
 		FinishUpload(file_length);
 
 		GetJsonUploadResponse(response);
@@ -1683,7 +1696,7 @@ void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 		// Do file handling
 		if (IsUploading())
 		{
-			FinishUpload(0);
+			FinishUpload(0U);
 			uploadState = notUploading;
 		}
 		state = authenticated;
