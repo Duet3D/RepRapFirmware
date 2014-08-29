@@ -83,44 +83,51 @@ Allows a non "Arduino Due" PIO pin to be setup.
 */
 extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode )
 {
-    if ( nonDuePinDescription[ulPin].ulPinType == PIO_NOT_A_PIN )
+	if (ulPin < X0)
+	{
+		pinMode(ulPin, ulMode);		// pass on to Arduino core
+		return;
+	}
+
+	const PinDescription& pinDesc = nonDuePinDescription[ulPin - X0];
+    if ( pinDesc.ulPinType == PIO_NOT_A_PIN )
     {
-        return ;
+        return;
     }
 
     switch ( ulMode )
     {
         case INPUT:
             /* Enable peripheral for clocking input */
-            pmc_enable_periph_clk( nonDuePinDescription[ulPin].ulPeripheralId ) ;
+            pmc_enable_periph_clk( pinDesc.ulPeripheralId ) ;
             PIO_Configure(
-            	nonDuePinDescription[ulPin].pPort,
+            	pinDesc.pPort,
             	PIO_INPUT,
-            	nonDuePinDescription[ulPin].ulPin,
+            	pinDesc.ulPin,
             	0 ) ;
         break ;
 
         case INPUT_PULLUP:
             /* Enable peripheral for clocking input */
-            pmc_enable_periph_clk( nonDuePinDescription[ulPin].ulPeripheralId ) ;
+            pmc_enable_periph_clk( pinDesc.ulPeripheralId ) ;
             PIO_Configure(
-            	nonDuePinDescription[ulPin].pPort,
+            	pinDesc.pPort,
             	PIO_INPUT,
-            	nonDuePinDescription[ulPin].ulPin,
+            	pinDesc.ulPin,
             	PIO_PULLUP ) ;
         break ;
 
         case OUTPUT:
             PIO_Configure(
-            	nonDuePinDescription[ulPin].pPort,
+            	pinDesc.pPort,
             	PIO_OUTPUT_1,
-            	nonDuePinDescription[ulPin].ulPin,
-            	nonDuePinDescription[ulPin].ulPinConfiguration ) ;
+            	pinDesc.ulPin,
+            	pinDesc.ulPinConfiguration ) ;
 
             /* if all pins are output, disable PIO Controller clocking, reduce power consumption */
-            if ( nonDuePinDescription[ulPin].pPort->PIO_OSR == 0xffffffff )
+            if ( pinDesc.pPort->PIO_OSR == 0xffffffff )
             {
-                pmc_disable_periph_clk( g_APinDescription[ulPin].ulPeripheralId ) ;
+                pmc_disable_periph_clk( pinDesc.ulPeripheralId ) ;
             }
         break ;
 
@@ -137,19 +144,27 @@ Allows digital write to a non "Arduino Due" PIO pin that has been setup as outpu
 
 extern void digitalWriteNonDue( uint32_t ulPin, uint32_t ulVal )
 {
+	if (ulPin < X0)
+	{
+		digitalWrite(ulPin, ulVal);		// pass on to Arduino core
+		return;
+	}
+
+	const PinDescription& pinDesc = nonDuePinDescription[ulPin - X0];
+
   /* Handle */
-  if ( nonDuePinDescription[ulPin].ulPinType == PIO_NOT_A_PIN ) 
- {
+  if ( pinDesc.ulPinType == PIO_NOT_A_PIN )
+  {
     return ;
   }
 
-  if ( PIO_GetOutputDataStatus( nonDuePinDescription[ulPin].pPort, nonDuePinDescription[ulPin].ulPin ) == 0 )
+  if ( PIO_GetOutputDataStatus( pinDesc.pPort, pinDesc.ulPin ) == 0 )
   {
-    PIO_PullUp( nonDuePinDescription[ulPin].pPort, nonDuePinDescription[ulPin].ulPin, ulVal ) ;
+    PIO_PullUp( pinDesc.pPort, pinDesc.ulPin, ulVal ) ;
   }
   else
   {
-    PIO_SetOutput( nonDuePinDescription[ulPin].pPort, nonDuePinDescription[ulPin].ulPin, ulVal, 0, PIO_PULLUP ) ;
+    PIO_SetOutput( pinDesc.pPort, pinDesc.ulPin, ulVal, 0, PIO_PULLUP ) ;
   }
 }
 
@@ -160,12 +175,18 @@ Allows digital read of a non "Arduino Due" PIO pin that has been setup as input 
 */
 extern int digitalReadNonDue( uint32_t ulPin )
 {
-	if ( nonDuePinDescription[ulPin].ulPinType == PIO_NOT_A_PIN )
+	if (ulPin < X0)
+	{
+		return digitalRead(ulPin);		// pass on to Arduino core
+	}
+
+	const PinDescription& pinDesc = nonDuePinDescription[ulPin - X0];
+	if ( pinDesc.ulPinType == PIO_NOT_A_PIN )
     {
         return LOW ;
     }
 
-	if ( PIO_Get( nonDuePinDescription[ulPin].pPort, PIO_INPUT, nonDuePinDescription[ulPin].ulPin ) == 1 )
+	if ( PIO_Get( pinDesc.pPort, PIO_INPUT, pinDesc.ulPin ) == 1 )
     {
         return HIGH ;
     }
@@ -173,17 +194,22 @@ extern int digitalReadNonDue( uint32_t ulPin )
 	return LOW ;
 }
 
-static uint8_t PWMEnabled = 0;
-static uint8_t pinEnabled[PINS_C];
+static bool nonDuePWMEnabled = 0;
+static bool PWMChanEnabled[8] = {false,false,false,false, false,false,false,false};		// there are only 8 PWM channels
 
-/*
-analog write helper functions
-*/
-void analogOutputNonDueInit(void) {
-	uint8_t i;
-	for (i=0; i<PINS_C; i++)
-		pinEnabled[i] = 0;
+// Version of PWMC_ConfigureChannel from Arduino core, fixed to not mess up PWM channel 0 when another channel is programmed
+static void PWMC_ConfigureChannel_fixed( Pwm* pPwm, uint32_t ul_channel, uint32_t prescaler, uint32_t alignment, uint32_t polarity )
+{
+    /* Disable ul_channel (effective at the end of the current period) */
+    if ((pPwm->PWM_SR & (1 << ul_channel)) != 0) {
+        pPwm->PWM_DIS = 1 << ul_channel;
+        while ((pPwm->PWM_SR & (1 << ul_channel)) != 0);
+    }
+
+    /* Configure ul_channel */
+    pPwm->PWM_CH_NUM[ul_channel].PWM_CMR = prescaler | alignment | polarity;
 }
+
 
 /*
 analogWriteNonDue
@@ -191,41 +217,57 @@ copied from the analogWrite function within wiring-analog.c file, part of the ar
 Allows analog write to a non "Arduino Due" PWM pin. Note this does not support the other functions of
 the arduino analog write function such as timer counters and the DAC. Any hardware PWM pin that is defined as such
 within the unDefPinDescription[] struct should work, and non hardware PWM pin will default to digitalWriteUndefined
+NOTE:
+1. We must not pass on any PWM calls to the Arduino core analogWrite here, because it calls the buggy version of PWMC_ConfigureChannel
+   which messes up channel 0..
+2. The optional fastPwm parameter only takes effect on the first call to analogWriteNonDuet for each PWM pin.
+   If true on the first call then the PWM frequency will be set to 25kHz instead of 1kHz.
 */
 
-void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue) {
-	uint32_t attr = nonDuePinDescription[ulPin].ulPinAttribute;
-  if ((attr & PIN_ATTR_PWM) == PIN_ATTR_PWM) {
-    if (!PWMEnabled) {
-      // PWM Startup code
-        pmc_enable_periph_clk(PWM_INTERFACE_ID);
-        PWMC_ConfigureClocks(PWM_FREQUENCY * PWM_MAX_DUTY_CYCLE, 0, VARIANT_MCK);
-        analogOutputNonDueInit();
-      PWMEnabled = 1;
-    }
-    uint32_t chan = nonDuePinDescription[ulPin].ulPWMChannel;
-    if (!pinEnabled[ulPin]) {
-      // Setup PWM for this pin
-      PIO_Configure(nonDuePinDescription[ulPin].pPort,
-          nonDuePinDescription[ulPin].ulPinType,
-          nonDuePinDescription[ulPin].ulPin,
-          nonDuePinDescription[ulPin].ulPinConfiguration);
-      PWMC_ConfigureChannel(PWM_INTERFACE, chan, PWM_CMR_CPRE_CLKA, 0, 0);
-      PWMC_SetPeriod(PWM_INTERFACE, chan, PWM_MAX_DUTY_CYCLE);
-      PWMC_SetDutyCycle(PWM_INTERFACE, chan, ulValue);
-      PWMC_EnableChannel(PWM_INTERFACE, chan);
-      pinEnabled[ulPin] = 1;
-    }
+void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm)
+{
+	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
+	uint32_t attr = pinDesc.ulPinAttribute;
+	if ((attr & PIN_ATTR_ANALOG) == PIN_ATTR_ANALOG)
+	{
+		// It's a DAC pin, so we can pass it on (and it can't be an extended pin because none of our extended pins support DAC)
+		analogWrite(ulPin, ulValue);
+		return;
+	}
 
-    PWMC_SetDutyCycle(PWM_INTERFACE, chan, ulValue);
-    return;
-  }
+	if ((attr & PIN_ATTR_PWM) == PIN_ATTR_PWM)
+	{
+		if (!nonDuePWMEnabled)
+		{
+			// PWM Startup code
+			pmc_enable_periph_clk(PWM_INTERFACE_ID);
+			// Set clock A to give 1kHz PWM (the standard value for Arduino Due) and clock B to give 25kHz PWM
+			PWMC_ConfigureClocks(PWM_FREQUENCY * PWM_MAX_DUTY_CYCLE, pwmFastFrequency * PWM_MAX_DUTY_CYCLE, VARIANT_MCK);
+			nonDuePWMEnabled = true;
+		}
+
+		uint32_t chan = pinDesc.ulPWMChannel;
+		if (!PWMChanEnabled[chan])
+		{
+			// Setup PWM for this PWM channel
+			PIO_Configure(pinDesc.pPort,
+					pinDesc.ulPinType,
+					pinDesc.ulPin,
+					pinDesc.ulPinConfiguration);
+			PWMC_ConfigureChannel_fixed(PWM_INTERFACE, chan, (fastPwm) ? PWM_CMR_CPRE_CLKB : PWM_CMR_CPRE_CLKA, 0, 0);
+			PWMC_SetPeriod(PWM_INTERFACE, chan, PWM_MAX_DUTY_CYCLE);
+			PWMC_SetDutyCycle(PWM_INTERFACE, chan, ulValue);
+			PWMC_EnableChannel(PWM_INTERFACE, chan);
+			PWMChanEnabled[chan] = true;
+		}
+
+		PWMC_SetDutyCycle(PWM_INTERFACE, chan, ulValue);
+		return;
+	}
+
 	// Defaults to digital write
 	pinModeNonDue(ulPin, OUTPUT);
-	if (ulValue < 128)
-		digitalWriteNonDue(ulPin, LOW);
-	else
-		digitalWriteNonDue(ulPin, HIGH);
+	digitalWriteNonDue(ulPin, (ulValue < 128) ? LOW : HIGH);
 }
 
 
@@ -239,11 +281,11 @@ void hsmciPinsinit()
   PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO].pPort,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO].ulPinConfiguration);
   PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO].pPort,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO].ulPinConfiguration);
   //set pullups (not on clock!)
-  digitalWriteNonDue(PIN_HSMCI_MCCDA_GPIO, HIGH);
-  digitalWriteNonDue(PIN_HSMCI_MCDA0_GPIO, HIGH);
-  digitalWriteNonDue(PIN_HSMCI_MCDA1_GPIO, HIGH);
-  digitalWriteNonDue(PIN_HSMCI_MCDA2_GPIO, HIGH);
-  digitalWriteNonDue(PIN_HSMCI_MCDA3_GPIO, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCCDA_GPIO+X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCDA0_GPIO+X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCDA1_GPIO+X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCDA2_GPIO+X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCDA3_GPIO+X0, HIGH);
 }
 
 //initialise ethernet pins

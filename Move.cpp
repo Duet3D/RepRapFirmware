@@ -1310,10 +1310,9 @@ long LookAhead::EndPointToMachine(int8_t drive, float coord)
 
 void LookAhead::PrintMove()
 {
-	scratchString.printf("X,Y,Z: %.1f %.1f %.1f, min v: %.2f, max v: %.1f, acc: %.1f, feed: %.1f, u: %.3f, v: %.3f\n",
+	platform->Message(HOST_MESSAGE, "X,Y,Z: %.1f %.1f %.1f, min v: %.2f, max v: %.1f, acc: %.1f, feed: %.1f, u: %.3f, v: %.3f\n",
 			MachineToEndPoint(X_AXIS), MachineToEndPoint(Y_AXIS), MachineToEndPoint(Z_AXIS),
 			MinSpeed(), MaxSpeed(), Acceleration(), FeedRate(), Previous()->V(), V());
-	platform->Message(HOST_MESSAGE, scratchString);
 }
 
 

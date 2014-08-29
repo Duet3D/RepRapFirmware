@@ -160,6 +160,7 @@ public:
 	Network();
 	void Init();
 	void Spin();
+	void Interrupt();
 
 	bool InLwip() const;
 	void ReadPacket();

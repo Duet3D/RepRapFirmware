@@ -123,6 +123,28 @@ static void SendData(tcp_pcb *pcb, ConnectionState *cs)
 extern "C"
 {
 
+// Callback functions for the EMAC driver
+
+static void emac_read_packet(uint32_t ul_status)
+{
+	// Because the LWIP stack can become corrupted if we work with it in parallel,
+	// we may have to wait for the next Spin() call to read the next packet.
+	// On this occasion, we can set the RX callback again.
+	if (inLwip)
+	{
+		reprap.GetNetwork()->ReadPacket();
+		ethernet_set_rx_callback(NULL);
+	}
+	else
+	{
+		++inLwip;
+		do {
+			// read all queued packets from the RX buffer
+		} while (ethernet_read());
+		--inLwip;
+	}
+}
+
 // Callback functions called by LWIP
 
 static void conn_err(void *arg, err_t err)
@@ -414,12 +436,19 @@ void Network::Spin()
 {
 	if (state == NetworkActive)
 	{
-		// Fetch incoming data
-		// ethernet_task() is called twice because the EMAC RX buffers have been increased by dc42's Arduino patch.
-		++inLwip;
-		ethernet_task();
-		ethernet_task();
-		--inLwip;
+		// See if we can read any packets
+		if (readingData)
+		{
+			readingData = false;
+
+			++inLwip;
+			do {
+				// read all queued packets from the RX buffer
+			} while (ethernet_read());
+			--inLwip;
+
+			ethernet_set_rx_callback(&emac_read_packet);
+		}
 
 		// See if we can send anything
 		++inLwip;
@@ -463,8 +492,19 @@ void Network::Spin()
 			httpd_init();
 			ftpd_init();
 			telnetd_init();
+			ethernet_set_rx_callback(&emac_read_packet);
 			state = NetworkActive;
 		}
+	}
+}
+
+void Network::Interrupt()
+{
+	if (!inLwip)
+	{
+		++inLwip;
+		ethernet_timers_update();
+		--inLwip;
 	}
 }
 

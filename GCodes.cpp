@@ -350,8 +350,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 		gb->GetFloatArray(eMovement, eMoveCount);
 		if(tool->DriveCount() != eMoveCount)
 		{
-			scratchString.printf("Wrong number of extruder drives for the selected tool: %s\n", gb->Buffer());
-			platform->Message(HOST_MESSAGE, scratchString);
+			platform->Message(BOTH_ERROR_MESSAGE, "Wrong number of extruder drives for the selected tool: %s\n", gb->Buffer());
 			return false;
 		}
 
@@ -490,12 +489,10 @@ bool GCodes::DoFileCannedCycles(const char* fileName)
 		if (f == NULL)
 		{
 			// Don't use snprintf into scratchString here, because fileName may be aliased to scratchString
-			platform->Message(HOST_MESSAGE, "Macro file ");
-			platform->Message(HOST_MESSAGE, fileName);
-			platform->Message(HOST_MESSAGE, " not found.\n");
+			platform->Message(BOTH_ERROR_MESSAGE, "Macro file %s not found.\n", fileName);
 			if(!Pop())
 			{
-				platform->Message(HOST_MESSAGE, "Cannot pop the stack.\n");
+				platform->Message(BOTH_ERROR_MESSAGE, "Cannot pop the stack.\n");
 			}
 			return true;
 		}
@@ -1008,7 +1005,7 @@ bool GCodes::OpenFileToWrite(const char* directory, const char* fileName, GCodeB
 	eofStringCounter = 0;
 	if (fileBeingWritten == NULL)
 	{
-		platform->Message(HOST_MESSAGE, "Can't open GCode file for writing.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Can't open GCode file \"%s\" for writing.\n", fileName);
 		return false;
 	}
 	else
@@ -1022,7 +1019,7 @@ void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
 {
 	if (fileBeingWritten == NULL)
 	{
-		platform->Message(HOST_MESSAGE, "Attempt to write to a null file.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write to a null file.\n");
 		return;
 	}
 
@@ -1058,7 +1055,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 {
 	if (fileBeingWritten == NULL)
 	{
-		platform->Message(HOST_MESSAGE, "Attempt to write to a null file.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write to a null file.\n");
 		return;
 	}
 
@@ -1085,7 +1082,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 		{
 			if (gb->Seen('P'))
 			{
-				scratchString.printf("%s", gb->GetIValue());
+				scratchString.printf("%d", gb->GetIValue());
 				HandleReply(false, gb == serialGCode, scratchString.Pointer(), 'G', 998, true);
 				return;
 			}
@@ -1120,7 +1117,7 @@ void GCodes::QueueFileToPrint(const char* fileName)
 	}
 	else
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "GCode file not found\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "GCode file \"%s\" not found\n", fileName);
 	}
 }
 
@@ -1128,8 +1125,7 @@ void GCodes::DeleteFile(const char* fileName)
 {
 	if(!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), fileName))
 	{
-		scratchString.printf("Unsuccessful attempt to delete: %s\n", fileName);
-		platform->Message(BOTH_ERROR_MESSAGE, scratchString);
+		platform->Message(BOTH_ERROR_MESSAGE, "Unsuccessful attempt to delete file \"%s\"\n", fileName);
 	}
 }
 
@@ -1142,7 +1138,7 @@ bool GCodes::SendConfigToLine()
 		configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 		if (configFile == NULL)
 		{
-			platform->Message(HOST_MESSAGE, "Configuration file not found\n");
+			platform->Message(BOTH_ERROR_MESSAGE, "Configuration file not found\n");
 			return true;
 		}
 		platform->GetLine()->Write('\n', true);
@@ -1331,9 +1327,7 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 			ipp++;
 			if (ipp > 3)
 			{
-				platform->Message(HOST_MESSAGE, "Dud IP address: ");
-				platform->Message(HOST_MESSAGE, gb->Buffer());
-				platform->Message(HOST_MESSAGE, "\n");
+				platform->Message(BOTH_ERROR_MESSAGE, "Dud IP address: %s\n", gb->Buffer());
 				return;
 			}
 			sp++;
@@ -1360,14 +1354,12 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 			break;
 
 		default:
-			platform->Message(HOST_MESSAGE, "Setting ether parameter - dud code.");
+			platform->Message(BOTH_ERROR_MESSAGE, "Setting ether parameter - dud code.");
 		}
 	}
 	else
 	{
-		platform->Message(HOST_MESSAGE, "Dud IP address: ");
-		platform->Message(HOST_MESSAGE, gb->Buffer());
-		platform->Message(HOST_MESSAGE, "\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Dud IP address: %s\n", gb->Buffer());
 	}
 }
 
@@ -1387,9 +1379,7 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 			ipp++;
 			if(ipp > 5)
 			{
-				platform->Message(HOST_MESSAGE, "Dud MAC address: ");
-				platform->Message(HOST_MESSAGE, gb->Buffer());
-				platform->Message(HOST_MESSAGE, "\n");
+				platform->Message(BOTH_ERROR_MESSAGE, "Dud MAC address: %s\n", gb->Buffer());
 				return;
 			}
 			sp++;
@@ -1407,9 +1397,7 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 	}
 	else
 	{
-		platform->Message(HOST_MESSAGE, "Dud MAC address: ");
-		platform->Message(HOST_MESSAGE, gb->Buffer());
-		platform->Message(HOST_MESSAGE, "\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Dud MAC address: %s\n", gb->Buffer());
 	}
 //	snprintf(scratchString, STRING_LENGTH, "MAC: %x:%x:%x:%x:%x:%x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 //	platform->Message(HOST_MESSAGE, scratchString);
@@ -1503,8 +1491,7 @@ void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOr
 
 	if (s != 0)
 	{
-		scratchString.printf("Emulation of %s is not yet supported.\n", s);
-		platform->Message(HOST_MESSAGE, scratchString);
+		platform->Message(BOTH_ERROR_MESSAGE, "Emulation of %s is not yet supported.\n", s);
 	}
 }
 
@@ -1638,7 +1625,7 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 {
 	if(tool == NULL)
 	{
-		platform->Message(HOST_MESSAGE, "Setting temperature: no tool selected.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Setting temperature: no tool selected.\n");
 		return;
 	}
 
@@ -1928,7 +1915,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 29: // End of file being written; should be intercepted before getting here
-		platform->Message(HOST_MESSAGE, "GCode end-of-file being interpreted.\n");
+		platform->Message(BOTH_MESSAGE, "GCode end-of-file being interpreted.\n");
 		break;
 
 	case 30:	// Delete file
@@ -1989,8 +1976,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				gb->GetFloatArray(eVals, eCount);
 				if(eCount != DRIVES-AXES)
 				{
-					scratchString.printf("Setting steps/mm - wrong number of E drives: %s\n", gb->Buffer());
-					platform->Message(HOST_MESSAGE, scratchString);
+					platform->Message(BOTH_ERROR_MESSAGE, "Setting steps/mm - wrong number of E drives: %s\n", gb->Buffer());
 				}
 				else
 				{
@@ -2052,32 +2038,43 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		reply.copy("T:");
 		for(int8_t heater = 1; heater < HEATERS; heater++)
 		{
-			if(reprap.GetHeat()->GetStatus(heater) != Heat::HS_off)
+			Heat::HeaterStatus hs = reprap.GetHeat()->GetStatus(heater);
+			if(hs != Heat::HS_off && hs != Heat::HS_fault)
 			{
 				reply.catf("%.1f ", reprap.GetHeat()->GetTemperature(heater));
 			}
 		}
-		reply.catf("B: %.1f ", reprap.GetHeat()->GetTemperature(0));
+		reply.catf("B: %.1f ", reprap.GetHeat()->GetTemperature(HOT_BED));
 		break;
    
 	case 106: // Fan on or off
-		if (gb->Seen('I'))
 		{
-			coolingInverted = (gb->GetIValue() > 0);
-		}
-		if (gb->Seen('S'))
-		{
-			float f = gb->GetFValue();
-			f = min<float>(f, 255.0);
-			f = max<float>(f, 0.0);
-			if (coolingInverted)
+			bool seen = false;
+			if (gb->Seen('I'))
 			{
-				// Check if 1.0 or 255.0 may be used as the maximum value
-				platform->CoolingFan((f <= 1.0 ? 1.0 : 255.0) - f);
+				coolingInverted = (gb->GetIValue() > 0);
+				seen = true;
 			}
-			else
+			if (gb->Seen('S'))
 			{
-				platform->CoolingFan(f);
+				float f = gb->GetFValue();
+				f = min<float>(f, 255.0);
+				f = max<float>(f, 0.0);
+				if (coolingInverted)
+				{
+					// Check if 1.0 or 255.0 may be used as the maximum value
+					platform->CoolingFan((f <= 1.0 ? 1.0 : 255.0) - f);
+				}
+				else
+				{
+					platform->CoolingFan(f);
+				}
+				seen = true;
+			}
+
+			if (!seen)
+			{
+				reply.printf("Cooling inverted: %s", coolingInverted ? "yes" : "no");
 			}
 		}
 		break;
@@ -2236,11 +2233,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 126: // Valve open
-		platform->Message(HOST_MESSAGE, "M126 - valves not yet implemented\n");
+		platform->Message(BOTH_MESSAGE, "M126 - valves not yet implemented\n");
 		break;
 
 	case 127: // Valve closed
-		platform->Message(HOST_MESSAGE, "M127 - valves not yet implemented\n");
+		platform->Message(BOTH_MESSAGE, "M127 - valves not yet implemented\n");
 		break;
 
 	case 135: // Set PID sample interval
@@ -2273,7 +2270,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 141: // Chamber temperature
-		platform->Message(HOST_MESSAGE, "M141 - heated chamber not yet implemented\n");
+		platform->Message(BOTH_MESSAGE, "M141 - heated chamber not yet implemented\n");
 		break;
 
 //	case 160: //number of mixing filament drives  TODO: With tools defined, is this needed?
@@ -2320,8 +2317,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				gb->GetFloatArray(eVals, eCount);
 				if(eCount != DRIVES-AXES)
 				{
-					scratchString.printf("Setting accelerations - wrong number of E drives: %s\n", gb->Buffer());
-					platform->Message(HOST_MESSAGE, scratchString);
+					platform->Message(BOTH_ERROR_MESSAGE, "Setting accelerations - wrong number of E drives: %s\n", gb->Buffer());
 				}
 				else
 				{
@@ -2369,8 +2365,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				gb->GetFloatArray(eVals, eCount);
 				if(eCount != DRIVES-AXES)
 				{
-					scratchString.printf("Setting feedrates - wrong number of E drives: %s\n", gb->Buffer());
-					platform->Message(HOST_MESSAGE, scratchString);
+					platform->Message(BOTH_ERROR_MESSAGE, "Setting feedrates - wrong number of E drives: %s\n", gb->Buffer());
 				}
 				else
 				{
@@ -3025,7 +3020,7 @@ bool GCodes::ChangeTool(int newToolNumber)
     	return true;
 
     default:
-    	platform->Message(HOST_MESSAGE, "Tool change - dud sequence number.\n");
+    	platform->Message(BOTH_ERROR_MESSAGE, "Tool change - dud sequence number.\n");
     }
 
     toolChangeSequence = 0;
@@ -3108,9 +3103,7 @@ bool GCodeBuffer::Put(char c)
 		Init();
 		if (reprap.Debug() && gcodeBuffer[0] && !writingFileDirectory) // Don't bother with blank/comment lines
 		{
-			platform->Message(HOST_MESSAGE, identity);
-			platform->Message(HOST_MESSAGE, gcodeBuffer);
-			platform->Message(HOST_MESSAGE, "\n");
+			platform->Message(HOST_MESSAGE, "%s%s\n", identity, gcodeBuffer);
 		}
 
 		// Deal with line numbers and checksums
@@ -3171,7 +3164,7 @@ bool GCodeBuffer::Put(char c)
 
 	if (gcodePointer >= GCODE_LENGTH)
 	{
-		platform->Message(HOST_MESSAGE, "G Code buffer length overflow.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "G Code buffer length overflow.\n");
 		gcodePointer = 0;
 		gcodeBuffer[0] = 0;
 	}
@@ -3202,7 +3195,7 @@ float GCodeBuffer::GetFValue()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
 		readPointer = -1;
 		return 0.0;
 	}
@@ -3218,7 +3211,7 @@ const void GCodeBuffer::GetFloatArray(float a[], int& returnedLength)
 	int length = 0;
 	if(readPointer < 0)
 	{
-		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode float array before a search.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode float array before a search.\n");
 		readPointer = -1;
 		returnedLength = 0;
 		return;
@@ -3229,8 +3222,7 @@ const void GCodeBuffer::GetFloatArray(float a[], int& returnedLength)
 	{
 		if(length >= returnedLength) // Array limit has been set in here
 		{
-			scratchString.printf("GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
-			platform->Message(HOST_MESSAGE, scratchString);
+			platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -3273,7 +3265,7 @@ const void GCodeBuffer::GetLongArray(long l[], int& returnedLength)
 	int length = 0;
 	if(readPointer < 0)
 	{
-		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode long array before a search.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode long array before a search.\n");
 		readPointer = -1;
 		return;
 	}
@@ -3283,8 +3275,7 @@ const void GCodeBuffer::GetLongArray(long l[], int& returnedLength)
 	{
 		if(length >= returnedLength) // Array limit has been set in here
 		{
-			scratchString.printf("GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
-			platform->Message(HOST_MESSAGE, scratchString);
+			platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -3313,7 +3304,7 @@ const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode string before a search.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode string before a search.\n");
 		readPointer = -1;
 		return "";
 	}
@@ -3343,7 +3334,7 @@ const char* GCodeBuffer::GetUnprecedentedString()
 
 	if (!gcodeBuffer[readPointer])
 	{
-		platform->Message(HOST_MESSAGE, "GCodes: String expected but not seen.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: String expected but not seen.\n");
 		readPointer = -1;
 		return gcodeBuffer; // Good idea?
 	}
@@ -3359,7 +3350,7 @@ long GCodeBuffer::GetLValue()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(HOST_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
 		readPointer = -1;
 		return 0;
 	}

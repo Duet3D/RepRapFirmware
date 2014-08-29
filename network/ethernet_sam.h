@@ -66,9 +66,9 @@ void init_ethernet(void);
 bool establish_ethernet_link(void);
 void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
 
-struct netif* GetConfiguration();
+struct netif* ethernet_get_configuration();
 
-static void timers_update(void);
+void ethernet_timers_update(void);
 
 /**
  * \brief Status callback used to print address given by DHCP.
@@ -76,13 +76,23 @@ static void timers_update(void);
  * \param netif Instance to network interface.
  *
  */
-void status_callback(struct netif *netif);
+void ethernet_status_callback(struct netif *netif);
 
 /**
  * \brief Manage the ethernet packets, if any received process them.
  *
+ * \return Returns true if data has been processed.
  */
-void ethernet_task(void);
+bool ethernet_read(void);
+
+/*
+ * \brief Sets the EMAC RX callback. It will be called when a new packet
+ * can be processed and should be called with a NULL parameter inside
+ * the actual callback.
+ *
+ * \param callback The callback to be called when a new packet is ready
+ */
+void ethernet_set_rx_callback(emac_dev_tx_cb_t callback);
 
 /// @cond 0
 /**INDENT-OFF**/

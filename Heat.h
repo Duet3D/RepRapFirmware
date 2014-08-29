@@ -72,7 +72,7 @@ class Heat
 {
   public:
 	// Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
-	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2 };
+	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2, HS_fault = 3 };
   
     Heat(Platform* p, GCodes* g);
     void Spin();												// Called in a tight loop to keep everything going
@@ -187,9 +187,10 @@ inline Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 {
 	if (heater < 0 || heater >= HEATERS)
 		return HS_off;
-	return (pids[heater]->SwitchedOff()) ? HS_off
-			  : (pids[heater]->Active()) ? HS_active
-				  : HS_standby;
+	return (pids[heater]->temperatureFault ? HS_fault
+			: pids[heater]->SwitchedOff()) ? HS_off
+				: (pids[heater]->Active()) ? HS_active
+					: HS_standby;
 }
 
 inline void Heat::SetActiveTemperature(int8_t heater, float t)

@@ -189,11 +189,10 @@ void RepRap::Init()
   currentTool = NULL;
   const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
   WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);	// enable watchdog, reset the mcu if it times out
-  coldExtrude = true;		// DC42 changed default to true for compatibility because for now we are aiming for copatibility with RRP 0.78
+  coldExtrude = true;		// DC42 changed default to true for compatibility because for now we are aiming for compatibility with RRP 0.78
   active = true;			// must do this before we start the network, else the watchdog may time out
 
-  scratchString.printf("%s Version %s dated %s\n", NAME, VERSION, DATE);
-  platform->Message(HOST_MESSAGE, scratchString);
+  platform->Message(HOST_MESSAGE, "%s Version %s dated %s\n", NAME, VERSION, DATE);
 
   platform->Message(HOST_MESSAGE, ".\n\nExecuting ");
   platform->Message(HOST_MESSAGE, platform->GetConfigFile());
@@ -222,14 +221,10 @@ void RepRap::Init()
 	  }
   }
 
-  //while(gCodes->RunConfigurationGCodes()); // Wait till the file is finished
-
   platform->Message(HOST_MESSAGE, "\nStarting network...\n");
   network->Init(); // Need to do this here, as the configuration GCodes may set IP address etc.
 
-  platform->Message(HOST_MESSAGE, "\n");
-  scratchString.printf("%s is up and running.\n", NAME);
-  platform->Message(HOST_MESSAGE, scratchString);
+  platform->Message(HOST_MESSAGE, "\n%s is up and running.\n", NAME);
   fastLoop = FLT_MAX;
   slowLoop = 0.0;
   lastTime = platform->Time();
@@ -295,8 +290,7 @@ void RepRap::Spin()
 
 void RepRap::Timing()
 {
-	scratchString.printf("Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
-	platform->AppendMessage(BOTH_MESSAGE, scratchString);
+	platform->AppendMessage(BOTH_MESSAGE, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
 	fastLoop = FLT_MAX;
 	slowLoop = 0.0;
 }
@@ -425,8 +419,7 @@ void RepRap::StandbyTool(int toolNumber)
 		tool = tool->Next();
 	}
 
-	scratchString.printf("Attempt to standby a non-existent tool: %d.\n", toolNumber);
-	platform->Message(HOST_MESSAGE, scratchString);
+	platform->Message(HOST_MESSAGE, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
 }
 
 Tool* RepRap::GetTool(int toolNumber)
@@ -456,8 +449,7 @@ void RepRap::SetToolVariables(int toolNumber, float* standbyTemperatures, float*
 		tool = tool->Next();
 	}
 
-	scratchString.printf("Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
-	platform->Message(HOST_MESSAGE, scratchString);
+	platform->Message(HOST_MESSAGE, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 }
 
 
@@ -550,7 +542,7 @@ size_t StringRef::cat(const char* src)
 
 // Utilities and storage not part of any class
 
-static char scratchStringBuffer[STRING_LENGTH];
+static char scratchStringBuffer[200];		// this is now used only for short messages
 StringRef scratchString(scratchStringBuffer, ARRAY_SIZE(scratchStringBuffer));
 
 // For debug use

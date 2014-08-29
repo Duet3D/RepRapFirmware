@@ -29,17 +29,21 @@ See undefined.cpp file for more info
 // Number of pins defined in PinDescription array
 #define PINS_C 25
 
-//undefined pins constants so the undef pins can
-//be refered to a Xn rather than n
-static const uint8_t X0  = 0;
-static const uint8_t X1  = 1;
-static const uint8_t X2  = 2;
-static const uint8_t X3  = 3;
-static const uint8_t X4  = 4;
-static const uint8_t X5  = 5;
-static const uint8_t X6  = 6;
-static const uint8_t X7  = 7;
-static const uint8_t X8  = 8;
+static const unsigned int pwmFastFrequency = 25000;		// fast PWM frequency for Intel spec PWM fans
+
+// Undefined pins constants so the undef pins can be referred to a Xn rather than n
+// Any pin numbers below X0 we assume are ordinary Due pin numbers
+// Note: these must all be <=127 because pin numbers are held in int8_t in some places.
+// There are 92 pins defined in the Arduino Due core as at version 1.5.4, so these must all be >=92
+static const uint8_t X0  = 100;
+static const uint8_t X1  = 101;
+static const uint8_t X2  = 102;
+static const uint8_t X3  = 103;
+static const uint8_t X4  = 104;
+static const uint8_t X5  = 105;
+static const uint8_t X6  = 106;
+static const uint8_t X7  = 107;
+static const uint8_t X8  = 108;
 //HSMCI
 static const uint8_t PIN_HSMCI_MCCDA_GPIO  = 9;
 static const uint8_t PIN_HSMCI_MCCK_GPIO  = 10;
@@ -66,7 +70,7 @@ extern const PinDescription nonDuePinDescription[] ;
 extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode );
 extern void digitalWriteNonDue( uint32_t ulPin, uint32_t ulVal );
 extern int digitalReadNonDue( uint32_t ulPin);
-extern void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue);
+extern void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm = false);
 extern void analogOutputNonDue();
 extern void hsmciPinsinit();
 extern void ethPinsInit();

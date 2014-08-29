@@ -324,7 +324,7 @@ void Webserver::ProcessGcode(const char* gc)
 		printStartTime = platform->Time();
 		strncpy(fileBeingPrinted, &gc[4], ARRAY_SIZE(fileBeingPrinted));
 		fileBeingPrinted[ARRAY_UPB(fileBeingPrinted)] = 0;
-		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
+		reprap.GetGCodes()->QueueFileToPrint(fileBeingPrinted);
 	}
 	else if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
 	{
@@ -523,7 +523,7 @@ void Webserver::MessageStringToWebInterface(const char *s, bool error)
 		}
 		else
 		{
-			gcodeReply.printf("%s", s);
+			gcodeReply.copy(s);
 		}
 	}
 
@@ -794,17 +794,13 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		jsonResponseBuffer[ARRAY_UPB(jsonResponseBuffer)] = 0;
 		if (webDebug)
 		{
-			platform->Message(HOST_MESSAGE, "JSON response: ");
-			platform->Message(HOST_MESSAGE, jsonResponseBuffer);
-			platform->Message(HOST_MESSAGE, " queued\n");
+			platform->Message(HOST_MESSAGE, "JSON response: %s queued\n", jsonResponseBuffer);
 		}
 	}
 	else
 	{
 		jsonResponseBuffer[0] = 0;
-		platform->Message(HOST_MESSAGE, "KnockOut request: ");
-		platform->Message(HOST_MESSAGE, command);
-		platform->Message(HOST_MESSAGE, " not recognised\n");
+		platform->Message(HOST_MESSAGE, "KnockOut request: %s not recognised\n", command);
 	}
 
 	if (mayKeepOpen)
@@ -875,7 +871,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 	else if (StringEquals(request, "upload_cancel"))
 	{
 		CancelUpload();
-		response.printf("{\"err\":%d}", 0);
+		response.copy("{\"err\":0}");
 	}
 	else if (StringEquals(request, "delete") && StringEquals(key, "name"))
 	{
@@ -933,7 +929,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 			}
 			else
 			{
-				response.printf("{\"err\":1}");
+				response.copy("{\"err\":1}");
 			}
 		}
 		else if (reprap.GetGCodes()->PrintingAFile() && webserver->fileInfoDetected)
@@ -964,7 +960,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 	}
 	else if (StringEquals(request, "name"))
 	{
-		response.printf("{\"myName\":\"");
+		response.copy("{\"myName\":\"");
 		size_t j = response.strlen();
 		const char *myName = webserver->GetName();
 		for (size_t i = 0; i < SHORT_STRING_LENGTH; ++i)
@@ -1135,6 +1131,9 @@ void Webserver::HttpInterpreter::GetStatusResponse(StringRef& response, uint8_t 
 		response.catf(",\"probe\":\"%d\"", v0);
 		break;
 	}
+
+	// Send fan RPM value
+	response.catf(",\"fanRPM\":%u", (unsigned int)platform->GetFanRPM());
 
 	// Send the amount of buffer space available for gcodes
 	response.catf(",\"buff\":%u", webserver->GetGcodeBufferSpace());
@@ -1723,8 +1722,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 
 			if (DebugEnabled())
 			{
-				scratchString.printf("FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
-				platform->Message(DEBUG_MESSAGE, scratchString);
+				platform->Message(DEBUG_MESSAGE, "FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
 			}
 
 			if (clientPointer > 1) // only process a new line if we actually received data
@@ -2482,6 +2480,8 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 			const size_t overlap = 100;
 			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
 			bool foundLayerHeight = false;
+			unsigned int filamentsFound = 0, nFilaments;
+			float filaments[DRIVES - AXES];
 
 			// Get slic3r settings by reading from the start of the file. We only read the first 1K or so, everything we are looking for should be there.
 			{
@@ -2490,6 +2490,17 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 				if (nbytes == (int)sizeToRead)
 				{
 					buf[sizeToRead] = 0;
+
+					// Search for filament usage (Cura puts it at the beginning of a G-code file)
+					nFilaments = FindFilamentUsed(buf, sizeToRead, filaments, DRIVES - AXES);
+					if (nFilaments != 0 && nFilaments >= filamentsFound)
+					{
+						filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
+						for (unsigned int i = 0; i < filamentsFound; ++i)
+						{
+							info.filamentNeeded[i] = filaments[i];
+						}
+					}
 
 					// Look for layer height
 					foundLayerHeight = FindLayerHeight(buf, sizeToRead, info.layerHeight);
@@ -2524,6 +2535,7 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 
 			// Now get the object height and filament used by reading the end of the file
 			{
+				bool searchForFilaments = (filamentsFound == 0);
 				size_t sizeToRead;
 				if (info.fileSize <= readSize + overlap)
 				{
@@ -2539,7 +2551,6 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 				}
 				unsigned long seekPos = info.fileSize - sizeToRead;	// read on a 512b boundary
 				size_t sizeToScan = sizeToRead;
-				unsigned int filamentsFound = 0;
 				for (;;)
 				{
 					if (!f->Seek(seekPos))
@@ -2554,14 +2565,16 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 					buf[sizeToScan] = 0;						// add a null terminator
 
 					// Search for filament used
-					float filaments[DRIVES - AXES];
-					unsigned int nFilaments = FindFilamentUsed(buf, sizeToScan, filaments, DRIVES - AXES);
-					if (nFilaments != 0 && nFilaments >= filamentsFound)
+					if (searchForFilaments)
 					{
-						filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
-						for (unsigned int i = 0; i < filamentsFound; ++i)
+						nFilaments = FindFilamentUsed(buf, sizeToScan, filaments, DRIVES - AXES);
+						if (nFilaments != 0 && nFilaments >= filamentsFound)
 						{
-							info.filamentNeeded[i] = filaments[i];
+							filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
+							for (unsigned int i = 0; i < filamentsFound; ++i)
+							{
+								info.filamentNeeded[i] = filaments[i];
+							}
 						}
 					}
 
