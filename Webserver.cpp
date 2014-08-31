@@ -898,7 +898,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 		}
 		else
 		{
-			response.copy("{\"files\":[NONE]}");
+			response.copy("{\"files\":[]}");
 		}
 	}
 	else if (StringEquals(request, "fileinfo"))

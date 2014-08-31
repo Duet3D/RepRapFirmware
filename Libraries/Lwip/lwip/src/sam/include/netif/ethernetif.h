@@ -54,9 +54,11 @@ bool ethernetif_phy_link_status(void);	//*****************************AB
 
 err_t ethernetif_init(struct netif *netif);
 
-void ethernetif_input(void *pv_parameters);
+bool ethernetif_input(void *pv_parameters);
 
 void ethernet_hardware_init(void);
 bool ethernet_establish_link(void);
+void RepRapNetworkSetMACAddress(const u8_t macAddress[]);
+void ethernetif_set_rx_callback(emac_dev_tx_cb_t callback);
 
 #endif /* ETHERNETIF_H_INCLUDED */

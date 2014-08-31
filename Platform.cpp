@@ -28,7 +28,10 @@ extern "C" char *sbrk(int i);
 
 const uint8_t memPattern = 0xA5;
 
-static volatile uint32_t fanRpmCounter = 0;
+static uint32_t fanInterruptCount = 0;				// accessed only in ISR, so no need to declare it volatile
+const uint32_t fanMaxInterruptCount = 32;			// number of fan interrupts that we average over
+static volatile uint32_t fanLastResetTime = 0;		// time (microseconds) at which we last reset the interrupt count, accessed inside and outside ISR
+static volatile uint32_t fanInterval = 0;			// written by ISR, read outside the ISR
 
 // Arduino initialise and loop functions
 // Put nothing in these other than calls to the RepRap equivalents
@@ -230,11 +233,6 @@ void Platform::Init()
 	gcodeDir = GCODE_DIR;
 	tempDir = TEMP_DIR;
 
-  /*
-  	FIXME Nasty having to specify individually if a pin is arduino or not.
-    requires a unified variant file. If implemented this would be much better
-	to allow for different hardware in the future
-  */
 	for (size_t i = 0; i < DRIVES; i++)
 	{
 		if (stepPins[i] >= 0)
@@ -290,7 +288,7 @@ void Platform::Init()
 
 	if (coolingFanRpmPin >= 0)
 	{
-		pinModeNonDue(coolingFanRpmPin, INPUT_PULLUP);
+		pinModeNonDue(coolingFanRpmPin, INPUT_PULLUP, 500);		// enable pullup and 500Hz debounce filter
 	}
 
 	InitialiseInterrupts();
@@ -627,7 +625,14 @@ void TC4_Handler()
 
 void FanInterrupt()
 {
-	fanRpmCounter++;
+	++fanInterruptCount;
+	if (fanInterruptCount == fanMaxInterruptCount)
+	{
+		uint32_t now = micros();
+		fanInterval = now - fanLastResetTime;
+		fanLastResetTime = now;
+		fanInterruptCount = 0;
+	}
 }
 
 void Platform::InitialiseInterrupts()
@@ -1078,21 +1083,13 @@ void Platform::CoolingFan(float speed)
 
 float Platform::GetFanRPM()
 {
-	float now = Time();
-	float diff = now - lastRpmResetTime;
-
-	// Intel's 4-pin PWM fan specifications say we get two pulses per revolution.
-	// That means we get 2 ISR calls per pulse and 4 increments per revolution.
-	float result = (float)fanRpmCounter / (4.0 * diff) * 60.0;
-
-	// Collect some values and reset the counters after a few seconds
-	if (diff > COOLING_FAN_RPM_SAMPLE_TIME)
-	{
-		fanRpmCounter = 0;
-		lastRpmResetTime = now;
-	}
-
-	return result;
+	// The ISR sets fanInterval to the number of microseconds it took to get fanMaxInterruptCount interrupts.
+	// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
+	// However, if the fan stops then we get no interrupts and fanInterval stops getting updated.
+	// We must recognise this and return zero.
+	return (fanInterval != 0 && micros() - fanLastResetTime < 3000000U)		// if we have a reading and it is less than 3 second old
+			? (float)((30000000U * fanMaxInterruptCount)/fanInterval)		// then calculate RPM assuming 2 interrupts per rev
+			: 0.0;															// else assume fan is off or tacho not connected
 }
 
 // Interrupts

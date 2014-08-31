@@ -75,21 +75,22 @@ extern const PinDescription nonDuePinDescription[]=
   { NULL, 0, 0, PIO_NOT_A_PIN, PIO_DEFAULT, 0, NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }
 } ;
 
+// Fixed version of PIO_SetDebounceFilter
+static void SetDebounceFilter( Pio* pPio, const uint32_t dwMask, const uint32_t dwCuttOff )
+{
+    pPio->PIO_IFER = dwMask; 		// enable input filtering, 0 bit field no effect
+    pPio->PIO_DIFSR = dwMask; 		// select debouncing filter, 0 bit field no effect
+    pPio->PIO_SCDR = ((32678/(2*(dwCuttOff))) - 1) & 0x3FFF; // the lowest 14 bits work
+}
 
 /*
 pinModeNonDue
 copied from the pinMode function within wiring-digital.c file, part of the arduino core.
 Allows a non "Arduino Due" PIO pin to be setup.
 */
-extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode )
+extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff )
 {
-	if (ulPin < X0)
-	{
-		pinMode(ulPin, ulMode);		// pass on to Arduino core
-		return;
-	}
-
-	const PinDescription& pinDesc = nonDuePinDescription[ulPin - X0];
+	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
     if ( pinDesc.ulPinType == PIO_NOT_A_PIN )
     {
         return;
@@ -105,7 +106,11 @@ extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode )
             	PIO_INPUT,
             	pinDesc.ulPin,
             	0 ) ;
-        break ;
+            if (debounceCutoff != 0)
+            {
+            	SetDebounceFilter(pinDesc.pPort, pinDesc.ulPin, debounceCutoff);	// enable debounce filer with specified cutoff frequency
+            }
+            break ;
 
         case INPUT_PULLUP:
             /* Enable peripheral for clocking input */
@@ -115,7 +120,11 @@ extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode )
             	PIO_INPUT,
             	pinDesc.ulPin,
             	PIO_PULLUP ) ;
-        break ;
+            if (debounceCutoff != 0)
+            {
+            	SetDebounceFilter(pinDesc.pPort, pinDesc.ulPin, debounceCutoff);	// enable debounce filer with specified cutoff frequency
+            }
+            break ;
 
         case OUTPUT:
             PIO_Configure(
@@ -129,10 +138,10 @@ extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode )
             {
                 pmc_disable_periph_clk( pinDesc.ulPeripheralId ) ;
             }
-        break ;
+            break ;
 
         default:
-        break ;
+        	break ;
     }
 }
 

@@ -67,7 +67,7 @@ static const uint8_t PIN_EMAC_EMDIO  = 24;
 // struct used to hold the descriptions for the "non arduino" pins.
 // from the Arduino.h files
 extern const PinDescription nonDuePinDescription[] ;
-extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode );
+extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff = 0 );	// NB only one debounce cutoff frequency can be set per PIO
 extern void digitalWriteNonDue( uint32_t ulPin, uint32_t ulVal );
 extern int digitalReadNonDue( uint32_t ulPin);
 extern void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm = false);
