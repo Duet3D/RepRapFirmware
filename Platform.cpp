@@ -288,7 +288,7 @@ void Platform::Init()
 
 	if (coolingFanRpmPin >= 0)
 	{
-		pinModeNonDue(coolingFanRpmPin, INPUT_PULLUP, 500);		// enable pullup and 500Hz debounce filter
+		pinModeNonDue(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
 	}
 
 	InitialiseInterrupts();

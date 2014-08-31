@@ -27,7 +27,7 @@ Separated out from Platform.h by dc42
 // Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
 // and therefore avoids additional memory use and fragmentation.
 
-const unsigned int tcpOutputBufferCount = MEMP_NUM_TCP_PCB - 1;	// number of send buffers
+const unsigned int tcpOutputBufferCount = MEMP_NUM_TCP_PCB;		// number of send buffers
 const unsigned int tcpOutputBufferSize = 2 * 1432;				// size of each send buffer
 
 #define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
