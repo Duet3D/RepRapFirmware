@@ -75,14 +75,6 @@ extern const PinDescription nonDuePinDescription[]=
   { NULL, 0, 0, PIO_NOT_A_PIN, PIO_DEFAULT, 0, NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }
 } ;
 
-// Fixed version of PIO_SetDebounceFilter
-static void SetDebounceFilter( Pio* pPio, const uint32_t dwMask, const uint32_t dwCuttOff )
-{
-    pPio->PIO_IFER = dwMask; 		// enable input filtering, 0 bit field no effect
-    pPio->PIO_DIFSR = dwMask; 		// select debouncing filter, 0 bit field no effect
-    pPio->PIO_SCDR = ((32678/(2*(dwCuttOff))) - 1) & 0x3FFF; // the lowest 14 bits work
-}
-
 /*
 pinModeNonDue
 copied from the pinMode function within wiring-digital.c file, part of the arduino core.
@@ -105,10 +97,10 @@ extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode, uint32_t debounceCut
             	pinDesc.pPort,
             	PIO_INPUT,
             	pinDesc.ulPin,
-            	0 ) ;
+            	(debounceCutoff == 0) ? 0 : PIO_DEBOUNCE ) ;
             if (debounceCutoff != 0)
             {
-            	SetDebounceFilter(pinDesc.pPort, pinDesc.ulPin, debounceCutoff);	// enable debounce filer with specified cutoff frequency
+            	PIO_SetDebounceFilter(pinDesc.pPort, pinDesc.ulPin, debounceCutoff);	// enable debounce filer with specified cutoff frequency
             }
             break ;
 
@@ -119,10 +111,10 @@ extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode, uint32_t debounceCut
             	pinDesc.pPort,
             	PIO_INPUT,
             	pinDesc.ulPin,
-            	PIO_PULLUP ) ;
+            	(debounceCutoff == 0) ? PIO_PULLUP : PIO_PULLUP | PIO_DEBOUNCE ) ;
             if (debounceCutoff != 0)
             {
-            	SetDebounceFilter(pinDesc.pPort, pinDesc.ulPin, debounceCutoff);	// enable debounce filer with specified cutoff frequency
+            	PIO_SetDebounceFilter(pinDesc.pPort, pinDesc.ulPin, debounceCutoff);	// enable debounce filer with specified cutoff frequency
             }
             break ;
 
