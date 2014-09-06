@@ -184,7 +184,7 @@ void PID::Spin()
 	  if(temperature < tmp)
 	  {
 		  float tim = platform->Time() - timeSetHeating;
-		  if(tim > TIME_TO_HOT)
+		  if(tim > platform->TimeToHot())
 		  {
 			  platform->SetHeater(heater, 0.0);
 			  temperatureFault = true;

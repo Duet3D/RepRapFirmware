@@ -460,10 +460,6 @@ void Move::DoLookAhead()
   if(LookAheadRingEmpty())
     return;
   
-  LookAhead* n0;
-  LookAhead* n1;
-  LookAhead* n2;
-  
   // If there are a reasonable number of moves in there (LOOK_AHEAD), or if we are
   // doing single moves with no other move immediately following on, run up and down
   // the moves using the DDA Init() function to reduce the start or the end speed
@@ -475,10 +471,9 @@ void Move::DoLookAhead()
     
     // Run up the moves
     
-    n1 = lookAheadRingGetPointer;
-    n0 = n1->Previous();
-    n2 = n1->Next();
-    while(n2 != lookAheadRingAddPointer)
+	LookAhead* n1 = lookAheadRingGetPointer;
+	LookAhead* n0 = n1->Previous();
+    while(n1 != lookAheadRingAddPointer)
     {
       if(!(n1->Processed() & complete))
       {
@@ -494,8 +489,7 @@ void Move::DoLookAhead()
         }
       }
       n0 = n1;
-      n1 = n2;
-      n2 = n2->Next();
+      n1 = n1->Next();
     }
     
     // Now run down
@@ -516,7 +510,6 @@ void Move::DoLookAhead()
           n1->SetProcessed(complete);
         }
       }
-      n2 = n1;
       n1 = n0;
       n0 = n0->Previous();      
     } while(n0 != lookAheadRingGetPointer);
@@ -528,9 +521,9 @@ void Move::DoLookAhead()
   
   if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > 1)
   {
-    n1 = lookAheadRingGetPointer;
-    n0 = n1->Previous();
-    n2 = n1->Next();
+	LookAhead* n1 = lookAheadRingGetPointer;
+	LookAhead* n0 = n1->Previous();
+	LookAhead* n2 = n1->Next();
     while(n2 != lookAheadRingAddPointer)
     {
       if(n1->Processed() == unprocessed)

@@ -1923,8 +1923,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		break;
 
 	case 80:	// ATX power on
+		platform->SetAtxPower(true);
+		break;
+
 	case 81:	// ATX power off
-		platform->SetAtxPower(code == 80);
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+			return false;
+		platform->SetAtxPower(false);
 		break;
 
 	case 82:	// Use absolute extruder positioning
@@ -2853,6 +2858,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			{
 				reply.printf("A %d sends drive %d forwards.", (int)platform->GetDirectionValue(drive), drive);
 			}
+		}
+		break;
+
+	case 570: // Set/report heater timeout
+		if(gb->Seen('S'))
+		{
+			platform->SetTimeToHot(gb->GetFValue());
+		}
+		else
+		{
+			reply.printf("Time allowed to get to temperature: %.1f seconds.", platform->TimeToHot());
 		}
 		break;
 

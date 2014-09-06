@@ -164,7 +164,7 @@ const float defaultPidKis[HEATERS] = {5.0, 0.1, 0.1, 0.1, 0.1, 0.1}; 			// Integ
 const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0}; // Derivative PID constants
 const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
 const float defaultPidKts[HEATERS] = {2.7, 0.25, 0.25, 0.25, 0.25, 0.25};		// approximate PWM value needed to maintain temperature, per degC above room temperature
-const float defaultPidKss[HEATERS] = {1.0, 0.9, 0.9, 0.9, 0.9, 0.9};			// PWM scaling factor, to allow for variation in heater power and supply voltage
+const float defaultPidKss[HEATERS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};			// PWM scaling factor, to allow for variation in heater power and supply voltage
 const float defaultFullBand[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0};		// errors larger than this cause heater to be on or off
 const float defaultPidMin[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
 const float defaultPidMax[HEATERS] = {255, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
@@ -654,6 +654,8 @@ public:
   float GetFanRPM();
   void SetPidParameters(size_t heater, const PidParameters& params);
   const PidParameters& GetPidParameters(size_t heater);
+  float TimeToHot() const;
+  void SetTimeToHot(float t);
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -756,6 +758,7 @@ private:
   float activeTemperatures[HEATERS];
   int8_t coolingFanPin;
   int8_t coolingFanRpmPin;
+  float timeToHot;
   float lastRpmResetTime;
 
 // Serial/USB
@@ -1049,6 +1052,16 @@ inline float Platform::HeatSampleTime() const
 inline void Platform::SetHeatSampleTime(float st)
 {
 	heatSampleTime = st;
+}
+
+inline float Platform::TimeToHot() const
+{
+	return timeToHot;
+}
+
+inline void Platform::SetTimeToHot(float t)
+{
+	timeToHot = t;
 }
 
 inline const byte* Platform::IPAddress() const

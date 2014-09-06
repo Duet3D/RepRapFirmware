@@ -227,6 +227,7 @@ void Platform::Init()
 	activeTemperatures = ACTIVE_TEMPERATURES;
 	coolingFanPin = COOLING_FAN_PIN;
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
+	timeToHot = TIME_TO_HOT;
 	lastRpmResetTime = 0.0;
 
 	webDir = WEB_DIR;
@@ -807,13 +808,12 @@ void Platform::Diagnostics()
 	AppendMessage(BOTH_MESSAGE, "Error status: %u\n", errorCodeBits);
 
 	// Show the current probe position heights
-	scratchString.copy("Bed probe heights:");
+	AppendMessage(BOTH_MESSAGE, "Bed probe heights:");
 	for (size_t i = 0; i < NUMBER_OF_PROBE_POINTS; ++i)
 	{
-		scratchString.catf(" %.3f", reprap.GetMove()->ZBedProbePoint(i));
+		AppendMessage(BOTH_MESSAGE, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
 	}
-	scratchString.cat("\n");
-	AppendMessage(BOTH_MESSAGE, scratchString);
+	AppendMessage(BOTH_MESSAGE, "\n");
 
 	// Show the number of free entries in the file table
 	unsigned int numFreeFiles = 0;
@@ -1351,10 +1351,7 @@ void MassStorage::Init()
 	int mounted = f_mount(0, &fileSystem);
 	if (mounted != FR_OK)
 	{
-		platform->Message(HOST_MESSAGE, "Can't mount filesystem 0: code ");
-		snprintf(scratchString, STRING_LENGTH, "%d", mounted);
-		platform->Message(HOST_MESSAGE, scratchString);
-		platform->Message(HOST_MESSAGE, "\n");
+		platform->Message(HOST_MESSAGE, "Can't mount filesystem 0: code %d\n", mounted);
 	}
 }
 
@@ -1508,7 +1505,7 @@ bool MassStorage::Delete(const char* directory, const char* fileName)
 								: fileName;
 	if (f_unlink(location) != FR_OK)
 	{
-		platform->Message(BOTH_MESSAGE, "Can't delete file %s\n, location");
+		platform->Message(BOTH_MESSAGE, "Can't delete file %s\n", location);
 		return false;
 	}
 	return true;
