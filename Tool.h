@@ -31,7 +31,8 @@ class Tool
 public:
 
 	Tool(int toolNumber, long d[], int dCount, long h[], int hCount);
-	void GetOffset(float& xx, float& yy, float& zz) const;
+	const float *GetOffset() const;
+	void SetOffset(const float offs[AXES]);
 	int DriveCount() const;
 	int Drive(int driveNumber) const;
 	bool ToolCanDrive() const;
@@ -78,6 +79,7 @@ private:
 	Tool* next;
 	bool active;
 	bool heaterFault;
+	float offset[AXES];
 };
 
 inline int Tool::Drive(int driveNumber) const
@@ -137,5 +139,19 @@ inline int Tool::DriveCount() const
 {
 	return driveCount;
 }
+
+inline const float *Tool::GetOffset() const
+{
+	return offset;
+}
+
+inline void Tool::SetOffset(const float offs[AXES])
+{
+	for(size_t i = 0; i < AXES; ++i)
+	{
+		offset[i] = offs[i];
+	}
+}
+
 
 #endif /* TOOL_H_ */

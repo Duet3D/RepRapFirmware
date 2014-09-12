@@ -175,21 +175,17 @@ void PID::Spin()
 
   if(heatingUp && heater != HOT_BED) // FIXME - also check bed warmup time?
   {
-	  float tmp = standbyTemperature;
-	  if(active)
-	  {
-		  tmp = activeTemperature;
-	  }
-	  tmp -= TEMPERATURE_CLOSE_ENOUGH;
-	  if(temperature < tmp)
+	  float tmp = (active) ? activeTemperature : standbyTemperature;
+	  if(temperature < tmp - TEMPERATURE_CLOSE_ENOUGH)
 	  {
 		  float tim = platform->Time() - timeSetHeating;
-		  if(tim > platform->TimeToHot())
+		  float limit = platform->TimeToHot();
+		  if(tim > limit && limit > 0.0)
 		  {
 			  platform->SetHeater(heater, 0.0);
 			  temperatureFault = true;
 			  switchedOff = true;
-			  platform->Message(BOTH_MESSAGE, "Heating fault on heater %d, T = %.1f C; still not at temperature after %f seconds.\n", heater, temperature, tim);
+			  platform->Message(BOTH_MESSAGE, "Heating fault on heater %d, T = %.1f C; still not at temperature %.1f after %f seconds.\n", heater, temperature, tmp, tim);
 			  reprap.FlagTemperatureFault(heater);
 		  }
 	  }

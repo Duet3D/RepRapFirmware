@@ -1062,6 +1062,15 @@ void Webserver::HttpInterpreter::GetStatusResponse(StringRef& response, uint8_t 
 		// Send XYZ positions
 		float liveCoordinates[DRIVES + 1];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
+		const Tool* currentTool = reprap.GetCurrentTool();
+		if (currentTool != NULL)
+		{
+			const float *offset = currentTool->GetOffset();
+			for (size_t i = 0; i < AXES; ++i)
+			{
+				liveCoordinates[i] += offset[i];
+			}
+		}
 		response.catf("],\"pos\":");		// announce the XYZ position
 		ch = '[';
 		for (int8_t drive = 0; drive < AXES; drive++)
@@ -1090,7 +1099,6 @@ void Webserver::HttpInterpreter::GetStatusResponse(StringRef& response, uint8_t 
 		response.cat("]");
 
 		// Send the current tool number
-		Tool* currentTool = reprap.GetCurrentTool();
 		int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
 		response.catf(",\"tool\":%d", toolNumber);
 	}

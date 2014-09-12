@@ -34,6 +34,10 @@ Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 	heaterCount = hCount;
 	heaterFault = false;
 	mixing = false;
+	for(size_t i = 0; i < AXES; ++i)
+	{
+		offset[i] = 0.0;
+	}
 
 	if(driveCount > 0)
 	{

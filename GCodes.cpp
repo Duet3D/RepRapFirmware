@@ -35,6 +35,7 @@ GCodes::GCodes(Platform* p, Webserver* w)
 	webGCode = new GCodeBuffer(platform, "web: ");
 	fileGCode = new GCodeBuffer(platform, "file: ");
 	serialGCode = new GCodeBuffer(platform, "serial: ");
+	auxGCode = new GCodeBuffer(platform, "aux: ");
 	cannedCycleGCode = new GCodeBuffer(platform, "macro: ");
 }
 
@@ -79,6 +80,7 @@ void GCodes::Reset()
 	webGCode->Init();
 	fileGCode->Init();
 	serialGCode->Init();
+	auxGCode->Init();
 	cannedCycleGCode->Init();
 	moveAvailable = false;
 	fileBeingPrinted.Close();
@@ -147,6 +149,13 @@ void GCodes::Spin()
 	if (serialGCode->Active())
 	{
 		serialGCode->SetFinished(ActOnCode(serialGCode));
+		platform->ClassReport("GCodes", longWait);
+		return;
+	}
+
+	if (auxGCode->Active())
+	{
+		auxGCode->SetFinished(ActOnCode(auxGCode));
 		platform->ClassReport("GCodes", longWait);
 		return;
 	}
@@ -230,6 +239,25 @@ void GCodes::Spin()
 		}
 	}
 
+	if (platform->GetAux()->Status() & byteAvailable)
+	{
+		int8_t i = 0;
+		do
+		{
+			char b;
+			platform->GetAux()->Read(b);
+			if (auxGCode->Put(b))	// add char to buffer and test whether the gcode is complete
+			{
+				auxGCode->SetFinished(ActOnCode(serialGCode));
+				break;	// stop after receiving a complete gcode in case we haven't finished processing it
+			}
+			++i;
+		} while (i < 16 && (platform->GetAux()->Status() & byteAvailable));
+		platform->ClassReport("GCodes", longWait);
+		return;
+	}
+
+	// Else see if there is anything to print from file
 	DoFilePrint(fileGCode);
 
 	platform->ClassReport("GCodes", longWait);
@@ -380,30 +408,39 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 
 	// Now the movement axes
 
+	const Tool *currentTool = reprap.GetCurrentTool();
 	for(uint8_t axis = 0; axis < AXES; axis++)
 	{
 		if(gb->Seen(axisLetters[axis]))
 		{
 			float moveArg = gb->GetFValue() * distanceScale;
-			if (axesRelative && !doingG92)
-			{
-				moveArg += moveBuffer[axis];
-			}
-			if (applyLimits && axis < 2 && axisIsHomed[axis] && !doingG92)	// limit X & Y moves unless doing G92.  FIXME: No Z for the moment as we often need to move -ve to set the origin
-			{
-				if (moveArg < platform->AxisMinimum(axis))
-				{
-					moveArg = platform->AxisMinimum(axis);
-				} else if (moveArg > platform->AxisMaximum(axis))
-				{
-					moveArg = platform->AxisMaximum(axis);
-				}
-			}
-			moveBuffer[axis] = moveArg;
 			if (doingG92)
 			{
 				axisIsHomed[axis] = true;		// doing a G92 defines the absolute axis position
 			}
+			else
+			{
+				if (axesRelative)
+				{
+					moveArg += moveBuffer[axis];
+				}
+				else if (currentTool != NULL)
+				{
+					moveArg -= currentTool->GetOffset()[axis];		// adjust requested position to compensate for tool offset
+				}
+				if (applyLimits && axis < 2 && axisIsHomed[axis])	// limit X & Y moves unless doing G92
+				{
+					if (moveArg < platform->AxisMinimum(axis))
+					{
+						moveArg = platform->AxisMinimum(axis);
+					}
+					else if (moveArg > platform->AxisMaximum(axis))
+					{
+						moveArg = platform->AxisMaximum(axis);
+					}
+				}
+			}
+			moveBuffer[axis] = moveArg;
 		}
 	}
 
@@ -990,11 +1027,20 @@ const char* GCodes::GetCurrentCoordinates() const
 {
 	float liveCoordinates[DRIVES + 1];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates);
+	const Tool *currentTool = reprap.GetCurrentTool();
+	if (currentTool != NULL)
+	{
+		const float *offset = currentTool->GetOffset();
+		for (size_t i = 0; i < AXES; ++i)
+		{
+			liveCoordinates[i] += offset[i];
+		}
+	}
 
 	scratchString.printf("X:%.2f Y:%.2f Z:%.2f ", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS]);
-	for(int i = AXES; i< DRIVES; i++)
+	for(unsigned int i = AXES; i< DRIVES; i++)
 	{
-		scratchString.catf("E%d:%.1f ", i-AXES, liveCoordinates[i]);
+		scratchString.catf("E%u:%.1f ", i-AXES, liveCoordinates[i]);
 	}
 	return scratchString.Pointer();
 }
@@ -1041,7 +1087,7 @@ void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
 			fileBeingWritten = NULL;
 			gb->SetWritingFileDirectory(NULL);
 			const char* r = (platform->Emulating() == marlin) ? "Done saving file." : "";
-			HandleReply(false, gb == serialGCode, r, 'M', 560, false);
+			HandleReply(false, gb, r, 'M', 560, false);
 			return;
 		}
 	}
@@ -1069,7 +1115,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 			fileBeingWritten = NULL;
 			gb->SetWritingFileDirectory(NULL);
 			const char* r = (platform->Emulating() == marlin) ? "Done saving file." : "";
-			HandleReply(false, gb == serialGCode, r, 'M', 29, false);
+			HandleReply(false, gb, r, 'M', 29, false);
 			return;
 		}
 	}
@@ -1083,7 +1129,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 			if (gb->Seen('P'))
 			{
 				scratchString.printf("%d", gb->GetIValue());
-				HandleReply(false, gb == serialGCode, scratchString.Pointer(), 'G', 998, true);
+				HandleReply(false, gb, scratchString.Pointer(), 'G', 998, true);
 				return;
 			}
 		}
@@ -1091,7 +1137,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 
 	fileBeingWritten->Write(gb->Buffer());
 	fileBeingWritten->Write('\n');
-	HandleReply(false, gb == serialGCode, "", 'G', 1, false);
+	HandleReply(false, gb, "", 'G', 1, false);
 }
 
 // Set up a file to print, but don't print it yet.
@@ -1198,8 +1244,7 @@ bool GCodes::DoDwellTime(float dwell)
 	return false;
 }
 
-// Set working and standby temperatures for
-// a tool.  I.e. handle a G10.
+// Set offset, working and standby temperatures for a tool. I.e. handle a G10.
 
 void GCodes::SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb)
 {
@@ -1213,33 +1258,70 @@ void GCodes::SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb)
 			reply.printf("Attempt to set/report offsets and temperatures for non-existent tool: %d\n", toolNumber);
 			return;
 		}
+
+		// Deal with setting offsets
+		float offset[AXES];
+		for (size_t i = 0; i < AXES; ++i)
+		{
+			offset[i] = tool->GetOffset()[i];
+		}
+
+		bool settingOffset = false;
+		if (gb->Seen('X'))
+		{
+			offset[X_AXIS] = gb->GetFValue();
+			settingOffset = true;
+		}
+		if (gb->Seen('Y'))
+		{
+			offset[Y_AXIS] = gb->GetFValue();
+			settingOffset = true;
+		}
+		if (gb->Seen('Z'))
+		{
+			offset[Z_AXIS] = gb->GetFValue();
+			settingOffset = true;
+		}
+		if (settingOffset)
+		{
+			tool->SetOffset(offset);
+		}
+
+		// Deal with setting temperatures
+		bool settingTemps = false;
+		int hCount = tool->HeaterCount();
 		float standby[HEATERS];
 		float active[HEATERS];
-		tool->GetVariables(standby, active);
-		int hCount = tool->HeaterCount();
 		if(hCount > 0)
 		{
-			bool setting = false;
+			tool->GetVariables(standby, active);
 			if(gb->Seen('R'))
 			{
 				gb->GetFloatArray(standby, hCount);
-				setting = true;
+				settingTemps = true;
 			}
 			if(gb->Seen('S'))
 			{
 				gb->GetFloatArray(active, hCount);
-				setting = true;
+				settingTemps = true;
 			}
-			if(setting)
+
+			if(settingTemps)
 			{
 				tool->SetVariables(standby, active);
 			}
-			else
+		}
+
+		if (!settingOffset && !settingTemps)
+		{
+			// Print offsets and temperatures
+			reply.printf("Tool %d offsets: X%.1f Y%.1f Z%.1f", toolNumber, offset[X_AXIS], offset[Y_AXIS], offset[Z_AXIS]);
+			if (hCount != 0)
 			{
-				reply.printf("Tool %d - Active/standby temperature(s): ", toolNumber);
+				reply.cat(", active/standby temperature(s):");
 				for(int8_t heater = 0; heater < hCount; heater++)
 				{
-					reply.catf("%.1f/%.1f ", active[heater], standby[heater]);
+					reply.catf(" %.1f/%.1f", active[heater], standby[heater]);
 				}
 			}
 		}
@@ -1403,19 +1485,28 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 //	platform->Message(HOST_MESSAGE, scratchString);
 }
 
-void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOrT, int code, bool resend)
+void GCodes::HandleReply(bool error, const GCodeBuffer *gb, const char* reply, char gMOrT, int code, bool resend)
 {
-	if (gMOrT != 'M' || (code != 111 && code != 122))	// web server reply for M111 and M122 is handled before we get here
+	if (gb == auxGCode)
+	{
+		// Command was received from the aux interface (LCD display), so send the response only to the aux interface.
+		platform->GetAux()->Write(reply);
+		platform->GetAux()->Write('\n');
+		return;
+	}
+
+	// Deal with sending a reply to the web interface.
+	// The browser only fetches replies once a second or so. Therefore, when we send a web command in the middle of an SD card print,
+	// in order to be sure that we see the reply in the web interface, we must not send empty responses to the web interface unless
+	// the corresponding command also came from the web interface.
+	if (   (gMOrT != 'M' || (code != 111 && code != 122))	// web server reply for M111 and M122 is handled before we get here
+		&& (gb == webGCode || error)
+	   )
 	{
 		platform->Message((error) ? WEB_ERROR_MESSAGE : WEB_MESSAGE, reply);
 	}
 
-	Compatibility c = platform->Emulating();
-	if (!fromLine)
-	{
-		c = me;
-	}
-
+	Compatibility c =  (gb == serialGCode) ? platform->Emulating() : me;
 	const char* response = "ok";
 	if (resend)
 	{
@@ -1435,7 +1526,7 @@ void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOr
 			platform->GetLine()->Write("Error: ");
 		}
 		platform->GetLine()->Write(reply);
-		platform->GetLine()->Write("\n");
+		platform->GetLine()->Write('\n');
 		return;
 
 	case marlin:
@@ -1445,16 +1536,16 @@ void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOr
 			platform->GetLine()->Write(reply);
 			platform->GetLine()->Write("\nEnd file list\n");
 			platform->GetLine()->Write(response);
-			platform->GetLine()->Write("\n");
+			platform->GetLine()->Write('\n');
 			return;
 		}
 
 		if (gMOrT == 'M' && code == 28)
 		{
 			platform->GetLine()->Write(response);
-			platform->GetLine()->Write("\n");
+			platform->GetLine()->Write('\n');
 			platform->GetLine()->Write(reply);
-			platform->GetLine()->Write("\n");
+			platform->GetLine()->Write('\n');
 			return;
 		}
 
@@ -1491,7 +1582,7 @@ void GCodes::HandleReply(bool error, bool fromLine, const char* reply, char gMOr
 
 	if (s != 0)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Emulation of %s is not yet supported.\n", s);
+		platform->Message(HOST_MESSAGE, "Emulation of %s is not yet supported.\n", s);	// don't send this one to the web as well, it concerns only the USB interface
 	}
 }
 
@@ -1664,7 +1755,7 @@ bool GCodes::ActOnCode(GCodeBuffer *gb)
 	}
 
 	// An empty buffer gets discarded
-	HandleReply(false, gb == serialGCode, "", 'X', 0, false);
+	HandleReply(false, gb, "", 'X', 0, false);
 	return true;
 }
 
@@ -1779,7 +1870,7 @@ bool GCodes::HandleGcode(GCodeBuffer* gb)
 	}
 	if (result)
 	{
-		HandleReply(error, gb == serialGCode, reply.Pointer(), 'G', code, resend);
+		HandleReply(error, gb, reply.Pointer(), 'G', code, resend);
 	}
 	return result;
 }
@@ -2940,7 +3031,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 	}
 	if (result)
 	{
-		HandleReply(error, gb == serialGCode, reply.Pointer(), 'M', code, resend);
+		HandleReply(error, gb, reply.Pointer(), 'M', code, resend);
 	}
 	return result;
 }
@@ -2952,7 +3043,7 @@ bool GCodes::HandleTcode(GCodeBuffer* gb)
 	bool result = ChangeTool(code);
     if(result)
     {
-    	HandleReply(false, gb == serialGCode, "", 'T', code, false);
+    	HandleReply(false, gb, "", 'T', code, false);
     }
     return result;
 }

@@ -163,7 +163,7 @@ const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 10000
 const float defaultPidKis[HEATERS] = {5.0, 0.1, 0.1, 0.1, 0.1, 0.1}; 			// Integral PID constants
 const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0}; // Derivative PID constants
 const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
-const float defaultPidKts[HEATERS] = {2.7, 0.25, 0.25, 0.25, 0.25, 0.25};		// approximate PWM value needed to maintain temperature, per degC above room temperature
+const float defaultPidKts[HEATERS] = {2.7, 0.4, 0.4, 0.4, 0.4, 0.4};			// approximate PWM value needed to maintain temperature, per degC above room temperature
 const float defaultPidKss[HEATERS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};			// PWM scaling factor, to allow for variation in heater power and supply voltage
 const float defaultFullBand[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0};		// errors larger than this cause heater to be on or off
 const float defaultPidMin[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
@@ -253,9 +253,10 @@ namespace SoftwareResetReason
 	enum
 	{
 		user = 0,					// M999 command
+		inAuxOutput = 0x0800,		// this bit is or'ed in if we were in aux output at the time
 		stuckInSpin = 0x1000,		// we got stuck in a Spin() function for too long
 		inLwipSpin = 0x2000,		// we got stuck in a call to lwip for too long
-		inUsbOutput = 0x4000		// this bit is or'ed in if we were in USB otuput at the time
+		inUsbOutput = 0x4000		// this bit is or'ed in if we were in USB output at the time
 	};
 }
 
@@ -286,7 +287,7 @@ friend class RepRap;
 
 protected:
 
-	Line();
+	Line(Stream& p_iface);
 	void Init();
 	void Spin();
 	void InjectString(char* string);
@@ -304,9 +305,10 @@ private:
 	uint16_t outputGetIndex;
 	uint16_t outputNumChars;
 
-	uint8_t inUsbWrite;
+	uint8_t inWrite;
 	bool ignoringOutputLine;
 	unsigned int outputColumn;
+	Stream& iface;
 };
 
 // Info returned by FindFirst/FindNext calls
@@ -565,6 +567,7 @@ public:
   // Communications and data storage
   
   Line* GetLine() const;
+  Line* GetAux() const;
   void SetIPAddress(byte ip[]);
   const byte* IPAddress() const;
   void SetNetMask(byte nm[]);
@@ -764,6 +767,7 @@ private:
 // Serial/USB
 
   Line* line;
+  Line* aux;
   uint8_t messageIndent;
 
 // Files
@@ -1104,6 +1108,11 @@ inline const byte* Platform::MACAddress() const
 inline Line* Platform::GetLine() const
 {
 	return line;
+}
+
+inline Line* Platform::GetAux() const
+{
+	return aux;
 }
 
 inline void Platform::PushMessageIndent()

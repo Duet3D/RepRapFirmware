@@ -132,8 +132,8 @@ class GCodes
     bool DisableDrives();												// Turn the motors off
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);				// Does what it says
     void SetMACAddress(GCodeBuffer *gb);								// Deals with an M540
-    void HandleReply(bool error, bool fromLine, const char* reply, 		// If the GCode is from the serial interface, reply to it
-    		char gMOrT, int code, bool resend);
+    void HandleReply(bool error, const GCodeBuffer *gb, 				// Reply to a gcode
+    		 const char* reply, char gMOrT, int code, bool resend);
     bool OpenFileToWrite(const char* directory,							// Start saving GCodes in a file
     		const char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);								// Write this GCode into a file
@@ -156,6 +156,7 @@ class GCodes
     GCodeBuffer* webGCode;						// The sources...
     GCodeBuffer* fileGCode;						// ...
     GCodeBuffer* serialGCode;					// ...
+    GCodeBuffer* auxGCode;						// this one is for the LCD display on the async serial interface
     GCodeBuffer* cannedCycleGCode;				// ... of G Codes
     bool moveAvailable;							// Have we seen a move G Code and set it up?
     float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate

@@ -99,7 +99,10 @@ Platform::Platform() :
 		tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0), debugCode(0),
 		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
 {
-	line = new Line();
+	SerialUSB.begin(BAUD_RATE);
+	line = new Line(SerialUSB);
+	Serial.begin(BAUD_RATE);
+	aux = new Line(Serial);
 
 	// Files
 
@@ -168,6 +171,7 @@ void Platform::Init()
 	}
 
 	line->Init();
+	aux->Init();
 	messageIndent = 0;
 
 	massStorage->Init();
@@ -578,6 +582,7 @@ void Platform::Spin()
 	}
 
 	line->Spin();
+	aux->Spin();
 
 	ClassReport("Platform", longWait);
 
@@ -587,9 +592,13 @@ void Platform::SoftwareReset(uint16_t reason)
 {
 	if (reason != 0)
 	{
-		if (line->inUsbWrite)
+		if (line->inWrite)
 		{
 			reason |= SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
+		}
+		if (aux->inWrite)
+		{
+			reason |= SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
 		}
 		if (reprap.GetNetwork()->InLwip())
 		{
@@ -1838,7 +1847,8 @@ uint32_t FileStore::longestWriteTime = 0;
 
 // Serial/USB class
 
-Line::Line()
+Line::Line(Stream& p_iface)
+	: iface(p_iface)
 {
 }
 
@@ -1865,9 +1875,6 @@ void Line::InjectString(char* string)
 
 int Line::Read(char& b)
 {
-//  if(alternateInput != NULL)
-//	return alternateInput->Read(b);
-
 	if (inputNumChars == 0)
 		return 0;
 	b = inBuffer[inputGetIndex];
@@ -1883,8 +1890,7 @@ void Line::Init()
 	outputGetIndex = 0;
 	outputNumChars = 0;
 	ignoringOutputLine = false;
-	SerialUSB.begin(BAUD_RATE);
-	inUsbWrite = false;
+	inWrite = false;
 	outputColumn = 0;
 }
 
@@ -1893,14 +1899,14 @@ void Line::Spin()
 	// Read the serial data in blocks to avoid excessive flow control
 	if (inputNumChars <= lineInBufsize / 2)
 	{
-		int16_t target = SerialUSB.available() + (int16_t) inputNumChars;
+		int16_t target = iface.available() + (int16_t) inputNumChars;
 		if (target > lineInBufsize)
 		{
 			target = lineInBufsize;
 		}
 		while ((int16_t) inputNumChars < target)
 		{
-			int incomingByte = SerialUSB.read();
+			int incomingByte = iface.read();
 			if (incomingByte < 0)
 				break;
 			inBuffer[(inputGetIndex + inputNumChars) % lineInBufsize] = (char) incomingByte;
@@ -1949,15 +1955,15 @@ void Line::Write(char b, bool block)
 			TryFlushOutput();
 			if (block)
 			{
-				SerialUSB.flush();
+				iface.flush();
 			}
 
-			if (outputNumChars == 0 && SerialUSB.canWrite() != 0)
+			if (outputNumChars == 0 && iface.canWrite() != 0)
 			{
-				// We can write the character directly into the USB output buffer
-				++inUsbWrite;
-				SerialUSB.write(b);
-				--inUsbWrite;
+				// We can write the character directly into the output buffer
+				++inWrite;
+				iface.write(b);
+				--inWrite;
 				break;
 			}
 			else if (   outputNumChars + 2 < lineOutBufSize							// save 2 spaces in the output buffer
@@ -1991,7 +1997,7 @@ void Line::Write(char b, bool block)
 		TryFlushOutput();
 		if (block)
 		{
-			SerialUSB.flush();
+			iface.flush();
 		}
 	}
 	// else discard the character
@@ -2011,11 +2017,11 @@ void Line::TryFlushOutput()
 	//while (SerialUSB.canWrite() == 0) {}
 	//end debug
 
-	while (outputNumChars != 0 && SerialUSB.canWrite() != 0)
+	while (outputNumChars != 0 && iface.canWrite() != 0)
 	{
-		++inUsbWrite;
-		SerialUSB.write(outBuffer[outputGetIndex]);
-		--inUsbWrite;
+		++inWrite;
+		iface.write(outBuffer[outputGetIndex]);
+		--inWrite;
 		outputGetIndex = (outputGetIndex + 1) % lineOutBufSize;
 		--outputNumChars;
 	}
