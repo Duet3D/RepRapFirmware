@@ -133,7 +133,7 @@ void Move::Init()
 
 void Move::Exit()
 {
-  platform->Message(HOST_MESSAGE, "Move class exited.\n");
+  platform->Message(BOTH_MESSAGE, "Move class exited.\n");
   active = false;
 }
 
@@ -190,7 +190,8 @@ void Move::Spin()
     		    noMove = false;
     		}
     		normalisedDirectionVector[drive] = nextMove[drive] - lastMove->MachineToEndPoint(drive);
-    	} else
+    	}
+    	else
     	{
     		if(nextMachineEndPoints[drive] != 0)
     		{
@@ -314,7 +315,7 @@ void Move::SetPositions(float move[])
 {
 	for(uint8_t drive = 0; drive < DRIVES; drive++)
 	{
-		lastMove->SetDriveCoordinateAndZeroEndSpeed(move[drive], drive);
+		lastMove->SetDriveCoordinate(move[drive], drive);
 	}
 	lastMove->SetFeedRate(move[DRIVES]);
 }
@@ -417,7 +418,7 @@ bool Move::DDARingAdd(LookAhead* lookAhead)
     }
     if(ddaRingAddPointer->Active())  // Should never happen...
     {
-      platform->Message(HOST_MESSAGE, "Attempt to alter an active ring buffer entry!\n");
+      platform->Message(BOTH_ERROR_MESSAGE, "Attempt to alter an active ring buffer entry!\n");
       ReleaseDDARingLock();
       return false;
     }
@@ -528,7 +529,6 @@ void Move::DoLookAhead()
     {
       if(n1->Processed() == unprocessed)
       {
-        //float c = fmin(n1->FeedRate(), n2->FeedRate());
     	float c = n1->V();
         float m = fmin(n1->MinSpeed(), n2->MinSpeed());  // FIXME we use min as one move's max may not be able to cope with the min for the other.  But should this be max?
         c = c*n1->Cosine();
@@ -595,7 +595,7 @@ bool Move::LookAheadRingAdd(long ep[], float requestedFeedRate, float minSpeed, 
       return false;
     if(!(lookAheadRingAddPointer->Processed() & released)) // Should never happen...
     {
-      platform->Message(HOST_MESSAGE, "Attempt to alter a non-released lookahead ring entry!\n");
+      platform->Message(BOTH_ERROR_MESSAGE, "Attempt to alter a non-released lookahead ring entry!\n");
       return false;
     }
     lookAheadRingAddPointer->Init(ep, requestedFeedRate, minSpeed, maxSpeed, acceleration, ce);
@@ -644,7 +644,7 @@ void Move::BedTransform(float xyzPoint[]) const
 		break;
 
 	default:
-		platform->Message(HOST_MESSAGE, "BedTransform: wrong number of sample points.");
+		platform->Message(BOTH_ERROR_MESSAGE, "BedTransform: wrong number of sample points.");
 	}
 }
 
@@ -673,7 +673,7 @@ void Move::InverseBedTransform(float xyzPoint[]) const
 		break;
 
 	default:
-		platform->Message(HOST_MESSAGE, "InverseBedTransform: wrong number of sample points.");
+		platform->Message(BOTH_ERROR_MESSAGE, "InverseBedTransform: wrong number of sample points.");
 	}
 }
 
@@ -721,7 +721,7 @@ void Move::SetAxisCompensation(int8_t axis, float tangent)
 		tanXZ = tangent;
 		break;
 	default:
-		platform->Message(HOST_MESSAGE, "SetAxisCompensation: dud axis.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "SetAxisCompensation: dud axis.\n");
 	}
 }
 
@@ -763,7 +763,7 @@ float Move::TriangleZ(float x, float y) const
 			return l1 * baryZBedProbePoints[i] + l2 * baryZBedProbePoints[j] + l3 * baryZBedProbePoints[4];
 		}
 	}
-	platform->Message(HOST_MESSAGE, "Triangle interpolation: point outside all triangles!");
+	platform->Message(BOTH_ERROR_MESSAGE, "Triangle interpolation: point outside all triangles!");
 	return 0.0;
 }
 
@@ -830,7 +830,7 @@ void Move::SetProbedBedEquation(StringRef& reply)
 		break;
 
 	default:
-		platform->Message(HOST_MESSAGE, "Attempt to set bed compensation before all probe points have been recorded.");
+		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to set bed compensation before all probe points have been recorded.");
 	}
 
 	reply.copy("Bed equation fits points");
@@ -1045,7 +1045,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   {
 	if(reprap.Debug())
 	{
-		platform->Message(HOST_MESSAGE, "DDA.Init(): Null movement.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "DDA.Init(): Null movement.\n");
 	}
     myLookAheadEntry->Release();
     return result;
@@ -1085,7 +1085,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
     velocity = instantDv;
     if(reprap.Debug())
     {
-    	platform->Message(HOST_MESSAGE, "DDA.Init(): Zero or negative initial velocity!\n");
+    	platform->Message(BOTH_ERROR_MESSAGE, "DDA.Init(): Zero or negative initial velocity!\n");
     }
   }
   
@@ -1285,16 +1285,27 @@ float LookAhead::Cosine()
   return cosine;
 }
 
-//Returns units (mm) from steps for a particular drive
+// Returns units (mm) from steps for a particular drive
 float LookAhead::MachineToEndPoint(int8_t drive, long coord)
 {
 	return ((float)coord)/reprap.GetPlatform()->DriveStepsPerUnit(drive);
 }
 
-//Returns steps from units (mm) for a particular drive
+// Returns steps from units (mm) for a particular drive
 long LookAhead::EndPointToMachine(int8_t drive, float coord)
 {
-	return  (long)roundf(coord*reprap.GetPlatform()->DriveStepsPerUnit(drive));
+	return (long)roundf(coord*reprap.GetPlatform()->DriveStepsPerUnit(drive));
+}
+
+void LookAhead::MoveAborted(float done)
+{
+	for (size_t drive = 0; drive < AXES; ++drive)
+	{
+		long prev = previous->endPoint[drive];
+		endPoint[drive] = prev + (long)((endPoint[drive] - prev) * done);
+	}
+	v = platform->InstantDv(platform->SlowestDrive());
+	cosine = 2.0;		// not sure this is needed
 }
 
 /*
@@ -1307,8 +1318,4 @@ void LookAhead::PrintMove()
 			MachineToEndPoint(X_AXIS), MachineToEndPoint(Y_AXIS), MachineToEndPoint(Z_AXIS),
 			MinSpeed(), MaxSpeed(), Acceleration(), FeedRate(), Previous()->V(), V());
 }
-
-
-
-
 

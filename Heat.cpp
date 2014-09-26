@@ -242,8 +242,14 @@ void PID::Spin()
   // Legacy - old RepRap PID parameters were set to give values in [0, 255] for 1 byte PWM control
   // TODO - maybe change them to give [0.0, 1.0]?
 
-  if (result < 0.0) result = 0.0;
-  else if (result > 255.0) result = 255.0;
+  if (result < 0.0)
+  {
+    result = 0.0;
+  }
+  else if (result > 255.0)
+  {
+    result = 255.0;
+  }
   result = result/255.0;
 
   if(!temperatureFault)

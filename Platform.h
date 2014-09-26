@@ -36,7 +36,7 @@ Licence: GPL
 
 // What are we supposed to be running on
 
-#define ELECTRONICS "Duet + Extension"
+#define ELECTRONICS "Duet (+ Extension)"
 
 // Language-specific includes
 
@@ -775,11 +775,11 @@ private:
   MassStorage* massStorage;
   FileStore* files[MAX_FILES];
   bool fileStructureInitialised;
-  char* webDir;
-  char* gcodeDir;
-  char* sysDir;
-  char* tempDir;
-  char* configFile;
+  const char* webDir;
+  const char* gcodeDir;
+  const char* sysDir;
+  const char* tempDir;
+  const char* configFile;
   
 // Data used by the tick interrupt handler
 

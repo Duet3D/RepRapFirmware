@@ -1389,6 +1389,7 @@ bool GCodes::DisableDrives()
 	{
 		platform->Disable(drive);
 	}
+	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
 	return true;
 }
 
@@ -1481,8 +1482,7 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 	{
 		platform->Message(BOTH_ERROR_MESSAGE, "Dud MAC address: %s\n", gb->Buffer());
 	}
-//	snprintf(scratchString, STRING_LENGTH, "MAC: %x:%x:%x:%x:%x:%x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-//	platform->Message(HOST_MESSAGE, scratchString);
+	//	platform->Message(HOST_MESSAGE, "MAC: %x:%x:%x:%x:%x:%x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
 void GCodes::HandleReply(bool error, const GCodeBuffer *gb, const char* reply, char gMOrT, int code, bool resend)
@@ -1552,19 +1552,19 @@ void GCodes::HandleReply(bool error, const GCodeBuffer *gb, const char* reply, c
 		if ((gMOrT == 'M' && code == 105) || (gMOrT == 'G' && code == 998))
 		{
 			platform->GetLine()->Write(response);
-			platform->GetLine()->Write(" ");
+			platform->GetLine()->Write(' ');
 			platform->GetLine()->Write(reply);
-			platform->GetLine()->Write("\n");
+			platform->GetLine()->Write('\n');
 			return;
 		}
 
 		if (reply[0])
 		{
 			platform->GetLine()->Write(reply);
-			platform->GetLine()->Write("\n");
+			platform->GetLine()->Write('\n');
 		}
 		platform->GetLine()->Write(response);
-		platform->GetLine()->Write("\n");
+		platform->GetLine()->Write('\n');
 		return;
 
 	case teacup:
@@ -2070,16 +2070,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				float eVals[DRIVES-AXES];
 				int eCount = DRIVES-AXES;
 				gb->GetFloatArray(eVals, eCount);
-				if(eCount != DRIVES-AXES)
+
+				// The user may not have as many extruders as we allow for, so just set the ones for which a value is provided
+				for(int e = 0; e < eCount; e++)
 				{
-					platform->Message(BOTH_ERROR_MESSAGE, "Setting steps/mm - wrong number of E drives: %s\n", gb->Buffer());
-				}
-				else
-				{
-					for(int8_t e = 0; e < eCount; e++)
-					{
-						platform->SetDriveStepsPerUnit(AXES + e, eVals[e]);
-					}
+					platform->SetDriveStepsPerUnit(AXES + e, eVals[e]);
 				}
 			}
 
@@ -2143,7 +2138,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		reply.catf("B: %.1f ", reprap.GetHeat()->GetTemperature(HOT_BED));
 		break;
    
-	case 106: // Fan on or off
+	case 106: // Set/report fan values
 		{
 			bool seen = false;
 			if (gb->Seen('I'))

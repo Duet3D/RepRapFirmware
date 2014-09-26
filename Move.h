@@ -84,10 +84,11 @@ protected:
 	void SetFeedRate(float f);											// Set the desired feedrate
 	int8_t Processed() const;											// Where we are in the look-ahead prediction sequence
 	void SetProcessed(MovementState ms);								// Set where we are the the look ahead processing
-	void SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive);		// Force an end point and set its speed to stopped
+	void SetDriveCoordinate(float a, int8_t drive);						// Force an end point
 	EndstopChecks EndStopsToCheck() const;								// Which endstops we are checking on this move
 	void Release();														// This move has been processed and executed
 	void PrintMove();													// Print diagnostics
+	void MoveAborted(float done);										// Update end coordinates to take account of an aborted move
 
 private:
 
@@ -200,15 +201,15 @@ class Move
     void Transform(float move[]) const;			// Take a position and apply the bed and the axis-angle compensations
     void InverseTransform(float move[]) const;	// Go from a transformed point back to user coordinates
     void Diagnostics();							// Report useful stuff
-    float ComputeCurrentCoordinate(int8_t drive,// Turn a DDA value back into a real world coordinate
-    		LookAhead* la, DDA* runningDDA);
-    float Normalise(float v[], int8_t dimensions);  // Normalise a vector to unit length
-    void Absolute(float v[], int8_t dimensions);	// Put a vector in the positive hyperquadrant
+    void UpdateCurrentCoordinates(LookAhead* la,		// Turn a DDA value back into a real world coordinate
+    		DDA* runningDDA);
+    float Normalise(float v[], int8_t dimensions);  	// Normalise a vector to unit length
+    void Absolute(float v[], int8_t dimensions);		// Put a vector in the positive hyperquadrant
     float Magnitude(const float v[], int8_t dimensions);  // Return the length of a vector
-    void Scale(float v[], float scale,				// Multiply a vector by a scalar
+    void Scale(float v[], float scale,					// Multiply a vector by a scalar
     		int8_t dimensions);
-    float VectorBoxIntersection(const float v[],  // Compute the length that a vector would have to have to...
-    		const float box[], int8_t dimensions);// ...just touch the surface of a hyperbox.
+    float VectorBoxIntersection(const float v[],  		// Compute the length that a vector would have to have to...
+    		const float box[], int8_t dimensions);		// ...just touch the surface of a hyperbox.
     
   private:
   
@@ -231,7 +232,8 @@ class Move
     void ReleaseDDARingLock();							// Release the DDA ring lock
     bool LookAheadRingEmpty() const;					// Anything there?
     bool LookAheadRingFull() const;						// Any more room?
-    bool LookAheadRingAdd(long ep[], float requestedFeedRate, 	// Add an entry to the look-ahead ring for processing
+    bool LookAheadRingAdd(long ep[], 					// Add an entry to the look-ahead ring for processing
+    		float requestedFeedRate,
     		float minSpeed, float maxSpeed,
     		float acceleration, EndstopChecks ce);
     LookAhead* LookAheadRingGet();						// Get the next entry from the look-ahead ring
@@ -295,7 +297,7 @@ inline float LookAhead::MachineToEndPoint(int8_t drive) const
 {
 	if(drive >= DRIVES)
 	{
-		platform->Message(HOST_MESSAGE, "MachineToEndPoint() called for feedrate!\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "MachineToEndPoint() called for feedrate!\n");
 		return 0.0;
 	}
 	return ((float)(endPoint[drive]))/platform->DriveStepsPerUnit(drive);
@@ -361,22 +363,15 @@ inline EndstopChecks LookAhead::EndStopsToCheck() const
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR should be declared 'volatile'.
-inline void LookAhead::SetDriveCoordinateAndZeroEndSpeed(float a, int8_t drive)
+inline void LookAhead::SetDriveCoordinate(float a, int8_t drive)
 {
   endPoint[drive] = EndPointToMachine(drive, a);
-  cosine = 2.0;
-  v = platform->InstantDv(platform->SlowestDrive());
 }
 
 inline const long* LookAhead::MachineCoordinates() const
 {
 	return endPoint;
 }
-
-//inline int8_t LookAhead::GetMovementType()
-//{
-//	return movementType;
-//}
 
 //******************************************************************************************************
 
@@ -486,7 +481,7 @@ inline void Move::SetXBedProbePoint(int index, float x)
 {
 	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
 	{
-		platform->Message(HOST_MESSAGE, "Z probe point  X index out of range.\n");
+		platform->Message(BOTH_MESSAGE, "Z probe point  X index out of range.\n");
 		return;
 	}
 	xBedProbePoints[index] = x;
@@ -497,7 +492,7 @@ inline void Move::SetYBedProbePoint(int index, float y)
 {
 	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
 	{
-		platform->Message(HOST_MESSAGE, "Z probe point Y index out of range.\n");
+		platform->Message(BOTH_MESSAGE, "Z probe point Y index out of range.\n");
 		return;
 	}
 	yBedProbePoints[index] = y;
@@ -508,7 +503,7 @@ inline void Move::SetZBedProbePoint(int index, float z)
 {
 	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
 	{
-		platform->Message(HOST_MESSAGE, "Z probe point Z index out of range.\n");
+		platform->Message(BOTH_MESSAGE, "Z probe point Z index out of range.\n");
 		return;
 	}
 	zBedProbePoints[index] = z;
@@ -605,6 +600,7 @@ inline float Move::SecondDegreeTransformZ(float x, float y) const
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
+	UpdateCurrentCoordinates(la, hitDDA);
 	float hitPoint = platform->AxisMinimum(drive);
 	if(drive == Z_AXIS)
 	{
@@ -614,19 +610,17 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 			if (gCodes->GetAxisIsHomed(drive))
 			{
 				// Z-axis has already been homed, so just record the height of the bed at this point
-				lastZHit = ComputeCurrentCoordinate(drive, la, hitDDA);
-				la->SetDriveCoordinateAndZeroEndSpeed(lastZHit, drive);
-				lastZHit = lastZHit - platform->ZProbeStopHeight();
+				lastZHit = la->MachineToEndPoint(drive) - platform->ZProbeStopHeight();
+				return;
 			}
 			else
 			{
 				// Z axis has not yet been homed, so treat this probe as a homing command
-				la->SetDriveCoordinateAndZeroEndSpeed(platform->ZProbeStopHeight(), drive);
-				gCodes->SetAxisIsHomed(drive);
-				lastZHit = hitPoint;
+				lastZHit = 0.0;
+				hitPoint = platform->ZProbeStopHeight();
 			}
-			return;
-		} else
+		}
+		else
 		{
 			// Executing G30, so set the current Z height to the value at which the end stop is triggered
 			// Transform it first so that the height is correct in user coordinates
@@ -637,23 +631,22 @@ inline void Move::HitLowStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 			hitPoint = xyzPoint[Z_AXIS];
 		}
 	}
-	la->SetDriveCoordinateAndZeroEndSpeed(hitPoint, drive);
+	la->SetDriveCoordinate(hitPoint, drive);
 	gCodes->SetAxisIsHomed(drive);
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 inline void Move::HitHighStop(int8_t drive, LookAhead* la, DDA* hitDDA)
 {
-  la->SetDriveCoordinateAndZeroEndSpeed(platform->AxisMaximum(drive), drive);
-  gCodes->SetAxisIsHomed(drive);
+	UpdateCurrentCoordinates(la, hitDDA);
+	la->SetDriveCoordinate(platform->AxisMaximum(drive), drive);
+	gCodes->SetAxisIsHomed(drive);
 }
 
-inline float Move::ComputeCurrentCoordinate(int8_t drive, LookAhead* la, DDA* runningDDA)
+// This updates the end coordinates in the lookahead struct to take account of an aborted move
+inline void Move::UpdateCurrentCoordinates(LookAhead* la, DDA* runningDDA)
 {
-	float previous = la->Previous()->MachineToEndPoint(drive);
-	if(runningDDA->totalSteps <= 0)
-		return previous;
-	return previous + (la->MachineToEndPoint(drive) - previous)*(float)runningDDA->stepCount/(float)runningDDA->totalSteps;
+	la->MoveAborted(runningDDA->totalSteps > 0 ? (float)runningDDA->stepCount/(float)runningDDA->totalSteps : 0.0);
 }
 
 inline float Move::AxisCompensation(int8_t axis) const

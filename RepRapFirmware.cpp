@@ -193,10 +193,7 @@ void RepRap::Init()
   active = true;			// must do this before we start the network, else the watchdog may time out
 
   platform->Message(HOST_MESSAGE, "%s Version %s dated %s\n", NAME, VERSION, DATE);
-
-  platform->Message(HOST_MESSAGE, ".\n\nExecuting ");
-  platform->Message(HOST_MESSAGE, platform->GetConfigFile());
-  platform->Message(HOST_MESSAGE, "...\n\n");
+  platform->Message(HOST_MESSAGE, "\nExecuting %s...\n\n", platform->GetConfigFile());
 
   // We inject an M98 into the serial input stream to run the start-up macro
 
@@ -419,7 +416,7 @@ void RepRap::StandbyTool(int toolNumber)
 		tool = tool->Next();
 	}
 
-	platform->Message(HOST_MESSAGE, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
+	platform->Message(BOTH_MESSAGE, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
 }
 
 Tool* RepRap::GetTool(int toolNumber)
@@ -449,7 +446,7 @@ void RepRap::SetToolVariables(int toolNumber, float* standbyTemperatures, float*
 		tool = tool->Next();
 	}
 
-	platform->Message(HOST_MESSAGE, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
+	platform->Message(BOTH_MESSAGE, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 }
 
 
