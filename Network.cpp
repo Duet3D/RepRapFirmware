@@ -39,7 +39,6 @@
  ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-#include "DueFlashStorage.h"
 #include "ethernet_sam.h"
 
 extern "C"

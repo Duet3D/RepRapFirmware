@@ -25,9 +25,8 @@ Licence: GPL
 #define STACK 5
 #define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
-#define AXIS_LETTERS { 'X', 'Y', 'Z' } // The axes in a GCode
-#define FEEDRATE_LETTER 'F'// GCode feedrate
-#define EXTRUDE_LETTER 'E' // GCode extrude
+const char feedrateLetter = 'F';	// GCode feedrate
+const char extrudeLetter = 'E'; 	// GCode extrude
 
 // Type for specifying which endstops we want to check
 typedef uint8_t EndstopChecks;
@@ -168,7 +167,7 @@ class GCodes
     float feedrateStack[STACK];					// For dealing with Push and Pop
     FileData fileStack[STACK];
     int8_t stackPointer;						// Push and Pop stack pointer
-    char axisLetters[AXES]; 					// 'X', 'Y', 'Z'
+    static const char axisLetters[AXES]; 		// 'X', 'Y', 'Z'
     float lastPos[DRIVES - AXES]; 				// Just needed for relative moves; i.e. not X, Y and Z
 	float record[DRIVES+1];						// Temporary store for move positions
 	float moveToDo[DRIVES+1];					// Where to go set by G1 etc
@@ -180,7 +179,7 @@ class GCodes
     FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) in
     FileStore* configFile;						// A file containing a macro
     bool doingCannedCycleFile;					// Are we executing a macro file?
-    char* eofString;							// What's at the end of an HTML file?
+    const char* eofString;						// What's at the end of an HTML file?
     uint8_t eofStringCounter;					// Check the...
     uint8_t eofStringLength;					// ... EoF string as we read.
     bool homeX;									// True to home the X axis this move

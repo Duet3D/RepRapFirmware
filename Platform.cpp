@@ -122,28 +122,31 @@ void Platform::Init()
 	pinModeNonDue(atxPowerPin, OUTPUT);
 
 	DueFlashStorage::init();
-	// We really want to use static_assert here, but the ancient version of gcc used by Arduino doesn't support it
-	//static_assert(sizeof(nvData) <= 1024, "NVData too large");
-	// So instead, create a reference to a non-existent declaration if the condition fails.
+
+#if __cplusplus >= 201103L
+	static_assert(sizeof(nvData) <= 1024, "NVData too large");
+#else
 	// We are relying on the compiler optimizing this out if the condition is false
-	// Watch out for the build warning "undefined reference to 'NonExistantFunction()' if this fails.
+	// Watch out for the build warning "undefined reference to 'BadStaticAssert()' if this fails.
 	if (!(sizeof(nvData) <= 1024))
 	{
 		extern void BadStaticAssert();
 		BadStaticAssert();
 	}
+#endif
+
 	DueFlashStorage::read(nvAddress, &nvData, sizeof(nvData));
 	if (nvData.magic != FlashData::magicValue)
 	{
 		// Nonvolatile data has not been initialized since the firmware was last written, so set up default values
 		nvData.compatibility = me;
-		nvData.ipAddress = IP_ADDRESS;
-		nvData.netMask = NET_MASK;
-		nvData.gateWay = GATE_WAY;
-		nvData.macAddress = MAC_ADDRESS;
+		ARRAY_INIT(nvData.ipAddress, IP_ADDRESS);
+		ARRAY_INIT(nvData.netMask, NET_MASK);
+		ARRAY_INIT(nvData.gateWay, GATE_WAY);
+		ARRAY_INIT(nvData.macAddress, MAC_ADDRESS);
 
 		nvData.zProbeType = 0;	// Default is to use the switch
-		nvData.zProbeAxes = Z_PROBE_AXES;
+		ARRAY_INIT(nvData.zProbeAxes, Z_PROBE_AXES);
 		nvData.switchZProbeParameters.Init(0.0);
 		nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
 		nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
@@ -190,18 +193,18 @@ void Platform::Init()
 
 	// DRIVES
 
-	stepPins = STEP_PINS;
-	directionPins = DIRECTION_PINS;
-	directions = DIRECTIONS;
-	enablePins = ENABLE_PINS;
-	disableDrives = DISABLE_DRIVES;
-	lowStopPins = LOW_STOP_PINS;
-	highStopPins = HIGH_STOP_PINS;
-	maxFeedrates = MAX_FEEDRATES;
-	accelerations = ACCELERATIONS;
-	driveStepsPerUnit = DRIVE_STEPS_PER_UNIT;
-	instantDvs = INSTANT_DVS;
-	potWipes = POT_WIPES;
+	ARRAY_INIT(stepPins, STEP_PINS);
+	ARRAY_INIT(directionPins, DIRECTION_PINS);
+	ARRAY_INIT(directions, DIRECTIONS);
+	ARRAY_INIT(enablePins, ENABLE_PINS);
+	ARRAY_INIT(disableDrives, DISABLE_DRIVES);
+	ARRAY_INIT(lowStopPins, LOW_STOP_PINS);
+	ARRAY_INIT(highStopPins, HIGH_STOP_PINS);
+	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
+	ARRAY_INIT(accelerations, ACCELERATIONS);
+	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
+	ARRAY_INIT(instantDvs, INSTANT_DVS);
+	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
 	numMixingDrives = NUM_MIXING_DRIVES;
@@ -215,20 +218,20 @@ void Platform::Init()
 
 	// AXES
 
-	axisMaxima = AXIS_MAXIMA;
-	axisMinima = AXIS_MINIMA;
-	homeFeedrates = HOME_FEEDRATES;
-	headOffsets = HEAD_OFFSETS;
+	ARRAY_INIT(axisMaxima, AXIS_MAXIMA);
+	ARRAY_INIT(axisMinima, AXIS_MINIMA);
+	ARRAY_INIT(homeFeedrates, HOME_FEEDRATES);
+	ARRAY_INIT(headOffsets, HEAD_OFFSETS);
 
 	SetSlowestDrive();
 
 	// HEATERS - Bed is assumed to be the first
 
-	tempSensePins = TEMP_SENSE_PINS;
-	heatOnPins = HEAT_ON_PINS;
+	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
+	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
 	heatSampleTime = HEAT_SAMPLE_TIME;
-	standbyTemperatures = STANDBY_TEMPERATURES;
-	activeTemperatures = ACTIVE_TEMPERATURES;
+	ARRAY_INIT(standbyTemperatures, STANDBY_TEMPERATURES);
+	ARRAY_INIT(activeTemperatures, ACTIVE_TEMPERATURES);
 	coolingFanPin = COOLING_FAN_PIN;
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
 	timeToHot = TIME_TO_HOT;

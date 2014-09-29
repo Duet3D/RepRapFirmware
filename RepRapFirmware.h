@@ -57,6 +57,15 @@ int StringContains(const char* string, const char* match);
 // Macro to give us the highest valid index into an array i.e. one less than the size
 #define ARRAY_UPB(_x)	(ARRAY_SIZE(_x) - 1)
 
+// Macro to assign an array from an initializer list
+#if __cplusplus >= 201103L
+// This version relies on C++'11 features
+#define ARRAY_INIT(_dest, _init) {static const decltype(_dest) _temp = _init; memcpy(_dest, _temp, sizeof(_dest)); }
+#else
+// This version relies on a gcc extension that is available only in older compilers
+#define ARRAY_INIT(_dest, _init) _dest = _init
+#endif
+
 // Class to describe a string buffer, including its length. This saved passing buffer lengths around everywhere.
 class StringRef
 {

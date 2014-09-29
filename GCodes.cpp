@@ -39,6 +39,8 @@ GCodes::GCodes(Platform* p, Webserver* w)
 	cannedCycleGCode = new GCodeBuffer(platform, "macro: ");
 }
 
+const char GCodes::axisLetters[AXES] = {'X', 'Y', 'Z'};
+
 void GCodes::Exit()
 {
 	platform->Message(BOTH_MESSAGE, "GCodes class exited.\n");
@@ -50,9 +52,8 @@ void GCodes::Init()
 	Reset();
 	drivesRelative = true;
 	axesRelative = false;
-	axisLetters = AXIS_LETTERS;
 	distanceScale = 1.0;
-	for (int8_t i = 0; i < DRIVES - AXES; i++)
+	for (unsigned int i = 0; i < DRIVES - AXES; i++)
 	{
 		lastPos[i] = 0.0;
 	}
@@ -366,7 +367,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	// First do extrusion, and check, if we are extruding, that we have a tool to extrude with
 
 	Tool* tool = reprap.GetCurrentTool();
-	if(gb->Seen(EXTRUDE_LETTER))
+	if(gb->Seen(extrudeLetter))
 	{
 		if(tool == NULL)
 		{
@@ -446,7 +447,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 
 	// Deal with feed rate
 
-	if(gb->Seen(FEEDRATE_LETTER))
+	if(gb->Seen(feedrateLetter))
 	{
 		moveBuffer[DRIVES] = gb->GetFValue() * distanceScale * speedFactor; // G Code feedrates are in mm/minute; we need mm/sec
 	}
@@ -669,7 +670,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 			}
 		}
 
-		if(gb->Seen(FEEDRATE_LETTER)) // Has the user specified a feedrate?
+		if(gb->Seen(feedrateLetter)) // Has the user specified a feedrate?
 		{
 			moveToDo[DRIVES] = gb->GetFValue();
 			activeDrive[DRIVES] = true;
@@ -2064,7 +2065,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				}
 			}
 
-			if(gb->Seen(EXTRUDE_LETTER))
+			if(gb->Seen(extrudeLetter))
 			{
 				seen = true;
 				float eVals[DRIVES-AXES];
@@ -2400,7 +2401,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				}
 			}
 
-			if(gb->Seen(EXTRUDE_LETTER))
+			if(gb->Seen(extrudeLetter))
 			{
 				seen = true;
 				float eVals[DRIVES-AXES];
@@ -2448,7 +2449,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				}
 			}
 
-			if(gb->Seen(EXTRUDE_LETTER))
+			if(gb->Seen(extrudeLetter))
 			{
 				seen = true;
 				float eVals[DRIVES-AXES];
@@ -2897,7 +2898,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
         		}
         	}
 
-        	if(gb->Seen(EXTRUDE_LETTER))
+        	if(gb->Seen(extrudeLetter))
         	{
         		seen = true;
         		float eVals[DRIVES-AXES];
@@ -2970,7 +2971,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				}
 			}
 
-			if(gb->Seen(EXTRUDE_LETTER))
+			if(gb->Seen(extrudeLetter))
 			{
 				float eVals[DRIVES-AXES];
 				int eCount = DRIVES-AXES;

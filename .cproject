@@ -21,10 +21,8 @@
 								<option id="it.baeyens.arduino.compiler.cpp.sketch.option.incpath.274618772" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.cpp.sketch.option.incpath" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
-									<listOptionValue builtIn="false" value="C:/Arduino-1.5.4/hardware/arduino/sam/system/libsam/include"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Arduino-1.5.4\hardware\arduino\sam\cores\arduino&quot;"/>
+									<listOptionValue builtIn="false" value="C:/arduino-1.5.4/hardware/arduino/sam/system/libsam/include"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Flash}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/EMAC}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Lwip}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/MCP4461}&quot;"/>
@@ -32,6 +30,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI/utility}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Wire}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Flash}&quot;"/>
 								</option>
 								<inputType id="it.baeyens.arduino.compiler.cpp.sketch.input.1531738210" name="CPP source files" superClass="it.baeyens.arduino.compiler.cpp.sketch.input"/>
 							</tool>
@@ -39,7 +38,7 @@
 								<option id="it.baeyens.arduino.compiler.c.sketch.option.incpath.1536622716" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.c.sketch.option.incpath" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
-									<listOptionValue builtIn="false" value="C:/Arduino-1.5.4/hardware/arduino/sam/system/libsam/include"/>
+									<listOptionValue builtIn="false" value="C:/arduino-1.5.4/hardware/arduino/sam/system/libsam/include"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/EMAC}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Lwip}&quot;"/>
@@ -73,11 +72,6 @@
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
-	<storageModule moduleId="refreshScope" versionNumber="2">
-		<configuration configurationName="Release">
-			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
-		</configuration>
-	</storageModule>
+	<storageModule moduleId="refreshScope"/>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
-	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 </cproject>
