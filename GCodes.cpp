@@ -1912,8 +1912,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		if (code == 1)
 		{
 			DisableDrives();
-			reprap.GetHeat()->SwitchOffAll();
 		}
+		reprap.GetHeat()->SwitchOffAll();
 		break;
 
 	case 18: // Motors off
