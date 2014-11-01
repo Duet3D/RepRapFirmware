@@ -1,6 +1,6 @@
 /*! Reprap Ormerod Web Control | by Matt Burnett <matt@burny.co.uk>. | open license
  */
-var ver = 1.02; //App version
+var ver = 1.03; //App version
 var polling = false; 
 var printing = false;
 var paused = false;
@@ -308,11 +308,7 @@ $('div#panicBtn button').on('click', function() {
             //reset printing after pause
             printing = false;
             paused = false;
-            btnVal = "M1";
-            //switch off heaters
-            $.askElle('gcode', "M140 S0"); //bed off
-            $.askElle('gcode', "G10 P1 S0 R0\nT1"); //head 1 off
-            $.askElle('gcode', "G10 P2 S0 R0\nT1"); //head 2 off
+            btnVal = "M0";
             resetLayerData(0, 0, false);
 			//no break
         case "M24":

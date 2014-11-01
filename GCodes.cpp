@@ -1907,14 +1907,54 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			}
 		}
 
-		if (!DisableDrives())
-			return false;
-
-		reprap.GetHeat()->SwitchOffAll();
+		// zpl 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
+		// I think M1 is sufficient for this purpose. Leave M0 for a normal reset.
+		if (code == 1)
+		{
+			DisableDrives();
+			reprap.GetHeat()->SwitchOffAll();
+		}
 		break;
 
 	case 18: // Motors off
-		result = DisableDrives();
+	case 84:
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+			return false;
+		{
+			bool seen = false;
+			for(uint8_t axis=0; axis<AXES; axis++)
+			{
+				if (gb->Seen(axisLetters[axis]))
+				{
+					axisIsHomed[axis] = false;
+					platform->Disable(axis);
+					seen = true;
+				}
+			}
+
+			if (gb->Seen(extrudeLetter))
+			{
+				long int eDrive[DRIVES-AXES];
+				int eCount = DRIVES-AXES;
+				gb->GetLongArray(eDrive, eCount);
+				for(uint8_t i=0; i<eCount; i++)
+				{
+					seen = true;
+					if (eDrive[i] >= DRIVES-AXES)
+					{
+						reply.printf("Invalid extruder number specified: %ld\n", eDrive[i]);
+						error = true;
+						break;
+					}
+					platform->Disable(AXES + eDrive[i]);
+				}
+			}
+
+			if (!seen)
+			{
+				DisableDrives();
+			}
+		}
 		break;
 
 	case 20:  // Deprecated...
@@ -2046,9 +2086,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		}
 		break;
 
-	case 84: // Motors off - deprecated, use M18
-		result = DisableDrives();
-		break;
+	// For case 84, see case 18
 
 	case 85: // Set inactive time
 		break;
@@ -2976,16 +3014,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				float eVals[DRIVES-AXES];
 				int eCount = DRIVES-AXES;
 				gb->GetFloatArray(eVals, eCount);
-				if(eCount != DRIVES-AXES)
+				// 2014-09-29 DC42: we no longer insist that the user supplies values for all possible extruder drives
+				for(int8_t e = 0; e < eCount; e++)
 				{
-					reply.printf("Setting motor currents - wrong number of E drives: %s\n", gb->Buffer());
-				}
-				else
-				{
-					for(int8_t e = 0; e < eCount; e++)
-					{
-						platform->SetMotorCurrent(AXES + e, eVals[e]);
-					}
+					platform->SetMotorCurrent(AXES + e, eVals[e]);
 				}
 			}
 			else if (!seen)
