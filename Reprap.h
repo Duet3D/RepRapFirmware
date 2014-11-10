@@ -58,6 +58,7 @@ class RepRap
     uint16_t GetTicksInSpinState() const;
     uint16_t GetExtrudersInUse() const;
     uint16_t GetHeatersInUse() const;
+    void GetStatusResponse(StringRef& response, uint8_t type) const;
     
   private:
   

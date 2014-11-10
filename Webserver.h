@@ -141,6 +141,9 @@ class Webserver
     void ConnectionLost(const ConnectionState *cs);
     void ConnectionError();
     void WebDebug(bool wdb);
+    const StringRef& GetGcodeReply() const { return gcodeReply; }
+    unsigned int GetReplySeq() const { return seq; }
+    unsigned int GetGcodeBufferSpace() const;
 
     friend class Platform;
 
@@ -166,7 +169,6 @@ class Webserver
 			bool CharFromClient(const char c);
 			void ResetState();
 			bool FlushUploadData();
-			void ReceivedGcodeReply();
 			virtual bool DebugEnabled() /*override*/ const { return webDebug; }
 			void SetDebug(bool b) { webDebug = b; }
 
@@ -202,7 +204,6 @@ class Webserver
 			void SendJsonResponse(const char* command);
 			bool GetJsonResponse(const char* request, StringRef& response, const char* key, const char* value, size_t valueLength, bool& keepOpen);
 			void GetJsonUploadResponse(StringRef& response);
-			void GetStatusResponse(StringRef& response, uint8_t type);
 			bool ProcessMessage();
 			bool RejectMessage(const char* s, unsigned int code = 500);
 
@@ -231,7 +232,6 @@ class Webserver
 
 			// Buffers to hold reply
 			char decodeChar;
-			uint16_t seq;									// reply sequence number, so that the client can tell if a json reply is new or not
 		    bool webDebug;
 	};
 	HttpInterpreter *httpInterpreter;
@@ -305,7 +305,6 @@ class Webserver
 	TelnetInterpreter *telnetInterpreter;
 
 	// G-Code processing
-    unsigned int GetGcodeBufferSpace() const;
     void ProcessGcode(const char* gc);
     void LoadGcodeBuffer(const char* gc);
     void StoreGcodeData(const char* data, size_t len);
@@ -322,6 +321,7 @@ class Webserver
     unsigned int gcodeReadIndex, gcodeWriteIndex;	// head and tail indices into gcodeBuffer
     char gcodeReplyBuffer[2048];
     StringRef gcodeReply;
+	uint16_t seq;									// reply sequence number, so that the client can tell if a json reply is new or not
 
     // Misc
     char password[SHORT_STRING_LENGTH + 1];

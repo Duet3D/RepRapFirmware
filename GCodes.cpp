@@ -2165,16 +2165,23 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
     	break;
 
 	case 105: // Deprecated...
-		reply.copy("T:");
-		for(int8_t heater = 1; heater < HEATERS; heater++)
+		if (gb->Seen('S') && gb->GetIValue() == 2)
 		{
-			Heat::HeaterStatus hs = reprap.GetHeat()->GetStatus(heater);
-			if(hs != Heat::HS_off && hs != Heat::HS_fault)
-			{
-				reply.catf("%.1f ", reprap.GetHeat()->GetTemperature(heater));
-			}
+			reprap.GetStatusResponse(reply, 2);				// send JSON-formatted status response
 		}
-		reply.catf("B: %.1f ", reprap.GetHeat()->GetTemperature(HOT_BED));
+		else
+		{
+			reply.copy("T:");
+			for(int8_t heater = 1; heater < HEATERS; heater++)
+			{
+				Heat::HeaterStatus hs = reprap.GetHeat()->GetStatus(heater);
+				if(hs != Heat::HS_off && hs != Heat::HS_fault)
+				{
+					reply.catf("%.1f ", reprap.GetHeat()->GetTemperature(heater));
+				}
+			}
+			reply.catf("B: %.1f ", reprap.GetHeat()->GetTemperature(HOT_BED));
+		}
 		break;
    
 	case 106: // Set/report fan values

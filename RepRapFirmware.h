@@ -66,7 +66,7 @@ int StringContains(const char* string, const char* match);
 #define ARRAY_INIT(_dest, _init) _dest = _init
 #endif
 
-// Class to describe a string buffer, including its length. This saved passing buffer lengths around everywhere.
+// Class to describe a string buffer, including its length. This saves passing buffer lengths around everywhere.
 class StringRef
 {
 	char *p;		// pointer to the storage

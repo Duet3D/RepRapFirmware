@@ -355,7 +355,7 @@ void Webserver::ProcessGcode(const char* gc)
 			configFile->Close();
 			gcodeReply[i] = 0;
 
-			httpInterpreter->ReceivedGcodeReply();
+			++seq;
 			telnetInterpreter->HandleGcodeReply(gcodeReply.Pointer());
 		}
 	}
@@ -527,7 +527,7 @@ void Webserver::MessageStringToWebInterface(const char *s, bool error)
 		}
 	}
 
-	httpInterpreter->ReceivedGcodeReply();
+	++seq;
 	telnetInterpreter->HandleGcodeReply(s);
 }
 
@@ -539,7 +539,7 @@ void Webserver::AppendReplyToWebInterface(const char *s, bool error)
 	}
 
 	gcodeReply.cat(s);
-	httpInterpreter->ReceivedGcodeReply();
+	++seq;
 	telnetInterpreter->HandleGcodeReply(s);
 }
 
@@ -699,7 +699,7 @@ bool ProtocolInterpreter::DebugEnabled() const
 
 
 Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws)
-	: ProtocolInterpreter(p, ws), state(doingCommandWord), seq(0), webDebug(false)
+	: ProtocolInterpreter(p, ws), state(doingCommandWord), webDebug(false)
 {
 }
 
@@ -837,11 +837,11 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 
 	if (StringEquals(request, "status"))	// new style status request
 	{
-		GetStatusResponse(response, 1);
+		reprap.GetStatusResponse(response, 1);
 	}
 	else if (StringEquals(request, "poll"))		// old style status request
 	{
-		GetStatusResponse(response, 0);
+		reprap.GetStatusResponse(response, 0);
 	}
 	else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
 	{
@@ -998,7 +998,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 	else if (StringEquals(request, "connect"))
 	{
 		CancelUpload();
-		GetStatusResponse(response, 1);
+		reprap.GetStatusResponse(response, 1);
 	}
 	else
 	{
@@ -1011,207 +1011,6 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 void Webserver::HttpInterpreter::GetJsonUploadResponse(StringRef& response)
 {
 	response.printf("{\"ubuff\":%u,\"err\":%d}", webUploadBufferSize, (uploadState == uploadOK) ? 0 : 1);
-}
-
-void Webserver::HttpInterpreter::GetStatusResponse(StringRef& response, uint8_t type)
-{
-	GCodes *gc = reprap.GetGCodes();
-	if (type == 1)
-	{
-		// New-style status request
-		// Send the printing/idle status
-		char ch = (reprap.IsStopped()) ? 'S' : (gc->PrintingAFile()) ? 'P' : 'I';
-		response.printf("{\"status\":\"%c\",\"heaters\":", ch);
-
-		// Send the heater actual temperatures
-		const Heat *heat = reprap.GetHeat();
-		ch = '[';
-		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
-		{
-			response.catf("%c%.1f", ch, heat->GetTemperature(heater));
-			ch = ',';
-		}
-
-		// Send the heater active temperatures
-		response.catf("],\"active\":");
-		ch = '[';
-		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
-		{
-			response.catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
-			ch = ',';
-		}
-
-		// Send the heater standby temperatures
-		response.catf("],\"standby\":");
-		ch = '[';
-		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
-		{
-			response.catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
-			ch = ',';
-		}
-
-		// Send the heater statuses (0=off, 1=standby, 2=active)
-		response.cat("],\"hstat\":");
-		ch = '[';
-		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
-		{
-			response.catf("%c%d", ch, (int)heat->GetStatus(heater));
-			ch = ',';
-		}
-
-		// Send XYZ positions
-		float liveCoordinates[DRIVES + 1];
-		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		const Tool* currentTool = reprap.GetCurrentTool();
-		if (currentTool != NULL)
-		{
-			const float *offset = currentTool->GetOffset();
-			for (size_t i = 0; i < AXES; ++i)
-			{
-				liveCoordinates[i] += offset[i];
-			}
-		}
-		response.catf("],\"pos\":");		// announce the XYZ position
-		ch = '[';
-		for (int8_t drive = 0; drive < AXES; drive++)
-		{
-			response.catf("%c%.2f", ch, liveCoordinates[drive]);
-			ch = ',';
-		}
-
-		// Send extruder total extrusion since power up, last G92 or last M23
-		response.catf("],\"extr\":");		// announce the extruder positions
-		ch = '[';
-		for (int8_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
-		{
-			response.catf("%c%.1f", ch, gc->GetExtruderPosition(drive));
-			ch = ',';
-		}
-		response.cat("]");
-
-		// Send the speed and extruder override factors
-		response.catf(",\"sfactor\":%.2f,\"efactor\":", gc->GetSpeedFactor() * 100.0);
-		const float *extrusionFactors = gc->GetExtrusionFactors();
-		for (unsigned int i = 0; i < reprap.GetExtrudersInUse(); ++i)
-		{
-			response.catf("%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
-		}
-		response.cat("]");
-
-		// Send the current tool number
-		int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
-		response.catf(",\"tool\":%d", toolNumber);
-	}
-	else
-	{
-		// The old (deprecated) poll response lists the status, then all the heater temperatures, then the XYZ positions, then all the extruder positions.
-		// These are all returned in a single vector called "poll".
-		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
-		// RRP reversed the order at version 0.65 to send the positions before the heaters, but we haven't yet done that.
-		char c = (gc->PrintingAFile()) ? 'P' : 'I';
-		response.printf("{\"poll\":[\"%c\",", c); // Printing
-		for (int8_t heater = 0; heater < HEATERS; heater++)
-		{
-			response.catf("\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
-		}
-		// Send XYZ and extruder positions
-		float liveCoordinates[DRIVES + 1];
-		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		for (int8_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
-		{
-			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
-			response.catf("\"%.2f\"%c", liveCoordinates[drive], ch);
-		}
-	}
-
-	// Send the Z probe value
-	int v0 = platform->ZProbe();
-	int v1, v2;
-	switch (platform->GetZProbeSecondaryValues(v1, v2))
-	{
-	case 1:
-		response.catf(",\"probe\":\"%d (%d)\"", v0, v1);
-		break;
-	case 2:
-		response.catf(",\"probe\":\"%d (%d, %d)\"", v0, v1, v2);
-		break;
-	default:
-		response.catf(",\"probe\":\"%d\"", v0);
-		break;
-	}
-
-	// Send fan RPM value
-	response.catf(",\"fanRPM\":%u", (unsigned int)platform->GetFanRPM());
-
-	// Send the amount of buffer space available for gcodes
-	response.catf(",\"buff\":%u", webserver->GetGcodeBufferSpace());
-
-	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-	if (type != 0)
-	{
-		response.catf(",\"homed\":[%d,%d,%d]",
-				(gc->GetAxisIsHomed(0)) ? 1 : 0,
-				(gc->GetAxisIsHomed(1)) ? 1 : 0,
-				(gc->GetAxisIsHomed(2)) ? 1 : 0);
-	}
-	else
-	{
-		response.catf(",\"hx\":%d,\"hy\":%d,\"hz\":%d",
-				(gc->GetAxisIsHomed(0)) ? 1 : 0,
-				(gc->GetAxisIsHomed(1)) ? 1 : 0,
-				(gc->GetAxisIsHomed(2)) ? 1 : 0);
-	}
-
-	// Retrieve the gcode buffer from Webserver
-	const char *p = webserver->gcodeReply.Pointer();
-
-	// Send the response sequence number
-	response.catf(",\"seq\":%u", (unsigned int) seq);
-
-	// Send the response to the last command. Do this last because it is long and may need to be truncated.
-	response.cat(",\"resp\":\"");
-	size_t jp = response.strlen();
-	while (*p != 0 && jp < response.Length() - 3)	// leave room for the final '"}\0'
-	{
-		char c = *p++;
-		char esc;
-		switch (c)
-		{
-		case '\r':
-			esc = 'r';
-			break;
-		case '\n':
-			esc = 'n';
-			break;
-		case '\t':
-			esc = 't';
-			break;
-		case '"':
-			esc = '"';
-			break;
-		case '\\':
-			esc = '\\';
-			break;
-		default:
-			esc = 0;
-			break;
-		}
-		if (esc)
-		{
-			if (jp == response.Length() - 4)
-			{
-				break;
-			}
-			response[jp++] = '\\';
-			response[jp++] = esc;
-		}
-		else
-		{
-			response[jp++] = c;
-		}
-	}
-	response[jp] = 0;
-	response.cat("\"}");
 }
 
 void Webserver::HttpInterpreter::ResetState()
@@ -1245,11 +1044,6 @@ bool Webserver::HttpInterpreter::FlushUploadData()
 	return true;
 }
 
-void Webserver::HttpInterpreter::ReceivedGcodeReply()
-{
-	// We need to increase seq whenever a new G-Code reply is available.
-	seq++;
-}
 
 // Process a character from the client
 // Rewritten as a state machine by dc42 to increase capability and speed, and reduce RAM requirement.
