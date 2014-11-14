@@ -249,7 +249,7 @@ void GCodes::Spin()
 			platform->GetAux()->Read(b);
 			if (auxGCode->Put(b))	// add char to buffer and test whether the gcode is complete
 			{
-				auxGCode->SetFinished(ActOnCode(serialGCode));
+				auxGCode->SetFinished(ActOnCode(auxGCode));
 				break;	// stop after receiving a complete gcode in case we haven't finished processing it
 			}
 			++i;
@@ -1491,8 +1491,11 @@ void GCodes::HandleReply(bool error, const GCodeBuffer *gb, const char* reply, c
 	if (gb == auxGCode)
 	{
 		// Command was received from the aux interface (LCD display), so send the response only to the aux interface.
-		platform->GetAux()->Write(reply);
-		platform->GetAux()->Write('\n');
+		if (reply[0] != 0)
+		{
+			platform->GetAux()->Write(reply);
+			platform->GetAux()->Write('\n');
+		}
 		return;
 	}
 

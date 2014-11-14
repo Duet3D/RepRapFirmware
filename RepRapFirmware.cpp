@@ -678,9 +678,10 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 			}
 		}
 		response[jp] = 0;
+		response.cat("\"");
 	}
 
-	response.cat("\"}");
+	response.cat("}");
 }
 
 

@@ -97,11 +97,9 @@ bool PidParameters::operator==(const PidParameters& other) const
 
 Platform::Platform() :
 		tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0), debugCode(0),
-		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
+		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer)), line(NULL), aux(NULL)
 {
-	SerialUSB.begin(BAUD_RATE);
 	line = new Line(SerialUSB);
-	Serial.begin(BAUD_RATE);
 	aux = new Line(Serial);
 
 	// Files
@@ -120,6 +118,9 @@ void Platform::Init()
 {
 	digitalWriteNonDue(atxPowerPin, LOW);		// ensure ATX power is off by default
 	pinModeNonDue(atxPowerPin, OUTPUT);
+
+	SerialUSB.begin(BAUD_RATE);
+	Serial.begin(BAUD_RATE);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 
 	DueFlashStorage::init();
 
