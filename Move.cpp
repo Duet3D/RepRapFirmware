@@ -146,8 +146,8 @@ void Move::Spin()
     
   DoLookAhead();
   
-  // If there's space in the DDA ring, and there are completed
-  // moves in the look-ahead ring, transfer them.
+  // If there's space in the DDA ring, and there is a completed
+  // move in the look-ahead ring, transfer it.
  
   if(!DDARingFull())
   {
@@ -426,7 +426,7 @@ bool Move::DDARingAdd(LookAhead* lookAhead)
     // We don't care about Init()'s return value - that should all have been sorted out by LookAhead.
     
     float u, v;
-    ddaRingAddPointer->Init(lookAhead, u, v);
+    ddaRingAddPointer->Init(lookAhead, u, v, false);
     ddaRingAddPointer = ddaRingAddPointer->Next();
     ReleaseDDARingLock();
     return true;
@@ -482,7 +482,7 @@ void Move::DoLookAhead()
         {
           float u = n0->V();
           float v = n1->V();
-          if(lookAheadDDA->Init(n1, u, v) & change)
+          if(lookAheadDDA->Init(n1, u, v, false) & change)
           {
             n0->SetV(u);
             n1->SetV(v); 
@@ -503,7 +503,7 @@ void Move::DoLookAhead()
         {
           float u = n0->V();
           float v = n1->V();
-          if(lookAheadDDA->Init(n1, u, v) & change)
+          if(lookAheadDDA->Init(n1, u, v, false) & change)
           {
             n0->SetV(u);
             n1->SetV(v); 
@@ -568,6 +568,7 @@ void Move::Interrupt()
     if(dda != NULL)
     {
       dda->Start();  // Yes - got it.  So fire it up.
+      dda->Step();   // And take the first step.
     }
     return;   
   }
@@ -900,11 +901,9 @@ TODO: Worry about having more than eight drives
 
 MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile result)
 {
-	// At which DDA step should we stop accelerating?  myLookAheadEntry->FeedRate() gives
-	// the desired feedrate.
+	// At which DDA step should we stop accelerating?  myLookAheadEntry->FeedRate() gives the desired feedrate.
 
-	feedRate = myLookAheadEntry->FeedRate();
-
+	float feedRate = myLookAheadEntry->FeedRate();
 	float d = 0.5*(feedRate*feedRate - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
 	stopAStep = (long)roundf((d*totalSteps)/distance);
 
@@ -957,40 +956,12 @@ MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile
 		stopAStep = (long)((dCross*totalSteps)/distance);
 		startDStep = stopAStep + 1;
 	}
-	else if(totalSteps > 5 && stopAStep <= 1)
-	{
-		result = change;
-		u = myLookAheadEntry->FeedRate();
-
-		if (startDStep >= totalSteps - 1)
-		{
-			// If we try to get to speed in a single step, the error from the
-			// Euler integration can create silly speeds.
-
-			// Note by zpl: This may not be needed in dc42's fork, because all speeds are checked
-			// after the integration has been done, but I left this in just in case.
-
-			stopAStep = 0;
-			startDStep = totalSteps;
-			v = u;
-		}
-		else
-		{
-			// Sometimes we get silly acceleration values, because (feedRate*feedRate - u*u) can become less than zero.
-
-			stopAStep = fabs(stopAStep);
-			if (stopAStep <= 1 || stopAStep >= startDStep)
-			{
-				stopAStep = startDStep - 1;
-			}
-		}
-	}
 
 	return result;
 }
 
 
-MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
+MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v, bool debug)
 {
   active = false;
   myLookAheadEntry = lookAhead;
@@ -1070,7 +1041,7 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
 
   acceleration = lookAhead->Acceleration();
   instantDv = lookAhead->MinSpeed();
-  timeStep = 1.0/platform->DriveStepsPerUnit(bigDirection);
+  timeStep = distance/(float)totalSteps;
 
   result = AccelerationCalculation(u, v, result);
   
@@ -1098,6 +1069,14 @@ MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v)
   
   timeStep = timeStep/velocity;
   
+  if(debug)
+  {
+	  myLookAheadEntry->PrintMove();
+
+	  platform->Message(HOST_MESSAGE, "DDA startV: %.2f, distance: %.1f, steps: %d, stopA: %d, startD: %d, timestep: %.5f\n",
+			  velocity, distance, totalSteps, stopAStep, startDStep, timeStep);
+  }
+
   return result;
 }
 
@@ -1172,9 +1151,9 @@ void DDA::Step()
     if(stepCount < stopAStep)
     {
       velocity += acceleration*timeStep;
-      if (velocity > feedRate)
+      if (velocity > myLookAheadEntry->FeedRate())
       {
-    	  velocity = feedRate;
+    	  velocity = myLookAheadEntry->FeedRate();
       }
     }
     else if(stepCount >= startDStep)
@@ -1247,7 +1226,7 @@ void LookAhead::Init(long ep[], float fRate, float minS, float maxS, float acc, 
   
   processed = (reprap.GetGCodes()->HaveIncomingData())
     			? unprocessed
-  	  	  	  	  : complete|vCosineSet|upPass;
+  	  	  	  	  : complete|vCosineSet;
 }
 
 

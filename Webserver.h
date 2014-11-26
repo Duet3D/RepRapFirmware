@@ -30,7 +30,8 @@ Licence: GPL
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
-const unsigned int gcodeBufLength = 512;		// size of our gcode ring buffer, preferably a power of 2
+const unsigned int gcodeBufferLength = 512;		// size of our gcode ring buffer, preferably a power of 2
+const unsigned int gcodeReplyBufferLength = 2048;	// size of our gcode reply buffer
 
 /* HTTP */
 
@@ -87,7 +88,7 @@ class ProtocolInterpreter
 		virtual void ResetState() = 0;
 
 	    virtual bool StoreUploadData(const char* data, unsigned int len);
-	    virtual bool FlushUploadData();
+	    bool FlushUploadData();
 	    void CancelUpload();
 		bool IsUploading() const { return uploadState != notUploading; }
 
@@ -145,15 +146,11 @@ class Webserver
     unsigned int GetReplySeq() const { return seq; }
     unsigned int GetGcodeBufferSpace() const;
 
+    static bool GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info);
+
     friend class Platform;
 
   protected:
-
-	// File information about the file being printed
-	bool fileInfoDetected;
-	char fileBeingPrinted[255];
-	GcodeFileInfo currentFileInfo;
-	float printStartTime;
 
     void MessageStringToWebInterface(const char *s, bool error);
     void AppendReplyToWebInterface(const char* s, bool error);
@@ -168,7 +165,6 @@ class Webserver
 
 			bool CharFromClient(const char c);
 			void ResetState();
-			bool FlushUploadData();
 			virtual bool DebugEnabled() /*override*/ const { return webDebug; }
 			void SetDebug(bool b) { webDebug = b; }
 
@@ -286,7 +282,7 @@ class Webserver
 			bool CharFromClient(const char c);
 			void ResetState();
 
-			void HandleGcodeReply(const char* reply);
+			void HandleGcodeReply(const char* reply, bool haveMore = false);
 
 		private:
 
@@ -310,16 +306,15 @@ class Webserver
     void StoreGcodeData(const char* data, size_t len);
 
     // File info methods
-    static bool GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info);
     static bool FindHeight(const char* buf, size_t len, float& height);
     static bool FindLayerHeight(const char* buf, size_t len, float& layerHeight);
     static unsigned int FindFilamentUsed(const char* buf, size_t len,  float *filamentUsed, unsigned int maxFilaments);
     static void CopyParameterText(const char* src, char *dst, size_t length);
 
     // Buffer to hold gcode that is ready for processing
-    char gcodeBuffer[gcodeBufLength];
+    char gcodeBuffer[gcodeBufferLength];
     unsigned int gcodeReadIndex, gcodeWriteIndex;	// head and tail indices into gcodeBuffer
-    char gcodeReplyBuffer[2048];
+    char gcodeReplyBuffer[gcodeReplyBufferLength];
     StringRef gcodeReply;
 	uint16_t seq;									// reply sequence number, so that the client can tell if a json reply is new or not
 

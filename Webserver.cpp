@@ -101,7 +101,6 @@ const float pasvPortTimeout = 10.0;	 					// seconds to wait for the FTP data po
 
 // Constructor and initialisation
 Webserver::Webserver(Platform* p) : platform(p), webserverActive(false), readingConnection(NULL),
-		fileInfoDetected(false), printStartTime(0.0),
 		gcodeReply(gcodeReplyBuffer, ARRAY_SIZE(gcodeReplyBuffer))
 {
 	httpInterpreter = new HttpInterpreter(p, this);
@@ -139,7 +138,7 @@ void Webserver::Spin()
 	if (webserverActive && httpInterpreter->FlushUploadData() && ftpInterpreter->FlushUploadData())
 	{
 		Network *net = reprap.GetNetwork();
-		RequestState *req = net->GetRequest(readingConnection);
+		NetworkTransaction *req = net->GetTransaction(readingConnection);
 		if (req != NULL)
 		{
 			// Process incoming request
@@ -170,7 +169,7 @@ void Webserver::Spin()
 						break;
 				}
 
-				RequestStatus status = req->GetStatus();
+				TransactionStatus status = req->GetStatus();
 
 				// For protocols other than HTTP it is important to send a HELO message
 				if (status == connected)
@@ -178,17 +177,17 @@ void Webserver::Spin()
 					interpreter->ConnectionEstablished();
 
 					// Close this request unless ConnectionEstablished() has already used it for sending
-					if (req == net->GetRequest(readingConnection))
+					if (req == net->GetTransaction(readingConnection))
 					{
-						net->CloseRequest();
+						net->CloseTransaction();
 					}
 				}
-				// Graceful disconnects are handled here, because prior RequestStates might still contain valid
+				// Graceful disconnects are handled here, because prior NetworkTransactions might still contain valid
 				// data. That's why it's a bad idea to close these connections immediately in the Network class.
 				else if (status == disconnected)
 				{
 					// CloseRequest() will call the disconnect events and close the connection
-					net->CloseRequest();
+					net->CloseTransaction();
 				}
 				// Fast upload for FTP connections
 				else if (is_data_port)
@@ -203,7 +202,7 @@ void Webserver::Spin()
 						}
 						else
 						{
-							net->CloseRequest();
+							net->CloseTransaction();
 						}
 					}
 					else
@@ -221,7 +220,7 @@ void Webserver::Spin()
 					{
 						if (req->Read(c))
 						{
-							// Each ProtocolInterpreter must take care of the current RequestState and remove
+							// Each ProtocolInterpreter must take care of the current NetworkTransaction and remove
 							// it from the ready transactions by either calling SendAndClose() or CloseRequest().
 							if (interpreter->CharFromClient(c))
 							{
@@ -243,7 +242,7 @@ void Webserver::Spin()
 			else if (req->LostConnection())
 			{
 				platform->Message(HOST_MESSAGE, "Webserver: Skipping zombie request\n");
-				net->CloseRequest();
+				net->CloseTransaction();
 			}
 		}
 
@@ -305,7 +304,7 @@ bool Webserver::CheckPassword(const char *pw) const
 // Get the actual amount of gcode buffer space we have
 unsigned int Webserver::GetGcodeBufferSpace() const
 {
-	return (gcodeReadIndex - gcodeWriteIndex - 1u) % gcodeBufLength;
+	return (gcodeReadIndex - gcodeWriteIndex - 1u) % gcodeBufferLength;
 }
 
 // Process a null-terminated gcode
@@ -320,11 +319,8 @@ void Webserver::ProcessGcode(const char* gc)
 	}
 	else if (StringStartsWith(gc, "M23 "))	// select SD card file to print next
 	{
-		fileInfoDetected = GetFileInfo(platform->GetGCodeDir(), &gc[4], currentFileInfo);
-		printStartTime = platform->Time();
-		strncpy(fileBeingPrinted, &gc[4], ARRAY_SIZE(fileBeingPrinted));
-		fileBeingPrinted[ARRAY_UPB(fileBeingPrinted)] = 0;
-		reprap.GetGCodes()->QueueFileToPrint(fileBeingPrinted);
+		reprap.StartingFilePrint(&gc[4]);
+		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
 	}
 	else if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
 	{
@@ -385,7 +381,7 @@ char Webserver::ReadGCode()
 	else
 	{
 		c = gcodeBuffer[gcodeReadIndex];
-		gcodeReadIndex = (gcodeReadIndex + 1u) % gcodeBufLength;
+		gcodeReadIndex = (gcodeReadIndex + 1u) % gcodeBufferLength;
 	}
 	return c;
 }
@@ -451,7 +447,7 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 	}
 	else
 	{
-		size_t remaining = gcodeBufLength - gcodeWriteIndex;
+		size_t remaining = gcodeBufferLength - gcodeWriteIndex;
 		if (len <= remaining)
 		{
 			memcpy(gcodeBuffer + gcodeWriteIndex, data, len);
@@ -461,11 +457,11 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 			memcpy(gcodeBuffer + gcodeWriteIndex, data, remaining);
 			memcpy(gcodeBuffer, data + remaining, len - remaining);
 		}
-		gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufLength;
+		gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufferLength;
 	}
 }
 
-// Handle disconnects here
+// Handle immediate disconnects here (cs will be freed after this call)
 void Webserver::ConnectionLost(const ConnectionState *cs)
 {
 	// Inform protocol handlers that this connection has been lost
@@ -514,21 +510,24 @@ void Webserver::MessageStringToWebInterface(const char *s, bool error)
 	if (strlen(s) == 0 && !error)
 	{
 		gcodeReply.copy("ok");
+		telnetInterpreter->HandleGcodeReply("ok");
 	}
 	else
 	{
 		if (error)
 		{
 			gcodeReply.printf("Error: %s", s);
+			telnetInterpreter->HandleGcodeReply("Error: ", true);
+			telnetInterpreter->HandleGcodeReply(s);
 		}
 		else
 		{
 			gcodeReply.copy(s);
+			telnetInterpreter->HandleGcodeReply(s);
 		}
 	}
 
 	++seq;
-	telnetInterpreter->HandleGcodeReply(s);
 }
 
 void Webserver::AppendReplyToWebInterface(const char *s, bool error)
@@ -540,7 +539,7 @@ void Webserver::AppendReplyToWebInterface(const char *s, bool error)
 
 	gcodeReply.cat(s);
 	++seq;
-	telnetInterpreter->HandleGcodeReply(s);
+	telnetInterpreter->HandleGcodeReply(s, true);
 }
 
 
@@ -607,9 +606,8 @@ bool ProtocolInterpreter::FlushUploadData()
 {
 	if (uploadState == uploadOK && uploadLength != 0)
 	{
-		// Write some uploaded data to file, if possible one sector (512 bytes) at a time
-		// Limiting the amount of data we write improves throughput, probably by allowing lwip time to send ACKs etc.
-		unsigned int len = min<unsigned int>(uploadLength, 512);
+		// Write some uploaded data to file, if possible half a sector (256 bytes) at a time
+		unsigned int len = min<unsigned int>(uploadLength, 256);
 		if (!fileBeingUploaded.Write(uploadPointer, len))
 		{
 			platform->Message(HOST_MESSAGE, "Could not flush upload data!\n");
@@ -725,7 +723,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
 	}
 
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	NetworkTransaction *req = net->GetTransaction();
 	req->Write("HTTP/1.1 200 OK\n");
 
 	const char* contentType;
@@ -774,7 +772,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
 void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 {
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	NetworkTransaction *req = net->GetTransaction();
 	bool keepOpen = false;
 	bool mayKeepOpen;
 	bool found;
@@ -820,7 +818,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	req->Write("Content-Type: application/json\n");
 	req->Printf("Content-Length: %u\n", jsonResponse.strlen());
 	req->Printf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
-	req->Write(jsonResponse.Pointer());
+	req->Write(jsonResponse);
 	net->SendAndClose(NULL, keepOpen);
 }
 
@@ -881,103 +879,15 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 	else if (StringEquals(request, "files"))
 	{
 		const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
-
-		FileInfo file_info;
-		if (platform->GetMassStorage()->FindFirst(dir, file_info))
-		{
-			response.copy("{\"files\":[");
-
-			do {
-				// build the file list here, but keep 2 characters free to terminate the JSON message
-				response.catf("%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
-			} while (platform->GetMassStorage()->FindNext(file_info));
-
-			response[response.strlen() - 1] = 0;	// remove last separator
-			response[response.Length() - 3] = 0;	// ensure room for 2 more characters and a null
-			response.cat("]}");
-		}
-		else
-		{
-			response.copy("{\"files\":[]}");
-		}
+		reprap.GetFilesResponse(response, dir);
 	}
 	else if (StringEquals(request, "fileinfo"))
 	{
-		// Poll file info for a specific file
-		if (StringEquals(key, "name"))
-		{
-			GcodeFileInfo info;
-			bool found = webserver->GetFileInfo("0:/", value, info);
-			if (found)
-			{
-				response.printf("{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
-								info.fileSize, info.objectHeight, info.layerHeight);
-				char ch = '[';
-				if (info.numFilaments == 0)
-				{
-					response.catf("%c", ch);
-				}
-				else
-				{
-					for (unsigned int i = 0; i < info.numFilaments; ++i)
-					{
-						response.catf("%c%.1f", ch, info.filamentNeeded[i]);
-						ch = ',';
-					}
-				}
-				response.catf("],\"generatedBy\":\"%s\"}", info.generatedBy);
-			}
-			else
-			{
-				response.copy("{\"err\":1}");
-			}
-		}
-		else if (reprap.GetGCodes()->PrintingAFile() && webserver->fileInfoDetected)
-		{
-			// Poll file info about a file currently being printed
-			response.printf("{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
-							webserver->currentFileInfo.fileSize, webserver->currentFileInfo.objectHeight, webserver->currentFileInfo.layerHeight);
-			char ch = '[';
-			if (webserver->currentFileInfo.numFilaments == 0)
-			{
-				response.catf("%c", ch);
-			}
-			else
-			{
-				for (unsigned int i = 0; i < webserver->currentFileInfo.numFilaments; ++i)
-				{
-					response.catf("%c%.1f", ch, webserver->currentFileInfo.filamentNeeded[i]);
-					ch = ',';
-				}
-			}
-			response.catf("],\"generatedBy\":\"%s\",\"printDuration\":%d,\"fileName\":\"%s\"}",
-					webserver->currentFileInfo.generatedBy, (int)((platform->Time() - webserver->printStartTime) * 1000.0), webserver->fileBeingPrinted);
-		}
-		else
-		{
-			response.copy("{\"err\":1}");
-		}
+		reprap.GetFileInfoResponse(response, (StringEquals(key, "name")) ? value : NULL);
 	}
 	else if (StringEquals(request, "name"))
 	{
-		response.copy("{\"myName\":\"");
-		size_t j = response.strlen();
-		const char *myName = webserver->GetName();
-		for (size_t i = 0; i < SHORT_STRING_LENGTH; ++i)
-		{
-			char c = myName[i];
-			if (c < ' ')	// if null terminator or bad character
-				break;
-			if (c == '"' || c == '\\')
-			{
-				// Need to escape the quote-mark or backslash for JSON
-				response[j++] = '\\';
-			}
-			response[j++] = c;
-		}
-		response[j++] = '"';
-		response[j++] = '}';
-		response[j] = 0;
+		reprap.GetNameResponse(response);
 	}
 	else if (StringEquals(request, "password") && StringEquals(key, "password"))
 	{
@@ -1021,27 +931,6 @@ void Webserver::HttpInterpreter::ResetState()
 	numQualKeys = 0;
 	numHeaderKeys = 0;
 	commandWords[0] = clientMessage;
-}
-
-bool Webserver::HttpInterpreter::FlushUploadData()
-{
-	if (uploadState == uploadOK && uploadLength != 0)
-	{
-		// FIXME: This method will fail whenever more than 256 bytes are written at once
-		unsigned int len = min<unsigned int>(uploadLength, 256);
-		if (!fileBeingUploaded.Write(uploadPointer, len))
-		{
-			platform->Message(HOST_MESSAGE, "Could not flush upload data!\n");
-			uploadState = uploadError;
-		}
-
-		uploadPointer += len;
-		uploadLength -= len;
-
-		return (uploadLength == 0);
-	}
-
-	return true;
 }
 
 
@@ -1402,7 +1291,7 @@ bool Webserver::HttpInterpreter::RejectMessage(const char* response, unsigned in
 	platform->Message(HOST_MESSAGE, "Webserver: rejecting message with: %s\n", response);
 
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	NetworkTransaction *req = net->GetTransaction();
 	req->Printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
 	net->SendAndClose(NULL);
 
@@ -1432,7 +1321,7 @@ void Webserver::FtpInterpreter::ConnectionEstablished()
 	}
 
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	NetworkTransaction *req = net->GetTransaction();
 
 	switch (state)
 	{
@@ -1472,7 +1361,7 @@ void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 		net->CloseDataPort();
 
 		// Send response
-		if (net->MakeFTPRequest())
+		if (net->AcquireFTPTransaction())
 		{
 			if (state == doingPasvIO)
 			{
@@ -1819,7 +1708,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			}
 			else
 			{
-				net->RepeatRequest();
+				net->RepeatTransaction();
 			}
 
 			break;
@@ -1833,17 +1722,17 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				// send response via main port
 				strncpy(ftpResponse, "150 Here comes the directory listing.\r\n", ftpResponseLength);
-				RequestState *ftp_req = net->GetRequest();
+				NetworkTransaction *ftp_req = net->GetTransaction();
 				ftp_req->Write(ftpResponse);
 				net->SendAndClose(NULL, true);
 
 				// send file list via data port
-				if (net->MakeDataRequest())
+				if (net->AcquireDataTransaction())
 				{
 					FileInfo file_info;
 					if (platform->GetMassStorage()->FindFirst(currentDir, file_info))
 					{
-						RequestState *data_req = net->GetRequest();
+						NetworkTransaction *data_req = net->GetTransaction();
 						char line[300];
 
 						do {
@@ -1854,27 +1743,8 @@ void Webserver::FtpInterpreter::ProcessLine()
 									dirChar, file_info.size, platform->GetMassStorage()->GetMonthName(file_info.month),
 									file_info.day, file_info.year, file_info.fileName);
 
-							// We may have to send the FTP file list in multiple chunks, so check
-							// if there's enough room left to write the current line.
-							if (!data_req->Write(line))
-							{
-								if (net->CanMakeRequest())
-								{
-									net->SendAndClose(NULL, true);
-
-									net->MakeDataRequest();
-									data_req = net->GetRequest();
-									data_req->Write(line);
-								}
-								else
-								{
-//									debugPrintf("Webserver: FTP file list was truncated\n");
-									// Note: If f_closedir() was implemented in FatFs, we'd have to call
-									// FindNext() here until it returns false.
-									break;
-								}
-							}
-
+							// Fortunately we don't need to bother with output buffer chunks any more...
+							data_req->Write(line);
 						} while (platform->GetMassStorage()->FindNext(file_info));
 					}
 					net->SendAndClose(NULL);
@@ -1938,7 +1808,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 					snprintf(ftpResponse, ftpResponseLength, "Opening data connection for %s (%lu bytes).", filename, fs->Length());
 					SendReply(150, ftpResponse);
 
-					if (net->MakeDataRequest())
+					if (net->AcquireDataTransaction())
 					{
 						// send the file via data port
 						net->SendAndClose(fs, false);
@@ -1992,7 +1862,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 void Webserver::FtpInterpreter::SendReply(int code, const char *message, bool keepConnection)
 {
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	NetworkTransaction *req = net->GetTransaction();
 	req->Printf("%d %s\r\n", code, message);
 	net->SendAndClose(NULL, keepConnection);
 }
@@ -2000,7 +1870,7 @@ void Webserver::FtpInterpreter::SendReply(int code, const char *message, bool ke
 void Webserver::FtpInterpreter::SendFeatures()
 {
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	NetworkTransaction *req = net->GetTransaction();
 	req->Write("211-Features:\r\n");
 	req->Write("PASV\r\n");		// support PASV mode
 	req->Write("211 End\r\n");
@@ -2122,7 +1992,7 @@ Webserver::TelnetInterpreter::TelnetInterpreter(Platform *p, Webserver *ws) : Pr
 void Webserver::TelnetInterpreter::ConnectionEstablished()
 {
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	NetworkTransaction *req = net->GetTransaction();
 	req->Write("RepRapPro Ormerod Telnet Interface\r\n\r\n");
 	req->Write("Please enter your password:\r\n");
 	req->Write("> ");
@@ -2185,7 +2055,7 @@ void Webserver::TelnetInterpreter::ResetState()
 void Webserver::TelnetInterpreter::ProcessLine()
 {
 	Network *net = reprap.GetNetwork();
-	RequestState *req = net->GetRequest();
+	NetworkTransaction *req = net->GetTransaction();
 
 	switch (state)
 	{
@@ -2216,21 +2086,21 @@ void Webserver::TelnetInterpreter::ProcessLine()
 			else
 			{
 				webserver->ProcessGcode(clientMessage);
-				net->CloseRequest();
+				net->CloseTransaction();
 			}
 			break;
 	}
 }
 
-void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
+void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply, bool haveMore)
 {
 	Network *net = reprap.GetNetwork();
-	if (state >= authenticated && net->MakeTelnetRequest(strlen(reply)))
+	if (state >= authenticated && net->AcquireTelnetTransaction())
 	{
-		RequestState *req = net->GetRequest();
+		NetworkTransaction *req = net->GetTransaction();
 
 		// Whenever a new line is read, we also need to send a carriage return
-		bool append_line;
+		bool append_line = false;
 		while (reply[0] != 0)
 		{
 			append_line = true;
@@ -2243,8 +2113,8 @@ void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
 			reply++;
 		}
 
-		// Only append a line break if reply didn't contain one
-		if (append_line)
+		// Only append a line break if reply didn't contain one and if we aren't expecting any more data
+		if (append_line && !haveMore)
 		{
 			req->Write("\r\n");
 		}
@@ -2282,7 +2152,7 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 			unsigned int filamentsFound = 0, nFilaments;
 			float filaments[DRIVES - AXES];
 
-			// Get slic3r settings by reading from the start of the file. We only read the first 1K or so, everything we are looking for should be there.
+			// Get slic3r settings by reading from the start of the file. We only read the first 2K or so, everything we are looking for should be there.
 			for (unsigned int i = 0; i < 4; ++i)
 			{
 				size_t sizeToRead = (size_t)min<unsigned long>(info.fileSize, readSize + overlap);

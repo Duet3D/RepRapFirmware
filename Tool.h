@@ -35,7 +35,7 @@ public:
 	void SetOffset(const float offs[AXES]);
 	int DriveCount() const;
 	int Drive(int driveNumber) const;
-	bool ToolCanDrive() const;
+	bool ToolCanDrive(bool extrude) const;
 	int HeaterCount() const;
 	int Heater(int heaterNumber) const;
 	int Number() const;
@@ -66,7 +66,7 @@ private:
 
 	void SetTemperatureFault(int8_t dudHeater);
 	void ResetTemperatureFault(int8_t wasDudHeater);
-	bool AllHeatersAtHighTemperature() const;
+	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
 	int myNumber;
 	int* drives;
 	float* mix;
@@ -152,6 +152,5 @@ inline void Tool::SetOffset(const float offs[AXES])
 		offset[i] = offs[i];
 	}
 }
-
 
 #endif /* TOOL_H_ */

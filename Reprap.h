@@ -40,10 +40,12 @@ class RepRap
     void StandbyTool(int toolNumber);
     Tool* GetCurrentTool();
     Tool* GetTool(int toolNumber);
+    Tool* GetToolByDrive(int driveNumber);
     void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures);
     void AllowColdExtrude();
     void DenyColdExtrude();
     bool ColdExtrude() const;
+    void GetExtruderCapabilities(bool canDrive[], const bool directions[]) const;
     void PrintTool(int toolNumber, StringRef& reply) const;
     void FlagTemperatureFault(int8_t dudHeater);
     void ClearTemperatureFault(int8_t wasDudHeater);
@@ -59,8 +61,13 @@ class RepRap
     uint16_t GetExtrudersInUse() const;
     uint16_t GetHeatersInUse() const;
     void GetStatusResponse(StringRef& response, uint8_t type) const;
+    void GetNameResponse(StringRef& response) const;
+    void GetFilesResponse(StringRef& response, const char* dir) const;
+    void GetFileInfoResponse(StringRef& response, const char* filename) const;
+    void StartingFilePrint(const char *filename);
     
   private:
+    void EncodeMachineName(StringRef& response) const;
   
     Platform* platform;
     Network* network;
@@ -81,6 +88,12 @@ class RepRap
     uint16_t activeExtruders;
     uint16_t activeHeaters;
     bool coldExtrude;
+
+    // File information about the file being printed
+	bool fileInfoDetected;
+	char fileBeingPrinted[255];
+	GcodeFileInfo currentFileInfo;
+	float printStartTime;
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }
@@ -96,6 +109,26 @@ inline uint16_t RepRap::GetHeatersInUse() const { return activeHeaters; }
 inline bool RepRap::ColdExtrude() const { return coldExtrude; }
 inline void RepRap::AllowColdExtrude() { coldExtrude = true; }
 inline void RepRap::DenyColdExtrude() { coldExtrude = false; }
+
+inline void RepRap::GetExtruderCapabilities(bool canDrive[], const bool directions[]) const
+{
+	for(uint8_t extruder=0; extruder<DRIVES - AXES; extruder++)
+	{
+		canDrive[extruder] = false;
+	}
+
+	Tool *tool = toolList;
+	while (tool)
+	{
+		for(uint8_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
+		{
+			const int extruderDrive = tool->Drive(driveNum);
+			canDrive[extruderDrive] = tool->ToolCanDrive(directions[extruderDrive + AXES] == FORWARDS);
+		}
+
+		tool = tool->Next();
+	}
+}
 
 inline void RepRap::FlagTemperatureFault(int8_t dudHeater)
 {

@@ -79,7 +79,7 @@ Licence: GPL
 #define DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
 #define FORWARDS true // What to send to go...
 #define BACKWARDS (!FORWARDS) // ...in each direction
-#define DIRECTIONS {false, true, true, true, true, true, true, true}
+#define DIRECTIONS {BACKWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS} // What each axis needs to make it go forwards - defaults
 #define ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
 #define ENABLE false // What to send to enable...
 #define DISABLE true // ...and disable a drive
@@ -99,6 +99,7 @@ Licence: GPL
 #define Z_PROBE_STOP_HEIGHT (0.7) // mm
 #define Z_PROBE_PIN (10) 						// Analogue pin number
 #define Z_PROBE_MOD_PIN (52)					// Digital pin number to turn the IR LED on (high) or off (low)
+#define Z_PROBE_MOD_PIN07 (X25)					// Digital pin number to turn the IR LED on (high) or off (low) Duet V0.7 onwards
 #define Z_PROBE_AXES {true, false, true}		// Axes for which the Z-probe is normally used
 const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of readings with IR on, and the same number with IR off
 
@@ -116,10 +117,9 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 
 // AXES
 
-#define AXIS_MAXIMA {220, 200, 200} 			// mm
+#define AXIS_MAXIMA {230, 200, 200} 			// mm
 #define AXIS_MINIMA {0, 0, 0}					// mm
 #define HOME_FEEDRATES {50.0, 50.0, 100.0/60.0}	// mm/sec (dc42 increased Z because we slow down z-homing when approaching the target height)
-#define HEAD_OFFSETS {0.0, 0.0, 0.0}			// mm
 
 #define X_AXIS 0  								// The index of the X axis in the arrays
 #define Y_AXIS 1  								// The index of the Y axis
@@ -165,9 +165,9 @@ const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0};
 const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
 const float defaultPidKts[HEATERS] = {2.7, 0.4, 0.4, 0.4, 0.4, 0.4};			// approximate PWM value needed to maintain temperature, per degC above room temperature
 const float defaultPidKss[HEATERS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};			// PWM scaling factor, to allow for variation in heater power and supply voltage
-const float defaultFullBand[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0};		// errors larger than this cause heater to be on or off
-const float defaultPidMin[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
-const float defaultPidMax[HEATERS] = {255, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
+const float defaultFullBands[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0};	// errors larger than this cause heater to be on or off
+const float defaultPidMins[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
+const float defaultPidMaxes[HEATERS] = {255, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
@@ -255,7 +255,7 @@ namespace SoftwareResetReason
 		user = 0,					// M999 command
 		inAuxOutput = 0x0800,		// this bit is or'ed in if we were in aux output at the time
 		stuckInSpin = 0x1000,		// we got stuck in a Spin() function for too long
-		inLwipSpin = 0x2000,		// we got stuck in a call to lwip for too long
+		inLwipSpin = 0x2000,		// we got stuck in a call to LWIP for too long
 		inUsbOutput = 0x4000		// this bit is or'ed in if we were in USB output at the time
 	};
 }
@@ -368,7 +368,8 @@ public:
 	bool Close();									// Shut the file and tidy up
 	bool Seek(unsigned long pos);					// Jump to pos in the file
 	bool GoToEnd();									// Position the file at the end (so you can write on the end).
-	unsigned long Length();							// File size in bytes
+	unsigned long Length() const;					// File size in bytes
+	float FractionRead() const;						// How far in we are
 	void Duplicate();								// Create a second reference to this file
 	bool Flush();									// Write remaining buffer data
 	static float GetAndClearLongestWriteTime();		// Return the longest time it took to write a block to a file, in milliseconds
@@ -383,21 +384,22 @@ protected:
         
 private:
 
-  bool inUse;
-  byte buf[FILE_BUF_LEN];
-  int bufferPointer;
+    bool inUse;
+    byte buf[FILE_BUF_LEN];
+    int bufferPointer;
+	unsigned long bytesRead;
   
-  bool ReadBuffer();
-  bool WriteBuffer();
-  bool InternalWriteBlock(const char *s, unsigned int len);
+	bool ReadBuffer();
+	bool WriteBuffer();
+	bool InternalWriteBlock(const char *s, unsigned int len);
 
-  FIL file;
-  Platform* platform;
-  bool writing;
-  unsigned int lastBufferEntry;
-  unsigned int openCount;
+	FIL file;
+	Platform* platform;
+	bool writing;
+	unsigned int lastBufferEntry;
+	unsigned int openCount;
 
-  static uint32_t longestWriteTime;
+	static uint32_t longestWriteTime;
 };
 
 
@@ -569,11 +571,11 @@ public:
   Line* GetLine() const;
   Line* GetAux() const;
   void SetIPAddress(byte ip[]);
-  const byte* IPAddress() const;
+  const uint8_t* IPAddress() const;
   void SetNetMask(byte nm[]);
-  const byte* NetMask() const;
+  const uint8_t* NetMask() const;
   void SetGateWay(byte gw[]);
-  const byte* GateWay() const;
+  const uint8_t* GateWay() const;
   void SetMACAddress(uint8_t mac[]);
   const uint8_t* MACAddress() const;
   
@@ -586,6 +588,7 @@ public:
   const char* GetSysDir() const;  	// Where the system files are
   const char* GetTempDir() const;	// Where temporary files are
   const char* GetConfigFile() const; // Where the configuration is stored (in the system dir).
+  const char* GetDefaultFile() const;	// Where the default configuration is stored (in the system dir).
   
   void Message(char type, const char* message, ...);		// Send a message.  Messages may simply flash an LED, or,
   	  	  	  	  	  	  	  	  	  // say, display the messages on an LCD. This may also transmit the messages to the host.
@@ -635,7 +638,6 @@ public:
   int GetZProbeType() const;
   void SetZProbeAxes(const bool axes[AXES]);
   void GetZProbeAxes(bool (&axes)[AXES]);
-  void SetZProbing(bool starting);
   bool GetZProbeParameters(struct ZProbeParameters& params) const;
   bool SetZProbeParameters(const struct ZProbeParameters& params);
   bool MustHomeXYBeforeZ() const;
@@ -653,12 +655,22 @@ public:
   void SetHeater(size_t heater, float power); // power is a fraction in [0,1]
   float HeatSampleTime() const;
   void SetHeatSampleTime(float st);
-  void CoolingFan(float speed);
+  float GetFanValue() const;						// Result is returned in per cent
+  void SetFanValue(float speed);					// Accepts values between 0..1 and 1..255
   float GetFanRPM();
   void SetPidParameters(size_t heater, const PidParameters& params);
   const PidParameters& GetPidParameters(size_t heater);
   float TimeToHot() const;
   void SetTimeToHot(float t);
+  void SetThermistorNumber(size_t heater, size_t thermistor);
+  int GetThermistorNumber(size_t heater) const;
+
+  // Flash operations
+  void ResetNvData();
+  void ReadNvData();
+  void WriteNvData();
+
+  void SetAutoSave(bool enabled);
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -694,6 +706,7 @@ private:
 
   static const uint32_t nvAddress = 0;				// address in flash where we store the nonvolatile data
   FlashData nvData;
+  bool autoSaveEnabled;
 
   float lastTime;
   float longWait;
@@ -737,18 +750,16 @@ private:
   volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
   volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
   volatile ThermistorAveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
-  int8_t numMixingDrives;
+  //int8_t numMixingDrives;
 
 // AXES
 
   void InitZProbe();
   void UpdateNetworkAddress(byte dst[4], const byte src[4]);
-  void WriteNvData();
 
   float axisMaxima[AXES];
   float axisMinima[AXES];
   float homeFeedrates[AXES];
-  float headOffsets[AXES]; // FIXME - needs a 2D array
   
 // HEATERS - Bed is assumed to be the first
 
@@ -759,6 +770,7 @@ private:
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
+  float coolingFanValue;
   int8_t coolingFanPin;
   int8_t coolingFanRpmPin;
   float timeToHot;
@@ -780,6 +792,7 @@ private:
   const char* sysDir;
   const char* tempDir;
   const char* configFile;
+  const char* defaultFile;
   
 // Data used by the tick interrupt handler
 
@@ -843,6 +856,16 @@ public:
 	bool Flush()
 	{
 		return f->Flush();
+	}
+
+	bool Seek(unsigned long position)
+	{
+		return f->Seek(position);
+	}
+
+	float FractionRead() const
+	{
+		return (f == NULL ? -1.0 : f->FractionRead());
 	}
 
 	unsigned long Length()
@@ -918,6 +941,10 @@ inline const char* Platform::GetConfigFile() const
   return configFile;
 }
 
+inline const char* Platform::GetDefaultFile() const
+{
+  return defaultFile;
+}
 
 
 //*****************************************************************************************************************
@@ -1068,17 +1095,17 @@ inline void Platform::SetTimeToHot(float t)
 	timeToHot = t;
 }
 
-inline const byte* Platform::IPAddress() const
+inline const uint8_t* Platform::IPAddress() const
 {
 	return nvData.ipAddress;
 }
 
-inline const byte* Platform::NetMask() const
+inline const uint8_t* Platform::NetMask() const
 {
 	return nvData.netMask;
 }
 
-inline const byte* Platform::GateWay() const
+inline const uint8_t* Platform::GateWay() const
 {
 	return nvData.gateWay;
 }
@@ -1094,13 +1121,13 @@ inline void Platform::SetMACAddress(uint8_t mac[])
 			changed = true;
 		}
 	}
-	if (changed)
+	if (changed && autoSaveEnabled)
 	{
 		WriteNvData();
 	}
 }
 
-inline const byte* Platform::MACAddress() const
+inline const uint8_t* Platform::MACAddress() const
 {
 	return nvData.macAddress;
 }

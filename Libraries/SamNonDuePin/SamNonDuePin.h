@@ -27,7 +27,7 @@ See undefined.cpp file for more info
 #include "Arduino.h"
 
 // Number of pins defined in PinDescription array
-#define PINS_C 25
+#define PINS_C 26
 
 static const unsigned int pwmFastFrequency = 25000;		// fast PWM frequency for Intel spec PWM fans
 
@@ -63,6 +63,8 @@ static const uint8_t PIN_EMAC_ERX1  = 21;
 static const uint8_t PIN_EMAC_ERXER  = 22;
 static const uint8_t PIN_EMAC_EMDC  = 23;
 static const uint8_t PIN_EMAC_EMDIO  = 24;
+//PROBE RIG
+static const uint8_t X25  = 25;
 
 // struct used to hold the descriptions for the "non arduino" pins.
 // from the Arduino.h files

@@ -23,7 +23,8 @@ Licence: GPL
 
 #define DDA_RING_LENGTH 5
 #define LOOK_AHEAD_RING_LENGTH 30
-#define LOOK_AHEAD 20    // Must be less than LOOK_AHEAD_RING_LENGTH
+#define LOOK_AHEAD 20         // Must be less than LOOK_AHEAD_RING_LENGTH
+
 
 enum MovementProfile
 {
@@ -39,9 +40,8 @@ enum MovementState
 {
   unprocessed = 0,
   vCosineSet = 1,
-  upPass = 2,
-  complete = 4,
-  released = 8
+  complete = 2,
+  released = 4
 };
 
 
@@ -120,7 +120,7 @@ class DDA
 protected:
 
 	DDA(Move* m, Platform* p, DDA* n);
-	MovementProfile Init(LookAhead* lookAhead, float& u, float& v); // Set up the DDA.  Also used experimentally in look ahead.
+	MovementProfile Init(LookAhead* lookAhead, float& u, float& v, bool debug); // Set up the DDA.  Also used experimentally in look ahead.
 	void Start();													// Start executing the DDA.  I.e. move the move.
 	void Step();													// Take one step of the DDA.  Called by timed interrupt.
 	bool Active() const;
@@ -149,7 +149,6 @@ private:
     float distance;							// How long is the move in real distance
     float acceleration;						// The acceleration to use
     float instantDv;						// The lowest possible velocity
-    float feedRate;
     volatile bool active;					// Is the DDA running?
 };
 
@@ -225,9 +224,9 @@ class Move
     float TriangleZ(float x, float y) const;			// Interpolate onto a triangular grid
     bool DDARingAdd(LookAhead* lookAhead);				// Add a processed look-ahead entry to the DDA ring
     DDA* DDARingGet();									// Get the next DDA ring entry to be run
-    bool DDARingEmpty() const;
-    bool NoLiveMovement() const;
-    bool DDARingFull() const;
+    bool DDARingEmpty() const;							// Anything there?
+    bool NoLiveMovement() const;						// Is a move running, or are there any queued?
+    bool DDARingFull() const;							// Any more room?
     bool GetDDARingLock();								// Lock the ring so only this function may access it
     void ReleaseDDARingLock();							// Release the DDA ring lock
     bool LookAheadRingEmpty() const;					// Anything there?

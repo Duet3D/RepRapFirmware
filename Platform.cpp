@@ -20,8 +20,10 @@
  ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-#include "DueFlashStorage.h"
+#include "DueFlashStorage.h"						// comment this out if you don't want to build with Flash support
+#if LWIP_STATS
 #include "lwip/src/include/lwip/stats.h"
+#endif
 
 extern char _end;
 extern "C" char *sbrk(int i);
@@ -97,7 +99,7 @@ bool PidParameters::operator==(const PidParameters& other) const
 
 Platform::Platform() :
 		tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0), debugCode(0),
-		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer)), line(NULL), aux(NULL)
+		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer)), autoSaveEnabled(false)
 {
 	line = new Line(SerialUSB);
 	aux = new Line(Serial);
@@ -122,11 +124,12 @@ void Platform::Init()
 	SerialUSB.begin(BAUD_RATE);
 	Serial.begin(BAUD_RATE);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 
+#ifdef DUEFLASHSTORAGE_H
 	DueFlashStorage::init();
 
-#if __cplusplus >= 201103L
+# if __cplusplus >= 201103L
 	static_assert(sizeof(nvData) <= 1024, "NVData too large");
-#else
+# else
 	// We are relying on the compiler optimizing this out if the condition is false
 	// Watch out for the build warning "undefined reference to 'BadStaticAssert()' if this fails.
 	if (!(sizeof(nvData) <= 1024))
@@ -134,45 +137,10 @@ void Platform::Init()
 		extern void BadStaticAssert();
 		BadStaticAssert();
 	}
+# endif
 #endif
 
-	DueFlashStorage::read(nvAddress, &nvData, sizeof(nvData));
-	if (nvData.magic != FlashData::magicValue)
-	{
-		// Nonvolatile data has not been initialized since the firmware was last written, so set up default values
-		nvData.compatibility = me;
-		ARRAY_INIT(nvData.ipAddress, IP_ADDRESS);
-		ARRAY_INIT(nvData.netMask, NET_MASK);
-		ARRAY_INIT(nvData.gateWay, GATE_WAY);
-		ARRAY_INIT(nvData.macAddress, MAC_ADDRESS);
-
-		nvData.zProbeType = 0;	// Default is to use the switch
-		ARRAY_INIT(nvData.zProbeAxes, Z_PROBE_AXES);
-		nvData.switchZProbeParameters.Init(0.0);
-		nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
-		nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
-
-		for (size_t i = 0; i < HEATERS; ++i)
-		{
-			PidParameters& pp = nvData.pidParams[i];
-			pp.thermistorSeriesR = defaultThermistorSeriesRs[i];
-			pp.SetThermistorR25AndBeta(defaultThermistor25RS[i], defaultThermistorBetas[i]);
-			pp.kI = defaultPidKis[i];
-			pp.kD = defaultPidKds[i];
-			pp.kP = defaultPidKps[i];
-			pp.kT = defaultPidKts[i];
-			pp.kS = defaultPidKss[i];
-			pp.fullBand = defaultFullBand[i];
-			pp.pidMin = defaultPidMin[i];
-			pp.pidMax = defaultPidMax[i];
-			pp.adcLowOffset = pp.adcHighOffset = 0.0;
-		}
-
-		nvData.resetReason = 0;
-		GetStackUsage(NULL, NULL, &nvData.neverUsedRam);
-		nvData.magic = FlashData::magicValue;
-		WriteNvData();
-	}
+	ResetNvData();
 
 	line->Init();
 	aux->Init();
@@ -180,9 +148,9 @@ void Platform::Init()
 
 	massStorage->Init();
 
-	for (size_t i = 0; i < MAX_FILES; i++)
+	for (size_t file = 0; file < MAX_FILES; file++)
 	{
-		files[i]->Init();
+		files[file]->Init();
 	}
 
 	fileStructureInitialised = true;
@@ -191,6 +159,7 @@ void Platform::Init()
 	mcpExpansion.setMCP4461Address(0x2E); //not required for mcpDuet, as this uses the default address
 	sysDir = SYS_DIR;
 	configFile = CONFIG_FILE;
+	defaultFile = DEFAULT_FILE;
 
 	// DRIVES
 
@@ -208,7 +177,7 @@ void Platform::Init()
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-	numMixingDrives = NUM_MIXING_DRIVES;
+	//numMixingDrives = NUM_MIXING_DRIVES;
 
 	// Z PROBE
 
@@ -222,7 +191,6 @@ void Platform::Init()
 	ARRAY_INIT(axisMaxima, AXIS_MAXIMA);
 	ARRAY_INIT(axisMinima, AXIS_MINIMA);
 	ARRAY_INIT(homeFeedrates, HOME_FEEDRATES);
-	ARRAY_INIT(headOffsets, HEAD_OFFSETS);
 
 	SetSlowestDrive();
 
@@ -230,9 +198,11 @@ void Platform::Init()
 
 	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
-	heatSampleTime = HEAT_SAMPLE_TIME;
 	ARRAY_INIT(standbyTemperatures, STANDBY_TEMPERATURES);
 	ARRAY_INIT(activeTemperatures, ACTIVE_TEMPERATURES);
+
+	heatSampleTime = HEAT_SAMPLE_TIME;
+	coolingFanValue = 0.0;
 	coolingFanPin = COOLING_FAN_PIN;
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
 	timeToHot = TIME_TO_HOT;
@@ -242,56 +212,54 @@ void Platform::Init()
 	gcodeDir = GCODE_DIR;
 	tempDir = TEMP_DIR;
 
-	for (size_t i = 0; i < DRIVES; i++)
+	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		if (stepPins[i] >= 0)
+		if (stepPins[drive] >= 0)
 		{
-			pinModeNonDue(stepPins[i], OUTPUT);
+			pinModeNonDue(stepPins[drive], OUTPUT);
 		}
-		if (directionPins[i] >= 0)
+		if (directionPins[drive] >= 0)
 		{
-			pinModeNonDue(directionPins[i], OUTPUT);
+			pinModeNonDue(directionPins[drive], OUTPUT);
 		}
-		if (enablePins[i] >= 0)
+		if (enablePins[drive] >= 0)
 		{
-			pinModeNonDue(enablePins[i], OUTPUT);
+			pinModeNonDue(enablePins[drive], OUTPUT);
 		}
-		Disable(i);
-		driveEnabled[i] = false;
-	}
-	for(size_t i = 0; i < DRIVES; i++)
-	{
-		if (lowStopPins[i] >= 0)
+		if (lowStopPins[drive] >= 0)
 		{
-			pinModeNonDue(lowStopPins[i], INPUT_PULLUP);
+			pinModeNonDue(lowStopPins[drive], INPUT_PULLUP);
 		}
-		if (highStopPins[i] >= 0)
+		if (highStopPins[drive] >= 0)
 		{
-			pinModeNonDue(highStopPins[i], INPUT_PULLUP);
+			pinModeNonDue(highStopPins[drive], INPUT_PULLUP);
 		}
+		Disable(drive);
+		driveEnabled[drive] = false;
 	}
 
-	for (size_t i = 0; i < HEATERS; i++)
+	for (size_t heater = 0; heater < HEATERS; heater++)
 	{
-		if (heatOnPins[i] >= 0)
+		if (heatOnPins[heater] >= 0)
 		{
-			digitalWriteNonDue(heatOnPins[i], HIGH);	// turn the heater off
-			pinModeNonDue(heatOnPins[i], OUTPUT);
+			digitalWriteNonDue(heatOnPins[heater], HIGH);	// turn the heater off
+			pinModeNonDue(heatOnPins[heater], OUTPUT);
 		}
 		analogReadResolution(12);
-		thermistorFilters[i].Init(analogRead(tempSensePins[i]));
-		heaterAdcChannels[i] = PinToAdcChannel(tempSensePins[i]);
+		SetThermistorNumber(heater, heater);				// map the thermistor straight through
+		thermistorFilters[heater].Init(analogRead(tempSensePins[heater]));
 
 		// Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check is quickly in the tick ISR
-		float thermistorOverheatResistance = nvData.pidParams[i].GetRInf()
-				* exp(-nvData.pidParams[i].GetBeta() / (BAD_HIGH_TEMPERATURE - ABS_ZERO));
+		float thermistorOverheatResistance = nvData.pidParams[heater].GetRInf()
+				* exp(-nvData.pidParams[heater].GetBeta() / (BAD_HIGH_TEMPERATURE - ABS_ZERO));
 		float thermistorOverheatAdcValue = (adRangeReal + 1) * thermistorOverheatResistance
-				/ (thermistorOverheatResistance + nvData.pidParams[i].thermistorSeriesR);
-		thermistorOverheatSums[i] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * numThermistorReadingsAveraged;
+				/ (thermistorOverheatResistance + nvData.pidParams[heater].thermistorSeriesR);
+		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * numThermistorReadingsAveraged;
 	}
 
 	if (coolingFanPin >= 0)
 	{
+		// Inverse logic for Duet v0.6 and later; this turns it off
 		analogWriteNonDue(coolingFanPin, (HEAT_ON == 0) ? 255 : 0, true);
 	}
 
@@ -306,6 +274,25 @@ void Platform::Init()
 	lastTimeCall = 0;
 	lastTime = Time();
 	longWait = lastTime;
+}
+
+// Specify which thermistor channel a particular heater uses
+void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
+//pre(heater < HEATERS && thermistor < HEATERS)
+{
+	heaterAdcChannels[heater] = PinToAdcChannel(tempSensePins[thermistor]);
+}
+
+int Platform::GetThermistorNumber(size_t heater) const
+{
+	for (size_t thermistor = 0; thermistor < HEATERS; ++thermistor)
+	{
+		if (heaterAdcChannels[heater] == PinToAdcChannel(tempSensePins[thermistor]))
+		{
+			return thermistor;
+		}
+	}
+	return -1;
 }
 
 void Platform::SetSlowestDrive()
@@ -323,17 +310,12 @@ void Platform::InitZProbe()
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
 
-	if (nvData.zProbeType == 1 || nvData.zProbeType == 2)
+	// zpl-2014-10-12: The Z-probe index of dc42's alternate sensor has moved from 3 to 4/5 to stay compatible with RRP's FW
+	if (nvData.zProbeType >= 1)
 	{
+		zProbeModulationPin = (nvData.zProbeType == 3 || nvData.zProbeType == 5) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
 		pinModeNonDue(zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(zProbeModulationPin, HIGH);	// enable the IR LED
-		SetZProbing(false);
-	}
-	else if (nvData.zProbeType == 3)
-	{
-		pinModeNonDue(zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(zProbeModulationPin, LOW);		// enable the alternate sensor
-		SetZProbing(false);
+		digitalWriteNonDue(zProbeModulationPin, (nvData.zProbeType <= 3) ? HIGH : LOW);	// enable the IR LED or alternate sensor
 	}
 }
 
@@ -351,11 +333,13 @@ int Platform::ZProbe() const
 		switch (nvData.zProbeType)
 		{
 		case 1:
-		case 3:
+		case 4:
+		case 5:
 			// Simple IR sensor, or direct-mode ultrasonic sensor
 			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));
 
 		case 2:
+		case 3:
 			// Modulated IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
@@ -376,6 +360,7 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 		switch (nvData.zProbeType)
 		{
 		case 2:		// modulated IR sensor
+		case 3:		// modulated IR sensor (Duet 0.7)
 			v1 = (int) (zProbeOnFilter.GetSum() / (4 * numZProbeReadingsAveraged));	// pass back the reading with IR turned on
 			return 1;
 		default:
@@ -396,7 +381,10 @@ void Platform::SetZProbeAxes(const bool axes[AXES])
 	{
 		nvData.zProbeAxes[axis] = axes[axis];
 	}
-	WriteNvData();
+	if (autoSaveEnabled)
+	{
+		WriteNvData();
+	}
 }
 
 void Platform::GetZProbeAxes(bool (&axes)[AXES])
@@ -415,8 +403,10 @@ float Platform::ZProbeStopHeight() const
 		return nvData.switchZProbeParameters.GetStopHeight(GetTemperature(0));
 	case 1:
 	case 2:
-		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
 	case 3:
+		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
+	case 4:
+	case 5:
 		return nvData.alternateZProbeParameters.GetStopHeight(GetTemperature(0));
 	default:
 		return 0;
@@ -425,11 +415,14 @@ float Platform::ZProbeStopHeight() const
 
 void Platform::SetZProbeType(int pt)
 {
-	int newZProbeType = (pt >= 0 && pt <= 3) ? pt : 0;
+	int newZProbeType = (pt >= 0 && pt <= 4) ? pt : 0;
 	if (newZProbeType != nvData.zProbeType)
 	{
 		nvData.zProbeType = newZProbeType;
-		WriteNvData();
+		if (autoSaveEnabled)
+		{
+			WriteNvData();
+		}
 	}
 	InitZProbe();
 }
@@ -443,9 +436,11 @@ bool Platform::GetZProbeParameters(struct ZProbeParameters& params) const
 		return true;
 	case 1:
 	case 2:
+	case 3:
 		params = nvData.irZProbeParameters;
 		return true;
-	case 3:
+	case 4:
+	case 5:
 		params = nvData.alternateZProbeParameters;
 		return true;
 	default:
@@ -461,22 +456,33 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 		if (nvData.switchZProbeParameters != params)
 		{
 			nvData.switchZProbeParameters = params;
-			WriteNvData();
+			if (autoSaveEnabled)
+			{
+				WriteNvData();
+			}
 		}
 		return true;
 	case 1:
 	case 2:
+	case 3:
 		if (nvData.irZProbeParameters != params)
 		{
 			nvData.irZProbeParameters = params;
-			WriteNvData();
+			if (autoSaveEnabled)
+			{
+				WriteNvData();
+			}
 		}
 		return true;
-	case 3:
+	case 4:
+	case 5:
 		if (nvData.alternateZProbeParameters != params)
 		{
 			nvData.alternateZProbeParameters = params;
-			WriteNvData();
+			if (autoSaveEnabled)
+			{
+				WriteNvData();
+			}
 		}
 		return true;
 	default:
@@ -490,14 +496,76 @@ bool Platform::MustHomeXYBeforeZ() const
 	return nvData.zProbeType != 0;
 }
 
-void Platform::WriteNvData()
+void Platform::ResetNvData()
 {
-	DueFlashStorage::write(nvAddress, &nvData, sizeof(nvData));
+	nvData.compatibility = me;
+	ARRAY_INIT(nvData.ipAddress, IP_ADDRESS);
+	ARRAY_INIT(nvData.netMask, NET_MASK);
+	ARRAY_INIT(nvData.gateWay, GATE_WAY);
+	ARRAY_INIT(nvData.macAddress, MAC_ADDRESS);
+
+	nvData.zProbeType = 0;	// Default is to use the switch
+	ARRAY_INIT(nvData.zProbeAxes, Z_PROBE_AXES);
+	nvData.switchZProbeParameters.Init(0.0);
+	nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
+	nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
+
+	for (size_t i = 0; i < HEATERS; ++i)
+	{
+		PidParameters& pp = nvData.pidParams[i];
+		pp.thermistorSeriesR = defaultThermistorSeriesRs[i];
+		pp.SetThermistorR25AndBeta(defaultThermistor25RS[i], defaultThermistorBetas[i]);
+		pp.kI = defaultPidKis[i];
+		pp.kD = defaultPidKds[i];
+		pp.kP = defaultPidKps[i];
+		pp.kT = defaultPidKts[i];
+		pp.kS = defaultPidKss[i];
+		pp.fullBand = defaultFullBands[i];
+		pp.pidMin = defaultPidMins[i];
+		pp.pidMax = defaultPidMaxes[i];
+		pp.adcLowOffset = pp.adcHighOffset = 0.0;
+	}
+
+	nvData.resetReason = 0;
+	GetStackUsage(NULL, NULL, &nvData.neverUsedRam);
+#ifdef DUEFLASHSTORAGE_H
+	nvData.magic = FlashData::magicValue;
+#endif
 }
 
-void Platform::SetZProbing(bool starting)
+void Platform::ReadNvData()
 {
+#ifdef DUEFLASHSTORAGE_H
+	DueFlashStorage::read(nvAddress, &nvData, sizeof(nvData));
+	if (nvData.magic != FlashData::magicValue)
+	{
+		// Nonvolatile data has not been initialized since the firmware was last written, so set up default values
+		ResetNvData();
+		WriteNvData();
+	}
+#else
+	Message(BOTH_ERROR_MESSAGE, "Cannot load non-volatile data, because Flash support has been disabled!");
+#endif
 }
+
+void Platform::WriteNvData()
+{
+#ifdef DUEFLASHSTORAGE_H
+	DueFlashStorage::write(nvAddress, &nvData, sizeof(nvData));
+#else
+	Message(BOTH_ERROR_MESSAGE, "Cannot write non-volatile data, because Flash support has been disabled!");
+#endif
+}
+
+void Platform::SetAutoSave(bool enabled)
+{
+#ifdef DUEFLASHSTORAGE_H
+	autoSaveEnabled = enabled;
+#else
+	Message(BOTH_ERROR_MESSAGE, "Cannot enable auto-save, because Flash support has been disabled!");
+#endif
+}
+
 
 // Note: the use of floating point time will cause the resolution to degrade over time.
 // For example, 1ms time resolution will only be available for about half an hour from startup.
@@ -541,7 +609,10 @@ void Platform::SetEmulating(Compatibility c)
 	if (c != nvData.compatibility)
 	{
 		nvData.compatibility = c;
-		WriteNvData();
+		if (autoSaveEnabled)
+		{
+			WriteNvData();
+		}
 	}
 }
 
@@ -556,7 +627,7 @@ void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])
 			changed = true;
 		}
 	}
-	if (changed)
+	if (changed && autoSaveEnabled)
 	{
 		WriteNvData();
 	}
@@ -602,18 +673,20 @@ void Platform::SoftwareReset(uint16_t reason)
 		{
 			reason |= SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 		}
-		if (aux->inWrite)
-		{
-			reason |= SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
-		}
 		if (reprap.GetNetwork()->InLwip())
 		{
 			reason |= SoftwareResetReason::inLwipSpin;
+		}
+		if (aux->inWrite)
+		{
+			reason |= SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
 		}
 	}
 
 	if (reason != 0 || reason != nvData.resetReason)
 	{
+		// zpl-2014-11-03: Here we must ensure that no changed values are saved, so load last-known values first
+		ReadNvData();
 		nvData.resetReason = reason;
 		GetStackUsage(NULL, NULL, &nvData.neverUsedRam);
 		WriteNvData();
@@ -736,9 +809,9 @@ void Platform::Tick()
 	case 2:			// last conversion started was the Z probe, with IR LED on
 		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
 		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
-		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
+		if (nvData.zProbeType == 2 || nvData.zProbeType == 3)	// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(Z_PROBE_MOD_PIN, LOW);					// turn off the IR emitter
+			digitalWriteNonDue(zProbeModulationPin, LOW);		// turn off the IR emitter
 		}
 		++tickState;
 		break;
@@ -749,9 +822,9 @@ void Platform::Tick()
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
 		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
-		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
+		if (nvData.zProbeType == 2 || nvData.zProbeType == 3)	// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(Z_PROBE_MOD_PIN, HIGH);				// turn on the IR emitter
+			digitalWriteNonDue(zProbeModulationPin, HIGH);		// turn on the IR emitter
 		}
 		tickState = 1;
 		break;
@@ -952,7 +1025,10 @@ void Platform::SetPidParameters(size_t heater, const PidParameters& params)
 	if (heater < HEATERS && params != nvData.pidParams[heater])
 	{
 		nvData.pidParams[heater] = params;
-		WriteNvData();
+		if (autoSaveEnabled)
+		{
+			WriteNvData();
+		}
 	}
 }
 const PidParameters& Platform::GetPidParameters(size_t heater)
@@ -1067,6 +1143,13 @@ float Platform::MotorCurrent(byte drive)
 	return (float)pot * maxStepperDigipotVoltage / (0.256 * 8.0 * senseResistor);
 }
 
+// Get current cooling fan speed on a scale between 0 and 1
+
+float Platform::GetFanValue() const
+{
+	return coolingFanValue;
+}
+
 // This is a bit of a compromise - old RepRaps used fan speeds in the range
 // [0, 255], which is very hardware dependent.  It makes much more sense
 // to specify speeds in [0.0, 1.0].  This looks at the value supplied (which
@@ -1074,7 +1157,7 @@ float Platform::MotorCurrent(byte drive)
 // do the right thing whichever the user has done.  This will only not work
 // for an old-style fan speed of 1/255...
 
-void Platform::CoolingFan(float speed)
+void Platform::SetFanValue(float speed)
 {
 	if(coolingFanPin >= 0)
 	{
@@ -1083,10 +1166,12 @@ void Platform::CoolingFan(float speed)
 		if(speed <= 1.0)
 		{
 			p = (byte)(255.0 * max<float>(0.0, speed));
+			coolingFanValue = speed;
 		}
 		else
 		{
 			p = (byte)speed;
+			coolingFanValue = speed / 255.0;
 		}
 
 		// The cooling fan output pin gets inverted if HEAT_ON == 0
@@ -1520,7 +1605,7 @@ bool MassStorage::Delete(const char* directory, const char* fileName)
 								: fileName;
 	if (f_unlink(location) != FR_OK)
 	{
-		platform->Message(BOTH_MESSAGE, "Can't delete file %s\n", location);
+		platform->Message(BOTH_ERROR_MESSAGE, "Can't delete file %s\n", location);
 		return false;
 	}
 	return true;
@@ -1532,7 +1617,7 @@ bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
 	const char* location = platform->GetMassStorage()->CombineName(parentDir, dirName);
 	if (f_mkdir(location) != FR_OK)
 	{
-		platform->Message(BOTH_MESSAGE, "Can't create directory %s\n", location);
+		platform->Message(BOTH_ERROR_MESSAGE, "Can't create directory %s\n", location);
 		return false;
 	}
 	return true;
@@ -1542,7 +1627,7 @@ bool MassStorage::MakeDirectory(const char *directory)
 {
 	if (f_mkdir(directory) != FR_OK)
 	{
-		platform->Message(BOTH_MESSAGE, "Can't create directory %s\n", directory);
+		platform->Message(BOTH_ERROR_MESSAGE, "Can't create directory %s\n", directory);
 		return false;
 	}
 	return true;
@@ -1553,7 +1638,7 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
 {
 	if (f_rename(oldFilename, newFilename) != FR_OK)
 	{
-		platform->Message(BOTH_MESSAGE, "Can't rename file or directory %s to %s\n", oldFilename, newFilename);
+		platform->Message(BOTH_ERROR_MESSAGE, "Can't rename file or directory %s to %s\n", oldFilename, newFilename);
 		return false;
 	}
 	return true;
@@ -1591,10 +1676,12 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 								: fileName;
 	writing = write;
 	lastBufferEntry = FILE_BUF_LEN - 1;
+	bytesRead = 0;
+
 	FRESULT openReturn = f_open(&file, location, (writing) ?  FA_CREATE_ALWAYS | FA_WRITE : FA_OPEN_EXISTING | FA_READ);
 	if (openReturn != FR_OK)
 	{
-		platform->Message(BOTH_MESSAGE, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
+		platform->Message(BOTH_ERROR_MESSAGE, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
 		return false;
 	}
 
@@ -1659,7 +1746,7 @@ bool FileStore::GoToEnd()
 	return Seek(Length());
 }
 
-unsigned long FileStore::Length()
+unsigned long FileStore::Length() const
 {
 	if (!inUse)
 	{
@@ -1667,6 +1754,17 @@ unsigned long FileStore::Length()
 		return 0;
 	}
 	return file.fsize;
+}
+
+float FileStore::FractionRead() const
+{
+	unsigned long len = Length();
+	if(len <= 0)
+	{
+		return 0.0;
+	}
+
+	return (float)bytesRead / (float)len;
 }
 
 int8_t FileStore::Status()
@@ -1688,7 +1786,7 @@ bool FileStore::ReadBuffer()
 	FRESULT readStatus = f_read(&file, buf, FILE_BUF_LEN, &lastBufferEntry);	// Read a chunk of file
 	if (readStatus)
 	{
-		platform->Message(BOTH_MESSAGE, "Error reading file.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Error reading file.\n");
 		return false;
 	}
 	bufferPointer = 0;
@@ -1721,6 +1819,7 @@ bool FileStore::Read(char& b)
 
 	b = (char) buf[bufferPointer];
 	bufferPointer++;
+	bytesRead++;
 
 	return true;
 }
@@ -1734,14 +1833,15 @@ int FileStore::Read(char* extBuf, unsigned int nBytes)
 		return -1;
 	}
 	bufferPointer = FILE_BUF_LEN;	// invalidate the buffer
-	UINT bytesRead;
-	FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytesRead);
+	UINT bytes_read;
+	FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
 	if (readStatus)
 	{
-		platform->Message(BOTH_MESSAGE, "Error reading file.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Error reading file.\n");
 		return -1;
 	}
-	return (int)bytesRead;
+	bytesRead += bytes_read;
+	return (int)bytes_read;
 }
 
 bool FileStore::WriteBuffer()
@@ -1751,7 +1851,7 @@ bool FileStore::WriteBuffer()
 		bool ok = InternalWriteBlock((const char*)buf, bufferPointer);
 		if (!ok)
 		{
-			platform->Message(BOTH_MESSAGE, "Error writing file. Disc may be full.\n");
+			platform->Message(BOTH_ERROR_MESSAGE, "Cannot write to file. Disc may be full.\n");
 			return false;
 		}
 		bufferPointer = 0;
@@ -1820,7 +1920,7 @@ bool FileStore::InternalWriteBlock(const char *s, unsigned int len)
 	}
 	if ((writeStatus != FR_OK) || (bytesWritten != len))
 	{
-		platform->Message(BOTH_MESSAGE, "Error writing file. Disc may be full.\n");
+		platform->Message(BOTH_ERROR_MESSAGE, "Cannot write to file. Disc may be full.\n");
 		return false;
 	}
 	return true;
@@ -1853,8 +1953,7 @@ uint32_t FileStore::longestWriteTime = 0;
 
 // Serial/USB class
 
-Line::Line(Stream& p_iface)
-	: iface(p_iface)
+Line::Line(Stream& p_iface) : iface(p_iface)
 {
 }
 
@@ -1896,7 +1995,7 @@ void Line::Init()
 	outputGetIndex = 0;
 	outputNumChars = 0;
 	ignoringOutputLine = false;
-	inWrite = false;
+	inWrite = 0;
 	outputColumn = 0;
 }
 
@@ -1966,7 +2065,7 @@ void Line::Write(char b, bool block)
 
 			if (outputNumChars == 0 && iface.canWrite() != 0)
 			{
-				// We can write the character directly into the output buffer
+				// We can write the character directly into the USB output buffer
 				++inWrite;
 				iface.write(b);
 				--inWrite;
