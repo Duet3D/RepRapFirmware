@@ -672,6 +672,9 @@ public:
 
   void SetAutoSave(bool enabled);
 
+  // Misc
+  void Beep(int freq, int ms);
+
 //-------------------------------------------------------------------------------------------------------
   
 private:

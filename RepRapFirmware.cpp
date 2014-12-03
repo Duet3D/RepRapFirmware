@@ -187,6 +187,7 @@ void RepRap::Init()
   move->Init();
   heat->Init();
   currentTool = NULL;
+  message[0] = 0;
   const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
   WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);	// enable watchdog, reset the mcu if it times out
   coldExtrude = true;		// DC42 changed default to true for compatibility because for now we are aiming for compatibility with RRP 0.78
@@ -641,84 +642,81 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 				(gc->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 
+	if (gc->PrintingAFile())
+	{
+		// Send the fraction printed
+		response.catf(",\"fraction_printed\":%.4f", max<float>(0.0, gc->FractionOfFilePrinted()));
+	}
+
+	response.cat(",\"message\":");
+	EncodeString(response, message, 2, false);
+
 	if (type < 2)
 	{
 		response.catf(",\"buff\":%u", webserver->GetGcodeBufferSpace());	// send the amount of buffer space available for gcodes
 		response.catf(",\"seq\":%u", webserver->GetReplySeq());				// send the response sequence number
-		const char *p = webserver->GetGcodeReply().Pointer();				// retrieve the gcode reply buffer from Webserver
 
 		// Send the response to the last command. Do this last because it is long and may need to be truncated.
-		response.cat(",\"resp\":\"");
-		size_t jp = response.strlen();
-		while (*p != 0 && jp < response.Length() - 3)	// leave room for the final '"}\0'
-		{
-			char c = *p++;
-			char esc;
-			switch (c)
-			{
-			case '\r':
-				esc = 'r';
-				break;
-			case '\n':
-				esc = 'n';
-				break;
-			case '\t':
-				esc = 't';
-				break;
-			case '"':
-				esc = '"';
-				break;
-			case '\\':
-				esc = '\\';
-				break;
-			default:
-				esc = 0;
-				break;
-			}
-			if (esc)
-			{
-				if (jp == response.Length() - 4)
-				{
-					break;
-				}
-				response[jp++] = '\\';
-				response[jp++] = esc;
-			}
-			else
-			{
-				response[jp++] = c;
-			}
-		}
-		response[jp] = 0;
-		response.cat("\"");
+		response.cat(",\"resp\":");
+		EncodeString(response, webserver->GetGcodeReply().Pointer(), 2, true);
 	}
 	else if (type == 3)
 	{
 		// Add the static fields. For now this is just the machine name, but other fields could be added e.g. axis lengths.
-		response.cat(",");
-		EncodeMachineName(response);
+		response.cat(",\"myName\":");
+		EncodeString(response, webserver->GetName(), 2, false);
 	}
 
 	response.cat("}");
 }
 
-// Copy the machine name variable in JSON format, leaving enough room to append "}" to it
-void RepRap::EncodeMachineName(StringRef& response) const
+// Encode a string in JSON format and append it to a string buffer, truncating it if necessary to leave the specified amount of room
+void RepRap::EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars)
 {
-	response.cat("\"myName\":\"");
+	response.cat("\"");
 	size_t j = response.strlen();
-	const char *myName = webserver->GetName();
-	for (size_t i = 0; i < response.Length() - 4; ++i)
+	while (j + spaceToLeave + 2 <= response.Length())	// while there is room for a character and a trailing quote
 	{
-		char c = myName[i];
-		if (c < ' ')	// if null terminator or bad character
-			break;
-		if (c == '"' || c == '\\')
+		char c = *src++;
+		if (c == 0 || (c < ' ' && !allowControlChars))	// if null terminator or bad character
 		{
-			// Need to escape the quote-mark or backslash for JSON
-			response[j++] = '\\';
+			break;
 		}
-		response[j++] = c;
+		char esc;
+		switch (c)
+		{
+		case '\r':
+			esc = 'r';
+			break;
+		case '\n':
+			esc = 'n';
+			break;
+		case '\t':
+			esc = 't';
+			break;
+		case '"':
+			esc = '"';
+			break;
+		case '\\':
+			esc = '\\';
+			break;
+		default:
+			esc = 0;
+			break;
+		}
+		if (esc)
+		{
+			if (j + spaceToLeave + 2 == response.Length())
+			{
+				break;					// if no room for the extra backslash then quit
+			}
+			response[j++] = '\\';
+			response[j++] = esc;
+		}
+		else
+		{
+			response[j++] = c;
+		}
 	}
 	response[j++] = '"';
 	response[j] = 0;
@@ -727,32 +725,26 @@ void RepRap::EncodeMachineName(StringRef& response) const
 // Get just the machine name in JSON format
 void RepRap::GetNameResponse(StringRef& response) const
 {
-	response.copy("{");
-	EncodeMachineName(response);
+	response.copy("{\"myName\":");
+	EncodeString(response, webserver->GetName(), 2, false);
 	response.cat("}");
 }
 
 // Get the list of files in the specified directory in JSON format
 void RepRap::GetFilesResponse(StringRef& response, const char* dir) const
 {
+	response.copy("{\"files\":");
+	char c = '[';
 	FileInfo file_info;
-	if (platform->GetMassStorage()->FindFirst(dir, file_info))
+	bool gotFile = platform->GetMassStorage()->FindFirst(dir, file_info);
+	while (gotFile && response.strlen() + strlen(file_info.fileName) + 6 < response.Length())
 	{
-		response.copy("{\"files\":[");
-
-		do {
-			// build the file list here, but keep 2 characters free to terminate the JSON message
-			response.catf("%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
-		} while (platform->GetMassStorage()->FindNext(file_info));
-
-		response[response.strlen() - 1] = 0;	// remove last separator
-		response[response.Length() - 3] = 0;	// ensure room for 2 more characters and a null
-		response.cat("]}");
+		response.catf("%c", c);
+		EncodeString(response, file_info.fileName, 3, false);
+		c = ',';
+		gotFile = platform->GetMassStorage()->FindNext(file_info);
 	}
-	else
-	{
-		response.copy("{\"files\":[]}");
-	}
+	response.cat("]}");
 }
 
 // Get information for the specified file, or the currently printing file, in JSON format
@@ -820,6 +812,12 @@ void RepRap::StartingFilePrint(const char *filename)
 	printStartTime = platform->Time();
 	strncpy(fileBeingPrinted, filename, ARRAY_SIZE(fileBeingPrinted));
 	fileBeingPrinted[ARRAY_UPB(fileBeingPrinted)] = 0;
+}
+
+void RepRap::SetMessage(const char *msg)
+{
+	strncpy(message, msg, maxMessageLength);
+	message[maxMessageLength] = 0;
 }
 
 //*************************************************************************************************

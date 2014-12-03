@@ -209,7 +209,7 @@ void GCodes::Spin()
 		}
 	}
 
-	if (platform->GetAux()->Status() & byteAvailable)
+	if (!auxGCode->Active() && (platform->GetAux()->Status() & byteAvailable))
 	{
 		int8_t i = 0;
 		do
@@ -314,6 +314,10 @@ bool GCodes::Push()
 	axesRelativeStack[stackPointer] = axesRelative;
 	feedrateStack[stackPointer] = moveBuffer[DRIVES];
 	fileStack[stackPointer].CopyFrom(fileBeingPrinted);
+	if (stackPointer == 0)
+	{
+		fractionOfFilePrinted = fileBeingPrinted.FractionRead();	// save this so that we don't return the fraction of the macro file read
+	}
 	stackPointer++;
 	platform->PushMessageIndent();
 	return true;
@@ -333,6 +337,10 @@ bool GCodes::Pop()
 		return false;
 
 	stackPointer--;
+	if (stackPointer == 0)
+	{
+		fractionOfFilePrinted = -1.0;			// restore live updates of fraction read from the file being printed
+	}
 	drivesRelative = drivesRelativeStack[stackPointer];
 	axesRelative = axesRelativeStack[stackPointer];
 
@@ -2477,7 +2485,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		}
 		break;
 
-    case 119:
+	case 117:	// Display message
+		reprap.SetMessage(gb->GetUnprecedentedString());
+		break;
+
+	case 119:
 		{
 			reply.copy("Endstops - ");
 			char comma = ',';
@@ -2797,6 +2809,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			else
 			{
 				reply.printf("Extrusion factor override for extruder %d: %.1f%%\n", extruder, extrusionFactors[extruder] * 100.0);
+			}
+		}
+		break;
+
+	case 300:	// Beep
+		if (gb->Seen('P'))
+		{
+			int ms = gb->GetIValue();
+			if (gb->Seen('S'))
+			{
+				platform->Beep(gb->GetIValue(), ms);
 			}
 		}
 		break;

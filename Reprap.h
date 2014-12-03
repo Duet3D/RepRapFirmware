@@ -21,6 +21,8 @@ Licence: GPL
 #ifndef REPRAP_H
 #define REPRAP_H
 
+const size_t maxMessageLength = 30;
+
 class RepRap
 {    
   public:
@@ -65,9 +67,10 @@ class RepRap
     void GetFilesResponse(StringRef& response, const char* dir) const;
     void GetFileInfoResponse(StringRef& response, const char* filename) const;
     void StartingFilePrint(const char *filename);
+    void SetMessage(const char *msg);
     
   private:
-    void EncodeMachineName(StringRef& response) const;
+    static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars);
   
     Platform* platform;
     Network* network;
@@ -94,6 +97,7 @@ class RepRap
 	char fileBeingPrinted[255];
 	GcodeFileInfo currentFileInfo;
 	float printStartTime;
+	char message[maxMessageLength + 1];
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }

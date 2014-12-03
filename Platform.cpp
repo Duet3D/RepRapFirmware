@@ -582,6 +582,13 @@ float Platform::Time()
 	return addToTime + TIME_FROM_REPRAP * (float) now;
 }
 
+void Platform::Beep(int freq, int ms)
+{
+	// Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
+	scratchString.printf("{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
+	aux->Write(scratchString.Pointer(), true);
+}
+
 void Platform::Exit()
 {
 	Message(BOTH_MESSAGE, "Platform class exited.\n");
