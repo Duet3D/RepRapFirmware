@@ -64,6 +64,7 @@ int StringContains(const char* string, const char* match);
 #else
 // This version relies on a gcc extension that is available only in older compilers
 #define ARRAY_INIT(_dest, _init) _dest = _init
+#define nullptr		(0)
 #endif
 
 // Class to describe a string buffer, including its length. This saves passing buffer lengths around everywhere.

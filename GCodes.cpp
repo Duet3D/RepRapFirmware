@@ -3249,7 +3249,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			}
 			else
 			{
-				reply.printf("A %d sends drive %d forwards.", (int)platform->GetDirectionValue(drive), drive);
+				reply.printf("A %d sends drive %d forwards.\n", (int)platform->GetDirectionValue(drive), drive);
 			}
 		}
 		break;
