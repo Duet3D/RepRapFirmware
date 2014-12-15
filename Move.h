@@ -448,9 +448,7 @@ inline void Move::LiveCoordinates(float m[]) const
 }
 
 
-// These are the actual numbers that we want to be the coordinates, so
-// don't transform them.
-
+// These are the actual numbers that we want to be the coordinates, so don't transform them.
 inline void Move::SetLiveCoordinates(float coords[])
 {
 	for(int8_t drive = 0; drive <= DRIVES; drive++)

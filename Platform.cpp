@@ -762,6 +762,21 @@ void Platform::InitialiseInterrupts()
 	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
+void Platform::SetInterrupt(float s) // Seconds
+{
+	if (s <= 0.0)
+	{
+		//NVIC_DisableIRQ(TC3_IRQn);
+		Message(BOTH_ERROR_MESSAGE, "Negative interrupt!\n");
+		s = STANDBY_INTERRUPT_RATE;
+	}
+	uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
+	TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
+	TC_SetRC(TC1, 0, rc);
+	TC_Start(TC1, 0);
+	NVIC_EnableIRQ(TC3_IRQn);
+}
+
 //void Platform::DisableInterrupts()
 //{
 //	NVIC_DisableIRQ(TC3_IRQn);
@@ -1197,23 +1212,6 @@ float Platform::GetFanRPM()
 	return (fanInterval != 0 && micros() - fanLastResetTime < 3000000U)		// if we have a reading and it is less than 3 second old
 			? (float)((30000000U * fanMaxInterruptCount)/fanInterval)		// then calculate RPM assuming 2 interrupts per rev
 			: 0.0;															// else assume fan is off or tacho not connected
-}
-
-// Interrupts
-
-void Platform::SetInterrupt(float s) // Seconds
-{
-	if (s <= 0.0)
-	{
-		//NVIC_DisableIRQ(TC3_IRQn);
-		Message(BOTH_ERROR_MESSAGE, "Negative interrupt!\n");
-		s = STANDBY_INTERRUPT_RATE;
-	}
-	uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
-	TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
-	TC_SetRC(TC1, 0, rc);
-	TC_Start(TC1, 0);
-	NVIC_EnableIRQ(TC3_IRQn);
 }
 
 //-----------------------------------------------------------------------------------------------------
