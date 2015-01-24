@@ -1,4 +1,4 @@
-Additional functionality in 0.78u-dc42 release compared to RRP 0.78a:
+Additional functionality in 1.00-dc42 release compared to RRP 0.78c:
 
 * The Duet can serve all the files needed by the web interface
 
@@ -90,6 +90,22 @@ Additional functionality in 0.78u-dc42 release compared to RRP 0.78a:
 
 * The G10 command can now be used to specify nozzle offsets (as well as active/standby temperatures)
 
+* The Move code has been almost completely rewritten to generate steps at accurate intervals, instead if using the Bresenham approximation
+
+* Extruder elasticity compensation is supported (M572 command)
+
+* Delta printers are supported (M665 and M666 commands)
+
+* Endstops can be configured (M574 command)
+
+* Debugging can now be enabled and disabled separately for all modules (M111 command). The module is selected using the P parameter.
+
+* Gcode commands received via the serial port are acted on (for PanelDue support), in addition to commands received from USB, web interface, and Telnet.
+
+* Extended responses in JSON format are generated in response to M105 S2 and M105 S3 commands (for PanelDue)
+
+* Additional status code C is returned while processing config.g (for PanelDue)
+
 * FTP server supported (thanks zombiepantslol)
 
 * Telnet server supported (thanks zombiepantslol)
@@ -128,7 +144,7 @@ Additional functionality in 0.78u-dc42 release compared to RRP 0.78a:
 
 * Bug fix: the M92 command could not be used to set extruder steps/mm in machines with multiple extruders unless either only one extruder steps/mm value was supplied (which was applied to all extruders) or 5 extruder steps/mm values were supplied 
 
-Additional functionality in web interface 1.03 compared to RRP 0.65:
+Additional functionality in web interface 1.04 compared to RRP 0.65:
 
 * Faster (>6Mbytes/min), more reliable file uploading, with reporting and graceful recovery if an upload fails
 
