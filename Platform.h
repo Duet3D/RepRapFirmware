@@ -84,9 +84,7 @@ Licence: GPL
 #define ENABLE false // What to send to enable...
 #define DISABLE true // ...and disable a drive
 #define DISABLE_DRIVES {false, false, true, false, false, false, false, false} // Set true to disable a drive when it becomes idle
-#define LOW_STOP_PINS {11, -1, 60, 31, 24, 46, 45, 44} //E Stops not currently used
-#define HIGH_STOP_PINS {-1, 28, -1, -1, -1, -1, -1, -1}
-#define ENDSTOP_HIT 1 // when a stop == this it is hit
+#define END_STOP_PINS {11, 28, 60, 31, 24, 46, 45, 44} //E Stops not currently used
 // Indices for motor current digipots (if any)
 // first 4 are for digipot 1,(on duet)
 // second 4 for digipot 2(on expansion board)
@@ -106,24 +104,19 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 #define MAX_FEEDRATES {100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0} // mm/sec
 #define ACCELERATIONS {500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0} // mm/sec^2
 #define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0}
-#define INSTANT_DVS {15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0} // (mm/sec)
-#define NUM_MIXING_DRIVES 1; //number of mixing drives
-
-#define E0_DRIVE 3 //the index of the first Extruder drive
-#define E1_DRIVE 4 //the index of the second Extruder drive
-#define E2_DRIVE 5 //the index of the third Extruder drive
-#define E3_DRIVE 6 //the index of the fourth Extruder drive
-#define E4_DRIVE 7 //the index of the fifth Extruder drive
+#define INSTANT_DVS {10.0, 10.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0} // (mm/sec)
 
 // AXES
 
 #define AXIS_MAXIMA {230, 200, 200} 			// mm
 #define AXIS_MINIMA {0, 0, 0}					// mm
+const float defaultPrintRadius = 50;			// mm
+const float defaultDeltaHomedHeight = 200;		// mm
+
 #define HOME_FEEDRATES {50.0, 50.0, 100.0/60.0}	// mm/sec (dc42 increased Z because we slow down z-homing when approaching the target height)
 
-#define X_AXIS 0  								// The index of the X axis in the arrays
-#define Y_AXIS 1  								// The index of the Y axis
-#define Z_AXIS 2  								// The index of the Z axis
+const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;	// The indices of the Cartesian axes in drive arrays
+const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;	// The indices of the 3 tower motors of a delta printer in drive arrays
 
 // HEATERS - The bed is assumed to be the at index 0
 
@@ -227,9 +220,17 @@ const size_t messageStringLength = 1024;		// max length of a message chunk sent 
 enum EndStopHit
 {
   noStop = 0,		// no endstop hit
-  lowHit = 1,									// low switch hit, or Z-probe in use and above threshold
+  lowHit = 1,		// low switch hit, or Z-probe in use and above threshold
   highHit = 2,		// high stop hit
   lowNear = 3		// approaching Z-probe threshold
+};
+
+// The values of the following enumeration must tally with the definitions for the M574 command
+enum EndStopType
+{
+	noEndStop = 0,
+	lowEndStop = 1,
+	highEndStop = 2
 };
 
 /***************************************************************************************************/
@@ -281,6 +282,7 @@ public:
 	int Read(char& b);
 	void Write(char b, bool block = false);
 	void Write(const char* s, bool block = false);
+	void Flush();
 
 friend class Platform;
 friend class RepRap;
@@ -347,7 +349,7 @@ protected:
 
 private:
 
-  char scratchString[STRING_LENGTH];
+  char combinedName[MaxFilenameLength + 1];
   Platform* platform;
   FATFS fileSystem;
   DIR findDir;
@@ -554,27 +556,27 @@ public:
   void SetEmulating(Compatibility c);
   void Diagnostics();
   void DiagnosticTest(int d);
-  void ClassReport(const char* className, float &lastTime);  // Called on return to check everything's live.
+  void ClassReport(const char* className, float &lastTime, Module m);  // Called on return to check everything's live.
   void RecordError(ErrorCode ec) { errorCodeBits |= ec; }
   void SoftwareReset(uint16_t reason);
   void SetAtxPower(bool on);
 
   // Timing
   
-  float Time(); // Returns elapsed seconds since some arbitrary time
-  void SetInterrupt(float s); // Set a regular interrupt going every s seconds; if s is -ve turn interrupt off
-  //void DisableInterrupts();
+  float Time();									// Returns elapsed seconds since some arbitrary time
+  static uint32_t GetInterruptClocks();			// Get the interrupt clock count
+  static bool ScheduleInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
   void Tick();
   
   // Communications and data storage
   
   Line* GetLine() const;
   Line* GetAux() const;
-  void SetIPAddress(byte ip[]);
+  void SetIPAddress(uint8_t ip[]);
   const uint8_t* IPAddress() const;
-  void SetNetMask(byte nm[]);
+  void SetNetMask(uint8_t nm[]);
   const uint8_t* NetMask() const;
-  void SetGateWay(byte gw[]);
+  void SetGateWay(uint8_t gw[]);
   const uint8_t* GateWay() const;
   void SetMACAddress(uint8_t mac[]);
   const uint8_t* MACAddress() const;
@@ -592,6 +594,7 @@ public:
   
   void Message(char type, const char* message, ...);		// Send a message.  Messages may simply flash an LED, or,
   	  	  	  	  	  	  	  	  	  // say, display the messages on an LCD. This may also transmit the messages to the host.
+  void Message(char type, const char* message, va_list vargs);
   void Message(char type, const StringRef& message);
   void AppendMessage(char type, const char* message, ...);	// Send a message.  Messages may simply flash an LED, or,
   	  	  	  	  	  	  	  	  	  // say, display the messages on an LCD. This may also transmit the messages to the host.
@@ -602,32 +605,37 @@ public:
   // Movement
   
   void EmergencyStop();
-  void SetDirection(byte drive, bool direction);
-  void SetDirectionValue(byte drive, bool dVal);
-  bool GetDirectionValue(byte drive) const;
-  void Step(byte drive);
-  void Disable(byte drive); // There is no drive enable; drives get enabled automatically the first time they are used.
+  void SetDirection(size_t drive, bool direction, bool enable);
+  void SetDirectionValue(size_t drive, bool dVal);
+  bool GetDirectionValue(size_t drive) const;
+  void StepHigh(size_t drive);
+  void StepLow(size_t drive);
+  void Disable(size_t drive); 									// there is no drive enable; drives get enabled automatically the first time they are used.
   void SetMotorCurrent(byte drive, float current);
-  float MotorCurrent(byte drive);
-  float DriveStepsPerUnit(int8_t drive) const;
-  void SetDriveStepsPerUnit(int8_t drive, float value);
-  float Acceleration(int8_t drive) const;
+  float MotorCurrent(size_t drive);
+  float DriveStepsPerUnit(size_t drive) const;
+  void SetDriveStepsPerUnit(size_t drive, float value);
+  float Acceleration(size_t drive) const;
   const float* Accelerations() const;
-  void SetAcceleration(int8_t drive, float value);
-  float MaxFeedrate(int8_t drive) const;
+  void SetAcceleration(size_t drive, float value);
+  float MaxFeedrate(size_t drive) const;
   const float* MaxFeedrates() const;
-  void SetMaxFeedrate(int8_t drive, float value);
-  float InstantDv(int8_t drive) const;
-  void SetInstantDv(int8_t drive, float value);
-  const float* InstantDvs() const;
-  float HomeFeedRate(int8_t axis) const;
-  void SetHomeFeedRate(int8_t axis, float value);
-  EndStopHit Stopped(int8_t drive);
-  float AxisMaximum(int8_t axis) const;
-  void SetAxisMaximum(int8_t axis, float value);
-  float AxisMinimum(int8_t axis) const;
-  void SetAxisMinimum(int8_t axis, float value);
-  float AxisTotalLength(int8_t axis) const;
+  void SetMaxFeedrate(size_t drive, float value);
+  float ConfiguredInstantDv(size_t drive) const;
+  float ActualInstantDv(size_t drive) const;
+  void SetInstantDv(size_t drive, float value);
+  float HomeFeedRate(size_t axis) const;
+  void SetHomeFeedRate(size_t axis, float value);
+  EndStopHit Stopped(size_t drive);
+  float AxisMaximum(size_t axis) const;
+  void SetAxisMaximum(size_t axis, float value);
+  float AxisMinimum(size_t axis) const;
+  void SetAxisMinimum(size_t axis, float value);
+  float AxisTotalLength(size_t axis) const;
+  float GetElasticComp(size_t drive) const;
+  void SetElasticComp(size_t drive, float factor);
+  void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel);
+  void GetEndStopConfiguration(size_t axis, EndStopType& endstopType, bool& logicLevel) const;
 
   // Z probe
 
@@ -647,7 +655,7 @@ public:
 //  void SetMixingDrives(int);
 //  int GetMixingDrives();
 
-  int8_t SlowestDrive() const;
+  uint8_t SlowestDrive() const;
 
   // Heat and temperature
   
@@ -679,18 +687,27 @@ public:
   
 private:
   
-  // This is the structure used to hold out non-volatile data.
+  // These are the structures used to hold out non-volatile data.
   // The SAM3X doesn't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
   // every time we reprogram the firmware. So there is no need to cater for writing one version of this
   // struct and reading back another.
 
-  struct FlashData
+  struct SoftwareResetData
   {
-	  static const uint16_t magicValue = 0x59B2;	// value we use to recognise that the flash data has been written
+	  static const uint16_t magicValue = 0x59B2;	// value we use to recognise that all the flash data has been written
+	  static const uint32_t nvAddress = 0;				// address in flash where we store the nonvolatile data
 
 	  uint16_t magic;
 	  uint16_t resetReason;							// this records why we did a software reset, for diagnostic purposes
 	  size_t neverUsedRam;							// the amount of never used RAM at the last abnormal software reset
+  };
+
+  struct FlashData
+  {
+	  static const uint16_t magicValue = 0xA436;	// value we use to recognise that just the reset flash data has been written
+	  static const uint32_t nvAddress = SoftwareResetData::nvAddress + sizeof(struct SoftwareResetData);
+
+	  uint16_t magic;
 
 	  // The remaining data could alternatively be saved to SD card.
 	  // Note however that if we save them as G codes, we need to provide a way of saving IR and ultrasonic G31 parameters separately.
@@ -707,7 +724,6 @@ private:
 	  Compatibility compatibility;
   };
 
-  static const uint32_t nvAddress = 0;				// address in flash where we store the nonvolatile data
   FlashData nvData;
   bool autoSaveEnabled;
 
@@ -733,16 +749,16 @@ private:
   bool disableDrives[DRIVES];
   volatile bool driveEnabled[DRIVES];
   bool directions[DRIVES];
-  int8_t lowStopPins[DRIVES];
-  int8_t highStopPins[DRIVES];
+  int8_t endStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float instantDvs[DRIVES];
+  float elasticComp[DRIVES];
+
   MCP4461 mcpDuet;
   MCP4461 mcpExpansion;
   int8_t slowestDrive;
-
 
   int8_t potWipes[DRIVES];
   float senseResistor;
@@ -753,7 +769,6 @@ private:
   volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
   volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
   volatile ThermistorAveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
-  //int8_t numMixingDrives;
 
 // AXES
 
@@ -763,6 +778,8 @@ private:
   float axisMaxima[AXES];
   float axisMinima[AXES];
   float homeFeedrates[AXES];
+  EndStopType endStopType[AXES];
+  bool endStopLogicLevel[AXES];
   
 // HEATERS - Bed is assumed to be the first
 
@@ -954,17 +971,17 @@ inline const char* Platform::GetDefaultFile() const
 
 // Drive the RepRap machine - Movement
 
-inline float Platform::DriveStepsPerUnit(int8_t drive) const
+inline float Platform::DriveStepsPerUnit(size_t drive) const
 {
   return driveStepsPerUnit[drive]; 
 }
 
-inline void Platform::SetDriveStepsPerUnit(int8_t drive, float value)
+inline void Platform::SetDriveStepsPerUnit(size_t drive, float value)
 {
   driveStepsPerUnit[drive] = value;
 }
 
-inline float Platform::Acceleration(int8_t drive) const
+inline float Platform::Acceleration(size_t drive) const
 {
 	return accelerations[drive];
 }
@@ -974,97 +991,111 @@ inline const float* Platform::Accelerations() const
 	return accelerations;
 }
 
-inline void Platform::SetAcceleration(int8_t drive, float value)
+inline void Platform::SetAcceleration(size_t drive, float value)
 {
 	accelerations[drive] = value;
 }
 
-inline float Platform::MaxFeedrate(int8_t drive) const
+inline float Platform::MaxFeedrate(size_t drive) const
 {
   return maxFeedrates[drive];
 }
 
 inline const float* Platform::MaxFeedrates() const
 {
-  return maxFeedrates;
+	return maxFeedrates;
 }
 
-inline void Platform::SetMaxFeedrate(int8_t drive, float value)
+inline void Platform::SetMaxFeedrate(size_t drive, float value)
 {
 	maxFeedrates[drive] = value;
 }
 
-inline float Platform::InstantDv(int8_t drive) const
+inline float Platform::ConfiguredInstantDv(size_t drive) const
 {
-  return instantDvs[drive]; 
+	return instantDvs[drive];
 }
 
-inline void Platform::SetInstantDv(int8_t drive, float value)
+inline void Platform::SetInstantDv(size_t drive, float value)
 {
 	instantDvs[drive] = value;
 	SetSlowestDrive();
 }
 
-inline int8_t Platform::SlowestDrive() const
+inline uint8_t Platform::SlowestDrive() const
 {
 	return slowestDrive;
 }
 
+#if 0	// not used
 inline const float* Platform::InstantDvs() const
 {
-  return instantDvs;
-}
-
-#if 0	// not used
-inline bool Platform::HighStopButNotLow(int8_t axis) const
-{
-	return (lowStopPins[axis] < 0) && (highStopPins[axis] >= 0);
+	return instantDvs;
 }
 #endif
 
-inline void Platform::SetDirectionValue(byte drive, bool dVal)
+inline void Platform::SetDirectionValue(size_t drive, bool dVal)
 {
 	directions[drive] = dVal;
 }
 
-inline bool Platform::GetDirectionValue(byte drive) const
+inline bool Platform::GetDirectionValue(size_t drive) const
 {
 	return directions[drive];
 }
 
-inline float Platform::HomeFeedRate(int8_t axis) const
+inline float Platform::HomeFeedRate(size_t axis) const
 {
   return homeFeedrates[axis];
 }
 
-inline void Platform::SetHomeFeedRate(int8_t axis, float value)
+inline void Platform::SetHomeFeedRate(size_t axis, float value)
 {
    homeFeedrates[axis] = value;
 }
 
-inline float Platform::AxisMaximum(int8_t axis) const
+inline float Platform::AxisMaximum(size_t axis) const
 {
   return axisMaxima[axis];
 }
 
-inline void Platform::SetAxisMaximum(int8_t axis, float value)
+inline void Platform::SetAxisMaximum(size_t axis, float value)
 {
   axisMaxima[axis] = value;
 }
 
-inline float Platform::AxisMinimum(int8_t axis) const
+inline float Platform::AxisMinimum(size_t axis) const
 {
   return axisMinima[axis];
 }
 
-inline void Platform::SetAxisMinimum(int8_t axis, float value)
+inline void Platform::SetAxisMinimum(size_t axis, float value)
 {
   axisMinima[axis] = value;
 }
 
-inline float Platform::AxisTotalLength(int8_t axis) const
+inline float Platform::AxisTotalLength(size_t axis) const
 {
 	return axisMaxima[axis] - axisMinima[axis];
+}
+
+// The A4988 requires 1us minimum pulse width, so we make separate StepHigh and StepLow calls so we don't waste this time
+inline void Platform::StepHigh(size_t drive)
+{
+	const int pin = stepPins[drive];
+	if (pin >= 0)
+	{
+		digitalWriteNonDue(pin, 1);
+	}
+}
+
+inline void Platform::StepLow(size_t drive)
+{
+	const int pin = stepPins[drive];
+	if (pin >= 0)
+	{
+		digitalWriteNonDue(pin, 0);
+	}
 }
 
 //********************************************************************************************************
@@ -1155,8 +1186,33 @@ inline void Platform::PopMessageIndent()
 	messageIndent -= 2;
 }
 
+inline float Platform::GetElasticComp(size_t drive) const
+{
+	return (drive < DRIVES) ? elasticComp[drive] : 0.0;
+}
+
+inline void Platform::SetEndStopConfiguration(size_t axis, EndStopType esType, bool logicLevel)
+//pre(axis < AXES)
+{
+	endStopType[axis] = esType;
+	endStopLogicLevel[axis] = logicLevel;
+}
+
+inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, bool& logicLevel) const
+//pre(axis < AXES)
+{
+	esType = endStopType[axis];
+	logicLevel = endStopLogicLevel[axis];
+}
+
+// Get the interrupt clock count
+/*static*/ inline uint32_t Platform::GetInterruptClocks()
+{
+	//return TC_ReadCV(TC1, 0);
+	// sadly, the Arduino IDE does not provide the inlined version of TC_ReadCV, so use the following instead...
+	return TC1 ->TC_CHANNEL[0].TC_CV;
+}
 
 //***************************************************************************************
-
 
 #endif

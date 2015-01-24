@@ -63,7 +63,7 @@ void Heat::Spin()
   {
     pids[heater]->Spin();
   }
-  platform->ClassReport("Heat", longWait);
+  platform->ClassReport("Heat", longWait, moduleHeat);
 }
 
 void Heat::Diagnostics() 

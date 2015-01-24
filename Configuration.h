@@ -24,9 +24,11 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "0.78za-dc42"
-#define DATE "2014-12-15"
+#define VERSION "1.00-dc42"
+#define DATE "2015-01-24"
 #define AUTHORS "reprappro, dc42, zpl"
+
+#define FLASH_SAVE_ENABLED	(1)
 
 // Other firmware that we might switch to be compatible with.
 
@@ -52,15 +54,13 @@ enum Compatibility
 #define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
 #define HOT_ENOUGH_TO_EXTRUDE (160.0)       // Celsius
 #define HOT_ENOUGH_TO_RETRACT (90.0)		// Celsius
-#define TIME_TO_HOT (120.0)					// Seconds
+#define TIME_TO_HOT (150.0)					// Seconds
 
 // If temperatures fall outside this range, something nasty has happened.
 
 #define MAX_BAD_TEMPERATURE_COUNT 6
 #define BAD_LOW_TEMPERATURE -10.0
 #define BAD_HIGH_TEMPERATURE 300.0
-
-#define STANDBY_INTERRUPT_RATE 2.0e-4 // Seconds
 
 #define NUMBER_OF_PROBE_POINTS 5	// Maximum number of probe points
 #define Z_DIVE 5.0  				// Height from which to probe the bed (mm)
@@ -81,12 +81,10 @@ enum Compatibility
 #define HOME_Y_G "homey.g"
 #define HOME_Z_G "homez.g"
 #define HOME_ALL_G "homeall.g"
+#define HOME_DELTA_G "homedelta.g"
 #define SET_BED_EQUATION "bed.g"
 #define PAUSE_G "pause.g"
 #define RESUME_G "resume.g"
-
-#define WEB_DEBUG_TRUE 9
-#define WEB_DEBUG_FALSE 8
 
 #define LIST_SEPARATOR ':'						// Lists in G Codes
 #define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them
@@ -106,4 +104,5 @@ enum Compatibility
 #define BOTH_MESSAGE 'B'						// Type byte of message that is to be sent to the web & host
 #define BOTH_ERROR_MESSAGE 'A'					// Type byte of message that is to be sent to the web & host - flags an error
 #define DEBUG_MESSAGE 'D'						// Type byte of debug message to send in blocking mode to USB
+
 #endif

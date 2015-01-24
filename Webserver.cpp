@@ -246,7 +246,7 @@ void Webserver::Spin()
 			}
 		}
 
-		platform->ClassReport("Webserver", longWait);
+		platform->ClassReport("Webserver", longWait, moduleWebserver);
 	}
 }
 
@@ -685,7 +685,7 @@ void ProtocolInterpreter::FinishUpload(uint32_t file_length)
 // This is overridden in class HttpInterpreter
 bool ProtocolInterpreter::DebugEnabled() const
 {
-	return reprap.Debug();
+	return reprap.Debug(moduleWebserver);
 }
 
 //********************************************************************************************
@@ -697,7 +697,7 @@ bool ProtocolInterpreter::DebugEnabled() const
 
 
 Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws)
-	: ProtocolInterpreter(p, ws), state(doingCommandWord), webDebug(false)
+	: ProtocolInterpreter(p, ws), state(doingCommandWord)
 {
 }
 
@@ -790,7 +790,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	if (found)
 	{
 		jsonResponseBuffer[ARRAY_UPB(jsonResponseBuffer)] = 0;
-		if (webDebug)
+		if (reprap.Debug(moduleWebserver))
 		{
 			platform->Message(HOST_MESSAGE, "JSON response: %s queued\n", jsonResponseBuffer);
 		}
@@ -1243,7 +1243,7 @@ bool Webserver::HttpInterpreter::CharFromClient(char c)
 // Return true if the message is complete, false if we want to continue receiving data (i.e. postdata)
 bool Webserver::HttpInterpreter::ProcessMessage()
 {
-    if(webDebug)
+    if(reprap.Debug(moduleWebserver))
     {
     	platform->Message(HOST_MESSAGE, "HTTP request:");
     	for (unsigned int i = 0; i < numCommandWords; ++i)
@@ -1642,16 +1642,16 @@ void Webserver::FtpInterpreter::ProcessLine()
 			}
 			else if (StringStartsWith(clientMessage, "RNTO"))
 			{
-				char buffer[maxFilenameLength];
-				strncpy(buffer, filename, maxFilenameLength);
+				char buffer[MaxFilenameLength];
+				strncpy(buffer, filename, MaxFilenameLength);
 				ReadFilename(4);
 
 				if (buffer[0] != '/' && filename[0] != '/')
 				{
-					char old_filename[maxFilenameLength];
+					char old_filename[MaxFilenameLength];
 					const char *new_filename;
 
-					strncpy(old_filename, platform->GetMassStorage()->CombineName(currentDir, buffer), maxFilenameLength);
+					strncpy(old_filename, platform->GetMassStorage()->CombineName(currentDir, buffer), MaxFilenameLength);
 					new_filename = platform->GetMassStorage()->CombineName(currentDir, filename);
 
 					if (platform->GetMassStorage()->Rename(old_filename, new_filename))
@@ -1881,7 +1881,7 @@ void Webserver::FtpInterpreter::ReadFilename(int start)
 {
 	int filenameLength = 0;
 	bool readingPath = false;
-	for(int i=start; i<clientPointer && i<maxFilenameLength + start -1; i++)
+	for(int i=start; i<clientPointer && i<MaxFilenameLength + start -1; i++)
 	{
 		switch (clientMessage[i])
 		{
@@ -1911,14 +1911,14 @@ void Webserver::FtpInterpreter::ReadFilename(int start)
 
 void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 {
-	char combinedPath[maxFilenameLength];
+	char combinedPath[MaxFilenameLength];
 
 	if (newDirectory[0] != 0)
 	{
 		/* Prepare the new directory path */
 		if (newDirectory[0] == '/') // absolute path
 		{
-			strncpy(combinedPath, newDirectory, maxFilenameLength);
+			strncpy(combinedPath, newDirectory, MaxFilenameLength);
 		}
 		else // relative path
 		{
@@ -1932,7 +1932,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 				}
 				else
 				{
-					strncpy(combinedPath, currentDir, maxFilenameLength);
+					strncpy(combinedPath, currentDir, MaxFilenameLength);
 					for(int i=strlen(combinedPath) -2; i>=0; i--)
 					{
 						if (combinedPath[i] == '/')
@@ -1945,12 +1945,12 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 			}
 			else // go to child directory
 			{
-				strncpy(combinedPath, currentDir, maxFilenameLength);
+				strncpy(combinedPath, currentDir, MaxFilenameLength);
 				if (strlen(currentDir) > 1)
 				{
-					strncat(combinedPath, "/", maxFilenameLength - strlen(combinedPath) - 1);
+					strncat(combinedPath, "/", MaxFilenameLength - strlen(combinedPath) - 1);
 				}
-				strncat(combinedPath, newDirectory, maxFilenameLength - strlen(combinedPath) - 1);
+				strncat(combinedPath, newDirectory, MaxFilenameLength - strlen(combinedPath) - 1);
 			}
 		}
 
@@ -1963,7 +1963,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		/* Verify path and change it */
 		if (platform->GetMassStorage()->PathExists(combinedPath))
 		{
-			strncpy(currentDir, combinedPath, maxFilenameLength);
+			strncpy(currentDir, combinedPath, MaxFilenameLength);
 			SendReply(250, "Directory successfully changed.");
 		}
 		else
@@ -2439,9 +2439,4 @@ unsigned int Webserver::FindFilamentUsed(const char* buf, size_t len, float *fil
 	return filamentsFound;
 }
 
-
-void Webserver::WebDebug(bool wdb)
-{
-	httpInterpreter->SetDebug(wdb);
-}
-
+// End

@@ -26,6 +26,12 @@ Licence: GPL
 #include <cfloat>
 #include <cstdarg>
 
+// Module numbers, used for diagnostics and debug
+enum Module
+{
+	modulePlatform = 0, moduleNetwork = 1, moduleWebserver = 2, moduleGcodes = 3, moduleMove = 4, moduleHeat = 5, moduleDda = 6,
+	noModule = 15
+};
 
 // Warn of what's to come, so we can use pointers to classes...
 
@@ -44,6 +50,7 @@ class FileStore;
 extern RepRap reprap;
 
 // Functions and globals not part of any class
+const size_t MaxFilenameLength = 100;					// maximum length of a path + filename on the SD card
 
 extern "C" void debugPrintf(const char* fmt, ...);
 
@@ -140,6 +147,21 @@ template<> inline double min(double _a, double _b)
 template<> inline double max(double _a, double _b)
 {
 	return (isnan(_a) || _a > _b) ? _a : _b;
+}
+
+inline float fsquare(float arg)
+{
+	return arg * arg;
+}
+
+inline uint64_t isquare64(int32_t arg)
+{
+	return (uint64_t)((int64_t)arg * arg);
+}
+
+inline uint64_t isquare64(uint32_t arg)
+{
+	return (uint64_t)arg * arg;
 }
 
 #endif

@@ -29,7 +29,7 @@ const char feedrateLetter = 'F';	// GCode feedrate
 const char extrudeLetter = 'E'; 	// GCode extrude
 
 // Type for specifying which endstops we want to check
-typedef uint8_t EndstopChecks;
+typedef uint16_t EndstopChecks;
 
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
@@ -89,17 +89,17 @@ class GCodes
     void Exit();														// Shut it down
     void Reset();														// Reset some parameter to defaults
     bool RunConfigurationGCodes();										// Run the configuration G Code file on reboot
-    bool ReadMove(float* m, EndstopChecks& ce);							// Called by the Move class to get a movement set by the last G Code
+    bool ReadMove(float* m, EndstopChecks& ce, bool& noDeltaMapping);	// Called by the Move class to get a movement set by the last G Code
     void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
     void DeleteFile(const char* fileName);								// Does what it says
     bool GetProbeCoordinates(int count, float& x, float& y, float& z) const;	// Get pre-recorded probe coordinates
-    const char* GetCurrentCoordinates() const;							// Get where we are as a string
+    void GetCurrentCoordinates(StringRef& s) const;				// Write where we are into a string
     bool PrintingAFile() const;											// Are we in the middle of printing a file?
     float FractionOfFilePrinted() const;								// Get fraction of file printed
     void Diagnostics();													// Send helpful information out
     bool HaveIncomingData() const;										// Is there something that we have to do?
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
-    void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homes
+    void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homed
     bool CoolingInverted() const;										// Is the current fan value inverted?
     float GetExtruderPosition(uint8_t extruder) const;					// Get the amount of filament extruded
     void PauseSDPrint();												// Pause the current print from SD card
@@ -117,10 +117,11 @@ class GCodes
     bool HandleGcode(GCodeBuffer* gb);									// Do a G code
     bool HandleMcode(GCodeBuffer* gb);									// Do an M code
     bool HandleTcode(GCodeBuffer* gb);									// Do a T code
-    int SetUpMove(GCodeBuffer* gb);										// Pass a move on to the Move module
+    int SetUpMove(GCodeBuffer* gb, StringRef& reply);					// Pass a move on to the Move module
     bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
     bool DoDwellTime(float dwell);										// Really wait for a bit
-    bool DoHome(StringRef& reply, bool& error);							// Home some axes
+    bool HomeCartesian(StringRef& reply, bool& error);					// Home some axes
+    bool HomeDelta(StringRef& reply, bool& error);						// Home the printer
     bool DoSingleZProbeAtPoint();										// Probe at a given point
     bool DoSingleZProbe();												// Probe where we are
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
@@ -151,6 +152,8 @@ class GCodes
     void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
     bool ChangeTool(int newToolNumber);									// Select a new tool
     bool ToolHeatersAtSetTemperatures(const Tool *tool) const;			// Wait for the heaters associated with the specified tool to reach their set temperatures
+    bool AllAxesAreHomed() const;										// Return true if all axes are homed
+    void SetAllAxesNotHomed();											// Flag all axes as not homed
 
     Platform* platform;							// The RepRap machine
     bool active;								// Live and running?
@@ -165,6 +168,7 @@ class GCodes
     bool moveAvailable;							// Have we seen a move G Code and set it up?
     float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
     EndstopChecks endStopsToCheck;				// Which end stops we check them on the next move
+    bool disableDeltaMapping;					// True if delta mapping should be bypassed for the next move
     bool drivesRelative; 						// Are movements relative - all except X, Y and Z
     bool axesRelative;   						// Are movements relative - X, Y and Z
     bool drivesRelativeStack[STACK];			// For dealing with Push and Pop
@@ -200,7 +204,7 @@ class GCodes
     bool settingBedEquationWithProbe;			// True if we're executing G32 without a macro
     float longWait;								// Timer for things that happen occasionally (seconds)
     bool limitAxes;								// Don't think outside the box.
-    bool axisIsHomed[3];						// These record which of the axes have been homed
+    bool axisIsHomed[AXES];						// These record which of the axes have been homed
     bool waitingForMoveToComplete;
     bool coolingInverted;
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
@@ -320,6 +324,16 @@ inline bool GCodes::RunConfigurationGCodes()
 inline bool GCodes::CoolingInverted() const
 {
 	return coolingInverted;
+}
+
+inline bool GCodes::AllAxesAreHomed() const
+{
+	return axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS] && axisIsHomed[Z_AXIS];
+}
+
+inline void GCodes::SetAllAxesNotHomed()
+{
+	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
 }
 
 #endif

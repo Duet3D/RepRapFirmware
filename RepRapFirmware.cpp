@@ -163,7 +163,7 @@ RepRap reprap;
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : active(false), debug(false), stopped(false), spinState(0), ticksInSpinState(0), resetting(false), fileInfoDetected(false), printStartTime(0.0)
+RepRap::RepRap() : active(false), debug(0), stopped(false), currentModule(noModule), ticksInSpinState(0), resetting(false), fileInfoDetected(false), printStartTime(0.0)
 {
   platform = new Platform();
   network = new Network();
@@ -176,9 +176,10 @@ RepRap::RepRap() : active(false), debug(false), stopped(false), spinState(0), ti
 
 void RepRap::Init()
 {
-  debug = false;
+  debug = 0;
   activeExtruders = 1;		// we always report at least 1 extruder to the web interface
   activeHeaters = 2;		// we always report the bed heater + 1 extruder heater to the web interface
+  processingConfig = true;
 
   // All of the following init functions must execute reasonably quickly before the watchdog times us out
   platform->Init();
@@ -230,6 +231,7 @@ void RepRap::Init()
 		  }
 	  }
   }
+  processingConfig = false;
 
   platform->AppendMessage(HOST_MESSAGE, "\nStarting network...\n");
   network->Init(); // Need to do this here, as the configuration GCodes may set IP address etc.
@@ -256,31 +258,31 @@ void RepRap::Spin()
 	if(!active)
 		return;
 
-	spinState = 1;
+	currentModule = modulePlatform;
 	ticksInSpinState = 0;
 	platform->Spin();
 
-	++spinState;
+	currentModule = moduleNetwork;
 	ticksInSpinState = 0;
 	network->Spin();
 
-	++spinState;
+	currentModule = moduleWebserver;
 	ticksInSpinState = 0;
 	webserver->Spin();
 
-	++spinState;
+	currentModule = moduleGcodes;
 	ticksInSpinState = 0;
 	gCodes->Spin();
 
-	++spinState;
+	currentModule = moduleMove;
 	ticksInSpinState = 0;
 	move->Spin();
 
-	++spinState;
+	currentModule = moduleHeat;
 	ticksInSpinState = 0;
 	heat->Spin();
 
-	spinState = 0;
+	currentModule = noModule;
 	ticksInSpinState = 0;
 
 	// Keep track of the loop time
@@ -484,7 +486,8 @@ void RepRap::Tick()
 					// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
 				}
 
-				platform->SoftwareReset(SoftwareResetReason::stuckInSpin + spinState);
+				move->PrintCurrentDda();
+				platform->SoftwareReset(SoftwareResetReason::stuckInSpin + (unsigned int)currentModule);
 			}
 		}
 	}
@@ -503,7 +506,10 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 	{
 		// New-style status request
 		// Send the printing/idle status
-		char ch = (reprap.IsStopped()) ? 'S' : (gc->PrintingAFile()) ? 'P' : 'I';
+		char ch = (processingConfig) ? 'C'
+					: (reprap.IsStopped()) ? 'S'
+					: (gc->PrintingAFile()) ? 'P'
+					: 'I';
 		response.printf("{\"status\":\"%c\",\"heaters\":", ch);
 
 		// Send the heater actual temperatures
@@ -543,7 +549,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 		}
 
 		// Send XYZ positions
-		float liveCoordinates[DRIVES + 1];
+		float liveCoordinates[DRIVES];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
 		const Tool* currentTool = reprap.GetCurrentTool();
 		if (currentTool != NULL)
@@ -598,7 +604,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 			response.catf("\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
 		}
 		// Send XYZ and extruder positions
-		float liveCoordinates[DRIVES + 1];
+		float liveCoordinates[DRIVES];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
 		for (int8_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
 		{
@@ -820,6 +826,81 @@ void RepRap::SetMessage(const char *msg)
 	message[maxMessageLength] = 0;
 }
 
+void RepRap::GetExtruderCapabilities(bool canDrive[], const bool directions[]) const
+{
+	for (uint8_t extruder=0; extruder<DRIVES - AXES; extruder++)
+	{
+		canDrive[extruder] = false;
+	}
+
+	Tool *tool = toolList;
+	while (tool != nullptr)
+	{
+		for(uint8_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
+		{
+			const int extruderDrive = tool->Drive(driveNum);
+			canDrive[extruderDrive] = tool->ToolCanDrive(directions[extruderDrive + AXES] == FORWARDS);
+		}
+
+		tool = tool->Next();
+	}
+}
+
+void RepRap::FlagTemperatureFault(int8_t dudHeater)
+{
+	if (toolList != NULL)
+	{
+		toolList->FlagTemperatureFault(dudHeater);
+	}
+}
+
+void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
+{
+	reprap.GetHeat()->ResetFault(wasDudHeater);
+	if (toolList != NULL)
+	{
+		toolList->ClearTemperatureFault(wasDudHeater);
+	}
+}
+
+void RepRap::SetDebug(Module m, bool enable)
+{
+	if (enable)
+	{
+		debug |= (1 << m);
+	}
+	else
+	{
+		debug &= ~(1 << m);
+	}
+	PrintDebug();
+}
+
+void RepRap::SetDebug(bool enable)
+{
+	debug = (enable) ? 0xFFFF : 0;
+}
+
+void RepRap::PrintDebug()
+{
+	if (debug != 0)
+	{
+		platform->Message(BOTH_MESSAGE, "Debugging enabled for modules:%s%s%s%s%s%s%s\n",
+										(debug & (1 << modulePlatform)) ? " Platform" : "",
+										(debug & (1 << moduleNetwork)) ? " Network" : "",
+										(debug & (1 << moduleWebserver)) ? " Webserver" : "",
+										(debug & (1 << moduleGcodes)) ? " GCodes" : "",
+										(debug & (1 << moduleMove))	? " Move" : "",
+										(debug & (1 << moduleDda)) ? " DDA" : "",
+										(debug & (1 << moduleHeat)) ? " Heat" : ""
+									);
+	}
+	else
+	{
+		platform->Message(BOTH_MESSAGE, "Debugging disabled\n");
+	}
+}
+
 //*************************************************************************************************
 // StringRef class member implementations
 
@@ -880,7 +961,7 @@ size_t StringRef::cat(const char* src)
 
 // Utilities and storage not part of any class
 
-static char scratchStringBuffer[200];		// this is now used only for short messages
+static char scratchStringBuffer[100];		// this is now used only for short messages
 StringRef scratchString(scratchStringBuffer, ARRAY_SIZE(scratchStringBuffer));
 
 // For debug use
@@ -888,9 +969,8 @@ void debugPrintf(const char* fmt, ...)
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	scratchString.vprintf(fmt, vargs);
+	reprap.GetPlatform()->Message(DEBUG_MESSAGE, fmt, vargs);
 	va_end(vargs);
-	reprap.GetPlatform()->Message(DEBUG_MESSAGE, scratchString);
 }
 
 // String testing

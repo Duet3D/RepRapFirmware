@@ -40,10 +40,6 @@ const unsigned int gcodeReplyBufferLength = 2048;	// size of our gcode reply buf
 
 const unsigned int webUploadBufferSize = 2300;	// maximum size of HTTP upload packets (webMessageLength - 700)
 const unsigned int webMessageLength = 3000;		// maximum length of the web message we accept after decoding, excluding POST data
-const unsigned int maxFilenameLength = 100;		// maximum length of a filename (inc. path from root) that we can upload
-//const unsigned int postBoundaryLength = 100;	// max length of the POST boundary string
-//const unsigned int postFilenameLength = 100;	// max length of the POST filename
-//const unsigned int postDataLength = 1000;		// max amount of POST data
 
 const unsigned int maxCommandWords = 4;			// max number of space-separated words in the command
 const unsigned int maxQualKeys = 5;				// max number of key/value pairs in the qualifier
@@ -112,7 +108,7 @@ class ProtocolInterpreter
 
 	    UploadState uploadState;
 	    FileData fileBeingUploaded;
-	    char filenameBeingUploaded[maxFilenameLength + 1];
+	    char filenameBeingUploaded[MaxFilenameLength + 1];
 	    const char *uploadPointer;							// pointer to start of uploaded data not yet written to file
 	    unsigned int uploadLength;							// amount of data not yet written to file
 	    uint32_t numContinuationBytes;						// number of UTF-8 continuation bytes we have received
@@ -141,7 +137,6 @@ class Webserver
 
     void ConnectionLost(const ConnectionState *cs);
     void ConnectionError();
-    void WebDebug(bool wdb);
     const StringRef& GetGcodeReply() const { return gcodeReply; }
     unsigned int GetReplySeq() const { return seq; }
     unsigned int GetGcodeBufferSpace() const;
@@ -165,8 +160,6 @@ class Webserver
 
 			bool CharFromClient(const char c);
 			void ResetState();
-			virtual bool DebugEnabled() /*override*/ const { return webDebug; }
-			void SetDebug(bool b) { webDebug = b; }
 
 		private:
 
@@ -228,7 +221,6 @@ class Webserver
 
 			// Buffers to hold reply
 			char decodeChar;
-		    bool webDebug;
 	};
 	HttpInterpreter *httpInterpreter;
 
@@ -258,8 +250,8 @@ class Webserver
 			unsigned int clientPointer;
 			char ftpResponse[ftpResponseLength];
 
-			char currentDir[maxFilenameLength];
-			char filename[maxFilenameLength];
+			char currentDir[MaxFilenameLength];
+			char filename[MaxFilenameLength];
 
 			float portOpenTime;
 

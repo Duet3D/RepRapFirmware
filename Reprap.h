@@ -35,8 +35,10 @@ class RepRap
     void Interrupt();
     void Diagnostics();
     void Timing();
-    bool Debug() const;
-    void SetDebug(bool d);
+    bool Debug(Module module) const;
+    void SetDebug(Module m, bool enable);
+    void SetDebug(bool enable);
+    void PrintDebug();
     void AddTool(Tool* t);
     void SelectTool(int toolNumber);
     void StandbyTool(int toolNumber);
@@ -81,13 +83,14 @@ class RepRap
     Tool* toolList;
     Tool* currentTool;
     uint16_t ticksInSpinState;
-    uint8_t spinState;
-    bool debug;
+    Module currentModule;
+    uint16_t debug;
     float fastLoop, slowLoop;
     float lastTime;
     bool stopped;
     bool active;
     bool resetting;
+    bool processingConfig;
     uint16_t activeExtruders;
     uint16_t activeHeaters;
     bool coldExtrude;
@@ -106,64 +109,13 @@ inline Heat* RepRap::GetHeat() const { return heat; }
 inline GCodes* RepRap::GetGCodes() const { return gCodes; }
 inline Network* RepRap::GetNetwork() const { return network; }
 inline Webserver* RepRap::GetWebserver() const { return webserver; }
-inline bool RepRap::Debug() const { return debug; }
+inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
 inline Tool* RepRap::GetCurrentTool() { return currentTool; }
 inline uint16_t RepRap::GetExtrudersInUse() const { return activeExtruders; }
 inline uint16_t RepRap::GetHeatersInUse() const { return activeHeaters; }
 inline bool RepRap::ColdExtrude() const { return coldExtrude; }
 inline void RepRap::AllowColdExtrude() { coldExtrude = true; }
 inline void RepRap::DenyColdExtrude() { coldExtrude = false; }
-
-inline void RepRap::GetExtruderCapabilities(bool canDrive[], const bool directions[]) const
-{
-	for(uint8_t extruder=0; extruder<DRIVES - AXES; extruder++)
-	{
-		canDrive[extruder] = false;
-	}
-
-	Tool *tool = toolList;
-	while (tool)
-	{
-		for(uint8_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
-		{
-			const int extruderDrive = tool->Drive(driveNum);
-			canDrive[extruderDrive] = tool->ToolCanDrive(directions[extruderDrive + AXES] == FORWARDS);
-		}
-
-		tool = tool->Next();
-	}
-}
-
-inline void RepRap::FlagTemperatureFault(int8_t dudHeater)
-{
-	if(toolList != NULL)
-	{
-		toolList->FlagTemperatureFault(dudHeater);
-	}
-}
-
-inline void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
-{
-	reprap.GetHeat()->ResetFault(wasDudHeater);
-	if(toolList != NULL)
-	{
-		toolList->ClearTemperatureFault(wasDudHeater);
-	}
-}
-
-inline void RepRap::SetDebug(bool d)
-{
-	debug = d;
-	if(debug)
-	{
-		platform->Message(BOTH_MESSAGE, "Debugging enabled\n");
-	}
-	else
-	{
-		platform->Message(WEB_MESSAGE, "");
-	}
-}
-
 inline void RepRap::Interrupt() { move->Interrupt(); }
 inline bool RepRap::IsStopped() const { return stopped; }
 inline uint16_t RepRap::GetTicksInSpinState() const { return ticksInSpinState; }

@@ -1,340 +1,272 @@
-/****************************************************************************************************
-
-RepRapFirmware - Move
-
-This is all the code to deal with movement and kinematics.
-
------------------------------------------------------------------------------------------------------
-
-Version 0.1
-
-18 November 2012
-
-Adrian Bowyer
-RepRap Professional Ltd
-http://reprappro.com
-
-Licence: GPL
-
-****************************************************************************************************/
+/*
+ * Move.cpp
+ *
+ *  Created on: 7 Dec 2014
+ *      Author: David
+ */
 
 #include "RepRapFirmware.h"
 
-Move::Move(Platform* p, GCodes* g)
+void DeltaParameters::Init()
 {
-  active = false;
-  platform = p;
-  gCodes = g;
-  
-  // Build the DDA ring
-  
-  ddaRingAddPointer = new DDA(this, platform, NULL);
-  dda = ddaRingAddPointer;
-  for(unsigned int i = 1; i < DDA_RING_LENGTH; i++)
-  {
-    dda = new DDA(this, platform, dda);
-  }
-  ddaRingAddPointer->next = dda;
-  
-  dda = NULL;
-  
-  // Build the lookahead ring
-  
-  lookAheadRingAddPointer = new LookAhead(this, platform, NULL);
-  lookAheadRingGetPointer = lookAheadRingAddPointer;
-  for(unsigned int i = 1; i < LOOK_AHEAD_RING_LENGTH; i++)
-  {
-    lookAheadRingGetPointer = new LookAhead(this, platform, lookAheadRingGetPointer);
-  }
-  lookAheadRingAddPointer->next = lookAheadRingGetPointer;
-  
-  // Set the lookahead backwards pointers (some oxymoron, surely?)
-  
-  lookAheadRingGetPointer = lookAheadRingAddPointer; 
-  for(unsigned int i = 0; i <= LOOK_AHEAD_RING_LENGTH; i++)
-  {
-    lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
-    lookAheadRingAddPointer->previous = lookAheadRingGetPointer;
-    lookAheadRingGetPointer = lookAheadRingAddPointer;
-  }    
-  
-  lookAheadDDA = new DDA(this, platform, NULL);
-  
+    deltaMode = false;
+	diagonal = 0.0;
+	radius = 0.0;
+	printRadius = defaultPrintRadius;
+	homedHeight = defaultDeltaHomedHeight;
+
+    for (size_t axis = 0; axis < AXES; ++axis)
+    {
+    	endstopAdjustments[axis] = 0.0;
+    	towerX[axis] = towerY[axis] = 0.0;
+    }
+}
+
+void DeltaParameters::SetRadius(float r)
+{
+	radius = r;
+
+	const float cos30 = sqrtf(3.0)/2.0;
+	const float sin30 = 0.5;
+
+	towerX[A_AXIS] = -(r * cos30);
+	towerX[B_AXIS] = r * cos30;
+	towerX[C_AXIS] = 0.0;
+
+	towerY[A_AXIS] = towerY[B_AXIS] = -(r * sin30);
+	towerY[C_AXIS] = r;
+
+	Recalc();
+}
+
+void DeltaParameters::Recalc()
+{
+	deltaMode = (radius > 0.0 && diagonal > radius);
+	if (deltaMode)
+	{
+		homedCarriageHeight = homedHeight + sqrtf(fsquare(diagonal) - fsquare(radius));
+		Xbc = towerX[C_AXIS] - towerX[B_AXIS];
+		Xca = towerX[A_AXIS] - towerX[C_AXIS];
+		Xab = towerX[B_AXIS] - towerX[A_AXIS];
+		Ybc = towerY[C_AXIS] - towerY[B_AXIS];
+		Yca = towerY[A_AXIS] - towerY[C_AXIS];
+		Yab = towerY[B_AXIS] - towerY[A_AXIS];
+		coreFa = fsquare(towerX[A_AXIS]) + fsquare(towerY[A_AXIS]);
+		coreFb = fsquare(towerX[B_AXIS]) + fsquare(towerY[B_AXIS]);
+		coreFc = fsquare(towerX[C_AXIS]) + fsquare(towerY[C_AXIS]);
+		Q = 2 * (Xca * Yab - Xab * Yca);
+		Q2 = fsquare(Q);
+	}
+}
+
+// Calculate the motor position for a single tower from a Cartesian coordinate
+float DeltaParameters::Transform(const float machinePos[AXES], size_t axis) const
+{
+	return machinePos[Z_AXIS]
+	+ sqrt(fsquare(diagonal) - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]));
+}
+
+void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machinePos[]) const
+{
+	const float Fa = coreFa + fsquare(Ha);
+	const float Fb = coreFb + fsquare(Hb);
+	const float Fc = coreFc + fsquare(Hc);
+
+//	debugPrintf("Ha=%f Hb=%f Hc=%f Fa=%f Fb=%f Fc=%f Xbc=%f Xca=%f Xab=%f Ybc=%f Yca=%f Yab=%f\n",
+//				Ha, Hb, Hc, Fa, Fb, Fc, Xbc, Xca, Xab, Ybc, Yca, Yab);
+
+	// Setup PQRSU such that x = -(S - uz)/P, y = (P - Rz)/Q
+	const float P = (Xbc * Fa) + (Xca * Fb) + (Xab * Fc);
+	const float S = (Ybc * Fa) + (Yca * Fb) + (Yab * Fc);
+
+	const float R = 2 * ((Xbc * Ha) + (Xca * Hb) + (Xab * Hc));
+	const float U = 2 * ((Ybc * Ha) + (Yca * Hb) + (Yab * Hc));
+
+//	debugPrintf("P= %f R=%f S=%f U=%f Q=%f\n", P, R, S, U, Q);
+
+	const float R2 = fsquare(R), U2 = fsquare(U);
+
+	float A = U2 + R2 + Q2;
+	float minusHalfB = S * U + P * R + Ha * Q2 + towerX[A_AXIS] * U * Q - towerY[A_AXIS] * R * Q;
+	float C = fsquare(S + towerX[A_AXIS] * Q) + fsquare(P - towerY[A_AXIS] * Q) + (fsquare(Ha) - fsquare(diagonal)) * Q2;
+
+//	debugPrintf("A=%f minusHalfB=%f C=%f\n", A, minusHalfB, C);
+
+	float z = (minusHalfB - sqrtf(fsquare(minusHalfB) - A * C)) / A;
+	machinePos[X_AXIS] = (U * z - S) / Q;
+	machinePos[Y_AXIS] = (P - R * z) / Q;
+	machinePos[Z_AXIS] = z;
+}
+
+Move::Move(Platform* p, GCodes* g) : currentDda(NULL)
+{
+	active = false;
+
+	// Build the DDA ring
+	DDA *dda = new DDA(NULL);
+	ddaRingGetPointer = ddaRingAddPointer = dda;
+	for(size_t i = 1; i < DdaRingLength; i++)
+	{
+		DDA *oldDda = dda;
+		dda = new DDA(dda);
+		oldDda->SetPrevious(dda);
+	}
+	ddaRingAddPointer->SetNext(dda);
+	dda->SetPrevious(ddaRingAddPointer);
 }
 
 void Move::Init()
 {
-  long ep[DRIVES];
-  
-  for(int8_t i = 0; i < DRIVES; i++)
-  {
-    platform->SetDirection(i, FORWARDS);
-  }
-  
-  // Empty the rings
-  
-  ddaRingGetPointer = ddaRingAddPointer; 
-  ddaRingLocked = false;
-  
-  for(unsigned int i = 0; i <= LOOK_AHEAD_RING_LENGTH; i++)
-  {
-    lookAheadRingAddPointer->Release();
-    lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
-  }
-  
-  lookAheadRingGetPointer = lookAheadRingAddPointer;
-  lookAheadRingCount = 0;
-  
-  addNoMoreMoves = false;
+	// Reset Cartesian mode
+	deltaParams.Init();
 
-  // Put the origin on the lookahead ring with default velocity in the previous
-  // position to the first one that will be used.
-  
-  lastMove = lookAheadRingAddPointer->Previous();
-  
-  for(unsigned int i = 0; i < DRIVES; i++)
-  {
-	  ep[i] = 0;
-	  liveCoordinates[i] = 0.0;
-  }
+	// Empty the ring
+	ddaRingGetPointer = ddaRingAddPointer;
+	DDA *dda = ddaRingAddPointer;
+	do
+	{
+		dda->Init();
+		dda = dda->GetNext();
+	} while (dda != ddaRingAddPointer);
 
-  int8_t slow = platform->SlowestDrive();
-  lastMove->Init(ep, platform->HomeFeedRate(slow), platform->InstantDv(slow), platform->MaxFeedrate(slow), platform->Acceleration(slow), false);
-  lastMove->Release();
-  liveCoordinates[DRIVES] = platform->HomeFeedRate(slow);
+	currentDda = nullptr;
+	addNoMoreMoves = false;
 
-  currentFeedrate = -1.0;
+	// Clear the transforms
+	SetIdentityTransform();
+	tanXY = tanYZ = tanXZ = 0.0;
 
-  SetIdentityTransform();
-  tanXY = 0.0;
-  tanYZ = 0.0;
-  tanXZ = 0.0;
+	// Put the origin on the lookahead ring with default velocity in the previous position to the first one that will be used.
+	// Do this by calling SetLiveCoordinates and SetPositions, so that the motor coordinates will be correct too even on a delta.
+	float move[DRIVES];
+	for (size_t i = 0; i < DRIVES; i++)
+	{
+		move[i] = 0.0;
+		reprap.GetPlatform()->SetDirection(i, FORWARDS, false);
+	}
+	SetLiveCoordinates(move);
+	SetPositions(move);
 
-  lastZHit = 0.0;
-  zProbing = false;
+	size_t slow = reprap.GetPlatform()->SlowestDrive();
+	currentFeedrate = reprap.GetPlatform()->HomeFeedRate(slow);
 
-  for(uint8_t point = 0; point < NUMBER_OF_PROBE_POINTS; point++)
-  {
-	  xBedProbePoints[point] = (0.3 + 0.6*(float)(point%2))*platform->AxisMaximum(X_AXIS);
-	  yBedProbePoints[point] = (0.0 + 0.9*(float)(point/2))*platform->AxisMaximum(Y_AXIS);
-	  zBedProbePoints[point] = 0.0;
-	  probePointSet[point] = unset;
-  }
+	lastZHit = 0.0;
+	zProbing = false;
 
-  xRectangle = 1.0/(0.8*platform->AxisMaximum(X_AXIS));
-  yRectangle = xRectangle;
+	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
+	for (size_t point = 0; point < NUMBER_OF_PROBE_POINTS; point++)
+	{
+		xBedProbePoints[point] = (0.3 + 0.6*(float)(point%2))*reprap.GetPlatform()->AxisMaximum(X_AXIS);
+		yBedProbePoints[point] = (0.0 + 0.9*(float)(point/2))*reprap.GetPlatform()->AxisMaximum(Y_AXIS);
+		zBedProbePoints[point] = 0.0;
+		probePointSet[point] = unset;
+	}
 
-  identityBedTransform = true;
+	xRectangle = 1.0/(0.8*reprap.GetPlatform()->AxisMaximum(X_AXIS));
+	yRectangle = xRectangle;
 
-  lastTime = platform->Time();
-  longWait = lastTime;
-  active = true;  
+	lastTime = reprap.GetPlatform()->Time();
+	longWait = lastTime;
+
+	active = true;
 }
 
 void Move::Exit()
 {
-  platform->Message(BOTH_MESSAGE, "Move class exited.\n");
-  active = false;
+	reprap.GetPlatform()->Message(BOTH_MESSAGE, "Move class exited.\n");
+	active = false;
 }
 
 void Move::Spin()
 {
-  if(!active)
-    return;
-    
-  // Do some look-ahead work, if there's any to do
-    
-  DoLookAhead();
-  
-  // If there's space in the DDA ring, and there is a completed
-  // move in the look-ahead ring, transfer it.
- 
-  if(!DDARingFull())
-  {
-     LookAhead* nextFromLookAhead = LookAheadRingGet();
-     if(nextFromLookAhead != NULL)
-     {
-       if(!DDARingAdd(nextFromLookAhead))
-       {
-         platform->Message(HOST_MESSAGE, "Can't add to non-full DDA ring!\n"); // Should never happen...
-       }
-     }
-  }
-  
-  // If we either don't want to, or can't, add to the look-ahead ring, go home.
-  
-  if(addNoMoreMoves || LookAheadRingFull())
-  {
-	  platform->ClassReport("Move", longWait);
-	  return;
-  }
- 
-  // If there's a G Code move available, add it to the look-ahead
-  // ring for processing.
-
-  EndstopChecks endStopsToCheck;
-  if(gCodes->ReadMove(nextMove, endStopsToCheck))
-  {
-	Transform(nextMove);
-
-    currentFeedrate = nextMove[DRIVES]; // Might be G1 with just an F field
-
-    bool noMove = true;
-    for(int8_t drive = 0; drive < DRIVES; drive++)
-    {
-    	nextMachineEndPoints[drive] = LookAhead::EndPointToMachine(drive, nextMove[drive]);
-    	if(drive < AXES)
-    	{
-    		if(nextMachineEndPoints[drive] - lastMove->MachineCoordinates()[drive] != 0)
-    		{
-    		    noMove = false;
-    		}
-    		normalisedDirectionVector[drive] = nextMove[drive] - lastMove->MachineToEndPoint(drive);
-    	}
-    	else
-    	{
-    		if(nextMachineEndPoints[drive] != 0)
-    		{
-    		    noMove = false;
-    		}
-    		normalisedDirectionVector[drive] = nextMove[drive];
-    	}
-    }
-
-    // Throw it away if there's no real movement.
-    
-    if(noMove)
-    {
-       platform->ClassReport("Move", longWait);
-       return;
-    }
-    
-    // Compute the direction of motion, moved to the positive hyperquadrant
-
-    Absolute(normalisedDirectionVector, DRIVES);
-    if(Normalise(normalisedDirectionVector, DRIVES) <= 0.0)
-    {
-    	platform->Message(HOST_MESSAGE, "\nAttempt to normalise zero-length move.\n");  // Should never get here - noMove above
-        platform->ClassReport("Move", longWait);
-        return;
-    }
-    
-    // Real move - record its feedrate with it, not here.
-
-    currentFeedrate = -1.0;
-
-    // Set the feedrate maximum and minimum, and the acceleration
-
-    float minSpeed = VectorBoxIntersection(normalisedDirectionVector, platform->InstantDvs(), DRIVES);
-    float acceleration = VectorBoxIntersection(normalisedDirectionVector, platform->Accelerations(), DRIVES);
-    float maxSpeed = VectorBoxIntersection(normalisedDirectionVector, platform->MaxFeedrates(), DRIVES);
-
-    if(!LookAheadRingAdd(nextMachineEndPoints, nextMove[DRIVES], minSpeed, maxSpeed, acceleration, endStopsToCheck))
-    {
-    	platform->Message(HOST_MESSAGE, "Can't add to non-full look ahead ring!\n"); // Should never happen...
-    }
-  }
-  platform->ClassReport("Move", longWait);
-}
-
-
-
-/*
- * Take a unit positive-hyperquadrant vector, and return the factor needed to obtain
- * length of the vector as projected to touch box[].
- */
-
-float Move::VectorBoxIntersection(const float v[], const float box[], int8_t dimensions)
-{
-	// Generate a vector length that is guaranteed to exceed the size of the box
-
-	float biggerThanBoxDiagonal = 2.0*Magnitude(box, dimensions);
-	float magnitude = biggerThanBoxDiagonal;
-	for(int8_t d = 0; d < dimensions; d++)
+	if (!active)
 	{
-		if(biggerThanBoxDiagonal*v[d] > box[d])
+		return;
+	}
+
+	// See if we can add another move to the ring
+	if (!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
+	{
+		if (reprap.Debug(moduleMove))
 		{
-			float a = box[d]/v[d];
-			if(a < magnitude)
+			ddaRingAddPointer->PrintIfHasStepError();
+		}
+		// If there's a G Code move available, add it to the DDA ring for processing.
+		float nextMove[DRIVES + 1];
+		EndstopChecks endStopsToCheck;
+		bool noDeltaMapping;
+		if (reprap.GetGCodes()->ReadMove(nextMove, endStopsToCheck, noDeltaMapping))
+		{
+			currentFeedrate = nextMove[DRIVES];		// might be G1 with just an F field
+			if (!noDeltaMapping || !IsDeltaMode())
 			{
-				magnitude = a;
+				Transform(nextMove);
+			}
+			if (ddaRingAddPointer->Init(nextMove, endStopsToCheck, IsDeltaMode() && !noDeltaMapping))
+			{
+				ddaRingAddPointer = ddaRingAddPointer->GetNext();
 			}
 		}
 	}
-	return magnitude;
-}
 
-// Normalise a vector, and also return its previous magnitude
-// If the vector is of 0 length, return a negative magnitude
-
-float Move::Normalise(float v[], int8_t dimensions)
-{
-	float magnitude = Magnitude(v, dimensions);
-	if(magnitude <= 0.0)
-		return -1.0;
-	Scale(v, 1.0/magnitude, dimensions);
-	return magnitude;
-}
-
-// Return the magnitude of a vector
-
-float Move::Magnitude(const float v[], int8_t dimensions)
-{
-	float magnitude = 0.0;
-	for(int8_t d = 0; d < dimensions; d++)
+	// See whether we need to kick off a move
+	DDA *cdda = currentDda;										// currentDda is volatile, so copy it
+	if (cdda == nullptr)
 	{
-		magnitude += v[d]*v[d];
+		// No DDA is executing, so start executing a new one if possible
+		DDA *dda = ddaRingGetPointer;
+		if (dda->GetState() == DDA::provisional)
+		{
+			dda->Prepare();
+		}
+		if (StartNextMove(Platform::GetInterruptClocks()))		// start the next move if none is executing already
+		{
+			cpu_irq_disable();
+			Interrupt();
+			cpu_irq_enable();
+		}
 	}
-	magnitude = sqrt(magnitude);
-	return magnitude;
-}
-
-// Multiply a vector by a scalar
-
-void Move::Scale(float v[], float scale, int8_t dimensions)
-{
-	for(int8_t d = 0; d < dimensions; d++)
+	else
 	{
-		v[d] = scale*v[d];
+		// See whether we need to prepare any moves
+		int32_t preparedTime = 0;
+		DDA::DDAState st;
+		while ((st = cdda->GetState()) == DDA:: completed || st == DDA::executing || st == DDA::frozen)
+		{
+			preparedTime += cdda->GetTimeLeft();
+			cdda = cdda->GetNext();
+		}
+
+		// If the number of prepared moves will execute in less than the minimum time, prepare another move
+		while (st == DDA::provisional && preparedTime < (int32_t)(DDA::stepClockRate/8))		// prepare moves one eighth of a second ahead of when they will be needed
+		{
+			cdda->Prepare();
+			preparedTime += cdda->GetTimeLeft();
+			cdda = cdda->GetNext();
+			st = cdda->GetState();
+		}
 	}
+
+	reprap.GetPlatform()->ClassReport("Move", longWait, moduleMove);
 }
 
-// Move a vector into the positive hyperquadrant
+uint32_t maxStepTime=0, maxCalcTime=0, minCalcTime = 999, maxReps = 0, sqrtErrors = 0, lastRes = 0; uint64_t lastNum = 0;	//DEBUG
 
-void Move::Absolute(float v[], int8_t dimensions)
+void Move::Diagnostics()
 {
-	for(int8_t d = 0; d < dimensions; d++)
-	{
-		v[d] = fabs(v[d]);
-	}
-}
+	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Move Diagnostics:\n");
 
-// These are the actual numbers we want in the positions, so don't transform them.
+	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxStepClocks: %u, minCalcClocks: %u, maxCalcClocks: %u, maxReps: %u, sqrtErrors: %u, lastRes: %u, lastNum: %" PRIu64 "\n",
+										maxStepTime, minCalcTime, maxCalcTime, maxReps, sqrtErrors, lastRes, lastNum);
+	maxStepTime = maxCalcTime = maxReps = 0;
+	minCalcTime = 999;
 
-void Move::SetPositions(float move[])
-{
-	for(uint8_t drive = 0; drive < DRIVES; drive++)
-	{
-		lastMove->SetDriveCoordinate(move[drive], drive);
-	}
-	lastMove->SetFeedRate(move[DRIVES]);
-}
-
-void Move::SetFeedrate(float feedRate)
-{
-	lastMove->SetFeedRate(feedRate);
-}
-
-
-void Move::Diagnostics() 
-{
-  platform->AppendMessage(BOTH_MESSAGE, "Move Diagnostics:\n");
-
-/*  if(active)
+#if 0
+  if(active)
     platform->Message(HOST_MESSAGE, " active\n");
   else
     platform->Message(HOST_MESSAGE, " not active\n");
-  
+
   platform->Message(HOST_MESSAGE, " look ahead ring count: ");
   snprintf(scratchString, STRING_LENGTH, "%d\n", lookAheadRingCount);
   platform->Message(HOST_MESSAGE, scratchString);
@@ -346,7 +278,7 @@ void Move::Diagnostics()
       platform->Message(HOST_MESSAGE, " dda: active\n");
     else
       platform->Message(HOST_MESSAGE, " dda: not active\n");
-    
+
   }
   if(ddaRingLocked)
     platform->Message(HOST_MESSAGE, " dda ring is locked\n");
@@ -355,331 +287,85 @@ void Move::Diagnostics()
   if(addNoMoreMoves)
     platform->Message(HOST_MESSAGE, " addNoMoreMoves is true\n\n");
   else
-    platform->Message(HOST_MESSAGE, " addNoMoreMoves is false\n\n"); 
-    */
+    platform->Message(HOST_MESSAGE, " addNoMoreMoves is false\n\n");
+#endif
 }
 
-// Return the untransformed machine coordinates
-// This returns false if it is not possible
-// to use the result as the basis for the
-// next move because the look ahead ring
-// is full.  True otherwise.
-
-bool Move::GetCurrentMachinePosition(float m[])
+// These are the actual numbers we want in the positions, so don't transform them.
+void Move::SetPositions(const float move[DRIVES])
 {
-  if(LookAheadRingFull())
-    return false;
-    
-  for(int8_t i = 0; i < DRIVES; i++)
-  {
-    if(i < AXES)
-    {
-      m[i] = lastMove->MachineToEndPoint(i);
-    }
-    else
-    {
-      m[i] = 0.0; //FIXME This resets extruders to 0.0, even the inactive ones (is this behaviour desired?)
-      //m[i] = lastMove->MachineToEndPoint(i); //FIXME TEST alternative that does not reset extruders to 0
-    }
-  }
-  if(currentFeedrate >= 0.0)
-  {
-    m[DRIVES] = currentFeedrate;
-  }
-  else
-  {
-    m[DRIVES] = lastMove->FeedRate();
-  }
-  currentFeedrate = -1.0;
-  return true;
-}
-
-// Return the transformed machine coordinates
-
-bool Move::GetCurrentUserPosition(float m[])
-{
-	if(!GetCurrentMachinePosition(m))
-		return false;
-	InverseTransform(m);
-	return true;
-}
-
-// Take an item from the look-ahead ring and add it to the DDA ring, if
-// possible.
-
-bool Move::DDARingAdd(LookAhead* lookAhead)
-{
-  if(GetDDARingLock())
-  {
-    if(DDARingFull())
-    {
-      ReleaseDDARingLock();
-      return false;
-    }
-    if(ddaRingAddPointer->Active())  // Should never happen...
-    {
-      platform->Message(BOTH_ERROR_MESSAGE, "Attempt to alter an active ring buffer entry!\n");
-      ReleaseDDARingLock();
-      return false;
-    }
-
-    // We don't care about Init()'s return value - that should all have been sorted out by LookAhead.
-    
-    float u, v;
-    ddaRingAddPointer->Init(lookAhead, u, v, false);
-    ddaRingAddPointer = ddaRingAddPointer->Next();
-    ReleaseDDARingLock();
-    return true;
-  }
-  return false;
-}
-
-// Get a movement from the DDA ring, if we can.
-
-DDA* Move::DDARingGet()
-{
-  DDA* result = NULL;
-  if(GetDDARingLock())
-  {
-    if(DDARingEmpty())
-    {
-      ReleaseDDARingLock();
-      return NULL;
-    }
-    result = ddaRingGetPointer;
-    ddaRingGetPointer = ddaRingGetPointer->Next();
-    ReleaseDDARingLock();
-    return result;
-  }
-  return NULL;
-}
-
-// Do the look-ahead calculations
-
-void Move::DoLookAhead()
-{
-  if(LookAheadRingEmpty())
-    return;
-  
-  // If there are a reasonable number of moves in there (LOOK_AHEAD), or if we are
-  // doing single moves with no other move immediately following on, run up and down
-  // the moves using the DDA Init() function to reduce the start or the end speed
-  // or both to the maximum that can be achieved because of the requirements of
-  // the adjacent moves. 
-    
-  if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > LOOK_AHEAD)
-  { 
-    
-    // Run up the moves
-    
-	LookAhead* n1 = lookAheadRingGetPointer;
-	LookAhead* n0 = n1->Previous();
-    while(n1 != lookAheadRingAddPointer)
-    {
-      if(!(n1->Processed() & complete))
-      {
-        if(n1->Processed() & vCosineSet)
-        {
-          float u = n0->V();
-          float v = n1->V();
-          if(lookAheadDDA->Init(n1, u, v, false) & change)
-          {
-            n0->SetV(u);
-            n1->SetV(v); 
-          }
-        }
-      }
-      n0 = n1;
-      n1 = n1->Next();
-    }
-    
-    // Now run down
-    
-    do
-    { 
-      if(!(n1->Processed() & complete))
-      {
-        if(n1->Processed() & vCosineSet)
-        {
-          float u = n0->V();
-          float v = n1->V();
-          if(lookAheadDDA->Init(n1, u, v, false) & change)
-          {
-            n0->SetV(u);
-            n1->SetV(v); 
-          }
-          n1->SetProcessed(complete);
-        }
-      }
-      n1 = n0;
-      n0 = n0->Previous();      
-    } while(n0 != lookAheadRingGetPointer);
-    n0->SetProcessed(complete);
-  }
-
-  // If there are any new unprocessed moves in there, set their end speeds
-  // according to the cosine of the angle between them.
-  
-  if(addNoMoreMoves || !gCodes->HaveIncomingData() || lookAheadRingCount > 1)
-  {
-	LookAhead* n1 = lookAheadRingGetPointer;
-	LookAhead* n0 = n1->Previous();
-	LookAhead* n2 = n1->Next();
-    while(n2 != lookAheadRingAddPointer)
-    {
-      if(n1->Processed() == unprocessed)
-      {
-    	float c = n1->V();
-        float m = fmin(n1->MinSpeed(), n2->MinSpeed());  // FIXME we use min as one move's max may not be able to cope with the min for the other.  But should this be max?
-        c = c*n1->Cosine();
-        if(c < m)
-        {
-        	c = m;
-        }
-        n1->SetV(c);
-        n1->SetProcessed(vCosineSet);
-      } 
-      n0 = n1;
-      n1 = n2;
-      n2 = n2->Next();
-    }
-
-    // If we are just doing one isolated move, set its end velocity to an appropriate minimum speed.
-
-    if(addNoMoreMoves || !gCodes->HaveIncomingData())
-    {
-    	n1->SetV(platform->InstantDv(platform->SlowestDrive())); // The next thing may be the slowest; be prepared.
-    	n1->SetProcessed(complete);
-    }
-  }
-}
-
-// This is the function that's called by the timer interrupt to step the motors.
-
-void Move::Interrupt()
-{
-  // Have we got a live DDA?
-  
-  if(dda == NULL)
-  {
-    // No - see if a new one is available.
-    
-    dda = DDARingGet();    
-    if(dda != NULL)
-    {
-      dda->Start();  // Yes - got it.  So fire it up.
-      dda->Step();   // And take the first step.
-    }
-    return;   
-  }
-  
-  // We have a DDA.  Has it finished?
-  
-  if(dda->Active())
-  {
-    // No - it's still live.  Step it and return.
-    
-    dda->Step();
-    return;
-  }
-  
-  // Yes - it's finished.  Throw it away so the code above will then find a new one.
-  
-  dda = NULL;
-}
-
-// Records a new lookahead object and adds it to the lookahead ring, returns false if it's full
-
-bool Move::LookAheadRingAdd(long ep[], float requestedFeedRate, float minSpeed, float maxSpeed, float acceleration, EndstopChecks ce)
-{
-    if(LookAheadRingFull())
-      return false;
-    if(!(lookAheadRingAddPointer->Processed() & released)) // Should never happen...
-    {
-      platform->Message(BOTH_ERROR_MESSAGE, "Attempt to alter a non-released lookahead ring entry!\n");
-      return false;
-    }
-    lookAheadRingAddPointer->Init(ep, requestedFeedRate, minSpeed, maxSpeed, acceleration, ce);
-    lastMove = lookAheadRingAddPointer;
-    lookAheadRingAddPointer = lookAheadRingAddPointer->Next();
-    lookAheadRingCount++;
-    return true;
-}
-
-
-LookAhead* Move::LookAheadRingGet()
-{
-  LookAhead* result;
-  if(LookAheadRingEmpty())
-    return NULL;
-  result = lookAheadRingGetPointer;
-  if(!(result->Processed() & complete))
-    return NULL;
-  lookAheadRingGetPointer = lookAheadRingGetPointer->Next();
-  lookAheadRingCount--;
-  return result;
-}
-
-// Do the bed transform AFTER the axis transform
-
-void Move::BedTransform(float xyzPoint[]) const
-{
-	if(identityBedTransform)
-		return;
-
-	switch(NumberOfProbePoints())
+	if (DDARingEmpty())
 	{
-	case 0:
-		return;
-
-	case 3:
-		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
-		break;
-
-	case 4:
-		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-		break;
-
-	case 5:
-		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-		break;
-
-	default:
-		platform->Message(BOTH_ERROR_MESSAGE, "BedTransform: wrong number of sample points.");
+		ddaRingAddPointer->GetPrevious()->SetPositions(move);
+	}
+	else
+	{
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "SetPositions called when DDA ring not empty\n");
 	}
 }
 
-// Invert the bed transform BEFORE the axis transform
-
-void Move::InverseBedTransform(float xyzPoint[]) const
+void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const
 {
-	if(identityBedTransform)
-		return;
-
-	switch(NumberOfProbePoints())
+	if (IsDeltaMode())
 	{
-	case 0:
-		return;
+		DeltaTransform(coords, ep);
+		for (size_t drive = AXES; drive < numDrives; ++drive)
+		{
+			ep[drive] = MotorEndPointToMachine(drive, coords[drive]);
+		}
+	}
+	else
+	{
+		for (size_t drive = 0; drive < DRIVES; drive++)
+		{
+			ep[drive] = MotorEndPointToMachine(drive, coords[drive]);
+		}
+	}
 
-	case 3:
-		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
-		break;
+}
 
-	case 4:
-		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-		break;
+void Move::SetFeedrate(float feedRate)
+{
+	if (DDARingEmpty())
+	{
+		DDA *lastMove = ddaRingAddPointer->GetPrevious();
+		currentFeedrate = feedRate;
+		lastMove->SetFeedRate(feedRate);
+	}
+	else
+	{
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "SetFeedrate called when DDA ring not empty\n");
+	}
+}
 
-	case 5:
-		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-		break;
+// Returns steps from units (mm) for a particular drive
+int32_t Move::MotorEndPointToMachine(size_t drive, float coord)
+{
+	return (int32_t)roundf(coord * reprap.GetPlatform()->DriveStepsPerUnit(drive));
+}
 
-	default:
-		platform->Message(BOTH_ERROR_MESSAGE, "InverseBedTransform: wrong number of sample points.");
+// Convert motor coordinates to machine coordinates
+// This is computationally expensive on a delta, so only call it when necessary, and never from the step ISR.
+void Move::MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_t numDrives) const
+{
+	if (IsDeltaMode())
+	{
+		InverseDeltaTransform(motorPos, machinePos);			// convert the axes
+		for (size_t drive = AXES; drive < numDrives; ++drive)
+		{
+			machinePos[drive] = MotorEndpointToPosition(motorPos[drive], drive);
+		}
+	}
+	else
+	{
+		for (size_t drive = 0; drive < numDrives; ++drive)
+		{
+			machinePos[drive] = MotorEndpointToPosition(motorPos[drive], drive);
+		}
 	}
 }
 
 // Do the Axis transform BEFORE the bed transform
-
 void Move::AxisTransform(float xyzPoint[]) const
 {
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
@@ -687,13 +373,11 @@ void Move::AxisTransform(float xyzPoint[]) const
 }
 
 // Invert the Axis transform AFTER the bed transform
-
 void Move::InverseAxisTransform(float xyzPoint[]) const
 {
 	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] - tanYZ*xyzPoint[Z_AXIS];
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] - (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
 }
-
 
 void Move::Transform(float xyzPoint[]) const
 {
@@ -707,6 +391,117 @@ void Move::InverseTransform(float xyzPoint[]) const
 	InverseAxisTransform(xyzPoint);
 }
 
+// Do the bed transform AFTER the axis transform
+void Move::BedTransform(float xyzPoint[]) const
+{
+	if (!identityBedTransform)
+	{
+		switch(NumberOfProbePoints())
+		{
+		case 0:
+			return;
+
+		case 3:
+			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
+			break;
+
+		case 4:
+			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+			break;
+
+		case 5:
+			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+			break;
+
+		default:
+			reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "BedTransform: wrong number of sample points.");
+		}
+	}
+}
+
+// Invert the bed transform BEFORE the axis transform
+void Move::InverseBedTransform(float xyzPoint[]) const
+{
+	if (!identityBedTransform)
+	{
+		switch(NumberOfProbePoints())
+		{
+		case 0:
+			return;
+
+		case 3:
+			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
+			break;
+
+		case 4:
+			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+			break;
+
+		case 5:
+			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+			break;
+
+		default:
+			reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "InverseBedTransform: wrong number of sample points.");
+		}
+	}
+}
+
+// Convert motor step positions to Cartesian machine coordinates.
+// Used after homing and after individual motor moves.
+// Because this is computationally expensive, we only call it when necessary, and never from the step ISR.
+void Move::InverseDeltaTransform(const int32_t motorPos[AXES], float machinePos[AXES]) const
+{
+	deltaParams.InverseTransform(
+			MotorEndpointToPosition(motorPos[A_AXIS], A_AXIS),
+			MotorEndpointToPosition(motorPos[B_AXIS], B_AXIS),
+			MotorEndpointToPosition(motorPos[C_AXIS], C_AXIS),
+			machinePos);
+
+	// We don't do inverse transforms very often, so if debugging is enabled, print them
+	if (reprap.Debug(moduleMove))
+	{
+		debugPrintf("Inverse transformed %d %d %d to %f %f %f\n", motorPos[0], motorPos[1], motorPos[2], machinePos[0], machinePos[1], machinePos[2]);
+	}
+}
+
+// Convert Cartesian coordinates to delta motor steps
+void Move::DeltaTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const
+{
+	for (size_t axis = 0; axis < AXES; ++axis)
+	{
+		motorPos[axis] = MotorEndPointToMachine(axis, deltaParams.Transform(machinePos, axis));
+	}
+
+	if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
+	{
+		debugPrintf("Transformed %f %f %f to %d %d %d\n", machinePos[0], machinePos[1], machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
+	}
+}
+
+void Move::SetIdentityTransform()
+{
+	identityBedTransform = true;
+}
+
+float Move::AxisCompensation(int8_t axis) const
+{
+	switch(axis)
+	{
+		case X_AXIS:
+			return tanXY;
+
+		case Y_AXIS:
+			return tanYZ;
+
+		case Z_AXIS:
+			return tanXZ;
+
+		default:
+			reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Axis compensation requested for non-existent axis.\n");
+	}
+	return 0.0;
+}
 
 void Move::SetAxisCompensation(int8_t axis, float tangent)
 {
@@ -722,7 +517,7 @@ void Move::SetAxisCompensation(int8_t axis, float tangent)
 		tanXZ = tangent;
 		break;
 	default:
-		platform->Message(BOTH_ERROR_MESSAGE, "SetAxisCompensation: dud axis.\n");
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "SetAxisCompensation: dud axis.\n");
 	}
 }
 
@@ -764,7 +559,7 @@ float Move::TriangleZ(float x, float y) const
 			return l1 * baryZBedProbePoints[i] + l2 * baryZBedProbePoints[j] + l3 * baryZBedProbePoints[4];
 		}
 	}
-	platform->Message(BOTH_ERROR_MESSAGE, "Triangle interpolation: point outside all triangles!");
+	reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Triangle interpolation: point outside all triangles!\n");
 	return 0.0;
 }
 
@@ -831,7 +626,7 @@ void Move::SetProbedBedEquation(StringRef& reply)
 		break;
 
 	default:
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to set bed compensation before all probe points have been recorded.");
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Attempt to set bed compensation before all probe points have been recorded.");
 	}
 
 	reply.copy("Bed equation fits points");
@@ -841,460 +636,286 @@ void Move::SetProbedBedEquation(StringRef& reply)
 	}
 }
 
-// FIXME
-// This function is never normally called.  It is a test to time
-// the interrupt function.  To activate it, uncomment the line that calls
-// this in Platform.ino.
-
-void Move::InterruptTime()
-{
-/*  char buffer[50];
-  float a[] = {1.0, 2.0, 3.0, 4.0, 5.0};
-  float b[] = {2.0, 3.0, 4.0, 5.0, 6.0};
-  float u = 50;
-  float v = 50;
-  lookAheadDDA->Init(a, b, u, v);
-  lookAheadDDA->Start(false);
-  float t = platform->Time();
-  for(long i = 0; i < 100000; i++) 
-    lookAheadDDA->Step(false);
-  t = platform->Time() - t;
-  platform->Message(HOST_MESSAGE, "Time for 100000 calls of the interrupt function: ");
-  snprintf(buffer, 50, "%ld", t);
-  platform->Message(HOST_MESSAGE, buffer);
-  platform->Message(HOST_MESSAGE, " microseconds.\n");*/
-}
-
-//****************************************************************************************************
-
-DDA::DDA(Move* m, Platform* p, DDA* n)
-{
-  active = false;
-  move = m;
-  platform = p;
-  next = n;
-}
-
 /*
-
-DDA::Init(...) 
-
-Sets up the DDA to take us between two positions and extrude states.
-The start velocity is u, and the end one is v.  The requested maximum feedrate
-is in myLookAheadEntry->FeedRate().
-
-Almost everything that needs to be done to set this up is also useful
-for GCode look-ahead, so this one function is used for both.  It flags when
-u and v cannot be satisfied with the distance available and reduces them 
-proportionately to give values that can just be achieved, which is why they
-are passed by reference.
-
-The return value is indicates if the move is a trapezium or triangle, and if
-the u and u values need to be changed.
-
-In the case of only extruders moving, the distance moved is taken to be the Pythagoran distance in
-the configuration space of the extruders.
-
-TODO: Worry about having more than eight drives
-
-*/
-
-MovementProfile DDA::AccelerationCalculation(float& u, float& v, MovementProfile result)
-{
-	// At which DDA step should we stop accelerating?  myLookAheadEntry->FeedRate() gives the desired feedrate.
-
-	float feedRate = myLookAheadEntry->FeedRate();
-	float d = 0.5*(feedRate*feedRate - u*u)/acceleration; // d = (v1^2 - v0^2)/2a
-	stopAStep = (long)roundf((d*totalSteps)/distance);
-
-	// At which DDA step should we start decelerating?
-
-	d = 0.5*(v*v - feedRate*feedRate)/acceleration;  // This should be 0 or negative...
-	startDStep = totalSteps + (long)roundf((d*totalSteps)/distance);
-
-	// If acceleration stop is at or after deceleration start, then the distance moved
-	// is not enough to get to full speed.
-
-	if(stopAStep >= startDStep)
-	{
-		result = noFlat;
-
-		// Work out the point at which to stop accelerating and then
-		// immediately start decelerating.
-
-		float dCross = 0.5*(0.5*(v*v - u*u)/acceleration + distance);
-
-		// dc42's better version
-
-		if(dCross < 0.0 || dCross > distance)
-		{
-			// With the acceleration available, it is not possible
-			// to satisfy u and v within the distance; reduce the greater of u and v
-			// to get ones that work and flag the fact.
-			// The result is two velocities that can just be accelerated
-			// or decelerated between over the distance to get
-			// from one to the other.
-
-			result = change;
-			float temp = 2.0 * acceleration * distance;
-			if (v > u)
-			{
-				// Accelerating, reduce v
-				v = sqrt((u * u) + temp);
-				dCross = distance;
-			}
-			else
-			{
-				// Decelerating, reduce u
-				u = sqrt((v * v) + temp);
-				dCross = 0.0;
-			}
-		}
-
-		// The DDA steps at which acceleration stops and deceleration starts
-
-		stopAStep = (long)((dCross*totalSteps)/distance);
-		startDStep = stopAStep + 1;
-	}
-
-	return result;
-}
-
-
-MovementProfile DDA::Init(LookAhead* lookAhead, float& u, float& v, bool debug)
-{
-  active = false;
-  myLookAheadEntry = lookAhead;
-  MovementProfile result = moving;
-  totalSteps = -1;
-  distance = 0.0;
-  const long* targetPosition = myLookAheadEntry->MachineCoordinates();
-  v = myLookAheadEntry->V();
-  const long* positionNow = myLookAheadEntry->Previous()->MachineCoordinates();
-  u = myLookAheadEntry->Previous()->V();
-  endStopsToCheck = myLookAheadEntry->EndStopsToCheck();
-  int8_t bigDirection = 0;
-
-  // How far are we going, both in steps and in mm?
-  
-  for(unsigned int drive = 0; drive < DRIVES; drive++)
-  {
-    if(drive < AXES) // X, Y, & Z
-    {
-      delta[drive] = targetPosition[drive] - positionNow[drive];  // XYZ Absolute
-    }
-    else
-    {
-      delta[drive] = targetPosition[drive];  // Es Relative
-    }
-
-    float d = myLookAheadEntry->MachineToEndPoint(drive, delta[drive]);
-    distance += d*d;
-    
-    if(delta[drive] >= 0)
-    {
-      directions[drive] = FORWARDS;
-    }
-    else
-    {
-      directions[drive] = BACKWARDS;
-      delta[drive] = -delta[drive];
-    }
-    
-    // Keep track of the biggest drive move in totalSteps
-    
-    if(delta[drive] > totalSteps)
-    {
-      totalSteps = delta[drive];
-      bigDirection = drive;
-    }
-  }
-  
-  // Not going anywhere?  Should have been chucked away before we got here.
-  
-  if(totalSteps <= 0)
-  {
-	if(reprap.Debug())
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "DDA.Init(): Null movement.\n");
-	}
-    myLookAheadEntry->Release();
-    return result;
-  }
-  
-  // Set up the DDA
-  
-  counter[0] = -totalSteps/2;
-  for(unsigned int drive = 1; drive < DRIVES; drive++)
-  {
-    counter[drive] = counter[0];
-  }
-  
-  // Acceleration and velocity calculations
-  
-  distance = sqrt(distance);
-  
-  // Decide the appropriate acceleration and instantDv values
-  // timeStep is set here to the distance of the
-  // biggest-move axis step.  It will be divided
-  // by a velocity later.
-
-  acceleration = lookAhead->Acceleration();
-  instantDv = lookAhead->MinSpeed();
-  timeStep = distance/(float)totalSteps;
-
-  result = AccelerationCalculation(u, v, result);
-  
-  // The initial velocity
-  
-  velocity = u;
-  
-// Sanity check
-  
-  if(velocity <= 0.0)
-  {
-    velocity = instantDv;
-    if(reprap.Debug())
-    {
-    	platform->Message(BOTH_ERROR_MESSAGE, "DDA.Init(): Zero or negative initial velocity!\n");
-    }
-  }
-  
-  // How far have we gone?
-  
-  stepCount = 0;
-  
-  // timeStep is an axis step distance at this point; divide it by the
-  // velocity to get time.
-  
-  timeStep = timeStep/velocity;
-  
-  if(debug)
-  {
-	  myLookAheadEntry->PrintMove();
-
-	  platform->Message(HOST_MESSAGE, "DDA startV: %.2f, distance: %.1f, steps: %d, stopA: %d, startD: %d, timestep: %.5f\n",
-			  velocity, distance, totalSteps, stopAStep, startDStep, timeStep);
-  }
-
-  return result;
-}
-
-void DDA::Start()
-{
-  for(int8_t drive = 0; drive < DRIVES; drive++)
-  {
-    platform->SetDirection(drive, directions[drive]);
-  }
-
-  platform->SetInterrupt(timeStep); // seconds
-  active = true;  
-}
-
-// This function is called from the ISR.
-// Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
-void DDA::Step()
-{
-  if(!active)
-    return;
-  
-  if(!move->active)
-	  return;
-
-  int drivesMoving = 0;
-  
-  for(size_t drive = 0; drive < DRIVES; drive++)
-  {
-    counter[drive] += delta[drive];
-    if(counter[drive] > 0)
-    {
-      platform->Step(drive);
-
-      counter[drive] -= totalSteps;
-      
-      drivesMoving |= 1<<drive;
-        
-      // Hit anything?
-  
-      if((endStopsToCheck & (1 << drive)) != 0)
-      {
-        switch(platform->Stopped(drive))
-        {
-        case lowHit:
-          move->HitLowStop(drive, myLookAheadEntry, this);
-          active = false;
-          break;
-        case highHit:
-          move->HitHighStop(drive, myLookAheadEntry, this);
-          active = false;
-          break;
-        case lowNear:
-          velocity = instantDv;		// slow down because we are getting close
-          break;
-        default:
-          break;
-        }
-      }        
-    }
-  }
-  
-  // May have hit a stop, so test active here
-  
-  if(active)
-  {
-	timeStep = distance/(totalSteps * velocity);	// dc42 use the average distance per step
-	//timeStep = move->stepDistances[drivesMoving]/velocity;
-      
-    // Simple Euler integration to get velocities.
-    // Maybe one day do a Runge-Kutta?
-  
-    if(stepCount < stopAStep)
-    {
-      velocity += acceleration*timeStep;
-      if (velocity > myLookAheadEntry->FeedRate())
-      {
-    	  velocity = myLookAheadEntry->FeedRate();
-      }
-    }
-    else if(stepCount >= startDStep)
-    {
-      velocity -= acceleration*timeStep;
-      if (velocity < instantDv)
-      {
-    	  velocity = instantDv;
-      }
-    }
-      
-    stepCount++;
-    active = stepCount < totalSteps;
-    
-    platform->SetInterrupt(timeStep);
-  }
-  
-  if(!active)
-  {
-	for(int8_t drive = 0; drive < DRIVES; drive++)
-	{
-		move->liveCoordinates[drive] = myLookAheadEntry->MachineToEndPoint(drive); // Don't use SetLiveCoordinates because that applies the transform
-	}
-	move->liveCoordinates[DRIVES] = myLookAheadEntry->FeedRate();
-    myLookAheadEntry->Release();
-    platform->SetInterrupt(STANDBY_INTERRUPT_RATE);
-  }
-}
-
-//***************************************************************************************************
-
-LookAhead::LookAhead(Move* m, Platform* p, LookAhead* n)
-{
-  move = m;
-  platform = p;
-  next = n;
-}
-
-void LookAhead::Init(long ep[], float fRate, float minS, float maxS, float acc, EndstopChecks ce)
-{
-  v = fRate;
-  requestedFeedrate = fRate;
-  minSpeed = minS;
-  maxSpeed = maxS;
-  acceleration = acc;
-
-  if(v < minSpeed)
-  {
-	  requestedFeedrate = minSpeed;
-	  v = minSpeed;
-  }
-  if(v > maxSpeed)
-  {
-	  requestedFeedrate = maxSpeed;
-	  v = maxSpeed;
-  }
-
-  for(int8_t i = 0; i < DRIVES; i++)
-  {
-    endPoint[i] = ep[i];
-  }
-  
-  endStopsToCheck = ce;
-  
-  // Cosines are lazily evaluated; flag this as unevaluated
-  
-  cosine = 2.0;
-    
-  // Only bother with lookahead when we are printing a file, so set processed complete when we aren't.
-  
-  processed = (reprap.GetGCodes()->HaveIncomingData())
-    			? unprocessed
-  	  	  	  	  : complete|vCosineSet;
-}
-
-
-// This returns the cosine of the angle between
-// the movement up to this, and the movement
-// away from this. Uses lazy evaluation.
-
-float LookAhead::Cosine()
-{
-  if(cosine < 1.5)
-    return cosine;
-    
-  cosine = 0.0;
-  float a2 = 0.0;
-  float b2 = 0.0;
-  float m1;
-  float m2;
-  for(int8_t drive = 0; drive < DRIVES; drive++)
-  {
-	m1 = MachineToEndPoint(drive);
-    m2 = Next()->MachineToEndPoint(drive) - m1;
-    m1 = m1 - Previous()->MachineToEndPoint(drive);
-    a2 += m1*m1;
-    b2 += m2*m2;
-    cosine += m1*m2;
-  }
-  
-  if(a2 <= 0.0 || b2 <= 0.0) // Avoid division by 0.0
-  {
-	cosine = 0.0;
-    return cosine;
-  }
- 
-  cosine = cosine/( (float)sqrt(a2) * (float)sqrt(b2) );
-  return cosine;
-}
-
-// Returns units (mm) from steps for a particular drive
-float LookAhead::MachineToEndPoint(int8_t drive, long coord)
-{
-	return ((float)coord)/reprap.GetPlatform()->DriveStepsPerUnit(drive);
-}
-
-// Returns steps from units (mm) for a particular drive
-long LookAhead::EndPointToMachine(int8_t drive, float coord)
-{
-	return (long)roundf(coord*reprap.GetPlatform()->DriveStepsPerUnit(drive));
-}
-
-void LookAhead::MoveAborted(float done)
-{
-	for (size_t drive = 0; drive < AXES; ++drive)
-	{
-		long prev = previous->endPoint[drive];
-		endPoint[drive] = prev + (long)((endPoint[drive] - prev) * done);
-	}
-	v = platform->InstantDv(platform->SlowestDrive());
-	cosine = 2.0;		// not sure this is needed
-}
-
-/*
- * For diagnostics
+ * Transform to a ruled-surface quadratic.  The corner points for interpolation are indexed:
+ *
+ *   ^  [1]      [2]
+ *   |
+ *   Y
+ *   |
+ *   |  [0]      [3]
+ *      -----X---->
+ *
+ *   The values of x and y are transformed to put them in the interval [0, 1].
  */
-
-void LookAhead::PrintMove()
+float Move::SecondDegreeTransformZ(float x, float y) const
 {
-	platform->Message(HOST_MESSAGE, "X,Y,Z: %.1f %.1f %.1f, min v: %.2f, max v: %.1f, acc: %.1f, feed: %.1f, u: %.3f, v: %.3f\n",
-			MachineToEndPoint(X_AXIS), MachineToEndPoint(Y_AXIS), MachineToEndPoint(Z_AXIS),
-			MinSpeed(), MaxSpeed(), Acceleration(), FeedRate(), Previous()->V(), V());
+	x = (x - xBedProbePoints[0])*xRectangle;
+	y = (y - yBedProbePoints[0])*yRectangle;
+	return (1.0 - x)*(1.0 - y)*zBedProbePoints[0] + x*(1.0 - y)*zBedProbePoints[3] + (1.0 - x)*y*zBedProbePoints[1] + x*y*zBedProbePoints[2];
 }
 
+// This is the function that's called by the timer interrupt to step the motors.
+void Move::Interrupt()
+{
+	bool again = true;
+	while (again && currentDda != nullptr)
+	{
+		again = currentDda->Step();
+	}
+}
+
+// This is called from the step ISR when the current move has been completed
+void Move::CurrentMoveCompleted()
+{
+	// Save the current motor coordinates, and the machine Cartesian coordinates if known
+	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
+
+	currentDda->Release();
+	currentDda = nullptr;
+	ddaRingGetPointer = ddaRingGetPointer->GetNext();
+}
+
+// Start the next move.
+bool Move::StartNextMove(uint32_t startTime)
+{
+	if (ddaRingGetPointer->GetState() == DDA::frozen)
+	{
+		currentDda = ddaRingGetPointer;
+		return currentDda->Start(startTime);
+	}
+	else
+	{
+		return false;
+	}
+}
+
+// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
+void Move::HitLowStop(size_t drive, DDA* hitDDA)
+{
+	float hitPoint = reprap.GetPlatform()->AxisMinimum(drive);
+	if (drive == Z_AXIS)
+	{
+		if (zProbing && reprap.GetGCodes()->GetAxisIsHomed(drive))
+		{
+			// Executing G32 and Z-axis has already been homed, so record the Z position at which we hit the end stop
+			hitDDA->SetStoppedHeight();
+			lastZHit = hitDDA->GetMotorPosition(drive) - reprap.GetPlatform()->ZProbeStopHeight();
+			return;
+		}
+		else
+		{
+			// Executing G30, so set the current Z height to the value at which the end stop is triggered
+			// OR executing the first move of a G32 and Z axis has not yet been homed
+			// Transform the height first so that the height is correct in user coordinates
+			lastZHit = 0.0;								// in case this is the first move of a G32
+			float xyzPoint[DRIVES];
+			LiveCoordinates(xyzPoint);
+			xyzPoint[Z_AXIS] = reprap.GetPlatform()->ZProbeStopHeight();
+			Transform(xyzPoint);
+			hitPoint = xyzPoint[Z_AXIS];
+		}
+	}
+	int32_t coord = MotorEndPointToMachine(drive, hitPoint);
+	hitDDA->SetDriveCoordinate(coord, drive);
+	reprap.GetGCodes()->SetAxisIsHomed(drive);
+}
+
+// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
+void Move::HitHighStop(size_t drive, DDA* hitDDA)
+{
+	if (drive < AXES)		// should always be true
+	{
+		float position = (IsDeltaMode())
+							? deltaParams.GetHomedCarriageHeight(drive)
+							        // this is a delta printer, so the motor is at the homed carriage height for this drive
+							: reprap.GetPlatform()->AxisMaximum(drive);
+									// this is a Cartesian printer, so we're at the maximum for this axis
+		hitDDA->SetDriveCoordinate(MotorEndPointToMachine(drive, position), drive);
+		reprap.GetGCodes()->SetAxisIsHomed(drive);
+	}
+}
+
+// Return the untransformed machine coordinates
+void Move::GetCurrentMachinePosition(float m[DRIVES + 1], bool disableDeltaMapping) const
+{
+	DDA *lastQueuedMove = ddaRingAddPointer->GetPrevious();
+	for (size_t i = 0; i < DRIVES; i++)
+	{
+		if (i < AXES)
+		{
+			m[i] = lastQueuedMove->GetEndCoordinate(i, disableDeltaMapping);
+		}
+		else
+		{
+			m[i] = 0.0;
+		}
+	}
+	m[DRIVES] = currentFeedrate;
+}
+
+/*static*/ float Move::MotorEndpointToPosition(int32_t endpoint, size_t drive)
+{
+	return ((float)(endpoint))/reprap.GetPlatform()->DriveStepsPerUnit(drive);
+}
+
+// Return the transformed machine coordinates
+void Move::GetCurrentUserPosition(float m[DRIVES + 1], bool disableDeltaMapping) const
+{
+	GetCurrentMachinePosition(m, disableDeltaMapping);
+	if (!disableDeltaMapping)
+	{
+		InverseTransform(m);
+	}
+}
+
+// Return the current live XYZ and extruder coordinates
+// Interrupts are assumed enabled on entry, so do not call this from an ISR
+void Move::LiveCoordinates(float m[DRIVES])
+{
+	// The live coordinates and live endpoints are modified by the ISR, to be careful to get a self-consistent set of them
+	cpu_irq_disable();
+	if (liveCoordinatesValid)
+	{
+		// All coordinates are valid, so copy them across
+		memcpy(m, const_cast<const float *>(liveCoordinates), sizeof(m[0]) * DRIVES);
+		cpu_irq_enable();
+	}
+	else
+	{
+		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
+		memcpy(m + AXES, const_cast<const float *>(liveCoordinates + AXES), sizeof(m[0]) * (DRIVES - AXES));
+		int32_t tempEndPoints[AXES];
+		memcpy(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints));
+		cpu_irq_enable();
+		MachineToEndPoint(tempEndPoints, m, AXES);		// this is slow, so do it with interrupts enabled
+
+		// If the ISR has not updated the endpoints, store the live coordinates back so that we don't need to do it again
+		cpu_irq_disable();
+		if (memcmp(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints)) == 0)
+		{
+			memcpy(const_cast<float *>(liveCoordinates), m, sizeof(m[0]) * AXES);
+			liveCoordinatesValid = true;
+		}
+		cpu_irq_enable();
+	}
+	InverseTransform(m);
+}
+
+// These are the actual numbers that we want to be the coordinates, so don't transform them.
+// Interrupts are assumed enabled on entry, so do not call this from an ISR
+void Move::SetLiveCoordinates(const float coords[])
+{
+	cpu_irq_disable();
+	for(size_t drive = 0; drive <= DRIVES; drive++)
+	{
+		liveCoordinates[drive] = coords[drive];
+	}
+	liveCoordinatesValid = true;
+	EndPointToMachine(coords, const_cast<int32_t *>(liveEndPoints), AXES);
+	cpu_irq_enable();
+}
+
+void Move::SetXBedProbePoint(int index, float x)
+{
+	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	{
+		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point  X index out of range.\n");
+		return;
+	}
+	xBedProbePoints[index] = x;
+	probePointSet[index] |= xSet;
+}
+
+void Move::SetYBedProbePoint(int index, float y)
+{
+	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	{
+		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Y index out of range.\n");
+		return;
+	}
+	yBedProbePoints[index] = y;
+	probePointSet[index] |= ySet;
+}
+
+void Move::SetZBedProbePoint(int index, float z)
+{
+	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	{
+		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Z index out of range.\n");
+		return;
+	}
+	zBedProbePoints[index] = z;
+	probePointSet[index] |= zSet;
+}
+
+float Move::XBedProbePoint(int index) const
+{
+	return xBedProbePoints[index];
+}
+
+float Move::YBedProbePoint(int index) const
+{
+	return yBedProbePoints[index];
+}
+
+float Move::ZBedProbePoint(int index) const
+{
+	return zBedProbePoints[index];
+}
+
+void Move::SetZProbing(bool probing)
+{
+	zProbing = probing;
+}
+
+float Move::GetLastProbedZ() const
+{
+	return lastZHit;
+}
+
+bool Move::AllProbeCoordinatesSet(int index) const
+{
+	return probePointSet[index] == (xSet | ySet | zSet);
+}
+
+bool Move::XYProbeCoordinatesSet(int index) const
+{
+	return (probePointSet[index]  & xSet) && (probePointSet[index]  & ySet);
+}
+
+int Move::NumberOfProbePoints() const
+{
+	for(int i = 0; i < NUMBER_OF_PROBE_POINTS; i++)
+	{
+		if(!AllProbeCoordinatesSet(i))
+		{
+			return i;
+		}
+	}
+	return NUMBER_OF_PROBE_POINTS;
+}
+
+int Move::NumberOfXYProbePoints() const
+{
+	for(int i = 0; i < NUMBER_OF_PROBE_POINTS; i++)
+	{
+		if(!XYProbeCoordinatesSet(i))
+		{
+			return i;
+		}
+	}
+	return NUMBER_OF_PROBE_POINTS;
+}
+
+// For debugging
+void Move::PrintCurrentDda() const
+{
+	if (currentDda != nullptr)
+	{
+		currentDda->DebugPrint();
+		reprap.GetPlatform()->GetLine()->Flush();
+	}
+}
+
+// End

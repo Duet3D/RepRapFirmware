@@ -20,7 +20,7 @@
  ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-#include "DueFlashStorage.h"						// comment this out if you don't want to build with Flash support
+#include "DueFlashStorage.h"
 #if LWIP_STATS
 #include "lwip/src/include/lwip/stats.h"
 #endif
@@ -34,6 +34,16 @@ static uint32_t fanInterruptCount = 0;				// accessed only in ISR, so no need to
 const uint32_t fanMaxInterruptCount = 32;			// number of fan interrupts that we average over
 static volatile uint32_t fanLastResetTime = 0;		// time (microseconds) at which we last reset the interrupt count, accessed inside and outside ISR
 static volatile uint32_t fanInterval = 0;			// written by ISR, read outside the ISR
+
+//#define MOVE_DEBUG
+
+#ifdef MOVE_DEBUG
+unsigned int numInterruptsScheduled = 0;
+unsigned int numInterruptsExecuted = 0;
+uint32_t nextInterruptTime = 0;
+uint32_t nextInterruptScheduledAt = 0;
+uint32_t lastInterruptTime = 0;
+#endif
 
 // Arduino initialise and loop functions
 // Put nothing in these other than calls to the RepRap equivalents
@@ -124,9 +134,6 @@ void Platform::Init()
 	SerialUSB.begin(BAUD_RATE);
 	Serial.begin(BAUD_RATE);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 
-#ifdef DUEFLASHSTORAGE_H
-	DueFlashStorage::init();
-
 # if __cplusplus >= 201103L
 	static_assert(sizeof(nvData) <= 1024, "NVData too large");
 # else
@@ -138,7 +145,6 @@ void Platform::Init()
 		BadStaticAssert();
 	}
 # endif
-#endif
 
 	ResetNvData();
 
@@ -168,8 +174,7 @@ void Platform::Init()
 	ARRAY_INIT(directions, DIRECTIONS);
 	ARRAY_INIT(enablePins, ENABLE_PINS);
 	ARRAY_INIT(disableDrives, DISABLE_DRIVES);
-	ARRAY_INIT(lowStopPins, LOW_STOP_PINS);
-	ARRAY_INIT(highStopPins, HIGH_STOP_PINS);
+	ARRAY_INIT(endStopPins, END_STOP_PINS);
 	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
 	ARRAY_INIT(accelerations, ACCELERATIONS);
 	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
@@ -226,16 +231,18 @@ void Platform::Init()
 		{
 			pinModeNonDue(enablePins[drive], OUTPUT);
 		}
-		if (lowStopPins[drive] >= 0)
+		if (endStopPins[drive] >= 0)
 		{
-			pinModeNonDue(lowStopPins[drive], INPUT_PULLUP);
-		}
-		if (highStopPins[drive] >= 0)
-		{
-			pinModeNonDue(highStopPins[drive], INPUT_PULLUP);
+			pinModeNonDue(endStopPins[drive], INPUT_PULLUP);
 		}
 		Disable(drive);
 		driveEnabled[drive] = false;
+		SetElasticComp(drive, 0.0);
+		if (drive < AXES)
+		{
+			endStopType[drive] = lowEndStop;		// assume all endstops are low endstops
+			endStopLogicLevel[drive] = true;
+		}
 	}
 
 	for (size_t heater = 0; heater < HEATERS; heater++)
@@ -298,10 +305,12 @@ int Platform::GetThermistorNumber(size_t heater) const
 void Platform::SetSlowestDrive()
 {
 	slowestDrive = 0;
-	for(int8_t drive = 1; drive < DRIVES; drive++)
+	for (size_t drive = 1; drive < DRIVES; drive++)
 	{
-		if(InstantDv(drive) < InstantDv(slowestDrive))
+		if (ConfiguredInstantDv(drive) < ConfiguredInstantDv(slowestDrive))
+		{
 			slowestDrive = drive;
+		}
 	}
 }
 
@@ -526,22 +535,20 @@ void Platform::ResetNvData()
 		pp.adcLowOffset = pp.adcHighOffset = 0.0;
 	}
 
-	nvData.resetReason = 0;
-	GetStackUsage(NULL, NULL, &nvData.neverUsedRam);
-#ifdef DUEFLASHSTORAGE_H
+#if FLASH_SAVE_ENABLED
 	nvData.magic = FlashData::magicValue;
 #endif
 }
 
 void Platform::ReadNvData()
 {
-#ifdef DUEFLASHSTORAGE_H
-	DueFlashStorage::read(nvAddress, &nvData, sizeof(nvData));
+#if FLASH_SAVE_ENABLED
+	DueFlashStorage::read(FlashData::nvAddress, &nvData, sizeof(nvData));
 	if (nvData.magic != FlashData::magicValue)
 	{
 		// Nonvolatile data has not been initialized since the firmware was last written, so set up default values
 		ResetNvData();
-		WriteNvData();
+		// No point in writing it back here
 	}
 #else
 	Message(BOTH_ERROR_MESSAGE, "Cannot load non-volatile data, because Flash support has been disabled!");
@@ -550,8 +557,8 @@ void Platform::ReadNvData()
 
 void Platform::WriteNvData()
 {
-#ifdef DUEFLASHSTORAGE_H
-	DueFlashStorage::write(nvAddress, &nvData, sizeof(nvData));
+#if FLASH_SAVE_ENABLED
+	DueFlashStorage::write(FlashData::nvAddress, &nvData, sizeof(nvData));
 #else
 	Message(BOTH_ERROR_MESSAGE, "Cannot write non-volatile data, because Flash support has been disabled!");
 #endif
@@ -559,7 +566,7 @@ void Platform::WriteNvData()
 
 void Platform::SetAutoSave(bool enabled)
 {
-#ifdef DUEFLASHSTORAGE_H
+#if FLASH_SAVE_ENABLED
 	autoSaveEnabled = enabled;
 #else
 	Message(BOTH_ERROR_MESSAGE, "Cannot enable auto-save, because Flash support has been disabled!");
@@ -668,7 +675,7 @@ void Platform::Spin()
 	line->Spin();
 	aux->Spin();
 
-	ClassReport("Platform", longWait);
+	ClassReport("Platform", longWait, modulePlatform);
 
 }
 
@@ -690,14 +697,12 @@ void Platform::SoftwareReset(uint16_t reason)
 		}
 	}
 
-	if (reason != 0 || reason != nvData.resetReason)
-	{
-		// zpl-2014-11-03: Here we must ensure that no changed values are saved, so load last-known values first
-		ReadNvData();
-		nvData.resetReason = reason;
-		GetStackUsage(NULL, NULL, &nvData.neverUsedRam);
-		WriteNvData();
-	}
+	// Write the reason for the software reset to flash
+	SoftwareResetData temp;
+	temp.magic = SoftwareResetData::magicValue;
+	temp.resetReason = reason;
+	GetStackUsage(NULL, NULL, &temp.neverUsedRam);
+	DueFlashStorage::write(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
 
 	rstc_start_software_reset(RSTC);
 	for(;;) {}
@@ -709,7 +714,11 @@ void Platform::SoftwareReset(uint16_t reason)
 
 void TC3_Handler()
 {
-	TC_GetStatus(TC1, 0);
+	TC1->TC_CHANNEL[0].TC_IDR = TC_IER_CPAS;	// disable the interrupt
+#ifdef MOVE_DEBUG
+	++numInterruptsExecuted;
+	lastInterruptTime = Platform::GetInterruptClocks();
+#endif
 	reprap.Interrupt();
 }
 
@@ -734,18 +743,21 @@ void FanInterrupt()
 void Platform::InitialiseInterrupts()
 {
 	// Timer interrupt for stepper motors
+	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
+	// We choose a clock divisor of 32, which gives us 0.38us resolution. The next option is 128 which would give 1.524us resolution.
 	pmc_set_writeprotect(false);
 	pmc_enable_periph_clk((uint32_t) TC3_IRQn);
-	TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK4);
-	TC1 ->TC_CHANNEL[0].TC_IER = TC_IER_CPCS;
-	TC1 ->TC_CHANNEL[0].TC_IDR = ~TC_IER_CPCS;
-	SetInterrupt(STANDBY_INTERRUPT_RATE);
+	TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK3);
+	TC1 ->TC_CHANNEL[0].TC_IDR = ~(uint32_t)0;				// interrupts disabled for now
+	TC_Start(TC1, 0);
+	TC_GetStatus(TC1, 0);									// clear any pending interrupt
+	NVIC_EnableIRQ(TC3_IRQn);
 
-	// Timer interrupt to keep the networking timers running (called at 8Hz)
+	// Timer interrupt to keep the networking timers running (called at 16Hz)
 	pmc_enable_periph_clk((uint32_t) TC4_IRQn);
 	TC_Configure(TC1, 1, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK2);
-	uint32_t rc = VARIANT_MCK/8/16; // 8 because we selected TIMER_CLOCK2 above
-	TC_SetRA(TC1, 1, rc/2); // 50% high, 50% low
+	uint32_t rc = (VARIANT_MCK/8)/16;						// 8 because we selected TIMER_CLOCK2 above
+	TC_SetRA(TC1, 1, rc/2);									// 50% high, 50% low
 	TC_SetRC(TC1, 1, rc);
 	TC_Start(TC1, 1);
 	TC1 ->TC_CHANNEL[1].TC_IER = TC_IER_CPCS;
@@ -762,26 +774,44 @@ void Platform::InitialiseInterrupts()
 	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
-void Platform::SetInterrupt(float s) // Seconds
+#pragma GCC push_options
+#pragma GCC optimize ("O3")
+
+// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already
+/*static*/ bool Platform::ScheduleInterrupt(uint32_t tim)
 {
-	if (s <= 0.0)
+	irqflags_t flags = cpu_irq_save();						// disable interrupts
+	TC_SetRA(TC1, 0, tim);									// set up the compare register
+	TC_GetStatus(TC1, 0);									// clear any pending interrupt
+	int32_t diff = (int32_t)(tim - TC_ReadCV(TC1, 0));		// see how long we have to go
+	bool ret;
+	if (diff < 2)											// if less than 0.5us or already passed
 	{
-		//NVIC_DisableIRQ(TC3_IRQn);
-		Message(BOTH_ERROR_MESSAGE, "Negative interrupt!\n");
-		s = STANDBY_INTERRUPT_RATE;
+		ret = true;											// tell the caller to simulate an interrupt instead
 	}
-	uint32_t rc = (uint32_t)( (((long)(TIME_TO_REPRAP*s))*84l)/128l );
-	TC_SetRA(TC1, 0, rc/2); //50% high, 50% low
-	TC_SetRC(TC1, 0, rc);
-	TC_Start(TC1, 0);
-	NVIC_EnableIRQ(TC3_IRQn);
+	else
+	{
+		ret = false;
+		TC1 ->TC_CHANNEL[0].TC_IER = TC_IER_CPAS;			// enable the interrupt
+#ifdef MOVE_DEBUG
+		++numInterruptsScheduled;
+		nextInterruptTime = tim;
+		nextInterruptScheduledAt = Platform::GetInterruptClocks();
+#endif
+	}
+	cpu_irq_restore(flags);									// restore interrupt enable status
+	return ret;
 }
 
-//void Platform::DisableInterrupts()
-//{
-//	NVIC_DisableIRQ(TC3_IRQn);
-//	NVIC_DisableIRQ(TC4_IRQn);
-//}
+#pragma GCC pop_options
+
+#if 0	// not used
+void Platform::DisableInterrupts()
+{
+	NVIC_DisableIRQ(TC3_IRQn);
+	NVIC_DisableIRQ(TC4_IRQn);
+}
+#endif
 
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
@@ -794,6 +824,9 @@ void Platform::SetInterrupt(float s) // Seconds
 //     We do this here because the usual polling loop sometimes gets stuck trying to send data to the USB port.
 
 //#define TIME_TICK_ISR	1		// define this to store the tick ISR time in errorCodeBits
+
+#pragma GCC push_options
+#pragma GCC optimize ("O3")
 
 void Platform::Tick()
 {
@@ -860,21 +893,21 @@ void Platform::Tick()
 #endif
 }
 
-/*static*/uint16_t Platform::GetAdcReading(adc_channel_num_t chan)
+/*static*/ uint16_t Platform::GetAdcReading(adc_channel_num_t chan)
 {
 	uint16_t rslt = (uint16_t) adc_get_channel_value(ADC, chan);
 	adc_disable_channel(ADC, chan);
 	return rslt;
 }
 
-/*static*/void Platform::StartAdcConversion(adc_channel_num_t chan)
+/*static*/ void Platform::StartAdcConversion(adc_channel_num_t chan)
 {
 	adc_enable_channel(ADC, chan);
 	adc_start(ADC );
 }
 
 // Convert an Arduino Due pin number to the corresponding ADC channel number
-/*static*/adc_channel_num_t Platform::PinToAdcChannel(int pin)
+/*static*/ adc_channel_num_t Platform::PinToAdcChannel(int pin)
 {
 	if (pin < A0)
 	{
@@ -883,12 +916,15 @@ void Platform::Tick()
 	return (adc_channel_num_t) (int) g_APinDescription[pin].ulADCChannelNumber;
 }
 
+#pragma GCC pop_options
+
 //*************************************************************************************************
 
 // This diagnostics function is the first to be called, so it calls Message to start with.
 // All other messages generated by this and other diagnostics functions must call AppendMessage.
 void Platform::Diagnostics()
 {
+	ReadNvData();					// need to do this to get the software reset code
 	Message(BOTH_MESSAGE, "Platform Diagnostics:\n");
 
 	// Print memory stats and error codes to USB and copy them to the current webserver reply
@@ -912,7 +948,15 @@ void Platform::Diagnostics()
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
 
 	// Show the error code stored at the last software reset
-	AppendMessage(BOTH_MESSAGE, "Last software reset code & available RAM: 0x%04x, %u\n", nvData.resetReason, nvData.neverUsedRam);
+	{
+		SoftwareResetData temp;
+		temp.magic = 0;
+		DueFlashStorage::read(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
+		if (temp.magic == SoftwareResetData::magicValue)
+		{
+			AppendMessage(BOTH_MESSAGE, "Last software reset code & available RAM: 0x%04x, %u\n", temp.resetReason, temp.neverUsedRam);
+		}
+	}
 
 	// Show the current error codes
 	AppendMessage(BOTH_MESSAGE, "Error status: %u\n", errorCodeBits);
@@ -943,10 +987,15 @@ void Platform::Diagnostics()
 
 #if LWIP_STATS
 	// Normally we should NOT try to display LWIP stats here, because it uses debugPrintf(), which will hang the system is no USB cable is connected.
-	if (reprap.Debug())
+	if (reprap.Debug(moduleNetwork))
 	{
 		stats_display();
 	}
+#endif
+
+#ifdef MOVE_DEBUG
+	AppendMessage(BOTH_MESSAGE, "Interrupts scheduled %u, done %u, last %u, next %u sched at %u, now %u\n",
+			numInterruptsScheduled, numInterruptsExecuted, lastInterruptTime, nextInterruptTime, nextInterruptScheduledAt, GetInterruptClocks());
 #endif
 }
 
@@ -982,14 +1031,17 @@ void Platform::GetStackUsage(size_t* currentStack, size_t* maxStack, size_t* nev
 	if (neverUsed) { *neverUsed = stack_lwm - heapend; }
 }
 
-void Platform::ClassReport(const char* className, float &lastTime)
+void Platform::ClassReport(const char* className, float &lastTime, Module m)
 {
-	if (!reprap.Debug())
-		return;
-	if (Time() - lastTime < LONG_TIME)
-		return;
-	lastTime = Time();
-	Message(HOST_MESSAGE, "Class %s spinning.\n", className);
+	if (reprap.Debug(m))
+	{
+		if (Time() - lastTime < LONG_TIME)
+		{
+			return;
+		}
+		lastTime = Time();
+		Message(HOST_MESSAGE, "Class %s spinning.\n", className);
+	}
 }
 
 //===========================================================================
@@ -1069,63 +1121,52 @@ void Platform::SetHeater(size_t heater, float power)
 	analogWriteNonDue(heatOnPins[heater], (HEAT_ON == 0) ? 255 - p : p);
 }
 
-EndStopHit Platform::Stopped(int8_t drive)
+EndStopHit Platform::Stopped(size_t drive)
 {
 	if (nvData.zProbeType > 0 && drive < AXES && nvData.zProbeAxes[drive])
 	{
 		int zProbeVal = ZProbe();
 		int zProbeADValue =
-				(nvData.zProbeType == 3) ?
-						nvData.alternateZProbeParameters.adcValue : nvData.irZProbeParameters.adcValue;
-		if (zProbeVal >= zProbeADValue)
-			return lowHit;
-		else if (zProbeVal * 10 >= zProbeADValue * 9)	// if we are at/above 90% of the target value
-			return lowNear;
-		else
-			return noStop;
+				(nvData.zProbeType == 3) ? nvData.alternateZProbeParameters.adcValue
+					: nvData.irZProbeParameters.adcValue;
+		return (zProbeVal >= zProbeADValue) ? lowHit
+				: (zProbeVal * 10 >= zProbeADValue * 9) ? lowNear	// if we are at/above 90% of the target value
+					: noStop;
 	}
 
-	if (lowStopPins[drive] >= 0)
+	if (endStopPins[drive] >= 0 && endStopType[drive] != noEndStop)
 	{
-		if (digitalReadNonDue(lowStopPins[drive]) == ENDSTOP_HIT)
-			return lowHit;
-	}
-	if (highStopPins[drive] >= 0)
-	{
-		if (digitalReadNonDue(highStopPins[drive]) == ENDSTOP_HIT)
-			return highHit;
+		if (digitalReadNonDue(endStopPins[drive]) == ((endStopLogicLevel[drive]) ? 1 : 0))
+		{
+			return (endStopType[drive] == highEndStop) ? highHit : lowHit;
+		}
 	}
 	return noStop;
 }
 
-void Platform::SetDirection(byte drive, bool direction)
+void Platform::SetDirection(size_t drive, bool direction, bool enable)
 {
-	if(directionPins[drive] < 0)
-		return;
-
-	bool d = (direction == FORWARDS) ? directions[drive] : !directions[drive];
-	digitalWriteNonDue(directionPins[drive], d);
-}
-
-void Platform::Disable(byte drive)
-{
-	if(enablePins[drive] < 0)
-		  return;
-	digitalWriteNonDue(enablePins[drive], DISABLE);
-	driveEnabled[drive] = false;
-}
-
-void Platform::Step(byte drive)
-{
-	if(stepPins[drive] < 0)
-		return;
-	if(!driveEnabled[drive] && enablePins[drive] >= 0)
+	const int pin = directionPins[drive];
+	if (pin >= 0)
 	{
-		digitalWriteNonDue(enablePins[drive], ENABLE);
-		driveEnabled[drive] = true;
+		if (enable && !driveEnabled[drive] && enablePins[drive] >= 0)
+		{
+			digitalWriteNonDue(enablePins[drive], ENABLE);
+			driveEnabled[drive] = true;
+		}
+		bool d = (direction == FORWARDS) ? directions[drive] : !directions[drive];
+		digitalWriteNonDue(pin, d);
 	}
-	digitalWriteNonDue(stepPins[drive], 0);
-	digitalWriteNonDue(stepPins[drive], 1);
+}
+
+void Platform::Disable(size_t drive)
+{
+	const int pin = enablePins[drive];
+	if (pin >= 0)
+	{
+		digitalWriteNonDue(pin, DISABLE);
+		driveEnabled[drive] = false;
+	}
 }
 
 // current is in mA
@@ -1150,7 +1191,7 @@ void Platform::SetMotorCurrent(byte drive, float current)
 }
 
 
-float Platform::MotorCurrent(byte drive)
+float Platform::MotorCurrent(size_t drive)
 {
 	unsigned short pot;
 	if (drive < 4)
@@ -1250,8 +1291,13 @@ void Platform::Message(char type, const char* message, ...)
 {
 	va_list vargs;
 	va_start(vargs, message);
-	messageString.vprintf(message, vargs);
+	Message(type, message, vargs);
 	va_end(vargs);
+}
+
+void Platform::Message(char type, const char* message, va_list vargs)
+{
+	messageString.vprintf(message, vargs);
 	Message(type, messageString);
 }
 
@@ -1408,6 +1454,22 @@ void Platform::SetAtxPower(bool on)
 }
 
 
+void Platform::SetElasticComp(size_t drive, float factor)
+{
+	if (drive < DRIVES)
+	{
+		elasticComp[drive] = factor;
+	}
+}
+
+float Platform::ActualInstantDv(size_t drive) const
+{
+	float idv = instantDvs[drive];
+	float eComp = elasticComp[drive];
+	// If we are4 using elastic compensation then we need to limit the instantDv to avoid velocityt mismatches
+	return (eComp <= 0.0) ? idv : min<float>(idv, 1.0/(eComp * driveStepsPerUnit[drive]));
+}
+
 /*********************************************************************************
 
  Files & Communication
@@ -1469,10 +1531,10 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 	{
 		while (directory[in] != 0 && directory[in] != '\n')
 		{
-			scratchString[out] = directory[in];
+			combinedName[out] = directory[in];
 			in++;
 			out++;
-			if (out >= STRING_LENGTH)
+			if (out >= ARRAY_SIZE(combinedName))
 			{
 				platform->Message(BOTH_ERROR_MESSAGE, "CombineName() buffer overflow.");
 				out = 0;
@@ -1480,27 +1542,27 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 		}
 	}
 
-	if (in > 0 && directory[in -1] != '/' && out < STRING_LENGTH -1)
+	if (in > 0 && directory[in -1] != '/' && out < ARRAY_UPB(combinedName))
 	{
-		scratchString[out] = '/';
+		combinedName[out] = '/';
 		out++;
 	}
 
 	in = 0;
 	while (fileName[in] != 0 && fileName[in] != '\n')
 	{
-		scratchString[out] = fileName[in];
+		combinedName[out] = fileName[in];
 		in++;
 		out++;
-		if (out >= STRING_LENGTH)
+		if (out >= ARRAY_SIZE(combinedName))
 		{
 			platform->Message(BOTH_ERROR_MESSAGE, "CombineName() buffer overflow.");
 			out = 0;
 		}
 	}
-	scratchString[out] = 0;
+	combinedName[out] = 0;
 
-	return scratchString;
+	return combinedName;
 }
 
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
@@ -2134,6 +2196,14 @@ void Line::TryFlushOutput()
 		--inWrite;
 		outputGetIndex = (outputGetIndex + 1) % lineOutBufSize;
 		--outputNumChars;
+	}
+}
+
+void Line::Flush()
+{
+	while (outputNumChars != 0)
+	{
+		TryFlushOutput();
 	}
 }
 
