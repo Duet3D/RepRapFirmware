@@ -4,7 +4,7 @@ G90
 M558 P1
 G1 X-240 F2000 S1
 G92 X0
-G1 X3 F200
+G1 X3 F500
 G1 X-30 S1
 G92 X0
 G1 X15 F500 ; adjust the X value to put the nozzle on the edge of the bed

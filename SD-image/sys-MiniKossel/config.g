@@ -20,7 +20,7 @@ M569 P1 S1							; Drive 1 goes forwards
 M569 P2 S1							; Drive 2 goes forwards
 M569 P3 S1							; Drive 3 goes forwards
 M569 P4 S1							; Drive 4 goes forwards
-M574 X2 Y2 Z2 P1					; set endstop configuration (all endstops at high end, active high)
+M574 X2 Y2 Z2 S1					; set endstop configuration (all endstops at high end, active high)
 ;*** The homed height is deliberately set too high in the following - you will adjust it during calibration
 M665 R105.6 L215.0 B85 H240			; set delta radius, diagonal rod length, printable radius and homed height
 M666 X0 Y0 Z0						; put your endstop adjustments here

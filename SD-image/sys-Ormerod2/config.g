@@ -12,7 +12,7 @@ M555 P2                             ; Set output to look like Marlin
 G21                                 ; Work in millimetres
 G90                                 ; Send absolute coordinates...
 M83                                 ; ...but relative extruder moves
-M574 X0 Y1 Z0 P1					; set endstop configuration (Y endstop only, at low end, active high)
+M574 X0 Y1 Z0 S1					; set endstop configuration (Y endstop only, at low end, active high)
 M906 X800 Y1000 Z800 E800           ; Set motor currents (mA)
 M563 P1 D0 H1                       ; Define tool 1
 G10 P1 S0 R0                        ; Set tool 1 operating and standby temperatures
