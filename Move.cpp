@@ -366,33 +366,33 @@ void Move::MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_
 }
 
 // Do the Axis transform BEFORE the bed transform
-void Move::AxisTransform(float xyzPoint[]) const
+void Move::AxisTransform(float xyzPoint[AXES]) const
 {
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
 	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] + tanYZ*xyzPoint[Z_AXIS];
 }
 
 // Invert the Axis transform AFTER the bed transform
-void Move::InverseAxisTransform(float xyzPoint[]) const
+void Move::InverseAxisTransform(float xyzPoint[AXES]) const
 {
 	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] - tanYZ*xyzPoint[Z_AXIS];
 	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] - (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
 }
 
-void Move::Transform(float xyzPoint[]) const
+void Move::Transform(float xyzPoint[AXES]) const
 {
 	AxisTransform(xyzPoint);
 	BedTransform(xyzPoint);
 }
 
-void Move::InverseTransform(float xyzPoint[]) const
+void Move::InverseTransform(float xyzPoint[AXES]) const
 {
 	InverseBedTransform(xyzPoint);
 	InverseAxisTransform(xyzPoint);
 }
 
 // Do the bed transform AFTER the axis transform
-void Move::BedTransform(float xyzPoint[]) const
+void Move::BedTransform(float xyzPoint[AXES]) const
 {
 	if (!identityBedTransform)
 	{
@@ -420,7 +420,7 @@ void Move::BedTransform(float xyzPoint[]) const
 }
 
 // Invert the bed transform BEFORE the axis transform
-void Move::InverseBedTransform(float xyzPoint[]) const
+void Move::InverseBedTransform(float xyzPoint[AXES]) const
 {
 	if (!identityBedTransform)
 	{
@@ -521,7 +521,7 @@ void Move::SetAxisCompensation(int8_t axis, float tangent)
 	}
 }
 
-void Move::BarycentricCoordinates(int8_t p1, int8_t p2, int8_t p3, float x, float y, float& l1, float& l2, float& l3) const
+void Move::BarycentricCoordinates(size_t p1, size_t p2, size_t p3, float x, float y, float& l1, float& l2, float& l3) const
 {
 	float y23 = baryYBedProbePoints[p2] - baryYBedProbePoints[p3];
 	float x3 = x - baryXBedProbePoints[p3];
@@ -548,13 +548,12 @@ void Move::BarycentricCoordinates(int8_t p1, int8_t p2, int8_t p3, float x, floa
  */
 float Move::TriangleZ(float x, float y) const
 {
-	float l1, l2, l3;
-	int8_t j;
-	for(int8_t i = 0; i < 4; i++)
+	for (size_t i = 0; i < 4; i++)
 	{
-		j = (i + 1) % 4;
+		size_t j = (i + 1) % 4;
+		float l1, l2, l3;
 		BarycentricCoordinates(i, j, 4, x, y, l1, l2, l3);
-		if(l1 > TRIANGLE_0 && l2 > TRIANGLE_0 && l3 > TRIANGLE_0)
+		if (l1 > TRIANGLE_0 && l2 > TRIANGLE_0 && l3 > TRIANGLE_0)
 		{
 			return l1 * baryZBedProbePoints[i] + l2 * baryZBedProbePoints[j] + l3 * baryZBedProbePoints[4];
 		}
@@ -630,7 +629,7 @@ void Move::SetProbedBedEquation(StringRef& reply)
 	}
 
 	reply.copy("Bed equation fits points");
-	for(int8_t point = 0; point < NumberOfProbePoints(); point++)
+	for (size_t point = 0; point < NumberOfProbePoints(); point++)
 	{
 		reply.catf(" [%.1f, %.1f, %.3f]", xBedProbePoints[point], yBedProbePoints[point], zBedProbePoints[point]);
 	}
@@ -820,7 +819,7 @@ void Move::SetXBedProbePoint(int index, float x)
 {
 	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
 	{
-		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point  X index out of range.\n");
+		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point X index out of range.\n");
 		return;
 	}
 	xBedProbePoints[index] = x;

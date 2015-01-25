@@ -130,13 +130,13 @@ public:
 
 private:
 
-    void BedTransform(float move[]) const;			    // Take a position and apply the bed compensations
+    void BedTransform(float move[AXES]) const;			// Take a position and apply the bed compensations
     void GetCurrentMachinePosition(float m[DRIVES + 1], bool disableDeltaMapping) const;	// Get the current position and feedrate in untransformed coords
-    void InverseBedTransform(float move[]) const;	    // Go from a bed-transformed point back to user coordinates
-    void AxisTransform(float move[]) const;			    // Take a position and apply the axis-angle compensations
-    void InverseAxisTransform(float move[]) const;	    // Go from an axis transformed point back to user coordinates
-    void BarycentricCoordinates(int8_t p0, int8_t p1,   // Compute the barycentric coordinates of a point in a triangle
-    		int8_t p2, float x, float y, float& l1,     // (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
+    void InverseBedTransform(float move[AXES]) const;	// Go from a bed-transformed point back to user coordinates
+    void AxisTransform(float move[AXES]) const;			// Take a position and apply the axis-angle compensations
+    void InverseAxisTransform(float move[AXES]) const;	// Go from an axis transformed point back to user coordinates
+    void BarycentricCoordinates(size_t p0, size_t p1,   // Compute the barycentric coordinates of a point in a triangle
+    		size_t p2, float x, float y, float& l1,     // (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
     		float& l2, float& l3) const;
     float TriangleZ(float x, float y) const;			// Interpolate onto a triangular grid
     bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
@@ -158,7 +158,7 @@ private:
     float currentFeedrate;								// Err... the current feed rate...
     volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move
     volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
-    volatile int32_t liveEndPoints[AXES];				// The XYZ endpoints of the last completed move in motor coordinates
+    volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
     float xBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The X coordinates of the points on the bed at which to probe
     float yBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The Y coordinates of the points on the bed at which to probe
     float zBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The Z coordinates of the points on the bed at which to probe
