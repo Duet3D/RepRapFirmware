@@ -17,122 +17,110 @@
 */
 
 /*
-Code from wiring-digital.c and from variant.cpp from the arduino software
+Code adapted from wiring-digital.c and from variant.cpp from the Arduino software
 This allows access to the pins on the SAM3X8E that are not defined in the Arduino
 pin description.
-
-At this point it only implements pinMode and digitalWrite on pin PA5 and PC27
-(also on PA0,PA1,PA7 as a further example, ahtough these are defined by the Arduino software)
-Note the pin numbers of "0" and "1"
 */
 
 #include "SamNonDuePin.h"
-
-//Example from the variant.cpp file
-/*
- * DUET "undefined" pin  |  PORT  | Label
- * ----------------------+--------+-------
- *  0                    |  PA5   | "E0_EN"
- *  1                    |  PC27  | "Z_EN"
-
-
- */
 
 /*
  * Pins descriptions
  */
 extern const PinDescription nonDuePinDescription[]=
 {
-  { PIOA, PIO_PA5,         ID_PIOA, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC, NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // PIN X0
-  { PIOC, PIO_PC27,        ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC, NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // PIN X1
-  { PIOA, PIO_PA0,         ID_PIOA, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC, NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // PIN X2
-  { PIOA, PIO_PA1,         ID_PIOA, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC, NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // PIN X3
-  { PIOC, PIO_PC11,         ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC, NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // PIN X4
-  { PIOC, PIO_PC8B_PWML3,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),   NO_ADC, NO_ADC, PWM_CH3,     NOT_ON_TIMER }, // PWM X5
-  { PIOC, PIO_PC2B_PWML0,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),   NO_ADC, NO_ADC, PWM_CH0,     NOT_ON_TIMER }, // PWM X6
-  { PIOC, PIO_PC6B_PWML2,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),   NO_ADC, NO_ADC, PWM_CH2,     NOT_ON_TIMER },  //PWM X7
-  { PIOC, PIO_PC20,        ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC, NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER },  //PWM X8
+  { PIOA, PIO_PA5,			ID_PIOA, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X0
+  { PIOC, PIO_PC27,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X1
+  { PIOA, PIO_PA0,			ID_PIOA, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X2
+  { PIOA, PIO_PA1,			ID_PIOA, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X3
+  { PIOC, PIO_PC11,         ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X4
+  { PIOC, PIO_PC8B_PWML3,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),	NO_ADC, NO_ADC, PWM_CH3,    NOT_ON_TIMER }, // PWM X5
+  { PIOC, PIO_PC2B_PWML0,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),	NO_ADC, NO_ADC, PWM_CH0,    NOT_ON_TIMER }, // PWM X6
+  { PIOC, PIO_PC6B_PWML2,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),	NO_ADC, NO_ADC, PWM_CH2,    NOT_ON_TIMER }, // PWM X7
+  { PIOC, PIO_PC20,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PWM X8
   // 9 .. 14
-  { PIOA, PIO_PA20A_MCCDA,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,   NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCCDA_GPIO
-  { PIOA, PIO_PA19A_MCCK,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,   NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCCK_GPIO
-  { PIOA, PIO_PA21A_MCDA0,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,   NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA0_GPIO
-  { PIOA, PIO_PA22A_MCDA1,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,   NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA1_GPIO
-  { PIOA, PIO_PA23A_MCDA2,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,   NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA2_GPIO
-  { PIOA, PIO_PA24A_MCDA3,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,   NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA3_GPIO
+  { PIOA, PIO_PA20A_MCCDA,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,   				NO_ADC, NO_ADC, NOT_ON_PWM,	NOT_ON_TIMER }, // PIN_HSMCI_MCCDA_GPIO
+  { PIOA, PIO_PA19A_MCCK,	ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCCK_GPIO
+  { PIOA, PIO_PA21A_MCDA0,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA0_GPIO
+  { PIOA, PIO_PA22A_MCDA1,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA1_GPIO
+  { PIOA, PIO_PA23A_MCDA2,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA2_GPIO
+  { PIOA, PIO_PA24A_MCDA3,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA3_GPIO
   // 15 .. 24 - ETHERNET MAC
-  { PIOB, PIO_PB0A_ETXCK,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // ETXCK
-  { PIOB, PIO_PB1A_ETXEN,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // ETXEN
-  { PIOB, PIO_PB2A_ETX0,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // ETX0
-  { PIOB, PIO_PB3A_ETX1,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // ETX1
-  { PIOB, PIO_PB4A_ECRSDV,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // ECRSDV
-  { PIOB, PIO_PB5A_ERX0,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // ERX0
-  { PIOB, PIO_PB6A_ERX1,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // ERX1
-  { PIOB, PIO_PB7A_ERXER,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // ERXER
-  { PIOB, PIO_PB8A_EMDC,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // EMDC
-  { PIOB, PIO_PB9A_EMDIO,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC,  NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER }, // EMDIO
+  { PIOB, PIO_PB0A_ETXCK,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ETXCK
+  { PIOB, PIO_PB1A_ETXEN,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ETXEN
+  { PIOB, PIO_PB2A_ETX0,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ETX0
+  { PIOB, PIO_PB3A_ETX1,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ETX1
+  { PIOB, PIO_PB4A_ECRSDV,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ECRSDV
+  { PIOB, PIO_PB5A_ERX0,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ERX0
+  { PIOB, PIO_PB6A_ERX1,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ERX1
+  { PIOB, PIO_PB7A_ERXER,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ERXER
+  { PIOB, PIO_PB8A_EMDC,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // EMDC
+  { PIOB, PIO_PB9A_EMDIO,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // EMDIO
   // 25
-  { PIOC, PIO_PC10,        ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,                  NO_ADC, NO_ADC, NOT_ON_PWM,  NOT_ON_TIMER },  //PIN X25
+  { PIOC, PIO_PC10,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }  // PIN X25
+};
 
-  // END
-  { NULL, 0, 0, PIO_NOT_A_PIN, PIO_DEFAULT, 0, NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }
-} ;
+const uint32_t MaxPinNumber = X25;
 
 /*
 pinModeNonDue
 copied from the pinMode function within wiring-digital.c file, part of the arduino core.
 Allows a non "Arduino Due" PIO pin to be setup.
 */
-extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff )
+extern void pinModeNonDue(uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff)
 {
+	if (ulPin > MaxPinNumber)
+	{
+		return;
+	}
+
 	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
-    if ( pinDesc.ulPinType == PIO_NOT_A_PIN )
+    if (pinDesc.ulPinType == PIO_NOT_A_PIN)
     {
         return;
     }
 
-    switch ( ulMode )
+    switch (ulMode)
     {
         case INPUT:
-            /* Enable peripheral for clocking input */
-            pmc_enable_periph_clk( pinDesc.ulPeripheralId ) ;
+            pmc_enable_periph_clk(pinDesc.ulPeripheralId);		// enable peripheral for clocking input
             PIO_Configure(
             	pinDesc.pPort,
             	PIO_INPUT,
             	pinDesc.ulPin,
-            	(debounceCutoff == 0) ? 0 : PIO_DEBOUNCE ) ;
+            	(debounceCutoff == 0) ? 0 : PIO_DEBOUNCE );
             if (debounceCutoff != 0)
             {
             	PIO_SetDebounceFilter(pinDesc.pPort, pinDesc.ulPin, debounceCutoff);	// enable debounce filer with specified cutoff frequency
             }
-            break ;
+            break;
 
         case INPUT_PULLUP:
-            /* Enable peripheral for clocking input */
-            pmc_enable_periph_clk( pinDesc.ulPeripheralId ) ;
+            pmc_enable_periph_clk(pinDesc.ulPeripheralId);		// enable peripheral for clocking input
             PIO_Configure(
             	pinDesc.pPort,
             	PIO_INPUT,
             	pinDesc.ulPin,
-            	(debounceCutoff == 0) ? PIO_PULLUP : PIO_PULLUP | PIO_DEBOUNCE ) ;
+            	(debounceCutoff == 0) ? PIO_PULLUP : PIO_PULLUP | PIO_DEBOUNCE );
             if (debounceCutoff != 0)
             {
             	PIO_SetDebounceFilter(pinDesc.pPort, pinDesc.ulPin, debounceCutoff);	// enable debounce filer with specified cutoff frequency
             }
-            break ;
+            break;
 
         case OUTPUT:
             PIO_Configure(
             	pinDesc.pPort,
             	PIO_OUTPUT_1,
             	pinDesc.ulPin,
-            	pinDesc.ulPinConfiguration ) ;
+            	pinDesc.ulPinConfiguration );
 
-            /* if all pins are output, disable PIO Controller clocking, reduce power consumption */
-            if ( pinDesc.pPort->PIO_OSR == 0xffffffff )
+            // If all pins are output, disable PIO Controller clocking, reduce power consumption
+            if (pinDesc.pPort->PIO_OSR == 0xffffffff)
             {
-                pmc_disable_periph_clk( pinDesc.ulPeripheralId ) ;
+                pmc_disable_periph_clk(pinDesc.ulPeripheralId);
             }
-            break ;
+            break;
 
         default:
         	break ;
@@ -143,32 +131,29 @@ extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode, uint32_t debounceCut
 digitalWriteNonDue
 copied from the digitalWrite function within wiring-digital.c file, part of the arduino core.
 Allows digital write to a non "Arduino Due" PIO pin that has been setup as output with pinModeUndefined
+This has now been optimised to speed up the generation of steps, so it may no longer be used to enable
+the pullup resistor on an input pin (use mode INPUT_PULLUP instead).
 */
 
-extern void digitalWriteNonDue( uint32_t ulPin, uint32_t ulVal )
+extern void digitalWriteNonDue(uint32_t ulPin, uint32_t ulVal)
 {
-	if (ulPin < X0)
+	if (ulPin > MaxPinNumber)
 	{
-		digitalWrite(ulPin, ulVal);		// pass on to Arduino core
 		return;
 	}
 
-	const PinDescription& pinDesc = nonDuePinDescription[ulPin - X0];
-
-  /* Handle */
-  if ( pinDesc.ulPinType == PIO_NOT_A_PIN )
-  {
-    return ;
-  }
-
-  if ( PIO_GetOutputDataStatus( pinDesc.pPort, pinDesc.ulPin ) == 0 )
-  {
-    PIO_PullUp( pinDesc.pPort, pinDesc.ulPin, ulVal ) ;
-  }
-  else
-  {
-    PIO_SetOutput( pinDesc.pPort, pinDesc.ulPin, ulVal, 0, PIO_PULLUP ) ;
-  }
+	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
+	if (pinDesc.ulPinType != PIO_NOT_A_PIN)
+	{
+		if (ulVal)		// we make use of the fact that LOW is zero and HIGH is nonzero
+		{
+			pinDesc.pPort->PIO_SODR = pinDesc.ulPin;
+		}
+		else
+		{
+			pinDesc.pPort->PIO_CODR = pinDesc.ulPin;
+		}
+	}
 }
 
 /*
@@ -178,29 +163,24 @@ Allows digital read of a non "Arduino Due" PIO pin that has been setup as input 
 */
 extern int digitalReadNonDue( uint32_t ulPin )
 {
-	if (ulPin < X0)
+	if (ulPin > MaxPinNumber)
 	{
-		return digitalRead(ulPin);		// pass on to Arduino core
+		return LOW;
 	}
 
-	const PinDescription& pinDesc = nonDuePinDescription[ulPin - X0];
-	if ( pinDesc.ulPinType == PIO_NOT_A_PIN )
+	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
+	if (pinDesc.ulPinType == PIO_NOT_A_PIN)
     {
         return LOW ;
     }
 
-	if ( PIO_Get( pinDesc.pPort, PIO_INPUT, pinDesc.ulPin ) == 1 )
-    {
-        return HIGH ;
-    }
-
-	return LOW ;
+	return (PIO_Get(pinDesc.pPort, PIO_INPUT, pinDesc.ulPin ) == 1) ? HIGH : LOW;
 }
 
 static bool nonDuePWMEnabled = 0;
 static bool PWMChanEnabled[8] = {false,false,false,false, false,false,false,false};		// there are only 8 PWM channels
 
-// Version of PWMC_ConfigureChannel from Arduino core, fixed to not mess up PWM channel 0 when another channel is programmed
+// Version of PWMC_ConfigureChannel from Arduino core, mended to not mess up PWM channel 0 when another channel is programmed
 static void PWMC_ConfigureChannel_fixed( Pwm* pPwm, uint32_t ul_channel, uint32_t prescaler, uint32_t alignment, uint32_t polarity )
 {
     /* Disable ul_channel (effective at the end of the current period) */
@@ -223,12 +203,17 @@ within the unDefPinDescription[] struct should work, and non hardware PWM pin wi
 NOTE:
 1. We must not pass on any PWM calls to the Arduino core analogWrite here, because it calls the buggy version of PWMC_ConfigureChannel
    which messes up channel 0..
-2. The optional fastPwm parameter only takes effect on the first call to analogWriteNonDuet for each PWM pin.
+2. The optional fastPwm parameter only takes effect on the first call to analogWriteNonDue for each PWM pin.
    If true on the first call then the PWM frequency will be set to 25kHz instead of 1kHz.
 */
 
 void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm)
 {
+	if (ulPin > MaxPinNumber)
+	{
+		return;
+	}
+
 	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
 	uint32_t attr = pinDesc.ulPinAttribute;
 	if ((attr & PIN_ATTR_ANALOG) == PIN_ATTR_ANALOG)

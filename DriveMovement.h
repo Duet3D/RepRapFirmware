@@ -34,7 +34,7 @@ public:
 	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params, size_t drive);
 	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params, size_t drive);
 	void PrepareExtruder(const DDA& dda, const PrepParams& params, size_t drive);
-	void ReduceSpeedCartesian(float inverseSpeedfactor, bool isNearEndstop);
+	void ReduceSpeed(const DDA& dda, float inverseSpeedFactor);
 	void DebugPrint(char c, bool withDelta) const;
 
 	static uint32_t isqrt(uint64_t num);

@@ -412,6 +412,7 @@ private:
 struct ZProbeParameters
 {
 	int adcValue;					// the target ADC value
+	float xOffset, yOffset;			// the offset of the probe relative to the print head
 	float height;					// the nozzle height at which the target ADC value is returned
 	float calibTemperature;			// the temperature at which we did the calibration
 	float temperatureCoefficient;	// the variation of height with bed temperature
@@ -419,6 +420,7 @@ struct ZProbeParameters
 	void Init(float h)
 	{
 		adcValue = Z_PROBE_AD_VALUE;
+		xOffset = yOffset = 0.0;
 		height = h;
 		calibTemperature = 20.0;
 		temperatureCoefficient = 0.0;	// no default temperature correction
@@ -433,6 +435,8 @@ struct ZProbeParameters
 	{
 		return adcValue == other.adcValue
 				&& height == other.height
+				&& xOffset == other.xOffset
+				&& yOffset == other.yOffset
 				&& calibTemperature == other.calibTemperature
 				&& temperatureCoefficient == other.temperatureCoefficient;
 	}
@@ -626,7 +630,7 @@ public:
   void SetInstantDv(size_t drive, float value);
   float HomeFeedRate(size_t axis) const;
   void SetHomeFeedRate(size_t axis, float value);
-  EndStopHit Stopped(size_t drive);
+  EndStopHit Stopped(size_t drive) const;
   float AxisMaximum(size_t axis) const;
   void SetAxisMaximum(size_t axis, float value);
   float AxisMinimum(size_t axis) const;
@@ -640,13 +644,18 @@ public:
   // Z probe
 
   float ZProbeStopHeight() const;
+  float ZProbeXoffset() const;
+  float ZProbeYoffset() const;
   int ZProbe() const;
+  EndStopHit GetZProbeResult() const;
   int GetZProbeSecondaryValues(int& v1, int& v2);
   void SetZProbeType(int iZ);
+  int GetZProbeChannel() const;
+  void SetZProbeChannel(int chan);
   int GetZProbeType() const;
   void SetZProbeAxes(const bool axes[AXES]);
   void GetZProbeAxes(bool (&axes)[AXES]);
-  bool GetZProbeParameters(struct ZProbeParameters& params) const;
+  const ZProbeParameters& GetZProbeParameters() const;
   bool SetZProbeParameters(const struct ZProbeParameters& params);
   bool MustHomeXYBeforeZ() const;
   
@@ -1079,7 +1088,7 @@ inline float Platform::AxisTotalLength(size_t axis) const
 	return axisMaxima[axis] - axisMinima[axis];
 }
 
-// The A4988 requires 1us minimum pulse width, so we make separate StepHigh and StepLow calls so we don't waste this time
+// The A4988 requires 1us minimum pulse width, so we make separate StepHigh and StepLow calls so that we don't waste this time
 inline void Platform::StepHigh(size_t drive)
 {
 	const int pin = stepPins[drive];

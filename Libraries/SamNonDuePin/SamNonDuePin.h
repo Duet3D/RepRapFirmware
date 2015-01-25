@@ -64,7 +64,7 @@ static const uint8_t PIN_EMAC_ERXER  = 22;
 static const uint8_t PIN_EMAC_EMDC  = 23;
 static const uint8_t PIN_EMAC_EMDIO  = 24;
 //PROBE RIG
-static const uint8_t X25  = 25;
+static const uint8_t X25  = 125;
 
 // struct used to hold the descriptions for the "non arduino" pins.
 // from the Arduino.h files

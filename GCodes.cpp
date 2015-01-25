@@ -641,11 +641,9 @@ bool GCodes::FileMacroCyclesReturn()
 // moveToDo[] entries corresponding with false entries in action[] will
 // be ignored.  Recall that moveToDo[DRIVES] should contain the feedrate
 // you want (if action[DRIVES] is true).
-
 bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 {
 	// Is the move already running?
-
 	if (cannedCycleMoveQueued)
 	{ // Yes.
 		if (!Pop()) // Wait for the move to finish then restore the state
@@ -661,7 +659,8 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 		{
 			return false;
 		}
-		for (int8_t drive = 0; drive <= DRIVES; drive++)
+
+		for (size_t drive = 0; drive <= DRIVES; drive++)
 		{
 			if (activeDrive[drive])
 			{
@@ -676,7 +675,6 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 }
 
 // This sets positions.  I.e. it handles G92.
-
 bool GCodes::SetPositions(GCodeBuffer *gb)
 {
 	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
@@ -686,11 +684,7 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 
 	if (LoadMoveBufferFromGCode(gb, true, false))
 	{
-		// Transform the position so that e.g. if the user does G92 Z0,
-		// the position we report (which gets inverse-transformed) really is Z=0 afterwards
-		reprap.GetMove()->Transform(moveBuffer);
-		reprap.GetMove()->SetLiveCoordinates(moveBuffer);
-		reprap.GetMove()->SetPositions(moveBuffer);
+		SetPositions(moveBuffer);
 	}
 
 	return true;
@@ -699,7 +693,6 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 // Offset the axes by the X, Y, and Z amounts in the M code in gb.  Say the machine is at [10, 20, 30] and
 // the offsets specified are [8, 2, -5].  The machine will move to [18, 22, 25] and henceforth consider that point
 // to be [10, 20, 30].
-
 bool GCodes::OffsetAxes(GCodeBuffer* gb)
 {
 	if (!offSetSet)
@@ -742,12 +735,12 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 	if (DoCannedCycleMove(0))
 	{
 		//LoadMoveBufferFromArray(record);
-		for (int drive = 0; drive <= DRIVES; drive++)
+		for (size_t drive = 0; drive <= DRIVES; drive++)
 		{
 			moveBuffer[drive] = record[drive];
 		}
-		reprap.GetMove()->SetLiveCoordinates(record); // This doesn't transform record
-		reprap.GetMove()->SetPositions(record);        // This does
+		reprap.GetMove()->SetLiveCoordinates(record);	// This doesn't transform record
+		reprap.GetMove()->SetPositions(record);			// This does
 		offSetSet = false;
 		return true;
 	}
@@ -839,7 +832,6 @@ bool GCodes::HomeCartesian(StringRef& reply, bool& error)
 	}
 
 	// Should never get here
-
 	endStopsToCheck = 0;
 	moveAvailable = false;
 
@@ -867,12 +859,12 @@ bool GCodes::HomeDelta(StringRef& reply, bool& error)
 // This lifts Z a bit, moves to the probe XY coordinates (obtained by a call to GetProbeCoordinates() ),
 // probes the bed height, and records the Z coordinate probed.  If you want to program any general
 // internal canned cycle, this shows how to do it.
-
+// On entry, probeCount specifies which of the 3, 4 or 5 points this is.
 bool GCodes::DoSingleZProbeAtPoint()
 {
 	reprap.GetMove()->SetIdentityTransform(); // It doesn't matter if these are called repeatedly
 
-	for (int8_t drive = 0; drive <= DRIVES; drive++)
+	for (size_t drive = 0; drive <= DRIVES; drive++)
 	{
 		activeDrive[drive] = false;
 	}
@@ -884,7 +876,6 @@ bool GCodes::DoSingleZProbeAtPoint()
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
-		reprap.GetMove()->SetZProbing(false);
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
@@ -898,7 +889,6 @@ bool GCodes::DoSingleZProbeAtPoint()
 		// NB - we don't use the Z value
 		moveToDo[DRIVES] = platform->MaxFeedrate(X_AXIS);
 		activeDrive[DRIVES] = true;
-		reprap.GetMove()->SetZProbing(false);
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
@@ -910,9 +900,22 @@ bool GCodes::DoSingleZProbeAtPoint()
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
-		reprap.GetMove()->SetZProbing(true);
-		if (DoCannedCycleMove(1 << Z_AXIS))
+		if (DoCannedCycleMove(ZProbeActive))
 		{
+			// The head has been moved down until the probe was triggered. Get the height from the live coordinates.
+			// DoCannedCycleMove has already loaded the current position into moveBuffer
+			if (axisIsHomed[Z_AXIS])
+			{
+				lastProbedZ = moveBuffer[Z_AXIS] - platform->ZProbeStopHeight();
+			}
+			else
+			{
+				// The Z axis has not yet been homed, so treat this probe as a homing move.
+				moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
+				SetPositions(moveBuffer);
+				axisIsHomed[Z_AXIS] = true;
+				lastProbedZ = 0.0;
+			}
 			cannedCycleMoveCount++;
 		}
 		return false;
@@ -922,7 +925,6 @@ bool GCodes::DoSingleZProbeAtPoint()
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
-		reprap.GetMove()->SetZProbing(false);
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
@@ -931,52 +933,45 @@ bool GCodes::DoSingleZProbeAtPoint()
 
 	default:
 		cannedCycleMoveCount = 0;
-		reprap.GetMove()->SetZBedProbePoint(probeCount, reprap.GetMove()->GetLastProbedZ());
+		reprap.GetMove()->SetZBedProbePoint(probeCount, lastProbedZ);
 		return true;
 	}
 }
 
 // This simply moves down till the Z probe/switch is triggered.
-
+// Called when we do a G30 with no P parameter.
 bool GCodes::DoSingleZProbe()
 {
-	for (int8_t drive = 0; drive <= DRIVES; drive++)
+	for (size_t drive = 0; drive <= DRIVES; drive++)
 	{
 		activeDrive[drive] = false;
 	}
 
-	switch (cannedCycleMoveCount)
+	moveToDo[Z_AXIS] = -1.1 * platform->AxisTotalLength(Z_AXIS);
+	activeDrive[Z_AXIS] = true;
+	moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+	activeDrive[DRIVES] = true;
+	if (DoCannedCycleMove(ZProbeActive))
 	{
-	case 0:
-		++cannedCycleMoveCount;
-		return false;
-
-	case 1:
-		moveToDo[Z_AXIS] = -1.1 * platform->AxisTotalLength(Z_AXIS);
-		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-		activeDrive[DRIVES] = true;
-		if (DoCannedCycleMove(1 << Z_AXIS))
-		{
-			cannedCycleMoveCount++;
-			probeCount = 0;
-		}
-		return false;
-
-	default:
-		cannedCycleMoveCount = 0;
+		// The head has been moved down until the probe was triggered. Get the height from the live coordinates.
+		// DoCannedCycleMove has already loaded the current position into moveBuffer
+		moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
+		SetPositions(moveBuffer);
+		axisIsHomed[Z_AXIS] = true;
+		lastProbedZ = 0.0;
 		return true;
 	}
+	return false;
 }
 
-// This sets wherever we are as the probe point P (probePointIndex)
+// This is called to execute a G30.
+// It sets wherever we are as the probe point P (probePointIndex)
 // then probes the bed, or gets all its parameters from the arguments.
 // If X or Y are specified, use those; otherwise use the machine's
 // coordinates.  If no Z is specified use the machine's coordinates.  If it
 // is specified and is greater than SILLY_Z_VALUE (i.e. greater than -9999.0)
 // then that value is used.  If it's less than SILLY_Z_VALUE the bed is
 // probed and that value is used.
-
 bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 {
 	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
@@ -998,7 +993,6 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	if (z > SILLY_Z_VALUE)
 	{
 		reprap.GetMove()->SetZBedProbePoint(probeCount, z);
-		reprap.GetMove()->SetZProbing(false); // Not really needed, but let's be safe
 		probeCount = 0;
 		if (gb->Seen('S'))
 		{
@@ -1012,7 +1006,6 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 		if (DoSingleZProbeAtPoint())
 		{
 			probeCount = 0;
-			reprap.GetMove()->SetZProbing(false);
 			if (gb->Seen('S'))
 			{
 				zProbesSet = true;
@@ -1025,10 +1018,9 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	return false;
 }
 
-// This probes multiple points on the bed (three in a
-// triangle or four in the corners), then sets the bed transformation to compensate
-// for the bed not quite being the plane Z = 0.
-
+// This probes multiple points on the bed (three in a triangle or four in the corners),
+// then sets the bed transformation to compensate for the bed not quite being the plane Z = 0.
+// Called to execute a G32 command.
 bool GCodes::SetBedEquationWithProbe(StringRef& reply)
 {
 	// zpl-2014-10-09: In order to stay compatible with old firmware versions, only execute bed.g
@@ -1060,7 +1052,6 @@ bool GCodes::SetBedEquationWithProbe(StringRef& reply)
 	{
 		probeCount = 0;
 		zProbesSet = true;
-		reprap.GetMove()->SetZProbing(false);
 		reprap.GetMove()->SetProbedBedEquation(reply);
 		settingBedEquationWithProbe = false;
 		return true;
@@ -1071,11 +1062,11 @@ bool GCodes::SetBedEquationWithProbe(StringRef& reply)
 // This returns the (X, Y) points to probe the bed at probe point count.  When probing,
 // it returns false.  If called after probing has ended it returns true, and the Z coordinate
 // probed is also returned.
-
 bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z) const
 {
-	x = reprap.GetMove()->XBedProbePoint(count);
-	y = reprap.GetMove()->YBedProbePoint(count);
+	const ZProbeParameters& rp = platform->GetZProbeParameters();
+	x = reprap.GetMove()->XBedProbePoint(count) - rp.xOffset;
+	y = reprap.GetMove()->YBedProbePoint(count) - rp.yOffset;
 	z = reprap.GetMove()->ZBedProbePoint(count);
 	return zProbesSet;
 }
@@ -1085,15 +1076,32 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, StringRef& reply)
 	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
 
+	ZProbeParameters params = platform->GetZProbeParameters();
+	bool seen = false;
+	if (gb->Seen(axisLetters[X_AXIS]))
+	{
+		params.xOffset = gb->GetFValue();
+		seen = true;
+	}
+	if (gb->Seen(axisLetters[Y_AXIS]))
+	{
+		params.yOffset = gb->GetFValue();
+		seen = true;
+	}
 	if (gb->Seen(axisLetters[Z_AXIS]))
 	{
-		ZProbeParameters params;
-		platform->GetZProbeParameters(params);
 		params.height = gb->GetFValue();
-		if (gb->Seen('P'))
-		{
-			params.adcValue = gb->GetIValue();
-		}
+		seen = true;
+	}
+	if (gb->Seen('P'))
+	{
+		params.adcValue = gb->GetIValue();
+		seen = true;
+	}
+	if (gb->Seen('C'))
+	{
+		params.temperatureCoefficient = gb->GetFValue();
+		seen = true;
 		if (gb->Seen('S'))
 		{
 			params.calibTemperature = gb->GetFValue();
@@ -1103,14 +1111,10 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, StringRef& reply)
 			// Use the current bed temperature as the calibration temperature if no value was provided
 			params.calibTemperature = platform->GetTemperature(HOT_BED);
 		}
-		if (gb->Seen('C'))
-		{
-			params.temperatureCoefficient = gb->GetFValue();
-		}
-		else
-		{
-			params.temperatureCoefficient = 0.0;
-		}
+	}
+
+	if (seen)
+	{
 		platform->SetZProbeParameters(params);
 	}
 	else
@@ -2347,9 +2351,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			if (seen)
 			{
 				// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
-				move->Transform(positionNow);
-				move->SetLiveCoordinates(positionNow);
-				move->SetPositions(positionNow);
+				SetPositions(positionNow);
 			}
 			else
 			{
@@ -3121,32 +3123,38 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
     case 558: // Set or report Z probe type and for which axes it is used
 		{
-			bool seen = false;
-			if(gb->Seen('P'))
+			bool seenP = false, seenR = false;
+			if (gb->Seen('P'))
 			{
 				platform->SetZProbeType(gb->GetIValue());
-				seen = true;
+				seenP = true;
 			}
 
 			bool zProbeAxes[AXES];
 			platform->GetZProbeAxes(zProbeAxes);
-			for(int axis=0; axis<AXES; axis++)
+			for (size_t axis=0; axis<AXES; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
 					zProbeAxes[axis] = (gb->GetIValue() > 0);
-					seen = true;
+					seenP = true;
 				}
 			}
 
-			if (seen)
+			if (gb->Seen('R'))
+			{
+				platform->SetZProbeChannel(gb->GetIValue());
+				seenR = true;
+			}
+
+			if (seenP)
 			{
 				platform->SetZProbeAxes(zProbeAxes);
 			}
-			else
+			else if (!seenR)
 			{
-				reply.printf("Z Probe type is %d and it is used for these axes:", platform->GetZProbeType());
-				for(int axis=0; axis<AXES; axis++)
+				reply.printf("Z Probe type is %d on channel %d and it is used for these axes:", platform->GetZProbeType(), platform->GetZProbeChannel());
+				for(size_t axis=0; axis<AXES; axis++)
 				{
 					if (zProbeAxes[axis])
 					{
@@ -3413,13 +3421,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			if (seen)
 			{
 				// If we have changed between Cartesian and Delta mode, we need to reset the motor coordinates to agree with the XYZ xoordinates.
-				// This normally happens only when we process the M665 command in config.g.
-				// Also flag that the machine is not homed.
+				// This normally happens only when we process the M665 command in config.g. Also flag that the machine is not homed.
 				if (params.IsDeltaMode() != wasInDeltaMode)
 				{
-					move->Transform(positionNow);
-					move->SetLiveCoordinates(positionNow);
-					move->SetPositions(positionNow);
+					SetPositions(positionNow);
 				}
 				SetAllAxesNotHomed();
 			}
@@ -3651,6 +3656,16 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool) const
 		}
     }
     return true;
+}
+
+// Set the current position
+void GCodes::SetPositions(float positionNow[DRIVES])
+{
+	// Transform the position so that e.g. if the user does G92 Z0,
+	// the position we report (which gets inverse-transformed) really is Z=0 afterwards
+	reprap.GetMove()->Transform(moveBuffer);
+	reprap.GetMove()->SetLiveCoordinates(moveBuffer);
+	reprap.GetMove()->SetPositions(moveBuffer);
 }
 
 //*************************************************************************************

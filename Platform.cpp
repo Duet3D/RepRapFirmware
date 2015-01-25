@@ -322,10 +322,19 @@ void Platform::InitZProbe()
 	// zpl-2014-10-12: The Z-probe index of dc42's alternate sensor has moved from 3 to 4/5 to stay compatible with RRP's FW
 	if (nvData.zProbeType >= 1)
 	{
-		zProbeModulationPin = (nvData.zProbeType == 3 || nvData.zProbeType == 5) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
 		pinModeNonDue(zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(zProbeModulationPin, (nvData.zProbeType <= 3) ? HIGH : LOW);	// enable the IR LED or alternate sensor
+		digitalWriteNonDue(zProbeModulationPin, (nvData.zProbeType < 3) ? HIGH : LOW);	// enable the IR LED or alternate sensor
 	}
+}
+
+int Platform::GetZProbeChannel() const
+{
+	return (zProbeModulationPin == Z_PROBE_MOD_PIN07) ? 1 : 0;
+}
+
+void Platform::SetZProbeChannel(int chan)
+{
+	zProbeModulationPin = (chan == 1) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
 }
 
 int Platform::GetRawZHeight() const
@@ -342,13 +351,11 @@ int Platform::ZProbe() const
 		switch (nvData.zProbeType)
 		{
 		case 1:
-		case 4:
-		case 5:
+		case 3:
 			// Simple IR sensor, or direct-mode ultrasonic sensor
 			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));
 
 		case 2:
-		case 3:
 			// Modulated IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
@@ -369,7 +376,6 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 		switch (nvData.zProbeType)
 		{
 		case 2:		// modulated IR sensor
-		case 3:		// modulated IR sensor (Duet 0.7)
 			v1 = (int) (zProbeOnFilter.GetSum() / (4 * numZProbeReadingsAveraged));	// pass back the reading with IR turned on
 			return 1;
 		default:
@@ -412,10 +418,8 @@ float Platform::ZProbeStopHeight() const
 		return nvData.switchZProbeParameters.GetStopHeight(GetTemperature(0));
 	case 1:
 	case 2:
-	case 3:
 		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
-	case 4:
-	case 5:
+	case 3:
 		return nvData.alternateZProbeParameters.GetStopHeight(GetTemperature(0));
 	default:
 		return 0;
@@ -424,7 +428,7 @@ float Platform::ZProbeStopHeight() const
 
 void Platform::SetZProbeType(int pt)
 {
-	int newZProbeType = (pt >= 0 && pt <= 4) ? pt : 0;
+	int newZProbeType = (pt >= 0 && pt <= 3) ? pt : 0;
 	if (newZProbeType != nvData.zProbeType)
 	{
 		nvData.zProbeType = newZProbeType;
@@ -436,24 +440,18 @@ void Platform::SetZProbeType(int pt)
 	InitZProbe();
 }
 
-bool Platform::GetZProbeParameters(struct ZProbeParameters& params) const
+const ZProbeParameters& Platform::GetZProbeParameters() const
 {
 	switch (nvData.zProbeType)
 	{
 	case 0:
-		params = nvData.switchZProbeParameters;
-		return true;
+	default:
+		return nvData.switchZProbeParameters;
 	case 1:
 	case 2:
+		return nvData.irZProbeParameters;
 	case 3:
-		params = nvData.irZProbeParameters;
-		return true;
-	case 4:
-	case 5:
-		params = nvData.alternateZProbeParameters;
-		return true;
-	default:
-		return false;
+		return nvData.alternateZProbeParameters;
 	}
 }
 
@@ -473,7 +471,6 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 		return true;
 	case 1:
 	case 2:
-	case 3:
 		if (nvData.irZProbeParameters != params)
 		{
 			nvData.irZProbeParameters = params;
@@ -483,8 +480,7 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 			}
 		}
 		return true;
-	case 4:
-	case 5:
+	case 3:
 		if (nvData.alternateZProbeParameters != params)
 		{
 			nvData.alternateZProbeParameters = params;
@@ -864,7 +860,7 @@ void Platform::Tick()
 	case 2:			// last conversion started was the Z probe, with IR LED on
 		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
 		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
-		if (nvData.zProbeType == 2 || nvData.zProbeType == 3)	// if using a modulated IR sensor
+		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
 		{
 			digitalWriteNonDue(zProbeModulationPin, LOW);		// turn off the IR emitter
 		}
@@ -1121,17 +1117,11 @@ void Platform::SetHeater(size_t heater, float power)
 	analogWriteNonDue(heatOnPins[heater], (HEAT_ON == 0) ? 255 - p : p);
 }
 
-EndStopHit Platform::Stopped(size_t drive)
+EndStopHit Platform::Stopped(size_t drive) const
 {
 	if (nvData.zProbeType > 0 && drive < AXES && nvData.zProbeAxes[drive])
 	{
-		int zProbeVal = ZProbe();
-		int zProbeADValue =
-				(nvData.zProbeType == 3) ? nvData.alternateZProbeParameters.adcValue
-					: nvData.irZProbeParameters.adcValue;
-		return (zProbeVal >= zProbeADValue) ? lowHit
-				: (zProbeVal * 10 >= zProbeADValue * 9) ? lowNear	// if we are at/above 90% of the target value
-					: noStop;
+		return GetZProbeResult();			// using the Z probe as am endstop for this axis, so just get its result
 	}
 
 	if (endStopPins[drive] >= 0 && endStopType[drive] != noEndStop)
@@ -1142,6 +1132,18 @@ EndStopHit Platform::Stopped(size_t drive)
 		}
 	}
 	return noStop;
+}
+
+// Return the Z probe result. We assume that if the Z probe is used as an endstop, it is used as the low stop.
+EndStopHit Platform::GetZProbeResult() const
+{
+	const int zProbeVal = ZProbe();
+	const int zProbeADValue =
+			(nvData.zProbeType == 3) ? nvData.alternateZProbeParameters.adcValue
+				: nvData.irZProbeParameters.adcValue;
+	return (zProbeVal >= zProbeADValue) ? lowHit
+			: (zProbeVal * 10 >= zProbeADValue * 9) ? lowNear	// if we are at/above 90% of the target value
+				: noStop;
 }
 
 void Platform::SetDirection(size_t drive, bool direction, bool enable)

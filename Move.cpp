@@ -150,9 +150,6 @@ void Move::Init()
 	size_t slow = reprap.GetPlatform()->SlowestDrive();
 	currentFeedrate = reprap.GetPlatform()->HomeFeedRate(slow);
 
-	lastZHit = 0.0;
-	zProbing = false;
-
 	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
 	for (size_t point = 0; point < NUMBER_OF_PROBE_POINTS; point++)
 	{
@@ -250,14 +247,14 @@ void Move::Spin()
 	reprap.GetPlatform()->ClassReport("Move", longWait, moduleMove);
 }
 
-uint32_t maxStepTime=0, maxCalcTime=0, minCalcTime = 999, maxReps = 0, sqrtErrors = 0, lastRes = 0; uint64_t lastNum = 0;	//DEBUG
+uint32_t maxStepTime=0, maxCalcTime=0, minCalcTime = 999, maxReps = 0;
 
 void Move::Diagnostics()
 {
 	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Move Diagnostics:\n");
 
-	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxStepClocks: %u, minCalcClocks: %u, maxCalcClocks: %u, maxReps: %u, sqrtErrors: %u, lastRes: %u, lastNum: %" PRIu64 "\n",
-										maxStepTime, minCalcTime, maxCalcTime, maxReps, sqrtErrors, lastRes, lastNum);
+	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxStepClocks: %u, minCalcClocks: %u, maxCalcClocks: %u, maxReps: %u\n",
+										maxStepTime, minCalcTime, maxCalcTime, maxReps);
 	maxStepTime = maxCalcTime = maxReps = 0;
 	minCalcTime = 999;
 
@@ -692,32 +689,23 @@ bool Move::StartNextMove(uint32_t startTime)
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 void Move::HitLowStop(size_t drive, DDA* hitDDA)
 {
-	float hitPoint = reprap.GetPlatform()->AxisMinimum(drive);
-	if (drive == Z_AXIS)
+	if (drive < AXES && !IsDeltaMode())		// should always be true
 	{
-		if (zProbing && reprap.GetGCodes()->GetAxisIsHomed(drive))
+		float hitPoint;
+		if (drive == Z_AXIS)
 		{
-			// Executing G32 and Z-axis has already been homed, so record the Z position at which we hit the end stop
-			hitDDA->SetStoppedHeight();
-			lastZHit = hitDDA->GetMotorPosition(drive) - reprap.GetPlatform()->ZProbeStopHeight();
-			return;
+			// Special case of doing a G1 S1 Z move on a Cartesian printer. This is not how we normally home the Z axis, we use G30 instead.
+			// But I think it used to work, so let's not break it.
+			hitPoint = reprap.GetPlatform()->ZProbeStopHeight();
 		}
 		else
 		{
-			// Executing G30, so set the current Z height to the value at which the end stop is triggered
-			// OR executing the first move of a G32 and Z axis has not yet been homed
-			// Transform the height first so that the height is correct in user coordinates
-			lastZHit = 0.0;								// in case this is the first move of a G32
-			float xyzPoint[DRIVES];
-			LiveCoordinates(xyzPoint);
-			xyzPoint[Z_AXIS] = reprap.GetPlatform()->ZProbeStopHeight();
-			Transform(xyzPoint);
-			hitPoint = xyzPoint[Z_AXIS];
+			hitPoint = reprap.GetPlatform()->AxisMinimum(drive);
 		}
+		int32_t coord = MotorEndPointToMachine(drive, hitPoint);
+		hitDDA->SetDriveCoordinate(coord, drive);
+		reprap.GetGCodes()->SetAxisIsHomed(drive);
 	}
-	int32_t coord = MotorEndPointToMachine(drive, hitPoint);
-	hitDDA->SetDriveCoordinate(coord, drive);
-	reprap.GetGCodes()->SetAxisIsHomed(drive);
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
@@ -733,6 +721,13 @@ void Move::HitHighStop(size_t drive, DDA* hitDDA)
 		hitDDA->SetDriveCoordinate(MotorEndPointToMachine(drive, position), drive);
 		reprap.GetGCodes()->SetAxisIsHomed(drive);
 	}
+}
+
+// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
+// The move has already been aborted when this is called, so the endpoints in the DDA are the current motor positions.
+void Move::ZProbeTriggered(DDA* hitDDA)
+{
+	// Currently, we don't need to do anything here
 }
 
 // Return the untransformed machine coordinates
@@ -803,10 +798,10 @@ void Move::LiveCoordinates(float m[DRIVES])
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
 // Interrupts are assumed enabled on entry, so do not call this from an ISR
-void Move::SetLiveCoordinates(const float coords[])
+void Move::SetLiveCoordinates(const float coords[DRIVES])
 {
 	cpu_irq_disable();
-	for(size_t drive = 0; drive <= DRIVES; drive++)
+	for(size_t drive = 0; drive < DRIVES; drive++)
 	{
 		liveCoordinates[drive] = coords[drive];
 	}
@@ -861,16 +856,6 @@ float Move::YBedProbePoint(int index) const
 float Move::ZBedProbePoint(int index) const
 {
 	return zBedProbePoints[index];
-}
-
-void Move::SetZProbing(bool probing)
-{
-	zProbing = probing;
-}
-
-float Move::GetLastProbedZ() const
-{
-	return lastZHit;
 }
 
 bool Move::AllProbeCoordinatesSet(int index) const

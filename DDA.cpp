@@ -238,16 +238,33 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping)
 		totalDistance = Normalise(directionVector, DRIVES, DRIVES);
 	}
 
-	// 5. Compute the maximum acceleration available
+	// 5. Compute the maximum acceleration available and maximum top speed
 	float normalisedDirectionVector[DRIVES];			// Used to hold a unit-length vector in the direction of motion
 	memcpy(normalisedDirectionVector, directionVector, sizeof(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, DRIVES);
 	acceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations, DRIVES);
 
 	// Set the speed to the smaller of the requested and maximum speed.
-	//FIXME: on a delta, we should limit the net movement in the XY plane to the maximum X or Y speed, instead of limiting them individually
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
 	requestedSpeed = max<float>(0.5, min<float>(nextMove[DRIVES], VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform()->MaxFeedrates(), DRIVES)));
+
+	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
+	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
+	if (isDeltaMovement)
+	{
+		const float xyFactor = sqrt(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[X_AXIS]));
+		const float maxSpeed = reprap.GetPlatform()->MaxFeedrates()[X_AXIS];
+		if (requestedSpeed * xyFactor > maxSpeed)
+		{
+			requestedSpeed = maxSpeed/xyFactor;
+		}
+
+		const float maxAcceleration = normalAccelerations[X_AXIS];
+		if (acceleration * xyFactor > maxAcceleration)
+		{
+			acceleration = maxAcceleration/xyFactor;
+		}
+	}
 
 	// 6. Calculate the provisional accelerate and decelerate distances and the top speed
 	endSpeed = 0.0;					// until the next move asks us to adjust it
@@ -621,8 +638,10 @@ bool DDA::Start(uint32_t tim)
 	}
 }
 
-extern uint32_t /*maxStepTime,*/ maxCalcTime, minCalcTime, maxReps, sqrtErrors, lastRes; extern uint64_t lastNum;	//DEBUG
+extern uint32_t maxReps;
 
+// This is called by the interrupt service routine to execute steps.
+// It returns true if it needs to be called again with the DDA of the next move, otherwise false.
 bool DDA::Step()
 {
 	if (state != executing)
@@ -631,87 +650,107 @@ bool DDA::Step()
 	}
 
 	bool repeat;
-uint32_t numReps = 0;
+	uint32_t numReps = 0;
 	do
 	{
-++numReps;
-if (numReps > maxReps) maxReps = numReps;
-		uint32_t now = Platform::GetInterruptClocks() - moveStartTime;		// how long since the move started
-		uint32_t nextInterruptTime = DriveMovement::NoStepTime;
-		for (size_t drive = 0; drive < DRIVES; ++drive)
+		++numReps;
+		if (numReps > maxReps)
 		{
-			DriveMovement& dm = ddm[drive];
-			if (dm.moving && !dm.stepError)
+			maxReps = numReps;
+		}
+		uint32_t now = Platform::GetInterruptClocks() - moveStartTime;			// how long since the move started
+
+		if ((endStopsToCheck & ZProbeActive) != 0)								// if the Z probe is enabled in this move
+		{
+			// Check whether the Z probe has been triggered. On a delta at least, this must be done separately from endstop checks,
+			// because we have both a high endstop and a Z probe, and the Z motor is not the same thing as the Z axis.
+			switch (reprap.GetPlatform()->GetZProbeResult())
 			{
-				// Hit anything?
-				if ((endStopsToCheck & (1 << drive)) != 0)
+			case lowHit:
+				MoveAborted(now);												// set the state to completed and recalculate the endpoints
+				reprap.GetMove()->ZProbeTriggered(this);
+				break;
+
+			case lowNear:
+				ReduceHomingSpeed(reprap.GetPlatform()->ConfiguredInstantDv(Z_AXIS));
+				break;
+
+			default:
+				break;
+			}
+		}
+
+		uint32_t nextInterruptTime = DriveMovement::NoStepTime;
+		if (state != completed)
+		{
+			for (size_t drive = 0; drive < DRIVES; ++drive)
+			{
+				DriveMovement& dm = ddm[drive];
+				if (dm.moving && !dm.stepError)
 				{
-					switch(reprap.GetPlatform()->Stopped(drive))
+					// Hit anything?
+					if ((endStopsToCheck & (1 << drive)) != 0)
 					{
-					case lowHit:
-						endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-						ddm[drive].moving = false;							// stop this drive
-						reprap.GetMove()->HitLowStop(drive, this);
-						if (endStopsToCheck == 0)							// if no more endstops to check
+						switch(reprap.GetPlatform()->Stopped(drive))
 						{
-							moveCompletedTime = now + settleClocks;
-							MoveAborted();
-						}
-						break;
-
-					case highHit:
-						endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-						ddm[drive].moving = false;							// stop this drive
-						reprap.GetMove()->HitHighStop(drive, this);
-						if (endStopsToCheck == 0)							// if no more endstops to check
-						{
-							moveCompletedTime = now + settleClocks;
-							MoveAborted();
-						}
-						break;
-
-					case lowNear:
-						{
-							// This code assumes that only one endstop that supports the 'near' function is enabled at a time.
-							// Typically, only the Z axis can give a LowNear indication anyway.
-							float instantDv = reprap.GetPlatform()->ConfiguredInstantDv(drive);
-							if (instantDv < topSpeed)
+						case lowHit:
+							endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
+							if (endStopsToCheck == 0)							// if no more endstops to check
 							{
-								ReduceHomingSpeed(instantDv, drive);
+								MoveAborted(now);
 							}
+							else
+							{
+								StopDrive(drive);
+							}
+							reprap.GetMove()->HitLowStop(drive, this);
+							break;
+
+						case highHit:
+							endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
+							if (endStopsToCheck == 0)							// if no more endstops to check
+							{
+								MoveAborted(now);
+							}
+							else
+							{
+								StopDrive(drive);
+							}
+							reprap.GetMove()->HitHighStop(drive, this);
+							break;
+
+						case lowNear:
+							ReduceHomingSpeed(reprap.GetPlatform()->ConfiguredInstantDv(drive));
+							break;
+
+						default:
+							break;
 						}
-						break;
-
-					default:
-						break;
 					}
-				}
 
-				uint32_t st0 = dm.nextStepTime;
-				if (now + minInterruptInterval >= st0)
-				{
-					if (st0 > moveCompletedTime)
+					uint32_t st0 = dm.nextStepTime;
+					if (now + minInterruptInterval >= st0)
 					{
-						moveCompletedTime = st0;							// save in case the move has finished
-					}
-//uint32_t t1 = Platform::GetInterruptClocks();
-					reprap.GetPlatform()->StepHigh(drive);
-//uint32_t t2 = Platform::GetInterruptClocks();
-//if (t2 - t1 > maxStepTime) maxStepTime = t2 - t1;
+						if (st0 > moveCompletedTime)
+						{
+							moveCompletedTime = st0;							// save in case the move has finished
+						}
+						reprap.GetPlatform()->StepHigh(drive);
 
-					uint32_t st1 = (isDeltaMovement && drive < AXES) ? dm.CalcNextStepTimeDelta(*this, drive) : dm.CalcNextStepTimeCartesian(drive);
-					if (st1 < nextInterruptTime)
-					{
-						nextInterruptTime = st1;
-					}
-					reprap.GetPlatform()->StepLow(drive);
+						uint32_t st1 = (isDeltaMovement && drive < AXES) ? dm.CalcNextStepTimeDelta(*this, drive) : dm.CalcNextStepTimeCartesian(drive);
+						if (st1 < nextInterruptTime)
+						{
+							nextInterruptTime = st1;
+						}
+						reprap.GetPlatform()->StepLow(drive);
 //uint32_t t3 = Platform::GetInterruptClocks() - t2;
 //if (t3 > maxCalcTime) maxCalcTime = t3;
 //if (t3 < minCalcTime) minCalcTime = t3;
-				}
-				else if (st0 < nextInterruptTime)
-				{
-					nextInterruptTime = st0;
+					}
+					else if (st0 < nextInterruptTime)
+					{
+						nextInterruptTime = st0;
+					}
 				}
 			}
 		}
@@ -733,62 +772,53 @@ if (numReps > maxReps) maxReps = numReps;
 	return false;
 }
 
-// This is called when we abort a move because we have hit and endstop.
-// It adjusts the end points of the current move to account for how far through the move we got.
-// The end point coordinate of the axis whose endstop we hit generally doesn't matter, because we will reset it,
-// however if we are using compensation then the other coordinates do matter.
-void DDA::MoveAborted()
+// Stop a drive and re-calculate the corresponding endpoint
+void DDA::StopDrive(size_t drive)
 {
+	DriveMovement& dm = ddm[drive];
+	if (dm.moving)
+	{
+		int32_t stepsLeft = dm.totalSteps - dm.nextStep;
+		if (dm.direction)
+		{
+			endPoint[drive] -= stepsLeft;			// we were going forwards
+		}
+		else
+		{
+			endPoint[drive] += stepsLeft;			// we were going backwards
+		}
+		dm.moving = false;
+		endCoordinatesValid = false;				// the XYZ position is no longer valid
+	}
+}
+
+// This is called when we abort a move because we have hit an endstop.
+// It adjusts the end points of the current move to account for how far through the move we got.
+void DDA::MoveAborted(uint32_t clocksFromStart)
+{
+	moveCompletedTime = clocksFromStart + settleClocks;
 	for (size_t drive = 0; drive < AXES; ++drive)
 	{
-		const DriveMovement& dm = ddm[drive];
-		if (dm.moving)
-		{
-			int32_t stepsLeft = dm.totalSteps - dm.nextStep;
-			if (dm.direction)
-			{
-				endPoint[drive] -= stepsLeft;			// we were going forwards
-			}
-			else
-			{
-				endPoint[drive] += stepsLeft;			// we were going backwards
-			}
-		}
+		StopDrive(drive);
 	}
 	state = completed;
 }
 
-// As MoveAborted, but just do the Z axis, unconditionally
-void DDA::SetStoppedHeight()
-{
-	const DriveMovement& dm = ddm[Z_AXIS];
-	int32_t stepsLeft = dm.totalSteps - dm.nextStep;
-	if (dm.direction)
-	{
-		endPoint[Z_AXIS] -= stepsLeft;					// we were going forwards
-	}
-	else
-	{
-		endPoint[Z_AXIS] += stepsLeft;					// we were going backwards
-	}
-}
-
 // Reduce the speed of this move to the indicated speed.
-// 'drive' is the drive whose near-endstop we hit, so it should be the one with the major movement.
 // This is called from the ISR, so interrupts are disabled and nothing else can mess with us.
 // As this is only called for homing moves and with very low speeds, we assume that we don't need acceleration or deceleration phases.
-void DDA::ReduceHomingSpeed(float newSpeed, size_t endstopDrive)
+void DDA::ReduceHomingSpeed(float newSpeed)
 {
-	if (!isDeltaMovement)				// the following code won't work for delta movements, but homing moves are always non-delta movements anyway
+	if (newSpeed < topSpeed)
 	{
-		float factor = topSpeed/newSpeed;				// the factor by which we are reducing the speed
+		const float factor = topSpeed/newSpeed;				// the factor by which we are reducing the speed
 		topSpeed = newSpeed;
 		for (size_t drive = 0; drive < DRIVES; ++drive)
 		{
 			DriveMovement& dm = ddm[drive];
 			if (dm.moving)
 			{
-				dm.ReduceSpeedCartesian(factor, drive == endstopDrive);
+				dm.ReduceSpeed(*this, factor);
 			}
 		}
 	}

@@ -278,8 +278,8 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 	{
 		mp.delta.hmz0sK -= (int32_t)K2;
 	}
-	int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
 
+	const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
 	const int32_t t1 = mp.delta.minusAaPlusBbTimesKs + hmz0scK;
 	const int32_t t2 = isqrt(isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - isquare64(mp.delta.hmz0sK));
 	const int32_t dsK = (direction) ? t1 - t2 : t1 + t2;
@@ -322,17 +322,34 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 }
 
 // Reduce the speed of this movement. Called to reduce the homing speed when we detect we are near the endstop for a drive.
-// Never called for delta moves.
-void DriveMovement::ReduceSpeedCartesian(float inverseSpeedfactor, bool isNearEndstop)
+void DriveMovement::ReduceSpeed(const DDA& dda, float inverseSpeedFactor)
 {
-	// Force the linear motion phase
-	mp.cart.decelStartStep = totalSteps + 1;
-	mp.cart.accelStopStep = 0;
-
-	// Adjust the speed
-	mp.cart.mmPerStepTimesCdivtopSpeed = (uint32_t)(inverseSpeedfactor * mp.cart.mmPerStepTimesCdivtopSpeed);
-	if (isNearEndstop)
+	if (dda.isDeltaMovement)
 	{
+		// Force the linear motion phase
+		mp.delta.accelStopDsK = 0;
+		mp.delta.decelStartDsK = 0xFFFFFFFF;
+
+		// Adjust the speed
+		mp.delta.mmPerStepTimesCdivtopSpeedK = (uint32_t)(inverseSpeedFactor * mp.delta.mmPerStepTimesCdivtopSpeedK);
+
+		// Adjust the acceleration clocks to as to maintain continuity of movement
+		const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
+		const int32_t t1 = mp.delta.minusAaPlusBbTimesKs + hmz0scK;
+		const int32_t t2 = isqrt(isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - isquare64(mp.delta.hmz0sK));
+		const int32_t dsK = (direction) ? t1 - t2 : t1 + t2;
+		accelClocksMinusAccelDistanceTimesCdivTopSpeed = (int32_t)nextStepTime - (int32_t)(((uint64_t)mp.delta.mmPerStepTimesCdivtopSpeedK * (uint32_t)dsK)/(K1 * K2));
+	}
+	else
+	{
+		// Force the linear motion phase
+		mp.cart.decelStartStep = totalSteps + 1;
+		mp.cart.accelStopStep = 0;
+
+		// Adjust the speed
+		mp.cart.mmPerStepTimesCdivtopSpeed = (uint32_t)(inverseSpeedFactor * mp.cart.mmPerStepTimesCdivtopSpeed);
+
+		// Adjust the acceleration clocks to as to maintain continuity of movement
 		accelClocksMinusAccelDistanceTimesCdivTopSpeed = (int32_t)nextStepTime - (int32_t)(((uint64_t)mp.cart.mmPerStepTimesCdivtopSpeed * nextStep)/K1);
 	}
 }

@@ -89,6 +89,7 @@ public:
     void DoLookAhead();									// Run the look-ahead procedure
     void HitLowStop(size_t drive, DDA* hitDDA);			// What to do when a low endstop is hit
     void HitHighStop(size_t drive, DDA* hitDDA);		// What to do when a high endstop is hit
+    void ZProbeTriggered(DDA* hitDDA);					// What to do when a the Z probe is triggered
     void SetPositions(const float move[DRIVES]);		// Force the coordinates to be these
     void SetFeedrate(float feedRate);					// Sometimes we want to override the feed rate
     void SetLiveCoordinates(const float coords[DRIVES]); // Force the live coordinates (see above) to be these
@@ -102,10 +103,8 @@ public:
     int NumberOfXYProbePoints() const;					// How many XY coordinates of probe points have been set (Zs may not have been probed yet)
     bool AllProbeCoordinatesSet(int index) const;		// XY, and Z all set for this one?
     bool XYProbeCoordinatesSet(int index) const;		// Just XY set for this one?
-    void SetZProbing(bool probing);						// Set the Z probe live
     void SetProbedBedEquation(StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
     float SecondDegreeTransformZ(float x, float y) const; // Used for second degree bed equation
-    float GetLastProbedZ() const;						// What was the Z when the probe last fired?
     void SetAxisCompensation(int8_t axis, float tangent); // Set an axis-pair compensation angle
     float AxisCompensation(int8_t axis) const;			// The tangent value
     void SetIdentityTransform();						// Cancel the bed equation; does not reset axis angle compensation
@@ -170,8 +169,6 @@ private:
     float tanXY, tanYZ, tanXZ; 							// Axis compensation - 90 degrees + angle gives angle between axes
     bool identityBedTransform;							// Is the bed transform in operation?
     float xRectangle, yRectangle;						// The side lengths of the rectangle used for second-degree bed compensation
-    volatile float lastZHit;							// The last Z value hit by the probe
-    bool zProbing;										// Are we bed probing as well as moving?
     float longWait;										// A long time for things that need to be done occasionally
 
     DeltaParameters deltaParams;						// Information about the delta parameters of this machine

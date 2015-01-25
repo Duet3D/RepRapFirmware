@@ -25,11 +25,12 @@ Licence: GPL
 #define STACK 5
 #define GCODE_LENGTH 100 // Maximum length of internally-generated G Code string
 
-const char feedrateLetter = 'F';	// GCode feedrate
-const char extrudeLetter = 'E'; 	// GCode extrude
+const char feedrateLetter = 'F';						// GCode feedrate
+const char extrudeLetter = 'E'; 						// GCode extrude
 
 // Type for specifying which endstops we want to check
-typedef uint16_t EndstopChecks;
+typedef uint16_t EndstopChecks;							// must be large enough to hold a bitmap of drive numbers or ZProbeActive
+const EndstopChecks ZProbeActive = 1 << 15;				// must be distinct from 1 << (any drive number)
 
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
 
@@ -154,6 +155,7 @@ class GCodes
     bool ToolHeatersAtSetTemperatures(const Tool *tool) const;			// Wait for the heaters associated with the specified tool to reach their set temperatures
     bool AllAxesAreHomed() const;										// Return true if all axes are homed
     void SetAllAxesNotHomed();											// Flag all axes as not homed
+    void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
 
     Platform* platform;							// The RepRap machine
     bool active;								// Live and running?
@@ -210,6 +212,7 @@ class GCodes
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
     float speedFactorChange;					// factor by which we changed the speed factor since the last move
     float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
+    float lastProbedZ;							// the last height at which the Z probe stopped
     int8_t toolChangeSequence;					// Steps through the tool change procedure
 };
 
