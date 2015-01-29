@@ -122,6 +122,8 @@ public:
     void MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_t numDrives) const;	// Convert motor coordinates to machine coordinates
     void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const;
 
+    void Simulate(bool sim);							// Enter or leave simulation mode
+    float GetSimulationTime() const { return simulationTime; }	// Get the accumulated simulation time
     void PrintCurrentDda() const;						// For debugging
 
     static int32_t MotorEndPointToMachine(size_t drive, float coord);		// Convert a single motor position to number of steps
@@ -154,10 +156,13 @@ private:
     float lastTime;										// The last time we were called (secs)
     bool addNoMoreMoves;								// If true, allow no more moves to be added to the look-ahead
     bool active;										// Are we live and running?
+    bool simulating;									// Are we simulating, or really printing?
+    float simulationTime;								// Print time since we started simulating
     float currentFeedrate;								// Err... the current feed rate...
     volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move
     volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
     volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
+
     float xBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The X coordinates of the points on the bed at which to probe
     float yBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The Y coordinates of the points on the bed at which to probe
     float zBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The Z coordinates of the points on the bed at which to probe

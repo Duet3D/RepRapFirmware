@@ -123,7 +123,7 @@ class GCodes
     bool DoDwellTime(float dwell);										// Really wait for a bit
     bool HomeCartesian(StringRef& reply, bool& error);					// Home some axes
     bool HomeDelta(StringRef& reply, bool& error);						// Home the printer
-    bool DoSingleZProbeAtPoint();										// Probe at a given point
+    bool DoSingleZProbeAtPoint(int probePointIndex);					// Probe at a given point
     bool DoSingleZProbe();												// Probe where we are
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
     bool SetBedEquationWithProbe(StringRef& reply);						// Probes a series of points and sets the bed equation
@@ -169,6 +169,7 @@ class GCodes
     GCodeBuffer* fileMacroGCode;				// ...
     bool moveAvailable;							// Have we seen a move G Code and set it up?
     float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
+    float savedMoveBuffer[DRIVES+1];			// The position and feedrate when we started the current simulation
     EndstopChecks endStopsToCheck;				// Which end stops we check them on the next move
     bool disableDeltaMapping;					// True if delta mapping should be bypassed for the next move
     bool drivesRelative; 						// Are movements relative - all except X, Y and Z
@@ -214,6 +215,9 @@ class GCodes
     float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
     float lastProbedZ;							// the last height at which the Z probe stopped
     int8_t toolChangeSequence;					// Steps through the tool change procedure
+
+    bool simulating;
+    float simulationTime;
 };
 
 //*****************************************************************************************************

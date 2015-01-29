@@ -104,6 +104,8 @@ void GCodes::Reset()
 	{
 		extrusionFactors[i] = 1.0;
 	}
+	simulating = false;
+	simulationTime = 0.0;
 }
 
 void GCodes::DoFilePrint(GCodeBuffer* gb)
@@ -529,7 +531,7 @@ int GCodes::SetUpMove(GCodeBuffer *gb, StringRef& reply)
 		}
 	}
 
-	// Load the last position and feed rate into moveBuffer; if Move can't accept more, return false
+	// Load the last position and feed rate into moveBuffer
 	reprap.GetMove()->GetCurrentUserPosition(moveBuffer, disableDeltaMapping);
 
 	moveBuffer[DRIVES] *= speedFactorChange;		// account for any change in the speed factor since the last move
@@ -682,6 +684,7 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 		return false;
 	}
 
+	reprap.GetMove()->GetCurrentUserPosition(moveBuffer, false);		// make sure move buffer is up to date
 	if (LoadMoveBufferFromGCode(gb, true, false))
 	{
 		SetPositions(moveBuffer);
@@ -859,10 +862,10 @@ bool GCodes::HomeDelta(StringRef& reply, bool& error)
 // This lifts Z a bit, moves to the probe XY coordinates (obtained by a call to GetProbeCoordinates() ),
 // probes the bed height, and records the Z coordinate probed.  If you want to program any general
 // internal canned cycle, this shows how to do it.
-// On entry, probeCount specifies which of the 3, 4 or 5 points this is.
-bool GCodes::DoSingleZProbeAtPoint()
+// On entry, probePointIndex specifies which of the 3, 4 or 5 points this is.
+bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 {
-	reprap.GetMove()->SetIdentityTransform(); // It doesn't matter if these are called repeatedly
+	reprap.GetMove()->SetIdentityTransform(); 		// It doesn't matter if these are called repeatedly
 
 	for (size_t drive = 0; drive <= DRIVES; drive++)
 	{
@@ -883,7 +886,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 		return false;
 
 	case 1:	// Move to the correct XY coordinates
-		GetProbeCoordinates(probeCount, moveToDo[X_AXIS], moveToDo[Y_AXIS], moveToDo[Z_AXIS]);
+		GetProbeCoordinates(probePointIndex, moveToDo[X_AXIS], moveToDo[Y_AXIS], moveToDo[Z_AXIS]);
 		activeDrive[X_AXIS] = true;
 		activeDrive[Y_AXIS] = true;
 		// NB - we don't use the Z value
@@ -933,7 +936,7 @@ bool GCodes::DoSingleZProbeAtPoint()
 
 	default:
 		cannedCycleMoveCount = 0;
-		reprap.GetMove()->SetZBedProbePoint(probeCount, lastProbedZ);
+		reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ);
 		return true;
 	}
 }
@@ -981,19 +984,18 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 		return DoSingleZProbe();
 
 	int probePointIndex = gb->GetIValue();
+	const ZProbeParameters& rp = platform->GetZProbeParameters();
 
-	float x = (gb->Seen(axisLetters[X_AXIS])) ? gb->GetFValue() : moveBuffer[X_AXIS];
-	float y = (gb->Seen(axisLetters[Y_AXIS])) ? gb->GetFValue() : moveBuffer[Y_AXIS];
+	float x = (gb->Seen(axisLetters[X_AXIS])) ? gb->GetFValue() : moveBuffer[X_AXIS] - rp.xOffset;
+	float y = (gb->Seen(axisLetters[Y_AXIS])) ? gb->GetFValue() : moveBuffer[Y_AXIS] - rp.yOffset;
 	float z = (gb->Seen(axisLetters[Z_AXIS])) ? gb->GetFValue() : moveBuffer[Z_AXIS];
 
-	probeCount = probePointIndex;
-	reprap.GetMove()->SetXBedProbePoint(probeCount, x);
-	reprap.GetMove()->SetYBedProbePoint(probeCount, y);
+	reprap.GetMove()->SetXBedProbePoint(probePointIndex, x);
+	reprap.GetMove()->SetYBedProbePoint(probePointIndex, y);
 
 	if (z > SILLY_Z_VALUE)
 	{
-		reprap.GetMove()->SetZBedProbePoint(probeCount, z);
-		probeCount = 0;
+		reprap.GetMove()->SetZBedProbePoint(probePointIndex, z);
 		if (gb->Seen('S'))
 		{
 			zProbesSet = true;
@@ -1003,9 +1005,8 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	}
 	else
 	{
-		if (DoSingleZProbeAtPoint())
+		if (DoSingleZProbeAtPoint(probePointIndex))
 		{
-			probeCount = 0;
 			if (gb->Seen('S'))
 			{
 				zProbesSet = true;
@@ -1043,7 +1044,7 @@ bool GCodes::SetBedEquationWithProbe(StringRef& reply)
 		settingBedEquationWithProbe = true;
 	}
 
-	if (DoSingleZProbeAtPoint())
+	if (DoSingleZProbeAtPoint(probeCount))
 	{
 		probeCount++;
 	}
@@ -1320,9 +1321,7 @@ bool GCodes::SendConfigToLine()
 	return true;
 }
 
-// Function to handle dwell delays.  Return true for
-// dwell finished, false otherwise.
-
+// Function to handle dwell delays.  Return true for dwell finished, false otherwise.
 bool GCodes::DoDwell(GCodeBuffer *gb)
 {
 	if(!gb->Seen('P'))
@@ -1331,11 +1330,18 @@ bool GCodes::DoDwell(GCodeBuffer *gb)
 	float dwell = 0.001 * (float) gb->GetLValue(); // P values are in milliseconds; we need seconds
 
 	// Wait for all the queued moves to stop
-
 	if (!reprap.GetMove()->AllMovesAreFinished())
 		return false;
 
-	return DoDwellTime(dwell);
+	if (simulating)
+	{
+		simulationTime += dwell;
+		return true;
+	}
+	else
+	{
+		return DoDwellTime(dwell);
+	}
 }
 
 bool GCodes::DoDwellTime(float dwell)
@@ -1422,7 +1428,7 @@ void GCodes::SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb)
 				settingTemps = true;
 			}
 
-			if(settingTemps)
+			if(settingTemps && !simulating)
 			{
 				tool->SetVariables(standby, active);
 			}
@@ -1898,6 +1904,11 @@ bool GCodes::HandleGcode(GCodeBuffer* gb)
 	reply.Clear();
 
 	int code = gb->GetIValue();
+	if (simulating && code != 0 && code != 1 && code != 4 && code != 10 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
+	{
+		return true;			// we only simulate some gcodes
+	}
+
 	switch (code)
 	{
 	case 0: // There are no rapid moves...
@@ -2021,6 +2032,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 	reply.Clear();
 
 	int code = gb->GetIValue();
+	if (simulating && (code < 20 || code > 37) && code != 82 && code != 83 && code != 999 && code != 111 && code != 122)
+	{
+		return true;			// we don't yet simulate most M codes
+	}
+
 	switch (code)
 	{
 	case 0: // Stop
@@ -2273,6 +2289,40 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			const char* filename = gb->GetUnprecedentedString(true);	// get filename, or NULL if none provided
 			reprap.GetFileInfoResponse(reply, filename);
 			reply.cat("\n");
+		}
+		break;
+
+	case 37:	// Simulation mode on/off
+		if (gb->Seen('S'))
+		{
+			if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+			{
+				return false;
+			}
+
+			bool wasSimulating = simulating;
+			simulating = gb->GetIValue() != 0;
+			reprap.GetMove()->Simulate(simulating);
+
+			if (simulating)
+			{
+				simulationTime = 0.0;
+				if (!wasSimulating)
+				{
+					// Starting a new simulation, so save the current position
+					reprap.GetMove()->GetCurrentUserPosition(savedMoveBuffer, false);
+				}
+			}
+			else if (wasSimulating)
+			{
+				// Ending a simulation, so restore the position
+				SetPositions(savedMoveBuffer);
+				reprap.GetMove()->SetFeedrate(savedMoveBuffer[DRIVES]);
+			}
+		}
+		else
+		{
+			reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec\n", (simulating) ? "on" : "off", simulationTime, reprap.GetMove()->GetSimulationTime());
 		}
 		break;
 
@@ -3538,8 +3588,13 @@ bool GCodes::HandleTcode(GCodeBuffer* gb)
 {
     int code = gb->GetIValue();
     code += gb->GetToolNumberAdjust();
+	if (simulating)
+	{
+		return true;			// we don't yet simulate any T codes
+	}
+
 	bool result = ChangeTool(code);
-    if(result)
+    if (result)
     {
     	HandleReply(false, gb, "", 'T', code, false);
     }
@@ -3663,9 +3718,9 @@ void GCodes::SetPositions(float positionNow[DRIVES])
 {
 	// Transform the position so that e.g. if the user does G92 Z0,
 	// the position we report (which gets inverse-transformed) really is Z=0 afterwards
-	reprap.GetMove()->Transform(moveBuffer);
-	reprap.GetMove()->SetLiveCoordinates(moveBuffer);
-	reprap.GetMove()->SetPositions(moveBuffer);
+	reprap.GetMove()->Transform(positionNow);
+	reprap.GetMove()->SetLiveCoordinates(positionNow);
+	reprap.GetMove()->SetPositions(positionNow);
 }
 
 //*************************************************************************************

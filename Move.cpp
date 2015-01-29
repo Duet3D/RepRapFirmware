@@ -165,6 +165,9 @@ void Move::Init()
 	lastTime = reprap.GetPlatform()->Time();
 	longWait = lastTime;
 
+	simulating = false;
+	simulationTime = 0.0;
+
 	active = true;
 }
 
@@ -182,6 +185,7 @@ void Move::Spin()
 	}
 
 	// See if we can add another move to the ring
+	bool moveAdded = false;
 	if (!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
 	{
 		if (reprap.Debug(moduleMove))
@@ -202,45 +206,61 @@ void Move::Spin()
 			if (ddaRingAddPointer->Init(nextMove, endStopsToCheck, IsDeltaMode() && !noDeltaMapping))
 			{
 				ddaRingAddPointer = ddaRingAddPointer->GetNext();
+				moveAdded = true;
 			}
 		}
 	}
 
-	// See whether we need to kick off a move
-	DDA *cdda = currentDda;										// currentDda is volatile, so copy it
-	if (cdda == nullptr)
+	if (simulating)
 	{
-		// No DDA is executing, so start executing a new one if possible
-		DDA *dda = ddaRingGetPointer;
-		if (dda->GetState() == DDA::provisional)
+		if (!moveAdded && !DDARingEmpty())
 		{
-			dda->Prepare();
-		}
-		if (StartNextMove(Platform::GetInterruptClocks()))		// start the next move if none is executing already
-		{
-			cpu_irq_disable();
-			Interrupt();
-			cpu_irq_enable();
+			// No move added this time, so simulate executing one already in the queue
+			DDA *dda = ddaRingGetPointer;
+			simulationTime += dda->CalcTime();
+			liveCoordinatesValid = dda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
+			dda->Release();
+			ddaRingGetPointer = ddaRingGetPointer->GetNext();
 		}
 	}
 	else
 	{
-		// See whether we need to prepare any moves
-		int32_t preparedTime = 0;
-		DDA::DDAState st;
-		while ((st = cdda->GetState()) == DDA:: completed || st == DDA::executing || st == DDA::frozen)
+		// See whether we need to kick off a move
+		DDA *cdda = currentDda;										// currentDda is volatile, so copy it
+		if (cdda == nullptr)
 		{
-			preparedTime += cdda->GetTimeLeft();
-			cdda = cdda->GetNext();
+			// No DDA is executing, so start executing a new one if possible
+			DDA *dda = ddaRingGetPointer;
+			if (dda->GetState() == DDA::provisional)
+			{
+				dda->Prepare();
+			}
+			cpu_irq_disable();										// must call StartNextMove and Interrupt with interrupts disabled
+			if (StartNextMove(Platform::GetInterruptClocks()))		// start the next move if none is executing already
+			{
+				Interrupt();
+			}
+			cpu_irq_enable();
 		}
-
-		// If the number of prepared moves will execute in less than the minimum time, prepare another move
-		while (st == DDA::provisional && preparedTime < (int32_t)(DDA::stepClockRate/8))		// prepare moves one eighth of a second ahead of when they will be needed
+		else
 		{
-			cdda->Prepare();
-			preparedTime += cdda->GetTimeLeft();
-			cdda = cdda->GetNext();
-			st = cdda->GetState();
+			// See whether we need to prepare any moves
+			int32_t preparedTime = 0;
+			DDA::DDAState st;
+			while ((st = cdda->GetState()) == DDA:: completed || st == DDA::executing || st == DDA::frozen)
+			{
+				preparedTime += cdda->GetTimeLeft();
+				cdda = cdda->GetNext();
+			}
+
+			// If the number of prepared moves will execute in less than the minimum time, prepare another move
+			while (st == DDA::provisional && preparedTime < (int32_t)(DDA::stepClockRate/8))		// prepare moves one eighth of a second ahead of when they will be needed
+			{
+				cdda->Prepare();
+				preparedTime += cdda->GetTimeLeft();
+				cdda = cdda->GetNext();
+				st = cdda->GetState();
+			}
 		}
 	}
 
@@ -255,6 +275,7 @@ void Move::Diagnostics()
 
 	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxStepClocks: %u, minCalcClocks: %u, maxCalcClocks: %u, maxReps: %u\n",
 										maxStepTime, minCalcTime, maxCalcTime, maxReps);
+	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Simulation time: %f\n", simulationTime);
 	maxStepTime = maxCalcTime = maxReps = 0;
 	minCalcTime = 999;
 
@@ -672,7 +693,7 @@ void Move::CurrentMoveCompleted()
 	ddaRingGetPointer = ddaRingGetPointer->GetNext();
 }
 
-// Start the next move.
+// Start the next move. Must be called with interrupts disabled, to avoid a race condition.
 bool Move::StartNextMove(uint32_t startTime)
 {
 	if (ddaRingGetPointer->GetState() == DDA::frozen)
@@ -890,6 +911,16 @@ int Move::NumberOfXYProbePoints() const
 		}
 	}
 	return NUMBER_OF_PROBE_POINTS;
+}
+
+// Enter or leave simulation mode
+void Move::Simulate(bool sim)
+{
+	simulating = sim;
+	if (sim)
+	{
+		simulationTime = 0.0;
+	}
 }
 
 // For debugging

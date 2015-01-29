@@ -724,6 +724,7 @@ private:
 	  ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
 	  ZProbeParameters alternateZProbeParameters;	// Z probe values for the alternate sensor
 	  int zProbeType;								// the type of Z probe we are currently using
+	  int8_t zProbeModulationPin;					// which pin is used for Z probe modulation
 	  bool zProbeAxes[AXES];						// Z probe is used for these axes
 	  PidParameters pidParams[HEATERS];
 	  byte ipAddress[4];
@@ -773,7 +774,6 @@ private:
   float senseResistor;
   float maxStepperDigipotVoltage;
   int8_t zProbePin;
-  int8_t zProbeModulationPin;
 
   volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
   volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off

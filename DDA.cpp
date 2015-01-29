@@ -161,7 +161,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping)
 		totalDistance = Normalise(directionVector, DRIVES, AXES);
 		if (isDeltaMovement)
 		{
-			// The following are only needed when doing delta movements
+			// The following are only needed when doing delta movements. We could defer computing them until Prepare(), which would make simulation faster.
 			a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
 			cKc = (int32_t)(directionVector[Z_AXIS] * DriveMovement::Kc);
 
@@ -200,16 +200,17 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping)
 					{
 						// Calculate how many steps we need to move up before reversing
 						float hrev = directionVector[Z_AXIS] * drev + sqrt(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - a2plusb2 * fsquare(drev));
-						uint32_t numStepsUp = (uint32_t)((hrev - h0MinusZ0) * stepsPerMm);
+						int32_t numStepsUp = (int32_t)((hrev - h0MinusZ0) * stepsPerMm);
 
-						// We may be almost at the peak height already, in which case we don't really have a reversal
-						if (numStepsUp == 0)
+						// We may be almost at the peak height already, in which case we don't really have a reversal.
+						// We must not set reverseStartStep to 1, because then we would set the direction when Prepare() calls CalcStepTime(), before the previous move finishes.
+						if (numStepsUp < 1 || (dm.direction && (uint32_t)numStepsUp <= dm.totalSteps))
 						{
 							dm.mp.delta.reverseStartStep = dm.totalSteps + 1;
 						}
 						else
 						{
-							dm.mp.delta.reverseStartStep = numStepsUp + 1;
+							dm.mp.delta.reverseStartStep = (uint32_t)numStepsUp + 1;
 
 							// Correct the initial direction and the total number of steps
 							if (dm.direction)
@@ -516,6 +517,14 @@ float DDA::GetEndCoordinate(size_t drive, bool disableDeltaMapping)
 	}
 }
 
+// Calculate the time needed for this move. Called instead of Prepare when we are in simulation mode.
+float DDA::CalcTime() const
+{
+	return (topSpeed - startSpeed)/acceleration								// acceleration time
+			+ (totalDistance - accelDistance - decelDistance)/topSpeed		// steady speed time
+			+ (topSpeed - endSpeed)/acceleration;
+}
+
 // Prepare this DDA for execution
 void DDA::Prepare()
 {
@@ -610,12 +619,11 @@ void DDA::Prepare()
 // The remaining functions are speed-critical, so use full optimisation
 #pragma GCC optimize ("O3")
 
-// Start executing the move, returning true if Step() needs to be called immediately.
+// Start executing the move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled, to avoid a race condition.
 bool DDA::Start(uint32_t tim)
 //pre(state == frozen)
 {
 	moveStartTime = tim;
-	moveCompletedTime = 0;
 	state = executing;
 
 	if (firstStepTime == DriveMovement::NoStepTime)
@@ -731,12 +739,7 @@ bool DDA::Step()
 					uint32_t st0 = dm.nextStepTime;
 					if (now + minInterruptInterval >= st0)
 					{
-						if (st0 > moveCompletedTime)
-						{
-							moveCompletedTime = st0;							// save in case the move has finished
-						}
 						reprap.GetPlatform()->StepHigh(drive);
-
 						uint32_t st1 = (isDeltaMovement && drive < AXES) ? dm.CalcNextStepTimeDelta(*this, drive) : dm.CalcNextStepTimeCartesian(drive);
 						if (st1 < nextInterruptTime)
 						{
@@ -762,7 +765,7 @@ bool DDA::Step()
 
 		if (state == completed)
 		{
-			uint32_t finishTime = moveStartTime + moveCompletedTime;
+			uint32_t finishTime = Platform::GetInterruptClocks();
 			Move *move = reprap.GetMove();
 			move->CurrentMoveCompleted();				// tell Move that the current move is complete
 			return move->StartNextMove(finishTime);		// schedule the next move
@@ -796,7 +799,6 @@ void DDA::StopDrive(size_t drive)
 // It adjusts the end points of the current move to account for how far through the move we got.
 void DDA::MoveAborted(uint32_t clocksFromStart)
 {
-	moveCompletedTime = clocksFromStart + settleClocks;
 	for (size_t drive = 0; drive < AXES; ++drive)
 	{
 		StopDrive(drive);

@@ -118,7 +118,7 @@ Platform::Platform() :
 
 	massStorage = new MassStorage(this);
 
-	for (int8_t i = 0; i < MAX_FILES; i++)
+	for (size_t i = 0; i < MAX_FILES; i++)
 	{
 		files[i] = new FileStore(this);
 	}
@@ -135,11 +135,11 @@ void Platform::Init()
 	Serial.begin(BAUD_RATE);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 
 # if __cplusplus >= 201103L
-	static_assert(sizeof(nvData) <= 1024, "NVData too large");
+	static_assert(sizeof(nvData) <= FLASH_DATA_LENGTH, "NVData too large");
 # else
-	// We are relying on the compiler optimizing this out if the condition is false
+	// We are relying on the compiler optimising this out if the condition is false
 	// Watch out for the build warning "undefined reference to 'BadStaticAssert()' if this fails.
-	if (!(sizeof(nvData) <= 1024))
+	if (!(sizeof(nvData) <= FLASH_DATA_LENGTH))
 	{
 		extern void BadStaticAssert();
 		BadStaticAssert();
@@ -187,7 +187,6 @@ void Platform::Init()
 	// Z PROBE
 
 	zProbePin = Z_PROBE_PIN;
-	zProbeModulationPin = Z_PROBE_MOD_PIN;
 	zProbeAdcChannel = PinToAdcChannel(zProbePin);
 	InitZProbe();
 
@@ -319,22 +318,26 @@ void Platform::InitZProbe()
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
 
-	// zpl-2014-10-12: The Z-probe index of dc42's alternate sensor has moved from 3 to 4/5 to stay compatible with RRP's FW
 	if (nvData.zProbeType >= 1)
 	{
-		pinModeNonDue(zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(zProbeModulationPin, (nvData.zProbeType < 3) ? HIGH : LOW);	// enable the IR LED or alternate sensor
+		pinModeNonDue(nvData.zProbeModulationPin, OUTPUT);
+		digitalWriteNonDue(nvData.zProbeModulationPin, (nvData.zProbeType < 3) ? HIGH : LOW);	// enable the IR LED or alternate sensor
 	}
 }
 
 int Platform::GetZProbeChannel() const
 {
-	return (zProbeModulationPin == Z_PROBE_MOD_PIN07) ? 1 : 0;
+	return (nvData.zProbeModulationPin == Z_PROBE_MOD_PIN07) ? 1 : 0;
 }
 
 void Platform::SetZProbeChannel(int chan)
 {
-	zProbeModulationPin = (chan == 1) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
+	int temp = nvData.zProbeModulationPin;
+	nvData.zProbeModulationPin = (chan == 1) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
+	if (autoSaveEnabled && temp != nvData.zProbeModulationPin)
+	{
+		WriteNvData();
+	}
 }
 
 int Platform::GetRawZHeight() const
@@ -514,6 +517,7 @@ void Platform::ResetNvData()
 	nvData.switchZProbeParameters.Init(0.0);
 	nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
 	nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
+	nvData.zProbeModulationPin = Z_PROBE_MOD_PIN;
 
 	for (size_t i = 0; i < HEATERS; ++i)
 	{
@@ -862,7 +866,7 @@ void Platform::Tick()
 		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
 		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(zProbeModulationPin, LOW);		// turn off the IR emitter
+			digitalWriteNonDue(nvData.zProbeModulationPin, LOW);		// turn off the IR emitter
 		}
 		++tickState;
 		break;
@@ -875,7 +879,7 @@ void Platform::Tick()
 		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
 		if (nvData.zProbeType == 2 || nvData.zProbeType == 3)	// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(zProbeModulationPin, HIGH);		// turn on the IR emitter
+			digitalWriteNonDue(nvData.zProbeModulationPin, HIGH);		// turn on the IR emitter
 		}
 		tickState = 1;
 		break;

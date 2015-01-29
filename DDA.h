@@ -38,6 +38,7 @@ public:
 	void SetPrevious(DDA *p) { prev = p; }
 	void Release() { state = empty; }
 	void Prepare();													// Calculate all the values and freeze this DDA
+	float CalcTime() const;											// Calculate the time needed for this move (used for simulation)
 	void PrintIfHasStepError();
 
 	DDAState GetState() const { return state; }
@@ -60,7 +61,6 @@ public:
 
 private:
 	static const uint32_t minInterruptInterval = 6;					// about 2us minimum interval between interrupts, in clocks
-	static const uint32_t settleClocks = stepClockRate/50;			// settling time after hitting an endstop (20ms)
 
 	void RecalculateMove();
 	void CalcNewSpeeds();
@@ -110,7 +110,6 @@ private:
 	uint32_t timeNeeded;					// in clocks
 	uint32_t moveStartTime;					// clock count at which the move was started
 	uint32_t firstStepTime;					// in clocks, relative to the start of the move
-	uint32_t moveCompletedTime;				// in clocks, relative to the start of the move
 
 	DriveMovement ddm[DRIVES];				// These describe the state of each drive movement
 };
