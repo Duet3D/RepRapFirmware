@@ -73,6 +73,8 @@ Licence: GPL
 // The numbers of entries in each array must correspond with the values of DRIVES,
 // AXES, or HEATERS. Set values to -1 to flag unavailability.
 
+#define NUM_SERIAL_CHANNELS		(2)
+
 // DRIVES
 
 #define STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
@@ -584,6 +586,10 @@ public:
   const uint8_t* GateWay() const;
   void SetMACAddress(uint8_t mac[]);
   const uint8_t* MACAddress() const;
+  void SetBaudRate(size_t chan, uint32_t br);
+  uint32_t GetBaudRate(size_t chan) const;
+  void SetCommsProperties(size_t chan, uint32_t cp);
+  uint32_t GetCommsProperties(size_t chan) const;
   
   friend class FileStore;
   
@@ -695,6 +701,7 @@ public:
 //-------------------------------------------------------------------------------------------------------
   
 private:
+  void ResetChannel(size_t chan);					// re-initialise a serial channel
   
   // These are the structures used to hold out non-volatile data.
   // The SAM3X doesn't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
@@ -704,7 +711,7 @@ private:
   struct SoftwareResetData
   {
 	  static const uint16_t magicValue = 0x59B2;	// value we use to recognise that all the flash data has been written
-	  static const uint32_t nvAddress = 0;				// address in flash where we store the nonvolatile data
+	  static const uint32_t nvAddress = 0;			// address in flash where we store the nonvolatile data
 
 	  uint16_t magic;
 	  uint16_t resetReason;							// this records why we did a software reset, for diagnostic purposes
@@ -746,7 +753,6 @@ private:
   uint32_t errorCodeBits;
   
   void InitialiseInterrupts();
-  int GetRawZHeight() const;
   void GetStackUsage(size_t* currentStack, size_t* maxStack, size_t* neverUsed) const;
 
 // DRIVES
@@ -809,6 +815,8 @@ private:
 
   Line* line;
   Line* aux;
+  uint32_t baudRates[NUM_SERIAL_CHANNELS];
+  uint8_t commsParams[NUM_SERIAL_CHANNELS];
   uint8_t messageIndent;
 
 // Files

@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.00c-dc42"
-#define DATE "2015-01-29"
+#define VERSION "1.00d-dc42"
+#define DATE "2015-01-30"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -43,6 +43,8 @@ enum Compatibility
 };
 
 // Some numbers...
+
+#define AUX_BAUD_RATE	(57600)
 
 #define ABS_ZERO (-273.15)  // Celsius
 

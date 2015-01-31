@@ -3435,6 +3435,44 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		}
 		break;
 
+	case 575: // Set communications parameters
+		if (gb->Seen('P'))
+		{
+			size_t chan = gb->GetIValue();
+			if (chan < NUM_SERIAL_CHANNELS)
+			{
+				bool seen = false;
+				if (gb->Seen('B'))
+				{
+					platform->SetBaudRate(chan, gb->GetIValue());
+					seen = true;
+				}
+				if (gb->Seen('S'))
+				{
+					uint32_t val = gb->GetIValue();
+					platform->SetCommsProperties(chan, val);
+					switch (chan)
+					{
+					case 0:
+						serialGCode->SetCommsProperties(val);
+						break;
+					case 1:
+						auxGCode->SetCommsProperties(val);
+						break;
+					default:
+						break;
+					}
+					seen = true;
+				}
+				if (!seen)
+				{
+					uint32_t cp = platform->GetCommsProperties(chan);
+					reply.printf("Channel %d: baud rate %d, %s checksum\n", chan, platform->GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
+				}
+			}
+		}
+		break;
+
 	case 665: // Set delta configuration
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
@@ -3733,6 +3771,7 @@ GCodeBuffer::GCodeBuffer(Platform* p, const char* id)
 	identity = id;
 	writingFileDirectory = NULL; // Has to be done here as Init() is called every line.
 	toolNumberAdjust = 0;
+	checksumRequired = false;
 }
 
 void GCodeBuffer::Init()
@@ -3743,7 +3782,7 @@ void GCodeBuffer::Init()
 	state = idle;
 }
 
-int GCodeBuffer::CheckSum()
+int GCodeBuffer::CheckSum() const
 {
 	int cs = 0;
 	for (int i = 0; gcodeBuffer[i] != '*' && gcodeBuffer[i] != 0; i++)
@@ -3756,28 +3795,21 @@ int GCodeBuffer::CheckSum()
 
 // Add a byte to the code being assembled.  If false is returned, the code is
 // not yet complete.  If true, it is complete and ready to be acted upon.
-
 bool GCodeBuffer::Put(char c)
 {
-	bool result = false;
-	gcodeBuffer[gcodePointer] = c;
-
 	if (c == ';')
 	{
 		inComment = true;
 	}
-
-	if (c == '\n' || !c)
+	else if (c == '\n' || !c)
 	{
 		gcodeBuffer[gcodePointer] = 0;
-		Init();
 		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] && !writingFileDirectory) // Don't bother with blank/comment lines
 		{
 			platform->Message(HOST_MESSAGE, "%s%s\n", identity, gcodeBuffer);
 		}
 
 		// Deal with line numbers and checksums
-
 		if (Seen('*'))
 		{
 			int csSent = GetIValue();
@@ -3787,30 +3819,26 @@ bool GCodeBuffer::Put(char c)
 			{
 				snprintf(gcodeBuffer, GCODE_LENGTH, "M998 P%d", GetIValue());
 				Init();
-				result = true;
-				return result;
+				return true;
 			}
 
 			// Strip out the line number and checksum
-
+			gcodePointer = 0;
 			while (gcodeBuffer[gcodePointer] != ' ' && gcodeBuffer[gcodePointer])
 			{
 				gcodePointer++;
 			}
 
 			// Anything there?
-
 			if (!gcodeBuffer[gcodePointer])
 			{
 				// No...
 				gcodeBuffer[0] = 0;
 				Init();
-				result = true;
-				return result;
+				return false;
 			}
 
 			// Yes...
-
 			gcodePointer++;
 			int gp2 = 0;
 			while (gcodeBuffer[gcodePointer] != '*' && gcodeBuffer[gcodePointer])
@@ -3819,27 +3847,28 @@ bool GCodeBuffer::Put(char c)
 				gp2++;
 			}
 			gcodeBuffer[gp2] = 0;
-			Init();
 		}
-
-		result = true;
-	}
-	else
-	{
-		if (!inComment || writingFileDirectory)
+		else if (checksumRequired)
 		{
-			gcodePointer++;
+			gcodeBuffer[0] = 0;
+			Init();
+			return false;
+		}
+		Init();
+		return true;
+	}
+	else if (!inComment || writingFileDirectory)
+	{
+		gcodeBuffer[gcodePointer++] = c;
+		if (gcodePointer >= GCODE_LENGTH)
+		{
+			platform->Message(BOTH_ERROR_MESSAGE, "G-Code buffer length overflow.\n");
+			gcodePointer = 0;
+			gcodeBuffer[0] = 0;
 		}
 	}
 
-	if (gcodePointer >= GCODE_LENGTH)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "G-Code buffer length overflow.\n");
-		gcodePointer = 0;
-		gcodeBuffer[0] = 0;
-	}
-
-	return result;
+	return false;
 }
 
 bool GCodeBuffer::Put(const char *str, size_t len)

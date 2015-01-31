@@ -60,20 +60,22 @@ class GCodeBuffer
     void SetWritingFileDirectory(const char* wfd);		// Set the directory for the file to write the GCode in
     int GetToolNumberAdjust() const { return toolNumberAdjust; }
     void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
+    void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
     
   private:
 
     enum State { idle, executing, paused };
-    int CheckSum();										// Compute the checksum (if any) at the end of the G Code
+    int CheckSum() const;								// Compute the checksum (if any) at the end of the G Code
     Platform* platform;									// Pointer to the RepRap's controlling class
     char gcodeBuffer[GCODE_LENGTH];						// The G Code
     const char* identity;								// Where we are from (web, file, serial line etc)
     int gcodePointer;									// Index in the buffer
     int readPointer;									// Where in the buffer to read next
     bool inComment;										// Are we after a ';' character?
+    bool checksumRequired;								// True if we only accept commands with a valid checksum
     State state;										// Idle, executing or paused
     const char* writingFileDirectory;					// If the G Code is going into a file, where that is
-    int toolNumberAdjust;
+    int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 };
 
 //****************************************************************************************************

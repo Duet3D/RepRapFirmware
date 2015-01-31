@@ -131,8 +131,12 @@ void Platform::Init()
 	digitalWriteNonDue(atxPowerPin, LOW);		// ensure ATX power is off by default
 	pinModeNonDue(atxPowerPin, OUTPUT);
 
-	SerialUSB.begin(BAUD_RATE);
-	Serial.begin(BAUD_RATE);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
+	baudRates[0] = BAUD_RATE;
+	baudRates[1] = AUX_BAUD_RATE;
+	commsParams[0] = commsParams[1] = 0;
+
+	SerialUSB.begin(baudRates[0]);
+	Serial.begin(baudRates[1]);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 
 # if __cplusplus >= 201103L
 	static_assert(sizeof(nvData) <= FLASH_DATA_LENGTH, "NVData too large");
@@ -318,7 +322,7 @@ void Platform::InitZProbe()
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
 
-	if (nvData.zProbeType >= 1)
+	if (nvData.zProbeType >= 1 && nvData.zProbeType < 4)
 	{
 		pinModeNonDue(nvData.zProbeModulationPin, OUTPUT);
 		digitalWriteNonDue(nvData.zProbeModulationPin, (nvData.zProbeType < 3) ? HIGH : LOW);	// enable the IR LED or alternate sensor
@@ -340,11 +344,6 @@ void Platform::SetZProbeChannel(int chan)
 	}
 }
 
-int Platform::GetRawZHeight() const
-{
-	return (nvData.zProbeType != 0) ? analogRead(zProbePin) : 0;
-}
-
 // Return the Z probe data.
 // The ADC readings are 12 bits, so we convert them to 10-bit readings for compatibility with the old firmware.
 int Platform::ZProbe() const
@@ -355,6 +354,7 @@ int Platform::ZProbe() const
 		{
 		case 1:
 		case 3:
+		case 4:
 			// Simple IR sensor, or direct-mode ultrasonic sensor
 			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));
 
@@ -395,7 +395,7 @@ int Platform::GetZProbeType() const
 
 void Platform::SetZProbeAxes(const bool axes[AXES])
 {
-	for(int axis=0; axis<AXES; axis++)
+	for (size_t axis=0; axis<AXES; axis++)
 	{
 		nvData.zProbeAxes[axis] = axes[axis];
 	}
@@ -407,7 +407,7 @@ void Platform::SetZProbeAxes(const bool axes[AXES])
 
 void Platform::GetZProbeAxes(bool (&axes)[AXES])
 {
-	for(int axis=0; axis<AXES; axis++)
+	for (size_t axis=0; axis<AXES; axis++)
 	{
 		axes[axis] = nvData.zProbeAxes[axis];
 	}
@@ -418,6 +418,7 @@ float Platform::ZProbeStopHeight() const
 	switch (nvData.zProbeType)
 	{
 	case 0:
+	case 4:
 		return nvData.switchZProbeParameters.GetStopHeight(GetTemperature(0));
 	case 1:
 	case 2:
@@ -431,7 +432,7 @@ float Platform::ZProbeStopHeight() const
 
 void Platform::SetZProbeType(int pt)
 {
-	int newZProbeType = (pt >= 0 && pt <= 3) ? pt : 0;
+	int newZProbeType = (pt >= 0 && pt <= 4) ? pt : 0;
 	if (newZProbeType != nvData.zProbeType)
 	{
 		nvData.zProbeType = newZProbeType;
@@ -448,6 +449,7 @@ const ZProbeParameters& Platform::GetZProbeParameters() const
 	switch (nvData.zProbeType)
 	{
 	case 0:
+	case 4:
 	default:
 		return nvData.switchZProbeParameters;
 	case 1:
@@ -463,6 +465,7 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 	switch (nvData.zProbeType)
 	{
 	case 0:
+	case 4:
 		if (nvData.switchZProbeParameters != params)
 		{
 			nvData.switchZProbeParameters = params;
@@ -501,7 +504,7 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 // Return true if we must home X and Y before we home Z (i.e. we are using a bed probe)
 bool Platform::MustHomeXYBeforeZ() const
 {
-	return nvData.zProbeType != 0;
+	return nvData.zProbeType != 0 && nvData.zProbeAxes[Z_AXIS];
 }
 
 void Platform::ResetNvData()
@@ -512,7 +515,7 @@ void Platform::ResetNvData()
 	ARRAY_INIT(nvData.gateWay, GATE_WAY);
 	ARRAY_INIT(nvData.macAddress, MAC_ADDRESS);
 
-	nvData.zProbeType = 0;	// Default is to use the switch
+	nvData.zProbeType = 0;	// Default is to use no Z probe switch
 	ARRAY_INIT(nvData.zProbeAxes, Z_PROBE_AXES);
 	nvData.switchZProbeParameters.Init(0.0);
 	nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
@@ -862,24 +865,30 @@ void Platform::Tick()
 		break;
 
 	case 2:			// last conversion started was the Z probe, with IR LED on
-		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
-		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
-		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(nvData.zProbeModulationPin, LOW);		// turn off the IR emitter
+			uint16_t reading = (nvData.zProbeType != 4) ? GetAdcReading(zProbeAdcChannel) : (digitalRead(endStopPins[AXES])) ? 1023 : 0;
+			const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(reading);
+		}
+		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
+		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
+		{
+			digitalWriteNonDue(nvData.zProbeModulationPin, LOW);	// turn off the IR emitter
 		}
 		++tickState;
 		break;
 
 	case 4:			// last conversion started was the Z probe, with IR LED off if modulation is enabled
-		const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(GetAdcReading(zProbeAdcChannel));
+		{
+			uint16_t reading = (nvData.zProbeType != 4) ? GetAdcReading(zProbeAdcChannel) : (digitalRead(endStopPins[AXES])) ? 1023 : 0;
+			const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(reading);
+		}
 		// no break
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
-		StartAdcConversion(heaterAdcChannels[currentHeater]);	// read a thermistor
-		if (nvData.zProbeType == 2 || nvData.zProbeType == 3)	// if using a modulated IR sensor
+		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
+		if (nvData.zProbeType == 2 || nvData.zProbeType == 3)		// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(nvData.zProbeModulationPin, HIGH);		// turn on the IR emitter
+			digitalWriteNonDue(nvData.zProbeModulationPin, HIGH);	// turn on the IR emitter
 		}
 		tickState = 1;
 		break;
@@ -1143,7 +1152,8 @@ EndStopHit Platform::GetZProbeResult() const
 {
 	const int zProbeVal = ZProbe();
 	const int zProbeADValue =
-			(nvData.zProbeType == 3) ? nvData.alternateZProbeParameters.adcValue
+			(nvData.zProbeType == 4) ? nvData.switchZProbeParameters.adcValue
+			: (nvData.zProbeType == 3) ? nvData.alternateZProbeParameters.adcValue
 				: nvData.irZProbeParameters.adcValue;
 	return (zProbeVal >= zProbeADValue) ? lowHit
 			: (zProbeVal * 10 >= zProbeADValue * 9) ? lowNear	// if we are at/above 90% of the target value
@@ -1472,8 +1482,56 @@ float Platform::ActualInstantDv(size_t drive) const
 {
 	float idv = instantDvs[drive];
 	float eComp = elasticComp[drive];
-	// If we are4 using elastic compensation then we need to limit the instantDv to avoid velocityt mismatches
+	// If we are4 using elastic compensation then we need to limit the instantDv to avoid velocity mismatches
 	return (eComp <= 0.0) ? idv : min<float>(idv, 1.0/(eComp * driveStepsPerUnit[drive]));
+}
+
+void Platform::SetBaudRate(size_t chan, uint32_t br)
+{
+	if (chan < NUM_SERIAL_CHANNELS)
+	{
+		baudRates[chan] = br;
+		ResetChannel(chan);
+	}
+}
+
+uint32_t Platform::GetBaudRate(size_t chan) const
+{
+	return (chan < NUM_SERIAL_CHANNELS) ? baudRates[chan] : 0;
+}
+
+void Platform::SetCommsProperties(size_t chan, uint32_t cp)
+{
+	if (chan < NUM_SERIAL_CHANNELS)
+	{
+		commsParams[chan] = cp;
+		ResetChannel(chan);
+	}
+}
+
+uint32_t Platform::GetCommsProperties(size_t chan) const
+{
+	return (chan < NUM_SERIAL_CHANNELS) ? commsParams[chan] : 0;
+}
+
+// Re-initialise a serial channel.
+// Ideally, this would be part of the Line class. However, the Arduino core inexplicably fails to make the serial I/O begin() and end() members
+// virtual functions of a base class, which makes that difficult to do.
+void Platform::ResetChannel(size_t chan)
+{
+	switch(chan)
+	{
+	case 0:
+		SerialUSB.end();
+		SerialUSB.begin(baudRates[0]);
+		break;
+	case 1:
+		Serial.end();
+		Serial.begin(baudRates[1]);
+		break;
+	default:
+		break;
+	}
 }
 
 /*********************************************************************************

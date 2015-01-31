@@ -668,8 +668,8 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 	}
 	else if (type == 3)
 	{
-		// Add the static fields. For now this is just the machine name, but other fields could be added e.g. axis lengths.
-		response.cat(",\"myName\":");
+		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
+		response.catf(",\"geometry\":\"%s\",\"myName\":", move->IsDeltaMode() ? "delta" : "cartesian");
 		EncodeString(response, webserver->GetName(), 2, false);
 	}
 
