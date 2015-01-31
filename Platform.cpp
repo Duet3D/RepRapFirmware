@@ -322,10 +322,25 @@ void Platform::InitZProbe()
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
 
-	if (nvData.zProbeType >= 1 && nvData.zProbeType < 4)
+	switch (nvData.zProbeType)
 	{
+	case 1:
+	case 2:
 		pinModeNonDue(nvData.zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(nvData.zProbeModulationPin, (nvData.zProbeType < 3) ? HIGH : LOW);	// enable the IR LED or alternate sensor
+		digitalWriteNonDue(nvData.zProbeModulationPin, HIGH);	// enable the IR LED
+		break;
+
+	case 3:
+		pinModeNonDue(nvData.zProbeModulationPin, OUTPUT);
+		digitalWriteNonDue(nvData.zProbeModulationPin, LOW);	// enable the alternate sensor
+		break;
+
+	case 4:
+		pinModeNonDue(endStopPins[E0_AXIS], INPUT_PULLUP);
+		break;
+
+	default:
+		break;
 	}
 }
 
@@ -427,6 +442,41 @@ float Platform::ZProbeStopHeight() const
 		return nvData.alternateZProbeParameters.GetStopHeight(GetTemperature(0));
 	default:
 		return 0;
+	}
+}
+
+float Platform::GetZProbeDiveHeight() const
+{
+	switch (nvData.zProbeType)
+	{
+	case 1:
+	case 2:
+		return nvData.irZProbeParameters.diveHeight;
+	case 3:
+		return nvData.alternateZProbeParameters.diveHeight;
+	case 4:
+		return nvData.switchZProbeParameters.diveHeight;
+	default:
+		return Z_DIVE;
+	}
+}
+
+void Platform::SetZProbeDiveHeight(float h)
+{
+	switch (nvData.zProbeType)
+	{
+	case 1:
+	case 2:
+		nvData.irZProbeParameters.diveHeight = h;
+		break;
+	case 3:
+		nvData.alternateZProbeParameters.diveHeight = h;
+		break;
+	case 4:
+		nvData.switchZProbeParameters.diveHeight = h;
+		break;
+	default:
+		break;
 	}
 }
 
@@ -866,7 +916,7 @@ void Platform::Tick()
 
 	case 2:			// last conversion started was the Z probe, with IR LED on
 		{
-			uint16_t reading = (nvData.zProbeType != 4) ? GetAdcReading(zProbeAdcChannel) : (digitalRead(endStopPins[AXES])) ? 1023 : 0;
+			uint16_t reading = (nvData.zProbeType != 4) ? GetAdcReading(zProbeAdcChannel) : (digitalRead(endStopPins[E0_AXIS])) ? 4000 : 0;
 			const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(reading);
 		}
 		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
@@ -879,7 +929,7 @@ void Platform::Tick()
 
 	case 4:			// last conversion started was the Z probe, with IR LED off if modulation is enabled
 		{
-			uint16_t reading = (nvData.zProbeType != 4) ? GetAdcReading(zProbeAdcChannel) : (digitalRead(endStopPins[AXES])) ? 1023 : 0;
+			uint16_t reading = (nvData.zProbeType != 4) ? GetAdcReading(zProbeAdcChannel) : (digitalRead(endStopPins[E0_AXIS])) ? 4000 : 0;
 			const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(reading);
 		}
 		// no break

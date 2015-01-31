@@ -45,15 +45,10 @@ M92 E663:663                       	; Set extruder steps per mm
 ;G10 P2 S0 R0                       ; Set tool 2 operating and standby temperatures
 
 // Z probe and compensation definition
-;*** If you have an IR zprobe, change P0 to P1 in the following M558 command
-M558 P0 X0 Y0 Z0					; Z probe is a switch and is not used for homing any axes
-;G31 Z1.20 P500						; Set the IR zprobe height and threshold (put your own values here)
-;*** Adjust the XY coordinates in the following M557 commands if necessary to suit your build and the position of the zprobe
-M557 P0 X-50 Y-50                   ; Four... 
-M557 P1 X-50 Y50                    ; ...probe points...
-M557 P2 X50 Y50						; ...for bed...
-M557 P3 X50 Y-50					; ...levelling
-M557 P4 X0 Y0						; 5th probe point for levelling
+;*** If you have an IR zprobe instead of a switch, change P4 to P1 in the following M558 command
+M558 P4 X0 Y0 Z0 H8					; Z probe is a switch and is not used for homing any axes
+G31 X1.2 Y17.6 Z4.80 P500			; Set the zprobe height and threshold (put your own values here)
+
 ;*** If you are using axis compensation, put the figures in the following command
 M556 S78 X0 Y0 Z0                   ; Axis compensation here
 

@@ -206,7 +206,6 @@ class GCodes
     int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
     bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
     bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
-    bool settingBedEquationWithProbe;			// True if we're executing G32 without a macro
     float longWait;								// Timer for things that happen occasionally (seconds)
     bool limitAxes;								// Don't think outside the box.
     bool axisIsHomed[AXES];						// These record which of the axes have been homed
@@ -216,7 +215,8 @@ class GCodes
     float speedFactorChange;					// factor by which we changed the speed factor since the last move
     float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
     float lastProbedZ;							// the last height at which the Z probe stopped
-    int8_t toolChangeSequence;					// Steps through the tool change procedure
+    uint8_t toolChangeSequence;					// Steps through the tool change procedure
+    uint8_t setBedState;						// Steps through the setbed procedure
 
     bool simulating;
     float simulationTime;

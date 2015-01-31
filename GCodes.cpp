@@ -74,6 +74,7 @@ void GCodes::Init()
 	limitAxes = true;
 	SetAllAxesNotHomed();
 	toolChangeSequence = 0;
+	setBedState = 0;
 	coolingInverted = false;
 }
 
@@ -875,7 +876,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 	switch (cannedCycleMoveCount)
 	{
 	case 0: // Raise Z to 5mm. This only does anything on the first move; on all the others Z is already there
-		moveToDo[Z_AXIS] = Z_DIVE;
+		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight();
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
@@ -924,7 +925,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 		return false;
 
 	case 3:	// Raise the head 5mm
-		moveToDo[Z_AXIS] = Z_DIVE;
+		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight();
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
@@ -1026,38 +1027,62 @@ bool GCodes::SetBedEquationWithProbe(StringRef& reply)
 {
 	// zpl-2014-10-09: In order to stay compatible with old firmware versions, only execute bed.g
 	// if it is actually present in the sys directory
-	if (platform->GetMassStorage()->PathExists(SYS_DIR SET_BED_EQUATION))
+	switch (setBedState)
 	{
-		return DoFileMacro(SET_BED_EQUATION);
-	}
+	case 0:
+		{
+			FileStore *f = platform->GetFileStore(SYS_DIR, SET_BED_EQUATION, false);
+			if (f != NULL)
+			{
+				f->Close();
+				setBedState = 1;
+			}
+			else
+			{
+				setBedState = 2;
+			}
+		}
+		return false;
 
-	if (reprap.GetMove()->NumberOfXYProbePoints() < 3)
-	{
-		reply.copy("Bed probing: there needs to be 3 or more points set.\n");
-		return true;
-	}
+	case 1:
+		{
+			bool finished = DoFileMacro(SET_BED_EQUATION);
+			if (finished)
+			{
+				setBedState = 0;
+			}
+			return finished;
+		}
 
-	// zpl 2014-11-02: When calling G32, ensure bed compensation parameters are initially reset
-	if (!settingBedEquationWithProbe)
-	{
+	case 2:
+		if (reprap.GetMove()->NumberOfXYProbePoints() < 3)
+		{
+			reply.copy("Bed probing: there needs to be 3 or more points set.\n");
+			setBedState = 0;
+			return true;
+		}
+
+		// zpl 2014-11-02: When calling G32, ensure bed compensation parameters are initially reset
 		reprap.GetMove()->SetIdentityTransform();
-		settingBedEquationWithProbe = true;
-	}
+		++setBedState;
+		return false;
 
-	if (DoSingleZProbeAtPoint(probeCount))
-	{
-		probeCount++;
-	}
+	case 3:
+		if (DoSingleZProbeAtPoint(probeCount))
+		{
+			probeCount++;
+		}
 
-	if (probeCount >= reprap.GetMove()->NumberOfXYProbePoints())
-	{
-		probeCount = 0;
-		zProbesSet = true;
-		reprap.GetMove()->SetProbedBedEquation(reply);
-		settingBedEquationWithProbe = false;
-		return true;
+		if (probeCount >= reprap.GetMove()->NumberOfXYProbePoints())
+		{
+			probeCount = 0;
+			zProbesSet = true;
+			reprap.GetMove()->SetProbedBedEquation(reply);
+			setBedState = 0;
+			return true;
+		}
+		return false;
 	}
-	return false;
 }
 
 // This returns the (X, Y) points to probe the bed at probe point count.  When probing,
@@ -1286,7 +1311,7 @@ void GCodes::QueueFileToPrint(const char* fileName)
 
 void GCodes::DeleteFile(const char* fileName)
 {
-	if(!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), fileName))
+	if (!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), fileName))
 	{
 		platform->Message(BOTH_ERROR_MESSAGE, "Could not delete file \"%s\"\n", fileName);
 	}
@@ -3173,13 +3198,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 
     case 558: // Set or report Z probe type and for which axes it is used
 		{
-			bool seenP = false, seenR = false;
-			if (gb->Seen('P'))
-			{
-				platform->SetZProbeType(gb->GetIValue());
-				seenP = true;
-			}
-
+			bool seen = false;
 			bool zProbeAxes[AXES];
 			platform->GetZProbeAxes(zProbeAxes);
 			for (size_t axis=0; axis<AXES; axis++)
@@ -3187,24 +3206,38 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 				if (gb->Seen(axisLetters[axis]))
 				{
 					zProbeAxes[axis] = (gb->GetIValue() > 0);
-					seenP = true;
+					seen = true;
 				}
+			}
+			if (seen)
+			{
+				platform->SetZProbeAxes(zProbeAxes);
+			}
+
+			// We must get and set the Z probe type first before setting the dive height, because different probe types may have different dive heights
+			if (gb->Seen('P'))
+			{
+				platform->SetZProbeType(gb->GetIValue());
+				seen = true;
+			}
+
+			if (gb->Seen('H'))
+			{
+				platform->SetZProbeDiveHeight(gb->GetIValue());
+				seen = true;
 			}
 
 			if (gb->Seen('R'))
 			{
 				platform->SetZProbeChannel(gb->GetIValue());
-				seenR = true;
+				seen = true;
 			}
 
-			if (seenP)
+			if (!seen)
 			{
-				platform->SetZProbeAxes(zProbeAxes);
-			}
-			else if (!seenR)
-			{
-				reply.printf("Z Probe type is %d on channel %d and it is used for these axes:", platform->GetZProbeType(), platform->GetZProbeChannel());
-				for(size_t axis=0; axis<AXES; axis++)
+				reply.printf("Z Probe type is %d on channel %d with dive height %.1f and it is used for these axes:",
+						platform->GetZProbeType(), platform->GetZProbeChannel(), platform->GetZProbeDiveHeight());
+				for (size_t axis=0; axis<AXES; axis++)
 				{
 					if (zProbeAxes[axis])
 					{

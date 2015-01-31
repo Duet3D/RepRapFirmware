@@ -117,7 +117,7 @@ const float defaultDeltaHomedHeight = 200;		// mm
 
 #define HOME_FEEDRATES {50.0, 50.0, 100.0/60.0}	// mm/sec (dc42 increased Z because we slow down z-homing when approaching the target height)
 
-const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2;	// The indices of the Cartesian axes in drive arrays
+const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;	// The indices of the 3 tower motors of a delta printer in drive arrays
 
 // HEATERS - The bed is assumed to be the at index 0
@@ -418,6 +418,7 @@ struct ZProbeParameters
 	float height;					// the nozzle height at which the target ADC value is returned
 	float calibTemperature;			// the temperature at which we did the calibration
 	float temperatureCoefficient;	// the variation of height with bed temperature
+	float diveHeight;				// the dive height we use when probing
 
 	void Init(float h)
 	{
@@ -426,6 +427,7 @@ struct ZProbeParameters
 		height = h;
 		calibTemperature = 20.0;
 		temperatureCoefficient = 0.0;	// no default temperature correction
+		diveHeight = Z_DIVE;
 	}
 
 	float GetStopHeight(float temperature) const
@@ -650,8 +652,8 @@ public:
   // Z probe
 
   float ZProbeStopHeight() const;
-  float ZProbeXoffset() const;
-  float ZProbeYoffset() const;
+  float GetZProbeDiveHeight() const;
+  void SetZProbeDiveHeight(float h);
   int ZProbe() const;
   EndStopHit GetZProbeResult() const;
   int GetZProbeSecondaryValues(int& v1, int& v2);
