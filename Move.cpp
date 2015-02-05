@@ -98,6 +98,13 @@ void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machi
 	machinePos[Z_AXIS] = z;
 }
 
+void DeltaParameters::PrintParameters(StringRef& reply)
+{
+	reply.printf("Endstop adjustments X: %.2f Y: %.2f Z: %.2f, radius: %.2f, height: %.2f\n",
+					endstopAdjustments[X_AXIS], endstopAdjustments[Y_AXIS], endstopAdjustments[Z_AXIS], radius, homedHeight);
+}
+
+
 Move::Move(Platform* p, GCodes* g) : currentDda(NULL)
 {
 	active = false;
@@ -580,6 +587,51 @@ float Move::TriangleZ(float x, float y) const
 	return 0.0;
 }
 
+// Calibrate or set the bed equation after probing.
+// sParam is the value of the S parameter in the G30 command that provoked this call.
+void Move::FinishedBedProbing(int sParam, int probePointIndex, StringRef& reply)
+{
+	switch (sParam)
+	{
+	case 0:
+	default:
+		// Default action - set up a bed transform
+		SetProbedBedEquation(reply);
+		break;
+
+	case 4:
+		// On a delta, this calibrates the endstop adjustments and delta radius automatically after a 3 point probe.
+		// Probe points 1,2,3 must be near the bases of the X, Y and Z towers in that order. Point 4 must be in the centre.
+		if (IsDeltaMode() && NumberOfProbePoints() >= 4)
+		{
+			const float averageEdgeHeight = (zBedProbePoints[0] + zBedProbePoints[1] + zBedProbePoints[2])/3.0;
+			const float averageEndstopOffset = (deltaParams.GetEndstopAdjustment(X_AXIS) + deltaParams.GetEndstopAdjustment(Y_AXIS) + deltaParams.GetEndstopAdjustment(Z_AXIS))/3.0;
+			float probeRadiusSquared = 0.0;
+
+			// Adjust the endstops to account for the differences in reading, while setting the average of the new values to zero
+			for (size_t axis = 0; axis < 3; ++axis)
+			{
+				deltaParams.SetEndstopAdjustment(axis, deltaParams.GetEndstopAdjustment(axis) + averageEdgeHeight - averageEndstopOffset - zBedProbePoints[axis]);
+				probeRadiusSquared += fsquare(xBedProbePoints[axis]) + fsquare(yBedProbePoints[axis]);
+			}
+
+			// Adjust the delta radius to make the bed appear flat
+			const float edgeDistance = deltaParams.GetRadius() - sqrt(probeRadiusSquared/3.0);
+			const float factor = edgeDistance/sqrt(fsquare(deltaParams.GetDiagonal()) - fsquare(edgeDistance))
+									- deltaParams.GetRadius()/sqrt(fsquare(deltaParams.GetDiagonal()) - fsquare(deltaParams.GetRadius()));
+			const float diff = zBedProbePoints[3] - averageEdgeHeight;
+			deltaParams.SetRadius(deltaParams.GetRadius() + diff/factor);
+
+			// Adjust the homed height to account for the error at the centre and the change in average endstop correction
+			deltaParams.SetHomedHeight(deltaParams.GetHomedHeight() + averageEndstopOffset - zBedProbePoints[3]);
+
+			// Print the parameters so the user can see when they have converged
+			deltaParams.PrintParameters(reply);
+		}
+		break;
+	}
+}
+
 void Move::SetProbedBedEquation(StringRef& reply)
 {
 	switch(NumberOfProbePoints())
@@ -651,6 +703,7 @@ void Move::SetProbedBedEquation(StringRef& reply)
 	{
 		reply.catf(" [%.1f, %.1f, %.3f]", xBedProbePoints[point], yBedProbePoints[point], zBedProbePoints[point]);
 	}
+	reply.cat("\n");
 }
 
 /*

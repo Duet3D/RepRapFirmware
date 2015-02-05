@@ -33,7 +33,6 @@ typedef uint16_t EndstopChecks;							// must be large enough to hold a bitmap o
 const EndstopChecks ZProbeActive = 1 << 15;				// must be distinct from 1 << (any drive number)
 
 // Small class to hold an individual GCode and provide functions to allow it to be parsed
-
 class GCodeBuffer
 {
   public:
@@ -76,6 +75,17 @@ class GCodeBuffer
     State state;										// Idle, executing or paused
     const char* writingFileDirectory;					// If the G Code is going into a file, where that is
     int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
+};
+
+// Small class to stack the state when we execute a macro file
+class GCodeMachineState
+{
+public:
+	float feedrate;
+	FileData fileState;
+	bool drivesRelative;
+	bool axesRelative;
+	bool doingFileMacro;
 };
 
 //****************************************************************************************************
@@ -128,7 +138,7 @@ class GCodes
     bool DoSingleZProbeAtPoint(int probePointIndex);					// Probe at a given point
     bool DoSingleZProbe();												// Probe where we are
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
-    bool SetBedEquationWithProbe(StringRef& reply);						// Probes a series of points and sets the bed equation
+    bool SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation
     bool SetPrintZProbe(GCodeBuffer *gb, StringRef& reply);				// Either return the probe value, or set its threshold
     void SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb);			// Deal with a G10
     bool SetPositions(GCodeBuffer *gb);									// Deal with a G92
@@ -176,11 +186,8 @@ class GCodes
     bool disableDeltaMapping;					// True if delta mapping should be bypassed for the next move
     bool drivesRelative; 						// Are movements relative - all except X, Y and Z
     bool axesRelative;   						// Are movements relative - X, Y and Z
-    bool drivesRelativeStack[STACK];			// For dealing with Push and Pop
-    bool axesRelativeStack[STACK];				// For dealing with Push and Pop
-    float feedrateStack[STACK];					// For dealing with Push and Pop
-    FileData fileStack[STACK];
-    int8_t stackPointer;						// Push and Pop stack pointer
+    GCodeMachineState stack[STACK];				// State that we save when calling macro files
+    unsigned int stackPointer;					// Push and Pop stack pointer
     static const char axisLetters[AXES]; 		// 'X', 'Y', 'Z'
     float lastExtruderPosition[DRIVES - AXES];	// Extruder position of the last move fed into the Move class
 	float record[DRIVES+1];						// Temporary store for move positions
@@ -193,7 +200,6 @@ class GCodes
     FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) in
     FileStore* configFile;						// A file containing a macro
     bool doingFileMacro;						// Are we executing a macro file?
-    bool doResumeMacro;							// Are we executing the pause/resume macro file?
     float fractionOfFilePrinted;				// Only used to record the main file when a macro is being printed
     const char* eofString;						// What's at the end of an HTML file?
     uint8_t eofStringCounter;					// Check the...

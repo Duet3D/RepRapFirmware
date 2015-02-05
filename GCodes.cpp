@@ -91,7 +91,7 @@ void GCodes::Reset()
 	fileToPrint.Close();
 	fileBeingWritten = NULL;
 	endStopsToCheck = 0;
-	doingFileMacro = doResumeMacro = false;
+	doingFileMacro = false;
 	fractionOfFilePrinted = -1.0;
 	dwellWaiting = false;
 	stackPointer = 0;
@@ -289,19 +289,20 @@ bool GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
 
 bool GCodes::Push()
 {
-	if(stackPointer >= STACK)
+	if (stackPointer >= STACK)
 	{
 		platform->Message(BOTH_ERROR_MESSAGE, "Push(): stack overflow!\n");
 		return true;
 	}
 
-	if(!AllMovesAreFinishedAndMoveBufferIsLoaded())
+	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		return false;
 
-	drivesRelativeStack[stackPointer] = drivesRelative;
-	axesRelativeStack[stackPointer] = axesRelative;
-	feedrateStack[stackPointer] = moveBuffer[DRIVES];
-	fileStack[stackPointer].CopyFrom(fileBeingPrinted);
+	stack[stackPointer].drivesRelative = drivesRelative;
+	stack[stackPointer].axesRelative = axesRelative;
+	stack[stackPointer].doingFileMacro = doingFileMacro;
+	stack[stackPointer].feedrate = moveBuffer[DRIVES];
+	stack[stackPointer].fileState.CopyFrom(fileBeingPrinted);
 	if (stackPointer == 0)
 	{
 		fractionOfFilePrinted = fileBeingPrinted.FractionRead();	// save this so that we don't return the fraction of the macro file read
@@ -315,7 +316,7 @@ bool GCodes::Push()
 
 bool GCodes::Pop()
 {
-	if(stackPointer < 1)
+	if (stackPointer < 1)
 	{
 		platform->Message(BOTH_ERROR_MESSAGE, "Pop(): stack underflow!\n");
 		return true;
@@ -329,11 +330,11 @@ bool GCodes::Pop()
 	{
 		fractionOfFilePrinted = -1.0;			// restore live updates of fraction read from the file being printed
 	}
-	drivesRelative = drivesRelativeStack[stackPointer];
-	axesRelative = axesRelativeStack[stackPointer];
-
-	moveBuffer[DRIVES] = feedrateStack[stackPointer];
-	fileBeingPrinted.MoveFrom(fileStack[stackPointer]);
+	drivesRelative = stack[stackPointer].drivesRelative;
+	axesRelative = stack[stackPointer].axesRelative;
+	doingFileMacro = stack[stackPointer].doingFileMacro;
+	moveBuffer[DRIVES] = stack[stackPointer].feedrate;
+	fileBeingPrinted.MoveFrom(stack[stackPointer].fileState);
 
 	endStopsToCheck = 0;
 	platform->PopMessageIndent();
@@ -565,14 +566,13 @@ bool GCodes::ReadMove(float m[], EndstopChecks& ce, bool& noDeltaMapping)
 	return true;
 }
 
+// Run the specified macro file.
 bool GCodes::DoFileMacro(const char* fileName)
 {
 	// Have we started the file?
-
 	if (!doingFileMacro)
 	{
 		// No
-
 		if (!Push())
 		{
 			return false;
@@ -583,7 +583,7 @@ bool GCodes::DoFileMacro(const char* fileName)
 		{
 			// Don't use snprintf into scratchString here, because fileName may be aliased to scratchString
 			platform->Message(BOTH_ERROR_MESSAGE, "Macro file %s not found.\n", fileName);
-			if(!Pop())
+			if (!Pop())
 			{
 				platform->Message(BOTH_ERROR_MESSAGE, "Cannot pop the stack.\n");
 			}
@@ -596,7 +596,6 @@ bool GCodes::DoFileMacro(const char* fileName)
 	}
 
 	// Complete the current move (must do this before checking whether we have finished the file in case it didn't end in newline)
-
 	if (fileMacroGCode->Active())
 	{
 		fileMacroGCode->SetFinished(ActOnCode(fileMacroGCode));
@@ -604,11 +603,9 @@ bool GCodes::DoFileMacro(const char* fileName)
 	}
 
 	// Have we finished the file?
-
 	if (!fileBeingPrinted.IsLive())
 	{
 		// Yes
-
 		if (!Pop())
 		{
 			return false;
@@ -620,7 +617,6 @@ bool GCodes::DoFileMacro(const char* fileName)
 	}
 
 	// No - Do more of the file
-
 	DoFilePrint(fileMacroGCode);
 	return false;
 }
@@ -1000,7 +996,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 		if (gb->Seen('S'))
 		{
 			zProbesSet = true;
-			reprap.GetMove()->SetProbedBedEquation(reply);
+			reprap.GetMove()->FinishedBedProbing(gb->GetIValue(), probePointIndex, reply);
 		}
 		return true;
 	}
@@ -1011,7 +1007,19 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 			if (gb->Seen('S'))
 			{
 				zProbesSet = true;
-				reprap.GetMove()->SetProbedBedEquation(reply);
+				int sParam = gb->GetIValue();
+				if (sParam == 1)
+				{
+					// G30 with a silly Z value and S=1 is equivalent to G30 with no parameters in that it sets the current Z height
+					// This is useful because it adjusts the XY position to account for the probe offset.
+					moveBuffer[Z_AXIS] += lastProbedZ;
+					SetPositions(moveBuffer);
+					lastProbedZ = 0.0;
+				}
+				else
+				{
+					reprap.GetMove()->FinishedBedProbing(sParam, probePointIndex, reply);
+				}
 			}
 			return true;
 		}
@@ -1023,7 +1031,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 // This probes multiple points on the bed (three in a triangle or four in the corners),
 // then sets the bed transformation to compensate for the bed not quite being the plane Z = 0.
 // Called to execute a G32 command.
-bool GCodes::SetBedEquationWithProbe(StringRef& reply)
+bool GCodes::SetBedEquationWithProbe(int sParam, StringRef& reply)
 {
 	// zpl-2014-10-09: In order to stay compatible with old firmware versions, only execute bed.g
 	// if it is actually present in the sys directory
@@ -1073,11 +1081,12 @@ bool GCodes::SetBedEquationWithProbe(StringRef& reply)
 			probeCount++;
 		}
 
-		if (probeCount >= reprap.GetMove()->NumberOfXYProbePoints())
+		int numProbePoints =  reprap.GetMove()->NumberOfXYProbePoints();
+		if (probeCount >= numProbePoints)
 		{
 			probeCount = 0;
 			zProbesSet = true;
-			reprap.GetMove()->SetProbedBedEquation(reply);
+			reprap.GetMove()->FinishedBedProbing(0, numProbePoints, reply);
 			setBedState = 0;
 			return true;
 		}
@@ -1647,8 +1656,8 @@ void GCodes::HandleReply(bool error, const GCodeBuffer *gb, const char* reply, c
 	// The browser only fetches replies once a second or so. Therefore, when we send a web command in the middle of an SD card print,
 	// in order to be sure that we see the reply in the web interface, we must not send empty responses to the web interface unless
 	// the corresponding command also came from the web interface.
-	if (   (gMOrT != 'M' || (code != 111 && code != 122))	// web server reply for M111 and M122 is handled before we get here
-		&& (gb == webGCode || error)
+	if (   reply[0] != 0									// don't send empty replies to the web server, they overwrite more useful replies
+		&& (gMOrT != 'M' || (code != 111 && code != 122))	// web server reply for M111 and M122 is handled before we get here
 	   )
 	{
 		platform->Message((error) ? WEB_ERROR_MESSAGE : WEB_MESSAGE, reply);
@@ -2016,7 +2025,8 @@ bool GCodes::HandleGcode(GCodeBuffer* gb)
 		}
 		else
 		{
-			result = SetBedEquationWithProbe(reply);
+			int sParam = (gb->Seen('S')) ? gb->GetIValue() : 0;
+			result = SetBedEquationWithProbe(sParam, reply);
 		}
 		break;
 
@@ -2213,16 +2223,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			reply.copy("Cannot resume print, because no print is in progress!\n");
 			error = true;
 			break;
-		}
-
-		if (doResumeMacro)
-		{
-			if (!DoFileMacro("resume.g"))
-			{
-				result = false;
-				break;
-			}
-			doResumeMacro = false;
 		}
 
 		fileBeingPrinted.MoveFrom(fileToPrint);
@@ -3536,7 +3536,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 			}
 			if (gb->Seen('H'))
 			{
-				params.SetDeltaHomedHeight(gb->GetFValue() * distanceScale);
+				params.SetHomedHeight(gb->GetFValue() * distanceScale);
 				seen = true;
 			}
 			if (seen)
@@ -3571,17 +3571,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb)
 		bool seen = false;
 		if (gb->Seen('X'))
 		{
-			params.SetEndstopAdjustment(gb->GetFValue(), X_AXIS);
+			params.SetEndstopAdjustment(X_AXIS, gb->GetFValue());
 			seen = true;
 		}
 		if (gb->Seen('Y'))
 		{
-			params.SetEndstopAdjustment(gb->GetFValue(), Y_AXIS);
+			params.SetEndstopAdjustment(Y_AXIS, gb->GetFValue());
 			seen = true;
 		}
 		if (gb->Seen('Z'))
 		{
-			params.SetEndstopAdjustment(gb->GetFValue(), Z_AXIS);
+			params.SetEndstopAdjustment(Z_AXIS, gb->GetFValue());
 			seen = true;
 		}
 		if (!seen)

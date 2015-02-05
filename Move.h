@@ -40,13 +40,15 @@ public:
     void Init();
     void SetDiagonal(float d) { diagonal = d; Recalc(); }
     void SetRadius(float r);
-    void SetEndstopAdjustment(float x, size_t axis) { endstopAdjustments[axis] = x; }
+    void SetEndstopAdjustment(size_t axis, float x) { endstopAdjustments[axis] = x; }
     void SetPrintRadius(float r) { printRadius = r; printRadiusSquared = r * r; }
     float GetHomedHeight() const { return homedHeight; }
-    void SetDeltaHomedHeight(float h) { homedHeight = h; Recalc(); }
+    void SetHomedHeight(float h) { homedHeight = h; Recalc(); }
 
     float Transform(const float machinePos[AXES], size_t axis) const;				// Calculate the motor position for a single tower from a Cartesian coordinate
     void InverseTransform(float Ha, float Hb, float Hc, float machinePos[]) const;	// Calculate the Cartesian position from the motor positions
+
+    void PrintParameters(StringRef& reply);
 
 private:
 	void Recalc();
@@ -103,7 +105,7 @@ public:
     int NumberOfXYProbePoints() const;					// How many XY coordinates of probe points have been set (Zs may not have been probed yet)
     bool AllProbeCoordinatesSet(int index) const;		// XY, and Z all set for this one?
     bool XYProbeCoordinatesSet(int index) const;		// Just XY set for this one?
-    void SetProbedBedEquation(StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
+    void FinishedBedProbing(int sParam, int probePointIndex, StringRef& reply);	// Calibrate or set the bed equiation after probing
     float SecondDegreeTransformZ(float x, float y) const; // Used for second degree bed equation
     void SetAxisCompensation(int8_t axis, float tangent); // Set an axis-pair compensation angle
     float AxisCompensation(int8_t axis) const;			// The tangent value
@@ -131,6 +133,7 @@ public:
 
 private:
 
+    void SetProbedBedEquation(StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
     void BedTransform(float move[AXES]) const;			// Take a position and apply the bed compensations
     void GetCurrentMachinePosition(float m[DRIVES + 1], bool disableDeltaMapping) const;	// Get the current position and feedrate in untransformed coords
     void InverseBedTransform(float move[AXES]) const;	// Go from a bed-transformed point back to user coordinates
