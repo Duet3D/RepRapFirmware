@@ -45,8 +45,7 @@ class UARTClass : public HardwareSerial
     int read( void ) ;
     void flush( void ) ;
     size_t write( const uint8_t c ) ;
-	
-	size_t canWrite( void ) const /*override*/;		//***** DC42 added
+    size_t canWrite( void ) const override;		//***** DC42 added
 
     void IrqHandler( void ) ;
 

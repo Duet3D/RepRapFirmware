@@ -147,6 +147,15 @@ bool WEAK CDC_Setup(Setup& setup)
 int _serialPeek = -1;
 void Serial_::begin(uint32_t baud_count)
 {
+	// suppress "unused parameter" warning
+	(void)baud_count;
+}
+
+void Serial_::begin(uint32_t baud_count, uint8_t config)
+{
+	// suppress "unused parameter" warning
+	(void)baud_count;
+	(void)config;
 }
 
 void Serial_::end(void)
@@ -262,13 +271,13 @@ size_t Serial_::write(const uint8_t *buffer, size_t size)
 	return 0;
 }
 
-size_t Serial_::canWrite() const {
-	return USBD_SendSpace(CDC_TX);
-}
-
-
 size_t Serial_::write(uint8_t c) {
 	return write(&c, 1);
+}
+
+// Function added by DC42 so we can find out how much data we can write without blocking
+size_t Serial_::canWrite() const {
+	return USBD_SendSpace(CDC_TX);
 }
 
 // This operator is a convenient way for a sketch to check whether the

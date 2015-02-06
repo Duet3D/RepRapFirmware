@@ -69,10 +69,13 @@ const uint16_t STRING_LANGUAGE[2] = {
 const uint8_t STRING_PRODUCT[] = USB_PRODUCT;
 
 #if USB_VID == 0x2341
-#define USB_MANUFACTURER "Arduino LLC"
+#  if defined(USB_MANUFACTURER)
+#    undef USB_MANUFACTURER
+#  endif
+#  define USB_MANUFACTURER "Arduino LLC"
 #elif !defined(USB_MANUFACTURER)
 // Fall through to unknown if no manufacturer name was provided in a macro
-#define USB_MANUFACTURER "Unknown"
+#  define USB_MANUFACTURER "Unknown"
 #endif
 
 const uint8_t STRING_MANUFACTURER[12] = USB_MANUFACTURER;
@@ -139,7 +142,7 @@ uint32_t USBD_Available(uint32_t ep)
 //	Return number of bytes read
 uint32_t USBD_Recv(uint32_t ep, void* d, uint32_t len)
 {
-	if (!_usbConfiguration || len < 0)
+	if (!_usbConfiguration)
 		return -1;
 
 	LockEP lock(ep);
@@ -166,15 +169,15 @@ uint32_t USBD_Recv(uint32_t ep)
 }
 
 //	Space in send EP
+// DC42 uncommented and modified this function to support the canWrite function in file CDC.cpp
 uint32_t USBD_SendSpace(uint32_t ep)
 {
 	if (!UDD_ReadWriteAllowed(ep & 0xF))
-    {
-        //printf("pb "); // UOTGHS->UOTGHS_DEVEPTISR[%d]=0x%X\n\r", ep, UOTGHS->UOTGHS_DEVEPTISR[ep]);
+	{
+		//printf("pb "); // UOTGHS->UOTGHS_DEVEPTISR[%d]=0x%X\n\r", ep, UOTGHS->UOTGHS_DEVEPTISR[ep]);
 		return 0;
-    }
-
-    return ((ep==0) ? EP0_SIZE : EPX_SIZE) - UDD_FifoByteCount(ep & 0xF);
+	}
+	return ((ep==0) ? EP0_SIZE : EPX_SIZE) - UDD_FifoByteCount(ep & 0xF);
 }
 
 //	Blocking Send of data to an endpoint
