@@ -157,17 +157,33 @@ Licence: GPL
 
 RepRap reprap;
 
+const char *moduleName[] =
+{
+	"Platform",
+	"Network",
+	"Webserver",
+	"GCodes",
+	"Move",
+	"Heat",
+	"DDA",
+	"?","?","?","?","?","?","?","?",
+	"none"
+};
+
 //*************************************************************************************************
 
 // RepRap member functions.
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : active(false), debug(0), stopped(false), currentModule(noModule), ticksInSpinState(0), resetting(false), fileInfoDetected(false), printStartTime(0.0)
+RepRap::RepRap() : active(false), debug(0), stopped(false), spinningModule(noModule), ticksInSpinState(0),
+		resetting(false), fileInfoDetected(false), printStartTime(0.0), gcodeReply(gcodeReplyBuffer, GCODE_REPLY_LENGTH),
+		currentLayer(0), firstLayerDuration(0.0), firstLayerHeight(0.0), firstLayerFilament(0.0), firstLayerProgress(0.0),
+		warmUpDuration(0.0), layerEstimatedTimeLeft(0.0), lastLayerTime(0.0), lastLayerFilament(0.0), numLayerSamples(0)
 {
   platform = new Platform();
-  network = new Network();
-  webserver = new Webserver(platform);
+  network = new Network(platform);
+  webserver = new Webserver(platform, network);
   gCodes = new GCodes(platform, webserver);
   move = new Move(platform, gCodes);
   heat = new Heat(platform, gCodes);
@@ -179,6 +195,14 @@ void RepRap::Init()
   debug = 0;
   activeExtruders = 1;		// we always report at least 1 extruder to the web interface
   activeHeaters = 2;		// we always report the bed heater + 1 extruder heater to the web interface
+  SetPassword(DEFAULT_PASSWORD);
+  SetName(DEFAULT_NAME);
+
+  beepFrequency = beepDuration = 0;
+  message[0] = 0;
+
+  gcodeReply[0] = 0;
+  replySeq = 0;
   processingConfig = true;
 
   // All of the following init functions must execute reasonably quickly before the watchdog times us out
@@ -216,7 +240,7 @@ void RepRap::Init()
 
   bool runningTheFile = false;
   bool initialisingInProgress = true;
-  while(initialisingInProgress)
+  while (initialisingInProgress)
   {
 	  Spin();
 	  if(gCodes->PrintingAFile())
@@ -233,8 +257,15 @@ void RepRap::Init()
   }
   processingConfig = false;
 
-  platform->AppendMessage(HOST_MESSAGE, "\nStarting network...\n");
-  network->Init(); // Need to do this here, as the configuration GCodes may set IP address etc.
+  if (network->IsEnabled())
+  {
+	  platform->AppendMessage(HOST_MESSAGE, "\nStarting network...\n");
+	  network->Init(); // Need to do this here, as the configuration GCodes may set IP address etc.
+  }
+  else
+  {
+	  platform->AppendMessage(HOST_MESSAGE, "\nNetwork disabled.\n");
+  }
 
   platform->AppendMessage(HOST_MESSAGE, "\n%s is up and running.\n", NAME);
   fastLoop = FLT_MAX;
@@ -258,32 +289,35 @@ void RepRap::Spin()
 	if(!active)
 		return;
 
-	currentModule = modulePlatform;
+	spinningModule = modulePlatform;
 	ticksInSpinState = 0;
 	platform->Spin();
 
-	currentModule = moduleNetwork;
+	spinningModule = moduleNetwork;
 	ticksInSpinState = 0;
 	network->Spin();
 
-	currentModule = moduleWebserver;
+	spinningModule = moduleWebserver;
 	ticksInSpinState = 0;
 	webserver->Spin();
 
-	currentModule = moduleGcodes;
+	spinningModule = moduleGcodes;
 	ticksInSpinState = 0;
 	gCodes->Spin();
 
-	currentModule = moduleMove;
+	spinningModule = moduleMove;
 	ticksInSpinState = 0;
 	move->Spin();
 
-	currentModule = moduleHeat;
+	spinningModule = moduleHeat;
 	ticksInSpinState = 0;
 	heat->Spin();
 
-	currentModule = noModule;
+	spinningModule = noModule;
 	ticksInSpinState = 0;
+
+	// Update the print stats
+	UpdatePrintProgress();
 
 	// Keep track of the loop time
 
@@ -356,6 +390,44 @@ void RepRap::EmergencyStop()
 	}
 }
 
+void RepRap::SetDebug(Module m, bool enable)
+{
+	if (enable)
+	{
+		debug |= (1 << m);
+	}
+	else
+	{
+		debug &= ~(1 << m);
+	}
+	PrintDebug();
+}
+
+void RepRap::SetDebug(bool enable)
+{
+	debug = (enable) ? 0xFFFF : 0;
+}
+
+void RepRap::PrintDebug()
+{
+	if (debug != 0)
+	{
+		platform->Message(BOTH_MESSAGE, "Debugging enabled for modules:");
+		for(uint8_t i=0; i<16;i++)
+		{
+			if (debug & (1 << i))
+			{
+				platform->AppendMessage(BOTH_MESSAGE, " %s", moduleName[i]);
+			}
+		}
+		platform->AppendMessage(BOTH_MESSAGE, "\n");
+	}
+	else
+	{
+		platform->Message(BOTH_MESSAGE, "Debugging disabled\n");
+	}
+}
+
 /*
  * The first tool added becomes the one selected.  This will not happen in future releases.
  */
@@ -409,7 +481,7 @@ void RepRap::PrintTool(int toolNumber, StringRef& reply) const
 			return;
 		}
 	}
-	reply.copy("Attempt to print details of non-existent tool.");
+	reply.copy("Attempt to print details of non-existent tool.\n");
 }
 
 void RepRap::StandbyTool(int toolNumber)
@@ -440,11 +512,34 @@ Tool* RepRap::GetTool(int toolNumber)
 	while(tool)
 	{
 		if(tool->Number() == toolNumber)
+		{
 			return tool;
+		}
 		tool = tool->Next();
 	}
 	return NULL; // Not an error
 }
+
+#if 0	// not used
+Tool* RepRap::GetToolByDrive(int driveNumber)
+{
+	Tool* tool = toolList;
+
+	while (tool)
+	{
+		for(uint8_t drive = 0; drive < tool->DriveCount(); drive++)
+		{
+			if (tool->Drive(drive) + AXES == driveNumber)
+			{
+				return tool;
+			}
+		}
+
+		tool = tool->Next();
+	}
+	return NULL;
+}
+#endif
 
 void RepRap::SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures)
 {
@@ -487,10 +582,360 @@ void RepRap::Tick()
 				}
 
 				move->PrintCurrentDda();
-				platform->SoftwareReset(SoftwareResetReason::stuckInSpin + (unsigned int)currentModule);
+				platform->SoftwareReset(SoftwareResetReason::stuckInSpin);
 			}
 		}
 	}
+}
+
+// Get the JSON status response for the web server (or later for the M105 command).
+// Type 1 is the ordinary JSON status response.
+// Type 2 is the same except that static parameters are also included.
+// Type 3 is the same but instead of static parameters we report print estimation values.
+void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebserver)
+{
+	char ch;
+
+	// Machine status
+	if (processingConfig)
+	{
+		// Reading the configuration file
+		ch = 'C';
+	}
+	else if (IsStopped())
+	{
+		// Halted
+		ch = 'H';
+	}
+	else if (gCodes->IsPausing())
+	{
+		// Pausing / Decelerating
+		ch = 'D';
+	}
+	else if (gCodes->IsResuming())
+	{
+		// Resuming
+		ch = 'R';
+	}
+	else if (gCodes->IsPaused())
+	{
+		// Paused / Stopped
+		ch = 'S';
+	}
+	else if (gCodes->PrintingAFile())
+	{
+		// Printing
+		ch = 'P';
+	}
+	else if (gCodes->DoingFileMacro() || !move->NoLiveMovement())
+	{
+		// Busy
+		ch = 'B';
+	}
+	else
+	{
+		// Idle
+		ch = 'I';
+	}
+	response.printf("{\"status\":\"%c\",\"coords\":{", ch);
+
+	/* Coordinates */
+	{
+		float liveCoordinates[DRIVES + 1];
+		if (currentTool != NULL)
+		{
+			const float *offset = currentTool->GetOffset();
+			for (size_t i = 0; i < AXES; ++i)
+			{
+				liveCoordinates[i] += offset[i];
+			}
+		}
+		move->LiveCoordinates(liveCoordinates);
+
+		// Homed axes
+		response.catf("\"axesHomed\":[%d,%d,%d]",
+				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
+				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
+				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
+
+		// Actual and theoretical extruder positions since power up, last G92 or last M23
+		response.catf(",\"extr\":");		// announce actual extruder positions
+		ch = '[';
+		for (uint8_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
+		{
+			response.catf("%c%.1f", ch, liveCoordinates[AXES + extruder]);
+			ch = ',';
+		}
+
+		// XYZ positions
+		response.cat("],\"xyz\":");
+		ch = '[';
+		for (uint8_t axis = 0; axis < AXES; axis++)
+		{
+			response.catf("%c%.2f", ch, liveCoordinates[axis]);
+			ch = ',';
+		}
+	}
+
+	// Current tool number
+	int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
+	response.catf("]},\"currentTool\":%d", toolNumber);
+
+	/* Output - only reported once */
+	{
+		bool sendBeep = (beepDuration != 0 && beepFrequency != 0);
+		bool sendMessage = (message[0]) && ((gCodes->HaveAux() && !forWebserver) || (!gCodes->HaveAux() && forWebserver));
+		if (sendBeep || sendMessage)
+		{
+			response.cat(",\"output\":{");
+
+			// Report beep values
+			if (sendBeep)
+			{
+				response.catf("\"beepDuration\":%d,\"beepFrequency\":%d", beepDuration, beepFrequency);
+				if (sendMessage)
+				{
+					response.cat(",");
+				}
+
+				beepFrequency = beepDuration = 0;
+			}
+
+			// Report message
+			if (sendMessage)
+			{
+				response.cat("\"message\":");
+				EncodeString(response, message, 2, false);
+
+				message[0] = 0;
+			}
+			response.cat("}");
+		}
+	}
+
+	/* Parameters */
+	{
+		// ATX power
+		response.catf(",\"params\":{\"atxPower\":%d", platform->AtxPower() ? 1 : 0);
+
+		// Cooling fan value
+		float fanValue = (gCodes->CoolingInverted() ? 1.0 - platform->GetFanValue() : platform->GetFanValue());
+		response.catf(",\"fanPercent\":%.2f", fanValue * 100.0);
+
+		// Speed and Extrusion factors
+		response.catf(",\"speedFactor\":%.2f,\"extrFactors\":", gCodes->GetSpeedFactor() * 100.0);
+		for (uint8_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
+		{
+			response.catf("%c%.2f", (extruder == 0) ? '[' : ',', gCodes->GetExtrusionFactors()[extruder] * 100.0);
+		}
+		response.cat("]}");
+	}
+
+	// G-code reply sequence for webserver
+	if (forWebserver)
+	{
+		response.catf(",\"seq\":%d", replySeq);
+
+		// There currently appears to be no need for this one, so skip it
+		//response.catf(",\"buff\":%u", webserver->GetGcodeBufferSpace());
+	}
+
+	/* Sensors */
+	{
+		response.cat(",\"sensors\":{");
+
+		// Probe
+		int v0 = platform->ZProbe();
+		int v1, v2;
+		switch (platform->GetZProbeSecondaryValues(v1, v2))
+		{
+			case 1:
+				response.catf("\"probeValue\":\%d,\"probeSecondary\":[%d]", v0, v1);
+				break;
+			case 2:
+				response.catf("\"probeValue\":\%d,\"probeSecondary\":[%d,%d]", v0, v1, v2);
+				break;
+			default:
+				response.catf("\"probeValue\":%d", v0);
+				break;
+		}
+
+		// Fan RPM
+		response.catf(",\"fanRPM\":%d}", (unsigned int)platform->GetFanRPM());
+	}
+
+	/* Temperatures */
+	{
+		response.cat(",\"temps\":{");
+
+		/* Bed */
+#if HOT_BED != -1
+		{
+			response.catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d},",
+					heat->GetTemperature(HOT_BED), heat->GetActiveTemperature(HOT_BED),
+					heat->GetStatus(HOT_BED));
+		}
+#endif
+
+		/* Heads */
+		{
+			response.cat("\"heads\":{\"current\":");
+
+			// Current temperatures
+			ch = '[';
+			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			{
+				response.catf("%c%.1f", ch, heat->GetTemperature(heater));
+				ch = ',';
+			}
+
+			// Active temperatures
+			response.catf("],\"active\":");
+			ch = '[';
+			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			{
+				response.catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
+				ch = ',';
+			}
+
+			// Standby temperatures
+			response.catf("],\"standby\":");
+			ch = '[';
+			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			{
+				response.catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
+				ch = ',';
+			}
+
+			// Heater statuses (0=off, 1=standby, 2=active, 3=fault)
+			response.cat("],\"state\":");
+			ch = '[';
+			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			{
+				response.catf("%c%d", ch, (int)heat->GetStatus(heater));
+				ch = ',';
+			}
+		}
+		response.cat("]}}");
+	}
+
+	// Time since last reset
+	response.catf(",\"time\":%.1f", platform->Time());
+
+	/* Extended Status Response */
+	if (type == 2)
+	{
+		// Cold Extrude/Retract
+		response.catf(",\"coldExtrudeTemp\":%1.f", ColdExtrude() ? 0 : HOT_ENOUGH_TO_EXTRUDE);
+		response.catf(",\"coldRetractTemp\":%1.f", ColdExtrude() ? 0 : HOT_ENOUGH_TO_RETRACT);
+
+		// Delta configuration
+		response.catf(",\"geometry\":\"%s\"", move->IsDeltaMode() ? "delta" : "cartesian");
+
+		// Machine name
+		response.cat(",\"name\":");
+		EncodeString(response, myName, 2, false);
+
+		/* Probe */
+		{
+			const ZProbeParameters& probeParams = platform->GetZProbeParameters();
+
+			// Trigger threshold
+			response.catf(",\"probe\":{\"threshold\":%d", probeParams.adcValue);
+
+			// Trigger height
+			response.catf(",\"height\":%.2f", probeParams.height);
+
+			// Type
+			response.catf(",\"type\":%d}", platform->GetZProbeType());
+		}
+
+		/* Tool Mapping */
+		{
+			response.cat(",\"tools\":[");
+			for(Tool *tool=toolList; tool != NULL; tool = tool->Next())
+			{
+				// Heaters
+				response.cat("{\"heaters\":[");
+				for(uint8_t heater=0; heater<tool->HeaterCount(); heater++)
+				{
+					response.catf("%d", tool->Heater(heater));
+					if (heater < tool->HeaterCount() - 1)
+					{
+						response.cat(",");
+					}
+				}
+
+				// Extruder drives
+				response.cat("],\"drives\":[");
+				for(uint8_t drive=0; drive<tool->DriveCount(); drive++)
+				{
+					response.catf("%d", tool->Drive(drive));
+					if (drive < tool->DriveCount() - 1)
+					{
+						response.cat(",");
+					}
+				}
+
+				// Do we have any more tools?
+				if (tool->Next() != NULL)
+				{
+					response.cat("]},");
+				}
+				else
+				{
+					response.cat("]}");
+				}
+			}
+			response.cat("]");
+		}
+	}
+	else if (type == 3)
+	{
+		// Current Layer
+		response.catf(",\"currentLayer\":%d", currentLayer);
+
+		// Current Layer Time
+		response.catf(",\"currentLayerTime\":%.1f", (lastLayerTime > 0.0) ? (platform->Time() - lastLayerTime) : 0.0);
+
+		// Raw Extruder Positions
+		response.catf("],\"extrRaw\":");		// announce the extruder positions
+		ch = '[';
+		for (size_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
+		{
+			response.catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
+			ch = ',';
+		}
+
+		// Fraction of file printed
+		response.catf("],\"fractionPrinted\":%.1f", (gCodes->PrintingAFile()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0);
+
+		// First Layer Duration
+		response.catf(",\"firstLayerDuration\":%.1f", firstLayerDuration);
+
+		// First Layer Height
+		response.catf(",\"firstLayerHeight\":%.2f", firstLayerHeight);
+
+		// Print Duration
+		response.catf(",\"printDuration\":%.1f", (printStartTime > 0.0) ? (platform->Time() - printStartTime) : 0.0);
+
+		// Warm-Up Time
+		response.catf(",\"warmUpDuration\":%.1f", warmUpDuration);
+
+		/* Print Time Estimations */
+		{
+			// Based on file progress
+			response.catf(",\"timesLeft\":{\"file\":%.1f", EstimateTimeLeft(0));
+
+			// Based on filament usage
+			response.catf(",\"filament\":%.1f", EstimateTimeLeft(1));
+
+			// Based on layers
+			response.catf(",\"layer\":%.1f}", EstimateTimeLeft(2));
+		}
+	}
+
+	response.cat("}");
 }
 
 // Get the JSON status response for the web server or M105 command.
@@ -498,17 +943,16 @@ void RepRap::Tick()
 // Type 1 is the new-style webserver status response.
 // Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
 // Type 3 is the M105 S3 response, which is like the M105 S2 response except that static values are also included.
-// 'seq' is the response sequence number, not needed for the type 2 response because that field is omitted.
-void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
+// 'seq' is the response sequence number, if it is not -1 and we have a higher sequence number then we send the gcode response
+void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq) const
 {
-	const GCodes *gc = reprap.GetGCodes();
 	if (type != 0)
 	{
 		// New-style status request
 		// Send the printing/idle status
 		char ch = (processingConfig) ? 'C'
 					: (reprap.IsStopped()) ? 'S'
-					: (gc->PrintingAFile()) ? 'P'
+					: (gCodes->PrintingAFile()) ? 'P'
 					: 'I';
 		response.printf("{\"status\":\"%c\",\"heaters\":", ch);
 
@@ -573,14 +1017,14 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 		ch = '[';
 		for (int8_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
 		{
-			response.catf("%c%.1f", ch, gc->GetExtruderPosition(drive));
+			response.catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
 			ch = ',';
 		}
 		response.cat("]");
 
 		// Send the speed and extruder override factors
-		response.catf(",\"sfactor\":%.2f,\"efactor\":", gc->GetSpeedFactor() * 100.0);
-		const float *extrusionFactors = gc->GetExtrusionFactors();
+		response.catf(",\"sfactor\":%.2f,\"efactor\":", gCodes->GetSpeedFactor() * 100.0);
+		const float *extrusionFactors = gCodes->GetExtrusionFactors();
 		for (unsigned int i = 0; i < reprap.GetExtrudersInUse(); ++i)
 		{
 			response.catf("%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
@@ -597,7 +1041,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 		// These are all returned in a single vector called "poll".
 		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
 		// RRP reversed the order at version 0.65 to send the positions before the heaters, but we haven't yet done that.
-		char c = (gc->PrintingAFile()) ? 'P' : 'I';
+		char c = (gCodes->PrintingAFile()) ? 'P' : 'I';
 		response.printf("{\"poll\":[\"%c\",", c); // Printing
 		for (int8_t heater = 0; heater < HEATERS; heater++)
 		{
@@ -636,22 +1080,22 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 	if (type != 0)
 	{
 		response.catf(",\"homed\":[%d,%d,%d]",
-				(gc->GetAxisIsHomed(0)) ? 1 : 0,
-				(gc->GetAxisIsHomed(1)) ? 1 : 0,
-				(gc->GetAxisIsHomed(2)) ? 1 : 0);
+				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
+				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
+				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 	else
 	{
 		response.catf(",\"hx\":%d,\"hy\":%d,\"hz\":%d",
-				(gc->GetAxisIsHomed(0)) ? 1 : 0,
-				(gc->GetAxisIsHomed(1)) ? 1 : 0,
-				(gc->GetAxisIsHomed(2)) ? 1 : 0);
+				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
+				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
+				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 
-	if (gc->PrintingAFile())
+	if (gCodes->PrintingAFile())
 	{
 		// Send the fraction printed
-		response.catf(",\"fraction_printed\":%.4f", max<float>(0.0, gc->FractionOfFilePrinted()));
+		response.catf(",\"fraction_printed\":%.4f", max<float>(0.0, gCodes->FractionOfFilePrinted()));
 	}
 
 	response.cat(",\"message\":");
@@ -660,20 +1104,41 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type) const
 	if (type < 2)
 	{
 		response.catf(",\"buff\":%u", webserver->GetGcodeBufferSpace());	// send the amount of buffer space available for gcodes
-		response.catf(",\"seq\":%u", webserver->GetReplySeq());				// send the response sequence number
+	}
+
+	if (type < 2 || (seq != -1 && replySeq > seq))
+	{
+		response.catf(",\"seq\":%u", replySeq);								// send the response sequence number
 
 		// Send the response to the last command. Do this last because it is long and may need to be truncated.
 		response.cat(",\"resp\":");
-		EncodeString(response, webserver->GetGcodeReply().Pointer(), 2, true);
+		EncodeString(response, GetGcodeReply().Pointer(), 2, true);
 	}
-	else if (type == 3)
+
+	if (type == 3)
 	{
 		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
 		response.catf(",\"geometry\":\"%s\",\"myName\":", move->IsDeltaMode() ? "delta" : "cartesian");
-		EncodeString(response, webserver->GetName(), 2, false);
+		EncodeString(response, myName, 2, false);
 	}
 
 	response.cat("}");
+}
+
+// Copy some parameter text, stopping at the first control character or when the destination buffer is full, and removing trailing spaces
+void RepRap::CopyParameterText(const char* src, char *dst, size_t length)
+{
+	size_t i;
+	for (i = 0; i + 1 < length && src[i] >= ' '; ++i)
+	{
+		dst[i] = src[i];
+	}
+	// Remove any trailing spaces
+	while (i > 0 && dst[i - 1] == ' ')
+	{
+		--i;
+	}
+	dst[i] = 0;
 }
 
 // Encode a string in JSON format and append it to a string buffer, truncating it if necessary to leave the specified amount of room
@@ -732,7 +1197,7 @@ void RepRap::EncodeString(StringRef& response, const char* src, size_t spaceToLe
 void RepRap::GetNameResponse(StringRef& response) const
 {
 	response.copy("{\"myName\":");
-	EncodeString(response, webserver->GetName(), 2, false);
+	EncodeString(response, myName, 2, false);
 	response.cat("}");
 }
 
@@ -820,10 +1285,337 @@ void RepRap::StartingFilePrint(const char *filename)
 	fileBeingPrinted[ARRAY_UPB(fileBeingPrinted)] = 0;
 }
 
+void RepRap::Beep(int freq, int ms)
+{
+	if (gCodes->HaveAux())
+	{
+		// If there is an LCD device present, make it beep
+		platform->Beep(freq, ms);
+	}
+	else
+	{
+		// Otherwise queue it until the webserver can process it
+		beepFrequency = freq;
+		beepDuration = ms;
+	}
+}
+
 void RepRap::SetMessage(const char *msg)
 {
 	strncpy(message, msg, maxMessageLength);
 	message[maxMessageLength] = 0;
+}
+
+void RepRap::MessageToGCodeReply(const char *message)
+{
+	gcodeReply.copy(message);
+	++replySeq;
+}
+
+void RepRap::AppendMessageToGCodeReply(const char *message)
+{
+	gcodeReply.cat(message);
+}
+
+void RepRap::AppendCharToStatusResponse(const char c)
+{
+	gcodeReply.catf("%c", c);
+}
+
+bool RepRap::NoPasswordSet() const
+{
+	return (!password[0] || StringEquals(password, DEFAULT_PASSWORD));
+}
+
+bool RepRap::CheckPassword(const char *pw) const
+{
+	return StringEquals(pw, password);
+}
+
+void RepRap::SetPassword(const char* pw)
+{
+	// Users sometimes put a tab character between the password and the comment, so allow for this
+	CopyParameterText(pw, password, ARRAY_SIZE(password));
+}
+
+const char *RepRap::GetName() const
+{
+	return myName;
+}
+
+void RepRap::SetName(const char* nm)
+{
+	// Users sometimes put a tab character between the machine name and the comment, so allow for this
+	CopyParameterText(nm, myName, ARRAY_SIZE(myName));
+}
+
+// The following methods keep track of the current print
+
+void RepRap::UpdatePrintProgress()
+{
+	if (gCodes->IsPausing() || gCodes->IsPaused() || gCodes->IsResuming())
+	{
+		return;
+	}
+
+	if (gCodes->PrintingAFile())
+	{
+		// May have just started a print, see if we're heating up
+		if (warmUpDuration == 0.0)
+		{
+			// When a new print starts, the total (raw) extruder positions are zeroed
+			float totalRawFilament = 0.0;
+			for (size_t extruder=0; extruder<DRIVES - AXES; extruder++)
+			{
+				totalRawFilament += gCodes->GetRawExtruderPosition(extruder);
+			}
+
+			// See if at least one heater is active and set
+			bool heatersAtHighTemperature = false;
+			for (uint8_t heater=E0_HEATER; heater<HEATERS; heater++)
+			{
+				if (heat->GetStatus(heater) == Heat::HS_active &&
+					heat->GetActiveTemperature(heater) > TEMPERATURE_LOW_SO_DONT_CARE &&
+					heat->HeaterAtSetTemperature(heater))
+				{
+					heatersAtHighTemperature = true;
+					break;
+				}
+			}
+
+			if (heatersAtHighTemperature && totalRawFilament != 0.0)
+			{
+				lastLayerTime = platform->Time();
+				warmUpDuration = lastLayerTime - printStartTime;
+
+				if (fileInfoDetected && currentFileInfo.layerHeight > 0.0) {
+					currentLayer = 1;
+				}
+			}
+		}
+		// Looks like the print has started
+		else if (currentLayer > 0)
+		{
+			float liveCoords[DRIVES + 1];
+			move->LiveCoordinates(liveCoords);
+
+			// See if we can determine the first layer height (must be smaller than the nozzle diameter)
+			if (firstLayerHeight == 0.0)
+			{
+				if (liveCoords[Z_AXIS] < NOZZLE_DIAMETER && !gCodes->DoingFileMacro())
+				{
+					firstLayerHeight = liveCoords[Z_AXIS];
+				}
+			}
+			// Then check if we've finished the first layer
+			else if (firstLayerDuration == 0.0)
+			{
+				if (liveCoords[Z_AXIS] > firstLayerHeight * 1.05) // allow some tolerance for transform operations
+				{
+					firstLayerFilament = 0.0;
+					for (size_t extruder=0; extruder<DRIVES - AXES; extruder++)
+					{
+						firstLayerFilament += gCodes->GetRawExtruderPosition(extruder);
+					}
+					firstLayerDuration = platform->Time() - lastLayerTime;
+					firstLayerProgress = gCodes->FractionOfFilePrinted();
+				}
+			}
+			// We have enough values to estimate the following layer heights
+			else if (currentFileInfo.objectHeight > 0.0)
+			{
+				unsigned int estimatedLayer = round((liveCoords[Z_AXIS] - firstLayerHeight) / currentFileInfo.layerHeight) + 1;
+				if (estimatedLayer == currentLayer + 1) // on layer change
+				{
+					// Record untainted extruder positions for filament-based estimation
+					float extrRawTotal = 0.0;
+					for(uint8_t extruder=0; extruder<DRIVES - AXES; extruder++)
+					{
+						extrRawTotal += gCodes->GetRawExtruderPosition(extruder);
+					}
+
+					const float now = platform->Time();
+					unsigned int remainingLayers;
+					remainingLayers = round((currentFileInfo.objectHeight - firstLayerHeight) / currentFileInfo.layerHeight) + 1;
+					remainingLayers -= currentLayer;
+
+					if (currentLayer > 1)
+					{
+						// Record a new set
+						if (numLayerSamples < MAX_LAYER_SAMPLES)
+						{
+							layerDurations[numLayerSamples] = now - lastLayerTime;
+							if (!numLayerSamples)
+							{
+								filamentUsagePerLayer[numLayerSamples] = extrRawTotal - firstLayerFilament;
+							}
+							else
+							{
+								filamentUsagePerLayer[numLayerSamples] = extrRawTotal - lastLayerFilament;
+							}
+							fileProgressPerLayer[numLayerSamples] = gCodes->FractionOfFilePrinted();
+							numLayerSamples++;
+						}
+						else
+						{
+							for(unsigned int i=1; i<MAX_LAYER_SAMPLES; i++)
+							{
+								layerDurations[i - 1] = layerDurations[i];
+								filamentUsagePerLayer[i - 1] = filamentUsagePerLayer[i];
+								fileProgressPerLayer[i - 1] = fileProgressPerLayer[i];
+							}
+
+							layerDurations[MAX_LAYER_SAMPLES - 1] = now - lastLayerTime;
+							filamentUsagePerLayer[MAX_LAYER_SAMPLES - 1] = extrRawTotal - lastLayerFilament;
+							fileProgressPerLayer[MAX_LAYER_SAMPLES - 1] = gCodes->FractionOfFilePrinted();
+						}
+					}
+
+					// Update layer-based estimation times
+					float avgLayerTime, avgLayerDelta = 0.0;
+					if (numLayerSamples)
+					{
+						avgLayerTime = 0.0;
+						for(unsigned int layer=0; layer<numLayerSamples; layer++)
+						{
+							avgLayerTime += layerDurations[layer];
+							if (layer)
+							{
+								avgLayerDelta += layerDurations[layer] - layerDurations[layer - 1];
+							}
+						}
+						avgLayerTime /= numLayerSamples;
+						avgLayerDelta /= numLayerSamples;
+					}
+					else
+					{
+						avgLayerTime = firstLayerDuration * FIRST_LAYER_SPEED_FACTOR;
+					}
+
+					layerEstimatedTimeLeft = (avgLayerTime * remainingLayers) - (avgLayerDelta * remainingLayers);
+					if (layerEstimatedTimeLeft < 0.0)
+					{
+						layerEstimatedTimeLeft = avgLayerTime * remainingLayers;
+					}
+
+					// TODO: maybe move other estimation methods here too?
+					// And move whole estimation code to a separate class?
+
+					// Set new layer values
+					currentLayer = estimatedLayer;
+					lastLayerTime = now;
+					lastLayerFilament = extrRawTotal;
+				}
+			}
+		}
+	}
+	else if (printStartTime > 0.0 && move->NoLiveMovement())
+	{
+		currentLayer = numLayerSamples = 0;
+		firstLayerDuration = firstLayerHeight = firstLayerFilament = firstLayerProgress = 0.0;
+		layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
+		lastLayerTime = lastLayerFilament = 0.0;
+	}
+}
+
+float RepRap::EstimateTimeLeft(uint8_t method) const
+{
+	// We can't provide an estimation if we're not printing (yet)
+	if (!gCodes->PrintingAFile() || (fileInfoDetected && currentFileInfo.numFilaments && warmUpDuration == 0.0))
+	{
+		return 0.0;
+	}
+
+	// Take into account the first layer time only if we haven't got any other samples
+	float realPrintDuration = (platform->Time() - printStartTime) - warmUpDuration;
+	if (numLayerSamples)
+	{
+		realPrintDuration -= firstLayerDuration;
+	}
+
+	// Actual estimations
+	switch (method)
+	{
+		case 0: // File-Based
+		{
+			// Provide rough estimation only if we haven't collected any layer samples
+			float fractionPrinted = gCodes->FractionOfFilePrinted();
+			if (!numLayerSamples || !fileInfoDetected || currentFileInfo.objectHeight == 0.0)
+			{
+				return realPrintDuration * (1.0 / fractionPrinted) - realPrintDuration;
+			}
+
+			// Each layer takes time to achieve more file progress, so take an average over our samples
+			float avgSecondsByProgress = 0.0, lastLayerProgress = 0.0;
+			for(unsigned int layer=0; layer<numLayerSamples; layer++)
+			{
+				avgSecondsByProgress += layerDurations[layer] / (fileProgressPerLayer[layer] - lastLayerProgress);
+				lastLayerProgress = fileProgressPerLayer[layer];
+			}
+			avgSecondsByProgress /= numLayerSamples;
+
+			// Then we know how many seconds it takes to finish 1% and we know how much file progress is left
+			return avgSecondsByProgress * (1.0 - fractionPrinted);
+		}
+
+		case 1: // Filament-Based
+		{
+			// Need some file information, otherwise this method won't work
+			if (!fileInfoDetected || !currentFileInfo.numFilaments)
+			{
+				return 0.0;
+			}
+
+			// Sum up the filament usage and the filament needed
+			float totalFilamentNeeded = 0.0;
+			float extrRawTotal = 0.0;
+			for (size_t extruder=0; extruder < DRIVES - AXES; extruder++)
+			{
+				totalFilamentNeeded += currentFileInfo.filamentNeeded[extruder];
+				extrRawTotal += gCodes->GetRawExtruderPosition(extruder);
+			}
+
+			// If we have a reasonable amount of filament extruded, calculate estimated times left
+			if (totalFilamentNeeded > 0.0 && extrRawTotal > totalFilamentNeeded * ESTIMATION_MIN_FILAMENT_USAGE)
+			{
+				if (firstLayerFilament == 0.0)
+				{
+					return realPrintDuration * (totalFilamentNeeded - extrRawTotal) / extrRawTotal;
+				}
+
+				float filamentRate;
+				if (numLayerSamples)
+				{
+					filamentRate = 0.0;
+					for (unsigned int i=0; i<numLayerSamples; i++)
+					{
+						filamentRate += filamentUsagePerLayer[i] / layerDurations[i];
+					}
+					filamentRate /= numLayerSamples;
+				}
+				else
+				{
+					filamentRate = firstLayerFilament / firstLayerDuration;
+				}
+
+				return (totalFilamentNeeded - extrRawTotal) / filamentRate;
+			}
+			break;
+		}
+
+		case 2: // Layer-Based
+			if (layerEstimatedTimeLeft > 0.0)
+			{
+				float timeLeft = layerEstimatedTimeLeft - (platform->Time() - lastLayerTime);
+				if (timeLeft > 0.0)
+				{
+					return timeLeft;
+				}
+			}
+			break;
+	}
+
+	return 0.0;
 }
 
 void RepRap::GetExtruderCapabilities(bool canDrive[], const bool directions[]) const
@@ -860,44 +1652,6 @@ void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 	if (toolList != NULL)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);
-	}
-}
-
-void RepRap::SetDebug(Module m, bool enable)
-{
-	if (enable)
-	{
-		debug |= (1 << m);
-	}
-	else
-	{
-		debug &= ~(1 << m);
-	}
-	PrintDebug();
-}
-
-void RepRap::SetDebug(bool enable)
-{
-	debug = (enable) ? 0xFFFF : 0;
-}
-
-void RepRap::PrintDebug()
-{
-	if (debug != 0)
-	{
-		platform->Message(BOTH_MESSAGE, "Debugging enabled for modules:%s%s%s%s%s%s%s\n",
-										(debug & (1 << modulePlatform)) ? " Platform" : "",
-										(debug & (1 << moduleNetwork)) ? " Network" : "",
-										(debug & (1 << moduleWebserver)) ? " Webserver" : "",
-										(debug & (1 << moduleGcodes)) ? " GCodes" : "",
-										(debug & (1 << moduleMove))	? " Move" : "",
-										(debug & (1 << moduleDda)) ? " DDA" : "",
-										(debug & (1 << moduleHeat)) ? " Heat" : ""
-									);
-	}
-	else
-	{
-		platform->Message(BOTH_MESSAGE, "Debugging disabled\n");
 	}
 }
 

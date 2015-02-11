@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.00g-dc42"
-#define DATE "2015-02-06"
+#define VERSION "1.00h-dc42"
+#define DATE "2015-02-11"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -45,6 +45,8 @@ enum Compatibility
 // Some numbers...
 
 #define AUX_BAUD_RATE	(57600)
+
+const unsigned int GcodeLength = 100;		// Maximum length of a G Code string that we handle
 
 #define ABS_ZERO (-273.15)  // Celsius
 
@@ -69,6 +71,20 @@ enum Compatibility
 #define TRIANGLE_0 -0.001			// Slightly less than 0 for point-in-triangle tests
 
 #define SILLY_Z_VALUE -9999.0
+
+// String lengths
+
+#define STRING_LENGTH 1024
+#define SHORT_STRING_LENGTH 40
+
+#define FILENAME_LENGTH 100
+#define GCODE_REPLY_LENGTH 2048
+
+// Print estimation defaults
+#define NOZZLE_DIAMETER 0.5						// Thickness of the nozzle
+#define MAX_LAYER_SAMPLES 5						// Number of layer samples (except for first layer)
+#define ESTIMATION_MIN_FILAMENT_USAGE 0.025		// Minimum per cent for filament usage estimation
+#define FIRST_LAYER_SPEED_FACTOR 0.25			// First layer speed compared to others (only for layer-based estimation)
 
 // Webserver stuff
 

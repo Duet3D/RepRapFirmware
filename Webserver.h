@@ -30,8 +30,7 @@ Licence: GPL
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
-const unsigned int gcodeBufferLength = 512;		// size of our gcode ring buffer, preferably a power of 2
-const unsigned int gcodeReplyBufferLength = 2048;	// size of our gcode reply buffer
+const unsigned int gcodeBufferLength = 512;			// size of our gcode ring buffer, preferably a power of 2
 
 /* HTTP */
 
@@ -39,18 +38,21 @@ const unsigned int gcodeReplyBufferLength = 2048;	// size of our gcode reply buf
 #define KO_FIRST 3
 
 const unsigned int webUploadBufferSize = 2300;	// maximum size of HTTP upload packets (webMessageLength - 700)
-const unsigned int webMessageLength = 3000;		// maximum length of the web message we accept after decoding, excluding POST data
+const unsigned int webMessageLength = 3000;		// maximum length of the web message we accept after decoding
 
 const unsigned int maxCommandWords = 4;			// max number of space-separated words in the command
 const unsigned int maxQualKeys = 5;				// max number of key/value pairs in the qualifier
 const unsigned int maxHeaders = 10;				// max number of key/value pairs in the headers
 
-const unsigned int jsonReplyLength = 2000;		// size of buffer used to hold JSON reply
+const unsigned int jsonReplyLength = 1024;		// size of buffer used to hold JSON reply
+
+const unsigned int maxSessions = 8;				// maximum number of simultaneous HTTP sessions
+const unsigned int httpSessionTimeout = 30;		// HTTP session timeout in seconds
 
 /* FTP */
 
-const unsigned int ftpMessageLength = 256;		// maximum line length for incoming FTP commands
-const unsigned int ftpResponseLength = 256;		// maximum FTP response length
+const unsigned int ftpResponseLength = 128;		// maximum FTP response length
+const unsigned int ftpMessageLength = 128;		// maximum line length for incoming FTP commands
 
 /* Telnet */
 
@@ -77,7 +79,7 @@ class ProtocolInterpreter
 {
 	public:
 
-		ProtocolInterpreter(Platform *p, Webserver *ws);
+		ProtocolInterpreter(Platform *p, Webserver *ws, Network *n);
 		virtual void ConnectionEstablished() { }
 		virtual void ConnectionLost(uint16_t local_port) { }
 		virtual bool CharFromClient(const char c) = 0;
@@ -88,15 +90,13 @@ class ProtocolInterpreter
 	    void CancelUpload();
 		bool IsUploading() const { return uploadState != notUploading; }
 
-		virtual bool DebugEnabled() const;
-
 		virtual ~ProtocolInterpreter() { }					// to keep Eclipse happy
 
 	protected:
 
-	    bool gotPassword;
 	    Platform *platform;
 	    Webserver *webserver;
+	    Network *network;
 
 	    // Information for file uploading
 	    enum UploadState
@@ -121,25 +121,18 @@ class Webserver
 {   
   public:
 
-    Webserver(Platform* p);
+    Webserver(Platform* p, Network *n);
     void Init();
     void Spin();
     void Exit();
     void Diagnostics();
 
-    void SetPassword(const char* pw);
-    void SetName(const char* nm);
-    const char *GetName() const;
-    bool CheckPassword(const char* pw) const;
-
     bool GCodeAvailable();
     char ReadGCode();
+    unsigned int GetGcodeBufferSpace() const;
 
     void ConnectionLost(const ConnectionState *cs);
     void ConnectionError();
-    const StringRef& GetGcodeReply() const { return gcodeReply; }
-    unsigned int GetReplySeq() const { return seq; }
-    unsigned int GetGcodeBufferSpace() const;
 
     static bool GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info);
 
@@ -147,19 +140,19 @@ class Webserver
 
   protected:
 
-    void MessageStringToWebInterface(const char *s, bool error);
-    void AppendReplyToWebInterface(const char* s, bool error);
-
-  private:
+    void ResponseToWebInterface(const char *s, bool error);
+    void AppendResponseToWebInterface(const char* s);
 
 	class HttpInterpreter : public ProtocolInterpreter
 	{
 		public:
 
-			HttpInterpreter(Platform *p, Webserver *ws);
-
+			HttpInterpreter(Platform *p, Webserver *ws, Network *n);
 			bool CharFromClient(const char c);
 			void ResetState();
+
+			void ResetSessions();
+			void CheckSessions();
 
 		private:
 
@@ -190,27 +183,24 @@ class Webserver
 			};
 
 			void SendFile(const char* nameOfFileToSend);
+			void SendGCodeReply();
 			void SendJsonResponse(const char* command);
 			bool GetJsonResponse(const char* request, StringRef& response, const char* key, const char* value, size_t valueLength, bool& keepOpen);
 			void GetJsonUploadResponse(StringRef& response);
 			bool ProcessMessage();
 			bool RejectMessage(const char* s, unsigned int code = 500);
 
-			HttpState state;
+			bool Authenticate();
+			bool IsAuthenticated() const;
+			void UpdateAuthentication();
+			void RemoveAuthentication();
 
-//			bool receivingPost;
-//			int boundaryCount;
-//			FileStore* postFile;
-//			bool postSeen;
-//			bool getSeen;
-//			bool clientLineIsBlank;
+			HttpState state;
 
 			// Buffers for processing HTTP input
 			char clientMessage[webMessageLength];			// holds the command, qualifier, and headers
-//			char postBoundary[postBoundaryLength];			// holds the POST boundary string
-//			char postFileName[postFilenameLength];			// holds the POST filename
-//			char postData[postDataLength];			    	// holds the POST data
 			unsigned int clientPointer;						// current index into clientMessage
+			char decodeChar;
 
 			const char* commandWords[maxCommandWords];
 			KeyValueIndices qualifiers[maxQualKeys + 1];	// offsets into clientQualifier of the key/value pairs, the +1 is needed so that values can contain nulls
@@ -219,8 +209,10 @@ class Webserver
 			unsigned int numQualKeys;						// number of qualifier keys we have found, <= maxQualKeys
 			unsigned int numHeaderKeys;						// number of keys we have found, <= maxHeaders
 
-			// Buffers to hold reply
-			char decodeChar;
+		    // HTTP sessions
+		    unsigned int numActiveSessions;
+		    unsigned int sessionIP[maxSessions];
+		    float sessionLastQueryTime[maxSessions];
 	};
 	HttpInterpreter *httpInterpreter;
 
@@ -228,11 +220,13 @@ class Webserver
 	{
 		public:
 
-			FtpInterpreter(Platform *p, Webserver *ws);
+			FtpInterpreter(Platform *p, Webserver *ws, Network *n);
 			void ConnectionEstablished();
 			void ConnectionLost(uint16_t local_port);
 			bool CharFromClient(const char c);
 			void ResetState();
+
+			bool StoreUploadData(const char* data, unsigned int len);
 
 		private:
 
@@ -248,10 +242,10 @@ class Webserver
 
 			char clientMessage[ftpMessageLength];
 			unsigned int clientPointer;
-			char ftpResponse[ftpResponseLength];
+			char ftpResponse[ftpResponseLength]; // TODO: remove this
 
-			char currentDir[MaxFilenameLength];
 			char filename[MaxFilenameLength];
+			char currentDir[MaxFilenameLength];
 
 			float portOpenTime;
 
@@ -268,13 +262,15 @@ class Webserver
 	{
 		public:
 
-			TelnetInterpreter(Platform *p, Webserver *ws);
+			TelnetInterpreter(Platform *p, Webserver *ws, Network *n);
 			void ConnectionEstablished();
 			void ConnectionLost(uint16_t local_port);
 			bool CharFromClient(const char c);
 			void ResetState();
 
-			void HandleGcodeReply(const char* reply, bool haveMore = false);
+			void HandleGcodeReply(const char* reply);
+			bool HasRemainingData() const;
+			void RemainingDataSent();
 
 		private:
 
@@ -287,6 +283,7 @@ class Webserver
 
 			char clientMessage[telnetMessageLength];
 			unsigned int clientPointer;
+			bool sendPending;
 
 			void ProcessLine();
 	};
@@ -300,21 +297,17 @@ class Webserver
     // File info methods
     static bool FindHeight(const char* buf, size_t len, float& height);
     static bool FindLayerHeight(const char* buf, size_t len, float& layerHeight);
-    static unsigned int FindFilamentUsed(const char* buf, size_t len,  float *filamentUsed, unsigned int maxFilaments);
-    static void CopyParameterText(const char* src, char *dst, size_t length);
+    static unsigned int FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, unsigned int maxFilaments);
+
+  private:
 
     // Buffer to hold gcode that is ready for processing
     char gcodeBuffer[gcodeBufferLength];
     unsigned int gcodeReadIndex, gcodeWriteIndex;	// head and tail indices into gcodeBuffer
-    char gcodeReplyBuffer[gcodeReplyBufferLength];
-    StringRef gcodeReply;
-	uint16_t seq;									// reply sequence number, so that the client can tell if a json reply is new or not
 
     // Misc
-    char password[SHORT_STRING_LENGTH + 1];
-    char myName[SHORT_STRING_LENGTH + 1];
-
     Platform* platform;
+    Network* network;
     bool webserverActive;
     const ConnectionState *readingConnection;
 

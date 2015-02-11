@@ -8,9 +8,6 @@
 #ifndef DRIVEMOVEMENT_H_
 #define DRIVEMOVEMENT_H_
 
-// Set the following nonzero to cache the square of startSpeedTimesCdivA, at the cost of 64 bytes of memory per DDA
-#define CACHE_startSpeedTimesCdivAsquared	0
-
 class DDA;
 
 // Struct for passing parameters to the DriveMovement Prepare methods
@@ -48,9 +45,6 @@ public:
 
 	// The following only need to be stored per-drive if we are supporting elasticity compensation
 	uint32_t startSpeedTimesCdivA;
-#if CACHE_startSpeedTimesCdivAsquared
-	uint64_t startSpeedTimesCdivAsquared;
-#endif
 	int32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;		// this one can be negative
 	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
 	uint64_t twoDistanceToStopTimesCsquaredDivA;

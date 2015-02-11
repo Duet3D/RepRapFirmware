@@ -1,15 +1,8 @@
+; X axis homing file for dc42 Duet firmware
 G91
-G1 Z5 F200
-G90
-M558 P1
+G1 Z4 F200
 G1 X-240 F2000 S1
-G92 X0
-G1 X3 F500
-G1 X-30 S1
-G92 X0
-G1 X15 F500 ; adjust the X value to put the nozzle on the edge of the bed
-G92 X0
-M558 P2
-G91
-G1 Z-5 F200
+G1 X4 F500
+G1 X-10 S1
+G1 Z-4 F200
 G90

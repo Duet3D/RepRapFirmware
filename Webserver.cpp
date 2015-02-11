@@ -4,12 +4,10 @@
 
  This class serves a single-page web applications to the attached network.  This page forms the user's
  interface with the RepRap machine.  This software interprests returned values from the page and uses it
- to Generate G Codes, which it sends to the RepRap.  It also collects values from the RepRap like
+ to generate G Codes, which it sends to the RepRap.  It also collects values from the RepRap like
  temperature and uses those to construct the web page.
 
- The page itself - reprap.htm - uses Knockout.js and Jquery.js.  See:
-
- http://knockoutjs.com/
+ The page itself - reprap.htm - uses Jquery.js to perform AJAX.  See:
 
  http://jquery.com/
 
@@ -31,32 +29,23 @@
  SD card), and the following. These all start with "/rr_". Ordinary files used for the web interface
  must not have names starting "/rr_" or they will not be found.
 
- rr_connect	 Sent by the web interface software to establish an initial connection, indicating that
+ rr_connect?password=xxx
+             Sent by the web interface software to establish an initial connection, indicating that
  	 	 	 any state variables relating to the web interface (e.g. file upload in progress) should
- 	 	 	 be reset. Returns the same response as rr_status.
-
- rr_poll	 Returns the old-style status response. Not recommended because all the position,
- 	 	 	 extruder position and temperature variables are returned in a single array, which means
- 	 	 	 that the web interface has to know in advance how many heaters and extruders there are.
- 	 	 	 Provided only for backwards compatibility with older web interface software. Likely to
- 	 	 	 be removed in a future version.
+ 	 	 	 be reset. This only happens if the password could be verified.
 
  rr_status	 New-style status response, in which temperatures, axis positions and extruder positions
  	 	 	 are returned in separate variables. Another difference is that extruder positions are
- 	 	 	 returned as absolute positions instead of relative to the previous gcode.
+ 	 	 	 returned as absolute positions instead of relative to the previous gcode. A client
+ 	 	 	 may also request different status responses by specifying the "type" keyword, followed
+ 	 	 	 by a custom status response type. Also see "M105 S1".
 
  rr_files?dir=xxx
  	 	 	 Returns a listing of the filenames in the /gcode directory of the SD card. 'dir' is a
  	 	 	 directory path relative to the root of the SD card. If the 'dir' variable is not present,
  	 	 	 it defaults to the /gcode directory.
 
- rr_axes	 Returns the axis lengths.
-
- rr_name	 Returns the machine name in variable myname.
-
- rr_password?password=xxx
- 	 	 	 Returns variable "password" having value "right" if xxx is the correct password and
- 	 	 	 "wrong" otherwise.
+ rr_reply    Returns the last-known G-code reply as plain text (not encapsulated as JSON).
 
  rr_upload_begin?name=xxx
  	 	 	 Indicates that we wish to upload the specified file. xxx is the filename relative
@@ -100,33 +89,27 @@ const float pasvPortTimeout = 10.0;	 					// seconds to wait for the FTP data po
 
 
 // Constructor and initialisation
-Webserver::Webserver(Platform* p) : platform(p), webserverActive(false), readingConnection(NULL),
-		gcodeReply(gcodeReplyBuffer, ARRAY_SIZE(gcodeReplyBuffer))
+Webserver::Webserver(Platform* p, Network *n) : platform(p), network(n),
+		webserverActive(false), readingConnection(NULL)
 {
-	httpInterpreter = new HttpInterpreter(p, this);
-	ftpInterpreter = new FtpInterpreter(p, this);
-	telnetInterpreter = new TelnetInterpreter(p, this);
+	httpInterpreter = new HttpInterpreter(p, this, n);
+	ftpInterpreter = new FtpInterpreter(p, this, n);
+	telnetInterpreter = new TelnetInterpreter(p, this, n);
 }
 
 void Webserver::Init()
 {
 	// initialise the webserver class
-	SetPassword(DEFAULT_PASSWORD);
-	SetName(DEFAULT_NAME);
-
 	gcodeReadIndex = gcodeWriteIndex = 0;
 	lastTime = platform->Time();
 	longWait = lastTime;
-	gcodeReply[0] = 0;
 	webserverActive = true;
 
 	// initialise all protocol handlers
 	httpInterpreter->ResetState();
+	httpInterpreter->ResetSessions();
 	ftpInterpreter->ResetState();
 	telnetInterpreter->ResetState();
-
-	// Reinitialise the message file
-	//platform->GetMassStorage()->Delete(platform->GetWebDir(), MESSAGE_FILE);
 }
 
 
@@ -135,14 +118,28 @@ void Webserver::Spin()
 {
 	// Before we process an incoming Request, we must ensure that the webserver
 	// is active and that all upload buffers are empty.
+
 	if (webserverActive && httpInterpreter->FlushUploadData() && ftpInterpreter->FlushUploadData())
 	{
-		Network *net = reprap.GetNetwork();
-		NetworkTransaction *req = net->GetTransaction(readingConnection);
+		// Check if we can purge any HTTP sessions
+
+		httpInterpreter->CheckSessions();
+
+		// We must ensure that we have exclusive access to LWIP
+
+		if (!network->Lock())
+		{
+			platform->ClassReport(longWait);
+			return;
+		}
+
+		// See if we have new data to process
+
+		NetworkTransaction *req = network->GetTransaction(readingConnection);
 		if (req != NULL)
 		{
 			// Process incoming request
-			if (req->IsReady())
+			if (!req->LostConnection())
 			{
 				// I (zpl) have added support for two more protocols (FTP and Telnet),
 				// so we must take care of the protocol type here.
@@ -177,9 +174,9 @@ void Webserver::Spin()
 					interpreter->ConnectionEstablished();
 
 					// Close this request unless ConnectionEstablished() has already used it for sending
-					if (req == net->GetTransaction(readingConnection))
+					if (req == network->GetTransaction())
 					{
-						net->CloseTransaction();
+						network->CloseTransaction();
 					}
 				}
 				// Graceful disconnects are handled here, because prior NetworkTransactions might still contain valid
@@ -187,7 +184,7 @@ void Webserver::Spin()
 				else if (status == disconnected)
 				{
 					// CloseRequest() will call the disconnect events and close the connection
-					net->CloseTransaction();
+					network->CloseTransaction();
 				}
 				// Fast upload for FTP connections
 				else if (is_data_port)
@@ -202,21 +199,27 @@ void Webserver::Spin()
 						}
 						else
 						{
-							net->CloseTransaction();
+							network->CloseTransaction();
 						}
 					}
-					else
+					else if (req->DataLength() > 0)
 					{
 						platform->Message(HOST_MESSAGE, "Webserver: Closing invalid data connection\n");
 						readingConnection = NULL;
-						net->SendAndClose(NULL);
+						network->SendAndClose(NULL);
 					}
+				}
+				// Check if we need to send data to a Telnet client
+				else if (interpreter == telnetInterpreter && telnetInterpreter->HasRemainingData())
+				{
+					network->SendAndClose(NULL, true);
+					telnetInterpreter->RemainingDataSent();
 				}
 				// Process other messages
 				else
 				{
 					char c;
-					for (int i=0; i<500; i++)
+					for (uint16_t i=0; i<500; i++)
 					{
 						if (req->Read(c))
 						{
@@ -231,22 +234,24 @@ void Webserver::Spin()
 						else
 						{
 							// We ran out of data before finding a complete request.
-							// This happens when the incoming message length exceeds the TCP MSS. We need to process another packet on the same connection.
+							// This happens when the incoming message length exceeds the TCP MSS.
+							// We need to process another packet on the same connection.
 							readingConnection = req->GetConnection();
-							net->SendAndClose(NULL, true);
+							network->CloseTransaction();
 							break;
 						}
 					}
 				}
 			}
-			else if (req->LostConnection())
+			else
 			{
-				platform->Message(HOST_MESSAGE, "Webserver: Skipping zombie request\n");
-				net->CloseTransaction();
+				platform->Message(HOST_MESSAGE, "Webserver: Skipping zombie request with status %d\n", req->GetStatus());
+				network->CloseTransaction();
 			}
 		}
 
-		platform->ClassReport("Webserver", longWait, moduleWebserver);
+		network->Unlock();
+		platform->ClassReport(longWait);
 	}
 }
 
@@ -254,51 +259,13 @@ void Webserver::Exit()
 {
 	httpInterpreter->CancelUpload();
 
-	platform->Message(HOST_MESSAGE, "Webserver class exited.\n");
+	platform->Message(BOTH_MESSAGE, "Webserver class exited.\n");
 	webserverActive = false;
 }
 
 void Webserver::Diagnostics()
 {
 	platform->AppendMessage(BOTH_MESSAGE, "Webserver Diagnostics:\n");
-}
-
-void Webserver::SetPassword(const char* pw)
-{
-	// Users sometimes put a tab character between the password and the comment, so allow for this
-	CopyParameterText(pw, password, ARRAY_SIZE(password));
-}
-
-void Webserver::SetName(const char* nm)
-{
-	// Users sometimes put a tab character between the machine name and the comment, so allow for this
-	CopyParameterText(nm, myName, ARRAY_SIZE(myName));
-}
-
-// Copy some parameter text, stopping at the first control character or when the destination buffer is full, and removing trailing spaces
-void Webserver::CopyParameterText(const char* src, char *dst, size_t length)
-{
-	size_t i;
-	for (i = 0; i + 1 < length && src[i] >= ' '; ++i)
-	{
-		dst[i] = src[i];
-	}
-	// Remove any trailing spaces
-	while (i > 0 && dst[i - 1] == ' ')
-	{
-		--i;
-	}
-	dst[i] = 0;
-}
-
-const char *Webserver::GetName() const
-{
-	return myName;
-}
-
-bool Webserver::CheckPassword(const char *pw) const
-{
-	return StringEquals(pw, password);
 }
 
 // Get the actual amount of gcode buffer space we have
@@ -333,31 +300,26 @@ void Webserver::ProcessGcode(const char* gc)
 		FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 		if (configFile == NULL)
 		{
-			MessageStringToWebInterface("Configuration file not found", true);
+			ResponseToWebInterface("Configuration file not found", true);
 		}
 		else
 		{
+			reprap.MessageToGCodeReply("");
+
 			char c;
-			size_t i = 0;
 			bool reading_whitespace = false;
-			while (i < gcodeReply.Length() - 1 && configFile->Read(c))
+			while (configFile->Read(c))
 			{
 				if (!reading_whitespace || (c != ' ' && c != '\t'))
 				{
-					gcodeReply[i++] = c;
+					reprap.AppendCharToStatusResponse(c);
 				}
 				reading_whitespace = (c == ' ' || c == '\t');
 			}
 			configFile->Close();
-			gcodeReply[i] = 0;
 
-			++seq;
-			telnetInterpreter->HandleGcodeReply(gcodeReply.Pointer());
+			telnetInterpreter->HandleGcodeReply(reprap.GetGcodeReply().Pointer());
 		}
-	}
-	else if (StringStartsWith(gc, "M25") && !isDigit(gc[3]))	// pause SD card print
-	{
-		reprap.GetGCodes()->PauseSDPrint();
 	}
 	else
 	{
@@ -389,7 +351,7 @@ char Webserver::ReadGCode()
 // Process a received string of gcodes
 void Webserver::LoadGcodeBuffer(const char* gc)
 {
-	char gcodeTempBuf[GCODE_LENGTH];
+	char gcodeTempBuf[GcodeLength];
 	uint16_t gtp = 0;
 	bool inComment = false;
 	for (;;)
@@ -442,8 +404,7 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 {
 	if (len > GetGcodeBufferSpace())
 	{
-		platform->Message(HOST_MESSAGE, "Webserver: GCode buffer overflow.\n");
-		MessageStringToWebInterface("Webserver: GCode buffer overflow", true);
+		platform->Message(BOTH_ERROR_MESSAGE, "GCode buffer overflow in Webserver!\n");
 	}
 	else
 	{
@@ -464,8 +425,9 @@ void Webserver::StoreGcodeData(const char* data, size_t len)
 // Handle immediate disconnects here (cs will be freed after this call)
 void Webserver::ConnectionLost(const ConnectionState *cs)
 {
-	// Inform protocol handlers that this connection has been lost
+	// Inform protcol handlers that this connection has been lost
 	uint16_t local_port = cs->GetLocalPort();
+	uint16_t data_port = network->GetDataPort();
 	ProtocolInterpreter *interpreter;
 	switch (local_port)
 	{
@@ -482,15 +444,19 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 			break;
 
 		default: /* FTP data */
-			interpreter = ftpInterpreter;
-			break;
-	}
+			if (local_port == data_port)
+			{
+				interpreter = ftpInterpreter;
+				break;
+			}
 
-	if (interpreter->DebugEnabled())
+			platform->Message(BOTH_ERROR_MESSAGE, "Webserver: Connection closed at local port %d, but no handler found!\n", local_port);
+			return;
+	}
+	if (reprap.Debug(moduleWebserver))
 	{
-		debugPrintf("Webserver: ConnectionLost called with port %d\n", local_port);
+		platform->Message(HOST_MESSAGE, "Webserver: ConnectionLost called with port %d\n", local_port);
 	}
-
 	interpreter->ConnectionLost(local_port);
 
 	// If our reading connection is lost, it will be no longer important which connection is read from first.
@@ -500,7 +466,7 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 	}
 }
 
-void Webserver::MessageStringToWebInterface(const char *s, bool error)
+void Webserver::ResponseToWebInterface(const char *s, bool error)
 {
 	if (!webserverActive)
 	{
@@ -509,39 +475,37 @@ void Webserver::MessageStringToWebInterface(const char *s, bool error)
 
 	if (strlen(s) == 0 && !error)
 	{
-		gcodeReply.copy("ok");
-		telnetInterpreter->HandleGcodeReply("ok");
+		reprap.MessageToGCodeReply(s);
+		telnetInterpreter->HandleGcodeReply("ok\r\n");
 	}
 	else
 	{
 		if (error)
 		{
-			gcodeReply.printf("Error: %s", s);
-			telnetInterpreter->HandleGcodeReply("Error: ", true);
+			reprap.MessageToGCodeReply("Error: ");
+			reprap.AppendMessageToGCodeReply(s);
+
+			telnetInterpreter->HandleGcodeReply("Error: ");
 			telnetInterpreter->HandleGcodeReply(s);
 		}
 		else
 		{
-			gcodeReply.copy(s);
+			reprap.MessageToGCodeReply(s);
 			telnetInterpreter->HandleGcodeReply(s);
 		}
 	}
-
-	++seq;
 }
 
-void Webserver::AppendReplyToWebInterface(const char *s, bool error)
+void Webserver::AppendResponseToWebInterface(const char *s)
 {
 	if (!webserverActive)
 	{
 		return;
 	}
 
-	gcodeReply.cat(s);
-	++seq;
-	telnetInterpreter->HandleGcodeReply(s, true);
+	reprap.AppendMessageToGCodeReply(s);
+	telnetInterpreter->HandleGcodeReply(s);
 }
-
 
 //********************************************************************************************
 //
@@ -549,7 +513,8 @@ void Webserver::AppendReplyToWebInterface(const char *s, bool error)
 //
 //********************************************************************************************
 
-ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws) : platform(p), webserver(ws)
+ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws, Network *n)
+	: platform(p), webserver(ws), network(n)
 {
 	uploadState = notUploading;
 	uploadPointer = NULL;
@@ -661,7 +626,7 @@ void ProtocolInterpreter::FinishUpload(uint32_t file_length)
 	}
 
 	// Check the file length is as expected
-	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() != file_length + numContinuationBytes)
+	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() + numContinuationBytes != file_length)
 	{
 		uploadState = uploadError;
 		platform->Message(HOST_MESSAGE, "Uploaded file size is different!\n");
@@ -682,11 +647,7 @@ void ProtocolInterpreter::FinishUpload(uint32_t file_length)
 	filenameBeingUploaded[0] = 0;
 }
 
-// This is overridden in class HttpInterpreter
-bool ProtocolInterpreter::DebugEnabled() const
-{
-	return reprap.Debug(moduleWebserver);
-}
+
 
 //********************************************************************************************
 //
@@ -696,8 +657,8 @@ bool ProtocolInterpreter::DebugEnabled() const
 
 
 
-Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws)
-	: ProtocolInterpreter(p, ws), state(doingCommandWord)
+Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws, Network *n)
+	: ProtocolInterpreter(p, ws, n), state(doingCommandWord)
 {
 }
 
@@ -722,8 +683,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
 		}
 	}
 
-	Network *net = reprap.GetNetwork();
-	NetworkTransaction *req = net->GetTransaction();
+	NetworkTransaction *req = network->GetTransaction();
 	req->Write("HTTP/1.1 200 OK\n");
 
 	const char* contentType;
@@ -766,13 +726,29 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
 	}
 
 	req->Write("Connection: close\n\n");
-	net->SendAndClose(fileToSend);
+	network->SendAndClose(fileToSend);
+}
+
+void Webserver::HttpInterpreter::SendGCodeReply()
+{
+	NetworkTransaction *req = network->GetTransaction();
+	req->Write("HTTP/1.1 200 OK\n");
+	req->Write("Content-Type: text/plain\n");
+	req->Printf("Content-Length: %u\n", reprap.GetGcodeReply().strlen());
+	req->Write("Connection: close\n\n");
+	req->Write(reprap.GetGcodeReply());
+	network->SendAndClose(NULL);
 }
 
 void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 {
-	Network *net = reprap.GetNetwork();
-	NetworkTransaction *req = net->GetTransaction();
+	if (IsAuthenticated() && StringEquals(command, "reply"))
+	{
+		SendGCodeReply();
+		return;
+	}
+
+	NetworkTransaction *req = network->GetTransaction();
 	bool keepOpen = false;
 	bool mayKeepOpen;
 	bool found;
@@ -819,7 +795,8 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	req->Printf("Content-Length: %u\n", jsonResponse.strlen());
 	req->Printf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
 	req->Write(jsonResponse);
-	net->SendAndClose(NULL, keepOpen);
+
+	network->SendAndClose(NULL, keepOpen);
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -830,89 +807,144 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matter when uploading files.
 bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef& response, const char* key, const char* value, size_t valueLength, bool& keepOpen)
 {
-	bool found = true;	// assume success
 	keepOpen = false;	// assume we don't want to persist the connection
+	bool found = true;	// assume success
 
-	if (StringEquals(request, "status"))	// new style status request
+	if (StringEquals(request, "connect") && StringEquals(key, "password"))
 	{
-		reprap.GetStatusResponse(response, 1);
-	}
-	else if (StringEquals(request, "poll"))		// old style status request
-	{
-		reprap.GetStatusResponse(response, 0);
-	}
-	else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
-	{
-		webserver->LoadGcodeBuffer(value);
-		response.printf("{\"buff\":%u}", webserver->GetGcodeBufferSpace());
-	}
-	else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
-	{
-		FileStore *file = platform->GetFileStore("0:/", value, true);
-		StartUpload(file);
-		GetJsonUploadResponse(response);
-	}
-	else if (StringEquals(request, "upload_data") && StringEquals(key, "data"))
-	{
-		StoreUploadData(value, valueLength);
-
-		GetJsonUploadResponse(response);
-		keepOpen = true;
-	}
-	else if (StringEquals(request, "upload_end") && StringEquals(key, "size"))
-	{
-		uint32_t file_length = strtoul(value, NULL, 10);
-		FinishUpload(file_length);
-
-		GetJsonUploadResponse(response);
-	}
-	else if (StringEquals(request, "upload_cancel"))
-	{
-		CancelUpload();
-		response.copy("{\"err\":0}");
-	}
-	else if (StringEquals(request, "delete") && StringEquals(key, "name"))
-	{
-		bool ok = platform->GetMassStorage()->Delete("0:/", value);
-		response.printf("{\"err\":%d}", (ok) ? 0 : 1);
-	}
-	else if (StringEquals(request, "files"))
-	{
-		const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
-		reprap.GetFilesResponse(response, dir);
-	}
-	else if (StringEquals(request, "fileinfo"))
-	{
-		reprap.GetFileInfoResponse(response, (StringEquals(key, "name")) ? value : NULL);
-	}
-	else if (StringEquals(request, "name"))
-	{
-		reprap.GetNameResponse(response);
-	}
-	else if (StringEquals(request, "password") && StringEquals(key, "password"))
-	{
-		gotPassword = webserver->CheckPassword(value);
-		response.printf("{\"password\":\"%s\"}", (gotPassword) ? "right" : "wrong");
-	}
-	else if (StringEquals(request, "axes"))
-	{
-		response.copy("{\"axes\":");
-		char ch = '[';
-		for (int8_t drive = 0; drive < AXES; drive++)
+		if (IsAuthenticated())
 		{
-			response.catf("%c%.1f", ch, platform->AxisTotalLength(drive));
-			ch = ',';
+			// We're already authenticated, no need to check the password again
+			response.copy("{\"err\":0}");
 		}
-		response.cat("]}");
+		else if (reprap.CheckPassword(value))
+		{
+			if (Authenticate())
+			{
+				// This is only possible if we have an HTTP session left
+				response.copy("{\"err\":0}");
+			}
+			else
+			{
+				// Otherwise report an error
+				response.copy("{\"err\":2}");
+			}
+		}
+		else
+		{
+			// Wrong password
+			response.copy("{\"err\":1}");
+		}
 	}
-	else if (StringEquals(request, "connect"))
+	else if (!IsAuthenticated())
 	{
-		CancelUpload();
-		reprap.GetStatusResponse(response, 1);
+		// Don't respond if this IP is not authenticated
+		found = false;
 	}
 	else
 	{
-		found = false;
+		UpdateAuthentication();
+
+		if (StringEquals(request, "disconnect"))
+		{
+			RemoveAuthentication();
+			response.copy("{\"err\":0}");
+		}
+		else if (StringEquals(request, "status"))
+		{
+			int type = 0;
+			if (StringEquals(key, "type"))
+			{
+				type = atoi(value);
+				if (type < 1 || type > 3)
+				{
+					type = 1;
+				}
+
+				reprap.GetStatusResponse(response, type, true);
+			}
+			else
+			{
+				// Deprecated
+				reprap.GetLegacyStatusResponse(response, 1, 0);
+			}
+		}
+		else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
+		{
+			webserver->LoadGcodeBuffer(value);
+			response.printf("{\"buff\":%u}", webserver->GetGcodeBufferSpace());
+		}
+		else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
+		{
+			FileStore *file = platform->GetFileStore("0:/", value, true);
+			if (StartUpload(file))
+			{
+				strncpy(filenameBeingUploaded, value, FILENAME_LENGTH);
+				filenameBeingUploaded[FILENAME_LENGTH - 1] = 0;
+			}
+
+			GetJsonUploadResponse(response);
+		}
+		else if (StringEquals(request, "upload_data") && StringEquals(key, "data"))
+		{
+			StoreUploadData(value, valueLength);
+
+			GetJsonUploadResponse(response);
+			keepOpen = true;
+		}
+		else if (StringEquals(request, "upload_end") && StringEquals(key, "size"))
+		{
+			uint32_t file_length = strtoul(value, NULL, 10);
+			FinishUpload(file_length);
+
+			GetJsonUploadResponse(response);
+		}
+		else if (StringEquals(request, "upload_cancel"))
+		{
+			CancelUpload();
+			response.copy("{\"err\":0}");
+		}
+		else if (StringEquals(request, "delete") && StringEquals(key, "name"))
+		{
+			bool ok = platform->GetMassStorage()->Delete("0:/", value);
+			response.printf("{\"err\":%d}", (ok) ? 0 : 1);
+		}
+		else if (StringEquals(request, "files"))
+		{
+			// TODO: get rid of GetFilesResponse and write directly to NetworkTransaction!
+			const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
+			reprap.GetFilesResponse(response, dir);
+		}
+		else if (StringEquals(request, "fileinfo"))
+		{
+			reprap.GetFileInfoResponse(response, (StringEquals(key, "name")) ? value : NULL);
+		}
+		else if (StringEquals(request, "name"))
+		{
+			reprap.GetNameResponse(response);
+		}
+		else if (StringEquals(request, "connect"))
+		{
+			CancelUpload();
+			reprap.GetStatusResponse(response, 1, -1);
+		}
+		else if (StringEquals(request, "mkdir") && StringEquals(key, "dir"))
+		{
+			bool ok = (platform->GetMassStorage()->MakeDirectory(value));
+			response.printf("{\"err\":%d}", (ok) ? 0 : 1);
+		}
+		else if (StringEquals(request, "config"))
+		{
+			if (StringEquals(key, "type"))
+			{
+				int type = max<int>(2, min<int>(0, atoi(value)));
+				// TODO: implement this
+			}
+		}
+		else
+		{
+			found = false;
+		}
 	}
 
 	return found;
@@ -933,6 +965,10 @@ void Webserver::HttpInterpreter::ResetState()
 	commandWords[0] = clientMessage;
 }
 
+void Webserver::HttpInterpreter::ResetSessions()
+{
+	numActiveSessions = 0;
+}
 
 // Process a character from the client
 // Rewritten as a state machine by dc42 to increase capability and speed, and reduce RAM requirement.
@@ -1243,7 +1279,7 @@ bool Webserver::HttpInterpreter::CharFromClient(char c)
 // Return true if the message is complete, false if we want to continue receiving data (i.e. postdata)
 bool Webserver::HttpInterpreter::ProcessMessage()
 {
-    if(reprap.Debug(moduleWebserver))
+	if (reprap.Debug(moduleWebserver))
     {
     	platform->Message(HOST_MESSAGE, "HTTP request:");
     	for (unsigned int i = 0; i < numCommandWords; ++i)
@@ -1290,14 +1326,94 @@ bool Webserver::HttpInterpreter::RejectMessage(const char* response, unsigned in
 {
 	platform->Message(HOST_MESSAGE, "Webserver: rejecting message with: %s\n", response);
 
-	Network *net = reprap.GetNetwork();
-	NetworkTransaction *req = net->GetTransaction();
+	NetworkTransaction *req = network->GetTransaction();
 	req->Printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
-	net->SendAndClose(NULL);
+	network->SendAndClose(NULL);
 
 	ResetState();
 
 	return true;
+}
+
+// Authenticate current IP and return true on success
+bool Webserver::HttpInterpreter::Authenticate()
+{
+	if (numActiveSessions < maxSessions)
+	{
+		sessionIP[numActiveSessions] = network->GetTransaction()->GetRemoteIP();
+		sessionLastQueryTime[numActiveSessions] = platform->Time();
+		numActiveSessions++;
+		return true;
+	}
+	return false;
+}
+
+bool Webserver::HttpInterpreter::IsAuthenticated() const
+{
+	if (reprap.NoPasswordSet())
+	{
+		// Make password authentication optional if there is no explicit password set
+		return true;
+	}
+
+	unsigned int ip = network->GetTransaction()->GetRemoteIP();
+	for(uint8_t i=0; i<numActiveSessions; i++)
+	{
+		if (sessionIP[i] == ip)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void Webserver::HttpInterpreter::UpdateAuthentication()
+{
+	unsigned int ip = network->GetTransaction()->GetRemoteIP();
+	for(int i=numActiveSessions - 1; i>=0; i--)
+	{
+		if (sessionIP[i] == ip)
+		{
+			sessionLastQueryTime[i] = platform->Time();
+			break;
+		}
+	}
+}
+
+void Webserver::HttpInterpreter::RemoveAuthentication()
+{
+	unsigned int ip = network->GetTransaction()->GetRemoteIP();
+	for(int i=numActiveSessions - 1; i>=0; i--)
+	{
+		if (sessionIP[i] == ip)
+		{
+			for(int k=numActiveSessions - 1; k > i; k--)
+			{
+				sessionIP[k - 1] = sessionIP[k];
+				sessionLastQueryTime[k - 1] = sessionLastQueryTime[k];
+			}
+			numActiveSessions--;
+			break;
+		}
+	}
+}
+
+void Webserver::HttpInterpreter::CheckSessions()
+{
+	const float time = platform->Time();
+	for(int i=numActiveSessions - 1; i>=0; i--)
+	{
+		if (time - sessionLastQueryTime[i] > httpSessionTimeout)
+		{
+			for(int k=numActiveSessions - 1; k > i; k--)
+			{
+				sessionIP[k - 1] = sessionIP[k];
+				sessionLastQueryTime[k - 1] = sessionLastQueryTime[k];
+			}
+			numActiveSessions--;
+		}
+	}
 }
 
 
@@ -1307,32 +1423,31 @@ bool Webserver::HttpInterpreter::RejectMessage(const char* response, unsigned in
 //
 //********************************************************************************************
 
-Webserver::FtpInterpreter::FtpInterpreter(Platform *p, Webserver *ws)
-	: ProtocolInterpreter(p, ws), state(authenticating), clientPointer(0)
+Webserver::FtpInterpreter::FtpInterpreter(Platform *p, Webserver *ws, Network *n)
+	: ProtocolInterpreter(p, ws, n), state(authenticating), clientPointer(0)
 {
 	strcpy(currentDir, "/");
 }
 
 void Webserver::FtpInterpreter::ConnectionEstablished()
 {
-	if (DebugEnabled())
+	if (reprap.Debug(moduleWebserver))
 	{
-		platform->Message(DEBUG_MESSAGE, "Webserver: FTP connection established!\n");
+		platform->Message(HOST_MESSAGE, "Webserver: FTP connection established!\n");
 	}
 
-	Network *net = reprap.GetNetwork();
-	NetworkTransaction *req = net->GetTransaction();
+	NetworkTransaction *req = network->GetTransaction();
 
 	switch (state)
 	{
 		case waitingForPasvPort:
 			if (req->GetLocalPort() == 21)
 			{
-				net->SendAndClose(NULL);
+				network->SendAndClose(NULL);
 				return;
 			}
 
-			net->SaveDataConnection();
+			network->SaveDataConnection();
 			state = pasvPortConnected;
 
 			break;
@@ -1343,7 +1458,7 @@ void Webserver::FtpInterpreter::ConnectionEstablished()
 			if (req->GetLocalPort() == 21)
 			{
 				req->Write("220 RepRapPro Ormerod\r\n");
-				net->SendAndClose(NULL, true);
+				network->SendAndClose(NULL, true);
 
 				ResetState();
 			}
@@ -1357,11 +1472,10 @@ void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 	if (local_port != 21)
 	{
 		// Close the data port
-		Network *net = reprap.GetNetwork();
-		net->CloseDataPort();
+		network->CloseDataPort();
 
 		// Send response
-		if (net->AcquireFTPTransaction())
+		if (network->AcquireFTPTransaction())
 		{
 			if (state == doingPasvIO)
 			{
@@ -1408,9 +1522,9 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 		case '\n':
 			clientMessage[clientPointer++] = 0;
 
-			if (DebugEnabled())
+			if (reprap.Debug(moduleWebserver))
 			{
-				platform->Message(DEBUG_MESSAGE, "FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
+				platform->Message(HOST_MESSAGE, "FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
 			}
 
 			if (clientPointer > 1) // only process a new line if we actually received data
@@ -1420,9 +1534,9 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 				return true;
 			}
 
-			if (DebugEnabled())
+			if (reprap.Debug(moduleWebserver))
 			{
-				platform->Message(DEBUG_MESSAGE, "FtpInterpreter::ProcessLine call finished.\n");
+				platform->Message(HOST_MESSAGE, "FtpInterpreter::ProcessLine call finished.\n");
 			}
 
 			clientPointer = 0;
@@ -1441,19 +1555,27 @@ void Webserver::FtpInterpreter::ResetState()
 	clientPointer = 0;
 	strcpy(currentDir, "/");
 
-	Network *net = reprap.GetNetwork();
-	net->CloseDataPort();
-
+	network->CloseDataPort();
 	CancelUpload();
 
 	state = authenticating;
 }
 
+bool Webserver::FtpInterpreter::StoreUploadData(const char* data, unsigned int len)
+{
+	if (uploadState == uploadOK)
+	{
+		uploadPointer = data;
+		uploadLength = len;
+		return true;
+	}
+	return false;
+}
+
+
 // return true if an error has occurred, false otherwise
 void Webserver::FtpInterpreter::ProcessLine()
 {
-	Network *net = reprap.GetNetwork();
-
 	switch (state)
 	{
 		case authenticating:
@@ -1478,7 +1600,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				}
 				pass[pass_length] = 0;
 
-				if (webserver->CheckPassword(pass))
+				if (reprap.CheckPassword(pass))
 				{
 					state = authenticated;
 					SendReply(230, "Login successful.");
@@ -1488,10 +1610,10 @@ void Webserver::FtpInterpreter::ProcessLine()
 					SendReply(530, "Login incorrect.", false);
 				}
 			}
-			// if this is different, disconnect immediately
+			// if it's different, send response 500 to indicate we don't know the code (might be AUTH or so)
 			else
 			{
-				SendReply(500, "Unknown login command.", false);
+				SendReply(500, "Unknown login command.");
 			}
 
 			break;
@@ -1548,12 +1670,12 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else if (StringEquals(clientMessage, "PASV"))
 			{
 				/* get local IP address */
-				const byte *ip_address = reprap.GetPlatform()->IPAddress();
+				const byte *ip_address = platform->IPAddress();
 
-				/* open random port > 1024 */
+				/* open random port > 1023 */
 				rand();
 				uint16_t pasv_port = random(1024, 65535);
-				net->OpenDataPort(pasv_port);
+				network->OpenDataPort(pasv_port);
 				portOpenTime = platform->Time();
 				state = waitingForPasvPort;
 
@@ -1642,16 +1764,16 @@ void Webserver::FtpInterpreter::ProcessLine()
 			}
 			else if (StringStartsWith(clientMessage, "RNTO"))
 			{
-				char buffer[MaxFilenameLength];
-				strncpy(buffer, filename, MaxFilenameLength);
+				char buffer[FILENAME_LENGTH];
+				strncpy(buffer, filename, FILENAME_LENGTH);
 				ReadFilename(4);
 
 				if (buffer[0] != '/' && filename[0] != '/')
 				{
-					char old_filename[MaxFilenameLength];
+					char old_filename[FILENAME_LENGTH];
 					const char *new_filename;
 
-					strncpy(old_filename, platform->GetMassStorage()->CombineName(currentDir, buffer), MaxFilenameLength);
+					strncpy(old_filename, platform->GetMassStorage()->CombineName(currentDir, buffer), FILENAME_LENGTH);
 					new_filename = platform->GetMassStorage()->CombineName(currentDir, filename);
 
 					if (platform->GetMassStorage()->Rename(old_filename, new_filename))
@@ -1699,40 +1821,40 @@ void Webserver::FtpInterpreter::ProcessLine()
 			break;
 
 		case waitingForPasvPort:
-			if (!DebugEnabled() && platform->Time() - portOpenTime > pasvPortTimeout)
+			if (!reprap.Debug(moduleWebserver) && platform->Time() - portOpenTime > pasvPortTimeout)
 			{
 				SendReply(425, "Failed to establish connection.");
 
-				net->CloseDataPort();
+				network->CloseDataPort();
 				state = authenticated;
 			}
 			else
 			{
-				net->RepeatTransaction();
+				network->WaitForDataConection();
 			}
 
 			break;
 
 		case pasvPortConnected:
 			// save current connection state so we can send '226 Transfer complete.' when ConnectionLost() is called
-			net->SaveFTPConnection();
+			network->SaveFTPConnection();
 
 			// list directory entries
 			if (StringEquals(clientMessage, "LIST"))
 			{
 				// send response via main port
 				strncpy(ftpResponse, "150 Here comes the directory listing.\r\n", ftpResponseLength);
-				NetworkTransaction *ftp_req = net->GetTransaction();
+				NetworkTransaction *ftp_req = network->GetTransaction();
 				ftp_req->Write(ftpResponse);
-				net->SendAndClose(NULL, true);
+				network->SendAndClose(NULL, true);
 
 				// send file list via data port
-				if (net->AcquireDataTransaction())
+				if (network->AcquireDataTransaction())
 				{
 					FileInfo file_info;
 					if (platform->GetMassStorage()->FindFirst(currentDir, file_info))
 					{
-						NetworkTransaction *data_req = net->GetTransaction();
+						NetworkTransaction *data_req = network->GetTransaction();
 						char line[300];
 
 						do {
@@ -1747,13 +1869,14 @@ void Webserver::FtpInterpreter::ProcessLine()
 							data_req->Write(line);
 						} while (platform->GetMassStorage()->FindNext(file_info));
 					}
-					net->SendAndClose(NULL);
+
+					network->SendAndClose(NULL);
 					state = doingPasvIO;
 				}
 				else
 				{
 					SendReply(500, "Unknown error.");
-					net->CloseDataPort();
+					network->CloseDataPort();
 					state = authenticated;
 				}
 			}
@@ -1774,13 +1897,16 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 				if (StartUpload(file))
 				{
+					strncpy(filenameBeingUploaded, filename, FILENAME_LENGTH);
+					filenameBeingUploaded[FILENAME_LENGTH - 1] = 0;
+
 					SendReply(150, "OK to send data.");
 					state = doingPasvIO;
 				}
 				else
 				{
 					SendReply(550, "Failed to open file.");
-					net->CloseDataPort();
+					network->CloseDataPort();
 					state = authenticated;
 				}
 			}
@@ -1808,16 +1934,16 @@ void Webserver::FtpInterpreter::ProcessLine()
 					snprintf(ftpResponse, ftpResponseLength, "Opening data connection for %s (%lu bytes).", filename, fs->Length());
 					SendReply(150, ftpResponse);
 
-					if (net->AcquireDataTransaction())
+					if (network->AcquireDataTransaction())
 					{
 						// send the file via data port
-						net->SendAndClose(fs, false);
+						network->SendAndClose(fs, false);
 						state = doingPasvIO;
 					}
 					else
 					{
 						SendReply(500, "Unknown error.");
-						net->CloseDataPort();
+						network->CloseDataPort();
 						state = authenticated;
 					}
 				}
@@ -1826,7 +1952,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else
 			{
 				SendReply(500, "Unknown command.");
-				net->CloseDataPort();
+				network->CloseDataPort();
 				state = authenticated;
 			}
 
@@ -1843,7 +1969,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				}
 				else
 				{
-					net->CloseDataPort();
+					network->CloseDataPort();
 					SendReply(226, "ABOR successful.");
 				}
 			}
@@ -1851,7 +1977,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else
 			{
 				SendReply(500, "Unknown command.");
-				net->CloseDataPort();
+				network->CloseDataPort();
 				state = authenticated;
 			}
 
@@ -1861,27 +1987,25 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 void Webserver::FtpInterpreter::SendReply(int code, const char *message, bool keepConnection)
 {
-	Network *net = reprap.GetNetwork();
-	NetworkTransaction *req = net->GetTransaction();
+	NetworkTransaction *req = network->GetTransaction();
 	req->Printf("%d %s\r\n", code, message);
-	net->SendAndClose(NULL, keepConnection);
+	network->SendAndClose(NULL, keepConnection);
 }
 
 void Webserver::FtpInterpreter::SendFeatures()
 {
-	Network *net = reprap.GetNetwork();
-	NetworkTransaction *req = net->GetTransaction();
+	NetworkTransaction *req = network->GetTransaction();
 	req->Write("211-Features:\r\n");
 	req->Write("PASV\r\n");		// support PASV mode
 	req->Write("211 End\r\n");
-	net->SendAndClose(NULL, true);
+	network->SendAndClose(NULL, true);
 }
 
 void Webserver::FtpInterpreter::ReadFilename(int start)
 {
 	int filenameLength = 0;
 	bool readingPath = false;
-	for(int i=start; i<clientPointer && i<MaxFilenameLength + start -1; i++)
+	for(int i=start; i<clientPointer && filenameLength<FILENAME_LENGTH; i++)
 	{
 		switch (clientMessage[i])
 		{
@@ -1911,14 +2035,14 @@ void Webserver::FtpInterpreter::ReadFilename(int start)
 
 void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 {
-	char combinedPath[MaxFilenameLength];
+	char combinedPath[FILENAME_LENGTH];
 
 	if (newDirectory[0] != 0)
 	{
 		/* Prepare the new directory path */
 		if (newDirectory[0] == '/') // absolute path
 		{
-			strncpy(combinedPath, newDirectory, MaxFilenameLength);
+			strncpy(combinedPath, newDirectory, FILENAME_LENGTH);
 		}
 		else // relative path
 		{
@@ -1932,7 +2056,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 				}
 				else
 				{
-					strncpy(combinedPath, currentDir, MaxFilenameLength);
+					strncpy(combinedPath, currentDir, FILENAME_LENGTH);
 					for(int i=strlen(combinedPath) -2; i>=0; i--)
 					{
 						if (combinedPath[i] == '/')
@@ -1945,12 +2069,12 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 			}
 			else // go to child directory
 			{
-				strncpy(combinedPath, currentDir, MaxFilenameLength);
+				strncpy(combinedPath, currentDir, FILENAME_LENGTH);
 				if (strlen(currentDir) > 1)
 				{
-					strncat(combinedPath, "/", MaxFilenameLength - strlen(combinedPath) - 1);
+					strncat(combinedPath, "/", FILENAME_LENGTH - strlen(combinedPath) - 1);
 				}
-				strncat(combinedPath, newDirectory, MaxFilenameLength - strlen(combinedPath) - 1);
+				strncat(combinedPath, newDirectory, FILENAME_LENGTH - strlen(combinedPath) - 1);
 			}
 		}
 
@@ -1963,7 +2087,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		/* Verify path and change it */
 		if (platform->GetMassStorage()->PathExists(combinedPath))
 		{
-			strncpy(currentDir, combinedPath, MaxFilenameLength);
+			strncpy(currentDir, combinedPath, FILENAME_LENGTH);
 			SendReply(250, "Directory successfully changed.");
 		}
 		else
@@ -1984,19 +2108,19 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 //
 //********************************************************************************************
 
-Webserver::TelnetInterpreter::TelnetInterpreter(Platform *p, Webserver *ws) : ProtocolInterpreter(p, ws)
+Webserver::TelnetInterpreter::TelnetInterpreter(Platform *p, Webserver *ws, Network *n)
+	: ProtocolInterpreter(p, ws, n)
 {
 	ResetState();
 }
 
 void Webserver::TelnetInterpreter::ConnectionEstablished()
 {
-	Network *net = reprap.GetNetwork();
-	NetworkTransaction *req = net->GetTransaction();
+	NetworkTransaction *req = network->GetTransaction();
 	req->Write("RepRapPro Ormerod Telnet Interface\r\n\r\n");
 	req->Write("Please enter your password:\r\n");
 	req->Write("> ");
-	net->SendAndClose(NULL, true);
+	network->SendAndClose(NULL, true);
 }
 
 void Webserver::TelnetInterpreter::ConnectionLost(uint16_t local_port)
@@ -2050,28 +2174,28 @@ void Webserver::TelnetInterpreter::ResetState()
 {
 	state = authenticating;
 	clientPointer = 0;
+	sendPending = false;
 }
 
 void Webserver::TelnetInterpreter::ProcessLine()
 {
-	Network *net = reprap.GetNetwork();
-	NetworkTransaction *req = net->GetTransaction();
+	NetworkTransaction *req = network->GetTransaction();
 
 	switch (state)
 	{
 		case authenticating:
-			if (webserver->CheckPassword(clientMessage))
+			if (reprap.CheckPassword(clientMessage))
 			{
-				net->SaveTelnetConnection();
+				network->SaveTelnetConnection();
 				state = authenticated;
 
 				req->Write("Log in successful!\r\n");
-				net->SendAndClose(NULL, true);
+				network->SendAndClose(NULL, true);
 			}
 			else
 			{
 				req->Write("Invalid password.\r\n> ");
-				net->SendAndClose(NULL, true);
+				network->SendAndClose(NULL, true);
 			}
 			break;
 
@@ -2080,47 +2204,56 @@ void Webserver::TelnetInterpreter::ProcessLine()
 			if (StringEquals(clientMessage, "exit") || StringEquals(clientMessage, "quit"))
 			{
 				req->Write("Goodbye.\r\n");
-				net->SendAndClose(NULL);
+				network->SendAndClose(NULL);
 			}
 			// All other commands are processed by the Webserver
 			else
 			{
 				webserver->ProcessGcode(clientMessage);
-				net->CloseTransaction();
+				if (sendPending)
+				{
+					sendPending = false;
+					network->SendAndClose(NULL, true);
+				}
+				else
+				{
+					network->CloseTransaction();
+				}
 			}
 			break;
 	}
 }
 
-void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply, bool haveMore)
+void Webserver::TelnetInterpreter::HandleGcodeReply(const char *reply)
 {
-	Network *net = reprap.GetNetwork();
-	if (state >= authenticated && net->AcquireTelnetTransaction())
+	if (state >= authenticated && network->AcquireTelnetTransaction())
 	{
-		NetworkTransaction *req = net->GetTransaction();
+		NetworkTransaction *req = network->GetTransaction();
 
 		// Whenever a new line is read, we also need to send a carriage return
-		bool append_line = false;
-		while (reply[0] != 0)
+		while (*reply != 0)
 		{
-			append_line = true;
-			if (reply[0] == '\n')
+			if (*reply == '\n')
 			{
 				req->Write('\r');
-				append_line = false;
 			}
-			req->Write(reply[0]);
+			req->Write(*reply);
 			reply++;
 		}
 
-		// Only append a line break if reply didn't contain one and if we aren't expecting any more data
-		if (append_line && !haveMore)
-		{
-			req->Write("\r\n");
-		}
-
-		net->SendAndClose(NULL, true);
+		// We must not send the message here, because then we'd have to deal with LWIP internals
+		sendPending = true;
 	}
+}
+
+bool Webserver::TelnetInterpreter::HasRemainingData() const
+{
+	return sendPending;
+}
+
+void Webserver::TelnetInterpreter::RemainingDataSent()
+{
+	sendPending = false;
 }
 
 
@@ -2148,90 +2281,110 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 			const size_t readSize = 512;					// read 512 bytes at a time (1K doesn't seem to work when we read from the end)
 			const size_t overlap = 100;
 			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
+
 			bool foundLayerHeight = false;
 			unsigned int filamentsFound = 0, nFilaments;
 			float filaments[DRIVES - AXES];
 
 			// Get slic3r settings by reading from the start of the file. We only read the first 2K or so, everything we are looking for should be there.
-			for (unsigned int i = 0; i < 4; ++i)
+			for(uint8_t i=0; i<4; i++)
 			{
 				size_t sizeToRead = (size_t)min<unsigned long>(info.fileSize, readSize + overlap);
 				int nbytes = f->Read(buf, sizeToRead);
-				if (nbytes == (int)sizeToRead)
+				if (nbytes != (int)sizeToRead)
+				{
+					break;									// read failed so give up
+				}
+				else
 				{
 					buf[sizeToRead] = 0;
 
 					// Search for filament usage (Cura puts it at the beginning of a G-code file)
-					nFilaments = FindFilamentUsed(buf, sizeToRead, filaments, DRIVES - AXES);
-					if (nFilaments != 0 && nFilaments >= filamentsFound)
+					if (!filamentsFound)
 					{
-						filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
-						for (unsigned int i = 0; i < filamentsFound; ++i)
+						nFilaments = FindFilamentUsed(buf, sizeToRead, filaments, DRIVES - AXES);
+						if (nFilaments != 0 && nFilaments >= filamentsFound)
 						{
-							info.filamentNeeded[i] = filaments[i];
+							filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
+							for (unsigned int i = 0; i < filamentsFound; ++i)
+							{
+								info.filamentNeeded[i] = filaments[i];
+							}
 						}
 					}
 
 					// Look for layer height
-					foundLayerHeight = FindLayerHeight(buf, sizeToRead, info.layerHeight);
-
-					// Look for slicer or Simplify3D generated-by comment program
-					const char* generatedByString = " generated by ";
-					const char* pos = strstr(buf, generatedByString);
-					size_t generatedByLength = ARRAY_SIZE(info.generatedBy);
-					if (pos != NULL)
+					if (!foundLayerHeight)
 					{
-						pos += strlen(generatedByString);
-						size_t i = 0;
-						while (i < ARRAY_SIZE(info.generatedBy) - 1 && *pos >= ' ')
-						{
-							char c = *pos++;
-							if (c == '"' || c == '\\')
-							{
-								// Need to escape the quote-mark for JSON
-								if ( i > ARRAY_SIZE(info.generatedBy) - 3)
-								{
-									break;
-								}
-								info.generatedBy[i++] = '\\';
-							}
-							info.generatedBy[i++] = c;
-						}
-						info.generatedBy[i] = 0;
+						foundLayerHeight = FindLayerHeight(buf, sizeToRead, info.layerHeight);
 					}
 
-					// Look for Cura comment
-					const char* slicedAtString = ";Sliced at: ";
-					pos = strstr(buf, slicedAtString);
-					if (pos != NULL)
+					// Look for slicer program
+					if (!info.generatedBy[0])
 					{
-						pos += strlen(slicedAtString);
-						strcpy(info.generatedBy, "Cura at ");
-						size_t i = 8;
-						while (i < ARRAY_SIZE(info.generatedBy) - 1 && *pos >= ' ')
+						// Slic3r and S3D
+						const char* generatedByString = "generated by ";
+						char* pos = strstr(buf, generatedByString);
+						size_t generatedByLength = ARRAY_SIZE(info.generatedBy);
+						if (pos != NULL)
 						{
-							char c = *pos++;
-							if (c == '"' || c == '\\')
+							pos += strlen(generatedByString);
+							size_t i = 0;
+							while (i < ARRAY_SIZE(info.generatedBy) - 1 && *pos >= ' ')
 							{
-								// Need to escape the quote-mark for JSON
-								if (i > ARRAY_SIZE(info.generatedBy) - 3)
+								char c = *pos++;
+								if (c == '"' || c == '\\')
 								{
-									break;
+									// Need to escape the quote-mark for JSON
+									if (i > ARRAY_SIZE(info.generatedBy) - 3)
+									{
+										break;
+									}
+									info.generatedBy[i++] = '\\';
 								}
-								info.generatedBy[i++] = '\\';
+								info.generatedBy[i++] = c;
 							}
-							info.generatedBy[i++] = c;
+							info.generatedBy[i] = 0;
 						}
-						info.generatedBy[i] = 0;
+
+						// Cura
+						const char* slicedAtString = ";Sliced at: ";
+						pos = strstr(buf, slicedAtString);
+						if (pos != NULL)
+						{
+							pos += strlen(slicedAtString);
+							strcpy(info.generatedBy, "Cura at ");
+							size_t i = 8;
+							while (i < ARRAY_SIZE(info.generatedBy) - 1 && *pos >= ' ')
+							{
+								char c = *pos++;
+								if (c == '"' || c == '\\')
+								{
+									// Need to escape the quote-mark for JSON
+									if (i > ARRAY_SIZE(info.generatedBy) - 3)
+									{
+										break;
+									}
+									info.generatedBy[i++] = '\\';
+								}
+								info.generatedBy[i++] = c;
+							}
+							info.generatedBy[i] = 0;
+						}
 					}
 
 					// Add code to look for other values here...
+				}
+
+				// Have we collected everything?
+				if (filamentsFound && foundLayerHeight && info.generatedBy[0])
+				{
+					break;
 				}
 			}
 
 			// Now get the object height and filament used by reading the end of the file
 			{
-				bool searchForFilaments = (filamentsFound == 0);
 				size_t sizeToRead;
 				if (info.fileSize <= readSize + overlap)
 				{
@@ -2258,10 +2411,9 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 					{
 						break;									// read failed so give up
 					}
-					buf[sizeToScan] = 0;						// add a null terminator
 
 					// Search for filament used
-					if (searchForFilaments)
+					if (!filamentsFound)
 					{
 						nFilaments = FindFilamentUsed(buf, sizeToScan, filaments, DRIVES - AXES);
 						if (nFilaments != 0 && nFilaments >= filamentsFound)
@@ -2285,6 +2437,7 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 					{
 						break;		// quit if found height
 					}
+
 					if (seekPos == 0 || info.fileSize - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
 					{
 						break;		// quit if reached start of file or already scanned the last 32K of the file
@@ -2304,42 +2457,70 @@ bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFi
 	return false;
 }
 
-// Scan the buffer for a G1 Zxxx command. The buffer is null-terminated. Simplify3D uses G0 Z instead.
+// Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
 bool Webserver::FindHeight(const char* buf, size_t len, float& height)
 {
 //debugPrintf("Scanning %u bytes starting %.100s\n", len, buf);
-	if (len >= 5)			// need to check this here to prevent arithmetic underflow later on
+	bool inComment;
+	unsigned int zPos;
+	for(size_t i = len - 5; i > 0; i--)
 	{
-		size_t i = len - 5;
-		for(;;)
+		// Look for last "G0/G1 ... Z#HEIGHT#" command as generated by common slicers
+		if (buf[i] == 'G' && (buf[i + 1] == '0' || buf[i + 1] == '1') && buf[i + 2] == ' ')
 		{
-			if (buf[i] == 'G' && (buf[i + 1] == '1' || buf[i + 1] == '0') && buf[i + 2] == ' ' && buf[i + 3] == 'Z' && isDigit(buf[i + 4]))
+			// Looks like we found a controlled move, however it could be in a comment, especially when using slic3r 1.1.1
+			inComment = false;
+			size_t j = i;
+			while (j != 0)
 			{
-				// Looks like we found a command to set the height, however it could be in a comment, especially when using slic3r 1.1.1
-				size_t j = i;
-				while (j != 0)
+				--j;
+				char c = buf[j];
+				if (c == '\n' || c == '\r')
 				{
-					--j;
-					char c = buf[j];
-					if (c == '\n' || c == '\r')
-					{
-//debugPrintf("Found at offset %u text: %.100s\n", i, &buf[i + 4]);
-						// It's not in a comment
-						height = strtod(&buf[i + 4], NULL);
-						return true;
-					}
-					if (c == ';')
-					{
-						// It is in a comment, so give up on this one
-						break;
-					}
+					// It's not in a comment
+					break;
+				}
+				if (c == ';')
+				{
+					// It is in a comment, so give up on this one
+					inComment = true;
+					break;
 				}
 			}
-			if (i == 0)
+			if (inComment)
+				continue;
+
+			// Find 'Z' position and grab that value
+			zPos = 0;
+			for(int j=i +3; j < len - 2; j++)
 			{
-				break;
+				char c = buf[j];
+				if (c < ' ')
+				{
+					// Skip all whitespaces...
+					while (j < len - 2 && c <= ' ')
+					{
+						c = buf[++j];
+					}
+					// ...to make sure ";End" doesn't follow G0 .. Z#HEIGHT#
+					if (zPos != 0 && (buf[j] != ';' || buf[j + 1] != 'E'))
+					{
+						//debugPrintf("Found at offset %u text: %.100s\n", zPos, &buf[zPos + 1]);
+						height = strtod(&buf[zPos + 1], NULL);
+						return true;
+					}
+					break;
+				}
+				else if (c == ';')
+				{
+					// Ignore comments
+					break;
+				}
+				else if (c == 'Z')
+				{
+					zPos = j;
+				}
 			}
-			--i;
 		}
 	}
 	return false;
@@ -2350,7 +2531,7 @@ bool Webserver::FindLayerHeight(const char *buf, size_t len, float& layerHeight)
 {
 	// Look for layer_height as generated by Slic3r
 	const char* layerHeightStringSlic3r = "; layer_height ";
-	const char *pos = strstr(buf, layerHeightStringSlic3r);
+	char *pos = strstr(buf, layerHeightStringSlic3r);
 	if (pos != NULL)
 	{
 		pos += strlen(layerHeightStringSlic3r);
@@ -2385,6 +2566,7 @@ bool Webserver::FindLayerHeight(const char *buf, size_t len, float& layerHeight)
 		layerHeight = strtod(pos, NULL);
 		return true;
 	}
+
 	return false;
 }
 
@@ -2395,9 +2577,9 @@ unsigned int Webserver::FindFilamentUsed(const char* buf, size_t len, float *fil
 	unsigned int filamentsFound = 0;
 
 	// Look for filament usage as generated by Slic3r and Cura
-	const char* filamentUsedStr = "ilament used";		// comment string used by slic3r, followed by filament used and "mm"
+	const char* filamentUsedStr = "ilament used";		// comment string used by slic3r and Cura, followed by filament used and "mm"
 	const char* p = buf;
-	while (filamentsFound < maxFilaments && (p = strstr(p, filamentUsedStr)) != NULL)
+	while (filamentsFound < maxFilaments &&	(p = strstr(p, filamentUsedStr)) != NULL)
 	{
 		p += strlen(filamentUsedStr);
 		while(strchr(" :=\t", *p) != NULL)
@@ -2416,21 +2598,22 @@ unsigned int Webserver::FindFilamentUsed(const char* buf, size_t len, float *fil
 		}
 	}
 
-	if (filamentsFound == 0)
+	// Look for filament usage as generated by S3D
+	if (!filamentsFound)
 	{
-		// Look for filament usage as generated by S3D
-		const char *filamentLengthStr = "ilament length";	// comment string used by S3D
+		const char *filamentLengthStr = "ilament length:";	// comment string used by S3D
 		p = buf;
 		while (filamentsFound < maxFilaments &&	(p = strstr(p, filamentLengthStr)) != NULL)
 		{
 			p += strlen(filamentLengthStr);
 			while(strchr(" :=\t", *p) != NULL)
 			{
-				++p;
+				++p;	// this allows for " = " from default slic3r comment and ": " from default Cura comment
 			}
 			if (isDigit(*p))
 			{
-				filamentUsed[filamentsFound] = strtod(p, NULL); // S3D reports filament usage in mm, no conversion needed
+				char* q;
+				filamentUsed[filamentsFound] = strtod(p, &q); // S3D reports filament usage in mm, no conversion needed
 				++filamentsFound;
 			}
 		}
@@ -2438,5 +2621,3 @@ unsigned int Webserver::FindFilamentUsed(const char* buf, size_t len, float *fil
 
 	return filamentsFound;
 }
-
-// End

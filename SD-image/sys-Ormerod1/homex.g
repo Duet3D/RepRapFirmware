@@ -1,3 +1,4 @@
+; X axis homing file for dc42 Duet firmware
 G91
 G1 Z4 F200
 G1 X-240 F2000 S1

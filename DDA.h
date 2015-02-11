@@ -19,7 +19,7 @@ class DDA
 
 public:
 
-	enum DDAState
+	enum DDAState : unsigned char
 	{
 		empty,				// empty or being filled in
 		provisional,		// ready, but could be subject to modifications
@@ -30,7 +30,8 @@ public:
 
 	DDA(DDA* n);
 
-	bool Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping);	// Set up a new move, returning true if it represents real movement
+	bool Init(const float nextMove[], EndstopChecks ce,
+			bool doDeltaMapping, FilePosition fPos);				// Set up a new move, returning true if it represents real movement
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim);										// Start executing the DDA, i.e. move the move.
 	bool Step();													// Take one step of the DDA, called by timed interrupt.
@@ -40,6 +41,7 @@ public:
 	void Prepare();													// Calculate all the values and freeze this DDA
 	float CalcTime() const;											// Calculate the time needed for this move (used for simulation)
 	void PrintIfHasStepError();
+	bool CanPause() const { return canPause; }
 
 	DDAState GetState() const { return state; }
 	DDA* GetNext() const { return next; }
@@ -52,6 +54,8 @@ public:
 	float GetEndCoordinate(size_t drive, bool disableDeltaMapping);
 	bool FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords[AXES]);
     void SetPositions(const float move[]);							// Force the endpoints to be these
+    FilePosition GetFilePosition() const { return filePos; }
+    float GetRequestedSpeed() const { return requestedSpeed; }
 
 	void DebugPrint() const;
 
@@ -79,16 +83,21 @@ private:
 
     DDA* next;								// The next one in the ring
 	DDA *prev;								// The previous one in the ring
-	volatile DDAState state;				// what state this DDA is in
 
-	// These remain the same regardless of how we execute a move
+	volatile DDAState state;				// what state this DDA is in
+	bool endCoordinatesValid;				// True if endCoordinates can be relied on
+    bool isDeltaMovement;					// True if this is a delta printer movement
+    bool canPause;							// True if we can pause at the end of this move
+
+    EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
+    // We are on a half-word boundary here, so expect 2 bytes of padding to be inserted at this point
+
+    FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read fro SD card
+
 	int32_t endPoint[DRIVES];  				// Machine coordinates of the endpoint
 	float endCoordinates[AXES];				// The Cartesian coordinates at the end of the move
 	float directionVector[DRIVES];			// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
-	bool endCoordinatesValid;				// True if endCoordinates can be relied on
-    bool isDeltaMovement;					// True if this is a delta printer movement
-	EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
-    float totalDistance;					// How long is the move in hypercuboid distance
+    float totalDistance;					// How long is the move in hypercuboid space
 	float acceleration;						// The acceleration to use
     float requestedSpeed;					// The speed that the user asked for
 

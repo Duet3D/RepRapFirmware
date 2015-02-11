@@ -1,5 +1,4 @@
-; Configuration file for RepRap Ormerod
-; RepRapPro Ltd
+; Ormerod 1 config file for dc42 Duet firmware
 M111 S0                             ; Debug off
 M550 PMy Ormerod			        ; Machine name (can be anything you like)
 M551 Preprap                        ; Machine password (currently not used)
@@ -17,14 +16,14 @@ M906 X800 Y1000 Z800 E800           ; Set motor currents (mA)
 M563 P1 D0 H1                       ; Define tool 1
 G10 P1 S0 R0                        ; Set tool 1 operating and standby temperatures
 M92 E420                        	; Set extruder steps per mm (single nozzle)
-;*** If you have a dual-nozzle build, remove ot comment out the previous line, and un-comment the following 3 lines
+;*** If you have a dual-nozzle build, remove or comment out the previous line, and un-comment the following 3 lines
 ;M563 P2 D1 H2                      ; Define tool 2
 ;G10 P2 S0 R0                       ; Set tool 2 operating and standby temperatures
 ;M92 E420:420						; Set extruder steps/mm (dual nozzle)
 ;*** If you have a modulated IR probe without on-board microcontroller, change P1 to P2 in the following
 M558 P1                             ; Use an unmodulated Z probe or an intelligent Z probe
 G31 Z1.20 P500                      ; Set the probe height and threshold (put your own values here)
-;*** If you have a Duet 0.7 board, change R1000 to R4700 to the following M305 commands
+;*** If you have a Duet board with 4.7K thermistor series resistors, change R1000 to R4700 to the following M305 commands
 M305 P0 R1000 H0 L0					; Put your own H and/or L values here to set the bed thermistor ADC correction
 M305 P1 R1000 H0 L0					; Put your own H and/or L values here to set the first nozzle thermistor ADC correction
 M305 P2 R1000 H0 L0					; Put your own H and/or L values here to set the second nozzle thermistor ADC correction
@@ -40,4 +39,4 @@ M201 X800 Y800 Z15 E1000            ; Accelerations (mm/s^2)
 M203 X15000 Y15000 Z100 E3600       ; Maximum speeds (mm/min)
 M566 X600 Y600 Z30 E20              ; Minimum speeds mm/minute
 M208 X214 Y210						; set axis maxima (adjust to suit your machine)
-M208 X-8 S1							; set axis minimum (adjust to make X=0 the edge of the bed)
+M208 X-8 Y0 S1						; set axis minimum (adjust to make X=0 the edge of the bed)

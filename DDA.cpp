@@ -71,7 +71,7 @@ void DDA::Init()
 }
 
 // Set up a real move. Return true if it represents real movement, else false.
-bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping)
+bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping, FilePosition fPos)
 {
 	// 1. Compute the new endpoints and the movement vector
 	const int32_t *positionNow = prev->DriveCoordinates();
@@ -150,6 +150,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping)
 
 	// 3. Store some values
 	endStopsToCheck = ce;
+	filePos = fPos;
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a special move on a delta printer
 	endCoordinatesValid = (ce == 0) && (doDeltaMapping || !reprap.GetMove()->IsDeltaMode());
 
@@ -364,7 +365,7 @@ void DDA::DoLookahead(DDA *laDDA)
 	}
 }
 
-// Recalculate the top speed, acceleration distance and deceleration distance
+// Recalculate the top speed, acceleration distance and deceleration distance, and whether we can pause after this move
 void DDA::RecalculateMove()
 {
 	accelDistance = ((requestedSpeed * requestedSpeed) - (startSpeed * startSpeed))/(2.0 * acceleration);
@@ -400,6 +401,20 @@ void DDA::RecalculateMove()
 	else
 	{
 		topSpeed = requestedSpeed;
+	}
+
+	canPause = (endStopsToCheck == 0);
+	if (canPause && endSpeed != 0.0)
+	{
+		const Platform *p = reprap.GetPlatform();
+		for (size_t drive = 0; drive < DRIVES; ++drive)
+		{
+			if (ddm[drive].moving && endSpeed * fabs(directionVector[drive]) > p->ActualInstantDv(drive))
+			{
+				canPause = false;
+				break;
+			}
+		}
 	}
 }
 
@@ -501,6 +516,7 @@ void DDA::SetPositions(const float move[DRIVES])
 
 // Get a Cartesian end coordinate from this move
 float DDA::GetEndCoordinate(size_t drive, bool disableDeltaMapping)
+//pre(drive < AXES)
 {
 	if (disableDeltaMapping)
 	{
@@ -728,7 +744,12 @@ bool DDA::Step()
 							break;
 
 						case lowNear:
-							ReduceHomingSpeed(reprap.GetPlatform()->ConfiguredInstantDv(drive));
+							// Only reduce homing speed if there are no more axes to be homed.
+							// This allows us to home X and Y simultaneously.
+							if (endStopsToCheck == (1 << drive))
+							{
+								ReduceHomingSpeed(reprap.GetPlatform()->ConfiguredInstantDv(drive));
+							}
 							break;
 
 						default:

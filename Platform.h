@@ -57,8 +57,6 @@ Licence: GPL
 
 // Some numbers...
 
-#define STRING_LENGTH 1029
-#define SHORT_STRING_LENGTH 40
 #define TIME_TO_REPRAP 1.0e6 	// Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
 
@@ -269,8 +267,8 @@ namespace DiagnosticTest
 	enum
 	{
 		TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
-		TestSpinLockup = 1002			// test that we get a software reset if a Spin() function takes too long
-
+		TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
+		TestSerialBlock = 1003			// test what happens when we write a blocking message via debugPrintf()
 	};
 }
 
@@ -359,7 +357,10 @@ private:
 
 // This class handles input from, and output to, files.
 
-class FileStore //: public InputOutput
+typedef uint32_t FilePosition;
+const FilePosition noFilePosition = 0xFFFFFFFF;
+
+class FileStore
 {
 public:
 
@@ -370,9 +371,10 @@ public:
 	bool Write(const char *s, unsigned int len);	// Write a block of len bytes
 	bool Write(const char* s);						// Write a string
 	bool Close();									// Shut the file and tidy up
-	bool Seek(unsigned long pos);					// Jump to pos in the file
+	bool Seek(FilePosition pos);					// Jump to pos in the file
+	FilePosition GetPosition() const;				// Return the current position in the file, assuming we are reading the file
 	bool GoToEnd();									// Position the file at the end (so you can write on the end).
-	unsigned long Length() const;					// File size in bytes
+	FilePosition Length() const;					// File size in bytes
 	float FractionRead() const;						// How far in we are
 	void Duplicate();								// Create a second reference to this file
 	bool Flush();									// Write remaining buffer data
@@ -390,8 +392,7 @@ private:
 
     bool inUse;
     byte buf[FILE_BUF_LEN];
-    int bufferPointer;
-	unsigned long bytesRead;
+    unsigned int bufferPointer;
   
 	bool ReadBuffer();
 	bool WriteBuffer();
@@ -564,9 +565,10 @@ public:
   void SetEmulating(Compatibility c);
   void Diagnostics();
   void DiagnosticTest(int d);
-  void ClassReport(const char* className, float &lastTime, Module m);  // Called on return to check everything's live.
+  void ClassReport(float &lastTime);  			// Called on return to check everything's live.
   void RecordError(ErrorCode ec) { errorCodeBits |= ec; }
   void SoftwareReset(uint16_t reason);
+  bool AtxPower() const;
   void SetAtxPower(bool on);
 
   // Timing
@@ -718,11 +720,12 @@ private:
 	  uint16_t magic;
 	  uint16_t resetReason;							// this records why we did a software reset, for diagnostic purposes
 	  size_t neverUsedRam;							// the amount of never used RAM at the last abnormal software reset
+	  char lastMessage[256];						// the last known message before a software reset occurred
   };
 
   struct FlashData
   {
-	  static const uint16_t magicValue = 0xA436;	// value we use to recognise that just the reset flash data has been written
+	  static const uint16_t magicValue = 0xA436;	// value we use to recognise that the flash data has been written
 	  static const uint32_t nvAddress = SoftwareResetData::nvAddress + sizeof(struct SoftwareResetData);
 
 	  uint16_t magic;
@@ -897,7 +900,12 @@ public:
 		return f->Flush();
 	}
 
-	bool Seek(unsigned long position)
+	uint32_t GetPosition() const
+	{
+		return f->GetPosition();
+	}
+
+	bool Seek(uint32_t position)
 	{
 		return f->Seek(position);
 	}
@@ -907,7 +915,7 @@ public:
 		return (f == NULL ? -1.0 : f->FractionRead());
 	}
 
-	unsigned long Length()
+	uint32_t Length() const
 	{
 		return f->Length();
 	}

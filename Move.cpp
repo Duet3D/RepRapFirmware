@@ -169,8 +169,8 @@ void Move::Init()
 	xRectangle = 1.0/(0.8*reprap.GetPlatform()->AxisMaximum(X_AXIS));
 	yRectangle = xRectangle;
 
-	lastTime = reprap.GetPlatform()->Time();
-	longWait = lastTime;
+	longWait = reprap.GetPlatform()->Time();
+	idleCount = 0;
 
 	simulating = false;
 	simulationTime = 0.0;
@@ -191,8 +191,12 @@ void Move::Spin()
 		return;
 	}
 
+	if (idleCount < 1000)
+	{
+		++idleCount;
+	}
+
 	// See if we can add another move to the ring
-	bool moveAdded = false;
 	if (!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
 	{
 		if (reprap.Debug(moduleMove))
@@ -203,24 +207,25 @@ void Move::Spin()
 		float nextMove[DRIVES + 1];
 		EndstopChecks endStopsToCheck;
 		bool noDeltaMapping;
-		if (reprap.GetGCodes()->ReadMove(nextMove, endStopsToCheck, noDeltaMapping))
+		FilePosition filePos;
+		if (reprap.GetGCodes()->ReadMove(nextMove, endStopsToCheck, noDeltaMapping, filePos))
 		{
 			currentFeedrate = nextMove[DRIVES];		// might be G1 with just an F field
 			if (!noDeltaMapping || !IsDeltaMode())
 			{
 				Transform(nextMove);
 			}
-			if (ddaRingAddPointer->Init(nextMove, endStopsToCheck, IsDeltaMode() && !noDeltaMapping))
+			if (ddaRingAddPointer->Init(nextMove, endStopsToCheck, IsDeltaMode() && !noDeltaMapping, filePos))
 			{
 				ddaRingAddPointer = ddaRingAddPointer->GetNext();
-				moveAdded = true;
+				idleCount = 0;
 			}
 		}
 	}
 
 	if (simulating)
 	{
-		if (!moveAdded && !DDARingEmpty())
+		if (idleCount > 10 && !DDARingEmpty())
 		{
 			// No move added this time, so simulate executing one already in the queue
 			DDA *dda = ddaRingGetPointer;
@@ -233,21 +238,24 @@ void Move::Spin()
 	else
 	{
 		// See whether we need to kick off a move
-		DDA *cdda = currentDda;										// currentDda is volatile, so copy it
+		DDA *cdda = currentDda;											// currentDda is volatile, so copy it
 		if (cdda == nullptr)
 		{
 			// No DDA is executing, so start executing a new one if possible
-			DDA *dda = ddaRingGetPointer;
-			if (dda->GetState() == DDA::provisional)
+			if (idleCount > 10)											// better to have a few moves in the queue so that we can do lookahead
 			{
-				dda->Prepare();
+				DDA *dda = ddaRingGetPointer;
+				if (dda->GetState() == DDA::provisional)
+				{
+					dda->Prepare();
+				}
+				cpu_irq_disable();										// must call StartNextMove and Interrupt with interrupts disabled
+				if (StartNextMove(Platform::GetInterruptClocks()))		// start the next move if none is executing already
+				{
+					Interrupt();
+				}
+				cpu_irq_enable();
 			}
-			cpu_irq_disable();										// must call StartNextMove and Interrupt with interrupts disabled
-			if (StartNextMove(Platform::GetInterruptClocks()))		// start the next move if none is executing already
-			{
-				Interrupt();
-			}
-			cpu_irq_enable();
 		}
 		else
 		{
@@ -271,7 +279,82 @@ void Move::Spin()
 		}
 	}
 
-	reprap.GetPlatform()->ClassReport("Move", longWait, moduleMove);
+	reprap.GetPlatform()->ClassReport(longWait);
+}
+
+// Pause the print as soon as we can.
+// Return the file position of the first queue move we are going to skip, or noFilePosition we we are not skipping any moves.
+// If we skipped any moves then we update 'positions' to the positions and feed rate expected for the next move, else we leave them alone.
+FilePosition Move::PausePrint(float positions[DRIVES+1])
+{
+	// Find a move we can pause after.
+	// Ideally, we would adjust a move if necessary and possible so that we can pause after it, but for now we don't do that.
+	// There are a few possibilities:
+	// 1. There are no moves in the queue.
+	// 2. There is a currently-executing move, and possibly some more in the queue.
+	// 3. There are moves in the queue, but we haven't started executing them yet. Unlikely, but possible.
+
+	const DDA *savedDdaRingAddPointer = ddaRingAddPointer;
+
+	// First, see if there is a currently-executing move, and if so, whether we can safely pause at the end of it
+	cpu_irq_disable();
+	DDA *dda = currentDda;
+	if (dda != nullptr)
+	{
+		if (dda->CanPause())
+		{
+			ddaRingAddPointer = dda->GetNext();
+		}
+		else
+		{
+			// We can't safely pause after the currently-executing move because its end speed is too high so we may miss steps.
+			// Search for the next move that we can safely stop after.
+			dda = ddaRingGetPointer;
+			while (dda != ddaRingAddPointer)
+			{
+				if (dda->CanPause())
+				{
+					ddaRingAddPointer = dda->GetNext();
+					break;
+				}
+				dda = dda->GetNext();
+			}
+		}
+	}
+	else
+	{
+		ddaRingAddPointer = ddaRingGetPointer;
+	}
+	cpu_irq_enable();
+
+	FilePosition fPos = noFilePosition;
+	if (ddaRingAddPointer != savedDdaRingAddPointer)
+	{
+		// We are going to skip some moves. dda points to the last move we are going to print.
+		for (size_t axis = 0; axis < AXES; ++axis)
+		{
+			positions[axis] = dda->GetEndCoordinate(axis, false);
+		}
+		positions[DRIVES] = dda->GetRequestedSpeed();
+
+		dda = ddaRingAddPointer;
+		do
+		{
+			if (fPos == noFilePosition)
+			{
+				fPos = dda->GetFilePosition();
+			}
+			dda->Release();
+			dda = dda->GetNext();
+		}
+		while (dda != savedDdaRingAddPointer);
+	}
+	else
+	{
+		GetCurrentUserPosition(positions, false);
+	}
+
+	return fPos;
 }
 
 uint32_t maxStepTime=0, maxCalcTime=0, minCalcTime = 999, maxReps = 0;

@@ -1,16 +1,8 @@
+; Omerod 2 Y homing file for dc42 Duet firmware
 G91
-G1 Z5 F200
-G1 X20 F2000
-G90
-G92 Y0
-G1 Y-250 F2000 S1
-G92 Y0
-G1 Y3 F200
-G1 Y-30 F200 S1
-G92 Y0
-G1 Y3 F500 ; adjust the Y value to put the nozzle on the edge of the bed
-G92 Y0
-G91
-G1 X-20 F2000
-G1 Z-5 F200
+G1 Z4 F200
+G1 Y-240 F2000 S1
+G1 Y4 F500
+G1 Y-10 S1
+G1 Z-4 F200
 G90

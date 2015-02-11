@@ -29,9 +29,17 @@ Licence: GPL
 // Module numbers, used for diagnostics and debug
 enum Module
 {
-	modulePlatform = 0, moduleNetwork = 1, moduleWebserver = 2, moduleGcodes = 3, moduleMove = 4, moduleHeat = 5, moduleDda = 6,
+	modulePlatform = 0,
+	moduleNetwork = 1,
+	moduleWebserver = 2,
+	moduleGcodes = 3,
+	moduleMove = 4,
+	moduleHeat = 5,
+	moduleDda = 6,
 	noModule = 15
 };
+
+extern const char *moduleName[];
 
 // Warn of what's to come, so we can use pointers to classes...
 

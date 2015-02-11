@@ -1,25 +1,16 @@
+; Ormerod 2 homeall file for use with dc42 Duet firmware
+; Adjust the bed upper and lower limits in config.g (M208 commands) to get the correct homing positions
 G91
-G1 Z5 F200
+G1 Z4 F200
+G1 X-240 Y-240 F2000 S1
+G1 X4 Y4 F500
+G1 X-10 Y-10 S1
 G90
-M558 P1
-G1 X-240 F2000 S1
-G92 X0
-G1 X3 F500
-G1 X-30 S1
-G92 X0
-G1 X15 F500 ; adjust the X value to put the nozzle on the edge of the bed
-G92 X0
-M558 P2
-G1 X45 F2000
-G92 Y0
-G1 Y-240 F2000 S1
-G92 Y0
-G1 Y3 F200
-G1 Y-30 S1
-G92 Y0
-G1 Y3 F500 ; adjust the Y value to put the nozzle on the edge of the bed
-G92 Y0
+; Adjust the XY coordinates in the following to place the IR sensor over a suitable spot
+; If you are using a dc42 IR sensor then you can change the cootdinates to be near the centre of the bed
+G1 X45 Y0 F2000
 G30
-G1 Z5 F200
-G1 X0 Y0
-G1 Z0
+; This file leaves the head at the zprobe trigger height so that you can slip a piece of paper under it and then do G0 Z0 to check the height.
+; If you prefer to send the printer to X0Y0Z0, un-comment the folloeing lines
+;G1 X0 Y0 F5000
+;G1 Z0

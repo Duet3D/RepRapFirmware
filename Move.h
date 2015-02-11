@@ -128,6 +128,9 @@ public:
     float GetSimulationTime() const { return simulationTime; }	// Get the accumulated simulation time
     void PrintCurrentDda() const;						// For debugging
 
+    FilePosition PausePrint(float positions[DRIVES+1]);	// Pause the print as soon as we can
+    bool NoLiveMovement() const;						// Is a move running, or are there any queued?
+
     static int32_t MotorEndPointToMachine(size_t drive, float coord);		// Convert a single motor position to number of steps
     static float MotorEndpointToPosition(int32_t endpoint, size_t drive);	// Convert number of motor steps to motor position
 
@@ -146,20 +149,17 @@ private:
     bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
     DDA* DDARingGet();									// Get the next DDA ring entry to be run
     bool DDARingEmpty() const;							// Anything there?
-    bool NoLiveMovement() const;						// Is a move running, or are there any queued?
 
     void InverseDeltaTransform(const int32_t motorPos[AXES], float machinePos[AXES]) const;	// Convert axis motor coordinates to Cartesian
-
-    // These implement the movement list
 
     DDA* volatile currentDda;
     DDA* ddaRingAddPointer;
     DDA* volatile ddaRingGetPointer;
 
-    float lastTime;										// The last time we were called (secs)
     bool addNoMoreMoves;								// If true, allow no more moves to be added to the look-ahead
     bool active;										// Are we live and running?
     bool simulating;									// Are we simulating, or really printing?
+    unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
     float simulationTime;								// Print time since we started simulating
     float currentFeedrate;								// Err... the current feed rate...
     volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move

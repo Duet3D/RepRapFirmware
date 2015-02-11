@@ -16,9 +16,6 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	// Acceleration phase parameters
 	mp.cart.accelStopStep = (uint32_t)(dda.accelDistance * stepsPerMm) + 1;
 	startSpeedTimesCdivA = params.startSpeedTimesCdivA;
-#if CACHE_startSpeedTimesCdivAsquared
-	startSpeedTimesCdivAsquared = isquare64(startSpeedTimesCdivA);
-#endif
 
 	// Constant speed phase parameters
 	mp.cart.mmPerStepTimesCdivtopSpeed = (uint32_t)(((float)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));
@@ -54,9 +51,6 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params, s
 	// Acceleration phase parameters
 	mp.delta.accelStopDsK = (uint32_t)(dda.accelDistance * stepsPerMm * K2);
 	startSpeedTimesCdivA = params.startSpeedTimesCdivA;
-#if CACHE_startSpeedTimesCdivAsquared
-	startSpeedTimesCdivAsquared = isquare64(startSpeedTimesCdivA);
-#endif
 
 	// Constant speed phase parameters
 	mp.delta.mmPerStepTimesCdivtopSpeedK = (uint32_t)(((float)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));
@@ -98,9 +92,6 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, si
 	// Acceleration phase parameters
 	mp.cart.accelStopStep = (uint32_t)((dda.accelDistance * stepsPerMm) + accelCompensationSteps) + 1;
 	startSpeedTimesCdivA = params.startSpeedTimesCdivA + compensationClocks;
-#if CACHE_startSpeedTimesCdivAsquared
-	startSpeedTimesCdivAsquared = isquare64(startSpeedTimesCdivA);
-#endif
 
 	// Constant speed phase parameters
 	mp.cart.mmPerStepTimesCdivtopSpeed = (uint32_t)(((float)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));
@@ -165,14 +156,8 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 	if (moving || stepError)
 	{
 		debugPrintf("DM%c%s dir=%c steps=%u next=%u sstcda=%u "
-#if CACHE_startSpeedTimesCdivAsquared
-					"sstcda2=%" PRIu64 " "
-#endif
 					"acmadtcdts=%d tstcdapdsc=%u tstdca2=%" PRIu64 "\n",
 					c, (stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, startSpeedTimesCdivA,
-#if CACHE_startSpeedTimesCdivAsquared
-					startSpeedTimesCdivAsquared,
-#endif
 					accelClocksMinusAccelDistanceTimesCdivTopSpeed, topSpeedTimesCdivAPlusDecelStartClocks, twoDistanceToStopTimesCsquaredDivA);
 
 		if (isDeltaMovement)
@@ -215,11 +200,7 @@ uint32_t DriveMovement::CalcNextStepTimeCartesian(size_t drive)
 	++nextStep;
 	if (nextStep < mp.cart.accelStopStep)
 	{
-#if CACHE_startSpeedTimesCdivAsquared
-		nextStepTime = isqrt(startSpeedTimesCdivAsquared + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep)) - startSpeedTimesCdivA;
-#else
 		nextStepTime = isqrt(isquare64(startSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep)) - startSpeedTimesCdivA;
-#endif
 	}
 	else if (nextStep < mp.cart.decelStartStep)
 	{
@@ -293,11 +274,7 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 	}
 	if ((uint32_t)dsK < mp.delta.accelStopDsK)
 	{
-#if CACHE_startSpeedTimesCdivAsquared
-		nextStepTime = isqrt(startSpeedTimesCdivAsquared + ((uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK)) - startSpeedTimesCdivA;
-#else
 		nextStepTime = isqrt(isquare64(startSpeedTimesCdivA) + ((uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK)) - startSpeedTimesCdivA;
-#endif
 	}
 	else if ((uint32_t)dsK < mp.delta.decelStartDsK)
 	{
@@ -394,7 +371,10 @@ void DriveMovement::ReduceSpeed(const DDA& dda, float inverseSpeedFactor)
 			}									\
 		}
 
-		// We need to do 16 iterations
+		// We need to do 16 iterations.
+		// After the last iteration, numAll may be between 0 and (1 + 2 * res) inclusive.
+		// So to take square roots of numbers up to 64 bits, we need to do all these iterations using 64 bit maths.
+		// If we restricted the input to e.g. 48 bits, then we could do some of the final iterations using 32-bit maths.
 		iter64b(15); iter64b(14); iter64b(13); iter64b(12);
 		iter64b(11); iter64b(10); iter64b(9); iter64b(8);
 		iter64b(7); iter64b(6); iter64b(5); iter64b(4);

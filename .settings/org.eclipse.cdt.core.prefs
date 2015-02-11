@@ -37,13 +37,13 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.SYSTEM.PATH/value=${A.RUNTIME.IDE.PATH}/hardware/arduino/sam/system
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_FLAGS/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_FLAGS/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_FLAGS/value=-DUSB_VID\=${A.BUILD.VID} -DUSB_PID\=${A.BUILD.PID} -DUSBCON "-DUSB_MANUFACTURER\=${A.BUILD.USB_MANUFACTURER}" "-DUSB_PRODUCT\=\\"${A.BUILD.USB_PRODUCT}\\""
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_FLAGS/value=-DUSB_VID\=${A.BUILD.VID} -DUSB_PID\=${A.BUILD.PID} -DUSBCON
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_MANUFACTURER/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_MANUFACTURER/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_MANUFACTURER/value=Unknown
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_MANUFACTURER/value="Unknown"
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_PRODUCT/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_PRODUCT/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_PRODUCT/value=Arduino Due
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USB_PRODUCT/value="Arduino Due"
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USE_ARCHIVER/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USE_ARCHIVER/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.BUILD.USE_ARCHIVER/value=true
@@ -85,13 +85,13 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPIL
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.ELF.EXTRA_FLAGS/value=
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.ELF.FLAGS/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.ELF.FLAGS/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.ELF.FLAGS/value=-O2 -Wl,--gc-sections
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.ELF.FLAGS/value=-Os -Wl,--gc-sections
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.EXTRA_FLAGS/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.EXTRA_FLAGS/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.EXTRA_FLAGS/value=
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.FLAGS/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.FLAGS/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.FLAGS/value=-c -g -O2 -w -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single\=500 -Dprintf\=iprintf
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.C.FLAGS/value=-c -g -Os -w -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single\=500 -Dprintf\=iprintf
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.CPP.CMD/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.CPP.CMD/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.CPP.CMD/value=arm-none-eabi-g++
@@ -100,7 +100,7 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPIL
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.CPP.EXTRA_FLAGS/value=
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.CPP.FLAGS/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.CPP.FLAGS/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.CPP.FLAGS/value=-c -g -std\=gnu++11 -O2 -w -ffunction-sections -fdata-sections -nostdlib -fno-threadsafe-statics --param max-inline-insns-single\=500 -fno-rtti -fno-exceptions -Dprintf\=iprintf
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.CPP.FLAGS/value=-c -g -Os -w -ffunction-sections -fdata-sections -nostdlib -fno-threadsafe-statics --param max-inline-insns-single\=500 -fno-rtti -fno-exceptions -Dprintf\=iprintf
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.DEFINE/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.DEFINE/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/A.COMPILER.DEFINE/value=-DARDUINO\=
@@ -274,10 +274,10 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.E
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.C.COMPILE/value=
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.COMPILE/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.COMPILE/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.COMPILE/value=
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.COMPILE/value=-O2
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.CPP.COMPILE/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.CPP.COMPILE/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.CPP.COMPILE/value=
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.CPP.COMPILE/value=-std\=gnu++11
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.PLATFORM_FILE/delimiter=;
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.PLATFORM_FILE/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.PLATFORM_FILE/value=C\:/Arduino-1.5.8/hardware/arduino/sam/platform.txt

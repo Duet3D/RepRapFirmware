@@ -11,7 +11,6 @@ Separated out from Platform.h by dc42 and extended by zpl
 
 #include <cctype>
 #include <cstring>
-#include <malloc.h>
 #include <cstdlib>
 #include <climits>
 
@@ -76,6 +75,7 @@ public:
 
 	NetworkTransaction(NetworkTransaction* n) : next(n) { }
 	void Set(pbuf *p, ConnectionState* c, TransactionStatus s);
+	uint16_t DataLength() const;
 	bool Read(char& b);
 	bool ReadBuffer(char *&buffer, unsigned int &len);
 	void Write(char b);
@@ -86,9 +86,9 @@ public:
 	bool Send();
 
 	void SetConnectionLost();
-	bool LostConnection() const { return cs == NULL; }
-	bool IsReady() const { return cs != NULL && cs->sendingTransaction == NULL; }
+	bool LostConnection() const { return cs == NULL || cs->pcb == NULL; }
 	ConnectionState *GetConnection() const { return cs; }
+	uint32_t GetRemoteIP() const;
 	uint16_t GetLocalPort() const;
 	TransactionStatus GetStatus() const { return status; }
 
@@ -109,22 +109,23 @@ private:
 	TransactionStatus status;
 	float lastWriteTime;
 	bool closeRequested;
+	bool waitingForDataConnection;
 };
 
 // This class holds data left to be sent to TCP clients.
 class SendBuffer
 {
-public:
-	friend class Network;
-	friend class NetworkTransaction;
+	public:
+		friend class Network;
+		friend class NetworkTransaction;
 
-	SendBuffer(SendBuffer *n) : next(n) { };
+		SendBuffer(SendBuffer *n) : next(n) { };
 
-private:
-	SendBuffer *next;
+	private:
+		SendBuffer *next;
 
-	uint16_t bytesToWrite;
-	char tcpOutputBuffer[tcpOutputBufferSize];
+		uint16_t bytesToWrite;
+		char tcpOutputBuffer[tcpOutputBufferSize];
 };
 
 
@@ -134,6 +135,7 @@ class Network
 public:
 	friend class NetworkTransaction;
 
+	void ReadPacket();
 	void ReceiveInput(pbuf *pb, ConnectionState *cs);
 	void SentPacketAcknowledged(ConnectionState *cs, unsigned int len);
 	ConnectionState *ConnectionAccepted(tcp_pcb *pcb);
@@ -143,10 +145,11 @@ public:
 	NetworkTransaction *GetTransaction(const ConnectionState *cs = NULL);
 	void SendAndClose(FileStore *f, bool keepConnectionOpen = false);
 	void CloseTransaction();
-	void RepeatTransaction();
+	void WaitForDataConection();
 
 	void OpenDataPort(uint16_t port);
-	bool CloseDataPort();
+	uint16_t GetDataPort() const;
+	void CloseDataPort();
 
 	void SaveDataConnection();
 	void SaveFTPConnection();
@@ -157,20 +160,25 @@ public:
 	bool AcquireDataTransaction();
 	bool AcquireTelnetTransaction();
 
-	Network();
+	Network(Platform* p);
 	void Init();
 	void Spin();
 	void Interrupt();
 	void Diagnostics();
 
+	bool Lock();
+	void Unlock();
 	bool InLwip() const;
-	void ReadPacket();
 
 	void Enable();
 	void Disable();
 	bool IsEnabled() const;
 
 private:
+
+	Platform* platform;
+	float longWait;
+
 	void AppendTransaction(NetworkTransaction* volatile * list, NetworkTransaction *r);
 	void PrependTransaction(NetworkTransaction* volatile * list, NetworkTransaction *r);
 	bool AcquireTransaction(ConnectionState *cs);
