@@ -899,7 +899,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 		response.catf(",\"currentLayerTime\":%.1f", (lastLayerTime > 0.0) ? (platform->Time() - lastLayerTime) : 0.0);
 
 		// Raw Extruder Positions
-		response.catf("],\"extrRaw\":");		// announce the extruder positions
+		response.cat(",\"extrRaw\":");		// announce the extruder positions
 		ch = '[';
 		for (size_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
 		{
@@ -1204,15 +1204,19 @@ void RepRap::GetNameResponse(StringRef& response) const
 // Get the list of files in the specified directory in JSON format
 void RepRap::GetFilesResponse(StringRef& response, const char* dir) const
 {
-	response.copy("{\"files\":");
-	char c = '[';
+	response.copy("{\"files\":[");
 	FileInfo file_info;
+	bool firstFile = true;
 	bool gotFile = platform->GetMassStorage()->FindFirst(dir, file_info);
 	while (gotFile && response.strlen() + strlen(file_info.fileName) + 6 < response.Length())
 	{
-		response.catf("%c", c);
+		if (!firstFile)
+		{
+			response.catf(",");
+		}
 		EncodeString(response, file_info.fileName, 3, false);
-		c = ',';
+
+		firstFile = false;
 		gotFile = platform->GetMassStorage()->FindNext(file_info);
 	}
 	response.cat("]}");
