@@ -20,7 +20,8 @@
 							<tool id="it.baeyens.arduino.tool.sketch.compiler.cpp.2087861045" name="Arduino C++ Compiler" superClass="it.baeyens.arduino.tool.sketch.compiler.cpp">
 								<option id="it.baeyens.arduino.compiler.cpp.sketch.option.incpath.274618772" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.cpp.sketch.option.incpath" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
-									<listOptionValue builtIn="false" value="C:/arduino-1.5.8/hardware/arduino/sam/system/libsam/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/system}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/EMAC}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Lwip}&quot;"/>
@@ -30,15 +31,15 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI/utility}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Wire}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Flash}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\lib\gcc\arm-none-eabi\4.8.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="/opt/arduino-1.6.0/hardware/tools/gcc-arm-none-eabi-4.8.3-2014q1/lib/gcc/arm-none-eabi/4.8.3/include"/>
 								</option>
 								<inputType id="it.baeyens.arduino.compiler.cpp.sketch.input.1531738210" name="CPP source files" superClass="it.baeyens.arduino.compiler.cpp.sketch.input"/>
 							</tool>
 							<tool id="it.baeyens.arduino.tool.compiler.c.993630870" name="Arduino C Compiler" superClass="it.baeyens.arduino.tool.compiler.c">
 								<option id="it.baeyens.arduino.compiler.c.sketch.option.incpath.1536622716" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.c.sketch.option.incpath" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
-									<listOptionValue builtIn="false" value="C:/arduino-1.5.8/hardware/arduino/sam/system/libsam/include"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/system}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/network}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/EMAC}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Lwip}&quot;"/>
@@ -47,8 +48,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI/utility}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Wire}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\arm-none-eabi\include&quot;"/>
+									<listOptionValue builtIn="false" value="/opt/arduino-1.6.0/hardware/tools/gcc-arm-none-eabi-4.8.3-2014q1/arm-none-eabi/include"/>
 								</option>
 								<inputType id="it.baeyens.arduino.compiler.c.sketch.input.1546791595" name="C Source Files" superClass="it.baeyens.arduino.compiler.c.sketch.input"/>
 							</tool>
@@ -60,7 +60,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="Libraries/*/?xamples" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
+						<entry excluding="Libraries/*/?xamples|ArduinoCorePatches" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
