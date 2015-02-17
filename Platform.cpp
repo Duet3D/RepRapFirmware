@@ -1251,7 +1251,7 @@ void Platform::Disable(size_t drive)
 
 void Platform::SetMotorCurrent(byte drive, float current)
 {
-	unsigned short pot = (unsigned short)(0.256*current*8.0*senseResistor/maxStepperDigipotVoltage);
+	unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
 //	Message(HOST_MESSAGE, "Set pot to: ");
 //	snprintf(scratchString, STRING_LENGTH, "%d", pot);
 //	Message(HOST_MESSAGE, scratchString);
@@ -1880,7 +1880,7 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 							? platform->GetMassStorage()->CombineName(directory, fileName)
 								: fileName;
 	writing = write;
-	lastBufferEntry = FILE_BUF_LEN - 1;
+	lastBufferEntry = FILE_BUF_LEN;
 
 	FRESULT openReturn = f_open(&file, location, (writing) ?  FA_CREATE_ALWAYS | FA_WRITE : FA_OPEN_EXISTING | FA_READ);
 	if (openReturn != FR_OK)
@@ -1944,45 +1944,32 @@ bool FileStore::Seek(FilePosition pos)
 	if (writing)
 	{
 		WriteBuffer();
-		FRESULT fr = f_lseek(&file, pos);
-		if (fr == FR_OK)
-		{
-			bufferPointer = 0;
-			lastBufferEntry = 0;
-			return true;
-		}
 	}
-	else
-	{
-		// Keep file reads aligned on a 256-byte boundary
-		FRESULT fr = f_lseek(&file, pos & ~(FilePosition)(FILE_BUF_LEN - 1));
-		if (fr == FR_OK)
-		{
-			bool ok = ReadBuffer();
-			if (ok)
-			{
-				bufferPointer = pos & (FilePosition)(FILE_BUF_LEN - 1);
-				return true;
-			}
-		}
-	}
-	return false;
+	FRESULT fr = f_lseek(&file, pos);
+	bufferPointer = (writing) ? 0 : FILE_BUF_LEN;
+	return fr == FR_OK;
 }
 
 FilePosition FileStore::GetPosition() const
 {
 	FilePosition pos = file.fptr;
-	if (!writing && bufferPointer < lastBufferEntry)
+	if (writing)
+	{
+		pos += bufferPointer;
+	}
+	else if (bufferPointer < lastBufferEntry)
 	{
 		pos -= (lastBufferEntry - bufferPointer);
 	}
 	return pos;
 }
 
+#if 0	// not currently used
 bool FileStore::GoToEnd()
 {
 	return Seek(Length());
 }
+#endif
 
 FilePosition FileStore::Length() const
 {
@@ -1996,7 +1983,7 @@ FilePosition FileStore::Length() const
 
 float FileStore::FractionRead() const
 {
-	uint32_t len = Length();
+	FilePosition len = Length();
 	if (len == 0)
 	{
 		return 0.0;

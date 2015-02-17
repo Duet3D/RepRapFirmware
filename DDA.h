@@ -116,7 +116,7 @@ private:
 	float targetNextSpeed;					// The speed that the next move would like to start at
 
 	// These are calculated from the above and used in the ISR, so they are set up by Prepare()
-	uint32_t timeNeeded;					// in clocks
+	uint32_t clocksNeeded;					// in clocks
 	uint32_t moveStartTime;					// clock count at which the move was started
 	uint32_t firstStepTime;					// in clocks, relative to the start of the move
 

@@ -28,10 +28,8 @@
 const char GCodes::axisLetters[AXES] = {'X', 'Y', 'Z'};
 
 GCodes::GCodes(Platform* p, Webserver* w)
+	: active(false), platform(p), webserver(w), stackPointer(0)
 {
-	active = false;
-	platform = p;
-	webserver = w;
 	webGCode = new GCodeBuffer(platform, "web: ");
 	fileGCode = new GCodeBuffer(platform, "file: ");
 	serialGCode = new GCodeBuffer(platform, "serial: ");
@@ -81,7 +79,6 @@ void GCodes::Reset()
 	fileBeingWritten = NULL;
 	endStopsToCheck = 0;
 	doingFileMacro = false;
-	fractionOfFilePrinted = -1.0;
 	dwellWaiting = false;
 	stackPointer = 0;
 	state = GCodeState::normal;
@@ -101,6 +98,19 @@ void GCodes::Reset()
 	simulationTime = 0.0;
 	isPaused = false;
 	filePos = moveFilePos = noFilePosition;
+}
+
+float GCodes::FractionOfFilePrinted() const
+{
+	if (isPaused)
+	{
+		return (fileToPrint.IsLive()) ? fileToPrint.FractionRead() : -1.0;
+	}
+	if (stackPointer == 0)
+	{
+		return (fileBeingPrinted.IsLive() && !doingFileMacro) ? fileBeingPrinted.FractionRead() : -1.0;
+	}
+	return (stack[0].fileState.IsLive() && !stack[0].doingFileMacro) ? stack[0].fileState.FractionRead() : -1.0;
 }
 
 void GCodes::DoFilePrint(GCodeBuffer* gb, StringRef& reply)
@@ -306,7 +316,6 @@ void GCodes::Spin()
 			fileBeingPrinted.MoveFrom(fileToPrint);
 			moveBuffer[DRIVES] = pausedMoveBuffer[DRIVES];
 			reprap.GetMove()->SetFeedrate(pausedMoveBuffer[DRIVES]);
-			fractionOfFilePrinted = -1.0;
 			fileGCode->Resume();
 			HandleReply(false, gbCurrent, reply.Pointer(), 'M', 24, false);
 			isPaused = false;
@@ -505,10 +514,6 @@ void GCodes::Push()
 	stack[stackPointer].drivesRelative = drivesRelative;
 	stack[stackPointer].axesRelative = axesRelative;
 	stack[stackPointer].doingFileMacro = doingFileMacro;
-	if (stackPointer == 0)
-	{
-		fractionOfFilePrinted = fileBeingPrinted.FractionRead();	// save this so that we don't return the fraction of the macro file read
-	}
 	stackPointer++;
 	platform->PushMessageIndent();
 }
@@ -523,10 +528,6 @@ void GCodes::Pop()
 	}
 
 	stackPointer--;
-	if (stackPointer == 0)
-	{
-		fractionOfFilePrinted = -1.0;			// restore live updates of fraction read from the file being printed
-	}
 	state = stack[stackPointer].state;
 	gbCurrent = stack[stackPointer].gb;
 	moveBuffer[DRIVES] = stack[stackPointer].feedrate;
@@ -2274,7 +2275,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		else
 		{
 			fileBeingPrinted.MoveFrom(fileToPrint);
-			fractionOfFilePrinted = -1.0;
 		}
 		break;
 
@@ -2315,7 +2315,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				}
 			}
 			pausedFanValue = platform->GetFanValue();
-			fractionOfFilePrinted = fileBeingPrinted.FractionRead();
 			fileToPrint.MoveFrom(fileBeingPrinted);
 			fileGCode->Pause();
 			state = GCodeState::pausing1;
@@ -3741,12 +3740,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			else if (!seen)
 			{
-				reply.printf("Axis currents (mA) - X:%.1f, Y:%.1f, Z:%.1f, E:",
-						platform->MotorCurrent(X_AXIS), platform->MotorCurrent(Y_AXIS),
-						platform->MotorCurrent(Z_AXIS));
+				reply.printf("Axis currents (mA) - X:%d, Y:%d, Z:%d, E:",
+						(int)platform->MotorCurrent(X_AXIS), (int)platform->MotorCurrent(Y_AXIS),
+						(int)platform->MotorCurrent(Z_AXIS));
 				for(int8_t drive = AXES; drive < DRIVES; drive++)
 				{
-					reply.catf("%.1f%c", platform->MotorCurrent(drive), (drive < DRIVES - 1) ? ':' : '\n');
+					reply.catf("%d%c", (int)platform->MotorCurrent(drive), (drive < DRIVES - 1) ? ':' : '\n');
 				}
 			}
 		}

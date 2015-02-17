@@ -243,13 +243,13 @@ void RepRap::Init()
   while (initialisingInProgress)
   {
 	  Spin();
-	  if(gCodes->PrintingAFile())
+	  if(gCodes->DoingFileMacro())
 	  {
 		  runningTheFile = true;
 	  }
 	  if(runningTheFile)
 	  {
-		  if(!gCodes->PrintingAFile())
+		  if(!gCodes->DoingFileMacro())
 		  {
 			  initialisingInProgress = false;
 		  }
@@ -622,7 +622,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 		// Paused / Stopped
 		ch = 'S';
 	}
-	else if (gCodes->PrintingAFile())
+	else if (gCodes->PrintingAFile() && !gCodes->DoingFileMacro())
 	{
 		// Printing
 		ch = 'P';
@@ -1104,6 +1104,12 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 	if (type < 2)
 	{
 		response.catf(",\"buff\":%u", webserver->GetGcodeBufferSpace());	// send the amount of buffer space available for gcodes
+	}
+
+	if (type == 2 && gCodes->PrintingAFile())
+	{
+		// Send estimated times left bBased on file progress, filament usage, and layers
+		response.catf(",\"timesLeft\":[%.1f,%.1f,%.1f]", EstimateTimeLeft(0), EstimateTimeLeft(1), EstimateTimeLeft(2));
 	}
 
 	if (type < 2 || (seq != -1 && replySeq > seq))

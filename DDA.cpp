@@ -19,8 +19,8 @@ int32_t DDA::GetTimeLeft() const
 //pre(state == executing || state == frozen || state == completed)
 {
 	return (state == completed) ? 0
-			: (state == executing) ? (int32_t)(moveStartTime + timeNeeded - Platform::GetInterruptClocks())
-			: (int32_t)timeNeeded;
+			: (state == executing) ? (int32_t)(moveStartTime + clocksNeeded - Platform::GetInterruptClocks())
+			: (int32_t)clocksNeeded;
 }
 
 void DDA::DebugPrintVector(const char *name, const float *vec, size_t len) const
@@ -551,14 +551,14 @@ void DDA::Prepare()
 	params.decelStartDistance = totalDistance - decelDistance;
 
 	// Convert the accelerate/decelerate distances to times
-	float accelStopTime = (topSpeed - startSpeed)/acceleration;
-	float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
-	float totalTime = decelStartTime + (topSpeed - endSpeed)/acceleration;
-	timeNeeded = (uint32_t)(totalTime * stepClockRate);
+	const float accelStopTime = (topSpeed - startSpeed)/acceleration;
+	const float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
+	const float totalTime = decelStartTime + (topSpeed - endSpeed)/acceleration;
+	clocksNeeded = (uint32_t)(totalTime * stepClockRate);
 
 	params.startSpeedTimesCdivA = (uint32_t)((startSpeed * stepClockRate)/acceleration);
 	params.topSpeedTimesCdivA = (uint32_t)((topSpeed * stepClockRate)/acceleration);
-	params.decelStartClocks = decelStartTime * stepClockRate;
+	params.decelStartClocks = (uint32_t)(decelStartTime * stepClockRate);
 	params.topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivA + params.decelStartClocks;
 	params.accelClocksMinusAccelDistanceTimesCdivTopSpeed = (uint32_t)((accelStopTime - (accelDistance/topSpeed)) * stepClockRate);
 	params.compFactor = 1.0 - startSpeed/topSpeed;

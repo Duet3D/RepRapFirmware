@@ -75,8 +75,13 @@ Licence: GPL
 
 // DRIVES
 
+#if 0 // swap X with E0
+#define STEP_PINS {X2, 25, 5, 14, 41, 39, X4, 49}
+#define DIRECTION_PINS {X3, 26, 4, 15, 35, 53, 51, 48}
+#else
 #define STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
 #define DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
+#endif
 #define FORWARDS true // What to send to go...
 #define BACKWARDS (!FORWARDS) // ...in each direction
 #define DIRECTIONS {BACKWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS} // What each axis needs to make it go forwards - defaults
@@ -373,7 +378,9 @@ public:
 	bool Close();									// Shut the file and tidy up
 	bool Seek(FilePosition pos);					// Jump to pos in the file
 	FilePosition GetPosition() const;				// Return the current position in the file, assuming we are reading the file
+#if 0	// not currently used
 	bool GoToEnd();									// Position the file at the end (so you can write on the end).
+#endif
 	FilePosition Length() const;					// File size in bytes
 	float FractionRead() const;						// How far in we are
 	void Duplicate();								// Create a second reference to this file
@@ -900,12 +907,12 @@ public:
 		return f->Flush();
 	}
 
-	uint32_t GetPosition() const
+	FilePosition GetPosition() const
 	{
 		return f->GetPosition();
 	}
 
-	bool Seek(uint32_t position)
+	bool Seek(FilePosition position)
 	{
 		return f->Seek(position);
 	}
@@ -915,7 +922,7 @@ public:
 		return (f == NULL ? -1.0 : f->FractionRead());
 	}
 
-	uint32_t Length() const
+	FilePosition Length() const
 	{
 		return f->Length();
 	}

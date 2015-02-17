@@ -199,26 +199,47 @@ void Move::Spin()
 	// See if we can add another move to the ring
 	if (!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
 	{
+		DDA *dda = ddaRingAddPointer;
 		if (reprap.Debug(moduleMove))
 		{
-			ddaRingAddPointer->PrintIfHasStepError();
+			dda->PrintIfHasStepError();
 		}
-		// If there's a G Code move available, add it to the DDA ring for processing.
-		float nextMove[DRIVES + 1];
-		EndstopChecks endStopsToCheck;
-		bool noDeltaMapping;
-		FilePosition filePos;
-		if (reprap.GetGCodes()->ReadMove(nextMove, endStopsToCheck, noDeltaMapping, filePos))
+
+		// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
+		// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is
+		// less than 0.5 seconds.
+		float unPreparedTime = 0.0;
+		float prevMoveTime = 0.0;
+		for(;;)
 		{
-			currentFeedrate = nextMove[DRIVES];		// might be G1 with just an F field
-			if (!noDeltaMapping || !IsDeltaMode())
+			dda = dda->GetPrevious();
+			if (dda->GetState() != DDA::provisional)
 			{
-				Transform(nextMove);
+				break;
 			}
-			if (ddaRingAddPointer->Init(nextMove, endStopsToCheck, IsDeltaMode() && !noDeltaMapping, filePos))
+			unPreparedTime += prevMoveTime;
+			prevMoveTime = dda->CalcTime();
+		}
+
+		if (unPreparedTime < 0.5 || unPreparedTime + prevMoveTime < 2.0)
+		{
+			// If there's a G Code move available, add it to the DDA ring for processing.
+			float nextMove[DRIVES + 1];
+			EndstopChecks endStopsToCheck;
+			bool noDeltaMapping;
+			FilePosition filePos;
+			if (reprap.GetGCodes()->ReadMove(nextMove, endStopsToCheck, noDeltaMapping, filePos))
 			{
-				ddaRingAddPointer = ddaRingAddPointer->GetNext();
-				idleCount = 0;
+				currentFeedrate = nextMove[DRIVES];		// might be G1 with just an F field
+				if (!noDeltaMapping || !IsDeltaMode())
+				{
+					Transform(nextMove);
+				}
+				if (ddaRingAddPointer->Init(nextMove, endStopsToCheck, IsDeltaMode() && !noDeltaMapping, filePos))
+				{
+					ddaRingAddPointer = ddaRingAddPointer->GetNext();
+					idleCount = 0;
+				}
 			}
 		}
 	}

@@ -192,7 +192,6 @@ class GCodes
     uint16_t toBeHomed;							// Bitmap of axes still to be homed
     bool doingFileMacro;						// Are we executing a macro file?
     int oldToolNumber, newToolNumber;			// Tools being changed
-    float fractionOfFilePrinted;				// Only used to record the main file when a macro is being printed
     const char* eofString;						// What's at the end of an HTML file?
     uint8_t eofStringCounter;					// Check the...
     uint8_t eofStringLength;					// ... EoF string as we read.
@@ -218,21 +217,6 @@ class GCodes
 };
 
 //*****************************************************************************************************
-
-inline float GCodes::FractionOfFilePrinted() const
-{
-	if (fractionOfFilePrinted < 0.0)
-	{
-		return fileBeingPrinted.FractionRead();
-	}
-
-	if (!fileBeingPrinted.IsLive())
-	{
-		return -1.0;
-	}
-
-	return fractionOfFilePrinted;
-}
 
 inline bool GCodes::PrintingAFile() const
 {
