@@ -283,7 +283,7 @@ environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.C
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.COM_PORT/value=/dev/ttyACM0
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.C.COMPILE/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.C.COMPILE/operation=replace
-environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.C.COMPILE/value=
+environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.C.COMPILE/value=-std\=gnu99
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.COMPILE/delimiter=\:
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.COMPILE/operation=replace
 environment/project/it.baeyens.arduino.core.toolChain.release.674980254/JANTJE.EXTRA.COMPILE/value=-O2

@@ -166,6 +166,13 @@ size_t UARTClass::write( const uint8_t uc_data )
   return 1;
 }
 
+// change by DC42
+// Function added
+size_t UARTClass::canWrite( void ) const
+{
+  return (_pUart->UART_SR & UART_SR_TXRDY) ? 1 : 0;
+}
+
 void UARTClass::IrqHandler( void )
 {
   uint32_t status = _pUart->UART_SR;

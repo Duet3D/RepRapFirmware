@@ -169,18 +169,20 @@ uint32_t USBD_Recv(uint32_t ep)
 }
 
 //	Space in send EP
-//uint32_t USBD_SendSpace(uint32_t ep)
-//{
+// change by DC42
+// Uncommented and modified this function to support the canWrite function in file CDC.cpp
+uint32_t USBD_SendSpace(uint32_t ep)
+{
 	//LockEP lock(ep);
-////	if (!UDD_ReadWriteAllowed(ep & 0xF))
-    ////{
-        ////printf("pb "); // UOTGHS->UOTGHS_DEVEPTISR[%d]=0x%X\n\r", ep, UOTGHS->UOTGHS_DEVEPTISR[ep]);
-		////return 0;
-    ////}
-
+	if (!UDD_ReadWriteAllowed(ep & 0xF))
+	{
+		//printf("pb "); // UOTGHS->UOTGHS_DEVEPTISR[%d]=0x%X\n\r", ep, UOTGHS->UOTGHS_DEVEPTISR[ep]);
+		return 0;
+	}
     //if(ep==0) return 64 - UDD_FifoByteCount(ep & 0xF);  // EP0_SIZE  jcb
     //else return 512 - UDD_FifoByteCount(ep & 0xF);  // EPX_SIZE  jcb
-//}
+	return ((ep==0) ? EP0_SIZE : EPX_SIZE) - UDD_FifoByteCount(ep & 0xF);
+}
 
 //	Blocking Send of data to an endpoint
 uint32_t USBD_Send(uint32_t ep, const void* d, uint32_t len)

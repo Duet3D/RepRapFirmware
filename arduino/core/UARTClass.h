@@ -54,6 +54,7 @@ class UARTClass : public HardwareSerial
     void flush(void);
     size_t write(const uint8_t c);
     using Print::write; // pull in write(str) and write(buf, size) from Print
+	size_t canWrite( void ) const override;		// change by DC42: added
 
     void setInterruptPriority(uint32_t priority);
     uint32_t getInterruptPriority();

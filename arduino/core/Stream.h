@@ -49,6 +49,7 @@ class Stream : public Print
     virtual int read() = 0;
     virtual int peek() = 0;
     virtual void flush() = 0;
+    virtual size_t canWrite() const { return 1; }		// change by DC42: added
 
     Stream() {_timeout=1000;}
 

@@ -60,6 +60,7 @@ public:
 	virtual size_t write(uint8_t);
 	virtual size_t write(const uint8_t *buffer, size_t size);
 	using Print::write; // pull in write(str) from Print
+	size_t canWrite() const /*override*/;	// change by DC42: Function added to tell how many characters we can write without blocking
 	operator bool();
 };
 extern Serial_ SerialUSB;

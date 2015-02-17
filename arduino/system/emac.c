@@ -69,8 +69,14 @@ extern "C" {
  * @{
  */
 
-#define EMAC_RX_BUFFERS                               16
-#define EMAC_TX_BUFFERS                               8
+// #define EMAC_RX_BUFFERS                               16
+// #define EMAC_TX_BUFFERS                               8
+
+// change by DC42
+// increased buffers for Duet
+#define EMAC_RX_BUFFERS                               (32)
+#define EMAC_TX_BUFFERS                               (8)
+
 #define MAC_PHY_RETRY_MAX                             1000000
 
 

@@ -275,6 +275,12 @@ size_t Serial_::write(uint8_t c) {
 	return write(&c, 1);
 }
 
+// change by DC42
+// Function added to find out how much data can be writen without blocking
+size_t Serial_::canWrite() const {
+	return USBD_SendSpace(CDC_TX);
+}
+
 // This operator is a convenient way for a sketch to check whether the
 // port has actually been configured and opened by the host (as opposed
 // to just being connected to the host).  It can be used, for example, in
