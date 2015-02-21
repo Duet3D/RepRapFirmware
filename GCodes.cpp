@@ -165,6 +165,37 @@ void GCodes::Spin()
 	StringRef reply(replyBuffer, ARRAY_SIZE(replyBuffer));
 	reply.Clear();
 
+	// Check for M105 poll requests from Pronterface and PanelDue so that the status is kept up to date during execution of file macros etc.
+	// No need to read multiple characters at a time in this case because the polling rate is quite low.
+	if (!serialGCode->Active() && serialGCode->WritingFileDirectory() == nullptr && (platform->GetLine()->Status() & byteAvailable))
+	{
+		char b;
+		platform->GetLine()->Read(b);
+		if (serialGCode->Put(b))	// add char to buffer and test whether the gcode is complete
+		{
+			if (serialGCode->IsPollRequest())
+			{
+				serialGCode->SetFinished(ActOnCode(serialGCode, reply));
+				return;
+			}
+		}
+	}
+
+	if (!auxGCode->Active() && (platform->GetAux()->Status() & byteAvailable))
+	{
+		char b;
+		platform->GetAux()->Read(b);
+		if (auxGCode->Put(b))		// add char to buffer and test whether the gcode is complete
+		{
+			auxDetected = true;
+			if (auxGCode->IsPollRequest())
+			{
+				auxGCode->SetFinished(ActOnCode(auxGCode, reply));
+				return;
+			}
+		}
+	}
+
 	// Perform the next operation of the state machine
 	// Note: if we change the state to 'normal' from another state, we must call HandleReply to tell the host about the command we have just completed.
 	switch (state)
@@ -176,7 +207,7 @@ void GCodes::Spin()
 	case GCodeState::waitingForMoveToComplete:
 		if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
-			HandleReply(false, gbCurrent, reply.Pointer(), 'G', 1, false);
+			HandleReply(false, gbCurrent, nullptr, 'G', 1, false);
 			state = GCodeState::normal;
 		}
 		break;
@@ -199,7 +230,7 @@ void GCodes::Spin()
 		}
 		else
 		{
-			HandleReply(false, gbCurrent, reply.Pointer(), 'G', 28, false);
+			HandleReply(false, gbCurrent, nullptr, 'G', 28, false);
 			state = GCodeState::normal;
 		}
 		break;
@@ -207,8 +238,7 @@ void GCodes::Spin()
 	case GCodeState::setBed1:
 		if (reprap.GetMove()->NumberOfXYProbePoints() < 3)
 		{
-			reply.copy("Bed probing: there needs to be 3 or more points set.\n");
-			HandleReply(false, gbCurrent, reply.Pointer(), 'G', 32, false);
+			HandleReply(false, gbCurrent, "Bed probing: there needs to be 3 or more points set.\n", 'G', 32, false);
 			state = GCodeState::normal;
 		}
 		else
@@ -218,7 +248,7 @@ void GCodes::Spin()
 			probeCount = 0;
 			state = GCodeState::setBed2;
 		}
-		break;
+		// no break
 
 	case GCodeState::setBed2:
 		{
@@ -228,10 +258,9 @@ void GCodes::Spin()
 				probeCount++;
 				if (probeCount >= numProbePoints)
 				{
-					probeCount = 0;
 					zProbesSet = true;
 					reprap.GetMove()->FinishedBedProbing(0, numProbePoints, reply);
-					HandleReply(false, gbCurrent, reply.Pointer(), 'G', 32, false);
+					HandleReply(false, gbCurrent, nullptr, 'G', 32, false);
 					state = GCodeState::normal;
 				}
 			}
@@ -265,7 +294,7 @@ void GCodes::Spin()
     	break;
 
     case GCodeState::toolChange3:
-    	HandleReply(false, gbCurrent, reply.Pointer(), 'T', newToolNumber, false);
+    	HandleReply(false, gbCurrent, nullptr, 'T', newToolNumber, false);
     	state = GCodeState::normal;
     	break;
 
@@ -278,7 +307,7 @@ void GCodes::Spin()
     	break;
 
     case GCodeState::pausing2:
-    	HandleReply(false, gbCurrent, reply.Pointer(), 'M', 25, false);
+    	HandleReply(false, gbCurrent, "Printing paused\n", 'M', 25, false);
     	state = GCodeState::normal;
     	break;
 
@@ -317,14 +346,13 @@ void GCodes::Spin()
 			moveBuffer[DRIVES] = pausedMoveBuffer[DRIVES];
 			reprap.GetMove()->SetFeedrate(pausedMoveBuffer[DRIVES]);
 			fileGCode->Resume();
-			HandleReply(false, gbCurrent, reply.Pointer(), 'M', 24, false);
 			isPaused = false;
+			HandleReply(false, gbCurrent, "Printing resumed\n", 'M', 24, false);
 			state = GCodeState::normal;
     	}
     	break;
 
     default:				// should not happen
-		//TODO report an error
 		break;
 	}
 }
@@ -332,7 +360,6 @@ void GCodes::Spin()
 void GCodes::StartNextGCode(StringRef& reply)
 {
 	// If a file macro is running, we don't allow anything to interrupt it
-	// TODO process M105 requests from Pronterface and PanelDue during file macro execution
 	if (doingFileMacro)
 	{
 		// Complete the current move (must do this before checking whether we have finished the file in case it didn't end in newline)
@@ -675,7 +702,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 // This function is called for a G Code that makes a move.
 // If the Move class can't receive the move (i.e. things have to wait), return 0.
 // If we have queued the move and the caller doesn't need to wait for it to complete, return 1.
-// If we need to wait for the move to complete before doing another one (because endstops are checked in this move), return 2.
+// If we need to wait for the move to complete before doing another one (e.g. because endstops are checked in this move), return 2.
 
 int GCodes::SetUpMove(GCodeBuffer *gb, StringRef& reply)
 {
@@ -886,7 +913,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 			}
 		}
 
-		if(gb->Seen(feedrateLetter)) // Has the user specified a feedrate?
+		if (gb->Seen(feedrateLetter)) // Has the user specified a feedrate?
 		{
 			moveToDo[DRIVES] = gb->GetFValue();
 			activeDrive[DRIVES] = true;
@@ -1309,7 +1336,7 @@ void GCodes::QueueFileToPrint(const char* fileName)
 	if (f != NULL)
 	{
 		// Reset all extruder positions when starting a new print
-		for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+		for (size_t extruder = AXES; extruder < DRIVES; extruder++)
 		{
 			lastRawExtruderPosition[extruder - AXES] = 0.0;
 		}
@@ -1650,20 +1677,16 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 void GCodes::HandleReply(bool error, const GCodeBuffer *gb, const char* reply, char gMOrT, int code, bool resend)
 {
 	// UART device, may be used for auxiliary purposes e.g. LCD control panel
-	if (gb == auxGCode)
+	if (gb == auxGCode && reply != nullptr && reply[0] == '{')
 	{
-		// Command was received from the aux interface (LCD display), so send the response only to the aux interface.
-		if (reply != nullptr && reply[0] != 0)
-		{
-			platform->GetAux()->Write(reply);
-		}
+		// Command was received from the aux interface (LCD display) and looks to be JSON-formatted, so send the response only to the aux interface.
+		platform->GetAux()->Write(reply);
 		return;
 	}
 
-	// Deal with sending a reply to the web interface.
-	// The browser only fetches replies once a second or so. Therefore, when we send a web command in the middle of an SD card print,
-	// in order to be sure that we see the reply in the web interface, we must not send empty responses to the web interface unless
-	// the corresponding command also came from the web interface.
+	// Deal with sending a reply to the web interface and/or Panel Due via the polling mechanism.
+	// The browser and PanelDue only fetch replies once a second or so. Therefore, when we send a web command in the middle of an SD card print,
+	// in order to be sure that we see the reply in the web interface or PanelDue, we do not allow empty responses to overwrite more useful responses.
 	if (   reply != nullptr
 		&& reply[0] != 0									// don't send empty replies to the web server, they overwrite more useful replies
 		&& (gMOrT != 'M' || (code != 111 && code != 122))	// web server reply for M111 and M122 is handled before we get here
@@ -1899,7 +1922,7 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, StringRef& reply)
 
 void GCodes::SetToolHeaters(Tool *tool, float temperature)
 {
-	if(tool == NULL)
+	if (tool == NULL)
 	{
 		platform->Message(BOTH_ERROR_MESSAGE, "Setting temperature: no tool selected.\n");
 		return;
@@ -1908,7 +1931,7 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 	float standby[HEATERS];
 	float active[HEATERS];
 	tool->GetVariables(standby, active);
-	for(int8_t h = 0; h < tool->HeaterCount(); h++)
+	for (size_t h = 0; h < tool->HeaterCount(); h++)
 	{
 		active[h] = temperature;
 	}
@@ -1968,6 +1991,29 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 	{
 	case 0: // There are no rapid moves...
 	case 1: // Ordinary move
+		// Check for 'R' parameter here to go back to the coordinates at which the print was paused
+		if (gb->Seen('R') && gb->GetIValue() > 0 && (IsPaused() || IsPausing() || IsResuming()))
+		{
+			if (moveAvailable)
+			{
+				return false;
+			}
+			for (size_t axis = 0; axis < AXES; ++axis)
+			{
+				float offset = gb->Seen(axisLetters[axis]) ? gb->GetFValue() * distanceScale : 0.0;
+				moveBuffer[axis] = pausedMoveBuffer[axis] + offset;
+			}
+			for (size_t drive = AXES; drive < DRIVES; ++drive)
+			{
+				moveBuffer[drive] = 0.0;
+			}
+			if (gb->Seen(feedrateLetter))
+			{
+				moveBuffer[DRIVES] = gb->GetFValue();
+			}
+			moveAvailable = true;
+		}
+		else
 		{
 			int res = SetUpMove(gb, reply);
 			if (res == 2)
@@ -2098,7 +2144,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	bool resend = false;
 
 	int code = gb->GetIValue();
-	if (simulating && (code < 20 || code > 37) && code != 82 && code != 83 && code != 999 && code != 111 && code != 122)
+	if (simulating && (code < 20 || code > 37) && code != 82 && code != 83 && code != 111 && code != 105 && code != 122 && code != 999)
 	{
 		return true;			// we don't yet simulate most M codes
 	}
@@ -2132,7 +2178,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 
 		reprap.GetHeat()->SwitchOffAll();
-		isPaused = false;
+		if (isPaused)
+		{
+			isPaused = false;
+			reply.copy("Print cancelled\n");
+		}
 		break;
 
 	case 18: // Motors off
@@ -2243,9 +2293,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			const char* filename = gb->GetUnprecedentedString();
 			reprap.StartingFilePrint(filename);
 			QueueFileToPrint(filename);
-			if (fileToPrint.IsLive() && platform->Emulating() == marlin)
+			if (fileToPrint.IsLive())
 			{
-				reply.copy("File opened\nFile selected\n");
+				if (platform->Emulating() == marlin && gb == serialGCode)
+				{
+					reply.copy("File opened\nFile selected\n");
+				}
+				else
+				{
+					// Command came from web interface or PanelDue, or not emulating Marlin, so send a nicer response
+					reply.printf("File %s selected for printing\n", filename);
+				}
 			}
 		}
 
@@ -2263,7 +2321,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 		if (!fileToPrint.IsLive())
 		{
-			reply.copy("Cannot resume print, because no print is in progress!\n");
+			reply.copy("Cannot print, because no file is selected!\n");
 			error = true;
 		}
 		else if (isPaused)
@@ -2284,7 +2342,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		// no break
 
 	case 25: // Pause the print
-		if (!PrintingAFile())
+		if (isPaused)
+		{
+			reply.copy("Printing is already paused!!\n");
+			error = true;
+		}
+		else if (!PrintingAFile())
 		{
 			reply.copy("Cannot pause print, because no file is being printed!\n");
 			error = true;
@@ -2586,14 +2649,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			case 2:
 				reprap.GetLegacyStatusResponse(reply, 2, seq);	// send JSON-formatted status response
+				reply.cat("\n");
 				break;
 
 			case 3:
 				reprap.GetLegacyStatusResponse(reply, 3, seq);	// send extended JSON-formatted response
+				reply.cat("\n");
 				break;
 
 			case 4:
 				reprap.GetStatusResponse(reply, 3, false);		// send print status JSON-formatted response
+				reply.cat("\n");
 				break;
 
 			default:
@@ -3709,7 +3775,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		if (!seen)
 		{
-			reply.printf("Endstop adjustments X: %.2f Y: %.2f Z: %.2f\n",
+			reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f\n",
 							params.GetEndstopAdjustment(X_AXIS), params.GetEndstopAdjustment(Y_AXIS), params.GetEndstopAdjustment(Z_AXIS));
 		}
 	}
@@ -3752,10 +3818,18 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 998:
+		// The input handling code replaces the gcode by this when it detects a checksum error.
+		// Since we have no way of asking for the line to be re-sent, just report an error.
+		// If the line number is zero, then it probably came from PanelDue and was caused by input buffer overflow
+		// while we were busy doing a macro, so just ignore it.
 		if (gb->Seen('P'))
 		{
-			reply.printf("%d\n", gb->GetIValue());
-			resend = true;
+			int val = gb->GetIValue();
+			if (val != 0)
+			{
+				reply.printf("Checksum error on line %d\n", val);
+				resend = true;
+			}
 		}
 		break;
 
@@ -3771,7 +3845,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		error = true;
 		reply.printf("invalid M Code: %s\n", gb->Buffer());
 	}
-	if (result && state == GCodeState::normal)
+
+	// Note that we send a reply to M105 requests even if the status is not 'normal', because we reply to these requests even when we are in other states
+	if (result && (state == GCodeState::normal || code == 105))
 	{
 		HandleReply(error, gb, reply.Pointer(), 'M', code, resend);
 	}
@@ -3854,14 +3930,14 @@ bool GCodes::IsPaused() const
 
 bool GCodes::IsPausing() const
 {
-	return state == GCodeState::pausing1 || state == GCodeState::pausing2
-			|| (stackPointer != 0 && (stack[0].state == GCodeState::pausing1 || stack[0].state == GCodeState::pausing2));
+	const GCodeState topState = (stackPointer == 0) ? state : stack[0].state;
+	return topState == GCodeState::pausing1 || topState == GCodeState::pausing2;
 }
 
 bool GCodes::IsResuming() const
 {
-	return state == GCodeState::resuming1
-			|| (stackPointer != 0 && stack[0].state == GCodeState::resuming1);
+	const GCodeState topState = (stackPointer == 0) ? state : stack[0].state;
+	return topState == GCodeState::resuming1 || topState == GCodeState::resuming2 || topState == GCodeState::resuming3;
 }
 
 // End

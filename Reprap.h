@@ -103,6 +103,7 @@ class RepRap
   
     void UpdatePrintProgress();
     float EstimateTimeLeft(uint8_t method) const;
+    char GetStatusCharacter() const;
 
     Platform* platform;
     Network* network;

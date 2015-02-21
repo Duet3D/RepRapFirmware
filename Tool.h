@@ -39,7 +39,7 @@ public:
 	int HeaterCount() const;
 	int Heater(int heaterNumber) const;
 	int Number() const;
-	void SetVariables(float* standby, float* active);
+	void SetVariables(const float* standby, const float* active);
 	void GetVariables(float* standby, float* active) const;
 	void DefineMix(float* m);
 	float* GetMix() const;

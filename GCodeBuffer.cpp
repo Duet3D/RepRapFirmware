@@ -108,6 +108,7 @@ bool GCodeBuffer::Put(char c)
 			return false;
 		}
 		Init();
+		state = executing;
 		return true;
 	}
 	else if (!inComment || writingFileDirectory)
@@ -144,13 +145,9 @@ bool GCodeBuffer::IsEmpty() const
 	const char *buf = gcodeBuffer;
 	while (strchr(" \t\n\r", *buf))
 	{
-		if (*buf == 0)
-		{
-			return true;
-		}
 		buf++;
 	}
-	return false;
+	return *buf == 0;
 }
 
 // Is 'c' in the G Code string?
@@ -342,6 +339,12 @@ long GCodeBuffer::GetLValue()
 	long result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
 	readPointer = -1;
 	return result;
+}
+
+// Return true if this buffer contains a poll request or empty request that can be executed while macros etc. from another source are being completed
+bool GCodeBuffer::IsPollRequest()
+{
+	return state == executing && (IsEmpty() || (Seen('M') && GetIValue() == 105));
 }
 
 // End

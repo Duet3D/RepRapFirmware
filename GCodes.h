@@ -170,7 +170,7 @@ class GCodes
     bool moveAvailable;							// Have we seen a move G Code and set it up?
     float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
     float savedMoveBuffer[DRIVES+1];			// The position and feedrate when we started the current simulation
-    float pausedMoveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
+    float pausedMoveBuffer[DRIVES+1]; 			// Move coordinates; last is feed rate
     EndstopChecks endStopsToCheck;				// Which end stops we check them on the next move
     bool disableDeltaMapping;					// True if delta mapping should be bypassed for the next move
     GCodeState state;							// The main state variable of the GCode state machine

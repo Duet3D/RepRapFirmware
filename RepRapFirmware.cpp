@@ -588,56 +588,27 @@ void RepRap::Tick()
 	}
 }
 
+// Get the status character for the new-style status response
+char RepRap::GetStatusCharacter() const
+{
+	return    (processingConfig)										? 'C'	// Reading the configuration file
+			: (IsStopped()) 											? 'H'	// Halted
+			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
+			: (gCodes->IsResuming()) 									? 'R'	// Resuming
+			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
+			: (gCodes->PrintingAFile() && !gCodes->DoingFileMacro()) 	? 'P'	// Printing
+			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
+			: 'I';																// Idle
+}
+
 // Get the JSON status response for the web server (or later for the M105 command).
 // Type 1 is the ordinary JSON status response.
 // Type 2 is the same except that static parameters are also included.
 // Type 3 is the same but instead of static parameters we report print estimation values.
 void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebserver)
 {
-	char ch;
-
 	// Machine status
-	if (processingConfig)
-	{
-		// Reading the configuration file
-		ch = 'C';
-	}
-	else if (IsStopped())
-	{
-		// Halted
-		ch = 'H';
-	}
-	else if (gCodes->IsPausing())
-	{
-		// Pausing / Decelerating
-		ch = 'D';
-	}
-	else if (gCodes->IsResuming())
-	{
-		// Resuming
-		ch = 'R';
-	}
-	else if (gCodes->IsPaused())
-	{
-		// Paused / Stopped
-		ch = 'S';
-	}
-	else if (gCodes->PrintingAFile() && !gCodes->DoingFileMacro())
-	{
-		// Printing
-		ch = 'P';
-	}
-	else if (gCodes->DoingFileMacro() || !move->NoLiveMovement())
-	{
-		// Busy
-		ch = 'B';
-	}
-	else
-	{
-		// Idle
-		ch = 'I';
-	}
-	response.printf("{\"status\":\"%c\",\"coords\":{", ch);
+	response.printf("{\"status\":\"%c\",\"coords\":{", GetStatusCharacter());
 
 	/* Coordinates */
 	{
@@ -660,8 +631,8 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 
 		// Actual and theoretical extruder positions since power up, last G92 or last M23
 		response.catf(",\"extr\":");		// announce actual extruder positions
-		ch = '[';
-		for (uint8_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
+		char ch = '[';
+		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
 			response.catf("%c%.1f", ch, liveCoordinates[AXES + extruder]);
 			ch = ',';
@@ -670,7 +641,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 		// XYZ positions
 		response.cat("],\"xyz\":");
 		ch = '[';
-		for (uint8_t axis = 0; axis < AXES; axis++)
+		for (size_t axis = 0; axis < AXES; axis++)
 		{
 			response.catf("%c%.2f", ch, liveCoordinates[axis]);
 			ch = ',';
@@ -782,7 +753,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 			response.cat("\"heads\":{\"current\":");
 
 			// Current temperatures
-			ch = '[';
+			char ch = '[';
 			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
 			{
 				response.catf("%c%.1f", ch, heat->GetTemperature(heater));
@@ -900,7 +871,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 
 		// Raw Extruder Positions
 		response.cat(",\"extrRaw\":");		// announce the extruder positions
-		ch = '[';
+		char ch = '[';
 		for (size_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
 		{
 			response.catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
@@ -943,17 +914,21 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 // Type 1 is the new-style webserver status response.
 // Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
 // Type 3 is the M105 S3 response, which is like the M105 S2 response except that static values are also included.
-// 'seq' is the response sequence number, if it is not -1 and we have a higher sequence number then we send the gcode response
+// 'seq' is the response sequence number, if it is not -1 and we have a different sequence number then we send the gcode response
 void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq) const
 {
 	if (type != 0)
 	{
-		// New-style status request
-		// Send the printing/idle status
-		char ch = (processingConfig) ? 'C'
-					: (reprap.IsStopped()) ? 'S'
-					: (gCodes->PrintingAFile()) ? 'P'
-					: 'I';
+		// Send the status. Note that 'S' has always meant that the machine is halted in this version of the status response, so we use A for pAused.
+		char ch = GetStatusCharacter();
+		if (ch == 'S')			// if paused then send 'A'
+		{
+			ch = 'A';
+		}
+		else if (ch == 'H')		// if halted then send 'S'
+		{
+			ch = 'S';
+		}
 		response.printf("{\"status\":\"%c\",\"heaters\":", ch);
 
 		// Send the heater actual temperatures
@@ -1105,27 +1080,27 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 	{
 		response.catf(",\"buff\":%u", webserver->GetGcodeBufferSpace());	// send the amount of buffer space available for gcodes
 	}
-
-	if (type == 2 && gCodes->PrintingAFile())
+	else if (type == 2)
 	{
-		// Send estimated times left bBased on file progress, filament usage, and layers
-		response.catf(",\"timesLeft\":[%.1f,%.1f,%.1f]", EstimateTimeLeft(0), EstimateTimeLeft(1), EstimateTimeLeft(2));
+		if (gCodes->PrintingAFile())
+		{
+			// Send estimated times left based on file progress, filament usage, and layers
+			response.catf(",\"timesLeft\":[%.1f,%.1f,%.1f]", EstimateTimeLeft(0), EstimateTimeLeft(1), EstimateTimeLeft(2));
+		}
 	}
-
-	if (type < 2 || (seq != -1 && replySeq > seq))
-	{
-		response.catf(",\"seq\":%u", replySeq);								// send the response sequence number
-
-		// Send the response to the last command. Do this last because it is long and may need to be truncated.
-		response.cat(",\"resp\":");
-		EncodeString(response, GetGcodeReply().Pointer(), 2, true);
-	}
-
-	if (type == 3)
+	else if (type == 3)
 	{
 		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
 		response.catf(",\"geometry\":\"%s\",\"myName\":", move->IsDeltaMode() ? "delta" : "cartesian");
 		EncodeString(response, myName, 2, false);
+	}
+
+	if (type < 2 || (seq != -1 && replySeq != seq))
+	{
+
+		// Send the response to the last command. Do this last because it can be long and may need to be truncated.
+		response.catf(",\"seq\":%u,\"resp\":", replySeq);					// send the response sequence number
+		EncodeString(response, GetGcodeReply().Pointer(), 2, true);
 	}
 
 	response.cat("}");

@@ -100,7 +100,7 @@ void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machi
 
 void DeltaParameters::PrintParameters(StringRef& reply)
 {
-	reply.printf("Endstop adjustments X: %.2f Y: %.2f Z: %.2f, radius: %.2f, height: %.2f\n",
+	reply.printf("Endstops X%.2f Y%.2f Z%.2f, radius %.2f, height %.2f\n",
 					endstopAdjustments[X_AXIS], endstopAdjustments[Y_AXIS], endstopAdjustments[Z_AXIS], radius, homedHeight);
 }
 

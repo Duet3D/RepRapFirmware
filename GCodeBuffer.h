@@ -37,6 +37,7 @@ class GCodeBuffer
     void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
     void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
     bool StartingNewCode() const { return gcodePointer == 0; }
+    bool IsPollRequest();
 
   private:
 
