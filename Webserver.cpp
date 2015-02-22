@@ -626,7 +626,7 @@ void ProtocolInterpreter::FinishUpload(uint32_t file_length)
 	}
 
 	// Check the file length is as expected
-	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() + numContinuationBytes != file_length)
+	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() != file_length + numContinuationBytes)
 	{
 		uploadState = uploadError;
 		platform->Message(HOST_MESSAGE, "Uploaded file size is different!\n");
@@ -639,7 +639,7 @@ void ProtocolInterpreter::FinishUpload(uint32_t file_length)
 		platform->Message(HOST_MESSAGE, "Could not close the upload file while finishing upload!\n");
 	}
 
-	// Delete file if an error has occured
+	// Delete file if an error has occurred
 	if (uploadState == uploadError && strlen(filenameBeingUploaded) != 0)
 	{
 		platform->GetMassStorage()->Delete("0:/", filenameBeingUploaded);
