@@ -34,6 +34,12 @@
  	 	 	 any state variables relating to the web interface (e.g. file upload in progress) should
  	 	 	 be reset. This only happens if the password could be verified.
 
+ rr_fileinfo Returns file information about the file being printed.
+
+ rr_fileinfo?name=xxx
+ 	 	 	 Returns file information about a file on the SD card or a JSON-encapsulated response
+ 	 	 	 with err = 1 if the passed filename was invalid.
+
  rr_status	 New-style status response, in which temperatures, axis positions and extruder positions
  	 	 	 are returned in separate variables. Another difference is that extruder positions are
  	 	 	 returned as absolute positions instead of relative to the previous gcode. A client
@@ -189,24 +195,10 @@ void Webserver::Spin()
 				// Fast upload for FTP connections
 				else if (is_data_port)
 				{
-					if (interpreter->IsUploading())
+					if (ftpInterpreter->ProcessUploadData())
 					{
-						char *buffer;
-						unsigned int len;
-						if (req->ReadBuffer(buffer, len))
-						{
-							interpreter->StoreUploadData(buffer, len);
-						}
-						else
-						{
-							network->CloseTransaction();
-						}
-					}
-					else if (req->DataLength() > 0)
-					{
-						platform->Message(HOST_MESSAGE, "Webserver: Closing invalid data connection\n");
+						// Ensure this connection won't block our process if anything goes wrong
 						readingConnection = NULL;
-						network->SendAndClose(NULL);
 					}
 				}
 				// Check if we need to send data to a Telnet client
@@ -280,16 +272,7 @@ unsigned int Webserver::GetGcodeBufferSpace() const
 // a valid G code (!) - confusion is avoided.
 void Webserver::ProcessGcode(const char* gc)
 {
-	if (StringStartsWith(gc, "M30 "))		// delete SD card file
-	{
-		reprap.GetGCodes()->DeleteFile(&gc[4]);
-	}
-	else if (StringStartsWith(gc, "M23 "))	// select SD card file to print next
-	{
-		reprap.StartingFilePrint(&gc[4]);
-		reprap.GetGCodes()->QueueFileToPrint(&gc[4]);
-	}
-	else if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
+	if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
 	{
 		reprap.EmergencyStop();
 		gcodeReadIndex = gcodeWriteIndex;		// clear the buffer
@@ -519,7 +502,6 @@ ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws, Network *n)
 	uploadState = notUploading;
 	uploadPointer = NULL;
 	uploadLength = 0;
-	numContinuationBytes = 0;
 	filenameBeingUploaded[0] = 0;
 }
 
@@ -527,7 +509,6 @@ ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws, Network *n)
 bool ProtocolInterpreter::StartUpload(FileStore *file)
 {
 	CancelUpload();
-	numContinuationBytes = 0;
 
 	if (file != NULL)
 	{
@@ -550,17 +531,6 @@ bool ProtocolInterpreter::StoreUploadData(const char* data, unsigned int len)
 	{
 		uploadPointer = data;
 		uploadLength = len;
-
-		// Count the number of UTF8 continuation bytes. We will need it to adjust the expected file length.
-		while (len != 0)
-		{
-			if ((*data & 0xC0) == 0x80)
-			{
-				++numContinuationBytes;
-			}
-			++data;
-			--len;
-		}
 		return true;
 	}
 	return false;
@@ -626,7 +596,7 @@ void ProtocolInterpreter::FinishUpload(uint32_t file_length)
 	}
 
 	// Check the file length is as expected
-	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() != file_length + numContinuationBytes)
+	if (uploadState == uploadOK && file_length != 0 && fileBeingUploaded.Length() != file_length)
 	{
 		uploadState = uploadError;
 		platform->Message(HOST_MESSAGE, "Uploaded file size is different!\n");
@@ -655,11 +625,48 @@ void ProtocolInterpreter::FinishUpload(uint32_t file_length)
 //
 //********************************************************************************************
 
-
-
 Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws, Network *n)
-	: ProtocolInterpreter(p, ws, n), state(doingCommandWord)
+	: ProtocolInterpreter(p, ws, n), state(doingCommandWord), uploadingTextData(false), numContinuationBytes(0)
 {
+}
+
+// File Uploads (TODO: implement POST support)
+
+bool Webserver::HttpInterpreter::StartUpload(FileStore *file)
+{
+	numContinuationBytes = 0;
+	return ProtocolInterpreter::StartUpload(file);
+}
+
+bool Webserver::HttpInterpreter::StoreUploadData(const char* data, unsigned int len)
+{
+	if (uploadState == uploadOK)
+	{
+		uploadPointer = data;
+		uploadLength = len;
+
+		// Count the number of UTF8 continuation bytes. We may need it to adjust the expected file length.
+		if (uploadingTextData)
+		{
+			while (len != 0)
+			{
+				if ((*data & 0xC0) == 0x80)
+				{
+					++numContinuationBytes;
+				}
+				++data;
+				--len;
+			}
+		}
+
+		return true;
+	}
+	return false;
+}
+
+void Webserver::HttpInterpreter::FinishUpload(uint32_t file_length)
+{
+	return ProtocolInterpreter::FinishUpload(file_length + numContinuationBytes);
 }
 
 // Output to the client
@@ -855,6 +862,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 			int type = 0;
 			if (StringEquals(key, "type"))
 			{
+				// New-style JSON status responses
 				type = atoi(value);
 				if (type < 1 || type > 3)
 				{
@@ -879,8 +887,10 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 			FileStore *file = platform->GetFileStore("0:/", value, true);
 			if (StartUpload(file))
 			{
-				strncpy(filenameBeingUploaded, value, FILENAME_LENGTH);
-				filenameBeingUploaded[FILENAME_LENGTH - 1] = 0;
+				strncpy(filenameBeingUploaded, value, MaxFilenameLength);
+				filenameBeingUploaded[MaxFilenameLength - 1] = 0;
+				uploadingTextData = (numQualKeys < 2 || !StringEquals(qualifiers[1].key, "type") ||
+										!StringEquals(qualifiers[1].value, "binary"));
 			}
 
 			GetJsonUploadResponse(response);
@@ -917,7 +927,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 		}
 		else if (StringEquals(request, "fileinfo"))
 		{
-			reprap.GetFileInfoResponse(response, (StringEquals(key, "name")) ? value : NULL);
+			reprap.GetPrintMonitor()->GetFileInfoResponse(response, (StringEquals(key, "name")) ? value : NULL);
 		}
 		else if (StringEquals(request, "name"))
 		{
@@ -1429,6 +1439,32 @@ Webserver::FtpInterpreter::FtpInterpreter(Platform *p, Webserver *ws, Network *n
 	strcpy(currentDir, "/");
 }
 
+bool Webserver::FtpInterpreter::ProcessUploadData()
+{
+	NetworkTransaction *req = network->GetTransaction();
+	if (IsUploading())
+	{
+		char *buffer;
+		unsigned int len;
+		if (req->ReadBuffer(buffer, len))
+		{
+			StoreUploadData(buffer, len);
+		}
+		else
+		{
+			network->CloseTransaction();
+		}
+	}
+	else if (req->DataLength() > 0)
+	{
+		platform->Message(HOST_MESSAGE, "Webserver: Closing invalid data connection\n");
+		network->SendAndClose(NULL);
+		return true;
+	}
+
+	return false;
+}
+
 void Webserver::FtpInterpreter::ConnectionEstablished()
 {
 	if (reprap.Debug(moduleWebserver))
@@ -1560,18 +1596,6 @@ void Webserver::FtpInterpreter::ResetState()
 
 	state = authenticating;
 }
-
-bool Webserver::FtpInterpreter::StoreUploadData(const char* data, unsigned int len)
-{
-	if (uploadState == uploadOK)
-	{
-		uploadPointer = data;
-		uploadLength = len;
-		return true;
-	}
-	return false;
-}
-
 
 // return true if an error has occurred, false otherwise
 void Webserver::FtpInterpreter::ProcessLine()
@@ -1764,16 +1788,16 @@ void Webserver::FtpInterpreter::ProcessLine()
 			}
 			else if (StringStartsWith(clientMessage, "RNTO"))
 			{
-				char buffer[FILENAME_LENGTH];
-				strncpy(buffer, filename, FILENAME_LENGTH);
+				char buffer[MaxFilenameLength];
+				strncpy(buffer, filename, MaxFilenameLength);
 				ReadFilename(4);
 
 				if (buffer[0] != '/' && filename[0] != '/')
 				{
-					char old_filename[FILENAME_LENGTH];
+					char old_filename[MaxFilenameLength];
 					const char *new_filename;
 
-					strncpy(old_filename, platform->GetMassStorage()->CombineName(currentDir, buffer), FILENAME_LENGTH);
+					strncpy(old_filename, platform->GetMassStorage()->CombineName(currentDir, buffer), MaxFilenameLength);
 					new_filename = platform->GetMassStorage()->CombineName(currentDir, filename);
 
 					if (platform->GetMassStorage()->Rename(old_filename, new_filename))
@@ -1897,8 +1921,8 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 				if (StartUpload(file))
 				{
-					strncpy(filenameBeingUploaded, filename, FILENAME_LENGTH);
-					filenameBeingUploaded[FILENAME_LENGTH - 1] = 0;
+					strncpy(filenameBeingUploaded, filename, MaxFilenameLength);
+					filenameBeingUploaded[MaxFilenameLength - 1] = 0;
 
 					SendReply(150, "OK to send data.");
 					state = doingPasvIO;
@@ -2005,7 +2029,7 @@ void Webserver::FtpInterpreter::ReadFilename(int start)
 {
 	int filenameLength = 0;
 	bool readingPath = false;
-	for(int i=start; i<clientPointer && filenameLength<FILENAME_LENGTH; i++)
+	for(int i=start; i<clientPointer && filenameLength < MaxFilenameLength; i++)
 	{
 		switch (clientMessage[i])
 		{
@@ -2035,14 +2059,14 @@ void Webserver::FtpInterpreter::ReadFilename(int start)
 
 void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 {
-	char combinedPath[FILENAME_LENGTH];
+	char combinedPath[MaxFilenameLength];
 
 	if (newDirectory[0] != 0)
 	{
 		/* Prepare the new directory path */
 		if (newDirectory[0] == '/') // absolute path
 		{
-			strncpy(combinedPath, newDirectory, FILENAME_LENGTH);
+			strncpy(combinedPath, newDirectory, MaxFilenameLength);
 		}
 		else // relative path
 		{
@@ -2056,7 +2080,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 				}
 				else
 				{
-					strncpy(combinedPath, currentDir, FILENAME_LENGTH);
+					strncpy(combinedPath, currentDir, MaxFilenameLength);
 					for(int i=strlen(combinedPath) -2; i>=0; i--)
 					{
 						if (combinedPath[i] == '/')
@@ -2069,12 +2093,12 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 			}
 			else // go to child directory
 			{
-				strncpy(combinedPath, currentDir, FILENAME_LENGTH);
+				strncpy(combinedPath, currentDir, MaxFilenameLength);
 				if (strlen(currentDir) > 1)
 				{
-					strncat(combinedPath, "/", FILENAME_LENGTH - strlen(combinedPath) - 1);
+					strncat(combinedPath, "/", MaxFilenameLength - strlen(combinedPath) - 1);
 				}
-				strncat(combinedPath, newDirectory, FILENAME_LENGTH - strlen(combinedPath) - 1);
+				strncat(combinedPath, newDirectory, MaxFilenameLength - strlen(combinedPath) - 1);
 			}
 		}
 
@@ -2087,7 +2111,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		/* Verify path and change it */
 		if (platform->GetMassStorage()->PathExists(combinedPath))
 		{
-			strncpy(currentDir, combinedPath, FILENAME_LENGTH);
+			strncpy(currentDir, combinedPath, MaxFilenameLength);
 			SendReply(250, "Directory successfully changed.");
 		}
 		else
@@ -2256,368 +2280,4 @@ void Webserver::TelnetInterpreter::RemainingDataSent()
 	sendPending = false;
 }
 
-
-//********************************************************************************************
-//
-// ************************ Helper methods for the Webserver class ***************************
-//
-//********************************************************************************************
-
-// Get information for a file on the SD card
-bool Webserver::GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info)
-{
-	FileStore *f = reprap.GetPlatform()->GetFileStore(directory, fileName, false);
-	if (f != NULL)
-	{
-		// Try to find the object height by looking for the last G1 Zxxx command in the file
-		info.fileSize = f->Length();
-		info.objectHeight = 0.0;
-		info.layerHeight = 0.0;
-		info.numFilaments = DRIVES - AXES;
-		info.generatedBy[0] = 0;
-
-		if (info.fileSize != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
-		{
-			const size_t readSize = 512;					// read 512 bytes at a time (1K doesn't seem to work when we read from the end)
-			const size_t overlap = 100;
-			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
-
-			bool foundLayerHeight = false;
-			unsigned int filamentsFound = 0, nFilaments;
-			float filaments[DRIVES - AXES];
-
-			// Get slic3r settings by reading from the start of the file. We only read the first 2K or so, everything we are looking for should be there.
-			for(uint8_t i=0; i<4; i++)
-			{
-				size_t sizeToRead = (size_t)min<unsigned long>(info.fileSize, readSize + overlap);
-				int nbytes = f->Read(buf, sizeToRead);
-				if (nbytes != (int)sizeToRead)
-				{
-					break;									// read failed so give up
-				}
-				else
-				{
-					buf[sizeToRead] = 0;
-
-					// Search for filament usage (Cura puts it at the beginning of a G-code file)
-					if (!filamentsFound)
-					{
-						nFilaments = FindFilamentUsed(buf, sizeToRead, filaments, DRIVES - AXES);
-						if (nFilaments != 0 && nFilaments >= filamentsFound)
-						{
-							filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
-							for (unsigned int i = 0; i < filamentsFound; ++i)
-							{
-								info.filamentNeeded[i] = filaments[i];
-							}
-						}
-					}
-
-					// Look for layer height
-					if (!foundLayerHeight)
-					{
-						foundLayerHeight = FindLayerHeight(buf, sizeToRead, info.layerHeight);
-					}
-
-					// Look for slicer program
-					if (!info.generatedBy[0])
-					{
-						// Slic3r and S3D
-						const char* generatedByString = "generated by ";
-						char* pos = strstr(buf, generatedByString);
-						size_t generatedByLength = ARRAY_SIZE(info.generatedBy);
-						if (pos != NULL)
-						{
-							pos += strlen(generatedByString);
-							size_t i = 0;
-							while (i < ARRAY_SIZE(info.generatedBy) - 1 && *pos >= ' ')
-							{
-								char c = *pos++;
-								if (c == '"' || c == '\\')
-								{
-									// Need to escape the quote-mark for JSON
-									if (i > ARRAY_SIZE(info.generatedBy) - 3)
-									{
-										break;
-									}
-									info.generatedBy[i++] = '\\';
-								}
-								info.generatedBy[i++] = c;
-							}
-							info.generatedBy[i] = 0;
-						}
-
-						// Cura
-						const char* slicedAtString = ";Sliced at: ";
-						pos = strstr(buf, slicedAtString);
-						if (pos != NULL)
-						{
-							pos += strlen(slicedAtString);
-							strcpy(info.generatedBy, "Cura at ");
-							size_t i = 8;
-							while (i < ARRAY_SIZE(info.generatedBy) - 1 && *pos >= ' ')
-							{
-								char c = *pos++;
-								if (c == '"' || c == '\\')
-								{
-									// Need to escape the quote-mark for JSON
-									if (i > ARRAY_SIZE(info.generatedBy) - 3)
-									{
-										break;
-									}
-									info.generatedBy[i++] = '\\';
-								}
-								info.generatedBy[i++] = c;
-							}
-							info.generatedBy[i] = 0;
-						}
-					}
-
-					// Add code to look for other values here...
-				}
-
-				// Have we collected everything?
-				if (filamentsFound && foundLayerHeight && info.generatedBy[0])
-				{
-					break;
-				}
-			}
-
-			// Now get the object height and filament used by reading the end of the file
-			{
-				size_t sizeToRead;
-				if (info.fileSize <= readSize + overlap)
-				{
-					sizeToRead = info.fileSize;						// read the whole file in one go
-				}
-				else
-				{
-					sizeToRead = info.fileSize % readSize;
-					if (sizeToRead <= overlap)
-					{
-						sizeToRead += readSize;
-					}
-				}
-				unsigned long seekPos = info.fileSize - sizeToRead;	// read on a 512b boundary
-				size_t sizeToScan = sizeToRead;
-				for (;;)
-				{
-					if (!f->Seek(seekPos))
-					{
-						break;
-					}
-					int nbytes = f->Read(buf, sizeToRead);
-					if (nbytes != (int)sizeToRead)
-					{
-						break;									// read failed so give up
-					}
-
-					// Search for filament used
-					if (!filamentsFound)
-					{
-						nFilaments = FindFilamentUsed(buf, sizeToScan, filaments, DRIVES - AXES);
-						if (nFilaments != 0 && nFilaments >= filamentsFound)
-						{
-							filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
-							for (unsigned int i = 0; i < filamentsFound; ++i)
-							{
-								info.filamentNeeded[i] = filaments[i];
-							}
-						}
-					}
-
-					// Search for layer height
-					if (!foundLayerHeight)
-					{
-						foundLayerHeight = FindLayerHeight(buf, sizeToScan, info.layerHeight);
-					}
-
-					// Search for object height
-					if (FindHeight(buf, sizeToScan, info.objectHeight))
-					{
-						break;		// quit if found height
-					}
-
-					if (seekPos == 0 || info.fileSize - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
-					{
-						break;		// quit if reached start of file or already scanned the last 32K of the file
-					}
-					seekPos -= readSize;
-					sizeToRead = readSize;
-					sizeToScan = readSize + overlap;
-					memcpy(buf + sizeToRead, buf, overlap);
-				}
-				info.numFilaments = filamentsFound;
-			}
-		}
-		f->Close();
-//debugPrintf("Set height %f and filament %f\n", height, filamentUsed);
-		return true;
-	}
-	return false;
-}
-
-// Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
-bool Webserver::FindHeight(const char* buf, size_t len, float& height)
-{
-//debugPrintf("Scanning %u bytes starting %.100s\n", len, buf);
-	bool inComment;
-	unsigned int zPos;
-	for(size_t i = len - 5; i > 0; i--)
-	{
-		// Look for last "G0/G1 ... Z#HEIGHT#" command as generated by common slicers
-		if (buf[i] == 'G' && (buf[i + 1] == '0' || buf[i + 1] == '1') && buf[i + 2] == ' ')
-		{
-			// Looks like we found a controlled move, however it could be in a comment, especially when using slic3r 1.1.1
-			inComment = false;
-			size_t j = i;
-			while (j != 0)
-			{
-				--j;
-				char c = buf[j];
-				if (c == '\n' || c == '\r')
-				{
-					// It's not in a comment
-					break;
-				}
-				if (c == ';')
-				{
-					// It is in a comment, so give up on this one
-					inComment = true;
-					break;
-				}
-			}
-			if (inComment)
-				continue;
-
-			// Find 'Z' position and grab that value
-			zPos = 0;
-			for(int j=i +3; j < len - 2; j++)
-			{
-				char c = buf[j];
-				if (c < ' ')
-				{
-					// Skip all whitespaces...
-					while (j < len - 2 && c <= ' ')
-					{
-						c = buf[++j];
-					}
-					// ...to make sure ";End" doesn't follow G0 .. Z#HEIGHT#
-					if (zPos != 0 && (buf[j] != ';' || buf[j + 1] != 'E'))
-					{
-						//debugPrintf("Found at offset %u text: %.100s\n", zPos, &buf[zPos + 1]);
-						height = strtod(&buf[zPos + 1], NULL);
-						return true;
-					}
-					break;
-				}
-				else if (c == ';')
-				{
-					// Ignore comments
-					break;
-				}
-				else if (c == 'Z')
-				{
-					zPos = j;
-				}
-			}
-		}
-	}
-	return false;
-}
-
-// Scan the buffer for the layer height. The buffer is null-terminated.
-bool Webserver::FindLayerHeight(const char *buf, size_t len, float& layerHeight)
-{
-	// Look for layer_height as generated by Slic3r
-	const char* layerHeightStringSlic3r = "; layer_height ";
-	char *pos = strstr(buf, layerHeightStringSlic3r);
-	if (pos != NULL)
-	{
-		pos += strlen(layerHeightStringSlic3r);
-		while (strchr(" \t=:", *pos))
-		{
-			++pos;
-		}
-		layerHeight = strtod(pos, NULL);
-		return true;
-	}
-
-	// Look for layer height as generated by Cura
-	const char* layerHeightStringCura = "Layer height: ";
-	pos = strstr(buf, layerHeightStringCura);
-	if (pos != NULL)
-	{
-		pos += strlen(layerHeightStringCura);
-		while (strchr(" \t=:", *pos))
-		{
-			++pos;
-		}
-		layerHeight = strtod(pos, NULL);
-		return true;
-	}
-
-	// Look for layer height as generated by S3D
-	const char* layerHeightStringS3D = "layerHeight,";
-	pos = strstr(buf, layerHeightStringS3D);
-	if (pos != NULL)
-	{
-		pos += strlen(layerHeightStringS3D);
-		layerHeight = strtod(pos, NULL);
-		return true;
-	}
-
-	return false;
-}
-
-// Scan the buffer for the filament used. The buffer is null-terminated.
-// Returns the number of filaments found.
-unsigned int Webserver::FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, unsigned int maxFilaments)
-{
-	unsigned int filamentsFound = 0;
-
-	// Look for filament usage as generated by Slic3r and Cura
-	const char* filamentUsedStr = "ilament used";		// comment string used by slic3r and Cura, followed by filament used and "mm"
-	const char* p = buf;
-	while (filamentsFound < maxFilaments &&	(p = strstr(p, filamentUsedStr)) != NULL)
-	{
-		p += strlen(filamentUsedStr);
-		while(strchr(" :=\t", *p) != NULL)
-		{
-			++p;	// this allows for " = " from default slic3r comment and ": " from default Cura comment
-		}
-		if (isDigit(*p))
-		{
-			char* q;
-			filamentUsed[filamentsFound] = strtod(p, &q);
-			if (*q == 'm' && *(q + 1) != 'm')
-			{
-				filamentUsed[filamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
-			}
-			++filamentsFound;
-		}
-	}
-
-	// Look for filament usage as generated by S3D
-	if (!filamentsFound)
-	{
-		const char *filamentLengthStr = "ilament length:";	// comment string used by S3D
-		p = buf;
-		while (filamentsFound < maxFilaments &&	(p = strstr(p, filamentLengthStr)) != NULL)
-		{
-			p += strlen(filamentLengthStr);
-			while(strchr(" :=\t", *p) != NULL)
-			{
-				++p;	// this allows for " = " from default slic3r comment and ": " from default Cura comment
-			}
-			if (isDigit(*p))
-			{
-				char* q;
-				filamentUsed[filamentsFound] = strtod(p, &q); // S3D reports filament usage in mm, no conversion needed
-				++filamentsFound;
-			}
-		}
-	}
-
-	return filamentsFound;
-}
+// End

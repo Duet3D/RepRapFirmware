@@ -344,6 +344,7 @@ public:
   bool MakeDirectory(const char *directory);
   bool Rename(const char *oldFilename, const char *newFilename);
   bool PathExists(const char *path) const;
+  bool PathExists(const char* directory, const char* fileName);
 
 friend class Platform;
 

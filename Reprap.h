@@ -30,7 +30,6 @@ class RepRap
     RepRap();
     void EmergencyStop();
     void Init();
-    Module GetSpinningModule() const;
     void Spin();
     void Exit();
     void Interrupt();
@@ -41,12 +40,13 @@ class RepRap
     void SetDebug(Module m, bool enable);
     void SetDebug(bool enable);
     void PrintDebug();
+    Module GetSpinningModule() const;
 
+    const char *GetName() const;
+    void SetName(const char* nm);
     bool NoPasswordSet() const;
     bool CheckPassword(const char* pw) const;
     void SetPassword(const char* pw);
-    const char *GetName() const;
-    void SetName(const char* nm);
 
     void AddTool(Tool* t);
     void SelectTool(int toolNumber);
@@ -71,6 +71,7 @@ class RepRap
     GCodes* GetGCodes() const;
     Network* GetNetwork() const;
     Webserver* GetWebserver() const;
+    PrintMonitor* GetPrintMonitor() const;
 
     void Tick();
     uint16_t GetTicksInSpinState() const;
@@ -83,9 +84,7 @@ class RepRap
     void GetLegacyStatusResponse(StringRef &response, uint8_t type, int seq) const;
     void GetNameResponse(StringRef& response) const;
     void GetFilesResponse(StringRef& response, const char* dir) const;
-    void GetFileInfoResponse(StringRef& response, const char* filename) const;
 
-    void StartingFilePrint(const char *filename);
     void Beep(int freq, int ms);
     void SetMessage(const char *msg);
     
@@ -101,8 +100,6 @@ class RepRap
 
     static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars);
   
-    void UpdatePrintProgress();
-    float EstimateTimeLeft(uint8_t method) const;
     char GetStatusCharacter() const;
 
     Platform* platform;
@@ -111,6 +108,7 @@ class RepRap
     Heat* heat;
     GCodes* gCodes;
     Webserver* webserver;
+    PrintMonitor* printMonitor;
 
     Tool* toolList;
     Tool* currentTool;
@@ -132,32 +130,12 @@ class RepRap
     char password[SHORT_STRING_LENGTH + 1];
     char myName[SHORT_STRING_LENGTH + 1];
 
-    bool fileInfoDetected;
-    char fileBeingPrinted[255];
-    GcodeFileInfo currentFileInfo;
-
     int beepFrequency, beepDuration;
     char message[SHORT_STRING_LENGTH + 1];
 
     char gcodeReplyBuffer[GCODE_REPLY_LENGTH];
     StringRef gcodeReply;
     unsigned int replySeq;
-
-    float printStartTime;
-    unsigned int currentLayer;
-    float warmUpDuration;
-
-    float firstLayerDuration;
-    float firstLayerHeight;
-    float firstLayerFilament;
-    float firstLayerProgress;
-
-    float lastLayerTime, lastLayerFilament;
-    unsigned int numLayerSamples;
-    float layerDurations[MAX_LAYER_SAMPLES];
-    float filamentUsagePerLayer[MAX_LAYER_SAMPLES];
-    float fileProgressPerLayer[MAX_LAYER_SAMPLES];
-    float layerEstimatedTimeLeft;
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }
@@ -166,8 +144,11 @@ inline Heat* RepRap::GetHeat() const { return heat; }
 inline GCodes* RepRap::GetGCodes() const { return gCodes; }
 inline Network* RepRap::GetNetwork() const { return network; }
 inline Webserver* RepRap::GetWebserver() const { return webserver; }
-inline Module RepRap::GetSpinningModule() const { return spinningModule; }
+inline PrintMonitor* RepRap::GetPrintMonitor() const { return printMonitor; }
+
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
+inline Module RepRap::GetSpinningModule() const { return spinningModule; }
+
 inline Tool* RepRap::GetCurrentTool() { return currentTool; }
 inline uint16_t RepRap::GetExtrudersInUse() const { return activeExtruders; }
 inline uint16_t RepRap::GetHeatersInUse() const { return activeHeaters; }

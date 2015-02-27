@@ -1325,9 +1325,8 @@ bool NetworkTransaction::Send()
 	{
 		memcpy(sendingWindow + bytesBeingSent, sendBuffer->tcpOutputBuffer, sendBuffer->bytesToWrite);
 		bytesBeingSent += sendBuffer->bytesToWrite;
-
+		bytesLeftToSend -= sendBuffer->bytesToWrite;
 		sendBuffer = reprap.GetNetwork()->ReleaseSendBuffer(sendBuffer);
-		bytesLeftToSend = TCP_WND - bytesBeingSent;
 	}
 
 	// We also intend to send a file, so check if we can fill up the TCP window
@@ -1372,10 +1371,10 @@ bool NetworkTransaction::Send()
 		// The TCP window has been filled up as much as possible, so send it now. There is no need to check
 		// the available space in the SNDBUF queue, because we really write only one TCP window at once.
 		tcp_sent(cs->pcb, conn_sent);
-		if (tcp_write(cs->pcb, sendingWindow, bytesBeingSent, 0 /*TCP_WRITE_FLAG_COPY*/ ) != ERR_OK) // Final arg - 1 means make a copy
+		err_t result = tcp_write(cs->pcb, sendingWindow, bytesBeingSent, 0);
+		if (result != ERR_OK) // Final arg - 1 means make a copy
 		{
-
-			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: tcp_write encountered an error, this should never happen!\n");
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: tcp_write returned error code %d, this should never happen!\n", result);
 			tcp_abort(cs->pcb);
 			cs->pcb = NULL;
 		}

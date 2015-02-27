@@ -695,6 +695,16 @@ float Move::TriangleZ(float x, float y) const
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 void Move::FinishedBedProbing(int sParam, int probePointIndex, StringRef& reply)
 {
+	if (reprap.Debug(moduleMove))
+	{
+		debugPrintf("Z probe offsets:");
+		for (size_t i = 0; i < NumberOfProbePoints(); ++i)
+		{
+			debugPrintf(" %.2f", zBedProbePoints[i]);
+		}
+		debugPrintf("\n");
+	}
+
 	switch (sParam)
 	{
 	case 0:

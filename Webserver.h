@@ -30,7 +30,7 @@ Licence: GPL
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
-const unsigned int gcodeBufferLength = 512;			// size of our gcode ring buffer, preferably a power of 2
+const unsigned int gcodeBufferLength = 512;		// size of our gcode ring buffer, preferably a power of 2
 
 /* HTTP */
 
@@ -44,7 +44,7 @@ const unsigned int maxCommandWords = 4;			// max number of space-separated words
 const unsigned int maxQualKeys = 5;				// max number of key/value pairs in the qualifier
 const unsigned int maxHeaders = 10;				// max number of key/value pairs in the headers
 
-const unsigned int jsonReplyLength = 2000;		// size of buffer used to hold JSON reply
+const unsigned int jsonReplyLength = 2048;		// size of buffer used to hold JSON reply
 
 const unsigned int maxSessions = 8;				// maximum number of simultaneous HTTP sessions
 const unsigned int httpSessionTimeout = 30;		// HTTP session timeout in seconds
@@ -61,18 +61,6 @@ const unsigned int telnetMessageLength = 256;	// maximum line length for incomin
 
 class Webserver;
 
-// Class to hold Gcode file information
-class GcodeFileInfo
-{
-public:
-	unsigned long fileSize;
-	float objectHeight;
-	float filamentNeeded[DRIVES - AXES];
-	unsigned int numFilaments;
-	float layerHeight;
-	char generatedBy[50];
-};
-
 // This is the abstract class for all supported protocols
 // Any inherited class should implement a state machine to increase performance and reduce memory usage.
 class ProtocolInterpreter
@@ -85,7 +73,6 @@ class ProtocolInterpreter
 		virtual bool CharFromClient(const char c) = 0;
 		virtual void ResetState() = 0;
 
-	    virtual bool StoreUploadData(const char* data, unsigned int len);
 	    bool FlushUploadData();
 	    void CancelUpload();
 		bool IsUploading() const { return uploadState != notUploading; }
@@ -108,12 +95,12 @@ class ProtocolInterpreter
 
 	    UploadState uploadState;
 	    FileData fileBeingUploaded;
-	    char filenameBeingUploaded[MaxFilenameLength + 1];
+	    char filenameBeingUploaded[MaxFilenameLength];
 	    const char *uploadPointer;							// pointer to start of uploaded data not yet written to file
 	    unsigned int uploadLength;							// amount of data not yet written to file
-	    uint32_t numContinuationBytes;						// number of UTF-8 continuation bytes we have received
 
-	    bool StartUpload(FileStore *file);
+	    virtual bool StartUpload(FileStore *file);
+	    virtual bool StoreUploadData(const char* data, unsigned int len);
 	    void FinishUpload(uint32_t file_length);
 };
 
@@ -133,8 +120,6 @@ class Webserver
 
     void ConnectionLost(const ConnectionState *cs);
     void ConnectionError();
-
-    static bool GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info);
 
     friend class Platform;
 
@@ -213,6 +198,14 @@ class Webserver
 		    unsigned int numActiveSessions;
 		    unsigned int sessionIP[maxSessions];
 		    float sessionLastQueryTime[maxSessions];
+
+		protected:
+		    bool uploadingTextData;							// do we need to count UTF-8 continuation bytes?
+		    uint32_t numContinuationBytes;					// number of UTF-8 continuation bytes we have received
+
+		    bool StartUpload(FileStore *file);
+			bool StoreUploadData(const char* data, unsigned int len);
+			void FinishUpload(uint32_t file_length);
 	};
 	HttpInterpreter *httpInterpreter;
 
@@ -226,7 +219,7 @@ class Webserver
 			bool CharFromClient(const char c);
 			void ResetState();
 
-			bool StoreUploadData(const char* data, unsigned int len);
+			bool ProcessUploadData();
 
 		private:
 
@@ -293,11 +286,6 @@ class Webserver
     void ProcessGcode(const char* gc);
     void LoadGcodeBuffer(const char* gc);
     void StoreGcodeData(const char* data, size_t len);
-
-    // File info methods
-    static bool FindHeight(const char* buf, size_t len, float& height);
-    static bool FindLayerHeight(const char* buf, size_t len, float& layerHeight);
-    static unsigned int FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, unsigned int maxFilaments);
 
   private:
 

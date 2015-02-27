@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.00k-dc42"
-#define DATE "2015-02-22"
+#define VERSION "1.00l-dc42"
+#define DATE "2015-02-26"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -47,6 +47,7 @@ enum Compatibility
 #define AUX_BAUD_RATE	(57600)
 
 const unsigned int GcodeLength = 100;		// Maximum length of a G Code string that we handle
+const size_t MaxFilenameLength = 100;		// maximum length of a path + filename on the SD card
 
 #define ABS_ZERO (-273.15)  // Celsius
 
@@ -77,7 +78,6 @@ const unsigned int GcodeLength = 100;		// Maximum length of a G Code string that
 #define STRING_LENGTH 1024
 #define SHORT_STRING_LENGTH 40
 
-#define FILENAME_LENGTH 100
 #define GCODE_REPLY_LENGTH 2048
 
 // Print estimation defaults

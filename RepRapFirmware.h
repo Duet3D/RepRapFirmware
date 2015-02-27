@@ -26,7 +26,7 @@ Licence: GPL
 #include <cfloat>
 #include <cstdarg>
 
-// Module numbers, used for diagnostics and debug
+// Module numbers and names, used for diagnostics and debug
 enum Module
 {
 	modulePlatform = 0,
@@ -36,6 +36,7 @@ enum Module
 	moduleMove = 4,
 	moduleHeat = 5,
 	moduleDda = 6,
+	modulePrintMonitor = 7,
 	noModule = 15
 };
 
@@ -50,6 +51,7 @@ class GCodes;
 class Move;
 class Heat;
 class Tool;
+class PrintMonitor;
 class RepRap;
 class FileStore;
 
@@ -58,7 +60,6 @@ class FileStore;
 extern RepRap reprap;
 
 // Functions and globals not part of any class
-const size_t MaxFilenameLength = 100;					// maximum length of a path + filename on the SD card
 
 extern "C" void debugPrintf(const char* fmt, ...);
 
@@ -74,7 +75,7 @@ int StringContains(const char* string, const char* match);
 
 // Macro to assign an array from an initializer list
 #if __cplusplus >= 201103L
-// This version relies on C++'11 features
+// This version relies on C++'11 features (add '-std=gnu++11' to your CPP compiler flags)
 #define ARRAY_INIT(_dest, _init) {static const decltype(_dest) _temp = _init; memcpy(_dest, _temp, sizeof(_dest)); }
 #else
 // This version relies on a gcc extension that is available only in older compilers
@@ -119,6 +120,7 @@ extern StringRef scratchString;
 #include "Move.h"
 #include "Heat.h"
 #include "Tool.h"
+#include "PrintMonitor.h"
 #include "Reprap.h"
 
 // std::min and std::max don't seem to work with this variant of gcc, so define our own ones here
