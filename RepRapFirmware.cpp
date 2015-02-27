@@ -1175,7 +1175,9 @@ void RepRap::GetNameResponse(StringRef& response) const
 // Get the list of files in the specified directory in JSON format
 void RepRap::GetFilesResponse(StringRef& response, const char* dir) const
 {
-	response.copy("{\"files\":[");
+	response.copy("{\"dir\":");
+	EncodeString(response, dir, 3, false);
+	response.cat(",\"files\":[");
 	FileInfo file_info;
 	bool firstFile = true;
 	bool gotFile = platform->GetMassStorage()->FindFirst(dir, file_info);
