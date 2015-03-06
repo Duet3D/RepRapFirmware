@@ -37,12 +37,12 @@ const unsigned int gcodeBufferLength = 512;		// size of our gcode ring buffer, p
 #define KO_START "rr_"
 #define KO_FIRST 3
 
-const unsigned int webUploadBufferSize = 2300;	// maximum size of HTTP upload packets (webMessageLength - 700)
+const unsigned int webUploadBufferSize = 2300;	// maximum size of HTTP GET upload packets (webMessageLength - 700)
 const unsigned int webMessageLength = 3000;		// maximum length of the web message we accept after decoding
 
 const unsigned int maxCommandWords = 4;			// max number of space-separated words in the command
 const unsigned int maxQualKeys = 5;				// max number of key/value pairs in the qualifier
-const unsigned int maxHeaders = 10;				// max number of key/value pairs in the headers
+const unsigned int maxHeaders = 16;				// max number of key/value pairs in the headers
 
 const unsigned int jsonReplyLength = 2048;		// size of buffer used to hold JSON reply
 
@@ -68,16 +68,18 @@ class ProtocolInterpreter
 	public:
 
 		ProtocolInterpreter(Platform *p, Webserver *ws, Network *n);
+		virtual ~ProtocolInterpreter() { }					// to keep Eclipse happy
+
 		virtual void ConnectionEstablished() { }
-		virtual void ConnectionLost(uint16_t local_port) { }
+		virtual void ConnectionLost(uint32_t remoteIP, uint16_t remotePort, uint16_t localPort) { }
 		virtual bool CharFromClient(const char c) = 0;
 		virtual void ResetState() = 0;
+		virtual bool NeedMoreData();
 
+		virtual bool DoFastUpload();
+		virtual bool DoingFastUpload() const;
 	    bool FlushUploadData();
-	    void CancelUpload();
-		bool IsUploading() const { return uploadState != notUploading; }
-
-		virtual ~ProtocolInterpreter() { }					// to keep Eclipse happy
+	    virtual void CancelUpload();
 
 	protected:
 
@@ -101,7 +103,8 @@ class ProtocolInterpreter
 
 	    virtual bool StartUpload(FileStore *file);
 	    virtual bool StoreUploadData(const char* data, unsigned int len);
-	    void FinishUpload(uint32_t file_length);
+		bool IsUploading() const;
+	    virtual void FinishUpload(uint32_t fileLength);
 };
 
 class Webserver
@@ -133,8 +136,15 @@ class Webserver
 		public:
 
 			HttpInterpreter(Platform *p, Webserver *ws, Network *n);
-			bool CharFromClient(const char c);
-			void ResetState();
+			void ConnectionLost(uint32_t remoteIP, uint16_t remotePort, uint16_t localPort) override;
+			bool CharFromClient(const char c) override;
+			void ResetState() override;
+			bool NeedMoreData() override;
+
+			bool DoFastUpload() override;
+			bool DoingFastUpload() const override;
+			void CancelUpload() override;
+			void CancelUpload(uint32_t remoteIP);
 
 			void ResetSessions();
 			void CheckSessions();
@@ -195,17 +205,26 @@ class Webserver
 			unsigned int numHeaderKeys;						// number of keys we have found, <= maxHeaders
 
 		    // HTTP sessions
+			struct HttpSession
+			{
+				uint32_t ip;
+				float lastQueryTime;
+				bool isPostUploading;
+				uint16_t postPort;
+			};
+
+			HttpSession sessions[maxSessions];
 		    unsigned int numActiveSessions;
-		    unsigned int sessionIP[maxSessions];
-		    float sessionLastQueryTime[maxSessions];
 
 		protected:
 		    bool uploadingTextData;							// do we need to count UTF-8 continuation bytes?
 		    uint32_t numContinuationBytes;					// number of UTF-8 continuation bytes we have received
 
-		    bool StartUpload(FileStore *file);
-			bool StoreUploadData(const char* data, unsigned int len);
-			void FinishUpload(uint32_t file_length);
+		    uint32_t postFileLength, uploadedBytes;			// how many POST bytes do we expect and how many have already been written?
+
+		    bool StartUpload(FileStore *file) override;
+			bool StoreUploadData(const char* data, unsigned int len) override;
+			void FinishUpload(uint32_t fileLength) override;
 	};
 	HttpInterpreter *httpInterpreter;
 
@@ -214,12 +233,12 @@ class Webserver
 		public:
 
 			FtpInterpreter(Platform *p, Webserver *ws, Network *n);
-			void ConnectionEstablished();
-			void ConnectionLost(uint16_t local_port);
-			bool CharFromClient(const char c);
-			void ResetState();
+			void ConnectionEstablished() override;
+			void ConnectionLost(uint32_t remoteIP, uint16_t remotePort, uint16_t localPort) override;
+			bool CharFromClient(const char c) override;
+			void ResetState() override;
 
-			bool ProcessUploadData();
+			bool DoingFastUpload() const override;
 
 		private:
 
@@ -235,7 +254,7 @@ class Webserver
 
 			char clientMessage[ftpMessageLength];
 			unsigned int clientPointer;
-			char ftpResponse[ftpResponseLength]; // TODO: remove this
+			char ftpResponse[ftpResponseLength];
 
 			char filename[MaxFilenameLength];
 			char currentDir[MaxFilenameLength];
@@ -256,10 +275,11 @@ class Webserver
 		public:
 
 			TelnetInterpreter(Platform *p, Webserver *ws, Network *n);
-			void ConnectionEstablished();
-			void ConnectionLost(uint16_t local_port);
-			bool CharFromClient(const char c);
-			void ResetState();
+			void ConnectionEstablished() override;
+			void ConnectionLost(uint32_t remoteIP, uint16_t remotePort, uint16_t local_port) override;
+			bool CharFromClient(const char c) override;
+			void ResetState() override;
+			bool NeedMoreData() override;
 
 			void HandleGcodeReply(const char* reply);
 			bool HasRemainingData() const;
@@ -303,5 +323,16 @@ class Webserver
     float longWait;
 };
 
+inline bool ProtocolInterpreter::NeedMoreData()  { return true; }
+inline bool ProtocolInterpreter::DoingFastUpload() const { return false; }
+inline bool ProtocolInterpreter::IsUploading() const { return uploadState != notUploading; }
+
+inline void Webserver::HttpInterpreter::FinishUpload(uint32_t fileLength) { ProtocolInterpreter::FinishUpload(fileLength + numContinuationBytes); }
+
+inline bool Webserver::TelnetInterpreter::NeedMoreData() { return false; }	// we don't want a Telnet connection to block everything else
+inline bool Webserver::TelnetInterpreter::HasRemainingData() const { return sendPending; }
+inline void Webserver::TelnetInterpreter::RemainingDataSent() { sendPending = false; }
+
+inline unsigned int Webserver::GetGcodeBufferSpace() const { return (gcodeReadIndex - gcodeWriteIndex - 1u) % gcodeBufferLength; }
 
 #endif

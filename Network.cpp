@@ -433,6 +433,7 @@ void Network::Spin()
 	}
 	else if (state == NetworkInitializing && establish_ethernet_link())
 	{
+		set_dhcp_hostname(reprap.GetName());
 		start_ethernet(platform->IPAddress(), platform->NetMask(), platform->GateWay());
 		httpd_init();
 		ftpd_init();
@@ -1049,6 +1050,18 @@ uint16_t ConnectionState::GetLocalPort() const
 	return pcb->local_port;
 }
 
+// Get remote IP from a ConnectionState
+uint32_t ConnectionState::GetRemoteIP() const
+{
+	return pcb->remote_ip.addr;
+}
+
+// Get remote port from a ConnectionState
+uint16_t ConnectionState::GetRemotePort() const
+{
+	return pcb->remote_port;
+}
+
 // NetRing class members
 void NetworkTransaction::Set(pbuf *p, ConnectionState *c, TransactionStatus s)
 {
@@ -1421,6 +1434,11 @@ void NetworkTransaction::SetConnectionLost()
 uint32_t NetworkTransaction::GetRemoteIP() const
 {
 	return (cs != NULL) ? cs->pcb->remote_ip.addr : 0;
+}
+
+uint16_t NetworkTransaction::GetRemotePort() const
+{
+	return (cs != NULL) ? cs->pcb->remote_port : 0;
 }
 
 uint16_t NetworkTransaction::GetLocalPort() const

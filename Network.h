@@ -58,6 +58,8 @@ struct ConnectionState
 
 	void Init(tcp_pcb *p);
 	uint16_t GetLocalPort() const;
+	uint32_t GetRemoteIP() const;
+	uint16_t GetRemotePort() const;
 };
 
 // Assign a status to each NetworkTransaction
@@ -92,6 +94,7 @@ public:
 	bool LostConnection() const { return cs == NULL || cs->pcb == NULL; }
 	ConnectionState *GetConnection() const { return cs; }
 	uint32_t GetRemoteIP() const;
+	uint16_t GetRemotePort() const;
 	uint16_t GetLocalPort() const;
 	TransactionStatus GetStatus() const { return status; }
 

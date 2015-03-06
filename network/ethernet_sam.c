@@ -216,7 +216,13 @@ void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask
 	ethernet_configure_interface(ipAddress, netMask, gateWay);
 }
 
-
+/** \brief Set the DHCP hostname.
+ *
+ */
+void set_dhcp_hostname(const char *hostname)
+{
+	gs_net_if.hostname = hostname;
+}
 
 //*************************************************************************************************************
 /**

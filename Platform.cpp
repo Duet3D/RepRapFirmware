@@ -21,9 +21,6 @@
 
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
-#if LWIP_STATS
-#include "lwip/src/include/lwip/stats.h"
-#endif
 
 extern char _end;
 extern "C" char *sbrk(int i);
@@ -604,7 +601,7 @@ void Platform::ReadNvData()
 		// No point in writing it back here
 	}
 #else
-	Message(BOTH_ERROR_MESSAGE, "Cannot load non-volatile data, because Flash support has been disabled!");
+	Message(BOTH_ERROR_MESSAGE, "Cannot load non-volatile data, because Flash support has been disabled!\n");
 #endif
 }
 
@@ -613,7 +610,7 @@ void Platform::WriteNvData()
 #if FLASH_SAVE_ENABLED
 	DueFlashStorage::write(FlashData::nvAddress, &nvData, sizeof(nvData));
 #else
-	Message(BOTH_ERROR_MESSAGE, "Cannot write non-volatile data, because Flash support has been disabled!");
+	Message(BOTH_ERROR_MESSAGE, "Cannot write non-volatile data, because Flash support has been disabled!\n");
 #endif
 }
 
@@ -622,10 +619,17 @@ void Platform::SetAutoSave(bool enabled)
 #if FLASH_SAVE_ENABLED
 	autoSaveEnabled = enabled;
 #else
-	Message(BOTH_ERROR_MESSAGE, "Cannot enable auto-save, because Flash support has been disabled!");
+	Message(BOTH_ERROR_MESSAGE, "Cannot enable auto-save, because Flash support has been disabled!\n");
 #endif
 }
 
+// AUX device
+void Platform::Beep(int freq, int ms)
+{
+	// Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
+	scratchString.printf("{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
+	aux->Write(scratchString.Pointer(), true);
+}
 
 // Note: the use of floating point time will cause the resolution to degrade over time.
 // For example, 1ms time resolution will only be available for about half an hour from startup.
@@ -640,13 +644,6 @@ float Platform::Time()
 	}
 	lastTimeCall = now;
 	return addToTime + TIME_FROM_REPRAP * (float) now;
-}
-
-void Platform::Beep(int freq, int ms)
-{
-	// Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
-	scratchString.printf("{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
-	aux->Write(scratchString.Pointer(), true);
 }
 
 void Platform::Exit()
@@ -1176,7 +1173,7 @@ void Platform::SetPidParameters(size_t heater, const PidParameters& params)
 		}
 	}
 }
-const PidParameters& Platform::GetPidParameters(size_t heater)
+const PidParameters& Platform::GetPidParameters(size_t heater) const
 {
 	return nvData.pidParams[heater];
 }
@@ -1373,9 +1370,9 @@ void Platform::Message(char type, const char* message, ...)
 	va_end(vargs);
 }
 
-void Platform::Message(char type, const char* message, va_list vargs)
+void Platform::Message(char type, const char* fmt, va_list vargs)
 {
-	messageString.vprintf(message, vargs);
+	messageString.vprintf(fmt, vargs);
 	Message(type, messageString);
 }
 
@@ -1848,6 +1845,13 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
 		return false;
 	}
 	return true;
+}
+
+// Check if the specified file exists
+bool MassStorage::FileExists(const char *file) const
+{
+	FILINFO fil;
+	return (f_stat(file, &fil) == FR_OK);
 }
 
 // Check if the specified directory exists

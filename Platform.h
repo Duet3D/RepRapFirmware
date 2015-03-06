@@ -75,13 +75,8 @@ Licence: GPL
 
 // DRIVES
 
-#if 0 // swap X with E0
-#define STEP_PINS {X2, 25, 5, 14, 41, 39, X4, 49}
-#define DIRECTION_PINS {X3, 26, 4, 15, 35, 53, 51, 48}
-#else
 #define STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
 #define DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
-#endif
 #define FORWARDS true // What to send to go...
 #define BACKWARDS (!FORWARDS) // ...in each direction
 #define DIRECTIONS {BACKWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS} // What each axis needs to make it go forwards - defaults
@@ -343,6 +338,7 @@ public:
   bool MakeDirectory(const char *parentDir, const char *dirName);
   bool MakeDirectory(const char *directory);
   bool Rename(const char *oldFilename, const char *newFilename);
+  bool FileExists(const char *file) const;
   bool PathExists(const char *path) const;
   bool PathExists(const char* directory, const char* fileName);
 
@@ -451,7 +447,8 @@ struct ZProbeParameters
 				&& xOffset == other.xOffset
 				&& yOffset == other.yOffset
 				&& calibTemperature == other.calibTemperature
-				&& temperatureCoefficient == other.temperatureCoefficient;
+				&& temperatureCoefficient == other.temperatureCoefficient
+				&& diveHeight == other.diveHeight;
 	}
 
 	bool operator!=(const ZProbeParameters& other) const
@@ -573,7 +570,7 @@ public:
   void SetEmulating(Compatibility c);
   void Diagnostics();
   void DiagnosticTest(int d);
-  void ClassReport(float &lastTime);  			// Called on return to check everything's live.
+  void ClassReport(float &lastTime);  			// Called on Spin() return to check everything's live.
   void RecordError(ErrorCode ec) { errorCodeBits |= ec; }
   void SoftwareReset(uint16_t reason);
   bool AtxPower() const;
@@ -616,7 +613,7 @@ public:
   
   void Message(char type, const char* message, ...);		// Send a message.  Messages may simply flash an LED, or,
   	  	  	  	  	  	  	  	  	  // say, display the messages on an LCD. This may also transmit the messages to the host.
-  void Message(char type, const char* message, va_list vargs);
+  void Message(char type, const char* fmt, va_list vargs);
   void Message(char type, const StringRef& message);
   void AppendMessage(char type, const char* message, ...);	// Send a message.  Messages may simply flash an LED, or,
   	  	  	  	  	  	  	  	  	  // say, display the messages on an LCD. This may also transmit the messages to the host.
@@ -694,7 +691,7 @@ public:
   void SetFanValue(float speed);					// Accepts values between 0..1 and 1..255
   float GetFanRPM();
   void SetPidParameters(size_t heater, const PidParameters& params);
-  const PidParameters& GetPidParameters(size_t heater);
+  const PidParameters& GetPidParameters(size_t heater) const;
   float TimeToHot() const;
   void SetTimeToHot(float t);
   void SetThermistorNumber(size_t heater, size_t thermistor);
@@ -707,7 +704,7 @@ public:
 
   void SetAutoSave(bool enabled);
 
-  // Misc
+  // AUX device
   void Beep(int freq, int ms);
 
 //-------------------------------------------------------------------------------------------------------

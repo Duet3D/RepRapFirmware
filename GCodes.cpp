@@ -1122,10 +1122,8 @@ void GCodes::SetBedEquationWithProbe(int sParam, StringRef& reply)
 {
 	// zpl-2014-10-09: In order to stay compatible with old firmware versions, only execute bed.g
 	// if it is actually present in the sys directory
-	FileStore *f = platform->GetFileStore(SYS_DIR, SET_BED_EQUATION, false);
-	if (f != NULL)
+	if (platform->GetMassStorage()->FileExists(SYS_DIR SET_BED_EQUATION))
 	{
-		f->Close();
 		DoFileMacro(SET_BED_EQUATION);
 	}
 	else
