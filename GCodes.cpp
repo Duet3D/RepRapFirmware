@@ -2212,7 +2212,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				long int eDrive[DRIVES - AXES];
 				int eCount = DRIVES - AXES;
 				gb->GetLongArray(eDrive, eCount);
-				for (uint8_t i = 0; i < eCount; i++)
+				for (int i = 0; i < eCount; i++)
 				{
 					seen = true;
 					if (eDrive[i] < 0 || eDrive[i] >= DRIVES - AXES)
@@ -3267,34 +3267,40 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 552: // Enable/Disable network and/or Set/Get IP address
 		// dc42: IMO providing a gcode to enable/disable network access is a waste of space, when it is easier and safer to unplug the network cable.
 		// But for compatibility with RRP official firmware, here it is.
-	{
-		bool seen = false;
-		if (gb->Seen('S')) // Has the user turned the network off?
 		{
-			seen = true;
-			if (gb->GetIValue())
+			bool seen = false;
+			if (gb->Seen('S')) // Has the user turned the network off?
 			{
-				reprap.GetNetwork()->Enable();
+				seen = true;
+				if (gb->GetIValue())
+				{
+					reprap.GetNetwork()->Enable();
+				}
+				else
+				{
+					reprap.GetNetwork()->Disable();
+				}
 			}
-			else
+
+			if (gb->Seen('P'))
 			{
-				reprap.GetNetwork()->Disable();
+				seen = true;
+				SetEthernetAddress(gb, code);
+			}
+
+			if (gb->Seen('R'))
+			{
+				reprap.GetNetwork()->SetHttpPort(gb->GetIValue());
+				seen = true;
+			}
+
+			if (!seen)
+			{
+				const byte *ip = platform->IPAddress();
+				reply.printf("Network is %s, IP address: %d.%d.%d.%d, HTTP port: %u\n ",
+						reprap.GetNetwork()->IsEnabled() ? "enabled" : "disabled", ip[0], ip[1], ip[2], ip[3], reprap.GetNetwork()->GetHttpPort());
 			}
 		}
-
-		if (gb->Seen('P'))
-		{
-			seen = true;
-			SetEthernetAddress(gb, code);
-		}
-
-		if (!seen)
-		{
-			const byte *ip = platform->IPAddress();
-			reply.printf("Network is %s, IP address: %d.%d.%d.%d\n ",
-					reprap.GetNetwork()->IsEnabled() ? "enabled" : "disabled", ip[0], ip[1], ip[2], ip[3]);
-		}
-	}
 		break;
 
 	case 553: // Set/Get netmask

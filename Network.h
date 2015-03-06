@@ -18,6 +18,9 @@ Separated out from Platform.h by dc42 and extended by zpl
 
 // This class handles the network - typically an Ethernet.
 
+const uint16_t ftpPort = 21;
+const uint16_t telnetPort = 23;
+
 // The size of the TCP output buffer is critical to getting fast load times in the browser.
 // If this value is less than the TCP MSS, then Chrome under Windows will delay ack messages by about 120ms,
 // which results in very slow page loading. Any value higher than that will cause the TCP packet to be split
@@ -173,6 +176,8 @@ public:
 	void Enable();
 	void Disable();
 	bool IsEnabled() const;
+	unsigned int GetHttpPort() const;
+	void SetHttpPort(unsigned int port);
 
 private:
 

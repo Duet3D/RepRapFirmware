@@ -67,6 +67,8 @@ static char sendingWindow[TCP_WND];
 static uint16_t sendingWindowSize, sentDataOutstanding;
 static uint8_t sendingRetries;
 
+static uint16_t httpPort = 80;
+
 // Called only by LWIP to put out a message.
 // May be called from C as well as C++
 
@@ -238,22 +240,26 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 	}
 
 	/* Keep the listening PCBs running */
+
 	switch (pcb->local_port)		// tell LWIP to accept further connections on the listening PCB
 	{
-	  case 80: // HTTP
-		  tcp_accepted(http_pcb);
-		  break;
-
-	  case 21: // FTP
+	  case ftpPort: // FTP
 		  tcp_accepted(ftp_main_pcb);
 		  break;
 
-	  case 23: // Telnet
+	  case telnetPort: // Telnet
 		  tcp_accepted(telnet_pcb);
 		  break;
 
-	  default: // FTP data
-		  tcp_accepted(ftp_pasv_pcb);
+	  default:
+		  if (pcb->local_port == httpPort)
+		  {
+			  tcp_accepted(http_pcb);
+		  }
+		  else // FTP data
+		  {
+			  tcp_accepted(ftp_pasv_pcb);
+		  }
 		  break;
 	}
 	tcp_arg(pcb, cs);				// tell LWIP that this is the structure we wish to be passed for our callbacks
@@ -281,7 +287,7 @@ void httpd_init()
 	}
 
 	tcp_pcb* pcb = tcp_new();
-	tcp_bind(pcb, IP_ADDR_ANY, 80);
+	tcp_bind(pcb, IP_ADDR_ANY, httpPort);
 	http_pcb = tcp_listen(pcb);
 	tcp_accept(http_pcb, conn_accept);
 }
@@ -297,7 +303,7 @@ void ftpd_init()
 	}
 
 	tcp_pcb* pcb = tcp_new();
-	tcp_bind(pcb, IP_ADDR_ANY, 23);
+	tcp_bind(pcb, IP_ADDR_ANY, ftpPort);
 	ftp_main_pcb = tcp_listen(pcb);
 	tcp_accept(ftp_main_pcb, conn_accept);
 }
@@ -313,7 +319,7 @@ void telnetd_init()
 	}
 
 	tcp_pcb* pcb = tcp_new();
-	tcp_bind(pcb, IP_ADDR_ANY, 21);
+	tcp_bind(pcb, IP_ADDR_ANY, telnetPort);
 	telnet_pcb = tcp_listen(pcb);
 	tcp_accept(telnet_pcb, conn_accept);
 }
@@ -514,6 +520,16 @@ void Network::Disable()
 bool Network::IsEnabled() const
 {
 	return isEnabled;
+}
+
+unsigned int Network::GetHttpPort() const
+{
+	return httpPort;
+}
+
+void Network::SetHttpPort(unsigned int port)
+{
+	httpPort = (uint16_t)port;
 }
 
 bool Network::AllocateSendBuffer(SendBuffer *&buffer)

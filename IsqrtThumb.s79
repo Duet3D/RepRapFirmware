@@ -1,0 +1,128 @@
+        RSEG    ICODE:CODE(2)
+
+        CODE16
+
+	public	isqrt
+
+isqrt:
+; Enter with R0 having low 32 bits and R1 having high 32 bits of input parameter
+; Exits with R0 having 32 bit result
+
+; Performs the following pseudo code:
+;	INPUT = 64 bit input
+;	RESIDULE = 96 bit variable
+;	RESULT = 32 bit accumulated result
+;	Clear RESULT
+;	Set RESIDULE = INPUT (top 32 bits will be clear)
+;	Do this loop 32 times:
+; 		Loop start
+;		{
+;		RESIDULE = RESIDULE << 2
+;		RESULT = RESULT << 1
+;		if ((RESULT << 1) + 1) <= (RESIDULE >> 32) then
+;			{ RESIDULE = RESIDULE - ((RESULT << 1) + 1) << 32
+;			  RESULT = RESULT + 1
+;			}
+;		}
+;		Loop end
+;	Return RESULT
+
+; For optimisation the 32 iterations are divided into 2 sets of 16 iterations.  The first set can shift
+; RESIDULE as a 64 bit variable, and the second shifts it as a 96 bit variable while performing
+; 32 and 64 bit arithmetic operations respectively on RESIDULE.
+;
+; A third loop is also used if the INPUT has the top 32 bits clear (only need to iterate 16 times)
+; The total number of iterations needed is in fact equal to half the number of significant bits in the input
+; but the overhead required to implement only the required number of iterations would on average take more time
+; than it saves.
+;
+; The 32 bit shifts do not need to be executed because they are achieved by operating on the appropriate
+; High or Low 32 bit register
+
+; Register usage:
+; R0 = Low 32 bits of input - re-used for low 32 bits of residule
+; R1 = High 32 bits of input - reused for middle 32 bits of residule
+; R2 = Top 32 bits of the 96 bit residule
+; R3 = Loop counter
+; R4 = Result accumulator
+; R5 = Potential new residule middle 32 bits
+; R6 = Potential new residule top 32 bits
+; R7 = zero constant - because thumb has no immediate mode for SBC instruction
+		push	{r2,r3,r4,r5,r6,r7}	; Save registers changed (no need to save entry or exit registers)
+; Set up initial variables
+		mov	r2,#0		; Clear residulal shift registers
+		mov	r3,r2		; ...
+		mov	r4,r2		; Clear result
+		mov	r7,r2		; Clear 0 constant
+		mov	r3,#16		; Do 16 iterations per loop
+; See if we have any high bits
+		cmp	r1,r7		; Is high 32 bits clear?
+		beq	Isqrt_Loop_32	; Only need to do low 32 bits if so
+Isqrt_Loop_High:
+		add	r1,r1,r1	; Shift the residual up 2 bits, overflowing into R2
+		adc	r2,r2		; ...
+		add	r1,r1,r1	; ...
+		adc	r2,r2		; ...
+
+		lsl	r4,r4,#1	; Shift accumulated result left 1 bit (this will clear the carry flag)
+		mov	r5,r2		; Thumb need source=destination
+		sbc	r5,r4		; Take potential new result +1 from shifted residual
+		bcc	Loopback_High	; If result is already greater we don't set the bit
+		sub	r5,r5,r4	; R5 now has (result << 1 +1)
+		bcc	Loopback_High	; If result is greater we don't set the bit
+		mov	r2,r5		; Replace if result was lower or equal
+		add	r4,r4,#1	; Set the bit in the result
+Loopback_High:	sub	r3,r3,#1	; Loop counter
+		bne	Isqrt_Loop_High	; Loop 16 times
+
+; R1 must now be clear (because it has been left shifted 32 times)
+; Continue, this time using 64 bit arithmetic, re-using R1 for the high 32 bits (and R2 has the low 32 bits)
+		mov	r3,#16		; Do 16 iterations per loop
+Isqrt_Loop_Low:
+		add	r0,r0,r0	; Shift the 64 bit residual up 2 bits (2 squared), overflowing into R1
+		adc	r2,r2		; ...
+		adc	r1,r1		; ...
+		add	r0,r0,r0	; ...
+		adc	r2,r2		; ...
+		adc	r1,r1		; ...
+		lsl	r4,r4,#1	; Shift accumulated result left 1 bit (this will clear the carry flag)
+		mov	r5,r2		; Thumb needs source-destination
+		mov	r6,r1		; Thumb needs source-destination
+		sbc	r5,r4		; Take potential new result +1 from shifted residual
+		sbc	r6,r7		; Deal with carry into top 32 bits
+		bcc	Loopback_Low	; If result is already greater we don't set the bit
+		sbc	r5,r4		; Subtract result again (result << 1 +1)
+		sbc	r6,r7		; R5/R6 now has potential new value
+		bcc	Loopback_Low	; If result is greater we don't set the bit
+		mov	r2,r5		; Replace if result was lower or equal
+		mov	r1,r6		; ...
+		add	r4,r4,#1	; Set the bit in the result
+Loopback_Low:	sub	r3,r3,#1	; Loop counter
+		bne	Isqrt_Loop_Low	; Loop 16 times
+
+		mov	r0,r4		; Result back into R0
+		pop	{r2,r3,r4,r5,r6,r7}; Recover registers
+		bx	r14		; Return
+
+; This routine is used instead if the top 32 bits of the input are zero
+Isqrt_Loop_32:	add	r0,r0,r0	; Shift the 32 bit residual up 2 bits (2 squared), overflowing into R2
+		adc	r2,r2		; ...
+		add	r0,r0,r0	; ...
+		adc	r2,r2		; ...
+
+		lsl	r4,r4,#1	; Shift accumulated result left 1 bit (this will clear the carry flag)
+		mov	r5,r2		; Thumb need source=destination
+		sbc	r5,r4		; Take potential new result +1 from shifted residual
+		bcc	Loopback_32	; If result is already greater we don't set the bit
+		sub	r5,r5,r4	; R5 now has (result << 1 +1)
+		bcc	Loopback_32	; If result is greater we don't set the bit
+		mov	r2,r5		; Replace if result was lower or equal
+		add	r4,r4,#1	; Set the bit in the result
+Loopback_32:	sub	r3,r3,#1	; Loop counter
+		bne	Isqrt_Loop_32	; Loop 16 times
+
+		mov	r0,r4		; Result back into R0
+		pop	{r2,r3,r4,r5,r6,r7}; Recover registers
+		bx	r14		; Return
+
+	        END

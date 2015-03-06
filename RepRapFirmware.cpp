@@ -1181,15 +1181,19 @@ void RepRap::GetFilesResponse(StringRef& response, const char* dir) const
 	FileInfo file_info;
 	bool firstFile = true;
 	bool gotFile = platform->GetMassStorage()->FindFirst(dir, file_info);
-	while (gotFile && response.strlen() + strlen(file_info.fileName) + 6 < response.Length())
+	while (gotFile)
 	{
-		if (!firstFile)
+		if (   file_info.fileName[0] != '.'			// ignore Mac resource files and Linux hidden files
+			&& response.strlen() + strlen(file_info.fileName) + 6 < response.Length()
+		   )
 		{
-			response.catf(",");
+			if (!firstFile)
+			{
+				response.catf(",");
+			}
+			EncodeString(response, file_info.fileName, 3, false);
+			firstFile = false;
 		}
-		EncodeString(response, file_info.fileName, 3, false);
-
-		firstFile = false;
 		gotFile = platform->GetMassStorage()->FindNext(file_info);
 	}
 	response.cat("]}");

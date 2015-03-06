@@ -154,21 +154,24 @@ void Webserver::Spin()
 				bool is_data_port = false;
 				switch (local_port)
 				{
-					case 80: 	/* HTTP */
-						interpreter = httpInterpreter;
-						break;
-
-					case 21: 	/* FTP */
+					case ftpPort: 	/* FTP */
 						interpreter = ftpInterpreter;
 						break;
 
-					case 23: 	/* Telnet */
+					case telnetPort: 	/* Telnet */
 						interpreter = telnetInterpreter;
 						break;
 
 					default:	/* FTP data */
-						interpreter = ftpInterpreter;
-						is_data_port = true;
+						if (local_port == network->GetHttpPort())
+						{
+							interpreter = httpInterpreter;
+						}
+						else
+						{
+							interpreter = ftpInterpreter;
+							is_data_port = true;
+						}
 						break;
 				}
 
@@ -414,20 +417,21 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 	ProtocolInterpreter *interpreter;
 	switch (local_port)
 	{
-		case 80: /* HTTP */
-			interpreter = httpInterpreter;
-			break;
-
-		case 21: /* FTP */
+		case ftpPort: /* FTP */
 			interpreter = ftpInterpreter;
 			break;
 
-		case 23: /* Telnet */
+		case telnetPort: /* Telnet */
 			interpreter = telnetInterpreter;
 			break;
 
 		default: /* FTP data */
-			if (local_port == data_port)
+			if (local_port == network->GetHttpPort())
+			{
+				interpreter = httpInterpreter;
+				break;
+			}
+			else if (local_port == data_port)
 			{
 				interpreter = ftpInterpreter;
 				break;
@@ -1477,7 +1481,7 @@ void Webserver::FtpInterpreter::ConnectionEstablished()
 	switch (state)
 	{
 		case waitingForPasvPort:
-			if (req->GetLocalPort() == 21)
+			if (req->GetLocalPort() == ftpPort)
 			{
 				network->SendAndClose(NULL);
 				return;
@@ -1491,7 +1495,7 @@ void Webserver::FtpInterpreter::ConnectionEstablished()
 		default:
 			// I (zpl) wanted to allow only one active FTP session, but some FTP programs
 			// like FileZilla open a second connection for transfers for some reason.
-			if (req->GetLocalPort() == 21)
+			if (req->GetLocalPort() == ftpPort)
 			{
 				req->Write("220 RepRapPro Ormerod\r\n");
 				network->SendAndClose(NULL, true);
@@ -1505,7 +1509,7 @@ void Webserver::FtpInterpreter::ConnectionEstablished()
 
 void Webserver::FtpInterpreter::ConnectionLost(uint16_t local_port)
 {
-	if (local_port != 21)
+	if (local_port != ftpPort)
 	{
 		// Close the data port
 		network->CloseDataPort();
