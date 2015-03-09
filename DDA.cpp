@@ -71,14 +71,16 @@ void DDA::Init()
 }
 
 // Set up a real move. Return true if it represents real movement, else false.
-bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping, FilePosition fPos)
+bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, FilePosition fPos)
 {
 	// 1. Compute the new endpoints and the movement vector
 	const int32_t *positionNow = prev->DriveCoordinates();
-	if (doDeltaMapping)
+	if (doMotorMapping)
 	{
-		reprap.GetMove()->DeltaTransform(nextMove, endPoint);			// transform the axis coordinates if on a delta printer
-		isDeltaMovement = (endPoint[X_AXIS] != positionNow[X_AXIS]) || (endPoint[Y_AXIS] != positionNow[Y_AXIS]) || (endPoint[Z_AXIS] != positionNow[Z_AXIS]);
+		const Move *move = reprap.GetMove();
+		move->MotorTransform(nextMove, endPoint);			// transform the axis coordinates if on a delta or CoreXY printer
+		isDeltaMovement = move->IsDeltaMode()
+							&& (endPoint[X_AXIS] != positionNow[X_AXIS] || endPoint[Y_AXIS] != positionNow[Y_AXIS] || endPoint[Z_AXIS] != positionNow[Z_AXIS]);
 	}
 	else
 	{
@@ -91,7 +93,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping, Fi
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
 		accelerations[drive] = normalAccelerations[drive];
-		if (drive >= AXES || !doDeltaMapping)
+		if (drive >= AXES || !doMotorMapping)
 		{
 			endPoint[drive] = Move::MotorEndPointToMachine(drive, nextMove[drive]);
 		}
@@ -152,7 +154,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doDeltaMapping, Fi
 	endStopsToCheck = ce;
 	filePos = fPos;
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a special move on a delta printer
-	endCoordinatesValid = (ce == 0) && (doDeltaMapping || !reprap.GetMove()->IsDeltaMode());
+	endCoordinatesValid = (ce == 0) && (doMotorMapping || !reprap.GetMove()->IsDeltaMode());
 
 	// 4. Normalise the direction vector and compute the amount of motion.
 	// If there is any XYZ movement, then we normalise it so that the total XYZ movement has unit length.

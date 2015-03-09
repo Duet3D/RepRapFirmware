@@ -1081,7 +1081,7 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 	else if (type == 3)
 	{
 		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
-		response.catf(",\"geometry\":\"%s\",\"myName\":", move->IsDeltaMode() ? "delta" : "cartesian");
+		response.catf(",\"geometry\":\"%s\",\"myName\":", move->GetGeometryString());
 		EncodeString(response, myName, 2, false);
 	}
 

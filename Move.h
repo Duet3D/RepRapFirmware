@@ -82,7 +82,7 @@ public:
     void Init();										// Start me up
     void Spin();										// Called in a tight loop to keep the class going
     void Exit();										// Shut down
-    void GetCurrentUserPosition(float m[DRIVES + 1], bool disableDeltaMapping) const;	// Return the position (after all queued moves have been executed) in transformed coords
+    void GetCurrentUserPosition(float m[DRIVES + 1], uint8_t moveType) const;	// Return the position (after all queued moves have been executed) in transformed coords
     void LiveCoordinates(float m[DRIVES]);				// Gives the last point at the end of the last complete DDA transformed to user coords
     void Interrupt();									// The hardware's (i.e. platform's)  interrupt should call this.
     void InterruptTime();								// Test function - not used
@@ -117,10 +117,14 @@ public:
     const DeltaParameters& GetDeltaParams() const { return deltaParams; }
     DeltaParameters& AccessDeltaParams() { return deltaParams; }
     bool IsDeltaMode() const { return deltaParams.IsDeltaMode(); }
+    const char* GetGeometryString() const;
+
+    int GetCoreXYMode() const { return coreXYMode; }
+    void SetCoreXYMode(int mode) { coreXYMode = mode; }
 
     void CurrentMoveCompleted();						// signals that the current move has just been completed
     bool StartNextMove(uint32_t startTime);				// start the next move, returning true if Step() needs to be called immediately
-    void DeltaTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const;				// Convert Cartesian coordinates to delta motor coordinates
+    void MotorTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const;				// Convert Cartesian coordinates to delta motor coordinates
     void MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_t numDrives) const;	// Convert motor coordinates to machine coordinates
     void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const;
 
@@ -138,7 +142,7 @@ private:
 
     void SetProbedBedEquation(StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
     void BedTransform(float move[AXES]) const;			// Take a position and apply the bed compensations
-    void GetCurrentMachinePosition(float m[DRIVES + 1], bool disableDeltaMapping) const;	// Get the current position and feedrate in untransformed coords
+    void GetCurrentMachinePosition(float m[DRIVES + 1], bool disableMotorMapping) const;	// Get the current position and feedrate in untransformed coords
     void InverseBedTransform(float move[AXES]) const;	// Go from a bed-transformed point back to user coordinates
     void AxisTransform(float move[AXES]) const;			// Take a position and apply the axis-angle compensations
     void InverseAxisTransform(float move[AXES]) const;	// Go from an axis transformed point back to user coordinates
@@ -149,8 +153,6 @@ private:
     bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
     DDA* DDARingGet();									// Get the next DDA ring entry to be run
     bool DDARingEmpty() const;							// Anything there?
-
-    void InverseDeltaTransform(const int32_t motorPos[AXES], float machinePos[AXES]) const;	// Convert axis motor coordinates to Cartesian
 
     DDA* volatile currentDda;
     DDA* ddaRingAddPointer;
@@ -180,6 +182,7 @@ private:
     float longWait;										// A long time for things that need to be done occasionally
 
     DeltaParameters deltaParams;						// Information about the delta parameters of this machine
+    int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ
 };
 
 //******************************************************************************************************

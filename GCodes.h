@@ -81,7 +81,7 @@ class GCodes
     void Init();														// Set it up
     void Exit();														// Shut it down
     void Reset();														// Reset some parameter to defaults
-    bool ReadMove(float* m, EndstopChecks& ce, bool& noDeltaMapping, FilePosition& fPos);	// Called by the Move class to get a movement set by the last G Code
+    bool ReadMove(float* m, EndstopChecks& ce, uint8_t& rMoveType, FilePosition& fPos);	// Called by the Move class to get a movement set by the last G Code
     void ClearMove();
     void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
     void DeleteFile(const char* fileName);								// Does what it says
@@ -172,7 +172,7 @@ class GCodes
     float savedMoveBuffer[DRIVES+1];			// The position and feedrate when we started the current simulation
     float pausedMoveBuffer[DRIVES+1]; 			// Move coordinates; last is feed rate
     EndstopChecks endStopsToCheck;				// Which end stops we check them on the next move
-    bool disableDeltaMapping;					// True if delta mapping should be bypassed for the next move
+    uint8_t moveType;							// 0 = normal move, 1 = homing move, 2 = direct motor move
     GCodeState state;							// The main state variable of the GCode state machine
 	bool drivesRelative;
 	bool axesRelative;

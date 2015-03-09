@@ -112,7 +112,7 @@ Move::Move(Platform* p, GCodes* g) : currentDda(NULL)
 	// Build the DDA ring
 	DDA *dda = new DDA(NULL);
 	ddaRingGetPointer = ddaRingAddPointer = dda;
-	for(size_t i = 1; i < DdaRingLength; i++)
+	for (size_t i = 1; i < DdaRingLength; i++)
 	{
 		DDA *oldDda = dda;
 		dda = new DDA(dda);
@@ -126,6 +126,7 @@ void Move::Init()
 {
 	// Reset Cartesian mode
 	deltaParams.Init();
+	coreXYMode = 0;
 
 	// Empty the ring
 	ddaRingGetPointer = ddaRingAddPointer;
@@ -226,16 +227,17 @@ void Move::Spin()
 			// If there's a G Code move available, add it to the DDA ring for processing.
 			float nextMove[DRIVES + 1];
 			EndstopChecks endStopsToCheck;
-			bool noDeltaMapping;
+			uint8_t moveType;
 			FilePosition filePos;
-			if (reprap.GetGCodes()->ReadMove(nextMove, endStopsToCheck, noDeltaMapping, filePos))
+			if (reprap.GetGCodes()->ReadMove(nextMove, endStopsToCheck, moveType, filePos))
 			{
 				currentFeedrate = nextMove[DRIVES];		// might be G1 with just an F field
-				if (!noDeltaMapping || !IsDeltaMode())
+				bool doMotorMapping = (moveType == 0) || (moveType == 1 && !IsDeltaMode());
+				if (doMotorMapping)
 				{
 					Transform(nextMove);
 				}
-				if (ddaRingAddPointer->Init(nextMove, endStopsToCheck, IsDeltaMode() && !noDeltaMapping, filePos))
+				if (ddaRingAddPointer->Init(nextMove, endStopsToCheck, doMotorMapping, filePos))
 				{
 					ddaRingAddPointer = ddaRingAddPointer->GetNext();
 					idleCount = 0;
@@ -372,7 +374,7 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 	}
 	else
 	{
-		GetCurrentUserPosition(positions, false);
+		GetCurrentUserPosition(positions, 0);
 	}
 
 	return fPos;
@@ -435,22 +437,11 @@ void Move::SetPositions(const float move[DRIVES])
 
 void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const
 {
-	if (IsDeltaMode())
+	MotorTransform(coords, ep);
+	for (size_t drive = AXES; drive < numDrives; ++drive)
 	{
-		DeltaTransform(coords, ep);
-		for (size_t drive = AXES; drive < numDrives; ++drive)
-		{
-			ep[drive] = MotorEndPointToMachine(drive, coords[drive]);
-		}
+		ep[drive] = MotorEndPointToMachine(drive, coords[drive]);
 	}
-	else
-	{
-		for (size_t drive = 0; drive < DRIVES; drive++)
-		{
-			ep[drive] = MotorEndPointToMachine(drive, coords[drive]);
-		}
-	}
-
 }
 
 void Move::SetFeedrate(float feedRate)
@@ -474,22 +465,102 @@ int32_t Move::MotorEndPointToMachine(size_t drive, float coord)
 }
 
 // Convert motor coordinates to machine coordinates
+// Used after homing and after individual motor moves.
 // This is computationally expensive on a delta, so only call it when necessary, and never from the step ISR.
 void Move::MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_t numDrives) const
 {
+	const float *stepsPerUnit = reprap.GetPlatform()->GetDriveStepsPerUnit();
+
+	// Convert the axes
 	if (IsDeltaMode())
 	{
-		InverseDeltaTransform(motorPos, machinePos);			// convert the axes
-		for (size_t drive = AXES; drive < numDrives; ++drive)
+		deltaParams.InverseTransform(motorPos[A_AXIS]/stepsPerUnit[A_AXIS], motorPos[B_AXIS]/stepsPerUnit[B_AXIS], motorPos[C_AXIS]/stepsPerUnit[C_AXIS], machinePos);
+
+		// We don't do inverse transforms very often, so if debugging is enabled, print them
+		if (reprap.Debug(moduleMove))
 		{
-			machinePos[drive] = MotorEndpointToPosition(motorPos[drive], drive);
+			debugPrintf("Inverse transformed %d %d %d to %f %f %f\n", motorPos[0], motorPos[1], motorPos[2], machinePos[0], machinePos[1], machinePos[2]);
 		}
 	}
 	else
 	{
-		for (size_t drive = 0; drive < numDrives; ++drive)
+		switch (coreXYMode)
 		{
-			machinePos[drive] = MotorEndpointToPosition(motorPos[drive], drive);
+		case 1:		// CoreXY
+			machinePos[X_AXIS] = ((motorPos[X_AXIS] * stepsPerUnit[Y_AXIS]) - (motorPos[Y_AXIS] * stepsPerUnit[X_AXIS]))/(2 * stepsPerUnit[X_AXIS] * stepsPerUnit[Y_AXIS]);
+			machinePos[Y_AXIS] = ((motorPos[X_AXIS] * stepsPerUnit[Y_AXIS]) + (motorPos[Y_AXIS] * stepsPerUnit[X_AXIS]))/(2 * stepsPerUnit[X_AXIS] * stepsPerUnit[Y_AXIS]);
+			machinePos[Z_AXIS] = motorPos[Z_AXIS]/stepsPerUnit[Z_AXIS];
+			break;
+
+		case 2:		// CoreXZ
+			machinePos[X_AXIS] = ((motorPos[X_AXIS] * stepsPerUnit[Z_AXIS]) - (motorPos[Z_AXIS] * stepsPerUnit[X_AXIS]))/(2 * stepsPerUnit[X_AXIS] * stepsPerUnit[Z_AXIS]);
+			machinePos[Y_AXIS] = motorPos[Y_AXIS]/stepsPerUnit[Y_AXIS];
+			machinePos[Z_AXIS] = ((motorPos[X_AXIS] * stepsPerUnit[Z_AXIS]) + (motorPos[Z_AXIS] * stepsPerUnit[X_AXIS]))/(2 * stepsPerUnit[X_AXIS] * stepsPerUnit[Z_AXIS]);
+			break;
+
+		case 3:		// CoreYZ
+			machinePos[X_AXIS] = motorPos[X_AXIS]/stepsPerUnit[X_AXIS];
+			machinePos[Y_AXIS] = ((motorPos[Y_AXIS] * stepsPerUnit[Z_AXIS]) - (motorPos[Z_AXIS] * stepsPerUnit[Y_AXIS]))/(2 * stepsPerUnit[Y_AXIS] * stepsPerUnit[Z_AXIS]);
+			machinePos[Z_AXIS] = ((motorPos[Y_AXIS] * stepsPerUnit[Z_AXIS]) + (motorPos[Z_AXIS] * stepsPerUnit[Y_AXIS]))/(2 * stepsPerUnit[Y_AXIS] * stepsPerUnit[Z_AXIS]);
+			break;
+
+		default:
+			machinePos[X_AXIS] = motorPos[X_AXIS]/stepsPerUnit[X_AXIS];
+			machinePos[Y_AXIS] = motorPos[Y_AXIS]/stepsPerUnit[Y_AXIS];
+			machinePos[Z_AXIS] = motorPos[Z_AXIS]/stepsPerUnit[Z_AXIS];
+			break;
+		}
+	}
+
+	// Convert the extruders
+	for (size_t drive = AXES; drive < numDrives; ++drive)
+	{
+		machinePos[drive] = motorPos[drive]/stepsPerUnit[drive];
+	}
+}
+
+// Convert Cartesian coordinates to delta motor steps
+void Move::MotorTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const
+{
+	if (IsDeltaMode())
+	{
+		for (size_t axis = 0; axis < AXES; ++axis)
+		{
+			motorPos[axis] = MotorEndPointToMachine(axis, deltaParams.Transform(machinePos, axis));
+		}
+
+		if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
+		{
+			debugPrintf("Transformed %f %f %f to %d %d %d\n", machinePos[0], machinePos[1], machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
+		}
+	}
+	else
+	{
+		switch (coreXYMode)
+		{
+		case 1:
+			motorPos[X_AXIS] = MotorEndPointToMachine(X_AXIS, machinePos[X_AXIS] + machinePos[Y_AXIS]);
+			motorPos[Y_AXIS] = MotorEndPointToMachine(Y_AXIS, machinePos[Y_AXIS] - machinePos[X_AXIS]);
+			motorPos[Z_AXIS] = MotorEndPointToMachine(Z_AXIS, machinePos[Z_AXIS]);
+			break;
+
+		case 2:
+			motorPos[X_AXIS] = MotorEndPointToMachine(X_AXIS, machinePos[X_AXIS] + machinePos[Z_AXIS]);
+			motorPos[Y_AXIS] = MotorEndPointToMachine(Y_AXIS, machinePos[Y_AXIS]);
+			motorPos[Z_AXIS] = MotorEndPointToMachine(Z_AXIS, machinePos[Z_AXIS] - machinePos[X_AXIS]);
+			break;
+
+		case 3:
+			motorPos[X_AXIS] = MotorEndPointToMachine(X_AXIS, machinePos[X_AXIS]);
+			motorPos[Y_AXIS] = MotorEndPointToMachine(Y_AXIS, machinePos[Y_AXIS] + machinePos[Z_AXIS]);
+			motorPos[Z_AXIS] = MotorEndPointToMachine(Z_AXIS, machinePos[Z_AXIS] - machinePos[Y_AXIS]);
+			break;
+
+		default:
+			motorPos[X_AXIS] = MotorEndPointToMachine(X_AXIS, machinePos[X_AXIS]);
+			motorPos[Y_AXIS] = MotorEndPointToMachine(Y_AXIS, machinePos[Y_AXIS]);
+			motorPos[Z_AXIS] = MotorEndPointToMachine(Z_AXIS, machinePos[Z_AXIS]);
+			break;
 		}
 	}
 }
@@ -573,38 +644,6 @@ void Move::InverseBedTransform(float xyzPoint[AXES]) const
 		default:
 			reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "InverseBedTransform: wrong number of sample points.");
 		}
-	}
-}
-
-// Convert motor step positions to Cartesian machine coordinates.
-// Used after homing and after individual motor moves.
-// Because this is computationally expensive, we only call it when necessary, and never from the step ISR.
-void Move::InverseDeltaTransform(const int32_t motorPos[AXES], float machinePos[AXES]) const
-{
-	deltaParams.InverseTransform(
-			MotorEndpointToPosition(motorPos[A_AXIS], A_AXIS),
-			MotorEndpointToPosition(motorPos[B_AXIS], B_AXIS),
-			MotorEndpointToPosition(motorPos[C_AXIS], C_AXIS),
-			machinePos);
-
-	// We don't do inverse transforms very often, so if debugging is enabled, print them
-	if (reprap.Debug(moduleMove))
-	{
-		debugPrintf("Inverse transformed %d %d %d to %f %f %f\n", motorPos[0], motorPos[1], motorPos[2], machinePos[0], machinePos[1], machinePos[2]);
-	}
-}
-
-// Convert Cartesian coordinates to delta motor steps
-void Move::DeltaTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const
-{
-	for (size_t axis = 0; axis < AXES; ++axis)
-	{
-		motorPos[axis] = MotorEndPointToMachine(axis, deltaParams.Transform(machinePos, axis));
-	}
-
-	if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
-	{
-		debugPrintf("Transformed %f %f %f to %d %d %d\n", machinePos[0], machinePos[1], machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 	}
 }
 
@@ -919,14 +958,14 @@ void Move::ZProbeTriggered(DDA* hitDDA)
 }
 
 // Return the untransformed machine coordinates
-void Move::GetCurrentMachinePosition(float m[DRIVES + 1], bool disableDeltaMapping) const
+void Move::GetCurrentMachinePosition(float m[DRIVES + 1], bool disableMotorMapping) const
 {
 	DDA *lastQueuedMove = ddaRingAddPointer->GetPrevious();
 	for (size_t i = 0; i < DRIVES; i++)
 	{
 		if (i < AXES)
 		{
-			m[i] = lastQueuedMove->GetEndCoordinate(i, disableDeltaMapping);
+			m[i] = lastQueuedMove->GetEndCoordinate(i, disableMotorMapping);
 		}
 		else
 		{
@@ -942,10 +981,10 @@ void Move::GetCurrentMachinePosition(float m[DRIVES + 1], bool disableDeltaMappi
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[DRIVES + 1], bool disableDeltaMapping) const
+void Move::GetCurrentUserPosition(float m[DRIVES + 1], uint8_t moveType) const
 {
-	GetCurrentMachinePosition(m, disableDeltaMapping);
-	if (!disableDeltaMapping)
+	GetCurrentMachinePosition(m, moveType == 2 || (moveType == 1 && IsDeltaMode()));
+	if (moveType == 0)
 	{
 		InverseTransform(m);
 	}
@@ -1098,6 +1137,15 @@ void Move::PrintCurrentDda() const
 		currentDda->DebugPrint();
 		reprap.GetPlatform()->GetLine()->Flush();
 	}
+}
+
+const char* Move::GetGeometryString() const
+{
+	return (IsDeltaMode()) ? "Delta"
+			: (coreXYMode == 1) ? "CoreXY"
+			: (coreXYMode == 2) ? "CoreXZ"
+			: (coreXYMode == 3) ? "CoreYZ"
+			: "Cartesian";
 }
 
 // End

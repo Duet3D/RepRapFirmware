@@ -31,7 +31,7 @@ public:
 	DDA(DDA* n);
 
 	bool Init(const float nextMove[], EndstopChecks ce,
-			bool doDeltaMapping, FilePosition fPos);				// Set up a new move, returning true if it represents real movement
+			bool doMotorMapping, FilePosition fPos);				// Set up a new move, returning true if it represents real movement
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim);										// Start executing the DDA, i.e. move the move.
 	bool Step();													// Take one step of the DDA, called by timed interrupt.

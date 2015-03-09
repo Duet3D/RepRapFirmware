@@ -633,6 +633,7 @@ public:
   void SetMotorCurrent(byte drive, float current);
   float MotorCurrent(size_t drive);
   float DriveStepsPerUnit(size_t drive) const;
+  const float *GetDriveStepsPerUnit() const { return driveStepsPerUnit; }
   void SetDriveStepsPerUnit(size_t drive, float value);
   float Acceleration(size_t drive) const;
   const float* Accelerations() const;
