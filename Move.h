@@ -48,7 +48,9 @@ public:
     float Transform(const float machinePos[AXES], size_t axis) const;				// Calculate the motor position for a single tower from a Cartesian coordinate
     void InverseTransform(float Ha, float Hb, float Hc, float machinePos[]) const;	// Calculate the Cartesian position from the motor positions
 
-    void PrintParameters(StringRef& reply);
+    float ComputeDerivative(unsigned int deriv, const float pos[AXES]);				// Compute the derivative of height with respect to a parameter at a point
+    void SixFactorAdjust(float ea, float eb, float ec, float xa, float xb, float yc);	// Perform 6-factor adjustment
+    void PrintParameters(StringRef& reply, bool full);
 
 private:
 	void Recalc();
@@ -64,6 +66,7 @@ private:
 
     // Derived values
     bool deltaMode;										// True if this is a delta printer
+    bool isEquilateral;									// True if the towers are at the corners of an equilateral triangle
     float printRadiusSquared;
     float homedCarriageHeight;
 	float Xbc, Xca, Xab, Ybc, Yca, Yab;
@@ -105,7 +108,7 @@ public:
     int NumberOfXYProbePoints() const;					// How many XY coordinates of probe points have been set (Zs may not have been probed yet)
     bool AllProbeCoordinatesSet(int index) const;		// XY, and Z all set for this one?
     bool XYProbeCoordinatesSet(int index) const;		// Just XY set for this one?
-    void FinishedBedProbing(int sParam, int probePointIndex, StringRef& reply);	// Calibrate or set the bed equiation after probing
+    void FinishedBedProbing(int sParam, StringRef& reply);	// Calibrate or set the bed equiation after probing
     float SecondDegreeTransformZ(float x, float y) const; // Used for second degree bed equation
     void SetAxisCompensation(int8_t axis, float tangent); // Set an axis-pair compensation angle
     float AxisCompensation(int8_t axis) const;			// The tangent value
@@ -140,7 +143,11 @@ public:
 
 private:
 
+    enum class IdleState : uint8_t { idle, busy, timing };
+
     void SetProbedBedEquation(StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
+    void FourPointDeltaCalibration(StringRef& reply);
+    void SixPointDeltaCalibration(StringRef& reply);
     void BedTransform(float move[AXES]) const;			// Take a position and apply the bed compensations
     void GetCurrentMachinePosition(float m[DRIVES + 1], bool disableMotorMapping) const;	// Get the current position and feedrate in untransformed coords
     void InverseBedTransform(float move[AXES]) const;	// Go from a bed-transformed point back to user coordinates
@@ -150,6 +157,9 @@ private:
     		size_t p2, float x, float y, float& l1,     // (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
     		float& l2, float& l3) const;
     float TriangleZ(float x, float y) const;			// Interpolate onto a triangular grid
+
+    static void PrintMatrix(const char* s, float matrix[6][7]);	// for debugging
+
     bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
     DDA* DDARingGet();									// Get the next DDA ring entry to be run
     bool DDARingEmpty() const;							// Anything there?
@@ -179,7 +189,10 @@ private:
     float tanXY, tanYZ, tanXZ; 							// Axis compensation - 90 degrees + angle gives angle between axes
     bool identityBedTransform;							// Is the bed transform in operation?
     float xRectangle, yRectangle;						// The side lengths of the rectangle used for second-degree bed compensation
+    float idleTimeout;									// How long we wait with no activity before we reduce motor currents to idle
+    float lastMoveTime;									// The approximate time at which the last move was completed, or 0
     float longWait;										// A long time for things that need to be done occasionally
+    IdleState iState;									// whether the idle timer is active
 
     DeltaParameters deltaParams;						// Information about the delta parameters of this machine
     int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ

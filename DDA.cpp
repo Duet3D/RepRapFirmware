@@ -543,7 +543,8 @@ float DDA::CalcTime() const
 			+ (topSpeed - endSpeed)/acceleration;
 }
 
-// Prepare this DDA for execution
+// Prepare this DDA for execution.
+// This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare()
 {
 //debugPrintf("Prep\n");
@@ -571,6 +572,7 @@ void DDA::Prepare()
 		DriveMovement& dm = ddm[drive];
 		if (dm.moving)
 		{
+			reprap.GetPlatform()->EnableDrive(drive);
 			if (drive >= AXES)
 			{
 				dm.PrepareExtruder(*this, params, drive);
@@ -657,7 +659,7 @@ bool DDA::Start(uint32_t tim)
 			DriveMovement& dm = ddm[i];
 			if (dm.moving)
 			{
-				reprap.GetPlatform()->SetDirection(i, dm.direction, true);
+				reprap.GetPlatform()->SetDirection(i, dm.direction);
 			}
 		}
 		return reprap.GetPlatform()->ScheduleInterrupt(firstStepTime + moveStartTime);

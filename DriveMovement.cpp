@@ -218,7 +218,7 @@ uint32_t DriveMovement::CalcNextStepTimeCartesian(size_t drive)
 	{
 		if (nextStep == mp.cart.reverseStartStep)
 		{
-			reprap.GetPlatform()->SetDirection(drive, !direction, false);
+			reprap.GetPlatform()->SetDirection(drive, !direction);
 		}
 		nextStepTime = topSpeedTimesCdivAPlusDecelStartClocks
 							+ isqrt((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
@@ -247,7 +247,7 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 	if (nextStep == mp.delta.reverseStartStep)
 	{
 		direction = false;
-		reprap.GetPlatform()->SetDirection(drive, false, false);		// going down now
+		reprap.GetPlatform()->SetDirection(drive, false);		// going down now
 	}
 
 	// Calculate d*s*K as an integer, where d = distance the head has travelled, s = steps/mm for this drive, K = a power of 2 to reduce the rounding errors

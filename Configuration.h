@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.00p-dc42"
-#define DATE "2015-03-07"
+#define VERSION "1.00q-dc42"
+#define DATE "2015-03-19"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -49,6 +49,9 @@ enum Compatibility
 const unsigned int GcodeLength = 100;		// Maximum length of a G Code string that we handle
 const unsigned int MaxFilenameLength = 100;	// Maximum length of a path + filename on the SD card
 
+const float defaultIdleCurrentFactor = 0.3;	// Proportion of normal motor current that we use for idle hold
+const float defaultIdleTimeout = 30.0;
+
 #define ABS_ZERO (-273.15)  // Celsius
 
 #define INCH_TO_MM (25.4)
@@ -67,8 +70,8 @@ const unsigned int MaxFilenameLength = 100;	// Maximum length of a path + filena
 #define BAD_LOW_TEMPERATURE -10.0
 #define BAD_HIGH_TEMPERATURE 300.0
 
-#define NUMBER_OF_PROBE_POINTS 5	// Maximum number of probe points
-#define Z_DIVE 5.0  				// Height from which to probe the bed (mm)
+#define NUMBER_OF_PROBE_POINTS 9	// Maximum number of probe points
+#define Z_DIVE 5.0  				// Default height from which to probe the bed (mm)
 #define TRIANGLE_0 -0.001			// Slightly less than 0 for point-in-triangle tests
 
 #define SILLY_Z_VALUE -9999.0

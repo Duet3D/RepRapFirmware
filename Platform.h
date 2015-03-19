@@ -206,6 +206,8 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 // Miscellaneous...
 
+typedef int8_t Pin;								// type used to represent a pin number, negative means no pin
+
 #define BAUD_RATE 115200 						// Communication speed of the USB if needed.
 
 const int atxPowerPin = 12;						// Arduino Due pin number that controls the ATX power on/off
@@ -554,6 +556,8 @@ enum ErrorCode
 class Platform
 {   
 public:
+	// Enumeration to describe the status of a drive
+	enum class DriveStatus : uint8_t { disabled, idle, enabled };
   
   Platform();
   
@@ -624,14 +628,18 @@ public:
   // Movement
   
   void EmergencyStop();
-  void SetDirection(size_t drive, bool direction, bool enable);
+  void SetDirection(size_t drive, bool direction);
   void SetDirectionValue(size_t drive, bool dVal);
   bool GetDirectionValue(size_t drive) const;
   void StepHigh(size_t drive);
   void StepLow(size_t drive);
-  void Disable(size_t drive); 									// there is no drive enable; drives get enabled automatically the first time they are used.
-  void SetMotorCurrent(byte drive, float current);
-  float MotorCurrent(size_t drive);
+  void EnableDrive(size_t drive);
+  void DisableDrive(size_t drive);
+  void SetDriveIdle(size_t drive);
+  void SetMotorCurrent(size_t drive, float current);
+  float MotorCurrent(size_t drive) const;
+  void SetIdleCurrentFactor(float f);
+  float GetIdleCurrentFactor() const { return idleCurrentFactor; }
   float DriveStepsPerUnit(size_t drive) const;
   const float *GetDriveStepsPerUnit() const { return driveStepsPerUnit; }
   void SetDriveStepsPerUnit(size_t drive, float value);
@@ -742,7 +750,7 @@ private:
 	  ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
 	  ZProbeParameters alternateZProbeParameters;	// Z probe values for the alternate sensor
 	  int zProbeType;								// the type of Z probe we are currently using
-	  int8_t zProbeModulationPin;					// which pin is used for Z probe modulation
+	  Pin zProbeModulationPin;						// which pin is used for Z probe modulation
 	  bool zProbeAxes[AXES];						// Z probe is used for these axes
 	  PidParameters pidParams[HEATERS];
 	  byte ipAddress[4];
@@ -769,12 +777,13 @@ private:
 // DRIVES
 
   void SetSlowestDrive();
+  void UpdateMotorCurrent(size_t drive);
 
-  int8_t stepPins[DRIVES];
-  int8_t directionPins[DRIVES];
-  int8_t enablePins[DRIVES];
-  bool disableDrives[DRIVES];
-  volatile bool driveEnabled[DRIVES];
+  Pin stepPins[DRIVES];
+  Pin directionPins[DRIVES];
+  Pin enablePins[DRIVES];
+//  bool disableDrives[DRIVES];			// not currently used
+  volatile DriveStatus driveState[DRIVES];
   bool directions[DRIVES];
   int8_t endStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
@@ -782,15 +791,19 @@ private:
   float driveStepsPerUnit[DRIVES];
   float instantDvs[DRIVES];
   float elasticComp[DRIVES];
+  float motorCurrents[DRIVES];
+  float idleCurrentFactor;
 
   MCP4461 mcpDuet;
   MCP4461 mcpExpansion;
   int8_t slowestDrive;
 
-  int8_t potWipes[DRIVES];
+  Pin potWipes[DRIVES];
   float senseResistor;
   float maxStepperDigipotVoltage;
-  int8_t zProbePin;
+
+// Z probe
+  Pin zProbePin;
 
   volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
   volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
@@ -811,14 +824,14 @@ private:
 
   int GetRawTemperature(byte heater) const;
 
-  int8_t tempSensePins[HEATERS];
-  int8_t heatOnPins[HEATERS];
+  Pin tempSensePins[HEATERS];
+  Pin heatOnPins[HEATERS];
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
   float coolingFanValue;
-  int8_t coolingFanPin;
-  int8_t coolingFanRpmPin;
+  Pin coolingFanPin;
+  Pin coolingFanRpmPin;
   float timeToHot;
   float lastRpmResetTime;
 
@@ -1180,7 +1193,7 @@ inline const uint8_t* Platform::GateWay() const
 inline void Platform::SetMACAddress(uint8_t mac[])
 {
 	bool changed = false;
-	for(int8_t i = 0; i < 6; i++)
+	for (size_t i = 0; i < 6; i++)
 	{
 		if (nvData.macAddress[i] != mac[i])
 		{

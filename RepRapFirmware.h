@@ -174,6 +174,13 @@ inline uint64_t isquare64(uint32_t arg)
 	return (uint64_t)arg * arg;
 }
 
+inline void swap(float& a, float& b)
+{
+	float temp = a;
+	a = b;
+	b = temp;
+}
+
 #endif
 
 

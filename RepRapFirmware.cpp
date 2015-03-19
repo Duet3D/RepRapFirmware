@@ -386,7 +386,7 @@ void RepRap::EmergencyStop()
 		for(int8_t drive = 0; drive < DRIVES; drive++)
 		{
 			platform->SetMotorCurrent(drive, 0.0);
-			platform->Disable(drive);
+			platform->DisableDrive(drive);
 		}
 	}
 }
@@ -578,7 +578,7 @@ void RepRap::Tick()
 				}
 				for(uint8_t i = 0; i < DRIVES; i++)
 				{
-					platform->Disable(i);
+					platform->DisableDrive(i);
 					// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
 				}
 
@@ -788,7 +788,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 		response.catf(",\"coldRetractTemp\":%1.f", ColdExtrude() ? 0 : HOT_ENOUGH_TO_RETRACT);
 
 		// Delta configuration
-		response.catf(",\"geometry\":\"%s\"", move->IsDeltaMode() ? "delta" : "cartesian");
+		response.catf(",\"geometry\":\"%s\"", move->GetGeometryString());
 
 		// Machine name
 		response.cat(",\"name\":");
@@ -811,11 +811,11 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 		/* Tool Mapping */
 		{
 			response.cat(",\"tools\":[");
-			for(Tool *tool=toolList; tool != NULL; tool = tool->Next())
+			for (Tool *tool=toolList; tool != NULL; tool = tool->Next())
 			{
 				// Heaters
-				response.cat("{\"heaters\":[");
-				for(uint8_t heater=0; heater<tool->HeaterCount(); heater++)
+				response.catf("{\"number\":%d,\"heaters\":[", tool->Number());
+				for (int heater=0; heater<tool->HeaterCount(); heater++)
 				{
 					response.catf("%d", tool->Heater(heater));
 					if (heater < tool->HeaterCount() - 1)
@@ -826,7 +826,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 
 				// Extruder drives
 				response.cat("],\"drives\":[");
-				for(uint8_t drive=0; drive<tool->DriveCount(); drive++)
+				for (int drive=0; drive<tool->DriveCount(); drive++)
 				{
 					response.catf("%d", tool->Drive(drive));
 					if (drive < tool->DriveCount() - 1)

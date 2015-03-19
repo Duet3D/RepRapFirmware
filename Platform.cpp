@@ -128,6 +128,8 @@ void Platform::Init()
 	digitalWriteNonDue(atxPowerPin, LOW);		// ensure ATX power is off by default
 	pinModeNonDue(atxPowerPin, OUTPUT);
 
+	idleCurrentFactor = defaultIdleCurrentFactor;
+
 	baudRates[0] = BAUD_RATE;
 	baudRates[1] = AUX_BAUD_RATE;
 	commsParams[0] = commsParams[1] = 0;
@@ -174,7 +176,7 @@ void Platform::Init()
 	ARRAY_INIT(directionPins, DIRECTION_PINS);
 	ARRAY_INIT(directions, DIRECTIONS);
 	ARRAY_INIT(enablePins, ENABLE_PINS);
-	ARRAY_INIT(disableDrives, DISABLE_DRIVES);
+//	ARRAY_INIT(disableDrives, DISABLE_DRIVES);		// not currently used
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
 	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
 	ARRAY_INIT(accelerations, ACCELERATIONS);
@@ -235,12 +237,13 @@ void Platform::Init()
 		{
 			pinModeNonDue(endStopPins[drive], INPUT_PULLUP);
 		}
-		Disable(drive);
-		driveEnabled[drive] = false;
+		motorCurrents[drive] = 0.0;
+		DisableDrive(drive);
+		driveState[drive] = DriveStatus::disabled;
 		SetElasticComp(drive, 0.0);
 		if (drive < AXES)
 		{
-			endStopType[drive] = lowEndStop;		// assume all endstops are low endstops
+			endStopType[drive] = lowEndStop;				// assume all endstops are low endstops
 			endStopLogicLevel[drive] = true;
 		}
 	}
@@ -1042,7 +1045,7 @@ void Platform::Diagnostics()
 
 	// Show the number of free entries in the file table
 	unsigned int numFreeFiles = 0;
-	for (int8_t i = 0; i < MAX_FILES; i++)
+	for (size_t i = 0; i < MAX_FILES; i++)
 	{
 		if (!files[i]->inUse)
 		{
@@ -1219,70 +1222,115 @@ EndStopHit Platform::GetZProbeResult() const
 				: noStop;
 }
 
-void Platform::SetDirection(size_t drive, bool direction, bool enable)
+// This is called from the step ISR as well as other places, so keep it fast, especially in the case where the motor is already enabled
+void Platform::SetDirection(size_t drive, bool direction)
 {
 	const int pin = directionPins[drive];
 	if (pin >= 0)
 	{
-		if (enable && !driveEnabled[drive] && enablePins[drive] >= 0)
-		{
-			digitalWriteNonDue(enablePins[drive], ENABLE);
-			driveEnabled[drive] = true;
-		}
 		bool d = (direction == FORWARDS) ? directions[drive] : !directions[drive];
 		digitalWriteNonDue(pin, d);
 	}
 }
 
-void Platform::Disable(size_t drive)
+// Enable a drive. Must not be called from an ISR, or with interrupts disabled.
+void Platform::EnableDrive(size_t drive)
 {
-	const int pin = enablePins[drive];
-	if (pin >= 0)
+	if (drive < DRIVES)
 	{
-		digitalWriteNonDue(pin, DISABLE);
-		driveEnabled[drive] = false;
+		DriveStatus oldState = driveState[drive];
+		driveState[drive] = DriveStatus::enabled;
+		if (oldState == DriveStatus::idle)
+		{
+			UpdateMotorCurrent(drive);
+		}
+
+		const int pin = enablePins[drive];
+		if (pin >= 0)
+		{
+			digitalWriteNonDue(pin, ENABLE);
+		}
 	}
 }
 
-// current is in mA
-
-void Platform::SetMotorCurrent(byte drive, float current)
+// Disable a drive, if it has a disable pin
+void Platform::DisableDrive(size_t drive)
 {
-	unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
-//	Message(HOST_MESSAGE, "Set pot to: ");
-//	snprintf(scratchString, STRING_LENGTH, "%d", pot);
-//	Message(HOST_MESSAGE, scratchString);
-//	Message(HOST_MESSAGE, "\n");
-	if(drive < 4)
+	if (drive < DRIVES)
 	{
-		mcpDuet.setNonVolatileWiper(potWipes[drive], pot);
-		mcpDuet.setVolatileWiper(potWipes[drive], pot);
-	}
-	else
-	{
-		mcpExpansion.setNonVolatileWiper(potWipes[drive], pot);
-		mcpExpansion.setVolatileWiper(potWipes[drive], pot);
+		const int pin = enablePins[drive];
+		if (pin >= 0)
+		{
+			digitalWriteNonDue(pin, DISABLE);
+			driveState[drive] = DriveStatus::disabled;
+		}
 	}
 }
 
-
-float Platform::MotorCurrent(size_t drive)
+// Set a drive to idle hold if it is enabled. If it is disabled, leave it alone.
+// Must not be called from an ISR, or with interrupts disabled.
+void Platform::SetDriveIdle(size_t drive)
 {
-	unsigned short pot;
-	if (drive < 4)
+	if (drive < DRIVES && driveState[drive] == DriveStatus::enabled)
 	{
-		pot = mcpDuet.getNonVolatileWiper(potWipes[drive]);
+		driveState[drive] = DriveStatus::idle;
+		UpdateMotorCurrent(drive);
 	}
-	else
-	{
-		pot = mcpExpansion.getNonVolatileWiper(potWipes[drive]);
-	}
+}
 
-	return (float)pot * maxStepperDigipotVoltage / (0.256 * 8.0 * senseResistor);
+// Set the current for a motor. Current is in mA.
+void Platform::SetMotorCurrent(size_t drive, float current)
+{
+	if (drive < DRIVES)
+	{
+		motorCurrents[drive] = current;
+		UpdateMotorCurrent(drive);
+	}
+}
+
+// This must not be called from an ISR, or with interrupts disabled.
+void Platform::UpdateMotorCurrent(size_t drive)
+{
+	if (drive < DRIVES)
+	{
+		float current = motorCurrents[drive];
+		if (driveState[drive] == DriveStatus::idle)
+		{
+			current *= idleCurrentFactor;
+		}
+		unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
+		if (drive < 4)
+		{
+			mcpDuet.setNonVolatileWiper(potWipes[drive], pot);
+			mcpDuet.setVolatileWiper(potWipes[drive], pot);
+		}
+		else
+		{
+			mcpExpansion.setNonVolatileWiper(potWipes[drive], pot);
+			mcpExpansion.setVolatileWiper(potWipes[drive], pot);
+		}
+	}
+}
+
+float Platform::MotorCurrent(size_t drive) const
+{
+	return (drive < DRIVES) ? motorCurrents[drive] : 0.0;
+}
+
+// Set the motor idle current factor
+void Platform::SetIdleCurrentFactor(float f)
+{
+	idleCurrentFactor = f;
+	for (size_t drive = 0; drive < DRIVES; ++drive)
+	{
+		if (driveState[drive] == DriveStatus::idle)
+		{
+			UpdateMotorCurrent(drive);
+		}
+	}
 }
 
 // Get current cooling fan speed on a scale between 0 and 1
-
 float Platform::GetFanValue() const
 {
 	return coolingFanValue;
@@ -1294,13 +1342,11 @@ float Platform::GetFanValue() const
 // the G Code reader will get right for a float or an int) and attempts to
 // do the right thing whichever the user has done.  This will only not work
 // for an old-style fan speed of 1/255...
-
 void Platform::SetFanValue(float speed)
 {
 	if(coolingFanPin >= 0)
 	{
 		byte p;
-
 		if(speed <= 1.0)
 		{
 			p = (byte)(255.0 * max<float>(0.0, speed));
@@ -1318,7 +1364,6 @@ void Platform::SetFanValue(float speed)
 }
 
 // Get current fan RPM
-
 float Platform::GetFanRPM()
 {
 	// The ISR sets fanInterval to the number of microseconds it took to get fanMaxInterruptCount interrupts.

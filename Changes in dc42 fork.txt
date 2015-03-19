@@ -1,4 +1,4 @@
-Additional functionality in 1.00o-dc42 release compared to RRP 0.78c
+Additional functionality in 1.00q-dc42 release compared to RRP 0.78c
 ====================================================================
 
 * The Duet can serve all the files needed by the web interface
@@ -93,9 +93,15 @@ Additional functionality in 1.00o-dc42 release compared to RRP 0.78c
 
 * The Move code has been almost completely rewritten to generate steps at accurate intervals, instead of using the Bresenham approximation. There are no minimum speeds any more.
 
+* X and Y axes can be homed simultaneously for faster homing (not available on CoreXY/CoreXZ/CoreYZ machines)
+
+* Motor current is reduced to lower than normal when M0 is received or the motors have all been idle for 30 seconds. The default is 30% of normal, but it can be adjusted using the S parameter in the M906 command.
+
 * Extruder elasticity compensation is supported (M572 command)
 
 * Delta printers are supported (M665 and M666 commands)
+
+* CoreXY, CoreXZ and CoreYZ printers are supported (M667 command)
 
 * Endstops can be configured (M574 command)
 

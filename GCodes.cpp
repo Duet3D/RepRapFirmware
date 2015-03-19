@@ -261,7 +261,7 @@ void GCodes::Spin()
 			if (probeCount >= numProbePoints)
 			{
 				zProbesSet = true;
-				reprap.GetMove()->FinishedBedProbing(0, numProbePoints, reply);
+				reprap.GetMove()->FinishedBedProbing(0, reply);
 				HandleReply(false, gbCurrent, nullptr, 'G', 32, false);
 				state = GCodeState::normal;
 			}
@@ -1068,6 +1068,12 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 		return DoSingleZProbe();
 
 	int probePointIndex = gb->GetIValue();
+	if (probePointIndex < 0 || probePointIndex >= NUMBER_OF_PROBE_POINTS)
+	{
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
+		return true;
+	}
+
 	const ZProbeParameters& rp = platform->GetZProbeParameters();
 
 	float x = (gb->Seen(axisLetters[X_AXIS])) ? gb->GetFValue() : moveBuffer[X_AXIS] - rp.xOffset;
@@ -1083,7 +1089,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 		if (gb->Seen('S'))
 		{
 			zProbesSet = true;
-			reprap.GetMove()->FinishedBedProbing(gb->GetIValue(), probePointIndex, reply);
+			reprap.GetMove()->FinishedBedProbing(gb->GetIValue(), reply);
 		}
 		return true;
 	}
@@ -1105,7 +1111,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 				}
 				else
 				{
-					reprap.GetMove()->FinishedBedProbing(sParam, probePointIndex, reply);
+					reprap.GetMove()->FinishedBedProbing(sParam, reply);
 				}
 			}
 			return true;
@@ -1580,7 +1586,7 @@ void GCodes::DisableDrives()
 {
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		platform->Disable(drive);
+		platform->DisableDrive(drive);
 	}
 	SetAllAxesNotHomed();
 }
@@ -2180,6 +2186,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			DisableDrives();
 		}
+		else
+		{
+			for (size_t drive = 0; drive < DRIVES; ++drive)
+			{
+				platform->SetDriveIdle(drive);
+			}
+		}
 
 		reprap.GetHeat()->SwitchOffAll();
 		if (isPaused)
@@ -2200,7 +2213,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				if (gb->Seen(axisLetters[axis]))
 				{
 					axisIsHomed[axis] = false;
-					platform->Disable(axis);
+					platform->DisableDrive(axis);
 					seen = true;
 				}
 			}
@@ -2219,7 +2232,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						error = true;
 						break;
 					}
-					platform->Disable(AXES + eDrive[i]);
+					platform->DisableDrive(AXES + eDrive[i]);
 				}
 			}
 
@@ -3387,22 +3400,29 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (gb->Seen('P'))
 		{
 			int point = gb->GetIValue();
-			bool seen = false;
-			if (gb->Seen(axisLetters[X_AXIS]))
+			if (point < 0 || point >= NUMBER_OF_PROBE_POINTS)
 			{
-				reprap.GetMove()->SetXBedProbePoint(point, gb->GetFValue());
-				seen = true;
+				reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
 			}
-			if (gb->Seen(axisLetters[Y_AXIS]))
+			else
 			{
-				reprap.GetMove()->SetYBedProbePoint(point, gb->GetFValue());
-				seen = true;
-			}
+				bool seen = false;
+				if (gb->Seen(axisLetters[X_AXIS]))
+				{
+					reprap.GetMove()->SetXBedProbePoint(point, gb->GetFValue());
+					seen = true;
+				}
+				if (gb->Seen(axisLetters[Y_AXIS]))
+				{
+					reprap.GetMove()->SetYBedProbePoint(point, gb->GetFValue());
+					seen = true;
+				}
 
-			if (!seen)
-			{
-				reply.printf("Probe point %d - [%.1f, %.1f]\n", point, reprap.GetMove()->XBedProbePoint(point),
-						reprap.GetMove()->YBedProbePoint(point));
+				if (!seen)
+				{
+					reply.printf("Probe point %d - [%.1f, %.1f]\n", point, reprap.GetMove()->XBedProbePoint(point),
+							reprap.GetMove()->YBedProbePoint(point));
+				}
 			}
 		}
 		break;
@@ -3831,7 +3851,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 906: // Set/report Motor currents
 		{
 			bool seen = false;
-			for (int8_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < AXES; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -3846,19 +3866,32 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				int eCount = DRIVES - AXES;
 				gb->GetFloatArray(eVals, eCount);
 				// 2014-09-29 DC42: we no longer insist that the user supplies values for all possible extruder drives
-				for (int8_t e = 0; e < eCount; e++)
+				for (size_t e = 0; e < eCount; e++)
 				{
 					platform->SetMotorCurrent(AXES + e, eVals[e]);
 				}
+				seen = true;
 			}
-			else if (!seen)
+
+			if (gb->Seen('I'))
+			{
+				float idleFactor = gb->GetFValue();
+				if (idleFactor >= 0 && idleFactor <= 100.0)
+				{
+					platform->SetIdleCurrentFactor(idleFactor/100.0);
+					seen = true;
+				}
+			}
+
+			if (!seen)
 			{
 				reply.printf("Axis currents (mA) - X:%d, Y:%d, Z:%d, E:", (int) platform->MotorCurrent(X_AXIS),
 						(int) platform->MotorCurrent(Y_AXIS), (int) platform->MotorCurrent(Z_AXIS));
-				for (int8_t drive = AXES; drive < DRIVES; drive++)
+				for (size_t drive = AXES; drive < DRIVES; drive++)
 				{
-					reply.catf("%d%c", (int) platform->MotorCurrent(drive), (drive < DRIVES - 1) ? ':' : '\n');
+					reply.catf("%d%c", (int) platform->MotorCurrent(drive), (drive < DRIVES - 1) ? ':' : ',');
 				}
+				reply.catf(" idle factor %d\n", (int)(platform->GetIdleCurrentFactor() * 100.0));
 			}
 		}
 		break;
