@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.00q-dc42"
-#define DATE "2015-03-19"
+#define VERSION "1.04a-dc42"
+#define DATE "2015-03-21"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -52,11 +52,12 @@ const unsigned int MaxFilenameLength = 100;	// Maximum length of a path + filena
 const float defaultIdleCurrentFactor = 0.3;	// Proportion of normal motor current that we use for idle hold
 const float defaultIdleTimeout = 30.0;
 
-#define ABS_ZERO (-273.15)  // Celsius
+#define ABS_ZERO (-273.15)  				// Celsius
 
 #define INCH_TO_MM (25.4)
 
-#define HEAT_SAMPLE_TIME (0.5) // Seconds
+#define HEAT_SAMPLE_TIME (0.5)				// Seconds
+#define HEAT_PWM_AVERAGE_TIME (5.0)			// Seconds
 
 #define TEMPERATURE_CLOSE_ENOUGH (2.5) 		// Celsius
 #define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius

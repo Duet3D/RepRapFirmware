@@ -44,6 +44,7 @@ class PID
     bool SwitchedOff() const;						// Are we switched off?
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
     float GetTemperature() const;					// Get the current temperature
+    float GetAveragePWM() const;					// Return the running average PWM to the heater.  Answer is a fraction in [0, 1].
 
   private:
 
@@ -62,6 +63,7 @@ class PID
     bool temperatureFault;							// Has our heater developed a fault?
     float timeSetHeating;							// When we were switched on
     bool heatingUp;									// Are we heating up?
+    float averagePWM;								// The running average of the PWM.
 };
 
 /**
@@ -91,7 +93,8 @@ class Heat
     bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
     bool HeaterAtSetTemperature(int8_t heater) const;			// Is a specific heater at temperature within tolerance?
     void Diagnostics();											// Output useful information
-    
+    float GetAveragePWM(int8_t heater) const;					// Return the running average PWM to the heater.    Answer is a fraction in [0, 1].
+
   private:
   
     Platform* platform;							// The instance of the RepRap hardware class
@@ -172,7 +175,6 @@ inline void PID::SwitchOff()
 	switchedOff = true;
 	heatingUp = false;
 }
-
 
 inline bool PID::SwitchedOff() const
 {
@@ -256,5 +258,9 @@ inline void Heat::ResetFault(int8_t heater)
   }
 }
 
+inline float Heat::GetAveragePWM(int8_t heater) const
+{
+	return pids[heater]->GetAveragePWM();
+}
 
 #endif

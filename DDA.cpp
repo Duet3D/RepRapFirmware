@@ -654,15 +654,30 @@ bool DDA::Start(uint32_t tim)
 	}
 	else
 	{
+		bool extrusionMove = false;
 		for (size_t i = 0; i < DRIVES; ++i)
 		{
 			DriveMovement& dm = ddm[i];
 			if (dm.moving)
 			{
 				reprap.GetPlatform()->SetDirection(i, dm.direction);
+				if (i >= AXES)
+				{
+					extrusionMove = true;
+				}
 			}
 		}
-		return reprap.GetPlatform()->ScheduleInterrupt(firstStepTime + moveStartTime);
+
+		Platform *platform = reprap.GetPlatform();
+		if (extrusionMove)
+		{
+			platform->ExtrudeOn();
+		}
+		else
+		{
+			platform->ExtrudeOff();
+		}
+		return platform->ScheduleInterrupt(firstStepTime + moveStartTime);
 	}
 }
 

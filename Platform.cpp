@@ -248,6 +248,9 @@ void Platform::Init()
 		}
 	}
 
+	extrusionAncilliaryPWM = 0.0;
+
+	// HEATERS - Bed is assumed to be index 0
 	for (size_t heater = 0; heater < HEATERS; heater++)
 	{
 		if (heatOnPins[heater] >= 0)
@@ -1248,7 +1251,7 @@ void Platform::EnableDrive(size_t drive)
 		const int pin = enablePins[drive];
 		if (pin >= 0)
 		{
-			digitalWriteNonDue(pin, ENABLE);
+			digitalWriteNonDue(pin, ENABLE_DRIVE);
 		}
 	}
 }
@@ -1261,7 +1264,7 @@ void Platform::DisableDrive(size_t drive)
 		const int pin = enablePins[drive];
 		if (pin >= 0)
 		{
-			digitalWriteNonDue(pin, DISABLE);
+			digitalWriteNonDue(pin, DISABLE_DRIVE);
 			driveState[drive] = DriveStatus::disabled;
 		}
 	}
@@ -1344,10 +1347,10 @@ float Platform::GetFanValue() const
 // for an old-style fan speed of 1/255...
 void Platform::SetFanValue(float speed)
 {
-	if(coolingFanPin >= 0)
+	if (coolingFanPin >= 0)
 	{
 		byte p;
-		if(speed <= 1.0)
+		if (speed <= 1.0)
 		{
 			p = (byte)(255.0 * max<float>(0.0, speed));
 			coolingFanValue = speed;

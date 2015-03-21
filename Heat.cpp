@@ -20,6 +20,8 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+const float invHeatPwmAverageCount = HEAT_SAMPLE_TIME/HEAT_PWM_AVERAGE_TIME;
+
 Heat::Heat(Platform* p, GCodes* g)
 {
   platform = p;
@@ -120,6 +122,7 @@ void PID::Init()
   active = false; 		// Default to standby temperature
   switchedOff = true;
   heatingUp = false;
+  averagePWM = 0.0;
 }
 
 void PID::SwitchOn()
@@ -148,6 +151,7 @@ void PID::Spin()
   if(temperatureFault || switchedOff)
   {
 	  platform->SetHeater(heater, 0.0); // Make sure...
+	  averagePWM = averagePWM*(1.0 - invHeatPwmAverageCount);
 	  return;
   }
 
@@ -201,8 +205,16 @@ void PID::Spin()
   
   if(!pp.UsePID())
   {
-	  platform->SetHeater(heater, (error > 0.0) ? pp.kS : 0.0);
-	  return;
+	if(error > 0.0)
+	{
+		platform->SetHeater(heater, pp.kS);
+		averagePWM = averagePWM*(1.0 - invHeatPwmAverageCount) + pp.kS;
+	} else
+	{
+		platform->SetHeater(heater, 0.0);
+		averagePWM = averagePWM*(1.0 - invHeatPwmAverageCount);
+	}
+	return;
   }
   
   if(error < -pp.fullBand)
@@ -210,6 +222,7 @@ void PID::Spin()
 	  // actual temperature is well above target
 	  temp_iState = (targetTemperature + pp.fullBand - 25.0) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
 	  platform->SetHeater(heater, 0.0);
+	  averagePWM = averagePWM*(1.0 - invHeatPwmAverageCount);
 	  lastTemperature = temperature;
 	  return;
   }
@@ -218,6 +231,7 @@ void PID::Spin()
 	  // actual temperature is well below target
 	  temp_iState = (targetTemperature - pp.fullBand - 25.0) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
 	  platform->SetHeater(heater, pp.kS);
+	  averagePWM = averagePWM*(1.0 - invHeatPwmAverageCount) + pp.kS;
 	  lastTemperature = temperature;
 	  return;
   }  
@@ -257,5 +271,15 @@ void PID::Spin()
 	  platform->SetHeater(heater, result * pp.kS);
   }
 
+  averagePWM = averagePWM*(1.0 - invHeatPwmAverageCount) + result;
+
 //  debugPrintf("Heater %d: e=%f, P=%f, I=%f, d=%f, r=%f\n", heater, error, pp.kP*error, temp_iState, temp_dState, result);
 }
+
+float PID::GetAveragePWM() const
+{
+	return averagePWM * invHeatPwmAverageCount;
+}
+
+// End
+

@@ -442,6 +442,7 @@ void GCodes::StartNextGCode(StringRef& reply)
 					if (serialGCode->WritingFileDirectory() != NULL)
 					{
 						WriteGCodeToFile(serialGCode);
+						serialGCode->SetFinished(true);
 					}
 					else
 					{
@@ -2465,19 +2466,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 28: // Write to file
-	{
-		const char* str = gb->GetUnprecedentedString();
-		bool ok = OpenFileToWrite(platform->GetGCodeDir(), str, gb);
-		if (ok)
 		{
-			reply.printf("Writing to file: %s\n", str);
+			const char* str = gb->GetUnprecedentedString();
+			bool ok = OpenFileToWrite(platform->GetGCodeDir(), str, gb);
+			if (ok)
+			{
+				reply.printf("Writing to file: %s\n", str);
+			}
+			else
+			{
+				reply.printf("Can't open file %s for writing.\n", str);
+				error = true;
+			}
 		}
-		else
-		{
-			reply.printf("Can't open file %s for writing.\n", str);
-			error = true;
-		}
-	}
 		break;
 
 	case 29: // End of file being written; should be intercepted before getting here
@@ -3652,6 +3653,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
+	case 571:
+		if (gb->Seen('S'))
+		{
+			platform->SetExtrusionAncilliaryPWM(gb->GetFValue());
+		}
+		else
+		{
+			reply.printf("Extrusion ancillary PWM: %.3f.\n", platform->GetExtrusionAncilliaryPWM());
+		}
+		break;
+
 	case 572: // Set/report elastic compensation
 		if (gb->Seen('P'))
 		{
@@ -3662,43 +3674,53 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Elastic compensation for drive %u is %.3f seconds\n", drive,
-						platform->GetElasticComp(drive));
+				reply.printf("Elastic compensation for drive %u is %.3f seconds\n", drive, platform->GetElasticComp(drive));
+			}
+		}
+		break;
+
+	case 573:
+		if (gb->Seen('P'))
+		{
+			int heater = gb->GetIValue();
+			if (heater >= 0 && heater < HEATERS)
+			{
+				reply.printf("Average heater %d PWM: %.3f.\n", heater, reprap.GetHeat()->GetAveragePWM(heater));
 			}
 		}
 		break;
 
 	case 574: // Set endstop configuration
-	{
-		bool seen = false;
-		bool logicLevel = (gb->Seen('S')) ? (gb->GetIValue() != 0) : true;
-		for (size_t axis = 0; axis < AXES; ++axis)
 		{
-			if (gb->Seen(axisLetters[axis]))
+			bool seen = false;
+			bool logicLevel = (gb->Seen('S')) ? (gb->GetIValue() != 0) : true;
+			for (size_t axis = 0; axis < AXES; ++axis)
 			{
-				int ival = gb->GetIValue();
-				if (ival >= 0 && ival <= 3)
+				if (gb->Seen(axisLetters[axis]))
 				{
-					platform->SetEndStopConfiguration(axis, (EndStopType) ival, logicLevel);
-					seen = true;
+					int ival = gb->GetIValue();
+					if (ival >= 0 && ival <= 3)
+					{
+						platform->SetEndStopConfiguration(axis, (EndStopType) ival, logicLevel);
+						seen = true;
+					}
+				}
+			}
+			if (!seen)
+			{
+				reply.copy("Endstop configuration:");
+				for (size_t axis = 0; axis < AXES; ++axis)
+				{
+					EndStopType config;
+					bool logic;
+					platform->GetEndStopConfiguration(axis, config, logic);
+					reply.catf(" %c %s %s %c", axisLetters[axis],
+							(config == highEndStop) ? "high end" : (config == lowEndStop) ? "low end" : "none",
+							(config == noEndStop) ? "" : (logic) ? " (active high)" : " (active low)",
+							(axis == AXES - 1) ? '\n' : ',');
 				}
 			}
 		}
-		if (!seen)
-		{
-			reply.copy("Endstop configuration:");
-			for (size_t axis = 0; axis < AXES; ++axis)
-			{
-				EndStopType config;
-				bool logic;
-				platform->GetEndStopConfiguration(axis, config, logic);
-				reply.catf(" %c %s %s %c", axisLetters[axis],
-						(config == highEndStop) ? "high end" : (config == lowEndStop) ? "low end" : "none",
-						(config == noEndStop) ? "" : (logic) ? " (active high)" : " (active low)",
-						(axis == AXES - 1) ? '\n' : ',');
-			}
-		}
-	}
 		break;
 
 	case 575: // Set communications parameters
