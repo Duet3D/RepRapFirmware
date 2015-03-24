@@ -143,7 +143,7 @@ bool GCodeBuffer::Put(const char *str, size_t len)
 bool GCodeBuffer::IsEmpty() const
 {
 	const char *buf = gcodeBuffer;
-	while (strchr(" \t\n\r", *buf))
+	while (*buf != 0 && strchr(" \t\n\r", *buf) != nullptr)
 	{
 		buf++;
 	}

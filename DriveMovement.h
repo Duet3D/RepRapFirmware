@@ -34,8 +34,6 @@ public:
 	void ReduceSpeed(const DDA& dda, float inverseSpeedFactor);
 	void DebugPrint(char c, bool withDelta) const;
 
-	static uint32_t isqrt(uint64_t num);
-
 	// Parameters common to Cartesian, delta and extruder moves
 	// These values don't depend on how the move is executed, so  are set by Init()
 	uint32_t totalSteps;								// total number of steps for this move

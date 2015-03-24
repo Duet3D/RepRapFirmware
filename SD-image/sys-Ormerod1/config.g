@@ -13,12 +13,12 @@ G90                                 ; Send absolute coordinates...
 M83                                 ; ...but relative extruder moves
 M574 X0 Y2 Z0 S1					; set endstop configuration (Y endstop only, at high end, active high)
 M906 X800 Y1000 Z800 E800           ; Set motor currents (mA)
-M563 P1 D0 H1                       ; Define tool 1
-G10 P1 S0 R0                        ; Set tool 1 operating and standby temperatures
+M563 P0 D0 H1                       ; Define tool 0
+G10 P0 S0 R0                        ; Set tool 1 operating and standby temperatures
 M92 E420                        	; Set extruder steps per mm (single nozzle)
 ;*** If you have a dual-nozzle build, remove or comment out the previous line, and un-comment the following 3 lines
-;M563 P2 D1 H2                      ; Define tool 2
-;G10 P2 S0 R0                       ; Set tool 2 operating and standby temperatures
+;M563 P1 D1 H2                      ; Define tool 1
+;G10 P1 S0 R0                       ; Set tool 1 operating and standby temperatures
 ;M92 E420:420						; Set extruder steps/mm (dual nozzle)
 ;*** If you have a modulated IR probe without on-board microcontroller, change P1 to P2 in the following
 M558 P1                             ; Use an unmodulated Z probe or an intelligent Z probe

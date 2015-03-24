@@ -37,12 +37,12 @@ M305 P1 T100000 B3974 R1000 H30 L0	; Put your own H and/or L values here to set 
 M305 P2 T100000 B3974 R1000 H30 L0	; Put your own H and/or L values here to set the second nozzle thermistor ADC correction
 
 ; Tool definitions
-M563 P1 D0 H1                       ; Define tool 1
-G10 P1 S0 R0                        ; Set tool 1 operating and standby temperatures
+M563 P0 D0 H1                       ; Define tool 0
+G10 P0 S0 R0                        ; Set tool 0 operating and standby temperatures
 M92 E663:663                       	; Set extruder steps per mm
 ;*** If you have a dual-nozzle build, un-comment the next 2 lines
-;M563 P2 D1 H2                      ; Define tool 2
-;G10 P2 S0 R0                       ; Set tool 2 operating and standby temperatures
+;M563 P1 D1 H2                      ; Define tool 1
+;G10 P1 S0 R0                       ; Set tool 1 operating and standby temperatures
 
 // Z probe and compensation definition
 ;*** If you have an IR zprobe instead of a switch, change P4 to P1 in the following M558 command

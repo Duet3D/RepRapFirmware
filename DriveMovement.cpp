@@ -200,7 +200,7 @@ uint32_t DriveMovement::CalcNextStepTimeCartesian(size_t drive)
 	++nextStep;
 	if (nextStep < mp.cart.accelStopStep)
 	{
-		nextStepTime = isqrt(isquare64(startSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep)) - startSpeedTimesCdivA;
+		nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep)) - startSpeedTimesCdivA;
 	}
 	else if (nextStep < mp.cart.decelStartStep)
 	{
@@ -211,7 +211,7 @@ uint32_t DriveMovement::CalcNextStepTimeCartesian(size_t drive)
 		uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep;
 		// Allow for possible rounding error when the end speed is zero or very small
 		nextStepTime = (twoDistanceToStopTimesCsquaredDivA > temp)
-						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt(twoDistanceToStopTimesCsquaredDivA - temp)
+						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
 						: topSpeedTimesCdivAPlusDecelStartClocks;
 	}
 	else
@@ -221,7 +221,7 @@ uint32_t DriveMovement::CalcNextStepTimeCartesian(size_t drive)
 			reprap.GetPlatform()->SetDirection(drive, !direction);
 		}
 		nextStepTime = topSpeedTimesCdivAPlusDecelStartClocks
-							+ isqrt((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
+							+ isqrt64((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
 
 	}
 
@@ -262,7 +262,7 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 
 	const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
 	const int32_t t1 = mp.delta.minusAaPlusBbTimesKs + hmz0scK;
-	const int32_t t2 = isqrt(isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - isquare64(mp.delta.hmz0sK));
+	const int32_t t2 = isqrt64(isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - isquare64(mp.delta.hmz0sK));
 	const int32_t dsK = (direction) ? t1 - t2 : t1 + t2;
 
 	// Now feed dsK into a modified version of the step algorithm for Cartesian motion without elasticity compensation
@@ -274,7 +274,7 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 	}
 	if ((uint32_t)dsK < mp.delta.accelStopDsK)
 	{
-		nextStepTime = isqrt(isquare64(startSpeedTimesCdivA) + ((uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK)) - startSpeedTimesCdivA;
+		nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + ((uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK)) - startSpeedTimesCdivA;
 	}
 	else if ((uint32_t)dsK < mp.delta.decelStartDsK)
 	{
@@ -285,7 +285,7 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 		uint64_t temp = (uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK;
 		// Because of possible rounding error when the end speed is zero or very small, we need to check that the square root will work OK
 		nextStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
-						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt(twoDistanceToStopTimesCsquaredDivA - temp)
+						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
 						: topSpeedTimesCdivAPlusDecelStartClocks;
 	}
 
@@ -313,7 +313,7 @@ void DriveMovement::ReduceSpeed(const DDA& dda, float inverseSpeedFactor)
 		// Adjust the acceleration clocks to as to maintain continuity of movement
 		const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
 		const int32_t t1 = mp.delta.minusAaPlusBbTimesKs + hmz0scK;
-		const int32_t t2 = isqrt(isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - isquare64(mp.delta.hmz0sK));
+		const int32_t t2 = isqrt64(isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - isquare64(mp.delta.hmz0sK));
 		const int32_t dsK = (direction) ? t1 - t2 : t1 + t2;
 		accelClocksMinusAccelDistanceTimesCdivTopSpeed = (int32_t)nextStepTime - (int32_t)(((uint64_t)mp.delta.mmPerStepTimesCdivtopSpeedK * (uint32_t)dsK)/(K1 * K2));
 	}
@@ -328,94 +328,6 @@ void DriveMovement::ReduceSpeed(const DDA& dda, float inverseSpeedFactor)
 
 		// Adjust the acceleration clocks to as to maintain continuity of movement
 		accelClocksMinusAccelDistanceTimesCdivTopSpeed = (int32_t)nextStepTime - (int32_t)(((uint64_t)mp.cart.mmPerStepTimesCdivtopSpeed * nextStep)/K1);
-	}
-}
-
-// Fast 64-bit integer square root function
-/* static */ uint32_t DriveMovement::isqrt(uint64_t num)
-{
-//irqflags_t flags = cpu_irq_save();
-//uint32_t t2 = Platform::GetInterruptClocks();
-	uint32_t numHigh = (uint32_t)(num >> 32);
-	if (numHigh != 0)
-	{
-		uint32_t resHigh = 0;
-
-#define iter64a(N) 								\
-		{										\
-			uint32_t temp = resHigh + (1 << N);	\
-			if (numHigh >= temp << N)			\
-			{									\
-				numHigh -= temp << N;			\
-				resHigh |= 2 << N;				\
-			}									\
-		}
-
-		// We need to do 16 iterations
-		iter64a(15); iter64a(14); iter64a(13); iter64a(12);
-		iter64a(11); iter64a(10); iter64a(9); iter64a(8);
-		iter64a(7); iter64a(6); iter64a(5); iter64a(4);
-		iter64a(3); iter64a(2); iter64a(1); iter64a(0);
-
-		// resHigh is twice the square root of the msw, in the range 0..2^17-1
-		uint64_t res = (uint64_t)resHigh << 16;
-		uint64_t numAll = ((uint64_t)numHigh << 32) | (uint32_t)num;
-
-#define iter64b(N) 								\
-		{										\
-			uint64_t temp = res | (1 << N);		\
-			if (numAll >= temp << N)			\
-			{									\
-				numAll -= temp << N;			\
-				res |= 2 << N;					\
-			}									\
-		}
-
-		// We need to do 16 iterations.
-		// After the last iteration, numAll may be between 0 and (1 + 2 * res) inclusive.
-		// So to take square roots of numbers up to 64 bits, we need to do all these iterations using 64 bit maths.
-		// If we restricted the input to e.g. 48 bits, then we could do some of the final iterations using 32-bit maths.
-		iter64b(15); iter64b(14); iter64b(13); iter64b(12);
-		iter64b(11); iter64b(10); iter64b(9); iter64b(8);
-		iter64b(7); iter64b(6); iter64b(5); iter64b(4);
-		iter64b(3); iter64b(2); iter64b(1); iter64b(0);
-
-		uint32_t rslt = (uint32_t)(res >> 1);
-
-//uint32_t t3 = Platform::GetInterruptClocks() - t2; if (t3 < minCalcTime) minCalcTime = t3; if (t3 > maxCalcTime) maxCalcTime = t3;
-//cpu_irq_restore(flags);
-//uint64_t num3 = (uint64_t)rslt * rslt; if (num3 > num || (num - num3) > 2*rslt) {++sqrtErrors; lastNum = num; lastRes = rslt; }
-		return rslt;
-	}
-	else
-	{
-		// 32-bit square root
-		uint32_t num32 = (uint32_t)num;
-		uint32_t res32 = 0;
-
-		// Thanks to Wilco Dijksra for this efficient ARM algorithm
-#define iter32(N) 								\
-		{										\
-			uint32_t temp = res32 | (1 << N);	\
-			if (num32 >= temp << N)				\
-			{									\
-				num32 -= temp << N;				\
-				res32 |= 2 << N;				\
-			}									\
-		}
-
-		// We need to do 16 iterations
-		iter32(15); iter32(14); iter32(13); iter32(12);
-		iter32(11); iter32(10); iter32(9); iter32(8);
-		iter32(7); iter32(6); iter32(5); iter32(4);
-		iter32(3); iter32(2); iter32(1); iter32(0);
-
-		res32 >>= 1;
-
-//uint32_t t3 = Platform::GetInterruptClocks() - t2; if (t3 < minCalcTime) minCalcTime = t3; if (t3 > maxCalcTime) maxCalcTime = t3;
-//cpu_irq_restore(flags);
-//uint64_t num3 = (uint64_t)res32 * res32; if (num3 > num || (num - num3) > 2*res32) {++sqrtErrors; lastNum = num; lastRes = res32; }
-		return res32;
 	}
 }
 

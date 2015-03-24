@@ -465,45 +465,26 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 	return fPos;
 }
 
-uint32_t maxStepTime=0, maxCalcTime=0, minCalcTime = 999, maxReps = 0;
+uint32_t maxReps = 0;
+
+#if 0
+extern uint32_t sqSum1, sqSum2, sqCount, sqErrors, lastRes1, lastRes2;
+extern uint64_t lastNum;
+#endif
 
 void Move::Diagnostics()
 {
 	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Move Diagnostics:\n");
-
-	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxStepClocks: %u, minCalcClocks: %u, maxCalcClocks: %u, maxReps: %u\n",
-										maxStepTime, minCalcTime, maxCalcTime, maxReps);
-	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Simulation time: %f\n", simulationTime);
-	maxStepTime = maxCalcTime = maxReps = 0;
-	minCalcTime = 999;
+	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxReps: %u\n", maxReps);
+	maxReps = 0;
 
 #if 0
-  if(active)
-    platform->Message(HOST_MESSAGE, " active\n");
-  else
-    platform->Message(HOST_MESSAGE, " not active\n");
-
-  platform->Message(HOST_MESSAGE, " look ahead ring count: ");
-  snprintf(scratchString, STRING_LENGTH, "%d\n", lookAheadRingCount);
-  platform->Message(HOST_MESSAGE, scratchString);
-  if(dda == NULL)
-    platform->Message(HOST_MESSAGE, " dda: NULL\n");
-  else
-  {
-    if(dda->Active())
-      platform->Message(HOST_MESSAGE, " dda: active\n");
-    else
-      platform->Message(HOST_MESSAGE, " dda: not active\n");
-
-  }
-  if(ddaRingLocked)
-    platform->Message(HOST_MESSAGE, " dda ring is locked\n");
-  else
-    platform->Message(HOST_MESSAGE, " dda ring is not locked\n");
-  if(addNoMoreMoves)
-    platform->Message(HOST_MESSAGE, " addNoMoreMoves is true\n\n");
-  else
-    platform->Message(HOST_MESSAGE, " addNoMoreMoves is false\n\n");
+	if (sqCount != 0)
+	{
+		reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Average sqrt times %.2f, %.2f, count %u,  errors %u, last %" PRIu64 " %u %u\n",
+				(float)sqSum1/sqCount, (float)sqSum2/sqCount, sqCount, sqErrors, lastNum, lastRes1, lastRes2);
+		sqSum1 = sqSum2 = sqCount = sqErrors = 0;
+	}
 #endif
 }
 

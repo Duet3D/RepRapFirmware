@@ -181,6 +181,8 @@ inline void swap(float& a, float& b)
 	b = temp;
 }
 
+extern uint32_t isqrt64(uint64_t num);		// Thus is defined in its own file, Isqrt.cpp or Isqrt.asm
+
 #endif
 
 
