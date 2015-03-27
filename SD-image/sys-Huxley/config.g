@@ -29,5 +29,5 @@ M563 P0 D0 H1						; Define tool 0
 G10 P0 S-273 R-273					; Set tool 0 operating and standby temperatures
 ;M563 P1 D1 H2						; Define tool 1 Uncomment if you have a dual colour upgrade
 ;G10 P1 X19 S-273 R-273				; Set tool 1 operating and standby temperatures Uncomment if you have a dual colour upgrade
-M208 X140 Y140						; set axis maxima (adjust to suit your machine)
-M208 X-8 Y0 S1						; set axis minimum (adjust to make X=0 the edge of the bed after homing)
+M208 X130 Y138						; set axis maxima (adjust to suit your machine)
+M208 X-13 Y-4 S1					; set axis minimum (adjust to make X=0 and Y=0 the edge of the bed after homing)
