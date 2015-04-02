@@ -177,7 +177,7 @@ const char *moduleName[] =
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
 RepRap::RepRap() : active(false), debug(0), stopped(false), spinningModule(noModule), ticksInSpinState(0),
-		resetting(false), gcodeReply(gcodeReplyBuffer, GCODE_REPLY_LENGTH)
+		resetting(false), gcodeReply(gcodeReplyBuffer, ARRAY_SIZE(gcodeReplyBuffer))
 {
   platform = new Platform();
   network = new Network(platform);
@@ -192,8 +192,10 @@ RepRap::RepRap() : active(false), debug(0), stopped(false), spinningModule(noMod
 void RepRap::Init()
 {
   debug = 0;
-  activeExtruders = 1;		// we always report at least 1 extruder to the web interface
-  activeHeaters = 2;		// we always report the bed heater + 1 extruder heater to the web interface
+
+  // zpl thinks it's a bad idea to count the bed as an active heater...
+  activeExtruders = activeHeaters = 0;
+
   SetPassword(DEFAULT_PASSWORD);
   SetName(DEFAULT_NAME);
 
@@ -215,8 +217,8 @@ void RepRap::Init()
   message[0] = 0;
   const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
   WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);	// enable watchdog, reset the mcu if it times out
-  coldExtrude = true;		// DC42 changed default to true for compatibility because for now we are aiming for compatibility with RRP 0.78
-  active = true;			// must do this before we start the network, else the watchdog may time out
+  coldExtrude = false;				// don't allow cold extrusion
+  active = true;					// must do this before we start the network, else the watchdog may time out
 
   platform->Message(HOST_MESSAGE, "%s Version %s dated %s\n", NAME, VERSION, DATE);
   FileStore *startup = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
@@ -319,6 +321,18 @@ void RepRap::Spin()
 
 	spinningModule = noModule;
 	ticksInSpinState = 0;
+
+	// Check if we need to display a cold extrusion warning
+
+	bool displayWarning = false;
+	for (Tool *t = toolList; t != NULL; t = t->Next())
+	{
+		displayWarning |= t->DisplayColdExtrudeWarning();
+	}
+	if (displayWarning)
+	{
+		platform->Message(BOTH_MESSAGE, "Warning: Tools can only be driven if their heater temperatures are high!\n");
+	}
 
 	// Keep track of the loop time
 
@@ -429,22 +443,68 @@ void RepRap::PrintDebug()
 	}
 }
 
-/*
- * The first tool added becomes the one selected.  This will not happen in future releases.
- */
-
 void RepRap::AddTool(Tool* tool)
 {
 	if(toolList == NULL)
 	{
 		toolList = tool;
-		currentTool = tool;
-		tool->Activate(currentTool);
+	}
+	else
+	{
+		toolList->AddTool(tool);
+	}
+	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeHeaters);
+}
+
+void RepRap::DeleteTool(Tool* tool)
+{
+	// Must have a valid tool...
+	if (tool == NULL)
+	{
 		return;
 	}
 
-	toolList->AddTool(tool);
-	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeHeaters);
+	// Deselect it if necessary
+	if (GetCurrentTool() == tool)
+	{
+		SelectTool(-1);
+	}
+
+	// Switch off any associated heater
+	for(size_t i=0; i<tool->HeaterCount(); i++)
+	{
+		reprap.GetHeat()->SwitchOff(tool->Heater(i));
+	}
+
+	// Purge any references to this tool
+	Tool *parent = NULL;
+	for(Tool *t = toolList; t != NULL; t = t->Next())
+	{
+		if (t->Next() == tool)
+		{
+			parent = t;
+			break;
+		}
+	}
+
+	if (parent == NULL)
+	{
+		toolList = tool->Next();
+	}
+	else
+	{
+		parent->next = tool->next;
+	}
+
+	// Delete it
+	delete tool;
+
+	// Update the number of active heaters and extruder drives
+	activeExtruders = activeHeaters = 0;
+	for(Tool *t = toolList; t != NULL; t = t->Next())
+	{
+		t->UpdateExtruderAndHeaterCount(activeExtruders, activeHeaters);
+	}
 }
 
 void RepRap::SelectTool(int toolNumber)
@@ -572,11 +632,11 @@ void RepRap::Tick()
 			if (ticksInSpinState >= 20000)	// if we stall for 20 seconds, save diagnostic data and reset
 			{
 				resetting = true;
-				for(uint8_t i = 0; i < HEATERS; i++)
+				for(size_t i = 0; i < HEATERS; i++)
 				{
 					platform->SetHeater(i, 0.0);
 				}
-				for(uint8_t i = 0; i < DRIVES; i++)
+				for(size_t i = 0; i < DRIVES; i++)
 				{
 					platform->DisableDrive(i);
 					// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
@@ -625,6 +685,11 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 			ch = ',';
 		}
 
+		if (ch == '[')
+		{
+			response.cat("[");
+		}
+
 		// XYZ positions
 		response.cat("],\"xyz\":");
 		ch = '[';
@@ -636,7 +701,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 	}
 
 	// Current tool number
-	int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
+	int toolNumber = (currentTool == NULL) ? -1 : currentTool->Number();
 	response.catf("]},\"currentTool\":%d", toolNumber);
 
 	/* Output - only reported once */
@@ -682,11 +747,13 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 
 		// Speed and Extrusion factors
 		response.catf(",\"speedFactor\":%.2f,\"extrFactors\":", gCodes->GetSpeedFactor() * 100.0);
+		char ch = '[';
 		for (uint8_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response.catf("%c%.2f", (extruder == 0) ? '[' : ',', gCodes->GetExtrusionFactors()[extruder] * 100.0);
+			response.catf("%c%.2f", ch, gCodes->GetExtrusionFactors()[extruder] * 100.0);
+			ch = ',';
 		}
-		response.cat("]}");
+		response.cat((ch == '[') ? "[]}" : "]}");
 	}
 
 	// G-code reply sequence for webserver
@@ -741,40 +808,44 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 
 			// Current temperatures
 			char ch = '[';
-			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			for (size_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
 			{
 				response.catf("%c%.1f", ch, heat->GetTemperature(heater));
 				ch = ',';
 			}
+			response.cat((ch == '[') ? "[]" : "]");
 
 			// Active temperatures
-			response.catf("],\"active\":");
+			response.catf(",\"active\":");
 			ch = '[';
-			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			for (size_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
 			{
 				response.catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
 				ch = ',';
 			}
+			response.cat((ch == '[') ? "[]" : "]");
 
 			// Standby temperatures
-			response.catf("],\"standby\":");
+			response.catf(",\"standby\":");
 			ch = '[';
-			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			for (size_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
 			{
 				response.catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
 				ch = ',';
 			}
+			response.cat((ch == '[') ? "[]" : "]");
 
 			// Heater statuses (0=off, 1=standby, 2=active, 3=fault)
-			response.cat("],\"state\":");
+			response.cat(",\"state\":");
 			ch = '[';
-			for (int8_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			for (size_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
 			{
 				response.catf("%c%d", ch, (int)heat->GetStatus(heater));
 				ch = ',';
 			}
+			response.cat((ch == '[') ? "[]" : "]");
 		}
-		response.cat("]}}");
+		response.cat("}}");
 	}
 
 	// Time since last reset
@@ -864,6 +935,10 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 			response.catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
 			ch = ',';
 		}
+		if (ch == '[')
+		{
+			response.cat("]");
+		}
 
 		// Fraction of file printed
 		response.catf("],\"fractionPrinted\":%.1f", (gCodes->PrintingAFile()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0);
@@ -894,6 +969,119 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 	}
 
 	response.cat("}");
+}
+
+void RepRap::GetConfigResponse(StringRef& response)
+{
+	// Axis minima
+	response.copy("{\"axisMins\":");
+	char ch = '[';
+	for (size_t axis = 0; axis < AXES; axis++)
+	{
+		response.catf("%c%.2f", ch, platform->AxisMinimum(axis));
+		ch = ',';
+	}
+
+	// Axis maxima
+	response.cat("],\"axisMaxes\":");
+	ch = '[';
+	for (size_t axis = 0; axis < AXES; axis++)
+	{
+		response.catf("%c%.2f", ch, platform->AxisMaximum(axis));
+		ch = ',';
+	}
+
+	// Accelerations
+	response.cat("],\"accelerations\":");
+	ch = '[';
+	for (size_t drive = 0; drive < DRIVES; drive++)
+	{
+		response.catf("%c%.2f", ch, platform->Acceleration(drive));
+		ch = ',';
+	}
+
+	// Firmware details
+	response.catf("],\"firmwareElectronics\":\"%s\"", ELECTRONICS);
+	response.catf(",\"firmwareName\":\"%s\"", NAME);
+	response.catf(",\"firmwareVersion\":\"%s\"", VERSION);
+	response.catf(",\"firmwareDate\":\"%s\"", DATE);
+
+	// Minimum feedrates
+	response.cat(",\"minFeedrates\":");
+	ch = '[';
+	for (size_t drive = 0; drive < DRIVES; drive++)
+	{
+		response.catf("%c%.2f", ch, platform->ConfiguredInstantDv(drive));
+		ch = ',';
+	}
+
+	// Maximum feedrates
+	response.cat("],\"maxFeedrates\":");
+	ch = '[';
+	for (size_t drive = 0; drive < DRIVES; drive++)
+	{
+		response.catf("%c%.2f", ch, platform->MaxFeedrate(drive));
+		ch = ',';
+	}
+
+	// Configuration File (whitespaces are skipped, otherwise we risk overflowing the response buffer)
+	response.cat("],\"configFile\":\"");
+	FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
+	if (configFile == NULL)
+	{
+		response.cat("not found");
+	}
+	else
+	{
+		char c;
+		bool readingWhitespace = false;
+		while (configFile->Read(c))
+		{
+			if (!readingWhitespace || (c != ' ' && c != '\t'))
+			{
+				char esc;
+				switch (c)
+				{
+					case '\r':
+						esc = 'r';
+						break;
+					case '\n':
+						esc = 'n';
+						break;
+					case '\t':
+						esc = 't';
+						break;
+					case '"':
+						esc = '"';
+						break;
+					case '\\':
+						esc = '\\';
+						break;
+					default:
+						esc = 0;
+						break;
+				}
+
+				if (esc)
+				{
+					response.catf("\\%c", esc);
+				}
+				else
+				{
+					response.catf("%c", c);
+				}
+
+				if (response.strlen() >= response.Length() - 4)
+				{
+					// Leave 4 chars to finish this response
+					break;
+				}
+			}
+			readingWhitespace = (c == ' ' || c == '\t');
+		}
+		configFile->Close();
+	}
+	response.cat("\"}");
 }
 
 // Get the JSON status response for the web server or M105 command.
@@ -968,30 +1156,32 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 		}
 		response.catf("],\"pos\":");		// announce the XYZ position
 		ch = '[';
-		for (int8_t drive = 0; drive < AXES; drive++)
+		for (size_t drive = 0; drive < AXES; drive++)
 		{
 			response.catf("%c%.2f", ch, liveCoordinates[drive]);
 			ch = ',';
 		}
 
 		// Send extruder total extrusion since power up, last G92 or last M23
-		response.catf("],\"extr\":");		// announce the extruder positions
+		response.cat("],\"extr\":");		// announce the extruder positions
 		ch = '[';
-		for (int8_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
+		for (size_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
 		{
 			response.catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
 			ch = ',';
 		}
-		response.cat("]");
+		response.cat((ch == ']') ? "[]" : "]");
 
 		// Send the speed and extruder override factors
 		response.catf(",\"sfactor\":%.2f,\"efactor\":", gCodes->GetSpeedFactor() * 100.0);
 		const float *extrusionFactors = gCodes->GetExtrusionFactors();
-		for (unsigned int i = 0; i < reprap.GetExtrudersInUse(); ++i)
+		ch = '[';
+		for (size_t i = 0; i < reprap.GetExtrudersInUse(); ++i)
 		{
-			response.catf("%c%.2f", (i == 0) ? '[' : ',', extrusionFactors[i] * 100.0);
+			response.catf("%c%.2f", ch, extrusionFactors[i] * 100.0);
+			ch = ',';
 		}
-		response.cat("]");
+		response.cat((ch == '[') ? "[]" : "]");
 
 		// Send the current tool number
 		int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
@@ -1005,14 +1195,14 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 		// RRP reversed the order at version 0.65 to send the positions before the heaters, but we haven't yet done that.
 		char c = (gCodes->PrintingAFile()) ? 'P' : 'I';
 		response.printf("{\"poll\":[\"%c\",", c); // Printing
-		for (int8_t heater = 0; heater < HEATERS; heater++)
+		for (size_t heater = 0; heater < HEATERS; heater++)
 		{
 			response.catf("\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
 		}
 		// Send XYZ and extruder positions
 		float liveCoordinates[DRIVES];
 		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		for (int8_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
+		for (size_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
 		{
 			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
 			response.catf("\"%.2f\"%c", liveCoordinates[drive], ch);
@@ -1082,7 +1272,7 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 	{
 		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
 		response.catf(",\"geometry\":\"%s\",\"myName\":", move->GetGeometryString());
-		EncodeString(response, myName, 2, false);
+		EncodeString(response, GetName(), 2, false);
 	}
 
 	if (type < 2 || (seq != -1 && replySeq != seq))

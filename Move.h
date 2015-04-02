@@ -9,6 +9,7 @@
 #define MOVE_H_
 
 #include "DDA.h"
+#include "Matrix.h"
 
 const unsigned int DdaRingLength = 20;
 
@@ -46,14 +47,16 @@ public:
     void SetHomedHeight(float h) { homedHeight = h; Recalc(); }
 
     float Transform(const float machinePos[AXES], size_t axis) const;				// Calculate the motor position for a single tower from a Cartesian coordinate
-    void InverseTransform(float Ha, float Hb, float Hc, float machinePos[]) const;	// Calculate the Cartesian position from the motor positions
+    void InverseTransform(float Ha, float Hb, float Hc, float machinePos[AXES]) const;	// Calculate the Cartesian position from the motor positions
 
-    float ComputeDerivative(unsigned int deriv, const float pos[AXES]);				// Compute the derivative of height with respect to a parameter at a point
-    void SixFactorAdjust(float ea, float eb, float ec, float xa, float xb, float yc);	// Perform 6-factor adjustment
+    float ComputeDerivative(unsigned int deriv, float ha, float hb, float hc);		// Compute the derivative of height with respect to a parameter at a set of motor endpoints
+    void AdjustFour(const float v[4]);												// Perform 4-factor adjustment
+    void AdjustSeven(const float v[7]);												// Perform 7-factor adjustment
     void PrintParameters(StringRef& reply, bool full);
 
 private:
 	void Recalc();
+	void NormaliseEndstopAdjustments();					// Make the average of the endstop adjustments zero
 
 	// Core parameters
     float diagonal;										// The diagonal rod length, all 3 are assumed to be the same length
@@ -71,7 +74,7 @@ private:
     float homedCarriageHeight;
 	float Xbc, Xca, Xab, Ybc, Yca, Yab;
 	float coreFa, coreFb, coreFc;
-    float Q, Q2;
+    float Q, Q2, D2;
 };
 
 /**
@@ -145,9 +148,8 @@ private:
 
     enum class IdleState : uint8_t { idle, busy, timing };
 
-    void SetProbedBedEquation(StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
-    void FourPointDeltaCalibration(StringRef& reply);
-    void SixPointDeltaCalibration(StringRef& reply);
+    void SetProbedBedEquation(size_t numPoints, StringRef& reply);	// When we have a full set of probed points, work out the bed's equation
+    void DoDeltaCalibration(size_t numPoints, StringRef& reply);
     void BedTransform(float move[AXES]) const;			// Take a position and apply the bed compensations
     void GetCurrentMachinePosition(float m[DRIVES + 1], bool disableMotorMapping) const;	// Get the current position and feedrate in untransformed coords
     void InverseBedTransform(float move[AXES]) const;	// Go from a bed-transformed point back to user coordinates
@@ -157,8 +159,10 @@ private:
     		size_t p2, float x, float y, float& l1,     // (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
     		float& l2, float& l3) const;
     float TriangleZ(float x, float y) const;			// Interpolate onto a triangular grid
+    void AdjustDeltaParameters(const float v[], bool allSeven);		// Perform 4- or 7-factor delta adjustment
 
-    static void PrintMatrix(const char* s, float matrix[6][7]);	// for debugging
+    static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0);	// for debugging
+    static void PrintVector(const char *s, const float *v, size_t numElems);	// for debugging
 
     bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
     DDA* DDARingGet();									// Get the next DDA ring entry to be run
@@ -178,13 +182,13 @@ private:
     volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
     volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
 
-    float xBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The X coordinates of the points on the bed at which to probe
-    float yBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The Y coordinates of the points on the bed at which to probe
-    float zBedProbePoints[NUMBER_OF_PROBE_POINTS];		// The Z coordinates of the points on the bed at which to probe
-    float baryXBedProbePoints[NUMBER_OF_PROBE_POINTS];	// The X coordinates of the triangle corner points
-    float baryYBedProbePoints[NUMBER_OF_PROBE_POINTS];	// The Y coordinates of the triangle corner points
-    float baryZBedProbePoints[NUMBER_OF_PROBE_POINTS];	// The Z coordinates of the triangle corner points
-    uint8_t probePointSet[NUMBER_OF_PROBE_POINTS];		// Has the XY of this point been set?  Has the Z been probed?
+    float xBedProbePoints[MaxProbePoints];				// The X coordinates of the points on the bed at which to probe
+    float yBedProbePoints[MaxProbePoints];				// The Y coordinates of the points on the bed at which to probe
+    float zBedProbePoints[MaxProbePoints];				// The Z coordinates of the points on the bed at which to probe
+    float baryXBedProbePoints[5];						// The X coordinates of the triangle corner points
+    float baryYBedProbePoints[5];						// The Y coordinates of the triangle corner points
+    float baryZBedProbePoints[5];						// The Z coordinates of the triangle corner points
+    uint8_t probePointSet[MaxProbePoints];				// Has the XY of this point been set?  Has the Z been probed?
     float aX, aY, aC; 									// Bed plane explicit equation z' = z + aX*x + aY*y + aC
     float tanXY, tanYZ, tanXZ; 							// Axis compensation - 90 degrees + angle gives angle between axes
     bool identityBedTransform;							// Is the bed transform in operation?
@@ -207,7 +211,7 @@ inline bool Move::DDARingEmpty() const
 
 inline bool Move::NoLiveMovement() const
 {
-	return currentDda == nullptr && DDARingEmpty();
+	return DDARingEmpty() && currentDda == nullptr;		// must test currentDda and DDARingEmpty *in this order* !
 }
 
 // To wait until all the current moves in the buffers are
@@ -218,7 +222,7 @@ inline bool Move::NoLiveMovement() const
 inline bool Move::AllMovesAreFinished()
 {
 	addNoMoreMoves = true;
-	return DDARingEmpty() && NoLiveMovement();
+	return NoLiveMovement();
 }
 
 inline void Move::ResumeMoving()

@@ -49,16 +49,17 @@ class RepRap
     void SetPassword(const char* pw);
 
     void AddTool(Tool* t);
+    void DeleteTool(Tool* t);
     void SelectTool(int toolNumber);
     void StandbyTool(int toolNumber);
     Tool* GetCurrentTool();
     Tool* GetTool(int toolNumber);
-    Tool* GetToolByDrive(int driveNumber);
+    //Tool* GetToolByDrive(int driveNumber);
     void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures);
 
     void AllowColdExtrude();
     void DenyColdExtrude();
-    bool ColdExtrude();
+    bool ColdExtrude() const;
 
     void GetExtruderCapabilities(bool canDrive[], const bool directions[]) const;
     void PrintTool(int toolNumber, StringRef& reply) const;
@@ -81,6 +82,7 @@ class RepRap
     uint16_t GetHeatersInUse() const;
 
     void GetStatusResponse(StringRef& response, uint8_t type, bool forWebserver);
+    void GetConfigResponse(StringRef& response);
     void GetLegacyStatusResponse(StringRef &response, uint8_t type, int seq) const;
     void GetNameResponse(StringRef& response) const;
     void GetFilesResponse(StringRef& response, const char* dir) const;
@@ -127,13 +129,13 @@ class RepRap
     bool resetting;
     bool processingConfig;
 
-    char password[SHORT_STRING_LENGTH + 1];
-    char myName[SHORT_STRING_LENGTH + 1];
+    char password[MaxPasswordLength + 1];
+    char myName[MaxNameLength + 1];
 
     int beepFrequency, beepDuration;
-    char message[SHORT_STRING_LENGTH + 1];
+    char message[MaxMessageLength + 1];
 
-    char gcodeReplyBuffer[GCODE_REPLY_LENGTH];
+    char gcodeReplyBuffer[MaxGcodeReplyLength];
     StringRef gcodeReply;
     unsigned int replySeq;
 };
@@ -152,7 +154,7 @@ inline Module RepRap::GetSpinningModule() const { return spinningModule; }
 inline Tool* RepRap::GetCurrentTool() { return currentTool; }
 inline uint16_t RepRap::GetExtrudersInUse() const { return activeExtruders; }
 inline uint16_t RepRap::GetHeatersInUse() const { return activeHeaters; }
-inline bool RepRap::ColdExtrude() { return coldExtrude; }
+inline bool RepRap::ColdExtrude() const { return coldExtrude; }
 inline void RepRap::AllowColdExtrude() { coldExtrude = true; }
 inline void RepRap::DenyColdExtrude() { coldExtrude = false; }
 inline void RepRap::Interrupt() { move->Interrupt(); }

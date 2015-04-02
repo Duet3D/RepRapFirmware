@@ -251,15 +251,8 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 		  tcp_accepted(telnet_pcb);
 		  break;
 
-	  default:
-		  if (pcb->local_port == httpPort)
-		  {
-			  tcp_accepted(http_pcb);
-		  }
-		  else // FTP data
-		  {
-			  tcp_accepted(ftp_pasv_pcb);
-		  }
+	  default: // HTTP and FTP data
+		  tcp_accepted((pcb->local_port == httpPort) ? http_pcb : ftp_pasv_pcb);
 		  break;
 	}
 	tcp_arg(pcb, cs);				// tell LWIP that this is the structure we wish to be passed for our callbacks
@@ -333,17 +326,17 @@ Network::Network(Platform* p)
 	  freeTransactions(NULL), readyTransactions(NULL), writingTransactions(NULL),
 	  dataCs(NULL), ftpCs(NULL), telnetCs(NULL), freeSendBuffers(NULL), freeConnections(NULL)
 {
-	for (int8_t i = 0; i < networkTransactionCount; i++)
+	for (unsigned int i = 0; i < networkTransactionCount; i++)
 	{
 		freeTransactions = new NetworkTransaction(freeTransactions);
 	}
 
-	for (int8_t i = 0; i < tcpOutputBufferCount; i++)
+	for (unsigned int i = 0; i < tcpOutputBufferCount; i++)
 	{
 		freeSendBuffers = new SendBuffer(freeSendBuffers);
 	}
 
-	for (int8_t i = 0; i < numConnections; i++)
+	for (unsigned int i = 0; i < numConnections; i++)
 	{
 		ConnectionState *cs = new ConnectionState;
 		cs->next = freeConnections;
@@ -523,14 +516,25 @@ bool Network::IsEnabled() const
 	return isEnabled;
 }
 
-unsigned int Network::GetHttpPort() const
+uint16_t Network::GetHttpPort() const
 {
 	return httpPort;
 }
 
-void Network::SetHttpPort(unsigned int port)
+void Network::SetHttpPort(uint16_t port)
 {
-	httpPort = (uint16_t)port;
+	if (state == NetworkActive && port != httpPort)
+	{
+		// Close old HTTP port
+		tcp_close(http_pcb);
+
+		// Create a new one for the new port
+		tcp_pcb* pcb = tcp_new();
+		tcp_bind(pcb, IP_ADDR_ANY, port);
+		http_pcb = tcp_listen(pcb);
+		tcp_accept(http_pcb, conn_accept);
+	}
+	httpPort = port;
 }
 
 bool Network::AllocateSendBuffer(SendBuffer *&buffer)
@@ -1062,7 +1066,7 @@ uint16_t ConnectionState::GetRemotePort() const
 	return pcb->remote_port;
 }
 
-// NetRing class members
+// NetworkTransaction class members
 void NetworkTransaction::Set(pbuf *p, ConnectionState *c, TransactionStatus s)
 {
 	cs = c;

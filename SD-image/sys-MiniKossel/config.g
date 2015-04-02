@@ -35,6 +35,7 @@ M566 X1200 Y1200 Z1200 E1200		; Maximum instant speed changes mm/minute
 M305 P0 T100000 B3950 R1000 H30 L0	; Put your own H and/or L values here to set the bed thermistor ADC correction
 M305 P1 T100000 B3974 R1000 H30 L0	; Put your own H and/or L values here to set the first nozzle thermistor ADC correction
 M305 P2 T100000 B3974 R1000 H30 L0	; Put your own H and/or L values here to set the second nozzle thermistor ADC correction
+M570 S180							; E3d hot end is a little slow to heat up so allow it 180 seconds
 
 ; Tool definitions
 M563 P0 D0 H1                       ; Define tool 0

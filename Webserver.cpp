@@ -164,7 +164,7 @@ void Webserver::Spin()
 				uint16_t localPort = req->GetLocalPort();
 				switch (localPort)
 				{
-					case ftpPort: 	/* FTP */
+					case ftpPort: 		/* FTP */
 						interpreter = ftpInterpreter;
 						break;
 
@@ -172,7 +172,7 @@ void Webserver::Spin()
 						interpreter = telnetInterpreter;
 						break;
 
-					default:	/* FTP data */
+					default:			/* HTTP and FTP data */
 						if (localPort == network->GetHttpPort())
 						{
 							interpreter = httpInterpreter;
@@ -296,14 +296,14 @@ void Webserver::ProcessGcode(const char* gc)
 			reprap.MessageToGCodeReply("");
 
 			char c;
-			bool reading_whitespace = false;
+			bool readingWhitespace = false;
 			while (configFile->Read(c))
 			{
-				if (!reading_whitespace || (c != ' ' && c != '\t'))
+				if (!readingWhitespace || (c != ' ' && c != '\t'))
 				{
 					reprap.AppendCharToStatusResponse(c);
 				}
-				reading_whitespace = (c == ' ' || c == '\t');
+				readingWhitespace = (c == ' ' || c == '\t');
 			}
 			configFile->Close();
 
@@ -423,7 +423,7 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 	ProtocolInterpreter *interpreter;
 	switch (localPort)
 	{
-		case ftpPort: /* FTP */
+		case ftpPort: 	/* FTP */
 			interpreter = ftpInterpreter;
 			break;
 
@@ -431,7 +431,7 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 			interpreter = telnetInterpreter;
 			break;
 
-		default: /* FTP data */
+		default: 		/* HTTP and FTP data */
 			if (localPort == network->GetHttpPort())
 			{
 				interpreter = httpInterpreter;
@@ -1084,11 +1084,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 		}
 		else if (StringEquals(request, "config"))
 		{
-			if (StringEquals(key, "type"))
-			{
-				int type = max<int>(2, min<int>(0, atoi(value)));
-				// TODO: implement this
-			}
+			reprap.GetConfigResponse(response);
 		}
 		else
 		{
@@ -1857,10 +1853,10 @@ void Webserver::FtpInterpreter::ProcessLine()
 			// but check the password
 			else if (StringStartsWith(clientMessage, "PASS"))
 			{
-				char pass[SHORT_STRING_LENGTH];
-				int pass_length = 0;
+				char pass[MaxPasswordLength + 1];
+				size_t pass_length = 0;
 				bool reading_pass = false;
-				for(int i=4; i<clientPointer && i<SHORT_STRING_LENGTH +3; i++)
+				for(size_t i = 4; i < clientPointer && i < MaxPasswordLength + 4; i++)
 				{
 					reading_pass |= (clientMessage[i] != ' ' && clientMessage[i] != '\t');
 					if (reading_pass)

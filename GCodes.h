@@ -148,7 +148,7 @@ class GCodes
     void SetPidParameters(GCodeBuffer *gb, int heater, StringRef& reply);	// Set the P/I/D parameters for a heater
     void SetHeaterParameters(GCodeBuffer *gb, StringRef& reply);		 // Set the thermistor and ADC parameters for a heater
     int8_t Heater(int8_t head) const;									// Legacy G codes start heaters at 0, but we use 0 for the bed.  This sorts that out.
-    void AddNewTool(GCodeBuffer *gb, StringRef& reply);					// Create a new tool definition
+    void ManageTool(GCodeBuffer *gb, StringRef& reply);					// Create a new tool definition
     void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
     bool ToolHeatersAtSetTemperatures(const Tool *tool) const;			// Wait for the heaters associated with the specified tool to reach their set temperatures
     bool AllAxesAreHomed() const;										// Return true if all axes are homed

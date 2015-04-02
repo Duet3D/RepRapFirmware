@@ -193,7 +193,6 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 #define MAX_FILES (10)		// must be large enough to handle the max number of simultaneous web requests + file being printed
 #define FILE_BUF_LEN (256)
-#define SD_SPI (4) //Pin
 #define WEB_DIR "0:/www/" 						// Place to find web files on the SD card
 #define GCODE_DIR "0:/gcodes/" 					// Ditto - g-codes
 #define SYS_DIR "0:/sys/" 						// Ditto - system files
@@ -215,7 +214,7 @@ const int atxPowerPin = 12;						// Arduino Due pin number that controls the ATX
 const uint16_t lineInBufsize = 256;				// use a power of 2 for good performance
 const uint16_t lineOutBufSize = 2048;			// ideally this should be large enough to hold the results of an M503 command,
 												// but could be reduced if we ever need the memory
-const size_t messageStringLength = 1024;		// max length of a message chunk sent via Message or AppendMessage
+const size_t messageStringLength = 256;			// max length of a message chunk sent via Message or AppendMessage
 
 /****************************************************************************************************/
 
@@ -325,7 +324,7 @@ public:
 	uint8_t day;
 	uint8_t month;
 	uint16_t year;
-	char fileName[255];
+	char fileName[MaxFilenameLength];
 };
 
 class MassStorage
@@ -342,7 +341,7 @@ public:
   bool Rename(const char *oldFilename, const char *newFilename);
   bool FileExists(const char *file) const;
   bool PathExists(const char *path) const;
-  bool PathExists(const char* directory, const char* fileName);
+  bool PathExists(const char* directory, const char* subDirectory);
 
 friend class Platform;
 
@@ -353,10 +352,10 @@ protected:
 
 private:
 
-  char combinedName[MaxFilenameLength + 1];
   Platform* platform;
   FATFS fileSystem;
   DIR findDir;
+  char combinedName[MaxFilenameLength + 1];
 };
 
 // This class handles input from, and output to, files.
@@ -434,7 +433,7 @@ struct ZProbeParameters
 		height = h;
 		calibTemperature = 20.0;
 		temperatureCoefficient = 0.0;	// no default temperature correction
-		diveHeight = Z_DIVE;
+		diveHeight = DefaultZDive;
 	}
 
 	float GetStopHeight(float temperature) const
@@ -693,7 +692,7 @@ public:
 //  void SetMixingDrives(int);
 //  int GetMixingDrives();
 
-  uint8_t SlowestDrive() const;
+  size_t SlowestDrive() const;
 
   // Heat and temperature
   
@@ -790,7 +789,7 @@ private:
 //  bool disableDrives[DRIVES];			// not currently used
   volatile DriveStatus driveState[DRIVES];
   bool directions[DRIVES];
-  int8_t endStopPins[DRIVES];
+  Pin endStopPins[DRIVES];
   float maxFeedrates[DRIVES];  
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
@@ -801,7 +800,7 @@ private:
 
   MCP4461 mcpDuet;
   MCP4461 mcpExpansion;
-  int8_t slowestDrive;
+  size_t slowestDrive;
 
   Pin potWipes[DRIVES];
   float senseResistor;
@@ -1076,7 +1075,7 @@ inline void Platform::SetInstantDv(size_t drive, float value)
 	SetSlowestDrive();
 }
 
-inline uint8_t Platform::SlowestDrive() const
+inline size_t Platform::SlowestDrive() const
 {
 	return slowestDrive;
 }

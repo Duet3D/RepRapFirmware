@@ -44,7 +44,7 @@ class PID
     bool SwitchedOff() const;						// Are we switched off?
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
     float GetTemperature() const;					// Get the current temperature
-    float GetAveragePWM() const;					// Return the running average PWM to the heater.  Answer is a fraction in [0, 1].
+    float GetAveragePWM() const;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 
   private:
 
@@ -88,6 +88,7 @@ class Heat
     void Standby(int8_t heater);								// Set a heater idle
     float GetTemperature(int8_t heater) const;					// Get the temperature of a heater
     HeaterStatus GetStatus(int8_t heater) const;				// Get the off/standby/active status
+    void SwitchOff(int8_t heater);								// Turn off a specific heater
     void SwitchOffAll();										// Turn all heaters off
     void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
     bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
@@ -137,7 +138,7 @@ inline float PID::GetStandbyTemperature() const
 
 inline float PID::GetTemperature() const
 {
-  return temperature;
+  return (temperatureFault ? ABS_ZERO : temperature);
 }
 
 inline void PID::Activate()
@@ -165,6 +166,7 @@ inline void PID::Standby()
 inline void PID::ResetFault()
 {
 	temperatureFault = false;
+    timeSetHeating = platform->Time();		// otherwise we will get another timeout immediately
 	badTemperatureCount = 0;
 }
 
@@ -232,6 +234,14 @@ inline void Heat::Activate(int8_t heater)
   {
     pids[heater]->Activate();
   }
+}
+
+inline void Heat::SwitchOff(int8_t heater)
+{
+	if (heater >= 0 && heater < HEATERS)
+	{
+		pids[heater]->SwitchOff();
+	}
 }
 
 inline void Heat::SwitchOffAll()

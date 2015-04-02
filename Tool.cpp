@@ -34,6 +34,7 @@ Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 	heaterCount = hCount;
 	heaterFault = false;
 	mixing = false;
+	displayColdExtrudeWarning = false;
 
 	for(size_t axis = 0; axis < AXES; axis++)
 	{
@@ -266,15 +267,23 @@ void Tool::SetVariables(const float* standby, const float* active)
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		if (active[heater] < BAD_HIGH_TEMPERATURE)
+		if (active[heater] < NEARLY_ABS_ZERO && standby[heater] < NEARLY_ABS_ZERO)
 		{
-			activeTemperatures[heater] = active[heater];
-			reprap.GetHeat()->SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
+			// Temperatures close to ABS_ZERO turn off all associated heaters
+			reprap.GetHeat()->SwitchOff(heaters[heater]);
 		}
-		if (standby[heater] < BAD_HIGH_TEMPERATURE)
+		else
 		{
-			standbyTemperatures[heater] = standby[heater];
-			reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+			if (active[heater] < BAD_HIGH_TEMPERATURE)
+			{
+				activeTemperatures[heater] = active[heater];
+				reprap.GetHeat()->SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
+			}
+			if (standby[heater] < BAD_HIGH_TEMPERATURE)
+			{
+				standbyTemperatures[heater] = standby[heater];
+				reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+			}
 		}
 	}
 }
@@ -288,14 +297,17 @@ void Tool::GetVariables(float* standby, float* active) const
 	}
 }
 
-bool Tool::ToolCanDrive(bool extrude) const
+// May be called from ISR
+bool Tool::ToolCanDrive(bool extrude)
 {
 	if (heaterFault)
-	{
 		return false;
-	}
 
-	return reprap.ColdExtrude() || AllHeatersAtHighTemperature(extrude);
+	if (reprap.ColdExtrude() || AllHeatersAtHighTemperature(extrude))
+		return true;
+
+	displayColdExtrudeWarning = true;
+	return false;
 }
 
 // Update the number of active drives and extruders in use to reflect what this tool uses
@@ -311,11 +323,18 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		if (heaters[heater] >= numHeaters)
+		if (heaters[heater] != HOT_BED && heaters[heater] >= numHeaters)
 		{
 			numHeaters = heaters[heater] + 1;
 		}
 	}
+}
+
+bool Tool::DisplayColdExtrudeWarning()
+{
+	bool result = displayColdExtrudeWarning;
+	displayColdExtrudeWarning = false;
+	return result;
 }
 
 // End

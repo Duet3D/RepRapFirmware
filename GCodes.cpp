@@ -278,7 +278,7 @@ void GCodes::Spin()
 		}
 	}
 		state = GCodeState::toolChange2;
-		if (reprap.GetTool(newToolNumber) != NULL)
+		if (reprap.GetTool(newToolNumber) != NULL && AllAxesAreHomed())
 		{
 			scratchString.printf("tpre%d.g", newToolNumber);
 			DoFileMacro(scratchString.Pointer());
@@ -288,7 +288,7 @@ void GCodes::Spin()
 	case GCodeState::toolChange2: // Select the new tool (even if it doesn't exist - that just deselects all tools)
 		reprap.SelectTool(newToolNumber);
 		state = GCodeState::toolChange3;
-		if (reprap.GetTool(newToolNumber) != NULL)
+		if (reprap.GetTool(newToolNumber) != NULL && AllAxesAreHomed())
 		{
 			scratchString.printf("tpost%d.g", newToolNumber);
 			DoFileMacro(scratchString.Pointer());
@@ -840,21 +840,18 @@ void GCodes::FileMacroCyclesReturn()
 // you want (if action[DRIVES] is true).
 bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 {
-	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+	if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 	{
-		return false;
-	}
+		if (cannedCycleMoveQueued)		// if the move has already been queued, it must have finished
+		{
+			Pop();
+			cannedCycleMoveQueued = false;
+			return true;
+		}
 
-	// Is the move already running?
-	if (cannedCycleMoveQueued)
-	{ // Yes.
-		Pop();
-		cannedCycleMoveQueued = false;
-		return true;
-	}
-	else
-	{ // No.
+		// Otherwise, the move has not been queued yet
 		Push();
+
 		for (size_t drive = 0; drive <= DRIVES; drive++)
 		{
 			if (activeDrive[drive])
@@ -865,6 +862,11 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 		endStopsToCheck = ce;
 		cannedCycleMoveQueued = true;
 		moveAvailable = true;
+
+		if ((ce & ZProbeActive) && reprap.GetPlatform()->GetZProbeResult() == lowHit)
+		{
+			platform->Message(BOTH_ERROR_MESSAGE, "Z probe warning: probe already triggered at start of probing move\n");
+		}
 	}
 	return false;
 }
@@ -947,7 +949,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 // This lifts Z a bit, moves to the probe XY coordinates (obtained by a call to GetProbeCoordinates() ),
 // probes the bed height, and records the Z coordinate probed.  If you want to program any general
 // internal canned cycle, this shows how to do it.
-// On entry, probePointIndex specifies which of the 3, 4 or 5 points this is.
+// On entry, probePointIndex specifies which of the points this is.
 bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 {
 	reprap.GetMove()->SetIdentityTransform(); 		// It doesn't matter if these are called repeatedly
@@ -959,7 +961,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 
 	switch (cannedCycleMoveCount)
 	{
-	case 0: // Raise Z to 5mm. This only does anything on the first move; on all the others Z is already there
+	case 0: // Move Z to the dive height. This only does anything on the first move; on all the others Z is already there
 		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight();
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
@@ -984,7 +986,9 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 		return false;
 
 	case 2:	// Probe the bed
-		moveToDo[Z_AXIS] = -2.0 * platform->AxisMaximum(Z_AXIS);
+		moveToDo[Z_AXIS] = (axisIsHomed[Z_AXIS])
+							? -platform->GetZProbeDiveHeight()				// Z axis has been homed, so no point in going very far
+							: -1.1 * platform->AxisTotalLength(Z_AXIS);		// Z axis not homed yet, so treat this as a homing move
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
 		activeDrive[DRIVES] = true;
@@ -1008,20 +1012,21 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 		}
 		return false;
 
-	case 3:	// Raise the head 5mm
+	case 3:	// Raise the head back up to the dive height
 		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight();
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		if (DoCannedCycleMove(0))
 		{
-			cannedCycleMoveCount++;
+			cannedCycleMoveCount = 0;
+			reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ);
+			return true;
 		}
 		return false;
 
-	default:
+	default: // should not happen
 		cannedCycleMoveCount = 0;
-		reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ);
 		return true;
 	}
 }
@@ -1069,7 +1074,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 		return DoSingleZProbe();
 
 	int probePointIndex = gb->GetIValue();
-	if (probePointIndex < 0 || probePointIndex >= NUMBER_OF_PROBE_POINTS)
+	if (probePointIndex < 0 || probePointIndex >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
 		return true;
@@ -1530,7 +1535,7 @@ void GCodes::SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb)
 	}
 }
 
-void GCodes::AddNewTool(GCodeBuffer *gb, StringRef& reply)
+void GCodes::ManageTool(GCodeBuffer *gb, StringRef& reply)
 {
 	if (!gb->Seen('P'))
 	{
@@ -1543,9 +1548,16 @@ void GCodes::AddNewTool(GCodeBuffer *gb, StringRef& reply)
 		return;
 	}
 
-	int toolNumber = gb->GetLValue();
+	// Check tool number
 	bool seen = false;
+	int toolNumber = gb->GetLValue();
+	if (toolNumber < 0)
+	{
+		platform->Message(BOTH_ERROR_MESSAGE, "Tool number must be positive!\n");
+		return;
+	}
 
+	// Check drives
 	long drives[DRIVES - AXES];  // There can never be more than we have...
 	int dCount = DRIVES - AXES;  // Sets the limit and returns the count
 	if (gb->Seen('D'))
@@ -1558,6 +1570,7 @@ void GCodes::AddNewTool(GCodeBuffer *gb, StringRef& reply)
 		dCount = 0;
 	}
 
+	// Check heaters
 	long heaters[HEATERS];
 	int hCount = HEATERS;
 	if (gb->Seen('H'))
@@ -1572,8 +1585,18 @@ void GCodes::AddNewTool(GCodeBuffer *gb, StringRef& reply)
 
 	if (seen)
 	{
-		Tool* tool = new Tool(toolNumber, drives, dCount, heaters, hCount);
-		reprap.AddTool(tool);
+		// Add or delete tool
+		// M563 P# D-1 H-1 removes an existing tool
+		if (dCount == 1 && hCount == 1 && drives[0] == -1 && heaters[0] == -1)
+		{
+			Tool *tool = reprap.GetTool(toolNumber);
+			reprap.DeleteTool(tool);
+		}
+		else
+		{
+			Tool* tool = new Tool(toolNumber, drives, dCount, heaters, hCount);
+			reprap.AddTool(tool);
+		}
 	}
 	else
 	{
@@ -3401,7 +3424,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (gb->Seen('P'))
 		{
 			int point = gb->GetIValue();
-			if (point < 0 || point >= NUMBER_OF_PROBE_POINTS)
+			if (point < 0 || point >= MaxProbePoints)
 			{
 				reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
 			}
@@ -3526,7 +3549,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 563: // Define tool
-		AddNewTool(gb, reply);
+		ManageTool(gb, reply);
 		break;
 
 	case 564: // Think outside the box?
@@ -3842,8 +3865,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			if (!seen)
 			{
-				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f\n", params.GetEndstopAdjustment(X_AXIS),
-						params.GetEndstopAdjustment(Y_AXIS), params.GetEndstopAdjustment(Z_AXIS));
+				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f\n",
+						params.GetEndstopAdjustment(X_AXIS),params.GetEndstopAdjustment(Y_AXIS), params.GetEndstopAdjustment(Z_AXIS));
 			}
 		}
 		break;
@@ -3973,7 +3996,7 @@ bool GCodes::HandleTcode(GCodeBuffer* gb, StringRef& reply)
 		// If old and new are the same still follow the sequence - the user may want the macros run.
 		Tool *oldTool = reprap.GetCurrentTool();
 		state = GCodeState::toolChange1;
-		if (oldTool != NULL)
+		if (oldTool != NULL && AllAxesAreHomed())
 		{
 			scratchString.printf("tfree%d.g", oldTool->Number());
 			DoFileMacro(scratchString.Pointer());

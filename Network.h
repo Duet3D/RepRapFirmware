@@ -179,8 +179,9 @@ public:
 	void Enable();
 	void Disable();
 	bool IsEnabled() const;
-	unsigned int GetHttpPort() const;
-	void SetHttpPort(unsigned int port);
+
+	void SetHttpPort(uint16_t port);
+	uint16_t GetHttpPort() const;
 
 private:
 

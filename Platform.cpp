@@ -137,23 +137,19 @@ void Platform::Init()
 	SerialUSB.begin(baudRates[0]);
 	Serial.begin(baudRates[1]);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 
-#if __cplusplus >= 201103L
 	static_assert(sizeof(FlashData) + sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
-#else
-	// We are relying on the compiler optimizing this out if the condition is false
-	// Watch out for the build warning "undefined reference to 'BadStaticAssert()' if this fails.
-	if (!(sizeof(FlashData) + sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH))
-	{
-		extern void BadStaticAssert();
-		BadStaticAssert();
-	}
-#endif
 
 	ResetNvData();
 
 	line->Init();
 	aux->Init();
 	messageIndent = 0;
+
+	// We need to initialize at least some of the time stuff before we call MassStorage::Init()
+	addToTime = 0.0;
+	lastTimeCall = 0;
+	lastTime = Time();
+	longWait = lastTime;
 
 	massStorage->Init();
 
@@ -283,8 +279,6 @@ void Platform::Init()
 
 	InitialiseInterrupts();
 
-	addToTime = 0.0;
-	lastTimeCall = 0;
 	lastTime = Time();
 	longWait = lastTime;
 }
@@ -370,14 +364,13 @@ int Platform::ZProbe() const
 	{
 		switch (nvData.zProbeType)
 		{
-		case 1:
-		case 3:
-		case 4:
-			// Simple IR sensor, or direct-mode ultrasonic sensor
+		case 1:		// Simple or intelligent IR sensor
+		case 3:		// Alternate sensor
+		case 4:		// Mechanical Z probe
 			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));
 
-		case 2:
-			// Modulated IR sensor. We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
+		case 2:		// Modulated IR sensor.
+			// We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
 					/ (4 * numZProbeReadingsAveraged));
@@ -460,7 +453,7 @@ float Platform::GetZProbeDiveHeight() const
 	case 4:
 		return nvData.switchZProbeParameters.diveHeight;
 	default:
-		return Z_DIVE;
+		return DefaultZDive;
 	}
 }
 
@@ -1040,7 +1033,7 @@ void Platform::Diagnostics()
 
 	// Show the current probe position heights
 	AppendMessage(BOTH_MESSAGE, "Bed probe heights:");
-	for (size_t i = 0; i < NUMBER_OF_PROBE_POINTS; ++i)
+	for (size_t i = 0; i < MaxProbePoints; ++i)
 	{
 		AppendMessage(BOTH_MESSAGE, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
 	}
@@ -1660,45 +1653,96 @@ void Platform::ResetChannel(size_t chan)
 
  */
 
-MassStorage::MassStorage(Platform* p)
+MassStorage::MassStorage(Platform* p) : platform(p)
 {
-	platform = p;
+	memset(&fileSystem, 0, sizeof(fileSystem));
 }
 
 void MassStorage::Init()
 {
-	hsmciPinsinit();
 	// Initialize SD MMC stack
+	hsmciPinsinit();
 	sd_mmc_init();
 	delay(20);
-	int sdPresentCount = 0;
-	while ((CTRL_NO_PRESENT == sd_mmc_check(0)) && (sdPresentCount < 5))
+
+	bool abort = false;
+	sd_mmc_err_t err;
+	do {
+		err = sd_mmc_check(0);
+		if (err > SD_MMC_ERR_NO_CARD)
+		{
+			abort = true;
+			delay(3000);	// Wait a few seconds, so users have a chance to see the following error message
+		}
+		else
+		{
+			abort = (err == SD_MMC_ERR_NO_CARD && platform->Time() > 5.0);
+		}
+
+		if (abort)
+		{
+			platform->Message(HOST_MESSAGE, "Cannot initialize the SD card: ");
+			switch (err)
+			{
+				case SD_MMC_ERR_NO_CARD:
+					platform->AppendMessage(HOST_MESSAGE, "Card not found\n");
+					break;
+				case SD_MMC_ERR_UNUSABLE:
+					platform->AppendMessage(HOST_MESSAGE, "Card is unusable, try another one\n");
+					break;
+				case SD_MMC_ERR_SLOT:
+					platform->AppendMessage(HOST_MESSAGE, "Slot unknown\n");
+					break;
+				case SD_MMC_ERR_COMM:
+					platform->AppendMessage(HOST_MESSAGE, "General communication error\n");
+					break;
+				case SD_MMC_ERR_PARAM:
+					platform->AppendMessage(HOST_MESSAGE, "Illegal input parameter\n");
+					break;
+				case SD_MMC_ERR_WP:
+					platform->AppendMessage(HOST_MESSAGE, "Card write protected\n");
+					break;
+				default:
+					platform->AppendMessage(HOST_MESSAGE, "Unknown (code %d)\m", err);
+					break;
+			}
+			return;
+		}
+	} while (err != SD_MMC_OK);
+
+	// Print some card details (optional)
+
+	/*platform->Message(HOST_MESSAGE, "SD card detected!\nCapacity: %d\n", sd_mmc_get_capacity(0));
+	platform->AppendMessage(HOST_MESSAGE, "Bus clock: %d\n", sd_mmc_get_bus_clock(0));
+	platform->AppendMessage(HOST_MESSAGE, "Bus width: %d\nCard type: ", sd_mmc_get_bus_width(0));
+	switch (sd_mmc_get_type(0))
 	{
-		//platform->Message(HOST_MESSAGE, "Please plug in the SD card.\n");
-		//delay(1000);
-		sdPresentCount++;
-	}
+		case CARD_TYPE_SD | CARD_TYPE_HC:
+			platform->AppendMessage(HOST_MESSAGE, "SDHC\n");
+			break;
+		case CARD_TYPE_SD:
+			platform->AppendMessage(HOST_MESSAGE, "SD\n");
+			break;
+		case CARD_TYPE_MMC | CARD_TYPE_HC:
+			platform->AppendMessage(HOST_MESSAGE, "MMC High Density\n");
+			break;
+		case CARD_TYPE_MMC:
+			platform->AppendMessage(HOST_MESSAGE, "MMC\n");
+			break;
+		case CARD_TYPE_SDIO:
+			platform->AppendMessage(HOST_MESSAGE, "SDIO\n");
+			return;
+		case CARD_TYPE_SD_COMBO:
+			platform->AppendMessage(HOST_MESSAGE, "SD COMBO\n");
+			break;
+		case CARD_TYPE_UNKNOWN:
+		default:
+			platform->AppendMessage(HOST_MESSAGE, "Unknown\n");
+			return;
+	}*/
 
-	if (sdPresentCount >= 5)
-	{
-		platform->Message(HOST_MESSAGE, "Can't find the SD card.\n");
-		return;
-	}
+	// Mount the file system
 
-	//print card info
-
-//	SerialUSB.print("sd_mmc_card->capacity: ");
-//	SerialUSB.print(sd_mmc_get_capacity(0));
-//	SerialUSB.print(" bytes\n");
-//	SerialUSB.print("sd_mmc_card->clock: ");
-//	SerialUSB.print(sd_mmc_get_bus_clock(0));
-//	SerialUSB.print(" Hz\n");
-//	SerialUSB.print("sd_mmc_card->bus_width: ");
-//	SerialUSB.println(sd_mmc_get_bus_width(0));
-
-	memset(&fileSystem, 0, sizeof(FATFS));
-	//f_mount (LUN_ID_SD_MMC_0_MEM, NULL);
-	//int mounted = f_mount(LUN_ID_SD_MMC_0_MEM, &fileSystem);
 	int mounted = f_mount(0, &fileSystem);
 	if (mounted != FR_OK)
 	{
@@ -1752,10 +1796,10 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 {
-	TCHAR loc[64 + 1];
+	TCHAR loc[MaxFilenameLength + 1];
 
 	// Remove the trailing '/' from the directory name
-	size_t len = strnlen(directory, ARRAY_SIZE(loc) - 1);	// the -1 ensures we have room for a null terminator
+	size_t len = strnlen(directory, ARRAY_UPB(loc));
 	if (len == 0)
 	{
 		loc[0] = 0;
@@ -1771,6 +1815,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 		loc[len] = 0;
 	}
 
+	findDir.lfn = nullptr;
 	FRESULT res = f_opendir(&findDir, loc);
 	if (res == FR_OK)
 	{
@@ -1814,6 +1859,7 @@ bool MassStorage::FindNext(FileInfo &file_info)
 	entry.lfname = file_info.fileName;
 	entry.lfsize = ARRAY_SIZE(file_info.fileName);
 
+	findDir.lfn = nullptr;
 	if (f_readdir(&findDir, &entry) != FR_OK || entry.fname[0] == 0)
 	{
 		//f_closedir(findDir);
@@ -1899,6 +1945,7 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
 bool MassStorage::FileExists(const char *file) const
 {
 	FILINFO fil;
+	fil.lfname = nullptr;
 	return (f_stat(file, &fil) == FR_OK);
 }
 
@@ -1906,14 +1953,15 @@ bool MassStorage::FileExists(const char *file) const
 bool MassStorage::PathExists(const char *path) const
 {
 	DIR dir;
+	dir.lfn = nullptr;
 	return (f_opendir(&dir, path) == FR_OK);
 }
 
-bool MassStorage::PathExists(const char* directory, const char* fileName)
+bool MassStorage::PathExists(const char* directory, const char* subDirectory)
 {
 	const char* location = (directory != NULL)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-								: fileName;
+							? platform->GetMassStorage()->CombineName(directory, subDirectory)
+								: subDirectory;
 	return PathExists(location);
 }
 

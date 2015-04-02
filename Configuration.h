@@ -2,8 +2,8 @@
 
 RepRapFirmware - Configuration
 
-This is where all machine-independent configuration and other definitions are set up.  Nothing that
-depends on any particular RepRap, RepRap component, or RepRap controller  should go in here.  Define 
+This is where all machine-independent configuration and other definitions are set up. Nothing that
+depends on any particular RepRap, RepRap component, or RepRap controller should go in here. Define
 machine-dependent things in Platform.h
 
 -----------------------------------------------------------------------------------------------------
@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.04b-dc42"
-#define DATE "2015-03-24"
+#define VERSION "1.04c-dc42"
+#define DATE "2015-04-02"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -46,24 +46,25 @@ enum Compatibility
 
 #define AUX_BAUD_RATE	(57600)
 
-const unsigned int GcodeLength = 100;		// Maximum length of a G Code string that we handle
-const unsigned int MaxFilenameLength = 100;	// Maximum length of a path + filename on the SD card
+const unsigned int GcodeLength = 100;			// Maximum length of a G Code string that we handle
+const unsigned int MaxFilenameLength = 100;		// Maximum length of a path + filename on the SD card
 
-const float defaultIdleCurrentFactor = 0.3;	// Proportion of normal motor current that we use for idle hold
+const float defaultIdleCurrentFactor = 0.3;		// Proportion of normal motor current that we use for idle hold
 const float defaultIdleTimeout = 30.0;
 
-#define ABS_ZERO (-273.15)  				// Celsius
+#define ABS_ZERO (-273.15)  					// Celsius
+#define NEARLY_ABS_ZERO (-273)					// Celsius
 
 #define INCH_TO_MM (25.4)
 
-#define HEAT_SAMPLE_TIME (0.5)				// Seconds
-#define HEAT_PWM_AVERAGE_TIME (5.0)			// Seconds
+#define HEAT_SAMPLE_TIME (0.5)					// Seconds
+#define HEAT_PWM_AVERAGE_TIME (5.0)				// Seconds
 
-#define TEMPERATURE_CLOSE_ENOUGH (2.5) 		// Celsius
-#define TEMPERATURE_LOW_SO_DONT_CARE (40.0)	// Celsius
-#define HOT_ENOUGH_TO_EXTRUDE (160.0)       // Celsius
-#define HOT_ENOUGH_TO_RETRACT (90.0)		// Celsius
-#define TIME_TO_HOT (150.0)					// Seconds
+#define TEMPERATURE_CLOSE_ENOUGH (2.5) 			// Celsius
+#define TEMPERATURE_LOW_SO_DONT_CARE (40.0)		// Celsius
+#define HOT_ENOUGH_TO_EXTRUDE (160.0)       	// Celsius
+#define HOT_ENOUGH_TO_RETRACT (90.0)			// Celsius
+#define TIME_TO_HOT (150.0)						// Seconds
 
 // If temperatures fall outside this range, something nasty has happened.
 
@@ -71,18 +72,22 @@ const float defaultIdleTimeout = 30.0;
 #define BAD_LOW_TEMPERATURE -10.0
 #define BAD_HIGH_TEMPERATURE 300.0
 
-#define NUMBER_OF_PROBE_POINTS 9	// Maximum number of probe points
-#define Z_DIVE 5.0  				// Default height from which to probe the bed (mm)
-#define TRIANGLE_0 -0.001			// Slightly less than 0 for point-in-triangle tests
+const size_t MaxProbePoints = 16;				// Maximum number of probe points
+const size_t MaxDeltaCalibrationPoints = 16;	// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
+
+const float DefaultZDive = 5.0;					// Default height from which to probe the bed (mm)
+
+#define TRIANGLE_0 -0.001						// Slightly less than 0 for point-in-triangle tests
 
 #define SILLY_Z_VALUE -9999.0
 
 // String lengths
 
 #define STRING_LENGTH 1024
-#define SHORT_STRING_LENGTH 40
-
-#define GCODE_REPLY_LENGTH 2048
+const size_t MaxPasswordLength = 20;
+const size_t MaxNameLength = 40;
+const size_t MaxMessageLength = 40;
+const size_t MaxGcodeReplyLength = 2048;
 
 // Print estimation defaults
 #define NOZZLE_DIAMETER 0.5						// Thickness of the nozzle
@@ -95,9 +100,9 @@ const float defaultIdleTimeout = 30.0;
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
 #define INDEX_PAGE "reprap.htm"
-//#define MESSAGE_FILE "messages.txt"	// currently unused
+//#define MESSAGE_FILE "messages.txt"			// currently unused
 #define FOUR04_FILE "html404.htm"
-#define CONFIG_FILE "config.g" 			// The file that sets the machine's parameters
+#define CONFIG_FILE "config.g" 					// The file that sets the machine's parameters
 #define DEFAULT_FILE "default.g"				// If the config file isn't found
 #define HOME_X_G "homex.g"
 #define HOME_Y_G "homey.g"

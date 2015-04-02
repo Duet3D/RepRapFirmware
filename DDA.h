@@ -127,6 +127,7 @@ private:
 inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 {
 	endPoint[drive] = a;
+	endCoordinatesValid = false;
 }
 
 #endif /* DDA_H_ */

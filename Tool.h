@@ -35,7 +35,7 @@ public:
 	void SetOffset(const float offs[AXES]);
 	int DriveCount() const;
 	int Drive(int driveNumber) const;
-	bool ToolCanDrive(bool extrude) const;
+	bool ToolCanDrive(bool extrude);
 	int HeaterCount() const;
 	int Heater(int heaterNumber) const;
 	int Number() const;
@@ -61,6 +61,7 @@ protected:
 	void FlagTemperatureFault(int8_t dudHeater);
 	void ClearTemperatureFault(int8_t wasDudHeater);
 	void UpdateExtruderAndHeaterCount(uint16_t &extruders, uint16_t &heaters) const;
+	bool DisplayColdExtrudeWarning();
 
 private:
 
@@ -80,6 +81,8 @@ private:
 	bool active;
 	bool heaterFault;
 	float offset[AXES];
+
+	volatile bool displayColdExtrudeWarning;
 };
 
 inline int Tool::Drive(int driveNumber) const

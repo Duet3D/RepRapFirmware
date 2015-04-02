@@ -46,7 +46,6 @@ void DeltaParameters::Recalc()
 	deltaMode = (radius > 0.0 && diagonal > radius);
 	if (deltaMode)
 	{
-		homedCarriageHeight = homedHeight + sqrtf(fsquare(diagonal) - fsquare(radius));
 		Xbc = towerX[C_AXIS] - towerX[B_AXIS];
 		Xca = towerX[A_AXIS] - towerX[C_AXIS];
 		Xab = towerX[B_AXIS] - towerX[A_AXIS];
@@ -58,17 +57,36 @@ void DeltaParameters::Recalc()
 		coreFc = fsquare(towerX[C_AXIS]) + fsquare(towerY[C_AXIS]);
 		Q = 2 * (Xca * Yab - Xab * Yca);
 		Q2 = fsquare(Q);
+		D2 = fsquare(diagonal);
+
+		// Calculate the base carriage height when the printer is homed.
+		const float tempHeight = diagonal;		// any sensible height will do here, probably even zero
+		float machinePos[AXES];
+		InverseTransform(tempHeight + endstopAdjustments[X_AXIS], tempHeight + endstopAdjustments[Y_AXIS], tempHeight + endstopAdjustments[X_AXIS],
+							machinePos);
+		homedCarriageHeight = homedHeight + tempHeight - machinePos[Z_AXIS];
 	}
+}
+
+// Make the average of the endstop adjustments zero, without changing the individual homed carriage heights
+void DeltaParameters::NormaliseEndstopAdjustments()
+{
+	const float eav = (endstopAdjustments[A_AXIS] + endstopAdjustments[B_AXIS] + endstopAdjustments[C_AXIS])/3.0;
+	endstopAdjustments[A_AXIS] -= eav;
+	endstopAdjustments[B_AXIS] -= eav;
+	endstopAdjustments[C_AXIS] -= eav;
+	homedHeight += eav;
+	homedCarriageHeight += eav;				// no need for a full recalc, this is sufficient
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate
 float DeltaParameters::Transform(const float machinePos[AXES], size_t axis) const
 {
 	return machinePos[Z_AXIS]
-	          + sqrt(fsquare(diagonal) - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]));
+	          + sqrt(D2 - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]));
 }
 
-void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machinePos[]) const
+void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machinePos[AXES]) const
 {
 	const float Fa = coreFa + fsquare(Ha);
 	const float Fb = coreFb + fsquare(Hb);
@@ -90,7 +108,7 @@ void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machi
 
 	float A = U2 + R2 + Q2;
 	float minusHalfB = S * U + P * R + Ha * Q2 + towerX[A_AXIS] * U * Q - towerY[A_AXIS] * R * Q;
-	float C = fsquare(S + towerX[A_AXIS] * Q) + fsquare(P - towerY[A_AXIS] * Q) + (fsquare(Ha) - fsquare(diagonal)) * Q2;
+	float C = fsquare(S + towerX[A_AXIS] * Q) + fsquare(P - towerY[A_AXIS] * Q) + (fsquare(Ha) - D2) * Q2;
 
 //	debugPrintf("A=%f minusHalfB=%f C=%f\n", A, minusHalfB, C);
 
@@ -100,8 +118,13 @@ void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machi
 	machinePos[Z_AXIS] = z;
 }
 
-// Compute the derivative of height with respect to a parameter
-float DeltaParameters::ComputeDerivative(unsigned int deriv, const float machinePos[AXES])
+// Compute the derivative of height with respect to a parameter at the specified motor endpoints.
+// 'deriv' indicates the parameter as follows:
+// 0, 1, 2 = X, Y, Z tower endstop adjustments
+// 3, 4 = X, Y tower X position
+// 5 = Z tower Y position
+// 6 = diagonal rod length
+float DeltaParameters::ComputeDerivative(unsigned int deriv, float ha, float hb, float hc)
 {
 	const float perturb = 0.2;			// perturbation amount in mm
 	DeltaParameters hiParams(*this), loParams(*this);
@@ -119,17 +142,25 @@ float DeltaParameters::ComputeDerivative(unsigned int deriv, const float machine
 		break;
 
 	case 5:
-		hiParams.towerY[C_AXIS] += perturb;
-		loParams.towerY[C_AXIS] -= perturb;
+		{
+			const float yAdj = perturb * (1.0/3.0);
+			hiParams.towerY[A_AXIS] -= yAdj;
+			hiParams.towerY[B_AXIS] -= yAdj;
+			hiParams.towerY[C_AXIS] += (perturb - yAdj);
+			loParams.towerY[A_AXIS] += yAdj;
+			loParams.towerY[B_AXIS] += yAdj;
+			loParams.towerY[C_AXIS] -= (perturb - yAdj);
+		}
+		break;
+
+	case 6:
+		hiParams.diagonal += perturb;
+		loParams.diagonal -= perturb;
 		break;
 	}
 
 	hiParams.Recalc();
 	loParams.Recalc();
-
-	float ha = Transform(machinePos, A_AXIS);
-	float hb = Transform(machinePos, B_AXIS);
-	float hc = Transform(machinePos, C_AXIS);
 
 	float newPos[AXES];
 	hiParams.InverseTransform((deriv == 0) ? ha + perturb : ha, (deriv == 1) ? hb + perturb : hb, (deriv == 2) ? hc + perturb : hc, newPos);
@@ -140,24 +171,58 @@ float DeltaParameters::ComputeDerivative(unsigned int deriv, const float machine
 	return (zHi - zLo)/(2 * perturb);
 }
 
-// Perform 6-factor adjustment
-void DeltaParameters::SixFactorAdjust(float ea, float eb, float ec, float xa, float xb, float yc)
+// Perform 4-factor adjustment.
+// The input vector contains the following parameters in this order:
+// X, Y and Z endstop adjustments
+// Delta radius
+void DeltaParameters::AdjustFour(const float v[4])
 {
-	const float eav = (ea + eb + ec)/3;
-	endstopAdjustments[A_AXIS] += ea - eav;
-	endstopAdjustments[B_AXIS] += eb - eav;
-	endstopAdjustments[C_AXIS] += ec - eav;
-	homedHeight += eav;
-	towerX[A_AXIS] += xa;
-	towerX[B_AXIS] += xb;
-	towerY[C_AXIS] += yc;
+	endstopAdjustments[A_AXIS] += v[0];
+	endstopAdjustments[B_AXIS] += v[1];
+	endstopAdjustments[C_AXIS] += v[2];
+	NormaliseEndstopAdjustments();
+	SetRadius(radius + v[3]);		// this sets isEquilateral true, recalculates tower positions, then calls Recalc()
+}
+
+// Perform 7-factor adjustment.
+// The input vector contains the following parameters in this order:
+//  X, Y and Z endstop adjustments
+//  X tower X position adjustment
+//  Y tower X position adjustment
+//  Z tower Y position adjustment
+//  Diagonal rod length adjustment
+void DeltaParameters::AdjustSeven(const float v[7])
+{
+	const float oldCarriageHeightA = GetHomedCarriageHeight(A_AXIS);	// save for later
+
+	endstopAdjustments[A_AXIS] += v[0];
+	endstopAdjustments[B_AXIS] += v[1];
+	endstopAdjustments[C_AXIS] += v[2];
+	NormaliseEndstopAdjustments();
+
+	towerX[A_AXIS] += v[3];
+	towerX[B_AXIS] += v[4];
+
+	const float yAdj = v[5] * (1.0/3.0);
+	towerY[A_AXIS] -= yAdj;
+	towerY[B_AXIS] -= yAdj;
+	towerY[C_AXIS] += (v[5] - yAdj);
+	diagonal += v[6];
 	isEquilateral = false;
+
 	Recalc();
+
+	// Adjusting the diagonal and the tower positions affects the homed carriage height.
+	// We need to adjust homedHeight to allow for this, to get the change that was requested in the endstop corrections.
+	const float heightError = GetHomedCarriageHeight(A_AXIS) - oldCarriageHeightA - v[0];
+	homedHeight -= heightError;
+	homedCarriageHeight -= heightError;
 }
 
 void DeltaParameters::PrintParameters(StringRef& reply, bool full)
 {
-	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, ", endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight);
+	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, diagonal %.2f, ",
+					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal);
 	if (isEquilateral && !full)
 	{
 		reply.catf("radius %.2f\n", radius);
@@ -224,10 +289,13 @@ void Move::Init()
 	currentFeedrate = reprap.GetPlatform()->HomeFeedRate(slow);
 
 	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
-	for (size_t point = 0; point < NUMBER_OF_PROBE_POINTS; point++)
+	for (size_t point = 0; point < MaxProbePoints; point++)
 	{
-		xBedProbePoints[point] = (0.3 + 0.6*(float)(point%2))*reprap.GetPlatform()->AxisMaximum(X_AXIS);
-		yBedProbePoints[point] = (0.0 + 0.9*(float)(point/2))*reprap.GetPlatform()->AxisMaximum(Y_AXIS);
+		if (point < 4)
+		{
+			xBedProbePoints[point] = (0.3 + 0.6*(float)(point%2))*reprap.GetPlatform()->AxisMaximum(X_AXIS);
+			yBedProbePoints[point] = (0.0 + 0.9*(float)(point/2))*reprap.GetPlatform()->AxisMaximum(Y_AXIS);
+		}
 		zBedProbePoints[point] = 0.0;
 		probePointSet[point] = unset;
 	}
@@ -298,7 +366,42 @@ void Move::Spin()
 			FilePosition filePos;
 			if (reprap.GetGCodes()->ReadMove(nextMove, endStopsToCheck, moveType, filePos))
 			{
+				// We have a new move
 				currentFeedrate = nextMove[DRIVES];		// might be G1 with just an F field
+
+#if 0	//*** This code is not finished yet ***
+				// If we are doing bed compensation and the move crosses a compensation boundary by a significant amount,
+				// segment it so that we can apply proper bed compensation
+				// Issues here:
+				// 1. Are there enough DDAs? need to make nextMove static and remember whether we have the remains of a move in there.
+				// 2. Restarting: if we restart a segmented move when we have already executed part of it, we will extrude too much.
+				// Perhaps remember how much of the last move we executed? Or always insist on completing all the segments in a move?
+				bool isSegmented;
+				do
+				{
+					float tempMove[DRIVES + 1];
+					memcpy(tempMove, nextMove, sizeof(tempMove));
+					isSegmented = SegmentMove(tempMove);
+					if (isSegmented)
+					{
+						// Extruder moves are relative, so we need to adjust the extrusion amounts in the original move
+						for (size_t drive = AXES; drive < DRIVES; ++drive)
+						{
+							nextMove[drive] -= tempMove[drive];
+						}
+					}
+					bool doMotorMapping = (moveType == 0) || (moveType == 1 && !IsDeltaMode());
+					if (doMotorMapping)
+					{
+						Transform(tempMove);
+					}
+					if (ddaRingAddPointer->Init(tempMove, endStopsToCheck, doMotorMapping, filePos))
+					{
+						ddaRingAddPointer = ddaRingAddPointer->GetNext();
+						idleCount = 0;
+					}
+				} while (isSegmented);
+#else	// Use old code
 				bool doMotorMapping = (moveType == 0) || (moveType == 1 && !IsDeltaMode());
 				if (doMotorMapping)
 				{
@@ -309,6 +412,7 @@ void Move::Spin()
 					ddaRingAddPointer = ddaRingAddPointer->GetNext();
 					idleCount = 0;
 				}
+#endif
 			}
 		}
 	}
@@ -800,56 +904,52 @@ float Move::TriangleZ(float x, float y) const
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 void Move::FinishedBedProbing(int sParam, StringRef& reply)
 {
-	if (reprap.Debug(moduleMove))
+	if (sParam < 0)
 	{
-		debugPrintf("Z probe offsets:");
+		// A negative sParam just prints the probe heights
+		reply.copy("Bed probe heights:");
 		for (size_t i = 0; i < NumberOfProbePoints(); ++i)
 		{
-			debugPrintf(" %.2f", zBedProbePoints[i]);
+			reply.catf(" %.2f", zBedProbePoints[i]);
 		}
-		debugPrintf("\n");
+		reply.cat("\n");
 	}
-
-	bool ok = false;
-	switch (sParam)
+	else if (NumberOfProbePoints() < sParam)
 	{
-	case 0:
-		SetProbedBedEquation(reply);
-		ok = true;
-		break;
-
-	case 4:
-		// On a delta, this calibrates the endstop adjustments and delta radius automatically after a 4 point probe.
-		// Probe points 1,2,3 must be near the bases of the X, Y and Z towers in that order. Point 4 must be in the centre.
-		if (IsDeltaMode() && NumberOfProbePoints() >= 4)
-		{
-			FourPointDeltaCalibration(reply);
-			ok = true;
-		}
-		break;
-
-	case 6:
-		// On a delta, this calibrates the endstop adjustments and tower positions automatically after a 6 point probe.
-		if (IsDeltaMode() && NumberOfProbePoints() >= 6)
-		{
-			SixPointDeltaCalibration(reply);
-			ok = true;
-		}
-		break;
-
-	default:
-		break;
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE,
+				"Bed calibration error: %d points requested but only %s provided\n", sParam, NumberOfProbePoints());
 	}
-
-	if (!ok)
+	else
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Bed probe type %d with %d points not supported on this machine\n", sParam, NumberOfProbePoints());
+		if (reprap.Debug(moduleMove))
+		{
+			debugPrintf("Z probe offsets:");
+			for (size_t i = 0; i < NumberOfProbePoints(); ++i)
+			{
+				debugPrintf(" %.2f", zBedProbePoints[i]);
+			}
+			debugPrintf("\n");
+		}
+
+		if (sParam == 0)
+		{
+			sParam = NumberOfProbePoints();
+		}
+
+		if (IsDeltaMode())
+		{
+			DoDeltaCalibration(sParam, reply);
+		}
+		else
+		{
+			SetProbedBedEquation(sParam, reply);
+		}
 	}
 }
 
-void Move::SetProbedBedEquation(StringRef& reply)
+void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 {
-	switch(NumberOfProbePoints())
+	switch(numPoints)
 	{
 	case 3:
 		/*
@@ -894,7 +994,7 @@ void Move::SetProbedBedEquation(StringRef& reply)
 		break;
 
 	case 5:
-		for(int8_t i = 0; i < 4; i++)
+		for (size_t i = 0; i < 4; i++)
 		{
 			float x10 = xBedProbePoints[i] - xBedProbePoints[4];
 			float y10 = yBedProbePoints[i] - yBedProbePoints[4];
@@ -910,7 +1010,8 @@ void Move::SetProbedBedEquation(StringRef& reply)
 		break;
 
 	default:
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Attempt to set bed compensation before all probe points have been recorded.");
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Bed calibration error: %d points provided but only 3, 4 and 5 supported\n", numPoints);
+		return;
 	}
 
 	reply.copy("Bed equation fits points");
@@ -921,6 +1022,43 @@ void Move::SetProbedBedEquation(StringRef& reply)
 	reply.cat("\n");
 }
 
+// Perform 4- or 7-factor delta adjustment
+void Move::AdjustDeltaParameters(const float v[], bool allSeven)
+{
+	// Save the old home carriage heights
+	float homedCarriageHeights[AXES];
+	for (size_t drive = 0; drive < AXES; ++drive)
+	{
+		homedCarriageHeights[drive] = deltaParams.GetHomedCarriageHeight(drive);
+	}
+
+	// Adjust the delta parameters
+	if (allSeven)
+	{
+		deltaParams.AdjustSeven(v);
+	}
+	else
+	{
+		deltaParams.AdjustFour(v);
+	}
+
+	// Adjust the motor endpoints to allow for the change in endstop adjustments
+	DDA *lastQueuedMove = ddaRingAddPointer->GetPrevious();
+	const int32_t *endCoordinates = lastQueuedMove->DriveCoordinates();
+	const float *driveStepsPerUnit = reprap.GetPlatform()->GetDriveStepsPerUnit();
+
+	for (size_t drive = 0; drive < AXES; ++drive)
+	{
+		const float heightAdjust = deltaParams.GetHomedCarriageHeight(drive) - homedCarriageHeights[drive];
+		int32_t ep = endCoordinates[drive] + (int32_t)(heightAdjust * driveStepsPerUnit[drive]);
+		lastQueuedMove->SetDriveCoordinate(ep, drive);
+		liveEndPoints[drive] = ep;
+	}
+
+	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated
+}
+
+#if 0
 // Do 4-point delta calibration. We adjust the 3 endstop corrections and the delta radius.
 void Move::FourPointDeltaCalibration(StringRef& reply)
 {
@@ -944,6 +1082,7 @@ void Move::FourPointDeltaCalibration(StringRef& reply)
 
 	// Adjust the homed height to account for the error at the centre and the change in average endstop correction
 	deltaParams.SetHomedHeight(deltaParams.GetHomedHeight() + averageEndstopOffset - zBedProbePoints[3]);
+	liveCoordinatesValid = false;				// we've updated the delta parameters, so we need to recalculate the position
 
 	// Print the parameters so the user can see when they have converged
 	deltaParams.PrintParameters(reply, false);
@@ -959,7 +1098,7 @@ void Move::SixPointDeltaCalibration(StringRef& reply)
 	}
 
 	// Build a 6x7 matrix of derivatives with respect to xa, xb, yc, za, zb, zc and the height errors.
-	float matrix[6][7];
+	FixedMatrix<float, 6, 7> matrix;
 	for (size_t i = 0; i < 6; ++i)
 	{
 		float machinePos[3];
@@ -968,9 +1107,9 @@ void Move::SixPointDeltaCalibration(StringRef& reply)
 		machinePos[2] = 0.0;						// the height doesn't matter
 		for (size_t j = 0; j < 6; ++j)
 		{
-			matrix[i][j] = deltaParams.ComputeDerivative(j, machinePos);
+			matrix(i, j) = deltaParams.ComputeDerivative(j, machinePos);
 		}
-		matrix[i][6] = -zBedProbePoints[i];
+		matrix(i, 6) = -zBedProbePoints[i];
 	}
 
 	if (reprap.Debug(moduleMove))
@@ -978,57 +1117,112 @@ void Move::SixPointDeltaCalibration(StringRef& reply)
 		PrintMatrix("Raw matrix", matrix);
 	}
 
-	for (size_t i = 0; i < 6; ++i)
+	float solution[6];
+	matrix.GaussJordan(solution);
+
+	if (reprap.Debug(moduleMove))
 	{
-		// Swap the rows around for stable Gauss-Jordan elimination
-		float vmax = fabs(matrix[i][i]);
-		for (size_t j = i + 1; j < 6; ++j)
-		{
-			const float rmax = fabs(matrix[j][i]);
-			if (rmax > vmax)
-			{
-				// swap rows i and j
-				for (size_t k = i; k < 7; ++k)
-				{
-					swap(matrix[i][k], matrix[j][k]);
-				}
-				vmax = rmax;
-			}
-		}
+		PrintMatrix("Solved matrix", matrix);
+		PrintVector("Solution", solution, 6);
+	}
 
-		// Use row i to eliminate the ith element from previous and subsequent rows
-		float v = matrix[i][i];
-		for (size_t j = 0; j < i; ++j)
-		{
-			float factor = matrix[j][i]/v;
-//			matrix[j][i] = 0.0;
-//			for (size_t k = i + 1; k < 7; ++k)
-			for (size_t k = i; k < 7; ++k)
-			{
-				matrix[j][k] -= matrix[i][k] * factor;
-			}
-		}
+	AdjustDeltaParameters(solution, true);
+	liveCoordinatesValid = false;					// we've updated the delta parameters, so we need to recalculate the position
+	deltaParams.PrintParameters(reply, true);
+}
+#endif
 
-		for (size_t j = i + 1; j < 6; ++j)
+// Do delta calibration. We adjust the three endstop corrections, and either the delta radius,
+// or the X positions of the front two towers, the Y position of the rear tower, and the diagonal rod length.
+void Move::DoDeltaCalibration(size_t numPoints, StringRef& reply)
+{
+	if (numPoints < 4 || numPoints > MaxDeltaCalibrationPoints)
+	{
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE,
+				"Delta calibration error: %d probe points provided but must be between 4 and %d\n", MaxDeltaCalibrationPoints);
+		return;
+	}
+
+	if (reprap.Debug(moduleMove))
+	{
+		deltaParams.PrintParameters(scratchString, true);
+		debugPrintf("%s\n", scratchString.Pointer());
+	}
+
+	size_t numFactors = (numPoints >= 7) ? 7 : 4;
+
+	// Build a Nx7 matrix of derivatives with respect to xa, xb, yc, za, zb, zc, diagonal.
+	FixedMatrix<float, MaxDeltaCalibrationPoints, 7> derivativeMatrix;
+	for (size_t i = 0; i < numPoints; ++i)
+	{
+		float machinePos[3];
+		machinePos[0] = xBedProbePoints[i];
+		machinePos[1] = yBedProbePoints[i];
+		machinePos[2] = 0.0;						// the height doesn't matter
+
+		float ha = deltaParams.Transform(machinePos, A_AXIS);
+		float hb = deltaParams.Transform(machinePos, B_AXIS);
+		float hc = deltaParams.Transform(machinePos, C_AXIS);
+		for (size_t j = 0; j < numFactors; ++j)
 		{
-			float factor = matrix[j][i]/v;
-//			matrix[j][i] = 0.0;
-//			for (size_t k = i + 1; k < 7; ++k)
-			for (size_t k = i; k < 7; ++k)
-			{
-				matrix[j][k] -= matrix[i][k] * factor;
-			}
+			derivativeMatrix(i, j) = deltaParams.ComputeDerivative(j, ha, hb, hc);
 		}
 	}
 
 	if (reprap.Debug(moduleMove))
 	{
-		PrintMatrix("Diagonalised matrix", matrix);
+		PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
 	}
 
-	deltaParams.SixFactorAdjust(matrix[0][6]/matrix[0][0], matrix[1][6]/matrix[1][1], matrix[2][6]/matrix[2][2],
-			matrix[3][6]/matrix[3][3], matrix[4][6]/matrix[4][4], matrix[5][6]/matrix[5][5]);
+	// Now build the normal equations for least squares fitting
+	FixedMatrix<float, 7, 8> normalMatrix;
+	for (size_t i = 0; i < numFactors; ++i)
+	{
+		for (size_t j = 0; j < numFactors; ++j)
+		{
+			float temp = derivativeMatrix(0, i) * derivativeMatrix(0, j);
+			for (size_t k = 1; k < numPoints; ++k)
+			{
+				temp += derivativeMatrix(k, i) * derivativeMatrix(k, j);
+			}
+			normalMatrix(i, j) = temp;
+		}
+		float temp = derivativeMatrix(0, i) * -zBedProbePoints[0];
+		for (size_t k = 1; k < numPoints; ++k)
+		{
+			temp += derivativeMatrix(k, i) * -zBedProbePoints[k];
+		}
+		normalMatrix(i, numFactors) = temp;
+	}
 
+	if (reprap.Debug(moduleMove))
+	{
+		PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
+	}
+
+	float solution[7];
+	normalMatrix.GaussJordan(solution, numFactors);
+
+	if (reprap.Debug(moduleMove))
+	{
+		PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
+		PrintVector("Solution", solution, numFactors);
+
+		// Calculate and display the residuals
+		float residuals[MaxDeltaCalibrationPoints];
+		for (size_t i = 0; i < numPoints; ++i)
+		{
+			residuals[i] = zBedProbePoints[i];
+			for (size_t j = 0; j < numFactors; ++j)
+			{
+				residuals[i] += solution[j] * derivativeMatrix(i, j);
+			}
+		}
+
+		PrintVector("Residuals", residuals, numPoints);
+	}
+
+	AdjustDeltaParameters(solution, numFactors == 7);
 	deltaParams.PrintParameters(reply, true);
 }
 
@@ -1212,7 +1406,7 @@ void Move::SetLiveCoordinates(const float coords[DRIVES])
 
 void Move::SetXBedProbePoint(int index, float x)
 {
-	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	if(index < 0 || index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point X index out of range.\n");
 		return;
@@ -1223,7 +1417,7 @@ void Move::SetXBedProbePoint(int index, float x)
 
 void Move::SetYBedProbePoint(int index, float y)
 {
-	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	if(index < 0 || index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Y index out of range.\n");
 		return;
@@ -1234,7 +1428,7 @@ void Move::SetYBedProbePoint(int index, float y)
 
 void Move::SetZBedProbePoint(int index, float z)
 {
-	if(index < 0 || index >= NUMBER_OF_PROBE_POINTS)
+	if(index < 0 || index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Z index out of range.\n");
 		return;
@@ -1270,26 +1464,26 @@ bool Move::XYProbeCoordinatesSet(int index) const
 
 int Move::NumberOfProbePoints() const
 {
-	for(int i = 0; i < NUMBER_OF_PROBE_POINTS; i++)
+	for(int i = 0; i < MaxProbePoints; i++)
 	{
 		if(!AllProbeCoordinatesSet(i))
 		{
 			return i;
 		}
 	}
-	return NUMBER_OF_PROBE_POINTS;
+	return MaxProbePoints;
 }
 
 int Move::NumberOfXYProbePoints() const
 {
-	for(int i = 0; i < NUMBER_OF_PROBE_POINTS; i++)
+	for(int i = 0; i < MaxProbePoints; i++)
 	{
 		if(!XYProbeCoordinatesSet(i))
 		{
 			return i;
 		}
 	}
-	return NUMBER_OF_PROBE_POINTS;
+	return MaxProbePoints;
 }
 
 // Enter or leave simulation mode
@@ -1321,13 +1515,35 @@ const char* Move::GetGeometryString() const
 			: "cartesian";
 }
 
-/*static*/ void Move::PrintMatrix(const char* s, float matrix[6][7])
+/*static*/ void Move::PrintMatrix(const char* s, const MathMatrix<float>& m, size_t maxRows, size_t maxCols)
 {
 	debugPrintf("%s\n", s);
-	for (size_t i = 0; i < 6; ++i)
+	if (maxRows == 0)
 	{
-		debugPrintf("%6.3f %6.3f %6.3f %6.3f %6.3f %6.3f = %6.3f\n", matrix[i][0], matrix[i][1], matrix[i][2], matrix[i][3], matrix[i][4], matrix[i][5], matrix[i][6]);
+		maxRows = m.rows();
 	}
+	if (maxCols == 0)
+	{
+		maxCols = m.cols();
+	}
+
+	for (size_t i = 0; i < maxRows; ++i)
+	{
+		for (size_t j = 0; j < maxCols; ++j)
+		{
+			debugPrintf("%7.3f%c", m(i, j), (j == maxCols - 1) ? '\n' : ' ');
+		}
+	}
+}
+
+/*static*/ void Move::PrintVector(const char *s, const float *v, size_t numElems)
+{
+	debugPrintf("%s:", s);
+	for (size_t i = 0; i < numElems; ++i)
+	{
+		debugPrintf(" %7.3f", v[i]);
+	}
+	debugPrintf("\n");
 }
 
 // End
