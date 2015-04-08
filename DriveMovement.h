@@ -35,17 +35,24 @@ public:
 	void DebugPrint(char c, bool withDelta) const;
 
 	// Parameters common to Cartesian, delta and extruder moves
-	// These values don't depend on how the move is executed, so  are set by Init()
+
+	// The following only need to be stored per-drive if we are supporting elasticity compensation
+	uint64_t twoDistanceToStopTimesCsquaredDivA;
+	uint32_t startSpeedTimesCdivA;
+	int32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;		// this one can be negative
+	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
+
+	// These values don't depend on how the move is executed, so are set by Init()
 	uint32_t totalSteps;								// total number of steps for this move
 	bool moving;										// true if this drive moves in this move, if false then all other values are don't cares
 	bool direction;										// true=forwards, false=backwards
 	bool stepError;										// for debugging
+	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
-	// The following only need to be stored per-drive if we are supporting elasticity compensation
-	uint32_t startSpeedTimesCdivA;
-	int32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;		// this one can be negative
-	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
-	uint64_t twoDistanceToStopTimesCsquaredDivA;
+	// These values change as the step is executed
+	uint32_t nextStep;									// number of steps already done
+	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
+	uint32_t stepInterval;								// how many clocks between steps
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union MoveParams
@@ -68,10 +75,10 @@ public:
 		struct DeltaParameters							// Parameters for delta movement
 		{
 			// The following don't depend on how the move is executed, so they can be set up in Init
+			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 			uint32_t reverseStartStep;
 			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
 			int32_t minusAaPlusBbTimesKs;
-			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 			uint32_t twoCsquaredTimesMmPerStepDivAK;	// this could be stored in the DDA if all towers use the same steps/mm
 
 			// The following depend on how the move is executed, so they must be set up in Prepare()
@@ -80,10 +87,6 @@ public:
 			uint32_t mmPerStepTimesCdivtopSpeedK;
 		} delta;
 	} mp;
-
-	// These values change as the step is executed
-	uint32_t nextStep;									// number of steps already done
-	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 
 	static const uint32_t NoStepTime = 0xFFFFFFFF;		// value to indicate that no further steps are needed when calculating the next step time
 	static const uint32_t K1 = 1024;					// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors

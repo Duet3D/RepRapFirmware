@@ -155,9 +155,9 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 {
 	if (moving || stepError)
 	{
-		debugPrintf("DM%c%s dir=%c steps=%u next=%u sstcda=%u "
+		debugPrintf("DM%c%s dir=%c steps=%u next=%u interval=%u sstcda=%u "
 					"acmadtcdts=%d tstcdapdsc=%u tstdca2=%" PRIu64 "\n",
-					c, (stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, startSpeedTimesCdivA,
+					c, (stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, stepInterval, startSpeedTimesCdivA,
 					accelClocksMinusAccelDistanceTimesCdivTopSpeed, topSpeedTimesCdivAPlusDecelStartClocks, twoDistanceToStopTimesCsquaredDivA);
 
 		if (isDeltaMovement)
@@ -196,39 +196,64 @@ uint32_t DriveMovement::CalcNextStepTimeCartesian(size_t drive)
 		return NoStepTime;
 	}
 
-	uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
 	++nextStep;
-	if (nextStep < mp.cart.accelStopStep)
+	if (stepsTillRecalc > 1)
 	{
-		nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep)) - startSpeedTimesCdivA;
-	}
-	else if (nextStep < mp.cart.decelStartStep)
-	{
-		nextStepTime = (uint32_t)((int32_t)(((uint64_t)mp.cart.mmPerStepTimesCdivtopSpeed * nextStep)/K1) + accelClocksMinusAccelDistanceTimesCdivTopSpeed);
-	}
-	else if (nextStep < mp.cart.reverseStartStep)
-	{
-		uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep;
-		// Allow for possible rounding error when the end speed is zero or very small
-		nextStepTime = (twoDistanceToStopTimesCsquaredDivA > temp)
-						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
-						: topSpeedTimesCdivAPlusDecelStartClocks;
+		--stepsTillRecalc;
+		nextStepTime += stepInterval;
 	}
 	else
 	{
-		if (nextStep == mp.cart.reverseStartStep)
+		uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
+		if (nextStep < mp.cart.accelStopStep)
 		{
-			reprap.GetPlatform()->SetDirection(drive, !direction);
+			nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep)) - startSpeedTimesCdivA;
 		}
-		nextStepTime = topSpeedTimesCdivAPlusDecelStartClocks
-							+ isqrt64((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
+		else if (nextStep < mp.cart.decelStartStep)
+		{
+			nextStepTime = (uint32_t)((int32_t)(((uint64_t)mp.cart.mmPerStepTimesCdivtopSpeed * nextStep)/K1) + accelClocksMinusAccelDistanceTimesCdivTopSpeed);
+		}
+		else if (nextStep < mp.cart.reverseStartStep)
+		{
+			uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep;
+			// Allow for possible rounding error when the end speed is zero or very small
+			nextStepTime = (twoDistanceToStopTimesCsquaredDivA > temp)
+							? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
+							: topSpeedTimesCdivAPlusDecelStartClocks;
+		}
+		else
+		{
+			if (nextStep == mp.cart.reverseStartStep)
+			{
+				reprap.GetPlatform()->SetDirection(drive, !direction);
+			}
+			nextStepTime = topSpeedTimesCdivAPlusDecelStartClocks
+								+ isqrt64((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
 
-	}
+		}
 
-	if ((int32_t)nextStepTime < (int32_t)(lastStepTime + DDA::MinStepTime) && nextStep > 1)
-	{
-		stepError = true;
-		return NoStepTime;
+		if (stepsTillRecalc == 1)
+		{
+			--stepsTillRecalc;			// we can't trust the interval
+		}
+		else
+		{
+			// Check for steps that are too fast, this normally indicates a problem with the calculation
+			int32_t interval = (int32_t)nextStepTime - (int32_t)lastStepTime;
+			if (interval < DDA::MinStepInterval)
+			{
+				stepInterval = (uint32_t)interval;
+				stepError = true;
+				return NoStepTime;
+			}
+
+			// If the step interval is very short, flag not to recalculate it next time
+			if (interval < DDA::MinCalcInterval)
+			{
+				stepInterval = (uint32_t)interval;
+				stepsTillRecalc = DDA::MinCalcInterval/stepInterval + 1;
+			}
+		}
 	}
 	return nextStepTime;
 }
@@ -242,58 +267,92 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 		return NoStepTime;
 	}
 
-	uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
 	++nextStep;
-	if (nextStep == mp.delta.reverseStartStep)
+	if (stepsTillRecalc > 1 && nextStep != mp.delta.reverseStartStep)
 	{
-		direction = false;
-		reprap.GetPlatform()->SetDirection(drive, false);		// going down now
-	}
+		--stepsTillRecalc;
+		nextStepTime += stepInterval;
 
-	// Calculate d*s*K as an integer, where d = distance the head has travelled, s = steps/mm for this drive, K = a power of 2 to reduce the rounding errors
-	if (direction)
-	{
-		mp.delta.hmz0sK += (int32_t)K2;
+		// We can avoid most of the calculation, but we still need to update mp.delta.hmz0sk
+		if (direction)
+		{
+			mp.delta.hmz0sK += (int32_t)K2;
+		}
+		else
+		{
+			mp.delta.hmz0sK -= (int32_t)K2;
+		}
 	}
 	else
 	{
-		mp.delta.hmz0sK -= (int32_t)K2;
-	}
+		uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
+		if (nextStep == mp.delta.reverseStartStep)
+		{
+			direction = false;
+			reprap.GetPlatform()->SetDirection(drive, false);		// going down now
+		}
 
-	const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
-	const int32_t t1 = mp.delta.minusAaPlusBbTimesKs + hmz0scK;
-	const int32_t t2 = isqrt64(isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - isquare64(mp.delta.hmz0sK));
-	const int32_t dsK = (direction) ? t1 - t2 : t1 + t2;
+		// Calculate d*s*K as an integer, where d = distance the head has travelled, s = steps/mm for this drive, K = a power of 2 to reduce the rounding errors
+		if (direction)
+		{
+			mp.delta.hmz0sK += (int32_t)K2;
+		}
+		else
+		{
+			mp.delta.hmz0sK -= (int32_t)K2;
+		}
 
-	// Now feed dsK into a modified version of the step algorithm for Cartesian motion without elasticity compensation
-	if (dsK < 0)
-	{
-		stepError = true;
-		nextStep += 1000000;		// so that we can tell what happened in the debug print
-		return NoStepTime;
-	}
-	if ((uint32_t)dsK < mp.delta.accelStopDsK)
-	{
-		nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + ((uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK)) - startSpeedTimesCdivA;
-	}
-	else if ((uint32_t)dsK < mp.delta.decelStartDsK)
-	{
-		nextStepTime = (uint32_t)((int32_t)(((uint64_t)mp.delta.mmPerStepTimesCdivtopSpeedK * (uint32_t)dsK)/(K1 * K2)) + accelClocksMinusAccelDistanceTimesCdivTopSpeed);
-	}
-	else
-	{
-		uint64_t temp = (uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK;
-		// Because of possible rounding error when the end speed is zero or very small, we need to check that the square root will work OK
-		nextStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
-						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
-						: topSpeedTimesCdivAPlusDecelStartClocks;
-	}
+		const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
+		const int32_t t1 = mp.delta.minusAaPlusBbTimesKs + hmz0scK;
+		const int32_t t2 = isqrt64(isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - isquare64(mp.delta.hmz0sK));
+		const int32_t dsK = (direction) ? t1 - t2 : t1 + t2;
 
-	if ((int32_t)nextStepTime < (int32_t)(lastStepTime + DDA::MinStepTime) && nextStep > 1)
-	{
-		stepError = true;
-//		debugPrintf("%u %u %u %d %d %d %d\n", nextStep, nextStepTime, lastStepTime, dsK, t1, t2, mp.delta.hmz0sK);
-		return NoStepTime;
+		// Now feed dsK into a modified version of the step algorithm for Cartesian motion without elasticity compensation
+		if (dsK < 0)
+		{
+			stepError = true;
+			nextStep += 1000000;		// so that we can tell what happened in the debug print
+			return NoStepTime;
+		}
+		if ((uint32_t)dsK < mp.delta.accelStopDsK)
+		{
+			nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + ((uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK)) - startSpeedTimesCdivA;
+		}
+		else if ((uint32_t)dsK < mp.delta.decelStartDsK)
+		{
+			nextStepTime = (uint32_t)((int32_t)(((uint64_t)mp.delta.mmPerStepTimesCdivtopSpeedK * (uint32_t)dsK)/(K1 * K2)) + accelClocksMinusAccelDistanceTimesCdivTopSpeed);
+		}
+		else
+		{
+			uint64_t temp = (uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK;
+			// Because of possible rounding error when the end speed is zero or very small, we need to check that the square root will work OK
+			nextStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
+							? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
+							: topSpeedTimesCdivAPlusDecelStartClocks;
+		}
+
+		if (stepsTillRecalc == 1)
+		{
+			--stepsTillRecalc;			// we can't trust the interval
+		}
+		else
+		{
+			// Check for steps that are too fast, this normally indicates a problem with the calculation
+			int32_t interval = (int32_t)nextStepTime - (int32_t)lastStepTime;
+			if (interval < DDA::MinStepInterval)
+			{
+				stepError = true;
+				stepInterval = (uint32_t)interval;
+				return NoStepTime;
+			}
+
+			// If the step interval is very short, flag not to recalculate it next time
+			if (interval < DDA::MinCalcInterval)
+			{
+				stepInterval = (uint32_t)interval;
+				stepsTillRecalc = DDA::MinCalcInterval/stepInterval + 1;
+			}
+		}
 	}
 	return nextStepTime;
 }

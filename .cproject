@@ -29,9 +29,9 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI/utility}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Wire}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Flash}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\lib\gcc\arm-none-eabi\4.8.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Flash}&quot;"/>
 								</option>
 								<inputType id="it.baeyens.arduino.compiler.cpp.sketch.input.1531738210" name="CPP source files" superClass="it.baeyens.arduino.compiler.cpp.sketch.input"/>
 							</tool>

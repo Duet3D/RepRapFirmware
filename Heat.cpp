@@ -203,18 +203,11 @@ void PID::Spin()
   float error = targetTemperature - temperature;
   const PidParameters& pp = platform->GetPidParameters(heater);
   
-  if(!pp.UsePID())
+  if (!pp.UsePID())
   {
-	if(error > 0.0)
-	{
-		platform->SetHeater(heater, pp.kS);
-		averagePWM = averagePWM * (1.0 - invHeatPwmAverageCount) + pp.kS;
-	}
-	else
-	{
-		platform->SetHeater(heater, 0.0);
-		averagePWM *= (1.0 - invHeatPwmAverageCount);
-	}
+	float heaterValue = (error > 0.0) ? min<float>(pp.kS, 1.0) : 0.0;
+	platform->SetHeater(heater, heaterValue);
+	averagePWM = averagePWM * (1.0 - invHeatPwmAverageCount) + heaterValue;
 	return;
   }
   
@@ -231,8 +224,9 @@ void PID::Spin()
   {
 	  // actual temperature is well below target
 	  temp_iState = (targetTemperature - pp.fullBand - 25.0) * pp.kT;	// set the I term to our estimate of what will be needed ready for the switch to PID
-	  platform->SetHeater(heater, pp.kS);
-	  averagePWM = averagePWM * (1.0 - invHeatPwmAverageCount) + pp.kS;
+	  float heaterValue = min<float>(pp.kS, 1.0);
+	  platform->SetHeater(heater, heaterValue);
+	  averagePWM = averagePWM * (1.0 - invHeatPwmAverageCount) + heaterValue;
 	  lastTemperature = temperature;
 	  return;
   }  
@@ -250,26 +244,22 @@ void PID::Spin()
   }
    
   float temp_dState = pp.kD * (temperature - lastTemperature) / sampleInterval;
-  float result = pp.kP * error + temp_iState - temp_dState;
+  float result = (pp.kP * error + temp_iState - temp_dState) * pp.kS / 255.0;
 
   lastTemperature = temperature;
-
-  // Legacy - old RepRap PID parameters were set to give values in [0, 255] for 1 byte PWM control
-  // TODO - maybe change them to give [0.0, 1.0]?
 
   if (result < 0.0)
   {
     result = 0.0;
   }
-  else if (result > 255.0)
+  else if (result > 1.0)
   {
-    result = 255.0;
+    result = 1.0;
   }
-  result = result/255.0;
 
-  if(!temperatureFault)
+  if (!temperatureFault)
   {
-	  platform->SetHeater(heater, result * pp.kS);
+	  platform->SetHeater(heater, result);
   }
 
   averagePWM = averagePWM * (1.0 - invHeatPwmAverageCount) + result;

@@ -27,19 +27,22 @@ template<class T, size_t ROWS, size_t COLS> class FixedMatrix : public MathMatri
 public:
 	size_t rows() const override { return ROWS; }
 	size_t cols() const override { return COLS; }
+
+	// Indexing operator, non-const version
 	T& operator() (size_t r, size_t c) override
 	//pre(r < ROWS; c < COLS)
 	{
 		return data[r * COLS + c];
 	}
 
+	// Indexing operator, const version
 	const T& operator() (size_t r, size_t c) const override
 	//pre(r < ROWS; c < COLS)
 	{
 		return data[r * COLS + c];
 	}
 
-	void SwapRows(size_t i, size_t j)
+	void SwapRows(size_t i, size_t j, size_t numCols = COLS)
 	//pre(i < ROWS; j < ROWS)
 	;
 
@@ -47,16 +50,30 @@ public:
 	//pre(numRows <= ROWS; numRows + 1 <= COLS)
 	;
 
+	// Return a pointer to a specified row, non-const version
+	T* GetRow(size_t r)
+	//pre(r < ROWS)
+	{
+		return data + (r * COLS);
+	}
+
+	// Return a pointer to a specified row, const version
+	const T* GetRow(size_t r) const
+	//pre(r < ROWS)
+	{
+		return data + (r * COLS);
+	}
+
 private:
 	T data[ROWS * COLS];
 };
 
 // Swap 2 rows of a matrix
-template<class T, size_t ROWS, size_t COLS> inline void FixedMatrix<T, ROWS, COLS>::SwapRows(size_t i, size_t j)
+template<class T, size_t ROWS, size_t COLS> inline void FixedMatrix<T, ROWS, COLS>::SwapRows(size_t i, size_t j, size_t numCols)
 {
 	if (i != j)
 	{
-		for (size_t k = i; k < COLS; ++k)
+		for (size_t k = i; k < numCols; ++k)
 		{
 			T temp = (*this)(i, k);
 			(*this)(i, k) = (*this)(j, k);

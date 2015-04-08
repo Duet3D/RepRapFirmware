@@ -617,7 +617,10 @@ void DDA::Prepare()
 			dm.nextStep = 0;
 			dm.nextStepTime = 0;
 			dm.stepError = false;							// clear any previous step error before we call CalcNextStep
-			uint32_t st = (isDeltaMovement && drive < AXES) ? dm.CalcNextStepTimeDelta(*this, drive) : dm.CalcNextStepTimeCartesian(drive);
+			dm.stepsTillRecalc = 1;
+			uint32_t st = (isDeltaMovement && drive < AXES)
+							? dm.CalcNextStepTimeDelta(*this, drive)
+							: dm.CalcNextStepTimeCartesian(drive);
 			if (st < firstStepTime)
 			{
 				firstStepTime = st;

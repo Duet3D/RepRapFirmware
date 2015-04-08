@@ -18,7 +18,8 @@ enum PointCoordinateSet
 	unset = 0,
 	xSet = 1,
 	ySet = 2,
-	zSet = 4
+	zSet = 4,
+	xyCorrected = 8
 };
 
 // Class to hold the parameter for a delta machine.
@@ -29,6 +30,7 @@ public:
 	DeltaParameters() { Init(); }
 
 	bool IsDeltaMode() const { return deltaMode; }
+	bool IsEquilateral() const { return isEquilateral; }
 	float GetDiagonal() const { return diagonal; }
 	float GetRadius() const { return radius; }
     float GetPrintRadius() const { return printRadius; }
@@ -50,13 +52,12 @@ public:
     void InverseTransform(float Ha, float Hb, float Hc, float machinePos[AXES]) const;	// Calculate the Cartesian position from the motor positions
 
     float ComputeDerivative(unsigned int deriv, float ha, float hb, float hc);		// Compute the derivative of height with respect to a parameter at a set of motor endpoints
-    void AdjustFour(const float v[4]);												// Perform 4-factor adjustment
-    void AdjustSeven(const float v[7]);												// Perform 7-factor adjustment
+    void Adjust(size_t numFactors, const float v[]);								// Perform 4-, 6- or 7-factor adjustment
     void PrintParameters(StringRef& reply, bool full);
 
 private:
 	void Recalc();
-	void NormaliseEndstopAdjustments();					// Make the average of the endstop adjustments zero
+	void NormaliseEndstopAdjustments();												// Make the average of the endstop adjustments zero
 
 	// Core parameters
     float diagonal;										// The diagonal rod length, all 3 are assumed to be the same length
@@ -103,7 +104,7 @@ public:
     void SetLiveCoordinates(const float coords[DRIVES]); // Force the live coordinates (see above) to be these
     void SetXBedProbePoint(int index, float x);			// Record the X coordinate of a probe point
     void SetYBedProbePoint(int index, float y);			// Record the Y coordinate of a probe point
-    void SetZBedProbePoint(int index, float z);			// Record the Z coordinate of a probe point
+    void SetZBedProbePoint(int index, float z, bool wasXyCorrected);	// Record the Z coordinate of a probe point
     float XBedProbePoint(int index) const;				// Get the X coordinate of a probe point
     float YBedProbePoint(int index) const;				// Get the Y coordinate of a probe point
     float ZBedProbePoint(int index)const ;				// Get the Z coordinate of a probe point
@@ -159,7 +160,7 @@ private:
     		size_t p2, float x, float y, float& l1,     // (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
     		float& l2, float& l3) const;
     float TriangleZ(float x, float y) const;			// Interpolate onto a triangular grid
-    void AdjustDeltaParameters(const float v[], bool allSeven);		// Perform 4- or 7-factor delta adjustment
+    void AdjustDeltaParameters(const float v[], size_t numFactors);	// Perform delta adjustment
 
     static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0);	// for debugging
     static void PrintVector(const char *s, const float *v, size_t numElems);	// for debugging

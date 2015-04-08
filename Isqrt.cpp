@@ -8,16 +8,39 @@
 uint32_t isqrt64(uint64_t num)
 {
 	uint32_t numHigh = (uint32_t)(num >> 32);
-	uint32_t res;
+	if (numHigh == 0)
+	{
+		// 32-bit square root - thanks to Wilco Dijksra for this efficient ARM algorithm
+		uint32_t num32 = (uint32_t)num;
+		uint32_t res = 0;
 
-	if ((numHigh & (3 << 30)) != 0)
+		#define iter32(N)						\
+		{										\
+			uint32_t temp = res | (1 << N);		\
+			if (num32 >= temp << N)				\
+			{									\
+				num32 -= temp << N;				\
+				res |= 2 << N;					\
+			}									\
+		}
+
+		// We need to do 16 iterations
+		iter32(15); iter32(14); iter32(13); iter32(12);
+		iter32(11); iter32(10); iter32(9); iter32(8);
+		iter32(7); iter32(6); iter32(5); iter32(4);
+		iter32(3); iter32(2); iter32(1); iter32(0);
+
+		return res >> 1;
+	}
+	else if ((numHigh & (3u << 30)) != 0)
 	{
 		// Input out of range - probably negative, so return -1
-		res = 0xFFFFFFFF;
+		return 0xFFFFFFFF;
 	}
 	else
 	{
-		res = 0;
+		// 62-bit square root
+		uint32_t res = 0;
 
 #define iter64a(N) 								\
 		{										\
@@ -59,14 +82,12 @@ uint32_t isqrt64(uint64_t num)
 		iter64b(14) iter64b(12) iter64b(10) iter64b(8)
 		iter64b(6)  iter64b(4)  iter64b(2)  iter64b(0)
 
-		res >>= 1;
+		return res >> 1;
 
 #undef iter64a
 #undef iter64b
 
 	}
-
-	return res;
 }
 
 #if 0

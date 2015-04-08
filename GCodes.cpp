@@ -1020,7 +1020,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount = 0;
-			reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ);
+			reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ, true);
 			return true;
 		}
 		return false;
@@ -1080,10 +1080,8 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 		return true;
 	}
 
-	const ZProbeParameters& rp = platform->GetZProbeParameters();
-
-	float x = (gb->Seen(axisLetters[X_AXIS])) ? gb->GetFValue() : moveBuffer[X_AXIS] - rp.xOffset;
-	float y = (gb->Seen(axisLetters[Y_AXIS])) ? gb->GetFValue() : moveBuffer[Y_AXIS] - rp.yOffset;
+	float x = (gb->Seen(axisLetters[X_AXIS])) ? gb->GetFValue() : moveBuffer[X_AXIS];
+	float y = (gb->Seen(axisLetters[Y_AXIS])) ? gb->GetFValue() : moveBuffer[Y_AXIS];
 	float z = (gb->Seen(axisLetters[Z_AXIS])) ? gb->GetFValue() : moveBuffer[Z_AXIS];
 
 	reprap.GetMove()->SetXBedProbePoint(probePointIndex, x);
@@ -1091,7 +1089,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 
 	if (z > SILLY_Z_VALUE)
 	{
-		reprap.GetMove()->SetZBedProbePoint(probePointIndex, z);
+		reprap.GetMove()->SetZBedProbePoint(probePointIndex, z, false);
 		if (gb->Seen('S'))
 		{
 			zProbesSet = true;
@@ -2301,8 +2299,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				{
 					if (encapsulate_list)
 					{
-						reply.catf("%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET,
-								FILE_LIST_SEPARATOR);
+						reply.catf("%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
 					}
 					else
 					{
@@ -2310,8 +2307,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					}
 				} while (platform->GetMassStorage()->FindNext(file_info));
 
-				// remove the last separator
-				reply[reply.strlen() - 1] = 0;
+				if (encapsulate_list)
+				{
+					// remove the last separator and replace by newline
+					reply[reply.strlen() - 1] = '\n';
+				}
 			}
 			else
 			{

@@ -61,7 +61,14 @@ public:
 
 	static const uint32_t stepClockRate = VARIANT_MCK/32;			// the frequency of the clock used for stepper pulse timing (using TIMER_CLOCK3), about 0.38us resolution
 	static const uint64_t stepClockRateSquared = (uint64_t)stepClockRate * stepClockRate;
-	static const int32_t MinStepTime = (10000000/stepClockRate);	// the smallest sensible interval between steps (10us)
+	static const int32_t MinStepInterval = (4 * stepClockRate)/1000000; // the smallest sensible interval between steps (10us) in step timer clocks
+
+	// Note on the following constant:
+	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
+	// The worst case is pure Z movement on a delta. On a Mini Kossel with 80 steps/mm witt this formware runnig on a Duet (84MHx SAM3X8 processor),
+	// the calculation can just be managed in time at speeds of 15000mm/min (step interval 50us), but not at 20000mm/min (step interval 37.5us).
+	// Therefore, where the step interval falls below 70us, we don't calculate on every step.
+	static const uint32_t MinCalcInterval = (70 * stepClockRate)/1000000; // the smallest sensible interval between calculations (70us) in step timer clocks
 
 private:
 	static const uint32_t minInterruptInterval = 6;					// about 2us minimum interval between interrupts, in clocks
