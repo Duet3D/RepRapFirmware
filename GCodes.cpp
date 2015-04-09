@@ -73,6 +73,7 @@ void GCodes::Reset()
 	fileGCode->Init();
 	serialGCode->Init();
 	auxGCode->Init();
+	auxGCode->SetCommsProperties(1);					// by default, we require a checksum on the aux port
 	fileMacroGCode->Init();
 	moveAvailable = false;
 	fileBeingPrinted.Close();
@@ -238,45 +239,36 @@ void GCodes::Spin()
 		break;
 
 	case GCodeState::setBed1:
-		if (reprap.GetMove()->NumberOfXYProbePoints() < 3)
-		{
-			HandleReply(false, gbCurrent, "Bed probing: there needs to be 3 or more points set.\n", 'G', 32, false);
-			state = GCodeState::normal;
-		}
-		else
-		{
-			// zpl 2014-11-02: When calling G32, ensure bed compensation parameters are initially reset
-			reprap.GetMove()->SetIdentityTransform();
-			probeCount = 0;
-			state = GCodeState::setBed2;
-		}
+		reprap.GetMove()->SetIdentityTransform();
+		probeCount = 0;
+		state = GCodeState::setBed2;
 		// no break
 
 	case GCodeState::setBed2:
-	{
-		int numProbePoints = reprap.GetMove()->NumberOfXYProbePoints();
-		if (DoSingleZProbeAtPoint(probeCount))
 		{
-			probeCount++;
-			if (probeCount >= numProbePoints)
+			int numProbePoints = reprap.GetMove()->NumberOfXYProbePoints();
+			if (DoSingleZProbeAtPoint(probeCount))
 			{
-				zProbesSet = true;
-				reprap.GetMove()->FinishedBedProbing(0, reply);
-				HandleReply(false, gbCurrent, nullptr, 'G', 32, false);
-				state = GCodeState::normal;
+				probeCount++;
+				if (probeCount >= numProbePoints)
+				{
+					zProbesSet = true;
+					reprap.GetMove()->FinishedBedProbing(0, reply);
+					HandleReply(false, gbCurrent, reply.Pointer(), 'G', 32, false);
+					state = GCodeState::normal;
+				}
 			}
 		}
-	}
 		break;
 
 	case GCodeState::toolChange1: // Release the old tool (if any)
-	{
-		const Tool *oldTool = reprap.GetCurrentTool();
-		if (oldTool != NULL)
 		{
-			reprap.StandbyTool(oldTool->Number());
+			const Tool *oldTool = reprap.GetCurrentTool();
+			if (oldTool != NULL)
+			{
+				reprap.StandbyTool(oldTool->Number());
+			}
 		}
-	}
 		state = GCodeState::toolChange2;
 		if (reprap.GetTool(newToolNumber) != NULL && AllAxesAreHomed())
 		{
@@ -3866,7 +3858,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f\n",
-						params.GetEndstopAdjustment(X_AXIS),params.GetEndstopAdjustment(Y_AXIS), params.GetEndstopAdjustment(Z_AXIS));
+						params.GetEndstopAdjustment(X_AXIS), params.GetEndstopAdjustment(Y_AXIS), params.GetEndstopAdjustment(Z_AXIS));
 			}
 		}
 		break;

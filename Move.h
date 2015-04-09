@@ -192,8 +192,9 @@ private:
     uint8_t probePointSet[MaxProbePoints];				// Has the XY of this point been set?  Has the Z been probed?
     float aX, aY, aC; 									// Bed plane explicit equation z' = z + aX*x + aY*y + aC
     float tanXY, tanYZ, tanXZ; 							// Axis compensation - 90 degrees + angle gives angle between axes
-    bool identityBedTransform;							// Is the bed transform in operation?
+    int numBedCompensationPoints;						// The number of points we are actually using for bed compensation, 0 means identity bed transform
     float xRectangle, yRectangle;						// The side lengths of the rectangle used for second-degree bed compensation
+
     float idleTimeout;									// How long we wait with no activity before we reduce motor currents to idle
     float lastMoveTime;									// The approximate time at which the last move was completed, or 0
     float longWait;										// A long time for things that need to be done occasionally

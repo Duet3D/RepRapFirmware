@@ -775,62 +775,56 @@ void Move::InverseTransform(float xyzPoint[AXES]) const
 // Do the bed transform AFTER the axis transform
 void Move::BedTransform(float xyzPoint[AXES]) const
 {
-	if (!identityBedTransform)
+	switch(numBedCompensationPoints)
 	{
-		switch(NumberOfProbePoints())
-		{
-		case 0:
-			return;
+	case 0:
+		break;
 
-		case 3:
-			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
-			break;
+	case 3:
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
+		break;
 
-		case 4:
-			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-			break;
+	case 4:
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+		break;
 
-		case 5:
-			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-			break;
+	case 5:
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] + TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+		break;
 
-		default:
-			reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "BedTransform: wrong number of sample points.");
-		}
+	default:
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "BedTransform: wrong number of sample points.");
 	}
 }
 
 // Invert the bed transform BEFORE the axis transform
 void Move::InverseBedTransform(float xyzPoint[AXES]) const
 {
-	if (!identityBedTransform)
+	switch(numBedCompensationPoints)
 	{
-		switch(NumberOfProbePoints())
-		{
-		case 0:
-			return;
+	case 0:
+		break;
 
-		case 3:
-			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
-			break;
+	case 3:
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
+		break;
 
-		case 4:
-			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-			break;
+	case 4:
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+		break;
 
-		case 5:
-			xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-			break;
+	case 5:
+		xyzPoint[Z_AXIS] = xyzPoint[Z_AXIS] - TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
+		break;
 
-		default:
-			reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "InverseBedTransform: wrong number of sample points.");
-		}
+	default:
+		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "InverseBedTransform: wrong number of sample points.");
 	}
 }
 
 void Move::SetIdentityTransform()
 {
-	identityBedTransform = true;
+	numBedCompensationPoints = 0;
 }
 
 float Move::AxisCompensation(int8_t axis) const
@@ -915,22 +909,23 @@ float Move::TriangleZ(float x, float y) const
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 void Move::FinishedBedProbing(int sParam, StringRef& reply)
 {
+	const int numPoints = NumberOfProbePoints();
 	if (sParam < 0)
 	{
 		// A negative sParam just prints the probe heights
 		reply.copy("Bed probe heights:");
 		float sumOfSquares = 0.0;
-		for (size_t i = 0; i < NumberOfProbePoints(); ++i)
+		for (size_t i = 0; i < numPoints; ++i)
 		{
 			reply.catf(" %.3f", zBedProbePoints[i]);
 			sumOfSquares += fsquare(zBedProbePoints[i]);
 		}
-		reply.catf(", RMS error: %.3f\n", sqrt(sumOfSquares/NumberOfProbePoints()));
+		reply.catf(", RMS error: %.3f\n", sqrt(sumOfSquares/numPoints));
 	}
-	else if (NumberOfProbePoints() < sParam)
+	else if (numPoints < sParam)
 	{
 		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE,
-				"Bed calibration error: %d factor calibration requested but only %d points provided\n", sParam, NumberOfProbePoints());
+				"Bed calibration error: %d factor calibration requested but only %d points provided\n", sParam, numPoints);
 	}
 	else
 	{
@@ -938,17 +933,17 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 		{
 			debugPrintf("Z probe offsets:");
 			float sumOfSquares = 0.0;
-			for (size_t i = 0; i < NumberOfProbePoints(); ++i)
+			for (size_t i = 0; i < numPoints; ++i)
 			{
 				debugPrintf(" %.3f", zBedProbePoints[i]);
 				sumOfSquares += fsquare(zBedProbePoints[i]);
 			}
-			debugPrintf(", RMS error: %.3f\n", sqrt(sumOfSquares/NumberOfProbePoints()));
+			debugPrintf(", RMS error: %.3f\n", sqrt(sumOfSquares/numPoints));
 		}
 
 		if (sParam == 0)
 		{
-			sParam = NumberOfProbePoints();
+			sParam = numPoints;
 		}
 
 		if (IsDeltaMode())
@@ -992,7 +987,6 @@ void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 			aX = -a / c;
 			aY = -b / c;
 			aC = -d / c;
-			identityBedTransform = false;
 		}
 		break;
 
@@ -1012,7 +1006,6 @@ void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 		 */
 		xRectangle = 1.0 / (xBedProbePoints[3] - xBedProbePoints[0]);
 		yRectangle = 1.0 / (yBedProbePoints[1] - yBedProbePoints[0]);
-		identityBedTransform = false;
 		break;
 
 	case 5:
@@ -1028,7 +1021,6 @@ void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 		baryXBedProbePoints[4] = xBedProbePoints[4];
 		baryYBedProbePoints[4] = yBedProbePoints[4];
 		baryZBedProbePoints[4] = zBedProbePoints[4];
-		identityBedTransform = false;
 		break;
 
 	default:
@@ -1036,8 +1028,10 @@ void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 		return;
 	}
 
+    numBedCompensationPoints = numPoints;
+
 	reply.copy("Bed equation fits points");
-	for (size_t point = 0; point < NumberOfProbePoints(); point++)
+	for (size_t point = 0; point < numPoints; point++)
 	{
 		reply.catf(" [%.1f, %.1f, %.3f]", xBedProbePoints[point], yBedProbePoints[point], zBedProbePoints[point]);
 	}
@@ -1469,7 +1463,7 @@ float Move::ZBedProbePoint(int index) const
 
 bool Move::AllProbeCoordinatesSet(int index) const
 {
-	return probePointSet[index] == (xSet | ySet | zSet);
+	return (probePointSet[index] & (xSet | ySet | zSet)) == (xSet | ySet | zSet);
 }
 
 bool Move::XYProbeCoordinatesSet(int index) const

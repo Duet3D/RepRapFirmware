@@ -132,7 +132,8 @@ void Platform::Init()
 
 	baudRates[0] = BAUD_RATE;
 	baudRates[1] = AUX_BAUD_RATE;
-	commsParams[0] = commsParams[1] = 0;
+	commsParams[0] = 0;
+	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
 
 	SerialUSB.begin(baudRates[0]);
 	Serial.begin(baudRates[1]);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
