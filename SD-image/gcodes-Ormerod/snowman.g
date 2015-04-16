@@ -25,7 +25,7 @@ G1 Z5 F200 ; lift nozzle
 G1 X2 Y50 F2000; Go to wait for warm position
 M116; Wait for all temperatures
 G10 P1 S185 R0 ; Set extruder temperature
-T1; Select extruder
+T0; Select extruder
 M116; Wait for all temperatures
 G1 F1800.000 E-4.00000
 G1 Z0.240 F3600.000

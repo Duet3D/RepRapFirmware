@@ -14,7 +14,7 @@ G90 ; use absolute coordinates
 M83 ; use relative distances for extrusion
 G1 Z10 F500 ; lift nozzle
 G1 X-85 Y0 F4000; Go to wait for warm position
-T1
+T0
 M116; Wait for all temperatures
 G1 E4 F500
 M109 S195 ; wait for temperature to be reached
