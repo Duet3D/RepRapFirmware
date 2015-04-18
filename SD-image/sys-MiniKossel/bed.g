@@ -1,7 +1,5 @@
 ; Auto calibration routine for delta printers
-; Before running this, you should have set up your zprobe X, Y and Z offsets to suit your build.
-; This does a single iteration of auto calibration. Run this file multiple times until the values converge.
-; Then transfer the values to your config.g file.
+; Before running this, you should have set up your zprobe Z offset to suit your build, in the G31 command in config.g.
 
 M561						; clear any bed transform, otherwise homing may be at the wrong height
 G31 X0 Y0					; don't want any probe offset for this
@@ -24,7 +22,7 @@ G30 P5 X-73.6 Y20 Z-99999		; between Z and X towers
 G30 P6 X-36.8 Y-21.25 Z-99999	; half way to X tower
 G30 P7 X36.8 Y-21.25 Z-99999	; half way to Y tower
 G30 P8 X0 Y42.5 Z-99999			; half way to Z tower
-G30 P9 X0 Y0 Z-99999 S10		; centre, and auto-calibrate
+G30 P9 X0 Y0 Z-99999 S7			; centre, and auto-calibrate 7 factors
 
 ;*** Remove the following line if your Z probe does not need to be retracted
 M98 Pretractprobe.g			; deploy the mechanical Z probe
