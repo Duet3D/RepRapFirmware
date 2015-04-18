@@ -1,6 +1,6 @@
 /*! Reprap Ormerod Web Control | by Matt Burnett <matt@burny.co.uk>. | open license
  */
-var ver = 1.04; //App version
+var ver = 1.06; //App version
 var polling = false; 
 var printing = false;
 var paused = false;
@@ -168,19 +168,19 @@ $('div#bedActiveTemperature').on('click', 'a#bedActiveTempLink', function() {
 });
 $('div#head1ActiveTemperature').on('click', 'a#head1ActiveTempLink', function() {
     $('input#head1ActiveTempInput').val($(this).text());
-    $.askElle('gcode', "G10 P1 S" + $(this).text());
+    $.askElle('gcode', "G10 P0 S" + $(this).text());
 });
 $('div#head1StandbyTemperature').on('click', 'a#head1StandbyTempLink', function() {
     $('input#head1StandbyTempInput').val($(this).text());
-    $.askElle('gcode', "G10 P1 R" + $(this).text());
+    $.askElle('gcode', "G10 P0 R" + $(this).text());
 });
 $('div#head2ActiveTemperature').on('click', 'a#head2ActiveTempLink', function() {
     $('input#head2ActiveTempInput').val($(this).text());
-	$.askElle('gcode', "G10 P2 S" + $(this).text());
+	$.askElle('gcode', "G10 P1 S" + $(this).text());
 });
 $('div#head2StandbyTemperature').on('click', 'a#head2StandbyTempLink', function() {
     $('input#head2StandbyTempInput').val($(this).text());
-    $.askElle('gcode', "G10 P2 R" + $(this).text());
+    $.askElle('gcode', "G10 P1 R" + $(this).text());
 });
 $('input#bedActiveTempInput').keydown(function(event) {
     if (event.which === 13) {
@@ -192,28 +192,28 @@ $('input#bedActiveTempInput').keydown(function(event) {
 $('input#head1ActiveTempInput').keydown(function(event) {
     if (event.which === 13) {
         event.preventDefault();
-        $.askElle('gcode', "G10 P1 S" + $(this).val());
+        $.askElle('gcode', "G10 P0 S" + $(this).val());
 		$('input#head1ActiveTempInput').blur();
     }
 });
 $('input#head1StandbyTempInput').keydown(function(event) {
     if (event.which === 13) {
         event.preventDefault();
-        $.askElle('gcode', "G10 P1 R" + $(this).val());
+        $.askElle('gcode', "G10 P0 R" + $(this).val());
 		$('input#head1StandbyTempInput').blur()
     }
 });
 $('input#head2ActiveTempInput').keydown(function(event) {
     if (event.which === 13) {
         event.preventDefault();
-        $.askElle('gcode', "G10 P2 S" + $(this).val());
+        $.askElle('gcode', "G10 P1 S" + $(this).val());
 		$('input#head2ActiveTempInput').blur();
     }
 });
 $('input#head2StandbyTempInput').keydown(function(event) {
     if (event.which === 13) {
         event.preventDefault();
-        $.askElle('gcode', "G10 P2 R" + $(this).val());
+        $.askElle('gcode', "G10 P1 R" + $(this).val());
 		$('input#head2StandbyTempInput').blur();
     }
 });
@@ -233,10 +233,10 @@ $('div#head2StandbyTemperature ul').on('click', 'a#addHead2StandbyTemp', functio
     addTemp($('input#head2StandbyTempInput').val(), 'standby');
 });
 $('a#head1Click').on('click', function() {
-	$.askElle('gcode', (currentTool == 1) ? "T0" : "T1");
+	$.askElle('gcode', (currentTool == 1) ? "T-1" : "T0");
 });
 $('a#head2Click').on('click', function() {
-	$.askElle('gcode', (currentTool == 2) ? "T0" : "T2");
+	$.askElle('gcode', (currentTool == 2) ? "T-1" : "T1");
 });
 
 //feed controls
@@ -1032,15 +1032,17 @@ function updatePage() {
 		if (status.hasOwnProperty('fanRPM')) {
 			$('#fanRPM').text(status.fanRPM.toString());
 		}
-		if (status.status == "S") {
-			//stopped
+		switch (status.status) {
+		case "S":
+			//halted
 			printing = false;
             $('button#printing').removeClass('btn-danger').removeClass('btn-success').addClass('btn-warning').text("Halted");
             disableButtons('panic');
             disableButtons("head");
 			disableButtons("temp");
             disableButtons("gfilelist");
-		} else if (status.status === "P") {
+			break;
+		case "P":
             //printing
             printing = true;
             objHeight = $('input#objheight').val();
@@ -1048,7 +1050,7 @@ function updatePage() {
 				objHeight = status.height;
 				$('input#objheight').val(objHeight.toString());
 			}
-            $('button#printing').removeClass('btn-danger').removeClass('btn-warning').addClass('btn-success').text("Active");
+            $('button#printing').removeClass('btn-danger').removeClass('btn-warning').addClass('btn-success').text("Printing");
             enableButtons('panic');
 			enableButtons('temp');
             disableButtons("print");
@@ -1067,26 +1069,62 @@ function updatePage() {
                 setProgress(0, 'print', 0, 0);
             }
             layers(currentLayer);
-        } else if (status.status === "I" && !paused ) {
+			break;
+        case "I":
             //inactive, not printing
             printing = false;
-            $('button#printing').removeClass('btn-danger').removeClass('btn-success').addClass('btn-warning').text("Ready :)");
+            $('button#printing').removeClass('btn-danger').removeClass('btn-success').addClass('btn-warning').text("Idle");
             disableButtons("panic");
             enableButtons('head');
 			enableButtons('temp');
             enableButtons("gfilelist");
-        } else if (status.status === "I" && paused) {
+			break;
+        case "C":
+            //starting up
+            printing = false;
+            $('button#printing').removeClass('btn-danger').removeClass('btn-success').addClass('btn-warning').text("Starting");
+            disableButtons('panic');
+            disableButtons('head');
+			disableButtons('temp');
+			break;
+        case "A":
             //paused
             printing = true;
             $('button#printing').removeClass('btn-danger').removeClass('btn-success').addClass('btn-warning').text("Paused");
             enableButtons('panic');
             enableButtons('head');
 			enableButtons('temp');
-        } else {
+			break;
+        case "B":
+            //busy, running a macro
+            printing = false;
+            $('button#printing').removeClass('btn-danger').removeClass('btn-success').addClass('btn-warning').text("Busy");
+            enableButtons('panic');
+            disableButtons('head');
+			disableButtons('temp');
+			break;
+        case "D":
+            //pausing
+            printing = true;
+            $('button#printing').removeClass('btn-danger').removeClass('btn-success').addClass('btn-warning').text("Pausing");
+            enableButtons('panic');
+            enableButtons('head');
+			enableButtons('temp');
+			break;
+        case "R":
+            //resuming
+            printing = true;
+            $('button#printing').removeClass('btn-danger').removeClass('btn-success').addClass('btn-warning').text("Resuming");
+            enableButtons('panic');
+            enableButtons('head');
+			enableButtons('temp');
+			break;
+        default:
             //unknown state
             printing = paused = false;
-            $('button#printing').removeClass('btn-warning').removeClass('btn-success').addClass('btn-danger').text("Error!");
+            $('button#printing').removeClass('btn-warning').removeClass('btn-success').addClass('btn-danger').text("Unknown");
             message('danger', 'Unknown Poll State : ' + status.status);
+			break;
         }
 
 		// Update the current and selected active/standby temperatures
