@@ -657,7 +657,7 @@ bool DDA::Start(uint32_t tim)
 	}
 	else
 	{
-		bool extrusionMove = false;
+		unsigned int extrusions = 0, retractions = 0;		// bitmaps of extruding and retracting drives
 		for (size_t i = 0; i < DRIVES; ++i)
 		{
 			DriveMovement& dm = ddm[i];
@@ -666,14 +666,32 @@ bool DDA::Start(uint32_t tim)
 				reprap.GetPlatform()->SetDirection(i, dm.direction);
 				if (i >= AXES)
 				{
-					extrusionMove = true;
+					if (dm.direction == FORWARDS)
+					{
+						extrusions |= (1 << (i - AXES));
+					}
+					else
+					{
+						retractions |= (1 << (i - AXES));
+					}
 				}
 			}
 		}
 
 		Platform *platform = reprap.GetPlatform();
-		if (extrusionMove)
+		if (extrusions != 0 || retractions != 0)
 		{
+			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
+			if (prohibitedMovements != 0)
+			{
+				for (size_t i = 0; i < DRIVES - AXES; ++i)
+				{
+					if (prohibitedMovements & (1 << i))
+					{
+						ddm[i + AXES].moving = false;
+					}
+				}
+			}
 			platform->ExtrudeOn();
 		}
 		else

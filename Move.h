@@ -19,7 +19,8 @@ enum PointCoordinateSet
 	xSet = 1,
 	ySet = 2,
 	zSet = 4,
-	xyCorrected = 8
+	xyCorrected = 8,
+	probeError = 16
 };
 
 // Class to hold the parameter for a delta machine.
@@ -104,7 +105,7 @@ public:
     void SetLiveCoordinates(const float coords[DRIVES]); // Force the live coordinates (see above) to be these
     void SetXBedProbePoint(int index, float x);			// Record the X coordinate of a probe point
     void SetYBedProbePoint(int index, float y);			// Record the Y coordinate of a probe point
-    void SetZBedProbePoint(int index, float z, bool wasXyCorrected);	// Record the Z coordinate of a probe point
+    void SetZBedProbePoint(int index, float z, bool wasXyCorrected, bool wasError);	// Record the Z coordinate of a probe point
     float XBedProbePoint(int index) const;				// Get the X coordinate of a probe point
     float YBedProbePoint(int index) const;				// Get the Y coordinate of a probe point
     float ZBedProbePoint(int index)const ;				// Get the Z coordinate of a probe point

@@ -238,7 +238,7 @@ void Platform::Init()
 		DisableDrive(drive);
 		driveState[drive] = DriveStatus::disabled;
 		SetElasticComp(drive, 0.0);
-		if (drive < AXES)
+		if (drive <= AXES)
 		{
 			endStopType[drive] = lowEndStop;				// assume all endstops are low endstops
 			endStopLogicLevel[drive] = true;
@@ -371,7 +371,7 @@ int Platform::ZProbe() const
 			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));
 
 		case 2:		// Modulated IR sensor.
-			// We assume that zProbeOnFilter and zprobeOffFilter average the same number of readings.
+			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
 					/ (4 * numZProbeReadingsAveraged));
@@ -923,10 +923,7 @@ void Platform::Tick()
 		break;
 
 	case 2:			// last conversion started was the Z probe, with IR LED on
-		{
-			uint16_t reading = (nvData.zProbeType != 4) ? GetAdcReading(zProbeAdcChannel) : (digitalRead(endStopPins[E0_AXIS])) ? 4000 : 0;
-			const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(reading);
-		}
+		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetRawZProbeReading());
 		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
 		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
 		{
@@ -936,10 +933,7 @@ void Platform::Tick()
 		break;
 
 	case 4:			// last conversion started was the Z probe, with IR LED off if modulation is enabled
-		{
-			uint16_t reading = (nvData.zProbeType != 4) ? GetAdcReading(zProbeAdcChannel) : (digitalRead(endStopPins[E0_AXIS])) ? 4000 : 0;
-			const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(reading);
-		}
+		const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(GetRawZProbeReading());
 		// no break
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
@@ -1233,14 +1227,10 @@ void Platform::SetDirection(size_t drive, bool direction)
 // Enable a drive. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableDrive(size_t drive)
 {
-	if (drive < DRIVES)
+	if (drive < DRIVES && driveState[drive] != DriveStatus::enabled)
 	{
-		DriveStatus oldState = driveState[drive];
 		driveState[drive] = DriveStatus::enabled;
-		if (oldState == DriveStatus::idle)
-		{
-			UpdateMotorCurrent(drive);
-		}
+		UpdateMotorCurrent(drive);						// the current may have been reduced by the idle timeout
 
 		const int pin = enablePins[drive];
 		if (pin >= 0)
@@ -1266,12 +1256,15 @@ void Platform::DisableDrive(size_t drive)
 
 // Set a drive to idle hold if it is enabled. If it is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
-void Platform::SetDriveIdle(size_t drive)
+void Platform::SetDrivesIdle()
 {
-	if (drive < DRIVES && driveState[drive] == DriveStatus::enabled)
+	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
-		driveState[drive] = DriveStatus::idle;
-		UpdateMotorCurrent(drive);
+		if (driveState[drive] == DriveStatus::enabled)
+		{
+			driveState[drive] = DriveStatus::idle;
+			UpdateMotorCurrent(drive);
+		}
 	}
 }
 

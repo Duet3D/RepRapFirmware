@@ -854,11 +854,6 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 		endStopsToCheck = ce;
 		cannedCycleMoveQueued = true;
 		moveAvailable = true;
-
-		if ((ce & ZProbeActive) && reprap.GetPlatform()->GetZProbeResult() == lowHit)
-		{
-			platform->Message(BOTH_ERROR_MESSAGE, "Z probe warning: probe already triggered at start of probing move\n");
-		}
 	}
 	return false;
 }
@@ -978,6 +973,15 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 		return false;
 
 	case 2:	// Probe the bed
+		if (!cannedCycleMoveQueued && reprap.GetPlatform()->GetZProbeResult() == lowHit)
+		{
+			// Z probe is already triggered at the start of the move, so abandon the probe and record an error
+			platform->Message(BOTH_ERROR_MESSAGE, "Z probe warning: probe already triggered at start of probing move\n");
+			cannedCycleMoveCount = 0;
+			reprap.GetMove()->SetZBedProbePoint(probePointIndex, platform->GetZProbeDiveHeight(), true, true);
+			return true;
+		}
+
 		moveToDo[Z_AXIS] = (axisIsHomed[Z_AXIS])
 							? -platform->GetZProbeDiveHeight()				// Z axis has been homed, so no point in going very far
 							: -1.1 * platform->AxisTotalLength(Z_AXIS);		// Z axis not homed yet, so treat this as a homing move
@@ -1012,7 +1016,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount = 0;
-			reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ, true);
+			reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ, true, false);
 			return true;
 		}
 		return false;
@@ -1081,7 +1085,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 
 	if (z > SILLY_Z_VALUE)
 	{
-		reprap.GetMove()->SetZBedProbePoint(probePointIndex, z, false);
+		reprap.GetMove()->SetZBedProbePoint(probePointIndex, z, false, false);
 		if (gb->Seen('S'))
 		{
 			zProbesSet = true;
@@ -2202,10 +2206,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			for (size_t drive = 0; drive < DRIVES; ++drive)
-			{
-				platform->SetDriveIdle(drive);
-			}
+			platform->SetDrivesIdle();
 		}
 
 		reprap.GetHeat()->SwitchOffAll();
@@ -2264,7 +2265,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 		if (sparam == 2)
 		{
-			reprap.GetFilesResponse(reply, dir);			// Send the file list in JSON format
+			reprap.GetFilesResponse(reply, dir, true);			// Send the file list in JSON format
 			reply.cat("\n");
 		}
 		else
@@ -2685,43 +2686,43 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 105: // Get Extruder Temperature / Get Status Message
-	{
-		int param = (gb->Seen('S')) ? gb->GetIValue() : 0;
-		int seq = (gb->Seen('R')) ? gb->GetIValue() : -1;
-		switch (param)
 		{
-		// case 1 is reserved for future Pronterface versions, see
-		// http://reprap.org/wiki/G-code#M105:_Get_Extruder_Temperature
-
-		case 2:
-			reprap.GetLegacyStatusResponse(reply, 2, seq);	// send JSON-formatted status response
-			reply.cat("\n");
-			break;
-
-		case 3:
-			reprap.GetLegacyStatusResponse(reply, 3, seq);	// send extended JSON-formatted response
-			reply.cat("\n");
-			break;
-
-		case 4:
-			reprap.GetStatusResponse(reply, 3, false);		// send print status JSON-formatted response
-			reply.cat("\n");
-			break;
-
-		default:
-			reply.copy("T:");
-			for (int8_t heater = 1; heater < HEATERS; heater++)
+			int param = (gb->Seen('S')) ? gb->GetIValue() : 0;
+			int seq = (gb->Seen('R')) ? gb->GetIValue() : -1;
+			switch (param)
 			{
-				Heat::HeaterStatus hs = reprap.GetHeat()->GetStatus(heater);
-				if (hs != Heat::HS_off && hs != Heat::HS_fault)
+			// case 1 is reserved for future Pronterface versions, see
+			// http://reprap.org/wiki/G-code#M105:_Get_Extruder_Temperature
+
+			case 2:
+				reprap.GetLegacyStatusResponse(reply, 2, seq);	// send JSON-formatted status response
+				reply.cat("\n");
+				break;
+
+			case 3:
+				reprap.GetLegacyStatusResponse(reply, 3, seq);	// send extended JSON-formatted response
+				reply.cat("\n");
+				break;
+
+			case 4:
+				reprap.GetStatusResponse(reply, 3, seq, false);	// send print status JSON-formatted response
+				reply.cat("\n");
+				break;
+
+			default:
+				reply.copy("T:");
+				for (int8_t heater = 1; heater < HEATERS; heater++)
 				{
-					reply.catf("%.1f ", reprap.GetHeat()->GetTemperature(heater));
+					Heat::HeaterStatus hs = reprap.GetHeat()->GetStatus(heater);
+					if (hs != Heat::HS_off && hs != Heat::HS_fault)
+					{
+						reply.catf("%.1f ", reprap.GetHeat()->GetTemperature(heater));
+					}
 				}
+				reply.catf("B:%.1f\n", reprap.GetHeat()->GetTemperature(HOT_BED));
+				break;
 			}
-			reply.catf("B:%.1f\n", reprap.GetHeat()->GetTemperature(HOT_BED));
-			break;
 		}
-	}
 		break;
 
 	case 106: // Set/report fan values
@@ -2850,40 +2851,40 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 119:
-	{
-		reply.copy("Endstops - ");
-		char comma = ',';
-		for (size_t axis = 0; axis < AXES; axis++)
 		{
-			const char* es;
-			switch (platform->Stopped(axis))
+			reply.copy("Endstops - ");
+			char comma = ',';
+			for (size_t axis = 0; axis < AXES; axis++)
 			{
-			case lowHit:
-				es = "at min stop";
-				break;
+				const char* es;
+				switch (platform->Stopped(axis))
+				{
+				case lowHit:
+					es = "at min stop";
+					break;
 
-			case highHit:
-				es = "at max stop";
-				break;
+				case highHit:
+					es = "at max stop";
+					break;
 
-			case lowNear:
-				es = "near min stop";
-				break;
+				case lowNear:
+					es = "near min stop";
+					break;
 
-			case noStop:
-			default:
-				es = "not stopped";
+				case noStop:
+				default:
+					es = "not stopped";
+				}
+
+				if (axis == AXES - 1)
+				{
+					comma = ' ';
+				}
+
+				reply.catf("%c: %s%c ", axisLetters[axis], es, comma);
 			}
-
-			if (axis == AXES - 1)
-			{
-				comma = ' ';
-			}
-
-			reply.catf("%c: %s%c ", axisLetters[axis], es, comma);
+			reply.cat("\n");
 		}
-		reply.cat("\n");
-	}
 		break;
 
 	case 120:
@@ -2903,17 +2904,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 122:
-	{
-		int val = (gb->Seen('P')) ? gb->GetIValue() : 0;
-		if (val == 0)
 		{
-			reprap.Diagnostics();
+			int val = (gb->Seen('P')) ? gb->GetIValue() : 0;
+			if (val == 0)
+			{
+				reprap.Diagnostics();
+			}
+			else
+			{
+				platform->DiagnosticTest(val);
+			}
 		}
-		else
-		{
-			platform->DiagnosticTest(val);
-		}
-	}
 		break;
 
 	case 126: // Valve open
@@ -3024,46 +3025,46 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 203: // Set/print maximum feedrates
-	{
-		bool seen = false;
-		for (size_t axis = 0; axis < AXES; axis++)
 		{
-			if (gb->Seen(axisLetters[axis]))
+			bool seen = false;
+			for (size_t axis = 0; axis < AXES; axis++)
 			{
-				platform->SetMaxFeedrate(axis, gb->GetFValue() * distanceScale * secondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
-				seen = true;
-			}
-		}
-
-		if (gb->Seen(extrudeLetter))
-		{
-			seen = true;
-			float eVals[DRIVES - AXES];
-			int eCount = DRIVES - AXES;
-			gb->GetFloatArray(eVals, eCount);
-			for (size_t e = 0; e < eCount; e++)
-			{
-				platform->SetMaxFeedrate(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
-			}
-		}
-
-		if (!seen)
-		{
-			reply.printf("Maximum feedrates: X: %.1f, Y: %.1f, Z: %.1f, E: ",
-					platform->MaxFeedrate(X_AXIS) / (distanceScale * secondsToMinutes),
-					platform->MaxFeedrate(Y_AXIS) / (distanceScale * secondsToMinutes),
-					platform->MaxFeedrate(Z_AXIS) / (distanceScale * secondsToMinutes));
-			for (size_t drive = AXES; drive < DRIVES; drive++)
-			{
-				reply.catf("%.1f", platform->MaxFeedrate(drive) / (distanceScale * secondsToMinutes));
-				if (drive < DRIVES - 1)
+				if (gb->Seen(axisLetters[axis]))
 				{
-					reply.cat(":");
+					platform->SetMaxFeedrate(axis, gb->GetFValue() * distanceScale * secondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
+					seen = true;
 				}
 			}
-			reply.cat("\n");
+
+			if (gb->Seen(extrudeLetter))
+			{
+				seen = true;
+				float eVals[DRIVES - AXES];
+				int eCount = DRIVES - AXES;
+				gb->GetFloatArray(eVals, eCount);
+				for (size_t e = 0; e < eCount; e++)
+				{
+					platform->SetMaxFeedrate(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
+				}
+			}
+
+			if (!seen)
+			{
+				reply.printf("Maximum feedrates: X: %.1f, Y: %.1f, Z: %.1f, E: ",
+						platform->MaxFeedrate(X_AXIS) / (distanceScale * secondsToMinutes),
+						platform->MaxFeedrate(Y_AXIS) / (distanceScale * secondsToMinutes),
+						platform->MaxFeedrate(Z_AXIS) / (distanceScale * secondsToMinutes));
+				for (size_t drive = AXES; drive < DRIVES; drive++)
+				{
+					reply.catf("%.1f", platform->MaxFeedrate(drive) / (distanceScale * secondsToMinutes));
+					if (drive < DRIVES - 1)
+					{
+						reply.cat(":");
+					}
+				}
+				reply.cat("\n");
+			}
 		}
-	}
 		break;
 
 	case 205: //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
@@ -3075,73 +3076,73 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 208: // Set/print maximum axis lengths. If there is an S parameter with value 1 then we set the min value, else we set the max value.
-	{
-		bool setMin = (gb->Seen('S') ? (gb->GetIValue() == 1) : false);
-		bool seen = false;
-		for (size_t axis = 0; axis < AXES; axis++)
 		{
-			if (gb->Seen(axisLetters[axis]))
-			{
-				float value = gb->GetFValue() * distanceScale;
-				if (setMin)
-				{
-					platform->SetAxisMinimum(axis, value);
-				}
-				else
-				{
-					platform->SetAxisMaximum(axis, value);
-				}
-				seen = true;
-			}
-		}
-
-		if (!seen)
-		{
-			reply.copy("Axis limits - ");
-			char comma = ',';
+			bool setMin = (gb->Seen('S') ? (gb->GetIValue() == 1) : false);
+			bool seen = false;
 			for (size_t axis = 0; axis < AXES; axis++)
 			{
-				if (axis == AXES - 1)
+				if (gb->Seen(axisLetters[axis]))
 				{
-					comma = '\n';
+					float value = gb->GetFValue() * distanceScale;
+					if (setMin)
+					{
+						platform->SetAxisMinimum(axis, value);
+					}
+					else
+					{
+						platform->SetAxisMaximum(axis, value);
+					}
+					seen = true;
 				}
-				reply.catf("%c: %.1f min, %.1f max%c ", axisLetters[axis], platform->AxisMinimum(axis),
-						platform->AxisMaximum(axis), comma);
+			}
+
+			if (!seen)
+			{
+				reply.copy("Axis limits - ");
+				char comma = ',';
+				for (size_t axis = 0; axis < AXES; axis++)
+				{
+					if (axis == AXES - 1)
+					{
+						comma = '\n';
+					}
+					reply.catf("%c: %.1f min, %.1f max%c ", axisLetters[axis], platform->AxisMinimum(axis),
+							platform->AxisMaximum(axis), comma);
+				}
 			}
 		}
-	}
 		break;
 
 	case 210: // Set/print homing feed rates
-	{
-		bool seen = false;
-		for (size_t axis = 0; axis < AXES; axis++)
 		{
-			if (gb->Seen(axisLetters[axis]))
-			{
-				float value = gb->GetFValue() * distanceScale * secondsToMinutes;
-				platform->SetHomeFeedRate(axis, value);
-				seen = true;
-			}
-		}
-
-		if (!seen)
-		{
-			reply.copy("Homing feedrates (mm/min) - ");
-			char comma = ',';
+			bool seen = false;
 			for (size_t axis = 0; axis < AXES; axis++)
 			{
-				if (axis == AXES - 1)
+				if (gb->Seen(axisLetters[axis]))
 				{
-					comma = ' ';
+					float value = gb->GetFValue() * distanceScale * secondsToMinutes;
+					platform->SetHomeFeedRate(axis, value);
+					seen = true;
 				}
-
-				reply.catf("%c: %.1f%c ", axisLetters[axis],
-						platform->HomeFeedRate(axis) * minutesToSeconds / distanceScale, comma);
 			}
-			reply.cat("\n");
+
+			if (!seen)
+			{
+				reply.copy("Homing feedrates (mm/min) - ");
+				char comma = ',';
+				for (size_t axis = 0; axis < AXES; axis++)
+				{
+					if (axis == AXES - 1)
+					{
+						comma = ' ';
+					}
+
+					reply.catf("%c: %.1f%c ", axisLetters[axis],
+							platform->HomeFeedRate(axis) * minutesToSeconds / distanceScale, comma);
+				}
+				reply.cat("\n");
+			}
 		}
-	}
 		break;
 
 	case 220:	// Set/report speed factor override percentage
@@ -3150,8 +3151,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			float newSpeedFactor = (gb->GetFValue() / 100.0) * secondsToMinutes;// include the conversion from mm/minute to mm/second
 			if (newSpeedFactor > 0)
 			{
-				speedFactorChange *= newSpeedFactor / speedFactor;
+				float ratio = newSpeedFactor / speedFactor;
 				speedFactor = newSpeedFactor;
+				if (moveAvailable)
+				{
+					// The last move has not gone yet, so we can update it
+					moveBuffer[DRIVES] *= ratio;
+				}
+				else
+				{
+					speedFactorChange *= ratio;
+				}
 			}
 			else
 			{
@@ -3166,27 +3176,31 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 221:	// Set/report extrusion factor override percentage
-	{
-		int extruder = 0;
-		if (gb->Seen('D'))	// D parameter (if present) selects the extruder number
 		{
-			extruder = gb->GetIValue();
-		}
-
-		if (gb->Seen('S'))	// S parameter sets the override percentage
-		{
-			float extrusionFactor = gb->GetFValue() / 100.0;
-			if (extruder >= 0 && extruder < DRIVES - AXES && extrusionFactor >= 0)
+			int extruder = 0;
+			if (gb->Seen('D'))	// D parameter (if present) selects the extruder number
 			{
-				extrusionFactors[extruder] = extrusionFactor;
+				extruder = gb->GetIValue();
+			}
+
+			if (gb->Seen('S'))	// S parameter sets the override percentage
+			{
+				float extrusionFactor = gb->GetFValue() / 100.0;
+				if (extruder >= 0 && extruder < DRIVES - AXES && extrusionFactor >= 0)
+				{
+					if (moveAvailable)
+					{
+						moveBuffer[extruder + AXES] *= extrusionFactor/extrusionFactors[extruder];	// last move not gone, so update it
+					}
+					extrusionFactors[extruder] = extrusionFactor;
+				}
+			}
+			else
+			{
+				reply.printf("Extrusion factor override for extruder %d: %.1f%%\n", extruder,
+						extrusionFactors[extruder] * 100.0);
 			}
 		}
-		else
-		{
-			reply.printf("Extrusion factor override for extruder %d: %.1f%%\n", extruder,
-					extrusionFactors[extruder] * 100.0);
-		}
-	}
 		break;
 
 		// For case 226, see case 25
@@ -3239,6 +3253,34 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 400: // Wait for current moves to finish
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 			return false;
+		break;
+
+	case 408: // Get status in JSON format
+		{
+			int param = (gb->Seen('S')) ? gb->GetIValue() : 0;
+			int seq = (gb->Seen('R')) ? gb->GetIValue() : -1;
+			switch (param)
+			{
+			case 0:
+			case 1:
+				reprap.GetLegacyStatusResponse(reply, param + 2, seq);	// send JSON-formatted status response
+				reply.cat("\n");
+				break;
+
+			case 2:
+			case 3:
+			case 4:
+				reprap.GetStatusResponse(reply, param - 1, seq, false);	// send extended JSON-formatted response
+				reply.cat("\n");
+				break;
+
+			case 5:
+				reprap.GetConfigResponse(reply);						// send JSON-formatted machine config
+				reply.cat("\n");
+				break;
+
+			}
+		}
 		break;
 
 	case 500: // Store parameters in EEPROM
@@ -3668,7 +3710,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
-	case 571:
+	case 571: // Set output on extrude
 		if (gb->Seen('S'))
 		{
 			platform->SetExtrusionAncilliaryPWM(gb->GetFValue());
@@ -3709,9 +3751,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			bool seen = false;
 			bool logicLevel = (gb->Seen('S')) ? (gb->GetIValue() != 0) : true;
-			for (size_t axis = 0; axis < AXES; ++axis)
+			for (size_t axis = 0; axis <= AXES; ++axis)
 			{
-				if (gb->Seen(axisLetters[axis]))
+				const char letter = (axis == AXES) ? extrudeLetter : axisLetters[axis];
+				if (gb->Seen(letter))
 				{
 					int ival = gb->GetIValue();
 					if (ival >= 0 && ival <= 3)

@@ -985,7 +985,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 					type = 1;
 				}
 
-				reprap.GetStatusResponse(response, type, true);
+				reprap.GetStatusResponse(response, type, -1, true);
 			}
 			else
 			{
@@ -1044,7 +1044,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 		{
 			// TODO: get rid of GetFilesResponse and write directly to NetworkTransaction!
 			const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
-			reprap.GetFilesResponse(response, dir);
+			reprap.GetFilesResponse(response, dir, false);
 		}
 		else if (StringEquals(request, "fileinfo"))
 		{
@@ -1075,7 +1075,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 		else if (StringEquals(request, "connect"))
 		{
 			CancelUpload();
-			reprap.GetStatusResponse(response, 1, -1);
+			reprap.GetStatusResponse(response, 1, -1, true);
 		}
 		else if (StringEquals(request, "mkdir") && StringEquals(key, "dir"))
 		{

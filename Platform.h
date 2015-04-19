@@ -497,13 +497,15 @@ public:
 
 	void Init(uint16_t val) volatile
 	{
+		irqflags_t flags = cpu_irq_save();
 		sum = (uint32_t)val * (uint32_t)numAveraged;
 		index = 0;
 		isValid = false;
-		for(size_t i = 0; i < numAveraged; ++i)
+		for (size_t i = 0; i < numAveraged; ++i)
 		{
 			readings[i] = val;
 		}
+		cpu_irq_restore(flags);
 	}
 
 	// Call this to put a new reading into the filter
@@ -513,7 +515,7 @@ public:
 		sum = sum - readings[index] + r;
 		readings[index] = r;
 		++index;
-		if(index == numAveraged)
+		if (index == numAveraged)
 		{
 			index = 0;
 			isValid = true;
@@ -634,7 +636,7 @@ public:
   void StepLow(size_t drive);
   void EnableDrive(size_t drive);
   void DisableDrive(size_t drive);
-  void SetDriveIdle(size_t drive);
+  void SetDrivesIdle();
   void SetMotorCurrent(size_t drive, float current);
   float MotorCurrent(size_t drive) const;
   void SetIdleCurrentFactor(float f);
@@ -817,6 +819,7 @@ private:
   float extrusionAncilliaryPWM;
 
   void InitZProbe();
+  uint16_t GetRawZProbeReading() const;
   void UpdateNetworkAddress(byte dst[4], const byte src[4]);
 
   // AXES
@@ -824,8 +827,8 @@ private:
   float axisMaxima[AXES];
   float axisMinima[AXES];
   float homeFeedrates[AXES];
-  EndStopType endStopType[AXES];
-  bool endStopLogicLevel[AXES];
+  EndStopType endStopType[AXES+1];
+  bool endStopLogicLevel[AXES+1];
   
 // HEATERS - Bed is assumed to be the first
 
@@ -1296,6 +1299,25 @@ inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, 
 	// sadly, the Arduino IDE does not provide the inlined version of TC_ReadCV, so use the following instead...
 	return TC1 ->TC_CHANNEL[0].TC_CV;
 }
+
+// This is called by the tick ISR to get the raw Z probe reading to feed to the filter
+inline uint16_t Platform::GetRawZProbeReading() const
+{
+	if (nvData.zProbeType == 4)
+	{
+		bool b = (bool)digitalRead(endStopPins[E0_AXIS]);
+		if (!endStopLogicLevel[AXES])
+		{
+			b = !b;
+		}
+		return (b) ? 4000 : 0;
+	}
+	else
+	{
+		return GetAdcReading(zProbeAdcChannel);
+	}
+}
+
 
 //***************************************************************************************
 

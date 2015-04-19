@@ -61,7 +61,7 @@ class RepRap
     void DenyColdExtrude();
     bool ColdExtrude() const;
 
-    void GetExtruderCapabilities(bool canDrive[], const bool directions[]) const;
+    unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions);
     void PrintTool(int toolNumber, StringRef& reply) const;
     void FlagTemperatureFault(int8_t dudHeater);
     void ClearTemperatureFault(int8_t wasDudHeater);
@@ -81,11 +81,11 @@ class RepRap
     uint16_t GetExtrudersInUse() const;
     uint16_t GetHeatersInUse() const;
 
-    void GetStatusResponse(StringRef& response, uint8_t type, bool forWebserver);
+    void GetStatusResponse(StringRef& response, uint8_t type, int seq, bool forWebserver);
     void GetConfigResponse(StringRef& response);
     void GetLegacyStatusResponse(StringRef &response, uint8_t type, int seq) const;
     void GetNameResponse(StringRef& response) const;
-    void GetFilesResponse(StringRef& response, const char* dir) const;
+    void GetFilesResponse(StringRef& response, const char* dir, bool flagsDirs) const;
 
     void Beep(int freq, int ms);
     void SetMessage(const char *msg);
@@ -100,7 +100,7 @@ class RepRap
 
   private:
 
-    static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars);
+    static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0);
   
     char GetStatusCharacter() const;
 

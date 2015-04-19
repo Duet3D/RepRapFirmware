@@ -294,7 +294,7 @@ void Move::Init()
 	SetPositions(move);
 
 	size_t slow = reprap.GetPlatform()->SlowestDrive();
-	currentFeedrate = reprap.GetPlatform()->HomeFeedRate(slow);
+	currentFeedrate = DefaultFeedRate;
 
 	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
 	for (size_t point = 0; point < MaxProbePoints; point++)
@@ -468,11 +468,7 @@ void Move::Spin()
 				}
 				else if (iState == IdleState::timing && reprap.GetPlatform()->Time() - lastMoveTime >= idleTimeout)
 				{
-					// Put all drives in idle hold
-					for (size_t drive = 0; drive < DRIVES; ++drive)
-					{
-						reprap.GetPlatform()->SetDriveIdle(drive);
-					}
+					reprap.GetPlatform()->SetDrivesIdle();					// put all drives in idle hold
 					iState = IdleState::idle;
 				}
 			}
@@ -1427,22 +1423,32 @@ void Move::SetYBedProbePoint(int index, float y)
 	probePointSet[index] |= ySet;
 }
 
-void Move::SetZBedProbePoint(int index, float z, bool wasXyCorrected)
+void Move::SetZBedProbePoint(int index, float z, bool wasXyCorrected, bool wasError)
 {
-	if(index < 0 || index >= MaxProbePoints)
+	if (index < 0 || index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Z index out of range.\n");
-		return;
-	}
-	zBedProbePoints[index] = z;
-	probePointSet[index] |= zSet;
-	if (wasXyCorrected)
-	{
-		probePointSet[index] |= xyCorrected;
 	}
 	else
 	{
-		probePointSet[index] &= ~xyCorrected;
+		zBedProbePoints[index] = z;
+		probePointSet[index] |= zSet;
+		if (wasXyCorrected)
+		{
+			probePointSet[index] |= xyCorrected;
+		}
+		else
+		{
+			probePointSet[index] &= ~xyCorrected;
+		}
+		if (wasError)
+		{
+			probePointSet[index] |= probeError;
+		}
+		else
+		{
+			probePointSet[index] &= ~probeError;
+		}
 	}
 }
 

@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.04e-dc42"
-#define DATE "2015-04-09"
+#define VERSION "1.04f-dc42"
+#define DATE "2015-04-19"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -51,6 +51,8 @@ const unsigned int MaxFilenameLength = 100;		// Maximum length of a path + filen
 
 const float defaultIdleCurrentFactor = 0.3;		// Proportion of normal motor current that we use for idle hold
 const float defaultIdleTimeout = 30.0;
+
+const float DefaultFeedRate = 3000;				// The initial requested feed rate after resetting the printer
 
 #define ABS_ZERO (-273.15)  					// Celsius
 #define NEARLY_ABS_ZERO (-273)					// Celsius

@@ -324,14 +324,12 @@ void RepRap::Spin()
 
 	// Check if we need to display a cold extrusion warning
 
-	bool displayWarning = false;
 	for (Tool *t = toolList; t != NULL; t = t->Next())
 	{
-		displayWarning |= t->DisplayColdExtrudeWarning();
-	}
-	if (displayWarning)
-	{
-		platform->Message(BOTH_MESSAGE, "Warning: Tools can only be driven if their heater temperatures are high!\n");
+		if (t->DisplayColdExtrudeWarning())
+		{
+			platform->Message(BOTH_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures was not high enough\n", t->myNumber);
+		}
 	}
 
 	// Keep track of the loop time
@@ -652,7 +650,7 @@ void RepRap::Tick()
 // Type 1 is the ordinary JSON status response.
 // Type 2 is the same except that static parameters are also included.
 // Type 3 is the same but instead of static parameters we report print estimation values.
-void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebserver)
+void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool forWebserver)
 {
 	// Machine status
 	response.printf("{\"status\":\"%c\",\"coords\":{", GetStatusCharacter());
@@ -728,7 +726,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 			if (sendMessage)
 			{
 				response.cat("\"message\":");
-				EncodeString(response, message, 2, false);
+				EncodeString(response, message, 2);
 
 				message[0] = 0;
 			}
@@ -863,7 +861,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 
 		// Machine name
 		response.cat(",\"name\":");
-		EncodeString(response, myName, 2, false);
+		EncodeString(response, myName, 2);
 
 		/* Probe */
 		{
@@ -966,6 +964,13 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, bool forWebser
 			// Based on layers
 			response.catf(",\"layer\":%.1f}", printMonitor->EstimateTimeLeft(layerBased));
 			}
+	}
+
+	if (!forWebserver && seq != -1 && replySeq != seq)
+	{
+		// Send the response to the last command. Do this last because it can be long and may need to be truncated.
+		response.catf(",\"seq\":%u,\"resp\":", replySeq);					// send the response sequence number
+		EncodeString(response, GetGcodeReply().Pointer(), 2, true);
 	}
 
 	response.cat("}");
@@ -1085,129 +1090,105 @@ void RepRap::GetConfigResponse(StringRef& response)
 }
 
 // Get the JSON status response for the web server or M105 command.
-// Type 0 is the old-style webserver status response (we should be able to bet rid of this soon).
+// Type 0 was the old-style webserver status response, but is no longer supported.
 // Type 1 is the new-style webserver status response.
 // Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
 // Type 3 is the M105 S3 response, which is like the M105 S2 response except that static values are also included.
 // 'seq' is the response sequence number, if it is not -1 and we have a different sequence number then we send the gcode response
 void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq) const
 {
-	if (type != 0)
+	// Send the status. Note that 'S' has always meant that the machine is halted in this version of the status response, so we use A for pAused.
+	char ch = GetStatusCharacter();
+	if (ch == 'S')			// if paused then send 'A'
 	{
-		// Send the status. Note that 'S' has always meant that the machine is halted in this version of the status response, so we use A for pAused.
-		char ch = GetStatusCharacter();
-		if (ch == 'S')			// if paused then send 'A'
-		{
-			ch = 'A';
-		}
-		else if (ch == 'H')		// if halted then send 'S'
-		{
-			ch = 'S';
-		}
-		response.printf("{\"status\":\"%c\",\"heaters\":", ch);
-
-		// Send the heater actual temperatures
-		const Heat *heat = reprap.GetHeat();
-		ch = '[';
-		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
-		{
-			response.catf("%c%.1f", ch, heat->GetTemperature(heater));
-			ch = ',';
-		}
-
-		// Send the heater active temperatures
-		response.catf("],\"active\":");
-		ch = '[';
-		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
-		{
-			response.catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
-			ch = ',';
-		}
-
-		// Send the heater standby temperatures
-		response.catf("],\"standby\":");
-		ch = '[';
-		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
-		{
-			response.catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
-			ch = ',';
-		}
-
-		// Send the heater statuses (0=off, 1=standby, 2=active)
-		response.cat("],\"hstat\":");
-		ch = '[';
-		for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
-		{
-			response.catf("%c%d", ch, (int)heat->GetStatus(heater));
-			ch = ',';
-		}
-
-		// Send XYZ positions
-		float liveCoordinates[DRIVES];
-		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		const Tool* currentTool = reprap.GetCurrentTool();
-		if (currentTool != NULL)
-		{
-			const float *offset = currentTool->GetOffset();
-			for (size_t i = 0; i < AXES; ++i)
-			{
-				liveCoordinates[i] += offset[i];
-			}
-		}
-		response.catf("],\"pos\":");		// announce the XYZ position
-		ch = '[';
-		for (size_t drive = 0; drive < AXES; drive++)
-		{
-			response.catf("%c%.2f", ch, liveCoordinates[drive]);
-			ch = ',';
-		}
-
-		// Send extruder total extrusion since power up, last G92 or last M23
-		response.cat("],\"extr\":");		// announce the extruder positions
-		ch = '[';
-		for (size_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
-		{
-			response.catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
-			ch = ',';
-		}
-		response.cat((ch == ']') ? "[]" : "]");
-
-		// Send the speed and extruder override factors
-		response.catf(",\"sfactor\":%.2f,\"efactor\":", gCodes->GetSpeedFactor() * 100.0);
-		const float *extrusionFactors = gCodes->GetExtrusionFactors();
-		ch = '[';
-		for (size_t i = 0; i < reprap.GetExtrudersInUse(); ++i)
-		{
-			response.catf("%c%.2f", ch, extrusionFactors[i] * 100.0);
-			ch = ',';
-		}
-		response.cat((ch == '[') ? "[]" : "]");
-
-		// Send the current tool number
-		int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
-		response.catf(",\"tool\":%d", toolNumber);
+		ch = 'A';
 	}
-	else
+	else if (ch == 'H')		// if halted then send 'S'
 	{
-		// The old (deprecated) poll response lists the status, then all the heater temperatures, then the XYZ positions, then all the extruder positions.
-		// These are all returned in a single vector called "poll".
-		// This is a poor choice of format because we can't easily tell which is which unless we already know the number of heaters and extruders.
-		// RRP reversed the order at version 0.65 to send the positions before the heaters, but we haven't yet done that.
-		char c = (gCodes->PrintingAFile()) ? 'P' : 'I';
-		response.printf("{\"poll\":[\"%c\",", c); // Printing
-		for (size_t heater = 0; heater < HEATERS; heater++)
+		ch = 'S';
+	}
+	response.printf("{\"status\":\"%c\",\"heaters\":", ch);
+
+	// Send the heater actual temperatures
+	const Heat *heat = reprap.GetHeat();
+	ch = '[';
+	for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+	{
+		response.catf("%c%.1f", ch, heat->GetTemperature(heater));
+		ch = ',';
+	}
+
+	// Send the heater active temperatures
+	response.catf("],\"active\":");
+	ch = '[';
+	for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+	{
+		response.catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
+		ch = ',';
+	}
+
+	// Send the heater standby temperatures
+	response.catf("],\"standby\":");
+	ch = '[';
+	for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+	{
+		response.catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
+		ch = ',';
+	}
+
+	// Send the heater statuses (0=off, 1=standby, 2=active)
+	response.cat("],\"hstat\":");
+	ch = '[';
+	for (int8_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+	{
+		response.catf("%c%d", ch, (int)heat->GetStatus(heater));
+		ch = ',';
+	}
+
+	// Send XYZ positions
+	float liveCoordinates[DRIVES];
+	reprap.GetMove()->LiveCoordinates(liveCoordinates);
+	const Tool* currentTool = reprap.GetCurrentTool();
+	if (currentTool != NULL)
+	{
+		const float *offset = currentTool->GetOffset();
+		for (size_t i = 0; i < AXES; ++i)
 		{
-			response.catf("\"%.1f\",", reprap.GetHeat()->GetTemperature(heater));
-		}
-		// Send XYZ and extruder positions
-		float liveCoordinates[DRIVES];
-		reprap.GetMove()->LiveCoordinates(liveCoordinates);
-		for (size_t drive = 0; drive < DRIVES; drive++)	// loop through extruders
-		{
-			char ch = (drive == DRIVES - 1) ? ']' : ',';	// append ] to the last one but , to the others
-			response.catf("\"%.2f\"%c", liveCoordinates[drive], ch);
+			liveCoordinates[i] += offset[i];
 		}
 	}
+	response.catf("],\"pos\":");		// announce the XYZ position
+	ch = '[';
+	for (size_t drive = 0; drive < AXES; drive++)
+	{
+		response.catf("%c%.2f", ch, liveCoordinates[drive]);
+		ch = ',';
+	}
+
+	// Send extruder total extrusion since power up, last G92 or last M23
+	response.cat("],\"extr\":");		// announce the extruder positions
+	ch = '[';
+	for (size_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
+	{
+		response.catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
+		ch = ',';
+	}
+	response.cat((ch == ']') ? "[]" : "]");
+
+	// Send the speed and extruder override factors
+	response.catf(",\"sfactor\":%.2f,\"efactor\":", gCodes->GetSpeedFactor() * 100.0);
+	const float *extrusionFactors = gCodes->GetExtrusionFactors();
+	ch = '[';
+	for (size_t i = 0; i < reprap.GetExtrudersInUse(); ++i)
+	{
+		response.catf("%c%.2f", ch, extrusionFactors[i] * 100.0);
+		ch = ',';
+	}
+	response.cat((ch == '[') ? "[]" : "]");
+
+	// Send the current tool number
+	int toolNumber = (currentTool == NULL) ? 0 : currentTool->Number();
+	response.catf(",\"tool\":%d", toolNumber);
 
 	// Send the Z probe value
 	int v0 = platform->ZProbe();
@@ -1251,7 +1232,7 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 	}
 
 	response.cat(",\"message\":");
-	EncodeString(response, message, 2, false);
+	EncodeString(response, message, 2);
 
 	if (type < 2)
 	{
@@ -1272,7 +1253,7 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 	{
 		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
 		response.catf(",\"geometry\":\"%s\",\"myName\":", move->GetGeometryString());
-		EncodeString(response, GetName(), 2, false);
+		EncodeString(response, GetName(), 2);
 	}
 
 	if (type < 2 || (seq != -1 && replySeq != seq))
@@ -1303,16 +1284,25 @@ void RepRap::CopyParameterText(const char* src, char *dst, size_t length)
 }
 
 // Encode a string in JSON format and append it to a string buffer, truncating it if necessary to leave the specified amount of room
-void RepRap::EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars)
+void RepRap::EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars, char prefix)
 {
 	response.cat("\"");
 	size_t j = response.strlen();
 	while (j + spaceToLeave + 2 <= response.Length())	// while there is room for a character and a trailing quote
 	{
-		char c = *src++;
-		if (c == 0 || (c < ' ' && !allowControlChars))	// if null terminator or bad character
+		char c;
+		if (prefix != 0)
 		{
-			break;
+			c = prefix;
+			prefix = 0;
+		}
+		else
+		{
+			c = *src++;
+			if (c == 0 || (c < ' ' && !allowControlChars))	// if null terminator or bad character
+			{
+				break;
+			}
 		}
 		char esc;
 		switch (c)
@@ -1358,15 +1348,16 @@ void RepRap::EncodeString(StringRef& response, const char* src, size_t spaceToLe
 void RepRap::GetNameResponse(StringRef& response) const
 {
 	response.copy("{\"myName\":");
-	EncodeString(response, myName, 2, false);
+	EncodeString(response, myName, 2);
 	response.cat("}");
 }
 
-// Get the list of files in the specified directory in JSON format
-void RepRap::GetFilesResponse(StringRef& response, const char* dir) const
+// Get the list of files in the specified directory in JSON format.
+// If flagDirs is true then we prefix each directory with a * character.
+void RepRap::GetFilesResponse(StringRef& response, const char* dir, bool flagsDirs) const
 {
 	response.copy("{\"dir\":");
-	EncodeString(response, dir, 3, false);
+	EncodeString(response, dir, 3);
 	response.cat(",\"files\":[");
 	FileInfo file_info;
 	bool firstFile = true;
@@ -1374,14 +1365,15 @@ void RepRap::GetFilesResponse(StringRef& response, const char* dir) const
 	while (gotFile)
 	{
 		if (   file_info.fileName[0] != '.'			// ignore Mac resource files and Linux hidden files
-			&& response.strlen() + strlen(file_info.fileName) + 6 < response.Length()
+			&& response.strlen() + strlen(file_info.fileName) + ((file_info.isDirectory) ? 7 : 6) < response.Length()
+													// need 2 extra characters for the quotes, 1 for the comma, 2 for the ]} and 1 for the null - total 6
 		   )
 		{
 			if (!firstFile)
 			{
 				response.catf(",");
 			}
-			EncodeString(response, file_info.fileName, 3, false);
+			EncodeString(response, file_info.fileName, 3, false, (flagsDirs && file_info.isDirectory) ? '*' : '\0');
 			firstFile = false;
 		}
 		gotFile = platform->GetMassStorage()->FindNext(file_info);
@@ -1466,24 +1458,38 @@ void RepRap::SetName(const char* nm)
 	CopyParameterText(nm, myName, ARRAY_SIZE(myName));
 }
 
-void RepRap::GetExtruderCapabilities(bool canDrive[], const bool directions[]) const
+// Given that we want to extrude/etract the specified extruder drives, check if they are allowed.
+// For each disallowed one, log an error to report later and return a bit in the bitmap.
+// This may be called by an ISR!
+unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions)
 {
-	for (uint8_t extruder=0; extruder<DRIVES - AXES; extruder++)
-	{
-		canDrive[extruder] = false;
-	}
-
+	unsigned int result = 0;
 	Tool *tool = toolList;
 	while (tool != nullptr)
 	{
-		for(uint8_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
+		for (int driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
 		{
 			const int extruderDrive = tool->Drive(driveNum);
-			canDrive[extruderDrive] = tool->ToolCanDrive(directions[extruderDrive + AXES] == FORWARDS);
+			unsigned int mask = 1 << extruderDrive;
+			if (extrusions & mask)
+			{
+				if (!tool->ToolCanDrive(true))
+				{
+					result |= mask;
+				}
+			}
+			else if (retractions & (1 << extruderDrive))
+			{
+				if (!tool->ToolCanDrive(false))
+				{
+					result |= mask;
+				}
+			}
 		}
 
 		tool = tool->Next();
 	}
+	return result;
 }
 
 void RepRap::FlagTemperatureFault(int8_t dudHeater)
