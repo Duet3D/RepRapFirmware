@@ -423,34 +423,18 @@ bool ethernetif_input(void * pvParameters)
 	struct netif      *netif = (struct netif *)pvParameters;
 	struct pbuf       *p;
 
-#ifdef FREERTOS_USED
-	for( ;; ) {
-		do {
-#endif
-			/* move received packet into a new pbuf */
-			p = low_level_input( netif );
-			if( p == NULL )
-			{
-#ifdef FREERTOS_USED
-				/* No packet could be read.  Wait a for an interrupt to tell us
-				there is more data available. */
-				vTaskDelay(100);
-			}
-		}while( p == NULL );
-#else
-				return false;
-			}
-#endif
-
-		if( ERR_OK != netif->input( p, netif ) )
-		{
-			pbuf_free(p);
-			p = NULL;
-		}
-#ifdef FREERTOS_USED
+	/* move received packet into a new pbuf */
+	p = low_level_input( netif );
+	if( p == NULL )
+	{
+		return false;
 	}
-#endif
 
+	if( ERR_OK != netif->input( p, netif ) )
+	{
+		pbuf_free(p);
+		p = NULL;
+	}
 	return true;
 }
 
@@ -475,7 +459,7 @@ err_t ethernetif_init(struct netif *netif)
 
 #if LWIP_NETIF_HOSTNAME
 	/* Initialize interface hostname */
-	netif->hostname = "lwip";
+//	netif->hostname = "lwip";				// Unused! Duet sets hostname explicitly
 #endif /* LWIP_NETIF_HOSTNAME */
 
 	/*
@@ -517,17 +501,15 @@ err_t ethernetif_init(struct netif *netif)
 	return ERR_OK;
 }
 
-void RepRapNetworkSetMACAddress(const u8_t macAddress[])
-{
-	size_t i;
-	for (i = 0; i < 8; ++i)
-	{
-		gs_uc_mac_address[i] = macAddress[i];
-	}
-}
-
-
 void ethernetif_set_rx_callback(emac_dev_tx_cb_t callback)
 {
 	emac_dev_set_rx_callback(&gs_emac_dev, callback);
+}
+
+void ethernetif_set_mac_address(const u8_t macAddress[])
+{
+	for (size_t i = 0; i < 8; ++i)
+	{
+		gs_uc_mac_address[i] = macAddress[i];
+	}
 }

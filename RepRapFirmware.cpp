@@ -1456,6 +1456,9 @@ void RepRap::SetName(const char* nm)
 {
 	// Users sometimes put a tab character between the machine name and the comment, so allow for this
 	CopyParameterText(nm, myName, ARRAY_SIZE(myName));
+
+	// Set new DHCP hostname
+	network->SetHostname(myName);
 }
 
 // Given that we want to extrude/etract the specified extruder drives, check if they are allowed.

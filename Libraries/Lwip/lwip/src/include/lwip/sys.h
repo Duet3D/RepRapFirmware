@@ -76,7 +76,7 @@ typedef u8_t sys_mbox_t;
  */
 #define SYS_MBOX_EMPTY SYS_ARCH_TIMEOUT 
 
-#include "lwip/err.h"
+#include "err.h"
 #include "arch/sys_arch.h"
 
 /** Function prototype for thread functions */

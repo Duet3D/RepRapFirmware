@@ -26,6 +26,11 @@ PrintMonitor::PrintMonitor(Platform *p, GCodes *gc) : platform(p), gCodes(gc), f
 {
 }
 
+void PrintMonitor::Init()
+{
+	longWait = platform->Time();
+}
+
 void PrintMonitor::Spin()
 {
 	if (gCodes->IsPausing() || gCodes->IsPaused() || gCodes->IsResuming())
@@ -135,7 +140,7 @@ void PrintMonitor::Spin()
 						}
 						else
 						{
-							for(unsigned int i=1; i<MAX_LAYER_SAMPLES; i++)
+							for(size_t i=1; i<MAX_LAYER_SAMPLES; i++)
 							{
 								layerDurations[i - 1] = layerDurations[i];
 								filamentUsagePerLayer[i - 1] = filamentUsagePerLayer[i];
@@ -153,7 +158,7 @@ void PrintMonitor::Spin()
 					if (numLayerSamples)
 					{
 						avgLayerTime = 0.0;
-						for(unsigned int layer=0; layer<numLayerSamples; layer++)
+						for(size_t layer=0; layer<numLayerSamples; layer++)
 						{
 							avgLayerTime += layerDurations[layer];
 							if (layer)
@@ -183,31 +188,27 @@ void PrintMonitor::Spin()
 			}
 		}
 	}
-	else if (printStartTime > 0.0 && reprap.GetMove()->NoLiveMovement())
-	{
-		currentLayer = numLayerSamples = 0;
-		firstLayerDuration = firstLayerHeight = firstLayerFilament = firstLayerProgress = 0.0;
-		layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
-		lastLayerTime = lastLayerFilament = 0.0;
-	}
 	platform->ClassReport(longWait);
 }
 
-void PrintMonitor::Init()
-{
-	longWait = platform->Time();
-}
-
-void PrintMonitor::StartingFilePrint(const char* filename)
+void PrintMonitor::StartingPrint(const char* filename)
 {
 	fileInfoDetected = GetFileInfo(platform->GetGCodeDir(), filename, currentFileInfo);
 	strncpy(fileBeingPrinted, filename, ARRAY_SIZE(fileBeingPrinted));
 	fileBeingPrinted[ARRAY_UPB(fileBeingPrinted)] = 0;
 }
 
-void PrintMonitor::StartedFilePrint()
+void PrintMonitor::StartedPrint()
 {
 	printStartTime = platform->Time();
+}
+
+void PrintMonitor::StoppedPrint()
+{
+	currentLayer = numLayerSamples = 0;
+	firstLayerDuration = firstLayerHeight = firstLayerFilament = firstLayerProgress = 0.0;
+	layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
+	lastLayerTime = lastLayerFilament = 0.0;
 }
 
 bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info) const
@@ -225,11 +226,11 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, Gcod
 		info.fileSize = f->Length();
 		info.objectHeight = 0.0;
 		info.layerHeight = 0.0;
-		info.numFilaments = DRIVES - AXES;
+		info.numFilaments = 0;
 		info.generatedBy[0] = 0;
-		for (size_t i = 0; i < DRIVES - AXES; ++i)
+		for(size_t extr=0; extr<DRIVES - AXES; extr++)
 		{
-			info.filamentNeeded[i] = 0.0;
+			info.filamentNeeded[extr] = 0.0;
 		}
 
 		if (info.fileSize != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
@@ -261,7 +262,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, Gcod
 						nFilaments = FindFilamentUsed(buf, sizeToRead, filaments, DRIVES - AXES);
 						if (nFilaments != 0 && nFilaments >= filamentsFound)
 						{
-							filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
+							filamentsFound = nFilaments;
 							for (unsigned int i = 0; i < filamentsFound; ++i)
 							{
 								info.filamentNeeded[i] = filaments[i];
@@ -374,7 +375,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, Gcod
 						nFilaments = FindFilamentUsed(buf, sizeToScan, filaments, DRIVES - AXES);
 						if (nFilaments != 0 && nFilaments >= filamentsFound)
 						{
-							filamentsFound = min<unsigned int>(nFilaments, info.numFilaments);
+							filamentsFound = nFilaments;
 							for (unsigned int i = 0; i < filamentsFound; ++i)
 							{
 								info.filamentNeeded[i] = filaments[i];

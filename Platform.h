@@ -218,7 +218,7 @@ const size_t messageStringLength = 256;			// max length of a message chunk sent 
 
 /****************************************************************************************************/
 
-enum EndStopHit
+enum class EndStopHit
 {
   noStop = 0,		// no endstop hit
   lowHit = 1,		// low switch hit, or Z-probe in use and above threshold
@@ -227,7 +227,7 @@ enum EndStopHit
 };
 
 // The values of the following enumeration must tally with the definitions for the M574 command
-enum EndStopType
+enum class EndStopType
 {
 	noEndStop = 0,
 	lowEndStop = 1,
@@ -236,7 +236,7 @@ enum EndStopType
 
 /***************************************************************************************************/
 
-// Input and output - these are ORed into an int8_t
+// Input and output - these are ORed into a uint8_t
 // By the Status() functions of the IO classes.
 
 enum IOStatus
@@ -255,6 +255,7 @@ namespace SoftwareResetReason
 	enum
 	{
 		user = 0,					// M999 command
+		erase = 55,					// special M999 command to erase firmware and reset
 		inAuxOutput = 0x0800,		// this bit is or'ed in if we were in aux output at the time
 		stuckInSpin = 0x1000,		// we got stuck in a Spin() function for too long
 		inLwipSpin = 0x2000,		// we got stuck in a call to LWIP for too long
@@ -279,7 +280,7 @@ class Line
 {
 public:
 
-	int8_t Status() const; // Returns OR of IOStatus
+	uint8_t Status() const;				// Returns OR of IOStatus
 	int Read(char& b);
 	void Write(char b, bool block = false);
 	void Write(const char* s, bool block = false);
@@ -367,7 +368,7 @@ class FileStore
 {
 public:
 
-	int8_t Status(); // Returns OR of IOStatus
+	uint8_t Status();								// Returns OR of IOStatus
 	bool Read(char& b);								// Read 1 byte
 	int Read(char* buf, unsigned int nBytes);		// Read a block of nBytes length
 	bool Write(char b);								// Write 1 byte
@@ -425,6 +426,7 @@ struct ZProbeParameters
 	float calibTemperature;			// the temperature at which we did the calibration
 	float temperatureCoefficient;	// the variation of height with bed temperature
 	float diveHeight;				// the dive height we use when probing
+	float param1, param2;			// extra parameters used by some types of probe e.g. Delta probe
 
 	void Init(float h)
 	{
@@ -434,6 +436,7 @@ struct ZProbeParameters
 		calibTemperature = 20.0;
 		temperatureCoefficient = 0.0;	// no default temperature correction
 		diveHeight = DefaultZDive;
+		param1 = param2 = 0.0;
 	}
 
 	float GetStopHeight(float temperature) const
@@ -449,7 +452,9 @@ struct ZProbeParameters
 				&& yOffset == other.yOffset
 				&& calibTemperature == other.calibTemperature
 				&& temperatureCoefficient == other.temperatureCoefficient
-				&& diveHeight == other.diveHeight;
+				&& diveHeight == other.diveHeight
+				&& param1 == other.param1
+				&& param2 == other.param2;
 	}
 
 	bool operator!=(const ZProbeParameters& other) const
@@ -1303,7 +1308,7 @@ inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 inline uint16_t Platform::GetRawZProbeReading() const
 {
-	if (nvData.zProbeType == 4)
+	if (nvData.zProbeType >= 4)
 	{
 		bool b = (bool)digitalRead(endStopPins[E0_AXIS]);
 		if (!endStopLogicLevel[AXES])

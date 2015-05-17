@@ -10,6 +10,8 @@
 
 #include "DDA.h"
 #include "Matrix.h"
+#include "DeltaParameters.h"
+#include "DeltaProbe.h"
 
 const unsigned int DdaRingLength = 20;
 
@@ -21,62 +23,6 @@ enum PointCoordinateSet
 	zSet = 4,
 	xyCorrected = 8,
 	probeError = 16
-};
-
-// Class to hold the parameter for a delta machine.
-// Some of the values that are currently calculated on demand could be pre-calculated in Recalc() and stored instead.
-class DeltaParameters
-{
-public:
-	DeltaParameters() { Init(); }
-
-	bool IsDeltaMode() const { return deltaMode; }
-	bool IsEquilateral() const { return isEquilateral; }
-	float GetDiagonal() const { return diagonal; }
-	float GetRadius() const { return radius; }
-    float GetPrintRadius() const { return printRadius; }
-    float GetTowerX(size_t axis) const { return towerX[axis]; }
-    float GetTowerY(size_t axis) const { return towerY[axis]; }
-    float GetEndstopAdjustment(size_t axis) const { return endstopAdjustments[axis]; }
-    float GetHomedCarriageHeight(size_t axis) const { return homedCarriageHeight + endstopAdjustments[axis]; }
-    float GetPrintRadiusSquared() const { return printRadiusSquared; }
-
-    void Init();
-    void SetDiagonal(float d) { diagonal = d; Recalc(); }
-    void SetRadius(float r);
-    void SetEndstopAdjustment(size_t axis, float x) { endstopAdjustments[axis] = x; }
-    void SetPrintRadius(float r) { printRadius = r; printRadiusSquared = r * r; }
-    float GetHomedHeight() const { return homedHeight; }
-    void SetHomedHeight(float h) { homedHeight = h; Recalc(); }
-
-    float Transform(const float machinePos[AXES], size_t axis) const;				// Calculate the motor position for a single tower from a Cartesian coordinate
-    void InverseTransform(float Ha, float Hb, float Hc, float machinePos[AXES]) const;	// Calculate the Cartesian position from the motor positions
-
-    float ComputeDerivative(unsigned int deriv, float ha, float hb, float hc);		// Compute the derivative of height with respect to a parameter at a set of motor endpoints
-    void Adjust(size_t numFactors, const float v[]);								// Perform 4-, 6- or 7-factor adjustment
-    void PrintParameters(StringRef& reply, bool full);
-
-private:
-	void Recalc();
-	void NormaliseEndstopAdjustments();												// Make the average of the endstop adjustments zero
-
-	// Core parameters
-    float diagonal;										// The diagonal rod length, all 3 are assumed to be the same length
-    float radius;										// The nominal delta radius, before any fine tuning of tower positions
-    float towerX[AXES];									// The X coordinate of each tower
-    float towerY[AXES];									// The Y coordinate of each tower
-    float endstopAdjustments[AXES];						// How much above or below the ideal position each endstop is
-    float printRadius;
-    float homedHeight;
-
-    // Derived values
-    bool deltaMode;										// True if this is a delta printer
-    bool isEquilateral;									// True if the towers are at the corners of an equilateral triangle
-    float printRadiusSquared;
-    float homedCarriageHeight;
-	float Xbc, Xca, Xab, Ybc, Yca, Yab;
-	float coreFa, coreFb, coreFc;
-    float Q, Q2, D2;
 };
 
 /**
@@ -143,6 +89,8 @@ public:
     FilePosition PausePrint(float positions[DRIVES+1]);	// Pause the print as soon as we can
     bool NoLiveMovement() const;						// Is a move running, or are there any queued?
 
+    int DoDeltaProbe(float frequency, float amplitude, float rate, float distance);
+
     static int32_t MotorEndPointToMachine(size_t drive, float coord);		// Convert a single motor position to number of steps
     static float MotorEndpointToPosition(int32_t endpoint, size_t drive);	// Convert number of motor steps to motor position
 
@@ -202,6 +150,9 @@ private:
     IdleState iState;									// whether the idle timer is active
 
     DeltaParameters deltaParams;						// Information about the delta parameters of this machine
+    DeltaProbe deltaProbe;								// Delta probing state
+    uint32_t deltaProbingStartTime;
+    bool deltaProbing;
     int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ
 };
 

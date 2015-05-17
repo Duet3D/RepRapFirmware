@@ -38,6 +38,7 @@ const float writeTimeout = 4.0;	 							// seconds to wait for data we have writ
 #define IP_ADDRESS {192, 168, 1, 10} // Need some sort of default...
 #define NET_MASK {255, 255, 255, 0}
 #define GATE_WAY {192, 168, 1, 1}
+#define HOSTNAME "duet"
 
 
 /****************************************************************************************************/
@@ -183,6 +184,8 @@ public:
 	void SetHttpPort(uint16_t port);
 	uint16_t GetHttpPort() const;
 
+	void SetHostname(const char *name);
+
 private:
 
 	Platform* platform;
@@ -202,6 +205,7 @@ private:
 	enum { NetworkInactive, NetworkInitializing, NetworkActive } state;
 	bool isEnabled;
 	bool volatile readingData;
+	char hostname[16];			// limit DHCP hostname to 15 characters + terminating 0
 
 	ConnectionState *dataCs;
 	ConnectionState *ftpCs;

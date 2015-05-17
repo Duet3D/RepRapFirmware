@@ -152,6 +152,7 @@ void GCodes::DoFilePrint(GCodeBuffer* gb, StringRef& reply)
 			else if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 			{
 				fileBeingPrinted.Close();
+				reprap.GetPrintMonitor()->StoppedPrint();
 			}
 			break;
 		}
@@ -170,7 +171,7 @@ void GCodes::Spin()
 	// Check for M105 poll requests from Pronterface and PanelDue so that the status is kept up to date during execution of file macros etc.
 	// No need to read multiple characters at a time in this case because the polling rate is quite low.
 	if (!serialGCode->Active() && serialGCode->WritingFileDirectory() == nullptr
-			&& (platform->GetLine()->Status() & byteAvailable))
+			&& (platform->GetLine()->Status() & (uint8_t)IOStatus::byteAvailable))
 	{
 		char b;
 		platform->GetLine()->Read(b);
@@ -184,7 +185,7 @@ void GCodes::Spin()
 		}
 	}
 
-	if (!auxGCode->Active() && (platform->GetAux()->Status() & byteAvailable))
+	if (!auxGCode->Active() && (platform->GetAux()->Status() & (uint8_t)IOStatus::byteAvailable))
 	{
 		char b;
 		platform->GetAux()->Read(b);
@@ -407,7 +408,7 @@ void GCodes::StartNextGCode(StringRef& reply)
 
 	// Now the serial interfaces.
 
-	if (platform->GetLine()->Status() & byteAvailable)
+	if (platform->GetLine()->Status() & (uint8_t)IOStatus::byteAvailable)
 	{
 		// First check the special case of uploading the reprap.htm file
 		if (serialGCode->WritingFileDirectory() == platform->GetWebDir())
@@ -443,7 +444,7 @@ void GCodes::StartNextGCode(StringRef& reply)
 					break;	// stop after receiving a complete gcode in case we haven't finished processing it
 				}
 				++i;
-			} while (i < 16 && (platform->GetLine()->Status() & byteAvailable));
+			} while (i < 16 && (platform->GetLine()->Status() & (uint8_t)IOStatus::byteAvailable));
 			platform->ClassReport(longWait);
 			return;
 		}
@@ -451,7 +452,7 @@ void GCodes::StartNextGCode(StringRef& reply)
 
 	// Now run the G-Code buffers. It's important to fill up the G-Code buffers before we do this,
 	// otherwise we wouldn't have a chance to pause/cancel running prints.
-	if (!auxGCode->Active() && (platform->GetAux()->Status() & byteAvailable))
+	if (!auxGCode->Active() && (platform->GetAux()->Status() & (uint8_t)IOStatus::byteAvailable))
 	{
 		int8_t i = 0;
 		do
@@ -465,7 +466,7 @@ void GCodes::StartNextGCode(StringRef& reply)
 				break;	// stop after receiving a complete gcode in case we haven't finished processing it
 			}
 			++i;
-		} while (i < 16 && (platform->GetAux()->Status() & byteAvailable));
+		} while (i < 16 && (platform->GetAux()->Status() & (uint8_t)IOStatus::byteAvailable));
 	}
 	else if (webGCode->Active())
 	{
@@ -949,7 +950,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 	switch (cannedCycleMoveCount)
 	{
 	case 0: // Move Z to the dive height. This only does anything on the first move; on all the others Z is already there
-		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight();
+		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
@@ -973,50 +974,50 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 		return false;
 
 	case 2:	// Probe the bed
-		if (!cannedCycleMoveQueued && reprap.GetPlatform()->GetZProbeResult() == lowHit)
 		{
-			// Z probe is already triggered at the start of the move, so abandon the probe and record an error
-			platform->Message(BOTH_ERROR_MESSAGE, "Z probe warning: probe already triggered at start of probing move\n");
-			cannedCycleMoveCount = 0;
-			reprap.GetMove()->SetZBedProbePoint(probePointIndex, platform->GetZProbeDiveHeight(), true, true);
-			return true;
-		}
+			const float height = (axisIsHomed[Z_AXIS])
+									? 2 * platform->GetZProbeDiveHeight()			// Z axis has been homed, so no point in going very far
+									: 1.1 * platform->AxisTotalLength(Z_AXIS);		// Z axis not homed yet, so treat this as a homing move
+			switch(DoZProbe(height))
+			{
+			case 0:
+				// Z probe is already triggered at the start of the move, so abandon the probe and record an error
+				platform->Message(BOTH_ERROR_MESSAGE, "Z probe warning: probe already triggered at start of probing move\n");
+				cannedCycleMoveCount++;
+				reprap.GetMove()->SetZBedProbePoint(probePointIndex, platform->GetZProbeDiveHeight(), true, true);
+				break;
 
-		moveToDo[Z_AXIS] = (axisIsHomed[Z_AXIS])
-							? -platform->GetZProbeDiveHeight()				// Z axis has been homed, so no point in going very far
-							: -1.1 * platform->AxisTotalLength(Z_AXIS);		// Z axis not homed yet, so treat this as a homing move
-		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-		activeDrive[DRIVES] = true;
-		if (DoCannedCycleMove(ZProbeActive))
-		{
-			// The head has been moved down until the probe was triggered. Get the height from the live coordinates.
-			// DoCannedCycleMove has already loaded the current position into moveBuffer
-			if (axisIsHomed[Z_AXIS])
-			{
-				lastProbedZ = moveBuffer[Z_AXIS] - platform->ZProbeStopHeight();
+			case 1:
+				if (axisIsHomed[Z_AXIS])
+				{
+					lastProbedZ = moveBuffer[Z_AXIS] - platform->ZProbeStopHeight();
+				}
+				else
+				{
+					// The Z axis has not yet been homed, so treat this probe as a homing move.
+					moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
+					SetPositions(moveBuffer);
+					axisIsHomed[Z_AXIS] = true;
+					lastProbedZ = 0.0;
+				}
+				reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ, true, false);
+				cannedCycleMoveCount++;
+				break;
+
+			default:
+				break;
 			}
-			else
-			{
-				// The Z axis has not yet been homed, so treat this probe as a homing move.
-				moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
-				SetPositions(moveBuffer);
-				axisIsHomed[Z_AXIS] = true;
-				lastProbedZ = 0.0;
-			}
-			cannedCycleMoveCount++;
 		}
 		return false;
 
 	case 3:	// Raise the head back up to the dive height
-		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight();
+		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
 		activeDrive[DRIVES] = true;
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount = 0;
-			reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ, true, false);
 			return true;
 		}
 		return false;
@@ -1027,30 +1028,62 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 	}
 }
 
-// This simply moves down till the Z probe/switch is triggered.
+// This simply moves down till the Z probe/switch is triggered. Call it repeatedly until it returns true.
 // Called when we do a G30 with no P parameter.
 bool GCodes::DoSingleZProbe()
 {
-	for (size_t drive = 0; drive <= DRIVES; drive++)
+	switch (DoZProbe(1.1 * platform->AxisTotalLength(Z_AXIS)))
 	{
-		activeDrive[drive] = false;
-	}
+	case 0:		// failed
+		return true;
 
-	moveToDo[Z_AXIS] = -1.1 * platform->AxisTotalLength(Z_AXIS);
-	activeDrive[Z_AXIS] = true;
-	moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
-	activeDrive[DRIVES] = true;
-	if (DoCannedCycleMove(ZProbeActive))
-	{
-		// The head has been moved down until the probe was triggered. Get the height from the live coordinates.
-		// DoCannedCycleMove has already loaded the current position into moveBuffer
+	case 1:		// success
 		moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
 		SetPositions(moveBuffer);
 		axisIsHomed[Z_AXIS] = true;
 		lastProbedZ = 0.0;
 		return true;
+
+	default:	// not finished yet
+		return false;
 	}
-	return false;
+}
+
+// Do a Z probe cycle up to the maximum specified distance.
+// Returns -1 if not complete yet
+// Returns 0 if failed
+// Returns 1 if success, with lastProbedZ set to the height we stopped at and the current position in moveBuffer
+int GCodes::DoZProbe(float distance)
+{
+	if (platform->GetZProbeType() == 5)
+	{
+		const ZProbeParameters& params = platform->GetZProbeParameters();
+		return reprap.GetMove()->DoDeltaProbe(params.param1, params.param2, platform->HomeFeedRate(Z_AXIS), distance);
+	}
+	else
+	{
+		if (!cannedCycleMoveQueued && reprap.GetPlatform()->GetZProbeResult() == EndStopHit::lowHit)
+		{
+			return 0;
+		}
+
+		// Do a normal canned cycle Z movement with Z probe enabled
+		for (size_t drive = 0; drive <= DRIVES; drive++)
+		{
+			activeDrive[drive] = false;
+		}
+
+		moveToDo[Z_AXIS] = -distance;
+		activeDrive[Z_AXIS] = true;
+		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+		activeDrive[DRIVES] = true;
+
+		if (DoCannedCycleMove(ZProbeActive))
+		{
+			return 1;
+		}
+		return -1;
+	}
 }
 
 // This is called to execute a G30.
@@ -1339,11 +1372,17 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 // Set up a file to print, but don't print it yet.
 void GCodes::QueueFileToPrint(const char* fileName)
 {
-	fileToPrint.Close();
-	fileGCode->CancelPause();	// if we paused it and then asked to print a new file, cancel any pending command
 	FileStore *f = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
 	if (f != NULL)
 	{
+		// Cancel current print if there is any
+		if (PrintingAFile())
+		{
+			CancelPrint();
+		}
+
+		fileGCode->SetToolNumberAdjust(0);	// clear tool number adjustment
+
 		// Reset all extruder positions when starting a new print
 		for (size_t extruder = AXES; extruder < DRIVES; extruder++)
 		{
@@ -1351,10 +1390,6 @@ void GCodes::QueueFileToPrint(const char* fileName)
 		}
 
 		fileToPrint.Set(f);
-		if (!fileBeingPrinted.IsLive())
-		{
-			fileGCode->SetToolNumberAdjust(0);	// clear tool number adjustment
-		}
 	}
 	else
 	{
@@ -2092,8 +2127,20 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (toBeHomed == 0 || toBeHomed == ((1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS)))
 			{
+				// Homing everything
 				SetAllAxesNotHomed();
 				DoFileMacro(HOME_ALL_G);
+			}
+			else if (   platform->MustHomeXYBeforeZ()
+					 && ((toBeHomed & (1 << Z_AXIS)) != 0)
+					 && (   (((toBeHomed & (1 << X_AXIS)) == 0) && !axisIsHomed[X_AXIS])
+					 	 || (((toBeHomed & (1 << Y_AXIS)) == 0) && !axisIsHomed[Y_AXIS])
+						)
+					)
+			{
+				// We can only home Z if both X and Y have already been homed or are being homed
+				reply.copy("Must home X and Y before homing Z");
+				error = true;
 			}
 			else
 			{
@@ -2215,6 +2262,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			isPaused = false;
 			reply.copy("Print cancelled\n");
 		}
+
+		// Reset everything
+		CancelPrint();
 		break;
 
 	case 18: // Motors off
@@ -2332,10 +2382,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 		{
 			const char* filename = gb->GetUnprecedentedString();
-			reprap.GetPrintMonitor()->StartingFilePrint(filename);
 			QueueFileToPrint(filename);
 			if (fileToPrint.IsLive())
 			{
+				reprap.GetPrintMonitor()->StartingPrint(filename);
 				if (platform->Emulating() == marlin && gb == serialGCode)
 				{
 					reply.copy("File opened\nFile selected\n");
@@ -2349,7 +2399,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				if (code == 32)
 				{
 					fileBeingPrinted.MoveFrom(fileToPrint);
-					reprap.GetPrintMonitor()->StartedFilePrint();
+					reprap.GetPrintMonitor()->StartedPrint();
 				}
 			}
 			else
@@ -2379,7 +2429,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		else
 		{
 			fileBeingPrinted.MoveFrom(fileToPrint);
-			reprap.GetPrintMonitor()->StartedFilePrint();
+			reprap.GetPrintMonitor()->StartedPrint();
 		}
 		break;
 
@@ -2859,19 +2909,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				const char* es;
 				switch (platform->Stopped(axis))
 				{
-				case lowHit:
+				case EndStopHit::lowHit:
 					es = "at min stop";
 					break;
 
-				case highHit:
+				case EndStopHit::highHit:
 					es = "at max stop";
 					break;
 
-				case lowNear:
+				case EndStopHit::lowNear:
 					es = "near min stop";
 					break;
 
-				case noStop:
+				case EndStopHit::noStop:
 				default:
 					es = "not stopped";
 				}
@@ -3522,10 +3572,31 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			seen = true;
 		}
 
+		if (gb->Seen('S'))
+		{
+			ZProbeParameters params = platform->GetZProbeParameters();
+			params.param1 = gb->GetFValue();
+			platform->SetZProbeParameters(params);
+			seen = true;
+		}
+
+		if (gb->Seen('T'))
+		{
+			ZProbeParameters params = platform->GetZProbeParameters();
+			params.param2 = gb->GetFValue();
+			platform->SetZProbeParameters(params);
+			seen = true;
+		}
+
 		if (!seen)
 		{
-			reply.printf("Z Probe type is %d on channel %d with dive height %.1f and it is used for these axes:",
-					platform->GetZProbeType(), platform->GetZProbeChannel(), platform->GetZProbeDiveHeight());
+			reply.printf("Z Probe type %d, channel %d, dive height %.1f", platform->GetZProbeType(), platform->GetZProbeChannel(), platform->GetZProbeDiveHeight());
+			if (platform->GetZProbeType() == 5)
+			{
+				ZProbeParameters params = platform->GetZProbeParameters();
+				reply.catf(", parameters %.2f %.2f", params.param1, params.param2);
+			}
+			reply.cat(", used for these axes:");
 			for (size_t axis = 0; axis < AXES; axis++)
 			{
 				if (zProbeAxes[axis])
@@ -3773,8 +3844,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					bool logic;
 					platform->GetEndStopConfiguration(axis, config, logic);
 					reply.catf(" %c %s %s %c", axisLetters[axis],
-							(config == highEndStop) ? "high end" : (config == lowEndStop) ? "low end" : "none",
-							(config == noEndStop) ? "" : (logic) ? " (active high)" : " (active low)",
+							(config == EndStopType::highEndStop) ? "high end" : (config == EndStopType::lowEndStop) ? "low end" : "none",
+							(config == EndStopType::noEndStop) ? "" : (logic) ? " (active high)" : " (active low)",
 							(axis == AXES - 1) ? '\n' : ',');
 				}
 			}
@@ -3996,7 +4067,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		result = DoDwellTime(0.5);// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
 		if (result)
 		{
-			platform->SoftwareReset(SoftwareResetReason::user);			// doesn't return
+			uint16_t reason = (gb->Seen('S') && gb->GetIValue() == 4321)
+											? SoftwareResetReason::erase
+											: SoftwareResetReason::user;
+			platform->SoftwareReset(reason);			// doesn't return
 		}
 		break;
 
@@ -4054,6 +4128,21 @@ void GCodes::PauseSDPrint()
 		fileToPrint.MoveFrom(fileBeingPrinted);
 		fileGCode->Pause();		// if we are executing some sort of wait command, pause it until we restart
 	}
+}
+
+// Cancel the current SD card print
+void GCodes::CancelPrint()
+{
+	moveAvailable = false;
+
+	fileGCode->Init();
+
+	if (fileBeingPrinted.IsLive())
+	{
+		fileBeingPrinted.Close();
+	}
+
+	reprap.GetPrintMonitor()->StoppedPrint();
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures

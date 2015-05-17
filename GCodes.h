@@ -119,11 +119,13 @@ class GCodes
     bool HandleGcode(GCodeBuffer* gb, StringRef& reply);				// Do a G code
     bool HandleMcode(GCodeBuffer* gb, StringRef& reply);				// Do an M code
     bool HandleTcode(GCodeBuffer* gb, StringRef& reply);				// Do a T code
+    void CancelPrint();													// Cancel the current print
     int SetUpMove(GCodeBuffer* gb, StringRef& reply);					// Pass a move on to the Move module
     bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
     bool DoDwellTime(float dwell);										// Really wait for a bit
     bool DoSingleZProbeAtPoint(int probePointIndex);					// Probe at a given point
     bool DoSingleZProbe();												// Probe where we are
+    int DoZProbe(float distance);										// Do a Z probe cycle up to the maximum specified distance
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
     void SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation
     bool SetPrintZProbe(GCodeBuffer *gb, StringRef& reply);				// Either return the probe value, or set its threshold
@@ -232,8 +234,8 @@ inline bool GCodes::HaveIncomingData() const
 {
 	return fileBeingPrinted.IsLive() ||
 			webserver->GCodeAvailable() ||
-			(platform->GetLine()->Status() & byteAvailable) ||
-			(platform->GetAux()->Status() & byteAvailable);
+			(platform->GetLine()->Status() & (uint8_t)IOStatus::byteAvailable) ||
+			(platform->GetAux()->Status() & (uint8_t)IOStatus::byteAvailable);
 }
 
 // This function takes care of the fact that the heater and head indices don't match because the bed is heater 0.

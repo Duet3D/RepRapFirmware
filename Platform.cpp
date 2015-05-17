@@ -240,7 +240,7 @@ void Platform::Init()
 		SetElasticComp(drive, 0.0);
 		if (drive <= AXES)
 		{
-			endStopType[drive] = lowEndStop;				// assume all endstops are low endstops
+			endStopType[drive] = EndStopType::lowEndStop;	// assume all endstops are low endstops
 			endStopLogicLevel[drive] = true;
 		}
 	}
@@ -337,6 +337,9 @@ void Platform::InitZProbe()
 		pinModeNonDue(endStopPins[E0_AXIS], INPUT_PULLUP);
 		break;
 
+	case 5:
+		break;	//TODO
+
 	default:
 		break;
 	}
@@ -375,6 +378,8 @@ int Platform::ZProbe() const
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
 					/ (int)(4 * numZProbeReadingsAveraged));
+		case 5:
+			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));	//TODO this is temporary
 
 		default:
 			break;
@@ -436,6 +441,7 @@ float Platform::ZProbeStopHeight() const
 	case 2:
 		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
 	case 3:
+	case 5:
 		return nvData.alternateZProbeParameters.GetStopHeight(GetTemperature(0));
 	default:
 		return 0;
@@ -450,6 +456,7 @@ float Platform::GetZProbeDiveHeight() const
 	case 2:
 		return nvData.irZProbeParameters.diveHeight;
 	case 3:
+	case 5:
 		return nvData.alternateZProbeParameters.diveHeight;
 	case 4:
 		return nvData.switchZProbeParameters.diveHeight;
@@ -467,6 +474,7 @@ void Platform::SetZProbeDiveHeight(float h)
 		nvData.irZProbeParameters.diveHeight = h;
 		break;
 	case 3:
+	case 5:
 		nvData.alternateZProbeParameters.diveHeight = h;
 		break;
 	case 4:
@@ -479,7 +487,7 @@ void Platform::SetZProbeDiveHeight(float h)
 
 void Platform::SetZProbeType(int pt)
 {
-	int newZProbeType = (pt >= 0 && pt <= 4) ? pt : 0;
+	int newZProbeType = (pt >= 0 && pt <= 5) ? pt : 0;
 	if (newZProbeType != nvData.zProbeType)
 	{
 		nvData.zProbeType = newZProbeType;
@@ -503,6 +511,7 @@ const ZProbeParameters& Platform::GetZProbeParameters() const
 	case 2:
 		return nvData.irZProbeParameters;
 	case 3:
+	case 5:
 		return nvData.alternateZProbeParameters;
 	}
 }
@@ -534,6 +543,7 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 		}
 		return true;
 	case 3:
+	case 5:
 		if (nvData.alternateZProbeParameters != params)
 		{
 			nvData.alternateZProbeParameters = params;
@@ -730,41 +740,49 @@ void Platform::Spin()
 
 void Platform::SoftwareReset(uint16_t reason)
 {
-	if (reason != SoftwareResetReason::user)
+	if (reason == SoftwareResetReason::erase)
 	{
-		if (line->inWrite)
-		{
-			reason |= SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
-		}
-		if (reprap.GetNetwork()->InLwip())
-		{
-			reason |= SoftwareResetReason::inLwipSpin;
-		}
-		if (aux->inWrite)
-		{
-			reason |= SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
-		}
-	}
-	reason |= reprap.GetSpinningModule();
-
-	// Record the reason for the software reset
-	SoftwareResetData temp;
-	temp.magic = SoftwareResetData::magicValue;
-	temp.resetReason = reason;
-	GetStackUsage(NULL, NULL, &temp.neverUsedRam);
-	if (reason != SoftwareResetReason::user)
-	{
-		strncpy(temp.lastMessage, messageString.Pointer(), sizeof(temp.lastMessage) - 1);
-		temp.lastMessage[sizeof(temp.lastMessage) - 1] = 0;
-	}
+		cpu_irq_disable();
+		flash_unlock(0x00080000, 0x000FFFFF, nullptr, nullptr);
+		flash_clear_gpnvm(1);			// tell the system to boot from flash next time
+ 	}
 	else
 	{
-		temp.lastMessage[0] = 0;
+		if (reason != SoftwareResetReason::user)
+		{
+			if (line->inWrite)
+			{
+				reason |= SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
+			}
+			if (reprap.GetNetwork()->InLwip())
+			{
+				reason |= SoftwareResetReason::inLwipSpin;
+			}
+			if (aux->inWrite)
+			{
+				reason |= SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
+			}
+		}
+		reason |= reprap.GetSpinningModule();
+
+		// Record the reason for the software reset
+		SoftwareResetData temp;
+		temp.magic = SoftwareResetData::magicValue;
+		temp.resetReason = reason;
+		GetStackUsage(NULL, NULL, &temp.neverUsedRam);
+		if (reason != SoftwareResetReason::user)
+		{
+			strncpy(temp.lastMessage, messageString.Pointer(), sizeof(temp.lastMessage) - 1);
+			temp.lastMessage[sizeof(temp.lastMessage) - 1] = 0;
+		}
+		else
+		{
+			temp.lastMessage[0] = 0;
+		}
+
+		// Save diagnostics data to Flash and reset the software
+		DueFlashStorage::write(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
 	}
-
-	// Save diagnostics data to Flash and reset the software
-	DueFlashStorage::write(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
-
 	rstc_start_software_reset(RSTC);
 	for(;;) {}
 }
@@ -1190,14 +1208,14 @@ EndStopHit Platform::Stopped(size_t drive) const
 		return GetZProbeResult();			// using the Z probe as am endstop for this axis, so just get its result
 	}
 
-	if (endStopPins[drive] >= 0 && endStopType[drive] != noEndStop)
+	if (endStopPins[drive] >= 0 && endStopType[drive] != EndStopType::noEndStop)
 	{
 		if (digitalReadNonDue(endStopPins[drive]) == ((endStopLogicLevel[drive]) ? 1 : 0))
 		{
-			return (endStopType[drive] == highEndStop) ? highHit : lowHit;
+			return (endStopType[drive] == EndStopType::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 		}
 	}
-	return noStop;
+	return EndStopHit::noStop;
 }
 
 // Return the Z probe result. We assume that if the Z probe is used as an endstop, it is used as the low stop.
@@ -1208,9 +1226,9 @@ EndStopHit Platform::GetZProbeResult() const
 			(nvData.zProbeType == 4) ? nvData.switchZProbeParameters.adcValue
 			: (nvData.zProbeType == 3) ? nvData.alternateZProbeParameters.adcValue
 				: nvData.irZProbeParameters.adcValue;
-	return (zProbeVal >= zProbeADValue) ? lowHit
-			: (zProbeVal * 10 >= zProbeADValue * 9) ? lowNear	// if we are at/above 90% of the target value
-				: noStop;
+	return (zProbeVal >= zProbeADValue) ? EndStopHit::lowHit
+			: (zProbeVal * 10 >= zProbeADValue * 9) ? EndStopHit::lowNear	// if we are at/above 90% of the target value
+				: EndStopHit::noStop;
 }
 
 // This is called from the step ISR as well as other places, so keep it fast, especially in the case where the motor is already enabled
@@ -2094,18 +2112,18 @@ float FileStore::FractionRead() const
 	return (float)GetPosition() / (float)len;
 }
 
-int8_t FileStore::Status()
+uint8_t FileStore::Status()
 {
 	if (!inUse)
-		return nothing;
+		return (uint8_t)IOStatus::nothing;
 
 	if (lastBufferEntry == FILE_BUF_LEN)
-		return byteAvailable;
+		return (uint8_t)IOStatus::byteAvailable;
 
 	if (bufferPointer < lastBufferEntry)
-		return byteAvailable;
+		return (uint8_t)IOStatus::byteAvailable;
 
-	return nothing;
+	return (uint8_t)IOStatus::nothing;
 }
 
 bool FileStore::ReadBuffer()
@@ -2282,11 +2300,9 @@ Line::Line(Stream& p_iface) : iface(p_iface)
 {
 }
 
-int8_t Line::Status() const
+uint8_t Line::Status() const
 {
-//	if(alternateInput != NULL)
-//		return alternateInput->Status();
-	return inputNumChars == 0 ? nothing : byteAvailable;
+	return inputNumChars == 0 ? (uint8_t)IOStatus::nothing : (uint8_t)IOStatus::byteAvailable;
 }
 
 // This is only ever called on initialisation, so we

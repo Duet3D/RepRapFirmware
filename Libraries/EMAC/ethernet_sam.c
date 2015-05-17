@@ -68,22 +68,12 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "lwip/src/sam/include/netif/ethernetif.h"
 
-#include "emac.h"
+#include "include/emac.h"
 
 extern void RepRapNetworkMessage(const char*);
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
-
-//*****************************AB
-//Pass through function for interface status
-//by including ethernetif.h directly and calling ethernetif_phy_link_status(); this function is not required
-bool status_link_up()
-{
-	return ethernetif_phy_link_status();
-}
-//*****************************AB
-
 
 struct netif* ethernet_get_configuration()
 {
@@ -193,10 +183,13 @@ static void ethernet_configure_interface(unsigned char ipAddress[], unsigned cha
 /** \brief Initialize the Ethernet subsystem.
  *
  */
-void init_ethernet(void)
+void init_ethernet(const u8_t macAddress[], const char *hostname)
 {
 	lwip_init();
 	ethernet_hardware_init();
+
+	ethernetif_set_mac_address(macAddress);
+	netif_set_hostname(&gs_net_if, hostname);
 }
 
 /** \brief Try to establish a physical link at, returning true if successful.
@@ -216,13 +209,6 @@ void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask
 	ethernet_configure_interface(ipAddress, netMask, gateWay);
 }
 
-/** \brief Set the DHCP hostname.
- *
- */
-void set_dhcp_hostname(const char *hostname)
-{
-	gs_net_if.hostname = hostname;
-}
 
 //*************************************************************************************************************
 /**
@@ -237,7 +223,7 @@ void ethernet_status_callback(struct netif *netif)
 	{
 		RepRapNetworkMessage("Network up, IP=");
 		ipaddr_ntoa_r(&(netif->ip_addr), c_mess, sizeof(c_mess));
-		strncat(c_mess, sizeof(c_mess) - strlen(c_mess) - 1, "\n");
+		strncat(c_mess, sizeof(c_mess) - 1, "\n");
 		RepRapNetworkMessage(c_mess);
 		netif->flags |= NETIF_FLAG_LINK_UP;
 	}
@@ -248,11 +234,10 @@ void ethernet_status_callback(struct netif *netif)
 }
 
 
-
 /**0
  *  \brief Manage the Ethernet packets, if any received process them.
  *  After processing any packets, manage the lwIP timers.
-*
+ *
  *  \return Returns true if data has been processed.
  */
 bool ethernet_read(void)
@@ -275,6 +260,5 @@ bool ethernet_read(void)
  */
 void ethernet_set_rx_callback(emac_dev_tx_cb_t callback)
 {
-
 	ethernetif_set_rx_callback(callback);
 }

@@ -53,9 +53,6 @@
 /* Include user defined options first */
 #include "conf_eth.h"
 
-#ifdef LWIP_DEBUG
-#include "lwip/src/include/lwip/debug.h"
-#endif
 
 /* ---------- System options ---------- */
 /* Specify NO_SYS because we are not using an RTOS */
@@ -101,10 +98,10 @@ a lot of data that needs to be copied, this should be set high. */
 #define UDP_TTL                 255
 /* MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
  per active UDP "connection". */
-#define MEMP_NUM_UDP_PCB        1
+#define MEMP_NUM_UDP_PCB        2
 
 /* MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections. */
-#define MEMP_NUM_TCP_PCB        12
+#define MEMP_NUM_TCP_PCB        16
 /* MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections. */
 #define MEMP_NUM_TCP_PCB_LISTEN 4
 /* MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments. */
@@ -267,12 +264,5 @@ a lot of data that needs to be copied, this should be set high. */
 
 
 // \note For a list of all possible lwIP configurations, check http://lwip.wikia.com/wiki/Lwipopts.h
-
-/** EMAC PHY address */
-#define BOARD_EMAC_PHY_ADDR  2
-/*! EMAC RMII mode */
-#define BOARD_EMAC_MODE_RMII 1
-
-/**/
 
 #endif /* __LWIPOPTS_H__ */

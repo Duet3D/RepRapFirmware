@@ -44,8 +44,9 @@ class PrintMonitor
 		void Spin();
 		void Init();
 
-		void StartingFilePrint(const char *filename);		// called to indicate a file will be printed (see M23)
-		void StartedFilePrint();							// called whenever a new live print starts (see M24)
+		void StartingPrint(const char *filename);		// called to indicate a file will be printed (see M23)
+		void StartedPrint();							// called whenever a new live print starts (see M24)
+		void StoppedPrint();							// called whenever a file print has stopped
 
 	    bool GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info) const;
 		void GetFileInfoResponse(StringRef& response, const char* filename) const;

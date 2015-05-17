@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.04g-dc42"
-#define DATE "2015-04-20"
+#define VERSION "1.09a-dc42"
+#define DATE "2015-05-17"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -77,7 +77,7 @@ const float DefaultFeedRate = 3000;				// The initial requested feed rate after 
 const size_t MaxProbePoints = 16;				// Maximum number of probe points
 const size_t MaxDeltaCalibrationPoints = 16;	// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
 
-const float DefaultZDive = 5.0;					// Default height from which to probe the bed (mm)
+const float DefaultZDive = 3.0;					// Default height from which to probe the bed (mm)
 
 #define TRIANGLE_0 -0.001						// Slightly less than 0 for point-in-triangle tests
 

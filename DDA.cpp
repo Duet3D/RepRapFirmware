@@ -730,12 +730,12 @@ bool DDA::Step()
 			// because we have both a high endstop and a Z probe, and the Z motor is not the same thing as the Z axis.
 			switch (reprap.GetPlatform()->GetZProbeResult())
 			{
-			case lowHit:
+			case EndStopHit::lowHit:
 				MoveAborted(now);												// set the state to completed and recalculate the endpoints
 				reprap.GetMove()->ZProbeTriggered(this);
 				break;
 
-			case lowNear:
+			case EndStopHit::lowNear:
 				ReduceHomingSpeed(reprap.GetPlatform()->ConfiguredInstantDv(Z_AXIS));
 				break;
 
@@ -757,7 +757,7 @@ bool DDA::Step()
 					{
 						switch(reprap.GetPlatform()->Stopped(drive))
 						{
-						case lowHit:
+						case EndStopHit::lowHit:
 							endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
 							if (endStopsToCheck == 0)							// if no more endstops to check
 							{
@@ -770,7 +770,7 @@ bool DDA::Step()
 							reprap.GetMove()->HitLowStop(drive, this);
 							break;
 
-						case highHit:
+						case EndStopHit::highHit:
 							endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
 							if (endStopsToCheck == 0)							// if no more endstops to check
 							{
@@ -783,7 +783,7 @@ bool DDA::Step()
 							reprap.GetMove()->HitHighStop(drive, this);
 							break;
 
-						case lowNear:
+						case EndStopHit::lowNear:
 							// Only reduce homing speed if there are no more axes to be homed.
 							// This allows us to home X and Y simultaneously.
 							if (endStopsToCheck == (1 << drive))
