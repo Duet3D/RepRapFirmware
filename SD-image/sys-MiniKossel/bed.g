@@ -2,13 +2,13 @@
 ; Before running this, you should have set up your zprobe Z offset to suit your build, in the G31 command in config.g.
 
 M561						; clear any bed transform, otherwise homing may be at the wrong height
-G31 X0 Y0					; don't want any probe offset for this
+G31 X0 Y0					; don't want any probe XY offset for this
 G28							; home the printer
 
 ;*** Remove the following line if your Z probe does not need to be deployed
 M98 Pdeployprobe.g			; deploy the mechanical Z probe
 
-; The first time the probe is used after deployment, it gives slightly different results.
+; The first time the mechanical probe is used after deployment, it gives slightly different results.
 ; So do an extra dummy probe here. The value stored gets overwritten later.
 G30 P0 X0 Y0 Z-99999
 
@@ -25,8 +25,8 @@ G30 P8 X0 Y42.5 Z-99999			; half way to Z tower
 G30 P9 X0 Y0 Z-99999 S7			; centre, and auto-calibrate 7 factors
 
 ;*** Remove the following line if your Z probe does not need to be retracted
-M98 Pretractprobe.g			; deploy the mechanical Z probe
+M98 Pretractprobe.g			; retract the mechanical Z probe
 G91
 G1 S1 X170 Y170 Z170 F15000	; go part way up to speed up homing, endstops activated just in case
 G90
-G28							; Home the printer again so as to activate the new endstop adjustments
+G28							; Home the printer again
