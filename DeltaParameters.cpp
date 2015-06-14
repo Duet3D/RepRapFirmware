@@ -23,6 +23,30 @@ void DeltaParameters::Init()
     }
 }
 
+float DeltaParameters::GetRadius() const
+{
+	if (isEquilateral)
+	{
+		return radius;
+	}
+	else
+	{
+		// Towers have been moved so we need to compute the effective radius
+		const float x1 = towerX[1] - towerX[0], x2 = towerX[2] - towerX[0], y1 = towerY[1] - towerY[0], y2 = towerY[2] - towerY[0];
+		return sqrt((fsquare(x1) + fsquare(y1)) * (fsquare(x2) + fsquare(y2)) * (fsquare(y1 - y2) + fsquare(x1 - x2)))/(2 * fabs(x1 * y2 - x2 * y1));
+	}
+}
+
+float DeltaParameters::GetXCorrection() const
+{
+	return (isEquilateral) ? 0.0 : (acos((towerX[Z_AXIS] - towerX[X_AXIS])/GetRadius()) * (180.0/PI)) - 30;
+}
+
+float DeltaParameters::GetYCorrection() const
+{
+	return (isEquilateral) ? 0.0 : 30 - (acos((towerX[Y_AXIS] - towerX[Z_AXIS])/GetRadius()) * (180.0/PI));
+}
+
 void DeltaParameters::SetRadius(float r)
 {
 	radius = r;
@@ -227,17 +251,17 @@ void DeltaParameters::Adjust(size_t numFactors, const float v[])
 	homedCarriageHeight -= heightError;
 }
 
-void DeltaParameters::PrintParameters(StringRef& reply, bool full)
+void DeltaParameters::PrintParameters(StringRef& reply) const
 {
-	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, diagonal %.2f, ",
-					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal);
-	if (isEquilateral && !full)
+	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, diagonal %.2f, radius %.2f",
+					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, GetRadius());
+	if (isEquilateral)
 	{
-		reply.catf("radius %.2f\n", radius);
+		reply.cat("\n");
 	}
 	else
 	{
-		reply.catf("towers (%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)\n",
+		reply.catf(", towers (%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)\n",
 						towerX[A_AXIS], towerY[A_AXIS], towerX[B_AXIS], towerY[B_AXIS], towerX[C_AXIS], towerY[C_AXIS]);
 	}
 }

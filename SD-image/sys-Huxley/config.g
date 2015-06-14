@@ -1,10 +1,10 @@
 ; Huxley Duo config file for dc42 Duet firmware
 ; Based on RepRapPro version 1.04
 M111 S0								; Debug off
-M550 PRepRapPro Huxley Duo			; Machine name (can be anything you like)
+M550 PMyHuxleyDuo					; Machine name (can be anything you like)
 M551 Preprap						; Machine password (used for FTP access)
 M540 P0xBE:0xEF:0xDE:0xAD:0xFE:0x14	; MAC Address
-M552 P192.168.1.14					; IP address
+M552 P0.0.0.0						; IP address (0 = use DHCP)
 M553 P255.255.255.0					; Netmask
 M554 P192.168.1.1					; Gateway
 M555 P2								; Set output to look like Marlin
@@ -29,5 +29,7 @@ M563 P0 D0 H1						; Define tool 0
 G10 P0 S-273 R-273					; Set tool 0 operating and standby temperatures
 ;M563 P1 D1 H2						; Define tool 1 Uncomment if you have a dual colour upgrade
 ;G10 P1 X19 S-273 R-273				; Set tool 1 operating and standby temperatures Uncomment if you have a dual colour upgrade
-M208 X130 Y138						; set axis maxima (adjust to suit your machine)
-M208 X-13 Y-4 S1					; set axis minimum (adjust to make X=0 and Y=0 the edge of the bed after homing)
+M208 X130 Y138 Z95					; set axis maxima (adjust to suit your machine)
+M208 X-13 Y-4 Z-0.5 S1				; set axis minim (adjust to make X=0 and Y=0 the edge of the bed after homing)
+;
+T0									; select first hot end

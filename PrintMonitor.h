@@ -44,9 +44,10 @@ class PrintMonitor
 		void Spin();
 		void Init();
 
-		void StartingPrint(const char *filename);		// called to indicate a file will be printed (see M23)
-		void StartedPrint();							// called whenever a new live print starts (see M24)
-		void StoppedPrint();							// called whenever a file print has stopped
+		bool IsPrinting() const;						// Is a file being printed?
+		void StartingPrint(const char *filename);		// Called to indicate a file will be printed (see M23)
+		void StartedPrint();							// Called whenever a new live print starts (see M24)
+		void StoppedPrint();							// Called whenever a file print has stopped
 
 	    bool GetFileInfo(const char *directory, const char *fileName, GcodeFileInfo& info) const;
 		void GetFileInfoResponse(StringRef& response, const char* filename) const;
@@ -70,6 +71,7 @@ class PrintMonitor
 	    char fileBeingPrinted[MaxFilenameLength];
 	    GcodeFileInfo currentFileInfo;
 
+		bool isPrinting;
 	    float printStartTime;
 	    unsigned int currentLayer;
 	    float warmUpDuration;
@@ -92,6 +94,7 @@ class PrintMonitor
 };
 
 inline const char *PrintMonitor::GetPrintFilename() const { return fileBeingPrinted; }
+inline bool PrintMonitor::IsPrinting() const { return isPrinting; }
 inline unsigned int PrintMonitor::GetCurrentLayer() const { return currentLayer; }
 inline float PrintMonitor::GetCurrentLayerTime() const { return (lastLayerTime > 0.0) ? (platform->Time() - lastLayerTime) : 0.0; }
 inline float PrintMonitor::GetPrintDuration() const { return (printStartTime > 0.0) ? (platform->Time() - printStartTime) : 0.0; }

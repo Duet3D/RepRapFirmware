@@ -264,8 +264,8 @@ void Move::Spin()
 }
 
 // Pause the print as soon as we can.
-// Return the file position of the first queue move we are going to skip, or noFilePosition we we are not skipping any moves.
-// If we skipped any moves then we update 'positions' to the positions and feed rate expected for the next move, else we leave them alone.
+// Returns the file position of the first queue move we are going to skip, or noFilePosition we we are not skipping any moves.
+// We update 'positions' to the positions and feed rate expected for the next move, and the amount of extrusion in the moves we skipped.
 FilePosition Move::PausePrint(float positions[DRIVES+1])
 {
 	// Find a move we can pause after.
@@ -275,9 +275,8 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 	// 2. There is a currently-executing move, and possibly some more in the queue.
 	// 3. There are moves in the queue, but we haven't started executing them yet. Unlikely, but possible.
 
-	const DDA *savedDdaRingAddPointer = ddaRingAddPointer;
-
 	// First, see if there is a currently-executing move, and if so, whether we can safely pause at the end of it
+	const DDA *savedDdaRingAddPointer = ddaRingAddPointer;
 	cpu_irq_disable();
 	DDA *dda = currentDda;
 	if (dda != nullptr)
@@ -309,6 +308,7 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 	cpu_irq_enable();
 
 	FilePosition fPos = noFilePosition;
+
 	if (ddaRingAddPointer != savedDdaRingAddPointer)
 	{
 		// We are going to skip some moves. dda points to the last move we are going to print.
@@ -316,11 +316,20 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 		{
 			positions[axis] = dda->GetEndCoordinate(axis, false);
 		}
+		for (size_t drive = AXES; drive < DRIVES; ++drive)
+		{
+			positions[drive] = 0.0;		// clear out extruder movement
+		}
 		positions[DRIVES] = dda->GetRequestedSpeed();
 
+		// Free the DDAs for the moves we are going to skip, and work out how much extrusion they would have performed
 		dda = ddaRingAddPointer;
 		do
 		{
+			for (size_t drive = AXES; drive < DRIVES; ++drive)
+			{
+				positions[drive] += dda->GetEndCoordinate(drive, true);		// update the amount of extrusion we are going to skip
+			}
 			if (fPos == noFilePosition)
 			{
 				fPos = dda->GetFilePosition();
@@ -332,7 +341,7 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 	}
 	else
 	{
-		GetCurrentUserPosition(positions, 0);
+		GetCurrentUserPosition(positions, 0);		// gets positions and feed rate, and clears out extrusion values
 	}
 
 	return fPos;
@@ -849,7 +858,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 
 	if (reprap.Debug(moduleMove))
 	{
-		deltaParams.PrintParameters(scratchString, true);
+		deltaParams.PrintParameters(scratchString);
 		debugPrintf("%s\n", scratchString.Pointer());
 	}
 
@@ -859,6 +868,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
 	FixedMatrix<float, MaxDeltaCalibrationPoints, AXES> probeMotorPositions;
 	float corrections[MaxDeltaCalibrationPoints];
+	float initialSumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{
 		corrections[i] = 0.0;
@@ -878,10 +888,13 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 		probeMotorPositions(i, A_AXIS) = deltaParams.Transform(machinePos, A_AXIS);
 		probeMotorPositions(i, B_AXIS) = deltaParams.Transform(machinePos, B_AXIS);
 		probeMotorPositions(i, C_AXIS) = deltaParams.Transform(machinePos, C_AXIS);
+
+		initialSumOfSquares += fsquare(zBedProbePoints[i]);
 	}
 
 	// Do 1 or more Newton-Raphson iterations
 	unsigned int iteration = 0;
+	float expectedRmsError;
 	for (;;)
 	{
 		// Build a Nx7 matrix of derivatives with respect to xa, xb, yc, za, zb, zc, diagonal.
@@ -969,23 +982,30 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 				sumOfSquares += fsquare(expectedResiduals[i]);
 			}
 
+			expectedRmsError = sqrt(sumOfSquares/numPoints);
+
 			if (reprap.Debug(moduleMove))
 			{
 				PrintVector("Expected probe error", expectedResiduals, numPoints);
-				debugPrintf("Expected RMS error %.3f\n", sqrt(sumOfSquares/numPoints));
 			}
 		}
 
 		// Decide whether to do another iteration Two is slightly better than one, but three doesn't improve things.
-		// Alteratively, we could stop when the expected RMS error is only slightly worse than the RMS of the residuals.
+		// Alternatively, we could stop when the expected RMS error is only slightly worse than the RMS of the residuals.
 		++iteration;
 		if (iteration == 2) break;
 	}
 
 	// Print out the calculation time
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
+	if (reprap.Debug(moduleMove))
+	{
+		deltaParams.PrintParameters(scratchString);
+		debugPrintf("%s\n", scratchString.Pointer());
+	}
 
-	deltaParams.PrintParameters(reply, true);
+	reply.printf("Calibrated %d factors using %d points, RMS error before %.2f after %.2f\n",
+			numFactors, numPoints, sqrt(initialSumOfSquares/numPoints), expectedRmsError);
 }
 
 /*
@@ -1084,6 +1104,7 @@ bool Move::StartNextMove(uint32_t startTime)
 	}
 	else
 	{
+		reprap.GetPlatform()->ExtrudeOff();	// turn off ancilliary PWM
 		return false;
 	}
 }

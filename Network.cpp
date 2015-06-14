@@ -270,14 +270,6 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 
 void httpd_init()
 {
-	static int httpInitCount = 0;
-
-	httpInitCount++;
-	if (httpInitCount > 1)
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "httpd_init() called more than once.\n");
-	}
-
 	tcp_pcb* pcb = tcp_new();
 	tcp_bind(pcb, IP_ADDR_ANY, httpPort);
 	http_pcb = tcp_listen(pcb);
@@ -286,14 +278,6 @@ void httpd_init()
 
 void ftpd_init()
 {
-	static int ftpInitCount = 0;
-
-	ftpInitCount++;
-	if (ftpInitCount > 1)
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "ftpd_init() called more than once.\n");
-	}
-
 	tcp_pcb* pcb = tcp_new();
 	tcp_bind(pcb, IP_ADDR_ANY, ftpPort);
 	ftp_main_pcb = tcp_listen(pcb);
@@ -302,14 +286,6 @@ void ftpd_init()
 
 void telnetd_init()
 {
-	static int telnetInitCount = 0;
-
-	telnetInitCount++;
-	if (telnetInitCount > 1)
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "telnetd_init() called more than once.\n");
-	}
-
 	tcp_pcb* pcb = tcp_new();
 	tcp_bind(pcb, IP_ADDR_ANY, telnetPort);
 	telnet_pcb = tcp_listen(pcb);
@@ -364,21 +340,15 @@ void Network::PrependTransaction(NetworkTransaction* volatile* list, NetworkTran
 
 void Network::Init()
 {
-	if (!isEnabled)
-	{
-		platform->Message(HOST_MESSAGE, "Attempting to start the network when it is disabled.\n");
-		return;
-	}
-	init_ethernet(platform->MACAddress(), hostname);
 	longWait = platform->Time();
-	state = NetworkInitializing;
+	state = NetworkPreInitializing;
 }
 
 void Network::Spin()
 {
 	// Basically we can't do anything if we can't interact with LWIP
 
-	if (!LockLWIP())
+	if (!isEnabled || !LockLWIP())
 	{
 		platform->ClassReport(longWait);
 		return;
@@ -423,7 +393,7 @@ void Network::Spin()
 			}
 		}
 	}
-	else if (state == NetworkInitializing && establish_ethernet_link())
+	else if (state == NetworkPostInitializing && establish_ethernet_link())
 	{
 		start_ethernet(platform->IPAddress(), platform->NetMask(), platform->GateWay());
 		ethernet_set_rx_callback(&emac_read_packet);
@@ -441,7 +411,7 @@ void Network::Spin()
 
 void Network::Interrupt()
 {
-	if (state != NetworkInactive && LockLWIP())
+	if (isEnabled && LockLWIP())
 	{
 		ethernet_timers_update();
 		UnlockLWIP();
@@ -491,12 +461,22 @@ void Network::Diagnostics()
 
 void Network::Enable()
 {
+	if (state == NetworkPreInitializing)
+	{
+		// We must call this one only once, otherwise we risk a firmware crash
+		init_ethernet(platform->MACAddress(), hostname);
+		state = NetworkPostInitializing;
+	}
+
 	if (!isEnabled)
 	{
 		readingData = true;
-		// EMAC RX callback will be reset on next Spin calls
-		Init();
 		isEnabled = true;
+		// EMAC RX callback will be reset on next Spin calls
+		if (state == NetworkInactive)
+		{
+			state = NetworkActive;
+		}
 	}
 }
 
@@ -506,7 +486,10 @@ void Network::Disable()
 	{
 		readingData = false;
 		ethernet_set_rx_callback(NULL);
-		state = NetworkInactive;
+		if (state == NetworkActive)
+		{
+			state = NetworkInactive;
+		}
 		isEnabled = false;
 	}
 }
@@ -731,7 +714,7 @@ void Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 
 // This is called by the web server to get a new received packet.
 // If the connection parameter is NULL, we just return the request at the head of the ready list.
-// Otherwise, we are only interested in packets received from the specified connection. If we find one than
+// Otherwise, we are only interested in packets received from the specified connection. If we find one then
 // we move it to the head of the ready list, so that a subsequent call with a null connection parameter
 // will return the same one.
 NetworkTransaction *Network::GetTransaction(const ConnectionState *cs)
@@ -900,6 +883,11 @@ void Network::WaitForDataConection()
 	NetworkTransaction *r = readyTransactions;
 	r->waitingForDataConnection = true;
 	r->inputPointer = 0; // behave as if this request hasn't been processed yet
+}
+
+uint8_t *Network::IPAddress() const
+{
+	return reinterpret_cast<uint8_t*>(&ethernet_get_configuration()->ip_addr.addr);
 }
 
 void Network::OpenDataPort(uint16_t port)
@@ -1367,7 +1355,7 @@ bool NetworkTransaction::Send()
 			float timeNow = reprap.GetPlatform()->Time();
 			if (timeNow - lastWriteTime > writeTimeout)
 			{
-				reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Timing out connection cs=%08x\n", (unsigned int)cs);
+//				reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Timing out connection cs=%08x\n", (unsigned int)cs);
 				tcp_abort(cs->pcb);
 				cs->pcb = NULL;
 			}

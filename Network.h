@@ -154,6 +154,7 @@ public:
 	void CloseTransaction();
 	void WaitForDataConection();
 
+	uint8_t *IPAddress() const;
 	void OpenDataPort(uint16_t port);
 	uint16_t GetDataPort() const;
 	void CloseDataPort();
@@ -202,7 +203,7 @@ private:
 	NetworkTransaction * volatile readyTransactions;
 	NetworkTransaction * volatile writingTransactions;
 
-	enum { NetworkInactive, NetworkInitializing, NetworkActive } state;
+	enum { NetworkPreInitializing, NetworkPostInitializing, NetworkInactive, NetworkActive } state;
 	bool isEnabled;
 	bool volatile readingData;
 	char hostname[16];			// limit DHCP hostname to 15 characters + terminating 0

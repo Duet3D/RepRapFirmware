@@ -87,7 +87,6 @@ class GCodes
     void DeleteFile(const char* fileName);								// Does what it says
     bool GetProbeCoordinates(int count, float& x, float& y, float& z) const;	// Get pre-recorded probe coordinates
     void GetCurrentCoordinates(StringRef& s) const;						// Write where we are into a string
-    bool PrintingAFile() const;											// Are we in the middle of printing a file?
     bool DoingFileMacro() const;										// Or still busy processing a macro file?
     float FractionOfFilePrinted() const;								// Get fraction of file printed
     void Diagnostics();													// Send helpful information out
@@ -219,11 +218,6 @@ class GCodes
 };
 
 //*****************************************************************************************************
-
-inline bool GCodes::PrintingAFile() const
-{
-	return FractionOfFilePrinted() >= 0.0;
-}
 
 inline bool GCodes::DoingFileMacro() const
 {

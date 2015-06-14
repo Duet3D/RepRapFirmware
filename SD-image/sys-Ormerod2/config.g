@@ -4,7 +4,7 @@ M550 PMy Ormerod			        ; Machine name (can be anything you like)
 M551 Preprap                        ; Machine password (currently not used)
 M540 P0xBE:0xEF:0xDE:0xAD:0xFE:0xED ; MAC Address
 ;*** Adjust the IP address and gateway in the following 2 lines to suit your network
-M552 P192.168.1.14                  ; IP address
+M552 P0.0.0.0						; IP address (0 = use DHCP)
 M554 P192.168.1.1                   ; Gateway
 M553 P255.255.255.0                 ; Netmask
 M555 P2                             ; Set output to look like Marlin
@@ -38,5 +38,7 @@ M556 S78 X0 Y0 Z0                   ; Axis compensation here
 M201 X800 Y800 Z15 E1000            ; Accelerations (mm/s^2)
 M203 X15000 Y15000 Z100 E3600       ; Maximum speeds (mm/min)
 M566 X600 Y600 Z30 E20              ; Minimum speeds mm/minute
-M208 X214 Y210						; set axis maxima (adjust to suit your machine)
-M208 X-8 Y0 S1						; set axis minimum (adjust to make X=0 the edge of the bed)
+M208 X214 Y210 Z200					; set axis maxima (adjust to suit your machine)
+M208 X-8 Y0 Z-1 S1					; set axis minimum (adjust to make X=0 the edge of the bed)
+;
+T0									; select first hot end

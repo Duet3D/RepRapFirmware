@@ -19,7 +19,7 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-PrintMonitor::PrintMonitor(Platform *p, GCodes *gc) : platform(p), gCodes(gc), fileInfoDetected(false),
+PrintMonitor::PrintMonitor(Platform *p, GCodes *gc) : platform(p), gCodes(gc), fileInfoDetected(false), isPrinting(false),
 			printStartTime(0.0), currentLayer(0), firstLayerDuration(0.0), firstLayerHeight(0.0),
 			firstLayerFilament(0.0), firstLayerProgress(0.0), warmUpDuration(0.0), layerEstimatedTimeLeft(0.0),
 			lastLayerTime(0.0), lastLayerFilament(0.0), numLayerSamples(0)
@@ -40,7 +40,7 @@ void PrintMonitor::Spin()
 		return;
 	}
 
-	if (gCodes->PrintingAFile())
+	if (IsPrinting())
 	{
 		// May have just started a print, see if we're heating up
 		if (warmUpDuration == 0.0)
@@ -84,7 +84,7 @@ void PrintMonitor::Spin()
 			// See if we can determine the first layer height (must be smaller than the nozzle diameter)
 			if (firstLayerHeight == 0.0)
 			{
-				if (liveCoords[Z_AXIS] < NOZZLE_DIAMETER && !gCodes->DoingFileMacro())
+				if (liveCoords[Z_AXIS] < platform->GetNozzleDiameter() * 1.1 && !gCodes->DoingFileMacro())
 				{
 					firstLayerHeight = liveCoords[Z_AXIS];
 				}
@@ -200,11 +200,13 @@ void PrintMonitor::StartingPrint(const char* filename)
 
 void PrintMonitor::StartedPrint()
 {
+	isPrinting = true;
 	printStartTime = platform->Time();
 }
 
 void PrintMonitor::StoppedPrint()
 {
+	isPrinting = false;
 	currentLayer = numLayerSamples = 0;
 	firstLayerDuration = firstLayerHeight = firstLayerFilament = firstLayerProgress = 0.0;
 	layerEstimatedTimeLeft = printStartTime = warmUpDuration = 0.0;
@@ -243,8 +245,8 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, Gcod
 			unsigned int filamentsFound = 0, nFilaments;
 			float filaments[DRIVES - AXES];
 
-			// Get slic3r settings by reading from the start of the file. We only read the first 2K or so, everything we are looking for should be there.
-			for(uint8_t i=0; i<4; i++)
+			// Get slic3r settings by reading from the start of the file. We only read the first 4K or so, everything we are looking for should be there.
+			for(uint8_t i=0; i<8; i++)
 			{
 				size_t sizeToRead = (size_t)min<unsigned long>(info.fileSize, readSize + overlap);
 				int nbytes = f->Read(buf, sizeToRead);
@@ -328,9 +330,24 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, Gcod
 							}
 							info.generatedBy[i] = 0;
 						}
-					}
 
-					// Add code to look for other values here...
+						// KISSlicer
+						const char* kisslicerStart = "; KISSlicer";
+						if (StringStartsWith(buf, kisslicerStart))
+						{
+							size_t stringLength = 0;
+							for(size_t i=2; i<ARRAY_UPB(info.generatedBy); i++)
+							{
+								if (buf[i] == '\r' || buf[i] == '\n')
+								{
+									break;
+								}
+
+								info.generatedBy[stringLength++] = buf[i];
+							}
+							info.generatedBy[stringLength] = 0;
+						}
+					}
 				}
 
 				// Have we collected everything?
@@ -395,9 +412,9 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, Gcod
 						break;		// quit if found height
 					}
 
-					if (seekPos == 0 || info.fileSize - seekPos >= 200000uL)	// scan up to about the last 200K of the file (32K wasn't enough)
+					if (seekPos == 0 || info.fileSize - seekPos >= 128000uL)	// scan up to about the last 128K of the file (32K wasn't enough)
 					{
-						break;		// quit if reached start of file or already scanned the last 32K of the file
+						break;
 					}
 					seekPos -= readSize;
 					sizeToRead = readSize;
@@ -445,7 +462,7 @@ void PrintMonitor::GetFileInfoResponse(StringRef& response, const char* filename
 			response.copy("{\"err\":1}");
 		}
 	}
-	else if (gCodes->PrintingAFile() && fileInfoDetected)
+	else if (IsPrinting() && fileInfoDetected)
 	{
 		// Poll file info about a file currently being printed
 		response.printf("{\"err\":0,\"size\":%lu,\"height\":%.2f,\"layerHeight\":%.2f,\"filament\":",
@@ -475,7 +492,7 @@ void PrintMonitor::GetFileInfoResponse(StringRef& response, const char* filename
 float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 {
 	// We can't provide an estimation if we're not printing (yet)
-	if (!gCodes->PrintingAFile() || (fileInfoDetected && currentFileInfo.numFilaments != 0 && warmUpDuration == 0.0))
+	if (!IsPrinting() || (fileInfoDetected && currentFileInfo.numFilaments && warmUpDuration == 0.0))
 	{
 		return 0.0;
 	}
@@ -536,6 +553,10 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 				{
 					return realPrintDuration * (totalFilamentNeeded - extrRawTotal) / extrRawTotal;
 				}
+				if (extrRawTotal >= totalFilamentNeeded)
+				{
+					return 0.0;		// Avoid division by zero, else the web interface will report AJAX errors
+				}
 
 				float filamentRate;
 				if (numLayerSamples != 0)
@@ -578,65 +599,87 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 bool PrintMonitor::FindHeight(const char* buf, size_t len, float& height) const
 {
 //debugPrintf("Scanning %u bytes starting %.100s\n", len, buf);
-	bool inComment;
+	bool inComment, inRelativeMode = false;
 	unsigned int zPos;
 	for(size_t i = len - 5; i > 0; i--)
 	{
-		// Look for last "G0/G1 ... Z#HEIGHT#" command as generated by common slicers
-		if (buf[i] == 'G' && (buf[i + 1] == '0' || buf[i + 1] == '1') && buf[i + 2] == ' ')
+		if (inRelativeMode)
 		{
-			// Looks like we found a controlled move, however it could be in a comment, especially when using slic3r 1.1.1
-			inComment = false;
-			size_t j = i;
-			while (j != 0)
+			inRelativeMode = !(buf[i] == 'G' && buf[i + 1] == '9' && buf[i + 2] == '1' && buf[i + 3] <= ' ');
+		}
+		else if (buf[i] == 'G')
+		{
+			// Ignore G0/G1 codes if absolute mode was switched back using G90 (typical for Cura files)
+			if (buf[i + 1] == '9' && buf[i + 2] == '0' && buf[i + 3] <= ' ')
 			{
-				--j;
-				char c = buf[j];
-				if (c == '\n' || c == '\r')
+				inRelativeMode = true;
+			}
+			// Look for last "G0/G1 ... Z#HEIGHT#" command as generated by common slicers
+			else if ((buf[i + 1] == '0' || buf[i + 1] == '1') && buf[i + 2] == ' ')
+			{
+				// Looks like we found a controlled move, however it could be in a comment, especially when using slic3r 1.1.1
+				inComment = false;
+				size_t j = i;
+				while (j != 0)
 				{
-					// It's not in a comment
-					break;
+					--j;
+					char c = buf[j];
+					if (c == '\n' || c == '\r')
+					{
+						// It's not in a comment
+						break;
+					}
+					if (c == ';')
+					{
+						// It is in a comment, so give up on this one
+						inComment = true;
+						break;
+					}
 				}
-				if (c == ';')
+				if (inComment)
+					continue;
+
+				// Find 'Z' position and grab that value
+				zPos = 0;
+				for(int j=i +3; j < len - 2; j++)
 				{
-					// It is in a comment, so give up on this one
-					inComment = true;
-					break;
+					char c = buf[j];
+					if (c < ' ')
+					{
+						// Skip all whitespaces...
+						while (j < len - 2 && c <= ' ')
+						{
+							c = buf[++j];
+						}
+						// ...to make sure ";End" doesn't follow G0 .. Z#HEIGHT#
+						if (zPos != 0 && (buf[j] != ';' || buf[j + 1] != 'E'))
+						{
+							//debugPrintf("Found at offset %u text: %.100s\n", zPos, &buf[zPos + 1]);
+							height = strtod(&buf[zPos + 1], NULL);
+							return true;
+						}
+						break;
+					}
+					else if (c == ';')
+					{
+						// Ignore comments
+						break;
+					}
+					else if (c == 'Z')
+					{
+						zPos = j;
+					}
 				}
 			}
-			if (inComment)
-				continue;
-
-			// Find 'Z' position and grab that value
-			zPos = 0;
-			for(int j=i +3; j < len - 2; j++)
+		}
+		// Special case: KISSlicer generates object height as a comment
+		else
+		{
+			const char *kisslicerHeightString = "; END_LAYER_OBJECT z=";
+			if (i < len - 32 && StringStartsWith(buf + i, kisslicerHeightString))
 			{
-				char c = buf[j];
-				if (c < ' ')
-				{
-					// Skip all whitespaces...
-					while (j < len - 2 && c <= ' ')
-					{
-						c = buf[++j];
-					}
-					// ...to make sure ";End" doesn't follow G0 .. Z#HEIGHT#
-					if (zPos != 0 && (buf[j] != ';' || buf[j + 1] != 'E'))
-					{
-						//debugPrintf("Found at offset %u text: %.100s\n", zPos, &buf[zPos + 1]);
-						height = strtod(&buf[zPos + 1], NULL);
-						return true;
-					}
-					break;
-				}
-				else if (c == ';')
-				{
-					// Ignore comments
-					break;
-				}
-				else if (c == 'Z')
-				{
-					zPos = j;
-				}
+				height = strtod(buf + i + strlen(kisslicerHeightString), NULL);
+				return true;
 			}
 		}
 	}
@@ -680,6 +723,16 @@ bool PrintMonitor::FindLayerHeight(const char *buf, size_t len, float& layerHeig
 	if (pos != NULL)
 	{
 		pos += strlen(layerHeightStringS3D);
+		layerHeight = strtod(pos, NULL);
+		return true;
+	}
+
+	// Look for layer height as generated by KISSlicer
+	const char* layerHeightStringKisslicer = "layer_thickness_mm = ";
+	pos = strstr(buf, layerHeightStringKisslicer);
+	if (pos != NULL)
+	{
+		pos += strlen(layerHeightStringKisslicer);
 		layerHeight = strtod(pos, NULL);
 		return true;
 	}
@@ -733,6 +786,18 @@ unsigned int PrintMonitor::FindFilamentUsed(const char* buf, size_t len, float *
 				filamentUsed[filamentsFound] = strtod(p, &q); // S3D reports filament usage in mm, no conversion needed
 				++filamentsFound;
 			}
+		}
+	}
+
+	// Special case: KISSlicer only generates the filament volume, so we need to calculate the length from it
+	if (!filamentsFound)
+	{
+		const char *filamentVolumeStr = "; Estimated Build Volume: ";
+		p = strstr(buf, filamentVolumeStr);
+		if (p != NULL)
+		{
+			float filamentCMM = strtod(p + strlen(filamentVolumeStr), NULL) * 1000.0;
+			filamentUsed[filamentsFound++] = filamentCMM / (PI * (platform->GetFilamentWidth() / 2.0) * (platform->GetFilamentWidth() / 2.0));
 		}
 	}
 

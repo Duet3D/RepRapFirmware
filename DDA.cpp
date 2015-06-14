@@ -454,10 +454,10 @@ void DDA::CalcNewSpeeds()
 					maxDeltaV *= 0.8;
 					if ((thisMoveFraction >= 0.0) == (nextMoveFraction >= 0.0))
 					{
-						// Drives moving in the same direction, so we must reduce the faster one
+						// Drive moving in the same direction for this move and the next one, so we must reduce speed of the faster one
 						if (fabsf(thisMoveSpeed) > fabsf(nextMoveSpeed))
 						{
-							endSpeed = fabsf((nextMoveSpeed) + maxDeltaV)/fabsf(thisMoveFraction);
+							endSpeed = (fabsf(nextMoveSpeed) + maxDeltaV)/fabsf(thisMoveFraction);
 						}
 						else
 						{
@@ -518,7 +518,7 @@ void DDA::SetPositions(const float move[DRIVES])
 
 // Get a Cartesian end coordinate from this move
 float DDA::GetEndCoordinate(size_t drive, bool disableDeltaMapping)
-//pre(drive < AXES)
+//pre(disableDeltaMapping || drive < AXES)
 {
 	if (disableDeltaMapping)
 	{

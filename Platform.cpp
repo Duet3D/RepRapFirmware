@@ -130,8 +130,8 @@ void Platform::Init()
 
 	idleCurrentFactor = defaultIdleCurrentFactor;
 
-	baudRates[0] = BAUD_RATE;
-	baudRates[1] = AUX_BAUD_RATE;
+	baudRates[0] = MainBaudRate;
+	baudRates[1] = AuxBaudRate;
 	commsParams[0] = 0;
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
 
@@ -161,8 +161,8 @@ void Platform::Init()
 
 	fileStructureInitialised = true;
 
-	mcpDuet.begin(); //only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
-	mcpExpansion.setMCP4461Address(0x2E); //not required for mcpDuet, as this uses the default address
+	mcpDuet.begin();							// only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
+	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
 	sysDir = SYS_DIR;
 	configFile = CONFIG_FILE;
 	defaultFile = DEFAULT_FILE;
@@ -173,7 +173,6 @@ void Platform::Init()
 	ARRAY_INIT(directionPins, DIRECTION_PINS);
 	ARRAY_INIT(directions, DIRECTIONS);
 	ARRAY_INIT(enablePins, ENABLE_PINS);
-//	ARRAY_INIT(disableDrives, DISABLE_DRIVES);		// not currently used
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
 	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
 	ARRAY_INIT(accelerations, ACCELERATIONS);
@@ -241,7 +240,7 @@ void Platform::Init()
 		if (drive <= AXES)
 		{
 			endStopType[drive] = EndStopType::lowEndStop;	// assume all endstops are low endstops
-			endStopLogicLevel[drive] = true;
+			endStopLogicLevel[drive] = true;				// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
 	}
 
@@ -278,6 +277,9 @@ void Platform::Init()
 		pinModeNonDue(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
 	}
 
+	// Hotend configuration
+	nozzleDiameter = DefaultNozzleDiameter;
+	filamentWidth = DefaultFilamentWidth;
 	InitialiseInterrupts();
 
 	lastTime = Time();

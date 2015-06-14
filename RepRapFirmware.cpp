@@ -209,6 +209,7 @@ void RepRap::Init()
   // All of the following init functions must execute reasonably quickly before the watchdog times us out
   platform->Init();
   gCodes->Init();
+  network->Init();
   webserver->Init();
   move->Init();
   heat->Init();
@@ -224,7 +225,7 @@ void RepRap::Init()
   FileStore *startup = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 
   platform->AppendMessage(HOST_MESSAGE, "\n\nExecuting ");
-  if(startup != NULL)
+  if (startup != NULL)
   {
 	  startup->Close();
 	  platform->AppendMessage(HOST_MESSAGE, "%s...\n\n", platform->GetConfigFile());
@@ -262,7 +263,7 @@ void RepRap::Init()
   if (network->IsEnabled())
   {
 	  platform->AppendMessage(HOST_MESSAGE, "\nStarting network...\n");
-	  network->Init(); // Need to do this here, as the configuration GCodes may set IP address etc.
+	  network->Enable(); // Need to do this here, as the configuration GCodes may set IP address etc.
   }
   else
   {
@@ -657,17 +658,6 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 
 	/* Coordinates */
 	{
-		float liveCoordinates[DRIVES + 1];
-		if (currentTool != NULL)
-		{
-			const float *offset = currentTool->GetOffset();
-			for (size_t i = 0; i < AXES; ++i)
-			{
-				liveCoordinates[i] += offset[i];
-			}
-		}
-		move->LiveCoordinates(liveCoordinates);
-
 		// Homed axes
 		response.catf("\"axesHomed\":[%d,%d,%d]",
 				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
@@ -679,7 +669,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 		char ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response.catf("%c%.1f", ch, liveCoordinates[AXES + extruder]);
+			response.catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(extruder));
 			ch = ',';
 		}
 
@@ -690,6 +680,17 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 
 		// XYZ positions
 		response.cat("],\"xyz\":");
+		float liveCoordinates[DRIVES + 1];
+		move->LiveCoordinates(liveCoordinates);
+		if (currentTool != NULL)
+		{
+			const float *offset = currentTool->GetOffset();
+			for (size_t i = 0; i < AXES; ++i)
+			{
+				liveCoordinates[i] += offset[i];
+			}
+		}
+
 		ch = '[';
 		for (size_t axis = 0; axis < AXES; axis++)
 		{
@@ -939,7 +940,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 		}
 
 		// Fraction of file printed
-		response.catf("],\"fractionPrinted\":%.1f", (gCodes->PrintingAFile()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0);
+		response.catf("],\"fractionPrinted\":%.1f", (printMonitor->IsPrinting()) ? (gCodes->FractionOfFilePrinted() * 100.0) : 0.0);
 
 		// First Layer Duration
 		response.catf(",\"firstLayerDuration\":%.1f", printMonitor->GetFirstLayerDuration());
@@ -1225,7 +1226,7 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
 	}
 
-	if (gCodes->PrintingAFile())
+	if (printMonitor->IsPrinting())
 	{
 		// Send the fraction printed
 		response.catf(",\"fraction_printed\":%.4f", max<float>(0.0, gCodes->FractionOfFilePrinted()));
@@ -1240,7 +1241,7 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 	}
 	else if (type == 2)
 	{
-		if (gCodes->PrintingAFile())
+		if (printMonitor->IsPrinting())
 		{
 			// Send estimated times left based on file progress, filament usage, and layers
 			response.catf(",\"timesLeft\":[%.1f,%.1f,%.1f]",
@@ -1426,7 +1427,7 @@ char RepRap::GetStatusCharacter() const
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
 			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
-			: (gCodes->PrintingAFile() && !gCodes->DoingFileMacro()) 	? 'P'	// Printing
+			: (printMonitor->IsPrinting())								? 'P'	// Printing
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
 			: 'I';																// Idle
 }

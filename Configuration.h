@@ -24,8 +24,8 @@ Licence: GPL
 #define CONFIGURATION_H
 
 #define NAME "RepRapFirmware"
-#define VERSION "1.09a-dc42"
-#define DATE "2015-05-17"
+#define VERSION "1.09b-dc42"
+#define DATE "2015-06-14"
 #define AUTHORS "reprappro, dc42, zpl"
 
 #define FLASH_SAVE_ENABLED	(1)
@@ -44,7 +44,8 @@ enum Compatibility
 
 // Some numbers...
 
-#define AUX_BAUD_RATE	(57600)
+const uint32_t MainBaudRate = 115200;			// Communication speed of the USB if needed.
+const uint32_t AuxBaudRate = 57600;
 
 const unsigned int GcodeLength = 100;			// Maximum length of a G Code string that we handle
 const unsigned int MaxFilenameLength = 100;		// Maximum length of a path + filename on the SD card
@@ -92,7 +93,9 @@ const size_t MaxMessageLength = 40;
 const size_t MaxGcodeReplyLength = 2048;
 
 // Print estimation defaults
-#define NOZZLE_DIAMETER 0.5						// Thickness of the nozzle
+const float DefaultNozzleDiameter = 0.5;		// Thickness of the nozzle
+const float DefaultFilamentWidth = 1.75;		// Width of the filament
+
 #define MAX_LAYER_SAMPLES 5						// Number of layer samples (except for first layer)
 #define ESTIMATION_MIN_FILAMENT_USAGE 0.025		// Minimum per cent for filament usage estimation
 #define FIRST_LAYER_SPEED_FACTOR 0.25			// First layer speed compared to others (only for layer-based estimation)
@@ -102,7 +105,6 @@ const size_t MaxGcodeReplyLength = 2048;
 #define DEFAULT_PASSWORD "reprap"
 #define DEFAULT_NAME "My RepRap 1"
 #define INDEX_PAGE "reprap.htm"
-//#define MESSAGE_FILE "messages.txt"			// currently unused
 #define FOUR04_FILE "html404.htm"
 #define CONFIG_FILE "config.g" 					// The file that sets the machine's parameters
 #define DEFAULT_FILE "default.g"				// If the config file isn't found
@@ -114,6 +116,8 @@ const size_t MaxGcodeReplyLength = 2048;
 #define SET_BED_EQUATION "bed.g"
 #define PAUSE_G "pause.g"
 #define RESUME_G "resume.g"
+#define STOP_G "stop.g"
+#define SLEEP_G "sleep.g"
 
 #define LIST_SEPARATOR ':'						// Lists in G Codes
 #define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them

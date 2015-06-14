@@ -1,11 +1,11 @@
 ; Ormerod 2 config file for dc42 Duet firmware
 
 M111 S0                             ; Debug off
-M550 PMy Ormerod			        ; Machine name (can be anything you like)
+M550 PMyCoreXY				        ; Machine name (can be anything you like)
 M551 Preprap                        ; Machine password (used for FTP connections)
 M540 P0xBE:0xEF:0xDE:0xAD:0xFE:0xED ; MAC Address
 ;*** Adjust the IP address and gateway in the following 2 lines to suit your network
-M552 P192.168.1.14                  ; IP address
+M552 P0.0.0.0						; IP address (0 = use DHCP)
 M554 P192.168.1.1                   ; Gateway
 M553 P255.255.255.0                 ; Netmask
 M555 P2                             ; Set output to look like Marlin
@@ -26,8 +26,8 @@ M906 X800 Y800 Z800 E800            ; Set motor currents (mA)
 M201 X800 Y800 Z15 E1000            ; Accelerations (mm/s^2)
 M203 X15000 Y15000 Z100 E3600       ; Maximum speeds (mm/min)
 M566 X600 Y600 Z30 E20              ; Maximum jerk speeds mm/minute
-M208 X200 Y200						; set axis maxima (adjust to suit your machine)
-M208 X-8 Y0 S1						; set axis minima (adjust to make X=0 and Y=0 the edges of the bed)
+M208 X200 Y200 Z200					; set axis maxima (adjust to suit your machine)
+M208 X-8 Y0 Z-0.5 S1				; set axis minima (adjust to make X=0 and Y=0 the edges of the bed)
 
 ; Z probe
 M558 P1 X0 Y0 Z1                    ; Analog Z probe, also used for homing the Z axis
@@ -58,3 +58,5 @@ M305 P2 R1000 H0 L0					; Put your own H and/or L values here to set the second 
 
 ;*** If you are using axis compensation, put the figures in the following command
 M556 S78 X0 Y0 Z0                   ; Axis compensation here
+;
+T0									; select first hot end

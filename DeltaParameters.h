@@ -18,7 +18,7 @@ public:
 	bool IsDeltaMode() const { return deltaMode; }
 	bool IsEquilateral() const { return isEquilateral; }
 	float GetDiagonal() const { return diagonal; }
-	float GetRadius() const { return radius; }
+	float GetRadius() const;
     float GetPrintRadius() const { return printRadius; }
     float GetTowerX(size_t axis) const { return towerX[axis]; }
     float GetTowerY(size_t axis) const { return towerY[axis]; }
@@ -39,7 +39,9 @@ public:
 
     float ComputeDerivative(unsigned int deriv, float ha, float hb, float hc);		// Compute the derivative of height with respect to a parameter at a set of motor endpoints
     void Adjust(size_t numFactors, const float v[]);								// Perform 4-, 6- or 7-factor adjustment
-    void PrintParameters(StringRef& reply, bool full);
+    void PrintParameters(StringRef& reply) const;									// Print all the parameters for debugging
+    float GetXCorrection() const;
+    float GetYCorrection() const;
 
 private:
 	void Recalc();
