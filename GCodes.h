@@ -112,7 +112,7 @@ class GCodes
     void DoFilePrint(GCodeBuffer* gb, StringRef& reply);				// Get G Codes from a file and print them
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();					// Wait for move queue to exhaust and the current position is loaded
     bool DoCannedCycleMove(EndstopChecks ce);							// Do a move from an internally programmed canned cycle
-    void DoFileMacro(const char* fileName);								// Run a GCode macro in a file, error if not found
+    bool DoFileMacro(const char* fileName, bool reportMissing = true);	// Run a GCode macro in a file, optionally report error if not found
     void FileMacroCyclesReturn();										// End a macro
     bool ActOnCode(GCodeBuffer* gb, StringRef& reply);					// Do a G, M or T Code
     bool HandleGcode(GCodeBuffer* gb, StringRef& reply);				// Do a G code

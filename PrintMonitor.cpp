@@ -492,7 +492,7 @@ void PrintMonitor::GetFileInfoResponse(StringRef& response, const char* filename
 float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 {
 	// We can't provide an estimation if we're not printing (yet)
-	if (!IsPrinting() || (fileInfoDetected && currentFileInfo.numFilaments && warmUpDuration == 0.0))
+	if (!IsPrinting() || (fileInfoDetected && currentFileInfo.numFilaments != 0 && warmUpDuration == 0.0))
 	{
 		return 0.0;
 	}
@@ -570,10 +570,10 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 				}
 				else
 				{
-					filamentRate = firstLayerFilament / firstLayerDuration;
+					filamentRate = (firstLayerDuration > 0.0) ? firstLayerFilament / firstLayerDuration : 0.0;
 				}
 
-				return (totalFilamentNeeded - extrRawTotal) / filamentRate;
+				return (filamentRate > 0.0) ? (totalFilamentNeeded - extrRawTotal) / filamentRate : 0.0;
 			}
 			break;
 		}

@@ -684,13 +684,16 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 	{
 		// A negative sParam just prints the probe heights
 		reply.copy("Bed probe heights:");
+		float sum = 0.0;
 		float sumOfSquares = 0.0;
 		for (size_t i = 0; i < numPoints; ++i)
 		{
 			reply.catf(" %.3f", zBedProbePoints[i]);
+			sum += zBedProbePoints[i];
 			sumOfSquares += fsquare(zBedProbePoints[i]);
 		}
-		reply.catf(", RMS error: %.3f\n", sqrt(sumOfSquares/numPoints));
+		const float mean = sum/numPoints;
+		reply.catf(", mean %.3f, deviation from mean %.3f\n", mean, sqrt(sumOfSquares/numPoints - fsquare(mean)));
 	}
 	else if (numPoints < sParam)
 	{
@@ -702,13 +705,16 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 		if (reprap.Debug(moduleMove))
 		{
 			debugPrintf("Z probe offsets:");
+			float sum = 0.0;
 			float sumOfSquares = 0.0;
 			for (size_t i = 0; i < numPoints; ++i)
 			{
 				debugPrintf(" %.3f", zBedProbePoints[i]);
+				sum += zBedProbePoints[i];
 				sumOfSquares += fsquare(zBedProbePoints[i]);
 			}
-			debugPrintf(", RMS error: %.3f\n", sqrt(sumOfSquares/numPoints));
+			const float mean = sum/numPoints;
+			debugPrintf(", mean %.3f, deviation from mean %.3f\n", mean, sqrt(sumOfSquares/numPoints - fsquare(mean)));
 		}
 
 		if (sParam == 0)
@@ -1004,7 +1010,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 		debugPrintf("%s\n", scratchString.Pointer());
 	}
 
-	reply.printf("Calibrated %d factors using %d points, RMS error before %.2f after %.2f\n",
+	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f\n",
 			numFactors, numPoints, sqrt(initialSumOfSquares/numPoints), expectedRmsError);
 }
 

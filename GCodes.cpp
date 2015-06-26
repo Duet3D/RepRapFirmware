@@ -285,7 +285,7 @@ void GCodes::Spin()
 		if (reprap.GetTool(newToolNumber) != NULL && AllAxesAreHomed())
 		{
 			scratchString.printf("tpre%d.g", newToolNumber);
-			DoFileMacro(scratchString.Pointer());
+			DoFileMacro(scratchString.Pointer(), false);
 		}
 		break;
 
@@ -295,7 +295,7 @@ void GCodes::Spin()
 		if (reprap.GetTool(newToolNumber) != NULL && AllAxesAreHomed())
 		{
 			scratchString.printf("tpost%d.g", newToolNumber);
-			DoFileMacro(scratchString.Pointer());
+			DoFileMacro(scratchString.Pointer(), false);
 		}
 		break;
 
@@ -823,14 +823,18 @@ void GCodes::ClearMove()
 }
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
-void GCodes::DoFileMacro(const char* fileName)
+// Return true if the file was found.
+bool GCodes::DoFileMacro(const char* fileName, bool reportMissing)
 {
 	FileStore *f = platform->GetFileStore((fileName[0] == '/') ? "0:" : platform->GetSysDir(), fileName, false);
 	if (f == NULL)
 	{
-		// Don't use snprintf into scratchString here, because fileName may be aliased to scratchString
-		platform->Message(BOTH_ERROR_MESSAGE, "Macro file %s not found.\n", fileName);
-		return;
+		if (reportMissing)
+		{
+			// Don't use snprintf into scratchString here, because fileName may be aliased to scratchString
+			platform->Message(BOTH_ERROR_MESSAGE, "Macro file %s not found.\n", fileName);
+		}
+		return false;
 	}
 
 	Push();
@@ -838,6 +842,7 @@ void GCodes::DoFileMacro(const char* fileName)
 	doingFileMacro = true;
 	fileMacroGCode->Init();
 	state = GCodeState::normal;
+	return true;
 }
 
 void GCodes::FileMacroCyclesReturn()
@@ -1176,26 +1181,19 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	return false;
 }
 
-// This probes multiple points on the bed (three in a triangle or four in the corners),
-// then sets the bed transformation to compensate for the bed not quite being the plane Z = 0.
+// This probes multiple points on the bed, then sets the bed transformation to compensate for the bed not quite being the plane Z = 0.
 // Called to execute a G32 command.
 void GCodes::SetBedEquationWithProbe(int sParam, StringRef& reply)
 {
-	// zpl-2014-10-09: In order to stay compatible with old firmware versions, only execute bed.g
-	// if it is actually present in the sys directory
-	if (platform->GetMassStorage()->FileExists(SYS_DIR SET_BED_EQUATION))
+	// zpl-2014-10-09: In order to stay compatible with old firmware versions, only execute bed.g if it is actually present in the sys directory
+	if (!DoFileMacro(SET_BED_EQUATION, false))
 	{
-		DoFileMacro(SET_BED_EQUATION);
-	}
-	else
-	{
-		state = GCodeState::setBed1;
+		state = GCodeState::setBed1;		// no bed.g file, so use the coordinates specified by M557
 	}
 }
 
-// This returns the (X, Y) points to probe the bed at probe point count.  When probing,
-// it returns false.  If called after probing has ended it returns true, and the Z coordinate
-// probed is also returned.
+// This returns the (X, Y) points to probe the bed at probe point count.  When probing, it returns false.
+// If called after probing has ended it returns true, and the Z coordinate probed is also returned.
 bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z) const
 {
 	const ZProbeParameters& rp = platform->GetZProbeParameters();
@@ -4185,7 +4183,7 @@ bool GCodes::HandleTcode(GCodeBuffer* gb, StringRef& reply)
 		if (oldTool != NULL && AllAxesAreHomed())
 		{
 			scratchString.printf("tfree%d.g", oldTool->Number());
-			DoFileMacro(scratchString.Pointer());
+			DoFileMacro(scratchString.Pointer(), false);
 		}
 	}
 	return true;

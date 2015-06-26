@@ -75,7 +75,7 @@ private:
 
 	void RecalculateMove();
 	void CalcNewSpeeds();
-	void ReduceHomingSpeed(float newSpeed);							// called to reduce homing speed when a near-endstop is triggered
+	void ReduceHomingSpeed();										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive);									// stop movement of a drive and recalculate the endpoint
 	void MoveAborted(uint32_t clocksFromStart);
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
@@ -95,6 +95,7 @@ private:
 	bool endCoordinatesValid;				// True if endCoordinates can be relied on
     bool isDeltaMovement;					// True if this is a delta printer movement
     bool canPause;							// True if we can pause at the end of this move
+    bool goingSlow;							// True if we have reduced speed during homing
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
     // We are on a half-word boundary here, so expect 2 bytes of padding to be inserted at this point
