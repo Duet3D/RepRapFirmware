@@ -341,7 +341,7 @@ static bool USBD_SendConfiguration(int maxlen)
 	//TRACE_CORE(printf("=> USBD_SendConfiguration sizeof=%d\r\n", sizeof(ConfigDescriptor));)
 
 _Pragma("pack(1)")
-     ConfigDescriptor config = D_CONFIG((uint16_t)(_cmark + sizeof(ConfigDescriptor)),(uint8_t)interfaces);
+	ConfigDescriptor config = D_CONFIG((uint16_t)(_cmark + sizeof(ConfigDescriptor)),(uint8_t)interfaces);
 _Pragma("pack()")
 	//TRACE_CORE(printf("=> USBD_SendConfiguration clen=%d\r\n", config.clen);)
 
@@ -364,7 +364,7 @@ static bool USBD_SendOtherConfiguration(int maxlen)
 	//TRACE_CORE(printf("=> USBD_SendConfiguration sizeof=%d\r\n", sizeof(ConfigDescriptor));)
 
 _Pragma("pack(1)")
-     ConfigDescriptor config = D_OTHERCONFIG((uint16_t)(_cmark + sizeof(ConfigDescriptor)),(uint8_t)interfaces);
+	ConfigDescriptor config = D_OTHERCONFIG((uint16_t)(_cmark + sizeof(ConfigDescriptor)),(uint8_t)interfaces);
 _Pragma("pack()")
 	//TRACE_CORE(printf("=> USBD_SendConfiguration clen=%d\r\n", config.clen);)
 
