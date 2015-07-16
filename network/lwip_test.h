@@ -14,7 +14,10 @@
 #include "ethernet_sam.h"
 #include "timer_mgt_sam.h"
 #include <stdarg.h>
+
+#ifdef printf
 #undef printf
+#endif
 
 //end of add your includes here
 #ifdef __cplusplus
@@ -27,7 +30,7 @@ void setup();
 #endif
 
 //add your function definitions for the project lwip_test here
-void printf(char *fmt, ... );
+int printf(const char *fmt, ... );
 
 //Do not add code below this line
 #endif /* lwip_test_H_ */
