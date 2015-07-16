@@ -170,7 +170,7 @@ class GCodes
     FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) in
     FileStore* configFile;						// A file containing a macro
     bool doingCannedCycleFile;					// Are we executing a macro file?
-    char* eofString;							// What's at the end of an HTML file?
+    const char* eofString;							// What's at the end of an HTML file?
     uint8_t eofStringCounter;					// Check the...
     uint8_t eofStringLength;					// ... EoF string as we read.
     int8_t selectedHead;						// Which extruder is in use

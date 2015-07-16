@@ -362,7 +362,9 @@ static struct pbuf *low_level_input(struct netif *netif)
 
 	/* Obtain the size of the packet and put it into the "len"
 	 * variable. */
-	uc_rc = emac_dev_read(&gs_emac_dev, pc_buf, sizeof(pc_buf), &ul_frmlen);
+	// Note 4th parameter should be uint32_t* (unsigned long int*)
+	// but we're passing an unsigned int*.  Promotion is okay.
+	uc_rc = emac_dev_read(&gs_emac_dev, pc_buf, sizeof(pc_buf), (uint32_t*)&ul_frmlen);
 	if (uc_rc != EMAC_OK) {
 		return NULL;
 	}

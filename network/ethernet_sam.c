@@ -151,7 +151,7 @@ static void timers_update(void)
 
 // Added by AB.
 
-static void ethernet_configure_interface(unsigned char ipAddress[], unsigned char netMask[], unsigned char gateWay[])
+static void ethernet_configure_interface(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[])
 {
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	extern err_t ethernetif_init(struct netif *netif);
@@ -235,7 +235,7 @@ void status_callback(struct netif *netif)
 	{
 		RepRapNetworkMessage("Network up, IP=");
 		ipaddr_ntoa_r(&(netif->ip_addr), c_mess, sizeof(c_mess));
-		strncat(c_mess, sizeof(c_mess) - 1, "\n");
+		strncat(c_mess, "\n", sizeof(c_mess) - 1);
 		RepRapNetworkMessage(c_mess);
 		netif->flags |= NETIF_FLAG_LINK_UP;
 	}
