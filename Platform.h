@@ -53,6 +53,14 @@ Licence: GPL
 #include "SD_HSMCI.h"
 #include "MCP4461.h"
 
+// Prevent conflict warnings; override defs from compiler.h
+#ifdef ENABLE
+#undef ENABLE
+#endif
+#ifdef DISABLE
+#undef DISABLE
+#endif
+
 /**************************************************************************************************/
 
 // Some numbers...
@@ -526,7 +534,7 @@ public:
   void SetEmulating(Compatibility c);
   void Diagnostics();
   void PrintMemoryUsage();  // Print memory stats for debugging
-  void ClassReport(char* className, float &lastTime);  // Called on return to check everything's live.
+  void ClassReport(const char* className, float &lastTime);  // Called on return to check everything's live.
   void RecordError(ErrorCode ec) { errorCodeBits |= ec; }
   void SetDebug(int d);
   void SoftwareReset(uint16_t reason);
@@ -721,11 +729,11 @@ private:
   MassStorage* massStorage;
   FileStore* files[MAX_FILES];
   bool fileStructureInitialised;
-  char* webDir;
-  char* gcodeDir;
-  char* sysDir;
-  char* tempDir;
-  char* configFile;
+  const char* webDir;
+  const char* gcodeDir;
+  const char* sysDir;
+  const char* tempDir;
+  const char* configFile;
   
 // Data used by the tick interrupt handler
 

@@ -814,7 +814,7 @@ void Platform::PrintMemoryUsage()
 	Message(HOST_MESSAGE, scratchString);
 }
 
-void Platform::ClassReport(char* className, float &lastTime)
+void Platform::ClassReport(const char* className, float &lastTime)
 {
 	if (!reprap.Debug())
 		return;
