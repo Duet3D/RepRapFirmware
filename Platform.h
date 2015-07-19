@@ -64,9 +64,9 @@ Licence: GPL
 
 // The physical capabilities of the machine
 
-#define DRIVES 8 // The number of drives in the machine, including X, Y, and Z plus extruder drives
+#define DRIVES 9 // The number of drives in the machine, including X, Y, and Z plus extruder drives
 #define AXES 3 // The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
-#define HEATERS 6 // The number of heaters in the machine; 0 is the heated bed even if there isn't one.
+#define HEATERS 7 // The number of heaters in the machine; 0 is the heated bed even if there isn't one.
 
 // The numbers of entries in each array must correspond with the values of DRIVES,
 // AXES, or HEATERS. Set values to -1 to flag unavailability.
@@ -75,16 +75,16 @@ Licence: GPL
 
 // DRIVES
 
-#define STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49}
-#define DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48}
+#define STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49, X10}
+#define DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48, X11}
 #define FORWARDS true // What to send to go...
 #define BACKWARDS (!FORWARDS) // ...in each direction
-#define DIRECTIONS {BACKWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS} // What each axis needs to make it go forwards - defaults
-#define ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47}
+#define DIRECTIONS {BACKWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS} // What each axis needs to make it go forwards - defaults
+#define ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47, X13}
 #define ENABLE_DRIVE false // What to send to enable...
 #define DISABLE_DRIVE true // ...and disable a drive
-#define DISABLE_DRIVES {false, false, true, false, false, false, false, false} // Set true to disable a drive when it becomes idle
-#define END_STOP_PINS {11, 28, 60, 31, 24, 46, 45, 44} //E Stops not currently used
+#define DISABLE_DRIVES {false, false, true, false, false, false, false, false, false} // Set true to disable a drive when it becomes idle
+#define END_STOP_PINS {11, 28, 60, 31, 24, 46, 45, 44, X9} //E Stops not currently used
 // Indices for motor current digipots (if any)
 // first 4 are for digipot 1,(on duet)
 // second 4 for digipot 2(on expansion board)
@@ -101,10 +101,10 @@ Licence: GPL
 #define Z_PROBE_AXES {true, false, true}		// Axes for which the Z-probe is normally used
 const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of readings with IR on, and the same number with IR off
 
-#define MAX_FEEDRATES {100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0} // mm/sec
-#define ACCELERATIONS {500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0} // mm/sec^2
-#define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0}
-#define INSTANT_DVS {30.0, 30.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0} // (mm/sec)
+#define MAX_FEEDRATES {100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0} // mm/sec
+#define ACCELERATIONS {500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0} // mm/sec^2
+#define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0}
+#define INSTANT_DVS {30.0, 30.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0} // (mm/sec)
 
 // AXES
 
@@ -120,13 +120,13 @@ const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;	// The indices of the 3 tower m
 
 // HEATERS - The bed is assumed to be the at index 0
 
-#define TEMP_SENSE_PINS {5, 4, 0, 7, 8, 9} // Analogue pin numbers
-#define HEAT_ON_PINS {6, X5, X7, 7, 8, 9} //pin D38 is PWM capable but not an Arduino PWM pin
+#define TEMP_SENSE_PINS {5, 4, 0, 7, 8, 9, 11} // Analogue pin numbers
+#define HEAT_ON_PINS {6, X5, X7, 7, 8, 9, X17} //pin D38 is PWM capable but not an Arduino PWM pin
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
-const float defaultThermistorBetas[HEATERS] = {3988.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0}; // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
-const float defaultThermistorSeriesRs[HEATERS] = {1000, 1000, 1000, 1000, 1000, 1000}; // Ohms in series with the thermistors
-const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0}; // Thermistor ohms at 25 C = 298.15 K
+const float defaultThermistorBetas[HEATERS] = {3988.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0}; // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
+const float defaultThermistorSeriesRs[HEATERS] = {1000, 1000, 1000, 1000, 1000, 1000, 1000}; // Ohms in series with the thermistors
+const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0}; // Thermistor ohms at 25 C = 298.15 K
 
 // Note on hot end PID parameters:
 // The system is highly nonlinear because the heater power is limited to a maximum value and cannot go negative.
@@ -153,17 +153,17 @@ const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 10000
 // This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
 // We use method 2 (see above)
-const float defaultPidKis[HEATERS] = {5.0, 0.1, 0.1, 0.1, 0.1, 0.1}; 			// Integral PID constants
-const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0}; // Derivative PID constants
-const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
-const float defaultPidKts[HEATERS] = {2.7, 0.4, 0.4, 0.4, 0.4, 0.4};			// approximate PWM value needed to maintain temperature, per degC above room temperature
-const float defaultPidKss[HEATERS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};			// PWM scaling factor, to allow for variation in heater power and supply voltage
-const float defaultFullBands[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0};	// errors larger than this cause heater to be on or off
-const float defaultPidMins[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
-const float defaultPidMaxes[HEATERS] = {255, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
+const float defaultPidKis[HEATERS] = {5.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1}; 			// Integral PID constants
+const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0}; // Derivative PID constants
+const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
+const float defaultPidKts[HEATERS] = {2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4};			// approximate PWM value needed to maintain temperature, per degC above room temperature
+const float defaultPidKss[HEATERS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};			// PWM scaling factor, to allow for variation in heater power and supply voltage
+const float defaultFullBands[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0};	// errors larger than this cause heater to be on or off
+const float defaultPidMins[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
+const float defaultPidMaxes[HEATERS] = {255, 180, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
 
-#define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
-#define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
+#define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
+#define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
 #define COOLING_FAN_PIN X6 														// pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
 #define COOLING_FAN_RPM_PIN 36													// pin PC4
 #define COOLING_FAN_RPM_SAMPLE_TIME	2.0											// Time to wait before resetting the internal fan RPM stats
