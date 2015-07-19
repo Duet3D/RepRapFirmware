@@ -323,6 +323,34 @@
 									</div>
 								</td>
 							</tr>
+              
+            <tr id="tr_head_6" class="hidden">
+								<th>
+									<a href="#">Heater 6<span class="caret hidden"></span></a>
+									<span class="text-muted"></span>
+								</th>
+								<td>n/a</td>
+								<td class="input-td">
+									<div class="input-group input-group-sm">
+										<input type="number" class="form-control" value="0" id="input_temp_h6_active" disabled>
+										<div class="input-group-btn div-head-temp">
+											<button type="button" class="btn btn-default dropdown-toggle btn-active-temp disabled" data-toggle="dropdown" aria-expanded="false"><span class="caret"></span></button>
+											<ul class="dropdown-menu dropdown-menu-right ul-active-temp" role="menu">
+											</ul>
+										</div>
+									</div>
+								</td>
+								<td class="input-td">
+									<div class="input-group input-group-sm">
+										<input type="number" class="form-control" value="0" id="input_temp_h6_standby" disabled>
+										<div class="input-group-btn div-head-temp">
+											<button type="button" class="btn btn-default dropdown-toggle btn-standby-temp disabled" data-toggle="dropdown" aria-expanded="false"><span class="caret"></span></button>
+											<ul class="dropdown-menu dropdown-menu-right ul-standby-temp" role="menu">
+											</ul>
+										</div>
+									</div>
+								</td>
+							</tr>
 							
 							<tr id="tr_bed">
 								<th>
@@ -415,6 +443,7 @@
 								<th class="hidden-md hidden extr-3">D3</th>
 								<th class="hidden-md hidden extr-4">D4</th>
 								<th class="hidden-md hidden extr-5">D5</th>
+								<th class="hidden-md hidden extr-6">D6</th>
 							</tr>
 							<tr>
 								<td id="td_extr_total" class="hidden-xs hidden-sm hidden-lg">n/a</td>
@@ -423,6 +452,7 @@
 								<td id="td_extr_3" class="hidden-md hidden extr-3">n/a</td>
 								<td id="td_extr_4" class="hidden-md hidden extr-4">n/a</td>
 								<td id="td_extr_5" class="hidden-md hidden extr-5">n/a</td>
+								<td id="td_extr_6" class="hidden-md hidden extr-6">n/a</td>
 							</tr>
 						</table>
 						
@@ -860,6 +890,12 @@
 												<td>Extruder 5:</td>
 												<td>
 													<input id="slider_extr_5" type="text" title="Set extrude factor override (via M221)" data-drive="4"/>
+												</td>
+											</tr>
+											<tr class="extr-6">
+												<td>Extruder 6:</td>
+												<td>
+													<input id="slider_extr_6" type="text" title="Set extrude factor override (via M221)" data-drive="5"/>
 												</td>
 											</tr>
 										</table>
@@ -1374,6 +1410,9 @@
 																</label>
 																<label class="btn btn-default disabled" title="Extruder 5">
 																	<input type="checkbox" name="tool_drives" value="4" disabled> 4
+																</label>
+																<label class="btn btn-default disabled" title="Extruder 6">
+																	<input type="checkbox" name="tool_drives" value="5" disabled> 5
 																</label>
 															</div>
 														</td>
