@@ -204,7 +204,8 @@ class GCodes
     bool limitAxes;								// Don't think outside the box.
     bool axisIsHomed[AXES];						// These record which of the axes have been homed
     bool coolingInverted;
-    float pausedFanValue;
+    float pausedFan0Value;
+    float pausedFan1Value;
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
     float speedFactorChange;					// factor by which we changed the speed factor since the last move
     float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
@@ -238,6 +239,7 @@ inline int8_t GCodes::Heater(int8_t head) const
    return head+1; 
 }
 
+//@TOTO T3P3 cooling inverted applies for both PWM fans
 inline bool GCodes::CoolingInverted() const
 {
 	return coolingInverted;

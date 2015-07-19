@@ -164,8 +164,9 @@ const float defaultPidMaxes[HEATERS] = {255, 180, 180, 180, 180, 180};			// maxi
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN_PIN X6 														// pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-#define COOLING_FAN_RPM_PIN 36													// pin PC4
+#define COOLING_FAN0_PIN X6 														// pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
+#define COOLING_FAN1_PIN -1 //X17													// X17 or -1 set to -1 to use a fan rpm pin on fan 0, pin D36 (PC4) is PWM capable but not an Arduino PWM pin - use X17 instead
+#define COOLING_FAN_RPM_PIN 36	//-1											    //36 or -1 set to -1 if there is a fan1 pin PC4
 #define COOLING_FAN_RPM_SAMPLE_TIME	2.0											// Time to wait before resetting the internal fan RPM stats
 #define HEAT_ON 0 																// 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
 
@@ -705,8 +706,8 @@ public:
   void SetHeater(size_t heater, float power); // power is a fraction in [0,1]
   float HeatSampleTime() const;
   void SetHeatSampleTime(float st);
-  float GetFanValue() const;						// Result is returned in per cent
-  void SetFanValue(float speed);					// Accepts values between 0..1 and 1..255
+  float GetFanValue(size_t fan) const;						// Result is returned in per cent
+  void SetFanValue(size_t fan,float speed);					// Accepts values between 0..1 and 1..255
   float GetFanRPM();
   void SetPidParameters(size_t heater, const PidParameters& params);
   const PidParameters& GetPidParameters(size_t heater) const;
@@ -848,8 +849,10 @@ private:
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
-  float coolingFanValue;
-  Pin coolingFanPin;
+  float coolingFan0Value;
+  float coolingFan1Value;
+  Pin coolingFan0Pin;
+  Pin coolingFan1Pin;
   Pin coolingFanRpmPin;
   float timeToHot;
   float lastRpmResetTime;
@@ -1185,7 +1188,7 @@ inline void Platform::ExtrudeOn()
 {
 	if (extrusionAncilliaryPWM > 0.0)
 	{
-		SetFanValue(extrusionAncilliaryPWM);
+		SetFanValue(0,extrusionAncilliaryPWM); //@TODO T3P3 currently only turns fan0 on
 	}
 }
 
@@ -1196,7 +1199,7 @@ inline void Platform::ExtrudeOff()
 {
 	if (extrusionAncilliaryPWM > 0.0)
 	{
-		SetFanValue(0.0);
+		SetFanValue(0,0.0); //@TODO T3P3 currently only turns fan0 off
 	}
 }
 

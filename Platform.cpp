@@ -205,8 +205,10 @@ void Platform::Init()
 	ARRAY_INIT(activeTemperatures, ACTIVE_TEMPERATURES);
 
 	heatSampleTime = HEAT_SAMPLE_TIME;
-	coolingFanValue = 0.0;
-	coolingFanPin = COOLING_FAN_PIN;
+	coolingFan0Value = 0.0;
+	coolingFan1Value = 0.0;
+	coolingFan0Pin = COOLING_FAN0_PIN;
+	coolingFan1Pin = COOLING_FAN1_PIN;
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
 	timeToHot = TIME_TO_HOT;
 	lastRpmResetTime = 0.0;
@@ -266,10 +268,15 @@ void Platform::Init()
 		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * numThermistorReadingsAveraged;
 	}
 
-	if (coolingFanPin >= 0)
+	if (coolingFan0Pin >= 0)
 	{
 		// Inverse logic for Duet v0.6 and later; this turns it off
-		analogWriteNonDue(coolingFanPin, (HEAT_ON == 0) ? 255 : 0, true);
+		analogWriteNonDue(coolingFan0Pin, (HEAT_ON == 0) ? 255 : 0, true);
+	}
+	if (coolingFan1Pin >= 0)
+	{
+		// Inverse logic for Duet v0.6 and later; this turns it off
+		analogWriteNonDue(coolingFan1Pin, (HEAT_ON == 0) ? 255 : 0, true);
 	}
 
 	if (coolingFanRpmPin >= 0)
@@ -1341,9 +1348,15 @@ void Platform::SetIdleCurrentFactor(float f)
 }
 
 // Get current cooling fan speed on a scale between 0 and 1
-float Platform::GetFanValue() const
+float Platform::GetFanValue(size_t fan) const
 {
-	return coolingFanValue;
+	if (fan==0){
+		return coolingFan0Value;
+	}
+	if (fan==1){
+		return coolingFan1Value;
+	}
+	else return -1;
 }
 
 // This is a bit of a compromise - old RepRaps used fan speeds in the range
@@ -1352,24 +1365,41 @@ float Platform::GetFanValue() const
 // the G Code reader will get right for a float or an int) and attempts to
 // do the right thing whichever the user has done.  This will only not work
 // for an old-style fan speed of 1/255...
-void Platform::SetFanValue(float speed)
+void Platform::SetFanValue(size_t fan, float speed)
 {
-	if (coolingFanPin >= 0)
+	if (fan==0 && coolingFan0Pin >= 0)
 	{
 		byte p;
 		if (speed <= 1.0)
 		{
 			p = (byte)(255.0 * max<float>(0.0, speed));
-			coolingFanValue = speed;
+			coolingFan0Value = speed;
 		}
 		else
 		{
 			p = (byte)speed;
-			coolingFanValue = speed / 255.0;
+			coolingFan0Value = speed / 255.0;
 		}
 
-		// The cooling fan output pin gets inverted if HEAT_ON == 0
-		analogWriteNonDue(coolingFanPin, (HEAT_ON == 0) ? (255 - p) : p, true);
+		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0
+		analogWriteNonDue(coolingFan0Pin, (HEAT_ON == 0) ? (255 - p) : p, true);
+	}
+	if (fan==1 && coolingFan1Pin >= 0)
+	{
+		byte p;
+		if (speed <= 1.0)
+		{
+			p = (byte)(255.0 * max<float>(0.0, speed));
+			coolingFan1Value = speed;
+		}
+		else
+		{
+			p = (byte)speed;
+			coolingFan1Value = speed / 255.0;
+		}
+
+		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0
+		analogWriteNonDue(coolingFan1Pin, (HEAT_ON == 0) ? (255 - p) : p, true);
 	}
 }
 
