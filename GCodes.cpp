@@ -33,7 +33,7 @@ const char GCodes::axisLetters[AXES] =
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 GCodes::GCodes(Platform* p, Webserver* w) :
-		active(false), platform(p), webserver(w), stackPointer(0)
+		platform(p), active(false), webserver(w), stackPointer(0)
 {
 	webGCode = new GCodeBuffer(platform, "web: ");
 	fileGCode = new GCodeBuffer(platform, "file: ");
@@ -620,7 +620,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 			if (tool->Mixing())
 			{
 				float length = gb->GetFValue();
-				for (size_t drive = 0; drive < tool->DriveCount(); drive++)
+				for (size_t drive = 0; (int)drive < tool->DriveCount(); drive++)
 				{
 					eMovement[drive] = length * tool->GetMix()[drive];
 				}
@@ -637,7 +637,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 
 			// Set the drive values for this tool.
 			// zpl-2014-10-03: Do NOT check extruder temperatures here, because we may be executing queued codes like M116
-			for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
+			for (size_t eDrive = 0; (int)eDrive < eMoveCount; eDrive++)
 			{
 				int drive = tool->Drive(eDrive);
 				float moveArg = eMovement[eDrive] * distanceScale;
@@ -1130,7 +1130,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 		return DoSingleZProbe();
 
 	int probePointIndex = gb->GetIValue();
-	if (probePointIndex < 0 || probePointIndex >= MaxProbePoints)
+	if (probePointIndex < 0 || (unsigned int)probePointIndex >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
 		return true;
@@ -2013,7 +2013,7 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 	float standby[HEATERS];
 	float active[HEATERS];
 	tool->GetVariables(standby, active);
-	for (size_t h = 0; h < tool->HeaterCount(); h++)
+	for (size_t h = 0; (int)h < tool->HeaterCount(); h++)
 	{
 		active[h] = temperature;
 	}
@@ -2821,37 +2821,38 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 106: // Set/report fan values
-	{
-		bool seen = false;
+		{
+			bool seen = false;
 
-		if (gb->Seen('I'))		// Invert cooling
-		{
-			coolingInverted = (gb->GetIValue() > 0);
-			seen = true;
-		}
+			if (gb->Seen('I'))		// Invert cooling
+			{
+				coolingInverted = (gb->GetIValue() > 0);
+				seen = true;
+			}
 
-		if (gb->Seen('S'))		// Set new fan value
-		{
-			float f = gb->GetFValue();
-			f = min<float>(f, 255.0);
-			f = max<float>(f, 0.0);
-			seen = true;
-			if (coolingInverted)
+			if (gb->Seen('S'))		// Set new fan value
 			{
-				// Check if 1.0 or 255.0 may be used as the maximum value
-				platform->SetFanValue((f <= 1.0 ? 1.0 : 255.0) - f);
+				float f = gb->GetFValue();
+				f = min<float>(f, 255.0);
+				f = max<float>(f, 0.0);
+				seen = true;
+				if (coolingInverted)
+				{
+					// Check if 1.0 or 255.0 may be used as the maximum value
+					platform->SetFanValue((f <= 1.0 ? 1.0 : 255.0) - f);
+				}
+				else
+				{
+					platform->SetFanValue(f);
+				}
 			}
-			else
+
+			if (!seen)
 			{
-				platform->SetFanValue(f);
+				float f = coolingInverted ? (1.0 - platform->GetFanValue()) : platform->GetFanValue();
+				reply.printf("Fan value: %d%%, Cooling inverted: %s\n", (byte) (f * 100.0), coolingInverted ? "yes" : "no");
 			}
 		}
-		else
-		{
-			float f = coolingInverted ? (1.0 - platform->GetFanValue()) : platform->GetFanValue();
-			reply.printf("Fan value: %d%%, Cooling inverted: %s\n", (byte) (f * 100.0), coolingInverted ? "yes" : "no");
-		}
-	}
 		break;
 
 	case 107: // Fan off - deprecated
@@ -2923,21 +2924,56 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			return false;
 		}
-		if (gb->Seen('P'))
+
 		{
-			// Wait for the heaters associated with the specified tool to be ready
-			int toolNumber = gb->GetIValue();
-			toolNumber += gb->GetToolNumberAdjust();
-			if (!ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber)))
+			bool seen = false;
+			if (gb->Seen('P'))
 			{
-				return false;
+				// Wait for the heaters associated with the specified tool to be ready
+				int toolNumber = gb->GetIValue();
+				toolNumber += gb->GetToolNumberAdjust();
+				if (!ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber)))
+				{
+					return false;
+				}
+				seen = true;
 			}
-			result = true;
-		}
-		else
-		{
-			// Wait for all heaters to be ready
-			result = reprap.GetHeat()->AllHeatersAtSetTemperatures(true);
+
+			if (gb->Seen('H'))
+			{
+				// Wait for specified heaters to be ready
+				long heaters[HEATERS];
+				int heaterCount = HEATERS;
+				gb->GetLongArray(heaters, heaterCount);
+				for(int8_t i=0; i<heaterCount; i++)
+				{
+					if (!reprap.GetHeat()->HeaterAtSetTemperature(heaters[i]))
+					{
+						return false;
+					}
+				}
+				seen = true;
+			}
+
+			if (gb->Seen('C'))
+			{
+				// Wait for chamber heater to be ready
+				const int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
+				if (chamberHeater != -1)
+				{
+					if (!reprap.GetHeat()->HeaterAtSetTemperature(chamberHeater))
+					{
+						return false;
+					}
+				}
+				seen = true;
+			}
+
+			if (!seen)
+			{
+				// Wait for all heaters to be ready
+				result = reprap.GetHeat()->AllHeatersAtSetTemperatures(true);
+			}
 		}
 		break;
 
@@ -3050,10 +3086,85 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 141: // Chamber temperature
-		reply.copy("M141 - heated chamber not yet implemented\n");
+		{
+			bool seen = false;
+			if (gb->Seen('H'))
+			{
+				seen = true;
+
+				int heater = gb->GetIValue();
+				if (heater < 0)
+				{
+					const int8_t currentHeater = reprap.GetHeat()->GetChamberHeater();
+					if (currentHeater != -1)
+					{
+						reprap.GetHeat()->SwitchOff(currentHeater);
+					}
+
+					reprap.GetHeat()->SetChamberHeater(-1);
+				}
+				else if (heater < HEATERS)
+				{
+					reprap.GetHeat()->SetChamberHeater(heater);
+				}
+				else
+				{
+					reply.copy("Bad heater number specified!\n");
+					error = true;
+				}
+			}
+
+			if (gb->Seen('S'))
+			{
+				seen = true;
+
+				const int8_t currentHeater = reprap.GetHeat()->GetChamberHeater();
+				if (currentHeater != -1)
+				{
+					float temperature = gb->GetFValue();
+
+					if (temperature < NEARLY_ABS_ZERO)
+					{
+						reprap.GetHeat()->SwitchOff(currentHeater);
+					}
+					else
+					{
+						reprap.GetHeat()->SetActiveTemperature(currentHeater, temperature);
+						reprap.GetHeat()->Activate(currentHeater);
+					}
+				}
+				else
+				{
+					reply.copy("No chamber heater has been set up yet!\n");
+					error = true;
+				}
+			}
+
+			if (!seen)
+			{
+				const int8_t currentHeater = reprap.GetHeat()->GetChamberHeater();
+				if (currentHeater != -1)
+				{
+					reply.printf("Chamber heater %d is currently at %.1fC\n", currentHeater, reprap.GetHeat()->GetTemperature(currentHeater));
+				}
+				else
+				{
+					reply.copy("No chamber heater has been configured yet.\n");
+				}
+			}
+		}
 		break;
 
-//	case 160: //number of mixing filament drives  TODO: With tools defined, is this needed?
+	case 144: // Set bed to standby
+#if HOT_BED != -1
+		reprap.GetHeat()->Standby(HOT_BED);
+#else
+		reply.copy("Hot bed is not present!\n");
+		error = true;
+#endif
+		break;
+
+		//	case 160: //number of mixing filament drives  TODO: With tools defined, is this needed?
 //    	if(gb->Seen('S'))
 //		{
 //			platform->SetMixingDrives(gb->GetIValue());
@@ -3095,7 +3206,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			float eVals[DRIVES - AXES];
 			int eCount = DRIVES - AXES;
 			gb->GetFloatArray(eVals, eCount);
-			for (size_t e = 0; e < eCount; e++)
+			for (size_t e = 0; (int)e < eCount; e++)
 			{
 				platform->SetAcceleration(AXES + e, eVals[e] * distanceScale);
 			}
@@ -3137,7 +3248,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				float eVals[DRIVES - AXES];
 				int eCount = DRIVES - AXES;
 				gb->GetFloatArray(eVals, eCount);
-				for (size_t e = 0; e < eCount; e++)
+				for (size_t e = 0; (int)e < eCount; e++)
 				{
 					platform->SetMaxFeedrate(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
 				}
@@ -3578,7 +3689,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (gb->Seen('P'))
 		{
 			int point = gb->GetIValue();
-			if (point < 0 || point >= MaxProbePoints)
+			if (point < 0 || (unsigned int)point >= MaxProbePoints)
 			{
 				reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
 			}
@@ -3821,10 +3932,16 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (tool != NULL)
 			{
 				if (gb->Seen('S'))
+				{
 					if (gb->GetIValue() != 0)
+					{
 						tool->TurnMixingOn();
+					}
 					else
+					{
 						tool->TurnMixingOff();
+					}
+				}
 			}
 		}
 		break;
@@ -3993,11 +4110,26 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				params.SetPrintRadius(gb->GetFValue() * distanceScale);
 				seen = true;
 			}
+			if (gb->Seen('X'))
+			{
+				// X tower position correction
+				params.SetXCorrection(gb->GetFValue());
+				seen = true;
+			}
+			if (gb->Seen('Y'))
+			{
+				// Y tower position correction
+				params.SetYCorrection(gb->GetFValue());
+				seen = true;
+			}
+
+			// The homed height must be done last, because it gets recalculated when some of the other factors are changed
 			if (gb->Seen('H'))
 			{
 				params.SetHomedHeight(gb->GetFValue() * distanceScale);
 				seen = true;
 			}
+
 			if (seen)
 			{
 				// If we have changed between Cartesian and Delta mode, we need to reset the motor coordinates to agree with the XYZ xoordinates.
@@ -4012,7 +4144,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				if (params.IsDeltaMode())
 				{
-					reply.printf("Diagonal %.2f, delta radius %.2f, homed height %.2f, bed radius %.1f, X %.1f" DEGREE_SYMBOL ", Y %.1f" DEGREE_SYMBOL "\n",
+					reply.printf("Diagonal %.2f, delta radius %.2f, homed height %.2f, bed radius %.1f, X %.2f" DEGREE_SYMBOL ", Y %.2f" DEGREE_SYMBOL "\n",
 							params.GetDiagonal() / distanceScale, params.GetRadius() / distanceScale,
 							params.GetHomedHeight() / distanceScale, params.GetPrintRadius() / distanceScale,
 							params.GetXCorrection(), params.GetYCorrection());
@@ -4092,7 +4224,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				int eCount = DRIVES - AXES;
 				gb->GetFloatArray(eVals, eCount);
 				// 2014-09-29 DC42: we no longer insist that the user supplies values for all possible extruder drives
-				for (size_t e = 0; e < eCount; e++)
+				for (size_t e = 0; (int)e < eCount; e++)
 				{
 					platform->SetMotorCurrent(AXES + e, eVals[e]);
 				}

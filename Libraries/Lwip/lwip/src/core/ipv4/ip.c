@@ -820,6 +820,7 @@ ip_debug_print(struct pbuf *p)
   u8_t *payload;
 
   payload = (u8_t *)iphdr + IP_HLEN;
+  (void)payload;	// suppress compiler warning
 
   LWIP_DEBUGF(IP_DEBUG, ("IP header:\n"));
   LWIP_DEBUGF(IP_DEBUG, ("+-------------------------------+\n"));

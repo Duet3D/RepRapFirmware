@@ -58,7 +58,6 @@ void Move::Init()
 	SetLiveCoordinates(move);
 	SetPositions(move);
 
-	size_t slow = reprap.GetPlatform()->SlowestDrive();
 	currentFeedrate = DefaultFeedRate;
 
 	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
@@ -686,7 +685,7 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 		reply.copy("Bed probe heights:");
 		float sum = 0.0;
 		float sumOfSquares = 0.0;
-		for (size_t i = 0; i < numPoints; ++i)
+		for (size_t i = 0; (int)i < numPoints; ++i)
 		{
 			reply.catf(" %.3f", zBedProbePoints[i]);
 			sum += zBedProbePoints[i];
@@ -707,7 +706,7 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 			debugPrintf("Z probe offsets:");
 			float sum = 0.0;
 			float sumOfSquares = 0.0;
-			for (size_t i = 0; i < numPoints; ++i)
+			for (size_t i = 0; (int)i < numPoints; ++i)
 			{
 				debugPrintf(" %.3f", zBedProbePoints[i]);
 				sum += zBedProbePoints[i];
@@ -814,7 +813,7 @@ void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 	reply.cat("\n");
 }
 
-// Perform 4- or 7-factor delta adjustment
+// Perform 3-, 4-, 6- or 7-factor delta adjustment
 void Move::AdjustDeltaParameters(const float v[], size_t numFactors)
 {
 	// Save the old home carriage heights
@@ -823,7 +822,6 @@ void Move::AdjustDeltaParameters(const float v[], size_t numFactors)
 	{
 		homedCarriageHeights[drive] = deltaParams.GetHomedCarriageHeight(drive);
 	}
-
 
 	deltaParams.Adjust(numFactors, v);	// adjust the delta parameters
 
@@ -853,12 +851,6 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	if (numFactors != 3 && numFactors != 4 && numFactors != 6 && numFactors != 7)
 	{
 		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Delta calibration error: %d factors requested but only 3, 4, 6 and 7 supported\n", numFactors);
-		return;
-	}
-
-	if (numFactors == 4 && !deltaParams.IsEquilateral())
-	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Delta calibration error: 4 factor calibration not possible because tower positions have been adjusted\n");
 		return;
 	}
 
@@ -910,8 +902,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 			for (size_t j = 0; j < numFactors; ++j)
 			{
 				derivativeMatrix(i, j) =
-					deltaParams.ComputeDerivative((numFactors == 4 && j == 3) ? 7 : j,
-													probeMotorPositions(i, A_AXIS), probeMotorPositions(i, B_AXIS), probeMotorPositions(i, C_AXIS));
+					deltaParams.ComputeDerivative(j, probeMotorPositions(i, A_AXIS), probeMotorPositions(i, B_AXIS), probeMotorPositions(i, C_AXIS));
 			}
 		}
 
@@ -1241,7 +1232,7 @@ void Move::SetLiveCoordinates(const float coords[DRIVES])
 
 void Move::SetXBedProbePoint(int index, float x)
 {
-	if(index < 0 || index >= MaxProbePoints)
+	if(index < 0 || (size_t)index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point X index out of range.\n");
 		return;
@@ -1252,7 +1243,7 @@ void Move::SetXBedProbePoint(int index, float x)
 
 void Move::SetYBedProbePoint(int index, float y)
 {
-	if(index < 0 || index >= MaxProbePoints)
+	if(index < 0 || (size_t)index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Y index out of range.\n");
 		return;
@@ -1263,7 +1254,7 @@ void Move::SetYBedProbePoint(int index, float y)
 
 void Move::SetZBedProbePoint(int index, float z, bool wasXyCorrected, bool wasError)
 {
-	if (index < 0 || index >= MaxProbePoints)
+	if (index < 0 || (size_t)index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Z index out of range.\n");
 	}
@@ -1317,7 +1308,7 @@ bool Move::XYProbeCoordinatesSet(int index) const
 
 int Move::NumberOfProbePoints() const
 {
-	for(int i = 0; i < MaxProbePoints; i++)
+	for(int i = 0; (size_t)i < MaxProbePoints; i++)
 	{
 		if(!AllProbeCoordinatesSet(i))
 		{
@@ -1329,7 +1320,7 @@ int Move::NumberOfProbePoints() const
 
 int Move::NumberOfXYProbePoints() const
 {
-	for(int i = 0; i < MaxProbePoints; i++)
+	for(int i = 0; (size_t)i < MaxProbePoints; i++)
 	{
 		if(!XYProbeCoordinatesSet(i))
 		{

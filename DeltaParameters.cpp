@@ -12,9 +12,9 @@ void DeltaParameters::Init()
     deltaMode = false;
 	diagonal = 0.0;
 	radius = 0.0;
+	xCorrection = yCorrection = 0.0;
 	printRadius = defaultPrintRadius;
 	homedHeight = defaultDeltaHomedHeight;
-	isEquilateral = true;
 
     for (size_t axis = 0; axis < AXES; ++axis)
     {
@@ -23,53 +23,18 @@ void DeltaParameters::Init()
     }
 }
 
-float DeltaParameters::GetRadius() const
-{
-	if (isEquilateral)
-	{
-		return radius;
-	}
-	else
-	{
-		// Towers have been moved so we need to compute the effective radius
-		const float x1 = towerX[1] - towerX[0], x2 = towerX[2] - towerX[0], y1 = towerY[1] - towerY[0], y2 = towerY[2] - towerY[0];
-		return sqrt((fsquare(x1) + fsquare(y1)) * (fsquare(x2) + fsquare(y2)) * (fsquare(y1 - y2) + fsquare(x1 - x2)))/(2 * fabs(x1 * y2 - x2 * y1));
-	}
-}
-
-float DeltaParameters::GetXCorrection() const
-{
-	return (isEquilateral) ? 0.0 : (acos((towerX[Z_AXIS] - towerX[X_AXIS])/GetRadius()) * (180.0/PI)) - 30;
-}
-
-float DeltaParameters::GetYCorrection() const
-{
-	return (isEquilateral) ? 0.0 : 30 - (acos((towerX[Y_AXIS] - towerX[Z_AXIS])/GetRadius()) * (180.0/PI));
-}
-
-void DeltaParameters::SetRadius(float r)
-{
-	radius = r;
-	isEquilateral = true;
-
-	const float cos30 = sqrtf(3.0)/2.0;
-	const float sin30 = 0.5;
-
-	towerX[A_AXIS] = -(r * cos30);
-	towerX[B_AXIS] = r * cos30;
-	towerX[C_AXIS] = 0.0;
-
-	towerY[A_AXIS] = towerY[B_AXIS] = -(r * sin30);
-	towerY[C_AXIS] = r;
-
-	Recalc();
-}
-
 void DeltaParameters::Recalc()
 {
 	deltaMode = (radius > 0.0 && diagonal > radius);
 	if (deltaMode)
 	{
+		towerX[A_AXIS] = -(radius * cos((30 + xCorrection) * degreesToRadians));
+		towerY[A_AXIS] = -(radius * sin((30 + xCorrection) * degreesToRadians));
+		towerX[B_AXIS] = +(radius * cos((30 - yCorrection) * degreesToRadians));
+		towerY[B_AXIS] = -(radius * sin((30 - yCorrection) * degreesToRadians));
+		towerX[C_AXIS] = 0;
+		towerY[C_AXIS] = radius;
+
 		Xbc = towerX[C_AXIS] - towerX[B_AXIS];
 		Xca = towerX[A_AXIS] - towerX[C_AXIS];
 		Xab = towerX[B_AXIS] - towerX[A_AXIS];
@@ -145,13 +110,13 @@ void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machi
 // Compute the derivative of height with respect to a parameter at the specified motor endpoints.
 // 'deriv' indicates the parameter as follows:
 // 0, 1, 2 = X, Y, Z tower endstop adjustments
-// 3, 4 = X, Y tower X position
-// 5 = Z tower Y position
+// 3 = delta radius
+// 4 = X tower correction
+// 5 = Y tower correction
 // 6 = diagonal rod length
-// 7 = delta radius (only if isEquilateral is true)
 float DeltaParameters::ComputeDerivative(unsigned int deriv, float ha, float hb, float hc)
 {
-	const float perturb = 0.2;			// perturbation amount in mm
+	const float perturb = 0.2;			// perturbation amount in mm or degrees
 	DeltaParameters hiParams(*this), loParams(*this);
 	switch(deriv)
 	{
@@ -161,31 +126,23 @@ float DeltaParameters::ComputeDerivative(unsigned int deriv, float ha, float hb,
 		break;
 
 	case 3:
+		hiParams.radius += perturb;
+		loParams.radius -= perturb;
+		break;
+
 	case 4:
-		hiParams.towerX[deriv - 3] += perturb;
-		loParams.towerX[deriv - 3] -= perturb;
+		hiParams.xCorrection += perturb;
+		loParams.xCorrection -= perturb;
 		break;
 
 	case 5:
-		{
-			const float yAdj = perturb * (1.0/3.0);
-			hiParams.towerY[A_AXIS] -= yAdj;
-			hiParams.towerY[B_AXIS] -= yAdj;
-			hiParams.towerY[C_AXIS] += (perturb - yAdj);
-			loParams.towerY[A_AXIS] += yAdj;
-			loParams.towerY[B_AXIS] += yAdj;
-			loParams.towerY[C_AXIS] -= (perturb - yAdj);
-		}
+		hiParams.yCorrection += perturb;
+		loParams.yCorrection -= perturb;
 		break;
 
 	case 6:
 		hiParams.diagonal += perturb;
 		loParams.diagonal -= perturb;
-		break;
-
-	case 7:
-		hiParams.SetRadius(radius + perturb);
-		loParams.SetRadius(radius - perturb);
 		break;
 	}
 
@@ -219,26 +176,19 @@ void DeltaParameters::Adjust(size_t numFactors, const float v[])
 	endstopAdjustments[C_AXIS] += v[2];
 	NormaliseEndstopAdjustments();
 
-	if (numFactors == 4)
+	if (numFactors >= 4)
 	{
-		// 4-factor adjustment, so update delta radius
-		SetRadius(radius + v[3]);		// this sets isEquilateral true, recalculates tower positions, then calls Recalc()
-	}
-	else if (numFactors > 3)
-	{
-		// 6- or 7-factor adjustment
-		towerX[A_AXIS] += v[3];
-		towerX[B_AXIS] += v[4];
+		radius += v[3];
 
-		const float yAdj = v[5] * (1.0/3.0);
-		towerY[A_AXIS] -= yAdj;
-		towerY[B_AXIS] -= yAdj;
-		towerY[C_AXIS] += (v[5] - yAdj);
-		isEquilateral = false;
-
-		if (numFactors == 7)
+		if (numFactors >= 6)
 		{
-			diagonal += v[6];
+			xCorrection += v[4];
+			yCorrection += v[5];
+
+			if (numFactors == 7)
+			{
+				diagonal += v[6];
+			}
 		}
 
 		Recalc();
@@ -253,17 +203,8 @@ void DeltaParameters::Adjust(size_t numFactors, const float v[])
 
 void DeltaParameters::PrintParameters(StringRef& reply) const
 {
-	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, diagonal %.2f, radius %.2f",
-					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, GetRadius());
-	if (isEquilateral)
-	{
-		reply.cat("\n");
-	}
-	else
-	{
-		reply.catf(", towers (%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)\n",
-						towerX[A_AXIS], towerY[A_AXIS], towerX[B_AXIS], towerY[B_AXIS], towerX[C_AXIS], towerY[C_AXIS]);
-	}
+	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, diagonal %.2f, radius %.2f, xcorr %.2f, ycorr %.2f\n",
+					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, radius, xCorrection, yCorrection);
 }
 
 // End

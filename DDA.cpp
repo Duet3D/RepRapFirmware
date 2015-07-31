@@ -8,7 +8,7 @@
 #include "RepRapFirmware.h"
 
 
-DDA::DDA(DDA* n) : state(empty), next(n), prev(nullptr)
+DDA::DDA(DDA* n) : next(n), prev(nullptr), state(empty)
 {
 	memset(ddm, 0, sizeof(ddm));	//DEBUG to clear stepError field
 }

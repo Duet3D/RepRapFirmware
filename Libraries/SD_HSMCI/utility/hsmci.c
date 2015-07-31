@@ -44,7 +44,7 @@
 #include "../SD_HSMCI.h"
 #include "hsmci.h"
 
-extern debugPrintf(const char *fmt, ...);
+extern void debugPrintf(const char *fmt, ...);
 #define hsmci_debug(_fmt, ...)	debugPrintf(_fmt, __VA_ARGS__)
 
 /**

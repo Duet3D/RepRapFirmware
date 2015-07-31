@@ -22,13 +22,12 @@ Licence: GPL
 
 const float invHeatPwmAverageCount = HEAT_SAMPLE_TIME/HEAT_PWM_AVERAGE_TIME;
 
-Heat::Heat(Platform* p, GCodes* g)
+Heat::Heat(Platform* p, GCodes* g) : platform(p), gCodes(g), active(false), chamberHeater(-1)
 {
-  platform = p;
-  gCodes = g;
   for(int8_t heater=0; heater < HEATERS; heater++)
+  {
     pids[heater] = new PID(platform, heater);
-  active = false;
+  }
 }
 
 void Heat::Init()

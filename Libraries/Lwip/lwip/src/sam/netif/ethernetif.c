@@ -55,14 +55,20 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "lwip/src/include/netif/ppp_oe.h"
 
-//#include "pmc.h"
-//#include "include/emac.h"
+#if 1
+// DC 2015-07-28.
+// The original RepRapPro code has the source files included like this, instead of the header files.
+// I tried including the header files instead, and found that doing so makes file upload unreliable. So leave it like this.
 #include "source/emac.c"
-//#include "include/rstc.h"
 #include "source/rstc.c"
+#else
+// DC 2015-07-28: this doesn't work, see above.
+//#include "include/emac.h"
+//#include "include/rstc.h"
+#endif
+
 #include "ethernet_phy.h"
 #include "lwip/src/sam/include/netif/ethernetif.h"
-//#include "sysclk.h"
 #include <string.h>
 #include "conf_eth.h"
 
@@ -355,7 +361,7 @@ static struct pbuf *low_level_input(struct netif *netif)
 	u8_t pc_buf[NET_RW_BUFF_SIZE];
 	s8_t *bufptr = (s8_t *)&pc_buf[0];
 
-	u32_t ul_frmlen;
+	uint32_t ul_frmlen;
 	u8_t uc_rc;
 
 	/* Obtain the size of the packet and put it into the "len"
@@ -482,19 +488,6 @@ err_t ethernetif_init(struct netif *netif)
 	netif->output = etharp_output;
 	netif->linkoutput = low_level_output;
 
-#if 1
-	// We now require the user to configure the MAC address if the default one is unsuitable, instead of selecting it automatically
-#else
-	// Patch the last 4 bytes of the MAC address to be the IP address, so that we can support multiple Duets on the same subnet
-	{
-		size_t i;
-		for (i = 0; i < 4; ++i)
-		{
-			gs_uc_mac_address[i + 2] = ((uint8_t*)&(netif->ip_addr))[i];
-		}
-	}
-#endif
-
 	/* Initialize the hardware */
 	low_level_init(netif);
 
@@ -508,7 +501,7 @@ void ethernetif_set_rx_callback(emac_dev_tx_cb_t callback)
 
 void ethernetif_set_mac_address(const u8_t macAddress[])
 {
-	for (size_t i = 0; i < 8; ++i)
+	for (size_t i = 0; i < 6; ++i)
 	{
 		gs_uc_mac_address[i] = macAddress[i];
 	}

@@ -87,26 +87,21 @@ extern "C" {
  *
  * Return Register contents
  */
-uint8_t ethernet_phy_read_register(Emac *p_emac, uint8_t uc_phy_addr, uint32_t ul_phy_reg,uint32_t *p_ul_reg_cont)
+uint8_t ethernet_phy_read_register(Emac *p_emac, uint8_t uc_phy_addr, uint32_t ul_phy_reg, uint32_t *p_ul_reg_cont)
 {
-uint32_t ul_phy_register;
-uint8_t uc_phy_address, uc_speed, uc_fd;
-uint8_t uc_rc = EMAC_TIMEOUT;
+	uint8_t uc_rc;
 
-emac_enable_management(p_emac, true);
+	emac_enable_management(p_emac, true);
 
-uc_phy_address = uc_phy_addr;
-ul_phy_register = ul_phy_reg;
-
-uc_rc = emac_phy_read(p_emac, uc_phy_address, ul_phy_reg, p_ul_reg_cont);
-if (uc_rc != EMAC_OK) {
-/* Disable PHY management and start the EMAC transfer */
-emac_enable_management(p_emac, false);
-return uc_rc;
-}
-/* Start the EMAC transfers */
-emac_enable_management(p_emac, false);
-return uc_rc;
+	uc_rc = emac_phy_read(p_emac, uc_phy_addr, ul_phy_reg, p_ul_reg_cont);
+	if (uc_rc != EMAC_OK) {
+		/* Disable PHY management and start the EMAC transfer */
+		emac_enable_management(p_emac, false);
+		return uc_rc;
+	}
+	/* Start the EMAC transfers */
+	emac_enable_management(p_emac, false);
+	return uc_rc;
 }
 //*****************************AB
 
@@ -179,7 +174,6 @@ uint8_t ethernet_phy_init(Emac *p_emac, uint8_t uc_phy_addr, uint32_t mck)
 {
 	
 	uint8_t uc_rc = EMAC_TIMEOUT;
-	uint8_t uc_phy;
 
 	/* Configure EMAC runtime clock */
 	uc_rc = emac_set_clock(p_emac, mck);
@@ -188,7 +182,7 @@ uint8_t ethernet_phy_init(Emac *p_emac, uint8_t uc_phy_addr, uint32_t mck)
 	}
 	/* Check PHY Address  - Not used as we know the PHY address*/
 /*
-  	uc_phy = ethernet_phy_find_valid(p_emac, uc_phy_addr, 0);
+  	uint8_t uc_phy = ethernet_phy_find_valid(p_emac, uc_phy_addr, 0);
 	if (uc_phy == 0xFF) {
 		return uc_phy;
 	}

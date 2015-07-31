@@ -1349,7 +1349,7 @@ bool Webserver::HttpInterpreter::CharFromClient(char c)
 		}
 		else if (c >= 'A' && c <= 'F')
 		{
-			clientMessage[clientPointer++] = decodeChar | c - ('A' - 10);
+			clientMessage[clientPointer++] = decodeChar | (c - ('A' - 10));
 			state = (HttpState)(state - 2);
 		}
 		else
@@ -1658,7 +1658,7 @@ void Webserver::HttpInterpreter::UpdateAuthentication()
 void Webserver::HttpInterpreter::RemoveAuthentication()
 {
 	uint32_t remoteIP = network->GetTransaction()->GetRemoteIP();
-	for(size_t i=numActiveSessions - 1; i>=0; i--)
+	for(int i=numActiveSessions - 1; i>=0; i--)
 	{
 		if (sessions[i].ip == remoteIP)
 		{
@@ -1915,7 +1915,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			// switch transfer mode (sends response, but doesn't have any effects)
 			else if (StringStartsWith(clientMessage, "TYPE"))
 			{
-				for(int i=4; i<clientPointer; i++)
+				for(unsigned int i=4; i<clientPointer; i++)
 				{
 					if (clientMessage[i] == 'I')
 					{
@@ -1947,7 +1947,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 
 				/* send FTP response */
 				snprintf(ftpResponse, ftpResponseLength, "Entering Passive Mode (%d,%d,%d,%d,%d,%d)",
-						*ip_address++, *ip_address++, *ip_address++, *ip_address++,
+						ip_address[0], ip_address[1], ip_address[2], ip_address[3],
 						pasv_port / 256, pasv_port % 256);
 				SendReply(227, ftpResponse);
 			}
@@ -2135,7 +2135,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 							// Example for a typical UNIX-like file list:
 							// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
 							char dirChar = (file_info.isDirectory) ? 'd' : '-';
-							snprintf(line, ARRAY_SIZE(line), "%crw-rw-rw- 1 ftp ftp %13d %s %02d %04d %s\r\n",
+							snprintf(line, ARRAY_SIZE(line), "%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
 									dirChar, file_info.size, platform->GetMassStorage()->GetMonthName(file_info.month),
 									file_info.day, file_info.year, file_info.fileName);
 
@@ -2279,7 +2279,7 @@ void Webserver::FtpInterpreter::ReadFilename(int start)
 {
 	int filenameLength = 0;
 	bool readingPath = false;
-	for(int i=start; i<clientPointer && filenameLength < MaxFilenameLength - 1; i++)
+	for(int i=start; i<(int)clientPointer && filenameLength < (int)(MaxFilenameLength - 1); i++)
 	{
 		switch (clientMessage[i])
 		{

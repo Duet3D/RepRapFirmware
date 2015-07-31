@@ -105,8 +105,8 @@ bool PidParameters::operator==(const PidParameters& other) const
 // Platform class
 
 Platform::Platform() :
-		tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0), debugCode(0),
-		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer)), autoSaveEnabled(false)
+		autoSaveEnabled(false), active(false), errorCodeBits(0), fileStructureInitialised(false), tickState(0), debugCode(0),
+		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
 {
 	line = new Line(SerialUSB);
 	aux = new Line(Serial);
@@ -855,6 +855,14 @@ void Platform::InitialiseInterrupts()
 	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
+#if 0	// not used
+void Platform::DisableInterrupts()
+{
+	NVIC_DisableIRQ(TC3_IRQn);
+	NVIC_DisableIRQ(TC4_IRQn);
+}
+#endif
+
 #pragma GCC push_options
 #pragma GCC optimize ("O3")
 
@@ -884,16 +892,6 @@ void Platform::InitialiseInterrupts()
 	return ret;
 }
 
-#pragma GCC pop_options
-
-#if 0	// not used
-void Platform::DisableInterrupts()
-{
-	NVIC_DisableIRQ(TC3_IRQn);
-	NVIC_DisableIRQ(TC4_IRQn);
-}
-#endif
-
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
 // This is what we need to do:
@@ -906,9 +904,6 @@ void Platform::DisableInterrupts()
 
 //#define TIME_TICK_ISR	1		// define this to store the tick ISR time in errorCodeBits
 
-#pragma GCC push_options
-#pragma GCC optimize ("O3")
-
 void Platform::Tick()
 {
 #ifdef TIME_TICK_ISR
@@ -918,27 +913,27 @@ void Platform::Tick()
 	{
 	case 1:			// last conversion started was a thermistor
 	case 3:
-	{
-		ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-		currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
-		StartAdcConversion(zProbeAdcChannel);
-		if (currentFilter.IsValid())
 		{
-			uint32_t sum = currentFilter.GetSum();
-			if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
+			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
+			StartAdcConversion(zProbeAdcChannel);
+			if (currentFilter.IsValid())
 			{
-				// We have an over-temperature or bad reading from this thermistor, so turn off the heater
-				// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
-				SetHeater(currentHeater, 0.0);
-				errorCodeBits |= ErrorBadTemp;
+				uint32_t sum = currentFilter.GetSum();
+				if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
+				{
+					// We have an over-temperature or bad reading from this thermistor, so turn off the heater
+					// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
+					SetHeater(currentHeater, 0.0);
+					errorCodeBits |= ErrorBadTemp;
+				}
+			}
+			++currentHeater;
+			if (currentHeater == HEATERS)
+			{
+				currentHeater = 0;
 			}
 		}
-		++currentHeater;
-		if (currentHeater == HEATERS)
-		{
-			currentHeater = 0;
-		}
-	}
 		++tickState;
 		break;
 
@@ -1162,7 +1157,7 @@ float Platform::GetTemperature(size_t heater) const
 	{
 		rawTemp -= (int) p.adcHighOffset;
 	}
-	if (rawTemp >= adDisconnectedVirtual)
+	if (rawTemp >= (int)adDisconnectedVirtual)
 	{
 		return ABS_ZERO;		// thermistor is disconnected
 	}
@@ -1717,7 +1712,7 @@ void MassStorage::Init()
 					platform->AppendMessage(HOST_MESSAGE, "Card write protected\n");
 					break;
 				default:
-					platform->AppendMessage(HOST_MESSAGE, "Unknown (code %d)\m", err);
+					platform->AppendMessage(HOST_MESSAGE, "Unknown (code %d)\n", err);
 					break;
 			}
 			return;
@@ -1766,8 +1761,8 @@ void MassStorage::Init()
 
 const char* MassStorage::CombineName(const char* directory, const char* fileName)
 {
-	int out = 0;
-	int in = 0;
+	size_t out = 0;
+	size_t in = 0;
 
 	if (directory != NULL)
 	{
@@ -1784,7 +1779,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 		}
 	}
 
-	if (in > 0 && directory[in -1] != '/' && out < ARRAY_UPB(combinedName))
+	if (in > 0 && directory[in - 1] != '/' && out < ARRAY_UPB(combinedName))
 	{
 		combinedName[out] = '/';
 		out++;

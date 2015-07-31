@@ -297,9 +297,9 @@ void telnetd_init()
 // Network/Ethernet class
 
 Network::Network(Platform* p)
-	: platform(p), isEnabled(true), state(NetworkInactive), readingData(false),
-	  freeTransactions(NULL), readyTransactions(NULL), writingTransactions(NULL),
-	  dataCs(NULL), ftpCs(NULL), telnetCs(NULL), freeSendBuffers(NULL), freeConnections(NULL)
+	: platform(p), freeTransactions(NULL), readyTransactions(NULL), writingTransactions(NULL),
+	  state(NetworkInactive), isEnabled(true), readingData(false),
+	  dataCs(NULL), ftpCs(NULL), telnetCs(NULL), freeConnections(NULL), freeSendBuffers(NULL)
 {
 	for (size_t i = 0; i < networkTransactionCount; i++)
 	{
@@ -729,7 +729,6 @@ NetworkTransaction *Network::GetTransaction(const ConnectionState *cs)
 	// If we're waiting for a new connection on a data port, see if there is a matching transaction available
 	if (cs == NULL && rs->waitingForDataConnection)
 	{
-		const uint16_t localPort = rs->GetLocalPort();
 		for (NetworkTransaction *rsNext = rs->next; rsNext != NULL; rsNext = rs->next)
 		{
 			if (rsNext->status == connected && rsNext->GetLocalPort() > 1023)
@@ -1395,7 +1394,7 @@ bool NetworkTransaction::Send()
 				bytesLeftToSend = TCP_WND - bytesBeingSent;
 			}
 
-			if (bytesRead != bytesToRead)
+			if (bytesRead != (int)bytesToRead)
 			{
 				fileBeingSent->Close();
 				fileBeingSent = NULL;

@@ -176,7 +176,7 @@ const char *moduleName[] =
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : active(false), debug(0), stopped(false), spinningModule(noModule), ticksInSpinState(0),
+RepRap::RepRap() : ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false), active(false),
 		resetting(false), gcodeReply(gcodeReplyBuffer, ARRAY_SIZE(gcodeReplyBuffer))
 {
   platform = new Platform();
@@ -470,7 +470,7 @@ void RepRap::DeleteTool(Tool* tool)
 	}
 
 	// Switch off any associated heater
-	for(size_t i=0; i<tool->HeaterCount(); i++)
+	for(int i=0; i<tool->HeaterCount(); i++)
 	{
 		reprap.GetHeat()->SwitchOff(tool->Heater(i));
 	}
@@ -967,7 +967,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 			}
 	}
 
-	if (!forWebserver && seq != -1 && replySeq != seq)
+	if (!forWebserver && seq != -1 && (int)replySeq != seq)
 	{
 		// Send the response to the last command. Do this last because it can be long and may need to be truncated.
 		response.catf(",\"seq\":%u,\"resp\":", replySeq);					// send the response sequence number
@@ -1257,7 +1257,7 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 		EncodeString(response, GetName(), 2);
 	}
 
-	if (type < 2 || (seq != -1 && replySeq != seq))
+	if (type < 2 || (seq != -1 && (int)replySeq != seq))
 	{
 
 		// Send the response to the last command. Do this last because it can be long and may need to be truncated.
