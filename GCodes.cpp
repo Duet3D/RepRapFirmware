@@ -354,7 +354,8 @@ void GCodes::Spin()
 	case GCodeState::resuming3:
 		if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
-			platform->SetFanValue(pausedFanValue);
+			platform->SetFanValue(0,pausedFan0Value);
+			platform->SetFanValue(1,pausedFan1Value);
 			fileBeingPrinted.MoveFrom(fileToPrint);
 			for (size_t drive = AXES; drive < DRIVES; ++drive)
 			{
@@ -2519,7 +2520,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				pausedMoveBuffer[DRIVES] = moveBuffer[DRIVES];
 			}
 
-			pausedFanValue = platform->GetFanValue();
+			pausedFan0Value = platform->GetFanValue(0);
+			pausedFan1Value = platform->GetFanValue(1);
 			fileToPrint.MoveFrom(fileBeingPrinted);
 			fileGCode->Pause();
 			state = GCodeState::pausing1;
@@ -2823,6 +2825,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 106: // Set/report fan values
 	{
 		bool seen = false;
+		int fanNum = 0; //default to the first fan
+		if (gb->Seen('P'))		// Choose fan number
+		{
+			fanNum = gb->GetIValue();
+			if(fanNum !=0 && fanNum !=1){
+				reply.printf("Fan value: %i is invalid, 0 or 1 are valid", fanNum);
+			}
+		}
 
 		if (gb->Seen('I'))		// Invert cooling
 		{
@@ -2839,23 +2849,23 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (coolingInverted)
 			{
 				// Check if 1.0 or 255.0 may be used as the maximum value
-				platform->SetFanValue((f <= 1.0 ? 1.0 : 255.0) - f);
+				platform->SetFanValue(fanNum,(f <= 1.0 ? 1.0 : 255.0) - f);
 			}
 			else
 			{
-				platform->SetFanValue(f);
+				platform->SetFanValue(fanNum,f);
 			}
 		}
 		else
 		{
-			float f = coolingInverted ? (1.0 - platform->GetFanValue()) : platform->GetFanValue();
-			reply.printf("Fan value: %d%%, Cooling inverted: %s\n", (byte) (f * 100.0), coolingInverted ? "yes" : "no");
+			float f = coolingInverted ? (1.0 - platform->GetFanValue(fanNum)) : platform->GetFanValue(fanNum);
+			reply.printf("Fan%i value: %d%%, Cooling inverted: %s\n",fanNum, (byte) (f * 100.0), coolingInverted ? "yes" : "no");
 		}
 	}
 		break;
 
 	case 107: // Fan off - deprecated
-		platform->SetFanValue(coolingInverted ? 255.0 : 0.0);
+		platform->SetFanValue(0,coolingInverted ? 255.0 : 0.0); //T3P3 as deprecated only applies to fan0
 		break;
 
 	case 109: // Deprecated
