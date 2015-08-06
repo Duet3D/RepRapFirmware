@@ -129,8 +129,8 @@ function resetGuiData() {
 	probeSlowDownValue = probeTriggerValue = undefined;
 	heatedBed = 1;
 	chamber = 0;
-	numHeads = 2;			// 5 Heaters max, only 2 are visible on load
-	numExtruderDrives = 2;	// 5 Extruder Drives max, only 2 are visible on load
+	numHeads = 2;			// 6 Heaters max, only 2 are visible on load
+	numExtruderDrives = 2;	// 6 Extruder Drives max, only 2 are visible on load
 	
 	coldExtrudeTemp = 160;
 	coldRetractTemp = 90;
@@ -138,7 +138,7 @@ function resetGuiData() {
 	recordedBedTemperatures = [];
 	recordedChamberTemperatures = [];
 	layerData = [];
-	recordedHeadTemperatures = [[], [], [], [], []];
+	recordedHeadTemperatures = [[], [], [], [], [], []];
 	
 	layerData = [];
 	maxLayerTime = lastLayerPrintDuration = 0;
@@ -1170,7 +1170,7 @@ function enableControls() {
 	$("#page_print .checkbox").removeClass("disabled");											// Print Control
 	$("#slider_fan_print").slider("enable");													// Fan Control
 	$("#slider_speed").slider("enable");														// Speed Factor
-	for(var extr=1; extr<=5; extr++) {
+	for(var extr=1; extr<=6; extr++) {
 		$("#slider_extr_" + extr).slider("enable");												// Extrusion Factors
 	}
 	
@@ -1194,7 +1194,7 @@ function disableControls() {
 	$("#btn_pause, #page_print .checkbox").addClass("disabled");								// Print Control
 	$("#slider_fan_print").slider("disable");													// Fan Control
 	$("#slider_speed").slider("disable");														// Speed Factor
-	for(var extr=1; extr<=5; extr++) {
+	for(var extr=1; extr<=6; extr++) {
 		$("#slider_extr_" + extr).slider("disable");											// Extrusion Factors
 	}
 	
@@ -1214,7 +1214,7 @@ function updateGui() {
 	} else {
 		$("#tr_chamber").addClass("hidden");
 	}
-	for(var i=1; i<=5; i++) {	// Heads (Heaters)
+	for(var i=1; i<=6; i++) {	// Heads (Heaters)
 		if (i <= numHeads) {
 			$("#tr_head_" + i).removeClass("hidden");
 		} else {
@@ -1224,7 +1224,7 @@ function updateGui() {
 	
 	// Visibility for Extruder Drive columns
 	
-	for(var i=1; i<=5; i++) {
+	for(var i=1; i<=6; i++) {
 		if (i <= numExtruderDrives) {
 			$(".extr-" + i).removeClass("hidden");
 			$("#slider_extr_" + i).slider("relayout");
@@ -1313,7 +1313,7 @@ function resetGui() {
 	setTemperatureInput("bed", 0, 1);
 	setCurrentTemperature("chamber",  undefined);
 	setTemperatureInput("chamber", 0, 1);
-	for(var i=1; i<=5; i++) {
+	for(var i=1; i<=6; i++) {
 		setCurrentTemperature(i, undefined);
 		setTemperatureInput(i, 0, 1);
 		setTemperatureInput(i, 0, 0);
@@ -1340,7 +1340,7 @@ function resetGui() {
 	$('#slider_fan_print').slider("setValue", 35);
 	$("#page_print dd, #panel_print_info table td, #table_estimations td").html("n/a");
 	$('#slider_speed').slider("setValue", 100);
-	for(var extr=1; extr<=5; extr++) {
+	for(var extr=1; extr<=6; extr++) {
 		$("#slider_extr_" + extr).slider("setValue", 100);
 	}
 	
@@ -2210,7 +2210,7 @@ function drawTemperatureChart()
 	for(var i=0; i<recordedChamberTemperatures.length; i++) {
 		preparedChamberTemps.push([i, recordedChamberTemperatures[i]]);
 	}
-	var preparedHeadTemps = [[], [], [], [], []], heaterSamples;
+	var preparedHeadTemps = [[], [], [], [], [], []], heaterSamples;
 	for(var head=0; head<recordedHeadTemperatures.length; head++) {
 		heaterSamples = recordedHeadTemperatures[head];
 		for(var k=0; k<heaterSamples.length; k++) {
@@ -2220,9 +2220,9 @@ function drawTemperatureChart()
 	
 	// Draw it
 	if (tempChart == undefined) {
-		tempChart = $.plot("#chart_temp", [preparedBedTemps, preparedHeadTemps[0], preparedHeadTemps[1], preparedHeadTemps[2], preparedHeadTemps[3], preparedHeadTemps[4], preparedChamberTemps], tempChartOptions);
+		tempChart = $.plot("#chart_temp", [preparedBedTemps, preparedHeadTemps[0], preparedHeadTemps[1], preparedHeadTemps[2], preparedHeadTemps[3], preparedHeadTemps[4], preparedHeadTemps[5], preparedChamberTemps], tempChartOptions);
 	} else {
-		tempChart.setData([preparedBedTemps, preparedHeadTemps[0], preparedHeadTemps[1], preparedHeadTemps[2], preparedHeadTemps[3], preparedHeadTemps[4], preparedChamberTemps]);
+		tempChart.setData([preparedBedTemps, preparedHeadTemps[0], preparedHeadTemps[1], preparedHeadTemps[2], preparedHeadTemps[3], preparedHeadTemps[4], preparedHeadTemps[5], preparedChamberTemps]);
 		tempChart.setupGrid();
 		tempChart.draw();
 	}
@@ -2341,7 +2341,7 @@ $('#slider_fan_print').slider({
 	fanSliderActive = false;
 });
 
-for(var extr=1; extr<=5; extr++) {
+for(var extr=1; extr<=6; extr++) {
 	$('#slider_extr_' + extr).slider({
 		enabled: false,
 		id: "extr-" + extr,
@@ -2735,7 +2735,7 @@ function recordHeaterTemperatures(bedTemp, chamberTemp, headTemps) {
 	}
 	
 	// Remove invalid data (in case the number of heads has changed)
-	for(var i=headTemps.length; i<5; i++) {
+	for(var i=headTemps.length; i<6; i++) {
 		recordedHeadTemperatures[i] = [];
 	}
 }
@@ -3224,7 +3224,7 @@ function showPage(name) {
 		if (name == "print") {
 			$("#slider_speed").slider("relayout");
 			$("#slider_fan_print").slider("relayout");
-			for(var extr=1; extr<=5; extr++) {
+			for(var extr=1; extr<=6; extr++) {
 				$("#slider_extr_" + extr).slider("relayout");
 			}
 			if (refreshPrintChart) {

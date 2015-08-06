@@ -262,7 +262,7 @@ label {
 	height: 200px;
 }
 
-.col-extr-1, .col-extr-2, .col-extr-3, .col-extr-4, .col-extr-5 {
+.col-extr-1, .col-extr-2, .col-extr-3, .col-extr-4, .col-extr-5, .col-extr-6 {
 	white-space: nowrap;
 }
 
@@ -343,6 +343,9 @@ div.panel table.table-status:not(:last-child)
 }
 #tr_head_5 th > a {
 	color: #337AB7;
+}
+#tr_head_6 th > a {
+	color: #00FFFF;
 }
 #tr_bed th > a {
 	color: #0000FF;
