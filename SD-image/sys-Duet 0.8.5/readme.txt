@@ -1,0 +1,1 @@
+The config file for 0.8.5 in this directory contains an example for a delta printer with 6 extruders and shows the Gcode requires to define that number of tools. It will need to be adapted to your particular printer. rename it to config.g and place it in the /sys SD card directory along with the other system gcodes.
