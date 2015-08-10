@@ -21,6 +21,7 @@ public:
     float GetPrintRadius() const { return printRadius; }
     float GetXCorrection() const { return xCorrection; }
     float GetYCorrection() const { return yCorrection; }
+    float GetZCorrection() const { return zCorrection; }
     float GetTowerX(size_t axis) const { return towerX[axis]; }
     float GetTowerY(size_t axis) const { return towerY[axis]; }
     float GetEndstopAdjustment(size_t axis) const { return endstopAdjustments[axis]; }
@@ -36,6 +37,7 @@ public:
     void SetHomedHeight(float h) { homedHeight = h; Recalc(); }
     void SetXCorrection(float angle) { xCorrection = angle; Recalc(); }
     void SetYCorrection(float angle) { yCorrection = angle; Recalc(); }
+    void SetZCorrection(float angle) { zCorrection = angle; Recalc(); }
 
     float Transform(const float machinePos[AXES], size_t axis) const;				// Calculate the motor position for a single tower from a Cartesian coordinate
     void InverseTransform(float Ha, float Hb, float Hc, float machinePos[AXES]) const;	// Calculate the Cartesian position from the motor positions
@@ -54,7 +56,7 @@ private:
 	// Core parameters
     float diagonal;										// The diagonal rod length, all 3 are assumed to be the same length
     float radius;										// The nominal delta radius, before any fine tuning of tower positions
-    float xCorrection, yCorrection;						// tower position corrections
+    float xCorrection, yCorrection, zCorrection;		// Tower position corrections
     float endstopAdjustments[AXES];						// How much above or below the ideal position each endstop is
     float printRadius;
     float homedHeight;

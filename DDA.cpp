@@ -506,9 +506,9 @@ bool DDA::FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords
 	return endCoordinatesValid;
 }
 
-void DDA::SetPositions(const float move[DRIVES])
+void DDA::SetPositions(const float move[DRIVES], size_t numDrives)
 {
-	reprap.GetMove()->EndPointToMachine(move, endPoint, DRIVES);
+	reprap.GetMove()->EndPointToMachine(move, endPoint, numDrives);
 	for (size_t axis = 0; axis < AXES; ++axis)
 	{
 		endCoordinates[axis] = move[axis];
@@ -761,7 +761,7 @@ bool DDA::Step()
 						{
 						case EndStopHit::lowHit:
 							endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-							if (endStopsToCheck == 0)							// if no more endstops to check
+							if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
 							{
 								MoveAborted(now);
 							}
@@ -774,7 +774,7 @@ bool DDA::Step()
 
 						case EndStopHit::highHit:
 							endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-							if (endStopsToCheck == 0)							// if no more endstops to check
+							if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
 							{
 								MoveAborted(now);
 							}

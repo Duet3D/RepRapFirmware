@@ -259,7 +259,7 @@ void GCodes::Spin()
 	case GCodeState::setBed2:
 		{
 			int numProbePoints = reprap.GetMove()->NumberOfXYProbePoints();
-			if (DoSingleZProbeAtPoint(probeCount))
+			if (DoSingleZProbeAtPoint(probeCount, 0.0))
 			{
 				probeCount++;
 				if (probeCount >= numProbePoints)
@@ -965,7 +965,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 // probes the bed height, and records the Z coordinate probed.  If you want to program any general
 // internal canned cycle, this shows how to do it.
 // On entry, probePointIndex specifies which of the points this is.
-bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
+bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 {
 	reprap.GetMove()->SetIdentityTransform(); 		// It doesn't matter if these are called repeatedly
 
@@ -1017,12 +1017,12 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 			case 1:
 				if (axisIsHomed[Z_AXIS])
 				{
-					lastProbedZ = moveBuffer[Z_AXIS] - platform->ZProbeStopHeight();
+					lastProbedZ = moveBuffer[Z_AXIS] - (platform->ZProbeStopHeight() + heightAdjust);
 				}
 				else
 				{
 					// The Z axis has not yet been homed, so treat this probe as a homing move.
-					moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
+					moveBuffer[Z_AXIS] = platform->ZProbeStopHeight() + heightAdjust;
 					SetPositions(moveBuffer);
 					axisIsHomed[Z_AXIS] = true;
 					lastProbedZ = 0.0;
@@ -1057,7 +1057,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 
 // This simply moves down till the Z probe/switch is triggered. Call it repeatedly until it returns true.
 // Called when we do a G30 with no P parameter.
-bool GCodes::DoSingleZProbe()
+bool GCodes::DoSingleZProbe(bool reportOnly, float heightAdjust)
 {
 	switch (DoZProbe(1.1 * platform->AxisTotalLength(Z_AXIS)))
 	{
@@ -1065,10 +1065,13 @@ bool GCodes::DoSingleZProbe()
 		return true;
 
 	case 1:		// success
-		moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
-		SetPositions(moveBuffer);
-		axisIsHomed[Z_AXIS] = true;
-		lastProbedZ = 0.0;
+		if (!reportOnly)
+		{
+			moveBuffer[Z_AXIS] = platform->ZProbeStopHeight() + heightAdjust;
+			SetPositions(moveBuffer);
+			axisIsHomed[Z_AXIS] = true;
+			lastProbedZ = 0.0;
+		}
 		return true;
 
 	default:	// not finished yet
@@ -1123,11 +1126,21 @@ int GCodes::DoZProbe(float distance)
 // probed and that value is used.
 bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 {
-	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
-		return false;
+	float heightAdjust = 0;
+	if (gb->Seen('H'))
+	{
+		heightAdjust = gb->GetFValue();
+	}
 
 	if (!gb->Seen('P'))
-		return DoSingleZProbe();
+	{
+		bool reportOnly = false;
+		if (gb->Seen('S') && gb->GetIValue() < 0)
+		{
+			reportOnly = true;
+		}
+		return DoSingleZProbe(reportOnly, heightAdjust);
+	}
 
 	int probePointIndex = gb->GetIValue();
 	if (probePointIndex < 0 || (unsigned int)probePointIndex >= MaxProbePoints)
@@ -1155,7 +1168,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	}
 	else
 	{
-		if (DoSingleZProbeAtPoint(probePointIndex))
+		if (DoSingleZProbeAtPoint(probePointIndex, heightAdjust))
 		{
 			if (gb->Seen('S'))
 			{
@@ -1205,9 +1218,6 @@ bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z) const
 
 bool GCodes::SetPrintZProbe(GCodeBuffer* gb, StringRef& reply)
 {
-	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
-		return false;
-
 	ZProbeParameters params = platform->GetZProbeParameters();
 	bool seen = false;
 	if (gb->Seen(axisLetters[X_AXIS]))
@@ -4122,6 +4132,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				params.SetYCorrection(gb->GetFValue());
 				seen = true;
 			}
+			if (gb->Seen('Z'))
+			{
+				// Y tower position correction
+				params.SetZCorrection(gb->GetFValue());
+				seen = true;
+			}
 
 			// The homed height must be done last, because it gets recalculated when some of the other factors are changed
 			if (gb->Seen('H'))
@@ -4144,10 +4160,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				if (params.IsDeltaMode())
 				{
-					reply.printf("Diagonal %.2f, delta radius %.2f, homed height %.2f, bed radius %.1f, X %.2f" DEGREE_SYMBOL ", Y %.2f" DEGREE_SYMBOL "\n",
-							params.GetDiagonal() / distanceScale, params.GetRadius() / distanceScale,
-							params.GetHomedHeight() / distanceScale, params.GetPrintRadius() / distanceScale,
-							params.GetXCorrection(), params.GetYCorrection());
+					reply.printf("Diagonal %.2f, delta radius %.2f, homed height %.2f, bed radius %.1f"
+								 ", X %.2f" DEGREE_SYMBOL ", Y %.2f" DEGREE_SYMBOL ", Z %.2f" DEGREE_SYMBOL "\n",
+								 	 params.GetDiagonal() / distanceScale, params.GetRadius() / distanceScale,
+								 	 params.GetHomedHeight() / distanceScale, params.GetPrintRadius() / distanceScale,
+								 	 params.GetXCorrection(), params.GetYCorrection(), params.GetZCorrection());
 				}
 				else
 				{

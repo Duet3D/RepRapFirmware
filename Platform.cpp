@@ -832,6 +832,7 @@ void Platform::InitialiseInterrupts()
 	TC1 ->TC_CHANNEL[0].TC_IDR = ~(uint32_t)0;				// interrupts disabled for now
 	TC_Start(TC1, 0);
 	TC_GetStatus(TC1, 0);									// clear any pending interrupt
+	NVIC_SetPriority(TC3_IRQn, 0);							// set highest priority for this IRQ; it's time-critical
 	NVIC_EnableIRQ(TC3_IRQn);
 
 	// Timer interrupt to keep the networking timers running (called at 16Hz)
@@ -843,6 +844,7 @@ void Platform::InitialiseInterrupts()
 	TC_Start(TC1, 1);
 	TC1 ->TC_CHANNEL[1].TC_IER = TC_IER_CPCS;
 	TC1 ->TC_CHANNEL[1].TC_IDR = ~TC_IER_CPCS;
+	NVIC_SetPriority(TC4_IRQn, 4);							// step interrupt is time-critical
 	NVIC_EnableIRQ(TC4_IRQn);
 
 	// Interrupt for 4-pin PWM fan sense line

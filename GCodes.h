@@ -122,8 +122,8 @@ class GCodes
     int SetUpMove(GCodeBuffer* gb, StringRef& reply);					// Pass a move on to the Move module
     bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
     bool DoDwellTime(float dwell);										// Really wait for a bit
-    bool DoSingleZProbeAtPoint(int probePointIndex);					// Probe at a given point
-    bool DoSingleZProbe();												// Probe where we are
+    bool DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust); // Probe at a given point
+    bool DoSingleZProbe(bool reportOnly, float heightAdjust);			// Probe where we are
     int DoZProbe(float distance);										// Do a Z probe cycle up to the maximum specified distance
     bool SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
     void SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation

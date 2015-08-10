@@ -12,7 +12,7 @@ void DeltaParameters::Init()
     deltaMode = false;
 	diagonal = 0.0;
 	radius = 0.0;
-	xCorrection = yCorrection = 0.0;
+	xCorrection = yCorrection = zCorrection = 0.0;
 	printRadius = defaultPrintRadius;
 	homedHeight = defaultDeltaHomedHeight;
 
@@ -32,8 +32,8 @@ void DeltaParameters::Recalc()
 		towerY[A_AXIS] = -(radius * sin((30 + xCorrection) * degreesToRadians));
 		towerX[B_AXIS] = +(radius * cos((30 - yCorrection) * degreesToRadians));
 		towerY[B_AXIS] = -(radius * sin((30 - yCorrection) * degreesToRadians));
-		towerX[C_AXIS] = 0;
-		towerY[C_AXIS] = radius;
+		towerX[C_AXIS] = -(radius * sin(zCorrection * degreesToRadians));
+		towerY[C_AXIS] = +(radius * cos(zCorrection * degreesToRadians));
 
 		Xbc = towerX[C_AXIS] - towerX[B_AXIS];
 		Xca = towerX[A_AXIS] - towerX[C_AXIS];

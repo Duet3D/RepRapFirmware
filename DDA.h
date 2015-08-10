@@ -53,7 +53,7 @@ public:
 	void SetFeedRate(float rate) { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableDeltaMapping);
 	bool FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords[AXES]);
-    void SetPositions(const float move[]);							// Force the endpoints to be these
+    void SetPositions(const float move[], size_t numDrives);		// Force the endpoints to be these
     FilePosition GetFilePosition() const { return filePos; }
     float GetRequestedSpeed() const { return requestedSpeed; }
 
@@ -61,7 +61,7 @@ public:
 
 	static const uint32_t stepClockRate = VARIANT_MCK/32;			// the frequency of the clock used for stepper pulse timing (using TIMER_CLOCK3), about 0.38us resolution
 	static const uint64_t stepClockRateSquared = (uint64_t)stepClockRate * stepClockRate;
-	static const int32_t MinStepInterval = (4 * stepClockRate)/1000000; // the smallest sensible interval between steps (10us) in step timer clocks
+	static const int32_t MinStepInterval = (4 * stepClockRate)/1000000; // the smallest sensible interval between steps (4us) in step timer clocks
 
 	// Note on the following constant:
 	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.

@@ -43,8 +43,8 @@ public:
     bool AllMovesAreFinished();							// Is the look-ahead ring empty?  Stops more moves being added as well.
     void ResumeMoving();								// Allow moves to be added after a call to AllMovesAreFinished()
     void DoLookAhead();									// Run the look-ahead procedure
-    void HitLowStop(size_t drive, DDA* hitDDA);			// What to do when a low endstop is hit
-    void HitHighStop(size_t drive, DDA* hitDDA);		// What to do when a high endstop is hit
+    void HitLowStop(size_t axis, DDA* hitDDA);			// What to do when a low endstop is hit
+    void HitHighStop(size_t axis, DDA* hitDDA);			// What to do when a high endstop is hit
     void ZProbeTriggered(DDA* hitDDA);					// What to do when a the Z probe is triggered
     void SetPositions(const float move[DRIVES]);		// Force the coordinates to be these
     void SetFeedrate(float feedRate);					// Sometimes we want to override the feed rate
@@ -75,6 +75,7 @@ public:
 
     int GetCoreXYMode() const { return coreXYMode; }
     void SetCoreXYMode(int mode) { coreXYMode = mode; }
+    bool IsCoreXYAxis(size_t axis) const;				// return true if the specified axis shares its motors with another
 
     void CurrentMoveCompleted();						// signals that the current move has just been completed
     bool StartNextMove(uint32_t startTime);				// start the next move, returning true if Step() needs to be called immediately
@@ -110,6 +111,7 @@ private:
     		float& l2, float& l3) const;
     float TriangleZ(float x, float y) const;			// Interpolate onto a triangular grid
     void AdjustDeltaParameters(const float v[], size_t numFactors);	// Perform delta adjustment
+    void JustHomed(size_t axis, float hitPoint, DDA* hitDDA);	// deal with setting positions after a drive has been homed
 
     static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0);	// for debugging
     static void PrintVector(const char *s, const float *v, size_t numElems);	// for debugging

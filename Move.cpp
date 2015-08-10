@@ -374,7 +374,7 @@ void Move::SetPositions(const float move[DRIVES])
 {
 	if (DDARingEmpty())
 	{
-		ddaRingAddPointer->GetPrevious()->SetPositions(move);
+		ddaRingAddPointer->GetPrevious()->SetPositions(move, DRIVES);
 	}
 	else
 	{
@@ -1107,12 +1107,12 @@ bool Move::StartNextMove(uint32_t startTime)
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
-void Move::HitLowStop(size_t drive, DDA* hitDDA)
+void Move::HitLowStop(size_t axis, DDA* hitDDA)
 {
-	if (drive < AXES && !IsDeltaMode())		// should always be true
+	if (axis < AXES && !IsDeltaMode())		// should always be true
 	{
 		float hitPoint;
-		if (drive == Z_AXIS)
+		if (axis == Z_AXIS)
 		{
 			// Special case of doing a G1 S1 Z move on a Cartesian printer. This is not how we normally home the Z axis, we use G30 instead.
 			// But I think it used to work, so let's not break it.
@@ -1120,27 +1120,45 @@ void Move::HitLowStop(size_t drive, DDA* hitDDA)
 		}
 		else
 		{
-			hitPoint = reprap.GetPlatform()->AxisMinimum(drive);
+			hitPoint = reprap.GetPlatform()->AxisMinimum(axis);
 		}
-		int32_t coord = MotorEndPointToMachine(drive, hitPoint);
-		hitDDA->SetDriveCoordinate(coord, drive);
-		reprap.GetGCodes()->SetAxisIsHomed(drive);
+		JustHomed(axis, hitPoint, hitDDA);
 	}
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
-void Move::HitHighStop(size_t drive, DDA* hitDDA)
+void Move::HitHighStop(size_t axis, DDA* hitDDA)
 {
-	if (drive < AXES)		// should always be true
+	if (axis < AXES)		// should always be true
 	{
-		float position = (IsDeltaMode())
-							? deltaParams.GetHomedCarriageHeight(drive)
+		float hitPoint = (IsDeltaMode())
+							? deltaParams.GetHomedCarriageHeight(axis)
 							        // this is a delta printer, so the motor is at the homed carriage height for this drive
-							: reprap.GetPlatform()->AxisMaximum(drive);
+							: reprap.GetPlatform()->AxisMaximum(axis);
 									// this is a Cartesian printer, so we're at the maximum for this axis
-		hitDDA->SetDriveCoordinate(MotorEndPointToMachine(drive, position), drive);
-		reprap.GetGCodes()->SetAxisIsHomed(drive);
+		JustHomed(axis, hitPoint, hitDDA);
 	}
+}
+
+// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
+void Move::JustHomed(size_t axisHomed, float hitPoint, DDA* hitDDA)
+{
+	if (IsCoreXYAxis(axisHomed))
+	{
+		float tempCoordinates[AXES];
+		for (size_t axis = 0; axis < AXES; ++axis)
+		{
+			tempCoordinates[axis] = hitDDA->GetEndCoordinate(axis, false);
+		}
+		tempCoordinates[axisHomed] = hitPoint;
+		hitDDA->SetPositions(tempCoordinates, AXES);
+	}
+	else
+	{
+		hitDDA->SetDriveCoordinate(MotorEndPointToMachine(axisHomed, hitPoint), axisHomed);
+	}
+	reprap.GetGCodes()->SetAxisIsHomed(axisHomed);
+
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
@@ -1357,6 +1375,22 @@ const char* Move::GetGeometryString() const
 			: (coreXYMode == 2) ? "coreXZ"
 			: (coreXYMode == 3) ? "coreYZ"
 			: "cartesian";
+}
+
+// Return true if the specified axis shares its motors with another
+bool Move::IsCoreXYAxis(unsigned int axis) const
+{
+	switch(coreXYMode)
+	{
+	case 1:
+		return axis == X_AXIS || axis == Y_AXIS;
+	case 2:
+		return axis == X_AXIS || axis == Z_AXIS;
+	case 3:
+		return axis == Y_AXIS || axis == Z_AXIS;
+	default:
+		return false;
+	}
 }
 
 // Do a delta probe returning -1 if still probing, 0 if failed, 1 if success
