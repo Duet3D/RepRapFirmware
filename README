@@ -14,7 +14,7 @@ To edit and compile this you will also need the libraries in this repository:
 A complete uploadable executable version is in the directory Release/RepRapFirmware.bin in this
 repository.  For details of how to flash it to a Duet see here:
 
-  http://www.reprappro.com/documentation/RepRapPro_Firmware#Flashing_the_Firmware
+  https://reprappro.com/documentation/commissioning-introduction/maintenance-duet/#Installation_8211_Flashing_the_Firmware
 
 For details of how to compile the source code, see below.
 
