@@ -7,10 +7,6 @@ This is the version for the RepRap Duet:
 
   http://blog.think3dprint3d.com/2013/12/Duet-Arduino-Due-compatible-3DPrinter-controller.html  
 
-To edit and compile this you will also need the libraries in this repository:
-
-  https://github.com/jmgiacalone/Arduino-libraries
-
 A complete uploadable executable version is in the directory Release/RepRapFirmware.bin in this
 repository.  For details of how to flash it to a Duet see here:
 
@@ -160,10 +156,6 @@ And the Arduino IDE itself (make sure you get the one for the Due/Duet - version
 As of this firmware version 0.57r-dc42, the Arduino IDE must be patched to enable watchdog support. Locate function init()
 inside file variant.cpp (....\hardware\arduino\sam\variants\arduino_due_x) and comment out the call to WDT_disable(WDT).
 If you don't do this, the firmware will still work but you won't get the benefit of watchdog protection.
-
-Finally you will need our libraries for driving the peripherals:
-
-   https://github.com/jmgiacalone/Arduino-libraries
 
 Start by getting the Arduino IDE programming your Duet with a simple Hello World program that prints to the USB (SerialUSB.print("Hello World"); on the Due/Duet, not Serial.print("Hello World");... )
 
