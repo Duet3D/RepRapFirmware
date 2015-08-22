@@ -52,8 +52,9 @@ class RepRap
     void DeleteTool(Tool* t);
     void SelectTool(int toolNumber);
     void StandbyTool(int toolNumber);
-    Tool* GetCurrentTool();
-    Tool* GetTool(int toolNumber);
+    Tool* GetCurrentTool() const;
+    Tool* GetTool(int toolNumber) const;
+    Tool* GetOnlyTool() const;
     //Tool* GetToolByDrive(int driveNumber);
     void SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures);
 
@@ -151,7 +152,7 @@ inline PrintMonitor* RepRap::GetPrintMonitor() const { return printMonitor; }
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
 inline Module RepRap::GetSpinningModule() const { return spinningModule; }
 
-inline Tool* RepRap::GetCurrentTool() { return currentTool; }
+inline Tool* RepRap::GetCurrentTool() const { return currentTool; }
 inline uint16_t RepRap::GetExtrudersInUse() const { return activeExtruders; }
 inline uint16_t RepRap::GetHeatersInUse() const { return activeHeaters; }
 inline bool RepRap::ColdExtrude() const { return coldExtrude; }

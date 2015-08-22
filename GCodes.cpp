@@ -1304,6 +1304,13 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	{
 		s.catf("E%u:%.1f ", i - AXES, liveCoordinates[i]);
 	}
+
+	// Print the stepper motor positions as Marlin does, as an aid to debugging
+	s.cat(" Count");
+	for (size_t i = 0; i < DRIVES; ++i)
+	{
+		s.catf(" %d", reprap.GetMove()->GetEndPoint(i));
+	}
 }
 
 bool GCodes::OpenFileToWrite(const char* directory, const char* fileName, GCodeBuffer *gb)
@@ -2785,6 +2792,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			else
 			{
 				tool = reprap.GetCurrentTool();
+				// If no tool is selected, and there is only one tool, set the active temperature for that one
+				if (tool == nullptr)
+				{
+					tool = reprap.GetOnlyTool();
+				}
 			}
 			SetToolHeaters(tool, temperature);
 		}

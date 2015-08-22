@@ -37,6 +37,7 @@ public:
     void Spin();										// Called in a tight loop to keep the class going
     void Exit();										// Shut down
     void GetCurrentUserPosition(float m[DRIVES + 1], uint8_t moveType) const;	// Return the position (after all queued moves have been executed) in transformed coords
+    int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; }	// Get the current position of a motor
     void LiveCoordinates(float m[DRIVES]);				// Gives the last point at the end of the last complete DDA transformed to user coords
     void Interrupt();									// The hardware's (i.e. platform's)  interrupt should call this.
     void InterruptTime();								// Test function - not used
@@ -123,6 +124,7 @@ private:
     DDA* volatile currentDda;
     DDA* ddaRingAddPointer;
     DDA* volatile ddaRingGetPointer;
+    DDA* ddaRingCheckPointer;
 
     bool addNoMoreMoves;								// If true, allow no more moves to be added to the look-ahead
     bool active;										// Are we live and running?
@@ -156,6 +158,7 @@ private:
     uint32_t deltaProbingStartTime;
     bool deltaProbing;
     int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ
+    unsigned int stepErrors;							// count of step errors, for diagnostics
 };
 
 //******************************************************************************************************

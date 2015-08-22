@@ -32,7 +32,7 @@ void Move::Init()
 	deltaProbing = false;
 
 	// Empty the ring
-	ddaRingGetPointer = ddaRingAddPointer;
+	ddaRingGetPointer = ddaRingCheckPointer = ddaRingAddPointer;
 	DDA *dda = ddaRingAddPointer;
 	do
 	{
@@ -42,6 +42,7 @@ void Move::Init()
 
 	currentDda = nullptr;
 	addNoMoreMoves = false;
+	stepErrors = 0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -53,6 +54,7 @@ void Move::Init()
 	for (size_t i = 0; i < DRIVES; i++)
 	{
 		move[i] = 0.0;
+		liveEndPoints[i] = 0;									// not actually right for a delta, but better than printing random values in response to M114
 		reprap.GetPlatform()->SetDirection(i, FORWARDS);		// DC: I don't see any reason why we do this
 	}
 	SetLiveCoordinates(move);
@@ -104,14 +106,25 @@ void Move::Spin()
 		++idleCount;
 	}
 
+	// Check for DDA errors to print if Move debug is enabled
+	while (ddaRingCheckPointer->GetState() == DDA::completed)
+	{
+		if (ddaRingCheckPointer->HasStepError())
+		{
+			if (reprap.Debug(moduleMove))
+			{
+				ddaRingCheckPointer->DebugPrint();
+			}
+			++stepErrors;
+		}
+		ddaRingCheckPointer->Free();
+		ddaRingCheckPointer = ddaRingCheckPointer->GetNext();
+	}
+
 	// See if we can add another move to the ring
 	if (!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
 	{
 		DDA *dda = ddaRingAddPointer;
-		if (reprap.Debug(moduleMove))
-		{
-			dda->PrintIfHasStepError();
-		}
 
 		// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
 		// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is
@@ -197,7 +210,7 @@ void Move::Spin()
 			DDA *dda = ddaRingGetPointer;
 			simulationTime += dda->CalcTime();
 			liveCoordinatesValid = dda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
-			dda->Release();
+			dda->Complete();
 			ddaRingGetPointer = ddaRingGetPointer->GetNext();
 		}
 	}
@@ -333,7 +346,7 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 			{
 				fPos = dda->GetFilePosition();
 			}
-			dda->Release();
+			dda->Complete();
 			dda = dda->GetNext();
 		}
 		while (dda != savedDdaRingAddPointer);
@@ -356,7 +369,7 @@ extern uint64_t lastNum;
 void Move::Diagnostics()
 {
 	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Move Diagnostics:\n");
-	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxReps: %u\n", maxReps);
+	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxReps: %u, StepErrors: %u\n", maxReps, stepErrors);
 	maxReps = 0;
 
 #if 0
@@ -1086,7 +1099,7 @@ void Move::CurrentMoveCompleted()
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 
-	currentDda->Release();
+	currentDda->Complete();
 	currentDda = nullptr;
 	ddaRingGetPointer = ddaRingGetPointer->GetNext();
 }

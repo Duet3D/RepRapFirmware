@@ -203,8 +203,8 @@ void DeltaParameters::Adjust(size_t numFactors, const float v[])
 
 void DeltaParameters::PrintParameters(StringRef& reply) const
 {
-	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, diagonal %.2f, radius %.2f, xcorr %.2f, ycorr %.2f\n",
-					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, radius, xCorrection, yCorrection);
+	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, diagonal %.2f, radius %.2f, xcorr %.2f, ycorr %.2f, zcorr %.2f\n",
+					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, radius, xCorrection, yCorrection, zCorrection);
 }
 
 // End

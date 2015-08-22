@@ -37,6 +37,7 @@ enum Module
 	moduleHeat = 5,
 	moduleDda = 6,
 	modulePrintMonitor = 7,
+	numModules = 8,				// make this one greater than the last module number
 	noModule = 15
 };
 

@@ -946,6 +946,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 			{
 				// This is only possible if we have at least one HTTP session left
 				response.copy("{\"err\":0}");
+
 			}
 			else
 			{
@@ -958,6 +959,8 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 			// Wrong password
 			response.copy("{\"err\":1}");
 		}
+
+		CancelUpload();				// if a file upload was in progress from this IP address, cancel it
 	}
 	else if (!IsAuthenticated())
 	{

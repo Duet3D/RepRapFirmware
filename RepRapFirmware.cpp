@@ -427,11 +427,19 @@ void RepRap::PrintDebug()
 	if (debug != 0)
 	{
 		platform->Message(BOTH_MESSAGE, "Debugging enabled for modules:");
-		for(uint8_t i=0; i<16;i++)
+		for (unsigned int i = 0; i < numModules; i++)
 		{
-			if (debug & (1 << i))
+			if ((debug & (1 << i)) != 0)
 			{
-				platform->AppendMessage(BOTH_MESSAGE, " %s", moduleName[i]);
+				platform->AppendMessage(BOTH_MESSAGE, " %s(%u)", moduleName[i], i);
+			}
+		}
+		platform->Message(BOTH_MESSAGE, "\nDebugging disabled for modules:");
+		for (unsigned int i = 0; i < numModules; i++)
+		{
+			if ((debug & (1 << i)) == 0)
+			{
+				platform->AppendMessage(BOTH_MESSAGE, " %s(%u)", moduleName[i], i);
 			}
 		}
 		platform->AppendMessage(BOTH_MESSAGE, "\n");
@@ -565,7 +573,7 @@ void RepRap::StandbyTool(int toolNumber)
 	platform->Message(BOTH_MESSAGE, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
 }
 
-Tool* RepRap::GetTool(int toolNumber)
+Tool* RepRap::GetTool(int toolNumber) const
 {
 	Tool* tool = toolList;
 
@@ -578,6 +586,11 @@ Tool* RepRap::GetTool(int toolNumber)
 		tool = tool->Next();
 	}
 	return NULL; // Not an error
+}
+
+Tool* RepRap::GetOnlyTool() const
+{
+	return (toolList != nullptr && toolList->Next() == nullptr) ? toolList : nullptr;
 }
 
 #if 0	// not used
@@ -1573,7 +1586,7 @@ size_t StringRef::cat(const char* src)
 
 // Utilities and storage not part of any class
 
-static char scratchStringBuffer[100];		// this is now used only for short messages
+static char scratchStringBuffer[120];		// this is now used only for short messages; needs to be long enough to print delta parameters
 StringRef scratchString(scratchStringBuffer, ARRAY_SIZE(scratchStringBuffer));
 
 // For debug use

@@ -37,10 +37,11 @@ public:
 	bool Step();													// Take one step of the DDA, called by timed interrupt.
 	void SetNext(DDA *n) { next = n; }
 	void SetPrevious(DDA *p) { prev = p; }
-	void Release() { state = empty; }
+	void Complete() { state = completed; }
+	void Free() { state = empty; }
 	void Prepare();													// Calculate all the values and freeze this DDA
 	float CalcTime() const;											// Calculate the time needed for this move (used for simulation)
-	void PrintIfHasStepError();
+	bool HasStepError() const;
 	bool CanPause() const { return canPause; }
 
 	DDAState GetState() const { return state; }

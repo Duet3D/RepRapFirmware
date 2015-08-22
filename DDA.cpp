@@ -38,15 +38,21 @@ void DDA::DebugPrint() const
 	debugPrintf("DDA:");
 	if (endCoordinatesValid)
 	{
+		float startCoordinates[AXES];
+		for (size_t i = 0; i < AXES; ++i)
+		{
+			startCoordinates[i] = endCoordinates[i] - (totalDistance * directionVector[i]);
+		}
+		DebugPrintVector(" start", startCoordinates, AXES);
 		DebugPrintVector(" end", endCoordinates, AXES);
 	}
 
 	debugPrintf(" d=%f", totalDistance);
 	DebugPrintVector(" vec", directionVector, 5);
-	debugPrintf(" a=%f reqv=%f topv=%f startv=%f endv=%f\n"
-				"daccel=%f ddecel=%f fstep=%u\n",
+	debugPrintf("\na=%f reqv=%f topv=%f startv=%f endv=%f\n"
+				"daccel=%f ddecel=%f fstep=%u cks=%u\n",
 				acceleration, requestedSpeed, topSpeed, startSpeed, endSpeed,
-				accelDistance, decelDistance, firstStepTime);
+				accelDistance, decelDistance, firstStepTime, clocksNeeded);
 //	reprap.GetPlatform()->GetLine()->Flush();
 	ddm[0].DebugPrint('x', isDeltaMovement);
 	ddm[1].DebugPrint('y', isDeltaMovement);
@@ -197,6 +203,8 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 				}
 				else
 				{
+					// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being above the bed,
+					// the other root corresponds to the carriages being above the bed.
 					const float drev = ((directionVector[Z_AXIS] * sqrt(a2b2D2 - fsquare(A * directionVector[Y_AXIS] - B * directionVector[X_AXIS])))
 										- aAplusbB)/a2plusb2;
 					if (drev > 0.0 && drev < totalDistance)		// if the reversal point is within range
@@ -250,7 +258,26 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 
 	// Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
-	requestedSpeed = max<float>(0.5, min<float>(nextMove[DRIVES], VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform()->MaxFeedrates(), DRIVES)));
+	float reqSpeed = nextMove[DRIVES];
+	if (reprap.GetMove()->IsDeltaMode() && !isDeltaMovement)
+	{
+		// Special case of a raw or homing move on a delta printer
+		// We use the Cartesian motion system to implement these moves, so the feed rate will be interpreted in Cartesian coordinates.
+		// This is wrong, we want the feed rate to apply to the drive that is moving the farthest.
+		float maxDistance = 0.0;
+		for (size_t axis = 0; axis < AXES; ++axis)
+		{
+			if (normalisedDirectionVector[axis] > maxDistance)
+			{
+				maxDistance = normalisedDirectionVector[axis];
+			}
+		}
+		if (maxDistance != 0.0)				// should always be true
+		{
+			reqSpeed /= maxDistance;		// because normalisedDirectionVector is unit-normalised
+		}
+	}
+	requestedSpeed = max<float>(0.5, min<float>(reqSpeed, VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform()->MaxFeedrates(), DRIVES)));
 
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
@@ -622,7 +649,7 @@ void DDA::Prepare()
 			dm.stepsTillRecalc = 1;
 			uint32_t st = (isDeltaMovement && drive < AXES)
 							? dm.CalcNextStepTimeDelta(*this, drive)
-							: dm.CalcNextStepTimeCartesian(drive);
+							: dm.CalcNextStepTimeCartesian(*this, drive);
 			if (st < firstStepTime)
 			{
 				firstStepTime = st;
@@ -633,10 +660,7 @@ void DDA::Prepare()
 	if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))	// temp show the prepared DDA if debug enabled for both modules
 	{
 		DebugPrint();
-		reprap.GetPlatform()->GetLine()->Flush();
 	}
-//debugPrintf("Done\n");
-//reprap.GetPlatform()->GetLine()->Flush();
 
 	state = frozen;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
 }
@@ -645,6 +669,7 @@ void DDA::Prepare()
 #pragma GCC optimize ("O3")
 
 // Start executing the move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled, to avoid a race condition.
+// Returns true if the caller needs to call the step ISR immediately.
 bool DDA::Start(uint32_t tim)
 //pre(state == frozen)
 {
@@ -654,8 +679,7 @@ bool DDA::Start(uint32_t tim)
 	if (firstStepTime == DriveMovement::NoStepTime)
 	{
 		// No steps are pending. This should not happen!
-		state = completed;
-		return false;
+		return true;	// schedule another interrupt immediately
 	}
 	else
 	{
@@ -707,14 +731,9 @@ bool DDA::Start(uint32_t tim)
 extern uint32_t maxReps;
 
 // This is called by the interrupt service routine to execute steps.
-// It returns true if it needs to be called again with the DDA of the next move, otherwise false.
+// It returns true if it needs to be called again on the DDA of the new current move, otherwise false.
 bool DDA::Step()
 {
-	if (state != executing)
-	{
-		return false;
-	}
-
 	bool repeat;
 	uint32_t numReps = 0;
 	do
@@ -803,7 +822,7 @@ bool DDA::Step()
 					if (now + minInterruptInterval >= st0)
 					{
 						reprap.GetPlatform()->StepHigh(drive);
-						uint32_t st1 = (isDeltaMovement && drive < AXES) ? dm.CalcNextStepTimeDelta(*this, drive) : dm.CalcNextStepTimeCartesian(drive);
+						uint32_t st1 = (isDeltaMovement && drive < AXES) ? dm.CalcNextStepTimeDelta(*this, drive) : dm.CalcNextStepTimeCartesian(*this, drive);
 						if (st1 < nextInterruptTime)
 						{
 							nextInterruptTime = st1;
@@ -828,10 +847,10 @@ bool DDA::Step()
 
 		if (state == completed)
 		{
-			uint32_t finishTime = Platform::GetInterruptClocks();
+			uint32_t finishTime = moveStartTime + clocksNeeded;		// calculate how long this move should take
 			Move *move = reprap.GetMove();
-			move->CurrentMoveCompleted();				// tell Move that the current move is complete
-			return move->StartNextMove(finishTime);		// schedule the next move
+			move->CurrentMoveCompleted();							// tell Move that the current move is complete
+			return move->StartNextMove(finishTime);					// schedule the next move
 		}
 		repeat = reprap.GetPlatform()->ScheduleInterrupt(nextInterruptTime + moveStartTime);
 	} while (repeat);
@@ -890,21 +909,17 @@ void DDA::ReduceHomingSpeed()
 	}
 }
 
-void DDA::PrintIfHasStepError()
+bool DDA::HasStepError() const
 {
-	bool printed = false;
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
-		if (ddm[drive].stepError)
+		const DriveMovement& dm = ddm[drive];
+		if (dm.moving && dm.stepError)
 		{
-			if (!printed)
-			{
-				DebugPrint();
-				printed = true;
-			}
-			ddm[drive].stepError = false;
+			return true;
 		}
 	}
+	return false;
 }
 
 // Take a unit positive-hyperquadrant vector, and return the factor needed to obtain

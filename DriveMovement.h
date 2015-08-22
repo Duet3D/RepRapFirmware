@@ -26,7 +26,7 @@ struct PrepParams
 class DriveMovement
 {
 public:
-	uint32_t CalcNextStepTimeCartesian(size_t drive);
+	uint32_t CalcNextStepTimeCartesian(const DDA &dda, size_t drive);
 	uint32_t CalcNextStepTimeDelta(const DDA &dda, size_t drive);
 	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params, size_t drive);
 	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params, size_t drive);
@@ -91,7 +91,7 @@ public:
 	static const uint32_t NoStepTime = 0xFFFFFFFF;		// value to indicate that no further steps are needed when calculating the next step time
 	static const uint32_t K1 = 1024;					// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors
 	static const uint32_t K2 = 512;						// a power of 2 used in delta calculations to reduce rounding errors (but too large makes things worse)
-	static const int32_t Kc = 4096;						// a power of 2 for scaling the Z movement fraction
+	static const int32_t Kc = 1024 * 1024;				// a power of 2 for scaling the Z movement fraction
 };
 
 #endif /* DRIVEMOVEMENT_H_ */

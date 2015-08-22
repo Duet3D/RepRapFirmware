@@ -568,7 +568,7 @@ bool Platform::MustHomeXYBeforeZ() const
 
 void Platform::ResetNvData()
 {
-	nvData.compatibility = me;
+	nvData.compatibility = marlin;				// default to Marlin because the common host programs expect the "OK" response to commands
 	ARRAY_INIT(nvData.ipAddress, IP_ADDRESS);
 	ARRAY_INIT(nvData.netMask, NET_MASK);
 	ARRAY_INIT(nvData.gateWay, GATE_WAY);
@@ -740,13 +740,49 @@ void Platform::Spin()
 	ClassReport(longWait);
 }
 
+// Switch into boot mode and reset
+#if 1		// trying the Arduino code to see if it is more reliable
+
+__attribute__ ((long_call, section (".ramfunc")))
+void eraseAndReset() {
+	cpu_irq_disable();
+
+	// Set boot flag to run SAM-BA bootloader at restart
+	const int EEFC_FCMD_CGPB = 0x0C;
+	const int EEFC_KEY = 0x5A;
+	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0);
+	EFC0->EEFC_FCR =
+		EEFC_FCR_FCMD(EEFC_FCMD_CGPB) |
+		EEFC_FCR_FARG(1) |
+		EEFC_FCR_FKEY(EEFC_KEY);
+	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0);
+
+	// From here flash memory is no more available.
+	const int RSTC_KEY = 0xA5;
+	RSTC->RSTC_CR =
+		RSTC_CR_KEY(RSTC_KEY) |
+		RSTC_CR_PROCRST |
+		RSTC_CR_PERRST;
+
+	while (true);
+}
+
+#else
+
+void eraseAndReset()
+{
+	cpu_irq_disable();
+	flash_unlock(0x00080000, 0x000FFFFF, nullptr, nullptr);
+	flash_clear_gpnvm(1);			// tell the system to boot from flash next time
+}
+
+#endif
+
 void Platform::SoftwareReset(uint16_t reason)
 {
 	if (reason == SoftwareResetReason::erase)
 	{
-		cpu_irq_disable();
-		flash_unlock(0x00080000, 0x000FFFFF, nullptr, nullptr);
-		flash_clear_gpnvm(1);			// tell the system to boot from flash next time
+		eraseAndReset();
  	}
 	else
 	{
@@ -789,6 +825,7 @@ void Platform::SoftwareReset(uint16_t reason)
 	for(;;) {}
 }
 
+
 //*****************************************************************************************************************
 
 // Interrupts
@@ -823,6 +860,9 @@ void FanInterrupt()
 
 void Platform::InitialiseInterrupts()
 {
+	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
+	NVIC_SetPriority (SysTick_IRQn, 0);						// set priority for tick interrupts
+
 	// Timer interrupt for stepper motors
 	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
 	// We choose a clock divisor of 32, which gives us 0.38us resolution. The next option is 128 which would give 1.524us resolution.
@@ -832,7 +872,7 @@ void Platform::InitialiseInterrupts()
 	TC1 ->TC_CHANNEL[0].TC_IDR = ~(uint32_t)0;				// interrupts disabled for now
 	TC_Start(TC1, 0);
 	TC_GetStatus(TC1, 0);									// clear any pending interrupt
-	NVIC_SetPriority(TC3_IRQn, 0);							// set highest priority for this IRQ; it's time-critical
+	NVIC_SetPriority(TC3_IRQn, 2);							// set high priority for this IRQ; it's time-critical
 	NVIC_EnableIRQ(TC3_IRQn);
 
 	// Timer interrupt to keep the networking timers running (called at 16Hz)
@@ -844,7 +884,7 @@ void Platform::InitialiseInterrupts()
 	TC_Start(TC1, 1);
 	TC1 ->TC_CHANNEL[1].TC_IER = TC_IER_CPCS;
 	TC1 ->TC_CHANNEL[1].TC_IDR = ~TC_IER_CPCS;
-	NVIC_SetPriority(TC4_IRQn, 4);							// step interrupt is time-critical
+	NVIC_SetPriority(TC4_IRQn, 4);							// step interrupt is more time-critical than this one
 	NVIC_EnableIRQ(TC4_IRQn);
 
 	// Interrupt for 4-pin PWM fan sense line
