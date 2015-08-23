@@ -280,8 +280,8 @@ public:
 
 	uint8_t Status() const;				// Returns OR of IOStatus
 	int Read(char& b);
-	void Write(char b, bool block = false);
-	void Write(const char* s, bool block = false);
+	void Write(char b, bool important = false);
+	void Write(const char* s, bool important = false);
 	void Flush();
 
 friend class Platform;
@@ -306,6 +306,7 @@ private:
 	uint16_t inputNumChars;
 	uint16_t outputGetIndex;
 	uint16_t outputNumChars;
+	uint32_t timeLastCharWritten;
 
 	uint8_t inWrite;
 	bool ignoringOutputLine;

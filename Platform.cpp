@@ -2377,6 +2377,7 @@ void Line::Init()
 	ignoringOutputLine = false;
 	inWrite = 0;
 	outputColumn = 0;
+	timeLastCharWritten = 0;
 }
 
 void Line::Spin()
@@ -2403,10 +2404,12 @@ void Line::Spin()
 }
 
 // Write a character to USB.
-// If 'block' is true then we don't return until we have either written it to the USB port or put it in the buffer.
+// If 'important' is true then we don't return until we have either written it to the USB port,
+// or put it in the buffer, or we have timed out waiting for the buffer to empty. The purpose of the timeout is to
+// avoid getting a software watchdog reset if we are writing important data (e.g. debug) and there is no consumer for the data.
 // Otherwise, if the buffer is full then we append ".\n" to the end of it, return immediately and ignore the rest
 // of the data we are asked to print until we get a new line.
-void Line::Write(char b, bool block)
+void Line::Write(char b, bool important)
 {
 	if (b == '\n')
 	{
@@ -2417,12 +2420,6 @@ void Line::Write(char b, bool block)
 		++outputColumn;
 	}
 
-	if (block)
-	{
-		// We failed to print an unimportant message that (unusually) didn't finish in a newline
-		ignoringOutputLine = false;
-	}
-
 	if (ignoringOutputLine)
 	{
 		// We have already failed to write some characters of this message line, so don't write any of it.
@@ -2431,36 +2428,32 @@ void Line::Write(char b, bool block)
 		{
 			ignoringOutputLine = false;
 		}
-		TryFlushOutput();		// this may help free things up
 	}
 	else
 	{
 		for(;;)
 		{
 			TryFlushOutput();
-			if (block)
-			{
-				iface.flush();
-			}
-
 			if (outputNumChars == 0 && iface.canWrite() != 0)
 			{
 				// We can write the character directly into the USB output buffer
 				++inWrite;
 				iface.write(b);
 				--inWrite;
+				timeLastCharWritten = millis();
 				break;
 			}
-			else if (   outputNumChars + 2 < lineOutBufSize							// save 2 spaces in the output buffer
-					 || (outputNumChars < lineOutBufSize && (block || b == '\n'))	//...unless doing blocking output or writing newline
+			else if (   outputNumChars + 2 < lineOutBufSize					// save 2 spaces in the output buffer
+					 || (b == '\n' && outputNumChars < lineOutBufSize)		//...unless writing newline
 					)
 			{
 				outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = b;
 				++outputNumChars;
 				break;
 			}
-			else if (!block)
+			else if (!important || millis() - timeLastCharWritten >= 100)
 			{
+				// Output is being consumed too slowly, so throw away some data
 				if (outputNumChars + 2 == lineOutBufSize)
 				{
 					// We still have our 2 free characters, so append ".\n" to the line to indicate it was incomplete
@@ -2478,21 +2471,14 @@ void Line::Write(char b, bool block)
 				break;
 			}
 		}
-
-		TryFlushOutput();
-		if (block)
-		{
-			iface.flush();
-		}
 	}
-	// else discard the character
 }
 
-void Line::Write(const char* b, bool block)
+void Line::Write(const char* b, bool important)
 {
 	while (*b)
 	{
-		Write(*b++, block);
+		Write(*b++, important);
 	}
 }
 
@@ -2507,6 +2493,7 @@ void Line::TryFlushOutput()
 		++inWrite;
 		iface.write(outBuffer[outputGetIndex]);
 		--inWrite;
+		timeLastCharWritten = millis();
 		outputGetIndex = (outputGetIndex + 1) % lineOutBufSize;
 		--outputNumChars;
 	}

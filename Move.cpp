@@ -255,10 +255,14 @@ void Move::Spin()
 			// See whether we need to prepare any moves
 			int32_t preparedTime = 0;
 			DDA::DDAState st;
-			while ((st = cdda->GetState()) == DDA:: completed || st == DDA::executing || st == DDA::frozen)
+			while ((st = cdda->GetState()) == DDA::completed || st == DDA::executing || st == DDA::frozen)
 			{
 				preparedTime += cdda->GetTimeLeft();
 				cdda = cdda->GetNext();
+				if (cdda == ddaRingAddPointer)
+				{
+					break;
+				}
 			}
 
 			// If the number of prepared moves will execute in less than the minimum time, prepare another move
