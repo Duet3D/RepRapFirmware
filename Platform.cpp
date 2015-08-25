@@ -741,7 +741,7 @@ void Platform::Spin()
 }
 
 // Switch into boot mode and reset
-#if 1		// trying the Arduino code to see if it is more reliable
+#if 0		// tried using this Arduino code to see if it is more reliable, but it wasn't
 
 __attribute__ ((long_call, section (".ramfunc")))
 void eraseAndReset() {
@@ -750,12 +750,25 @@ void eraseAndReset() {
 	// Set boot flag to run SAM-BA bootloader at restart
 	const int EEFC_FCMD_CGPB = 0x0C;
 	const int EEFC_KEY = 0x5A;
-	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0);
+	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0)
+		;
 	EFC0->EEFC_FCR =
 		EEFC_FCR_FCMD(EEFC_FCMD_CGPB) |
 		EEFC_FCR_FARG(1) |
 		EEFC_FCR_FKEY(EEFC_KEY);
-	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0);
+	// Try adding this delay to see if it helps
+	for (unsigned int i = 0; i < 100; ++i)
+	{
+		asm volatile ("nop");
+	}
+	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0)
+		;
+
+	// Try adding this delay to see if it helps
+	for (unsigned int i = 0; i < 10000; ++i)
+	{
+		asm volatile ("nop");
+	}
 
 	// From here flash memory is no more available.
 	const int RSTC_KEY = 0xA5;
@@ -774,6 +787,8 @@ void eraseAndReset()
 	cpu_irq_disable();
 	flash_unlock(0x00080000, 0x000FFFFF, nullptr, nullptr);
 	flash_clear_gpnvm(1);			// tell the system to boot from flash next time
+	rstc_start_software_reset(RSTC);
+	for(;;) {}
 }
 
 #endif
@@ -916,7 +931,7 @@ void Platform::DisableInterrupts()
 	TC_GetStatus(TC1, 0);									// clear any pending interrupt
 	int32_t diff = (int32_t)(tim - TC_ReadCV(TC1, 0));		// see how long we have to go
 	bool ret;
-	if (diff < 2)											// if less than 0.5us or already passed
+	if (diff < 3)											// if less than about 1us or already passed
 	{
 		ret = true;											// tell the caller to simulate an interrupt instead
 	}

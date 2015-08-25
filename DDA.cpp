@@ -50,9 +50,9 @@ void DDA::DebugPrint() const
 	debugPrintf(" d=%f", totalDistance);
 	DebugPrintVector(" vec", directionVector, 5);
 	debugPrintf("\na=%f reqv=%f topv=%f startv=%f endv=%f\n"
-				"daccel=%f ddecel=%f fstep=%u cks=%u\n",
+				"daccel=%f ddecel=%f cks=%u\n",
 				acceleration, requestedSpeed, topSpeed, startSpeed, endSpeed,
-				accelDistance, decelDistance, firstStepTime, clocksNeeded);
+				accelDistance, decelDistance, clocksNeeded);
 //	reprap.GetPlatform()->GetLine()->Flush();
 	ddm[0].DebugPrint('x', isDeltaMovement);
 	ddm[1].DebugPrint('y', isDeltaMovement);
@@ -70,7 +70,7 @@ void DDA::Init()
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		endPoint[drive] = 0;
-		ddm[drive].stepError = false;
+		ddm[drive].state = DMState::idle;
 	}
 	state = empty;
 	endCoordinatesValid = false;
@@ -119,15 +119,15 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 		if (drive < AXES && isDeltaMovement)
 		{
 			directionVector[drive] = nextMove[drive] - prev->GetEndCoordinate(drive, false);
-			dm.moving = true;							// on a delta printer, if one tower moves then we assume they all do
+			dm.state = DMState::moving;					// on a delta printer, if one tower moves then we assume they all do
 		}
 		else
 		{
 			directionVector[drive] = (float)delta/reprap.GetPlatform()->DriveStepsPerUnit(drive);
-			dm.moving = (delta != 0);
+			dm.state = (delta != 0) ? DMState::moving : DMState::idle;
 		}
 
-		if (dm.moving)
+		if (dm.state == DMState::moving)
 		{
 			dm.totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			dm.direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
@@ -165,7 +165,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 	// 4. Normalise the direction vector and compute the amount of motion.
 	// If there is any XYZ movement, then we normalise it so that the total XYZ movement has unit length.
 	// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
-	if (xyMoving || ddm[Z_AXIS].moving)
+	if (xyMoving || ddm[Z_AXIS].state == DMState::moving)
 	{
 		totalDistance = Normalise(directionVector, DRIVES, AXES);
 		if (isDeltaMovement)
@@ -438,7 +438,7 @@ void DDA::RecalculateMove()
 		const Platform *p = reprap.GetPlatform();
 		for (size_t drive = 0; drive < DRIVES; ++drive)
 		{
-			if (ddm[drive].moving && endSpeed * fabs(directionVector[drive]) > p->ActualInstantDv(drive))
+			if (ddm[drive].state == DMState::moving && endSpeed * fabs(directionVector[drive]) > p->ActualInstantDv(drive))
 			{
 				canPause = false;
 				break;
@@ -467,7 +467,7 @@ void DDA::CalcNewSpeeds()
 			const float nextMoveFraction = next->directionVector[drive];
 			const DriveMovement& thisMoveDm = ddm[drive];
 			const DriveMovement& nextMoveDm = next->ddm[drive];
-			if (thisMoveDm.moving || nextMoveDm.moving)
+			if (thisMoveDm.state == DMState::moving || nextMoveDm.state == DMState::moving)
 			{
 				float thisMoveSpeed = endSpeed * thisMoveFraction;
 				float nextMoveSpeed = targetNextSpeed * nextMoveFraction;
@@ -593,14 +593,15 @@ void DDA::Prepare()
 	params.accelClocksMinusAccelDistanceTimesCdivTopSpeed = (uint32_t)((accelStopTime - (accelDistance/topSpeed)) * stepClockRate);
 	params.compFactor = 1.0 - startSpeed/topSpeed;
 
-	firstStepTime = DriveMovement::NoStepTime;
 	goingSlow = false;
+	firstDM = nullptr;
 
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		DriveMovement& dm = ddm[drive];
-		if (dm.moving)
+		if (dm.state == DMState::moving)
 		{
+			dm.drive = drive;
 			reprap.GetPlatform()->EnableDrive(drive);
 			if (drive >= AXES)
 			{
@@ -645,14 +646,18 @@ void DDA::Prepare()
 			// Prepare for the first step
 			dm.nextStep = 0;
 			dm.nextStepTime = 0;
-			dm.stepError = false;							// clear any previous step error before we call CalcNextStep
-			dm.stepsTillRecalc = 1;
-			uint32_t st = (isDeltaMovement && drive < AXES)
+			dm.stepInterval = 999999;						// initialise to a large value so that we will calculating the time for just one steps
+			dm.stepsTillRecalc = 0;							// so that we don't skip the calculation
+			bool stepsToDo = (isDeltaMovement && drive < AXES)
 							? dm.CalcNextStepTimeDelta(*this, drive)
 							: dm.CalcNextStepTimeCartesian(*this, drive);
-			if (st < firstStepTime)
+			if (stepsToDo)
 			{
-				firstStepTime = st;
+				InsertDM(&dm);
+			}
+			else
+			{
+				dm.state = DMState::idle;
 			}
 		}
 	}
@@ -676,7 +681,7 @@ bool DDA::Start(uint32_t tim)
 	moveStartTime = tim;
 	state = executing;
 
-	if (firstStepTime == DriveMovement::NoStepTime)
+	if (firstDM == nullptr)
 	{
 		// No steps are pending. This should not happen!
 		return true;	// schedule another interrupt immediately
@@ -687,7 +692,7 @@ bool DDA::Start(uint32_t tim)
 		for (size_t i = 0; i < DRIVES; ++i)
 		{
 			DriveMovement& dm = ddm[i];
-			if (dm.moving)
+			if (dm.state == DMState::moving)
 			{
 				reprap.GetPlatform()->SetDirection(i, dm.direction);
 				if (i >= AXES)
@@ -714,7 +719,7 @@ bool DDA::Start(uint32_t tim)
 				{
 					if (prohibitedMovements & (1 << i))
 					{
-						ddm[i + AXES].moving = false;
+						ddm[i + AXES].state = DMState::idle;
 					}
 				}
 			}
@@ -724,7 +729,8 @@ bool DDA::Start(uint32_t tim)
 		{
 			platform->ExtrudeOff();
 		}
-		return platform->ScheduleInterrupt(firstStepTime + moveStartTime);
+
+		return platform->ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
 	}
 }
 
@@ -743,106 +749,104 @@ bool DDA::Step()
 		{
 			maxReps = numReps;
 		}
-		uint32_t now = Platform::GetInterruptClocks() - moveStartTime;			// how long since the move started
 
-		if ((endStopsToCheck & ZProbeActive) != 0)								// if the Z probe is enabled in this move
+		// Check endstop switches and Z probe if asked
+		if (endStopsToCheck != 0)											// if any homing switches or the Z probe is enabled in this move
 		{
-			// Check whether the Z probe has been triggered. On a delta at least, this must be done separately from endstop checks,
-			// because we have both a high endstop and a Z probe, and the Z motor is not the same thing as the Z axis.
-			switch (reprap.GetPlatform()->GetZProbeResult())
+			if ((endStopsToCheck & ZProbeActive) != 0)						// if the Z probe is enabled in this move
 			{
-			case EndStopHit::lowHit:
-				MoveAborted(now);												// set the state to completed and recalculate the endpoints
-				reprap.GetMove()->ZProbeTriggered(this);
-				break;
-
-			case EndStopHit::lowNear:
-				ReduceHomingSpeed();
-				break;
-
-			default:
-				break;
-			}
-		}
-
-		uint32_t nextInterruptTime = DriveMovement::NoStepTime;
-		if (state != completed)
-		{
-			for (size_t drive = 0; drive < DRIVES; ++drive)
-			{
-				DriveMovement& dm = ddm[drive];
-				if (dm.moving && !dm.stepError)
+				// Check whether the Z probe has been triggered. On a delta at least, this must be done separately from endstop checks,
+				// because we have both a high endstop and a Z probe, and the Z motor is not the same thing as the Z axis.
+				switch (reprap.GetPlatform()->GetZProbeResult())
 				{
-					// Hit anything?
-					if ((endStopsToCheck & (1 << drive)) != 0)
+				case EndStopHit::lowHit:
+					MoveAborted();											// set the state to completed and recalculate the endpoints
+					reprap.GetMove()->ZProbeTriggered(this);
+					break;
+
+				case EndStopHit::lowNear:
+					ReduceHomingSpeed();
+					break;
+
+				default:
+					break;
+				}
+			}
+
+			for (size_t drive = 0; drive < AXES; ++drive)
+			{
+				if ((endStopsToCheck & (1 << drive)) != 0)
+				{
+					switch(reprap.GetPlatform()->Stopped(drive))
 					{
-						switch(reprap.GetPlatform()->Stopped(drive))
+					case EndStopHit::lowHit:
+						endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
+						if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
 						{
-						case EndStopHit::lowHit:
-							endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-							if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
-							{
-								MoveAborted(now);
-							}
-							else
-							{
-								StopDrive(drive);
-							}
-							reprap.GetMove()->HitLowStop(drive, this);
-							break;
-
-						case EndStopHit::highHit:
-							endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-							if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
-							{
-								MoveAborted(now);
-							}
-							else
-							{
-								StopDrive(drive);
-							}
-							reprap.GetMove()->HitHighStop(drive, this);
-							break;
-
-						case EndStopHit::lowNear:
-							// Only reduce homing speed if there are no more axes to be homed.
-							// This allows us to home X and Y simultaneously.
-							if (endStopsToCheck == (1 << drive))
-							{
-								ReduceHomingSpeed();
-							}
-							break;
-
-						default:
-							break;
+							MoveAborted();
 						}
-					}
-
-					uint32_t st0 = dm.nextStepTime;
-					if (now + minInterruptInterval >= st0)
-					{
-						reprap.GetPlatform()->StepHigh(drive);
-						uint32_t st1 = (isDeltaMovement && drive < AXES) ? dm.CalcNextStepTimeDelta(*this, drive) : dm.CalcNextStepTimeCartesian(*this, drive);
-						if (st1 < nextInterruptTime)
+						else
 						{
-							nextInterruptTime = st1;
+							StopDrive(drive);
 						}
-						reprap.GetPlatform()->StepLow(drive);
-//uint32_t t3 = Platform::GetInterruptClocks() - t2;
-//if (t3 > maxCalcTime) maxCalcTime = t3;
-//if (t3 < minCalcTime) minCalcTime = t3;
-					}
-					else if (st0 < nextInterruptTime)
-					{
-						nextInterruptTime = st0;
+						reprap.GetMove()->HitLowStop(drive, this);
+						break;
+
+					case EndStopHit::highHit:
+						endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
+						if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
+						{
+							MoveAborted();
+						}
+						else
+						{
+							StopDrive(drive);
+						}
+						reprap.GetMove()->HitHighStop(drive, this);
+						break;
+
+					case EndStopHit::lowNear:
+						// Only reduce homing speed if there are no more axes to be homed.
+						// This allows us to home X and Y simultaneously.
+						if (endStopsToCheck == (1 << drive))
+						{
+							ReduceHomingSpeed();
+						}
+						break;
+
+					default:
+						break;
 					}
 				}
 			}
 		}
 
-		if (nextInterruptTime == DriveMovement::NoStepTime)
+		if (state != completed)
 		{
-			state = completed;
+			DriveMovement* dm = firstDM;
+			if (dm == nullptr)			// I don't think this should happen, but best to be sure
+			{
+				state = completed;
+			}
+			else if ((Platform::GetInterruptClocks() - moveStartTime) + minInterruptInterval > dm->nextStepTime)	// if the next step is due
+			{
+				size_t drive = dm->drive;
+				reprap.GetPlatform()->StepHigh(drive);
+				firstDM = dm->nextDM;
+				bool moreSteps = (isDeltaMovement && drive < AXES) ? dm->CalcNextStepTimeDelta(*this, drive) : dm->CalcNextStepTimeCartesian(*this, drive);
+				if (moreSteps)
+				{
+					InsertDM(dm);
+				}
+				else if (firstDM == nullptr)
+				{
+					state = completed;
+				}
+				reprap.GetPlatform()->StepLow(drive);
+//uint32_t t3 = Platform::GetInterruptClocks() - t2;
+//if (t3 > maxCalcTime) maxCalcTime = t3;
+//if (t3 < minCalcTime) minCalcTime = t3;
+			}
 		}
 
 		if (state == completed)
@@ -852,8 +856,10 @@ bool DDA::Step()
 			move->CurrentMoveCompleted();							// tell Move that the current move is complete
 			return move->StartNextMove(finishTime);					// schedule the next move
 		}
-		repeat = reprap.GetPlatform()->ScheduleInterrupt(nextInterruptTime + moveStartTime);
+
+		repeat = reprap.GetPlatform()->ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
 	} while (repeat);
+
 	return false;
 }
 
@@ -861,7 +867,7 @@ bool DDA::Step()
 void DDA::StopDrive(size_t drive)
 {
 	DriveMovement& dm = ddm[drive];
-	if (dm.moving)
+	if (dm.state == DMState::moving)
 	{
 		int32_t stepsLeft = dm.totalSteps - dm.nextStep + 1;
 		if (dm.direction)
@@ -872,16 +878,24 @@ void DDA::StopDrive(size_t drive)
 		{
 			endPoint[drive] += stepsLeft;			// we were going backwards
 		}
-		dm.moving = false;
-		endCoordinatesValid = false;				// the XYZ position is no longer valid
+		dm.state = DMState::idle;
+		if (drive < AXES)
+		{
+			endCoordinatesValid = false;			// the XYZ position is no longer valid
+		}
+		RemoveDM(drive);
+		if (firstDM == nullptr)
+		{
+			state = completed;
+		}
 	}
 }
 
 // This is called when we abort a move because we have hit an endstop.
 // It adjusts the end points of the current move to account for how far through the move we got.
-void DDA::MoveAborted(uint32_t clocksFromStart)
+void DDA::MoveAborted()
 {
-	for (size_t drive = 0; drive < AXES; ++drive)
+	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		StopDrive(drive);
 	}
@@ -901,9 +915,11 @@ void DDA::ReduceHomingSpeed()
 		for (size_t drive = 0; drive < DRIVES; ++drive)
 		{
 			DriveMovement& dm = ddm[drive];
-			if (dm.moving)
+			if (dm.state == DMState::moving)
 			{
 				dm.ReduceSpeed(*this, factor);
+				RemoveDM(dm.drive);
+				InsertDM(&dm);
 			}
 		}
 	}
@@ -914,12 +930,30 @@ bool DDA::HasStepError() const
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		const DriveMovement& dm = ddm[drive];
-		if (dm.moving && dm.stepError)
+		if (dm.state == DMState::stepError)
 		{
 			return true;
 		}
 	}
 	return false;
+}
+
+// Remove this drive from the list of drives with steps due, and return its DM or nullptr if not there
+// Called from the step ISR only.
+DriveMovement *DDA::RemoveDM(size_t drive)
+{
+	DriveMovement **dmp = &firstDM;
+	while (*dmp != nullptr)
+	{
+		DriveMovement *dm = *dmp;
+		if (dm->drive == drive)
+		{
+			(*dmp) = dm->nextDM;
+			return dm;
+		}
+		dmp = &(dm->nextDM);
+	}
+	return nullptr;
 }
 
 // Take a unit positive-hyperquadrant vector, and return the factor needed to obtain

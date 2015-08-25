@@ -153,11 +153,11 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, si
 
 void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 {
-	if (moving || stepError)
+	if (state != DMState::idle)
 	{
 		debugPrintf("DM%c%s dir=%c steps=%u next=%u interval=%u sstcda=%u "
 					"acmadtcdts=%d tstcdapdsc=%u 2dtstc2diva=%" PRIu64 "\n",
-					c, (stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, stepInterval, startSpeedTimesCdivA,
+					c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, stepInterval, startSpeedTimesCdivA,
 					accelClocksMinusAccelDistanceTimesCdivTopSpeed, topSpeedTimesCdivAPlusDecelStartClocks, twoDistanceToStopTimesCsquaredDivA);
 
 		if (isDeltaMovement)
@@ -187,36 +187,68 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 // The remaining functions are speed-critical, so use full optimisation
 #pragma GCC optimize ("O3")
 
-// Calculate the time since the start of the move when the next step for the specified DriveMovement is due
-// This is also used for extruders on delta machines
-uint32_t DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, size_t drive)
+// Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
+// Return true if there are ore steps to do.
+// This is also used for extruders on delta machines.
+bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, size_t drive)
 {
 	if (nextStep >= totalSteps)
 	{
-		moving = false;
-		return NoStepTime;
+		state = DMState::idle;
+		return false;
 	}
 
 	++nextStep;
-	if (stepsTillRecalc > 1 && nextStep != totalSteps)
+	if (stepsTillRecalc != 0)
 	{
-		--stepsTillRecalc;
-		nextStepTime += stepInterval;
+		--stepsTillRecalc;								// doing double/quad/octal stepping
 	}
 	else
 	{
+		// Work out how many steps to calculate at a time.
+		uint32_t shiftFactor;
+		if (stepInterval < DDA::MinCalcInterval)
+		{
+			uint32_t stepsToLimit = ((nextStep <= mp.cart.reverseStartStep && mp.cart.reverseStartStep <= totalSteps)
+										? mp.cart.reverseStartStep
+										: totalSteps
+									) - nextStep;
+			if (stepInterval < DDA::MinCalcInterval/4 && stepsToLimit > 8)
+			{
+				shiftFactor = 3;		// octal stepping
+			}
+			else if (stepInterval < DDA::MinCalcInterval/2 && stepsToLimit > 4)
+			{
+				shiftFactor = 2;		// quad stepping
+			}
+			else if (stepsToLimit > 2)
+			{
+				shiftFactor = 1;		// double stepping
+			}
+			else
+			{
+				shiftFactor = 0;		// single stepping
+			}
+		}
+		else
+		{
+			shiftFactor = 0;			// single stepping
+		}
+		stepsTillRecalc = (1u << shiftFactor) - 1;					// store number of additional steps to generate
+
+		uint32_t nextCalcStep = nextStep + stepsTillRecalc;
 		uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
-		if (nextStep < mp.cart.accelStopStep)
+		if (nextCalcStep < mp.cart.accelStopStep)
 		{
-			nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep)) - startSpeedTimesCdivA;
+			nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + (mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep)) - startSpeedTimesCdivA;
 		}
-		else if (nextStep < mp.cart.decelStartStep)
+		else if (nextCalcStep < mp.cart.decelStartStep)
 		{
-			nextStepTime = (uint32_t)((int32_t)(((uint64_t)mp.cart.mmPerStepTimesCdivtopSpeed * nextStep)/K1) + accelClocksMinusAccelDistanceTimesCdivTopSpeed);
+			nextStepTime = (uint32_t)((int32_t)(((uint64_t)mp.cart.mmPerStepTimesCdivtopSpeed * nextCalcStep)/K1) + accelClocksMinusAccelDistanceTimesCdivTopSpeed);
 		}
-		else if (nextStep < mp.cart.reverseStartStep)
+		else if (nextCalcStep < mp.cart.reverseStartStep)
 		{
-			uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep;
+			uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep;
 			// Allow for possible rounding error when the end speed is zero or very small
 			nextStepTime = (twoDistanceToStopTimesCsquaredDivA > temp)
 							? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
@@ -224,107 +256,106 @@ uint32_t DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, size_t drive)
 		}
 		else
 		{
-			if (nextStep == mp.cart.reverseStartStep)
+			if (nextCalcStep == mp.cart.reverseStartStep)
 			{
 				reprap.GetPlatform()->SetDirection(drive, !direction);
 			}
 			nextStepTime = topSpeedTimesCdivAPlusDecelStartClocks
-								+ isqrt64((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
-
+								+ isqrt64((int64_t)(mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep) - mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA);
 		}
 
-		if (stepsTillRecalc == 1)
+		stepInterval = (nextStepTime - lastStepTime) >> shiftFactor;	// calculate the time per step, ready for next time
+
+		if (nextStepTime > dda.clocksNeeded)
 		{
-			--stepsTillRecalc;			// we can't trust the interval
-		}
-		else
-		{
-			// Check for steps that are too fast, this normally indicates a problem with the calculation
-			int32_t interval = (int32_t)nextStepTime - (int32_t)lastStepTime;
-			if (interval < DDA::MinStepInterval)
+			// The calculation makes this step late.
+			// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
+			// So if this is the last step and it is late, bring it forward to the expected finish time.
+			if (nextStep == totalSteps)
 			{
-				stepError = true;
+				nextStepTime = dda.clocksNeeded;
+			}
+			else
+			{
+				// We don't expect any step except the last to be late
+				state = DMState::stepError;
 				if (reprap.Debug(moduleMove))
 				{
-					stepInterval = (uint32_t)interval;
-					return NoStepTime;
+					stepInterval = 10000000 + nextStepTime;		// so we can tell what happened in debug
+					return false;
 				}
 			}
-			else if (interval < DDA::MinCalcInterval)
-			{
-				// If the step interval is very short, flag not to recalculate it next time
-				stepInterval = (uint32_t)interval;
-				stepsTillRecalc = DDA::MinCalcInterval/stepInterval + 1;
-			}
 		}
 	}
-
-	if (nextStepTime > dda.clocksNeeded)
-	{
-		// The calculation makes this step late.
-		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
-		// So if this is the last step and it is late, bring it forward to the expected finish time.
-		if (nextStep == totalSteps)
-		{
-			nextStepTime = dda.clocksNeeded;
-		}
-		else
-		{
-			// We don't expect any step except the last to be late
-			stepError = true;
-			if (reprap.Debug(moduleMove))
-			{
-				stepInterval = 10000000 + nextStepTime;		// so we can tell what happened in debug
-				return NoStepTime;
-			}
-		}
-	}
-	return nextStepTime;
+	return true;
 }
 
 // Calculate the time since the start of the move when the next step for the specified DriveMovement is due
-uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
+bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 {
 	if (nextStep >= totalSteps)
 	{
-		moving = false;
-		return NoStepTime;
+		state = DMState::idle;
+		return false;
 	}
 
 	++nextStep;
-	if (stepsTillRecalc > 1 && nextStep != mp.delta.reverseStartStep && nextStep != totalSteps)
+	if (stepsTillRecalc != 0)
 	{
-		--stepsTillRecalc;
-		nextStepTime += stepInterval;
-
-		// We can avoid most of the calculation, but we still need to update mp.delta.hmz0sk
-		if (direction)
-		{
-			mp.delta.hmz0sK += (int32_t)K2;
-		}
-		else
-		{
-			mp.delta.hmz0sK -= (int32_t)K2;
-		}
+		--stepsTillRecalc;			// we are doing double or quad stepping
 	}
 	else
 	{
-		uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
+		// Work out how many steps to calculate at a time.
+		// The simulator suggests that at 200steps/mm, the minimum step pulse interval for 400mm/sec movement is 4.5us
+		uint32_t shiftFactor;
+		if (stepInterval < DDA::MinCalcInterval)
+		{
+			uint32_t stepsToLimit = ((nextStep <= mp.delta.reverseStartStep && mp.delta.reverseStartStep <= totalSteps)
+										? mp.delta.reverseStartStep
+										: totalSteps
+									) - nextStep;
+			if (stepInterval < DDA::MinCalcInterval/8 && stepsToLimit > 16)
+			{
+				shiftFactor = 4;		// octal stepping
+			}
+			else if (stepInterval < DDA::MinCalcInterval/4 && stepsToLimit > 8)
+			{
+				shiftFactor = 3;		// octal stepping
+			}
+			else if (stepInterval < DDA::MinCalcInterval/2 && stepsToLimit > 4)
+			{
+				shiftFactor = 2;		// quad stepping
+			}
+			else if (stepsToLimit > 2)
+			{
+				shiftFactor = 1;		// double stepping
+			}
+			else
+			{
+				shiftFactor = 0;		// single stepping
+			}
+		}
+		else
+		{
+			shiftFactor = 0;			// single stepping
+		}
+		stepsTillRecalc = (1u << shiftFactor) - 1;					// store number of additional steps to generate
+
 		if (nextStep == mp.delta.reverseStartStep)
 		{
 			direction = false;
 			reprap.GetPlatform()->SetDirection(drive, false);		// going down now
-			stepsTillRecalc = 1;						// we can't trust the interval at the inflexion point
 		}
 
 		// Calculate d*s*K as an integer, where d = distance the head has travelled, s = steps/mm for this drive, K = a power of 2 to reduce the rounding errors
 		if (direction)
 		{
-			mp.delta.hmz0sK += (int32_t)K2;
+			mp.delta.hmz0sK += (int32_t)(K2 << shiftFactor);
 		}
 		else
 		{
-			mp.delta.hmz0sK -= (int32_t)K2;
+			mp.delta.hmz0sK -= (int32_t)(K2 << shiftFactor);
 		}
 
 		const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
@@ -337,10 +368,12 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 		// Now feed dsK into a modified version of the step algorithm for Cartesian motion without elasticity compensation
 		if (dsK < 0)
 		{
-			stepError = true;
+			state = DMState::stepError;
 			nextStep += 1000000;		// so that we can tell what happened in the debug print
-			return NoStepTime;
+			return false;
 		}
+
+		uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
 		if ((uint32_t)dsK < mp.delta.accelStopDsK)
 		{
 			nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + ((uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK)) - startSpeedTimesCdivA;
@@ -358,54 +391,31 @@ uint32_t DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive)
 							: topSpeedTimesCdivAPlusDecelStartClocks;
 		}
 
-		if (stepsTillRecalc == 1)
+		stepInterval = (nextStepTime - lastStepTime) >> shiftFactor;	// calculate the time per step, ready for next time
+
+		if (nextStepTime > dda.clocksNeeded)
 		{
-			--stepsTillRecalc;			// we can't trust the interval
-		}
-		else
-		{
-			// Check for steps that are too fast, this normally indicates a problem with the calculation
-			int32_t interval = (int32_t)nextStepTime - (int32_t)lastStepTime;
-			if (interval < DDA::MinStepInterval)
+			// The calculation makes this step late.
+			// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
+			// So if this is the last step and it is late, bring it forward to the expected finish time.
+			if (nextStep == totalSteps)
 			{
-				stepError = true;
+				nextStepTime = dda.clocksNeeded;
+			}
+			else
+			{
+				// We don't expect any step except the last to be late
+				state = DMState::stepError;
 				if (reprap.Debug(moduleMove))
 				{
-					stepInterval = (uint32_t)interval;
-					return NoStepTime;
+					stepInterval = 10000000 + nextStepTime;		// so we can tell what happened in debug
+					return false;
 				}
 			}
-			else if (interval < DDA::MinCalcInterval)
-			{
-				// If the step interval is very short, flag not to recalculate it next time
-				stepInterval = (uint32_t)interval;
-				stepsTillRecalc = DDA::MinCalcInterval/stepInterval + 1;
-			}
 		}
 	}
 
-	if (nextStepTime > dda.clocksNeeded)
-	{
-		// The calculation makes this step late.
-		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
-		// So if this is the last step and it is late, bring it forward to the expected finish time.
-		if (nextStep == totalSteps)
-		{
-			nextStepTime = dda.clocksNeeded;
-		}
-		else
-		{
-			// We don't expect any step except the last to be late
-			stepError = true;
-			if (reprap.Debug(moduleMove))
-			{
-				stepInterval = 10000000 + nextStepTime;		// so we can tell what happened in debug
-				return NoStepTime;
-			}
-		}
-	}
-
-	return nextStepTime;
+	return true;
 }
 
 // Reduce the speed of this movement. Called to reduce the homing speed when we detect we are near the endstop for a drive.

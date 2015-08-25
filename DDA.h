@@ -62,7 +62,6 @@ public:
 
 	static const uint32_t stepClockRate = VARIANT_MCK/32;			// the frequency of the clock used for stepper pulse timing (using TIMER_CLOCK3), about 0.38us resolution
 	static const uint64_t stepClockRateSquared = (uint64_t)stepClockRate * stepClockRate;
-	static const int32_t MinStepInterval = (4 * stepClockRate)/1000000; // the smallest sensible interval between steps (4us) in step timer clocks
 
 	// Note on the following constant:
 	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
@@ -78,7 +77,9 @@ private:
 	void CalcNewSpeeds();
 	void ReduceHomingSpeed();										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive);									// stop movement of a drive and recalculate the endpoint
-	void MoveAborted(uint32_t clocksFromStart);
+	void MoveAborted();
+	void InsertDM(DriveMovement *dm);
+	DriveMovement *RemoveDM(size_t drive);
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
 
 	static void DoLookahead(DDA *laDDA);							// called by AdjustEndSpeed to do the real work
@@ -127,7 +128,8 @@ private:
 	// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 	uint32_t clocksNeeded;					// in clocks
 	uint32_t moveStartTime;					// clock count at which the move was started
-	uint32_t firstStepTime;					// in clocks, relative to the start of the move
+
+    DriveMovement* firstDM;					// the contained DM that needs the first step
 
 	DriveMovement ddm[DRIVES];				// These describe the state of each drive movement
 };
@@ -137,6 +139,18 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 {
 	endPoint[drive] = a;
 	endCoordinatesValid = false;
+}
+
+// Insert the specified drive into the step list, in step time order
+inline void DDA::InsertDM(DriveMovement *dm)
+{
+	DriveMovement **dmp = &firstDM;
+	while (*dmp != nullptr && (*dmp)->nextStepTime < dm->nextStepTime)
+	{
+		dmp = &((*dmp)->nextDM);
+	}
+	dm->nextDM = *dmp;
+	*dmp = dm;
 }
 
 #endif /* DDA_H_ */

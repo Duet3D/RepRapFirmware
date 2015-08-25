@@ -1116,32 +1116,32 @@ inline bool Platform::GetDirectionValue(size_t drive) const
 
 inline float Platform::HomeFeedRate(size_t axis) const
 {
-  return homeFeedrates[axis];
+	return homeFeedrates[axis];
 }
 
 inline void Platform::SetHomeFeedRate(size_t axis, float value)
 {
-   homeFeedrates[axis] = value;
+	homeFeedrates[axis] = value;
 }
 
 inline float Platform::AxisMaximum(size_t axis) const
 {
-  return axisMaxima[axis];
+	return axisMaxima[axis];
 }
 
 inline void Platform::SetAxisMaximum(size_t axis, float value)
 {
-  axisMaxima[axis] = value;
+	axisMaxima[axis] = value;
 }
 
 inline float Platform::AxisMinimum(size_t axis) const
 {
-  return axisMinima[axis];
+	return axisMinima[axis];
 }
 
 inline void Platform::SetAxisMinimum(size_t axis, float value)
 {
-  axisMinima[axis] = value;
+	axisMinima[axis] = value;
 }
 
 inline float Platform::AxisTotalLength(size_t axis) const
@@ -1152,20 +1152,12 @@ inline float Platform::AxisTotalLength(size_t axis) const
 // The A4988 requires 1us minimum pulse width, so we make separate StepHigh and StepLow calls so that we don't waste this time
 inline void Platform::StepHigh(size_t drive)
 {
-	const int pin = stepPins[drive];
-	if (pin >= 0)
-	{
-		digitalWriteNonDue(pin, 1);
-	}
+	digitalWriteNonDue(stepPins[drive], 1);
 }
 
 inline void Platform::StepLow(size_t drive)
 {
-	const int pin = stepPins[drive];
-	if (pin >= 0)
-	{
-		digitalWriteNonDue(pin, 0);
-	}
+	digitalWriteNonDue(stepPins[drive], 0);
 }
 
 inline void Platform::SetExtrusionAncilliaryPWM(float v)
