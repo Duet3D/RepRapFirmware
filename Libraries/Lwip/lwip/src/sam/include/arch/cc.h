@@ -100,6 +100,7 @@ typedef u32_t mem_ptr_t;
 #define  LWIP_COMPAT_MUTEX  1
 
 /* Plaform specific diagnostic output */
+void debugPrintf(const char*, ...);
 
 #define LWIP_PLATFORM_DIAG(x)   do {debugPrintf x;} while (0)
 

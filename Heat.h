@@ -80,6 +80,10 @@ class Heat
     void Spin();												// Called in a tight loop to keep everything going
     void Init();												// Set everything up
     void Exit();												// Shut everything down
+
+	int8_t GetChamberHeater() const;							// Get chamber heater number
+	void SetChamberHeater(int8_t heater);						// Set chamber heater number
+
     void SetActiveTemperature(int8_t heater, float t);
     float GetActiveTemperature(int8_t heater) const;
     void SetStandbyTemperature(int8_t heater, float t);
@@ -100,8 +104,12 @@ class Heat
   
     Platform* platform;							// The instance of the RepRap hardware class
     GCodes* gCodes;								// The instance of the G Code interpreter class
+
     bool active;								// Are we active?
     PID* pids[HEATERS];							// A PID controller for each heater
+
+	int8_t chamberHeater;						// Index of the chamber heater to use or -1 if none is available
+
     float lastTime;								// The last time our Spin() was called
     float longWait;								// Long time for things that happen occasionally
 };
@@ -186,6 +194,16 @@ inline bool PID::SwitchedOff() const
 //**********************************************************************************
 
 // Heat
+
+inline int8_t Heat::GetChamberHeater() const
+{
+	return chamberHeater;
+}
+
+inline void Heat::SetChamberHeater(int8_t heater)
+{
+	chamberHeater = heater;
+}
 
 inline Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 {

@@ -32,7 +32,7 @@ void Move::Init()
 	deltaProbing = false;
 
 	// Empty the ring
-	ddaRingGetPointer = ddaRingAddPointer;
+	ddaRingGetPointer = ddaRingCheckPointer = ddaRingAddPointer;
 	DDA *dda = ddaRingAddPointer;
 	do
 	{
@@ -42,6 +42,7 @@ void Move::Init()
 
 	currentDda = nullptr;
 	addNoMoreMoves = false;
+	stepErrors = 0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -53,12 +54,12 @@ void Move::Init()
 	for (size_t i = 0; i < DRIVES; i++)
 	{
 		move[i] = 0.0;
+		liveEndPoints[i] = 0;									// not actually right for a delta, but better than printing random values in response to M114
 		reprap.GetPlatform()->SetDirection(i, FORWARDS);		// DC: I don't see any reason why we do this
 	}
 	SetLiveCoordinates(move);
 	SetPositions(move);
 
-	size_t slow = reprap.GetPlatform()->SlowestDrive();
 	currentFeedrate = DefaultFeedRate;
 
 	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
@@ -105,14 +106,25 @@ void Move::Spin()
 		++idleCount;
 	}
 
+	// Check for DDA errors to print if Move debug is enabled
+	while (ddaRingCheckPointer->GetState() == DDA::completed)
+	{
+		if (ddaRingCheckPointer->HasStepError())
+		{
+			if (reprap.Debug(moduleMove))
+			{
+				ddaRingCheckPointer->DebugPrint();
+			}
+			++stepErrors;
+		}
+		ddaRingCheckPointer->Free();
+		ddaRingCheckPointer = ddaRingCheckPointer->GetNext();
+	}
+
 	// See if we can add another move to the ring
 	if (!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
 	{
 		DDA *dda = ddaRingAddPointer;
-		if (reprap.Debug(moduleMove))
-		{
-			dda->PrintIfHasStepError();
-		}
 
 		// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
 		// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is
@@ -198,7 +210,7 @@ void Move::Spin()
 			DDA *dda = ddaRingGetPointer;
 			simulationTime += dda->CalcTime();
 			liveCoordinatesValid = dda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
-			dda->Release();
+			dda->Complete();
 			ddaRingGetPointer = ddaRingGetPointer->GetNext();
 		}
 	}
@@ -243,10 +255,14 @@ void Move::Spin()
 			// See whether we need to prepare any moves
 			int32_t preparedTime = 0;
 			DDA::DDAState st;
-			while ((st = cdda->GetState()) == DDA:: completed || st == DDA::executing || st == DDA::frozen)
+			while ((st = cdda->GetState()) == DDA::completed || st == DDA::executing || st == DDA::frozen)
 			{
 				preparedTime += cdda->GetTimeLeft();
 				cdda = cdda->GetNext();
+				if (cdda == ddaRingAddPointer)
+				{
+					break;
+				}
 			}
 
 			// If the number of prepared moves will execute in less than the minimum time, prepare another move
@@ -334,7 +350,7 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 			{
 				fPos = dda->GetFilePosition();
 			}
-			dda->Release();
+			dda->Complete();
 			dda = dda->GetNext();
 		}
 		while (dda != savedDdaRingAddPointer);
@@ -357,7 +373,7 @@ extern uint64_t lastNum;
 void Move::Diagnostics()
 {
 	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Move Diagnostics:\n");
-	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxReps: %u\n", maxReps);
+	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxReps: %u, StepErrors: %u\n", maxReps, stepErrors);
 	maxReps = 0;
 
 #if 0
@@ -375,7 +391,7 @@ void Move::SetPositions(const float move[DRIVES])
 {
 	if (DDARingEmpty())
 	{
-		ddaRingAddPointer->GetPrevious()->SetPositions(move);
+		ddaRingAddPointer->GetPrevious()->SetPositions(move, DRIVES);
 	}
 	else
 	{
@@ -686,7 +702,7 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 		reply.copy("Bed probe heights:");
 		float sum = 0.0;
 		float sumOfSquares = 0.0;
-		for (size_t i = 0; i < numPoints; ++i)
+		for (size_t i = 0; (int)i < numPoints; ++i)
 		{
 			reply.catf(" %.3f", zBedProbePoints[i]);
 			sum += zBedProbePoints[i];
@@ -707,7 +723,7 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 			debugPrintf("Z probe offsets:");
 			float sum = 0.0;
 			float sumOfSquares = 0.0;
-			for (size_t i = 0; i < numPoints; ++i)
+			for (size_t i = 0; (int)i < numPoints; ++i)
 			{
 				debugPrintf(" %.3f", zBedProbePoints[i]);
 				sum += zBedProbePoints[i];
@@ -814,7 +830,7 @@ void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 	reply.cat("\n");
 }
 
-// Perform 4- or 7-factor delta adjustment
+// Perform 3-, 4-, 6- or 7-factor delta adjustment
 void Move::AdjustDeltaParameters(const float v[], size_t numFactors)
 {
 	// Save the old home carriage heights
@@ -823,7 +839,6 @@ void Move::AdjustDeltaParameters(const float v[], size_t numFactors)
 	{
 		homedCarriageHeights[drive] = deltaParams.GetHomedCarriageHeight(drive);
 	}
-
 
 	deltaParams.Adjust(numFactors, v);	// adjust the delta parameters
 
@@ -853,12 +868,6 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	if (numFactors != 3 && numFactors != 4 && numFactors != 6 && numFactors != 7)
 	{
 		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Delta calibration error: %d factors requested but only 3, 4, 6 and 7 supported\n", numFactors);
-		return;
-	}
-
-	if (numFactors == 4 && !deltaParams.IsEquilateral())
-	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Delta calibration error: 4 factor calibration not possible because tower positions have been adjusted\n");
 		return;
 	}
 
@@ -910,8 +919,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 			for (size_t j = 0; j < numFactors; ++j)
 			{
 				derivativeMatrix(i, j) =
-					deltaParams.ComputeDerivative((numFactors == 4 && j == 3) ? 7 : j,
-													probeMotorPositions(i, A_AXIS), probeMotorPositions(i, B_AXIS), probeMotorPositions(i, C_AXIS));
+					deltaParams.ComputeDerivative(j, probeMotorPositions(i, A_AXIS), probeMotorPositions(i, B_AXIS), probeMotorPositions(i, C_AXIS));
 			}
 		}
 
@@ -1095,7 +1103,7 @@ void Move::CurrentMoveCompleted()
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 
-	currentDda->Release();
+	currentDda->Complete();
 	currentDda = nullptr;
 	ddaRingGetPointer = ddaRingGetPointer->GetNext();
 }
@@ -1116,12 +1124,12 @@ bool Move::StartNextMove(uint32_t startTime)
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
-void Move::HitLowStop(size_t drive, DDA* hitDDA)
+void Move::HitLowStop(size_t axis, DDA* hitDDA)
 {
-	if (drive < AXES && !IsDeltaMode())		// should always be true
+	if (axis < AXES && !IsDeltaMode())		// should always be true
 	{
 		float hitPoint;
-		if (drive == Z_AXIS)
+		if (axis == Z_AXIS)
 		{
 			// Special case of doing a G1 S1 Z move on a Cartesian printer. This is not how we normally home the Z axis, we use G30 instead.
 			// But I think it used to work, so let's not break it.
@@ -1129,27 +1137,45 @@ void Move::HitLowStop(size_t drive, DDA* hitDDA)
 		}
 		else
 		{
-			hitPoint = reprap.GetPlatform()->AxisMinimum(drive);
+			hitPoint = reprap.GetPlatform()->AxisMinimum(axis);
 		}
-		int32_t coord = MotorEndPointToMachine(drive, hitPoint);
-		hitDDA->SetDriveCoordinate(coord, drive);
-		reprap.GetGCodes()->SetAxisIsHomed(drive);
+		JustHomed(axis, hitPoint, hitDDA);
 	}
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
-void Move::HitHighStop(size_t drive, DDA* hitDDA)
+void Move::HitHighStop(size_t axis, DDA* hitDDA)
 {
-	if (drive < AXES)		// should always be true
+	if (axis < AXES)		// should always be true
 	{
-		float position = (IsDeltaMode())
-							? deltaParams.GetHomedCarriageHeight(drive)
+		float hitPoint = (IsDeltaMode())
+							? deltaParams.GetHomedCarriageHeight(axis)
 							        // this is a delta printer, so the motor is at the homed carriage height for this drive
-							: reprap.GetPlatform()->AxisMaximum(drive);
+							: reprap.GetPlatform()->AxisMaximum(axis);
 									// this is a Cartesian printer, so we're at the maximum for this axis
-		hitDDA->SetDriveCoordinate(MotorEndPointToMachine(drive, position), drive);
-		reprap.GetGCodes()->SetAxisIsHomed(drive);
+		JustHomed(axis, hitPoint, hitDDA);
 	}
+}
+
+// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
+void Move::JustHomed(size_t axisHomed, float hitPoint, DDA* hitDDA)
+{
+	if (IsCoreXYAxis(axisHomed))
+	{
+		float tempCoordinates[AXES];
+		for (size_t axis = 0; axis < AXES; ++axis)
+		{
+			tempCoordinates[axis] = hitDDA->GetEndCoordinate(axis, false);
+		}
+		tempCoordinates[axisHomed] = hitPoint;
+		hitDDA->SetPositions(tempCoordinates, AXES);
+	}
+	else
+	{
+		hitDDA->SetDriveCoordinate(MotorEndPointToMachine(axisHomed, hitPoint), axisHomed);
+	}
+	reprap.GetGCodes()->SetAxisIsHomed(axisHomed);
+
 }
 
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
@@ -1241,7 +1267,7 @@ void Move::SetLiveCoordinates(const float coords[DRIVES])
 
 void Move::SetXBedProbePoint(int index, float x)
 {
-	if(index < 0 || index >= MaxProbePoints)
+	if(index < 0 || (size_t)index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point X index out of range.\n");
 		return;
@@ -1252,7 +1278,7 @@ void Move::SetXBedProbePoint(int index, float x)
 
 void Move::SetYBedProbePoint(int index, float y)
 {
-	if(index < 0 || index >= MaxProbePoints)
+	if(index < 0 || (size_t)index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Y index out of range.\n");
 		return;
@@ -1263,7 +1289,7 @@ void Move::SetYBedProbePoint(int index, float y)
 
 void Move::SetZBedProbePoint(int index, float z, bool wasXyCorrected, bool wasError)
 {
-	if (index < 0 || index >= MaxProbePoints)
+	if (index < 0 || (size_t)index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Z index out of range.\n");
 	}
@@ -1317,7 +1343,7 @@ bool Move::XYProbeCoordinatesSet(int index) const
 
 int Move::NumberOfProbePoints() const
 {
-	for(int i = 0; i < MaxProbePoints; i++)
+	for(int i = 0; (size_t)i < MaxProbePoints; i++)
 	{
 		if(!AllProbeCoordinatesSet(i))
 		{
@@ -1329,7 +1355,7 @@ int Move::NumberOfProbePoints() const
 
 int Move::NumberOfXYProbePoints() const
 {
-	for(int i = 0; i < MaxProbePoints; i++)
+	for(int i = 0; (size_t)i < MaxProbePoints; i++)
 	{
 		if(!XYProbeCoordinatesSet(i))
 		{
@@ -1366,6 +1392,22 @@ const char* Move::GetGeometryString() const
 			: (coreXYMode == 2) ? "coreXZ"
 			: (coreXYMode == 3) ? "coreYZ"
 			: "cartesian";
+}
+
+// Return true if the specified axis shares its motors with another
+bool Move::IsCoreXYAxis(unsigned int axis) const
+{
+	switch(coreXYMode)
+	{
+	case 1:
+		return axis == X_AXIS || axis == Y_AXIS;
+	case 2:
+		return axis == X_AXIS || axis == Z_AXIS;
+	case 3:
+		return axis == Y_AXIS || axis == Z_AXIS;
+	default:
+		return false;
+	}
 }
 
 // Do a delta probe returning -1 if still probing, 0 if failed, 1 if success

@@ -60,4 +60,7 @@ bool ethernetif_input(void *pv_parameters);
 void ethernet_hardware_init(void);
 bool ethernet_establish_link(void);
 
+void ethernetif_set_rx_callback(emac_dev_tx_cb_t callback);
+void ethernetif_set_mac_address(const u8_t macAddress[]);
+
 #endif /* ETHERNETIF_H_INCLUDED */

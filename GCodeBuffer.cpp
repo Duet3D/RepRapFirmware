@@ -114,7 +114,7 @@ bool GCodeBuffer::Put(char c)
 	else if (!inComment || writingFileDirectory)
 	{
 		gcodeBuffer[gcodePointer++] = c;
-		if (gcodePointer >= GcodeLength)
+		if (gcodePointer >= (int)GcodeLength)
 		{
 			platform->Message(BOTH_ERROR_MESSAGE, "G-Code buffer length overflow.\n");
 			gcodePointer = 0;

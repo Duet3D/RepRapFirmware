@@ -33,7 +33,7 @@ const char GCodes::axisLetters[AXES] =
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 GCodes::GCodes(Platform* p, Webserver* w) :
-		active(false), platform(p), webserver(w), stackPointer(0)
+		platform(p), active(false), webserver(w), stackPointer(0)
 {
 	webGCode = new GCodeBuffer(platform, "web: ");
 	fileGCode = new GCodeBuffer(platform, "file: ");
@@ -259,7 +259,7 @@ void GCodes::Spin()
 	case GCodeState::setBed2:
 		{
 			int numProbePoints = reprap.GetMove()->NumberOfXYProbePoints();
-			if (DoSingleZProbeAtPoint(probeCount))
+			if (DoSingleZProbeAtPoint(probeCount, 0.0))
 			{
 				probeCount++;
 				if (probeCount >= numProbePoints)
@@ -621,7 +621,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 			if (tool->Mixing())
 			{
 				float length = gb->GetFValue();
-				for (size_t drive = 0; drive < tool->DriveCount(); drive++)
+				for (size_t drive = 0; (int)drive < tool->DriveCount(); drive++)
 				{
 					eMovement[drive] = length * tool->GetMix()[drive];
 				}
@@ -638,7 +638,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 
 			// Set the drive values for this tool.
 			// zpl-2014-10-03: Do NOT check extruder temperatures here, because we may be executing queued codes like M116
-			for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
+			for (size_t eDrive = 0; (int)eDrive < eMoveCount; eDrive++)
 			{
 				int drive = tool->Drive(eDrive);
 				float moveArg = eMovement[eDrive] * distanceScale;
@@ -966,7 +966,7 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 // probes the bed height, and records the Z coordinate probed.  If you want to program any general
 // internal canned cycle, this shows how to do it.
 // On entry, probePointIndex specifies which of the points this is.
-bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
+bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 {
 	reprap.GetMove()->SetIdentityTransform(); 		// It doesn't matter if these are called repeatedly
 
@@ -1018,12 +1018,12 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 			case 1:
 				if (axisIsHomed[Z_AXIS])
 				{
-					lastProbedZ = moveBuffer[Z_AXIS] - platform->ZProbeStopHeight();
+					lastProbedZ = moveBuffer[Z_AXIS] - (platform->ZProbeStopHeight() + heightAdjust);
 				}
 				else
 				{
 					// The Z axis has not yet been homed, so treat this probe as a homing move.
-					moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
+					moveBuffer[Z_AXIS] = platform->ZProbeStopHeight() + heightAdjust;
 					SetPositions(moveBuffer);
 					axisIsHomed[Z_AXIS] = true;
 					lastProbedZ = 0.0;
@@ -1058,7 +1058,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex)
 
 // This simply moves down till the Z probe/switch is triggered. Call it repeatedly until it returns true.
 // Called when we do a G30 with no P parameter.
-bool GCodes::DoSingleZProbe()
+bool GCodes::DoSingleZProbe(bool reportOnly, float heightAdjust)
 {
 	switch (DoZProbe(1.1 * platform->AxisTotalLength(Z_AXIS)))
 	{
@@ -1066,10 +1066,13 @@ bool GCodes::DoSingleZProbe()
 		return true;
 
 	case 1:		// success
-		moveBuffer[Z_AXIS] = platform->ZProbeStopHeight();
-		SetPositions(moveBuffer);
-		axisIsHomed[Z_AXIS] = true;
-		lastProbedZ = 0.0;
+		if (!reportOnly)
+		{
+			moveBuffer[Z_AXIS] = platform->ZProbeStopHeight() + heightAdjust;
+			SetPositions(moveBuffer);
+			axisIsHomed[Z_AXIS] = true;
+			lastProbedZ = 0.0;
+		}
 		return true;
 
 	default:	// not finished yet
@@ -1124,14 +1127,24 @@ int GCodes::DoZProbe(float distance)
 // probed and that value is used.
 bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 {
-	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
-		return false;
+	float heightAdjust = 0;
+	if (gb->Seen('H'))
+	{
+		heightAdjust = gb->GetFValue();
+	}
 
 	if (!gb->Seen('P'))
-		return DoSingleZProbe();
+	{
+		bool reportOnly = false;
+		if (gb->Seen('S') && gb->GetIValue() < 0)
+		{
+			reportOnly = true;
+		}
+		return DoSingleZProbe(reportOnly, heightAdjust);
+	}
 
 	int probePointIndex = gb->GetIValue();
-	if (probePointIndex < 0 || probePointIndex >= MaxProbePoints)
+	if (probePointIndex < 0 || (unsigned int)probePointIndex >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
 		return true;
@@ -1156,7 +1169,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	}
 	else
 	{
-		if (DoSingleZProbeAtPoint(probePointIndex))
+		if (DoSingleZProbeAtPoint(probePointIndex, heightAdjust))
 		{
 			if (gb->Seen('S'))
 			{
@@ -1206,9 +1219,6 @@ bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z) const
 
 bool GCodes::SetPrintZProbe(GCodeBuffer* gb, StringRef& reply)
 {
-	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
-		return false;
-
 	ZProbeParameters params = platform->GetZProbeParameters();
 	bool seen = false;
 	if (gb->Seen(axisLetters[X_AXIS]))
@@ -1294,6 +1304,13 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	for (size_t i = AXES; i < DRIVES; i++)
 	{
 		s.catf("E%u:%.1f ", i - AXES, liveCoordinates[i]);
+	}
+
+	// Print the stepper motor positions as Marlin does, as an aid to debugging
+	s.cat(" Count");
+	for (size_t i = 0; i < DRIVES; ++i)
+	{
+		s.catf(" %d", reprap.GetMove()->GetEndPoint(i));
 	}
 }
 
@@ -2014,7 +2031,7 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 	float standby[HEATERS];
 	float active[HEATERS];
 	tool->GetVariables(standby, active);
-	for (size_t h = 0; h < tool->HeaterCount(); h++)
+	for (size_t h = 0; (int)h < tool->HeaterCount(); h++)
 	{
 		active[h] = temperature;
 	}
@@ -2777,6 +2794,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			else
 			{
 				tool = reprap.GetCurrentTool();
+				// If no tool is selected, and there is only one tool, set the active temperature for that one
+				if (tool == nullptr)
+				{
+					tool = reprap.GetOnlyTool();
+				}
 			}
 			SetToolHeaters(tool, temperature);
 		}
@@ -2856,7 +2878,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				platform->SetFanValue(fanNum,f);
 			}
 		}
-		else
+
+		if (!seen)
 		{
 			float f = coolingInverted ? (1.0 - platform->GetFanValue(fanNum)) : platform->GetFanValue(fanNum);
 			reply.printf("Fan%i value: %d%%, Cooling inverted: %s\n",fanNum, (byte) (f * 100.0), coolingInverted ? "yes" : "no");
@@ -2933,21 +2956,56 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			return false;
 		}
-		if (gb->Seen('P'))
+
 		{
-			// Wait for the heaters associated with the specified tool to be ready
-			int toolNumber = gb->GetIValue();
-			toolNumber += gb->GetToolNumberAdjust();
-			if (!ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber)))
+			bool seen = false;
+			if (gb->Seen('P'))
 			{
-				return false;
+				// Wait for the heaters associated with the specified tool to be ready
+				int toolNumber = gb->GetIValue();
+				toolNumber += gb->GetToolNumberAdjust();
+				if (!ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber)))
+				{
+					return false;
+				}
+				seen = true;
 			}
-			result = true;
-		}
-		else
-		{
-			// Wait for all heaters to be ready
-			result = reprap.GetHeat()->AllHeatersAtSetTemperatures(true);
+
+			if (gb->Seen('H'))
+			{
+				// Wait for specified heaters to be ready
+				long heaters[HEATERS];
+				int heaterCount = HEATERS;
+				gb->GetLongArray(heaters, heaterCount);
+				for(int8_t i=0; i<heaterCount; i++)
+				{
+					if (!reprap.GetHeat()->HeaterAtSetTemperature(heaters[i]))
+					{
+						return false;
+					}
+				}
+				seen = true;
+			}
+
+			if (gb->Seen('C'))
+			{
+				// Wait for chamber heater to be ready
+				const int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
+				if (chamberHeater != -1)
+				{
+					if (!reprap.GetHeat()->HeaterAtSetTemperature(chamberHeater))
+					{
+						return false;
+					}
+				}
+				seen = true;
+			}
+
+			if (!seen)
+			{
+				// Wait for all heaters to be ready
+				result = reprap.GetHeat()->AllHeatersAtSetTemperatures(true);
+			}
 		}
 		break;
 
@@ -3060,10 +3118,85 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 141: // Chamber temperature
-		reply.copy("M141 - heated chamber not yet implemented\n");
+		{
+			bool seen = false;
+			if (gb->Seen('H'))
+			{
+				seen = true;
+
+				int heater = gb->GetIValue();
+				if (heater < 0)
+				{
+					const int8_t currentHeater = reprap.GetHeat()->GetChamberHeater();
+					if (currentHeater != -1)
+					{
+						reprap.GetHeat()->SwitchOff(currentHeater);
+					}
+
+					reprap.GetHeat()->SetChamberHeater(-1);
+				}
+				else if (heater < HEATERS)
+				{
+					reprap.GetHeat()->SetChamberHeater(heater);
+				}
+				else
+				{
+					reply.copy("Bad heater number specified!\n");
+					error = true;
+				}
+			}
+
+			if (gb->Seen('S'))
+			{
+				seen = true;
+
+				const int8_t currentHeater = reprap.GetHeat()->GetChamberHeater();
+				if (currentHeater != -1)
+				{
+					float temperature = gb->GetFValue();
+
+					if (temperature < NEARLY_ABS_ZERO)
+					{
+						reprap.GetHeat()->SwitchOff(currentHeater);
+					}
+					else
+					{
+						reprap.GetHeat()->SetActiveTemperature(currentHeater, temperature);
+						reprap.GetHeat()->Activate(currentHeater);
+					}
+				}
+				else
+				{
+					reply.copy("No chamber heater has been set up yet!\n");
+					error = true;
+				}
+			}
+
+			if (!seen)
+			{
+				const int8_t currentHeater = reprap.GetHeat()->GetChamberHeater();
+				if (currentHeater != -1)
+				{
+					reply.printf("Chamber heater %d is currently at %.1fC\n", currentHeater, reprap.GetHeat()->GetTemperature(currentHeater));
+				}
+				else
+				{
+					reply.copy("No chamber heater has been configured yet.\n");
+				}
+			}
+		}
 		break;
 
-//	case 160: //number of mixing filament drives  TODO: With tools defined, is this needed?
+	case 144: // Set bed to standby
+#if HOT_BED != -1
+		reprap.GetHeat()->Standby(HOT_BED);
+#else
+		reply.copy("Hot bed is not present!\n");
+		error = true;
+#endif
+		break;
+
+		//	case 160: //number of mixing filament drives  TODO: With tools defined, is this needed?
 //    	if(gb->Seen('S'))
 //		{
 //			platform->SetMixingDrives(gb->GetIValue());
@@ -3105,7 +3238,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			float eVals[DRIVES - AXES];
 			int eCount = DRIVES - AXES;
 			gb->GetFloatArray(eVals, eCount);
-			for (size_t e = 0; e < eCount; e++)
+			for (size_t e = 0; (int)e < eCount; e++)
 			{
 				platform->SetAcceleration(AXES + e, eVals[e] * distanceScale);
 			}
@@ -3147,7 +3280,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				float eVals[DRIVES - AXES];
 				int eCount = DRIVES - AXES;
 				gb->GetFloatArray(eVals, eCount);
-				for (size_t e = 0; e < eCount; e++)
+				for (size_t e = 0; (int)e < eCount; e++)
 				{
 					platform->SetMaxFeedrate(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
 				}
@@ -3588,7 +3721,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (gb->Seen('P'))
 		{
 			int point = gb->GetIValue();
-			if (point < 0 || point >= MaxProbePoints)
+			if (point < 0 || (unsigned int)point >= MaxProbePoints)
 			{
 				reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
 			}
@@ -3831,10 +3964,16 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (tool != NULL)
 			{
 				if (gb->Seen('S'))
+				{
 					if (gb->GetIValue() != 0)
+					{
 						tool->TurnMixingOn();
+					}
 					else
+					{
 						tool->TurnMixingOff();
+					}
+				}
 			}
 		}
 		break;
@@ -4003,11 +4142,32 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				params.SetPrintRadius(gb->GetFValue() * distanceScale);
 				seen = true;
 			}
+			if (gb->Seen('X'))
+			{
+				// X tower position correction
+				params.SetXCorrection(gb->GetFValue());
+				seen = true;
+			}
+			if (gb->Seen('Y'))
+			{
+				// Y tower position correction
+				params.SetYCorrection(gb->GetFValue());
+				seen = true;
+			}
+			if (gb->Seen('Z'))
+			{
+				// Y tower position correction
+				params.SetZCorrection(gb->GetFValue());
+				seen = true;
+			}
+
+			// The homed height must be done last, because it gets recalculated when some of the other factors are changed
 			if (gb->Seen('H'))
 			{
 				params.SetHomedHeight(gb->GetFValue() * distanceScale);
 				seen = true;
 			}
+
 			if (seen)
 			{
 				// If we have changed between Cartesian and Delta mode, we need to reset the motor coordinates to agree with the XYZ xoordinates.
@@ -4022,10 +4182,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				if (params.IsDeltaMode())
 				{
-					reply.printf("Diagonal %.2f, delta radius %.2f, homed height %.2f, bed radius %.1f, X %.1f" DEGREE_SYMBOL ", Y %.1f" DEGREE_SYMBOL "\n",
-							params.GetDiagonal() / distanceScale, params.GetRadius() / distanceScale,
-							params.GetHomedHeight() / distanceScale, params.GetPrintRadius() / distanceScale,
-							params.GetXCorrection(), params.GetYCorrection());
+					reply.printf("Diagonal %.2f, delta radius %.2f, homed height %.2f, bed radius %.1f"
+								 ", X %.2f" DEGREE_SYMBOL ", Y %.2f" DEGREE_SYMBOL ", Z %.2f" DEGREE_SYMBOL "\n",
+								 	 params.GetDiagonal() / distanceScale, params.GetRadius() / distanceScale,
+								 	 params.GetHomedHeight() / distanceScale, params.GetPrintRadius() / distanceScale,
+								 	 params.GetXCorrection(), params.GetYCorrection(), params.GetZCorrection());
 				}
 				else
 				{
@@ -4102,7 +4263,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				int eCount = DRIVES - AXES;
 				gb->GetFloatArray(eVals, eCount);
 				// 2014-09-29 DC42: we no longer insist that the user supplies values for all possible extruder drives
-				for (size_t e = 0; e < eCount; e++)
+				for (size_t e = 0; (int)e < eCount; e++)
 				{
 					platform->SetMotorCurrent(AXES + e, eVals[e]);
 				}

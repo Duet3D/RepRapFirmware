@@ -105,8 +105,8 @@ bool PidParameters::operator==(const PidParameters& other) const
 // Platform class
 
 Platform::Platform() :
-		tickState(0), fileStructureInitialised(false), active(false), errorCodeBits(0), debugCode(0),
-		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer)), autoSaveEnabled(false)
+		autoSaveEnabled(false), active(false), errorCodeBits(0), fileStructureInitialised(false), tickState(0), debugCode(0),
+		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
 {
 	line = new Line(SerialUSB);
 	aux = new Line(Serial);
@@ -181,6 +181,7 @@ void Platform::Init()
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
+	maxStepperDACVoltage = MAX_STEPPER_DAC_VOLTAGE;
 	//numMixingDrives = NUM_MIXING_DRIVES;
 
 	// Z PROBE
@@ -575,7 +576,7 @@ bool Platform::MustHomeXYBeforeZ() const
 
 void Platform::ResetNvData()
 {
-	nvData.compatibility = me;
+	nvData.compatibility = marlin;				// default to Marlin because the common host programs expect the "OK" response to commands
 	ARRAY_INIT(nvData.ipAddress, IP_ADDRESS);
 	ARRAY_INIT(nvData.netMask, NET_MASK);
 	ARRAY_INIT(nvData.gateWay, GATE_WAY);
@@ -747,13 +748,64 @@ void Platform::Spin()
 	ClassReport(longWait);
 }
 
+// Switch into boot mode and reset
+#if 0		// tried using this Arduino code to see if it is more reliable, but it wasn't
+
+__attribute__ ((long_call, section (".ramfunc")))
+void eraseAndReset() {
+	cpu_irq_disable();
+
+	// Set boot flag to run SAM-BA bootloader at restart
+	const int EEFC_FCMD_CGPB = 0x0C;
+	const int EEFC_KEY = 0x5A;
+	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0)
+		;
+	EFC0->EEFC_FCR =
+		EEFC_FCR_FCMD(EEFC_FCMD_CGPB) |
+		EEFC_FCR_FARG(1) |
+		EEFC_FCR_FKEY(EEFC_KEY);
+	// Try adding this delay to see if it helps
+	for (unsigned int i = 0; i < 100; ++i)
+	{
+		asm volatile ("nop");
+	}
+	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0)
+		;
+
+	// Try adding this delay to see if it helps
+	for (unsigned int i = 0; i < 10000; ++i)
+	{
+		asm volatile ("nop");
+	}
+
+	// From here flash memory is no more available.
+	const int RSTC_KEY = 0xA5;
+	RSTC->RSTC_CR =
+		RSTC_CR_KEY(RSTC_KEY) |
+		RSTC_CR_PROCRST |
+		RSTC_CR_PERRST;
+
+	while (true);
+}
+
+#else
+
+void eraseAndReset()
+{
+	cpu_irq_disable();
+	flash_unlock(0x00080000, 0x000FFFFF, nullptr, nullptr);
+	flash_clear_gpnvm(1);			// tell the system to boot from flash next time
+	rstc_start_software_reset(RSTC);
+	for(;;) {}
+}
+
+#endif
+
 void Platform::SoftwareReset(uint16_t reason)
 {
 	if (reason == SoftwareResetReason::erase)
 	{
-		cpu_irq_disable();
-		flash_unlock(0x00080000, 0x000FFFFF, nullptr, nullptr);
-		flash_clear_gpnvm(1);			// tell the system to boot from flash next time
+		eraseAndReset();
  	}
 	else
 	{
@@ -796,6 +848,7 @@ void Platform::SoftwareReset(uint16_t reason)
 	for(;;) {}
 }
 
+
 //*****************************************************************************************************************
 
 // Interrupts
@@ -830,6 +883,9 @@ void FanInterrupt()
 
 void Platform::InitialiseInterrupts()
 {
+	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
+	NVIC_SetPriority (SysTick_IRQn, 0);						// set priority for tick interrupts
+
 	// Timer interrupt for stepper motors
 	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
 	// We choose a clock divisor of 32, which gives us 0.38us resolution. The next option is 128 which would give 1.524us resolution.
@@ -839,6 +895,7 @@ void Platform::InitialiseInterrupts()
 	TC1 ->TC_CHANNEL[0].TC_IDR = ~(uint32_t)0;				// interrupts disabled for now
 	TC_Start(TC1, 0);
 	TC_GetStatus(TC1, 0);									// clear any pending interrupt
+	NVIC_SetPriority(TC3_IRQn, 2);							// set high priority for this IRQ; it's time-critical
 	NVIC_EnableIRQ(TC3_IRQn);
 
 	// Timer interrupt to keep the networking timers running (called at 16Hz)
@@ -850,6 +907,7 @@ void Platform::InitialiseInterrupts()
 	TC_Start(TC1, 1);
 	TC1 ->TC_CHANNEL[1].TC_IER = TC_IER_CPCS;
 	TC1 ->TC_CHANNEL[1].TC_IDR = ~TC_IER_CPCS;
+	NVIC_SetPriority(TC4_IRQn, 4);							// step interrupt is more time-critical than this one
 	NVIC_EnableIRQ(TC4_IRQn);
 
 	// Interrupt for 4-pin PWM fan sense line
@@ -862,6 +920,14 @@ void Platform::InitialiseInterrupts()
 	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
+#if 0	// not used
+void Platform::DisableInterrupts()
+{
+	NVIC_DisableIRQ(TC3_IRQn);
+	NVIC_DisableIRQ(TC4_IRQn);
+}
+#endif
+
 #pragma GCC push_options
 #pragma GCC optimize ("O3")
 
@@ -873,7 +939,7 @@ void Platform::InitialiseInterrupts()
 	TC_GetStatus(TC1, 0);									// clear any pending interrupt
 	int32_t diff = (int32_t)(tim - TC_ReadCV(TC1, 0));		// see how long we have to go
 	bool ret;
-	if (diff < 2)											// if less than 0.5us or already passed
+	if (diff < 3)											// if less than about 1us or already passed
 	{
 		ret = true;											// tell the caller to simulate an interrupt instead
 	}
@@ -891,16 +957,6 @@ void Platform::InitialiseInterrupts()
 	return ret;
 }
 
-#pragma GCC pop_options
-
-#if 0	// not used
-void Platform::DisableInterrupts()
-{
-	NVIC_DisableIRQ(TC3_IRQn);
-	NVIC_DisableIRQ(TC4_IRQn);
-}
-#endif
-
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
 // This is what we need to do:
@@ -913,9 +969,6 @@ void Platform::DisableInterrupts()
 
 //#define TIME_TICK_ISR	1		// define this to store the tick ISR time in errorCodeBits
 
-#pragma GCC push_options
-#pragma GCC optimize ("O3")
-
 void Platform::Tick()
 {
 #ifdef TIME_TICK_ISR
@@ -925,27 +978,27 @@ void Platform::Tick()
 	{
 	case 1:			// last conversion started was a thermistor
 	case 3:
-	{
-		ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-		currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
-		StartAdcConversion(zProbeAdcChannel);
-		if (currentFilter.IsValid())
 		{
-			uint32_t sum = currentFilter.GetSum();
-			if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
+			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
+			StartAdcConversion(zProbeAdcChannel);
+			if (currentFilter.IsValid())
 			{
-				// We have an over-temperature or bad reading from this thermistor, so turn off the heater
-				// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
-				SetHeater(currentHeater, 0.0);
-				errorCodeBits |= ErrorBadTemp;
+				uint32_t sum = currentFilter.GetSum();
+				if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
+				{
+					// We have an over-temperature or bad reading from this thermistor, so turn off the heater
+					// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
+					SetHeater(currentHeater, 0.0);
+					errorCodeBits |= ErrorBadTemp;
+				}
+			}
+			++currentHeater;
+			if (currentHeater == HEATERS)
+			{
+				currentHeater = 0;
 			}
 		}
-		++currentHeater;
-		if (currentHeater == HEATERS)
-		{
-			currentHeater = 0;
-		}
-	}
 		++tickState;
 		break;
 
@@ -1169,7 +1222,7 @@ float Platform::GetTemperature(size_t heater) const
 	{
 		rawTemp -= (int) p.adcHighOffset;
 	}
-	if (rawTemp >= adDisconnectedVirtual)
+	if (rawTemp >= (int)adDisconnectedVirtual)
 	{
 		return ABS_ZERO;		// thermistor is disconnected
 	}
@@ -1316,6 +1369,7 @@ void Platform::UpdateMotorCurrent(size_t drive)
 			current *= idleCurrentFactor;
 		}
 		unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
+		unsigned short dac = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDACVoltage/2)/maxStepperDACVoltage);
 		if (drive < 4)
 		{
 			mcpDuet.setNonVolatileWiper(potWipes[drive], pot);
@@ -1323,8 +1377,19 @@ void Platform::UpdateMotorCurrent(size_t drive)
 		}
 		else
 		{
-			mcpExpansion.setNonVolatileWiper(potWipes[drive], pot);
-			mcpExpansion.setVolatileWiper(potWipes[drive], pot);
+			if(e1UsesDAC==1){
+				if(drive==4){
+					analogWrite(DAC0, dac);
+				}
+				else {
+					mcpExpansion.setNonVolatileWiper(potWipes[drive-1], pot);
+					mcpExpansion.setVolatileWiper(potWipes[drive-1], pot);
+				}
+			}
+			else {
+				mcpExpansion.setNonVolatileWiper(potWipes[drive], pot);
+				mcpExpansion.setVolatileWiper(potWipes[drive], pot);
+			}
 		}
 	}
 }
@@ -1398,7 +1463,7 @@ void Platform::SetFanValue(size_t fan, float speed)
 			coolingFan1Value = speed / 255.0;
 		}
 
-		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0
+		// The cooling fan 1 output pin gets inverted if HEAT_ON == 0
 		analogWriteNonDue(coolingFan1Pin, (HEAT_ON == 0) ? (255 - p) : p, true);
 	}
 }
@@ -1747,7 +1812,7 @@ void MassStorage::Init()
 					platform->AppendMessage(HOST_MESSAGE, "Card write protected\n");
 					break;
 				default:
-					platform->AppendMessage(HOST_MESSAGE, "Unknown (code %d)\m", err);
+					platform->AppendMessage(HOST_MESSAGE, "Unknown (code %d)\n", err);
 					break;
 			}
 			return;
@@ -1796,8 +1861,8 @@ void MassStorage::Init()
 
 const char* MassStorage::CombineName(const char* directory, const char* fileName)
 {
-	int out = 0;
-	int in = 0;
+	size_t out = 0;
+	size_t in = 0;
 
 	if (directory != NULL)
 	{
@@ -1814,7 +1879,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 		}
 	}
 
-	if (in > 0 && directory[in -1] != '/' && out < ARRAY_UPB(combinedName))
+	if (in > 0 && directory[in - 1] != '/' && out < ARRAY_UPB(combinedName))
 	{
 		combinedName[out] = '/';
 		out++;
@@ -2370,6 +2435,7 @@ void Line::Init()
 	ignoringOutputLine = false;
 	inWrite = 0;
 	outputColumn = 0;
+	timeLastCharWritten = 0;
 }
 
 void Line::Spin()
@@ -2396,10 +2462,12 @@ void Line::Spin()
 }
 
 // Write a character to USB.
-// If 'block' is true then we don't return until we have either written it to the USB port or put it in the buffer.
+// If 'important' is true then we don't return until we have either written it to the USB port,
+// or put it in the buffer, or we have timed out waiting for the buffer to empty. The purpose of the timeout is to
+// avoid getting a software watchdog reset if we are writing important data (e.g. debug) and there is no consumer for the data.
 // Otherwise, if the buffer is full then we append ".\n" to the end of it, return immediately and ignore the rest
 // of the data we are asked to print until we get a new line.
-void Line::Write(char b, bool block)
+void Line::Write(char b, bool important)
 {
 	if (b == '\n')
 	{
@@ -2410,12 +2478,6 @@ void Line::Write(char b, bool block)
 		++outputColumn;
 	}
 
-	if (block)
-	{
-		// We failed to print an unimportant message that (unusually) didn't finish in a newline
-		ignoringOutputLine = false;
-	}
-
 	if (ignoringOutputLine)
 	{
 		// We have already failed to write some characters of this message line, so don't write any of it.
@@ -2424,36 +2486,32 @@ void Line::Write(char b, bool block)
 		{
 			ignoringOutputLine = false;
 		}
-		TryFlushOutput();		// this may help free things up
 	}
 	else
 	{
 		for(;;)
 		{
 			TryFlushOutput();
-			if (block)
-			{
-				iface.flush();
-			}
-
 			if (outputNumChars == 0 && iface.canWrite() != 0)
 			{
 				// We can write the character directly into the USB output buffer
 				++inWrite;
 				iface.write(b);
 				--inWrite;
+				timeLastCharWritten = millis();
 				break;
 			}
-			else if (   outputNumChars + 2 < lineOutBufSize							// save 2 spaces in the output buffer
-					 || (outputNumChars < lineOutBufSize && (block || b == '\n'))	//...unless doing blocking output or writing newline
+			else if (   outputNumChars + 2 < lineOutBufSize					// save 2 spaces in the output buffer
+					 || (b == '\n' && outputNumChars < lineOutBufSize)		//...unless writing newline
 					)
 			{
 				outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = b;
 				++outputNumChars;
 				break;
 			}
-			else if (!block)
+			else if (!important || millis() - timeLastCharWritten >= 100)
 			{
+				// Output is being consumed too slowly, so throw away some data
 				if (outputNumChars + 2 == lineOutBufSize)
 				{
 					// We still have our 2 free characters, so append ".\n" to the line to indicate it was incomplete
@@ -2471,21 +2529,14 @@ void Line::Write(char b, bool block)
 				break;
 			}
 		}
-
-		TryFlushOutput();
-		if (block)
-		{
-			iface.flush();
-		}
 	}
-	// else discard the character
 }
 
-void Line::Write(const char* b, bool block)
+void Line::Write(const char* b, bool important)
 {
 	while (*b)
 	{
-		Write(*b++, block);
+		Write(*b++, important);
 	}
 }
 
@@ -2500,6 +2551,7 @@ void Line::TryFlushOutput()
 		++inWrite;
 		iface.write(outBuffer[outputGetIndex]);
 		--inWrite;
+		timeLastCharWritten = millis();
 		outputGetIndex = (outputGetIndex + 1) % lineOutBufSize;
 		--outputNumChars;
 	}

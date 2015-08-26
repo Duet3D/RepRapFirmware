@@ -54,7 +54,7 @@ Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 		mix = new float[driveCount];
 		float r = 1.0/(float)driveCount;
 
-		for (size_t drive = 0; drive < driveCount; drive++)
+		for (int drive = 0; drive < driveCount; drive++)
 		{
 			drives[drive] = d[drive];
 			mix[drive] = r;
@@ -74,7 +74,7 @@ Tool::Tool(int toolNumber, long d[], int dCount, long h[], int hCount)
 		activeTemperatures = new float[heaterCount];
 		standbyTemperatures = new float[heaterCount];
 
-		for(size_t heater = 0; heater < heaterCount; heater++)
+		for(int heater = 0; heater < heaterCount; heater++)
 		{
 			heaters[heater] = h[heater];
 			activeTemperatures[heater] = ABS_ZERO;
@@ -87,7 +87,7 @@ void Tool::Print(StringRef& reply)
 {
 	reply.printf("Tool %d - drives: ", myNumber);
 	char comma = ',';
-	for (size_t drive = 0; drive < driveCount; drive++)
+	for (int drive = 0; drive < driveCount; drive++)
 	{
 		if (drive >= driveCount - 1)
 		{
@@ -98,7 +98,7 @@ void Tool::Print(StringRef& reply)
 
 	reply.cat("heaters (active/standby temps): ");
 	comma = ',';
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (int heater = 0; heater < heaterCount; heater++)
 	{
 			if (heater >= heaterCount - 1)
 			{
@@ -119,7 +119,7 @@ float Tool::MaxFeedrate() const
 		return 1.0;
 	}
 	float result = 0.0;
-	for (size_t d = 0; d < driveCount; d++)
+	for (int d = 0; d < driveCount; d++)
 	{
 		float mf = reprap.GetPlatform()->MaxFeedrate(drives[d] + AXES);
 		if (mf > result)
@@ -138,7 +138,7 @@ float Tool::InstantDv() const
 		return 1.0;
 	}
 	float result = FLT_MAX;
-	for (size_t d = 0; d < driveCount; d++)
+	for (int d = 0; d < driveCount; d++)
 	{
 		float idv = reprap.GetPlatform()->ActualInstantDv(drives[d] + AXES);
 		if (idv < result)
@@ -155,7 +155,7 @@ float Tool::InstantDv() const
 void Tool::AddTool(Tool* tool)
 {
 	Tool* t = this;
-	Tool* last;
+	Tool* last = this;		// initialised to suppress spurious compiler warning
 	while(t != NULL)
 	{
 		if(t->Number() == tool->Number())
@@ -197,7 +197,7 @@ void Tool::ClearTemperatureFault(int8_t heater)
 
 void Tool::SetTemperatureFault(int8_t dudHeater)
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (int heater = 0; heater < heaterCount; heater++)
 	{
 		if(dudHeater == heaters[heater])
 		{
@@ -209,7 +209,7 @@ void Tool::SetTemperatureFault(int8_t dudHeater)
 
 void Tool::ResetTemperatureFault(int8_t wasDudHeater)
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (int heater = 0; heater < heaterCount; heater++)
 	{
 		if (wasDudHeater == heaters[heater])
 		{
@@ -221,7 +221,7 @@ void Tool::ResetTemperatureFault(int8_t wasDudHeater)
 
 bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (int heater = 0; heater < heaterCount; heater++)
 	{
 		const float temperature = reprap.GetHeat()->GetTemperature(heaters[heater]);
 		if (temperature < HOT_ENOUGH_TO_RETRACT || (temperature < HOT_ENOUGH_TO_EXTRUDE && forExtrusion))
@@ -240,7 +240,7 @@ void Tool::Activate(Tool* currentlyActive)
 		{
 			currentlyActive->Standby();
 		}
-		for (size_t heater = 0; heater < heaterCount; heater++)
+		for (int heater = 0; heater < heaterCount; heater++)
 		{
 			reprap.GetHeat()->SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
 			reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
@@ -254,7 +254,7 @@ void Tool::Standby()
 {
 	if (active)
 	{
-		for (size_t heater = 0; heater < heaterCount; heater++)
+		for (int heater = 0; heater < heaterCount; heater++)
 		{
 			reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 			reprap.GetHeat()->Standby(heaters[heater]);
@@ -265,7 +265,7 @@ void Tool::Standby()
 
 void Tool::SetVariables(const float* standby, const float* active)
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (int heater = 0; heater < heaterCount; heater++)
 	{
 		if (active[heater] < NEARLY_ABS_ZERO && standby[heater] < NEARLY_ABS_ZERO)
 		{
@@ -290,7 +290,7 @@ void Tool::SetVariables(const float* standby, const float* active)
 
 void Tool::GetVariables(float* standby, float* active) const
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (int heater = 0; heater < heaterCount; heater++)
 	{
 		active[heater] = activeTemperatures[heater];
 		standby[heater] = standbyTemperatures[heater];
@@ -313,7 +313,7 @@ bool Tool::ToolCanDrive(bool extrude)
 // Update the number of active drives and extruders in use to reflect what this tool uses
 void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters) const
 {
-	for (size_t drive = 0; drive < driveCount; drive++)
+	for (int drive = 0; drive < driveCount; drive++)
 	{
 		if (drives[drive] >= numExtruders)
 		{
@@ -321,7 +321,7 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 		}
 	}
 
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (int heater = 0; heater < heaterCount; heater++)
 	{
 		if (heaters[heater] != HOT_BED && heaters[heater] >= numHeaters)
 		{

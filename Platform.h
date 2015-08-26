@@ -90,8 +90,10 @@ Licence: GPL
 // second 4 for digipot 2(on expansion board)
 // Full order is {1, 3, 2, 0, 1, 3, 2, 0}, only include as many as you have DRIVES defined
 #define POT_WIPES {1, 3, 2, 0, 1, 3, 2, 0}
+const bool e1UsesDAC = true; //if defined then E1 motor voltage set via DAC
 #define SENSE_RESISTOR 0.1 // Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
+#define MAX_STEPPER_DAC_VOLTAGE 2.12 // Stepper motor current reference voltage for E1 if using a DAC
 
 #define Z_PROBE_AD_VALUE (400) // Default for the Z probe - should be overwritten by experiment
 #define Z_PROBE_STOP_HEIGHT (0.7) // mm
@@ -121,7 +123,7 @@ const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;	// The indices of the 3 tower m
 // HEATERS - The bed is assumed to be the at index 0
 
 #define TEMP_SENSE_PINS {5, 4, 0, 7, 8, 9, 11} // Analogue pin numbers
-#define HEAT_ON_PINS {6, X5, X7, 7, 8, 9, X17} //pin D38 is PWM capable but not an Arduino PWM pin
+#define HEAT_ON_PINS {6, X5, X7, 7, 8, 9, -1} //heater Channel 7 (pin X17) is shared with Fan1. Only define 1 or the other
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
 const float defaultThermistorBetas[HEATERS] = {3988.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0}; // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
@@ -153,7 +155,6 @@ const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 10000
 // This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
 // We use method 2 (see above)
-<<<<<<< HEAD
 const float defaultPidKis[HEATERS] = {5.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1}; 			// Integral PID constants
 const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0}; // Derivative PID constants
 const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
@@ -165,24 +166,9 @@ const float defaultPidMaxes[HEATERS] = {255, 180, 180, 180, 180, 180, 180};			//
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN_PIN X6 														// pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-#define COOLING_FAN_RPM_PIN 36													// pin PC4
-=======
-const float defaultPidKis[HEATERS] = {5.0, 0.1, 0.1, 0.1, 0.1, 0.1}; 			// Integral PID constants
-const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0}; // Derivative PID constants
-const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
-const float defaultPidKts[HEATERS] = {2.7, 0.4, 0.4, 0.4, 0.4, 0.4};			// approximate PWM value needed to maintain temperature, per degC above room temperature
-const float defaultPidKss[HEATERS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0};			// PWM scaling factor, to allow for variation in heater power and supply voltage
-const float defaultFullBands[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0};	// errors larger than this cause heater to be on or off
-const float defaultPidMins[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
-const float defaultPidMaxes[HEATERS] = {255, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
-
-#define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
-#define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
 #define COOLING_FAN0_PIN X6 														// pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-#define COOLING_FAN1_PIN -1 //X17													// X17 or -1 set to -1 to use a fan rpm pin on fan 0, pin D36 (PC4) is PWM capable but not an Arduino PWM pin - use X17 instead
-#define COOLING_FAN_RPM_PIN 36	//-1											    //36 or -1 set to -1 if there is a fan1 pin PC4
->>>>>>> origin/Dual-PWM-Fan-Support
+#define COOLING_FAN1_PIN X17 //-1													// X17 or -1 set to -1 to use a fan rpm pin on fan 0, pin D36 (PC4) is PWM capable but not an Arduino PWM pin - use X17 instead
+#define COOLING_FAN_RPM_PIN -1	//36											    //36 or -1 set to -1 if there is a fan1 pin PC4
 #define COOLING_FAN_RPM_SAMPLE_TIME	2.0											// Time to wait before resetting the internal fan RPM stats
 #define HEAT_ON 0 																// 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
 
@@ -297,8 +283,8 @@ public:
 
 	uint8_t Status() const;				// Returns OR of IOStatus
 	int Read(char& b);
-	void Write(char b, bool block = false);
-	void Write(const char* s, bool block = false);
+	void Write(char b, bool important = false);
+	void Write(const char* s, bool important = false);
 	void Flush();
 
 friend class Platform;
@@ -323,6 +309,7 @@ private:
 	uint16_t inputNumChars;
 	uint16_t outputGetIndex;
 	uint16_t outputNumChars;
+	uint32_t timeLastCharWritten;
 
 	uint8_t inWrite;
 	bool ignoringOutputLine;
@@ -1134,32 +1121,32 @@ inline bool Platform::GetDirectionValue(size_t drive) const
 
 inline float Platform::HomeFeedRate(size_t axis) const
 {
-  return homeFeedrates[axis];
+	return homeFeedrates[axis];
 }
 
 inline void Platform::SetHomeFeedRate(size_t axis, float value)
 {
-   homeFeedrates[axis] = value;
+	homeFeedrates[axis] = value;
 }
 
 inline float Platform::AxisMaximum(size_t axis) const
 {
-  return axisMaxima[axis];
+	return axisMaxima[axis];
 }
 
 inline void Platform::SetAxisMaximum(size_t axis, float value)
 {
-  axisMaxima[axis] = value;
+	axisMaxima[axis] = value;
 }
 
 inline float Platform::AxisMinimum(size_t axis) const
 {
-  return axisMinima[axis];
+	return axisMinima[axis];
 }
 
 inline void Platform::SetAxisMinimum(size_t axis, float value)
 {
-  axisMinima[axis] = value;
+	axisMinima[axis] = value;
 }
 
 inline float Platform::AxisTotalLength(size_t axis) const
@@ -1170,20 +1157,12 @@ inline float Platform::AxisTotalLength(size_t axis) const
 // The A4988 requires 1us minimum pulse width, so we make separate StepHigh and StepLow calls so that we don't waste this time
 inline void Platform::StepHigh(size_t drive)
 {
-	const int pin = stepPins[drive];
-	if (pin >= 0)
-	{
-		digitalWriteNonDue(pin, 1);
-	}
+	digitalWriteNonDue(stepPins[drive], 1);
 }
 
 inline void Platform::StepLow(size_t drive)
 {
-	const int pin = stepPins[drive];
-	if (pin >= 0)
-	{
-		digitalWriteNonDue(pin, 0);
-	}
+	digitalWriteNonDue(stepPins[drive], 0);
 }
 
 inline void Platform::SetExtrusionAncilliaryPWM(float v)

@@ -22,12 +22,19 @@ struct PrepParams
 	float compFactor;
 };
 
+enum class DMState : uint8_t
+{
+	idle = 0,
+	moving = 1,
+	stepError = 2
+};
+
 // This class describes a single movement of one drive
 class DriveMovement
 {
 public:
-	uint32_t CalcNextStepTimeCartesian(size_t drive);
-	uint32_t CalcNextStepTimeDelta(const DDA &dda, size_t drive);
+	bool CalcNextStepTimeCartesian(const DDA &dda, size_t drive);
+	bool CalcNextStepTimeDelta(const DDA &dda, size_t drive);
 	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params, size_t drive);
 	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params, size_t drive);
 	void PrepareExtruder(const DDA& dda, const PrepParams& params, size_t drive);
@@ -44,15 +51,16 @@ public:
 
 	// These values don't depend on how the move is executed, so are set by Init()
 	uint32_t totalSteps;								// total number of steps for this move
-	bool moving;										// true if this drive moves in this move, if false then all other values are don't cares
+	uint8_t drive;										// the drive that this DM controls
+	DMState state;										// whether this is active or not
 	bool direction;										// true=forwards, false=backwards
-	bool stepError;										// for debugging
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
 	// These values change as the step is executed
 	uint32_t nextStep;									// number of steps already done
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
+	DriveMovement *nextDM;								// link to next DM that needs a step
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union MoveParams
@@ -91,7 +99,7 @@ public:
 	static const uint32_t NoStepTime = 0xFFFFFFFF;		// value to indicate that no further steps are needed when calculating the next step time
 	static const uint32_t K1 = 1024;					// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors
 	static const uint32_t K2 = 512;						// a power of 2 used in delta calculations to reduce rounding errors (but too large makes things worse)
-	static const int32_t Kc = 4096;						// a power of 2 for scaling the Z movement fraction
+	static const int32_t Kc = 1024 * 1024;				// a power of 2 for scaling the Z movement fraction
 };
 
 #endif /* DRIVEMOVEMENT_H_ */
