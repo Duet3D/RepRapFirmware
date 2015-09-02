@@ -18,7 +18,7 @@
 
 /*
 Code from wiring-digital.c and wiring-analog.c from the arduino core.
-See undefined.cpp file for more info
+See SamNonDuePin.cpp file for more info
 */
 
 #ifndef SAM_NON_DUE_PIN_H
@@ -27,7 +27,7 @@ See undefined.cpp file for more info
 #include "Arduino.h"
 
 // Number of pins defined in PinDescription array
-#define PINS_C 26
+//#define PINS_C 28  //not used
 
 static const unsigned int pwmFastFrequency = 25000;		// fast PWM frequency for Intel spec PWM fans
 
@@ -35,46 +35,69 @@ static const unsigned int pwmFastFrequency = 25000;		// fast PWM frequency for I
 // Any pin numbers below X0 we assume are ordinary Due pin numbers
 // Note: these must all be <=127 because pin numbers are held in int8_t in some places.
 // There are 92 pins defined in the Arduino Due core as at version 1.5.4, so these must all be >=92
-static const uint8_t X0  = 100;
-static const uint8_t X1  = 101;
-static const uint8_t X2  = 102;
-static const uint8_t X3  = 103;
-static const uint8_t X4  = 104;
-static const uint8_t X5  = 105;
-static const uint8_t X6  = 106;
-static const uint8_t X7  = 107;
-static const uint8_t X8  = 108;
+// 2015-07-08 Tony@t3p3 Added the additional pins for the Duet 0.8.5, changed the mapping to start at 93 (>=92) and
+// finish at 126 (<=127).
+static const uint8_t X0  = 93;
+static const uint8_t X1  = 94;
+static const uint8_t X2  = 95;
+static const uint8_t X3  = 96;
+static const uint8_t X4  = 97;
+static const uint8_t X5  = 98;
+static const uint8_t X6  = 99;
+static const uint8_t X7  = 100;
+static const uint8_t X8  = 101;
+static const uint8_t X9  = 102;
+static const uint8_t X10  = 103;
+static const uint8_t X11  = 104;
+static const uint8_t X12  = 105; //probe
+static const uint8_t X13  = 106;
+static const uint8_t X14  = 107;
+static const uint8_t X15  = 108;
+static const uint8_t X16  = 109;
+static const uint8_t X17  = 110;
 //HSMCI
-static const uint8_t PIN_HSMCI_MCCDA_GPIO  = 9;
-static const uint8_t PIN_HSMCI_MCCK_GPIO  = 10;
-static const uint8_t PIN_HSMCI_MCDA0_GPIO  = 11;
-static const uint8_t PIN_HSMCI_MCDA1_GPIO  = 12;
-static const uint8_t PIN_HSMCI_MCDA2_GPIO  = 13;
-static const uint8_t PIN_HSMCI_MCDA3_GPIO  = 14;
+static const uint8_t PIN_HSMCI_MCCDA_GPIO  = 111;
+static const uint8_t PIN_HSMCI_MCCK_GPIO  = 112;
+static const uint8_t PIN_HSMCI_MCDA0_GPIO  = 113;
+static const uint8_t PIN_HSMCI_MCDA1_GPIO  = 114;
+static const uint8_t PIN_HSMCI_MCDA2_GPIO  = 115;
+static const uint8_t PIN_HSMCI_MCDA3_GPIO  = 116;
 //EMAC
-static const uint8_t PIN_EMAC_EREFCK_GPIO  = 15; //What is this one for?
-static const uint8_t PIN_EMAC_EREFCK  = 15;
-static const uint8_t PIN_EMAC_ETXEN  = 16;
-static const uint8_t PIN_EMAC_ETX0  = 17;
-static const uint8_t PIN_EMAC_ETX1  = 18;
-static const uint8_t PIN_EMAC_ECRSDV  = 19;
-static const uint8_t PIN_EMAC_ERX0  = 20;
-static const uint8_t PIN_EMAC_ERX1  = 21;
-static const uint8_t PIN_EMAC_ERXER  = 22;
-static const uint8_t PIN_EMAC_EMDC  = 23;
-static const uint8_t PIN_EMAC_EMDIO  = 24;
-//PROBE RIG
-static const uint8_t X25  = 125;
+static const uint8_t PIN_EMAC_EREFCK  = 117;
+static const uint8_t PIN_EMAC_ETXEN  = 118;
+static const uint8_t PIN_EMAC_ETX0  = 119;
+static const uint8_t PIN_EMAC_ETX1  = 120;
+static const uint8_t PIN_EMAC_ECRSDV  = 121;
+static const uint8_t PIN_EMAC_ERX0  = 122;
+static const uint8_t PIN_EMAC_ERX1  = 123;
+static const uint8_t PIN_EMAC_ERXER  = 124;
+static const uint8_t PIN_EMAC_EMDC  = 125;
+static const uint8_t PIN_EMAC_EMDIO  = 126;
 
-// struct used to hold the descriptions for the "non arduino" pins.
+// Class to give fast access to digital output pins for stepping
+class OutputPin
+{
+	Pio *pPort;
+	uint32_t ulPin;
+public:
+	explicit OutputPin(unsigned int pin);
+	OutputPin() : pPort(PIOC), ulPin(1 << 31) {}			// default constructor needed for array init - accesses PC31 which isn't on the package, so safe
+	void SetHigh() const { pPort->PIO_SODR = ulPin; }
+	void SetLow() const { pPort->PIO_CODR = ulPin; }
+};
+
+// struct used to hold the descriptions for the "non Arduino" pins.
 // from the Arduino.h files
 extern const PinDescription nonDuePinDescription[] ;
-extern void pinModeNonDue( uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff = 0 );	// NB only one debounce cutoff frequency can be set per PIO
-extern void digitalWriteNonDue( uint32_t ulPin, uint32_t ulVal );
-extern int digitalReadNonDue( uint32_t ulPin);
+extern void pinModeNonDue(uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff = 0);	// NB only one debounce cutoff frequency can be set per PIO
+extern void digitalWriteNonDue(uint32_t ulPin, uint32_t ulVal);
+extern int digitalReadNonDue(uint32_t ulPin);
+extern OutputPin getPioPin(uint32_t ulPin);
 extern void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm = false);
 extern void analogOutputNonDue();
 extern void hsmciPinsinit();
 extern void ethPinsInit();
+extern adc_channel_num_t PinToAdcChannel(int pin);		// convert an analog pin number to an ADC channel
+
 #endif /* SAM_NON_DUE_PIN_H */
 

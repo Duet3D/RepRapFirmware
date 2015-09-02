@@ -946,7 +946,6 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, StringRef&
 			{
 				// This is only possible if we have at least one HTTP session left
 				response.copy("{\"err\":0}");
-
 			}
 			else
 			{

@@ -26,6 +26,7 @@ extern char _end;
 extern "C" char *sbrk(int i);
 
 const uint8_t memPattern = 0xA5;
+const int Dac0DigitalPin = 66;						// Arduino Due pin number corresponding to DAC0 output pin
 
 static uint32_t fanInterruptCount = 0;				// accessed only in ISR, so no need to declare it volatile
 const uint32_t fanMaxInterruptCount = 32;			// number of fan interrupts that we average over
@@ -105,7 +106,7 @@ bool PidParameters::operator==(const PidParameters& other) const
 // Platform class
 
 Platform::Platform() :
-		autoSaveEnabled(false), active(false), errorCodeBits(0), fileStructureInitialised(false), tickState(0), debugCode(0),
+		autoSaveEnabled(false), board(BoardType::Duet_06), active(false), errorCodeBits(0), fileStructureInitialised(false), tickState(0), debugCode(0),
 		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
 {
 	line = new Line(SerialUSB);
@@ -125,10 +126,13 @@ Platform::Platform() :
 
 void Platform::Init()
 {
+	// Deal with power first
 	digitalWriteNonDue(atxPowerPin, LOW);		// ensure ATX power is off by default
 	pinModeNonDue(atxPowerPin, OUTPUT);
 
-	idleCurrentFactor = defaultIdleCurrentFactor;
+	SetBoardType(BoardType::Auto);
+
+	// Comms
 
 	baudRates[0] = MainBaudRate;
 	baudRates[1] = AuxBaudRate;
@@ -146,12 +150,13 @@ void Platform::Init()
 	aux->Init();
 	messageIndent = 0;
 
-	// We need to initialize at least some of the time stuff before we call MassStorage::Init()
+	// We need to initialise at least some of the time stuff before we call MassStorage::Init()
 	addToTime = 0.0;
 	lastTimeCall = 0;
 	lastTime = Time();
 	longWait = lastTime;
 
+	// File management
 	massStorage->Init();
 
 	for (size_t file = 0; file < MAX_FILES; file++)
@@ -172,6 +177,7 @@ void Platform::Init()
 	ARRAY_INIT(stepPins, STEP_PINS);
 	ARRAY_INIT(directionPins, DIRECTION_PINS);
 	ARRAY_INIT(directions, DIRECTIONS);
+	ARRAY_INIT(enableValues, ENABLE_VALUES);
 	ARRAY_INIT(enablePins, ENABLE_PINS);
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
 	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
@@ -181,13 +187,13 @@ void Platform::Init()
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-	//numMixingDrives = NUM_MIXING_DRIVES;
+	maxStepperDACVoltage = MAX_STEPPER_DAC_VOLTAGE;
 
 	// Z PROBE
 
 	zProbePin = Z_PROBE_PIN;
 	zProbeAdcChannel = PinToAdcChannel(zProbePin);
-	InitZProbe();
+	InitZProbe();		// this also sets up zProbeModulationPin
 
 	// AXES
 
@@ -195,6 +201,7 @@ void Platform::Init()
 	ARRAY_INIT(axisMinima, AXIS_MINIMA);
 	ARRAY_INIT(homeFeedrates, HOME_FEEDRATES);
 
+	idleCurrentFactor = defaultIdleCurrentFactor;
 	SetSlowestDrive();
 
 	// HEATERS - Bed is assumed to be the first
@@ -205,8 +212,10 @@ void Platform::Init()
 	ARRAY_INIT(activeTemperatures, ACTIVE_TEMPERATURES);
 
 	heatSampleTime = HEAT_SAMPLE_TIME;
-	coolingFanValue = 0.0;
-	coolingFanPin = COOLING_FAN_PIN;
+	coolingFan0Value = 0.0;
+	coolingFan1Value = 0.0;
+	coolingFan0Pin = COOLING_FAN0_PIN;
+	coolingFan1Pin = COOLING_FAN1_PIN;
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
 	timeToHot = TIME_TO_HOT;
 	lastRpmResetTime = 0.0;
@@ -215,8 +224,11 @@ void Platform::Init()
 	gcodeDir = GCODE_DIR;
 	tempDir = TEMP_DIR;
 
+	// Motors
+
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
+		SetPhysicalDrive(drive, drive);					// map drivers directly to axes and extruders
 		if (stepPins[drive] >= 0)
 		{
 			pinModeNonDue(stepPins[drive], OUTPUT);
@@ -266,10 +278,15 @@ void Platform::Init()
 		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * numThermistorReadingsAveraged;
 	}
 
-	if (coolingFanPin >= 0)
+	if (coolingFan0Pin >= 0)
 	{
 		// Inverse logic for Duet v0.6 and later; this turns it off
-		analogWriteNonDue(coolingFanPin, (HEAT_ON == 0) ? 255 : 0, true);
+		analogWriteNonDue(coolingFan0Pin, (HEAT_ON == 0) ? 255 : 0, true);
+	}
+	if (coolingFan1Pin >= 0)
+	{
+		// Inverse logic for Duet v0.6 and later; this turns it off
+		analogWriteNonDue(coolingFan1Pin, (HEAT_ON == 0) ? 255 : 0, true);
 	}
 
 	if (coolingFanRpmPin >= 0)
@@ -321,18 +338,19 @@ void Platform::InitZProbe()
 {
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
+	zProbeModulationPin = (board == BoardType::Duet_07) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
 
 	switch (nvData.zProbeType)
 	{
 	case 1:
 	case 2:
-		pinModeNonDue(nvData.zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(nvData.zProbeModulationPin, HIGH);	// enable the IR LED
+		pinModeNonDue(zProbeModulationPin, OUTPUT);
+		digitalWriteNonDue(zProbeModulationPin, HIGH);	// enable the IR LED
 		break;
 
 	case 3:
-		pinModeNonDue(nvData.zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(nvData.zProbeModulationPin, LOW);	// enable the alternate sensor
+		pinModeNonDue(zProbeModulationPin, OUTPUT);
+		digitalWriteNonDue(zProbeModulationPin, LOW);	// enable the alternate sensor
 		break;
 
 	case 4:
@@ -344,21 +362,6 @@ void Platform::InitZProbe()
 
 	default:
 		break;
-	}
-}
-
-int Platform::GetZProbeChannel() const
-{
-	return (nvData.zProbeModulationPin == Z_PROBE_MOD_PIN07) ? 1 : 0;
-}
-
-void Platform::SetZProbeChannel(int chan)
-{
-	int temp = nvData.zProbeModulationPin;
-	nvData.zProbeModulationPin = (chan == 1) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
-	if (autoSaveEnabled && temp != nvData.zProbeModulationPin)
-	{
-		WriteNvData();
 	}
 }
 
@@ -579,7 +582,6 @@ void Platform::ResetNvData()
 	nvData.switchZProbeParameters.Init(0.0);
 	nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
 	nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
-	nvData.zProbeModulationPin = Z_PROBE_MOD_PIN;
 
 	for (size_t i = 0; i < HEATERS; ++i)
 	{
@@ -903,7 +905,10 @@ void Platform::InitialiseInterrupts()
 	NVIC_EnableIRQ(TC4_IRQn);
 
 	// Interrupt for 4-pin PWM fan sense line
-	attachInterrupt(coolingFanRpmPin, FanInterrupt, FALLING);
+	if (coolingFanRpmPin >= 0)
+	{
+		attachInterrupt(coolingFanRpmPin, FanInterrupt, FALLING);
+	}
 
 	// Tick interrupt for ADC conversions
 	tickState = 0;
@@ -923,30 +928,25 @@ void Platform::DisableInterrupts()
 #pragma GCC push_options
 #pragma GCC optimize ("O3")
 
-// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already
+// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
+// Must be called with interrupts disabled,
 /*static*/ bool Platform::ScheduleInterrupt(uint32_t tim)
 {
-	irqflags_t flags = cpu_irq_save();						// disable interrupts
 	TC_SetRA(TC1, 0, tim);									// set up the compare register
 	TC_GetStatus(TC1, 0);									// clear any pending interrupt
 	int32_t diff = (int32_t)(tim - TC_ReadCV(TC1, 0));		// see how long we have to go
-	bool ret;
-	if (diff < 3)											// if less than about 1us or already passed
+	if (diff < (int32_t)DDA::minInterruptInterval)			// if less than about 2us or already passed
 	{
-		ret = true;											// tell the caller to simulate an interrupt instead
+		return true;										// tell the caller to simulate an interrupt instead
 	}
-	else
-	{
-		ret = false;
-		TC1 ->TC_CHANNEL[0].TC_IER = TC_IER_CPAS;			// enable the interrupt
+
+	TC1 ->TC_CHANNEL[0].TC_IER = TC_IER_CPAS;				// enable the interrupt
 #ifdef MOVE_DEBUG
 		++numInterruptsScheduled;
 		nextInterruptTime = tim;
 		nextInterruptScheduledAt = Platform::GetInterruptClocks();
 #endif
-	}
-	cpu_irq_restore(flags);									// restore interrupt enable status
-	return ret;
+	return false;
 }
 
 // Process a 1ms tick interrupt
@@ -999,7 +999,7 @@ void Platform::Tick()
 		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
 		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(nvData.zProbeModulationPin, LOW);	// turn off the IR emitter
+			digitalWriteNonDue(zProbeModulationPin, LOW);			// turn off the IR emitter
 		}
 		++tickState;
 		break;
@@ -1012,7 +1012,7 @@ void Platform::Tick()
 		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
 		if (nvData.zProbeType == 2 || nvData.zProbeType == 3)		// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(nvData.zProbeModulationPin, HIGH);	// turn on the IR emitter
+			digitalWriteNonDue(zProbeModulationPin, HIGH);			// turn on the IR emitter
 		}
 		tickState = 1;
 		break;
@@ -1037,16 +1037,6 @@ void Platform::Tick()
 {
 	adc_enable_channel(ADC, chan);
 	adc_start(ADC );
-}
-
-// Convert an Arduino Due pin number to the corresponding ADC channel number
-/*static*/ adc_channel_num_t Platform::PinToAdcChannel(int pin)
-{
-	if (pin < A0)
-	{
-		pin += A0;
-	}
-	return (adc_channel_num_t) (int) g_APinDescription[pin].ulADCChannelNumber;
 }
 
 #pragma GCC pop_options
@@ -1288,11 +1278,15 @@ EndStopHit Platform::GetZProbeResult() const
 // This is called from the step ISR as well as other places, so keep it fast, especially in the case where the motor is already enabled
 void Platform::SetDirection(size_t drive, bool direction)
 {
-	const int pin = directionPins[drive];
-	if (pin >= 0)
+	const int driver = driverNumbers[drive];
+	if (driver >= 0)
 	{
-		bool d = (direction == FORWARDS) ? directions[drive] : !directions[drive];
-		digitalWriteNonDue(pin, d);
+		const int pin = directionPins[driver];
+		if (pin >= 0)
+		{
+			bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
+			digitalWriteNonDue(pin, d);
+		}
 	}
 }
 
@@ -1302,12 +1296,16 @@ void Platform::EnableDrive(size_t drive)
 	if (drive < DRIVES && driveState[drive] != DriveStatus::enabled)
 	{
 		driveState[drive] = DriveStatus::enabled;
-		UpdateMotorCurrent(drive);						// the current may have been reduced by the idle timeout
-
-		const int pin = enablePins[drive];
-		if (pin >= 0)
+		const size_t driver = driverNumbers[drive];
+		if (driver >= 0)
 		{
-			digitalWriteNonDue(pin, ENABLE_DRIVE);
+			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
+
+			const int pin = enablePins[driver];
+			if (pin >= 0)
+			{
+				digitalWriteNonDue(pin, enableValues[driver]);
+			}
 		}
 	}
 }
@@ -1317,16 +1315,17 @@ void Platform::DisableDrive(size_t drive)
 {
 	if (drive < DRIVES)
 	{
-		const int pin = enablePins[drive];
+		const size_t driver = driverNumbers[drive];
+		const int pin = enablePins[driver];
 		if (pin >= 0)
 		{
-			digitalWriteNonDue(pin, DISABLE_DRIVE);
-			driveState[drive] = DriveStatus::disabled;
+			digitalWriteNonDue(pin, !enableValues[driver]);
 		}
+		driveState[drive] = DriveStatus::disabled;
 	}
 }
 
-// Set a drive to idle hold if it is enabled. If it is disabled, leave it alone.
+// Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
 void Platform::SetDrivesIdle()
 {
@@ -1361,15 +1360,33 @@ void Platform::UpdateMotorCurrent(size_t drive)
 			current *= idleCurrentFactor;
 		}
 		unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
-		if (drive < 4)
+		unsigned short dac = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDACVoltage/2)/maxStepperDACVoltage);
+		const size_t driver = driverNumbers[drive];
+		if (driver < 4)
 		{
-			mcpDuet.setNonVolatileWiper(potWipes[drive], pot);
-			mcpDuet.setVolatileWiper(potWipes[drive], pot);
+			mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
+			mcpDuet.setVolatileWiper(potWipes[driver], pot);
 		}
 		else
 		{
-			mcpExpansion.setNonVolatileWiper(potWipes[drive], pot);
-			mcpExpansion.setVolatileWiper(potWipes[drive], pot);
+			if (board == BoardType::Duet_085)
+			{
+				// Extruder 0 is on DAC channel 0
+				if (driver == 4)
+				{
+					analogWrite(DAC0, dac);
+				}
+				else
+				{
+					mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
+					mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
+				}
+			}
+			else
+			{
+				mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
+				mcpExpansion.setVolatileWiper(potWipes[driver], pot);
+			}
 		}
 	}
 }
@@ -1392,10 +1409,42 @@ void Platform::SetIdleCurrentFactor(float f)
 	}
 }
 
-// Get current cooling fan speed on a scale between 0 and 1
-float Platform::GetFanValue() const
+// Set the physical drive (i.e. axis or extruder) number used by this driver
+void Platform::SetPhysicalDrive(size_t driverNumber, int8_t physicalDrive)
 {
-	return coolingFanValue;
+	int oldDrive = GetPhysicalDrive(driverNumber);
+	if (oldDrive >= 0)
+	{
+		driverNumbers[oldDrive] = -1;
+		stepPinDescriptors[oldDrive] = OutputPin();
+	}
+	driverNumbers[physicalDrive] = driverNumber;
+	stepPinDescriptors[physicalDrive] = OutputPin(stepPins[driverNumber]);
+}
+
+// Return the physical drive used by this driver, or -1 if not found
+int Platform::GetPhysicalDrive(size_t driverNumber) const
+{
+	for (int drive = 0; drive < DRIVES; ++drive)
+	{
+		if (driverNumbers[drive] == (int8_t)driverNumber)
+		{
+			return drive;
+		}
+	}
+	return -1;
+}
+
+// Get current cooling fan speed on a scale between 0 and 1
+float Platform::GetFanValue(size_t fan) const
+{
+	if (fan==0){
+		return coolingFan0Value;
+	}
+	if (fan==1){
+		return coolingFan1Value;
+	}
+	else return -1;
 }
 
 // This is a bit of a compromise - old RepRaps used fan speeds in the range
@@ -1404,24 +1453,41 @@ float Platform::GetFanValue() const
 // the G Code reader will get right for a float or an int) and attempts to
 // do the right thing whichever the user has done.  This will only not work
 // for an old-style fan speed of 1/255...
-void Platform::SetFanValue(float speed)
+void Platform::SetFanValue(size_t fan, float speed)
 {
-	if (coolingFanPin >= 0)
+	if (fan==0 && coolingFan0Pin >= 0)
 	{
 		byte p;
 		if (speed <= 1.0)
 		{
 			p = (byte)(255.0 * max<float>(0.0, speed));
-			coolingFanValue = speed;
+			coolingFan0Value = speed;
 		}
 		else
 		{
 			p = (byte)speed;
-			coolingFanValue = speed / 255.0;
+			coolingFan0Value = speed / 255.0;
 		}
 
-		// The cooling fan output pin gets inverted if HEAT_ON == 0
-		analogWriteNonDue(coolingFanPin, (HEAT_ON == 0) ? (255 - p) : p, true);
+		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0
+		analogWriteNonDue(coolingFan0Pin, (HEAT_ON == 0) ? (255 - p) : p, true);
+	}
+	if (fan==1 && coolingFan1Pin >= 0)
+	{
+		byte p;
+		if (speed <= 1.0)
+		{
+			p = (byte)(255.0 * max<float>(0.0, speed));
+			coolingFan1Value = speed;
+		}
+		else
+		{
+			p = (byte)speed;
+			coolingFan1Value = speed / 255.0;
+		}
+
+		// The cooling fan 1 output pin gets inverted if HEAT_ON == 0
+		analogWriteNonDue(coolingFan1Pin, (HEAT_ON == 0) ? (255 - p) : p, true);
 	}
 }
 
@@ -1710,6 +1776,41 @@ void Platform::ResetChannel(size_t chan)
 		break;
 	default:
 		break;
+	}
+}
+
+void Platform::SetBoardType(BoardType bt)
+{
+	if (bt == BoardType::Auto)
+	{
+		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
+		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
+		// So we enable the pullup (value 150K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
+		// This may fail if anyone connects a load to the DAC0 pin on and Dur=et 0.6, hence we implement board selection in M115 as well.
+		pinModeNonDue(Dac0DigitalPin, INPUT_PULLUP);
+		board = (digitalReadNonDue(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
+		pinModeNonDue(Dac0DigitalPin, INPUT);	// turn pullup off
+	}
+	else
+	{
+		board = bt;
+	}
+
+	if (active)
+	{
+		InitZProbe();							// select and initialise the Z probe modulation pin
+	}
+}
+
+// Get a string describing the electronics
+const char* Platform::GetElectronicsString() const
+{
+	switch (board)
+	{
+	case BoardType::Duet_06:				return "Duet 0.6";
+	case BoardType::Duet_07:				return "Duet 0.7";
+	case BoardType::Duet_085:				return "Duet 0.85";
+	default:								return "Unidentified";
 	}
 }
 

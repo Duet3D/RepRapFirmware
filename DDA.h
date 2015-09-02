@@ -69,10 +69,9 @@ public:
 	// the calculation can just be managed in time at speeds of 15000mm/min (step interval 50us), but not at 20000mm/min (step interval 37.5us).
 	// Therefore, where the step interval falls below 70us, we don't calculate on every step.
 	static const int32_t MinCalcInterval = (70 * stepClockRate)/1000000; // the smallest sensible interval between calculations (70us) in step timer clocks
-
-private:
 	static const uint32_t minInterruptInterval = 6;					// about 2us minimum interval between interrupts, in clocks
 
+private:
 	void RecalculateMove();
 	void CalcNewSpeeds();
 	void ReduceHomingSpeed();										// called to reduce homing speed when a near-endstop is triggered

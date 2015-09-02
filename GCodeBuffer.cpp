@@ -344,7 +344,18 @@ long GCodeBuffer::GetLValue()
 // Return true if this buffer contains a poll request or empty request that can be executed while macros etc. from another source are being completed
 bool GCodeBuffer::IsPollRequest()
 {
-	return state == executing && (IsEmpty() || (Seen('M') && GetIValue() == 105));
+	if (state == executing)
+	{	if (IsEmpty())
+		{
+			return true;
+		}
+		if (Seen('M'))
+		{
+			int i = GetIValue();
+			return i == 105 || i == 408;
+		}
+	}
+	return false;
 }
 
 // End

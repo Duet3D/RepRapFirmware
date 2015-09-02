@@ -738,18 +738,14 @@ extern uint32_t maxReps;
 
 // This is called by the interrupt service routine to execute steps.
 // It returns true if it needs to be called again on the DDA of the new current move, otherwise false.
+// This must be as fast as possible, because it determines the maximum movement speed.
 bool DDA::Step()
 {
 	bool repeat;
 	uint32_t numReps = 0;
 	do
 	{
-		++numReps;
-		if (numReps > maxReps)
-		{
-			maxReps = numReps;
-		}
-
+		// Keep this loop as fast as possible, in the case that there are no endstops to check!
 		// Check endstop switches and Z probe if asked
 		if (endStopsToCheck != 0)											// if any homing switches or the Z probe is enabled in this move
 		{
@@ -819,47 +815,63 @@ bool DDA::Step()
 					}
 				}
 			}
+
+			if (state == completed)		// we may have completed the move due to triggering an endstop switch or Z probe
+			{
+				break;
+			}
 		}
 
-		if (state != completed)
+		// Generate any steps that are now due, overdue, or will be due very shortly
+		DriveMovement* dm = firstDM;
+		if (dm == nullptr)				// I don't think this should happen, but best to be sure
 		{
-			DriveMovement* dm = firstDM;
-			if (dm == nullptr)			// I don't think this should happen, but best to be sure
+			state = completed;
+			break;
+		}
+
+		const uint32_t elapsedTime = (Platform::GetInterruptClocks() - moveStartTime) + minInterruptInterval;
+		while (elapsedTime >= dm->nextStepTime)	// if the next step is due
+		{
+			size_t drive = dm->drive;
+			reprap.GetPlatform()->StepHigh(drive);
+			++numReps;
+			firstDM = dm->nextDM;
+			bool moreSteps = (isDeltaMovement && drive < AXES) ? dm->CalcNextStepTimeDelta(*this, drive) : dm->CalcNextStepTimeCartesian(*this, drive);
+			if (moreSteps)
+			{
+				InsertDM(dm);
+			}
+			else if (firstDM == nullptr)
 			{
 				state = completed;
-			}
-			else if ((Platform::GetInterruptClocks() - moveStartTime) + minInterruptInterval > dm->nextStepTime)	// if the next step is due
-			{
-				size_t drive = dm->drive;
-				reprap.GetPlatform()->StepHigh(drive);
-				firstDM = dm->nextDM;
-				bool moreSteps = (isDeltaMovement && drive < AXES) ? dm->CalcNextStepTimeDelta(*this, drive) : dm->CalcNextStepTimeCartesian(*this, drive);
-				if (moreSteps)
-				{
-					InsertDM(dm);
-				}
-				else if (firstDM == nullptr)
-				{
-					state = completed;
-				}
 				reprap.GetPlatform()->StepLow(drive);
+				goto quit;			// yukky multi-level break, but saves us another test in this time-critical code
+			}
+			reprap.GetPlatform()->StepLow(drive);
+			dm = firstDM;
+
 //uint32_t t3 = Platform::GetInterruptClocks() - t2;
 //if (t3 > maxCalcTime) maxCalcTime = t3;
 //if (t3 < minCalcTime) minCalcTime = t3;
-			}
-		}
-
-		if (state == completed)
-		{
-			uint32_t finishTime = moveStartTime + clocksNeeded;		// calculate how long this move should take
-			Move *move = reprap.GetMove();
-			move->CurrentMoveCompleted();							// tell Move that the current move is complete
-			return move->StartNextMove(finishTime);					// schedule the next move
 		}
 
 		repeat = reprap.GetPlatform()->ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
 	} while (repeat);
 
+quit:
+	if (numReps > maxReps)
+	{
+		maxReps = numReps;
+	}
+
+	if (state == completed)
+	{
+		uint32_t finishTime = moveStartTime + clocksNeeded;		// calculate how long this move should take
+		Move *move = reprap.GetMove();
+		move->CurrentMoveCompleted();							// tell Move that the current move is complete
+		return move->StartNextMove(finishTime);					// schedule the next move
+	}
 	return false;
 }
 

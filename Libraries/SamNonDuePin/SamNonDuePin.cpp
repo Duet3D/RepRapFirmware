@@ -37,15 +37,25 @@ extern const PinDescription nonDuePinDescription[]=
   { PIOC, PIO_PC8B_PWML3,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),	NO_ADC, NO_ADC, PWM_CH3,    NOT_ON_TIMER }, // PWM X5
   { PIOC, PIO_PC2B_PWML0,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),	NO_ADC, NO_ADC, PWM_CH0,    NOT_ON_TIMER }, // PWM X6
   { PIOC, PIO_PC6B_PWML2,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),	NO_ADC, NO_ADC, PWM_CH2,    NOT_ON_TIMER }, // PWM X7
-  { PIOC, PIO_PC20,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PWM X8
-  // 9 .. 14
+  { PIOC, PIO_PC20,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X8
+  { PIOD, PIO_PD9,			ID_PIOD, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X9
+  //10-14
+  { PIOC, PIO_PC29,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X10
+  { PIOC, PIO_PC30,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X11
+  { PIOC, PIO_PC10,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X12
+  { PIOC, PIO_PC28,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X13
+  { PIOB, PIO_PB22,			ID_PIOB, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X14
+  { PIOB, PIO_PB23,			ID_PIOB, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X15
+  { PIOB, PIO_PB24,			ID_PIOB, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN X16
+  { PIOC, PIO_PC4B_PWML1,   ID_PIOC, PIO_PERIPH_B, PIO_DEFAULT, (PIN_ATTR_DIGITAL|PIN_ATTR_PWM),	NO_ADC, NO_ADC, PWM_CH1,    NOT_ON_TIMER }, // PWM X17
+  // 18-23 - HSMCI
   { PIOA, PIO_PA20A_MCCDA,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,   				NO_ADC, NO_ADC, NOT_ON_PWM,	NOT_ON_TIMER }, // PIN_HSMCI_MCCDA_GPIO
   { PIOA, PIO_PA19A_MCCK,	ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCCK_GPIO
   { PIOA, PIO_PA21A_MCDA0,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA0_GPIO
   { PIOA, PIO_PA22A_MCDA1,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA1_GPIO
   { PIOA, PIO_PA23A_MCDA2,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA2_GPIO
   { PIOA, PIO_PA24A_MCDA3,  ID_PIOA, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // PIN_HSMCI_MCDA3_GPIO
-  // 15 .. 24 - ETHERNET MAC
+  // 24-33 - ETHERNET MAC
   { PIOB, PIO_PB0A_ETXCK,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ETXCK
   { PIOB, PIO_PB1A_ETXEN,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ETXEN
   { PIOB, PIO_PB2A_ETX0,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ETX0
@@ -55,12 +65,11 @@ extern const PinDescription nonDuePinDescription[]=
   { PIOB, PIO_PB6A_ERX1,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ERX1
   { PIOB, PIO_PB7A_ERXER,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // ERXER
   { PIOB, PIO_PB8A_EMDC,	ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // EMDC
-  { PIOB, PIO_PB9A_EMDIO,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }, // EMDIO
-  // 25
-  { PIOC, PIO_PC10,			ID_PIOC, PIO_OUTPUT_0, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER }  // PIN X25
+  { PIOB, PIO_PB9A_EMDIO,   ID_PIOB, PIO_PERIPH_A, PIO_DEFAULT, PIN_ATTR_DIGITAL,					NO_ADC, NO_ADC, NOT_ON_PWM, NOT_ON_TIMER } // EMDIO
+
 };
 
-const uint32_t MaxPinNumber = X25;
+const uint32_t MaxPinNumber = X17;
 
 /*
 pinModeNonDue
@@ -177,6 +186,14 @@ extern int digitalReadNonDue( uint32_t ulPin )
 	return (PIO_Get(pinDesc.pPort, PIO_INPUT, pinDesc.ulPin ) == 1) ? HIGH : LOW;
 }
 
+// Build a short-form pin descriptor for a IO pin
+OutputPin::OutputPin(unsigned int pin)
+{
+	const PinDescription& pinDesc = (pin >= X0) ? nonDuePinDescription[pin - X0] : g_APinDescription[pin];
+	pPort = pinDesc.pPort;
+	ulPin = pinDesc.ulPin;
+}
+
 static bool nonDuePWMEnabled = 0;
 static bool PWMChanEnabled[8] = {false,false,false,false, false,false,false,false};		// there are only 8 PWM channels
 
@@ -184,7 +201,8 @@ static bool PWMChanEnabled[8] = {false,false,false,false, false,false,false,fals
 static void PWMC_ConfigureChannel_fixed( Pwm* pPwm, uint32_t ul_channel, uint32_t prescaler, uint32_t alignment, uint32_t polarity )
 {
     /* Disable ul_channel (effective at the end of the current period) */
-    if ((pPwm->PWM_SR & (1 << ul_channel)) != 0) {
+    if ((pPwm->PWM_SR & (1 << ul_channel)) != 0)
+    {
         pPwm->PWM_DIS = 1 << ul_channel;
         while ((pPwm->PWM_SR & (1 << ul_channel)) != 0);
     }
@@ -193,6 +211,15 @@ static void PWMC_ConfigureChannel_fixed( Pwm* pPwm, uint32_t ul_channel, uint32_
     pPwm->PWM_CH_NUM[ul_channel].PWM_CMR = prescaler | alignment | polarity;
 }
 
+// Convert an Arduino Due analog pin number to the corresponding ADC channel number
+adc_channel_num_t PinToAdcChannel(int pin)
+{
+	if (pin < A0)
+	{
+		pin += A0;
+	}
+	return (adc_channel_num_t) (int) g_APinDescription[pin].ulADCChannelNumber;
+}
 
 /*
 analogWriteNonDue
@@ -262,61 +289,63 @@ void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm)
 //initialise HSMCI pins
 void hsmciPinsinit()
 {
-  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCCDA_GPIO].pPort,nonDuePinDescription[PIN_HSMCI_MCCDA_GPIO].ulPinType,nonDuePinDescription[PIN_HSMCI_MCCDA_GPIO].ulPin,nonDuePinDescription[PIN_HSMCI_MCCDA_GPIO].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCCK_GPIO].pPort,nonDuePinDescription[PIN_HSMCI_MCCK_GPIO].ulPinType,nonDuePinDescription[PIN_HSMCI_MCCK_GPIO].ulPin,nonDuePinDescription[PIN_HSMCI_MCCK_GPIO].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA0_GPIO].pPort,nonDuePinDescription[PIN_HSMCI_MCDA0_GPIO].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA0_GPIO].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA0_GPIO].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA1_GPIO].pPort,nonDuePinDescription[PIN_HSMCI_MCDA1_GPIO].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA1_GPIO].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA1_GPIO].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO].pPort,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO].pPort,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCCDA_GPIO - X0].pPort,nonDuePinDescription[PIN_HSMCI_MCCDA_GPIO - X0].ulPinType,nonDuePinDescription[PIN_HSMCI_MCCDA_GPIO - X0].ulPin,nonDuePinDescription[PIN_HSMCI_MCCDA_GPIO - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCCK_GPIO - X0].pPort,nonDuePinDescription[PIN_HSMCI_MCCK_GPIO - X0].ulPinType,nonDuePinDescription[PIN_HSMCI_MCCK_GPIO - X0].ulPin,nonDuePinDescription[PIN_HSMCI_MCCK_GPIO - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA0_GPIO - X0].pPort,nonDuePinDescription[PIN_HSMCI_MCDA0_GPIO - X0].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA0_GPIO - X0].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA0_GPIO - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA1_GPIO - X0].pPort,nonDuePinDescription[PIN_HSMCI_MCDA1_GPIO - X0].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA1_GPIO - X0].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA1_GPIO - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO - X0].pPort,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO - X0].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO - X0].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA2_GPIO - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO - X0].pPort,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO - X0].ulPinType,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO - X0].ulPin,nonDuePinDescription[PIN_HSMCI_MCDA3_GPIO - X0].ulPinConfiguration);
   //set pullups (not on clock!)
-  digitalWriteNonDue(PIN_HSMCI_MCCDA_GPIO+X0, HIGH);
-  digitalWriteNonDue(PIN_HSMCI_MCDA0_GPIO+X0, HIGH);
-  digitalWriteNonDue(PIN_HSMCI_MCDA1_GPIO+X0, HIGH);
-  digitalWriteNonDue(PIN_HSMCI_MCDA2_GPIO+X0, HIGH);
-  digitalWriteNonDue(PIN_HSMCI_MCDA3_GPIO+X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCCDA_GPIO - X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCDA0_GPIO - X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCDA1_GPIO - X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCDA2_GPIO - X0, HIGH);
+  digitalWriteNonDue(PIN_HSMCI_MCDA3_GPIO - X0, HIGH);
 }
 
 //initialise ethernet pins
 void ethPinsInit()
 {
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_EREFCK].pPort,
-			  nonDuePinDescription[PIN_EMAC_EREFCK].ulPinType,
-			  nonDuePinDescription[PIN_EMAC_EREFCK].ulPin,
-			  nonDuePinDescription[PIN_EMAC_EREFCK].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_ETXEN].pPort,
-		  nonDuePinDescription[PIN_EMAC_ETXEN].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_ETXEN].ulPin,
-		  nonDuePinDescription[PIN_EMAC_ETXEN].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_ETX0].pPort,
-		  nonDuePinDescription[PIN_EMAC_ETX0].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_ETX0].ulPin,
-		  nonDuePinDescription[PIN_EMAC_ETX0].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_ETX1].pPort,
-		  nonDuePinDescription[PIN_EMAC_ETX1].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_ETX1].ulPin,
-		  nonDuePinDescription[PIN_EMAC_ETX1].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_ECRSDV].pPort,
-		  nonDuePinDescription[PIN_EMAC_ECRSDV].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_ECRSDV].ulPin,
-		  nonDuePinDescription[PIN_EMAC_ECRSDV].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_ERX0].pPort,
-		  nonDuePinDescription[PIN_EMAC_ERX0].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_ERX0].ulPin,
-		  nonDuePinDescription[PIN_EMAC_ERX0].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_ERX1].pPort,
-		  nonDuePinDescription[PIN_EMAC_ERX1].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_ERX1].ulPin,
-		  nonDuePinDescription[PIN_EMAC_ERX1].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_ERXER].pPort,
-		  nonDuePinDescription[PIN_EMAC_ERXER].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_ERXER].ulPin,
-		  nonDuePinDescription[PIN_EMAC_ERXER].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_EMDC].pPort,
-		  nonDuePinDescription[PIN_EMAC_EMDC].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_EMDC].ulPin,
-		  nonDuePinDescription[PIN_EMAC_EMDC].ulPinConfiguration);
-  PIO_Configure(nonDuePinDescription[PIN_EMAC_EMDIO].pPort,
-		  nonDuePinDescription[PIN_EMAC_EMDIO].ulPinType,
-		  nonDuePinDescription[PIN_EMAC_EMDIO].ulPin,
-		  nonDuePinDescription[PIN_EMAC_EMDIO].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_EREFCK - X0].pPort,
+			  nonDuePinDescription[PIN_EMAC_EREFCK - X0].ulPinType,
+			  nonDuePinDescription[PIN_EMAC_EREFCK - X0].ulPin,
+			  nonDuePinDescription[PIN_EMAC_EREFCK - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_ETXEN - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_ETXEN - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_ETXEN - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_ETXEN - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_ETX0 - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_ETX0 - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_ETX0 - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_ETX0 - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_ETX1 - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_ETX1 - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_ETX1 - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_ETX1 - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_ECRSDV - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_ECRSDV - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_ECRSDV - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_ECRSDV - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_ERX0 - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_ERX0 - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_ERX0 - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_ERX0 - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_ERX1 - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_ERX1 - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_ERX1 - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_ERX1 - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_ERXER - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_ERXER - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_ERXER - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_ERXER - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_EMDC - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_EMDC - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_EMDC - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_EMDC - X0].ulPinConfiguration);
+  PIO_Configure(nonDuePinDescription[PIN_EMAC_EMDIO - X0].pPort,
+		  nonDuePinDescription[PIN_EMAC_EMDIO - X0].ulPinType,
+		  nonDuePinDescription[PIN_EMAC_EMDIO - X0].ulPin,
+		  nonDuePinDescription[PIN_EMAC_EMDIO - X0].ulPinConfiguration);
 }
+
+// End

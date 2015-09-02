@@ -354,7 +354,8 @@ void GCodes::Spin()
 	case GCodeState::resuming3:
 		if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
-			platform->SetFanValue(pausedFanValue);
+			platform->SetFanValue(0,pausedFan0Value);
+			platform->SetFanValue(1,pausedFan1Value);
 			fileBeingPrinted.MoveFrom(fileToPrint);
 			for (size_t drive = AXES; drive < DRIVES; ++drive)
 			{
@@ -2256,8 +2257,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	bool resend = false;
 
 	int code = gb->GetIValue();
-	if (simulating && (code < 20 || code > 37) && code != 82 && code != 83 && code != 111 && code != 105 && code != 122
-			&& code != 999)
+	if (simulating && (code < 20 || code > 37) && code != 82 && code != 83 && code != 111 && code != 105 && code != 122 && code != 999)
 	{
 		return true;			// we don't yet simulate most M codes
 	}
@@ -2536,7 +2536,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				pausedMoveBuffer[DRIVES] = moveBuffer[DRIVES];
 			}
 
-			pausedFanValue = platform->GetFanValue();
+			pausedFan0Value = platform->GetFanValue(0);
+			pausedFan1Value = platform->GetFanValue(1);
 			fileToPrint.MoveFrom(fileBeingPrinted);
 			fileGCode->Pause();
 			state = GCodeState::pausing1;
@@ -2843,42 +2844,50 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 106: // Set/report fan values
+	{
+		bool seen = false;
+		int fanNum = 0; //default to the first fan
+		if (gb->Seen('P'))		// Choose fan number
 		{
-			bool seen = false;
-
-			if (gb->Seen('I'))		// Invert cooling
-			{
-				coolingInverted = (gb->GetIValue() > 0);
-				seen = true;
-			}
-
-			if (gb->Seen('S'))		// Set new fan value
-			{
-				float f = gb->GetFValue();
-				f = min<float>(f, 255.0);
-				f = max<float>(f, 0.0);
-				seen = true;
-				if (coolingInverted)
-				{
-					// Check if 1.0 or 255.0 may be used as the maximum value
-					platform->SetFanValue((f <= 1.0 ? 1.0 : 255.0) - f);
-				}
-				else
-				{
-					platform->SetFanValue(f);
-				}
-			}
-
-			if (!seen)
-			{
-				float f = coolingInverted ? (1.0 - platform->GetFanValue()) : platform->GetFanValue();
-				reply.printf("Fan value: %d%%, Cooling inverted: %s\n", (byte) (f * 100.0), coolingInverted ? "yes" : "no");
+			fanNum = gb->GetIValue();
+			if(fanNum !=0 && fanNum !=1){
+				reply.printf("Fan value: %i is invalid, 0 or 1 are valid", fanNum);
 			}
 		}
+
+		if (gb->Seen('I'))		// Invert cooling
+		{
+			coolingInverted = (gb->GetIValue() > 0);
+			seen = true;
+		}
+
+		if (gb->Seen('S'))		// Set new fan value
+		{
+			float f = gb->GetFValue();
+			f = min<float>(f, 255.0);
+			f = max<float>(f, 0.0);
+			seen = true;
+			if (coolingInverted)
+			{
+				// Check if 1.0 or 255.0 may be used as the maximum value
+				platform->SetFanValue(fanNum,(f <= 1.0 ? 1.0 : 255.0) - f);
+			}
+			else
+			{
+				platform->SetFanValue(fanNum,f);
+			}
+		}
+
+		if (!seen)
+		{
+			float f = coolingInverted ? (1.0 - platform->GetFanValue(fanNum)) : platform->GetFanValue(fanNum);
+			reply.printf("Fan%i value: %d%%, Cooling inverted: %s\n",fanNum, (byte) (f * 100.0), coolingInverted ? "yes" : "no");
+		}
+	}
 		break;
 
 	case 107: // Fan off - deprecated
-		platform->SetFanValue(coolingInverted ? 255.0 : 0.0);
+		platform->SetFanValue(0,coolingInverted ? 255.0 : 0.0); //T3P3 as deprecated only applies to fan0
 		break;
 
 	case 109: // Deprecated
@@ -2937,8 +2946,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		reply.cat("\n");
 		break;
 
-	case 115: // Print firmware version
-		reply.printf("FIRMWARE_NAME:%s FIRMWARE_VERSION:%s ELECTRONICS:%s DATE:%s\n", NAME, VERSION, ELECTRONICS, DATE);
+	case 115: // Print firmware version or set hardware type
+		if (gb->Seen('P'))
+		{
+			platform->SetBoardType((BoardType)gb->GetIValue());
+		}
+		else
+		{
+			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s DATE: %s\n", NAME, VERSION, platform->GetElectronicsString(), DATE);
+		}
 		break;
 
 	case 116: // Wait for everything, especially set temperatures
@@ -3769,12 +3785,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			seen = true;
 		}
 
-		if (gb->Seen('R'))
-		{
-			platform->SetZProbeChannel(gb->GetIValue());
-			seen = true;
-		}
-
 		if (gb->Seen('S'))
 		{
 			ZProbeParameters params = platform->GetZProbeParameters();
@@ -3793,7 +3803,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 		if (!seen)
 		{
-			reply.printf("Z Probe type %d, channel %d, dive height %.1f", platform->GetZProbeType(), platform->GetZProbeChannel(), platform->GetZProbeDiveHeight());
+			reply.printf("Z Probe type %d, dive height %.1f", platform->GetZProbeType(), platform->GetZProbeDiveHeight());
 			if (platform->GetZProbeType() == 5)
 			{
 				ZProbeParameters params = platform->GetZProbeParameters();
@@ -3971,14 +3981,52 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 569: // Set/report axis direction
 		if (gb->Seen('P'))
 		{
-			int8_t drive = gb->GetIValue();
-			if (gb->Seen('S'))
+			size_t drive = gb->GetIValue();
+			if (drive < DRIVES)
 			{
-				platform->SetDirectionValue(drive, gb->GetIValue());
-			}
-			else
-			{
-				reply.printf("A %d sends drive %d forwards.\n", (int) platform->GetDirectionValue(drive), drive);
+				bool seen = false;
+				if (gb->Seen('S'))
+				{
+					platform->SetDirectionValue(drive, gb->GetIValue());
+					seen = true;
+				}
+				if (gb->Seen('R'))
+				{
+					platform->SetEnableValue(drive, gb->GetIValue() != 0);
+					seen = true;
+				}
+				for (size_t axis = 0; axis < AXES; ++axis)
+				{
+					if (gb->Seen(axisLetters[axis]))
+					{
+						platform->SetPhysicalDrive(drive, axis);
+						seen = true;
+					}
+				}
+				if (gb->Seen(extrudeLetter))
+				{
+					size_t extruder = gb->GetIValue();
+					if (extruder + AXES < DRIVES)
+					{
+						platform->SetPhysicalDrive(drive, extruder + AXES);
+					}
+					seen = true;
+				}
+				if (!seen)
+				{
+					int physicalDrive = platform->GetPhysicalDrive(drive);
+					if (physicalDrive < 0)
+					{
+						reply.printf("Driver %u is not used\n", drive);
+					}
+					else
+					{
+						const char phyDriveLetter = (physicalDrive < AXES) ? axisLetters[physicalDrive] : extrudeLetter;
+						const int phyDriveNumber = (physicalDrive < AXES) ? 0 : physicalDrive - AXES;
+						reply.printf("Driver %u drives the %c%d motor, a %d sends it forwards and a %d enables it\n",
+								drive, phyDriveLetter, phyDriveNumber, (int) platform->GetDirectionValue(drive), (int) platform->GetEnableValue(drive));
+					}
+				}
 			}
 		}
 		break;
