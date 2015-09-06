@@ -140,11 +140,12 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 	endCoordinatesValid = false;
 }
 
-// Insert the specified drive into the step list, in step time order
+// Insert the specified drive into the step list, in step time order.
+// We insert the drive after any existing entries with the same step time so that we service them in round-robin order.
 inline void DDA::InsertDM(DriveMovement *dm)
 {
 	DriveMovement **dmp = &firstDM;
-	while (*dmp != nullptr && (*dmp)->nextStepTime < dm->nextStepTime)
+	while (*dmp != nullptr && (*dmp)->nextStepTime <= dm->nextStepTime)
 	{
 		dmp = &((*dmp)->nextDM);
 	}

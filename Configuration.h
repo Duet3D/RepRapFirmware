@@ -26,11 +26,11 @@ Licence: GPL
 #define NAME "RepRapFirmware"
 
 #ifndef VERSION
-#define VERSION "1.09i-dc42"
+#define VERSION "1.09j-dc42"
 #endif
 
 #ifndef DATE
-#define DATE "2015-09-02"
+#define DATE "2015-09-06"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"

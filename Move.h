@@ -76,6 +76,8 @@ public:
 
     int GetCoreXYMode() const { return coreXYMode; }
     void SetCoreXYMode(int mode) { coreXYMode = mode; }
+    float GetCoreAxisFactor(size_t axis) const { return axisFactors[axis]; }
+    void setCoreAxisFactor(size_t axis, float f) { axisFactors[axis] = f; }
     bool IsCoreXYAxis(size_t axis) const;				// return true if the specified axis shares its motors with another
 
     void CurrentMoveCompleted();						// signals that the current move has just been completed
@@ -158,6 +160,7 @@ private:
     uint32_t deltaProbingStartTime;
     bool deltaProbing;
     int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ
+    float axisFactors[AXES];							// How much further the motors need to move for each axis movement, on a CoreXY/CoreXZ/CoreYZ machine
     unsigned int stepErrors;							// count of step errors, for diagnostics
 };
 

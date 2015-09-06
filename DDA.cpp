@@ -831,11 +831,11 @@ bool DDA::Step()
 		}
 
 		const uint32_t elapsedTime = (Platform::GetInterruptClocks() - moveStartTime) + minInterruptInterval;
-		while (elapsedTime >= dm->nextStepTime)	// if the next step is due
+		while (elapsedTime >= dm->nextStepTime)		// if the next step is due
 		{
 			size_t drive = dm->drive;
-			reprap.GetPlatform()->StepHigh(drive);
 			++numReps;
+			reprap.GetPlatform()->StepHigh(drive);
 			firstDM = dm->nextDM;
 			bool moreSteps = (isDeltaMovement && drive < AXES) ? dm->CalcNextStepTimeDelta(*this, drive) : dm->CalcNextStepTimeCartesian(*this, drive);
 			if (moreSteps)

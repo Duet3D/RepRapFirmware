@@ -251,8 +251,10 @@ void Platform::Init()
 		SetElasticComp(drive, 0.0);
 		if (drive <= AXES)
 		{
-			endStopType[drive] = EndStopType::lowEndStop;	// assume all endstops are low endstops
-			endStopLogicLevel[drive] = true;				// assume all endstops use active high logic e.g. normally-closed switch to ground
+			endStopType[drive] = (drive == Y_AXIS)
+									? EndStopType::lowEndStop	// for Ormerod 2/Huxley/Mendel compatibility
+									: EndStopType::noEndStop;	// for Ormerod/Huxley/Mendel compatibility
+			endStopLogicLevel[drive] = true;					// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
 	}
 
@@ -1247,12 +1249,15 @@ void Platform::SetHeater(size_t heater, float power)
 
 EndStopHit Platform::Stopped(size_t drive) const
 {
-	if (nvData.zProbeType > 0 && drive < AXES && nvData.zProbeAxes[drive])
+	if (endStopType[drive] == EndStopType::noEndStop)
 	{
-		return GetZProbeResult();			// using the Z probe as am endstop for this axis, so just get its result
+		// No homing switch is configured for this axis, so see if we should use the Z probe
+		if (nvData.zProbeType > 0 && drive < AXES && nvData.zProbeAxes[drive])
+		{
+			return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
+		}
 	}
-
-	if (endStopPins[drive] >= 0 && endStopType[drive] != EndStopType::noEndStop)
+	else if (endStopPins[drive] >= 0)
 	{
 		if (digitalReadNonDue(endStopPins[drive]) == ((endStopLogicLevel[drive]) ? 1 : 0))
 		{

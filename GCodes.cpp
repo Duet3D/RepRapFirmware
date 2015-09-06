@@ -890,9 +890,23 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 // This sets positions.  I.e. it handles G92.
 bool GCodes::SetPositions(GCodeBuffer *gb)
 {
-	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+	// Don't pause the machine if only extruder drives are being reset (DC, 2015-09-06)
+	bool doPause = false;
+	for (size_t drive = 0; drive < AXES; ++drive)
 	{
-		return false;
+		if (gb->Seen(axisLetters[drive]))
+		{
+			doPause = true;
+			break;
+		}
+	}
+
+	if (doPause)
+	{
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		{
+			return false;
+		}
 	}
 
 	reprap.GetMove()->GetCurrentUserPosition(moveBuffer, 0);		// make sure move buffer is up to date
@@ -4264,21 +4278,36 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 667: // Set CoreXY mode
 		{
 			Move* move = reprap.GetMove();
+			bool seen = false;
+			float positionNow[DRIVES];
+			move->GetCurrentUserPosition(positionNow, 0);					// get the current position, we may need it later
 			if (gb->Seen('S'))
 			{
-				float positionNow[DRIVES];
-				move->GetCurrentUserPosition(positionNow, 0);					// get the current position, we may need it later
-				int newMode = gb->GetIValue();
-				if (newMode != move->GetCoreXYMode())
+				move->SetCoreXYMode(gb->GetIValue());
+				seen = true;
+			}
+			for (size_t axis = 0; axis < AXES; ++axis)
+			{
+				if (gb->Seen(axisLetters[axis]))
 				{
-					move->SetCoreXYMode(newMode);
-					SetPositions(positionNow);
-					SetAllAxesNotHomed();
+					move->setCoreAxisFactor(axis, gb->GetFValue());
+					seen = true;
 				}
+			}
+
+			if (seen)
+			{
+				SetPositions(positionNow);
+				SetAllAxesNotHomed();
 			}
 			else
 			{
-				reply.printf("Printer mode is %s\n", move->GetGeometryString());
+				reply.printf("Printer mode is %s with axis factors", move->GetGeometryString());
+				for (size_t axis = 0; axis < AXES; ++axis)
+				{
+					reply.catf(" %c:%f", move->GetCoreAxisFactor(axis));
+				}
+				reply.cat("\n");
 			}
 		}
 		break;
