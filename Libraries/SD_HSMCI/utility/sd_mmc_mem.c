@@ -3,7 +3,7 @@
  *
  * \brief CTRL_ACCESS interface for common SD/MMC stack
  *
- * Copyright (c) 2012 - 2013 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2012-2015 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -40,12 +40,15 @@
  * \asf_license_stop
  *
  */
+/*
+ * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
+ */
 
-#include "../SD_HSMCI.h"
 #include "conf_access.h"
 
 #if (SD_MMC_0_MEM == ENABLE) || (SD_MMC_1_MEM == ENABLE)
 
+#include "../SD_HSMCI.h"
 #include "sd_mmc.h"
 #include "sd_mmc_mem.h"
 
@@ -208,13 +211,16 @@ Ctrl_status sd_mmc_usb_read_10(uint8_t slot, uint32_t addr, uint16_t nb_sector)
 					sector_buf_1 : sector_buf_0,
 					SD_MMC_BLOCK_SIZE,
 					NULL)) {
+				if (!b_first_step) {
+					sd_mmc_wait_end_of_read_blocks(true);
+				}
 				return CTRL_FAIL;
 			}
 		} else {
 			b_first_step = false;
 		}
 		if (nb_step) { // Skip last step
-			if (SD_MMC_OK != sd_mmc_wait_end_of_read_blocks()) {
+			if (SD_MMC_OK != sd_mmc_wait_end_of_read_blocks(false)) {
 				return CTRL_FAIL;
 			}
 		}
@@ -263,11 +269,14 @@ Ctrl_status sd_mmc_usb_write_10(uint8_t slot, uint32_t addr, uint16_t nb_sector)
 					sector_buf_1 : sector_buf_0,
 					SD_MMC_BLOCK_SIZE,
 					NULL)) {
+				if (!b_first_step) {
+					sd_mmc_wait_end_of_write_blocks(true);
+				}
 				return CTRL_FAIL;
 			}
 		}
 		if (!b_first_step) { // Skip first step
-			if (SD_MMC_OK != sd_mmc_wait_end_of_write_blocks()) {
+			if (SD_MMC_OK != sd_mmc_wait_end_of_write_blocks(false)) {
 				return CTRL_FAIL;
 			}
 		} else {
@@ -308,7 +317,7 @@ Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram)
 	if (SD_MMC_OK != sd_mmc_start_read_blocks(ram, 1)) {
 		return CTRL_FAIL;
 	}
-	if (SD_MMC_OK != sd_mmc_wait_end_of_read_blocks()) {
+	if (SD_MMC_OK != sd_mmc_wait_end_of_read_blocks(false)) {
 		return CTRL_FAIL;
 	}
 	return CTRL_GOOD;
@@ -337,7 +346,7 @@ Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram)
 	if (SD_MMC_OK != sd_mmc_start_write_blocks(ram, 1)) {
 		return CTRL_FAIL;
 	}
-	if (SD_MMC_OK != sd_mmc_wait_end_of_write_blocks()) {
+	if (SD_MMC_OK != sd_mmc_wait_end_of_write_blocks(false)) {
 		return CTRL_FAIL;
 	}
 	return CTRL_GOOD;

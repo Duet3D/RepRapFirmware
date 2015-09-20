@@ -230,23 +230,24 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, Gcod
 		info.layerHeight = 0.0;
 		info.numFilaments = 0;
 		info.generatedBy[0] = 0;
-		for(size_t extr=0; extr<DRIVES - AXES; extr++)
+		for (size_t extr=0; extr<DRIVES - AXES; extr++)
 		{
 			info.filamentNeeded[extr] = 0.0;
 		}
 
 		if (info.fileSize != 0 && (StringEndsWith(fileName, ".gcode") || StringEndsWith(fileName, ".g") || StringEndsWith(fileName, ".gco") || StringEndsWith(fileName, ".gc")))
 		{
-			const size_t readSize = 512;					// read 512 bytes at a time (1K doesn't seem to work when we read from the end)
+			const size_t readSize = 1024;					// read 1024 bytes at a time (must be a multiple of 4, and a multiple of the sector size is efficient)
 			const size_t overlap = 100;
-			char buf[readSize + overlap + 1];				// need the +1 so we can add a null terminator
+			uint32_t buf32[(readSize + overlap + 3)/4 + 1];	// buffer should be 32-bit aligned for HSMCI (need the +1 so we can add a null terminator)
+			char* const buf = reinterpret_cast<char*>(buf32);
 
 			bool foundLayerHeight = false;
 			unsigned int filamentsFound = 0, nFilaments;
 			float filaments[DRIVES - AXES];
 
 			// Get slic3r settings by reading from the start of the file. We only read the first 4K or so, everything we are looking for should be there.
-			for(uint8_t i=0; i<8; i++)
+			for (unsigned int i=0; i<8; i++)
 			{
 				size_t sizeToRead = (size_t)min<unsigned long>(info.fileSize, readSize + overlap);
 				int nbytes = f->Read(buf, sizeToRead);

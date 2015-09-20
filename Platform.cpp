@@ -105,6 +105,32 @@ bool PidParameters::operator==(const PidParameters& other) const
 //*************************************************************************************************
 // Platform class
 
+// Definition of which pins we allow to be controlled using M42
+// The allowed pins are these ones on the DueX4 expansion connector:
+// TXD1 aka PA13 aka pin 16
+// RXD1 aka PA12 aka pin 17
+// TXD0 aka PA11 aka pin 18
+// RXD0 aka PA10 aka pin 19
+// PC4_PWML1 aka PC4 aka pin 36
+// AD13 aka PB20 aka pin 66
+// AD14 aka PB21 aka pin 52
+// PB16 aka pin 67 (could possibly allow analog output on this one)
+// RTS1 aka PA14 aka pin 23
+// TWD1 aka PB12 aka pin 20
+// TWCK1 aka PB13 aka pin 21
+
+/*static*/ const uint8_t Platform::pinAccessAllowed[numPins/8] =
+{ 	0,			// pins 0-7
+	0,			// pins 8-15
+	0b10111111,	// pins 16-23
+	0,			// pins 24-31
+	0b00010000,	// pins 32-39
+	0,			// pins 40-47
+	0b00010000,	// pins 48-55
+	0,			// pins 46-63
+	0b00001100	// pins 64-71
+};
+
 Platform::Platform() :
 		autoSaveEnabled(false), board(BoardType::Duet_06), active(false), errorCodeBits(0), fileStructureInitialised(false), tickState(0), debugCode(0),
 		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
@@ -199,7 +225,6 @@ void Platform::Init()
 
 	ARRAY_INIT(axisMaxima, AXIS_MAXIMA);
 	ARRAY_INIT(axisMinima, AXIS_MINIMA);
-	ARRAY_INIT(homeFeedrates, HOME_FEEDRATES);
 
 	idleCurrentFactor = defaultIdleCurrentFactor;
 	SetSlowestDrive();
@@ -299,10 +324,14 @@ void Platform::Init()
 	// Hotend configuration
 	nozzleDiameter = DefaultNozzleDiameter;
 	filamentWidth = DefaultFilamentWidth;
-	InitialiseInterrupts();
 
+	// Spare pin configuration
+	memset(pinInitialised, 0, sizeof(pinInitialised));
+
+	// Kick everything off
 	lastTime = Time();
 	longWait = lastTime;
+	InitialiseInterrupts();		// also sets 'active' to true
 }
 
 // Specify which thermistor channel a particular heater uses
@@ -472,23 +501,20 @@ float Platform::GetZProbeDiveHeight() const
 	}
 }
 
-void Platform::SetZProbeDiveHeight(float h)
+float Platform::GetZProbeTravelSpeed() const
 {
 	switch (nvData.zProbeType)
 	{
 	case 1:
 	case 2:
-		nvData.irZProbeParameters.diveHeight = h;
-		break;
+		return nvData.irZProbeParameters.travelSpeed;
 	case 3:
 	case 5:
-		nvData.alternateZProbeParameters.diveHeight = h;
-		break;
+		return nvData.alternateZProbeParameters.travelSpeed;
 	case 4:
-		nvData.switchZProbeParameters.diveHeight = h;
-		break;
+		return nvData.switchZProbeParameters.travelSpeed;
 	default:
-		break;
+		return DefaultTravelSpeed;
 	}
 }
 
@@ -880,7 +906,8 @@ void FanInterrupt()
 void Platform::InitialiseInterrupts()
 {
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
-	NVIC_SetPriority (SysTick_IRQn, 0);						// set priority for tick interrupts
+	NVIC_SetPriority(SysTick_IRQn, 0);						// set priority for tick interrupts
+	NVIC_SetPriority(UART_IRQn, 2);							// set priority for UART interrupt - must be higher than step interrupt
 
 	// Timer interrupt for stepper motors
 	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
@@ -927,123 +954,11 @@ void Platform::DisableInterrupts()
 }
 #endif
 
-#pragma GCC push_options
-#pragma GCC optimize ("O3")
-
-// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
-// Must be called with interrupts disabled,
-/*static*/ bool Platform::ScheduleInterrupt(uint32_t tim)
-{
-	TC_SetRA(TC1, 0, tim);									// set up the compare register
-	TC_GetStatus(TC1, 0);									// clear any pending interrupt
-	int32_t diff = (int32_t)(tim - TC_ReadCV(TC1, 0));		// see how long we have to go
-	if (diff < (int32_t)DDA::minInterruptInterval)			// if less than about 2us or already passed
-	{
-		return true;										// tell the caller to simulate an interrupt instead
-	}
-
-	TC1 ->TC_CHANNEL[0].TC_IER = TC_IER_CPAS;				// enable the interrupt
-#ifdef MOVE_DEBUG
-		++numInterruptsScheduled;
-		nextInterruptTime = tim;
-		nextInterruptScheduledAt = Platform::GetInterruptClocks();
-#endif
-	return false;
-}
-
-// Process a 1ms tick interrupt
-// This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
-// This is what we need to do:
-// 0.  Kick the watchdog.
-// 1.  Kick off a new ADC conversion.
-// 2.  Fetch and process the result of the last ADC conversion.
-// 3a. If the last ADC conversion was for the Z probe, toggle the modulation output if using a modulated IR sensor.
-// 3b. If the last ADC reading was a thermistor reading, check for an over-temperature situation and turn off the heater if necessary.
-//     We do this here because the usual polling loop sometimes gets stuck trying to send data to the USB port.
-
-//#define TIME_TICK_ISR	1		// define this to store the tick ISR time in errorCodeBits
-
-void Platform::Tick()
-{
-#ifdef TIME_TICK_ISR
-	uint32_t now = micros();
-#endif
-	switch (tickState)
-	{
-	case 1:			// last conversion started was a thermistor
-	case 3:
-		{
-			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
-			StartAdcConversion(zProbeAdcChannel);
-			if (currentFilter.IsValid())
-			{
-				uint32_t sum = currentFilter.GetSum();
-				if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
-				{
-					// We have an over-temperature or bad reading from this thermistor, so turn off the heater
-					// NB - the SetHeater function we call does floating point maths, but this is an exceptional situation so we allow it
-					SetHeater(currentHeater, 0.0);
-					errorCodeBits |= ErrorBadTemp;
-				}
-			}
-			++currentHeater;
-			if (currentHeater == HEATERS)
-			{
-				currentHeater = 0;
-			}
-		}
-		++tickState;
-		break;
-
-	case 2:			// last conversion started was the Z probe, with IR LED on
-		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetRawZProbeReading());
-		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
-		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
-		{
-			digitalWriteNonDue(zProbeModulationPin, LOW);			// turn off the IR emitter
-		}
-		++tickState;
-		break;
-
-	case 4:			// last conversion started was the Z probe, with IR LED off if modulation is enabled
-		const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(GetRawZProbeReading());
-		// no break
-	case 0:			// this is the state after initialisation, no conversion has been started
-	default:
-		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
-		if (nvData.zProbeType == 2 || nvData.zProbeType == 3)		// if using a modulated IR sensor
-		{
-			digitalWriteNonDue(zProbeModulationPin, HIGH);			// turn on the IR emitter
-		}
-		tickState = 1;
-		break;
-	}
-#ifdef TIME_TICK_ISR
-	uint32_t now2 = micros();
-	if (now2 - now > errorCodeBits)
-	{
-		errorCodeBits = now2 - now;
-	}
-#endif
-}
-
-/*static*/ uint16_t Platform::GetAdcReading(adc_channel_num_t chan)
-{
-	uint16_t rslt = (uint16_t) adc_get_channel_value(ADC, chan);
-	adc_disable_channel(ADC, chan);
-	return rslt;
-}
-
-/*static*/ void Platform::StartAdcConversion(adc_channel_num_t chan)
-{
-	adc_enable_channel(ADC, chan);
-	adc_start(ADC );
-}
-
-#pragma GCC pop_options
-
 //*************************************************************************************************
+
+// Debugging variables
+//extern "C" uint32_t longestWriteWaitTime, shortestWriteWaitTime, longestReadWaitTime, shortestReadWaitTime;
+//extern uint32_t maxRead, maxWrite;
 
 // This diagnostics function is the first to be called, so it calls Message to start with.
 // All other messages generated by this and other diagnostics functions must call AppendMessage.
@@ -1111,6 +1026,12 @@ void Platform::Diagnostics()
 
 	// Show the longest write time
 	AppendMessage(BOTH_MESSAGE, "Longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
+
+// Debug
+//AppendMessage(BOTH_MESSAGE, "Shortest/longest times read %.1f/%.1f write %.1f/%.1f ms, %u/%u\n",
+//		(float)shortestReadWaitTime/1000, (float)longestReadWaitTime/1000, (float)shortestWriteWaitTime/1000, (float)longestWriteWaitTime/1000,
+//		maxRead, maxWrite);
+//longestWriteWaitTime = longestReadWaitTime = 0; shortestReadWaitTime = shortestWriteWaitTime = 1000000;
 
 	reprap.Timing();
 
@@ -1240,11 +1161,15 @@ const PidParameters& Platform::GetPidParameters(size_t heater) const
 
 void Platform::SetHeater(size_t heater, float power)
 {
-	if (heatOnPins[heater] < 0)
-		return;
+	SetHeaterPwm(heater, (uint8_t)(255.0 * min<float>(1.0, max<float>(0.0, power))));
+}
 
-	byte p = (byte) (255.0 * min<float>(1.0, max<float>(0.0, power)));
-	analogWriteNonDue(heatOnPins[heater], (HEAT_ON == 0) ? 255 - p : p);
+void Platform::SetHeaterPwm(size_t heater, uint8_t power)
+{
+	if (heatOnPins[heater] >= 0)
+	{
+		analogWriteNonDue(heatOnPins[heater], (HEAT_ON == 0) ? 255 - power : power);
+	}
 }
 
 EndStopHit Platform::Stopped(size_t drive) const
@@ -1819,813 +1744,144 @@ const char* Platform::GetElectronicsString() const
 	}
 }
 
-/*********************************************************************************
-
- Files & Communication
-
- */
-
-MassStorage::MassStorage(Platform* p) : platform(p)
+// Direct pin operations
+// Set the specified pin to the specified output level. Return true if success, false if not allowed.
+bool Platform::SetPin(int pin, int level)
 {
-	memset(&fileSystem, 0, sizeof(fileSystem));
-}
-
-void MassStorage::Init()
-{
-	// Initialize SD MMC stack
-	hsmciPinsinit();
-	sd_mmc_init();
-	delay(20);
-
-	bool abort = false;
-	sd_mmc_err_t err;
-	do {
-		err = sd_mmc_check(0);
-		if (err > SD_MMC_ERR_NO_CARD)
+	if (pin >= 0 && (unsigned int)pin < numPins && (level == 0 || level == 1))
+	{
+		const size_t index = (unsigned int)pin/8;
+		const uint8_t mask = 1 << ((unsigned int)pin & 7);
+		if ((pinAccessAllowed[index] & mask) != 0)
 		{
-			abort = true;
-			delay(3000);	// Wait a few seconds, so users have a chance to see the following error message
-		}
-		else
-		{
-			abort = (err == SD_MMC_ERR_NO_CARD && platform->Time() > 5.0);
-		}
-
-		if (abort)
-		{
-			platform->Message(HOST_MESSAGE, "Cannot initialize the SD card: ");
-			switch (err)
+			if ((pinInitialised[index] & mask) == 0)
 			{
-				case SD_MMC_ERR_NO_CARD:
-					platform->AppendMessage(HOST_MESSAGE, "Card not found\n");
-					break;
-				case SD_MMC_ERR_UNUSABLE:
-					platform->AppendMessage(HOST_MESSAGE, "Card is unusable, try another one\n");
-					break;
-				case SD_MMC_ERR_SLOT:
-					platform->AppendMessage(HOST_MESSAGE, "Slot unknown\n");
-					break;
-				case SD_MMC_ERR_COMM:
-					platform->AppendMessage(HOST_MESSAGE, "General communication error\n");
-					break;
-				case SD_MMC_ERR_PARAM:
-					platform->AppendMessage(HOST_MESSAGE, "Illegal input parameter\n");
-					break;
-				case SD_MMC_ERR_WP:
-					platform->AppendMessage(HOST_MESSAGE, "Card write protected\n");
-					break;
-				default:
-					platform->AppendMessage(HOST_MESSAGE, "Unknown (code %d)\n", err);
-					break;
+				pinModeNonDue(pin, OUTPUT);
+				pinInitialised[index] |= mask;
 			}
-			return;
-		}
-	} while (err != SD_MMC_OK);
-
-	// Print some card details (optional)
-
-	/*platform->Message(HOST_MESSAGE, "SD card detected!\nCapacity: %d\n", sd_mmc_get_capacity(0));
-	platform->AppendMessage(HOST_MESSAGE, "Bus clock: %d\n", sd_mmc_get_bus_clock(0));
-	platform->AppendMessage(HOST_MESSAGE, "Bus width: %d\nCard type: ", sd_mmc_get_bus_width(0));
-	switch (sd_mmc_get_type(0))
-	{
-		case CARD_TYPE_SD | CARD_TYPE_HC:
-			platform->AppendMessage(HOST_MESSAGE, "SDHC\n");
-			break;
-		case CARD_TYPE_SD:
-			platform->AppendMessage(HOST_MESSAGE, "SD\n");
-			break;
-		case CARD_TYPE_MMC | CARD_TYPE_HC:
-			platform->AppendMessage(HOST_MESSAGE, "MMC High Density\n");
-			break;
-		case CARD_TYPE_MMC:
-			platform->AppendMessage(HOST_MESSAGE, "MMC\n");
-			break;
-		case CARD_TYPE_SDIO:
-			platform->AppendMessage(HOST_MESSAGE, "SDIO\n");
-			return;
-		case CARD_TYPE_SD_COMBO:
-			platform->AppendMessage(HOST_MESSAGE, "SD COMBO\n");
-			break;
-		case CARD_TYPE_UNKNOWN:
-		default:
-			platform->AppendMessage(HOST_MESSAGE, "Unknown\n");
-			return;
-	}*/
-
-	// Mount the file system
-
-	int mounted = f_mount(0, &fileSystem);
-	if (mounted != FR_OK)
-	{
-		platform->Message(HOST_MESSAGE, "Can't mount filesystem 0: code %d\n", mounted);
-	}
-}
-
-const char* MassStorage::CombineName(const char* directory, const char* fileName)
-{
-	size_t out = 0;
-	size_t in = 0;
-
-	if (directory != NULL)
-	{
-		while (directory[in] != 0 && directory[in] != '\n')
-		{
-			combinedName[out] = directory[in];
-			in++;
-			out++;
-			if (out >= ARRAY_SIZE(combinedName))
-			{
-				platform->Message(BOTH_ERROR_MESSAGE, "CombineName() buffer overflow.");
-				out = 0;
-			}
-		}
-	}
-
-	if (in > 0 && directory[in - 1] != '/' && out < ARRAY_UPB(combinedName))
-	{
-		combinedName[out] = '/';
-		out++;
-	}
-
-	in = 0;
-	while (fileName[in] != 0 && fileName[in] != '\n')
-	{
-		combinedName[out] = fileName[in];
-		in++;
-		out++;
-		if (out >= ARRAY_SIZE(combinedName))
-		{
-			platform->Message(BOTH_ERROR_MESSAGE, "CombineName() buffer overflow.");
-			out = 0;
-		}
-	}
-	combinedName[out] = 0;
-
-	return combinedName;
-}
-
-// Open a directory to read a file list. Returns true if it contains any files, false otherwise.
-bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
-{
-	TCHAR loc[MaxFilenameLength + 1];
-
-	// Remove the trailing '/' from the directory name
-	size_t len = strnlen(directory, ARRAY_UPB(loc));
-	if (len == 0)
-	{
-		loc[0] = 0;
-	}
-	else if (directory[len - 1] == '/')
-	{
-		strncpy(loc, directory, len - 1);
-		loc[len - 1] = 0;
-	}
-	else
-	{
-		strncpy(loc, directory, len);
-		loc[len] = 0;
-	}
-
-	findDir.lfn = nullptr;
-	FRESULT res = f_opendir(&findDir, loc);
-	if (res == FR_OK)
-	{
-		FILINFO entry;
-		entry.lfname = file_info.fileName;
-		entry.lfsize = ARRAY_SIZE(file_info.fileName);
-
-		for(;;)
-		{
-			res = f_readdir(&findDir, &entry);
-			if (res != FR_OK || entry.fname[0] == 0) break;
-			if (StringEquals(entry.fname, ".") || StringEquals(entry.fname, "..")) continue;
-
-			file_info.isDirectory = (entry.fattrib & AM_DIR);
-			file_info.size = entry.fsize;
-			uint16_t day = entry.fdate & 0x1F;
-			if (day == 0)
-			{
-				// This can happen if a transfer hasn't been processed completely.
-				day = 1;
-			}
-			file_info.day = day;
-			file_info.month = (entry.fdate & 0x01E0) >> 5;
-			file_info.year = (entry.fdate >> 9) + 1980;
-			if (file_info.fileName[0] == 0)
-			{
-				strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
-			}
-
+			digitalWriteNonDue(pin, level);
 			return true;
 		}
 	}
-
 	return false;
 }
 
-// Find the next file in a directory. Returns true if another file has been read.
-bool MassStorage::FindNext(FileInfo &file_info)
-{
-	FILINFO entry;
-	entry.lfname = file_info.fileName;
-	entry.lfsize = ARRAY_SIZE(file_info.fileName);
 
-	findDir.lfn = nullptr;
-	if (f_readdir(&findDir, &entry) != FR_OK || entry.fname[0] == 0)
+// Pragma pop_options is not supported on this platform, so we put this time-critical code right at the end of the file
+//#pragma GCC push_options
+#pragma GCC optimize ("O3")
+
+// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
+// Must be called with interrupts disabled,
+/*static*/ bool Platform::ScheduleInterrupt(uint32_t tim)
+{
+	TC_SetRA(TC1, 0, tim);									// set up the compare register
+	TC_GetStatus(TC1, 0);									// clear any pending interrupt
+	int32_t diff = (int32_t)(tim - TC_ReadCV(TC1, 0));		// see how long we have to go
+	if (diff < (int32_t)DDA::minInterruptInterval)			// if less than about 2us or already passed
 	{
-		//f_closedir(findDir);
-		return false;
+		return true;										// tell the caller to simulate an interrupt instead
 	}
 
-	file_info.isDirectory = (entry.fattrib & AM_DIR);
-	file_info.size = entry.fsize;
-	uint16_t day = entry.fdate & 0x1F;
-	if (day == 0)
-	{
-		// This can happen if a transfer hasn't been processed completely.
-		day = 1;
-	}
-	file_info.day = day;
-	file_info.month = (entry.fdate & 0x01E0) >> 5;
-	file_info.year = (entry.fdate >> 9) + 1980;
-	if (file_info.fileName[0] == 0)
-	{
-		strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
-	}
-
-	return true;
-}
-
-// Month names. The first entry is used for invalid month numbers.
-static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-
-// Returns the name of the specified month or '???' if the specified value is invalid.
-const char* MassStorage::GetMonthName(const uint8_t month)
-{
-	return (month <= 12) ? monthNames[month] : monthNames[0];
-}
-
-// Delete a file or directory
-bool MassStorage::Delete(const char* directory, const char* fileName)
-{
-	const char* location = (directory != NULL)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-								: fileName;
-	if (f_unlink(location) != FR_OK)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't delete file %s\n", location);
-		return false;
-	}
-	return true;
-}
-
-// Create a new directory
-bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
-{
-	const char* location = platform->GetMassStorage()->CombineName(parentDir, dirName);
-	if (f_mkdir(location) != FR_OK)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't create directory %s\n", location);
-		return false;
-	}
-	return true;
-}
-
-bool MassStorage::MakeDirectory(const char *directory)
-{
-	if (f_mkdir(directory) != FR_OK)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't create directory %s\n", directory);
-		return false;
-	}
-	return true;
-}
-
-// Rename a file or directory
-bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
-{
-	if (f_rename(oldFilename, newFilename) != FR_OK)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't rename file or directory %s to %s\n", oldFilename, newFilename);
-		return false;
-	}
-	return true;
-}
-
-// Check if the specified file exists
-bool MassStorage::FileExists(const char *file) const
-{
-	FILINFO fil;
-	fil.lfname = nullptr;
-	return (f_stat(file, &fil) == FR_OK);
-}
-
-// Check if the specified directory exists
-bool MassStorage::PathExists(const char *path) const
-{
-	DIR dir;
-	dir.lfn = nullptr;
-	return (f_opendir(&dir, path) == FR_OK);
-}
-
-bool MassStorage::PathExists(const char* directory, const char* subDirectory)
-{
-	const char* location = (directory != NULL)
-							? platform->GetMassStorage()->CombineName(directory, subDirectory)
-								: subDirectory;
-	return PathExists(location);
-}
-
-//------------------------------------------------------------------------------------------------
-
-FileStore::FileStore(Platform* p) : platform(p)
-{
-}
-
-void FileStore::Init()
-{
-	bufferPointer = 0;
-	inUse = false;
-	writing = false;
-	lastBufferEntry = 0;
-	openCount = 0;
-}
-
-// Open a local file (for example on an SD card).
-// This is protected - only Platform can access it.
-bool FileStore::Open(const char* directory, const char* fileName, bool write)
-{
-	const char* location = (directory != NULL)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-								: fileName;
-	writing = write;
-	lastBufferEntry = FILE_BUF_LEN;
-
-	FRESULT openReturn = f_open(&file, location, (writing) ?  FA_CREATE_ALWAYS | FA_WRITE : FA_OPEN_EXISTING | FA_READ);
-	if (openReturn != FR_OK)
-	{
-		// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
-		// It is up to the caller to report an error if necessary.
-		if (reprap.Debug(modulePlatform))
-		{
-			platform->Message(BOTH_ERROR_MESSAGE, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
-		}
-		return false;
-	}
-
-	bufferPointer = (writing) ? 0 : FILE_BUF_LEN;
-	inUse = true;
-	openCount = 1;
-	return true;
-}
-
-void FileStore::Duplicate()
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to dup a non-open file.\n");
-		return;
-	}
-	++openCount;
-}
-
-bool FileStore::Close()
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to close a non-open file.\n");
-		return false;
-	}
-	--openCount;
-	if (openCount != 0)
-	{
-		return true;
-	}
-	bool ok = true;
-	if (writing)
-	{
-		ok = Flush();
-	}
-	FRESULT fr = f_close(&file);
-	inUse = false;
-	writing = false;
-	lastBufferEntry = 0;
-	return ok && fr == FR_OK;
-}
-
-bool FileStore::Seek(FilePosition pos)
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to seek on a non-open file.\n");
-		return false;
-	}
-	if (writing)
-	{
-		WriteBuffer();
-	}
-	FRESULT fr = f_lseek(&file, pos);
-	bufferPointer = (writing) ? 0 : FILE_BUF_LEN;
-	return fr == FR_OK;
-}
-
-FilePosition FileStore::GetPosition() const
-{
-	FilePosition pos = file.fptr;
-	if (writing)
-	{
-		pos += bufferPointer;
-	}
-	else if (bufferPointer < lastBufferEntry)
-	{
-		pos -= (lastBufferEntry - bufferPointer);
-	}
-	return pos;
-}
-
-#if 0	// not currently used
-bool FileStore::GoToEnd()
-{
-	return Seek(Length());
-}
+	TC1 ->TC_CHANNEL[0].TC_IER = TC_IER_CPAS;				// enable the interrupt
+#ifdef MOVE_DEBUG
+		++numInterruptsScheduled;
+		nextInterruptTime = tim;
+		nextInterruptScheduledAt = Platform::GetInterruptClocks();
 #endif
-
-FilePosition FileStore::Length() const
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to size non-open file.\n");
-		return 0;
-	}
-	return file.fsize;
+	return false;
 }
 
-float FileStore::FractionRead() const
+// Process a 1ms tick interrupt
+// This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
+// This is what we need to do:
+// 0.  Kick the watchdog.
+// 1.  Kick off a new ADC conversion.
+// 2.  Fetch and process the result of the last ADC conversion.
+// 3a. If the last ADC conversion was for the Z probe, toggle the modulation output if using a modulated IR sensor.
+// 3b. If the last ADC reading was a thermistor reading, check for an over-temperature situation and turn off the heater if necessary.
+//     We do this here because the usual polling loop sometimes gets stuck trying to send data to the USB port.
+
+//#define TIME_TICK_ISR	1		// define this to store the tick ISR time in errorCodeBits
+
+void Platform::Tick()
 {
-	FilePosition len = Length();
-	if (len == 0)
+#ifdef TIME_TICK_ISR
+	uint32_t now = micros();
+#endif
+	switch (tickState)
 	{
-		return 0.0;
-	}
-
-	return (float)GetPosition() / (float)len;
-}
-
-uint8_t FileStore::Status()
-{
-	if (!inUse)
-		return (uint8_t)IOStatus::nothing;
-
-	if (lastBufferEntry == FILE_BUF_LEN)
-		return (uint8_t)IOStatus::byteAvailable;
-
-	if (bufferPointer < lastBufferEntry)
-		return (uint8_t)IOStatus::byteAvailable;
-
-	return (uint8_t)IOStatus::nothing;
-}
-
-bool FileStore::ReadBuffer()
-{
-	FRESULT readStatus = f_read(&file, buf, FILE_BUF_LEN, &lastBufferEntry);	// Read a chunk of file
-	if (readStatus)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Error reading file.\n");
-		return false;
-	}
-	bufferPointer = 0;
-	return true;
-}
-
-// Single character read via the buffer
-bool FileStore::Read(char& b)
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to read from a non-open file.\n");
-		return false;
-	}
-
-	if (bufferPointer >= FILE_BUF_LEN)
-	{
-		bool ok = ReadBuffer();
-		if (!ok)
+	case 1:			// last conversion started was a thermistor
+	case 3:
 		{
-			return false;
-		}
-	}
-
-	if (bufferPointer >= lastBufferEntry)
-	{
-		b = 0;  // Good idea?
-		return false;
-	}
-
-	b = (char) buf[bufferPointer];
-	bufferPointer++;
-
-	return true;
-}
-
-// Block read, doesn't use the buffer
-int FileStore::Read(char* extBuf, unsigned int nBytes)
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to read from a non-open file.\n");
-		return -1;
-	}
-	bufferPointer = FILE_BUF_LEN;	// invalidate the buffer
-	UINT bytes_read;
-	FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
-	if (readStatus)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Error reading file.\n");
-		return -1;
-	}
-	return (int)bytes_read;
-}
-
-bool FileStore::WriteBuffer()
-{
-	if (bufferPointer != 0)
-	{
-		bool ok = InternalWriteBlock((const char*)buf, bufferPointer);
-		if (!ok)
-		{
-			platform->Message(BOTH_ERROR_MESSAGE, "Cannot write to file. Disc may be full.\n");
-			return false;
-		}
-		bufferPointer = 0;
-	}
-	return true;
-}
-
-bool FileStore::Write(char b)
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write byte to a non-open file.\n");
-		return false;
-	}
-	buf[bufferPointer] = b;
-	bufferPointer++;
-	if (bufferPointer >= FILE_BUF_LEN)
-	{
-		return WriteBuffer();
-	}
-	return true;
-}
-
-bool FileStore::Write(const char* b)
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write string to a non-open file.\n");
-		return false;
-	}
-	int i = 0;
-	while (b[i])
-	{
-		if (!Write(b[i++]))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-// Direct block write that bypasses the buffer. Used when uploading files.
-bool FileStore::Write(const char *s, unsigned int len)
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write block to a non-open file.\n");
-		return false;
-	}
-	if (!WriteBuffer())
-	{
-		return false;
-	}
-	return InternalWriteBlock(s, len);
-}
-
-bool FileStore::InternalWriteBlock(const char *s, unsigned int len)
-{
-	unsigned int bytesWritten;
-	uint32_t time = micros();
-	FRESULT writeStatus = f_write(&file, s, len, &bytesWritten);
-	time = micros() - time;
-	if (time > longestWriteTime)
-	{
-		longestWriteTime = time;
-	}
-	if ((writeStatus != FR_OK) || (bytesWritten != len))
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Cannot write to file. Disc may be full.\n");
-		return false;
-	}
-	return true;
-}
-
-bool FileStore::Flush()
-{
-	if (!inUse)
-	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to flush a non-open file.\n");
-		return false;
-	}
-	if (!WriteBuffer())
-	{
-		return false;
-	}
-	return f_sync(&file) == FR_OK;
-}
-
-float FileStore::GetAndClearLongestWriteTime()
-{
-	float ret = (float)longestWriteTime/1000.0;
-	longestWriteTime = 0;
-	return ret;
-}
-
-uint32_t FileStore::longestWriteTime = 0;
-
-//***************************************************************************************************
-
-// Serial/USB class
-
-Line::Line(Stream& p_iface) : iface(p_iface)
-{
-}
-
-uint8_t Line::Status() const
-{
-	return inputNumChars == 0 ? (uint8_t)IOStatus::nothing : (uint8_t)IOStatus::byteAvailable;
-}
-
-// This is only ever called on initialisation, so we
-// know the buffer won't overflow
-
-void Line::InjectString(char* string)
-{
-	int i = 0;
-	while(string[i])
-	{
-		inBuffer[(inputGetIndex + inputNumChars) % lineInBufsize] = string[i];
-		inputNumChars++;
-		i++;
-	}
-}
-
-int Line::Read(char& b)
-{
-	if (inputNumChars == 0)
-		return 0;
-	b = inBuffer[inputGetIndex];
-	inputGetIndex = (inputGetIndex + 1) % lineInBufsize;
-	--inputNumChars;
-	return 1;
-}
-
-void Line::Init()
-{
-	inputGetIndex = 0;
-	inputNumChars = 0;
-	outputGetIndex = 0;
-	outputNumChars = 0;
-	ignoringOutputLine = false;
-	inWrite = 0;
-	outputColumn = 0;
-	timeLastCharWritten = 0;
-}
-
-void Line::Spin()
-{
-	// Read the serial data in blocks to avoid excessive flow control
-	if (inputNumChars <= lineInBufsize / 2)
-	{
-		int16_t target = iface.available() + (int16_t) inputNumChars;
-		if (target > lineInBufsize)
-		{
-			target = lineInBufsize;
-		}
-		while ((int16_t) inputNumChars < target)
-		{
-			int incomingByte = iface.read();
-			if (incomingByte < 0)
-				break;
-			inBuffer[(inputGetIndex + inputNumChars) % lineInBufsize] = (char) incomingByte;
-			++inputNumChars;
-		}
-	}
-
-	TryFlushOutput();
-}
-
-// Write a character to USB.
-// If 'important' is true then we don't return until we have either written it to the USB port,
-// or put it in the buffer, or we have timed out waiting for the buffer to empty. The purpose of the timeout is to
-// avoid getting a software watchdog reset if we are writing important data (e.g. debug) and there is no consumer for the data.
-// Otherwise, if the buffer is full then we append ".\n" to the end of it, return immediately and ignore the rest
-// of the data we are asked to print until we get a new line.
-void Line::Write(char b, bool important)
-{
-	if (b == '\n')
-	{
-		outputColumn = 0;
-	}
-	else
-	{
-		++outputColumn;
-	}
-
-	if (ignoringOutputLine)
-	{
-		// We have already failed to write some characters of this message line, so don't write any of it.
-		// But try to start sending again after this line finishes.
-		if (b == '\n')
-		{
-			ignoringOutputLine = false;
-		}
-	}
-	else
-	{
-		for(;;)
-		{
-			TryFlushOutput();
-			if (outputNumChars == 0 && iface.canWrite() != 0)
+			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
+			StartAdcConversion(zProbeAdcChannel);
+			if (currentFilter.IsValid())
 			{
-				// We can write the character directly into the USB output buffer
-				++inWrite;
-				iface.write(b);
-				--inWrite;
-				timeLastCharWritten = millis();
-				break;
-			}
-			else if (   outputNumChars + 2 < lineOutBufSize					// save 2 spaces in the output buffer
-					 || (b == '\n' && outputNumChars < lineOutBufSize)		//...unless writing newline
-					)
-			{
-				outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = b;
-				++outputNumChars;
-				break;
-			}
-			else if (!important || millis() - timeLastCharWritten >= 100)
-			{
-				// Output is being consumed too slowly, so throw away some data
-				if (outputNumChars + 2 == lineOutBufSize)
+				uint32_t sum = currentFilter.GetSum();
+				if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
 				{
-					// We still have our 2 free characters, so append ".\n" to the line to indicate it was incomplete
-					outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = '.';
-					++outputNumChars;
-					outBuffer[(outputGetIndex + outputNumChars) % lineOutBufSize] = '\n';
-					++outputNumChars;
+					// We have an over-temperature or disconnected reading from this thermistor, so turn off the heater
+					SetHeaterPwm(currentHeater, 0);
+					errorCodeBits |= ErrorBadTemp;
 				}
-				else
-				{
-					// As we don't have 2 spare characters in the buffer, we can't have written any of the current line.
-					// So ignore the whole line.
-				}
-				ignoringOutputLine = true;
-				break;
+			}
+			++currentHeater;
+			if (currentHeater == HEATERS)
+			{
+				currentHeater = 0;
 			}
 		}
-	}
-}
+		++tickState;
+		break;
 
-void Line::Write(const char* b, bool important)
-{
-	while (*b)
+	case 2:			// last conversion started was the Z probe, with IR LED on
+		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetRawZProbeReading());
+		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
+		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
+		{
+			digitalWriteNonDue(zProbeModulationPin, LOW);			// turn off the IR emitter
+		}
+		++tickState;
+		break;
+
+	case 4:			// last conversion started was the Z probe, with IR LED off if modulation is enabled
+		const_cast<ZProbeAveragingFilter&>(zProbeOffFilter).ProcessReading(GetRawZProbeReading());
+		// no break
+	case 0:			// this is the state after initialisation, no conversion has been started
+	default:
+		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
+		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
+		{
+			digitalWriteNonDue(zProbeModulationPin, HIGH);			// turn on the IR emitter
+		}
+		tickState = 1;
+		break;
+	}
+#ifdef TIME_TICK_ISR
+	uint32_t now2 = micros();
+	if (now2 - now > errorCodeBits)
 	{
-		Write(*b++, important);
+		errorCodeBits = now2 - now;
 	}
+#endif
 }
 
-void Line::TryFlushOutput()
+/*static*/ uint16_t Platform::GetAdcReading(adc_channel_num_t chan)
 {
-	//debug
-	//while (SerialUSB.canWrite() == 0) {}
-	//end debug
-
-	while (outputNumChars != 0 && iface.canWrite() != 0)
-	{
-		++inWrite;
-		iface.write(outBuffer[outputGetIndex]);
-		--inWrite;
-		timeLastCharWritten = millis();
-		outputGetIndex = (outputGetIndex + 1) % lineOutBufSize;
-		--outputNumChars;
-	}
+	uint16_t rslt = (uint16_t) adc_get_channel_value(ADC, chan);
+	adc_disable_channel(ADC, chan);
+	return rslt;
 }
 
-void Line::Flush()
+/*static*/ void Platform::StartAdcConversion(adc_channel_num_t chan)
 {
-	while (outputNumChars != 0)
-	{
-		TryFlushOutput();
-	}
+	adc_enable_channel(ADC, chan);
+	adc_start(ADC );
 }
+
+// Pragma pop_options is not supported on this platform
+//#pragma GCC pop_options
 
 // End

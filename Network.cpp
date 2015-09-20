@@ -62,7 +62,8 @@ static bool closingDataPort = false;
 static volatile bool lwipLocked = false;
 
 static NetworkTransaction *sendingTransaction = NULL;
-static char sendingWindow[TCP_WND];
+static uint32_t sendingWindow32[(TCP_WND + 3)/4];						// should be 32-bit aligned for efficiency
+static inline char* sendingWindow() { return reinterpret_cast<char*>(sendingWindow32); }
 static uint16_t sendingWindowSize, sentDataOutstanding;
 static uint8_t sendingRetries;
 
@@ -159,7 +160,7 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 
 		// Try to send the remaining data once again
 
-		err_t err = tcp_write(pcb, sendingWindow + (sendingWindowSize - sentDataOutstanding), sentDataOutstanding, 0);
+		err_t err = tcp_write(pcb, sendingWindow() + (sendingWindowSize - sentDataOutstanding), sentDataOutstanding, 0);
 		if (err == ERR_OK)
 		{
 			tcp_output(pcb);
@@ -1176,7 +1177,7 @@ void NetworkTransaction::Write(char b)
 	{
 		if (reprap.GetNetwork()->AllocateSendBuffer(sendBuffer))
 		{
-			sendBuffer->tcpOutputBuffer[0] = b;
+			sendBuffer->GetOutputBuffer()[0] = b;
 			sendBuffer->bytesToWrite = 1;
 		}
 		else
@@ -1196,7 +1197,7 @@ void NetworkTransaction::Write(char b)
 		// Check if there's enough space left
 		if (tcpOutputBufferSize - lastSendBuffer->bytesToWrite > 0)
 		{
-			lastSendBuffer->tcpOutputBuffer[lastSendBuffer->bytesToWrite] = b;
+			lastSendBuffer->GetOutputBuffer()[lastSendBuffer->bytesToWrite] = b;
 			lastSendBuffer->bytesToWrite++;
 		}
 
@@ -1207,7 +1208,7 @@ void NetworkTransaction::Write(char b)
 			if (reprap.GetNetwork()->AllocateSendBuffer(newSendBuffer))
 			{
 				lastSendBuffer->next = newSendBuffer;
-				newSendBuffer->tcpOutputBuffer[0] = b;
+				newSendBuffer->GetOutputBuffer()[0] = b;
 				newSendBuffer->bytesToWrite = 1;
 			}
 			else
@@ -1261,7 +1262,7 @@ void NetworkTransaction::Write(const char* s, size_t len)
 	do {
 		// Fill up current SendBuffer
 
-		memcpy(lastSendBuffer->tcpOutputBuffer + lastSendBuffer->bytesToWrite, s + bytesStored, bytesToStore);
+		memcpy(lastSendBuffer->GetOutputBuffer() + lastSendBuffer->bytesToWrite, s + bytesStored, bytesToStore);
 		lastSendBuffer->bytesToWrite += bytesToStore;
 
 		bytesStored += bytesToStore;
@@ -1346,7 +1347,6 @@ bool NetworkTransaction::Send()
 	}
 
 	// We're still waiting for data to be ACK'ed, so check timeouts here
-
 	if (sentDataOutstanding)
 	{
 		if (!isnan(lastWriteTime))
@@ -1367,31 +1367,27 @@ bool NetworkTransaction::Send()
 	}
 
 	// See if we can fill up the TCP window with some data chunks from our SendBuffer instances
-
 	uint16_t bytesBeingSent = 0, bytesLeftToSend = TCP_WND;
 	while (sendBuffer != NULL && bytesLeftToSend >= sendBuffer->bytesToWrite)
 	{
-		memcpy(sendingWindow + bytesBeingSent, sendBuffer->tcpOutputBuffer, sendBuffer->bytesToWrite);
+		memcpy(sendingWindow() + bytesBeingSent, sendBuffer->GetOutputBuffer(), sendBuffer->bytesToWrite);
 		bytesBeingSent += sendBuffer->bytesToWrite;
 		bytesLeftToSend -= sendBuffer->bytesToWrite;
 		sendBuffer = reprap.GetNetwork()->ReleaseSendBuffer(sendBuffer);
 	}
 
 	// We also intend to send a file, so check if we can fill up the TCP window
-
-	if (sendBuffer == NULL)
+	if (sendBuffer == NULL && bytesLeftToSend != 0 && fileBeingSent != NULL)
 	{
-		int bytesRead;
-		size_t bytesToRead;
-		while (bytesLeftToSend && fileBeingSent != NULL)
+		// For HSMCI efficiency, read from the file in multiples of 4 bytes except at the end.
+		// This ensures that the second and subsequent chunks can be DMA'd directly into sendingWindow.
+		size_t bytesToRead = bytesLeftToSend & (~3);
+		if (bytesToRead != 0)
 		{
-			bytesToRead = min<size_t>(256, bytesLeftToSend);  // FIXME: doesn't work with higher block sizes
-			bytesRead = fileBeingSent->Read(sendingWindow + bytesBeingSent, bytesToRead);
-
+			int bytesRead = fileBeingSent->Read(sendingWindow() + bytesBeingSent, bytesToRead);
 			if (bytesRead > 0)
 			{
 				bytesBeingSent += bytesRead;
-				bytesLeftToSend = TCP_WND - bytesBeingSent;
 			}
 
 			if (bytesRead != (int)bytesToRead)
@@ -1402,7 +1398,7 @@ bool NetworkTransaction::Send()
 		}
 	}
 
-	if (!bytesBeingSent)
+	if (bytesBeingSent == 0)
 	{
 		// If we have no data to send and fileBeingSent is NULL, we can close the connection
 		if (!cs->persistConnection && nextWrite == NULL)
@@ -1419,7 +1415,7 @@ bool NetworkTransaction::Send()
 		// The TCP window has been filled up as much as possible, so send it now. There is no need to check
 		// the available space in the SNDBUF queue, because we really write only one TCP window at once.
 		tcp_sent(cs->pcb, conn_sent);
-		err_t result = tcp_write(cs->pcb, sendingWindow, bytesBeingSent, 0);
+		err_t result = tcp_write(cs->pcb, sendingWindow(), bytesBeingSent, 0);
 		if (result != ERR_OK) // Final arg - 1 means make a copy
 		{
 			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: tcp_write returned error code %d, this should never happen!\n", result);

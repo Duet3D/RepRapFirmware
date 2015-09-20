@@ -193,8 +193,8 @@ class Webserver
 			HttpState state;
 
 			// Buffers for processing HTTP input
-			char clientMessage[webMessageLength];			// holds the command, qualifier, and headers
-			unsigned int clientPointer;						// current index into clientMessage
+			char clientMessage[webMessageLength + 3];		// holds the command, qualifier, and headers
+			size_t clientPointer;							// current index into clientMessage
 			char decodeChar;
 
 			const char* commandWords[maxCommandWords];

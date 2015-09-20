@@ -3,7 +3,7 @@
  *
  * \brief SAM HSMCI driver
  *
- * Copyright (c) 2012 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2012-2015 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -40,12 +40,14 @@
  * \asf_license_stop
  *
  */
+/*
+ * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
+ */
 
 #include "../SD_HSMCI.h"
+#include "sd_mmc_protocol.h"
+#include "pmc.h"
 #include "hsmci.h"
-
-extern void debugPrintf(const char *fmt, ...);
-#define hsmci_debug(_fmt, ...)	debugPrintf(_fmt, __VA_ARGS__)
 
 /**
  * \ingroup sam_drivers_hsmci
@@ -63,7 +65,7 @@ extern void debugPrintf(const char *fmt, ...);
 #ifndef CONF_BOARD_SD_MMC_HSMCI
 #  warning CONF_BOARD_SD_MMC_HSMCI must be defined in conf_board.h file.
 #endif
-#if (SAM3XA_SERIES)
+#if (SAM3XA)
 #  if (SD_MMC_HSMCI_MEM_CNT > 2)
 #    warning Wrong define SD_MMC_HSMCI_MEM_CNT in board.h,\
      this part have 2 slots maximum on HSMCI.
@@ -76,7 +78,7 @@ extern void debugPrintf(const char *fmt, ...);
 #endif
 #ifndef SD_MMC_HSMCI_SLOT_0_SIZE
 #  warning SD_MMC_HSMCI_SLOT_0_SIZE must be defined in board.h.
-#  define SD_MMC_HSMCI_SLOT_0_SIZE 4
+#  define SD_MMC_HSMCI_SLOT_0_SIZE 1
 #endif
 #if (SD_MMC_HSMCI_MEM_CNT > 2)
 #  ifndef SD_MMC_HSMCI_SLOT_1_SIZE
@@ -85,11 +87,17 @@ extern void debugPrintf(const char *fmt, ...);
 #  endif
 #endif
 
+// Enable debug information for SD/MMC SPI module
+#ifdef HSMCI_DEBUG
+#  define hsmci_debug(...)      debugPrintf(__VA_ARGS__)
+#else
+#  define hsmci_debug(...)
+#endif
 
-#if (SAM3S || SAM4S)
-  // PDC is used for transfers
-#elif (SAM3U || SAM3XA_SERIES)
-  // DMA is used for transferts
+#if (SAM3S || SAM4S || SAM4E)
+  // PDC is used for transfer
+#elif (SAM3U || SAM3XA || SAM3XE)
+  // DMA is used for transfer
 #  include "dmac.h"
 #  define DMA_HW_ID_HSMCI    0
 #  ifndef CONF_HSMCI_DMA_CHANNEL
@@ -143,11 +151,41 @@ static void hsmci_reset(void)
  */
 static void hsmci_set_speed(uint32_t speed, uint32_t mck)
 {
-	uint32_t clkdiv;
-	uint32_t rest;
+#if (SAM4E)
+	uint32_t clkdiv = 0;
+	uint32_t clkodd = 0;
+	// clock divider, represent (((clkdiv << 1) + clkodd) + 2)
+	uint32_t div = 0;
+
+	// Speed = MCK clock / (((clkdiv << 1) + clkodd) + 2)
+	if ((speed * 2) < mck) {
+		div = (mck / speed) - 2;
+		if (mck % speed) {
+			// Ensure that the card speed not be higher than expected.
+			div++;
+		}
+		clkdiv = div >> 1;
+		// clkodd is the last significant bit of the clock divider (div).
+		clkodd = div % 2;
+	} else {
+		clkdiv = 0;
+		clkodd = 0;
+	}
+
+	HSMCI->HSMCI_MR &= ~HSMCI_MR_CLKDIV_Msk;
+	HSMCI->HSMCI_MR |= HSMCI_MR_CLKDIV(clkdiv);
+	if (clkodd) {
+		HSMCI->HSMCI_MR |= HSMCI_MR_CLKODD;
+	}
+	else {
+		HSMCI->HSMCI_MR &= ~HSMCI_MR_CLKODD;
+	}
+#else
+	uint32_t clkdiv = 0;
+	uint32_t rest = 0;
 
 	// Speed = MCK clock / (2 * (CLKDIV + 1))
-	if (speed > 0) {
+	if ((speed * 2) < mck) {
 		clkdiv = mck / (2 * speed);
 		rest = mck % (2 * speed);
 		if (rest > 0) {
@@ -162,6 +200,8 @@ static void hsmci_set_speed(uint32_t speed, uint32_t mck)
 	}
 	HSMCI->HSMCI_MR &= ~HSMCI_MR_CLKDIV_Msk;
 	HSMCI->HSMCI_MR |= HSMCI_MR_CLKDIV(clkdiv);
+#endif
+
 }
 
 /** \brief Wait the end of busy signal on data line
@@ -170,7 +210,7 @@ static void hsmci_set_speed(uint32_t speed, uint32_t mck)
  */
 static bool hsmci_wait_busy(void)
 {
-	uint32_t busy_wait = 1000000;
+	uint32_t busy_wait = 0xFFFFFFFF;
 	uint32_t sr;
 
 	do {
@@ -221,19 +261,12 @@ static bool hsmci_send_cmd_execute(uint32_t cmdr, sdmmc_cmd_def_t cmd,
 	// Wait end of command
 	do {
 		sr = HSMCI->HSMCI_SR;
-		if (cmd == 0x5103) {
-			if (sr & (HSMCI_SR_CSTOE | HSMCI_SR_RTOE
-				   | HSMCI_SR_RCRCE
-					| HSMCI_SR_RDIRE)) {
-				hsmci_debug("%s: CMD 0x%08x sr 0x%08x CMD 3 error\n\r",__func__, cmd, sr);
-				hsmci_reset();
-				return false;
-		    }				
-	    } else if (cmd & SDMMC_RESP_CRC) {
+		if (cmd & SDMMC_RESP_CRC) {
 			if (sr & (HSMCI_SR_CSTOE | HSMCI_SR_RTOE
 					| HSMCI_SR_RENDE | HSMCI_SR_RCRCE
 					| HSMCI_SR_RDIRE | HSMCI_SR_RINDE)) {
-				hsmci_debug("%s: CMD 0x%08x sr 0x%08x RESP_CRC error\n\r",__func__, cmd, sr);
+				hsmci_debug("%s: CMD 0x%08x sr 0x%08x error\n\r",
+						__func__, cmd, sr);
 				hsmci_reset();
 				return false;
 			}
@@ -241,7 +274,8 @@ static bool hsmci_send_cmd_execute(uint32_t cmdr, sdmmc_cmd_def_t cmd,
 			if (sr & (HSMCI_SR_CSTOE | HSMCI_SR_RTOE
 					| HSMCI_SR_RENDE
 					| HSMCI_SR_RDIRE | HSMCI_SR_RINDE)) {
-				hsmci_debug("%s: CMD 0x%08x sr 0x%08x error\n\r",__func__, cmd, sr);
+				hsmci_debug("%s: CMD 0x%08x sr 0x%08x error\n\r",
+						__func__, cmd, sr);
 				hsmci_reset();
 				return false;
 			}
@@ -311,7 +345,7 @@ void hsmci_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool h
 		HSMCI->HSMCI_CFG &= ~HSMCI_CFG_HSMODE;
 	}
 
-	hsmci_set_speed(clock, SystemCoreClock);
+	hsmci_set_speed(clock, sysclk_get_cpu_hz());
 
 	switch (slot) {
 	case 0:
@@ -324,7 +358,6 @@ void hsmci_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool h
 #endif
 	default:
 		Assert(false); // Slot number wrong
-		break;
 	}
 
 	switch (bus_width) {
@@ -342,7 +375,6 @@ void hsmci_select_device(uint8_t slot, uint32_t clock, uint8_t bus_width, bool h
 
 	default:
 		Assert(false); // Bus width wrong
-		break;
 	}
 	HSMCI->HSMCI_SDCR = hsmci_slot | hsmci_bus_width;
 }
@@ -391,8 +423,8 @@ uint32_t hsmci_get_response(void)
 void hsmci_get_response_128(uint8_t* response)
 {
 	uint32_t response_32;
-	uint8_t i=0;
-	for (i = 0; i < 4; i++) {
+
+	for (uint8_t i = 0; i < 4; i++) {
 		response_32 = HSMCI->HSMCI_RSPR[0];
 		*response = (response_32 >> 24) & 0xFF;
 		response++;
@@ -488,7 +520,8 @@ bool hsmci_read_word(uint32_t* value)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",
+					__func__, sr);
 			hsmci_reset();
 			return false;
 		}
@@ -507,7 +540,8 @@ bool hsmci_read_word(uint32_t* value)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",
+					__func__, sr);
 			hsmci_reset();
 			return false;
 		}
@@ -526,7 +560,8 @@ bool hsmci_write_word(uint32_t value)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",
+					__func__, sr);
 			hsmci_reset();
 			return false;
 		}
@@ -545,7 +580,8 @@ bool hsmci_write_word(uint32_t value)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",
+					__func__, sr);
 			hsmci_reset();
 			return false;
 		}
@@ -555,6 +591,9 @@ bool hsmci_write_word(uint32_t value)
 }
 
 #ifdef HSMCI_SR_DMADONE
+// Debug variables
+//uint32_t longestWriteWaitTime=0, shortestWriteWaitTime=999999, longestReadWaitTime=0, shortestReadWaitTime=999999, numRead=0, numWrite=0;
+
 bool hsmci_start_read_blocks(void *dest, uint16_t nb_block)
 {
 	uint32_t cfg, nb_data;
@@ -613,6 +652,9 @@ bool hsmci_start_read_blocks(void *dest, uint16_t nb_block)
 
 bool hsmci_wait_end_of_read_blocks(void)
 {
+//debug
+//uint32_t time = micros(); ++numRead;
+//
 	uint32_t sr;
 	// Wait end of transfer
 	// Note: no need of timeout, because it is include in HSMCI
@@ -620,7 +662,8 @@ bool hsmci_wait_end_of_read_blocks(void)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",
+					__func__, sr);
 			hsmci_reset();
 			// Disable DMA
 			dmac_channel_disable(DMAC, CONF_HSMCI_DMA_CHANNEL);
@@ -630,10 +673,16 @@ bool hsmci_wait_end_of_read_blocks(void)
 			// It is not the end of all transfers
 			// then just wait end of DMA
 			if (sr & HSMCI_SR_DMADONE) {
+//time = micros() - time;
+//if (time > longestReadWaitTime) { longestReadWaitTime = time; }
+//if (time < shortestReadWaitTime) { shortestReadWaitTime = time; }
 				return true;
 			}
 		}
 	} while (!(sr & HSMCI_SR_XFRDONE));
+//time = micros() - time;
+//if (time > longestReadWaitTime) { longestReadWaitTime = time; }
+//if (time < shortestReadWaitTime) { shortestReadWaitTime = time; }
 	return true;
 }
 
@@ -695,6 +744,9 @@ bool hsmci_start_write_blocks(const void *src, uint16_t nb_block)
 
 bool hsmci_wait_end_of_write_blocks(void)
 {
+//debug
+//uint32_t time = micros(); ++numWrite;
+//
 	uint32_t sr;
 	// Wait end of transfer
 	// Note: no need of timeout, because it is include in HSMCI, see DTOE bit.
@@ -702,7 +754,8 @@ bool hsmci_wait_end_of_write_blocks(void)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: DMA sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: DMA sr 0x%08x error\n\r",
+					__func__, sr);
 			hsmci_reset();
 			// Disable DMA
 			dmac_channel_disable(DMAC, CONF_HSMCI_DMA_CHANNEL);
@@ -712,14 +765,19 @@ bool hsmci_wait_end_of_write_blocks(void)
 			// It is not the end of all transfers
 			// then just wait end of DMA
 			if (sr & HSMCI_SR_DMADONE) {
+//time = micros() - time;
+//if (time > longestWriteWaitTime) { longestWriteWaitTime = time; }
+//if (time < shortestWriteWaitTime) { shortestWriteWaitTime = time; }
 				return true;
 			}
 		}
 	} while (!(sr & HSMCI_SR_NOTBUSY));
 	Assert(HSMCI->HSMCI_SR & HSMCI_SR_FIFOEMPTY);
 	Assert(!dmac_channel_is_enable(DMAC, CONF_HSMCI_DMA_CHANNEL));
+//time = micros() - time;
+//if (time > longestWriteWaitTime) { longestWriteWaitTime = time; }
+//if (time < shortestWriteWaitTime) { shortestWriteWaitTime = time; }
 	return true;
-
 }
 #endif // HSMCI_SR_DMADONE
 
@@ -732,12 +790,19 @@ bool hsmci_start_read_blocks(void *dest, uint16_t nb_block)
 	Assert(nb_data <= (((uint32_t)hsmci_block_size * hsmci_nb_block) - hsmci_transfert_pos));
 	Assert(nb_data <= (PERIPH_RCR_RXCTR_Msk >> PERIPH_RCR_RXCTR_Pos));
 
-	// Configure PDC transfert
+	// Handle unaligned memory address
+	if (((uint32_t)dest & 0x3) || (hsmci_block_size & 0x3)) {
+		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
+	} else {
+		HSMCI->HSMCI_MR &= ~HSMCI_MR_FBYTE;
+	}
+
+	// Configure PDC transfer
 	HSMCI->HSMCI_RPR = (uint32_t)dest;
 	HSMCI->HSMCI_RCR = (HSMCI->HSMCI_MR & HSMCI_MR_FBYTE) ?
 			nb_data : nb_data / 4;
 	HSMCI->HSMCI_RNCR = 0;
-	// Start transfert
+	// Start transfer
 	HSMCI->HSMCI_PTCR = HSMCI_PTCR_RXTEN;
 	hsmci_transfert_pos += nb_data;
 	return true;
@@ -746,13 +811,14 @@ bool hsmci_start_read_blocks(void *dest, uint16_t nb_block)
 bool hsmci_wait_end_of_read_blocks(void)
 {
 	uint32_t sr;
-	// Wait end of transfert
+	// Wait end of transfer
 	// Note: no need of timeout, because it is include in HSMCI, see DTOE bit.
 	do {
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: PDC sr 0x%08x error\n\r",__func__, sr);
+			hsmci_debug("%s: PDC sr 0x%08x error\n\r",
+					__func__, sr);
 			HSMCI->HSMCI_PTCR = HSMCI_PTCR_RXTDIS | HSMCI_PTCR_TXTDIS;
 			hsmci_reset();
 			return false;
@@ -786,12 +852,19 @@ bool hsmci_start_write_blocks(const void *src, uint16_t nb_block)
 	Assert(nb_data <= (((uint32_t)hsmci_block_size * hsmci_nb_block) - hsmci_transfert_pos));
 	Assert(nb_data <= (PERIPH_TCR_TXCTR_Msk >> PERIPH_TCR_TXCTR_Pos));
 
-	// Configure PDC transfert
+	// Handle unaligned memory address
+	if (((uint32_t)src & 0x3) || (hsmci_block_size & 0x3)) {
+		HSMCI->HSMCI_MR |= HSMCI_MR_FBYTE;
+	} else {
+		HSMCI->HSMCI_MR &= ~HSMCI_MR_FBYTE;
+	}
+
+	// Configure PDC transfer
 	HSMCI->HSMCI_TPR = (uint32_t)src;
 	HSMCI->HSMCI_TCR = (HSMCI->HSMCI_MR & HSMCI_MR_FBYTE) ?
 			nb_data : nb_data / 4;
 	HSMCI->HSMCI_TNCR = 0;
-	// Start transfert
+	// Start transfer
 	HSMCI->HSMCI_PTCR = HSMCI_PTCR_TXTEN;
 	hsmci_transfert_pos += nb_data;
 	return true;
@@ -801,14 +874,15 @@ bool hsmci_wait_end_of_write_blocks(void)
 {
 	uint32_t sr;
 
-	// Wait end of transfert
+	// Wait end of transfer
 	// Note: no need of timeout, because it is include in HSMCI, see DTOE bit.
 	do {
 		sr = HSMCI->HSMCI_SR;
 		if (sr &
 				(HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: PDC sr 0x%08x error\n\r", __func__, sr);
+			hsmci_debug("%s: PDC sr 0x%08x error\n\r",
+					__func__, sr);
 			hsmci_reset();
 			HSMCI->HSMCI_PTCR = HSMCI_PTCR_RXTDIS | HSMCI_PTCR_TXTDIS;
 			return false;
@@ -825,7 +899,8 @@ bool hsmci_wait_end_of_write_blocks(void)
 		sr = HSMCI->HSMCI_SR;
 		if (sr & (HSMCI_SR_UNRE | HSMCI_SR_OVRE | \
 				HSMCI_SR_DTOE | HSMCI_SR_DCRCE)) {
-			hsmci_debug("%s: PDC sr 0x%08x last transfer error\n\r",__func__, sr);
+			hsmci_debug("%s: PDC sr 0x%08x last transfer error\n\r",
+					__func__, sr);
 			hsmci_reset();
 			return false;
 		}

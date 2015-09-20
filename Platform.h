@@ -52,6 +52,9 @@ Licence: GPL
 #include "SamNonDuePin.h"
 #include "SD_HSMCI.h"
 #include "MCP4461.h"
+#include "MassStorage.h"
+#include "FileStore.h"
+#include "Line.h"
 
 /**************************************************************************************************/
 
@@ -111,8 +114,6 @@ const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of r
 #define AXIS_MINIMA {0, 0, -0.5}				// mm
 const float defaultPrintRadius = 50;			// mm
 const float defaultDeltaHomedHeight = 200;		// mm
-
-#define HOME_FEEDRATES {50.0, 50.0, 100.0/60.0}	// mm/sec (dc42 increased Z because we slow down z-homing when approaching the target height)
 
 const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;	// The indices of the 3 tower motors of a delta printer in drive arrays
@@ -191,8 +192,7 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 // File handling
 
-#define MAX_FILES (10)		// must be large enough to handle the max number of simultaneous web requests + file being printed
-#define FILE_BUF_LEN (256)
+#define MAX_FILES (10)							// must be large enough to handle the max number of simultaneous web requests + file being printed
 #define WEB_DIR "0:/www/" 						// Place to find web files on the SD card
 #define GCODE_DIR "0:/gcodes/" 					// Ditto - g-codes
 #define SYS_DIR "0:/sys/" 						// Ditto - system files
@@ -207,12 +207,11 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 
 typedef int8_t Pin;								// type used to represent a pin number, negative means no pin
 
-const int atxPowerPin = 12;						// Arduino Due pin number that controls the ATX power on/off
+const Pin atxPowerPin = 12;						// Arduino Due pin number that controls the ATX power on/off
 
-const uint16_t lineInBufsize = 256;				// use a power of 2 for good performance
-const uint16_t lineOutBufSize = 2048;			// ideally this should be large enough to hold the results of an M503 command,
-												// but could be reduced if we ever need the memory
 const size_t messageStringLength = 256;			// max length of a message chunk sent via Message or AppendMessage
+
+const size_t numPins = 72;						// the number of pins we have, for M42 command
 
 /****************************************************************************************************/
 
@@ -242,18 +241,6 @@ enum class EndStopType
 
 /***************************************************************************************************/
 
-// Input and output - these are ORed into a uint8_t
-// By the Status() functions of the IO classes.
-
-enum IOStatus
-{
-  nothing = 0,
-  byteAvailable = 1,
-  atEoF = 2,
-  clientLive = 4,
-  clientConnected = 8
-};
-
 // Enumeration describing the reasons for a software reset.
 // The spin state gets or'ed into this, so keep the lower ~4 bits unused.
 namespace SoftwareResetReason
@@ -280,48 +267,6 @@ namespace DiagnosticTest
 	};
 }
 
-// This class handles serial I/O - typically via USB
-
-class Line
-{
-public:
-
-	uint8_t Status() const;				// Returns OR of IOStatus
-	int Read(char& b);
-	void Write(char b, bool important = false);
-	void Write(const char* s, bool important = false);
-	void Flush();
-
-friend class Platform;
-friend class RepRap;
-
-protected:
-
-	Line(Stream& p_iface);
-	void Init();
-	void Spin();
-	void InjectString(char* string);
-	unsigned int GetOutputColumn() const { return outputColumn; }
-
-private:
-	void TryFlushOutput();
-
-	// Although the sam3x usb interface code already has a 512-byte buffer, adding this extra 256-byte buffer
-	// increases the speed of uploading to the SD card by 10%
-	char inBuffer[lineInBufsize];
-	char outBuffer[lineOutBufSize];
-	uint16_t inputGetIndex;
-	uint16_t inputNumChars;
-	uint16_t outputGetIndex;
-	uint16_t outputNumChars;
-	uint32_t timeLastCharWritten;
-
-	uint8_t inWrite;
-	bool ignoringOutputLine;
-	unsigned int outputColumn;
-	Stream& iface;
-};
-
 // Info returned by FindFirst/FindNext calls
 class FileInfo
 {
@@ -335,92 +280,6 @@ public:
 	char fileName[MaxFilenameLength];
 };
 
-class MassStorage
-{
-public:
-
-  bool FindFirst(const char *directory, FileInfo &file_info);
-  bool FindNext(FileInfo &file_info);
-  const char* GetMonthName(const uint8_t month);
-  const char* CombineName(const char* directory, const char* fileName);
-  bool Delete(const char* directory, const char* fileName);
-  bool MakeDirectory(const char *parentDir, const char *dirName);
-  bool MakeDirectory(const char *directory);
-  bool Rename(const char *oldFilename, const char *newFilename);
-  bool FileExists(const char *file) const;
-  bool PathExists(const char *path) const;
-  bool PathExists(const char* directory, const char* subDirectory);
-
-friend class Platform;
-
-protected:
-
-  MassStorage(Platform* p);
-  void Init();
-
-private:
-
-  Platform* platform;
-  FATFS fileSystem;
-  DIR findDir;
-  char combinedName[MaxFilenameLength + 1];
-};
-
-// This class handles input from, and output to, files.
-
-typedef uint32_t FilePosition;
-const FilePosition noFilePosition = 0xFFFFFFFF;
-
-class FileStore
-{
-public:
-
-	uint8_t Status();								// Returns OR of IOStatus
-	bool Read(char& b);								// Read 1 byte
-	int Read(char* buf, unsigned int nBytes);		// Read a block of nBytes length
-	bool Write(char b);								// Write 1 byte
-	bool Write(const char *s, unsigned int len);	// Write a block of len bytes
-	bool Write(const char* s);						// Write a string
-	bool Close();									// Shut the file and tidy up
-	bool Seek(FilePosition pos);					// Jump to pos in the file
-	FilePosition GetPosition() const;				// Return the current position in the file, assuming we are reading the file
-#if 0	// not currently used
-	bool GoToEnd();									// Position the file at the end (so you can write on the end).
-#endif
-	FilePosition Length() const;					// File size in bytes
-	float FractionRead() const;						// How far in we are
-	void Duplicate();								// Create a second reference to this file
-	bool Flush();									// Write remaining buffer data
-	static float GetAndClearLongestWriteTime();		// Return the longest time it took to write a block to a file, in milliseconds
-
-friend class Platform;
-
-protected:
-
-	FileStore(Platform* p);
-	void Init();
-    bool Open(const char* directory, const char* fileName, bool write);
-        
-private:
-
-    bool inUse;
-    byte buf[FILE_BUF_LEN];
-    unsigned int bufferPointer;
-  
-	bool ReadBuffer();
-	bool WriteBuffer();
-	bool InternalWriteBlock(const char *s, unsigned int len);
-
-	FIL file;
-	Platform* platform;
-	bool writing;
-	unsigned int lastBufferEntry;
-	unsigned int openCount;
-
-	static uint32_t longestWriteTime;
-};
-
-
 /***************************************************************************************************************/
 
 // Struct for holding Z probe parameters
@@ -433,6 +292,8 @@ struct ZProbeParameters
 	float calibTemperature;			// the temperature at which we did the calibration
 	float temperatureCoefficient;	// the variation of height with bed temperature
 	float diveHeight;				// the dive height we use when probing
+	float probeSpeed;				// the initial speed of probing
+	float travelSpeed;				// the speed at which we travel to the probe point
 	float param1, param2;			// extra parameters used by some types of probe e.g. Delta probe
 
 	void Init(float h)
@@ -443,6 +304,8 @@ struct ZProbeParameters
 		calibTemperature = 20.0;
 		temperatureCoefficient = 0.0;	// no default temperature correction
 		diveHeight = DefaultZDive;
+		probeSpeed = DefaultProbeSpeed;
+		travelSpeed = DefaultTravelSpeed;
 		param1 = param2 = 0.0;
 	}
 
@@ -460,6 +323,8 @@ struct ZProbeParameters
 				&& calibTemperature == other.calibTemperature
 				&& temperatureCoefficient == other.temperatureCoefficient
 				&& diveHeight == other.diveHeight
+				&& probeSpeed == other.probeSpeed
+				&& travelSpeed == other.travelSpeed
 				&& param1 == other.param1
 				&& param2 == other.param2;
 	}
@@ -671,8 +536,6 @@ public:
   float ConfiguredInstantDv(size_t drive) const;
   float ActualInstantDv(size_t drive) const;
   void SetInstantDv(size_t drive, float value);
-  float HomeFeedRate(size_t axis) const;
-  void SetHomeFeedRate(size_t axis, float value);
   EndStopHit Stopped(size_t drive) const;
   float AxisMaximum(size_t axis) const;
   void SetAxisMaximum(size_t axis, float value);
@@ -688,7 +551,7 @@ public:
 
   float ZProbeStopHeight() const;
   float GetZProbeDiveHeight() const;
-  void SetZProbeDiveHeight(float h);
+  float GetZProbeTravelSpeed() const;
   int ZProbe() const;
   EndStopHit GetZProbeResult() const;
   int GetZProbeSecondaryValues(int& v1, int& v2);
@@ -738,6 +601,9 @@ public:
   void SetFilamentWidth(float width);
   float GetNozzleDiameter() const;
   void SetNozzleDiameter(float diameter);
+
+  // Direct pin operations
+  bool SetPin(int pin, int level);
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -844,17 +710,17 @@ private:
   uint16_t GetRawZProbeReading() const;
   void UpdateNetworkAddress(byte dst[4], const byte src[4]);
 
-  // AXES
+// AXES
 
   float axisMaxima[AXES];
   float axisMinima[AXES];
-  float homeFeedrates[AXES];
   EndStopType endStopType[AXES+1];
   bool endStopLogicLevel[AXES+1];
   
 // HEATERS - Bed is assumed to be the first
 
   int GetRawTemperature(size_t heater) const;
+  void SetHeaterPwm(size_t heater, uint8_t pwm);
 
   Pin tempSensePins[HEATERS];
   Pin heatOnPins[HEATERS];
@@ -907,6 +773,10 @@ private:
   // Hotend configuration
   float filamentWidth;
   float nozzleDiameter;
+
+  // Direct pin manipulation
+  static const uint8_t pinAccessAllowed[numPins/8];
+  uint8_t pinInitialised[numPins/8];
 };
 
 // Small class to hold an open file and data relating to it.
@@ -1135,16 +1005,6 @@ inline void Platform::SetEnableValue(size_t drive, bool eVal)
 inline bool Platform::GetEnableValue(size_t drive) const
 {
 	return enableValues[drive];
-}
-
-inline float Platform::HomeFeedRate(size_t axis) const
-{
-	return homeFeedrates[axis];
-}
-
-inline void Platform::SetHomeFeedRate(size_t axis, float value)
-{
-	homeFeedrates[axis] = value;
 }
 
 inline float Platform::AxisMaximum(size_t axis) const

@@ -58,6 +58,8 @@ extern "C" {
 #include <stdio.h>
 #include <assert.h>
 
+//void debugPrintf(const char*, ...);
+
 //#if (SAM3S || SAM3U || SAM3N || SAM3XA_SERIES || SAM4S)
 //# include "rtc.h"
 //#endif
@@ -163,6 +165,7 @@ DSTATUS disk_status(BYTE drv)
  */
 DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 {
+//	debugPrintf("R %u %u\n", sector, count);
 #if ACCESS_MEM_TO_RAM
 	uint8_t uc_sector_size = mem_sector_size(drv);
 	uint32_t i;
@@ -181,12 +184,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 
 	/* Read the data */
 	for (i = 0; i < count; i++) {
-		if (memory_2_ram(drv, sector + uc_sector_size *
-				SECTOR_SIZE_DEFAULT * i,
-				buff +
-				uc_sector_size *
-				SECTOR_SIZE_DEFAULT * i) !=
-				CTRL_GOOD) {
+		if (memory_2_ram(drv, sector + uc_sector_size * i, buff + uc_sector_size * SECTOR_SIZE_DEFAULT * i) != CTRL_GOOD) {
 			return RES_ERROR;
 		}
 	}
@@ -216,6 +214,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 #if _READONLY == 0
 DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
 {
+//	debugPrintf("W %u %u\n", sector, count);
 #if ACCESS_MEM_TO_RAM
 	uint8_t uc_sector_size = mem_sector_size(drv);
 	uint32_t i;
@@ -232,14 +231,9 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
 		return RES_PARERR;
 	}
 
-	/* Read the data */
+	/* Write the data */
 	for (i = 0; i < count; i++) {
-		if (ram_2_memory(drv, sector + uc_sector_size *
-				SECTOR_SIZE_DEFAULT * i,
-				buff +
-				uc_sector_size *
-				SECTOR_SIZE_DEFAULT * i) !=
-				CTRL_GOOD) {
+		if (ram_2_memory(drv, sector + uc_sector_size * i, buff + uc_sector_size * SECTOR_SIZE_DEFAULT * i) != CTRL_GOOD) {
 			return RES_ERROR;
 		}
 	}

@@ -221,9 +221,9 @@ void Webserver::Spin()
 				// Process other messages
 				else
 				{
-					char c;
 					for (uint16_t i=0; i<500; i++)
 					{
+						char c;
 						if (req->Read(c))
 						{
 							// Each ProtocolInterpreter must take care of the current NetworkTransaction and remove
@@ -549,18 +549,15 @@ bool ProtocolInterpreter::FlushUploadData()
 {
 	if (uploadState == uploadOK && uploadLength != 0)
 	{
-		// Write some uploaded data to file (never write more than 256 bytes at once)
-		unsigned int len = min<unsigned int>(uploadLength, 256);
-		if (!fileBeingUploaded.Write(uploadPointer, len))
+		// Write uploaded data to file
+		if (!fileBeingUploaded.Write(uploadPointer, uploadLength))
 		{
 			platform->Message(HOST_MESSAGE, "Could not flush upload data!\n");
 			uploadState = uploadError;
 		}
 
-		uploadPointer += len;
-		uploadLength -= len;
-
-		return (uploadLength == 0);
+		uploadPointer = NULL;
+		uploadLength = 0;
 	}
 
 	return true;
@@ -611,20 +608,12 @@ bool ProtocolInterpreter::DoFastUpload()
 void ProtocolInterpreter::FinishUpload(uint32_t fileLength)
 {
 	// Write the remaining data
-	if (uploadState == uploadOK)
+	if (uploadState == uploadOK && uploadLength != 0)
 	{
-		while (uploadLength > 0)
+		if (!fileBeingUploaded.Write(uploadPointer, uploadLength))
 		{
-			unsigned int len = min<unsigned int>(uploadLength, 256);
-			if (!fileBeingUploaded.Write(uploadPointer, len))
-			{
-				uploadState = uploadError;
-				platform->Message(HOST_MESSAGE, "Could not write remaining data while finishing upload!\n");
-				break;
-			}
-
-			uploadLength -= len;
-			uploadPointer += len;
+			uploadState = uploadError;
+			platform->Message(HOST_MESSAGE, "Could not write remaining data while finishing upload!\n");
 		}
 	}
 
@@ -836,7 +825,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
 	if (zip && fileToSend != NULL)
 	{
 		req->Write("Content-Encoding: gzip\n");
-		req->Printf("Content-Length: %lu", fileToSend->Length());
+		req->Printf("Content-Length: %lu\n", fileToSend->Length());
 	}
 
 	req->Write("Connection: close\n\n");
@@ -1580,6 +1569,11 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 									break;
 								}
 							}
+
+							// Align the client pointer on a 32-bit boundary for HSMCI efficiency.
+							// To remain efficient, the browser should send POSTDATA in multiples of 4 bytes.
+							clientPointer += 3;
+							clientPointer -= reinterpret_cast<unsigned int>(clientMessage + clientPointer) & 3;
 							state = doingPost;
 
 							return false;

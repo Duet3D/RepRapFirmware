@@ -60,7 +60,7 @@
 / Functions and Buffer Configurations
 /----------------------------------------------------------------------------*/
 
-#define    _FS_TINY        1    /* 0:Normal or 1:Tiny */
+#define    _FS_TINY		1    /* 0:Normal or 1:Tiny */
 /* When _FS_TINY is set to 1, FatFs uses the sector buffer in the file system
 /  object instead of the sector buffer in the individual file object for file
 /  data transfer. This reduces memory consumption 512 bytes each file object. */
@@ -82,11 +82,11 @@
 /   3: f_lseek is removed in addition to 2. */
 
 
-#define    _USE_STRFUNC    1    /* 0:Disable or 1-2:Enable */
+#define    _USE_STRFUNC    0    /* 0:Disable or 1-2:Enable */
 /* To enable string functions, set _USE_STRFUNC to 1 or 2. */
 
 
-#define    _USE_MKFS    1        /* 0:Disable or 1:Enable */
+#define    _USE_MKFS    0        /* 0:Disable or 1:Enable */
 /* To enable f_mkfs function, set _USE_MKFS to 1 and set _FS_READONLY to 0 */
 
 

@@ -15,7 +15,7 @@
  *   - specific features;
  *   - etc.
  *
- * Copyright (c) 2009 - 2013 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2009-2015 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -52,17 +52,21 @@
  * \asf_license_stop
  *
  ******************************************************************************/
+/*
+ * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
+ */
 
 
 //_____ I N C L U D E S ____________________________________________________
 
+#include "compiler.h"
+#include "preprocessor.h"
 #ifdef FREERTOS_USED
 #include "FreeRTOS.h"
 #include "semphr.h"
 #endif
 #include "ctrl_access.h"
-#include "preprocessor.h"
-#include "sd_mmc_mem.h"
+
 
 //_____ D E F I N I T I O N S ______________________________________________
 
@@ -380,6 +384,10 @@ U8 mem_sector_size(U8 lun)
 bool mem_unload(U8 lun, bool unload)
 {
   bool unloaded;
+#if !MAX_LUN || !defined(Lun_usb_unload)
+  UNUSED(lun);
+#endif
+
   if (!Ctrl_access_lock()) return false;
 
   unloaded =

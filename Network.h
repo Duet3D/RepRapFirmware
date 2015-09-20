@@ -129,10 +129,12 @@ class SendBuffer
 		SendBuffer(SendBuffer *n) : next(n) { };
 
 	private:
+		char* GetOutputBuffer() { return reinterpret_cast<char*>(storage); }
+
 		SendBuffer *next;
+		uint32_t storage[(tcpOutputBufferSize + 3)/4];		// buffer must be 32-bit aligned for HSMCI
 
 		uint16_t bytesToWrite;
-		char tcpOutputBuffer[tcpOutputBufferSize];
 };
 
 

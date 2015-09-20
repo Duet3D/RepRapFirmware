@@ -527,11 +527,25 @@ static WCHAR LfnBuf[_MAX_LFN+1];
 
 ---------------------------------------------------------------------------*/
 
+// Function to check whether a buffer pointer is 32-bit aligned.
+// If it isn't then we must not do direct sector reads/writes, because the DMA controller used for HSMCI transfers doesn't do unaligned memory accesses.
+inline _Bool isAligned(const BYTE *p)
+{
+	return ((unsigned int)p & 3) == 0;
+}
 
 /*-----------------------------------------------------------------------*/
 /* String functions                                                      */
 /*-----------------------------------------------------------------------*/
 
+#if 1
+
+#include "string.h"
+#define mem_cpy(_dst, _src, _count) memcpy(_dst, _src, _count)
+#define mem_set(_dst, _val, _count) memset(_dst, _val, _count)
+#define mem_cmp(_dst, _src, _count) memcmp(_dst, _src, _count)
+
+#else
 /* Copy memory to memory */
 static
 void mem_cpy (void* dst, const void* src, UINT cnt) {
@@ -567,6 +581,7 @@ int mem_cmp (const void* dst, const void* src, UINT cnt) {
 	while (cnt-- && (r = *d++ - *s++) == 0) ;
 	return r;
 }
+#endif
 
 /* Check if chr is contained in the string */
 static
@@ -2409,7 +2424,7 @@ FRESULT f_read (
 		rbuff += rcnt, fp->fptr += rcnt, *br += rcnt, btr -= rcnt) {
 		if ((fp->fptr % SS(fp->fs)) == 0) {		/* On the sector boundary? */
 			csect = (BYTE)(fp->fptr / SS(fp->fs) & (fp->fs->csize - 1));	/* Sector offset in the cluster */
-			if (!csect) {						/* On the cluster boundary? */
+			if (csect == 0) {					/* On the cluster boundary? */
 				if (fp->fptr == 0) {			/* On the top of the file? */
 					clst = fp->sclust;			/* Follow from the origin */
 				} else {						/* Middle or end of the file */
@@ -2428,7 +2443,7 @@ FRESULT f_read (
 			if (!sect) ABORT(fp->fs, FR_INT_ERR);
 			sect += csect;
 			cc = btr / SS(fp->fs);				/* When remaining bytes >= sector size, */
-			if (cc) {							/* Read maximum contiguous sectors directly */
+			if (cc != 0 && isAligned(rbuff)) {	/* Read maximum contiguous sectors directly */
 				if (csect + cc > fp->fs->csize)	/* Clip at cluster boundary */
 					cc = fp->fs->csize - csect;
 				if (disk_read(fp->fs->drv, rbuff, sect, (BYTE)cc) != RES_OK)
@@ -2510,7 +2525,7 @@ FRESULT f_write (
 		wbuff += wcnt, fp->fptr += wcnt, *bw += wcnt, btw -= wcnt) {
 		if ((fp->fptr % SS(fp->fs)) == 0) {	/* On the sector boundary? */
 			csect = (BYTE)(fp->fptr / SS(fp->fs) & (fp->fs->csize - 1));	/* Sector offset in the cluster */
-			if (!csect) {					/* On the cluster boundary? */
+			if (csect == 0) {				/* On the cluster boundary? */
 				if (fp->fptr == 0) {		/* On the top of the file? */
 					clst = fp->sclust;		/* Follow from the origin */
 					if (clst == 0)			/* When no cluster is allocated, */
@@ -2542,7 +2557,7 @@ FRESULT f_write (
 			if (!sect) ABORT(fp->fs, FR_INT_ERR);
 			sect += csect;
 			cc = btw / SS(fp->fs);			/* When remaining bytes >= sector size, */
-			if (cc) {						/* Write maximum contiguous sectors directly */
+			if (cc != 0 && isAligned(wbuff)) {	/* Write maximum contiguous sectors directly */
 				if (csect + cc > fp->fs->csize)	/* Clip at cluster boundary */
 					cc = fp->fs->csize - csect;
 				if (disk_write(fp->fs->drv, wbuff, sect, (BYTE)cc) != RES_OK)

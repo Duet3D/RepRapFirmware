@@ -124,7 +124,7 @@ typedef struct {
 	DWORD	dsect;			/* Current data sector */
 #if !_FS_READONLY
 	DWORD	dir_sect;		/* Sector containing the directory entry */
-	BYTE*	dir_ptr;		/* Ponter to the directory entry in the window */
+	BYTE*	dir_ptr;		/* Pointer to the directory entry in the window */
 #endif
 #if _USE_FASTSEEK
 	DWORD*	cltbl;			/* Pointer to the cluster link map table (null on file open) */

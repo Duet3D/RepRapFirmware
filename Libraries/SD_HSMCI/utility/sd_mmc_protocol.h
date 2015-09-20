@@ -3,7 +3,7 @@
  *
  * \brief SD/MMC protocol definitions.
  *
- * Copyright (c) 2012 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2014-2015 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -39,6 +39,9 @@
  *
  * \asf_license_stop
  *
+ */
+/*
+ * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
  */
 
 #ifndef SD_MMC_PROTOCOL_H_INCLUDED
@@ -171,9 +174,9 @@ typedef uint32_t sdmmc_cmd_def_t;
 #define MMC_SPI_CMD1_SEND_OP_COND        (1 | SDMMC_CMD_R1)
 #define MMC_MCI_CMD1_SEND_OP_COND        (1 | SDMMC_CMD_R3 | SDMMC_CMD_OPENDRAIN)
 /** Cmd2(bcr, R2): Ask the card to send its CID number (stuff but arg 0 used) */
-#define SDMMC_CMD2_ALL_SEND_CID          (2 | SDMMC_CMD_R2 | SDMMC_CMD_OPENDRAIN) /**@todo open drain commented out if no pullup on MCCDA*/
+#define SDMMC_CMD2_ALL_SEND_CID          (2 | SDMMC_CMD_R2 | SDMMC_CMD_OPENDRAIN)
 /** SD Cmd3(bcr, R6): Ask the card to publish a new relative address (RCA) */
-#define SD_CMD3_SEND_RELATIVE_ADDR       (3 | SDMMC_CMD_R6 | SDMMC_CMD_OPENDRAIN) /**@todo open drain commented out if no pullup on MCCDA*/
+#define SD_CMD3_SEND_RELATIVE_ADDR       (3 | SDMMC_CMD_R6 | SDMMC_CMD_OPENDRAIN)
 /** MMC Cmd3(ac, R1): Assigns relative address to the card */
 #define MMC_CMD3_SET_RELATIVE_ADDR       (3 | SDMMC_CMD_R1)
 /** Cmd4(bc): Program the DSR of all cards (MCI only) */
@@ -329,7 +332,7 @@ typedef uint32_t sdmmc_cmd_def_t;
  * accessed card to send its operating condition register (OCR) content
  * in the response
  */
-#define SD_MCI_ACMD41_SD_SEND_OP_COND    (41 | SDMMC_CMD_R3 | SDMMC_CMD_OPENDRAIN) /**@todo open drain commented out if no pullup on MCCDA*/
+#define SD_MCI_ACMD41_SD_SEND_OP_COND    (41 | SDMMC_CMD_R3 | SDMMC_CMD_OPENDRAIN)
 /**
  * ACMD41(R1): Send host capacity support information (HCS) and activates the
  * card's initilization process

@@ -538,8 +538,8 @@ bool GCodes::AllMovesAreFinishedAndMoveBufferIsLoaded()
 	// Wait for all the queued moves to stop so we get the actual last position and feedrate
 	if (!reprap.GetMove()->AllMovesAreFinished())
 		return false;
-	reprap.GetMove()->ResumeMoving();
 
+	reprap.GetMove()->ResumeMoving();
 	reprap.GetMove()->GetCurrentUserPosition(moveBuffer, 0);
 	return true;
 }
@@ -890,27 +890,33 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 // This sets positions.  I.e. it handles G92.
 bool GCodes::SetPositions(GCodeBuffer *gb)
 {
-	// Don't pause the machine if only extruder drives are being reset (DC, 2015-09-06)
-	bool doPause = false;
+	// Don't pause the machine if only extruder drives are being reset (DC, 2015-09-06).
+	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
+	bool includingAxes = false;
 	for (size_t drive = 0; drive < AXES; ++drive)
 	{
 		if (gb->Seen(axisLetters[drive]))
 		{
-			doPause = true;
+			includingAxes = true;
 			break;
 		}
 	}
 
-	if (doPause)
+	if (includingAxes)
 	{
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
 			return false;
 		}
 	}
+	else if (moveAvailable)			// wait for previous move to be taken so that GetCurrentUserPosition returns the correct value
+	{
+		return false;
+	}
 
 	reprap.GetMove()->GetCurrentUserPosition(moveBuffer, 0);		// make sure move buffer is up to date
-	if (LoadMoveBufferFromGCode(gb, true, false))
+	bool ok = LoadMoveBufferFromGCode(gb, true, false);
+	if (ok && includingAxes)
 	{
 		SetPositions(moveBuffer);
 	}
@@ -994,7 +1000,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 	case 0: // Move Z to the dive height. This only does anything on the first move; on all the others Z is already there
 		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
 		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
+		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
 		activeDrive[DRIVES] = true;
 		if (DoCannedCycleMove(0))
 		{
@@ -1007,7 +1013,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 		activeDrive[X_AXIS] = true;
 		activeDrive[Y_AXIS] = true;
 		// NB - we don't use the Z value
-		moveToDo[DRIVES] = platform->MaxFeedrate(X_AXIS);
+		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
 		activeDrive[DRIVES] = true;
 		if (DoCannedCycleMove(0))
 		{
@@ -1055,7 +1061,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 	case 3:	// Raise the head back up to the dive height
 		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
 		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->MaxFeedrate(Z_AXIS);
+		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
 		activeDrive[DRIVES] = true;
 		if (DoCannedCycleMove(0))
 		{
@@ -1103,7 +1109,7 @@ int GCodes::DoZProbe(float distance)
 	if (platform->GetZProbeType() == 5)
 	{
 		const ZProbeParameters& params = platform->GetZProbeParameters();
-		return reprap.GetMove()->DoDeltaProbe(params.param1, params.param2, platform->HomeFeedRate(Z_AXIS), distance);
+		return reprap.GetMove()->DoDeltaProbe(params.param1, params.param2, params.probeSpeed, distance);
 	}
 	else
 	{
@@ -1120,7 +1126,7 @@ int GCodes::DoZProbe(float distance)
 
 		moveToDo[Z_AXIS] = -distance;
 		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->HomeFeedRate(Z_AXIS);
+		moveToDo[DRIVES] = platform->GetZProbeParameters().probeSpeed;
 		activeDrive[DRIVES] = true;
 
 		if (DoCannedCycleMove(ZProbeActive))
@@ -1492,11 +1498,13 @@ bool GCodes::DoDwell(GCodeBuffer *gb)
 	if (!gb->Seen('P'))
 		return true;  // No time given - throw it away
 
-	float dwell = 0.001 * (float) gb->GetLValue(); // P values are in milliseconds; we need seconds
-
-			// Wait for all the queued moves to stop
-	if (!reprap.GetMove()->AllMovesAreFinished())
+	// Wait for all the queued moves to stop
+	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+	{
 		return false;
+	}
+
+	float dwell = 0.001 * (float) gb->GetLValue(); // P values are in milliseconds; we need seconds
 
 	if (simulating)
 	{
@@ -2677,6 +2685,22 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
+	case 42:	// Turn an output pin on or off
+		if (gb->Seen('P'))
+		{
+			int pin = gb->GetIValue();
+			if (gb->Seen('S'))
+			{
+				int val = gb->GetIValue();
+				bool success = platform->SetPin(pin, val);
+				if (!success)
+				{
+					platform->Message(BOTH_ERROR_MESSAGE, "Setting pin %d to %d is not supported\n", pin, val);
+				}
+			}
+		}
+		break;
+
 	case 80:	// ATX power on
 		platform->SetAtxPower(true);
 		break;
@@ -3372,35 +3396,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 210: // Set/print homing feed rates
-		{
-			bool seen = false;
-			for (size_t axis = 0; axis < AXES; axis++)
-			{
-				if (gb->Seen(axisLetters[axis]))
-				{
-					float value = gb->GetFValue() * distanceScale * secondsToMinutes;
-					platform->SetHomeFeedRate(axis, value);
-					seen = true;
-				}
-			}
-
-			if (!seen)
-			{
-				reply.copy("Homing feedrates (mm/min) - ");
-				char comma = ',';
-				for (size_t axis = 0; axis < AXES; axis++)
-				{
-					if (axis == AXES - 1)
-					{
-						comma = ' ';
-					}
-
-					reply.catf("%c: %.1f%c ", axisLetters[axis],
-							platform->HomeFeedRate(axis) * minutesToSeconds / distanceScale, comma);
-				}
-				reply.cat("\n");
-			}
-		}
+		// This is no longer used, but for backwards compatibility we don't report an error
 		break;
 
 	case 220:	// Set/report speed factor override percentage
@@ -3770,7 +3766,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 	case 558: // Set or report Z probe type and for which axes it is used
 	{
-		bool seen = false;
+		bool seenAxes = false, seenType = false, seenParam = false;
 		bool zProbeAxes[AXES];
 		platform->GetZProbeAxes(zProbeAxes);
 		for (size_t axis = 0; axis < AXES; axis++)
@@ -3778,46 +3774,62 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (gb->Seen(axisLetters[axis]))
 			{
 				zProbeAxes[axis] = (gb->GetIValue() > 0);
-				seen = true;
+				seenAxes = true;
 			}
 		}
-		if (seen)
+		if (seenAxes)
 		{
 			platform->SetZProbeAxes(zProbeAxes);
 		}
 
 		// We must get and set the Z probe type first before setting the dive height, because different probe types may have different dive heights
-		if (gb->Seen('P'))
+		if (gb->Seen('P'))		// probe type
 		{
 			platform->SetZProbeType(gb->GetIValue());
-			seen = true;
+			seenType = true;
 		}
 
-		if (gb->Seen('H'))
+		ZProbeParameters params = platform->GetZProbeParameters();
+		if (gb->Seen('H'))		// dive height
 		{
-			platform->SetZProbeDiveHeight(gb->GetIValue());
-			seen = true;
+			params.diveHeight = gb->GetFValue();
+			seenParam = true;
 		}
 
-		if (gb->Seen('S'))
+		if (gb->Seen('F'))		// feed rate i.e. probing speed
 		{
-			ZProbeParameters params = platform->GetZProbeParameters();
+			params.probeSpeed = gb->GetFValue() * secondsToMinutes;
+			seenParam = true;
+		}
+
+		if (gb->Seen('T'))		// travel speed to probe point
+		{
+			params.travelSpeed = gb->GetFValue() * secondsToMinutes;
+			seenParam = true;
+		}
+
+		if (gb->Seen('S'))		// extra parameter for experimentation
+		{
 			params.param1 = gb->GetFValue();
-			platform->SetZProbeParameters(params);
-			seen = true;
+			seenParam = true;
 		}
 
-		if (gb->Seen('T'))
+		if (gb->Seen('R'))		// extra parameter for experimentation
 		{
-			ZProbeParameters params = platform->GetZProbeParameters();
 			params.param2 = gb->GetFValue();
-			platform->SetZProbeParameters(params);
-			seen = true;
+			seenParam = true;
 		}
 
-		if (!seen)
+		if (seenParam)
 		{
-			reply.printf("Z Probe type %d, dive height %.1f", platform->GetZProbeType(), platform->GetZProbeDiveHeight());
+			platform->SetZProbeParameters(params);
+		}
+
+		if (!(seenAxes || seenType || seenParam))
+		{
+			reply.printf("Z Probe type %d, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min",
+							platform->GetZProbeType(), platform->GetZProbeDiveHeight(),
+							(int)(platform->GetZProbeParameters().probeSpeed * minutesToSeconds), (int)(platform->GetZProbeTravelSpeed() * minutesToSeconds));
 			if (platform->GetZProbeType() == 5)
 			{
 				ZProbeParameters params = platform->GetZProbeParameters();

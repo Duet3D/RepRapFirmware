@@ -15,7 +15,7 @@
  *   - specific features;
  *   - etc.
  *
- * Copyright (c) 2009 - 2013 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2009-2015 Atmel Corporation. All rights reserved.
  *
  * \asf_license_start
  *
@@ -52,10 +52,17 @@
  * \asf_license_stop
  *
  ******************************************************************************/
+/*
+ * Support and FAQ: visit <a href="http://www.atmel.com/design-support/">Atmel Support</a>
+ */
 
 
 #ifndef _CTRL_ACCESS_H_
 #define _CTRL_ACCESS_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * \defgroup group_common_services_storage_ctrl_access Memory Control Access
@@ -65,18 +72,21 @@
  *
  * \{
  */
+
 #include "compiler.h"
 #include "conf_access.h"
 
+#ifndef SECTOR_SIZE
 #define SECTOR_SIZE  512
+#endif
 
 //! Status returned by CTRL_ACCESS interfaces.
 typedef enum
 {
-  CTRL_GOOD       = 0,//PASS,     //!< Success, memory ready.
-  CTRL_FAIL       = 1,//FAIL,     //!< An error occurred.
-  CTRL_NO_PRESENT = 2,//FAIL + 1, //!< Memory unplugged.
-  CTRL_BUSY       = 3//FAIL + 2  //!< Memory not initialized or changed.
+  CTRL_GOOD       = PASS,     //!< Success, memory ready.
+  CTRL_FAIL       = FAIL,     //!< An error occurred.
+  CTRL_NO_PRESENT = FAIL + 1, //!< Memory unplugged.
+  CTRL_BUSY       = FAIL + 2  //!< Memory not initialized or changed.
 } Ctrl_status;
 
 
@@ -126,8 +136,7 @@ typedef enum
 #define LUN_ID_USB      (MAX_LUN)           //!< First dynamic LUN (USB host mass storage).
 //! @}
 
-/*
-//not used, the header dile for SD is included in SD_HSMCI.h
+
 // Include LUN header files.
 #if LUN_0 == ENABLE
   #include LUN_0_INCLUDE
@@ -156,7 +165,7 @@ typedef enum
 #if LUN_USB == ENABLE
   #include LUN_USB_INCLUDE
 #endif
-*/
+
 
 // Check the configuration of write protection in conf_access.h.
 #ifndef GLOBAL_WR_PROTECT
@@ -385,5 +394,9 @@ extern U16 stream_stop(U8 id);
 /**
  * \}
  */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  // _CTRL_ACCESS_H_
