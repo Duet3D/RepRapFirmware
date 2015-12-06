@@ -30,19 +30,21 @@ class Tool
 {
 public:
 
-	Tool(int toolNumber, long d[], int dCount, long h[], int hCount);
+	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount);
+	static void Delete(Tool *t);
+
 	const float *GetOffset() const;
 	void SetOffset(const float offs[AXES]);
-	int DriveCount() const;
+	size_t DriveCount() const;
 	int Drive(int driveNumber) const;
 	bool ToolCanDrive(bool extrude);
-	int HeaterCount() const;
+	size_t HeaterCount() const;
 	int Heater(int heaterNumber) const;
 	int Number() const;
 	void SetVariables(const float* standby, const float* active);
 	void GetVariables(float* standby, float* active) const;
 	void DefineMix(float* m);
-	float* GetMix() const;
+	const float* GetMix() const;
 	void TurnMixingOn();
 	void TurnMixingOff();
 	bool Mixing() const;
@@ -57,26 +59,26 @@ protected:
 	Tool* Next() const;
 	void Activate(Tool* currentlyActive);
 	void Standby();
-	void AddTool(Tool* tool);
 	void FlagTemperatureFault(int8_t dudHeater);
 	void ClearTemperatureFault(int8_t wasDudHeater);
 	void UpdateExtruderAndHeaterCount(uint16_t &extruders, uint16_t &heaters) const;
 	bool DisplayColdExtrudeWarning();
 
 private:
+	static Tool *freelist;
 
 	void SetTemperatureFault(int8_t dudHeater);
 	void ResetTemperatureFault(int8_t wasDudHeater);
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
 	int myNumber;
-	int* drives;
-	float* mix;
+	int drives[DRIVES - AXES];
+	float mix[DRIVES - AXES];
 	bool mixing;
-	int driveCount;
-	int* heaters;
-	float* activeTemperatures;
-	float* standbyTemperatures;
-	int heaterCount;
+	size_t driveCount;
+	int heaters[HEATERS];
+	float activeTemperatures[HEATERS];
+	float standbyTemperatures[HEATERS];
+	size_t heaterCount;
 	Tool* next;
 	bool active;
 	bool heaterFault;
@@ -90,7 +92,7 @@ inline int Tool::Drive(int driveNumber) const
 	return drives[driveNumber];
 }
 
-inline int Tool::HeaterCount() const
+inline size_t Tool::HeaterCount() const
 {
 	return heaterCount;
 }
@@ -112,13 +114,13 @@ inline int Tool::Number() const
 
 inline void Tool::DefineMix(float* m)
 {
-	for(int8_t drive = 0; drive < driveCount; drive++)
+	for(size_t drive = 0; drive < driveCount; drive++)
 	{
 		mix[drive] = m[drive];
 	}
 }
 
-inline float* Tool::GetMix() const
+inline const float* Tool::GetMix() const
 {
 	return mix;
 }
@@ -138,7 +140,7 @@ inline bool Tool::Mixing() const
 	return mixing;
 }
 
-inline int Tool::DriveCount() const
+inline size_t Tool::DriveCount() const
 {
 	return driveCount;
 }

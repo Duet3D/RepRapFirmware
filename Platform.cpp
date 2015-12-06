@@ -235,15 +235,10 @@ void Platform::Init()
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
 	ARRAY_INIT(standbyTemperatures, STANDBY_TEMPERATURES);
 	ARRAY_INIT(activeTemperatures, ACTIVE_TEMPERATURES);
-
 	heatSampleTime = HEAT_SAMPLE_TIME;
-	coolingFan0Value = 0.0;
-	coolingFan1Value = 0.0;
-	coolingFan0Pin = COOLING_FAN0_PIN;
-	coolingFan1Pin = COOLING_FAN1_PIN;
-	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
 	timeToHot = TIME_TO_HOT;
-	lastRpmResetTime = 0.0;
+
+	// Directories
 
 	webDir = WEB_DIR;
 	gcodeDir = GCODE_DIR;
@@ -305,27 +300,13 @@ void Platform::Init()
 		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * numThermistorReadingsAveraged;
 	}
 
-	if (coolingFan0Pin >= 0)
-	{
-		// Inverse logic for Duet v0.6 and later; this turns it off
-		analogWriteNonDue(coolingFan0Pin, (HEAT_ON == 0) ? 255 : 0, true);
-	}
-	if (coolingFan1Pin >= 0)
-	{
-		// Inverse logic for Duet v0.6 and later; this turns it off
-		analogWriteNonDue(coolingFan1Pin, (HEAT_ON == 0) ? 255 : 0, true);
-	}
-
-	if (coolingFanRpmPin >= 0)
-	{
-		pinModeNonDue(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
-	}
+	InitFans();
 
 	// Hotend configuration
 	nozzleDiameter = DefaultNozzleDiameter;
 	filamentWidth = DefaultFilamentWidth;
 
-	// Spare pin configuration
+	// Clear the spare pin configuration
 	memset(pinInitialised, 0, sizeof(pinInitialised));
 
 	// Kick everything off
@@ -369,7 +350,7 @@ void Platform::InitZProbe()
 {
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
-	zProbeModulationPin = (board == BoardType::Duet_07) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
+	zProbeModulationPin = (board == BoardType::Duet_07 || board == BoardType::Duet_085) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
 
 	switch (nvData.zProbeType)
 	{
@@ -771,57 +752,18 @@ void Platform::Spin()
 }
 
 // Switch into boot mode and reset
-#if 0		// tried using this Arduino code to see if it is more reliable, but it wasn't
-
-__attribute__ ((long_call, section (".ramfunc")))
-void eraseAndReset() {
-	cpu_irq_disable();
-
-	// Set boot flag to run SAM-BA bootloader at restart
-	const int EEFC_FCMD_CGPB = 0x0C;
-	const int EEFC_KEY = 0x5A;
-	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0)
-		;
-	EFC0->EEFC_FCR =
-		EEFC_FCR_FCMD(EEFC_FCMD_CGPB) |
-		EEFC_FCR_FARG(1) |
-		EEFC_FCR_FKEY(EEFC_KEY);
-	// Try adding this delay to see if it helps
-	for (unsigned int i = 0; i < 100; ++i)
-	{
-		asm volatile ("nop");
-	}
-	while ((EFC0->EEFC_FSR & EEFC_FSR_FRDY) == 0)
-		;
-
-	// Try adding this delay to see if it helps
-	for (unsigned int i = 0; i < 10000; ++i)
-	{
-		asm volatile ("nop");
-	}
-
-	// From here flash memory is no more available.
-	const int RSTC_KEY = 0xA5;
-	RSTC->RSTC_CR =
-		RSTC_CR_KEY(RSTC_KEY) |
-		RSTC_CR_PROCRST |
-		RSTC_CR_PERRST;
-
-	while (true);
-}
-
-#else
-
-void eraseAndReset()
+static void eraseAndReset()
 {
 	cpu_irq_disable();
-	flash_unlock(0x00080000, 0x000FFFFF, nullptr, nullptr);
-	flash_clear_gpnvm(1);			// tell the system to boot from flash next time
+    for(size_t i = 0; i <= (IFLASH_LAST_PAGE_ADDRESS - IFLASH_ADDR) / IFLASH_PAGE_SIZE; i++)
+    {
+        size_t pageStartAddr = IFLASH_ADDR + i * IFLASH_PAGE_SIZE;
+        flash_unlock(pageStartAddr, pageStartAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+    }
+	flash_clear_gpnvm(1);			// tell the system to boot from ROM next time
 	rstc_start_software_reset(RSTC);
 	for(;;) {}
 }
-
-#endif
 
 void Platform::SoftwareReset(uint16_t reason)
 {
@@ -906,8 +848,8 @@ void FanInterrupt()
 void Platform::InitialiseInterrupts()
 {
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
-	NVIC_SetPriority(SysTick_IRQn, 0);						// set priority for tick interrupts
-	NVIC_SetPriority(UART_IRQn, 2);							// set priority for UART interrupt - must be higher than step interrupt
+	NVIC_SetPriority(SysTick_IRQn, 0);						// set priority for tick interrupts - highest, because it kicks the watchdog
+	NVIC_SetPriority(UART_IRQn, 1);							// set priority for UART interrupt - must be higher than step interrupt
 
 	// Timer interrupt for stepper motors
 	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
@@ -1168,7 +1110,8 @@ void Platform::SetHeaterPwm(size_t heater, uint8_t power)
 {
 	if (heatOnPins[heater] >= 0)
 	{
-		analogWriteNonDue(heatOnPins[heater], (HEAT_ON == 0) ? 255 - power : power);
+		uint16_t freq = (reprap.GetHeat()->UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
+		analogWriteNonDue(heatOnPins[heater], (HEAT_ON == 0) ? 255 - power : power, freq);
 	}
 }
 
@@ -1368,56 +1311,33 @@ int Platform::GetPhysicalDrive(size_t driverNumber) const
 // Get current cooling fan speed on a scale between 0 and 1
 float Platform::GetFanValue(size_t fan) const
 {
-	if (fan==0){
-		return coolingFan0Value;
+	return (fan < NumFans) ? fans[fan].val : -1;
+}
+
+bool Platform::GetCoolingInverted(size_t fan) const
+{
+	return (fan < NumFans) ? fans[fan].inverted : -1;
+
+}
+
+void Platform::SetCoolingInverted(size_t fan, bool inv)
+{
+	if (fan < NumFans)
+	{
+		fans[fan].inverted = inv;
 	}
-	if (fan==1){
-		return coolingFan1Value;
-	}
-	else return -1;
 }
 
 // This is a bit of a compromise - old RepRaps used fan speeds in the range
 // [0, 255], which is very hardware dependent.  It makes much more sense
 // to specify speeds in [0.0, 1.0].  This looks at the value supplied (which
 // the G Code reader will get right for a float or an int) and attempts to
-// do the right thing whichever the user has done.  This will only not work
-// for an old-style fan speed of 1/255...
+// do the right thing whichever the user has done.
 void Platform::SetFanValue(size_t fan, float speed)
 {
-	if (fan==0 && coolingFan0Pin >= 0)
+	if (fan < NumFans)
 	{
-		byte p;
-		if (speed <= 1.0)
-		{
-			p = (byte)(255.0 * max<float>(0.0, speed));
-			coolingFan0Value = speed;
-		}
-		else
-		{
-			p = (byte)speed;
-			coolingFan0Value = speed / 255.0;
-		}
-
-		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0
-		analogWriteNonDue(coolingFan0Pin, (HEAT_ON == 0) ? (255 - p) : p, true);
-	}
-	if (fan==1 && coolingFan1Pin >= 0)
-	{
-		byte p;
-		if (speed <= 1.0)
-		{
-			p = (byte)(255.0 * max<float>(0.0, speed));
-			coolingFan1Value = speed;
-		}
-		else
-		{
-			p = (byte)speed;
-			coolingFan1Value = speed / 255.0;
-		}
-
-		// The cooling fan 1 output pin gets inverted if HEAT_ON == 0
-		analogWriteNonDue(coolingFan1Pin, (HEAT_ON == 0) ? (255 - p) : p, true);
+		fans[fan].SetValue(speed);
 	}
 }
 
@@ -1431,6 +1351,95 @@ float Platform::GetFanRPM()
 	return (fanInterval != 0 && micros() - fanLastResetTime < 3000000U)		// if we have a reading and it is less than 3 second old
 			? (float)((30000000U * fanMaxInterruptCount)/fanInterval)		// then calculate RPM assuming 2 interrupts per rev
 			: 0.0;															// else assume fan is off or tacho not connected
+}
+
+void Platform::InitFans()
+{
+	for (size_t i =0; i < NumFans; ++i)
+	{
+		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0 on a Duet 0.4, 0.6 or 0.7
+		fans[i].Init(defaultCoolingFanPins[i], HEAT_ON == 0 && board != BoardType::Duet_085);
+	}
+	coolingFanRpmPin = defaultCoolingFanRpmPin;
+	lastRpmResetTime = 0.0;
+	if (coolingFanRpmPin >= 0)
+	{
+		pinModeNonDue(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
+	}
+}
+
+float Platform::GetFanPwmFrequency(size_t fan) const
+{
+	if (fan < NumFans)
+	{
+		return (float)fans[fan].freq;
+	}
+	return 0.0;
+}
+
+void Platform::SetFanPwmFrequency(size_t fan, float freq)
+{
+	if (fan < NumFans)
+	{
+		fans[fan].SetPwmFrequency(freq);
+	}
+}
+
+void Platform::Fan::Init(Pin p_pin, bool hwInverted)
+{
+	val = 0.0;
+	freq = DefaultFanPwmFreq;
+	pin = p_pin;
+	hardwareInverted = hwInverted;
+	inverted = false;
+	Refresh();
+}
+
+void Platform::Fan::SetValue(float speed)
+{
+	if (speed > 1.0)
+	{
+		speed /= 255.0;
+	}
+	val = constrain<float>(speed, 0.0, 1.0);
+	Refresh();
+}
+
+void Platform::Fan::Refresh()
+{
+	if (pin >= 0)
+	{
+		uint32_t p = (uint32_t)(255.0 * val);
+		bool invert = hardwareInverted;
+		if (inverted)
+		{
+			invert = !invert;
+		}
+		analogWriteNonDue(pin, (invert) ? (255 - p) : p, freq);
+	}
+}
+
+void Platform::Fan::SetPwmFrequency(float p_freq)
+{
+	freq = (uint16_t)max<float>(1.0, min<float>(65535.0, p_freq));
+	Refresh();
+}
+
+void Platform::SetMACAddress(uint8_t mac[])
+{
+	bool changed = false;
+	for (size_t i = 0; i < 6; i++)
+	{
+		if (nvData.macAddress[i] != mac[i])
+		{
+			nvData.macAddress[i] = mac[i];
+			changed = true;
+		}
+	}
+	if (changed && autoSaveEnabled)
+	{
+		WriteNvData();
+	}
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -1729,6 +1738,7 @@ void Platform::SetBoardType(BoardType bt)
 	if (active)
 	{
 		InitZProbe();							// select and initialise the Z probe modulation pin
+		InitFans();								// select whether cooling is inverted or not
 	}
 }
 

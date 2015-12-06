@@ -504,7 +504,7 @@ void Move::MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_
 	}
 }
 
-// Convert Cartesian coordinates to delta motor steps
+// Convert Cartesian coordinates to motor steps
 void Move::MotorTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const
 {
 	if (IsDeltaMode())
@@ -521,33 +521,59 @@ void Move::MotorTransform(const float machinePos[AXES], int32_t motorPos[AXES]) 
 	}
 	else
 	{
-		switch (coreXYMode)
+		for (size_t axis = 0; axis < AXES; ++axis)
 		{
-		case 1:			// CoreXY
-			motorPos[X_AXIS] = MotorEndPointToMachine(X_AXIS, (machinePos[X_AXIS] * axisFactors[X_AXIS]) + (machinePos[Y_AXIS] * axisFactors[Y_AXIS]));
-			motorPos[Y_AXIS] = MotorEndPointToMachine(Y_AXIS, (machinePos[Y_AXIS] * axisFactors[Y_AXIS]) - (machinePos[X_AXIS] * axisFactors[X_AXIS]));
-			motorPos[Z_AXIS] = MotorEndPointToMachine(Z_AXIS, machinePos[Z_AXIS]);
-			break;
-
-		case 2:			// CoreXZ
-			motorPos[X_AXIS] = MotorEndPointToMachine(X_AXIS, (machinePos[X_AXIS] * axisFactors[X_AXIS]) + (machinePos[Z_AXIS] * axisFactors[Z_AXIS]));
-			motorPos[Y_AXIS] = MotorEndPointToMachine(Y_AXIS, machinePos[Y_AXIS]);
-			motorPos[Z_AXIS] = MotorEndPointToMachine(Z_AXIS, (machinePos[Z_AXIS] * axisFactors[Z_AXIS]) - (machinePos[X_AXIS] * axisFactors[X_AXIS]));
-			break;
-
-		case 3:			// CoreYZ
-			motorPos[X_AXIS] = MotorEndPointToMachine(X_AXIS, machinePos[X_AXIS]);
-			motorPos[Y_AXIS] = MotorEndPointToMachine(Y_AXIS, (machinePos[Y_AXIS] * axisFactors[Y_AXIS]) + (machinePos[Z_AXIS] * axisFactors[Z_AXIS]));
-			motorPos[Z_AXIS] = MotorEndPointToMachine(Z_AXIS, (machinePos[Z_AXIS] * axisFactors[Z_AXIS]) - (machinePos[Y_AXIS] * axisFactors[Y_AXIS]));
-			break;
-
-		default:		// Cartesian
-			motorPos[X_AXIS] = MotorEndPointToMachine(X_AXIS, machinePos[X_AXIS]);
-			motorPos[Y_AXIS] = MotorEndPointToMachine(Y_AXIS, machinePos[Y_AXIS]);
-			motorPos[Z_AXIS] = MotorEndPointToMachine(Z_AXIS, machinePos[Z_AXIS]);
-			break;
+			motorPos[axis] = MotorEndPointToMachine(axis, MotorFactor(axis, machinePos));
 		}
 	}
+}
+
+// Calculate the movement fraction for a single axis motor of a Cartesian or CoreXY printer
+float Move::MotorFactor(size_t drive, const float directionVector[]) const
+{
+	// NB we could simplify this code by building a matrix and using matrix multiply
+	switch(drive)
+	{
+	case X_AXIS:
+		switch(coreXYMode)
+		{
+		case 1:			// CoreXY
+			return (directionVector[X_AXIS] * axisFactors[X_AXIS]) + (directionVector[Y_AXIS] * axisFactors[Y_AXIS]);
+		case 2:			// CoreXZ
+			return (directionVector[X_AXIS] * axisFactors[X_AXIS]) + (directionVector[Z_AXIS] * axisFactors[Z_AXIS]);
+		default:
+			break;
+		}
+		break;
+
+	case Y_AXIS:
+		switch(coreXYMode)
+		{
+		case 1:			// CoreXY
+			return (directionVector[Y_AXIS] * axisFactors[Y_AXIS]) - (directionVector[X_AXIS] * axisFactors[X_AXIS]);
+		case 3:			// CoreYZ
+			return (directionVector[Y_AXIS] * axisFactors[Y_AXIS]) + (directionVector[Z_AXIS] * axisFactors[Z_AXIS]);
+		default:
+			break;
+		}
+		break;
+
+	case Z_AXIS:
+		switch(coreXYMode)
+		{
+		case 2:			// CoreXZ
+			return (directionVector[Z_AXIS] * axisFactors[Z_AXIS]) - (directionVector[X_AXIS] * axisFactors[X_AXIS]);
+		case 3:			// CoreYZ
+			return (directionVector[Z_AXIS] * axisFactors[Z_AXIS]) - (directionVector[Y_AXIS] * axisFactors[Y_AXIS]);
+		default:
+			break;
+		}
+		break;
+
+	default:
+		break;
+	}
+	return directionVector[drive];
 }
 
 // Do the Axis transform BEFORE the bed transform
@@ -700,7 +726,7 @@ float Move::TriangleZ(float x, float y) const
 		size_t j = (i + 1) % 4;
 		float l1, l2, l3;
 		BarycentricCoordinates(i, j, 4, x, y, l1, l2, l3);
-		if (l1 > TRIANGLE_0 && l2 > TRIANGLE_0 && l3 > TRIANGLE_0)
+		if (l1 > Triangle0 && l2 > Triangle0 && l3 > Triangle0)
 		{
 			return l1 * baryZBedProbePoints[i] + l2 * baryZBedProbePoints[j] + l3 * baryZBedProbePoints[4];
 		}
@@ -1412,7 +1438,7 @@ const char* Move::GetGeometryString() const
 			: "cartesian";
 }
 
-// Return true if the specified axis shares its motors with another
+// Return true if the specified axis shares its motors with another. Safe to call for extruders as well as axes.
 bool Move::IsCoreXYAxis(unsigned int axis) const
 {
 	switch(coreXYMode)

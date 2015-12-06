@@ -102,7 +102,8 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 	size_t out = 0;
 	size_t in = 0;
 
-	if (directory != NULL)
+	// DC 2015-11-25 Only prepend the directory if the filename does not have an absolute path
+	if (directory != NULL && fileName[0] != '/' && (strlen(fileName) < 3 || !isdigit(fileName[0]) || fileName[1] != ':' || fileName[2] != '/'))
 	{
 		while (directory[in] != 0 && directory[in] != '\n')
 		{
@@ -115,15 +116,15 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 				out = 0;
 			}
 		}
+
+		if (in > 0 && directory[in - 1] != '/' && out < ARRAY_UPB(combinedName))
+		{
+			combinedName[out] = '/';
+			out++;
+		}
+		in = 0;
 	}
 
-	if (in > 0 && directory[in - 1] != '/' && out < ARRAY_UPB(combinedName))
-	{
-		combinedName[out] = '/';
-		out++;
-	}
-
-	in = 0;
 	while (fileName[in] != 0 && fileName[in] != '\n')
 	{
 		combinedName[out] = fileName[in];

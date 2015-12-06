@@ -70,6 +70,8 @@ extern const PinDescription nonDuePinDescription[]=
 };
 
 const uint32_t MaxPinNumber = X17;
+const uint32_t PwmFastClock = 25000 * 255;		// fast PWM clock for Intel spec PWM fans that need 25kHz PWM
+const uint32_t PwmSlowClock = PwmFastClock/256;	// slow PWM clock to allow us to get slow speeds
 
 /*
 pinModeNonDue
@@ -195,19 +197,20 @@ OutputPin::OutputPin(unsigned int pin)
 }
 
 static bool nonDuePWMEnabled = 0;
-static bool PWMChanEnabled[8] = {false,false,false,false, false,false,false,false};		// there are only 8 PWM channels
+static uint16_t PWMChanFreq[8] = {0, 0, 0, 0, 0, 0, 0, 0};		// there are only 8 PWM channels
+static uint16_t PWMChanPeriod[8];
 
 // Version of PWMC_ConfigureChannel from Arduino core, mended to not mess up PWM channel 0 when another channel is programmed
 static void PWMC_ConfigureChannel_fixed( Pwm* pPwm, uint32_t ul_channel, uint32_t prescaler, uint32_t alignment, uint32_t polarity )
 {
-    /* Disable ul_channel (effective at the end of the current period) */
+    // Disable ul_channel (effective at the end of the current period)
     if ((pPwm->PWM_SR & (1 << ul_channel)) != 0)
     {
         pPwm->PWM_DIS = 1 << ul_channel;
         while ((pPwm->PWM_SR & (1 << ul_channel)) != 0);
     }
 
-    /* Configure ul_channel */
+    // Configure ul_channel
     pPwm->PWM_CH_NUM[ul_channel].PWM_CMR = prescaler | alignment | polarity;
 }
 
@@ -229,16 +232,21 @@ the arduino analog write function such as timer counters and the DAC. Any hardwa
 within the unDefPinDescription[] struct should work, and non hardware PWM pin will default to digitalWriteUndefined
 NOTE:
 1. We must not pass on any PWM calls to the Arduino core analogWrite here, because it calls the buggy version of PWMC_ConfigureChannel
-   which messes up channel 0..
+   which messes up channel 0.
 2. The optional fastPwm parameter only takes effect on the first call to analogWriteNonDue for each PWM pin.
    If true on the first call then the PWM frequency will be set to 25kHz instead of 1kHz.
 */
 
-void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm)
+void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, uint16_t freq)
 {
 	if (ulPin > MaxPinNumber)
 	{
 		return;
+	}
+
+	if (ulValue > 255)
+	{
+		ulValue = 255;
 	}
 
 	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
@@ -252,37 +260,48 @@ void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm)
 
 	if ((attr & PIN_ATTR_PWM) == PIN_ATTR_PWM)
 	{
-		if (!nonDuePWMEnabled)
-		{
-			// PWM Startup code
-			pmc_enable_periph_clk(PWM_INTERFACE_ID);
-			// Set clock A to give 1kHz PWM (the standard value for Arduino Due) and clock B to give 25kHz PWM
-			PWMC_ConfigureClocks(PWM_FREQUENCY * PWM_MAX_DUTY_CYCLE, pwmFastFrequency * PWM_MAX_DUTY_CYCLE, VARIANT_MCK);
-			nonDuePWMEnabled = true;
-		}
-
 		uint32_t chan = pinDesc.ulPWMChannel;
-		if (!PWMChanEnabled[chan])
+		if (freq == 0)
 		{
+			PWMChanFreq[chan] = freq;
+			pinModeNonDue(ulPin, OUTPUT);
+			digitalWriteNonDue(ulPin, (ulValue < 128) ? LOW : HIGH);
+		}
+		else if (PWMChanFreq[chan] != freq)
+		{
+			if (!nonDuePWMEnabled)
+			{
+				// PWM Startup code
+				pmc_enable_periph_clk(PWM_INTERFACE_ID);
+				PWMC_ConfigureClocks(PwmSlowClock, PwmFastClock, VARIANT_MCK);	// clock A is slow clock, B is fast clock
+				nonDuePWMEnabled = true;
+			}
+
+			bool useFastClock = (freq >= PwmFastClock/65535);
+			uint16_t period = ((useFastClock) ? PwmFastClock : PwmSlowClock)/freq - 1;
 			// Setup PWM for this PWM channel
 			PIO_Configure(pinDesc.pPort,
 					pinDesc.ulPinType,
 					pinDesc.ulPin,
 					pinDesc.ulPinConfiguration);
-			PWMC_ConfigureChannel_fixed(PWM_INTERFACE, chan, (fastPwm) ? PWM_CMR_CPRE_CLKB : PWM_CMR_CPRE_CLKA, 0, 0);
-			PWMC_SetPeriod(PWM_INTERFACE, chan, PWM_MAX_DUTY_CYCLE);
-			PWMC_SetDutyCycle(PWM_INTERFACE, chan, ulValue);
+			PWMC_ConfigureChannel_fixed(PWM_INTERFACE, chan, (useFastClock) ? PWM_CMR_CPRE_CLKB : PWM_CMR_CPRE_CLKA, 0, 0);
+			PWMC_SetPeriod(PWM_INTERFACE, chan, period);
+			PWMC_SetDutyCycle(PWM_INTERFACE, chan, (ulValue * (uint32_t)period)/255);
 			PWMC_EnableChannel(PWM_INTERFACE, chan);
-			PWMChanEnabled[chan] = true;
+			PWMChanFreq[chan] = freq;
+			PWMChanPeriod[chan] = period;
 		}
-
-		PWMC_SetDutyCycle(PWM_INTERFACE, chan, ulValue);
-		return;
+		else
+		{
+			PWMC_SetDutyCycle(PWM_INTERFACE, chan, (ulValue * (uint32_t)PWMChanPeriod[chan])/255);
+		}
 	}
-
-	// Defaults to digital write
-	pinModeNonDue(ulPin, OUTPUT);
-	digitalWriteNonDue(ulPin, (ulValue < 128) ? LOW : HIGH);
+	else
+	{
+		// Defaults to digital write
+		pinModeNonDue(ulPin, OUTPUT);
+		digitalWriteNonDue(ulPin, (ulValue < 128) ? LOW : HIGH);
+	}
 }
 
 

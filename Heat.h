@@ -49,7 +49,8 @@ class PID
   private:
 
     void SwitchOn();
-  
+    void SetHeater(float power) const;				// power is a fraction in [0,1]
+
     Platform* platform;								// The instance of the class that is the RepRap hardware
     float activeTemperature;						// The required active temperature
     float standbyTemperature;						// The required standby temperature
@@ -59,7 +60,7 @@ class PID
     bool active;									// Are we active or standby?
     bool switchedOff;								// Becomes false when someone tells us our active or standby temperatures
     int8_t heater;									// The index of our heater
-    int8_t badTemperatureCount;						// Count of sequential dud readings
+    uint8_t badTemperatureCount;					// Count of sequential dud readings
     bool temperatureFault;							// Has our heater developed a fault?
     float timeSetHeating;							// When we were switched on
     bool heatingUp;									// Are we heating up?
@@ -76,10 +77,17 @@ class Heat
 	// Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
 	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2, HS_fault = 3 };
   
-    Heat(Platform* p, GCodes* g);
+    Heat(Platform* p);
     void Spin();												// Called in a tight loop to keep everything going
     void Init();												// Set everything up
     void Exit();												// Shut everything down
+
+	bool ColdExtrude() const;									// Is cold extrusion allowed?
+	void AllowColdExtrude();									// Allow cold extrusion
+	void DenyColdExtrude();										// Deny cold extrusion
+
+	int8_t GetBedHeater() const;								// Get hot bed heater number
+	void SetBedHeater(int8_t heater);							// Set hot bed heater number
 
 	int8_t GetChamberHeater() const;							// Get chamber heater number
 	void SetChamberHeater(int8_t heater);						// Set chamber heater number
@@ -94,20 +102,24 @@ class Heat
     HeaterStatus GetStatus(int8_t heater) const;				// Get the off/standby/active status
     void SwitchOff(int8_t heater);								// Turn off a specific heater
     void SwitchOffAll();										// Turn all heaters off
+	bool FaultOccurred() const;									// Has a heater fault occurred?
     void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
     bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
     bool HeaterAtSetTemperature(int8_t heater) const;			// Is a specific heater at temperature within tolerance?
     void Diagnostics();											// Output useful information
-    float GetAveragePWM(int8_t heater) const;					// Return the running average PWM to the heater.    Answer is a fraction in [0, 1].
+    float GetAveragePWM(int8_t heater) const;					// Return the running average PWM to the heater as a fraction in [0, 1].
+
+    bool UseSlowPwm(int8_t heater) const;						// called by the PID class
 
   private:
   
     Platform* platform;							// The instance of the RepRap hardware class
-    GCodes* gCodes;								// The instance of the G Code interpreter class
 
     bool active;								// Are we active?
     PID* pids[HEATERS];							// A PID controller for each heater
 
+	bool coldExtrude;							// Is cold extrusion allowed?
+	int8_t bedHeater;							// Index of the hot bed heater to use or -1 if none is available
 	int8_t chamberHeater;						// Index of the chamber heater to use or -1 if none is available
 
     float lastTime;								// The last time our Spin() was called
@@ -180,7 +192,7 @@ inline void PID::ResetFault()
 
 inline void PID::SwitchOff()
 {
-	platform->SetHeater(heater, 0.0);
+	SetHeater(0.0);
 	active = false;
 	switchedOff = true;
 	heatingUp = false;
@@ -194,6 +206,31 @@ inline bool PID::SwitchedOff() const
 //**********************************************************************************
 
 // Heat
+
+inline bool Heat::ColdExtrude() const
+{
+	return coldExtrude;
+}
+
+inline void Heat::AllowColdExtrude()
+{
+	coldExtrude = true;
+}
+
+inline void Heat::DenyColdExtrude()
+{
+	coldExtrude = false;
+}
+
+inline int8_t Heat::GetBedHeater() const
+{
+	return bedHeater;
+}
+
+inline void Heat::SetBedHeater(int8_t heater)
+{
+	bedHeater = heater;
+}
 
 inline int8_t Heat::GetChamberHeater() const
 {
@@ -264,7 +301,7 @@ inline void Heat::SwitchOff(int8_t heater)
 
 inline void Heat::SwitchOffAll()
 {
-	for (int8_t heater = 0; heater < HEATERS; ++heater)
+	for (size_t heater = 0; heater < HEATERS; ++heater)
 	{
 		pids[heater]->SwitchOff();
 	}
@@ -289,6 +326,11 @@ inline void Heat::ResetFault(int8_t heater)
 inline float Heat::GetAveragePWM(int8_t heater) const
 {
 	return pids[heater]->GetAveragePWM();
+}
+
+inline bool Heat::UseSlowPwm(int8_t heater) const
+{
+	return heater == bedHeater || heater == chamberHeater;
 }
 
 #endif

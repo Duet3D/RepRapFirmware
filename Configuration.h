@@ -26,11 +26,11 @@ Licence: GPL
 #define NAME "RepRapFirmware"
 
 #ifndef VERSION
-#define VERSION "1.09k-dc42"
+#define VERSION "1.09m-beta3-dc42"
 #endif
 
 #ifndef DATE
-#define DATE "2015-09-20"
+#define DATE "2015-12-06"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -51,8 +51,8 @@ enum Compatibility
 
 // Some numbers...
 
-const uint32_t MainBaudRate = 115200;			// Communication speed of the USB if needed.
-const uint32_t AuxBaudRate = 57600;
+const uint32_t MainBaudRate = 115200;			// Communication speed of the USB if needed
+const uint32_t AuxBaudRate = 57600;				// Communication speed of the auxiliary serial port
 
 const unsigned int GcodeLength = 100;			// Maximum length of a G Code string that we handle
 const unsigned int MaxFilenameLength = 100;		// Maximum length of a path + filename on the SD card
@@ -65,7 +65,7 @@ const float DefaultFeedRate = 3000;				// The initial requested feed rate after 
 #define ABS_ZERO (-273.15)  					// Celsius
 #define NEARLY_ABS_ZERO (-273)					// Celsius
 
-#define INCH_TO_MM (25.4)
+const float InchToMm = 25.4;
 
 #define HEAT_SAMPLE_TIME (0.5)					// Seconds
 #define HEAT_PWM_AVERAGE_TIME (5.0)				// Seconds
@@ -78,20 +78,23 @@ const float DefaultFeedRate = 3000;				// The initial requested feed rate after 
 
 // If temperatures fall outside this range, something nasty has happened.
 
-#define MAX_BAD_TEMPERATURE_COUNT 6
-#define BAD_LOW_TEMPERATURE -10.0
-#define BAD_HIGH_TEMPERATURE 300.0
+#define MAX_BAD_TEMPERATURE_COUNT (6)
+#define BAD_LOW_TEMPERATURE (-10.0)
+#define BAD_HIGH_TEMPERATURE (300.0)
+
+const unsigned int SlowHeaterPwmFreq = 10;		// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
+const unsigned int NormalHeaterPwmFreq = 500;	// normal PWM frequency used for hot ends
+const unsigned int DefaultFanPwmFreq = 500;		// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
 
 const size_t MaxProbePoints = 16;				// Maximum number of probe points
 const size_t MaxDeltaCalibrationPoints = 16;	// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
 
-const float DefaultZDive = 3.0;					// Default height from which to probe the bed (mm)
+const float DefaultZDive = 5.0;					// Default height from which to probe the bed (mm)
 const float DefaultProbeSpeed = 2.0;			// Default Z probing speed
 const float DefaultTravelSpeed = 100.0;			// Default speed for travel to probe points
 
-#define TRIANGLE_0 -0.001						// Slightly less than 0 for point-in-triangle tests
-
-#define SILLY_Z_VALUE -9999.0
+const float Triangle0 = -0.001;					// Slightly less than 0 for point-in-triangle tests
+const float SillyZValue = -9999.0;
 
 // String lengths
 

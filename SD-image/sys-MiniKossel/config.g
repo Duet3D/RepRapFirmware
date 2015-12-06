@@ -10,6 +10,8 @@ M552 P0.0.0.0						; IP address (0 = use DHCP)
 M554 P192.168.1.1                   ; Gateway
 M553 P255.255.255.0                 ; Netmask
 M555 P2                             ; Set output to look like Marlin
+M575 P1 B57600 S1					; Comms parameters for PanelDue
+
 G21                                 ; Work in millimetres
 G90                                 ; Send absolute coordinates...
 M83                                 ; ...but relative extruder moves

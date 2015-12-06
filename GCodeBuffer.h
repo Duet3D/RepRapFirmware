@@ -23,13 +23,12 @@ class GCodeBuffer
     long GetLValue();									// Get a long integer after a key letter
     const char* GetUnprecedentedString(bool optional = false);	// Get a string with no preceding key letter
     const char* GetString();							// Get a string after a key letter
-    const void GetFloatArray(float a[], int& length);	// Get a :-separated list of floats after a key letter
-    const void GetLongArray(long l[], int& length);		// Get a :-separated list of longs after a key letter
+    const void GetFloatArray(float a[], size_t& length); // Get a :-separated list of floats after a key letter
+    const void GetLongArray(long l[], size_t& length);	// Get a :-separated list of longs after a key letter
     const char* Buffer() const;
     bool Active() const;
     void SetFinished(bool f);							// Set the G Code executed (or not)
     void Pause();
-    void CancelPause();
     void Resume();
     const char* WritingFileDirectory() const;			// If we are writing the G Code to a file, where that file is
     void SetWritingFileDirectory(const char* wfd);		// Set the directory for the file to write the GCode in
@@ -38,6 +37,8 @@ class GCodeBuffer
     void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
     bool StartingNewCode() const { return gcodePointer == 0; }
     bool IsPollRequest();
+
+    static bool IsPollCode(int code);
 
   private:
 
@@ -82,15 +83,6 @@ inline void GCodeBuffer::Pause()
 	if (state == executing)
 	{
 		state = paused;
-	}
-}
-
-// If we paused a print, cancel printing that file and get ready to print a new one
-inline void GCodeBuffer::CancelPause()
-{
-	if (state == paused)
-	{
-		Init();
 	}
 }
 

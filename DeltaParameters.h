@@ -9,7 +9,6 @@
 #define DELTAPARAMETERS_H_
 
 // Class to hold the parameter for a delta machine.
-// Some of the values that are currently calculated on demand could be pre-calculated in Recalc() and stored instead.
 class DeltaParameters
 {
 public:

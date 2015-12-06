@@ -57,8 +57,13 @@ void DDA::DebugPrint() const
 	ddm[0].DebugPrint('x', isDeltaMovement);
 	ddm[1].DebugPrint('y', isDeltaMovement);
 	ddm[2].DebugPrint('z', isDeltaMovement);
-	ddm[3].DebugPrint('1', false);
-	ddm[4].DebugPrint('2', false);
+	for (size_t i = AXES; i < DRIVES; ++i)
+	{
+		if (ddm[i].state != DMState::idle)
+		{
+			ddm[i].DebugPrint((char)('0' + (i - AXES)), false);
+		}
+	}
 //	reprap.GetPlatform()->GetLine()->Flush();
 }
 
@@ -81,9 +86,9 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 {
 	// 1. Compute the new endpoints and the movement vector
 	const int32_t *positionNow = prev->DriveCoordinates();
+	const Move *move = reprap.GetMove();
 	if (doMotorMapping)
 	{
-		const Move *move = reprap.GetMove();
 		move->MotorTransform(nextMove, endPoint);			// transform the axis coordinates if on a delta or CoreXY printer
 		isDeltaMovement = move->IsDeltaMode()
 							&& (endPoint[X_AXIS] != positionNow[X_AXIS] || endPoint[Y_AXIS] != positionNow[Y_AXIS] || endPoint[Z_AXIS] != positionNow[Z_AXIS]);
@@ -94,6 +99,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 	}
 
 	bool realMove = false, xyMoving = false;
+	const bool isSpecialDeltaMove = (move->IsDeltaMode() && !doMotorMapping);
 	float accelerations[DRIVES];
 	const float *normalAccelerations = reprap.GetPlatform()->Accelerations();
 	for (size_t drive = 0; drive < DRIVES; drive++)
@@ -107,7 +113,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 		int32_t delta;
 		if (drive < AXES)
 		{
-			endCoordinates[drive] = nextMove[drive];					// this will be wrong if we are doing a special move
+			endCoordinates[drive] = nextMove[drive];
 			delta = endPoint[drive] - positionNow[drive];
 		}
 		else
@@ -116,10 +122,12 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 		}
 
 		DriveMovement& dm = ddm[drive];
-		if (drive < AXES && isDeltaMovement)
+		if (drive < AXES && !isSpecialDeltaMove)
 		{
 			directionVector[drive] = nextMove[drive] - prev->GetEndCoordinate(drive, false);
-			dm.state = DMState::moving;					// on a delta printer, if one tower moves then we assume they all do
+			dm.state = (isDeltaMovement || delta != 0)
+						? DMState::moving				// on a delta printer, if one tower moves then we assume they all do
+						: DMState::idle;
 		}
 		else
 		{
@@ -160,7 +168,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 	endStopsToCheck = ce;
 	filePos = fPos;
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a special move on a delta printer
-	endCoordinatesValid = (ce == 0) && (doMotorMapping || !reprap.GetMove()->IsDeltaMode());
+	endCoordinatesValid = (ce == 0) && (doMotorMapping || !move->IsDeltaMode());
 
 	// 4. Normalise the direction vector and compute the amount of motion.
 	// If there is any XYZ movement, then we normalise it so that the total XYZ movement has unit length.
@@ -174,7 +182,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 			a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
 			cKc = (int32_t)(directionVector[Z_AXIS] * DriveMovement::Kc);
 
-			const DeltaParameters& dparams = reprap.GetMove()->GetDeltaParams();
+			const DeltaParameters& dparams = move->GetDeltaParams();
 			const float initialX = prev->GetEndCoordinate(X_AXIS, false);
 			const float initialY = prev->GetEndCoordinate(Y_AXIS, false);
 			const float diagonalSquared = fsquare(dparams.GetDiagonal());
@@ -259,7 +267,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 	// Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
 	float reqSpeed = nextMove[DRIVES];
-	if (reprap.GetMove()->IsDeltaMode() && !isDeltaMovement)
+	if (isSpecialDeltaMove)
 	{
 		// Special case of a raw or homing move on a delta printer
 		// We use the Cartesian motion system to implement these moves, so the feed rate will be interpreted in Cartesian coordinates.
@@ -279,7 +287,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 	}
 	requestedSpeed = max<float>(0.5, min<float>(reqSpeed, VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform()->MaxFeedrates(), DRIVES)));
 
-	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
+	// On a Cartesian or CoreXY printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
 	if (isDeltaMovement)
 	{
@@ -673,7 +681,7 @@ void DDA::Prepare()
 // The remaining functions are speed-critical, so use full optimisation
 #pragma GCC optimize ("O3")
 
-// Start executing the move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled, to avoid a race condition.
+// Start executing this move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled, to avoid a race condition.
 // Returns true if the caller needs to call the step ISR immediately.
 bool DDA::Start(uint32_t tim)
 //pre(state == frozen)
@@ -709,20 +717,31 @@ bool DDA::Start(uint32_t tim)
 			}
 		}
 
-		Platform *platform = reprap.GetPlatform();
+		bool extruding = false;
 		if (extrusions != 0 || retractions != 0)
 		{
 			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
 			if (prohibitedMovements != 0)
 			{
-				for (size_t i = 0; i < DRIVES - AXES; ++i)
+				for (DriveMovement **dmpp = &firstDM; *dmpp != nullptr; )
 				{
-					if (prohibitedMovements & (1 << i))
+					bool thisDriveExtruding = (*dmpp)->drive >= AXES;
+					if (thisDriveExtruding && (prohibitedMovements & (1 << ((*dmpp)->drive - AXES))) != 0)
 					{
-						ddm[i + AXES].state = DMState::idle;
+						*dmpp = (*dmpp)->nextDM;
+					}
+					else
+					{
+						extruding = extruding || thisDriveExtruding;
+						dmpp = &((*dmpp)->nextDM);
 					}
 				}
 			}
+		}
+
+		Platform *platform = reprap.GetPlatform();
+		if (extruding)
+		{
 			platform->ExtrudeOn();
 		}
 		else
@@ -730,7 +749,14 @@ bool DDA::Start(uint32_t tim)
 			platform->ExtrudeOff();
 		}
 
-		return platform->ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
+		if (firstDM != nullptr)
+		{
+			return platform->ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
+		}
+		else
+		{
+			return true;
+		}
 	}
 }
 

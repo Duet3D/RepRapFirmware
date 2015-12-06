@@ -56,6 +56,8 @@ Licence: GPL
 #include "FileStore.h"
 #include "Line.h"
 
+typedef int8_t Pin;								// type used to represent a pin number, negative means no pin
+
 /**************************************************************************************************/
 
 // Some numbers...
@@ -91,9 +93,9 @@ Licence: GPL
 // second 4 for digipot 2(on expansion board)
 // Full order is {1, 3, 2, 0, 1, 3, 2, 0}, only include as many as you have DRIVES defined
 #define POT_WIPES {1, 3, 2, 0, 1, 3, 2, 0}
-#define SENSE_RESISTOR 0.1						// Stepper motor current sense resistor
+#define SENSE_RESISTOR (0.1)					// Stepper motor current sense resistor
 #define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define MAX_STEPPER_DAC_VOLTAGE 2.12			// Stepper motor current reference voltage for E1 if using a DAC
+#define MAX_STEPPER_DAC_VOLTAGE (2.12)			// Stepper motor current reference voltage for E1 if using a DAC
 
 #define Z_PROBE_AD_VALUE (400)					// Default for the Z probe - should be overwritten by experiment
 #define Z_PROBE_STOP_HEIGHT (0.7) 				// mm
@@ -101,7 +103,7 @@ Licence: GPL
 #define Z_PROBE_MOD_PIN (52)					// Digital pin number to turn the IR LED on (high) or off (low)
 #define Z_PROBE_MOD_PIN07 (X12)					// Digital pin number to turn the IR LED on (high) or off (low) Duet V0.7 onwards
 #define Z_PROBE_AXES {true, false, true}		// Axes for which the Z-probe is normally used
-const unsigned int numZProbeReadingsAveraged = 8;	// we average this number of readings with IR on, and the same number with IR off
+const unsigned int numZProbeReadingsAveraged = (8);	// we average this number of readings with IR on, and the same number with IR off
 
 #define MAX_FEEDRATES {100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0} // mm/sec
 #define ACCELERATIONS {500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0} // mm/sec^2
@@ -132,30 +134,28 @@ const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 10000
 // The system is highly nonlinear because the heater power is limited to a maximum value and cannot go negative.
 // If we try to run a traditional PID when there are large temperature errors, this causes the I-accumulator to go out of control,
 // which causes a large amount of overshoot at lower temperatures. There are at least two ways of avoiding this:
+//
 // 1. Allow the PID to operate even with very large errors, but choose a very small I-term, just the right amount so that when heating up
 //    from cold, the I-accumulator is approximately the value needed to maintain the correct power when the target temperature is reached.
 //    This works well most of the time. However if the Duet board is reset when the extruder is hot and is then
 //    commanded to heat up again before the extruder has cooled, the I-accumulator doesn't grow large enough, so the
 //    temperature undershoots. The small value of the I-term then causes it to take a long time to reach the correct temperature.
+//
 // 2. Only allow the PID to operate when the temperature error is small enough for the PID to operate in the linear region.
 //    So we set FULL_PID_BAND to a small value. It needs to be at least 15C because that is how much the temperature overshoots by
-//    when we turn the heater off from full power at about 180C. We set the I-accumulator to zero when the PID is off, and use a
-//    much larger I-term. So the I-accumulator grows from zero to the value needed to maintain the required temperature
-//    much faster, but not so fast as to cause too much overshoot. This works well most of the time, except when we reduce
-//    the temperature by more than FULL_PID_BAND. In this case we turn off the PID and the heater, clear the
-//    I-accumulator, and wait for the temperature to drop before we turn the PID on again. The temperature has to undershoot by 10C
-//    or more in order for the I-accumulator to build up again. However, dropping the temperature by more then 20C is not a normal
-//    operation for a 3D printer, so we don't worry about this case.
-// An improvement on method (2) would be to preset the I-accumulator to an estimate of the value needed to maintain the
-// target temperature when we start using the PID (instead of clearing it to zero), and then reduce the I-term a little.
+//    on an Ormerod when we turn the heater off from full power at about 180C. When we transition to PID, we set the I-term to the
+//    value we expect to be needed to maintain the target temperature. We use an additional T parameter to allow this value to be
+//    estimated.
+//
+// The default values use method (2).
 //
 // Note: a negative P, I or D value means do not use PID for this heater, use bang-bang control instead.
 // This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
 // We use method 2 (see above)
-const float defaultPidKis[HEATERS] = {5.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1}; 			// Integral PID constants
+const float defaultPidKis[HEATERS] = {5.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2}; 			// Integral PID constants
 const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0}; // Derivative PID constants
-const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0};		// Proportional PID constants, negative values indicate use bang-bang instead of PID
+const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0};	// Proportional PID constants, negative values indicate use bang-bang instead of PID
 const float defaultPidKts[HEATERS] = {2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4};			// approximate PWM value needed to maintain temperature, per degC above room temperature
 const float defaultPidKss[HEATERS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};			// PWM scaling factor, to allow for variation in heater power and supply voltage
 const float defaultFullBands[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0};	// errors larger than this cause heater to be on or off
@@ -164,29 +164,26 @@ const float defaultPidMaxes[HEATERS] = {255, 180, 180, 180, 180, 180, 180};			//
 
 #define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
 #define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
-#define COOLING_FAN0_PIN X6 														// pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-#define COOLING_FAN1_PIN X17
-#define COOLING_FAN_RPM_PIN 23
-#define COOLING_FAN_RPM_SAMPLE_TIME	2.0											// Time to wait before resetting the internal fan RPM stats
-#define HEAT_ON 0 																// 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
+#define HEAT_ON 0 											// 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
+
+const unsigned int NumFans = 2;								// max number of PWM-controllable fans
+const Pin defaultCoolingFanPins[NumFans] = { X6, X17 };
+const Pin defaultCoolingFanRpmPin = 23;
+//const float defaultCoolingFanRpmSampleTime = 2.0;					// time to wait before resetting the internal fan RPM stats
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 const unsigned int adOversampleBits = 1;					// number of bits we oversample when reading temperatures
 
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ** adOversampleBits.
-// Keep numThermistorReadingsAveraged * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
-const unsigned int numThermistorReadingsAveraged = (HEATERS > 3) ? 32 : 64;
+// Keep numThermistorReadingsAveraged * HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
+const unsigned int numThermistorReadingsAveraged = 32;
 const unsigned int adRangeReal = 4095;						// the ADC that measures temperatures gives an int this big as its max value
 const unsigned int adRangeVirtual = ((adRangeReal + 1) << adOversampleBits) - 1;	// the max value we can get using oversampling
 const unsigned int adDisconnectedReal = adRangeReal - 3;	// we consider an ADC reading at/above this value to indicate that the thermistor is disconnected
 const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBits;
 
-#define HOT_BED 0 	// The index of the heated bed; set to -1 if there is no heated bed
-#define E0_HEATER 1 //the index of the first extruder heater
-#define E1_HEATER 2 //the index of the second extruder heater
-#define E2_HEATER 3 //the index of the third extruder heater
-#define E3_HEATER 4 //the index of the fourth extruder heater
-#define E4_HEATER 5 //the index of the fifth extruder heater
+#define BED_HEATER 0 										// the index of the heated bed; set to -1 if there is no heated bed
+#define E0_HEATER 1 										// the index of the first extruder heater
 
 /****************************************************************************************************/
 
@@ -204,8 +201,6 @@ const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBit
 /****************************************************************************************************/
 
 // Miscellaneous...
-
-typedef int8_t Pin;								// type used to represent a pin number, negative means no pin
 
 const Pin atxPowerPin = 12;						// Arduino Due pin number that controls the ATX power on/off
 
@@ -572,19 +567,26 @@ public:
 
   // Heat and temperature
   
-  float GetTemperature(size_t heater) const; // Result is in degrees Celsius
-  void SetHeater(size_t heater, float power); // power is a fraction in [0,1]
+  float GetTemperature(size_t heater) const;				// Result is in degrees Celsius
+  void SetHeater(size_t heater, float power);				// power is a fraction in [0,1]
   float HeatSampleTime() const;
   void SetHeatSampleTime(float st);
-  float GetFanValue(size_t fan) const;						// Result is returned in per cent
-  void SetFanValue(size_t fan,float speed);					// Accepts values between 0..1 and 1..255
-  float GetFanRPM();
   void SetPidParameters(size_t heater, const PidParameters& params);
   const PidParameters& GetPidParameters(size_t heater) const;
   float TimeToHot() const;
   void SetTimeToHot(float t);
   void SetThermistorNumber(size_t heater, size_t thermistor);
   int GetThermistorNumber(size_t heater) const;
+
+  // Fans
+
+  float GetFanValue(size_t fan) const;						// Result is returned in per cent
+  void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1 and 1..255
+  bool GetCoolingInverted(size_t fan) const;
+  void SetCoolingInverted(size_t fan, bool inv);
+  float GetFanPwmFrequency(size_t fan) const;
+  void SetFanPwmFrequency(size_t fan, float freq);
+  float GetFanRPM();
 
   // Flash operations
   void ResetNvData();
@@ -646,6 +648,20 @@ private:
 	  byte gateWay[4];
 	  uint8_t macAddress[6];
 	  Compatibility compatibility;
+  };
+
+  struct Fan
+  {
+	  float val;
+	  uint16_t freq;
+	  Pin pin;
+	  bool inverted;
+	  bool hardwareInverted;
+
+	  void Init(Pin p_pin, bool hwInverted);
+	  void SetValue(float speed);
+	  void SetPwmFrequency(float p_freq);
+	  void Refresh();
   };
 
   FlashData nvData;
@@ -710,14 +726,14 @@ private:
   uint16_t GetRawZProbeReading() const;
   void UpdateNetworkAddress(byte dst[4], const byte src[4]);
 
-// AXES
+// Axes and endstops
 
   float axisMaxima[AXES];
   float axisMinima[AXES];
   EndStopType endStopType[AXES+1];
   bool endStopLogicLevel[AXES+1];
   
-// HEATERS - Bed is assumed to be the first
+// Heaters - bed is assumed to be the first
 
   int GetRawTemperature(size_t heater) const;
   void SetHeaterPwm(size_t heater, uint8_t pwm);
@@ -727,13 +743,14 @@ private:
   float heatSampleTime;
   float standbyTemperatures[HEATERS];
   float activeTemperatures[HEATERS];
-  float coolingFan0Value;
-  float coolingFan1Value;
-  Pin coolingFan0Pin;
-  Pin coolingFan1Pin;
-  Pin coolingFanRpmPin;
   float timeToHot;
+
+// Fans
+
+  Fan fans[NumFans];
+  Pin coolingFanRpmPin;			// we currently support only one fan RPM input
   float lastRpmResetTime;
+  void InitFans();
 
 // Serial/USB
 
@@ -761,7 +778,7 @@ private:
   adc_channel_num_t zProbeAdcChannel;
   uint32_t thermistorOverheatSums[HEATERS];
   uint8_t tickState;
-  uint8_t currentHeater;
+  size_t currentHeater;
   int debugCode;
 
   static uint16_t GetAdcReading(adc_channel_num_t chan);
@@ -1120,23 +1137,6 @@ inline const uint8_t* Platform::NetMask() const
 inline const uint8_t* Platform::GateWay() const
 {
 	return nvData.gateWay;
-}
-
-inline void Platform::SetMACAddress(uint8_t mac[])
-{
-	bool changed = false;
-	for (size_t i = 0; i < 6; i++)
-	{
-		if (nvData.macAddress[i] != mac[i])
-		{
-			nvData.macAddress[i] = mac[i];
-			changed = true;
-		}
-	}
-	if (changed && autoSaveEnabled)
-	{
-		WriteNvData();
-	}
 }
 
 inline const uint8_t* Platform::MACAddress() const

@@ -184,9 +184,8 @@ float GCodeBuffer::GetFValue()
 
 // Get a :-separated list of floats after a key letter
 
-const void GCodeBuffer::GetFloatArray(float a[], int& returnedLength)
+const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 {
-	int length = 0;
 	if(readPointer < 0)
 	{
 		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode float array before a search.\n");
@@ -195,6 +194,7 @@ const void GCodeBuffer::GetFloatArray(float a[], int& returnedLength)
 		return;
 	}
 
+	size_t length = 0;
 	bool inList = true;
 	while(inList)
 	{
@@ -221,9 +221,9 @@ const void GCodeBuffer::GetFloatArray(float a[], int& returnedLength)
 	// Special case if there is one entry and returnedLength requests several.
 	// Fill the array with the first entry.
 
-	if(length == 1 && returnedLength > 1)
+	if (length == 1 && returnedLength > 1)
 	{
-		for(int i = 1; i < returnedLength; i++)
+		for(size_t i = 1; i < returnedLength; i++)
 		{
 			a[i] = a[0];
 		}
@@ -238,7 +238,7 @@ const void GCodeBuffer::GetFloatArray(float a[], int& returnedLength)
 
 // Get a :-separated list of longs after a key letter
 
-const void GCodeBuffer::GetLongArray(long l[], int& returnedLength)
+const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 {
 	if(readPointer < 0)
 	{
@@ -247,7 +247,7 @@ const void GCodeBuffer::GetLongArray(long l[], int& returnedLength)
 		return;
 	}
 
-	int length = 0;
+	size_t length = 0;
 	bool inList = true;
 	while(inList)
 	{
@@ -351,14 +351,15 @@ bool GCodeBuffer::IsPollRequest()
 		}
 		if (Seen('M'))
 		{
-			int i = GetIValue();
-			return i == 105 || i == 408;
+			return IsPollCode(GetIValue());
 		}
 	}
 	return false;
 }
 
+/*static*/ bool GCodeBuffer::IsPollCode(int code)
+{
+	return code == 27 || code == 105 || code == 408 || code == 114 || code == 119 || code == 573;
+}
+
 // End
-
-
-

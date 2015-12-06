@@ -176,7 +176,7 @@ const char *moduleName[] =
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false), active(false),
+RepRap::RepRap() : toolList(nullptr), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false), active(false),
 		resetting(false), gcodeReply(gcodeReplyBuffer, ARRAY_SIZE(gcodeReplyBuffer))
 {
   platform = new Platform();
@@ -184,9 +184,8 @@ RepRap::RepRap() : ticksInSpinState(0), spinningModule(noModule), debug(0), stop
   webserver = new Webserver(platform, network);
   gCodes = new GCodes(platform, webserver);
   move = new Move(platform, gCodes);
-  heat = new Heat(platform, gCodes);
+  heat = new Heat(platform);
   printMonitor = new PrintMonitor(platform, gCodes);
-  toolList = NULL;
 }
 
 void RepRap::Init()
@@ -214,7 +213,7 @@ void RepRap::Init()
   move->Init();
   heat->Init();
   printMonitor->Init();
-  currentTool = NULL;
+  currentTool = nullptr;
   message[0] = 0;
   const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
   WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);	// enable watchdog, reset the mcu if it times out
@@ -225,7 +224,7 @@ void RepRap::Init()
   FileStore *startup = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 
   platform->AppendMessage(HOST_MESSAGE, "\n\nExecuting ");
-  if (startup != NULL)
+  if (startup != nullptr)
   {
 	  startup->Close();
 	  platform->AppendMessage(HOST_MESSAGE, "%s...\n\n", platform->GetConfigFile());
@@ -325,7 +324,7 @@ void RepRap::Spin()
 
 	// Check if we need to display a cold extrusion warning
 
-	for (Tool *t = toolList; t != NULL; t = t->Next())
+	for (Tool *t = toolList; t != nullptr; t = t->Next())
 	{
 		if (t->DisplayColdExtrudeWarning())
 		{
@@ -450,23 +449,24 @@ void RepRap::PrintDebug()
 	}
 }
 
+// Add a tool.
+// Prior to calling this, delete any existing tool with the same number
 void RepRap::AddTool(Tool* tool)
 {
-	if(toolList == NULL)
+	Tool** t = &toolList;
+	while(*t != nullptr && (*t)->Number() < tool->Number())
 	{
-		toolList = tool;
+		t = &((*t)->next);
 	}
-	else
-	{
-		toolList->AddTool(tool);
-	}
+	tool->next = *t;
+	*t = tool;
 	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeHeaters);
 }
 
 void RepRap::DeleteTool(Tool* tool)
 {
 	// Must have a valid tool...
-	if (tool == NULL)
+	if (tool == nullptr)
 	{
 		return;
 	}
@@ -478,37 +478,27 @@ void RepRap::DeleteTool(Tool* tool)
 	}
 
 	// Switch off any associated heater
-	for(int i=0; i<tool->HeaterCount(); i++)
+	for (size_t i = 0; i < tool->HeaterCount(); i++)
 	{
 		reprap.GetHeat()->SwitchOff(tool->Heater(i));
 	}
 
 	// Purge any references to this tool
-	Tool *parent = NULL;
-	for(Tool *t = toolList; t != NULL; t = t->Next())
+	for (Tool **t = &toolList; *t != nullptr; t = &((*t)->next))
 	{
-		if (t->Next() == tool)
+		if (*t == tool)
 		{
-			parent = t;
+			*t = tool->next;
 			break;
 		}
 	}
 
-	if (parent == NULL)
-	{
-		toolList = tool->Next();
-	}
-	else
-	{
-		parent->next = tool->next;
-	}
-
 	// Delete it
-	delete tool;
+	Tool::Delete(tool);
 
 	// Update the number of active heaters and extruder drives
 	activeExtruders = activeHeaters = 0;
-	for(Tool *t = toolList; t != NULL; t = t->Next())
+	for (Tool *t = toolList; t != nullptr; t = t->Next())
 	{
 		t->UpdateExtruderAndHeaterCount(activeExtruders, activeHeaters);
 	}
@@ -518,9 +508,9 @@ void RepRap::SelectTool(int toolNumber)
 {
 	Tool* tool = toolList;
 
-	while(tool)
+	while(tool != nullptr)
 	{
-		if(tool->Number() == toolNumber)
+		if (tool->Number() == toolNumber)
 		{
 			tool->Activate(currentTool);
 			currentTool = tool;
@@ -530,62 +520,55 @@ void RepRap::SelectTool(int toolNumber)
 	}
 
 	// Selecting a non-existent tool is valid.  It sets them all to standby.
-
-	if(currentTool != NULL)
+	if (currentTool != nullptr)
 	{
 		StandbyTool(currentTool->Number());
 	}
-	currentTool = NULL;
-
+	currentTool = nullptr;
 }
 
 void RepRap::PrintTool(int toolNumber, StringRef& reply) const
 {
-	for(Tool *tool = toolList; tool != NULL; tool = tool->next)
+	Tool* tool = GetTool(toolNumber);
+	if (tool != nullptr)
 	{
-		if(tool->Number() == toolNumber)
-		{
-			tool->Print(reply);
-			return;
-		}
+		tool->Print(reply);
 	}
-	reply.copy("Attempt to print details of non-existent tool.\n");
+	else
+	{
+		reply.copy("Attempt to print details of non-existent tool.\n");
+	}
 }
 
 void RepRap::StandbyTool(int toolNumber)
 {
-	Tool* tool = toolList;
-
-	while(tool)
+	Tool* tool = GetTool(toolNumber);
+	if (tool != nullptr)
 	{
-		if(tool->Number() == toolNumber)
+		tool->Standby();
+		if (currentTool == tool)
 		{
-			tool->Standby();
-			if(currentTool == tool)
-			{
-				currentTool = NULL;
-			}
-			return;
+			currentTool = nullptr;
 		}
-		tool = tool->Next();
 	}
-
-	platform->Message(BOTH_MESSAGE, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
+	else
+	{
+		platform->Message(BOTH_MESSAGE, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
+	}
 }
 
 Tool* RepRap::GetTool(int toolNumber) const
 {
 	Tool* tool = toolList;
-
-	while(tool)
+	while(tool != nullptr)
 	{
-		if(tool->Number() == toolNumber)
+		if (tool->Number() == toolNumber)
 		{
 			return tool;
 		}
 		tool = tool->Next();
 	}
-	return NULL; // Not an error
+	return nullptr; // Not an error
 }
 
 Tool* RepRap::GetOnlyTool() const
@@ -593,44 +576,18 @@ Tool* RepRap::GetOnlyTool() const
 	return (toolList != nullptr && toolList->Next() == nullptr) ? toolList : nullptr;
 }
 
-#if 0	// not used
-Tool* RepRap::GetToolByDrive(int driveNumber)
+void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures)
 {
-	Tool* tool = toolList;
-
-	while (tool)
+	Tool* tool = GetTool(toolNumber);
+	if (tool != nullptr)
 	{
-		for(uint8_t drive = 0; drive < tool->DriveCount(); drive++)
-		{
-			if (tool->Drive(drive) + AXES == driveNumber)
-			{
-				return tool;
-			}
-		}
-
-		tool = tool->Next();
+		tool->SetVariables(standbyTemperatures, activeTemperatures);
 	}
-	return NULL;
-}
-#endif
-
-void RepRap::SetToolVariables(int toolNumber, float* standbyTemperatures, float* activeTemperatures)
-{
-	Tool* tool = toolList;
-
-	while(tool)
+	else
 	{
-		if(tool->Number() == toolNumber)
-		{
-			tool->SetVariables(standbyTemperatures, activeTemperatures);
-			return;
-		}
-		tool = tool->Next();
+		platform->Message(BOTH_MESSAGE, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 	}
-
-	platform->Message(BOTH_MESSAGE, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 }
-
 
 void RepRap::Tick()
 {
@@ -695,7 +652,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 		response.cat("],\"xyz\":");
 		float liveCoordinates[DRIVES + 1];
 		move->LiveCoordinates(liveCoordinates);
-		if (currentTool != NULL)
+		if (currentTool != nullptr)
 		{
 			const float *offset = currentTool->GetOffset();
 			for (size_t i = 0; i < AXES; ++i)
@@ -713,7 +670,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 	}
 
 	// Current tool number
-	int toolNumber = (currentTool == NULL) ? -1 : currentTool->Number();
+	int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
 	response.catf("]},\"currentTool\":%d", toolNumber);
 
 	/* Output - only reported once */
@@ -755,7 +712,7 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 
 		// Cooling fan value
 		//@TODO T3P3 only reports first PWM fan
-		float fanValue = (gCodes->CoolingInverted() ? 1.0 - platform->GetFanValue(0) : platform->GetFanValue(0));
+		float fanValue = platform->GetFanValue(0);
 		response.catf(",\"fanPercent\":%.2f", fanValue * 100.0);
 
 		// Speed and Extrusion factors
@@ -807,13 +764,22 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 		response.cat(",\"temps\":{");
 
 		/* Bed */
-#if HOT_BED != -1
+		const int8_t bedHeater = heat->GetBedHeater();
+		if (bedHeater != -1)
 		{
 			response.catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d},",
-					heat->GetTemperature(HOT_BED), heat->GetActiveTemperature(HOT_BED),
-					heat->GetStatus(HOT_BED));
+					heat->GetTemperature(BED_HEATER), heat->GetActiveTemperature(BED_HEATER),
+					heat->GetStatus(BED_HEATER));
 		}
-#endif
+
+		/* Chamber */
+		const int8_t chamberHeater = heat->GetChamberHeater();
+		if (chamberHeater != -1)
+		{
+			response.catf("\"chamber\":{\"current\":%.1f,", heat->GetTemperature(chamberHeater));
+			response.catf("\"active\":%.1f,", heat->GetActiveTemperature(chamberHeater));
+			response.catf("\"state\":%d},", static_cast<int>(heat->GetStatus(chamberHeater)));
+		}
 
 		/* Heads */
 		{
@@ -871,6 +837,18 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 		response.catf(",\"coldExtrudeTemp\":%1.f", ColdExtrude() ? 0 : HOT_ENOUGH_TO_EXTRUDE);
 		response.catf(",\"coldRetractTemp\":%1.f", ColdExtrude() ? 0 : HOT_ENOUGH_TO_RETRACT);
 
+		// Endstops
+		uint16_t endstops = 0;
+		for(size_t drive = 0; drive < DRIVES; drive++)
+		{
+			EndStopHit stopped = platform->Stopped(drive);
+			if (stopped == EndStopHit::highHit || stopped == EndStopHit::lowHit)
+			{
+				endstops |= (1 << drive);
+			}
+		}
+		response.catf(",\"endstops\":%d", endstops);
+
 		// Delta configuration
 		response.catf(",\"geometry\":\"%s\"", move->GetGeometryString());
 
@@ -895,14 +873,14 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 		/* Tool Mapping */
 		{
 			response.cat(",\"tools\":[");
-			for (Tool *tool=toolList; tool != NULL; tool = tool->Next())
+			for (Tool *tool=toolList; tool != nullptr; tool = tool->Next())
 			{
 				// Heaters
 				response.catf("{\"number\":%d,\"heaters\":[", tool->Number());
-				for (int heater=0; heater<tool->HeaterCount(); heater++)
+				for (size_t heater=0; heater<tool->HeaterCount(); heater++)
 				{
 					response.catf("%d", tool->Heater(heater));
-					if (heater < tool->HeaterCount() - 1)
+					if (heater + 1 < tool->HeaterCount())
 					{
 						response.cat(",");
 					}
@@ -910,17 +888,17 @@ void RepRap::GetStatusResponse(StringRef& response, uint8_t type, int seq, bool 
 
 				// Extruder drives
 				response.cat("],\"drives\":[");
-				for (int drive=0; drive<tool->DriveCount(); drive++)
+				for (size_t drive=0; drive<tool->DriveCount(); drive++)
 				{
 					response.catf("%d", tool->Drive(drive));
-					if (drive < tool->DriveCount() - 1)
+					if (drive + 1 < tool->DriveCount())
 					{
 						response.cat(",");
 					}
 				}
 
 				// Do we have any more tools?
-				if (tool->Next() != NULL)
+				if (tool->Next() != nullptr)
 				{
 					response.cat("]},");
 				}
@@ -1047,7 +1025,7 @@ void RepRap::GetConfigResponse(StringRef& response)
 	// Configuration File (whitespaces are skipped, otherwise we risk overflowing the response buffer)
 	response.cat("],\"configFile\":\"");
 	FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
-	if (configFile == NULL)
+	if (configFile == nullptr)
 	{
 		response.cat("not found");
 	}
@@ -1164,7 +1142,7 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 	float liveCoordinates[DRIVES];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates);
 	const Tool* currentTool = reprap.GetCurrentTool();
-	if (currentTool != NULL)
+	if (currentTool != nullptr)
 	{
 		const float *offset = currentTool->GetOffset();
 		for (size_t i = 0; i < AXES; ++i)
@@ -1221,6 +1199,8 @@ void RepRap::GetLegacyStatusResponse(StringRef& response, uint8_t type, int seq)
 		break;
 	}
 
+	// Send the fan0 settings (for PanelDue firmware 1.13)
+	response.catf(",\"fanPercent\":[%.02f,%.02f]", platform->GetFanValue(0) * 100.0, platform->GetFanValue(1) * 100.0);
 	// Send fan RPM value
 	response.catf(",\"fanRPM\":%u", (unsigned int)platform->GetFanRPM());
 
@@ -1386,7 +1366,7 @@ void RepRap::GetFilesResponse(StringRef& response, const char* dir, bool flagsDi
 		{
 			if (!firstFile)
 			{
-				response.catf(",");
+				response.cat(",");
 			}
 			EncodeString(response, file_info.fileName, 3, false, (flagsDirs && file_info.isDirectory) ? '*' : '\0');
 			firstFile = false;
@@ -1485,7 +1465,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 	Tool *tool = toolList;
 	while (tool != nullptr)
 	{
-		for (int driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
+		for (size_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
 		{
 			const int extruderDrive = tool->Drive(driveNum);
 			unsigned int mask = 1 << extruderDrive;
@@ -1512,7 +1492,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 
 void RepRap::FlagTemperatureFault(int8_t dudHeater)
 {
-	if (toolList != NULL)
+	if (toolList != nullptr)
 	{
 		toolList->FlagTemperatureFault(dudHeater);
 	}
@@ -1521,7 +1501,7 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater)
 void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 {
 	reprap.GetHeat()->ResetFault(wasDudHeater);
-	if (toolList != NULL)
+	if (toolList != nullptr)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);
 	}

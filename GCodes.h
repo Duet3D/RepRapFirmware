@@ -93,7 +93,6 @@ class GCodes
     bool HaveIncomingData() const;										// Is there something that we have to do?
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
     void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homed
-    bool CoolingInverted() const;										// Is the current fan value inverted?
 
     void PauseSDPrint();												// Pause the current print from SD card
     float GetSpeedFactor() const { return speedFactor * minutesToSeconds; }	// Return the current speed factor
@@ -155,6 +154,7 @@ class GCodes
     bool AllAxesAreHomed() const;										// Return true if all axes are homed
     void SetAllAxesNotHomed();											// Flag all axes as not homed
     void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
+    const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
 
     Platform* platform;							// The RepRap machine
     bool active;								// Live and running?
@@ -180,6 +180,7 @@ class GCodes
     GCodeMachineState stack[StackSize];			// State that we save when calling macro files
     unsigned int stackPointer;					// Push and Pop stack pointer
     static const char axisLetters[AXES]; 		// 'X', 'Y', 'Z'
+	float axisScaleFactors[AXES];				// Scale XYZ coordinates by this factor (for Delta configurations)
     float lastRawExtruderPosition[DRIVES - AXES];	// Extruder position of the last move fed into the Move class
 	float record[DRIVES+1];						// Temporary store for move positions
 	float moveToDo[DRIVES+1];					// Where to go set by G1 etc
@@ -203,7 +204,6 @@ class GCodes
     float longWait;								// Timer for things that happen occasionally (seconds)
     bool limitAxes;								// Don't think outside the box.
     bool axisIsHomed[AXES];						// These record which of the axes have been homed
-    bool coolingInverted;
     float pausedFan0Value;
     float pausedFan1Value;
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
@@ -237,12 +237,6 @@ inline bool GCodes::HaveIncomingData() const
 inline int8_t GCodes::Heater(int8_t head) const
 {
    return head+1; 
-}
-
-//@TOTO T3P3 cooling inverted applies for both PWM fans
-inline bool GCodes::CoolingInverted() const
-{
-	return coolingInverted;
 }
 
 inline bool GCodes::AllAxesAreHomed() const

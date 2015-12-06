@@ -51,7 +51,7 @@ void DeltaParameters::Recalc()
 		// Calculate the base carriage height when the printer is homed.
 		const float tempHeight = diagonal;		// any sensible height will do here, probably even zero
 		float machinePos[AXES];
-		InverseTransform(tempHeight + endstopAdjustments[X_AXIS], tempHeight + endstopAdjustments[Y_AXIS], tempHeight + endstopAdjustments[X_AXIS],
+		InverseTransform(tempHeight + endstopAdjustments[X_AXIS], tempHeight + endstopAdjustments[Y_AXIS], tempHeight + endstopAdjustments[Z_AXIS],
 							machinePos);
 		homedCarriageHeight = homedHeight + tempHeight - machinePos[Z_AXIS];
 	}

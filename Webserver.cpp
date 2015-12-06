@@ -770,9 +770,13 @@ void Webserver::HttpInterpreter::CancelUpload(uint32_t remoteIP)
 // Start sending a file or a JSON response.
 void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
 {
-	if (StringEquals(nameOfFileToSend, "/"))
+	if (nameOfFileToSend[0] == '/')
 	{
-		nameOfFileToSend = INDEX_PAGE;
+		++nameOfFileToSend;						// all web files are relative to the /www folder, so remove the leading '/'
+		if (nameOfFileToSend[0] == 0)
+		{
+			nameOfFileToSend = INDEX_PAGE;
+		}
 	}
 	FileStore *fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
 	if (fileToSend == NULL)
@@ -2046,29 +2050,14 @@ void Webserver::FtpInterpreter::ProcessLine()
 				oldFilename[MaxFilenameLength - 1] = 0;
 				ReadFilename(4);
 
-				// See where this file needs to be moved to
-				if (filename[0] == '/')
+				const char *newFilename = platform->GetMassStorage()->CombineName(currentDir, filename);
+				if (platform->GetMassStorage()->Rename(oldFilename, newFilename))
 				{
-					if (platform->GetMassStorage()->Rename(oldFilename, filename))
-					{
-						SendReply(250, "Rename successful.");
-					}
-					else
-					{
-						SendReply(550, "Could not rename file or directory.");
-					}
+					SendReply(250, "Rename successful.");
 				}
 				else
 				{
-					const char *newFilename = platform->GetMassStorage()->CombineName(currentDir, filename);
-					if (platform->GetMassStorage()->Rename(oldFilename, newFilename))
-					{
-						SendReply(250, "Rename successful.");
-					}
-					else
-					{
-						SendReply(500, "Could not rename file or directory.");
-					}
+					SendReply(500, "Could not rename file or directory.");
 				}
 			}
 			// no op
@@ -2156,14 +2145,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				FileStore *file;
 
 				ReadFilename(4);
-				if (filename[0] == '/')
-				{
-					file = platform->GetFileStore(NULL, filename, true);
-				}
-				else
-				{
-					file = platform->GetFileStore(currentDir, filename, true);
-				}
+				file = platform->GetFileStore(currentDir, filename, true);
 
 				if (StartUpload(file))
 				{
@@ -2186,14 +2168,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				FileStore *fs;
 
 				ReadFilename(4);
-				if (filename[0] == '/')
-				{
-					fs = platform->GetFileStore(NULL, filename, false);
-				}
-				else
-				{
-					fs = platform->GetFileStore(currentDir, filename, false);
-				}
+				fs = platform->GetFileStore(currentDir, filename, false);
 
 				if (fs == NULL)
 				{

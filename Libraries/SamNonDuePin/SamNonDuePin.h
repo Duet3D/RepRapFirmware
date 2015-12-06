@@ -29,8 +29,6 @@ See SamNonDuePin.cpp file for more info
 // Number of pins defined in PinDescription array
 //#define PINS_C 28  //not used
 
-static const unsigned int pwmFastFrequency = 25000;		// fast PWM frequency for Intel spec PWM fans
-
 // Undefined pins constants so the undef pins can be referred to a Xn rather than n
 // Any pin numbers below X0 we assume are ordinary Due pin numbers
 // Note: these must all be <=127 because pin numbers are held in int8_t in some places.
@@ -81,7 +79,7 @@ class OutputPin
 	uint32_t ulPin;
 public:
 	explicit OutputPin(unsigned int pin);
-	OutputPin() : pPort(PIOC), ulPin(1 << 31) {}			// default constructor needed for array init - accesses PC31 which isn't on the package, so safe
+	OutputPin() : pPort(PIOC), ulPin(1 << 31) {}		// default constructor needed for array init - accesses PC31 which isn't on the package, so safe
 	void SetHigh() const { pPort->PIO_SODR = ulPin; }
 	void SetLow() const { pPort->PIO_CODR = ulPin; }
 };
@@ -93,7 +91,7 @@ extern void pinModeNonDue(uint32_t ulPin, uint32_t ulMode, uint32_t debounceCuto
 extern void digitalWriteNonDue(uint32_t ulPin, uint32_t ulVal);
 extern int digitalReadNonDue(uint32_t ulPin);
 extern OutputPin getPioPin(uint32_t ulPin);
-extern void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, bool fastPwm = false);
+extern void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, uint16_t freq);
 extern void analogOutputNonDue();
 extern void hsmciPinsinit();
 extern void ethPinsInit();
