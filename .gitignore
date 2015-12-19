@@ -6,7 +6,9 @@
 Release/*
 !Release/RepRapFirmware*.bin
 
+.project
 .cproject
+
 .absdata
 .metadata
 .settings
