@@ -1,6 +1,14 @@
 *.d
 *.o
-Release/*
-!Release/RepRapFirmware*.bin
 *~
 *orig
+
+Release/*
+!Release/RepRapFirmware*.bin
+
+.project
+.cproject
+
+.absdata
+.metadata
+.settings
