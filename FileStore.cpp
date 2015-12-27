@@ -37,7 +37,7 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 		// It is up to the caller to report an error if necessary.
 		if (reprap.Debug(modulePlatform))
 		{
-			platform->Message(BOTH_ERROR_MESSAGE, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
+			platform->MessageF(GENERIC_MESSAGE, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
 		}
 		return false;
 	}
@@ -52,7 +52,7 @@ void FileStore::Duplicate()
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to dup a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to dup a non-open file.\n");
 		return;
 	}
 	++openCount;
@@ -62,7 +62,7 @@ bool FileStore::Close()
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to close a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to close a non-open file.\n");
 		return false;
 	}
 	--openCount;
@@ -86,7 +86,7 @@ bool FileStore::Seek(FilePosition pos)
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to seek on a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to seek on a non-open file.\n");
 		return false;
 	}
 	if (writing)
@@ -98,7 +98,7 @@ bool FileStore::Seek(FilePosition pos)
 	return fr == FR_OK;
 }
 
-FilePosition FileStore::GetPosition() const
+FilePosition FileStore::Position() const
 {
 	FilePosition pos = file.fptr;
 	if (writing)
@@ -123,7 +123,7 @@ FilePosition FileStore::Length() const
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to size non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to size non-open file.\n");
 		return 0;
 	}
 	return file.fsize;
@@ -137,7 +137,7 @@ float FileStore::FractionRead() const
 		return 0.0;
 	}
 
-	return (float)GetPosition() / (float)len;
+	return (float)Position() / (float)len;
 }
 
 uint8_t FileStore::Status()
@@ -159,7 +159,7 @@ bool FileStore::ReadBuffer()
 	FRESULT readStatus = f_read(&file, GetBuffer(), FileBufLen, &lastBufferEntry);	// Read a chunk of file
 	if (readStatus)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Error reading file.\n");
+		platform->Message(GENERIC_MESSAGE, "Error reading file.\n");
 		return false;
 	}
 	bufferPointer = 0;
@@ -171,7 +171,7 @@ bool FileStore::Read(char& b)
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to read from a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to read from a non-open file.\n");
 		return false;
 	}
 
@@ -201,7 +201,7 @@ int FileStore::Read(char* extBuf, unsigned int nBytes)
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to read from a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to read from a non-open file.\n");
 		return -1;
 	}
 
@@ -210,7 +210,7 @@ int FileStore::Read(char* extBuf, unsigned int nBytes)
 	FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
 	if (readStatus != FR_OK)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Error reading file.\n");
+		platform->Message(GENERIC_MESSAGE, "Error reading file.\n");
 		return -1;
 	}
 	return (int)bytes_read;
@@ -223,7 +223,7 @@ bool FileStore::WriteBuffer()
 		bool ok = InternalWriteBlock((const char*)GetBuffer(), bufferPointer);
 		if (!ok)
 		{
-			platform->Message(BOTH_ERROR_MESSAGE, "Cannot write to file. Disc may be full.\n");
+			platform->Message(GENERIC_MESSAGE, "Cannot write to file. Disc may be full.\n");
 			return false;
 		}
 		bufferPointer = 0;
@@ -235,7 +235,7 @@ bool FileStore::Write(char b)
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write byte to a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to write byte to a non-open file.\n");
 		return false;
 	}
 	GetBuffer()[bufferPointer] = b;
@@ -251,7 +251,7 @@ bool FileStore::Write(const char* b)
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write string to a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to write string to a non-open file.\n");
 		return false;
 	}
 	int i = 0;
@@ -270,7 +270,7 @@ bool FileStore::Write(const char *s, unsigned int len)
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write block to a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to write block to a non-open file.\n");
 		return false;
 	}
 
@@ -300,7 +300,7 @@ bool FileStore::InternalWriteBlock(const char *s, unsigned int len)
 	}
 	if ((writeStatus != FR_OK) || (bytesWritten != len))
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Cannot write to file. Disc may be full.\n");
+		platform->Message(GENERIC_MESSAGE, "Cannot write to file. Disc may be full.\n");
 		return false;
 	}
 	return true;
@@ -310,7 +310,7 @@ bool FileStore::Flush()
 {
 	if (!inUse)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to flush a non-open file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to flush a non-open file.\n");
 		return false;
 	}
 	if (!WriteBuffer())

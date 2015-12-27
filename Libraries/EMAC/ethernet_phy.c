@@ -204,20 +204,13 @@ uint8_t ethernet_phy_init(Emac *p_emac, uint8_t uc_phy_addr, uint32_t mck)
  *
  * Return EMAC_OK if successfully, EMAC_TIMEOUT if timeout. 
  */
-uint8_t ethernet_phy_set_link(Emac *p_emac, uint8_t uc_phy_addr,
-		uint8_t uc_apply_setting_flag)
+uint8_t ethernet_phy_set_link(Emac *p_emac, uint8_t uc_phy_addr, uint8_t uc_apply_setting_flag)
 {
+	emac_enable_management(p_emac, true);
+	uint8_t uc_phy_address = uc_phy_addr;
 
 	uint32_t ul_stat1;
-	uint32_t ul_stat2;
-	uint8_t uc_phy_address, uc_speed, uc_fd;
-	uint8_t uc_rc = EMAC_TIMEOUT;
-	
-	emac_enable_management(p_emac, true);
-
-	uc_phy_address = uc_phy_addr;
-
-	uc_rc = emac_phy_read(p_emac, uc_phy_address, MII_BMSR, &ul_stat1);
+	uint8_t uc_rc = emac_phy_read(p_emac, uc_phy_address, MII_BMSR, &ul_stat1);
 	if (uc_rc != EMAC_OK) {
 		/* Disable PHY management and start the EMAC transfer */
 		emac_enable_management(p_emac, false);
@@ -237,9 +230,11 @@ uint8_t ethernet_phy_set_link(Emac *p_emac, uint8_t uc_phy_addr,
 	}
 
 	// Re-configure Link speed 
+	bool uc_speed, uc_fd;
+	uint32_t ul_stat2;
 	uc_rc = emac_phy_read(p_emac, uc_phy_address, MII_PC1, &ul_stat2);
 	if (uc_rc != EMAC_OK) {
-		//Disable PHY management and start the EMAC transfer
+		// Disable PHY management and start the EMAC transfer
 		emac_enable_management(p_emac, false);
 		return uc_rc;
 	}
@@ -264,6 +259,11 @@ uint8_t ethernet_phy_set_link(Emac *p_emac, uint8_t uc_phy_addr,
 
 	else if ((ul_stat1 & MII_10BASE_T_HD) && (ul_stat2 & MII_OMI_10_HD)) {
 		// Set MII for 10BaseT and Half Duplex 
+		uc_speed = false;
+		uc_fd = false;
+	}
+	else {
+		// not clear what the default should be here (DC)
 		uc_speed = false;
 		uc_fd = false;
 	}

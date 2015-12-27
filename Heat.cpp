@@ -22,7 +22,8 @@ Licence: GPL
 
 const float invHeatPwmAverageCount = HEAT_SAMPLE_TIME/HEAT_PWM_AVERAGE_TIME;
 
-Heat::Heat(Platform* p) : platform(p), active(false), bedHeater(0), chamberHeater(-1)
+Heat::Heat(Platform* p) : platform(p), active(false), coldExtrude(false),
+	bedHeater(BED_HEATER), chamberHeater(-1)
 {
   for (size_t heater = 0; heater < HEATERS; heater++)
   {
@@ -38,6 +39,7 @@ void Heat::Init()
   }
   lastTime = platform->Time();
   longWait = lastTime;
+  coldExtrude = false;
   active = true;
 }
 
@@ -70,12 +72,12 @@ void Heat::Spin()
 
 void Heat::Diagnostics() 
 {
-  platform->AppendMessage(BOTH_MESSAGE, "Heat Diagnostics:\n");
+  platform->Message(GENERIC_MESSAGE, "Heat Diagnostics:\n");
   for (size_t heater=0; heater < HEATERS; heater++)
   {
 	  if (pids[heater]->active)
 	  {
-		  platform->AppendMessage(BOTH_MESSAGE, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->temp_iState);
+		  platform->MessageF(GENERIC_MESSAGE, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->temp_iState);
 	  }
   }
 }
@@ -166,7 +168,7 @@ void PID::Spin()
 		  SetHeater(0.0);
 		  temperatureFault = true;
 		  //switchedOff = true;
-		  platform->Message(BOTH_MESSAGE, "Temperature fault on heater %d, T = %.1f\n", heater, temperature);
+		  platform->MessageF(GENERIC_MESSAGE, "Temperature fault on heater %d, T = %.1f\n", heater, temperature);
 		  reprap.FlagTemperatureFault(heater);
 	  }
   }
@@ -188,7 +190,7 @@ void PID::Spin()
 			  SetHeater(0.0);
 			  temperatureFault = true;
 			  //switchedOff = true;
-			  platform->Message(BOTH_MESSAGE, "Heating fault on heater %d, T = %.1f C; still not at temperature %.1f after %f seconds.\n", heater, temperature, tmp, tim);
+			  platform->MessageF(GENERIC_MESSAGE, "Heating fault on heater %d, T = %.1f C; still not at temperature %.1f after %f seconds.\n", heater, temperature, tmp, tim);
 			  reprap.FlagTemperatureFault(heater);
 		  }
 	  }

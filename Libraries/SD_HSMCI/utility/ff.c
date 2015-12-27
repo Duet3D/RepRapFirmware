@@ -519,7 +519,7 @@ static WCHAR LfnBuf[_MAX_LFN+1];
 #endif
 
 
-
+//void debugPrintf(const char*, ...);
 
 /*--------------------------------------------------------------------------
 
@@ -2408,7 +2408,6 @@ FRESULT f_read (
 	UINT rcnt, cc;
 	BYTE csect, *rbuff = buff;
 
-
 	*br = 0;	/* Initialize byte counter */
 
 	res = validate(fp->fs, fp->id);				/* Check validity */
@@ -2460,6 +2459,7 @@ FRESULT f_read (
 				rcnt = SS(fp->fs) * cc;			/* Number of bytes transferred */
 				continue;
 			}
+//			else if (cc > 1) { debugPrintf("Unaligned read\n"); }
 #if !_FS_TINY
 			if (fp->dsect != sect) {			/* Load data sector if not in cache */
 #if !_FS_READONLY
@@ -2509,7 +2509,6 @@ FRESULT f_write (
 	UINT wcnt, cc;
 	const BYTE *wbuff = buff;
 	BYTE csect;
-
 
 	*bw = 0;	/* Initialize byte counter */
 
@@ -2576,6 +2575,7 @@ FRESULT f_write (
 				wcnt = SS(fp->fs) * cc;		/* Number of bytes transferred */
 				continue;
 			}
+//			else if (cc > 1) { debugPrintf("Unaligned write\n"); }	//DEBUG
 #if _FS_TINY
 			if (fp->fptr >= fp->fsize) {	/* Avoid silly cache filling at growing edge */
 				if (move_window(fp->fs, 0)) ABORT(fp->fs, FR_DISK_ERR);

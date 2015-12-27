@@ -26,11 +26,11 @@ Licence: GPL
 #define NAME "RepRapFirmware"
 
 #ifndef VERSION
-#define VERSION "1.09m-dc42"
+#define VERSION "1.09o-dc42"
 #endif
 
 #ifndef DATE
-#define DATE "2015-12-08"
+#define DATE "2015-12-27"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -49,105 +49,124 @@ enum Compatibility
 	repetier = 5
 };
 
-// Some numbers...
+// Generic constants
 
-const uint32_t MainBaudRate = 115200;			// Communication speed of the USB if needed
-const uint32_t AuxBaudRate = 57600;				// Communication speed of the auxiliary serial port
+const float ABS_ZERO = -273.15;						// Celsius
+const float NEARLY_ABS_ZERO = -273.0;				// Celsius
+const float ROOM_TEMPERATURE = 21.0;				// Celsius
 
-const unsigned int GcodeLength = 100;			// Maximum length of a G Code string that we handle
-const unsigned int MaxFilenameLength = 100;		// Maximum length of a path + filename on the SD card
+const float INCH_TO_MM = 25.4;
+const float MINUTES_TO_SECONDS = 60.0;
+const float SECONDS_TO_MINUTES = 1.0 / MINUTES_TO_SECONDS;
 
-const float defaultIdleCurrentFactor = 0.3;		// Proportion of normal motor current that we use for idle hold
-const float defaultIdleTimeout = 30.0;
+const float LONG_TIME = 300.0;						// Seconds
+const float MINIMUM_TOOL_WARNING_INTERVAL = 4.0;	// Seconds
 
-const float DefaultFeedRate = 3000;				// The initial requested feed rate after resetting the printer
+// Comms defaults
 
-#define ABS_ZERO (-273.15)  					// Celsius
-#define NEARLY_ABS_ZERO (-273)					// Celsius
+const unsigned int USB_BAUD_RATE = 115200;			// Default communication speed of the USB if needed
+const unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART device
+const unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
 
-const float InchToMm = 25.4;
+// Heater values
 
-#define HEAT_SAMPLE_TIME (0.5)					// Seconds
-#define HEAT_PWM_AVERAGE_TIME (5.0)				// Seconds
+const float HEAT_SAMPLE_TIME = 0.5;					// Seconds
+const float HEAT_PWM_AVERAGE_TIME = 5.0;			// Seconds
 
-#define TEMPERATURE_CLOSE_ENOUGH (2.5) 			// Celsius
-#define TEMPERATURE_LOW_SO_DONT_CARE (40.0)		// Celsius
-#define HOT_ENOUGH_TO_EXTRUDE (160.0)       	// Celsius
-#define HOT_ENOUGH_TO_RETRACT (90.0)			// Celsius
-#define TIME_TO_HOT (150.0)						// Seconds
+const float TEMPERATURE_CLOSE_ENOUGH = 2.5;			// Celsius
+const float TEMPERATURE_LOW_SO_DONT_CARE = 40.0;	// Celsius
+const float HOT_ENOUGH_TO_EXTRUDE = 160.0;			// Celsius
+const float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
+const float TIME_TO_HOT = 150.0;					// Seconds
 
-// If temperatures fall outside this range, something nasty has happened.
+const uint8_t MAX_BAD_TEMPERATURE_COUNT = 6;		// Number of bad temperature samples before a heater fault is reported
+const float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
+const float BAD_HIGH_TEMPERATURE = 300.0;			// Celsius
+const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 
-#define MAX_BAD_TEMPERATURE_COUNT (6)
-#define BAD_LOW_TEMPERATURE (-10.0)
-#define BAD_HIGH_TEMPERATURE (300.0)
+// PWM frequencies
 
-const unsigned int SlowHeaterPwmFreq = 10;		// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
-const unsigned int NormalHeaterPwmFreq = 500;	// normal PWM frequency used for hot ends
-const unsigned int DefaultFanPwmFreq = 500;		// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
+const unsigned int SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
+const unsigned int NormalHeaterPwmFreq = 500;		// normal PWM frequency used for hot ends
+const unsigned int DefaultFanPwmFreq = 500;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
 
-const size_t MaxProbePoints = 16;				// Maximum number of probe points
-const size_t MaxDeltaCalibrationPoints = 16;	// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
+// Default Z probe values
 
-const float DefaultZDive = 5.0;					// Default height from which to probe the bed (mm)
-const float DefaultProbeSpeed = 2.0;			// Default Z probing speed
-const float DefaultTravelSpeed = 100.0;			// Default speed for travel to probe points
+const size_t MAX_PROBE_POINTS = 16;					// Maximum number of probe points
+const size_t MAX_DELTA_PROBE_POINTS = 16;			// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
 
-const float Triangle0 = -0.001;					// Slightly less than 0 for point-in-triangle tests
-const float SillyZValue = -9999.0;
+const float DEFAULT_Z_DIVE = 5.0;					// Millimetres
+const float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed
+const float DEFAULT_TRAVEL_SPEED = 100.0;			// Default speed for travel to probe points
+
+const float TRIANGLE_ZERO = -0.001;					// Millimetres
+const float SILLY_Z_VALUE = -9999.0;				// Millimetres
 
 // String lengths
 
-#define STRING_LENGTH 1024
-const size_t MaxPasswordLength = 20;
-const size_t MaxNameLength = 40;
-const size_t MaxMessageLength = 40;
-const size_t MaxGcodeReplyLength = 2048;
+//const size_t LONG_STRING_LENGTH = 1024;
+const size_t FORMAT_STRING_LENGTH = 256;
+const size_t MACHINE_NAME_LENGTH = 40;
+const size_t PASSWORD_LENGTH = 20;
 
-// Print estimation defaults
-const float DefaultNozzleDiameter = 0.5;		// Thickness of the nozzle
-const float DefaultFilamentWidth = 1.75;		// Width of the filament
+const size_t GCODE_LENGTH = 100;
+const size_t GCODE_REPLY_LENGTH = 2048;
+const size_t MESSAGE_LENGTH = 256;
 
-#define MAX_LAYER_SAMPLES 5						// Number of layer samples (except for first layer)
-#define ESTIMATION_MIN_FILAMENT_USAGE 0.025		// Minimum per cent for filament usage estimation
-#define FIRST_LAYER_SPEED_FACTOR 0.25			// First layer speed compared to others (only for layer-based estimation)
+const size_t FILENAME_LENGTH = 100;
+
+// Output buffer lengths
+
+const uint16_t OUTPUT_BUFFER_SIZE = 256;			// How many bytes does each OutputBuffer hold?
+const size_t OUTPUT_BUFFER_COUNT = 16;				// How many OutputBuffer instances do we have?
+
+// Move system
+
+const float DEFAULT_FEEDRATE = 3000.0;				// The initial requested feed rate after resetting the printer
+const float DEFAULT_IDLE_TIMEOUT = 30.0;			// Seconds
+const float DEFAULT_IDLE_CURRENT_FACTOR = 0.3;		// Proportion of normal motor current that we use for idle hold
+
+// Default nozzle and filament values
+
+const float NOZZLE_DIAMETER = 0.5;					// Millimetres
+const float FILAMENT_WIDTH = 1.75;					// Millimetres
 
 // Webserver stuff
 
-#define DEFAULT_PASSWORD "reprap"
-#define DEFAULT_NAME "My RepRap 1"
-#define INDEX_PAGE "reprap.htm"
-#define FOUR04_FILE "html404.htm"
-#define CONFIG_FILE "config.g" 					// The file that sets the machine's parameters
-#define DEFAULT_FILE "default.g"				// If the config file isn't found
+#define DEFAULT_PASSWORD "reprap"					// Default machine password
+#define DEFAULT_NAME "My Duet"						// Default machine name
+#define HOSTNAME "duet"								// Default netbios name
+
+#define INDEX_PAGE_FILE "reprap.htm"
+#define FOUR04_PAGE_FILE "html404.htm"
+
+// Filesystem and upload defaults
+
+#define FS_PREFIX "0:"
+#define WEB_DIR "0:/www/"							// Place to find web files on the SD card
+#define GCODE_DIR "0:/gcodes/"						// Ditto - G-Codes
+#define SYS_DIR "0:/sys/";							// Ditto - System files
+#define MACRO_DIR "0:/macros/"						// Ditto - Macro files
+
+#define CONFIG_FILE "config.g"
+#define DEFAULT_FILE "default.g"
 #define HOME_X_G "homex.g"
 #define HOME_Y_G "homey.g"
 #define HOME_Z_G "homez.g"
 #define HOME_ALL_G "homeall.g"
 #define HOME_DELTA_G "homedelta.g"
-#define SET_BED_EQUATION "bed.g"
+#define BED_EQUATION_G "bed.g"
 #define PAUSE_G "pause.g"
 #define RESUME_G "resume.g"
 #define STOP_G "stop.g"
 #define SLEEP_G "sleep.g"
 
-#define LIST_SEPARATOR ':'						// Lists in G Codes
-#define FILE_LIST_SEPARATOR ','					// Put this between file names when listing them
-#define FILE_LIST_BRACKET '"'					// Put these round file names when listing them
+#define EOF_STRING "<!-- **EoF** -->"
 
-#define LONG_TIME 300.0 // Seconds
+// List defaults
 
-#define EOF_STRING "<!-- **EoF** -->"           // For HTML uploads
-
-#define FLASH_LED 'F' 							// Type byte of a message that is to flash an LED; the next two bytes define
-                      	  	  	  	  	  	  	// the frequency and M/S ratio.
-#define DISPLAY_MESSAGE 'L'  					// Type byte of a message that is to appear on a local display; the L is
-                             	 	 	 	 	// not displayed; \f and \n should be supported.
-#define HOST_MESSAGE 'H' 						// Type byte of a message that is to be sent to the host via USB; the H is not sent.
-#define WEB_MESSAGE 'W'							// Type byte of message that is to be sent to the web
-#define WEB_ERROR_MESSAGE 'E'					// Type byte of message that is to be sent to the web - flags an error
-#define BOTH_MESSAGE 'B'						// Type byte of message that is to be sent to the web & host
-#define BOTH_ERROR_MESSAGE 'A'					// Type byte of message that is to be sent to the web & host - flags an error
-#define DEBUG_MESSAGE 'D'						// Type byte of debug message to send in blocking mode to USB
+const char LIST_SEPARATOR = ':';
+const char FILE_LIST_SEPARATOR = ',';
+const char FILE_LIST_BRACKET = '"';
 
 #endif

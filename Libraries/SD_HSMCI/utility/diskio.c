@@ -168,7 +168,6 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 //	debugPrintf("R %u %u\n", sector, count);
 #if ACCESS_MEM_TO_RAM
 	uint8_t uc_sector_size = mem_sector_size(drv);
-	uint32_t i;
 	uint32_t ul_last_sector_num;
 
 	if (uc_sector_size == 0) {
@@ -177,16 +176,13 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count)
 
 	/* Check valid address */
 	mem_read_capacity(drv, &ul_last_sector_num);
-	if ((sector + count * uc_sector_size) >
-			(ul_last_sector_num + 1) * uc_sector_size) {
+	if ((sector + count * uc_sector_size) > (ul_last_sector_num + 1) * uc_sector_size) {
 		return RES_PARERR;
 	}
 
 	/* Read the data */
-	for (i = 0; i < count; i++) {
-		if (memory_2_ram(drv, sector + uc_sector_size * i, buff + uc_sector_size * SECTOR_SIZE_DEFAULT * i) != CTRL_GOOD) {
-			return RES_ERROR;
-		}
+	if (memory_2_ram(drv, sector, buff, count) != CTRL_GOOD) {
+		return RES_ERROR;
 	}
 
 	return RES_OK;
@@ -217,7 +213,6 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
 //	debugPrintf("W %u %u\n", sector, count);
 #if ACCESS_MEM_TO_RAM
 	uint8_t uc_sector_size = mem_sector_size(drv);
-	uint32_t i;
 	uint32_t ul_last_sector_num;
 
 	if (uc_sector_size == 0) {
@@ -232,10 +227,8 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count)
 	}
 
 	/* Write the data */
-	for (i = 0; i < count; i++) {
-		if (ram_2_memory(drv, sector + uc_sector_size * i, buff + uc_sector_size * SECTOR_SIZE_DEFAULT * i) != CTRL_GOOD) {
-			return RES_ERROR;
-		}
+	if (ram_2_memory(drv, sector, buff, count) != CTRL_GOOD) {
+		return RES_ERROR;
 	}
 
 	return RES_OK;

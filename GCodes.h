@@ -74,7 +74,7 @@ public:
 
 class GCodes
 {   
-  public:
+public:
   
     GCodes(Platform* p, Webserver* w);
     void Spin();														// Called in a tight loop to make this class work
@@ -91,27 +91,34 @@ class GCodes
     float FractionOfFilePrinted() const;								// Get fraction of file printed
     void Diagnostics();													// Send helpful information out
     bool HaveIncomingData() const;										// Is there something that we have to do?
+	size_t GetStackPointer() const;										// Returns the current stack pointer
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
     void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homed
 
     void PauseSDPrint();												// Pause the current print from SD card
     float GetSpeedFactor() const { return speedFactor * minutesToSeconds; }	// Return the current speed factor
-    const float *GetExtrusionFactors() const { return extrusionFactors; } // Return the current extrusion factors
+    float GetExtrusionFactor(size_t extruder) { return extrusionFactors[extruder]; } // Return the current extrusion factors
     float GetRawExtruderPosition(size_t drive) const;					// Get the actual extruder position, after adjusting the extrusion factor
+    float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
+    float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
     
     bool HaveAux() const { return auxDetected; }						// Any device on the AUX line?
+	OutputBuffer *GetAuxGCodeReply();									// Returns cached G-Code reply for AUX devices and clears its reference
+    uint32_t GetAuxSeq() { return auxSeq; }
 
-    bool IsPaused() const;
-    bool IsPausing() const;
-    bool IsResuming() const;
+	bool IsPaused() const;
+	bool IsPausing() const;
+	bool IsResuming() const;
 
-  private:
+    bool AllAxesAreHomed() const;										// Return true if all axes are homed
+    bool DoFileMacro(const char* fileName, bool reportMissing = true);	// Run a GCode macro in a file, optionally report error if not found
+
+private:
   
     void StartNextGCode(StringRef& reply);								// Fetch a new GCode and process it
     void DoFilePrint(GCodeBuffer* gb, StringRef& reply);				// Get G Codes from a file and print them
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();					// Wait for move queue to exhaust and the current position is loaded
     bool DoCannedCycleMove(EndstopChecks ce);							// Do a move from an internally programmed canned cycle
-    bool DoFileMacro(const char* fileName, bool reportMissing = true);	// Run a GCode macro in a file, optionally report error if not found
     void FileMacroCyclesReturn();										// End a macro
     bool ActOnCode(GCodeBuffer* gb, StringRef& reply);					// Do a G, M or T Code
     bool HandleGcode(GCodeBuffer* gb, StringRef& reply);				// Do a G code
@@ -121,6 +128,7 @@ class GCodes
     int SetUpMove(GCodeBuffer* gb, StringRef& reply);					// Pass a move on to the Move module
     bool DoDwell(GCodeBuffer *gb);										// Wait for a bit
     bool DoDwellTime(float dwell);										// Really wait for a bit
+    bool DoHome(GCodeBuffer *gb, StringRef& reply, bool& error);		// Home some axes
     bool DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust); // Probe at a given point
     bool DoSingleZProbe(bool reportOnly, float heightAdjust);			// Probe where we are
     int DoZProbe(float distance);										// Do a Z probe cycle up to the maximum specified distance
@@ -137,8 +145,8 @@ class GCodes
     void DisableDrives();												// Turn the motors off
     void SetEthernetAddress(GCodeBuffer *gb, int mCode);				// Does what it says
     void SetMACAddress(GCodeBuffer *gb);								// Deals with an M540
-    void HandleReply(bool error, const GCodeBuffer *gb, 				// If the GCode is from the serial interface, reply to it
-    		 const char* reply, char gMOrT, int code, bool resend);
+	void HandleReply(GCodeBuffer *gb, bool error, const char *reply);	// Handle G-Code replies
+	void HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply);
     bool OpenFileToWrite(const char* directory,							// Start saving GCodes in a file
     		const char* fileName, GCodeBuffer *gb);
     void WriteGCodeToFile(GCodeBuffer *gb);								// Write this GCode into a file
@@ -147,11 +155,9 @@ class GCodes
     bool OffsetAxes(GCodeBuffer *gb);									// Set offsets - deprecated, use G10
     void SetPidParameters(GCodeBuffer *gb, int heater, StringRef& reply);	// Set the P/I/D parameters for a heater
     void SetHeaterParameters(GCodeBuffer *gb, StringRef& reply);		 // Set the thermistor and ADC parameters for a heater
-    int8_t Heater(int8_t head) const;									// Legacy G codes start heaters at 0, but we use 0 for the bed.  This sorts that out.
     void ManageTool(GCodeBuffer *gb, StringRef& reply);					// Create a new tool definition
     void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
     bool ToolHeatersAtSetTemperatures(const Tool *tool) const;			// Wait for the heaters associated with the specified tool to reach their set temperatures
-    bool AllAxesAreHomed() const;										// Return true if all axes are homed
     void SetAllAxesNotHomed();											// Flag all axes as not homed
     void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
     const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
@@ -162,7 +168,8 @@ class GCodes
     Webserver* webserver;						// The webserver class
     float dwellTime;							// How long a pause for a dwell (seconds)?
     bool dwellWaiting;							// We are in a dwell
-    GCodeBuffer* webGCode;						// The sources...
+    GCodeBuffer* httpGCode;						// The sources...
+	GCodeBuffer* telnetGCode;					// ...
     GCodeBuffer* fileGCode;						// ...
     GCodeBuffer* serialGCode;					// ...
     GCodeBuffer* auxGCode;						// this one is for the LCD display on the async serial interface
@@ -182,6 +189,8 @@ class GCodes
     static const char axisLetters[AXES]; 		// 'X', 'Y', 'Z'
 	float axisScaleFactors[AXES];				// Scale XYZ coordinates by this factor (for Delta configurations)
     float lastRawExtruderPosition[DRIVES - AXES];	// Extruder position of the last move fed into the Move class
+    float rawExtruderTotalByDrive[DRIVES - AXES];	// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive
+    float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 	float record[DRIVES+1];						// Temporary store for move positions
 	float moveToDo[DRIVES+1];					// Where to go set by G1 etc
 	bool activeDrive[DRIVES+1];					// Is this drive involved in a move?
@@ -190,7 +199,6 @@ class GCodes
     FileData fileBeingPrinted;
     FileData fileToPrint;
     FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) in
-    FileStore* configFile;						// A file containing a macro
     uint16_t toBeHomed;							// Bitmap of axes still to be homed
     bool doingFileMacro;						// Are we executing a macro file?
     int oldToolNumber, newToolNumber;			// Tools being changed
@@ -204,14 +212,15 @@ class GCodes
     float longWait;								// Timer for things that happen occasionally (seconds)
     bool limitAxes;								// Don't think outside the box.
     bool axisIsHomed[AXES];						// These record which of the axes have been homed
-    float pausedFan0Value;
-    float pausedFan1Value;
+    float pausedFanValues[NUM_FANS];			// Fan speeds when the print was paused
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
     float speedFactorChange;					// factor by which we changed the speed factor since the last move
     float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
     float lastProbedZ;							// the last height at which the Z probe stopped
 
     bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
+	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
+	uint32_t auxSeq;							// Sequence number for AUX devices
     bool simulating;
     float simulationTime;
     FilePosition filePos;						// The position we got up to in the file being printed
@@ -228,15 +237,10 @@ inline bool GCodes::DoingFileMacro() const
 inline bool GCodes::HaveIncomingData() const
 {
 	return fileBeingPrinted.IsLive() ||
-			webserver->GCodeAvailable() ||
-			(platform->GetLine()->Status() & (uint8_t)IOStatus::byteAvailable) ||
-			(platform->GetAux()->Status() & (uint8_t)IOStatus::byteAvailable);
-}
-
-// This function takes care of the fact that the heater and head indices don't match because the bed is heater 0.
-inline int8_t GCodes::Heater(int8_t head) const
-{
-   return head+1; 
+			webserver->GCodeAvailable(WebSource::HTTP) ||
+			webserver->GCodeAvailable(WebSource::Telnet) ||
+			platform->GCodeAvailable(SerialSource::USB) ||
+			platform->GCodeAvailable(SerialSource::AUX);
 }
 
 inline bool GCodes::AllAxesAreHomed() const
@@ -247,6 +251,18 @@ inline bool GCodes::AllAxesAreHomed() const
 inline void GCodes::SetAllAxesNotHomed()
 {
 	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
+}
+
+inline size_t GCodes::GetStackPointer() const
+{
+	return stackPointer;
+}
+
+inline OutputBuffer *GCodes::GetAuxGCodeReply()
+{
+	OutputBuffer *temp = auxGCodeReply;
+	auxGCodeReply = nullptr;
+	return temp;
 }
 
 #endif

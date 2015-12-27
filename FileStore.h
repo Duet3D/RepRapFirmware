@@ -7,6 +7,15 @@ typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 const size_t FileBufLen = 256;						// 512 would be more efficient, but need to free up some RAM first
 
+enum class IOStatus : uint8_t
+{
+	nothing = 0,
+	byteAvailable = 1,
+	atEoF = 2,
+	clientLive = 4,
+	clientConnected = 8
+};
+
 class FileStore
 {
 public:
@@ -19,7 +28,7 @@ public:
 	bool Write(const char* s);						// Write a string
 	bool Close();									// Shut the file and tidy up
 	bool Seek(FilePosition pos);					// Jump to pos in the file
-	FilePosition GetPosition() const;				// Return the current position in the file, assuming we are reading the file
+	FilePosition Position() const;					// Return the current position in the file, assuming we are reading the file
 #if 0	// not currently used
 	bool GoToEnd();									// Position the file at the end (so you can write on the end).
 #endif

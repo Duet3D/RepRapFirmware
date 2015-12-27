@@ -62,8 +62,10 @@ void init_ethernet(const u8_t macAddress[], const char *hostname);
 
 bool establish_ethernet_link(void);
 void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
+bool ethernet_is_ready();
 
 struct netif* ethernet_get_configuration();
+void ethernet_set_configuration(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
 
 void ethernet_timers_update(void);
 

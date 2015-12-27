@@ -74,6 +74,7 @@ extern void RepRapNetworkMessage(const char*);
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
+static bool net_if_ready = false;
 
 struct netif* ethernet_get_configuration()
 {
@@ -135,7 +136,6 @@ void ethernet_timers_update(void)
 	}
 }
 
-
 //************************************************************************************************************
 
 // Added by AB.
@@ -170,13 +170,38 @@ static void ethernet_configure_interface(const unsigned char ipAddress[], const 
 	/* Bring it up */
 	if (x_ip_addr.addr == 0)
 	{
-		RepRapNetworkMessage("Starting DHCP\n");
+		RepRapNetworkMessage("Starting DHCP...\n");
 		dhcp_start(&gs_net_if);
 	}
 	else
 	{
-		RepRapNetworkMessage("Starting network\n");
+		RepRapNetworkMessage("Starting network...\n");
 		netif_set_up(&gs_net_if);
+	}
+}
+
+// This sets the IP configuration on-the-fly
+void ethernet_set_configuration(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[])
+{
+	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
+	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+	IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);
+	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);
+
+	if (gs_net_if.ip_addr.addr == 0)
+	{
+		dhcp_stop(&gs_net_if);
+	}
+
+	if (x_ip_addr.addr == 0)
+	{
+		dhcp_start(&gs_net_if);
+	}
+	else
+	{
+		netif_set_ipaddr(&gs_net_if, &x_ip_addr);
+		netif_set_netmask(&gs_net_if, &x_net_mask);
+		netif_set_gw(&gs_net_if, &x_gateway);
 	}
 }
 
@@ -209,6 +234,14 @@ void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask
 	ethernet_configure_interface(ipAddress, netMask, gateWay);
 }
 
+/** \brief Check if the ethernet interface has been configured completely and if
+ * an IP has been assigned to it.
+ *
+ */
+bool ethernet_is_ready()
+{
+	return net_if_ready;
+}
 
 //*************************************************************************************************************
 /**
@@ -218,15 +251,16 @@ void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask
  */
 void ethernet_status_callback(struct netif *netif)
 {
-	char c_mess[20];		// 15 for IP address, 1 for \n, 1 for null, so 3 spare
+	char c_mess[20];		// 15 for IP address, 2 for \n\n, 1 for null, so 2 spare
 	if (netif_is_up(netif))
 	{
 		RepRapNetworkMessage("Network up, IP=");
 		ipaddr_ntoa_r(&(netif->ip_addr), c_mess, sizeof(c_mess));
 		c_mess[sizeof(c_mess) - 1] = 0;		// ensure null terminated
-		strncat(c_mess, "\n", sizeof(c_mess) - strlen(c_mess) - 1);
+		strncat(c_mess, "\n\n", sizeof(c_mess) - strlen(c_mess) - 1);
 		RepRapNetworkMessage(c_mess);
 		netif->flags |= NETIF_FLAG_LINK_UP;
+		net_if_ready = true;
 	}
 	else
 	{

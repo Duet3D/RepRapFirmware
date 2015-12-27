@@ -32,25 +32,25 @@ void MassStorage::Init()
 			switch (err)
 			{
 				case SD_MMC_ERR_NO_CARD:
-					platform->AppendMessage(HOST_MESSAGE, "Card not found\n");
+					platform->Message(HOST_MESSAGE, "Card not found\n");
 					break;
 				case SD_MMC_ERR_UNUSABLE:
-					platform->AppendMessage(HOST_MESSAGE, "Card is unusable, try another one\n");
+					platform->Message(HOST_MESSAGE, "Card is unusable, try another one\n");
 					break;
 				case SD_MMC_ERR_SLOT:
-					platform->AppendMessage(HOST_MESSAGE, "Slot unknown\n");
+					platform->Message(HOST_MESSAGE, "Slot unknown\n");
 					break;
 				case SD_MMC_ERR_COMM:
-					platform->AppendMessage(HOST_MESSAGE, "General communication error\n");
+					platform->Message(HOST_MESSAGE, "General communication error\n");
 					break;
 				case SD_MMC_ERR_PARAM:
-					platform->AppendMessage(HOST_MESSAGE, "Illegal input parameter\n");
+					platform->Message(HOST_MESSAGE, "Illegal input parameter\n");
 					break;
 				case SD_MMC_ERR_WP:
-					platform->AppendMessage(HOST_MESSAGE, "Card write protected\n");
+					platform->Message(HOST_MESSAGE, "Card write protected\n");
 					break;
 				default:
-					platform->AppendMessage(HOST_MESSAGE, "Unknown (code %d)\n", err);
+					platform->MessageF(HOST_MESSAGE, "Unknown (code %d)\n", err);
 					break;
 			}
 			return;
@@ -93,7 +93,7 @@ void MassStorage::Init()
 	int mounted = f_mount(0, &fileSystem);
 	if (mounted != FR_OK)
 	{
-		platform->Message(HOST_MESSAGE, "Can't mount filesystem 0: code %d\n", mounted);
+		platform->MessageF(HOST_MESSAGE, "Can't mount filesystem 0: code %d\n", mounted);
 	}
 }
 
@@ -112,7 +112,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 			out++;
 			if (out >= ARRAY_SIZE(combinedName))
 			{
-				platform->Message(BOTH_ERROR_MESSAGE, "CombineName() buffer overflow.");
+				platform->MessageF(GENERIC_MESSAGE, "CombineName() buffer overflow.");
 				out = 0;
 			}
 		}
@@ -132,7 +132,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 		out++;
 		if (out >= ARRAY_SIZE(combinedName))
 		{
-			platform->Message(BOTH_ERROR_MESSAGE, "CombineName() buffer overflow.");
+			platform->Message(GENERIC_MESSAGE, "CombineName() buffer overflow.");
 			out = 0;
 		}
 	}
@@ -144,7 +144,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 {
-	TCHAR loc[MaxFilenameLength + 1];
+	TCHAR loc[FILENAME_LENGTH + 1];
 
 	// Remove the trailing '/' from the directory name
 	size_t len = strnlen(directory, ARRAY_UPB(loc));
@@ -250,7 +250,7 @@ bool MassStorage::Delete(const char* directory, const char* fileName)
 								: fileName;
 	if (f_unlink(location) != FR_OK)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't delete file %s\n", location);
+		platform->MessageF(GENERIC_MESSAGE, "Can't delete file %s\n", location);
 		return false;
 	}
 	return true;
@@ -262,7 +262,7 @@ bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
 	const char* location = platform->GetMassStorage()->CombineName(parentDir, dirName);
 	if (f_mkdir(location) != FR_OK)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't create directory %s\n", location);
+		platform->MessageF(GENERIC_MESSAGE, "Can't create directory %s\n", location);
 		return false;
 	}
 	return true;
@@ -272,7 +272,7 @@ bool MassStorage::MakeDirectory(const char *directory)
 {
 	if (f_mkdir(directory) != FR_OK)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't create directory %s\n", directory);
+		platform->MessageF(GENERIC_MESSAGE, "Can't create directory %s\n", directory);
 		return false;
 	}
 	return true;
@@ -283,7 +283,7 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
 {
 	if (f_rename(oldFilename, newFilename) != FR_OK)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't rename file or directory %s to %s\n", oldFilename, newFilename);
+		platform->MessageF(GENERIC_MESSAGE, "Can't rename file or directory %s to %s\n", oldFilename, newFilename);
 		return false;
 	}
 	return true;
@@ -298,19 +298,16 @@ bool MassStorage::FileExists(const char *file) const
 }
 
 // Check if the specified directory exists
-bool MassStorage::PathExists(const char *path) const
+bool MassStorage::DirectoryExists(const char *path) const
 {
 	DIR dir;
 	dir.lfn = nullptr;
 	return (f_opendir(&dir, path) == FR_OK);
 }
 
-bool MassStorage::PathExists(const char* directory, const char* subDirectory)
+bool MassStorage::DirectoryExists(const char* directory, const char* subDirectory)
 {
-	const char* location = (directory != NULL)
-							? platform->GetMassStorage()->CombineName(directory, subDirectory)
-								: subDirectory;
-	return PathExists(location);
+	return DirectoryExists(CombineName(directory, subDirectory));
 }
 
 // End

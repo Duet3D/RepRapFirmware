@@ -33,9 +33,10 @@ const char GCodes::axisLetters[AXES] =
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 GCodes::GCodes(Platform* p, Webserver* w) :
-		platform(p), active(false), webserver(w), stackPointer(0)
+		platform(p), active(false), webserver(w), stackPointer(0), auxGCodeReply(nullptr)
 {
-	webGCode = new GCodeBuffer(platform, "web: ");
+	httpGCode = new GCodeBuffer(platform, "web: ");
+	telnetGCode = new GCodeBuffer(platform, "telnet: ");
 	fileGCode = new GCodeBuffer(platform, "file: ");
 	serialGCode = new GCodeBuffer(platform, "serial: ");
 	auxGCode = new GCodeBuffer(platform, "aux: ");
@@ -44,7 +45,7 @@ GCodes::GCodes(Platform* p, Webserver* w) :
 
 void GCodes::Exit()
 {
-	platform->Message(BOTH_MESSAGE, "GCodes class exited.\n");
+	platform->Message(GENERIC_MESSAGE, "GCodes class exited.\n");
 	active = false;
 }
 
@@ -52,11 +53,12 @@ void GCodes::Init()
 {
 	Reset();
 	distanceScale = 1.0;
-	for (unsigned int extruder = 0; extruder < DRIVES - AXES; extruder++)
+	rawExtruderTotal = 0.0;
+	for (size_t extruder = 0; extruder < DRIVES - AXES; extruder++)
 	{
 		lastRawExtruderPosition[extruder] = 0.0;
+		rawExtruderTotalByDrive[extruder] = 0.0;
 	}
-	configFile = NULL;
 	eofString = EOF_STRING;
 	eofStringCounter = 0;
 	eofStringLength = strlen(eofString);
@@ -71,12 +73,17 @@ void GCodes::Init()
 		axisScaleFactors[axis] = 1.0;
 	}
 	SetAllAxesNotHomed();
+	for (size_t i = 0; i < NUM_FANS; ++i)
+	{
+		pausedFanValues[i] = 0.0;
+	}
 }
 
 // This is called from Init and when doing an emergency stop
 void GCodes::Reset()
 {
-	webGCode->Init();
+	httpGCode->Init();
+	telnetGCode->Init();
 	fileGCode->Init();
 	serialGCode->Init();
 	auxGCode->Init();
@@ -104,9 +111,17 @@ void GCodes::Reset()
 	}
 	for (size_t i = 0; i < DRIVES; ++i)
 	{
+		moveBuffer[i] = 0.0;
 		pausedMoveBuffer[i] = 0.0;
 	}
+	moveBuffer[DRIVES] = DEFAULT_FEEDRATE/minutesToSeconds;
+
 	auxDetected = false;
+	while (auxGCodeReply != nullptr)
+	{
+		auxGCodeReply = reprap.ReleaseOutput(auxGCodeReply);
+	}
+	auxSeq = 0;
 	simulating = false;
 	simulationTime = 0.0;
 	isPaused = false;
@@ -169,7 +184,7 @@ void GCodes::DoFilePrint(GCodeBuffer* gb, StringRef& reply)
 					if (platform->Emulating() == marlin)
 					{
 						// Pronterface expects a "Done printing" message
-						HandleReply(false, gb, "Done printing file\n", 'M', -1, false);
+						HandleReply(gb, false, "Done printing file");
 					}
 				}
 			}
@@ -189,11 +204,9 @@ void GCodes::Spin()
 
 	// Check for M105 poll requests from Pronterface and PanelDue so that the status is kept up to date during execution of file macros etc.
 	// No need to read multiple characters at a time in this case because the polling rate is quite low.
-	if (!serialGCode->Active() && serialGCode->WritingFileDirectory() == nullptr
-			&& (platform->GetLine()->Status() & (uint8_t)IOStatus::byteAvailable))
+	if (!serialGCode->Active() && serialGCode->WritingFileDirectory() == nullptr && platform->GCodeAvailable(SerialSource::USB))
 	{
-		char b;
-		platform->GetLine()->Read(b);
+		char b = platform->ReadFromSource(SerialSource::USB);
 		if (serialGCode->Put(b))	// add char to buffer and test whether the gcode is complete
 		{
 			if (serialGCode->IsPollRequest())
@@ -204,10 +217,9 @@ void GCodes::Spin()
 		}
 	}
 
-	if (!auxGCode->Active() && (platform->GetAux()->Status() & (uint8_t)IOStatus::byteAvailable))
+	if (!auxGCode->Active() && platform->GCodeAvailable(SerialSource::AUX))
 	{
-		char b;
-		platform->GetAux()->Read(b);
+		char b = platform->ReadFromSource(SerialSource::AUX);
 		if (auxGCode->Put(b))		// add char to buffer and test whether the gcode is complete
 		{
 			auxDetected = true;
@@ -230,7 +242,7 @@ void GCodes::Spin()
 	case GCodeState::waitingForMoveToComplete:
 		if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
-			HandleReply(false, gbCurrent, nullptr, 'G', 1, false);
+			HandleReply(gbCurrent, false, "");
 			state = GCodeState::normal;
 		}
 		break;
@@ -253,7 +265,7 @@ void GCodes::Spin()
 		}
 		else
 		{
-			HandleReply(false, gbCurrent, nullptr, 'G', 28, false);
+			HandleReply(gbCurrent, false, "");
 			state = GCodeState::normal;
 		}
 		break;
@@ -274,7 +286,7 @@ void GCodes::Spin()
 				{
 					zProbesSet = true;
 					reprap.GetMove()->FinishedBedProbing(0, reply);
-					HandleReply(false, gbCurrent, reply.Pointer(), 'G', 32, false);
+					HandleReply(gbCurrent, false, reply.Pointer());
 					state = GCodeState::normal;
 				}
 			}
@@ -308,7 +320,7 @@ void GCodes::Spin()
 		break;
 
 	case GCodeState::toolChange3:
-		HandleReply(false, gbCurrent, nullptr, 'T', newToolNumber, false);
+		HandleReply(gbCurrent, false, "");
 		state = GCodeState::normal;
 		break;
 
@@ -321,7 +333,7 @@ void GCodes::Spin()
 		break;
 
 	case GCodeState::pausing2:
-		HandleReply(false, gbCurrent, "Printing paused\n", 'M', 25, false);
+		HandleReply(gbCurrent, false, "Printing paused");
 		state = GCodeState::normal;
 		break;
 
@@ -340,7 +352,7 @@ void GCodes::Spin()
 			{
 				moveBuffer[drive] = 0.0;
 			}
-			moveBuffer[DRIVES] = 5000 / minutesToSeconds;	// ask for a good feed rate, we may have paused during a slow move
+			moveBuffer[DRIVES] = DEFAULT_FEEDRATE/minutesToSeconds;		// ask for a good feed rate, we may have paused during a slow move
 			moveType = 0;
 			endStopsToCheck = 0;
 			moveFilePos = noFilePosition;
@@ -362,8 +374,10 @@ void GCodes::Spin()
 	case GCodeState::resuming3:
 		if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
-			platform->SetFanValue(0,pausedFan0Value);
-			platform->SetFanValue(1,pausedFan1Value);
+			for (size_t i = 0; i < NUM_FANS; ++i)
+			{
+				platform->SetFanValue(i, pausedFanValues[i]);
+			}
 			fileBeingPrinted.MoveFrom(fileToPrint);
 			for (size_t drive = AXES; drive < DRIVES; ++drive)
 			{
@@ -373,7 +387,7 @@ void GCodes::Spin()
 			reprap.GetMove()->SetFeedrate(pausedMoveBuffer[DRIVES]);
 			fileGCode->Resume();
 			isPaused = false;
-			HandleReply(false, gbCurrent, "Printing resumed\n", 'M', 24, false);
+			HandleReply(gbCurrent, false, "Printing resumed");
 			state = GCodeState::normal;
 		}
 		break;
@@ -407,45 +421,56 @@ void GCodes::StartNextGCode(StringRef& reply)
 
 	// Check each of the sources of G Codes (web, serial, queued and file) to
 	// see if they are finished in order to feed them new codes.
-	//
 	// Note the order establishes a priority: web, serial, queued, file.
 	// If file weren't last, then the others would never get a look in when
 	// a file was being printed.
-
-	if (!webGCode->Active() && webserver->GCodeAvailable())
+	if (!httpGCode->Active() && webserver->GCodeAvailable(WebSource::HTTP))
 	{
 		int8_t i = 0;
 		do
 		{
-			char b = webserver->ReadGCode();
-			if (webGCode->Put(b))
+			char b = webserver->ReadGCode(WebSource::HTTP);
+			if (httpGCode->Put(b))
 			{
 				// we have a complete gcode
-				if (webGCode->WritingFileDirectory() != NULL)
+				if (httpGCode->WritingFileDirectory() != NULL)
 				{
-					WriteGCodeToFile(webGCode);
+					WriteGCodeToFile(httpGCode);
 				}
 				else
 				{
-					webGCode->SetFinished(ActOnCode(webGCode, reply));
+					httpGCode->SetFinished(ActOnCode(httpGCode, reply));
 				}
 				break;	// stop after receiving a complete gcode in case we haven't finished processing it
 			}
 			++i;
-		} while (i < 16 && webserver->GCodeAvailable());
+		} while (i < 16 && webserver->GCodeAvailable(WebSource::HTTP));
 		platform->ClassReport(longWait);
 		return;
 	}
 
-	// Now the serial interfaces.
+	// Telnet
+	if (!telnetGCode->Active() && webserver->GCodeAvailable(WebSource::Telnet))
+	{
+		size_t i = 0;
+		do {
+			char b = webserver->ReadGCode(WebSource::Telnet);
+			if (telnetGCode->Put(b))
+			{
+				// we have a complete gcode
+				telnetGCode->SetFinished(ActOnCode(telnetGCode, reply));
+				break;
+			}
+		} while (++i < GCODE_LENGTH && webserver->GCodeAvailable(WebSource::Telnet));
+	}
 
-	if (platform->GetLine()->Status() & (uint8_t)IOStatus::byteAvailable)
+	// Now the serial interfaces.
+	if (platform->GCodeAvailable(SerialSource::USB))
 	{
 		// First check the special case of uploading the reprap.htm file
 		if (serialGCode->WritingFileDirectory() == platform->GetWebDir())
 		{
-			char b;
-			platform->GetLine()->Read(b);
+			char b = platform->ReadFromSource(SerialSource::USB);
 			WriteHTMLToFile(b, serialGCode);
 			platform->ClassReport(longWait);
 			return;
@@ -458,8 +483,7 @@ void GCodes::StartNextGCode(StringRef& reply)
 			int8_t i = 0;
 			do
 			{
-				char b;
-				platform->GetLine()->Read(b);
+				char b = platform->ReadFromSource(SerialSource::USB);
 				if (serialGCode->Put(b))	// add char to buffer and test whether the gcode is complete
 				{
 					// we have a complete gcode
@@ -475,7 +499,7 @@ void GCodes::StartNextGCode(StringRef& reply)
 					break;	// stop after receiving a complete gcode in case we haven't finished processing it
 				}
 				++i;
-			} while (i < 16 && (platform->GetLine()->Status() & (uint8_t)IOStatus::byteAvailable));
+			} while (i < 16 && platform->GCodeAvailable(SerialSource::USB));
 			platform->ClassReport(longWait);
 			return;
 		}
@@ -483,13 +507,12 @@ void GCodes::StartNextGCode(StringRef& reply)
 
 	// Now run the G-Code buffers. It's important to fill up the G-Code buffers before we do this,
 	// otherwise we wouldn't have a chance to pause/cancel running prints.
-	if (!auxGCode->Active() && (platform->GetAux()->Status() & (uint8_t)IOStatus::byteAvailable))
+	if (!auxGCode->Active() && platform->GCodeAvailable(SerialSource::AUX))
 	{
 		int8_t i = 0;
 		do
 		{
-			char b;
-			platform->GetAux()->Read(b);
+			char b = platform->ReadFromSource(SerialSource::AUX);
 			if (auxGCode->Put(b))	// add char to buffer and test whether the gcode is complete
 			{
 				auxDetected = true;
@@ -497,12 +520,12 @@ void GCodes::StartNextGCode(StringRef& reply)
 				break;	// stop after receiving a complete gcode in case we haven't finished processing it
 			}
 			++i;
-		} while (i < 16 && (platform->GetAux()->Status() & (uint8_t)IOStatus::byteAvailable));
+		} while (i < 16 && platform->GCodeAvailable(SerialSource::AUX));
 	}
-	else if (webGCode->Active())
+	else if (httpGCode->Active())
 	{
 		// Note: Direct web-printing has been dropped, so it's safe to execute web codes immediately
-		webGCode->SetFinished(ActOnCode(webGCode, reply));
+		httpGCode->SetFinished(ActOnCode(httpGCode, reply));
 	}
 	else if (serialGCode->Active())
 	{
@@ -528,8 +551,9 @@ void GCodes::StartNextGCode(StringRef& reply)
 
 void GCodes::Diagnostics()
 {
-	platform->AppendMessage(BOTH_MESSAGE, "GCodes Diagnostics:\n");
-	platform->AppendMessage(BOTH_MESSAGE, "Move available? %s\n", moveAvailable ? "yes" : "no");
+	platform->Message(GENERIC_MESSAGE, "GCodes Diagnostics:\n");
+	platform->MessageF(GENERIC_MESSAGE, "Move available? %s\n", moveAvailable ? "yes" : "no");
+	platform->MessageF(GENERIC_MESSAGE, "Stack pointer: %u of %u\n", stackPointer, StackSize);
 }
 
 // The wait till everything's done function.  If you need the machine to
@@ -557,7 +581,7 @@ void GCodes::Push()
 {
 	if (stackPointer >= StackSize)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Push(): stack overflow!\n");
+		platform->Message(GENERIC_MESSAGE, "Push(): stack overflow!\n");
 		return;
 	}
 
@@ -569,7 +593,6 @@ void GCodes::Push()
 	stack[stackPointer].axesRelative = axesRelative;
 	stack[stackPointer].doingFileMacro = doingFileMacro;
 	stackPointer++;
-	platform->PushMessageIndent();
 }
 
 // Recover a saved state
@@ -577,7 +600,7 @@ void GCodes::Pop()
 {
 	if (stackPointer < 1)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Pop(): stack underflow!\n");
+		platform->Message(GENERIC_MESSAGE, "Pop(): stack underflow!\n");
 		return;
 	}
 
@@ -590,15 +613,12 @@ void GCodes::Pop()
 	drivesRelative = stack[stackPointer].drivesRelative;
 	axesRelative = stack[stackPointer].axesRelative;
 	doingFileMacro = stack[stackPointer].doingFileMacro;
-
-	platform->PopMessageIndent();
 }
 
 // Move expects all axis movements to be absolute, and all
 // extruder drive moves to be relative.  This function serves that.
 // If applyLimits is true and we have homed the relevant axes, then we don't allow movement beyond the bed.
 // Returns true if we have a legal move (or G92 argument), false if this gcode should be discarded
-
 bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyLimits)
 {
 	// Zero every extruder drive as some drives may not be changed
@@ -619,7 +639,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 	{
 		if (tool == nullptr)
 		{
-			platform->Message(BOTH_ERROR_MESSAGE, "Attempting to extrude with no tool selected.\n");
+			platform->Message(GENERIC_MESSAGE, "Attempting to extrude with no tool selected.\n");
 			return false;
 		}
 		size_t eMoveCount = tool->DriveCount();
@@ -640,7 +660,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 				gb->GetFloatArray(eMovement, mc);
 				if (eMoveCount != mc)
 				{
-					platform->Message(BOTH_ERROR_MESSAGE, "Wrong number of extruder drives for the selected tool: %s\n", gb->Buffer());
+					platform->MessageF(GENERIC_MESSAGE, "Wrong number of extruder drives for the selected tool: %s\n", gb->Buffer());
 					return false;
 				}
 			}
@@ -656,15 +676,15 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 					moveBuffer[drive + AXES] = 0.0;		// no move required
 					lastRawExtruderPosition[drive] = moveArg;
 				}
-				else if (drivesRelative)
-				{
-					moveBuffer[drive + AXES] = moveArg * extrusionFactors[drive];
-					lastRawExtruderPosition[drive] += moveArg;
-				}
 				else
 				{
-					moveBuffer[drive + AXES] = (moveArg - lastRawExtruderPosition[drive]) * extrusionFactors[drive];
-					lastRawExtruderPosition[drive] = moveArg;
+					float extrusionAmount = (drivesRelative)
+												? moveArg
+												: moveArg - lastRawExtruderPosition[drive];
+					lastRawExtruderPosition[drive] += extrusionAmount;
+					rawExtruderTotalByDrive[drive] += extrusionAmount;
+					rawExtruderTotal += extrusionAmount;
+					moveBuffer[drive + AXES] = extrusionAmount * extrusionFactors[drive];
 				}
 			}
 		}
@@ -693,7 +713,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 				}
 
 				// If on a Cartesian printer and applying limits, limit all axes
-				if (applyLimits && axisIsHomed[axis] && !reprap.GetMove()->IsDeltaMode())
+				if (applyLimits && axisIsHomed[axis] && !reprap.GetMove()->IsDeltaMode() && !reprap.GetRoland()->Active())
 				{
 					if (moveArg < platform->AxisMinimum(axis))
 					{
@@ -773,7 +793,7 @@ int GCodes::SetUpMove(GCodeBuffer *gb, StringRef& reply)
 		{
 			// We have been asked to do a move without delta mapping on a delta machine, but the move is not relative.
 			// This may be damaging and is almost certainly a user mistake, so ignore the move.
-			reply.copy("Attempt to move the motors of a delta printer to absolute positions\n");
+			reply.copy("Attempt to move the motors of a delta printer to absolute positions");
 			return 1;
 		}
 
@@ -783,14 +803,21 @@ int GCodes::SetUpMove(GCodeBuffer *gb, StringRef& reply)
 			// This may be damaging and is almost certainly a user mistake, so ignore the move. But allow extruder-only moves.
 			if (gb->Seen(axisLetters[X_AXIS]) || gb->Seen(axisLetters[Y_AXIS]) || gb->Seen(axisLetters[Z_AXIS]))
 			{
-				reply.copy("Attempt to move the head of a delta printer before homing the towers\n");
+				reply.copy("Attempt to move the head of a delta printer before homing the towers");
 				return 1;
 			}
 		}
 	}
 
 	// Load the last position and feed rate into moveBuffer
-	reprap.GetMove()->GetCurrentUserPosition(moveBuffer, moveType);
+	if (reprap.GetRoland()->Active())
+	{
+		reprap.GetRoland()->GetCurrentRolandPosition(moveBuffer);
+	}
+	else
+	{
+		reprap.GetMove()->GetCurrentUserPosition(moveBuffer, moveType);
+	}
 
 	moveBuffer[DRIVES] *= speedFactorChange;		// account for any change in the speed factor since the last move
 	speedFactorChange = 1.0;
@@ -833,7 +860,7 @@ void GCodes::ClearMove()
 }
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
-// Return true if the file was found.
+// Return true if the file was found or it wasn't and we were asked to report that fact.
 bool GCodes::DoFileMacro(const char* fileName, bool reportMissing)
 {
 	FileStore *f = platform->GetFileStore(platform->GetSysDir(), fileName, false);
@@ -842,7 +869,8 @@ bool GCodes::DoFileMacro(const char* fileName, bool reportMissing)
 		if (reportMissing)
 		{
 			// Don't use snprintf into scratchString here, because fileName may be aliased to scratchString
-			platform->Message(BOTH_ERROR_MESSAGE, "Macro file %s not found.\n", fileName);
+			platform->MessageF(GENERIC_MESSAGE, "Macro file %s not found.\n", fileName);
+			return true;
 		}
 		return false;
 	}
@@ -927,6 +955,17 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 	bool ok = LoadMoveBufferFromGCode(gb, true, false);
 	if (ok && includingAxes)
 	{
+		if (reprap.GetRoland()->Active())
+		{
+			for(size_t axis = 0; axis < AXES; axis++)
+			{
+				if (!reprap.GetRoland()->ProcessG92(moveBuffer[axis], axis))
+				{
+					return false;
+				}
+			}
+		}
+
 		SetPositions(moveBuffer);
 	}
 
@@ -991,6 +1030,74 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 	return false;
 }
 
+// Home one or more of the axes.  Which ones are decided by the
+// booleans homeX, homeY and homeZ.
+// Returns true if completed, false if needs to be called again.
+// 'reply' is only written if there is an error.
+// 'error' is false on entry, gets changed to true if there is an error.
+bool GCodes::DoHome(GCodeBuffer *gb, StringRef& reply, bool& error)
+{
+	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+	{
+		return false;
+	}
+
+	// Deal with a Roland configuration
+	if (reprap.GetRoland()->Active())
+	{
+		bool rolHome = reprap.GetRoland()->ProcessHome();
+		if (rolHome)
+		{
+			for(size_t axis = 0; axis < AXES; axis++)
+			{
+				axisIsHomed[axis] = true;
+			}
+		}
+		return rolHome;
+	}
+
+	if (reprap.GetMove()->IsDeltaMode())
+	{
+		SetAllAxesNotHomed();
+		DoFileMacro(HOME_DELTA_G);
+	}
+	else
+	{
+		toBeHomed = 0;
+		for (size_t axis = 0; axis < AXES; ++axis)
+		{
+			if (gb->Seen(axisLetters[axis]))
+			{
+				toBeHomed |= (1 << axis);
+				axisIsHomed[axis] = false;
+			}
+		}
+
+		if (toBeHomed == 0 || toBeHomed == ((1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS)))
+		{
+			// Homing everything
+			SetAllAxesNotHomed();
+			DoFileMacro(HOME_ALL_G);
+		}
+		else if (   platform->MustHomeXYBeforeZ()
+				 && ((toBeHomed & (1 << Z_AXIS)) != 0)
+				 && (   (((toBeHomed & (1 << X_AXIS)) == 0) && !axisIsHomed[X_AXIS])
+					 || (((toBeHomed & (1 << Y_AXIS)) == 0) && !axisIsHomed[Y_AXIS])
+					)
+				)
+		{
+			// We can only home Z if both X and Y have already been homed or are being homed
+			reply.copy("Must home X and Y before homing Z");
+			error = true;
+		}
+		else
+		{
+			state = GCodeState::homing;
+		}
+	}
+	return true;
+}
+
 // This lifts Z a bit, moves to the probe XY coordinates (obtained by a call to GetProbeCoordinates() ),
 // probes the bed height, and records the Z coordinate probed.  If you want to program any general
 // internal canned cycle, this shows how to do it.
@@ -1039,7 +1146,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 			{
 			case 0:
 				// Z probe is already triggered at the start of the move, so abandon the probe and record an error
-				platform->Message(BOTH_ERROR_MESSAGE, "Z probe warning: probe already triggered at start of probing move\n");
+				platform->Message(GENERIC_MESSAGE, "Z probe warning: probe already triggered at start of probing move\n");
 				cannedCycleMoveCount++;
 				reprap.GetMove()->SetZBedProbePoint(probePointIndex, platform->GetZProbeDiveHeight(), true, true);
 				break;
@@ -1154,8 +1261,15 @@ int GCodes::DoZProbe(float distance)
 // is specified and is greater than SILLY_Z_VALUE (i.e. greater than -9999.0)
 // then that value is used.  If it's less than SILLY_Z_VALUE the bed is
 // probed and that value is used.
+// Call this repeatedly until it returns true.
 bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 {
+	if (reprap.GetMove()->IsDeltaMode() && !AllAxesAreHomed())
+	{
+		reply.copy("Must home before bed probing");
+		return true;
+	}
+
 	float heightAdjust = 0;
 	if (gb->Seen('H'))
 	{
@@ -1173,9 +1287,9 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	}
 
 	int probePointIndex = gb->GetIValue();
-	if (probePointIndex < 0 || (unsigned int)probePointIndex >= MaxProbePoints)
+	if (probePointIndex < 0 || (unsigned int)probePointIndex >= MAX_PROBE_POINTS)
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point index out of range.\n");
 		return true;
 	}
 
@@ -1186,7 +1300,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	reprap.GetMove()->SetXBedProbePoint(probePointIndex, x);
 	reprap.GetMove()->SetYBedProbePoint(probePointIndex, y);
 
-	if (z > SillyZValue)
+	if (z > SILLY_Z_VALUE)
 	{
 		reprap.GetMove()->SetZBedProbePoint(probePointIndex, z, false, false);
 		if (gb->Seen('S'))
@@ -1222,17 +1336,6 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer *gb, StringRef& reply)
 	}
 
 	return false;
-}
-
-// This probes multiple points on the bed, then sets the bed transformation to compensate for the bed not quite being the plane Z = 0.
-// Called to execute a G32 command.
-void GCodes::SetBedEquationWithProbe(int sParam, StringRef& reply)
-{
-	// zpl-2014-10-09: In order to stay compatible with old firmware versions, only execute bed.g if it is actually present in the sys directory
-	if (!DoFileMacro(SET_BED_EQUATION, false))
-	{
-		state = GCodeState::setBed1;		// no bed.g file, so use the coordinates specified by M557
-	}
 }
 
 // This returns the (X, Y) points to probe the bed at probe point count.  When probing, it returns false.
@@ -1349,7 +1452,7 @@ bool GCodes::OpenFileToWrite(const char* directory, const char* fileName, GCodeB
 	eofStringCounter = 0;
 	if (fileBeingWritten == NULL)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Can't open GCode file \"%s\" for writing.\n", fileName);
+		platform->MessageF(GENERIC_MESSAGE, "Can't open GCode file \"%s\" for writing.\n", fileName);
 		return false;
 	}
 	else
@@ -1363,7 +1466,7 @@ void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
 {
 	if (fileBeingWritten == NULL)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write to a null file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to write to a null file.\n");
 		return;
 	}
 
@@ -1385,7 +1488,7 @@ void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
 			fileBeingWritten = NULL;
 			gb->SetWritingFileDirectory(NULL);
 			const char* r = (platform->Emulating() == marlin) ? "Done saving file." : "";
-			HandleReply(false, gb, r, 'M', 560, false);
+			HandleReply(gb, false, r);
 			return;
 		}
 	}
@@ -1399,7 +1502,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 {
 	if (fileBeingWritten == NULL)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Attempt to write to a null file.\n");
+		platform->Message(GENERIC_MESSAGE, "Attempt to write to a null file.\n");
 		return;
 	}
 
@@ -1412,7 +1515,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 			fileBeingWritten = NULL;
 			gb->SetWritingFileDirectory(NULL);
 			const char* r = (platform->Emulating() == marlin) ? "Done saving file." : "";
-			HandleReply(false, gb, r, 'M', 29, false);
+			HandleReply(gb, false, r);
 			return;
 		}
 	}
@@ -1425,7 +1528,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 			if (gb->Seen('P'))
 			{
 				scratchString.printf("%d\n", gb->GetIValue());
-				HandleReply(false, gb, scratchString.Pointer(), 'G', 998, true);
+				HandleReply(gb, false, scratchString.Pointer());
 				return;
 			}
 		}
@@ -1433,14 +1536,14 @@ void GCodes::WriteGCodeToFile(GCodeBuffer *gb)
 
 	fileBeingWritten->Write(gb->Buffer());
 	fileBeingWritten->Write('\n');
-	HandleReply(false, gb, "", 'G', 1, false);
+	HandleReply(gb, false, "");
 }
 
 // Set up a file to print, but don't print it yet.
 void GCodes::QueueFileToPrint(const char* fileName)
 {
 	FileStore *f = platform->GetFileStore(platform->GetGCodeDir(), fileName, false);
-	if (f != NULL)
+	if (f != nullptr)
 	{
 		// Cancel current print if there is any
 		if (!reprap.GetPrintMonitor()->IsPrinting())
@@ -1454,13 +1557,15 @@ void GCodes::QueueFileToPrint(const char* fileName)
 		for (size_t extruder = AXES; extruder < DRIVES; extruder++)
 		{
 			lastRawExtruderPosition[extruder - AXES] = 0.0;
+			rawExtruderTotalByDrive[extruder - AXES] = 0.0;
 		}
+		rawExtruderTotal = 0.0;
 
 		fileToPrint.Set(f);
 	}
 	else
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "GCode file \"%s\" not found\n", fileName);
+		platform->MessageF(GENERIC_MESSAGE, "GCode file \"%s\" not found\n", fileName);
 	}
 }
 
@@ -1468,44 +1573,23 @@ void GCodes::DeleteFile(const char* fileName)
 {
 	if (!platform->GetMassStorage()->Delete(platform->GetGCodeDir(), fileName))
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Could not delete file \"%s\"\n", fileName);
+		platform->MessageF(GENERIC_MESSAGE, "Could not delete file \"%s\"\n", fileName);
 	}
-}
-
-// Send the config file to USB in response to an M503 command.
-// This is not used for processing M503 requests received via the webserver.
-bool GCodes::SendConfigToLine()
-{
-	if (configFile == NULL)
-	{
-		configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
-		if (configFile == NULL)
-		{
-			platform->Message(BOTH_ERROR_MESSAGE, "Configuration file not found\n");
-			return true;
-		}
-		platform->GetLine()->Write('\n', true);
-	}
-
-	char b;
-	while (configFile->Read(b))
-	{
-		platform->GetLine()->Write(b, true);
-		if (b == '\n')
-			return false;
-	}
-
-	platform->GetLine()->Write('\n', true);
-	configFile->Close();
-	configFile = NULL;
-	return true;
 }
 
 // Function to handle dwell delays.  Return true for dwell finished, false otherwise.
 bool GCodes::DoDwell(GCodeBuffer *gb)
 {
 	if (!gb->Seen('P'))
+	{
 		return true;  // No time given - throw it away
+	}
+
+	// Deal with a Roland configuration
+	if (reprap.GetRoland()->Active())
+	{
+		return reprap.GetRoland()->ProcessDwell(gb->GetLValue());
+	}
 
 	// Wait for all the queued moves to stop
 	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
@@ -1559,7 +1643,7 @@ void GCodes::SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb)
 		Tool* tool = reprap.GetTool(toolNumber);
 		if (tool == NULL)
 		{
-			reply.printf("Attempt to set/report offsets and temperatures for non-existent tool: %d\n", toolNumber);
+			reply.printf("Attempt to set/report offsets and temperatures for non-existent tool: %d", toolNumber);
 			return;
 		}
 
@@ -1651,7 +1735,7 @@ void GCodes::ManageTool(GCodeBuffer *gb, StringRef& reply)
 	int toolNumber = gb->GetLValue();
 	if (toolNumber < 0)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Tool number must be positive!\n");
+		platform->Message(GENERIC_MESSAGE, "Tool number must be positive!\n");
 		return;
 	}
 
@@ -1707,7 +1791,6 @@ void GCodes::ManageTool(GCodeBuffer *gb, StringRef& reply)
 }
 
 // Does what it says.
-
 void GCodes::DisableDrives()
 {
 	for (size_t drive = 0; drive < DRIVES; drive++)
@@ -1718,7 +1801,6 @@ void GCodes::DisableDrives()
 }
 
 // Does what it says.
-
 void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 {
 	byte eth[4];
@@ -1734,7 +1816,7 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 			ipp++;
 			if (ipp > 3)
 			{
-				platform->Message(BOTH_ERROR_MESSAGE, "Dud IP address: %s\n", gb->Buffer());
+				platform->MessageF(GENERIC_MESSAGE, "Dud IP address: %s\n", gb->Buffer());
 				return;
 			}
 			sp++;
@@ -1761,12 +1843,12 @@ void GCodes::SetEthernetAddress(GCodeBuffer *gb, int mCode)
 			break;
 
 		default:
-			platform->Message(BOTH_ERROR_MESSAGE, "Setting ether parameter - dud code.\n");
+			platform->Message(GENERIC_MESSAGE, "Setting ether parameter - dud code.\n");
 		}
 	}
 	else
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Dud IP address: %s\n", gb->Buffer());
+		platform->MessageF(GENERIC_MESSAGE, "Dud IP address: %s\n", gb->Buffer());
 	}
 }
 
@@ -1785,7 +1867,7 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 			ipp++;
 			if (ipp > 5)
 			{
-				platform->Message(BOTH_ERROR_MESSAGE, "Dud MAC address: %s\n", gb->Buffer());
+				platform->MessageF(GENERIC_MESSAGE, "Dud MAC address: %s\n", gb->Buffer());
 				return;
 			}
 			sp++;
@@ -1803,111 +1885,263 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 	}
 	else
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Dud MAC address: %s\n", gb->Buffer());
+		platform->MessageF(GENERIC_MESSAGE, "Dud MAC address: %s\n", gb->Buffer());
 	}
 }
 
 // Handle sending a reply back to the appropriate interface(s).
-// Note that 'reply' may be null.
-void GCodes::HandleReply(bool error, const GCodeBuffer *gb, const char* reply, char gMOrT, int code, bool resend)
+// Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
+void GCodes::HandleReply(GCodeBuffer *gb, bool error, const char* reply)
 {
-	// UART device, may be used for auxiliary purposes e.g. LCD control panel
-	if (gb == auxGCode && reply != nullptr && reply[0] == '{')
+	// Don't report "ok" responses if a (macro) file is being processed
+	if ((gb == fileMacroGCode || gb == fileGCode) && reply[0] == 0)
 	{
-		// Command was received from the aux interface (LCD display) and looks to be JSON-formatted, so send the response only to the aux interface.
-		platform->GetAux()->Write(reply);
 		return;
 	}
 
-	// Deal with sending a reply to the web interface and/or Panel Due via the polling mechanism.
-	// The browser and PanelDue only fetch replies once a second or so. Therefore, when we send a web command in the middle of an SD card print,
-	// in order to be sure that we see the reply in the web interface or PanelDue, we do not allow empty responses to overwrite more useful responses.
-	if (reply != nullptr && reply[0] != 0	// don't send empty replies to the web server, they overwrite more useful replies
-		 && (gMOrT != 'M' || (code != 111 && code != 122))	// web server reply for M111 and M122 is handled before we get here
-		 && (gMOrT != 'M' || (code != 105 && code != 20) || gb == webGCode)	// don't echo M105 requests and file lists from Pronterface etc. to the web server
-	   )
+	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
+	if (gb == auxGCode || (stackPointer != 0 && stack[0].gb == auxGCode))
 	{
-		platform->Message((error) ? WEB_ERROR_MESSAGE : WEB_MESSAGE, reply);
+		// Discard this response if either no aux device is attached or if the response is empty
+		if (reply[0] == 0 || !HaveAux())
+		{
+			return;
+		}
+
+		// Regular text-based responses for AUX are always stored and processed by M105/M408
+		if (auxGCodeReply == nullptr && !reprap.AllocateOutput(auxGCodeReply))
+		{
+			// No more space to buffer this response. Should never happen
+			return;
+		}
+		auxSeq++;
+		auxGCodeReply->cat(reply);
+		return;
 	}
 
-	const Compatibility c = (gb == serialGCode) ? platform->Emulating() : me;
-	const char* response = (resend) ? "rs " : "ok";
+	const Compatibility c = (gb == serialGCode || gb == telnetGCode) ? platform->Emulating() : me;
+	MessageType type = GENERIC_MESSAGE;
+	if (gb == httpGCode)
+	{
+		type = HTTP_MESSAGE;
+	}
+	else if (gb == telnetGCode)
+	{
+		type = TELNET_MESSAGE;
+	}
+	else if (gb == serialGCode)
+	{
+		type = HOST_MESSAGE;
+	}
+
+	const char* response = (gb->Seen('M') && gb->GetIValue() == 998) ? "rs " : "ok";
 	const char* emulationType = 0;
 
 	switch (c)
 	{
-	case me:
-	case reprapFirmware:
-		if (error)
-		{
-			platform->GetLine()->Write("Error: ");
-		}
-		if (reply)
-		{
-			platform->GetLine()->Write(reply);
-		}
-		return;
-
-	case marlin:
-		if (gMOrT == 'M' && code == 20)
-		{
-			platform->GetLine()->Write("Begin file list\n");
-			if (reply)
+		case me:
+		case reprapFirmware:
+			if (error)
 			{
-				platform->GetLine()->Write(reply);
+				platform->Message(type, "Error: ");
 			}
-			platform->GetLine()->Write("End file list\n");
-			platform->GetLine()->Write(response);
-			platform->GetLine()->Write('\n');
+			platform->Message(type, reply);
+			platform->Message(type, "\n");
 			return;
-		}
 
-		if (gMOrT == 'M' && code == 28)
-		{
-			platform->GetLine()->Write(response);
-			platform->GetLine()->Write('\n');
-			if (reply)
+		case marlin:
+			// We don't need to handle M20 here because we always allocate an output buffer for that one
+			if (gb->Seen('M') && gb->GetIValue() == 28)
 			{
-				platform->GetLine()->Write(reply);
+				platform->Message(type, response);
+				platform->Message(type, "\n");
+				platform->Message(type, reply);
+				platform->Message(type, "\n");
+				return;
 			}
-			return;
-		}
 
-		if ((gMOrT == 'M' && code == 105) || (gMOrT == 'G' && code == 998))
-		{
-			platform->GetLine()->Write(response);
-			if (reply)
+			if ((gb->Seen('M') && gb->GetIValue() == 105) || (gb->Seen('M') && gb->GetIValue() == 998))
 			{
-				platform->GetLine()->Write(' ');
-				platform->GetLine()->Write(reply);
+				platform->Message(type, response);
+				platform->Message(type, " ");
+				platform->Message(type, reply);
+				platform->Message(type, "\n");
+				return;
+			}
+
+			if (reply[0] != 0 && !DoingFileMacro())
+			{
+				platform->Message(type, reply);
+				platform->Message(type, "\n");
+				platform->Message(type, response);
+				platform->Message(type, "\n");
+			}
+			else if (reply[0] != 0)
+			{
+				platform->Message(type, reply);
+				platform->Message(type, "\n");
+			}
+			else
+			{
+				platform->Message(type, response);
+				platform->Message(type, "\n");
 			}
 			return;
-		}
 
-		if (reply && reply[0])
-		{
-			platform->GetLine()->Write(reply);
-		}
-		platform->GetLine()->Write(response);
-		platform->GetLine()->Write('\n');
-		return;
-
-	case teacup:
-		emulationType = "teacup";
-		break;
-	case sprinter:
-		emulationType = "sprinter";
-		break;
-	case repetier:
-		emulationType = "repetier";
-		break;
-	default:
-		emulationType = "unknown";
+		case teacup:
+			emulationType = "teacup";
+			break;
+		case sprinter:
+			emulationType = "sprinter";
+			break;
+		case repetier:
+			emulationType = "repetier";
+			break;
+		default:
+			emulationType = "unknown";
 	}
 
 	if (emulationType != 0)
 	{
-		platform->Message(HOST_MESSAGE, "Emulation of %s is not yet supported.\n", emulationType);// don't send this one to the web as well, it concerns only the USB interface
+		platform->MessageF(type, "Emulation of %s is not yet supported.\n", emulationType);	// don't send this one to the web as well, it concerns only the USB interface
+	}
+}
+
+void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
+{
+	// Although unlikely, it's possible that we get a nullptr reply. Don't proceed if this is the case
+	if (reply == nullptr)
+	{
+		return;
+	}
+
+	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
+	if (gb == auxGCode || (stackPointer != 0 && stack[0].gb == auxGCode))
+	{
+		// Discard this response if either no aux device is attached or if the response is empty
+		if (reply->Length() == 0 || !HaveAux())
+		{
+			while (reply != nullptr)
+			{
+				reply = reprap.ReleaseOutput(reply);
+			}
+			return;
+		}
+
+		// JSON responses are always sent directly to the AUX device
+		if ((*reply)[0] == '{')
+		{
+			platform->Message(AUX_MESSAGE, reply);
+			return;
+		}
+
+		// Other responses are stored for M105/M408
+		auxSeq++;
+		if (auxGCodeReply == nullptr)
+		{
+			auxGCodeReply = reply;
+		}
+		else
+		{
+			auxGCodeReply->Append(reply);
+		}
+		return;
+	}
+
+	const Compatibility c = (gb == serialGCode || gb == telnetGCode) ? platform->Emulating() : me;
+	MessageType type = GENERIC_MESSAGE;
+	if (gb == httpGCode)
+	{
+		type = HTTP_MESSAGE;
+	}
+	else if (gb == telnetGCode)
+	{
+		type = TELNET_MESSAGE;
+	}
+	else if (gb == serialGCode)
+	{
+		type = HOST_MESSAGE;
+	}
+
+	const char* response = (gb->Seen('M') && gb->GetIValue() == 998) ? "rs " : "ok";
+	const char* emulationType = 0;
+
+	switch (c)
+	{
+		case me:
+		case reprapFirmware:
+			if (error)
+			{
+				platform->Message(type, "Error: ");
+				platform->Message(type, reply);
+			}
+			else
+			{
+				platform->Message(type, reply);
+			}
+			return;
+
+		case marlin:
+			if (gb->Seen('M') && gb->GetIValue() == 20)
+			{
+				platform->Message(type, "Begin file list\n");
+				platform->Message(type, reply);
+				platform->Message(type, "End file list\n");
+				platform->Message(type, response);
+				platform->Message(type, "\n");
+				return;
+			}
+
+			if (gb->Seen('M') && gb->GetIValue() == 28)
+			{
+				platform->Message(type, response);
+				platform->Message(type, "\n");
+				platform->Message(type, reply);
+				return;
+			}
+
+			if ((gb->Seen('M') && gb->GetIValue() == 105) || (gb->Seen('M') && gb->GetIValue() == 998))
+			{
+				platform->Message(type, response);
+				platform->Message(type, " ");
+				platform->Message(type, reply);
+				return;
+			}
+
+			if (reply->Length() != 0 && !DoingFileMacro())
+			{
+				platform->Message(type, reply);
+				platform->Message(type, "\n");
+				platform->Message(type, response);
+				platform->Message(type, "\n");
+			}
+			else if (reply->Length() != 0)
+			{
+				platform->Message(type, reply);
+			}
+			else
+			{
+				platform->Message(type, response);
+				platform->Message(type, "\n");
+			}
+			return;
+
+		case teacup:
+			emulationType = "teacup";
+			break;
+		case sprinter:
+			emulationType = "sprinter";
+			break;
+		case repetier:
+			emulationType = "repetier";
+			break;
+		default:
+			emulationType = "unknown";
+	}
+
+	if (emulationType != 0)
+	{
+		platform->MessageF(type, "Emulation of %s is not yet supported.\n", emulationType);	// don't send this one to the web as well, it concerns only the USB interface
 	}
 }
 
@@ -1965,7 +2199,7 @@ void GCodes::SetPidParameters(GCodeBuffer *gb, int heater, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Heater %d P:%.2f I:%.3f D:%.2f T:%.2f S:%.2f W:%.1f B:%.1f\n",
+			reply.printf("Heater %d P:%.2f I:%.3f D:%.2f T:%.2f S:%.2f W:%.1f B:%.1f",
 					heater, pp.kP, pp.kI * platform->HeatSampleTime(), pp.kD / platform->HeatSampleTime(),
 					pp.kT, pp.kS, pp.pidMax, pp.fullBand);
 		}
@@ -2033,7 +2267,7 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, StringRef& reply)
 				}
 				else
 				{
-					platform->Message(BOTH_ERROR_MESSAGE, "Thermistor number %d is out of range\n", thermistor);
+					platform->MessageF(GENERIC_MESSAGE, "Thermistor number %d is out of range\n", thermistor);
 				}
 				seen = true;
 			}
@@ -2044,13 +2278,13 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("T:%.1f B:%.1f R:%.1f L:%.1f H:%.1f X:%d\n", r25, beta, pp.thermistorSeriesR,
+				reply.printf("T:%.1f B:%.1f R:%.1f L:%.1f H:%.1f X:%d", r25, beta, pp.thermistorSeriesR,
 						pp.adcLowOffset, pp.adcHighOffset, platform->GetThermistorNumber(heater));
 			}
 		}
 		else
 		{
-			platform->Message(BOTH_ERROR_MESSAGE, "Heater number %d is out of range\n", heater);
+			platform->MessageF(GENERIC_MESSAGE, "Heater number %d is out of range\n", heater);
 		}
 	}
 }
@@ -2059,7 +2293,7 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 {
 	if (tool == NULL)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "Setting temperature: no tool selected.\n");
+		platform->Message(GENERIC_MESSAGE, "Setting temperature: no tool selected.\n");
 		return;
 	}
 
@@ -2106,7 +2340,7 @@ bool GCodes::ActOnCode(GCodeBuffer *gb, StringRef& reply)
 	}
 
 	// An invalid or queued buffer gets discarded
-	HandleReply(false, gb, nullptr, 'X', 0, false);
+	HandleReply(gb, false, "");
 	return true;
 }
 
@@ -2114,11 +2348,9 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 {
 	bool result = true;
 	bool error = false;
-	bool resend = false;
 
 	int code = gb->GetIValue();
-	if (simulating && code != 0 && code != 1 && code != 4 && code != 10 && code != 20 && code != 21 && code != 90
-			&& code != 91 && code != 92)
+	if (simulating && code != 0 && code != 1 && code != 4 && code != 10 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
 	{
 		return true;			// we only simulate some gcodes
 	}
@@ -2169,7 +2401,7 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 20: // Inches (which century are we living in, here?)
-		distanceScale = InchToMm;
+		distanceScale = INCH_TO_MM;
 		break;
 
 	case 21: // mm
@@ -2177,50 +2409,7 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 28: // Home
-		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
-		{
-			return false;
-		}
-
-		if (reprap.GetMove()->IsDeltaMode())
-		{
-			SetAllAxesNotHomed();
-			DoFileMacro(HOME_DELTA_G);
-		}
-		else
-		{
-			toBeHomed = 0;
-			for (size_t axis = 0; axis < AXES; ++axis)
-			{
-				if (gb->Seen(axisLetters[axis]))
-				{
-					toBeHomed |= (1 << axis);
-					axisIsHomed[axis] = false;
-				}
-			}
-
-			if (toBeHomed == 0 || toBeHomed == ((1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS)))
-			{
-				// Homing everything
-				SetAllAxesNotHomed();
-				DoFileMacro(HOME_ALL_G);
-			}
-			else if (   platform->MustHomeXYBeforeZ()
-					 && ((toBeHomed & (1 << Z_AXIS)) != 0)
-					 && (   (((toBeHomed & (1 << X_AXIS)) == 0) && !axisIsHomed[X_AXIS])
-					 	 || (((toBeHomed & (1 << Y_AXIS)) == 0) && !axisIsHomed[Y_AXIS])
-						)
-					)
-			{
-				// We can only home Z if both X and Y have already been homed or are being homed
-				reply.copy("Must home X and Y before homing Z");
-				error = true;
-			}
-			else
-			{
-				state = GCodeState::homing;
-			}
-		}
+		result = DoHome(gb, reply, error);
 		break;
 
 	case 30: // Z probe/manually set at a position and set that as point P
@@ -2228,7 +2417,15 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			return false;
 		}
-		result = SetSingleZProbeAtAPosition(gb, reply);
+		if (reprap.GetMove()->IsDeltaMode() && !AllAxesAreHomed())
+		{
+			reply.copy("Must home a delta printer before bed probing");
+			error = true;
+		}
+		else
+		{
+			result = SetSingleZProbeAtAPosition(gb, reply);
+		}
 		break;
 
 	case 31: // Return the probe value, or set probe variables
@@ -2245,16 +2442,20 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 			return false;
 		}
 
-		if (!(axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS]))
+		// Try to execute bed.g
+		if (!DoFileMacro(BED_EQUATION_G, reprap.GetMove()->IsDeltaMode()))
 		{
-			// We can only do bed levelling if X and Y have already been homed
-			reply.copy("Must home X and Y before bed probing\n");
-			error = true;
-		}
-		else
-		{
-			int sParam = (gb->Seen('S')) ? gb->GetIValue() : 0;
-			SetBedEquationWithProbe(sParam, reply);
+			// If we get here then we are not on a delta printer and there is no bed.g file
+			if (axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS])
+			{
+				state = GCodeState::setBed1;		// no bed.g file, so use the coordinates specified by M557
+			}
+			else
+			{
+				// We can only do bed levelling if X and Y have already been homed
+				reply.copy("Must home X and Y before bed probing");
+				error = true;
+			}
 		}
 		break;
 
@@ -2276,11 +2477,11 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 
 	default:
 		error = true;
-		reply.printf("invalid G Code: %s\n", gb->Buffer());
+		reply.printf("invalid G Code: %s", gb->Buffer());
 	}
 	if (result && state == GCodeState::normal)
 	{
-		HandleReply(error, gb, reply.Pointer(), 'G', code, resend);
+		HandleReply(gb, error, reply.Pointer());
 	}
 	return result;
 }
@@ -2289,7 +2490,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 {
 	bool result = true;
 	bool error = false;
-	bool resend = false;
 
 	int code = gb->GetIValue();
 	if (simulating && (code < 20 || code > 37) && code != 82 && code != 83 && code != 111 && code != 105 && code != 122 && code != 999)
@@ -2333,11 +2533,21 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (isPaused)
 		{
 			isPaused = false;
-			reply.copy("Print cancelled\n");
+			reply.copy("Print cancelled");
 		}
 
 		// Reset everything
 		CancelPrint();
+		break;
+
+	case 3: // Spin spindle
+		if (reprap.GetRoland()->Active())
+		{
+			if (gb->Seen('S'))
+			{
+				result = reprap.GetRoland()->ProcessSpindle(gb->GetFValue());
+			}
+		}
 		break;
 
 	case 18: // Motors off
@@ -2364,13 +2574,29 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				for (size_t i = 0; i < eCount; i++)
 				{
 					seen = true;
-					if (eDrive[i] < 0 || eDrive[i] >= DRIVES - AXES)
+					if (eDrive[i] < 0 || (size_t)eDrive[i] >= DRIVES - AXES)
 					{
-						reply.printf("Invalid extruder number specified: %ld\n", eDrive[i]);
+						reply.printf("Invalid extruder number specified: %ld", eDrive[i]);
 						error = true;
 						break;
 					}
 					platform->DisableDrive(AXES + eDrive[i]);
+				}
+			}
+
+			if (gb->Seen('S'))
+			{
+				seen = true;
+
+				float idleTimeout = gb->GetFValue();
+				if (idleTimeout < 0.0)
+				{
+					reply.copy("Idle timeouts cannot be negative!");
+					error = true;
+				}
+				else
+				{
+					reprap.GetMove()->SetIdleTimeout(idleTimeout);
 				}
 			}
 
@@ -2382,60 +2608,63 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 20:		// List files on SD card
-		{
-			int sparam = (gb->Seen('S')) ? gb->GetIValue() : 0;
-			const char* dir = (gb->Seen('P')) ? gb->GetString() : platform->GetGCodeDir();
+	{
+		OutputBuffer *fileResponse;
+		int sparam = (gb->Seen('S')) ? gb->GetIValue() : 0;
+		const char* dir = (gb->Seen('P')) ? gb->GetString() : platform->GetGCodeDir();
 
-			if (sparam == 2)
+		if (sparam == 2)
+		{
+			fileResponse = reprap.GetFilesResponse(dir, true);		// Send the file list in JSON format
+		}
+		else
+		{
+			if (!reprap.AllocateOutput(fileResponse))
 			{
-				reprap.GetFilesResponse(reply, dir, true);			// Send the file list in JSON format
-				reply.cat("\n");
+				// Cannot allocate an output buffer, try again later
+				return false;
+			}
+
+			// To mimic the behaviour of the official RepRapPro firmware:
+			// If we are emulating RepRap then we print "GCode files:\n" at the start, otherwise we don't.
+			// If we are emulating Marlin and the code came via the serial/USB interface, then we don't put quotes around the names and we separate them with newline;
+			// otherwise we put quotes around them and separate them with comma.
+			if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
+			{
+				fileResponse->copy("GCode files:\n");
+			}
+
+			bool encapsulateList = ((gb != serialGCode && gb != telnetGCode) || platform->Emulating() != marlin);
+			FileInfo fileInfo;
+			if (platform->GetMassStorage()->FindFirst(dir, fileInfo))
+			{
+				// iterate through all entries and append each file name
+				do {
+					if (encapsulateList)
+					{
+						fileResponse->catf("%c%s%c%c", FILE_LIST_BRACKET, fileInfo.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
+					}
+					else
+					{
+						fileResponse->catf("%s\n", fileInfo.fileName);
+					}
+				} while (platform->GetMassStorage()->FindNext(fileInfo));
+
+				if (encapsulateList)
+				{
+					// remove the last separator
+					(*fileResponse)[fileResponse->Length() - 1] = '\n';
+				}
 			}
 			else
 			{
-				// To mimic the behaviour of the official RepRapPro firmware:
-				// If we are emulating RepRap then we print "GCode files:\n" at the start, otherwise we don't.
-				// If we are emulating Marlin and the code came via the serial/USB interface, then we don't put quotes around the names and we separate them with newline;
-				// otherwise we put quotes around them and separate them with comma.
-				if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
-				{
-					reply.copy("GCode files:\n");
-				}
-				else
-				{
-					reply.Clear();
-				}
-
-				bool encapsulate_list = (gb != serialGCode || platform->Emulating() != marlin);
-				FileInfo file_info;
-				if (platform->GetMassStorage()->FindFirst(dir, file_info))
-				{
-					// iterate through all entries and append each file name
-					do
-					{
-						if (encapsulate_list)
-						{
-							reply.catf("%c%s%c%c", FILE_LIST_BRACKET, file_info.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
-						}
-						else
-						{
-							reply.catf("%s\n", file_info.fileName);
-						}
-					} while (platform->GetMassStorage()->FindNext(file_info));
-
-					if (encapsulate_list)
-					{
-						// remove the last separator and replace by newline
-						reply[reply.strlen() - 1] = '\n';
-					}
-				}
-				else
-				{
-					reply.cat("NONE\n");
-				}
+				fileResponse->cat("NONE\n");
 			}
 		}
-		break;
+
+		HandleReply(gb, false, fileResponse);
+		return true;
+	}
 
 	case 21: // Initialise SD - ignore
 		break;
@@ -2461,12 +2690,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				reprap.GetPrintMonitor()->StartingPrint(filename);
 				if (platform->Emulating() == marlin && gb == serialGCode)
 				{
-					reply.copy("File opened\nFile selected\n");
+					reply.copy("File opened\nFile selected");
 				}
 				else
 				{
 					// Command came from web interface or PanelDue, or not emulating Marlin, so send a nicer response
-					reply.printf("File %s selected for printing\n", filename);
+					reply.printf("File %s selected for printing", filename);
 				}
 
 				if (code == 32)
@@ -2477,7 +2706,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Failed to open file %s\n", filename);
+				reply.printf("Failed to open file %s", filename);
 			}
 		}
 		break;
@@ -2490,7 +2719,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 		if (!fileToPrint.IsLive())
 		{
-			reply.copy("Cannot print, because no file is selected!\n");
+			reply.copy("Cannot print, because no file is selected!");
 			error = true;
 		}
 		else if (isPaused)
@@ -2514,17 +2743,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 25: // Pause the print
 		if (isPaused)
 		{
-			reply.copy("Printing is already paused!!\n");
+			reply.copy("Printing is already paused!!");
 			error = true;
 		}
 		else if (!reprap.GetPrintMonitor()->IsPrinting())
 		{
-			reply.copy("Cannot pause print, because no file is being printed!\n");
+			reply.copy("Cannot pause print, because no file is being printed!");
 			error = true;
 		}
 		else if (doingFileMacro)
 		{
-			reply.copy("Cannot pause macro files, wait for it to complete first!\n");
+			reply.copy("Cannot pause macro files, wait for it to complete first!");
 			error = true;
 		}
 		else
@@ -2554,7 +2783,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 				if (reprap.Debug(moduleGcodes))
 				{
-					platform->Message(BOTH_MESSAGE, "Paused print, file offset=%u\n", fPos);
+					platform->MessageF(GENERIC_MESSAGE, "Paused print, file offset=%u\n", fPos);
 				}
 			}
 			else
@@ -2571,8 +2800,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				pausedMoveBuffer[DRIVES] = moveBuffer[DRIVES];
 			}
 
-			pausedFan0Value = platform->GetFanValue(0);
-			pausedFan1Value = platform->GetFanValue(1);
+			for (size_t i = 0; i < NUM_FANS; ++i)
+			{
+				pausedFanValues[i] = platform->GetFanValue(i);
+			}
 			fileToPrint.MoveFrom(fileBeingPrinted);
 			fileGCode->Pause();
 			state = GCodeState::pausing1;
@@ -2586,14 +2817,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			long value = gb->GetLValue();
 			if (value < 0)
 			{
-				reply.copy("SD positions can't be negative!\n");
+				reply.copy("SD positions can't be negative!");
 				error = true;
 			}
 			else if (fileBeingPrinted.IsLive())
 			{
 				if (!fileBeingPrinted.Seek(value))
 				{
-					reply.copy("The specified SD position is invalid!\n");
+					reply.copy("The specified SD position is invalid!");
 					error = true;
 				}
 			}
@@ -2601,19 +2832,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				if (!fileToPrint.Seek(value))
 				{
-					reply.copy("The specified SD position is invalid!\n");
+					reply.copy("The specified SD position is invalid!");
 					error = true;
 				}
 			}
 			else
 			{
-				reply.copy("Cannot set SD file position, because no print is in progress!\n");
+				reply.copy("Cannot set SD file position, because no print is in progress!");
 				error = true;
 			}
 		}
 		else
 		{
-			reply.copy("You must specify the SD position in bytes using the S parameter.\n");
+			reply.copy("You must specify the SD position in bytes using the S parameter.");
 			error = true;
 		}
 		break;
@@ -2622,11 +2853,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (reprap.GetPrintMonitor()->IsPrinting())
 		{
 			// Pronterface keeps sending M27 commands if "Monitor status" is checked, and it specifically expects the following response syntax
-			reply.printf("SD printing byte %lu/%lu\n", fileBeingPrinted.GetPosition(), fileBeingPrinted.Length());
+			reply.printf("SD printing byte %lu/%lu", fileBeingPrinted.GetPosition(), fileBeingPrinted.Length());
 		}
 		else
 		{
-			reply.copy("Not SD printing.\n");
+			reply.copy("Not SD printing.");
 		}
 		break;
 
@@ -2636,18 +2867,18 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			bool ok = OpenFileToWrite(platform->GetGCodeDir(), str, gb);
 			if (ok)
 			{
-				reply.printf("Writing to file: %s\n", str);
+				reply.printf("Writing to file: %s", str);
 			}
 			else
 			{
-				reply.printf("Can't open file %s for writing.\n", str);
+				reply.printf("Can't open file %s for writing.", str);
 				error = true;
 			}
 		}
 		break;
 
 	case 29: // End of file being written; should be intercepted before getting here
-		reply.copy("GCode end-of-file being interpreted.\n");
+		reply.copy("GCode end-of-file being interpreted.");
 		break;
 
 	case 30:	// Delete file
@@ -2657,11 +2888,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		// For case 32, see case 24
 
 	case 36:	// Return file information
-	{
-		const char* filename = gb->GetUnprecedentedString(true);	// get filename, or NULL if none provided
-		reprap.GetPrintMonitor()->GetFileInfoResponse(reply, filename);
-		reply.cat("\n");
-	}
+		{
+			const char* filename = gb->GetUnprecedentedString(true);	// get filename, or nullptr if none provided
+			OutputBuffer *fileInfoResponse;
+			result = reprap.GetPrintMonitor()->GetFileInfoResponse(filename, fileInfoResponse);
+			if (result)
+			{
+				fileInfoResponse->cat('\n');
+				HandleReply(gb, false, fileInfoResponse);
+				return true;
+			}
+		}
 		break;
 
 	case 37:	// Simulation mode on/off
@@ -2694,7 +2931,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec\n",
+			reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
 					(simulating) ? "on" : "off", simulationTime, reprap.GetMove()->GetSimulationTime());
 		}
 		break;
@@ -2709,7 +2946,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				bool success = platform->SetPin(pin, val);
 				if (!success)
 				{
-					platform->Message(BOTH_ERROR_MESSAGE, "Setting pin %d to %d is not supported\n", pin, val);
+					platform->MessageF(GENERIC_MESSAGE, "Setting pin %d to %d is not supported\n", pin, val);
 				}
 			}
 		}
@@ -2728,7 +2965,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 82:	// Use absolute extruder positioning
 		if (drivesRelative)		// don't reset the absolute extruder position if it was already absolute
 		{
-			for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+			for (size_t extruder = AXES; extruder < DRIVES; extruder++)
 			{
 				lastRawExtruderPosition[extruder - AXES] = 0.0;
 			}
@@ -2739,7 +2976,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 83:	// Use relative extruder positioning
 		if (!drivesRelative)	// don't reset the absolute extruder position if it was already relative
 		{
-			for (int8_t extruder = AXES; extruder < DRIVES; extruder++)
+			for (size_t extruder = AXES; extruder < DRIVES; extruder++)
 			{
 				lastRawExtruderPosition[extruder - AXES] = 0.0;
 			}
@@ -2805,7 +3042,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						reply.cat(":");
 					}
 				}
-				reply.cat("\n");
 			}
 		}
 		break;
@@ -2857,27 +3093,25 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 	case 105: // Get Extruder Temperature / Get Status Message
 		{
+			OutputBuffer *statusResponse;
 			int param = (gb->Seen('S')) ? gb->GetIValue() : 0;
 			int seq = (gb->Seen('R')) ? gb->GetIValue() : -1;
 			switch (param)
 			{
-			// case 1 is reserved for future Pronterface versions, see
-			// http://reprap.org/wiki/G-code#M105:_Get_Extruder_Temperature
+			// case 1 is reserved for future Pronterface versions, see http://reprap.org/wiki/G-code#M105:_Get_Extruder_Temperature
+			// case 2 and 3 are used by old versions of PanelDue firmware. Later versions use M408 instead.
 
+			/* NOTE: The following responses are subject to deprecation */
 			case 2:
-				reprap.GetLegacyStatusResponse(reply, 2, seq);	// send JSON-formatted status response
-				reply.cat("\n");
-				break;
-
 			case 3:
-				reprap.GetLegacyStatusResponse(reply, 3, seq);	// send extended JSON-formatted response
-				reply.cat("\n");
-				break;
-
-			case 4:
-				reprap.GetStatusResponse(reply, 3, seq, false);	// send print status JSON-formatted response
-				reply.cat("\n");
-				break;
+				statusResponse = reprap.GetLegacyStatusResponse(param, seq);	// send JSON-formatted status response
+				if (statusResponse != nullptr)
+				{
+					statusResponse->cat('\n');
+					HandleReply(gb, false, statusResponse);
+					return true;
+				}
+				return false;
 
 			default:
 				reply.copy("T:");
@@ -2889,7 +3123,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						reply.catf("%.1f ", reprap.GetHeat()->GetTemperature(heater));
 					}
 				}
-				reply.catf("B:%.1f\n", reprap.GetHeat()->GetTemperature(BED_HEATER));
+				reply.catf("B:%.1f", reprap.GetHeat()->GetTemperature(BED_HEATER));
 				break;
 			}
 		}
@@ -2902,9 +3136,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (gb->Seen('P'))		// Choose fan number
 			{
 				fanNum = gb->GetIValue();
-				if (fanNum < 0 || fanNum > (int)NumFans)
+				if (fanNum < 0 || fanNum > (int)NUM_FANS)
 				{
-					reply.printf("Fan number %d is invalid, must be between 0 and %u", fanNum, NumFans);
+					reply.printf("Fan number %d is invalid, must be between 0 and %u", fanNum, NUM_FANS);
 					break;
 				}
 			}
@@ -2921,7 +3155,32 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				seen = true;
 			}
 
-			if (gb->Seen('S'))		// Set new fan value
+			if (gb->Seen('T'))		// Set thermostatic trigger temperature
+			{
+				seen = true;
+				platform->SetTriggerTemperature(fanNum, gb->GetFValue());
+			}
+
+			if (gb->Seen('H'))		// Set thermostatically-controller heaters
+			{
+				seen = true;
+				long heaters[HEATERS];
+				unsigned int numH = HEATERS;
+				gb->GetLongArray(heaters, numH);
+				// Note that M106 H-1 disables thermostatic mode. The following code implements that automatically.
+				uint16_t hh = 0;
+				for (unsigned int h = 0; h < numH; ++h)
+				{
+					const int hnum = heaters[h];
+					if (hnum >= 0 && hnum < HEATERS)
+					{
+						hh |= (1 << (unsigned int)hnum);
+					}
+				}
+				platform->SetHeatersMonitored(fanNum, hh);
+			}
+
+			if (gb->Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
 			{
 				float f = gb->GetFValue();
 				f = min<float>(f, 255.0);
@@ -2929,14 +3188,34 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				seen = true;
 				platform->SetFanValue(fanNum, f);
 			}
+			else if (gb->Seen('R'))
+			{
+				seen = true;
+				platform->SetFanValue(fanNum, pausedFanValues[fanNum]);
+			}
 
 			if (!seen)
 			{
-				reply.printf("Fan%i value: %d%%, Frequency: %dHz, Inverted: %s\n",
+				reply.printf("Fan%i frequency: %dHz, inverted: %s, ",
 								fanNum,
-								(int)(platform->GetFanValue(fanNum) * 100.0),
 								(int)(platform->GetFanPwmFrequency(fanNum)),
 								(platform->GetCoolingInverted(fanNum)) ? "yes" : "no");
+				uint16_t hh = platform->GetHeatersMonitored(fanNum);
+				if (hh == 0)
+				{
+					reply.catf("value: %d%%\n", (int)(platform->GetFanValue(fanNum) * 100.0));
+				}
+				else
+				{
+					reply.catf("trigger: %dC, heaters:", (int)platform->GetTriggerTemperature(fanNum));
+					for (unsigned int i = 0; i < HEATERS; ++i)
+					{
+						if ((hh & (1 << i)) != 0)
+						{
+							reply.catf(" %u", i);
+						}
+					}
+				}
 			}
 		}
 		break;
@@ -2993,7 +3272,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 112: // Emergency stop - acted upon in Webserver, but also here in case it comes from USB etc.
 		reprap.EmergencyStop();
 		Reset();
-		reply.copy("Emergency Stop! Reset the controller to continue.\n");
+		reply.copy("Emergency Stop! Reset the controller to continue.");
 		break;
 
 	case 114: // Deprecated
@@ -3008,7 +3287,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s DATE: %s\n", NAME, VERSION, platform->GetElectronicsString(), DATE);
+			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s DATE: %s", NAME, VERSION, platform->GetElectronicsString(), DATE);
 		}
 		break;
 
@@ -3080,7 +3359,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			reply.catf("%c: %s, ", axisLetters[axis], TranslateEndStopResult(platform->Stopped(axis)));
 		}
-		reply.catf("Z probe: %s\n", TranslateEndStopResult(platform->GetZProbeResult()));
+		reply.catf("Z probe: %s", TranslateEndStopResult(platform->GetZProbeResult()));
 		break;
 
 	case 120:
@@ -3114,11 +3393,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 126: // Valve open
-		reply.copy("M126 - valves not yet implemented\n");
+		reply.copy("M126 - valves not yet implemented");
 		break;
 
 	case 127: // Valve closed
-		reply.copy("M127 - valves not yet implemented\n");
+		reply.copy("M127 - valves not yet implemented");
 		break;
 
 	case 135: // Set PID sample interval
@@ -3128,7 +3407,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Heat sample time is %.3f seconds.\n", platform->HeatSampleTime());
+			reply.printf("Heat sample time is %.3f seconds", platform->HeatSampleTime());
 		}
 		break;
 
@@ -3148,7 +3427,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				}
 				else if (bedHeater >= HEATERS)
 				{
-					reply.copy("Invalid heater number!\n");
+					reply.copy("Invalid heater number!");
 					error = true;
 					break;
 				}
@@ -3165,7 +3444,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				bedHeater = reprap.GetHeat()->GetBedHeater();
 				if (bedHeater < 0)
 				{
-					reply.copy("Hot bed is not present!\n");
+					reply.copy("Hot bed is not present!");
 					error = true;
 					break;
 				}
@@ -3215,7 +3494,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				}
 				else
 				{
-					reply.copy("Bad heater number specified!\n");
+					reply.copy("Bad heater number specified!");
 					error = true;
 				}
 			}
@@ -3241,7 +3520,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				}
 				else
 				{
-					reply.copy("No chamber heater has been set up yet!\n");
+					reply.copy("No chamber heater has been set up yet!");
 					error = true;
 				}
 			}
@@ -3251,11 +3530,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				const int8_t currentHeater = reprap.GetHeat()->GetChamberHeater();
 				if (currentHeater != -1)
 				{
-					reply.printf("Chamber heater %d is currently at %.1fC\n", currentHeater, reprap.GetHeat()->GetTemperature(currentHeater));
+					reply.printf("Chamber heater %d is currently at %.1fC", currentHeater, reprap.GetHeat()->GetTemperature(currentHeater));
 				}
 				else
 				{
-					reply.copy("No chamber heater has been configured yet.\n");
+					reply.copy("No chamber heater has been configured yet.");
 				}
 			}
 		}
@@ -3265,7 +3544,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 #if BED_HEATER != -1
 		reprap.GetHeat()->Standby(BED_HEATER);
 #else
-		reply.copy("Hot bed is not present!\n");
+		reply.copy("Hot bed is not present!");
 		error = true;
 #endif
 		break;
@@ -3331,7 +3610,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					reply.cat(":");
 				}
 			}
-			reply.cat("\n");
 		}
 	}
 		break;
@@ -3374,7 +3652,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						reply.cat(":");
 					}
 				}
-				reply.cat("\n");
 			}
 		}
 		break;
@@ -3449,13 +3726,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Invalid speed factor specified.\n");
+				reply.printf("Invalid speed factor specified.");
 				error = true;
 			}
 		}
 		else
 		{
-			reply.printf("Speed factor override: %.1f%%\n", speedFactor * minutesToSeconds * 100.0);
+			reply.printf("Speed factor override: %.1f%%", speedFactor * minutesToSeconds * 100.0);
 		}
 		break;
 
@@ -3470,7 +3747,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (gb->Seen('S'))	// S parameter sets the override percentage
 			{
 				float extrusionFactor = gb->GetFValue() / 100.0;
-				if (extruder >= 0 && extruder < DRIVES - AXES && extrusionFactor >= 0)
+				if (extruder >= 0 && (size_t)extruder < DRIVES - AXES && extrusionFactor >= 0)
 				{
 					if (moveAvailable)
 					{
@@ -3481,7 +3758,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Extrusion factor override for extruder %d: %.1f%%\n", extruder,
+				reply.printf("Extrusion factor override for extruder %d: %.1f%%", extruder,
 						extrusionFactors[extruder] * 100.0);
 			}
 		}
@@ -3518,7 +3795,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Cold extrudes are %s, use M302 P[1/0] to allow/deny them\n",
+			reply.printf("Cold extrudes are %s, use M302 P[1/0] to allow/deny them",
 					reprap.GetHeat()->ColdExtrude() ? "enabled" : "disabled");
 		}
 		break;
@@ -3556,35 +3833,40 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (!seen)
 			{
-				reply.printf("Filament width: %.2fmm, nozzle diameter: %.2fmm\n", platform->GetFilamentWidth(), platform->GetNozzleDiameter());
+				reply.printf("Filament width: %.2fmm, nozzle diameter: %.2fmm", platform->GetFilamentWidth(), platform->GetNozzleDiameter());
 			}
 		}
 		break;
 
 	case 408: // Get status in JSON format
 		{
-			int param = (gb->Seen('S')) ? gb->GetIValue() : 0;
-			int seq = (gb->Seen('R')) ? gb->GetIValue() : -1;
-			switch (param)
+			int type = gb->Seen('S') ? gb->GetIValue() : 0;
+			int seq = gb->Seen('R') ? gb->GetIValue() : -1;
+
+			OutputBuffer *statusResponse = nullptr;
+			switch (type)
 			{
-			case 0:
-			case 1:
-				reprap.GetLegacyStatusResponse(reply, param + 2, seq);	// send JSON-formatted status response
-				reply.cat("\n");
-				break;
+				case 0:
+				case 1:
+					statusResponse = reprap.GetLegacyStatusResponse(type + 2, seq);
+					break;
 
-			case 2:
-			case 3:
-			case 4:
-				reprap.GetStatusResponse(reply, param - 1, seq, false);	// send extended JSON-formatted response
-				reply.cat("\n");
-				break;
+				case 2:
+				case 3:
+				case 4:
+					statusResponse = reprap.GetStatusResponse(type - 1, (gb == auxGCode) ? ResponseSource::AUX : ResponseSource::Generic);
+					break;
 
-			case 5:
-				reprap.GetConfigResponse(reply);						// send JSON-formatted machine config
-				reply.cat("\n");
-				break;
+				case 5:
+					statusResponse = reprap.GetConfigResponse();
+					break;
+			}
 
+			if (statusResponse != nullptr)
+			{
+				statusResponse->cat('\n');
+				HandleReply(gb, false, statusResponse);
+				return true;
 			}
 		}
 		break;
@@ -3606,7 +3888,48 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 503: // List variable settings
-		result = SendConfigToLine();
+		{
+			// Need a valid output buffer to continue...
+			OutputBuffer *configResponse;
+			if (!reprap.AllocateOutput(configResponse))
+			{
+				// No buffer available, try again later
+				return false;
+			}
+
+			// Read the entire file
+			FileStore *f = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
+			if (f == nullptr)
+			{
+				error = true;
+				reply.copy("Configuration file not found!");
+			}
+			else
+			{
+				char fileBuffer[FILE_BUFFER_SIZE];
+				size_t bytesRead, bytesLeftForWriting = reprap.GetOutputBytesLeft(configResponse);
+				while ((bytesRead = f->Read(fileBuffer, FILE_BUFFER_SIZE)) > 0 && bytesLeftForWriting > 0)
+				{
+					// Don't write more data than we can process
+					if (bytesRead < bytesLeftForWriting)
+					{
+						bytesLeftForWriting -= bytesRead;
+					}
+					else
+					{
+						bytesRead = bytesLeftForWriting;
+						bytesLeftForWriting = 0;
+					}
+
+					// Write it
+					configResponse->cat(fileBuffer, bytesRead);
+				}
+				f->Close();
+
+				HandleReply(gb, false, configResponse);
+				return true;
+			}
+		}
 		break;
 
 	case 540: // Set/report MAC address
@@ -3617,7 +3940,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		else
 		{
 			const byte* mac = platform->MACAddress();
-			reply.printf("MAC: %x:%x:%x:%x:%x:%x\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+			reply.printf("MAC: %x:%x:%x:%x:%x:%x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		}
 		break;
 
@@ -3628,7 +3951,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("RepRap name: %s\n", reprap.GetName());
+			reply.printf("RepRap name: %s", reprap.GetName());
 		}
 		break;
 
@@ -3673,7 +3996,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				const byte *config_ip = platform->IPAddress();
 				const byte *actual_ip = reprap.GetNetwork()->IPAddress();
-				reply.printf("Network is %s, configured IP address: %d.%d.%d.%d, actual IP address: %d.%d.%d.%d, HTTP port: %d\n",
+				reply.printf("Network is %s, configured IP address: %d.%d.%d.%d, actual IP address: %d.%d.%d.%d, HTTP port: %d",
 						reprap.GetNetwork()->IsEnabled() ? "enabled" : "disabled",
 						config_ip[0], config_ip[1], config_ip[2], config_ip[3], actual_ip[0], actual_ip[1], actual_ip[2], actual_ip[3],
 						reprap.GetNetwork()->GetHttpPort());
@@ -3689,7 +4012,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		else
 		{
 			const byte *nm = platform->NetMask();
-			reply.printf("Net mask: %d.%d.%d.%d\n ", nm[0], nm[1], nm[2], nm[3]);
+			reply.printf("Net mask: %d.%d.%d.%d ", nm[0], nm[1], nm[2], nm[3]);
 		}
 		break;
 
@@ -3701,7 +4024,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		else
 		{
 			const byte *gw = platform->GateWay();
-			reply.printf("Gateway: %d.%d.%d.%d\n ", gw[0], gw[1], gw[2], gw[3]);
+			reply.printf("Gateway: %d.%d.%d.%d ", gw[0], gw[1], gw[2], gw[3]);
 		}
 		break;
 
@@ -3739,7 +4062,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			default:
 				reply.catf("Unknown: (%d)", platform->Emulating());
 			}
-			reply.cat("\n");
 		}
 		break;
 
@@ -3747,7 +4069,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (gb->Seen('S'))
 		{
 			float value = gb->GetFValue();
-			for (int8_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < AXES; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -3757,7 +4079,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Axis compensations - XY: %.5f, YZ: %.5f, ZX: %.5f\n",
+			reply.printf("Axis compensations - XY: %.5f, YZ: %.5f, ZX: %.5f",
 					reprap.GetMove()->AxisCompensation(X_AXIS), reprap.GetMove()->AxisCompensation(Y_AXIS),
 					reprap.GetMove()->AxisCompensation(Z_AXIS));
 		}
@@ -3767,9 +4089,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (gb->Seen('P'))
 		{
 			int point = gb->GetIValue();
-			if (point < 0 || (unsigned int)point >= MaxProbePoints)
+			if (point < 0 || (unsigned int)point >= MAX_PROBE_POINTS)
 			{
-				reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Z probe point index out of range.\n");
+				reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point index out of range.\n");
 			}
 			else
 			{
@@ -3787,7 +4109,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 				if (!seen)
 				{
-					reply.printf("Probe point %d - [%.1f, %.1f]\n", point, reprap.GetMove()->XBedProbePoint(point),
+					reply.printf("Probe point %d - [%.1f, %.1f]", point, reprap.GetMove()->XBedProbePoint(point),
 							reprap.GetMove()->YBedProbePoint(point));
 				}
 			}
@@ -3795,87 +4117,86 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 558: // Set or report Z probe type and for which axes it is used
-	{
-		bool seenAxes = false, seenType = false, seenParam = false;
-		bool zProbeAxes[AXES];
-		platform->GetZProbeAxes(zProbeAxes);
-		for (size_t axis = 0; axis < AXES; axis++)
 		{
-			if (gb->Seen(axisLetters[axis]))
-			{
-				zProbeAxes[axis] = (gb->GetIValue() > 0);
-				seenAxes = true;
-			}
-		}
-		if (seenAxes)
-		{
-			platform->SetZProbeAxes(zProbeAxes);
-		}
-
-		// We must get and set the Z probe type first before setting the dive height, because different probe types may have different dive heights
-		if (gb->Seen('P'))		// probe type
-		{
-			platform->SetZProbeType(gb->GetIValue());
-			seenType = true;
-		}
-
-		ZProbeParameters params = platform->GetZProbeParameters();
-		if (gb->Seen('H'))		// dive height
-		{
-			params.diveHeight = gb->GetFValue();
-			seenParam = true;
-		}
-
-		if (gb->Seen('F'))		// feed rate i.e. probing speed
-		{
-			params.probeSpeed = gb->GetFValue() * secondsToMinutes;
-			seenParam = true;
-		}
-
-		if (gb->Seen('T'))		// travel speed to probe point
-		{
-			params.travelSpeed = gb->GetFValue() * secondsToMinutes;
-			seenParam = true;
-		}
-
-		if (gb->Seen('S'))		// extra parameter for experimentation
-		{
-			params.param1 = gb->GetFValue();
-			seenParam = true;
-		}
-
-		if (gb->Seen('R'))		// extra parameter for experimentation
-		{
-			params.param2 = gb->GetFValue();
-			seenParam = true;
-		}
-
-		if (seenParam)
-		{
-			platform->SetZProbeParameters(params);
-		}
-
-		if (!(seenAxes || seenType || seenParam))
-		{
-			reply.printf("Z Probe type %d, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min",
-							platform->GetZProbeType(), platform->GetZProbeDiveHeight(),
-							(int)(platform->GetZProbeParameters().probeSpeed * minutesToSeconds), (int)(platform->GetZProbeTravelSpeed() * minutesToSeconds));
-			if (platform->GetZProbeType() == 5)
-			{
-				ZProbeParameters params = platform->GetZProbeParameters();
-				reply.catf(", parameters %.2f %.2f", params.param1, params.param2);
-			}
-			reply.cat(", used for these axes:");
+			bool seenAxes = false, seenType = false, seenParam = false;
+			bool zProbeAxes[AXES];
+			platform->GetZProbeAxes(zProbeAxes);
 			for (size_t axis = 0; axis < AXES; axis++)
 			{
-				if (zProbeAxes[axis])
+				if (gb->Seen(axisLetters[axis]))
 				{
-					reply.catf(" %c", axisLetters[axis]);
+					zProbeAxes[axis] = (gb->GetIValue() > 0);
+					seenAxes = true;
 				}
 			}
-			reply.cat("\n");
+			if (seenAxes)
+			{
+				platform->SetZProbeAxes(zProbeAxes);
+			}
+
+			// We must get and set the Z probe type first before setting the dive height, because different probe types may have different dive heights
+			if (gb->Seen('P'))		// probe type
+			{
+				platform->SetZProbeType(gb->GetIValue());
+				seenType = true;
+			}
+
+			ZProbeParameters params = platform->GetZProbeParameters();
+			if (gb->Seen('H'))		// dive height
+			{
+				params.diveHeight = gb->GetFValue();
+				seenParam = true;
+			}
+
+			if (gb->Seen('F'))		// feed rate i.e. probing speed
+			{
+				params.probeSpeed = gb->GetFValue() * secondsToMinutes;
+				seenParam = true;
+			}
+
+			if (gb->Seen('T'))		// travel speed to probe point
+			{
+				params.travelSpeed = gb->GetFValue() * secondsToMinutes;
+				seenParam = true;
+			}
+
+			if (gb->Seen('S'))		// extra parameter for experimentation
+			{
+				params.param1 = gb->GetFValue();
+				seenParam = true;
+			}
+
+			if (gb->Seen('R'))		// extra parameter for experimentation
+			{
+				params.param2 = gb->GetFValue();
+				seenParam = true;
+			}
+
+			if (seenParam)
+			{
+				platform->SetZProbeParameters(params);
+			}
+
+			if (!(seenAxes || seenType || seenParam))
+			{
+				reply.printf("Z Probe type %d, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min",
+								platform->GetZProbeType(), platform->GetZProbeDiveHeight(),
+								(int)(platform->GetZProbeParameters().probeSpeed * minutesToSeconds), (int)(platform->GetZProbeTravelSpeed() * minutesToSeconds));
+				if (platform->GetZProbeType() == 5)
+				{
+					ZProbeParameters params = platform->GetZProbeParameters();
+					reply.catf(", parameters %.2f %.2f", params.param1, params.param2);
+				}
+				reply.cat(", used for these axes:");
+				for (size_t axis = 0; axis < AXES; axis++)
+				{
+					if (zProbeAxes[axis])
+					{
+						reply.catf(" %c", axisLetters[axis]);
+					}
+				}
+			}
 		}
-	}
 		break;
 
 	case 559: // Upload config.g or another gcode file to put in the sys directory
@@ -3884,11 +4205,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		bool ok = OpenFileToWrite(platform->GetSysDir(), str, gb);
 		if (ok)
 		{
-			reply.printf("Writing to file: %s\n", str);
+			reply.printf("Writing to file: %s", str);
 		}
 		else
 		{
-			reply.printf("Can't open file %s for writing.\n", str);
+			reply.printf("Can't open file %s for writing.", str);
 			error = true;
 		}
 	}
@@ -3896,15 +4217,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 	case 560: // Upload reprap.htm or another web interface file
 	{
-		const char* str = (gb->Seen('P') ? gb->GetString() : INDEX_PAGE);
+		const char* str = (gb->Seen('P') ? gb->GetString() : INDEX_PAGE_FILE);
 		bool ok = OpenFileToWrite(platform->GetWebDir(), str, gb);
 		if (ok)
 		{
-			reply.printf("Writing to file: %s\n", str);
+			reply.printf("Writing to file: %s", str);
 		}
 		else
 		{
-			reply.printf("Can't open file %s for writing.\n", str);
+			reply.printf("Can't open file %s for writing.", str);
 			error = true;
 		}
 	}
@@ -3933,14 +4254,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Movement outside the bed is %spermitted\n", (limitAxes) ? "not " : "");
+			reply.printf("Movement outside the bed is %spermitted", (limitAxes) ? "not " : "");
 		}
 		break;
 
 	case 566: // Set/print maximum jerk speeds
 	{
 		bool seen = false;
-		for (int8_t axis = 0; axis < AXES; axis++)
+		for (size_t axis = 0; axis < AXES; axis++)
 		{
 			if (gb->Seen(axisLetters[axis]))
 			{
@@ -3962,14 +4283,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else if (!seen)
 		{
-			reply.printf("Maximum jerk rates: X: %.1f, Y: %.1f, Z: %.1f, E: ",
+			reply.printf("Maximum jerk rates: X: %.1f, Y: %.1f, Z: %.1f, E:",
 					platform->ConfiguredInstantDv(X_AXIS) / (distanceScale * secondsToMinutes),
 					platform->ConfiguredInstantDv(Y_AXIS) / (distanceScale * secondsToMinutes),
 					platform->ConfiguredInstantDv(Z_AXIS) / (distanceScale * secondsToMinutes));
-			for (int8_t drive = AXES; drive < DRIVES; drive++)
+			char sep = ' ';
+			for (size_t drive = AXES; drive < DRIVES; drive++)
 			{
-				reply.catf("%.1f%c", platform->ConfiguredInstantDv(drive) / (distanceScale * secondsToMinutes),
-						(drive < DRIVES - 1) ? ':' : '\n');
+				reply.catf("%c%.1f", sep, platform->ConfiguredInstantDv(drive) / (distanceScale * secondsToMinutes));
+				sep = ':';
 			}
 		}
 	}
@@ -3989,7 +4311,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					gb->GetFloatArray(eVals, eCount);
 					if (eCount != tool->DriveCount())
 					{
-						reply.printf("Setting mix ratios - wrong number of E drives: %s\n", gb->Buffer());
+						reply.printf("Setting mix ratios - wrong number of E drives: %s", gb->Buffer());
 					}
 					else
 					{
@@ -3998,15 +4320,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				}
 				else
 				{
-					reply.printf("Tool %d mix ratios: ", tNumber);
-					char sep = ':';
+					reply.printf("Tool %d mix ratios:", tNumber);
+					char sep = ' ';
 					for (size_t drive = 0; drive < tool->DriveCount(); drive++)
 					{
-						if (drive + 1 == tool->DriveCount())
-						{
-							sep = '\n';
-						}
-						reply.catf("%.3f%c", tool->GetMix()[drive], sep);
+						reply.catf("%c%.3f", sep, tool->GetMix()[drive]);
+						sep = ':';
 					}
 				}
 			}
@@ -4073,13 +4392,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					int physicalDrive = platform->GetPhysicalDrive(drive);
 					if (physicalDrive < 0)
 					{
-						reply.printf("Driver %u is not used\n", drive);
+						reply.printf("Driver %u is not used", drive);
 					}
 					else
 					{
-						const char phyDriveLetter = (physicalDrive < AXES) ? axisLetters[physicalDrive] : extrudeLetter;
-						const int phyDriveNumber = (physicalDrive < AXES) ? 0 : physicalDrive - AXES;
-						reply.printf("Driver %u drives the %c%d motor, a %d sends it forwards and a %d enables it\n",
+						const char phyDriveLetter = ((size_t)physicalDrive < AXES) ? axisLetters[physicalDrive] : extrudeLetter;
+						const size_t phyDriveNumber = ((size_t)physicalDrive < AXES) ? 0 : physicalDrive - AXES;
+						reply.printf("Driver %u drives the %c%u motor, a %d sends it forwards and a %d enables it",
 								drive, phyDriveLetter, phyDriveNumber, (int) platform->GetDirectionValue(drive), (int) platform->GetEnableValue(drive));
 					}
 				}
@@ -4094,7 +4413,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Time allowed to get to temperature: %.1f seconds.\n", platform->TimeToHot());
+			reply.printf("Time allowed to get to temperature: %.1f seconds.", platform->TimeToHot());
 		}
 		break;
 
@@ -4105,21 +4424,22 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Extrusion ancillary PWM: %.3f.\n", platform->GetExtrusionAncilliaryPWM());
+			reply.printf("Extrusion ancillary PWM: %.3f.", platform->GetExtrusionAncilliaryPWM());
 		}
 		break;
 
 	case 572: // Set/report elastic compensation
-		if (gb->Seen('P'))
+		if (gb->Seen('D'))
 		{
-			size_t drive = gb->GetIValue();
+			// New usage: specify the extruder drive using the D parameter
+			size_t extruder = gb->GetIValue();
 			if (gb->Seen('S'))
 			{
-				platform->SetElasticComp(drive, gb->GetFValue());
+				platform->SetElasticComp(extruder, gb->GetFValue());
 			}
 			else
 			{
-				reply.printf("Elastic compensation for drive %u is %.3f seconds\n", drive, platform->GetElasticComp(drive));
+				reply.printf("Elastic compensation for extruder %u is %.3f seconds", extruder, platform->GetElasticComp(extruder));
 			}
 		}
 		break;
@@ -4130,7 +4450,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			int heater = gb->GetIValue();
 			if (heater >= 0 && heater < HEATERS)
 			{
-				reply.printf("Average heater %d PWM: %.3f.\n", heater, reprap.GetHeat()->GetAveragePWM(heater));
+				reply.printf("Average heater %d PWM: %.3f", heater, reprap.GetHeat()->GetAveragePWM(heater));
 			}
 		}
 		break;
@@ -4155,16 +4475,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.copy("Endstop configuration:");
+				EndStopType config;
+				bool logic;
 				for (size_t axis = 0; axis < AXES; ++axis)
 				{
-					EndStopType config;
-					bool logic;
 					platform->GetEndStopConfiguration(axis, config, logic);
-					reply.catf(" %c %s %s %c", axisLetters[axis],
+					reply.catf(" %c %s (active %s),", axisLetters[axis],
 							(config == EndStopType::highEndStop) ? "high end" : (config == EndStopType::lowEndStop) ? "low end" : "none",
-							(config == EndStopType::noEndStop) ? "" : (logic) ? " (active high)" : " (active low)",
-							(axis == AXES - 1) ? '\n' : ',');
+							(config == EndStopType::noEndStop) ? "" : (logic) ? "high" : "low");
 				}
+				platform->GetEndStopConfiguration(E0_AXIS, config, logic);
+				reply.catf(" E (active %s)", (logic) ? "high" : "low");
 			}
 		}
 		break;
@@ -4201,7 +4522,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				if (!seen)
 				{
 					uint32_t cp = platform->GetCommsProperties(chan);
-					reply.printf("Channel %d: baud rate %d, %s checksum\n", chan, platform->GetBaudRate(chan),
+					reply.printf("Channel %d: baud rate %d, %s checksum", chan, platform->GetBaudRate(chan),
 							(cp & 1) ? "requires" : "does not require");
 				}
 			}
@@ -4222,17 +4543,36 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (!seen)
 			{
-				char comma = ',';
-				reply.copy("Axis scale factors:");
+				char sep = ':';
+				reply.copy("Axis scale factors");
 				for(size_t axis = 0; axis < AXES; axis++)
 				{
-					if (axis == AXES - 1)
-					{
-						comma = '\n';
-					}
-					reply.catf(" %c: %.3f%c", axisLetters[axis], axisScaleFactors[axis], comma);
+					reply.catf("%c %c: %.3f", sep, axisLetters[axis], axisScaleFactors[axis]);
+					sep = ',';
 				}
 			}
+		}
+		break;
+
+	case 580: // (De)Select Roland mill
+		if (gb->Seen('R'))
+		{
+			if (gb->GetIValue())
+			{
+				reprap.GetRoland()->Activate();
+				if (gb->Seen('P'))
+				{
+					result = reprap.GetRoland()->RawWrite(gb->GetString());
+				}
+			}
+			else
+			{
+				result = reprap.GetRoland()->Deactivate();
+			}
+		}
+		else
+		{
+			reply.printf("Roland is %s.", reprap.GetRoland()->Active() ? "active" : "inactive");
 		}
 		break;
 
@@ -4307,14 +4647,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				if (params.IsDeltaMode())
 				{
 					reply.printf("Diagonal %.2f, delta radius %.2f, homed height %.2f, bed radius %.1f"
-								 ", X %.2f" DEGREE_SYMBOL ", Y %.2f" DEGREE_SYMBOL ", Z %.2f" DEGREE_SYMBOL "\n",
+								 ", X %.2f" DEGREE_SYMBOL ", Y %.2f" DEGREE_SYMBOL ", Z %.2f" DEGREE_SYMBOL,
 								 	 params.GetDiagonal() / distanceScale, params.GetRadius() / distanceScale,
 								 	 params.GetHomedHeight() / distanceScale, params.GetPrintRadius() / distanceScale,
 								 	 params.GetXCorrection(), params.GetYCorrection(), params.GetZCorrection());
 				}
 				else
 				{
-					reply.printf("Printer is not in delta mode\n");
+					reply.printf("Printer is not in delta mode");
 				}
 			}
 		}
@@ -4343,9 +4683,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				params.SetEndstopAdjustment(Z_AXIS, gb->GetFValue());
 				seen = true;
 			}
-			if (!seen)
+
+			if (seen)
 			{
-				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f\n",
+				SetAllAxesNotHomed();
+			}
+			else
+			{
+				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f",
 						params.GetEndstopAdjustment(X_AXIS), params.GetEndstopAdjustment(Y_AXIS), params.GetEndstopAdjustment(Z_AXIS));
 			}
 		}
@@ -4387,7 +4732,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				{
 					reply.catf(" %c:%f", axisLetters[axis], move->GetCoreAxisFactor(axis));
 				}
-				reply.cat("\n");
 			}
 		}
 		break;
@@ -4435,7 +4779,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				{
 					reply.catf("%d%c", (int) platform->MotorCurrent(drive), (drive < DRIVES - 1) ? ':' : ',');
 				}
-				reply.catf(" idle factor %d\n", (int)(platform->GetIdleCurrentFactor() * 100.0));
+				reply.catf(" idle factor %d", (int)(platform->GetIdleCurrentFactor() * 100.0));
 			}
 		}
 		break;
@@ -4450,8 +4794,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			int val = gb->GetIValue();
 			if (val != 0)
 			{
-				reply.printf("Checksum error on line %d\n", val);
-				resend = true;
+				reply.printf("Checksum error on line %d", val);
+				//resend = true; // FIXME?
 			}
 		}
 		break;
@@ -4461,21 +4805,21 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (result)
 		{
 			uint16_t reason = (gb->Seen('P') && StringStartsWith(gb->GetString(), "ERASE"))
-											? SoftwareResetReason::erase
-											: SoftwareResetReason::user;
+											? (uint16_t)SoftwareResetReason::erase
+											: (uint16_t)SoftwareResetReason::user;
 			platform->SoftwareReset(reason);			// doesn't return
 		}
 		break;
 
 	default:
 		error = true;
-		reply.printf("invalid M Code: %s\n", gb->Buffer());
+		reply.printf("invalid M Code: %s", gb->Buffer());
 	}
 
 	// Note that we send a reply to M105 requests even if the status is not 'normal', because we reply to these requests even when we are in other states
 	if (result && (state == GCodeState::normal || GCodeBuffer::IsPollCode(code)))
 	{
-		HandleReply(error, gb, reply.Pointer(), 'M', code, resend);
+		HandleReply(gb, error, reply.Pointer());
 	}
 	return result;
 }
@@ -4491,7 +4835,7 @@ bool GCodes::HandleTcode(GCodeBuffer* gb, StringRef& reply)
 	newToolNumber += gb->GetToolNumberAdjust();
 	if (simulating)						// we don't yet simulate any T codes
 	{
-		HandleReply(false, gb, "", 'T', newToolNumber, false);
+		HandleReply(gb, false, "");
 	}
 	else
 	{
@@ -4510,7 +4854,12 @@ bool GCodes::HandleTcode(GCodeBuffer* gb, StringRef& reply)
 // Return the amount of filament extruded
 float GCodes::GetRawExtruderPosition(size_t extruder) const
 {
-	return (extruder < (DRIVES - AXES)) ? lastRawExtruderPosition[extruder] : 0;
+	return (extruder < (DRIVES - AXES)) ? lastRawExtruderPosition[extruder] : 0.0;
+}
+
+float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const
+{
+	return (extruder < (DRIVES - AXES)) ? rawExtruderTotalByDrive[extruder] : 0.0;
 }
 
 // Pause the current SD card print. Called from the web interface.

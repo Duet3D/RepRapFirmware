@@ -18,8 +18,8 @@ public:
   bool MakeDirectory(const char *directory);
   bool Rename(const char *oldFilename, const char *newFilename);
   bool FileExists(const char *file) const;
-  bool PathExists(const char *path) const;
-  bool PathExists(const char* directory, const char* subDirectory);
+  bool DirectoryExists(const char *path) const;
+  bool DirectoryExists(const char* directory, const char* subDirectory);
 
 friend class Platform;
 
@@ -33,7 +33,7 @@ private:
   Platform* platform;
   FATFS fileSystem;
   DIR findDir;
-  char combinedName[MaxFilenameLength + 1];
+  char combinedName[FILENAME_LENGTH + 1];
 };
 
 #endif

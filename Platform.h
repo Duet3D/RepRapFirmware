@@ -54,9 +54,15 @@ Licence: GPL
 #include "MCP4461.h"
 #include "MassStorage.h"
 #include "FileStore.h"
-#include "Line.h"
+
+// Definitions needed by Pins.h
 
 typedef int8_t Pin;								// type used to represent a pin number, negative means no pin
+
+const bool FORWARDS = true;
+const bool BACKWARDS = !FORWARDS;
+
+#include "Pins.h"
 
 /**************************************************************************************************/
 
@@ -67,68 +73,50 @@ typedef int8_t Pin;								// type used to represent a pin number, negative mean
 
 /**************************************************************************************************/
 
-// The physical capabilities of the machine
 
-#define DRIVES 9 // The number of drives in the machine, including X, Y, and Z plus extruder drives
-#define AXES 3 // The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
-#define HEATERS 7 // The number of heaters in the machine; 0 is the heated bed even if there isn't one.
+const int Z_PROBE_AD_VALUE = 400;						// Default for the Z probe - should be overwritten by experiment
+const float Z_PROBE_STOP_HEIGHT = 0.7;					// Millimetres
+const bool Z_PROBE_AXES[AXES] = { true, false, true };	// Axes for which the Z-probe is normally used
+const unsigned int Z_PROBE_AVERAGE_READINGS = 8;		// We average this number of readings with IR on, and the same number with IR off
 
-// The numbers of entries in each array must correspond with the values of DRIVES,
-// AXES, or HEATERS. Set values to -1 to flag unavailability.
+// Inkjet (if any - no inkjet is flagged by INKJET_BITS negative)
 
-#define NUM_SERIAL_CHANNELS		(2)
+const int8_t INKJET_BITS = 12;							// How many nozzles? Set to -1 to disable this feature
+const int INKJET_FIRE_MICROSECONDS = 5;					// How long to fire a nozzle
+const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the next bit
 
-// DRIVES
+// Inkjet control pins
 
-#define STEP_PINS {14, 25, 5, X2, 41, 39, X4, 49, X10}
-#define DIRECTION_PINS {15, 26, 4, X3, 35, 53, 51, 48, X11}
-#define FORWARDS true // What to send to go...
-#define BACKWARDS (!FORWARDS) // ...in each direction
-#define DIRECTIONS {BACKWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS} // What each axis needs to make it go forwards - defaults
-#define ENABLE_PINS {29, 27, X1, X0, 37, X8, 50, 47, X13}
-#define ENABLE_VALUES {false, false, false, false, false, false, false, false, false}	// what to send to enable a drive
-#define END_STOP_PINS {11, 28, 60, 31, 24, 46, 45, 44, X9} // E0 stop used for switch-type Z probe, others not currently used
-// Indices for motor current digipots (if any)
-// first 4 are for digipot 1,(on duet)
-// second 4 for digipot 2(on expansion board)
-// Full order is {1, 3, 2, 0, 1, 3, 2, 0}, only include as many as you have DRIVES defined
-#define POT_WIPES {1, 3, 2, 0, 1, 3, 2, 0}
-#define SENSE_RESISTOR (0.1)					// Stepper motor current sense resistor
-#define MAX_STEPPER_DIGIPOT_VOLTAGE ( 3.3*2.5/(2.7+2.5) ) // Stepper motor current reference voltage
-#define MAX_STEPPER_DAC_VOLTAGE (2.12)			// Stepper motor current reference voltage for E1 if using a DAC
+const int8_t INKJET_SERIAL_OUT = 65;					// Serial bitpattern into the shift register
+const int8_t INKJET_SHIFT_CLOCK = 20;					// Shift the register
+const int8_t INKJET_STORAGE_CLOCK = 67;					// Put the pattern in the output register
+const int8_t INKJET_OUTPUT_ENABLE = 66;					// Make the output visible
+const int8_t INKJET_CLEAR = 36;							// Clear the register to 0
 
-#define Z_PROBE_AD_VALUE (400)					// Default for the Z probe - should be overwritten by experiment
-#define Z_PROBE_STOP_HEIGHT (0.7) 				// mm
-#define Z_PROBE_PIN (10) 						// Analogue pin number
-#define Z_PROBE_MOD_PIN (52)					// Digital pin number to turn the IR LED on (high) or off (low)
-#define Z_PROBE_MOD_PIN07 (X12)					// Digital pin number to turn the IR LED on (high) or off (low) Duet V0.7 onwards
-#define Z_PROBE_AXES {true, false, true}		// Axes for which the Z-probe is normally used
-const unsigned int numZProbeReadingsAveraged = (8);	// we average this number of readings with IR on, and the same number with IR off
-
-#define MAX_FEEDRATES {100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0} // mm/sec
-#define ACCELERATIONS {500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0} // mm/sec^2
-#define DRIVE_STEPS_PER_UNIT {87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0}
-#define INSTANT_DVS {30.0, 30.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0} // (mm/sec)
+const float MAX_FEEDRATES[DRIVES] = DRIVES_(100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0);						// mm/sec
+const float ACCELERATIONS[DRIVES] = DRIVES_(500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0);				// mm/sec^2
+const float DRIVE_STEPS_PER_UNIT[DRIVES] = DRIVES_(87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0);	// steps/mm
+const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0);								// mm/sec
 
 // AXES
 
-#define AXIS_MAXIMA {230, 200, 200} 			// mm
-#define AXIS_MINIMA {0, 0, -0.5}				// mm
-const float defaultPrintRadius = 50;			// mm
-const float defaultDeltaHomedHeight = 200;		// mm
 
 const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
-const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;	// The indices of the 3 tower motors of a delta printer in drive arrays
+const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;				// The indices of the 3 tower motors of a delta printer in drive arrays
+
+const float AXIS_MINIMA[AXES] = { 0.0, 0.0, 0.0 };				// mm
+const float AXIS_MAXIMA[AXES] = { 230.0, 210.0, 200.0 };		// mm
+
+const float defaultPrintRadius = 50;							// mm
+const float defaultDeltaHomedHeight = 200;						// mm
 
 // HEATERS - The bed is assumed to be the at index 0
 
-#define TEMP_SENSE_PINS {5, 4, 0, 7, 8, 9, 11} // Analogue pin numbers
-#define HEAT_ON_PINS {6, X5, X7, 7, 8, 9, -1} //heater Channel 7 (pin X17) is shared with Fan1. Only define 1 or the other
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
-const float defaultThermistorBetas[HEATERS] = {3988.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0}; // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
-const float defaultThermistorSeriesRs[HEATERS] = {1000, 1000, 1000, 1000, 1000, 1000, 1000}; // Ohms in series with the thermistors
-const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0}; // Thermistor ohms at 25 C = 298.15 K
+const float defaultThermistorBetas[HEATERS] = HEATERS_(3988.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0, 4138.0); // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
+const float defaultThermistorSeriesRs[HEATERS] = HEATERS_(1000, 1000, 1000, 1000, 1000, 1000, 1000); 			// Ohms in series with the thermistors
+const float defaultThermistor25RS[HEATERS] = HEATERS_(10000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0); // Thermistor ohms at 25 C = 298.15 K
 
 // Note on hot end PID parameters:
 // The system is highly nonlinear because the heater power is limited to a maximum value and cannot go negative.
@@ -153,56 +141,45 @@ const float defaultThermistor25RS[HEATERS] = {10000.0, 100000.0, 100000.0, 10000
 // This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
 // We use method 2 (see above)
-const float defaultPidKis[HEATERS] = {5.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2}; 			// Integral PID constants
-const float defaultPidKds[HEATERS] = {500.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0}; // Derivative PID constants
-const float defaultPidKps[HEATERS] = {-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0};	// Proportional PID constants, negative values indicate use bang-bang instead of PID
-const float defaultPidKts[HEATERS] = {2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4};			// approximate PWM value needed to maintain temperature, per degC above room temperature
-const float defaultPidKss[HEATERS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};			// PWM scaling factor, to allow for variation in heater power and supply voltage
-const float defaultFullBands[HEATERS] = {5.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0};	// errors larger than this cause heater to be on or off
-const float defaultPidMins[HEATERS] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};			// minimum value of I-term
-const float defaultPidMaxes[HEATERS] = {255, 180, 180, 180, 180, 180, 180};			// maximum value of I-term, must be high enough to reach 245C for ABS printing
+const float defaultPidKis[HEATERS] = HEATERS_(5.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2); 			// Integral PID constants
+const float defaultPidKds[HEATERS] = HEATERS_(500.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0); // Derivative PID constants
+const float defaultPidKps[HEATERS] = HEATERS_(-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0);	// Proportional PID constants, negative values indicate use bang-bang instead of PID
+const float defaultPidKts[HEATERS] = HEATERS_(2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4);			// approximate PWM value needed to maintain temperature, per degC above room temperature
+const float defaultPidKss[HEATERS] = HEATERS_(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);			// PWM scaling factor, to allow for variation in heater power and supply voltage
+const float defaultFullBands[HEATERS] = HEATERS_(5.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0);	// errors larger than this cause heater to be on or off
+const float defaultPidMins[HEATERS] = HEATERS_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);			// minimum value of I-term
+const float defaultPidMaxes[HEATERS] = HEATERS_(255, 180, 180, 180, 180, 180, 180);			// maximum value of I-term, must be high enough to reach 245C for ABS printing
 
-#define STANDBY_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO} // We specify one for the bed, though it's not needed
-#define ACTIVE_TEMPERATURES {ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO}
-#define HEAT_ON 0 											// 0 for inverted heater (e.g. Duet v0.6) 1 for not (e.g. Duet v0.4)
-
-const unsigned int NumFans = 2;								// max number of PWM-controllable fans
-const Pin defaultCoolingFanPins[NumFans] = { X6, X17 };
-const Pin defaultCoolingFanRpmPin = 23;
-//const float defaultCoolingFanRpmSampleTime = 2.0;					// time to wait before resetting the internal fan RPM stats
+const float STANDBY_TEMPERATURES[HEATERS] = HEATERS_(ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO); // We specify one for the bed, though it's not needed
+const float ACTIVE_TEMPERATURES[HEATERS] = HEATERS_(ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO);
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
-const unsigned int adOversampleBits = 1;					// number of bits we oversample when reading temperatures
+const unsigned int AD_OVERSAMPLE_BITS = 1;		// Number of bits we oversample when reading temperatures
 
-// Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ** adOversampleBits.
-// Keep numThermistorReadingsAveraged * HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
-const unsigned int numThermistorReadingsAveraged = 32;
-const unsigned int adRangeReal = 4095;						// the ADC that measures temperatures gives an int this big as its max value
-const unsigned int adRangeVirtual = ((adRangeReal + 1) << adOversampleBits) - 1;	// the max value we can get using oversampling
-const unsigned int adDisconnectedReal = adRangeReal - 3;	// we consider an ADC reading at/above this value to indicate that the thermistor is disconnected
-const unsigned int adDisconnectedVirtual = adDisconnectedReal << adOversampleBits;
+// Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ** AD_OVERSAMPLE_BITS.
+// Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
+const unsigned int THERMISTOR_AVERAGE_READINGS = 32;
+const unsigned int AD_RANGE_REAL = 4095;													// The ADC that measures temperatures gives an int this big as its max value
+const unsigned int AD_RANGE_VIRTUAL = ((AD_RANGE_REAL + 1) << AD_OVERSAMPLE_BITS) - 1;		// The max value we can get using oversampling
+const unsigned int AD_DISCONNECTED_REAL = AD_RANGE_REAL - 3;								// We consider an ADC reading at/above this value to indicate that the thermistor is disconnected
+const unsigned int AD_DISCONNECTED_VIRTUAL = AD_DISCONNECTED_REAL << AD_OVERSAMPLE_BITS;
 
-#define BED_HEATER 0 										// the index of the heated bed; set to -1 if there is no heated bed
-#define E0_HEATER 1 										// the index of the first extruder heater
+const size_t BED_HEATER = 0;					// Index of the heated bed
+const size_t E0_HEATER = 1;						// Index of the first extruder heater
 
 /****************************************************************************************************/
 
 // File handling
 
-#define MAX_FILES (10)							// must be large enough to handle the max number of simultaneous web requests + file being printed
-#define WEB_DIR "0:/www/" 						// Place to find web files on the SD card
-#define GCODE_DIR "0:/gcodes/" 					// Ditto - g-codes
-#define SYS_DIR "0:/sys/" 						// Ditto - system files
-#define TEMP_DIR "0:/tmp/" 						// Ditto - temporary files
+const size_t MAX_FILES = 10;					// Must be large enough to handle the max number of simultaneous web requests + files being printed
 
-#define MAC_ADDRESS {0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED}
+const size_t FILE_BUFFER_SIZE = 256;
 
+const uint8_t MAC_ADDRESS[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };
 
 /****************************************************************************************************/
 
 // Miscellaneous...
-
-const Pin atxPowerPin = 12;						// Arduino Due pin number that controls the ATX power on/off
 
 const size_t messageStringLength = 256;			// max length of a message chunk sent via Message or AppendMessage
 
@@ -238,29 +215,23 @@ enum class EndStopType
 
 // Enumeration describing the reasons for a software reset.
 // The spin state gets or'ed into this, so keep the lower ~4 bits unused.
-namespace SoftwareResetReason
+enum class SoftwareResetReason : uint16_t
 {
-	enum
-	{
-		user = 0,					// M999 command
-		erase = 55,					// special M999 command to erase firmware and reset
-		inAuxOutput = 0x0800,		// this bit is or'ed in if we were in aux output at the time
-		stuckInSpin = 0x1000,		// we got stuck in a Spin() function for too long
-		inLwipSpin = 0x2000,		// we got stuck in a call to LWIP for too long
-		inUsbOutput = 0x4000		// this bit is or'ed in if we were in USB output at the time
-	};
-}
+	user = 0,					// M999 command
+	erase = 55,					// special M999 command to erase firmware and reset
+	inAuxOutput = 0x0800,		// this bit is or'ed in if we were in aux output at the time
+	stuckInSpin = 0x1000,		// we got stuck in a Spin() function for too long
+	inLwipSpin = 0x2000,		// we got stuck in a call to LWIP for too long
+	inUsbOutput = 0x4000		// this bit is or'ed in if we were in USB output at the time
+};
 
 // Enumeration to describe various tests we do in response to the M111 command
-namespace DiagnosticTest
+enum class DiagnosticTestType : int
 {
-	enum
-	{
-		TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
-		TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
-		TestSerialBlock = 1003			// test what happens when we write a blocking message via debugPrintf()
-	};
-}
+	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
+	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
+	TestSerialBlock = 1003			// test what happens when we write a blocking message via debugPrintf()
+};
 
 // Info returned by FindFirst/FindNext calls
 class FileInfo
@@ -272,7 +243,7 @@ public:
 	uint8_t day;
 	uint8_t month;
 	uint16_t year;
-	char fileName[MaxFilenameLength];
+	char fileName[FILENAME_LENGTH];
 };
 
 /***************************************************************************************************************/
@@ -298,9 +269,9 @@ struct ZProbeParameters
 		height = h;
 		calibTemperature = 20.0;
 		temperatureCoefficient = 0.0;	// no default temperature correction
-		diveHeight = DefaultZDive;
-		probeSpeed = DefaultProbeSpeed;
-		travelSpeed = DefaultTravelSpeed;
+		diveHeight = DEFAULT_Z_DIVE;
+		probeSpeed = DEFAULT_PROBE_SPEED;
+		travelSpeed = DEFAULT_TRAVEL_SPEED;
 		param1 = param2 = 0.0;
 	}
 
@@ -415,13 +386,36 @@ private:
 	//invariant(index < numAveraged)
 };
 
-typedef AveragingFilter<numThermistorReadingsAveraged> ThermistorAveragingFilter;
-typedef AveragingFilter<numZProbeReadingsAveraged> ZProbeAveragingFilter;
+typedef AveragingFilter<THERMISTOR_AVERAGE_READINGS> ThermistorAveragingFilter;
+typedef AveragingFilter<Z_PROBE_AVERAGE_READINGS> ZProbeAveragingFilter;
 
 // Enumeration of error condition bits
-enum ErrorCode
+enum class ErrorCode : uint32_t
 {
-	ErrorBadTemp = 1 << 0
+	BadTemp = 1 << 0,
+	BadMove = 1 << 1
+};
+
+// Different types of hardware-related input-output
+enum class SerialSource
+{
+	USB,
+	AUX,
+	AUX2
+};
+
+// Supported message destinations
+enum MessageType
+{
+	AUX_MESSAGE,						// Type byte of a message that is to be sent to the first auxiliary device
+	AUX2_MESSAGE,						// Type byte of a message that is to be sent to the second auxiliary device
+	FLASH_LED,							// Type byte of a message that is to flash an LED; the next two bytes define the frequency and M/S ratio
+	DISPLAY_MESSAGE,					// Type byte of a message that is to appear on a local display; the L is not displayed; \f and \n should be supported
+	HOST_MESSAGE,						// Type byte of a message that is to be sent in non-blocking mode to the host via USB
+	DEBUG_MESSAGE,						// Type byte of a debug message to send in blocking mode to USB
+	HTTP_MESSAGE,						// Type byte of a message that is to be sent to the web (HTTP)
+	TELNET_MESSAGE,						// Type byte of a message that is to be sent to a Telnet client
+	GENERIC_MESSAGE,					// Type byte of a message that is to be sent to the web & host
 };
 
 // The main class that defines the RepRap machine for the benefit of the other classes
@@ -432,74 +426,76 @@ public:
 	// Enumeration to describe the status of a drive
 	enum class DriveStatus : uint8_t { disabled, idle, enabled };
   
-  Platform();
+	Platform();
   
 //-------------------------------------------------------------------------------------------------------------
 
-// These are the functions that form the interface between Platform and the rest of the firmware.
+	// These are the functions that form the interface between Platform and the rest of the firmware.
 
-  void Init(); // Set the machine up after a restart.  If called subsequently this should set the machine up as if
-               // it has just been restarted; it can do this by executing an actual restart if you like, but beware the 
-               // loop of death...
-  void Spin(); // This gets called in the main loop and should do any housekeeping needed
-  void Exit(); // Shut down tidily. Calling Init after calling this should reset to the beginning
-  Compatibility Emulating() const;
-  void SetEmulating(Compatibility c);
-  void Diagnostics();
-  void DiagnosticTest(int d);
-  void ClassReport(float &lastTime);  			// Called on Spin() return to check everything's live.
-  void RecordError(ErrorCode ec) { errorCodeBits |= ec; }
-  void SoftwareReset(uint16_t reason);
-  bool AtxPower() const;
-  void SetAtxPower(bool on);
-  void SetBoardType(BoardType bt);
-  const char* GetElectronicsString() const;
+	void Init();									// Set the machine up after a restart.  If called subsequently this should set the machine up as if
+													// it has just been restarted; it can do this by executing an actual restart if you like, but beware the loop of death...
+	void Spin();									// This gets called in the main loop and should do any housekeeping needed
+	void Exit();									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
-  // Timing
+	static void EnableWatchdog();
+	static void KickWatchdog();						// kick the watchdog
+
+	Compatibility Emulating() const;
+	void SetEmulating(Compatibility c);
+	void Diagnostics();
+	void DiagnosticTest(int d);
+	void ClassReport(float &lastTime);  			// Called on Spin() return to check everything's live.
+	void RecordError(ErrorCode ec) { errorCodeBits |= (uint32_t)ec; }
+	void SoftwareReset(uint16_t reason);
+	bool AtxPower() const;
+	void SetAtxPower(bool on);
+	void SetBoardType(BoardType bt);
+	const char* GetElectronicsString() const;
+
+	// Timing
   
-  float Time();									// Returns elapsed seconds since some arbitrary time
-  static uint32_t GetInterruptClocks();			// Get the interrupt clock count
-  static bool ScheduleInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
-  void Tick();
+	float Time();									// Returns elapsed seconds since some arbitrary time
+	static uint32_t GetInterruptClocks();			// Get the interrupt clock count
+	static bool ScheduleInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
+	void Tick();
   
-  // Communications and data storage
+  	// Communications and data storage
   
-  Line* GetLine() const;
-  Line* GetAux() const;
-  void SetIPAddress(uint8_t ip[]);
-  const uint8_t* IPAddress() const;
-  void SetNetMask(uint8_t nm[]);
-  const uint8_t* NetMask() const;
-  void SetGateWay(uint8_t gw[]);
-  const uint8_t* GateWay() const;
-  void SetMACAddress(uint8_t mac[]);
-  const uint8_t* MACAddress() const;
-  void SetBaudRate(size_t chan, uint32_t br);
-  uint32_t GetBaudRate(size_t chan) const;
-  void SetCommsProperties(size_t chan, uint32_t cp);
-  uint32_t GetCommsProperties(size_t chan) const;
+	bool GCodeAvailable(const SerialSource source) const;
+	char ReadFromSource(const SerialSource source);
+
+	void SetIPAddress(uint8_t ip[]);
+	const uint8_t* IPAddress() const;
+	void SetNetMask(uint8_t nm[]);
+	const uint8_t* NetMask() const;
+	void SetGateWay(uint8_t gw[]);
+	const uint8_t* GateWay() const;
+	void SetMACAddress(uint8_t mac[]);
+	const uint8_t* MACAddress() const;
+	void SetBaudRate(size_t chan, uint32_t br);
+	uint32_t GetBaudRate(size_t chan) const;
+	void SetCommsProperties(size_t chan, uint32_t cp);
+	uint32_t GetCommsProperties(size_t chan) const;
+
+	friend class FileStore;
+
+	MassStorage* GetMassStorage();
+	FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
+	const char* GetWebDir() const; 	// Where the htm etc files are
+	const char* GetGCodeDir() const; 	// Where the gcodes are
+	const char* GetSysDir() const;  	// Where the system files are
+	const char* GetMacroDir() const;					// Where the user-defined macros are
+	const char* GetConfigFile() const; // Where the configuration is stored (in the system dir).
+	const char* GetDefaultFile() const;	// Where the default configuration is stored (in the system dir).
   
-  friend class FileStore;
-  
-  MassStorage* GetMassStorage();
-  FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
-  const char* GetWebDir() const; 	// Where the htm etc files are
-  const char* GetGCodeDir() const; 	// Where the gcodes are
-  const char* GetSysDir() const;  	// Where the system files are
-  const char* GetTempDir() const;	// Where temporary files are
-  const char* GetConfigFile() const; // Where the configuration is stored (in the system dir).
-  const char* GetDefaultFile() const;	// Where the default configuration is stored (in the system dir).
-  
-  void Message(char type, const char* message, ...);		// Send a message.  Messages may simply flash an LED, or,
-  	  	  	  	  	  	  	  	  	  // say, display the messages on an LCD. This may also transmit the messages to the host.
-  void Message(char type, const char* fmt, va_list vargs);
-  void Message(char type, const StringRef& message);
-  void AppendMessage(char type, const char* message, ...);	// Send a message.  Messages may simply flash an LED, or,
-  	  	  	  	  	  	  	  	  	  // say, display the messages on an LCD. This may also transmit the messages to the host.
-  void AppendMessage(char type, const StringRef& message);
-  void PushMessageIndent();
-  void PopMessageIndent();
-  
+	// Message output (see MessageType for further details)
+
+	void Message(const MessageType type, const char *message);
+	void Message(const MessageType type, const StringRef& message);
+	void Message(const MessageType type, OutputBuffer *buffer);
+	void MessageF(const MessageType type, const char *fmt, ...);
+	void MessageF(const MessageType type, const char *fmt, va_list vargs);
+
   // Movement
   
   void EmergencyStop();
@@ -538,7 +534,7 @@ public:
   void SetAxisMinimum(size_t axis, float value);
   float AxisTotalLength(size_t axis) const;
   float GetElasticComp(size_t drive) const;
-  void SetElasticComp(size_t drive, float factor);
+  void SetElasticComp(size_t extruder, float factor);
   void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel);
   void GetEndStopConfiguration(size_t axis, EndStopType& endstopType, bool& logicLevel) const;
 
@@ -586,6 +582,10 @@ public:
   void SetCoolingInverted(size_t fan, bool inv);
   float GetFanPwmFrequency(size_t fan) const;
   void SetFanPwmFrequency(size_t fan, float freq);
+  float GetTriggerTemperature(size_t fan) const;
+  void SetTriggerTemperature(size_t fan, float t);
+  uint16_t GetHeatersMonitored(size_t fan) const;
+  void SetHeatersMonitored(size_t fan, uint16_t h);
   float GetFanRPM();
 
   // Flash operations
@@ -606,6 +606,9 @@ public:
 
   // Direct pin operations
   bool SetPin(int pin, int level);
+
+  // Error logging
+  void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -653,7 +656,9 @@ private:
   struct Fan
   {
 	  float val;
+	  float triggerTemperature;
 	  uint16_t freq;
+	  uint16_t heatersMonitored;
 	  Pin pin;
 	  bool inverted;
 	  bool hardwareInverted;
@@ -662,6 +667,9 @@ private:
 	  void SetValue(float speed);
 	  void SetPwmFrequency(float p_freq);
 	  void Refresh();
+	  void SetTriggerTemperature(float t) { triggerTemperature = t; }
+	  void SetHeatersMonitored(uint16_t h) { heatersMonitored = h; }
+	  void Check();
   };
 
   FlashData nvData;
@@ -699,7 +707,7 @@ private:
   float accelerations[DRIVES];
   float driveStepsPerUnit[DRIVES];
   float instantDvs[DRIVES];
-  float elasticComp[DRIVES];
+  float elasticComp[DRIVES - AXES];
   float motorCurrents[DRIVES];
   float idleCurrentFactor;
 
@@ -737,6 +745,7 @@ private:
 
   int GetRawTemperature(size_t heater) const;
   void SetHeaterPwm(size_t heater, uint8_t pwm);
+  bool AnyHeaterHot(uint16_t heaters, float t) const;				// called to see if we need to turn on the hot end fan
 
   Pin tempSensePins[HEATERS];
   Pin heatOnPins[HEATERS];
@@ -745,32 +754,32 @@ private:
   float activeTemperatures[HEATERS];
   float timeToHot;
 
-// Fans
+  	// Fans
 
-  Fan fans[NumFans];
-  Pin coolingFanRpmPin;			// we currently support only one fan RPM input
-  float lastRpmResetTime;
-  void InitFans();
+	Fan fans[NUM_FANS];
+	Pin coolingFanRpmPin;											// we currently support only one fan RPM input
+	float lastRpmResetTime;
+	void InitFans();
 
-// Serial/USB
+  	// Serial/USB
 
-  Line* line;
-  Line* aux;
-  uint32_t baudRates[NUM_SERIAL_CHANNELS];
-  uint8_t commsParams[NUM_SERIAL_CHANNELS];
-  uint8_t messageIndent;
+	uint32_t baudRates[NUM_SERIAL_CHANNELS];
+	uint8_t commsParams[NUM_SERIAL_CHANNELS];
+	OutputBuffer * volatile auxOutputBuffer;
+	OutputBuffer * volatile aux2OutputBuffer;
+	OutputBuffer * volatile usbOutputBuffer;
 
-// Files
+	// Files
 
-  MassStorage* massStorage;
-  FileStore* files[MAX_FILES];
-  bool fileStructureInitialised;
-  const char* webDir;
-  const char* gcodeDir;
-  const char* sysDir;
-  const char* tempDir;
-  const char* configFile;
-  const char* defaultFile;
+	MassStorage* massStorage;
+	FileStore* files[MAX_FILES];
+	bool fileStructureInitialised;
+	const char* webDir;
+	const char* gcodeDir;
+	const char* sysDir;
+	const char* macroDir;
+	const char* configFile;
+	const char* defaultFile;
   
 // Data used by the tick interrupt handler
 
@@ -845,7 +854,7 @@ public:
 
 	FilePosition GetPosition() const
 	{
-		return f->GetPosition();
+		return f->Position();
 	}
 
 	bool Seek(FilePosition position)
@@ -918,13 +927,10 @@ inline const char* Platform::GetSysDir() const
   return sysDir;
 }
 
-// Where the temporary files are
-
-inline const char* Platform::GetTempDir() const
+inline const char* Platform::GetMacroDir() const
 {
-  return tempDir;
+	return macroDir;
 }
-
 
 inline const char* Platform::GetConfigFile() const
 {
@@ -1100,7 +1106,7 @@ inline void Platform::ExtrudeOff()
 inline int Platform::GetRawTemperature(size_t heater) const
 {
   return (heater < HEATERS)
-		  ? thermistorFilters[heater].GetSum()/(numThermistorReadingsAveraged >> adOversampleBits)
+		  ? thermistorFilters[heater].GetSum()/(THERMISTOR_AVERAGE_READINGS >> AD_OVERSAMPLE_BITS)
 		  : 0;
 }
 
@@ -1144,29 +1150,9 @@ inline const uint8_t* Platform::MACAddress() const
 	return nvData.macAddress;
 }
 
-inline Line* Platform::GetLine() const
+inline float Platform::GetElasticComp(size_t extruder) const
 {
-	return line;
-}
-
-inline Line* Platform::GetAux() const
-{
-	return aux;
-}
-
-inline void Platform::PushMessageIndent()
-{
-	messageIndent += 2;
-}
-
-inline void Platform::PopMessageIndent()
-{
-	messageIndent -= 2;
-}
-
-inline float Platform::GetElasticComp(size_t drive) const
-{
-	return (drive < DRIVES) ? elasticComp[drive] : 0.0;
+	return (extruder < DRIVES - AXES) ? elasticComp[extruder] : 0.0;
 }
 
 inline void Platform::SetEndStopConfiguration(size_t axis, EndStopType esType, bool logicLevel)
@@ -1227,6 +1213,17 @@ inline float Platform::GetNozzleDiameter() const
 inline void Platform::SetNozzleDiameter(float diameter)
 {
 	nozzleDiameter = diameter;
+}
+
+/*static*/ inline void Platform::EnableWatchdog()
+{
+	const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
+	WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);	// enable watchdog, reset the mcu if it times out
+}
+
+/*static*/ inline void Platform::KickWatchdog()
+{
+	WDT_Restart(WDT);
 }
 
 //***************************************************************************************

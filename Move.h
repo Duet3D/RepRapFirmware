@@ -50,17 +50,17 @@ public:
     void SetPositions(const float move[DRIVES]);		// Force the coordinates to be these
     void SetFeedrate(float feedRate);					// Sometimes we want to override the feed rate
     void SetLiveCoordinates(const float coords[DRIVES]); // Force the live coordinates (see above) to be these
-    void SetXBedProbePoint(int index, float x);			// Record the X coordinate of a probe point
-    void SetYBedProbePoint(int index, float y);			// Record the Y coordinate of a probe point
-    void SetZBedProbePoint(int index, float z, bool wasXyCorrected, bool wasError);	// Record the Z coordinate of a probe point
-    float XBedProbePoint(int index) const;				// Get the X coordinate of a probe point
-    float YBedProbePoint(int index) const;				// Get the Y coordinate of a probe point
-    float ZBedProbePoint(int index)const ;				// Get the Z coordinate of a probe point
-    int NumberOfProbePoints() const;					// How many points to probe have been set?  0 if incomplete
-    int NumberOfXYProbePoints() const;					// How many XY coordinates of probe points have been set (Zs may not have been probed yet)
+    void SetXBedProbePoint(size_t index, float x);		// Record the X coordinate of a probe point
+    void SetYBedProbePoint(size_t index, float y);		// Record the Y coordinate of a probe point
+    void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError);	// Record the Z coordinate of a probe point
+    float XBedProbePoint(size_t index) const;			// Get the X coordinate of a probe point
+    float YBedProbePoint(size_t index) const;			// Get the Y coordinate of a probe point
+    float ZBedProbePoint(size_t index)const ;			// Get the Z coordinate of a probe point
+    size_t NumberOfProbePoints() const;					// How many points to probe have been set?  0 if incomplete
+    size_t NumberOfXYProbePoints() const;				// How many XY coordinates of probe points have been set (Zs may not have been probed yet)
     bool AllProbeCoordinatesSet(int index) const;		// XY, and Z all set for this one?
     bool XYProbeCoordinatesSet(int index) const;		// Just XY set for this one?
-    void FinishedBedProbing(int sParam, StringRef& reply);	// Calibrate or set the bed equiation after probing
+    void FinishedBedProbing(int sParam, StringRef& reply); // Calibrate or set the bed equation after probing
     float SecondDegreeTransformZ(float x, float y) const; // Used for second degree bed equation
     void SetAxisCompensation(int8_t axis, float tangent); // Set an axis-pair compensation angle
     float AxisCompensation(int8_t axis) const;			// The tangent value
@@ -78,47 +78,50 @@ public:
     void SetCoreXYMode(int mode) { coreXYMode = mode; }
     float GetCoreAxisFactor(size_t axis) const { return axisFactors[axis]; }
     void setCoreAxisFactor(size_t axis, float f) { axisFactors[axis] = f; }
-    bool IsCoreXYAxis(size_t axis) const;				// return true if the specified axis shares its motors with another
+    bool IsCoreXYAxis(size_t axis) const;											// return true if the specified axis shares its motors with another
 
-    void CurrentMoveCompleted();						// signals that the current move has just been completed
-    bool StartNextMove(uint32_t startTime);				// start the next move, returning true if Step() needs to be called immediately
+    void CurrentMoveCompleted();													// signals that the current move has just been completed
+    bool StartNextMove(uint32_t startTime);											// start the next move, returning true if Step() needs to be called immediately
     void MotorTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const;				// Convert Cartesian coordinates to delta motor coordinates
     float MotorFactor(size_t drive, const float directionVector[]) const;							// Calculate the movement fraction for a single axis motor of a Cartesian or CoreXY printer
     void MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_t numDrives) const;	// Convert motor coordinates to machine coordinates
     void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const;
 
-    void Simulate(bool sim);							// Enter or leave simulation mode
-    float GetSimulationTime() const { return simulationTime; }	// Get the accumulated simulation time
-    void PrintCurrentDda() const;						// For debugging
+	float IdleTimeout() const { return idleTimeout; }								// Returns the idle timeout in seconds
+	void SetIdleTimeout(float timeout) { idleTimeout = timeout; }					// Set the idle timeout in seconds
 
-    FilePosition PausePrint(float positions[DRIVES+1]);	// Pause the print as soon as we can
-    bool NoLiveMovement() const;						// Is a move running, or are there any queued?
+    void Simulate(bool sim);														// Enter or leave simulation mode
+    float GetSimulationTime() const { return simulationTime; }						// Get the accumulated simulation time
+    void PrintCurrentDda() const;													// For debugging
+
+    FilePosition PausePrint(float positions[DRIVES+1]);								// Pause the print as soon as we can
+    bool NoLiveMovement() const;													// Is a move running, or are there any queued?
 
     int DoDeltaProbe(float frequency, float amplitude, float rate, float distance);
 
-    static int32_t MotorEndPointToMachine(size_t drive, float coord);		// Convert a single motor position to number of steps
-    static float MotorEndpointToPosition(int32_t endpoint, size_t drive);	// Convert number of motor steps to motor position
+    static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
+    static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
 
 private:
 
     enum class IdleState : uint8_t { idle, busy, timing };
 
-    void SetProbedBedEquation(size_t numPoints, StringRef& reply);	// When we have a full set of probed points, work out the bed's equation
+    void SetProbedBedEquation(size_t numPoints, StringRef& reply);					// When we have a full set of probed points, work out the bed's equation
     void DoDeltaCalibration(size_t numPoints, StringRef& reply);
-    void BedTransform(float move[AXES]) const;			// Take a position and apply the bed compensations
+    void BedTransform(float move[AXES]) const;										// Take a position and apply the bed compensations
     void GetCurrentMachinePosition(float m[DRIVES + 1], bool disableMotorMapping) const;	// Get the current position and feedrate in untransformed coords
-    void InverseBedTransform(float move[AXES]) const;	// Go from a bed-transformed point back to user coordinates
-    void AxisTransform(float move[AXES]) const;			// Take a position and apply the axis-angle compensations
-    void InverseAxisTransform(float move[AXES]) const;	// Go from an axis transformed point back to user coordinates
-    void BarycentricCoordinates(size_t p0, size_t p1,   // Compute the barycentric coordinates of a point in a triangle
-    		size_t p2, float x, float y, float& l1,     // (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
+    void InverseBedTransform(float move[AXES]) const;								// Go from a bed-transformed point back to user coordinates
+    void AxisTransform(float move[AXES]) const;										// Take a position and apply the axis-angle compensations
+    void InverseAxisTransform(float move[AXES]) const;								// Go from an axis transformed point back to user coordinates
+    void BarycentricCoordinates(size_t p0, size_t p1,   							// Compute the barycentric coordinates of a point in a triangle
+    		size_t p2, float x, float y, float& l1,     							// (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
     		float& l2, float& l3) const;
-    float TriangleZ(float x, float y) const;			// Interpolate onto a triangular grid
-    void AdjustDeltaParameters(const float v[], size_t numFactors);	// Perform delta adjustment
-    void JustHomed(size_t axis, float hitPoint, DDA* hitDDA);	// deal with setting positions after a drive has been homed
+    float TriangleZ(float x, float y) const;										// Interpolate onto a triangular grid
+    void AdjustDeltaParameters(const float v[], size_t numFactors);					// Perform delta adjustment
+    void JustHomed(size_t axis, float hitPoint, DDA* hitDDA);						// deal with setting positions after a drive has been homed
 
     static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0);	// for debugging
-    static void PrintVector(const char *s, const float *v, size_t numElems);	// for debugging
+    static void PrintVector(const char *s, const float *v, size_t numElems);		// for debugging
 
     bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
     DDA* DDARingGet();									// Get the next DDA ring entry to be run
@@ -139,13 +142,13 @@ private:
     volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
     volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
 
-    float xBedProbePoints[MaxProbePoints];				// The X coordinates of the points on the bed at which to probe
-    float yBedProbePoints[MaxProbePoints];				// The Y coordinates of the points on the bed at which to probe
-    float zBedProbePoints[MaxProbePoints];				// The Z coordinates of the points on the bed at which to probe
+    float xBedProbePoints[MAX_PROBE_POINTS];			// The X coordinates of the points on the bed at which to probe
+    float yBedProbePoints[MAX_PROBE_POINTS];			// The Y coordinates of the points on the bed at which to probe
+    float zBedProbePoints[MAX_PROBE_POINTS];			// The Z coordinates of the points on the bed at which to probe
     float baryXBedProbePoints[5];						// The X coordinates of the triangle corner points
     float baryYBedProbePoints[5];						// The Y coordinates of the triangle corner points
     float baryZBedProbePoints[5];						// The Z coordinates of the triangle corner points
-    uint8_t probePointSet[MaxProbePoints];				// Has the XY of this point been set?  Has the Z been probed?
+    uint8_t probePointSet[MAX_PROBE_POINTS];			// Has the XY of this point been set?  Has the Z been probed?
     float aX, aY, aC; 									// Bed plane explicit equation z' = z + aX*x + aY*y + aC
     float tanXY, tanYZ, tanXZ; 							// Axis compensation - 90 degrees + angle gives angle between axes
     int numBedCompensationPoints;						// The number of points we are actually using for bed compensation, 0 means identity bed transform

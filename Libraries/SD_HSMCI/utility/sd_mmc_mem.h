@@ -195,11 +195,11 @@ extern Ctrl_status sd_mmc_usb_write_10_1(uint32_t addr, uint16_t nb_sector);
  *
  * \return Status.
  */
-extern Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram);
+extern Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram, uint32_t numBlocks);
 //! Instance Declaration for sd_mmc_mem_2_ram Slot O
-extern Ctrl_status sd_mmc_mem_2_ram_0(uint32_t addr, void *ram);
+extern Ctrl_status sd_mmc_mem_2_ram_0(uint32_t addr, void *ram, uint32_t numBlocks);
 //! Instance Declaration for sd_mmc_mem_2_ram Slot 1
-extern Ctrl_status sd_mmc_mem_2_ram_1(uint32_t addr, void *ram);
+extern Ctrl_status sd_mmc_mem_2_ram_1(uint32_t addr, void *ram, uint32_t numBlocks);
 
 /*! \brief Copies 1 data sector from RAM to the memory.
  *
@@ -209,11 +209,11 @@ extern Ctrl_status sd_mmc_mem_2_ram_1(uint32_t addr, void *ram);
  *
  * \return Status.
  */
-extern Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram);
+extern Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram, uint32_t numBlocks);
 //! Instance Declaration for sd_mmc_mem_2_ram Slot O
-extern Ctrl_status sd_mmc_ram_2_mem_0(uint32_t addr, const void *ram);
+extern Ctrl_status sd_mmc_ram_2_mem_0(uint32_t addr, const void *ram, uint32_t numBlocks);
 //! Instance Declaration for sd_mmc_mem_2_ram Slot 1
-extern Ctrl_status sd_mmc_ram_2_mem_1(uint32_t addr, const void *ram);
+extern Ctrl_status sd_mmc_ram_2_mem_1(uint32_t addr, const void *ram, uint32_t numBlocks);
 
 //! @}
 

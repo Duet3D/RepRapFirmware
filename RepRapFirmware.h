@@ -26,6 +26,9 @@ Licence: GPL
 #include <cfloat>
 #include <cstdarg>
 
+#include "Arduino.h"
+#include "Configuration.h"
+
 // Module numbers and names, used for diagnostics and debug
 enum Module
 {
@@ -36,8 +39,9 @@ enum Module
 	moduleMove = 4,
 	moduleHeat = 5,
 	moduleDda = 6,
-	modulePrintMonitor = 7,
-	numModules = 8,				// make this one greater than the last module number
+	moduleRoland = 7,
+	modulePrintMonitor = 8,
+	numModules = 9,				// make this one greater than the last module number
 	noModule = 15
 };
 
@@ -52,6 +56,7 @@ class GCodes;
 class Move;
 class Heat;
 class Tool;
+class Roland;
 class PrintMonitor;
 class RepRap;
 class FileStore;
@@ -73,16 +78,8 @@ int StringContains(const char* string, const char* match);
 #define ARRAY_SIZE(_x)	(sizeof(_x)/sizeof(_x[0]))
 // Macro to give us the highest valid index into an array i.e. one less than the size
 #define ARRAY_UPB(_x)	(ARRAY_SIZE(_x) - 1)
-
 // Macro to assign an array from an initializer list
-#if __cplusplus >= 201103L
-// This version relies on C++'11 features (add '-std=gnu++11' to your CPP compiler flags)
-#define ARRAY_INIT(_dest, _init) {static const decltype(_dest) _temp = _init; memcpy(_dest, _temp, sizeof(_dest)); }
-#else
-// This version relies on a gcc extension that is available only in older compilers
-#define ARRAY_INIT(_dest, _init) _dest = _init
-#define nullptr		(0)
-#endif
+#define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
 
 // Class to describe a string buffer, including its length. This saves passing buffer lengths around everywhere.
 class StringRef
@@ -112,8 +109,53 @@ public:
 
 extern StringRef scratchString;
 
-#include "Arduino.h"
-#include "Configuration.h"
+// This class is used to hold data for sending (either for Serial or Network destinations)
+class OutputBuffer
+{
+	public:
+		friend class RepRap;
+
+		OutputBuffer(OutputBuffer *n) : next(n) { }
+
+		OutputBuffer *Next() const { return next; }
+		void Append(OutputBuffer *other);
+		size_t References() const { return references; }
+		void IncreaseReferences(size_t refs);
+
+		const char *Data() const { return data; }
+		uint16_t DataLength() const { return dataLength; }		// How many bytes have been written to this instance?
+		uint32_t Length() const;								// How many bytes have been written to the whole chain?
+
+		char& operator[](size_t index);
+		char operator[](size_t index) const;
+		const char *Read(uint16_t len);
+		uint16_t BytesLeft() const { return bytesLeft; }		// How many bytes have not been sent yet?
+
+		int printf(const char *fmt, ...);
+		int vprintf(const char *fmt, va_list vargs);
+		int catf(const char *fmt, ...);
+
+		size_t copy(const char c);
+		size_t copy(const char *src);
+		size_t copy(const char *src, size_t len);
+
+		size_t cat(const char c);
+		size_t cat(const char *src);
+		size_t cat(const char *src, size_t len);
+		size_t cat(StringRef &str);
+
+		size_t EncodeString(const char *src, uint16_t srcLength, bool allowControlChars, bool encapsulateString = true);
+		size_t EncodeReply(OutputBuffer *src, bool allowControlChars);
+
+	private:
+		OutputBuffer *next;
+
+		char data[OUTPUT_BUFFER_SIZE];
+		uint16_t dataLength, bytesLeft;
+
+		size_t references;
+};
+
 #include "Network.h"
 #include "Platform.h"
 #include "Webserver.h"
@@ -121,6 +163,7 @@ extern StringRef scratchString;
 #include "Move.h"
 #include "Heat.h"
 #include "Tool.h"
+#include "Roland.h"
 #include "PrintMonitor.h"
 #include "Reprap.h"
 
