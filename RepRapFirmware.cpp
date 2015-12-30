@@ -1586,6 +1586,13 @@ OutputBuffer *RepRap::ReleaseOutput(OutputBuffer *buf)
 	return nextBuffer;
 }
 
+void RepRap::ReleaseOutputAll(OutputBuffer *buf)
+{
+	while (buf != nullptr)
+	{
+		buf = ReleaseOutput(buf);
+	}
+}
 void RepRap::Beep(int freq, int ms)
 {
 	if (gCodes->HaveAux())

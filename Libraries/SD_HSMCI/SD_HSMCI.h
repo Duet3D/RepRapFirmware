@@ -24,7 +24,7 @@
 
 // From module: Common SAM compiler driver
 #include "utility/compiler.h"
-#include "utility/status_codes.h"
+#include "status_codes.h"
 #include "utility/preprocessor.h"
 // From module: Memory Control Access Interface
 #include "utility/conf_access.h"

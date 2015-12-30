@@ -45,6 +45,7 @@ class PID
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
     float GetTemperature() const;					// Get the current temperature
     float GetAveragePWM() const;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
+    float GetLastSampleTime() const;				// Return when the temp sensor was last sampled
 
   private:
 
@@ -65,6 +66,7 @@ class PID
     float timeSetHeating;							// When we were switched on
     bool heatingUp;									// Are we heating up?
     float averagePWM;								// The running average of the PWM.
+	float lastSampleTime;							// Time when the temperature was last sampled by Spin()
 };
 
 /**
@@ -110,6 +112,7 @@ class Heat
     float GetAveragePWM(int8_t heater) const;					// Return the running average PWM to the heater as a fraction in [0, 1].
 
     bool UseSlowPwm(int8_t heater) const;						// called by the PID class
+    float GetLastSampleTime(int8_t heater) const;
 
   private:
   
@@ -201,6 +204,11 @@ inline void PID::SwitchOff()
 inline bool PID::SwitchedOff() const
 {
 	return switchedOff;
+}
+
+inline float PID::GetLastSampleTime() const
+{
+	return lastSampleTime;
 }
 
 //**********************************************************************************
@@ -326,6 +334,11 @@ inline void Heat::ResetFault(int8_t heater)
 inline float Heat::GetAveragePWM(int8_t heater) const
 {
 	return pids[heater]->GetAveragePWM();
+}
+
+inline float Heat::GetLastSampleTime(int8_t heater) const
+{
+	return pids[heater]->GetLastSampleTime();
 }
 
 inline bool Heat::UseSlowPwm(int8_t heater) const

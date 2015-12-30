@@ -123,6 +123,11 @@ void PID::Init()
   switchedOff = true;
   heatingUp = false;
   averagePWM = 0.0;
+
+  // Time the sensor was last sampled.  During startup, we use the current
+  // time as the initial value so as to not trigger an immediate warning from
+  // the Tick ISR.
+  lastSampleTime = platform->Time();
 }
 
 void PID::SwitchOn()
@@ -142,9 +147,18 @@ void PID::SetHeater(float power) const
 
 void PID::Spin()
 {
+  // For temperature sensors which do not require frequent sampling and averaging,
+  // their temperature is read here and error/safety handling performed.  However,
+  // unlike the Tick ISR, this code is not executed at interrupt level and consequently
+  // runs the risk of having undesirable delays between calls.  To guard against this,
+  // we record for each PID object when it was last sampled and have the Tick ISR
+  // take action if there is a significant delay since the time of last sampling.
+  lastSampleTime = platform->Time();
+
   // Always know our temperature, regardless of whether we have been switched on or not
 
-  temperature = platform->GetTemperature(heater);
+  Platform::TempError err = Platform::TempError::errOpen;  // Initially assign an error; call should update but if it doesn't, we'll treat as an error
+  temperature = platform->GetTemperature(heater, &err);    // In the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
 
   // If we're not switched on, or there's a fault, turn the power off and go home.
   // If we're not switched on, then nothing is using us.  This probably means that
@@ -162,13 +176,29 @@ void PID::Spin()
   // or shorted thermistor respectively.
   if (temperature < BAD_LOW_TEMPERATURE || temperature > BAD_HIGH_TEMPERATURE)
   {
-	  badTemperatureCount++;
+	  if (platform->DoThermistorAdc(heater) || !(Platform::TempErrorPermanent(err)))
+	  {
+		  // Error may be a temporary error and may correct itself after a few additional reads
+		  badTemperatureCount++;
+	  }
+	  else
+	  {
+		  // Error condition is not expected to correct itself (e.g., digital device such
+		  // as a MAX31855 reporting that the temp sensor is shorted -- even a temporary
+		  // short in such a situation warrants manual attention and correction).
+		  badTemperatureCount = MAX_BAD_TEMPERATURE_COUNT + 1;
+	  }
+
 	  if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
 	  {
 		  SetHeater(0.0);
 		  temperatureFault = true;
 		  //switchedOff = true;
-		  platform->MessageF(GENERIC_MESSAGE, "Temperature fault on heater %d, T = %.1f\n", heater, temperature);
+		  platform->MessageF(GENERIC_MESSAGE, "Temperature fault on heater %d%s%s, T = %.1f\n",
+							 heater,
+							 (err != Platform::TempError::errOk) ? ", " : "",
+							 (err != Platform::TempError::errOk) ? Platform::TempErrorStr(err) : "",
+							 temperature);
 		  reprap.FlagTemperatureFault(heater);
 	  }
   }

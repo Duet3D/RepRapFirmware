@@ -2021,10 +2021,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 		// Discard this response if either no aux device is attached or if the response is empty
 		if (reply->Length() == 0 || !HaveAux())
 		{
-			while (reply != nullptr)
-			{
-				reply = reprap.ReleaseOutput(reply);
-			}
+			reprap.ReleaseOutputAll(reply);
 			return;
 		}
 
@@ -2064,7 +2061,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 	}
 
 	const char* response = (gb->Seen('M') && gb->GetIValue() == 998) ? "rs " : "ok";
-	const char* emulationType = 0;
+	const char* emulationType = nullptr;
 
 	switch (c)
 	{
@@ -2073,12 +2070,8 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 			if (error)
 			{
 				platform->Message(type, "Error: ");
-				platform->Message(type, reply);
 			}
-			else
-			{
-				platform->Message(type, reply);
-			}
+			platform->Message(type, reply);
 			return;
 
 		case marlin:
@@ -2121,6 +2114,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 			}
 			else
 			{
+				reprap.ReleaseOutputAll(reply);
 				platform->Message(type, response);
 				platform->Message(type, "\n");
 			}
@@ -2139,6 +2133,8 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 			emulationType = "unknown";
 	}
 
+	// If we get here then we didn't handle the message, so release the buffer(s)
+	reprap.ReleaseOutputAll(reply);
 	if (emulationType != 0)
 	{
 		platform->MessageF(type, "Emulation of %s is not yet supported.\n", emulationType);	// don't send this one to the web as well, it concerns only the USB interface
@@ -2653,12 +2649,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				if (encapsulateList)
 				{
 					// remove the last separator
-					(*fileResponse)[fileResponse->Length() - 1] = '\n';
+					(*fileResponse)[fileResponse->Length() - 1] = 0;
 				}
 			}
 			else
 			{
-				fileResponse->cat("NONE\n");
+				fileResponse->cat("NONE");
 			}
 		}
 
@@ -3277,7 +3273,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 	case 114: // Deprecated
 		GetCurrentCoordinates(reply);
-		reply.cat("\n");
 		break;
 
 	case 115: // Print firmware version or set hardware type
@@ -3687,16 +3682,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (!seen)
 			{
-				reply.copy("Axis limits - ");
-				char comma = ',';
+				reply.copy("Axis limits ");
+				char sep = '-';
 				for (size_t axis = 0; axis < AXES; axis++)
 				{
-					if (axis == AXES - 1)
-					{
-						comma = '\n';
-					}
-					reply.catf("%c: %.1f min, %.1f max%c ", axisLetters[axis], platform->AxisMinimum(axis),
-							platform->AxisMaximum(axis), comma);
+					reply.catf("%c %c: %.1f min, %.1f max", sep, axisLetters[axis], platform->AxisMinimum(axis),
+							platform->AxisMaximum(axis));
+					sep = ',';
 				}
 			}
 		}

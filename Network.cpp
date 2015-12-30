@@ -106,7 +106,6 @@ static void emac_read_packet(uint32_t ul_status)
 {
 	// Because the LWIP stack can become corrupted if we work with it in parallel,
 	// we may have to wait for the next Spin() call to read the next packet.
-
 	if (ethernet_is_ready() && LockLWIP())
 	{
 		do {
@@ -727,8 +726,7 @@ uint8_t *Network::IPAddress() const
 	return reinterpret_cast<uint8_t*>(&ethernet_get_configuration()->ip_addr.addr);
 }
 
-void Network::SetIPAddress(const unsigned char ipAddress[], const unsigned char netmask[],
-		const unsigned char gateway[])
+void Network::SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
 {
 	if (state == NetworkActive)
 	{

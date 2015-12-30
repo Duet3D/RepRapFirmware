@@ -140,7 +140,7 @@ void ethernet_timers_update(void)
 
 // Added by AB.
 
-static void ethernet_configure_interface(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[])
+static void ethernet_configure_interface(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[])
 {
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	extern err_t ethernetif_init(struct netif *netif);
@@ -181,7 +181,7 @@ static void ethernet_configure_interface(const unsigned char ipAddress[], const 
 }
 
 // This sets the IP configuration on-the-fly
-void ethernet_set_configuration(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[])
+void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[])
 {
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);

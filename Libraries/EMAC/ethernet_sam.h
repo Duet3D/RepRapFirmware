@@ -58,14 +58,14 @@ extern "C" {
  * \brief Initialize the ethernet interface.
  *
  */
-void init_ethernet(const u8_t macAddress[], const char *hostname);
+void init_ethernet(const uint8_t macAddress[], const char *hostname);
 
 bool establish_ethernet_link(void);
-void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
+void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[]);
 bool ethernet_is_ready();
 
 struct netif* ethernet_get_configuration();
-void ethernet_set_configuration(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
+void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[]);
 
 void ethernet_timers_update(void);
 

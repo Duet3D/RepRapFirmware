@@ -231,7 +231,7 @@ template<class T> inline float constrain(T val, T vmin, T vmax)
 	return max<T>(vmin, min<T>(val, vmax));
 }
 
-extern uint32_t isqrt64(uint64_t num);		// Thus is defined in its own file, Isqrt.cpp or Isqrt.asm
+extern uint32_t isqrt64(uint64_t num);		// This is defined in its own file, Isqrt.cpp or Isqrt.asm
 
 #endif
 

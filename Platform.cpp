@@ -105,34 +105,10 @@ bool PidParameters::operator==(const PidParameters& other) const
 //*************************************************************************************************
 // Platform class
 
-// Definition of which pins we allow to be controlled using M42
-// The allowed pins are these ones on the DueX4 expansion connector:
-// TXD1 aka PA13 aka pin 16
-// RXD1 aka PA12 aka pin 17
-// TXD0 aka PA11 aka pin 18
-// RXD0 aka PA10 aka pin 19
-// PC4_PWML1 aka PC4 aka pin 36
-// AD13 aka PB20 aka pin 66
-// AD14 aka PB21 aka pin 52
-// PB16 aka pin 67 (could possibly allow analog output on this one)
-// RTS1 aka PA14 aka pin 23
-// TWD1 aka PB12 aka pin 20
-// TWCK1 aka PB13 aka pin 21
-
-/*static*/ const uint8_t Platform::pinAccessAllowed[numPins/8] =
-{ 	0,			// pins 0-7
-	0,			// pins 8-15
-	0b10111111,	// pins 16-23
-	0,			// pins 24-31
-	0b00010000,	// pins 32-39
-	0,			// pins 40-47
-	0b00010000,	// pins 48-55
-	0,			// pins 46-63
-	0b00001100	// pins 64-71
-};
+/*static*/ const uint8_t Platform::pinAccessAllowed[NUM_PINS_ALLOWED/8] = PINS_ALLOWED;
 
 Platform::Platform() :
-		autoSaveEnabled(false), board(BoardType::Duet_06), active(false), errorCodeBits(0),
+		autoSaveEnabled(false), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
 		 auxOutputBuffer(nullptr), aux2OutputBuffer(nullptr), usbOutputBuffer(nullptr),
 		fileStructureInitialised(false), tickState(0), debugCode(0),
 		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
@@ -164,10 +140,11 @@ void Platform::Init()
 	baudRates[2] = AUX2_BAUD_RATE;
 	commsParams[0] = 0;
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
+	commsParams[2] = 0;
 
-	SerialUSB.begin(baudRates[0]);
-	Serial.begin(baudRates[1]);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
-	Serial1.begin(baudRates[2]);
+	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
+	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
+	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 
 	static_assert(sizeof(FlashData) + sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 
@@ -238,6 +215,7 @@ void Platform::Init()
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
 	ARRAY_INIT(standbyTemperatures, STANDBY_TEMPERATURES);
 	ARRAY_INIT(activeTemperatures, ACTIVE_TEMPERATURES);
+	ARRAY_INIT(max31855CsPins, MAX31855_CS_PINS);
 	heatSampleTime = HEAT_SAMPLE_TIME;
 	timeToHot = TIME_TO_HOT;
 
@@ -286,6 +264,7 @@ void Platform::Init()
 			pinModeNonDue(heatOnPins[heater], OUTPUT);
 		}
 		analogReadResolution(12);
+		thermistorAdcChannels[heater] = PinToAdcChannel(tempSensePins[heater]);	// Translate the Arduino Due Analog pin number to the SAM ADC channel number
 		SetThermistorNumber(heater, heater);				// map the thermistor straight through
 		thermistorFilters[heater].Init(analogRead(tempSensePins[heater]));
 
@@ -312,23 +291,30 @@ void Platform::Init()
 	InitialiseInterrupts();		// also sets 'active' to true
 }
 
+void Platform::InvalidateFiles()
+{
+	for (size_t i = 0; i < MAX_FILES; i++)
+	{
+		files[i]->Init();
+	}
+}
+
 // Specify which thermistor channel a particular heater uses
 void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
 //pre(heater < HEATERS && thermistor < HEATERS)
 {
-	heaterAdcChannels[heater] = PinToAdcChannel(tempSensePins[thermistor]);
+	heaterTempChannels[heater] = thermistor;
+
+	// Initialize the associated MAX31855?
+	if (thermistor >= MAX31855_START_CHANNEL)
+	{
+		Max31855Devices[thermistor - MAX31855_START_CHANNEL].Init(max31855CsPins[thermistor - MAX31855_START_CHANNEL]);
+	}
 }
 
 int Platform::GetThermistorNumber(size_t heater) const
 {
-	for (size_t thermistor = 0; thermistor < HEATERS; ++thermistor)
-	{
-		if (heaterAdcChannels[heater] == PinToAdcChannel(tempSensePins[thermistor]))
-		{
-			return thermistor;
-		}
-	}
-	return -1;
+	return heaterTempChannels[heater];
 }
 
 void Platform::SetSlowestDrive()
@@ -738,10 +724,10 @@ void Platform::Spin()
 	// Write non-blocking data to the AUX line
 	if (auxOutputBuffer != nullptr)
 	{
-		size_t bytesToWrite = min<size_t>(Serial.canWrite(), auxOutputBuffer->BytesLeft());
+		size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
 		if (bytesToWrite > 0)
 		{
-			Serial.write(auxOutputBuffer->Read(bytesToWrite), bytesToWrite);
+			SERIAL_AUX_DEVICE.write(auxOutputBuffer->Read(bytesToWrite), bytesToWrite);
 		}
 
 		if (auxOutputBuffer->BytesLeft() == 0)
@@ -753,10 +739,10 @@ void Platform::Spin()
 	// Write non-blocking data to the second AUX line
 	if (aux2OutputBuffer != nullptr)
 	{
-		size_t bytesToWrite = min<size_t>(Serial1.canWrite(), aux2OutputBuffer->BytesLeft());
+		size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
 		if (bytesToWrite > 0)
 		{
-			Serial1.write(aux2OutputBuffer->Read(bytesToWrite), bytesToWrite);
+			SERIAL_AUX2_DEVICE.write(aux2OutputBuffer->Read(bytesToWrite), bytesToWrite);
 		}
 
 		if (aux2OutputBuffer->BytesLeft() == 0)
@@ -768,23 +754,20 @@ void Platform::Spin()
 	// Write non-blocking data to the USB line
 	if (usbOutputBuffer != nullptr)
 	{
-		if (!SerialUSB)
+		if (!SERIAL_MAIN_DEVICE)
 		{
 			// If the USB port is not opened, free the data left for writing
 			OutputBuffer *buffer = usbOutputBuffer;
 			usbOutputBuffer = nullptr;
-
-			do {
-				buffer = reprap.ReleaseOutput(buffer);
-			} while (buffer != nullptr);
+			reprap.ReleaseOutputAll(buffer);
 		}
 		else
 		{
 			// Write as much data as we can...
-			size_t bytesToWrite = min<size_t>(SerialUSB.canWrite(), usbOutputBuffer->BytesLeft());
+			size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
 			if (bytesToWrite > 0)
 			{
-				SerialUSB.write(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
+				SERIAL_MAIN_DEVICE.write(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
 			}
 
 			if (usbOutputBuffer->BytesLeft() == 0)
@@ -833,7 +816,7 @@ void Platform::SoftwareReset(uint16_t reason)
 	{
 		if (reason != (uint16_t)SoftwareResetReason::user)
 		{
-			if (!SerialUSB.canWrite())
+			if (!SERIAL_MAIN_DEVICE.canWrite())
 			{
 				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
@@ -841,7 +824,7 @@ void Platform::SoftwareReset(uint16_t reason)
 			{
 				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
 			}
-			if (!Serial.canWrite() || !Serial1.canWrite())
+			if (!SERIAL_AUX_DEVICE.canWrite() || !SERIAL_AUX2_DEVICE.canWrite())
 			{
 				reason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
 			}
@@ -1110,33 +1093,88 @@ void Platform::ClassReport(float &lastTime)
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(size_t heater) const
+float Platform::GetTemperature(size_t heater, TempError* err) const
 {
-	int rawTemp = GetRawTemperature(heater);
-
-	// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
-	// So we add 0.5 to to the reading to get a better estimate of the input.
-	float reading = (float) rawTemp + 0.5;
-
-	// Recognise the special case of thermistor disconnected.
-	// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
-	const PidParameters& p = nvData.pidParams[heater];
-	if (p.adcHighOffset < 0.0)
+	// Note that at this point we're actually getting an averaged ADC read, not a "raw" temp.  For thermistors,
+	// we're getting an averaged voltage reading which we'll convert to a temperature.
+	if (DoThermistorAdc(heater))
 	{
-		rawTemp -= (int) p.adcHighOffset;
+		int rawTemp = GetRawTemperature(heater);
+
+		// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
+		// So we add 0.5 to to the reading to get a better estimate of the input.
+		float reading = (float) rawTemp + 0.5;
+
+		// Recognise the special case of thermistor disconnected.
+		// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
+		const PidParameters& p = nvData.pidParams[heater];
+		if (p.adcHighOffset < 0.0)
+		{
+			rawTemp -= (int) p.adcHighOffset;
+		}
+		if (rawTemp >= (int)AD_DISCONNECTED_VIRTUAL)
+		{
+			// thermistor is disconnected
+			if (err)
+			{
+				*err = TempError::errOpen;
+			}
+			return ABS_ZERO;
+		}
+
+		// Correct for the low and high ADC offsets
+		reading -= p.adcLowOffset;
+		reading *= (AD_RANGE_VIRTUAL + 1) / (AD_RANGE_VIRTUAL + 1 + p.adcHighOffset - p.adcLowOffset);
+
+		float resistance = reading * p.thermistorSeriesR / ((AD_RANGE_VIRTUAL + 1) - reading);
+		if (resistance > p.GetRInf())
+		{
+			return ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
+		}
+		else
+		{
+			// thermistor short circuit, return a high temperature
+			if (err) *err = TempError::errShort;
+			return BAD_ERROR_TEMPERATURE;
+		}
 	}
-	if (rawTemp >= (int)AD_DISCONNECTED_VIRTUAL)
+	else
 	{
-		return ABS_ZERO;		// thermistor is disconnected
+		// MAX31855 thermocouple chip
+		float temp;
+		MAX31855_error res = Max31855Devices[heaterTempChannels[heater] - MAX31855_START_CHANNEL].getTemperature(&temp);
+		if (res == MAX31855_OK)
+		{
+			return temp;
+		}
+		if (err)
+		{
+			switch(res) {
+			case MAX31855_OK      : *err = TempError::errOk; break;			// Success
+			case MAX31855_ERR_SCV : *err = TempError::errShortVcc; break;	// Short to Vcc
+			case MAX31855_ERR_SCG : *err = TempError::errShortGnd; break;	// Short to GND
+			case MAX31855_ERR_OC  : *err = TempError::errOpen; break;		// Open connection
+			case MAX31855_ERR_TMO : *err = TempError::errTimeout; break;	// SPI comms timeout
+			case MAX31855_ERR_IO  : *err = TempError::errIO; break;			// SPI comms not functioning
+			}
+		}
+		return BAD_ERROR_TEMPERATURE;
 	}
+}
 
-	// Correct for the low and high ADC offsets
-	reading -= p.adcLowOffset;
-	reading *= (AD_RANGE_VIRTUAL + 1) / (AD_RANGE_VIRTUAL + 1 + p.adcHighOffset - p.adcLowOffset);
-
-	float resistance = reading * p.thermistorSeriesR / ((AD_RANGE_VIRTUAL + 1) - reading);
-	return (resistance <= p.GetRInf()) ? 2000.0			// thermistor short circuit, return a high temperature
-			: ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
+/*static*/ const char* Platform::TempErrorStr(TempError err)
+{
+	switch(err)
+	{
+	default : return "Unknown temperature read error";
+	case TempError::errOk : return "successful temperature read";
+	case TempError::errShort : return "sensor circuit is shorted";
+	case TempError::errShortVcc : return "sensor circuit is shorted to the voltage rail";
+	case TempError::errShortGnd : return "sensor circuit is shorted to ground";
+	case TempError::errOpen : return "sensor circuit is open/disconnected";
+	case TempError::errTimeout : return "communication error whilst reading sensor; read took too long";
+	case TempError::errIO: return "communication error whilst reading sensor; check sensor connections";
+	}
 }
 
 // See if we need to turn on the hot end fan
@@ -1641,8 +1679,8 @@ void Platform::Message(MessageType type, const char *message)
 
 		case DEBUG_MESSAGE:
 			// Debug messages in blocking mode - potentially DANGEROUS, use with care!
-			SerialUSB.write(message);
-			SerialUSB.flush();
+			SERIAL_MAIN_DEVICE.write(message);
+			SERIAL_MAIN_DEVICE.flush();
 			break;
 
 		case HOST_MESSAGE:
@@ -1714,10 +1752,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 			// If no AUX device is attached, don't queue this buffer
 			if (!reprap.GetGCodes()->HaveAux())
 			{
-				while (buffer != nullptr)
-				{
-					buffer = reprap.ReleaseOutput(buffer);
-				}
+				reprap.ReleaseOutputAll(buffer);
 				break;
 			}
 
@@ -1748,8 +1783,8 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 			// Probably rarely used, but supported.
 			while (buffer != nullptr)
 			{
-				SerialUSB.write(buffer->Data(), buffer->DataLength());
-				SerialUSB.flush();
+				SERIAL_MAIN_DEVICE.write(buffer->Data(), buffer->DataLength());
+				SERIAL_MAIN_DEVICE.flush();
 
 				buffer = reprap.ReleaseOutput(buffer);
 			}
@@ -1757,12 +1792,9 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 
 		case HOST_MESSAGE:
 			// If the serial USB line is not open, discard its content right away
-			if (!SerialUSB)
+			if (!SERIAL_MAIN_DEVICE)
 			{
-				while (buffer != nullptr)
-				{
-					buffer = reprap.ReleaseOutput(buffer);
-				}
+				reprap.ReleaseOutputAll(buffer);
 			}
 			else
 			{
@@ -1798,6 +1830,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		default:
 			// Everything else is unsupported (and probably not used)
 			MessageF(HOST_MESSAGE, "Warning: Unsupported Message call for type %u!\n", type);
+			reprap.ReleaseOutputAll(buffer);
 			break;
 	}
 }
@@ -1894,12 +1927,16 @@ void Platform::ResetChannel(size_t chan)
 	switch(chan)
 	{
 	case 0:
-		SerialUSB.end();
-		SerialUSB.begin(baudRates[0]);
+		SERIAL_MAIN_DEVICE.end();
+		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 		break;
 	case 1:
-		Serial.end();
-		Serial.begin(baudRates[1]);
+		SERIAL_AUX_DEVICE.end();
+		SERIAL_AUX_DEVICE.begin(baudRates[1]);
+		break;
+	case 2:
+		SERIAL_AUX2_DEVICE.end();
+		SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 		break;
 	default:
 		break;
@@ -1946,7 +1983,7 @@ const char* Platform::GetElectronicsString() const
 // Set the specified pin to the specified output level. Return true if success, false if not allowed.
 bool Platform::SetPin(int pin, int level)
 {
-	if (pin >= 0 && (unsigned int)pin < numPins && (level == 0 || level == 1))
+	if (pin >= 0 && (unsigned int)pin < NUM_PINS_ALLOWED && (level == 0 || level == 1))
 	{
 		const size_t index = (unsigned int)pin/8;
 		const uint8_t mask = 1 << ((unsigned int)pin & 7);
@@ -1969,13 +2006,13 @@ bool Platform::GCodeAvailable(const SerialSource source) const
 	switch (source)
 	{
 		case SerialSource::USB:
-			return SerialUSB.available() > 0;
+			return SERIAL_MAIN_DEVICE.available() > 0;
 
 		case SerialSource::AUX:
-			return Serial.available() > 0;
+			return SERIAL_AUX_DEVICE.available() > 0;
 
 		case SerialSource::AUX2:
-			return Serial1.available() > 0;
+			return SERIAL_AUX2_DEVICE.available() > 0;
 	}
 
 	return false;
@@ -1986,13 +2023,13 @@ char Platform::ReadFromSource(const SerialSource source)
 	switch (source)
 	{
 		case SerialSource::USB:
-			return static_cast<char>(SerialUSB.read());
+			return static_cast<char>(SERIAL_MAIN_DEVICE.read());
 
 		case SerialSource::AUX:
-			return static_cast<char>(Serial.read());
+			return static_cast<char>(SERIAL_AUX_DEVICE.read());
 
 		case SerialSource::AUX2:
-			return static_cast<char>(Serial1.read());
+			return static_cast<char>(SERIAL_AUX2_DEVICE.read());
 	}
 
 	return 0;
@@ -2045,19 +2082,37 @@ void Platform::Tick()
 	case 1:			// last conversion started was a thermistor
 	case 3:
 		{
-			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
-			StartAdcConversion(zProbeAdcChannel);
-			if (currentFilter.IsValid())
+			if (DoThermistorAdc(currentHeater))
 			{
-				uint32_t sum = currentFilter.GetSum();
-				if (sum < thermistorOverheatSums[currentHeater] || sum >= AD_DISCONNECTED_REAL * THERMISTOR_AVERAGE_READINGS)
+				ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+				currentFilter.ProcessReading(GetAdcReading(thermistorAdcChannels[heaterTempChannels[currentHeater]]));
+				StartAdcConversion(zProbeAdcChannel);
+				if (currentFilter.IsValid())
 				{
-					// We have an over-temperature or disconnected reading from this thermistor, so turn off the heater
+					uint32_t sum = currentFilter.GetSum();
+					if (sum < thermistorOverheatSums[currentHeater] || sum >= AD_DISCONNECTED_REAL * THERMISTOR_AVERAGE_READINGS)
+					{
+						// We have an over-temperature or disconnected reading from this thermistor, so turn off the heater
+						SetHeaterPwm(currentHeater, 0);
+						LogError(ErrorCode::BadTemp);
+					}
+				}
+			}
+			else
+			{
+				// Thermocouple case: oversampling is not necessary as the MAX31855 is itself continuously sampling and
+				// averaging.  As such, the temperature reading is taken directly by Platform::GetTemperature() and
+				// periodically called by PID::Spin() where temperature fault handling is taken care of.  However, we
+				// must guard against overly long delays between successive calls of PID::Spin().
+
+				StartAdcConversion(zProbeAdcChannel);
+				if ((Time() - reprap.GetHeat()->GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
+				{
 					SetHeaterPwm(currentHeater, 0);
 					LogError(ErrorCode::BadTemp);
 				}
 			}
+
 			++currentHeater;
 			if (currentHeater == HEATERS)
 			{
@@ -2069,7 +2124,10 @@ void Platform::Tick()
 
 	case 2:			// last conversion started was the Z probe, with IR LED on
 		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetRawZProbeReading());
-		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
+		if (DoThermistorAdc(currentHeater))
+		{
+			StartAdcConversion(thermistorAdcChannels[heaterTempChannels[currentHeater]]);		// read a thermistor
+		}
 		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
 		{
 			digitalWriteNonDue(zProbeModulationPin, LOW);			// turn off the IR emitter
@@ -2082,7 +2140,10 @@ void Platform::Tick()
 		// no break
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
-		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
+		if (DoThermistorAdc(currentHeater))
+		{
+			StartAdcConversion(thermistorAdcChannels[heaterTempChannels[currentHeater]]);		// read a thermistor
+		}
 		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
 		{
 			digitalWriteNonDue(zProbeModulationPin, HIGH);			// turn on the IR emitter

@@ -102,6 +102,7 @@ public:
 
 	// Release one OutputBuffer instance. Returns the next item from the chain or nullptr if this was the last instance.
 	OutputBuffer *ReleaseOutput(OutputBuffer *buf);
+	void ReleaseOutputAll(OutputBuffer *buf);
 
 	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source);
 	OutputBuffer *GetConfigResponse();

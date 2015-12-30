@@ -141,8 +141,7 @@ class Network
 		void WaitForDataConection();
 
 		uint8_t *IPAddress() const;
-		void SetIPAddress(const unsigned char ipAddress[], const unsigned char netmask[],
-				const unsigned char gateway[]);
+		void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
 		void OpenDataPort(uint16_t port);
 		uint16_t GetDataPort() const;
 		void CloseDataPort();
