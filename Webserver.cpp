@@ -209,7 +209,7 @@ void Webserver::Spin()
 				{
 					telnetInterpreter->SendGCodeReply(transaction);
 				}
-				// Process other messages (unless this is an HTTP request which may need special treatement)
+				// Process other messages (unless this is an HTTP request which may need special treatment)
 				else if (interpreter != httpInterpreter || httpInterpreter->IsReady())
 				{
 					for(size_t i = 0; i < 500; i++)
@@ -236,6 +236,7 @@ void Webserver::Spin()
 						}
 					}
 				}
+				// else the HTTP server is not ready
 			}
 			else
 			{
@@ -1042,6 +1043,10 @@ bool Webserver::HttpInterpreter::NeedMoreData()
 		// At this stage we've processed the first chunk of a POST upload request. Store the
 		// initial payload and reset the HTTP reader again in order to process new requests
 		WriteUploadedData(clientMessage + (clientPointer - uploadedBytes), uploadedBytes);
+		if (reprap.Debug(moduleWebserver))
+		{
+			platform->MessageF(HOST_MESSAGE, "Wrote %lu bytes of file\n", uploadedBytes);
+		}
 		ResetState();
 		return false;
 	}
@@ -1228,7 +1233,6 @@ bool Webserver::HttpInterpreter::CharFromClient(char c)
 				case '\t':
 					clientMessage[clientPointer++] = 0;
 					qualifiers[numQualKeys].key = clientMessage + clientPointer;	// so that we can read the whole value even if it contains a null
-					++numCommandWords;
 					commandWords[numCommandWords] = clientMessage + clientPointer;
 					state = doingCommandWord;
 					break;
@@ -1431,12 +1435,18 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		platform->MessageF(HOST_MESSAGE, "HTTP requests with %d command words:", numCommandWords);
+		platform->Message(HOST_MESSAGE, "HTTP req, command words {");
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
 			platform->MessageF(HOST_MESSAGE, " %s", commandWords[i]);
 		}
-		platform->Message(HOST_MESSAGE, "\n");
+		platform->Message(HOST_MESSAGE, " }, parameters {");
+
+		for (size_t i = 0; i < numQualKeys; ++i)
+		{
+			platform->MessageF(HOST_MESSAGE, " %s=%s", qualifiers[i].key, qualifiers[i].value);
+		}
+		platform->Message(HOST_MESSAGE, " }\n");
 	}
 
 	if (numCommandWords < 2)
@@ -1498,6 +1508,10 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 					FileStore *file = platform->GetFileStore("0:/", qualifiers[0].value, true);
 					if (StartUpload(file))
 					{
+						if (reprap.Debug(moduleWebserver))
+						{
+							platform->MessageF(HOST_MESSAGE, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
+						}
 						// Start new file upload
 						uploadingTextData = false;
 						uploadedBytes = numContinuationBytes = 0;
@@ -2307,27 +2321,28 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else if (StringStartsWith(clientMessage, "RETR"))
 			{
 				ReadFilename(4);
-				FileStore *fs = platform->GetFileStore(currentDir, filename, false);
+				FileStore *file = platform->GetFileStore(currentDir, filename, false);
 
-				if (fs == nullptr)
+				if (file == nullptr)
 				{
 					SendReply(550, "Failed to open file.");
 				}
 				else
 				{
-					snprintf(ftpResponse, ftpResponseLength, "Opening data connection for %s (%lu bytes).", filename, fs->Length());
+					snprintf(ftpResponse, ftpResponseLength, "Opening data connection for %s (%lu bytes).", filename, file->Length());
 					SendReply(150, ftpResponse);
 
 					if (network->AcquireDataTransaction())
 					{
 						// send the file via data port
 						NetworkTransaction *dataTransaction = network->GetTransaction();
-						dataTransaction->SetFileToWrite(fs);
+						dataTransaction->SetFileToWrite(file);
 						dataTransaction->Commit(false);
 						state = doingPasvIO;
 					}
 					else
 					{
+						file->Close();
 						SendReply(500, "Unknown error.");
 						network->CloseDataPort();
 						state = authenticated;

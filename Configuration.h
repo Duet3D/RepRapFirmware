@@ -30,7 +30,7 @@ Licence: GPL
 #endif
 
 #ifndef DATE
-#define DATE "2015-12-30"
+#define DATE "2015-12-31"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"

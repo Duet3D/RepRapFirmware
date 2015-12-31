@@ -470,7 +470,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			}
 
 			// Go to the last sector and proceed from there on
-			const FilePosition seekFromEnd = fileBeingParsed->Length() % GCODE_READ_SIZE;
+			const FilePosition seekFromEnd = ((fileBeingParsed->Length() - 1) % GCODE_READ_SIZE) + 1;
 			fileBeingParsed->Seek(fileBeingParsed->Length() - seekFromEnd);
 			fileOverlapLength = 0;
 			parseState = parsingFooter;
