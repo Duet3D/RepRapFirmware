@@ -137,7 +137,7 @@ void Webserver::Spin()
 		httpInterpreter->CheckSessions();
 
 		// Check if we can actually send something back to the client
-		if (reprap.GetOutputBytesLeft(nullptr) == 0)
+		if (OutputBuffer::GetBytesLeft(nullptr) == 0)
 		{
 			platform->ClassReport(longWait);
 			return;
@@ -748,7 +748,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 
 	// We need a valid output buffer to process this request...
 	OutputBuffer *jsonResponse;
-	if (!reprap.AllocateOutput(jsonResponse))
+	if (!OutputBuffer::Allocate(jsonResponse))
 	{
 		// Should never happen
 		network->GetTransaction()->Commit(false);
@@ -772,7 +772,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	if (processingDeferredRequest)
 	{
 		do {
-			jsonResponse = reprap.ReleaseOutput(jsonResponse);
+			jsonResponse = OutputBuffer::Release(jsonResponse);
 		} while (jsonResponse != nullptr);
 
 		return;
@@ -819,10 +819,10 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 bool Webserver::HttpInterpreter::IsReady()
 {
 	// We want to send a response, but we need memory for that. If there isn't enough available, see if we can truncate the G-Code reply
-	size_t bytesLeft = reprap.GetOutputBytesLeft(nullptr);
+	size_t bytesLeft = OutputBuffer::GetBytesLeft(nullptr);
 	if (bytesLeft < minHttpResponseSize && gcodeReply != nullptr)
 	{
-		if (bytesLeft + reprap.TruncateOutput(gcodeReply, minHttpResponseSize) < minHttpResponseSize)
+		if (bytesLeft + OutputBuffer::Truncate(gcodeReply, minHttpResponseSize) < minHttpResponseSize)
 		{
 			// There is not enough space available and we cannot free it up. Try again later
 			return false;
@@ -901,12 +901,12 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 					type = 1;
 				}
 
-				reprap.ReplaceOutput(response, reprap.GetStatusResponse(type, ResponseSource::HTTP));
+				OutputBuffer::Replace(response, reprap.GetStatusResponse(type, ResponseSource::HTTP));
 			}
 			else
 			{
 				// Deprecated
-				reprap.ReplaceOutput(response, reprap.GetLegacyStatusResponse(1, 0));
+				OutputBuffer::Replace(response, reprap.GetLegacyStatusResponse(1, 0));
 			}
 		}
 		else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
@@ -968,14 +968,14 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 					flagDirs = StringEquals(qualifiers[1].value, "1");
 				}
 			}
-			reprap.ReplaceOutput(response, reprap.GetFilesResponse(dir, flagDirs));
+			OutputBuffer::Replace(response, reprap.GetFilesResponse(dir, flagDirs));
 		}
 		else if (StringEquals(request, "fileinfo"))
 		{
 			OutputBuffer *buffer;
 			if (reprap.GetPrintMonitor()->GetFileInfoResponse(StringEquals(key, "name") ? value : nullptr, buffer))
 			{
-				reprap.ReplaceOutput(response, buffer);
+				OutputBuffer::Replace(response, buffer);
 				processingDeferredRequest = false;
 			}
 			else
@@ -1009,7 +1009,7 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		}
 		else if (StringEquals(request, "config"))
 		{
-			reprap.ReplaceOutput(response, reprap.GetConfigResponse());
+			OutputBuffer::Replace(response, reprap.GetConfigResponse());
 		}
 		else
 		{
@@ -1654,7 +1654,7 @@ void Webserver::HttpInterpreter::CheckSessions()
 	{
 		while (gcodeReply != nullptr)
 		{
-			gcodeReply = reprap.ReleaseOutput(gcodeReply);
+			gcodeReply = OutputBuffer::Release(gcodeReply);
 		}
 		clientsServed = 0;
 	}
@@ -1790,7 +1790,7 @@ void Webserver::HttpInterpreter::HandleGCodeReply(OutputBuffer *reply)
 			// Don't use buffers that may never get released...
 			while (reply != nullptr)
 			{
-				reply = reprap.ReleaseOutput(reply);
+				reply = OutputBuffer::Release(reply);
 			}
 		}
 	}
@@ -1803,7 +1803,7 @@ void Webserver::HttpInterpreter::HandleGCodeReply(const char *reply)
 		if (gcodeReply == nullptr)
 		{
 			OutputBuffer *buffer;
-			if (!reprap.AllocateOutput(buffer))
+			if (!OutputBuffer::Allocate(buffer))
 			{
 				// No more space available
 				return;
@@ -2559,7 +2559,7 @@ void Webserver::TelnetInterpreter::ConnectionLost(uint32_t remoteIP, uint16_t re
 		// Don't save up output buffers if they can't be sent
 		while (gcodeReply != nullptr)
 		{
-			reprap.ReleaseOutput(gcodeReply);
+			OutputBuffer::Release(gcodeReply);
 		}
 	}
 }
@@ -2739,10 +2739,10 @@ void Webserver::TelnetInterpreter::HandleGCodeReply(OutputBuffer *reply)
 		if (gcodeReply == nullptr)
 		{
 			OutputBuffer *buffer;
-			if (!reprap.AllocateOutput(buffer))
+			if (!OutputBuffer::Allocate(buffer))
 			{
-				reprap.TruncateOutput(reply, 1);
-				if (!reprap.AllocateOutput(buffer, false))
+				OutputBuffer::Truncate(reply, 1);
+				if (!OutputBuffer::Allocate(buffer, false))
 				{
 					// If we're really short on memory, just skip the conversion
 					gcodeReply = reply;
@@ -2765,7 +2765,7 @@ void Webserver::TelnetInterpreter::HandleGCodeReply(OutputBuffer *reply)
 				gcodeReply->cat(*data);
 				data++;
 			}
-			reply = reprap.ReleaseOutput(reply);
+			reply = OutputBuffer::Release(reply);
 		} while (reply != nullptr);
 	}
 	else
@@ -2773,7 +2773,7 @@ void Webserver::TelnetInterpreter::HandleGCodeReply(OutputBuffer *reply)
 		// Don't use buffers that may never get released...
 		while (reply != nullptr)
 		{
-			reply = reprap.ReleaseOutput(reply);
+			reply = OutputBuffer::Release(reply);
 		}
 	}
 }
@@ -2786,7 +2786,7 @@ void Webserver::TelnetInterpreter::HandleGCodeReply(const char *reply)
 		if (gcodeReply == nullptr)
 		{
 			OutputBuffer *buffer;
-			if (!reprap.AllocateOutput(buffer))
+			if (!OutputBuffer::Allocate(buffer))
 			{
 				// No more space available to store this reply
 				return;

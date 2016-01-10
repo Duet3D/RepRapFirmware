@@ -119,7 +119,7 @@ void GCodes::Reset()
 	auxDetected = false;
 	while (auxGCodeReply != nullptr)
 	{
-		auxGCodeReply = reprap.ReleaseOutput(auxGCodeReply);
+		auxGCodeReply = OutputBuffer::Release(auxGCodeReply);
 	}
 	auxSeq = 0;
 	simulating = false;
@@ -1909,7 +1909,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, const char* reply)
 		}
 
 		// Regular text-based responses for AUX are always stored and processed by M105/M408
-		if (auxGCodeReply == nullptr && !reprap.AllocateOutput(auxGCodeReply))
+		if (auxGCodeReply == nullptr && !OutputBuffer::Allocate(auxGCodeReply))
 		{
 			// No more space to buffer this response. Should never happen
 			return;
@@ -2021,7 +2021,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 		// Discard this response if either no aux device is attached or if the response is empty
 		if (reply->Length() == 0 || !HaveAux())
 		{
-			reprap.ReleaseOutputAll(reply);
+			OutputBuffer::ReleaseAll(reply);
 			return;
 		}
 
@@ -2114,7 +2114,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 			}
 			else
 			{
-				reprap.ReleaseOutputAll(reply);
+				OutputBuffer::ReleaseAll(reply);
 				platform->Message(type, response);
 				platform->Message(type, "\n");
 			}
@@ -2134,7 +2134,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 	}
 
 	// If we get here then we didn't handle the message, so release the buffer(s)
-	reprap.ReleaseOutputAll(reply);
+	OutputBuffer::ReleaseAll(reply);
 	if (emulationType != 0)
 	{
 		platform->MessageF(type, "Emulation of %s is not yet supported.\n", emulationType);	// don't send this one to the web as well, it concerns only the USB interface
@@ -2615,7 +2615,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			if (!reprap.AllocateOutput(fileResponse))
+			if (!OutputBuffer::Allocate(fileResponse))
 			{
 				// Cannot allocate an output buffer, try again later
 				return false;
@@ -3883,7 +3883,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			// Need a valid output buffer to continue...
 			OutputBuffer *configResponse;
-			if (!reprap.AllocateOutput(configResponse))
+			if (!OutputBuffer::Allocate(configResponse))
 			{
 				// No buffer available, try again later
 				return false;
@@ -3899,7 +3899,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			else
 			{
 				char fileBuffer[FILE_BUFFER_SIZE];
-				size_t bytesRead, bytesLeftForWriting = reprap.GetOutputBytesLeft(configResponse);
+				size_t bytesRead, bytesLeftForWriting = OutputBuffer::GetBytesLeft(configResponse);
 				while ((bytesRead = f->Read(fileBuffer, FILE_BUFFER_SIZE)) > 0 && bytesLeftForWriting > 0)
 				{
 					// Don't write more data than we can process

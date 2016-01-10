@@ -284,7 +284,8 @@ bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, size_t drive, bool
 			// The calculation makes this step late.
 			// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 			// So if this is the last step and it is late, bring it forward to the expected finish time.
-			if (nextStep == totalSteps)
+			// Very rarely on a delta, the penultimate step may be calculated late. Allow for that here in case it affects Cartesian axes too.
+			if (nextStep == totalSteps || nextStep + 1 == totalSteps)
 			{
 				nextStepTime = dda.clocksNeeded;
 			}
@@ -385,7 +386,7 @@ bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive, bool liv
 		if (dsK < 0)
 		{
 			state = DMState::stepError;
-			nextStep += 1000000;		// so that we can tell what happened in the debug print
+			nextStep += 1000000;						// so that we can tell what happened in the debug print
 			return false;
 		}
 
@@ -414,7 +415,8 @@ bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive, bool liv
 			// The calculation makes this step late.
 			// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 			// So if this is the last step and it is late, bring it forward to the expected finish time.
-			if (nextStep == totalSteps)
+			// Very rarely, the penultimate step may be calculated late too.
+			if (nextStep == totalSteps || nextStep + 1 == totalSteps)
 			{
 				nextStepTime = dda.clocksNeeded;
 			}

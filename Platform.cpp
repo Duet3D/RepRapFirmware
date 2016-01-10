@@ -146,6 +146,10 @@ void Platform::Init()
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 
+	// Reconfigure the ADC to avoid crosstalk between channels (especially on Duet 0.8.5)
+	adc_init(ADC, SystemCoreClock, ADC_FREQ_MIN, ADC_STARTUP_FAST);		// reduce clock rate
+	adc_configure_timing(ADC, 3, ADC_SETTLING_TIME_3, 1);				// add transfer time
+
 	static_assert(sizeof(FlashData) + sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 
 	ResetNvData();
@@ -732,7 +736,7 @@ void Platform::Spin()
 
 		if (auxOutputBuffer->BytesLeft() == 0)
 		{
-			auxOutputBuffer = reprap.ReleaseOutput(auxOutputBuffer);
+			auxOutputBuffer = OutputBuffer::Release(auxOutputBuffer);
 		}
 	}
 
@@ -747,7 +751,7 @@ void Platform::Spin()
 
 		if (aux2OutputBuffer->BytesLeft() == 0)
 		{
-			aux2OutputBuffer = reprap.ReleaseOutput(aux2OutputBuffer);
+			aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
 		}
 	}
 
@@ -759,7 +763,7 @@ void Platform::Spin()
 			// If the USB port is not opened, free the data left for writing
 			OutputBuffer *buffer = usbOutputBuffer;
 			usbOutputBuffer = nullptr;
-			reprap.ReleaseOutputAll(buffer);
+			OutputBuffer::ReleaseAll(buffer);
 		}
 		else
 		{
@@ -772,7 +776,7 @@ void Platform::Spin()
 
 			if (usbOutputBuffer->BytesLeft() == 0)
 			{
-				usbOutputBuffer = reprap.ReleaseOutput(usbOutputBuffer);
+				usbOutputBuffer = OutputBuffer::Release(usbOutputBuffer);
 			}
 		}
 	}
@@ -1690,7 +1694,7 @@ void Platform::Message(MessageType type, const char *message)
 			if (usbOutputBuffer == nullptr)
 			{
 				OutputBuffer *buffer;
-				if (!reprap.AllocateOutput(buffer))
+				if (!OutputBuffer::Allocate(buffer))
 				{
 					// Should never happen
 					return;
@@ -1752,7 +1756,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 			// If no AUX device is attached, don't queue this buffer
 			if (!reprap.GetGCodes()->HaveAux())
 			{
-				reprap.ReleaseOutputAll(buffer);
+				OutputBuffer::ReleaseAll(buffer);
 				break;
 			}
 
@@ -1786,7 +1790,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 				SERIAL_MAIN_DEVICE.write(buffer->Data(), buffer->DataLength());
 				SERIAL_MAIN_DEVICE.flush();
 
-				buffer = reprap.ReleaseOutput(buffer);
+				buffer = OutputBuffer::Release(buffer);
 			}
 			break;
 
@@ -1794,7 +1798,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 			// If the serial USB line is not open, discard its content right away
 			if (!SERIAL_MAIN_DEVICE)
 			{
-				reprap.ReleaseOutputAll(buffer);
+				OutputBuffer::ReleaseAll(buffer);
 			}
 			else
 			{
@@ -1830,7 +1834,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		default:
 			// Everything else is unsupported (and probably not used)
 			MessageF(HOST_MESSAGE, "Warning: Unsupported Message call for type %u!\n", type);
-			reprap.ReleaseOutputAll(buffer);
+			OutputBuffer::ReleaseAll(buffer);
 			break;
 	}
 }

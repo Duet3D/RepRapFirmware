@@ -588,7 +588,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 
 		if (info.isValid)
 		{
-			if (!reprap.AllocateOutput(response))
+			if (!OutputBuffer::Allocate(response))
 			{
 				// Should never happen
 				return false;
@@ -613,7 +613,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 		}
 		else
 		{
-			if (!reprap.AllocateOutput(response))
+			if (!OutputBuffer::Allocate(response))
 			{
 				// Should never happen
 				return false;
@@ -624,7 +624,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 	}
 	else if (IsPrinting())
 	{
-		if (!reprap.AllocateOutput(response))
+		if (!OutputBuffer::Allocate(response))
 		{
 			// Should never happen
 			return false;
@@ -658,7 +658,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 	}
 	else
 	{
-		if (!reprap.AllocateOutput(response))
+		if (!OutputBuffer::Allocate(response))
 		{
 			// Should never happen
 			return false;

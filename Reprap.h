@@ -86,24 +86,6 @@ public:
     uint16_t GetExtrudersInUse() const;
     uint16_t GetHeatersInUse() const;
 
-	// Allocate an unused OutputBuffer instance. Returns true on success or false if no instance could be allocated.
-	// Setting isAppending to true will guarantee that one OutputBuffer will remain available for single allocation.
-	bool AllocateOutput(OutputBuffer *&buf, bool isAppending = false);
-
-	// Get the number of bytes left for allocation. If writingBuffer is not NULL, this returns the number of free bytes for
-	// continuous writes, i.e. for writes that need to allocate an extra OutputBuffer instance to finish the message.
-	size_t GetOutputBytesLeft(const OutputBuffer *writingBuffer) const;
-
-	// Replace an existing OutputBuffer with another one.
-	void ReplaceOutput(OutputBuffer *&destination, OutputBuffer *source);
-
-	// Truncate an OutputBuffer instance to free up more memory. Returns the number of released bytes.
-	size_t TruncateOutput(OutputBuffer *buffer, size_t bytesNeeded);
-
-	// Release one OutputBuffer instance. Returns the next item from the chain or nullptr if this was the last instance.
-	OutputBuffer *ReleaseOutput(OutputBuffer *buf);
-	void ReleaseOutputAll(OutputBuffer *buf);
-
 	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source);
 	OutputBuffer *GetConfigResponse();
 	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq);
@@ -153,10 +135,6 @@ private:
 
     int beepFrequency, beepDuration;
     char message[MESSAGE_LENGTH + 1];
-
-	OutputBuffer * volatile freeOutputBuffers;		// Messages may also be sent by ISRs,
-	volatile size_t usedOutputBuffers;				// so make these volatile.
-	volatile size_t maxUsedOutputBuffers;
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }

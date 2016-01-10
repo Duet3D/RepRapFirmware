@@ -721,9 +721,9 @@ void Network::WaitForDataConection()
 	r->inputPointer = 0; // behave as if this request hasn't been processed yet
 }
 
-uint8_t *Network::IPAddress() const
+const uint8_t *Network::IPAddress() const
 {
-	return reinterpret_cast<uint8_t*>(&ethernet_get_configuration()->ip_addr.addr);
+	return reinterpret_cast<const uint8_t*>(&ethernet_get_configuration()->ip_addr.addr);
 }
 
 void Network::SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
@@ -1015,7 +1015,7 @@ void NetworkTransaction::Write(char b)
 {
 	if (!LostConnection() && status != disconnected)
 	{
-		if (sendBuffer == nullptr && !reprap.AllocateOutput(sendBuffer))
+		if (sendBuffer == nullptr && !OutputBuffer::Allocate(sendBuffer))
 		{
 			return;
 		}
@@ -1029,7 +1029,7 @@ void NetworkTransaction::Write(const char* s)
 {
 	if (!LostConnection() && status != disconnected)
 	{
-		if (sendBuffer == nullptr && !reprap.AllocateOutput(sendBuffer))
+		if (sendBuffer == nullptr && !OutputBuffer::Allocate(sendBuffer))
 		{
 			return;
 		}
@@ -1046,7 +1046,7 @@ void NetworkTransaction::Write(const char* s, size_t len)
 {
 	if (!LostConnection() && status != disconnected)
 	{
-		if (sendBuffer == nullptr && !reprap.AllocateOutput(sendBuffer))
+		if (sendBuffer == nullptr && !OutputBuffer::Allocate(sendBuffer))
 		{
 			return;
 		}
@@ -1071,7 +1071,7 @@ void NetworkTransaction::Write(OutputBuffer *buffer)
 	{
 		while (buffer != nullptr)
 		{
-			buffer = reprap.ReleaseOutput(buffer);
+			buffer = OutputBuffer::Release(buffer);
 		}
 	}
 }
@@ -1084,7 +1084,7 @@ void NetworkTransaction::Printf(const char* fmt, ...)
 		return;
 	}
 
-	if (sendBuffer == nullptr && !reprap.AllocateOutput(sendBuffer))
+	if (sendBuffer == nullptr && !OutputBuffer::Allocate(sendBuffer))
 	{
 		return;
 	}
@@ -1115,7 +1115,7 @@ bool NetworkTransaction::Send()
 
 		while (sendBuffer != nullptr)
 		{
-			sendBuffer = reprap.ReleaseOutput(sendBuffer);
+			sendBuffer = OutputBuffer::Release(sendBuffer);
 		}
 
 		if (!LostConnection())
@@ -1173,7 +1173,7 @@ bool NetworkTransaction::Send()
 
 		if (sendBuffer->BytesLeft() == 0)
 		{
-			sendBuffer = reprap.ReleaseOutput(sendBuffer);
+			sendBuffer = OutputBuffer::Release(sendBuffer);
 		}
 	}
 
@@ -1313,7 +1313,7 @@ void NetworkTransaction::Discard()
 
 	while (sendBuffer != nullptr)
 	{
-		sendBuffer = reprap.ReleaseOutput(sendBuffer);
+		sendBuffer = OutputBuffer::Release(sendBuffer);
 	}
 
 	// Free this transaction again unless it's still referenced

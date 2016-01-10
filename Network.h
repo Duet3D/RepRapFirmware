@@ -16,6 +16,7 @@ Separated out from Platform.h by dc42 and extended by zpl
 
 #include "lwipopts.h"
 #include "ethernet_sam.h"
+#include "OutputBuffer.h"
 
 // This class handles the network - typically an Ethernet.
 
@@ -140,7 +141,7 @@ class Network
 		NetworkTransaction *GetTransaction(const ConnectionState *cs = nullptr);
 		void WaitForDataConection();
 
-		uint8_t *IPAddress() const;
+		const uint8_t *IPAddress() const;
 		void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
 		void OpenDataPort(uint16_t port);
 		uint16_t GetDataPort() const;

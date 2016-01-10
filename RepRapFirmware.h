@@ -28,6 +28,7 @@ Licence: GPL
 
 #include "Arduino.h"
 #include "Configuration.h"
+#include "StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
 enum Module
@@ -81,81 +82,9 @@ int StringContains(const char* string, const char* match);
 // Macro to assign an array from an initializer list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
 
-// Class to describe a string buffer, including its length. This saves passing buffer lengths around everywhere.
-class StringRef
-{
-	char *p;		// pointer to the storage
-	size_t len;		// number of characters in the storage
-
-public:
-	StringRef(char *pp, size_t pl) : p(pp), len(pl) { }
-
-	size_t Length() const { return len; }
-	size_t strlen() const;
-	char *Pointer() { return p; }
-	const char *Pointer() const { return p; }
-
-	char& operator[](size_t index) { return p[index]; }
-	char operator[](size_t index) const { return p[index]; }
-
-	void Clear() { p[0] = 0; }
-
-	int printf(const char *fmt, ...);
-	int vprintf(const char *fmt, va_list vargs);
-	int catf(const char *fmt, ...);
-	size_t copy(const char* src);
-	size_t cat(const char *src);
-};
-
 extern StringRef scratchString;
 
-// This class is used to hold data for sending (either for Serial or Network destinations)
-class OutputBuffer
-{
-	public:
-		friend class RepRap;
-
-		OutputBuffer(OutputBuffer *n) : next(n) { }
-
-		OutputBuffer *Next() const { return next; }
-		void Append(OutputBuffer *other);
-		size_t References() const { return references; }
-		void IncreaseReferences(size_t refs);
-
-		const char *Data() const { return data; }
-		uint16_t DataLength() const { return dataLength; }		// How many bytes have been written to this instance?
-		uint32_t Length() const;								// How many bytes have been written to the whole chain?
-
-		char& operator[](size_t index);
-		char operator[](size_t index) const;
-		const char *Read(uint16_t len);
-		uint16_t BytesLeft() const { return bytesLeft; }		// How many bytes have not been sent yet?
-
-		int printf(const char *fmt, ...);
-		int vprintf(const char *fmt, va_list vargs);
-		int catf(const char *fmt, ...);
-
-		size_t copy(const char c);
-		size_t copy(const char *src);
-		size_t copy(const char *src, size_t len);
-
-		size_t cat(const char c);
-		size_t cat(const char *src);
-		size_t cat(const char *src, size_t len);
-		size_t cat(StringRef &str);
-
-		size_t EncodeString(const char *src, uint16_t srcLength, bool allowControlChars, bool encapsulateString = true);
-		size_t EncodeReply(OutputBuffer *src, bool allowControlChars);
-
-	private:
-		OutputBuffer *next;
-
-		char data[OUTPUT_BUFFER_SIZE];
-		uint16_t dataLength, bytesLeft;
-
-		size_t references;
-};
-
+#include "OutputBuffer.h"
 #include "Network.h"
 #include "Platform.h"
 #include "Webserver.h"
