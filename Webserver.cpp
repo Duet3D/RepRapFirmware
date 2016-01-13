@@ -808,6 +808,9 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	}
 
 	transaction->Write("HTTP/1.1 200 OK\n");
+	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
+	transaction->Write("Pragma: no-cache\n");
+	transaction->Write("Expires: 0\n");
 	transaction->Write("Content-Type: application/json\n");
 	transaction->Printf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
 	transaction->Printf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
