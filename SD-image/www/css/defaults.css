@@ -179,13 +179,19 @@ label {
 	margin-left: 0px !important;
 	padding-left: 3px !important;
 	padding-right: 3px !important;
-	/*padding-top: 8px !important;*/
 	padding-top: 15px !important;
 }
 @media (max-width: 767px) {
 	.navbar-brand {
 		margin-left: 15px !important;
 	}
+}
+.navbar-brand > abbr {
+	border: 0px;
+	margin-left: 9px;
+}
+.navbar-brand > abbr > span {
+	color: #F0AD4E;
 }
 
 .navbar-default {
@@ -262,7 +268,7 @@ label {
 	height: 200px;
 }
 
-.col-extr-1, .col-extr-2, .col-extr-3, .col-extr-4, .col-extr-5 {
+.extr-1, .extr-2, .extr-3, .extr-4, .extr-5, .extr-6 {
 	white-space: nowrap;
 }
 
@@ -278,6 +284,14 @@ label {
 
 .panel-status {
 	margin-bottom: 12px;
+}
+
+.probe-slow-down {
+	color:	#FFFFE0;
+}
+
+.probe-trigger {
+	color: #FFF0F0;
 }
 
 #row_info {
@@ -343,6 +357,9 @@ div.panel table.table-status:not(:last-child)
 }
 #tr_head_5 th > a {
 	color: #337AB7;
+}
+#tr_head_6 th > a {
+	color: #00FFFF;
 }
 #tr_bed th > a {
 	color: #0000FF;
@@ -434,6 +451,11 @@ div.panel table.table-status:not(:last-child)
 		padding-right: 8px !important;
 	}
 }
+@media (max-width: 991px) {
+	.content-collapsed-padding {
+		padding-top: 15px;
+	}
+}
 
 #main_content .panel-body {
 	padding: 9px !important;
@@ -461,7 +483,7 @@ div.panel table.table-status:not(:last-child)
 /* Control Page */
 
 #btn_homeall {
-	width: 82px;
+	min-width: 82px;
 }
 
 .btn-group-vertical-justified {
@@ -478,7 +500,7 @@ div.panel table.table-status:not(:last-child)
 	}
 }
 
-#home_warning {
+.home-warning {
 	margin-top: -14px;
 	padding-top: 6px;
 	padding-bottom: 6px;
@@ -556,6 +578,10 @@ div.panel table.table-status:not(:last-child)
 
 /* Print Status */
 
+#img_webcam {
+	width: 100%;
+}
+
 #page_print .btn-group {
 	padding-bottom: 6px;
 }
@@ -582,6 +608,24 @@ div.panel table.table-status:not(:last-child)
 #progress {
 	width: 100%;
 	font-weight: bold;
+}
+
+.layer-done-animation {
+	background-color: #D9EDF7 !important;
+	-webkit-transition: background-color 500ms linear;
+	-moz-transition: background-color 500ms linear;
+	-o-transition: background-color 500ms linear;
+	-ms-transition: background-color 500ms linear;
+	transition: background-color 500ms linear;
+}
+
+#layer_tooltip {
+	position: absolute;
+	display: none;
+	border: 1px solid #fdd;
+	padding: 2px;
+	background-color: #fee;
+	opacity: 0.80;
 }
 
 #panel_print_control .btn {
@@ -611,6 +655,10 @@ div.panel table.table-status:not(:last-child)
 	height: 190px;
 }
 
+.chart-print-line {
+	color: #EDC240;
+}
+
 @media (min-width: 970px) {
 	#span_progress_right {
 		float: right;
@@ -627,6 +675,7 @@ div.panel table.table-status:not(:last-child)
 	padding-top: 0px;
 	background-color: #eee;
 	border: 1px solid #bbb;
+	margin-bottom: 15px;
 }
 
 #console_log div.row {
@@ -703,6 +752,10 @@ div.panel table.table-status:not(:last-child)
 	padding-left: 6px;
 }
 
+.table-files {
+	margin-bottom: 15px;
+}
+
 .table-files button > span {
 	padding-top: 6px;
 	padding-bottom: 6px;
@@ -721,6 +774,16 @@ div.panel table.table-status:not(:last-child)
 	padding-top: 4px !important;
 	padding-bottom: 4px !important;
 	vertical-align: middle !important;
+}
+.table-files tr > td:first-child {
+	border-right: 0px;
+	padding-right: 4px;
+	width: 1%;
+}
+.table-files tr > td:nth-child(2) {
+	border-left: 0px;
+	padding-left: 4px;
+	width: 1%;
 }
 
 .table-files tr button:last-child {
@@ -750,8 +813,19 @@ div.panel table.table-status:not(:last-child)
 /* Settings Page */
 
 #page_tools button,
-#btn_add_gcode {
+#btn_add_gcode,
+#btn_fw_diagnostics {
 	margin-top: 9px;
+}
+
+#btn_fw_diagnostics {
+	padding-left: 4px;
+	padding-right: 4px;
+	width: 100%;
+}
+
+#btn_language {
+	margin-left: 9px;
 }
 
 #check_heaters > label:first-child {
@@ -770,6 +844,11 @@ div.panel table.table-status:not(:last-child)
 
 label[for="dropdown_language"] {
 	margin-right: 6px;
+}
+
+#frm_settings li.open li > a {
+	height: 40px;
+	padding-top: 10px;
 }
 
 #label_feedrate {
@@ -801,13 +880,11 @@ label[for="dropdown_language"] {
 	padding-bottom: 15px;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 992px) {
 	#page_settings .col-left {
 		padding-right: 0px;
 	}
-}
 
-@media (min-width: 992px) {
 	#page_settings .col-right {
 		padding-left: 0px;
 	}
@@ -881,7 +958,7 @@ label[for="dropdown_language"] {
 	padding: 6px;
 }
 
-#table_define_tool td:first-child {
+#table_define_tool > tbody > tr:first-child > td:first-child {
 	padding-right: 9px;
 }
 
@@ -896,6 +973,14 @@ label[for="dropdown_language"] {
 	line-height: 30px;
 	vertical-align: middle;
 	padding: 6px;
+}
+
+#text_config {
+	background-color: inherit;
+	border: 0px;
+	min-height: 200px;
+	resize: none;
+	width: 100%;
 }
 
 #ul_control_dropdown {
