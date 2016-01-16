@@ -250,8 +250,8 @@ void ethernet_hardware_init(void)
 		emac_dev_init(EMAC, &gs_emac_dev, &emac_option);
 	}
 
-	/* Set lower priority */
-	NVIC_SetPriority(EMAC_IRQn, 12);
+	/* Set IRQ priority */
+	NVIC_SetPriority(EMAC_IRQn, 4);
 
 	/* Enable Interrupt */
 	NVIC_EnableIRQ(EMAC_IRQn);
@@ -504,7 +504,7 @@ void ethernetif_set_rx_callback(emac_dev_tx_cb_t callback)
 
 void ethernetif_set_mac_address(const u8_t macAddress[])
 {
-	for (size_t i = 0; i < 6; ++i)
+	for(size_t i = 0; i < 6; ++i)
 	{
 		gs_uc_mac_address[i] = macAddress[i];
 	}

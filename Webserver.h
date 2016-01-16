@@ -45,7 +45,7 @@ const size_t maxCommandWords = 4;				// max number of space-separated words in t
 const size_t maxQualKeys = 5;					// max number of key/value pairs in the qualifier
 const size_t maxHeaders = 16;					// max number of key/value pairs in the headers
 
-const size_t  maxSessions = 8;					// maximum number of simultaneous HTTP sessions
+const size_t  maxHttpSessions = 8;				// maximum number of simultaneous HTTP sessions
 const float httpSessionTimeout = 8.0;			// HTTP session timeout in seconds
 
 /* FTP */
@@ -143,6 +143,7 @@ class Webserver
 		public:
 
 			HttpInterpreter(Platform *p, Webserver *ws, Network *n);
+			void Diagnostics();
 			void ConnectionLost(uint32_t remoteIP, uint16_t remotePort, uint16_t localPort) override;
 			bool CharFromClient(const char c) override;
 			void ResetState() override;
@@ -195,6 +196,7 @@ class Webserver
 			};
 
 			void SendFile(const char* nameOfFileToSend);
+			void SendConfigFile(NetworkTransaction *transaction);
 			void SendGCodeReply(NetworkTransaction *transaction);
 			void SendJsonResponse(const char* command);
 			bool GetJsonResponse(const char* request, OutputBuffer *&response, const char* key, const char* value, size_t valueLength, bool& keepOpen);
@@ -223,7 +225,7 @@ class Webserver
 				uint16_t postPort;
 			};
 
-			HttpSession sessions[maxSessions];
+			HttpSession sessions[maxHttpSessions];
 			size_t numSessions, clientsServed;
 
 			bool Authenticate();
@@ -243,7 +245,7 @@ class Webserver
 
 			// Response from GCodes class
 
-			OutputBuffer * volatile gcodeReply;
+			OutputStack *gcodeReply;
 
 		protected:
 			bool processingDeferredRequest;					// it's no good idea to parse 128kB of text in one go...
@@ -263,6 +265,7 @@ class Webserver
 		public:
 
 			FtpInterpreter(Platform *p, Webserver *ws, Network *n);
+			void Diagnostics();
 			void ConnectionEstablished() override;
 			void ConnectionLost(uint32_t remoteIP, uint16_t remotePort, uint16_t localPort) override;
 			bool CharFromClient(const char c) override;
@@ -307,6 +310,7 @@ class Webserver
 		public:
 
 			TelnetInterpreter(Platform *p, Webserver *ws, Network *n);
+			void Diagnostics();
 			void ConnectionEstablished() override;
 			void ConnectionLost(uint32_t remoteIP, uint16_t remotePort, uint16_t local_port) override;
 			bool CharFromClient(const char c) override;
@@ -348,7 +352,7 @@ class Webserver
 			void ProcessGcode(const char* gc);
 			void StoreGcodeData(const char* data, uint16_t len);
 
-			// Response from GCodes class
+			// Converted response from GCodes class (NL -> CRNL)
 
 			OutputBuffer * volatile gcodeReply;
 	};

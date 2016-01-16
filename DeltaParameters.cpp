@@ -48,7 +48,7 @@ void DeltaParameters::Recalc()
 		Q2 = fsquare(Q);
 		D2 = fsquare(diagonal);
 
-		// Calculate the base carriage height when the printer is homed.
+		// Calculate the base carriage height when the printer is homed, i.e. the carriages are at the endstops less the corrections
 		const float tempHeight = diagonal;		// any sensible height will do here
 		float machinePos[AXES];
 		InverseTransform(tempHeight, tempHeight, tempHeight, machinePos);
@@ -203,7 +203,8 @@ void DeltaParameters::Adjust(size_t numFactors, const float v[])
 void DeltaParameters::PrintParameters(StringRef& reply) const
 {
 	reply.printf("Endstops X%.2f Y%.2f Z%.2f, height %.2f, diagonal %.2f, radius %.2f, xcorr %.2f, ycorr %.2f, zcorr %.2f\n",
-					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, radius, xCorrection, yCorrection, zCorrection);
+					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, radius,
+					xCorrection, yCorrection, zCorrection);
 }
 
 // End

@@ -16,7 +16,7 @@ Separated out from Platform.h by dc42 and extended by zpl
 
 #include "lwipopts.h"
 #include "ethernet_sam.h"
-#include "OutputBuffer.h"
+#include "OutputMemory.h"
 
 // This class handles the network - typically an Ethernet.
 
@@ -28,17 +28,17 @@ Separated out from Platform.h by dc42 and extended by zpl
 // Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
 // and therefore avoids additional memory use and fragmentation.
 
-static const uint8_t NETWORK_TRANSACTION_COUNT = 16;				// Number of NetworkTransactions to be used for network IO
-static const float TCP_WRITE_TIMEOUT = 4.0;	 						// Seconds to wait for data we have written to be acknowledged
+const uint8_t NETWORK_TRANSACTION_COUNT = 16;				// Number of NetworkTransactions to be used for network IO
+const float TCP_WRITE_TIMEOUT = 8.0;	 					// Seconds to wait for data we have written to be acknowledged
 
 
-static const uint8_t IP_ADDRESS[4] = { 192, 168, 1, 10 };			// Need some sort of default...
-static const uint8_t NET_MASK[4] = { 255, 255, 255, 0 };
-static const uint8_t GATE_WAY[4] = { 192, 168, 1, 1 };
+const uint8_t IP_ADDRESS[4] = { 192, 168, 1, 10 };			// Need some sort of default...
+const uint8_t NET_MASK[4] = { 255, 255, 255, 0 };
+const uint8_t GATE_WAY[4] = { 192, 168, 1, 1 };
 
-static const uint16_t FTP_PORT = 21;
-static const uint16_t TELNET_PORT = 23;
-static const uint16_t DEFAULT_HTTP_PORT = 80;
+const uint16_t FTP_PORT = 21;
+const uint16_t TELNET_PORT = 23;
+const uint16_t DEFAULT_HTTP_PORT = 80;
 
 
 /****************************************************************************************************/
@@ -78,11 +78,11 @@ class NetworkTransaction
 	public:
 		friend class Network;
 
-		NetworkTransaction(NetworkTransaction* n) : next(n) { }
+		NetworkTransaction(NetworkTransaction* n);
 		void Set(pbuf *p, ConnectionState* c, TransactionStatus s);
 		TransactionStatus GetStatus() const { return status; }
 
-		uint16_t DataLength() const;
+		size_t DataLength() const;
 		bool Read(char& b);
 		bool ReadBuffer(char *&buffer, unsigned int &len);
 		void Write(char b);
@@ -90,6 +90,7 @@ class NetworkTransaction
 		void Write(StringRef ref);
 		void Write(const char* s, size_t len);
 		void Write(OutputBuffer *buffer);
+		void Write(OutputStack *stack);
 		void Printf(const char *fmt, ...);
 		void SetFileToWrite(FileStore *file);
 
@@ -105,6 +106,7 @@ class NetworkTransaction
 		void Discard();
 
 	private:
+		bool CanWrite() const;
 		bool Send();
 		void Close();
 		void FreePbuf();
@@ -117,6 +119,7 @@ class NetworkTransaction
 		unsigned int inputPointer;					// amount of data already taken from the first packet buffer
 
 		OutputBuffer *sendBuffer;
+		OutputStack *sendStack;
 		FileStore *fileBeingSent;
 
 		TransactionStatus status;
@@ -158,6 +161,7 @@ class Network
 
 		Network(Platform* p);
 		void Init();
+		void Exit() {}
 		void Spin();
 		void Interrupt();
 		void Diagnostics();
@@ -199,6 +203,11 @@ class Network
 
 		ConnectionState * volatile freeConnections;		// May be referenced by Ethernet ISR, hence it's volatile
 };
+
+inline bool NetworkTransaction::CanWrite() const
+{
+	return (!LostConnection() && status != disconnected && status != dataSending);
+}
 
 #endif
 

@@ -109,10 +109,14 @@ bool PidParameters::operator==(const PidParameters& other) const
 
 Platform::Platform() :
 		autoSaveEnabled(false), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
-		 auxOutputBuffer(nullptr), aux2OutputBuffer(nullptr), usbOutputBuffer(nullptr),
 		fileStructureInitialised(false), tickState(0), debugCode(0),
 		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
 {
+	// Output
+	auxOutput = new OutputStack();
+	aux2Output = new OutputStack();
+	usbOutput = new OutputStack();
+
 	// Files
 
 	massStorage = new MassStorage(this);
@@ -128,14 +132,14 @@ Platform::Platform() :
 void Platform::Init()
 {
 	// Deal with power first
-	digitalWriteNonDue(atxPowerPin, LOW);		// ensure ATX power is off by default
-	pinModeNonDue(atxPowerPin, OUTPUT);
+	digitalWriteNonDue(ATX_POWER_PIN, LOW);		// ensure ATX power is off by default
+	pinModeNonDue(ATX_POWER_PIN, OUTPUT);
 
 	SetBoardType(BoardType::Auto);
 
 	// Comms
 
-	baudRates[0] = USB_BAUD_RATE;
+	baudRates[0] = MAIN_BAUD_RATE;
 	baudRates[1] = AUX_BAUD_RATE;
 	baudRates[2] = AUX2_BAUD_RATE;
 	commsParams[0] = 0;
@@ -726,6 +730,7 @@ void Platform::Spin()
 		return;
 
 	// Write non-blocking data to the AUX line
+	OutputBuffer *auxOutputBuffer = auxOutput->GetFirstItem();
 	if (auxOutputBuffer != nullptr)
 	{
 		size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
@@ -737,10 +742,12 @@ void Platform::Spin()
 		if (auxOutputBuffer->BytesLeft() == 0)
 		{
 			auxOutputBuffer = OutputBuffer::Release(auxOutputBuffer);
+			auxOutput->SetFirstItem(auxOutputBuffer);
 		}
 	}
 
 	// Write non-blocking data to the second AUX line
+	OutputBuffer *aux2OutputBuffer = aux2Output->GetFirstItem();
 	if (aux2OutputBuffer != nullptr)
 	{
 		size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
@@ -752,18 +759,19 @@ void Platform::Spin()
 		if (aux2OutputBuffer->BytesLeft() == 0)
 		{
 			aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
+			aux2Output->SetFirstItem(aux2OutputBuffer);
 		}
 	}
 
 	// Write non-blocking data to the USB line
+	OutputBuffer *usbOutputBuffer = usbOutput->GetFirstItem();
 	if (usbOutputBuffer != nullptr)
 	{
 		if (!SERIAL_MAIN_DEVICE)
 		{
 			// If the USB port is not opened, free the data left for writing
-			OutputBuffer *buffer = usbOutputBuffer;
-			usbOutputBuffer = nullptr;
-			OutputBuffer::ReleaseAll(buffer);
+			OutputBuffer::ReleaseAll(usbOutputBuffer);
+			usbOutput->SetFirstItem(nullptr);
 		}
 		else
 		{
@@ -777,6 +785,7 @@ void Platform::Spin()
 			if (usbOutputBuffer->BytesLeft() == 0)
 			{
 				usbOutputBuffer = OutputBuffer::Release(usbOutputBuffer);
+				usbOutput->SetFirstItem(usbOutputBuffer);
 			}
 		}
 	}
@@ -1657,23 +1666,32 @@ void Platform::Message(MessageType type, const char *message)
 
 		case AUX_MESSAGE:
 			// Message that is to be sent to the first auxiliary device
-			if (auxOutputBuffer != nullptr)
+			if (!auxOutput->IsEmpty())
 			{
 				// If we're still busy sending a response to the UART device, append this message to the output buffer
-				auxOutputBuffer->cat(message);
+				auxOutput->GetLastItem()->cat(message);
 			}
 			else
 			{
-				// Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
-				Serial.write(message);
-				Serial.flush();
+				// Send short strings immediately through the aux channel. There is no flow control on this port, so it can't block for long
+				SERIAL_AUX_DEVICE.write(message);
+				SERIAL_AUX_DEVICE.flush();
 			}
 			break;
 
 		case AUX2_MESSAGE:
 			// Message that is to be sent to the second auxiliary device (blocking)
-			Serial1.write(message);
-			Serial1.flush();
+			if (!aux2Output->IsEmpty())
+			{
+				// If we're still busy sending a response to the USART device, append this message to the output buffer
+				aux2Output->GetLastItem()->cat(message);
+			}
+			else
+			{
+				// Send short strings immediately through the aux channel. There is no flow control on this port, so it can't block for long
+				SERIAL_AUX2_DEVICE.write(message);
+				SERIAL_AUX2_DEVICE.flush();
+			}
 			break;
 
 		case DISPLAY_MESSAGE:
@@ -1689,21 +1707,20 @@ void Platform::Message(MessageType type, const char *message)
 
 		case HOST_MESSAGE:
 			// Message that is to be sent via the USB line (non-blocking)
-			//
-			// Ensure we have a valid buffer to write to
-			if (usbOutputBuffer == nullptr)
 			{
-				OutputBuffer *buffer;
-				if (!OutputBuffer::Allocate(buffer))
+				// Ensure we have a valid buffer to write to that isn't referenced for other destinations
+				OutputBuffer *usbOutputBuffer = usbOutput->GetLastItem();
+				if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 				{
-					// Should never happen
-					return;
+					if (!OutputBuffer::Allocate(usbOutputBuffer))
+					{
+						// Should never happen
+						return;
+					}
+					usbOutput->Push(usbOutputBuffer);
 				}
-				usbOutputBuffer = buffer;
-			}
 
-			// Check if we need to write the indentation chars first
-			{
+				// Check if we need to write the indentation chars first
 				const size_t stackPointer = reprap.GetGCodes()->GetStackPointer();
 				if (stackPointer > 0)
 				{
@@ -1715,13 +1732,13 @@ void Platform::Message(MessageType type, const char *message)
 					}
 					indentation[stackPointer * 2] = 0;
 
-					// Append the indentation string to our chain, or allocate a new buffer if there is none
+					// Append the indentation string
 					usbOutputBuffer->cat(indentation);
 				}
-			}
 
-			// Append the message string to the output buffer chain
-			usbOutputBuffer->cat(message);
+				// Append the message string
+				usbOutputBuffer->cat(message);
+			}
 			break;
 
 		case HTTP_MESSAGE:
@@ -1736,9 +1753,9 @@ void Platform::Message(MessageType type, const char *message)
 		case GENERIC_MESSAGE:
 			// Message that is to be sent to the web & host. Make this the default one, too.
 		default:
-			Message(HOST_MESSAGE, message);
 			Message(HTTP_MESSAGE, message);
 			Message(TELNET_MESSAGE, message);
+			Message(HOST_MESSAGE, message);
 			break;
 	}
 }
@@ -1761,26 +1778,12 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 			}
 
 			// For big responses it makes sense to write big chunks of data in portions. Store this data here
-			if (auxOutputBuffer == nullptr)
-			{
-				auxOutputBuffer = buffer;
-			}
-			else
-			{
-				auxOutputBuffer->Append(buffer);
-			}
+			auxOutput->Push(buffer);
 			break;
 
 		case AUX2_MESSAGE:
 			// Send this message to the second UART device
-			if (aux2OutputBuffer == nullptr)
-			{
-				aux2OutputBuffer = buffer;
-			}
-			else
-			{
-				aux2OutputBuffer->Append(buffer);
-			}
+			aux2Output->Push(buffer);
 			break;
 
 		case DEBUG_MESSAGE:
@@ -1795,22 +1798,15 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 			break;
 
 		case HOST_MESSAGE:
-			// If the serial USB line is not open, discard its content right away
 			if (!SERIAL_MAIN_DEVICE)
 			{
+				// If the serial USB line is not open, discard the message right away
 				OutputBuffer::ReleaseAll(buffer);
 			}
 			else
 			{
-				// Append incoming data to the list of our output buffers
-				if (usbOutputBuffer == nullptr)
-				{
-					usbOutputBuffer = buffer;
-				}
-				else
-				{
-					usbOutputBuffer->Append(buffer);
-				}
+				// Else append incoming data to the stack
+				usbOutput->Push(buffer);
 			}
 			break;
 
@@ -1826,15 +1822,15 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		case GENERIC_MESSAGE:
 			// Message that is to be sent to the web & host.
 			buffer->IncreaseReferences(2);		// This one is handled by two additional destinations
-			Message(HOST_MESSAGE, buffer);
 			Message(HTTP_MESSAGE, buffer);
 			Message(TELNET_MESSAGE, buffer);
+			Message(HOST_MESSAGE, buffer);
 			break;
 
 		default:
 			// Everything else is unsupported (and probably not used)
-			MessageF(HOST_MESSAGE, "Warning: Unsupported Message call for type %u!\n", type);
 			OutputBuffer::ReleaseAll(buffer);
+			MessageF(HOST_MESSAGE, "Warning: Unsupported Message call for type %u!\n", type);
 			break;
 	}
 }
@@ -1863,20 +1859,20 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 
 bool Platform::AtxPower() const
 {
-	return (digitalReadNonDue(atxPowerPin) == HIGH);
+	return (digitalReadNonDue(ATX_POWER_PIN) == HIGH);
 }
 
 void Platform::SetAtxPower(bool on)
 {
-	digitalWriteNonDue(atxPowerPin, (on) ? HIGH : LOW);
+	digitalWriteNonDue(ATX_POWER_PIN, (on) ? HIGH : LOW);
 }
 
 
-void Platform::SetElasticComp(size_t drive, float factor)
+void Platform::SetElasticComp(size_t extruder, float factor)
 {
-	if (drive < DRIVES - AXES)
+	if (extruder < DRIVES - AXES)
 	{
-		elasticComp[drive] = factor;
+		elasticComp[extruder] = factor;
 	}
 }
 

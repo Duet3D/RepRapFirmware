@@ -24,7 +24,7 @@ void RepRap::Init()
 {
 	debug = 0;
 
-	// zpl thinks it's a bad idea to count the bed as an active heater...
+	// chrishamm thinks it's a bad idea to count the bed as an active heater...
 	activeExtruders = activeHeaters = 0;
 
 	SetPassword(DEFAULT_PASSWORD);
@@ -99,13 +99,14 @@ void RepRap::Init()
 
 void RepRap::Exit()
 {
-  active = false;
-  heat->Exit();
-  move->Exit();
-  gCodes->Exit();
-  webserver->Exit();
-  platform->Message(GENERIC_MESSAGE, "RepRap class exited.\n");
-  platform->Exit();
+	active = false;
+	heat->Exit();
+	move->Exit();
+	gCodes->Exit();
+	webserver->Exit();
+	network->Exit();
+	platform->Message(GENERIC_MESSAGE, "RepRap class exited.\n");
+	platform->Exit();
 }
 
 void RepRap::Spin()
@@ -251,7 +252,7 @@ void RepRap::PrintDebug()
 	if (debug != 0)
 	{
 		platform->Message(GENERIC_MESSAGE, "Debugging enabled for modules:");
-		for (unsigned int i = 0; i < numModules; i++)
+		for (size_t i = 0; i < numModules; i++)
 		{
 			if ((debug & (1 << i)) != 0)
 			{
@@ -259,7 +260,7 @@ void RepRap::PrintDebug()
 			}
 		}
 		platform->Message(GENERIC_MESSAGE, "\nDebugging disabled for modules:");
-		for (unsigned int i = 0; i < numModules; i++)
+		for (size_t i = 0; i < numModules; i++)
 		{
 			if ((debug & (1 << i)) == 0)
 			{
@@ -591,9 +592,18 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"params\":{\"atxPower\":%d", platform->AtxPower() ? 1 : 0);
 
 		// Cooling fan value
-		//@TODO T3P3 only reports first PWM fan
-		float fanValue = platform->GetFanValue(0);
-		response->catf(",\"fanPercent\":%.2f", fanValue * 100.0);
+		response->cat(",\"fanPercent\":[");
+		for(size_t i = 0; i < NUM_FANS; i++)
+		{
+			if (i == NUM_FANS - 1)
+			{
+				response->catf("%.2f", platform->GetFanValue(i) * 100.0);
+			}
+			else
+			{
+				response->catf("%.2f,", platform->GetFanValue(i) * 100.0);
+			}
+		}
 
 		// Speed and Extrusion factors
 		response->catf(",\"speedFactor\":%.2f,\"extrFactors\":", gCodes->GetSpeedFactor() * 100.0);
@@ -625,10 +635,10 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		switch (platform->GetZProbeSecondaryValues(v1, v2))
 		{
 			case 1:
-				response->catf("\"probeValue\":\%d,\"probeSecondary\":[%d]", v0, v1);
+				response->catf("\"probeValue\":%d,\"probeSecondary\":[%d]", v0, v1);
 				break;
 			case 2:
-				response->catf("\"probeValue\":\%d,\"probeSecondary\":[%d,%d]", v0, v1, v2);
+				response->catf("\"probeValue\":%d,\"probeSecondary\":[%d,%d]", v0, v1, v2);
 				break;
 			default:
 				response->catf("\"probeValue\":%d", v0);
@@ -760,7 +770,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				for(size_t heater=0; heater<tool->HeaterCount(); heater++)
 				{
 					response->catf("%d", tool->Heater(heater));
-					if (heater < tool->HeaterCount() - 1)
+					if (heater + 1 < tool->HeaterCount())
 					{
 						response->cat(",");
 					}
@@ -771,7 +781,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				for(size_t drive=0; drive<tool->DriveCount(); drive++)
 				{
 					response->catf("%d", tool->Drive(drive));
-					if (drive < tool->DriveCount() - 1)
+					if (drive + 1 < tool->DriveCount())
 					{
 						response->cat(",");
 					}
@@ -988,7 +998,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	return response;
 }
 
-// Get the JSON status response for the web server or M105 command.
+// Get the JSON status response for PanelDue or the old web server.
 // Type 0 was the old-style webserver status response, but is no longer supported.
 // Type 1 is the new-style webserver status response.
 // Type 2 is the M105 S2 response, which is like the new-style status response but some fields are omitted.
@@ -1193,23 +1203,6 @@ void RepRap::CopyParameterText(const char* src, char *dst, size_t length)
 		--i;
 	}
 	dst[i] = 0;
-}
-
-// Get just the machine name in JSON format
-OutputBuffer *RepRap::GetNameResponse()
-{
-	// Need something to write to...
-	OutputBuffer *response;
-	if (!OutputBuffer::Allocate(response))
-	{
-		return nullptr;
-	}
-
-	response->copy("{\"myName\":");
-	response->EncodeString(myName, ARRAY_SIZE(myName), false);
-	response->cat("}");
-
-	return response;
 }
 
 // Get the list of files in the specified directory in JSON format.

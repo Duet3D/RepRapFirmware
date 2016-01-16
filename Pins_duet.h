@@ -2,10 +2,10 @@
 #define PINS_DUET_H__
 
 // What are we supposed to be running on
+#define ELECTRONICS "Duet (+ Extension)"
 
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::Duet_06
-#define ELECTRONICS "Duet (+ Extension)"
 
 // The physical capabilities of the machine
 
@@ -26,7 +26,7 @@ const size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB
 // DRIVES
 
 const Pin ENABLE_PINS[DRIVES] = { 29, 27, X1, X0, 37, X8, 50, 47, X13 };
-const bool ENABLE_VALUES[DRIVES] = { false, false, false, false, false, false, false, false, false };	// what to send to enable a drive
+const bool ENABLE_VALUES[DRIVES] = { false, false, false, false, false, false, false, false, false };	// What to send to enable a drive
 const Pin STEP_PINS[DRIVES] = { 14, 25, 5, X2, 41, 39, X4, 49, X10 };
 const Pin DIRECTION_PINS[DRIVES] = { 15, 26, 4, X3, 35, 53, 51, 48, X11 };
 const bool DIRECTIONS[DRIVES] = { BACKWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS };	// What each axis needs to make it go forwards - defaults
@@ -40,6 +40,7 @@ const uint8_t POT_WIPES[8] = { 1, 3, 2, 0, 1, 3, 2, 0 };
 const float SENSE_RESISTOR = 0.1;										// Stepper motor current sense resistor
 const float MAX_STEPPER_DIGIPOT_VOLTAGE = (3.3 * 2.5 / (2.7 + 2.5));	// Stepper motor current reference voltage
 const float MAX_STEPPER_DAC_VOLTAGE = 2.12;								// Stepper motor current reference voltage for E1 if using a DAC
+const int DAC0_DIGITAL_PIN = 66;										// Arduino Due pin number corresponding to DAC0 output pin
 
 // HEATERS
 
@@ -67,7 +68,7 @@ const size_t MAX31855_DEVICES = 4;
 const Pin MAX31855_CS_PINS[MAX31855_DEVICES] = { 16, 17, 18, 19 };
 
 // Arduino Due pin number that controls the ATX power on/off
-const Pin atxPowerPin = 12;											// Arduino Due pin number that controls the ATX power on/off
+const Pin ATX_POWER_PIN = 12;											// Arduino Due pin number that controls the ATX power on/off
 
 // Analogue pin numbers
 const Pin Z_PROBE_PIN = 10;											// Analogue pin number
@@ -81,6 +82,18 @@ const Pin Z_PROBE_MOD_PIN07 = X12;									// Digital pin number to turn the IR 
 const size_t NUM_FANS = 2;
 const Pin COOLING_FAN_PINS[NUM_FANS] = { X6, X17 };					// Pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
 const Pin COOLING_FAN_RPM_PIN = 23;									// Pin PA15
+
+// INKJET CONTROL PINS
+
+const Pin INKJET_SERIAL_OUT = 65;										// Serial bitpattern into the shift register
+const Pin INKJET_SHIFT_CLOCK = 20;										// Shift the register
+const Pin INKJET_STORAGE_CLOCK = 67;									// Put the pattern in the output register
+const Pin INKJET_OUTPUT_ENABLE = 66;									// Make the output visible
+const Pin INKJET_CLEAR = 36;											// Clear the register to 0
+
+// Roland mill
+const int8_t ROLAND_RTS_PIN = 77;										// Expansion pin 27, SPI0_NPCS0
+const int8_t ROLAND_CTS_PIN = 87;										// Expansion pin 26, SPI0_NPCS1
 
 // Definition of which pins we allow to be controlled using M42
 //

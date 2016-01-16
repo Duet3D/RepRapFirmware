@@ -28,15 +28,11 @@ Licence: GPL
 #include "Platform.h"
 
 const float ROLAND_FACTOR = (1.016088061*100.0/2.54);	// Roland units are 0.001"
-const int8_t ROLAND_RTS_PIN = 75;						// Expansion pin 29, SPI0_MOSI
-const int8_t ROLAND_CTS_PIN = 76;						// Expansion pin 28, SPI0_SPCK
 const size_t ROLAND_BUFFER_SIZE = 50;
 
 // TX and RX
-// Expansion pin 11, PA13_TXD1
-// Expansion pin 12, PA12_RXD1
-
-const uint16_t ROLAND_BAUD = 9600;
+// Expansion pin 13, PA13_TXD0
+// Expansion pin 14, PA12_RXD0
 
 
 class Roland

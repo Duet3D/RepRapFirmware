@@ -46,6 +46,7 @@ Licence: GPL
 
 #include "Arduino.h"
 #include "SamNonDuePin.h"
+#include "OutputMemory.h"
 #include "SD_HSMCI.h"
 #include "MAX31855.h"
 #include "MCP4461.h"
@@ -81,14 +82,6 @@ const unsigned int Z_PROBE_AVERAGE_READINGS = 8;		// We average this number of r
 const int8_t INKJET_BITS = 12;							// How many nozzles? Set to -1 to disable this feature
 const int INKJET_FIRE_MICROSECONDS = 5;					// How long to fire a nozzle
 const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the next bit
-
-// Inkjet control pins
-
-const int8_t INKJET_SERIAL_OUT = 65;					// Serial bitpattern into the shift register
-const int8_t INKJET_SHIFT_CLOCK = 20;					// Shift the register
-const int8_t INKJET_STORAGE_CLOCK = 67;					// Put the pattern in the output register
-const int8_t INKJET_OUTPUT_ENABLE = 66;					// Make the output visible
-const int8_t INKJET_CLEAR = 36;							// Clear the register to 0
 
 const float MAX_FEEDRATES[DRIVES] = DRIVES_(100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0);						// mm/sec
 const float ACCELERATIONS[DRIVES] = DRIVES_(500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0);				// mm/sec^2
@@ -391,7 +384,9 @@ typedef AveragingFilter<Z_PROBE_AVERAGE_READINGS> ZProbeAveragingFilter;
 enum class ErrorCode : uint32_t
 {
 	BadTemp = 1 << 0,
-	BadMove = 1 << 1
+	BadMove = 1 << 1,
+	OutputStarvation = 1 << 2,
+	OutputStackOverflow = 1 << 3
 };
 
 // Different types of hardware-related input-output
@@ -610,6 +605,12 @@ public:
 	float GetNozzleDiameter() const;
 	void SetNozzleDiameter(float diameter);
 
+	// Fire the inkjet (if any) in the given pattern
+	// If there is no inkjet false is returned; if there is one this returns true
+	// So you can test for inkjet presence with if(platform->Inkjet(0))
+
+	bool Inkjet(int bitPattern);
+
 	// Direct pin operations
 	bool SetPin(int pin, int level);
 
@@ -772,9 +773,9 @@ private:
 
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];
 	uint8_t commsParams[NUM_SERIAL_CHANNELS];
-	OutputBuffer * volatile auxOutputBuffer;
-	OutputBuffer * volatile aux2OutputBuffer;
-	OutputBuffer * volatile usbOutputBuffer;
+	OutputStack *auxOutput;
+	OutputStack *aux2Output;
+	OutputStack *usbOutput;
 
 	// Files
 

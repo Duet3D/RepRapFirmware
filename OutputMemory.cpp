@@ -1,16 +1,16 @@
 /*
- * OuputBuffer.cpp
+ * OutputMemory.cpp
  *
  *  Created on: 10 Jan 2016
- *      Author: David
+ *      Authors: David and Christian
  */
 
-#include "OutputBuffer.h"
+#include "OutputMemory.h"
 #include "RepRapFirmware.h"
 #include <cstdarg>
 
 /*static*/ OutputBuffer * volatile OutputBuffer::freeOutputBuffers = nullptr;		// Messages may also be sent by ISRs,
-/*static*/ volatile size_t OutputBuffer::usedOutputBuffers = 0;				// so make these volatile.
+/*static*/ volatile size_t OutputBuffer::usedOutputBuffers = 0;						// so make these volatile.
 /*static*/ volatile size_t OutputBuffer::maxUsedOutputBuffers = 0;
 
 //*************************************************************************************************
@@ -20,32 +20,34 @@ void OutputBuffer::Append(OutputBuffer *other)
 {
 	if (other != nullptr)
 	{
-		OutputBuffer *lastBuffer = this;
-		while (lastBuffer->next != nullptr)
+		last->next = other;
+		last = other->last;
+		for(OutputBuffer *item = Next(); item != other; item = item->Next())
 		{
-			lastBuffer = lastBuffer->next;
+			item->last = last;
 		}
-		lastBuffer->next = other;
 	}
 }
 
 void OutputBuffer::IncreaseReferences(size_t refs)
 {
-	references += refs;
-	if (next != nullptr)
+	if (refs > 0)
 	{
-		next->IncreaseReferences(refs);
+		for(OutputBuffer *item = this; item != nullptr; item = item->Next())
+		{
+			item->references += refs;
+			item->isReferenced = true;
+		}
 	}
 }
 
-uint32_t OutputBuffer::Length() const
+size_t OutputBuffer::Length() const
 {
-	uint32_t totalLength = 0;
-	const OutputBuffer *current = this;
-	do {
+	size_t totalLength = 0;
+	for(const OutputBuffer *current = this; current != nullptr; current = current->Next())
+	{
 		totalLength += current->DataLength();
-		current = current->next;
-	} while (current != nullptr);
+	}
 	return totalLength;
 }
 
@@ -77,24 +79,22 @@ char OutputBuffer::operator[](size_t index) const
 	return itemToIndex->data[index];
 }
 
-const char *OutputBuffer::Read(uint16_t len)
+const char *OutputBuffer::Read(size_t len)
 {
-	size_t offset = dataLength - bytesLeft;
-	bytesLeft -= len;
+	size_t offset = bytesRead;
+	bytesRead += len;
 	return data + offset;
 }
 
 int OutputBuffer::printf(const char *fmt, ...)
 {
 	char formatBuffer[FORMAT_STRING_LENGTH];
-
 	va_list vargs;
 	va_start(vargs, fmt);
 	int ret = vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 	va_end(vargs);
 
 	copy(formatBuffer);
-
 	return ret;
 }
 
@@ -102,6 +102,7 @@ int OutputBuffer::vprintf(const char *fmt, va_list vargs)
 {
 	char formatBuffer[FORMAT_STRING_LENGTH];
 	int res = vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
+
 	cat(formatBuffer);
 	return res;
 }
@@ -109,21 +110,28 @@ int OutputBuffer::vprintf(const char *fmt, va_list vargs)
 int OutputBuffer::catf(const char *fmt, ...)
 {
 	char formatBuffer[FORMAT_STRING_LENGTH];
-
 	va_list vargs;
 	va_start(vargs, fmt);
 	int ret = vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 	va_end(vargs);
 
 	cat(formatBuffer);
-
 	return ret;
 }
 
 size_t OutputBuffer::copy(const char c)
 {
+	// Unlink existing entries before starting the copy process
+	if (next != nullptr)
+	{
+		ReleaseAll(next);
+		next = nullptr;
+		last = this;
+	}
+
+	// Set the date
 	data[0] = c;
-	dataLength = bytesLeft = 1;
+	dataLength = 1;
 	return 1;
 }
 
@@ -134,69 +142,70 @@ size_t OutputBuffer::copy(const char *src)
 
 size_t OutputBuffer::copy(const char *src, size_t len)
 {
-	// Unlink other entries before starting the copy process
-	OutputBuffer *nextBuffer = next;
-	while (nextBuffer != nullptr)
+	// Unlink existing entries before starting the copy process
+	if (next != nullptr)
 	{
-		nextBuffer = Release(nextBuffer);
+		ReleaseAll(next);
+		next = nullptr;
+		last = this;
 	}
 
 	// Does the whole string fit into this instance?
 	if (len > OUTPUT_BUFFER_SIZE)
 	{
 		// No - copy what we can't write into a new chain
-		OutputBuffer *currentBuffer, *lastBuffer = nullptr;
+		OutputBuffer *currentBuffer;
 		size_t bytesCopied = OUTPUT_BUFFER_SIZE;
 		do {
 			if (!Allocate(currentBuffer, true))
 			{
-				// We cannot store the whole string. Should never happen
+				// We cannot store the whole string, stop here
 				break;
 			}
 			currentBuffer->references = references;
 
+			// Fill up the next instance
 			const size_t copyLength = min<size_t>(OUTPUT_BUFFER_SIZE, len - bytesCopied);
 			memcpy(currentBuffer->data, src + bytesCopied, copyLength);
-			currentBuffer->dataLength = currentBuffer->bytesLeft = copyLength;
+			currentBuffer->dataLength = copyLength;
 			bytesCopied += copyLength;
 
+			// Link it to the chain
 			if (next == nullptr)
 			{
-				next = lastBuffer = currentBuffer;
+				next = last = currentBuffer;
 			}
 			else
 			{
-				lastBuffer->next = currentBuffer;
-				lastBuffer = currentBuffer;
+				last->next = currentBuffer;
+				last = currentBuffer;
 			}
 		} while (bytesCopied < len);
 
+		// Update references to the last entry for all items
+		for(OutputBuffer *item = Next(); item != last; item = item->Next())
+		{
+			item->last = last;
+		}
+
 		// Then copy the rest into this instance
 		memcpy(data, src, OUTPUT_BUFFER_SIZE);
-		dataLength = bytesLeft = OUTPUT_BUFFER_SIZE;
-		next = nextBuffer;
+		dataLength = OUTPUT_BUFFER_SIZE;
 		return bytesCopied;
 	}
 
-	// Yes - no need to use a new item
+	// Yes, the whole string fits into this instance. No need to allocate a new item
 	memcpy(data, src, len);
-	dataLength = bytesLeft = len;
+	dataLength = len;
 	return len;
 }
 
 size_t OutputBuffer::cat(const char c)
 {
-	// Get the last entry from the chain
-	OutputBuffer *lastBuffer = this;
-	while (lastBuffer->next != nullptr)
-	{
-		lastBuffer = lastBuffer->next;
-	}
-
 	// See if we can append a char
-	if (lastBuffer->dataLength == OUTPUT_BUFFER_SIZE)
+	if (last->dataLength == OUTPUT_BUFFER_SIZE)
 	{
-		// No - allocate a new item and link it
+		// No - allocate a new item and copy the data
 		OutputBuffer *nextBuffer;
 		if (!Allocate(nextBuffer, true))
 		{
@@ -206,13 +215,17 @@ size_t OutputBuffer::cat(const char c)
 		nextBuffer->references = references;
 		nextBuffer->copy(c);
 
-		lastBuffer->next = nextBuffer;
+		// Link the new item to this list
+		last->next = nextBuffer;
+		for(OutputBuffer *item = this; item != nextBuffer; item = item->Next())
+		{
+			item->last = nextBuffer;
+		}
 	}
 	else
 	{
 		// Yes - we have enough space left
-		lastBuffer->data[lastBuffer->dataLength++] = c;
-		lastBuffer->bytesLeft++;
+		last->data[last->dataLength++] = c;
 	}
 	return 1;
 }
@@ -224,42 +237,35 @@ size_t OutputBuffer::cat(const char *src)
 
 size_t OutputBuffer::cat(const char *src, size_t len)
 {
-	// Get the last entry from the chain
-	OutputBuffer *lastBuffer = this;
-	while (lastBuffer->next != nullptr)
-	{
-		lastBuffer = lastBuffer->next;
-	}
+	// Copy what we can into the last buffer
+	size_t copyLength = min<size_t>(len, OUTPUT_BUFFER_SIZE - last->dataLength);
+	memcpy(last->data + last->dataLength, src, copyLength);
+	last->dataLength += copyLength;
 
-	// Do we need to use an extra buffer?
-	if (lastBuffer->dataLength + len > OUTPUT_BUFFER_SIZE)
+	// Is there any more data left?
+	if (len > copyLength)
 	{
-		size_t copyLength = OUTPUT_BUFFER_SIZE - lastBuffer->dataLength;
-		size_t bytesCopied = copyLength;
-		bytesCopied = copyLength;
-
-		// Yes - copy what we can't write into a new chain
+		// Yes - copy what we couldn't write into a new chain
 		OutputBuffer *nextBuffer;
 		if (!Allocate(nextBuffer, true))
 		{
-			// We cannot store any more data. Should never happen
-			return 0;
+			// We cannot store any more data, stop here
+			return copyLength;
 		}
 		nextBuffer->references = references;
-		bytesCopied += nextBuffer->copy(src + copyLength, len - copyLength);
-		lastBuffer->next = nextBuffer;
+		const size_t bytesCopied = copyLength + nextBuffer->copy(src + copyLength, len - copyLength);
 
-		// Then copy the rest into this one
-		memcpy(lastBuffer->data + lastBuffer->dataLength, src, copyLength);
-		lastBuffer->dataLength += copyLength;
-		lastBuffer->bytesLeft += copyLength;
+		// Done - now append the new entry to the chain
+		last->next = nextBuffer;
+		last = nextBuffer->last;
+		for(OutputBuffer *item = Next(); item != nextBuffer; item = item->Next())
+		{
+			item->last = last;
+		}
 		return bytesCopied;
 	}
 
-	// No - reuse this one instead
-	memcpy(lastBuffer->data + lastBuffer->dataLength, src, len);
-	lastBuffer->dataLength += len;
-	lastBuffer->bytesLeft += len;
+	// No more data had to be written, we could store everything
 	return len;
 }
 
@@ -269,7 +275,7 @@ size_t OutputBuffer::cat(StringRef &str)
 }
 
 // Encode a string in JSON format and append it to a string buffer and return the number of bytes written
-size_t OutputBuffer::EncodeString(const char *src, uint16_t srcLength, bool allowControlChars, bool encapsulateString)
+size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString)
 {
 	size_t bytesWritten = 0;
 	if (encapsulateString)
@@ -356,6 +362,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 
 	if (freeOutputBuffers == nullptr)
 	{
+		reprap.GetPlatform()->RecordError(ErrorCode::OutputStarvation);
 		cpu_irq_restore(flags);
 
 		buf = nullptr;
@@ -384,57 +391,57 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 	}
 
 	buf->next = nullptr;
-	buf->dataLength = buf->bytesLeft = 0;
+	buf->last = buf;
+	buf->dataLength = buf->bytesRead = 0;
 	buf->references = 1; // Assume it's only used once by default
+	buf->isReferenced = false;
 
 	cpu_irq_restore(flags);
-
 	return true;
 }
 
 // Get the number of bytes left for continuous writing
 /*static*/ size_t OutputBuffer::GetBytesLeft(const OutputBuffer *writingBuffer)
 {
-	// If writingBuffer is NULL, just return how much space there is left for everything
+	// If writingBuffer is NULL, just return how much space there is left for continuous writing
 	if (writingBuffer == nullptr)
 	{
-		return (OUTPUT_BUFFER_COUNT - usedOutputBuffers) * OUTPUT_BUFFER_SIZE;
-	}
+		if (usedOutputBuffers == OUTPUT_BUFFER_COUNT)
+		{
+			// No more instances can be allocated
+			return 0;
+		}
 
-	// Otherwise get the last entry from the chain
-	const OutputBuffer *lastBuffer = writingBuffer;
-	while (lastBuffer->Next() != nullptr)
-	{
-		lastBuffer = lastBuffer->Next();
+		return (OUTPUT_BUFFER_COUNT - usedOutputBuffers - 1) * OUTPUT_BUFFER_SIZE;
 	}
 
 	// Do we have any more buffers left for writing?
-	if (usedOutputBuffers >= OUTPUT_BUFFER_COUNT)
+	if (usedOutputBuffers == OUTPUT_BUFFER_COUNT)
 	{
 		// No - refer to this one only
-		return OUTPUT_BUFFER_SIZE - lastBuffer->DataLength();
+		return OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength();
 	}
 
 	// Yes - we know how many buffers are in use, so there is no need to work through the free list
-	return (OUTPUT_BUFFER_SIZE - lastBuffer->DataLength() + (OUTPUT_BUFFER_COUNT - usedOutputBuffers - 1) * OUTPUT_BUFFER_SIZE);
+	return (OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength() + (OUTPUT_BUFFER_COUNT - usedOutputBuffers - 1) * OUTPUT_BUFFER_SIZE);
 }
 
 
 // Truncate an output buffer to free up more memory. Returns the number of released bytes.
 /*static */ size_t OutputBuffer::Truncate(OutputBuffer *buffer, size_t bytesNeeded)
 {
-	// Can we free up space from this entry?
+	// Can we free up space from this chain?
 	if (buffer == nullptr || buffer->Next() == nullptr)
 	{
 		// No
 		return 0;
 	}
 
-	// Yes - free up the last entry (entries) from this chain
-	size_t releasedBytes = OUTPUT_BUFFER_SIZE;
+	// Yes - free up the last entries
+	size_t releasedBytes = 0;
 	OutputBuffer *previousItem;
 	do {
-		// Get the last entry from the chain
+		// Get two the last entries from the chain
 		previousItem = buffer;
 		OutputBuffer *lastItem = previousItem->Next();
 		while (lastItem->Next() != nullptr)
@@ -443,24 +450,18 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 			lastItem = lastItem->Next();
 		}
 
-		// Unlink and free it
+		// Unlink and free the last entry
 		previousItem->next = nullptr;
 		Release(lastItem);
 		releasedBytes += OUTPUT_BUFFER_SIZE;
 	} while (previousItem != buffer && releasedBytes < bytesNeeded);
 
-	return releasedBytes;
-}
-
-/*static*/ void OutputBuffer::Replace(OutputBuffer *&destination, OutputBuffer *source)
-{
-	OutputBuffer *temp = destination;
-	while (temp != nullptr)
+	// Update all the references to the last item
+	for(OutputBuffer *item = buffer; item != nullptr; item = item->Next())
 	{
-		temp = Release(temp);
+		item->last = previousItem;
 	}
-
-	destination = source;
+	return releasedBytes;
 }
 
 // Releases an output buffer instance and returns the next entry from the chain
@@ -473,7 +474,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 	if (buf->references > 1)
 	{
 		buf->references--;
-		buf->bytesLeft = buf->dataLength;
+		buf->bytesRead = 0;
 		cpu_irq_restore(flags);
 		return nextBuffer;
 	}
@@ -501,9 +502,140 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 			usedOutputBuffers, OUTPUT_BUFFER_COUNT, maxUsedOutputBuffers);
 }
 
-// End
+//*************************************************************************************************
+// OutputStack class implementation
 
+// Push an OutputBuffer chain to the stack
+void OutputStack::Push(OutputBuffer *buffer)
+{
+	if (count == OUTPUT_STACK_DEPTH)
+	{
+		OutputBuffer::ReleaseAll(buffer);
+		reprap.GetPlatform()->RecordError(ErrorCode::OutputStackOverflow);
+		return;
+	}
 
+	if (buffer != nullptr)
+	{
+		const irqflags_t flags = cpu_irq_save();
+		items[count++] = buffer;
+		cpu_irq_restore(flags);
+	}
+}
 
+// Pop an OutputBuffer chain or return NULL if none is available
+OutputBuffer *OutputStack::Pop()
+{
+	if (count == 0)
+	{
+		return nullptr;
+	}
 
+	const irqflags_t flags = cpu_irq_save();
+	OutputBuffer *item = items[0];
+	for(size_t i = 1; i < count; i++)
+	{
+		items[i - 1] = items[i];
+	}
+	count--;
+	cpu_irq_restore(flags);
 
+	return item;
+}
+
+// Returns the first item from the stack or NULL if none is available
+OutputBuffer *OutputStack::GetFirstItem() const
+{
+	if (count == 0)
+	{
+		return nullptr;
+	}
+	return items[0];
+}
+
+// Set the first item of the stack. If it's NULL, then the first item will be removed
+void OutputStack::SetFirstItem(OutputBuffer *buffer)
+{
+	const irqflags_t flags = cpu_irq_save();
+	if (buffer == nullptr)
+	{
+		// If buffer is NULL, then the first item is removed from the stack
+		for(size_t i = 1; i < count; i++)
+		{
+			items[i - 1] = items[i];
+		}
+		count--;
+	}
+	else
+	{
+		// Else only the first item is updated
+		items[0] = buffer;
+	}
+	cpu_irq_restore(flags);
+}
+
+// Returns the last item from the stack or NULL if none is available
+OutputBuffer *OutputStack::GetLastItem() const
+{
+	if (count == 0)
+	{
+		return nullptr;
+	}
+	return items[count - 1];
+}
+
+// Get the total length of all queued buffers
+size_t OutputStack::DataLength() const
+{
+	size_t totalLength = 0;
+
+	const irqflags_t flags = cpu_irq_save();
+	for(size_t i = 0; i < count; i++)
+	{
+		totalLength += items[i]->Length();
+	}
+	cpu_irq_restore(flags);
+
+	return totalLength;
+}
+
+// Append another OutputStack to this instance. If no more space is available,
+// all OutputBuffers that can't be added are automatically released
+void OutputStack::Append(OutputStack *stack)
+{
+	for(size_t i = 0; i < stack->count; i++)
+	{
+		if (count < OUTPUT_STACK_DEPTH)
+		{
+			items[count++] = stack->items[i];
+		}
+		else
+		{
+			reprap.GetPlatform()->RecordError(ErrorCode::OutputStackOverflow);
+			OutputBuffer::ReleaseAll(stack->items[i]);
+		}
+	}
+}
+
+// Increase the number of references for each OutputBuffer on the stack
+void OutputStack::IncreaseReferences(size_t num)
+{
+	const irqflags_t flags = cpu_irq_save();
+	for(size_t i = 0; i < count; i++)
+	{
+		items[i]->IncreaseReferences(num);
+	}
+	cpu_irq_restore(flags);
+}
+
+// Release all buffers and clean up
+void OutputStack::ReleaseAll()
+{
+	for(size_t i = 0; i < count; i++)
+	{
+		OutputBuffer::ReleaseAll(items[i]);
+	}
+	count = 0;
+}
+
+// vim: ts=4:sw=4

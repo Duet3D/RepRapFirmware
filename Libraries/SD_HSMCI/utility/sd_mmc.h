@@ -78,9 +78,9 @@ typedef uint8_t sd_mmc_err_t; //!< Type of return error code
 #define SD_MMC_INIT_ONGOING     1    //! Card not initialized
 #define SD_MMC_ERR_NO_CARD      2    //! No SD/MMC card inserted
 #define SD_MMC_ERR_UNUSABLE     3    //! Unusable card
-#define SD_MMC_ERR_SLOT         4    //! Slot unknow
+#define SD_MMC_ERR_SLOT         4    //! Slot unknown
 #define SD_MMC_ERR_COMM         5    //! General communication error
-#define SD_MMC_ERR_PARAM        6    //! Illeage input parameter
+#define SD_MMC_ERR_PARAM        6    //! Illegal input parameter
 #define SD_MMC_ERR_WP           7    //! Card write protected
 //! @}
 

@@ -715,9 +715,8 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 	{
 		case fileBased:
 		{
-			const float fractionPrinted = gCodes->FractionOfFilePrinted();
-
 			// Provide rough estimation only if we haven't collected at least 2 layer samples
+			const float fractionPrinted = gCodes->FractionOfFilePrinted();
 			if (numLayerSamples < 2 || !printingFileParsed || printingFileInfo.objectHeight == 0.0)
 			{
 				return (fractionPrinted < 0.01)

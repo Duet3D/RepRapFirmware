@@ -64,9 +64,9 @@ void Heat::Spin()
 			{
 				pids[heater]->Spin();
 			}
-			platform->ClassReport(longWait);
 		}
 	}
+	platform->ClassReport(longWait);
 }
 
 void Heat::Diagnostics() 
@@ -74,16 +74,19 @@ void Heat::Diagnostics()
 	platform->Message(GENERIC_MESSAGE, "Heat Diagnostics:\n");
 	for (size_t heater=0; heater < HEATERS; heater++)
 	{
-		if (pids[heater]->active)
+		if (pids[heater]->Active())
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->temp_iState);
+			platform->MessageF(GENERIC_MESSAGE, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->GetAccumulator());
 		}
 	}
 }
 
 bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
 {
-	for (int8_t heater = (includingBed) ? 0 : 1; heater < HEATERS; heater++)
+	size_t firstHeater = 	(bedHeater == -1) ? E0_HEATER :
+							(includingBed) ? min<int8_t>(bedHeater, E0_HEATER) : E0_HEATER;
+
+	for(size_t heater = firstHeater; heater < HEATERS; heater++)
 	{
 		if (!HeaterAtSetTemperature(heater))
 		{
@@ -96,7 +99,8 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
 //query an individual heater
 bool Heat::HeaterAtSetTemperature(int8_t heater) const
 {
-	if (pids[heater]->SwitchedOff())  // If it hasn't anything to do, it must be right wherever it is...
+	// If it hasn't anything to do, it must be right wherever it is...
+	if (heater < 0 || pids[heater]->SwitchedOff() || pids[heater]->FaultOccurred())
 	{
 		return true;
 	}
@@ -169,7 +173,7 @@ void PID::Spin()
 	// heater off in that case anyway.
 	if (temperatureFault || switchedOff)
 	{
-		SetHeater(0.0); // Make sure...
+		SetHeater(0.0); // Make sure to turn it off...
 		averagePWM *= (1.0 - invHeatPwmAverageCount);
 		return;
 	}
@@ -195,7 +199,6 @@ void PID::Spin()
 		{
 			SetHeater(0.0);
 			temperatureFault = true;
-			//switchedOff = true;
 			platform->MessageF(GENERIC_MESSAGE, "Temperature fault on heater %d%s%s, T = %.1f\n",
 							 heater,
 							 (err != Platform::TempError::errOk) ? ", " : "",
@@ -210,7 +213,7 @@ void PID::Spin()
 	}
 
 	// Now check how long it takes to warm up.  If too long, maybe the thermistor is not in contact with the heater
-	if (heatingUp && heater != BED_HEATER) // FIXME - also check bed warmup time?
+	if (heatingUp && heater != reprap.GetHeat()->GetBedHeater()) // FIXME - also check bed warmup time?
 	{
 		float tmp = (active) ? activeTemperature : standbyTemperature;
 		if (temperature < tmp - TEMPERATURE_CLOSE_ENOUGH)
@@ -221,7 +224,6 @@ void PID::Spin()
 			{
 				SetHeater(0.0);
 				temperatureFault = true;
-				//switchedOff = true;
 				platform->MessageF(GENERIC_MESSAGE, "Heating fault on heater %d, T = %.1f C; still not at temperature %.1f after %f seconds.\n", heater, temperature, tmp, tim);
 				reprap.FlagTemperatureFault(heater);
 			}

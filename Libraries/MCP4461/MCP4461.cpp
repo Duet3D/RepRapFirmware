@@ -4,7 +4,7 @@
 Library to control the MCP4461 Digital Potentiometer over I2C.
 http://ww1.microchip.com/downloads/en/DeviceDoc/22265a.pdf
 This library does not fully implement the functionality of
-the MCP4461 – just the basics of changing the wiper values.
+the MCP4461 just the basics of changing the wiper values.
 Note this is currently configured to use the second I2C bus
 on the Due: Wire1
 The master joins the bus with the default address of 0

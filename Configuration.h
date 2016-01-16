@@ -26,11 +26,11 @@ Licence: GPL
 #define NAME "RepRapFirmware"
 
 #ifndef VERSION
-#define VERSION "1.09p-alpha2-dc42"
+#define VERSION "1.09q-alpha3-dc42"
 #endif
 
 #ifndef DATE
-#define DATE "2016-01-10"
+#define DATE "2016-01-16"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -64,7 +64,7 @@ const float MINIMUM_TOOL_WARNING_INTERVAL = 4.0;	// Seconds
 
 // Comms defaults
 
-const unsigned int USB_BAUD_RATE = 115200;			// Default communication speed of the USB if needed
+const unsigned int MAIN_BAUD_RATE = 115200;			// Default communication speed of the USB if needed
 const unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART device
 const unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
 

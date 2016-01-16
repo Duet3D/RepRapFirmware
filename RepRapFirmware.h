@@ -84,7 +84,7 @@ int StringContains(const char* string, const char* match);
 
 extern StringRef scratchString;
 
-#include "OutputBuffer.h"
+#include "OutputMemory.h"
 #include "Network.h"
 #include "Platform.h"
 #include "Webserver.h"

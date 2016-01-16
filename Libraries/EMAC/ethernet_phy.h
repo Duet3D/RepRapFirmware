@@ -50,7 +50,6 @@
 //#include "board.h"
 //#include "emac.h"
 #include "Arduino.h"
-//#include "SamNonDuePin/SamNonDuePin.h"
 #include <include/emac.h>
 #include "conf_eth.h"
 

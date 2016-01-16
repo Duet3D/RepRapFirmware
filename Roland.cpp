@@ -15,7 +15,6 @@ void Roland::Init()
 	pinMode(ROLAND_RTS_PIN, OUTPUT);
 	pinMode(ROLAND_CTS_PIN, INPUT);
 	digitalWrite(ROLAND_RTS_PIN, HIGH);
-	Serial1.begin(ROLAND_BAUD); //For serial comms to mill
 
 	sBuffer = new StringRef(buffer, ARRAY_SIZE(buffer));
 	sBuffer->Clear();
@@ -36,8 +35,8 @@ void Roland::Spin()
 
 	// 'U' is 01010101 in binary (nice for an oscilloscope...)
 
-	//Serial1.write('U');
-	//Serial1.flush();
+	//SERIAL_AUX2_DEVICE.write('U');
+	//SERIAL_AUX2_DEVICE.flush();
 	//return;
 
 	// Are we sending something to the Roland?
@@ -50,8 +49,8 @@ void Roland::Spin()
 			return;
 		}
 
-		Serial1.write(buffer[bufferPointer]);
-		Serial1.flush();
+		SERIAL_AUX2_DEVICE.write(buffer[bufferPointer]);
+		SERIAL_AUX2_DEVICE.flush();
 		bufferPointer++;
 	}
 	else		// Not sending.

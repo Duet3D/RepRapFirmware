@@ -89,11 +89,9 @@ extern "C" {
  */
 uint8_t ethernet_phy_read_register(Emac *p_emac, uint8_t uc_phy_addr, uint32_t ul_phy_reg, uint32_t *p_ul_reg_cont)
 {
-	uint8_t uc_rc;
-
 	emac_enable_management(p_emac, true);
 
-	uc_rc = emac_phy_read(p_emac, uc_phy_addr, ul_phy_reg, p_ul_reg_cont);
+	uint8_t uc_rc = emac_phy_read(p_emac, uc_phy_addr, ul_phy_reg, p_ul_reg_cont);
 	if (uc_rc != EMAC_OK) {
 		/* Disable PHY management and start the EMAC transfer */
 		emac_enable_management(p_emac, false);

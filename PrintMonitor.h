@@ -25,7 +25,7 @@ const FilePosition GCODE_FOOTER_SIZE = 128000uL;	// How many bytes to read from 
 const size_t GCODE_READ_SIZE = 1024;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 4 for read efficiency)
 const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (should be a multple of 4 as well)
 
-const float LAYER_HEIGHT_TOLERANCE = 0.025;			// For comparing two Z heights (in mm)
+const float LAYER_HEIGHT_TOLERANCE = 0.025;			// Tolerance for comparing two Z heights (in mm)
 
 const size_t MAX_LAYER_SAMPLES = 5;					// Number of layer samples for end-time estimation (except for first layer)
 const float ESTIMATION_MIN_FILAMENT_USAGE = 0.01;	// Minimum per cent of filament to be printed before the filament-based estimation returns values
