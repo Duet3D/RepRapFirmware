@@ -517,6 +517,7 @@ void OutputStack::Push(OutputBuffer *buffer)
 
 	if (buffer != nullptr)
 	{
+		buffer->whenQueued = millis();
 		const irqflags_t flags = cpu_irq_save();
 		items[count++] = buffer;
 		cpu_irq_restore(flags);
@@ -570,6 +571,7 @@ void OutputStack::SetFirstItem(OutputBuffer *buffer)
 	{
 		// Else only the first item is updated
 		items[0] = buffer;
+		buffer->whenQueued = millis();
 	}
 	cpu_irq_restore(flags);
 }

@@ -134,7 +134,7 @@ void PID::Init()
 	// Time the sensor was last sampled.  During startup, we use the current
 	// time as the initial value so as to not trigger an immediate warning from
 	// the Tick ISR.
-	lastSampleTime = platform->Time();
+	lastSampleTime = millis();
 }
 
 void PID::SwitchOn()
@@ -159,7 +159,7 @@ void PID::Spin()
 	// runs the risk of having undesirable delays between calls.  To guard against this,
 	// we record for each PID object when it was last sampled and have the Tick ISR
 	// take action if there is a significant delay since the time of last sampling.
-	lastSampleTime = platform->Time();
+	lastSampleTime = millis();
 
 	// Always know our temperature, regardless of whether we have been switched on or not
 

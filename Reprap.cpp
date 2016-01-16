@@ -14,7 +14,11 @@ RepRap::RepRap() : lastToolWarningTime(0.0), ticksInSpinState(0), spinningModule
 	gCodes = new GCodes(platform, webserver);
 	move = new Move(platform, gCodes);
 	heat = new Heat(platform);
+
+#if SUPPORT_ROLAND
 	roland = new Roland(platform);
+#endif
+
 	printMonitor = new PrintMonitor(platform, gCodes);
 
 	toolList = nullptr;
@@ -42,7 +46,9 @@ void RepRap::Init()
 	webserver->Init();
 	move->Init();
 	heat->Init();
+#if SUPPORT_ROLAND
 	roland->Init();
+#endif
 	printMonitor->Init();
 	currentTool = nullptr;
 	message[0] = 0;
@@ -138,9 +144,11 @@ void RepRap::Spin()
 	ticksInSpinState = 0;
 	heat->Spin();
 
+#if SUPPORT_ROLAND
 	spinningModule = moduleRoland;
 	ticksInSpinState = 0;
 	roland->Spin();
+#endif
 
 	spinningModule = modulePrintMonitor;
 	ticksInSpinState = 0;
@@ -494,11 +502,13 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	/* Coordinates */
 	{
 		float liveCoordinates[DRIVES + 1];
+#if SUPPORT_ROLAND
 		if (roland->Active())
 		{
 			roland->GetCurrentRolandPosition(liveCoordinates);
 		}
 		else
+#endif
 		{
 			move->LiveCoordinates(liveCoordinates);
 		}
@@ -606,7 +616,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// Speed and Extrusion factors
-		response->catf(",\"speedFactor\":%.2f,\"extrFactors\":", gCodes->GetSpeedFactor() * 100.0);
+		response->catf("],\"speedFactor\":%.2f,\"extrFactors\":", gCodes->GetSpeedFactor() * 100.0);
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{

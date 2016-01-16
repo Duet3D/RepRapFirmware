@@ -26,7 +26,7 @@ Licence: GPL
 #define NAME "RepRapFirmware"
 
 #ifndef VERSION
-#define VERSION "1.09q-alpha3-dc42"
+#define VERSION "1.09r-dc42"
 #endif
 
 #ifndef DATE
@@ -67,6 +67,8 @@ const float MINIMUM_TOOL_WARNING_INTERVAL = 4.0;	// Seconds
 const unsigned int MAIN_BAUD_RATE = 115200;			// Default communication speed of the USB if needed
 const unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART device
 const unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
+
+const uint32_t SERIAL_MAIN_TIMEOUT = 1000;			// timeout in ms for sending dara to the main serial/USB port
 
 // Heater values
 

@@ -45,7 +45,7 @@ public:
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
     float GetTemperature() const;					// Get the current temperature
     float GetAveragePWM() const;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
-    float GetLastSampleTime() const;				// Return when the temp sensor was last sampled
+    uint32_t GetLastSampleTime() const;				// Return when the temp sensor was last sampled
     float GetAccumulator() const;					// Return the integral accumulator
 
 private:
@@ -67,7 +67,7 @@ private:
     float timeSetHeating;							// When we were switched on
     bool heatingUp;									// Are we heating up?
     float averagePWM;								// The running average of the PWM.
-	float lastSampleTime;							// Time when the temperature was last sampled by Spin()
+	uint32_t lastSampleTime;						// Time when the temperature was last sampled by Spin()
 };
 
 /**
@@ -112,7 +112,7 @@ class Heat
     float GetAveragePWM(int8_t heater) const;					// Return the running average PWM to the heater as a fraction in [0, 1].
 
     bool UseSlowPwm(int8_t heater) const;						// Queried by the Platform class
-    float GetLastSampleTime(int8_t heater) const;
+    uint32_t GetLastSampleTime(int8_t heater) const;
 
   private:
   
@@ -231,7 +231,7 @@ inline bool PID::SwitchedOff() const
 	return switchedOff;
 }
 
-inline float PID::GetLastSampleTime() const
+inline uint32_t PID::GetLastSampleTime() const
 {
 	return lastSampleTime;
 }
@@ -370,7 +370,7 @@ inline float Heat::GetAveragePWM(int8_t heater) const
 	return pids[heater]->GetAveragePWM();
 }
 
-inline float Heat::GetLastSampleTime(int8_t heater) const
+inline uint32_t Heat::GetLastSampleTime(int8_t heater) const
 {
 	return pids[heater]->GetLastSampleTime();
 }

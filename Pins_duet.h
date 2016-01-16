@@ -7,6 +7,9 @@
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::Duet_06
 
+#define SUPPORT_INKJET		0					// set nonzero to support inkjet control
+#define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
+
 // The physical capabilities of the machine
 
 const size_t DRIVES = 9;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
@@ -44,10 +47,10 @@ const int DAC0_DIGITAL_PIN = 66;										// Arduino Due pin number correspondin
 
 // HEATERS
 
-const bool HEAT_ON = false;											// false for inverted heater (e.g. Duet v0.6), true for not (e.g. Duet v0.4)
+const bool HEAT_ON = false;												// false for inverted heater (e.g. Duet v0.6), true for not (e.g. Duet v0.4)
 
-const Pin TEMP_SENSE_PINS[HEATERS] = { 5, 4, 0, 7, 8, 9, 11 };		// Analogue pin numbers
-const Pin HEAT_ON_PINS[HEATERS] = { 6, X5, X7, 7, 8, 9, -1 };		// Heater Channel 7 (pin X17) is shared with Fan1. Only define 1 or the other
+const Pin TEMP_SENSE_PINS[HEATERS] = { 5, 4, 0, 7, 8, 9, 11 };			// Analogue pin numbers
+const Pin HEAT_ON_PINS[HEATERS] = { 6, X5, X7, 7, 8, 9, -1 };			// Heater Channel 7 (pin X17) is shared with Fan1. Only define 1 or the other
 
 // Default thermistor parameters
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
@@ -62,38 +65,56 @@ const float THERMISTOR_SERIES_RS = 1000.0;
 
 // Number of MAX31855 chips to support
 const size_t MAX31855_START_CHANNEL = 100;
+
+#if SUPPORT_ROLAND
+
+// chrishamm's pin assignments
+const size_t MAX31855_DEVICES = 2;
+
+// Digital pins the 31855s have their select lines tied to
+const Pin MAX31855_CS_PINS[MAX31855_DEVICES] = { 77, 87 };
+
+#else
+
 const size_t MAX31855_DEVICES = 4;
 
 // Digital pins the 31855s have their select lines tied to
-const Pin MAX31855_CS_PINS[MAX31855_DEVICES] = { 16, 17, 18, 19 };
+const Pin MAX31855_CS_PINS[MAX31855_DEVICES] = { 77, 87, 16, 17 };
+
+#endif
 
 // Arduino Due pin number that controls the ATX power on/off
 const Pin ATX_POWER_PIN = 12;											// Arduino Due pin number that controls the ATX power on/off
 
 // Analogue pin numbers
-const Pin Z_PROBE_PIN = 10;											// Analogue pin number
+const Pin Z_PROBE_PIN = 10;												// Analogue pin number
 
 // Digital pin number to turn the IR LED on (high) or off (low)
-const Pin Z_PROBE_MOD_PIN = 52;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
-const Pin Z_PROBE_MOD_PIN07 = X12;									// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.7 and v0.8.5 (PC10)
+const Pin Z_PROBE_MOD_PIN = 52;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
+const Pin Z_PROBE_MOD_PIN07 = X12;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.7 and v0.8.5 (PC10)
 
 // COOLING FANS
 
 const size_t NUM_FANS = 2;
-const Pin COOLING_FAN_PINS[NUM_FANS] = { X6, X17 };					// Pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
-const Pin COOLING_FAN_RPM_PIN = 23;									// Pin PA15
+const Pin COOLING_FAN_PINS[NUM_FANS] = { X6, X17 };						// Pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
+const Pin COOLING_FAN_RPM_PIN = 23;										// Pin PA15
 
-// INKJET CONTROL PINS
-
-const Pin INKJET_SERIAL_OUT = 65;										// Serial bitpattern into the shift register
+#if SUPPORT_INKJET
+// Inkjet control pins
+const Pin INKJET_SERIAL_OUT = 21;										// Serial bitpattern into the shift register
 const Pin INKJET_SHIFT_CLOCK = 20;										// Shift the register
 const Pin INKJET_STORAGE_CLOCK = 67;									// Put the pattern in the output register
 const Pin INKJET_OUTPUT_ENABLE = 66;									// Make the output visible
 const Pin INKJET_CLEAR = 36;											// Clear the register to 0
 
+#endif
+
+#if SUPPORT_ROLAND
 // Roland mill
-const int8_t ROLAND_RTS_PIN = 77;										// Expansion pin 27, SPI0_NPCS0
-const int8_t ROLAND_CTS_PIN = 87;										// Expansion pin 26, SPI0_NPCS1
+const Pin ROLAND_CTS_PIN = 16;											// Expansion pin 11, PA12_TXD1
+const Pin ROLAND_RTS_PIN = 17;											// Expansion pin 12, PA13_RXD1
+
+#endif
 
 // Definition of which pins we allow to be controlled using M42
 //

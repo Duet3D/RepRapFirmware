@@ -54,6 +54,8 @@ class OutputBuffer
 		size_t EncodeString(const char *src, size_t srcLength, bool allowControlChars, bool encapsulateString = true);
 		size_t EncodeReply(OutputBuffer *src, bool allowControlChars);
 
+		uint32_t GetAge() const;
+
 		// Initialise the output buffers manager
 		static void Init();
 
@@ -81,6 +83,8 @@ class OutputBuffer
 		OutputBuffer *next;
 		OutputBuffer *last;
 
+		uint32_t whenQueued;
+
 		char data[OUTPUT_BUFFER_SIZE];
 		size_t dataLength, bytesRead;
 
@@ -91,6 +95,11 @@ class OutputBuffer
 		static volatile size_t usedOutputBuffers;				// so make these volatile.
 		static volatile size_t maxUsedOutputBuffers;
 };
+
+inline uint32_t OutputBuffer::GetAge() const
+{
+	return millis() - whenQueued;
+}
 
 // This class is used to manage references to OutputBuffer chains for all output destinations
 class OutputStack

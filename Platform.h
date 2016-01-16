@@ -77,11 +77,15 @@ const float Z_PROBE_STOP_HEIGHT = 0.7;					// Millimetres
 const bool Z_PROBE_AXES[AXES] = { true, false, true };	// Axes for which the Z-probe is normally used
 const unsigned int Z_PROBE_AVERAGE_READINGS = 8;		// We average this number of readings with IR on, and the same number with IR off
 
+#if SUPPORT_INKJET
+
 // Inkjet (if any - no inkjet is flagged by INKJET_BITS negative)
 
 const int8_t INKJET_BITS = 12;							// How many nozzles? Set to -1 to disable this feature
 const int INKJET_FIRE_MICROSECONDS = 5;					// How long to fire a nozzle
 const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the next bit
+
+#endif
 
 const float MAX_FEEDRATES[DRIVES] = DRIVES_(100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0);						// mm/sec
 const float ACCELERATIONS[DRIVES] = DRIVES_(500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0);				// mm/sec^2
@@ -89,7 +93,6 @@ const float DRIVE_STEPS_PER_UNIT[DRIVES] = DRIVES_(87.4890, 87.4890, 4000.0, 420
 const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0);								// mm/sec
 
 // AXES
-
 
 const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;				// The indices of the 3 tower motors of a delta printer in drive arrays
@@ -155,7 +158,7 @@ const unsigned int AD_RANGE_VIRTUAL = ((AD_RANGE_REAL + 1) << AD_OVERSAMPLE_BITS
 const unsigned int AD_DISCONNECTED_REAL = AD_RANGE_REAL - 3;								// We consider an ADC reading at/above this value to indicate that the thermistor is disconnected
 const unsigned int AD_DISCONNECTED_VIRTUAL = AD_DISCONNECTED_REAL << AD_OVERSAMPLE_BITS;
 
-const float maxPidSpinDelay = 5.0;				// Maximum elapsed time between successive temp samples by Pid::Spin() permitted for a temp sensor (units of seconds)
+const uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
 
 const size_t BED_HEATER = 0;					// Index of the heated bed
 const size_t E0_HEATER = 1;						// Index of the first extruder heater

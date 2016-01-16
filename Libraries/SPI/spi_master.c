@@ -192,7 +192,7 @@ void spi_set_clock_phase(Spi *p_spi, uint32_t ul_pcs_ch, uint32_t ul_phase)
  *
  */
 
-void spi_master_init(Spi *p_spi, uint32_t ul_cs_pin, uint32_t ul_npcs_pin)
+void spi_master_init(Spi *p_spi, int ul_cs_pin, int ul_npcs_pin)
 {
 	static bool init_comms = true;
 
@@ -229,7 +229,7 @@ void spi_master_init(Spi *p_spi, uint32_t ul_cs_pin, uint32_t ul_npcs_pin)
 		init_comms = false;
 	}
 
-	if (ul_npcs_pin != CONFIG_SPI_NO_PERIPHERALS)
+	if (ul_npcs_pin >= 0)
 	{
 		// Connect the NPCS pin as a PIO peripheral and assert it HIGH
 		PIO_Configure(
@@ -241,7 +241,7 @@ void spi_master_init(Spi *p_spi, uint32_t ul_cs_pin, uint32_t ul_npcs_pin)
 		WRITE(ul_npcs_pin, HIGH);	
 	}
 
-	if (ul_cs_pin != CONFIG_SPI_NO_PERIPHERALS)
+	if (ul_cs_pin >= 0)
 	{
 		PIO_Configure(
 			g_APinDescription[ul_cs_pin].pPort,

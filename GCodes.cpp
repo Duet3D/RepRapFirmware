@@ -713,7 +713,11 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 				}
 
 				// If on a Cartesian printer and applying limits, limit all axes
-				if (applyLimits && axisIsHomed[axis] && !reprap.GetMove()->IsDeltaMode() && !reprap.GetRoland()->Active())
+				if (applyLimits && axisIsHomed[axis] && !reprap.GetMove()->IsDeltaMode()
+#if SUPPORT_ROLAND
+						&& !reprap.GetRoland()->Active()
+#endif
+					)
 				{
 					if (moveArg < platform->AxisMinimum(axis))
 					{
@@ -810,11 +814,13 @@ int GCodes::SetUpMove(GCodeBuffer *gb, StringRef& reply)
 	}
 
 	// Load the last position and feed rate into moveBuffer
+#if SUPPORT_ROLAND
 	if (reprap.GetRoland()->Active())
 	{
 		reprap.GetRoland()->GetCurrentRolandPosition(moveBuffer);
 	}
 	else
+#endif
 	{
 		reprap.GetMove()->GetCurrentUserPosition(moveBuffer, moveType);
 	}
@@ -955,6 +961,7 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 	bool ok = LoadMoveBufferFromGCode(gb, true, false);
 	if (ok && includingAxes)
 	{
+#if SUPPORT_ROLAND
 		if (reprap.GetRoland()->Active())
 		{
 			for(size_t axis = 0; axis < AXES; axis++)
@@ -965,7 +972,7 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 				}
 			}
 		}
-
+#endif
 		SetPositions(moveBuffer);
 	}
 
@@ -1042,6 +1049,7 @@ bool GCodes::DoHome(GCodeBuffer *gb, StringRef& reply, bool& error)
 		return false;
 	}
 
+#if SUPPORT_ROLAND
 	// Deal with a Roland configuration
 	if (reprap.GetRoland()->Active())
 	{
@@ -1055,6 +1063,7 @@ bool GCodes::DoHome(GCodeBuffer *gb, StringRef& reply, bool& error)
 		}
 		return rolHome;
 	}
+#endif
 
 	if (reprap.GetMove()->IsDeltaMode())
 	{
@@ -1585,11 +1594,13 @@ bool GCodes::DoDwell(GCodeBuffer *gb)
 		return true;  // No time given - throw it away
 	}
 
+#if SUPPORT_ROLAND
 	// Deal with a Roland configuration
 	if (reprap.GetRoland()->Active())
 	{
 		return reprap.GetRoland()->ProcessDwell(gb->GetLValue());
 	}
+#endif
 
 	// Wait for all the queued moves to stop
 	if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
@@ -2257,7 +2268,9 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, StringRef& reply)
 			if (gb->Seen('X'))
 			{
 				int thermistor = gb->GetIValue();
-				if (thermistor >= 0 && thermistor < HEATERS)
+				if (   (0 <= thermistor && thermistor < HEATERS)
+					|| ((int)MAX31855_START_CHANNEL <= thermistor && thermistor < (int)(MAX31855_START_CHANNEL + MAX31855_DEVICES))
+				   )
 				{
 					platform->SetThermistorNumber(heater, thermistor);
 				}
@@ -2536,6 +2549,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		CancelPrint();
 		break;
 
+#if SUPPORT_ROLAND
 	case 3: // Spin spindle
 		if (reprap.GetRoland()->Active())
 		{
@@ -2545,6 +2559,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 		}
 		break;
+#endif
 
 	case 18: // Motors off
 	case 84:
@@ -4521,6 +4536,80 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
+	case 577: // Wait until endstop is triggered
+		if (gb->Seen('S'))
+		{
+			// Determine trigger type
+			EndStopHit triggerCondition;
+			switch (gb->GetIValue())
+			{
+				case 1:
+					triggerCondition = EndStopHit::lowHit;
+					break;
+				case 2:
+					triggerCondition = EndStopHit::highHit;
+					break;
+				case 3:
+					triggerCondition = EndStopHit::lowNear;
+					break;
+				default:
+					triggerCondition = EndStopHit::noStop;
+					break;
+			}
+
+			// Axis endstops
+			for(size_t axis=0; axis<AXES; axis++)
+			{
+				if (gb->Seen(axisLetters[axis]))
+				{
+					if (platform->Stopped(axis) != triggerCondition)
+					{
+						result = false;
+						break;
+					}
+				}
+			}
+
+			// Extruder drives
+			size_t eDriveCount = DRIVES - AXES;
+			long eDrives[DRIVES - AXES];
+			if (gb->Seen(extrudeLetter))
+			{
+				gb->GetLongArray(eDrives, eDriveCount);
+				for(size_t extruder=0; extruder<DRIVES - AXES; extruder++)
+				{
+					const size_t eDrive = eDrives[extruder] + AXES;
+					if (eDrive < AXES || eDrive >= DRIVES)
+					{
+						reply.copy("Invalid extruder drive specified!\n");
+						error = result = true;
+						break;
+					}
+
+					if (platform->Stopped(eDrive) != triggerCondition)
+					{
+						result = false;
+						break;
+					}
+				}
+			}
+		}
+		break;
+
+#if SUPPORT_INKJET
+	case 578: // Fire Inkjet bits
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		{
+			return false;
+		}
+
+		if (gb->Seen('S')) // Need to handle the 'P' parameter too; see http://reprap.org/wiki/G-code#M578:_Fire_inkjet_bits
+		{
+			platform->Inkjet(gb->GetIValue());
+		}
+		break;
+#endif
+
 	case 579: // Scale Cartesian axes (for Delta configurations)
 		{
 			bool seen = false;
@@ -4546,6 +4635,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
+#if SUPPORT_ROLAND
 	case 580: // (De)Select Roland mill
 		if (gb->Seen('R'))
 		{
@@ -4567,6 +4657,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			reply.printf("Roland is %s.", reprap.GetRoland()->Active() ? "active" : "inactive");
 		}
 		break;
+#endif
 
 	case 665: // Set delta configuration
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())

@@ -56,9 +56,6 @@
 extern "C" {
 #endif
 
-// Request that a NPCS peripheral NOT be connected
-#define CONFIG_SPI_NO_PERIPHERALS  0xffff
-
 //! Default Configuration of SPI Master Delay BCS
 #ifndef CONFIG_SPI_MASTER_DELAY_BCS
 #define CONFIG_SPI_MASTER_DELAY_BCS          0
@@ -173,7 +170,7 @@ void spi_set_transfer_delay(Spi *p_spi, uint32_t ul_pcs_ch,
  * \param p_spi Base address of the SPI instance.
  *
  */
-extern void spi_master_init(Spi *p_spi, uint32_t ul_cs_pin, uint32_t ul_npcs_pin);
+extern void spi_master_init(Spi *p_spi, int ul_cs_pin, int ul_npcs_pin);
 
 /**
  * \brief Set up an SPI device.

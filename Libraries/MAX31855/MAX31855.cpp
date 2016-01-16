@@ -84,7 +84,7 @@ void MAX31855::Init(uint8_t cs)
 		device.cs   = cs;                    // Chip select
 		device.id   = PERIPHERAL_CHANNEL_ID; // Peripheral channel
 		device.bits = SPI_CSR_BITS_16_BIT;   // 16 bit data transfers
-		spi_master_init(SPI0, device.cs, CONFIG_SPI_NO_PERIPHERALS);
+		spi_master_init(SPI0, device.cs, -1);
 		initialized = true;
 	}
 }

@@ -2,6 +2,8 @@
 // See: http://www.rolanddg.com/product/3d/3d/mdx-20_15/mdx-20_15.html
 //      http://altlab.org/d/content/m/pangelo/ideas/rml_command_guide_en_v100.pdf
 
+#if SUPPORT_ROLAND
+
 #include "RepRapFirmware.h"
 
 Roland::Roland(Platform* p)
@@ -264,4 +266,4 @@ bool Roland::Deactivate()
 	return true;
 }
 
-// vim: ts=4:sw=4
+#endif

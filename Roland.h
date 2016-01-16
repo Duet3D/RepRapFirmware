@@ -20,6 +20,8 @@ Licence: GPL
 #ifndef ROLAND_H
 #define ROLAND_H
 
+#if SUPPORT_ROLAND
+
 // This class allows the RepRap firmware to transmit commands to a Roland mill
 // See: http://www.rolanddg.com/product/3d/3d/mdx-20_15/mdx-20_15.html
 //      http://altlab.org/d/content/m/pangelo/ideas/rml_command_guide_en_v100.pdf
@@ -29,11 +31,6 @@ Licence: GPL
 
 const float ROLAND_FACTOR = (1.016088061*100.0/2.54);	// Roland units are 0.001"
 const size_t ROLAND_BUFFER_SIZE = 50;
-
-// TX and RX
-// Expansion pin 13, PA13_TXD0
-// Expansion pin 14, PA12_RXD0
-
 
 class Roland
 {
@@ -68,6 +65,8 @@ class Roland
 		StringRef *sBuffer;
 		bool active;
 };
+
+#endif
 
 #endif
 

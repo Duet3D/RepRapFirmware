@@ -60,7 +60,11 @@ void PrintMonitor::Spin()
 	}
 
 	// Otherwise try to update them
-	if (IsPrinting() && !reprap.GetRoland()->Active())
+	if (IsPrinting()
+#if SUPPORT_ROLAND
+			&& !reprap.GetRoland()->Active()
+#endif
+		)
 	{
 		// We might need to adjust the actual print time if it was paused before
 		if (pauseStartTime != 0.0)
@@ -740,7 +744,11 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 		case filamentBased:
 		{
 			// Need some file information, otherwise this method won't work
-			if (!printingFileParsed || printingFileInfo.numFilaments == 0 || reprap.GetRoland()->Active())
+			if (!printingFileParsed || printingFileInfo.numFilaments == 0
+#if SUPPORT_ROLAND
+					|| reprap.GetRoland()->Active()
+#endif
+				)
 			{
 				return 0.0;
 			}
