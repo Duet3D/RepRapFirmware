@@ -703,6 +703,9 @@ void Webserver::HttpInterpreter::SendGCodeReply(NetworkTransaction *transaction)
 {
 	// Send G-Code reply as plain text to the client
 	transaction->Write("HTTP/1.1 200 OK\n");
+	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
+	transaction->Write("Pragma: no-cache\n");
+	transaction->Write("Expires: 0\n");
 	transaction->Write("Content-Type: text/plain\n");
 	transaction->Printf("Content-Length: %u\n", (gcodeReply != nullptr) ? gcodeReply->Length() : 0);
 	transaction->Write("Connection: close\n\n");
