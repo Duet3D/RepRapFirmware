@@ -715,6 +715,9 @@ void Webserver::HttpInterpreter::SendConfigFile(NetworkTransaction *transaction)
 	FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 
 	transaction->Write("HTTP/1.1 200 OK\n");
+	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
+	transaction->Write("Pragma: no-cache\n");
+	transaction->Write("Expires: 0\n");
 	transaction->Write("Content-Type: text/plain\n");
 	transaction->Printf("Content-Length: %u\n", (configFile != nullptr) ? configFile->Length() : 0);
 	transaction->Write("Connection: close\n\n");
