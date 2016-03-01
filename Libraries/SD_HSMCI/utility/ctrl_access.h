@@ -325,7 +325,7 @@ extern Ctrl_status usb_2_memory(U8 lun, U32 addr, U16 nb_sector);
  *
  * \return Status.
  */
-extern Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram);
+extern Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram, uint32_t numBlocks);
 
 /*! \brief Copies 1 data sector from RAM to the memory.
  *
@@ -335,7 +335,7 @@ extern Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram);
  *
  * \return Status.
  */
-extern Ctrl_status ram_2_memory(U8 lun, U32 addr, const void *ram);
+extern Ctrl_status ram_2_memory(U8 lun, U32 addr, const void *ram, uint32_t numBlocks);
 
 //! @}
 

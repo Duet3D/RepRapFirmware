@@ -183,8 +183,8 @@ static const struct
   Ctrl_status (*usb_write_10)(U32, U16);
 #endif
 #if ACCESS_MEM_TO_RAM == true
-  Ctrl_status (*mem_2_ram)(U32, void *);
-  Ctrl_status (*ram_2_mem)(U32, const void *);
+  Ctrl_status (*mem_2_ram)(U32, void *, U32);
+  Ctrl_status (*ram_2_mem)(U32, const void *, U32);
 #endif
   const char *name;
 } lun_desc[MAX_LUN] =
@@ -537,7 +537,7 @@ Ctrl_status usb_2_memory(U8 lun, U32 addr, U16 nb_sector)
 //! @{
 
 
-Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram)
+Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram, uint32_t numBlocks)
 {
   Ctrl_status status;
 #if MAX_LUN==0
@@ -549,10 +549,10 @@ Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram)
   memory_start_read_action(1);
   status =
 #if MAX_LUN
-           (lun < MAX_LUN) ? lun_desc[lun].mem_2_ram(addr, ram) :
+           (lun < MAX_LUN) ? lun_desc[lun].mem_2_ram(addr, ram, numBlocks) :
 #endif
 #if LUN_USB == ENABLE
-                             Lun_usb_mem_2_ram(addr, ram);
+                             Lun_usb_mem_2_ram(addr, ram, numBlocks);
 #else
                              CTRL_FAIL;
 #endif
@@ -564,7 +564,7 @@ Ctrl_status memory_2_ram(U8 lun, U32 addr, void *ram)
 }
 
 
-Ctrl_status ram_2_memory(U8 lun, U32 addr, const void *ram)
+Ctrl_status ram_2_memory(U8 lun, U32 addr, const void *ram, uint32_t numBlocks)
 {
   Ctrl_status status;
 #if MAX_LUN==0
@@ -576,10 +576,10 @@ Ctrl_status ram_2_memory(U8 lun, U32 addr, const void *ram)
   memory_start_write_action(1);
   status =
 #if MAX_LUN
-           (lun < MAX_LUN) ? lun_desc[lun].ram_2_mem(addr, ram) :
+           (lun < MAX_LUN) ? lun_desc[lun].ram_2_mem(addr, ram, numBlocks) :
 #endif
 #if LUN_USB == ENABLE
-                             Lun_usb_ram_2_mem(addr, ram);
+                             Lun_usb_ram_2_mem(addr, ram, numBlocks);
 #else
                              CTRL_FAIL;
 #endif

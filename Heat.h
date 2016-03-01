@@ -27,8 +27,7 @@ Licence: GPL
 
 class PID
 {
-  friend class Heat;
-  protected:
+public:
   
     PID(Platform* p, int8_t h);
     void Init();									// (Re)Set everything to start
@@ -42,11 +41,14 @@ class PID
     bool Active() const;							// Are we active?
     void SwitchOff();								// Not even standby - all heater power off
     bool SwitchedOff() const;						// Are we switched off?
+	bool FaultOccurred() const;						// Has a heater fault occurred?
     void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
     float GetTemperature() const;					// Get the current temperature
     float GetAveragePWM() const;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
+    uint32_t GetLastSampleTime() const;				// Return when the temp sensor was last sampled
+    float GetAccumulator() const;					// Return the integral accumulator
 
-  private:
+private:
 
     void SwitchOn();
     void SetHeater(float power) const;				// power is a fraction in [0,1]
@@ -65,6 +67,7 @@ class PID
     float timeSetHeating;							// When we were switched on
     bool heatingUp;									// Are we heating up?
     float averagePWM;								// The running average of the PWM.
+	uint32_t lastSampleTime;						// Time when the temperature was last sampled by Spin()
 };
 
 /**
@@ -102,14 +105,14 @@ class Heat
     HeaterStatus GetStatus(int8_t heater) const;				// Get the off/standby/active status
     void SwitchOff(int8_t heater);								// Turn off a specific heater
     void SwitchOffAll();										// Turn all heaters off
-	bool FaultOccurred() const;									// Has a heater fault occurred?
     void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
     bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
     bool HeaterAtSetTemperature(int8_t heater) const;			// Is a specific heater at temperature within tolerance?
     void Diagnostics();											// Output useful information
     float GetAveragePWM(int8_t heater) const;					// Return the running average PWM to the heater as a fraction in [0, 1].
 
-    bool UseSlowPwm(int8_t heater) const;						// called by the PID class
+    bool UseSlowPwm(int8_t heater) const;						// Queried by the Platform class
+    uint32_t GetLastSampleTime(int8_t heater) const;
 
   private:
   
@@ -136,51 +139,76 @@ inline bool PID::Active() const
 
 inline void PID::SetActiveTemperature(float t)
 {
-  SwitchOn();
-  activeTemperature = t;
+	if (t > BAD_HIGH_TEMPERATURE)
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
+	}
+
+	SwitchOn();
+	activeTemperature = t;
 }
 
 inline float PID::GetActiveTemperature() const
 {
-  return activeTemperature;
+	return activeTemperature;
 }
 
 inline void PID::SetStandbyTemperature(float t)
 {
-  SwitchOn();
-  standbyTemperature = t;
+	if (t > BAD_HIGH_TEMPERATURE)
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
+	}
+
+	SwitchOn();
+	standbyTemperature = t;
 }
 
 inline float PID::GetStandbyTemperature() const
 {
-  return standbyTemperature;
+	return standbyTemperature;
 }
 
 inline float PID::GetTemperature() const
 {
-  return (temperatureFault ? ABS_ZERO : temperature);
+	return temperature;
 }
 
 inline void PID::Activate()
 {
-  SwitchOn();
-  active = true;
-  if(!heatingUp)
-  {
-    timeSetHeating = platform->Time();
-  }
-  heatingUp = activeTemperature > temperature;
+	if (temperatureFault)
+	{
+		return;
+	}
+
+	SwitchOn();
+	active = true;
+	if (!heatingUp)
+	{
+		timeSetHeating = platform->Time();
+	}
+	heatingUp = activeTemperature > temperature;
 }
 
 inline void PID::Standby()
 {
-  SwitchOn();
-  active = false;
-  if(!heatingUp)
-  {
-    timeSetHeating = platform->Time();
-  }
-  heatingUp = standbyTemperature > temperature;
+	if (temperatureFault)
+	{
+		return;
+	}
+
+	SwitchOn();
+	active = false;
+	if (!heatingUp)
+	{
+		timeSetHeating = platform->Time();
+	}
+	heatingUp = standbyTemperature > temperature;
+}
+
+inline bool PID::FaultOccurred() const
+{
+	return temperatureFault;
 }
 
 inline void PID::ResetFault()
@@ -202,6 +230,17 @@ inline bool PID::SwitchedOff() const
 {
 	return switchedOff;
 }
+
+inline uint32_t PID::GetLastSampleTime() const
+{
+	return lastSampleTime;
+}
+
+inline float PID::GetAccumulator() const
+{
+	return temp_iState;
+}
+
 
 //**********************************************************************************
 
@@ -245,8 +284,11 @@ inline void Heat::SetChamberHeater(int8_t heater)
 inline Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 {
 	if (heater < 0 || heater >= HEATERS)
+	{
 		return HS_off;
-	return (pids[heater]->temperatureFault ? HS_fault
+	}
+
+	return (pids[heater]->FaultOccurred() ? HS_fault
 			: pids[heater]->SwitchedOff()) ? HS_off
 				: (pids[heater]->Active()) ? HS_active
 					: HS_standby;
@@ -326,6 +368,11 @@ inline void Heat::ResetFault(int8_t heater)
 inline float Heat::GetAveragePWM(int8_t heater) const
 {
 	return pids[heater]->GetAveragePWM();
+}
+
+inline uint32_t Heat::GetLastSampleTime(int8_t heater) const
+{
+	return pids[heater]->GetLastSampleTime();
 }
 
 inline bool Heat::UseSlowPwm(int8_t heater) const

@@ -25,10 +25,10 @@ M92 E420                        	; Set extruder steps per mm (single nozzle)
 ;*** If you have a modulated IR probe with on-board microcontroller, change P2 to P1 in the following
 M558 P2                             ; Use a simple modulated Z probe (change to P1 for an intelligent Z probe)
 G31 Z1.20 P500                      ; Set the probe height and threshold (put your own values here)
-;*** If you have a Duet board with 4.7K thermistor series resistors, change R1000 to R4700 to the following M305 commands
-M305 P0 R1000 H0 L0					; Put your own H and/or L values here to set the bed thermistor ADC correction
-M305 P1 R1000 H0 L0					; Put your own H and/or L values here to set the first nozzle thermistor ADC correction
-M305 P2 R1000 H0 L0					; Put your own H and/or L values here to set the second nozzle thermistor ADC correction
+;*** If you have a Duet board with 1K thermistor series resistors, change R4700 to R1000 to the following M305 commands
+M305 P0 R4700 H0 L0					; Put your own H and/or L values here to set the bed thermistor ADC correction
+M305 P1 R4700 H0 L0					; Put your own H and/or L values here to set the first nozzle thermistor ADC correction
+M305 P2 R4700 H0 L0					; Put your own H and/or L values here to set the second nozzle thermistor ADC correction
 ;*** Adjust the XY coordinates in the following M557 commands to suit your build and the position of the IR sensor
 M557 P0 X60 Y0                      ; Four... 
 M557 P1 X60 Y165                    ; ...probe points...

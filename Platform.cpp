@@ -105,38 +105,17 @@ bool PidParameters::operator==(const PidParameters& other) const
 //*************************************************************************************************
 // Platform class
 
-// Definition of which pins we allow to be controlled using M42
-// The allowed pins are these ones on the DueX4 expansion connector:
-// TXD1 aka PA13 aka pin 16
-// RXD1 aka PA12 aka pin 17
-// TXD0 aka PA11 aka pin 18
-// RXD0 aka PA10 aka pin 19
-// PC4_PWML1 aka PC4 aka pin 36
-// AD13 aka PB20 aka pin 66
-// AD14 aka PB21 aka pin 52
-// PB16 aka pin 67 (could possibly allow analog output on this one)
-// RTS1 aka PA14 aka pin 23
-// TWD1 aka PB12 aka pin 20
-// TWCK1 aka PB13 aka pin 21
-
-/*static*/ const uint8_t Platform::pinAccessAllowed[numPins/8] =
-{ 	0,			// pins 0-7
-	0,			// pins 8-15
-	0b10111111,	// pins 16-23
-	0,			// pins 24-31
-	0b00010000,	// pins 32-39
-	0,			// pins 40-47
-	0b00010000,	// pins 48-55
-	0,			// pins 46-63
-	0b00001100	// pins 64-71
-};
+/*static*/ const uint8_t Platform::pinAccessAllowed[NUM_PINS_ALLOWED/8] = PINS_ALLOWED;
 
 Platform::Platform() :
-		autoSaveEnabled(false), board(BoardType::Duet_06), active(false), errorCodeBits(0), fileStructureInitialised(false), tickState(0), debugCode(0),
+		autoSaveEnabled(false), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
+		fileStructureInitialised(false), tickState(0), debugCode(0),
 		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
 {
-	line = new Line(SerialUSB);
-	aux = new Line(Serial);
+	// Output
+	auxOutput = new OutputStack();
+	aux2Output = new OutputStack();
+	usbOutput = new OutputStack();
 
 	// Files
 
@@ -153,28 +132,31 @@ Platform::Platform() :
 void Platform::Init()
 {
 	// Deal with power first
-	digitalWriteNonDue(atxPowerPin, LOW);		// ensure ATX power is off by default
-	pinModeNonDue(atxPowerPin, OUTPUT);
+	digitalWriteNonDue(ATX_POWER_PIN, LOW);		// ensure ATX power is off by default
+	pinModeNonDue(ATX_POWER_PIN, OUTPUT);
 
 	SetBoardType(BoardType::Auto);
 
 	// Comms
 
-	baudRates[0] = MainBaudRate;
-	baudRates[1] = AuxBaudRate;
+	baudRates[0] = MAIN_BAUD_RATE;
+	baudRates[1] = AUX_BAUD_RATE;
+	baudRates[2] = AUX2_BAUD_RATE;
 	commsParams[0] = 0;
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
+	commsParams[2] = 0;
 
-	SerialUSB.begin(baudRates[0]);
-	Serial.begin(baudRates[1]);					// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
+	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
+	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
+	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
+
+	// Reconfigure the ADC to avoid crosstalk between channels (especially on Duet 0.8.5)
+	adc_init(ADC, SystemCoreClock, ADC_FREQ_MIN, ADC_STARTUP_FAST);		// reduce clock rate
+	adc_configure_timing(ADC, 3, ADC_SETTLING_TIME_3, 1);				// add transfer time
 
 	static_assert(sizeof(FlashData) + sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 
 	ResetNvData();
-
-	line->Init();
-	aux->Init();
-	messageIndent = 0;
 
 	// We need to initialise at least some of the time stuff before we call MassStorage::Init()
 	addToTime = 0.0;
@@ -194,7 +176,13 @@ void Platform::Init()
 
 	mcpDuet.begin();							// only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
 	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
+
+	// Directories
+
 	sysDir = SYS_DIR;
+	macroDir = MACRO_DIR;
+	webDir = WEB_DIR;
+	gcodeDir = GCODE_DIR;
 	configFile = CONFIG_FILE;
 	defaultFile = DEFAULT_FILE;
 
@@ -226,7 +214,7 @@ void Platform::Init()
 	ARRAY_INIT(axisMaxima, AXIS_MAXIMA);
 	ARRAY_INIT(axisMinima, AXIS_MINIMA);
 
-	idleCurrentFactor = defaultIdleCurrentFactor;
+	idleCurrentFactor = DEFAULT_IDLE_CURRENT_FACTOR;
 	SetSlowestDrive();
 
 	// HEATERS - Bed is assumed to be the first
@@ -235,14 +223,9 @@ void Platform::Init()
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
 	ARRAY_INIT(standbyTemperatures, STANDBY_TEMPERATURES);
 	ARRAY_INIT(activeTemperatures, ACTIVE_TEMPERATURES);
+	ARRAY_INIT(max31855CsPins, MAX31855_CS_PINS);
 	heatSampleTime = HEAT_SAMPLE_TIME;
 	timeToHot = TIME_TO_HOT;
-
-	// Directories
-
-	webDir = WEB_DIR;
-	gcodeDir = GCODE_DIR;
-	tempDir = TEMP_DIR;
 
 	// Motors
 
@@ -289,22 +272,54 @@ void Platform::Init()
 			pinModeNonDue(heatOnPins[heater], OUTPUT);
 		}
 		analogReadResolution(12);
+		thermistorAdcChannels[heater] = PinToAdcChannel(tempSensePins[heater]);	// Translate the Arduino Due Analog pin number to the SAM ADC channel number
 		SetThermistorNumber(heater, heater);				// map the thermistor straight through
 		thermistorFilters[heater].Init(analogRead(tempSensePins[heater]));
 
 		// Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check is quickly in the tick ISR
 		float thermistorOverheatResistance = nvData.pidParams[heater].GetRInf()
 				* exp(-nvData.pidParams[heater].GetBeta() / (BAD_HIGH_TEMPERATURE - ABS_ZERO));
-		float thermistorOverheatAdcValue = (adRangeReal + 1) * thermistorOverheatResistance
+		float thermistorOverheatAdcValue = (AD_RANGE_REAL + 1) * thermistorOverheatResistance
 				/ (thermistorOverheatResistance + nvData.pidParams[heater].thermistorSeriesR);
-		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * numThermistorReadingsAveraged;
+		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * THERMISTOR_AVERAGE_READINGS;
 	}
 
 	InitFans();
 
 	// Hotend configuration
-	nozzleDiameter = DefaultNozzleDiameter;
-	filamentWidth = DefaultFilamentWidth;
+	nozzleDiameter = NOZZLE_DIAMETER;
+	filamentWidth = FILAMENT_WIDTH;
+
+#if SUPPORT_INKJET
+	// Inkjet
+
+	inkjetBits = INKJET_BITS;
+	if (inkjetBits >= 0)
+	{
+		inkjetFireMicroseconds = INKJET_FIRE_MICROSECONDS;
+		inkjetDelayMicroseconds = INKJET_DELAY_MICROSECONDS;
+
+		inkjetSerialOut = INKJET_SERIAL_OUT;
+		pinMode(inkjetSerialOut, OUTPUT);
+		digitalWrite(inkjetSerialOut, 0);
+
+		inkjetShiftClock = INKJET_SHIFT_CLOCK;
+		pinMode(inkjetShiftClock, OUTPUT);
+		digitalWrite(inkjetShiftClock, LOW);
+
+		inkjetStorageClock = INKJET_STORAGE_CLOCK;
+		pinMode(inkjetStorageClock, OUTPUT);
+		digitalWrite(inkjetStorageClock, LOW);
+
+		inkjetOutputEnable = INKJET_OUTPUT_ENABLE;
+		pinMode(inkjetOutputEnable, OUTPUT);
+		digitalWrite(inkjetOutputEnable, HIGH);
+
+		inkjetClear = INKJET_CLEAR;
+		pinMode(inkjetClear, OUTPUT);
+		digitalWrite(inkjetClear, HIGH);
+	}
+#endif
 
 	// Clear the spare pin configuration
 	memset(pinInitialised, 0, sizeof(pinInitialised));
@@ -315,23 +330,30 @@ void Platform::Init()
 	InitialiseInterrupts();		// also sets 'active' to true
 }
 
+void Platform::InvalidateFiles()
+{
+	for (size_t i = 0; i < MAX_FILES; i++)
+	{
+		files[i]->Init();
+	}
+}
+
 // Specify which thermistor channel a particular heater uses
 void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
 //pre(heater < HEATERS && thermistor < HEATERS)
 {
-	heaterAdcChannels[heater] = PinToAdcChannel(tempSensePins[thermistor]);
+	heaterTempChannels[heater] = thermistor;
+
+	// Initialize the associated MAX31855?
+	if (thermistor >= MAX31855_START_CHANNEL)
+	{
+		Max31855Devices[thermistor - MAX31855_START_CHANNEL].Init(max31855CsPins[thermistor - MAX31855_START_CHANNEL]);
+	}
 }
 
 int Platform::GetThermistorNumber(size_t heater) const
 {
-	for (size_t thermistor = 0; thermistor < HEATERS; ++thermistor)
-	{
-		if (heaterAdcChannels[heater] == PinToAdcChannel(tempSensePins[thermistor]))
-		{
-			return thermistor;
-		}
-	}
-	return -1;
+	return heaterTempChannels[heater];
 }
 
 void Platform::SetSlowestDrive()
@@ -388,15 +410,15 @@ int Platform::ZProbe() const
 		case 1:		// Simple or intelligent IR sensor
 		case 3:		// Alternate sensor
 		case 4:		// Mechanical Z probe
-			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));
+			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
 
 		case 2:		// Modulated IR sensor.
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
-					/ (int)(4 * numZProbeReadingsAveraged));
+					/ (int)(4 * Z_PROBE_AVERAGE_READINGS));
 		case 5:
-			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * numZProbeReadingsAveraged));	//TODO this is temporary
+			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));	//TODO this is temporary
 
 		default:
 			break;
@@ -413,7 +435,7 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 		switch (nvData.zProbeType)
 		{
 		case 2:		// modulated IR sensor
-			v1 = (int) (zProbeOnFilter.GetSum() / (4 * numZProbeReadingsAveraged));	// pass back the reading with IR turned on
+			v1 = (int) (zProbeOnFilter.GetSum() / (4 * Z_PROBE_AVERAGE_READINGS));	// pass back the reading with IR turned on
 			return 1;
 		default:
 			break;
@@ -478,7 +500,7 @@ float Platform::GetZProbeDiveHeight() const
 	case 4:
 		return nvData.switchZProbeParameters.diveHeight;
 	default:
-		return DefaultZDive;
+		return DEFAULT_Z_DIVE;
 	}
 }
 
@@ -495,7 +517,7 @@ float Platform::GetZProbeTravelSpeed() const
 	case 4:
 		return nvData.switchZProbeParameters.travelSpeed;
 	default:
-		return DefaultTravelSpeed;
+		return DEFAULT_TRAVEL_SPEED;
 	}
 }
 
@@ -646,12 +668,10 @@ void Platform::SetAutoSave(bool enabled)
 #endif
 }
 
-// AUX device
+// Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::Beep(int freq, int ms)
 {
-	// Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
-	scratchString.printf("{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
-	aux->Write(scratchString.Pointer(), true);
+	MessageF(AUX_MESSAGE, "{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
 }
 
 // Note: the use of floating point time will cause the resolution to degrade over time.
@@ -671,7 +691,7 @@ float Platform::Time()
 
 void Platform::Exit()
 {
-	Message(BOTH_MESSAGE, "Platform class exited.\n");
+	Message(GENERIC_MESSAGE, "Platform class exited.\n");
 	active = false;
 }
 
@@ -686,7 +706,7 @@ void Platform::SetEmulating(Compatibility c)
 {
 	if (c != me && c != reprapFirmware && c != marlin)
 	{
-		Message(BOTH_ERROR_MESSAGE, "Attempt to emulate unsupported firmware.\n");
+		Message(GENERIC_MESSAGE, "Attempt to emulate unsupported firmware.\n");
 		return;
 	}
 	if (c == reprapFirmware)
@@ -740,13 +760,78 @@ void Platform::Spin()
 	if (!active)
 		return;
 
-	if (debugCode == DiagnosticTest::TestSpinLockup)
+	// Write non-blocking data to the AUX line
+	OutputBuffer *auxOutputBuffer = auxOutput->GetFirstItem();
+	if (auxOutputBuffer != nullptr)
+	{
+		size_t bytesToWrite = min<size_t>(SERIAL_AUX_DEVICE.canWrite(), auxOutputBuffer->BytesLeft());
+		if (bytesToWrite > 0)
+		{
+			SERIAL_AUX_DEVICE.write(auxOutputBuffer->Read(bytesToWrite), bytesToWrite);
+		}
+
+		if (auxOutputBuffer->BytesLeft() == 0)
+		{
+			auxOutputBuffer = OutputBuffer::Release(auxOutputBuffer);
+			auxOutput->SetFirstItem(auxOutputBuffer);
+		}
+	}
+
+	// Write non-blocking data to the second AUX line
+	OutputBuffer *aux2OutputBuffer = aux2Output->GetFirstItem();
+	if (aux2OutputBuffer != nullptr)
+	{
+		size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
+		if (bytesToWrite > 0)
+		{
+			SERIAL_AUX2_DEVICE.write(aux2OutputBuffer->Read(bytesToWrite), bytesToWrite);
+		}
+
+		if (aux2OutputBuffer->BytesLeft() == 0)
+		{
+			aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
+			aux2Output->SetFirstItem(aux2OutputBuffer);
+		}
+	}
+
+	// Write non-blocking data to the USB line
+	OutputBuffer *usbOutputBuffer = usbOutput->GetFirstItem();
+	if (usbOutputBuffer != nullptr)
+	{
+		if (!SERIAL_MAIN_DEVICE)
+		{
+			// If the USB port is not opened, free the data left for writing
+			OutputBuffer::ReleaseAll(usbOutputBuffer);
+			usbOutput->SetFirstItem(nullptr);
+		}
+		else
+		{
+			// Write as much data as we can...
+			size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
+			if (bytesToWrite > 0)
+			{
+				SERIAL_MAIN_DEVICE.write(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
+			}
+
+			if (usbOutputBuffer->BytesLeft() == 0 || usbOutputBuffer->GetAge() > SERIAL_MAIN_TIMEOUT)
+			{
+				usbOutputBuffer = OutputBuffer::Release(usbOutputBuffer);
+				usbOutput->SetFirstItem(usbOutputBuffer);
+			}
+		}
+	}
+
+	// Thermostatically-controlled fans
+	for (size_t fan = 0; fan < NUM_FANS; ++fan)
+	{
+		fans[fan].Check();
+	}
+
+	// Diagnostics test
+	if (debugCode == (int)DiagnosticTestType::TestSpinLockup)
 	{
 		for (;;) {}
 	}
-
-	line->Spin();
-	aux->Spin();
 
 	ClassReport(longWait);
 }
@@ -767,35 +852,35 @@ static void eraseAndReset()
 
 void Platform::SoftwareReset(uint16_t reason)
 {
-	if (reason == SoftwareResetReason::erase)
+	if (reason == (uint16_t)SoftwareResetReason::erase)
 	{
 		eraseAndReset();
  	}
 	else
 	{
-		if (reason != SoftwareResetReason::user)
+		if (reason != (uint16_t)SoftwareResetReason::user)
 		{
-			if (line->inWrite)
+			if (!SERIAL_MAIN_DEVICE.canWrite())
 			{
-				reason |= SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
+				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
 			if (reprap.GetNetwork()->InLwip())
 			{
-				reason |= SoftwareResetReason::inLwipSpin;
+				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
 			}
-			if (aux->inWrite)
+			if (!SERIAL_AUX_DEVICE.canWrite() || !SERIAL_AUX2_DEVICE.canWrite())
 			{
-				reason |= SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
+				reason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
 			}
 		}
-		reason |= reprap.GetSpinningModule();
+		reason |= (uint16_t)reprap.GetSpinningModule();
 
 		// Record the reason for the software reset
 		SoftwareResetData temp;
 		temp.magic = SoftwareResetData::magicValue;
 		temp.resetReason = reason;
 		GetStackUsage(NULL, NULL, &temp.neverUsedRam);
-		if (reason != SoftwareResetReason::user)
+		if (reason != (uint16_t)SoftwareResetReason::user)
 		{
 			strncpy(temp.lastMessage, messageString.Pointer(), sizeof(temp.lastMessage) - 1);
 			temp.lastMessage[sizeof(temp.lastMessage) - 1] = 0;
@@ -906,25 +991,25 @@ void Platform::DisableInterrupts()
 // All other messages generated by this and other diagnostics functions must call AppendMessage.
 void Platform::Diagnostics()
 {
-	Message(BOTH_MESSAGE, "Platform Diagnostics:\n");
+	Message(GENERIC_MESSAGE, "Platform Diagnostics:\n");
 
 	// Print memory stats and error codes to USB and copy them to the current webserver reply
 	const char *ramstart = (char *) 0x20070000;
 	const struct mallinfo mi = mallinfo();
-	AppendMessage(BOTH_MESSAGE, "Memory usage:\n");
-	AppendMessage(BOTH_MESSAGE, "Program static ram used: %d\n", &_end - ramstart);
-	AppendMessage(BOTH_MESSAGE, "Dynamic ram used: %d\n", mi.uordblks);
-	AppendMessage(BOTH_MESSAGE, "Recycled dynamic ram: %d\n", mi.fordblks);
+	Message(GENERIC_MESSAGE, "Memory usage:\n");
+	MessageF(GENERIC_MESSAGE, "Program static ram used: %d\n", &_end - ramstart);
+	MessageF(GENERIC_MESSAGE, "Dynamic ram used: %d\n", mi.uordblks);
+	MessageF(GENERIC_MESSAGE, "Recycled dynamic ram: %d\n", mi.fordblks);
 	size_t currentStack, maxStack, neverUsed;
 	GetStackUsage(&currentStack, &maxStack, &neverUsed);
-	AppendMessage(BOTH_MESSAGE, "Current stack ram used: %d\n", currentStack);
-	AppendMessage(BOTH_MESSAGE, "Maximum stack ram used: %d\n", maxStack);
-	AppendMessage(BOTH_MESSAGE, "Never used ram: %d\n", neverUsed);
+	MessageF(GENERIC_MESSAGE, "Current stack ram used: %d\n", currentStack);
+	MessageF(GENERIC_MESSAGE, "Maximum stack ram used: %d\n", maxStack);
+	MessageF(GENERIC_MESSAGE, "Never used ram: %d\n", neverUsed);
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)Time();		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
-	AppendMessage(BOTH_MESSAGE, "Last reset %02d:%02d:%02d ago, cause: %s\n",
+	MessageF(GENERIC_MESSAGE, "Last reset %02d:%02d:%02d ago, cause: %s\n",
 			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
 
@@ -935,25 +1020,25 @@ void Platform::Diagnostics()
 		DueFlashStorage::read(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
 		if (temp.magic == SoftwareResetData::magicValue)
 		{
-			AppendMessage(BOTH_MESSAGE, "Last software reset code & available RAM: 0x%04x, %u\n", temp.resetReason, temp.neverUsedRam);
-			AppendMessage(BOTH_MESSAGE, "Spinning module during software reset: %s\n", moduleName[temp.resetReason & 0x0F]);
+			MessageF(GENERIC_MESSAGE, "Last software reset code & available RAM: 0x%04x, %u\n", temp.resetReason, temp.neverUsedRam);
+			MessageF(GENERIC_MESSAGE, "Spinning module during software reset: %s\n", moduleName[temp.resetReason & 0x0F]);
 			if (temp.lastMessage[0])
 			{
-				AppendMessage(BOTH_MESSAGE, "Last message before reset: %s", temp.lastMessage); // usually ends with NL
+				MessageF(GENERIC_MESSAGE, "Last message before reset: %s", temp.lastMessage); // usually ends with NL
 			}
 		}
 	}
 
 	// Show the current error codes
-	AppendMessage(BOTH_MESSAGE, "Error status: %u\n", errorCodeBits);
+	MessageF(GENERIC_MESSAGE, "Error status: %u\n", errorCodeBits);
 
 	// Show the current probe position heights
-	AppendMessage(BOTH_MESSAGE, "Bed probe heights:");
-	for (size_t i = 0; i < MaxProbePoints; ++i)
+	Message(GENERIC_MESSAGE, "Bed probe heights:");
+	for (size_t i = 0; i < MAX_PROBE_POINTS; ++i)
 	{
-		AppendMessage(BOTH_MESSAGE, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
+		MessageF(GENERIC_MESSAGE, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
 	}
-	AppendMessage(BOTH_MESSAGE, "\n");
+	Message(GENERIC_MESSAGE, "\n");
 
 	// Show the number of free entries in the file table
 	unsigned int numFreeFiles = 0;
@@ -964,13 +1049,13 @@ void Platform::Diagnostics()
 			++numFreeFiles;
 		}
 	}
-	AppendMessage(BOTH_MESSAGE, "Free file entries: %u\n", numFreeFiles);
+	MessageF(GENERIC_MESSAGE, "Free file entries: %u\n", numFreeFiles);
 
 	// Show the longest write time
-	AppendMessage(BOTH_MESSAGE, "Longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
+	MessageF(GENERIC_MESSAGE, "Longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
 
 // Debug
-//AppendMessage(BOTH_MESSAGE, "Shortest/longest times read %.1f/%.1f write %.1f/%.1f ms, %u/%u\n",
+//MessageF(GENERIC_MESSAGE, "Shortest/longest times read %.1f/%.1f write %.1f/%.1f ms, %u/%u\n",
 //		(float)shortestReadWaitTime/1000, (float)longestReadWaitTime/1000, (float)shortestWriteWaitTime/1000, (float)longestWriteWaitTime/1000,
 //		maxRead, maxWrite);
 //longestWriteWaitTime = longestReadWaitTime = 0; shortestReadWaitTime = shortestWriteWaitTime = 1000000;
@@ -978,7 +1063,7 @@ void Platform::Diagnostics()
 	reprap.Timing();
 
 #ifdef MOVE_DEBUG
-	AppendMessage(BOTH_MESSAGE, "Interrupts scheduled %u, done %u, last %u, next %u sched at %u, now %u\n",
+	MessageF(GENERIC_MESSAGE, "Interrupts scheduled %u, done %u, last %u, next %u sched at %u, now %u\n",
 			numInterruptsScheduled, numInterruptsExecuted, lastInterruptTime, nextInterruptTime, nextInterruptScheduledAt, GetInterruptClocks());
 #endif
 }
@@ -987,15 +1072,15 @@ void Platform::DiagnosticTest(int d)
 {
 	switch (d)
 	{
-	case DiagnosticTest::TestWatchdog:
+	case (int)DiagnosticTestType::TestWatchdog:
 		SysTick ->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);	// disable the system tick interrupt so that we get a watchdog timeout reset
 		break;
 
-	case DiagnosticTest::TestSpinLockup:
+	case (int)DiagnosticTestType::TestSpinLockup:
 		debugCode = d;									// tell the Spin function to loop
 		break;
 
-	case DiagnosticTest::TestSerialBlock:				// write an arbitrary message via debugPrintf()
+	case (int)DiagnosticTestType::TestSerialBlock:				// write an arbitrary message via debugPrintf()
 		debugPrintf("Diagnostic Test\n");
 		break;
 
@@ -1028,7 +1113,7 @@ void Platform::ClassReport(float &lastTime)
 		if (Time() - lastTime >= LONG_TIME)
 		{
 			lastTime = Time();
-			Message(HOST_MESSAGE, "Class %s spinning.\n", moduleName[spinningModule]);
+			MessageF(HOST_MESSAGE, "Class %s spinning.\n", moduleName[spinningModule]);
 		}
 	}
 }
@@ -1052,35 +1137,105 @@ void Platform::ClassReport(float &lastTime)
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(size_t heater) const
+float Platform::GetTemperature(size_t heater, TempError* err) const
 {
-	int rawTemp = GetRawTemperature(heater);
-
-	// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
-	// So we add 0.5 to to the reading to get a better estimate of the input.
-
-	float reading = (float) rawTemp + 0.5;
-
-	// Recognise the special case of thermistor disconnected.
-	// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
-
-	const PidParameters& p = nvData.pidParams[heater];
-	if (p.adcHighOffset < 0.0)
+	// Note that at this point we're actually getting an averaged ADC read, not a "raw" temp.  For thermistors,
+	// we're getting an averaged voltage reading which we'll convert to a temperature.
+	if (DoThermistorAdc(heater))
 	{
-		rawTemp -= (int) p.adcHighOffset;
+		int rawTemp = GetRawTemperature(heater);
+
+		// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
+		// So we add 0.5 to to the reading to get a better estimate of the input.
+		float reading = (float) rawTemp + 0.5;
+
+		// Recognise the special case of thermistor disconnected.
+		// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
+		const PidParameters& p = nvData.pidParams[heater];
+		if (p.adcHighOffset < 0.0)
+		{
+			rawTemp -= (int) p.adcHighOffset;
+		}
+		if (rawTemp >= (int)AD_DISCONNECTED_VIRTUAL)
+		{
+			// thermistor is disconnected
+			if (err)
+			{
+				*err = TempError::errOpen;
+			}
+			return ABS_ZERO;
+		}
+
+		// Correct for the low and high ADC offsets
+		reading -= p.adcLowOffset;
+		reading *= (AD_RANGE_VIRTUAL + 1) / (AD_RANGE_VIRTUAL + 1 + p.adcHighOffset - p.adcLowOffset);
+
+		float resistance = reading * p.thermistorSeriesR / ((AD_RANGE_VIRTUAL + 1) - reading);
+		if (resistance > p.GetRInf())
+		{
+			return ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
+		}
+		else
+		{
+			// thermistor short circuit, return a high temperature
+			if (err) *err = TempError::errShort;
+			return BAD_ERROR_TEMPERATURE;
+		}
 	}
-	if (rawTemp >= (int)adDisconnectedVirtual)
+	else
 	{
-		return ABS_ZERO;		// thermistor is disconnected
+		// MAX31855 thermocouple chip
+		float temp;
+		MAX31855_error res = Max31855Devices[heaterTempChannels[heater] - MAX31855_START_CHANNEL].getTemperature(&temp);
+		if (res == MAX31855_OK)
+		{
+			return temp;
+		}
+		if (err)
+		{
+			switch(res) {
+			case MAX31855_OK      : *err = TempError::errOk; break;			// Success
+			case MAX31855_ERR_SCV : *err = TempError::errShortVcc; break;	// Short to Vcc
+			case MAX31855_ERR_SCG : *err = TempError::errShortGnd; break;	// Short to GND
+			case MAX31855_ERR_OC  : *err = TempError::errOpen; break;		// Open connection
+			case MAX31855_ERR_TMO : *err = TempError::errTimeout; break;	// SPI comms timeout
+			case MAX31855_ERR_IO  : *err = TempError::errIO; break;			// SPI comms not functioning
+			}
+		}
+		return BAD_ERROR_TEMPERATURE;
 	}
+}
 
-	// Correct for the low and high ADC offsets
-	reading -= p.adcLowOffset;
-	reading *= (adRangeVirtual + 1) / (adRangeVirtual + 1 + p.adcHighOffset - p.adcLowOffset);
+/*static*/ const char* Platform::TempErrorStr(TempError err)
+{
+	switch(err)
+	{
+	default : return "Unknown temperature read error";
+	case TempError::errOk : return "successful temperature read";
+	case TempError::errShort : return "sensor circuit is shorted";
+	case TempError::errShortVcc : return "sensor circuit is shorted to the voltage rail";
+	case TempError::errShortGnd : return "sensor circuit is shorted to ground";
+	case TempError::errOpen : return "sensor circuit is open/disconnected";
+	case TempError::errTimeout : return "communication error whilst reading sensor; read took too long";
+	case TempError::errIO: return "communication error whilst reading sensor; check sensor connections";
+	}
+}
 
-	float resistance = reading * p.thermistorSeriesR / ((adRangeVirtual + 1) - reading);
-	return (resistance <= p.GetRInf()) ? 2000.0			// thermistor short circuit, return a high temperature
-			: ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
+// See if we need to turn on the hot end fan
+bool Platform::AnyHeaterHot(uint16_t heaters, float t) const
+{
+	for (size_t h = 0; h < reprap.GetHeatersInUse(); ++h)
+	{
+		if (((1 << h) & heaters) != 0)
+		{
+			const float ht = GetTemperature(h);
+			if (ht >= t || ht < BAD_LOW_TEMPERATURE)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 void Platform::SetPidParameters(size_t heater, const PidParameters& params)
@@ -1298,7 +1453,7 @@ void Platform::SetPhysicalDrive(size_t driverNumber, int8_t physicalDrive)
 // Return the physical drive used by this driver, or -1 if not found
 int Platform::GetPhysicalDrive(size_t driverNumber) const
 {
-	for (int drive = 0; drive < DRIVES; ++drive)
+	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		if (driverNumbers[drive] == (int8_t)driverNumber)
 		{
@@ -1311,18 +1466,18 @@ int Platform::GetPhysicalDrive(size_t driverNumber) const
 // Get current cooling fan speed on a scale between 0 and 1
 float Platform::GetFanValue(size_t fan) const
 {
-	return (fan < NumFans) ? fans[fan].val : -1;
+	return (fan < NUM_FANS) ? fans[fan].val : -1;
 }
 
 bool Platform::GetCoolingInverted(size_t fan) const
 {
-	return (fan < NumFans) ? fans[fan].inverted : -1;
+	return (fan < NUM_FANS) ? fans[fan].inverted : -1;
 
 }
 
 void Platform::SetCoolingInverted(size_t fan, bool inv)
 {
-	if (fan < NumFans)
+	if (fan < NUM_FANS)
 	{
 		fans[fan].inverted = inv;
 	}
@@ -1335,7 +1490,7 @@ void Platform::SetCoolingInverted(size_t fan, bool inv)
 // do the right thing whichever the user has done.
 void Platform::SetFanValue(size_t fan, float speed)
 {
-	if (fan < NumFans)
+	if (fan < NUM_FANS)
 	{
 		fans[fan].SetValue(speed);
 	}
@@ -1355,12 +1510,19 @@ float Platform::GetFanRPM()
 
 void Platform::InitFans()
 {
-	for (size_t i =0; i < NumFans; ++i)
+	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
 		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0 on a Duet 0.4, 0.6 or 0.7
-		fans[i].Init(defaultCoolingFanPins[i], HEAT_ON == 0 && board != BoardType::Duet_085);
+		fans[i].Init(COOLING_FAN_PINS[i], !HEAT_ON && board != BoardType::Duet_085);
 	}
-	coolingFanRpmPin = defaultCoolingFanRpmPin;
+
+	if (NUM_FANS > 1)
+	{
+		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed heater
+		fans[1].SetHeatersMonitored(0xFFFF & ~(1 << BED_HEATER));
+	}
+
+	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
 	lastRpmResetTime = 0.0;
 	if (coolingFanRpmPin >= 0)
 	{
@@ -1370,7 +1532,7 @@ void Platform::InitFans()
 
 float Platform::GetFanPwmFrequency(size_t fan) const
 {
-	if (fan < NumFans)
+	if (fan < NUM_FANS)
 	{
 		return (float)fans[fan].freq;
 	}
@@ -1379,9 +1541,44 @@ float Platform::GetFanPwmFrequency(size_t fan) const
 
 void Platform::SetFanPwmFrequency(size_t fan, float freq)
 {
-	if (fan < NumFans)
+	if (fan < NUM_FANS)
 	{
 		fans[fan].SetPwmFrequency(freq);
+	}
+}
+
+float Platform::GetTriggerTemperature(size_t fan) const
+{
+	if (fan < NUM_FANS)
+	{
+		return fans[fan].triggerTemperature;
+	}
+	return ABS_ZERO;
+
+}
+
+void Platform::SetTriggerTemperature(size_t fan, float t)
+{
+	if (fan < NUM_FANS)
+	{
+		fans[fan].SetTriggerTemperature(t);
+	}
+}
+
+uint16_t Platform::GetHeatersMonitored(size_t fan) const
+{
+	if (fan < NUM_FANS)
+	{
+		return fans[fan].heatersMonitored;
+	}
+	return 0;
+}
+
+void Platform::SetHeatersMonitored(size_t fan, uint16_t h)
+{
+	if (fan < NUM_FANS)
+	{
+		fans[fan].SetHeatersMonitored(h);
 	}
 }
 
@@ -1392,17 +1589,22 @@ void Platform::Fan::Init(Pin p_pin, bool hwInverted)
 	pin = p_pin;
 	hardwareInverted = hwInverted;
 	inverted = false;
+	heatersMonitored = 0;
+	triggerTemperature = HOT_END_FAN_TEMPERATURE;
 	Refresh();
 }
 
 void Platform::Fan::SetValue(float speed)
 {
-	if (speed > 1.0)
+	if (heatersMonitored == 0)
 	{
-		speed /= 255.0;
+		if (speed > 1.0)
+		{
+			speed /= 255.0;
+		}
+		val = constrain<float>(speed, 0.0, 1.0);
+		Refresh();
 	}
-	val = constrain<float>(speed, 0.0, 1.0);
-	Refresh();
 }
 
 void Platform::Fan::Refresh()
@@ -1423,6 +1625,15 @@ void Platform::Fan::SetPwmFrequency(float p_freq)
 {
 	freq = (uint16_t)max<float>(1.0, min<float>(65535.0, p_freq));
 	Refresh();
+}
+
+void Platform::Fan::Check()
+{
+	if (heatersMonitored != 0)
+	{
+		val = (reprap.GetPlatform()->AnyHeaterHot(heatersMonitored, triggerTemperature)) ? 1.0 : 0.0;
+		Refresh();
+	}
 }
 
 void Platform::SetMACAddress(uint8_t mac[])
@@ -1474,200 +1685,241 @@ MassStorage* Platform::GetMassStorage()
 	return massStorage;
 }
 
-void Platform::Message(char type, const char* message, ...)
+void Platform::Message(MessageType type, const char *message)
 {
+	switch (type)
+	{
+		case FLASH_LED:
+			// Message that is to flash an LED; the next two bytes define
+			// the frequency and M/S ratio.
+			// (not implemented yet)
+			break;
+
+		case AUX_MESSAGE:
+			// Message that is to be sent to the first auxiliary device
+			if (!auxOutput->IsEmpty())
+			{
+				// If we're still busy sending a response to the UART device, append this message to the output buffer
+				auxOutput->GetLastItem()->cat(message);
+			}
+			else
+			{
+				// Send short strings immediately through the aux channel. There is no flow control on this port, so it can't block for long
+				SERIAL_AUX_DEVICE.write(message);
+				SERIAL_AUX_DEVICE.flush();
+			}
+			break;
+
+		case AUX2_MESSAGE:
+			// Message that is to be sent to the second auxiliary device (blocking)
+			if (!aux2Output->IsEmpty())
+			{
+				// If we're still busy sending a response to the USART device, append this message to the output buffer
+				aux2Output->GetLastItem()->cat(message);
+			}
+			else
+			{
+				// Send short strings immediately through the aux channel. There is no flow control on this port, so it can't block for long
+				SERIAL_AUX2_DEVICE.write(message);
+				SERIAL_AUX2_DEVICE.flush();
+			}
+			break;
+
+		case DISPLAY_MESSAGE:
+			// Message that is to appear on a local display;  \f and \n should be supported.
+			reprap.SetMessage(message);
+			break;
+
+		case DEBUG_MESSAGE:
+			// Debug messages in blocking mode - potentially DANGEROUS, use with care!
+			SERIAL_MAIN_DEVICE.write(message);
+			SERIAL_MAIN_DEVICE.flush();
+			break;
+
+		case HOST_MESSAGE:
+			// Message that is to be sent via the USB line (non-blocking)
+			{
+				// Ensure we have a valid buffer to write to that isn't referenced for other destinations
+				OutputBuffer *usbOutputBuffer = usbOutput->GetLastItem();
+				if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
+				{
+					if (!OutputBuffer::Allocate(usbOutputBuffer))
+					{
+						// Should never happen
+						return;
+					}
+					usbOutput->Push(usbOutputBuffer);
+				}
+
+				// Check if we need to write the indentation chars first
+				const size_t stackPointer = reprap.GetGCodes()->GetStackPointer();
+				if (stackPointer > 0)
+				{
+					// First, make sure we get the indentation right
+					char indentation[StackSize * 2 + 1];
+					for(size_t i = 0; i < stackPointer * 2; i++)
+					{
+						indentation[i] = ' ';
+					}
+					indentation[stackPointer * 2] = 0;
+
+					// Append the indentation string
+					usbOutputBuffer->cat(indentation);
+				}
+
+				// Append the message string
+				usbOutputBuffer->cat(message);
+			}
+			break;
+
+		case HTTP_MESSAGE:
+		case TELNET_MESSAGE:
+			// Message that is to be sent to the web
+			{
+				const WebSource source = (type == HTTP_MESSAGE) ? WebSource::HTTP : WebSource::Telnet;
+				reprap.GetWebserver()->HandleGCodeReply(source, message);
+			}
+			break;
+
+		case GENERIC_MESSAGE:
+			// Message that is to be sent to the web & host. Make this the default one, too.
+		default:
+			Message(HTTP_MESSAGE, message);
+			Message(TELNET_MESSAGE, message);
+			Message(HOST_MESSAGE, message);
+			break;
+	}
+}
+
+void Platform::Message(const MessageType type, const StringRef &message)
+{
+	Message(type, message.Pointer());
+}
+
+void Platform::Message(const MessageType type, OutputBuffer *buffer)
+{
+	switch (type)
+	{
+		case AUX_MESSAGE:
+			// If no AUX device is attached, don't queue this buffer
+			if (!reprap.GetGCodes()->HaveAux())
+			{
+				OutputBuffer::ReleaseAll(buffer);
+				break;
+			}
+
+			// For big responses it makes sense to write big chunks of data in portions. Store this data here
+			auxOutput->Push(buffer);
+			break;
+
+		case AUX2_MESSAGE:
+			// Send this message to the second UART device
+			aux2Output->Push(buffer);
+			break;
+
+		case DEBUG_MESSAGE:
+			// Probably rarely used, but supported.
+			while (buffer != nullptr)
+			{
+				SERIAL_MAIN_DEVICE.write(buffer->Data(), buffer->DataLength());
+				SERIAL_MAIN_DEVICE.flush();
+
+				buffer = OutputBuffer::Release(buffer);
+			}
+			break;
+
+		case HOST_MESSAGE:
+			if (!SERIAL_MAIN_DEVICE)
+			{
+				// If the serial USB line is not open, discard the message right away
+				OutputBuffer::ReleaseAll(buffer);
+			}
+			else
+			{
+				// Else append incoming data to the stack
+				usbOutput->Push(buffer);
+			}
+			break;
+
+		case HTTP_MESSAGE:
+		case TELNET_MESSAGE:
+			// Message that is to be sent to the web
+			{
+				const WebSource source = (type == HTTP_MESSAGE) ? WebSource::HTTP : WebSource::Telnet;
+				reprap.GetWebserver()->HandleGCodeReply(source, buffer);
+			}
+			break;
+
+		case GENERIC_MESSAGE:
+			// Message that is to be sent to the web & host.
+			buffer->IncreaseReferences(2);		// This one is handled by two additional destinations
+			Message(HTTP_MESSAGE, buffer);
+			Message(TELNET_MESSAGE, buffer);
+			Message(HOST_MESSAGE, buffer);
+			break;
+
+		default:
+			// Everything else is unsupported (and probably not used)
+			OutputBuffer::ReleaseAll(buffer);
+			MessageF(HOST_MESSAGE, "Warning: Unsupported Message call for type %u!\n", type);
+			break;
+	}
+}
+
+void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
+{
+	char formatBuffer[FORMAT_STRING_LENGTH];
+	StringRef formatString(formatBuffer, ARRAY_SIZE(formatBuffer));
+	formatString.vprintf(fmt, vargs);
+
+	Message(type, formatBuffer);
+}
+
+void Platform::MessageF(MessageType type, const char *fmt, ...)
+{
+	char formatBuffer[FORMAT_STRING_LENGTH];
+	StringRef formatString(formatBuffer, ARRAY_SIZE(formatBuffer));
+
 	va_list vargs;
-	va_start(vargs, message);
-	Message(type, message, vargs);
+	va_start(vargs, fmt);
+	formatString.vprintf(fmt, vargs);
 	va_end(vargs);
-}
 
-void Platform::Message(char type, const char* fmt, va_list vargs)
-{
-	messageString.vprintf(fmt, vargs);
-	Message(type, messageString);
-}
-
-void Platform::Message(char type, const StringRef& message)
-{
-	if (message.Pointer() != messageString.Pointer())
-	{
-		// We might need to save the last message before a software reset is triggered
-		messageString.copy(message.Pointer());
-	}
-
-	switch(type)
-	{
-	case FLASH_LED:
-		// Message that is to flash an LED; the next two bytes define
-		// the frequency and M/S ratio.
-
-		break;
-
-	case DISPLAY_MESSAGE:
-		// Message that is to appear on a local display;  \f and \n should be supported.
-		break;
-
-	case HOST_MESSAGE:
-	case DEBUG_MESSAGE:
-		// Message that is to be sent to the host via USB; the H is not sent.
-		if (line->GetOutputColumn() == 0)
-		{
-			for(uint8_t i = 0; i < messageIndent; i++)
-			{
-				line->Write(' ', type == DEBUG_MESSAGE);
-			}
-		}
-		line->Write(message.Pointer(), type == DEBUG_MESSAGE);
-		break;
-
-	case WEB_MESSAGE:
-		// Message that is to be sent to the web
-		reprap.GetWebserver()->ResponseToWebInterface(message.Pointer(), false);
-		break;
-
-	case WEB_ERROR_MESSAGE:
-		// Message that is to be sent to the web - flags an error
-		reprap.GetWebserver()->ResponseToWebInterface(message.Pointer(), true);
-		break;
-
-	case BOTH_MESSAGE:
-		// Message that is to be sent to the web & host
-		if (line->GetOutputColumn() == 0)
-		{
-			for(uint8_t i = 0; i < messageIndent; i++)
-			{
-				line->Write(' ');
-			}
-		}
-		line->Write(message.Pointer());
-		reprap.GetWebserver()->ResponseToWebInterface(message.Pointer(), false);
-		break;
-
-	case BOTH_ERROR_MESSAGE:
-		// Message that is to be sent to the web & host - flags an error
-		// Make this the default behaviour too.
-
-	default:
-		if (line->GetOutputColumn() == 0)
-		{
-			for(uint8_t i = 0; i < messageIndent; i++)
-			{
-				line->Write(' ');
-			}
-		}
-		line->Write(message.Pointer());
-		reprap.GetWebserver()->ResponseToWebInterface(message.Pointer(), true);
-		break;
-	}
-}
-
-void Platform::AppendMessage(char type, const char* message, ...)
-{
-	va_list vargs;
-	va_start(vargs, message);
-	messageString.vprintf(message, vargs);
-	va_end(vargs);
-	AppendMessage(type, messageString);
-}
-
-void Platform::AppendMessage(char type, const StringRef& message)
-{
-	if (message.Pointer() != messageString.Pointer())
-	{
-		// We might need to save the last message before a software reset is triggered
-		messageString.cat(message.Pointer());
-	}
-
-	switch(type)
-	{
-	case FLASH_LED:
-		// Message that is to flash an LED; the next two bytes define
-		// the frequency and M/S ratio.
-
-		break;
-
-	case DISPLAY_MESSAGE:
-		// Message that is to appear on a local display;  \f and \n should be supported.
-
-		break;
-
-	case HOST_MESSAGE:
-	case DEBUG_MESSAGE:
-		// Message that is to be sent to the host via USB; the H is not sent.
-		if (line->GetOutputColumn() == 0)
-		{
-			for(uint8_t i = 0; i < messageIndent; i++)
-			{
-				line->Write(' ', type == DEBUG_MESSAGE);
-			}
-		}
-		line->Write(message.Pointer(), type == DEBUG_MESSAGE);
-		break;
-
-	case WEB_MESSAGE:
-		// Message that is to be sent to the web
-	case WEB_ERROR_MESSAGE:
-		// Message that is to be sent to the web - flags an error
-		reprap.GetWebserver()->AppendResponseToWebInterface(message.Pointer());
-		break;
-
-	case BOTH_MESSAGE:
-		// Message that is to be sent to the web & host
-		if (line->GetOutputColumn() == 0)
-		{
-			for(uint8_t i = 0; i < messageIndent; i++)
-			{
-				line->Write(' ');
-			}
-		}
-		line->Write(message.Pointer());
-		reprap.GetWebserver()->AppendResponseToWebInterface(message.Pointer());
-		break;
-
-	case BOTH_ERROR_MESSAGE:
-		// Message that is to be sent to the web & host - flags an error
-		// Make this the default behaviour too.
-
-	default:
-		if (line->GetOutputColumn() == 0)
-		{
-			for(uint8_t i = 0; i < messageIndent; i++)
-			{
-				line->Write(' ');
-			}
-		}
-		line->Write(message.Pointer());
-		reprap.GetWebserver()->AppendResponseToWebInterface(message.Pointer());
-		break;
-	}
+	Message(type, formatBuffer);
 }
 
 bool Platform::AtxPower() const
 {
-	return (digitalReadNonDue(atxPowerPin) == HIGH);
+	return (digitalReadNonDue(ATX_POWER_PIN) == HIGH);
 }
 
 void Platform::SetAtxPower(bool on)
 {
-	digitalWriteNonDue(atxPowerPin, (on) ? HIGH : LOW);
+	digitalWriteNonDue(ATX_POWER_PIN, (on) ? HIGH : LOW);
 }
 
 
-void Platform::SetElasticComp(size_t drive, float factor)
+void Platform::SetElasticComp(size_t extruder, float factor)
 {
-	if (drive < DRIVES)
+	if (extruder < DRIVES - AXES)
 	{
-		elasticComp[drive] = factor;
+		elasticComp[extruder] = factor;
 	}
 }
 
 float Platform::ActualInstantDv(size_t drive) const
 {
 	float idv = instantDvs[drive];
-	float eComp = elasticComp[drive];
-	// If we are using elastic compensation then we need to limit the instantDv to avoid velocity mismatches
-	return (eComp <= 0.0) ? idv : min<float>(idv, 1.0/(eComp * driveStepsPerUnit[drive]));
+	if (drive >= AXES)
+	{
+		float eComp = elasticComp[drive - AXES];
+		// If we are using elastic compensation then we need to limit the instantDv to avoid velocity mismatches
+		return (eComp <= 0.0) ? idv : min<float>(idv, 1.0/(eComp * driveStepsPerUnit[drive]));
+	}
+	else
+	{
+		return idv;
+	}
 }
 
 void Platform::SetBaudRate(size_t chan, uint32_t br)
@@ -1706,12 +1958,16 @@ void Platform::ResetChannel(size_t chan)
 	switch(chan)
 	{
 	case 0:
-		SerialUSB.end();
-		SerialUSB.begin(baudRates[0]);
+		SERIAL_MAIN_DEVICE.end();
+		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 		break;
 	case 1:
-		Serial.end();
-		Serial.begin(baudRates[1]);
+		SERIAL_AUX_DEVICE.end();
+		SERIAL_AUX_DEVICE.begin(baudRates[1]);
+		break;
+	case 2:
+		SERIAL_AUX2_DEVICE.end();
+		SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 		break;
 	default:
 		break;
@@ -1758,7 +2014,7 @@ const char* Platform::GetElectronicsString() const
 // Set the specified pin to the specified output level. Return true if success, false if not allowed.
 bool Platform::SetPin(int pin, int level)
 {
-	if (pin >= 0 && (unsigned int)pin < numPins && (level == 0 || level == 1))
+	if (pin >= 0 && (unsigned int)pin < NUM_PINS_ALLOWED && (level == 0 || level == 1))
 	{
 		const size_t index = (unsigned int)pin/8;
 		const uint8_t mask = 1 << ((unsigned int)pin & 7);
@@ -1776,6 +2032,84 @@ bool Platform::SetPin(int pin, int level)
 	return false;
 }
 
+#if SUPPORT_INKJET
+
+// Fire the inkjet (if any) in the given pattern
+// If there is no inkjet, false is returned; if there is one this returns true
+// So you can test for inkjet presence with if(platform->Inkjet(0))
+bool Platform::Inkjet(int bitPattern)
+{
+	if (inkjetBits < 0)
+		return false;
+	if (!bitPattern)
+		return true;
+
+	for(int8_t i = 0; i < inkjetBits; i++)
+	{
+		if (bitPattern & 1)
+		{
+			digitalWrite(inkjetSerialOut, 1);			// Write data to shift register
+
+			for(int8_t j = 0; j <= i; j++)
+			{
+				digitalWrite(inkjetShiftClock, HIGH);
+				digitalWrite(inkjetShiftClock, LOW);
+				digitalWrite(inkjetSerialOut, 0);
+			}
+
+			digitalWrite(inkjetStorageClock, HIGH);		// Transfers data from shift register to output register
+			digitalWrite(inkjetStorageClock, LOW);
+
+			digitalWrite(inkjetOutputEnable, LOW);		// Fire the droplet out
+			delayMicroseconds(inkjetFireMicroseconds);
+			digitalWrite(inkjetOutputEnable, HIGH);
+
+			digitalWrite(inkjetClear, LOW);				// Clear to 0
+			digitalWrite(inkjetClear, HIGH);
+
+			delayMicroseconds(inkjetDelayMicroseconds); // Wait for the next bit
+		}
+
+		bitPattern >>= 1; // Put the next bit in the units column
+	}
+
+	return true;
+}
+#endif
+
+bool Platform::GCodeAvailable(const SerialSource source) const
+{
+	switch (source)
+	{
+		case SerialSource::USB:
+			return SERIAL_MAIN_DEVICE.available() > 0;
+
+		case SerialSource::AUX:
+			return SERIAL_AUX_DEVICE.available() > 0;
+
+		case SerialSource::AUX2:
+			return SERIAL_AUX2_DEVICE.available() > 0;
+	}
+
+	return false;
+}
+
+char Platform::ReadFromSource(const SerialSource source)
+{
+	switch (source)
+	{
+		case SerialSource::USB:
+			return static_cast<char>(SERIAL_MAIN_DEVICE.read());
+
+		case SerialSource::AUX:
+			return static_cast<char>(SERIAL_AUX_DEVICE.read());
+
+		case SerialSource::AUX2:
+			return static_cast<char>(SERIAL_AUX2_DEVICE.read());
+	}
+
+	return 0;
+}
 
 // Pragma pop_options is not supported on this platform, so we put this time-critical code right at the end of the file
 //#pragma GCC push_options
@@ -1824,19 +2158,37 @@ void Platform::Tick()
 	case 1:			// last conversion started was a thermistor
 	case 3:
 		{
-			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-			currentFilter.ProcessReading(GetAdcReading(heaterAdcChannels[currentHeater]));
-			StartAdcConversion(zProbeAdcChannel);
-			if (currentFilter.IsValid())
+			if (DoThermistorAdc(currentHeater))
 			{
-				uint32_t sum = currentFilter.GetSum();
-				if (sum < thermistorOverheatSums[currentHeater] || sum >= adDisconnectedReal * numThermistorReadingsAveraged)
+				ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+				currentFilter.ProcessReading(GetAdcReading(thermistorAdcChannels[heaterTempChannels[currentHeater]]));
+				StartAdcConversion(zProbeAdcChannel);
+				if (currentFilter.IsValid())
 				{
-					// We have an over-temperature or disconnected reading from this thermistor, so turn off the heater
-					SetHeaterPwm(currentHeater, 0);
-					errorCodeBits |= ErrorBadTemp;
+					uint32_t sum = currentFilter.GetSum();
+					if (sum < thermistorOverheatSums[currentHeater] || sum >= AD_DISCONNECTED_REAL * THERMISTOR_AVERAGE_READINGS)
+					{
+						// We have an over-temperature or disconnected reading from this thermistor, so turn off the heater
+						SetHeaterPwm(currentHeater, 0);
+						LogError(ErrorCode::BadTemp);
+					}
 				}
 			}
+			else
+			{
+				// Thermocouple case: oversampling is not necessary as the MAX31855 is itself continuously sampling and
+				// averaging.  As such, the temperature reading is taken directly by Platform::GetTemperature() and
+				// periodically called by PID::Spin() where temperature fault handling is taken care of.  However, we
+				// must guard against overly long delays between successive calls of PID::Spin().
+
+				StartAdcConversion(zProbeAdcChannel);
+				if ((millis() - reprap.GetHeat()->GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
+				{
+					SetHeaterPwm(currentHeater, 0);
+					LogError(ErrorCode::BadTemp);
+				}
+			}
+
 			++currentHeater;
 			if (currentHeater == HEATERS)
 			{
@@ -1848,7 +2200,10 @@ void Platform::Tick()
 
 	case 2:			// last conversion started was the Z probe, with IR LED on
 		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetRawZProbeReading());
-		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
+		if (DoThermistorAdc(currentHeater))
+		{
+			StartAdcConversion(thermistorAdcChannels[heaterTempChannels[currentHeater]]);		// read a thermistor
+		}
 		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
 		{
 			digitalWriteNonDue(zProbeModulationPin, LOW);			// turn off the IR emitter
@@ -1861,7 +2216,10 @@ void Platform::Tick()
 		// no break
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
-		StartAdcConversion(heaterAdcChannels[currentHeater]);		// read a thermistor
+		if (DoThermistorAdc(currentHeater))
+		{
+			StartAdcConversion(thermistorAdcChannels[heaterTempChannels[currentHeater]]);		// read a thermistor
+		}
 		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
 		{
 			digitalWriteNonDue(zProbeModulationPin, HIGH);			// turn on the IR emitter

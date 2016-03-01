@@ -69,6 +69,7 @@
 #ifndef __ASSEMBLY__ // Not defined for assembling.
 
 #include <stdio.h>
+#undef printf			// some idiot defined printf as a macro inside cstdio, which prevents us using it as a member function name
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>

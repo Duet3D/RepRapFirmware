@@ -45,7 +45,7 @@ class GCodeBuffer
     enum State { idle, executing, paused };
     int CheckSum() const;								// Compute the checksum (if any) at the end of the G Code
     Platform* platform;									// Pointer to the RepRap's controlling class
-    char gcodeBuffer[GcodeLength];						// The G Code
+    char gcodeBuffer[GCODE_LENGTH];						// The G Code
     const char* identity;								// Where we are from (web, file, serial line etc)
     int gcodePointer;									// Index in the buffer
     int readPointer;									// Where in the buffer to read next

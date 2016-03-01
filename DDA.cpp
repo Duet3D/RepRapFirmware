@@ -53,7 +53,6 @@ void DDA::DebugPrint() const
 				"daccel=%f ddecel=%f cks=%u\n",
 				acceleration, requestedSpeed, topSpeed, startSpeed, endSpeed,
 				accelDistance, decelDistance, clocksNeeded);
-//	reprap.GetPlatform()->GetLine()->Flush();
 	ddm[0].DebugPrint('x', isDeltaMovement);
 	ddm[1].DebugPrint('y', isDeltaMovement);
 	ddm[2].DebugPrint('z', isDeltaMovement);
@@ -64,7 +63,6 @@ void DDA::DebugPrint() const
 			ddm[i].DebugPrint((char)('0' + (i - AXES)), false);
 		}
 	}
-//	reprap.GetPlatform()->GetLine()->Flush();
 }
 
 // This is called by Move to initialize all DDAs
@@ -583,7 +581,6 @@ float DDA::CalcTime() const
 void DDA::Prepare()
 {
 //debugPrintf("Prep\n");
-//reprap.GetPlatform()->GetLine()->Flush();
 
 	PrepParams params;
 	params.decelStartDistance = totalDistance - decelDistance;
@@ -603,6 +600,7 @@ void DDA::Prepare()
 
 	goingSlow = false;
 	firstDM = nullptr;
+	bool xyMoving = false;
 
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
@@ -613,7 +611,7 @@ void DDA::Prepare()
 			reprap.GetPlatform()->EnableDrive(drive);
 			if (drive >= AXES)
 			{
-				dm.PrepareExtruder(*this, params, drive);
+				dm.PrepareExtruder(*this, params, drive, xyMoving);
 
 				// Check for sensible values, print them if they look dubious
 				if (reprap.Debug(moduleDda)
@@ -625,29 +623,34 @@ void DDA::Prepare()
 				   )
 				{
 					DebugPrint();
-					reprap.GetPlatform()->GetLine()->Flush();
 				}
 			}
 			else if (isDeltaMovement)
 			{
+				if (drive <= Z_AXIS)
+				{
+					xyMoving = true;
+				}
 				dm.PrepareDeltaAxis(*this, params, drive);
 
 				// Check for sensible values, print them if they look dubious
 				if (reprap.Debug(moduleDda) && dm.totalSteps > 1000000)
 				{
 					DebugPrint();
-					reprap.GetPlatform()->GetLine()->Flush();
 				}
 			}
 			else
 			{
+				if (drive < Z_AXIS)
+				{
+					xyMoving = true;
+				}
 				dm.PrepareCartesianAxis(*this, params, drive);
 
 				// Check for sensible values, print them if they look dubious
 				if (reprap.Debug(moduleDda) && dm.totalSteps > 1000000)
 				{
 					DebugPrint();
-					reprap.GetPlatform()->GetLine()->Flush();
 				}
 			}
 
@@ -657,8 +660,8 @@ void DDA::Prepare()
 			dm.stepInterval = 999999;						// initialise to a large value so that we will calculating the time for just one steps
 			dm.stepsTillRecalc = 0;							// so that we don't skip the calculation
 			bool stepsToDo = (isDeltaMovement && drive < AXES)
-							? dm.CalcNextStepTimeDelta(*this, drive)
-							: dm.CalcNextStepTimeCartesian(*this, drive);
+							? dm.CalcNextStepTimeDelta(*this, drive, false)
+							: dm.CalcNextStepTimeCartesian(*this, drive, false);
 			if (stepsToDo)
 			{
 				InsertDM(&dm);
@@ -863,7 +866,9 @@ bool DDA::Step()
 			++numReps;
 			reprap.GetPlatform()->StepHigh(drive);
 			firstDM = dm->nextDM;
-			bool moreSteps = (isDeltaMovement && drive < AXES) ? dm->CalcNextStepTimeDelta(*this, drive) : dm->CalcNextStepTimeCartesian(*this, drive);
+			bool moreSteps = (isDeltaMovement && drive < AXES)
+								? dm->CalcNextStepTimeDelta(*this, drive, true)
+								: dm->CalcNextStepTimeCartesian(*this, drive, true);
 			if (moreSteps)
 			{
 				InsertDM(dm);

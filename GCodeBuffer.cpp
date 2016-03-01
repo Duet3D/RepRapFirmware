@@ -59,7 +59,7 @@ bool GCodeBuffer::Put(char c)
 		gcodeBuffer[gcodePointer] = 0;
 		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] && !writingFileDirectory) // Don't bother with blank/comment lines
 		{
-			platform->Message(HOST_MESSAGE, "%s%s\n", identity, gcodeBuffer);
+			platform->MessageF(HOST_MESSAGE, "%s%s\n", identity, gcodeBuffer);
 		}
 
 		// Deal with line numbers and checksums
@@ -70,7 +70,7 @@ bool GCodeBuffer::Put(char c)
 			Seen('N');
 			if (csSent != csHere)
 			{
-				snprintf(gcodeBuffer, GcodeLength, "M998 P%d", GetIValue());
+				snprintf(gcodeBuffer, GCODE_LENGTH, "M998 P%d", GetIValue());
 				Init();
 				return true;
 			}
@@ -114,9 +114,9 @@ bool GCodeBuffer::Put(char c)
 	else if (!inComment || writingFileDirectory)
 	{
 		gcodeBuffer[gcodePointer++] = c;
-		if (gcodePointer >= (int)GcodeLength)
+		if (gcodePointer >= (int)GCODE_LENGTH)
 		{
-			platform->Message(BOTH_ERROR_MESSAGE, "G-Code buffer length overflow.\n");
+			platform->Message(GENERIC_MESSAGE, "G-Code buffer length overflow.\n");
 			gcodePointer = 0;
 			gcodeBuffer[0] = 0;
 		}
@@ -173,7 +173,7 @@ float GCodeBuffer::GetFValue()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
 		readPointer = -1;
 		return 0.0;
 	}
@@ -188,7 +188,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 {
 	if(readPointer < 0)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode float array before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode float array before a search.\n");
 		readPointer = -1;
 		returnedLength = 0;
 		return;
@@ -200,7 +200,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 	{
 		if(length >= returnedLength) // Array limit has been set in here
 		{
-			platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
+			platform->MessageF(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -242,7 +242,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 {
 	if(readPointer < 0)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode long array before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode long array before a search.\n");
 		readPointer = -1;
 		return;
 	}
@@ -253,7 +253,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 	{
 		if(length >= returnedLength) // Array limit has been set in here
 		{
-			platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
+			platform->MessageF(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -282,7 +282,7 @@ const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode string before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode string before a search.\n");
 		readPointer = -1;
 		return "";
 	}
@@ -317,7 +317,7 @@ const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 		{
 			return NULL;
 		}
-		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: String expected but not seen.\n");
+		platform->Message(GENERIC_MESSAGE, "GCodes: String expected but not seen.\n");
 		return gcodeBuffer; // Good idea?
 	}
 
@@ -332,7 +332,7 @@ long GCodeBuffer::GetLValue()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(BOTH_ERROR_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
 		readPointer = -1;
 		return 0;
 	}
@@ -357,9 +357,11 @@ bool GCodeBuffer::IsPollRequest()
 	return false;
 }
 
+// Return true if the specified M code can be executed concurrently with other requests.
+// These should be codes that do not modify the state (we make an exception for M111) and are always executed in a single call to function HandleMCode.
 /*static*/ bool GCodeBuffer::IsPollCode(int code)
 {
-	return code == 27 || code == 105 || code == 408 || code == 114 || code == 119 || code == 573;
+	return code == 27 || code == 105 || code == 111 || code == 114 || code == 119 || code == 122 || code == 408 || code == 573;
 }
 
 // End

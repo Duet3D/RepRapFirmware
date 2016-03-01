@@ -169,7 +169,7 @@ struct sd_mmc_card {
 	enum card_state state;     //!< Card state
 	card_type_t type;          //!< Card type
 	card_version_t version;    //!< Card version
-	uint8_t  bus_width;        //!< Number of DATA lin on bus (MCI only)
+	uint8_t  bus_width;        //!< Number of DATA lines on bus (MCI only)
 	uint8_t csd[CSD_REG_BSIZE];//!< CSD register
 	uint8_t high_speed;        //!< High speed card (1)
 };
@@ -1932,8 +1932,7 @@ sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort)
 	return SD_MMC_OK;
 }
 
-sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start,
-		uint16_t nb_block)
+sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_block)
 {
 	sd_mmc_err_t sd_mmc_err;
 	uint32_t cmd, arg, resp;

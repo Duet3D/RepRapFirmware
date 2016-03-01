@@ -137,14 +137,14 @@ a lot of data that needs to be copied, this should be set high. */
 #define LWIP_TCP                (1)
 #define TCP_TTL                 (255)
 /* TCP receive window. */
-#define TCP_WND                 (2 * 1432)
+#define TCP_WND                 (2 * 1460)
 /* Controls if TCP should queue segments that arrive out of
    order. Define to 0 if your device is low on memory. */
 #define TCP_QUEUE_OOSEQ         1
 /* TCP Maximum segment size. */
-#define TCP_MSS                 (1432)	// 1432 is optimal for Windows clients
+#define TCP_MSS                 (1460)	// 1432 is optimal for Windows clients
 /* TCP sender buffer space (bytes). */
-#define TCP_SND_BUF             (2 * 1432)  //changed from 2150 to pass LWIP sanity checks
+#define TCP_SND_BUF             (2 * 1460)  //changed from 2150 to pass LWIP sanity checks
 /* TCP sender buffer space (pbufs). This must be at least = 2 * TCP_SND_BUF/TCP_MSS for things to work. */
 #define TCP_SND_QUEUELEN        (3 * TCP_SND_BUF / TCP_MSS)
 /* Maximum number of retransmissions of data segments. */

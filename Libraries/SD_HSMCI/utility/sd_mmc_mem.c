@@ -304,9 +304,9 @@ Ctrl_status sd_mmc_usb_write_10_1(uint32_t addr, uint16_t nb_sector)
  * \name MEM <-> RAM Interface
  * @{
  */
-Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram)
+Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram, uint32_t numBlocks)
 {
-	switch (sd_mmc_init_read_blocks(slot, addr, 1)) {
+	switch (sd_mmc_init_read_blocks(slot, addr, numBlocks)) {
 	case SD_MMC_OK:
 		break;
 	case SD_MMC_ERR_NO_CARD:
@@ -314,7 +314,7 @@ Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram)
 	default:
 		return CTRL_FAIL;
 	}
-	if (SD_MMC_OK != sd_mmc_start_read_blocks(ram, 1)) {
+	if (SD_MMC_OK != sd_mmc_start_read_blocks(ram, numBlocks)) {
 		return CTRL_FAIL;
 	}
 	if (SD_MMC_OK != sd_mmc_wait_end_of_read_blocks(false)) {
@@ -323,19 +323,19 @@ Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram)
 	return CTRL_GOOD;
 }
 
-Ctrl_status sd_mmc_mem_2_ram_0(uint32_t addr, void *ram)
+Ctrl_status sd_mmc_mem_2_ram_0(uint32_t addr, void *ram, uint32_t numBlocks)
 {
-	return sd_mmc_mem_2_ram(0, addr, ram);
+	return sd_mmc_mem_2_ram(0, addr, ram, numBlocks);
 }
 
-Ctrl_status sd_mmc_mem_2_ram_1(uint32_t addr, void *ram)
+Ctrl_status sd_mmc_mem_2_ram_1(uint32_t addr, void *ram, uint32_t numBlocks)
 {
-	return sd_mmc_mem_2_ram(1, addr, ram);
+	return sd_mmc_mem_2_ram(1, addr, ram, numBlocks);
 }
 
-Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram)
+Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram, uint32_t numBlocks)
 {
-	switch (sd_mmc_init_write_blocks(slot, addr, 1)) {
+	switch (sd_mmc_init_write_blocks(slot, addr, numBlocks)) {
 	case SD_MMC_OK:
 		break;
 	case SD_MMC_ERR_NO_CARD:
@@ -343,7 +343,7 @@ Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram)
 	default:
 		return CTRL_FAIL;
 	}
-	if (SD_MMC_OK != sd_mmc_start_write_blocks(ram, 1)) {
+	if (SD_MMC_OK != sd_mmc_start_write_blocks(ram, numBlocks)) {
 		return CTRL_FAIL;
 	}
 	if (SD_MMC_OK != sd_mmc_wait_end_of_write_blocks(false)) {
@@ -352,14 +352,14 @@ Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram)
 	return CTRL_GOOD;
 }
 
-Ctrl_status sd_mmc_ram_2_mem_0(uint32_t addr, const void *ram)
+Ctrl_status sd_mmc_ram_2_mem_0(uint32_t addr, const void *ram, uint32_t numBlocks)
 {
-	return sd_mmc_ram_2_mem(0, addr, ram);
+	return sd_mmc_ram_2_mem(0, addr, ram, numBlocks);
 }
 
-Ctrl_status sd_mmc_ram_2_mem_1(uint32_t addr, const void *ram)
+Ctrl_status sd_mmc_ram_2_mem_1(uint32_t addr, const void *ram, uint32_t numBlocks)
 {
-	return sd_mmc_ram_2_mem(1, addr, ram);
+	return sd_mmc_ram_2_mem(1, addr, ram, numBlocks);
 }
 //! @}
 

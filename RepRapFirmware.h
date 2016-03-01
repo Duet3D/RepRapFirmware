@@ -26,6 +26,10 @@ Licence: GPL
 #include <cfloat>
 #include <cstdarg>
 
+#include "Arduino.h"
+#include "Configuration.h"
+#include "StringRef.h"
+
 // Module numbers and names, used for diagnostics and debug
 enum Module
 {
@@ -36,8 +40,9 @@ enum Module
 	moduleMove = 4,
 	moduleHeat = 5,
 	moduleDda = 6,
-	modulePrintMonitor = 7,
-	numModules = 8,				// make this one greater than the last module number
+	moduleRoland = 7,
+	modulePrintMonitor = 8,
+	numModules = 9,				// make this one greater than the last module number
 	noModule = 15
 };
 
@@ -52,6 +57,7 @@ class GCodes;
 class Move;
 class Heat;
 class Tool;
+class Roland;
 class PrintMonitor;
 class RepRap;
 class FileStore;
@@ -73,47 +79,12 @@ int StringContains(const char* string, const char* match);
 #define ARRAY_SIZE(_x)	(sizeof(_x)/sizeof(_x[0]))
 // Macro to give us the highest valid index into an array i.e. one less than the size
 #define ARRAY_UPB(_x)	(ARRAY_SIZE(_x) - 1)
-
 // Macro to assign an array from an initializer list
-#if __cplusplus >= 201103L
-// This version relies on C++'11 features (add '-std=gnu++11' to your CPP compiler flags)
-#define ARRAY_INIT(_dest, _init) {static const decltype(_dest) _temp = _init; memcpy(_dest, _temp, sizeof(_dest)); }
-#else
-// This version relies on a gcc extension that is available only in older compilers
-#define ARRAY_INIT(_dest, _init) _dest = _init
-#define nullptr		(0)
-#endif
-
-// Class to describe a string buffer, including its length. This saves passing buffer lengths around everywhere.
-class StringRef
-{
-	char *p;		// pointer to the storage
-	size_t len;		// number of characters in the storage
-
-public:
-	StringRef(char *pp, size_t pl) : p(pp), len(pl) { }
-
-	size_t Length() const { return len; }
-	size_t strlen() const;
-	char *Pointer() { return p; }
-	const char *Pointer() const { return p; }
-
-	char& operator[](size_t index) { return p[index]; }
-	char operator[](size_t index) const { return p[index]; }
-
-	void Clear() { p[0] = 0; }
-
-	int printf(const char *fmt, ...);
-	int vprintf(const char *fmt, va_list vargs);
-	int catf(const char *fmt, ...);
-	size_t copy(const char* src);
-	size_t cat(const char *src);
-};
+#define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
 
 extern StringRef scratchString;
 
-#include "Arduino.h"
-#include "Configuration.h"
+#include "OutputMemory.h"
 #include "Network.h"
 #include "Platform.h"
 #include "Webserver.h"
@@ -121,6 +92,7 @@ extern StringRef scratchString;
 #include "Move.h"
 #include "Heat.h"
 #include "Tool.h"
+#include "Roland.h"
 #include "PrintMonitor.h"
 #include "Reprap.h"
 
@@ -188,7 +160,7 @@ template<class T> inline float constrain(T val, T vmin, T vmax)
 	return max<T>(vmin, min<T>(val, vmax));
 }
 
-extern uint32_t isqrt64(uint64_t num);		// Thus is defined in its own file, Isqrt.cpp or Isqrt.asm
+extern uint32_t isqrt64(uint64_t num);		// This is defined in its own file, Isqrt.cpp or Isqrt.asm
 
 #endif
 

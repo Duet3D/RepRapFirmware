@@ -332,8 +332,7 @@ void dmac_channel_keep(
  * "DMAC Channel Handler Status Register" in the device-specific datasheet for more
  * information.
  */
-uint32_t dmac_channel_get_status(
-		Dmac *p_dmac)
+uint32_t dmac_channel_get_status(Dmac *p_dmac)
 {
 	/* Validate parameters. */
 	Assert(p_dmac);

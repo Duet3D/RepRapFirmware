@@ -31,13 +31,13 @@ Tool * Tool::freelist = nullptr;
 {
 	if (dCount > DRIVES - AXES)
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Tool creation: attempt to use more drives than there are in the RepRap...");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: attempt to use more drives than there are in the RepRap");
 		return nullptr;
 	}
 
 	if (hCount > HEATERS)
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Tool creation: attempt to use more heaters than there are in the RepRap...");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: attempt to use more heaters than there are in the RepRap");
 		return nullptr;
 	}
 
@@ -131,7 +131,7 @@ float Tool::MaxFeedrate() const
 {
 	if (driveCount <= 0)
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Attempt to get maximum feedrate for a tool with no drives.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Attempt to get maximum feedrate for a tool with no drives.\n");
 		return 1.0;
 	}
 	float result = 0.0;
@@ -150,7 +150,7 @@ float Tool::InstantDv() const
 {
 	if (driveCount <= 0)
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Attempt to get InstantDv for a tool with no drives.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Attempt to get InstantDv for a tool with no drives.\n");
 		return 1.0;
 	}
 	float result = FLT_MAX;
@@ -298,7 +298,7 @@ bool Tool::ToolCanDrive(bool extrude)
 	if (heaterFault)
 		return false;
 
-	if (reprap.ColdExtrude() || AllHeatersAtHighTemperature(extrude))
+	if (reprap.GetHeat()->ColdExtrude() || AllHeatersAtHighTemperature(extrude))
 		return true;
 
 	displayColdExtrudeWarning = true;

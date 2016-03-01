@@ -64,10 +64,10 @@ void Move::Init()
 	SetLiveCoordinates(move);
 	SetPositions(move);
 
-	currentFeedrate = DefaultFeedRate;
+	currentFeedrate = DEFAULT_FEEDRATE/minutesToSeconds;
 
 	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
-	for (size_t point = 0; point < MaxProbePoints; point++)
+	for (size_t point = 0; point < MAX_PROBE_POINTS; point++)
 	{
 		if (point < 4)
 		{
@@ -82,7 +82,7 @@ void Move::Init()
 	yRectangle = xRectangle;
 
 	longWait = reprap.GetPlatform()->Time();
-	idleTimeout = defaultIdleTimeout;
+	idleTimeout = DEFAULT_IDLE_TIMEOUT;
 	iState = IdleState::idle;
 	idleCount = 0;
 
@@ -94,7 +94,7 @@ void Move::Init()
 
 void Move::Exit()
 {
-	reprap.GetPlatform()->Message(BOTH_MESSAGE, "Move class exited.\n");
+	reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Move class exited.\n");
 	active = false;
 }
 
@@ -120,6 +120,7 @@ void Move::Spin()
 				ddaRingCheckPointer->DebugPrint();
 			}
 			++stepErrors;
+			reprap.GetPlatform()->LogError(ErrorCode::BadMove);
 		}
 		ddaRingCheckPointer->Free();
 		ddaRingCheckPointer = ddaRingCheckPointer->GetNext();
@@ -384,14 +385,14 @@ extern uint64_t lastNum;
 
 void Move::Diagnostics()
 {
-	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Move Diagnostics:\n");
-	reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "MaxReps: %u, StepErrors: %u\n", maxReps, stepErrors);
+	reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Move Diagnostics:\n");
+	reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "MaxReps: %u, StepErrors: %u\n", maxReps, stepErrors);
 	maxReps = 0;
 
 #if 0
 	if (sqCount != 0)
 	{
-		reprap.GetPlatform()->AppendMessage(BOTH_MESSAGE, "Average sqrt times %.2f, %.2f, count %u,  errors %u, last %" PRIu64 " %u %u\n",
+		reprap.GetPlatform()->AppendMessage(GENERIC_MESSAGE, "Average sqrt times %.2f, %.2f, count %u,  errors %u, last %" PRIu64 " %u %u\n",
 				(float)sqSum1/sqCount, (float)sqSum2/sqCount, sqCount, sqErrors, lastNum, lastRes1, lastRes2);
 		sqSum1 = sqSum2 = sqCount = sqErrors = 0;
 	}
@@ -407,7 +408,7 @@ void Move::SetPositions(const float move[DRIVES])
 	}
 	else
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "SetPositions called when DDA ring not empty\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "SetPositions called when DDA ring not empty\n");
 	}
 }
 
@@ -430,7 +431,7 @@ void Move::SetFeedrate(float feedRate)
 	}
 	else
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "SetFeedrate called when DDA ring not empty\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "SetFeedrate called when DDA ring not empty\n");
 	}
 }
 
@@ -623,7 +624,7 @@ void Move::BedTransform(float xyzPoint[AXES]) const
 		break;
 
 	default:
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "BedTransform: wrong number of sample points.");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "BedTransform: wrong number of sample points.");
 	}
 }
 
@@ -648,7 +649,7 @@ void Move::InverseBedTransform(float xyzPoint[AXES]) const
 		break;
 
 	default:
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "InverseBedTransform: wrong number of sample points.");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "InverseBedTransform: wrong number of sample points.");
 	}
 }
 
@@ -671,7 +672,7 @@ float Move::AxisCompensation(int8_t axis) const
 			return tanXZ;
 
 		default:
-			reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Axis compensation requested for non-existent axis.\n");
+			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Axis compensation requested for non-existent axis.\n");
 	}
 	return 0.0;
 }
@@ -690,7 +691,7 @@ void Move::SetAxisCompensation(int8_t axis, float tangent)
 		tanXZ = tangent;
 		break;
 	default:
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "SetAxisCompensation: dud axis.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "SetAxisCompensation: dud axis.\n");
 	}
 }
 
@@ -726,12 +727,12 @@ float Move::TriangleZ(float x, float y) const
 		size_t j = (i + 1) % 4;
 		float l1, l2, l3;
 		BarycentricCoordinates(i, j, 4, x, y, l1, l2, l3);
-		if (l1 > Triangle0 && l2 > Triangle0 && l3 > Triangle0)
+		if (l1 > TRIANGLE_ZERO && l2 > TRIANGLE_ZERO && l3 > TRIANGLE_ZERO)
 		{
 			return l1 * baryZBedProbePoints[i] + l2 * baryZBedProbePoints[j] + l3 * baryZBedProbePoints[4];
 		}
 	}
-	reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Triangle interpolation: point outside all triangles!\n");
+	reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Triangle interpolation: point outside all triangles!\n");
 	return 0.0;
 }
 
@@ -757,7 +758,7 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 	}
 	else if (numPoints < sParam)
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE,
+		reprap.GetPlatform()->MessageF(GENERIC_MESSAGE,
 				"Bed calibration error: %d factor calibration requested but only %d points provided\n", sParam, numPoints);
 	}
 	else
@@ -793,7 +794,7 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 
 		// Clear out the Z heights so that we don't re-use old points.
 		// This allows us to use different numbers of probe point on different occasions.
-		for (size_t i = 0; i < MaxProbePoints; ++i)
+		for (size_t i = 0; i < MAX_PROBE_POINTS; ++i)
 		{
 			probePointSet[i] &= ~zSet;
 		}
@@ -860,7 +861,7 @@ void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 		break;
 
 	default:
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Bed calibration error: %d points provided but only 3, 4 and 5 supported\n", numPoints);
+		reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Bed calibration error: %d points provided but only 3, 4 and 5 supported\n", numPoints);
 		return;
 	}
 
@@ -911,7 +912,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 
 	if (numFactors != 3 && numFactors != 4 && numFactors != 6 && numFactors != 7)
 	{
-		reprap.GetPlatform()->Message(BOTH_ERROR_MESSAGE, "Delta calibration error: %d factors requested but only 3, 4, 6 and 7 supported\n", numFactors);
+		reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Delta calibration error: %d factors requested but only 3, 4, 6 and 7 supported\n", numFactors);
 		return;
 	}
 
@@ -925,8 +926,8 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	//uint32_t startTime = reprap.GetPlatform()->GetInterruptClocks();
 
 	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
-	FixedMatrix<float, MaxDeltaCalibrationPoints, AXES> probeMotorPositions;
-	float corrections[MaxDeltaCalibrationPoints];
+	FixedMatrix<float, MAX_DELTA_PROBE_POINTS, AXES> probeMotorPositions;
+	float corrections[MAX_DELTA_PROBE_POINTS];
 	float initialSumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{
@@ -957,7 +958,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	for (;;)
 	{
 		// Build a Nx7 matrix of derivatives with respect to xa, xb, yc, za, zb, zc, diagonal.
-		FixedMatrix<float, MaxDeltaCalibrationPoints, NumDeltaFactors> derivativeMatrix;
+		FixedMatrix<float, MAX_DELTA_PROBE_POINTS, NumDeltaFactors> derivativeMatrix;
 		for (size_t i = 0; i < numPoints; ++i)
 		{
 			for (size_t j = 0; j < numFactors; ++j)
@@ -1007,7 +1008,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 			PrintVector("Solution", solution, numFactors);
 
 			// Calculate and display the residuals
-			float residuals[MaxDeltaCalibrationPoints];
+			float residuals[MAX_DELTA_PROBE_POINTS];
 			for (size_t i = 0; i < numPoints; ++i)
 			{
 				residuals[i] = zBedProbePoints[i];
@@ -1025,7 +1026,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 
 		// Calculate the expected probe heights using the new parameters
 		{
-			float expectedResiduals[MaxDeltaCalibrationPoints];
+			float expectedResiduals[MAX_DELTA_PROBE_POINTS];
 			float sumOfSquares = 0.0;
 			for (size_t i = 0; i < numPoints; ++i)
 			{
@@ -1309,33 +1310,33 @@ void Move::SetLiveCoordinates(const float coords[DRIVES])
 	cpu_irq_enable();
 }
 
-void Move::SetXBedProbePoint(int index, float x)
+void Move::SetXBedProbePoint(size_t index, float x)
 {
-	if(index < 0 || (size_t)index >= MaxProbePoints)
+	if (index >= MAX_PROBE_POINTS)
 	{
-		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point X index out of range.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point X index out of range.\n");
 		return;
 	}
 	xBedProbePoints[index] = x;
 	probePointSet[index] |= xSet;
 }
 
-void Move::SetYBedProbePoint(int index, float y)
+void Move::SetYBedProbePoint(size_t index, float y)
 {
-	if(index < 0 || (size_t)index >= MaxProbePoints)
+	if (index >= MAX_PROBE_POINTS)
 	{
-		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Y index out of range.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point Y index out of range.\n");
 		return;
 	}
 	yBedProbePoints[index] = y;
 	probePointSet[index] |= ySet;
 }
 
-void Move::SetZBedProbePoint(int index, float z, bool wasXyCorrected, bool wasError)
+void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError)
 {
-	if (index < 0 || (size_t)index >= MaxProbePoints)
+	if (index >= MAX_PROBE_POINTS)
 	{
-		reprap.GetPlatform()->Message(BOTH_MESSAGE, "Z probe point Z index out of range.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point Z index out of range.\n");
 	}
 	else
 	{
@@ -1360,17 +1361,17 @@ void Move::SetZBedProbePoint(int index, float z, bool wasXyCorrected, bool wasEr
 	}
 }
 
-float Move::XBedProbePoint(int index) const
+float Move::XBedProbePoint(size_t index) const
 {
 	return xBedProbePoints[index];
 }
 
-float Move::YBedProbePoint(int index) const
+float Move::YBedProbePoint(size_t index) const
 {
 	return yBedProbePoints[index];
 }
 
-float Move::ZBedProbePoint(int index) const
+float Move::ZBedProbePoint(size_t index) const
 {
 	return zBedProbePoints[index];
 }
@@ -1385,28 +1386,28 @@ bool Move::XYProbeCoordinatesSet(int index) const
 	return (probePointSet[index]  & xSet) && (probePointSet[index]  & ySet);
 }
 
-int Move::NumberOfProbePoints() const
+size_t Move::NumberOfProbePoints() const
 {
-	for(int i = 0; (size_t)i < MaxProbePoints; i++)
+	for(size_t i = 0; i < MAX_PROBE_POINTS; i++)
 	{
 		if(!AllProbeCoordinatesSet(i))
 		{
 			return i;
 		}
 	}
-	return MaxProbePoints;
+	return MAX_PROBE_POINTS;
 }
 
-int Move::NumberOfXYProbePoints() const
+size_t Move::NumberOfXYProbePoints() const
 {
-	for(int i = 0; (size_t)i < MaxProbePoints; i++)
+	for(size_t i = 0; i < MAX_PROBE_POINTS; i++)
 	{
 		if(!XYProbeCoordinatesSet(i))
 		{
 			return i;
 		}
 	}
-	return MaxProbePoints;
+	return MAX_PROBE_POINTS;
 }
 
 // Enter or leave simulation mode
@@ -1425,7 +1426,6 @@ void Move::PrintCurrentDda() const
 	if (currentDda != nullptr)
 	{
 		currentDda->DebugPrint();
-		reprap.GetPlatform()->GetLine()->Flush();
 	}
 }
 

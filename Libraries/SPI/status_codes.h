@@ -47,19 +47,6 @@
 #ifndef STATUS_CODES_H_INCLUDED
 #define STATUS_CODES_H_INCLUDED
 
-/* Note: this is a local workaround to avoid a pre-processor clash due to the
- * lwIP macro ERR_TIMEOUT. */
-#if defined(__LWIP_ERR_H__) && defined(ERR_TIMEOUT)
-#if (ERR_TIMEOUT != -3)
-
-/* Internal check to make sure that the later restore of lwIP's ERR_TIMEOUT
- * macro is set to the correct value. Note that it is highly improbable that
- * this value ever changes in lwIP. */
-#error ASF developers: check lwip err.h new value for ERR_TIMEOUT
-#endif
-#undef ERR_TIMEOUT
-#endif
-
 /**
  * Status code that may be returned by shell commands and protocol
  * implementations.
@@ -76,7 +63,12 @@ enum status_code {
 	STATUS_ERR_TIMEOUT      =  0x12,
 	ERR_IO_ERROR            =  -1, //!< I/O error
 	ERR_FLUSHED             =  -2, //!< Request flushed from queue
+#if 1
+	// Renamed this to ERR_TMO because ERR_TIMEOUT clashes with a definition in lwip
+	ERR_TMO					=  -3, //!< Operation timed out
+#else
 	ERR_TIMEOUT             =  -3, //!< Operation timed out
+#endif
 	ERR_BAD_DATA            =  -4, //!< Data integrity check failed
 	ERR_PROTOCOL            =  -5, //!< Protocol error
 	ERR_UNSUPPORTED_DEV     =  -6, //!< Unsupported device
@@ -102,9 +94,5 @@ enum status_code {
 };
 
 typedef enum status_code status_code_t;
-
-#if defined(__LWIP_ERR_H__)
-#define ERR_TIMEOUT -3
-#endif
 
 #endif /* STATUS_CODES_H_INCLUDED */
