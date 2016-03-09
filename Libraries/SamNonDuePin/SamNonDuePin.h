@@ -84,18 +84,22 @@ public:
 	void SetLow() const { pPort->PIO_CODR = ulPin; }
 };
 
-// struct used to hold the descriptions for the "non Arduino" pins.
-// from the Arduino.h files
-extern const PinDescription nonDuePinDescription[] ;
-extern void pinModeNonDue(uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff = 0);	// NB only one debounce cutoff frequency can be set per PIO
-extern void digitalWriteNonDue(uint32_t ulPin, uint32_t ulVal);
-extern int digitalReadNonDue(uint32_t ulPin);
-extern OutputPin getPioPin(uint32_t ulPin);
-extern void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, uint16_t freq);
-extern void analogOutputNonDue();
-extern void hsmciPinsinit();
-extern void ethPinsInit();
-extern adc_channel_num_t PinToAdcChannel(int pin);		// convert an analog pin number to an ADC channel
+extern const PinDescription nonDuePinDescription[];
+
+inline const PinDescription& GetPinDescription(uint32_t ulPin)
+{
+	return (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
+}
+
+void pinModeNonDue(uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff = 0);	// NB only one debounce cutoff frequency can be set per PIO
+void digitalWriteNonDue(uint32_t ulPin, uint32_t ulVal);
+int digitalReadNonDue(uint32_t ulPin);
+OutputPin getPioPin(uint32_t ulPin);
+void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, uint16_t freq);
+void analogOutputNonDue();
+void hsmciPinsinit();
+void ethPinsInit();
+adc_channel_num_t PinToAdcChannel(int pin);		// convert an analog pin number to an ADC channel
 
 #endif /* SAM_NON_DUE_PIN_H */
 

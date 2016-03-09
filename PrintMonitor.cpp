@@ -723,23 +723,27 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 			const float fractionPrinted = gCodes->FractionOfFilePrinted();
 			if (numLayerSamples < 2 || !printingFileParsed || printingFileInfo.objectHeight == 0.0)
 			{
-				return (fractionPrinted < 0.01)
-						? 0.0
-						: realPrintDuration * (1.0 / fractionPrinted) - realPrintDuration;
+				if (fractionPrinted < 0.01)
+				{
+					break;
+				}
+				return realPrintDuration * (1.0 / fractionPrinted) - realPrintDuration;
 			}
 
 			// Work out how much progress we made in the layers we have data for, and how long it took.
 			// Can't use the first layer sample in the table because we don't know the fraction printed at the start.
 			float duration = 0.0;
-			for(size_t layer = 1; layer < numLayerSamples; layer++)
+			for (size_t layer = 1; layer < numLayerSamples; layer++)
 			{
 				duration += layerDurations[layer];
 			}
 			const float fractionPrintedInLayers = fileProgressPerLayer[numLayerSamples - 1] - fileProgressPerLayer[0];
-			return (fractionPrintedInLayers < 0.01)
-					? 0.0
-					: duration * (1.0 - fractionPrinted)/fractionPrintedInLayers;
+			if (fractionPrintedInLayers >= 0.01)
+			{
+				return duration * (1.0 - fractionPrinted)/fractionPrintedInLayers;
+			}
 		}
+		break;
 
 		case filamentBased:
 		{
@@ -750,7 +754,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 #endif
 				)
 			{
-				return 0.0;
+				break;
 			}
 
 			// Sum up the filament usage and the filament needed
@@ -770,22 +774,35 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 				}
 				if (extrRawTotal >= totalFilamentNeeded)
 				{
-					return 0.0;		// Avoid division by zero, else the web interface will report AJAX errors
+					break;		// Avoid division by zero, else the web interface will report AJAX errors
 				}
 
 				float filamentRate;
-				if (numLayerSamples)
+				if (numLayerSamples != 0)
 				{
 					filamentRate = 0.0;
-					for(size_t i = 0; i < numLayerSamples; i++)
+					size_t numSamples = 0;
+					for (size_t i = 0; i < numLayerSamples; i++)
 					{
-						filamentRate += filamentUsagePerLayer[i] / layerDurations[i];
+						if (layerDurations[i] > 0.0)
+						{
+							filamentRate += filamentUsagePerLayer[i] / layerDurations[i];
+							++numSamples;
+						}
 					}
-					filamentRate /= numLayerSamples;
+					if (numSamples == 0)
+					{
+						break;
+					}
+					filamentRate /= numSamples;
+				}
+				else if (firstLayerDuration > 0.0)
+				{
+					filamentRate = firstLayerFilament / firstLayerDuration;
 				}
 				else
 				{
-					filamentRate = firstLayerFilament / firstLayerDuration;
+					break;
 				}
 
 				return (totalFilamentNeeded - extrRawTotal) / filamentRate;

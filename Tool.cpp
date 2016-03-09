@@ -1,43 +1,45 @@
 /****************************************************************************************************
 
-RepRapFirmware - Tool
+ RepRapFirmware - Tool
 
-This class implements a tool in the RepRap machine, usually (though not necessarily) an extruder.
+ This class implements a tool in the RepRap machine, usually (though not necessarily) an extruder.
 
-Tools may have zero or more drives associated with them and zero or more heaters.  There are a fixed number
-of tools in a given RepRap, with fixed heaters and drives.  All this is specified on reboot, and cannot
-be altered dynamically.  This restriction may be lifted in the future.  Tool descriptions are stored in
-GCode macros that are loaded on reboot.
+ Tools may have zero or more drives associated with them and zero or more heaters.  There are a fixed number
+ of tools in a given RepRap, with fixed heaters and drives.  All this is specified on reboot, and cannot
+ be altered dynamically.  This restriction may be lifted in the future.  Tool descriptions are stored in
+ GCode macros that are loaded on reboot.
 
------------------------------------------------------------------------------------------------------
+ -----------------------------------------------------------------------------------------------------
 
-Version 0.1
+ Version 0.1
 
-Created on: Apr 11, 2014
+ Created on: Apr 11, 2014
 
-Adrian Bowyer
-RepRap Professional Ltd
-http://reprappro.com
+ Adrian Bowyer
+ RepRap Professional Ltd
+ http://reprappro.com
 
-Licence: GPL
+ Licence: GPL
 
-****************************************************************************************************/
+ ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
 
 Tool * Tool::freelist = nullptr;
 
-/*static*/ Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount)
+/*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount)
 {
 	if (dCount > DRIVES - AXES)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: attempt to use more drives than there are in the RepRap");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE,
+				"Error: Tool creation: attempt to use more drives than there are in the RepRap");
 		return nullptr;
 	}
 
 	if (hCount > HEATERS)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: attempt to use more heaters than there are in the RepRap");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE,
+				"Error: Tool creation: attempt to use more heaters than there are in the RepRap");
 		return nullptr;
 	}
 
@@ -61,14 +63,14 @@ Tool * Tool::freelist = nullptr;
 	t->mixing = false;
 	t->displayColdExtrudeWarning = false;
 
-	for(size_t axis = 0; axis < AXES; axis++)
+	for (size_t axis = 0; axis < AXES; axis++)
 	{
 		t->offset[axis] = 0.0;
 	}
 
 	if (t->driveCount > 0)
 	{
-		float r = 1.0/(float)(t->driveCount);
+		float r = 1.0 / (float) (t->driveCount);
 
 		for (size_t drive = 0; drive < t->driveCount; drive++)
 		{
@@ -79,7 +81,7 @@ Tool * Tool::freelist = nullptr;
 
 	if (t->heaterCount > 0)
 	{
-		for(size_t heater = 0; heater < t->heaterCount; heater++)
+		for (size_t heater = 0; heater < t->heaterCount; heater++)
 		{
 			t->heaters[heater] = h[heater];
 			t->activeTemperatures[heater] = ABS_ZERO;
@@ -90,7 +92,7 @@ Tool * Tool::freelist = nullptr;
 	return t;
 }
 
-/*static*/ void Tool::Delete(Tool *t)
+/*static*/void Tool::Delete(Tool *t)
 {
 	if (t != nullptr)
 	{
@@ -116,12 +118,11 @@ void Tool::Print(StringRef& reply)
 	comma = ',';
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-			if (heater >= heaterCount - 1)
-			{
-				comma = ';';
-			}
-			reply.catf("%d (%.1f/%.1f)%c", heaters[heater],
-					activeTemperatures[heater], standbyTemperatures[heater], comma);
+		if (heater >= heaterCount - 1)
+		{
+			comma = ';';
+		}
+		reply.catf("%d (%.1f/%.1f)%c", heaters[heater], activeTemperatures[heater], standbyTemperatures[heater], comma);
 	}
 
 	reply.catf(" status: %s", active ? "selected" : "standby");
@@ -131,7 +132,8 @@ float Tool::MaxFeedrate() const
 {
 	if (driveCount <= 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Attempt to get maximum feedrate for a tool with no drives.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE,
+				"Error: Attempt to get maximum feedrate for a tool with no drives.\n");
 		return 1.0;
 	}
 	float result = 0.0;
@@ -173,7 +175,7 @@ float Tool::InstantDv() const
 void Tool::FlagTemperatureFault(int8_t heater)
 {
 	Tool* n = this;
-	while(n != nullptr)
+	while (n != nullptr)
 	{
 		n->SetTemperatureFault(heater);
 		n = n->Next();
@@ -183,7 +185,7 @@ void Tool::FlagTemperatureFault(int8_t heater)
 void Tool::ClearTemperatureFault(int8_t heater)
 {
 	Tool* n = this;
-	while(n != nullptr)
+	while (n != nullptr)
 	{
 		n->ResetTemperatureFault(heater);
 		n = n->Next();
@@ -194,7 +196,7 @@ void Tool::SetTemperatureFault(int8_t dudHeater)
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		if(dudHeater == heaters[heater])
+		if (dudHeater == heaters[heater])
 		{
 			heaterFault = true;
 			return;
@@ -269,12 +271,12 @@ void Tool::SetVariables(const float* standby, const float* active)
 		}
 		else
 		{
-			if (active[heater] < BAD_HIGH_TEMPERATURE)
+			if (active[heater] < reprap.GetPlatform()->GetTemperatureLimit())
 			{
 				activeTemperatures[heater] = active[heater];
 				reprap.GetHeat()->SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
 			}
-			if (standby[heater] < BAD_HIGH_TEMPERATURE)
+			if (standby[heater] < reprap.GetPlatform()->GetTemperatureLimit())
 			{
 				standbyTemperatures[heater] = standby[heater];
 				reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
@@ -295,11 +297,10 @@ void Tool::GetVariables(float* standby, float* active) const
 // May be called from ISR
 bool Tool::ToolCanDrive(bool extrude)
 {
-	if (heaterFault)
-		return false;
-
-	if (reprap.GetHeat()->ColdExtrude() || AllHeatersAtHighTemperature(extrude))
+	if (!heaterFault && AllHeatersAtHighTemperature(extrude))
+	{
 		return true;
+	}
 
 	displayColdExtrudeWarning = true;
 	return false;

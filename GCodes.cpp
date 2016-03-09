@@ -3550,8 +3550,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
+	case 143: // Set temperature limit
+		if (gb->Seen('S'))
+		{
+			platform->SetTemperatureLimit(gb->GetFValue());
+		}
+		else
+		{
+			reply.printf("Temperature limit is %.1fC", platform->GetTemperatureLimit());
+		}
+		break;
+
 	case 144: // Set bed to standby
-#if BED_HEATER != -1
+#if BED_HEATER >= 0
 		reprap.GetHeat()->Standby(BED_HEATER);
 #else
 		reply.copy("Hot bed is not present!");
@@ -3559,14 +3570,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 #endif
 		break;
 
-		//	case 160: //number of mixing filament drives  TODO: With tools defined, is this needed?
-//    	if(gb->Seen('S'))
-//		{
-//			platform->SetMixingDrives(gb->GetIValue());
-//		}
-//		break;
-
-	case 190: // Deprecated...
+	case 190: // Set bed temperature and wait
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())	// tell Move not to wait for more moves
 		{
 			return false;
@@ -3818,9 +3822,75 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		SetHeaterParameters(gb, reply);
 		break;
 
+	case 350: // Set/report microstepping
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		{
+			return false;
+		}
+		{
+			// interp is current an int not a bool, because we use special values of interp to set the chopper control register
+			int interp = 0;
+			if (gb->Seen('I'))
+			{
+				interp = gb->GetIValue();
+			}
+
+			bool seen = false;
+			for (size_t axis = 0; axis < AXES; axis++)
+			{
+				if (gb->Seen(axisLetters[axis]))
+				{
+					seen = true;
+					int microsteps = gb->GetIValue();
+					if (!platform->SetMicrostepping(axis, microsteps, interp))
+					{
+						platform->MessageF(GENERIC_MESSAGE, "Drive %c does not support %dx microstepping%s\n",
+												axisLetters[axis], microsteps, (interp) ? " with interpolation" : "");
+					}
+				}
+			}
+
+			if (gb->Seen(extrudeLetter))
+			{
+				seen = true;
+				long eVals[DRIVES - AXES];
+				size_t eCount = DRIVES - AXES;
+				gb->GetLongArray(eVals, eCount);
+				for (size_t e = 0; e < eCount; e++)
+				{
+					if (!platform->SetMicrostepping(AXES + e, (int)eVals[e], interp))
+					{
+						platform->MessageF(GENERIC_MESSAGE, "Drive E%u does not support %dx microstepping%s\n",
+												e, (int)eVals[e], (interp) ? " with interpolation" : "");
+					}
+				}
+			}
+
+			if (!seen)
+			{
+				reply.copy("Microstepping - ");
+				for (size_t axis = 0; axis < AXES; ++axis)
+				{
+					bool interp;
+					int microsteps = platform->GetMicrostepping(axis, interp);
+					reply.catf("%c:%d%s, ", axisLetters[axis], microsteps, (interp) ? "(on)" : "");
+				}
+				reply.cat("E");
+				for (size_t drive = AXES; drive < DRIVES; drive++)
+				{
+					bool interp;
+					int microsteps = platform->GetMicrostepping(drive, interp);
+					reply.catf(":%d%s", microsteps, (interp) ? "(on)" : "");
+				}
+			}
+		}
+		break;
+
 	case 400: // Wait for current moves to finish
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		{
 			return false;
+		}
 		break;
 
 	case 404: // Filament width and nozzle diameter
@@ -4610,7 +4680,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 #endif
 
-	case 579: // Scale Cartesian axes (for Delta configurations)
+	case 579: // Scale Cartesian axes (mostly for Delta configurations)
 		{
 			bool seen = false;
 			for(size_t axis = 0; axis < AXES; axis++)
@@ -4820,6 +4890,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 906: // Set/report Motor currents
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		{
+			return false;
+		}
 		{
 			bool seen = false;
 			for (size_t axis = 0; axis < AXES; axis++)
@@ -4856,13 +4930,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (!seen)
 			{
-				reply.printf("Axis currents (mA) - X:%d, Y:%d, Z:%d, E:", (int) platform->MotorCurrent(X_AXIS),
-						(int) platform->MotorCurrent(Y_AXIS), (int) platform->MotorCurrent(Z_AXIS));
+				reply.copy("Axis currents (mA) - ");
+				for (size_t axis = 0; axis < AXES; ++axis)
+				{
+					reply.catf("%c:%d, ", axisLetters[axis], (int) platform->MotorCurrent(axis));
+				}
+				reply.cat("E");
 				for (size_t drive = AXES; drive < DRIVES; drive++)
 				{
-					reply.catf("%d%c", (int) platform->MotorCurrent(drive), (drive < DRIVES - 1) ? ':' : ',');
+					reply.catf(":%d", (int) platform->MotorCurrent(drive));
 				}
-				reply.catf(" idle factor %d", (int)(platform->GetIdleCurrentFactor() * 100.0));
+				reply.catf(", idle factor %d%%", (int)(platform->GetIdleCurrentFactor() * 100.0));
 			}
 		}
 		break;

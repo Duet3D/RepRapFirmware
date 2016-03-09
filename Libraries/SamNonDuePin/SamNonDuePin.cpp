@@ -85,7 +85,7 @@ extern void pinModeNonDue(uint32_t ulPin, uint32_t ulMode, uint32_t debounceCuto
 		return;
 	}
 
-	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
+	const PinDescription& pinDesc = GetPinDescription(ulPin);
     if (pinDesc.ulPinType == PIO_NOT_A_PIN)
     {
         return;
@@ -153,7 +153,7 @@ extern void digitalWriteNonDue(uint32_t ulPin, uint32_t ulVal)
 		return;
 	}
 
-	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
+	const PinDescription& pinDesc = GetPinDescription(ulPin);
 	if (pinDesc.ulPinType != PIO_NOT_A_PIN)
 	{
 		if (ulVal)		// we make use of the fact that LOW is zero and HIGH is nonzero
@@ -179,7 +179,7 @@ extern int digitalReadNonDue( uint32_t ulPin )
 		return LOW;
 	}
 
-	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
+	const PinDescription& pinDesc = GetPinDescription(ulPin);
 	if (pinDesc.ulPinType == PIO_NOT_A_PIN)
     {
         return LOW ;
@@ -191,7 +191,7 @@ extern int digitalReadNonDue( uint32_t ulPin )
 // Build a short-form pin descriptor for a IO pin
 OutputPin::OutputPin(unsigned int pin)
 {
-	const PinDescription& pinDesc = (pin >= X0) ? nonDuePinDescription[pin - X0] : g_APinDescription[pin];
+	const PinDescription& pinDesc = GetPinDescription(pin);
 	pPort = pinDesc.pPort;
 	ulPin = pinDesc.ulPin;
 }
@@ -249,7 +249,7 @@ void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, uint16_t freq)
 		ulValue = 255;
 	}
 
-	const PinDescription& pinDesc = (ulPin >= X0) ? nonDuePinDescription[ulPin - X0] : g_APinDescription[ulPin];
+	const PinDescription& pinDesc = GetPinDescription(ulPin);
 	uint32_t attr = pinDesc.ulPinAttribute;
 	if ((attr & PIN_ATTR_ANALOG) == PIN_ATTR_ANALOG)
 	{

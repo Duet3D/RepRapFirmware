@@ -96,8 +96,8 @@
 
 //***************************************************************************************************
 
-static const char* overflowResponse = "overflow";
-static const char* badEscapeResponse = "bad escape";
+const char* overflowResponse = "overflow";
+const char* badEscapeResponse = "bad escape";
 
 
 //********************************************************************************************

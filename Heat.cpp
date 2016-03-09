@@ -163,8 +163,8 @@ void PID::Spin()
 
 	// Always know our temperature, regardless of whether we have been switched on or not
 
-	Platform::TempError err = Platform::TempError::errOpen;  // Initially assign an error; call should update but if it doesn't, we'll treat as an error
-	temperature = platform->GetTemperature(heater, &err);    // In the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+	Platform::TempError err = Platform::TempError::errOk;		// assume no error
+	temperature = platform->GetTemperature(heater, &err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
 
 	// If we're not switched on, or there's a fault, turn the power off and go home.
 	// If we're not switched on, then nothing is using us.  This probably means that
@@ -180,7 +180,16 @@ void PID::Spin()
 
 	// We are switched on.  Check for faults.  Temperature silly-low or silly-high mean open-circuit
 	// or shorted thermistor respectively.
-	if (temperature < BAD_LOW_TEMPERATURE || temperature > BAD_HIGH_TEMPERATURE)
+	if (temperature < BAD_LOW_TEMPERATURE)
+	{
+		err = Platform::TempError::errOpen;
+	}
+	else if (temperature > platform->GetTemperatureLimit())
+	{
+		err = Platform::TempError::errTooHigh;
+	}
+
+	if (err != Platform::TempError::errOk)
 	{
 		if (platform->DoThermistorAdc(heater) || !(Platform::TempErrorPermanent(err)))
 		{
@@ -209,7 +218,7 @@ void PID::Spin()
 	}
 	else
 	{
-	  badTemperatureCount = 0;
+		badTemperatureCount = 0;
 	}
 
 	// Now check how long it takes to warm up.  If too long, maybe the thermistor is not in contact with the heater
@@ -301,6 +310,75 @@ void PID::Spin()
 	averagePWM = averagePWM * (1.0 - invHeatPwmAverageCount) + result;
 
 //  debugPrintf("Heater %d: e=%f, P=%f, I=%f, d=%f, r=%f\n", heater, error, pp.kP*error, temp_iState, temp_dState, result);
+}
+
+void PID::SetActiveTemperature(float t)
+{
+	if (t > platform->GetTemperatureLimit())
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
+	}
+
+	SwitchOn();
+	activeTemperature = t;
+}
+
+void PID::SetStandbyTemperature(float t)
+{
+	if (t > platform->GetTemperatureLimit())
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
+	}
+
+	SwitchOn();
+	standbyTemperature = t;
+}
+
+void PID::Activate()
+{
+	if (temperatureFault)
+	{
+		return;
+	}
+
+	SwitchOn();
+	active = true;
+	if (!heatingUp)
+	{
+		timeSetHeating = platform->Time();
+	}
+	heatingUp = activeTemperature > temperature;
+}
+
+void PID::Standby()
+{
+	if (temperatureFault)
+	{
+		return;
+	}
+
+	SwitchOn();
+	active = false;
+	if (!heatingUp)
+	{
+		timeSetHeating = platform->Time();
+	}
+	heatingUp = standbyTemperature > temperature;
+}
+
+void PID::ResetFault()
+{
+	temperatureFault = false;
+    timeSetHeating = platform->Time();		// otherwise we will get another timeout immediately
+	badTemperatureCount = 0;
+}
+
+void PID::SwitchOff()
+{
+	SetHeater(0.0);
+	active = false;
+	switchedOff = true;
+	heatingUp = false;
 }
 
 float PID::GetAveragePWM() const

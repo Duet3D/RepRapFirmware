@@ -26,16 +26,19 @@ Licence: GPL
 #define NAME "RepRapFirmware"
 
 #ifndef VERSION
-#define VERSION "1.09r-dc42"
+#define VERSION "1.09s-dc42-beta4"
 #endif
 
 #ifndef DATE
-#define DATE "2016-01-16"
+#define DATE "2016-03-08"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
 
 #define FLASH_SAVE_ENABLED	(1)
+
+//#define EXTERNAL_DRIVERS		(1)
+//#define FIRST_EXTERNAL_DRIVE	(4)
 
 // Other firmware that we might switch to be compatible with.
 
@@ -81,9 +84,9 @@ const float HOT_ENOUGH_TO_EXTRUDE = 160.0;			// Celsius
 const float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
 const float TIME_TO_HOT = 150.0;					// Seconds
 
-const uint8_t MAX_BAD_TEMPERATURE_COUNT = 6;		// Number of bad temperature samples before a heater fault is reported
+const uint8_t MAX_BAD_TEMPERATURE_COUNT = 4;		// Number of bad temperature samples permitted before a heater fault is reported
 const float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
-const float BAD_HIGH_TEMPERATURE = 300.0;			// Celsius
+const float DEFAULT_TEMPERATURE_LIMIT = 300.0;		// Celsius
 const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 const float BAD_ERROR_TEMPERATURE = 2000.0;			// must exceed BAD_HIGH_TEMPERATURE
 

@@ -137,31 +137,9 @@ inline bool PID::Active() const
 	return active;
 }
 
-inline void PID::SetActiveTemperature(float t)
-{
-	if (t > BAD_HIGH_TEMPERATURE)
-	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
-	}
-
-	SwitchOn();
-	activeTemperature = t;
-}
-
 inline float PID::GetActiveTemperature() const
 {
 	return activeTemperature;
-}
-
-inline void PID::SetStandbyTemperature(float t)
-{
-	if (t > BAD_HIGH_TEMPERATURE)
-	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
-	}
-
-	SwitchOn();
-	standbyTemperature = t;
 }
 
 inline float PID::GetStandbyTemperature() const
@@ -174,56 +152,9 @@ inline float PID::GetTemperature() const
 	return temperature;
 }
 
-inline void PID::Activate()
-{
-	if (temperatureFault)
-	{
-		return;
-	}
-
-	SwitchOn();
-	active = true;
-	if (!heatingUp)
-	{
-		timeSetHeating = platform->Time();
-	}
-	heatingUp = activeTemperature > temperature;
-}
-
-inline void PID::Standby()
-{
-	if (temperatureFault)
-	{
-		return;
-	}
-
-	SwitchOn();
-	active = false;
-	if (!heatingUp)
-	{
-		timeSetHeating = platform->Time();
-	}
-	heatingUp = standbyTemperature > temperature;
-}
-
 inline bool PID::FaultOccurred() const
 {
 	return temperatureFault;
-}
-
-inline void PID::ResetFault()
-{
-	temperatureFault = false;
-    timeSetHeating = platform->Time();		// otherwise we will get another timeout immediately
-	badTemperatureCount = 0;
-}
-
-inline void PID::SwitchOff()
-{
-	SetHeater(0.0);
-	active = false;
-	switchedOff = true;
-	heatingUp = false;
 }
 
 inline bool PID::SwitchedOff() const

@@ -22,6 +22,10 @@
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
 
+#ifdef EXTERNAL_DRIVERS
+#include "ExternalDrivers.h"
+#endif
+
 extern char _end;
 extern "C" char *sbrk(int i);
 
@@ -109,8 +113,7 @@ bool PidParameters::operator==(const PidParameters& other) const
 
 Platform::Platform() :
 		autoSaveEnabled(false), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
-		fileStructureInitialised(false), tickState(0), debugCode(0),
-		messageString(messageStringBuffer, ARRAY_SIZE(messageStringBuffer))
+		fileStructureInitialised(false), tickState(0), debugCode(0)
 {
 	// Output
 	auxOutput = new OutputStack();
@@ -148,7 +151,9 @@ void Platform::Init()
 
 	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
+#ifdef SERIAL_AUX2_DEVICE
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
+#endif
 
 	// Reconfigure the ADC to avoid crosstalk between channels (especially on Duet 0.8.5)
 	adc_init(ADC, SystemCoreClock, ADC_FREQ_MIN, ADC_STARTUP_FAST);		// reduce clock rate
@@ -240,7 +245,11 @@ void Platform::Init()
 		{
 			pinModeNonDue(directionPins[drive], OUTPUT);
 		}
+#ifdef EXTERNAL_DRIVERS
+		if (drive < FIRST_EXTERNAL_DRIVE && enablePins[drive] >= 0)
+#else
 		if (enablePins[drive] >= 0)
+#endif
 		{
 			pinModeNonDue(enablePins[drive], OUTPUT);
 		}
@@ -261,6 +270,10 @@ void Platform::Init()
 		}
 	}
 
+#ifdef EXTERNAL_DRIVERS
+	ExternalDrivers::Init();
+#endif
+
 	extrusionAncilliaryPWM = 0.0;
 
 	// HEATERS - Bed is assumed to be index 0
@@ -275,14 +288,8 @@ void Platform::Init()
 		thermistorAdcChannels[heater] = PinToAdcChannel(tempSensePins[heater]);	// Translate the Arduino Due Analog pin number to the SAM ADC channel number
 		SetThermistorNumber(heater, heater);				// map the thermistor straight through
 		thermistorFilters[heater].Init(analogRead(tempSensePins[heater]));
-
-		// Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check is quickly in the tick ISR
-		float thermistorOverheatResistance = nvData.pidParams[heater].GetRInf()
-				* exp(-nvData.pidParams[heater].GetBeta() / (BAD_HIGH_TEMPERATURE - ABS_ZERO));
-		float thermistorOverheatAdcValue = (AD_RANGE_REAL + 1) * thermistorOverheatResistance
-				/ (thermistorOverheatResistance + nvData.pidParams[heater].thermistorSeriesR);
-		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * THERMISTOR_AVERAGE_READINGS;
 	}
+	SetTemperatureLimit(DEFAULT_TEMPERATURE_LIMIT);
 
 	InitFans();
 
@@ -335,6 +342,20 @@ void Platform::InvalidateFiles()
 	for (size_t i = 0; i < MAX_FILES; i++)
 	{
 		files[i]->Init();
+	}
+}
+
+void Platform::SetTemperatureLimit(float t)
+{
+	temperatureLimit = t;
+	for (size_t heater = 0; heater < HEATERS; heater++)
+	{
+		// Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check it quickly in the tick ISR
+		float thermistorOverheatResistance = nvData.pidParams[heater].GetRInf()
+				* exp(-nvData.pidParams[heater].GetBeta() / (temperatureLimit - ABS_ZERO));
+		float thermistorOverheatAdcValue = (AD_RANGE_REAL + 1) * thermistorOverheatResistance
+				/ (thermistorOverheatResistance + nvData.pidParams[heater].thermistorSeriesR);
+		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * THERMISTOR_AVERAGE_READINGS;
 	}
 }
 
@@ -781,6 +802,7 @@ void Platform::Spin()
 	OutputBuffer *aux2OutputBuffer = aux2Output->GetFirstItem();
 	if (aux2OutputBuffer != nullptr)
 	{
+#ifdef SERIAL_AUX2_DEVICE
 		size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
 		if (bytesToWrite > 0)
 		{
@@ -792,6 +814,9 @@ void Platform::Spin()
 			aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
 			aux2Output->SetFirstItem(aux2OutputBuffer);
 		}
+#else
+		aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
+#endif
 	}
 
 	// Write non-blocking data to the USB line
@@ -868,7 +893,11 @@ void Platform::SoftwareReset(uint16_t reason)
 			{
 				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
 			}
-			if (!SERIAL_AUX_DEVICE.canWrite() || !SERIAL_AUX2_DEVICE.canWrite())
+			if (!SERIAL_AUX_DEVICE.canWrite()
+#ifdef SERIAL_AUX2_DEVICE
+				|| !SERIAL_AUX2_DEVICE.canWrite()
+#endif
+			   )
 			{
 				reason |= (uint16_t)SoftwareResetReason::inAuxOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to aux
 			}
@@ -880,15 +909,6 @@ void Platform::SoftwareReset(uint16_t reason)
 		temp.magic = SoftwareResetData::magicValue;
 		temp.resetReason = reason;
 		GetStackUsage(NULL, NULL, &temp.neverUsedRam);
-		if (reason != (uint16_t)SoftwareResetReason::user)
-		{
-			strncpy(temp.lastMessage, messageString.Pointer(), sizeof(temp.lastMessage) - 1);
-			temp.lastMessage[sizeof(temp.lastMessage) - 1] = 0;
-		}
-		else
-		{
-			temp.lastMessage[0] = 0;
-		}
 
 		// Save diagnostics data to Flash and reset the software
 		DueFlashStorage::write(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
@@ -1022,10 +1042,6 @@ void Platform::Diagnostics()
 		{
 			MessageF(GENERIC_MESSAGE, "Last software reset code & available RAM: 0x%04x, %u\n", temp.resetReason, temp.neverUsedRam);
 			MessageF(GENERIC_MESSAGE, "Spinning module during software reset: %s\n", moduleName[temp.resetReason & 0x0F]);
-			if (temp.lastMessage[0])
-			{
-				MessageF(GENERIC_MESSAGE, "Last message before reset: %s", temp.lastMessage); // usually ends with NL
-			}
 		}
 	}
 
@@ -1178,7 +1194,10 @@ float Platform::GetTemperature(size_t heater, TempError* err) const
 		else
 		{
 			// thermistor short circuit, return a high temperature
-			if (err) *err = TempError::errShort;
+			if (err)
+			{
+				*err = TempError::errShort;
+			}
 			return BAD_ERROR_TEMPERATURE;
 		}
 	}
@@ -1216,6 +1235,7 @@ float Platform::GetTemperature(size_t heater, TempError* err) const
 	case TempError::errShortVcc : return "sensor circuit is shorted to the voltage rail";
 	case TempError::errShortGnd : return "sensor circuit is shorted to ground";
 	case TempError::errOpen : return "sensor circuit is open/disconnected";
+	case TempError::errTooHigh: return "temperature above safety limit";
 	case TempError::errTimeout : return "communication error whilst reading sensor; read took too long";
 	case TempError::errIO: return "communication error whilst reading sensor; check sensor connections";
 	}
@@ -1238,6 +1258,7 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t) const
 	return false;
 }
 
+// Update the heater PID parameters or thermistor resistance etc.
 void Platform::SetPidParameters(size_t heater, const PidParameters& params)
 {
 	if (heater < HEATERS && params != nvData.pidParams[heater])
@@ -1247,6 +1268,7 @@ void Platform::SetPidParameters(size_t heater, const PidParameters& params)
 		{
 			WriteNvData();
 		}
+		SetTemperatureLimit(temperatureLimit);		// recalculate the thermistor resistance at max allowed temperature for the tick ISR
 	}
 }
 const PidParameters& Platform::GetPidParameters(size_t heater) const
@@ -1329,11 +1351,22 @@ void Platform::EnableDrive(size_t drive)
 		{
 			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
-			const int pin = enablePins[driver];
-			if (pin >= 0)
+#ifdef EXTERNAL_DRIVERS
+			if (drive >= FIRST_EXTERNAL_DRIVE)
 			{
-				digitalWriteNonDue(pin, enableValues[driver]);
+				ExternalDrivers::EnableDrive(driver - FIRST_EXTERNAL_DRIVE, true);
 			}
+			else
+			{
+#endif
+				const int pin = enablePins[driver];
+				if (pin >= 0)
+				{
+					digitalWriteNonDue(pin, enableValues[driver]);
+				}
+#ifdef EXTERNAL_DRIVERS
+			}
+#endif
 		}
 	}
 }
@@ -1344,12 +1377,23 @@ void Platform::DisableDrive(size_t drive)
 	if (drive < DRIVES)
 	{
 		const size_t driver = driverNumbers[drive];
-		const int pin = enablePins[driver];
-		if (pin >= 0)
+#ifdef EXTERNAL_DRIVERS
+		if (drive >= FIRST_EXTERNAL_DRIVE)
 		{
-			digitalWriteNonDue(pin, !enableValues[driver]);
+			ExternalDrivers::EnableDrive(driver - FIRST_EXTERNAL_DRIVE, false);
 		}
-		driveState[drive] = DriveStatus::disabled;
+		else
+		{
+#endif
+			const int pin = enablePins[driver];
+			if (pin >= 0)
+			{
+				digitalWriteNonDue(pin, !enableValues[driver]);
+			}
+			driveState[drive] = DriveStatus::disabled;
+#ifdef EXTERNAL_DRIVERS
+		}
+#endif
 	}
 }
 
@@ -1387,35 +1431,46 @@ void Platform::UpdateMotorCurrent(size_t drive)
 		{
 			current *= idleCurrentFactor;
 		}
-		unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
-		unsigned short dac = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDACVoltage/2)/maxStepperDACVoltage);
 		const size_t driver = driverNumbers[drive];
-		if (driver < 4)
+#ifdef EXTERNAL_DRIVERS
+		if (driver >= FIRST_EXTERNAL_DRIVE)
 		{
-			mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
-			mcpDuet.setVolatileWiper(potWipes[driver], pot);
+			ExternalDrivers::SetCurrent(driver - FIRST_EXTERNAL_DRIVE, current);
 		}
 		else
 		{
-			if (board == BoardType::Duet_085)
+#endif
+			unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
+			unsigned short dac = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDACVoltage/2)/maxStepperDACVoltage);
+			if (driver < 4)
 			{
-				// Extruder 0 is on DAC channel 0
-				if (driver == 4)
-				{
-					analogWrite(DAC0, dac);
-				}
-				else
-				{
-					mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
-					mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
-				}
+				mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
+				mcpDuet.setVolatileWiper(potWipes[driver], pot);
 			}
 			else
 			{
-				mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
-				mcpExpansion.setVolatileWiper(potWipes[driver], pot);
-			}
+				if (board == BoardType::Duet_085)
+				{
+					// Extruder 0 is on DAC channel 0
+					if (driver == 4)
+					{
+						analogWrite(DAC0, dac);
+					}
+					else
+					{
+						mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
+						mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
+					}
+				}
+				else
+				{
+					mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
+					mcpExpansion.setVolatileWiper(potWipes[driver], pot);
+				}
 		}
+#ifdef EXTERNAL_DRIVERS
+		}
+#endif
 	}
 }
 
@@ -1435,6 +1490,48 @@ void Platform::SetIdleCurrentFactor(float f)
 			UpdateMotorCurrent(drive);
 		}
 	}
+}
+
+// Set the microstepping, returning true if successful
+bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
+{
+	if (drive < DRIVES)
+	{
+#ifdef EXTERNAL_DRIVERS
+		const size_t driver = driverNumbers[drive];
+		if (driver >= FIRST_EXTERNAL_DRIVE)
+		{
+			return ExternalDrivers::SetMicrostepping(driver - FIRST_EXTERNAL_DRIVE, microsteps, mode);
+		}
+		else
+		{
+#endif
+			// On-board drivers only support x16 microstepping.
+			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
+			return microsteps == 16;
+#ifdef EXTERNAL_DRIVERS
+		}
+#endif
+	}
+	return false;
+}
+
+unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
+{
+#ifdef EXTERNAL_DRIVERS
+	if (drive < DRIVES)
+	{
+		const size_t driver = driverNumbers[drive];
+		if (driver >= FIRST_EXTERNAL_DRIVE)
+		{
+			return ExternalDrivers::GetMicrostepping(driver - FIRST_EXTERNAL_DRIVE, interpolation);
+		}
+	}
+#endif
+
+	// On-board drivers only support x16 microstepping without interpolation
+	interpolation = false;
+	return 16;
 }
 
 // Set the physical drive (i.e. axis or extruder) number used by this driver
@@ -1513,7 +1610,7 @@ void Platform::InitFans()
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
 		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0 on a Duet 0.4, 0.6 or 0.7
-		fans[i].Init(COOLING_FAN_PINS[i], !HEAT_ON && board != BoardType::Duet_085);
+		fans[i].Init(COOLING_FAN_PINS[i], !HEAT_ON && (board == BoardType::Duet_06 || board == BoardType::Duet_07));
 	}
 
 	if (NUM_FANS > 1)
@@ -1711,6 +1808,7 @@ void Platform::Message(MessageType type, const char *message)
 			break;
 
 		case AUX2_MESSAGE:
+#ifdef SERIAL_AUX2_DEVICE
 			// Message that is to be sent to the second auxiliary device (blocking)
 			if (!aux2Output->IsEmpty())
 			{
@@ -1723,6 +1821,7 @@ void Platform::Message(MessageType type, const char *message)
 				SERIAL_AUX2_DEVICE.write(message);
 				SERIAL_AUX2_DEVICE.flush();
 			}
+#endif
 			break;
 
 		case DISPLAY_MESSAGE:
@@ -1965,10 +2064,12 @@ void Platform::ResetChannel(size_t chan)
 		SERIAL_AUX_DEVICE.end();
 		SERIAL_AUX_DEVICE.begin(baudRates[1]);
 		break;
+#ifdef SERIAL_AUX2_DEVICE
 	case 2:
 		SERIAL_AUX2_DEVICE.end();
 		SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 		break;
+#endif
 	default:
 		break;
 	}
@@ -1981,7 +2082,7 @@ void Platform::SetBoardType(BoardType bt)
 		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
 		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
 		// So we enable the pullup (value 150K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
-		// This may fail if anyone connects a load to the DAC0 pin on and Dur=et 0.6, hence we implement board selection in M115 as well.
+		// This may fail if anyone connects a load to the DAC0 pin on and Duet 0.6, hence we implement board selection in M115 as well.
 		pinModeNonDue(Dac0DigitalPin, INPUT_PULLUP);
 		board = (digitalReadNonDue(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
 		pinModeNonDue(Dac0DigitalPin, INPUT);	// turn pullup off
@@ -2088,7 +2189,11 @@ bool Platform::GCodeAvailable(const SerialSource source) const
 			return SERIAL_AUX_DEVICE.available() > 0;
 
 		case SerialSource::AUX2:
+#ifdef SERIAL_AUX2_DEVICE
 			return SERIAL_AUX2_DEVICE.available() > 0;
+#else
+			return false;
+#endif
 	}
 
 	return false;
@@ -2105,7 +2210,11 @@ char Platform::ReadFromSource(const SerialSource source)
 			return static_cast<char>(SERIAL_AUX_DEVICE.read());
 
 		case SerialSource::AUX2:
+#ifdef SERIAL_AUX2_DEVICE
 			return static_cast<char>(SERIAL_AUX2_DEVICE.read());
+#else
+			return 0;
+#endif
 	}
 
 	return 0;
@@ -2180,7 +2289,7 @@ void Platform::Tick()
 				// averaging.  As such, the temperature reading is taken directly by Platform::GetTemperature() and
 				// periodically called by PID::Spin() where temperature fault handling is taken care of.  However, we
 				// must guard against overly long delays between successive calls of PID::Spin().
-
+				// Do not call Time() here, it isn't safe. We use millis() instead.
 				StartAdcConversion(zProbeAdcChannel);
 				if ((millis() - reprap.GetHeat()->GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
 				{

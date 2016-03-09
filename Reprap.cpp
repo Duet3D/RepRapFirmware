@@ -163,7 +163,7 @@ void RepRap::Spin()
 	{
 		if (t->DisplayColdExtrudeWarning() && ToolWarningsAllowed())
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures were not high enough\n", t->myNumber);
+			platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its temperatures were not high enough or it has a heater fault\n", t->myNumber);
 		}
 	}
 
@@ -1341,37 +1341,44 @@ void RepRap::SetName(const char* nm)
 	network->SetHostname(myName);
 }
 
-// Given that we want to extrude/etract the specified extruder drives, check if they are allowed.
+// Given that we want to extrude/retract the specified extruder drives, check if they are allowed.
 // For each disallowed one, log an error to report later and return a bit in the bitmap.
 // This may be called by an ISR!
 unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions)
 {
-	unsigned int result = 0;
-	Tool *tool = toolList;
-	while (tool != nullptr)
+	if (GetHeat()->ColdExtrude())
 	{
-		for (size_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
+		return 0;
+	}
+
+	Tool *tool = currentTool;
+	if (tool == nullptr)
+	{
+		// This should not happen, but if on tool is selected then don't allow any extruder movement
+		return extrusions | retractions;
+	}
+
+	unsigned int result = 0;
+	for (size_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
+	{
+		const unsigned int extruderDrive = (unsigned int)(tool->Drive(driveNum));
+		const unsigned int mask = 1 << extruderDrive;
+		if (extrusions & mask)
 		{
-			const int extruderDrive = tool->Drive(driveNum);
-			unsigned int mask = 1 << extruderDrive;
-			if (extrusions & mask)
+			if (!tool->ToolCanDrive(true))
 			{
-				if (!tool->ToolCanDrive(true))
-				{
-					result |= mask;
-				}
-			}
-			else if (retractions & (1 << extruderDrive))
-			{
-				if (!tool->ToolCanDrive(false))
-				{
-					result |= mask;
-				}
+				result |= mask;
 			}
 		}
-
-		tool = tool->Next();
+		else if (retractions & mask)
+		{
+			if (!tool->ToolCanDrive(false))
+			{
+				result |= mask;
+			}
+		}
 	}
+
 	return result;
 }
 

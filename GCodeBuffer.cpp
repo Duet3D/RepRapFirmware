@@ -65,12 +65,14 @@ bool GCodeBuffer::Put(char c)
 		// Deal with line numbers and checksums
 		if (Seen('*'))
 		{
-			int csSent = GetIValue();
-			int csHere = CheckSum();
-			Seen('N');
+			const int csSent = GetIValue();
+			const int csHere = CheckSum();
 			if (csSent != csHere)
 			{
-				snprintf(gcodeBuffer, GCODE_LENGTH, "M998 P%d", GetIValue());
+				if (Seen('N'))
+				{
+					snprintf(gcodeBuffer, GCODE_LENGTH, "M998 P%d", GetIValue());
+				}
 				Init();
 				return true;
 			}
