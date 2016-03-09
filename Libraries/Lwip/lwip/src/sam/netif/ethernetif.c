@@ -55,7 +55,7 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "lwip/src/include/netif/ppp_oe.h"
 
-#if 1
+#if 0
 // DC 2015-07-28.
 // The original RepRapPro code has the source files included like this, instead of the header files.
 // I tried including the header files instead, and found that doing so makes file upload unreliable. So leave it like this.

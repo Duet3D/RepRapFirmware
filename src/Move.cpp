@@ -1439,7 +1439,7 @@ const char* Move::GetGeometryString() const
 }
 
 // Return true if the specified axis shares its motors with another. Safe to call for extruders as well as axes.
-bool Move::IsCoreXYAxis(unsigned int axis) const
+bool Move::IsCoreXYAxis(size_t axis) const
 {
 	switch(coreXYMode)
 	{

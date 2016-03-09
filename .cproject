@@ -1,64 +1,112 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <?fileVersion 4.0.0?><cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
 	<storageModule moduleId="org.eclipse.cdt.core.settings">
-		<cconfiguration id="it.baeyens.arduino.core.toolChain.release.674980254">
-			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="it.baeyens.arduino.core.toolChain.release.674980254" moduleId="org.eclipse.cdt.core.settings" name="Release">
+		<cconfiguration id="cdt.managedbuild.config.gnu.cross.exe.release.516195201">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201" moduleId="org.eclipse.cdt.core.settings" name="Release">
 				<externalSettings/>
 				<extensions>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
 					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
 					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
-					<extension id="org.eclipse.cdt.core.MakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
 					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
 				</extensions>
 			</storageModule>
 			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactName="${ProjName}" buildProperties="" description="" id="it.baeyens.arduino.core.toolChain.release.674980254" name="Release" parent="org.eclipse.cdt.build.core.emptycfg">
-					<folderInfo id="it.baeyens.arduino.core.toolChain.release.674980254.1794475143" name="/" resourcePath="">
-						<toolChain id="it.baeyens.arduino.core.toolChain.release.634866029" name="it.baeyens.arduino.core.toolChain.release" nonInternalBuilderId="it.baeyens.arduino.sketch.builder" resourceTypeBasedDiscovery="false" superClass="it.baeyens.arduino.core.toolChain.release">
-							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="it.baeyens.arduino.targetplatform.847468288" name="Arduino Target" osList="all" superClass="it.baeyens.arduino.targetplatform"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="it.baeyens.arduino.sketch.builder.952736646" keepEnvironmentInBuildfile="false" name="Arduino sketch builder" superClass="it.baeyens.arduino.sketch.builder"/>
-							<tool id="it.baeyens.arduino.tool.sketch.compiler.cpp.2087861045" name="Arduino C++ Compiler" superClass="it.baeyens.arduino.tool.sketch.compiler.cpp">
-								<option id="it.baeyens.arduino.compiler.cpp.sketch.option.incpath.274618772" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.cpp.sketch.option.incpath" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
-									<listOptionValue builtIn="false" value="C:/arduino-1.5.8/hardware/arduino/sam/system/libsam/include"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/EMAC}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Lwip}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/MCP4461}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SamNonDuePin}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI/utility}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Wire}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\lib\gcc\arm-none-eabi\4.8.3\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Flash}&quot;"/>
-								</option>
-								<inputType id="it.baeyens.arduino.compiler.cpp.sketch.input.1531738210" name="CPP source files" superClass="it.baeyens.arduino.compiler.cpp.sketch.input"/>
+				<configuration artifactExtension="elf" artifactName="${ProjName}" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release,org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201" name="Release" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary ${workspace_loc:/${ProjName}/Release}/${ProjName}.elf ${workspace_loc:/${ProjName}/Release}/${ProjName}.bin">
+					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201." name="/" resourcePath="">
+						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.56337087" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
+							<option id="cdt.managedbuild.option.gnu.cross.path.716610183" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" value="C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin" valueType="string"/>
+							<option id="cdt.managedbuild.option.gnu.cross.prefix.1300241300" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" value="arm-none-eabi-" valueType="string"/>
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1581645614" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.527170141" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1967891077" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
+								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.729788515" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
-							<tool id="it.baeyens.arduino.tool.compiler.c.993630870" name="Arduino C Compiler" superClass="it.baeyens.arduino.tool.compiler.c">
-								<option id="it.baeyens.arduino.compiler.c.sketch.option.incpath.1536622716" name="Include Paths (-I)" superClass="it.baeyens.arduino.compiler.c.sketch.option.incpath" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/core}&quot;"/>
-									<listOptionValue builtIn="false" value="C:/arduino-1.5.8/hardware/arduino/sam/system/libsam/include"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/EMAC}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Lwip}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/MCP4461}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SamNonDuePin}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/SD_HSMCI/utility}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/Libraries/Wire}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RepRapFirmware/arduino/variant}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\arm-none-eabi\include&quot;"/>
+							<tool commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${INPUTS}" id="cdt.managedbuild.tool.gnu.cross.c.compiler.220085372" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler">
+								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.1490670229" name="Optimization Level" superClass="gnu.c.compiler.option.optimization.level" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.debugging.level.1765216517" name="Debug Level" superClass="gnu.c.compiler.option.debugging.level" value="gnu.c.debugging.level.none" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.misc.verbose.1564280355" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" value="false" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.misc.other.96683616" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-c -std=gnu99 -mcpu=cortex-m3 -mthumb -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single=500" valueType="string"/>
+								<option id="gnu.c.compiler.option.include.paths.187319219" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/cores/arduino}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/libsam}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/CMSIS/Device/ATMEL}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/CMSIS/CMSIS/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/variants/duet}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/libsam/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/CMSIS/Device/ATMEL/sam3xa/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SD_HSMCI/utility}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SPI}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/Lwip}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/EMAC}&quot;"/>
 								</option>
-								<inputType id="it.baeyens.arduino.compiler.c.sketch.input.1546791595" name="C Source Files" superClass="it.baeyens.arduino.compiler.c.sketch.input"/>
+								<option id="gnu.c.compiler.option.preprocessor.def.symbols.2036576066" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
+									<listOptionValue builtIn="false" value="F_CPU=84000000"/>
+									<listOptionValue builtIn="false" value="USBCON"/>
+									<listOptionValue builtIn="false" value="USB_PID=0x003e"/>
+									<listOptionValue builtIn="false" value="USB_VID=0x2341"/>
+									<listOptionValue builtIn="false" value="printf=iprintf"/>
+								</option>
+								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1345445195" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
-							<tool id="it.baeyens.arduino.tool.ar.1601937869" name="Arduino archiver" superClass="it.baeyens.arduino.tool.ar"/>
-							<tool id="it.baeyens.arduino.tool.combine.110203046" name="Arduino combiner" superClass="it.baeyens.arduino.tool.combine"/>
-							<tool id="it.baeyens.arduino.tool.objcopy.eep.431373986" name="Arduino tool Create eeprom" superClass="it.baeyens.arduino.tool.objcopy.eep"/>
-							<tool id="it.baeyens.arduino.tool.objcopy.flash.310453427" name="Arduino tool Create hex" superClass="it.baeyens.arduino.tool.objcopy.flash"/>
-							<tool id="it.baeyens.arduino.tool.size.20579182" name="Arduino tool Print Size" superClass="it.baeyens.arduino.tool.size"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.244306990" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.1297529102" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver"/>
+							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT}  ${LINK_FLAGS_1} ${workspace_loc:/CoreDuet/Release/cores/arduino/syscalls_sam3.o} ${INPUTS} ${LINK_FLAGS_2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.1456918662" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
+								<option id="gnu.cpp.link.option.nostdlibs.1511064380" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.link.option.paths.178730582" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/Release/}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/variants/duet}&quot;"/>
+								</option>
+								<option id="gnu.cpp.link.option.libs.1614032345" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
+									<listOptionValue builtIn="false" value="CoreDuet"/>
+									<listOptionValue builtIn="false" value="sam_sam3x8e_gcc_rel"/>
+								</option>
+								<option id="gnu.cpp.link.option.flags.1874922881" name="Linker flags" superClass="gnu.cpp.link.option.flags" value="-Os -Wl,--gc-sections -mcpu=cortex-m3 -T${workspace_loc:/CoreDuet/variants/duet/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/Release}/${ProjName}.map" valueType="string"/>
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1479906997" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
+									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
+									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
+								</inputType>
+							</tool>
+							<tool command="g++" id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1703390221" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler">
+								<option id="gnu.cpp.compiler.option.optimization.level.1076886860" name="Optimization Level" superClass="gnu.cpp.compiler.option.optimization.level" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.debugging.level.1252771497" name="Debug Level" superClass="gnu.cpp.compiler.option.debugging.level" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.other.verbose.526148117" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.other.other.1337488452" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" value="-c -std=gnu++11 -mcpu=cortex-m3 -mthumb -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fno-exceptions -nostdlib --param max-inline-insns-single=500" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.include.paths.148186010" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/cores/arduino}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/libsam}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/CMSIS/Device/ATMEL}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/CMSIS/CMSIS/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/variants/duet}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/libsam/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/Lwip}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/EMAC}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SamNonDuePin}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SD_HSMCI}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SD_HSMCI/utility}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SPI}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/MAX31855}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/MCP4461}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/Flash}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/Wire}&quot;"/>
+								</option>
+								<option id="gnu.cpp.compiler.option.preprocessor.def.1913656094" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
+									<listOptionValue builtIn="false" value="F_CPU=84000000"/>
+									<listOptionValue builtIn="false" value="USBCON"/>
+									<listOptionValue builtIn="false" value="USB_PID=0x003e"/>
+									<listOptionValue builtIn="false" value="USB_VID=0x2341"/>
+									<listOptionValue builtIn="false" value="printf=iprintf"/>
+								</option>
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.111814721" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
+							</tool>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="Libraries/*/?xamples" flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name=""/>
+						<entry excluding="DuetArduinoCore/system/CMSIS/Device/ATMEL/sam3xa/source/as_gcc|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam3xa/source/gcc_atmel|DuetArduinoCore/system/CMSIS/Device/ARM|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam3xa/source/gcc_arm|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam3xa/source/iar|DuetArduinoCore/system/CMSIS/CMSIS/Lib/ARM|DuetArduinoCore/system/CMSIS/CMSIS/DSP_Lib|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam4.h|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam4s|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam3u|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam3s|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam3n|DuetArduinoCore/system/CMSIS/Device/ARM/ARMCM4|DuetArduinoCore/system/CMSIS/Device/ARM/ARMCM0|DuetArduinoCore/system/CMSIS/Device/ATMEL/sam3sd8" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -66,7 +114,7 @@
 		</cconfiguration>
 	</storageModule>
 	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-		<project id="RepRapFirmware.null.1049349308" name="RepRapFirmware"/>
+		<project id="RepRapFirmware.cdt.managedbuild.target.gnu.cross.exe.1494358155" name="Executable" projectType="cdt.managedbuild.target.gnu.cross.exe"/>
 	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="refreshScope" versionNumber="2">
@@ -74,12 +122,14 @@
 			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
 		</configuration>
 	</storageModule>
-	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets"/>
 	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		<scannerConfigBuildInfo instanceId="it.baeyens.arduino.core.toolChain.release.674980254">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.cross.exe.release.516195201;cdt.managedbuild.config.gnu.cross.exe.release.516195201.;cdt.managedbuild.tool.gnu.cross.c.compiler.220085372;cdt.managedbuild.tool.gnu.c.compiler.input.1345445195">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileC"/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.config.gnu.cross.exe.release.516195201;cdt.managedbuild.config.gnu.cross.exe.release.516195201.;cdt.managedbuild.tool.gnu.cross.cpp.compiler.1703390221;cdt.managedbuild.tool.gnu.cpp.compiler.input.111814721">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
 		</scannerConfigBuildInfo>
 	</storageModule>
 </cproject>
