@@ -45,12 +45,7 @@ inline const PinDescription& GetPinDescription(uint32_t ulPin)
 	return g_APinDescription[ulPin];
 }
 
-void pinModeNonDue(uint32_t ulPin, uint32_t ulMode, uint32_t debounceCutoff = 0);	// NB only one debounce cutoff frequency can be set per PIO
-void digitalWriteNonDue(uint32_t ulPin, uint32_t ulVal);
-int digitalReadNonDue(uint32_t ulPin);
 OutputPin getPioPin(uint32_t ulPin);
-void analogWriteNonDue(uint32_t ulPin, uint32_t ulValue, uint16_t freq);
-void analogOutputNonDue();
 void hsmciPinsinit();
 void ethPinsInit();
 

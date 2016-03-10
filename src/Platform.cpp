@@ -78,11 +78,10 @@ extern "C"
 	}
 }
 
-// This overrides the weak function in CoreDuet
-// Don't enable the watchdog yet, because we enable it after initialization is complete
-void watchdogSetup(void)
-{
-}
+// This used to overrides the weak function in CoreDuet, but now CoreDuet no longer calls it so we don't need it
+//void watchdogSetup(void)
+//{
+//}
 
 //*************************************************************************************************
 // PidParameters class
@@ -141,8 +140,8 @@ Platform::Platform() :
 void Platform::Init()
 {
 	// Deal with power first
-	digitalWriteNonDue(ATX_POWER_PIN, LOW);		// ensure ATX power is off by default
-	pinModeNonDue(ATX_POWER_PIN, OUTPUT);
+	digitalWrite(ATX_POWER_PIN, LOW);		// ensure ATX power is off by default
+	pinMode(ATX_POWER_PIN, OUTPUT);
 
 	SetBoardType(BoardType::Auto);
 
@@ -245,11 +244,11 @@ void Platform::Init()
 		SetPhysicalDrive(drive, drive);					// map drivers directly to axes and extruders
 		if (stepPins[drive] >= 0)
 		{
-			pinModeNonDue(stepPins[drive], OUTPUT);
+			pinMode(stepPins[drive], OUTPUT);
 		}
 		if (directionPins[drive] >= 0)
 		{
-			pinModeNonDue(directionPins[drive], OUTPUT);
+			pinMode(directionPins[drive], OUTPUT);
 		}
 #ifdef EXTERNAL_DRIVERS
 		if (drive < FIRST_EXTERNAL_DRIVE && enablePins[drive] >= 0)
@@ -257,11 +256,11 @@ void Platform::Init()
 		if (enablePins[drive] >= 0)
 #endif
 		{
-			pinModeNonDue(enablePins[drive], OUTPUT);
+			pinMode(enablePins[drive], OUTPUT);
 		}
 		if (endStopPins[drive] >= 0)
 		{
-			pinModeNonDue(endStopPins[drive], INPUT_PULLUP);
+			pinMode(endStopPins[drive], INPUT_PULLUP);
 		}
 		motorCurrents[drive] = 0.0;
 		DisableDrive(drive);
@@ -287,8 +286,8 @@ void Platform::Init()
 	{
 		if (heatOnPins[heater] >= 0)
 		{
-			digitalWriteNonDue(heatOnPins[heater], HIGH);	// turn the heater off
-			pinModeNonDue(heatOnPins[heater], OUTPUT);
+			digitalWrite(heatOnPins[heater], HIGH);	// turn the heater off
+			pinMode(heatOnPins[heater], OUTPUT);
 		}
 		analogReadResolution(12);
 		thermistorAdcChannels[heater] = PinToAdcChannel(tempSensePins[heater]);	// Translate the Arduino Due Analog pin number to the SAM ADC channel number
@@ -405,17 +404,17 @@ void Platform::InitZProbe()
 	{
 	case 1:
 	case 2:
-		pinModeNonDue(zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(zProbeModulationPin, HIGH);	// enable the IR LED
+		pinMode(zProbeModulationPin, OUTPUT);
+		digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
 		break;
 
 	case 3:
-		pinModeNonDue(zProbeModulationPin, OUTPUT);
-		digitalWriteNonDue(zProbeModulationPin, LOW);	// enable the alternate sensor
+		pinMode(zProbeModulationPin, OUTPUT);
+		digitalWrite(zProbeModulationPin, LOW);	// enable the alternate sensor
 		break;
 
 	case 4:
-		pinModeNonDue(endStopPins[E0_AXIS], INPUT_PULLUP);
+		pinMode(endStopPins[E0_AXIS], INPUT_PULLUP);
 		break;
 
 	case 5:
@@ -1294,7 +1293,7 @@ void Platform::SetHeaterPwm(size_t heater, uint8_t power)
 	if (heatOnPins[heater] >= 0)
 	{
 		uint16_t freq = (reprap.GetHeat()->UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
-		analogWriteNonDue(heatOnPins[heater], (HEAT_ON == 0) ? 255 - power : power, freq);
+		analogWriteDuet(heatOnPins[heater], (HEAT_ON == 0) ? 255 - power : power, freq);
 	}
 }
 
@@ -1310,7 +1309,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 	}
 	else if (endStopPins[drive] >= 0)
 	{
-		if (digitalReadNonDue(endStopPins[drive]) == ((endStopLogicLevel[drive]) ? 1 : 0))
+		if (digitalRead(endStopPins[drive]) == ((endStopLogicLevel[drive]) ? 1 : 0))
 		{
 			return (endStopType[drive] == EndStopType::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 		}
@@ -1341,7 +1340,7 @@ void Platform::SetDirection(size_t drive, bool direction)
 		if (pin >= 0)
 		{
 			bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
-			digitalWriteNonDue(pin, d);
+			digitalWrite(pin, d);
 		}
 	}
 }
@@ -1368,7 +1367,7 @@ void Platform::EnableDrive(size_t drive)
 				const int pin = enablePins[driver];
 				if (pin >= 0)
 				{
-					digitalWriteNonDue(pin, enableValues[driver]);
+					digitalWrite(pin, enableValues[driver]);
 				}
 #ifdef EXTERNAL_DRIVERS
 			}
@@ -1394,7 +1393,7 @@ void Platform::DisableDrive(size_t drive)
 			const int pin = enablePins[driver];
 			if (pin >= 0)
 			{
-				digitalWriteNonDue(pin, !enableValues[driver]);
+				digitalWrite(pin, !enableValues[driver]);
 			}
 			driveState[drive] = DriveStatus::disabled;
 #ifdef EXTERNAL_DRIVERS
@@ -1629,7 +1628,7 @@ void Platform::InitFans()
 	lastRpmResetTime = 0.0;
 	if (coolingFanRpmPin >= 0)
 	{
-		pinModeNonDue(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
+		pinModeDuet(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
 	}
 }
 
@@ -1720,7 +1719,7 @@ void Platform::Fan::Refresh()
 		{
 			invert = !invert;
 		}
-		analogWriteNonDue(pin, (invert) ? (255 - p) : p, freq);
+		analogWriteDuet(pin, (invert) ? (255 - p) : p, freq);
 	}
 }
 
@@ -1995,12 +1994,12 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 
 bool Platform::AtxPower() const
 {
-	return (digitalReadNonDue(ATX_POWER_PIN) == HIGH);
+	return (digitalRead(ATX_POWER_PIN) == HIGH);
 }
 
 void Platform::SetAtxPower(bool on)
 {
-	digitalWriteNonDue(ATX_POWER_PIN, (on) ? HIGH : LOW);
+	digitalWrite(ATX_POWER_PIN, (on) ? HIGH : LOW);
 }
 
 
@@ -2088,10 +2087,10 @@ void Platform::SetBoardType(BoardType bt)
 		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
 		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
 		// So we enable the pullup (value 150K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
-		// This may fail if anyone connects a load to the DAC0 pin on and Duet 0.6, hence we implement board selection in M115 as well.
-		pinModeNonDue(Dac0DigitalPin, INPUT_PULLUP);
-		board = (digitalReadNonDue(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
-		pinModeNonDue(Dac0DigitalPin, INPUT);	// turn pullup off
+		// This may fail if anyone connects a load to the DAC0 pin on a Duet 0.6, hence we implement board selection in M115 as well.
+		pinMode(Dac0DigitalPin, INPUT_PULLUP);
+		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
+		pinMode(Dac0DigitalPin, INPUT);	// turn pullup off
 	}
 	else
 	{
@@ -2129,10 +2128,10 @@ bool Platform::SetPin(int pin, int level)
 		{
 			if ((pinInitialised[index] & mask) == 0)
 			{
-				pinModeNonDue(pin, OUTPUT);
+				pinMode(pin, OUTPUT);
 				pinInitialised[index] |= mask;
 			}
-			digitalWriteNonDue(pin, level);
+			digitalWrite(pin, level);
 			return true;
 		}
 	}
@@ -2321,7 +2320,7 @@ void Platform::Tick()
 		}
 		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(zProbeModulationPin, LOW);			// turn off the IR emitter
+			digitalWrite(zProbeModulationPin, LOW);			// turn off the IR emitter
 		}
 		++tickState;
 		break;
@@ -2337,7 +2336,7 @@ void Platform::Tick()
 		}
 		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
 		{
-			digitalWriteNonDue(zProbeModulationPin, HIGH);			// turn on the IR emitter
+			digitalWrite(zProbeModulationPin, HIGH);			// turn on the IR emitter
 		}
 		tickState = 1;
 		break;
