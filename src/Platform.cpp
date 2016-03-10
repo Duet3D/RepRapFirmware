@@ -78,6 +78,12 @@ extern "C"
 	}
 }
 
+// This overrides the weak function in CoreDuet
+// Don't enable the watchdog yet, because we enable it after initialization is complete
+void watchdogSetup(void)
+{
+}
+
 //*************************************************************************************************
 // PidParameters class
 
