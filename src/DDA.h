@@ -43,6 +43,7 @@ public:
 	float CalcTime() const;											// Calculate the time needed for this move (used for simulation)
 	bool HasStepError() const;
 	bool CanPause() const { return canPause; }
+	bool IsPrintingMove() const { return isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 
 	DDAState GetState() const { return state; }
 	DDA* GetNext() const { return next; }
@@ -93,10 +94,11 @@ private:
 	DDA *prev;								// The previous one in the ring
 
 	volatile DDAState state;				// what state this DDA is in
-	bool endCoordinatesValid;				// True if endCoordinates can be relied on
-    bool isDeltaMovement;					// True if this is a delta printer movement
-    bool canPause;							// True if we can pause at the end of this move
-    bool goingSlow;							// True if we have reduced speed during homing
+	uint8_t endCoordinatesValid : 1;		// True if endCoordinates can be relied on
+	uint8_t isDeltaMovement : 1;			// True if this is a delta printer movement
+	uint8_t canPause : 1;					// True if we can pause at the end of this move
+	uint8_t goingSlow : 1;					// True if we have reduced speed during homing
+	uint8_t isPrintingMove : 1;				// True if this move includes XY movement and extrusion
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
     // We are on a half-word boundary here, so expect 2 bytes of padding to be inserted at this point

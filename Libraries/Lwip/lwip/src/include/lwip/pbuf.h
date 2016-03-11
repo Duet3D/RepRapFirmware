@@ -69,6 +69,12 @@ typedef enum {
 #define PBUF_FLAG_IS_CUSTOM 0x02U
 /** indicates this pbuf is UDP multicast to be looped back */
 #define PBUF_FLAG_MCASTLOOP 0x04U
+/** indicates this pbuf was received as link-level broadcast */
+#define PBUF_FLAG_LLBCAST   0x08U
+/** indicates this pbuf was received as link-level multicast */
+#define PBUF_FLAG_LLMCAST   0x10U
+/** indicates this pbuf includes a TCP FIN flag */
+#define PBUF_FLAG_TCP_FIN   0x20U
 
 struct pbuf {
   /** next pbuf in singly linked pbuf chain */
@@ -116,6 +122,24 @@ struct pbuf_custom {
 };
 #endif /* LWIP_SUPPORT_CUSTOM_PBUF */
 
+#if LWIP_TCP && TCP_QUEUE_OOSEQ
+/** Define this to 0 to prevent freeing ooseq pbufs when the PBUF_POOL is empty */
+#ifndef PBUF_POOL_FREE_OOSEQ
+#define PBUF_POOL_FREE_OOSEQ 1
+#endif /* PBUF_POOL_FREE_OOSEQ */
+#if NO_SYS && PBUF_POOL_FREE_OOSEQ
+extern volatile u8_t pbuf_free_ooseq_pending;
+void pbuf_free_ooseq();
+/** When not using sys_check_timeouts(), call PBUF_CHECK_FREE_OOSEQ()
+    at regular intervals from main level to check if ooseq pbufs need to be
+    freed! */
+#define PBUF_CHECK_FREE_OOSEQ() do { if(pbuf_free_ooseq_pending) { \
+  /* pbuf_alloc() reported PBUF_POOL to be empty -> try to free some \
+     ooseq queued pbufs now */ \
+  pbuf_free_ooseq(); }}while(0)
+#endif /* NO_SYS && PBUF_POOL_FREE_OOSEQ*/
+#endif /* LWIP_TCP && TCP_QUEUE_OOSEQ */
+
 /* Initializes the pbuf module. This call is empty for now, but may not be in future. */
 #define pbuf_init()
 
@@ -125,11 +149,11 @@ struct pbuf *pbuf_alloced_custom(pbuf_layer l, u16_t length, pbuf_type type,
                                  struct pbuf_custom *p, void *payload_mem,
                                  u16_t payload_mem_len);
 #endif /* LWIP_SUPPORT_CUSTOM_PBUF */
-void pbuf_realloc(struct pbuf *p, u16_t size);
+void pbuf_realloc(struct pbuf *p, u16_t size); 
 u8_t pbuf_header(struct pbuf *p, s16_t header_size);
 void pbuf_ref(struct pbuf *p);
 u8_t pbuf_free(struct pbuf *p);
-u8_t pbuf_clen(struct pbuf *p);
+u8_t pbuf_clen(struct pbuf *p);  
 void pbuf_cat(struct pbuf *head, struct pbuf *tail);
 void pbuf_chain(struct pbuf *head, struct pbuf *tail);
 struct pbuf *pbuf_dechain(struct pbuf *p);

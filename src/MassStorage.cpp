@@ -297,6 +297,14 @@ bool MassStorage::FileExists(const char *file) const
 	return (f_stat(file, &fil) == FR_OK);
 }
 
+bool MassStorage::FileExists(const char *directory, const char *fileName) const
+{
+	const char *location = (directory != nullptr)
+							? platform->GetMassStorage()->CombineName(directory, fileName)
+							: fileName;
+	return FileExists(location);
+}
+
 // Check if the specified directory exists
 bool MassStorage::DirectoryExists(const char *path) const
 {

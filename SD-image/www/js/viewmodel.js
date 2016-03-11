@@ -1,4 +1,4 @@
-/* Interface logic for the Duet Web Control v1.08
+/* Interface logic for the Duet Web Control v1.10
  * 
  * written by Christian Hammacher
  * 
@@ -69,8 +69,8 @@ $(document).ready(function() {
 	resetGuiData();
 	updateGui();
 
-	$("#web_version").append(", JS: " + jsVersion.toFixed(2));
-	$("#text_config").autosize();
+	$("#web_version").append(", JS: " + jsVersion);
+	$("#text_config").textareaAutoSize();
 
 	loadSettings(false);
 });
@@ -341,10 +341,10 @@ function updateWebcam(externalTrigger) {
 		webcamUpdating = false;
 	} else {
 		var newURL = settings.webcamURL;
-		if (newURL.indexOf("?") != -1) {
-			newURL = newURL + "?dummy=" + Math.random();
+		if (newURL.indexOf("?") == -1) {
+			newURL += "?dummy=" + Math.random();
 		} else {
-			newURL = newURL + "&dummy=" + Math.random();
+			newURL += "&dummy=" + Math.random();
 		}
 		$("#img_webcam").attr("src", newURL);
 
@@ -990,7 +990,7 @@ $("#btn_reset_settings").click(function(e) {
 		var files = e.originalEvent.dataTransfer.files;
 		if (files != null && files.length > 0) {
 			// Start new file upload
-			startUpload($(this).data("type"), files);
+			startUpload($(this).data("type"), files, false);
 		}
 	});
 });
@@ -1071,7 +1071,7 @@ $("input[name='temp_selection']:radio").change(function() {
 $("#input_file_upload").change(function(e) {
 	if (this.files.length > 0) {
 		// For POST uploads, we need file blobs
-		startUpload($(this).data("type"), this.files);
+		startUpload($(this).data("type"), this.files, false);
 	}
 });
 
@@ -1217,6 +1217,7 @@ $('a[href="#page_general"], a[href="#page_listitems"]').on('shown.bs.tab', funct
 
 $('a[href="#page_config"]').on('shown.bs.tab', function() {
 	$("#row_save_settings, #btn_reset_settings").addClass("hidden");
+	$("#text_config").trigger("input");
 	getConfigFile();
 });
 

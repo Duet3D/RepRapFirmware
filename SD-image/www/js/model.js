@@ -1,4 +1,4 @@
-/* Interface logic for the Duet Web Control v1.08
+/* Interface logic for the Duet Web Control v1.10
  * 
  * written by Christian Hammacher
  * 
@@ -6,7 +6,7 @@
  * see http://www.gnu.org/licenses/gpl-2.0.html
  */
 
-var jsVersion = 1.08;
+var jsVersion = "1.10";
 var sessionPassword = "reprap";
 var translationWarning = false;		// Set this to "true" if you want to look for missing translation entries
 
@@ -17,6 +17,7 @@ var settings = {
 
 	updateInterval: 250,			// in ms
 	haltedReconnectDelay: 5000,		// in ms
+	updateReconnectDelay: 15000,	// in ms
 	extendedStatusInterval: 10,		// nth status request will include extended values
 	maxRequestTime: 8000,			// time to wait for a status response in ms
 
@@ -25,6 +26,7 @@ var settings = {
 	uppercaseGCode: true,			// convert G-Codes to upper-case before sending them
 	useKiB: true,					// display file sizes in KiB instead of KB
 	showFanControl: false,			// show fan controls
+	showFanRPM: false,				// show fan RPM in sensors
 	showATXControl: false,			// show ATX control
 	confirmStop: false,				// ask for confirmation when pressing Emergency STOP
 	useDarkTheme: false,			// load dark theme by Fotomas
@@ -317,6 +319,10 @@ function updateStatus() {
 			// Status
 			var printing = false, paused = false;
 			switch (status.status) {
+				case 'F':	// Flashing new firmware
+					setStatusLabel("Updating", "success");
+					break;
+
 				case 'H':	// Halted
 					setStatusLabel("Halted", "danger");
 					break;
@@ -619,11 +625,7 @@ function updateStatus() {
 						$("#td_warmup_time").html(convertSeconds(status.warmUpDuration));
 					}
 				} else if (!printHasFinished) {
-					if (status.printDuration > 0) {
-						$("#td_warmup_time").html(convertSeconds(status.printDuration));
-					} else {
-						$("#td_warmup_time").html("n/a");
-					}
+					$("#td_warmup_time").html("n/a");
 				}
 
 				// Current Layer Time
@@ -684,14 +686,20 @@ function updateStatus() {
 			drawTemperatureChart();
 
 			// Set timer for next status update
-			if (status.status != 'H') {
-				setTimeout(updateStatus, settings.updateInterval);
-			} else {
-				updateTaskLive = false;
+			if (status.status == 'F') {
+				isConnected = updateTaskLive = false;
+				log("info", "<strong>" + T("Updating Firmware...") + "</strong>");
+				setTimeout(function() {
+					connect(sessionPassword, false);
+				}, settings.updateReconnectDelay);
+			} else if (status.status == 'H') {
+				isConnected = updateTaskLive = false;
 				log("danger", "<strong>" + T("Emergency Stop!") + "</strong>");
 				setTimeout(function() {
 					connect(sessionPassword, false);
 				}, settings.haltedReconnectDelay);
+			} else {
+				setTimeout(updateStatus, settings.updateInterval);
 			}
 
 			// Save the last status response
@@ -711,7 +719,8 @@ function getConfigFile() {
 		success: function(response) {
 			if (response != "") {
 				configFile = response;
-				$("#text_config").val(response).prop("readonly", false);
+				$("#div_config > h1").addClass("hidden");
+				$("#text_config").val(response).prop("readonly", false).trigger("input");
 				$("#row_save_settings").removeClass("hidden");
 			}
 		}
@@ -729,9 +738,10 @@ function getConfigResponse() {
 			if (configFile == undefined) {
 				if (response.hasOwnProperty("configFile")) {
 					$("#div_config > h1").addClass("hidden");
-					$("#text_config").removeClass("hidden").prop("readonly", true).val(response.configFile);
+					$("#text_config").removeClass("hidden").prop("readonly", true).val(response.configFile).trigger("input");
 				} else {
-					$("#div_config > h1").text(T("loading"));
+					$("#div_config > h1").removeClass("hidden").text(T("loading"));
+					$("#text_config").addClass("hidden");
 				}
 			}
 
@@ -1027,6 +1037,9 @@ function loadSettings(usingCookie) {
 		if (loadedSettings.hasOwnProperty("haltedReconnectDelay")) {
 			settings.haltedReconnectDelay = loadedSettings.haltedReconnectDelay;
 		}
+		if (loadedSettings.hasOwnProperty("updatedReconnectDelay")) {
+			settings.updateReconnectDelay = loadedSettings.updateReconnectDelay;
+		}
 		if (loadedSettings.hasOwnProperty("extendedStatusInterval")) {
 			settings.extendedStatusInterval = loadedSettings.extendedStatusInterval;
 		}
@@ -1055,6 +1068,9 @@ function loadSettings(usingCookie) {
 		}
 		if (loadedSettings.hasOwnProperty("showFanControl")) {
 			settings.showFanControl = loadedSettings.showFanControl;
+		}
+		if (loadedSettings.hasOwnProperty("showFanRPM")) {
+			settings.showFanRPM = loadedSettings.showFanRPM;
 		}
 		if (loadedSettings.hasOwnProperty("showATXControl")) {
 			settings.showATXControl = loadedSettings.showATXControl;
@@ -1107,6 +1123,7 @@ function saveSettings() {
 	settings.uppercaseGCode = $("#uppercase_gcode").is(":checked");
 	settings.useKiB = $("#use_kib").is(":checked");
 	settings.showFanControl = $("#fan_sliders").is(":checked");
+	settings.showFanRPM = $("#fan_rpm_display").is(":checked");
 	settings.showATXControl = $("#show_atx").is(":checked");
 	settings.confirmStop = $("#confirm_stop").is(":checked");
 	settings.useDarkTheme = $("#dark_theme").is(":checked");
@@ -1119,7 +1136,8 @@ function saveSettings() {
 	// UI Timing
 	settings.updateInterval = checkBoundaries($("#update_interval").val(), defaultSettings.updateInterval, 50);
 	settings.extendedStatusInterval = checkBoundaries($("#extended_status_interval").val(), defaultSettings.extendedStatusInterval, 1, 99999);
-	settings.haltedReconnectDelay = checkBoundaries($("#reconnect_delay").val(), defaultSettings.haltedReconnectDelay, 1000);
+	settings.haltedReconnectDelay = checkBoundaries($("#reconnect_halt_delay").val(), defaultSettings.haltedReconnectDelay, 1000);
+	settings.updateReconnectDelay = checkBoundaries($("#reconnect_update_delay").val(), defaultSettings.updateReconnectDelay, 1000);
 	settings.maxRequestTime = checkBoundaries($("#ajax_timeout").val(), defaultSettings.maxRequestTime, 100);
 	settings.webcamInterval = checkBoundaries($("#webcam_interval").val(), defaultSettings.maxRequestTime, 100);
 
@@ -1165,7 +1183,7 @@ function saveSettings() {
 		configFile = $("#text_config").val();
 
 		var uploadFile = new File([configFile], "config.g", { type: "application/octet-stream" });
-		startUpload("generic", [uploadFile]);
+		startUpload("generic", [uploadFile], false);
 	}
 
 	// Save Settings
@@ -1202,6 +1220,13 @@ function applySettings() {
 		$(".fan-control").removeClass("hidden");
 	} else {
 		$(".fan-control").addClass("hidden");
+	}
+
+	// Show/Hide Fan RPM
+	if (settings.showFanRPM) {
+		$(".fan-rpm").removeClass("hidden");
+	} else {
+		$(".fan-rpm").addClass("hidden");
 	}
 
 	// Show/Hide ATX Power
@@ -1246,6 +1271,7 @@ function applySettings() {
 	$("#uppercase_gcode").prop("checked", settings.uppercaseGCode);
 	$("#use_kib").prop("checked", settings.useKiB);
 	$("#fan_sliders").prop("checked", settings.showFanControl);
+	$("#fan_rpm_display").prop("checked", settings.showFanRPM);
 	$("#show_atx").prop("checked", settings.showATXControl);
 	$("#confirm_stop").prop("checked", settings.confirmStop);
 	$("#dark_theme").prop("checked", settings.useDarkTheme);
@@ -1254,7 +1280,8 @@ function applySettings() {
 	// UI Timing
 	$("#update_interval").val(settings.updateInterval);
 	$("#extended_status_interval").val(settings.extendedStatusInterval);
-	$("#reconnect_delay").val(settings.haltedReconnectDelay);
+	$("#reconnect_halt_delay").val(settings.haltedReconnectDelay);
+	$("#reconnect_update_delay").val(settings.updateReconnectDelay);
 	$("#ajax_timeout").val(settings.maxRequestTime);
 	$("#webcam_interval").val(settings.webcamInterval);
 
@@ -1287,9 +1314,9 @@ function applySettings() {
 var uploadType, uploadFiles, uploadRows, uploadedFileCount;
 var uploadTotalBytes, uploadedTotalBytes;
 var uploadStartTime, uploadRequest, uploadFileSize, uploadFileName, uploadPosition;
-var uploadIncludedConfig;
+var uploadedDWC, uploadIncludedConfig, uploadFirmwareFile;
 
-function startUpload(type, files) {
+function startUpload(type, files, fromCallback) {
 	// Initialize some values
 	stopUpdates();
 	isUploading = true;	
@@ -1300,7 +1327,11 @@ function startUpload(type, files) {
 		uploadTotalBytes += this.size;
 	});
 	uploadRows = [];
+	if (!fromCallback) {
+		uploadedDWC = false;
+	}
 	uploadIncludedConfig = false;
+	uploadFirmwareFile = undefined;
 
 	// Safety check for Upload and Print
 	if (type == "print" && files.length > 1) {
@@ -1309,45 +1340,49 @@ function startUpload(type, files) {
 	}
 
 	// Unzip files if necessary
-	var containsZip = false;
-	$.each(files, function() {
-		if (this.name.match("\\.zip$")) {
-			var fileReader = new FileReader();
-			fileReader.onload = (function(theFile) {
-				return function(e) {
-					try {
-						var zip = new JSZip(e.target.result);
+	if (type == "macro" || type == "generic") {
+		var containsZip = false;
+		$.each(files, function() {
+			if (this.name.toLowerCase().match("\\.zip$") != null) {
+				uploadedDWC |= this.name.toLowerCase().match("^duetwebcontrol.*\\.zip") != null;
 
-						var zipFiles = [];
-						$.each(zip.files, function(index, zipEntry) {
-							if (!zipEntry.dir && zipEntry.name.match("\/\\.git") == null) {
-								var zipName = zipEntry.name.split("/");
-								zipName = zipName[zipName.length - 1];
+				var fileReader = new FileReader();
+				fileReader.onload = (function(theFile) {
+					return function(e) {
+						try {
+							var zip = new JSZip(e.target.result);
 
-								var unpackedFile = new File([zipEntry.asArrayBuffer()], zipName, { type: "application/octet-stream", lastModified: zipEntry.date });
-								zipFiles.push(unpackedFile);
+							var zipFiles = [];
+							$.each(zip.files, function(index, zipEntry) {
+								if (!zipEntry.dir && zipEntry.name.match("\/\\.git") == null && zipEntry.name.match("README") == null) {
+									var zipName = zipEntry.name.split("/");
+									zipName = zipName[zipName.length - 1];
+
+									var unpackedFile = new File([zipEntry.asArrayBuffer()], zipName, { type: "application/octet-stream", lastModified: zipEntry.date });
+									zipFiles.push(unpackedFile);
+								}
+							});
+
+							if (zipFiles.length == 0) {
+								showMessage("exclamation-sign", T("Error"), T("The archive {0} does not contain any files!", theFile.name), "md");
+							} else {
+								startUpload(type, zipFiles, true);
 							}
-						});
-
-						if (zipFiles.length == 0) {
-							showMessage("exclamation-sign", T("Error"), T("The archive {0} does not contain any files!", theFile.name), "md");
-						} else {
-							startUpload(type, zipFiles);
+						} catch(e) {
+							showMessage("exclamation-sign", T("Error"), T("Could not read contents of file {0}!", theFile.name), "md");
 						}
-					} catch(e) {
-						showMessage("exclamation-sign", T("Error"), T("Could not read contents of file {0}!", theFile.name), "md");
 					}
-				}
-			})(this);
-			fileReader.readAsArrayBuffer(this);
+				})(this);
+				fileReader.readAsArrayBuffer(this);
 
-			containsZip = true;
-			return false;
+				containsZip = true;
+				return false;
+			}
+		});
+		if (containsZip) {
+			// We're relying on an async task which will trigger this method again when required
+			return;
 		}
-	});
-	if (containsZip) {
-		// We're relying on an async task which will trigger this method again when required
-		return;
 	}
 
 	// Reset modal dialog
@@ -1359,7 +1394,13 @@ function startUpload(type, files) {
 	// Add files to the table
 	$("#table_upload_files > tbody").remove();
 	$.each(files, function() {
-		uploadIncludedConfig |= (this.name == "config.g") && (type == "generic");
+		if (type == "generic") {
+			uploadIncludedConfig |= (this.name == "config.g");
+			if (this.name.toUpperCase().match("^REPRAPFIRMWARE.*\.BIN") != null) {
+				uploadFirmwareFile = this.name;
+			}
+		}
+
 		var row = 	'<tr><td><span class="glyphicon glyphicon-asterisk"></span> ' + this.name + '</td>';
 		row += 		'<td>' + formatSize(this.size) + '</td>';
 		row +=		'<td><div class="progress"><div class="progress-bar progress-bar-info progress-bar-striped" role="progressbar"><span></span></div></div></td></tr>';
@@ -1553,11 +1594,51 @@ function uploadHasFinished() {
 		}
 	}
 
-	// Ask for software reset if it's safe to do
-	if (uploadIncludedConfig && lastStatusResponse != undefined && lastStatusResponse.status == 'I') {
-		showConfirmationDialog(T("Reboot Duet?"), T("You have just uploaded a config file. Would you like to perform a software reset now?"), function() {
-			sendGCode("M999");
+	// Ask for page reload if DWC has been updated
+	if (uploadedDWC) {
+		$("#modal_upload").modal("hide");
+		showConfirmationDialog(T("Reload Page?"), T("You have just updated Duet Web Control. Would you like to reload the page now?"), function() {
+			location.reload();
 		});
+	}
+
+	// Ask for software reset if it's safe to do
+	else if (lastStatusResponse != undefined && lastStatusResponse.status == 'I') {
+		if (uploadIncludedConfig) {
+			$("#modal_upload").modal("hide");
+			showConfirmationDialog(T("Reboot Duet?"), T("You have just uploaded a config file. Would you like to perform a software reset now?"), function() {
+				sendGCode("M999");
+			});
+		}
+
+		if (uploadFirmwareFile != undefined)
+		{
+			$("#modal_upload").modal("hide");
+			showConfirmationDialog(T("Perform Firmware Update?"), T("You have just uploaded a firmware file. Would you like to update your Duet now?"), function() {
+				if (uploadFirmwareFile.toUpperCase() != "REPRAPFIRMWARE.BIN")
+				{
+					// Firmware update filename is hardcoded in the IAP binary, so try to rename this one first
+					$.ajax("rr_move?old=" + encodeURIComponent("/sys/" + uploadFirmwareFile) + "&new=" + encodeURIComponent("/sys/RepRapFirmware.bin"), {
+						dataType: "json",
+						row: draggingObject,
+						success: function(response) {
+							if (response.err == 0) {
+								// Flashing can be performed now
+								sendGCode("M997");
+							} else {
+								// Something went wrong
+								showMessage("exclamation-sign", T("Error"), T("Could not rename firmware file!"), "md");
+							}
+						}
+					});
+				}
+				else
+				{
+					// Filename is okay, start flashing immediately
+					sendGCode("M997");
+				}
+			});
+		}
 	}
 
 	// Start polling again

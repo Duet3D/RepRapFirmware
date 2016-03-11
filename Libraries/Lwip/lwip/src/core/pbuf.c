@@ -69,12 +69,12 @@
 #include "lwip/src/include/lwip/memp.h"
 #include "lwip/src/include/lwip/pbuf.h"
 #include "lwip/src/include/lwip/sys.h"
-#include "lwip/src/sam/include/arch/perf.h"
-#if TCP_QUEUE_OOSEQ
+#include "arch/perf.h"
+#if LWIP_TCP && TCP_QUEUE_OOSEQ
 #include "lwip/src/include/lwip/tcp_impl.h"
 #endif
 #if LWIP_CHECKSUM_ON_COPY
-#include "lwip/src/include/lwip/inet_chksum.h"
+#include "lwip/src/include/ipv4/lwip/inet_chksum.h"
 #endif
 
 #include <string.h>
@@ -84,18 +84,25 @@
    aligned there. Therefore, PBUF_POOL_BUFSIZE_ALIGNED can be used here. */
 #define PBUF_POOL_BUFSIZE_ALIGNED LWIP_MEM_ALIGN_SIZE(PBUF_POOL_BUFSIZE)
 
-#if !LWIP_TCP || !TCP_QUEUE_OOSEQ || NO_SYS
+#if !LWIP_TCP || !TCP_QUEUE_OOSEQ || !PBUF_POOL_FREE_OOSEQ
 #define PBUF_POOL_IS_EMPTY()
-#else /* !LWIP_TCP || !TCP_QUEUE_OOSEQ || NO_SYS */
-/** Define this to 0 to prevent freeing ooseq pbufs when the PBUF_POOL is empty */
-#ifndef PBUF_POOL_FREE_OOSEQ
-#define PBUF_POOL_FREE_OOSEQ 1
-#endif /* PBUF_POOL_FREE_OOSEQ */
+#else /* !LWIP_TCP || !TCP_QUEUE_OOSEQ || !PBUF_POOL_FREE_OOSEQ */
 
-#if PBUF_POOL_FREE_OOSEQ
+#if !NO_SYS
+#ifndef PBUF_POOL_FREE_OOSEQ_QUEUE_CALL
 #include "lwip/tcpip.h"
+#define PBUF_POOL_FREE_OOSEQ_QUEUE_CALL()  do { \
+  if(tcpip_callback_with_block(pbuf_free_ooseq_callback, NULL, 0) != ERR_OK) { \
+      SYS_ARCH_PROTECT(old_level); \
+      pbuf_free_ooseq_pending = 0; \
+      SYS_ARCH_UNPROTECT(old_level); \
+  } } while(0)
+#endif /* PBUF_POOL_FREE_OOSEQ_QUEUE_CALL */
+#endif /* !NO_SYS */
+
+volatile u8_t pbuf_free_ooseq_pending;
 #define PBUF_POOL_IS_EMPTY() pbuf_pool_is_empty()
-static u8_t pbuf_free_ooseq_queued;
+
 /**
  * Attempt to reclaim some memory from queued out-of-sequence TCP segments
  * if we run out of pool pbufs. It's better to give priority to new packets
@@ -104,15 +111,19 @@ static u8_t pbuf_free_ooseq_queued;
  * This must be done in the correct thread context therefore this function
  * can only be used with NO_SYS=0 and through tcpip_callback.
  */
-static void
-pbuf_free_ooseq(void* arg)
+#if !NO_SYS
+static
+#endif /* !NO_SYS */
+void
+pbuf_free_ooseq(void);
+void
+pbuf_free_ooseq(void)
 {
   struct tcp_pcb* pcb;
   SYS_ARCH_DECL_PROTECT(old_level);
-  LWIP_UNUSED_ARG(arg);
 
   SYS_ARCH_PROTECT(old_level);
-  pbuf_free_ooseq_queued = 0;
+  pbuf_free_ooseq_pending = 0;
   SYS_ARCH_UNPROTECT(old_level);
 
   for (pcb = tcp_active_pcbs; NULL != pcb; pcb = pcb->next) {
@@ -126,29 +137,42 @@ pbuf_free_ooseq(void* arg)
   }
 }
 
+#if !NO_SYS
+/**
+ * Just a callback function for tcpip_timeout() that calls pbuf_free_ooseq().
+ */
+static void
+pbuf_free_ooseq_callback(void *arg)
+{
+  LWIP_UNUSED_ARG(arg);
+  pbuf_free_ooseq();
+}
+#endif /* !NO_SYS */
+
 /** Queue a call to pbuf_free_ooseq if not already queued. */
 static void
 pbuf_pool_is_empty(void)
 {
+#ifndef PBUF_POOL_FREE_OOSEQ_QUEUE_CALL
+  SYS_ARCH_DECL_PROTECT(old_level);
+  SYS_ARCH_PROTECT(old_level);
+  pbuf_free_ooseq_pending = 1;
+  SYS_ARCH_UNPROTECT(old_level);
+#else /* PBUF_POOL_FREE_OOSEQ_QUEUE_CALL */
   u8_t queued;
   SYS_ARCH_DECL_PROTECT(old_level);
-
   SYS_ARCH_PROTECT(old_level);
-  queued = pbuf_free_ooseq_queued;
-  pbuf_free_ooseq_queued = 1;
+  queued = pbuf_free_ooseq_pending;
+  pbuf_free_ooseq_pending = 1;
   SYS_ARCH_UNPROTECT(old_level);
 
   if(!queued) {
     /* queue a call to pbuf_free_ooseq if not already queued */
-    if(tcpip_callback_with_block(pbuf_free_ooseq, NULL, 0) != ERR_OK) {
-      SYS_ARCH_PROTECT(old_level);
-      pbuf_free_ooseq_queued = 0;
-      SYS_ARCH_UNPROTECT(old_level);
-    }
+    PBUF_POOL_FREE_OOSEQ_QUEUE_CALL();
   }
+#endif /* PBUF_POOL_FREE_OOSEQ_QUEUE_CALL */
 }
-#endif /* PBUF_POOL_FREE_OOSEQ */
-#endif /* !LWIP_TCP || !TCP_QUEUE_OOSEQ || NO_SYS */
+#endif /* !LWIP_TCP || !TCP_QUEUE_OOSEQ || !PBUF_POOL_FREE_OOSEQ */
 
 /**
  * Allocates a pbuf of the given type (possibly a chain for PBUF_POOL type).
@@ -190,21 +214,21 @@ pbuf_alloc(pbuf_layer layer, u16_t length, pbuf_type type)
   LWIP_DEBUGF(PBUF_DEBUG | LWIP_DBG_TRACE, ("pbuf_alloc(length=%"U16_F")\n", length));
 
   /* determine header offset */
-  offset = 0;
   switch (layer) {
   case PBUF_TRANSPORT:
     /* add room for transport (often TCP) layer header */
-    offset += PBUF_TRANSPORT_HLEN;
-    /* no break */
+    offset = PBUF_LINK_HLEN + PBUF_IP_HLEN + PBUF_TRANSPORT_HLEN;
+    break;
   case PBUF_IP:
     /* add room for IP layer header */
-    offset += PBUF_IP_HLEN;
-    /* no break */
+    offset = PBUF_LINK_HLEN + PBUF_IP_HLEN;
+    break;
   case PBUF_LINK:
     /* add room for link layer header */
-    offset += PBUF_LINK_HLEN;
+    offset = PBUF_LINK_HLEN;
     break;
   case PBUF_RAW:
+    offset = 0;
     break;
   default:
     LWIP_ASSERT("pbuf_alloc: bad pbuf layer", 0);
@@ -336,7 +360,8 @@ pbuf_alloc(pbuf_layer layer, u16_t length, pbuf_type type)
  * @param p pointer to the custom pbuf to initialize (already allocated)
  * @param payload_mem pointer to the buffer that is used for payload and headers,
  *        must be at least big enough to hold 'length' plus the header size,
- *        may be NULL if set later
+ *        may be NULL if set later.
+ *        ATTENTION: The caller is responsible for correct alignment of this buffer!!
  * @param payload_mem_len the size of the 'payload_mem' buffer, must be at least
  *        big enough to hold 'length' plus the header size
  */
@@ -348,35 +373,35 @@ pbuf_alloced_custom(pbuf_layer l, u16_t length, pbuf_type type, struct pbuf_cust
   LWIP_DEBUGF(PBUF_DEBUG | LWIP_DBG_TRACE, ("pbuf_alloced_custom(length=%"U16_F")\n", length));
 
   /* determine header offset */
-  offset = 0;
   switch (l) {
   case PBUF_TRANSPORT:
     /* add room for transport (often TCP) layer header */
-    offset += PBUF_TRANSPORT_HLEN;
-    /* no break */
+    offset = PBUF_LINK_HLEN + PBUF_IP_HLEN + PBUF_TRANSPORT_HLEN;
+    break;
   case PBUF_IP:
     /* add room for IP layer header */
-    offset += PBUF_IP_HLEN;
-    /* no break */
+    offset = PBUF_LINK_HLEN + PBUF_IP_HLEN;
+    break;
   case PBUF_LINK:
     /* add room for link layer header */
-    offset += PBUF_LINK_HLEN;
+    offset = PBUF_LINK_HLEN;
     break;
   case PBUF_RAW:
+    offset = 0;
     break;
   default:
     LWIP_ASSERT("pbuf_alloced_custom: bad pbuf layer", 0);
     return NULL;
   }
 
-  if (LWIP_MEM_ALIGN_SIZE(offset) + length < payload_mem_len) {
+  if (LWIP_MEM_ALIGN_SIZE(offset) + length > payload_mem_len) {
     LWIP_DEBUGF(PBUF_DEBUG | LWIP_DBG_LEVEL_WARNING, ("pbuf_alloced_custom(length=%"U16_F") buffer too short\n", length));
     return NULL;
   }
 
   p->pbuf.next = NULL;
   if (payload_mem != NULL) {
-    p->pbuf.payload = LWIP_MEM_ALIGN((void *)((u8_t *)payload_mem + offset));
+    p->pbuf.payload = (u8_t *)payload_mem + LWIP_MEM_ALIGN_SIZE(offset);
   } else {
     p->pbuf.payload = NULL;
   }
@@ -499,7 +524,7 @@ pbuf_header(struct pbuf *p, s16_t header_size_increment)
   if (header_size_increment < 0){
     increment_magnitude = -header_size_increment;
     /* Check that we aren't going to move off the end of the pbuf */
-    LWIP_ERROR("increment_magnitude <= p->len\n", (increment_magnitude <= p->len), return 1;);
+    LWIP_ERROR("increment_magnitude <= p->len", (increment_magnitude <= p->len), return 1;);
   } else {
     increment_magnitude = header_size_increment;
 #if 0
@@ -529,10 +554,10 @@ pbuf_header(struct pbuf *p, s16_t header_size_increment)
         (void *)p->payload, (void *)(p + 1)));
       /* restore old payload pointer */
       p->payload = payload;
-      /* bail out unsuccessfully */
+      /* bail out unsuccesfully */
       return 1;
     }
-  /* pbuf types referring to external payloads? */
+  /* pbuf types refering to external payloads? */
   } else if (type == PBUF_REF || type == PBUF_ROM) {
     /* hide a header in the payload? */
     if ((header_size_increment < 0) && (increment_magnitude <= p->len)) {
@@ -540,7 +565,7 @@ pbuf_header(struct pbuf *p, s16_t header_size_increment)
       p->payload = (u8_t *)p->payload - header_size_increment;
     } else {
       /* cannot expand payload to front (yet!)
-       * bail out unsuccessfully */
+       * bail out unsuccesfully */
       return 1;
     }
   } else {
@@ -552,8 +577,8 @@ pbuf_header(struct pbuf *p, s16_t header_size_increment)
   p->len += header_size_increment;
   p->tot_len += header_size_increment;
 
-//  LWIP_DEBUGF(PBUF_DEBUG | LWIP_DBG_TRACE, ("pbuf_header: old %d new %d (%d)\n",
-//    (void *)payload, (void *)p->payload, header_size_increment));
+  LWIP_DEBUGF(PBUF_DEBUG | LWIP_DBG_TRACE, ("pbuf_header: old %p new %p (%"S16_F")\n",
+    (void *)payload, (void *)p->payload, header_size_increment));
 
   return 0;
 }
@@ -840,7 +865,6 @@ pbuf_copy(struct pbuf *p_to, struct pbuf *p_from)
   /* iterate through pbuf chain */
   do
   {
-    LWIP_ASSERT("p_to != NULL", p_to != NULL);
     /* copy one part of the original chain */
     if ((p_to->len - offset_to) >= (p_from->len - offset_from)) {
       /* complete current p_from fits into current p_to */
@@ -853,16 +877,17 @@ pbuf_copy(struct pbuf *p_to, struct pbuf *p_from)
     offset_to += len;
     offset_from += len;
     LWIP_ASSERT("offset_to <= p_to->len", offset_to <= p_to->len);
-    if (offset_to == p_to->len) {
-      /* on to next p_to (if any) */
-      offset_to = 0;
-      p_to = p_to->next;
-    }
     LWIP_ASSERT("offset_from <= p_from->len", offset_from <= p_from->len);
     if (offset_from >= p_from->len) {
       /* on to next p_from (if any) */
       offset_from = 0;
       p_from = p_from->next;
+    }
+    if (offset_to == p_to->len) {
+      /* on to next p_to (if any) */
+      offset_to = 0;
+      p_to = p_to->next;
+      LWIP_ERROR("p_to != NULL", (p_to != NULL) || (p_from == NULL) , return ERR_ARG;);
     }
 
     if((p_from != NULL) && (p_from->len == p_from->tot_len)) {
@@ -997,7 +1022,6 @@ pbuf_coalesce(struct pbuf *p, pbuf_layer layer)
     return p;
   }
   err = pbuf_copy(q, p);
-  (void)err;	// suppress compiler warning
   LWIP_ASSERT("pbuf_copy failed", err == ERR_OK);
   pbuf_free(p);
   return q;

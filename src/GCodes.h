@@ -103,12 +103,14 @@ public:
     float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
     
     bool HaveAux() const { return auxDetected; }						// Any device on the AUX line?
+	bool IsFlashing() const { return isFlashing; }						// Is a new firmware binary going to be flashed?
 	OutputBuffer *GetAuxGCodeReply();									// Returns cached G-Code reply for AUX devices and clears its reference
     uint32_t GetAuxSeq() { return auxSeq; }
 
 	bool IsPaused() const;
 	bool IsPausing() const;
 	bool IsResuming() const;
+	bool IsRunning() const;
 
     bool AllAxesAreHomed() const;										// Return true if all axes are homed
     bool DoFileMacro(const char* fileName, bool reportMissing = true);	// Run a GCode macro in a file, optionally report error if not found
@@ -223,6 +225,7 @@ private:
 	uint32_t auxSeq;							// Sequence number for AUX devices
     bool simulating;
     float simulationTime;
+	bool isFlashing;							// Is a new firmware binary going to be flashed?
     FilePosition filePos;						// The position we got up to in the file being printed
     FilePosition moveFilePos;					// Saved version of filePos for the next real move to be processed
 };

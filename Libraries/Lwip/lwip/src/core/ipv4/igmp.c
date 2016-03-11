@@ -81,14 +81,14 @@ Steve Reynolds
 
 #if LWIP_IGMP /* don't build if not configured for use in lwipopts.h */
 
-#include "lwip/src/include/lwip/igmp.h"
+#include "lwip/src/include/ipv4/lwip/igmp.h"
 #include "lwip/src/include/lwip/debug.h"
 #include "lwip/src/include/lwip/def.h"
 #include "lwip/src/include/lwip/mem.h"
-#include "lwip/src/include/lwip/ip.h"
-#include "lwip/src/include/lwip/inet_chksum.h"
+#include "lwip/src/include/ipv4/lwip/ip.h"
+#include "lwip/src/include/ipv4/lwip/inet_chksum.h"
 #include "lwip/src/include/lwip/netif.h"
-#include "lwip/src/include/lwip/icmp.h"
+#include "lwip/src/include/ipv4/lwip/icmp.h"
 #include "lwip/src/include/lwip/udp.h"
 #include "lwip/src/include/lwip/tcp.h"
 #include "lwip/src/include/lwip/stats.h"
@@ -139,7 +139,6 @@ static struct igmp_group *igmp_lookup_group(struct netif *ifp, ip_addr_t *addr);
 static err_t  igmp_remove_group(struct igmp_group *group);
 static void   igmp_timeout( struct igmp_group *group);
 static void   igmp_start_timer(struct igmp_group *group, u8_t max_time);
-static void   igmp_stop_timer(struct igmp_group *group);
 static void   igmp_delaying_member(struct igmp_group *group, u8_t maxresp);
 static err_t  igmp_ip_output_if(struct pbuf *p, ip_addr_t *src, ip_addr_t *dest, struct netif *netif);
 static void   igmp_send(struct igmp_group *group, u8_t type);
@@ -704,17 +703,6 @@ igmp_start_timer(struct igmp_group *group, u8_t max_time)
   }
   /* ensure the random value is > 0 */
   group->timer = (LWIP_RAND() % (max_time - 1)) + 1;
-}
-
-/**
- * Stop a timer for an igmp_group
- *
- * @param group the igmp_group for which to stop the timer
- */
-static void
-igmp_stop_timer(struct igmp_group *group)
-{
-  group->timer = 0;
 }
 
 /**

@@ -63,24 +63,6 @@
  	 	 	 a JSON response with the variable "err" will be returned, which will be 0 if the job
  	 	 	 has finished without problems, it will be set to 1 otherwise.
 
- rr_upload_begin?name=xxx
- 	 	 	 Indicates that we wish to upload the specified file. xxx is the filename relative
- 	 	 	 to the root of the SD card. The directory component of the filename must already
- 	 	 	 exist. Returns variables ubuff (= max upload data we can accept in the next message)
- 	 	 	 and err (= 0 if the file was created successfully, nonzero if there was an error).
-
- rr_upload_data?data=xxx
- 	 	 	 Provides a data block for the file upload. Returns the samwe variables as rr_upload_begin,
- 	 	 	 except that err is only zero if the file was successfully created and there has not been
- 	 	 	 a file write error yet. This response is returned before attempting to write this data block.
-
- rr_upload_end
- 	 	 	 Indicates that we have finished sending upload data. The server closes the file and reports
- 	 	 	 the overall status in err. It may also return ubuff again.
-
- rr_upload_cancel
- 	 	 	 Indicates that the user wishes to cancel the current upload. Returns err and ubuff.
-
  rr_delete?name=xxx
 			 Delete file xxx. Returns err (zero if successful).
 
@@ -120,8 +102,7 @@ Webserver::Webserver(Platform* p, Network *n) : platform(p), network(n), webserv
 void Webserver::Init()
 {
 	// initialise the webserver class
-	lastTime = platform->Time();
-	longWait = lastTime;
+	longWait = platform->Time();
 	webserverActive = true;
 
 	// initialise all protocol handlers
@@ -201,18 +182,14 @@ void Webserver::Spin()
 				// Check for fast uploads
 				else if (interpreter->DoingFastUpload())
 				{
-					if (!interpreter->DoFastUpload(transaction))
-					{
-						// Ensure this connection won't block everything if anything goes wrong
-						readingConnection = nullptr;
-					}
+					interpreter->DoFastUpload(transaction);
 				}
 				// Check if we need to send data to a Telnet client
 				else if (interpreter == telnetInterpreter && telnetInterpreter->HasDataToSend())
 				{
 					telnetInterpreter->SendGCodeReply(transaction);
 				}
-				// Process other messages (unless this is an HTTP request which may need special treatment)
+				// Process other messages (if we can)
 				else if (interpreter != httpInterpreter || httpInterpreter->IsReady())
 				{
 					for(size_t i = 0; i < 500; i++)
@@ -426,38 +403,37 @@ void ProtocolInterpreter::CancelUpload()
 		fileBeingUploaded.Close();		// cancel any pending file upload
 		if (strlen(filenameBeingUploaded) != 0)
 		{
-			platform->GetMassStorage()->Delete("0:/", filenameBeingUploaded);
+			platform->GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
 		}
 	}
 	filenameBeingUploaded[0] = 0;
 	uploadState = notUploading;
 }
 
-bool ProtocolInterpreter::DoFastUpload(NetworkTransaction *transaction)
+void ProtocolInterpreter::DoFastUpload(NetworkTransaction *transaction)
 {
-	if (IsUploading())
+	const char *buffer;
+	unsigned int len;
+	if (transaction->ReadBuffer(buffer, len))
 	{
-		char *buffer;
-		unsigned int len;
-		if (transaction->ReadBuffer(buffer, len))
+		// Writing data usually takes a while, so keep LwIP running while this is being done
+		network->Unlock();
+		if (!fileBeingUploaded.Write(buffer, len))
 		{
-			// Write uploaded data immediately to the file
-			if (!fileBeingUploaded.Write(buffer, len))
-			{
-				platform->Message(HOST_MESSAGE, "Could not write upload data!\n");
-				uploadState = uploadError;
-			}
-			transaction->Discard();
+			platform->Message(HOST_MESSAGE, "Could not write upload data!\n");
+			uploadState = uploadError;
+
+			while (!network->Lock());
+			transaction->Commit(false);
+			return;
 		}
-	}
-	else if (transaction->DataLength() > 0)
-	{
-		platform->Message(HOST_MESSAGE, "Webserver: Closing invalid data connection\n");
-		transaction->Commit(false);
-		return false;
+		while (!network->Lock());
 	}
 
-	return true;
+	if (!transaction->HasMoreDataToRead())
+	{
+		transaction->Discard();
+	}
 }
 
 void ProtocolInterpreter::FinishUpload(uint32_t fileLength)
@@ -486,7 +462,7 @@ void ProtocolInterpreter::FinishUpload(uint32_t fileLength)
 	// Delete file if an error has occurred
 	if (uploadState == uploadError && strlen(filenameBeingUploaded) != 0)
 	{
-		platform->GetMassStorage()->Delete("0:/", filenameBeingUploaded);
+		platform->GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
 	}
 	filenameBeingUploaded[0] = 0;
 }
@@ -506,9 +482,8 @@ Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws, Network 
 {
 	gcodeReadIndex = gcodeWriteIndex = 0;
 	gcodeReply = new OutputStack();
-	uploadingTextData = false;
 	processingDeferredRequest = false;
-	numContinuationBytes = seq = 0;
+	seq = 0;
 }
 
 void Webserver::HttpInterpreter::Diagnostics()
@@ -518,32 +493,44 @@ void Webserver::HttpInterpreter::Diagnostics()
 
 // File Uploads
 
-bool Webserver::HttpInterpreter::DoFastUpload(NetworkTransaction *transaction)
+bool Webserver::HttpInterpreter::DoingFastUpload() const
 {
-	// Attempt to write one pbuf entry in one go
-	if (IsUploading())
+	uint32_t remoteIP = network->GetTransaction()->GetRemoteIP();
+	uint16_t remotePort = network->GetTransaction()->GetRemotePort();
+	for(size_t i = 0; i < numSessions; i++)
 	{
-		char *buffer;
-		unsigned int len;
-		if (transaction->ReadBuffer(buffer, len))
+		if (sessions[i].ip == remoteIP && sessions[i].isPostUploading)
 		{
-			WriteUploadedData(buffer, len);
-			uploadedBytes += len;
-		}
-		else
-		{
-			transaction->Discard();
+			// There is only one session per IP address...
+			return (sessions[i].postPort == remotePort);
 		}
 	}
-	else if (transaction->DataLength() > 0)
+	return false;
+}
+
+void Webserver::HttpInterpreter::DoFastUpload(NetworkTransaction *transaction)
+{
+	// Write some data on the SD card
+	const char *buffer;
+	unsigned int len;
+	if (transaction->ReadBuffer(buffer, len))
 	{
-		platform->Message(HOST_MESSAGE, "Webserver: Closing invalid data connection\n");
-		transaction->Commit(false);
-		return false;
+		network->Unlock();
+		if (!fileBeingUploaded.Write(buffer, len))
+		{
+			platform->Message(HOST_MESSAGE, "Could not write upload data!\n");
+			uploadState = uploadError;
+
+			while (!network->Lock());
+			SendJsonResponse("upload");
+			return;
+		}
+		uploadedBytes += len;
+		while (!network->Lock());
 	}
 
 	// See if the upload has finished
-	if (uploadState != uploadOK || uploadedBytes >= postFileLength)
+	if (uploadState == uploadOK && uploadedBytes >= postFileLength)
 	{
 		// Reset POST upload state for this client
 		uint32_t remoteIP = transaction->GetRemoteIP();
@@ -561,75 +548,20 @@ bool Webserver::HttpInterpreter::DoFastUpload(NetworkTransaction *transaction)
 		SendJsonResponse("upload");
 		uploadState = notUploading;
 	}
-
-	return (uploadState != uploadError);
-}
-
-bool Webserver::HttpInterpreter::DoingFastUpload() const
-{
-	if (state == doingPost)
+	else if (!transaction->HasMoreDataToRead())
 	{
-		// Always finish the current request before checking for fast POST uploads
-		return false;
-	}
-
-	uint32_t remoteIP = network->GetTransaction()->GetRemoteIP();
-	uint16_t remotePort = network->GetTransaction()->GetRemotePort();
-	for(size_t i = 0; i < numSessions; i++)
-	{
-		if (sessions[i].ip == remoteIP && sessions[i].isPostUploading)
-		{
-			return (remotePort == sessions[i].postPort);
-		}
-	}
-	return false;
-}
-
-bool Webserver::HttpInterpreter::StartUpload(FileStore *file)
-{
-	numContinuationBytes = 0;
-	return ProtocolInterpreter::StartUpload(file);
-}
-
-void Webserver::HttpInterpreter::WriteUploadedData(const char *buffer, unsigned int length)
-{
-	// Count the number of UTF8 continuation bytes. We may need it to adjust the expected file length.
-	if (uploadingTextData)
-	{
-		unsigned int bytesToCheck = length;
-		const char *data = buffer;
-		while (bytesToCheck != 0)
-		{
-			if ((*data & 0xC0) == 0x80)
-			{
-				++numContinuationBytes;
-			}
-			++data;
-			--bytesToCheck;
-		}
-	}
-
-	// Write uploaded data immediately to the file
-	if (!fileBeingUploaded.Write(buffer, length))
-	{
-		platform->Message(HOST_MESSAGE, "Could not write upload data!\n");
-		uploadState = uploadError;
+		transaction->Discard();
 	}
 }
 
 void Webserver::HttpInterpreter::CancelUpload()
 {
-	CancelUpload(network->GetTransaction()->GetRemoteIP());
-}
-
-void Webserver::HttpInterpreter::CancelUpload(uint32_t remoteIP)
-{
 	for(size_t i = 0; i < numSessions; i++)
 	{
-		if (sessions[i].ip == remoteIP && sessions[i].isPostUploading)
+		if (sessions[i].isPostUploading)
 		{
 			sessions[i].isPostUploading = false;
-			sessions[i].lastQueryTime = platform->Time();
+			sessions[i].lastQueryTime = millis();
 			break;
 		}
 	}
@@ -715,6 +647,9 @@ void Webserver::HttpInterpreter::SendConfigFile(NetworkTransaction *transaction)
 	FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
 
 	transaction->Write("HTTP/1.1 200 OK\n");
+	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
+	transaction->Write("Pragma: no-cache\n");
+	transaction->Write("Expires: 0\n");
 	transaction->Write("Content-Type: text/plain\n");
 	transaction->Printf("Content-Length: %u\n", (configFile != nullptr) ? configFile->Length() : 0);
 	transaction->Write("Connection: close\n\n");
@@ -743,7 +678,7 @@ void Webserver::HttpInterpreter::SendGCodeReply(NetworkTransaction *transaction)
 
 		if (reprap.Debug(moduleWebserver))
 		{
-			platform->MessageF(HOST_MESSAGE, "Serving client %d of %d\n", clientsServed, numSessions);
+			platform->MessageF(HOST_MESSAGE, "Sending G-Code reply to client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
 		}
 	}
 
@@ -968,43 +903,9 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		{
 			response->printf("{\"err\":%d}", (uploadState == uploadOK && uploadedBytes == postFileLength) ? 0 : 1);
 		}
-		else if (StringEquals(request, "upload_begin") && StringEquals(key, "name"))
-		{
-			FileStore *file = platform->GetFileStore("0:/", value, true);
-			if (StartUpload(file))
-			{
-				strncpy(filenameBeingUploaded, value, ARRAY_SIZE(filenameBeingUploaded));
-				filenameBeingUploaded[ARRAY_UPB(filenameBeingUploaded)] = 0;
-				uploadingTextData = (numQualKeys < 2 || !StringEquals(qualifiers[1].key, "type") ||
-										!StringEquals(qualifiers[1].value, "binary"));
-			}
-
-			GetJsonUploadResponse(response);
-		}
-		else if (StringEquals(request, "upload_data") && StringEquals(key, "data"))
-		{
-			WriteUploadedData(value, valueLength);
-			uploadedBytes += valueLength;
-
-			GetJsonUploadResponse(response);
-			keepOpen = true;
-		}
-		else if (StringEquals(request, "upload_end") && StringEquals(key, "size"))
-		{
-			uint32_t fileLength = strtoul(value, nullptr, 10);
-			FinishUpload(fileLength);
-
-			GetJsonUploadResponse(response);
-			uploadState = notUploading;
-		}
-		else if (StringEquals(request, "upload_cancel"))
-		{
-			CancelUpload();
-			response->copy("{\"err\":0}");
-		}
 		else if (StringEquals(request, "delete") && StringEquals(key, "name"))
 		{
-			bool ok = platform->GetMassStorage()->Delete("0:/", value);
+			bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, value);
 			response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 		}
 		else if (StringEquals(request, "files"))
@@ -1023,15 +924,15 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		}
 		else if (StringEquals(request, "fileinfo"))
 		{
+			// This may take a while before it returns, so allow LwIP to send ACKs while we're waiting for it
+			network->Unlock();
 			OutputBuffer::Release(response);
-			if (reprap.GetPrintMonitor()->GetFileInfoResponse(StringEquals(key, "name") ? value : nullptr, response))
-			{
-				processingDeferredRequest = false;
-			}
-			else
+			processingDeferredRequest = !reprap.GetPrintMonitor()->GetFileInfoResponse(StringEquals(key, "name") ? value : nullptr, response);
+			while (!network->Lock());	// This won't block for long
+
+			if (processingDeferredRequest)
 			{
 				network->GetTransaction()->Defer();
-				processingDeferredRequest = true;
 			}
 		}
 		else if (StringEquals(request, "move"))
@@ -1089,22 +990,9 @@ void Webserver::HttpInterpreter::ResetState()
 
 bool Webserver::HttpInterpreter::NeedMoreData()
 {
-	if (state == doingPost)
+	if (!IsAuthenticated() && (!numCommandWords || !StringEquals(commandWords[0], "connect")))
 	{
-		// At this stage we've processed the first chunk of a POST upload request. Store the
-		// initial payload and reset the HTTP reader again in order to process new requests
-		WriteUploadedData(clientMessage + (clientPointer - uploadedBytes), uploadedBytes);
-		if (reprap.Debug(moduleWebserver))
-		{
-			platform->MessageF(HOST_MESSAGE, "Wrote %lu bytes of file\n", uploadedBytes);
-		}
-		ResetState();
-		return false;
-	}
-	else if (!IsAuthenticated() && (!numCommandWords || !StringEquals(commandWords[0], "connect")))
-	{
-		// It makes very little sense to allow unknown connections to block our HTTP reader, however
-		// connect requests may take up more than one TCP_MSS if a long cookie value is passed.
+		// It makes very little sense to allow unknown connections to block our HTTP reader
 		ResetState();
 		return false;
 	}
@@ -1140,7 +1028,7 @@ void Webserver::HttpInterpreter::ConnectionLost(uint32_t remoteIP, uint16_t remo
 				{
 					platform->MessageF(HOST_MESSAGE, "POST upload for '%s' has been cancelled!\n", filenameBeingUploaded);
 				}
-				CancelUpload(remoteIP);
+				CancelUpload();
 				break;
 			}
 		}
@@ -1439,36 +1327,6 @@ bool Webserver::HttpInterpreter::CharFromClient(char c)
 			}
 			break;
 
-		case doingPost:
-			clientMessage[clientPointer++] = c;
-			uploadedBytes++;
-
-			if (uploadedBytes == postFileLength)
-			{
-				WriteUploadedData(clientMessage + (clientPointer - uploadedBytes), uploadedBytes);
-				FinishUpload(postFileLength);
-
-				SendJsonResponse("upload");
-
-				// Reset state
-				uint32_t remoteIP = network->GetTransaction()->GetRemoteIP();
-				for(size_t i = 0; i < numSessions; i++)
-				{
-					if (sessions[i].ip == remoteIP && sessions[i].isPostUploading)
-					{
-						sessions[i].isPostUploading = false;
-						sessions[i].lastQueryTime = platform->Time();
-						break;
-					}
-				}
-				uploadState = notUploading;
-				ResetState();
-
-				return true;
-			}
-
-			break;
-
 		default:
 			break;
 	}
@@ -1554,55 +1412,42 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 				}
 
 				// Start POST file upload
-				if (contentLengthFound)
+				if (!contentLengthFound)
 				{
-					FileStore *file = platform->GetFileStore("0:/", qualifiers[0].value, true);
-					if (StartUpload(file))
-					{
-						if (reprap.Debug(moduleWebserver))
-						{
-							platform->MessageF(HOST_MESSAGE, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
-						}
-						// Start new file upload
-						uploadingTextData = false;
-						uploadedBytes = numContinuationBytes = 0;
+					return RejectMessage("invalid POST upload request");
+				}
 
-						strncpy(filenameBeingUploaded, qualifiers[0].value, ARRAY_SIZE(filenameBeingUploaded));
-						filenameBeingUploaded[ARRAY_UPB(filenameBeingUploaded)] = 0;
-
-						// Set POST variables only if we actually need to store data
-						if (postFileLength > 0)
-						{
-							uint32_t remoteIP = network->GetTransaction()->GetRemoteIP();
-							uint16_t remotePort = network->GetTransaction()->GetRemotePort();
-							for(size_t i = 0; i < numSessions; i++)
-							{
-								if (sessions[i].ip == remoteIP)
-								{
-									sessions[i].postPort = remotePort;
-									sessions[i].isPostUploading = true;
-									break;
-								}
-							}
-							
-							// Align the client pointer on a 32-bit boundary for HSMCI efficiency.
-							// To remain efficient, the browser should send POSTDATA in multiples of 4 bytes.
-							clientPointer += 3;
-							clientPointer -= reinterpret_cast<size_t>(clientMessage + clientPointer) & 3;
-							state = doingPost;
-
-							return false;
-						}
-
-						// User has uploaded an empty file - we should have finished here already
-						FinishUpload(0);
-						SendJsonResponse("upload");
-						return true;
-					}
+				// Start a new file upload
+				FileStore *file = platform->GetFileStore(FS_PREFIX, qualifiers[0].value, true);
+				if (!StartUpload(file))
+				{
 					return RejectMessage("could not start file upload");
 				}
+
+				if (reprap.Debug(moduleWebserver))
+				{
+					platform->MessageF(HOST_MESSAGE, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
+				}
+				uploadedBytes = 0;
+
+				strncpy(filenameBeingUploaded, qualifiers[0].value, ARRAY_SIZE(filenameBeingUploaded));
+				filenameBeingUploaded[ARRAY_UPB(filenameBeingUploaded)] = 0;
+
+				uint32_t remoteIP = network->GetTransaction()->GetRemoteIP();
+				uint16_t remotePort = network->GetTransaction()->GetRemotePort();
+				for(size_t i = 0; i < numSessions; i++)
+				{
+					if (sessions[i].ip == remoteIP)
+					{
+						sessions[i].postPort = remotePort;
+						sessions[i].isPostUploading = true;
+						break;
+					}
+				}
+
+				ResetState();
+				return true;
 			}
-			return RejectMessage("invalid POST upload request");
 		}
 		return RejectMessage("only rr_upload is supported for POST requests");
 	}
@@ -1632,7 +1477,7 @@ bool Webserver::HttpInterpreter::Authenticate()
 	if (numSessions < maxHttpSessions)
 	{
 		sessions[numSessions].ip = network->GetTransaction()->GetRemoteIP();
-		sessions[numSessions].lastQueryTime = platform->Time();
+		sessions[numSessions].lastQueryTime = millis();
 		sessions[numSessions].isPostUploading = false;
 		numSessions++;
 		return true;
@@ -1660,7 +1505,7 @@ void Webserver::HttpInterpreter::UpdateAuthentication()
 	{
 		if (sessions[i].ip == remoteIP)
 		{
-			sessions[i].lastQueryTime = platform->Time();
+			sessions[i].lastQueryTime = millis();
 			break;
 		}
 	}
@@ -1686,12 +1531,12 @@ void Webserver::HttpInterpreter::RemoveAuthentication()
 void Webserver::HttpInterpreter::CheckSessions()
 {
 	// Check if any HTTP session can be purged
-	const float time = platform->Time();
+	const uint32_t now = millis();
 	for (int i = numSessions - 1; i >=0 ; i--)
 	{
-		if (!sessions[i].isPostUploading && (time - sessions[i].lastQueryTime) > httpSessionTimeout)
+		if (!sessions[i].isPostUploading && (now - sessions[i].lastQueryTime) > httpSessionTimeout)
 		{
-			for (size_t k = i + 1; k < numSessions; ++k)
+			for (size_t k = i + 1; k < numSessions; k++)
 			{
 				memcpy(&sessions[k - 1], &sessions[k], sizeof(HttpSession));
 			}
@@ -1856,6 +1701,7 @@ void Webserver::HttpInterpreter::HandleGCodeReply(const char *reply)
 		}
 
 		buffer->cat(reply);
+		clientsServed = 0;
 		seq++;
 	}
 }
@@ -2132,7 +1978,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				rand();
 				uint16_t pasv_port = random(1024, 65535);
 				network->OpenDataPort(pasv_port);
-				portOpenTime = platform->Time();
+				portOpenTime = millis();
 				state = waitingForPasvPort;
 
 				/* send FTP response */
@@ -2248,7 +2094,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			break;
 
 		case waitingForPasvPort:
-			if (!reprap.Debug(moduleWebserver) && platform->Time() - portOpenTime > ftpPasvPortTimeout)
+			if (!reprap.Debug(moduleWebserver) && millis() - portOpenTime > ftpPasvPortTimeout)
 			{
 				SendReply(425, "Failed to establish connection.");
 
@@ -2550,7 +2396,7 @@ void Webserver::TelnetInterpreter::ConnectionEstablished()
 		return;
 	}
 	state = justConnected;
-	connectTime = platform->Time();
+	connectTime = millis();
 
 	// Check whether we need a password to log in
 	if (reprap.NoPasswordSet())
@@ -2596,7 +2442,7 @@ bool Webserver::TelnetInterpreter::CharFromClient(char c)
 			state = authenticating;
 		}
 
-		if (platform->Time() - connectTime < telnetSetupDuration)
+		if (millis() - connectTime < telnetSetupDuration)
 		{
 			network->GetTransaction()->Discard();
 			return true;
@@ -2636,7 +2482,7 @@ bool Webserver::TelnetInterpreter::CharFromClient(char c)
 void Webserver::TelnetInterpreter::ResetState()
 {
 	state = idle;
-	connectTime = 0.0;
+	connectTime = 0;
 	clientPointer = 0;
 }
 

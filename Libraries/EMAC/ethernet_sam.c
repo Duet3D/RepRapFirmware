@@ -66,20 +66,10 @@
 #include "lwip/src/include/lwip/tcp_impl.h"
 #endif
 #include "lwip/src/include/netif/etharp.h"
-#include "lwip/src/sam/include/netif/ethernetif.h"
-
-#include "include/emac.h"
-
-extern void RepRapNetworkMessage(const char*);
+#include "ethernetif.h"
 
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
-static bool net_if_ready = false;
-
-struct netif* ethernet_get_configuration()
-{
-	return &gs_net_if;
-}
 
 /* Timer for calling lwIP tmr functions without system */
 typedef struct timers_info {
@@ -136,11 +126,12 @@ void ethernet_timers_update(void)
 	}
 }
 
+
 //************************************************************************************************************
 
 // Added by AB.
 
-static void ethernet_configure_interface(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[])
+void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[], netif_status_callback_fn status_cb)
 {
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	extern err_t ethernetif_init(struct netif *netif);
@@ -165,17 +156,17 @@ static void ethernet_configure_interface(const uint8_t ipAddress[], const uint8_
 	netif_set_default(&gs_net_if);
 
 	/* Setup callback function for netif status change */
-	netif_set_status_callback(&gs_net_if, ethernet_status_callback);
+	netif_set_status_callback(&gs_net_if, status_cb);
 
 	/* Bring it up */
 	if (x_ip_addr.addr == 0)
 	{
-		RepRapNetworkMessage("Starting DHCP...\n");
+		/* DHCP mode */
 		dhcp_start(&gs_net_if);
 	}
 	else
 	{
-		RepRapNetworkMessage("Starting network...\n");
+		/* Static mode */
 		netif_set_up(&gs_net_if);
 	}
 }
@@ -187,11 +178,6 @@ void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask
 	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 	IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);
 	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);
-
-	if (gs_net_if.ip_addr.addr == 0)
-	{
-		dhcp_stop(&gs_net_if);
-	}
 
 	if (x_ip_addr.addr == 0)
 	{
@@ -225,25 +211,7 @@ bool establish_ethernet_link(void)
 	return ethernet_establish_link();		// this is the one that takes a long time
 }
 
-/** \brief Create ethernet task, for ethernet management.
- *
- */
-void start_ethernet(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[])
-{
-	/* Set hw and IP parameters, initialize MAC too */
-	ethernet_configure_interface(ipAddress, netMask, gateWay);
-}
-
-/** \brief Check if the ethernet interface has been configured completely and if
- * an IP has been assigned to it.
- *
- */
-bool ethernet_is_ready()
-{
-	return net_if_ready;
-}
-
-//*************************************************************************************************************
+#if 0
 /**
  *  \brief Status callback used to print address given by DHCP.
  *
@@ -256,7 +224,6 @@ void ethernet_status_callback(struct netif *netif)
 	{
 		RepRapNetworkMessage("Network up, IP=");
 		ipaddr_ntoa_r(&(netif->ip_addr), c_mess, sizeof(c_mess));
-		c_mess[sizeof(c_mess) - 1] = 0;		// ensure null terminated
 		strncat(c_mess, "\n\n", sizeof(c_mess) - strlen(c_mess) - 1);
 		RepRapNetworkMessage(c_mess);
 		netif->flags |= NETIF_FLAG_LINK_UP;
@@ -267,23 +234,21 @@ void ethernet_status_callback(struct netif *netif)
 		RepRapNetworkMessage("Network down\n");
 	}
 }
+#endif
 
-
-/**0
+/**
  *  \brief Manage the Ethernet packets, if any received process them.
  *  After processing any packets, manage the lwIP timers.
  *
  *  \return Returns true if data has been processed.
  */
-bool ethernet_read(void)
+void ethernet_task(void)
 {
 	/* Run polling tasks */
-	bool data_read = ethernetif_input(&gs_net_if);
+	while (ethernetif_input(&gs_net_if));
 
 	/* Run periodic tasks */
 	ethernet_timers_update();
-
-	return data_read;
 }
 
 /*
@@ -296,4 +261,20 @@ bool ethernet_read(void)
 void ethernet_set_rx_callback(emac_dev_tx_cb_t callback)
 {
 	ethernetif_set_rx_callback(callback);
+}
+
+/*
+ * \brief Sets the network adapter's MAC address.
+ */
+void ethernet_set_mac_address(const uint8_t macAddress[])
+{
+	ethernetif_set_mac_address(macAddress);
+}
+
+/*
+ * \brief Returns the current IP address
+ */
+const uint8_t *ethernet_get_ipaddress()
+{
+	return (uint8_t*)&gs_net_if.ip_addr.addr;
 }

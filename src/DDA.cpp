@@ -96,6 +96,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 		isDeltaMovement = false;
 	}
 
+	isPrintingMove = false;
 	bool realMove = false, xyMoving = false;
 	const bool isSpecialDeltaMove = (move->IsDeltaMode() && !doMotorMapping);
 	float accelerations[DRIVES];
@@ -146,6 +147,7 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 
 			if (drive >= AXES && xyMoving)
 			{
+				isPrintingMove = true;					// we have both movement and extrusion
 				float compensationTime = reprap.GetPlatform()->GetElasticComp(drive);
 				if (compensationTime > 0.0)
 				{
@@ -724,20 +726,17 @@ bool DDA::Start(uint32_t tim)
 		if (extrusions != 0 || retractions != 0)
 		{
 			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
-			if (prohibitedMovements != 0)
+			for (DriveMovement **dmpp = &firstDM; *dmpp != nullptr; )
 			{
-				for (DriveMovement **dmpp = &firstDM; *dmpp != nullptr; )
+				bool thisDriveExtruding = (*dmpp)->drive >= AXES;
+				if (thisDriveExtruding && (prohibitedMovements & (1 << ((*dmpp)->drive - AXES))) != 0)
 				{
-					bool thisDriveExtruding = (*dmpp)->drive >= AXES;
-					if (thisDriveExtruding && (prohibitedMovements & (1 << ((*dmpp)->drive - AXES))) != 0)
-					{
-						*dmpp = (*dmpp)->nextDM;
-					}
-					else
-					{
-						extruding = extruding || thisDriveExtruding;
-						dmpp = &((*dmpp)->nextDM);
-					}
+					*dmpp = (*dmpp)->nextDM;
+				}
+				else
+				{
+					extruding = extruding || thisDriveExtruding;
+					dmpp = &((*dmpp)->nextDM);
 				}
 			}
 		}

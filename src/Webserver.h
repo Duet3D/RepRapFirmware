@@ -39,26 +39,26 @@ const uint16_t gcodeBufferLength = 512;			// size of our gcode ring buffer, pref
 
 const uint16_t webUploadBufferSize = 2300;		// maximum size of HTTP GET upload packets (webMessageLength - 700)
 const uint16_t webMessageLength = 3000;			// maximum length of the web message we accept after decoding
-const size_t minHttpResponseSize = 1024;		// minimum number of bytes required for an HTTP response
+const size_t minHttpResponseSize = 768;			// minimum number of bytes required for an HTTP response
 
 const size_t maxCommandWords = 4;				// max number of space-separated words in the command
 const size_t maxQualKeys = 5;					// max number of key/value pairs in the qualifier
 const size_t maxHeaders = 16;					// max number of key/value pairs in the headers
 
 const size_t  maxHttpSessions = 8;				// maximum number of simultaneous HTTP sessions
-const float httpSessionTimeout = 8.0;			// HTTP session timeout in seconds
+const uint32_t httpSessionTimeout = 8000;		// HTTP session timeout in milliseconds
 
 /* FTP */
 
 const uint16_t ftpResponseLength = 128;			// maximum FTP response length
 const uint16_t ftpFileListLineLength = 256;		// maximum length for one FTP file listing line
 const uint16_t ftpMessageLength = 128;			// maximum line length for incoming FTP commands
-const float ftpPasvPortTimeout = 10.0;			// maximum time to wait for an FTP data connection
+const uint32_t ftpPasvPortTimeout = 10000;		// maximum time to wait for an FTP data connection in milliseconds
 
 /* Telnet */
 
 const uint16_t telnetMessageLength = 128;		// maximum line length for incoming Telnet commands
-const float telnetSetupDuration = 4.0;			// ignore the first Telnet request within this duration
+const uint32_t telnetSetupDuration = 4000;		// ignore the first Telnet request within this duration (in ms)
 
 
 class Webserver;
@@ -85,31 +85,31 @@ class ProtocolInterpreter
 		virtual void ResetState() = 0;
 		virtual bool NeedMoreData();
 
-		virtual bool DoFastUpload(NetworkTransaction *transaction);
 		virtual bool DoingFastUpload() const;
-	    virtual void CancelUpload();
+		virtual void DoFastUpload(NetworkTransaction *transaction);
+		virtual void CancelUpload();
 
 	protected:
 
-	    Platform *platform;
-	    Webserver *webserver;
-	    Network *network;
+		Platform *platform;
+		Webserver *webserver;
+		Network *network;
 
-	    // Information for file uploading
-	    enum UploadState
-	    {
+		// Information for file uploading
+		enum UploadState
+		{
 			notUploading,									// no upload in progress
 			uploadOK,										// upload in progress, no error so far
 			uploadError										// upload in progress but had error
-	    };
+		};
 
-	    UploadState uploadState;
-	    FileData fileBeingUploaded;
-	    char filenameBeingUploaded[FILENAME_LENGTH];
+		UploadState uploadState;
+		FileData fileBeingUploaded;
+		char filenameBeingUploaded[FILENAME_LENGTH];
 
-	    virtual bool StartUpload(FileStore *file);
+		virtual bool StartUpload(FileStore *file);
 		bool IsUploading() const;
-	    virtual void FinishUpload(uint32_t fileLength);
+		virtual void FinishUpload(uint32_t fileLength);
 };
 
 class Webserver
@@ -149,10 +149,9 @@ class Webserver
 			void ResetState() override;
 			bool NeedMoreData() override;
 
-			bool DoFastUpload(NetworkTransaction *transaction) override;
 			bool DoingFastUpload() const override;
+			void DoFastUpload(NetworkTransaction *transaction) override;
 			void CancelUpload() override;
-			void CancelUpload(uint32_t remoteIP);
 
 			void ResetSessions();
 			void CheckSessions();
@@ -184,8 +183,7 @@ class Webserver
 				doingHeaderKey,				// receiving a header key
 				expectingHeaderValue,		// expecting a header value
 				doingHeaderValue,			// receiving a header value
-				doingHeaderContinuation,	// received a newline after a header value
-				doingPost					// receiving post data
+				doingHeaderContinuation		// received a newline after a header value
 			};
 			HttpState state;
 
@@ -220,7 +218,7 @@ class Webserver
 			struct HttpSession
 			{
 				uint32_t ip;
-				float lastQueryTime;
+				uint32_t lastQueryTime;
 				bool isPostUploading;
 				uint16_t postPort;
 			};
@@ -249,14 +247,7 @@ class Webserver
 
 		protected:
 			bool processingDeferredRequest;					// it's no good idea to parse 128kB of text in one go...
-		    bool uploadingTextData;							// do we need to count UTF-8 continuation bytes?
-		    uint32_t numContinuationBytes;					// number of UTF-8 continuation bytes we have received
-
 		    uint32_t postFileLength, uploadedBytes;			// how many POST bytes do we expect and how many have already been written?
-
-		    bool StartUpload(FileStore *file) override;
-			void WriteUploadedData(const char* buffer, unsigned int length);
-			void FinishUpload(uint32_t fileLength) override;
 	};
 	HttpInterpreter *httpInterpreter;
 
@@ -294,7 +285,7 @@ class Webserver
 			char filename[FILENAME_LENGTH];
 			char currentDir[FILENAME_LENGTH];
 
-			float portOpenTime;
+			uint32_t portOpenTime;
 
 			void ProcessLine();
 			void SendReply(int code, const char *message, bool keepConnection = true);
@@ -337,7 +328,7 @@ class Webserver
 			};
 			TelnetState state;
 			uint8_t connectedClients;
-			float connectTime;
+			uint32_t connectTime;
 
 			char clientMessage[telnetMessageLength];
 			uint16_t clientPointer;
@@ -365,7 +356,6 @@ class Webserver
     bool webserverActive;
     const ConnectionState *readingConnection;
 
-    float lastTime;
     float longWait;
 };
 
@@ -375,7 +365,6 @@ inline bool ProtocolInterpreter::IsUploading() const { return uploadState != not
 
 inline uint32_t Webserver::GetReplySeq() const { return httpInterpreter->GetReplySeq(); }
 
-inline void Webserver::HttpInterpreter::FinishUpload(uint32_t fileLength) { ProtocolInterpreter::FinishUpload(fileLength + numContinuationBytes); }
 inline uint16_t Webserver::HttpInterpreter::GetGCodeBufferSpace() const { return (gcodeReadIndex - gcodeWriteIndex - 1u) % gcodeBufferLength; }
 inline bool Webserver::HttpInterpreter::GCodeAvailable() const { return gcodeReadIndex != gcodeWriteIndex; }
 inline uint32_t Webserver::HttpInterpreter::GetReplySeq() const { return seq; }

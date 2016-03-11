@@ -12,12 +12,9 @@
 // This class stores a single G Code and provides functions to allow it to be parsed
 
 GCodeBuffer::GCodeBuffer(Platform* p, const char* id)
+	: platform(p), identity(id), checksumRequired(false), writingFileDirectory(nullptr), toolNumberAdjust(0)
 {
-	platform = p;
-	identity = id;
-	writingFileDirectory = NULL; // Has to be done here as Init() is called every line.
-	toolNumberAdjust = 0;
-	checksumRequired = false;
+	Init();
 }
 
 void GCodeBuffer::Init()
@@ -25,18 +22,17 @@ void GCodeBuffer::Init()
 	gcodePointer = 0;
 	readPointer = -1;
 	inComment = false;
-	state = idle;
+	state = GCodeState::idle;
 }
 
 int GCodeBuffer::CheckSum() const
 {
-	int cs = 0;
-	for (int i = 0; gcodeBuffer[i] != '*' && gcodeBuffer[i] != 0; i++)
+	uint8_t cs = 0;
+	for (size_t i = 0; gcodeBuffer[i] != '*' && gcodeBuffer[i] != 0; i++)
 	{
-		cs = cs ^ gcodeBuffer[i];
+		cs = cs ^ (uint8_t)gcodeBuffer[i];
 	}
-	cs &= 0xff;  // Defensive programming...
-	return cs;
+	return (int)cs;
 }
 
 // Add a byte to the code being assembled.  If false is returned, the code is
@@ -54,7 +50,7 @@ bool GCodeBuffer::Put(char c)
 	{
 		inComment = true;
 	}
-	else if (c == '\n' || !c)
+	else if (c == '\n' || c == 0)
 	{
 		gcodeBuffer[gcodePointer] = 0;
 		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] && !writingFileDirectory) // Don't bother with blank/comment lines
@@ -79,13 +75,13 @@ bool GCodeBuffer::Put(char c)
 
 			// Strip out the line number and checksum
 			gcodePointer = 0;
-			while (gcodeBuffer[gcodePointer] != ' ' && gcodeBuffer[gcodePointer])
+			while (gcodeBuffer[gcodePointer] != ' ' && gcodeBuffer[gcodePointer] != 0)
 			{
 				gcodePointer++;
 			}
 
 			// Anything there?
-			if (!gcodeBuffer[gcodePointer])
+			if (gcodeBuffer[gcodePointer] == 0)
 			{
 				// No...
 				gcodeBuffer[0] = 0;
@@ -96,21 +92,22 @@ bool GCodeBuffer::Put(char c)
 			// Yes...
 			gcodePointer++;
 			int gp2 = 0;
-			while (gcodeBuffer[gcodePointer] != '*' && gcodeBuffer[gcodePointer])
+			while (gcodeBuffer[gcodePointer] != '*' && gcodeBuffer[gcodePointer] != 0)
 			{
 				gcodeBuffer[gp2] = gcodeBuffer[gcodePointer++];
 				gp2++;
 			}
 			gcodeBuffer[gp2] = 0;
 		}
-		else if (checksumRequired)
+		else if (checksumRequired || IsEmpty())
 		{
+			// Checksum not found or buffer empty - cannot do anything
 			gcodeBuffer[0] = 0;
 			Init();
 			return false;
 		}
 		Init();
-		state = executing;
+		state = GCodeState::executing;
 		return true;
 	}
 	else if (!inComment || writingFileDirectory)
@@ -118,7 +115,7 @@ bool GCodeBuffer::Put(char c)
 		gcodeBuffer[gcodePointer++] = c;
 		if (gcodePointer >= (int)GCODE_LENGTH)
 		{
-			platform->Message(GENERIC_MESSAGE, "G-Code buffer length overflow.\n");
+			platform->Message(GENERIC_MESSAGE, "Error: G-Code buffer length overflow.\n");
 			gcodePointer = 0;
 			gcodeBuffer[0] = 0;
 		}
@@ -175,7 +172,7 @@ float GCodeBuffer::GetFValue()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode float before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float before a search.\n");
 		readPointer = -1;
 		return 0.0;
 	}
@@ -190,7 +187,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 {
 	if(readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode float array before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array before a search.\n");
 		readPointer = -1;
 		returnedLength = 0;
 		return;
@@ -202,7 +199,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 	{
 		if(length >= returnedLength) // Array limit has been set in here
 		{
-			platform->MessageF(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
+			platform->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -244,7 +241,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 {
 	if(readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode long array before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
 		readPointer = -1;
 		return;
 	}
@@ -255,7 +252,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 	{
 		if(length >= returnedLength) // Array limit has been set in here
 		{
-			platform->MessageF(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
+			platform->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -284,7 +281,7 @@ const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode string before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
 		readPointer = -1;
 		return "";
 	}
@@ -317,9 +314,9 @@ const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 		readPointer = -1;
 		if (optional)
 		{
-			return NULL;
+			return nullptr;
 		}
-		platform->Message(GENERIC_MESSAGE, "GCodes: String expected but not seen.\n");
+		platform->Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
 		return gcodeBuffer; // Good idea?
 	}
 
@@ -334,7 +331,7 @@ long GCodeBuffer::GetLValue()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "GCodes: Attempt to read a GCode int before a search.\n");
+		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode int before a search.\n");
 		readPointer = -1;
 		return 0;
 	}
@@ -346,7 +343,7 @@ long GCodeBuffer::GetLValue()
 // Return true if this buffer contains a poll request or empty request that can be executed while macros etc. from another source are being completed
 bool GCodeBuffer::IsPollRequest()
 {
-	if (state == executing)
+	if (state == GCodeState::executing)
 	{	if (IsEmpty())
 		{
 			return true;

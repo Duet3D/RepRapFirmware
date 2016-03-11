@@ -15,7 +15,6 @@ Separated out from Platform.h by dc42 and extended by zpl
 #include <climits>
 
 #include "lwipopts.h"
-#include "ethernet_sam.h"
 #include "OutputMemory.h"
 
 // This class handles the network - typically an Ethernet.
@@ -28,17 +27,19 @@ Separated out from Platform.h by dc42 and extended by zpl
 // Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
 // and therefore avoids additional memory use and fragmentation.
 
-const uint8_t NETWORK_TRANSACTION_COUNT = 16;				// Number of NetworkTransactions to be used for network IO
-const float TCP_WRITE_TIMEOUT = 8.0;	 					// Seconds to wait for data we have written to be acknowledged
+const size_t NETWORK_TRANSACTION_COUNT = 16;							// Number of NetworkTransactions to be used for network IO
 
+const uint32_t TCP_WRITE_TIMEOUT = 4000;	 							// Miliseconds to wait for data we have written to be acknowledged
+const uint32_t TCP_MAX_SEND_RETRIES = 4;								// How many times can we attempt to write data
 
-const uint8_t IP_ADDRESS[4] = { 192, 168, 1, 10 };			// Need some sort of default...
+const uint8_t MAC_ADDRESS[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };	// Need some sort of default...
+const uint8_t IP_ADDRESS[4] = { 192, 168, 1, 10 };
 const uint8_t NET_MASK[4] = { 255, 255, 255, 0 };
 const uint8_t GATE_WAY[4] = { 192, 168, 1, 1 };
 
+const uint16_t DEFAULT_HTTP_PORT = 80;
 const uint16_t FTP_PORT = 21;
 const uint16_t TELNET_PORT = 23;
-const uint16_t DEFAULT_HTTP_PORT = 80;
 
 
 /****************************************************************************************************/
@@ -52,14 +53,16 @@ class NetworkTransaction;
 struct ConnectionState
 {
 	tcp_pcb *pcb;								// Connection PCB
+	uint16_t localPort, remotePort;				// Copy of the local and remote ports, because the PCB may be unavailable
+	uint32_t remoteIPAddress;					// Same for the remote IP address
 	NetworkTransaction *sendingTransaction;		// NetworkTransaction that is currently sending via this connection
 	ConnectionState *next;						// Next ConnectionState in this list
 	bool persistConnection;						// Do we expect this connection to stay alive?
 
 	void Init(tcp_pcb *p);
-	uint16_t GetLocalPort() const;
-	uint32_t GetRemoteIP() const;
-	uint16_t GetRemotePort() const;
+	uint16_t GetLocalPort() const { return localPort; }
+	uint32_t GetRemoteIP() const { return remoteIPAddress; }
+	uint16_t GetRemotePort() const { return remotePort; }
 };
 
 // Assign a status to each NetworkTransaction
@@ -82,9 +85,9 @@ class NetworkTransaction
 		void Set(pbuf *p, ConnectionState* c, TransactionStatus s);
 		TransactionStatus GetStatus() const { return status; }
 
-		size_t DataLength() const;
+		bool HasMoreDataToRead() const { return readingPb != nullptr; }
 		bool Read(char& b);
-		bool ReadBuffer(char *&buffer, unsigned int &len);
+		bool ReadBuffer(const char *&buffer, unsigned int &len);
 		void Write(char b);
 		void Write(const char* s);
 		void Write(StringRef ref);
@@ -97,9 +100,9 @@ class NetworkTransaction
 		void SetConnectionLost();
 		bool LostConnection() const { return cs == nullptr || cs->pcb == nullptr; }
 		ConnectionState *GetConnection() const { return cs; }
+		uint16_t GetLocalPort() const;
 		uint32_t GetRemoteIP() const;
 		uint16_t GetRemotePort() const;
-		uint16_t GetLocalPort() const;
 
 		void Commit(bool keepConnectionAlive);
 		void Defer();
@@ -114,7 +117,7 @@ class NetworkTransaction
 		ConnectionState* cs;
 		NetworkTransaction* volatile next;			// next NetworkTransaction in the list we are in
 		NetworkTransaction* nextWrite;				// next NetworkTransaction queued to write to assigned connection
-		pbuf *pb;									// linked list of incoming packet buffers
+		pbuf *pb, *readingPb;						// received packet queue and a pointer to the pbuf being read from
 		unsigned int bufferLength;					// total length of the packet buffer
 		unsigned int inputPointer;					// amount of data already taken from the first packet buffer
 
@@ -123,7 +126,6 @@ class NetworkTransaction
 		FileStore *fileBeingSent;
 
 		TransactionStatus status;
-		float lastWriteTime;
 		bool closeRequested;
 		bool waitingForDataConnection;
 };
@@ -135,11 +137,10 @@ class Network
 		friend class NetworkTransaction;
 
 		void ReadPacket();
-		void ReceiveInput(pbuf *pb, ConnectionState *cs);
-		void SentPacketAcknowledged(ConnectionState *cs, unsigned int len);
+		bool ReceiveInput(pbuf *pb, ConnectionState *cs);
 		ConnectionState *ConnectionAccepted(tcp_pcb *pcb);
 		void ConnectionClosed(ConnectionState* cs, bool closeConnection);
-		void ConnectionClosedGracefully(ConnectionState *cs);
+		bool ConnectionClosedGracefully(ConnectionState *cs);
 
 		NetworkTransaction *GetTransaction(const ConnectionState *cs = nullptr);
 		void WaitForDataConection();

@@ -26,17 +26,18 @@ Licence: GPL
 #define NAME "RepRapFirmware"
 
 #ifndef VERSION
-#define VERSION "1.09t-dc42-beta2"
+#define VERSION "1.09x-dc42-beta3"
 #endif
 
 #ifndef DATE
-#define DATE "2016-03-10"
+#define DATE "2016-03-11"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
 
 #define FLASH_SAVE_ENABLED	(1)
 
+// If enabled, the following control the use of the optional ExternalDrivers module
 //#define EXTERNAL_DRIVERS		(1)
 //#define FIRST_EXTERNAL_DRIVE	(4)
 
@@ -168,6 +169,9 @@ const float FILAMENT_WIDTH = 1.75;					// Millimetres
 #define SLEEP_G "sleep.g"
 
 #define EOF_STRING "<!-- **EoF** -->"
+
+#define IAP_UPDATE_FILE "iap.bin"
+#define IAP_FIRMWARE_FILE "RepRapFirmware.bin"
 
 // List defaults
 

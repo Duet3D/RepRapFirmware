@@ -978,6 +978,7 @@ label[for="dropdown_language"] {
 #text_config {
 	background-color: inherit;
 	border: 0px;
+	margin-bottom: 15px;
 	min-height: 200px;
 	resize: none;
 	width: 100%;

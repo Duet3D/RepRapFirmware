@@ -171,8 +171,6 @@ const size_t MAX_FILES = 10;					// Must be large enough to handle the max numbe
 
 const size_t FILE_BUFFER_SIZE = 256;
 
-const uint8_t MAC_ADDRESS[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };
-
 /****************************************************************************************************/
 
 enum class BoardType : uint8_t
@@ -574,6 +572,7 @@ public:
 	float GetTemperatureLimit() const { return temperatureLimit; }
 	static const char* TempErrorStr(TempError err);
 	static bool TempErrorPermanent(TempError err);
+	void UpdateConfiguredHeaters();
 
 	// Fans
 
@@ -593,8 +592,9 @@ public:
 	void ResetNvData();
 	void ReadNvData();
 	void WriteNvData();
-
 	void SetAutoSave(bool enabled);
+
+	void UpdateFirmware();
 
 	// AUX device
 	void Beep(int freq, int ms);
@@ -757,9 +757,8 @@ private:
 	Pin heatOnPins[HEATERS];
 	MAX31855 Max31855Devices[MAX31855_DEVICES];
 	Pin max31855CsPins[MAX31855_DEVICES];
+	uint32_t configuredHeaters;										// Bitmask of all heaters in use
 	float heatSampleTime;
-	float standbyTemperatures[HEATERS];
-	float activeTemperatures[HEATERS];
 	float timeToHot;
 	float temperatureLimit;
 

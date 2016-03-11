@@ -40,45 +40,68 @@
 
 #include "RepRapFirmware.h"
 
+extern "C"
+{
+#include "ethernet_sam.h"
+
+#include "lwipopts.h"
+
 #ifdef LWIP_STATS
 #include "lwip/src/include/lwip/stats.h"
 #endif
 
-extern "C"
-{
-#include "lwipopts.h"
 #include "lwip/src/include/lwip/tcp.h"
+#include "lwip/src/include/lwip/tcp_impl.h"
+
 #include "contrib/apps/netbios/netbios.h"
+#include "contrib/apps/mdns/mdns_responder.h"
 }
+
+static volatile bool lwipLocked = false;
+static volatile bool hasLink = false;
 
 static tcp_pcb *http_pcb = nullptr;
 static tcp_pcb *ftp_main_pcb = nullptr;
 static tcp_pcb *ftp_pasv_pcb = nullptr;
 static tcp_pcb *telnet_pcb = nullptr;
 
+static struct mdns_service mdns_services[] = {
+	{
+		.name = "\x05_echo\x04_tcp\x05local",
+		.port = 7,
+	},
+	{
+		.name = "\x05_http\x04_tcp\x05local",
+		.port = DEFAULT_HTTP_PORT,
+	},
+	{
+		.name = "\x04_ftp\x04_tcp\x05local",
+		.port = FTP_PORT
+	},
+	{
+		.name = "\x07_telnet\x04_tcp\x05local",
+		.port = TELNET_PORT
+	}
+};
+
+const size_t MDNS_HTTP_SERVICE_INDEX = 1;	// Index of the mDNS HTTP service above
+
+static const char *mdns_txt_records[] = {
+	"product=" NAME,
+	"version=" VERSION,
+	NULL
+};
+
 static bool closingDataPort = false;
 
-static volatile bool lwipLocked = false;
+static ConnectionState *sendingConnection = nullptr;
 
-static NetworkTransaction *sendingTransaction = nullptr;
 static uint32_t sendingWindow32[(TCP_WND + 3)/4];						// should be 32-bit aligned for efficiency
 static inline char* sendingWindow() { return reinterpret_cast<char*>(sendingWindow32); }
 static uint16_t sendingWindowSize, sentDataOutstanding;
 static uint8_t sendingRetries;
 
 static uint16_t httpPort = DEFAULT_HTTP_PORT;
-
-// Called only by LWIP to put out a message.
-// May be called from C as well as C++
-
-extern "C" void RepRapNetworkMessage(const char* s)
-{
-#ifdef LWIP_DEBUG
-	reprap.GetPlatform()->Message(DEBUG_MESSAGE, s);
-#else
-	reprap.GetPlatform()->Message(HOST_MESSAGE, s);
-#endif
-}
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -100,17 +123,32 @@ void UnlockLWIP()
 	lwipLocked = false;
 }
 
-// Callback functions for the EMAC driver (called from ISR)
+// Callback functions for the EMAC driver
 
-static void emac_read_packet(uint32_t ul_status)
+// Callback to report when the link has gone up or down
+static void ethernet_status_callback(struct netif *netif)
+{
+	hasLink = netif_is_up(netif);
+	if (hasLink)
+	{
+		char ip[16];
+		ipaddr_ntoa_r(&(netif->ip_addr), ip, sizeof(ip));
+		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network up, IP=%s\n", ip);
+	}
+	else
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network down\n");
+	}
+}
+
+// Called from ISR
+static void ethernet_rx_callback(uint32_t ul_status)
 {
 	// Because the LWIP stack can become corrupted if we work with it in parallel,
 	// we may have to wait for the next Spin() call to read the next packet.
-	if (ethernet_is_ready() && LockLWIP())
+	if (LockLWIP())
 	{
-		do {
-			// read all queued packets from the RX buffer
-		} while (ethernet_read());
+		ethernet_task();
 		UnlockLWIP();
 	}
 	else
@@ -120,7 +158,7 @@ static void emac_read_packet(uint32_t ul_status)
 	}
 }
 
-// Callback functions called by LWIP (may be called from ISR)
+// Callback functions for LWIP (may be called from ISR)
 
 static void conn_err(void *arg, err_t err)
 {
@@ -130,12 +168,13 @@ static void conn_err(void *arg, err_t err)
 	ConnectionState *cs = (ConnectionState*)arg;
 	if (cs != nullptr)
 	{
-		reprap.GetNetwork()->ConnectionClosed(cs, false);	// tell the higher levels about the error
-		if (sendingTransaction == cs->sendingTransaction)
+		if (reprap.Debug(moduleNetwork))
 		{
-			sendingTransaction = nullptr;
-			sentDataOutstanding = 0;
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: This connection has a valid CS\n");
 		}
+
+		// Tell the higher levels about the error
+		reprap.GetNetwork()->ConnectionClosed(cs, false);
 	}
 }
 
@@ -144,33 +183,45 @@ static void conn_err(void *arg, err_t err)
 static err_t conn_poll(void *arg, tcp_pcb *pcb)
 {
 	ConnectionState *cs = (ConnectionState*)arg;
-	if (cs != nullptr && sendingTransaction != nullptr && cs == sendingTransaction->GetConnection())
+	if (cs == sendingConnection)
 	{
-		// We tried to send data, but didn't receive an ACK within reasonable time.
-
+		// Data could not be sent in time, check if the connection has to be timed out
 		sendingRetries++;
-		if (sendingRetries == 4)
+		if (sendingRetries == TCP_MAX_SEND_RETRIES)
 		{
-			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Poll received error!\n");
+			reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Poll couldn't send data after %d retries!\n", TCP_MAX_SEND_RETRIES);
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}
 
-		// Try to send the remaining data once again
+		// Do we have enough space left for sending? Third-party apps may be sending data as well, so check this first
+		if (tcp_sndbuf(pcb) < TCP_WND)
+		{
+			if (reprap.Debug(moduleNetwork))
+			{
+				reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Could not send data because not enough sending space is available\n");
+			}
+			return ERR_MEM;
+		}
 
+		// Try to send the remaining data once again
 		err_t err = tcp_write(pcb, sendingWindow() + (sendingWindowSize - sentDataOutstanding), sentDataOutstanding, 0);
 		if (err == ERR_OK)
 		{
-			tcp_output(pcb);
+			err = tcp_output(pcb);
 		}
-		else
+
+		if (ERR_IS_FATAL(err))
 		{
-			reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: tcp_write in conn_poll failed with code %d\n", err);
+			reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to write data in conn_poll (code %d)\n", err);
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}
 	}
-
+	else
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_poll!\n");
+	}
 	return ERR_OK;
 }
 
@@ -178,12 +229,22 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 
 static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 {
-	LWIP_UNUSED_ARG(pcb);
-
 	ConnectionState *cs = (ConnectionState*)arg;
-	if (cs != nullptr)
+	if (cs == sendingConnection)
 	{
-		reprap.GetNetwork()->SentPacketAcknowledged(cs, len);
+		if (sentDataOutstanding > len)
+		{
+			sentDataOutstanding -= len;
+		}
+		else
+		{
+			tcp_poll(pcb, nullptr, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
+			sendingConnection = nullptr;
+		}
+	}
+	else
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_sent!\n");
 	}
 	return ERR_OK;
 }
@@ -197,21 +258,31 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 	{
 		if (cs->pcb != pcb)
 		{
-			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Mismatched pcb!\n");
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_recv!\n");
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}
 
+		bool processingOk = true;
 		if (p != nullptr)
 		{
 			// Tell higher levels that we are receiving data
-			reprap.GetNetwork()->ReceiveInput(p, cs);
+			processingOk = reprap.GetNetwork()->ReceiveInput(p, cs);
 		}
 		else if (cs->persistConnection)
 		{
-			// This is called when the connection has been gracefully closed, but LWIP doesn't close these
-			// connections automatically. That's why we must do it once all packets have been read.
-			reprap.GetNetwork()->ConnectionClosedGracefully(cs);
+			// Tell higher levels that a connection has been closed
+			processingOk = reprap.GetNetwork()->ConnectionClosedGracefully(cs);
+		}
+
+		if (!processingOk)
+		{
+			if (p != nullptr)
+			{
+				pbuf_free(p);
+			}
+			tcp_abort(pcb);
+			return ERR_ABRT;
 		}
 	}
 
@@ -224,10 +295,6 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 {
 	LWIP_UNUSED_ARG(arg);
 	LWIP_UNUSED_ARG(err);
-
-	tcp_setprio(pcb, TCP_PRIO_MIN);
-
-	//RepRapNetworkMessage("conn_accept\n");
 
 	/* Allocate a new ConnectionState for this connection */
 	ConnectionState *cs = reprap.GetNetwork()->ConnectionAccepted(pcb);
@@ -255,7 +322,6 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 	tcp_arg(pcb, cs);			// tell LWIP that this is the structure we wish to be passed for our callbacks
 	tcp_recv(pcb, conn_recv);	// tell LWIP that we wish to be informed of incoming data by a call to the conn_recv() function
 	tcp_err(pcb, conn_err);
-	tcp_poll(pcb, conn_poll, 4);
 
 	return ERR_OK;
 }
@@ -345,58 +411,68 @@ void Network::Spin()
 		return;
 	}
 
-	if (state == NetworkActive)
+	if (state == NetworkActive && hasLink)
 	{
 		// See if we can read any packets
 
 		if (readingData)
 		{
-			do {
-				// read all queued packets from the RX buffer
-			} while (ethernet_read());
-
-			if (ethernet_is_ready())
-			{
-				readingData = false;
-				ethernet_set_rx_callback(&emac_read_packet);
-			}
+			ethernet_task();
+			readingData = false;
+			ethernet_set_rx_callback(&ethernet_rx_callback);
 		}
 
 		// See if we can send anything
 
 		NetworkTransaction *r = writingTransactions;
-		if (r != nullptr && r->Send())
+		if (r != nullptr && sendingConnection == nullptr)
 		{
-			// We're done, free up this transaction
-
-			ConnectionState *cs = r->cs;
-			NetworkTransaction *rn = r->nextWrite;
-			writingTransactions = r->next;
-			AppendTransaction(&freeTransactions, r);
-
-			// If there is more data to write on this connection, do it next time
-
-			if (cs != nullptr)
+			if (r->next != nullptr)
 			{
-				cs->sendingTransaction = rn;
+				// Data is supposed to be sent to another connection and the last packet has
+				// been acknowledged. Rotate the sending transactions so every client is
+				// served even while big files are being sent.
+				NetworkTransaction *rn = r->next;
+				writingTransactions = rn;
+				AppendTransaction(&writingTransactions, r);
+				r = rn;
 			}
-			if (rn != nullptr)
+
+			if (r->Send())
 			{
-				PrependTransaction(&writingTransactions, rn);
+				// We're done, free up this transaction
+				ConnectionState *cs = r->cs;
+				NetworkTransaction *rn = r->nextWrite;
+				writingTransactions = r->next;
+				AppendTransaction(&freeTransactions, r);
+
+				// If there is more data to write on this connection, do it next time
+
+				if (cs != nullptr)
+				{
+					cs->sendingTransaction = rn;
+				}
+				if (rn != nullptr)
+				{
+					PrependTransaction(&writingTransactions, rn);
+				}
 			}
 		}
 	}
-	else if (state == NetworkPostInitializing && establish_ethernet_link())
+	else if (state == NetworkPostInitializing && ethernet_establish_link())
 	{
-		start_ethernet(platform->IPAddress(), platform->NetMask(), platform->GateWay());
-		ethernet_set_rx_callback(&emac_read_packet);
+		start_ethernet(platform->IPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
+		ethernet_set_rx_callback(&ethernet_rx_callback);
 
 		httpd_init();
 		ftpd_init();
 		telnetd_init();
-		netbios_init();
 
-		state = NetworkActive;
+		netbios_init();
+		mdns_responder_init(mdns_services, ARRAY_SIZE(mdns_services), mdns_txt_records);
+		mdns_announce(); // NB: Wireless bridges like the TP-Link WR702N don't route incoming IGMP packets, so send an mDNS announcement as a fall-back option
+
+		state = isEnabled ? NetworkActive : NetworkInactive;
 	}
 
 	UnlockLWIP();
@@ -405,7 +481,7 @@ void Network::Spin()
 
 void Network::Interrupt()
 {
-	if (isEnabled && LockLWIP())
+	if (isEnabled && state == NetworkActive && LockLWIP())
 	{
 		ethernet_timers_update();
 		UnlockLWIP();
@@ -500,26 +576,12 @@ void Network::SetHttpPort(uint16_t port)
 		tcp_bind(pcb, IP_ADDR_ANY, port);
 		http_pcb = tcp_listen(pcb);
 		tcp_accept(http_pcb, conn_accept);
+
+		// Update mDNS services
+		mdns_services[MDNS_HTTP_SERVICE_INDEX].port = port;
+		mdns_announce();
 	}
 	httpPort = port;
-}
-
-void Network::SentPacketAcknowledged(ConnectionState *cs, unsigned int len)
-{
-	if (cs != nullptr && sendingTransaction != nullptr && cs == sendingTransaction->GetConnection())
-	{
-		if (sentDataOutstanding > len)
-		{
-			sentDataOutstanding -= len;
-		}
-		else
-		{
-			sendingTransaction = nullptr;
-			sentDataOutstanding = 0;
-		}
-	}
-
-//	debugPrintf("Network SentPacketAcknowledged: invalid cs=%08x\n", (unsigned int)cs);
 }
 
 // This is called when a connection is being established and returns an initialised ConnectionState instance.
@@ -549,11 +611,10 @@ ConnectionState *Network::ConnectionAccepted(tcp_pcb *pcb)
 	return cs;
 }
 
-// This is called when a connection is being closed or has gone down.
-// It must set the state of any NetworkTransaction that refers to it to connection lost.
+// This is called when a connection is being closed or has gone down unexpectedly
 void Network::ConnectionClosed(ConnectionState* cs, bool closeConnection)
 {
-	// make sure these connections are not reused
+	// Make sure these connections are not reused. Remove all references to it
 	if (cs == dataCs)
 	{
 		dataCs = nullptr;
@@ -566,22 +627,25 @@ void Network::ConnectionClosed(ConnectionState* cs, bool closeConnection)
 	{
 		telnetCs = nullptr;
 	}
-
-	// inform the Webserver that we are about to remove an existing connection
-	tcp_pcb *pcb = cs->pcb;
-	if (pcb != nullptr)
+	if (cs == sendingConnection)
 	{
-		reprap.GetWebserver()->ConnectionLost(cs);
-		if (closeConnection)
-		{
-			tcp_arg(pcb, nullptr);
-			tcp_sent(pcb, nullptr);
-			tcp_recv(pcb, nullptr);
-			tcp_poll(pcb, nullptr, 4);
-			tcp_close(pcb);
-			cs->pcb = nullptr;
-		}
+		sendingConnection = nullptr;
 	}
+
+	// Close it if requested
+	tcp_pcb *pcb = cs->pcb;
+	if (pcb != nullptr && closeConnection)
+	{
+		tcp_arg(pcb, nullptr);
+		tcp_sent(pcb, nullptr);
+		tcp_recv(pcb, nullptr);
+		tcp_poll(pcb, nullptr, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
+		tcp_close(pcb);
+	}
+	cs->pcb = nullptr;
+
+	// Inform the Webserver that we are about to remove an existing connection
+	reprap.GetWebserver()->ConnectionLost(cs);
 
 	// cs points to a connection state block that the caller is about to release, so we need to stop referring to it.
 	// There may be one NetworkTransaction in the writing or closing list referring to it, and possibly more than one in the ready list.
@@ -604,18 +668,20 @@ void Network::ConnectionClosed(ConnectionState* cs, bool closeConnection)
 	freeConnections = cs;
 }
 
-void Network::ConnectionClosedGracefully(ConnectionState *cs)
+// This enqueues a new transaction to indicate a graceful reset. Do this to keep the time line of incoming transactions valid
+bool Network::ConnectionClosedGracefully(ConnectionState *cs)
 {
 	NetworkTransaction* r = freeTransactions;
 	if (r == nullptr)
 	{
 		platform->Message(HOST_MESSAGE, "Network::ConnectionClosedGracefully() - no free transactions!\n");
-		return;
+		return false;
 	}
+
 	freeTransactions = r->next;
 	r->Set(nullptr, cs, disconnected);
-
 	AppendTransaction(&readyTransactions, r);
+	return true;
 }
 
 bool Network::Lock()
@@ -638,13 +704,13 @@ void Network::ReadPacket()
 	readingData = true;
 }
 
-void Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
+bool Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 {
 	NetworkTransaction* r = freeTransactions;
 	if (r == nullptr)
 	{
 		platform->Message(HOST_MESSAGE, "Network::ReceiveInput() - no free transactions!\n");
-		return;
+		return false;
 	}
 
 	freeTransactions = r->next;
@@ -652,6 +718,7 @@ void Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 
 	AppendTransaction(&readyTransactions, r);
 //	debugPrintf("Network - input received\n");
+	return true;
 }
 
 // This is called by the web server to get a new received packet.
@@ -723,7 +790,7 @@ void Network::WaitForDataConection()
 
 const uint8_t *Network::IPAddress() const
 {
-	return reinterpret_cast<const uint8_t*>(&ethernet_get_configuration()->ip_addr.addr);
+	return ethernet_get_ipaddress();
 }
 
 void Network::SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
@@ -732,6 +799,9 @@ void Network::SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], c
 	{
 		// This performs IP changes on-the-fly
 		ethernet_set_configuration(ipAddress, netmask, gateway);
+
+		// Announce mDNS services again
+		mdns_announce();
 	}
 }
 
@@ -835,7 +905,8 @@ bool Network::AcquireTransaction(ConnectionState *cs)
 	}
 
 	// See if we're already writing on this connection
-	NetworkTransaction *lastTransaction = cs->sendingTransaction;
+	NetworkTransaction *firstTransaction = cs->sendingTransaction;
+	NetworkTransaction *lastTransaction = firstTransaction;
 	if (lastTransaction != nullptr)
 	{
 		while (lastTransaction->nextWrite != nullptr)
@@ -846,7 +917,7 @@ bool Network::AcquireTransaction(ConnectionState *cs)
 
 	// Then check if this transaction is valid and safe to use
 	NetworkTransaction *transactionToUse;
-	if (lastTransaction != nullptr && sendingTransaction != lastTransaction && lastTransaction->fileBeingSent == nullptr)
+	if (firstTransaction != nullptr && firstTransaction != lastTransaction && lastTransaction->fileBeingSent == nullptr)
 	{
 		transactionToUse = lastTransaction;
 	}
@@ -886,44 +957,39 @@ void Network::SetHostname(const char *name)
 		}
 	}
 
-	if (i)
+	if (i != 0)
 	{
 		hostname[i] = 0;
 	}
 	else
 	{
+		// Don't allow empty hostnames
 		strcpy(hostname, HOSTNAME);
+	}
+
+	if (state == NetworkActive)
+	{
+		mdns_update_hostname();
 	}
 }
 
-// Initialise a ConnectionState for a new connection
+//***************************************************************************************************
+
+// ConnectionState class
+
 void ConnectionState::Init(tcp_pcb *p)
 {
 	pcb = p;
+	localPort = p->local_port;
+	remoteIPAddress = p->remote_ip.addr;
+	remotePort = p->remote_port;
 	next = nullptr;
 	sendingTransaction = nullptr;
 	persistConnection = true;
 }
 
-// Get local port from a ConnectionState
-uint16_t ConnectionState::GetLocalPort() const
-{
-	return pcb->local_port;
-}
-
-// Get remote IP from a ConnectionState
-uint32_t ConnectionState::GetRemoteIP() const
-{
-	return pcb->remote_ip.addr;
-}
-
-// Get remote port from a ConnectionState
-uint16_t ConnectionState::GetRemotePort() const
-{
-	return pcb->remote_port;
-}
-
-// NetworkTransaction class members
+//***************************************************************************************************
+// NetworkTransaction class
 
 NetworkTransaction::NetworkTransaction(NetworkTransaction *n) : next(n)
 {
@@ -933,7 +999,7 @@ NetworkTransaction::NetworkTransaction(NetworkTransaction *n) : next(n)
 void NetworkTransaction::Set(pbuf *p, ConnectionState *c, TransactionStatus s)
 {
 	cs = c;
-	pb = p;
+	pb = readingPb = p;
 	bufferLength = (p == nullptr) ? 0 : pb->tot_len;
 	status = s;
 	inputPointer = 0;
@@ -941,80 +1007,51 @@ void NetworkTransaction::Set(pbuf *p, ConnectionState *c, TransactionStatus s)
 	fileBeingSent = nullptr;
 	closeRequested = false;
 	nextWrite = nullptr;
-	lastWriteTime = NAN;
 	waitingForDataConnection = false;
 }
 
-// How many incoming bytes do we have to process?
-size_t NetworkTransaction::DataLength() const
-{
-	return (pb == nullptr) ? 0 : pb->tot_len;
-}
-
-// Webserver calls this to read bytes that have come in from the network.
+// Read one char from the NetworkTransaction
 bool NetworkTransaction::Read(char& b)
 {
-	if (LostConnection() || pb == nullptr)
+	if (LostConnection() || readingPb == nullptr)
 	{
+		b = 0;
 		return false;
 	}
 
-	if (inputPointer == pb->len)
+	b = ((const char*)readingPb->payload)[inputPointer++];
+	if (inputPointer > readingPb->len)
 	{
-		// See if there is another pbuf in the chain
-		if (inputPointer < pb->tot_len)
-		{
-			pb = pbuf_dechain(pb);
-			if (pb == nullptr)
-			{
-				return false;
-			}
-			inputPointer = 0;
-		}
-		else
-		{
-			return false;
-		}
+		readingPb = readingPb->next;
+		inputPointer = 0;
 	}
-
-	b = ((const char*)pb->payload)[inputPointer++];
 	return true;
 }
 
-// Read an entire pbuf from the NetworkTransaction
-bool NetworkTransaction::ReadBuffer(char *&buffer, unsigned int &len)
+// Read data from the NetworkTransaction and return true on success
+bool NetworkTransaction::ReadBuffer(const char *&buffer, unsigned int &len)
 {
-	if (LostConnection() || pb == nullptr)
+	if (LostConnection() || readingPb == nullptr)
 	{
 		return false;
 	}
 
-	if (inputPointer == pb->len)
+	if (inputPointer >= readingPb->len)
 	{
-		// See if there is another pbuf in the chain
-		if (inputPointer < pb->tot_len)
-		{
-			pb = pbuf_dechain(pb);
-			if (pb == nullptr)
-			{
-				return false;
-			}
-			inputPointer = 0;
-		}
-		else
+		readingPb = readingPb->next;
+		inputPointer = 0;
+		if (readingPb == nullptr)
 		{
 			return false;
 		}
 	}
 
-	len = pb->len;
-	buffer = static_cast<char *>(pb->payload);
-	inputPointer += len;
-
+	buffer = (const char*)readingPb->payload + inputPointer;
+	len = readingPb->len - inputPointer;
+	readingPb = readingPb->next;
+	inputPointer = 0;
 	return true;
 }
-
-// Webserver calls this to write bytes that need to go out to the network
 
 void NetworkTransaction::Write(char b)
 {
@@ -1022,20 +1059,20 @@ void NetworkTransaction::Write(char b)
 	{
 		if (sendBuffer == nullptr && !OutputBuffer::Allocate(sendBuffer))
 		{
+			// Should never get here
 			return;
 		}
 		sendBuffer->cat(b);
 	}
 }
 
-// These functions attempt to store a whole string for sending.
-// It may be necessary to split it up into multiple SendBuffers.
 void NetworkTransaction::Write(const char* s)
 {
 	if (CanWrite())
 	{
 		if (sendBuffer == nullptr && !OutputBuffer::Allocate(sendBuffer))
 		{
+			// Should never get here
 			return;
 		}
 		sendBuffer->cat(s);
@@ -1053,6 +1090,7 @@ void NetworkTransaction::Write(const char* s, size_t len)
 	{
 		if (sendBuffer == nullptr && !OutputBuffer::Allocate(sendBuffer))
 		{
+			// Should never get here
 			return;
 		}
 		sendBuffer->cat(s, len);
@@ -1069,6 +1107,7 @@ void NetworkTransaction::Write(OutputBuffer *buffer)
 	}
 	else
 	{
+		// Don't keep buffers we can't send...
 		OutputBuffer::ReleaseAll(buffer);
 	}
 }
@@ -1112,11 +1151,10 @@ void NetworkTransaction::SetFileToWrite(FileStore *file)
 	}
 }
 
-// Send exactly one TCP window of data or return true if we can free up this object
+// Send exactly one TCP window of data and return true when done
 bool NetworkTransaction::Send()
 {
-	// Free up this transaction if we either lost our connection or are supposed to close it now
-
+	// Free up this transaction if we either lost the connection or if it is supposed to be closed
 	if (LostConnection() || closeRequested)
 	{
 		if (fileBeingSent != nullptr)
@@ -1130,7 +1168,6 @@ bool NetworkTransaction::Send()
 
 		if (!LostConnection())
 		{
-//			debugPrintf("NetworkTransaction is closing connection cs=%08x\n", (unsigned int)cs);
 			reprap.GetNetwork()->ConnectionClosed(cs, true);
 		}
 
@@ -1146,33 +1183,20 @@ bool NetworkTransaction::Send()
 			closingDataPort = false;
 		}
 
-		sendingTransaction = nullptr;
-		sentDataOutstanding = 0;
-
 		return true;
 	}
 
-	// We're still waiting for data to be ACK'ed, so check timeouts here
-	if (sentDataOutstanding != 0)
+	// Do we have enough space left for sending? Third-party apps may be sending data as well, so check this first
+	if (tcp_sndbuf(cs->pcb) < TCP_WND)
 	{
-		if (!isnan(lastWriteTime))
+		if (reprap.Debug(moduleNetwork))
 		{
-			float timeNow = reprap.GetPlatform()->Time();
-			if (timeNow - lastWriteTime > TCP_WRITE_TIMEOUT)
-			{
-//				reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Timing out connection cs=%08x\n", (unsigned int)cs);
-				tcp_abort(cs->pcb);
-				cs->pcb = nullptr;
-			}
-			return false;
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Could not send data because not enough sending space is available\n");
 		}
-	}
-	else
-	{
-		sendingTransaction = nullptr;
+		return false;
 	}
 
-	// See if we can fill up the TCP window with some data chunks from our OutputBuffer instances
+	// Fill up the TCP window with some data chunks from our OutputBuffer instances
 	size_t bytesBeingSent = 0, bytesLeftToSend = TCP_WND;
 	while (sendBuffer != nullptr && bytesLeftToSend > 0)
 	{
@@ -1215,7 +1239,7 @@ bool NetworkTransaction::Send()
 
 	if (bytesBeingSent == 0)
 	{
-		// If we have no data to send and fileBeingSent is nullptr, we can close the connection
+		// If we have no data to send and fileBeingSent is nullptr, we can close the connection next time
 		if (!cs->persistConnection && nextWrite == nullptr)
 		{
 			Close();
@@ -1225,29 +1249,30 @@ bool NetworkTransaction::Send()
 		// We want to send data from another transaction, so only free up this one
 		return true;
 	}
-	else
+
+	// The TCP window has been filled up as much as possible, so send it now. There is no need to check
+	// the available space in the SNDBUF queue, because we really write only one TCP window at once.
+	err_t result = tcp_write(cs->pcb, sendingWindow(), bytesBeingSent, 0);
+	if (result == ERR_OK)
 	{
-		// The TCP window has been filled up as much as possible, so send it now. There is no need to check
-		// the available space in the SNDBUF queue, because we really write only one TCP window at once.
-		tcp_sent(cs->pcb, conn_sent);
-		err_t result = tcp_write(cs->pcb, sendingWindow(), bytesBeingSent, 0);
-		if (result != ERR_OK) // Final arg - 1 means make a copy
-		{
-			reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: tcp_write returned error code %d, this should never happen!\n", result);
-			tcp_abort(cs->pcb);
-			cs->pcb = nullptr;
-		}
-		else
-		{
-			sendingTransaction = this;
-			sendingRetries = 0;
-			sendingWindowSize = sentDataOutstanding = bytesBeingSent;
-
-			lastWriteTime = reprap.GetPlatform()->Time();
-
-			tcp_output(cs->pcb);
-		}
+		result = tcp_output(cs->pcb);
 	}
+
+	if (ERR_IS_FATAL(result))
+	{
+		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to write data in Send (code %d)\n", result);
+		tcp_abort(cs->pcb);
+		cs->pcb = nullptr;
+		return false;
+	}
+
+
+	tcp_poll(cs->pcb, conn_poll, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
+	tcp_sent(cs->pcb, conn_sent);
+
+	sendingConnection = cs;
+	sendingRetries = 0;
+	sendingWindowSize = sentDataOutstanding = bytesBeingSent;
 	return false;
 }
 
@@ -1255,21 +1280,21 @@ bool NetworkTransaction::Send()
 // the current connection is terminated once everything has been sent.
 void NetworkTransaction::Commit(bool keepConnectionAlive)
 {
-	// If this transaction is already in use for sending, just pretend it was complete
 	if (status == dataSending)
 	{
 		reprap.GetNetwork()->readyTransactions = next;
+		// This transaction is already on the list of sending transactions. Pretend it's already complete
 	}
 	else
 	{
 		if (LostConnection())
 		{
+			// Discard transaction if no connection is available
 			Discard();
-//			debugPrintf("Conn lost before send\n");
 		}
 		else
 		{
-			// We're actually sending, so this transaction must be complete
+			// We intend to send data, so move this transaction and prepare some values
 			FreePbuf();
 			reprap.GetNetwork()->readyTransactions = next;
 			cs->persistConnection = keepConnectionAlive;
@@ -1286,7 +1311,6 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 				cs->sendingTransaction = this;
 				NetworkTransaction * volatile * writingTransactions = &reprap.GetNetwork()->writingTransactions;
 				reprap.GetNetwork()->AppendTransaction(writingTransactions, this);
-//				debugPrintf("Transaction queued for writing to network, file=%c, data=%s\n", (f ? 'Y' : 'N'), r->outputBuffer);
 			}
 			else
 			{
@@ -1295,7 +1319,6 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 					mySendingTransaction = mySendingTransaction->nextWrite;
 				}
 				mySendingTransaction->nextWrite = this;
-//				debugPrintf("Transaction appended to sending RS\n");
 			}
 		}
 	}
@@ -1307,7 +1330,7 @@ void NetworkTransaction::Defer()
 	FreePbuf();
 
 	// Call LWIP task to process tcp_recved(). This will hopefully send an ACK
-	while (ethernet_read());
+	ethernet_task();
 }
 
 // This method should be called if we don't want to send data to the client and if
@@ -1317,32 +1340,37 @@ void NetworkTransaction::Discard()
 	// Is this the transaction we should be dealing with?
 	if (reprap.GetNetwork()->readyTransactions != this)
 	{
+		// Should never get here
 		return;
 	}
 	reprap.GetNetwork()->readyTransactions = next;
 
-	// Free up some resources...
+	// Free up some resources
 	FreePbuf();
 
 	if (fileBeingSent != nullptr)
 	{
 		fileBeingSent->Close();
+		fileBeingSent = nullptr;
 	}
 
 	OutputBuffer::ReleaseAll(sendBuffer);
 	sendStack->ReleaseAll();
 
-	// Free this transaction again unless it's still referenced
+	// Release this transaction unless it's still in use for sending
 	if (status != dataSending)
 	{
 		NetworkTransaction * volatile * freeTransactions = &reprap.GetNetwork()->freeTransactions;
 		reprap.GetNetwork()->AppendTransaction(freeTransactions, this);
 	}
 
-	// Call disconnect events if this transaction indicates a graceful disconnect
+	// Call disconnect event if this transaction indicates a graceful disconnect
 	if (!LostConnection() && status == disconnected)
 	{
-//		debugPrintf("Network: CloseRequest is closing connection cs=%08x\n", (unsigned int)locCs);
+		if (reprap.Debug(moduleNetwork))
+		{
+			reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Discard() is handling a graceful disconnect for cs=%08x\n", (unsigned int)cs);
+		}
 		reprap.GetNetwork()->ConnectionClosed(cs, true);
 	}
 }
@@ -1375,7 +1403,6 @@ uint16_t NetworkTransaction::GetLocalPort() const
 void NetworkTransaction::Close()
 {
 	tcp_pcb *pcb = cs->pcb;
-	tcp_poll(pcb, nullptr, 4);
 	tcp_recv(pcb, nullptr);
 	closeRequested = true;
 }
@@ -1393,8 +1420,8 @@ void NetworkTransaction::FreePbuf()
 	if (pb != nullptr)
 	{
 		pbuf_free(pb);
-		pb = nullptr;
+		pb = readingPb = nullptr;
 	}
 }
 
-// vim: ts=4:sw=4
+// End

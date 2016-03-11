@@ -231,9 +231,9 @@ void Platform::Init()
 
 	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
-	ARRAY_INIT(standbyTemperatures, STANDBY_TEMPERATURES);
-	ARRAY_INIT(activeTemperatures, ACTIVE_TEMPERATURES);
 	ARRAY_INIT(max31855CsPins, MAX31855_CS_PINS);
+
+	configuredHeaters = (BED_HEATER >= 0) ? (1 << BED_HEATER) : 0;
 	heatSampleTime = HEAT_SAMPLE_TIME;
 	timeToHot = TIME_TO_HOT;
 
@@ -694,6 +694,79 @@ void Platform::SetAutoSave(bool enabled)
 #endif
 }
 
+void Platform::UpdateFirmware()
+{
+	FileStore *iapFile = GetFileStore(GetSysDir(), IAP_UPDATE_FILE, false);
+	if (iapFile == nullptr)
+	{
+		MessageF(GENERIC_MESSAGE, "Error: Could not open IAP programmer binary \"%s\"\n", IAP_UPDATE_FILE);
+		return;
+	}
+
+	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters...
+	reprap.EmergencyStop();
+
+
+	// Step 1 - Write update binary to Flash
+	char data[IFLASH_PAGE_SIZE];
+	int bytesRead;
+	for(uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
+	{
+		bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
+
+		if (bytesRead > 0 && flashAddr + bytesRead < IFLASH_ADDR + IFLASH_SIZE)
+		{
+			// Write one page at a time
+			cpu_irq_disable();
+			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			flash_write(flashAddr, data, bytesRead, 1);
+			flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			cpu_irq_enable();
+
+			// Verify written data
+			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
+			{
+				Message(GENERIC_MESSAGE, "Error: Verify during Flash write failed!\n");
+				return;
+			}
+		}
+		else
+		{
+			// Cannot read any more or IAP binary exceeds 64KiB limit
+			break;
+		}
+	}
+	iapFile->Close();
+
+	// Step 2 - Reallocate the vector table and program entry point to the new IAP binary
+	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
+
+	// Disable all IRQs
+	cpu_irq_disable();
+	for(size_t i = 0; i < 8; i++)
+	{
+		NVIC->ICER[i] = 0xFFFFFFFF;		// Disable IRQs
+		NVIC->ICPR[i] = 0xFFFFFFFF;		// Clear pending IRQs
+	}
+
+	// Our SAM3X doesn't support disabling the watchdog, so leave it running.
+	// The IAP binary will kick it as soon as it's started
+
+	// Modify vector table location
+	__DSB();
+	__ISB();
+	SCB->VTOR = ((uint32_t)IAP_FLASH_START & SCB_VTOR_TBLOFF_Msk);
+	__DSB();
+	__ISB();
+
+	// Reset stack pointer, enable IRQs again and start the new IAP binary
+	__set_MSP(*(uint32_t *)IAP_FLASH_START);
+	cpu_irq_enable();
+
+	void *entryPoint = (void *)(*(uint32_t *)(IAP_FLASH_START + 4));
+	goto *entryPoint;
+}
+
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::Beep(int freq, int ms)
 {
@@ -934,7 +1007,7 @@ void TC3_Handler()
 	++numInterruptsExecuted;
 	lastInterruptTime = Platform::GetInterruptClocks();
 #endif
-	reprap.Interrupt();
+	reprap.GetMove()->Interrupt();
 }
 
 void TC4_Handler()
@@ -1249,7 +1322,7 @@ float Platform::GetTemperature(size_t heater, TempError* err) const
 // See if we need to turn on the hot end fan
 bool Platform::AnyHeaterHot(uint16_t heaters, float t) const
 {
-	for (size_t h = 0; h < reprap.GetHeatersInUse(); ++h)
+	for (size_t h = 0; h < reprap.GetToolHeatersInUse(); ++h)
 	{
 		if (((1 << h) & heaters) != 0)
 		{
@@ -1258,6 +1331,17 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t) const
 			{
 				return true;
 			}
+		}
+	}
+
+	// Check the bed heater too, in case the user wants a fan on when the bed is hot
+	int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
+	if (bedHeater >= 0 && ((1 << (unsigned int)bedHeater) & heaters) != 0)
+	{
+		const float ht = GetTemperature(bedHeater);
+		if (ht >= t || ht < BAD_LOW_TEMPERATURE)
+		{
+			return true;
 		}
 	}
 	return false;
@@ -1294,6 +1378,34 @@ void Platform::SetHeaterPwm(size_t heater, uint8_t power)
 	{
 		uint16_t freq = (reprap.GetHeat()->UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
 		analogWriteDuet(heatOnPins[heater], (HEAT_ON == 0) ? 255 - power : power, freq);
+	}
+}
+
+void Platform::UpdateConfiguredHeaters()
+{
+	configuredHeaters = 0;
+
+	// Check bed heater
+	const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
+	if (bedHeater >= 0)
+	{
+		configuredHeaters |= (1 << bedHeater);
+	}
+
+	// Check chamber heater
+	const int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
+	if (chamberHeater >= 0)
+	{
+		configuredHeaters |= (1 << chamberHeater);
+	}
+
+	// Check tool heaters
+	for(size_t heater = 0; heater < HEATERS; heater++)
+	{
+		if (reprap.IsHeaterAssignedToTool(heater))
+		{
+			configuredHeaters |= (1 << heater);
+		}
 	}
 }
 
@@ -2277,7 +2389,7 @@ void Platform::Tick()
 				ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
 				currentFilter.ProcessReading(GetAdcReading(thermistorAdcChannels[heaterTempChannels[currentHeater]]));
 				StartAdcConversion(zProbeAdcChannel);
-				if (currentFilter.IsValid())
+				if (currentFilter.IsValid() && (configuredHeaters & (1 << currentHeater)) != 0)
 				{
 					uint32_t sum = currentFilter.GetSum();
 					if (sum < thermistorOverheatSums[currentHeater] || sum >= AD_DISCONNECTED_REAL * THERMISTOR_AVERAGE_READINGS)

@@ -33,7 +33,7 @@ const char GCodes::axisLetters[AXES] =
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 GCodes::GCodes(Platform* p, Webserver* w) :
-		platform(p), active(false), webserver(w), stackPointer(0), auxGCodeReply(nullptr)
+		platform(p), active(false), webserver(w), stackPointer(0), auxGCodeReply(nullptr), isFlashing(false)
 {
 	httpGCode = new GCodeBuffer(platform, "web: ");
 	telnetGCode = new GCodeBuffer(platform, "telnet: ");
@@ -3176,11 +3176,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				seen = true;
 				long heaters[HEATERS];
-				unsigned int numH = HEATERS;
+				size_t numH = HEATERS;
 				gb->GetLongArray(heaters, numH);
 				// Note that M106 H-1 disables thermostatic mode. The following code implements that automatically.
 				uint16_t hh = 0;
-				for (unsigned int h = 0; h < numH; ++h)
+				for (size_t h = 0; h < numH; ++h)
 				{
 					const int hnum = heaters[h];
 					if (hnum >= 0 && hnum < HEATERS)
@@ -4945,6 +4945,28 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
+	case 997: // Perform firmware update
+		if (!platform->GetMassStorage()->FileExists(platform->GetSysDir(), IAP_FIRMWARE_FILE))
+		{
+			platform->MessageF(GENERIC_MESSAGE, "Error: Firmware file \"%s\" not found in sys directory\n", IAP_FIRMWARE_FILE);
+			break;
+		}
+		if (!platform->GetMassStorage()->FileExists(platform->GetSysDir(), IAP_UPDATE_FILE))
+		{
+			platform->MessageF(GENERIC_MESSAGE, "Error: IAP file \"%s\" not found in sys directory\n", IAP_UPDATE_FILE);
+			break;
+		}
+
+		isFlashing = true;
+		if (!DoDwellTime(2.0))
+		{
+			// wait a second so all HTTP clients are notified
+			return false;
+		}
+		platform->UpdateFirmware();
+		isFlashing = false;				// should never get here, but leave this here in case an error has occurred
+		break;
+
 	case 998:
 		// The input handling code replaces the gcode by this when it detects a checksum error.
 		// Since we have no way of asking for the line to be re-sent, just report an error.
@@ -5089,6 +5111,11 @@ bool GCodes::IsResuming() const
 {
 	const GCodeState topState = (stackPointer == 0) ? state : stack[0].state;
 	return topState == GCodeState::resuming1 || topState == GCodeState::resuming2 || topState == GCodeState::resuming3;
+}
+
+bool GCodes::IsRunning() const
+{
+	return !IsPaused() && !IsPausing() && !IsResuming();
 }
 
 const char *GCodes::TranslateEndStopResult(EndStopHit es)

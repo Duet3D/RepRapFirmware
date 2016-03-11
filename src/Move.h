@@ -102,6 +102,8 @@ public:
     static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
     static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
 
+	bool IsExtruding() const;														// Is filament being extruded?
+
 private:
 
     enum class IdleState : uint8_t { idle, busy, timing };

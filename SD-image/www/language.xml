@@ -111,7 +111,7 @@
 		<string t="Status Update Interval:">Aktualisierungsrate für Statusupdates:</string>
 		<string t="Extended Status Update after every:">Erweiterte Statusupdates nach jeder:</string>
 		<string t="th response">ten Antwort</string>
-		<string t="Reconnect Delay on Halt:">Wiederverbindungsverzögerung nach NOT-AUS</string>
+		<string t="Reconnect Delay on Halt:">Wiederverbindungsverzögerung nach NOT-AUS:</string>
 		<string t="AJAX Timeout:">AJAX-Timeout:</string>
 		<string t="Send G-Code...">G-Code senden...</string>
 		<string t="Web Interface by Christian Hammacher">Web Interface von Christian Hammacher</string>
@@ -364,6 +364,19 @@
 		<string t="URL must point to an image file"></string>
 		<string t="Webcam Update Interval:">Webcam Updateintervall:</string>
 		<string t="Interval at which the webcam image on the Print Status page will be updated">Intervall nach dem das Webcam-Bild auf der Druckstatus-Seite aktualisiert wird</string>
+
+		<!-- New in v1.10 -->
+		<string t="Updating">Aktualisiere</string>
+		<string t="Updating Firmware...">Aktualisiere Firmware...</string>
+		<string t="Perform Firmware Update?">Firmwareaktualisierung durchführen?</string>
+		<string t="You have just uploaded a firmware file. Would you like to update your Duet now?">Sie haben gerade eine Firmwaredatei hochgeladen. Möchten Sie jetzt ihr Duet aktualisieren?</string>
+		<string t="Could not rename firmware file!">Konnte Firmwaredatei nicht umbenennen!</string>
+		<string t="Display fan RPM of a 4-pin PWM cooling fan in the sensors area">Umdrehungsanzahl pro Minute eines 4-pin PWM-Lüfters im Sensorenbereich anzeigen</string>
+		<string t="Show Fan RPM in Sensors">Lüfterumdrehungen pro Minute anzeigen</string>
+		<string t="Reconnect Delay on Firmware Update:">Wiederverbindungsverzögerung bei Firmwareaktualisierung:</string>
+		<string t="Time to wait for a reconnect when a new firmware is about to be flashed">Abzuwartende Zeit wenn eine neue Firmware geflasht wird</string>
+		<string t="Reload Page?">Seite neu laden?</string>
+		<string t="You have just updated Duet Web Control. Would you like to reload the page now?">Sie haben gerade Duet Web Control aktualisiert. Möchten Sie die Seite jetzt neu laden?</string>
 	</de>
 	<es name="Espanol">
 		<!-- JavaScript Strings -->
@@ -473,7 +486,7 @@
 		<string t="Status Update Interval:">Intervalo de actualización del estado:</string>
 		<string t="Extended Status Update after every:">Actualización completa de estado cada:</string>
 		<string t="th response">ésima respuesta</string>
-		<string t="Reconnect Delay on Halt:">Retraso de reconexión tras Parada</string>
+		<string t="Reconnect Delay on Halt:">Retraso de reconexión tras Parada:</string>
 		<string t="AJAX Timeout:">Error AJAX:</string>
 		<string t="Send G-Code...">Enviar G-Code...</string>
 		<string t="Web Interface by Christian Hammacher">Interfaz Web de Christian Hammacher</string>
@@ -798,7 +811,7 @@
 		<string t="Status Update Interval:">Intervalle de mise à jour d'état:</string>
 		<string t="Extended Status Update after every:">Mise à jour complète de l'état après chaque:</string>
 		<string t="th response">ème réponse</string>
-		<string t="Reconnect Delay on Halt:">Délai de reconnection après interruption</string>
+		<string t="Reconnect Delay on Halt:">Délai de reconnection après interruption:</string>
 		<string t="AJAX Timeout:">AJAX-Timeout:</string>
 		<string t="Send G-Code...">Envoie G-Code...</string>
 		<string t="Web Interface by Christian Hammacher">Web Interface par Christian Hammacher</string>
@@ -1151,7 +1164,7 @@
 		<string t="Status Update Interval:">Uppdateringsintervall för status:</string>
 		<string t="Extended Status Update after every:">Utökad status efter:</string>
 		<string t="th response">svar</string>
-		<string t="Reconnect Delay on Halt:">Anslutningsfördröjning efter stopp</string>
+		<string t="Reconnect Delay on Halt:">Anslutningsfördröjning efter stopp:</string>
 		<string t="AJAX Timeout:">AJAX-timeout:</string>
 		<string t="Send G-Code...">Skicka G-kod...</string>
 		<string t="Web Interface by Christian Hammacher">Webgränssnitt av Christian Hammacher</string>
@@ -1504,7 +1517,7 @@
 		<string t="Status Update Interval:">状态更新间隔:</string>
 		<string t="Extended Status Update after every:">每次后延续更新状态:</string>
 		<string t="th response">响应 </string>
-		<string t="Reconnect Delay on Halt:">中间停止后再连接</string>
+		<string t="Reconnect Delay on Halt:">中间停止后再连接:</string>
 		<string t="AJAX Timeout:">AJAX 超时:</string>
 		<string t="Send G-Code...">发送G-Code ...</string>
 		<string t="Web Interface by Christian Hammacher">Christian Hammacher网络控制界面版本，西安锐普3D打印机公司（RepRapPro China）翻译 </string>

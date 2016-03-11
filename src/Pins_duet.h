@@ -146,4 +146,8 @@ const size_t NUM_PINS_ALLOWED = 72;
 	/* pins 64-71 */	0b00001100	\
 }
 
+// SAM3X Flash locations (may be expanded in the future)
+const uint32_t IAP_FLASH_START = 0x000F0000;
+const uint32_t IAP_FLASH_END = 0x000FFFFF;
+
 #endif

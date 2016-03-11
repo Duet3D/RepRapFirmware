@@ -45,6 +45,7 @@
 #define ETHERNET_SAM_H_INCLUDED
 
 #include <lwip/src/include/lwip/netif.h>
+#include "emac.h"
 
 /// @cond 0
 /**INDENT-OFF**/
@@ -54,44 +55,31 @@ extern "C" {
 /**INDENT-ON**/
 /// @endcond
 
-/**
- * \brief Initialize the ethernet interface.
- *
- */
+
+// Perform low-level initialisation of the network interface
 void init_ethernet(const uint8_t macAddress[], const char *hostname);
 
-bool establish_ethernet_link(void);
-void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[]);
-bool ethernet_is_ready();
+// Perform ethernet auto-negotiation and establish link. Returns true when ready
+bool ethernet_establish_link(void);
 
-struct netif* ethernet_get_configuration();
-void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[]);
+// Initialise network interface and set network interface status callback
+void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[], netif_status_callback_fn status_cb);
 
+// Update IPv4 configuration on demand
+void ethernet_set_configuration(const unsigned char ipAddress[], const unsigned char netMask[], const unsigned char gateWay[]);
+
+// Must be called periodically to keep the LwIP timers running
 void ethernet_timers_update(void);
 
-/**
- * \brief Status callback used to print address given by DHCP.
- *
- * \param netif Instance to network interface.
- *
- */
-void ethernet_status_callback(struct netif *netif);
+// Reads all stored network packets and processes them
+void ethernet_task(void);
 
-/**
- * \brief Manage the ethernet packets, if any received process them.
- *
- * \return Returns true if data has been processed.
- */
-bool ethernet_read(void);
-
-/*
- * \brief Sets the EMAC RX callback. It will be called when a new packet
- * can be processed and should be called with a NULL parameter inside
- * the actual callback.
- *
- * \param callback The callback to be called when a new packet is ready
- */
+// Set the RX callback for incoming network packets
 void ethernet_set_rx_callback(emac_dev_tx_cb_t callback);
+
+// Returns the network interface's current IPv4 address
+const uint8_t *ethernet_get_ipaddress();
+
 
 /// @cond 0
 /**INDENT-OFF**/

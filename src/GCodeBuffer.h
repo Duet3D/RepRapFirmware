@@ -42,7 +42,7 @@ class GCodeBuffer
 
   private:
 
-    enum State { idle, executing, paused };
+    enum class GCodeState { idle, executing, paused };
     int CheckSum() const;								// Compute the checksum (if any) at the end of the G Code
     Platform* platform;									// Pointer to the RepRap's controlling class
     char gcodeBuffer[GCODE_LENGTH];						// The G Code
@@ -51,16 +51,15 @@ class GCodeBuffer
     int readPointer;									// Where in the buffer to read next
     bool inComment;										// Are we after a ';' character?
     bool checksumRequired;								// True if we only accept commands with a valid checksum
-    State state;										// Idle, executing or paused
+    GCodeState state;									// Idle, executing or paused
     const char* writingFileDirectory;					// If the G Code is going into a file, where that is
     int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 };
 
 // Get an Int after a G Code letter
-
 inline int GCodeBuffer::GetIValue()
 {
-	return (int)GetLValue();
+	return static_cast<int>(GetLValue());
 }
 
 inline const char* GCodeBuffer::Buffer() const
@@ -70,27 +69,27 @@ inline const char* GCodeBuffer::Buffer() const
 
 inline bool GCodeBuffer::Active() const
 {
-	return state == executing;
+	return state == GCodeState::executing;
 }
 
 inline void GCodeBuffer::SetFinished(bool f)
 {
-	state = (f) ? idle : executing;
+	state = (f) ? GCodeState::idle : GCodeState::executing;
 }
 
 inline void GCodeBuffer::Pause()
 {
-	if (state == executing)
+	if (state == GCodeState::executing)
 	{
-		state = paused;
+		state = GCodeState::paused;
 	}
 }
 
 inline void GCodeBuffer::Resume()
 {
-	if (state == paused)
+	if (state == GCodeState::paused)
 	{
-		state = executing;
+		state = GCodeState::executing;
 	}
 }
 

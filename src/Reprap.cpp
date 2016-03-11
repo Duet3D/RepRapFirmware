@@ -4,8 +4,9 @@
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : lastToolWarningTime(0.0), ticksInSpinState(0), spinningModule(noModule), debug(0),
-	stopped(false), active(false), resetting(false)
+RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastToolWarningTime(0.0), activeExtruders(0),
+	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
+	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0)
 {
 	OutputBuffer::Init();
 	platform = new Platform();
@@ -21,24 +22,13 @@ RepRap::RepRap() : lastToolWarningTime(0.0), ticksInSpinState(0), spinningModule
 
 	printMonitor = new PrintMonitor(platform, gCodes);
 
-	toolList = nullptr;
+	SetPassword(DEFAULT_PASSWORD);
+	SetName(DEFAULT_NAME);
+	message[0] = 0;
 }
 
 void RepRap::Init()
 {
-	debug = 0;
-
-	// chrishamm thinks it's a bad idea to count the bed as an active heater...
-	activeExtruders = activeHeaters = 0;
-
-	SetPassword(DEFAULT_PASSWORD);
-	SetName(DEFAULT_NAME);
-
-	beepFrequency = beepDuration = 0;
-	message[0] = 0;
-
-	processingConfig = true;
-
 	// All of the following init functions must execute reasonably quickly before the watchdog times us out
 	platform->Init();
 	gCodes->Init();
@@ -50,26 +40,22 @@ void RepRap::Init()
 	roland->Init();
 #endif
 	printMonitor->Init();
-	currentTool = nullptr;
-	message[0] = 0;
-	Platform::EnableWatchdog();
+	Platform::EnableWatchdog();		// do this after all init calls are made
 	active = true;					// must do this before we start the network, else the watchdog may time out
 
 	platform->MessageF(HOST_MESSAGE, "%s Version %s dated %s\n", NAME, VERSION, DATE);
 
+	// Run the configuration file
 	const char *configFile = platform->GetConfigFile();
-	FileStore *startup = platform->GetFileStore(platform->GetSysDir(), configFile, false);
-
 	platform->Message(HOST_MESSAGE, "\nExecuting ");
-	if (startup != nullptr)
+	if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
 	{
-		startup->Close();
-		platform->MessageF(HOST_MESSAGE, "%s... ", configFile);
+		platform->MessageF(HOST_MESSAGE, "%s...", platform->GetConfigFile());
 	}
 	else
 	{
+		platform->MessageF(HOST_MESSAGE, "%s (no configuration file found)...", platform->GetDefaultFile());
 		configFile = platform->GetDefaultFile();
-		platform->MessageF(HOST_MESSAGE, "%s (no configuration file found)... ", configFile);
 	}
 
 	if (gCodes->DoFileMacro(configFile, false))
@@ -87,10 +73,12 @@ void RepRap::Init()
 	}
 	processingConfig = false;
 
+	// Enable network (unless it's disabled)
 	if (network->IsEnabled())
 	{
-		// EMAC driver will report when it's starting up; no need to do this twice
-		network->Enable(); // Need to do this here, as the configuration GCodes may set IP address etc.
+		// Need to do this here, as the configuration GCodes may set IP address etc.
+		platform->Message(HOST_MESSAGE, "Starting network...\n");
+		network->Enable();
 	}
 	else
 	{
@@ -163,7 +151,7 @@ void RepRap::Spin()
 	{
 		if (t->DisplayColdExtrudeWarning() && ToolWarningsAllowed())
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its temperatures were not high enough or it has a heater fault\n", t->myNumber);
+			platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
 		}
 	}
 
@@ -208,12 +196,12 @@ void RepRap::Diagnostics()
 void RepRap::EmergencyStop()
 {
 	stopped = true;
-	platform->SetAtxPower(false);		// turn off the ATX power if we can
 
-	//platform->DisableInterrupts();
+	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts...
+	//platform->SetAtxPower(false);
 
 	Tool* tool = toolList;
-	while(tool)
+	while (tool != nullptr)
 	{
 		tool->Standby();
 		tool = tool->Next();
@@ -294,7 +282,8 @@ void RepRap::AddTool(Tool* tool)
 	}
 	tool->next = *t;
 	*t = tool;
-	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeHeaters);
+	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters);
+	platform->UpdateConfiguredHeaters();
 }
 
 void RepRap::DeleteTool(Tool* tool)
@@ -331,11 +320,12 @@ void RepRap::DeleteTool(Tool* tool)
 	Tool::Delete(tool);
 
 	// Update the number of active heaters and extruder drives
-	activeExtruders = activeHeaters = 0;
+	activeExtruders = activeToolHeaters = 0;
 	for (Tool *t = toolList; t != nullptr; t = t->Next())
 	{
-		t->UpdateExtruderAndHeaterCount(activeExtruders, activeHeaters);
+		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters);
 	}
+	platform->UpdateConfiguredHeaters();
 }
 
 void RepRap::SelectTool(int toolNumber)
@@ -370,7 +360,7 @@ void RepRap::PrintTool(int toolNumber, StringRef& reply) const
 	}
 	else
 	{
-		reply.copy("Attempt to print details of non-existent tool.\n");
+		reply.copy("Error: Attempt to print details of non-existent tool.\n");
 	}
 }
 
@@ -387,7 +377,7 @@ void RepRap::StandbyTool(int toolNumber)
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
+		platform->MessageF(GENERIC_MESSAGE, "Error: Attempt to standby a non-existent tool: %d.\n", toolNumber);
 	}
 }
 
@@ -419,7 +409,7 @@ void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, 
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
+		platform->MessageF(GENERIC_MESSAGE, "Error: Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 	}
 }
 
@@ -687,7 +677,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 			// Current temperatures
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetTemperature(heater));
 				ch = ',';
@@ -697,7 +687,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Active temperatures
 			response->catf(",\"active\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
 				ch = ',';
@@ -707,7 +697,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Standby temperatures
 			response->catf(",\"standby\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
 				ch = ',';
@@ -717,7 +707,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Heater statuses (0=off, 1=standby, 2=active, 3=fault)
 			response->cat(",\"state\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetHeatersInUse(); heater++)
+			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
 				ch = ',';
@@ -1037,39 +1027,76 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->printf("{\"status\":\"%c\",\"heaters\":", ch);
 
 	// Send the heater actual temperatures
-	ch = '[';
-	for (size_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+	const int8_t bedHeater = heat->GetBedHeater();
+	if (bedHeater != -1)
+	{
+		ch = ',';
+		response->catf("[%.1f", heat->GetTemperature(bedHeater));
+	}
+	else
+	{
+		ch = '[';
+	}
+	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetTemperature(heater));
 		ch = ',';
 	}
+	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the heater active temperatures
-	response->catf("],\"active\":");
-	ch = '[';
-	for (size_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+	response->catf(",\"active\":");
+	if (heat->GetBedHeater() != -1)
+	{
+		ch = ',';
+		response->catf("[%.1f", heat->GetActiveTemperature(heat->GetBedHeater()));
+	}
+	else
+	{
+		ch = '[';
+	}
+	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
 		ch = ',';
 	}
+	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the heater standby temperatures
-	response->catf("],\"standby\":");
-	ch = '[';
-	for (size_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+	response->catf(",\"standby\":");
+	if (bedHeater != -1)
+	{
+		ch = ',';
+		response->catf("[%.1f", heat->GetStandbyTemperature(bedHeater));
+	}
+	else
+	{
+		ch = '[';
+	}
+	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
 		ch = ',';
 	}
+	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the heater statuses (0=off, 1=standby, 2=active)
-	response->cat("],\"hstat\":");
-	ch = '[';
-	for (size_t heater = 0; heater < reprap.GetHeatersInUse(); heater++)
+	response->cat(",\"hstat\":");
+	if (bedHeater != -1)
 	{
-		response->catf("%c%d", ch, (int)heat->GetStatus(heater));
+		ch = ',';
+		response->catf("[%d", static_cast<int>(heat->GetStatus(bedHeater)));
+	}
+	else
+	{
+		ch = '[';
+	}
+	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	{
+		response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
 		ch = ',';
 	}
+	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send XYZ positions
 	float liveCoordinates[DRIVES];
@@ -1083,7 +1110,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 			liveCoordinates[i] += offset[i];
 		}
 	}
-	response->catf("],\"pos\":");		// announce the XYZ position
+	response->catf(",\"pos\":");		// announce the XYZ position
 	ch = '[';
 	for (size_t drive = 0; drive < AXES; drive++)
 	{
@@ -1133,8 +1160,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	// Send the fan0 settings (for PanelDue firmware 1.13)
 	response->catf(",\"fanPercent\":[%.02f,%.02f]", platform->GetFanValue(0) * 100.0, platform->GetFanValue(1) * 100.0);
+
 	// Send fan RPM value
-	response->catf(",\"fanRPM\":%u", (unsigned int)platform->GetFanRPM());
+	response->catf(",\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	if (type != 0)
@@ -1302,6 +1330,7 @@ void RepRap::SetMessage(const char *msg)
 char RepRap::GetStatusCharacter() const
 {
 	return    (processingConfig)										? 'C'	// Reading the configuration file
+			: (gCodes->IsFlashing())									? 'F'	// Flashing a new firmware binary
 			: (IsStopped()) 											? 'H'	// Halted
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
