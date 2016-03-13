@@ -8,7 +8,6 @@ MassStorage::MassStorage(Platform* p) : platform(p)
 void MassStorage::Init()
 {
 	// Initialize SD MMC stack
-	hsmciPinsinit();
 	sd_mmc_init();
 	delay(20);
 

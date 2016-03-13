@@ -147,7 +147,10 @@ bool DDA::Init(const float nextMove[], EndstopChecks ce, bool doMotorMapping, Fi
 
 			if (drive >= AXES && xyMoving)
 			{
-				isPrintingMove = true;					// we have both movement and extrusion
+				if (delta > 0)
+				{
+					isPrintingMove = true;				// we have both movement and extrusion
+				}
 				float compensationTime = reprap.GetPlatform()->GetElasticComp(drive);
 				if (compensationTime > 0.0)
 				{

@@ -45,7 +45,6 @@ Licence: GPL
 // Platform-specific includes
 
 #include "Arduino.h"
-#include "SamNonDuePin.h"
 #include "OutputMemory.h"
 #include "SD_HSMCI.h"
 #include "MAX31855.h"

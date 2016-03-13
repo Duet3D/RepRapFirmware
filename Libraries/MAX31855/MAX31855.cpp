@@ -1,5 +1,4 @@
 #include "MAX31855.h"
-#include "SamNonDuePin.h"
 #include "spi_master.h"
 
 // MAX31855 thermocouple chip

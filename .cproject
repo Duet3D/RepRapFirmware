@@ -59,11 +59,9 @@
 								<option id="gnu.cpp.link.option.nostdlibs.1511064380" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" value="false" valueType="boolean"/>
 								<option id="gnu.cpp.link.option.paths.178730582" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/Release/}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/variants/duet}&quot;"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.1614032345" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="CoreDuet"/>
-									<listOptionValue builtIn="false" value="sam_sam3x8e_gcc_rel"/>
 								</option>
 								<option id="gnu.cpp.link.option.flags.1874922881" name="Linker flags" superClass="gnu.cpp.link.option.flags" value="-Os -Wl,--gc-sections -mcpu=cortex-m3 -T${workspace_loc:/CoreDuet/variants/duet/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/Release}/${ProjName}.map" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1479906997" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
@@ -85,7 +83,6 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreDuet/system/libsam/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/Lwip}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/EMAC}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SamNonDuePin}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SD_HSMCI}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SD_HSMCI/utility}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/SPI}&quot;"/>

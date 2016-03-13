@@ -149,20 +149,20 @@ void Platform::Init()
 
 	baudRates[0] = MAIN_BAUD_RATE;
 	baudRates[1] = AUX_BAUD_RATE;
+#if NUM_SERIAL_CHANNELS >= 2
 	baudRates[2] = AUX2_BAUD_RATE;
+#endif
 	commsParams[0] = 0;
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
+#if NUM_SERIAL_CHANNELS >= 2
 	commsParams[2] = 0;
+#endif
 
 	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
 #ifdef SERIAL_AUX2_DEVICE
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 #endif
-
-	// Reconfigure the ADC to avoid crosstalk between channels (especially on Duet 0.8.5)
-	adc_init(ADC, SystemCoreClock, ADC_FREQ_MIN, ADC_STARTUP_FAST);		// reduce clock rate
-	adc_configure_timing(ADC, 3, ADC_SETTLING_TIME_3, 1);				// add transfer time
 
 	static_assert(sizeof(FlashData) + sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 
@@ -1007,17 +1007,22 @@ void TC3_Handler()
 	++numInterruptsExecuted;
 	lastInterruptTime = Platform::GetInterruptClocks();
 #endif
+//	__enable_irq();					// allow nested interrupts
 	reprap.GetMove()->Interrupt();
+//	__disable_irq();
 }
 
 void TC4_Handler()
 {
 	TC_GetStatus(TC1, 1);
+//	__enable_irq();					// allow nested interrupts
 	reprap.GetNetwork()->Interrupt();
+//	__disable_irq();
 }
 
 void FanInterrupt()
 {
+//	__enable_irq();					// allow nested interrupts
 	++fanInterruptCount;
 	if (fanInterruptCount == fanMaxInterruptCount)
 	{
@@ -1026,6 +1031,7 @@ void FanInterrupt()
 		fanLastResetTime = now;
 		fanInterruptCount = 0;
 	}
+//	__disable_irq();
 }
 
 void Platform::InitialiseInterrupts()

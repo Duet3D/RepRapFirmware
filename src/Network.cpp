@@ -376,7 +376,6 @@ Network::Network(Platform* p)
 	}
 
 	strcpy(hostname, HOSTNAME);
-	ethPinsInit();
 }
 
 void Network::AppendTransaction(NetworkTransaction* volatile* list, NetworkTransaction *r)
