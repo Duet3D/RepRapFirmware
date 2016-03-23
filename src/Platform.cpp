@@ -658,6 +658,7 @@ void Platform::ResetNvData()
 
 #if FLASH_SAVE_ENABLED
 	nvData.magic = FlashData::magicValue;
+	nvData.version = FlashData::versionValue;
 #endif
 }
 
@@ -665,7 +666,7 @@ void Platform::ReadNvData()
 {
 #if FLASH_SAVE_ENABLED
 	DueFlashStorage::read(FlashData::nvAddress, &nvData, sizeof(nvData));
-	if (nvData.magic != FlashData::magicValue)
+	if (nvData.magic != FlashData::magicValue || nvData.version != FlashData::versionValue)
 	{
 		// Nonvolatile data has not been initialized since the firmware was last written, so set up default values
 		ResetNvData();
@@ -706,20 +707,26 @@ void Platform::UpdateFirmware()
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters...
 	reprap.EmergencyStop();
 
-
-	// Step 1 - Write update binary to Flash
+	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
+	// Leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
 	char data[IFLASH_PAGE_SIZE];
 	int bytesRead;
 	for(uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
 	{
 		bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
 
-		if (bytesRead > 0 && flashAddr + bytesRead < IFLASH_ADDR + IFLASH_SIZE)
+		if (bytesRead > 0)
 		{
+			// Do we have to fill up the remaining buffer with zeros?
+			if (bytesRead != IFLASH_PAGE_SIZE)
+			{
+				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
+			}
+
 			// Write one page at a time
 			cpu_irq_disable();
 			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-			flash_write(flashAddr, data, bytesRead, 1);
+			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
 			flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
 			cpu_irq_enable();
 
@@ -732,13 +739,27 @@ void Platform::UpdateFirmware()
 		}
 		else
 		{
-			// Cannot read any more or IAP binary exceeds 64KiB limit
-			break;
+			// Empty write buffer so we can use it to fill up the remaining space
+			if (bytesRead != IFLASH_PAGE_SIZE)
+			{
+				memset(data, 0, sizeof(data[0]) * sizeof(data));
+				bytesRead = IFLASH_PAGE_SIZE;
+			}
+
+			// Fill up the remaining space
+			cpu_irq_disable();
+			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
+			flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			cpu_irq_enable();
 		}
 	}
 	iapFile->Close();
 
-	// Step 2 - Reallocate the vector table and program entry point to the new IAP binary
+	// Step 2 - Let the firmware do whatever is necessary before we exit this program
+	reprap.Exit();
+
+	// Step 3 - Reallocate the vector table and program entry point to the new IAP binary
 	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
 
 	// Disable all IRQs
@@ -790,6 +811,16 @@ float Platform::Time()
 
 void Platform::Exit()
 {
+	// Close all files
+	for(size_t i = 0; i < MAX_FILES; i++)
+	{
+		while (files[i]->inUse)
+		{
+			files[i]->Close();
+		}
+	}
+
+	// Stop processing data
 	Message(GENERIC_MESSAGE, "Platform class exited.\n");
 	active = false;
 }
@@ -858,6 +889,16 @@ void Platform::Spin()
 {
 	if (!active)
 		return;
+
+	// Check if any files are supposed to be closed
+	for(size_t i = 0; i < MAX_FILES; i++)
+	{
+		if (files[i]->closeRequested)
+		{
+			// We cannot do this in ISRs, so do it here
+			files[i]->Close();
+		}
+	}
 
 	// Write non-blocking data to the AUX line
 	OutputBuffer *auxOutputBuffer = auxOutput->GetFirstItem();
@@ -985,6 +1026,7 @@ void Platform::SoftwareReset(uint16_t reason)
 		// Record the reason for the software reset
 		SoftwareResetData temp;
 		temp.magic = SoftwareResetData::magicValue;
+		temp.version = SoftwareResetData::versionValue;
 		temp.resetReason = reason;
 		GetStackUsage(NULL, NULL, &temp.neverUsedRam);
 
@@ -1122,7 +1164,7 @@ void Platform::Diagnostics()
 		SoftwareResetData temp;
 		temp.magic = 0;
 		DueFlashStorage::read(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
-		if (temp.magic == SoftwareResetData::magicValue)
+		if (temp.magic == SoftwareResetData::magicValue && temp.version == SoftwareResetData::versionValue)
 		{
 			MessageF(GENERIC_MESSAGE, "Last software reset code & available RAM: 0x%04x, %u\n", temp.resetReason, temp.neverUsedRam);
 			MessageF(GENERIC_MESSAGE, "Spinning module during software reset: %s\n", moduleName[temp.resetReason & 0x0F]);
@@ -1328,6 +1370,7 @@ float Platform::GetTemperature(size_t heater, TempError* err) const
 // See if we need to turn on the hot end fan
 bool Platform::AnyHeaterHot(uint16_t heaters, float t) const
 {
+	// Check tool heaters first
 	for (size_t h = 0; h < reprap.GetToolHeatersInUse(); ++h)
 	{
 		if (((1 << h) & heaters) != 0)
@@ -1345,6 +1388,17 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t) const
 	if (bedHeater >= 0 && ((1 << (unsigned int)bedHeater) & heaters) != 0)
 	{
 		const float ht = GetTemperature(bedHeater);
+		if (ht >= t || ht < BAD_LOW_TEMPERATURE)
+		{
+			return true;
+		}
+	}
+
+	// Check the chamber heater as well
+	int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
+	if (chamberHeater >= 0 && ((1 << (unsigned int)chamberHeater) & heaters) != 0)
+	{
+		const float ht = GetTemperature(chamberHeater);
 		if (ht >= t || ht < BAD_LOW_TEMPERATURE)
 		{
 			return true;
@@ -1843,7 +1897,7 @@ void Platform::Fan::Refresh()
 
 void Platform::Fan::SetPwmFrequency(float p_freq)
 {
-	freq = (uint16_t)max<float>(1.0, min<float>(65535.0, p_freq));
+	freq = (uint16_t)constrain<float>(p_freq, 1.0, 65535.0);
 	Refresh();
 }
 
@@ -1878,31 +1932,27 @@ void Platform::SetMACAddress(uint8_t mac[])
 FileStore* Platform::GetFileStore(const char* directory, const char* fileName, bool write)
 {
 	if (!fileStructureInitialised)
-		return NULL;
+	{
+		return nullptr;
+	}
 
 	for (size_t i = 0; i < MAX_FILES; i++)
 	{
 		if (!files[i]->inUse)
 		{
-			files[i]->inUse = true;
 			if (files[i]->Open(directory, fileName, write))
 			{
+				files[i]->inUse = true;
 				return files[i];
 			}
 			else
 			{
-				files[i]->inUse = false;
-				return NULL;
+				return nullptr;
 			}
 		}
 	}
 	Message(HOST_MESSAGE, "Max open file count exceeded.\n");
 	return NULL;
-}
-
-MassStorage* Platform::GetMassStorage()
-{
-	return massStorage;
 }
 
 void Platform::Message(MessageType type, const char *message)
@@ -2083,7 +2133,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		default:
 			// Everything else is unsupported (and probably not used)
 			OutputBuffer::ReleaseAll(buffer);
-			MessageF(HOST_MESSAGE, "Warning: Unsupported Message call for type %u!\n", type);
+			MessageF(HOST_MESSAGE, "Error: Unsupported Message call for type %u!\n", type);
 			break;
 	}
 }

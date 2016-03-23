@@ -26,11 +26,11 @@ Licence: GPL
 #define NAME "RepRapFirmware"
 
 #ifndef VERSION
-#define VERSION "1.09x-dc42"
+#define VERSION "1.09z"
 #endif
 
 #ifndef DATE
-#define DATE "2016-03-13"
+#define DATE "2016-03-23"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -89,7 +89,7 @@ const uint8_t MAX_BAD_TEMPERATURE_COUNT = 4;		// Number of bad temperature sampl
 const float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
 const float DEFAULT_TEMPERATURE_LIMIT = 300.0;		// Celsius
 const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
-const float BAD_ERROR_TEMPERATURE = 2000.0;			// must exceed BAD_HIGH_TEMPERATURE
+const float BAD_ERROR_TEMPERATURE = 2000.0;			// must exceed DEFAULT_TEMPERATURE_LIMIT
 
 // PWM frequencies
 

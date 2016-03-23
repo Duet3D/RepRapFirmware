@@ -18,6 +18,7 @@ void FileStore::Init()
 	writing = false;
 	lastBufferEntry = 0;
 	openCount = 0;
+	closeRequested = false;
 }
 
 // Open a local file (for example on an SD card).
@@ -55,30 +56,61 @@ void FileStore::Duplicate()
 		platform->Message(GENERIC_MESSAGE, "Attempt to dup a non-open file.\n");
 		return;
 	}
+	irqflags_t flags = cpu_irq_save();
 	++openCount;
+	cpu_irq_restore(flags);
 }
 
+// This may be called from an ISR, in which case we need to defer the close
 bool FileStore::Close()
 {
+	if (inInterrupt())
+	{
+		if (!inUse)
+		{
+			return false;
+		}
+
+		irqflags_t flags = cpu_irq_save();
+		if (openCount > 1)
+		{
+			--openCount;
+		}
+		else
+		{
+			closeRequested = true;
+		}
+		cpu_irq_restore(flags);
+		return true;
+	}
+
 	if (!inUse)
 	{
 		platform->Message(GENERIC_MESSAGE, "Attempt to close a non-open file.\n");
 		return false;
 	}
+
+	irqflags_t flags = cpu_irq_save();
 	--openCount;
-	if (openCount != 0)
+	bool leaveOpen = (openCount != 0);
+	cpu_irq_restore(flags);
+
+	if (leaveOpen)
 	{
 		return true;
 	}
+
 	bool ok = true;
 	if (writing)
 	{
 		ok = Flush();
 	}
+
 	FRESULT fr = f_close(&file);
 	inUse = false;
 	writing = false;
 	lastBufferEntry = 0;
+	closeRequested = false;
 	return ok && fr == FR_OK;
 }
 
@@ -157,7 +189,7 @@ uint8_t FileStore::Status()
 bool FileStore::ReadBuffer()
 {
 	FRESULT readStatus = f_read(&file, GetBuffer(), FileBufLen, &lastBufferEntry);	// Read a chunk of file
-	if (readStatus)
+	if (readStatus != FR_OK)
 	{
 		platform->Message(GENERIC_MESSAGE, "Error reading file.\n");
 		return false;
@@ -197,7 +229,7 @@ bool FileStore::Read(char& b)
 }
 
 // Block read, doesn't use the buffer
-int FileStore::Read(char* extBuf, unsigned int nBytes)
+int FileStore::Read(char* extBuf, size_t nBytes)
 {
 	if (!inUse)
 	{
@@ -266,7 +298,7 @@ bool FileStore::Write(const char* b)
 }
 
 // Direct block write that bypasses the buffer. Used when uploading files.
-bool FileStore::Write(const char *s, unsigned int len)
+bool FileStore::Write(const char *s, size_t len)
 {
 	if (!inUse)
 	{
@@ -285,7 +317,7 @@ bool FileStore::Write(const char *s, unsigned int len)
 //extern "C" uint32_t numRead, numWrite;
 //uint32_t maxRead, maxWrite;
 
-bool FileStore::InternalWriteBlock(const char *s, unsigned int len)
+bool FileStore::InternalWriteBlock(const char *s, size_t len)
 {
 	unsigned int bytesWritten;
 	uint32_t time = micros();

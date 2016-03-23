@@ -9,52 +9,45 @@ void MassStorage::Init()
 {
 	// Initialize SD MMC stack
 	sd_mmc_init();
-	delay(20);
 
-	bool abort = false;
+	const size_t startTime = millis();
 	sd_mmc_err_t err;
 	do {
 		err = sd_mmc_check(0);
-		if (err > SD_MMC_ERR_NO_CARD)
-		{
-			abort = true;
-			delay(3000);	// Wait a few seconds, so users have a chance to see the following error message
-		}
-		else
-		{
-			abort = (err == SD_MMC_ERR_NO_CARD && platform->Time() > 5.0);
-		}
+		delay_ms(1);
+	} while (err != SD_MMC_OK && millis() - startTime < 5000);
 
-		if (abort)
+	if (err != SD_MMC_OK)
+	{
+		delay_ms(3000);		// Wait a few seconds so users have a chance to see this
+
+		platform->Message(HOST_MESSAGE, "Cannot initialise the SD card: ");
+		switch (err)
 		{
-			platform->Message(HOST_MESSAGE, "Cannot initialize the SD card: ");
-			switch (err)
-			{
-				case SD_MMC_ERR_NO_CARD:
-					platform->Message(HOST_MESSAGE, "Card not found\n");
-					break;
-				case SD_MMC_ERR_UNUSABLE:
-					platform->Message(HOST_MESSAGE, "Card is unusable, try another one\n");
-					break;
-				case SD_MMC_ERR_SLOT:
-					platform->Message(HOST_MESSAGE, "Slot unknown\n");
-					break;
-				case SD_MMC_ERR_COMM:
-					platform->Message(HOST_MESSAGE, "General communication error\n");
-					break;
-				case SD_MMC_ERR_PARAM:
-					platform->Message(HOST_MESSAGE, "Illegal input parameter\n");
-					break;
-				case SD_MMC_ERR_WP:
-					platform->Message(HOST_MESSAGE, "Card write protected\n");
-					break;
-				default:
-					platform->MessageF(HOST_MESSAGE, "Unknown (code %d)\n", err);
-					break;
-			}
-			return;
+			case SD_MMC_ERR_NO_CARD:
+				platform->Message(HOST_MESSAGE, "Card not found\n");
+				break;
+			case SD_MMC_ERR_UNUSABLE:
+				platform->Message(HOST_MESSAGE, "Card is unusable, try another one\n");
+				break;
+			case SD_MMC_ERR_SLOT:
+				platform->Message(HOST_MESSAGE, "Slot unknown\n");
+				break;
+			case SD_MMC_ERR_COMM:
+				platform->Message(HOST_MESSAGE, "General communication error\n");
+				break;
+			case SD_MMC_ERR_PARAM:
+				platform->Message(HOST_MESSAGE, "Illegal input parameter\n");
+				break;
+			case SD_MMC_ERR_WP:
+				platform->Message(HOST_MESSAGE, "Card write protected\n");
+				break;
+			default:
+				platform->MessageF(HOST_MESSAGE, "Unknown (code %d)\n", err);
+				break;
 		}
-	} while (err != SD_MMC_OK);
+		return;
+	}
 
 	// Print some card details (optional)
 
@@ -89,7 +82,7 @@ void MassStorage::Init()
 
 	// Mount the file system
 
-	int mounted = f_mount(0, &fileSystem);
+	FRESULT mounted = f_mount(0, &fileSystem);
 	if (mounted != FR_OK)
 	{
 		platform->MessageF(HOST_MESSAGE, "Can't mount filesystem 0: code %d\n", mounted);

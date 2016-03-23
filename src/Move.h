@@ -36,7 +36,7 @@ public:
     void Init();										// Start me up
     void Spin();										// Called in a tight loop to keep the class going
     void Exit();										// Shut down
-    void GetCurrentUserPosition(float m[DRIVES + 1], uint8_t moveType) const;	// Return the position (after all queued moves have been executed) in transformed coords
+    void GetCurrentUserPosition(float m[DRIVES], uint8_t moveType) const;	// Return the position (after all queued moves have been executed) in transformed coords
     int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; }	// Get the current position of a motor
     void LiveCoordinates(float m[DRIVES]);				// Gives the last point at the end of the last complete DDA transformed to user coords
     void Interrupt();									// The hardware's (i.e. platform's)  interrupt should call this.
@@ -48,7 +48,6 @@ public:
     void HitHighStop(size_t axis, DDA* hitDDA);			// What to do when a high endstop is hit
     void ZProbeTriggered(DDA* hitDDA);					// What to do when a the Z probe is triggered
     void SetPositions(const float move[DRIVES]);		// Force the coordinates to be these
-    void SetFeedrate(float feedRate);					// Sometimes we want to override the feed rate
     void SetLiveCoordinates(const float coords[DRIVES]); // Force the live coordinates (see above) to be these
     void SetXBedProbePoint(size_t index, float x);		// Record the X coordinate of a probe point
     void SetYBedProbePoint(size_t index, float y);		// Record the Y coordinate of a probe point
@@ -111,7 +110,7 @@ private:
     void SetProbedBedEquation(size_t numPoints, StringRef& reply);					// When we have a full set of probed points, work out the bed's equation
     void DoDeltaCalibration(size_t numPoints, StringRef& reply);
     void BedTransform(float move[AXES]) const;										// Take a position and apply the bed compensations
-    void GetCurrentMachinePosition(float m[DRIVES + 1], bool disableMotorMapping) const;	// Get the current position and feedrate in untransformed coords
+    void GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const;	// Get the current position in untransformed coords
     void InverseBedTransform(float move[AXES]) const;								// Go from a bed-transformed point back to user coordinates
     void AxisTransform(float move[AXES]) const;										// Take a position and apply the axis-angle compensations
     void InverseAxisTransform(float move[AXES]) const;								// Go from an axis transformed point back to user coordinates
@@ -139,7 +138,6 @@ private:
     bool simulating;									// Are we simulating, or really printing?
     unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
     float simulationTime;								// Print time since we started simulating
-    float currentFeedrate;								// Err... the current feed rate...
     volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move
     volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
     volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates

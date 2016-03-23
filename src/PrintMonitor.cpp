@@ -590,7 +590,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&response)
 {
 	// Poll file info for a specific file
-	if (filename != nullptr)
+	if (filename != nullptr && filename[0] != 0)
 	{
 		GCodeFileInfo info;
 		if (!GetFileInfo("0:/", filename, info))
@@ -682,25 +682,17 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 	return true;
 }
 
+// May be called from ISR
 void PrintMonitor::StopParsing(const char *filename)
 {
-	if (parseState == notParsing)
+	if (parseState != notParsing && StringEquals(filenameBeingParsed, filename))
 	{
-		// We're not parsing anything, stop here
-		return;
-	}
-
-	if (filenameBeingPrinted[0] != 0 && !printingFileParsed)
-	{
-		if (StringEquals(filename, filenameBeingPrinted))
+		if (!printingFileParsed)
 		{
 			// If this is the file we're parsing for internal purposes, don't bother with this request
 			return;
 		}
-	}
 
-	if (StringEquals(filenameBeingParsed, filename))
-	{
 		parseState = notParsing;
 		fileBeingParsed->Close();
 	}
@@ -977,14 +969,17 @@ bool PrintMonitor::FindHeight(const char* buf, size_t len, float& height) const
 					{
 						if (zPos != 0)
 						{
-							// Check special case of this code ending with ";E" - ignore such codes
-							j = zPos;
-							while (j < len - 2 && c != '\n')
+							// Check special case of this code ending with ";E" or "; E" - ignore such codes
+							for(j = zPos + 1; j < len - 3; j++)
 							{
-								c = buf[++j];
-								if (c == ';' && buf[j + 1] == 'E')
+								c = buf[j];
+								if (c == ';' && (buf[j + 1] == 'E' || buf[j + 2] == 'E'))
 								{
 									zPos = 0;
+									break;
+								}
+								if (c == '\n')
+								{
 									break;
 								}
 							}

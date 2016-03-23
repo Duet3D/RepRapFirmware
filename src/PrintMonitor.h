@@ -21,7 +21,7 @@ Licence: GPL
 #define PRINTMONITOR_H
 
 const FilePosition GCODE_HEADER_SIZE = 8192uL;		// How many bytes to read from the header
-const FilePosition GCODE_FOOTER_SIZE = 128000uL;	// How many bytes to read from the footer
+const FilePosition GCODE_FOOTER_SIZE = 192000uL;	// How many bytes to read from the footer
 const size_t GCODE_READ_SIZE = 1024;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 4 for read efficiency)
 const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (should be a multple of 4 as well)
 
@@ -119,7 +119,7 @@ class PrintMonitor
 		float RawFilamentExtruded() const;
 
 		// We parse G-Code files in multiple stages. These variables hold the required information
-		FileParseState parseState;
+		volatile FileParseState parseState;
 		char filenameBeingParsed[FILENAME_LENGTH];
 		FileStore *fileBeingParsed;
 		GCodeFileInfo parsedFileInfo;

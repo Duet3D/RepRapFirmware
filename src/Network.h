@@ -27,10 +27,10 @@ Separated out from Platform.h by dc42 and extended by zpl
 // Currently we set the MSS (in file network/lwipopts.h) to 1432 which matches the value used by most versions of Windows
 // and therefore avoids additional memory use and fragmentation.
 
-const size_t NETWORK_TRANSACTION_COUNT = 16;							// Number of NetworkTransactions to be used for network IO
+const size_t NETWORK_TRANSACTION_COUNT = 24;							// Number of NetworkTransactions to be used for network IO
 
 const uint32_t TCP_WRITE_TIMEOUT = 4000;	 							// Miliseconds to wait for data we have written to be acknowledged
-const uint32_t TCP_MAX_SEND_RETRIES = 4;								// How many times can we attempt to write data
+const uint32_t TCP_MAX_SEND_RETRIES = 8;								// How many times can we attempt to write data
 
 const uint8_t MAC_ADDRESS[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };	// Need some sort of default...
 const uint8_t IP_ADDRESS[4] = { 192, 168, 1, 10 };
@@ -52,26 +52,33 @@ class NetworkTransaction;
 // ConnectionState structure that we use to track TCP connections. It is usually combined with NetworkTransactions.
 struct ConnectionState
 {
-	tcp_pcb *pcb;								// Connection PCB
-	uint16_t localPort, remotePort;				// Copy of the local and remote ports, because the PCB may be unavailable
-	uint32_t remoteIPAddress;					// Same for the remote IP address
-	NetworkTransaction *sendingTransaction;		// NetworkTransaction that is currently sending via this connection
-	ConnectionState *next;						// Next ConnectionState in this list
-	bool persistConnection;						// Do we expect this connection to stay alive?
+	tcp_pcb *volatile pcb;								// Connection PCB
+	uint16_t localPort, remotePort;						// Copy of the local and remote ports, because the PCB may be unavailable
+	uint32_t remoteIPAddress;							// Same for the remote IP address
+	NetworkTransaction * volatile sendingTransaction;	// NetworkTransaction that is currently sending via this connection
+	ConnectionState * volatile next;					// Next ConnectionState in this list
+	bool persistConnection;								// Do we expect this connection to stay alive?
+	volatile bool isTerminated;							// Will be true if the connection has gone down unexpectedly (TCP RST)
 
 	void Init(tcp_pcb *p);
 	uint16_t GetLocalPort() const { return localPort; }
 	uint32_t GetRemoteIP() const { return remoteIPAddress; }
 	uint16_t GetRemotePort() const { return remotePort; }
+	bool IsConnected() const { return pcb != nullptr; }
+	bool IsTerminated() const { return isTerminated; }
+	void Terminate();
 };
 
 // Assign a status to each NetworkTransaction
 enum TransactionStatus
 {
+	released,
 	connected,
-	dataReceiving,
-	dataSending,
-	disconnected
+	receiving,
+	sending,
+	disconnected,
+	deferred,
+	acquired
 };
 
 // Start with a class to hold input and output from the network that needs to be responded to.
@@ -84,10 +91,11 @@ class NetworkTransaction
 		NetworkTransaction(NetworkTransaction* n);
 		void Set(pbuf *p, ConnectionState* c, TransactionStatus s);
 		TransactionStatus GetStatus() const { return status; }
+		bool IsConnected() const;
 
 		bool HasMoreDataToRead() const { return readingPb != nullptr; }
 		bool Read(char& b);
-		bool ReadBuffer(const char *&buffer, unsigned int &len);
+		bool ReadBuffer(const char *&buffer, size_t &len);
 		void Write(char b);
 		void Write(const char* s);
 		void Write(StringRef ref);
@@ -97,15 +105,13 @@ class NetworkTransaction
 		void Printf(const char *fmt, ...);
 		void SetFileToWrite(FileStore *file);
 
-		void SetConnectionLost();
-		bool LostConnection() const { return cs == nullptr || cs->pcb == nullptr; }
 		ConnectionState *GetConnection() const { return cs; }
 		uint16_t GetLocalPort() const;
 		uint32_t GetRemoteIP() const;
 		uint16_t GetRemotePort() const;
 
 		void Commit(bool keepConnectionAlive);
-		void Defer();
+		void Defer(bool keepData);
 		void Discard();
 
 	private:
@@ -116,18 +122,16 @@ class NetworkTransaction
 
 		ConnectionState* cs;
 		NetworkTransaction* volatile next;			// next NetworkTransaction in the list we are in
-		NetworkTransaction* nextWrite;				// next NetworkTransaction queued to write to assigned connection
+		NetworkTransaction* volatile nextWrite;		// next NetworkTransaction queued to write to assigned connection
 		pbuf *pb, *readingPb;						// received packet queue and a pointer to the pbuf being read from
-		unsigned int bufferLength;					// total length of the packet buffer
-		unsigned int inputPointer;					// amount of data already taken from the first packet buffer
+		size_t inputPointer;						// amount of data already taken from the first packet buffer
 
 		OutputBuffer *sendBuffer;
 		OutputStack *sendStack;
-		FileStore *fileBeingSent;
+		FileStore * volatile fileBeingSent;
 
-		TransactionStatus status;
-		bool closeRequested;
-		bool waitingForDataConnection;
+		volatile TransactionStatus status;
+		volatile bool closeRequested, dataAcknowledged;
 };
 
 // The main network class that drives the network.
@@ -136,30 +140,6 @@ class Network
 	public:
 		friend class NetworkTransaction;
 
-		void ReadPacket();
-		bool ReceiveInput(pbuf *pb, ConnectionState *cs);
-		ConnectionState *ConnectionAccepted(tcp_pcb *pcb);
-		void ConnectionClosed(ConnectionState* cs, bool closeConnection);
-		bool ConnectionClosedGracefully(ConnectionState *cs);
-
-		NetworkTransaction *GetTransaction(const ConnectionState *cs = nullptr);
-		void WaitForDataConection();
-
-		const uint8_t *IPAddress() const;
-		void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
-		void OpenDataPort(uint16_t port);
-		uint16_t GetDataPort() const;
-		void CloseDataPort();
-
-		void SaveDataConnection();
-		void SaveFTPConnection();
-		void SaveTelnetConnection();
-
-		bool CanAcquireTransaction();
-		bool AcquireFTPTransaction();
-		bool AcquireDataTransaction();
-		bool AcquireTelnetTransaction();
-
 		Network(Platform* p);
 		void Init();
 		void Exit() {}
@@ -167,18 +147,46 @@ class Network
 		void Interrupt();
 		void Diagnostics();
 
+		// Deal with LwIP
+
+		void ResetCallback();
+		bool ReceiveInput(pbuf *pb, ConnectionState *cs);
+		ConnectionState *ConnectionAccepted(tcp_pcb *pcb);
+		void ConnectionClosed(ConnectionState* cs, bool closeConnection);
+		bool ConnectionClosedGracefully(ConnectionState *cs);
+
 		bool Lock();
 		void Unlock();
 		bool InLwip() const;
+
+		// Global settings
+
+		const uint8_t *IPAddress() const;
+		void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
+		void SetHostname(const char *name);
 
 		void Enable();
 		void Disable();
 		bool IsEnabled() const;
 
+		// Interfaces for the Webserver
+
+		NetworkTransaction *GetTransaction(const ConnectionState *cs = nullptr);
+
+		void OpenDataPort(uint16_t port);
+		uint16_t GetDataPort() const;
+		void CloseDataPort();
+
 		void SetHttpPort(uint16_t port);
 		uint16_t GetHttpPort() const;
 
-		void SetHostname(const char *name);
+		void SaveDataConnection();
+		void SaveFTPConnection();
+		void SaveTelnetConnection();
+
+		bool AcquireFTPTransaction();
+		bool AcquireDataTransaction();
+		bool AcquireTelnetTransaction();
 
 	private:
 
@@ -195,19 +203,24 @@ class Network
 
 		enum { NetworkPreInitializing, NetworkPostInitializing, NetworkInactive, NetworkActive } state;
 		bool isEnabled;
-		bool volatile readingData;
+		volatile bool resetCallback;
 		char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 
-		ConnectionState *dataCs;
-		ConnectionState *ftpCs;
-		ConnectionState *telnetCs;
+		ConnectionState * volatile dataCs;
+		ConnectionState * volatile ftpCs;
+		ConnectionState * volatile telnetCs;
 
-		ConnectionState * volatile freeConnections;		// May be referenced by Ethernet ISR, hence it's volatile
+		ConnectionState * volatile freeConnections;
 };
+
+inline bool NetworkTransaction::IsConnected() const
+{
+	return (cs != nullptr && cs->IsConnected());
+}
 
 inline bool NetworkTransaction::CanWrite() const
 {
-	return (!LostConnection() && status != disconnected && status != dataSending);
+	return (IsConnected() && status != released);
 }
 
 #endif

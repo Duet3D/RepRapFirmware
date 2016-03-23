@@ -31,7 +31,7 @@ Licence: GPL
 #include "StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
-enum Module
+enum Module : uint8_t
 {
 	modulePlatform = 0,
 	moduleNetwork = 1,

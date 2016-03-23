@@ -428,10 +428,10 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 
 
 // Truncate an output buffer to free up more memory. Returns the number of released bytes.
-/*static */ size_t OutputBuffer::Truncate(OutputBuffer *buffer, size_t bytesNeeded)
+/*static */ size_t OutputBuffer::Truncate(OutputBuffer *buffer, size_t bytesNeeded )
 {
-	// Can we free up space from this chain?
-	if (buffer == nullptr || buffer->Next() == nullptr)
+	// Can we free up space from this chain? Don't break it up if it's referenced anywhere else
+	if (buffer == nullptr || buffer->Next() == nullptr || buffer->IsReferenced())
 	{
 		// No
 		return 0;

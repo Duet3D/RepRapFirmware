@@ -45,9 +45,8 @@ public:
 	void GetVariables(float* standby, float* active) const;
 	void DefineMix(float* m);
 	const float* GetMix() const;
-	void TurnMixingOn();
-	void TurnMixingOff();
-	bool Mixing() const;
+	void SetMixing(bool b);
+	bool GetMixing() const;
 	float MaxFeedrate() const;
 	float InstantDv() const;
 	void Print(StringRef& reply);
@@ -125,17 +124,12 @@ inline const float* Tool::GetMix() const
 	return mix;
 }
 
-inline void Tool::TurnMixingOn()
+inline void Tool::SetMixing(bool b)
 {
-	mixing = true;
+	mixing = b;
 }
 
-inline void Tool::TurnMixingOff()
-{
-	mixing = false;
-}
-
-inline bool Tool::Mixing() const
+inline bool Tool::GetMixing() const
 {
 	return mixing;
 }

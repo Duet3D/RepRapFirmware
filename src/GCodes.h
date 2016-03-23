@@ -75,13 +75,22 @@ public:
 class GCodes
 {   
 public:
+	struct RawMove
+	{
+		float coords[DRIVES];											// new positions for the axes, amount of movement for the extruders
+		float feedRate;													// feed rate of this move
+		FilePosition filePos;											// offset in the file being printed that this move was read from
+		EndstopChecks endStopsToCheck;									// endstops to check
+		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
+		bool isFirmwareRetraction;										// true if this is a firmware retraction/un-retraction move
+	};
   
     GCodes(Platform* p, Webserver* w);
     void Spin();														// Called in a tight loop to make this class work
     void Init();														// Set it up
     void Exit();														// Shut it down
     void Reset();														// Reset some parameter to defaults
-    bool ReadMove(float* m, EndstopChecks& ce, uint8_t& rMoveType, FilePosition& fPos);	// Called by the Move class to get a movement set by the last G Code
+    bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
     void ClearMove();
     void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
     void DeleteFile(const char* fileName);								// Does what it says
@@ -163,13 +172,11 @@ private:
     void SetAllAxesNotHomed();											// Flag all axes as not homed
     void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
     const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
+    bool RetractFilament(bool retract);									// Retract or un-retract filaments
 
     Platform* platform;							// The RepRap machine
-    bool active;								// Live and running?
-    bool isPaused;								// true if the print has been paused
     Webserver* webserver;						// The webserver class
-    float dwellTime;							// How long a pause for a dwell (seconds)?
-    bool dwellWaiting;							// We are in a dwell
+
     GCodeBuffer* httpGCode;						// The sources...
 	GCodeBuffer* telnetGCode;					// ...
     GCodeBuffer* fileGCode;						// ...
@@ -177,12 +184,15 @@ private:
     GCodeBuffer* auxGCode;						// this one is for the LCD display on the async serial interface
     GCodeBuffer* fileMacroGCode;				// ...
     GCodeBuffer *gbCurrent;
+    bool active;								// Live and running?
+    bool isPaused;								// true if the print has been paused
+    bool dwellWaiting;							// We are in a dwell
     bool moveAvailable;							// Have we seen a move G Code and set it up?
-    float moveBuffer[DRIVES+1]; 				// Move coordinates; last is feed rate
-    float savedMoveBuffer[DRIVES+1];			// The position and feedrate when we started the current simulation
-    float pausedMoveBuffer[DRIVES+1]; 			// Move coordinates; last is feed rate
-    EndstopChecks endStopsToCheck;				// Which end stops we check them on the next move
-    uint8_t moveType;							// 0 = normal move, 1 = homing move, 2 = direct motor move
+    float dwellTime;							// How long a pause for a dwell (seconds)?
+    float feedRate;								// The feed rate of the last G0/G1 command that had an F parameter
+    RawMove moveBuffer;							// Move details to pass to Move class
+    float savedMoveBuffer[DRIVES + 1];			// The position and feedrate when we started the current simulation
+    float pausedMoveBuffer[DRIVES + 1]; 		// Move coordinates; last is feed rate
     GCodeState state;							// The main state variable of the GCode state machine
 	bool drivesRelative;
 	bool axesRelative;
@@ -216,7 +226,6 @@ private:
     bool axisIsHomed[AXES];						// These record which of the axes have been homed
     float pausedFanValues[NUM_FANS];			// Fan speeds when the print was paused
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
-    float speedFactorChange;					// factor by which we changed the speed factor since the last move
     float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
     float lastProbedZ;							// the last height at which the Z probe stopped
 
@@ -227,7 +236,11 @@ private:
     float simulationTime;
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
     FilePosition filePos;						// The position we got up to in the file being printed
-    FilePosition moveFilePos;					// Saved version of filePos for the next real move to be processed
+
+    // Firmware retraction settings
+    float retractLength, retractExtra;			// retraction length and extra length to un-retract
+    float retractSpeed;							// retract speed in mm/min
+    float retractHop;							// Z hop when retracting
 };
 
 //*****************************************************************************************************

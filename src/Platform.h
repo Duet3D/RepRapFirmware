@@ -469,7 +469,7 @@ public:
 
 	friend class FileStore;
 
-	MassStorage* GetMassStorage();
+	MassStorage* GetMassStorage() const;
 	FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
 	const char* GetWebDir() const; 	// Where the htm etc files are
 	const char* GetGCodeDir() const; 	// Where the gcodes are
@@ -623,39 +623,45 @@ private:
 
 	// These are the structures used to hold out non-volatile data.
 	// The SAM3X doesn't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
-	// every time we reprogram the firmware. So there is no need to cater for writing one version of this
-	// struct and reading back another.
+	// every time we reprogram the firmware via bossa, but it can be retained when firmware updates are performed
+	// via the web interface. That's why it's a good idea to implement versioning here - increase these values
+	// whenever the fields of the follwoing structs have changed.
 
 	struct SoftwareResetData
 	{
-	  static const uint16_t magicValue = 0x59B2;	// value we use to recognise that all the flash data has been written
-	  static const uint32_t nvAddress = 0;			// address in flash where we store the nonvolatile data
+		static const uint16_t magicValue = 0x7C5F;	// value we use to recognise that all the flash data has been written
+		static const uint16_t versionValue = 1;		// increment this whenever this struct changes
+		static const uint32_t nvAddress = 0;
 
-	  uint16_t magic;
-	  uint16_t resetReason;							// this records why we did a software reset, for diagnostic purposes
-	  size_t neverUsedRam;							// the amount of never used RAM at the last abnormal software reset
+		uint16_t magic;
+		uint16_t version;
+
+		uint16_t resetReason;						// this records why we did a software reset, for diagnostic purposes
+		size_t neverUsedRam;						// the amount of never used RAM at the last abnormal software reset
 	};
 
 	struct FlashData
 	{
-	  static const uint16_t magicValue = 0xA436;	// value we use to recognise that the flash data has been written
-	  static const uint32_t nvAddress = SoftwareResetData::nvAddress + sizeof(struct SoftwareResetData);
+		static const uint16_t magicValue = 0xE6C4;	// value we use to recognise that the flash data has been written
+		static const uint16_t versionValue = 1;		// increment this whenever this struct changes
+		static const uint32_t nvAddress = SoftwareResetData::nvAddress + sizeof(struct SoftwareResetData);
 
-	  uint16_t magic;
+		uint16_t magic;
+		uint16_t version;
 
-	  // The remaining data could alternatively be saved to SD card.
-	  // Note however that if we save them as G codes, we need to provide a way of saving IR and ultrasonic G31 parameters separately.
-	  ZProbeParameters switchZProbeParameters;		// Z probe values for the endstop switch
-	  ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
-	  ZProbeParameters alternateZProbeParameters;	// Z probe values for the alternate sensor
-	  int zProbeType;								// the type of Z probe we are currently using
-	  bool zProbeAxes[AXES];						// Z probe is used for these axes
-	  PidParameters pidParams[HEATERS];
-	  byte ipAddress[4];
-	  byte netMask[4];
-	  byte gateWay[4];
-	  uint8_t macAddress[6];
-	  Compatibility compatibility;
+		// The remaining data could alternatively be saved to SD card.
+		// Note however that if we save them as G codes, we need to provide a way of saving IR and ultrasonic G31 parameters separately.
+		ZProbeParameters switchZProbeParameters;		// Z probe values for the endstop switch
+		ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
+		ZProbeParameters alternateZProbeParameters;	// Z probe values for the alternate sensor
+		int zProbeType;								// the type of Z probe we are currently using
+		bool zProbeAxes[AXES];						// Z probe is used for these axes
+		PidParameters pidParams[HEATERS];
+		byte ipAddress[4];
+		byte netMask[4];
+		byte gateWay[4];
+		uint8_t macAddress[6];
+		Compatibility compatibility;
 	};
 
 	struct Fan
@@ -1262,6 +1268,11 @@ inline float Platform::GetNozzleDiameter() const
 inline void Platform::SetNozzleDiameter(float diameter)
 {
 	nozzleDiameter = diameter;
+}
+
+inline MassStorage* Platform::GetMassStorage() const
+{
+	return massStorage;
 }
 
 /*static*/ inline void Platform::EnableWatchdog()

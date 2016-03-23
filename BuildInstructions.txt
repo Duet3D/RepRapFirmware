@@ -15,7 +15,7 @@ Instructions for building dc42 fork of RepRapFirmware version 1.09t and later un
 
 7. If your compiler and tools are in a folder other than C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin, configure the path to the tools in both projects. You will find this in the project settings under C/C++ Build -> Settings -> Cross Settings.
 
-8. Ensure there is a copy of make.ex on your PATH. If you installed Arduino 1.5.8 into  C:/Arduino-1.5.8 then there will be one in C:\Arduino-1.5.8\hardware\arduino\sam\system\CMSIS\Examples\cmsis_example\gcc_arm.
+8. Ensure there is a copy of make.exe on your PATH. If you installed Arduino 1.5.8 into C:/Arduino-1.5.8 then there will be one in C:\Arduino-1.5.8\hardware\arduino\sam\system\CMSIS\Examples\cmsis_example\gcc_arm.
 
 9. Build CoreDuet first, then RepRapFirmware.
 

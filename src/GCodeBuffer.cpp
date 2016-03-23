@@ -53,7 +53,7 @@ bool GCodeBuffer::Put(char c)
 	else if (c == '\n' || c == 0)
 	{
 		gcodeBuffer[gcodePointer] = 0;
-		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] && !writingFileDirectory) // Don't bother with blank/comment lines
+		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] != 0 && !writingFileDirectory) // Don't bother with blank/comment lines
 		{
 			platform->MessageF(HOST_MESSAGE, "%s%s\n", identity, gcodeBuffer);
 		}
@@ -304,12 +304,12 @@ const char* GCodeBuffer::GetString()
 const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 {
 	readPointer = 0;
-	while (gcodeBuffer[readPointer] && gcodeBuffer[readPointer] != ' ')
+	while (gcodeBuffer[readPointer] != 0 && gcodeBuffer[readPointer] != ' ')
 	{
 		readPointer++;
 	}
 
-	if (!gcodeBuffer[readPointer])
+	if (gcodeBuffer[readPointer] == 0)
 	{
 		readPointer = -1;
 		if (optional)

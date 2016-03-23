@@ -22,9 +22,9 @@ public:
 
 	uint8_t Status();								// Returns OR of IOStatus
 	bool Read(char& b);								// Read 1 byte
-	int Read(char* buf, unsigned int nBytes);		// Read a block of nBytes length
+	int Read(char* buf, size_t nBytes);				// Read a block of nBytes length
 	bool Write(char b);								// Write 1 byte
-	bool Write(const char *s, unsigned int len);	// Write a block of len bytes
+	bool Write(const char *s, size_t len);			// Write a block of len bytes
 	bool Write(const char* s);						// Write a string
 	bool Close();									// Shut the file and tidy up
 	bool Seek(FilePosition pos);					// Jump to pos in the file
@@ -49,8 +49,8 @@ protected:
 private:
 	bool ReadBuffer();
 	bool WriteBuffer();
-	bool InternalWriteBlock(const char *s, unsigned int len);
-	byte *GetBuffer() { return reinterpret_cast<byte*>(buf32); }
+	bool InternalWriteBlock(const char *s, size_t len);
+	uint8_t *GetBuffer() { return reinterpret_cast<uint8_t*>(buf32); }
 
     uint32_t buf32[FileBufLen/4];
 	Platform* platform;
@@ -58,7 +58,8 @@ private:
 
 	FIL file;
 	unsigned int lastBufferEntry;
-	unsigned int openCount;
+	volatile unsigned int openCount;
+	volatile bool closeRequested;
 
 	bool inUse;
 	bool writing;
