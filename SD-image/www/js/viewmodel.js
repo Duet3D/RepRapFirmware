@@ -1,4 +1,4 @@
-/* Interface logic for the Duet Web Control v1.10
+/* Interface logic for the Duet Web Control v1.11
  * 
  * written by Christian Hammacher
  * 
@@ -62,6 +62,27 @@ var printChartOptions =	{
 
 var webcamUpdating = false;
 
+var notificationOptions = {
+	animate: {
+		enter: 'animated fadeInDown',
+		exit: 'animated fadeOutDown'
+	},
+	placement: {
+		from: "bottom",
+		align: "center"
+	},
+	template: '<div data-notify="container" class="col-xs-11 col-sm-9 col-md-8 col-lg-5 alert alert-{0}" role="alert">' +
+		'<button type="button" aria-hidden="true" class="close" data-notify="dismiss">×</button>' +
+		'<span data-notify="icon"></span> ' +
+		'<span data-notify="title">{1}</span> ' +
+		'<span data-notify="message">{2}</span>' +
+		'<div class="progress" data-notify="progressbar">' +
+		'<div class="progress-bar progress-bar-{0}" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%;"></div>' +
+		'</div>' +
+		'<a href="{3}" target="{4}" data-notify="url"></a>' +
+		'</div>'
+};
+
 
 $(document).ready(function() {
 	disableControls();
@@ -71,6 +92,8 @@ $(document).ready(function() {
 
 	$("#web_version").append(", JS: " + jsVersion);
 	$("#text_config").textareaAutoSize();
+
+	$.notifyDefaults(notificationOptions);
 
 	loadSettings(false);
 });
@@ -295,7 +318,8 @@ function resetGui() {
 	}
 	$("#td_extr_total").text("n/a");
 	setProbeValue(-1, undefined);
-	$("#td_fanrpm").text("n/a");
+	$("#td_fanrpm, #td_cputemp").text("n/a");
+	$(".cpu-temp").addClass("hidden");
 
 	// Control page
 	setAxesHomed([1,1,1]);
@@ -324,7 +348,7 @@ function resetGui() {
 	// Settings
 	$("#firmware_name, #firmware_version").html("n/a");
 	$("#page_machine td:not(:first-child), #page_machine dd").html("n/a");
-	$("#div_config > h1").removeClass("hidden");
+	$("#div_config > h1").removeClass("hidden").html(T("Connect to your Duet to display the configuration file"));
 	$("#text_config").addClass("hidden");
 
 	// Modal dialogs
@@ -408,7 +432,7 @@ $("body").on("click", ".btn-delete-file", function(e) {
 						updateGCodeFiles();
 					}
 				} else {
-					showMessage("warning-sign", T("Deletion failed"), T("<strong>Warning:</strong> Could not delete file <strong>{0}</strong>!", this.file), "md");
+					showMessage("warning", T("Deletion failed"), T("<strong>Warning:</strong> Could not delete file <strong>{0}</strong>!", this.file));
 				}
 			}
 		});
@@ -431,7 +455,7 @@ $("body").on("click", ".btn-delete-gcode-directory", function(e) {
 					updateGCodeFiles();
 				}
 			} else {
-				showMessage("warning-sign", T("Deletion failed"), T("<strong>Warning:</strong> Could not delete directory <strong>{0}</strong>!<br/><br/>Perhaps it isn't empty?", this.directory), "md");
+				showMessage("warning", T("Deletion failed"), T("<strong>Warning:</strong> Could not delete directory <strong>{0}</strong>!<br/><br/>Perhaps it isn't empty?", this.directory));
 			}
 		}
 	});
@@ -462,7 +486,7 @@ $("body").on("click", ".btn-delete-macro-directory", function(e) {
 					updateMacroFiles();
 				}
 			} else {
-				showMessage("warning-sign", T("Deletion failed"), T("<strong>Warning:</strong> Could not delete directory <strong>{0}</strong>!<br/><br/>Perhaps it isn't empty?", this.directory), "md");
+				showMessage("warning", T("Deletion failed"), T("<strong>Warning:</strong> Could not delete directory <strong>{0}</strong>!<br/><br/>Perhaps it isn't empty?", this.directory));
 			}
 		}
 	});
@@ -483,7 +507,7 @@ $("body").on("click", ".btn-delete-macro", function(e) {
 						updateMacroFiles();
 					}
 				} else {
-					showMessage("warning-sign", T("Deletion failed"), T("<strong>Warning:</strong> Could not delete macro <strong>{0}</strong>!", this.macro), "md");
+					showMessage("warning", T("Deletion failed"), T("<strong>Warning:</strong> Could not delete macro <strong>{0}</strong>!", this.macro));
 				}
 			}
 		});
@@ -524,7 +548,7 @@ $("body").on("click", "#dropdown_language a", function(e) {
 $("body").on("click", ".filament-usage", function(e) {
 	if (window.matchMedia('(max-width: 991px)').matches) {
 		// Display filament usage for small devices on click
-		showMessage("info-sign", T("Filament usage"), $(this).attr("title"), "xs");
+		showMessage("info", T("Filament usage"), $(this).attr("title"));
 	}
 	e.preventDefault();
 });
@@ -551,18 +575,23 @@ $("body").on("click", ".heater-temp", function(e) {
 
 	if (inputElement.prop("id").indexOf("all") == -1) {
 		var heater = inputElement.prop("id").match("_h(.)_")[1];
+
+		var gcode = "";
 		getToolsByHeater(heater).forEach(function(tool) {
-			sendGCode("G10 P" + tool + " " + activeOrStandby + temperature);
+			gcode += "G10 P" + tool + " " + activeOrStandby + temperature + "\n";
 		});
+		sendGCode(gcode);
 	} else {
 		if (toolMapping != undefined) {
+			var gcode = "";
 			for(var i=0; i<toolMapping.length; i++) {
 				var number = (toolMapping[i].hasOwnProperty("number") ? toolMapping[i].number : i + 1);
 				if ($.inArray(0, toolMapping[i].heaters) == -1) {
 					// Make sure we don't set temperatures for the heated bed
-					sendGCode("G10 P" + number + " " + activeOrStandby + $(this).val());
+					gcode += "G10 P" + number + " " + activeOrStandby + $(this).val() + "\n";
 				}
 			}
+			sendGCode(gcode);
 		}
 	}
 
@@ -593,7 +622,7 @@ $("body").on("click", "#ol_macro_directory a", function(e) {
 var draggingObject;
 
 function fileDragStart(e) {
-	draggingObject = $(this);
+	draggingObject = $(this).closest("tr");
 	// The following doesn't work, although it's recommended. I wonder who invented this crappy API...
 	//e.dataTransfer.setData('text/html', this.innerHTML);
 }
@@ -603,9 +632,13 @@ function fileDragEnd(e) {
 }
 
 $("#table_gcode_files, #table_macro_files").on("dragover", "tr", function(e) {
-	if (draggingObject != undefined && $(e.target).closest("tr").data("directory") != undefined) {
-		e.stopPropagation();
-		e.preventDefault();
+	var row = $(e.target).closest("tr");
+	if (draggingObject != undefined && row != undefined) {
+		var dir = row.data("directory");
+		if (dir != undefined && dir != draggingObject.data("directory")) {
+			e.stopPropagation();
+			e.preventDefault();
+		}
 	}
 });
 
@@ -613,17 +646,15 @@ $("#table_gcode_files, #table_macro_files").on("drop", "tr", function(e) {
 	if (draggingObject == undefined) {
 		return;
 	}
-	draggingObject = draggingObject.closest("tr");
 
-	var targetDir = $(e.target).closest("tr").data("directory");
-	if (targetDir != undefined) {
-		var sourcePath = draggingObject.data("item");
-		var targetPath;
+	var sourcePath = draggingObject.data("item");
+	var targetPath = $(e.target).closest("tr").data("directory");
+	if (targetPath != undefined && sourcePath != targetPath) {
 		if (currentPage == "files") {
-			targetPath = currentGCodeDirectory + "/" + targetDir + "/" + sourcePath;
+			targetPath = currentGCodeDirectory + "/" + targetPath + "/" + sourcePath;
 			sourcePath = currentGCodeDirectory + "/" + sourcePath;
 		} else {
-			targetPath = currentMacroDirectory + "/" + targetDir + "/" + sourcePath;
+			targetPath = currentMacroDirectory + "/" + targetPath + "/" + sourcePath;
 			sourcePath = currentMacroDirectory + "/" + sourcePath;
 		}
 
@@ -708,6 +739,8 @@ $("body").on("hidden.bs.popover", function() {
 
 $("#a_heaters_off").click(function(e) {
 	if (isConnected) {
+		var gcode = "";
+
 		// Turn off nozzle heaters
 		if (toolMapping != undefined) {
 			for(var i=0; i<toolMapping.length; i++) {
@@ -717,19 +750,21 @@ $("#a_heaters_off").click(function(e) {
 				toolMapping[i].heaters.forEach(function() { temps.push("-273.15"); });
 				tempString = temps.reduce(function(a, b) { return a + ":" + b; });
 
-				sendGCode("G10 P" + number + " R" + tempString + " S" + tempString);
+				gcode = "G10 P" + number + " R" + tempString + " S" + tempString + "\n";
 			}
 		}
 
 		// Turn off bed
 		if (heatedBed) {
-			sendGCode("M140 S-273.15");
+			gcode += "M140 S-273.15\n";
 		}
 
 		// Turn off chamber
 		if (chamber) {
-			sendGCode("M141 S-273.15");
+			gcode += "M141 S-273.15\n";
 		}
+
+		sendGCode(gcode);
 	}
 	e.preventDefault();
 });
@@ -914,7 +949,7 @@ $("#btn_new_gcode_directory").click(function() {
 					gcodeUpdateIndex = -1;
 					updateGCodeFiles();
 				} else {
-					showMessage("warning-sign", T("Error"), T("Could not create this directory!"), "sm");
+					showMessage("warning", T("Error"), T("Could not create this directory!"));
 				}
 			}
 		});
@@ -930,7 +965,7 @@ $("#btn_new_macro_directory").click(function() {
 					macroUpdateIndex = -1;
 					updateMacroFiles();
 				} else {
-					showMessage("warning-sign", T("Error"), T("Could not create this directory!"), "sm");
+					showMessage("warning", T("Error"), T("Could not create this directory!"));
 				}
 			}
 		});
@@ -947,19 +982,21 @@ $("#btn_pause").click(function() {
 });
 
 $(".btn-upload").click(function(e) {
-	$("#input_file_upload").data("type", $(this).data("type")).click();
+	if (!$(this).is(".disabled")) {
+		$("#input_file_upload").data("type", $(this).data("type")).click();
+	}
 	e.preventDefault();
 });
 
 $("#btn_reset_settings").click(function(e) {
 	showConfirmationDialog(T("Reset Settings"), T("Are you sure you want to revert to Factory Settings?"), function() {
 		if (defaultSettings.language != settings.language) {
-			showMessage("info-sign", T("Language has changed"), T("You have changed the current language.<br/><br/>Please reload the web interface to apply this change."), "md");
+			showMessage("info", T("Language has changed"), T("You have changed the current language. Please reload the web interface to apply this change."), 0);
 		}
 		settings = jQuery.extend(true, {}, defaultSettings);
 		$("#btn_language").data("language", "en").children("span:first-child").text("English");
-		applySettings();
 		saveSettings();
+		applySettings();
 	});
 	e.preventDefault();
 });
@@ -988,7 +1025,7 @@ $("#btn_reset_settings").click(function(e) {
 		e.stopPropagation();
 
 		var files = e.originalEvent.dataTransfer.files;
-		if (files != null && files.length > 0) {
+		if (!$(this).is(".disabled") && files != null && files.length > 0) {
 			// Start new file upload
 			startUpload($(this).data("type"), files, false);
 		}
@@ -1105,11 +1142,13 @@ $("input[id^='input_temp_h']").keydown(function(e) {
 		var heater = $(this).prop("id").match("_h(.)_")[1];
 		var temperature = $(this).val();
 
+		var gcode = "";
 		getToolsByHeater(heater).forEach(function(toolNumber) {
-			sendGCode("G10 P" + toolNumber + " " + activeOrStandby + temperature);
+			gcode += "G10 P" + toolNumber + " " + activeOrStandby + temperature + "\n";
 		});
-		$(this).select();
+		sendGCode(gcode);
 
+		$(this).select();
 		e.preventDefault();
 	}
 });
@@ -1120,13 +1159,15 @@ $("#input_temp_all_active, #input_temp_all_standby").keydown(function(e) {
 			var activeOrStandby = ($(this).prop("id").match("active$")) ? "S" : "R";
 			var temperature = $(this).val();
 
+			var gcode = "";
 			for(var i=0; i<toolMapping.length; i++) {
 				var number = (toolMapping[i].hasOwnProperty("number") ? toolMapping[i].number : i + 1);
 				if ($.inArray(0, toolMapping[i].heaters) == -1) {
 					// Make sure we don't set temperatures for the heated bed
-					sendGCode("G10 P" + number + " " + activeOrStandby + $(this).val());
+					gcode += "G10 P" + number + " " + activeOrStandby + $(this).val() + "\n";
 				}
 			}
+			sendGCode(gcode);
 		}
 
 		e.preventDefault();
@@ -1135,7 +1176,7 @@ $("#input_temp_all_active, #input_temp_all_standby").keydown(function(e) {
 
 $(".navbar-brand").click(function(e) { e.preventDefault(); });
 $(".navbar-brand.visible-xs > abbr").click(function(e) {
-	showMessage("warning-sign", T("Warning"), T("Some axes are not homed"), "sm");
+	showMessage("warning", T("Warning"), T("Some axes are not homed"));
 	e.preventDefault();
 });
 
@@ -1230,7 +1271,7 @@ $("#table_heaters a").click(function(e) {
 		if ($(this).parents("#tr_bed").length > 0) {
 			var bedState = lastStatusResponse.temps.bed.state;
 			if (bedState == 3) {
-				showMessage("exclamation-sign", T("Heater Fault"), T("<strong>Error:</strong> A heater fault has occured on this particular heater.<br/><br/>Please turn off your machine and check your wiring for loose connections."), "md");
+				showMessage("danger", T("Heater Fault"), T("<strong>Error:</strong> A heater fault has occured on this particular heater.<br/><br/>Please turn off your machine and check your wiring for loose connections."));
 			} else if (bedState == 2) {
 				// Put bed into standby mode
 				sendGCode("M144");
@@ -1242,7 +1283,7 @@ $("#table_heaters a").click(function(e) {
 			var heater = $(this).parents("tr").index();
 			var heaterState = lastStatusResponse.temps.heads.state[heater - 1];
 			if (heaterState == 3) {
-				showMessage("exclamation-sign", T("Heater Fault"), T("<strong>Error:</strong> A heater fault has occured on this particular heater.<br/><br/>Please turn off your machine and check your wiring for loose connections."), "md");
+				showMessage("danger", T("Heater Fault"), T("<strong>Error:</strong> A heater fault has occured on this particular heater.<br/><br/>Please turn off your machine and check your wiring for loose connections."));
 			} else {
 				var tools = getToolsByHeater(heater), hasToolSelected = false;
 				tools.forEach(function(tool) {
@@ -1580,15 +1621,33 @@ function showTextInput(title, message, action) {
 	$("#modal_textinput").modal("show");
 }
 
-function showMessage(icon, title, message, size) {
-	$("#modal_message h4").html((icon == "") ? "" :  '<span class="glyphicon glyphicon-' + icon + '"></span> ');
-	$("#modal_message h4").append(title);
-	$("#modal_message p").html(message);
-	$("#modal_message .modal-dialog").removeClass("modal-sm modal-lg");
-	if (size != "md") {
-		$("#modal_message .modal-dialog").addClass("modal-" + size);
+function showMessage(type, title, message, timeout, allowDismiss) {
+	// Find a suitable icon
+	var icon = "glyphicon glyphicon-info-sign";
+	if (type == "warning") {
+		icon = "glyphicon glyphicon-warning-sign";
+	} else if (type == "danger") {
+		icon = "glyphicon glyphicon-exclamation-sign";
 	}
-	$("#modal_message").modal("show");
+
+	// Check if the title can be displayed as bold text
+	if (title != "")
+	{
+		if (title.indexOf("<strong>") == -1)
+		{
+			title = "<strong>" + title + "</strong>";
+		}
+		title += "<br/><br/>";
+	}
+
+	// Show the notification
+	var notifySettings = { icon: "glyphicon glyphicon-" + icon,
+		title: title,
+		message: message};
+	var options = { type: type,
+		allow_dismiss: (allowDismiss == undefined) ? true : allowDismiss,
+		delay: (timeout == undefined) ? settings.notificationTimeout : timeout };
+	return $.notify(notifySettings, options);
 }
 
 function showPasswordPrompt() {
@@ -1601,22 +1660,28 @@ function showPasswordPrompt() {
 	});
 }
 
+function showUpdateMessage() {
+	var notifySettings = { icon: "glyphicon glyphicon-time",
+		title: "<strong>" + T("Updating Firmware...") + "</strong><br/><br/>",
+		message: T("Please wait while the firmware is being updated..."),
+		progress: settings.updateReconnectDelay / 100,
+	};
+	var options = { type: "success",
+		allow_dismiss: false,
+		delay: settings.updateReconnectDelay,
+		timeout: 1000,
+		showProgressbar: true
+	};
+	return $.notify(notifySettings, options);
+}
+
 $("#modal_pass_input, #modal_textinput").on('shown.bs.modal', function() {
 	$(this).find("input").focus()
 });
 
-var elementToFocus;
-
-$("#modal_message").on('shown.bs.modal', function() {
-	elementToFocus = $("body :focus");
-	$('#modal_message button').focus()
-});
-
-$("#modal_message").on('hidden.bs.modal', function() {
-	if (elementToFocus != undefined) {
-		elementToFocus.focus();
-		elementToFocus = undefined;
-	}
+$(".modal").on("hidden.bs.modal", function() {
+	// Bootstrap bug: Padding is added to the right, but never cleaned
+	$("body").css("padding-right", "");
 });
 
 $("#form_password").submit(function(e) {
@@ -1664,7 +1729,7 @@ function addGCodeFile(filename) {
 	row +=		'<td class="hidden-xs">' + T("loading") + '</td>';
 	row +=		'<td>loading</td>';
 	row +=		'<td>loading</td>';
-	row +=		'<td>loading</td>';
+	row +=		'<td class="hidden-xs">loading</td>';
 	row +=		'<td class="hidden-xs hidden-sm">' + T("loading") + '</td></tr>';
 
 	$("#table_gcode_files").removeClass("hidden");
@@ -1693,14 +1758,14 @@ function addMacroFile(filename) {
 	return $(row).appendTo("#table_macro_files");
 }
 
+var audioContext = new (window.AudioContext || window.webkitAudioContext);
 function beep(frequency, duration) {
-	var context = new webkitAudioContext();
-	oscillator = context.createOscillator();
+	var oscillator = audioContext.createOscillator();
 
-	oscillator.type = 0; // sine wave: TODO add more possibilities to the Settings page
+	oscillator.type = 'sine';
 	oscillator.frequency.value = frequency;
-	oscillator.connect(context.destination);
-	oscillator.noteOn && oscillator.noteOn(0);
+	oscillator.connect(audioContext.destination);
+	oscillator.start();
 
 	setTimeout(function() {
 		oscillator.disconnect();
@@ -1984,7 +2049,7 @@ function setCurrentTemperature(heater, temperature) {
 
 	if (temperature == undefined) {
 		$(field).first().html("n/a");
-	} else if (temperature < -200) {
+	} else if (temperature < -270) {
 		$(field).first().html("error");
 	} else {
 		$(field).first().html(temperature.toFixed(1) + " °C");
@@ -2439,6 +2504,9 @@ function showPage(name) {
 
 		if (name == "settings" && isConnected) {
 			getConfigResponse();
+			if ($("#page_config").is(".active")) {
+				getConfigFile();
+			}
 		}
 	}
 

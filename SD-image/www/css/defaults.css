@@ -894,6 +894,10 @@ label[for="dropdown_language"] {
 	margin-top: 0px;
 }
 
+#page_settings div.panel-body > div.checkbox:last-child {
+	margin-bottom: 0px;
+}
+
 #page_settings div.panel-body > label {
 	margin-bottom: 3px;
 }
@@ -998,10 +1002,6 @@ label[for="dropdown_language"] {
 }
 
 /* Modals */
-
-#modal_message .modal-footer {
-	text-align: center !important;
-}
 
 #modal_textinput div.input-group {
 	width: 100%;

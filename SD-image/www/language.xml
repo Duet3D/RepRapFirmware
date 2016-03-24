@@ -281,11 +281,11 @@
 		
 		<!-- Modal Dialogs -->
 		<string t="Error">Fehler</string>
-		<string t="Could not establish connection to the Duet firmware!&lt;br/&gt;&lt;br/&gt;Please check your settings and try again.">Konnte keine Verbindung zum Duet herstellen!&lt;br/&gt;&lt;br/&gt;Bitte prüfen Sie ihre Einstellungen und versuchen Sie es erneut.</string>
+		<string t="Could not establish a connection to the Duet firmware! Please check your settings and try again.">Konnte keine Verbindung zum Duet herstellen! Bitte prüfen Sie ihre Einstellungen und versuchen Sie es erneut.</string>
 		<string t="Could not connect to Duet, because there are no more HTTP sessions available.">Konnte keine Verbindung zum Duet herstellen, da keine weiteren HTTP-Sitzungen verfügbar sind.</string>
 		<string t="Message from Duet firmware">Nachricht von der Duet Firmware</string>
-		<string t="{0} returned an error">{0} lieferte einen Fehler zurück</string>
-		<string t="An AJAX error was reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">Es wurde ein AJAX-Fehler berichtet, deshalb wurde die aktuelle Sitzung beendet.&lt;br/&gt;&lt;br/&gt;Bitte prüfen Sie, ob Ihr Drucker noch an ist und versuchen Sie erneut zu verbinden.</string>
+		<string t="{0} has returned an error:">{0} hat einen Fehler zurückgeliefert:</string>
+		<string t="An AJAX error has been reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">Es wurde ein AJAX-Fehler berichtet, deshalb wurde die aktuelle Sitzung beendet.&lt;br/&gt;&lt;br/&gt;Bitte prüfen Sie, ob Ihr Drucker noch an ist und versuchen Sie erneut zu verbinden.</string>
 		<string t="Password required">Passwort benötigt</string>
 		<string t="Please enter your password:">Bitte geben Sie Ihr Passwort ein:</string>
 		<string t="OK">Ok</string>
@@ -377,6 +377,17 @@
 		<string t="Time to wait for a reconnect when a new firmware is about to be flashed">Abzuwartende Zeit wenn eine neue Firmware geflasht wird</string>
 		<string t="Reload Page?">Seite neu laden?</string>
 		<string t="You have just updated Duet Web Control. Would you like to reload the page now?">Sie haben gerade Duet Web Control aktualisiert. Möchten Sie die Seite jetzt neu laden?</string>
+
+		<!-- New in v1.11 -->
+		<string t="Default Notification Timeout:">Timeout für Standardbenachrichtigungen:</string>
+		<string t="Time after which default notifications are automatically closed">Zeit nach welcher Standardbenachrichtigungen automatisch ausgeblendet werden</string>
+		<string t="Please wait while the firmware is being updated...">Bitte warten Sie während die Firmware aktualisiert wird...</string>
+		<string t="CPU Temp.">CPU-Temp.</string>
+		<string t="Current CPU temperature">Aktuelle CPU-Temperatur</string>
+		<string t="G-Code Handling">G-Code-Behandlung</string>
+		<string t="(not set)">(nicht gesetzt)</string>
+		<string t="Current Z-Probe reading on a scale between 0 and 1024">Aktueller Z-Probe-Wert auf einer Skala zwischen 0 und 1024</string>
+		<string t="Current Fan RPM (needs a 4-pin PWM fan and proper wiring)">Aktuelle Lüfterumdrehungen pro Minute (benötigt einen 4-pin PWM-Lüfter und richtige Verkabelung)</string>
 	</de>
 	<es name="Espanol">
 		<!-- JavaScript Strings -->
@@ -655,11 +666,11 @@
 		
 		<!-- Modal Dialogs -->
 		<string t="Error">Error</string>
-		<string t="Could not establish connection to the Duet firmware!&lt;br/&gt;&lt;br/&gt;Please check your settings and try again.">No se puede establecer conexión con la Duet!&lt;br/&gt;&lt;br/&gt;Por favor, revisa tus ajustes y prueba de nuevo.</string>
+		<string t="Could not establish a connection to the Duet firmware! Please check your settings and try again.">No se puede establecer conexión con la Duet! Por favor, revisa tus ajustes y prueba de nuevo.</string>
 		<string t="Could not connect to Duet, because there are no more HTTP sessions available.">No se puede conectar con la Duet porque no hay más sesiones HTTP disponibles.</string>
 		<string t="Message from Duet firmware">Mensaje del Firmware Duet</string>
-		<string t="{0} returned an error">{0} ha devuelto un error</string>
-		<string t="An AJAX error was reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">Se ha recivido un error AJAX, de modo que la sesión se ha terminado.&lt;br/&gt;&lt;br/&gt;Por favor, revisa si tu impresora sigue activa e intentalo de nuevo</string>
+		<string t="{0} has returned an error:">{0} ha devuelto un error:</string>
+		<string t="An AJAX error has been reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">Se ha recivido un error AJAX, de modo que la sesión se ha terminado.&lt;br/&gt;&lt;br/&gt;Por favor, revisa si tu impresora sigue activa e intentalo de nuevo</string>
 		<string t="Password required">Contraseña solicitada</string>
 		<string t="Please enter your password:">Por favor, introduce tu contraseña:</string>
 		<string t="OK">Correcto</string>
@@ -980,11 +991,11 @@
 				
 		<!-- Modal Dialogs -->
 		<string t="Erreur">Erreur</string>
-		<string t="Could not establish connection to the Duet firmware!&lt;br/&gt;&lt;br/&gt;Please check your settings and try again.">Ne peut pas établir de connexion avec le micrologiciel de la carte Duet!&lt;br/&gt;&lt;br/&gt; vérifiez la configuration et réessayer.</string>
+		<string t="Could not establish a connection to the Duet firmware! Please check your settings and try again.">Ne peut pas établir de connexion avec le micrologiciel de la carte Duet! Vérifiez la configuration et réessayer.</string>
 		<string t="Could not connect to Duet, because there are no more HTTP sessions available.">Ne peut pas se connecter à la Duet, car il n'y a plus de session HTTP disponible.</string>
 		<string t="Message from Duet firmware">Message du micrologiciel de la Duet</string>
-		<string t="{0} returned an error">{0} renvoie une erreur</string>
-		<string t="An AJAX error was reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">Une Erreur AJAX a été retournée, la session courante est arrêtée. Vérifiez si votre imprimante est toujours en marche et réessayez de vous connecter.</string>
+		<string t="{0} has returned an error:">{0} renvoie une erreur:</string>
+		<string t="An AJAX error has been reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">Une Erreur AJAX a été retournée, la session courante est arrêtée. Vérifiez si votre imprimante est toujours en marche et réessayez de vous connecter.</string>
 		<string t="Password required">Mot de passe requis</string>
 		<string t="Please enter your password:">Saisir mot de passe:</string>
 		<string t="OK">Ok</string>
@@ -1333,11 +1344,11 @@
 		
 		<!-- Modal Dialogs -->
 		<string t="Error">Fel</string>
-		<string t="Could not establish connection to the Duet firmware!&lt;br/&gt;&lt;br/&gt;Please check your settings and try again.">Kan inte ansluta till Duet-mjukvaran!&lt;br/&gt;&lt;br/&gt;Vänligen kontrollera inställningarna och försök igen.</string>
+		<string t="Could not establish a connection to the Duet firmware! Please check your settings and try again.">Kan inte ansluta till Duet-mjukvaran! Vänligen kontrollera inställningarna och försök igen.</string>
 		<string t="Could not connect to Duet, because there are no more HTTP sessions available.">Kan inte ansluta till Duet, det finns inga fler tillgängliga HTTP-sessioner.</string>
 		<string t="Message from Duet firmware">Meddelande från Duet-mjukvara</string>
-		<string t="{0} returned an error">{0} har rapporterat ett fel</string>
-		<string t="An AJAX error was reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">Ett AJAX-fel rapporterades så den nuvarande sessionen har avslutats.&lt;br/&gt;&lt;br/&gt;Vänligen kontrollera att skrivaren fortfarande är på och försök ansluta igen.</string>
+		<string t="{0} has returned an error:">{0} har rapporterat ett fel:</string>
+		<string t="An AJAX error has been reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">Ett AJAX-fel rapporterades så den nuvarande sessionen har avslutats.&lt;br/&gt;&lt;br/&gt;Vänligen kontrollera att skrivaren fortfarande är på och försök ansluta igen.</string>
 		<string t="Password required">Lösenord krävs</string>
 		<string t="Please enter your password:">Skriv in ditt lösenord:</string>
 		<string t="OK">OK</string>
@@ -1687,11 +1698,11 @@
 		
 		<!-- Modal Dialogs -->
 		<string t="Error">出错</string>
-		<string t="Could not establish connection to the Duet firmware!&lt;br/&gt;&lt;br/&gt;Please check your settings and try again.">无法建立与Duet主板的连接!&lt;br/&gt;&lt;br/&gt;;请检查您的设置，然后再试一次.</string>
+		<string t="Could not establish a connection to the Duet firmware! Please check your settings and try again.">无法建立与Duet主板的连接! ;请检查您的设置，然后再试一次.</string>
 		<string t="Could not connect to Duet, because there are no more HTTP sessions available.">因为有没有其他可用的HTTP，无法连接到Duet主板上.</string>
 		<string t="Message from Duet firmware">来自于Duet主板上的固件</string>
-		<string t="{0} returned an error">{0} 返回错误</string>
-		<string t="An AJAX error was reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">报告AJAX错误，所以终止当前会话.&lt;br/&gt;&lt;br/&gt;如果你的打印机还开着，请重新检查并尝试重新连接.</string>
+		<string t="{0} has returned an error:">{0} 返回错误:</string>
+		<string t="An AJAX error has been reported, so the current session has been terminated.&lt;br/&gt;&lt;br/&gt;Please check if your printer is still on and try to connect again.">报告AJAX错误，所以终止当前会话.&lt;br/&gt;&lt;br/&gt;如果你的打印机还开着，请重新检查并尝试重新连接.</string>
 		<string t="Password required">需要密码</string>
 		<string t="Please enter your password:">请输入你的密码:</string>
 		<string t="OK">可以</string>

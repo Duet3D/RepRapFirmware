@@ -129,6 +129,10 @@ a:focus, a:hover {
     color: #f0f0f0;
 }
 
+.table-file-navigation button {
+    font-size: 18px !important;
+}
+
 /*Layer statistics value ------------------------------------------*/
 #span_progress_right{
     color:#0fa4f4;
@@ -270,7 +274,7 @@ a {
 
 /* Macros-------------------------------------------------------*/
 #panel_macro_buttons > div.panel-body.text-center > div > div > button {
-    color: 0fa4f4;
+    color: #0fa4f4;
 }
 
 /* Heater Temperatures-------------------------------------------------------*/
@@ -310,10 +314,13 @@ a {
     font-size: 18px; /*Name and value font size*/
 }
 
-.text-muted{
-font-size: 14px !important;
-font-weight: lighter;
-color:#cccccc;
+span.text-muted {
+	font-size: 14px !important;
+}
+
+.text-muted {
+	font-weight: lighter;
+	color:#cccccc;
 }
 
 /* Machine status-------------------------------------------------------*/

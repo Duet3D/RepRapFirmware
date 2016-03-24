@@ -1,4 +1,4 @@
-/* Interface logic for the Duet Web Control v1.10
+/* Interface logic for the Duet Web Control v1.11
  * 
  * written by Christian Hammacher
  * 
@@ -6,7 +6,7 @@
  * see http://www.gnu.org/licenses/gpl-2.0.html
  */
 
-var jsVersion = "1.10";
+var jsVersion = "1.11";
 var sessionPassword = "reprap";
 var translationWarning = false;		// Set this to "true" if you want to look for missing translation entries
 
@@ -17,9 +17,10 @@ var settings = {
 
 	updateInterval: 250,			// in ms
 	haltedReconnectDelay: 5000,		// in ms
-	updateReconnectDelay: 15000,	// in ms
+	updateReconnectDelay: 20000,	// in ms
 	extendedStatusInterval: 10,		// nth status request will include extended values
-	maxRequestTime: 8000,			// time to wait for a status response in ms
+	maxRequestTime: 8000,			// maximum time to wait for a status response in ms
+	notificationTimeout: 5000,		// in ms
 
 	halfZMovements: false,			// use half Z movements
 	logSuccess: false,				// log all sucessful G-Codes in the console
@@ -53,7 +54,7 @@ var defaultSettings = jQuery.extend(true, {}, settings);		// need to do this to 
 
 var isConnected = false, justConnected, isUploading, updateTaskLive, stopUpdating;
 var ajaxRequests = [], extendedStatusCounter, lastStatusResponse, configResponse, configFile;
-var lastSendGCode, lastGCodeFromInput;
+var lastSentGCode;
 
 var fileInfo, currentLayerTime, maxLayerTime, lastLayerPrintDuration;
 
@@ -77,11 +78,11 @@ function resetGuiData() {
 	setPrintStatus(false);
 	setGeometry("cartesian");
 
-	justConnected = isUploading = updateTaskLive = stopUpdating = false;
+	justConnected = isUploading = updateTaskLive = false;
+	stopUpdating = true;
 	fileInfo = lastStatusResponse = configResponse = configFile = undefined;
 
-	lastSendGCode = "";
-	lastGCodeFromInput = false;
+	lastSentGCode = "";
 
 	probeSlowDownValue = probeTriggerValue = undefined;
 	heatedBed = 1;
@@ -111,27 +112,28 @@ function resetGuiData() {
 
 /* Connect / Disconnect */
 
-function connect(password, firstConnect) {
+function connect(password, regularConnect) {
+	// Close all notifications before we connect...
+	if (regularConnect) {
+		$.notifyClose();
+	}
+
 	$(".btn-connect").removeClass("btn-info").addClass("btn-warning disabled").find("span:not(.glyphicon)").text(T("Connecting..."));
 	$(".btn-connect span.glyphicon").removeClass("glyphicon-log-in").addClass("glyphicon-transfer");
 	$.ajax("rr_connect?password=" + password, {
 		dataType: "json",
 		error: function() {
-			showMessage("exclamation-sign", T("Error"), T("Could not establish connection to the Duet firmware!<br/><br/>Please check your settings and try again."), "md");
-			$("#modal_message").one("hide.bs.modal", function() {
-				$(".btn-connect").removeClass("btn-warning disabled").addClass("btn-info").find("span:not(.glyphicon)").text(T("Connect"));
-				$(".btn-connect span.glyphicon").removeClass("glyphicon-transfer").addClass("glyphicon-log-in");
-			});
+			showMessage("danger", T("Error"), T("Could not establish a connection to the Duet firmware! Please check your settings and try again."), 0);
+			$(".btn-connect").removeClass("btn-warning disabled").addClass("btn-info").find("span:not(.glyphicon)").text(T("Connect"));
+			$(".btn-connect span.glyphicon").removeClass("glyphicon-transfer").addClass("glyphicon-log-in");
 		},
 		success: function(data) {
 			if (data.err == 2) {		// Looks like the firmware ran out of HTTP sessions
-				showMessage("exclamation-sign", T("Error"), T("Could not connect to Duet, because there are no more HTTP sessions available."), "md");
-				$("#modal_message").one("hide.bs.modal", function() {
-					$(".btn-connect").removeClass("btn-warning disabled").addClass("btn-info").find("span:not(.glyphicon)").text(T("Connect"));
-					$(".btn-connect span.glyphicon").removeClass("glyphicon-transfer").addClass("glyphicon-log-in");
-				});
+				showMessage("danger", T("Error"), T("Could not connect to Duet, because there are no more HTTP sessions available."), 0);
+				$(".btn-connect").removeClass("btn-warning disabled").addClass("btn-info").find("span:not(.glyphicon)").text(T("Connect"));
+				$(".btn-connect span.glyphicon").removeClass("glyphicon-transfer").addClass("glyphicon-log-in");
 			}
-			else if (firstConnect)
+			else if (regularConnect)
 			{
 				if (data.err == 0) {	// No password authentication required
 					sessionPassword = password;
@@ -146,11 +148,9 @@ function connect(password, firstConnect) {
 					sessionPassword = password;
 					postConnect();
 				} else {
-					showMessage("exclamation-sign", T("Error"), T("Invalid password!"), "sm");
-					$("#modal_message").one("hide.bs.modal", function() {
-						$(".btn-connect").removeClass("btn-warning disabled").addClass("btn-info").find("span:not(.glyphicon)").text(T("Connect"));
-						$(".btn-connect span.glyphicon").removeClass("glyphicon-transfer").addClass("glyphicon-log-in");
-					});
+					showMessage("danger", T("Error"), T("Invalid password!"), 0);
+					$(".btn-connect").removeClass("btn-warning disabled").addClass("btn-info").find("span:not(.glyphicon)").text(T("Connect"));
+					$(".btn-connect span.glyphicon").removeClass("glyphicon-transfer").addClass("glyphicon-log-in");
 				}
 			}
 		}
@@ -170,6 +170,9 @@ function postConnect() {
 		updateMacroFiles();
 	} else if (currentPage == "settings") {
 		getConfigResponse();
+		if ($("#page_config").is(".active")) {
+			getConfigFile();
+		}
 	}
 
 	$(".btn-connect").removeClass("btn-warning disabled").addClass("btn-success").find("span:not(.glyphicon)").text(T("Disconnect"));
@@ -314,6 +317,12 @@ function updateStatus() {
 				setToolMapping(status.tools);
 			}
 
+			// CPU temperature
+			if (status.hasOwnProperty("cputemp")) {
+				$(".cpu-temp").removeClass("hidden");
+				$("#td_cputemp").html(status.cputemp.toFixed(1) + " °C");
+			}
+
 			/*** Default status response ***/
 
 			// Status
@@ -407,7 +416,7 @@ function updateStatus() {
 					beep(status.output.beepFrequency, status.output.beepDuration);
 				}
 				if (status.output.hasOwnProperty("message")) {
-					showMessage("envelope", T("Message from Duet firmware"), status.output.message, "md");
+					showMessage("info", T("Message from Duet firmware"), status.output.message, 0);
 				}
 			}
 
@@ -444,35 +453,40 @@ function updateStatus() {
 					dataType: "html",
 					success: function(response) {
 						response = response.trim();
-
-						// Log message (if necessary)
-						var logThis = (response != "");
-						logThis |= (lastSendGCode != "" && (lastGCodeFromInput || settings.logSuccess));
-						if (logThis) {
-							// Log this message in the console
-							var style = (response == "") ? "success" : "info";
-							var content = (lastSendGCode != "") ? "<strong>" + lastSendGCode.replace(/\n/g, "<br/>") + "</strong><br/>" : "";
+						if ((response != "") || (lastSentGCode != "" && settings.logSuccess)) {
+							// What kind of reply are we dealing with?
+							var style = (response == "") ? "success" : "info", isError = false;
 							if (response.match("^Error: ") != null) {
 								style = "warning";
-								response = response.replace(/Error:/g, "<strong>Error:</strong>");
+								isError = true;
 							}
-							content += response.replace(/\n/g, "<br/>")
-								log(style, content);
 
-							// If it the console isn't visible and if it was caused by an ordinary input, show message dialog
-							if (lastGCodeFromInput && lastSendGCode != "" && response != "" && currentPage != "console") {
-								var icon = (style == "warning" ? "exclamation-sign" : "info-sign");
-								if (response.match("^Error: ") != null) {
-									showMessage("warning-sign", T("{0} returned an error", lastSendGCode), response.substring(6).replace(/\n/g, "<br/>"), "md");
+							// Prepare line breaks for HTML
+							lastSentGCode = lastSentGCode.trim().replace(/\n/g, "<br/>");
+							response = response.replace(/\n/g, "<br/>");
+
+							// Log this message in the G-Code console
+							var prefix = (lastSentGCode != "") ? "<strong>" + lastSentGCode + "</strong><br/>" : "";
+							log(style, prefix + response.replace(/Error:/g, "<strong>Error:</strong>"));
+
+							// If the console isn't visible, show a notification too
+							if (currentPage != "console") {
+								if (lastSentGCode != "") {
+									if (isError) {
+										showMessage(style, T("{0} has returned an error:", lastSentGCode), response.substring(6).trim());
+									} else if (response != "") {
+										showMessage(style, lastSentGCode, response);
+									} else {
+										showMessage(style, "", "<strong>" + lastSentGCode + "</strong>");
+									}
 								} else {
-									showMessage("info-sign", lastSendGCode, response.replace(/\n/g, "<br/>"), "md");
+									showMessage(style, "", response.replace(/Error:/g, "<strong>Error:</strong>"));
 								}
 							}
 						}
 
-						// Reset info about last sent G-Code
-						lastSendGCode = "";
-						lastGCodeFromInput = false;
+						// Reset info about last sent G-Code again
+						lastSentGCode = "";
 					}
 				});
 			}
@@ -689,6 +703,7 @@ function updateStatus() {
 			if (status.status == 'F') {
 				isConnected = updateTaskLive = false;
 				log("info", "<strong>" + T("Updating Firmware...") + "</strong>");
+				showUpdateMessage();
 				setTimeout(function() {
 					connect(sessionPassword, false);
 				}, settings.updateReconnectDelay);
@@ -720,7 +735,7 @@ function getConfigFile() {
 			if (response != "") {
 				configFile = response;
 				$("#div_config > h1").addClass("hidden");
-				$("#text_config").val(response).prop("readonly", false).trigger("input");
+				$("#text_config").val(response).prop("readonly", false).removeClass("hidden").trigger("input");
 				$("#row_save_settings").removeClass("hidden");
 			}
 		}
@@ -735,14 +750,12 @@ function getConfigResponse() {
 			$("#firmware_name").text(response.firmwareName);
 			$("#firmware_version").text(response.firmwareVersion + " (" + response.firmwareDate + ")");
 
-			if (configFile == undefined) {
-				if (response.hasOwnProperty("configFile")) {
-					$("#div_config > h1").addClass("hidden");
-					$("#text_config").removeClass("hidden").prop("readonly", true).val(response.configFile).trigger("input");
-				} else {
-					$("#div_config > h1").removeClass("hidden").text(T("loading"));
-					$("#text_config").addClass("hidden");
-				}
+			if (response.hasOwnProperty("configFile")) {
+				$("#div_config > h1").addClass("hidden");
+				$("#text_config").removeClass("hidden").prop("readonly", true).val(response.configFile).trigger("input");
+			} else {
+				$("#div_config > h1").removeClass("hidden").text(T("loading"));
+				$("#text_config").addClass("hidden");
 			}
 
 			for(var drive = 0; drive < response.accelerations.length; drive++) {
@@ -940,8 +953,7 @@ function updateMacroFiles() {
 
 // Send G-Code directly to the firmware
 function sendGCode(gcode, fromInput) {
-	lastSendGCode = gcode;
-	lastGCodeFromInput = (fromInput != undefined && fromInput);
+	lastSentGCode = gcode;
 
 	// Although rr_gcode gives us a JSON response, it doesn't provide any results.
 	// We only need to worry about an AJAX error event.
@@ -953,7 +965,6 @@ function sendGCode(gcode, fromInput) {
 /* AJAX Events */
 
 $(document).ajaxSend(function(event, jqxhr, settings) {
-	settings.timeout = settings.maxRequestTime;
 	ajaxRequests.push(jqxhr);
 });
 
@@ -968,11 +979,11 @@ $(document).ajaxError(function(event, jqxhr, settings, thrownError) {
 	}
 
 	if (isConnected) {
-		var msg = T("An AJAX error was reported, so the current session has been terminated.<br/><br/>Please check if your printer is still on and try to connect again.");
+		var msg = T("An AJAX error has been reported, so the current session has been terminated.<br/><br/>Please check if your printer is still on and try to connect again.");
 		if (thrownError != "") {
-			msg += "<br/></br>" + T("Error reason: {0}", thrownError);
+			msg += "<br/><br/>" + T("Error reason: {0}", thrownError);
 		}
-		showMessage("warning-sign", T("Communication Error"), msg, "md");
+		showMessage("danger", T("Communication Error"), msg, 0);
 
 		disconnect();
 
@@ -1048,6 +1059,9 @@ function loadSettings(usingCookie) {
 		}
 		if (loadedSettings.hasOwnProperty("webcamInterval")) {
 			settings.webcamInterval = loadedSettings.webcamInterval;
+		}
+		if (loadedSettings.hasOwnProperty("notificationTimeout")) {
+			settings.notificationTimeout = loadedSettings.notificationTimeout;
 		}
 
 		// Behavior
@@ -1129,7 +1143,7 @@ function saveSettings() {
 	settings.useDarkTheme = $("#dark_theme").is(":checked");
 	settings.moveFeedrate = checkBoundaries($("#move_feedrate").val(), defaultSettings.moveFeedrate, 0);
 	if (settings.language != $("#btn_language").data("language")) {
-		showMessage("info-sign", T("Language has changed"), T("You have changed the current language.<br/><br/>Please reload the web interface to apply this change."), "md");
+		showMessage("success", T("Language has changed"), T("You have changed the current language. Please reload the web interface to apply this change."), 0);
 	}
 	settings.language = $("#btn_language").data("language");
 
@@ -1139,7 +1153,8 @@ function saveSettings() {
 	settings.haltedReconnectDelay = checkBoundaries($("#reconnect_halt_delay").val(), defaultSettings.haltedReconnectDelay, 1000);
 	settings.updateReconnectDelay = checkBoundaries($("#reconnect_update_delay").val(), defaultSettings.updateReconnectDelay, 1000);
 	settings.maxRequestTime = checkBoundaries($("#ajax_timeout").val(), defaultSettings.maxRequestTime, 100);
-	settings.webcamInterval = checkBoundaries($("#webcam_interval").val(), defaultSettings.maxRequestTime, 100);
+	settings.webcamInterval = checkBoundaries($("#webcam_interval").val(), defaultSettings.webcamInterval, 100);
+	settings.notificationTimeout = checkBoundaries($("#notification_timeout").val(), defaultSettings.notificationTimeout, 0);
 
 	// Default G-Codes
 	settings.defaultGCodes = [];
@@ -1283,7 +1298,9 @@ function applySettings() {
 	$("#reconnect_halt_delay").val(settings.haltedReconnectDelay);
 	$("#reconnect_update_delay").val(settings.updateReconnectDelay);
 	$("#ajax_timeout").val(settings.maxRequestTime);
+	$.ajaxSetup({ timeout: settings.maxRequestTime });
 	$("#webcam_interval").val(settings.webcamInterval);
+	$("#notification_timeout").val(settings.notificationTimeout);
 
 	/* Default list items */
 
@@ -1335,7 +1352,7 @@ function startUpload(type, files, fromCallback) {
 
 	// Safety check for Upload and Print
 	if (type == "print" && files.length > 1) {
-		showMessage("exclamation-sign", T("Error"), T("You can only upload and print one file at once!"), "md");
+		showMessage("warning", T("Error"), T("You can only upload and print one file at once!"));
 		return;
 	}
 
@@ -1364,12 +1381,12 @@ function startUpload(type, files, fromCallback) {
 							});
 
 							if (zipFiles.length == 0) {
-								showMessage("exclamation-sign", T("Error"), T("The archive {0} does not contain any files!", theFile.name), "md");
+								showMessage("warning", T("Error"), T("The archive {0} does not contain any files!", theFile.name));
 							} else {
 								startUpload(type, zipFiles, true);
 							}
 						} catch(e) {
-							showMessage("exclamation-sign", T("Error"), T("Could not read contents of file {0}!", theFile.name), "md");
+							showMessage("danger", T("Error"), T("Could not read contents of file {0}!", theFile.name));
 						}
 					}
 				})(this);
@@ -1444,6 +1461,7 @@ function uploadNextFile() {
 					break;
 
 				case "css":
+				case "map":
 					targetPath = "/www/css/" + uploadFileName;
 					break;
 
@@ -1480,6 +1498,7 @@ function uploadNextFile() {
 		dataType: "json",
 		processData: false,
 		contentType: false,
+		timeout: 0,
 		type: "POST",
 		success: function(data) {
 			if (isUploading) {
@@ -1563,14 +1582,14 @@ function finishUpload(success) {
 
 	if (success) {
 		// If everything went well, update the GUI immediately
-		uploadHasFinished();
+		uploadHasFinished(true);
 	} else {
 		// In case an upload has been aborted, give the firmware some time to recover
-		setTimeout(uploadHasFinished, 1000);
+		setTimeout(function() { uploadHasFinished(false); }, 1000);
 	}
 }
 
-function uploadHasFinished() {
+function uploadHasFinished(success) {
 	// Make sure the G-Codes and Macro pages are updated
 	if (uploadType == "gcode" || uploadType == "print") {
 		gcodeUpdateIndex = -1;
@@ -1584,65 +1603,81 @@ function uploadHasFinished() {
 		}
 	}
 
+	// Start polling again
+	startUpdates();
+
 	// Deal with different upload types
-	if (uploadType == "print") {
-		waitingForPrintStart = true;
-		if (currentGCodeDirectory == "/gcodes") {
-			sendGCode("M32 " + uploadFileName);
-		} else {
-			sendGCode("M32 " + currentGCodeDirectory.substring(8) + "/" + uploadFileName);
+	if (success) {
+		// Check if a print is supposed to be started
+		if (uploadType == "print") {
+			waitingForPrintStart = true;
+			if (currentGCodeDirectory == "/gcodes") {
+				sendGCode("M32 " + uploadFileName);
+			} else {
+				sendGCode("M32 " + currentGCodeDirectory.substring(8) + "/" + uploadFileName);
+			}
 		}
-	}
 
-	// Ask for page reload if DWC has been updated
-	if (uploadedDWC) {
-		$("#modal_upload").modal("hide");
-		showConfirmationDialog(T("Reload Page?"), T("You have just updated Duet Web Control. Would you like to reload the page now?"), function() {
-			location.reload();
-		});
-	}
-
-	// Ask for software reset if it's safe to do
-	else if (lastStatusResponse != undefined && lastStatusResponse.status == 'I') {
-		if (uploadIncludedConfig) {
+		// Ask for page reload if DWC has been updated
+		if (uploadedDWC) {
 			$("#modal_upload").modal("hide");
-			showConfirmationDialog(T("Reboot Duet?"), T("You have just uploaded a config file. Would you like to perform a software reset now?"), function() {
-				sendGCode("M999");
+			showConfirmationDialog(T("Reload Page?"), T("You have just updated Duet Web Control. Would you like to reload the page now?"), function() {
+				location.reload();
 			});
 		}
 
-		if (uploadFirmwareFile != undefined)
-		{
-			$("#modal_upload").modal("hide");
-			showConfirmationDialog(T("Perform Firmware Update?"), T("You have just uploaded a firmware file. Would you like to update your Duet now?"), function() {
-				if (uploadFirmwareFile.toUpperCase() != "REPRAPFIRMWARE.BIN")
-				{
-					// Firmware update filename is hardcoded in the IAP binary, so try to rename this one first
-					$.ajax("rr_move?old=" + encodeURIComponent("/sys/" + uploadFirmwareFile) + "&new=" + encodeURIComponent("/sys/RepRapFirmware.bin"), {
+		// Ask for software reset if it's safe to do
+		else if (lastStatusResponse != undefined && lastStatusResponse.status == 'I') {
+			if (uploadIncludedConfig) {
+				$("#modal_upload").modal("hide");
+				showConfirmationDialog(T("Reboot Duet?"), T("You have just uploaded a config file. Would you like to perform a software reset now?"), function() {
+					sendGCode("M999");
+				});
+			}
+
+			if (uploadFirmwareFile != undefined)
+			{
+				$("#modal_upload").modal("hide");
+				showConfirmationDialog(T("Perform Firmware Update?"), T("You have just uploaded a firmware file. Would you like to update your Duet now?"), startFirmwareUpdate);
+			}
+		}
+	}
+}
+
+function startFirmwareUpdate() {
+	if (uploadFirmwareFile.toUpperCase() != "REPRAPFIRMWARE.BIN")
+	{
+		// The firmware filename is hardcoded in the IAP binary, so try to rename the uploaded file first
+		$.ajax("rr_move?old=" + encodeURIComponent("/sys/" + uploadFirmwareFile) + "&new=" + encodeURIComponent("/sys/RepRapFirmware.bin"), {
+			dataType: "json",
+			success: function(response) {
+				if (response.err == 0) {
+					// Rename succeeded and flashing can be performed now
+					sendGCode("M997");
+				} else {
+					// Looks like /sys/RepRapFirmware.bin already exists, attempt to delete it and try again
+					$.ajax("rr_delete?name=" + encodeURIComponent("/sys/RepRapFirmware.bin"), {
 						dataType: "json",
-						row: draggingObject,
 						success: function(response) {
 							if (response.err == 0) {
-								// Flashing can be performed now
-								sendGCode("M997");
+								// File delete succeeded, attempt to start the firmware update once again
+								startFirmwareUpdate();
 							} else {
 								// Something went wrong
-								showMessage("exclamation-sign", T("Error"), T("Could not rename firmware file!"), "md");
+								showMessage("danger", T("Error"), T("Could not rename firmware file!"));
 							}
 						}
 					});
 				}
-				else
-				{
-					// Filename is okay, start flashing immediately
-					sendGCode("M997");
-				}
-			});
-		}
+			}
+		});
+	}
+	else
+	{
+		// Filename is okay, start flashing immediately
+		sendGCode("M997");
 	}
 
-	// Start polling again
-	startUpdates();
 }
 
 /* Data helpers */
@@ -1817,7 +1852,7 @@ function translatePage() {
 			translateEntries(root, $("span, th, td, strong, dt, button"), "textContent");
 			translateEntries(root, $("h1, h4, label, a"), "textContent");
 			translateEntries(root, $("input[type='text']"), "placeholder");
-			translateEntries(root, $("a, abbr, button, label, #chart_temp, input"), "title");
+			translateEntries(root, $("a, abbr, button, label, #chart_temp, input, td"), "title");
 			translateEntries(root, $("img"), "alt");
 
 			$("#btn_language").data("language", settings.language).children("span:first-child").text(root.attributes["name"].value);
