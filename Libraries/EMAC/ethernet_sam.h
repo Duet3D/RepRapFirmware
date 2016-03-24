@@ -45,7 +45,6 @@
 #define ETHERNET_SAM_H_INCLUDED
 
 #include <lwip/src/include/lwip/netif.h>
-#include "emac.h"
 
 /// @cond 0
 /**INDENT-OFF**/
@@ -57,10 +56,16 @@ extern "C" {
 
 
 // Perform low-level initialisation of the network interface
-void init_ethernet(const uint8_t macAddress[], const char *hostname);
+void init_ethernet();
+
+// Configure the ethernet interface
+void ethernet_configure_interface(const u8_t macAddress[], const char *hostname);
 
 // Perform ethernet auto-negotiation and establish link. Returns true when ready
 bool ethernet_establish_link(void);
+
+// Is the link still up? Also updates the interface status if the link has gone down
+bool ethernet_link_established(void);
 
 // Initialise network interface and set network interface status callback
 void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[], netif_status_callback_fn status_cb);

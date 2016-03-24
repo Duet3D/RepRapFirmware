@@ -43,8 +43,8 @@
 #include "utility/dmac.h"
 
 // From module: FatFS file system
-#include "utility/diskio.h"
-#include "utility/ff.h"
+#include "../Fatfs/diskio.h"
+#include "../Fatfs/ff.h"
 
 
 // From module: Part identification macros

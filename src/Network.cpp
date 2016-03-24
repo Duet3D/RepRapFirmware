@@ -58,7 +58,7 @@ extern "C"
 }
 
 static volatile bool lwipLocked = false;
-static volatile bool hasLink = false;
+static bool ethernetStarted = false;
 
 static tcp_pcb *http_pcb = nullptr;
 static tcp_pcb *ftp_main_pcb = nullptr;
@@ -129,12 +129,15 @@ void UnlockLWIP()
 // Callback to report when the link has gone up or down
 static void ethernet_status_callback(struct netif *netif)
 {
-	hasLink = netif_is_up(netif);
-	if (hasLink)
+	if (netif_is_up(netif))
 	{
 		char ip[16];
 		ipaddr_ntoa_r(&(netif->ip_addr), ip, sizeof(ip));
 		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network up, IP=%s\n", ip);
+
+		// Do mDNS announcement here and not while the network is being initialised,
+		// because the IP address may not be assigned at that time
+		mdns_announce();
 	}
 	else
 	{
@@ -368,8 +371,8 @@ void telnetd_init()
 
 // Network/Ethernet class
 
-Network::Network(Platform* p)
-	: platform(p), freeTransactions(nullptr), readyTransactions(nullptr), writingTransactions(nullptr),
+Network::Network(Platform* p) :
+	platform(p), freeTransactions(nullptr), readyTransactions(nullptr), writingTransactions(nullptr),
 	state(NetworkInactive), isEnabled(true), resetCallback(false),
 	dataCs(nullptr), ftpCs(nullptr), telnetCs(nullptr), freeConnections(nullptr)
 {
@@ -390,22 +393,38 @@ Network::Network(Platform* p)
 
 void Network::Init()
 {
+	init_ethernet();
+
+	httpd_init();
+	ftpd_init();
+	telnetd_init();
+	netbios_init();
+
 	longWait = platform->Time();
-	state = NetworkPreInitializing;
 }
 
 void Network::Spin()
 {
 	// Basically we can't do anything if we can't interact with LWIP
 
-	if (!isEnabled || !LockLWIP())
+	if (!LockLWIP())
 	{
 		platform->ClassReport(longWait);
 		return;
 	}
 
-	if (state == NetworkActive && hasLink)
+	if (state == NetworkActive)
 	{
+		// Is the link still up?
+		if (!ethernet_link_established())
+		{
+			state = NetworkEstablishingLink;
+			UnlockLWIP();
+
+			platform->ClassReport(longWait);
+			return;
+		}
+
 		// See if we can read any packets
 		ethernet_task();
 		if (resetCallback)
@@ -443,20 +462,21 @@ void Network::Spin()
 			}
 		}
 	}
-	else if (state == NetworkPostInitializing && ethernet_establish_link())
+	else if (state == NetworkEstablishingLink && ethernet_establish_link())
 	{
-		start_ethernet(platform->IPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
-		ethernet_set_rx_callback(&ethernet_rx_callback);
+		if (!ethernetStarted)
+		{
+			start_ethernet(platform->IPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
+			ethernetStarted = true;
 
-		httpd_init();
-		ftpd_init();
-		telnetd_init();
-
-		netbios_init();
-		mdns_responder_init(mdns_services, ARRAY_SIZE(mdns_services), mdns_txt_records);
-		mdns_announce(); // NB: Wireless bridges like the TP-Link WR702N don't route incoming IGMP packets, so send an mDNS announcement as a fall-back option
-
-		state = isEnabled ? NetworkActive : NetworkInactive;
+			// Initialise this one here, because it requires a configured IGMP network interface
+			mdns_responder_init(mdns_services, ARRAY_SIZE(mdns_services), mdns_txt_records);
+		}
+		else
+		{
+			ethernet_set_configuration(platform->IPAddress(), platform->NetMask(), platform->GateWay());
+		}
+		state = NetworkActive;
 	}
 
 	UnlockLWIP();
@@ -465,7 +485,7 @@ void Network::Spin()
 
 void Network::Interrupt()
 {
-	if (isEnabled && state == NetworkActive && LockLWIP())
+	if (state != NetworkInactive && LockLWIP())
 	{
 		ethernet_timers_update();
 		UnlockLWIP();
@@ -495,7 +515,7 @@ void Network::Diagnostics()
 	platform->MessageF(GENERIC_MESSAGE, "Free transactions: %d of %d\n", numFreeTransactions, NETWORK_TRANSACTION_COUNT);
 
 #if LWIP_STATS
-	// Normally we should NOT try to display LWIP stats here, because it uses debugPrintf(), which will hang the system is no USB cable is connected.
+	// Normally we should NOT try to display LWIP stats here, because it uses debugPrintf(), which will hang the system if no USB cable is connected.
 	if (reprap.Debug(moduleNetwork))
 	{
 		stats_display();
@@ -720,9 +740,6 @@ void Network::SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], c
 	{
 		// This performs IP changes on-the-fly
 		ethernet_set_configuration(ipAddress, netmask, gateway);
-
-		// Announce mDNS services again
-		mdns_announce();
 	}
 }
 
@@ -762,43 +779,29 @@ void Network::SetHostname(const char *name)
 
 void Network::Enable()
 {
-	if (state == NetworkPreInitializing)
+	if (state == NetworkInactive)
 	{
-		// We must call this one only once, otherwise we risk a firmware crash
-		init_ethernet(platform->MACAddress(), hostname);
-		state = NetworkPostInitializing;
-	}
-
-	if (!isEnabled)
-	{
-		resetCallback = true;
-		isEnabled = true;
-		// EMAC RX callback will be reset on next Spin calls
-
-		if (state == NetworkInactive)
+		if (!ethernetStarted)
 		{
-			state = NetworkActive;
+			// Allow the MAC address to be set only before LwIP is started...
+			ethernet_configure_interface(platform->MACAddress(), hostname);
 		}
+
+		resetCallback = true;	// Reset EMAC RX callback on next Spin calls
+		state = NetworkEstablishingLink;
+		isEnabled = true;
 	}
 }
 
 void Network::Disable()
 {
-	if (isEnabled)
+	if (state != NetworkInactive)
 	{
 		resetCallback = false;
 		ethernet_set_rx_callback(nullptr);
-		if (state == NetworkActive)
-		{
-			state = NetworkInactive;
-		}
+		state = NetworkInactive;
 		isEnabled = false;
 	}
-}
-
-bool Network::IsEnabled() const
-{
-	return isEnabled;
 }
 
 // This is called by the web server to get a new received packet.

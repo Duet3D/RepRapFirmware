@@ -68,6 +68,8 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "ethernetif.h"
 
+#include "emac.h"
+
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
 
@@ -129,7 +131,7 @@ void ethernet_timers_update(void)
 
 //************************************************************************************************************
 
-// Added by AB.
+// Added by AB. This must be called only once!
 
 void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[], netif_status_callback_fn status_cb)
 {
@@ -140,14 +142,14 @@ void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const ui
 
 	if (x_ip_addr.addr == 0)
 	{
-		x_net_mask.addr = 0;	// not sure this is needed, but the demo program does it
+		x_net_mask.addr = 0;
+		x_gateway.addr = 0;
 	}
 	else
 	{
 		IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);			// set network mask
+		IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);			// set gateway
 	}
-
-	IP4_ADDR(&x_gateway, gateWay[0], gateWay[1], gateWay[2], gateWay[3]);				// set gateway
 
 	/* Add data to netif */
 	netif_add(&gs_net_if, &x_ip_addr, &x_net_mask, &x_gateway, NULL, ethernetif_init, ethernet_input);
@@ -174,6 +176,12 @@ void start_ethernet(const uint8_t ipAddress[], const uint8_t netMask[], const ui
 // This sets the IP configuration on-the-fly
 void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask[], const uint8_t gateWay[])
 {
+	if ((gs_net_if.flags & NETIF_FLAG_DHCP) != 0)
+	{
+		// stop DHCP if it was used before
+		dhcp_stop(&gs_net_if);
+	}
+
 	struct ip_addr x_ip_addr, x_net_mask, x_gateway;
 	IP4_ADDR(&x_ip_addr, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 	IP4_ADDR(&x_net_mask, netMask[0], netMask[1], netMask[2], netMask[3]);
@@ -181,60 +189,59 @@ void ethernet_set_configuration(const uint8_t ipAddress[], const uint8_t netMask
 
 	if (x_ip_addr.addr == 0)
 	{
+		// start DHCP and request a dynamic IP address
 		dhcp_start(&gs_net_if);
 	}
 	else
 	{
+		// use static IP address
 		netif_set_ipaddr(&gs_net_if, &x_ip_addr);
 		netif_set_netmask(&gs_net_if, &x_net_mask);
 		netif_set_gw(&gs_net_if, &x_gateway);
+
+		// don't forget to set it up again
+		netif_set_up(&gs_net_if);
 	}
 }
 
 /** \brief Initialize the Ethernet subsystem.
  *
  */
-void init_ethernet(const u8_t macAddress[], const char *hostname)
+void init_ethernet()
 {
+	ethernetif_hardware_init();
 	lwip_init();
-	ethernet_hardware_init();
+}
 
+/** \brief Configure the Ethernet subsystem. Should be called after init_ethernet()
+ *
+ */
+void ethernet_configure_interface(const u8_t macAddress[], const char *hostname)
+{
 	ethernetif_set_mac_address(macAddress);
 	netif_set_hostname(&gs_net_if, hostname);
 }
 
-/** \brief Try to establish a physical link at, returning true if successful.
+/* \brief Perform ethernet auto-negotiation and establish link. Returns true when ready
  *
  */
-bool establish_ethernet_link(void)
+bool ethernet_establish_link(void)
 {
-	return ethernet_establish_link();		// this is the one that takes a long time
+	return ethernetif_establish_link();
 }
 
-#if 0
-/**
- *  \brief Status callback used to print address given by DHCP.
+/* \brief Is the link still up? Also updates the interface status if the link has gone down
  *
- * \param netif Instance to network interface.
  */
-void ethernet_status_callback(struct netif *netif)
+bool ethernet_link_established(void)
 {
-	char c_mess[20];		// 15 for IP address, 2 for \n\n, 1 for null, so 2 spare
-	if (netif_is_up(netif))
+	if (!ethernetif_link_established())
 	{
-		RepRapNetworkMessage("Network up, IP=");
-		ipaddr_ntoa_r(&(netif->ip_addr), c_mess, sizeof(c_mess));
-		strncat(c_mess, "\n\n", sizeof(c_mess) - strlen(c_mess) - 1);
-		RepRapNetworkMessage(c_mess);
-		netif->flags |= NETIF_FLAG_LINK_UP;
-		net_if_ready = true;
+		netif_set_down(&gs_net_if);
+		return false;
 	}
-	else
-	{
-		RepRapNetworkMessage("Network down\n");
-	}
+	return true;
 }
-#endif
 
 /**
  *  \brief Manage the Ethernet packets, if any received process them.
@@ -261,14 +268,6 @@ void ethernet_task(void)
 void ethernet_set_rx_callback(emac_dev_tx_cb_t callback)
 {
 	ethernetif_set_rx_callback(callback);
-}
-
-/*
- * \brief Sets the network adapter's MAC address.
- */
-void ethernet_set_mac_address(const uint8_t macAddress[])
-{
-	ethernetif_set_mac_address(macAddress);
 }
 
 /*

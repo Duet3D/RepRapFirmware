@@ -446,6 +446,8 @@ static int parse_question(struct mdns_state *ms, struct udp_pcb *upcb,
     int qtype = (data[offset] << 8) | data[offset+1];
     offset += 2;
     int qclass = (data[offset] << 8) | data[offset+1];
+    (void)qclass;		// dc42 suppress 'unused' warning when debug is disabled
+
     offset += 2;
 
     LWIP_DEBUGF(MDNS_DEBUG | LWIP_DBG_STATE,

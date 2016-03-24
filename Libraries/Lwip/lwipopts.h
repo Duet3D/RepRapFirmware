@@ -249,6 +249,7 @@ a lot of data that needs to be copied, this should be set high. */
 #define LWIP_NOASSERT				0
 
 #ifdef LWIP_DEBUG
+#define DHCP_DEBUG					LWIP_DBG_ON
 #define ETHARP_DEBUG				LWIP_DBG_ON
 #define NETIF_DEBUG				 	LWIP_DBG_ON
 #define PBUF_DEBUG					LWIP_DBG_ON
@@ -276,6 +277,7 @@ a lot of data that needs to be copied, this should be set high. */
 #define TCPIP_DEBUG				 	LWIP_DBG_ON
 #define LWIP_DBG_MIN_LEVEL			LWIP_DBG_LEVEL_ALL
 #else
+#define DHCP_DEBUG					LWIP_DBG_OFF
 #define ETHARP_DEBUG				LWIP_DBG_ON
 #define NETIF_DEBUG				 	LWIP_DBG_ON
 #define PBUF_DEBUG					LWIP_DBG_ON

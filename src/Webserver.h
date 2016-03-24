@@ -30,17 +30,18 @@ Licence: GPL
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
+#include "lwipopts.h"
+
 /* Generic values */
 
 const size_t gcodeBufferLength = 512;			// size of our gcode ring buffer, preferably a power of 2
-const uint32_t processTimeout = 4000;			// how long a connection can block the webserver (in ms)
 
 /* HTTP */
 
 #define KO_START "rr_"
 #define KO_FIRST 3
 
-const uint16_t webMessageLength = 3000;			// maximum length of the web message we accept after decoding
+const uint16_t webMessageLength = TCP_MSS;		// maximum length of the web message we accept after decoding
 const size_t minHttpResponseSize = 768;			// minimum number of bytes required for an HTTP response
 
 const size_t maxCommandWords = 4;				// max number of space-separated words in the command
@@ -84,12 +85,11 @@ class ProtocolInterpreter
 		virtual void ConnectionEstablished();
 		virtual void ConnectionLost(const ConnectionState *cs) { }
 		virtual bool CharFromClient(const char c) = 0;
-		virtual void ResetState() = 0;
-		virtual bool NeedMoreData();
+		virtual void NoMoreDataAvailable() = 0;
 
 		virtual bool DoingFastUpload() const;
 		virtual void DoFastUpload();
-		void CancelUpload();								// may be called by ISR!
+		void CancelUpload();								// may be called from ISR!
 
 	protected:
 
@@ -105,7 +105,7 @@ class ProtocolInterpreter
 			uploadError										// upload in progress but had error
 		};
 
-		volatile UploadState uploadState;
+		UploadState uploadState;
 		FileData fileBeingUploaded;
 		char filenameBeingUploaded[FILENAME_LENGTH];
 
@@ -150,9 +150,9 @@ class Webserver
 			void Diagnostics();
 			void ConnectionLost(const ConnectionState *cs);
 			bool CharFromClient(const char c) override;
-			void ResetState() override;
+			void NoMoreDataAvailable() override;
+			void ResetState();
 			void ResetSessions();
-			bool NeedMoreData() override;
 
 			bool DoingFastUpload() const override;
 			void DoFastUpload();
@@ -186,7 +186,7 @@ class Webserver
 				doingHeaderValue,			// receiving a header value
 				doingHeaderContinuation		// received a newline after a header value
 			};
-			volatile HttpState state;
+			HttpState state;
 
 			struct KeyValueIndices
 			{
@@ -224,7 +224,7 @@ class Webserver
 			};
 
 			HttpSession sessions[maxHttpSessions];
-			volatile uint8_t numSessions;
+			uint8_t numSessions;
 			uint8_t clientsServed;
 
 			bool Authenticate();
@@ -250,7 +250,7 @@ class Webserver
 			uint32_t postFileLength, uploadedBytes;			// How many POST bytes do we expect and how many have already been written?
 
 			// Deferred requests (rr_fileinfo)
-			volatile bool processingDeferredRequest;		// Are we processing a transaction multiple times to retrieve information?
+			bool processingDeferredRequest;					// Are we processing a transaction multiple times to retrieve information?
 			ConnectionState *deferredRequestConnection;		// Which connection expects a response?
 			char filenameBeingProcessed[FILENAME_LENGTH];	// The filename being processed (for rr_fileinfo)
 
@@ -264,10 +264,12 @@ class Webserver
 
 			FtpInterpreter(Platform *p, Webserver *ws, Network *n);
 			void Diagnostics();
+
 			void ConnectionEstablished() override;
 			void ConnectionLost(const ConnectionState *cs) override;
 			bool CharFromClient(const char c) override;
-			void ResetState() override;
+			void NoMoreDataAvailable() override;
+			void ResetState();
 
 			bool DoingFastUpload() const override;
 
@@ -282,8 +284,8 @@ class Webserver
 				pasvPortConnected,		// client connected to PASV port, ready to send data
 				doingPasvIO				// client is connected and data is being transferred
 			};
-			volatile FtpState state;
-			volatile uint8_t connectedClients;
+			FtpState state;
+			uint8_t connectedClients;
 
 			char clientMessage[ftpMessageLength];
 			unsigned int clientPointer;
@@ -308,11 +310,12 @@ class Webserver
 
 			TelnetInterpreter(Platform *p, Webserver *ws, Network *n);
 			void Diagnostics();
+
 			void ConnectionEstablished() override;
 			void ConnectionLost(const ConnectionState *cs) override;
 			bool CharFromClient(const char c) override;
-			void ResetState() override;
-			bool NeedMoreData() override;
+			void NoMoreDataAvailable() override;
+			void ResetState();
 
 			bool GCodeAvailable() const;
 			char ReadGCode();
@@ -332,8 +335,8 @@ class Webserver
 				authenticating,			// not logged in
 				authenticated			// logged in
 			};
-			volatile TelnetState state;
-			volatile uint8_t connectedClients;
+			TelnetState state;
+			uint8_t connectedClients;
 			uint32_t connectTime;
 
 			char clientMessage[telnetMessageLength];
@@ -360,14 +363,11 @@ class Webserver
     Platform* platform;
     Network* network;
     bool webserverActive;
-	ConnectionState * volatile readingConnection;
-	uint32_t readingConnectionTimestamp;
 	NetworkTransaction *currentTransaction;
 
     float longWait;
 };
 
-inline bool ProtocolInterpreter::NeedMoreData()  { return true; }
 inline bool ProtocolInterpreter::DoingFastUpload() const { return false; }
 inline bool ProtocolInterpreter::IsUploading() const { return uploadState != notUploading; }
 
@@ -377,7 +377,6 @@ inline uint16_t Webserver::HttpInterpreter::GetGCodeBufferSpace() const { return
 inline bool Webserver::HttpInterpreter::GCodeAvailable() const { return gcodeReadIndex != gcodeWriteIndex; }
 inline uint32_t Webserver::HttpInterpreter::GetReplySeq() const { return seq; }
 
-inline bool Webserver::TelnetInterpreter::NeedMoreData() { return false; }	// We don't want a Telnet connection to block everything else
 inline uint16_t Webserver::TelnetInterpreter::GetGCodeBufferSpace() const { return (gcodeReadIndex - gcodeWriteIndex - 1u) % gcodeBufferLength; }
 inline bool Webserver::TelnetInterpreter::GCodeAvailable() const { return gcodeReadIndex != gcodeWriteIndex; }
 

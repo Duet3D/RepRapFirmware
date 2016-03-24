@@ -637,17 +637,11 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 	}
 	else if (IsPrinting())
 	{
-		if (!OutputBuffer::Allocate(response))
+		// If the file being printed hasn't been processed yet or if we
+		// cannot write the response, try again later
+		if (!printingFileParsed || !OutputBuffer::Allocate(response))
 		{
-			// Should never happen
 			return false;
-		}
-
-		// If we are still busy processing the file, return err code 2 so the web interface knows what's going on
-		if (!printingFileParsed)
-		{
-			response->copy("{\"err\":2}");
-			return true;
 		}
 
 		// Poll file info about a file currently being printed

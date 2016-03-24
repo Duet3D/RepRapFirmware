@@ -1022,6 +1022,7 @@ pbuf_coalesce(struct pbuf *p, pbuf_layer layer)
     return p;
   }
   err = pbuf_copy(q, p);
+  (void)err;				// dc42 suppress code analysis warning when debugging disabled
   LWIP_ASSERT("pbuf_copy failed", err == ERR_OK);
   pbuf_free(p);
   return q;

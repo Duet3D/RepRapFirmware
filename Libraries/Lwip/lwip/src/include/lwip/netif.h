@@ -298,8 +298,13 @@ void netif_set_link_callback(struct netif *netif, netif_status_callback_fn link_
 #endif /* LWIP_NETIF_LINK_CALLBACK */
 
 #if LWIP_NETIF_HOSTNAME
+#if 1	// dc42 change to avoid code analysis warnings
+inline void netif_set_hostname(struct netif *netif, const char *name) { if (netif != NULL) { netif->hostname = name; }}
+inline const char *netif_get_hostname(struct netif *netif) { return (netif != NULL) ? (netif->hostname) : NULL; }
+#else
 #define netif_set_hostname(netif, name) do { if((netif) != NULL) { (netif)->hostname = name; }}while(0)
 #define netif_get_hostname(netif) (((netif) != NULL) ? ((netif)->hostname) : NULL)
+#endif
 #endif /* LWIP_NETIF_HOSTNAME */
 
 #if LWIP_IGMP

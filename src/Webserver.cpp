@@ -91,8 +91,7 @@ const char* badEscapeResponse = "bad escape";
 
 
 // Constructor and initialisation
-Webserver::Webserver(Platform* p, Network *n) : platform(p), network(n), webserverActive(false),
-	readingConnection(nullptr), readingConnectionTimestamp(0)
+Webserver::Webserver(Platform* p, Network *n) : platform(p), network(n), webserverActive(false)
 {
 	httpInterpreter = new HttpInterpreter(p, this, n);
 	ftpInterpreter = new FtpInterpreter(p, this, n);
@@ -137,7 +136,7 @@ void Webserver::Spin()
 		telnetInterpreter->Spin();
 
 		// See if we have new data to process
-		currentTransaction = network->GetTransaction(readingConnection);
+		currentTransaction = network->GetTransaction();
 		if (currentTransaction != nullptr)
 		{
 			// Take care of different protocol types here
@@ -219,7 +218,6 @@ void Webserver::Spin()
 						// calling either Commit(), Discard() or Defer()
 						if (interpreter->CharFromClient(c))
 						{
-							readingConnection = nullptr;
 							break;
 						}
 					}
@@ -227,34 +225,12 @@ void Webserver::Spin()
 					{
 						// We ran out of data before finding a complete request.
 						// This happens when the incoming message length exceeds the TCP MSS.
-						// Check if we need to process another packet on the same connection.
-						if (interpreter->NeedMoreData())
-						{
-							readingConnection = currentTransaction->GetConnection();
-							readingConnectionTimestamp = millis();
-						}
-						else
-						{
-							readingConnection = nullptr;
-						}
-
-						currentTransaction->Discard();
+						// Notify the current ProtocolInterpreter about this
+						interpreter->NoMoreDataAvailable();
 						break;
 					}
 				}
 			}
-			// else the HTTP server is not ready
-		}
-		else if (readingConnection != nullptr && millis() - readingConnectionTimestamp > processTimeout)
-		{
-			if (reprap.Debug(moduleWebserver))
-			{
-				platform->MessageF(HOST_MESSAGE, "Timing out connection at local port %d (remote port %d)\n",
-						readingConnection->GetLocalPort(), readingConnection->GetRemotePort());
-			}
-
-			// If the reading connection blocks too long, reset it. The connection closed handler will do everything else
-			readingConnection->Terminate();
 		}
 		network->Unlock();		// unlock LWIP again
 	}
@@ -388,12 +364,6 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 		platform->MessageF(HOST_MESSAGE, "ConnectionLost called for local port %d (remote port %d)\n", localPort, cs->GetRemotePort());
 	}
 	interpreter->ConnectionLost(cs);
-
-	// If our reading connection is lost, it will be no longer important which connection is read from first.
-	if (cs == readingConnection)
-	{
-		readingConnection = nullptr;
-	}
 }
 
 
@@ -1097,15 +1067,9 @@ void Webserver::HttpInterpreter::ResetState()
 	commandWords[0] = clientMessage;
 }
 
-bool Webserver::HttpInterpreter::NeedMoreData()
+void Webserver::HttpInterpreter::NoMoreDataAvailable()
 {
-	if (!IsAuthenticated() && (numCommandWords == 0 || !StringEquals(commandWords[0], "connect")))
-	{
-		// It makes very little sense to allow unknown connections to block our HTTP reader
-		ResetState();
-		return false;
-	}
-	return true;
+	RejectMessage("Incomplete or too long HTTP request", 500);
 }
 
 // May be called from ISR!
@@ -1120,12 +1084,6 @@ void Webserver::HttpInterpreter::ConnectionLost(const ConnectionState *cs)
 			reprap.GetPrintMonitor()->StopParsing(filenameBeingProcessed);
 		}
 		processingDeferredRequest = false;
-	}
-
-	// If the connection was lost before the request could be parsed, reset our state here
-	if (webserver->readingConnection == cs)
-	{
-		ResetState();
 	}
 
 	// Deal with aborted POST uploads. Note that we also check the remote port here,
@@ -1996,6 +1954,12 @@ void Webserver::FtpInterpreter::ResetState()
 	state = idle;
 }
 
+void Webserver::FtpInterpreter::NoMoreDataAvailable()
+{
+	clientPointer = 0;
+	SendReply(422, "Incomplete or too long request", true);
+}
+
 bool Webserver::FtpInterpreter::DoingFastUpload() const
 {
 	return (IsUploading() && webserver->currentTransaction->GetLocalPort() == network->GetDataPort());
@@ -2606,6 +2570,15 @@ void Webserver::TelnetInterpreter::ResetState()
 	state = idle;
 	connectTime = 0;
 	clientPointer = 0;
+}
+
+void Webserver::TelnetInterpreter::NoMoreDataAvailable()
+{
+	clientPointer = 0;
+
+	NetworkTransaction *transaction = webserver->currentTransaction;
+	transaction->Write("Invalid or too long request\r\n");
+	transaction->Commit(true);
 }
 
 void Webserver::TelnetInterpreter::ProcessLine()
