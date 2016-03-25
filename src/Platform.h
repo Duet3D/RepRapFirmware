@@ -46,6 +46,7 @@ Licence: GPL
 
 #include "Arduino.h"
 #include "OutputMemory.h"
+#include "ff.h"
 #include "SD_HSMCI.h"
 #include "MAX31855.h"
 #include "MCP4461.h"

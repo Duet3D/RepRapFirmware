@@ -356,6 +356,7 @@ void GCodes::Spin()
 			moveBuffer.feedRate = DEFAULT_FEEDRATE/minutesToSeconds;	// ask for a good feed rate, we may have paused during a slow move
 			moveBuffer.moveType = 0;
 			moveBuffer.endStopsToCheck = 0;
+			moveBuffer.usePressureAdvance = false;
 			moveBuffer.filePos = noFilePosition;
 			if (state == GCodeState::resuming1 && currentZ > pausedMoveBuffer[Z_AXIS])
 			{
@@ -826,9 +827,15 @@ int GCodes::SetUpMove(GCodeBuffer *gb, StringRef& reply)
 	}
 
 	// Load the move buffer with either the absolute movement required or the relative movement required
+	const float currentX = moveBuffer.coords[X_AXIS];
+	const float currentY = moveBuffer.coords[Y_AXIS];
 	moveAvailable = LoadMoveBufferFromGCode(gb, false, limitAxes && moveBuffer.moveType == 0);
 	if (moveAvailable)
 	{
+		// Flag whether we should use pressure advance, if there is any extrusion in this move.
+		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XY movement.
+		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XY movement here.
+		moveBuffer.usePressureAdvance = (moveBuffer.coords[X_AXIS] != currentX || moveBuffer.coords[Y_AXIS] != currentY);
 		moveBuffer.filePos = (gb == fileGCode) ? filePos : noFilePosition;
 		//debugPrintf("Queue move pos %u\n", moveFilePos);
 	}
@@ -918,8 +925,9 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 		moveBuffer.feedRate = moveToDo[DRIVES];
 		moveBuffer.endStopsToCheck = ce;
 		moveBuffer.filePos = noFilePosition;
-		cannedCycleMoveQueued = true;
+		moveBuffer.usePressureAdvance = false;
 		moveAvailable = true;
+		cannedCycleMoveQueued = true;
 	}
 	return false;
 }
@@ -2334,7 +2342,10 @@ bool GCodes::RetractFilament(bool retract)
 				{
 					moveBuffer.coords[i] = 0.0;
 				}
-				moveBuffer.feedRate = retractSpeed * secondsToMinutes;		// set the feed rate
+				// Set the feed rate. If there is any Z hop then we need to pass the Z speed, else we pass the extrusion speed.
+				moveBuffer.feedRate = (retractHop == 0.0)
+										? retractSpeed * secondsToMinutes
+										: retractSpeed * secondsToMinutes * retractHop/retractLength;
 				moveBuffer.coords[Z_AXIS] += ((retract) ? retractHop : -retractHop);
 				for (size_t i = 0; i < nDrives; ++i)
 				{
@@ -2342,6 +2353,7 @@ bool GCodes::RetractFilament(bool retract)
 				}
 
 				moveBuffer.isFirmwareRetraction = true;
+				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = filePos;
 				moveAvailable = true;
 			}
@@ -2422,6 +2434,7 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 				moveBuffer.feedRate = (gb->Seen(feedrateLetter)) ? gb->GetFValue() : feedRate;
 			}
 			moveBuffer.filePos = noFilePosition;
+			moveBuffer.usePressureAdvance = false;
 			moveAvailable = true;
 		}
 		else
@@ -4598,7 +4611,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Elastic compensation for extruder %u is %.3f seconds", extruder, platform->GetElasticComp(extruder));
+				reply.printf("Pressure advance for extruder %u is %.3f seconds", extruder, platform->GetElasticComp(extruder));
 			}
 		}
 		break;

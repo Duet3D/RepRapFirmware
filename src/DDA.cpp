@@ -80,14 +80,14 @@ void DDA::Init()
 }
 
 // Set up a real move. Return true if it represents real movement, else false.
-bool DDA::Init(const float nextMove[], float reqSpeed, EndstopChecks ce, bool doMotorMapping, FilePosition fPos)
+bool DDA::Init(const GCodes::RawMove *nextMove, bool doMotorMapping)
 {
 	// 1. Compute the new endpoints and the movement vector
 	const int32_t *positionNow = prev->DriveCoordinates();
 	const Move *move = reprap.GetMove();
 	if (doMotorMapping)
 	{
-		move->MotorTransform(nextMove, endPoint);			// transform the axis coordinates if on a delta or CoreXY printer
+		move->MotorTransform(nextMove->coords, endPoint);			// transform the axis coordinates if on a delta or CoreXY printer
 		isDeltaMovement = move->IsDeltaMode()
 							&& (endPoint[X_AXIS] != positionNow[X_AXIS] || endPoint[Y_AXIS] != positionNow[Y_AXIS] || endPoint[Z_AXIS] != positionNow[Z_AXIS]);
 	}
@@ -106,13 +106,13 @@ bool DDA::Init(const float nextMove[], float reqSpeed, EndstopChecks ce, bool do
 		accelerations[drive] = normalAccelerations[drive];
 		if (drive >= AXES || !doMotorMapping)
 		{
-			endPoint[drive] = Move::MotorEndPointToMachine(drive, nextMove[drive]);
+			endPoint[drive] = Move::MotorEndPointToMachine(drive, nextMove->coords[drive]);
 		}
 
 		int32_t delta;
 		if (drive < AXES)
 		{
-			endCoordinates[drive] = nextMove[drive];
+			endCoordinates[drive] = nextMove->coords[drive];
 			delta = endPoint[drive] - positionNow[drive];
 		}
 		else
@@ -123,7 +123,7 @@ bool DDA::Init(const float nextMove[], float reqSpeed, EndstopChecks ce, bool do
 		DriveMovement& dm = ddm[drive];
 		if (drive < AXES && !isSpecialDeltaMove)
 		{
-			directionVector[drive] = nextMove[drive] - prev->GetEndCoordinate(drive, false);
+			directionVector[drive] = nextMove->coords[drive] - prev->GetEndCoordinate(drive, false);
 			dm.state = (isDeltaMovement || delta != 0)
 						? DMState::moving				// on a delta printer, if one tower moves then we assume they all do
 						: DMState::idle;
@@ -168,10 +168,12 @@ bool DDA::Init(const float nextMove[], float reqSpeed, EndstopChecks ce, bool do
 	}
 
 	// 3. Store some values
-	endStopsToCheck = ce;
-	filePos = fPos;
+	endStopsToCheck = nextMove->endStopsToCheck;
+	filePos = nextMove->filePos;
+	usePressureAdvance = nextMove->usePressureAdvance;
+
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a special move on a delta printer
-	endCoordinatesValid = (ce == 0) && (doMotorMapping || !move->IsDeltaMode());
+	endCoordinatesValid = (endStopsToCheck == 0) && (doMotorMapping || !move->IsDeltaMode());
 
 	// 4. Normalise the direction vector and compute the amount of motion.
 	// If there is any XYZ movement, then we normalise it so that the total XYZ movement has unit length.
@@ -269,6 +271,7 @@ bool DDA::Init(const float nextMove[], float reqSpeed, EndstopChecks ce, bool do
 
 	// Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
+	float reqSpeed = nextMove->feedRate;
 	if (isSpecialDeltaMove)
 	{
 		// Special case of a raw or homing move on a delta printer
@@ -604,7 +607,6 @@ void DDA::Prepare()
 
 	goingSlow = false;
 	firstDM = nullptr;
-	bool xyMoving = false;
 
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
@@ -615,7 +617,7 @@ void DDA::Prepare()
 			reprap.GetPlatform()->EnableDrive(drive);
 			if (drive >= AXES)
 			{
-				dm.PrepareExtruder(*this, params, drive, xyMoving);
+				dm.PrepareExtruder(*this, params, drive, usePressureAdvance);
 
 				// Check for sensible values, print them if they look dubious
 				if (reprap.Debug(moduleDda)
@@ -631,10 +633,6 @@ void DDA::Prepare()
 			}
 			else if (isDeltaMovement)
 			{
-				if (drive <= Z_AXIS)
-				{
-					xyMoving = true;
-				}
 				dm.PrepareDeltaAxis(*this, params, drive);
 
 				// Check for sensible values, print them if they look dubious
@@ -645,10 +643,6 @@ void DDA::Prepare()
 			}
 			else
 			{
-				if (drive < Z_AXIS)
-				{
-					xyMoving = true;
-				}
 				dm.PrepareCartesianAxis(*this, params, drive);
 
 				// Check for sensible values, print them if they look dubious

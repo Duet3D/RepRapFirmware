@@ -190,7 +190,7 @@ void Move::Spin()
 				{
 					Transform(nextMove.coords);
 				}
-				if (ddaRingAddPointer->Init(nextMove.coords, nextMove.feedRate, nextMove.endStopsToCheck, doMotorMapping, nextMove.filePos))
+				if (ddaRingAddPointer->Init(&nextMove, doMotorMapping))
 				{
 					ddaRingAddPointer = ddaRingAddPointer->GetNext();
 					idleCount = 0;

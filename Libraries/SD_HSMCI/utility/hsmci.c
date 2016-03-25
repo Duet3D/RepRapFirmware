@@ -48,6 +48,7 @@
 #include "sd_mmc_protocol.h"
 #include "pmc.h"
 #include "hsmci.h"
+#include "part.h"
 
 /**
  * \ingroup sam_drivers_hsmci

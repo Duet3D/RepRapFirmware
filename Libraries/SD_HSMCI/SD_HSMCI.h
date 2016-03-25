@@ -30,7 +30,6 @@
 #include "utility/conf_access.h"
 #include "utility/ctrl_access.h"
 
-
 // From module: SD/MMC stack on Multimedia Card interface
 #include "utility/sd_mmc_mem.h"
 #include "utility/sd_mmc.h"
@@ -38,25 +37,6 @@
 
 // From module: High Speed Multimedia Card Interface
 #include "utility/hsmci.h"
-
-// From module: DMAC - DMAC Controller
-#include "utility/dmac.h"
-
-// From module: FatFS file system
-#include "../Fatfs/diskio.h"
-#include "../Fatfs/ff.h"
-
-
-// From module: Part identification macros
-#include "sam.h"
-
-#ifdef __SAM3X8E__
-#define SAM3XE	(1)
-#endif
-
-// From module: RTC - Real Time Clock
-// Does not work right now
-#include "utility/rtc.h"
 
 /** Enable SD MMC interface pins through HSMCI */
 #define CONF_BOARD_SD_MMC_HSMCI

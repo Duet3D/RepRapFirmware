@@ -30,8 +30,7 @@ public:
 
 	DDA(DDA* n);
 
-	bool Init(const float nextMove[], float reqSpeed, EndstopChecks ce,
-			bool doMotorMapping, FilePosition fPos);				// Set up a new move, returning true if it represents real movement
+	bool Init(const GCodes::RawMove *nextMove, bool doMotorMapping);	// Set up a new move, returning true if it represents real movement
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim);										// Start executing the DDA, i.e. move the move.
 	bool Step();													// Take one step of the DDA, called by timed interrupt.
@@ -99,9 +98,9 @@ private:
 	uint8_t canPause : 1;					// True if we can pause at the end of this move
 	uint8_t goingSlow : 1;					// True if we have reduced speed during homing
 	uint8_t isPrintingMove : 1;				// True if this move includes XY movement and extrusion
+	uint8_t usePressureAdvance : 1;			// True if pressure advance should be applied to any forward extrusion
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
-    // We are on a half-word boundary here, so expect 2 bytes of padding to be inserted at this point
 
     FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read fro SD card
 
