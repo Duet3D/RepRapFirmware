@@ -57,6 +57,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>			// for strtol
 
 
 #ifndef ip_set_option

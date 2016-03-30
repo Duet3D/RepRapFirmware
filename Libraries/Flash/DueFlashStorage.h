@@ -17,7 +17,6 @@ Further modified up by David Crocker
 
 #include <Arduino.h>
 #include "flash_efc.h"
-#include "efc.h"
 
 // 1Kb of data
 #define FLASH_DATA_LENGTH   ((IFLASH1_PAGE_SIZE/sizeof(byte))*4)

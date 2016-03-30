@@ -47,7 +47,6 @@ Licence: GPL
 #include "Arduino.h"
 #include "OutputMemory.h"
 #include "ff.h"
-#include "SD_HSMCI.h"
 #include "MAX31855.h"
 #include "MCP4461.h"
 #include "MassStorage.h"
@@ -829,15 +828,15 @@ private:
 	// checking has already been performed.
 
 	uint8_t heaterTempChannels[HEATERS];
-	adc_channel_num_t thermistorAdcChannels[HEATERS];
-	adc_channel_num_t zProbeAdcChannel;
+	EAnalogChannel thermistorAdcChannels[HEATERS];
+	EAnalogChannel zProbeAdcChannel;
 	uint32_t thermistorOverheatSums[HEATERS];
 	uint8_t tickState;
 	size_t currentHeater;
 	int debugCode;
 
-	static uint16_t GetAdcReading(adc_channel_num_t chan);
-	static void StartAdcConversion(adc_channel_num_t chan);
+	static uint16_t GetAdcReading(EAnalogChannel chan);
+	static void StartAdcConversion(EAnalogChannel chan);
 
 	// Hotend configuration
 	float filamentWidth;
@@ -1278,13 +1277,12 @@ inline MassStorage* Platform::GetMassStorage() const
 
 /*static*/ inline void Platform::EnableWatchdog()
 {
-	const uint32_t wdtTicks = 256;	// number of watchdog ticks @ 32768Hz/128 before the watchdog times out (max 4095)
-	WDT_Enable(WDT, (wdtTicks << WDT_MR_WDV_Pos) | (wdtTicks << WDT_MR_WDD_Pos) | WDT_MR_WDRSTEN);	// enable watchdog, reset the mcu if it times out
+	watchdogEnable(1000);
 }
 
 /*static*/ inline void Platform::KickWatchdog()
 {
-	WDT_Restart(WDT);
+	watchdogReset();
 }
 
 //***************************************************************************************

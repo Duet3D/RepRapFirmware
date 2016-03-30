@@ -23,14 +23,18 @@ Licence: GPL
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
+#ifdef CORE_NG
+#define NAME "RepRapFirmware (CoreNG)"
+#else
 #define NAME "RepRapFirmware"
+#endif
 
 #ifndef VERSION
-#define VERSION "1.10+1"
+#define VERSION "1.10+3"
 #endif
 
 #ifndef DATE
-#define DATE "2016-03-25"
+#define DATE "2016-03-30"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"

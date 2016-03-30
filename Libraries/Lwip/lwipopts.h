@@ -48,7 +48,6 @@
 #define __LWIPOPTS_H__
 
 /* Include user defined options first */
-#include "conf_eth.h"
 #include "WMath.h"
 
 /* Uncomment the following line to enable LWIP debugging */
@@ -96,7 +95,13 @@ a lot of data that needs to be copied, this should be set high. */
 
 /* --------- IGMP options ---------- */
 #define LWIP_IGMP					1
-#define LWIP_RAND					trueRandom
+
+#ifdef __SAM3X8E__
+# define LWIP_RAND					trueRandom
+#else
+# define LWIP_RAND					random
+#endif
+
 #define SO_REUSE					1
 
 

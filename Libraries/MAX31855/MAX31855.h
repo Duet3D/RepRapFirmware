@@ -2,7 +2,7 @@
 #define MAX31855_H
 
 #include "Arduino.h"
-#include "../SPI/spi_master.h"
+#include "spi_master.h"
 
 enum MAX31855_error {
 	MAX31855_OK      = 0,  // Success
@@ -22,7 +22,7 @@ public:
 	const char* errorStr(MAX31855_error err) const;
 
 private:
-	status_code readRaw(uint16_t *r) const;
+	spi_status_t readRaw(uint16_t *r) const;
 	bool initialized;
 	struct spi_device device;
 };

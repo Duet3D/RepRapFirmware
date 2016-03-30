@@ -1,4 +1,5 @@
 #include "RepRapFirmware.h"
+#include "sd_mmc.h"
 
 MassStorage::MassStorage(Platform* p) : platform(p)
 {
@@ -14,12 +15,12 @@ void MassStorage::Init()
 	sd_mmc_err_t err;
 	do {
 		err = sd_mmc_check(0);
-		delay_ms(1);
+		delay(1);
 	} while (err != SD_MMC_OK && millis() - startTime < 5000);
 
 	if (err != SD_MMC_OK)
 	{
-		delay_ms(3000);		// Wait a few seconds so users have a chance to see this
+		delay(3000);		// Wait a few seconds so users have a chance to see this
 
 		platform->Message(HOST_MESSAGE, "Cannot initialise the SD card: ");
 		switch (err)

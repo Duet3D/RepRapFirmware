@@ -60,12 +60,24 @@ void setup()
 		*heapend++ = memPattern;
 	}
 
+#if 0
+	watchdogDisable();
+	pinMode(39, OUTPUT);
+#else
 	reprap.Init();
+#endif
 }
 
 void loop()
 {
+#if 0
+	digitalWrite(39, HIGH);
+	delay(500);
+	digitalWrite(39, LOW);
+	delay(500);
+#else
 	reprap.Spin();
+#endif
 }
 
 extern "C"
@@ -709,6 +721,10 @@ void Platform::UpdateFirmware()
 
 	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
 	// Leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
+#if !defined(IFLASH_PAGE_SIZE) && defined(IFLASH0_PAGE_SIZE)
+# define IFLASH_PAGE_SIZE	IFLASH0_PAGE_SIZE
+#endif
+
 	char data[IFLASH_PAGE_SIZE];
 	int bytesRead;
 	for(uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
@@ -980,25 +996,11 @@ void Platform::Spin()
 	ClassReport(longWait);
 }
 
-// Switch into boot mode and reset
-static void eraseAndReset()
-{
-	cpu_irq_disable();
-    for(size_t i = 0; i <= (IFLASH_LAST_PAGE_ADDRESS - IFLASH_ADDR) / IFLASH_PAGE_SIZE; i++)
-    {
-        size_t pageStartAddr = IFLASH_ADDR + i * IFLASH_PAGE_SIZE;
-        flash_unlock(pageStartAddr, pageStartAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-    }
-	flash_clear_gpnvm(1);			// tell the system to boot from ROM next time
-	rstc_start_software_reset(RSTC);
-	for(;;) {}
-}
-
 void Platform::SoftwareReset(uint16_t reason)
 {
 	if (reason == (uint16_t)SoftwareResetReason::erase)
 	{
-		eraseAndReset();
+		EraseAndReset();
  	}
 	else
 	{
@@ -1033,7 +1035,7 @@ void Platform::SoftwareReset(uint16_t reason)
 		// Save diagnostics data to Flash and reset the software
 		DueFlashStorage::write(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
 	}
-	rstc_start_software_reset(RSTC);
+	Reset();
 	for(;;) {}
 }
 
@@ -1041,6 +1043,18 @@ void Platform::SoftwareReset(uint16_t reason)
 //*****************************************************************************************************************
 
 // Interrupts
+
+#ifdef CORE_NG
+# include "sam/drivers/tc/tc.h"
+
+# define TC_GetStatus(_a, _b)		tc_get_status(_a, _b)
+# define TC_Configure(_a, _b, _c)	tc_init(_a, _b, _c)
+# define TC_Start(_a, _b)			tc_start(_a, _b)
+# define TC_SetRA(_a, _b, _c)		tc_write_ra(_a, _b, _c)
+# define TC_SetRB(_a, _b, _c)		tc_write_rb(_a, _b, _c)
+# define TC_SetRC(_a, _b, _c)		tc_write_rc(_a, _b, _c)
+# define TC_ReadCV(_a, _b)			tc_read_cv(_a, _b)
+#endif
 
 void TC3_Handler()
 {
@@ -2518,16 +2532,16 @@ void Platform::Tick()
 #endif
 }
 
-/*static*/ uint16_t Platform::GetAdcReading(adc_channel_num_t chan)
+/*static*/ uint16_t Platform::GetAdcReading(EAnalogChannel chan)
 {
-	uint16_t rslt = (uint16_t) adc_get_channel_value(ADC, chan);
-	adc_disable_channel(ADC, chan);
+	uint16_t rslt = (uint16_t) adc_get_channel_value(ADC, (adc_channel_num_t)(int)chan);
+	adc_disable_channel(ADC, (adc_channel_num_t)(int)chan);
 	return rslt;
 }
 
-/*static*/ void Platform::StartAdcConversion(adc_channel_num_t chan)
+/*static*/ void Platform::StartAdcConversion(EAnalogChannel chan)
 {
-	adc_enable_channel(ADC, chan);
+	adc_enable_channel(ADC, (adc_channel_num_t)(int)chan);
 	adc_start(ADC );
 }
 

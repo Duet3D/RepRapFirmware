@@ -44,7 +44,8 @@
 #ifndef ETHERNET_SAM_H_INCLUDED
 #define ETHERNET_SAM_H_INCLUDED
 
-#include <lwip/src/include/lwip/netif.h>
+#include "lwip/src/include/lwip/netif.h"
+#include "emac.h"							// for emac_dev_tx_cb_t
 
 /// @cond 0
 /**INDENT-OFF**/
