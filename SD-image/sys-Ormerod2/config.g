@@ -14,6 +14,7 @@ G21                                 ; Work in millimetres
 G90                                 ; Send absolute coordinates...
 M83                                 ; ...but relative extruder moves
 M574 X0 Y1 Z0 S1					; set endstop configuration (Y endstop only, at low end, active high)
+M92 X87.4890 Y87.4890 Z4000			; Set axis steps/mm
 M906 X800 Y1000 Z800 E800           ; Set motor currents (mA)
 M563 P0 D0 H1                       ; Define tool 0
 G10 P0 S0 R0                        ; Set tool 0 operating and standby temperatures

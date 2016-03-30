@@ -14,6 +14,7 @@ M83									; ...but relative extruder moves
 M574 X0 Y1 Z0 S1					; set endstop configuration (Y endstop only, at low end, active high)
 M569 P0 S1							; Reverse the X motor
 M569 P3 S0							; Don't reverse the extruder motor
+M92 X87.4890 Y87.4890 Z4000			; Set axis steps/mm
 M906 X600 Y600 Z600 E600			; Set motor currents (mA)
 M305 P0 T100000 R4700               ; bed thermistor is 100K with 4K7 series resistor
 M305 P1 R4700                       ; first nozzle thermistor has 4K7 series resistor
