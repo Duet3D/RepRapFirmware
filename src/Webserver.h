@@ -85,7 +85,7 @@ class ProtocolInterpreter
 		virtual void ConnectionEstablished();
 		virtual void ConnectionLost(const ConnectionState *cs) { }
 		virtual bool CharFromClient(const char c) = 0;
-		virtual void NoMoreDataAvailable() = 0;
+		virtual void NoMoreDataAvailable();
 
 		virtual bool DoingFastUpload() const;
 		virtual void DoFastUpload();
@@ -250,8 +250,7 @@ class Webserver
 			uint32_t postFileLength, uploadedBytes;			// How many POST bytes do we expect and how many have already been written?
 
 			// Deferred requests (rr_fileinfo)
-			bool processingDeferredRequest;					// Are we processing a transaction multiple times to retrieve information?
-			ConnectionState *deferredRequestConnection;		// Which connection expects a response?
+			ConnectionState * volatile deferredRequestConnection;	// Which connection expects a response for a deferred request?
 			char filenameBeingProcessed[FILENAME_LENGTH];	// The filename being processed (for rr_fileinfo)
 
 			void ProcessDeferredRequest();
@@ -268,7 +267,6 @@ class Webserver
 			void ConnectionEstablished() override;
 			void ConnectionLost(const ConnectionState *cs) override;
 			bool CharFromClient(const char c) override;
-			void NoMoreDataAvailable() override;
 			void ResetState();
 
 			bool DoingFastUpload() const override;
@@ -314,7 +312,6 @@ class Webserver
 			void ConnectionEstablished() override;
 			void ConnectionLost(const ConnectionState *cs) override;
 			bool CharFromClient(const char c) override;
-			void NoMoreDataAvailable() override;
 			void ResetState();
 
 			bool GCodeAvailable() const;
@@ -364,6 +361,7 @@ class Webserver
     Network* network;
     bool webserverActive;
 	NetworkTransaction *currentTransaction;
+	ConnectionState * volatile readingConnection;
 
     float longWait;
 };

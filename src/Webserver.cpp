@@ -89,7 +89,6 @@ const char* badEscapeResponse = "bad escape";
 //********************************************************************************************
 
 
-
 // Constructor and initialisation
 Webserver::Webserver(Platform* p, Network *n) : platform(p), network(n), webserverActive(false)
 {
@@ -103,13 +102,13 @@ void Webserver::Init()
 	// initialise the webserver class
 	longWait = platform->Time();
 	webserverActive = true;
+	readingConnection = nullptr;
 
 	// initialise all protocol handlers
 	httpInterpreter->ResetState();
 	ftpInterpreter->ResetState();
 	telnetInterpreter->ResetState();
 }
-
 
 // Deal with input/output from/to the client (if any)
 void Webserver::Spin()
@@ -136,7 +135,7 @@ void Webserver::Spin()
 		telnetInterpreter->Spin();
 
 		// See if we have new data to process
-		currentTransaction = network->GetTransaction();
+		currentTransaction = network->GetTransaction(readingConnection);
 		if (currentTransaction != nullptr)
 		{
 			// Take care of different protocol types here
@@ -209,7 +208,8 @@ void Webserver::Spin()
 			// Process other messages (if we can)
 			else if (interpreter != httpInterpreter || httpInterpreter->IsReady())
 			{
-				for(size_t i = 0; i < 500; i++)
+				readingConnection = currentTransaction->GetConnection();
+				for(size_t i = 0; i < TCP_MSS / 3; i++)
 				{
 					char c;
 					if (currentTransaction->Read(c))
@@ -218,19 +218,28 @@ void Webserver::Spin()
 						// calling either Commit(), Discard() or Defer()
 						if (interpreter->CharFromClient(c))
 						{
+							readingConnection = nullptr;
 							break;
 						}
 					}
 					else
 					{
-						// We ran out of data before finding a complete request.
-						// This happens when the incoming message length exceeds the TCP MSS.
-						// Notify the current ProtocolInterpreter about this
+						// We ran out of data before finding a complete request. This happens when the incoming
+						// message length exceeds the TCP MSS. Notify the current ProtocolInterpreter about this,
+						// which will remove the current transaction too
 						interpreter->NoMoreDataAvailable();
+						readingConnection = nullptr;
 						break;
 					}
 				}
 			}
+		}
+		else if (readingConnection != nullptr)
+		{
+			// We failed to find a transaction for a reading connection.
+			// This should never happen, but if it does, terminate this connection instantly
+			platform->Message(HOST_MESSAGE, "Error: Transaction for reading connection not found\n");
+			readingConnection->Terminate();
 		}
 		network->Unlock();		// unlock LWIP again
 	}
@@ -364,6 +373,12 @@ void Webserver::ConnectionLost(const ConnectionState *cs)
 		platform->MessageF(HOST_MESSAGE, "ConnectionLost called for local port %d (remote port %d)\n", localPort, cs->GetRemotePort());
 	}
 	interpreter->ConnectionLost(cs);
+
+	// Don't process any more data from this connection if has gone down
+	if (readingConnection == cs)
+	{
+		readingConnection = nullptr;
+	}
 }
 
 
@@ -402,6 +417,13 @@ void ProtocolInterpreter::Spin()
 void ProtocolInterpreter::ConnectionEstablished()
 {
 	// Don't care about incoming connections by default
+	webserver->currentTransaction->Discard();
+}
+
+void ProtocolInterpreter::NoMoreDataAvailable()
+{
+	// Request is not complete yet, but don't care. Interpreters that do not explicitly
+	// overwrite this method don't support more than one connected client anyway
 	webserver->currentTransaction->Discard();
 }
 
@@ -514,7 +536,7 @@ Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws, Network 
 {
 	gcodeReadIndex = gcodeWriteIndex = 0;
 	gcodeReply = new OutputStack();
-	processingDeferredRequest = false;
+	deferredRequestConnection = nullptr;
 	seq = 0;
 }
 
@@ -877,11 +899,12 @@ bool Webserver::HttpInterpreter::IsReady()
 	}
 
 	// Are we still processing a deferred request?
-	if (processingDeferredRequest && deferredRequestConnection == webserver->currentTransaction->GetConnection())
+	if (deferredRequestConnection == webserver->currentTransaction->GetConnection())
 	{
 		if (deferredRequestConnection->IsConnected())
 		{
-			// Process more of this request
+			// Process more of this request. If it doesn't finish this time, it will be appended to the list
+			// of ready transactions again, which will ensure it can be processed later again
 			ProcessDeferredRequest();
 		}
 		else
@@ -997,9 +1020,9 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		}
 		else if (StringEquals(request, "fileinfo"))
 		{
-			if (processingDeferredRequest)
+			if (deferredRequestConnection != nullptr)
 			{
-				// Don't allow multiple requests to be processed at once
+				// Don't allow multiple deferred requests to be processed at once
 				webserver->currentTransaction->Defer(true);
 			}
 			else
@@ -1076,14 +1099,16 @@ void Webserver::HttpInterpreter::NoMoreDataAvailable()
 void Webserver::HttpInterpreter::ConnectionLost(const ConnectionState *cs)
 {
 	// Make sure deferred requests are cancelled
-	if (processingDeferredRequest && deferredRequestConnection == cs)
+	if (deferredRequestConnection == cs)
 	{
-		if (filenameBeingProcessed[0] != 0)
-		{
-			// Only stop the parsing process if the filename is valid
-			reprap.GetPrintMonitor()->StopParsing(filenameBeingProcessed);
-		}
-		processingDeferredRequest = false;
+		reprap.GetPrintMonitor()->StopParsing(filenameBeingProcessed);
+		deferredRequestConnection = nullptr;
+	}
+
+	// If we couldn't read an entire request from a connection, reset our state here again
+	if (webserver->readingConnection == cs)
+	{
+		ResetState();
 	}
 
 	// Deal with aborted POST uploads. Note that we also check the remote port here,
@@ -1756,7 +1781,7 @@ void Webserver::HttpInterpreter::HandleGCodeReply(const char *reply)
 void Webserver::HttpInterpreter::ProcessDeferredRequest()
 {
 	OutputBuffer *jsonResponse = nullptr;
-	bool doingDeferredRequest = processingDeferredRequest;
+	const ConnectionState *lastDeferredConnection = deferredRequestConnection;
 
 	// At the moment only file info requests are deferred.
 	// Parsing the file may take a while, so keep LwIP running while we're waiting
@@ -1765,13 +1790,14 @@ void Webserver::HttpInterpreter::ProcessDeferredRequest()
 	while (!network->Lock());
 
 	// Because LwIP was unlocked before, there is a chance that the ConnectionLost() call has already
-	// stopped the file parsing. Check this special case
-	NetworkTransaction *transaction = webserver->currentTransaction;
-	if (doingDeferredRequest == processingDeferredRequest)
+	// stopped the file parsing. Check this special case here
+	if (lastDeferredConnection == deferredRequestConnection)
 	{
-		processingDeferredRequest = !gotFileInfo;
+		NetworkTransaction *transaction = webserver->currentTransaction;
 		if (gotFileInfo)
 		{
+			deferredRequestConnection = nullptr;
+
 			// Got it - send the response now
 			transaction->Write("HTTP/1.1 200 OK\n");
 			transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
@@ -1790,8 +1816,12 @@ void Webserver::HttpInterpreter::ProcessDeferredRequest()
 			transaction->Defer(false);
 		}
 	}
+	else
+	{
+		// Clean up again if we cannot send the response at all
+		OutputBuffer::ReleaseAll(jsonResponse);
+	}
 }
-
 
 //********************************************************************************************
 //
@@ -1952,12 +1982,6 @@ void Webserver::FtpInterpreter::ResetState()
 	CancelUpload();
 
 	state = idle;
-}
-
-void Webserver::FtpInterpreter::NoMoreDataAvailable()
-{
-	clientPointer = 0;
-	SendReply(422, "Incomplete or too long request", true);
 }
 
 bool Webserver::FtpInterpreter::DoingFastUpload() const
@@ -2570,15 +2594,6 @@ void Webserver::TelnetInterpreter::ResetState()
 	state = idle;
 	connectTime = 0;
 	clientPointer = 0;
-}
-
-void Webserver::TelnetInterpreter::NoMoreDataAvailable()
-{
-	clientPointer = 0;
-
-	NetworkTransaction *transaction = webserver->currentTransaction;
-	transaction->Write("Invalid or too long request\r\n");
-	transaction->Commit(true);
 }
 
 void Webserver::TelnetInterpreter::ProcessLine()

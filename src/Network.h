@@ -15,6 +15,7 @@ Separated out from Platform.h by dc42 and extended by zpl
 #include <climits>
 
 #include "lwipopts.h"
+
 #include "OutputMemory.h"
 
 // This class handles the network - typically an Ethernet.
@@ -40,7 +41,6 @@ const uint8_t GATE_WAY[4] = { 192, 168, 1, 1 };
 const uint16_t DEFAULT_HTTP_PORT = 80;
 const uint16_t FTP_PORT = 21;
 const uint16_t TELNET_PORT = 23;
-
 
 /****************************************************************************************************/
 
@@ -201,7 +201,7 @@ class Network
 		NetworkTransaction * volatile readyTransactions;
 		NetworkTransaction * volatile writingTransactions;
 
-		enum { NetworkInactive, NetworkEstablishingLink, NetworkActive } state;
+		enum { NetworkInactive, NetworkEstablishingLink, NetworkObtainingIP, NetworkActive } state;
 		bool isEnabled;
 		volatile bool resetCallback;
 		char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0

@@ -593,7 +593,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 	if (filename != nullptr && filename[0] != 0)
 	{
 		GCodeFileInfo info;
-		if (!GetFileInfo("0:/", filename, info))
+		if (!GetFileInfo(FS_PREFIX, filename, info))
 		{
 			// This may take a few runs...
 			return false;
@@ -681,7 +681,7 @@ void PrintMonitor::StopParsing(const char *filename)
 {
 	if (parseState != notParsing && StringEquals(filenameBeingParsed, filename))
 	{
-		if (!printingFileParsed)
+		if (filenameBeingPrinted[0] != 0 && !printingFileParsed)
 		{
 			// If this is the file we're parsing for internal purposes, don't bother with this request
 			return;

@@ -124,9 +124,11 @@ void UnlockLWIP()
 	lwipLocked = false;
 }
 
-// Callback functions for the EMAC driver
+// Callback functions for the EMAC driver and for LwIP
 
-// Callback to report when the link has gone up or down
+// Callback to report when the network interface has gone up or down.
+// Note that this is only a rough indicator and may not be called when
+// the IP address is changed on-the-fly!
 static void ethernet_status_callback(struct netif *netif)
 {
 	if (netif_is_up(netif))
@@ -134,10 +136,6 @@ static void ethernet_status_callback(struct netif *netif)
 		char ip[16];
 		ipaddr_ntoa_r(&(netif->ip_addr), ip, sizeof(ip));
 		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network up, IP=%s\n", ip);
-
-		// Do mDNS announcement here and not while the network is being initialised,
-		// because the IP address may not be assigned at that time
-		mdns_announce();
 	}
 	else
 	{
@@ -177,8 +175,6 @@ static void conn_err(void *arg, err_t err)
 		reprap.GetNetwork()->ConnectionClosed(cs, false);
 	}
 }
-
-/*-----------------------------------------------------------------------------------*/
 
 static err_t conn_poll(void *arg, tcp_pcb *pcb)
 {
@@ -235,8 +231,6 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 	return ERR_OK;
 }
 
-/*-----------------------------------------------------------------------------------*/
-
 static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 {
 	ConnectionState *cs = (ConnectionState*)arg;
@@ -258,8 +252,6 @@ static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 	}
 	return ERR_OK;
 }
-
-/*-----------------------------------------------------------------------------------*/
 
 static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 {
@@ -301,8 +293,6 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 
 	return ERR_OK;
 }
-
-/*-----------------------------------------------------------------------------------*/
 
 static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 {
@@ -413,7 +403,7 @@ void Network::Spin()
 		return;
 	}
 
-	if (state == NetworkActive)
+	if (state == NetworkObtainingIP || state == NetworkActive)
 	{
 		// Is the link still up?
 		if (!ethernet_link_established())
@@ -425,12 +415,27 @@ void Network::Spin()
 			return;
 		}
 
-		// See if we can read any packets
+		// See if we can read any packets. They may include DHCP responses too
 		ethernet_task();
 		if (resetCallback)
 		{
 			resetCallback = false;
 			ethernet_set_rx_callback(&ethernet_rx_callback);
+		}
+
+		// Have we obtained a valid IP address yet?
+		if (state == NetworkObtainingIP)
+		{
+			const uint8_t *ip = ethernet_get_ipaddress();
+			if (ip[0] != 0 && ip[1] != 0 && ip[2] != 0 && ip[3] != 0)
+			{
+				// Yes - we're good to go now
+				state = NetworkActive;
+
+				// Send mDNS announcement so that some routers can perform hostname mapping
+				// if ths board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
+				mdns_announce();
+			}
 		}
 
 		// See if we can send anything
@@ -476,7 +481,7 @@ void Network::Spin()
 		{
 			ethernet_set_configuration(platform->IPAddress(), platform->NetMask(), platform->GateWay());
 		}
-		state = NetworkActive;
+		state = NetworkObtainingIP;
 	}
 
 	UnlockLWIP();
@@ -615,6 +620,7 @@ void Network::ConnectionClosed(ConnectionState* cs, bool closeConnection)
 	tcp_poll(pcb, nullptr, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
 	if (pcb != nullptr && closeConnection)
 	{
+		tcp_err(pcb, nullptr);
 		tcp_close(pcb);
 	}
 	cs->pcb = nullptr;
@@ -697,6 +703,7 @@ bool Network::ConnectionClosedGracefully(ConnectionState *cs)
 	tcp_sent(cs->pcb, nullptr);
 	tcp_recv(cs->pcb, nullptr);
 	tcp_poll(cs->pcb, nullptr, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
+	tcp_err(cs->pcb, nullptr);
 	tcp_close(cs->pcb);
 	cs->pcb = nullptr;
 
@@ -736,7 +743,7 @@ const uint8_t *Network::IPAddress() const
 
 void Network::SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[])
 {
-	if (state == NetworkActive)
+	if (state == NetworkObtainingIP || state == NetworkActive)
 	{
 		// This performs IP changes on-the-fly
 		ethernet_set_configuration(ipAddress, netmask, gateway);
@@ -878,22 +885,20 @@ uint16_t Network::GetHttpPort() const
 
 void Network::SetHttpPort(uint16_t port)
 {
-	if (state == NetworkActive && port != httpPort)
+	if (port != httpPort)
 	{
-		// Close old HTTP port
+		// Close the old HTTP PCB and create a new one
 		tcp_close(http_pcb);
+		httpPort = port;
+		httpd_init();
 
-		// Create a new one for the new port
-		tcp_pcb* pcb = tcp_new();
-		tcp_bind(pcb, IP_ADDR_ANY, port);
-		http_pcb = tcp_listen(pcb);
-		tcp_accept(http_pcb, conn_accept);
-
-		// Update mDNS services
+		// Update mDNS service
 		mdns_services[MDNS_HTTP_SERVICE_INDEX].port = port;
-		mdns_announce();
+		if (state == NetworkActive)
+		{
+			mdns_announce();
+		}
 	}
-	httpPort = port;
 }
 
 // Close FTP data port and purge associated PCB
@@ -1488,7 +1493,7 @@ void NetworkTransaction::Discard()
 	{
 		if (reprap.Debug(moduleNetwork))
 		{
-			reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Discard() is handling a graceful disconnect for cs=%08x\n", (unsigned int)cs);
+			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Discard() is handling a graceful disconnect\n");
 		}
 		reprap.GetNetwork()->ConnectionClosed(cs, false);
 	}

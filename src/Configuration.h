@@ -30,7 +30,7 @@ Licence: GPL
 #endif
 
 #ifndef VERSION
-#define VERSION "1.10+3"
+#define VERSION "1.10+4"
 #endif
 
 #ifndef DATE
