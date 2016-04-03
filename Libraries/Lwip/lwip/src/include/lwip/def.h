@@ -44,13 +44,8 @@ extern "C" {
 #define LWIP_MIN(x , y)  (((x) < (y)) ? (x) : (y))
 
 #ifndef NULL
-#define NULL 0
-//#define NULL ((void *)0)
+#define NULL ((void *)0)
 #endif
-
-/** Get the absolute difference between 2 u32_t values (correcting overflows)
- * 'a' is expected to be 'higher' (without overflow) than 'b'. */
-#define LWIP_U32_DIFF(a, b) (((a) >= (b)) ? ((a) - (b)) : (((a) + ((b) ^ 0xFFFFFFFF) + 1))) 
 
 /* Endianess-optimized shifting of two u8_t to create one u16_t */
 #if BYTE_ORDER == LITTLE_ENDIAN

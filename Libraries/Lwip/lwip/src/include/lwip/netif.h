@@ -163,6 +163,10 @@ struct netif {
    */
   netif_status_callback_fn link_callback;
 #endif /* LWIP_NETIF_LINK_CALLBACK */
+#if LWIP_NETIF_REMOVE_CALLBACK
+  /** This function is called when the netif has been removed */
+  netif_status_callback_fn remove_callback;
+#endif /* LWIP_NETIF_REMOVE_CALLBACK */
   /** This field can be set by the device driver and could point
    *  to state information for the device. */
   void *state;
@@ -176,7 +180,7 @@ struct netif {
 #endif
 #if LWIP_NETIF_HOSTNAME
   /* the hostname for this netif, NULL is a valid value */
-  char*  hostname;
+  const char*  hostname;
 #endif /* LWIP_NETIF_HOSTNAME */
   /** maximum transfer unit (in bytes) */
   u16_t mtu;
@@ -280,6 +284,9 @@ void netif_set_down(struct netif *netif);
 #if LWIP_NETIF_STATUS_CALLBACK
 void netif_set_status_callback(struct netif *netif, netif_status_callback_fn status_callback);
 #endif /* LWIP_NETIF_STATUS_CALLBACK */
+#if LWIP_NETIF_REMOVE_CALLBACK
+void netif_set_remove_callback(struct netif *netif, netif_status_callback_fn remove_callback);
+#endif /* LWIP_NETIF_REMOVE_CALLBACK */
 
 void netif_set_link_up(struct netif *netif);
 void netif_set_link_down(struct netif *netif);
@@ -291,8 +298,13 @@ void netif_set_link_callback(struct netif *netif, netif_status_callback_fn link_
 #endif /* LWIP_NETIF_LINK_CALLBACK */
 
 #if LWIP_NETIF_HOSTNAME
+#if 1	// dc42 change to avoid code analysis warnings
+inline void netif_set_hostname(struct netif *netif, const char *name) { if (netif != NULL) { netif->hostname = name; }}
+inline const char *netif_get_hostname(struct netif *netif) { return (netif != NULL) ? (netif->hostname) : NULL; }
+#else
 #define netif_set_hostname(netif, name) do { if((netif) != NULL) { (netif)->hostname = name; }}while(0)
 #define netif_get_hostname(netif) (((netif) != NULL) ? ((netif)->hostname) : NULL)
+#endif
 #endif /* LWIP_NETIF_HOSTNAME */
 
 #if LWIP_IGMP
@@ -307,6 +319,12 @@ void netif_poll(struct netif *netif);
 void netif_poll_all(void);
 #endif /* !LWIP_NETIF_LOOPBACK_MULTITHREADING */
 #endif /* ENABLE_LOOPBACK */
+
+#if LWIP_NETIF_HWADDRHINT
+#define NETIF_SET_HWADDRHINT(netif, hint) ((netif)->addr_hint = (hint))
+#else /* LWIP_NETIF_HWADDRHINT */
+#define NETIF_SET_HWADDRHINT(netif, hint)
+#endif /* LWIP_NETIF_HWADDRHINT */
 
 #ifdef __cplusplus
 }

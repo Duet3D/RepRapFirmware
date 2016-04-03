@@ -41,14 +41,16 @@
 #if LWIP_TIMERS
 
 #include "lwip/src/include/lwip/err.h"
+#if !NO_SYS
 #include "lwip/src/include/lwip/sys.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #ifndef LWIP_DEBUG_TIMERNAMES
-#ifdef SYS_DEBUG
+#ifdef LWIP_DEBUG
 #define LWIP_DEBUG_TIMERNAMES SYS_DEBUG
 #else /* LWIP_DEBUG */
 #define LWIP_DEBUG_TIMERNAMES 0

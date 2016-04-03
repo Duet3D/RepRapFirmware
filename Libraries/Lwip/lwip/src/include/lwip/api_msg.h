@@ -38,10 +38,10 @@
 
 #include <stddef.h> /* for size_t */
 
-#include "lwip/src/include/lwip/ip_addr.h"
+#include "lwip/src/include/ipv4/lwip/ip_addr.h"
 #include "lwip/src/include/lwip/err.h"
 #include "lwip/src/include/lwip/sys.h"
-#include "lwip/src/include/lwip/igmp.h"
+#include "lwip/src/include/ipv4/lwip/igmp.h"
 #include "lwip/src/include/lwip/api.h"
 
 #ifdef __cplusplus
@@ -89,6 +89,9 @@ struct api_msg_msg {
       const void *dataptr;
       size_t len;
       u8_t apiflags;
+#if LWIP_SO_SNDTIMEO
+      u32_t time_started;
+#endif /* LWIP_SO_SNDTIMEO */
     } w;
     /** used for do_recv */
     struct {
