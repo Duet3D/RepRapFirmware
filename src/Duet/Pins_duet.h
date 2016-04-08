@@ -93,6 +93,9 @@ const Pin Z_PROBE_PIN = 10;												// Analogue pin number
 const Pin Z_PROBE_MOD_PIN = 52;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
 const Pin Z_PROBE_MOD_PIN07 = X12;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.7 and v0.8.5 (PC10)
 
+// Pin number that the DAC that controls the second extruder motor current on the Duet 0.8.5 is connected to
+const int Dac0DigitalPin = 66;						// Arduino Due pin number corresponding to DAC0 output pin
+
 // COOLING FANS
 
 const size_t NUM_FANS = 2;
@@ -149,5 +152,16 @@ const size_t NUM_PINS_ALLOWED = 72;
 // SAM3X Flash locations (may be expanded in the future)
 const uint32_t IAP_FLASH_START = 0x000F0000;
 const uint32_t IAP_FLASH_END = 0x000FFFFF;
+
+// Timer allocation
+#define NETWORK_TC			(TC1)
+#define NETWORK_TC_CHAN		(1)
+#define NETWORK_TC_IRQN		TC4_IRQn
+#define NETWORK_TC_HANDLER	TC4_Handler
+
+#define STEP_TC				(TC1)
+#define STEP_TC_CHAN		(0)
+#define STEP_TC_IRQN		TC3_IRQn
+#define STEP_TC_HANDLER		TC3_Handler
 
 #endif

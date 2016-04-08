@@ -17,6 +17,12 @@ GPL v3
 #include <stdio.h>
 #include <Wire.h>
 
+#ifdef DUET_NG
+# define MCP_WIRE	Wire
+#else
+# define MCP_WIRE	Wire1
+#endif
+
 //ensure you call begin() before any other functions but note
 //begin can only be called once for all MCP* objects as it initialises
 //the local master through the Wire library
@@ -28,7 +34,7 @@ MCP4461::MCP4461() {
 
 //initialise the I2C interface as master ie local address is 0
 void MCP4461::begin() {
-    Wire1.begin();
+	MCP_WIRE.begin();
 }
 
 //set the MCP4461 address
@@ -61,10 +67,10 @@ void MCP4461::setVolatileWiper(uint8_t wiper, uint16_t wiper_value){
   } 
   c_byte |= MCP4461_WRITE;
   //send command byte
-  Wire1.beginTransmission(_mcp4461_address);
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
-  Wire1.endTransmission(); //do not release bus
+  MCP_WIRE.beginTransmission(_mcp4461_address);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
+  MCP_WIRE.endTransmission(); //do not release bus
   }
 
 void MCP4461::setNonVolatileWiper(uint8_t wiper, uint16_t wiper_value){
@@ -92,10 +98,10 @@ void MCP4461::setNonVolatileWiper(uint8_t wiper, uint16_t wiper_value){
   } 
   c_byte |= MCP4461_WRITE;
   //send command byte
-  Wire1.beginTransmission(_mcp4461_address);
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
-  Wire1.endTransmission(); //do not release bus
+  MCP_WIRE.beginTransmission(_mcp4461_address);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
+  MCP_WIRE.endTransmission(); //do not release bus
   delay(20); //allow the write to complete (this is wasteful - better to check if the write has completed)
   }
   
@@ -108,30 +114,30 @@ void MCP4461::setVolatileWipers(uint16_t wiper_value){
   uint8_t c_byte;
   if (value > 0xFF)c_byte = 0x1; //the 8th data bit is 1
   else c_byte =0;
-  Wire1.beginTransmission(_mcp4461_address);
+  MCP_WIRE.beginTransmission(_mcp4461_address);
   c_byte |= MCP4461_WRITE;
   c_byte |= MCP4461_VW0;
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
   if (value > 0xFF) c_byte = 0x1;
   else c_byte =0;
   c_byte |= MCP4461_WRITE;
   c_byte |= MCP4461_VW1;
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
   if (value > 0xFF) c_byte = 0x1;
   else c_byte =0;
   c_byte |= MCP4461_WRITE;
   c_byte |= MCP4461_VW2;
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
   if (value > 0xFF) c_byte = 0x1;
   else c_byte =0;
   c_byte |= MCP4461_WRITE;
   c_byte |= MCP4461_VW3;
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
-  Wire1.endTransmission();
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
+  MCP_WIRE.endTransmission();
 }
 
 //set all the wipers in one transmission, more verbose but quicker than multiple calls to
@@ -143,33 +149,33 @@ void MCP4461::setNonVolatileWipers(uint16_t wiper_value){
   uint8_t c_byte;
   if (value > 0xFF)c_byte = 0x1; //the 8th data bit is 1
   else c_byte =0;
-  Wire1.beginTransmission(_mcp4461_address);
+  MCP_WIRE.beginTransmission(_mcp4461_address);
   c_byte |= MCP4461_WRITE;
   c_byte |= MCP4461_NVW0;
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
   delay(20); //allow the write to complete (this is wasteful - better to check if the write has completed)
   if (value > 0xFF) c_byte = 0x1;
   else c_byte =0;
   c_byte |= MCP4461_WRITE;
   c_byte |= MCP4461_NVW1;
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
   delay(20);
   if (value > 0xFF) c_byte = 0x1;
   else c_byte =0;
   c_byte |= MCP4461_WRITE;
   c_byte |= MCP4461_NVW2;
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
   delay(20);
   if (value > 0xFF) c_byte = 0x1;
   else c_byte =0;
   c_byte |= MCP4461_WRITE;
   c_byte |= MCP4461_NVW3;
-  Wire1.write(c_byte);
-  Wire1.write(d_byte);
-  Wire1.endTransmission();
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.write(d_byte);
+  MCP_WIRE.endTransmission();
   delay(20);
 }
 
@@ -195,15 +201,15 @@ uint16_t MCP4461::getNonVolatileWiper(uint8_t wiper){
   } 
   c_byte |= MCP4461_READ; 
   //send command byte
-  Wire1.beginTransmission(_mcp4461_address);
-  Wire1.write(c_byte);
-  Wire1.endTransmission(false); //do not release bus
-  Wire1.requestFrom((uint8_t)_mcp4461_address,(uint8_t)2);
+  MCP_WIRE.beginTransmission(_mcp4461_address);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.endTransmission(false); //do not release bus
+  MCP_WIRE.requestFrom((uint8_t)_mcp4461_address,(uint8_t)2);
   //read the register
   int i = 0;
-  while(Wire1.available()) 
+  while(MCP_WIRE.available())
   { 
-    ret |= Wire1.read();
+    ret |= MCP_WIRE.read();
     if (i==0) ret = ret<<8;
     i++;
   }
@@ -232,15 +238,15 @@ uint16_t MCP4461::getVolatileWiper(uint8_t wiper){
   } 
   c_byte |= MCP4461_READ; 
   //send command byte
-  Wire1.beginTransmission(_mcp4461_address);
-  Wire1.write(c_byte);
-  Wire1.endTransmission(false); //do not release bus
-  Wire1.requestFrom((uint8_t)_mcp4461_address,(uint8_t)2);
+  MCP_WIRE.beginTransmission(_mcp4461_address);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.endTransmission(false); //do not release bus
+  MCP_WIRE.requestFrom((uint8_t)_mcp4461_address,(uint8_t)2);
   //read the register
   int i = 0;
-  while(Wire1.available()) 
+  while(MCP_WIRE.available())
   { 
-    ret |= Wire1.read();
+    ret |= MCP_WIRE.read();
     if (i==0) ret = ret<<8;
     i++;
   }
@@ -255,15 +261,15 @@ uint16_t MCP4461::getStatus(){
   c_byte |= MCP4461_STATUS;
   c_byte |= MCP4461_READ; 
   //send command byte
-  Wire1.beginTransmission(_mcp4461_address);
-  Wire1.write(c_byte);
-  Wire1.endTransmission(false); //do not release bus
-  Wire1.requestFrom((uint8_t)_mcp4461_address, (uint8_t)2);
+  MCP_WIRE.beginTransmission(_mcp4461_address);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.endTransmission(false); //do not release bus
+  MCP_WIRE.requestFrom((uint8_t)_mcp4461_address, (uint8_t)2);
   //read the register
   int i = 0;
-  while(Wire1.available()) 
+  while(MCP_WIRE.available())
   { 
-    ret |= Wire1.read();
+    ret |= MCP_WIRE.read();
     if (i==0) ret = ret<<8;
     i++;
   }
@@ -286,15 +292,15 @@ void MCP4461::toggleWiper(uint8_t wiper){
     c_byte |= MCP4461_READ;
   }
   //send command byte
-  Wire1.beginTransmission(_mcp4461_address);
-  Wire1.write(c_byte);
-  Wire1.endTransmission(false); //do not release bus
-  Wire1.requestFrom((uint8_t)_mcp4461_address,(uint8_t)2);
+  MCP_WIRE.beginTransmission(_mcp4461_address);
+  MCP_WIRE.write(c_byte);
+  MCP_WIRE.endTransmission(false); //do not release bus
+  MCP_WIRE.requestFrom((uint8_t)_mcp4461_address,(uint8_t)2);
   //read the register
   int i = 0;
-  while(Wire1.available()) 
+  while(MCP_WIRE.available())
   { 
-    tcon |= Wire1.read();
+    tcon |= MCP_WIRE.read();
     if (i==0) tcon = tcon<<8;
     i++;
   }

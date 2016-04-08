@@ -8,13 +8,25 @@ void DueFlashStorage::read(uint32_t address, void *data, uint32_t dataLength)
 
 bool DueFlashStorage::write(uint32_t address, const void *data, uint32_t dataLength)
 {
-	if ((uint32_t)FLASH_START + address < IFLASH1_ADDR)
+	if ((uint32_t)FLASH_START + address <
+#ifdef DUET_NG
+					IFLASH_ADDR
+#else
+					IFLASH1_ADDR
+#endif
+			)
 	{
 		FLASH_DEBUG("Flash write address too low");
 		return false;
 	}
 
-	if ((uint32_t)FLASH_START + address + dataLength > IFLASH1_ADDR + IFLASH1_SIZE)
+	if ((uint32_t)FLASH_START + address + dataLength >
+#ifdef DUET_NG
+					IFLASH_ADDR + IFLASH_SIZE
+#else
+					IFLASH1_ADDR + IFLASH1_SIZE
+#endif
+			)
 	{
 		FLASH_DEBUG("Flash write address too high");
 		return false;

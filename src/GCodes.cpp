@@ -1905,6 +1905,23 @@ void GCodes::SetMACAddress(GCodeBuffer *gb)
 	}
 }
 
+bool GCodes::ChangeMicrostepping(size_t drive, int microsteps, int mode) const
+{
+	bool dummy;
+	unsigned int oldSteps = platform->GetMicrostepping(drive, dummy);
+	bool success = platform->SetMicrostepping(drive, microsteps, mode);
+	if (success)
+	{
+		// We changed the microstepping, so adjust the steps/mm to compensate
+		float stepsPerMm = platform->DriveStepsPerUnit(drive);
+		if (stepsPerMm > 0)
+		{
+			platform->SetDriveStepsPerUnit(drive, stepsPerMm * (float)microsteps / (float)oldSteps);
+		}
+	}
+	return success;
+}
+
 // Handle sending a reply back to the appropriate interface(s).
 // Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
 void GCodes::HandleReply(GCodeBuffer *gb, bool error, const char* reply)
@@ -2727,7 +2744,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			else
 			{
-				fileResponse->cat("NONE");
+				fileResponse->cat("NONE\n");
 			}
 		}
 
@@ -3940,7 +3957,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				{
 					seen = true;
 					int microsteps = gb->GetIValue();
-					if (!platform->SetMicrostepping(axis, microsteps, interp))
+					if (!ChangeMicrostepping(axis, microsteps, interp))
 					{
 						platform->MessageF(GENERIC_MESSAGE, "Drive %c does not support %dx microstepping%s\n",
 												axisLetters[axis], microsteps, (interp) ? " with interpolation" : "");
@@ -3956,7 +3973,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				gb->GetLongArray(eVals, eCount);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					if (!platform->SetMicrostepping(AXES + e, (int)eVals[e], interp))
+					if (!ChangeMicrostepping(AXES + e, (int)eVals[e], interp))
 					{
 						platform->MessageF(GENERIC_MESSAGE, "Drive E%u does not support %dx microstepping%s\n",
 												e, (int)eVals[e], (interp) ? " with interpolation" : "");

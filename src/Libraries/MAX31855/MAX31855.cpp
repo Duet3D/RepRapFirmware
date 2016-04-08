@@ -45,6 +45,12 @@
 // dan.newman@mtbaldy.us
 // GPL v3
 
+#ifdef DUET_NG
+# define MAX_SPI	SPI
+#else
+# define MAX_SPI	SPI0
+#endif
+
 #define PERIPHERAL_CHANNEL_ID       3
 #define PERIPHERAL_CHANNEL_CS_PIN  78  // NPCS3
 
@@ -83,7 +89,7 @@ void MAX31855::Init(uint8_t cs)
 		device.cs   = cs;                    // Chip select
 		device.id   = PERIPHERAL_CHANNEL_ID; // Peripheral channel
 		device.bits = SPI_CSR_BITS_16_BIT;   // 16 bit data transfers
-		spi_master_init(SPI0, device.cs, -1);
+		spi_master_init(MAX_SPI, device.cs);
 		initialized = true;
 	}
 }
@@ -95,7 +101,7 @@ spi_status_t MAX31855::readRaw(uint16_t *raw) const
 	for (uint8_t i = 0; i < 2; i++)
 	{
 		uint32_t timeout = SPI_TIMEOUT;
-		while (!spi_is_tx_ready(SPI0))
+		while (!spi_is_tx_ready(MAX_SPI))
 		{
 			if (!timeout--)
 			{
@@ -103,10 +109,10 @@ spi_status_t MAX31855::readRaw(uint16_t *raw) const
 			}
 		}
 
-		SPI0->SPI_TDR = (i != 1) ? 0x00000000 : 0x00000000 | SPI_TDR_LASTXFER;
+		MAX_SPI->SPI_TDR = (i != 1) ? 0x00000000 : 0x00000000 | SPI_TDR_LASTXFER;
 
 		timeout = SPI_TIMEOUT;
-		while (!spi_is_rx_ready(SPI0))
+		while (!spi_is_rx_ready(MAX_SPI))
 		{
 			if (!timeout--)
 			{
@@ -114,7 +120,7 @@ spi_status_t MAX31855::readRaw(uint16_t *raw) const
 			}
 		}
 
-		*raw++ = SPI0->SPI_RDR;
+		*raw++ = MAX_SPI->SPI_RDR;
 	}
 
 	return SPI_OK;
@@ -125,11 +131,11 @@ MAX31855_error MAX31855::getTemperature(float *t) const
 	// Assume properly initialized
 	// Ensure that the configuration is as needed; another SPI0 consumer
 	// may have changed the bus speed and/or timing delays.
-	spi_master_setup_device(SPI0, &device, 0, MAX31855_MAX_FREQ, 0);
-	spi_set_transfer_delay(SPI0, device.id, MAX31855_DLYBS, MAX31855_DLYBCT);
+	spi_master_setup_device(MAX_SPI, &device, 0, MAX31855_MAX_FREQ, 0);
+	spi_set_transfer_delay(MAX_SPI, device.id, MAX31855_DLYBS, MAX31855_DLYBCT);
 
 	// Select the device; enable CS (set it LOW)
-	spi_select_device(SPI0, &device);
+	spi_select_device(MAX_SPI, &device);
 
 	// Read in 32 bits
 	uint16_t raw[2];
@@ -139,7 +145,7 @@ MAX31855_error MAX31855::getTemperature(float *t) const
 	}
 
 	// Deselect the device; disable CS (set it HIGH)
-	spi_deselect_device(SPI0, &device);
+	spi_deselect_device(MAX_SPI, &device);
 
 	if ((raw[0] & 0x02) || (raw[1] & 0x08))
 	{

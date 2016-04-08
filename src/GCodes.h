@@ -174,6 +174,7 @@ private:
     void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
     const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
     bool RetractFilament(bool retract);									// Retract or un-retract filaments
+    bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive
 
     Platform* platform;							// The RepRap machine
     Webserver* webserver;						// The webserver class

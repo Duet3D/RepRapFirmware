@@ -43,7 +43,7 @@ public:
 
 	// Parameters common to Cartesian, delta and extruder moves
 
-	// The following only need to be stored per-drive if we are supporting elasticity compensation
+	// The following only need to be stored per-drive if we are supporting pressure advance
 	uint64_t twoDistanceToStopTimesCsquaredDivA;
 	uint32_t startSpeedTimesCdivA;
 	int32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;		// this one can be negative
@@ -65,7 +65,7 @@ public:
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union MoveParams
 	{
-		struct CartesianParameters						// Parameters for Cartesian and extruder movement, including extruder pre-compensation
+		struct CartesianParameters						// Parameters for Cartesian and extruder movement, including extruder pressure advance
 		{
 			// The following don't depend on how the move is executed, so they could be set up in Init()
 			uint64_t twoCsquaredTimesMmPerStepDivA;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / acceleration
@@ -73,10 +73,10 @@ public:
 			// The following depend on how the move is executed, so they must be set up in Prepare()
 			uint32_t accelStopStep;						// the first step number at which we are no longer accelerating
 			uint32_t decelStartStep;					// the first step number at which we are decelerating
-			uint32_t reverseStartStep;					// the first step number for which we need to reverse direction to to elastic compensation
+			uint32_t reverseStartStep;					// the first step number for which we need to reverse direction due to pressure advance
 			uint32_t mmPerStepTimesCdivtopSpeed;		// mmPerStepInHyperCuboidSpace * clock / topSpeed
 
-			// The following only need to be stored per-drive if we are supporting elasticity compensation
+			// The following only need to be stored per-drive if we are supporting pressure advance
 			int64_t fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA;		// this one can be negative
 		} cart;
 

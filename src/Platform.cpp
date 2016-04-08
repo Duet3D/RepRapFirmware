@@ -22,15 +22,18 @@
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
 
+#ifdef CORE_NG
+# include "sam/drivers/tc/tc.h"
+#endif
+
 #ifdef EXTERNAL_DRIVERS
-#include "ExternalDrivers.h"
+# include "ExternalDrivers.h"
 #endif
 
 extern char _end;
 extern "C" char *sbrk(int i);
 
 const uint8_t memPattern = 0xA5;
-const int Dac0DigitalPin = 66;						// Arduino Due pin number corresponding to DAC0 output pin
 
 static uint32_t fanInterruptCount = 0;				// accessed only in ISR, so no need to declare it volatile
 const uint32_t fanMaxInterruptCount = 32;			// number of fan interrupts that we average over
@@ -60,24 +63,12 @@ void setup()
 		*heapend++ = memPattern;
 	}
 
-#if 0
-	watchdogDisable();
-	pinMode(39, OUTPUT);
-#else
 	reprap.Init();
-#endif
 }
 
 void loop()
 {
-#if 0
-	digitalWrite(39, HIGH);
-	delay(500);
-	digitalWrite(39, LOW);
-	delay(500);
-#else
 	reprap.Spin();
-#endif
 }
 
 extern "C"
@@ -89,11 +80,6 @@ extern "C"
 		return 0;
 	}
 }
-
-// This used to overrides the weak function in CoreDuet, but now CoreDuet no longer calls it so we don't need it
-//void watchdogSetup(void)
-//{
-//}
 
 //*************************************************************************************************
 // PidParameters class
@@ -298,13 +284,15 @@ void Platform::Init()
 	{
 		if (heatOnPins[heater] >= 0)
 		{
-			digitalWrite(heatOnPins[heater], HIGH);	// turn the heater off
+			digitalWrite(heatOnPins[heater], (HEAT_ON) ? LOW : HIGH);		// turn the heater off
 			pinMode(heatOnPins[heater], OUTPUT);
 		}
-		analogReadResolution(12);
-		thermistorAdcChannels[heater] = PinToAdcChannel(tempSensePins[heater]);	// Translate the Arduino Due Analog pin number to the SAM ADC channel number
+		AnalogChannelNumber chan = PinToAdcChannel(tempSensePins[heater]);	// translate the Arduino Due Analog pin number to the SAM ADC channel number
+		thermistorAdcChannels[heater] = chan;
+		AnalogInEnableChannel(chan, true);
+
 		SetThermistorNumber(heater, heater);				// map the thermistor straight through
-		thermistorFilters[heater].Init(analogRead(tempSensePins[heater]));
+		thermistorFilters[heater].Init(0);
 	}
 	SetTemperatureLimit(DEFAULT_TEMPERATURE_LIMIT);
 
@@ -410,29 +398,39 @@ void Platform::InitZProbe()
 {
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
+
+#ifdef DUET_NG
+	zProbeModulationPin = Z_PROBE_MOD_PIN;
+#else
 	zProbeModulationPin = (board == BoardType::Duet_07 || board == BoardType::Duet_085) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
+#endif
 
 	switch (nvData.zProbeType)
 	{
 	case 1:
 	case 2:
+		AnalogInEnableChannel(zProbeAdcChannel, true);
 		pinMode(zProbeModulationPin, OUTPUT);
 		digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
 		break;
 
 	case 3:
+		AnalogInEnableChannel(zProbeAdcChannel, true);
 		pinMode(zProbeModulationPin, OUTPUT);
-		digitalWrite(zProbeModulationPin, LOW);	// enable the alternate sensor
+		digitalWrite(zProbeModulationPin, LOW);		// enable the alternate sensor
 		break;
 
 	case 4:
+		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(endStopPins[E0_AXIS], INPUT_PULLUP);
 		break;
 
 	case 5:
-		break;	//TODO
+		AnalogInEnableChannel(zProbeAdcChannel, false);
+		break;	//TODO (DeltaProbe)
 
 	default:
+		AnalogInEnableChannel(zProbeAdcChannel, false);
 		break;
 	}
 }
@@ -644,7 +642,12 @@ void Platform::ResetNvData()
 	ARRAY_INIT(nvData.ipAddress, IP_ADDRESS);
 	ARRAY_INIT(nvData.netMask, NET_MASK);
 	ARRAY_INIT(nvData.gateWay, GATE_WAY);
+
+#ifdef DUET_NG
+	memset(nvData.macAddress, 0xFF, sizeof(nvData.macAddress));
+#else
 	ARRAY_INIT(nvData.macAddress, MAC_ADDRESS);
+#endif
 
 	nvData.zProbeType = 0;	// Default is to use no Z probe switch
 	ARRAY_INIT(nvData.zProbeAxes, Z_PROBE_AXES);
@@ -1006,7 +1009,7 @@ void Platform::SoftwareReset(uint16_t reason)
 	{
 		if (reason != (uint16_t)SoftwareResetReason::user)
 		{
-			if (!SERIAL_MAIN_DEVICE.canWrite())
+			if (SERIAL_MAIN_DEVICE.canWrite() == 0)
 			{
 				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
@@ -1014,9 +1017,9 @@ void Platform::SoftwareReset(uint16_t reason)
 			{
 				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
 			}
-			if (!SERIAL_AUX_DEVICE.canWrite()
+			if (SERIAL_AUX_DEVICE.canWrite() == 0
 #ifdef SERIAL_AUX2_DEVICE
-				|| !SERIAL_AUX2_DEVICE.canWrite()
+				|| SERIAL_AUX2_DEVICE.canWrite() == 0
 #endif
 			   )
 			{
@@ -1044,21 +1047,9 @@ void Platform::SoftwareReset(uint16_t reason)
 
 // Interrupts
 
-#ifdef CORE_NG
-# include "sam/drivers/tc/tc.h"
-
-# define TC_GetStatus(_a, _b)		tc_get_status(_a, _b)
-# define TC_Configure(_a, _b, _c)	tc_init(_a, _b, _c)
-# define TC_Start(_a, _b)			tc_start(_a, _b)
-# define TC_SetRA(_a, _b, _c)		tc_write_ra(_a, _b, _c)
-# define TC_SetRB(_a, _b, _c)		tc_write_rb(_a, _b, _c)
-# define TC_SetRC(_a, _b, _c)		tc_write_rc(_a, _b, _c)
-# define TC_ReadCV(_a, _b)			tc_read_cv(_a, _b)
-#endif
-
-void TC3_Handler()
+void STEP_TC_HANDLER()
 {
-	TC1->TC_CHANNEL[0].TC_IDR = TC_IER_CPAS;	// disable the interrupt
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;	// disable the interrupt
 #ifdef MOVE_DEBUG
 	++numInterruptsExecuted;
 	lastInterruptTime = Platform::GetInterruptClocks();
@@ -1068,13 +1059,15 @@ void TC3_Handler()
 //	__disable_irq();
 }
 
-void TC4_Handler()
+#ifndef DUET_NG
+void NETWORK_TC_HANDLER()
 {
-	TC_GetStatus(TC1, 1);
+	tc_get_status(NETWORK_TC, NETWORK_TC_CHAN);
 //	__enable_irq();					// allow nested interrupts
 	reprap.GetNetwork()->Interrupt();
 //	__disable_irq();
 }
+#endif
 
 void FanInterrupt()
 {
@@ -1094,31 +1087,38 @@ void Platform::InitialiseInterrupts()
 {
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
 	NVIC_SetPriority(SysTick_IRQn, 0);						// set priority for tick interrupts - highest, because it kicks the watchdog
+
+#ifdef DUET_NG
+	NVIC_SetPriority(UART0_IRQn, 1);						// set priority for UART interrupt - must be higher than step interrupt
+#else
 	NVIC_SetPriority(UART_IRQn, 1);							// set priority for UART interrupt - must be higher than step interrupt
+#endif
 
 	// Timer interrupt for stepper motors
 	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
 	// We choose a clock divisor of 32, which gives us 0.38us resolution. The next option is 128 which would give 1.524us resolution.
 	pmc_set_writeprotect(false);
-	pmc_enable_periph_clk((uint32_t) TC3_IRQn);
-	TC_Configure(TC1, 0, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK3);
-	TC1 ->TC_CHANNEL[0].TC_IDR = ~(uint32_t)0;				// interrupts disabled for now
-	TC_Start(TC1, 0);
-	TC_GetStatus(TC1, 0);									// clear any pending interrupt
-	NVIC_SetPriority(TC3_IRQn, 2);							// set high priority for this IRQ; it's time-critical
-	NVIC_EnableIRQ(TC3_IRQn);
+	pmc_enable_periph_clk((uint32_t) STEP_TC_IRQN);
+	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK3);
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0;	// interrupts disabled for now
+	tc_start(STEP_TC, 0);
+	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
+	NVIC_SetPriority(STEP_TC_IRQN, 2);						// set high priority for this IRQ; it's time-critical
+	NVIC_EnableIRQ(STEP_TC_IRQN);
 
+#ifndef DUET_NG
 	// Timer interrupt to keep the networking timers running (called at 16Hz)
-	pmc_enable_periph_clk((uint32_t) TC4_IRQn);
-	TC_Configure(TC1, 1, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK2);
+	pmc_enable_periph_clk((uint32_t) NETWORK_TC_IRQN);
+	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK2);
 	uint32_t rc = (VARIANT_MCK/8)/16;						// 8 because we selected TIMER_CLOCK2 above
-	TC_SetRA(TC1, 1, rc/2);									// 50% high, 50% low
-	TC_SetRC(TC1, 1, rc);
-	TC_Start(TC1, 1);
-	TC1 ->TC_CHANNEL[1].TC_IER = TC_IER_CPCS;
-	TC1 ->TC_CHANNEL[1].TC_IDR = ~TC_IER_CPCS;
-	NVIC_SetPriority(TC4_IRQn, 4);							// step interrupt is more time-critical than this one
-	NVIC_EnableIRQ(TC4_IRQn);
+	tc_write_ra(NETWORK_TC, NETWORK_TC_CHAN, rc/2);			// 50% high, 50% low
+	tc_write_rc(NETWORK_TC, NETWORK_TC_CHAN, rc);
+	tc_start(NETWORK_TC, NETWORK_TC_CHAN);
+	NETWORK_TC ->TC_CHANNEL[NETWORK_TC_CHAN].TC_IER = TC_IER_CPCS;
+	NETWORK_TC ->TC_CHANNEL[NETWORK_TC_CHAN].TC_IDR = ~TC_IER_CPCS;
+	NVIC_SetPriority(NETWORK_TC_IRQN, 4);					// step interrupt is more time-critical than this one
+	NVIC_EnableIRQ(NETWORK_TC_IRQN);
+#endif
 
 	// Interrupt for 4-pin PWM fan sense line
 	if (coolingFanRpmPin >= 0)
@@ -1136,8 +1136,10 @@ void Platform::InitialiseInterrupts()
 #if 0	// not used
 void Platform::DisableInterrupts()
 {
-	NVIC_DisableIRQ(TC3_IRQn);
-	NVIC_DisableIRQ(TC4_IRQn);
+	NVIC_DisableIRQ(STEP_IRQN);
+#ifdef DUET_NG
+	NVIC_DisableIRQ(NETWORK_IRQN);
+#endif
 }
 #endif
 
@@ -1451,7 +1453,7 @@ void Platform::SetHeaterPwm(size_t heater, uint8_t power)
 	if (heatOnPins[heater] >= 0)
 	{
 		uint16_t freq = (reprap.GetHeat()->UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
-		analogWriteDuet(heatOnPins[heater], (HEAT_ON == 0) ? 255 - power : power, freq);
+		AnalogWrite(heatOnPins[heater], (HEAT_ON) ? power : 255 - power, freq);
 	}
 }
 
@@ -1640,25 +1642,33 @@ void Platform::UpdateMotorCurrent(size_t drive)
 			}
 			else
 			{
+#ifndef DUET_NG
 				if (board == BoardType::Duet_085)
 				{
+#endif
 					// Extruder 0 is on DAC channel 0
 					if (driver == 4)
 					{
-						analogWrite(DAC0, dac);
+#ifdef DUET_NG
+						AnalogWrite(DAC1, dac);
+#else
+						AnalogWrite(DAC0, dac);
+#endif
 					}
 					else
 					{
 						mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
 						mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
 					}
+#ifndef DUET_NG
 				}
 				else
 				{
 					mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
 					mcpExpansion.setVolatileWiper(potWipes[driver], pot);
 				}
-		}
+#endif
+			}
 #ifdef EXTERNAL_DRIVERS
 		}
 #endif
@@ -1800,8 +1810,13 @@ void Platform::InitFans()
 {
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		// The cooling fan 0 output pin gets inverted if HEAT_ON == 0 on a Duet 0.4, 0.6 or 0.7
-		fans[i].Init(COOLING_FAN_PINS[i], !HEAT_ON && (board == BoardType::Duet_06 || board == BoardType::Duet_07));
+		fans[i].Init(COOLING_FAN_PINS[i],
+				!HEAT_ON
+#ifndef DUET_NG
+					// The cooling fan 0 output pin gets inverted if HEAT_ON == 0 on a Duet 0.4, 0.6 or 0.7
+					&& (board == BoardType::Duet_06 || board == BoardType::Duet_07)
+#endif
+				);
 	}
 
 	if (NUM_FANS > 1)
@@ -1905,7 +1920,7 @@ void Platform::Fan::Refresh()
 		{
 			invert = !invert;
 		}
-		analogWriteDuet(pin, (invert) ? (255 - p) : p, freq);
+		AnalogWrite(pin, (invert) ? (255 - p) : p, freq);
 	}
 }
 
@@ -2266,6 +2281,9 @@ void Platform::SetBoardType(BoardType bt)
 {
 	if (bt == BoardType::Auto)
 	{
+#ifdef DUET_NG
+		board = BoardType::DuetNG_08;
+#else
 		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
 		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
 		// So we enable the pullup (value 150K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
@@ -2273,6 +2291,7 @@ void Platform::SetBoardType(BoardType bt)
 		pinMode(Dac0DigitalPin, INPUT_PULLUP);
 		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
 		pinMode(Dac0DigitalPin, INPUT);	// turn pullup off
+#endif
 	}
 	else
 	{
@@ -2291,9 +2310,13 @@ const char* Platform::GetElectronicsString() const
 {
 	switch (board)
 	{
+#ifdef DUET_NG
+	case BoardType::DuetNG_08:				return "DuetNG 0.8";
+#else
 	case BoardType::Duet_06:				return "Duet 0.6";
 	case BoardType::Duet_07:				return "Duet 0.7";
 	case BoardType::Duet_085:				return "Duet 0.85";
+#endif
 	default:								return "Unidentified";
 	}
 }
@@ -2415,9 +2438,9 @@ char Platform::ReadFromSource(const SerialSource source)
 // Must be called with interrupts disabled,
 /*static*/ bool Platform::ScheduleInterrupt(uint32_t tim)
 {
-	TC_SetRA(TC1, 0, tim);									// set up the compare register
-	TC_GetStatus(TC1, 0);									// clear any pending interrupt
-	int32_t diff = (int32_t)(tim - TC_ReadCV(TC1, 0));		// see how long we have to go
+	tc_write_ra(TC1, 0, tim);								// set up the compare register
+	tc_get_status(TC1, 0);									// clear any pending interrupt
+	int32_t diff = (int32_t)(tim - tc_read_cv(TC1, 0));		// see how long we have to go
 	if (diff < (int32_t)DDA::minInterruptInterval)			// if less than about 2us or already passed
 	{
 		return true;										// tell the caller to simulate an interrupt instead
@@ -2435,7 +2458,6 @@ char Platform::ReadFromSource(const SerialSource source)
 // Process a 1ms tick interrupt
 // This function must be kept fast so as not to disturb the stepper timing, so don't do any floating point maths in here.
 // This is what we need to do:
-// 0.  Kick the watchdog.
 // 1.  Kick off a new ADC conversion.
 // 2.  Fetch and process the result of the last ADC conversion.
 // 3a. If the last ADC conversion was for the Z probe, toggle the modulation output if using a modulated IR sensor.
@@ -2457,8 +2479,7 @@ void Platform::Tick()
 			if (DoThermistorAdc(currentHeater))
 			{
 				ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-				currentFilter.ProcessReading(GetAdcReading(thermistorAdcChannels[heaterTempChannels[currentHeater]]));
-				StartAdcConversion(zProbeAdcChannel);
+				currentFilter.ProcessReading(AnalogInReadChannel(thermistorAdcChannels[heaterTempChannels[currentHeater]]));
 				if (currentFilter.IsValid() && (configuredHeaters & (1 << currentHeater)) != 0)
 				{
 					uint32_t sum = currentFilter.GetSum();
@@ -2477,7 +2498,6 @@ void Platform::Tick()
 				// periodically called by PID::Spin() where temperature fault handling is taken care of.  However, we
 				// must guard against overly long delays between successive calls of PID::Spin().
 				// Do not call Time() here, it isn't safe. We use millis() instead.
-				StartAdcConversion(zProbeAdcChannel);
 				if ((millis() - reprap.GetHeat()->GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
 				{
 					SetHeaterPwm(currentHeater, 0);
@@ -2496,13 +2516,9 @@ void Platform::Tick()
 
 	case 2:			// last conversion started was the Z probe, with IR LED on
 		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetRawZProbeReading());
-		if (DoThermistorAdc(currentHeater))
+		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
 		{
-			StartAdcConversion(thermistorAdcChannels[heaterTempChannels[currentHeater]]);		// read a thermistor
-		}
-		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
-		{
-			digitalWrite(zProbeModulationPin, LOW);			// turn off the IR emitter
+			digitalWrite(zProbeModulationPin, LOW);				// turn off the IR emitter
 		}
 		++tickState;
 		break;
@@ -2512,17 +2528,16 @@ void Platform::Tick()
 		// no break
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
-		if (DoThermistorAdc(currentHeater))
-		{
-			StartAdcConversion(thermistorAdcChannels[heaterTempChannels[currentHeater]]);		// read a thermistor
-		}
-		if (nvData.zProbeType == 2)									// if using a modulated IR sensor
+		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
 		{
 			digitalWrite(zProbeModulationPin, HIGH);			// turn on the IR emitter
 		}
 		tickState = 1;
 		break;
 	}
+
+	AnalogInStartConversion();
+
 #ifdef TIME_TICK_ISR
 	uint32_t now2 = micros();
 	if (now2 - now > errorCodeBits)
@@ -2530,19 +2545,6 @@ void Platform::Tick()
 		errorCodeBits = now2 - now;
 	}
 #endif
-}
-
-/*static*/ uint16_t Platform::GetAdcReading(EAnalogChannel chan)
-{
-	uint16_t rslt = (uint16_t) adc_get_channel_value(ADC, (adc_channel_num_t)(int)chan);
-	adc_disable_channel(ADC, (adc_channel_num_t)(int)chan);
-	return rslt;
-}
-
-/*static*/ void Platform::StartAdcConversion(EAnalogChannel chan)
-{
-	adc_enable_channel(ADC, (adc_channel_num_t)(int)chan);
-	adc_start(ADC );
 }
 
 // Pragma pop_options is not supported on this platform

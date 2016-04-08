@@ -175,9 +175,13 @@ const size_t FILE_BUFFER_SIZE = 256;
 enum class BoardType : uint8_t
 {
 	Auto = 0,
+#ifdef DUET_NG
+	DuetNG_08 = 1
+#else
 	Duet_06 = 1,
 	Duet_07 = 2,
 	Duet_085 = 3
+#endif
 };
 
 enum class EndStopHit
@@ -828,15 +832,12 @@ private:
 	// checking has already been performed.
 
 	uint8_t heaterTempChannels[HEATERS];
-	EAnalogChannel thermistorAdcChannels[HEATERS];
-	EAnalogChannel zProbeAdcChannel;
+	AnalogChannelNumber thermistorAdcChannels[HEATERS];
+	AnalogChannelNumber zProbeAdcChannel;
 	uint32_t thermistorOverheatSums[HEATERS];
 	uint8_t tickState;
 	size_t currentHeater;
 	int debugCode;
-
-	static uint16_t GetAdcReading(EAnalogChannel chan);
-	static void StartAdcConversion(EAnalogChannel chan);
 
 	// Hotend configuration
 	float filamentWidth;
@@ -1246,7 +1247,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	}
 	else
 	{
-		return GetAdcReading(zProbeAdcChannel);
+		return AnalogInReadChannel(zProbeAdcChannel);
 	}
 }
 
