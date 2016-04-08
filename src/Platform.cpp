@@ -22,9 +22,7 @@
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
 
-#ifdef CORE_NG
-# include "sam/drivers/tc/tc.h"
-#endif
+#include "sam/drivers/tc/tc.h"
 
 #ifdef EXTERNAL_DRIVERS
 # include "ExternalDrivers.h"
@@ -1054,24 +1052,19 @@ void STEP_TC_HANDLER()
 	++numInterruptsExecuted;
 	lastInterruptTime = Platform::GetInterruptClocks();
 #endif
-//	__enable_irq();					// allow nested interrupts
 	reprap.GetMove()->Interrupt();
-//	__disable_irq();
 }
 
 #ifndef DUET_NG
 void NETWORK_TC_HANDLER()
 {
 	tc_get_status(NETWORK_TC, NETWORK_TC_CHAN);
-//	__enable_irq();					// allow nested interrupts
 	reprap.GetNetwork()->Interrupt();
-//	__disable_irq();
 }
 #endif
 
 void FanInterrupt()
 {
-//	__enable_irq();					// allow nested interrupts
 	++fanInterruptCount;
 	if (fanInterruptCount == fanMaxInterruptCount)
 	{
@@ -1080,7 +1073,6 @@ void FanInterrupt()
 		fanLastResetTime = now;
 		fanInterruptCount = 0;
 	}
-//	__disable_irq();
 }
 
 void Platform::InitialiseInterrupts()
