@@ -200,13 +200,8 @@ void Webserver::Spin()
 			{
 				interpreter->DoFastUpload();
 			}
-			// Check if we need to send data to a Telnet client
-			else if (interpreter == telnetInterpreter && telnetInterpreter->HasDataToSend())
-			{
-				telnetInterpreter->SendGCodeReply();
-			}
 			// Process other messages (if we can)
-			else if (interpreter != httpInterpreter || httpInterpreter->IsReady())
+			else if (interpreter->CanParseData())
 			{
 				readingConnection = currentTransaction->GetConnection();
 				for(size_t i = 0; i < TCP_MSS / 3; i++)
@@ -397,7 +392,7 @@ ProtocolInterpreter::ProtocolInterpreter(Platform *p, Webserver *ws, Network *n)
 
 void ProtocolInterpreter::Spin()
 {
-	// We cannot safely access the SD card in ISRs, so check if we have to close them here
+	// Check if anything went wrong while writing upload data, and delete the file again if that is the case
 	if (uploadState == uploadError)
 	{
 		if (fileBeingUploaded.IsLive())
@@ -794,9 +789,11 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		Authenticate();
 	}
 
-	// Handle "text/plain" requests
+	// Update the authentication status and try handle "text/plain" requests here
 	if (IsAuthenticated())
 	{
+		UpdateAuthentication();
+
 		if (StringEquals(command, "reply"))			// rr_reply
 		{
 			SendGCodeReply();
@@ -821,17 +818,16 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 
 	bool keepOpen = false;
 	bool mayKeepOpen;
-	bool found;
 	if (numQualKeys == 0)
 	{
-		found = GetJsonResponse(command, jsonResponse, "", "", 0, mayKeepOpen);
+		GetJsonResponse(command, jsonResponse, "", "", 0, mayKeepOpen);
 	}
 	else
 	{
-		found = GetJsonResponse(command, jsonResponse, qualifiers[0].key, qualifiers[0].value, qualifiers[1].key - qualifiers[0].value - 1, mayKeepOpen);
+		GetJsonResponse(command, jsonResponse, qualifiers[0].key, qualifiers[0].value, qualifiers[1].key - qualifiers[0].value - 1, mayKeepOpen);
 	}
 
-	// Check the special case of a deferred request (rr_fileinfo)
+	// Check special cases of deferred requests (rr_fileinfo) and rejected messages
 	NetworkTransaction *transaction = webserver->currentTransaction;
 	if (transaction->GetStatus() == deferred || transaction->GetStatus() == sending)
 	{
@@ -839,20 +835,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		return;
 	}
 
-	// React to whether or not a JSON response could be found
-	if (!found)
-	{
-		if (!IsAuthenticated())
-		{
-			// Send an error message and stop here
-			RejectMessage("Not authorized", 500);
-			return;
-		}
-		else
-		{
-			platform->MessageF(HOST_MESSAGE, "KnockOut request: %s not recognised\n", command);
-		}
-	}
+	// Send the JSON response
 
 	if (mayKeepOpen)
 	{
@@ -880,54 +863,15 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	transaction->Commit(keepOpen);
 }
 
-bool Webserver::HttpInterpreter::IsReady()
-{
-	// We want to send a response, but we need memory for that. Check if we have to truncate the G-Code reply
-	while (OutputBuffer::GetBytesLeft(nullptr) < minHttpResponseSize)
-	{
-		if (gcodeReply->IsEmpty())
-		{
-			// We cannot truncate any G-Code reply and don't have enough free space, try again later
-			return false;
-		}
-
-		if (OutputBuffer::Truncate(gcodeReply->GetFirstItem(), minHttpResponseSize) == 0)
-		{
-			// Truncating didn't work out, but see if we can free up a few more bytes by releasing the first reply item
-			OutputBuffer::ReleaseAll(gcodeReply->Pop());
-		}
-	}
-
-	// Are we still processing a deferred request?
-	if (deferredRequestConnection == webserver->currentTransaction->GetConnection())
-	{
-		if (deferredRequestConnection->IsConnected())
-		{
-			// Process more of this request. If it doesn't finish this time, it will be appended to the list
-			// of ready transactions again, which will ensure it can be processed later again
-			ProcessDeferredRequest();
-		}
-		else
-		{
-			// Don't bother with this request if the connection has been closed.
-			// We expect a "disconnected" transaction to report this later, so don't clean up anything here
-			webserver->currentTransaction->Discard();
-		}
-		return false;
-	}
-	return true;
-}
-
 //----------------------------------------------------------------------------------------------------
 
 // Input from the client
 
 // Get the Json response for this command.
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matters when uploading files.
-bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuffer *&response, const char* key, const char* value, size_t valueLength, bool& keepOpen)
+void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuffer *&response, const char* key, const char* value, size_t valueLength, bool& keepOpen)
 {
 	keepOpen = false;	// assume we don't want to persist the connection
-	bool found = true;	// assume success
 
 	if (StringEquals(request, "connect") && StringEquals(key, "password"))
 	{
@@ -957,127 +901,119 @@ bool Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	}
 	else if (!IsAuthenticated())
 	{
-		// Return error message if the user could not be authenticated
-		found = false;
+		RejectMessage("Not authorized", 500);
 	}
-	else
+	else if (StringEquals(request, "disconnect"))
 	{
-		UpdateAuthentication();
+		response->printf("{\"err\":%d}", RemoveAuthentication() ? 0 : 1);
+	}
+	else if (StringEquals(request, "status"))
+	{
+		int type = 0;
+		if (StringEquals(key, "type"))
+		{
+			// New-style JSON status responses
+			type = atoi(value);
+			if (type < 1 || type > 3)
+			{
+				type = 1;
+			}
 
-		if (StringEquals(request, "disconnect"))
-		{
-			response->printf("{\"err\":%d}", RemoveAuthentication() ? 0 : 1);
-		}
-		else if (StringEquals(request, "status"))
-		{
-			int type = 0;
-			if (StringEquals(key, "type"))
-			{
-				// New-style JSON status responses
-				type = atoi(value);
-				if (type < 1 || type > 3)
-				{
-					type = 1;
-				}
-
-				OutputBuffer::Release(response);
-				response = reprap.GetStatusResponse(type, ResponseSource::HTTP);
-			}
-			else
-			{
-				// Deprecated
-				OutputBuffer::Release(response);
-				response = reprap.GetLegacyStatusResponse(1, 0);
-			}
-		}
-		else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
-		{
-			LoadGcodeBuffer(value);
-			response->printf("{\"buff\":%u}", GetGCodeBufferSpace());
-		}
-		else if (StringEquals(request, "upload"))
-		{
-			response->printf("{\"err\":%d}", (uploadedBytes == postFileLength) ? 0 : 1);
-		}
-		else if (StringEquals(request, "delete") && StringEquals(key, "name"))
-		{
-			bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, value);
-			response->printf("{\"err\":%d}", (ok) ? 0 : 1);
-		}
-		else if (StringEquals(request, "files"))
-		{
-			const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
-			bool flagDirs = false;
-			if (numQualKeys >= 2)
-			{
-				if (StringEquals(qualifiers[1].key, "flagDirs"))
-				{
-					flagDirs = StringEquals(qualifiers[1].value, "1");
-				}
-			}
 			OutputBuffer::Release(response);
-			response = reprap.GetFilesResponse(dir, flagDirs);
+			response = reprap.GetStatusResponse(type, ResponseSource::HTTP);
 		}
-		else if (StringEquals(request, "fileinfo"))
+		else
 		{
-			if (deferredRequestConnection != nullptr)
+			// Deprecated
+			OutputBuffer::Release(response);
+			response = reprap.GetLegacyStatusResponse(1, 0);
+		}
+	}
+	else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
+	{
+		LoadGcodeBuffer(value);
+		response->printf("{\"buff\":%u}", GetGCodeBufferSpace());
+	}
+	else if (StringEquals(request, "upload"))
+	{
+		response->printf("{\"err\":%d}", (uploadedBytes == postFileLength) ? 0 : 1);
+	}
+	else if (StringEquals(request, "delete") && StringEquals(key, "name"))
+	{
+		bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, value);
+		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
+	}
+	else if (StringEquals(request, "files"))
+	{
+		const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
+		bool flagDirs = false;
+		if (numQualKeys >= 2)
+		{
+			if (StringEquals(qualifiers[1].key, "flagDirs"))
 			{
-				// Don't allow multiple deferred requests to be processed at once
-				webserver->currentTransaction->Defer(true);
+				flagDirs = StringEquals(qualifiers[1].value, "1");
+			}
+		}
+		OutputBuffer::Release(response);
+		response = reprap.GetFilesResponse(dir, flagDirs);
+	}
+	else if (StringEquals(request, "fileinfo"))
+	{
+		if (deferredRequestConnection != nullptr)
+		{
+			// Don't allow multiple deferred requests to be processed at once
+			webserver->currentTransaction->Defer(DeferralMode::ResetData);
+		}
+		else
+		{
+			if (StringEquals(qualifiers[0].key, "name"))
+			{
+				// Regular rr_fileinfo?name=xxx call
+				strncpy(filenameBeingProcessed, value, ARRAY_SIZE(filenameBeingProcessed));
+				filenameBeingProcessed[ARRAY_UPB(filenameBeingProcessed)] = 0;
 			}
 			else
 			{
-				if (StringEquals(qualifiers[0].key, "name"))
-				{
-					// Regular rr_fileinfo?name=xxx call
-					strncpy(filenameBeingProcessed, value, ARRAY_SIZE(filenameBeingProcessed));
-					filenameBeingProcessed[ARRAY_UPB(filenameBeingProcessed)] = 0;
-				}
-				else
-				{
-					// Simple rr_fileinfo call to get info about the file being printed
-					filenameBeingProcessed[0] = 0;
-				}
-
-				deferredRequestConnection = webserver->currentTransaction->GetConnection();
-				ProcessDeferredRequest();
+				// Simple rr_fileinfo call to get info about the file being printed
+				filenameBeingProcessed[0] = 0;
 			}
+
+			deferredRequestConnection = webserver->currentTransaction->GetConnection();
+			ProcessDeferredRequest();
 		}
-		else if (StringEquals(request, "move"))
+	}
+	else if (StringEquals(request, "move"))
+	{
+		if (numQualKeys >= 2)
 		{
-			if (numQualKeys >= 2)
+			if (StringEquals(key, "old") && StringEquals(qualifiers[1].key, "new"))
 			{
-				if (StringEquals(key, "old") && StringEquals(qualifiers[1].key, "new"))
-				{
-					response->printf("{\"err\":%d}", platform->GetMassStorage()->Rename(value, qualifiers[1].value) ? 0 : 1);
-				}
-				else
-				{
-					response->printf("{\"err\":1}");
-				}
+				response->printf("{\"err\":%d}", platform->GetMassStorage()->Rename(value, qualifiers[1].value) ? 0 : 1);
 			}
 			else
 			{
 				response->printf("{\"err\":1}");
 			}
 		}
-		else if (StringEquals(request, "mkdir") && StringEquals(key, "dir"))
-		{
-			bool ok = (platform->GetMassStorage()->MakeDirectory(value));
-			response->printf("{\"err\":%d}", (ok) ? 0 : 1);
-		}
-		else if (StringEquals(request, "config"))
-		{
-			OutputBuffer::Release(response);
-			response = reprap.GetConfigResponse();
-		}
 		else
 		{
-			found = false;
+			response->printf("{\"err\":1}");
 		}
 	}
-
-	return found;
+	else if (StringEquals(request, "mkdir") && StringEquals(key, "dir"))
+	{
+		bool ok = (platform->GetMassStorage()->MakeDirectory(value));
+		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
+	}
+	else if (StringEquals(request, "config"))
+	{
+		OutputBuffer::Release(response);
+		response = reprap.GetConfigResponse();
+	}
+	else
+	{
+		RejectMessage("Unknown request", 500);
+	}
 }
 
 void Webserver::HttpInterpreter::ResetState()
@@ -1131,6 +1067,45 @@ void Webserver::HttpInterpreter::ConnectionLost(const ConnectionState *cs)
 			}
 		}
 	}
+}
+
+bool Webserver::HttpInterpreter::CanParseData()
+{
+	// We want to send a response, but we need memory for that. Check if we have to truncate the G-Code reply
+	while (OutputBuffer::GetBytesLeft(nullptr) < minHttpResponseSize)
+	{
+		if (gcodeReply->IsEmpty())
+		{
+			// We cannot truncate any G-Code reply and don't have enough free space, try again later
+			return false;
+		}
+
+		if (OutputBuffer::Truncate(gcodeReply->GetFirstItem(), minHttpResponseSize) == 0)
+		{
+			// Truncating didn't work out, but see if we can free up a few more bytes by releasing the first reply item
+			OutputBuffer::ReleaseAll(gcodeReply->Pop());
+		}
+	}
+
+	// Are we still processing a deferred request?
+	if (deferredRequestConnection == webserver->currentTransaction->GetConnection())
+	{
+		if (deferredRequestConnection->IsConnected())
+		{
+			// Process more of this request. If it doesn't finish this time, it will be appended to the list
+			// of ready transactions again, which will ensure it can be processed later again
+			ProcessDeferredRequest();
+		}
+		else
+		{
+			// Don't bother with this request if the connection has been closed.
+			// We expect a "disconnected" transaction to report this later, so don't clean up anything here
+			webserver->currentTransaction->Discard();
+		}
+		return false;
+	}
+
+	return true;
 }
 
 // Process a character from the client
@@ -1813,7 +1788,7 @@ void Webserver::HttpInterpreter::ProcessDeferredRequest()
 		else
 		{
 			// File hasn't been fully parsed yet, try again later
-			transaction->Defer(false);
+			transaction->Defer(DeferralMode::DiscardData);
 		}
 	}
 	else
@@ -2221,7 +2196,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			}
 			else
 			{
-				webserver->currentTransaction->Defer(true);
+				webserver->currentTransaction->Defer(DeferralMode::ResetData);
 			}
 
 			break;
@@ -2479,17 +2454,15 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 //********************************************************************************************
 
 Webserver::TelnetInterpreter::TelnetInterpreter(Platform *p, Webserver *ws, Network *n)
-	: ProtocolInterpreter(p, ws, n)
+: ProtocolInterpreter(p, ws, n), connectedClients(0), processNextLine(false),
+gcodeReadIndex(0), gcodeWriteIndex(0), gcodeReply(nullptr)
 {
-	connectedClients = 0;
-	gcodeReadIndex = gcodeWriteIndex = 0;
-	gcodeReply = nullptr;
 	ResetState();
 }
 
 void Webserver::TelnetInterpreter::Diagnostics()
 {
-	platform->MessageF(GENERIC_MESSAGE, "Telnet connections: %d\n", connectedClients);
+	platform->MessageF(GENERIC_MESSAGE, "Telnet connections: %d, state %d\n", connectedClients, state);
 }
 
 void Webserver::TelnetInterpreter::ConnectionEstablished()
@@ -2536,6 +2509,40 @@ void Webserver::TelnetInterpreter::ConnectionLost(const ConnectionState *cs)
 	}
 }
 
+bool Webserver::TelnetInterpreter::CanParseData()
+{
+	// Is this an acquired transaction using which we can send the G-code reply?
+	TransactionStatus status = webserver->currentTransaction->GetStatus();
+	if (status == acquired)
+	{
+		SendGCodeReply();
+		return false;
+	}
+
+	// Is this connection still live? Check that for deferred requests
+	if (status == deferred && !webserver->currentTransaction->IsConnected())
+	{
+		webserver->currentTransaction->Discard();
+		return false;
+	}
+
+	// In order to support TCP streaming mode, check if we can store any more data at this time
+	if (GetGCodeBufferSpace() < clientPointer + 1)
+	{
+		webserver->currentTransaction->Defer(DeferralMode::DeferOnly);
+		return false;
+	}
+
+	// If that works and if the next line hasn't been processed yet, do it now
+	if (processNextLine)
+	{
+		return !ProcessLine();
+	}
+
+	// Otherwise just parse the next request
+	return true;
+}
+
 bool Webserver::TelnetInterpreter::CharFromClient(char c)
 {
 	// If this is likely to be a Telnet setup message (with some garbage in it), dump the first
@@ -2565,18 +2572,37 @@ bool Webserver::TelnetInterpreter::CharFromClient(char c)
 		case 0:
 			break;
 
+		case '\b':
+			// Allow backspace for pure Telnet clients like PuTTY
+			if (clientPointer != 0)
+			{
+				clientPointer--;
+			}
+			break;
+
 		case '\r':
 		case '\n':
 			if (clientPointer != 0)
 			{
+				// This line is complete, do we have enough space left to store it?
 				clientMessage[clientPointer] = 0;
-				ProcessLine();
-				clientPointer = 0;
+				if (GetGCodeBufferSpace() < clientPointer + 1)
+				{
+					// No - defer this transaction, so we can process more of it next time
+					webserver->currentTransaction->Defer(DeferralMode::DeferOnly);
+					processNextLine = true;
+					return true;
+				}
+
+				// Yes - try to process it
+				return ProcessLine();
 			}
-			return true;
+			break;
 
 		default:
 			clientMessage[clientPointer++] = c;
+
+			// Make sure we don't overflow the line buffer
 			if (clientPointer == ARRAY_UPB(clientMessage))
 			{
 				clientPointer = 0;
@@ -2594,16 +2620,24 @@ void Webserver::TelnetInterpreter::ResetState()
 	state = idle;
 	connectTime = 0;
 	clientPointer = 0;
+	gcodeReadIndex = gcodeWriteIndex;					// clear the buffer
 }
 
-void Webserver::TelnetInterpreter::ProcessLine()
+// Usually we should not try to send any data here, because that would purge the packet's
+// payload and mess with TCP streaming mode if Pronterface is used. However, under special
+// circumstances this must happen and in this case this method must always return true.
+bool Webserver::TelnetInterpreter::ProcessLine()
 {
+	processNextLine = false;
+	clientPointer = 0;
+
 	NetworkTransaction *transaction = network->GetTransaction();
 	switch (state)
 	{
 		case idle:
 		case justConnected:
 			// Should never get here...
+			// no break
 
 		case authenticating:
 			if (reprap.CheckPassword(clientMessage))
@@ -2619,7 +2653,7 @@ void Webserver::TelnetInterpreter::ProcessLine()
 				transaction->Write("Invalid password.\r\n> ");
 				transaction->Commit(true);
 			}
-			break;
+			return true;
 
 		case authenticated:
 			// Special commands for Telnet
@@ -2627,22 +2661,13 @@ void Webserver::TelnetInterpreter::ProcessLine()
 			{
 				transaction->Write("Goodbye.\r\n");
 				transaction->Commit(false);
+				return true;
 			}
-			// All other commands are processed by the Webserver
-			else
-			{
-				ProcessGcode(clientMessage);
-				if (HasDataToSend())
-				{
-					SendGCodeReply();
-				}
-				else
-				{
-					transaction->Discard();
-				}
-			}
+			// All other codes are stored for the GCodes class
+			ProcessGcode(clientMessage);
 			break;
 	}
+	return false;
 }
 
 // Process a null-terminated gcode
@@ -2796,8 +2821,16 @@ void Webserver::TelnetInterpreter::HandleGCodeReply(const char *reply)
 void Webserver::TelnetInterpreter::SendGCodeReply()
 {
 	NetworkTransaction *transaction = webserver->currentTransaction;
-	transaction->Write(gcodeReply);
-	transaction->Commit(true);
+
+	if (gcodeReply == nullptr)
+	{
+		transaction->Discard();
+	}
+	else
+	{
+		transaction->Write(gcodeReply);
+		transaction->Commit(true);
+	}
 
 	gcodeReply = nullptr;
 }

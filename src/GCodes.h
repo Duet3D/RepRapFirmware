@@ -205,9 +205,9 @@ private:
     float lastRawExtruderPosition[DRIVES - AXES];	// Extruder position of the last move fed into the Move class
     float rawExtruderTotalByDrive[DRIVES - AXES];	// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive
     float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
-	float record[DRIVES+1];						// Temporary store for move positions
+	float record[DRIVES];						// Temporary store for move positions
 	float moveToDo[DRIVES+1];					// Where to go set by G1 etc
-	bool activeDrive[DRIVES+1];					// Is this drive involved in a move?
+	bool activeDrive[DRIVES];					// Is this drive involved in a move?
 	bool offSetSet;								// Are any axis offsets non-zero?
     float distanceScale;						// MM or inches
     FileData fileBeingPrinted;

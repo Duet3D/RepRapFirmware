@@ -35,12 +35,12 @@ const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable
 GCodes::GCodes(Platform* p, Webserver* w) :
 		platform(p), webserver(w), active(false), stackPointer(0), auxGCodeReply(nullptr), isFlashing(false)
 {
-	httpGCode = new GCodeBuffer(platform, "web: ");
-	telnetGCode = new GCodeBuffer(platform, "telnet: ");
-	fileGCode = new GCodeBuffer(platform, "file: ");
-	serialGCode = new GCodeBuffer(platform, "serial: ");
-	auxGCode = new GCodeBuffer(platform, "aux: ");
-	fileMacroGCode = new GCodeBuffer(platform, "macro: ");
+	httpGCode = new GCodeBuffer(platform, "http");
+	telnetGCode = new GCodeBuffer(platform, "telnet");
+	fileGCode = new GCodeBuffer(platform, "file");
+	serialGCode = new GCodeBuffer(platform, "serial");
+	auxGCode = new GCodeBuffer(platform, "aux");
+	fileMacroGCode = new GCodeBuffer(platform, "macro");
 }
 
 void GCodes::Exit()
@@ -555,6 +555,13 @@ void GCodes::Diagnostics()
 	platform->Message(GENERIC_MESSAGE, "GCodes Diagnostics:\n");
 	platform->MessageF(GENERIC_MESSAGE, "Move available? %s\n", moveAvailable ? "yes" : "no");
 	platform->MessageF(GENERIC_MESSAGE, "Stack pointer: %u of %u\n", stackPointer, StackSize);
+
+	fileMacroGCode->Diagnostics();
+	httpGCode->Diagnostics();
+	telnetGCode->Diagnostics();
+	serialGCode->Diagnostics();
+	auxGCode->Diagnostics();
+	fileGCode->Diagnostics();
 }
 
 // The wait till everything's done function.  If you need the machine to
@@ -1006,7 +1013,6 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 			}
 			activeDrive[drive] = false;
 		}
-		record[DRIVES] = moveToDo[DRIVES] = feedRate;
 
 		for (size_t axis = 0; axis < AXES; axis++)
 		{
@@ -1019,8 +1025,11 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 
 		if (gb->Seen(feedrateLetter)) // Has the user specified a feedrate?
 		{
-			moveToDo[DRIVES] = gb->GetFValue();
-			activeDrive[DRIVES] = true;
+			moveToDo[DRIVES] = gb->GetFValue() * distanceScale * SECONDS_TO_MINUTES;
+		}
+		else
+		{
+			moveToDo[DRIVES] = feedRate;
 		}
 
 		offSetSet = true;
@@ -1131,7 +1140,6 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
-		activeDrive[DRIVES] = true;
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
@@ -1144,7 +1152,6 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 		activeDrive[Y_AXIS] = true;
 		// NB - we don't use the Z value
 		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
-		activeDrive[DRIVES] = true;
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
@@ -1192,7 +1199,6 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
-		activeDrive[DRIVES] = true;
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount = 0;
@@ -1257,7 +1263,6 @@ int GCodes::DoZProbe(float distance)
 		moveToDo[Z_AXIS] = -distance;
 		activeDrive[Z_AXIS] = true;
 		moveToDo[DRIVES] = platform->GetZProbeParameters().probeSpeed;
-		activeDrive[DRIVES] = true;
 
 		if (DoCannedCycleMove(ZProbeActive))
 		{
@@ -3792,7 +3797,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			if (!seen)
 			{
-				reply.printf("Retraction settings: length %.2f, extra length %.2f, speed %d, Z hop %.2f",
+				reply.printf("Retraction settings: length %.2fmm, extra length %.2fmm, speed %dmm/min, Z hop %.2fmm",
 						retractLength, retractExtra, (int)retractSpeed, retractHop);
 			}
 		}
@@ -4155,23 +4160,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 552: // Enable/Disable network and/or Set/Get IP address
-		// dc42: IMO providing a gcode to enable/disable network access is a waste of space, when it is easier and safer to unplug the network cable.
-		// But for compatibility with RRP official firmware, here it is.
 		{
 			bool seen = false;
-			if (gb->Seen('S')) // Has the user turned the network off?
-			{
-				seen = true;
-				if (gb->GetIValue())
-				{
-					reprap.GetNetwork()->Enable();
-				}
-				else
-				{
-					reprap.GetNetwork()->Disable();
-				}
-			}
-
 			if (gb->Seen('P'))
 			{
 				seen = true;
@@ -4182,6 +4172,20 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				reprap.GetNetwork()->SetHttpPort(gb->GetIValue());
 				seen = true;
+			}
+
+			// Process this one last in case the IP address is changed and the network enabled in the same command
+			if (gb->Seen('S')) // Has the user turned the network on or off?
+			{
+				seen = true;
+				if (gb->GetIValue() != 0)
+				{
+					reprap.GetNetwork()->Enable();
+				}
+				else
+				{
+					reprap.GetNetwork()->Disable();
+				}
 			}
 
 			if (!seen)
@@ -5058,25 +5062,46 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 997: // Perform firmware update
-		if (!platform->GetMassStorage()->FileExists(platform->GetSysDir(), IAP_FIRMWARE_FILE))
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Error: Firmware file \"%s\" not found in sys directory\n", IAP_FIRMWARE_FILE);
-			break;
-		}
-		if (!platform->GetMassStorage()->FileExists(platform->GetSysDir(), IAP_UPDATE_FILE))
-		{
-			platform->MessageF(GENERIC_MESSAGE, "Error: IAP file \"%s\" not found in sys directory\n", IAP_UPDATE_FILE);
-			break;
-		}
+			int sparam = 0;			// default to zero for compatibility with the original implementation
+			if (gb->Seen('S'))
+			{
+				sparam = gb->GetIValue();
+			}
+			if (sparam == 0)
+			{
+				// Update main firmware
+				if (!platform->GetMassStorage()->FileExists(platform->GetSysDir(), IAP_FIRMWARE_FILE))
+				{
+					platform->MessageF(GENERIC_MESSAGE, "Error: Firmware file \"%s\" not found in sys directory\n", IAP_FIRMWARE_FILE);
+					break;
+				}
+				if (!platform->GetMassStorage()->FileExists(platform->GetSysDir(), IAP_UPDATE_FILE))
+				{
+					platform->MessageF(GENERIC_MESSAGE, "Error: IAP file \"%s\" not found in sys directory\n", IAP_UPDATE_FILE);
+					break;
+				}
 
-		isFlashing = true;
-		if (!DoDwellTime(1.0))
-		{
-			// wait a second so all HTTP clients are notified
-			return false;
+				isFlashing = true;
+				if (!DoDwellTime(1.0))
+				{
+					// wait a second so all HTTP clients are notified
+					return false;
+				}
+				platform->UpdateFirmware();
+				isFlashing = false;				// should never get here, but leave this here in case an error has occurred
+			}
+#ifdef DUET_NG
+			else if (sparam == 1 || sparam == 2)
+			{
+				reprap.GetNetwork()->FirmwareUpdate(sparam);
+			}
+#endif
+			else
+			{
+				reply.copy("Error: M997 invalid S parameter");
+			}
 		}
-		platform->UpdateFirmware();
-		isFlashing = false;				// should never get here, but leave this here in case an error has occurred
 		break;
 
 	case 998:

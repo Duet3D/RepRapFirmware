@@ -74,6 +74,17 @@ void RepRap::Init()
 	processingConfig = false;
 
 	// Enable network (unless it's disabled)
+#ifdef DUET_NG
+	network->Activate();			// Need to do this here, as the configuration GCodes may set IP address etc.
+	if (network->IsEnabled())
+	{
+		platform->Message(HOST_MESSAGE, "Starting network...\n");
+	}
+	else
+	{
+		platform->Message(HOST_MESSAGE, "Network disabled.\n");
+	}
+#else
 	if (network->IsEnabled())
 	{
 		// Need to do this here, as the configuration GCodes may set IP address etc.
@@ -84,6 +95,7 @@ void RepRap::Init()
 	{
 		platform->Message(HOST_MESSAGE, "Network disabled.\n");
 	}
+#endif
 
 	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", NAME);
 	fastLoop = FLT_MAX;
@@ -913,7 +925,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	}
 
 	// Firmware details
-	response->catf("],\"firmwareElectronics\":\"%s\"", ELECTRONICS);
+	response->catf("],\"firmwareElectronics\":\"%s\"", platform->GetElectronicsString());
 	response->catf(",\"firmwareName\":\"%s\"", NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);
@@ -940,60 +952,8 @@ OutputBuffer *RepRap::GetConfigResponse()
 		ch = ',';
 	}
 
-	// Configuration File (whitespaces are skipped, otherwise we easily risk overflowing the response buffer)
-	response->cat("],\"configFile\":\"");
-	FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
-	if (configFile == nullptr)
-	{
-		response->cat("not found");
-	}
-	else
-	{
-		char c, esc;
-		bool readingWhitespace = false;
-		size_t bytesWritten = 0, bytesLeft = OutputBuffer::GetBytesLeft(response);
-		while (configFile->Read(c) && bytesWritten + 4 < bytesLeft)		// need 4 bytes to finish this response
-		{
-			if (!readingWhitespace || (c != ' ' && c != '\t'))
-			{
-				switch (c)
-				{
-					case '\r':
-						esc = 'r';
-						break;
-					case '\n':
-						esc = 'n';
-						break;
-					case '\t':
-						esc = 't';
-						break;
-					case '"':
-						esc = '"';
-						break;
-					case '\\':
-						esc = '\\';
-						break;
-					default:
-						esc = 0;
-						break;
-				}
-
-				if (esc)
-				{
-					response->catf("\\%c", esc);
-					bytesWritten += 2;
-				}
-				else
-				{
-					response->cat(c);
-					bytesWritten++;
-				}
-			}
-			readingWhitespace = (c == ' ' || c == '\t');
-		}
-		configFile->Close();
-	}
-	response->cat("\"}");
+	// Config file is no longer included, because we can use rr_configfile or M503 instead
+	response->cat("]}");
 
 	return response;
 }

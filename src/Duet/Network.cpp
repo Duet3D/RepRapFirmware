@@ -811,40 +811,46 @@ void Network::Disable()
 	}
 }
 
-// This is called by the web server to get a new received packet.
-// If the connection parameter is nullptr, we just return the request at the head of the ready list.
-// Otherwise, we are only interested in packets received from the specified connection. If we find one then
-// we move it to the head of the ready list, so that a subsequent call with a null connection parameter
-// will return the same one.
+// This is called by the web server to get the next networking transaction.
+//
+// If cs is NULL, the transaction from the head of readyTransactions will be retrieved.
+// If cs is not NULL, the first transaction with the matching connection will be returned.
+//
+// This method also ensures that the retrieved transaction is moved to the first item of
+// readyTransactions, so that a subsequent call with a NULL cs parameter will return exactly
+// the same instance.
 NetworkTransaction *Network::GetTransaction(const ConnectionState *cs)
 {
 	// See if there is any transaction at all
-	NetworkTransaction *rs = readyTransactions;
-	if (rs == nullptr)
+	NetworkTransaction *transaction = readyTransactions;
+	if (transaction == nullptr)
 	{
 		return nullptr;
 	}
 
-	// See if the first one is the transaction we're looking for
-	if (cs == nullptr || rs->cs == cs)
+	// If no specific connection is specified or if the first item already matches the
+	// connection we are looking for, just return it
+	if (cs == nullptr || transaction->GetConnection() == cs)
 	{
-		return rs;
+		return transaction;
 	}
 
-	// There is at least one ready transaction, but it's not on the connection we are looking for
-	for (NetworkTransaction *rsNext = rs->next; rsNext != nullptr; rsNext = rs->next)
+	// We are looking for a specific transaction, but it's not the first item.
+	// Search for it and move it to the head of readyTransactions
+	NetworkTransaction *previous = transaction;
+	for(NetworkTransaction *item = transaction->next; item != nullptr; item = item->next)
 	{
-		if (rsNext->cs == cs)
+		if (item->GetConnection() == cs)
 		{
-			rs->next = rsNext->next;		// remove rsNext from the list
-			rsNext->next = readyTransactions;
-			readyTransactions = rsNext;
-			return rsNext;
+			previous->next = item->next;
+			item->next = readyTransactions;
+			readyTransactions = item;
+			return item;
 		}
-
-		rs = rsNext;
+		previous = item;
 	}
 
+	// We failed to find a valid transaction for the given connection
 	return nullptr;
 }
 
@@ -973,47 +979,26 @@ bool Network::AcquireTransaction(ConnectionState *cs)
 		return false;
 	}
 
-	// If our current transaction already belongs to cs and can be used, don't look for another one
+	// Does the head of ready transaction already belong to cs and was it acquired before?
 	NetworkTransaction *currentTransaction = readyTransactions;
-	if (currentTransaction != nullptr && currentTransaction->GetConnection() == cs && currentTransaction->fileBeingSent == nullptr)
+	if (currentTransaction != nullptr && currentTransaction->GetConnection() == cs &&
+			currentTransaction->GetStatus() == acquired)
 	{
+		// Yes - don't look for another one
 		return true;
 	}
 
-	// See if we're already writing on this connection
-	NetworkTransaction *previousTransaction = cs->sendingTransaction;
-	NetworkTransaction *lastTransaction = previousTransaction;
-	if (lastTransaction != nullptr)
+	// No - try to allocate a free one
+	NetworkTransaction *acquiredTransaction = freeTransactions;
+	if (acquiredTransaction == nullptr)
 	{
-		while (lastTransaction->nextWrite != nullptr)
-		{
-			previousTransaction = lastTransaction;
-			lastTransaction = lastTransaction->nextWrite;
-		}
+		platform->Message(HOST_MESSAGE, "Network: Could not acquire free transaction!\n");
+		return false;
 	}
+	freeTransactions = acquiredTransaction->next;
+	acquiredTransaction->Set(nullptr, cs, acquired);
+	PrependTransaction(&readyTransactions, acquiredTransaction);
 
-	// Then check if this transaction is valid and safe to use
-	NetworkTransaction *transactionToUse;
-	if (previousTransaction != lastTransaction && lastTransaction->fileBeingSent == nullptr)
-	{
-		previousTransaction->nextWrite = nullptr;
-		transactionToUse = lastTransaction;
-	}
-	// We cannot use it, so try to allocate a free one
-	else
-	{
-		transactionToUse = freeTransactions;
-		if (transactionToUse == nullptr)
-		{
-			platform->Message(HOST_MESSAGE, "Network: Could not acquire free transaction!\n");
-			return false;
-		}
-		freeTransactions = transactionToUse->next;
-		transactionToUse->Set(nullptr, cs, acquired);
-	}
-
-	// Replace the first entry of readyTransactions with our new transaction, so it can be used by Commit().
-	PrependTransaction(&readyTransactions, transactionToUse);
 	return true;
 }
 
@@ -1072,7 +1057,7 @@ bool NetworkTransaction::Read(char& b)
 	}
 
 	b = ((const char*)readingPb->payload)[inputPointer++];
-	if (inputPointer > readingPb->len)
+	if (inputPointer == readingPb->len)
 	{
 		readingPb = readingPb->next;
 		inputPointer = 0;
@@ -1399,13 +1384,21 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 	}
 }
 
-// Call this to perform some networking tasks while processing deferred requests.
-// If keepData is true, then the pbuf won't be released so it can be reused
-void NetworkTransaction::Defer(bool keepData)
+// Call this to perform some networking tasks while processing deferred requests,
+// and to move this transaction and all transactions that are associated with its
+// connection to the end of readyTransactions. There are three ways to do this:
+//
+// 1) DeferOnly: Do not modify any of the processed data and don't send an ACK.
+//               This will ensure that zero-window packets are sent back to the client
+// 2) ResetData: Reset the read pointers and acknowledge that the data has been processed
+// 3) DiscardData: Free the processed data, acknowledge it and append this transaction as
+//                 an empty item again without payload (i.e. without pbufs)
+//
+void NetworkTransaction::Defer(DeferralMode mode)
 {
-	// See if we have to keep the data for future calls
-	if (keepData)
+	if (mode == DeferralMode::ResetData)
 	{
+		// Reset the reading pointers and send an ACK
 		inputPointer = 0;
 		readingPb = pb;
 		if (IsConnected() && pb != nullptr && !dataAcknowledged)
@@ -1414,21 +1407,24 @@ void NetworkTransaction::Defer(bool keepData)
 			dataAcknowledged = true;
 		}
 	}
-	else
+	else if (mode == DeferralMode::DiscardData)
 	{
-		FreePbuf();			// Free up the allocated pbufs
+		// Discard the incoming data, because we don't need to process it any more
+		FreePbuf();
 	}
+
 	status = deferred;
 
 	// Unlink this transaction from the list of ready transactions and append it again
-	NetworkTransaction *previous = nullptr;
-	for(NetworkTransaction *item = reprap.GetNetwork()->readyTransactions; item != nullptr; item = item->next)
+	Network *network = reprap.GetNetwork();
+	NetworkTransaction *item, *previous = nullptr;
+	for(item = network->readyTransactions; item != nullptr; item = item->next)
 	{
 		if (item == this)
 		{
 			if (previous == nullptr)
 			{
-				reprap.GetNetwork()->readyTransactions = next;
+				network->readyTransactions = next;
 			}
 			else
 			{
@@ -1438,8 +1434,38 @@ void NetworkTransaction::Defer(bool keepData)
 		}
 		previous = item;
 	}
-	reprap.GetNetwork()->AppendTransaction(&reprap.GetNetwork()->readyTransactions, this);
+	network->AppendTransaction(&network->readyTransactions, this);
+
+	// Append all other transactions that are associated to this connection, so that the
+	// Webserver gets a chance to deal with all connected clients even while multiple
+	// deferred requests are present in the list.
+	item = network->readyTransactions;
+	previous = nullptr;
+	while (item != this)
+	{
+		if (item->cs == cs)
+		{
+			NetworkTransaction *nextItem = item->next;
+			if (previous == nullptr)
+			{
+				network->readyTransactions = item->next;
+				network->AppendTransaction(&network->readyTransactions, item);
+			}
+			else
+			{
+				previous->next = item->next;
+				network->AppendTransaction(&network->readyTransactions, item);
+			}
+			item = nextItem;
+		}
+		else
+		{
+			previous = item;
+			item = item->next;
+		}
+	}
 }
+
 
 // This method should be called if we don't want to send data to the client and if we
 // don't want to interfere with the connection state. May also be called from ISR!

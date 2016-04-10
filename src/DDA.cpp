@@ -655,7 +655,7 @@ void DDA::Prepare()
 			// Prepare for the first step
 			dm.nextStep = 0;
 			dm.nextStepTime = 0;
-			dm.stepInterval = 999999;						// initialise to a large value so that we will calculating the time for just one steps
+			dm.stepInterval = 999999;						// initialise to a large value so that we will calculate the time for just one step
 			dm.stepsTillRecalc = 0;							// so that we don't skip the calculation
 			bool stepsToDo = (isDeltaMovement && drive < AXES)
 							? dm.CalcNextStepTimeDelta(*this, drive, false)

@@ -22,8 +22,14 @@ Licence: GPL
 
 const FilePosition GCODE_HEADER_SIZE = 8192uL;		// How many bytes to read from the header
 const FilePosition GCODE_FOOTER_SIZE = 192000uL;	// How many bytes to read from the footer
-const size_t GCODE_READ_SIZE = 1024;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 4 for read efficiency)
-const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (should be a multple of 4 as well)
+
+#ifdef DUET_NG
+const size_t GCODE_READ_SIZE = 4096;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
+#else
+const size_t GCODE_READ_SIZE = 2048;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
+#endif
+
+const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (should be a multiple of 4)
 
 const float LAYER_HEIGHT_TOLERANCE = 0.015;			// Tolerance for comparing two Z heights (in mm)
 

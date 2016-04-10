@@ -14,6 +14,7 @@ class GCodeBuffer
   public:
     GCodeBuffer(Platform* p, const char* id);
     void Init(); 										// Set it up
+	void Diagnostics();									// Write some debug info
     bool Put(char c);									// Add a character to the end
     bool Put(const char *str, size_t len);				// Add an entire string
     bool IsEmpty() const;								// Does this buffer contain any code?

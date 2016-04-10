@@ -1,9 +1,6 @@
 #ifndef PINS_DUET_H__
 #define PINS_DUET_H__
 
-// What are we supposed to be running on
-#define ELECTRONICS "Duet (+ Extension)"
-
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::Duet_06
 

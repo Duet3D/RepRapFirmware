@@ -2303,7 +2303,7 @@ const char* Platform::GetElectronicsString() const
 	switch (board)
 	{
 #ifdef DUET_NG
-	case BoardType::DuetNG_08:				return "DuetNG 0.8";
+	case BoardType::DuetNG_08:				return "DuetNG 0.6";
 #else
 	case BoardType::Duet_06:				return "Duet 0.6";
 	case BoardType::Duet_07:				return "Duet 0.7";

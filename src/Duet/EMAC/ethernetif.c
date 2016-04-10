@@ -104,9 +104,7 @@ struct ethernetif {
  */
 void EMAC_Handler(void)
 {
-//	__enable_irq();					// allow nested interrupts
 	emac_handler(&gs_emac_dev);
-//	__disable_irq();
 }
 
 /**

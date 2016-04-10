@@ -25,6 +25,24 @@ void GCodeBuffer::Init()
 	state = GCodeState::idle;
 }
 
+void GCodeBuffer::Diagnostics()
+{
+	switch (state)
+	{
+		case GCodeState::idle:
+			platform->MessageF(GENERIC_MESSAGE, "%s is idle\n", identity);
+			break;
+
+		case GCodeState::executing:
+			platform->MessageF(GENERIC_MESSAGE, "%s is doing \"%s\"\n", identity, Buffer());
+			break;
+
+		case GCodeState::paused:
+			platform->MessageF(GENERIC_MESSAGE, "%s is paused\n", identity);
+			break;
+	}
+}
+
 int GCodeBuffer::CheckSum() const
 {
 	uint8_t cs = 0;
@@ -55,7 +73,7 @@ bool GCodeBuffer::Put(char c)
 		gcodeBuffer[gcodePointer] = 0;
 		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] != 0 && !writingFileDirectory) // Don't bother with blank/comment lines
 		{
-			platform->MessageF(HOST_MESSAGE, "%s%s\n", identity, gcodeBuffer);
+			platform->MessageF(DEBUG_MESSAGE, "%s: %s\n", identity, gcodeBuffer);
 		}
 
 		// Deal with line numbers and checksums

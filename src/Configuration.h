@@ -34,7 +34,7 @@ Licence: GPL
 #endif
 
 #ifndef DATE
-#define DATE "2016-04-08"
+#define DATE "2016-04-10"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -128,8 +128,8 @@ const size_t FILENAME_LENGTH = 100;
 
 // Output buffer lengths
 
-const uint16_t OUTPUT_BUFFER_SIZE = 256;			// How many bytes does each OutputBuffer hold?
-const size_t OUTPUT_BUFFER_COUNT = 16;				// How many OutputBuffer instances do we have?
+const uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
+const size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
 
 // Move system
 

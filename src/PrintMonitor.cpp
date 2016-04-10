@@ -344,7 +344,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 	{
 		bool headerInfoComplete = true;
 
-		// Read a chunk from the header. On the first run only process 1024 bytes, but use overlap (total 1124 bytes) next times.
+		// Read a chunk from the header. On the first run only process GCODE_READ_SIZE bytes, but use overlap next times.
 		sizeToRead = (size_t)min<FilePosition>(fileBeingParsed->Length() - fileBeingParsed->Position(), GCODE_READ_SIZE);
 		if (fileOverlapLength > 0)
 		{
@@ -482,7 +482,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 				accumulatedReadTime = accumulatedParseTime = 0.0;
 			}
 
-			// Go to the last sector and proceed from there on
+			// Go to the last chunk and proceed from there on
 			const FilePosition seekFromEnd = ((fileBeingParsed->Length() - 1) % GCODE_READ_SIZE) + 1;
 			fileBeingParsed->Seek(fileBeingParsed->Length() - seekFromEnd);
 			fileOverlapLength = 0;
