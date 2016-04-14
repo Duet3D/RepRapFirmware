@@ -76,11 +76,7 @@ void RepRap::Init()
 	// Enable network (unless it's disabled)
 #ifdef DUET_NG
 	network->Activate();			// Need to do this here, as the configuration GCodes may set IP address etc.
-	if (network->IsEnabled())
-	{
-		platform->Message(HOST_MESSAGE, "Starting network...\n");
-	}
-	else
+	if (!network->IsEnabled())
 	{
 		platform->Message(HOST_MESSAGE, "Network disabled.\n");
 	}

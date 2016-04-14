@@ -30,11 +30,11 @@ Licence: GPL
 #endif
 
 #ifndef VERSION
-#define VERSION "1.11-beta1"
+#define VERSION "1.11"
 #endif
 
 #ifndef DATE
-#define DATE "2016-04-10"
+#define DATE "2016-04-14"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"

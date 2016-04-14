@@ -733,7 +733,7 @@ private:
 	Pin potWipes[8];			// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
 	float senseResistor;
 	float maxStepperDigipotVoltage;
-	float maxStepperDACVoltage;
+	float stepperDacVoltageRange, stepperDacVoltageOffset;
 
 	// Z probe
 

@@ -207,7 +207,8 @@ void Platform::Init()
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-	maxStepperDACVoltage = MAX_STEPPER_DAC_VOLTAGE;
+	stepperDacVoltageRange = STEPPER_DAC_VOLTAGE_RANGE;
+	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
 
 	// Z PROBE
 
@@ -1626,7 +1627,6 @@ void Platform::UpdateMotorCurrent(size_t drive)
 		{
 #endif
 			unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
-			unsigned short dac = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDACVoltage/2)/maxStepperDACVoltage);
 			if (driver < 4)
 			{
 				mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
@@ -1641,6 +1641,8 @@ void Platform::UpdateMotorCurrent(size_t drive)
 					// Extruder 0 is on DAC channel 0
 					if (driver == 4)
 					{
+						float dacVoltage = max<float>(current * 0.008*senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
+						uint32_t dac = (uint32_t)((256 * dacVoltage + 0.5 * stepperDacVoltageRange)/stepperDacVoltageRange);
 #ifdef DUET_NG
 						AnalogWrite(DAC1, dac);
 #else

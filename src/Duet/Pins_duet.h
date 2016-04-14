@@ -39,7 +39,8 @@ const Pin END_STOP_PINS[DRIVES] = { 11, 28, 60, 31, 24, 46, 45, 44, X9 };
 const uint8_t POT_WIPES[8] = { 1, 3, 2, 0, 1, 3, 2, 0 };
 const float SENSE_RESISTOR = 0.1;										// Stepper motor current sense resistor
 const float MAX_STEPPER_DIGIPOT_VOLTAGE = (3.3 * 2.5 / (2.7 + 2.5));	// Stepper motor current reference voltage
-const float MAX_STEPPER_DAC_VOLTAGE = 2.12;								// Stepper motor current reference voltage for E1 if using a DAC
+const float STEPPER_DAC_VOLTAGE_RANGE = 2.02;							// Stepper motor current reference voltage for E1 if using a DAC
+const float STEPPER_DAC_VOLTAGE_OFFSET = -0.025;						// Stepper motor current offset voltage for E1 if using a DAC
 const int DAC0_DIGITAL_PIN = 66;										// Arduino Due pin number corresponding to DAC0 output pin
 
 // HEATERS
