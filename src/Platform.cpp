@@ -723,15 +723,26 @@ void Platform::UpdateFirmware()
 
 	// Step 1 - Write update binary to Flash and overwrite the remaining space with zeros
 	// Leave the last 1KB of Flash memory untouched, so we can reuse the NvData after this update
+
 #if !defined(IFLASH_PAGE_SIZE) && defined(IFLASH0_PAGE_SIZE)
 # define IFLASH_PAGE_SIZE	IFLASH0_PAGE_SIZE
 #endif
 
-	char data[IFLASH_PAGE_SIZE];
-	int bytesRead;
-	for(uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
+	// Use a 32-bit aligned buffer. This gives us the option of calling the EFC functions directly in future.
+	uint32_t data32[IFLASH_PAGE_SIZE/4];
+	char* const data = reinterpret_cast<char *>(data32);
+
+#if (SAM4S || SAM4E)
+	// The EWP command is not supported for non-8KByte sectors in the SAM4 series.
+	// So unlock and erase the complete 64Kb sector first.
+	// TODO save the NVRAM area and restore it later
+
+	flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
+	flash_erase_sector(IAP_FLASH_START);
+
+	for (uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
 	{
-		bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
+		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
 
 		if (bytesRead > 0)
 		{
@@ -743,28 +754,82 @@ void Platform::UpdateFirmware()
 
 			// Write one page at a time
 			cpu_irq_disable();
-			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
-			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
-			flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			const uint32_t rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
 			cpu_irq_enable();
 
+			if (rc != FLASH_RC_OK)
+			{
+				MessageF(GENERIC_MESSAGE, "Error: Flash write failed, code=%u, address=0x%08x\n", rc, flashAddr);
+				return;
+			}
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
-				Message(GENERIC_MESSAGE, "Error: Verify during Flash write failed!\n");
+				MessageF(GENERIC_MESSAGE, "Error: Verify during flash write failed, address=0x%08x\n", flashAddr);
 				return;
 			}
 		}
 		else
 		{
-			// Empty write buffer so we can use it to fill up the remaining space
+			// Fill up the remaining space with zeros
+			memset(data, 0, sizeof(data[0]) * sizeof(data));
+			cpu_irq_disable();
+			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 0);
+			cpu_irq_enable();
+		}
+	}
+
+	// Re-lock the whole area
+	flash_lock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
+
+#else	// SAM3X code
+
+	for (uint32_t flashAddr = IAP_FLASH_START; flashAddr < IAP_FLASH_END; flashAddr += IFLASH_PAGE_SIZE)
+	{
+		const int bytesRead = iapFile->Read(data, IFLASH_PAGE_SIZE);
+
+		if (bytesRead > 0)
+		{
+			// Do we have to fill up the remaining buffer with zeros?
 			if (bytesRead != IFLASH_PAGE_SIZE)
 			{
-				memset(data, 0, sizeof(data[0]) * sizeof(data));
-				bytesRead = IFLASH_PAGE_SIZE;
+				memset(data + bytesRead, 0, sizeof(data[0]) * (IFLASH_PAGE_SIZE - bytesRead));
 			}
 
+			// Write one page at a time
+			cpu_irq_disable();
+
+			const char* op = "unlock";
+			uint32_t rc = flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+
+			if (rc == FLASH_RC_OK)
+			{
+				op = "write";
+				rc = flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
+			}
+			if (rc == FLASH_RC_OK)
+			{
+				op = "lock";
+				rc = flash_lock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
+			}
+			cpu_irq_enable();
+
+			if (rc != FLASH_RC_OK)
+			{
+				MessageF(GENERIC_MESSAGE, "Error: Flash %s failed, code=%u, address=0x%08x\n", op, rc, flashAddr);
+				return;
+			}
+			// Verify written data
+			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
+			{
+				MessageF(GENERIC_MESSAGE, "Error: Verify during flash write failed, address=0x%08x\n", flashAddr);
+				return;
+			}
+		}
+		else
+		{
 			// Fill up the remaining space
+			memset(data, 0, sizeof(data[0]) * sizeof(data));
 			cpu_irq_disable();
 			flash_unlock(flashAddr, flashAddr + IFLASH_PAGE_SIZE - 1, nullptr, nullptr);
 			flash_write(flashAddr, data, IFLASH_PAGE_SIZE, 1);
@@ -772,6 +837,8 @@ void Platform::UpdateFirmware()
 			cpu_irq_enable();
 		}
 	}
+#endif
+
 	iapFile->Close();
 
 	// Step 2 - Let the firmware do whatever is necessary before we exit this program

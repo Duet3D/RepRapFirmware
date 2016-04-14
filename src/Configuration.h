@@ -30,7 +30,7 @@ Licence: GPL
 #endif
 
 #ifndef VERSION
-#define VERSION "1.11"
+#define VERSION "1.11d"
 #endif
 
 #ifndef DATE
@@ -174,7 +174,12 @@ const float FILAMENT_WIDTH = 1.75;					// Millimetres
 
 #define EOF_STRING "<!-- **EoF** -->"
 
+#ifdef DUET_NG
+#define IAP_UPDATE_FILE "iap4e.bin"
+#else
 #define IAP_UPDATE_FILE "iap.bin"
+#endif
+
 #define IAP_FIRMWARE_FILE "RepRapFirmware.bin"
 
 // List defaults
