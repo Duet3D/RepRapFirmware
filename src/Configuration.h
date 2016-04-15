@@ -23,18 +23,14 @@ Licence: GPL
 #ifndef CONFIGURATION_H
 #define CONFIGURATION_H
 
-#ifdef CORE_NG
-#define NAME "RepRapFirmware (CoreNG)"
-#else
-#define NAME "RepRapFirmware"
-#endif
+// Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-#define VERSION "1.11d"
+# define VERSION "1.11d"
 #endif
 
 #ifndef DATE
-#define DATE "2016-04-14"
+# define DATE "2016-04-14"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -156,7 +152,7 @@ const float FILAMENT_WIDTH = 1.75;					// Millimetres
 #define FS_PREFIX "0:"
 #define WEB_DIR "0:/www/"							// Place to find web files on the SD card
 #define GCODE_DIR "0:/gcodes/"						// Ditto - G-Codes
-#define SYS_DIR "0:/sys/";							// Ditto - System files
+#define SYS_DIR "0:/sys/"							// Ditto - System files
 #define MACRO_DIR "0:/macros/"						// Ditto - Macro files
 
 #define CONFIG_FILE "config.g"
@@ -174,13 +170,7 @@ const float FILAMENT_WIDTH = 1.75;					// Millimetres
 
 #define EOF_STRING "<!-- **EoF** -->"
 
-#ifdef DUET_NG
-#define IAP_UPDATE_FILE "iap4e.bin"
-#else
-#define IAP_UPDATE_FILE "iap.bin"
-#endif
-
-#define IAP_FIRMWARE_FILE "RepRapFirmware.bin"
+// Firmware update files are now defined in the Pins file
 
 // List defaults
 

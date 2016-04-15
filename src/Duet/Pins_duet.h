@@ -1,6 +1,11 @@
 #ifndef PINS_DUET_H__
 #define PINS_DUET_H__
 
+#define NAME "RepRapFirmware for Duet"
+
+#define IAP_UPDATE_FILE "iap.bin"
+#define IAP_FIRMWARE_FILE "RepRapFirmware.bin"
+
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::Duet_06
 

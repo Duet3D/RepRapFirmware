@@ -3,6 +3,9 @@
 #ifndef FILESTORE_H
 #define FILESTORE_H
 
+#include "Arduino.h"
+#include "ff.h"
+
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 const size_t FileBufLen = 256;						// 512 would be more efficient, but need to free up some RAM first
@@ -15,6 +18,8 @@ enum class IOStatus : uint8_t
 	clientLive = 4,
 	clientConnected = 8
 };
+
+class Platform;
 
 class FileStore
 {
