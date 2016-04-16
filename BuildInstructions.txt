@@ -9,9 +9,9 @@ Instructions for building dc42 fork of RepRapFirmware version 1.09t and later un
 
 4. Download this github project as a zip file and unzip it into C:/Eclipse/Firmware. Then rename folder ReprapFirmware-dev in that folder to RepRapFirmware.
 
-5. Repeat for github project CoreDue. The folder name should be left as CoreDuet (or renamed from CoreDuet-dev to CoreDuet if you downloaded a dev build).
+5. Repeat for github project CoreNG. The folder name should be left as CoreNG (or renamed from CoreNG-dev to CoreNG if you downloaded a dev build).
 
-6. Load Eclipse and tell it to import the CoreDuet and ReprapFirmware projects.
+6. Load Eclipse and tell it to import the CoreNG and ReprapFirmware projects.
 
 7. If your compiler and tools are in a folder other than C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin, configure the path to the tools in both projects. You will find this in the project settings under C/C++ Build -> Settings -> Cross Settings.
 
@@ -19,4 +19,4 @@ Instructions for building dc42 fork of RepRapFirmware version 1.09t and later un
 
 9. Build CoreDuet first, then RepRapFirmware.
 
-D Crocker, updated 2016-03-14.
+D Crocker, updated 2016-04-16.
