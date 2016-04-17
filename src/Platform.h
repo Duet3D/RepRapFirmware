@@ -1228,9 +1228,7 @@ inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, 
 // Get the interrupt clock count
 /*static*/ inline uint32_t Platform::GetInterruptClocks()
 {
-	//return TC_ReadCV(TC1, 0);
-	// sadly, the Arduino IDE does not provide the inlined version of TC_ReadCV, so use the following instead...
-	return TC1 ->TC_CHANNEL[0].TC_CV;
+	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 }
 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter

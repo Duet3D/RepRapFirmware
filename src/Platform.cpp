@@ -1160,8 +1160,8 @@ void Platform::InitialiseInterrupts()
 	pmc_set_writeprotect(false);
 	pmc_enable_periph_clk((uint32_t) STEP_TC_IRQN);
 	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK3);
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0;	// interrupts disabled for now
-	tc_start(STEP_TC, 0);
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0; // interrupts disabled for now
+	tc_start(STEP_TC, STEP_TC_CHAN);
 	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
 	NVIC_SetPriority(STEP_TC_IRQN, 2);						// set high priority for this IRQ; it's time-critical
 	NVIC_EnableIRQ(STEP_TC_IRQN);
@@ -2499,15 +2499,15 @@ char Platform::ReadFromSource(const SerialSource source)
 // Must be called with interrupts disabled,
 /*static*/ bool Platform::ScheduleInterrupt(uint32_t tim)
 {
-	tc_write_ra(TC1, 0, tim);								// set up the compare register
-	tc_get_status(TC1, 0);									// clear any pending interrupt
-	int32_t diff = (int32_t)(tim - tc_read_cv(TC1, 0));		// see how long we have to go
+	tc_write_ra(STEP_TC, STEP_TC_CHAN, tim);				// set up the compare register
+	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
+	int32_t diff = (int32_t)(tim - GetInterruptClocks());	// see how long we have to go
 	if (diff < (int32_t)DDA::minInterruptInterval)			// if less than about 2us or already passed
 	{
 		return true;										// tell the caller to simulate an interrupt instead
 	}
 
-	TC1 ->TC_CHANNEL[0].TC_IER = TC_IER_CPAS;				// enable the interrupt
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;	// enable the interrupt
 #ifdef MOVE_DEBUG
 		++numInterruptsScheduled;
 		nextInterruptTime = tim;

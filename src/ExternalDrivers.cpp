@@ -5,13 +5,14 @@
  *      Author: David
  */
 
+//#include "Platform.h"			// for typedefs uint8_t etc.
+#include "RepRapFirmware.h"
+
 #ifdef EXTERNAL_DRIVERS
 
-#include "Platform.h"			// for typedefs uint8_t etc.
+const size_t NumExternalDrivers = DRIVES - FIRST_EXTERNAL_DRIVE;
 
-#define NUM_EXTERNAL_DRIVERS	(DRIVES - FIRST_EXTERNAL_DRIVE)
-
-// Connections between Duet and TMC2660-EVAL board:
+// Connections between Duet 0.6 and TMC2660-EVAL board:
 
 // Driver signal name  	Eval board pin	Our signal name   	Duet 0.6 expansion connector pin #
 // SDI                 	29				MOSI              	11 (TXD1)
@@ -25,12 +26,33 @@
 // CLK					23				connect to ground	2  (GND
 // 5V_USB				5				+3.3V				3  (+3.3V)
 
-const Pin MosiPin = 16;								// PA13
-const Pin MisoPin = 17;								// PA12
-const Pin SclkPin = 54;								// PA16
-const Pin SelectPins[NUM_EXTERNAL_DRIVERS] = {37, X8, 50, 47, X13};
+// Connections between DuetNG 0.6 and TMC2660-EVAL board:
 
-const uint32_t SpiClockFrequency = 1000000;			// 1MHz SPI clock
+// Driver signal name  	Eval board pin	Our signal name   	DuetNG 0.6 expansion connector pin #
+// SDI                 	29				SPI1_MOSI           29 (SPI1_MOSI)
+// SDO                  28 				SPI1_MISO           30 (SPI1_MISO)
+// SCK                  27 				SPI1_SCLK           28 (SPI1_SCLK)
+// /CS                  24				/CS                	24 (E2_EN)
+// GND					2,3,43,44		GND					2  (GND)
+// INT_STEP				19				E2_STEP				19 (E2_STEP)
+// INT_DIR				20				E2_DIR				20 (E2_DIR)
+// ENN					8				connect to ground	2  (GND)
+// CLK					23				connect to ground	2  (GND
+// 5V_USB				5				+3.3V				3  (+3.3V)
+
+#ifdef DUET_NG
+const Pin DriversMosiPin = 22;								// PA13
+const Pin DriversMisoPin = 21;								// PA22
+const Pin DriversSclkPin = 23;								// PA23
+const Pin DriverSelectPins[NumExternalDrivers] = {87, 88, 89, 90};
+#else
+const Pin DriversMosiPin = 16;								// PA13
+const Pin DriversMisoPin = 17;								// PA12
+const Pin DriversSclkPin = 54;								// PA16
+const Pin DriverSelectPins[NumExternalDrivers] = {37, X8, 50, 47, X13};
+#endif
+
+const uint32_t DriversSpiClockFrequency = 1000000;			// 1MHz SPI clock
 
 // TMC2660 registers
 const uint32_t TMC_REG_DRVCTRL = 0;
@@ -155,7 +177,7 @@ const uint32_t defaultSmartEnReg =
 uint32_t SpiSendWord(uint32_t pin, uint32_t dataOut)
 {
 	USART1->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
-	digitalWriteNonDue(pin, LOW);				// set CS low
+	digitalWrite(pin, LOW);						// set CS low
 	delayMicroseconds(1);						// allow some CS low setup time
 	USART1->US_CR = US_CR_RXEN | US_CR_TXEN;	// enable transmitter and receiver
 	uint32_t dataIn = 0;
@@ -171,9 +193,9 @@ uint32_t SpiSendWord(uint32_t pin, uint32_t dataOut)
 		dataIn |= USART1->US_RHR & 0x000000FF;
 	}
 	delayMicroseconds(1);
-	digitalWriteNonDue(pin, HIGH);				// set CS high again
-	delayMicroseconds(1);						// ensure it stays high for long enough before the next write
+	digitalWrite(pin, HIGH);					// set CS high again
 	USART1->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;	// reset and disable transmitter and receiver
+	delayMicroseconds(1);						// ensure it stays high for long enough before the next write
 	return (dataIn >> 4) & 0x000FFFFF;
 }
 
@@ -242,7 +264,6 @@ void TmcDriverState::SetCurrent(float current)
 	// I am assuming that the current sense resistor is 0.1 ohms as on the evaluation board.
 	// This gives us a range of 95mA to 3.05A in 95mA steps when VSENSE is high (but max allowed RMS current is 2A),
 	// or 52mA to 1.65A in 52mA steps when VSENSE is low.
-
 	if (current > 1650.0)
 	{
 		// Need VSENSE = 1, but set up the current first to avoid temporarily exceeding the 2A rating
@@ -284,7 +305,7 @@ uint32_t TmcDriverState::GetStatus() const
 	return SpiSendWord(pin, smartEnReg) & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
-static TmcDriverState driverStates[NUM_EXTERNAL_DRIVERS];
+static TmcDriverState driverStates[NumExternalDrivers];
 
 //--------------------------- Public interface ---------------------------------
 
@@ -294,26 +315,37 @@ namespace ExternalDrivers
 	void Init()
 	{
 		// Set up the SPI pins
+#ifndef DUET_NG
 		// PinS AD0 and AD7 may have already be set up as an ADC pin by the Arduino core, so undo that here or we won't get a clock output
 		ADC->ADC_CHDR = (1 << 7);
+#endif
 
-		const PinDescription& pin2 = GetPinDescription(MosiPin);
-		PIO_Configure(pin2.pPort, PIO_PERIPH_A, pin2.ulPin, PIO_DEFAULT);
-		const PinDescription& pin3 = GetPinDescription(MisoPin);
-		PIO_Configure(pin3.pPort, PIO_PERIPH_A, pin3.ulPin, PIO_DEFAULT);
-		const PinDescription& pin1 = GetPinDescription(SclkPin);
-		PIO_Configure(pin1.pPort, PIO_PERIPH_A, pin1.ulPin, PIO_DEFAULT);
+#ifdef DUET_NG
+		// The pins are already set up for SPI in the pins table
+		ConfigurePin(GetPinDescription(DriversMosiPin));
+		ConfigurePin(GetPinDescription(DriversMisoPin));
+		ConfigurePin(GetPinDescription(DriversSclkPin));
+#else
+		const PinDescription& pin2 = GetPinDescription(DriversMosiPin);
+		pio_configure(pin2.pPort, PIO_PERIPH_A, pin2.ulPin, PIO_DEFAULT);
+		const PinDescription& pin3 = GetPinDescription(DriversMisoPin);
+		pio_configure(pin3.pPort, PIO_PERIPH_A, pin3.ulPin, PIO_DEFAULT);
+		const PinDescription& pin1 = GetPinDescription(DriversSclkPin);
+		pio_configure(pin1.pPort, PIO_PERIPH_A, pin1.ulPin, PIO_DEFAULT);
+#endif
+
+		// Enable the clock to UART1
+		pmc_enable_periph_clk(ID_USART1);
 
 		// Set up the CS pins and set them all high
 		// When this becomes the standard code, we must set up the STEP and DIR pins here too.
-		for (size_t drive = 0; drive < NUM_EXTERNAL_DRIVERS; ++drive)
+		for (size_t drive = 0; drive < NumExternalDrivers; ++drive)
 		{
-			digitalWriteNonDue(SelectPins[drive], HIGH);
-			pinModeNonDue(SelectPins[drive], OUTPUT);
+			digitalWrite(DriverSelectPins[drive], HIGH);
+			pinMode(DriverSelectPins[drive], OUTPUT);
 		}
 
 		// Set USART1 in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
-		pmc_enable_periph_clk(ID_USART1);
 		USART1->US_IDR = ~0u;
 		USART1->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
 		USART1->US_MR = US_MR_USART_MODE_SPI_MASTER
@@ -322,50 +354,65 @@ namespace ExternalDrivers
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		USART1->US_BRGR = F_CPU/SpiClockFrequency;				// 1MHz SPI clock
+		USART1->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;				// 1MHz SPI clock
 		USART1->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
-		for (size_t drive = 0; drive < NUM_EXTERNAL_DRIVERS; ++drive)
+		// We need a few microseconds of delay here foe the USART to sort itself out,
+		// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
+		// But it looks like the TMC drivers need a longer delay anyway to get used to CS being high,
+		// otherwise they ignore the command we send to set the microstepping to x16 and  start up in full-step mode.
+		delay(10);
+
+		for (size_t drive = 0; drive < NumExternalDrivers; ++drive)
 		{
-			driverStates[drive].Init(SelectPins[drive]);
+			driverStates[drive].Init(DriverSelectPins[drive]);
 		}
 	}
 
 	void SetCurrent(size_t drive, float current)
 	{
-		driverStates[drive].SetCurrent(current);
+		if (drive < NumExternalDrivers)
+		{
+			driverStates[drive].SetCurrent(current);
+		}
 	}
 
 	void EnableDrive(size_t drive, bool en)
 	{
-		driverStates[drive].Enable(en);
+		if (drive < NumExternalDrivers)
+		{
+			driverStates[drive].Enable(en);
+		}
 	}
 
 	uint32_t GetStatus(size_t drive)
 	{
-		return driverStates[drive].GetStatus();
+		return (drive < NumExternalDrivers) ? driverStates[drive].GetStatus() : 0;
 	}
 
 	bool SetMicrostepping(size_t drive, int microsteps, int mode)
 	{
-		if (mode == 999 && microsteps >= 0)
+		if (drive < NumExternalDrivers)
 		{
-			driverStates[drive].SetChopConf((uint32_t)microsteps);	// set the chopper control register
-		}
-		else if (microsteps > 0 && (mode == 0 || mode == 1))
-		{
-			// Set the microstepping. We need to determine how many bits left to shift the desired microstepping to reach 256.
-			unsigned int shift = 0;
-			unsigned int uSteps = (unsigned int)microsteps;
-			while (uSteps < 256)
+			if (mode == 999 && microsteps >= 0)
 			{
-				uSteps <<= 1;
-				++shift;
+				driverStates[drive].SetChopConf((uint32_t)microsteps);	// set the chopper control register
 			}
-			if (uSteps == 256)
+			else if (microsteps > 0 && (mode == 0 || mode == 1))
 			{
-				driverStates[drive].SetMicrostepping(shift, mode != 0);
-				return true;
+				// Set the microstepping. We need to determine how many bits left to shift the desired microstepping to reach 256.
+				unsigned int shift = 0;
+				unsigned int uSteps = (unsigned int)microsteps;
+				while (uSteps < 256)
+				{
+					uSteps <<= 1;
+					++shift;
+				}
+				if (uSteps == 256)
+				{
+					driverStates[drive].SetMicrostepping(shift, mode != 0);
+					return true;
+				}
 			}
 		}
 		return false;
@@ -373,10 +420,14 @@ namespace ExternalDrivers
 
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation)
 	{
-		const uint32_t drvCtrl = driverStates[drive].drvCtrlReg;
-		interpolation = (drvCtrl & TMC_DRVCTRL_INTPOL) != 0;
-		const uint32_t mresBits = (drvCtrl & TMC_DRVCTRL_MRES_MASK) >> TMC_DRVCTRL_MRES_SHIFT;
-		return 256 >> mresBits;
+		if (drive < NumExternalDrivers)
+		{
+			const uint32_t drvCtrl = driverStates[drive].drvCtrlReg;
+			interpolation = (drvCtrl & TMC_DRVCTRL_INTPOL) != 0;
+			const uint32_t mresBits = (drvCtrl & TMC_DRVCTRL_MRES_MASK) >> TMC_DRVCTRL_MRES_SHIFT;
+			return 256 >> mresBits;
+		}
+		return 1;
 	}
 };
 
