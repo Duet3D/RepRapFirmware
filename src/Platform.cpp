@@ -370,7 +370,7 @@ void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
 	heaterTempChannels[heater] = thermistor;
 
 	// Initialize the associated MAX31855?
-	if (thermistor >= MAX31855_START_CHANNEL)
+	if (thermistor >= MAX31855_START_CHANNEL && thermistor < MAX31855_START_CHANNEL + MAX31855_DEVICES)
 	{
 		Max31855Devices[thermistor - MAX31855_START_CHANNEL].Init(max31855CsPins[thermistor - MAX31855_START_CHANNEL]);
 	}
@@ -1414,13 +1414,15 @@ float Platform::GetTemperature(size_t heater, TempError* err) const
 		}
 		if (err)
 		{
-			switch(res) {
+			switch(res)
+			{
 			case MAX31855_OK      : *err = TempError::errOk; break;			// Success
 			case MAX31855_ERR_SCV : *err = TempError::errShortVcc; break;	// Short to Vcc
 			case MAX31855_ERR_SCG : *err = TempError::errShortGnd; break;	// Short to GND
 			case MAX31855_ERR_OC  : *err = TempError::errOpen; break;		// Open connection
 			case MAX31855_ERR_TMO : *err = TempError::errTimeout; break;	// SPI comms timeout
-			case MAX31855_ERR_IO  : *err = TempError::errIO; break;			// SPI comms not functioning
+			case MAX31855_ERR_IO  :
+			default				  :	*err = TempError::errIO; break;			// SPI comms not functioning
 			}
 		}
 		return BAD_ERROR_TEMPERATURE;

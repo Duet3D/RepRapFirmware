@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.11d"
+# define VERSION "1.11a"
 #endif
 
 #ifndef DATE
-# define DATE "2016-04-14"
+# define DATE "2016-04-21"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -39,7 +39,7 @@ Licence: GPL
 
 // If enabled, the following control the use of the optional ExternalDrivers module
 //#define EXTERNAL_DRIVERS		(1)
-//#define FIRST_EXTERNAL_DRIVE	(4)
+//#define FIRST_EXTERNAL_DRIVE	(5)
 
 // Other firmware that we might switch to be compatible with.
 

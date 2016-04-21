@@ -1,5 +1,4 @@
 #include "MAX31855.h"
-#include "spi_master.h"
 
 // MAX31855 thermocouple chip
 //
@@ -45,107 +44,68 @@
 // dan.newman@mtbaldy.us
 // GPL v3
 
-#ifdef DUET_NG
-# define MAX_SPI	SPI
-#else
-# define MAX_SPI	SPI0
-#endif
-
 #define PERIPHERAL_CHANNEL_ID       3
 #define PERIPHERAL_CHANNEL_CS_PIN  78  // NPCS3
 
 // 5.0 MHz Max clock frequency when clocking data out of a MAX31855 
 #define MAX31855_MAX_FREQ 5000000u
 
-// Delay before send should be at least 100 ns
-#define MAX31855_DLYBS (1u + (F_CPU / 10000000u))
-
-// Delay between consecutive transfers should be 0
-#define MAX31855_DLYBCT 0
-
-MAX31855::MAX31855(uint8_t cs, bool deferInit) : initialized(false)
-{
-	if (!deferInit)
-	{
-		Init(cs);
-	}
-}
-
 // Perform the actual hardware initialization for attaching and using this
 // device on the SPI hardware bus.
-//
-// A deferred initialization model is permitted so that the
-// firmware can declare static instances of these devices at compiled time
-// BUT not actually have them configure themselves unless gcode commands
-// are issued which explicitly request the devices.  Otherwise, pins intended
-// for other purposes may be implicitly usurped.
-
 void MAX31855::Init(uint8_t cs)
 {
-	if (!initialized)
-	{
-		// Let the SPI library configure our actual CS as an output and
-		// pull it HIGH.  We do not bother the configure the NPCS3 peripheral
-		device.cs   = cs;                    // Chip select
-		device.id   = PERIPHERAL_CHANNEL_ID; // Peripheral channel
-		device.bits = SPI_CSR_BITS_16_BIT;   // 16 bit data transfers
-		spi_master_init(MAX_SPI, device.cs);
-		initialized = true;
-	}
-}
+	device.csPin = cs;
+	pinMode(cs, OUTPUT);
+	digitalWrite(cs, HIGH);
 
-// Use our own read routine; the ASF SPI read routines only do 8 bit data transfers
-
-spi_status_t MAX31855::readRaw(uint16_t *raw) const
-{
-	for (uint8_t i = 0; i < 2; i++)
-	{
-		uint32_t timeout = SPI_TIMEOUT;
-		while (!spi_is_tx_ready(MAX_SPI))
-		{
-			if (!timeout--)
-			{
-				return SPI_ERROR_TIMEOUT;
-			}
-		}
-
-		MAX_SPI->SPI_TDR = (i != 1) ? 0x00000000 : 0x00000000 | SPI_TDR_LASTXFER;
-
-		timeout = SPI_TIMEOUT;
-		while (!spi_is_rx_ready(MAX_SPI))
-		{
-			if (!timeout--)
-			{
-				return SPI_ERROR_TIMEOUT;
-			}
-		}
-
-		*raw++ = MAX_SPI->SPI_RDR;
-	}
-
-	return SPI_OK;
+#ifdef DUET_NG
+	sspi_master_init(&device, 8);
+#else
+	device.id   = PERIPHERAL_CHANNEL_ID;		// Peripheral channel
+	sspi_master_init(&device, 16);
+#endif
 }
 
 MAX31855_error MAX31855::getTemperature(float *t) const
 {
+	if (!sspi_acquire())
+	{
+		return MAX31855_GSPI_BUSY;
+	}
+
 	// Assume properly initialized
-	// Ensure that the configuration is as needed; another SPI0 consumer
+	// Ensure that the configuration is as needed; another GSPI consumer
 	// may have changed the bus speed and/or timing delays.
-	spi_master_setup_device(MAX_SPI, &device, 0, MAX31855_MAX_FREQ, 0);
-	spi_set_transfer_delay(MAX_SPI, device.id, MAX31855_DLYBS, MAX31855_DLYBCT);
+	sspi_master_setup_device(&device, SPI_MODE_0, MAX31855_MAX_FREQ);
 
 	// Select the device; enable CS (set it LOW)
-	spi_select_device(MAX_SPI, &device);
+	sspi_select_device(&device);
+	delayMicroseconds(1);		// TODO shorten this (MAX31855 needs 100ns minimum)
 
 	// Read in 32 bits
+
+#ifdef DUET_NG
+	uint8_t dataOut[4] = {0, 0, 0, 0};
+	uint8_t rawBytes[4];
+	spi_status_t sts = sspi_transceive_packet(dataOut, rawBytes, 4);
 	uint16_t raw[2];
-	if (readRaw(raw) != SPI_OK)
+	raw[0] = ((uint16_t)rawBytes[0] << 8) | (uint16_t)rawBytes[1];
+	raw[1] = ((uint16_t)rawBytes[2] << 8) | (uint16_t)rawBytes[3];
+#else
+	uint16_t dataOut[2] = {0, 0};
+	uint16_t raw[2];
+	spi_status_t sts = sspi_transceive_packet16(dataOut, raw, 2);
+#endif
+
+	// Deselect the device; disable CS (set it HIGH)
+	sspi_deselect_device(&device);
+
+	sspi_release();
+
+	if (sts != SPI_OK)
 	{
 		return MAX31855_ERR_TMO;
 	}
-
-	// Deselect the device; disable CS (set it HIGH)
-	spi_deselect_device(MAX_SPI, &device);
 
 	if ((raw[0] & 0x02) || (raw[1] & 0x08))
 	{
@@ -180,7 +140,6 @@ MAX31855_error MAX31855::getTemperature(float *t) const
 		// At this point we are assured that bit 16 (fault indicator) is set
 		// and that at least one of the fault reason bits (0:2) are set.  We
 		// now need to ensure that only one fault reason bit is set.
-
 		uint8_t nbits = 0;
 		MAX31855_error err;
 
@@ -228,7 +187,7 @@ MAX31855_error MAX31855::getTemperature(float *t) const
 	}
 
 	// And convert to from units of 1/4C to 1C
-	*t = (float)(0.25 * temp);
+	*t = (float)(0.25 * (float)temp);
 
 	// Success!
 	return MAX31855_OK;
@@ -245,6 +204,7 @@ const char* MAX31855::errorStr(MAX31855_error err) const
 	case MAX31855_ERR_OC   : return "thermocouple is broken (open)";
 	case MAX31855_ERR_TMO  : return "error communicating with MAX31855; read timed out";
 	case MAX31855_ERR_IO   : return "error communicating with MAX31855; disconnected?";
+	case MAX31855_GSPI_BUSY: return "general SPI bus is busy";
 	}
 }
 

@@ -194,6 +194,7 @@
 								<option id="gnu.cpp.compiler.option.include.paths.1285689288" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/cores/arduino}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Wire}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/SharedSpi}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Storage}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
@@ -316,6 +317,7 @@
 								<option id="gnu.cpp.compiler.option.include.paths.251815634" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/cores/arduino}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Wire}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/SharedSpi}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Storage}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>

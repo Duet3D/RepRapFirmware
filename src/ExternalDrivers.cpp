@@ -49,7 +49,7 @@ const Pin DriverSelectPins[NumExternalDrivers] = {87, 88, 89, 90};
 const Pin DriversMosiPin = 16;								// PA13
 const Pin DriversMisoPin = 17;								// PA12
 const Pin DriversSclkPin = 54;								// PA16
-const Pin DriverSelectPins[NumExternalDrivers] = {37, X8, 50, 47, X13};
+const Pin DriverSelectPins[NumExternalDrivers] = {37, X8, 50, 47 /*, X13*/ };
 #endif
 
 const uint32_t DriversSpiClockFrequency = 1000000;			// 1MHz SPI clock
