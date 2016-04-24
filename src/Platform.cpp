@@ -228,11 +228,18 @@ void Platform::Init()
 
 	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
-	ARRAY_INIT(max31855CsPins, MAX31855_CS_PINS);
+	ARRAY_INIT(spiTempSenseCsPins, SpiTempSensorCsPins);
 
 	configuredHeaters = (BED_HEATER >= 0) ? (1 << BED_HEATER) : 0;
 	heatSampleTime = HEAT_SAMPLE_TIME;
 	timeToHot = TIME_TO_HOT;
+
+	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
+	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
+	for (size_t i = 0; i < MaxSpiTempSensors; ++i)
+	{
+		setPullup(SpiTempSensorCsPins[i], true);
+	}
 
 	// Motors
 
@@ -369,11 +376,17 @@ void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
 {
 	heaterTempChannels[heater] = thermistor;
 
-	// Initialize the associated MAX31855?
-	if (thermistor >= MAX31855_START_CHANNEL && thermistor < MAX31855_START_CHANNEL + MAX31855_DEVICES)
+	// Initialize the associated SPI temperature sensor?
+	if (thermistor >= FirstThermocoupleChannel && thermistor < FirstThermocoupleChannel + MaxSpiTempSensors)
 	{
-		Max31855Devices[thermistor - MAX31855_START_CHANNEL].Init(max31855CsPins[thermistor - MAX31855_START_CHANNEL]);
+		SpiTempSensors[thermistor - FirstThermocoupleChannel].InitThermocouple(SpiTempSensorCsPins[thermistor - FirstThermocoupleChannel]);
 	}
+	else if (thermistor >= FirstRtdChannel && thermistor < FirstRtdChannel + MaxSpiTempSensors)
+	{
+		SpiTempSensors[thermistor - FirstRtdChannel].InitRtd(spiTempSenseCsPins[thermistor - FirstRtdChannel]);
+	}
+
+	reprap.GetHeat()->ResetFault(heater);
 }
 
 int Platform::GetThermistorNumber(size_t heater) const
@@ -504,19 +517,21 @@ void Platform::GetZProbeAxes(bool (&axes)[AXES])
 	}
 }
 
-float Platform::ZProbeStopHeight() const
+float Platform::ZProbeStopHeight()
 {
+	const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
+	float temperature = (bedHeater >= 0) ? GetTemperature(bedHeater) : 25.0;
 	switch (nvData.zProbeType)
 	{
 	case 0:
 	case 4:
-		return nvData.switchZProbeParameters.GetStopHeight(GetTemperature(0));
+		return nvData.switchZProbeParameters.GetStopHeight(temperature);
 	case 1:
 	case 2:
-		return nvData.irZProbeParameters.GetStopHeight(GetTemperature(0));
+		return nvData.irZProbeParameters.GetStopHeight(temperature);
 	case 3:
 	case 5:
-		return nvData.alternateZProbeParameters.GetStopHeight(GetTemperature(0));
+		return nvData.alternateZProbeParameters.GetStopHeight(temperature);
 	default:
 		return 0;
 	}
@@ -1355,13 +1370,13 @@ void Platform::ClassReport(float &lastTime)
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(size_t heater, TempError* err) const
+float Platform::GetTemperature(size_t heater, TemperatureError* err)
 {
 	// Note that at this point we're actually getting an averaged ADC read, not a "raw" temp.  For thermistors,
 	// we're getting an averaged voltage reading which we'll convert to a temperature.
-	if (DoThermistorAdc(heater))
+	if (IsThermistorChannel(heater))
 	{
-		int rawTemp = GetRawTemperature(heater);
+		int rawTemp = GetRawThermistorTemperature(heater);
 
 		// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
 		// So we add 0.5 to to the reading to get a better estimate of the input.
@@ -1379,7 +1394,7 @@ float Platform::GetTemperature(size_t heater, TempError* err) const
 			// thermistor is disconnected
 			if (err)
 			{
-				*err = TempError::errOpen;
+				*err = TemperatureError::openCircuit;
 			}
 			return ABS_ZERO;
 		}
@@ -1398,55 +1413,44 @@ float Platform::GetTemperature(size_t heater, TempError* err) const
 			// thermistor short circuit, return a high temperature
 			if (err)
 			{
-				*err = TempError::errShort;
+				*err = TemperatureError::shortCircuit;
 			}
-			return BAD_ERROR_TEMPERATURE;
 		}
 	}
-	else
+	else if (IsThermocoupleChannel(heater))
 	{
 		// MAX31855 thermocouple chip
 		float temp;
-		MAX31855_error res = Max31855Devices[heaterTempChannels[heater] - MAX31855_START_CHANNEL].getTemperature(&temp);
-		if (res == MAX31855_OK)
+		TemperatureError res = SpiTempSensors[heaterTempChannels[heater] - FirstThermocoupleChannel].GetThermocoupleTemperature(&temp);
+		if (res == TemperatureError::success)
 		{
 			return temp;
 		}
 		if (err)
 		{
-			switch(res)
-			{
-			case MAX31855_OK      : *err = TempError::errOk; break;			// Success
-			case MAX31855_ERR_SCV : *err = TempError::errShortVcc; break;	// Short to Vcc
-			case MAX31855_ERR_SCG : *err = TempError::errShortGnd; break;	// Short to GND
-			case MAX31855_ERR_OC  : *err = TempError::errOpen; break;		// Open connection
-			case MAX31855_ERR_TMO : *err = TempError::errTimeout; break;	// SPI comms timeout
-			case MAX31855_ERR_IO  :
-			default				  :	*err = TempError::errIO; break;			// SPI comms not functioning
-			}
+			*err = res;
 		}
-		return BAD_ERROR_TEMPERATURE;
 	}
-}
-
-/*static*/ const char* Platform::TempErrorStr(TempError err)
-{
-	switch(err)
+	else if (IsRtdChannel(heater))
 	{
-	default : return "Unknown temperature read error";
-	case TempError::errOk : return "successful temperature read";
-	case TempError::errShort : return "sensor circuit is shorted";
-	case TempError::errShortVcc : return "sensor circuit is shorted to the voltage rail";
-	case TempError::errShortGnd : return "sensor circuit is shorted to ground";
-	case TempError::errOpen : return "sensor circuit is open/disconnected";
-	case TempError::errTooHigh: return "temperature above safety limit";
-	case TempError::errTimeout : return "communication error whilst reading sensor; read took too long";
-	case TempError::errIO: return "communication error whilst reading sensor; check sensor connections";
+		// MAX31865 RTD chip
+		float temp;
+		TemperatureError res = SpiTempSensors[heaterTempChannels[heater] - FirstRtdChannel].GetRtdTemperature(&temp);
+		if (res == TemperatureError::success)
+		{
+			return temp;
+		}
+		if (err)
+		{
+			*err = res;
+		}
 	}
+
+	return BAD_ERROR_TEMPERATURE;
 }
 
 // See if we need to turn on the hot end fan
-bool Platform::AnyHeaterHot(uint16_t heaters, float t) const
+bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 {
 	// Check tool heaters first
 	for (size_t h = 0; h < reprap.GetToolHeatersInUse(); ++h)
@@ -2539,7 +2543,7 @@ void Platform::Tick()
 	case 1:			// last conversion started was a thermistor
 	case 3:
 		{
-			if (DoThermistorAdc(currentHeater))
+			if (IsThermistorChannel(currentHeater))
 			{
 				ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
 				currentFilter.ProcessReading(AnalogInReadChannel(thermistorAdcChannels[heaterTempChannels[currentHeater]]));

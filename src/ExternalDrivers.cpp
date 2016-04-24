@@ -26,12 +26,12 @@ const size_t NumExternalDrivers = DRIVES - FIRST_EXTERNAL_DRIVE;
 // CLK					23				connect to ground	2  (GND
 // 5V_USB				5				+3.3V				3  (+3.3V)
 
-// Connections between DuetNG 0.6 and TMC2660-EVAL board:
+// Connections between DuetNG 0.6 and TMC2660-EVAL board (now using USART0):
 
 // Driver signal name  	Eval board pin	Our signal name   	DuetNG 0.6 expansion connector pin #
-// SDI                 	29				SPI1_MOSI           29 (SPI1_MOSI)
-// SDO                  28 				SPI1_MISO           30 (SPI1_MISO)
-// SCK                  27 				SPI1_SCLK           28 (SPI1_SCLK)
+// SDI                 	29				SPI1_MOSI           13 (SPI0_MOSI) was 29
+// SDO                  28 				SPI1_MISO           14 (SPI0_MISO) was 30
+// SCK                  27 				SPI1_SCLK           12 (SPI0_SCLK) was 28
 // /CS                  24				/CS                	24 (E2_EN)
 // GND					2,3,43,44		GND					2  (GND)
 // INT_STEP				19				E2_STEP				19 (E2_STEP)
@@ -41,18 +41,32 @@ const size_t NumExternalDrivers = DRIVES - FIRST_EXTERNAL_DRIVE;
 // 5V_USB				5				+3.3V				3  (+3.3V)
 
 #ifdef DUET_NG
+# if 1
+// Pin assignments for the first prototype, using USART0 SPI
+const Pin DriversMosiPin = 27;								// PB1
+const Pin DriversMisoPin = 26;								// PB0
+const Pin DriversSclkPin = 30;								// PB13
+#  define USART_EXT_DRV		USART0
+#  define ID_USART_EXT_DRV	ID_USART0
+# else
+// Pin assignments for the second prototype, using USART1 SPI
 const Pin DriversMosiPin = 22;								// PA13
 const Pin DriversMisoPin = 21;								// PA22
 const Pin DriversSclkPin = 23;								// PA23
+#  define USART_EXT_DRV		USART1
+#  define ID_USART_EXT_DRV	ID_USART1
+# endif
 const Pin DriverSelectPins[NumExternalDrivers] = {87, 88, 89, 90};
 #else
 const Pin DriversMosiPin = 16;								// PA13
 const Pin DriversMisoPin = 17;								// PA12
 const Pin DriversSclkPin = 54;								// PA16
 const Pin DriverSelectPins[NumExternalDrivers] = {37, X8, 50, 47 /*, X13*/ };
+# define USART_EXT_DRV		USART1
+# define ID_USART_EXT_DRV	ID_USART1
 #endif
 
-const uint32_t DriversSpiClockFrequency = 1000000;			// 1MHz SPI clock
+const uint32_t DriversSpiClockFrequency = 1000000;			// 1MHz SPI clock for now
 
 // TMC2660 registers
 const uint32_t TMC_REG_DRVCTRL = 0;
@@ -176,25 +190,25 @@ const uint32_t defaultSmartEnReg =
 // Send an SPI control string. The drivers need 20 bits. We send and receive 24 because the USART only supports 5 to 9 bit transfers.
 uint32_t SpiSendWord(uint32_t pin, uint32_t dataOut)
 {
-	USART1->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
+	USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
 	digitalWrite(pin, LOW);						// set CS low
 	delayMicroseconds(1);						// allow some CS low setup time
-	USART1->US_CR = US_CR_RXEN | US_CR_TXEN;	// enable transmitter and receiver
+	USART_EXT_DRV->US_CR = US_CR_RXEN | US_CR_TXEN;	// enable transmitter and receiver
 	uint32_t dataIn = 0;
 	for (int i = 0; i < 3; ++i)
 	{
-		USART1->US_THR = (dataOut >> 16) & 0x000000FFu;
+		USART_EXT_DRV->US_THR = (dataOut >> 16) & 0x000000FFu;
 		dataOut <<= 8;
 		dataIn <<= 8;
-		for (int j = 0; j < 10000 && (USART1->US_CSR & (US_CSR_RXRDY | US_CSR_TXRDY)) != (US_CSR_RXRDY | US_CSR_TXRDY); ++j)
+		for (int j = 0; j < 10000 && (USART_EXT_DRV->US_CSR & (US_CSR_RXRDY | US_CSR_TXRDY)) != (US_CSR_RXRDY | US_CSR_TXRDY); ++j)
 		{
 			// nothing
 		}
-		dataIn |= USART1->US_RHR & 0x000000FF;
+		dataIn |= USART_EXT_DRV->US_RHR & 0x000000FF;
 	}
 	delayMicroseconds(1);
 	digitalWrite(pin, HIGH);					// set CS high again
-	USART1->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;	// reset and disable transmitter and receiver
+	USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;	// reset and disable transmitter and receiver
 	delayMicroseconds(1);						// ensure it stays high for long enough before the next write
 	return (dataIn >> 4) & 0x000FFFFF;
 }
@@ -315,10 +329,6 @@ namespace ExternalDrivers
 	void Init()
 	{
 		// Set up the SPI pins
-#ifndef DUET_NG
-		// PinS AD0 and AD7 may have already be set up as an ADC pin by the Arduino core, so undo that here or we won't get a clock output
-		ADC->ADC_CHDR = (1 << 7);
-#endif
 
 #ifdef DUET_NG
 		// The pins are already set up for SPI in the pins table
@@ -326,6 +336,9 @@ namespace ExternalDrivers
 		ConfigurePin(GetPinDescription(DriversMisoPin));
 		ConfigurePin(GetPinDescription(DriversSclkPin));
 #else
+		// PinS AD0 and AD7 may have already be set up as an ADC pin by the Arduino core, so undo that here or we won't get a clock output
+		ADC->ADC_CHDR = (1 << 7);
+
 		const PinDescription& pin2 = GetPinDescription(DriversMosiPin);
 		pio_configure(pin2.pPort, PIO_PERIPH_A, pin2.ulPin, PIO_DEFAULT);
 		const PinDescription& pin3 = GetPinDescription(DriversMisoPin);
@@ -335,7 +348,7 @@ namespace ExternalDrivers
 #endif
 
 		// Enable the clock to UART1
-		pmc_enable_periph_clk(ID_USART1);
+		pmc_enable_periph_clk(ID_USART_EXT_DRV);
 
 		// Set up the CS pins and set them all high
 		// When this becomes the standard code, we must set up the STEP and DIR pins here too.
@@ -345,17 +358,17 @@ namespace ExternalDrivers
 			pinMode(DriverSelectPins[drive], OUTPUT);
 		}
 
-		// Set USART1 in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
-		USART1->US_IDR = ~0u;
-		USART1->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
-		USART1->US_MR = US_MR_USART_MODE_SPI_MASTER
+		// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
+		USART_EXT_DRV->US_IDR = ~0u;
+		USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;
+		USART_EXT_DRV->US_MR = US_MR_USART_MODE_SPI_MASTER
 						| US_MR_USCLKS_MCK
 						| US_MR_CHRL_8_BIT
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		USART1->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;				// 1MHz SPI clock
-		USART1->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
+		USART_EXT_DRV->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;				// 1MHz SPI clock
+		USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
 		// We need a few microseconds of delay here foe the USART to sort itself out,
 		// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.

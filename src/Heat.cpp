@@ -110,6 +110,105 @@ bool Heat::HeaterAtSetTemperature(int8_t heater) const
 	return (target < TEMPERATURE_LOW_SO_DONT_CARE) || (fabs(dt - target) <= TEMPERATURE_CLOSE_ENOUGH);
 }
 
+Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
+{
+	if (heater < 0 || heater >= HEATERS)
+	{
+		return HS_off;
+	}
+
+	return (pids[heater]->FaultOccurred() ? HS_fault
+			: pids[heater]->SwitchedOff()) ? HS_off
+				: (pids[heater]->Active()) ? HS_active
+					: HS_standby;
+}
+
+void Heat::SetActiveTemperature(int8_t heater, float t)
+{
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->SetActiveTemperature(t);
+  }
+}
+
+float Heat::GetActiveTemperature(int8_t heater) const
+{
+	return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetActiveTemperature() : ABS_ZERO;
+}
+
+void Heat::SetStandbyTemperature(int8_t heater, float t)
+{
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->SetStandbyTemperature(t);
+  }
+}
+
+float Heat::GetStandbyTemperature(int8_t heater) const
+{
+  return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
+}
+
+float Heat::GetTemperature(int8_t heater) const
+{
+  return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetTemperature() : ABS_ZERO;
+}
+
+void Heat::Activate(int8_t heater)
+{
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->Activate();
+  }
+}
+
+void Heat::SwitchOff(int8_t heater)
+{
+	if (heater >= 0 && heater < HEATERS)
+	{
+		pids[heater]->SwitchOff();
+	}
+}
+
+void Heat::SwitchOffAll()
+{
+	for (size_t heater = 0; heater < HEATERS; ++heater)
+	{
+		pids[heater]->SwitchOff();
+	}
+}
+
+void Heat::Standby(int8_t heater)
+{
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->Standby();
+  }
+}
+
+void Heat::ResetFault(int8_t heater)
+{
+  if (heater >= 0 && heater < HEATERS)
+  {
+    pids[heater]->ResetFault();
+  }
+}
+
+float Heat::GetAveragePWM(int8_t heater) const
+{
+	return pids[heater]->GetAveragePWM();
+}
+
+uint32_t Heat::GetLastSampleTime(int8_t heater) const
+{
+	return pids[heater]->GetLastSampleTime();
+}
+
+bool Heat::UseSlowPwm(int8_t heater) const
+{
+	return heater == bedHeater || heater == chamberHeater;
+}
+
 //******************************************************************************************************
 
 PID::PID(Platform* p, int8_t h) : platform(p), heater(h)
@@ -163,7 +262,7 @@ void PID::Spin()
 
 	// Always know our temperature, regardless of whether we have been switched on or not
 
-	Platform::TempError err = Platform::TempError::errOk;		// assume no error
+	TemperatureError err = TemperatureError::success;			// assume no error
 	temperature = platform->GetTemperature(heater, &err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
 
 	// If we're not switched on, or there's a fault, turn the power off and go home.
@@ -180,18 +279,22 @@ void PID::Spin()
 
 	// We are switched on.  Check for faults.  Temperature silly-low or silly-high mean open-circuit
 	// or shorted thermistor respectively.
-	if (temperature < BAD_LOW_TEMPERATURE)
+	if (err == TemperatureError::success && temperature < BAD_LOW_TEMPERATURE)
 	{
-		err = Platform::TempError::errOpen;
+		err = TemperatureError::openCircuit;
 	}
-	else if (temperature > platform->GetTemperatureLimit())
+	else if (err == TemperatureError::success && temperature > platform->GetTemperatureLimit())
 	{
-		err = Platform::TempError::errTooHigh;
+		err = TemperatureError::tooHigh;
 	}
 
-	if (err != Platform::TempError::errOk)
+	if (err == TemperatureError::success)
 	{
-		if (platform->DoThermistorAdc(heater) || !(Platform::TempErrorPermanent(err)))
+		badTemperatureCount = 0;
+	}
+	else
+	{
+		if (platform->IsThermistorChannel(heater) || !IsPermanentError(err))
 		{
 			// Error may be a temporary error and may correct itself after a few additional reads
 			badTemperatureCount++;
@@ -208,17 +311,9 @@ void PID::Spin()
 		{
 			SetHeater(0.0);
 			temperatureFault = true;
-			platform->MessageF(GENERIC_MESSAGE, "Temperature fault on heater %d%s%s, T = %.1f\n",
-							 heater,
-							 (err != Platform::TempError::errOk) ? ", " : "",
-							 (err != Platform::TempError::errOk) ? Platform::TempErrorStr(err) : "",
-							 temperature);
+			platform->MessageF(GENERIC_MESSAGE, "Error: Temperature fault on heater %d: %s\n", heater, TemperatureErrorString(err));
 			reprap.FlagTemperatureFault(heater);
 		}
-	}
-	else
-	{
-		badTemperatureCount = 0;
 	}
 
 	// Now check how long it takes to warm up.  If too long, maybe the thermistor is not in contact with the heater

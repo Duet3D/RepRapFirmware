@@ -2296,7 +2296,8 @@ void GCodes::SetHeaterParameters(GCodeBuffer *gb, StringRef& reply)
 			{
 				int thermistor = gb->GetIValue();
 				if (   (0 <= thermistor && thermistor < HEATERS)
-					|| ((int)MAX31855_START_CHANNEL <= thermistor && thermistor < (int)(MAX31855_START_CHANNEL + MAX31855_DEVICES))
+					|| ((int)FirstThermocoupleChannel <= thermistor && thermistor < (int)(FirstThermocoupleChannel + MaxSpiTempSensors))
+					|| ((int)FirstRtdChannel <= thermistor && thermistor < (int)(FirstRtdChannel + MaxSpiTempSensors))
 				   )
 				{
 					platform->SetThermistorNumber(heater, thermistor);
@@ -2775,29 +2776,32 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 		{
 			const char* filename = gb->GetUnprecedentedString();
-			QueueFileToPrint(filename);
-			if (fileToPrint.IsLive())
+			if (filename != nullptr)
 			{
-				reprap.GetPrintMonitor()->StartingPrint(filename);
-				if (platform->Emulating() == marlin && gb == serialGCode)
+				QueueFileToPrint(filename);
+				if (fileToPrint.IsLive())
 				{
-					reply.copy("File opened\nFile selected");
+					reprap.GetPrintMonitor()->StartingPrint(filename);
+					if (platform->Emulating() == marlin && gb == serialGCode)
+					{
+						reply.copy("File opened\nFile selected");
+					}
+					else
+					{
+						// Command came from web interface or PanelDue, or not emulating Marlin, so send a nicer response
+						reply.printf("File %s selected for printing", filename);
+					}
+
+					if (code == 32)
+					{
+						fileBeingPrinted.MoveFrom(fileToPrint);
+						reprap.GetPrintMonitor()->StartedPrint();
+					}
 				}
 				else
 				{
-					// Command came from web interface or PanelDue, or not emulating Marlin, so send a nicer response
-					reply.printf("File %s selected for printing", filename);
+					reply.printf("Failed to open file %s", filename);
 				}
-
-				if (code == 32)
-				{
-					fileBeingPrinted.MoveFrom(fileToPrint);
-					reprap.GetPrintMonitor()->StartedPrint();
-				}
-			}
-			else
-			{
-				reply.printf("Failed to open file %s", filename);
 			}
 		}
 		break;
@@ -2956,15 +2960,18 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 28: // Write to file
 		{
 			const char* str = gb->GetUnprecedentedString();
-			bool ok = OpenFileToWrite(platform->GetGCodeDir(), str, gb);
-			if (ok)
+			if (str != nullptr)
 			{
-				reply.printf("Writing to file: %s", str);
-			}
-			else
-			{
-				reply.printf("Can't open file %s for writing.", str);
-				error = true;
+				bool ok = OpenFileToWrite(platform->GetGCodeDir(), str, gb);
+				if (ok)
+				{
+					reply.printf("Writing to file: %s", str);
+				}
+				else
+				{
+					reply.printf("Can't open file %s for writing.", str);
+					error = true;
+				}
 			}
 		}
 		break;
@@ -2974,7 +2981,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 30:	// Delete file
-		DeleteFile(gb->GetUnprecedentedString());
+		{
+			const char *filename = gb->GetUnprecedentedString();
+			if (filename != nullptr)
+			{
+				DeleteFile(filename);
+			}
+		}
 		break;
 
 		// For case 32, see case 24
@@ -3445,7 +3458,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 117:	// Display message
-		reprap.SetMessage(gb->GetUnprecedentedString());
+		{
+			const char *msg = gb->GetUnprecedentedString();
+			if (msg != nullptr)
+			{
+				reprap.SetMessage(msg);
+			}
+		}
 		break;
 
 	case 119:
@@ -4434,8 +4453,16 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 562: // Reset temperature fault - use with great caution
 		if (gb->Seen('P'))
 		{
-			int iValue = gb->GetIValue();
-			reprap.GetHeat()->ResetFault(iValue);
+			int heater = gb->GetIValue();
+			if (heater >= 0 && heater < HEATERS)
+			{
+				reprap.ClearTemperatureFault(heater);
+			}
+			else
+			{
+				reply.copy("Invalid heater number.\n");
+				error = true;
+			}
 		}
 		break;
 

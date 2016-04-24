@@ -17,6 +17,10 @@
 const size_t DRIVES = 9;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
 #define DRIVES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
 
+// If enabled, the following control the use of the optional ExternalDrivers module
+//#define EXTERNAL_DRIVERS		(1)
+//#define FIRST_EXTERNAL_DRIVE	(5)
+
 const int8_t HEATERS = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g) { a,b,c,d,e,f,g }
 
@@ -66,23 +70,22 @@ const float EXT_BETA = 4138.0;
 // Thermistor series resistor value in Ohms
 const float THERMISTOR_SERIES_RS = 1000.0;
 
-// Number of MAX31855 chips to support
-const size_t MAX31855_START_CHANNEL = 100;
+// Number of SPI temperature sensors to support
 
 #if SUPPORT_ROLAND
 
 // chrishamm's pin assignments
-const size_t MAX31855_DEVICES = 2;
+const size_t MaxSpiTempSensors = 2;
 
 // Digital pins the 31855s have their select lines tied to
-const Pin MAX31855_CS_PINS[MAX31855_DEVICES] = { 77, 87 };
+const Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 77, 87 };
 
 #else
 
-const size_t MAX31855_DEVICES = 4;
+const size_t MaxSpiTempSensors = 4;
 
 // Digital pins the 31855s have their select lines tied to
-const Pin MAX31855_CS_PINS[MAX31855_DEVICES] = { 77, 87, 16, 17 };
+const Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 77, 87, 16, 17 };
 
 #endif
 

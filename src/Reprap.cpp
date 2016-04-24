@@ -497,7 +497,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	char ch = GetStatusCharacter();
 	response->printf("{\"status\":\"%c\",\"coords\":{", ch);
 
-	/* Coordinates */
+	// Coordinates
 	{
 		float liveCoordinates[DRIVES + 1];
 #if SUPPORT_ROLAND
@@ -594,7 +594,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 	}
 
-	/* Parameters */
+	// Parameters
 	{
 		// ATX power
 		response->catf(",\"params\":{\"atxPower\":%d", platform->AtxPower() ? 1 : 0);
@@ -1121,20 +1121,10 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->catf(",\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-	if (type != 0)
-	{
-		response->catf(",\"homed\":[%d,%d,%d]",
-				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
-	}
-	else
-	{
-		response->catf(",\"hx\":%d,\"hy\":%d,\"hz\":%d",
-				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
-	}
+	response->catf(",\"homed\":[%d,%d,%d]",
+			(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
+			(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
+			(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
 
 	if (printMonitor->IsPrinting())
 	{

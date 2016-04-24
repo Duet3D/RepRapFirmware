@@ -319,6 +319,7 @@ const char* GCodeBuffer::GetString()
 // preference use GetString() which requires the string to have
 // been preceded by a tag letter.
 
+// If no string was provided, it produces an error message if the string was not optional, and returns nullptr.
 const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 {
 	readPointer = 0;
@@ -330,12 +331,11 @@ const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 	if (gcodeBuffer[readPointer] == 0)
 	{
 		readPointer = -1;
-		if (optional)
+		if (!optional)
 		{
-			return nullptr;
+			platform->Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
 		}
-		platform->Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
-		return gcodeBuffer; // Good idea?
+		return nullptr;
 	}
 
 	const char* result = &gcodeBuffer[readPointer + 1];

@@ -30,16 +30,12 @@ Licence: GPL
 #endif
 
 #ifndef DATE
-# define DATE "2016-04-21"
+# define DATE "2016-04-24"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
 
 #define FLASH_SAVE_ENABLED	(1)
-
-// If enabled, the following control the use of the optional ExternalDrivers module
-//#define EXTERNAL_DRIVERS		(1)
-//#define FIRST_EXTERNAL_DRIVE	(5)
 
 // Other firmware that we might switch to be compatible with.
 
@@ -87,9 +83,12 @@ const float TIME_TO_HOT = 150.0;					// Seconds
 
 const uint8_t MAX_BAD_TEMPERATURE_COUNT = 4;		// Number of bad temperature samples permitted before a heater fault is reported
 const float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
-const float DEFAULT_TEMPERATURE_LIMIT = 300.0;		// Celsius
+const float DEFAULT_TEMPERATURE_LIMIT = 260.0;		// Celsius
 const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
-const float BAD_ERROR_TEMPERATURE = 2000.0;			// must exceed DEFAULT_TEMPERATURE_LIMIT
+const float BAD_ERROR_TEMPERATURE = 2000.0;			// Must exceed any reasonable 5temperature limit including DEFAULT_TEMPERATURE_LIMIT
+
+const unsigned int FirstThermocoupleChannel = 100;	// Temperature sensor channels 100.. are thermocouples
+const unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200... are RTDs
 
 // PWM frequencies
 
