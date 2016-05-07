@@ -593,9 +593,17 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 	if (filename != nullptr && filename[0] != 0)
 	{
 		GCodeFileInfo info;
-		if (!GetFileInfo(FS_PREFIX, filename, info))
+
+		// Getting file information take a few runs. Speed it up when we are not printing by calling it several times.
+		uint32_t startTime = millis();
+		bool gotFileInfo;
+		do
 		{
-			// This may take a few runs...
+			gotFileInfo = GetFileInfo(FS_PREFIX, filename, info);
+		} while (!gotFileInfo && !isPrinting && millis() - startTime < MAX_FILEINFO_PROCESS_TIME);
+
+		if (!gotFileInfo)
+		{
 			return false;
 		}
 

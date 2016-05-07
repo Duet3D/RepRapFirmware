@@ -26,7 +26,7 @@ const FilePosition GCODE_FOOTER_SIZE = 192000uL;	// How many bytes to read from 
 #ifdef DUET_NG
 const size_t GCODE_READ_SIZE = 4096;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
 #else
-const size_t GCODE_READ_SIZE = 2048;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
+const size_t GCODE_READ_SIZE = 1024;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
 #endif
 
 const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (should be a multiple of 4)
@@ -39,6 +39,7 @@ const float ESTIMATION_MIN_FILE_USAGE = 0.001;		// Minium per cent of the file t
 const float FIRST_LAYER_SPEED_FACTOR = 0.25;		// First layer speed factor compared to other layers (only for layer-based estimation)
 
 const uint32_t PRINTMONITOR_UPDATE_INTERVAL = 200;	// Update interval in milliseconds
+const uint32_t MAX_FILEINFO_PROCESS_TIME = 100;		// Maximum time to spend polling for file info in each call
 
 enum PrintEstimationMethod
 {

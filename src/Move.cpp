@@ -190,7 +190,7 @@ void Move::Spin()
 				{
 					Transform(nextMove.coords);
 				}
-				if (ddaRingAddPointer->Init(&nextMove, doMotorMapping))
+				if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
 				{
 					ddaRingAddPointer = ddaRingAddPointer->GetNext();
 					idleCount = 0;
@@ -200,19 +200,7 @@ void Move::Spin()
 		}
 	}
 
-	if (simulating)
-	{
-		if (idleCount > 10 && !DDARingEmpty())
-		{
-			// No move added this time, so simulate executing one already in the queue
-			DDA *dda = ddaRingGetPointer;
-			simulationTime += dda->CalcTime();
-			liveCoordinatesValid = dda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
-			dda->Complete();
-			ddaRingGetPointer = ddaRingGetPointer->GetNext();
-		}
-	}
-	else if (!deltaProbing)
+	if (!deltaProbing)
 	{
 		// See whether we need to kick off a move
 		DDA *cdda = currentDda;											// currentDda is volatile, so copy it
@@ -228,20 +216,27 @@ void Move::Spin()
 				}
 				if (dda->GetState() == DDA::frozen)
 				{
-					cpu_irq_disable();										// must call StartNextMove and Interrupt with interrupts disabled
-					if (StartNextMove(Platform::GetInterruptClocks()))		// start the next move if none is executing already
+					if (simulating)
 					{
-						Interrupt();
+						currentDda = ddaRingGetPointer;						// pretend we are executing this move
 					}
-					cpu_irq_enable();
+					else
+					{
+						cpu_irq_disable();									// must call StartNextMove and Interrupt with interrupts disabled
+						if (StartNextMove(Platform::GetInterruptClocks()))	// start the next move
+						{
+							Interrupt();
+						}
+						cpu_irq_enable();
+					}
 					iState = IdleState::busy;
 				}
-				else if (iState == IdleState::busy && !reprap.GetGCodes()->IsPaused() && idleTimeout > 0.0)
+				else if (!simulating && iState == IdleState::busy && !reprap.GetGCodes()->IsPaused() && idleTimeout > 0.0)
 				{
 					lastMoveTime = reprap.GetPlatform()->Time();			// record when we first noticed that the machine was idle
 					iState = IdleState::timing;
 				}
-				else if (iState == IdleState::timing && reprap.GetPlatform()->Time() - lastMoveTime >= idleTimeout)
+				else if (!simulating && iState == IdleState::timing && reprap.GetPlatform()->Time() - lastMoveTime >= idleTimeout)
 				{
 					reprap.GetPlatform()->SetDrivesIdle();					// put all drives in idle hold
 					iState = IdleState::idle;
@@ -270,6 +265,15 @@ void Move::Spin()
 				preparedTime += cdda->GetTimeLeft();
 				cdda = cdda->GetNext();
 				st = cdda->GetState();
+			}
+
+			if (simulating)
+			{
+				// Simulate completion of the current move
+//DEBUG
+//currentDda->DebugPrint();
+				simulationTime += currentDda->CalcTime();
+				CurrentMoveCompleted();
 			}
 		}
 	}
@@ -1133,13 +1137,12 @@ void Move::CurrentMoveCompleted()
 	ddaRingGetPointer = ddaRingGetPointer->GetNext();
 }
 
-// Start the next move. Must be called with interrupts disabled, to avoid a race condition.
-bool Move::StartNextMove(uint32_t startTime)
+// Try to start another move. Must be called with interrupts disabled, to avoid a race condition.
+bool Move::TryStartNextMove(uint32_t startTime)
 {
 	if (ddaRingGetPointer->GetState() == DDA::frozen)
 	{
-		currentDda = ddaRingGetPointer;
-		return currentDda->Start(startTime);
+		return StartNextMove(startTime);
 	}
 	else
 	{

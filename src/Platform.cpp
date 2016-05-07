@@ -209,6 +209,7 @@ void Platform::Init()
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
 	stepperDacVoltageRange = STEPPER_DAC_VOLTAGE_RANGE;
 	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
+	maxAverageAcceleration = 10000.0;			// high enough to have no effect until it is changed
 
 	// Z PROBE
 
@@ -242,6 +243,10 @@ void Platform::Init()
 	}
 
 	// Motors
+	for (size_t drive = 0; drive < DRIVES; drive++)
+	{
+		driverNumbers[drive] = -1;						// needed so that SetPhysicalDrive() behaves correctly
+	}
 
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
@@ -1611,7 +1616,7 @@ void Platform::EnableDrive(size_t drive)
 			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
 #ifdef EXTERNAL_DRIVERS
-			if (drive >= FIRST_EXTERNAL_DRIVE)
+			if (driver >= FIRST_EXTERNAL_DRIVE)
 			{
 				ExternalDrivers::EnableDrive(driver - FIRST_EXTERNAL_DRIVE, true);
 			}
@@ -1637,7 +1642,7 @@ void Platform::DisableDrive(size_t drive)
 	{
 		const size_t driver = driverNumbers[drive];
 #ifdef EXTERNAL_DRIVERS
-		if (drive >= FIRST_EXTERNAL_DRIVE)
+		if (driver >= FIRST_EXTERNAL_DRIVE)
 		{
 			ExternalDrivers::EnableDrive(driver - FIRST_EXTERNAL_DRIVE, false);
 		}
@@ -1729,7 +1734,7 @@ void Platform::UpdateMotorCurrent(size_t drive)
 					}
 #ifndef DUET_NG
 				}
-				else
+				else if (driver < 8)		// on a Duet 0.6 we have a maximum of 8 drives
 				{
 					mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
 					mcpExpansion.setVolatileWiper(potWipes[driver], pot);
@@ -1806,13 +1811,22 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 void Platform::SetPhysicalDrive(size_t driverNumber, int8_t physicalDrive)
 {
 	int oldDrive = GetPhysicalDrive(driverNumber);
-	if (oldDrive >= 0)
+	if (oldDrive != physicalDrive)
 	{
-		driverNumbers[oldDrive] = -1;
-		stepPinDescriptors[oldDrive] = OutputPin();
+		if (oldDrive >= 0)
+		{
+			DisableDrive(oldDrive);				// turn off the motor current
+			driverNumbers[oldDrive] = -1;
+			stepPinDescriptors[oldDrive] = OutputPin();
+		}
+
+		if (physicalDrive >= 0)
+		{
+			driverNumbers[physicalDrive] = driverNumber;
+			stepPinDescriptors[physicalDrive] = OutputPin(stepPins[driverNumber]);
+			driveState[physicalDrive] = DriveStatus::disabled;
+		}
 	}
-	driverNumbers[physicalDrive] = driverNumber;
-	stepPinDescriptors[physicalDrive] = OutputPin(stepPins[driverNumber]);
 }
 
 // Return the physical drive used by this driver, or -1 if not found
@@ -2281,8 +2295,10 @@ float Platform::ActualInstantDv(size_t drive) const
 	if (drive >= AXES)
 	{
 		float eComp = elasticComp[drive - AXES];
-		// If we are using elastic compensation then we need to limit the instantDv to avoid velocity mismatches
-		return (eComp <= 0.0) ? idv : min<float>(idv, 1.0/(eComp * driveStepsPerUnit[drive]));
+		// If we are using elastic compensation then we need to limit the extruder instantDv to avoid velocity mismatches.
+		// Assume that we want the extruder motor position to be accurate to within 0.01mm of extrusion.
+		// TODO remove this limit and add/remove steps to the previous and/or next move instead
+		return (eComp <= 0.0) ? idv : min<float>(idv, 0.01/eComp);
 	}
 	else
 	{

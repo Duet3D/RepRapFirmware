@@ -50,7 +50,6 @@ const float SENSE_RESISTOR = 0.1;										// Stepper motor current sense resist
 const float MAX_STEPPER_DIGIPOT_VOLTAGE = (3.3 * 2.5 / (2.7 + 2.5));	// Stepper motor current reference voltage
 const float STEPPER_DAC_VOLTAGE_RANGE = 2.02;							// Stepper motor current reference voltage for E1 if using a DAC
 const float STEPPER_DAC_VOLTAGE_OFFSET = -0.025;						// Stepper motor current offset voltage for E1 if using a DAC
-const int DAC0_DIGITAL_PIN = 66;										// Arduino Due pin number corresponding to DAC0 output pin
 
 // HEATERS
 
@@ -100,7 +99,7 @@ const Pin Z_PROBE_MOD_PIN = 52;											// Digital pin number to turn the IR L
 const Pin Z_PROBE_MOD_PIN07 = X12;										// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.7 and v0.8.5 (PC10)
 
 // Pin number that the DAC that controls the second extruder motor current on the Duet 0.8.5 is connected to
-const int Dac0DigitalPin = 66;						// Arduino Due pin number corresponding to DAC0 output pin
+const int Dac0DigitalPin = 66;											// Arduino Due pin number corresponding to DAC0 output pin
 
 // COOLING FANS
 

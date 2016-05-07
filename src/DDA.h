@@ -30,7 +30,7 @@ public:
 
 	DDA(DDA* n);
 
-	bool Init(const GCodes::RawMove *nextMove, bool doMotorMapping);	// Set up a new move, returning true if it represents real movement
+	bool Init(const GCodes::RawMove &nextMove, bool doMotorMapping); // Set up a new move, returning true if it represents real movement
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim);										// Start executing the DDA, i.e. move the move.
 	bool Step();													// Take one step of the DDA, called by timed interrupt.

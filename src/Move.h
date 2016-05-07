@@ -77,10 +77,10 @@ public:
     void SetCoreXYMode(int mode) { coreXYMode = mode; }
     float GetCoreAxisFactor(size_t axis) const { return axisFactors[axis]; }
     void setCoreAxisFactor(size_t axis, float f) { axisFactors[axis] = f; }
-    bool IsCoreXYAxis(size_t axis) const;											// return true if the specified axis shares its motors with another
+    bool IsCoreXYAxis(size_t axis) const;											// Return true if the specified axis shares its motors with another
 
-    void CurrentMoveCompleted();													// signals that the current move has just been completed
-    bool StartNextMove(uint32_t startTime);											// start the next move, returning true if Step() needs to be called immediately
+    void CurrentMoveCompleted();													// Signal that the current move has just been completed
+    bool TryStartNextMove(uint32_t startTime);										// Try to start another move, returning true if Step() needs to be called immediately
     void MotorTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const;				// Convert Cartesian coordinates to delta motor coordinates
     float MotorFactor(size_t drive, const float directionVector[]) const;							// Calculate the movement fraction for a single axis motor of a Cartesian or CoreXY printer
     void MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_t numDrives) const;	// Convert motor coordinates to machine coordinates
@@ -107,6 +107,7 @@ private:
 
     enum class IdleState : uint8_t { idle, busy, timing };
 
+    bool StartNextMove(uint32_t startTime);											// start the next move, returning true if Step() needs to be called immediately
     void SetProbedBedEquation(size_t numPoints, StringRef& reply);					// When we have a full set of probed points, work out the bed's equation
     void DoDeltaCalibration(size_t numPoints, StringRef& reply);
     void BedTransform(float move[AXES]) const;										// Take a position and apply the bed compensations
@@ -180,11 +181,9 @@ inline bool Move::NoLiveMovement() const
 	return DDARingEmpty() && currentDda == nullptr;		// must test currentDda and DDARingEmpty *in this order* !
 }
 
-// To wait until all the current moves in the buffers are
-// complete, call this function repeatedly and wait for it to
-// return true.  Then do whatever you wanted to do after all
-// current moves have finished.  THEN CALL THE ResumeMoving() FUNCTION
-// OTHERWISE NOTHING MORE WILL EVER HAPPEN.
+// To wait until all the current moves in the buffers are complete, call this function repeatedly and wait for it to return true.
+// Then do whatever you wanted to do after all current moves have finished.
+// Then call ResumeMoving() otherwise nothing more will ever happen.
 inline bool Move::AllMovesAreFinished()
 {
 	addNoMoreMoves = true;
@@ -194,6 +193,14 @@ inline bool Move::AllMovesAreFinished()
 inline void Move::ResumeMoving()
 {
 	addNoMoreMoves = false;
+}
+
+// Start the next move. Must be called with interrupts disabled, to avoid a race with the step ISR.
+inline bool Move::StartNextMove(uint32_t startTime)
+//pre(ddaRingGetPointer->GetState() == DDA::frozen)
+{
+	currentDda = ddaRingGetPointer;
+	return currentDda->Start(startTime);
 }
 
 #endif /* MOVE_H_ */

@@ -609,6 +609,42 @@ void Webserver::HttpInterpreter::DoFastUpload()
 	if (transaction->ReadBuffer(buffer, len))
 	{
 		network->Unlock();
+#if 1
+		// Write data in sector-aligned chunks. This also means that the buffer in fatfs is only used to hold the FAT.
+		static const size_t writeBufLength = 2048;				// use a multiple of the 512b sector size
+		static uint32_t writeBufStorage[writeBufLength/4];		// aligned buffer for file writes
+		static size_t writeBufIndex;
+		char* const writeBuf = (char *)writeBufStorage;
+
+		if (uploadedBytes == 0)
+		{
+			writeBufIndex = 0;
+		}
+
+		while (len != 0)
+		{
+			size_t lengthToCopy = min<size_t>(writeBufLength - writeBufIndex, len);
+			memcpy(writeBuf + writeBufIndex, buffer, lengthToCopy);
+			writeBufIndex += lengthToCopy;
+			uploadedBytes += lengthToCopy;
+			buffer += lengthToCopy;
+			len -= lengthToCopy;
+			if (writeBufIndex == writeBufLength || uploadedBytes >= postFileLength)
+			{
+				bool success = fileBeingUploaded.Write(writeBuf, writeBufIndex);
+				writeBufIndex = 0;
+				if (!success)
+				{
+					platform->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+					CancelUpload();
+
+					while (!network->Lock());
+					SendJsonResponse("upload");
+					return;
+				}
+			}
+		}
+#else
 		if (!fileBeingUploaded.Write(buffer, len))
 		{
 			platform->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
@@ -619,6 +655,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 			return;
 		}
 		uploadedBytes += len;
+#endif
 		while (!network->Lock());
 	}
 

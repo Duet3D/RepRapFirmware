@@ -317,7 +317,7 @@ void PID::Spin()
 	}
 
 	// Now check how long it takes to warm up.  If too long, maybe the thermistor is not in contact with the heater
-	if (heatingUp && heater != reprap.GetHeat()->GetBedHeater()) // FIXME - also check bed warmup time?
+	if (heatingUp && heater != reprap.GetHeat()->GetBedHeater() && heater != reprap.GetHeat()->GetChamberHeater()) // FIXME - also check bed warmup time?
 	{
 		float tmp = (active) ? activeTemperature : standbyTemperature;
 		if (temperature < tmp - TEMPERATURE_CLOSE_ENOUGH)

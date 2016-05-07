@@ -2582,7 +2582,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	bool error = false;
 
 	int code = gb->GetIValue();
-	if (simulating && (code < 20 || code > 37) && code != 82 && code != 83 && code != 111 && code != 105 && code != 122 && code != 999)
+	if (simulating && (code < 20 || code > 37) && code != 82 && code != 83 && code != 111 && code != 105 && code != 122 && code != 408 && code != 999)
 	{
 		return true;			// we don't yet simulate most M codes
 	}
@@ -2592,21 +2592,38 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 0: // Stop
 	case 1: // Sleep
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
-			return false;
-
-		if (fileBeingPrinted.IsLive())
 		{
-			fileBeingPrinted.Close();
+			return false;
 		}
 
-		// Deselect the active tool
+		// Reset everything
+		CancelPrint();
+
+		if (isPaused)
+		{
+			isPaused = false;
+			reply.copy("Print cancelled");
+			// If we are cancelling a paused print with M0 and cancel.g exists then run it
+			if (code == 0)
+			{
+				if (DoFileMacro(CANCEL_G, false))
+				{
+					break;
+				}
+			}
+		}
+
+		// Otherwise, deselect the active tool, if any
 		{
 			Tool* tool = reprap.GetCurrentTool();
-			if (tool != NULL)
+			if (tool != nullptr)
 			{
 				reprap.StandbyTool(tool->Number());
 			}
 		}
+
+		// Turn the heaters off
+		reprap.GetHeat()->SwitchOffAll();
 
 		// zpl 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
 		// I think M1 is sufficient for this purpose. Leave M0 for a normal reset.
@@ -2618,16 +2635,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			platform->SetDrivesIdle();
 		}
-
-		reprap.GetHeat()->SwitchOffAll();
-		if (isPaused)
-		{
-			isPaused = false;
-			reply.copy("Print cancelled");
-		}
-
-		// Reset everything
-		CancelPrint();
 		break;
 
 #if SUPPORT_ROLAND
@@ -3724,6 +3731,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 		}
 
+		if (gb->Seen('P'))
+		{
+			// Set max average printing acceleration
+			platform->SetMaxAverageAcceleration(gb->GetFValue() * distanceScale);
+			seen = true;
+		}
+
 		if (!seen)
 		{
 			reply.printf("Accelerations: X: %.1f, Y: %.1f, Z: %.1f, E: ",
@@ -3737,6 +3751,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					reply.cat(":");
 				}
 			}
+			reply.catf(", avg. printing: %.1f", platform->GetMaxAverageAcceleration());
 		}
 	}
 		break;
@@ -5119,7 +5134,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				isFlashing = false;				// should never get here, but leave this here in case an error has occurred
 			}
 #ifdef DUET_NG
-			else if (sparam == 1 || sparam == 2)
+			else if (sparam >= 1 && sparam <= 3)
 			{
 				reprap.GetNetwork()->FirmwareUpdate(sparam);
 			}

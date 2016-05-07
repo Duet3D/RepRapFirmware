@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.11a"
+# define VERSION "1.12"
 #endif
 
 #ifndef DATE
-# define DATE "2016-04-24"
+# define DATE "2016-05-07"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -164,6 +164,7 @@ const float FILAMENT_WIDTH = 1.75;					// Millimetres
 #define BED_EQUATION_G "bed.g"
 #define PAUSE_G "pause.g"
 #define RESUME_G "resume.g"
+#define CANCEL_G "cancel.g"
 #define STOP_G "stop.g"
 #define SLEEP_G "sleep.g"
 

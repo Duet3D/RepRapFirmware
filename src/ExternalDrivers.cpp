@@ -370,7 +370,7 @@ namespace ExternalDrivers
 		USART_EXT_DRV->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;				// 1MHz SPI clock
 		USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
-		// We need a few microseconds of delay here foe the USART to sort itself out,
+		// We need a few microseconds of delay here for the USART to sort itself out,
 		// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
 		// But it looks like the TMC drivers need a longer delay anyway to get used to CS being high,
 		// otherwise they ignore the command we send to set the microstepping to x16 and  start up in full-step mode.
