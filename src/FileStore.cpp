@@ -339,4 +339,24 @@ float FileStore::GetAndClearLongestWriteTime()
 	return ret;
 }
 
+#if 0	// not currently used
+
+// Provide a cluster map for fast seeking. Needs _USE_FASTSEEK defined as 1 in conf_fatfs to make any difference.
+// The first element of the table must be set to the total number of 32-bit entries in the table before calling this.
+bool FileStore::SetClusterMap(uint32_t tbl[])
+{
+	if (!inUse)
+	{
+		platform->Message(GENERIC_MESSAGE, "Error: Attempt to set cluster map for a non-open file.\n");
+		return false;
+	}
+
+	file.cltbl = tbl;
+	FRESULT ret = f_lseek(&file, CREATE_LINKMAP);
+//	debugPrintf("ret %d need %u\n", (int)ret, tbl[0]);
+	return ret == FR_OK;
+}
+
+#endif
+
 // End

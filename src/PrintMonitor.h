@@ -21,7 +21,7 @@ Licence: GPL
 #define PRINTMONITOR_H
 
 const FilePosition GCODE_HEADER_SIZE = 8192uL;		// How many bytes to read from the header
-const FilePosition GCODE_FOOTER_SIZE = 192000uL;	// How many bytes to read from the footer
+const FilePosition GCODE_FOOTER_SIZE = 400000uL;	// How many bytes to read from the footer
 
 #ifdef DUET_NG
 const size_t GCODE_READ_SIZE = 4096;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
@@ -39,7 +39,7 @@ const float ESTIMATION_MIN_FILE_USAGE = 0.001;		// Minium per cent of the file t
 const float FIRST_LAYER_SPEED_FACTOR = 0.25;		// First layer speed factor compared to other layers (only for layer-based estimation)
 
 const uint32_t PRINTMONITOR_UPDATE_INTERVAL = 200;	// Update interval in milliseconds
-const uint32_t MAX_FILEINFO_PROCESS_TIME = 100;		// Maximum time to spend polling for file info in each call
+const uint32_t MAX_FILEINFO_PROCESS_TIME = 200;		// Maximum time to spend polling for file info in each call
 
 enum PrintEstimationMethod
 {
@@ -144,7 +144,7 @@ class PrintMonitor
 		bool FindLayerHeight(const char* buf, size_t len, float& layerHeight) const;
 		unsigned int FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, unsigned int maxFilaments) const;
 
-		float accumulatedParseTime, accumulatedReadTime;
+		uint32_t accumulatedParseTime, accumulatedReadTime, accumulatedSeekTime;
 };
 
 inline bool PrintMonitor::IsPrinting() const { return isPrinting; }

@@ -41,6 +41,10 @@ public:
 	float FractionRead() const;						// How far in we are
 	void Duplicate();								// Create a second reference to this file
 	bool Flush();									// Write remaining buffer data
+
+#if 0	// not currently used
+	bool SetClusterMap(uint32_t[]);					// Provide a cluster map for fast seeking
+#endif
 	static float GetAndClearLongestWriteTime();		// Return the longest time it took to write a block to a file, in milliseconds
 
 	friend class Platform;

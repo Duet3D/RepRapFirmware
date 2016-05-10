@@ -45,9 +45,6 @@
 // dan.newman@mtbaldy.us
 // GPL v3
 
-#define PERIPHERAL_CHANNEL_ID       3
-#define PERIPHERAL_CHANNEL_CS_PIN  78  // NPCS3
-
 const uint32_t MAX31855_Frequency = 4000000;	// maximum for MAX31855 is 5MHz
 const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is also 5MHz
 
@@ -121,9 +118,6 @@ void TemperatureSensor::InitThermocouple(uint8_t cs)
 	device.csPin = cs;
 	device.spiMode = MAX31855_SpiMode;
 	device.clockFrequency = MAX31855_Frequency;
-#ifndef DUET_NG
-	device.id = PERIPHERAL_CHANNEL_ID;			// Peripheral channel
-#endif
 	sspi_master_init(&device, 8);
 
 	lastReadingTime = millis();
@@ -137,9 +131,6 @@ void TemperatureSensor::InitRtd(uint8_t cs)
 	device.csPin = cs;
 	device.spiMode = MAX31865_SpiMode;
 	device.clockFrequency = MAX31865_Frequency;
-#ifndef DUET_NG
-	device.id = PERIPHERAL_CHANNEL_ID;			// Peripheral channel
-#endif
 	sspi_master_init(&device, 8);
 
 	TemperatureError rslt;
