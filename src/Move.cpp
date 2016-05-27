@@ -47,6 +47,7 @@ void Move::Init()
 	currentDda = nullptr;
 	addNoMoreMoves = false;
 	stepErrors = 0;
+	numLookaheadUnderruns = 0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -84,7 +85,7 @@ void Move::Init()
 	iState = IdleState::idle;
 	idleCount = 0;
 
-	simulating = false;
+	simulationMode = 0;
 	simulationTime = 0.0;
 
 	active = true;
@@ -120,7 +121,10 @@ void Move::Spin()
 			++stepErrors;
 			reprap.GetPlatform()->LogError(ErrorCode::BadMove);
 		}
-		ddaRingCheckPointer->Free();
+		if (ddaRingCheckPointer->Free())
+		{
+			++numLookaheadUnderruns;
+		}
 		ddaRingCheckPointer = ddaRingCheckPointer->GetNext();
 	}
 
@@ -152,50 +156,53 @@ void Move::Spin()
 			if (reprap.GetGCodes()->ReadMove(nextMove))
 			{
 				// We have a new move
+				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
+				{
 
 #if 0	//*** This code is not finished yet ***
-				// If we are doing bed compensation and the move crosses a compensation boundary by a significant amount,
-				// segment it so that we can apply proper bed compensation
-				// Issues here:
-				// 1. Are there enough DDAs? need to make nextMove static and remember whether we have the remains of a move in there.
-				// 2. Pause/restart: if we restart a segmented move when we have already executed part of it, we will extrude too much.
-				// Perhaps remember how much of the last move we executed? Or always insist on completing all the segments in a move?
-				bool isSegmented;
-				do
-				{
-					GCodes::RawMove tempMove = nextMove;
-					isSegmented = SegmentMove(tempMove);
-					if (isSegmented)
+					// If we are doing bed compensation and the move crosses a compensation boundary by a significant amount,
+					// segment it so that we can apply proper bed compensation
+					// Issues here:
+					// 1. Are there enough DDAs? need to make nextMove static and remember whether we have the remains of a move in there.
+					// 2. Pause/restart: if we restart a segmented move when we have already executed part of it, we will extrude too much.
+					// Perhaps remember how much of the last move we executed? Or always insist on completing all the segments in a move?
+					bool isSegmented;
+					do
 					{
-						// Extruder moves are relative, so we need to adjust the extrusion amounts in the original move
-						for (size_t drive = AXES; drive < DRIVES; ++drive)
+						GCodes::RawMove tempMove = nextMove;
+						isSegmented = SegmentMove(tempMove);
+						if (isSegmented)
 						{
-							nextMove.coords[drive] -= tempMove.coords[drive];
+							// Extruder moves are relative, so we need to adjust the extrusion amounts in the original move
+							for (size_t drive = AXES; drive < DRIVES; ++drive)
+							{
+								nextMove.coords[drive] -= tempMove.coords[drive];
+							}
 						}
-					}
-					bool doMotorMapping = (moveType == 0) || (moveType == 1 && !IsDeltaMode());
+						bool doMotorMapping = (moveType == 0) || (moveType == 1 && !IsDeltaMode());
+						if (doMotorMapping)
+						{
+							Transform(tempMove);
+						}
+						if (ddaRingAddPointer->Init(tempMove.coords, nextMove.feedRate, nextMove.endStopsToCheck, doMotorMapping, nextMove.filePos))
+						{
+							ddaRingAddPointer = ddaRingAddPointer->GetNext();
+							idleCount = 0;
+						}
+					} while (isSegmented);
+#else	// Use old code
+					bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
 					if (doMotorMapping)
 					{
-						Transform(tempMove);
+						Transform(nextMove.coords);
 					}
-					if (ddaRingAddPointer->Init(tempMove.coords, nextMove.feedRate, nextMove.endStopsToCheck, doMotorMapping, nextMove.filePos))
+					if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
 					{
 						ddaRingAddPointer = ddaRingAddPointer->GetNext();
 						idleCount = 0;
 					}
-				} while (isSegmented);
-#else	// Use old code
-				bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
-				if (doMotorMapping)
-				{
-					Transform(nextMove.coords);
-				}
-				if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
-				{
-					ddaRingAddPointer = ddaRingAddPointer->GetNext();
-					idleCount = 0;
-				}
 #endif
+				}
 			}
 		}
 	}
@@ -216,27 +223,26 @@ void Move::Spin()
 				}
 				if (dda->GetState() == DDA::frozen)
 				{
-					if (simulating)
+					if (simulationMode != 0)
 					{
 						currentDda = ddaRingGetPointer;						// pretend we are executing this move
 					}
 					else
 					{
-						cpu_irq_disable();									// must call StartNextMove and Interrupt with interrupts disabled
+						Platform::DisableStepInterrupt();					// should be disabled already, but make sure
 						if (StartNextMove(Platform::GetInterruptClocks()))	// start the next move
 						{
 							Interrupt();
 						}
-						cpu_irq_enable();
 					}
 					iState = IdleState::busy;
 				}
-				else if (!simulating && iState == IdleState::busy && !reprap.GetGCodes()->IsPaused() && idleTimeout > 0.0)
+				else if (!simulationMode != 0 && iState == IdleState::busy && !reprap.GetGCodes()->IsPaused() && idleTimeout > 0.0)
 				{
 					lastMoveTime = reprap.GetPlatform()->Time();			// record when we first noticed that the machine was idle
 					iState = IdleState::timing;
 				}
-				else if (!simulating && iState == IdleState::timing && reprap.GetPlatform()->Time() - lastMoveTime >= idleTimeout)
+				else if (!simulationMode != 0 && iState == IdleState::timing && reprap.GetPlatform()->Time() - lastMoveTime >= idleTimeout)
 				{
 					reprap.GetPlatform()->SetDrivesIdle();					// put all drives in idle hold
 					iState = IdleState::idle;
@@ -259,7 +265,7 @@ void Move::Spin()
 			}
 
 			// If the number of prepared moves will execute in less than the minimum time, prepare another move
-			while (st == DDA::provisional && preparedTime < (int32_t)(DDA::stepClockRate/8))		// prepare moves one eighth of a second ahead of when they will be needed
+			while (st == DDA::provisional && preparedTime < (int32_t)(DDA::stepClockRate/8))	// prepare moves one eighth of a second ahead of when they will be needed
 			{
 				cdda->Prepare();
 				preparedTime += cdda->GetTimeLeft();
@@ -267,7 +273,7 @@ void Move::Spin()
 				st = cdda->GetState();
 			}
 
-			if (simulating)
+			if (simulationMode != 0)
 			{
 				// Simulate completion of the current move
 //DEBUG
@@ -318,7 +324,7 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 					if (ddaRingAddPointer->GetState() == DDA::frozen)
 					{
 						// Change the state so that the ISR won't start executing this move
-						ddaRingAddPointer->Free();
+						(void)ddaRingAddPointer->Free();
 					}
 					break;
 				}
@@ -361,7 +367,7 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 			{
 				fPos = dda->GetFilePosition();
 			}
-			dda->Free();
+			(void)dda->Free();
 			dda = dda->GetNext();
 		}
 		while (dda != savedDdaRingAddPointer);
@@ -381,11 +387,12 @@ extern uint32_t sqSum1, sqSum2, sqCount, sqErrors, lastRes1, lastRes2;
 extern uint64_t lastNum;
 #endif
 
-void Move::Diagnostics()
+void Move::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Move Diagnostics:\n");
-	reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "MaxReps: %u, StepErrors: %u\n", maxReps, stepErrors);
+	reprap.GetPlatform()->Message(mtype, "Move Diagnostics:\n");
+	reprap.GetPlatform()->MessageF(mtype, "MaxReps: %u, StepErrors: %u. Underruns: %u\n", maxReps, stepErrors, numLookaheadUnderruns);
 	maxReps = 0;
+	numLookaheadUnderruns = 0;
 
 #if 0
 	if (sqCount != 0)
@@ -1402,10 +1409,10 @@ size_t Move::NumberOfXYProbePoints() const
 }
 
 // Enter or leave simulation mode
-void Move::Simulate(bool sim)
+void Move::Simulate(uint8_t simMode)
 {
-	simulating = sim;
-	if (sim)
+	simulationMode = simMode;
+	if (simMode)
 	{
 		simulationTime = 0.0;
 	}

@@ -37,6 +37,7 @@ public:
 	int catf(const char *fmt, ...);
 	size_t copy(const char* src);
 	size_t cat(const char *src);
+	size_t cat(char c);
 };
 
 #endif /* STRINGREF_H_ */

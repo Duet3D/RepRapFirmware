@@ -26,7 +26,7 @@ Licence: GPL
 #include <cfloat>
 #include <cstdarg>
 
-#include "Arduino.h"
+#include "Core.h"
 #include "Configuration.h"
 #include "StringRef.h"
 
@@ -75,10 +75,6 @@ bool StringStartsWith(const char* string, const char* starting);
 bool StringEquals(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
   
-// Macro to give us the number of elements in an array
-#define ARRAY_SIZE(_x)	(sizeof(_x)/sizeof(_x[0]))
-// Macro to give us the highest valid index into an array i.e. one less than the size
-#define ARRAY_UPB(_x)	(ARRAY_SIZE(_x) - 1)
 // Macro to assign an array from an initializer list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
 
@@ -95,70 +91,6 @@ extern StringRef scratchString;
 #include "Roland.h"
 #include "PrintMonitor.h"
 #include "Reprap.h"
-
-// std::min and std::max don't seem to work with this variant of gcc, so define our own ones here
-// We use these only with primitive types, so pass them directly instead of by const reference
-#undef min
-#undef max
-
-template<class X> inline X min(X _a, X _b)
-{
-	return (_a < _b) ? _a : _b;
-}
-
-template<class X> inline X max(X _a, X _b)
-{
-	return (_a > _b) ? _a : _b;
-}
-
-// Specialisations for float and double to handle NANs properly
-template<> inline float min(float _a, float _b)
-{
-	return (isnan(_a) || _a < _b) ? _a : _b;
-}
-
-template<> inline float max(float _a, float _b)
-{
-	return (isnan(_a) || _a > _b) ? _a : _b;
-}
-
-template<> inline double min(double _a, double _b)
-{
-	return (isnan(_a) || _a < _b) ? _a : _b;
-}
-
-template<> inline double max(double _a, double _b)
-{
-	return (isnan(_a) || _a > _b) ? _a : _b;
-}
-
-inline float fsquare(float arg)
-{
-	return arg * arg;
-}
-
-inline uint64_t isquare64(int32_t arg)
-{
-	return (uint64_t)((int64_t)arg * arg);
-}
-
-inline uint64_t isquare64(uint32_t arg)
-{
-	return (uint64_t)arg * arg;
-}
-
-inline void swap(float& a, float& b)
-{
-	float temp = a;
-	a = b;
-	b = temp;
-}
-
-#undef constrain
-template<class T> inline float constrain(T val, T vmin, T vmax)
-{
-	return max<T>(vmin, min<T>(val, vmax));
-}
 
 extern uint32_t isqrt64(uint64_t num);		// This is defined in its own file, Isqrt.cpp or Isqrt.asm
 

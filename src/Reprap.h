@@ -37,7 +37,7 @@ public:
     void Init();
     void Spin();
     void Exit();
-    void Diagnostics();
+    void Diagnostics(MessageType mtype);
     void Timing();
 
     bool Debug(Module module) const;

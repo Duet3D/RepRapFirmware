@@ -37,7 +37,7 @@ public:
 	void SetNext(DDA *n) { next = n; }
 	void SetPrevious(DDA *p) { prev = p; }
 	void Complete() { state = completed; }
-	void Free() { state = empty; }
+	bool Free();
 	void Prepare();													// Calculate all the values and freeze this DDA
 	float CalcTime() const;											// Calculate the time needed for this move (used for simulation)
 	bool HasStepError() const;
@@ -65,7 +65,7 @@ public:
 
 	// Note on the following constant:
 	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
-	// The worst case is pure Z movement on a delta. On a Mini Kossel with 80 steps/mm witt this formware runnig on a Duet (84MHx SAM3X8 processor),
+	// The worst case is pure Z movement on a delta. On a Mini Kossel with 80 steps/mm with this firmware running on a Duet (84MHx SAM3X8 processor),
 	// the calculation can just be managed in time at speeds of 15000mm/min (step interval 50us), but not at 20000mm/min (step interval 37.5us).
 	// Therefore, where the step interval falls below 70us, we don't calculate on every step.
 	static const int32_t MinCalcInterval = (70 * stepClockRate)/1000000; // the smallest sensible interval between calculations (70us) in step timer clocks
@@ -99,6 +99,7 @@ private:
 	uint8_t goingSlow : 1;					// True if we have reduced speed during homing
 	uint8_t isPrintingMove : 1;				// True if this move includes XY movement and extrusion
 	uint8_t usePressureAdvance : 1;			// True if pressure advance should be applied to any forward extrusion
+	uint8_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
 
@@ -133,6 +134,14 @@ private:
 
 	DriveMovement ddm[DRIVES];				// These describe the state of each drive movement
 };
+
+// Free up this DDA, returning true if the lookahead underrun flag was set
+inline bool DDA::Free()
+{
+	state = empty;
+	return hadLookaheadUnderrun;
+}
+
 
 // Force an end point
 inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)

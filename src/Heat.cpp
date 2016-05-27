@@ -69,14 +69,14 @@ void Heat::Spin()
 	platform->ClassReport(longWait);
 }
 
-void Heat::Diagnostics() 
+void Heat::Diagnostics(MessageType mtype)
 {
-	platform->Message(GENERIC_MESSAGE, "Heat Diagnostics:\n");
+	platform->Message(mtype, "Heat Diagnostics:\n");
 	for (size_t heater=0; heater < HEATERS; heater++)
 	{
 		if (pids[heater]->Active())
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->GetAccumulator());
+			platform->MessageF(mtype, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->GetAccumulator());
 		}
 	}
 }

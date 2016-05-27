@@ -46,12 +46,13 @@ Licence: GPL
 
 // Platform-specific includes
 
-#include "Arduino.h"
+#include "Core.h"
 #include "OutputMemory.h"
 #include "ff.h"
 #include "MCP4461.h"
 #include "MassStorage.h"
 #include "FileStore.h"
+#include "MessageType.h"
 
 // Definitions needed by Pins.h
 
@@ -396,20 +397,6 @@ enum class SerialSource
 	AUX2
 };
 
-// Supported message destinations
-enum MessageType
-{
-	AUX_MESSAGE,						// Type byte of a message that is to be sent to the first auxiliary device
-	AUX2_MESSAGE,						// Type byte of a message that is to be sent to the second auxiliary device
-	FLASH_LED,							// Type byte of a message that is to flash an LED; the next two bytes define the frequency and M/S ratio
-	DISPLAY_MESSAGE,					// Type byte of a message that is to appear on a local display; the L is not displayed; \f and \n should be supported
-	HOST_MESSAGE,						// Type byte of a message that is to be sent in non-blocking mode to the host via USB
-	DEBUG_MESSAGE,						// Type byte of a debug message to send in blocking mode to USB
-	HTTP_MESSAGE,						// Type byte of a message that is to be sent to the web (HTTP)
-	TELNET_MESSAGE,						// Type byte of a message that is to be sent to a Telnet client
-	GENERIC_MESSAGE,					// Type byte of a message that is to be sent to the web & host
-};
-
 // The main class that defines the RepRap machine for the benefit of the other classes
 
 class Platform
@@ -434,7 +421,7 @@ public:
 
 	Compatibility Emulating() const;
 	void SetEmulating(Compatibility c);
-	void Diagnostics();
+	void Diagnostics(MessageType mtype);
 	void DiagnosticTest(int d);
 	void ClassReport(float &lastTime);  			// Called on Spin() return to check everything's live.
 	void RecordError(ErrorCode ec) { errorCodeBits |= (uint32_t)ec; }
@@ -449,6 +436,7 @@ public:
 	float Time();									// Returns elapsed seconds since some arbitrary time
 	static uint32_t GetInterruptClocks();			// Get the interrupt clock count
 	static bool ScheduleInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
+	static void DisableStepInterrupt();				// Make sure we get no step interrupts
 	void Tick();
   
   	// Communications and data storage
@@ -473,21 +461,21 @@ public:
 
 	MassStorage* GetMassStorage() const;
 	FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
-	const char* GetWebDir() const; 	// Where the htm etc files are
-	const char* GetGCodeDir() const; 	// Where the gcodes are
-	const char* GetSysDir() const;  	// Where the system files are
-	const char* GetMacroDir() const;		// Where the user-defined macros are
-	const char* GetConfigFile() const; // Where the configuration is stored (in the system dir).
-	const char* GetDefaultFile() const;	// Where the default configuration is stored (in the system dir).
-	void InvalidateFiles();					// Called to invalidate files when the SD card is removed
+	const char* GetWebDir() const; 					// Where the htm etc files are
+	const char* GetGCodeDir() const; 				// Where the gcodes are
+	const char* GetSysDir() const;  				// Where the system files are
+	const char* GetMacroDir() const;				// Where the user-defined macros are
+	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
+	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
+	void InvalidateFiles();							// Called to invalidate files when the SD card is removed
 
 	// Message output (see MessageType for further details)
 
 	void Message(const MessageType type, const char *message);
-	void Message(const MessageType type, const StringRef& message);
 	void Message(const MessageType type, OutputBuffer *buffer);
 	void MessageF(const MessageType type, const char *fmt, ...);
 	void MessageF(const MessageType type, const char *fmt, va_list vargs);
+	bool FlushMessages();							// Flush messages to USB and aux, returning true if there is more to send
 
 	// Movement
 
@@ -534,6 +522,7 @@ public:
 	void SetElasticComp(size_t extruder, float factor);
 	void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel);
 	void GetEndStopConfiguration(size_t axis, EndStopType& endstopType, bool& logicLevel) const;
+	uint32_t GetAllEndstopStates() const;
 
 	// Z probe
 
@@ -598,6 +587,7 @@ public:
 	void SetAutoSave(bool enabled);
 
 	void UpdateFirmware();
+	bool CheckFirmwareUpdatePrerequisites();
 
 	// AUX device
 	void Beep(int freq, int ms);

@@ -66,7 +66,7 @@ public:
     void SetIdentityTransform();						// Cancel the bed equation; does not reset axis angle compensation
     void Transform(float move[]) const;					// Take a position and apply the bed and the axis-angle compensations
     void InverseTransform(float move[]) const;			// Go from a transformed point back to user coordinates
-    void Diagnostics();									// Report useful stuff
+    void Diagnostics(MessageType mtype);				// Report useful stuff
 
     const DeltaParameters& GetDeltaParams() const { return deltaParams; }
     DeltaParameters& AccessDeltaParams() { return deltaParams; }
@@ -89,7 +89,7 @@ public:
 	float IdleTimeout() const { return idleTimeout; }								// Returns the idle timeout in seconds
 	void SetIdleTimeout(float timeout) { idleTimeout = timeout; }					// Set the idle timeout in seconds
 
-    void Simulate(bool sim);														// Enter or leave simulation mode
+    void Simulate(uint8_t simMode);													// Enter or leave simulation mode
     float GetSimulationTime() const { return simulationTime; }						// Get the accumulated simulation time
     void PrintCurrentDda() const;													// For debugging
 
@@ -136,7 +136,8 @@ private:
 
     bool addNoMoreMoves;								// If true, allow no more moves to be added to the look-ahead
     bool active;										// Are we live and running?
-    bool simulating;									// Are we simulating, or really printing?
+    uint8_t simulationMode;								// Are we simulating, or really printing?
+    unsigned int numLookaheadUnderruns;					// How many times we have run out of moves
     unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
     float simulationTime;								// Print time since we started simulating
     volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move

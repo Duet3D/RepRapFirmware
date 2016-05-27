@@ -46,10 +46,7 @@
 #ifndef KSZ8051RNL_H_INCLUDED
 #define KSZ8051RNL_H_INCLUDED
 
-//#include "ASF/sam/utils/compiler.h"
-//#include "board.h"
-//#include "emac.h"
-#include "Arduino.h"
+#include "Core.h"
 #include "emac.h"
 #include "conf_eth.h"
 

@@ -185,16 +185,16 @@ void RepRap::Timing()
 	slowLoop = 0.0;
 }
 
-void RepRap::Diagnostics()
+void RepRap::Diagnostics(MessageType mtype)
 {
-	platform->Message(GENERIC_MESSAGE, "Diagnostics\n");
-	OutputBuffer::Diagnostics();
-	platform->Diagnostics();				// this includes a call to our Timing() function
-	move->Diagnostics();
-	heat->Diagnostics();
-	gCodes->Diagnostics();
-	network->Diagnostics();
-	webserver->Diagnostics();
+	platform->Message(mtype, "Diagnostics\n");
+	OutputBuffer::Diagnostics(mtype);
+	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
+	move->Diagnostics(mtype);
+	heat->Diagnostics(mtype);
+	gCodes->Diagnostics(mtype);
+	network->Diagnostics(mtype);
+	webserver->Diagnostics(mtype);
 }
 
 // Turn off the heaters, disable the motors, and

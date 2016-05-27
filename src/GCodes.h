@@ -52,7 +52,11 @@ enum class GCodeState
 	pausing2,
 	resuming1,
 	resuming2,
-	resuming3
+	resuming3,
+	flashing1,
+	flashing2,
+	stopping,
+	sleeping
 };
 
 // Small class to stack the state when we execute a macro file
@@ -66,6 +70,19 @@ public:
 	bool drivesRelative;
 	bool axesRelative;
 	bool doingFileMacro;
+};
+
+typedef uint16_t TriggerMask;
+
+struct Trigger
+{
+	TriggerMask rising;
+	TriggerMask falling;
+
+	void Init()
+	{
+		rising = falling = 0;
+	}
 };
 
 //****************************************************************************************************
@@ -99,13 +116,12 @@ public:
     void GetCurrentCoordinates(StringRef& s) const;						// Write where we are into a string
     bool DoingFileMacro() const;										// Or still busy processing a macro file?
     float FractionOfFilePrinted() const;								// Get fraction of file printed
-    void Diagnostics();													// Send helpful information out
+    void Diagnostics(MessageType mtype);								// Send helpful information out
     bool HaveIncomingData() const;										// Is there something that we have to do?
 	size_t GetStackPointer() const;										// Returns the current stack pointer
     bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
     void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homed
 
-    void PauseSDPrint();												// Pause the current print from SD card
     float GetSpeedFactor() const { return speedFactor * minutesToSeconds; }	// Return the current speed factor
     float GetExtrusionFactor(size_t extruder) { return extrusionFactors[extruder]; } // Return the current extrusion factors
     float GetRawExtruderPosition(size_t drive) const;					// Get the actual extruder position, after adjusting the extrusion factor
@@ -127,6 +143,7 @@ public:
 
 private:
   
+    void FillGCodeBuffers();											// Get new data into the gcode buffers
     void StartNextGCode(StringRef& reply);								// Fetch a new GCode and process it
     void DoFilePrint(GCodeBuffer* gb, StringRef& reply);				// Get G Codes from a file and print them
     bool AllMovesAreFinishedAndMoveBufferIsLoaded();					// Wait for move queue to exhaust and the current position is loaded
@@ -175,6 +192,10 @@ private:
     const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
     bool RetractFilament(bool retract);									// Retract or un-retract filaments
     bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive
+    void ListTriggers(StringRef reply, TriggerMask mask);				// Append a list of trigger endstops to a message
+    bool CheckTriggers();												// Check for and execute triggers
+    void DoEmergencyStop();												// Execute an emergency stop
+    void DoPause(bool externalToFile);									// Pause the print
 
     Platform* platform;							// The RepRap machine
     Webserver* webserver;						// The webserver class
@@ -234,8 +255,8 @@ private:
     bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
 	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
 	uint32_t auxSeq;							// Sequence number for AUX devices
-    bool simulating;
-    float simulationTime;
+    float simulationTime;						// Accumulated simulation time
+    uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
     FilePosition filePos;						// The position we got up to in the file being printed
 
@@ -243,6 +264,15 @@ private:
     float retractLength, retractExtra;			// retraction length and extra length to un-retract
     float retractSpeed;							// retract speed in mm/min
     float retractHop;							// Z hop when retracting
+
+    // Triggers
+    Trigger triggers[MaxTriggers];				// Trigger conditions
+    TriggerMask lastEndstopStates;				// States of the endstop inputs last time we looked
+    static_assert(MaxTriggers <= 32, "Too many triggers");
+    uint32_t triggersPending;					// Bitmap of triggers pending but not yet executed
+
+    // Firmware update
+    uint8_t firmwareUpdateModuleMap;			// Bitmap of firmware modules to be updated
 };
 
 //*****************************************************************************************************

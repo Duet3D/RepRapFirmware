@@ -66,6 +66,18 @@ size_t StringRef::cat(const char* src)
 	return length;
 }
 
+// Append a character
+size_t StringRef::cat(char c)
+{
+	size_t length = strlen();
+	if (length + 1 < len)
+	{
+		p[length++] = c;
+		p[length] = 0;
+	}
+	return length;
+}
+
 // End
 
 

@@ -496,9 +496,9 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 	}
 }
 
-/*static*/ void OutputBuffer::Diagnostics()
+/*static*/ void OutputBuffer::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Used output buffers: %d of %d (%d max)\n",
+	reprap.GetPlatform()->MessageF(mtype, "Used output buffers: %d of %d (%d max)\n",
 			usedOutputBuffers, OUTPUT_BUFFER_COUNT, maxUsedOutputBuffers);
 }
 

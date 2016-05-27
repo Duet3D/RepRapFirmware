@@ -78,7 +78,7 @@ class ProtocolInterpreter
 
 		ProtocolInterpreter(Platform *p, Webserver *ws, Network *n);
 		virtual ~ProtocolInterpreter() { }					// to keep Eclipse happy
-		virtual void Diagnostics() = 0;
+		virtual void Diagnostics(MessageType mtype) = 0;
 		virtual void Spin();
 
 		virtual void ConnectionEstablished();
@@ -125,7 +125,7 @@ class Webserver
 	void Init();
 	void Spin();
 	void Exit();
-	void Diagnostics();
+	void Diagnostics(MessageType mtype);
 
 	bool GCodeAvailable(const WebSource source) const;
 	char ReadGCode(const WebSource source);
@@ -147,7 +147,7 @@ class Webserver
 
 			HttpInterpreter(Platform *p, Webserver *ws, Network *n);
 			void Spin();
-			void Diagnostics();
+			void Diagnostics(MessageType mtype) override;
 			void ConnectionLost(const ConnectionState *cs);
 			bool CanParseData() override;
 			bool CharFromClient(const char c) override;
@@ -261,7 +261,7 @@ class Webserver
 		public:
 
 			FtpInterpreter(Platform *p, Webserver *ws, Network *n);
-			void Diagnostics();
+			void Diagnostics(MessageType mtype) override;
 
 			void ConnectionEstablished() override;
 			void ConnectionLost(const ConnectionState *cs) override;
@@ -306,7 +306,7 @@ class Webserver
 		public:
 
 			TelnetInterpreter(Platform *p, Webserver *ws, Network *n);
-			void Diagnostics();
+			void Diagnostics(MessageType mtype) override;
 
 			void ConnectionEstablished() override;
 			void ConnectionLost(const ConnectionState *cs) override;

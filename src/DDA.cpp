@@ -171,6 +171,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	endStopsToCheck = nextMove.endStopsToCheck;
 	filePos = nextMove.filePos;
 	usePressureAdvance = nextMove.usePressureAdvance;
+	hadLookaheadUnderrun = false;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a special move on a delta printer
 	endCoordinatesValid = (endStopsToCheck == 0) && (doMotorMapping || !move->IsDeltaMode());
@@ -358,18 +359,29 @@ void DDA::DoLookahead(DDA *laDDA)
 				laDDA->endSpeed = laDDA->requestedSpeed;		// remove the deceleration phase
 				laDDA->CalcNewSpeeds();							// put it back if necessary
 			}
-			else if (laDDA->decelDistance == laDDA->totalDistance && laDDA->prev->state == provisional)
+			else if (laDDA->decelDistance == laDDA->totalDistance)
 			{
 				// This is a deceleration-only move, so we may have to adjust the previous move as well to get optimum behaviour
-				laDDA->endSpeed = laDDA->requestedSpeed;
-				laDDA->CalcNewSpeeds();
-				laDDA->prev->targetNextSpeed = min<float>(sqrtf(fsquare(laDDA->endSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance)),
-															laDDA->requestedSpeed);
-				recurse = true;
+				if (laDDA->prev->state == provisional)
+				{
+					laDDA->endSpeed = laDDA->requestedSpeed;
+					laDDA->CalcNewSpeeds();
+					laDDA->prev->targetNextSpeed = min<float>(sqrtf(fsquare(laDDA->endSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance)),
+																laDDA->requestedSpeed);
+					recurse = true;
+				}
+				else
+				{
+					// This move is a deceleration-only move but we can't adjust the previous one
+					laDDA->hadLookaheadUnderrun = true;
+					laDDA->endSpeed = min<float>(sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance)),
+													laDDA->requestedSpeed);
+					laDDA->CalcNewSpeeds();
+				}
 			}
 			else
 			{
-				// This move doesn't reach its requested speed, but it isn't a deceleration-only move, or we can't adjust the previous one
+				// This move doesn't reach its requested speed, but it isn't a deceleration-only move
 				laDDA->endSpeed = min<float>(sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance)),
 												laDDA->requestedSpeed);
 				laDDA->CalcNewSpeeds();

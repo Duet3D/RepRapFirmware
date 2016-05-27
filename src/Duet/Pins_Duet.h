@@ -3,6 +3,7 @@
 
 #define NAME "RepRapFirmware for Duet"
 
+const size_t NumFirmwareUpdateModules = 1;
 #define IAP_UPDATE_FILE "iap.bin"
 #define IAP_FIRMWARE_FILE "RepRapFirmware.bin"
 
@@ -156,7 +157,7 @@ const size_t NUM_PINS_ALLOWED = 72;
 
 // SAM3X Flash locations (may be expanded in the future)
 const uint32_t IAP_FLASH_START = 0x000F0000;
-const uint32_t IAP_FLASH_END = 0x000FFFFF;
+const uint32_t IAP_FLASH_END = 0x000FFBFF;		// don't touch the last 1KB, it's used for NvData
 
 // Timer allocation
 #define NETWORK_TC			(TC1)

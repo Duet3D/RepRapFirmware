@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.12a"
+# define VERSION "1.13beta1"
 #endif
 
 #ifndef DATE
-# define DATE "2016-05-10"
+# define DATE "2016-05-27"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -123,14 +123,23 @@ const size_t FILENAME_LENGTH = 100;
 
 // Output buffer lengths
 
+#ifdef DUET_NG
+const uint16_t OUTPUT_BUFFER_SIZE = 256;			// How many bytes does each OutputBuffer hold?
+const size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
+#else
 const uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
 const size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
+#endif
 
 // Move system
 
 const float DEFAULT_FEEDRATE = 3000.0;				// The initial requested feed rate after resetting the printer
 const float DEFAULT_IDLE_TIMEOUT = 30.0;			// Seconds
 const float DEFAULT_IDLE_CURRENT_FACTOR = 0.3;		// Proportion of normal motor current that we use for idle hold
+
+// Triggers
+
+const unsigned int MaxTriggers = 10;				// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
 // Default nozzle and filament values
 

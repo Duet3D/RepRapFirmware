@@ -210,7 +210,7 @@ uint32_t SpiSendWord(uint32_t pin, uint32_t dataOut)
 	digitalWrite(pin, HIGH);					// set CS high again
 	USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;	// reset and disable transmitter and receiver
 	delayMicroseconds(1);						// ensure it stays high for long enough before the next write
-	return (dataIn >> 4) & 0x000FFFFF;
+	return dataIn >> 4;
 }
 
 struct TmcDriverState

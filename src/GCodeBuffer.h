@@ -12,9 +12,9 @@
 class GCodeBuffer
 {
   public:
-    GCodeBuffer(Platform* p, const char* id);
+    GCodeBuffer(Platform* p, const char* id, MessageType mt);
     void Init(); 										// Set it up
-	void Diagnostics();									// Write some debug info
+	void Diagnostics(MessageType mtype);				// Write some debug info
     bool Put(char c);									// Add a character to the end
     bool Put(const char *str, size_t len);				// Add an entire string
     bool IsEmpty() const;								// Does this buffer contain any code?
@@ -27,10 +27,10 @@ class GCodeBuffer
     const void GetFloatArray(float a[], size_t& length); // Get a :-separated list of floats after a key letter
     const void GetLongArray(long l[], size_t& length);	// Get a :-separated list of longs after a key letter
     const char* Buffer() const;
-    bool Active() const;
+    bool IsIdle() const;
+    bool IsReady() const;								// Return true if a gcode is ready but hasn't been started yet
+    bool IsExecuting() const;							// Return true if a gcode has been started and is not paused
     void SetFinished(bool f);							// Set the G Code executed (or not)
-    void Pause();
-    void Resume();
     const char* WritingFileDirectory() const;			// If we are writing the G Code to a file, where that file is
     void SetWritingFileDirectory(const char* wfd);		// Set the directory for the file to write the GCode in
     int GetToolNumberAdjust() const { return toolNumberAdjust; }
@@ -38,12 +38,18 @@ class GCodeBuffer
     void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
     bool StartingNewCode() const { return gcodePointer == 0; }
     bool IsPollRequest();
+    MessageType GetResponseMessageType() const { return responseMessageType; }
 
     static bool IsPollCode(int code);
 
   private:
 
-    enum class GCodeState { idle, executing, paused };
+    enum class GCodeState
+	{
+    	idle,			// we don't have a complete gcode ready
+		ready,			// we have a complete gcode but haven't started executing it
+		executing		// we have a complete gcode and have started executing it
+	};
     int CheckSum() const;								// Compute the checksum (if any) at the end of the G Code
     Platform* platform;									// Pointer to the RepRap's controlling class
     char gcodeBuffer[GCODE_LENGTH];						// The G Code
@@ -55,6 +61,7 @@ class GCodeBuffer
     GCodeState state;									// Idle, executing or paused
     const char* writingFileDirectory;					// If the G Code is going into a file, where that is
     int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
+    const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
 };
 
 // Get an Int after a G Code letter
@@ -68,7 +75,17 @@ inline const char* GCodeBuffer::Buffer() const
 	return gcodeBuffer;
 }
 
-inline bool GCodeBuffer::Active() const
+inline bool GCodeBuffer::IsIdle() const
+{
+	return state == GCodeState::idle;
+}
+
+inline bool GCodeBuffer::IsReady() const
+{
+	return state == GCodeState::ready;
+}
+
+inline bool GCodeBuffer::IsExecuting() const
 {
 	return state == GCodeState::executing;
 }
@@ -76,22 +93,6 @@ inline bool GCodeBuffer::Active() const
 inline void GCodeBuffer::SetFinished(bool f)
 {
 	state = (f) ? GCodeState::idle : GCodeState::executing;
-}
-
-inline void GCodeBuffer::Pause()
-{
-	if (state == GCodeState::executing)
-	{
-		state = GCodeState::paused;
-	}
-}
-
-inline void GCodeBuffer::Resume()
-{
-	if (state == GCodeState::paused)
-	{
-		state = GCodeState::executing;
-	}
 }
 
 inline const char* GCodeBuffer::WritingFileDirectory() const

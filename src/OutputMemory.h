@@ -8,9 +8,10 @@
 #ifndef OUTPUTMEMORY_H_
 #define OUTPUTMEMORY_H_
 
-#include "Arduino.h"
+#include "Core.h"
 #include "Configuration.h"
 #include "StringRef.h"
+#include "MessageType.h"
 
 const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can be pushed onto one stack instance
 
@@ -76,7 +77,7 @@ class OutputBuffer
 		// Release all OutputBuffer objects in a chain
 		static void ReleaseAll(OutputBuffer *buf);
 
-		static void Diagnostics();
+		static void Diagnostics(MessageType mtype);
 
 	private:
 

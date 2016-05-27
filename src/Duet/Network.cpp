@@ -497,9 +497,9 @@ void Network::Interrupt()
 	}
 }
 
-void Network::Diagnostics()
+void Network::Diagnostics(MessageType mtype)
 {
-	platform->Message(GENERIC_MESSAGE, "Network Diagnostics:\n");
+	platform->Message(mtype, "Network Diagnostics:\n");
 
 	size_t numFreeConnections = 0;
 	ConnectionState *freeConn = freeConnections;
@@ -508,7 +508,7 @@ void Network::Diagnostics()
 		numFreeConnections++;
 		freeConn = freeConn->next;
 	}
-	platform->MessageF(GENERIC_MESSAGE, "Free connections: %d of %d\n", numFreeConnections, MEMP_NUM_TCP_PCB);
+	platform->MessageF(mtype, "Free connections: %d of %d\n", numFreeConnections, MEMP_NUM_TCP_PCB);
 
 	size_t numFreeTransactions = 0;
 	NetworkTransaction *freeTrans = freeTransactions;
@@ -517,7 +517,7 @@ void Network::Diagnostics()
 		numFreeTransactions++;
 		freeTrans = freeTrans->next;
 	}
-	platform->MessageF(GENERIC_MESSAGE, "Free transactions: %d of %d\n", numFreeTransactions, NETWORK_TRANSACTION_COUNT);
+	platform->MessageF(mtype, "Free transactions: %d of %d\n", numFreeTransactions, NETWORK_TRANSACTION_COUNT);
 
 #if LWIP_STATS
 	// Normally we should NOT try to display LWIP stats here, because it uses debugPrintf(), which will hang the system if no USB cable is connected.

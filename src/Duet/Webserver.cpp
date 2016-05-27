@@ -251,12 +251,12 @@ void Webserver::Exit()
 	webserverActive = false;
 }
 
-void Webserver::Diagnostics()
+void Webserver::Diagnostics(MessageType mtype)
 {
-	platform->Message(GENERIC_MESSAGE, "Webserver Diagnostics:\n");
-	httpInterpreter->Diagnostics();
-	ftpInterpreter->Diagnostics();
-	telnetInterpreter->Diagnostics();
+	platform->Message(mtype, "Webserver Diagnostics:\n");
+	httpInterpreter->Diagnostics(mtype);
+	ftpInterpreter->Diagnostics(mtype);
+	telnetInterpreter->Diagnostics(mtype);
 }
 
 bool Webserver::GCodeAvailable(const WebSource source) const
@@ -535,9 +535,9 @@ Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws, Network 
 	seq = 0;
 }
 
-void Webserver::HttpInterpreter::Diagnostics()
+void Webserver::HttpInterpreter::Diagnostics(MessageType mt)
 {
-	platform->MessageF(GENERIC_MESSAGE, "HTTP sessions: %d of %d\n", numSessions, maxHttpSessions);
+	platform->MessageF(mt, "HTTP sessions: %d of %d\n", numSessions, maxHttpSessions);
 }
 
 void Webserver::HttpInterpreter::Spin()
@@ -1848,9 +1848,9 @@ Webserver::FtpInterpreter::FtpInterpreter(Platform *p, Webserver *ws, Network *n
 	strcpy(currentDir, "/");
 }
 
-void Webserver::FtpInterpreter::Diagnostics()
+void Webserver::FtpInterpreter::Diagnostics(MessageType mt)
 {
-	platform->MessageF(GENERIC_MESSAGE, "FTP connections: %d, state %d\n", connectedClients, state);
+	platform->MessageF(mt, "FTP connections: %d, state %d\n", connectedClients, state);
 }
 
 void Webserver::FtpInterpreter::ConnectionEstablished()
@@ -2497,9 +2497,9 @@ gcodeReadIndex(0), gcodeWriteIndex(0), gcodeReply(nullptr)
 	ResetState();
 }
 
-void Webserver::TelnetInterpreter::Diagnostics()
+void Webserver::TelnetInterpreter::Diagnostics(MessageType mt)
 {
-	platform->MessageF(GENERIC_MESSAGE, "Telnet connections: %d, state %d\n", connectedClients, state);
+	platform->MessageF(mt, "Telnet connections: %d, state %d\n", connectedClients, state);
 }
 
 void Webserver::TelnetInterpreter::ConnectionEstablished()

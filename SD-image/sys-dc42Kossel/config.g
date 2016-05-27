@@ -34,6 +34,7 @@ M83                                 ; ...but relative extruder moves
 ; Thermistors and heaters
 M305 P0 T100000 B3950 R4700 H0 L0	; Typical Chinese bed thermistor. Put your own H and/or L values here to set the bed thermistor ADC correction.
 M305 P1 T100000 B4388 R4700 H0 L0	; E3Dv6 hot end. Put your own H and/or L values here if necessary to set the first nozzle thermistor ADC correction.
+M301 H0 P20 I0.5 D1000 T0.85 W150 B5 ; PID settings for the bed
 M301 H1 P10 I0.10 D100 T0.50		; PID settings for extruder 0
 M570 S200							; Allow extra heating time
 

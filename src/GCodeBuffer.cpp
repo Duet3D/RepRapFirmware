@@ -11,8 +11,8 @@
 
 // This class stores a single G Code and provides functions to allow it to be parsed
 
-GCodeBuffer::GCodeBuffer(Platform* p, const char* id)
-	: platform(p), identity(id), checksumRequired(false), writingFileDirectory(nullptr), toolNumberAdjust(0)
+GCodeBuffer::GCodeBuffer(Platform* p, const char* id, MessageType mt)
+	: platform(p), identity(id), checksumRequired(false), writingFileDirectory(nullptr), toolNumberAdjust(0), responseMessageType(mt)
 {
 	Init();
 }
@@ -25,21 +25,20 @@ void GCodeBuffer::Init()
 	state = GCodeState::idle;
 }
 
-void GCodeBuffer::Diagnostics()
+void GCodeBuffer::Diagnostics(MessageType mtype)
 {
 	switch (state)
 	{
 		case GCodeState::idle:
-			platform->MessageF(GENERIC_MESSAGE, "%s is idle\n", identity);
+			platform->MessageF(mtype, "%s is idle\n", identity);
+			break;
+
+		case GCodeState::ready:
+			platform->MessageF(mtype, "%s is ready with \"%s\"\n", identity, Buffer());
 			break;
 
 		case GCodeState::executing:
-			platform->MessageF(GENERIC_MESSAGE, "%s is doing \"%s\"\n", identity, Buffer());
-			break;
-
-		case GCodeState::paused:
-			platform->MessageF(GENERIC_MESSAGE, "%s is paused\n", identity);
-			break;
+			platform->MessageF(mtype, "%s is doing \"%s\"\n", identity, Buffer());
 	}
 }
 
@@ -125,7 +124,7 @@ bool GCodeBuffer::Put(char c)
 			return false;
 		}
 		Init();
-		state = GCodeState::executing;
+		state = GCodeState::ready;
 		return true;
 	}
 	else if (!inComment || writingFileDirectory)
@@ -237,7 +236,6 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 
 	// Special case if there is one entry and returnedLength requests several.
 	// Fill the array with the first entry.
-
 	if (length == 1 && returnedLength > 1)
 	{
 		for(size_t i = 1; i < returnedLength; i++)
@@ -361,7 +359,7 @@ long GCodeBuffer::GetLValue()
 // Return true if this buffer contains a poll request or empty request that can be executed while macros etc. from another source are being completed
 bool GCodeBuffer::IsPollRequest()
 {
-	if (state == GCodeState::executing)
+	if (state == GCodeState::ready)
 	{	if (IsEmpty())
 		{
 			return true;

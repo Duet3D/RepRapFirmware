@@ -23,9 +23,14 @@
 #include "DueFlashStorage.h"
 
 #include "sam/drivers/tc/tc.h"
+#include "sam/drivers/hsmci/hsmci.h"
 
 #ifdef EXTERNAL_DRIVERS
 # include "ExternalDrivers.h"
+#endif
+
+#ifdef DUET_NG
+# include "FirmwareUpdater.h"
 #endif
 
 extern char _end;
@@ -729,12 +734,31 @@ void Platform::SetAutoSave(bool enabled)
 #endif
 }
 
+// Check the prerequisites for updating the main firmware. Return True if satisfied, else print as message and return false.
+bool Platform::CheckFirmwareUpdatePrerequisites()
+{
+	if (!GetMassStorage()->FileExists(GetSysDir(), IAP_FIRMWARE_FILE))
+	{
+		MessageF(GENERIC_MESSAGE, "Error: Firmware binary \"%s\" not found\n", IAP_FIRMWARE_FILE);
+		return false;
+	}
+
+	if (!GetMassStorage()->FileExists(GetSysDir(), IAP_UPDATE_FILE))
+	{
+		MessageF(GENERIC_MESSAGE, "Error: In-application programming binary \"%s\" not found\n", IAP_UPDATE_FILE);
+		return false;
+	}
+
+	return true;
+}
+
+// Update the firmware. Prerequisites should be checked before calling this.
 void Platform::UpdateFirmware()
 {
 	FileStore *iapFile = GetFileStore(GetSysDir(), IAP_UPDATE_FILE, false);
 	if (iapFile == nullptr)
 	{
-		MessageF(GENERIC_MESSAGE, "Error: Could not open IAP programmer binary \"%s\"\n", IAP_UPDATE_FILE);
+		MessageF(FIRMWARE_UPDATE_MESSAGE, "IAP not found\n");
 		return;
 	}
 
@@ -754,7 +778,7 @@ void Platform::UpdateFirmware()
 
 #if (SAM4S || SAM4E)
 	// The EWP command is not supported for non-8KByte sectors in the SAM4 series.
-	// So unlock and erase the complete 64Kb sector first.
+	// So we have to unlock and erase the complete 64Kb sector first.
 	// TODO save the NVRAM area and restore it later
 
 	flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
@@ -779,13 +803,13 @@ void Platform::UpdateFirmware()
 
 			if (rc != FLASH_RC_OK)
 			{
-				MessageF(GENERIC_MESSAGE, "Error: Flash write failed, code=%u, address=0x%08x\n", rc, flashAddr);
+				MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Flash write failed, code=%u, address=0x%08x\n", rc, flashAddr);
 				return;
 			}
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
-				MessageF(GENERIC_MESSAGE, "Error: Verify during flash write failed, address=0x%08x\n", flashAddr);
+				MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Verify during flash write failed, address=0x%08x\n", flashAddr);
 				return;
 			}
 		}
@@ -836,13 +860,13 @@ void Platform::UpdateFirmware()
 
 			if (rc != FLASH_RC_OK)
 			{
-				MessageF(GENERIC_MESSAGE, "Error: Flash %s failed, code=%u, address=0x%08x\n", op, rc, flashAddr);
+				MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Flash %s failed, code=%u, address=0x%08x\n", op, rc, flashAddr);
 				return;
 			}
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
-				MessageF(GENERIC_MESSAGE, "Error: Verify during flash write failed, address=0x%08x\n", flashAddr);
+				MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Verify during flash write failed, address=0x%08x\n", flashAddr);
 				return;
 			}
 		}
@@ -860,6 +884,11 @@ void Platform::UpdateFirmware()
 #endif
 
 	iapFile->Close();
+	Message(FIRMWARE_UPDATE_MESSAGE, "Updating main firmware\n");
+
+	// Allow time for the firmware update message to be sent
+	uint32_t now = millis();
+	while (FlushMessages() && millis() - now < 2000) { }
 
 	// Step 2 - Let the firmware do whatever is necessary before we exit this program
 	reprap.Exit();
@@ -925,16 +954,13 @@ void Platform::Exit()
 		}
 	}
 
-	// Stop processing data
-	Message(GENERIC_MESSAGE, "Platform class exited.\n");
+	// Stop processing data. Don't try to send a message because it will probably never get there.
 	active = false;
 }
 
 Compatibility Platform::Emulating() const
 {
-	if (nvData.compatibility == reprapFirmware)
-		return me;
-	return nvData.compatibility;
+	return (nvData.compatibility == reprapFirmware) ? me : nvData.compatibility;
 }
 
 void Platform::SetEmulating(Compatibility c)
@@ -990,21 +1016,9 @@ void Platform::SetNetMask(byte nm[])
 	UpdateNetworkAddress(nvData.netMask, nm);
 }
 
-void Platform::Spin()
+// Flush messages to USB and aux, returning true if there is more to send
+bool Platform::FlushMessages()
 {
-	if (!active)
-		return;
-
-	// Check if any files are supposed to be closed
-	for(size_t i = 0; i < MAX_FILES; i++)
-	{
-		if (files[i]->closeRequested)
-		{
-			// We cannot do this in ISRs, so do it here
-			files[i]->Close();
-		}
-	}
-
 	// Write non-blocking data to the AUX line
 	OutputBuffer *auxOutputBuffer = auxOutput->GetFirstItem();
 	if (auxOutputBuffer != nullptr)
@@ -1070,6 +1084,29 @@ void Platform::Spin()
 		}
 	}
 
+	return auxOutput->GetFirstItem() != nullptr
+		|| aux2Output->GetFirstItem() != nullptr
+		|| usbOutput->GetFirstItem() != nullptr;
+}
+
+void Platform::Spin()
+{
+	if (!active)
+		return;
+
+	// Check if any files are supposed to be closed
+	for(size_t i = 0; i < MAX_FILES; i++)
+	{
+		if (files[i]->closeRequested)
+		{
+			// We cannot do this in ISRs, so do it here
+			files[i]->Close();
+		}
+	}
+
+	// Try to flush messages to serial ports
+	(void)FlushMessages();
+
 	// Thermostatically-controlled fans
 	for (size_t fan = 0; fan < NUM_FANS; ++fan)
 	{
@@ -1132,16 +1169,6 @@ void Platform::SoftwareReset(uint16_t reason)
 //*****************************************************************************************************************
 
 // Interrupts
-
-void STEP_TC_HANDLER()
-{
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;	// disable the interrupt
-#ifdef MOVE_DEBUG
-	++numInterruptsExecuted;
-	lastInterruptTime = Platform::GetInterruptClocks();
-#endif
-	reprap.GetMove()->Interrupt();
-}
 
 #ifndef DUET_NG
 void NETWORK_TC_HANDLER()
@@ -1231,27 +1258,27 @@ void Platform::DisableInterrupts()
 
 // This diagnostics function is the first to be called, so it calls Message to start with.
 // All other messages generated by this and other diagnostics functions must call AppendMessage.
-void Platform::Diagnostics()
+void Platform::Diagnostics(MessageType mtype)
 {
-	Message(GENERIC_MESSAGE, "Platform Diagnostics:\n");
+	Message(mtype, "Platform Diagnostics:\n");
 
 	// Print memory stats and error codes to USB and copy them to the current webserver reply
 	const char *ramstart = (char *) 0x20070000;
 	const struct mallinfo mi = mallinfo();
-	Message(GENERIC_MESSAGE, "Memory usage:\n");
-	MessageF(GENERIC_MESSAGE, "Program static ram used: %d\n", &_end - ramstart);
-	MessageF(GENERIC_MESSAGE, "Dynamic ram used: %d\n", mi.uordblks);
-	MessageF(GENERIC_MESSAGE, "Recycled dynamic ram: %d\n", mi.fordblks);
+	Message(mtype, "Memory usage:\n");
+	MessageF(mtype, "Program static ram used: %d\n", &_end - ramstart);
+	MessageF(mtype, "Dynamic ram used: %d\n", mi.uordblks);
+	MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
 	size_t currentStack, maxStack, neverUsed;
 	GetStackUsage(&currentStack, &maxStack, &neverUsed);
-	MessageF(GENERIC_MESSAGE, "Current stack ram used: %d\n", currentStack);
-	MessageF(GENERIC_MESSAGE, "Maximum stack ram used: %d\n", maxStack);
-	MessageF(GENERIC_MESSAGE, "Never used ram: %d\n", neverUsed);
+	MessageF(mtype, "Current stack ram used: %d\n", currentStack);
+	MessageF(mtype, "Maximum stack ram used: %d\n", maxStack);
+	MessageF(mtype, "Never used ram: %d\n", neverUsed);
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)Time();		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
-	MessageF(GENERIC_MESSAGE, "Last reset %02d:%02d:%02d ago, cause: %s\n",
+	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n",
 			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
 
@@ -1262,21 +1289,21 @@ void Platform::Diagnostics()
 		DueFlashStorage::read(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
 		if (temp.magic == SoftwareResetData::magicValue && temp.version == SoftwareResetData::versionValue)
 		{
-			MessageF(GENERIC_MESSAGE, "Last software reset code & available RAM: 0x%04x, %u\n", temp.resetReason, temp.neverUsedRam);
-			MessageF(GENERIC_MESSAGE, "Spinning module during software reset: %s\n", moduleName[temp.resetReason & 0x0F]);
+			MessageF(mtype, "Last software reset code & available RAM: 0x%04x, %u\n", temp.resetReason, temp.neverUsedRam);
+			MessageF(mtype, "Spinning module during software reset: %s\n", moduleName[temp.resetReason & 0x0F]);
 		}
 	}
 
 	// Show the current error codes
-	MessageF(GENERIC_MESSAGE, "Error status: %u\n", errorCodeBits);
+	MessageF(mtype, "Error status: %u\n", errorCodeBits);
 
 	// Show the current probe position heights
-	Message(GENERIC_MESSAGE, "Bed probe heights:");
+	Message(mtype, "Bed probe heights:");
 	for (size_t i = 0; i < MAX_PROBE_POINTS; ++i)
 	{
-		MessageF(GENERIC_MESSAGE, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
+		MessageF(mtype, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
 	}
-	Message(GENERIC_MESSAGE, "\n");
+	Message(mtype, "\n");
 
 	// Show the number of free entries in the file table
 	unsigned int numFreeFiles = 0;
@@ -1287,13 +1314,16 @@ void Platform::Diagnostics()
 			++numFreeFiles;
 		}
 	}
-	MessageF(GENERIC_MESSAGE, "Free file entries: %u\n", numFreeFiles);
+	MessageF(mtype, "Free file entries: %u\n", numFreeFiles);
 
 	// Show the longest write time
-	MessageF(GENERIC_MESSAGE, "Longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
+	MessageF(mtype, "Longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
+
+	// Show the HSMCI speed
+	MessageF(mtype, "SD card speed: %.1fMHz\n", (float)hsmci_get_speed()/1000000.0);
 
 // Debug
-//MessageF(GENERIC_MESSAGE, "Shortest/longest times read %.1f/%.1f write %.1f/%.1f ms, %u/%u\n",
+//MessageF(mtype, "Shortest/longest times read %.1f/%.1f write %.1f/%.1f ms, %u/%u\n",
 //		(float)shortestReadWaitTime/1000, (float)longestReadWaitTime/1000, (float)shortestWriteWaitTime/1000, (float)longestWriteWaitTime/1000,
 //		maxRead, maxWrite);
 //longestWriteWaitTime = longestReadWaitTime = 0; shortestReadWaitTime = shortestWriteWaitTime = 1000000;
@@ -1301,7 +1331,7 @@ void Platform::Diagnostics()
 	reprap.Timing();
 
 #ifdef MOVE_DEBUG
-	MessageF(GENERIC_MESSAGE, "Interrupts scheduled %u, done %u, last %u, next %u sched at %u, now %u\n",
+	MessageF(mtype, "Interrupts scheduled %u, done %u, last %u, next %u sched at %u, now %u\n",
 			numInterruptsScheduled, numInterruptsExecuted, lastInterruptTime, nextInterruptTime, nextInterruptScheduledAt, GetInterruptClocks());
 #endif
 }
@@ -1574,6 +1604,21 @@ EndStopHit Platform::Stopped(size_t drive) const
 		}
 	}
 	return EndStopHit::noStop;
+}
+
+// Get the statues of all the endstop inputs, regardless of what they are used for. Used for triggers.
+uint32_t Platform::GetAllEndstopStates() const
+{
+	uint32_t rslt = 0;
+	for (unsigned int drive = 0; drive < DRIVES; ++drive)
+	{
+		const Pin pin = endStopPins[drive];
+		if (pin >= 0 && digitalRead(pin))
+		{
+			rslt |= (1 << drive);
+		}
+	}
+	return rslt;
 }
 
 // Return the Z probe result. We assume that if the Z probe is used as an endstop, it is used as the low stop.
@@ -2069,12 +2114,6 @@ void Platform::Message(MessageType type, const char *message)
 {
 	switch (type)
 	{
-		case FLASH_LED:
-			// Message that is to flash an LED; the next two bytes define
-			// the frequency and M/S ratio.
-			// (not implemented yet)
-			break;
-
 		case AUX_MESSAGE:
 			// Message that is to be sent to the first auxiliary device
 			if (!auxOutput->IsEmpty())
@@ -2105,11 +2144,6 @@ void Platform::Message(MessageType type, const char *message)
 				SERIAL_AUX2_DEVICE.flush();
 			}
 #endif
-			break;
-
-		case DISPLAY_MESSAGE:
-			// Message that is to appear on a local display;  \f and \n should be supported.
-			reprap.SetMessage(message);
 			break;
 
 		case DEBUG_MESSAGE:
@@ -2163,19 +2197,30 @@ void Platform::Message(MessageType type, const char *message)
 			}
 			break;
 
+		case FIRMWARE_UPDATE_MESSAGE:
+			Message(HOST_MESSAGE, message);
+			// Send an alert message to the aux port
+			{
+				OutputBuffer *buf;
+				if (OutputBuffer::Allocate(buf, false))
+				{
+					buf->cat("{\"alert\":");
+					buf->EncodeString(message, strlen(message), true, true);
+					buf->cat("}\n");
+					Message(AUX_MESSAGE, buf);
+				}
+			}
+			break;
+
 		case GENERIC_MESSAGE:
 			// Message that is to be sent to the web & host. Make this the default one, too.
 		default:
 			Message(HTTP_MESSAGE, message);
 			Message(TELNET_MESSAGE, message);
 			Message(HOST_MESSAGE, message);
+			Message(AUX_MESSAGE, message);
 			break;
 	}
-}
-
-void Platform::Message(const MessageType type, const StringRef &message)
-{
-	Message(type, message.Pointer());
 }
 
 void Platform::Message(const MessageType type, OutputBuffer *buffer)
@@ -2234,9 +2279,15 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 
 		case GENERIC_MESSAGE:
 			// Message that is to be sent to the web & host.
-			buffer->IncreaseReferences(2);		// This one is handled by two additional destinations
+			buffer->IncreaseReferences(3);		// This one is handled by three additional destinations
 			Message(HTTP_MESSAGE, buffer);
 			Message(TELNET_MESSAGE, buffer);
+			Message(HOST_MESSAGE, buffer);
+			Message(AUX_MESSAGE, buffer);
+			break;
+
+		case FIRMWARE_UPDATE_MESSAGE:
+			// We don't generate any of these with an OutputBuffer argument, but if we get one, just send it to USB
 			Message(HOST_MESSAGE, buffer);
 			break;
 
@@ -2517,6 +2568,17 @@ char Platform::ReadFromSource(const SerialSource source)
 //#pragma GCC push_options
 #pragma GCC optimize ("O3")
 
+// Step pulse timer interrupt
+void STEP_TC_HANDLER()
+{
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;	// disable the interrupt
+#ifdef MOVE_DEBUG
+	++numInterruptsExecuted;
+	lastInterruptTime = Platform::GetInterruptClocks();
+#endif
+	reprap.GetMove()->Interrupt();
+}
+
 // Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
 // Must be called with interrupts disabled,
 /*static*/ bool Platform::ScheduleInterrupt(uint32_t tim)
@@ -2536,6 +2598,12 @@ char Platform::ReadFromSource(const SerialSource source)
 		nextInterruptScheduledAt = Platform::GetInterruptClocks();
 #endif
 	return false;
+}
+
+// Make sure we get no step interrupts
+/*static*/ void Platform::DisableStepInterrupt()
+{
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;
 }
 
 // Process a 1ms tick interrupt

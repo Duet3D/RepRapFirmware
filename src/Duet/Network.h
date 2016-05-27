@@ -153,7 +153,7 @@ class Network
 		void Exit() {}
 		void Spin();
 		void Interrupt();
-		void Diagnostics();
+		void Diagnostics(MessageType mtype);
 
 		// Deal with LwIP
 

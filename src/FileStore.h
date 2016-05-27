@@ -3,7 +3,7 @@
 #ifndef FILESTORE_H
 #define FILESTORE_H
 
-#include "Arduino.h"
+#include "Core.h"
 #include "ff.h"
 
 typedef uint32_t FilePosition;
