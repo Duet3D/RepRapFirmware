@@ -1,6 +1,6 @@
 /****************************************************************************************************
 
- RepRapFirmware - Platform: RepRapPro Ormerod with Arduino Due controller
+ RepRapFirmware - Platform: RepRapPro Ormerod with Duet controller
 
  Platform contains all the code and definitions to deal with machine-dependent things such as control
  pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
@@ -25,7 +25,7 @@
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"
 
-#ifdef EXTERNAL_DRIVERS
+#if defined(DUET_NG) || defined (EXTERNAL_DRIVERS)
 # include "ExternalDrivers.h"
 #endif
 
@@ -185,8 +185,10 @@ void Platform::Init()
 
 	fileStructureInitialised = true;
 
+#if !defined(DUET_NG) || defined(PROTOTYPE_1)
 	mcpDuet.begin();							// only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
 	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
+#endif
 
 	// Directories
 
@@ -209,11 +211,15 @@ void Platform::Init()
 	ARRAY_INIT(accelerations, ACCELERATIONS);
 	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
 	ARRAY_INIT(instantDvs, INSTANT_DVS);
+
+#if !defined(DUET_NG) || defined(PROTOTYPE_1)
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
 	stepperDacVoltageRange = STEPPER_DAC_VOLTAGE_RANGE;
 	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
+#endif
+
 	maxAverageAcceleration = 10000.0;			// high enough to have no effect until it is changed
 
 	// Z PROBE
@@ -264,14 +270,17 @@ void Platform::Init()
 		{
 			pinMode(directionPins[drive], OUTPUT);
 		}
-#ifdef EXTERNAL_DRIVERS
+
+#if !defined(DUET_NG) || defined(PROTOTYPE_1)
+# ifdef EXTERNAL_DRIVERS
 		if (drive < FIRST_EXTERNAL_DRIVE && enablePins[drive] >= 0)
-#else
+# else
 		if (enablePins[drive] >= 0)
-#endif
+# endif
 		{
 			pinMode(enablePins[drive], OUTPUT);
 		}
+#endif
 		if (endStopPins[drive] >= 0)
 		{
 			pinMode(endStopPins[drive], INPUT_PULLUP);
@@ -928,6 +937,19 @@ void Platform::Beep(int freq, int ms)
 	MessageF(AUX_MESSAGE, "{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
 }
 
+// Send a short message to the aux channel. There is no flow control on this port, so it can't block for long.
+void Platform::SendMessage(const char* msg)
+{
+	OutputBuffer *buf;
+	if (OutputBuffer::Allocate(buf))
+	{
+		buf->copy("{\"message\":");
+		buf->EncodeString(msg, strlen(msg), false, true);
+		buf->cat("}\n");
+		Message(AUX_MESSAGE, buf);
+	}
+}
+
 // Note: the use of floating point time will cause the resolution to degrade over time.
 // For example, 1ms time resolution will only be available for about half an hour from startup.
 // Personally, I (dc42) would rather just maintain and provide the time in milliseconds in a uint32_t.
@@ -1316,13 +1338,15 @@ void Platform::Diagnostics(MessageType mtype)
 	}
 	MessageF(mtype, "Free file entries: %u\n", numFreeFiles);
 
-	// Show the longest write time
-	MessageF(mtype, "Longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
-
 	// Show the HSMCI speed
-	MessageF(mtype, "SD card speed: %.1fMHz\n", (float)hsmci_get_speed()/1000000.0);
+	MessageF(mtype, "SD card interface speed: %.1fMBytes/sec\n", (float)hsmci_get_speed()/1000000.0);
+
+	// Show the longest SD card write time
+	MessageF(mtype, "SD card longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
 
 // Debug
+//MessageF(mtype, "TC_FMR = %08x, PWM_FPE = %08x, PWM_FSR = %08x\n", TC2->TC_FMR, PWM->PWM_FPE, PWM->PWM_FSR);
+//MessageF(mtype, "PWM2 period %08x, duty %08x\n", PWM->PWM_CH_NUM[2].PWM_CPRD, PWM->PWM_CH_NUM[2].PWM_CDTY);
 //MessageF(mtype, "Shortest/longest times read %.1f/%.1f write %.1f/%.1f ms, %u/%u\n",
 //		(float)shortestReadWaitTime/1000, (float)longestReadWaitTime/1000, (float)shortestWriteWaitTime/1000, (float)longestWriteWaitTime/1000,
 //		maxRead, maxWrite);
@@ -1660,21 +1684,25 @@ void Platform::EnableDrive(size_t drive)
 		{
 			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
-#ifdef EXTERNAL_DRIVERS
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+			ExternalDrivers::EnableDrive(driver, true);
+#else
+# ifdef EXTERNAL_DRIVERS
 			if (driver >= FIRST_EXTERNAL_DRIVE)
 			{
 				ExternalDrivers::EnableDrive(driver - FIRST_EXTERNAL_DRIVE, true);
 			}
 			else
 			{
-#endif
+# endif
 				const int pin = enablePins[driver];
 				if (pin >= 0)
 				{
 					digitalWrite(pin, enableValues[driver]);
 				}
-#ifdef EXTERNAL_DRIVERS
+# ifdef EXTERNAL_DRIVERS
 			}
+# endif
 #endif
 		}
 	}
@@ -1685,23 +1713,27 @@ void Platform::DisableDrive(size_t drive)
 {
 	if (drive < DRIVES)
 	{
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+		ExternalDrivers::EnableDrive(driverNumbers[drive], false);
+#else
 		const size_t driver = driverNumbers[drive];
-#ifdef EXTERNAL_DRIVERS
+# ifdef EXTERNAL_DRIVERS
 		if (driver >= FIRST_EXTERNAL_DRIVE)
 		{
 			ExternalDrivers::EnableDrive(driver - FIRST_EXTERNAL_DRIVE, false);
 		}
 		else
 		{
-#endif
+# endif
 			const int pin = enablePins[driver];
 			if (pin >= 0)
 			{
 				digitalWrite(pin, !enableValues[driver]);
 			}
 			driveState[drive] = DriveStatus::disabled;
-#ifdef EXTERNAL_DRIVERS
+# ifdef EXTERNAL_DRIVERS
 		}
+# endif
 #endif
 	}
 }
@@ -1741,14 +1773,19 @@ void Platform::UpdateMotorCurrent(size_t drive)
 			current *= idleCurrentFactor;
 		}
 		const size_t driver = driverNumbers[drive];
-#ifdef EXTERNAL_DRIVERS
+
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+		ExternalDrivers::SetCurrent(driver, current);
+#else
+
+# ifdef EXTERNAL_DRIVERS
 		if (driver >= FIRST_EXTERNAL_DRIVE)
 		{
 			ExternalDrivers::SetCurrent(driver - FIRST_EXTERNAL_DRIVE, current);
 		}
 		else
 		{
-#endif
+# endif
 			unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
 			if (driver < 4)
 			{
@@ -1757,37 +1794,39 @@ void Platform::UpdateMotorCurrent(size_t drive)
 			}
 			else
 			{
-#ifndef DUET_NG
+# ifndef DUET_NG
 				if (board == BoardType::Duet_085)
 				{
-#endif
+# endif
 					// Extruder 0 is on DAC channel 0
 					if (driver == 4)
 					{
 						float dacVoltage = max<float>(current * 0.008*senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
 						uint32_t dac = (uint32_t)((256 * dacVoltage + 0.5 * stepperDacVoltageRange)/stepperDacVoltageRange);
-#ifdef DUET_NG
+# ifdef DUET_NG
 						AnalogWrite(DAC1, dac);
-#else
+# else
 						AnalogWrite(DAC0, dac);
-#endif
+# endif
 					}
 					else
 					{
 						mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
 						mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
 					}
-#ifndef DUET_NG
+# ifndef DUET_NG
 				}
 				else if (driver < 8)		// on a Duet 0.6 we have a maximum of 8 drives
 				{
 					mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
 					mcpExpansion.setVolatileWiper(potWipes[driver], pot);
 				}
-#endif
+# endif
 			}
-#ifdef EXTERNAL_DRIVERS
+# ifdef EXTERNAL_DRIVERS
 		}
+# endif
+
 #endif
 	}
 }
@@ -1815,7 +1854,10 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 {
 	if (drive < DRIVES)
 	{
-#ifdef EXTERNAL_DRIVERS
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+		return ExternalDrivers::SetMicrostepping(driverNumbers[drive], microsteps, mode);
+#else
+# ifdef EXTERNAL_DRIVERS
 		const size_t driver = driverNumbers[drive];
 		if (driver >= FIRST_EXTERNAL_DRIVE)
 		{
@@ -1823,12 +1865,14 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 		}
 		else
 		{
-#endif
+# endif
 			// On-board drivers only support x16 microstepping.
 			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
 			return microsteps == 16;
-#ifdef EXTERNAL_DRIVERS
+# ifdef EXTERNAL_DRIVERS
 		}
+# endif
+
 #endif
 	}
 	return false;
@@ -1836,7 +1880,13 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 
 unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 {
-#ifdef EXTERNAL_DRIVERS
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+	if (drive < DRIVES)
+	{
+		return ExternalDrivers::GetMicrostepping(driverNumbers[drive], interpolation);
+	}
+# else
+# ifdef EXTERNAL_DRIVERS
 	if (drive < DRIVES)
 	{
 		const size_t driver = driverNumbers[drive];
@@ -1845,8 +1895,8 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 			return ExternalDrivers::GetMicrostepping(driver - FIRST_EXTERNAL_DRIVE, interpolation);
 		}
 	}
+# endif
 #endif
-
 	// On-board drivers only support x16 microstepping without interpolation
 	interpolation = false;
 	return 16;
@@ -1937,10 +1987,11 @@ void Platform::InitFans()
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
 		fans[i].Init(COOLING_FAN_PINS[i],
-				!HEAT_ON
-#ifndef DUET_NG
-					// The cooling fan 0 output pin gets inverted if HEAT_ON == 0 on a Duet 0.4, 0.6 or 0.7
-					&& (board == BoardType::Duet_06 || board == BoardType::Duet_07)
+#ifdef DUET_NG
+				false
+#else
+				// The cooling fan output pin gets inverted if HEAT_ON == 0 on a Duet 0.6 or 0.7
+				!HEAT_ON && (board == BoardType::Duet_06 || board == BoardType::Duet_07)
 #endif
 				);
 	}
@@ -1949,6 +2000,7 @@ void Platform::InitFans()
 	{
 		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed heater
 		fans[1].SetHeatersMonitored(0xFFFF & ~(1 << BED_HEATER));
+		fans[1].SetValue(1.0);												// set it full on
 	}
 
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
@@ -2060,7 +2112,9 @@ void Platform::Fan::Check()
 {
 	if (heatersMonitored != 0)
 	{
-		val = (reprap.GetPlatform()->AnyHeaterHot(heatersMonitored, triggerTemperature)) ? 1.0 : 0.0;
+		val = (reprap.GetPlatform()->AnyHeaterHot(heatersMonitored, triggerTemperature))
+				? max<float>(0.5, val)			// make sure that thermostatic fans always run at 50% speed or more
+				: 0.0;
 		Refresh();
 	}
 }
@@ -2198,18 +2252,8 @@ void Platform::Message(MessageType type, const char *message)
 			break;
 
 		case FIRMWARE_UPDATE_MESSAGE:
-			Message(HOST_MESSAGE, message);
-			// Send an alert message to the aux port
-			{
-				OutputBuffer *buf;
-				if (OutputBuffer::Allocate(buf, false))
-				{
-					buf->cat("{\"alert\":");
-					buf->EncodeString(message, strlen(message), true, true);
-					buf->cat("}\n");
-					Message(AUX_MESSAGE, buf);
-				}
-			}
+			Message(HOST_MESSAGE, message);			// send message to USB
+			SendMessage(message);					// send message to aux
 			break;
 
 		case GENERIC_MESSAGE:
@@ -2287,7 +2331,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 			break;
 
 		case FIRMWARE_UPDATE_MESSAGE:
-			// We don't generate any of these with an OutputBuffer argument, but if we get one, just send it to USB
+			// We don't generate any of these with an OutputBuffer argument, but if do we get one, just send it to USB
 			Message(HOST_MESSAGE, buffer);
 			break;
 
@@ -2416,7 +2460,11 @@ void Platform::SetBoardType(BoardType bt)
 	if (bt == BoardType::Auto)
 	{
 #ifdef DUET_NG
-		board = BoardType::DuetNG_08;
+# ifdef PROTOTYPE_1
+		board = BoardType::DuetNG_06;
+# else
+		board = BoardType::DuetNG_10;
+# endif
 #else
 		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
 		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
@@ -2445,7 +2493,11 @@ const char* Platform::GetElectronicsString() const
 	switch (board)
 	{
 #ifdef DUET_NG
-	case BoardType::DuetNG_08:				return "DuetNG 0.6";
+# ifdef PROTOTYPE_1
+	case BoardType::DuetNG_06:				return "DuetNG 0.6";
+# else
+	case BoardType::DuetNG_10:				return "DuetNG 1.0";
+# endif
 #else
 	case BoardType::Duet_06:				return "Duet 0.6";
 	case BoardType::Duet_07:				return "Duet 0.7";
@@ -2459,18 +2511,26 @@ const char* Platform::GetElectronicsString() const
 // Set the specified pin to the specified output level. Return true if success, false if not allowed.
 bool Platform::SetPin(int pin, int level)
 {
-	if (pin >= 0 && (unsigned int)pin < NUM_PINS_ALLOWED && (level == 0 || level == 1))
+	if (pin >= 0 && (unsigned int)pin < NUM_PINS_ALLOWED && (level >= 0 || level <= 255))
 	{
 		const size_t index = (unsigned int)pin/8;
 		const uint8_t mask = 1 << ((unsigned int)pin & 7);
 		if ((pinAccessAllowed[index] & mask) != 0)
 		{
+#ifdef DUET_NG	//TODO temporary
+			if (level == 1)
+			{
+				level = 255;
+			}
+			AnalogWrite(pin, level, 1000);
+#else
 			if ((pinInitialised[index] & mask) == 0)
 			{
 				pinMode(pin, OUTPUT);
 				pinInitialised[index] |= mask;
 			}
 			digitalWrite(pin, level);
+#endif
 			return true;
 		}
 	}

@@ -184,7 +184,6 @@ bool GCodeBuffer::Seen(char c)
 }
 
 // Get a float after a G Code letter found by a call to Seen()
-
 float GCodeBuffer::GetFValue()
 {
 	if (readPointer < 0)
@@ -199,7 +198,6 @@ float GCodeBuffer::GetFValue()
 }
 
 // Get a :-separated list of floats after a key letter
-
 const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 {
 	if(readPointer < 0)
@@ -214,7 +212,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 	bool inList = true;
 	while(inList)
 	{
-		if(length >= returnedLength) // Array limit has been set in here
+		if (length >= returnedLength)		// array limit has been set in here
 		{
 			platform->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
@@ -223,12 +221,11 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 		}
 		a[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
 		length++;
-		readPointer++;
-		while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR))
+		do
 		{
 			readPointer++;
-		}
-		if(gcodeBuffer[readPointer] != LIST_SEPARATOR)
+		} while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
+		if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
 		{
 			inList = false;
 		}
@@ -252,10 +249,9 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 }
 
 // Get a :-separated list of longs after a key letter
-
 const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 {
-	if(readPointer < 0)
+	if (readPointer < 0)
 	{
 		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
 		readPointer = -1;
@@ -266,7 +262,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 	bool inList = true;
 	while(inList)
 	{
-		if(length >= returnedLength) // Array limit has been set in here
+		if (length >= returnedLength) // Array limit has been set in here
 		{
 			platform->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
@@ -275,12 +271,11 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 		}
 		l[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
 		length++;
-		readPointer++;
-		while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR))
+		do
 		{
 			readPointer++;
-		}
-		if(gcodeBuffer[readPointer] != LIST_SEPARATOR)
+		} while(gcodeBuffer[readPointer] != 0 && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
+		if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
 		{
 			inList = false;
 		}

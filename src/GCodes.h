@@ -78,10 +78,17 @@ struct Trigger
 {
 	TriggerMask rising;
 	TriggerMask falling;
+	uint8_t condition;
 
 	void Init()
 	{
 		rising = falling = 0;
+		condition = 0;
+	}
+
+	bool IsUnused() const
+	{
+		return rising == 0 && falling == 0;
 	}
 };
 
@@ -257,7 +264,6 @@ private:
 	uint32_t auxSeq;							// Sequence number for AUX devices
     float simulationTime;						// Accumulated simulation time
     uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
-	bool isFlashing;							// Is a new firmware binary going to be flashed?
     FilePosition filePos;						// The position we got up to in the file being printed
 
     // Firmware retraction settings
@@ -273,6 +279,7 @@ private:
 
     // Firmware update
     uint8_t firmwareUpdateModuleMap;			// Bitmap of firmware modules to be updated
+	bool isFlashing;							// Is a new firmware binary going to be flashed?
 };
 
 //*****************************************************************************************************

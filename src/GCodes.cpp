@@ -56,7 +56,6 @@ void GCodes::Exit()
 void GCodes::Init()
 {
 	Reset();
-	firmwareUpdateModuleMap = 0;
 	distanceScale = 1.0;
 	rawExtruderTotal = 0.0;
 	for (size_t extruder = 0; extruder < DRIVES - AXES; extruder++)
@@ -122,7 +121,7 @@ void GCodes::Reset()
 	feedRate = pausedMoveBuffer[DRIVES] = DEFAULT_FEEDRATE/minutesToSeconds;
 	ClearMove();
 
-	for (size_t i =0; i < MaxTriggers; ++i)
+	for (size_t i = 0; i < MaxTriggers; ++i)
 	{
 		triggers[i].Init();
 	}
@@ -139,6 +138,7 @@ void GCodes::Reset()
 	isPaused = false;
 	filePos = moveBuffer.filePos = noFilePosition;
 	lastEndstopStates = platform->GetAllEndstopStates();
+	firmwareUpdateModuleMap = 0;
 }
 
 float GCodes::FractionOfFilePrinted() const
@@ -397,7 +397,7 @@ void GCodes::Spin()
 			if (FirmwareUpdater::IsReady())
 			{
 				bool updating = false;
-				for (unsigned int module = 0; module < NumFirmwareUpdateModules; ++module)
+				for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
 				{
 					if ((firmwareUpdateModuleMap & (1 << module)) != 0)
 					{
@@ -626,7 +626,10 @@ bool GCodes::CheckTriggers()
 	unsigned int lowestTriggerPending = MaxTriggers;
 	for (unsigned int triggerNumber = 0; triggerNumber < MaxTriggers; ++triggerNumber)
 	{
-		if ((triggers[triggerNumber].rising & risen) != 0 || (triggers[triggerNumber].falling & fallen) != 0)
+		const Trigger& ct = triggers[triggerNumber];
+		if (   ((ct.rising & risen) != 0 || (ct.falling & fallen) != 0)
+			&& (ct.condition == 0 || (ct.condition == 1 && reprap.GetPrintMonitor()->IsPrinting()))
+		   )
 		{
 			triggersPending |= (1 << triggerNumber);
 		}
@@ -740,7 +743,6 @@ void GCodes::Diagnostics(MessageType mtype)
 	platform->Message(mtype, "GCodes Diagnostics:\n");
 	platform->MessageF(mtype, "Move available? %s\n", moveAvailable ? "yes" : "no");
 	platform->MessageF(mtype, "Stack pointer: %u of %u\n", stackPointer, StackSize);
-
 	fileMacroGCode->Diagnostics(mtype);
 	httpGCode->Diagnostics(mtype);
 	telnetGCode->Diagnostics(mtype);
@@ -1642,9 +1644,10 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 		s.catf("E%u:%.1f ", i - AXES, liveCoordinates[i]);
 	}
 
-	// Print the stepper motor positions as Marlin does, as an aid to debugging
+	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.
+	// Don't bother with the extruder endpoints, they are zero after any non-extruding move.
 	s.cat(" Count");
-	for (size_t i = 0; i < DRIVES; ++i)
+	for (size_t i = 0; i < AXES; ++i)
 	{
 		s.catf(" %d", reprap.GetMove()->GetEndPoint(i));
 	}
@@ -2769,7 +2772,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	bool error = false;
 
 	int code = gb->GetIValue();
-	if (simulationMode != 0 && (code < 20 || code > 37) && code != 82 && code != 83 && code != 111 && code != 105 && code != 122 && code != 408 && code != 999)
+	if (simulationMode != 0 && (code < 20 || code > 37) && code != 0 && code != 1 && code != 82 && code != 83 && code != 111 && code != 105 && code != 122 && code != 408 && code != 999)
 	{
 		return true;			// we don't yet simulate most M codes
 	}
@@ -3409,6 +3412,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						hh |= (1 << (unsigned int)hnum);
 					}
 				}
+				if (hh != 0)
+				{
+					platform->SetFanValue(fanNum, 1.0);			// default the fan speed to full for safety
+				}
 				platform->SetHeatersMonitored(fanNum, hh);
 			}
 
@@ -3510,7 +3517,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		DoEmergencyStop();
 		break;
 
-	case 114: // Deprecated
+	case 114:
 		GetCurrentCoordinates(reply);
 		break;
 
@@ -3585,11 +3592,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 	case 117:	// Display message
 		{
-			const char *msg = gb->GetUnprecedentedString();
-			if (msg != nullptr)
-			{
-				reprap.SetMessage(msg);
-			}
+			const char *msg = gb->GetUnprecedentedString(true);
+			reprap.SetMessage((msg == nullptr) ? "" : msg);
 		}
 		break;
 
@@ -4112,7 +4116,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				{
 					seen = true;
 					int microsteps = gb->GetIValue();
-					if (!ChangeMicrostepping(axis, microsteps, interp))
+					if (ChangeMicrostepping(axis, microsteps, interp))
+					{
+						axisIsHomed[axis] = false;
+					}
+					else
 					{
 						platform->MessageF(GENERIC_MESSAGE, "Drive %c does not support %dx microstepping%s\n",
 												axisLetters[axis], microsteps, (interp) ? " with interpolation" : "");
@@ -5018,63 +5026,81 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						triggersPending |= (1 << triggerNumber);
 					}
 				}
-				else if (gb->Seen('S'))
-				{
-					int sval = gb->GetIValue();
-					TriggerMask triggerMask = 0;
-					for (size_t axis = 0; axis < AXES; ++axis)
-					{
-						if (gb->Seen(axisLetters[axis]))
-						{
-							triggerMask |= (1u << axis);
-						}
-					}
-					if (gb->Seen(extrudeLetter))
-					{
-						long eStops[DRIVES - AXES];
-						size_t numEntries = DRIVES - AXES;
-						gb->GetLongArray(eStops, numEntries);
-						for (size_t i = 0; i < numEntries; ++i)
-						{
-							if (eStops[i] >= 0 && (unsigned long)eStops[i] < DRIVES - AXES)
-							{
-								triggerMask |= (1u << (eStops[i] + AXES));
-							}
-						}
-					}
-					switch(sval)
-					{
-					case -1:
-						if (triggerMask == 0)
-						{
-							triggers[triggerNumber].rising = triggers[triggerNumber].falling = 0;
-						}
-						else
-						{
-							triggers[triggerNumber].rising &= (~triggerMask);
-							triggers[triggerNumber].falling &= (~triggerMask);
-						}
-						break;
-
-					case 0:
-						triggers[triggerNumber].falling |= triggerMask;
-						break;
-
-					case 1:
-						triggers[triggerNumber].rising |= triggerMask;
-						break;
-
-					default:
-						platform->Message(GENERIC_MESSAGE, "Bad S parameter in M581 command\n");
-					}
-				}
 				else
 				{
-					reply.printf("Trigger %u fires on a rising edge on ", triggerNumber);
-					ListTriggers(reply, triggers[triggerNumber].rising);
-					reply.cat(" or a falling edge on ");
-					ListTriggers(reply, triggers[triggerNumber].falling);
-					reply.cat(" endstop inputs");
+					bool seen = false;
+					if (gb->Seen('C'))
+					{
+						seen = true;
+						triggers[triggerNumber].condition = gb->GetIValue();
+					}
+					else if (triggers[triggerNumber].IsUnused())
+					{
+						triggers[triggerNumber].condition = 0;		// this is a new trigger, so set no condition
+					}
+					if (gb->Seen('S'))
+					{
+						seen = true;
+						int sval = gb->GetIValue();
+						TriggerMask triggerMask = 0;
+						for (size_t axis = 0; axis < AXES; ++axis)
+						{
+							if (gb->Seen(axisLetters[axis]))
+							{
+								triggerMask |= (1u << axis);
+							}
+						}
+						if (gb->Seen(extrudeLetter))
+						{
+							long eStops[DRIVES - AXES];
+							size_t numEntries = DRIVES - AXES;
+							gb->GetLongArray(eStops, numEntries);
+							for (size_t i = 0; i < numEntries; ++i)
+							{
+								if (eStops[i] >= 0 && (unsigned long)eStops[i] < DRIVES - AXES)
+								{
+									triggerMask |= (1u << (eStops[i] + AXES));
+								}
+							}
+						}
+						switch(sval)
+						{
+						case -1:
+							if (triggerMask == 0)
+							{
+								triggers[triggerNumber].rising = triggers[triggerNumber].falling = 0;
+							}
+							else
+							{
+								triggers[triggerNumber].rising &= (~triggerMask);
+								triggers[triggerNumber].falling &= (~triggerMask);
+							}
+							break;
+
+						case 0:
+							triggers[triggerNumber].falling |= triggerMask;
+							break;
+
+						case 1:
+							triggers[triggerNumber].rising |= triggerMask;
+							break;
+
+						default:
+							platform->Message(GENERIC_MESSAGE, "Bad S parameter in M581 command\n");
+						}
+					}
+					if (!seen)
+					{
+						reply.printf("Trigger %u fires on a rising edge on ", triggerNumber);
+						ListTriggers(reply, triggers[triggerNumber].rising);
+						reply.cat(" or a falling edge on ");
+						ListTriggers(reply, triggers[triggerNumber].falling);
+						reply.cat(" endstop inputs");
+						if (triggers[triggerNumber].condition == 1)
+						{
+							reply.cat(" when printing from SD card");
+						}
+					}
 				}
 			}
 			else
@@ -5301,27 +5327,21 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 997: // Perform firmware update
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		{
+			return false;
+		}
+		reprap.GetHeat()->SwitchOffAll();					// turn all heaters off because the main loop may get suspended
+		DisableDrives();									// all motors off
+
 		if (firmwareUpdateModuleMap == 0)					// have we worked out which modules to update?
 		{
 			// Find out which modules we have been asked to update
-			long modulesToUpdate[3];
-			size_t numUpdateModules;
 			if (gb->Seen('S'))
 			{
-				numUpdateModules = ARRAY_SIZE(modulesToUpdate);
+				long modulesToUpdate[3];
+				size_t numUpdateModules = ARRAY_SIZE(modulesToUpdate);
 				gb->GetLongArray(modulesToUpdate, numUpdateModules);
-			}
-			else
-			{
-				numUpdateModules = 0;
-			}
-
-			if (numUpdateModules == 0)
-			{
-				firmwareUpdateModuleMap = (1 << 0);			// no modules specified, so update module 0 to match old behaviour
-			}
-			else
-			{
 				for (size_t i = 0; i < numUpdateModules; ++i)
 				{
 					long t = modulesToUpdate[i];
@@ -5331,27 +5351,37 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						firmwareUpdateModuleMap = 0;
 						break;
 					}
-					firmwareUpdateModuleMap |= (1 << t);
+					firmwareUpdateModuleMap |= (1 << (unsigned int)t);
 				}
+			}
+			else
+			{
+				firmwareUpdateModuleMap = (1 << 0);			// no modules specified, so update module 0 to match old behaviour
+			}
+
+			if (firmwareUpdateModuleMap == 0)
+			{
+				break;										// nothing to update
 			}
 
 			// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
 #ifdef DUET_NG
 			if (!FirmwareUpdater::CheckFirmwareUpdatePrerequisites(firmwareUpdateModuleMap))
 			{
+				firmwareUpdateModuleMap = 0;
 				break;
 			}
 #endif
 			if ((firmwareUpdateModuleMap & 1) != 0 && !platform->CheckFirmwareUpdatePrerequisites())
 			{
+				firmwareUpdateModuleMap = 0;
 				break;
 			}
 		}
 
 		// If we get here then we have the module map, and all prerequisites are satisfied
-		reprap.GetHeat()->SwitchOffAll();	// turn all heaters off because the main loop may get suspended
 		isFlashing = true;					// this tells the web interface and PanelDue that we are about to flash firmware
-		if (!DoDwellTime(1.0))				// wait a second so all HTTP clients are notified
+		if (!DoDwellTime(1.0))				// wait a second so all HTTP clients and PanelDue are notified
 		{
 			return false;
 		}
@@ -5370,7 +5400,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (val != 0)
 			{
 				reply.printf("Checksum error on line %d", val);
-				//resend = true; // FIXME?
 			}
 		}
 		break;

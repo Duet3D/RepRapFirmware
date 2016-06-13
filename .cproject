@@ -137,7 +137,7 @@
 				</extensions>
 			</storageModule>
 			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
-				<configuration artifactExtension="elf" artifactName="${ProjName}" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release,org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451" name="SAM4E_CoreNG" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary ${workspace_loc:/${ProjName}/${ConfigName}}/${ProjName}.elf ${workspace_loc:/${ProjName}/${ConfigName}}/${ProjName}.bin">
+				<configuration artifactExtension="elf" artifactName="DuetWiFiFirmware" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release,org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451" name="SAM4E_CoreNG" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary ${workspace_loc:/${ProjName}/${ConfigName}}/DuetWiFiFirmware.elf ${workspace_loc:/${ProjName}/${ConfigName}}/DuetWiFiFirmware.bin">
 					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451." name="/" resourcePath="">
 						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.1362047835" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
 							<option id="cdt.managedbuild.option.gnu.cross.path.1491883811" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" value="C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin" valueType="string"/>
@@ -206,7 +206,10 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/clock}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/dmac}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/efc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/matrix}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/pdc}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/pmc}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/spi}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/twi}&quot;"/>
@@ -230,6 +233,129 @@
 									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.151249281" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+					<sourceEntries>
+						<entry excluding="src/Libraries/MCP4461|src/Duet" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+					</sourceEntries>
+				</configuration>
+			</storageModule>
+			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
+		</cconfiguration>
+		<cconfiguration id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.286403080">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.286403080" moduleId="org.eclipse.cdt.core.settings" name="SAM4E_PROTO1">
+				<macros>
+					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreNG"/>
+				</macros>
+				<externalSettings/>
+				<extensions>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
+				</extensions>
+			</storageModule>
+			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+				<configuration artifactExtension="elf" artifactName="${ProjName}" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release,org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.286403080" name="SAM4E_PROTO1" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary ${workspace_loc:/${ProjName}/${ConfigName}}/${ProjName}.elf ${workspace_loc:/${ProjName}/${ConfigName}}/${ProjName}.bin">
+					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.286403080." name="/" resourcePath="">
+						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.1721367471" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
+							<option id="cdt.managedbuild.option.gnu.cross.path.775185210" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" value="C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin" valueType="string"/>
+							<option id="cdt.managedbuild.option.gnu.cross.prefix.662072815" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" value="arm-none-eabi-" valueType="string"/>
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1984540835" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.614311341" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1598889104" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
+								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.2008444256" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
+							</tool>
+							<tool commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${INPUTS}" id="cdt.managedbuild.tool.gnu.cross.c.compiler.669564787" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler">
+								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.925369674" name="Optimization Level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.debugging.level.1437680267" name="Debug Level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.none" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.misc.verbose.454077281" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.misc.other.1262081974" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="false" value="-c -std=gnu99 -mcpu=cortex-m4 -mthumb -ffunction-sections -fdata-sections -nostdlib --param max-inline-insns-single=500" valueType="string"/>
+								<option id="gnu.c.compiler.option.include.paths.1815693236" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/cores/arduino}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Storage}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/hsmci}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/rstc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/rtc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/cmsis/sam4e/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/header_files}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/preprocessor}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/thirdparty/CMSIS/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/duetNG}&quot;"/>
+								</option>
+								<option id="gnu.c.compiler.option.preprocessor.def.symbols.1739570632" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__SAM4E8E__"/>
+									<listOptionValue builtIn="false" value="CORE_NG"/>
+									<listOptionValue builtIn="false" value="DUET_NG"/>
+									<listOptionValue builtIn="false" value="printf=iprintf"/>
+									<listOptionValue builtIn="false" value="PROTOTYPE_1"/>
+								</option>
+								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1283635516" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
+							</tool>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.316456764" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.81082459" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver"/>
+							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT}  ${LINK_FLAGS_1} ${workspace_loc:/${CoreName}/SAM4E8E/cores/arduino/syscalls.o} ${INPUTS} ${LINK_FLAGS_2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.1781803617" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
+								<option id="gnu.cpp.link.option.nostdlibs.1188962244" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.link.option.paths.2059496497" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAM4E_PROTO1/}&quot;"/>
+								</option>
+								<option id="gnu.cpp.link.option.libs.1868917950" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
+									<listOptionValue builtIn="false" value="${CoreName}"/>
+								</option>
+								<option id="gnu.cpp.link.option.flags.748151728" name="Linker flags" superClass="gnu.cpp.link.option.flags" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T${workspace_loc:/${CoreName}/variants/duetNG/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${ProjName}.map" valueType="string"/>
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1649038990" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
+									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
+									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
+								</inputType>
+							</tool>
+							<tool command="g++" id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.2138612171" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler">
+								<option id="gnu.cpp.compiler.option.optimization.level.1445246033" name="Optimization Level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.debugging.level.213346939" name="Debug Level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.none" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.other.verbose.1378702640" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.other.other.1875098822" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="false" value="-c -std=gnu++11 -mcpu=cortex-m4 -mthumb -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fno-exceptions -nostdlib --param max-inline-insns-single=500" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.include.paths.254420427" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/cores/arduino}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Wire}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/SharedSpi}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Storage}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/clock}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/dmac}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/efc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/pdc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/pmc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/spi}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/twi}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/services/flash_efc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/cmsis/sam4e/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/header_files}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/preprocessor}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/thirdparty/CMSIS/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/duetNG}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/DuetNG}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/Fatfs}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/MCP4461}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/Flash}&quot;"/>
+								</option>
+								<option id="gnu.cpp.compiler.option.preprocessor.def.486383061" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__SAM4E8E__"/>
+									<listOptionValue builtIn="false" value="CORE_NG"/>
+									<listOptionValue builtIn="false" value="DUET_NG"/>
+									<listOptionValue builtIn="false" value="printf=iprintf"/>
+									<listOptionValue builtIn="false" value="PROTOTYPE_1"/>
+								</option>
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.2012484327" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
 					</folderInfo>

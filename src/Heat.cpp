@@ -71,12 +71,12 @@ void Heat::Spin()
 
 void Heat::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "Heat Diagnostics:\n");
+	platform->MessageF(mtype, "Heat Diagnostics:\nBed heater = %d, chamber heater = %d\n", bedHeater, chamberHeater);
 	for (size_t heater=0; heater < HEATERS; heater++)
 	{
 		if (pids[heater]->Active())
 		{
-			platform->MessageF(mtype, "Heater %d: I-accumulator = %.1f\n", heater, pids[heater]->GetAccumulator());
+			platform->MessageF(mtype, "Heater %d is on, I-accum = %.1f\n", heater, pids[heater]->GetAccumulator());
 		}
 	}
 }
@@ -231,8 +231,7 @@ void PID::Init()
 	averagePWM = 0.0;
 
 	// Time the sensor was last sampled.  During startup, we use the current
-	// time as the initial value so as to not trigger an immediate warning from
-	// the Tick ISR.
+	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
 	lastSampleTime = millis();
 }
 
@@ -240,7 +239,7 @@ void PID::SwitchOn()
 {
 	if (reprap.Debug(Module::moduleHeat))
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Heater %d switched on.\n", heater);
+		platform->MessageF(GENERIC_MESSAGE, "Heater %d %s\n", heater, (temperatureFault) ? "not switched on due to temperature fault" : "switched on");
 	}
 	switchedOff = temperatureFault;
 }
@@ -474,6 +473,10 @@ void PID::SwitchOff()
 	active = false;
 	switchedOff = true;
 	heatingUp = false;
+	if (reprap.Debug(Module::moduleHeat))
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Heater %d switched off", heater);
+	}
 }
 
 float PID::GetAveragePWM() const

@@ -49,7 +49,11 @@ Licence: GPL
 #include "Core.h"
 #include "OutputMemory.h"
 #include "ff.h"
-#include "MCP4461.h"
+
+#if !defined(DUET_NG) || defined(PROTOTYPE_1)
+# include "MCP4461.h"
+#endif
+
 #include "MassStorage.h"
 #include "FileStore.h"
 #include "MessageType.h"
@@ -178,7 +182,11 @@ enum class BoardType : uint8_t
 {
 	Auto = 0,
 #ifdef DUET_NG
-	DuetNG_08 = 1
+# ifdef PROTOTYPE_1
+	DuetNG_06 = 1
+# else
+	DuetNG_10 = 1
+# endif
 #else
 	Duet_06 = 1,
 	Duet_07 = 2,
@@ -591,6 +599,7 @@ public:
 
 	// AUX device
 	void Beep(int freq, int ms);
+	void SendMessage(const char* msg);
 
 	// Hotend configuration
 	float GetFilamentWidth() const;
@@ -719,12 +728,14 @@ private:
 
 	// Digipots
 
+#if !defined(DUET_NG) || defined(PROTOTYPE_1)
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
 	Pin potWipes[8];			// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
 	float senseResistor;
 	float maxStepperDigipotVoltage;
 	float stepperDacVoltageRange, stepperDacVoltageOffset;
+#endif
 
 	// Z probe
 

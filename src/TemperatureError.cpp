@@ -30,15 +30,20 @@ const char* TemperatureErrorString(TemperatureError err)
 // and so the heater should just be shut off immediately.
 bool IsPermanentError(TemperatureError err)
 {
+#if 1
+	return false;
+#else
 	switch (err)
 	{
 	case TemperatureError::success:
 	case TemperatureError::busBusy:
 	case TemperatureError::ioError:
+	case TemperatureError::hardwareError:		// need this one because it comes up sometimes (Jimustanguitar on seemecnc forum)
 		return false;
 	default:
 		return true;
 	}
+#endif
 }
 
 // End

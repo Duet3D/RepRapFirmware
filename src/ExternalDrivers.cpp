@@ -5,7 +5,6 @@
  *      Author: David
  */
 
-//#include "Platform.h"			// for typedefs uint8_t etc.
 #include "RepRapFirmware.h"
 
 #ifdef EXTERNAL_DRIVERS
@@ -41,29 +40,45 @@ const size_t NumExternalDrivers = DRIVES - FIRST_EXTERNAL_DRIVE;
 // 5V_USB				5				+3.3V				3  (+3.3V)
 
 #ifdef DUET_NG
-# if 1
+
+const Pin DriverSelectPins[NumExternalDrivers] = {78, 41, 42, 49, 57, 87, 88, 89, 90};
+
+# ifdef PROTOTYPE_1
+
 // Pin assignments for the first prototype, using USART0 SPI
 const Pin DriversMosiPin = 27;								// PB1
 const Pin DriversMisoPin = 26;								// PB0
 const Pin DriversSclkPin = 30;								// PB13
 #  define USART_EXT_DRV		USART0
 #  define ID_USART_EXT_DRV	ID_USART0
+
 # else
+
+#  include "sam/drivers/tc/tc.h"
+
 // Pin assignments for the second prototype, using USART1 SPI
+const Pin DriversClockPin = 15;								// PB15/TIOA1
 const Pin DriversMosiPin = 22;								// PA13
 const Pin DriversMisoPin = 21;								// PA22
 const Pin DriversSclkPin = 23;								// PA23
 #  define USART_EXT_DRV		USART1
 #  define ID_USART_EXT_DRV	ID_USART1
+#  define TMC_CLOCK_TC		TC0
+#  define TMC_CLOCK_CHAN	1
+#  define TMC_CLOCK_ID		ID_TC1							// this is channel 1 on TC0
 # endif
-const Pin DriverSelectPins[NumExternalDrivers] = {87, 88, 89, 90};
+
 #else
+
+// Duet 0.6 or 0.8.5
+
+const Pin DriverSelectPins[NumExternalDrivers] = {37, X8, 50, 47 /*, X13*/ };
 const Pin DriversMosiPin = 16;								// PA13
 const Pin DriversMisoPin = 17;								// PA12
 const Pin DriversSclkPin = 54;								// PA16
-const Pin DriverSelectPins[NumExternalDrivers] = {37, X8, 50, 47 /*, X13*/ };
 # define USART_EXT_DRV		USART1
 # define ID_USART_EXT_DRV	ID_USART1
+
 #endif
 
 const uint32_t DriversSpiClockFrequency = 1000000;			// 1MHz SPI clock for now
@@ -171,6 +186,7 @@ const uint32_t defaultSgscConfReg =
 // Driver configuration register
 const uint32_t defaultDrvConfReg =
 	TMC_REG_DRVCONF
+	| TMC_DRVCONF_VSENSE				// use high sensitivity range
 	| 0;
 
 // Driver control register
@@ -275,25 +291,40 @@ void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 
 void TmcDriverState::SetCurrent(float current)
 {
-	// I am assuming that the current sense resistor is 0.1 ohms as on the evaluation board.
-	// This gives us a range of 95mA to 3.05A in 95mA steps when VSENSE is high (but max allowed RMS current is 2A),
-	// or 52mA to 1.65A in 52mA steps when VSENSE is low.
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+
+	// The current sense resistor is 0.051 ohms.
+	// This gives us a range of 101mA to 3.236A in 101mA steps in the high sensitivity range (VSENSE = 1)
+	drvConfReg |= TMC_DRVCONF_VSENSE;										// this should always be set, but send it again just in case
+	SpiSendWord(pin, drvConfReg);
+
+	const uint32_t iCurrent = (current > 2000.0) ? 2000 : (current < 100) ? 100 : (uint32_t)current;
+	const uint32_t csBits = (uint32_t)((32 * iCurrent - 1600)/3236);		// formula checked by simulation on a spreadsheet
+	sgcsConfReg &= ~TMC_SGCSCONF_CS_MASK;
+	sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
+	SpiSendWord(pin, sgcsConfReg);
+
+#else
+
+	// The current sense resistor is 0.1 ohms on the evaluation board.
+	// This gives us a range of 95mA to 3.05A in 95mA steps when VSENSE is low (but max allowed RMS current is 2A),
+	// or 52mA to 1.65A in 52mA steps when VSENSE is high.
 	if (current > 1650.0)
 	{
-		// Need VSENSE = 1, but set up the current first to avoid temporarily exceeding the 2A rating
+		// Need VSENSE = 0, but set up the current first to avoid temporarily exceeding the 2A rating
 		const uint32_t iCurrent = (current > 2000.0) ? 2000 : (uint32_t)current;
 		const uint32_t csBits = (uint32_t)((32 * iCurrent - 1500)/3050);	// formula checked by simulation on a spreadsheet
 		sgcsConfReg &= ~TMC_SGCSCONF_CS_MASK;
 		sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
 		SpiSendWord(pin, sgcsConfReg);
 
-		drvConfReg |= TMC_DRVCONF_VSENSE;
+		drvConfReg &= ~TMC_DRVCONF_VSENSE;
 		SpiSendWord(pin, drvConfReg);
 	}
 	else
 	{
-		// Use VSENSE = 0
-		drvConfReg &= ~TMC_DRVCONF_VSENSE;
+		// Use VSENSE = 1
+		drvConfReg |= TMC_DRVCONF_VSENSE;
 		SpiSendWord(pin, drvConfReg);
 
 		const uint32_t iCurrent = (current < 50) ? 50 : (uint32_t)current;
@@ -302,6 +333,8 @@ void TmcDriverState::SetCurrent(float current)
 		sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
 		SpiSendWord(pin, sgcsConfReg);
 	}
+
+	#endif
 }
 
 void TmcDriverState::Enable(bool en)
@@ -347,8 +380,23 @@ namespace ExternalDrivers
 		pio_configure(pin1.pPort, PIO_PERIPH_A, pin1.ulPin, PIO_DEFAULT);
 #endif
 
-		// Enable the clock to UART1
+		// Enable the clock to the USART
 		pmc_enable_periph_clk(ID_USART_EXT_DRV);
+
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+		// Set up the 15MHz clock to the TMC drivers on TIOA1
+		pmc_enable_periph_clk(TMC_CLOCK_ID);
+		ConfigurePin(GetPinDescription(DriversClockPin));	// set up TIOA1 to be an output
+		tc_init(TMC_CLOCK_TC, TMC_CLOCK_CHAN,
+				TC_CMR_TCCLKS_TIMER_CLOCK1 |			// clock is MCLK/2 (fastest available)
+				TC_CMR_BURST_NONE |						// clock is not gated
+				TC_CMR_WAVE |         					// Waveform mode
+				TC_CMR_WAVSEL_UP_RC | 					// Counter runs up and reset when equals to RC
+				TC_CMR_EEVT_XC0 |     					// Set external events from XC0 (this sets up TIOB as output)
+				TC_CMR_ACPC_TOGGLE);					// toggle TIOA output
+		tc_write_rc(TMC_CLOCK_TC, TMC_CLOCK_CHAN, 2);	// divisor = 2, gives us a 15MHz clock with a master clock of 120MHz.
+		tc_start(TMC_CLOCK_TC, TMC_CLOCK_CHAN);
+#endif
 
 		// Set up the CS pins and set them all high
 		// When this becomes the standard code, we must set up the STEP and DIR pins here too.

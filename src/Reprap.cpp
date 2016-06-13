@@ -562,12 +562,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
 	response->catf("]},\"currentTool\":%d", toolNumber);
 
-	/* Output - only reported once */
+	// Output - only reported once
 	{
 		bool sendBeep = (beepDuration != 0 && beepFrequency != 0);
 		bool sendMessage = (message[0] != 0);
-		bool sourceRight = (gCodes->HaveAux() && source == ResponseSource::AUX) || (!gCodes->HaveAux() && source == ResponseSource::HTTP);
-		if ((sendBeep || message[0] != 0) && sourceRight)
+		if (sendBeep || sendMessage)
 		{
 			response->cat(",\"output\":{");
 
@@ -579,7 +578,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				{
 					response->cat(",");
 				}
-
 				beepFrequency = beepDuration = 0;
 			}
 
@@ -600,17 +598,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"params\":{\"atxPower\":%d", platform->AtxPower() ? 1 : 0);
 
 		// Cooling fan value
-		response->cat(",\"fanPercent\":[");
+		response->cat(",\"fanPercent\":");
+		ch = '[';
 		for(size_t i = 0; i < NUM_FANS; i++)
 		{
-			if (i == NUM_FANS - 1)
-			{
-				response->catf("%.2f", platform->GetFanValue(i) * 100.0);
-			}
-			else
-			{
-				response->catf("%.2f,", platform->GetFanValue(i) * 100.0);
-			}
+			response->catf("%c%.2f", ch, platform->GetFanValue(i) * 100.0);
+			ch = ',';
 		}
 
 		// Speed and Extrusion factors
@@ -1114,11 +1107,17 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		break;
 	}
 
-	// Send the fan0 settings (for PanelDue firmware 1.13)
-	response->catf(",\"fanPercent\":[%.02f,%.02f]", platform->GetFanValue(0) * 100.0, platform->GetFanValue(1) * 100.0);
+	// Send the fan settings, for PanelDue firmware 1.13 and later
+	response->catf(",\"fanPercent\":");
+	ch = '[';
+	for (size_t i = 0; i < NUM_FANS; ++i)
+	{
+		response->catf("%c%.02f", ch, platform->GetFanValue(i));
+		ch = ',';
+	}
 
-	// Send fan RPM value
-	response->catf(",\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
+	// Send fan RPM value (we only support one)
+	response->catf("],\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
 	response->catf(",\"homed\":[%d,%d,%d]",
@@ -1132,14 +1131,10 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->catf(",\"fraction_printed\":%.4f", max<float>(0.0, gCodes->FractionOfFilePrinted()));
 	}
 
-	response->cat(",\"message\":");
-	response->EncodeString(message, ARRAY_SIZE(message), false);
+	// Short messages are now pushed directly to PanelDue, so don't include them here as well
+	// We no longer send the amount of http buffer space here because the web interface doesn't use these formns of status response
 
-	if (type < 2)
-	{
-		response->catf(",\"buff\":%u", webserver->GetGCodeBufferSpace(WebSource::HTTP));	// send the amount of buffer space available for gcodes
-	}
-	else if (type == 2)
+	if (type == 2)
 	{
 		if (printMonitor->IsPrinting())
 		{
@@ -1251,25 +1246,29 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 	return response;
 }
 
+// Send a beep. We send it to both PanelDue and the web interface.
 void RepRap::Beep(int freq, int ms)
 {
+	beepFrequency = freq;
+	beepDuration = ms;
+
 	if (gCodes->HaveAux())
 	{
 		// If there is an LCD device present, make it beep
 		platform->Beep(freq, ms);
 	}
-	else
-	{
-		// Otherwise queue it until the webserver can process it
-		beepFrequency = freq;
-		beepDuration = ms;
-	}
 }
 
+// Send a short message. We send it to both PanelDue and the web interface.
 void RepRap::SetMessage(const char *msg)
 {
 	strncpy(message, msg, MESSAGE_LENGTH);
 	message[MESSAGE_LENGTH] = 0;
+
+	if (gCodes->HaveAux())
+	{
+		platform->SendMessage(msg);
+	}
 }
 
 // Get the status character for the new-style status response

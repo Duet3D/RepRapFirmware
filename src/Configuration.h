@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.13beta1"
+# define VERSION "1.13"
 #endif
 
 #ifndef DATE
-# define DATE "2016-05-27"
+# define DATE "2016-06-13"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -68,7 +68,7 @@ const unsigned int MAIN_BAUD_RATE = 115200;			// Default communication speed of 
 const unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART device
 const unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
 
-const uint32_t SERIAL_MAIN_TIMEOUT = 1000;			// timeout in ms for sending dara to the main serial/USB port
+const uint32_t SERIAL_MAIN_TIMEOUT = 1000;			// timeout in ms for sending data to the main serial/USB port
 
 // Heater values
 
@@ -83,7 +83,7 @@ const float TIME_TO_HOT = 150.0;					// Seconds
 
 const uint8_t MAX_BAD_TEMPERATURE_COUNT = 4;		// Number of bad temperature samples permitted before a heater fault is reported
 const float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
-const float DEFAULT_TEMPERATURE_LIMIT = 260.0;		// Celsius
+const float DEFAULT_TEMPERATURE_LIMIT = 262.0;		// Celsius
 const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 const float BAD_ERROR_TEMPERATURE = 2000.0;			// Must exceed any reasonable 5temperature limit including DEFAULT_TEMPERATURE_LIMIT
 
@@ -93,7 +93,7 @@ const unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200..
 // PWM frequencies
 
 const unsigned int SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
-const unsigned int NormalHeaterPwmFreq = 500;		// normal PWM frequency used for hot ends
+const unsigned int NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
 const unsigned int DefaultFanPwmFreq = 500;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
 
 // Default Z probe values
