@@ -16,6 +16,7 @@ namespace ExternalDrivers
 	uint32_t GetStatus(size_t drive);
 	bool SetMicrostepping(size_t drive, int microsteps, int mode);
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation);
+	void SetDriversPowered(bool powered);
 };
 
 #endif /* EXTERNALDRIVERS_H_ */

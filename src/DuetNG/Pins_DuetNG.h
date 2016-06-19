@@ -11,9 +11,9 @@ const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual u
 
 // Default board type
 #ifdef PROTOTYPE_1
-#define DEFAULT_BOARD_TYPE BoardType::DuetNG_06
+#define DEFAULT_BOARD_TYPE BoardType::DuetWiFi_06
 #else
-#define DEFAULT_BOARD_TYPE BoardType::DuetNG_10
+#define DEFAULT_BOARD_TYPE BoardType::DuetWiFi_10
 #endif
 
 #define SUPPORT_ETHERNET	0					// set nonzero to support embedded web interface over Ethernet
@@ -110,7 +110,11 @@ const Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 28, 50, 51, 52 };	// SPI0_C
 const Pin ATX_POWER_PIN = 79;											// Arduino Due pin number that controls the ATX power on/off
 
 // Analogue pin numbers
-const Pin Z_PROBE_PIN = 33;												// Z probe analog input
+const Pin Z_PROBE_PIN = 33;												// AFE1_AD4/PC1 Z probe analog input
+const Pin PowerMonitorVinDetectPin = 36;								// AFE1_AD7/PC4 Vin monitor
+const Pin PowerMonitor5vDetectPin = 29;									// AFE1_AD1/PB3 Buck regulator input monitor
+
+const float PowerFailVoltageRange = 11.0 * 3.3;							// we use an 11:1 voltage divider
 
 // Digital pin number to turn the IR LED on (high) or off (low)
 const Pin Z_PROBE_MOD_PIN = 34;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)

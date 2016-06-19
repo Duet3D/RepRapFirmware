@@ -183,10 +183,12 @@ enum class BoardType : uint8_t
 	Auto = 0,
 #ifdef DUET_NG
 # ifdef PROTOTYPE_1
-	DuetNG_06 = 1
+	DuetWiFi_06 = 1
 # else
-	DuetNG_10 = 1
+	DuetWiFi_10 = 1
 # endif
+#elif defined(__RADDS__)
+	RADDS_15 = 1
 #else
 	Duet_06 = 1,
 	Duet_07 = 2,
@@ -610,7 +612,6 @@ public:
 	// Fire the inkjet (if any) in the given pattern
 	// If there is no inkjet false is returned; if there is one this returns true
 	// So you can test for inkjet presence with if(platform->Inkjet(0))
-
 	bool Inkjet(int bitPattern);
 
 	// Direct pin operations
@@ -619,10 +620,25 @@ public:
 	// Error logging
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
+	// MCU temperature
+	void GetMcuTemperatures(float& minT, float& currT, float& maxT) const;
+	void SetMcuTemperatureAdjust(float v) { mcuTemperatureAdjust = v; }
+	float GetMcuTemperatureAdjust() const { return mcuTemperatureAdjust; }
+
+#ifdef DUET_NG
+	// Power in voltage
+	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
+#endif
+
 //-------------------------------------------------------------------------------------------------------
   
 private:
 	void ResetChannel(size_t chan);					// re-initialise a serial channel
+	float AdcReadingToCpuTemperature(uint16_t reading) const;
+
+#ifdef DUET_NG
+	static float AdcReadingToPowerVoltage(uint16_t reading);
+#endif
 
 	// These are the structures used to hold out non-volatile data.
 	// The SAM3X doesn't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
@@ -667,23 +683,33 @@ private:
 		Compatibility compatibility;
 	};
 
-	struct Fan
+	class Fan
 	{
-	  float val;
-	  float triggerTemperature;
-	  uint16_t freq;
-	  uint16_t heatersMonitored;
-	  Pin pin;
-	  bool inverted;
-	  bool hardwareInverted;
+	private:
+		float val;
+		float triggerTemperature;
+		uint16_t freq;
+		uint16_t heatersMonitored;
+		Pin pin;
+		bool inverted;
+		bool hardwareInverted;
+	public:
+		float GetValue() const { return val; }
+		float GetPwmFrequency() const { return freq; }
+		bool GetInverted() const { return inverted; }
+		uint16_t GetHeatersMonitored() const { return heatersMonitored; }
+		float GetTriggerTemperature() const { return triggerTemperature; }
 
-	  void Init(Pin p_pin, bool hwInverted);
-	  void SetValue(float speed);
-	  void SetPwmFrequency(float p_freq);
-	  void Refresh();
-	  void SetTriggerTemperature(float t) { triggerTemperature = t; }
-	  void SetHeatersMonitored(uint16_t h) { heatersMonitored = h; }
-	  void Check();
+		void Init(Pin p_pin, bool hwInverted);
+		void SetValue(float speed);
+		void SetInverted(bool inv);
+		void SetPwmFrequency(float p_freq);
+		void SetTriggerTemperature(float t) { triggerTemperature = t; }
+		void SetHeatersMonitored(uint16_t h);
+		void Check();
+	private:
+		void Refresh();
+		void SetHardwarePwm(float pwmVal);
 	};
 
 	FlashData nvData;
@@ -844,6 +870,19 @@ private:
 	// Hotend configuration
 	float filamentWidth;
 	float nozzleDiameter;
+
+	// Temperature and power monitoring
+	AnalogChannelNumber temperatureAdcChannel;
+	uint16_t currentMcuTemperature, highestMcuTemperature, lowestMcuTemperature;
+	uint16_t mcuAlarmTemperature;
+	float mcuTemperatureAdjust;
+
+#ifdef DUET_NG
+	AnalogChannelNumber vInMonitorAdcChannel;
+	volatile uint16_t currentVin, highestVin, lowestVin;
+	uint16_t upperVinLimit, lowerVinLimit;
+	bool driversPowered;
+#endif
 
 	// Direct pin manipulation
 	static const uint8_t pinAccessAllowed[NUM_PINS_ALLOWED/8];
@@ -1289,6 +1328,26 @@ inline MassStorage* Platform::GetMassStorage() const
 {
 	watchdogReset();
 }
+
+// Inline functions
+inline float Platform::AdcReadingToCpuTemperature(uint16_t adcVal) const
+{
+	float voltage = (float)adcVal * (3.3/4096.0);
+#ifdef DUET_NG
+	return (voltage - 1.44) * (1000.0/4.7) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-13C
+#else
+	return (voltage - 0.8) * (1000.0/2.65) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-45C
+#endif
+}
+
+#ifdef DUET_NG
+inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
+{
+	return adcVal * (PowerFailVoltageRange/4096.0);
+}
+#endif
+
+
 
 //***************************************************************************************
 

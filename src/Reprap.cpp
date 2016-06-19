@@ -800,6 +800,24 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			}
 			response->cat("]");
 		}
+
+		// MCU temperatures
+		{
+			float minT, currT, maxT;
+			platform->GetMcuTemperatures(minT, currT, maxT);
+			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", minT, currT, maxT);
+			// TEMPORARY for DWC 1.11: send mcutemp.cur as cputemp as well
+			response->catf(",\"cputemp\":%.1f", currT);
+		}
+
+#ifdef DUET_NG
+		// Power in voltages
+		{
+			float minV, currV, maxV;
+			platform->GetPowerVoltages(minV, currV, maxV);
+			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", minV, currV, maxV);
+		}
+#endif
 	}
 	else if (type == 3)
 	{

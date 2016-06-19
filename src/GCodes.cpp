@@ -3435,18 +3435,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (!seen)
 			{
-				reply.printf("Fan%i frequency: %dHz, inverted: %s, ",
+				reply.printf("Fan%i frequency: %dHz, speed: %d%%, inverted: %s",
 								fanNum,
 								(int)(platform->GetFanPwmFrequency(fanNum)),
+								(int)(platform->GetFanValue(fanNum) * 100.0),
 								(platform->GetCoolingInverted(fanNum)) ? "yes" : "no");
 				uint16_t hh = platform->GetHeatersMonitored(fanNum);
-				if (hh == 0)
+				if (hh != 0)
 				{
-					reply.catf("value: %d%%", (int)(platform->GetFanValue(fanNum) * 100.0));
-				}
-				else
-				{
-					reply.catf("trigger: %dC, heaters:", (int)platform->GetTriggerTemperature(fanNum));
+					reply.catf(", trigger: %dC, heaters:", (int)platform->GetTriggerTemperature(fanNum));
 					for (unsigned int i = 0; i < HEATERS; ++i)
 					{
 						if ((hh & (1 << i)) != 0)
@@ -5323,6 +5320,22 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				}
 				reply.catf(", idle factor %d%%", (int)(platform->GetIdleCurrentFactor() * 100.0));
 			}
+		}
+		break;
+
+	case 911: // Set power monitor threshold voltages
+		reply.printf("M911 not implemented yet");
+		break;
+
+	case 912: // Set electronics temperature monitor adjustment
+		// Currently we ignore the P parameter (i.e. temperature measurement channel)
+		if (gb->Seen('S'))
+		{
+			platform->SetMcuTemperatureAdjust(gb->GetFValue());
+		}
+		else
+		{
+			reply.printf("MCU temperature calibration adjustment is %.1f" DEGREE_SYMBOL "C", platform->GetMcuTemperatureAdjust());
 		}
 		break;
 

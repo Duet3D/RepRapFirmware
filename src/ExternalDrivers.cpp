@@ -11,6 +11,8 @@
 
 const size_t NumExternalDrivers = DRIVES - FIRST_EXTERNAL_DRIVE;
 
+static bool driversPowered = false;
+
 // Connections between Duet 0.6 and TMC2660-EVAL board:
 
 // Driver signal name  	Eval board pin	Our signal name   	Duet 0.6 expansion connector pin #
@@ -204,29 +206,37 @@ const uint32_t defaultSmartEnReg =
 // Private types and methods
 
 // Send an SPI control string. The drivers need 20 bits. We send and receive 24 because the USART only supports 5 to 9 bit transfers.
+// If the drivers are not powered up, don't attempt a transaction, and return 0xFFFFFFFF
 uint32_t SpiSendWord(uint32_t pin, uint32_t dataOut)
 {
-	USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
-	digitalWrite(pin, LOW);						// set CS low
-	delayMicroseconds(1);						// allow some CS low setup time
-	USART_EXT_DRV->US_CR = US_CR_RXEN | US_CR_TXEN;	// enable transmitter and receiver
-	uint32_t dataIn = 0;
-	for (int i = 0; i < 3; ++i)
+	if (driversPowered)
 	{
-		USART_EXT_DRV->US_THR = (dataOut >> 16) & 0x000000FFu;
-		dataOut <<= 8;
-		dataIn <<= 8;
-		for (int j = 0; j < 10000 && (USART_EXT_DRV->US_CSR & (US_CSR_RXRDY | US_CSR_TXRDY)) != (US_CSR_RXRDY | US_CSR_TXRDY); ++j)
+		USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
+		digitalWrite(pin, LOW);						// set CS low
+		delayMicroseconds(1);						// allow some CS low setup time
+		USART_EXT_DRV->US_CR = US_CR_RXEN | US_CR_TXEN;	// enable transmitter and receiver
+		uint32_t dataIn = 0;
+		for (int i = 0; i < 3; ++i)
 		{
-			// nothing
+			USART_EXT_DRV->US_THR = (dataOut >> 16) & 0x000000FFu;
+			dataOut <<= 8;
+			dataIn <<= 8;
+			for (int j = 0; j < 10000 && (USART_EXT_DRV->US_CSR & (US_CSR_RXRDY | US_CSR_TXRDY)) != (US_CSR_RXRDY | US_CSR_TXRDY); ++j)
+			{
+				// nothing
+			}
+			dataIn |= USART_EXT_DRV->US_RHR & 0x000000FF;
 		}
-		dataIn |= USART_EXT_DRV->US_RHR & 0x000000FF;
+		delayMicroseconds(1);
+		digitalWrite(pin, HIGH);					// set CS high again
+		USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;	// reset and disable transmitter and receiver
+		delayMicroseconds(1);						// ensure it stays high for long enough before the next write
+		return dataIn >> 4;
 	}
-	delayMicroseconds(1);
-	digitalWrite(pin, HIGH);					// set CS high again
-	USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;	// reset and disable transmitter and receiver
-	delayMicroseconds(1);						// ensure it stays high for long enough before the next write
-	return dataIn >> 4;
+	else
+	{
+		return 0xFFFFFFFF;
+	}
 }
 
 struct TmcDriverState
@@ -248,7 +258,9 @@ struct TmcDriverState
 	uint32_t GetStatus() const;
 };
 
+// Initialise the state of the driver.
 void TmcDriverState::Init(uint32_t p_pin)
+//pre(!driversPowered)
 {
 	drvCtrlReg = defaultDrvCtrlReg;
 	chopConfReg = defaultChopConfReg;
@@ -256,7 +268,7 @@ void TmcDriverState::Init(uint32_t p_pin)
 	sgcsConfReg = defaultSgscConfReg;
 	drvConfReg = defaultDrvConfReg;
 	pin = p_pin;
-	WriteAll();
+	// No point in calling WriteAll() here because the drivers are assumed to be not powered up.
 }
 
 void TmcDriverState::WriteAll()
@@ -358,7 +370,8 @@ static TmcDriverState driverStates[NumExternalDrivers];
 
 namespace ExternalDrivers
 {
-	// Initialise the driver interface and the drivers, leaving each drive disabled
+	// Initialise the driver interface and the drivers, leaving each drive disabled.
+	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
 	void Init()
 	{
 		// Set up the SPI pins
@@ -424,6 +437,7 @@ namespace ExternalDrivers
 		// otherwise they ignore the command we send to set the microstepping to x16 and  start up in full-step mode.
 		delay(10);
 
+		driversPowered = false;
 		for (size_t drive = 0; drive < NumExternalDrivers; ++drive)
 		{
 			driverStates[drive].Init(DriverSelectPins[drive]);
@@ -490,7 +504,24 @@ namespace ExternalDrivers
 		}
 		return 1;
 	}
-};
+
+	// Flag the the drivers have been powered up.
+	// Must call Init() before the first call to say the drivers have been powered uo.
+	void SetDriversPowered(bool powered)
+	{
+		bool wasPowered = driversPowered;
+		driversPowered = powered;
+		if (powered && !wasPowered)
+		{
+			// Power to the drivers has been provided or restored, so we need to re-initialise them
+			for (size_t drive = 0; drive < NumExternalDrivers; ++drive)
+			{
+				driverStates[drive].WriteAll();
+			}
+		}
+	}
+
+};	// end namespace
 
 #endif
 
