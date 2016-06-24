@@ -1130,7 +1130,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	ch = '[';
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		response->catf("%c%.02f", ch, platform->GetFanValue(i));
+		response->catf("%c%.02f", ch, platform->GetFanValue(i) * 100.0);
 		ch = ',';
 	}
 

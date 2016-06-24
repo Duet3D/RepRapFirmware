@@ -2103,7 +2103,7 @@ bool GCodes::ChangeMicrostepping(size_t drive, int microsteps, int mode) const
 	bool dummy;
 	unsigned int oldSteps = platform->GetMicrostepping(drive, dummy);
 	bool success = platform->SetMicrostepping(drive, microsteps, mode);
-	if (success)
+	if (success && mode <= 1)							// modes higher than 1 are used for special functions
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate
 		float stepsPerMm = platform->DriveStepsPerUnit(drive);

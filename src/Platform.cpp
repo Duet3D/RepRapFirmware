@@ -378,7 +378,7 @@ void Platform::Init()
 	vInMonitorAdcChannel = PinToAdcChannel(PowerMonitorVinDetectPin);
 	AnalogInEnableChannel(vInMonitorAdcChannel, true);
 	currentVin = highestVin = 0;
-	lowestVin = 4095;
+	lowestVin = 9999;
 #endif
 
 	// Clear the spare pin configuration
@@ -1158,13 +1158,12 @@ void Platform::Spin()
 		fans[fan].Check();
 	}
 
-	// Read the MCU temperature.
-	currentMcuTemperature = AnalogInReadChannel(temperatureAdcChannel);
+	// Check the MCU max and min temperatures
 	if (currentMcuTemperature > highestMcuTemperature)
 	{
 		highestMcuTemperature= currentMcuTemperature;
 	}
-	if (currentMcuTemperature < lowestMcuTemperature)
+	if (currentMcuTemperature < lowestMcuTemperature && currentMcuTemperature != 0)
 	{
 		lowestMcuTemperature = currentMcuTemperature;
 	}
@@ -1335,7 +1334,12 @@ void Platform::Diagnostics(MessageType mtype)
 	Message(mtype, "Platform Diagnostics:\n");
 
 	// Print memory stats and error codes to USB and copy them to the current webserver reply
-	const char *ramstart = (char *) 0x20070000;
+	const char *ramstart =
+#ifdef DUET_NG
+			(char *) 0x20000000;
+#else
+			(char *) 0x20070000;
+#endif
 	const struct mallinfo mi = mallinfo();
 	Message(mtype, "Memory usage:\n");
 	MessageF(mtype, "Program static ram used: %d\n", &_end - ramstart);
@@ -1397,10 +1401,13 @@ void Platform::Diagnostics(MessageType mtype)
 	// Show the MCU temperatures
 	MessageF(mtype, "MCU temperature: min %.1f, current %.1f, max %.1f\n",
 				AdcReadingToCpuTemperature(lowestMcuTemperature), AdcReadingToCpuTemperature(currentMcuTemperature), AdcReadingToCpuTemperature(highestMcuTemperature));
-#ifdef DUET_NG
+	lowestMcuTemperature = highestMcuTemperature = currentMcuTemperature;
+
+	#ifdef DUET_NG
 	// Show the supply voltage
 	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f\n",
 				AdcReadingToPowerVoltage(lowestVin), AdcReadingToPowerVoltage(currentVin), AdcReadingToPowerVoltage(highestVin));
+	lowestVin = highestVin = currentVin;
 #endif
 
 // Debug
@@ -1443,7 +1450,12 @@ void Platform::DiagnosticTest(int d)
 // Return the stack usage and amount of memory that has never been used, in bytes
 void Platform::GetStackUsage(size_t* currentStack, size_t* maxStack, size_t* neverUsed) const
 {
-	const char *ramend = (const char *) 0x20088000;
+	const char *ramend = (const char *)
+#ifdef DUET_NG
+		0x20020000;			// 0x20000000 + 128Kb
+#else
+		0x20088000;			// 0x20070000 + 96Kb
+#endif
 	register const char * stack_ptr asm ("sp");
 	const char *heapend = sbrk(0);
 	const char* stack_lwm = heapend;
@@ -2788,25 +2800,27 @@ void Platform::Tick()
 	uint32_t now = micros();
 #endif
 
+	if (tickState != 0)
+	{
 #ifdef DUET_NG
-	// Read the power input voltage
-	currentVin = AnalogInReadChannel(vInMonitorAdcChannel);
-	if (currentVin > highestVin)
-	{
-		highestVin = currentVin;
+		// Read the power input voltage
+		currentVin = AnalogInReadChannel(vInMonitorAdcChannel);
+		if (currentVin > highestVin)
+		{
+			highestVin = currentVin;
+		}
+		if (currentVin < lowestVin)
+		{
+			lowestVin = currentVin;
+		}
+		if (driversPowered && currentVin > driverOverVoltageAdcReading)
+		{
+			driversPowered = false;
+			ExternalDrivers::SetDriversPowered(false);
+			//TODO set ENN high on production boards
+		}
+#endif
 	}
-	if (currentVin < lowestVin)
-	{
-		lowestVin = currentVin;
-	}
-	if (driversPowered && currentVin > driverOverVoltageAdcReading)
-	{
-		driversPowered = false;
-		ExternalDrivers::SetDriversPowered(false);
-		//TODO set ENN high on production boards
-	}
-
-	#endif
 
 	switch (tickState)
 	{
@@ -2857,6 +2871,10 @@ void Platform::Tick()
 		{
 			digitalWrite(zProbeModulationPin, LOW);				// turn off the IR emitter
 		}
+
+		// Read the MCU temperature as well (no need to do it in every state)
+		currentMcuTemperature = AnalogInReadChannel(temperatureAdcChannel);
+
 		++tickState;
 		break;
 
