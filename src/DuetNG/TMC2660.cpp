@@ -1,5 +1,5 @@
 /*
- * ExternalDrivers.cpp
+ * TMC2660.cpp
  *
  *  Created on: 23 Jan 2016
  *      Author: David
@@ -7,9 +7,9 @@
 
 #include "RepRapFirmware.h"
 
-#ifdef EXTERNAL_DRIVERS
+#if !defined(PROTOTYPE_1)
 
-const size_t NumExternalDrivers = DRIVES - FIRST_EXTERNAL_DRIVE;
+const size_t NumTmc2660Drivers = DRIVES;
 
 static bool driversPowered = false;
 
@@ -41,47 +41,17 @@ static bool driversPowered = false;
 // CLK					23				connect to ground	2  (GND
 // 5V_USB				5				+3.3V				3  (+3.3V)
 
-#ifdef DUET_NG
-
-const Pin DriverSelectPins[NumExternalDrivers] = {78, 41, 42, 49, 57, 87, 88, 89, 90};
-
-# ifdef PROTOTYPE_1
-
-// Pin assignments for the first prototype, using USART0 SPI
-const Pin DriversMosiPin = 27;								// PB1
-const Pin DriversMisoPin = 26;								// PB0
-const Pin DriversSclkPin = 30;								// PB13
-#  define USART_EXT_DRV		USART0
-#  define ID_USART_EXT_DRV	ID_USART0
-
-# else
-
-#  include "sam/drivers/tc/tc.h"
-
 // Pin assignments for the second prototype, using USART1 SPI
 const Pin DriversClockPin = 15;								// PB15/TIOA1
 const Pin DriversMosiPin = 22;								// PA13
 const Pin DriversMisoPin = 21;								// PA22
 const Pin DriversSclkPin = 23;								// PA23
-#  define USART_EXT_DRV		USART1
-#  define ID_USART_EXT_DRV	ID_USART1
-#  define TMC_CLOCK_TC		TC0
-#  define TMC_CLOCK_CHAN	1
-#  define TMC_CLOCK_ID		ID_TC1							// this is channel 1 on TC0
-# endif
 
-#else
-
-// Duet 0.6 or 0.8.5
-
-const Pin DriverSelectPins[NumExternalDrivers] = {37, X8, 50, 47 /*, X13*/ };
-const Pin DriversMosiPin = 16;								// PA13
-const Pin DriversMisoPin = 17;								// PA12
-const Pin DriversSclkPin = 54;								// PA16
-# define USART_EXT_DRV		USART1
-# define ID_USART_EXT_DRV	ID_USART1
-
-#endif
+#define USART_EXT_DRV		USART1
+#define ID_USART_EXT_DRV	ID_USART1
+#define TMC_CLOCK_TC		TC0
+#define TMC_CLOCK_CHAN		1
+#define TMC_CLOCK_ID		ID_TC1							// this is channel 1 on TC0
 
 const uint32_t DriversSpiClockFrequency = 1000000;			// 1MHz SPI clock for now
 
@@ -364,15 +334,15 @@ uint32_t TmcDriverState::GetStatus() const
 	return SpiSendWord(pin, smartEnReg) & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
-static TmcDriverState driverStates[NumExternalDrivers];
+static TmcDriverState driverStates[NumTmc2660Drivers];
 
 //--------------------------- Public interface ---------------------------------
 
-namespace ExternalDrivers
+namespace TMC2660
 {
 	// Initialise the driver interface and the drivers, leaving each drive disabled.
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
-	void Init()
+	void Init(const Pin driverSelectPins[NumTmc2660Drivers])
 	{
 		// Set up the SPI pins
 
@@ -396,27 +366,11 @@ namespace ExternalDrivers
 		// Enable the clock to the USART
 		pmc_enable_periph_clk(ID_USART_EXT_DRV);
 
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
-		// Set up the 15MHz clock to the TMC drivers on TIOA1
-		pmc_enable_periph_clk(TMC_CLOCK_ID);
-		ConfigurePin(GetPinDescription(DriversClockPin));	// set up TIOA1 to be an output
-		tc_init(TMC_CLOCK_TC, TMC_CLOCK_CHAN,
-				TC_CMR_TCCLKS_TIMER_CLOCK1 |			// clock is MCLK/2 (fastest available)
-				TC_CMR_BURST_NONE |						// clock is not gated
-				TC_CMR_WAVE |         					// Waveform mode
-				TC_CMR_WAVSEL_UP_RC | 					// Counter runs up and reset when equals to RC
-				TC_CMR_EEVT_XC0 |     					// Set external events from XC0 (this sets up TIOB as output)
-				TC_CMR_ACPC_TOGGLE);					// toggle TIOA output
-		tc_write_rc(TMC_CLOCK_TC, TMC_CLOCK_CHAN, 2);	// divisor = 2, gives us a 15MHz clock with a master clock of 120MHz.
-		tc_start(TMC_CLOCK_TC, TMC_CLOCK_CHAN);
-#endif
-
 		// Set up the CS pins and set them all high
 		// When this becomes the standard code, we must set up the STEP and DIR pins here too.
-		for (size_t drive = 0; drive < NumExternalDrivers; ++drive)
+		for (size_t drive = 0; drive < NumTmc2660Drivers; ++drive)
 		{
-			digitalWrite(DriverSelectPins[drive], HIGH);
-			pinMode(DriverSelectPins[drive], OUTPUT);
+			pinMode(driverSelectPins[drive], OUTPUT_HIGH);
 		}
 
 		// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
@@ -438,15 +392,15 @@ namespace ExternalDrivers
 		delay(10);
 
 		driversPowered = false;
-		for (size_t drive = 0; drive < NumExternalDrivers; ++drive)
+		for (size_t drive = 0; drive < NumTmc2660Drivers; ++drive)
 		{
-			driverStates[drive].Init(DriverSelectPins[drive]);
+			driverStates[drive].Init(driverSelectPins[drive]);
 		}
 	}
 
 	void SetCurrent(size_t drive, float current)
 	{
-		if (drive < NumExternalDrivers)
+		if (drive < NumTmc2660Drivers)
 		{
 			driverStates[drive].SetCurrent(current);
 		}
@@ -454,7 +408,7 @@ namespace ExternalDrivers
 
 	void EnableDrive(size_t drive, bool en)
 	{
-		if (drive < NumExternalDrivers)
+		if (drive < NumTmc2660Drivers)
 		{
 			driverStates[drive].Enable(en);
 		}
@@ -462,12 +416,12 @@ namespace ExternalDrivers
 
 	uint32_t GetStatus(size_t drive)
 	{
-		return (drive < NumExternalDrivers) ? driverStates[drive].GetStatus() : 0;
+		return (drive < NumTmc2660Drivers) ? driverStates[drive].GetStatus() : 0;
 	}
 
 	bool SetMicrostepping(size_t drive, int microsteps, int mode)
 	{
-		if (drive < NumExternalDrivers)
+		if (drive < NumTmc2660Drivers)
 		{
 			if (mode == 999 && microsteps >= 0)
 			{
@@ -495,7 +449,7 @@ namespace ExternalDrivers
 
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation)
 	{
-		if (drive < NumExternalDrivers)
+		if (drive < NumTmc2660Drivers)
 		{
 			const uint32_t drvCtrl = driverStates[drive].drvCtrlReg;
 			interpolation = (drvCtrl & TMC_DRVCTRL_INTPOL) != 0;
@@ -514,7 +468,7 @@ namespace ExternalDrivers
 		if (powered && !wasPowered)
 		{
 			// Power to the drivers has been provided or restored, so we need to re-initialise them
-			for (size_t drive = 0; drive < NumExternalDrivers; ++drive)
+			for (size_t drive = 0; drive < NumTmc2660Drivers; ++drive)
 			{
 				driverStates[drive].WriteAll();
 			}

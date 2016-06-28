@@ -16,14 +16,10 @@ const size_t NumFirmwareUpdateModules = 1;
 // The physical capabilities of the machine
 
 const size_t DRIVES = 9;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
-#define DRIVES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
-
-// If enabled, the following control the use of the optional ExternalDrivers module
-//#define EXTERNAL_DRIVERS		(1)
-//#define FIRST_EXTERNAL_DRIVE	(5)
+#define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h,i }
 
 const int8_t HEATERS = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
-#define HEATERS_(a,b,c,d,e,f,g) { a,b,c,d,e,f,g }
+#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g }
 
 const size_t AXES = 3;							// The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
 const size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)

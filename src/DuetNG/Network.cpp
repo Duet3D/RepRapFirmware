@@ -53,8 +53,7 @@ Network::Network(Platform* p) : platform(p), responseCode(0), responseBody(nullp
 void Network::Init()
 {
 	// Make sure the ESP8266 is held in the reset state
-	pinMode(EspResetPin, OUTPUT);
-	digitalWrite(EspResetPin, LOW);
+	pinMode(EspResetPin, OUTPUT_LOW);
 	uploader = new WifiFirmwareUploader(Serial1);
 }
 
@@ -90,27 +89,22 @@ void Network::Start()
 {
 	// The ESP8266 is held in a reset state by a pulldown resistor until we enable it.
 	// Make sure the ESP8266 is in the reset state
-	pinMode(EspResetPin, OUTPUT);
-	digitalWrite(EspResetPin, LOW);
+	pinMode(EspResetPin, OUTPUT_LOW);
 
 	// Take the ESP8266 out of power down
-	pinMode(EspEnablePin, OUTPUT);
-	digitalWrite(EspEnablePin, HIGH);
+	pinMode(EspEnablePin, OUTPUT_HIGH);
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
-	pinMode(SamTfrReadyPin, OUTPUT);
-	digitalWrite(SamTfrReadyPin, LOW);
+	pinMode(SamTfrReadyPin, OUTPUT_LOW);
 
 	// Set up our data ready pin (ESP GPIO0) as an output and set it high ready to boot the ESP from flash
-	pinMode(EspTransferRequestPin, OUTPUT);
-	digitalWrite(EspTransferRequestPin, HIGH);
+	pinMode(EspTransferRequestPin, OUTPUT_HIGH);
 
 	// GPIO2 also needs to be high to boot. It's connected to MISO on the SAM, so set the pullup resistor on that pin
 	pinMode(APIN_SPI_MISO, INPUT_PULLUP);
 
 	// Set our CS input (ESP GPIO15) low ready for booting the ESP. This also clears the transfer ready latch.
-	pinMode(SamCsPin, OUTPUT);
-	digitalWrite(SamCsPin, LOW);
+	pinMode(SamCsPin, OUTPUT_LOW);
 
 	// Make sure it has time to reset - no idea how long it needs, but 20ms should be plenty
 	delay(50);
@@ -182,7 +176,7 @@ void Network::Spin()
 	{
 	case starting:
 		// See if the ESP8266 has set CS high yet
-		if (digitalRead(SamCsPin) == HIGH)
+		if (digitalRead(SamCsPin))
 		{
 			// Setup the SPI controller in slave mode and assign the CS pin to it
 			platform->Message(HOST_MESSAGE, "WiFi server starting up\n");
@@ -925,7 +919,7 @@ void Network::TryStartTransfer()
 		{
 			PrepareForTransfer(true, true);
 		}
-		else if (digitalRead(EspTransferRequestPin) == HIGH)
+		else if (digitalRead(EspTransferRequestPin))
 		{
 			PrepareForTransfer(false, true);
 		}
@@ -1030,8 +1024,7 @@ void Network::SpiInterrupt()
 // Reset the ESP8266 and leave held in reset
 void Network::ResetWiFi()
 {
-	pinMode(EspResetPin, OUTPUT);
-	digitalWrite(EspResetPin, LOW);
+	pinMode(EspResetPin, OUTPUT_LOW);
 }
 
 // Reset the ESP8266 to take commands from the UART. The caller must wait for the reset to complete after calling this.
@@ -1043,27 +1036,22 @@ void Network::ResetWiFi()
 void Network::ResetWiFiForUpload()
 {
 	// Make sure the ESP8266 is in the reset state
-	pinMode(EspResetPin, OUTPUT);
-	digitalWrite(EspResetPin, LOW);
+	pinMode(EspResetPin, OUTPUT_LOW);
 
 	// Take the ESP8266 out of power down
-	pinMode(EspEnablePin, OUTPUT);
-	digitalWrite(EspEnablePin, HIGH);
+	pinMode(EspEnablePin, OUTPUT_HIGH);
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
-	pinMode(SamTfrReadyPin, OUTPUT);
-	digitalWrite(SamTfrReadyPin, LOW);
+	pinMode(SamTfrReadyPin, OUTPUT_LOW);
 
 	// Set up our data ready pin (ESP GPIO0) as an output and set it low ready to boot the ESP from UART
-	pinMode(EspTransferRequestPin, OUTPUT);
-	digitalWrite(EspTransferRequestPin, LOW);
+	pinMode(EspTransferRequestPin, OUTPUT_LOW);
 
 	// GPIO2 also needs to be high to boot up. It's connected to MISO on the SAM, so set the pullup resistor on that pin
 	pinMode(APIN_SPI_MISO, INPUT_PULLUP);
 
 	// Set our CS input (ESP GPIO15) low ready for booting the ESP. This also clears the transfer ready latch.
-	pinMode(SamCsPin, OUTPUT);
-	digitalWrite(SamCsPin, LOW);
+	pinMode(SamCsPin, OUTPUT_LOW);
 
 	// Make sure it has time to reset - no idea how long it needs, but 50ms should be plenty
 	delay(50);
@@ -1078,8 +1066,7 @@ void Network::ResetWiFiForExternalUpload()
 	ResetWiFiForUpload();
 
 	// Set our TxD pin low to make things easier for the FTDI chip to drive the ESP RxD input
-	pinMode(APIN_UART1_TXD, OUTPUT);
-	digitalWrite(APIN_UART1_TXD, LOW);
+	pinMode(APIN_UART1_TXD, OUTPUT_LOW);
 }
 
 // End

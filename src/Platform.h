@@ -92,10 +92,10 @@ const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the nex
 
 #endif
 
-const float MAX_FEEDRATES[DRIVES] = DRIVES_(100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0);						// mm/sec
-const float ACCELERATIONS[DRIVES] = DRIVES_(500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0);				// mm/sec^2
-const float DRIVE_STEPS_PER_UNIT[DRIVES] = DRIVES_(87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0);	// steps/mm
-const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0);								// mm/sec
+const float MAX_FEEDRATES[DRIVES] = DRIVES_(100.0, 100.0, 3.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0);						// mm/sec
+const float ACCELERATIONS[DRIVES] = DRIVES_(500.0, 500.0, 20.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0, 250.0);				// mm/sec^2
+const float DRIVE_STEPS_PER_UNIT[DRIVES] = DRIVES_(87.4890, 87.4890, 4000.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0, 420.0);	// steps/mm
+const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0);								// mm/sec
 
 // AXES
 
@@ -112,10 +112,10 @@ const float defaultDeltaHomedHeight = 200;						// mm
 
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
-const float defaultThermistorBetas[HEATERS] = HEATERS_(BED_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA); // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
-const float defaultThermistorSeriesRs[HEATERS] = HEATERS_(THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS,
+const float defaultThermistorBetas[HEATERS] = HEATERS_(BED_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA); // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
+const float defaultThermistorSeriesRs[HEATERS] = HEATERS_(THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS,
 													THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS);
-const float defaultThermistor25RS[HEATERS] = HEATERS_(BED_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25); // Thermistor ohms at 25 C = 298.15 K
+const float defaultThermistor25RS[HEATERS] = HEATERS_(BED_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25); // Thermistor ohms at 25 C = 298.15 K
 
 // Note on hot end PID parameters:
 // The system is highly nonlinear because the heater power is limited to a maximum value and cannot go negative.
@@ -140,17 +140,17 @@ const float defaultThermistor25RS[HEATERS] = HEATERS_(BED_R25, EXT_R25, EXT_R25,
 // This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
 // We use method 2 (see above)
-const float defaultPidKis[HEATERS] = HEATERS_(5.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2); 			// Integral PID constants
-const float defaultPidKds[HEATERS] = HEATERS_(500.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0); // Derivative PID constants
-const float defaultPidKps[HEATERS] = HEATERS_(-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0);	// Proportional PID constants, negative values indicate use bang-bang instead of PID
-const float defaultPidKts[HEATERS] = HEATERS_(2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4);			// approximate PWM value needed to maintain temperature, per degC above room temperature
-const float defaultPidKss[HEATERS] = HEATERS_(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);			// PWM scaling factor, to allow for variation in heater power and supply voltage
-const float defaultFullBands[HEATERS] = HEATERS_(5.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0);	// errors larger than this cause heater to be on or off
-const float defaultPidMins[HEATERS] = HEATERS_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);			// minimum value of I-term
-const float defaultPidMaxes[HEATERS] = HEATERS_(255, 180, 180, 180, 180, 180, 180);			// maximum value of I-term, must be high enough to reach 245C for ABS printing
+const float defaultPidKis[HEATERS] = HEATERS_(5.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2); 			// Integral PID constants
+const float defaultPidKds[HEATERS] = HEATERS_(500.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0); // Derivative PID constants
+const float defaultPidKps[HEATERS] = HEATERS_(-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0);	// Proportional PID constants, negative values indicate use bang-bang instead of PID
+const float defaultPidKts[HEATERS] = HEATERS_(2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4);			// approximate PWM value needed to maintain temperature, per degC above room temperature
+const float defaultPidKss[HEATERS] = HEATERS_(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);			// PWM scaling factor, to allow for variation in heater power and supply voltage
+const float defaultFullBands[HEATERS] = HEATERS_(5.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0);	// errors larger than this cause heater to be on or off
+const float defaultPidMins[HEATERS] = HEATERS_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);			// minimum value of I-term
+const float defaultPidMaxes[HEATERS] = HEATERS_(255, 180, 180, 180, 180, 180, 180, 180);			// maximum value of I-term, must be high enough to reach 245C for ABS printing
 
-const float STANDBY_TEMPERATURES[HEATERS] = HEATERS_(ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO); // We specify one for the bed, though it's not needed
-const float ACTIVE_TEMPERATURES[HEATERS] = HEATERS_(ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO);
+const float STANDBY_TEMPERATURES[HEATERS] = HEATERS_(ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO); // We specify one for the bed, though it's not needed
+const float ACTIVE_TEMPERATURES[HEATERS] = HEATERS_(ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO);
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 const unsigned int AD_OVERSAMPLE_BITS = 1;		// Number of bits we oversample when reading temperatures
@@ -751,10 +751,13 @@ private:
 	float idleCurrentFactor;
 	size_t slowestDrive;
 	float maxAverageAcceleration;
+	//uint16_t driversUsed[DRIVES];
 
 	// Digipots
 
-#if !defined(DUET_NG) || defined(PROTOTYPE_1)
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+	size_t numTMC2660Drivers;
+#else
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
 	Pin potWipes[8];			// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
@@ -1281,7 +1284,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 {
 	if (nvData.zProbeType >= 4)
 	{
-		bool b = (bool)digitalRead(endStopPins[E0_AXIS]);
+		bool b = digitalRead(endStopPins[E0_AXIS]);
 		if (!endStopLogicLevel[AXES])
 		{
 			b = !b;

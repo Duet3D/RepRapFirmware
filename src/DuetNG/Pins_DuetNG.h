@@ -22,15 +22,11 @@ const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual u
 
 // The physical capabilities of the machine
 
-const size_t DRIVES = 9;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
-#define DRIVES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f,g,h,i }
+const size_t DRIVES = 10;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
+#define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h,i,j }
 
-// If enabled, the following control the use of the optional ExternalDrivers module
-#define EXTERNAL_DRIVERS		(9)
-#define FIRST_EXTERNAL_DRIVE	(0)
-
-const int8_t HEATERS = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
-#define HEATERS_(a,b,c,d,e,f,g) { a,b,c,d,e,f,g }
+const int8_t HEATERS = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+#define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g,h }
 
 const size_t AXES = 3;							// The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
 const size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
@@ -41,15 +37,15 @@ const size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB
 
 // DRIVES
 
-const Pin ENABLE_PINS[DRIVES] = { 78, 41, 42, 49, 57, 87, 88, 89, 90 };
-const bool ENABLE_VALUES[DRIVES] = { false, false, false, false, false, false, false, false, false };	// What to send to enable a drive
-const Pin STEP_PINS[DRIVES] = { 70, 71, 72, 69, 68, 66, 65, 64, 67 };
-const Pin DIRECTION_PINS[DRIVES] = { 75, 76, 77, 01, 73, 92, 86, 80, 81 };
-const bool DIRECTIONS[DRIVES] = { BACKWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS };	// What each axis needs to make it go forwards - defaults
+const Pin ENABLE_PINS[DRIVES] = { 78, 41, 42, 49, 57, 87, 88, 89, 90, 31 };
+const bool ENABLE_VALUES[DRIVES] = { false, false, false, false, false, false, false, false, false, false };	// What to send to enable a drive
+const Pin STEP_PINS[DRIVES] = { 70, 71, 72, 69, 68, 66, 65, 64, 67, 91 };
+const Pin DIRECTION_PINS[DRIVES] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32 };
+const bool DIRECTIONS[DRIVES] = { FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS };	// What each axis needs to make it go forwards - defaults
 
 // Endstops
 // RepRapFirmware only has a single endstop per axis. gcode defines if it is a max ("high end") or min ("low end") endstop. gcode also sets if it is active HIGH or LOW.
-const Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 96, 97, 98, 99 };
+const Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17 };
 
 // Indices for motor current digipots (if any): first 4 are for digipot 1 (on duet), second 4 for digipot 2 (on expansion board)
 #ifdef PROTOTYPE_1
@@ -64,12 +60,12 @@ const float STEPPER_DAC_VOLTAGE_OFFSET = -0.11;							// Stepper motor current o
 
 const bool HEAT_ON = false;												// false for inverted heater (e.g. Duet v0.6), true for not (e.g. Duet v0.4)
 
-const Pin TEMP_SENSE_PINS[HEATERS] = { 45, 47, 44, 61, 62, 63, 59 };	// Thermistor pin numbers
+const Pin TEMP_SENSE_PINS[HEATERS] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers
 
 #ifdef PROTOTYPE_1
-const Pin HEAT_ON_PINS[HEATERS] = { 19, 20, 16, 15, 37, 40, 43 };		// Heater pin numbers
+const Pin HEAT_ON_PINS[HEATERS] = { 19, 20, 16, 15, 37, 40, 43, 38 };	// Heater pin numbers
 #else
-const Pin HEAT_ON_PINS[HEATERS] = { 19, 20, 16, 35, 37, 40, 43 };		// Heater pin numbers
+const Pin HEAT_ON_PINS[HEATERS] = { 19, 20, 16, 35, 37, 40, 43, 38 };	// Heater pin numbers (heater 7 pin TBC)
 #endif
 
 // Default thermistor parameters
@@ -167,6 +163,7 @@ const size_t NUM_PINS_ALLOWED = 96;
 	/* pins 88-95 */	0b00001000	\
 }
 #endif
+
 // SAM4E Flash locations (may be expanded in the future)
 const uint32_t IAP_FLASH_START = 0x00470000;
 const uint32_t IAP_FLASH_END = 0x0047FBFF;
@@ -179,8 +176,8 @@ const Pin SamTfrReadyPin = 94;			// Output from the SAM to the WiFi module indic
 const Pin SamCsPin = 11;				// SPI NPCS pin, input from WiFi module
 
 // Timer allocation (no network timer on DuetNG)
-// TC0 channel 0 is used for FAM2
-// TC0 channel 1 is used for the TMC clock
+// TC0 channel 0 is used for FAN2
+// TC0 channel 1 is currently unused (may use ift for a heater or a fan)
 // TC0 channel 2 is available for us to use
 #define STEP_TC				(TC0)
 #define STEP_TC_CHAN		(2)

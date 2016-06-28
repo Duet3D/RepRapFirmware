@@ -25,8 +25,8 @@
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"
 
-#if defined(DUET_NG) || defined (EXTERNAL_DRIVERS)
-# include "ExternalDrivers.h"
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+# include <TMC2660.h>
 #endif
 
 #ifdef DUET_NG
@@ -60,9 +60,26 @@ uint32_t nextInterruptScheduledAt = 0;
 uint32_t lastInterruptTime = 0;
 #endif
 
+// Urgent initialisation function
+// This is called before general init has been done, and before constructors for C++ static data have been called.
+// Therefore, be very careful what you do here!
+void UrgentInit()
+{
+#ifdef DUET_NG
+	// When the reset button is pressed, if the TMC2660 drivers were previously enabled then we get uncommanded motor movements.
+	// Try to reduce that by initialising the drivers early here.
+	// On the production board we will also be able to set the ENN line high here.
+	for (size_t drive = 0; drive < DRIVES; ++drive)
+	{
+		pinMode(STEP_PINS[drive], OUTPUT_LOW);
+		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
+		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);
+	}
+#endif
+}
+
 // Arduino initialise and loop functions
 // Put nothing in these other than calls to the RepRap equivalents
-
 void setup()
 {
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
@@ -148,8 +165,7 @@ Platform::Platform() :
 void Platform::Init()
 {
 	// Deal with power first
-	digitalWrite(ATX_POWER_PIN, LOW);		// ensure ATX power is off by default
-	pinMode(ATX_POWER_PIN, OUTPUT);
+	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
 
 	SetBoardType(BoardType::Auto);
 
@@ -232,7 +248,7 @@ void Platform::Init()
 	// Z PROBE
 
 	zProbePin = Z_PROBE_PIN;
-	zProbeAdcChannel = PinToAdcChannel(zProbePin);
+	zProbeAdcChannel = PinToAdcChannel(zProbePin);	// we don't bother to turn the pullup resistor off for this input
 	InitZProbe();		// this also sets up zProbeModulationPin
 
 	// AXES
@@ -271,21 +287,17 @@ void Platform::Init()
 		SetPhysicalDrive(drive, drive);					// map drivers directly to axes and extruders
 		if (stepPins[drive] >= 0)
 		{
-			pinMode(stepPins[drive], OUTPUT);
+			pinMode(stepPins[drive], OUTPUT_LOW);
 		}
 		if (directionPins[drive] >= 0)
 		{
-			pinMode(directionPins[drive], OUTPUT);
+			pinMode(directionPins[drive], OUTPUT_LOW);
 		}
 
 #if !defined(DUET_NG) || defined(PROTOTYPE_1)
-# ifdef EXTERNAL_DRIVERS
-		if (drive < FIRST_EXTERNAL_DRIVE && enablePins[drive] >= 0)
-# else
 		if (enablePins[drive] >= 0)
-# endif
 		{
-			pinMode(enablePins[drive], OUTPUT);
+			pinMode(enablePins[drive], OUTPUT_HIGH);
 		}
 #endif
 		if (endStopPins[drive] >= 0)
@@ -305,9 +317,10 @@ void Platform::Init()
 		}
 	}
 
-#ifdef EXTERNAL_DRIVERS
+#ifdef DUET_NG
+	numTMC2660Drivers = DRIVES;			// for now assume all drivers are TMC2660 on the Duet NG
 	driversPowered = false;
-	ExternalDrivers::Init();
+	TMC2660::Init(enablePins);
 #endif
 
 	extrusionAncilliaryPWM = 0.0;
@@ -317,10 +330,10 @@ void Platform::Init()
 	{
 		if (heatOnPins[heater] >= 0)
 		{
-			digitalWrite(heatOnPins[heater], (HEAT_ON) ? LOW : HIGH);		// turn the heater off
-			pinMode(heatOnPins[heater], OUTPUT);
+			pinMode(heatOnPins[heater], (HEAT_ON) ? OUTPUT_LOW : OUTPUT_HIGH);
 		}
 		AnalogChannelNumber chan = PinToAdcChannel(tempSensePins[heater]);	// translate the Arduino Due Analog pin number to the SAM ADC channel number
+		pinMode(tempSensePins[heater], AIN);
 		thermistorAdcChannels[heater] = chan;
 		AnalogInEnableChannel(chan, true);
 
@@ -345,24 +358,19 @@ void Platform::Init()
 		inkjetDelayMicroseconds = INKJET_DELAY_MICROSECONDS;
 
 		inkjetSerialOut = INKJET_SERIAL_OUT;
-		pinMode(inkjetSerialOut, OUTPUT);
-		digitalWrite(inkjetSerialOut, 0);
+		pinMode(inkjetSerialOut, OUTPUT_LOW);
 
 		inkjetShiftClock = INKJET_SHIFT_CLOCK;
-		pinMode(inkjetShiftClock, OUTPUT);
-		digitalWrite(inkjetShiftClock, LOW);
+		pinMode(inkjetShiftClock, OUTPUT_LOW);
 
 		inkjetStorageClock = INKJET_STORAGE_CLOCK;
-		pinMode(inkjetStorageClock, OUTPUT);
-		digitalWrite(inkjetStorageClock, LOW);
+		pinMode(inkjetStorageClock, OUTPUT_LOW);
 
 		inkjetOutputEnable = INKJET_OUTPUT_ENABLE;
-		pinMode(inkjetOutputEnable, OUTPUT);
-		digitalWrite(inkjetOutputEnable, HIGH);
+		pinMode(inkjetOutputEnable, OUTPUT_HIGH);
 
 		inkjetClear = INKJET_CLEAR;
-		pinMode(inkjetClear, OUTPUT);
-		digitalWrite(inkjetClear, HIGH);
+		pinMode(inkjetClear, OUTPUT_HIGH);
 	}
 #endif
 
@@ -376,6 +384,7 @@ void Platform::Init()
 
 #ifdef DUET_NG
 	vInMonitorAdcChannel = PinToAdcChannel(PowerMonitorVinDetectPin);
+	pinMode(PowerMonitorVinDetectPin, AIN);
 	AnalogInEnableChannel(vInMonitorAdcChannel, true);
 	currentVin = highestVin = 0;
 	lowestVin = 9999;
@@ -464,14 +473,12 @@ void Platform::InitZProbe()
 	case 1:
 	case 2:
 		AnalogInEnableChannel(zProbeAdcChannel, true);
-		pinMode(zProbeModulationPin, OUTPUT);
-		digitalWrite(zProbeModulationPin, HIGH);	// enable the IR LED
+		pinMode(zProbeModulationPin, OUTPUT_HIGH);	// enable the IR LED
 		break;
 
 	case 3:
 		AnalogInEnableChannel(zProbeAdcChannel, true);
-		pinMode(zProbeModulationPin, OUTPUT);
-		digitalWrite(zProbeModulationPin, LOW);		// enable the alternate sensor
+		pinMode(zProbeModulationPin, OUTPUT_LOW);		// enable the alternate sensor
 		break;
 
 	case 4:
@@ -1187,7 +1194,7 @@ void Platform::Spin()
 	{
 		driversPowered = true;
 	}
-	ExternalDrivers::SetDriversPowered(driversPowered);
+	TMC2660::SetDriversPowered(driversPowered);
 #endif
 
 	ClassReport(longWait);
@@ -1693,7 +1700,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 	}
 	else if (endStopPins[drive] >= 0)
 	{
-		if (digitalRead(endStopPins[drive]) == ((endStopLogicLevel[drive]) ? 1 : 0))
+		if (digitalRead(endStopPins[drive]) == endStopLogicLevel[drive])
 		{
 			return (endStopType[drive] == EndStopType::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 		}
@@ -1756,24 +1763,21 @@ void Platform::EnableDrive(size_t drive)
 			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
-			ExternalDrivers::EnableDrive(driver, true);
-#else
-# ifdef EXTERNAL_DRIVERS
-			if (driver >= FIRST_EXTERNAL_DRIVE)
+			TMC2660::EnableDrive(driver, true);
+			if (driver < numTMC2660Drivers)
 			{
-				ExternalDrivers::EnableDrive(driver - FIRST_EXTERNAL_DRIVE, true);
+				TMC2660::EnableDrive(driver, true);
 			}
 			else
 			{
-# endif
+#endif
 				const int pin = enablePins[driver];
 				if (pin >= 0)
 				{
 					digitalWrite(pin, enableValues[driver]);
 				}
-# ifdef EXTERNAL_DRIVERS
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
 			}
-# endif
 #endif
 		}
 	}
@@ -1784,27 +1788,23 @@ void Platform::DisableDrive(size_t drive)
 {
 	if (drive < DRIVES)
 	{
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
-		ExternalDrivers::EnableDrive(driverNumbers[drive], false);
-#else
 		const size_t driver = driverNumbers[drive];
-# ifdef EXTERNAL_DRIVERS
-		if (driver >= FIRST_EXTERNAL_DRIVE)
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+		if (driver < numTMC2660Drivers)
 		{
-			ExternalDrivers::EnableDrive(driver - FIRST_EXTERNAL_DRIVE, false);
+			TMC2660::EnableDrive(driver, false);
 		}
 		else
 		{
-# endif
+#endif
 			const int pin = enablePins[driver];
 			if (pin >= 0)
 			{
 				digitalWrite(pin, !enableValues[driver]);
 			}
 			driveState[drive] = DriveStatus::disabled;
-# ifdef EXTERNAL_DRIVERS
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
 		}
-# endif
 #endif
 	}
 }
@@ -1846,60 +1846,51 @@ void Platform::UpdateMotorCurrent(size_t drive)
 		const size_t driver = driverNumbers[drive];
 
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
-		ExternalDrivers::SetCurrent(driver, current);
-#else
-
-# ifdef EXTERNAL_DRIVERS
-		if (driver >= FIRST_EXTERNAL_DRIVE)
+		if (driver < numTMC2660Drivers)
 		{
-			ExternalDrivers::SetCurrent(driver - FIRST_EXTERNAL_DRIVE, current);
+			TMC2660::SetCurrent(driver, current);
+		}
+		// else we can't set the current
+#elif defined (__RADDS__)
+		// we can't set the current on RADDS
+#else
+		unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
+		if (driver < 4)
+		{
+			mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
+			mcpDuet.setVolatileWiper(potWipes[driver], pot);
 		}
 		else
 		{
-# endif
-			unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
-			if (driver < 4)
+# ifndef DUET_NG
+			if (board == BoardType::Duet_085)
 			{
-				mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
-				mcpDuet.setVolatileWiper(potWipes[driver], pot);
-			}
-			else
-			{
-# ifndef __RADDS__
-#  ifndef DUET_NG
-				if (board == BoardType::Duet_085)
-				{
-#  endif
-					// Extruder 0 is on DAC channel 0
-					if (driver == 4)
-					{
-						float dacVoltage = max<float>(current * 0.008*senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
-						uint32_t dac = (uint32_t)((256 * dacVoltage + 0.5 * stepperDacVoltageRange)/stepperDacVoltageRange);
-#  ifdef DUET_NG
-						AnalogWrite(DAC1, dac);
-#  else
-						AnalogWrite(DAC0, dac);
-#  endif
-					}
-					else
-					{
-						mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
-						mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
-					}
-#  ifndef DUET_NG
-				}
-				else if (driver < 8)		// on a Duet 0.6 we have a maximum of 8 drives
-				{
-					mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
-					mcpExpansion.setVolatileWiper(potWipes[driver], pot);
-				}
-#  endif
 # endif
+				// Extruder 0 is on DAC channel 0
+				if (driver == 4)
+				{
+					float dacVoltage = max<float>(current * 0.008*senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
+					uint32_t dac = (uint32_t)((256 * dacVoltage + 0.5 * stepperDacVoltageRange)/stepperDacVoltageRange);
+# ifdef DUET_NG
+					AnalogWrite(DAC1, dac);
+# else
+					AnalogWrite(DAC0, dac);
+# endif
+				}
+				else
+				{
+					mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
+					mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
+				}
+# ifndef DUET_NG
 			}
-# ifdef EXTERNAL_DRIVERS
+			else if (driver < 8)		// on a Duet 0.6 we have a maximum of 8 drives
+			{
+				mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
+				mcpExpansion.setVolatileWiper(potWipes[driver], pot);
+			}
+# endif
 		}
-# endif
-
 #endif
 	}
 }
@@ -1928,13 +1919,10 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 	if (drive < DRIVES)
 	{
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
-		return ExternalDrivers::SetMicrostepping(driverNumbers[drive], microsteps, mode);
-#else
-# ifdef EXTERNAL_DRIVERS
 		const size_t driver = driverNumbers[drive];
-		if (driver >= FIRST_EXTERNAL_DRIVE)
+		if (driver < numTMC2660Drivers)
 		{
-			return ExternalDrivers::SetMicrostepping(driver - FIRST_EXTERNAL_DRIVE, microsteps, mode);
+			return TMC2660::SetMicrostepping(driver, microsteps, mode);
 		}
 		else
 		{
@@ -1942,10 +1930,8 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 			// On-board drivers only support x16 microstepping.
 			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
 			return microsteps == 16;
-# ifdef EXTERNAL_DRIVERS
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
 		}
-# endif
-
 #endif
 	}
 	return false;
@@ -1956,19 +1942,12 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
 	if (drive < DRIVES)
 	{
-		return ExternalDrivers::GetMicrostepping(driverNumbers[drive], interpolation);
-	}
-# else
-# ifdef EXTERNAL_DRIVERS
-	if (drive < DRIVES)
-	{
 		const size_t driver = driverNumbers[drive];
-		if (driver >= FIRST_EXTERNAL_DRIVE)
+		if (driver < numTMC2660Drivers)
 		{
-			return ExternalDrivers::GetMicrostepping(driver - FIRST_EXTERNAL_DRIVE, interpolation);
+			return TMC2660::GetMicrostepping(driver, interpolation);
 		}
 	}
-# endif
 #endif
 	// On-board drivers only support x16 microstepping without interpolation
 	interpolation = false;
@@ -2461,12 +2440,12 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 
 bool Platform::AtxPower() const
 {
-	return (digitalRead(ATX_POWER_PIN) == HIGH);
+	return (digitalRead(ATX_POWER_PIN));
 }
 
 void Platform::SetAtxPower(bool on)
 {
-	digitalWrite(ATX_POWER_PIN, (on) ? HIGH : LOW);
+	digitalWrite(ATX_POWER_PIN, on);
 }
 
 
@@ -2624,7 +2603,7 @@ bool Platform::SetPin(int pin, int level)
 #else
 			if ((pinInitialised[index] & mask) == 0)
 			{
-				pinMode(pin, OUTPUT);
+				pinMode(pin, (level == 0) ? OUTPUT_LOW : OUTPUT_HIGH);
 				pinInitialised[index] |= mask;
 			}
 			digitalWrite(pin, level);
@@ -2816,7 +2795,7 @@ void Platform::Tick()
 		if (driversPowered && currentVin > driverOverVoltageAdcReading)
 		{
 			driversPowered = false;
-			ExternalDrivers::SetDriversPowered(false);
+			TMC2660::SetDriversPowered(false);
 			//TODO set ENN high on production boards
 		}
 #endif

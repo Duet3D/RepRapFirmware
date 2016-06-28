@@ -2772,7 +2772,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	bool error = false;
 
 	int code = gb->GetIValue();
-	if (simulationMode != 0 && (code < 20 || code > 37) && code != 0 && code != 1 && code != 82 && code != 83 && code != 111 && code != 105 && code != 122 && code != 408 && code != 999)
+	if (simulationMode != 0 && (code < 20 || code > 37) && code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 111 && code != 112 && code != 122 && code != 408 && code != 999)
 	{
 		return true;			// we don't yet simulate most M codes
 	}
@@ -5418,9 +5418,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 999:
-		result = DoDwellTime(0.5);		// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
+		result = DoDwellTime(0.5);			// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
 		if (result)
 		{
+			reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi seems to need drives disabled here
 			uint16_t reason = (gb->Seen('P') && StringStartsWith(gb->GetString(), "ERASE"))
 											? (uint16_t)SoftwareResetReason::erase
 											: (uint16_t)SoftwareResetReason::user;

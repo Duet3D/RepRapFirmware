@@ -5,12 +5,14 @@
  *      Author: David
  */
 
-#ifndef EXTERNALDRIVERS_H_
-#define EXTERNALDRIVERS_H_
+#ifndef TMC2660_H_
+#define TMC2660_H_
 
-namespace ExternalDrivers
+#include "Pins.h"
+
+namespace TMC2660
 {
-	void Init();
+	void Init(const Pin[DRIVES]);
 	void SetCurrent(size_t drive, float current);
 	void EnableDrive(size_t drive, bool en);
 	uint32_t GetStatus(size_t drive);
@@ -19,4 +21,4 @@ namespace ExternalDrivers
 	void SetDriversPowered(bool powered);
 };
 
-#endif /* EXTERNALDRIVERS_H_ */
+#endif /* TMC2660_H_ */
