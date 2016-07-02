@@ -198,7 +198,7 @@ float GCodeBuffer::GetFValue()
 }
 
 // Get a :-separated list of floats after a key letter
-const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
+const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool doPad)
 {
 	if(readPointer < 0)
 	{
@@ -233,7 +233,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength)
 
 	// Special case if there is one entry and returnedLength requests several.
 	// Fill the array with the first entry.
-	if (length == 1 && returnedLength > 1)
+	if (doPad && length == 1 && returnedLength > 1)
 	{
 		for(size_t i = 1; i < returnedLength; i++)
 		{
@@ -285,9 +285,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 }
 
 // Get a string after a G Code letter found by a call to Seen().
-// It will be the whole of the rest of the GCode string, so strings
-// should always be the last parameter.
-
+// It will be the whole of the rest of the GCode string, so strings should always be the last parameter.
 const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)

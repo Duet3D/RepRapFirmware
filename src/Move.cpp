@@ -244,7 +244,7 @@ void Move::Spin()
 				}
 				else if (!simulationMode != 0 && iState == IdleState::timing && reprap.GetPlatform()->Time() - lastMoveTime >= idleTimeout)
 				{
-					reprap.GetPlatform()->SetDrivesIdle();					// put all drives in idle hold
+					reprap.GetPlatform()->SetDriversIdle();					// put all drives in idle hold
 					iState = IdleState::idle;
 				}
 			}
@@ -1112,13 +1112,10 @@ void Move::Interrupt()
 			platform->SetDirection(Y_AXIS, dir);
 			platform->SetDirection(Z_AXIS, dir);
 			ShortDelay();
-			platform->StepHigh(X_AXIS);
-			platform->StepHigh(Y_AXIS);
-			platform->StepHigh(Z_AXIS);
+			const uint32_t steppersMoving = platform->GetDriversBitmap(X_AXIS) | platform->GetDriversBitmap(Y_AXIS) | platform->GetDriversBitmap(Z_AXIS);
+			Platform::StepDriversHigh(steppersMoving);
 			ShortDelay();
-			platform->StepLow(X_AXIS);
-			platform->StepLow(Y_AXIS);
-			platform->StepLow(Z_AXIS);
+			Platform::StepDriversLow();
 			uint32_t tim = deltaProbe.CalcNextStepTime();
 			again = (tim != 0xFFFFFFFF && platform->ScheduleInterrupt(tim + deltaProbingStartTime));
 		}

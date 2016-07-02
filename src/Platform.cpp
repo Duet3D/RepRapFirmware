@@ -50,6 +50,8 @@ const uint32_t fanMaxInterruptCount = 32;			// number of fan interrupts that we 
 static volatile uint32_t fanLastResetTime = 0;		// time (microseconds) at which we last reset the interrupt count, accessed inside and outside ISR
 static volatile uint32_t fanInterval = 0;			// written by ISR, read outside the ISR
 
+const float minStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
+
 //#define MOVE_DEBUG
 
 #ifdef MOVE_DEBUG
@@ -224,11 +226,8 @@ void Platform::Init()
 
 	// DRIVES
 
-	ARRAY_INIT(stepPins, STEP_PINS);
-	ARRAY_INIT(directionPins, DIRECTION_PINS);
 	ARRAY_INIT(directions, DIRECTIONS);
 	ARRAY_INIT(enableValues, ENABLE_VALUES);
-	ARRAY_INIT(enablePins, ENABLE_PINS);
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
 	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
 	ARRAY_INIT(accelerations, ACCELERATIONS);
@@ -248,7 +247,7 @@ void Platform::Init()
 	// Z PROBE
 
 	zProbePin = Z_PROBE_PIN;
-	zProbeAdcChannel = PinToAdcChannel(zProbePin);	// we don't bother to turn the pullup resistor off for this input
+	zProbeAdcChannel = PinToAdcChannel(zProbePin);
 	InitZProbe();		// this also sets up zProbeModulationPin
 
 	// AXES
@@ -257,7 +256,6 @@ void Platform::Init()
 	ARRAY_INIT(axisMinima, AXIS_MINIMA);
 
 	idleCurrentFactor = DEFAULT_IDLE_CURRENT_FACTOR;
-	SetSlowestDrive();
 
 	// HEATERS - Bed is assumed to be the first
 
@@ -277,50 +275,60 @@ void Platform::Init()
 	}
 
 	// Motors
-	for (size_t drive = 0; drive < DRIVES; drive++)
-	{
-		driverNumbers[drive] = -1;						// needed so that SetPhysicalDrive() behaves correctly
-	}
+	// Disable parallel writes to all pins. We re-enable them for the step pins.
+	PIOA->PIO_OWDR = 0xFFFFFFFF;
+	PIOB->PIO_OWDR = 0xFFFFFFFF;
+	PIOC->PIO_OWDR = 0xFFFFFFFF;
+	PIOD->PIO_OWDR = 0xFFFFFFFF;
 
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		SetPhysicalDrive(drive, drive);					// map drivers directly to axes and extruders
-		if (stepPins[drive] >= 0)
+		// Map axes and extruders straight through
+		if (drive < AXES)
 		{
-			pinMode(stepPins[drive], OUTPUT_LOW);
-		}
-		if (directionPins[drive] >= 0)
-		{
-			pinMode(directionPins[drive], OUTPUT_LOW);
-		}
-
-#if !defined(DUET_NG) || defined(PROTOTYPE_1)
-		if (enablePins[drive] >= 0)
-		{
-			pinMode(enablePins[drive], OUTPUT_HIGH);
-		}
-#endif
-		if (endStopPins[drive] >= 0)
-		{
-			pinMode(endStopPins[drive], INPUT_PULLUP);
-		}
-		motorCurrents[drive] = 0.0;
-		DisableDrive(drive);
-		driveState[drive] = DriveStatus::disabled;
-		SetElasticComp(drive, 0.0);
-		if (drive <= AXES)
-		{
-			endStopType[drive] = (drive == Y_AXIS)
+			axisDrivers[drive].numDrivers = 1;
+			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
+			endStopType[drive] =
+#if defined(DUET_NG) || defined(__RADDS__)
+									EndStopType::lowEndStop;	// default to low endstop
+#else
+									(drive == Y_AXIS)
 									? EndStopType::lowEndStop	// for Ormerod 2/Huxley/Mendel compatibility
 									: EndStopType::noEndStop;	// for Ormerod/Huxley/Mendel compatibility
+#endif
 			endStopLogicLevel[drive] = true;					// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
+		else
+		{
+			extruderDrivers[drive - AXES] = (uint8_t)drive;
+			SetElasticComp(drive - AXES, 0.0);
+		}
+		driveDriverBits[drive] = CalcDriverBitmap(drive);
+
+		// Set up the control pins and endstops
+		pinMode(STEP_PINS[drive], OUTPUT_LOW);
+		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
+		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+		if (endStopPins[drive] >= 0)
+		{
+			pinMode(endStopPins[drive], INPUT_PULLUP);			// enable pullup resistor so that expansion connector pins can be used as trigger inputs
+		}
+
+		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
+		pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pin
+
+		motorCurrents[drive] = 0.0;
+		motorCurrentFraction[drive] = 1.0;
+		driverState[drive] = DriverStatus::disabled;
 	}
 
+	slowDriverStepPulseClocks = 0;								// no extended driver timing configured yet
+	slowDrivers = 0;											// assume no drivers need extended step pulse timing
+
 #ifdef DUET_NG
-	numTMC2660Drivers = DRIVES;			// for now assume all drivers are TMC2660 on the Duet NG
+	numTMC2660Drivers = DRIVES;									// for now assume all drivers are TMC2660 on the Duet NG
 	driversPowered = false;
-	TMC2660::Init(enablePins);
+	TMC2660::Init(ENABLE_PINS);
 #endif
 
 	extrusionAncilliaryPWM = 0.0;
@@ -337,7 +345,7 @@ void Platform::Init()
 		thermistorAdcChannels[heater] = chan;
 		AnalogInEnableChannel(chan, true);
 
-		SetThermistorNumber(heater, heater);				// map the thermistor straight through
+		SetThermistorNumber(heater, heater);					// map the thermistor straight through
 		thermistorFilters[heater].Init(0);
 	}
 	SetTemperatureLimit(DEFAULT_TEMPERATURE_LIMIT);
@@ -445,18 +453,6 @@ int Platform::GetThermistorNumber(size_t heater) const
 	return heaterTempChannels[heater];
 }
 
-void Platform::SetSlowestDrive()
-{
-	slowestDrive = 0;
-	for (size_t drive = 1; drive < DRIVES; drive++)
-	{
-		if (ConfiguredInstantDv(drive) < ConfiguredInstantDv(slowestDrive))
-		{
-			slowestDrive = drive;
-		}
-	}
-}
-
 void Platform::InitZProbe()
 {
 	zProbeOnFilter.Init(0);
@@ -473,26 +469,32 @@ void Platform::InitZProbe()
 	case 1:
 	case 2:
 		AnalogInEnableChannel(zProbeAdcChannel, true);
-		pinMode(zProbeModulationPin, OUTPUT_HIGH);	// enable the IR LED
+		pinMode(zProbePin, AIN);
+		pinMode(zProbeModulationPin, OUTPUT_HIGH);		// enable the IR LED
 		break;
 
 	case 3:
 		AnalogInEnableChannel(zProbeAdcChannel, true);
+		pinMode(zProbePin, AIN);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// enable the alternate sensor
 		break;
 
 	case 4:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
+		pinMode(zProbePin, INPUT_PULLUP);
 		pinMode(endStopPins[E0_AXIS], INPUT_PULLUP);
 		break;
 
 	case 5:
-		AnalogInEnableChannel(zProbeAdcChannel, false);
-		break;	//TODO (DeltaProbe)
-
 	default:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
+		pinMode(zProbePin, INPUT_PULLUP);
 		break;
+
+	case 6:
+		AnalogInEnableChannel(zProbeAdcChannel, false);
+		pinMode(zProbePin, INPUT_PULLUP);
+		break;	//TODO (DeltaProbe)
 	}
 }
 
@@ -506,15 +508,17 @@ int Platform::ZProbe() const
 		{
 		case 1:		// Simple or intelligent IR sensor
 		case 3:		// Alternate sensor
-		case 4:		// Mechanical Z probe
+		case 4:		// Switch connected to E0 endstop input
+		case 5:		// Switch connected to Z probe input
 			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
 
-		case 2:		// Modulated IR sensor.
+		case 2:		// Dumb modulated IR sensor.
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
 					/ (int)(4 * Z_PROBE_AVERAGE_READINGS));
-		case 5:
+
+		case 6:
 			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));	//TODO this is temporary
 
 		default:
@@ -572,15 +576,15 @@ float Platform::ZProbeStopHeight()
 	float temperature = (bedHeater >= 0) ? GetTemperature(bedHeater) : 25.0;
 	switch (nvData.zProbeType)
 	{
-	case 0:
-	case 4:
-		return nvData.switchZProbeParameters.GetStopHeight(temperature);
 	case 1:
 	case 2:
 		return nvData.irZProbeParameters.GetStopHeight(temperature);
 	case 3:
-	case 5:
+	case 6:
 		return nvData.alternateZProbeParameters.GetStopHeight(temperature);
+	case 4:
+	case 5:
+		return nvData.switchZProbeParameters.GetStopHeight(temperature);
 	default:
 		return 0;
 	}
@@ -594,9 +598,10 @@ float Platform::GetZProbeDiveHeight() const
 	case 2:
 		return nvData.irZProbeParameters.diveHeight;
 	case 3:
-	case 5:
+	case 6:
 		return nvData.alternateZProbeParameters.diveHeight;
 	case 4:
+	case 5:
 		return nvData.switchZProbeParameters.diveHeight;
 	default:
 		return DEFAULT_Z_DIVE;
@@ -611,9 +616,10 @@ float Platform::GetZProbeTravelSpeed() const
 	case 2:
 		return nvData.irZProbeParameters.travelSpeed;
 	case 3:
-	case 5:
+	case 6:
 		return nvData.alternateZProbeParameters.travelSpeed;
 	case 4:
+	case 5:
 		return nvData.switchZProbeParameters.travelSpeed;
 	default:
 		return DEFAULT_TRAVEL_SPEED;
@@ -622,7 +628,7 @@ float Platform::GetZProbeTravelSpeed() const
 
 void Platform::SetZProbeType(int pt)
 {
-	int newZProbeType = (pt >= 0 && pt <= 5) ? pt : 0;
+	int newZProbeType = (pt >= 0 && pt <= 6) ? pt : 0;
 	if (newZProbeType != nvData.zProbeType)
 	{
 		nvData.zProbeType = newZProbeType;
@@ -638,16 +644,16 @@ const ZProbeParameters& Platform::GetZProbeParameters() const
 {
 	switch (nvData.zProbeType)
 	{
-	case 0:
-	case 4:
-	default:
-		return nvData.switchZProbeParameters;
 	case 1:
 	case 2:
 		return nvData.irZProbeParameters;
 	case 3:
-	case 5:
+	case 6:
 		return nvData.alternateZProbeParameters;
+	case 4:
+	case 5:
+	default:
+		return nvData.switchZProbeParameters;
 	}
 }
 
@@ -655,17 +661,6 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 {
 	switch (nvData.zProbeType)
 	{
-	case 0:
-	case 4:
-		if (nvData.switchZProbeParameters != params)
-		{
-			nvData.switchZProbeParameters = params;
-			if (autoSaveEnabled)
-			{
-				WriteNvData();
-			}
-		}
-		return true;
 	case 1:
 	case 2:
 		if (nvData.irZProbeParameters != params)
@@ -678,10 +673,21 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 		}
 		return true;
 	case 3:
-	case 5:
+	case 6:
 		if (nvData.alternateZProbeParameters != params)
 		{
 			nvData.alternateZProbeParameters = params;
+			if (autoSaveEnabled)
+			{
+				WriteNvData();
+			}
+		}
+		return true;
+	case 4:
+	case 5:
+		if (nvData.switchZProbeParameters != params)
+		{
+			nvData.switchZProbeParameters = params;
 			if (autoSaveEnabled)
 			{
 				WriteNvData();
@@ -1728,67 +1734,58 @@ EndStopHit Platform::GetZProbeResult() const
 {
 	const int zProbeVal = ZProbe();
 	const int zProbeADValue =
-			(nvData.zProbeType == 4) ? nvData.switchZProbeParameters.adcValue
-			: (nvData.zProbeType == 3) ? nvData.alternateZProbeParameters.adcValue
+			(nvData.zProbeType == 4 || nvData.zProbeType == 5) ? nvData.switchZProbeParameters.adcValue
+			: (nvData.zProbeType == 3 || nvData.zProbeType == 6) ? nvData.alternateZProbeParameters.adcValue
 				: nvData.irZProbeParameters.adcValue;
 	return (zProbeVal >= zProbeADValue) ? EndStopHit::lowHit
 			: (zProbeVal * 10 >= zProbeADValue * 9) ? EndStopHit::lowNear	// if we are at/above 90% of the target value
 				: EndStopHit::noStop;
 }
 
-// This is called from the step ISR as well as other places, so keep it fast, especially in the case where the motor is already enabled
+// This is called from the step ISR as well as other places, so keep it fast
 void Platform::SetDirection(size_t drive, bool direction)
 {
-	const int driver = driverNumbers[drive];
-	if (driver >= 0)
+	if (drive < AXES)
 	{
-		const int pin = directionPins[driver];
-		if (pin >= 0)
+		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
-			bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
-			digitalWrite(pin, d);
+			SetDriverDirection(axisDrivers[drive].driverNumbers[i], direction);
 		}
+	}
+	else if (drive < DRIVES)
+	{
+		SetDriverDirection(extruderDrivers[drive - AXES], direction);
 	}
 }
 
-// Enable a drive. Must not be called from an ISR, or with interrupts disabled.
-void Platform::EnableDrive(size_t drive)
+// Enable a driver. Must not be called from an ISR, or with interrupts disabled.
+void Platform::EnableDriver(size_t driver)
 {
-	if (drive < DRIVES && driveState[drive] != DriveStatus::enabled)
+	if (driver < DRIVES && driverState[driver] != DriverStatus::enabled)
 	{
-		driveState[drive] = DriveStatus::enabled;
-		const size_t driver = driverNumbers[drive];
-		if (driver >= 0)
-		{
-			UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
+		driverState[driver] = DriverStatus::enabled;
+		UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
+		if (driver < numTMC2660Drivers)
+		{
 			TMC2660::EnableDrive(driver, true);
-			if (driver < numTMC2660Drivers)
-			{
-				TMC2660::EnableDrive(driver, true);
-			}
-			else
-			{
-#endif
-				const int pin = enablePins[driver];
-				if (pin >= 0)
-				{
-					digitalWrite(pin, enableValues[driver]);
-				}
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
-			}
-#endif
 		}
+		else
+		{
+#endif
+			digitalWrite(ENABLE_PINS[driver], enableValues[driver]);
+#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+		}
+#endif
 	}
 }
 
-// Disable a drive, if it has a disable pin
-void Platform::DisableDrive(size_t drive)
+// Disable a driver
+void Platform::DisableDriver(size_t driver)
 {
-	if (drive < DRIVES)
+	if (driver < DRIVES)
 	{
-		const size_t driver = driverNumbers[drive];
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
 		if (driver < numTMC2660Drivers)
 		{
@@ -1797,53 +1794,108 @@ void Platform::DisableDrive(size_t drive)
 		else
 		{
 #endif
-			const int pin = enablePins[driver];
-			if (pin >= 0)
-			{
-				digitalWrite(pin, !enableValues[driver]);
-			}
-			driveState[drive] = DriveStatus::disabled;
+			digitalWrite(ENABLE_PINS[driver], !enableValues[driver]);
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
 		}
 #endif
+		driverState[driver] = DriverStatus::disabled;
+	}
+}
+
+// Enable the drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
+void Platform::EnableDrive(size_t drive)
+{
+	if (drive < AXES)
+	{
+		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
+		{
+			EnableDriver(axisDrivers[drive].driverNumbers[i]);
+		}
+	}
+	else if (drive < DRIVES)
+	{
+		EnableDriver(extruderDrivers[drive - AXES]);
+	}
+}
+
+// Disable the drivers for a drive
+void Platform::DisableDrive(size_t drive)
+{
+	if (drive < AXES)
+	{
+		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
+		{
+			DisableDriver(axisDrivers[drive].driverNumbers[i]);
+		}
+	}
+	else if (drive < DRIVES)
+	{
+		DisableDriver(extruderDrivers[drive - AXES]);
 	}
 }
 
 // Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
-void Platform::SetDrivesIdle()
+void Platform::SetDriversIdle()
 {
-	for (size_t drive = 0; drive < DRIVES; ++drive)
+	for (size_t driver = 0; driver < DRIVES; ++driver)
 	{
-		if (driveState[drive] == DriveStatus::enabled)
+		if (driverState[driver] == DriverStatus::enabled)
 		{
-			driveState[drive] = DriveStatus::idle;
-			UpdateMotorCurrent(drive);
+			driverState[driver] = DriverStatus::idle;
+			UpdateMotorCurrent(driver);
 		}
 	}
 }
 
-// Set the current for a motor. Current is in mA.
-void Platform::SetMotorCurrent(size_t drive, float current)
+// Set the current for a drive. Current is in mA.
+void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, bool isPercent)
 {
-	if (drive < DRIVES)
+	if (driver < DRIVES)
 	{
-		motorCurrents[drive] = current;
-		UpdateMotorCurrent(drive);
+		if (isPercent)
+		{
+			motorCurrentFraction[driver] = 0.01 * currentOrPercent;
+		}
+		else
+		{
+			motorCurrents[driver] = currentOrPercent;
+		}
+		UpdateMotorCurrent(driver);
+	}
+}
+
+// Set the current for all drivers on an axis or extruder. Current is in mA.
+void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, bool isPercent)
+{
+	if (drive < AXES)
+	{
+		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
+		{
+			SetDriverCurrent(axisDrivers[drive].driverNumbers[i], currentOrPercent, isPercent);
+		}
+
+	}
+	else if (drive < DRIVES)
+	{
+		SetDriverCurrent(extruderDrivers[drive - AXES], currentOrPercent, isPercent);
 	}
 }
 
 // This must not be called from an ISR, or with interrupts disabled.
-void Platform::UpdateMotorCurrent(size_t drive)
+void Platform::UpdateMotorCurrent(size_t driver)
 {
-	if (drive < DRIVES)
+	if (driver < DRIVES)
 	{
-		float current = motorCurrents[drive];
-		if (driveState[drive] == DriveStatus::idle)
+		float current = motorCurrents[driver];
+		if (driverState[driver] == DriverStatus::idle)
 		{
 			current *= idleCurrentFactor;
 		}
-		const size_t driver = driverNumbers[drive];
+		else
+		{
+			current *= motorCurrentFraction[driver];
+		}
 
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
 		if (driver < numTMC2660Drivers)
@@ -1895,31 +1947,40 @@ void Platform::UpdateMotorCurrent(size_t drive)
 	}
 }
 
-float Platform::MotorCurrent(size_t drive) const
+// Get the configured motor current for a drive.
+// Currently we don't allow multiple motors on a single axis to have different currents, so we can just return the current for the first one.
+float Platform::GetMotorCurrent(size_t drive, bool isPercent) const
 {
-	return (drive < DRIVES) ? motorCurrents[drive] : 0.0;
+	if (drive < DRIVES)
+	{
+		uint8_t driver = (drive < AXES) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - AXES];
+		if (driver < DRIVES)
+		{
+			return (isPercent) ? motorCurrentFraction[driver] * 100.0 : motorCurrents[driver];
+		}
+	}
+	return 0.0;
 }
 
 // Set the motor idle current factor
 void Platform::SetIdleCurrentFactor(float f)
 {
 	idleCurrentFactor = f;
-	for (size_t drive = 0; drive < DRIVES; ++drive)
+	for (size_t driver = 0; driver < DRIVES; ++driver)
 	{
-		if (driveState[drive] == DriveStatus::idle)
+		if (driverState[driver] == DriverStatus::idle)
 		{
-			UpdateMotorCurrent(drive);
+			UpdateMotorCurrent(driver);
 		}
 	}
 }
 
-// Set the microstepping, returning true if successful
-bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
+// Set the microstepping for a driver, returning true if successful
+bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
 {
-	if (drive < DRIVES)
+	if (driver < DRIVES)
 	{
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
-		const size_t driver = driverNumbers[drive];
 		if (driver < numTMC2660Drivers)
 		{
 			return TMC2660::SetMicrostepping(driver, microsteps, mode);
@@ -1927,7 +1988,7 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 		else
 		{
 # endif
-			// On-board drivers only support x16 microstepping.
+			// Other drivers only support x16 microstepping.
 			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
 			return microsteps == 16;
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
@@ -1937,16 +1998,32 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 	return false;
 }
 
-unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
+// Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
+bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
+{
+	if (drive < AXES)
+	{
+		bool ok = true;
+		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
+		{
+			ok = SetDriverMicrostepping(axisDrivers[drive].driverNumbers[i], microsteps, mode) && ok;
+		}
+		return ok;
+	}
+	else if (drive < DRIVES)
+	{
+		return SetDriverMicrostepping(extruderDrivers[drive - AXES], microsteps, mode);
+	}
+	return false;
+}
+
+// Get the microstepping for a driver
+unsigned int Platform::GetDriverMicrostepping(size_t driver, bool& interpolation) const
 {
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
-	if (drive < DRIVES)
+	if (driver < numTMC2660Drivers)
 	{
-		const size_t driver = driverNumbers[drive];
-		if (driver < numTMC2660Drivers)
-		{
-			return TMC2660::GetMicrostepping(driver, interpolation);
-		}
+		return TMC2660::GetMicrostepping(driver, interpolation);
 	}
 #endif
 	// On-board drivers only support x16 microstepping without interpolation
@@ -1954,39 +2031,64 @@ unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 	return 16;
 }
 
-// Set the physical drive (i.e. axis or extruder) number used by this driver
-void Platform::SetPhysicalDrive(size_t driverNumber, int8_t physicalDrive)
+// Get the microstepping for an axis or extruder
+unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 {
-	int oldDrive = GetPhysicalDrive(driverNumber);
-	if (oldDrive != physicalDrive)
+	if (drive < AXES)
 	{
-		if (oldDrive >= 0)
-		{
-			DisableDrive(oldDrive);				// turn off the motor current
-			driverNumbers[oldDrive] = -1;
-			stepPinDescriptors[oldDrive] = OutputPin();
-		}
-
-		if (physicalDrive >= 0)
-		{
-			driverNumbers[physicalDrive] = driverNumber;
-			stepPinDescriptors[physicalDrive] = OutputPin(stepPins[driverNumber]);
-			driveState[physicalDrive] = DriveStatus::disabled;
-		}
+		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], interpolation);
+	}
+	else if (drive < DRIVES)
+	{
+		return GetDriverMicrostepping(extruderDrivers[drive - AXES], interpolation);
+	}
+	else
+	{
+		interpolation = false;
+		return 16;
 	}
 }
 
-// Return the physical drive used by this driver, or -1 if not found
-int Platform::GetPhysicalDrive(size_t driverNumber) const
+void Platform::SetAxisDriversConfig(size_t drive, const AxisDriversConfig& config)
 {
-	for (size_t drive = 0; drive < DRIVES; ++drive)
+	axisDrivers[drive] = config;
+	uint32_t bitmap = 0;
+	for (size_t i = 0; i < config.numDrivers; ++i)
 	{
-		if (driverNumbers[drive] == (int8_t)driverNumber)
-		{
-			return drive;
-		}
+		bitmap |= CalcDriverBitmap(config.driverNumbers[i]);
 	}
-	return -1;
+	driveDriverBits[drive] = bitmap;
+}
+
+// Map an extruder to a driver
+void Platform::SetExtruderDriver(size_t extruder, uint8_t driver)
+{
+	extruderDrivers[extruder] = driver;
+	driveDriverBits[extruder + AXES] = CalcDriverBitmap(driver);
+}
+
+void Platform::SetDriverStepTiming(size_t driver, float microseconds)
+{
+	if (microseconds < minStepPulseTiming)
+	{
+		slowDrivers &= ~CalcDriverBitmap(driver);						// this drive does not need extended timing
+	}
+	else
+	{
+		uint32_t clocks = (uint32_t)(((float)DDA::stepClockRate * microseconds/1000000.0) + 0.99);	// convert microseconds to step clocks, rounding up
+		if (clocks > slowDriverStepPulseClocks)
+		{
+			slowDriverStepPulseClocks = clocks;
+		}
+		slowDrivers |= CalcDriverBitmap(driver);						// this drive does need extended timing
+	}
+}
+
+float Platform::GetDriverStepTiming(size_t driver) const
+{
+	return ((slowDrivers & CalcDriverBitmap(driver)) != 0)
+			? (float)slowDriverStepPulseClocks * 1000000.0/(float)DDA::stepClockRate
+			: 0.0;
 }
 
 // Get current cooling fan speed on a scale between 0 and 1
@@ -2112,83 +2214,6 @@ void Platform::SetHeatersMonitored(size_t fan, uint16_t h)
 	if (fan < NUM_FANS)
 	{
 		fans[fan].SetHeatersMonitored(h);
-	}
-}
-
-void Platform::Fan::Init(Pin p_pin, bool hwInverted)
-{
-	val = 0.0;
-	freq = DefaultFanPwmFreq;
-	pin = p_pin;
-	hardwareInverted = hwInverted;
-	inverted = false;
-	heatersMonitored = 0;
-	triggerTemperature = HOT_END_FAN_TEMPERATURE;
-	Refresh();
-}
-
-void Platform::Fan::SetValue(float speed)
-{
-	if (speed > 1.0)
-	{
-		speed /= 255.0;
-	}
-	val = constrain<float>(speed, 0.0, 1.0);
-	Refresh();
-}
-
-void Platform::Fan::SetInverted(bool inv)
-{
-	inverted = inv;
-	Refresh();
-}
-
-void Platform::Fan::SetHardwarePwm(float pwmVal)
-{
-	if (pin >= 0)
-	{
-		uint32_t p = (uint32_t)(255.0 * pwmVal);
-		bool invert = hardwareInverted;
-		if (inverted)
-		{
-			invert = !invert;
-		}
-		AnalogWrite(pin, (invert) ? (255 - p) : p, freq);
-	}
-}
-
-void Platform::Fan::SetPwmFrequency(float p_freq)
-{
-	freq = (uint16_t)constrain<float>(p_freq, 1.0, 65535.0);
-	Refresh();
-}
-
-void Platform::Fan::SetHeatersMonitored(uint16_t h)
-{
-	heatersMonitored = h;
-	Refresh();
-}
-
-void Platform::Fan::Refresh()
-{
-	if (heatersMonitored != 0)
-	{
-		const float pwmVal = (reprap.GetPlatform()->AnyHeaterHot(heatersMonitored, triggerTemperature))
-				? max<float>(0.5, val)			// make sure that thermostatic fans always run at 50% speed or more
-				: 0.0;
-		SetHardwarePwm(pwmVal);
-	}
-	else
-	{
-		SetHardwarePwm(val);
-	}
-}
-
-void Platform::Fan::Check()
-{
-	if (heatersMonitored != 0)
-	{
-		Refresh();
 	}
 }
 

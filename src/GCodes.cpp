@@ -31,13 +31,12 @@
 
 #define DEGREE_SYMBOL	"\xC2\xB0"				// degree-symbol encoding in UTF8
 
-const char GCodes::axisLetters[AXES] =
-{ 'X', 'Y', 'Z' };
+const char GCodes::axisLetters[AXES] = { 'X', 'Y', 'Z' };
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 GCodes::GCodes(Platform* p, Webserver* w) :
-		platform(p), webserver(w), active(false), stackPointer(0), auxGCodeReply(nullptr), isFlashing(false)
+	platform(p), webserver(w), active(false), stackPointer(0), auxGCodeReply(nullptr), isFlashing(false)
 {
 	httpGCode = new GCodeBuffer(platform, "http", HTTP_MESSAGE);
 	telnetGCode = new GCodeBuffer(platform, "telnet", TELNET_MESSAGE);
@@ -450,7 +449,7 @@ void GCodes::Spin()
 			}
 			else
 			{
-				platform->SetDrivesIdle();
+				platform->SetDriversIdle();
 			}
 			HandleReply(gbCurrent, false, "");
 			state = GCodeState::normal;
@@ -852,7 +851,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 			else
 			{
 				size_t mc = eMoveCount;
-				gb->GetFloatArray(eMovement, mc);
+				gb->GetFloatArray(eMovement, mc, false);
 				if (eMoveCount != mc)
 				{
 					platform->MessageF(GENERIC_MESSAGE, "Wrong number of extruder drives for the selected tool: %s\n", gb->Buffer());
@@ -1429,7 +1428,7 @@ bool GCodes::DoSingleZProbe(bool reportOnly, float heightAdjust)
 // Returns 1 if success, with lastProbedZ set to the height we stopped at and the current position in moveBuffer
 int GCodes::DoZProbe(float distance)
 {
-	if (platform->GetZProbeType() == 5)
+	if (platform->GetZProbeType() == ZProbeTypeDelta)
 	{
 		const ZProbeParameters& params = platform->GetZProbeParameters();
 		return reprap.GetMove()->DoDeltaProbe(params.param1, params.param2, params.probeSpeed, distance);
@@ -1894,12 +1893,12 @@ void GCodes::SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb)
 			tool->GetVariables(standby, active);
 			if (gb->Seen('R'))
 			{
-				gb->GetFloatArray(standby, hCount);
+				gb->GetFloatArray(standby, hCount, true);
 				settingTemps = true;
 			}
 			if (gb->Seen('S'))
 			{
-				gb->GetFloatArray(active, hCount);
+				gb->GetFloatArray(active, hCount, true);
 				settingTemps = true;
 			}
 
@@ -3251,7 +3250,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				seen = true;
 				float eVals[DRIVES - AXES];
 				size_t eCount = DRIVES - AXES;
-				gb->GetFloatArray(eVals, eCount);
+				gb->GetFloatArray(eVals, eCount, true);
 
 				// The user may not have as many extruders as we allow for, so just set the ones for which a value is provided
 				for (size_t e = 0; e < eCount; e++)
@@ -3844,7 +3843,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			seen = true;
 			float eVals[DRIVES - AXES];
 			size_t eCount = DRIVES - AXES;
-			gb->GetFloatArray(eVals, eCount);
+			gb->GetFloatArray(eVals, eCount, true);
 			for (size_t e = 0; e < eCount; e++)
 			{
 				platform->SetAcceleration(AXES + e, eVals[e] * distanceScale);
@@ -3893,7 +3892,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				seen = true;
 				float eVals[DRIVES - AXES];
 				size_t eCount = DRIVES - AXES;
-				gb->GetFloatArray(eVals, eCount);
+				gb->GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
 					platform->SetMaxFeedrate(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
@@ -4533,7 +4532,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				reply.printf("Z Probe type %d, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min",
 								platform->GetZProbeType(), platform->GetZProbeDiveHeight(),
 								(int)(platform->GetZProbeParameters().probeSpeed * minutesToSeconds), (int)(platform->GetZProbeTravelSpeed() * minutesToSeconds));
-				if (platform->GetZProbeType() == 5)
+				if (platform->GetZProbeType() == ZProbeTypeDelta)
 				{
 					ZProbeParameters params = platform->GetZProbeParameters();
 					reply.catf(", parameters %.2f %.2f", params.param1, params.param2);
@@ -4634,7 +4633,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			seen = true;
 			float eVals[DRIVES - AXES];
 			size_t eCount = DRIVES - AXES;
-			gb->GetFloatArray(eVals, eCount);
+			gb->GetFloatArray(eVals, eCount, true);
 			for (size_t e = 0; e < eCount; e++)
 			{
 				platform->SetInstantDv(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
@@ -4667,7 +4666,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				{
 					float eVals[DRIVES - AXES];
 					size_t eCount = tool->DriveCount();
-					gb->GetFloatArray(eVals, eCount);
+					gb->GetFloatArray(eVals, eCount, false);
 					if (eCount != tool->DriveCount())
 					{
 						reply.printf("Setting mix ratios - wrong number of E drives: %s", gb->Buffer());
@@ -4718,7 +4717,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				bool seen = false;
 				if (gb->Seen('S'))
 				{
-					platform->SetDirectionValue(drive, gb->GetIValue());
+					platform->SetDirectionValue(drive, gb->GetIValue() != 0);
 					seen = true;
 				}
 				if (gb->Seen('R'))
@@ -4726,37 +4725,33 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					platform->SetEnableValue(drive, gb->GetIValue() != 0);
 					seen = true;
 				}
+				if (gb->Seen('T'))
+				{
+					platform->SetDriverStepTiming(drive, gb->GetFValue());
+					seen = true;
+				}
+				bool badParameter = false;
 				for (size_t axis = 0; axis < AXES; ++axis)
 				{
 					if (gb->Seen(axisLetters[axis]))
 					{
-						platform->SetPhysicalDrive(drive, axis);
-						seen = true;
+						badParameter = true;
 					}
 				}
 				if (gb->Seen(extrudeLetter))
 				{
-					size_t extruder = gb->GetIValue();
-					if (extruder + AXES < DRIVES)
-					{
-						platform->SetPhysicalDrive(drive, extruder + AXES);
-					}
-					seen = true;
+					badParameter = true;
 				}
-				if (!seen)
+				if (badParameter)
 				{
-					int physicalDrive = platform->GetPhysicalDrive(drive);
-					if (physicalDrive < 0)
-					{
-						reply.printf("Driver %u is not used", drive);
-					}
-					else
-					{
-						const char phyDriveLetter = ((size_t)physicalDrive < AXES) ? axisLetters[physicalDrive] : extrudeLetter;
-						const size_t phyDriveNumber = ((size_t)physicalDrive < AXES) ? 0 : physicalDrive - AXES;
-						reply.printf("Driver %u drives the %c%u motor, a %d sends it forwards and a %d enables it",
-								drive, phyDriveLetter, phyDriveNumber, (int) platform->GetDirectionValue(drive), (int) platform->GetEnableValue(drive));
-					}
+					platform->Message(GENERIC_MESSAGE, "Error: M569 no longer accepts XYZE parameters; use M584 instead\n");
+				}
+				else if (!seen)
+				{
+					reply.printf("A %d sends drive %u forwards, a %d enables it, and the minimum pulse width is %.1f microseconds",
+								(int)platform->GetDirectionValue(drive), drive,
+								(int)platform->GetEnableValue(drive),
+								platform->GetDriverStepTiming(drive));
 				}
 			}
 		}
@@ -5107,6 +5102,92 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
+	case 584: // Set axis/extruder to stepper driver(s) mapping
+		{
+			bool seen = false, badDrive = false;
+			for (size_t drive = 0; drive < AXES; ++drive)
+			{
+				if (gb->Seen(axisLetters[drive]))
+				{
+					seen = true;
+					size_t numValues = MaxDriversPerAxis;
+					long drivers[MaxDriversPerAxis];
+					gb->GetLongArray(drivers, numValues);
+
+					// Check all the driver numbers are in range
+					bool badAxis = false;
+					AxisDriversConfig config;
+					config.numDrivers = numValues;
+					for (size_t i = 0; i < numValues; ++i)
+					{
+						if ((unsigned long)drivers[i] >= DRIVES)
+						{
+							badAxis = true;
+						}
+						else
+						{
+							config.driverNumbers[i] = (uint8_t)drivers[i];
+						}
+					}
+					if (badAxis)
+					{
+						badDrive = true;
+					}
+					else
+					{
+						platform->SetAxisDriversConfig(drive, config);
+					}
+				}
+			}
+
+			if (gb->Seen(extrudeLetter))
+			{
+				seen = true;
+				size_t numValues = DRIVES - AXES;
+				long drivers[DRIVES - AXES];
+				gb->GetLongArray(drivers, numValues);
+				for (size_t i = 0; i < numValues; ++i)
+				{
+					if ((unsigned long)drivers[i] >= DRIVES)
+					{
+						badDrive = true;
+					}
+					else
+					{
+						platform->SetExtruderDriver(i, (uint8_t)drivers[i]);
+					}
+				}
+			}
+
+			if (badDrive)
+			{
+				platform->Message(GENERIC_MESSAGE, "Error: invalid drive number in M584 command\n");
+			}
+			else if (!seen)
+			{
+				reply.copy("Driver assignments:");
+				for (size_t drive = 0; drive < AXES; ++ drive)
+				{
+					reply.cat(' ');
+					const AxisDriversConfig& axisConfig = platform->GetAxisDriversConfig(drive);
+					char c = axisLetters[drive];
+					for (size_t i = 0; i < axisConfig.numDrivers; ++i)
+					{
+						reply.catf("%c%u", c, axisConfig.driverNumbers[i]);
+						c = ':';
+					}
+				}
+				reply.cat(' ');
+				char c = extrudeLetter;
+				for (size_t extruder = 0; extruder < DRIVES - AXES; ++extruder)
+				{
+					reply.catf("%c%u", c, platform->GetExtruderDriver(extruder));
+					c = ':';
+				}
+			}
+		}
+		break;
+
 	case 665: // Set delta configuration
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
@@ -5268,6 +5349,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 906: // Set/report Motor currents
+	case 913: // Set/report motor current percent
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
 		{
 			return false;
@@ -5278,7 +5360,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
-					platform->SetMotorCurrent(axis, gb->GetFValue());
+					platform->SetMotorCurrent(axis, gb->GetFValue(), code == 913);
 					seen = true;
 				}
 			}
@@ -5287,16 +5369,16 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				float eVals[DRIVES - AXES];
 				size_t eCount = DRIVES - AXES;
-				gb->GetFloatArray(eVals, eCount);
+				gb->GetFloatArray(eVals, eCount, true);
 				// 2014-09-29 DC42: we no longer insist that the user supplies values for all possible extruder drives
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform->SetMotorCurrent(AXES + e, eVals[e]);
+					platform->SetMotorCurrent(AXES + e, eVals[e], code == 913);
 				}
 				seen = true;
 			}
 
-			if (gb->Seen('I'))
+			if (code == 906 && gb->Seen('I'))
 			{
 				float idleFactor = gb->GetFValue();
 				if (idleFactor >= 0 && idleFactor <= 100.0)
@@ -5308,17 +5390,20 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (!seen)
 			{
-				reply.copy("Axis currents (mA) - ");
+				reply.copy((code == 913) ? "Motor current % of normal - " : "Motor current (mA) - ");
 				for (size_t axis = 0; axis < AXES; ++axis)
 				{
-					reply.catf("%c:%d, ", axisLetters[axis], (int) platform->MotorCurrent(axis));
+					reply.catf("%c:%d, ", axisLetters[axis], (int)platform->GetMotorCurrent(axis, code == 913));
 				}
 				reply.cat("E");
 				for (size_t drive = AXES; drive < DRIVES; drive++)
 				{
-					reply.catf(":%d", (int) platform->MotorCurrent(drive));
+					reply.catf(":%d", (int)platform->GetMotorCurrent(drive, code == 913));
 				}
-				reply.catf(", idle factor %d%%", (int)(platform->GetIdleCurrentFactor() * 100.0));
+				if (code == 906)
+				{
+					reply.catf(", idle factor %d%%", (int)(platform->GetIdleCurrentFactor() * 100.0));
+				}
 			}
 		}
 		break;
@@ -5338,6 +5423,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			reply.printf("MCU temperature calibration adjustment is %.1f" DEGREE_SYMBOL "C", platform->GetMcuTemperatureAdjust());
 		}
 		break;
+
+	// For case 913, see 906
 
 	case 997: // Perform firmware update
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())

@@ -671,7 +671,7 @@ void DDA::Prepare()
 			reprap.GetPlatform()->EnableDrive(drive);
 			if (drive >= AXES)
 			{
-				dm.PrepareExtruder(*this, params, drive, usePressureAdvance);
+				dm.PrepareExtruder(*this, params, usePressureAdvance);
 
 				// Check for sensible values, print them if they look dubious
 				if (reprap.Debug(moduleDda)
@@ -687,7 +687,7 @@ void DDA::Prepare()
 			}
 			else if (isDeltaMovement)
 			{
-				dm.PrepareDeltaAxis(*this, params, drive);
+				dm.PrepareDeltaAxis(*this, params);
 
 				// Check for sensible values, print them if they look dubious
 				if (reprap.Debug(moduleDda) && dm.totalSteps > 1000000)
@@ -697,7 +697,7 @@ void DDA::Prepare()
 			}
 			else
 			{
-				dm.PrepareCartesianAxis(*this, params, drive);
+				dm.PrepareCartesianAxis(*this, params);
 
 				// Check for sensible values, print them if they look dubious
 				if (reprap.Debug(moduleDda) && dm.totalSteps > 1000000)
@@ -712,8 +712,8 @@ void DDA::Prepare()
 			dm.stepInterval = 999999;						// initialise to a large value so that we will calculate the time for just one step
 			dm.stepsTillRecalc = 0;							// so that we don't skip the calculation
 			bool stepsToDo = (isDeltaMovement && drive < AXES)
-							? dm.CalcNextStepTimeDelta(*this, drive, false)
-							: dm.CalcNextStepTimeCartesian(*this, drive, false);
+							? dm.CalcNextStepTimeDelta(*this, false)
+							: dm.CalcNextStepTimeCartesian(*this, false);
 			if (stepsToDo)
 			{
 				InsertDM(&dm);
@@ -819,19 +819,22 @@ extern uint32_t maxReps;
 // This must be as fast as possible, because it determines the maximum movement speed.
 bool DDA::Step()
 {
+	Platform *platform = reprap.GetPlatform();
+	uint32_t lastStepPulseTime = platform->GetInterruptClocks();
 	bool repeat;
 	uint32_t numReps = 0;
 	do
 	{
 		// Keep this loop as fast as possible, in the case that there are no endstops to check!
-		// Check endstop switches and Z probe if asked
+
+		// 1. Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops of the Z probe.
 		if (endStopsToCheck != 0)											// if any homing switches or the Z probe is enabled in this move
 		{
 			if ((endStopsToCheck & ZProbeActive) != 0)						// if the Z probe is enabled in this move
 			{
 				// Check whether the Z probe has been triggered. On a delta at least, this must be done separately from endstop checks,
 				// because we have both a high endstop and a Z probe, and the Z motor is not the same thing as the Z axis.
-				switch (reprap.GetPlatform()->GetZProbeResult())
+				switch (platform->GetZProbeResult())
 				{
 				case EndStopHit::lowHit:
 					MoveAborted();											// set the state to completed and recalculate the endpoints
@@ -851,7 +854,7 @@ bool DDA::Step()
 			{
 				if ((endStopsToCheck & (1 << drive)) != 0)
 				{
-					switch(reprap.GetPlatform()->Stopped(drive))
+					switch(platform->Stopped(drive))
 					{
 					case EndStopHit::lowHit:
 						endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
@@ -900,46 +903,74 @@ bool DDA::Step()
 			}
 		}
 
-		// Generate any steps that are now due, overdue, or will be due very shortly
+		// 2. Determine which drivers are due for stepping, overdue, or will be due very shortly
 		DriveMovement* dm = firstDM;
-		if (dm == nullptr)				// I don't think this should happen, but best to be sure
-		{
-			state = completed;
-			break;
-		}
-
 		const uint32_t elapsedTime = (Platform::GetInterruptClocks() - moveStartTime) + minInterruptInterval;
-		while (elapsedTime >= dm->nextStepTime)		// if the next step is due
+		uint32_t driversStepping = 0;
+		while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 		{
-			size_t drive = dm->drive;
 			++numReps;
-			reprap.GetPlatform()->StepHigh(drive);
-			firstDM = dm->nextDM;
-			bool moreSteps = (isDeltaMovement && drive < AXES)
-								? dm->CalcNextStepTimeDelta(*this, drive, true)
-								: dm->CalcNextStepTimeCartesian(*this, drive, true);
-			if (moreSteps)
-			{
-				InsertDM(dm);
-			}
-			else if (firstDM == nullptr)
-			{
-				state = completed;
-				reprap.GetPlatform()->StepLow(drive);
-				goto quit;			// yukky multi-level break, but saves us another test in this time-critical code
-			}
-			reprap.GetPlatform()->StepLow(drive);
-			dm = firstDM;
+			driversStepping |= platform->GetDriversBitmap(dm->drive);
+			dm = dm->nextDM;
 
 //uint32_t t3 = Platform::GetInterruptClocks() - t2;
 //if (t3 > maxCalcTime) maxCalcTime = t3;
 //if (t3 < minCalcTime) minCalcTime = t3;
 		}
 
-		repeat = reprap.GetPlatform()->ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
+		// 3. Step the drivers
+		if ((driversStepping & platform->GetSlowDrivers()) != 0)
+		{
+			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform->GetSlowDriverClocks()) {}
+			Platform::StepDriversHigh(driversStepping);					// generate the steps
+			lastStepPulseTime = Platform::GetInterruptClocks();
+		}
+		else
+		{
+			Platform::StepDriversHigh(driversStepping);					// generate the steps
+		}
+
+		// 4. Remove those drives from the list, calculate the next step times, update the direction pins where necessary,
+		//    and re-insert them so as to keep the list in step-time order. We assume that meeting the direction pin hold time
+		//    is not a problem for any driver type. This is not necessarily true.
+		DriveMovement *dmToInsert = firstDM;							// head of the chain we need to re-insert
+		firstDM = dm;													// remove the chain from the list
+		while (dmToInsert != dm)										// note that both of these may be nullptr
+		{
+			bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < AXES)
+					? dmToInsert->CalcNextStepTimeDelta(*this, true)
+					: dmToInsert->CalcNextStepTimeCartesian(*this, true);
+			DriveMovement * const nextToInsert = dmToInsert->nextDM;
+			if (hasMoreSteps)
+			{
+				InsertDM(dmToInsert);
+			}
+			dmToInsert = nextToInsert;
+		}
+
+		// 5. Reset all step pins low
+		if ((driversStepping & platform->GetSlowDrivers()) != 0)
+		{
+			while (Platform::GetInterruptClocks() - lastStepPulseTime < platform->GetSlowDriverClocks()) {}
+			Platform::StepDriversLow();									// set all step pins low
+			lastStepPulseTime = Platform::GetInterruptClocks();
+		}
+		else
+		{
+			Platform::StepDriversLow();									// set all step pins low
+		}
+
+		// 6. Check for move completed
+		if (firstDM == nullptr)
+		{
+			state = completed;
+			break;
+		}
+
+		// 7. Schedule next interrupt, or if it would be too soon, generate more steps immediately
+		repeat = platform->ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
 	} while (repeat);
 
-quit:
 	if (numReps > maxReps)
 	{
 		maxReps = numReps;
@@ -950,7 +981,7 @@ quit:
 		uint32_t finishTime = moveStartTime + clocksNeeded;		// calculate how long this move should take
 		Move *move = reprap.GetMove();
 		move->CurrentMoveCompleted();							// tell Move that the current move is complete
-		return move->TryStartNextMove(finishTime);					// schedule the next move
+		return move->TryStartNextMove(finishTime);				// schedule the next move
 	}
 	return false;
 }

@@ -60,7 +60,7 @@ public:
 
 	void DebugPrint() const;
 
-	static const uint32_t stepClockRate = VARIANT_MCK/32;			// the frequency of the clock used for stepper pulse timing (using TIMER_CLOCK3), about 0.38us resolution
+	static const uint32_t stepClockRate = VARIANT_MCK/32;			// the frequency of the clock used for stepper pulse timing, about 0.38us resolution on the Duet
 	static const uint64_t stepClockRateSquared = (uint64_t)stepClockRate * stepClockRate;
 
 	// Note on the following constant:

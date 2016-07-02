@@ -33,11 +33,11 @@ enum class DMState : uint8_t
 class DriveMovement
 {
 public:
-	bool CalcNextStepTimeCartesian(const DDA &dda, size_t drive, bool live);
-	bool CalcNextStepTimeDelta(const DDA &dda, size_t drive, bool live);
-	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params, size_t drive);
-	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params, size_t drive);
-	void PrepareExtruder(const DDA& dda, const PrepParams& params, size_t drive, bool doCompensation);
+	bool CalcNextStepTimeCartesian(const DDA &dda, bool live);
+	bool CalcNextStepTimeDelta(const DDA &dda, bool live);
+	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params);
+	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params);
+	void PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation);
 	void ReduceSpeed(const DDA& dda, float inverseSpeedFactor);
 	void DebugPrint(char c, bool withDelta) const;
 

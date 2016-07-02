@@ -8,7 +8,7 @@
 #include "RepRapFirmware.h"
 
 // Prepare this DM for a Cartesian axis move
-void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params, size_t drive)
+void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
 {
 	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabs(reprap.GetMove()->MotorFactor(drive, dda.directionVector));
 	mp.cart.twoCsquaredTimesMmPerStepDivA = (uint64_t)(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
@@ -43,7 +43,7 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 }
 
 // Prepare this DM for a Delta axis move
-void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params, size_t drive)
+void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 {
 	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive);
 	mp.delta.twoCsquaredTimesMmPerStepDivAK = (uint32_t)((float)DDA::stepClockRateSquared/(stepsPerMm * dda.acceleration * (K2/2)));
@@ -74,7 +74,7 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params, s
 }
 
 // Prepare this DM for an extruder move
-void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, size_t drive, bool doCompensation)
+void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation)
 {
 	const float dv = dda.directionVector[drive];
 	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabs(dv);
@@ -195,7 +195,7 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do.
 // This is also used for extruders on delta machines.
-bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, size_t drive, bool live)
+bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live)
 {
 	if (nextStep >= totalSteps)
 	{
@@ -305,7 +305,7 @@ bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, size_t drive, bool
 }
 
 // Calculate the time since the start of the move when the next step for the specified DriveMovement is due
-bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, size_t drive, bool live)
+bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live)
 {
 	if (nextStep >= totalSteps)
 	{

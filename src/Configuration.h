@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.14 beta 1"
+# define VERSION "1.14"
 #endif
 
 #ifndef DATE
-# define DATE "2016-06-27"
+# define DATE "2016-07-02"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"

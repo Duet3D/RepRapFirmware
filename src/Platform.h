@@ -46,6 +46,7 @@ Licence: GPL
 
 // Platform-specific includes
 
+#include "Types.h"
 #include "Core.h"
 #include "OutputMemory.h"
 #include "ff.h"
@@ -57,10 +58,9 @@ Licence: GPL
 #include "MassStorage.h"
 #include "FileStore.h"
 #include "MessageType.h"
+#include "Fan.h"
 
 // Definitions needed by Pins.h
-
-typedef int8_t Pin;								// type used to represent a pin number, negative means no pin
 
 const bool FORWARDS = true;
 const bool BACKWARDS = !FORWARDS;
@@ -76,11 +76,17 @@ const bool BACKWARDS = !FORWARDS;
 
 /**************************************************************************************************/
 
-
+#ifdef DUET_NG
+const int Z_PROBE_AD_VALUE = 500;						// Default for the Z probe - should be overwritten by experiment
+const bool Z_PROBE_AXES[AXES] = { false, false, true };	// Axes for which the Z-probe is normally used
+#else
 const int Z_PROBE_AD_VALUE = 400;						// Default for the Z probe - should be overwritten by experiment
-const float Z_PROBE_STOP_HEIGHT = 0.7;					// Millimetres
 const bool Z_PROBE_AXES[AXES] = { true, false, true };	// Axes for which the Z-probe is normally used
+#endif
+
+const float Z_PROBE_STOP_HEIGHT = 0.7;					// Millimetres
 const unsigned int Z_PROBE_AVERAGE_READINGS = 8;		// We average this number of readings with IR on, and the same number with IR off
+const int ZProbeTypeDelta = 6;							// Z probe type for experimental delta probe
 
 #if SUPPORT_INKJET
 
@@ -407,13 +413,18 @@ enum class SerialSource
 	AUX2
 };
 
-// The main class that defines the RepRap machine for the benefit of the other classes
+struct AxisDriversConfig
+{
+	size_t numDrivers;								// Number of drivers assigned to each axis
+	uint8_t driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
+};
 
+// The main class that defines the RepRap machine for the benefit of the other classes
 class Platform
 {   
 public:
 	// Enumeration to describe the status of a drive
-	enum class DriveStatus : uint8_t { disabled, idle, enabled };
+	enum class DriverStatus : uint8_t { disabled, idle, enabled };
   
 	Platform();
   
@@ -490,32 +501,40 @@ public:
 	// Movement
 
 	void EmergencyStop();
-	void SetPhysicalDrive(size_t driverNumber, int8_t physicalDrive);
-	int GetPhysicalDrive(size_t driverNumber) const;
+	void SetPhysicalDrives(size_t drive, uint32_t physicalDrives);
+	uint32_t GetPhysicalDrives(size_t drive) const;
 	void SetDirection(size_t drive, bool direction);
 	void SetDirectionValue(size_t drive, bool dVal);
 	bool GetDirectionValue(size_t drive) const;
 	void SetEnableValue(size_t drive, bool eVal);
 	bool GetEnableValue(size_t drive) const;
-	void StepHigh(size_t drive);
-	void StepLow(size_t drive);
+	void EnableDriver(size_t driver);
+	void DisableDriver(size_t driver);
 	void EnableDrive(size_t drive);
 	void DisableDrive(size_t drive);
-	void SetDrivesIdle();
-	void SetMotorCurrent(size_t drive, float current);
-	float MotorCurrent(size_t drive) const;
+	void SetDriversIdle();
+	void SetMotorCurrent(size_t drive, float current, bool isPercent);
+	float GetMotorCurrent(size_t drive, bool isPercent) const;
 	void SetIdleCurrentFactor(float f);
-	float GetIdleCurrentFactor() const { return idleCurrentFactor; }
+	float GetIdleCurrentFactor() const
+		{ return idleCurrentFactor; }
+	bool SetDriverMicrostepping(size_t driver, int microsteps, int mode);
+	unsigned int GetDriverMicrostepping(size_t drive, bool& interpolation) const;
 	bool SetMicrostepping(size_t drive, int microsteps, int mode);
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) const;
+	void SetDriverStepTiming(size_t driver, float microseconds);
+	float GetDriverStepTiming(size_t driver) const;
 	float DriveStepsPerUnit(size_t drive) const;
-	const float *GetDriveStepsPerUnit() const { return driveStepsPerUnit; }
+	const float *GetDriveStepsPerUnit() const
+		{ return driveStepsPerUnit; }
 	void SetDriveStepsPerUnit(size_t drive, float value);
 	float Acceleration(size_t drive) const;
 	const float* Accelerations() const;
 	void SetAcceleration(size_t drive, float value);
-	const float GetMaxAverageAcceleration() const { return maxAverageAcceleration; }
-	void SetMaxAverageAcceleration(float f) { maxAverageAcceleration = f; }
+	const float GetMaxAverageAcceleration() const
+		{ return maxAverageAcceleration; }
+	void SetMaxAverageAcceleration(float f)
+		{ maxAverageAcceleration = f; }
 	float MaxFeedrate(size_t drive) const;
 	const float* MaxFeedrates() const;
 	void SetMaxFeedrate(size_t drive, float value);
@@ -533,6 +552,18 @@ public:
 	void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel);
 	void GetEndStopConfiguration(size_t axis, EndStopType& endstopType, bool& logicLevel) const;
 	uint32_t GetAllEndstopStates() const;
+	void SetAxisDriversConfig(size_t drive, const AxisDriversConfig& config);
+	const AxisDriversConfig& GetAxisDriversConfig(size_t drive) const
+		{ return axisDrivers[drive]; }
+	void SetExtruderDriver(size_t extruder, uint8_t driver);
+	uint8_t GetExtruderDriver(size_t extruder) const
+		{ return extruderDrivers[extruder]; }
+	uint32_t GetDriversBitmap(size_t drive) const			// get the bitmap of driver step bits for this axis or extruder
+		{ return driveDriverBits[drive]; }
+	static void StepDriversLow();							// set all step pins low
+	static void StepDriversHigh(uint32_t driverMap);		// set the specified step pins high
+	uint32_t GetSlowDrivers() const { return slowDrivers; }
+	uint32_t GetSlowDriverClocks() const { return slowDriverStepPulseClocks; }
 
 	// Z probe
 
@@ -555,8 +586,6 @@ public:
 	void ExtrudeOn();
 	void ExtrudeOff();
 
-	size_t SlowestDrive() const;
-
 	// Heat and temperature
 
 	float GetTemperature(size_t heater, TemperatureError* err = nullptr); // Result is in degrees Celsius
@@ -575,6 +604,7 @@ public:
 	void SetTemperatureLimit(float t);
 	float GetTemperatureLimit() const { return temperatureLimit; }
 	void UpdateConfiguredHeaters();
+	bool AnyHeaterHot(uint16_t heaters, float t);			// called to see if we need to turn on the hot end fan
 
 	// Fans
 
@@ -644,7 +674,7 @@ private:
 	// The SAM3X doesn't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
 	// every time we reprogram the firmware via bossa, but it can be retained when firmware updates are performed
 	// via the web interface. That's why it's a good idea to implement versioning here - increase these values
-	// whenever the fields of the follwoing structs have changed.
+	// whenever the fields of the following structs have changed.
 
 	struct SoftwareResetData
 	{
@@ -683,35 +713,6 @@ private:
 		Compatibility compatibility;
 	};
 
-	class Fan
-	{
-	private:
-		float val;
-		float triggerTemperature;
-		uint16_t freq;
-		uint16_t heatersMonitored;
-		Pin pin;
-		bool inverted;
-		bool hardwareInverted;
-	public:
-		float GetValue() const { return val; }
-		float GetPwmFrequency() const { return freq; }
-		bool GetInverted() const { return inverted; }
-		uint16_t GetHeatersMonitored() const { return heatersMonitored; }
-		float GetTriggerTemperature() const { return triggerTemperature; }
-
-		void Init(Pin p_pin, bool hwInverted);
-		void SetValue(float speed);
-		void SetInverted(bool inv);
-		void SetPwmFrequency(float p_freq);
-		void SetTriggerTemperature(float t) { triggerTemperature = t; }
-		void SetHeatersMonitored(uint16_t h);
-		void Check();
-	private:
-		void Refresh();
-		void SetHardwarePwm(float pwmVal);
-	};
-
 	FlashData nvData;
 	bool autoSaveEnabled;
 
@@ -730,37 +731,38 @@ private:
 
 	// DRIVES
 
-	void SetSlowestDrive();
-	void UpdateMotorCurrent(size_t drive);
+	void SetDriverCurrent(size_t driver, float current, bool isPercent);
+	void UpdateMotorCurrent(size_t driver);
+	void SetDriverDirection(uint8_t driver, bool direction);
+	static uint32_t CalcDriverBitmap(size_t driver);			// calculate the step bit for this driver
 
-	Pin stepPins[DRIVES];							// the Arduino pin numbers for the stepper pins
-	OutputPin stepPinDescriptors[DRIVES];			// output pin descriptors for faster access, with the driver number mapping already done
-	Pin directionPins[DRIVES];
-	Pin enablePins[DRIVES];
-	volatile DriveStatus driveState[DRIVES];
+	volatile DriverStatus driverState[DRIVES];
 	bool directions[DRIVES];
 	bool enableValues[DRIVES];
 	Pin endStopPins[DRIVES];
-	int8_t driverNumbers[DRIVES];
 	float maxFeedrates[DRIVES];
 	float accelerations[DRIVES];
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
 	float elasticComp[DRIVES - AXES];
-	float motorCurrents[DRIVES];
+	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
+	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
+	AxisDriversConfig axisDrivers[AXES];			// the driver numbers assigned to each axis
+	uint8_t extruderDrivers[DRIVES - AXES];			// the driver number assigned to each extruder
+	uint32_t driveDriverBits[DRIVES];				// the bitmap of driver port bits for each axis or extruder
+	uint32_t slowDriverStepPulseClocks;				// minimum high and low step pulse widths, in processor clocks
+	uint32_t slowDrivers;							// bitmap of driver port bits that need extended step pulse timing
 	float idleCurrentFactor;
-	size_t slowestDrive;
 	float maxAverageAcceleration;
-	//uint16_t driversUsed[DRIVES];
 
 	// Digipots
 
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
-	size_t numTMC2660Drivers;
+	size_t numTMC2660Drivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
 #else
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
-	Pin potWipes[8];			// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
+	Pin potWipes[8];								// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th
 	float senseResistor;
 	float maxStepperDigipotVoltage;
 	float stepperDacVoltageRange, stepperDacVoltageOffset;
@@ -791,7 +793,6 @@ private:
 
 	int GetRawThermistorTemperature(size_t heater) const;
 	void SetHeaterPwm(size_t heater, uint8_t pwm);
-	bool AnyHeaterHot(uint16_t heaters, float t);					// called to see if we need to turn on the hot end fan
 
 	Pin tempSensePins[HEATERS];
 	Pin heatOnPins[HEATERS];
@@ -1082,20 +1083,7 @@ inline float Platform::ConfiguredInstantDv(size_t drive) const
 inline void Platform::SetInstantDv(size_t drive, float value)
 {
 	instantDvs[drive] = value;
-	SetSlowestDrive();
 }
-
-inline size_t Platform::SlowestDrive() const
-{
-	return slowestDrive;
-}
-
-#if 0	// not used
-inline const float* Platform::InstantDvs() const
-{
-	return instantDvs;
-}
-#endif
 
 inline void Platform::SetDirectionValue(size_t drive, bool dVal)
 {
@@ -1105,6 +1093,15 @@ inline void Platform::SetDirectionValue(size_t drive, bool dVal)
 inline bool Platform::GetDirectionValue(size_t drive) const
 {
 	return directions[drive];
+}
+
+inline void Platform::SetDriverDirection(uint8_t driver, bool direction)
+{
+	if (driver < DRIVES)
+	{
+		bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
+		digitalWrite(DIRECTION_PINS[driver], d);
+	}
 }
 
 inline void Platform::SetEnableValue(size_t drive, bool eVal)
@@ -1140,17 +1137,6 @@ inline void Platform::SetAxisMinimum(size_t axis, float value)
 inline float Platform::AxisTotalLength(size_t axis) const
 {
 	return axisMaxima[axis] - axisMinima[axis];
-}
-
-// The A4988 requires 1us minimum pulse width, so we make separate StepHigh and StepLow calls so that we don't waste this time
-inline void Platform::StepHigh(size_t drive)
-{
-	stepPinDescriptors[drive].SetHigh();
-}
-
-inline void Platform::StepLow(size_t drive)
-{
-	stepPinDescriptors[drive].SetLow();
 }
 
 inline void Platform::SetExtrusionAncilliaryPWM(float v)
@@ -1282,17 +1268,22 @@ inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 inline uint16_t Platform::GetRawZProbeReading() const
 {
-	if (nvData.zProbeType >= 4)
+	switch (nvData.zProbeType)
 	{
-		bool b = digitalRead(endStopPins[E0_AXIS]);
-		if (!endStopLogicLevel[AXES])
+	case 4:
 		{
-			b = !b;
+			bool b = digitalRead(endStopPins[E0_AXIS]);
+			if (!endStopLogicLevel[AXES])
+			{
+				b = !b;
+			}
+			return (b) ? 4000 : 0;
 		}
-		return (b) ? 4000 : 0;
-	}
-	else
-	{
+
+	case 5:
+		return (digitalRead(zProbePin)) ? 4000 : 0;
+
+	default:
 		return AnalogInReadChannel(zProbeAdcChannel);
 	}
 }
@@ -1332,7 +1323,6 @@ inline MassStorage* Platform::GetMassStorage() const
 	watchdogReset();
 }
 
-// Inline functions
 inline float Platform::AdcReadingToCpuTemperature(uint16_t adcVal) const
 {
 	float voltage = (float)adcVal * (3.3/4096.0);
@@ -1350,7 +1340,61 @@ inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
 }
 #endif
 
+// *** These next two functions must use the same bit assignments in the drivers bitmap ***
+// The bitmaps are organised like this:
+// Duet WiFi:
+//	All step pins are on port D, so the bitmap is just the map of bits in port D.
+// Duet 0.6 and 0.8.5:
+//	Step pins are PA0, PC7,9,11,14,25,29 and PD0,3.
+//	The PC and PD bit numbers don't overlap, so we use their actual positions.
+//	PA0 clashes with PD0, so we use bit 1 to represent PA0.
+// RADDS:
+//	To be done
 
+// Calculate the step bit for a driver. This doesn't need to be fast.
+/*static*/ inline uint32_t Platform::CalcDriverBitmap(size_t driver)
+{
+	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
+#if defined(DUET_NG)
+	return pinDesc.ulPin;
+#elif defined(__RADDS__)
+# error needs writing
+#else
+	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
+#endif
+}
+
+// Set the specified step pins high and all other step pins low
+// This needs to be as fast as possible, so we do a parallel write to the port(s).
+// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
+/*static*/ inline void Platform::StepDriversHigh(uint32_t driverMap)
+{
+#if defined(DUET_NG)
+	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
+#elif defined(__RADDS__)
+# error need to write this
+#else	// Duet
+	PIOD->PIO_ODSR = driverMap;
+	PIOC->PIO_ODSR = driverMap;
+	PIOA->PIO_ODSR = driverMap >> 1;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
+#endif
+}
+
+// Set all step pins low
+// This needs to be as fast as possible, so we do a parallel write to the port(s).
+// We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
+/*static*/ inline void Platform::StepDriversLow()
+{
+#if defined(DUET_NG)
+	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
+#elif defined(__RADDS__)
+# error need to write this
+#else	// Duet
+	PIOD->PIO_ODSR = 0;
+	PIOC->PIO_ODSR = 0;
+	PIOA->PIO_ODSR = 0;
+#endif
+}
 
 //***************************************************************************************
 

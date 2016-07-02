@@ -27,6 +27,7 @@ const size_t DRIVES = 10;						// The number of drives in the machine, including
 
 const int8_t HEATERS = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g,h }
+const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 const size_t AXES = 3;							// The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
 const size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
@@ -44,7 +45,8 @@ const Pin DIRECTION_PINS[DRIVES] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32 };
 const bool DIRECTIONS[DRIVES] = { FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS };	// What each axis needs to make it go forwards - defaults
 
 // Endstops
-// RepRapFirmware only has a single endstop per axis. gcode defines if it is a max ("high end") or min ("low end") endstop. gcode also sets if it is active HIGH or LOW.
+// RepRapFirmware only has a single endstop per axis.
+// Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
 const Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17 };
 
 // Indices for motor current digipots (if any): first 4 are for digipot 1 (on duet), second 4 for digipot 2 (on expansion board)

@@ -197,10 +197,7 @@ void RepRap::Diagnostics(MessageType mtype)
 	webserver->Diagnostics(mtype);
 }
 
-// Turn off the heaters, disable the motors, and
-// deactivate the Heat and Move classes.  Leave everything else
-// working.
-
+// Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
 void RepRap::EmergencyStop()
 {
 	stopped = true;
@@ -227,7 +224,7 @@ void RepRap::EmergencyStop()
 		move->Exit();
 		for(size_t drive = 0; drive < DRIVES; drive++)
 		{
-			platform->SetMotorCurrent(drive, 0.0);
+			platform->SetMotorCurrent(drive, 0.0, false);
 			platform->DisableDrive(drive);
 		}
 	}
@@ -927,7 +924,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	ch = '[';
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		response->catf("%c%.2f", ch, platform->MotorCurrent(drive));
+		response->catf("%c%.2f", ch, platform->GetMotorCurrent(drive, false));
 		ch = ',';
 	}
 

@@ -24,7 +24,7 @@ class GCodeBuffer
     long GetLValue();									// Get a long integer after a key letter
     const char* GetUnprecedentedString(bool optional = false);	// Get a string with no preceding key letter
     const char* GetString();							// Get a string after a key letter
-    const void GetFloatArray(float a[], size_t& length); // Get a :-separated list of floats after a key letter
+    const void GetFloatArray(float a[], size_t& length, bool doPad); // Get a :-separated list of floats after a key letter
     const void GetLongArray(long l[], size_t& length);	// Get a :-separated list of longs after a key letter
     const char* Buffer() const;
     bool IsIdle() const;
