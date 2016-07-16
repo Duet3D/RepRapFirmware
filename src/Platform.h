@@ -445,7 +445,8 @@ public:
 	void Diagnostics(MessageType mtype);
 	void DiagnosticTest(int d);
 	void ClassReport(float &lastTime);  			// Called on Spin() return to check everything's live.
-	void RecordError(ErrorCode ec) { errorCodeBits |= (uint32_t)ec; }
+	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
+
 	void SoftwareReset(uint16_t reason);
 	bool AtxPower() const;
 	void SetAtxPower(bool on);
@@ -647,9 +648,6 @@ public:
 	// Direct pin operations
 	bool SetPin(int pin, int level);
 
-	// Error logging
-	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
-
 	// MCU temperature
 	void GetMcuTemperatures(float& minT, float& currT, float& maxT) const;
 	void SetMcuTemperatureAdjust(float v) { mcuTemperatureAdjust = v; }
@@ -680,12 +678,13 @@ private:
 	{
 		static const uint16_t magicValue = 0x7C5F;	// value we use to recognise that all the flash data has been written
 		static const uint16_t versionValue = 1;		// increment this whenever this struct changes
-		static const uint32_t nvAddress = 0;
+		static const uint32_t nvAddress = 0;		// must be 4-byte aligned
 
 		uint16_t magic;
 		uint16_t version;
 
 		uint16_t resetReason;						// this records why we did a software reset, for diagnostic purposes
+		uint16_t dummy;								// padding to align the next field (should happen automatically I think)
 		size_t neverUsedRam;						// the amount of never used RAM at the last abnormal software reset
 	};
 
@@ -693,15 +692,15 @@ private:
 	{
 		static const uint16_t magicValue = 0xE6C4;	// value we use to recognise that the flash data has been written
 		static const uint16_t versionValue = 1;		// increment this whenever this struct changes
-		static const uint32_t nvAddress = SoftwareResetData::nvAddress + sizeof(struct SoftwareResetData);
+		static const uint32_t nvAddress = (SoftwareResetData::nvAddress + sizeof(SoftwareResetData) + 3) & (~3);
 
 		uint16_t magic;
 		uint16_t version;
 
 		// The remaining data could alternatively be saved to SD card.
 		// Note however that if we save them as G codes, we need to provide a way of saving IR and ultrasonic G31 parameters separately.
-		ZProbeParameters switchZProbeParameters;		// Z probe values for the endstop switch
-		ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
+		ZProbeParameters switchZProbeParameters;	// Z probe values for the switch Z-probe
+		ZProbeParameters irZProbeParameters;		// Z probe values for the IR sensor
 		ZProbeParameters alternateZProbeParameters;	// Z probe values for the alternate sensor
 		int zProbeType;								// the type of Z probe we are currently using
 		bool zProbeAxes[AXES];						// Z probe is used for these axes
@@ -798,7 +797,7 @@ private:
 	Pin heatOnPins[HEATERS];
 	TemperatureSensor SpiTempSensors[MaxSpiTempSensors];
 	Pin spiTempSenseCsPins[MaxSpiTempSensors];
-	uint32_t configuredHeaters;										// Bitmask of all heaters in use
+	uint32_t configuredHeaters;										// bitmask of all heaters in use
 	float heatSampleTime;
 	float timeToHot;
 	float temperatureLimit;

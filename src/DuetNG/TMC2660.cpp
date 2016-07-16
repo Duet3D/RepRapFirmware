@@ -387,9 +387,8 @@ namespace TMC2660
 
 		// We need a few microseconds of delay here for the USART to sort itself out,
 		// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
-		// But it looks like the TMC drivers need a longer delay anyway to get used to CS being high,
-		// otherwise they ignore the command we send to set the microstepping to x16 and  start up in full-step mode.
-		delay(10);
+		// 2016-07-07: removed this delay, because we no longer send commands to the TMC2660 drivers immediately.
+		//delay(10);
 
 		driversPowered = false;
 		for (size_t drive = 0; drive < NumTmc2660Drivers; ++drive)

@@ -595,7 +595,7 @@ float DDA::CalcTime() const
 {
 	return (topSpeed - startSpeed)/acceleration								// acceleration time
 			+ (totalDistance - accelDistance - decelDistance)/topSpeed		// steady speed time
-			+ (topSpeed - endSpeed)/acceleration;
+			+ (topSpeed - endSpeed)/acceleration;							// deceleration time
 }
 
 // Prepare this DDA for execution.

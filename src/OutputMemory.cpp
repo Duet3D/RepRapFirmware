@@ -362,7 +362,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 
 	if (freeOutputBuffers == nullptr)
 	{
-		reprap.GetPlatform()->RecordError(ErrorCode::OutputStarvation);
+		reprap.GetPlatform()->LogError(ErrorCode::OutputStarvation);
 		cpu_irq_restore(flags);
 
 		buf = nullptr;
@@ -511,7 +511,7 @@ void OutputStack::Push(OutputBuffer *buffer)
 	if (count == OUTPUT_STACK_DEPTH)
 	{
 		OutputBuffer::ReleaseAll(buffer);
-		reprap.GetPlatform()->RecordError(ErrorCode::OutputStackOverflow);
+		reprap.GetPlatform()->LogError(ErrorCode::OutputStackOverflow);
 		return;
 	}
 
@@ -613,7 +613,7 @@ void OutputStack::Append(OutputStack *stack)
 		}
 		else
 		{
-			reprap.GetPlatform()->RecordError(ErrorCode::OutputStackOverflow);
+			reprap.GetPlatform()->LogError(ErrorCode::OutputStackOverflow);
 			OutputBuffer::ReleaseAll(stack->items[i]);
 		}
 	}

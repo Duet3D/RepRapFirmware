@@ -10,6 +10,7 @@
 #include "Pins.h"
 #include "WifiFirmwareUploader.h"
 #include "TransactionBuffer.h"
+#include "TransactionBufferReader.h"
 
 // Define exactly one of the following as 1, thje other as zero
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
@@ -409,27 +410,100 @@ void Network::DebugPrintResponse()
 	}
 }
 
+// Translate a ESP8266 reset reason to text
+const char* Network::TranslateEspResetReason(uint32_t reason)
+{
+	// Mapping from known ESP reset codes to reasons
+	static const char * const resetReasonTexts[] =
+	{
+		"Power on",
+		"Hardware watchdog",
+		"Exception",
+		"Software watchdog",
+		"Software restart",
+		"Deep-sleep wakeup",
+		"Turned on by main processor"
+	};
+
+	return (reason < sizeof(resetReasonTexts)/sizeof(resetReasonTexts[0]))
+			? resetReasonTexts[reason]
+			: "Unknown";
+}
+
 void Network::ProcessIncomingData(TransactionBuffer &buf)
 {
 	uint32_t opcode = inBuffer.GetOpcode();
-	size_t length;
-	const void *data = inBuffer.GetData(length);
 	switch(opcode & 0xFF0000FF)
 	{
 	case trTypeInfo | ttNetworkInfo:
 		// Network info received from host
-		// Data is 4 bytes of IP address, 4 bytes of free heap, 4 bytes of reset reason, 64 chars of host name, and 32 bytes of ssid
-		if (length >= 12)
+		// The first 4 bytes specify the format of the remaining data, as follows:
+		// Format 1:
+		//		4 bytes of IP address
+		//		4 bytes of free heap
+		//		4 bytes of reset reason
+		//		4 bytes of flash chip size
+		//		2 bytes of operating state (1 = client, 2 = access point)
+		//		2 bytes of ESP8266 Vcc according to its ADC
+		//		16 chars of WiFi firmware version
+		//		64 chars of host name, null terminated
+		//		32 chars of ssid (either ssid we are connected to or our own AP name), null terminated
 		{
-			const uint8_t *ip = (const uint8_t*) data;
-			uint32_t freeHeap = *(reinterpret_cast<const uint32_t*>(data) + 1);
-			uint32_t resetReason = *(reinterpret_cast<const uint32_t*>(data) + 2);
-			const char *hostName = reinterpret_cast<const char*>(data) + 12;
-			const char *ssid = reinterpret_cast<const char*>(data) + 76;
-			platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u\n", ssid, ip[0], ip[1], ip[2], ip[3]);
-			platform->MessageF(HOST_MESSAGE, "WiFi host name %s, free memory %u bytes, reset reason %u\n", hostName, freeHeap, resetReason);
-			memcpy(ipAddress, ip, 4);
-			connectedToAp = true;
+			TransactionBufferReader reader(buf);
+			if (reader.GetPrimitive<uint32_t>() == 1)
+			{
+				reader.GetArray(ipAddress, 4);
+				uint32_t freeHeap = reader.GetPrimitive<uint32_t>();
+				const char *resetReason = TranslateEspResetReason(reader.GetPrimitive<uint32_t>());
+				uint32_t flashSize = reader.GetPrimitive<uint32_t>();
+				uint16_t wifiState = reader.GetPrimitive<uint16_t>();
+				uint16_t espVcc = reader.GetPrimitive<uint16_t>();
+				const char *firmwareVersion = reader.GetString(16);
+				const char *hostName = reader.GetString(64);
+				const char *ssid = reader.GetString(32);
+				if (reader.IsOk())
+				{
+					platform->MessageF(HOST_MESSAGE,
+										"DuetWiFiServer version %s\n"
+										"Flash size %u, free RAM %u bytes, WiFi Vcc %.2fV, host name: %s, reset reason: %s\n",
+										firmwareVersion, flashSize, freeHeap, (float)espVcc/1024, hostName, resetReason);
+					if (wifiState == 1)
+					{
+						platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u\n",
+											ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+					}
+					else if (wifiState == 2)
+					{
+						platform->MessageF(HOST_MESSAGE, "WiFi is running as an access point with name %s\n", ssid);
+					}
+					else
+					{
+						platform->MessageF(HOST_MESSAGE, "Unknown WiFi state %d\n", wifiState);
+					}
+					connectedToAp = true;
+				}
+			}
+		}
+		inBuffer.Clear();
+		break;
+
+	case trTypeInfo | ttNetworkInfoOld:
+		// Old style network info received from host. Remove this code when everyone is using updated DuetWiFiServer firmware.
+		// Data is 4 bytes of IP address, 4 bytes of free heap, 4 bytes of reset reason, 64 chars of host name, and 32 bytes of ssid
+		{
+			TransactionBufferReader reader(buf);
+			reader.GetArray(ipAddress, 4);
+			uint32_t freeHeap = reader.GetPrimitive<uint32_t>();
+			const char *resetReason = TranslateEspResetReason(reader.GetPrimitive<uint32_t>());
+			const char *hostName = reader.GetString(64);
+			const char *ssid = reader.GetString(32);
+			if (reader.IsOk())
+			{
+				platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u\n",
+									ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+				platform->MessageF(HOST_MESSAGE, "WiFi host name %s, free memory %u bytes, reset reason: %s\n", hostName, freeHeap, resetReason);
+				connectedToAp = true;
+			}
 		}
 		inBuffer.Clear();
 		break;

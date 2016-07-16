@@ -68,8 +68,15 @@ public:
 	// The worst case is pure Z movement on a delta. On a Mini Kossel with 80 steps/mm with this firmware running on a Duet (84MHx SAM3X8 processor),
 	// the calculation can just be managed in time at speeds of 15000mm/min (step interval 50us), but not at 20000mm/min (step interval 37.5us).
 	// Therefore, where the step interval falls below 70us, we don't calculate on every step.
-	static const int32_t MinCalcInterval = (70 * stepClockRate)/1000000; // the smallest sensible interval between calculations (70us) in step timer clocks
+#ifdef DUET_NG
+	static const int32_t MinCalcIntervalDelta = (50 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (70us) in step timer clocks
+	static const int32_t MinCalcIntervalCartesian = (50 * stepClockRate)/1000000;	// same as delta for now, but could be lower
 	static const uint32_t minInterruptInterval = 6;					// about 2us minimum interval between interrupts, in clocks
+#else
+	static const int32_t MinCalcIntervalDelta = (70 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (70us) in step timer clocks
+	static const int32_t MinCalcIntervalCartesian = (70 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static const uint32_t minInterruptInterval = 6;					// about 2us minimum interval between interrupts, in clocks
+#endif
 
 private:
 	void RecalculateMove();
@@ -151,11 +158,12 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 }
 
 // Insert the specified drive into the step list, in step time order.
-// We insert the drive after any existing entries with the same step time so that we service them in round-robin order.
+// We insert the drive before any existing entries with the same step time for best performance. Now that we generate step pulses
+// for multiple motors simultaneously, there is no need to preserve round-robin order.
 inline void DDA::InsertDM(DriveMovement *dm)
 {
 	DriveMovement **dmp = &firstDM;
-	while (*dmp != nullptr && (*dmp)->nextStepTime <= dm->nextStepTime)
+	while (*dmp != nullptr && (*dmp)->nextStepTime < dm->nextStepTime)
 	{
 		dmp = &((*dmp)->nextDM);
 	}

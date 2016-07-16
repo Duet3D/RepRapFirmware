@@ -253,10 +253,12 @@ void Move::Spin()
 		{
 			// See whether we need to prepare any moves
 			int32_t preparedTime = 0;
+			uint32_t preparedCount = 0;
 			DDA::DDAState st;
 			while ((st = cdda->GetState()) == DDA::completed || st == DDA::executing || st == DDA::frozen)
 			{
 				preparedTime += cdda->GetTimeLeft();
+				++preparedCount;
 				cdda = cdda->GetNext();
 				if (cdda == ddaRingAddPointer)
 				{
@@ -265,10 +267,14 @@ void Move::Spin()
 			}
 
 			// If the number of prepared moves will execute in less than the minimum time, prepare another move
-			while (st == DDA::provisional && preparedTime < (int32_t)(DDA::stepClockRate/8))	// prepare moves one eighth of a second ahead of when they will be needed
+			while (st == DDA::provisional
+					&& preparedTime < (int32_t)(DDA::stepClockRate/8)	// prepare moves one eighth of a second ahead of when they will be needed
+					&& preparedCount < DdaRingLength/2					// but don't prepare more than half the ring
+				  )
 			{
 				cdda->Prepare();
 				preparedTime += cdda->GetTimeLeft();
+				++preparedCount;
 				cdda = cdda->GetNext();
 				st = cdda->GetState();
 			}
@@ -1093,41 +1099,31 @@ static void ShortDelay()
 	}
 }
 
-// This is the function that's called by the timer interrupt to step the motors.
-void Move::Interrupt()
+// This is the function that is called by the timer interrupt to step the motors when we are using the experimental delta probe.
+// The movements are quite slow so it is not time-critical.
+void Move::DeltaProbeInterrupt()
 {
-	if (deltaProbing)
+	bool again;
+	do
 	{
-		bool again = true;
-		while (again)
+		if (reprap.GetPlatform()->GetZProbeResult() == EndStopHit::lowHit)
 		{
-			if (reprap.GetPlatform()->GetZProbeResult() == EndStopHit::lowHit)
-			{
-				deltaProbe.Trigger();
-			}
+			deltaProbe.Trigger();
+		}
 
-			bool dir = deltaProbe.GetDirection();
-			Platform *platform = reprap.GetPlatform();
-			platform->SetDirection(X_AXIS, dir);
-			platform->SetDirection(Y_AXIS, dir);
-			platform->SetDirection(Z_AXIS, dir);
-			ShortDelay();
-			const uint32_t steppersMoving = platform->GetDriversBitmap(X_AXIS) | platform->GetDriversBitmap(Y_AXIS) | platform->GetDriversBitmap(Z_AXIS);
-			Platform::StepDriversHigh(steppersMoving);
-			ShortDelay();
-			Platform::StepDriversLow();
-			uint32_t tim = deltaProbe.CalcNextStepTime();
-			again = (tim != 0xFFFFFFFF && platform->ScheduleInterrupt(tim + deltaProbingStartTime));
-		}
-	}
-	else
-	{
-		bool again = true;
-		while (again && currentDda != nullptr)
-		{
-			again = currentDda->Step();
-		}
-	}
+		bool dir = deltaProbe.GetDirection();
+		Platform *platform = reprap.GetPlatform();
+		platform->SetDirection(X_AXIS, dir);
+		platform->SetDirection(Y_AXIS, dir);
+		platform->SetDirection(Z_AXIS, dir);
+		ShortDelay();
+		const uint32_t steppersMoving = platform->GetDriversBitmap(X_AXIS) | platform->GetDriversBitmap(Y_AXIS) | platform->GetDriversBitmap(Z_AXIS);
+		Platform::StepDriversHigh(steppersMoving);
+		ShortDelay();
+		Platform::StepDriversLow();
+		uint32_t tim = deltaProbe.CalcNextStepTime();
+		again = (tim != 0xFFFFFFFF && platform->ScheduleInterrupt(tim + deltaProbingStartTime));
+	} while (again);
 }
 
 // This is called from the step ISR when the current move has been completed

@@ -41,6 +41,11 @@ public:
 	void ReduceSpeed(const DDA& dda, float inverseSpeedFactor);
 	void DebugPrint(char c, bool withDelta) const;
 
+private:
+	bool CalcNextStepTimeCartesianFull(const DDA &dda, bool live);
+	bool CalcNextStepTimeDeltaFull(const DDA &dda, bool live);
+
+public:
 	// Parameters common to Cartesian, delta and extruder moves
 
 	// The following only need to be stored per-drive if we are supporting pressure advance
@@ -101,5 +106,48 @@ public:
 	static const uint32_t K2 = 512;						// a power of 2 used in delta calculations to reduce rounding errors (but too large makes things worse)
 	static const int32_t Kc = 1024 * 1024;				// a power of 2 for scaling the Z movement fraction
 };
+
+// Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
+// Return true if there are more steps to do.
+// This is also used for extruders on delta machines.
+// We inline this part to speed things up when we are doing double/quad/octal stepping.
+inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live)
+{
+	if (nextStep < totalSteps)
+	{
+		++nextStep;
+		if (stepsTillRecalc != 0)
+		{
+			--stepsTillRecalc;			// we are doing double/quad/octal stepping
+			return true;
+		}
+		return CalcNextStepTimeCartesianFull(dda, live);
+	}
+
+	state = DMState::idle;
+	return false;
+}
+
+// Calculate the time since the start of the move when the next step for the specified DriveMovement is due
+// Return true if there are more steps to do
+inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live)
+{
+	if (nextStep < totalSteps)
+	{
+		++nextStep;
+		if (stepsTillRecalc != 0)
+		{
+			--stepsTillRecalc;			// we are doing double or quad stepping
+			return true;
+		}
+		else
+		{
+			return CalcNextStepTimeDeltaFull(dda, live);
+		}
+	}
+
+	state = DMState::idle;
+	return false;
+}
 
 #endif /* DRIVEMOVEMENT_H_ */

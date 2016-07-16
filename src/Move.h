@@ -13,7 +13,12 @@
 #include "DeltaParameters.h"
 #include "DeltaProbe.h"
 
+#ifdef DUET_NG
+const unsigned int DdaRingLength = 40;
+#else
+// We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
+#endif
 
 enum PointCoordinateSet
 {
@@ -121,6 +126,7 @@ private:
     float TriangleZ(float x, float y) const;										// Interpolate onto a triangular grid
     void AdjustDeltaParameters(const float v[], size_t numFactors);					// Perform delta adjustment
     void JustHomed(size_t axis, float hitPoint, DDA* hitDDA);						// deal with setting positions after a drive has been homed
+    void DeltaProbeInterrupt();														// step ISR when using the experimental delta probe
 
     static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0);	// for debugging
     static void PrintVector(const char *s, const float *v, size_t numElems);		// for debugging
@@ -202,6 +208,21 @@ inline bool Move::StartNextMove(uint32_t startTime)
 {
 	currentDda = ddaRingGetPointer;
 	return currentDda->Start(startTime);
+}
+
+// This is the function that is called by the timer interrupt to step the motors.
+inline void Move::Interrupt()
+{
+	if (currentDda != nullptr)
+	{
+		do
+		{
+		} while (currentDda->Step());
+	}
+	else if (deltaProbing)
+	{
+		DeltaProbeInterrupt();
+	}
 }
 
 #endif /* MOVE_H_ */

@@ -96,6 +96,8 @@ private:
 	void TryStartTransfer();
 	void DebugPrintResponse();
 
+	static const char* TranslateEspResetReason(uint32_t reason);
+
 	Platform *platform;
 	WifiFirmwareUploader *uploader;
 
