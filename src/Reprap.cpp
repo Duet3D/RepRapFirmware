@@ -1044,7 +1044,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 	response->cat((ch == '[') ? "[]" : "]");
 
-	// Send the heater statuses (0=off, 1=standby, 2=active)
+	// Send the heater statuses (0=off, 1=standby, 2=active, 3 = fault)
 	response->cat(",\"hstat\":");
 	if (bedHeater != -1)
 	{

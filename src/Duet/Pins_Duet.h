@@ -101,10 +101,12 @@ const Pin Z_PROBE_MOD_PIN07 = X12;										// Digital pin number to turn the IR
 const int Dac0DigitalPin = 66;											// Arduino Due pin number corresponding to DAC0 output pin
 
 // COOLING FANS
-
 const size_t NUM_FANS = 2;
 const Pin COOLING_FAN_PINS[NUM_FANS] = { X6, X17 };						// Pin D34 is PWM capable but not an Arduino PWM pin - use X6 instead
 const Pin COOLING_FAN_RPM_PIN = 23;										// Pin PA15
+
+// SD cards
+const size_t NumSdCards = 1;											// Only HSMCI card supported for now
 
 #if SUPPORT_INKJET
 // Inkjet control pins

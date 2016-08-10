@@ -175,9 +175,42 @@ const uint32_t defaultSmartEnReg =
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
 
+struct TmcDriverState
+{
+	uint32_t drvCtrlReg;
+	uint32_t chopConfReg;
+	uint32_t smartEnReg;
+	uint32_t sgcsConfReg;
+	uint32_t drvConfReg;
+	uint32_t lastReadValue;
+	uint32_t pin;
+
+	void Init(uint32_t p_pin);
+	void WriteAll();
+	void SetChopConf(uint32_t newVal);
+	void SetMicrostepping(uint32_t shift, bool interpolate);
+	void SetCurrent(float current);
+	void Enable(bool en);
+	void SpiSendWord(uint32_t dataOut);
+	uint32_t ReadStatus();
+};
+
+// Initialise the state of the driver.
+void TmcDriverState::Init(uint32_t p_pin)
+pre(!driversPowered)
+{
+	drvCtrlReg = defaultDrvCtrlReg;
+	chopConfReg = defaultChopConfReg;
+	smartEnReg = defaultSmartEnReg;
+	sgcsConfReg = defaultSgscConfReg;
+	drvConfReg = defaultDrvConfReg;
+	pin = p_pin;
+	// No point in calling WriteAll() here because the drivers are assumed to be not powered up.
+}
+
 // Send an SPI control string. The drivers need 20 bits. We send and receive 24 because the USART only supports 5 to 9 bit transfers.
 // If the drivers are not powered up, don't attempt a transaction, and return 0xFFFFFFFF
-uint32_t SpiSendWord(uint32_t pin, uint32_t dataOut)
+void TmcDriverState::SpiSendWord( uint32_t dataOut)
 {
 	if (driversPowered)
 	{
@@ -201,61 +234,28 @@ uint32_t SpiSendWord(uint32_t pin, uint32_t dataOut)
 		digitalWrite(pin, HIGH);					// set CS high again
 		USART_EXT_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;	// reset and disable transmitter and receiver
 		delayMicroseconds(1);						// ensure it stays high for long enough before the next write
-		return dataIn >> 4;
-	}
-	else
-	{
-		return 0xFFFFFFFF;
+		lastReadValue = dataIn >> 4;
 	}
 }
 
-struct TmcDriverState
-{
-	uint32_t drvCtrlReg;
-	uint32_t chopConfReg;
-	uint32_t smartEnReg;
-	uint32_t sgcsConfReg;
-	uint32_t drvConfReg;
-	uint32_t lastReadValue;
-	uint32_t pin;
-
-	void Init(uint32_t p_pin);
-	void WriteAll();
-	void SetChopConf(uint32_t newVal);
-	void SetMicrostepping(uint32_t shift, bool interpolate);
-	void SetCurrent(float current);
-	void Enable(bool en);
-	uint32_t GetStatus() const;
-};
-
-// Initialise the state of the driver.
-void TmcDriverState::Init(uint32_t p_pin)
-//pre(!driversPowered)
-{
-	drvCtrlReg = defaultDrvCtrlReg;
-	chopConfReg = defaultChopConfReg;
-	smartEnReg = defaultSmartEnReg;
-	sgcsConfReg = defaultSgscConfReg;
-	drvConfReg = defaultDrvConfReg;
-	pin = p_pin;
-	// No point in calling WriteAll() here because the drivers are assumed to be not powered up.
-}
-
+// Write all registers, if the drivers are powered up
 void TmcDriverState::WriteAll()
 {
-	SpiSendWord(pin, chopConfReg);
-	SpiSendWord(pin, sgcsConfReg);
-	SpiSendWord(pin, drvConfReg);
-	SpiSendWord(pin, drvCtrlReg);
-	SpiSendWord(pin, smartEnReg);
+	SpiSendWord(chopConfReg);
+	SpiSendWord(sgcsConfReg);
+	SpiSendWord(drvConfReg);
+	SpiSendWord(drvCtrlReg);
+	SpiSendWord(smartEnReg);
 }
 
+// Set the chopper control register
 void TmcDriverState::SetChopConf(uint32_t newVal)
 {
 	chopConfReg = (newVal & 0x0001FFFF) | TMC_REG_CHOPCONF;
-	SpiSendWord(pin, chopConfReg);
+	SpiSendWord(chopConfReg);
 }
 
+// Set the microstepping and microstep interpolation
 void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 {
 	drvCtrlReg &= ~TMC_DRVCTRL_MRES_MASK;
@@ -268,23 +268,24 @@ void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 	{
 		drvCtrlReg &= ~TMC_DRVCTRL_INTPOL;
 	}
-	SpiSendWord(pin, drvCtrlReg);
+	SpiSendWord(drvCtrlReg);
 }
 
+// Set the motor current
 void TmcDriverState::SetCurrent(float current)
 {
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
 
-	// The current sense resistor is 0.051 ohms.
+	// The current sense resistor on the production Duet WiFi is 0.051 ohms.
 	// This gives us a range of 101mA to 3.236A in 101mA steps in the high sensitivity range (VSENSE = 1)
-	drvConfReg |= TMC_DRVCONF_VSENSE;										// this should always be set, but send it again just in case
-	SpiSendWord(pin, drvConfReg);
+	drvConfReg |= TMC_DRVCONF_VSENSE;							// this should always be set, but send it again just in case
+	SpiSendWord(drvConfReg);
 
-	const uint32_t iCurrent = (current > 2000.0) ? 2000 : (current < 100) ? 100 : (uint32_t)current;
-	const uint32_t csBits = (uint32_t)((32 * iCurrent - 1600)/3236);		// formula checked by simulation on a spreadsheet
+	const uint32_t iCurrent = static_cast<uint32_t>(constrain<float>(current, 100.0, 2000.0));
+	const uint32_t csBits = (32 * iCurrent - 1600)/3236;		// formula checked by simulation on a spreadsheet
 	sgcsConfReg &= ~TMC_SGCSCONF_CS_MASK;
 	sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
-	SpiSendWord(pin, sgcsConfReg);
+	SpiSendWord(sgcsConfReg);
 
 #else
 
@@ -295,30 +296,31 @@ void TmcDriverState::SetCurrent(float current)
 	{
 		// Need VSENSE = 0, but set up the current first to avoid temporarily exceeding the 2A rating
 		const uint32_t iCurrent = (current > 2000.0) ? 2000 : (uint32_t)current;
-		const uint32_t csBits = (uint32_t)((32 * iCurrent - 1500)/3050);	// formula checked by simulation on a spreadsheet
+		const uint32_t csBits = (32 * iCurrent - 1500)/3050;	// formula checked by simulation on a spreadsheet
 		sgcsConfReg &= ~TMC_SGCSCONF_CS_MASK;
 		sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
-		SpiSendWord(pin, sgcsConfReg);
+		SpiSendWord(sgcsConfReg);
 
 		drvConfReg &= ~TMC_DRVCONF_VSENSE;
-		SpiSendWord(pin, drvConfReg);
+		SpiSendWord(drvConfReg);
 	}
 	else
 	{
 		// Use VSENSE = 1
 		drvConfReg |= TMC_DRVCONF_VSENSE;
-		SpiSendWord(pin, drvConfReg);
+		SpiSendWord(drvConfReg);
 
 		const uint32_t iCurrent = (current < 50) ? 50 : (uint32_t)current;
-		const uint32_t csBits = (uint32_t)((32 * iCurrent - 800)/1650);		// formula checked by simulation on a spreadsheet
+		const uint32_t csBits = (32 * iCurrent - 800)/1650;		// formula checked by simulation on a spreadsheet
 		sgcsConfReg &= ~TMC_SGCSCONF_CS_MASK;
 		sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
-		SpiSendWord(pin, sgcsConfReg);
+		SpiSendWord(sgcsConfReg);
 	}
 
 	#endif
 }
 
+// Enable or disable the driver
 void TmcDriverState::Enable(bool en)
 {
 	chopConfReg &= ~TMC_CHOPCONF_TOFF_MASK;
@@ -326,12 +328,15 @@ void TmcDriverState::Enable(bool en)
 	{
 		chopConfReg |= TMC_CHOPCONF_TOFF(defaultChopConfToff);
 	}
-	SpiSendWord(pin, chopConfReg);
+	SpiSendWord(chopConfReg);
 }
 
-uint32_t TmcDriverState::GetStatus() const
+// Read the status
+uint32_t TmcDriverState::ReadStatus()
 {
-	return SpiSendWord(pin, smartEnReg) & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+	// We need to send a command in order to get up-to-date status
+	SpiSendWord(smartEnReg);
+	return lastReadValue & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
 static TmcDriverState driverStates[NumTmc2660Drivers];
@@ -344,6 +349,9 @@ namespace TMC2660
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
 	void Init(const Pin driverSelectPins[NumTmc2660Drivers])
 	{
+		// Make sure the ENN pins are high
+		pinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
+
 		// Set up the SPI pins
 
 #ifdef DUET_NG
@@ -352,7 +360,7 @@ namespace TMC2660
 		ConfigurePin(GetPinDescription(DriversMisoPin));
 		ConfigurePin(GetPinDescription(DriversSclkPin));
 #else
-		// PinS AD0 and AD7 may have already be set up as an ADC pin by the Arduino core, so undo that here or we won't get a clock output
+		// Pins AD0 and AD7 may have already be set up as an ADC pin by the Arduino core, so undo that here or we won't get a clock output
 		ADC->ADC_CHDR = (1 << 7);
 
 		const PinDescription& pin2 = GetPinDescription(DriversMosiPin);
@@ -415,7 +423,7 @@ namespace TMC2660
 
 	uint32_t GetStatus(size_t drive)
 	{
-		return (drive < NumTmc2660Drivers) ? driverStates[drive].GetStatus() : 0;
+		return (drive < NumTmc2660Drivers) ? driverStates[drive].ReadStatus() : 0;
 	}
 
 	bool SetMicrostepping(size_t drive, int microsteps, int mode)
@@ -466,11 +474,18 @@ namespace TMC2660
 		driversPowered = powered;
 		if (powered && !wasPowered)
 		{
-			// Power to the drivers has been provided or restored, so we need to re-initialise them
+			// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
+			digitalWrite(GlobalTmcEnablePin, LOW);
+			delayMicroseconds(10);
+
 			for (size_t drive = 0; drive < NumTmc2660Drivers; ++drive)
 			{
 				driverStates[drive].WriteAll();
 			}
+		}
+		else if (!powered and wasPowered)
+		{
+			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
 		}
 	}
 

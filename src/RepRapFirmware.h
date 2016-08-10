@@ -42,7 +42,8 @@ enum Module : uint8_t
 	moduleDda = 6,
 	moduleRoland = 7,
 	modulePrintMonitor = 8,
-	numModules = 9,				// make this one greater than the last module number
+	moduleStorage = 9,
+	numModules = 10,				// make this one greater than the last module number
 	noModule = 15
 };
 

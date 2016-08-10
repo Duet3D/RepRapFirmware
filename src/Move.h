@@ -204,7 +204,7 @@ inline void Move::ResumeMoving()
 
 // Start the next move. Must be called with interrupts disabled, to avoid a race with the step ISR.
 inline bool Move::StartNextMove(uint32_t startTime)
-//pre(ddaRingGetPointer->GetState() == DDA::frozen)
+pre(ddaRingGetPointer->GetState() == DDA::frozen)
 {
 	currentDda = ddaRingGetPointer;
 	return currentDda->Start(startTime);

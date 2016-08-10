@@ -22,61 +22,14 @@ Licence: GPL
 #define HEAT_H
 
 /**
- * This class implements a PID controller for the heaters
- */
-
-class PID
-{
-public:
-  
-    PID(Platform* p, int8_t h);
-    void Init();									// (Re)Set everything to start
-    void Spin();									// Called in a tight loop to keep things running
-    void SetActiveTemperature(float t);
-    float GetActiveTemperature() const;
-    void SetStandbyTemperature(float t);
-    float GetStandbyTemperature() const;
-    void Activate();								// Switch from idle to active
-    void Standby();									// Switch from active to idle
-    bool Active() const;							// Are we active?
-    void SwitchOff();								// Not even standby - all heater power off
-    bool SwitchedOff() const;						// Are we switched off?
-	bool FaultOccurred() const;						// Has a heater fault occurred?
-    void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
-    float GetTemperature() const;					// Get the current temperature
-    float GetAveragePWM() const;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
-    uint32_t GetLastSampleTime() const;				// Return when the temp sensor was last sampled
-    float GetAccumulator() const;					// Return the integral accumulator
-
-private:
-
-    void SwitchOn();
-    void SetHeater(float power) const;				// power is a fraction in [0,1]
-
-    Platform* platform;								// The instance of the class that is the RepRap hardware
-    float activeTemperature;						// The required active temperature
-    float standbyTemperature;						// The required standby temperature
-    float temperature;								// The current temperature
-    float lastTemperature;							// The previous current temperature
-    float temp_iState;								// The integral PID component
-    bool active;									// Are we active or standby?
-    bool switchedOff;								// Becomes false when someone tells us our active or standby temperatures
-    int8_t heater;									// The index of our heater
-    uint8_t badTemperatureCount;					// Count of sequential dud readings
-    bool temperatureFault;							// Has our heater developed a fault?
-    float timeSetHeating;							// When we were switched on
-    bool heatingUp;									// Are we heating up?
-    float averagePWM;								// The running average of the PWM.
-	uint32_t lastSampleTime;						// Time when the temperature was last sampled by Spin()
-};
-
-/**
  * The master class that controls all the heaters in the RepRap machine
  */
 
+class PID;
+
 class Heat
 {
-  public:
+public:
 	// Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
 	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2, HS_fault = 3 };
   
@@ -114,68 +67,22 @@ class Heat
     bool UseSlowPwm(int8_t heater) const;						// Queried by the Platform class
     uint32_t GetLastSampleTime(int8_t heater) const;
 
-  private:
+private:
   
-    Platform* platform;							// The instance of the RepRap hardware class
+    Platform* platform;											// The instance of the RepRap hardware class
 
-    bool active;								// Are we active?
-    PID* pids[HEATERS];							// A PID controller for each heater
+    bool active;												// Are we active?
+    PID* pids[HEATERS];											// A PID controller for each heater
 
-	bool coldExtrude;							// Is cold extrusion allowed?
-	int8_t bedHeater;							// Index of the hot bed heater to use or -1 if none is available
-	int8_t chamberHeater;						// Index of the chamber heater to use or -1 if none is available
+	bool coldExtrude;											// Is cold extrusion allowed?
+	int8_t bedHeater;											// Index of the hot bed heater to use or -1 if none is available
+	int8_t chamberHeater;										// Index of the chamber heater to use or -1 if none is available
 
-    float lastTime;								// The last time our Spin() was called
-    float longWait;								// Long time for things that happen occasionally
+    float lastTime;												// The last time our Spin() was called
+    float longWait;												// Long time for things that happen occasionally
 };
 
-
 //***********************************************************************************************************
-
-inline bool PID::Active() const
-{
-	return active;
-}
-
-inline float PID::GetActiveTemperature() const
-{
-	return activeTemperature;
-}
-
-inline float PID::GetStandbyTemperature() const
-{
-	return standbyTemperature;
-}
-
-inline float PID::GetTemperature() const
-{
-	return temperature;
-}
-
-inline bool PID::FaultOccurred() const
-{
-	return temperatureFault;
-}
-
-inline bool PID::SwitchedOff() const
-{
-	return switchedOff;
-}
-
-inline uint32_t PID::GetLastSampleTime() const
-{
-	return lastSampleTime;
-}
-
-inline float PID::GetAccumulator() const
-{
-	return temp_iState;
-}
-
-
-//**********************************************************************************
-
-// Heat
 
 inline bool Heat::ColdExtrude() const
 {

@@ -24,6 +24,7 @@
 
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"
+#include "sd_mmc.h"
 
 #if defined(DUET_NG) && !defined(PROTOTYPE_1)
 # include <TMC2660.h>
@@ -39,8 +40,8 @@ extern "C" char *sbrk(int i);
 #ifdef DUET_NG
 const uint16_t driverPowerOnAdcReading = (uint16_t)(4096 * 10.0/PowerFailVoltageRange);			// minimum voltage at which we initialise the drivers
 const uint16_t driverPowerOffAdcReading = (uint16_t)(4096 * 9.5/PowerFailVoltageRange);			// voltages below this flag the drivers as unusable
-const uint16_t driverOverVoltageAdcReading = (uint16_t)(4096 * 29.0/PowerFailVoltageRange);		// voltages above this cause driver shutdown
-const uint16_t driverNormalVoltageAdcReading = (uint16_t)(4096 * 25.5/PowerFailVoltageRange);	// voltages at or below this are normal
+const uint16_t driverOverVoltageAdcReading = (uint16_t)(4096 * 29.5/PowerFailVoltageRange);		// voltages above this cause driver shutdown
+const uint16_t driverNormalVoltageAdcReading = (uint16_t)(4096 * 27.5/PowerFailVoltageRange);	// voltages at or below this are normal
 #endif
 
 const uint8_t memPattern = 0xA5;
@@ -265,7 +266,6 @@ void Platform::Init()
 
 	configuredHeaters = (BED_HEATER >= 0) ? (1 << BED_HEATER) : 0;
 	heatSampleTime = HEAT_SAMPLE_TIME;
-	timeToHot = TIME_TO_HOT;
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
@@ -407,11 +407,11 @@ void Platform::Init()
 	InitialiseInterrupts();		// also sets 'active' to true
 }
 
-void Platform::InvalidateFiles()
+void Platform::InvalidateFiles(const FATFS *fs)
 {
 	for (size_t i = 0; i < MAX_FILES; i++)
 	{
-		files[i]->Init();
+		files[i]->Invalidate(fs);
 	}
 }
 
@@ -431,7 +431,7 @@ void Platform::SetTemperatureLimit(float t)
 
 // Specify which thermistor channel a particular heater uses
 void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
-//pre(heater < HEATERS && thermistor < HEATERS)
+pre(heater < HEATERS && thermistor < HEATERS)
 {
 	heaterTempChannels[heater] = thermistor;
 
@@ -570,10 +570,25 @@ void Platform::GetZProbeAxes(bool (&axes)[AXES])
 	}
 }
 
-float Platform::ZProbeStopHeight()
+// Get our best estimate of the Z probe temperature
+float Platform::GetZProbeTemperature()
 {
 	const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
-	float temperature = (bedHeater >= 0) ? GetTemperature(bedHeater) : 25.0;
+	if (bedHeater >= 0)
+	{
+		TemperatureError err;
+		const float temp = GetTemperature(bedHeater, err);
+		if (err == TemperatureError::success)
+		{
+			return temp;
+		}
+	}
+	return 25.0;							// assume 25C if we can't read he bed temperature
+}
+
+float Platform::ZProbeStopHeight()
+{
+	const float temperature = GetZProbeTemperature();
 	switch (nvData.zProbeType)
 	{
 	case 1:
@@ -1405,8 +1420,8 @@ void Platform::Diagnostics(MessageType mtype)
 	}
 	MessageF(mtype, "Free file entries: %u\n", numFreeFiles);
 
-	// Show the HSMCI speed
-	MessageF(mtype, "SD card interface speed: %.1fMBytes/sec\n", (float)hsmci_get_speed()/1000000.0);
+	// Show the HSMCI CD pin and speed
+	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"), (float)hsmci_get_speed()/1000000.0);
 
 	// Show the longest SD card write time
 	MessageF(mtype, "SD card longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
@@ -1513,7 +1528,7 @@ void Platform::ClassReport(float &lastTime)
 
 // Result is in degrees celsius
 
-float Platform::GetTemperature(size_t heater, TemperatureError* err)
+float Platform::GetTemperature(size_t heater, TemperatureError& err)
 {
 	// Note that at this point we're actually getting an averaged ADC read, not a "raw" temp.  For thermistors,
 	// we're getting an averaged voltage reading which we'll convert to a temperature.
@@ -1535,10 +1550,7 @@ float Platform::GetTemperature(size_t heater, TemperatureError* err)
 		if (rawTemp >= (int)AD_DISCONNECTED_VIRTUAL)
 		{
 			// thermistor is disconnected
-			if (err)
-			{
-				*err = TemperatureError::openCircuit;
-			}
+			err = TemperatureError::openCircuit;
 			return ABS_ZERO;
 		}
 
@@ -1549,46 +1561,32 @@ float Platform::GetTemperature(size_t heater, TemperatureError* err)
 		float resistance = reading * p.thermistorSeriesR / ((AD_RANGE_VIRTUAL + 1) - reading);
 		if (resistance > p.GetRInf())
 		{
+			err = TemperatureError::success;
 			return ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
 		}
-		else
-		{
-			// thermistor short circuit, return a high temperature
-			if (err)
-			{
-				*err = TemperatureError::shortCircuit;
-			}
-		}
+
+		// thermistor short circuit, return a high temperature
+		err = TemperatureError::shortCircuit;
+		return BAD_ERROR_TEMPERATURE;
 	}
-	else if (IsThermocoupleChannel(heater))
+
+	if (IsThermocoupleChannel(heater))
 	{
 		// MAX31855 thermocouple chip
 		float temp;
-		TemperatureError res = SpiTempSensors[heaterTempChannels[heater] - FirstThermocoupleChannel].GetThermocoupleTemperature(&temp);
-		if (res == TemperatureError::success)
-		{
-			return temp;
-		}
-		if (err)
-		{
-			*err = res;
-		}
+		err = SpiTempSensors[heaterTempChannels[heater] - FirstThermocoupleChannel].GetThermocoupleTemperature(&temp);
+		return (err == TemperatureError::success) ? temp : BAD_ERROR_TEMPERATURE;
 	}
-	else if (IsRtdChannel(heater))
+
+	if (IsRtdChannel(heater))
 	{
 		// MAX31865 RTD chip
 		float temp;
-		TemperatureError res = SpiTempSensors[heaterTempChannels[heater] - FirstRtdChannel].GetRtdTemperature(&temp);
-		if (res == TemperatureError::success)
-		{
-			return temp;
-		}
-		if (err)
-		{
-			*err = res;
-		}
+		err = SpiTempSensors[heaterTempChannels[heater] - FirstRtdChannel].GetRtdTemperature(&temp);
+		return (err == TemperatureError::success) ? temp : BAD_ERROR_TEMPERATURE;
 	}
 
+	err = TemperatureError::unknownChannel;
 	return BAD_ERROR_TEMPERATURE;
 }
 
@@ -1600,8 +1598,9 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 	{
 		if (((1 << h) & heaters) != 0)
 		{
-			const float ht = GetTemperature(h);
-			if (ht >= t || ht < BAD_LOW_TEMPERATURE)
+			TemperatureError err;
+			const float ht = GetTemperature(h, err);
+			if (err != TemperatureError::success || ht >= t || ht < BAD_LOW_TEMPERATURE)
 			{
 				return true;
 			}
@@ -1612,8 +1611,9 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 	int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
 	if (bedHeater >= 0 && ((1 << (unsigned int)bedHeater) & heaters) != 0)
 	{
-		const float ht = GetTemperature(bedHeater);
-		if (ht >= t || ht < BAD_LOW_TEMPERATURE)
+		TemperatureError err;
+		const float ht = GetTemperature(bedHeater, err);
+		if (err != TemperatureError::success || ht >= t || ht < BAD_LOW_TEMPERATURE)
 		{
 			return true;
 		}
@@ -1623,8 +1623,9 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 	int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
 	if (chamberHeater >= 0 && ((1 << (unsigned int)chamberHeater) & heaters) != 0)
 	{
-		const float ht = GetTemperature(chamberHeater);
-		if (ht >= t || ht < BAD_LOW_TEMPERATURE)
+		TemperatureError err;
+		const float ht = GetTemperature(chamberHeater, err);
+		if (err != TemperatureError::success || ht >= t || ht < BAD_LOW_TEMPERATURE)
 		{
 			return true;
 		}
@@ -1654,15 +1655,10 @@ const PidParameters& Platform::GetPidParameters(size_t heater) const
 
 void Platform::SetHeater(size_t heater, float power)
 {
-	SetHeaterPwm(heater, (uint8_t)(255.0 * min<float>(1.0, max<float>(0.0, power))));
-}
-
-void Platform::SetHeaterPwm(size_t heater, uint8_t power)
-{
 	if (heatOnPins[heater] >= 0)
 	{
 		uint16_t freq = (reprap.GetHeat()->UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
-		AnalogWrite(heatOnPins[heater], (HEAT_ON) ? power : 255 - power, freq);
+		AnalogOut(heatOnPins[heater], (HEAT_ON) ? power : 1.0 - power, freq);
 	}
 }
 
@@ -1921,12 +1917,12 @@ void Platform::UpdateMotorCurrent(size_t driver)
 				// Extruder 0 is on DAC channel 0
 				if (driver == 4)
 				{
-					float dacVoltage = max<float>(current * 0.008*senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
-					uint32_t dac = (uint32_t)((256 * dacVoltage + 0.5 * stepperDacVoltageRange)/stepperDacVoltageRange);
+					const float dacVoltage = max<float>(current * 0.008 * senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
+					const float dac = dacVoltage/stepperDacVoltageRange;
 # ifdef DUET_NG
-					AnalogWrite(DAC1, dac);
+					AnalogOut(DAC1, dac);
 # else
-					AnalogWrite(DAC0, dac);
+					AnalogOut(DAC0, dac);
 # endif
 				}
 				else
@@ -2611,28 +2607,15 @@ const char* Platform::GetElectronicsString() const
 
 // Direct pin operations
 // Set the specified pin to the specified output level. Return true if success, false if not allowed.
-bool Platform::SetPin(int pin, int level)
+bool Platform::SetPin(int pin, float level)
 {
-	if (pin >= 0 && (unsigned int)pin < NUM_PINS_ALLOWED && (level >= 0 || level <= 255))
+	if (pin >= 0 && (unsigned int)pin < NUM_PINS_ALLOWED)
 	{
 		const size_t index = (unsigned int)pin/8;
 		const uint8_t mask = 1 << ((unsigned int)pin & 7);
 		if ((pinAccessAllowed[index] & mask) != 0)
 		{
-#ifdef DUET_NG	//TODO temporary
-			if (level == 1)
-			{
-				level = 255;
-			}
-			AnalogWrite(pin, level, 1000);
-#else
-			if ((pinInitialised[index] & mask) == 0)
-			{
-				pinMode(pin, (level == 0) ? OUTPUT_LOW : OUTPUT_HIGH);
-				pinInitialised[index] |= mask;
-			}
-			digitalWrite(pin, level);
-#endif
+			AnalogOut(pin, level);
 			return true;
 		}
 	}
@@ -2841,7 +2824,7 @@ void Platform::Tick()
 					if (sum < thermistorOverheatSums[currentHeater] || sum >= AD_DISCONNECTED_REAL * THERMISTOR_AVERAGE_READINGS)
 					{
 						// We have an over-temperature or disconnected reading from this thermistor, so turn off the heater
-						SetHeaterPwm(currentHeater, 0);
+						SetHeater(currentHeater, 0.0);
 						LogError(ErrorCode::BadTemp);
 					}
 				}
@@ -2855,7 +2838,7 @@ void Platform::Tick()
 				// Do not call Time() here, it isn't safe. We use millis() instead.
 				if ((millis() - reprap.GetHeat()->GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
 				{
-					SetHeaterPwm(currentHeater, 0);
+					SetHeater(currentHeater, 0.0);
 					LogError(ErrorCode::BadTemp);
 				}
 			}

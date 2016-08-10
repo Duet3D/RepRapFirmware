@@ -173,7 +173,8 @@ const char *moduleName[] =
 	"DDA",
 	"Roland",
 	"PrintMonitor",
-	"?","?","?","?","?","?",
+	"Storage",
+	"?","?","?","?","?",
 	"none"
 };
 

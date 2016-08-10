@@ -21,6 +21,15 @@ void FileStore::Init()
 	closeRequested = false;
 }
 
+// Invalidate the file if it uses the specified FATFS object
+void FileStore::Invalidate(const FATFS *fs)
+{
+	if (file.fs == fs)
+	{
+		Init();
+	}
+}
+
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* directory, const char* fileName, bool write)

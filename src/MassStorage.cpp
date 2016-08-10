@@ -3,133 +3,67 @@
 
 MassStorage::MassStorage(Platform* p) : platform(p)
 {
-	memset(&fileSystem, 0, sizeof(fileSystem));
+	memset(&fileSystems, 0, sizeof(fileSystems));
 }
 
 void MassStorage::Init()
 {
-	// Initialize SD MMC stack
-	sd_mmc_init();
+	sd_mmc_init();				// Initialize SD MMC stack
 
-	const size_t startTime = millis();
-	sd_mmc_err_t err;
-	do {
-		err = sd_mmc_check(0);
-		delay(1);
-	} while (err != SD_MMC_OK && millis() - startTime < 5000);
-
-	if (err != SD_MMC_OK)
+	// Try to mount the SD cards
+	for (size_t card = 0; card < NumSdCards; ++card)
 	{
-		delay(3000);		// Wait a few seconds so users have a chance to see this
-
-		platform->Message(HOST_MESSAGE, "Cannot initialise the SD card: ");
-		switch (err)
+		char replyBuffer[100];
+		StringRef reply(replyBuffer, ARRAY_SIZE(replyBuffer));
+		do { } while (!Mount(card, reply));
+		if (reply.strlen() != 0)
 		{
-			case SD_MMC_ERR_NO_CARD:
-				platform->Message(HOST_MESSAGE, "Card not found\n");
-				break;
-			case SD_MMC_ERR_UNUSABLE:
-				platform->Message(HOST_MESSAGE, "Card is unusable, try another one\n");
-				break;
-			case SD_MMC_ERR_SLOT:
-				platform->Message(HOST_MESSAGE, "Slot unknown\n");
-				break;
-			case SD_MMC_ERR_COMM:
-				platform->Message(HOST_MESSAGE, "General communication error\n");
-				break;
-			case SD_MMC_ERR_PARAM:
-				platform->Message(HOST_MESSAGE, "Illegal input parameter\n");
-				break;
-			case SD_MMC_ERR_WP:
-				platform->Message(HOST_MESSAGE, "Card write protected\n");
-				break;
-			default:
-				platform->MessageF(HOST_MESSAGE, "Unknown (code %d)\n", err);
-				break;
+			delay(3000);		// Wait a few seconds so users have a chance to see this
+			platform->Message(HOST_MESSAGE, reply.Pointer());
 		}
-		return;
-	}
-
-	// Print some card details (optional)
-
-	/*platform->Message(HOST_MESSAGE, "SD card detected!\nCapacity: %d\n", sd_mmc_get_capacity(0));
-	platform->AppendMessage(HOST_MESSAGE, "Bus clock: %d\n", sd_mmc_get_bus_clock(0));
-	platform->AppendMessage(HOST_MESSAGE, "Bus width: %d\nCard type: ", sd_mmc_get_bus_width(0));
-	switch (sd_mmc_get_type(0))
-	{
-		case CARD_TYPE_SD | CARD_TYPE_HC:
-			platform->AppendMessage(HOST_MESSAGE, "SDHC\n");
-			break;
-		case CARD_TYPE_SD:
-			platform->AppendMessage(HOST_MESSAGE, "SD\n");
-			break;
-		case CARD_TYPE_MMC | CARD_TYPE_HC:
-			platform->AppendMessage(HOST_MESSAGE, "MMC High Density\n");
-			break;
-		case CARD_TYPE_MMC:
-			platform->AppendMessage(HOST_MESSAGE, "MMC\n");
-			break;
-		case CARD_TYPE_SDIO:
-			platform->AppendMessage(HOST_MESSAGE, "SDIO\n");
-			return;
-		case CARD_TYPE_SD_COMBO:
-			platform->AppendMessage(HOST_MESSAGE, "SD COMBO\n");
-			break;
-		case CARD_TYPE_UNKNOWN:
-		default:
-			platform->AppendMessage(HOST_MESSAGE, "Unknown\n");
-			return;
-	}*/
-
-	// Mount the file system
-
-	FRESULT mounted = f_mount(0, &fileSystem);
-	if (mounted != FR_OK)
-	{
-		platform->MessageF(HOST_MESSAGE, "Can't mount filesystem 0: code %d\n", mounted);
 	}
 }
 
 const char* MassStorage::CombineName(const char* directory, const char* fileName)
 {
-	size_t out = 0;
-	size_t in = 0;
+	size_t outIndex = 0;
+	size_t inIndex = 0;
 
 	// DC 2015-11-25 Only prepend the directory if the filename does not have an absolute path
 	if (directory != NULL && fileName[0] != '/' && (strlen(fileName) < 3 || !isdigit(fileName[0]) || fileName[1] != ':' || fileName[2] != '/'))
 	{
-		while (directory[in] != 0 && directory[in] != '\n')
+		while (directory[inIndex] != 0 && directory[inIndex] != '\n')
 		{
-			combinedName[out] = directory[in];
-			in++;
-			out++;
-			if (out >= ARRAY_SIZE(combinedName))
+			combinedName[outIndex] = directory[inIndex];
+			inIndex++;
+			outIndex++;
+			if (outIndex >= ARRAY_SIZE(combinedName))
 			{
 				platform->MessageF(GENERIC_MESSAGE, "CombineName() buffer overflow.");
-				out = 0;
+				outIndex = 0;
 			}
 		}
 
-		if (in > 0 && directory[in - 1] != '/' && out < ARRAY_UPB(combinedName))
+		if (inIndex > 0 && directory[inIndex - 1] != '/' && outIndex < ARRAY_UPB(combinedName))
 		{
-			combinedName[out] = '/';
-			out++;
+			combinedName[outIndex] = '/';
+			outIndex++;
 		}
-		in = 0;
+		inIndex = 0;
 	}
 
-	while (fileName[in] != 0 && fileName[in] != '\n')
+	while (fileName[inIndex] != 0 && fileName[inIndex] != '\n')
 	{
-		combinedName[out] = fileName[in];
-		in++;
-		out++;
-		if (out >= ARRAY_SIZE(combinedName))
+		combinedName[outIndex] = fileName[inIndex];
+		inIndex++;
+		outIndex++;
+		if (outIndex >= ARRAY_SIZE(combinedName))
 		{
 			platform->Message(GENERIC_MESSAGE, "CombineName() buffer overflow.");
-			out = 0;
+			outIndex = 0;
 		}
 	}
-	combinedName[out] = 0;
+	combinedName[outIndex] = 0;
 
 	return combinedName;
 }
@@ -309,6 +243,126 @@ bool MassStorage::DirectoryExists(const char *path) const
 bool MassStorage::DirectoryExists(const char* directory, const char* subDirectory)
 {
 	return DirectoryExists(CombineName(directory, subDirectory));
+}
+
+// Mount the specified SD card, returning true if done, false if needs to be called again.
+// If an error occurs, return true with the error message in 'reply'.
+// This may only be called to mount one card at a time.
+bool MassStorage::Mount(size_t card, StringRef& reply)
+{
+	if (card >= NumSdCards)
+	{
+		reply.copy("SD card number out of range");
+		return true;
+	}
+
+	static bool mounting = false;
+	static size_t startTime;
+
+	if (!mounting)
+	{
+		sd_mmc_unmount(card);			// this forces it to re-initialise the card
+		startTime = millis();
+		mounting = true;
+		delay(2);
+	}
+
+	sd_mmc_err_t err = sd_mmc_check(card);
+	if (err != SD_MMC_OK && millis() - startTime < 5000)
+	{
+		delay(2);
+		return false;
+	}
+
+	mounting = false;
+	if (err != SD_MMC_OK)
+	{
+		f_mount(card, NULL);
+
+		reply.printf("Cannot initialise SD card %u: ", card);
+		switch (err)
+		{
+			case SD_MMC_ERR_NO_CARD:
+				reply.cat("Card not found");
+				break;
+			case SD_MMC_ERR_UNUSABLE:
+				reply.cat("Card is unusable, try another one");
+				break;
+			case SD_MMC_ERR_SLOT:
+				reply.cat("Slot unknown");
+				break;
+			case SD_MMC_ERR_COMM:
+				reply.cat("General communication error");
+				break;
+			case SD_MMC_ERR_PARAM:
+				reply.cat("Illegal input parameter");
+				break;
+			case SD_MMC_ERR_WP:
+				reply.cat("Card write protected");
+				break;
+			default:
+				reply.catf("Unknown (code %d)", err);
+				break;
+		}
+	}
+	else
+	{
+		if (reprap.Debug(moduleStorage))
+		{
+			// Print some card details
+			platform->MessageF(DEBUG_MESSAGE, "SD card %u detected, capacity: %u\n", card, sd_mmc_get_capacity(card));
+			platform->Message(DEBUG_MESSAGE, "Card type: ");
+			switch (sd_mmc_get_type(card))
+			{
+				case CARD_TYPE_SD | CARD_TYPE_HC:
+					platform->Message(DEBUG_MESSAGE, "SDHC\n");
+					break;
+				case CARD_TYPE_SD:
+					platform->Message(DEBUG_MESSAGE, "SD\n");
+					break;
+				case CARD_TYPE_MMC | CARD_TYPE_HC:
+					platform->Message(DEBUG_MESSAGE, "MMC High Density\n");
+					break;
+				case CARD_TYPE_MMC:
+					platform->Message(DEBUG_MESSAGE, "MMC\n");
+					break;
+				case CARD_TYPE_SDIO:
+					platform->Message(DEBUG_MESSAGE, "SDIO\n");
+					break;
+				case CARD_TYPE_SD_COMBO:
+					platform->Message(DEBUG_MESSAGE, "SD COMBO\n");
+					break;
+				case CARD_TYPE_UNKNOWN:
+				default:
+					platform->Message(DEBUG_MESSAGE, "Unknown\n");
+					break;
+			}
+		}
+
+		// Mount the file systems
+		FRESULT mounted = f_mount(card, &fileSystems[card]);
+		if (mounted != FR_OK)
+		{
+			reply.printf("Can't mount SD card %u: code %d\n", card, mounted);
+		}
+	}
+	return true;
+}
+
+// Unmount the specified SD card, returning true if done, false if needs to be called again.
+// If an error occurs, return true with the error message in 'reply'.
+bool MassStorage::Unmount(size_t card, StringRef& reply)
+{
+	if (card >= NumSdCards)
+	{
+		reply.copy("SD card number out of range");
+		return true;
+	}
+
+	platform->InvalidateFiles(&fileSystems[card]);
+	f_mount(card, NULL);
+	sd_mmc_unmount(card);
+	return true;
 }
 
 // End

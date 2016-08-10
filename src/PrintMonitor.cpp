@@ -655,8 +655,10 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 				ch = ',';
 			}
 		}
-		response->catf("],\"generatedBy\":\"%s\",\"printDuration\":%d,\"fileName\":\"%s\"}",
-				printingFileInfo.generatedBy, (int)GetPrintDuration(), filenameBeingPrinted);
+		response->cat("],\"generatedBy\":");
+		response->EncodeString(printingFileInfo.generatedBy, ARRAY_SIZE(printingFileInfo.generatedBy), false);
+		response->catf(",\"printDuration\":%d,\"fileName\":", (int)GetPrintDuration());
+		response->EncodeString(filenameBeingPrinted, ARRAY_SIZE(filenameBeingPrinted), false);
 	}
 	else
 	{

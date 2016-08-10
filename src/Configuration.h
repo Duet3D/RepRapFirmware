@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.15-beta3"
+# define VERSION "1.15-beta6"
 #endif
 
 #ifndef DATE
-# define DATE "2016-07-09"
+# define DATE "2016-08-07"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -76,10 +76,11 @@ const float HEAT_SAMPLE_TIME = 0.5;					// Seconds
 const float HEAT_PWM_AVERAGE_TIME = 5.0;			// Seconds
 
 const float TEMPERATURE_CLOSE_ENOUGH = 2.5;			// Celsius
+const float MaxStableTemperatureError = 5.0;		// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
+static_assert(MaxStableTemperatureError > TEMPERATURE_CLOSE_ENOUGH, "MaxStableTemperatureError is too low");
 const float TEMPERATURE_LOW_SO_DONT_CARE = 40.0;	// Celsius
 const float HOT_ENOUGH_TO_EXTRUDE = 160.0;			// Celsius
 const float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
-const float TIME_TO_HOT = 150.0;					// Seconds
 
 const uint8_t MAX_BAD_TEMPERATURE_COUNT = 4;		// Number of bad temperature samples permitted before a heater fault is reported
 const float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
@@ -87,7 +88,24 @@ const float DEFAULT_TEMPERATURE_LIMIT = 262.0;		// Celsius
 const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 const float BAD_ERROR_TEMPERATURE = 2000.0;			// Must exceed any reasonable 5temperature limit including DEFAULT_TEMPERATURE_LIMIT
 
-const unsigned int FirstThermocoupleChannel = 100;	// Temperature sensor channels 100.. are thermocouples
+// Parameters used to detect heating errors
+const float MaxHeatingFaultTime = 3;				// How many seconds we allow a heating fault to persist
+const float MaxAmbientTemperature = 45.0;			// We expect heaters to cool to this temperature or lower when switched off
+const float NormalAmbientTemperature = 20.0;		// Temperature at which the heating rates (below) apply
+
+const float BedHeatingRate = 0.2;					// The minimum rate of rise of bed temperature from cold after the startup time
+const float BedHeaterAchievableTemp = 90.0;			// Lowest temperature at which the bed heater might top out
+const float BedHeaterStartupTime = 10.0;			// How long we allow for the bed heater to reach its normal heating rate
+
+const float ChamberHeatingRate = 0.2;				// The minimum rate of rise of chamber temperature from cold after the startup time
+const float ChamberHeaterAchievableTemp = 50.0;		// Lowest temperature at which the chamber heater might top out
+const float ChamberHeaterStartupTime = 10.0;		// How long we allow for the chamber heater to reach its normal heating rate
+
+const float ExtruderHeatingRate = 1.0;				// The minimum rate of rise of extruder temperature from cold after the startup time
+const float ExtruderHeaterAchievableTemp = 300.0;	// Lowest temperature at which the extruder temperature might top out
+const float ExtruderHeaterStartupTime = 3.0;		// How long we allow for the extruder heater to reach its normal heating rate
+
+const unsigned int FirstThermocoupleChannel = 100;	// Temperature sensor channels 100... are thermocouples
 const unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200... are RTDs
 
 // PWM frequencies

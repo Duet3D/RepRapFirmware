@@ -55,7 +55,6 @@ Licence: GPL
 # include "MCP4461.h"
 #endif
 
-#include "MassStorage.h"
 #include "FileStore.h"
 #include "MessageType.h"
 #include "Fan.h"
@@ -66,6 +65,7 @@ const bool FORWARDS = true;
 const bool BACKWARDS = !FORWARDS;
 
 #include "Pins.h"
+#include "MassStorage.h"
 
 /**************************************************************************************************/
 
@@ -489,7 +489,7 @@ public:
 	const char* GetMacroDir() const;				// Where the user-defined macros are
 	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
-	void InvalidateFiles();							// Called to invalidate files when the SD card is removed
+	void InvalidateFiles(const FATFS *fs);			// Called to invalidate files when the SD card is removed
 
 	// Message output (see MessageType for further details)
 
@@ -589,14 +589,13 @@ public:
 
 	// Heat and temperature
 
-	float GetTemperature(size_t heater, TemperatureError* err = nullptr); // Result is in degrees Celsius
+	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
+	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
 	void SetHeater(size_t heater, float power);				// power is a fraction in [0,1]
 	float HeatSampleTime() const;
 	void SetHeatSampleTime(float st);
 	void SetPidParameters(size_t heater, const PidParameters& params);
 	const PidParameters& GetPidParameters(size_t heater) const;
-	float TimeToHot() const;
-	void SetTimeToHot(float t);
 	void SetThermistorNumber(size_t heater, size_t thermistor);
 	int GetThermistorNumber(size_t heater) const;
 	bool IsThermistorChannel(uint8_t heater) const;
@@ -646,7 +645,7 @@ public:
 	bool Inkjet(int bitPattern);
 
 	// Direct pin operations
-	bool SetPin(int pin, int level);
+	bool SetPin(int pin, float level);
 
 	// MCU temperature
 	void GetMcuTemperatures(float& minT, float& currT, float& maxT) const;
@@ -791,7 +790,6 @@ private:
   // Heaters - bed is assumed to be the first
 
 	int GetRawThermistorTemperature(size_t heater) const;
-	void SetHeaterPwm(size_t heater, uint8_t pwm);
 
 	Pin tempSensePins[HEATERS];
 	Pin heatOnPins[HEATERS];
@@ -799,7 +797,6 @@ private:
 	Pin spiTempSenseCsPins[MaxSpiTempSensors];
 	uint32_t configuredHeaters;										// bitmask of all heaters in use
 	float heatSampleTime;
-	float timeToHot;
 	float temperatureLimit;
 
 	// Fans
@@ -1192,16 +1189,6 @@ inline void Platform::SetHeatSampleTime(float st)
 	heatSampleTime = st;
 }
 
-inline float Platform::TimeToHot() const
-{
-	return timeToHot;
-}
-
-inline void Platform::SetTimeToHot(float t)
-{
-	timeToHot = t;
-}
-
 inline bool Platform::IsThermistorChannel(uint8_t heater) const
 {
 	return heaterTempChannels[heater] < HEATERS;
@@ -1245,14 +1232,14 @@ inline float Platform::GetElasticComp(size_t extruder) const
 }
 
 inline void Platform::SetEndStopConfiguration(size_t axis, EndStopType esType, bool logicLevel)
-//pre(axis < AXES)
+pre(axis < AXES)
 {
 	endStopType[axis] = esType;
 	endStopLogicLevel[axis] = logicLevel;
 }
 
 inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, bool& logicLevel) const
-//pre(axis < AXES)
+pre(axis < AXES)
 {
 	esType = endStopType[axis];
 	logicLevel = endStopLogicLevel[axis];

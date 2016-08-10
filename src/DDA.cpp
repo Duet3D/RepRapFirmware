@@ -16,7 +16,7 @@ DDA::DDA(DDA* n) : next(n), prev(nullptr), state(empty)
 // Return the number of clocks this DDA still needs to execute.
 // This could be slightly negative, if the move is overdue for completion.
 int32_t DDA::GetTimeLeft() const
-//pre(state == executing || state == frozen || state == completed)
+pre(state == executing || state == frozen || state == completed)
 {
 	return (state == completed) ? 0
 			: (state == executing) ? (int32_t)(moveStartTime + clocksNeeded - Platform::GetInterruptClocks())
@@ -341,7 +341,7 @@ float DDA::GetMotorPosition(size_t drive) const
 
 // Try to increase the ending speed of this move to allow the next move to start at targetNextSpeed
 void DDA::DoLookahead(DDA *laDDA)
-//pre(state == provisional)
+pre(state == provisional)
 {
 //	if (reprap.Debug(moduleDda)) debugPrintf("Adjusting, %f\n", laDDA->targetNextSpeed);
 	unsigned int laDepth = 0;
@@ -573,7 +573,7 @@ void DDA::SetPositions(const float move[DRIVES], size_t numDrives)
 
 // Get a Cartesian end coordinate from this move
 float DDA::GetEndCoordinate(size_t drive, bool disableDeltaMapping)
-//pre(disableDeltaMapping || drive < AXES)
+pre(disableDeltaMapping || drive < AXES)
 {
 	if (disableDeltaMapping)
 	{
@@ -739,7 +739,7 @@ void DDA::Prepare()
 // Start executing this move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled, to avoid a race condition.
 // Returns true if the caller needs to call the step ISR immediately.
 bool DDA::Start(uint32_t tim)
-//pre(state == frozen)
+pre(state == frozen)
 {
 	moveStartTime = tim;
 	state = executing;

@@ -143,7 +143,7 @@ public:
 	// Ensure there is a null at the specified data position.
 	// Used to make sure that received fields that should be null terminated really are.
 	void EnsureNull(size_t offset)
-	//pre(offset < dataLength)
+	pre(offset < dataLength)
 	{
 		*((char*)data + offset) = 0;
 	}
@@ -162,7 +162,7 @@ public:
 
 	// Append a single 32-bit integer to the output buffer
 	size_t AppendU32(uint32_t val)
-	//pre(dataLength + sizeof(uint32_t) <= maxSpiDataLength)
+	pre(dataLength + sizeof(uint32_t) <= maxSpiDataLength)
 	{
 		return AppendData(&val, sizeof(val));
 	}
@@ -178,7 +178,7 @@ public:
 
     // Tell the buffer that we have appended some data. Call this after writing data directly.
     void DataAppended(size_t length)
-    //pre(dataLength + length <= maxSpiDataLength)
+    pre(dataLength + length <= maxSpiDataLength)
     ;
 };
 

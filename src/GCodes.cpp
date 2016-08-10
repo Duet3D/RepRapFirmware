@@ -1589,7 +1589,7 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, StringRef& reply)
 		else
 		{
 			// Use the current bed temperature as the calibration temperature if no value was provided
-			params.calibTemperature = platform->GetTemperature(BED_HEATER);
+			params.calibTemperature = platform->GetZProbeTemperature();
 		}
 	}
 
@@ -2934,7 +2934,18 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		return true;
 	}
 
-	case 21: // Initialise SD - ignore
+	case 21: // Initialise SD card
+		{
+			size_t card = (gb->Seen('P')) ? gb->GetIValue() : 0;
+			result = platform->GetMassStorage()->Mount(card, reply);
+		}
+		break;
+
+	case 22: // Release SD card
+		{
+			size_t card = (gb->Seen('P')) ? gb->GetIValue() : 0;
+			result = platform->GetMassStorage()->Unmount(card, reply);
+		}
 		break;
 
 	case 23: // Set file to print
@@ -4758,14 +4769,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 570: // Set/report heater timeout
-		if (gb->Seen('S'))
-		{
-			platform->SetTimeToHot(gb->GetFValue());
-		}
-		else
-		{
-			reply.printf("Time allowed to get to temperature: %.1f seconds.", platform->TimeToHot());
-		}
+		reply.copy("M570 is no longer required or supported");
 		break;
 
 	case 571: // Set output on extrude

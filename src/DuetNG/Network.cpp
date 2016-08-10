@@ -1018,7 +1018,7 @@ void Network::EspRequestsTransfer()
 
 // Set up the DMA controller and assert transfer ready. Must be called with interrupts disabled.
 void Network::PrepareForTransfer(bool dataToSend, bool allowReceive)
-//pre(state == idle || state == sending)
+pre(state == idle || state == sending)
 {
 	if (allowReceive)
 	{

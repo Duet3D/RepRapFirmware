@@ -300,10 +300,9 @@ size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowC
 				esc = 't';
 				break;
 			case '"':
-				esc = '"';
-				break;
 			case '\\':
-				esc = '\\';
+			case '/':
+				esc = c;
 				break;
 			default:
 				esc = 0;

@@ -196,7 +196,7 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 // Return true if there are more steps to do.
 // This is also used for extruders on delta machines.
 bool DriveMovement::CalcNextStepTimeCartesianFull(const DDA &dda, bool live)
-//pre(nextStep < totalSteps; stepsTillRecalc == 0)
+pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
 	uint32_t shiftFactor;
@@ -294,7 +294,7 @@ bool DriveMovement::CalcNextStepTimeCartesianFull(const DDA &dda, bool live)
 // Calculate the time since the start of the move when the next step for the specified DriveMovement is due
 // Return true if there are more steps to do
 bool DriveMovement::CalcNextStepTimeDeltaFull(const DDA &dda, bool live)
-//pre(nextStep < totalSteps; stepsTillRecalc == 0)
+pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
 	// The simulator suggests that at 200steps/mm, the minimum step pulse interval for 400mm/sec movement is 4.5us

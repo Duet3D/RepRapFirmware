@@ -22,28 +22,9 @@ const char* TemperatureErrorString(TemperatureError err)
 	case TemperatureError::hardwareError:	return "hardware error";
 	case TemperatureError::busBusy:			return "bus busy";
 	case TemperatureError::badResponse:		return "bad response";
+	case TemperatureError::unknownChannel:	return "unknown temperature sensor channel";
 	default:								return "unknown temperature sense error";
 	}
-}
-
-// Indicate if a temp sensor error is a "permanent" error: whether it is an error condition which will not rectify over time
-// and so the heater should just be shut off immediately.
-bool IsPermanentError(TemperatureError err)
-{
-#if 1
-	return false;
-#else
-	switch (err)
-	{
-	case TemperatureError::success:
-	case TemperatureError::busBusy:
-	case TemperatureError::ioError:
-	case TemperatureError::hardwareError:		// need this one because it comes up sometimes (Jimustanguitar on seemecnc forum)
-		return false;
-	default:
-		return true;
-	}
-#endif
 }
 
 // End

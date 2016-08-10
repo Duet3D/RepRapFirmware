@@ -514,7 +514,8 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	const uint16_t hdrOfst = 0;
 	const uint16_t dataOfst = 16;
 	const uint16_t blkBufSize = dataOfst + blkSize;
-	uint8_t blkBuf[blkBufSize];
+	uint32_t blkBuf32[blkBufSize/4];
+	uint8_t * const blkBuf = reinterpret_cast<uint8_t*>(blkBuf32);
 
 	// Prepare the header for the block
 	putData(blkSize, 4, blkBuf, hdrOfst + 0);
@@ -523,8 +524,8 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	putData(0, 4, blkBuf, hdrOfst + 12);
 
 	// Get the data for the block
-	size_t cnt = uploadFile->Read((char *)blkBuf + dataOfst, blkSize);
-	if (cnt != EspFlashBlockSize)
+	size_t cnt = uploadFile->Read(reinterpret_cast<char *>(blkBuf + dataOfst), blkSize);
+	if (cnt != blkSize)
 	{
 		if (uploadFile->Position() == fileSize)
 		{
@@ -543,6 +544,23 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 		// update the Flash parameters
 		uint32_t flashParm = getData(2, blkBuf + dataOfst + 2, 0) & ~(uint32_t)flashParmMask;
 		putData(flashParm | flashParmVal, 2, blkBuf + dataOfst + 2, 0);
+	}
+
+	// If the block is all 0xFF characters, don't bother to send it because that's what the flash gets erased to
+	bool empty = true;
+	for (size_t i = 0; i < blkSize/4; ++i)
+	{
+		static_assert(dataOfst % 4 == 0, "Code only works when dataOfst is a multiple of 4");
+		if (blkBuf32[i + dataOfst/4] != 0xFFFFFFFF)
+		{
+			empty = false;
+			break;
+		}
+	}
+
+	if (empty)
+	{
+		return EspUploadResult::success;
 	}
 
 	// Calculate the block checksum

@@ -40,13 +40,12 @@ void Fan::SetHardwarePwm(float pwmVal)
 {
 	if (pin >= 0)
 	{
-		uint32_t p = (uint32_t)(255.0 * pwmVal);
 		bool invert = hardwareInverted;
 		if (inverted)
 		{
 			invert = !invert;
 		}
-		AnalogWrite(pin, (invert) ? (255 - p) : p, freq);
+		AnalogOut(pin, (invert) ? (1.0 - pwmVal) : pwmVal, freq);
 	}
 }
 

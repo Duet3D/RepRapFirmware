@@ -30,36 +30,36 @@ public:
 
 	// Indexing operator, non-const version
 	T& operator() (size_t r, size_t c) override
-	//pre(r < ROWS; c < COLS)
+	pre(r < ROWS; c < COLS)
 	{
 		return data[r * COLS + c];
 	}
 
 	// Indexing operator, const version
 	const T& operator() (size_t r, size_t c) const override
-	//pre(r < ROWS; c < COLS)
+	pre(r < ROWS; c < COLS)
 	{
 		return data[r * COLS + c];
 	}
 
 	void SwapRows(size_t i, size_t j, size_t numCols = COLS)
-	//pre(i < ROWS; j < ROWS)
+	pre(i < ROWS; j < ROWS)
 	;
 
 	void GaussJordan(T *solution, size_t numRows)
-	//pre(numRows <= ROWS; numRows + 1 <= COLS)
+	pre(numRows <= ROWS; numRows + 1 <= COLS)
 	;
 
 	// Return a pointer to a specified row, non-const version
 	T* GetRow(size_t r)
-	//pre(r < ROWS)
+	pre(r < ROWS)
 	{
 		return data + (r * COLS);
 	}
 
 	// Return a pointer to a specified row, const version
 	const T* GetRow(size_t r) const
-	//pre(r < ROWS)
+	pre(r < ROWS)
 	{
 		return data + (r * COLS);
 	}

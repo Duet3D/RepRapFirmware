@@ -20,7 +20,7 @@ class StringRef
 	size_t len;		// number of characters in the storage
 
 public:
-	StringRef(char *pp, size_t pl) : p(pp), len(pl) { }
+	StringRef(char *pp, size_t pl) : p(pp), len(pl) { p[0] = 0; }
 
 	size_t Length() const { return len; }
 	size_t strlen() const;

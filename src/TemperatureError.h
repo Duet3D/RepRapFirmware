@@ -23,13 +23,10 @@ enum class TemperatureError : uint8_t
 	ioError,
 	hardwareError,
 	busBusy,
-	badResponse
+	badResponse,
+	unknownChannel
 };
 
 const char* TemperatureErrorString(TemperatureError err);
-
-// Indicate if a temp sensor error is a "permanent" error: whether it is an error condition which will not rectify over time
-// and so the heater should just be shut off immediately.
-bool IsPermanentError(TemperatureError err);
 
 #endif /* TEMPERATUREERROR_H_ */

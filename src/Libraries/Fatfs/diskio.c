@@ -93,9 +93,6 @@ extern "C" {
  */
 DSTATUS disk_initialize(BYTE drv)
 {
-	int i;
-	Ctrl_status mem_status;
-
 #if (SAM3S || SAM3U || SAM3N || SAM3XA_SERIES || SAM4S)
 	/* Default RTC configuration, 24-hour mode */
 	/**@TODO FIX THIS - need an RTC*/
@@ -113,8 +110,11 @@ DSTATUS disk_initialize(BYTE drv)
 		return STA_NOINIT;
 	}
 #endif
+
+	Ctrl_status mem_status;
+
 	/* Check LUN ready (USB disk report CTRL_BUSY then CTRL_GOOD) */
-	for (i = 0; i < 2; i ++) {
+	for (int i = 0; i < 2; i ++) {
 		mem_status = mem_test_unit_ready(drv);
 		if (CTRL_BUSY != mem_status) {
 			break;

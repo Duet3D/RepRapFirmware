@@ -41,6 +41,7 @@ public:
 	float FractionRead() const;						// How far in we are
 	void Duplicate();								// Create a second reference to this file
 	bool Flush();									// Write remaining buffer data
+	void Invalidate(const FATFS *fs);				// Invalidate the file if it uses the specified FATFS object
 
 #if 0	// not currently used
 	bool SetClusterMap(uint32_t[]);					// Provide a cluster map for fast seeking
