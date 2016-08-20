@@ -34,7 +34,7 @@ const size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 
-// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to -1 to flag unavailability.
+// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // DRIVES
 
@@ -125,6 +125,9 @@ const Pin COOLING_FAN_RPM_PIN = 32;
 
 // SD cards
 const size_t NumSdCards = 2;
+const Pin SdCardDetectPins[NumSdCards] = {53, NoPin};
+const Pin SdWriteProtectPins[NumSdCards] = {NoPin, NoPin};
+const Pin SdSpiCSPins[1] = {56};
 
 #if SUPPORT_INKJET
 // Inkjet control pins

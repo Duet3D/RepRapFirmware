@@ -193,8 +193,7 @@ class Webserver
 				const char* value;
 			};
 
-			void SendFile(const char* nameOfFileToSend);
-			void SendConfigFile();
+			void SendFile(const char* nameOfFileToSend, bool isWebFile = true);
 			void SendGCodeReply();
 			void SendJsonResponse(const char* command);
 			void GetJsonResponse(const char* request, OutputBuffer *&response, const char* key, const char* value, size_t valueLength, bool& keepOpen);

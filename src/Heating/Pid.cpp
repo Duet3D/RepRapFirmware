@@ -1,0 +1,728 @@
+/*
+ * Pid.cpp
+ *
+ *  Created on: 21 Jul 2016
+ *      Author: David
+ */
+
+#include "RepRapFirmware.h"
+#include "Pid.h"
+
+// Private constants
+const uint32_t InitialTuningReadingInterval = 250;	// the initial reading interval in milliseconds
+const uint32_t TempSettleTimeout = 20000;	// how long we allow the initial temperature to settle
+
+// Static class variables
+
+float *PID::tuningTempReadings = nullptr;	// the readings from the heater being tuned
+float PID::tuningStartTemp;					// the temperature when we turned on the heater
+float PID::tuningPwm;						// the PWM to use
+float PID::tuningMaxTemp;					// the maximum temperature we are allowed to reach
+uint32_t PID::tuningBeginTime;				// when we started the tuning process
+uint32_t PID::tuningPhaseStartTime;			// when we started the current tuning phase
+uint32_t PID::tuningReadingInterval;		// how often we are sampling
+size_t PID::tuningReadingsTaken;			// how many samples we have taken
+float PID::tuningTimeOfFastestRate;			// how long after turn-on the fastest temperature rise occurred
+float PID::tuningFastestRate;				// the fastest temperature rise
+
+// Member functions and constructors
+
+PID::PID(Platform* p, int8_t h) : platform(p), heater(h), mode(HeaterMode::off)
+{
+}
+
+void PID::Init(float pGain, float pTc, float pTd, bool usePid)
+{
+	model.SetParameters(pGain, pTc, pTd, 1.0, usePid);
+
+	SetHeater(0.0);
+	mode = HeaterMode::off;
+	previousTemperaturesGood = 0;
+	previousTemperatureIndex = 0;
+	activeTemperature = ABS_ZERO;
+	standbyTemperature = ABS_ZERO;
+	iAccumulator = 0.0;
+	badTemperatureCount = 0;
+	active = false; 						// default to standby temperature
+	tuned = false;
+	useModel = true;						// by default we use the model in this first release
+	averagePWM = lastPwm = 0.0;
+
+	// Time the sensor was last sampled.  During startup, we use the current
+	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
+	lastSampleTime = millis();
+}
+
+// Set the process model
+bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
+{
+	return model.SetParameters(gain, tc, td, maxPwm, usePid);
+}
+
+// Read and store the temperature of this heater and returns the error code.
+TemperatureError PID::ReadTemperature()
+{
+	TemperatureError err = TemperatureError::success;				// assume no error
+	temperature = platform->GetTemperature(heater, err);			// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+	if (err == TemperatureError::success)
+	{
+		if (temperature < BAD_LOW_TEMPERATURE)
+		{
+			err = TemperatureError::openCircuit;
+		}
+		else if (temperature > platform->GetTemperatureLimit())
+		{
+			err = TemperatureError::tooHigh;
+		}
+	}
+	return err;
+}
+
+// This must be called whenever the heater is turned on, and any time the heater is active and the target temperature is changed
+void PID::SwitchOn()
+{
+	if (mode == HeaterMode::fault)
+	{
+		if (reprap.Debug(Module::moduleHeat))
+		{
+			platform->MessageF(GENERIC_MESSAGE, "Heater %d not switched on due to temperature fault\n", heater);
+		}
+	}
+	else
+	{
+		const float target = (active) ? activeTemperature : standbyTemperature;
+		const HeaterMode oldMode = mode;
+		mode = (temperature + TEMPERATURE_CLOSE_ENOUGH < target) ? HeaterMode::heating
+				: (temperature > target + TEMPERATURE_CLOSE_ENOUGH) ? HeaterMode::cooling
+					: HeaterMode::stable;
+		if (mode != oldMode)
+		{
+			heatingFaultCount = 0;
+			if (mode == HeaterMode::heating)
+			{
+				timeSetHeating = millis();
+			}
+			if (reprap.Debug(Module::moduleHeat) && oldMode == HeaterMode::off)
+			{
+				platform->MessageF(GENERIC_MESSAGE, "Heater %d switched on\n", heater);
+			}
+		}
+	}
+}
+
+// Switch off the specified heater. If in tuning mode, delete the array used to store tuning temperature readings.
+void PID::SwitchOff()
+{
+	lastPwm = 0.0;
+	SetHeater(0.0);
+	if (IsTuning())
+	{
+		delete tuningTempReadings;
+		tuningTempReadings = nullptr;
+	}
+	if (mode > HeaterMode::off)
+	{
+		mode = HeaterMode::off;
+		if (reprap.Debug(Module::moduleHeat))
+		{
+			platform->MessageF(GENERIC_MESSAGE, "Heater %d switched off\n", heater);
+		}
+	}
+}
+
+// This is the meain heater control loop function
+void PID::Spin()
+{
+	// Read the temperature
+	const TemperatureError err = ReadTemperature();
+	const PidParameters& pp = platform->GetPidParameters(heater);
+
+	// Handle any temperature reading error and calculate the temperature rate of change, if possible
+	if (err != TemperatureError::success)
+	{
+		previousTemperaturesGood <<= 1;				// this reading isn't a good one
+		if (mode > HeaterMode::off)					// don't worry about errors when reading heaters that are switched off or flagged as having faults
+		{
+			// Error may be a temporary error and may correct itself after a few additional reads
+			badTemperatureCount++;
+			if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+			{
+				lastPwm = 0.0;
+				SetHeater(0.0);						// do this here just to be sure, in case the call to platform->Message causes a delay
+				if (IsTuning())
+				{
+					delete tuningTempReadings;
+					tuningTempReadings = nullptr;
+				}
+				mode = HeaterMode::fault;
+				platform->MessageF(GENERIC_MESSAGE, "Error: Temperature reading fault on heater %d: %s\n", heater, TemperatureErrorString(err));
+				reprap.FlagTemperatureFault(heater);
+			}
+		}
+		// We leave lastPWM alone if we have a temporary temperature reading error
+	}
+	else
+	{
+		// We have a good temperature reading. Calculate the derivative, if possible.
+		float derivative = 0.0;
+		bool gotDerivative = false;
+		badTemperatureCount = 0;
+		if ((previousTemperaturesGood & (1 << (NumPreviousTemperatures - 1))) != 0)
+		{
+			derivative = SecondsToMillis * (temperature - previousTemperatures[previousTemperatureIndex])
+							/ (float)(platform->HeatSampleInterval() * NumPreviousTemperatures);
+			gotDerivative = true;
+		}
+		previousTemperatures[previousTemperatureIndex] = temperature;
+		previousTemperaturesGood = (previousTemperaturesGood << 1) | 1;
+
+		// Get the target temperature and the error
+		const float targetTemperature = (active) ? activeTemperature : standbyTemperature;
+		const float error = targetTemperature - temperature;
+
+		// Do the heating checks
+		switch(mode)
+		{
+		case HeaterMode::heating:
+			{
+				if (error <= TEMPERATURE_CLOSE_ENOUGH)
+				{
+					mode = HeaterMode::stable;
+					heatingFaultCount = 0;
+				}
+				else if (gotDerivative)
+				{
+					const float expectedRate = GetExpectedHeatingRate();
+					if (derivative < expectedRate
+						&& (float)(millis() - timeSetHeating) > model.GetDeadTime() * SecondsToMillis * 2)
+					{
+						++heatingFaultCount;
+						if (heatingFaultCount * platform->HeatSampleInterval() > MaxHeatingFaultTime * SecondsToMillis)
+						{
+							SetHeater(0.0);			// do this here just to be sure
+							mode = HeaterMode::fault;
+							platform->MessageF(GENERIC_MESSAGE,
+										"Error: heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
+										heater, expectedRate);
+							reprap.FlagTemperatureFault(heater);
+						}
+					}
+					else if (heatingFaultCount != 0)
+					{
+						--heatingFaultCount;
+					}
+				}
+				else
+				{
+					// Leave the heating fault count alone
+				}
+			}
+			break;
+
+		case HeaterMode::stable:
+			if (fabs(error) > MaxStableTemperatureError)
+			{
+				mode = HeaterMode::fault;
+				platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion too large\n", heater);
+			}
+			break;
+
+		case HeaterMode::cooling:
+			if (-error <= TEMPERATURE_CLOSE_ENOUGH && targetTemperature > MaxAmbientTemperature)
+			{
+				// We have cooled to close to the target temperature, so we should now maintain that temperature
+				mode = HeaterMode::stable;
+				heatingFaultCount = 0;
+			}
+			else
+			{
+				// We could check for temperature excessive or not falling here, but without an alarm there is not much we can do
+			}
+			break;
+
+		default:		// this covers off, fault, and the auto tuning states
+			break;
+		}
+
+		// Calculate the PWM
+		if (mode <= HeaterMode::off)
+		{
+			lastPwm = 0.0;
+		}
+		else if (mode < HeaterMode::tuning0)
+		{
+			// Performing normal temperature control
+			bool usingPid = (useModel) ? model.UsePid() : pp.UsePID();
+			float maxPwm = (useModel) ? model.GetMaxPwm() : pp.kS;
+			if (usingPid)
+			{
+				// Using PID mode
+				float kP, kI, kD, gain;
+				if (useModel)
+				{
+					const PidParams& params = model.GetPidParameters(fabs(error) < 1.0);
+					kP = params.kP;
+					kI = params.kI;
+					kD = params.kD;
+					gain = model.GetGain();
+				}
+				else
+				{
+					kP = pp.kP/255.0 * pp.kS;
+					kI = pp.kI/255.0 * pp.kS;
+					kD = pp.kD/255.0 * pp.kS;
+					gain = 255.0/pp.kT;
+				}
+
+				// If the P term still has full authority, preset the I term to the expected PWM for this temperature
+				// and turn the heater full on or full off
+				const float pPlusD = (kP * error) - (kD * derivative);
+				const float expectedPwm = constrain<float>((temperature - NormalAmbientTemperature)/gain, 0.0, maxPwm);
+				if (pPlusD + expectedPwm > maxPwm)
+				{
+					lastPwm = maxPwm;
+					iAccumulator = expectedPwm;
+				}
+				else if (pPlusD + expectedPwm < 0.0)
+				{
+					lastPwm = 0.0;
+					iAccumulator = expectedPwm;
+				}
+				else
+				{
+					iAccumulator = constrain<float>(iAccumulator + (error * kI * platform->HeatSampleInterval() * MillisToSeconds), 0.0, maxPwm);
+					lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, maxPwm);
+				}
+			}
+			else
+			{
+				// Using bang-bang mode
+				lastPwm = (error > 0.0) ? maxPwm : 0.0;
+			}
+		}
+		else
+		{
+			DoTuningStep();
+		}
+	}
+
+	// Set the heater power and update the average PWM
+	SetHeater(lastPwm);
+	averagePWM = averagePWM * (1.0 - platform->HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis)) + lastPwm;
+	previousTemperatureIndex = (previousTemperatureIndex + 1) % NumPreviousTemperatures;
+
+	// For temperature sensors which do not require frequent sampling and averaging,
+	// their temperature is read here and error/safety handling performed.  However,
+	// unlike the Tick ISR, this code is not executed at interrupt level and consequently
+	// runs the risk of having undesirable delays between calls.  To guard against this,
+	// we record for each PID object when it was last sampled and have the Tick ISR
+	// take action if there is a significant delay since the time of last sampling.
+	lastSampleTime = millis();
+
+//  debugPrintf("Heater %d: e=%f, P=%f, I=%f, d=%f, r=%f\n", heater, error, pp.kP*error, temp_iState, temp_dState, result);
+}
+
+void PID::SetActiveTemperature(float t)
+{
+	if (t > platform->GetTemperatureLimit())
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
+	}
+	else
+	{
+		activeTemperature = t;
+		if (mode > HeaterMode::off && active)
+		{
+			SwitchOn();
+		}
+	}
+}
+
+void PID::SetStandbyTemperature(float t)
+{
+	if (t > platform->GetTemperatureLimit())
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
+	}
+	else
+	{
+		standbyTemperature = t;
+		if (mode > HeaterMode::off && !active)
+		{
+			SwitchOn();
+		}
+	}
+}
+
+void PID::Activate()
+{
+	if (mode != HeaterMode::fault)
+	{
+		active = true;
+		SwitchOn();
+	}
+}
+
+void PID::Standby()
+{
+	if (mode != HeaterMode::fault)
+	{
+		active = false;
+		SwitchOn();
+	}
+}
+
+void PID::ResetFault()
+{
+	mode = HeaterMode::off;
+	SwitchOff();
+	badTemperatureCount = 0;
+}
+
+float PID::GetAveragePWM() const
+{
+	return averagePWM * platform->HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis);
+}
+
+// Get a conservative estimate of the expected heating rate at the current temperature and average PWM
+float PID::GetExpectedHeatingRate() const
+{
+	float avPwm = GetAveragePWM();
+	if (avPwm < 0.15)
+	{
+		return 0.0;										// avoid overflow etc. in the following calculation because a low or silly PWM value was passed
+	}
+
+	// In the following we allow for the gain being only 7t% of what we think it should be, to avoid false alarms
+	const float initialHeatingRate = 0.75 * model.GetGain() * avPwm/model.GetTimeConstant();	// this is the expected heating rate @ ambient temperature
+	const float maxTemperature = 0.75 * model.GetGain() * avPwm + NormalAmbientTemperature;		// this is the highest temperature that expect the heater can reach at this PWM
+	return max<float>((maxTemperature - temperature) * initialHeatingRate/(maxTemperature - NormalAmbientTemperature), 0.0);
+}
+
+// Auto tune this PID
+void PID::StartAutoTune(float maxTemp, float maxPwm, StringRef& reply)
+{
+	// Starting an auto tune
+	if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
+	{
+		reply.printf("Error: heater %d must be off and cold before auto tuning it", heater);
+	}
+	else
+	{
+		const TemperatureError err = ReadTemperature();
+		if (err != TemperatureError::success)
+		{
+			reply.printf("Error: heater %d reported error '%u' at start of auto tuning", heater, TemperatureErrorString(err));
+		}
+		else
+		{
+			mode = HeaterMode::tuning0;
+			tuningReadingsTaken = 0;
+			tuned = false;					// assume failure
+
+			// We don't normally allow dynamic memory allocation when running. However, auto tuning is rarely done and it
+			// would be wasteful to allocate a permanent array just in case we are going to run it, so we make an exception here.
+			tuningTempReadings = new float[MaxTuningTempReadings];
+			tuningTempReadings[0] = temperature;
+			tuningReadingInterval = platform->HeatSampleInterval();
+			tuningPwm = min<float>(maxPwm, model.GetMaxPwm());
+			tuningMaxTemp = maxTemp;
+			reply.printf("Auto tuning heater %d - do not leave printer unattended", heater);
+		}
+	}
+}
+
+void PID::GetAutoTuneStatus(StringRef& reply)	// Get the auto tune status or last result
+{
+	if (mode >= HeaterMode::tuning0)
+	{
+		reply.printf("Heater %d is being tuned, phase %u of %u",
+						heater,
+						(unsigned int)mode - (unsigned int)HeaterMode::tuning0 + 1,
+						(unsigned int)HeaterMode::lastTuningMode - (unsigned int)HeaterMode::tuning0 + 1);
+	}
+	else if (tuned)
+	{
+		reply.printf("Heater %d tuning succeeded, use M207 H%d to see result", heater, heater);
+	}
+	else
+	{
+		reply.printf("Heater %d tuning failed");
+	}
+}
+
+/* Notes on the auto tune algorithm
+ *
+ * Most 3D printer firmwares use the Åström-Hägglund relay tuning method (sometimes called Ziegler-Nichols + relay).
+ * This gives results  of variable quality, but they seem to be generally satisfactory.
+ *
+ * We use Cohen-Coon tuning instead. This models the heating process as a first-order process (i.e. one that with constant heating
+ * power approaches the equilibrium temperature exponentially) with dead time. This process is defined by three constants:
+ *
+ *  G is the gain of the system, i.e. the increase in ultimate temperature increase per unit of additional PWM
+ *  td is the dead time, i.e. the time between increasing the heater PWM and the temperature following an exponential curve
+ *  tc is the time constant of the exponential curve
+ *
+ * If the temperature is stable at T0 to begin with, the temperature at time t after increasing heater PWM by p is:
+ *  T = T0 when t <= td
+ *  T = T0 + G * p * (1 - exp((t - td)/tc)) when t >= td
+ * In practice the transition from no change to the exponential curve is not instant, however this model is a reasonable approximation.
+ *
+ * Having a process model allows us to preset the I accumulator to a suitable value when switching between heater full on/off and using PID.
+ * It will also make it easier to include feedforward terms in future.
+ *
+ * The auto tune procedure follows the following steps:
+ * 1. Turn on any thermostatically-controlled fans that are triggered by the heater being tuned. This is done by code in the Platform module
+ *    when it sees that a heater is being auto tuned.
+ * 2. Accumulate temperature readings and wait for the starting temperature to stabilise. Abandon auto tuning if the starting temperature
+ *    is not stable.
+ * 3. Apply a known power to the heater and take temperature readings.
+ * 4. Wait until the temperature vs time curve has flattened off, such that the temperature rise over the last 1/3 of the readings is less than the
+ *    total temperature rise - which means we have been heating for about 3 time constants. Abandon auto tuning if we don't see a temperature rise
+ *    after 30 seconds, or we exceed the target temperature plus 10C.
+ * 5. Calculate the G, td and tc values that best fit the model to the temperature readings.
+ * 6. Calculate the P, I and D parameters from G, td and tc using the modified Cohen-Coon tuning rules, or the Ho et al tuning rules.
+ *    Cohen-Coon (modified to use half the original Kc value):
+ *     Kc = (0.67/G) * (tc/td + 0.185)
+ *     Ti = 2.5 * td * (tc + 0.185 * td)/(tc + 0.611 * td)
+ *     Td = 0.37 * td * tc/(tc + 0.185 * td)
+ *    Ho et al, best response to load changes:
+ *     Kc = (1.435/G) * (td/tc)^-0.921
+ *     Ti = 1.14 * (td/tc)^0.749
+ *     Td = 0.482 * tc * (td/tc)^1.137
+ *    Ho et al, best response to setpoint changes:
+ *     Kc = (1.086/G) * (td/tc)^-0.869
+ *     Ti = tc/(0.74 - 0.13 * td/tc)
+ *     Td = 0.348 * tc * (td/tc)^0.914
+ */
+
+// This is called on each temperature sample when auto tuning
+// It must set lastPWM to the required PWM, unless it is the same as last time.
+void PID::DoTuningStep()
+{
+	// See if another sample is due
+	if (tuningReadingsTaken == 0)
+	{
+		tuningPhaseStartTime = millis();
+		if (mode == HeaterMode::tuning0)
+		{
+			tuningBeginTime = tuningPhaseStartTime;
+		}
+	}
+	else if (millis() - tuningPhaseStartTime < tuningReadingsTaken * tuningReadingInterval)
+	{
+		return;		// not due yet
+	}
+
+	// See if we have room to store the new reading, and if not, double the sample interval
+	if (tuningReadingsTaken == MaxTuningTempReadings)
+	{
+		// Double the sample interval
+		tuningReadingsTaken /= 2;
+		for (size_t i = 1; i < tuningReadingsTaken; ++i)
+		{
+			tuningTempReadings[i] = tuningTempReadings[i * 2];
+		}
+		tuningReadingInterval *= 2;
+	}
+
+	tuningTempReadings[tuningReadingsTaken] = temperature;
+	++tuningReadingsTaken;
+
+	if (temperature > tuningMaxTemp)
+	{
+		platform->MessageF(GENERIC_MESSAGE,
+				"Auto tune of heater %u with P=%.2f S=%.1f cancelled because temperature limit exceeded. Use lower P or higher S in m303 command.\n",
+				heater, tuningPwm, tuningMaxTemp);
+	}
+	else
+	{
+		switch(mode)
+		{
+		case HeaterMode::tuning0:
+			// Waiting for initial temperature to settle after any thermostatic fans have turned on
+			if (ReadingsStable(6000/platform->HeatSampleInterval(), 0.5))	// expect temperature to be stable within a 0.5C band for 6 seconds
+			{
+				// Starting temperature is stable, so move on
+				tuningReadingsTaken = 1;
+				tuningTempReadings[0] = tuningStartTemp = temperature;
+				timeSetHeating = tuningPhaseStartTime = millis();
+				lastPwm = tuningPwm;										// turn on heater at specified power
+				tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
+				active = true;
+				mode = HeaterMode::tuning1;
+				return;
+			}
+			if (millis() - tuningPhaseStartTime < 20000)
+			{
+				// Allow up to 20 seconds for starting temperature to settle
+				return;
+			}
+			platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because starting temperature is not stable\n");
+			break;
+
+		case HeaterMode::tuning1:
+			if (millis() - tuningPhaseStartTime > (uint32_t)(model.GetDeadTime() * SecondsToMillis) + 20000 && (temperature - tuningStartTemp) < 4.0)
+			{
+				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not increasing\n");
+				break;
+			}
+
+			// If we have a reasonable number of readings, try to identify the point of maximum rate of temperature increase
+			if (tuningReadingsTaken >= 50)
+			{
+				const size_t index = GetMaxRateIndex();
+				if (index <= tuningReadingsTaken/2)
+				{
+					// We have found the point of inflection, so start the next phase
+					if (reprap.Debug(moduleHeat))
+					{
+						DisplayBuffer("At phase 1 end");
+					}
+					tuningTimeOfFastestRate = index * tuningReadingInterval * MillisToSeconds;
+					tuningPhaseStartTime += index * tuningReadingInterval;
+					tuningFastestRate = (tuningTempReadings[index + 1] - tuningTempReadings[index - 1]) / (tuningReadingInterval * 2 * MillisToSeconds);
+
+					// Move the readings down so as to start at the max rate index
+					tuningReadingsTaken -= index;
+					for (size_t i = 0; i < tuningReadingsTaken; ++i)
+					{
+						tuningTempReadings[i] = tuningTempReadings[i + index];
+					}
+					mode = HeaterMode::tuning2;
+				}
+			}
+			return;
+
+		case HeaterMode::tuning2:
+			// Note: there is no check for temperature increasing here, because it may increase very slowly towards the end of the tuning process.
+			{
+				// In the following, the figure of 2.75 was chosen because a value of 2 is too low to handle the bed heater
+				// with embedded thermistor on my Kossel (reservoir effect)
+				if (ReadingsStable(tuningReadingsTaken/2, (temperature - tuningTempReadings[0]) * 0.269))		// if we have been going for ~2 time constants
+				{
+					// We have been heating for long enough, so we can do a fit
+					FitCurve();
+					break;
+				}
+				else
+				{
+					return;
+				}
+			}
+			break;
+
+		default:
+			// Should not happen, but if it does then quit
+			break;
+		}
+	}
+
+	// If we get here, we have finished
+	SwitchOff();								// sets mode and lastPWM, also deletes tuningTempReadings
+}
+
+// Return true if the last 'numReadings' readings are stable
+bool PID::ReadingsStable(size_t numReadings, float maxDiff) const
+{
+	if (tuningTempReadings == nullptr || tuningReadingsTaken < numReadings)
+	{
+		return false;
+	}
+
+	float minReading = tuningTempReadings[tuningReadingsTaken - numReadings];
+	float maxReading = minReading;
+	for (size_t i = tuningReadingsTaken - numReadings + 1; i < tuningReadingsTaken; ++i)
+	{
+		const float t = tuningTempReadings[i];
+		if (t < minReading) { minReading = t; }
+		if (t > maxReading) { maxReading = t; }
+	}
+
+	return maxReading - minReading <= maxDiff;
+}
+
+// Return the index in the temperature readings of the maximum rate of increase
+/*static*/ size_t PID::GetMaxRateIndex()
+{
+	size_t index = 1;
+	float maxIncrease = 0.0;
+	for (size_t i = 1; i + 1 < tuningReadingsTaken; ++i)
+	{
+		const float increase = tuningTempReadings[i + 1] - tuningTempReadings[i - 1];
+		if (increase > maxIncrease)
+		{
+			maxIncrease = increase;
+			index = i;
+		}
+	}
+	return index;
+}
+
+// Calculate G, td and tc from the accumulated readings and print the auto tune success/fail message
+// Before calling this we must have already identified the point of inflection and re-based the readings to start at it.
+void PID::FitCurve()
+{
+	if (reprap.Debug(moduleHeat))
+	{
+		DisplayBuffer("At completion");
+	}
+
+	// We need 3 points equally-spaced in time to do the calculation
+	const size_t lowIndex = 0;
+	size_t highIndex = tuningReadingsTaken - 1;
+	if ((highIndex - lowIndex) % 2 != 0)
+	{
+		--highIndex;
+	}
+
+	// Calculate tc, td, G
+	const float T1 = tuningTempReadings[lowIndex] - tuningStartTemp;
+	const size_t midIndex = (lowIndex + highIndex)/2;
+	const float T2 = tuningTempReadings[midIndex] - tuningStartTemp;
+	const float T3 = tuningTempReadings[highIndex] - tuningStartTemp;
+	//const float t1 = lowIndex * tuningReadingInterval * MillisToSeconds;
+	const float dt = (midIndex - lowIndex) * tuningReadingInterval * MillisToSeconds;
+	const float t3 = highIndex * tuningReadingInterval * MillisToSeconds;
+	const float tc = dt/log((T2 - T1)/(T3 - T2));
+
+	// In theory we should calculate the delay time like this:
+	// td = tc * log((T3 - T1)/(T3 * exp(-t1/tc) - T1 * exp(-t3/tc)));
+	// However, the calculated td is highly inaccurate in some situations e.g. bed heater with reservoir effect.
+	// Better to estimate it from the point of inflection.
+	const float td = tuningTimeOfFastestRate - (tuningTempReadings[0] - tuningStartTemp)/tuningFastestRate;
+
+	// I'm not sure which td value we should use to calculate the gain, but it probably doesn't make much difference because usually, td << t3.
+	const float gain = T3 / (lastPwm * (1.0 - exp((td - t3)/tc)));
+
+	tuned = model.SetParameters(gain, tc, td, model.GetMaxPwm(), true);
+	if (tuned)
+	{
+		useModel = true;
+		platform->MessageF(GENERIC_MESSAGE,
+				"Auto tune heater %d with PWM=%.2f completed in %u sec, maximum temperature reached %.1fC\n"
+				"Use M307 H%d to see the result\n",
+				heater, tuningPwm, (millis() - tuningBeginTime)/(uint32_t)SecondsToMillis, tuningTempReadings[tuningReadingsTaken - 1], heater);
+	}
+	else
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, gain, tc, td);
+	}
+}
+
+void PID::DisplayBuffer(const char *intro)
+{
+	OutputBuffer *buf;
+	if (OutputBuffer::Allocate(buf, false))
+	{
+		buf->catf("%s: interval %.1f sec, readings", intro, tuningReadingInterval * MillisToSeconds);
+		for (size_t i = 0; i < tuningReadingsTaken; ++i)
+		{
+			buf->catf(" %.1f", tuningTempReadings[i]);
+		}
+		buf->cat("\n");
+		platform->Message(HOST_MESSAGE, buf);
+	}
+}
+
+// End

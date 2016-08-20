@@ -46,7 +46,11 @@
  	 	 	 may also request different status responses by specifying the "type" keyword, followed
  	 	 	 by a custom status response type. Also see "M105 S1".
 
- rr_files?dir=xxx&flagDirs={1/0}
+ rr_filelist?dir=xxx
+ 	 	 	 Returns a JSON-formatted list of all the files in xxx including the type and size in the
+			 following format: "files":[{"type":'f/d',"name":"xxx",size:yyy},...]
+
+ rr_files?dir=xxx&flagDirs={1/0} [DEPRECATED]
  	 	 	 Returns a listing of the filenames in the /gcode directory of the SD card. 'dir' is a
  	 	 	 directory path relative to the root of the SD card. If the 'dir' variable is not present,
  	 	 	 it defaults to the /gcode directory. If flagDirs is set to 1, all directories will be
@@ -54,29 +58,17 @@
 
  rr_reply    Returns the last-known G-code reply as plain text (not encapsulated as JSON).
 
+ rr_configfile [DEPRECATED]
+			 Sends the config file as plain text (not encapsulated as JSON either).
+
+ rr_download?name=xxx
+			 Download a specified file from the SD card
+
  rr_upload?name=xxx
  	 	 	 Upload a specified file using a POST request. The payload of this request has to be
  	 	 	 the file content. Only one file may be uploaded at once. When the upload has finished,
  	 	 	 a JSON response with the variable "err" will be returned, which will be 0 if the job
  	 	 	 has finished without problems, it will be set to 1 otherwise.
-
- rr_upload_begin?name=xxx
- 	 	 	 Indicates that we wish to upload the specified file. xxx is the filename relative
- 	 	 	 to the root of the SD card. The directory component of the filename must already
- 	 	 	 exist. Returns variables ubuff (= max upload data we can accept in the next message)
- 	 	 	 and err (= 0 if the file was created successfully, nonzero if there was an error).
-
- rr_upload_data?data=xxx
- 	 	 	 Provides a data block for the file upload. Returns the samwe variables as rr_upload_begin,
- 	 	 	 except that err is only zero if the file was successfully created and there has not been
- 	 	 	 a file write error yet. This response is returned before attempting to write this data block.
-
- rr_upload_end
- 	 	 	 Indicates that we have finished sending upload data. The server closes the file and reports
- 	 	 	 the overall status in err. It may also return ubuff again.
-
- rr_upload_cancel
- 	 	 	 Indicates that the user wishes to cancel the current upload. Returns err and ubuff.
 
  rr_delete?name=xxx
 			 Delete file xxx. Returns err (zero if successful).
@@ -351,7 +343,7 @@ Webserver::HttpSession *Webserver::StartSession(uint32_t ip)
 		s->isAuthenticated = false;
 		s->nextFragment = 0;
 		s->fileBeingUploaded.Close();			// make sure no file is open
-		s->lastQueryTime = platform->Time();
+		s->lastQueryTime = millis();
 		++numSessions;
 		return s;
 	}
@@ -366,7 +358,7 @@ Webserver::HttpSession *Webserver::FindSession(uint32_t ip)
 		HttpSession *s = &sessions[i];
 		if (s->ip == ip)
 		{
-			s->lastQueryTime = platform->Time();
+			s->lastQueryTime = millis();
 			return s;
 		}
 	}
@@ -529,29 +521,33 @@ bool Webserver::ProcessFirstFragment(HttpSession& session, const char* command, 
 	// Get the first two key/value pairs
 	const char* key1 = (numQualKeys >= 1) ? qualifiers[0].key : "";
 	const char* value1 = (numQualKeys >= 1) ? qualifiers[0].value : "";
-	const char* key2 = (numQualKeys >= 1) ? qualifiers[1].key : "";
-	const char* value2 = (numQualKeys >= 1) ? qualifiers[1].value : "";
+	const char* key2 = (numQualKeys >= 2) ? qualifiers[1].key : "";
+	const char* value2 = (numQualKeys >= 2) ? qualifiers[1].value : "";
 
 	// Process connect messages first
 	if (StringEquals(command, "connect") && StringEquals(key1, "password"))
 	{
-		const char *response;
-		if (session.isAuthenticated)
+		OutputBuffer *response;
+		if (OutputBuffer::Allocate(response))
 		{
-			// This IP is already authenticated, no need to check the password again
-			response = "{\"err\":0}";
-		}
-		else if (reprap.CheckPassword(value1))
-		{
-			session.isAuthenticated = true;
-			response = "{\"err\":0}";
+			if (session.isAuthenticated || reprap.CheckPassword(value1))
+			{
+				// Password OK
+				session.isAuthenticated = true;
+				response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", httpSessionTimeout, platform->GetBoardString());
+			}
+			else
+			{
+				// Wrong password
+				response->copy("{\"err\":1}");
+			}
+			network->SendReply(session.ip, 200 | rcJson, response);
 		}
 		else
 		{
-			// Wrong password
-			response = "{\"err\":1}";
+			// If we failed to allocate an output buffer, send back an error string
+			network->SendReply(session.ip, 200 | rcJson, "{\"err\":2}");
 		}
-		network->SendReply(session.ip, 200 | rcJson, response);
 		return false;
 	}
 
@@ -584,7 +580,17 @@ bool Webserver::ProcessFirstFragment(HttpSession& session, const char* command, 
 	// rr_configfile sends the config as plain text well
 	if (StringEquals(command, "configfile"))
 	{
-		SendConfigFile(session);
+		const char *configPath = platform->GetMassStorage()->CombineName(platform->GetSysDir(), platform->GetConfigFile());
+		char fileName[FILENAME_LENGTH];
+		strncpy(fileName, configPath, FILENAME_LENGTH);
+
+		SendFile(fileName, session);
+		return false;
+	}
+
+	if (StringEquals(command, "download") && StringEquals(key1, "name"))
+	{
+		SendFile(value1, session);
 		return false;
 	}
 
@@ -696,6 +702,10 @@ bool Webserver::ProcessFirstFragment(HttpSession& session, const char* command, 
 			return false;
 		}
 	}
+	else if (StringEquals(command, "filelist") && StringEquals(key1, "dir"))
+	{
+		response = reprap.GetFilelistResponse(value1);
+	}
 	else if (StringEquals(command, "files"))
 	{
 		const char* dir = (StringEquals(key1, "dir")) ? value1 : platform->GetGCodeDir();
@@ -768,17 +778,17 @@ void Webserver::SendGCodeReply(HttpSession& session)
 	}
 }
 
-void Webserver::SendConfigFile(HttpSession& session)
+void Webserver::SendFile(const char *nameOfFileToSend, HttpSession& session)
 {
-	FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
-	if (configFile == nullptr)
+	FileStore *file = platform->GetFileStore(FS_PREFIX, nameOfFileToSend, false);
+	if (file == nullptr)
 	{
-		network->SendReply(session.ip, 400, "File config.g not found");
+		network->SendReply(session.ip, 400, "File not found");
 	}
 	else
 	{
 		// Send an initial message containing the response code and the file size (needed for the Content-length field)
-		network->SendReply(session.ip, 200, configFile);		// tell the network layer to send the file
+		network->SendReply(session.ip, 200, file);		// tell the network layer to send the file
 	}
 }
 
@@ -943,7 +953,7 @@ bool Webserver::CharFromClient(char c, const char* &error)
 void Webserver::CheckSessions()
 {
 	// Check if any HTTP session can be purged
-	const float time = platform->Time();
+	const uint32_t time = millis();
 	for (size_t i = 0; i < numSessions; ++i)
 	{
 		if ((time - sessions[i].lastQueryTime) > httpSessionTimeout)

@@ -725,6 +725,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"coldExtrudeTemp\":%1.f", heat->ColdExtrude() ? 0 : HOT_ENOUGH_TO_EXTRUDE);
 		response->catf(",\"coldRetractTemp\":%1.f", heat->ColdExtrude() ? 0 : HOT_ENOUGH_TO_RETRACT);
 
+		// Maximum hotend temperature
+		response->catf(",\"tempLimit\":%1.f", platform->GetTemperatureLimit());
+
 		// Endstops
 		uint16_t endstops = 0;
 		for(size_t drive = 0; drive < DRIVES; drive++)
@@ -932,6 +935,9 @@ OutputBuffer *RepRap::GetConfigResponse()
 	response->catf("],\"firmwareElectronics\":\"%s\"", platform->GetElectronicsString());
 	response->catf(",\"firmwareName\":\"%s\"", NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
+#ifdef DUET_NG
+	response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());
+#endif
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);
 
 	// Motor idle parameters
@@ -1253,6 +1259,55 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 			bytesLeft -= response->EncodeString(fname, FILENAME_LENGTH, false);
 
 			firstFile = false;
+		}
+		gotFile = platform->GetMassStorage()->FindNext(fileInfo);
+	}
+	response->cat("]}");
+
+	return response;
+}
+
+// Get a JSON-style filelist including file types and sizes
+OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
+{
+	// Need something to write to...
+	OutputBuffer *response;
+	if (!OutputBuffer::Allocate(response))
+	{
+		return nullptr;
+	}
+
+	response->copy("{\"dir\":");
+	response->EncodeString(dir, strlen(dir), false);
+	response->cat(",\"files\":[");
+
+	FileInfo fileInfo;
+	bool firstFile = true;
+	bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
+	size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
+
+	while (gotFile)
+	{
+		if (fileInfo.fileName[0] != '.')			// ignore Mac resource files and Linux hidden files
+		{
+			// Make sure we can end this response properly
+			if (bytesLeft < strlen(fileInfo.fileName) + 32)
+			{
+				// No more space available - stop here
+				break;
+			}
+
+			// Write delimiter
+			if (!firstFile)
+			{
+				bytesLeft -= response->cat(',');
+			}
+			firstFile = false;
+
+			// Write another file entry
+			bytesLeft -= response->catf("{\"type\":\"%c\",\"name\":", fileInfo.isDirectory ? 'd' : 'f');
+			bytesLeft -= response->EncodeString(fileInfo.fileName, FILENAME_LENGTH, false);
+			bytesLeft -= response->catf(",\"size\":%u}", fileInfo.size);
 		}
 		gotFile = platform->GetMassStorage()->FindNext(fileInfo);
 	}

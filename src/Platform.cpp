@@ -133,8 +133,7 @@ void PidParameters::SetThermistorR25AndBeta(float r25, float beta)
 bool PidParameters::operator==(const PidParameters& other) const
 {
 	return kI == other.kI && kD == other.kD && kP == other.kP && kT == other.kT && kS == other.kS
-			&& fullBand == other.fullBand && pidMin == other.pidMin
-			&& pidMax == other.pidMax && thermistorBeta == other.thermistorBeta && thermistorInfR == other.thermistorInfR
+			&& thermistorBeta == other.thermistorBeta && thermistorInfR == other.thermistorInfR
 			&& thermistorSeriesR == other.thermistorSeriesR && adcLowOffset == other.adcLowOffset
 			&& adcHighOffset == other.adcHighOffset;
 }
@@ -265,13 +264,21 @@ void Platform::Init()
 	ARRAY_INIT(spiTempSenseCsPins, SpiTempSensorCsPins);
 
 	configuredHeaters = (BED_HEATER >= 0) ? (1 << BED_HEATER) : 0;
-	heatSampleTime = HEAT_SAMPLE_TIME;
+	heatSampleTicks = HEAT_SAMPLE_TIME * SecondsToMillis;
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
 	for (size_t i = 0; i < MaxSpiTempSensors; ++i)
 	{
 		setPullup(SpiTempSensorCsPins[i], true);
+	}
+	for (size_t i = 0; i < NumSdCards; ++i)
+	{
+		const Pin p = SdCardDetectPins[i];
+		if (p != NoPin)
+		{
+			setPullup(p, true);
+		}
 	}
 
 	// Motors
@@ -309,7 +316,7 @@ void Platform::Init()
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
 		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
-		if (endStopPins[drive] >= 0)
+		if (endStopPins[drive] != NoPin)
 		{
 			pinMode(endStopPins[drive], INPUT_PULLUP);			// enable pullup resistor so that expansion connector pins can be used as trigger inputs
 		}
@@ -336,7 +343,7 @@ void Platform::Init()
 	// HEATERS - Bed is assumed to be index 0
 	for (size_t heater = 0; heater < HEATERS; heater++)
 	{
-		if (heatOnPins[heater] >= 0)
+		if (heatOnPins[heater] != NoPin)
 		{
 			pinMode(heatOnPins[heater], (HEAT_ON) ? OUTPUT_LOW : OUTPUT_HIGH);
 		}
@@ -749,9 +756,6 @@ void Platform::ResetNvData()
 		pp.kP = defaultPidKps[i];
 		pp.kT = defaultPidKts[i];
 		pp.kS = defaultPidKss[i];
-		pp.fullBand = defaultFullBands[i];
-		pp.pidMin = defaultPidMins[i];
-		pp.pidMax = defaultPidMaxes[i];
 		pp.adcLowOffset = pp.adcHighOffset = 0.0;
 	}
 
@@ -1327,7 +1331,7 @@ void Platform::InitialiseInterrupts()
 #endif
 
 	// Interrupt for 4-pin PWM fan sense line
-	if (coolingFanRpmPin >= 0)
+	if (coolingFanRpmPin != NoPin)
 	{
 		attachInterrupt(coolingFanRpmPin, FanInterrupt, FALLING);
 	}
@@ -1590,44 +1594,27 @@ float Platform::GetTemperature(size_t heater, TemperatureError& err)
 	return BAD_ERROR_TEMPERATURE;
 }
 
-// See if we need to turn on the hot end fan
+// See if we need to turn on a thermostatically-controlled fan
 bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 {
-	// Check tool heaters first
-	for (size_t h = 0; h < reprap.GetToolHeatersInUse(); ++h)
+	for (size_t h = 0; h < HEATERS; ++h)
 	{
-		if (((1 << h) & heaters) != 0)
+		// Check if this heater is both monitored by this fan and in use
+		if (   ((1 << h) & heaters) != 0
+			&& (h < reprap.GetToolHeatersInUse() || (int)h == reprap.GetHeat()->GetBedHeater() || (int)h == reprap.GetHeat()->GetChamberHeater())
+		   )
 		{
+			if (reprap.GetHeat()->IsTuning(h))
+			{
+				return true;			// when turning the PID for a monitored heater, turn the fan on
+			}
+
 			TemperatureError err;
 			const float ht = GetTemperature(h, err);
 			if (err != TemperatureError::success || ht >= t || ht < BAD_LOW_TEMPERATURE)
 			{
 				return true;
 			}
-		}
-	}
-
-	// Check the bed heater too, in case the user wants a fan on when the bed is hot
-	int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
-	if (bedHeater >= 0 && ((1 << (unsigned int)bedHeater) & heaters) != 0)
-	{
-		TemperatureError err;
-		const float ht = GetTemperature(bedHeater, err);
-		if (err != TemperatureError::success || ht >= t || ht < BAD_LOW_TEMPERATURE)
-		{
-			return true;
-		}
-	}
-
-	// Check the chamber heater as well
-	int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
-	if (chamberHeater >= 0 && ((1 << (unsigned int)chamberHeater) & heaters) != 0)
-	{
-		TemperatureError err;
-		const float ht = GetTemperature(chamberHeater, err);
-		if (err != TemperatureError::success || ht >= t || ht < BAD_LOW_TEMPERATURE)
-		{
-			return true;
 		}
 	}
 	return false;
@@ -1655,7 +1642,7 @@ const PidParameters& Platform::GetPidParameters(size_t heater) const
 
 void Platform::SetHeater(size_t heater, float power)
 {
-	if (heatOnPins[heater] >= 0)
+	if (heatOnPins[heater] != NoPin)
 	{
 		uint16_t freq = (reprap.GetHeat()->UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
 		AnalogOut(heatOnPins[heater], (HEAT_ON) ? power : 1.0 - power, freq);
@@ -1700,7 +1687,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 			return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
 		}
 	}
-	else if (endStopPins[drive] >= 0)
+	else if (endStopPins[drive] != NoPin)
 	{
 		if (digitalRead(endStopPins[drive]) == endStopLogicLevel[drive])
 		{
@@ -1717,7 +1704,7 @@ uint32_t Platform::GetAllEndstopStates() const
 	for (unsigned int drive = 0; drive < DRIVES; ++drive)
 	{
 		const Pin pin = endStopPins[drive];
-		if (pin >= 0 && digitalRead(pin))
+		if (pin != NoPin && digitalRead(pin))
 		{
 			rslt |= (1 << drive);
 		}
@@ -2155,7 +2142,7 @@ void Platform::InitFans()
 
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
 	lastRpmResetTime = 0.0;
-	if (coolingFanRpmPin >= 0)
+	if (coolingFanRpmPin != NoPin)
 	{
 		pinModeDuet(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
 	}
@@ -2602,6 +2589,28 @@ const char* Platform::GetElectronicsString() const
 	case BoardType::Duet_085:				return "Duet 0.85";
 #endif
 	default:								return "Unidentified";
+	}
+}
+
+// Get the board string
+const char* Platform::GetBoardString() const
+{
+	switch (board)
+	{
+#ifdef DUET_NG
+# ifdef PROTOTYPE_1
+	case BoardType::DuetWiFi_06:			return "duetwifi06";
+# else
+	case BoardType::DuetWiFi_10:			return "duetwifi10";
+# endif
+#elif defined(__RADDS__)
+	case BoardType::RADDS_15:				return "radds15";
+#else
+	case BoardType::Duet_06:				return "duet06";
+	case BoardType::Duet_07:				return "duet07";
+	case BoardType::Duet_085:				return "duet085";
+#endif
+	default:								return "unknown";
 	}
 }
 

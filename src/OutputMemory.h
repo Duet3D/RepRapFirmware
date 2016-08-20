@@ -10,7 +10,7 @@
 
 #include "Core.h"
 #include "Configuration.h"
-#include "StringRef.h"
+#include "Libraries/General/StringRef.h"
 #include "MessageType.h"
 
 const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can be pushed onto one stack instance

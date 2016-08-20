@@ -21,7 +21,8 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "Pid.h"
 
-Heat::Heat(Platform* p) : platform(p), active(false), coldExtrude(false), bedHeater(BED_HEATER), chamberHeater(-1)
+Heat::Heat(Platform* p)
+	: platform(p), active(false), coldExtrude(false), bedHeater(BED_HEATER), chamberHeater(-1), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	for (size_t heater = 0; heater < HEATERS; heater++)
 	{
@@ -31,12 +32,19 @@ Heat::Heat(Platform* p) : platform(p), active(false), coldExtrude(false), bedHea
 
 void Heat::Init()
 {
-	for (size_t heater = 0; heater < HEATERS; heater++)
+	for (int heater = 0; heater < HEATERS; heater++)
 	{
-		pids[heater]->Init();
+		if (heater == bedHeater || heater == chamberHeater)
+		{
+			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, false);
+		}
+		else
+		{
+			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, true);
+		}
 	}
-	lastTime = platform->Time();
-	longWait = lastTime;
+	lastTime = millis();
+	longWait = platform->Time();
 	coldExtrude = false;
 	active = true;
 }
@@ -55,13 +63,21 @@ void Heat::Spin()
 {
 	if (active)
 	{
-		float t = platform->Time();
-		if (t - lastTime >= platform->HeatSampleTime())
+		// See if it is time to spin the PIDs
+		const uint32_t now = millis();
+		if (now - lastTime >= platform->HeatSampleInterval())
 		{
-			lastTime = t;
+			lastTime = now;
 			for (size_t heater=0; heater < HEATERS; heater++)
 			{
 				pids[heater]->Spin();
+			}
+
+			// See if we have finished tuning a PID
+			if (heaterBeingTuned != -1 && !pids[heaterBeingTuned]->IsTuning())
+			{
+				lastHeaterTuned = heaterBeingTuned;
+				heaterBeingTuned = -1;
 			}
 		}
 	}
@@ -206,6 +222,39 @@ uint32_t Heat::GetLastSampleTime(int8_t heater) const
 bool Heat::UseSlowPwm(int8_t heater) const
 {
 	return heater == bedHeater || heater == chamberHeater;
+}
+
+// Auto tune a PID
+void Heat::StartAutoTune(size_t heater, float temperature, float maxPwm, StringRef& reply)
+{
+	if (heaterBeingTuned == -1)
+	{
+		heaterBeingTuned = (int8_t)heater;
+		pids[heater]->StartAutoTune(temperature, maxPwm, reply);
+	}
+	else
+	{
+		// Trying to start a new auto tune, but we are already tuning a heater
+		reply.printf("Error: cannot start auto tuning heater %u because heater %d is being tuned", heater, heaterBeingTuned);
+	}
+}
+
+bool Heat::IsTuning(size_t heater) const
+{
+	return pids[heater]->IsTuning();
+}
+
+void Heat::GetAutoTuneStatus(StringRef& reply) const
+{
+	int8_t whichPid = (heaterBeingTuned == -1) ? lastHeaterTuned : heaterBeingTuned;
+	if (whichPid != -1)
+	{
+		pids[whichPid]->GetAutoTuneStatus(reply);
+	}
+	else
+	{
+		reply.copy("No heater has been tuned yet");
+	}
 }
 
 // End

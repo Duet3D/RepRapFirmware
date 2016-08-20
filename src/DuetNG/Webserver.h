@@ -42,7 +42,7 @@ const uint16_t gcodeBufferLength = 512;			// size of our gcode ring buffer, pref
 const uint16_t webMessageLength = 2000;			// maximum length of the web message we accept after decoding
 const size_t maxQualKeys = 5;					// max number of key/value pairs in the qualifier
 const size_t maxHttpSessions = 8;				// maximum number of simultaneous HTTP sessions
-const float httpSessionTimeout = 20.0;			// HTTP session timeout in seconds
+const uint32_t httpSessionTimeout = 20000;		// HTTP session timeout in milliseconds
 
 class Webserver
 {   
@@ -85,7 +85,7 @@ private:
 	{
 		uint32_t ip;
 		uint32_t nextFragment;
-		float lastQueryTime;
+		uint32_t lastQueryTime;
 		FileData fileBeingUploaded;
 		uint32_t postLength;
 		uint32_t bytesWritten;
@@ -105,7 +105,7 @@ private:
 	void FinishUpload(HttpSession& session);
 	void CancelUpload(HttpSession& session);
 	bool GetJsonResponse(uint32_t remoteIp, const char* request, OutputBuffer *&response, const char* key, const char* value, size_t valueLength, bool& keepOpen);
-	void SendConfigFile(HttpSession& session);
+	void SendFile(const char* nameOfFileToSend, HttpSession& session);
 
 	// Deal with incoming G-Codes
 	char gcodeBuffer[gcodeBufferLength];

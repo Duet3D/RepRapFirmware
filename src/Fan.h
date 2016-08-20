@@ -8,7 +8,7 @@
 #ifndef SRC_FAN_H_
 #define SRC_FAN_H_
 
-#include "Types.h"
+#include "Core.h"
 
 class Fan
 {

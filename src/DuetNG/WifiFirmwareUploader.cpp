@@ -6,7 +6,6 @@
  */
 
 #include "WifiFirmwareUploader.h"
-#include "Core.h"
 #include "RepRapFirmware.h"
 
 // ESP8266 command codes
@@ -544,23 +543,6 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 		// update the Flash parameters
 		uint32_t flashParm = getData(2, blkBuf + dataOfst + 2, 0) & ~(uint32_t)flashParmMask;
 		putData(flashParm | flashParmVal, 2, blkBuf + dataOfst + 2, 0);
-	}
-
-	// If the block is all 0xFF characters, don't bother to send it because that's what the flash gets erased to
-	bool empty = true;
-	for (size_t i = 0; i < blkSize/4; ++i)
-	{
-		static_assert(dataOfst % 4 == 0, "Code only works when dataOfst is a multiple of 4");
-		if (blkBuf32[i + dataOfst/4] != 0xFFFFFFFF)
-		{
-			empty = false;
-			break;
-		}
-	}
-
-	if (empty)
-	{
-		return EspUploadResult::success;
 	}
 
 	// Calculate the block checksum

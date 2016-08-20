@@ -182,7 +182,7 @@ void PrintMonitor::WarmUpComplete()
 // Called when the first layer has been finished
 void PrintMonitor::FirstLayerComplete()
 {
-	firstLayerFilament = RawFilamentExtruded();
+	firstLayerFilament = gCodes->GetTotalRawExtrusion();
 	firstLayerDuration = GetPrintDuration() - warmUpDuration;
 	firstLayerProgress = gCodes->FractionOfFilePrinted();
 
@@ -199,7 +199,7 @@ void PrintMonitor::FirstLayerComplete()
 void PrintMonitor::LayerComplete()
 {
 	// Record a new set of layer, filament and file stats
-	const float extrRawTotal = RawFilamentExtruded();
+	const float extrRawTotal = gCodes->GetTotalRawExtrusion();
 	if (numLayerSamples < MAX_LAYER_SAMPLES)
 	{
 		if (numLayerSamples == 0)
@@ -591,6 +591,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 		GCodeFileInfo info;
 		if (!GetFileInfo(FS_PREFIX, filename, info))
 		{
+			// This may take a few runs...
 			return false;
 		}
 
@@ -659,6 +660,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 		response->EncodeString(printingFileInfo.generatedBy, ARRAY_SIZE(printingFileInfo.generatedBy), false);
 		response->catf(",\"printDuration\":%d,\"fileName\":", (int)GetPrintDuration());
 		response->EncodeString(filenameBeingPrinted, ARRAY_SIZE(filenameBeingPrinted), false);
+		response->cat('}');
 	}
 	else
 	{
@@ -885,12 +887,6 @@ bool PrintMonitor::FindFirstLayerHeight(const char* buf, size_t len, float& heig
 		}
 	}
 	return foundHeight;
-}
-
-// Get the sum of extruded filament (in mm)
-float PrintMonitor::RawFilamentExtruded() const
-{
-	return reprap.GetGCodes()->GetTotalRawExtrusion();
 }
 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.

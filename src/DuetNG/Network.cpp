@@ -49,6 +49,7 @@ Network::Network(Platform* p) : platform(p), responseCode(0), responseBody(nullp
 {
 	strcpy(hostname, HOSTNAME);
 	ClearIpAddress();
+	wiFiServerVersion[0] = 0;
 }
 
 void Network::Init()
@@ -85,7 +86,7 @@ void Network::ClearIpAddress()
 // GPIO0	GPIO2	GPIO15
 // 0		1		0		Firmware download from UART
 // 1		1		0		Normal boot from flash memory
-// 0		0		1		SD card boot (not used in on Duet)
+// 0		0		1		SD card boot (not used on Duet)
 void Network::Start()
 {
 	// The ESP8266 is held in a reset state by a pulldown resistor until we enable it.
@@ -450,15 +451,22 @@ void Network::ProcessIncomingData(TransactionBuffer &buf)
 		//		32 chars of ssid (either ssid we are connected to or our own AP name), null terminated
 		{
 			TransactionBufferReader reader(buf);
-			if (reader.GetPrimitive<uint32_t>() == 1)
+			uint32_t infoVersion = reader.GetPrimitive<uint32_t>();
+			if (infoVersion == 1 || infoVersion == 2)
 			{
 				reader.GetArray(ipAddress, 4);
-				uint32_t freeHeap = reader.GetPrimitive<uint32_t>();
+				const uint32_t freeHeap = reader.GetPrimitive<uint32_t>();
 				const char *resetReason = TranslateEspResetReason(reader.GetPrimitive<uint32_t>());
-				uint32_t flashSize = reader.GetPrimitive<uint32_t>();
-				uint16_t wifiState = reader.GetPrimitive<uint16_t>();
-				uint16_t espVcc = reader.GetPrimitive<uint16_t>();
+				const uint32_t flashSize = reader.GetPrimitive<uint32_t>();
+				int32_t rssi;
+				if (infoVersion == 2)
+				{
+					rssi = reader.GetPrimitive<int32_t>();
+				}
+				const uint16_t wifiState = reader.GetPrimitive<uint16_t>();
+				const uint16_t espVcc = reader.GetPrimitive<uint16_t>();
 				const char *firmwareVersion = reader.GetString(16);
+				strncpy(wiFiServerVersion, firmwareVersion, ARRAY_SIZE(wiFiServerVersion));
 				const char *hostName = reader.GetString(64);
 				const char *ssid = reader.GetString(32);
 				if (reader.IsOk())
@@ -469,8 +477,16 @@ void Network::ProcessIncomingData(TransactionBuffer &buf)
 										firmwareVersion, flashSize, freeHeap, (float)espVcc/1024, hostName, resetReason);
 					if (wifiState == 1)
 					{
-						platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u\n",
-											ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+						if (infoVersion == 2)
+						{
+							platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u, signal strength=%ddBm\n",
+												ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3], rssi);
+						}
+						else
+						{
+							platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u\n",
+												ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+						}
 					}
 					else if (wifiState == 2)
 					{

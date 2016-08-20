@@ -28,7 +28,7 @@ Licence: GPL
 
 #include "Core.h"
 #include "Configuration.h"
-#include "StringRef.h"
+#include "Libraries/General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
 enum Module : uint8_t
@@ -85,15 +85,13 @@ extern StringRef scratchString;
 #include "Network.h"
 #include "Platform.h"
 #include "Webserver.h"
-#include "GCodes.h"
-#include "Move.h"
-#include "Heat.h"
+#include "GCodes/GCodes.h"
+#include "Movement/Move.h"
+#include "Heating/Heat.h"
 #include "Tool.h"
 #include "Roland.h"
 #include "PrintMonitor.h"
 #include "Reprap.h"
-
-extern uint32_t isqrt64(uint64_t num);		// This is defined in its own file, Isqrt.cpp or Isqrt.asm
 
 #endif
 

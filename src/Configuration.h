@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.15-beta6"
+# define VERSION "1.15-rc2"
 #endif
 
 #ifndef DATE
-# define DATE "2016-08-07"
+# define DATE "2016-08-20"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -88,31 +88,30 @@ const float DEFAULT_TEMPERATURE_LIMIT = 262.0;		// Celsius
 const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 const float BAD_ERROR_TEMPERATURE = 2000.0;			// Must exceed any reasonable 5temperature limit including DEFAULT_TEMPERATURE_LIMIT
 
+// Heating model default parameters. For the chamber heater, we use the same values as for the bed heater.
+// These parameters are about right for an E3Dv6 hot end with 30W heater.
+const float DefaultHotEndHeaterGain = 340.0;
+const float DefaultHotEndHeaterTimeConstant = 140.0;
+const float DefaultHotEndHeaterDeadTime = 5.5;
+
+// These parameters are about right for a typical PCB bed heater that maxes out at 110C
+const float DefaultBedHeaterGain = 90.0;
+const float DefaultBedHeaterTimeConstant = 700.0;
+const float DefaultBedHeaterDeadTime = 10.0;
+
 // Parameters used to detect heating errors
-const float MaxHeatingFaultTime = 3;				// How many seconds we allow a heating fault to persist
+const float MaxHeatingFaultTime = 5;				// How many seconds we allow a heating fault to persist
 const float MaxAmbientTemperature = 45.0;			// We expect heaters to cool to this temperature or lower when switched off
-const float NormalAmbientTemperature = 20.0;		// Temperature at which the heating rates (below) apply
+const float NormalAmbientTemperature = 25.0;		// The ambient temperature we assume - allow for the printer heating its surroundings a little
 
-const float BedHeatingRate = 0.2;					// The minimum rate of rise of bed temperature from cold after the startup time
-const float BedHeaterAchievableTemp = 90.0;			// Lowest temperature at which the bed heater might top out
-const float BedHeaterStartupTime = 10.0;			// How long we allow for the bed heater to reach its normal heating rate
-
-const float ChamberHeatingRate = 0.2;				// The minimum rate of rise of chamber temperature from cold after the startup time
-const float ChamberHeaterAchievableTemp = 50.0;		// Lowest temperature at which the chamber heater might top out
-const float ChamberHeaterStartupTime = 10.0;		// How long we allow for the chamber heater to reach its normal heating rate
-
-const float ExtruderHeatingRate = 1.0;				// The minimum rate of rise of extruder temperature from cold after the startup time
-const float ExtruderHeaterAchievableTemp = 300.0;	// Lowest temperature at which the extruder temperature might top out
-const float ExtruderHeaterStartupTime = 3.0;		// How long we allow for the extruder heater to reach its normal heating rate
-
+// Temperature sense channels
 const unsigned int FirstThermocoupleChannel = 100;	// Temperature sensor channels 100... are thermocouples
 const unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200... are RTDs
 
 // PWM frequencies
-
 const unsigned int SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
 const unsigned int NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
-const unsigned int DefaultFanPwmFreq = 500;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
+const unsigned int DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
 
 // Default Z probe values
 

@@ -6,6 +6,7 @@
  */
 
 #include "RepRapFirmware.h"
+#include "Libraries/Math/Isqrt.h"
 
 // Prepare this DM for a Cartesian axis move
 void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)

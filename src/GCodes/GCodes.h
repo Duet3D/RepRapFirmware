@@ -23,6 +23,7 @@ Licence: GPL
 #define GCODES_H
 
 #include "GCodeBuffer.h"
+#include "Libraries/sha1/sha1.h"
 
 const unsigned int StackSize = 5;
 
@@ -280,6 +281,12 @@ private:
     // Firmware update
     uint8_t firmwareUpdateModuleMap;			// Bitmap of firmware modules to be updated
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
+
+	// SHA1 hashing
+	FileStore *fileBeingHashed;
+	SHA1Context hash;
+	bool StartHash(const char* filename);
+	bool AdvanceHash(StringRef &reply);
 };
 
 //*****************************************************************************************************

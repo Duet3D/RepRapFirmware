@@ -46,7 +46,11 @@
  	 	 	 may also request different status responses by specifying the "type" keyword, followed
  	 	 	 by a custom status response type. Also see "M105 S1".
 
- rr_files?dir=xxx&flagDirs={1/0}
+ rr_filelist?dir=xxx
+ 	 	 	 Returns a JSON-formatted list of all the files in xxx including the type and size in the
+			 following format: "files":[{"type":'f/d',"name":"xxx",size:yyy},...]
+
+ rr_files?dir=xxx&flagDirs={1/0} [DEPRECATED]
  	 	 	 Returns a listing of the filenames in the /gcode directory of the SD card. 'dir' is a
  	 	 	 directory path relative to the root of the SD card. If the 'dir' variable is not present,
  	 	 	 it defaults to the /gcode directory. If flagDirs is set to 1, all directories will be
@@ -54,8 +58,11 @@
 
  rr_reply    Returns the last-known G-code reply as plain text (not encapsulated as JSON).
 
- rr_configfile
+ rr_configfile [DEPRECATED]
 			 Sends the config file as plain text (not encapsulated as JSON either).
+
+ rr_download?name=xxx
+			 Download a specified file from the SD card
 
  rr_upload?name=xxx
  	 	 	 Upload a specified file using a POST request. The payload of this request has to be
@@ -688,32 +695,59 @@ void Webserver::HttpInterpreter::DoFastUpload()
 // Output to the client
 
 // Start sending a file or a JSON response.
-void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
+void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isWebFile)
 {
 	NetworkTransaction *transaction = webserver->currentTransaction;
+	FileStore *fileToSend;
 
-	if (nameOfFileToSend[0] == '/')
+	if (isWebFile)
 	{
-		++nameOfFileToSend;						// all web files are relative to the /www folder, so remove the leading '/'
-		if (nameOfFileToSend[0] == 0)
+		if (nameOfFileToSend[0] == '/')
 		{
-			nameOfFileToSend = INDEX_PAGE_FILE;
+			++nameOfFileToSend;						// all web files are relative to the /www folder, so remove the leading '/'
+			if (nameOfFileToSend[0] == 0)
+			{
+				nameOfFileToSend = INDEX_PAGE_FILE;
+			}
 		}
-	}
-	FileStore *fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
-	if (fileToSend == nullptr)
-	{
-		nameOfFileToSend = FOUR04_PAGE_FILE;
 		fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
 		if (fileToSend == nullptr)
 		{
-			RejectMessage("not found", 404);
-			return;
+			nameOfFileToSend = FOUR04_PAGE_FILE;
+			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
+			if (fileToSend == nullptr)
+			{
+				RejectMessage("not found", 404);
+				return;
+			}
 		}
+		transaction->SetFileToWrite(fileToSend);
 	}
-	transaction->SetFileToWrite(fileToSend);
+	else
+	{
+		fileToSend = platform->GetFileStore(FS_PREFIX, nameOfFileToSend, false);
+		if (fileToSend == nullptr)
+		{
+			nameOfFileToSend = FOUR04_PAGE_FILE;
+			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
+			if (fileToSend == nullptr)
+			{
+				RejectMessage("not found", 404);
+				return;
+			}
+		}
+		transaction->SetFileToWrite(fileToSend);
+	}
 
 	transaction->Write("HTTP/1.1 200 OK\n");
+
+	// Don't cache files served by rr_download
+	if (!isWebFile)
+	{
+		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
+		transaction->Write("Pragma: no-cache\n");
+		transaction->Write("Expires: 0\n");
+	}
 
 	const char* contentType;
 	bool zip = false;
@@ -742,6 +776,10 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
 		contentType = "application/zip";
 		zip = true;
 	}
+	else if (StringEndsWith(nameOfFileToSend, ".g") || StringEndsWith(nameOfFileToSend, ".gc") || StringEndsWith(nameOfFileToSend, ".gcode"))
+	{
+		contentType = "text/plain";
+	}
 	else
 	{
 		contentType = "application/octet-stream";
@@ -755,22 +793,6 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend)
 	}
 
 	transaction->Write("Connection: close\n\n");
-	transaction->Commit(false);
-}
-
-void Webserver::HttpInterpreter::SendConfigFile()
-{
-	FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
-
-	NetworkTransaction *transaction = webserver->currentTransaction;
-	transaction->Write("HTTP/1.1 200 OK\n");
-	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
-	transaction->Write("Pragma: no-cache\n");
-	transaction->Write("Expires: 0\n");
-	transaction->Write("Content-Type: text/plain\n");
-	transaction->Printf("Content-Length: %u\n", (configFile != nullptr) ? configFile->Length() : 0);
-	transaction->Write("Connection: close\n\n");
-	transaction->SetFileToWrite(configFile);
 	transaction->Commit(false);
 }
 
@@ -837,9 +859,19 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 			return;
 		}
 
-		if (StringEquals(command, "configfile"))	// rr_configfile
+		if (StringEquals(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
-			SendConfigFile();
+			const char *configPath = platform->GetMassStorage()->CombineName(platform->GetSysDir(), platform->GetConfigFile());
+			char fileName[FILENAME_LENGTH];
+			strncpy(fileName, configPath, FILENAME_LENGTH);
+
+			SendFile(fileName, false);
+			return;
+		}
+
+		if (StringEquals(command, "download") && StringEquals(qualifiers[0].key, "name"))
+		{
+			SendFile(qualifiers[0].value, false);
 			return;
 		}
 	}
@@ -912,21 +944,17 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 
 	if (StringEquals(request, "connect") && StringEquals(key, "password"))
 	{
-		if (IsAuthenticated())
+		if (IsAuthenticated() || reprap.CheckPassword(value))
 		{
-			// This IP is already authenticated, no need to check the password again
-			response->copy("{\"err\":0}");
-		}
-		else if (reprap.CheckPassword(value))
-		{
+			// Password OK
 			if (Authenticate())
 			{
-				// This is only possible if we have at least one HTTP session left
-				response->copy("{\"err\":0}");
+				// Client has been logged in
+				response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", httpSessionTimeout, platform->GetBoardString());
 			}
 			else
 			{
-				// Otherwise report an error
+				// No more HTTP sessions available
 				response->copy("{\"err\":2}");
 			}
 		}
@@ -979,6 +1007,11 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	{
 		bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, value);
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
+	}
+	else if (StringEquals(request, "filelist"))
+	{
+		OutputBuffer::Release(response);
+		response = reprap.GetFilelistResponse(value);
 	}
 	else if (StringEquals(request, "files"))
 	{

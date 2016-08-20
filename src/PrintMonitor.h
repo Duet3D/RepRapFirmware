@@ -123,8 +123,6 @@ class PrintMonitor
 		float fileProgressPerLayer[MAX_LAYER_SAMPLES];
 		float layerEstimatedTimeLeft;
 
-		float RawFilamentExtruded() const;
-
 		// We parse G-Code files in multiple stages. These variables hold the required information
 		volatile FileParseState parseState;
 		char filenameBeingParsed[FILENAME_LENGTH];

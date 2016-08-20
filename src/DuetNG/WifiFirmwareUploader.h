@@ -9,7 +9,7 @@
 #define SRC_DUETNG_WIFIFIRMWAREUPLOADER_H_
 
 #include "Core.h"
-#include "FileStore.h"
+#include "Storage/FileStore.h"
 
 class WifiFirmwareUploader
 {

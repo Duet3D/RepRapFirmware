@@ -88,6 +88,8 @@ public:
 	static void ResetWiFiForUpload();
 	static void ResetWiFiForExternalUpload();
 
+	const char *GetWiFiServerVersion() const { return wiFiServerVersion; }
+
 private:
 	void SetupSpi();
 	void PrepareForTransfer(bool dataToSend, bool allowReceive);
@@ -118,6 +120,7 @@ private:
     bool connectedToAp;
     uint8_t ipAddress[4];
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
+	char wiFiServerVersion[16];
 };
 
 #endif

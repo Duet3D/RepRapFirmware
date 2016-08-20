@@ -129,7 +129,11 @@ void Move::Spin()
 	}
 
 	// See if we can add another move to the ring
-	if (!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
+	if (
+#if SUPPORT_ROLAND
+			!reprap.GetRoland()->Active() &&
+#endif
+			!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
 	{
 		DDA *dda = ddaRingAddPointer;
 
@@ -1298,6 +1302,16 @@ void Move::SetLiveCoordinates(const float coords[DRIVES])
 	}
 	liveCoordinatesValid = true;
 	EndPointToMachine(coords, const_cast<int32_t *>(liveEndPoints), AXES);
+	cpu_irq_enable();
+}
+
+void Move::ResetExtruderPositions()
+{
+	cpu_irq_disable();
+	for(size_t eDrive = AXES; eDrive < DRIVES; eDrive++)
+	{
+		liveCoordinates[eDrive] = 0.0;
+	}
 	cpu_irq_enable();
 }
 

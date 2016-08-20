@@ -36,26 +36,25 @@ Licence: GPL
 
 // Language-specific includes
 
-#include <Libraries/TemperatureSensor/TemperatureSensor.h>
 #include <cctype>
 #include <cstring>
 #include <malloc.h>
-#include <TemperatureError.h>
 #include <cstdlib>
 #include <climits>
 
 // Platform-specific includes
 
-#include "Types.h"
 #include "Core.h"
+#include "Heating/TemperatureSensor.h"
+#include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
-#include "ff.h"
+#include "Libraries/Fatfs/ff.h"
 
 #if !defined(DUET_NG) || defined(PROTOTYPE_1)
-# include "MCP4461.h"
+# include "Libraries/MCP4461/MCP4461.h"
 #endif
 
-#include "FileStore.h"
+#include "Storage/FileStore.h"
 #include "MessageType.h"
 #include "Fan.h"
 
@@ -65,14 +64,19 @@ const bool FORWARDS = true;
 const bool BACKWARDS = !FORWARDS;
 
 #include "Pins.h"
-#include "MassStorage.h"
+#include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
 
 /**************************************************************************************************/
 
 // Some numbers...
 
-#define TIME_TO_REPRAP 1.0e6 	// Convert seconds to the units used by the machine (usually microseconds)
-#define TIME_FROM_REPRAP 1.0e-6 // Convert the units used by the machine (usually microseconds) to seconds
+#define TIME_TO_REPRAP 1.0e6 		// Convert seconds to the units used by the machine (usually microseconds)
+#define TIME_FROM_REPRAP 1.0e-6 	// Convert the units used by the machine (usually microseconds) to seconds
+
+const float SecondsToMillis = 1000.0;
+const float MillisToSeconds = 0.001;
+
+#define DEGREE_SYMBOL	"\xC2\xB0"	// Unicode degree-symbol as UTF8
 
 /**************************************************************************************************/
 
@@ -151,12 +155,6 @@ const float defaultPidKds[HEATERS] = HEATERS_(500.0, 100.0, 100.0, 100.0, 100.0,
 const float defaultPidKps[HEATERS] = HEATERS_(-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0);	// Proportional PID constants, negative values indicate use bang-bang instead of PID
 const float defaultPidKts[HEATERS] = HEATERS_(2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4);			// approximate PWM value needed to maintain temperature, per degC above room temperature
 const float defaultPidKss[HEATERS] = HEATERS_(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);			// PWM scaling factor, to allow for variation in heater power and supply voltage
-const float defaultFullBands[HEATERS] = HEATERS_(5.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0, 30.0);	// errors larger than this cause heater to be on or off
-const float defaultPidMins[HEATERS] = HEATERS_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);			// minimum value of I-term
-const float defaultPidMaxes[HEATERS] = HEATERS_(255, 180, 180, 180, 180, 180, 180, 180);			// maximum value of I-term, must be high enough to reach 245C for ABS printing
-
-const float STANDBY_TEMPERATURES[HEATERS] = HEATERS_(ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO); // We specify one for the bed, though it's not needed
-const float ACTIVE_TEMPERATURES[HEATERS] = HEATERS_(ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO, ABS_ZERO);
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 const unsigned int AD_OVERSAMPLE_BITS = 1;		// Number of bits we oversample when reading temperatures
@@ -316,7 +314,6 @@ private:
 
 public:
 	float kI, kD, kP, kT, kS;
-	float fullBand, pidMin, pidMax;
 	float thermistorSeriesR;
 	float adcLowOffset, adcHighOffset;
 
@@ -452,6 +449,7 @@ public:
 	void SetAtxPower(bool on);
 	void SetBoardType(BoardType bt);
 	const char* GetElectronicsString() const;
+	const char* GetBoardString() const;
 
 	// Timing
   
@@ -592,8 +590,9 @@ public:
 	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
 	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
 	void SetHeater(size_t heater, float power);				// power is a fraction in [0,1]
-	float HeatSampleTime() const;
+	uint32_t HeatSampleInterval() const;
 	void SetHeatSampleTime(float st);
+	float GetHeatSampleTime() const;
 	void SetPidParameters(size_t heater, const PidParameters& params);
 	const PidParameters& GetPidParameters(size_t heater) const;
 	void SetThermistorNumber(size_t heater, size_t thermistor);
@@ -690,7 +689,7 @@ private:
 	struct FlashData
 	{
 		static const uint16_t magicValue = 0xE6C4;	// value we use to recognise that the flash data has been written
-		static const uint16_t versionValue = 1;		// increment this whenever this struct changes
+		static const uint16_t versionValue = 2;		// increment this whenever this struct changes
 		static const uint32_t nvAddress = (SoftwareResetData::nvAddress + sizeof(SoftwareResetData) + 3) & (~3);
 
 		uint16_t magic;
@@ -796,7 +795,7 @@ private:
 	TemperatureSensor SpiTempSensors[MaxSpiTempSensors];
 	Pin spiTempSenseCsPins[MaxSpiTempSensors];
 	uint32_t configuredHeaters;										// bitmask of all heaters in use
-	float heatSampleTime;
+	uint32_t heatSampleTicks;
 	float temperatureLimit;
 
 	// Fans
@@ -1174,19 +1173,26 @@ inline void Platform::ExtrudeOff()
 
 inline int Platform::GetRawThermistorTemperature(size_t heater) const
 {
-  return (heater < HEATERS)
+	return (heater < HEATERS)
 		  ? thermistorFilters[heater].GetSum()/(THERMISTOR_AVERAGE_READINGS >> AD_OVERSAMPLE_BITS)
 		  : 0;
 }
 
-inline float Platform::HeatSampleTime() const
+inline uint32_t Platform::HeatSampleInterval() const
 {
-  return heatSampleTime;
+	return heatSampleTicks;
 }
 
+inline float Platform::GetHeatSampleTime() const
+{
+	return (float)heatSampleTicks/1000.0;
+}
 inline void Platform::SetHeatSampleTime(float st)
 {
-	heatSampleTime = st;
+	if (st > 0)
+	{
+		heatSampleTicks = (uint32_t)(st * 1000.0);
+	}
 }
 
 inline bool Platform::IsThermistorChannel(uint8_t heater) const

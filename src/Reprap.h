@@ -89,6 +89,7 @@ public:
 	OutputBuffer *GetConfigResponse();
 	OutputBuffer *GetLegacyStatusResponse(uint8_t type, int seq);
 	OutputBuffer *GetFilesResponse(const char* dir, bool flagsDirs);
+	OutputBuffer *GetFilelistResponse(const char* dir);
 
 	void Beep(int freq, int ms);
 	void SetMessage(const char *msg);

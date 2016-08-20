@@ -8,19 +8,16 @@ MassStorage::MassStorage(Platform* p) : platform(p)
 
 void MassStorage::Init()
 {
-	sd_mmc_init();				// Initialize SD MMC stack
+	sd_mmc_init(SdCardDetectPins, SdWriteProtectPins, SdSpiCSPins);		// Initialize SD MMC stack
 
-	// Try to mount the SD cards
-	for (size_t card = 0; card < NumSdCards; ++card)
+	// Try to mount the first SD card only
+	char replyBuffer[100];
+	StringRef reply(replyBuffer, ARRAY_SIZE(replyBuffer));
+	do { } while (!Mount(0, reply));
+	if (reply.strlen() != 0)
 	{
-		char replyBuffer[100];
-		StringRef reply(replyBuffer, ARRAY_SIZE(replyBuffer));
-		do { } while (!Mount(card, reply));
-		if (reply.strlen() != 0)
-		{
-			delay(3000);		// Wait a few seconds so users have a chance to see this
-			platform->Message(HOST_MESSAGE, reply.Pointer());
-		}
+		delay(3000);		// Wait a few seconds so users have a chance to see this
+		platform->Message(HOST_MESSAGE, reply.Pointer());
 	}
 }
 

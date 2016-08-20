@@ -9,7 +9,7 @@
 #define MOVE_H_
 
 #include "DDA.h"
-#include "Matrix.h"
+#include "Libraries/Math/Matrix.h"
 #include "DeltaParameters.h"
 #include "DeltaProbe.h"
 
@@ -54,6 +54,7 @@ public:
     void ZProbeTriggered(DDA* hitDDA);					// What to do when a the Z probe is triggered
     void SetPositions(const float move[DRIVES]);		// Force the coordinates to be these
     void SetLiveCoordinates(const float coords[DRIVES]); // Force the live coordinates (see above) to be these
+	void ResetExtruderPositions();						// Resets the extrusion amounts of the live coordinates
     void SetXBedProbePoint(size_t index, float x);		// Record the X coordinate of a probe point
     void SetYBedProbePoint(size_t index, float y);		// Record the Y coordinate of a probe point
     void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError);	// Record the Z coordinate of a probe point
