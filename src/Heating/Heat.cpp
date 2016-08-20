@@ -134,8 +134,9 @@ Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 
 	return (pids[heater]->FaultOccurred()) ? HS_fault
 			: (pids[heater]->SwitchedOff()) ? HS_off
-				: (pids[heater]->Active()) ? HS_active
-					: HS_standby;
+				: (pids[heater]->IsTuning()) ? HS_tuning
+					: (pids[heater]->Active()) ? HS_active
+						: HS_standby;
 }
 
 void Heat::SetActiveTemperature(int8_t heater, float t)

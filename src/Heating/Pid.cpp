@@ -257,26 +257,30 @@ void PID::Spin()
 			if (usingPid)
 			{
 				// Using PID mode
-				float kP, kI, kD, gain;
+				float kP, recipTi, tD, gain;
+				bool inSetPointMode;
 				if (useModel)
 				{
-					const PidParams& params = model.GetPidParameters(fabs(error) < 1.0);
+					inSetPointMode = fabs(error) > 1.0;			// use modified PID when the error is large
+					const PidParams& params = model.GetPidParameters(!inSetPointMode);
 					kP = params.kP;
-					kI = params.kI;
-					kD = params.kD;
+					recipTi = params.recipTi;
+					tD = params.tD;
 					gain = model.GetGain();
 				}
 				else
 				{
-					kP = pp.kP/255.0 * pp.kS;
-					kI = pp.kI/255.0 * pp.kS;
-					kD = pp.kD/255.0 * pp.kS;
+					inSetPointMode = false;						// use standard PID always
+					kP = (pp.kP * pp.kS) * (1.0/255.0);
+					recipTi = pp.kI/pp.kP;
+					tD = pp.kD/kP;
 					gain = 255.0/pp.kT;
 				}
 
 				// If the P term still has full authority, preset the I term to the expected PWM for this temperature
 				// and turn the heater full on or full off
-				const float pPlusD = (kP * error) - (kD * derivative);
+				const float errorMinusDterm = error - (tD * derivative);
+				const float pPlusD = kP * errorMinusDterm;
 				const float expectedPwm = constrain<float>((temperature - NormalAmbientTemperature)/gain, 0.0, maxPwm);
 				if (pPlusD + expectedPwm > maxPwm)
 				{
@@ -290,7 +294,12 @@ void PID::Spin()
 				}
 				else
 				{
-					iAccumulator = constrain<float>(iAccumulator + (error * kI * platform->HeatSampleInterval() * MillisToSeconds), 0.0, maxPwm);
+					// In the following we use a modified PID when the temperature is a long way off target.
+					// During initial heating or cooling, the D term represents expected overshoot, which we don't want to add to the I accumulator.
+					// When we are in load mode, the I term is much larger and the D term doesn't represent overshoot, so use normal PID.
+					const float errorToUse = (inSetPointMode) ? errorMinusDterm : error;
+					iAccumulator = constrain<float>(iAccumulator + (errorToUse * kP * recipTi * platform->HeatSampleInterval() * MillisToSeconds),
+													0.0, maxPwm);
 					lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, maxPwm);
 				}
 			}
@@ -549,7 +558,6 @@ void PID::DoTuningStep()
 				timeSetHeating = tuningPhaseStartTime = millis();
 				lastPwm = tuningPwm;										// turn on heater at specified power
 				tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
-				active = true;
 				mode = HeaterMode::tuning1;
 				return;
 			}
@@ -580,10 +588,10 @@ void PID::DoTuningStep()
 						DisplayBuffer("At phase 1 end");
 					}
 					tuningTimeOfFastestRate = index * tuningReadingInterval * MillisToSeconds;
-					tuningPhaseStartTime += index * tuningReadingInterval;
-					tuningFastestRate = (tuningTempReadings[index + 1] - tuningTempReadings[index - 1]) / (tuningReadingInterval * 2 * MillisToSeconds);
+					tuningFastestRate = (tuningTempReadings[index + 2] - tuningTempReadings[index - 2]) / (tuningReadingInterval * 4 * MillisToSeconds);
 
 					// Move the readings down so as to start at the max rate index
+					tuningPhaseStartTime += index * tuningReadingInterval;
 					tuningReadingsTaken -= index;
 					for (size_t i = 0; i < tuningReadingsTaken; ++i)
 					{
@@ -599,7 +607,7 @@ void PID::DoTuningStep()
 			{
 				// In the following, the figure of 2.75 was chosen because a value of 2 is too low to handle the bed heater
 				// with embedded thermistor on my Kossel (reservoir effect)
-				if (ReadingsStable(tuningReadingsTaken/2, (temperature - tuningTempReadings[0]) * 0.269))		// if we have been going for ~2 time constants
+				if (ReadingsStable(tuningReadingsTaken/2, (temperature - tuningTempReadings[0]) * 0.2))		// if we have been going for ~2.75 time constants
 				{
 					// We have been heating for long enough, so we can do a fit
 					FitCurve();
@@ -643,13 +651,14 @@ bool PID::ReadingsStable(size_t numReadings, float maxDiff) const
 }
 
 // Return the index in the temperature readings of the maximum rate of increase
+// In view of the poor resolution of most thermistors at low temperatures, we measure over 4 time intervals instead of 2.
 /*static*/ size_t PID::GetMaxRateIndex()
 {
-	size_t index = 1;
+	size_t index = 2;
 	float maxIncrease = 0.0;
-	for (size_t i = 1; i + 1 < tuningReadingsTaken; ++i)
+	for (size_t i = 2; i + 2 < tuningReadingsTaken; ++i)
 	{
-		const float increase = tuningTempReadings[i + 1] - tuningTempReadings[i - 1];
+		const float increase = tuningTempReadings[i + 2] - tuningTempReadings[i - 2];
 		if (increase > maxIncrease)
 		{
 			maxIncrease = increase;

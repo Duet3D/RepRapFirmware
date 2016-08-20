@@ -57,26 +57,13 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pU
 void FopDt::CalcPidConstants()
 {
 	const float timeFrac = deadTime/timeConstant;
-
-#if 1
 	loadChangeParams.kP = 0.7/(gain * timeFrac);
-	loadChangeParams.kI = loadChangeParams.kP/(deadTime * 2.0);
-	loadChangeParams.kD = loadChangeParams.kP * deadTime;
+	loadChangeParams.recipTi = 1.0/(deadTime * 2.0);								// Ti = 2 * deadTime
+	loadChangeParams.tD = deadTime * 0.7;
 
 	setpointChangeParams.kP = 0.7/(gain * timeFrac);
-	setpointChangeParams.kI = setpointChangeParams.kP/max<float>(deadTime * 2.0, timeConstant);
-	setpointChangeParams.kD = setpointChangeParams.kP * deadTime;
-#else
-	// Calculate the PID parameters for responding to changes in load, using ITAE-load
-	loadChangeParams.kP = (0.77902/gain) * pow(timeFrac, -1.06401);
-	loadChangeParams.kI = loadChangeParams.kP/((1.0/1.14311) * timeConstant * pow(timeFrac, 0.70949));
-	loadChangeParams.kD = loadChangeParams.kP * 0.57137 * timeConstant * pow(timeFrac, 1.03826);
-
-	// Calculate the PID parameters for responding to changes in the setpoint using IAE-setpoint
-	setpointChangeParams.kP = (0.65/gain) * pow(timeFrac, -1.04432);
-	setpointChangeParams.kI = setpointChangeParams.kP * (0.9895 + 0.09539 * timeFrac)/timeConstant;
-	setpointChangeParams.kD = setpointChangeParams.kP * 0.50814 * timeConstant * pow(timeFrac, 1.08433);
-#endif
+	setpointChangeParams.recipTi = 1.0/max<float>(deadTime * 2.0, timeConstant);	// Ti = time constant unless dead time is very long
+	setpointChangeParams.tD = deadTime * 0.7;
 }
 
 // End

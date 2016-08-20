@@ -3206,7 +3206,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				if (!success)
 				{
 					error = true;
-					platform->MessageF(GENERIC_MESSAGE, "Setting pin %d to %d is not supported\n", pin, val);
+					reply.printf("Setting pin %d to %d is not supported\n", pin, val);
 				}
 			}
 		}
@@ -4216,9 +4216,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					{
 						// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
 						const PidParams& spParams = model.GetPidParameters(false);
-						reply.catf("\nSetpoint change: P%.1f, I%.2f, D%.1f", 255.0 * spParams.kP, 255.0 * spParams.kI, 255.0 * spParams.kD);
+						const float scaledSpKp = 255.0 * spParams.kP;
+						reply.catf("\nSetpoint change: P%.1f, I%.2f, D%.1f",
+								scaledSpKp, scaledSpKp * spParams.recipTi, scaledSpKp * spParams.tD);
 						const PidParams& ldParams = model.GetPidParameters(true);
-						reply.catf("\nLoad change: P%.1f, I%.2f, D%.1f", 255.0 * ldParams.kP, 255.0 * ldParams.kI, 255.0 * ldParams.kD);
+						const float scaledLoadKp = 255.0 * ldParams.kP;
+						reply.catf("\nLoad change: P%.1f, I%.2f, D%.1f",
+								scaledLoadKp, scaledLoadKp * ldParams.recipTi, scaledLoadKp * ldParams.tD);
 					}
 				}
 			}

@@ -31,7 +31,7 @@ class Heat
 {
 public:
 	// Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
-	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2, HS_fault = 3 };
+	enum HeaterStatus { HS_off = 0, HS_standby = 1, HS_active = 2, HS_fault = 3, HS_tuning = 4 };
 
 	Heat(Platform* p);
 	void Spin();												// Called in a tight loop to keep everything going

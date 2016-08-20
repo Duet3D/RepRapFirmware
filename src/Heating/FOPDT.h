@@ -12,9 +12,9 @@
 
 struct PidParams
 {
-	float kP;
-	float kI;
-	float kD;
+	float kP;			// controller (not model) gain
+	float recipTi;		// reciprocal of controller integral time
+	float tD;			// controller differential time
 };
 
 class FopDt
