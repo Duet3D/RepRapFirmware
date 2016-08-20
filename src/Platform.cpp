@@ -20,7 +20,7 @@
  ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-#include "DueFlashStorage.h"
+#include "Libraries/Flash/DueFlashStorage.h"
 
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"

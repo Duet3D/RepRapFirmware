@@ -102,9 +102,6 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet/Lwip}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet/EMAC}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/Fatfs}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/MCP4461}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/Flash}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1548770846" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
@@ -222,9 +219,6 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/duetNG}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/DuetNG}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/Fatfs}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/MCP4461}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/Flash}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1610427238" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM4E8E__"/>
@@ -344,9 +338,6 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/duetNG}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/DuetNG}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/Fatfs}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/MCP4461}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Libraries/Flash}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.486383061" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM4E8E__"/>

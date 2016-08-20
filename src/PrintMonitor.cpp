@@ -494,7 +494,6 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 		if (parseState == parsingFooter)
 		{
 			// Processing the footer. See how many bytes we need to read and if we can reuse the overlap
-			bool footerInfoComplete = true;
 			FilePosition pos = fileBeingParsed->Position();
 			sizeToRead = (size_t)min<FilePosition>(fileBeingParsed->Length() - pos, GCODE_READ_SIZE);
 			if (fileOverlapLength > 0)
@@ -525,23 +524,34 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			accumulatedReadTime += now - startTime;
 			startTime = now;
 
+			bool footerInfoComplete = true;
+
 			// Search for filament used
 			if (parsedFileInfo.numFilaments == 0)
 			{
 				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - AXES);
-				footerInfoComplete &= (parsedFileInfo.numFilaments != 0);
+				if (parsedFileInfo.numFilaments == 0)
+				{
+					footerInfoComplete = false;
+				}
 			}
 
 			// Search for layer height
 			if (parsedFileInfo.layerHeight == 0.0)
 			{
-				footerInfoComplete &= FindLayerHeight(buf, sizeToScan, parsedFileInfo.layerHeight);
+				if (!FindLayerHeight(buf, sizeToScan, parsedFileInfo.layerHeight))
+				{
+					footerInfoComplete = false;
+				}
 			}
 
 			// Search for object height
 			if (parsedFileInfo.objectHeight == 0.0)
 			{
-				footerInfoComplete &= FindHeight(buf, sizeToScan, parsedFileInfo.objectHeight);
+				if (!FindHeight(buf, sizeToScan, parsedFileInfo.objectHeight))
+				{
+					footerInfoComplete = false;
+				}
 			}
 
 			// Keep track of the time stats
@@ -917,16 +927,18 @@ bool PrintMonitor::FindHeight(const char* buf, size_t len, float& height) const
 
 		if (len < 5)
 		{
-			break;
+			break;			// not enough characters left for a G1 Zx.x command
 		}
 
-		++buf;			// move to 1 character beyond c
+		++buf;				// move to 1 character beyond c
 		--len;
 
+		// In theory we should skip N and a line number here if they are present, but no slicers seem to generate line numbers
 		if (c == 'G')
 		{
 			if (inRelativeMode)
 			{
+				// We have seen a G91 in this buffer already, so we are only interested in G90 commands that switch back to absolute mode
 				if (buf[0] == '9' && buf[1] == '0' && (buf[2] < '0' || buf[2] > '9'))
 				{
 					// It's a G90 command so go back to absolute mode
@@ -943,11 +955,10 @@ bool PrintMonitor::FindHeight(const char* buf, size_t len, float& height) const
 					// It is a G0 or G1 command. See if it has a Z parameter.
 					while (len >= 4)
 					{
-						c = *buf++;
-						--len;
+						c = *buf;
 						if (c == 'Z')
 						{
-							const char* zpos = buf;
+							const char* zpos = buf + 1;
 							// Check special case of this code ending with ";E" or "; E" - ignore such codes
 							while (len > 2 && *buf != '\n' && *buf != '\r' && *buf != ';')
 							{
@@ -969,6 +980,8 @@ bool PrintMonitor::FindHeight(const char* buf, size_t len, float& height) const
 						{
 							break;		// no Z parameter
 						}
+						++buf;
+						--len;
 					}
 				}
 			}
