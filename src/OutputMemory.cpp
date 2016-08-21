@@ -301,7 +301,12 @@ size_t OutputBuffer::EncodeString(const char *src, size_t srcLength, bool allowC
 				break;
 			case '"':
 			case '\\':
+#if 1
+			// In theory we should escape '/' as well. However, we never used to, and doing so confuses PanelDue.
+			// This will be fixed in PanelDue firmware version 1.15, but in the mean time, don't escape '/'.
+#else
 			case '/':
+#endif
 				esc = c;
 				break;
 			default:

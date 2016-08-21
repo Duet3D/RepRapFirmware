@@ -11,7 +11,7 @@
 // Check the model parameters are sensible, if they are then save them and return true.
 bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pUsePid)
 {
-	if (pg > 10.0 && pg < 1000.0 && pdt > 0.1 && ptc > 2 * pdt && pMaxPwm > 0.2 && pMaxPwm <= 1.0)
+	if (pg > 10.0 && pg < 1500.0 && pdt > 0.1 && ptc > 2 * pdt && pMaxPwm > 0.2 && pMaxPwm <= 1.0)
 	{
 		gain = pg;
 		timeConstant = ptc;

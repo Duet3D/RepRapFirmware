@@ -3206,7 +3206,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				if (!success)
 				{
 					error = true;
-					reply.printf("Setting pin %d to %d is not supported\n", pin, val);
+					reply.printf("Setting pin %d to %d is not supported", pin, val);
 				}
 			}
 		}

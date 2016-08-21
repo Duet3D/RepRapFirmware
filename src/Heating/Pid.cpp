@@ -47,6 +47,7 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid)
 	tuned = false;
 	useModel = true;						// by default we use the model in this first release
 	averagePWM = lastPwm = 0.0;
+	heatingFaultCount = 0;
 
 	// Time the sensor was last sampled.  During startup, we use the current
 	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
@@ -56,7 +57,19 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid)
 // Set the process model
 bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 {
-	return model.SetParameters(gain, tc, td, maxPwm, usePid);
+	bool rslt = model.SetParameters(gain, tc, td, maxPwm, usePid);
+	if (rslt)
+	{
+		float safeGain = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater())
+								? 170.0 : 480.0;
+		if (gain > safeGain)
+		{
+			platform->MessageF(GENERIC_MESSAGE,
+					"Warning: Heater %u appears to be over-powered and a fire risk! If left on at full power, its temperature is predicted to reach %uC.\n",
+					heater, (unsigned int)gain + 20);
+		}
+	}
+	return rslt;
 }
 
 // Read and store the temperature of this heater and returns the error code.
@@ -222,8 +235,17 @@ void PID::Spin()
 		case HeaterMode::stable:
 			if (fabs(error) > MaxStableTemperatureError)
 			{
-				mode = HeaterMode::fault;
-				platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion too large\n", heater);
+				++heatingFaultCount;
+				if (heatingFaultCount * platform->HeatSampleInterval() > MaxHeatingFaultTime * SecondsToMillis)
+				{
+					SetHeater(0.0);			// do this here just to be sure
+					mode = HeaterMode::fault;
+					platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion too large\n", heater);
+				}
+			}
+			else if (heatingFaultCount != 0)
+			{
+				--heatingFaultCount;
 			}
 			break;
 
@@ -236,7 +258,7 @@ void PID::Spin()
 			}
 			else
 			{
-				// We could check for temperature excessive or not falling here, but without an alarm there is not much we can do
+				// We could check for temperature excessive or not falling here, but without an alarm or a power-off mechanism, there is not much we can do
 			}
 			break;
 
@@ -290,7 +312,7 @@ void PID::Spin()
 				else if (pPlusD + expectedPwm < 0.0)
 				{
 					lastPwm = 0.0;
-					iAccumulator = expectedPwm;
+					// Don't set iAccumulator to expectedPwm here, it may slow down cooling or cause unexpected heating
 				}
 				else
 				{
@@ -421,7 +443,7 @@ void PID::StartAutoTune(float maxTemp, float maxPwm, StringRef& reply)
 		const TemperatureError err = ReadTemperature();
 		if (err != TemperatureError::success)
 		{
-			reply.printf("Error: heater %d reported error '%u' at start of auto tuning", heater, TemperatureErrorString(err));
+			reply.printf("Error: heater %d reported error '%s' at start of auto tuning", heater, TemperatureErrorString(err));
 		}
 		else
 		{
@@ -704,7 +726,7 @@ void PID::FitCurve()
 	// I'm not sure which td value we should use to calculate the gain, but it probably doesn't make much difference because usually, td << t3.
 	const float gain = T3 / (lastPwm * (1.0 - exp((td - t3)/tc)));
 
-	tuned = model.SetParameters(gain, tc, td, model.GetMaxPwm(), true);
+	tuned = SetModel(gain, tc, td, model.GetMaxPwm(), true);
 	if (tuned)
 	{
 		useModel = true;

@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.15-rc3"
+# define VERSION "1.15-rc4"
 #endif
 
 #ifndef DATE
-# define DATE "2016-08-20"
+# define DATE "2016-08-21"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -76,7 +76,7 @@ const float HEAT_SAMPLE_TIME = 0.5;					// Seconds
 const float HEAT_PWM_AVERAGE_TIME = 5.0;			// Seconds
 
 const float TEMPERATURE_CLOSE_ENOUGH = 2.5;			// Celsius
-const float MaxStableTemperatureError = 5.0;		// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
+const float MaxStableTemperatureError = 8.0;		// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
 static_assert(MaxStableTemperatureError > TEMPERATURE_CLOSE_ENOUGH, "MaxStableTemperatureError is too low");
 const float TEMPERATURE_LOW_SO_DONT_CARE = 40.0;	// Celsius
 const float HOT_ENOUGH_TO_EXTRUDE = 160.0;			// Celsius
