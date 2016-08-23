@@ -1,7 +1,8 @@
 *.d
 *.o
 Release/*
-!Release/RepRapFirmware*.bin
-!Release/DuetWiFiFirmware*.bin
+!Release/*.bin
+!Release/*/*.bin
+!Release/*/*/*.bin
 *~
 *orig
