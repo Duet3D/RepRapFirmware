@@ -1,6 +1,5 @@
 *.d
 *.o
-Release/*
 !Release/*.bin
 !Release/*/*.bin
 !Release/*/*/*.bin
