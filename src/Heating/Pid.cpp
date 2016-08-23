@@ -233,7 +233,7 @@ void PID::Spin()
 			break;
 
 		case HeaterMode::stable:
-			if (fabs(error) > MaxStableTemperatureError)
+			if (fabs(error) > MaxStableTemperatureError && temperature > MaxAmbientTemperature)
 			{
 				++heatingFaultCount;
 				if (heatingFaultCount * platform->HeatSampleInterval() > MaxHeatingFaultTime * SecondsToMillis)

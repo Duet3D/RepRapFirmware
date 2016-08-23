@@ -879,7 +879,8 @@ private:
 #ifdef DUET_NG
 	AnalogChannelNumber vInMonitorAdcChannel;
 	volatile uint16_t currentVin, highestVin, lowestVin;
-	uint16_t upperVinLimit, lowerVinLimit;
+	uint32_t numUnderVoltageEvents;
+	volatile uint32_t numOverVoltageEvents;
 	bool driversPowered;
 #endif
 

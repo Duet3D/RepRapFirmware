@@ -68,7 +68,7 @@ const Pin TEMP_SENSE_PINS[HEATERS] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Ther
 #ifdef PROTOTYPE_1
 const Pin HEAT_ON_PINS[HEATERS] = { 19, 20, 16, 15, 37, 40, 43, 38 };	// Heater pin numbers
 #else
-const Pin HEAT_ON_PINS[HEATERS] = { 19, 20, 16, 35, 37, 40, 43, 38 };	// Heater pin numbers (heater 7 pin TBC)
+const Pin HEAT_ON_PINS[HEATERS] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
 #endif
 
 // Default thermistor parameters

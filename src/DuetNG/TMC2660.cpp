@@ -467,10 +467,12 @@ namespace TMC2660
 	}
 
 	// Flag the the drivers have been powered up.
-	// Must call Init() before the first call to say the drivers have been powered uo.
+	// Important notes:
+	// 1. Before the first call to this function with powered true, you must call Init().
+	// 2. This may be called by the tick ISR with powered false, possibly while another call (with powered either true or false) is being executed
 	void SetDriversPowered(bool powered)
 	{
-		bool wasPowered = driversPowered;
+		const bool wasPowered = driversPowered;
 		driversPowered = powered;
 		if (powered && !wasPowered)
 		{
@@ -483,7 +485,7 @@ namespace TMC2660
 				driverStates[drive].WriteAll();
 			}
 		}
-		else if (!powered and wasPowered)
+		else if (!powered && wasPowered)
 		{
 			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
 		}

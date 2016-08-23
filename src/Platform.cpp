@@ -69,9 +69,9 @@ uint32_t lastInterruptTime = 0;
 void UrgentInit()
 {
 #ifdef DUET_NG
-	// When the reset button is pressed, if the TMC2660 drivers were previously enabled then we get uncommanded motor movements.
-	// Try to reduce that by initialising the drivers early here.
-	// On the production board we will also be able to set the ENN line high here.
+	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
+	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the drivers early here.
+	// On the production boards the ENN line is pulled high and that prevents motor movements.
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
@@ -322,7 +322,7 @@ void Platform::Init()
 		}
 
 		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
-		pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pin
+		pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
 
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
@@ -403,6 +403,7 @@ void Platform::Init()
 	AnalogInEnableChannel(vInMonitorAdcChannel, true);
 	currentVin = highestVin = 0;
 	lowestVin = 9999;
+	numUnderVoltageEvents = numOverVoltageEvents = 0;
 #endif
 
 	// Clear the spare pin configuration
@@ -412,6 +413,12 @@ void Platform::Init()
 	lastTime = Time();
 	longWait = lastTime;
 	InitialiseInterrupts();		// also sets 'active' to true
+
+	// Allow the thermistors to collect enough readings to average before we response to PanelDue requests or allow heater to be turned on,
+	// otherwise we may send bad data to PanelDue, which confuses older firmware versions, and/or get PID problems.
+	// We read 1 heater every 2 system ticks, hence the wait for THERMISTOR_AVERAGE_READINGS * HEATERS * 2 ticks.
+	// We allow an extra 2 reads per thermistor, because the first few ADC readings may be inaccurate.
+	delay((THERMISTOR_AVERAGE_READINGS + 2) * HEATERS * 2);
 }
 
 void Platform::InvalidateFiles(const FATFS *fs)
@@ -1207,12 +1214,19 @@ void Platform::Spin()
 	}
 
 #ifdef DUET_NG
-	// Check whether the TMC drivers need to be initialised
+	// Check whether the TMC drivers need to be initialised.
+	// The tick ISR also looks for over-voltage events, but it just disables the driver without changing driversPowerd or numOverVoltageEvents
 	if (driversPowered)
 	{
-		if (currentVin < driverPowerOffAdcReading || currentVin > driverOverVoltageAdcReading)
+		if (currentVin < driverPowerOffAdcReading)
+		{
+			++numUnderVoltageEvents;
+			driversPowered = false;
+		}
+		else if (currentVin > driverOverVoltageAdcReading)
 		{
 			driversPowered = false;
+			++numOverVoltageEvents;
 		}
 	}
 	else if (currentVin >= driverPowerOnAdcReading && currentVin <= driverNormalVoltageAdcReading)
@@ -1437,8 +1451,9 @@ void Platform::Diagnostics(MessageType mtype)
 
 	#ifdef DUET_NG
 	// Show the supply voltage
-	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f\n",
-				AdcReadingToPowerVoltage(lowestVin), AdcReadingToPowerVoltage(currentVin), AdcReadingToPowerVoltage(highestVin));
+	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %u, over voltage events: %u\n",
+				AdcReadingToPowerVoltage(lowestVin), AdcReadingToPowerVoltage(currentVin), AdcReadingToPowerVoltage(highestVin),
+				numUnderVoltageEvents, numOverVoltageEvents);
 	lowestVin = highestVin = currentVin;
 #endif
 
@@ -2811,9 +2826,8 @@ void Platform::Tick()
 		}
 		if (driversPowered && currentVin > driverOverVoltageAdcReading)
 		{
-			driversPowered = false;
 			TMC2660::SetDriversPowered(false);
-			//TODO set ENN high on production boards
+			// We deliberately do not clear driversPowered here or increase the over voltage event count - we let the spin loop handle that
 		}
 #endif
 	}
