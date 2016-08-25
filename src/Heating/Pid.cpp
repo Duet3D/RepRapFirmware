@@ -176,15 +176,20 @@ void PID::Spin()
 	}
 	else
 	{
-		// We have a good temperature reading. Calculate the derivative, if possible.
+		// We have an apparently-good temperature reading. Calculate the derivative, if possible.
 		float derivative = 0.0;
 		bool gotDerivative = false;
 		badTemperatureCount = 0;
 		if ((previousTemperaturesGood & (1 << (NumPreviousTemperatures - 1))) != 0)
 		{
-			derivative = SecondsToMillis * (temperature - previousTemperatures[previousTemperatureIndex])
+			const float tentativeDerivative = SecondsToMillis * (temperature - previousTemperatures[previousTemperatureIndex])
 							/ (float)(platform->HeatSampleInterval() * NumPreviousTemperatures);
-			gotDerivative = true;
+			// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
+			if (fabs(tentativeDerivative) <= 10.0)
+			{
+				derivative = tentativeDerivative;
+				gotDerivative = true;
+			}
 		}
 		previousTemperatures[previousTemperatureIndex] = temperature;
 		previousTemperaturesGood = (previousTemperaturesGood << 1) | 1;
@@ -259,6 +264,7 @@ void PID::Spin()
 			else
 			{
 				// We could check for temperature excessive or not falling here, but without an alarm or a power-off mechanism, there is not much we can do
+				// TODO emergency stop?
 			}
 			break;
 
@@ -278,7 +284,7 @@ void PID::Spin()
 			float maxPwm = (useModel) ? model.GetMaxPwm() : pp.kS;
 			if (usingPid)
 			{
-				// Using PID mode
+				// Using PID mode. Determine the PID parameters to use.
 				float kP, recipTi, tD, gain;
 				bool inSetPointMode;
 				if (useModel)
@@ -295,24 +301,26 @@ void PID::Spin()
 					inSetPointMode = false;						// use standard PID always
 					kP = (pp.kP * pp.kS) * (1.0/255.0);
 					recipTi = pp.kI/pp.kP;
-					tD = pp.kD/kP;
+					tD = pp.kD/pp.kP;
 					gain = 255.0/pp.kT;
 				}
 
-				// If the P term still has full authority, preset the I term to the expected PWM for this temperature
-				// and turn the heater full on or full off
+				// If the P and D terms together demand that the heater is full on or full off, disregard the I term
 				const float errorMinusDterm = error - (tD * derivative);
 				const float pPlusD = kP * errorMinusDterm;
 				const float expectedPwm = constrain<float>((temperature - NormalAmbientTemperature)/gain, 0.0, maxPwm);
 				if (pPlusD + expectedPwm > maxPwm)
 				{
 					lastPwm = maxPwm;
-					iAccumulator = expectedPwm;
+					// If we are heating up, preset the I term to the expected PWM at this temperature, ready for the switch over to PID
+					if (error > 0.0 && derivative > 0.0)
+					{
+						iAccumulator = expectedPwm;
+					}
 				}
 				else if (pPlusD + expectedPwm < 0.0)
 				{
 					lastPwm = 0.0;
-					// Don't set iAccumulator to expectedPwm here, it may slow down cooling or cause unexpected heating
 				}
 				else
 				{
@@ -592,7 +600,7 @@ void PID::DoTuningStep()
 			break;
 
 		case HeaterMode::tuning1:
-			if (millis() - tuningPhaseStartTime > (uint32_t)(model.GetDeadTime() * SecondsToMillis) + 20000 && (temperature - tuningStartTemp) < 4.0)
+			if (millis() - tuningPhaseStartTime > (uint32_t)(model.GetDeadTime() * SecondsToMillis) + 30000 && (temperature - tuningStartTemp) < 3.0)
 			{
 				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not increasing\n");
 				break;
