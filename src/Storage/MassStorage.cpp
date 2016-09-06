@@ -1,6 +1,51 @@
 #include "RepRapFirmware.h"
 #include "sd_mmc.h"
 
+// Static helper functions - not declared as class members to avoid having to include sd_mmc.h everywhere
+static const char* TranslateCardType(card_type_t ct)
+{
+	switch (ct)
+	{
+		case CARD_TYPE_SD | CARD_TYPE_HC:
+			return "SDHC";
+		case CARD_TYPE_SD:
+			return "SD";
+		case CARD_TYPE_MMC | CARD_TYPE_HC:
+			return "MMC High Capacity";
+		case CARD_TYPE_MMC:
+			return "MMC";
+		case CARD_TYPE_SDIO:
+			return "SDIO";
+		case CARD_TYPE_SD_COMBO:
+			return "SD COMBO";
+		case CARD_TYPE_UNKNOWN:
+		default:
+			return "Unknown type";
+	}
+}
+
+static const char* TranslateCardError(sd_mmc_err_t err)
+{
+	switch (err)
+	{
+		case SD_MMC_ERR_NO_CARD:
+			return "Card not found";
+		case SD_MMC_ERR_UNUSABLE:
+			return "Card is unusable";
+		case SD_MMC_ERR_SLOT:
+			return "Slot unknown";
+		case SD_MMC_ERR_COMM:
+			return "Communication error";
+		case SD_MMC_ERR_PARAM:
+			return "Illegal input parameter";
+		case SD_MMC_ERR_WP:
+			return "Card write protected";
+		default:
+			return "Unknown error";
+	}
+}
+
+// Mass Storage class
 MassStorage::MassStorage(Platform* p) : platform(p)
 {
 	memset(&fileSystems, 0, sizeof(fileSystems));
@@ -8,12 +53,17 @@ MassStorage::MassStorage(Platform* p) : platform(p)
 
 void MassStorage::Init()
 {
+	for (size_t i = 0; i < NumSdCards; ++i)
+	{
+		isMounted[i] = false;
+	}
+
 	sd_mmc_init(SdCardDetectPins, SdWriteProtectPins, SdSpiCSPins);		// Initialize SD MMC stack
 
 	// Try to mount the first SD card only
 	char replyBuffer[100];
 	StringRef reply(replyBuffer, ARRAY_SIZE(replyBuffer));
-	do { } while (!Mount(0, reply));
+	do { } while (!Mount(0, reply, false));
 	if (reply.strlen() != 0)
 	{
 		delay(3000);		// Wait a few seconds so users have a chance to see this
@@ -26,8 +76,8 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 	size_t outIndex = 0;
 	size_t inIndex = 0;
 
-	// DC 2015-11-25 Only prepend the directory if the filename does not have an absolute path
-	if (directory != NULL && fileName[0] != '/' && (strlen(fileName) < 3 || !isdigit(fileName[0]) || fileName[1] != ':' || fileName[2] != '/'))
+	// DC 2015-11-25 Only prepend the directory if the filename does not have an absolute path or volume specifier
+	if (directory != NULL && fileName[0] != '/' && (strlen(fileName) < 2 || !isdigit(fileName[0]) || fileName[1] != ':'))
 	{
 		while (directory[inIndex] != 0 && directory[inIndex] != '\n')
 		{
@@ -245,11 +295,18 @@ bool MassStorage::DirectoryExists(const char* directory, const char* subDirector
 // Mount the specified SD card, returning true if done, false if needs to be called again.
 // If an error occurs, return true with the error message in 'reply'.
 // This may only be called to mount one card at a time.
-bool MassStorage::Mount(size_t card, StringRef& reply)
+bool MassStorage::Mount(size_t card, StringRef& reply, bool reportSuccess)
 {
 	if (card >= NumSdCards)
 	{
 		reply.copy("SD card number out of range");
+		return true;
+	}
+
+	if (isMounted[card] && platform->AnyFileOpen(&fileSystems[card]))
+	{
+		// Don't re-mount the card if any files are open on it
+		reply.copy("SD card has open file(s)");
 		return true;
 	}
 
@@ -259,6 +316,7 @@ bool MassStorage::Mount(size_t card, StringRef& reply)
 	if (!mounting)
 	{
 		sd_mmc_unmount(card);			// this forces it to re-initialise the card
+		isMounted[card] = false;
 		startTime = millis();
 		mounting = true;
 		delay(2);
@@ -275,72 +333,38 @@ bool MassStorage::Mount(size_t card, StringRef& reply)
 	if (err != SD_MMC_OK)
 	{
 		f_mount(card, NULL);
-
-		reply.printf("Cannot initialise SD card %u: ", card);
-		switch (err)
-		{
-			case SD_MMC_ERR_NO_CARD:
-				reply.cat("Card not found");
-				break;
-			case SD_MMC_ERR_UNUSABLE:
-				reply.cat("Card is unusable, try another one");
-				break;
-			case SD_MMC_ERR_SLOT:
-				reply.cat("Slot unknown");
-				break;
-			case SD_MMC_ERR_COMM:
-				reply.cat("General communication error");
-				break;
-			case SD_MMC_ERR_PARAM:
-				reply.cat("Illegal input parameter");
-				break;
-			case SD_MMC_ERR_WP:
-				reply.cat("Card write protected");
-				break;
-			default:
-				reply.catf("Unknown (code %d)", err);
-				break;
-		}
+		reply.printf("Cannot initialise SD card %u: %s", card, TranslateCardError(err));
 	}
 	else
 	{
-		if (reprap.Debug(moduleStorage))
-		{
-			// Print some card details
-			platform->MessageF(DEBUG_MESSAGE, "SD card %u detected, capacity: %u\n", card, sd_mmc_get_capacity(card));
-			platform->Message(DEBUG_MESSAGE, "Card type: ");
-			switch (sd_mmc_get_type(card))
-			{
-				case CARD_TYPE_SD | CARD_TYPE_HC:
-					platform->Message(DEBUG_MESSAGE, "SDHC\n");
-					break;
-				case CARD_TYPE_SD:
-					platform->Message(DEBUG_MESSAGE, "SD\n");
-					break;
-				case CARD_TYPE_MMC | CARD_TYPE_HC:
-					platform->Message(DEBUG_MESSAGE, "MMC High Density\n");
-					break;
-				case CARD_TYPE_MMC:
-					platform->Message(DEBUG_MESSAGE, "MMC\n");
-					break;
-				case CARD_TYPE_SDIO:
-					platform->Message(DEBUG_MESSAGE, "SDIO\n");
-					break;
-				case CARD_TYPE_SD_COMBO:
-					platform->Message(DEBUG_MESSAGE, "SD COMBO\n");
-					break;
-				case CARD_TYPE_UNKNOWN:
-				default:
-					platform->Message(DEBUG_MESSAGE, "Unknown\n");
-					break;
-			}
-		}
-
 		// Mount the file systems
 		FRESULT mounted = f_mount(card, &fileSystems[card]);
 		if (mounted != FR_OK)
 		{
-			reply.printf("Can't mount SD card %u: code %d\n", card, mounted);
+			reply.printf("Can't mount SD card %u: code %d", card, mounted);
+		}
+		else
+		{
+			isMounted[card] = true;
+			if (reportSuccess)
+			{
+				float capacity = sd_mmc_get_capacity(card)/1024;		// get capacity and convert to Mbytes
+				const char* capUnits;
+				if (capacity >= 1024.0)
+				{
+					capacity /= 1024.0;
+					capUnits = "Gb";
+				}
+				else
+				{
+					capUnits = "Mb";
+				}
+				reply.printf("%s card mounted in slot %u, capacity %.2f%s", TranslateCardType(sd_mmc_get_type(card)), card, capacity, capUnits);
+			}
+			else
+			{
+				reply.Clear();
+			}
 		}
 	}
 	return true;
@@ -359,7 +383,26 @@ bool MassStorage::Unmount(size_t card, StringRef& reply)
 	platform->InvalidateFiles(&fileSystems[card]);
 	f_mount(card, NULL);
 	sd_mmc_unmount(card);
+	isMounted[card] = false;
+	reply.Clear();
 	return true;
+}
+
+// Check if the drive referenced in the specified path is mounted. Return true if it is.
+// Ideally we would try to mount it if it is not, however mounting a drive can take a long time, and the functions that call this are expected to execute quickly.
+bool MassStorage::CheckDriveMounted(const char* path)
+{
+	unsigned int card;
+	if (strlen(path) >= 2 && isDigit(path[0]) && path[1] == ':')
+	{
+		card = path[0] - '0';
+	}
+	else
+	{
+		card = 0;
+	}
+
+	return card < NumSdCards && isMounted[card];
 }
 
 // End

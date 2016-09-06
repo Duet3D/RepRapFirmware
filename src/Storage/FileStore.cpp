@@ -27,7 +27,14 @@ void FileStore::Invalidate(const FATFS *fs)
 	if (file.fs == fs)
 	{
 		Init();
+		file.fs = nullptr;
 	}
+}
+
+// Return true if the file is open on the specified file system
+bool FileStore::IsOpenOn(const FATFS *fs) const
+{
+	return openCount != 0 && file.fs == fs;
 }
 
 // Open a local file (for example on an SD card).

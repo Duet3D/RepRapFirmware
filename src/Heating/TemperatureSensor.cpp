@@ -294,10 +294,10 @@ TemperatureError TemperatureSensor::GetRtdTemperature(float *t)
 				// Formally-verified binary search routine, adapted from one of the eCv examples
 				size_t low = 0u, high = NumTempTableEntries;
 				while (high > low)
-				//keep(low <= high; high <= NumTempTableEntries)
-				//keep(low == 0u || tempTable[low - 1u].adcReading < adcVal)
-				//keep(high == NumTempTableEntries || adcVal <= tempTable[high].adcReading)
-				//decrease(high - low)
+				keep(low <= high; high <= NumTempTableEntries)
+				keep(low == 0u || tempTable[low - 1u].adcReading < adcVal)
+				keep(high == NumTempTableEntries || adcVal <= tempTable[high].adcReading)
+				decrease(high - low)
 				{
 					size_t mid = (high - low)/2u + low;			// get the mid point, avoiding arithmetic overflow
 					if (adcVal <= tempTable[mid].adcReading)
@@ -309,9 +309,9 @@ TemperatureError TemperatureSensor::GetRtdTemperature(float *t)
 						low = mid + 1u;
 					}
 				}
-				//assert(low <= NumTempTableEntries)
-				//assert(low == 0 || table[low - 1] < adcVal)
-				//assert(low == NumTempTableEntries || adcVal <= table[low])
+				assert(low <= NumTempTableEntries);
+				assert(low == 0 || tempTable[low - 1] < adcVal);
+				assert(low == NumTempTableEntries || adcVal <= tempTable[low]);
 
 				if (low == 0)									// if off the bottom of the table
 				{

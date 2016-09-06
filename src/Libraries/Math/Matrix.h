@@ -89,10 +89,10 @@ template<class T, size_t ROWS, size_t COLS> void FixedMatrix<T, ROWS, COLS>::Gau
 	for (size_t i = 0; i < numRows; ++i)
 	{
 		// Swap the rows around for stable Gauss-Jordan elimination
-		float vmax = fabs((*this)(i, i));
+		float vmax = fabsf((*this)(i, i));
 		for (size_t j = i + 1; j < numRows; ++j)
 		{
-			const float rmax = fabs((*this)(j, i));
+			const float rmax = fabsf((*this)(j, i));
 			if (rmax > vmax)
 			{
 				SwapRows(i, j);

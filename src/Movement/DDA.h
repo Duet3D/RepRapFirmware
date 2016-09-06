@@ -78,6 +78,8 @@ public:
 	static const uint32_t minInterruptInterval = 6;					// about 2us minimum interval between interrupts, in clocks
 #endif
 
+	static void PrintMoves();										// print saved moves for debugging
+
 private:
 	void RecalculateMove();
 	void CalcNewSpeeds();
@@ -86,6 +88,7 @@ private:
 	void MoveAborted();
 	void InsertDM(DriveMovement *dm);
 	DriveMovement *RemoveDM(size_t drive);
+	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
 
 	static void DoLookahead(DDA *laDDA);							// called by AdjustEndSpeed to do the real work

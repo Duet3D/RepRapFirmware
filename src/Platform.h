@@ -222,12 +222,12 @@ enum class EndStopType
 // The spin state gets or'ed into this, so keep the lower ~4 bits unused.
 enum class SoftwareResetReason : uint16_t
 {
-	user = 0,					// M999 command
-	erase = 55,					// special M999 command to erase firmware and reset
-	inAuxOutput = 0x0800,		// this bit is or'ed in if we were in aux output at the time
-	stuckInSpin = 0x1000,		// we got stuck in a Spin() function for too long
-	inLwipSpin = 0x2000,		// we got stuck in a call to LWIP for too long
-	inUsbOutput = 0x4000		// this bit is or'ed in if we were in USB output at the time
+	user = 0,						// M999 command
+	erase = 55,						// special M999 command to erase firmware and reset
+	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
+	stuckInSpin = 0x1000,			// we got stuck in a Spin() function for too long
+	inLwipSpin = 0x2000,			// we got stuck in a call to LWIP for too long
+	inUsbOutput = 0x4000			// this bit is or'ed in if we were in USB output at the time
 };
 
 // Enumeration to describe various tests we do in response to the M111 command
@@ -235,7 +235,8 @@ enum class DiagnosticTestType : int
 {
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
-	TestSerialBlock = 1003			// test what happens when we write a blocking message via debugPrintf()
+	TestSerialBlock = 1003,			// test what happens when we write a blocking message via debugPrintf()
+	PrintMoves = 100				// print summary of recent moves
 };
 
 // Info returned by FindFirst/FindNext calls
@@ -481,13 +482,14 @@ public:
 
 	MassStorage* GetMassStorage() const;
 	FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
-	const char* GetWebDir() const; 					// Where the htm etc files are
+	const char* GetWebDir() const; 					// Where the html etc files are
 	const char* GetGCodeDir() const; 				// Where the gcodes are
 	const char* GetSysDir() const;  				// Where the system files are
 	const char* GetMacroDir() const;				// Where the user-defined macros are
 	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
 	void InvalidateFiles(const FATFS *fs);			// Called to invalidate files when the SD card is removed
+	bool AnyFileOpen(const FATFS *fs) const;		// Returns true if any files are open on the SD card
 
 	// Message output (see MessageType for further details)
 
@@ -786,9 +788,7 @@ private:
 	EndStopType endStopType[AXES+1];
 	bool endStopLogicLevel[AXES+1];
   
-  // Heaters - bed is assumed to be the first
-
-	int GetRawThermistorTemperature(size_t heater) const;
+	// Heaters - bed is assumed to be the first
 
 	Pin tempSensePins[HEATERS];
 	Pin heatOnPins[HEATERS];
@@ -1171,13 +1171,6 @@ inline void Platform::ExtrudeOff()
 //********************************************************************************************************
 
 // Drive the RepRap machine - Heat and temperature
-
-inline int Platform::GetRawThermistorTemperature(size_t heater) const
-{
-	return (heater < HEATERS)
-		  ? thermistorFilters[heater].GetSum()/(THERMISTOR_AVERAGE_READINGS >> AD_OVERSAMPLE_BITS)
-		  : 0;
-}
 
 inline uint32_t Platform::HeatSampleInterval() const
 {

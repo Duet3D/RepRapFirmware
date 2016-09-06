@@ -42,6 +42,7 @@ public:
 	void Duplicate();								// Create a second reference to this file
 	bool Flush();									// Write remaining buffer data
 	void Invalidate(const FATFS *fs);				// Invalidate the file if it uses the specified FATFS object
+	bool IsOpenOn(const FATFS *fs) const;			// Return true if the file is open on the specified file system
 
 #if 0	// not currently used
 	bool SetClusterMap(uint32_t[]);					// Provide a cluster map for fast seeking

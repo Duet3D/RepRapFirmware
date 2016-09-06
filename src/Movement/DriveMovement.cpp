@@ -11,7 +11,7 @@
 // Prepare this DM for a Cartesian axis move
 void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
 {
-	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabs(reprap.GetMove()->MotorFactor(drive, dda.directionVector));
+	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabsf(reprap.GetMove()->MotorFactor(drive, dda.directionVector));
 	mp.cart.twoCsquaredTimesMmPerStepDivA = (uint64_t)(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
 
 	// Acceleration phase parameters
@@ -78,7 +78,7 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation)
 {
 	const float dv = dda.directionVector[drive];
-	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabs(dv);
+	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabsf(dv);
 	mp.cart.twoCsquaredTimesMmPerStepDivA = (uint64_t)(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
 
 	// Calculate the elasticity compensation parameter (not needed for axis movements, but we do them anyway to keep the code simple)

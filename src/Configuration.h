@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.15b"
+# define VERSION "1.15c"
 #endif
 
 #ifndef DATE
-# define DATE "2016-08-25"
+# define DATE "2016-09-05"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -115,11 +115,20 @@ const unsigned int DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 co
 
 // Default Z probe values
 
-const size_t MAX_PROBE_POINTS = 16;					// Maximum number of probe points
-const size_t MAX_DELTA_PROBE_POINTS = 16;			// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
+// The maximum number of probe points is constrained by RAM usage:
+// - Each probe point uses 12 bytes of static RAM. So 16 points use 192 bytes
+// - The delta probe points use the same static ram, but when auto-calibrating we temporarily need another 44 bytes per probe point to hold the matrices etc.
+//   So 16 points need 704 bytes of stack space.
+#ifdef DUET_NG
+const size_t MAX_PROBE_POINTS = 64;					// Maximum number of probe points
+const size_t MAX_DELTA_PROBE_POINTS = 64;			// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
+#else
+const size_t MAX_PROBE_POINTS = 32;					// Maximum number of probe points
+const size_t MAX_DELTA_PROBE_POINTS = 32;			// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
+#endif
 
 const float DEFAULT_Z_DIVE = 5.0;					// Millimetres
-const float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed
+const float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed mm/sec
 const float DEFAULT_TRAVEL_SPEED = 100.0;			// Default speed for travel to probe points
 
 const float TRIANGLE_ZERO = -0.001;					// Millimetres

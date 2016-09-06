@@ -740,11 +740,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 		response->catf(",\"endstops\":%d", endstops);
 
-		// Delta configuration
-		response->catf(",\"geometry\":\"%s\"", move->GetGeometryString());
-
-		// Machine name
-		response->cat(",\"name\":");
+		// Delta configuration, number of disk volumes, and machine name
+		response->catf(",\"geometry\":\"%s\",\"volumes\":%u,\"name\":", move->GetGeometryString(), NumSdCards);
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 
 		/* Probe */
@@ -1169,7 +1166,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	else if (type == 3)
 	{
 		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
-		response->catf(",\"geometry\":\"%s\",\"myName\":", move->GetGeometryString());
+		response->catf(",\"geometry\":\"%s\",\"volumes\":%u,\"myName\":", move->GetGeometryString(), NumSdCards);
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 	}
 
@@ -1219,51 +1216,60 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 	response->copy("{\"dir\":");
 	response->EncodeString(dir, strlen(dir), false);
 	response->cat(",\"files\":[");
+	unsigned int err;
 
-	FileInfo fileInfo;
-	bool firstFile = true;
-	bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
-	size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
-	char filename[FILENAME_LENGTH];
-	filename[0] = '*';
-	const char *fname;
-
-	while (gotFile)
+	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
 	{
-		if (fileInfo.fileName[0] != '.')			// ignore Mac resource files and Linux hidden files
-		{
-			// Get the long filename if possible
-			if (flagsDirs && fileInfo.isDirectory)
-			{
-				strncpy(filename + sizeof(char), fileInfo.fileName, FILENAME_LENGTH - 1);
-				filename[FILENAME_LENGTH - 1] = 0;
-				fname = filename;
-			}
-			else
-			{
-				fname = fileInfo.fileName;
-			}
-
-			// Make sure we can end this response properly
-			if (bytesLeft < strlen(fname) * 2 + 4)
-			{
-				// No more space available - stop here
-				break;
-			}
-
-			// Write separator and filename
-			if (!firstFile)
-			{
-				bytesLeft -= response->cat(',');
-			}
-			bytesLeft -= response->EncodeString(fname, FILENAME_LENGTH, false);
-
-			firstFile = false;
-		}
-		gotFile = platform->GetMassStorage()->FindNext(fileInfo);
+		err = 1;
 	}
-	response->cat("]}");
+	else
+	{
+		err = 0;
+		FileInfo fileInfo;
+		bool firstFile = true;
+		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);	// TODO error handling here
 
+		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
+		char filename[FILENAME_LENGTH];
+		filename[0] = '*';
+		const char *fname;
+
+		while (gotFile)
+		{
+			if (fileInfo.fileName[0] != '.')						// ignore Mac resource files and Linux hidden files
+			{
+				// Get the long filename if possible
+				if (flagsDirs && fileInfo.isDirectory)
+				{
+					strncpy(filename + sizeof(char), fileInfo.fileName, FILENAME_LENGTH - 1);
+					filename[FILENAME_LENGTH - 1] = 0;
+					fname = filename;
+				}
+				else
+				{
+					fname = fileInfo.fileName;
+				}
+
+				// Make sure we can end this response properly
+				if (bytesLeft < strlen(fname) * 2 + 4)
+				{
+					// No more space available - stop here
+					break;
+				}
+
+				// Write separator and filename
+				if (!firstFile)
+				{
+					bytesLeft -= response->cat(',');
+				}
+				bytesLeft -= response->EncodeString(fname, FILENAME_LENGTH, false);
+
+				firstFile = false;
+			}
+			gotFile = platform->GetMassStorage()->FindNext(fileInfo);	// TODO error handling here
+		}
+	}
+	response->catf("],\"err\":%u}", err);
 	return response;
 }
 

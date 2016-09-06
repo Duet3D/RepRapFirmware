@@ -122,7 +122,7 @@ bool Heat::HeaterAtSetTemperature(int8_t heater) const
 
 	const float dt = GetTemperature(heater);
 	const float target = (pids[heater]->Active()) ? GetActiveTemperature(heater) : GetStandbyTemperature(heater);
-	return (target < TEMPERATURE_LOW_SO_DONT_CARE) || (fabs(dt - target) <= TEMPERATURE_CLOSE_ENOUGH);
+	return (target < TEMPERATURE_LOW_SO_DONT_CARE) || (fabsf(dt - target) <= TEMPERATURE_CLOSE_ENOUGH);
 }
 
 Heat::HeaterStatus Heat::GetStatus(int8_t heater) const

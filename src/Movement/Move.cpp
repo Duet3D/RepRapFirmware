@@ -47,7 +47,7 @@ void Move::Init()
 	currentDda = nullptr;
 	addNoMoreMoves = false;
 	stepErrors = 0;
-	numLookaheadUnderruns = 0;
+	numLookaheadUnderruns = numPrepareUnderruns = 0;
 
 	// Clear the transforms
 	SetIdentityTransform();
@@ -87,6 +87,8 @@ void Move::Init()
 
 	simulationMode = 0;
 	simulationTime = 0.0;
+	longestGcodeWaitInterval = 0;
+	waitingForMove = false;
 
 	active = true;
 }
@@ -135,11 +137,10 @@ void Move::Spin()
 #endif
 			!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
 	{
-		DDA *dda = ddaRingAddPointer;
-
 		// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
 		// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is
 		// less than 0.5 seconds.
+		const DDA *dda = ddaRingAddPointer;
 		float unPreparedTime = 0.0;
 		float prevMoveTime = 0.0;
 		for(;;)
@@ -159,6 +160,15 @@ void Move::Spin()
 			GCodes::RawMove nextMove;
 			if (reprap.GetGCodes()->ReadMove(nextMove))
 			{
+				if (waitingForMove)
+				{
+					waitingForMove = false;
+					const uint32_t timeWaiting = millis() - gcodeWaitStartTime;
+					if (timeWaiting > longestGcodeWaitInterval)
+					{
+						longestGcodeWaitInterval = timeWaiting;
+					}
+				}
 				// We have a new move
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
@@ -208,14 +218,22 @@ void Move::Spin()
 #endif
 				}
 			}
+			else
+			{
+				// We wanted another move, but none was available
+				if (currentDda != nullptr && !waitingForMove)
+				{
+					gcodeWaitStartTime = millis();
+					waitingForMove = true;
+				}
+			}
 		}
 	}
 
 	if (!deltaProbing)
 	{
 		// See whether we need to kick off a move
-		DDA *cdda = currentDda;											// currentDda is volatile, so copy it
-		if (cdda == nullptr)
+		if (currentDda == nullptr)
 		{
 			// No DDA is executing, so start executing a new one if possible
 			if (idleCount > 10)											// better to have a few moves in the queue so that we can do lookahead
@@ -229,11 +247,11 @@ void Move::Spin()
 				{
 					if (simulationMode != 0)
 					{
-						currentDda = ddaRingGetPointer;						// pretend we are executing this move
+						currentDda = dda;								// pretend we are executing this move
 					}
 					else
 					{
-						Platform::DisableStepInterrupt();					// should be disabled already, but make sure
+						Platform::DisableStepInterrupt();					// should be disabled already because we weren't executing a move, but make sure
 						if (StartNextMove(Platform::GetInterruptClocks()))	// start the next move
 						{
 							Interrupt();
@@ -253,7 +271,9 @@ void Move::Spin()
 				}
 			}
 		}
-		else
+
+		DDA *cdda = currentDda;											// currentDda is volatile, so copy it
+		if (cdda != nullptr)
 		{
 			// See whether we need to prepare any moves
 			int32_t preparedTime = 0;
@@ -283,7 +303,8 @@ void Move::Spin()
 				st = cdda->GetState();
 			}
 
-			if (simulationMode != 0)
+			// If we are simulating and the move pipeline is reasonably full, simulate completion of the current move
+			if (simulationMode != 0 && idleCount >= 10)
 			{
 				// Simulate completion of the current move
 //DEBUG
@@ -301,7 +322,7 @@ void Move::Spin()
 // Returns the file position of the first queue move we are going to skip, or noFilePosition we we are not skipping any moves.
 // We update 'positions' to the positions and feed rate expected for the next move, and the amount of extrusion in the moves we skipped.
 // If we are not skipping any moves then the feed rate is left alone, therefore the caller should set this up first.
-FilePosition Move::PausePrint(float positions[DRIVES+1])
+FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate)
 {
 	// Find a move we can pause after.
 	// Ideally, we would adjust a move if necessary and possible so that we can pause after it, but for now we don't do that.
@@ -363,7 +384,7 @@ FilePosition Move::PausePrint(float positions[DRIVES+1])
 		{
 			positions[drive] = 0.0;		// clear out extruder movement
 		}
-		positions[DRIVES] = dda->GetRequestedSpeed();
+		pausedFeedRate = dda->GetRequestedSpeed();
 
 		// Free the DDAs for the moves we are going to skip, and work out how much extrusion they would have performed
 		dda = ddaRingAddPointer;
@@ -400,9 +421,11 @@ extern uint64_t lastNum;
 void Move::Diagnostics(MessageType mtype)
 {
 	reprap.GetPlatform()->Message(mtype, "Move Diagnostics:\n");
-	reprap.GetPlatform()->MessageF(mtype, "MaxReps: %u, StepErrors: %u. Underruns: %u\n", maxReps, stepErrors, numLookaheadUnderruns);
+	reprap.GetPlatform()->MessageF(mtype, "MaxReps: %u, StepErrors: %u, MaxWait: %ums, Underruns: %u, %u\n",
+											maxReps, stepErrors, longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	maxReps = 0;
-	numLookaheadUnderruns = 0;
+	numLookaheadUnderruns = numPrepareUnderruns = 0;
+	longestGcodeWaitInterval = 0;
 
 #if 0
 	if (sqCount != 0)
@@ -1144,12 +1167,18 @@ void Move::CurrentMoveCompleted()
 // Try to start another move. Must be called with interrupts disabled, to avoid a race condition.
 bool Move::TryStartNextMove(uint32_t startTime)
 {
-	if (ddaRingGetPointer->GetState() == DDA::frozen)
+	const DDA::DDAState st = ddaRingGetPointer->GetState();
+	if (st == DDA::frozen)
 	{
 		return StartNextMove(startTime);
 	}
 	else
 	{
+		if (st == DDA::provisional)
+		{
+			// There are more moves available, but they are not prepared yet. Signal an underrun.
+			++numPrepareUnderruns;
+		}
 		reprap.GetPlatform()->ExtrudeOff();	// turn off ancilliary PWM
 		return false;
 	}
@@ -1248,7 +1277,7 @@ bool Move::IsExtruding() const
 	return rslt;
 }
 
-// Return the transformed machine coordinates, leaving the feed rate at m[DRIVES] alone
+// Return the transformed machine coordinates
 void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType) const
 {
 	GetCurrentMachinePosition(m, moveType == 2 || (moveType == 1 && IsDeltaMode()));

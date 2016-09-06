@@ -118,7 +118,7 @@ void GCodes::Reset()
 		moveBuffer.coords[i] = 0.0;
 		pausedMoveBuffer[i] = 0.0;
 	}
-	feedRate = pausedMoveBuffer[DRIVES] = DEFAULT_FEEDRATE/minutesToSeconds;
+	feedRate = pausedFeedRate = DEFAULT_FEEDRATE/minutesToSeconds;
 	ClearMove();
 
 	for (size_t i = 0; i < MaxTriggers; ++i)
@@ -384,7 +384,7 @@ void GCodes::Spin()
 				{
 					lastRawExtruderPosition[drive - AXES] = pausedMoveBuffer[drive];	// reset the extruder position in case we are receiving absolute extruder moves
 				}
-				feedRate = pausedMoveBuffer[DRIVES];
+				feedRate = pausedFeedRate;
 				isPaused = false;
 				HandleReply(gbCurrent, false, "Printing resumed");
 				state = GCodeState::normal;
@@ -689,8 +689,8 @@ void GCodes::DoPause(bool externalToFile)
 	if (externalToFile)
 	{
 		// Pausing a file print via another input source
-		pausedMoveBuffer[DRIVES] = feedRate;							// the call to PausePrint may or may not change this
-		FilePosition fPos = reprap.GetMove()->PausePrint(pausedMoveBuffer);	// tell Move we wish to pause the current print
+		pausedFeedRate = feedRate;										// the call to PausePrint may or may not change this
+		FilePosition fPos = reprap.GetMove()->PausePrint(pausedMoveBuffer, pausedFeedRate);	// tell Move we wish to pause the current print
 		FileData& fdata = (stackPointer == 0) ? fileBeingPrinted : stack[0].fileState;
 		if (fPos != noFilePosition && fdata.IsLive())
 		{
@@ -727,7 +727,7 @@ void GCodes::DoPause(bool externalToFile)
 		{
 			pausedMoveBuffer[drive] = lastRawExtruderPosition[drive - AXES];	// get current extruder positions into pausedMoveBuffer
 		}
-		pausedMoveBuffer[DRIVES] = feedRate;
+		pausedFeedRate = feedRate;
 	}
 
 	for (size_t i = 0; i < NUM_FANS; ++i)
@@ -2812,7 +2812,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 18: // Motors off
 	case 84:
 		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())
+		{
 			return false;
+		}
 		{
 			bool seen = false;
 			for (size_t axis = 0; axis < AXES; axis++)
@@ -2867,68 +2869,68 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 20:		// List files on SD card
-	{
-		OutputBuffer *fileResponse;
-		int sparam = (gb->Seen('S')) ? gb->GetIValue() : 0;
-		const char* dir = (gb->Seen('P')) ? gb->GetString() : platform->GetGCodeDir();
-
-		if (sparam == 2)
 		{
-			fileResponse = reprap.GetFilesResponse(dir, true);		// Send the file list in JSON format
-		}
-		else
-		{
-			if (!OutputBuffer::Allocate(fileResponse))
-			{
-				// Cannot allocate an output buffer, try again later
-				return false;
-			}
+			OutputBuffer *fileResponse;
+			int sparam = (gb->Seen('S')) ? gb->GetIValue() : 0;
+			const char* dir = (gb->Seen('P')) ? gb->GetString() : platform->GetGCodeDir();
 
-			// To mimic the behaviour of the official RepRapPro firmware:
-			// If we are emulating RepRap then we print "GCode files:\n" at the start, otherwise we don't.
-			// If we are emulating Marlin and the code came via the serial/USB interface, then we don't put quotes around the names and we separate them with newline;
-			// otherwise we put quotes around them and separate them with comma.
-			if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
+			if (sparam == 2)
 			{
-				fileResponse->copy("GCode files:\n");
-			}
-
-			bool encapsulateList = ((gb != serialGCode && gb != telnetGCode) || platform->Emulating() != marlin);
-			FileInfo fileInfo;
-			if (platform->GetMassStorage()->FindFirst(dir, fileInfo))
-			{
-				// iterate through all entries and append each file name
-				do {
-					if (encapsulateList)
-					{
-						fileResponse->catf("%c%s%c%c", FILE_LIST_BRACKET, fileInfo.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
-					}
-					else
-					{
-						fileResponse->catf("%s\n", fileInfo.fileName);
-					}
-				} while (platform->GetMassStorage()->FindNext(fileInfo));
-
-				if (encapsulateList)
-				{
-					// remove the last separator
-					(*fileResponse)[fileResponse->Length() - 1] = 0;
-				}
+				fileResponse = reprap.GetFilesResponse(dir, true);		// Send the file list in JSON format
 			}
 			else
 			{
-				fileResponse->cat("NONE\n");
-			}
-		}
+				if (!OutputBuffer::Allocate(fileResponse))
+				{
+					// Cannot allocate an output buffer, try again later
+					return false;
+				}
 
-		HandleReply(gb, false, fileResponse);
-		return true;
-	}
+				// To mimic the behaviour of the official RepRapPro firmware:
+				// If we are emulating RepRap then we print "GCode files:\n" at the start, otherwise we don't.
+				// If we are emulating Marlin and the code came via the serial/USB interface, then we don't put quotes around the names and we separate them with newline;
+				// otherwise we put quotes around them and separate them with comma.
+				if (platform->Emulating() == me || platform->Emulating() == reprapFirmware)
+				{
+					fileResponse->copy("GCode files:\n");
+				}
+
+				bool encapsulateList = ((gb != serialGCode && gb != telnetGCode) || platform->Emulating() != marlin);
+				FileInfo fileInfo;
+				if (platform->GetMassStorage()->FindFirst(dir, fileInfo))
+				{
+					// iterate through all entries and append each file name
+					do {
+						if (encapsulateList)
+						{
+							fileResponse->catf("%c%s%c%c", FILE_LIST_BRACKET, fileInfo.fileName, FILE_LIST_BRACKET, FILE_LIST_SEPARATOR);
+						}
+						else
+						{
+							fileResponse->catf("%s\n", fileInfo.fileName);
+						}
+					} while (platform->GetMassStorage()->FindNext(fileInfo));
+
+					if (encapsulateList)
+					{
+						// remove the last separator
+						(*fileResponse)[fileResponse->Length() - 1] = 0;
+					}
+				}
+				else
+				{
+					fileResponse->cat("NONE\n");
+				}
+			}
+
+			HandleReply(gb, false, fileResponse);
+			return true;
+		}
 
 	case 21: // Initialise SD card
 		{
 			size_t card = (gb->Seen('P')) ? gb->GetIValue() : 0;
-			result = platform->GetMassStorage()->Mount(card, reply);
+			result = platform->GetMassStorage()->Mount(card, reply, true);
 		}
 		break;
 
@@ -3152,6 +3154,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				{
 					// Starting a new simulation, so save the current position
 					reprap.GetMove()->GetCurrentUserPosition(savedMoveBuffer, 0);
+					savedFeedRate = feedRate;
 				}
 			}
 			else if (wasSimulating)
@@ -3162,13 +3165,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				{
 					moveBuffer.coords[i] = savedMoveBuffer[i];
 				}
-				feedRate = savedMoveBuffer[DRIVES];
+				feedRate = savedFeedRate;
 			}
 		}
 		else
 		{
 			reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
-					(simulationMode != 0) ? "on" : "off", simulationTime, reprap.GetMove()->GetSimulationTime());
+					(simulationMode != 0) ? "on" : "off", reprap.GetMove()->GetSimulationTime(), simulationTime);
 		}
 		break;
 
@@ -4024,9 +4027,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 220:	// Set/report speed factor override percentage
 		if (gb->Seen('S'))
 		{
-			float newSpeedFactor = (gb->GetFValue() / 100.0) * secondsToMinutes;// include the conversion from mm/minute to mm/second
+			float newSpeedFactor = (gb->GetFValue() / 100.0) * secondsToMinutes;	// include the conversion from mm/minute to mm/second
 			if (newSpeedFactor > 0.0)
 			{
+				feedRate *= newSpeedFactor / speedFactor;
 				if (moveAvailable && !moveBuffer.isFirmwareRetraction)
 				{
 					// The last move has not gone yet, so we can update it

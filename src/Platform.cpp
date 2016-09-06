@@ -413,12 +413,6 @@ void Platform::Init()
 	lastTime = Time();
 	longWait = lastTime;
 	InitialiseInterrupts();		// also sets 'active' to true
-
-	// Allow the thermistors to collect enough readings to average before we response to PanelDue requests or allow heater to be turned on,
-	// otherwise we may send bad data to PanelDue, which confuses older firmware versions, and/or get PID problems.
-	// We read 1 heater every 2 system ticks, hence the wait for THERMISTOR_AVERAGE_READINGS * HEATERS * 2 ticks.
-	// We allow an extra 2 reads per thermistor, because the first few ADC readings may be inaccurate.
-	delay((THERMISTOR_AVERAGE_READINGS + 2) * HEATERS * 2);
 }
 
 void Platform::InvalidateFiles(const FATFS *fs)
@@ -427,6 +421,18 @@ void Platform::InvalidateFiles(const FATFS *fs)
 	{
 		files[i]->Invalidate(fs);
 	}
+}
+
+bool Platform::AnyFileOpen(const FATFS *fs) const
+{
+	for (size_t i = 0; i < MAX_FILES; i++)
+	{
+		if (files[i]->IsOpenOn(fs))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void Platform::SetTemperatureLimit(float t)
@@ -1485,8 +1491,12 @@ void Platform::DiagnosticTest(int d)
 		debugCode = d;									// tell the Spin function to loop
 		break;
 
-	case (int)DiagnosticTestType::TestSerialBlock:				// write an arbitrary message via debugPrintf()
+	case (int)DiagnosticTestType::TestSerialBlock:		// write an arbitrary message via debugPrintf()
 		debugPrintf("Diagnostic Test\n");
+		break;
+
+	case (int)DiagnosticTestType::PrintMoves:
+		DDA::PrintMoves();
 		break;
 
 	default:
@@ -1537,8 +1547,7 @@ void Platform::ClassReport(float &lastTime)
 // BETA is the B value
 // RS is the value of the series resistor in ohms
 // R_INF is R0.exp(-BETA/T0), where R0 is the thermistor resistance at T0 (T0 is in kelvin)
-// Normally T0 is 298.15K (25 C).  If you write that expression in brackets in the #define the compiler 
-// should compute it for you (i.e. it won't need to be calculated at run time).
+// Normally T0 is 298.15K (25 C).
 
 // If the A->D converter has a range of 0..1023 and the measured voltage is V (between 0 and 1023)
 // then the thermistor resistance, R = V.RS/(1024 - V)
@@ -1553,39 +1562,47 @@ float Platform::GetTemperature(size_t heater, TemperatureError& err)
 	// we're getting an averaged voltage reading which we'll convert to a temperature.
 	if (IsThermistorChannel(heater))
 	{
-		int rawTemp = GetRawThermistorTemperature(heater);
-
-		// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
-		// So we add 0.5 to to the reading to get a better estimate of the input.
-		float reading = (float) rawTemp + 0.5;
-
-		// Recognise the special case of thermistor disconnected.
-		// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
-		const PidParameters& p = nvData.pidParams[heater];
-		if (p.adcHighOffset < 0.0)
+		const volatile ThermistorAveragingFilter& filter = thermistorFilters[heater];
+		if (filter.IsValid())
 		{
-			rawTemp -= (int) p.adcHighOffset;
-		}
-		if (rawTemp >= (int)AD_DISCONNECTED_VIRTUAL)
-		{
-			// thermistor is disconnected
-			err = TemperatureError::openCircuit;
-			return ABS_ZERO;
+			int rawTemp = filter.GetSum()/(THERMISTOR_AVERAGE_READINGS >> AD_OVERSAMPLE_BITS);
+
+			// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
+			// So we add 0.5 to to the reading to get a better estimate of the input.
+			float reading = (float) rawTemp + 0.5;
+
+			// Recognise the special case of thermistor disconnected.
+			// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
+			const PidParameters& p = nvData.pidParams[heater];
+			if (p.adcHighOffset < 0.0)
+			{
+				rawTemp -= (int) p.adcHighOffset;
+			}
+			if (rawTemp >= (int)AD_DISCONNECTED_VIRTUAL)
+			{
+				// thermistor is disconnected
+				err = TemperatureError::openCircuit;
+				return ABS_ZERO;
+			}
+
+			// Correct for the low and high ADC offsets
+			reading -= p.adcLowOffset;
+			reading *= (AD_RANGE_VIRTUAL + 1) / (AD_RANGE_VIRTUAL + 1 + p.adcHighOffset - p.adcLowOffset);
+
+			float resistance = reading * p.thermistorSeriesR / ((AD_RANGE_VIRTUAL + 1) - reading);
+			if (resistance > p.GetRInf())
+			{
+				err = TemperatureError::success;
+				return ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
+			}
+
+			// thermistor short circuit, return a high temperature
+			err = TemperatureError::shortCircuit;
+			return BAD_ERROR_TEMPERATURE;
 		}
 
-		// Correct for the low and high ADC offsets
-		reading -= p.adcLowOffset;
-		reading *= (AD_RANGE_VIRTUAL + 1) / (AD_RANGE_VIRTUAL + 1 + p.adcHighOffset - p.adcLowOffset);
-
-		float resistance = reading * p.thermistorSeriesR / ((AD_RANGE_VIRTUAL + 1) - reading);
-		if (resistance > p.GetRInf())
-		{
-			err = TemperatureError::success;
-			return ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
-		}
-
-		// thermistor short circuit, return a high temperature
-		err = TemperatureError::shortCircuit;
+		// Filter is not ready yet
+		err = TemperatureError::busBusy;
 		return BAD_ERROR_TEMPERATURE;
 	}
 

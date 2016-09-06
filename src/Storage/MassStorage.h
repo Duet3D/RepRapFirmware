@@ -21,8 +21,9 @@ public:
 	bool FileExists(const char* directory, const char *fileName) const;
 	bool DirectoryExists(const char *path) const;
 	bool DirectoryExists(const char* directory, const char* subDirectory);
-	bool Mount(size_t card, StringRef& reply);
+	bool Mount(size_t card, StringRef& reply, bool reportSuccess);
 	bool Unmount(size_t card, StringRef& reply);
+	bool CheckDriveMounted(const char* path);
 
 friend class Platform;
 
@@ -32,10 +33,10 @@ protected:
 	void Init();
 
 private:
-
 	Platform* platform;
 	FATFS fileSystems[NumSdCards];
 	DIR findDir;
+	bool isMounted[NumSdCards];
 	char combinedName[FILENAME_LENGTH + 1];
 };
 

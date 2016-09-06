@@ -7,6 +7,53 @@
 
 #include "RepRapFirmware.h"
 
+#ifdef DUET_NG
+# define DDA_MOVE_DEBUG	(1)
+#else
+// On the wired Duets we don't have enough RAM to support this
+# define DDA_MOVE_DEBUG	(0)
+#endif
+
+#if DDA_MOVE_DEBUG
+
+// Structure to hold the essential parameters of a move, for debugging
+struct MoveParameters
+{
+	float accelDistance;
+	float steadyDistance;
+	float decelDistance;
+	float startSpeed;
+	float topSpeed;
+	float endSpeed;
+
+	MoveParameters()
+	{
+		accelDistance = steadyDistance = decelDistance = startSpeed = topSpeed = endSpeed = 0.0;
+	}
+};
+
+const size_t NumSavedMoves = 256;
+
+static MoveParameters savedMoves[NumSavedMoves];
+static size_t savedMovePointer = 0;
+
+// Print the saved moves in CSV format for analysis
+/*static*/ void DDA::PrintMoves()
+{
+	// Print the saved moved in CSV format
+	for (size_t i = 0; i < NumSavedMoves; ++i)
+	{
+		const MoveParameters& m = savedMoves[savedMovePointer];
+		reprap.GetPlatform()->MessageF(DEBUG_MESSAGE, "%f,%f,%f,%f,%f,%f\n", m.accelDistance, m.steadyDistance, m.decelDistance, m.startSpeed, m.topSpeed, m.endSpeed);
+		savedMovePointer = (savedMovePointer + 1) % NumSavedMoves;
+	}
+}
+
+#else
+
+/*static*/ void DDA::PrintMoves() { }
+
+#endif
 
 DDA::DDA(DDA* n) : next(n), prev(nullptr), state(empty)
 {
@@ -323,8 +370,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	{
 		// Try to meld this move to the previous move to avoid stop/start
 		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = v^2 - 2as
-		float maxStartSpeed = sqrtf(acceleration * totalDistance * 2.0);
-		prev->targetNextSpeed = min<float>(maxStartSpeed, requestedSpeed);
+		prev->targetNextSpeed = min<float>(sqrtf(acceleration * totalDistance * 2.0), requestedSpeed);
 		DoLookahead(prev);
 		startSpeed = prev->targetNextSpeed;
 	}
@@ -339,8 +385,20 @@ float DDA::GetMotorPosition(size_t drive) const
 	return Move::MotorEndpointToPosition(endPoint[drive], drive);
 }
 
+// Return true if this move is or might have been intended to be a deceleration-only move
+// A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error
+// We declare this inline because it is only used once, in DDA::DoLookahead
+inline bool DDA::IsDecelerationMove() const
+{
+	return decelDistance == totalDistance					// the simple case - is a deceleration-only move
+			|| (topSpeed < requestedSpeed					// can't have been intended as deceleration-only if it reaches the requested speed
+				&& decelDistance > 0.98 * totalDistance		// rounding error can only go so far
+				&& prev->state == DDA::provisional			// if we can't adjust the previous move then we don't care (and its figures may not be reliable if it has been recycled already)
+				&& prev->decelDistance > 0.0);				// if the previous move has no deceleration phase then no point in adjus6ting it
+}
+
 // Try to increase the ending speed of this move to allow the next move to start at targetNextSpeed
-void DDA::DoLookahead(DDA *laDDA)
+/*static*/ void DDA::DoLookahead(DDA *laDDA)
 pre(state == provisional)
 {
 //	if (reprap.Debug(moduleDda)) debugPrintf("Adjusting, %f\n", laDDA->targetNextSpeed);
@@ -353,21 +411,29 @@ pre(state == provisional)
 		if (goingUp)
 		{
 			// We have been asked to adjust the end speed of this move to match the next move starting at targetNextSpeed
-			if (laDDA->topSpeed == laDDA->requestedSpeed)
+			if (laDDA->topSpeed >= laDDA->requestedSpeed)
 			{
 				// This move already reaches its top speed, so just need to adjust the deceleration part
 				laDDA->endSpeed = laDDA->requestedSpeed;		// remove the deceleration phase
 				laDDA->CalcNewSpeeds();							// put it back if necessary
 			}
-			else if (laDDA->decelDistance == laDDA->totalDistance)
+			else if (laDDA->IsDecelerationMove())
 			{
 				// This is a deceleration-only move, so we may have to adjust the previous move as well to get optimum behaviour
 				if (laDDA->prev->state == provisional)
 				{
 					laDDA->endSpeed = laDDA->requestedSpeed;
 					laDDA->CalcNewSpeeds();
-					laDDA->prev->targetNextSpeed = min<float>(sqrtf(fsquare(laDDA->endSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance)),
-																laDDA->requestedSpeed);
+					const float maxStartSpeed = sqrtf(fsquare(laDDA->endSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
+					if (maxStartSpeed < laDDA->requestedSpeed)
+					{
+						laDDA->prev->targetNextSpeed = maxStartSpeed;
+						// Still provisionally a decelerate-only move
+					}
+					else
+					{
+						laDDA->prev->targetNextSpeed = laDDA->requestedSpeed;
+					}
 					recurse = true;
 				}
 				else
@@ -382,6 +448,7 @@ pre(state == provisional)
 			else
 			{
 				// This move doesn't reach its requested speed, but it isn't a deceleration-only move
+				// Set its end speed to the minimum of the requested speed and the highest we can reach
 				laDDA->endSpeed = min<float>(sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance)),
 												laDDA->requestedSpeed);
 				laDDA->CalcNewSpeeds();
@@ -389,8 +456,11 @@ pre(state == provisional)
 		}
 		else
 		{
+			// Going back down the list
+			// We have adjusted the end speed of the previous move as much as is possible and it has adjusted its targetNextSpeed accordingly.
+			// Adjust this move to match it.
 			laDDA->startSpeed = laDDA->prev->targetNextSpeed;
-			float maxEndSpeed = sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
+			const float maxEndSpeed = sqrtf(fsquare(laDDA->startSpeed) + (2 * laDDA->acceleration * laDDA->totalDistance));
 			if (maxEndSpeed < laDDA->endSpeed)
 			{
 				// Oh dear, we were too optimistic! Have another go.
@@ -401,12 +471,14 @@ pre(state == provisional)
 
 		if (recurse)
 		{
+			// Still going up
 			laDDA = laDDA->prev;
 			++laDepth;
 			if (reprap.Debug(moduleDda)) debugPrintf("Recursion start %u\n", laDepth);
 		}
 		else
 		{
+			// Either just stopped going up. or going down
 			laDDA->RecalculateMove();
 
 			if (laDepth == 0)
@@ -423,13 +495,15 @@ pre(state == provisional)
 }
 
 // Recalculate the top speed, acceleration distance and deceleration distance, and whether we can pause after this move
+// This may cause a move that we intended to be a deceleration-only move to have a tiny acceleration segment at the start
 void DDA::RecalculateMove()
 {
 	accelDistance = (fsquare(requestedSpeed) - fsquare(startSpeed))/(2.0 * acceleration);
 	decelDistance = (fsquare(requestedSpeed) - fsquare(endSpeed))/(2.0 * acceleration);
 	if (accelDistance + decelDistance >= totalDistance)
 	{
-		// It's an accelerate-decelerate move. If V is the peak speed, then (V^2 - u^2)/2a + (V^2 - v^2)/2a = distance.
+		// This move has no steady-speed phase, so it's accelerate-decelerate or accelerate-only move.
+		// If V is the peak speed, then (V^2 - u^2)/2a + (V^2 - v^2)/2a = distance.
 		// So (2V^2 - u^2 - v^2)/2a = distance
 		// So V^2 = a * distance + 0.5(u^2 + v^2)
 		float vsquared = (acceleration * totalDistance) + 0.5 * (fsquare(startSpeed) + fsquare(endSpeed));
@@ -466,7 +540,7 @@ void DDA::RecalculateMove()
 		const Platform *p = reprap.GetPlatform();
 		for (size_t drive = 0; drive < DRIVES; ++drive)
 		{
-			if (ddm[drive].state == DMState::moving && endSpeed * fabs(directionVector[drive]) > p->ActualInstantDv(drive))
+			if (ddm[drive].state == DMState::moving && endSpeed * fabsf(directionVector[drive]) > p->ActualInstantDv(drive))
 			{
 				canPause = false;
 				break;
@@ -475,14 +549,11 @@ void DDA::RecalculateMove()
 	}
 }
 
+// Decide what speed we would really like this move to end at.
+// On entry, endSpeed is our proposed ending speed and targetNextSpeed is the proposed starting speed of the next move
+// On return, targetNextSpeed is the speed we would like the next move to start at, and endSpeed is the corresponding end speed of this move.
 void DDA::CalcNewSpeeds()
 {
-	// Decide what speed we would really like to start at. There are several possibilities:
-	// 1. If the top speed is already the requested speed, use the requested speed.
-	// 2. Else if this is a deceleration-only move and the previous move is not frozen, we may be able to increase the start speed,
-	//    so use the requested speed again.
-	// 3. Else the start speed must be pinned, so use the lower of the maximum speed we can accelerate to and the requested speed.
-
 	// We may have to make multiple passes, because reducing one of the speeds may solve some problems but actually make matters worse on another axis.
 	bool limited;
 	do
@@ -497,9 +568,9 @@ void DDA::CalcNewSpeeds()
 			const DriveMovement& nextMoveDm = next->ddm[drive];
 			if (thisMoveDm.state == DMState::moving || nextMoveDm.state == DMState::moving)
 			{
-				float thisMoveSpeed = endSpeed * thisMoveFraction;
-				float nextMoveSpeed = targetNextSpeed * nextMoveFraction;
-				float idealDeltaV = fabsf(thisMoveSpeed - nextMoveSpeed);
+				const float thisMoveSpeed = endSpeed * thisMoveFraction;
+				const float nextMoveSpeed = targetNextSpeed * nextMoveFraction;
+				const float idealDeltaV = fabsf(thisMoveSpeed - nextMoveSpeed);
 				float maxDeltaV = reprap.GetPlatform()->ActualInstantDv(drive);
 				if (idealDeltaV > maxDeltaV)
 				{
@@ -729,6 +800,17 @@ void DDA::Prepare()
 	{
 		DebugPrint();
 	}
+
+#if DDA_MOVE_DEBUG
+	MoveParameters& m = savedMoves[savedMovePointer];
+	m.accelDistance = accelDistance;
+	m.decelDistance = decelDistance;
+	m.steadyDistance = totalDistance - accelDistance - decelDistance;
+	m.startSpeed = startSpeed;
+	m.topSpeed = topSpeed;
+	m.endSpeed = endSpeed;
+	savedMovePointer = (savedMovePointer + 1) % NumSavedMoves;
+#endif
 
 	state = frozen;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
 }

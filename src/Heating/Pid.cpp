@@ -185,7 +185,7 @@ void PID::Spin()
 			const float tentativeDerivative = SecondsToMillis * (temperature - previousTemperatures[previousTemperatureIndex])
 							/ (float)(platform->HeatSampleInterval() * NumPreviousTemperatures);
 			// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
-			if (fabs(tentativeDerivative) <= 10.0)
+			if (fabsf(tentativeDerivative) <= 10.0)
 			{
 				derivative = tentativeDerivative;
 				gotDerivative = true;
@@ -238,7 +238,7 @@ void PID::Spin()
 			break;
 
 		case HeaterMode::stable:
-			if (fabs(error) > MaxStableTemperatureError && temperature > MaxAmbientTemperature)
+			if (fabsf(error) > MaxStableTemperatureError && temperature > MaxAmbientTemperature)
 			{
 				++heatingFaultCount;
 				if (heatingFaultCount * platform->HeatSampleInterval() > MaxHeatingFaultTime * SecondsToMillis)
@@ -289,7 +289,7 @@ void PID::Spin()
 				bool inSetPointMode;
 				if (useModel)
 				{
-					inSetPointMode = fabs(error) > 1.0;			// use modified PID when the error is large
+					inSetPointMode = (mode != HeaterMode::stable);	// use modified PID when the error is large
 					const PidParams& params = model.GetPidParameters(!inSetPointMode);
 					kP = params.kP;
 					recipTi = params.recipTi;
@@ -482,7 +482,7 @@ void PID::GetAutoTuneStatus(StringRef& reply)	// Get the auto tune status or las
 	}
 	else if (tuned)
 	{
-		reply.printf("Heater %d tuning succeeded, use M207 H%d to see result", heater, heater);
+		reply.printf("Heater %d tuning succeeded, use M307 H%d to see result", heater, heater);
 	}
 	else
 	{

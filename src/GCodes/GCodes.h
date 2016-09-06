@@ -222,8 +222,10 @@ private:
     float dwellTime;							// How long a pause for a dwell (seconds)?
     float feedRate;								// The feed rate of the last G0/G1 command that had an F parameter
     RawMove moveBuffer;							// Move details to pass to Move class
-    float savedMoveBuffer[DRIVES + 1];			// The position and feedrate when we started the current simulation
-    float pausedMoveBuffer[DRIVES + 1]; 		// Move coordinates; last is feed rate
+    float savedMoveBuffer[DRIVES];				// The position when we started the current simulation
+    float savedFeedRate;						// The feed rate when we started the current simulation
+    float pausedMoveBuffer[DRIVES];		 		// The position at which we paused the print
+    float pausedFeedRate;						// The feed rate when we paused the print
     GCodeState state;							// The main state variable of the GCode state machine
 	bool drivesRelative;
 	bool axesRelative;

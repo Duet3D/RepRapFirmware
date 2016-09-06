@@ -99,7 +99,7 @@ public:
     float GetSimulationTime() const { return simulationTime; }						// Get the accumulated simulation time
     void PrintCurrentDda() const;													// For debugging
 
-    FilePosition PausePrint(float positions[DRIVES+1]);								// Pause the print as soon as we can
+    FilePosition PausePrint(float positions[DRIVES+1], float& pausedFeedRate);		// Pause the print as soon as we can
     bool NoLiveMovement() const;													// Is a move running, or are there any queued?
 
     int DoDeltaProbe(float frequency, float amplitude, float rate, float distance);
@@ -144,8 +144,12 @@ private:
     bool addNoMoreMoves;								// If true, allow no more moves to be added to the look-ahead
     bool active;										// Are we live and running?
     uint8_t simulationMode;								// Are we simulating, or really printing?
-    unsigned int numLookaheadUnderruns;					// How many times we have run out of moves
+    bool waitingForMove;								// True if we are waiting for a new move
+    unsigned int numLookaheadUnderruns;					// How many times we have run out of moves to adjust during lookahead
+    unsigned int numPrepareUnderruns;					// How many times we wanted a new move but there were only un-prepared moves in the queue
     unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
+    uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new gcode
+    uint32_t gcodeWaitStartTime;						// When we last asked for a gcode and didn't get one
     float simulationTime;								// Print time since we started simulating
     volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move
     volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
