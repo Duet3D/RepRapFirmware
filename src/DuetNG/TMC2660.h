@@ -12,7 +12,8 @@
 
 namespace TMC2660
 {
-	void Init(const Pin[DRIVES]);
+	void Init(const Pin[DRIVES], size_t numTmcDrivers)
+		pre(numTmcDrivers <= DRIVES);
 	void SetCurrent(size_t drive, float current);
 	void EnableDrive(size_t drive, bool en);
 	uint32_t GetStatus(size_t drive);

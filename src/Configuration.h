@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.15c"
+# define VERSION "1.15d"
 #endif
 
 #ifndef DATE
-# define DATE "2016-09-05"
+# define DATE "2016-09-24"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -76,8 +76,6 @@ const float HEAT_SAMPLE_TIME = 0.5;					// Seconds
 const float HEAT_PWM_AVERAGE_TIME = 5.0;			// Seconds
 
 const float TEMPERATURE_CLOSE_ENOUGH = 2.5;			// Celsius
-const float MaxStableTemperatureError = 10.0;		// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
-static_assert(MaxStableTemperatureError > TEMPERATURE_CLOSE_ENOUGH, "MaxStableTemperatureError is too low");
 const float TEMPERATURE_LOW_SO_DONT_CARE = 40.0;	// Celsius
 const float HOT_ENOUGH_TO_EXTRUDE = 160.0;			// Celsius
 const float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
@@ -100,9 +98,13 @@ const float DefaultBedHeaterTimeConstant = 700.0;
 const float DefaultBedHeaterDeadTime = 10.0;
 
 // Parameters used to detect heating errors
-const float MaxHeatingFaultTime = 5;				// How many seconds we allow a heating fault to persist
+const float MaxHeatingFaultTime = 5.0;				// How many seconds we allow a heating fault to persist
+const float AllowedTemperatureDerivativeNoise = 0.25;	// How much fluctuation in the averaged temperature derivative we allow
 const float MaxAmbientTemperature = 45.0;			// We expect heaters to cool to this temperature or lower when switched off
 const float NormalAmbientTemperature = 25.0;		// The ambient temperature we assume - allow for the printer heating its surroundings a little
+const float MaxStableTemperatureError = 10.0;		// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
+
+static_assert(MaxStableTemperatureError > TEMPERATURE_CLOSE_ENOUGH, "MaxStableTemperatureError is too low");
 
 // Temperature sense channels
 const unsigned int FirstThermocoupleChannel = 100;	// Temperature sensor channels 100... are thermocouples

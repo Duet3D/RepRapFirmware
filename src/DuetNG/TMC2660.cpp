@@ -9,7 +9,7 @@
 
 #if !defined(PROTOTYPE_1)
 
-const size_t NumTmc2660Drivers = DRIVES;
+static size_t numTmc2660Drivers;
 
 static bool driversPowered = false;
 
@@ -339,7 +339,7 @@ uint32_t TmcDriverState::ReadStatus()
 	return lastReadValue & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
-static TmcDriverState driverStates[NumTmc2660Drivers];
+static TmcDriverState driverStates[DRIVES];
 
 //--------------------------- Public interface ---------------------------------
 
@@ -347,8 +347,10 @@ namespace TMC2660
 {
 	// Initialise the driver interface and the drivers, leaving each drive disabled.
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
-	void Init(const Pin driverSelectPins[NumTmc2660Drivers])
+	void Init(const Pin driverSelectPins[DRIVES], size_t numTmcDrivers)
 	{
+		numTmc2660Drivers = numTmcDrivers;
+
 		// Make sure the ENN pins are high
 		pinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 
@@ -376,7 +378,7 @@ namespace TMC2660
 
 		// Set up the CS pins and set them all high
 		// When this becomes the standard code, we must set up the STEP and DIR pins here too.
-		for (size_t drive = 0; drive < NumTmc2660Drivers; ++drive)
+		for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
 		{
 			pinMode(driverSelectPins[drive], OUTPUT_HIGH);
 		}
@@ -399,7 +401,7 @@ namespace TMC2660
 		//delay(10);
 
 		driversPowered = false;
-		for (size_t drive = 0; drive < NumTmc2660Drivers; ++drive)
+		for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
 		{
 			driverStates[drive].Init(driverSelectPins[drive]);
 		}
@@ -407,7 +409,7 @@ namespace TMC2660
 
 	void SetCurrent(size_t drive, float current)
 	{
-		if (drive < NumTmc2660Drivers)
+		if (drive < numTmc2660Drivers)
 		{
 			driverStates[drive].SetCurrent(current);
 		}
@@ -415,7 +417,7 @@ namespace TMC2660
 
 	void EnableDrive(size_t drive, bool en)
 	{
-		if (drive < NumTmc2660Drivers)
+		if (drive < numTmc2660Drivers)
 		{
 			driverStates[drive].Enable(en);
 		}
@@ -423,12 +425,12 @@ namespace TMC2660
 
 	uint32_t GetStatus(size_t drive)
 	{
-		return (drive < NumTmc2660Drivers) ? driverStates[drive].ReadStatus() : 0;
+		return (drive < numTmc2660Drivers) ? driverStates[drive].ReadStatus() : 0;
 	}
 
 	bool SetMicrostepping(size_t drive, int microsteps, int mode)
 	{
-		if (drive < NumTmc2660Drivers)
+		if (drive < numTmc2660Drivers)
 		{
 			if (mode == 999 && microsteps >= 0)
 			{
@@ -456,7 +458,7 @@ namespace TMC2660
 
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation)
 	{
-		if (drive < NumTmc2660Drivers)
+		if (drive < numTmc2660Drivers)
 		{
 			const uint32_t drvCtrl = driverStates[drive].drvCtrlReg;
 			interpolation = (drvCtrl & TMC_DRVCTRL_INTPOL) != 0;
@@ -480,7 +482,7 @@ namespace TMC2660
 			digitalWrite(GlobalTmcEnablePin, LOW);
 			delayMicroseconds(10);
 
-			for (size_t drive = 0; drive < NumTmc2660Drivers; ++drive)
+			for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
 			{
 				driverStates[drive].WriteAll();
 			}

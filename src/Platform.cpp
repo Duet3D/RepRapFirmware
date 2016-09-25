@@ -333,9 +333,9 @@ void Platform::Init()
 	slowDrivers = 0;											// assume no drivers need extended step pulse timing
 
 #ifdef DUET_NG
-	numTMC2660Drivers = DRIVES;									// for now assume all drivers are TMC2660 on the Duet NG
+	numTMC2660Drivers = 5;										// until we have the DueX5 expansion board, assume that additional drivers are dumb enable/step/dir ones
 	driversPowered = false;
-	TMC2660::Init(ENABLE_PINS);
+	TMC2660::Init(ENABLE_PINS, numTMC2660Drivers);
 #endif
 
 	extrusionAncilliaryPWM = 0.0;

@@ -58,11 +58,12 @@ void FopDt::CalcPidConstants()
 {
 	const float timeFrac = deadTime/timeConstant;
 	loadChangeParams.kP = 0.7/(gain * timeFrac);
-	loadChangeParams.recipTi = 1.0/(deadTime * 2.0);								// Ti = 2 * deadTime
+//	loadChangeParams.recipTi = 1.0/(deadTime * 2.0);										// Ti = 2 * deadTime (this is what we used in version 1.15c)
+	loadChangeParams.recipTi = (1.0/1.14)/(pow(timeConstant, 0.25) * pow(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
 	loadChangeParams.tD = deadTime * 0.7;
 
 	setpointChangeParams.kP = 0.7/(gain * timeFrac);
-	setpointChangeParams.recipTi = 1.0/max<float>(deadTime * 2.0, timeConstant);	// Ti = time constant unless dead time is very long
+	setpointChangeParams.recipTi = 1.0/timeConstant;										// Ti = time constant
 	setpointChangeParams.tD = deadTime * 0.7;
 }
 

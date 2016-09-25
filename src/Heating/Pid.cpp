@@ -211,7 +211,7 @@ void PID::Spin()
 				else if (gotDerivative)
 				{
 					const float expectedRate = GetExpectedHeatingRate();
-					if (derivative < expectedRate
+					if (derivative + AllowedTemperatureDerivativeNoise < expectedRate
 						&& (float)(millis() - timeSetHeating) > model.GetDeadTime() * SecondsToMillis * 2)
 					{
 						++heatingFaultCount;
@@ -245,7 +245,7 @@ void PID::Spin()
 				{
 					SetHeater(0.0);			// do this here just to be sure
 					mode = HeaterMode::fault;
-					platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion too large\n", heater);
+					platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion exceeded %.1fC\n", heater, MaxStableTemperatureError);
 				}
 			}
 			else if (heatingFaultCount != 0)
@@ -313,7 +313,7 @@ void PID::Spin()
 				{
 					lastPwm = maxPwm;
 					// If we are heating up, preset the I term to the expected PWM at this temperature, ready for the switch over to PID
-					if (error > 0.0 && derivative > 0.0)
+					if (mode == HeaterMode::heating && error > 0.0 && derivative > 0.0)
 					{
 						iAccumulator = expectedPwm;
 					}
@@ -423,19 +423,15 @@ float PID::GetAveragePWM() const
 	return averagePWM * platform->HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis);
 }
 
-// Get a conservative estimate of the expected heating rate at the current temperature and average PWM
+// Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
 float PID::GetExpectedHeatingRate() const
 {
-	float avPwm = GetAveragePWM();
-	if (avPwm < 0.15)
-	{
-		return 0.0;										// avoid overflow etc. in the following calculation because a low or silly PWM value was passed
-	}
-
-	// In the following we allow for the gain being only 7t% of what we think it should be, to avoid false alarms
-	const float initialHeatingRate = 0.75 * model.GetGain() * avPwm/model.GetTimeConstant();	// this is the expected heating rate @ ambient temperature
-	const float maxTemperature = 0.75 * model.GetGain() * avPwm + NormalAmbientTemperature;		// this is the highest temperature that expect the heater can reach at this PWM
-	return max<float>((maxTemperature - temperature) * initialHeatingRate/(maxTemperature - NormalAmbientTemperature), 0.0);
+	// In the following we allow for the gain being only 75% of what we think it should be, to avoid false alarms
+	const float maxTemperatureRise = 0.75 * model.GetGain() * GetAveragePWM();		// this is the highest temperature above ambient we expect the heater can reach at this PWM
+	const float initialHeatingRate = maxTemperatureRise/model.GetTimeConstant();	// this is the expected heating rate at ambient temperature
+	return (maxTemperatureRise >= 20.0)
+			? (maxTemperatureRise + NormalAmbientTemperature - temperature) * initialHeatingRate/maxTemperatureRise
+			: 0.0;
 }
 
 // Auto tune this PID
