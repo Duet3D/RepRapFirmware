@@ -260,7 +260,7 @@ void Webserver::Exit()
 
 void Webserver::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "Webserver Diagnostics:\n");
+	platform->Message(mtype, "=== Webserver ===\n");
 	httpInterpreter->Diagnostics(mtype);
 	ftpInterpreter->Diagnostics(mtype);
 	telnetInterpreter->Diagnostics(mtype);

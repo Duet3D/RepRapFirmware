@@ -67,6 +67,12 @@ public:
 	void UseModel(bool b)							// Use or don't use the model to provide the PID parameters
 		{ useModel = b; }
 
+	void GetHeaterProtection(float& pMaxTempExcursion, float& pMaxFaultTime) const
+		{ pMaxTempExcursion = maxTempExcursion; pMaxFaultTime = maxHeatingFaultTime; }
+
+	void SetHeaterProtection(float pMaxTempExcursion, float pMaxFaultTime)
+		{ maxTempExcursion = pMaxTempExcursion; maxHeatingFaultTime = pMaxFaultTime; }
+
 private:
 
 	void SwitchOn();								// Turn the heater on and set the mode
@@ -83,6 +89,8 @@ private:
 	Platform* platform;								// The instance of the class that is the RepRap hardware
 	float activeTemperature;						// The required active temperature
 	float standbyTemperature;						// The required standby temperature
+	float maxTempExcursion;							// The maximum temperature excursion permitted while maintaining the setpoint
+	float maxHeatingFaultTime;						// How long a heater fault is permitted to persist before a heater fault is raised
 	float temperature;								// The current temperature
 	float previousTemperatures[NumPreviousTemperatures]; // The temperatures of the previous NumDerivativeSamples measurements, used for calculating the derivative
 	size_t previousTemperatureIndex;				// Which slot in previousTemperature we fill in next

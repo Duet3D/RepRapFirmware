@@ -33,6 +33,8 @@ PID::PID(Platform* p, int8_t h) : platform(p), heater(h), mode(HeaterMode::off)
 
 void PID::Init(float pGain, float pTc, float pTd, bool usePid)
 {
+	maxTempExcursion = DefaultMaxTempExcursion;
+	maxHeatingFaultTime = DefaultMaxHeatingFaultTime;
 	model.SetParameters(pGain, pTc, pTd, 1.0, usePid);
 
 	SetHeater(0.0);
@@ -215,10 +217,11 @@ void PID::Spin()
 						&& (float)(millis() - timeSetHeating) > model.GetDeadTime() * SecondsToMillis * 2)
 					{
 						++heatingFaultCount;
-						if (heatingFaultCount * platform->HeatSampleInterval() > MaxHeatingFaultTime * SecondsToMillis)
+						if (heatingFaultCount * platform->HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
 						{
-							SetHeater(0.0);			// do this here just to be sure
+							SetHeater(0.0);					// do this here just to be sure
 							mode = HeaterMode::fault;
+							reprap.GetGCodes()->CancelPrint();
 							platform->MessageF(GENERIC_MESSAGE,
 										"Error: heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
 										heater, expectedRate);
@@ -238,14 +241,15 @@ void PID::Spin()
 			break;
 
 		case HeaterMode::stable:
-			if (fabsf(error) > MaxStableTemperatureError && temperature > MaxAmbientTemperature)
+			if (fabsf(error) > maxTempExcursion && temperature > MaxAmbientTemperature)
 			{
 				++heatingFaultCount;
-				if (heatingFaultCount * platform->HeatSampleInterval() > MaxHeatingFaultTime * SecondsToMillis)
+				if (heatingFaultCount * platform->HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
 				{
-					SetHeater(0.0);			// do this here just to be sure
+					SetHeater(0.0);					// do this here just to be sure
 					mode = HeaterMode::fault;
-					platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion exceeded %.1fC\n", heater, MaxStableTemperatureError);
+					reprap.GetGCodes()->CancelPrint();
+					platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion exceeded %.1fC\n", heater, maxTempExcursion);
 				}
 			}
 			else if (heatingFaultCount != 0)
@@ -286,11 +290,11 @@ void PID::Spin()
 			{
 				// Using PID mode. Determine the PID parameters to use.
 				float kP, recipTi, tD, gain;
-				bool inSetPointMode;
+				bool inLoadMode;
 				if (useModel)
 				{
-					inSetPointMode = (mode != HeaterMode::stable);	// use modified PID when the error is large
-					const PidParams& params = model.GetPidParameters(!inSetPointMode);
+					inLoadMode = (mode == HeaterMode::stable);	// use standard PID when maintaining temperature
+					const PidParams& params = model.GetPidParameters(inLoadMode);
 					kP = params.kP;
 					recipTi = params.recipTi;
 					tD = params.tD;
@@ -298,7 +302,7 @@ void PID::Spin()
 				}
 				else
 				{
-					inSetPointMode = false;						// use standard PID always
+					inLoadMode = true;							// use standard PID always
 					kP = (pp.kP * pp.kS) * (1.0/255.0);
 					recipTi = pp.kI/pp.kP;
 					tD = pp.kD/pp.kP;
@@ -327,7 +331,7 @@ void PID::Spin()
 					// In the following we use a modified PID when the temperature is a long way off target.
 					// During initial heating or cooling, the D term represents expected overshoot, which we don't want to add to the I accumulator.
 					// When we are in load mode, the I term is much larger and the D term doesn't represent overshoot, so use normal PID.
-					const float errorToUse = (inSetPointMode) ? errorMinusDterm : error;
+					const float errorToUse = (inLoadMode) ? error : errorMinusDterm;
 					iAccumulator = constrain<float>(iAccumulator + (errorToUse * kP * recipTi * platform->HeatSampleInterval() * MillisToSeconds),
 													0.0, maxPwm);
 					lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, maxPwm);

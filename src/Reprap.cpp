@@ -178,16 +178,16 @@ void RepRap::Spin()
 	lastTime = t;
 }
 
-void RepRap::Timing()
+void RepRap::Timing(MessageType mtype)
 {
-	platform->MessageF(GENERIC_MESSAGE, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
+	platform->MessageF(mtype, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
 	fastLoop = FLT_MAX;
 	slowLoop = 0.0;
 }
 
 void RepRap::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "Diagnostics\n");
+	platform->Message(mtype, "=== Diagnostics ===\n");
 	OutputBuffer::Diagnostics(mtype);
 	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
 	move->Diagnostics(mtype);

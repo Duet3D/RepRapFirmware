@@ -86,7 +86,7 @@ void Heat::Spin()
 
 void Heat::Diagnostics(MessageType mtype)
 {
-	platform->MessageF(mtype, "Heat Diagnostics:\nBed heater = %d, chamber heater = %d\n", bedHeater, chamberHeater);
+	platform->MessageF(mtype, "=== Heat ===\nBed heater = %d, chamber heater = %d\n", bedHeater, chamberHeater);
 	for (size_t heater=0; heater < HEATERS; heater++)
 	{
 		if (pids[heater]->Active())

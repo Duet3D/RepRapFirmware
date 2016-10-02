@@ -740,7 +740,7 @@ void GCodes::DoPause(bool externalToFile)
 
 void GCodes::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "GCodes Diagnostics:\n");
+	platform->Message(mtype, "=== GCodes ===\n");
 	platform->MessageF(mtype, "Move available? %s\n", moveAvailable ? "yes" : "no");
 	platform->MessageF(mtype, "Stack pointer: %u of %u\n", stackPointer, StackSize);
 	fileMacroGCode->Diagnostics(mtype);
@@ -2775,20 +2775,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			return false;
 		}
-
-		// Reset everything
-		CancelPrint();
-
-		if (isPaused)
 		{
-			isPaused = false;
-			reply.copy("Print cancelled");
-			// If we are cancelling a paused print with M0 and cancel.g exists then run it and do nothing else
-			if (code == 0)
+			bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
+			CancelPrint();
+			if (wasPaused)
 			{
-				if (DoFileMacro(CANCEL_G, false))
+				reply.copy("Print cancelled");
+				// If we are cancelling a paused print with M0 and cancel.g exists then run it and do nothing else
+				if (code == 0)
 				{
-					break;
+					if (DoFileMacro(CANCEL_G, false))
+					{
+						break;
+					}
 				}
 			}
 		}
@@ -3257,7 +3256,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			return false;
 		}
-
 		{
 			// Save the current positions as we may need them later
 			float positionNow[DRIVES];
@@ -4899,7 +4897,38 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 570: // Set/report heater timeout
-		reply.copy("M570 is no longer required or supported");
+		if (gb->Seen('H'))
+		{
+			const size_t heater = gb->GetIValue();
+			bool seen = false;
+			if (heater < HEATERS)
+			{
+				float maxTempExcursion, maxFaultTime;
+				reprap.GetHeat()->GetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
+				if (gb->Seen('P'))
+				{
+					maxFaultTime = gb->GetFValue();
+					seen = true;
+				}
+				if (gb->Seen('T'))
+				{
+					maxTempExcursion = gb->GetFValue();
+					seen = true;
+				}
+				if (seen)
+				{
+					reprap.GetHeat()->SetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
+				}
+				else
+				{
+					reply.printf("Heater %u allowed excursion %.1fC, fault trigger time %.1f seconds", heater, maxTempExcursion, maxFaultTime);
+				}
+			}
+		}
+		else if (gb->Seen('S'))
+		{
+			reply.copy("M570 S parameter is no longer required or supported");
+		}
 		break;
 
 	case 571: // Set output on extrude
@@ -4920,11 +4949,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			size_t extruder = gb->GetIValue();
 			if (gb->Seen('S'))
 			{
-				platform->SetElasticComp(extruder, gb->GetFValue());
+				platform->SetPressureAdvance(extruder, gb->GetFValue());
 			}
 			else
 			{
-				reply.printf("Pressure advance for extruder %u is %.3f seconds", extruder, platform->GetElasticComp(extruder));
+				reply.printf("Pressure advance for extruder %u is %.3f seconds", extruder, platform->GetPressureAdvance(extruder));
 			}
 		}
 		break;
@@ -5701,10 +5730,12 @@ float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const
 	return (extruder < (DRIVES - AXES)) ? rawExtruderTotalByDrive[extruder] : 0.0;
 }
 
-// Cancel the current SD card print
+// Cancel the current SD card print.
+// This is called from Pid.cpp when there is a heater fault, and from elsewhere in this module.
 void GCodes::CancelPrint()
 {
 	moveAvailable = false;
+	isPaused = false;
 
 	fileGCode->Init();
 

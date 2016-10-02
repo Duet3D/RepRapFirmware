@@ -86,6 +86,18 @@ public:
 	void UseModel(size_t heater, bool b)						// Use or don't use the model to provide the PID parameters
 		pre(heater < HEATERS);
 
+	void GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
+	pre(heater < HEATERS)
+	{
+		pids[heater]->GetHeaterProtection(maxTempExcursion, maxFaultTime);
+	}
+
+	void SetHeaterProtection(size_t heater, float maxTempExcursion, float maxFaultTime)
+	pre(heater < HEATERS)
+	{
+		pids[heater]->SetHeaterProtection(maxTempExcursion, maxFaultTime);
+	}
+
 private:
 	Platform* platform;											// The instance of the RepRap hardware class
 	PID* pids[HEATERS];											// A PID controller for each heater

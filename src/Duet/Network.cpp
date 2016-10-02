@@ -499,7 +499,7 @@ void Network::Interrupt()
 
 void Network::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "Network Diagnostics:\n");
+	platform->Message(mtype, "=== Network ===\n");
 
 	size_t numFreeConnections = 0;
 	ConnectionState *freeConn = freeConnections;

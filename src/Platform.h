@@ -548,8 +548,8 @@ public:
 	float AxisMinimum(size_t axis) const;
 	void SetAxisMinimum(size_t axis, float value);
 	float AxisTotalLength(size_t axis) const;
-	float GetElasticComp(size_t drive) const;
-	void SetElasticComp(size_t extruder, float factor);
+	float GetPressureAdvance(size_t drive) const;
+	void SetPressureAdvance(size_t extruder, float factor);
 	void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel);
 	void GetEndStopConfiguration(size_t axis, EndStopType& endstopType, bool& logicLevel) const;
 	uint32_t GetAllEndstopStates() const;
@@ -743,7 +743,7 @@ private:
 	float accelerations[DRIVES];
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
-	float elasticComp[DRIVES - AXES];
+	float pressureAdvance[DRIVES - AXES];
 	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
 	AxisDriversConfig axisDrivers[AXES];			// the driver numbers assigned to each axis
@@ -1226,9 +1226,9 @@ inline const uint8_t* Platform::MACAddress() const
 	return nvData.macAddress;
 }
 
-inline float Platform::GetElasticComp(size_t extruder) const
+inline float Platform::GetPressureAdvance(size_t extruder) const
 {
-	return (extruder < DRIVES - AXES) ? elasticComp[extruder] : 0.0;
+	return (extruder < DRIVES - AXES) ? pressureAdvance[extruder] : 0.0;
 }
 
 inline void Platform::SetEndStopConfiguration(size_t axis, EndStopType esType, bool logicLevel)

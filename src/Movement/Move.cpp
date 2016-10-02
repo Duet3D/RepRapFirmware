@@ -420,7 +420,7 @@ extern uint64_t lastNum;
 
 void Move::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform()->Message(mtype, "Move Diagnostics:\n");
+	reprap.GetPlatform()->Message(mtype, "=== Move ===\n");
 	reprap.GetPlatform()->MessageF(mtype, "MaxReps: %u, StepErrors: %u, MaxWait: %ums, Underruns: %u, %u\n",
 											maxReps, stepErrors, longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	maxReps = 0;

@@ -198,7 +198,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 				{
 					isPrintingMove = true;				// we have both movement and extrusion
 				}
-				float compensationTime = reprap.GetPlatform()->GetElasticComp(drive);
+				const float compensationTime = reprap.GetPlatform()->GetPressureAdvance(drive);
 				if (compensationTime > 0.0)
 				{
 					// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
@@ -909,7 +909,7 @@ bool DDA::Step()
 	{
 		// Keep this loop as fast as possible, in the case that there are no endstops to check!
 
-		// 1. Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops of the Z probe.
+		// 1. Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
 		if (endStopsToCheck != 0)											// if any homing switches or the Z probe is enabled in this move
 		{
 			if ((endStopsToCheck & ZProbeActive) != 0)						// if the Z probe is enabled in this move
@@ -1019,7 +1019,7 @@ bool DDA::Step()
 		firstDM = dm;													// remove the chain from the list
 		while (dmToInsert != dm)										// note that both of these may be nullptr
 		{
-			bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < AXES)
+			const bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < AXES)
 					? dmToInsert->CalcNextStepTimeDelta(*this, true)
 					: dmToInsert->CalcNextStepTimeCartesian(*this, true);
 			DriveMovement * const nextToInsert = dmToInsert->nextDM;

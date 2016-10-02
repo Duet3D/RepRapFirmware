@@ -405,7 +405,7 @@ void Webserver::ResetState()
 
 void Webserver::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "Webserver Diagnostics:\n");
+	platform->Message(mtype, "=== Webserver ===\n");
 	platform->MessageF(mtype, "HTTP sessions: %d of %d\n", numSessions, maxHttpSessions);
 }
 

@@ -81,20 +81,20 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabsf(dv);
 	mp.cart.twoCsquaredTimesMmPerStepDivA = (uint64_t)(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
 
-	// Calculate the elasticity compensation parameter (not needed for axis movements, but we do them anyway to keep the code simple)
-	const float compensationTime = (doCompensation && dv > 0.0) ? reprap.GetPlatform()->GetElasticComp(drive - AXES) : 0.0;
-	uint32_t compensationClocks = (uint32_t)(compensationTime * DDA::stepClockRate);
+	// Calculate the pressure advance parameter
+	const float compensationTime = (doCompensation && dv > 0.0) ? reprap.GetPlatform()->GetPressureAdvance(drive - AXES) : 0.0;
+	const uint32_t compensationClocks = (uint32_t)(compensationTime * DDA::stepClockRate);
 
 	// Calculate the net total step count to allow for compensation. It may be negative.
 	// Note that we add totalSteps in floating point mode, to round the number of steps down consistently
-	int32_t netSteps = (int32_t)(((dda.endSpeed - dda.startSpeed) * compensationTime * stepsPerMm) + totalSteps);
+	const float compensationDistance = (dda.endSpeed - dda.startSpeed) * compensationTime;
+	const int32_t netSteps = (int32_t)(compensationDistance * stepsPerMm) + (int32_t)totalSteps;
 
 	// Calculate the acceleration phase parameters
 	const float accelCompensationDistance = compensationTime * (dda.topSpeed - dda.startSpeed);
-	const float accelCompensationSteps = accelCompensationDistance * stepsPerMm;
 
 	// Acceleration phase parameters
-	mp.cart.accelStopStep = (uint32_t)((dda.accelDistance * stepsPerMm) + accelCompensationSteps) + 1;
+	mp.cart.accelStopStep = (uint32_t)((dda.accelDistance + accelCompensationDistance) * stepsPerMm) + 1;
 	startSpeedTimesCdivA = params.startSpeedTimesCdivA + compensationClocks;
 
 	// Constant speed phase parameters
@@ -113,7 +113,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 	}
 	else
 	{
-		mp.cart.decelStartStep = (uint32_t)((params.decelStartDistance * stepsPerMm) + accelCompensationSteps) + 1;
+		mp.cart.decelStartStep = (uint32_t)((params.decelStartDistance + accelCompensationDistance) * stepsPerMm) + 1;
 		const int32_t initialDecelSpeedTimesCdivA = (int32_t)params.topSpeedTimesCdivA - (int32_t)compensationClocks;	// signed because it may be negative and we square it
 		const uint64_t initialDecelSpeedTimesCdivASquared = isquare64(initialDecelSpeedTimesCdivA);
 		topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivAPlusDecelStartClocks - compensationClocks;
@@ -126,7 +126,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 												: params.decelStartDistance;
 
 		// Reverse phase parameters
-		if (reverseStartDistance >= dda.totalDistance)
+		if (reverseStartDistance >= dda.totalDistance + compensationDistance)
 		{
 			// No reverse phase
 			totalSteps = (uint)max<int32_t>(netSteps, 0);
@@ -140,7 +140,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 									: (twoDistanceToStopTimesCsquaredDivA/mp.cart.twoCsquaredTimesMmPerStepDivA) + 1;
 			// Because the step numbers are rounded down, we may sometimes get a situation in which netSteps = 1 and reverseStartStep = 1.
 			// This would lead to totalSteps = -1, which must be avoided.
-			int32_t overallSteps = (int32_t)(2 * (mp.cart.reverseStartStep - 1)) - netSteps;
+			const int32_t overallSteps = (int32_t)(2 * (mp.cart.reverseStartStep - 1)) - netSteps;
 			if (overallSteps > 0)
 			{
 				totalSteps = overallSteps;
@@ -282,11 +282,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		{
 			// We don't expect any step except the last to be late
 			state = DMState::stepError;
-			if (reprap.Debug(moduleMove))
-			{
-				stepInterval = 10000000 + nextStepTime;				// so we can tell what happened in debug
-				return false;
-			}
+			stepInterval = 10000000 + nextStepTime;				// so we can tell what happened in the debug print
+			return false;
 		}
 	}
 	return true;
@@ -302,13 +299,13 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	uint32_t shiftFactor;
 	if (stepInterval < DDA::MinCalcIntervalDelta)
 	{
-		uint32_t stepsToLimit = ((nextStep <= mp.delta.reverseStartStep && mp.delta.reverseStartStep <= totalSteps)
-									? mp.delta.reverseStartStep
-									: totalSteps
-								) - nextStep;
+		const uint32_t stepsToLimit = ((nextStep < mp.delta.reverseStartStep && mp.delta.reverseStartStep <= totalSteps)
+										? mp.delta.reverseStartStep
+										: totalSteps
+									  ) - nextStep;
 		if (stepInterval < DDA::MinCalcIntervalDelta/8 && stepsToLimit > 16)
 		{
-			shiftFactor = 4;		// octal stepping
+			shiftFactor = 4;		// hexadecimal stepping
 		}
 		else if (stepInterval < DDA::MinCalcIntervalDelta/4 && stepsToLimit > 8)
 		{
@@ -403,11 +400,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		{
 			// We don't expect any step except the last to be late
 			state = DMState::stepError;
-			if (reprap.Debug(moduleMove))
-			{
-				stepInterval = 10000000 + nextStepTime;		// so we can tell what happened in debug
-				return false;
-			}
+			stepInterval = 10000000 + nextStepTime;		// so we can tell what happened in the debug print
+			return false;
 		}
 	}
 	return true;

@@ -702,7 +702,7 @@ void Network::DiscardMessage()
 
 void Network::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "Network Diagnostics:\n");
+	platform->Message(mtype, "=== Network ===\n");
 	const char* text = (state == starting) ? "starting"
 						: (state == disabled) ? "disabled"
 							: (state == enabled) ? "enabled but not running"
