@@ -29,7 +29,8 @@ Tool * Tool::freelist = nullptr;
 
 /*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount)
 {
-	if (dCount > DRIVES - AXES)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	if (dCount > DRIVES - numAxes)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE,
 				"Error: Tool creation: attempt to use more drives than there are in the RepRap");
@@ -63,7 +64,7 @@ Tool * Tool::freelist = nullptr;
 	t->mixing = false;
 	t->displayColdExtrudeWarning = false;
 
-	for (size_t axis = 0; axis < AXES; axis++)
+	for (size_t axis = 0; axis < MAX_AXES; axis++)
 	{
 		t->offset[axis] = 0.0;
 	}
@@ -137,9 +138,10 @@ float Tool::MaxFeedrate() const
 		return 1.0;
 	}
 	float result = 0.0;
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	for (size_t d = 0; d < driveCount; d++)
 	{
-		float mf = reprap.GetPlatform()->MaxFeedrate(drives[d] + AXES);
+		float mf = reprap.GetPlatform()->MaxFeedrate(drives[d] + numAxes);
 		if (mf > result)
 		{
 			result = mf;
@@ -156,9 +158,10 @@ float Tool::InstantDv() const
 		return 1.0;
 	}
 	float result = FLT_MAX;
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	for (size_t d = 0; d < driveCount; d++)
 	{
-		float idv = reprap.GetPlatform()->ActualInstantDv(drives[d] + AXES);
+		float idv = reprap.GetPlatform()->ActualInstantDv(drives[d] + numAxes);
 		if (idv < result)
 		{
 			result = idv;

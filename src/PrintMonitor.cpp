@@ -302,7 +302,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 		parsedFileInfo.layerHeight = 0.0;
 		parsedFileInfo.numFilaments = 0;
 		parsedFileInfo.generatedBy[0] = 0;
-		for(size_t extr = 0; extr < DRIVES - AXES; extr++)
+		for(size_t extr = 0; extr < DRIVES - MIN_AXES; extr++)
 		{
 			parsedFileInfo.filamentNeeded[extr] = 0.0;
 		}
@@ -374,7 +374,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			// Search for filament usage (Cura puts it at the beginning of a G-code file)
 			if (parsedFileInfo.numFilaments == 0)
 			{
-				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - AXES);
+				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes()->GetNumAxes());
 				headerInfoComplete &= (parsedFileInfo.numFilaments != 0);
 			}
 
@@ -529,7 +529,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			// Search for filament used
 			if (parsedFileInfo.numFilaments == 0)
 			{
-				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - AXES);
+				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes()->GetNumAxes());
 				if (parsedFileInfo.numFilaments == 0)
 				{
 					footerInfoComplete = false;
@@ -778,7 +778,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 			// Sum up the filament usage and the filament needed
 			float totalFilamentNeeded = 0.0;
 			const float extrRawTotal = gCodes->GetTotalRawExtrusion();
-			for(size_t extruder = 0; extruder < DRIVES - AXES; extruder++)
+			for(size_t extruder = 0; extruder < DRIVES - reprap.GetGCodes()->GetNumAxes(); extruder++)
 			{
 				totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 			}

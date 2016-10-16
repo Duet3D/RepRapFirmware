@@ -182,7 +182,7 @@ const char *moduleName[] =
 
 // Utilities and storage not part of any class
 
-static char scratchStringBuffer[120];		// this is now used only for short messages; needs to be long enough to print delta parameters
+static char scratchStringBuffer[140];		// this is now used only for short messages; needs to be long enough to print delta parameters
 StringRef scratchString(scratchStringBuffer, ARRAY_SIZE(scratchStringBuffer));
 
 // For debug use

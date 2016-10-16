@@ -43,7 +43,7 @@ void Heat::Init()
 			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, true);
 		}
 	}
-	lastTime = millis();
+	lastTime = millis() - platform->HeatSampleInterval();		// flag the PIDS as due for spinning
 	longWait = platform->Time();
 	coldExtrude = false;
 	active = true;
@@ -210,12 +210,12 @@ void Heat::ResetFault(int8_t heater)
 	}
 }
 
-float Heat::GetAveragePWM(int8_t heater) const
+float Heat::GetAveragePWM(size_t heater) const
 {
 	return pids[heater]->GetAveragePWM();
 }
 
-uint32_t Heat::GetLastSampleTime(int8_t heater) const
+uint32_t Heat::GetLastSampleTime(size_t heater) const
 {
 	return pids[heater]->GetLastSampleTime();
 }

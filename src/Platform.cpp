@@ -145,7 +145,7 @@ bool PidParameters::operator==(const PidParameters& other) const
 
 Platform::Platform() :
 		autoSaveEnabled(false), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
-		fileStructureInitialised(false), tickState(0), debugCode(0)
+		auxGCodeReply(nullptr), fileStructureInitialised(false), tickState(0), debugCode(0)
 {
 	// Output
 	auxOutput = new OutputStack();
@@ -183,6 +183,9 @@ void Platform::Init()
 #if NUM_SERIAL_CHANNELS >= 2
 	commsParams[2] = 0;
 #endif
+
+	auxDetected = false;
+	auxSeq = 0;
 
 	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 	SERIAL_AUX_DEVICE.begin(baudRates[1]);		// this can't be done in the constructor because the Arduino port initialisation isn't complete at that point
@@ -291,7 +294,7 @@ void Platform::Init()
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
 		// Map axes and extruders straight through
-		if (drive < AXES)
+		if (drive < MAX_AXES)
 		{
 			axisDrivers[drive].numDrivers = 1;
 			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
@@ -305,10 +308,11 @@ void Platform::Init()
 #endif
 			endStopLogicLevel[drive] = true;					// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
-		else
+
+		if (drive >= MIN_AXES)
 		{
-			extruderDrivers[drive - AXES] = (uint8_t)drive;
-			SetPressureAdvance(drive - AXES, 0.0);
+			extruderDrivers[drive - MIN_AXES] = (uint8_t)drive;
+			SetPressureAdvance(drive - MIN_AXES, 0.0);
 		}
 		driveDriverBits[drive] = CalcDriverBitmap(drive);
 
@@ -570,23 +574,12 @@ int Platform::GetZProbeType() const
 	return nvData.zProbeType;
 }
 
-void Platform::SetZProbeAxes(const bool axes[AXES])
+void Platform::SetZProbeAxes(uint32_t axes)
 {
-	for (size_t axis=0; axis<AXES; axis++)
-	{
-		nvData.zProbeAxes[axis] = axes[axis];
-	}
+	nvData.zProbeAxes = axes;
 	if (autoSaveEnabled)
 	{
 		WriteNvData();
-	}
-}
-
-void Platform::GetZProbeAxes(bool (&axes)[AXES])
-{
-	for (size_t axis=0; axis<AXES; axis++)
-	{
-		axes[axis] = nvData.zProbeAxes[axis];
 	}
 }
 
@@ -737,7 +730,7 @@ bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 // Return true if we must home X and Y before we home Z (i.e. we are using a bed probe)
 bool Platform::MustHomeXYBeforeZ() const
 {
-	return nvData.zProbeType != 0 && nvData.zProbeAxes[Z_AXIS];
+	return (nvData.zProbeType != 0) && ((nvData.zProbeAxes & (1 << Z_AXIS)) != 0);
 }
 
 void Platform::ResetNvData()
@@ -754,7 +747,7 @@ void Platform::ResetNvData()
 #endif
 
 	nvData.zProbeType = 0;	// Default is to use no Z probe switch
-	ARRAY_INIT(nvData.zProbeAxes, Z_PROBE_AXES);
+	nvData.zProbeAxes = Z_PROBE_AXES;
 	nvData.switchZProbeParameters.Init(0.0);
 	nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
 	nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
@@ -1042,6 +1035,12 @@ void Platform::Exit()
 		{
 			files[i]->Close();
 		}
+	}
+
+	// Release the aux output stack (should release the others too!)
+	while (auxGCodeReply != nullptr)
+	{
+		auxGCodeReply = OutputBuffer::Release(auxGCodeReply);
 	}
 
 	// Stop processing data. Don't try to send a message because it will probably never get there.
@@ -1596,7 +1595,7 @@ float Platform::GetTemperature(size_t heater, TemperatureError& err)
 				return ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
 			}
 
-			// thermistor short circuit, return a high temperature
+			// Thermistor short circuit, return a high temperature
 			err = TemperatureError::shortCircuit;
 			return BAD_ERROR_TEMPERATURE;
 		}
@@ -1714,7 +1713,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 	if (endStopType[drive] == EndStopType::noEndStop)
 	{
 		// No homing switch is configured for this axis, so see if we should use the Z probe
-		if (nvData.zProbeType > 0 && drive < AXES && nvData.zProbeAxes[drive])
+		if (nvData.zProbeType > 0 && drive < reprap.GetGCodes()->GetNumAxes() && (nvData.zProbeAxes & (1 << drive)) != 0)
 		{
 			return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
 		}
@@ -1760,7 +1759,8 @@ EndStopHit Platform::GetZProbeResult() const
 // This is called from the step ISR as well as other places, so keep it fast
 void Platform::SetDirection(size_t drive, bool direction)
 {
-	if (drive < AXES)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
@@ -1769,7 +1769,7 @@ void Platform::SetDirection(size_t drive, bool direction)
 	}
 	else if (drive < DRIVES)
 	{
-		SetDriverDirection(extruderDrivers[drive - AXES], direction);
+		SetDriverDirection(extruderDrivers[drive - numAxes], direction);
 	}
 }
 
@@ -1820,7 +1820,8 @@ void Platform::DisableDriver(size_t driver)
 // Enable the drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableDrive(size_t drive)
 {
-	if (drive < AXES)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
@@ -1829,14 +1830,15 @@ void Platform::EnableDrive(size_t drive)
 	}
 	else if (drive < DRIVES)
 	{
-		EnableDriver(extruderDrivers[drive - AXES]);
+		EnableDriver(extruderDrivers[drive - numAxes]);
 	}
 }
 
 // Disable the drivers for a drive
 void Platform::DisableDrive(size_t drive)
 {
-	if (drive < AXES)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
@@ -1845,7 +1847,7 @@ void Platform::DisableDrive(size_t drive)
 	}
 	else if (drive < DRIVES)
 	{
-		DisableDriver(extruderDrivers[drive - AXES]);
+		DisableDriver(extruderDrivers[drive - numAxes]);
 	}
 }
 
@@ -1883,7 +1885,8 @@ void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, bool isPe
 // Set the current for all drivers on an axis or extruder. Current is in mA.
 void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, bool isPercent)
 {
-	if (drive < AXES)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
@@ -1893,7 +1896,7 @@ void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, bool isPerc
 	}
 	else if (drive < DRIVES)
 	{
-		SetDriverCurrent(extruderDrivers[drive - AXES], currentOrPercent, isPercent);
+		SetDriverCurrent(extruderDrivers[drive - numAxes], currentOrPercent, isPercent);
 	}
 }
 
@@ -1968,7 +1971,8 @@ float Platform::GetMotorCurrent(size_t drive, bool isPercent) const
 {
 	if (drive < DRIVES)
 	{
-		uint8_t driver = (drive < AXES) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - AXES];
+		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+		const uint8_t driver = (drive < numAxes) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - numAxes];
 		if (driver < DRIVES)
 		{
 			return (isPercent) ? motorCurrentFraction[driver] * 100.0 : motorCurrents[driver];
@@ -2016,7 +2020,8 @@ bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
 // Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
 bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 {
-	if (drive < AXES)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	if (drive < numAxes)
 	{
 		bool ok = true;
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2027,7 +2032,7 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 	}
 	else if (drive < DRIVES)
 	{
-		return SetDriverMicrostepping(extruderDrivers[drive - AXES], microsteps, mode);
+		return SetDriverMicrostepping(extruderDrivers[drive - numAxes], microsteps, mode);
 	}
 	return false;
 }
@@ -2049,13 +2054,14 @@ unsigned int Platform::GetDriverMicrostepping(size_t driver, bool& interpolation
 // Get the microstepping for an axis or extruder
 unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
 {
-	if (drive < AXES)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	if (drive < numAxes)
 	{
 		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], interpolation);
 	}
 	else if (drive < DRIVES)
 	{
-		return GetDriverMicrostepping(extruderDrivers[drive - AXES], interpolation);
+		return GetDriverMicrostepping(extruderDrivers[drive - numAxes], interpolation);
 	}
 	else
 	{
@@ -2079,7 +2085,7 @@ void Platform::SetAxisDriversConfig(size_t drive, const AxisDriversConfig& confi
 void Platform::SetExtruderDriver(size_t extruder, uint8_t driver)
 {
 	extruderDrivers[extruder] = driver;
-	driveDriverBits[extruder + AXES] = CalcDriverBitmap(driver);
+	driveDriverBits[extruder + reprap.GetGCodes()->GetNumAxes()] = CalcDriverBitmap(driver);
 }
 
 void Platform::SetDriverStepTiming(size_t driver, float microseconds)
@@ -2277,23 +2283,54 @@ FileStore* Platform::GetFileStore(const char* directory, const char* fileName, b
 	return NULL;
 }
 
+void Platform::AppendAuxReply(const char *msg)
+{
+	// Discard this response if either no aux device is attached or if the response is empty
+	if (msg[0] != 0 && HaveAux())
+	{
+		// Regular text-based responses for AUX are currently stored and processed by M105/M408
+		if (auxGCodeReply != nullptr || OutputBuffer::Allocate(auxGCodeReply))
+		{
+			auxSeq++;
+			auxGCodeReply->cat(msg);
+		}
+	}
+}
+
+void Platform::AppendAuxReply(OutputBuffer *reply)
+{
+	// Discard this response if either no aux device is attached or if the response is empty
+	if (reply == nullptr || reply->Length() == 0 || !HaveAux())
+	{
+		OutputBuffer::ReleaseAll(reply);
+	}
+	else if ((*reply)[0] == '{')
+	{
+		// JSON responses are always sent directly to the AUX device
+		// For big responses it makes sense to write big chunks of data in portions. Store this data here
+		auxOutput->Push(reply);
+	}
+	else
+	{
+		// Other responses are stored for M105/M408
+		auxSeq++;
+		if (auxGCodeReply == nullptr)
+		{
+			auxGCodeReply = reply;
+		}
+		else
+		{
+			auxGCodeReply->Append(reply);
+		}
+	}
+}
+
 void Platform::Message(MessageType type, const char *message)
 {
 	switch (type)
 	{
 		case AUX_MESSAGE:
-			// Message that is to be sent to the first auxiliary device
-			if (!auxOutput->IsEmpty())
-			{
-				// If we're still busy sending a response to the UART device, append this message to the output buffer
-				auxOutput->GetLastItem()->cat(message);
-			}
-			else
-			{
-				// Send short strings immediately through the aux channel. There is no flow control on this port, so it can't block for long
-				SERIAL_AUX_DEVICE.write(message);
-				SERIAL_AUX_DEVICE.flush();
-			}
+			AppendAuxReply(message);
 			break;
 
 		case AUX2_MESSAGE:
@@ -2385,15 +2422,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 	switch (type)
 	{
 		case AUX_MESSAGE:
-			// If no AUX device is attached, don't queue this buffer
-			if (!reprap.GetGCodes()->HaveAux())
-			{
-				OutputBuffer::ReleaseAll(buffer);
-				break;
-			}
-
-			// For big responses it makes sense to write big chunks of data in portions. Store this data here
-			auxOutput->Push(buffer);
+			AppendAuxReply(buffer);
 			break;
 
 		case AUX2_MESSAGE:
@@ -2491,7 +2520,7 @@ void Platform::SetAtxPower(bool on)
 
 void Platform::SetPressureAdvance(size_t extruder, float factor)
 {
-	if (extruder < DRIVES - AXES)
+	if (extruder < DRIVES - MIN_AXES)
 	{
 		pressureAdvance[extruder] = factor;
 	}
@@ -2500,9 +2529,10 @@ void Platform::SetPressureAdvance(size_t extruder, float factor)
 float Platform::ActualInstantDv(size_t drive) const
 {
 	const float idv = instantDvs[drive];
-	if (drive >= AXES)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	if (drive >= numAxes)
 	{
-		const float eComp = pressureAdvance[drive - AXES];
+		const float eComp = pressureAdvance[drive - numAxes];
 		// If we are using pressure advance then we need to limit the extruder instantDv to avoid velocity mismatches.
 		// Assume that we want the extruder motor position to be accurate to within 0.01mm of extrusion.
 		// TODO remove this limit and add/remove steps to the previous and/or next move instead

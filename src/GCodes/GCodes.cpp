@@ -31,12 +31,22 @@
 
 #define DEGREE_SYMBOL	"\xC2\xB0"				// degree-symbol encoding in UTF8
 
-const char GCodes::axisLetters[AXES] = { 'X', 'Y', 'Z' };
+const char GCodes::axisLetters[MAX_AXES] = { 'X', 'Y', 'Z', 'U', 'V', 'W' };
+
+const char* BED_EQUATION_G = "bed.g";
+const char* PAUSE_G = "pause.g";
+const char* RESUME_G = "resume.g";
+const char* CANCEL_G = "cancel.g";
+const char* STOP_G = "stop.g";
+const char* SLEEP_G = "sleep.g";
+const char* homingFileNames[MAX_AXES] = { "homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g" };
+const char* HOME_ALL_G = "homeall.g";
+const char* HOME_DELTA_G = "homedelta.g";
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 GCodes::GCodes(Platform* p, Webserver* w) :
-	platform(p), webserver(w), active(false), stackPointer(0), auxGCodeReply(nullptr), isFlashing(false),
+	platform(p), webserver(w), active(false), stackPointer(0), isFlashing(false),
 	fileBeingHashed(nullptr)
 {
 	httpGCode = new GCodeBuffer(platform, "http", HTTP_MESSAGE);
@@ -56,9 +66,10 @@ void GCodes::Exit()
 void GCodes::Init()
 {
 	Reset();
+	numAxes = MIN_AXES;
 	distanceScale = 1.0;
 	rawExtruderTotal = 0.0;
-	for (size_t extruder = 0; extruder < DRIVES - AXES; extruder++)
+	for (size_t extruder = 0; extruder < DRIVES - MIN_AXES; extruder++)
 	{
 		lastRawExtruderPosition[extruder] = 0.0;
 		rawExtruderTotalByDrive[extruder] = 0.0;
@@ -72,7 +83,7 @@ void GCodes::Init()
 	longWait = platform->Time();
 	dwellTime = longWait;
 	limitAxes = true;
-	for(size_t axis = 0; axis < AXES; axis++)
+	for(size_t axis = 0; axis < MAX_AXES; axis++)
 	{
 		axisScaleFactors[axis] = 1.0;
 	}
@@ -109,7 +120,7 @@ void GCodes::Reset()
 	cannedCycleMoveCount = 0;
 	cannedCycleMoveQueued = false;
 	speedFactor = 1.0 / minutesToSeconds;				// default is just to convert from mm/minute to mm/second
-	for (size_t i = 0; i < DRIVES - AXES; ++i)
+	for (size_t i = 0; i < DRIVES - MIN_AXES; ++i)
 	{
 		extrusionFactors[i] = 1.0;
 	}
@@ -127,12 +138,6 @@ void GCodes::Reset()
 	}
 	triggersPending = 0;
 
-	auxDetected = false;
-	while (auxGCodeReply != nullptr)
-	{
-		auxGCodeReply = OutputBuffer::Release(auxGCodeReply);
-	}
-	auxSeq = 0;
 	simulationMode = 0;
 	simulationTime = 0.0;
 	isPaused = false;
@@ -221,7 +226,7 @@ void GCodes::Spin()
 	StringRef reply(replyBuffer, ARRAY_SIZE(replyBuffer));
 	reply.Clear();
 
-	// Check for M105 poll requests from Pronterface and PanelDue so that the status is kept up to date during execution of file macros etc.
+	// Check for poll requests from Pronterface and PanelDue so that the status is kept up to date during execution of file macros etc.
 	if (serialGCode->IsReady() && serialGCode->IsPollRequest())
 	{
 		serialGCode->SetFinished(ActOnCode(serialGCode, reply));
@@ -249,25 +254,23 @@ void GCodes::Spin()
 			break;
 
 		case GCodeState::homing:
-			if (toBeHomed & (1 << X_AXIS))
-			{
-				toBeHomed &= ~(1 << X_AXIS);
-				DoFileMacro(HOME_X_G);
-			}
-			else if (toBeHomed & (1 << Y_AXIS))
-			{
-				toBeHomed &= ~(1 << Y_AXIS);
-				DoFileMacro(HOME_Y_G);
-			}
-			else if (toBeHomed & (1 << Z_AXIS))
-			{
-				toBeHomed &= ~(1 << Z_AXIS);
-				DoFileMacro(HOME_Z_G);
-			}
-			else
+			if (toBeHomed == 0)
 			{
 				HandleReply(gbCurrent, false, "");
 				state = GCodeState::normal;
+			}
+			else
+			{
+				for (size_t axis = 0; axis < numAxes; ++axis)
+				{
+					// Leave the Z axis until all other axes are done
+					if ((toBeHomed & (1u << axis)) != 0 && (axis != Z_AXIS || toBeHomed == (1u << Z_AXIS)))
+					{
+						toBeHomed &= ~(1u << axis);
+						DoFileMacro(homingFileNames[axis]);
+						break;
+					}
+				}
 			}
 			break;
 
@@ -345,11 +348,11 @@ void GCodes::Spin()
 			if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 			{
 				float currentZ = moveBuffer.coords[Z_AXIS];
-				for (size_t drive = 0; drive < AXES; ++drive)
+				for (size_t drive = 0; drive < numAxes; ++drive)
 				{
 					moveBuffer.coords[drive] =  pausedMoveBuffer[drive];
 				}
-				for (size_t drive = AXES; drive < DRIVES; ++drive)
+				for (size_t drive = numAxes; drive < DRIVES; ++drive)
 				{
 					moveBuffer.coords[drive] = 0.0;
 				}
@@ -380,9 +383,9 @@ void GCodes::Spin()
 				{
 					platform->SetFanValue(i, pausedFanValues[i]);
 				}
-				for (size_t drive = AXES; drive < DRIVES; ++drive)
+				for (size_t drive = numAxes; drive < DRIVES; ++drive)
 				{
-					lastRawExtruderPosition[drive - AXES] = pausedMoveBuffer[drive];	// reset the extruder position in case we are receiving absolute extruder moves
+					lastRawExtruderPosition[drive - numAxes] = pausedMoveBuffer[drive];	// reset the extruder position in case we are receiving absolute extruder moves
 				}
 				feedRate = pausedFeedRate;
 				isPaused = false;
@@ -399,9 +402,9 @@ void GCodes::Spin()
 				bool updating = false;
 				for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
 				{
-					if ((firmwareUpdateModuleMap & (1 << module)) != 0)
+					if ((firmwareUpdateModuleMap & (1u << module)) != 0)
 					{
-						firmwareUpdateModuleMap &= ~(1 << module);
+						firmwareUpdateModuleMap &= ~(1u << module);
 						FirmwareUpdater::UpdateModule(module);
 						updating = true;
 						break;
@@ -531,7 +534,7 @@ void GCodes::FillGCodeBuffers()
 			char b = platform->ReadFromSource(SerialSource::AUX);
 			if (auxGCode->Put(b))	// add char to buffer and test whether the gcode is complete
 			{
-				auxDetected = true;
+				platform->SetAuxDetected();
 				break;
 			}
 		}
@@ -631,9 +634,9 @@ bool GCodes::CheckTriggers()
 			&& (ct.condition == 0 || (ct.condition == 1 && reprap.GetPrintMonitor()->IsPrinting()))
 		   )
 		{
-			triggersPending |= (1 << triggerNumber);
+			triggersPending |= (1u << triggerNumber);
 		}
-		if (triggerNumber < lowestTriggerPending && (triggersPending & (1 << triggerNumber)) != 0)
+		if (triggerNumber < lowestTriggerPending && (triggersPending & (1u << triggerNumber)) != 0)
 		{
 			lowestTriggerPending = triggerNumber;
 		}
@@ -643,7 +646,7 @@ bool GCodes::CheckTriggers()
 	if (lowestTriggerPending < MaxTriggers)
 	{
 		gbCurrent = nullptr;
-		triggersPending &= ~(1 << lowestTriggerPending);		// clear the trigger
+		triggersPending &= ~(1u << lowestTriggerPending);		// clear the trigger
 
 		// Execute the trigger
 		switch(lowestTriggerPending)
@@ -699,16 +702,16 @@ void GCodes::DoPause(bool externalToFile)
 		fileGCode->Init();
 		if (moveAvailable)
 		{
-			for (size_t drive = AXES; drive < DRIVES; ++drive)
+			for (size_t drive = numAxes; drive < DRIVES; ++drive)
 			{
 				pausedMoveBuffer[drive] += moveBuffer.coords[drive];	// add on the extrusion in the move not yet taken
 			}
 			ClearMove();
 		}
 
-		for (size_t drive = AXES; drive < DRIVES; ++drive)
+		for (size_t drive = numAxes; drive < DRIVES; ++drive)
 		{
-			pausedMoveBuffer[drive] = lastRawExtruderPosition[drive - AXES] - pausedMoveBuffer[drive];
+			pausedMoveBuffer[drive] = lastRawExtruderPosition[drive - numAxes] - pausedMoveBuffer[drive];
 		}
 
 		if (reprap.Debug(moduleGcodes))
@@ -719,13 +722,13 @@ void GCodes::DoPause(bool externalToFile)
 	else
 	{
 		// Pausing a file print because of a command in the file itself
-		for (size_t drive = 0; drive < AXES; ++drive)
+		for (size_t drive = 0; drive < numAxes; ++drive)
 		{
 			pausedMoveBuffer[drive] = moveBuffer.coords[drive];
 		}
-		for (size_t drive = AXES; drive < DRIVES; ++drive)
+		for (size_t drive = numAxes; drive < DRIVES; ++drive)
 		{
-			pausedMoveBuffer[drive] = lastRawExtruderPosition[drive - AXES];	// get current extruder positions into pausedMoveBuffer
+			pausedMoveBuffer[drive] = lastRawExtruderPosition[drive - numAxes];	// get current extruder positions into pausedMoveBuffer
 		}
 		pausedFeedRate = feedRate;
 	}
@@ -816,7 +819,7 @@ void GCodes::Pop()
 bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyLimits)
 {
 	// Zero every extruder drive as some drives may not be changed
-	for (size_t drive = AXES; drive < DRIVES; drive++)
+	for (size_t drive = numAxes; drive < DRIVES; drive++)
 	{
 		moveBuffer.coords[drive] = 0.0;
 	}
@@ -840,7 +843,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 		size_t eMoveCount = tool->DriveCount();
 		if (eMoveCount > 0)
 		{
-			float eMovement[DRIVES - AXES];
+			float eMovement[DRIVES - MIN_AXES];
 			if (tool->GetMixing())
 			{
 				float length = gb->GetFValue();
@@ -868,7 +871,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 				float moveArg = eMovement[eDrive] * distanceScale;
 				if (doingG92)
 				{
-					moveBuffer.coords[drive + AXES] = moveArg;
+					moveBuffer.coords[drive + numAxes] = moveArg;
 					lastRawExtruderPosition[drive] = moveArg;
 				}
 				else
@@ -879,7 +882,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 					lastRawExtruderPosition[drive] += extrusionAmount;
 					rawExtruderTotalByDrive[drive] += extrusionAmount;
 					rawExtruderTotal += extrusionAmount;
-					moveBuffer.coords[drive + AXES] = extrusionAmount * extrusionFactors[drive];
+					moveBuffer.coords[drive + numAxes] = extrusionAmount * extrusionFactors[drive];
 				}
 			}
 		}
@@ -887,14 +890,14 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 
 	// Now the movement axes
 	const Tool *currentTool = reprap.GetCurrentTool();
-	for (size_t axis = 0; axis < AXES; axis++)
+	for (size_t axis = 0; axis < numAxes; axis++)
 	{
 		if (gb->Seen(axisLetters[axis]))
 		{
 			float moveArg = gb->GetFValue() * distanceScale * axisScaleFactors[axis];
 			if (doingG92)
 			{
-				axisIsHomed[axis] = true;		// doing a G92 defines the absolute axis position
+				SetAxisIsHomed(axis);				// doing a G92 defines the absolute axis position
 			}
 			else
 			{
@@ -904,11 +907,11 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer *gb, bool doingG92, bool applyL
 				}
 				else if (currentTool != NULL)
 				{
-					moveArg -= currentTool->GetOffset()[axis];// adjust requested position to compensate for tool offset
+					moveArg -= currentTool->GetOffset()[axis];	// adjust requested position to compensate for tool offset
 				}
 
 				// If on a Cartesian printer and applying limits, limit all axes
-				if (applyLimits && axisIsHomed[axis] && !reprap.GetMove()->IsDeltaMode()
+				if (applyLimits && GetAxisIsHomed(axis) && !reprap.GetMove()->IsDeltaMode()
 #if SUPPORT_ROLAND
 						&& !reprap.GetRoland()->Active()
 #endif
@@ -975,11 +978,11 @@ int GCodes::SetUpMove(GCodeBuffer *gb, StringRef& reply)
 
 		if (ival == 1)
 		{
-			for (size_t i = 0; i < AXES; ++i)
+			for (size_t i = 0; i < numAxes; ++i)
 			{
 				if (gb->Seen(axisLetters[i]))
 				{
-					moveBuffer.endStopsToCheck |= (1 << i);
+					moveBuffer.endStopsToCheck |= (1u << i);
 				}
 			}
 		}
@@ -1111,12 +1114,19 @@ bool GCodes::DoCannedCycleMove(EndstopChecks ce)
 
 		for (size_t drive = 0; drive < DRIVES; drive++)
 		{
-			if (activeDrive[drive])
+			switch(cannedMoveType[drive])
 			{
-				moveBuffer.coords[drive] = moveToDo[drive];
+			case CannedMoveType::none:
+				break;
+			case CannedMoveType::relative:
+				moveBuffer.coords[drive] += cannedMoveCoords[drive];
+				break;
+			case CannedMoveType::absolute:
+				moveBuffer.coords[drive] = cannedMoveCoords[drive];
+				break;
 			}
 		}
-		moveBuffer.feedRate = moveToDo[DRIVES];
+		moveBuffer.feedRate = cannedFeedRate;
 		moveBuffer.endStopsToCheck = ce;
 		moveBuffer.filePos = noFilePosition;
 		moveBuffer.usePressureAdvance = false;
@@ -1132,7 +1142,7 @@ bool GCodes::SetPositions(GCodeBuffer *gb)
 	// Don't pause the machine if only extruder drives are being reset (DC, 2015-09-06).
 	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
 	bool includingAxes = false;
-	for (size_t drive = 0; drive < AXES; ++drive)
+	for (size_t drive = 0; drive < numAxes; ++drive)
 	{
 		if (gb->Seen(axisLetters[drive]))
 		{
@@ -1188,35 +1198,29 @@ bool GCodes::OffsetAxes(GCodeBuffer* gb)
 		}
 		for (size_t drive = 0; drive < DRIVES; drive++)
 		{
-			if (drive < AXES)
+			if (drive < numAxes)
 			{
 				record[drive] = moveBuffer.coords[drive];
-				moveToDo[drive] = moveBuffer.coords[drive];
+				if (gb->Seen(axisLetters[drive]))
+				{
+					cannedMoveCoords[drive] = gb->GetFValue();
+					cannedMoveType[drive] = CannedMoveType::relative;
+				}
 			}
 			else
 			{
 				record[drive] = 0.0;
-				moveToDo[drive] = 0.0;
 			}
-			activeDrive[drive] = false;
-		}
-
-		for (size_t axis = 0; axis < AXES; axis++)
-		{
-			if (gb->Seen(axisLetters[axis]))
-			{
-				moveToDo[axis] += gb->GetFValue();
-				activeDrive[axis] = true;
-			}
+			cannedMoveType[drive] = CannedMoveType::none;
 		}
 
 		if (gb->Seen(feedrateLetter)) // Has the user specified a feedrate?
 		{
-			moveToDo[DRIVES] = gb->GetFValue() * distanceScale * SECONDS_TO_MINUTES;
+			cannedFeedRate = gb->GetFValue() * distanceScale * SECONDS_TO_MINUTES;
 		}
 		else
 		{
-			moveToDo[DRIVES] = feedRate;
+			cannedFeedRate = DEFAULT_FEEDRATE;
 		}
 
 		offSetSet = true;
@@ -1274,30 +1278,28 @@ bool GCodes::DoHome(GCodeBuffer *gb, StringRef& reply, bool& error)
 	else
 	{
 		toBeHomed = 0;
-		for (size_t axis = 0; axis < AXES; ++axis)
+		for (size_t axis = 0; axis < numAxes; ++axis)
 		{
 			if (gb->Seen(axisLetters[axis]))
 			{
-				toBeHomed |= (1 << axis);
-				axisIsHomed[axis] = false;
+				toBeHomed |= (1u << axis);
+				SetAxisNotHomed(axis);
 			}
 		}
 
-		if (toBeHomed == 0 || toBeHomed == ((1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS)))
+		if (toBeHomed == 0 || toBeHomed == ((1u << numAxes) - 1))
 		{
 			// Homing everything
 			SetAllAxesNotHomed();
 			DoFileMacro(HOME_ALL_G);
 		}
 		else if (   platform->MustHomeXYBeforeZ()
-				 && ((toBeHomed & (1 << Z_AXIS)) != 0)
-				 && (   (((toBeHomed & (1 << X_AXIS)) == 0) && !axisIsHomed[X_AXIS])
-					 || (((toBeHomed & (1 << Y_AXIS)) == 0) && !axisIsHomed[Y_AXIS])
-					)
+				 && ((toBeHomed & (1u << Z_AXIS)) != 0)
+				 && ((toBeHomed | axesHomed | (1u << Z_AXIS)) != ((1u << numAxes) - 1))
 				)
 		{
 			// We can only home Z if both X and Y have already been homed or are being homed
-			reply.copy("Must home X and Y before homing Z");
+			reply.copy("Must home all other axes before homing Z");
 			error = true;
 		}
 		else
@@ -1318,15 +1320,15 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 
 	for (size_t drive = 0; drive <= DRIVES; drive++)
 	{
-		activeDrive[drive] = false;
+		cannedMoveType[drive] = CannedMoveType::none;
 	}
 
 	switch (cannedCycleMoveCount)
 	{
 	case 0: // Move Z to the dive height. This only does anything on the first move; on all the others Z is already there
-		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
-		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
+		cannedMoveCoords[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
+		cannedMoveType[Z_AXIS] = CannedMoveType::absolute;
+		cannedFeedRate = platform->GetZProbeTravelSpeed();
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
@@ -1334,11 +1336,11 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 		return false;
 
 	case 1:	// Move to the correct XY coordinates
-		GetProbeCoordinates(probePointIndex, moveToDo[X_AXIS], moveToDo[Y_AXIS], moveToDo[Z_AXIS]);
-		activeDrive[X_AXIS] = true;
-		activeDrive[Y_AXIS] = true;
+		GetProbeCoordinates(probePointIndex, cannedMoveCoords[X_AXIS], cannedMoveCoords[Y_AXIS], cannedMoveCoords[Z_AXIS]);
+		cannedMoveType[X_AXIS] = CannedMoveType::absolute;
+		cannedMoveType[Y_AXIS] = CannedMoveType::absolute;
 		// NB - we don't use the Z value
-		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
+		cannedFeedRate = platform->GetZProbeTravelSpeed();
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount++;
@@ -1347,20 +1349,28 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 
 	case 2:	// Probe the bed
 		{
-			const float height = (axisIsHomed[Z_AXIS])
+			const float height = (GetAxisIsHomed(Z_AXIS))
 									? 2 * platform->GetZProbeDiveHeight()			// Z axis has been homed, so no point in going very far
 									: 1.1 * platform->AxisTotalLength(Z_AXIS);		// Z axis not homed yet, so treat this as a homing move
 			switch(DoZProbe(height))
 			{
 			case 0:
 				// Z probe is already triggered at the start of the move, so abandon the probe and record an error
-				platform->Message(GENERIC_MESSAGE, "Z probe warning: probe already triggered at start of probing move\n");
+				platform->Message(GENERIC_MESSAGE, "Error: Z probe already triggered at start of probing move\n");
 				cannedCycleMoveCount++;
 				reprap.GetMove()->SetZBedProbePoint(probePointIndex, platform->GetZProbeDiveHeight(), true, true);
 				break;
 
 			case 1:
-				if (axisIsHomed[Z_AXIS])
+				// Z probe did not trigger
+				platform->Message(GENERIC_MESSAGE, "Error: Z probe was not triggered during probing move\n");
+				cannedCycleMoveCount++;
+				reprap.GetMove()->SetZBedProbePoint(probePointIndex, -(platform->GetZProbeDiveHeight()), true, true);
+				break;
+
+			case 2:
+				// Successful probing
+				if (GetAxisIsHomed(Z_AXIS))
 				{
 					lastProbedZ = moveBuffer.coords[Z_AXIS] - (platform->ZProbeStopHeight() + heightAdjust);
 				}
@@ -1369,7 +1379,7 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 					// The Z axis has not yet been homed, so treat this probe as a homing move.
 					moveBuffer.coords[Z_AXIS] = platform->ZProbeStopHeight() + heightAdjust;
 					SetPositions(moveBuffer.coords);
-					axisIsHomed[Z_AXIS] = true;
+					SetAxisIsHomed(Z_AXIS);
 					lastProbedZ = 0.0;
 				}
 				reprap.GetMove()->SetZBedProbePoint(probePointIndex, lastProbedZ, true, false);
@@ -1383,9 +1393,9 @@ bool GCodes::DoSingleZProbeAtPoint(int probePointIndex, float heightAdjust)
 		return false;
 
 	case 3:	// Raise the head back up to the dive height
-		moveToDo[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
-		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->GetZProbeTravelSpeed();
+		cannedMoveCoords[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
+		cannedMoveType[Z_AXIS] = CannedMoveType::absolute;
+		cannedFeedRate = platform->GetZProbeTravelSpeed();
 		if (DoCannedCycleMove(0))
 		{
 			cannedCycleMoveCount = 0;
@@ -1406,14 +1416,15 @@ bool GCodes::DoSingleZProbe(bool reportOnly, float heightAdjust)
 	switch (DoZProbe(1.1 * platform->AxisTotalLength(Z_AXIS)))
 	{
 	case 0:		// failed
+	case 1:
 		return true;
 
-	case 1:		// success
+	case 2:		// success
 		if (!reportOnly)
 		{
 			moveBuffer.coords[Z_AXIS] = platform->ZProbeStopHeight() + heightAdjust;
 			SetPositions(moveBuffer.coords);
-			axisIsHomed[Z_AXIS] = true;
+			SetAxisIsHomed(Z_AXIS);
 			lastProbedZ = 0.0;
 		}
 		return true;
@@ -1425,8 +1436,9 @@ bool GCodes::DoSingleZProbe(bool reportOnly, float heightAdjust)
 
 // Do a Z probe cycle up to the maximum specified distance.
 // Returns -1 if not complete yet
-// Returns 0 if failed
-// Returns 1 if success, with lastProbedZ set to the height we stopped at and the current position in moveBuffer
+// Returns 0 if Z probe already triggered at start of probing
+// Returns 1 if Z probe didn't trigger
+// Returns 2 if success, with the current position in moveBuffer
 int GCodes::DoZProbe(float distance)
 {
 	if (platform->GetZProbeType() == ZProbeTypeDelta)
@@ -1436,24 +1448,29 @@ int GCodes::DoZProbe(float distance)
 	}
 	else
 	{
-		if (!cannedCycleMoveQueued && reprap.GetPlatform()->GetZProbeResult() == EndStopHit::lowHit)
+		// Check for probe already triggered at start
+		if (!cannedCycleMoveQueued)
 		{
-			return 0;
+			if (reprap.GetPlatform()->GetZProbeResult() == EndStopHit::lowHit)
+			{
+				return 0;
+			}
+			zProbeTriggered = false;
 		}
 
 		// Do a normal canned cycle Z movement with Z probe enabled
 		for (size_t drive = 0; drive <= DRIVES; drive++)
 		{
-			activeDrive[drive] = false;
+			cannedMoveType[drive] = CannedMoveType::none;
 		}
 
-		moveToDo[Z_AXIS] = -distance;
-		activeDrive[Z_AXIS] = true;
-		moveToDo[DRIVES] = platform->GetZProbeParameters().probeSpeed;
+		cannedMoveCoords[Z_AXIS] = -distance;
+		cannedMoveType[Z_AXIS] = CannedMoveType::relative;
+		cannedFeedRate = platform->GetZProbeParameters().probeSpeed;
 
 		if (DoCannedCycleMove(ZProbeActive))
 		{
-			return 1;
+			return (zProbeTriggered) ? 2 : 1;
 		}
 		return -1;
 	}
@@ -1621,9 +1638,6 @@ bool GCodes::SetPrintZProbe(GCodeBuffer* gb, StringRef& reply)
 // Return the current coordinates as a printable string.  Coordinates
 // are updated at the end of each movement, so this won't tell you
 // where you are mid-movement.
-
-//Fixed to deal with multiple extruders
-
 void GCodes::GetCurrentCoordinates(StringRef& s) const
 {
 	float liveCoordinates[DRIVES];
@@ -1632,22 +1646,26 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	if (currentTool != NULL)
 	{
 		const float *offset = currentTool->GetOffset();
-		for (size_t i = 0; i < AXES; ++i)
+		for (size_t i = 0; i < numAxes; ++i)
 		{
 			liveCoordinates[i] += offset[i];
 		}
 	}
 
-	s.printf("X:%.2f Y:%.2f Z:%.2f ", liveCoordinates[X_AXIS], liveCoordinates[Y_AXIS], liveCoordinates[Z_AXIS]);
-	for (size_t i = AXES; i < DRIVES; i++)
+	s.Clear();
+	for (size_t axis = 0; axis < numAxes; ++axis)
 	{
-		s.catf("E%u:%.1f ", i - AXES, liveCoordinates[i]);
+		s.catf("%c: %.2f ", axisLetters[axis], liveCoordinates[axis]);
+	}
+	for (size_t i = numAxes; i < DRIVES; i++)
+	{
+		s.catf("E%u: %.1f ", i - numAxes, liveCoordinates[i]);
 	}
 
 	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.
 	// Don't bother with the extruder endpoints, they are zero after any non-extruding move.
 	s.cat(" Count");
-	for (size_t i = 0; i < AXES; ++i)
+	for (size_t i = 0; i < numAxes; ++i)
 	{
 		s.catf(" %d", reprap.GetMove()->GetEndPoint(i));
 	}
@@ -1761,10 +1779,10 @@ void GCodes::QueueFileToPrint(const char* fileName)
 		fileGCode->SetToolNumberAdjust(0);	// clear tool number adjustment
 
 		// Reset all extruder positions when starting a new print
-		for (size_t extruder = AXES; extruder < DRIVES; extruder++)
+		for (size_t extruder = MIN_AXES; extruder < DRIVES; extruder++)
 		{
-			lastRawExtruderPosition[extruder - AXES] = 0.0;
-			rawExtruderTotalByDrive[extruder - AXES] = 0.0;
+			lastRawExtruderPosition[extruder - MIN_AXES] = 0.0;
+			rawExtruderTotalByDrive[extruder - MIN_AXES] = 0.0;
 		}
 		rawExtruderTotal = 0.0;
 		reprap.GetMove()->ResetExtruderPositions();
@@ -1788,7 +1806,16 @@ void GCodes::DeleteFile(const char* fileName)
 // Function to handle dwell delays.  Return true for dwell finished, false otherwise.
 bool GCodes::DoDwell(GCodeBuffer *gb)
 {
-	if (!gb->Seen('P'))
+	float dwell;
+	if (gb->Seen('S'))
+	{
+		dwell = gb->GetFValue();
+	}
+	else if (gb->Seen('P'))
+	{
+		dwell = 0.001 * (float) gb->GetLValue(); // P values are in milliseconds; we need seconds
+	}
+	else
 	{
 		return true;  // No time given - throw it away
 	}
@@ -1806,8 +1833,6 @@ bool GCodes::DoDwell(GCodeBuffer *gb)
 	{
 		return false;
 	}
-
-	float dwell = 0.001 * (float) gb->GetLValue(); // P values are in milliseconds; we need seconds
 
 	if (simulationMode != 0)
 	{
@@ -1858,27 +1883,20 @@ void GCodes::SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb)
 		}
 
 		// Deal with setting offsets
-		float offset[AXES];
-		for (size_t i = 0; i < AXES; ++i)
+		float offset[MAX_AXES];
+		for (size_t i = 0; i < MAX_AXES; ++i)
 		{
 			offset[i] = tool->GetOffset()[i];
 		}
 
 		bool settingOffset = false;
-		if (gb->Seen('X'))
+		for (size_t axis = 0; axis < numAxes; ++axis)
 		{
-			offset[X_AXIS] = gb->GetFValue();
-			settingOffset = true;
-		}
-		if (gb->Seen('Y'))
-		{
-			offset[Y_AXIS] = gb->GetFValue();
-			settingOffset = true;
-		}
-		if (gb->Seen('Z'))
-		{
-			offset[Z_AXIS] = gb->GetFValue();
-			settingOffset = true;
+			if (gb->Seen(axisLetters[axis]))
+			{
+				offset[axis] = gb->GetFValue();
+				settingOffset = true;
+			}
 		}
 		if (settingOffset)
 		{
@@ -1950,8 +1968,8 @@ void GCodes::ManageTool(GCodeBuffer *gb, StringRef& reply)
 	}
 
 	// Check drives
-	long drives[DRIVES - AXES];  // There can never be more than we have...
-	size_t dCount = DRIVES - AXES;  // Sets the limit and returns the count
+	long drives[DRIVES - MIN_AXES];  	// There can never be more than we have...
+	size_t dCount = DRIVES - numAxes;	// Sets the limit and returns the count
 	if (gb->Seen('D'))
 	{
 		gb->GetLongArray(drives, dCount);
@@ -2131,20 +2149,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, const char* reply)
 	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
 	if (gb == auxGCode || (stackPointer != 0 && stack[0].gb == auxGCode))
 	{
-		// Discard this response if either no aux device is attached or if the response is empty
-		if (reply[0] == 0 || !HaveAux())
-		{
-			return;
-		}
-
-		// Regular text-based responses for AUX are always stored and processed by M105/M408
-		if (auxGCodeReply == nullptr && !OutputBuffer::Allocate(auxGCodeReply))
-		{
-			// No more space to buffer this response. Should never happen
-			return;
-		}
-		auxSeq++;
-		auxGCodeReply->cat(reply);
+		platform->AppendAuxReply(reply);
 		return;
 	}
 
@@ -2247,30 +2252,7 @@ void GCodes::HandleReply(GCodeBuffer *gb, bool error, OutputBuffer *reply)
 	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
 	if (gb == auxGCode || (stackPointer != 0 && stack[0].gb == auxGCode))
 	{
-		// Discard this response if either no aux device is attached or if the response is empty
-		if (reply->Length() == 0 || !HaveAux())
-		{
-			OutputBuffer::ReleaseAll(reply);
-			return;
-		}
-
-		// JSON responses are always sent directly to the AUX device
-		if ((*reply)[0] == '{')
-		{
-			platform->Message(AUX_MESSAGE, reply);
-			return;
-		}
-
-		// Other responses are stored for M105/M408
-		auxSeq++;
-		if (auxGCodeReply == nullptr)
-		{
-			auxGCodeReply = reply;
-		}
-		else
-		{
-			auxGCodeReply->Append(reply);
-		}
+		platform->AppendAuxReply(reply);
 		return;
 	}
 
@@ -2541,7 +2523,7 @@ bool GCodes::RetractFilament(bool retract)
 				}
 
 				reprap.GetMove()->GetCurrentUserPosition(moveBuffer.coords, 0);
-				for (size_t i = AXES; i < DRIVES; ++i)
+				for (size_t i = numAxes; i < DRIVES; ++i)
 				{
 					moveBuffer.coords[i] = 0.0;
 				}
@@ -2623,12 +2605,12 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				return false;
 			}
-			for (size_t axis = 0; axis < AXES; ++axis)
+			for (size_t axis = 0; axis < numAxes; ++axis)
 			{
 				float offset = gb->Seen(axisLetters[axis]) ? gb->GetFValue() * distanceScale : 0.0;
 				moveBuffer.coords[axis] = pausedMoveBuffer[axis] + offset;
 			}
-			for (size_t drive = AXES; drive < DRIVES; ++drive)
+			for (size_t drive = numAxes; drive < DRIVES; ++drive)
 			{
 				moveBuffer.coords[drive] = 0.0;
 			}
@@ -2716,7 +2698,7 @@ bool GCodes::HandleGcode(GCodeBuffer* gb, StringRef& reply)
 		if (!DoFileMacro(BED_EQUATION_G, reprap.GetMove()->IsDeltaMode()))
 		{
 			// If we get here then we are not on a delta printer and there is no bed.g file
-			if (axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS])
+			if (GetAxisIsHomed(X_AXIS) && GetAxisIsHomed(Y_AXIS))
 			{
 				state = GCodeState::setBed1;		// no bed.g file, so use the coordinates specified by M557
 			}
@@ -2816,11 +2798,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		{
 			bool seen = false;
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
-					axisIsHomed[axis] = false;
+					SetAxisNotHomed(axis);
 					platform->DisableDrive(axis);
 					seen = true;
 				}
@@ -2828,19 +2810,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (gb->Seen(extrudeLetter))
 			{
-				long int eDrive[DRIVES - AXES];
-				size_t eCount = DRIVES - AXES;
+				long int eDrive[DRIVES - MIN_AXES];
+				size_t eCount = DRIVES - numAxes;
 				gb->GetLongArray(eDrive, eCount);
 				for (size_t i = 0; i < eCount; i++)
 				{
 					seen = true;
-					if (eDrive[i] < 0 || (size_t)eDrive[i] >= DRIVES - AXES)
+					if (eDrive[i] < 0 || (size_t)eDrive[i] >= DRIVES - numAxes)
 					{
 						reply.printf("Invalid extruder number specified: %ld", eDrive[i]);
 						error = true;
 						break;
 					}
-					platform->DisableDrive(AXES + eDrive[i]);
+					platform->DisableDrive(numAxes + eDrive[i]);
 				}
 			}
 
@@ -2876,6 +2858,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (sparam == 2)
 			{
 				fileResponse = reprap.GetFilesResponse(dir, true);		// Send the file list in JSON format
+				fileResponse->cat('\n');
 			}
 			else
 			{
@@ -3227,9 +3210,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 82:	// Use absolute extruder positioning
 		if (drivesRelative)		// don't reset the absolute extruder position if it was already absolute
 		{
-			for (size_t extruder = AXES; extruder < DRIVES; extruder++)
+			for (size_t extruder = MIN_AXES; extruder < DRIVES; extruder++)
 			{
-				lastRawExtruderPosition[extruder - AXES] = 0.0;
+				lastRawExtruderPosition[extruder - MIN_AXES] = 0.0;
 			}
 			drivesRelative = false;
 		}
@@ -3238,9 +3221,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 83:	// Use relative extruder positioning
 		if (!drivesRelative)	// don't reset the absolute extruder position if it was already relative
 		{
-			for (size_t extruder = AXES; extruder < DRIVES; extruder++)
+			for (size_t extruder = MIN_AXES; extruder < DRIVES; extruder++)
 			{
-				lastRawExtruderPosition[extruder - AXES] = 0.0;
+				lastRawExtruderPosition[extruder - MIN_AXES] = 0.0;
 			}
 			drivesRelative = true;
 		}
@@ -3263,7 +3246,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			move->GetCurrentUserPosition(positionNow, 0);
 
 			bool seen = false;
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -3275,14 +3258,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (gb->Seen(extrudeLetter))
 			{
 				seen = true;
-				float eVals[DRIVES - AXES];
-				size_t eCount = DRIVES - AXES;
+				float eVals[DRIVES - MIN_AXES];
+				size_t eCount = DRIVES - numAxes;
 				gb->GetFloatArray(eVals, eCount, true);
 
 				// The user may not have as many extruders as we allow for, so just set the ones for which a value is provided
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform->SetDriveStepsPerUnit(AXES + e, eVals[e]);
+					platform->SetDriveStepsPerUnit(numAxes + e, eVals[e]);
 				}
 			}
 
@@ -3293,9 +3276,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Steps/mm: X: %.3f, Y: %.3f, Z: %.3f, E: ", platform->DriveStepsPerUnit(X_AXIS),
-						platform->DriveStepsPerUnit(Y_AXIS), platform->DriveStepsPerUnit(Z_AXIS));
-				for (size_t drive = AXES; drive < DRIVES; drive++)
+				reply.copy("Steps/mm: ");
+				for (size_t axis = 0; axis < numAxes; ++axis)
+				{
+					reply.catf("%c: %.3f, ", platform->DriveStepsPerUnit(axis));
+				}
+				reply.catf("E: ");
+				for (size_t drive = numAxes; drive < DRIVES; drive++)
 				{
 					reply.catf("%.3f", platform->DriveStepsPerUnit(drive));
 					if (drive < DRIVES - 1)
@@ -3435,7 +3422,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					const int hnum = heaters[h];
 					if (hnum >= 0 && hnum < HEATERS)
 					{
-						hh |= (1 << (unsigned int)hnum);
+						hh |= (1u << (unsigned int)hnum);
 					}
 				}
 				if (hh != 0)
@@ -3472,7 +3459,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					reply.catf(", trigger: %dC, heaters:", (int)platform->GetTriggerTemperature(fanNum));
 					for (unsigned int i = 0; i < HEATERS; ++i)
 					{
-						if ((hh & (1 << i)) != 0)
+						if ((hh & (1u << i)) != 0)
 						{
 							reply.catf(" %u", i);
 						}
@@ -3622,7 +3609,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 	case 119:
 		reply.copy("Endstops - ");
-		for (size_t axis = 0; axis < AXES; axis++)
+		for (size_t axis = 0; axis < numAxes; axis++)
 		{
 			reply.catf("%c: %s, ", axisLetters[axis], TranslateEndStopResult(platform->Stopped(axis)));
 		}
@@ -3657,14 +3644,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				platform->DiagnosticTest(val);
 			}
 		}
-		break;
-
-	case 126: // Valve open
-		reply.copy("M126 - valves not yet implemented");
-		break;
-
-	case 127: // Valve closed
-		reply.copy("M127 - valves not yet implemented");
 		break;
 
 	case 135: // Set PID sample interval
@@ -3856,7 +3835,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 201: // Set/print axis accelerations
 	{
 		bool seen = false;
-		for (size_t axis = 0; axis < AXES; axis++)
+		for (size_t axis = 0; axis < numAxes; axis++)
 		{
 			if (gb->Seen(axisLetters[axis]))
 			{
@@ -3868,12 +3847,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (gb->Seen(extrudeLetter))
 		{
 			seen = true;
-			float eVals[DRIVES - AXES];
-			size_t eCount = DRIVES - AXES;
+			float eVals[DRIVES - MIN_AXES];
+			size_t eCount = DRIVES - numAxes;
 			gb->GetFloatArray(eVals, eCount, true);
 			for (size_t e = 0; e < eCount; e++)
 			{
-				platform->SetAcceleration(AXES + e, eVals[e] * distanceScale);
+				platform->SetAcceleration(numAxes + e, eVals[e] * distanceScale);
 			}
 		}
 
@@ -3886,10 +3865,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 		if (!seen)
 		{
-			reply.printf("Accelerations: X: %.1f, Y: %.1f, Z: %.1f, E: ",
-					platform->Acceleration(X_AXIS) / distanceScale, platform->Acceleration(Y_AXIS) / distanceScale,
-					platform->Acceleration(Z_AXIS) / distanceScale);
-			for (size_t drive = AXES; drive < DRIVES; drive++)
+			reply.printf("Accelerations: ");
+			for (size_t axis = 0; axis < numAxes; ++axis)
+			{
+				reply.catf("%c: %.1f, ", platform->Acceleration(axis) / distanceScale);
+			}
+			for (size_t drive = numAxes; drive < DRIVES; drive++)
 			{
 				reply.catf("%.1f", platform->Acceleration(drive) / distanceScale);
 				if (drive < DRIVES - 1)
@@ -3905,7 +3886,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 203: // Set/print maximum feedrates
 		{
 			bool seen = false;
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -3917,22 +3898,24 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (gb->Seen(extrudeLetter))
 			{
 				seen = true;
-				float eVals[DRIVES - AXES];
-				size_t eCount = DRIVES - AXES;
+				float eVals[DRIVES - MIN_AXES];
+				size_t eCount = DRIVES - numAxes;
 				gb->GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform->SetMaxFeedrate(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
+					platform->SetMaxFeedrate(numAxes + e, eVals[e] * distanceScale * secondsToMinutes);
 				}
 			}
 
 			if (!seen)
 			{
-				reply.printf("Maximum feedrates: X: %.1f, Y: %.1f, Z: %.1f, E: ",
-						platform->MaxFeedrate(X_AXIS) / (distanceScale * secondsToMinutes),
-						platform->MaxFeedrate(Y_AXIS) / (distanceScale * secondsToMinutes),
-						platform->MaxFeedrate(Z_AXIS) / (distanceScale * secondsToMinutes));
-				for (size_t drive = AXES; drive < DRIVES; drive++)
+				reply.copy("Maximum feedrates: ");
+				for (size_t axis = 0; axis < numAxes; axis++)
+				{
+					reply.catf("%c: %.1f, ", platform->MaxFeedrate(axis) / (distanceScale * secondsToMinutes));
+				}
+				reply.cat("E: ");
+				for (size_t drive = numAxes; drive < DRIVES; drive++)
 				{
 					reply.catf("%.1f", platform->MaxFeedrate(drive) / (distanceScale * secondsToMinutes));
 					if (drive < DRIVES - 1)
@@ -3987,7 +3970,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			bool setMin = (gb->Seen('S') ? (gb->GetIValue() == 1) : false);
 			bool seen = false;
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -4008,7 +3991,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				reply.copy("Axis limits ");
 				char sep = '-';
-				for (size_t axis = 0; axis < AXES; axis++)
+				for (size_t axis = 0; axis < numAxes; axis++)
 				{
 					reply.catf("%c %c: %.1f min, %.1f max", sep, axisLetters[axis], platform->AxisMinimum(axis),
 							platform->AxisMaximum(axis));
@@ -4059,11 +4042,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (gb->Seen('S'))	// S parameter sets the override percentage
 			{
 				float extrusionFactor = gb->GetFValue() / 100.0;
-				if (extruder >= 0 && (size_t)extruder < DRIVES - AXES && extrusionFactor >= 0.0)
+				if (extruder >= 0 && (size_t)extruder < DRIVES - numAxes && extrusionFactor >= 0.0)
 				{
 					if (moveAvailable && !moveBuffer.isFirmwareRetraction)
 					{
-						moveBuffer.coords[extruder + AXES] *= extrusionFactor/extrusionFactors[extruder];	// last move not gone, so update it
+						moveBuffer.coords[extruder + numAxes] *= extrusionFactor/extrusionFactors[extruder];	// last move not gone, so update it
 					}
 					extrusionFactors[extruder] = extrusionFactor;
 				}
@@ -4245,7 +4228,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 
 			bool seen = false;
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -4253,7 +4236,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					int microsteps = gb->GetIValue();
 					if (ChangeMicrostepping(axis, microsteps, interp))
 					{
-						axisIsHomed[axis] = false;
+						SetAxisNotHomed(axis);
 					}
 					else
 					{
@@ -4266,12 +4249,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (gb->Seen(extrudeLetter))
 			{
 				seen = true;
-				long eVals[DRIVES - AXES];
-				size_t eCount = DRIVES - AXES;
+				long eVals[DRIVES - MIN_AXES];
+				size_t eCount = DRIVES - numAxes;
 				gb->GetLongArray(eVals, eCount);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					if (!ChangeMicrostepping(AXES + e, (int)eVals[e], interp))
+					if (!ChangeMicrostepping(numAxes + e, (int)eVals[e], interp))
 					{
 						platform->MessageF(GENERIC_MESSAGE, "Drive E%u does not support %dx microstepping%s\n",
 												e, (int)eVals[e], (interp) ? " with interpolation" : "");
@@ -4282,14 +4265,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.copy("Microstepping - ");
-				for (size_t axis = 0; axis < AXES; ++axis)
+				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
 					bool interp;
 					int microsteps = platform->GetMicrostepping(axis, interp);
 					reply.catf("%c:%d%s, ", axisLetters[axis], microsteps, (interp) ? "(on)" : "");
 				}
 				reply.cat("E");
-				for (size_t drive = AXES; drive < DRIVES; drive++)
+				for (size_t drive = numAxes; drive < DRIVES; drive++)
 				{
 					bool interp;
 					int microsteps = platform->GetMicrostepping(drive, interp);
@@ -4554,11 +4537,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		break;
 
-	case 556: // Axis compensation
+	case 556: // Axis compensation (we support only X, Y, Z)
 		if (gb->Seen('S'))
 		{
 			float value = gb->GetFValue();
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis <= Z_AXIS; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -4608,13 +4591,19 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 558: // Set or report Z probe type and for which axes it is used
 		{
 			bool seenAxes = false, seenType = false, seenParam = false;
-			bool zProbeAxes[AXES];
-			platform->GetZProbeAxes(zProbeAxes);
-			for (size_t axis = 0; axis < AXES; axis++)
+			uint32_t zProbeAxes = platform->GetZProbeAxes();
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
-					zProbeAxes[axis] = (gb->GetIValue() > 0);
+					if (gb->GetIValue() > 0)
+					{
+						zProbeAxes |= (1u << axis);
+					}
+					else
+					{
+						zProbeAxes &= ~(1u << axis);
+					}
 					seenAxes = true;
 				}
 			}
@@ -4677,9 +4666,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					reply.catf(", parameters %.2f %.2f", params.param1, params.param2);
 				}
 				reply.cat(", used for these axes:");
-				for (size_t axis = 0; axis < AXES; axis++)
+				for (size_t axis = 0; axis < numAxes; axis++)
 				{
-					if (zProbeAxes[axis])
+					if ((zProbeAxes & (1u << axis)) != 0)
 					{
 						reply.catf(" %c", axisLetters[axis]);
 					}
@@ -4758,7 +4747,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 566: // Set/print maximum jerk speeds
 	{
 		bool seen = false;
-		for (size_t axis = 0; axis < AXES; axis++)
+		for (size_t axis = 0; axis < numAxes; axis++)
 		{
 			if (gb->Seen(axisLetters[axis]))
 			{
@@ -4770,22 +4759,24 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		if (gb->Seen(extrudeLetter))
 		{
 			seen = true;
-			float eVals[DRIVES - AXES];
-			size_t eCount = DRIVES - AXES;
+			float eVals[DRIVES - MIN_AXES];
+			size_t eCount = DRIVES - numAxes;
 			gb->GetFloatArray(eVals, eCount, true);
 			for (size_t e = 0; e < eCount; e++)
 			{
-				platform->SetInstantDv(AXES + e, eVals[e] * distanceScale * secondsToMinutes);
+				platform->SetInstantDv(numAxes + e, eVals[e] * distanceScale * secondsToMinutes);
 			}
 		}
 		else if (!seen)
 		{
-			reply.printf("Maximum jerk rates: X: %.1f, Y: %.1f, Z: %.1f, E:",
-					platform->ConfiguredInstantDv(X_AXIS) / (distanceScale * secondsToMinutes),
-					platform->ConfiguredInstantDv(Y_AXIS) / (distanceScale * secondsToMinutes),
-					platform->ConfiguredInstantDv(Z_AXIS) / (distanceScale * secondsToMinutes));
+			reply.copy("Maximum jerk rates: ");
+			for (size_t axis = 0; axis < numAxes; ++axis)
+			{
+				reply.catf("%c: %.1f, ", platform->ConfiguredInstantDv(axis) / (distanceScale * secondsToMinutes));
+			}
+			reply.cat("E:");
 			char sep = ' ';
-			for (size_t drive = AXES; drive < DRIVES; drive++)
+			for (size_t drive = numAxes; drive < DRIVES; drive++)
 			{
 				reply.catf("%c%.1f", sep, platform->ConfiguredInstantDv(drive) / (distanceScale * secondsToMinutes));
 				sep = ':';
@@ -4803,7 +4794,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				if (gb->Seen(extrudeLetter))
 				{
-					float eVals[DRIVES - AXES];
+					float eVals[DRIVES - MIN_AXES];
 					size_t eCount = tool->DriveCount();
 					gb->GetFloatArray(eVals, eCount, false);
 					if (eCount != tool->DriveCount())
@@ -4870,7 +4861,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					seen = true;
 				}
 				bool badParameter = false;
-				for (size_t axis = 0; axis < AXES; ++axis)
+				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
 					if (gb->Seen(axisLetters[axis]))
 					{
@@ -4973,9 +4964,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			bool seen = false;
 			bool logicLevel = (gb->Seen('S')) ? (gb->GetIValue() != 0) : true;
-			for (size_t axis = 0; axis <= AXES; ++axis)
+			for (size_t axis = 0; axis <= numAxes; ++axis)
 			{
-				const char letter = (axis == AXES) ? extrudeLetter : axisLetters[axis];
+				const char letter = (axis == numAxes) ? extrudeLetter : axisLetters[axis];
 				if (gb->Seen(letter))
 				{
 					int ival = gb->GetIValue();
@@ -4991,7 +4982,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				reply.copy("Endstop configuration:");
 				EndStopType config;
 				bool logic;
-				for (size_t axis = 0; axis < AXES; ++axis)
+				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
 					platform->GetEndStopConfiguration(axis, config, logic);
 					reply.catf(" %c %s (active %s),", axisLetters[axis],
@@ -5065,7 +5056,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 
 			// Axis endstops
-			for(size_t axis=0; axis<AXES; axis++)
+			for (size_t axis=0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -5078,15 +5069,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 
 			// Extruder drives
-			size_t eDriveCount = DRIVES - AXES;
-			long eDrives[DRIVES - AXES];
+			size_t eDriveCount = DRIVES - numAxes;
+			long eDrives[DRIVES - MIN_AXES];
 			if (gb->Seen(extrudeLetter))
 			{
 				gb->GetLongArray(eDrives, eDriveCount);
-				for(size_t extruder=0; extruder<DRIVES - AXES; extruder++)
+				for(size_t extruder = 0; extruder < DRIVES - numAxes; extruder++)
 				{
-					const size_t eDrive = eDrives[extruder] + AXES;
-					if (eDrive < AXES || eDrive >= DRIVES)
+					const size_t eDrive = eDrives[extruder] + numAxes;
+					if (eDrive < numAxes || eDrive >= DRIVES)
 					{
 						reply.copy("Invalid extruder drive specified!");
 						error = result = true;
@@ -5120,7 +5111,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 579: // Scale Cartesian axes (mostly for Delta configurations)
 		{
 			bool seen = false;
-			for(size_t axis = 0; axis < AXES; axis++)
+			for(size_t axis = 0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -5133,7 +5124,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				char sep = ':';
 				reply.copy("Axis scale factors");
-				for(size_t axis = 0; axis < AXES; axis++)
+				for(size_t axis = 0; axis < numAxes; axis++)
 				{
 					reply.catf("%c %c: %.3f", sep, axisLetters[axis], axisScaleFactors[axis]);
 					sep = ',';
@@ -5178,7 +5169,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					uint32_t states = platform->GetAllEndstopStates();
 					if ((triggers[triggerNumber].rising & states) != 0 || (triggers[triggerNumber].falling & ~states) != 0)
 					{
-						triggersPending |= (1 << triggerNumber);
+						triggersPending |= (1u << triggerNumber);
 					}
 				}
 				else
@@ -5198,7 +5189,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						seen = true;
 						int sval = gb->GetIValue();
 						TriggerMask triggerMask = 0;
-						for (size_t axis = 0; axis < AXES; ++axis)
+						for (size_t axis = 0; axis < numAxes; ++axis)
 						{
 							if (gb->Seen(axisLetters[axis]))
 							{
@@ -5207,14 +5198,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						}
 						if (gb->Seen(extrudeLetter))
 						{
-							long eStops[DRIVES - AXES];
-							size_t numEntries = DRIVES - AXES;
+							long eStops[DRIVES - MIN_AXES];
+							size_t numEntries = DRIVES - numAxes;
 							gb->GetLongArray(eStops, numEntries);
 							for (size_t i = 0; i < numEntries; ++i)
 							{
-								if (eStops[i] >= 0 && (unsigned long)eStops[i] < DRIVES - AXES)
+								if (eStops[i] >= 0 && (unsigned long)eStops[i] < DRIVES - numAxes)
 								{
-									triggerMask |= (1u << (eStops[i] + AXES));
+									triggerMask |= (1u << (eStops[i] + numAxes));
 								}
 							}
 						}
@@ -5268,7 +5259,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 584: // Set axis/extruder to stepper driver(s) mapping
 		{
 			bool seen = false, badDrive = false;
-			for (size_t drive = 0; drive < AXES; ++drive)
+			for (size_t drive = 0; drive < MAX_AXES; ++drive)
 			{
 				if (gb->Seen(axisLetters[drive]))
 				{
@@ -5298,6 +5289,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					}
 					else
 					{
+						if (drive >= numAxes)
+						{
+							numAxes = drive + 1;		// user has defined a new axis
+						}
 						platform->SetAxisDriversConfig(drive, config);
 					}
 				}
@@ -5306,8 +5301,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (gb->Seen(extrudeLetter))
 			{
 				seen = true;
-				size_t numValues = DRIVES - AXES;
-				long drivers[DRIVES - AXES];
+				size_t numValues = DRIVES - numAxes;
+				long drivers[DRIVES - MIN_AXES];
 				gb->GetLongArray(drivers, numValues);
 				for (size_t i = 0; i < numValues; ++i)
 				{
@@ -5329,7 +5324,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			else if (!seen)
 			{
 				reply.copy("Driver assignments:");
-				for (size_t drive = 0; drive < AXES; ++ drive)
+				for (size_t drive = 0; drive < numAxes; ++ drive)
 				{
 					reply.cat(' ');
 					const AxisDriversConfig& axisConfig = platform->GetAxisDriversConfig(drive);
@@ -5342,7 +5337,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				}
 				reply.cat(' ');
 				char c = extrudeLetter;
-				for (size_t extruder = 0; extruder < DRIVES - AXES; ++extruder)
+				for (size_t extruder = 0; extruder < DRIVES - numAxes; ++extruder)
 				{
 					reply.catf("%c%u", c, platform->GetExtruderDriver(extruder));
 					c = ':';
@@ -5421,8 +5416,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			{
 				if (params.IsDeltaMode())
 				{
-					reply.printf("Diagonal %.2f, delta radius %.2f, homed height %.2f, bed radius %.1f"
-								 ", X %.2f" DEGREE_SYMBOL ", Y %.2f" DEGREE_SYMBOL ", Z %.2f" DEGREE_SYMBOL,
+					reply.printf("Diagonal %.3f, delta radius %.3f, homed height %.3f, bed radius %.1f"
+								 ", X %.3f" DEGREE_SYMBOL ", Y %.3f" DEGREE_SYMBOL ", Z %.3f" DEGREE_SYMBOL,
 								 	 params.GetDiagonal() / distanceScale, params.GetRadius() / distanceScale,
 								 	 params.GetHomedHeight() / distanceScale, params.GetPrintRadius() / distanceScale,
 								 	 params.GetXCorrection(), params.GetYCorrection(), params.GetZCorrection());
@@ -5486,11 +5481,11 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				move->SetCoreXYMode(gb->GetIValue());
 				seen = true;
 			}
-			for (size_t axis = 0; axis < AXES; ++axis)
+			for (size_t axis = 0; axis < numAxes; ++axis)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
-					move->setCoreAxisFactor(axis, gb->GetFValue());
+					move->SetCoreAxisFactor(axis, gb->GetFValue());
 					seen = true;
 				}
 			}
@@ -5503,7 +5498,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			else
 			{
 				reply.printf("Printer mode is %s with axis factors", move->GetGeometryString());
-				for (size_t axis = 0; axis < AXES; ++axis)
+				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
 					reply.catf(" %c:%f", axisLetters[axis], move->GetCoreAxisFactor(axis));
 				}
@@ -5519,7 +5514,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		{
 			bool seen = false;
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -5530,13 +5525,13 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 			if (gb->Seen(extrudeLetter))
 			{
-				float eVals[DRIVES - AXES];
-				size_t eCount = DRIVES - AXES;
+				float eVals[DRIVES - MIN_AXES];
+				size_t eCount = DRIVES - numAxes;
 				gb->GetFloatArray(eVals, eCount, true);
 				// 2014-09-29 DC42: we no longer insist that the user supplies values for all possible extruder drives
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform->SetMotorCurrent(AXES + e, eVals[e], code == 913);
+					platform->SetMotorCurrent(numAxes + e, eVals[e], code == 913);
 				}
 				seen = true;
 			}
@@ -5554,12 +5549,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.copy((code == 913) ? "Motor current % of normal - " : "Motor current (mA) - ");
-				for (size_t axis = 0; axis < AXES; ++axis)
+				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
 					reply.catf("%c:%d, ", axisLetters[axis], (int)platform->GetMotorCurrent(axis, code == 913));
 				}
 				reply.cat("E");
-				for (size_t drive = AXES; drive < DRIVES; drive++)
+				for (size_t drive = numAxes; drive < DRIVES; drive++)
 				{
 					reply.catf(":%d", (int)platform->GetMotorCurrent(drive, code == 913));
 				}
@@ -5614,12 +5609,12 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 						firmwareUpdateModuleMap = 0;
 						break;
 					}
-					firmwareUpdateModuleMap |= (1 << (unsigned int)t);
+					firmwareUpdateModuleMap |= (1u << (unsigned int)t);
 				}
 			}
 			else
 			{
-				firmwareUpdateModuleMap = (1 << 0);			// no modules specified, so update module 0 to match old behaviour
+				firmwareUpdateModuleMap = (1u << 0);			// no modules specified, so update module 0 to match old behaviour
 			}
 
 			if (firmwareUpdateModuleMap == 0)
@@ -5655,8 +5650,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 998:
 		// The input handling code replaces the gcode by this when it detects a checksum error.
 		// Since we have no way of asking for the line to be re-sent, just report an error.
-		// If the line number is zero, then it probably came from PanelDue and was caused by input buffer overflow
-		// while we were busy doing a macro, so just ignore it.
 		if (gb->Seen('P'))
 		{
 			int val = gb->GetIValue();
@@ -5681,7 +5674,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 	default:
 		error = true;
-		reply.printf("invalid M Code: %s", gb->Buffer());
+		reply.printf("unsupported command: %s", gb->Buffer());
 	}
 
 	// Note that we send a reply to M105 requests even if the status is not 'normal', because we reply to these requests even when we are in other states
@@ -5722,12 +5715,12 @@ bool GCodes::HandleTcode(GCodeBuffer* gb, StringRef& reply)
 // Return the amount of filament extruded
 float GCodes::GetRawExtruderPosition(size_t extruder) const
 {
-	return (extruder < (DRIVES - AXES)) ? lastRawExtruderPosition[extruder] : 0.0;
+	return (extruder < (DRIVES - numAxes)) ? lastRawExtruderPosition[extruder] : 0.0;
 }
 
 float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const
 {
-	return (extruder < (DRIVES - AXES)) ? rawExtruderTotalByDrive[extruder] : 0.0;
+	return (extruder < (DRIVES - numAxes)) ? rawExtruderTotalByDrive[extruder] : 0.0;
 }
 
 // Cancel the current SD card print.
@@ -5826,19 +5819,19 @@ void GCodes::ListTriggers(StringRef reply, TriggerMask mask)
 		bool printed = false;
 		for (unsigned int i = 0; i < DRIVES; ++i)
 		{
-			if ((mask & (1 << i)) != 0)
+			if ((mask & (1u << i)) != 0)
 			{
 				if (printed)
 				{
 					reply.cat(' ');
 				}
-				if (i < AXES)
+				if (i < numAxes)
 				{
 					reply.cat(axisLetters[i]);
 				}
 				else
 				{
-					reply.catf("E%d", i - AXES);
+					reply.catf("E%d", i - numAxes);
 				}
 				printed = true;
 			}
@@ -5893,6 +5886,17 @@ bool GCodes::AdvanceHash(StringRef &reply)
 	fileBeingHashed->Close();
 	fileBeingHashed = nullptr;
 	return true;
+}
+
+bool GCodes::AllAxesAreHomed() const
+{
+	const uint32_t allAxes = (1u << numAxes) - 1;
+	return (axesHomed & allAxes) == allAxes;
+}
+
+void GCodes::SetAllAxesNotHomed()
+{
+	axesHomed = 0;
 }
 
 // End

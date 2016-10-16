@@ -80,18 +80,6 @@ const float MillisToSeconds = 0.001;
 
 /**************************************************************************************************/
 
-#ifdef DUET_NG
-const int Z_PROBE_AD_VALUE = 500;						// Default for the Z probe - should be overwritten by experiment
-const bool Z_PROBE_AXES[AXES] = { false, false, true };	// Axes for which the Z-probe is normally used
-#else
-const int Z_PROBE_AD_VALUE = 400;						// Default for the Z probe - should be overwritten by experiment
-const bool Z_PROBE_AXES[AXES] = { true, false, true };	// Axes for which the Z-probe is normally used
-#endif
-
-const float Z_PROBE_STOP_HEIGHT = 0.7;					// Millimetres
-const unsigned int Z_PROBE_AVERAGE_READINGS = 8;		// We average this number of readings with IR on, and the same number with IR off
-const int ZProbeTypeDelta = 6;							// Z probe type for experimental delta probe
-
 #if SUPPORT_INKJET
 
 // Inkjet (if any - no inkjet is flagged by INKJET_BITS negative)
@@ -112,11 +100,25 @@ const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2
 const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;				// The indices of the 3 tower motors of a delta printer in drive arrays
 
-const float AXIS_MINIMA[AXES] = { 0.0, 0.0, 0.0 };				// mm
-const float AXIS_MAXIMA[AXES] = { 230.0, 210.0, 200.0 };		// mm
+const float AXIS_MINIMA[MAX_AXES] = { 0.0, 0.0, 0.0 };			// mm
+const float AXIS_MAXIMA[MAX_AXES] = { 230.0, 210.0, 200.0 };	// mm
 
 const float defaultPrintRadius = 50;							// mm
 const float defaultDeltaHomedHeight = 200;						// mm
+
+// Z PROBE
+
+const float Z_PROBE_STOP_HEIGHT = 0.7;							// Millimetres
+const unsigned int Z_PROBE_AVERAGE_READINGS = 8;				// We average this number of readings with IR on, and the same number with IR off
+const int ZProbeTypeDelta = 6;									// Z probe type for experimental delta probe
+
+#ifdef DUET_NG
+const int Z_PROBE_AD_VALUE = 500;								// Default for the Z probe - should be overwritten by experiment
+const uint32_t Z_PROBE_AXES = (1 << Z_AXIS);					// Axes for which the Z-probe is normally used
+#else
+const int Z_PROBE_AD_VALUE = 400;								// Default for the Z probe - should be overwritten by experiment
+const uint32_t Z_PROBE_AXES = (1 << X_AXIS) | (1 << Z_AXIS);	// Axes for which the Z-probe is normally used
+#endif
 
 // HEATERS - The bed is assumed to be the at index 0
 
@@ -464,6 +466,12 @@ public:
   
 	bool GCodeAvailable(const SerialSource source) const;
 	char ReadFromSource(const SerialSource source);
+	OutputBuffer *GetAuxGCodeReply();				// Returns cached G-Code reply for AUX devices and clears its reference
+	void AppendAuxReply(OutputBuffer *buf);
+	void AppendAuxReply(const char *msg);
+    uint32_t GetAuxSeq() { return auxSeq; }
+    bool HaveAux() const { return auxDetected; }	// Any device on the AUX line?
+    void SetAuxDetected() { auxDetected = true; }
 
 	void SetIPAddress(uint8_t ip[]);
 	const uint8_t* IPAddress() const;
@@ -576,8 +584,8 @@ public:
 	int GetZProbeSecondaryValues(int& v1, int& v2);
 	void SetZProbeType(int iZ);
 	int GetZProbeType() const;
-	void SetZProbeAxes(const bool axes[AXES]);
-	void GetZProbeAxes(bool (&axes)[AXES]);
+	void SetZProbeAxes(uint32_t axes);
+	uint32_t GetZProbeAxes() const { return nvData.zProbeAxes; }
 	const ZProbeParameters& GetZProbeParameters() const;
 	bool SetZProbeParameters(const struct ZProbeParameters& params);
 	bool MustHomeXYBeforeZ() const;
@@ -691,7 +699,7 @@ private:
 	struct FlashData
 	{
 		static const uint16_t magicValue = 0xE6C4;	// value we use to recognise that the flash data has been written
-		static const uint16_t versionValue = 2;		// increment this whenever this struct changes
+		static const uint16_t versionValue = 3;		// increment this whenever this struct changes
 		static const uint32_t nvAddress = (SoftwareResetData::nvAddress + sizeof(SoftwareResetData) + 3) & (~3);
 
 		uint16_t magic;
@@ -703,7 +711,7 @@ private:
 		ZProbeParameters irZProbeParameters;		// Z probe values for the IR sensor
 		ZProbeParameters alternateZProbeParameters;	// Z probe values for the alternate sensor
 		int zProbeType;								// the type of Z probe we are currently using
-		bool zProbeAxes[AXES];						// Z probe is used for these axes
+		uint32_t zProbeAxes;						// Z probe is used for these axes (bitmap)
 		PidParameters pidParams[HEATERS];
 		byte ipAddress[4];
 		byte netMask[4];
@@ -743,11 +751,11 @@ private:
 	float accelerations[DRIVES];
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
-	float pressureAdvance[DRIVES - AXES];
+	float pressureAdvance[DRIVES - MIN_AXES];
 	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
-	AxisDriversConfig axisDrivers[AXES];			// the driver numbers assigned to each axis
-	uint8_t extruderDrivers[DRIVES - AXES];			// the driver number assigned to each extruder
+	AxisDriversConfig axisDrivers[MAX_AXES];		// the driver numbers assigned to each axis
+	uint8_t extruderDrivers[DRIVES - MIN_AXES];		// the driver number assigned to each extruder
 	uint32_t driveDriverBits[DRIVES];				// the bitmap of driver port bits for each axis or extruder
 	uint32_t slowDriverStepPulseClocks;				// minimum high and low step pulse widths, in processor clocks
 	uint32_t slowDrivers;							// bitmap of driver port bits that need extended step pulse timing
@@ -783,10 +791,10 @@ private:
 
 	// Axes and endstops
 
-	float axisMaxima[AXES];
-	float axisMinima[AXES];
-	EndStopType endStopType[AXES+1];
-	bool endStopLogicLevel[AXES+1];
+	float axisMaxima[MAX_AXES];
+	float axisMinima[MAX_AXES];
+	EndStopType endStopType[MAX_AXES+1];
+	bool endStopLogicLevel[MAX_AXES+1];
   
 	// Heaters - bed is assumed to be the first
 
@@ -812,6 +820,9 @@ private:
 	OutputStack *auxOutput;
 	OutputStack *aux2Output;
 	OutputStack *usbOutput;
+    bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
+	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
+	uint32_t auxSeq;							// Sequence number for AUX devices
 
 	// Files
 
@@ -1228,7 +1239,7 @@ inline const uint8_t* Platform::MACAddress() const
 
 inline float Platform::GetPressureAdvance(size_t extruder) const
 {
-	return (extruder < DRIVES - AXES) ? pressureAdvance[extruder] : 0.0;
+	return (extruder < DRIVES - MIN_AXES) ? pressureAdvance[extruder] : 0.0;
 }
 
 inline void Platform::SetEndStopConfiguration(size_t axis, EndStopType esType, bool logicLevel)
@@ -1259,7 +1270,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	case 4:
 		{
 			bool b = digitalRead(endStopPins[E0_AXIS]);
-			if (!endStopLogicLevel[AXES])
+			if (!endStopLogicLevel[MAX_AXES])
 			{
 				b = !b;
 			}
@@ -1297,6 +1308,13 @@ inline void Platform::SetNozzleDiameter(float diameter)
 inline MassStorage* Platform::GetMassStorage() const
 {
 	return massStorage;
+}
+
+inline OutputBuffer *Platform::GetAuxGCodeReply()
+{
+	OutputBuffer *temp = auxGCodeReply;
+	auxGCodeReply = nullptr;
+	return temp;
 }
 
 /*static*/ inline void Platform::EnableWatchdog()

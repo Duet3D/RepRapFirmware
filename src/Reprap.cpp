@@ -62,7 +62,7 @@ void RepRap::Init()
 	{
 		while (gCodes->DoingFileMacro())
 		{
-			// GCodes::Spin will read the macro and ensure DoFileMacro returns true when it's done
+			// GCodes::Spin will read the macro and ensure DoingFileMacro returns false when it's done
 			Spin();
 		}
 		platform->Message(HOST_MESSAGE, "Done!\n");
@@ -496,6 +496,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	// Coordinates
 	{
+		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 		float liveCoordinates[DRIVES + 1];
 #if SUPPORT_ROLAND
 		if (roland->Active())
@@ -511,24 +512,27 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		if (currentTool != nullptr)
 		{
 			const float *offset = currentTool->GetOffset();
-			for (size_t i = 0; i < AXES; ++i)
+			for (size_t i = 0; i < numAxes; ++i)
 			{
 				liveCoordinates[i] += offset[i];
 			}
 		}
 
 		// Homed axes
-		response->catf("\"axesHomed\":[%d,%d,%d]",
-				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
+		response->cat("\"axesHomed\":");
+		ch = '[';
+		for (size_t axis = 0; axis < numAxes; ++axis)
+		{
+			response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+			ch = ',';
+		}
 
 		// Actual and theoretical extruder positions since power up, last G92 or last M23
-		response->catf(",\"extr\":");		// announce actual extruder positions
+		response->catf("],\"extr\":");		// announce actual extruder positions
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, liveCoordinates[AXES + extruder]);
+			response->catf("%c%.1f", ch, liveCoordinates[numAxes + extruder]);
 			ch = ',';
 		}
 		if (ch == '[')
@@ -547,7 +551,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			// On Cartesian printers, the live coordinates are (usually) valid
 			ch = '[';
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				response->catf("%c%.2f", ch, liveCoordinates[axis]);
 				ch = ',';
@@ -868,11 +872,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	if (source == ResponseSource::AUX)
 	{
-		OutputBuffer *response = gCodes->GetAuxGCodeReply();
+		OutputBuffer *response = platform->GetAuxGCodeReply();
 		if (response != nullptr)
 		{
 			// Send the response to the last command. Do this last
-			response->catf(",\"seq\":%u,\"resp\":", gCodes->GetAuxSeq());			// send the response sequence number
+			response->catf(",\"seq\":%u,\"resp\":", platform->GetAuxSeq());			// send the response sequence number
 
 			// Send the JSON response
 			response->EncodeReply(response, true);									// also releases the OutputBuffer chain
@@ -892,10 +896,12 @@ OutputBuffer *RepRap::GetConfigResponse()
 		return nullptr;
 	}
 
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+
 	// Axis minima
 	response->copy("{\"axisMins\":");
 	char ch = '[';
-	for (size_t axis = 0; axis < AXES; axis++)
+	for (size_t axis = 0; axis < numAxes; axis++)
 	{
 		response->catf("%c%.2f", ch, platform->AxisMinimum(axis));
 		ch = ',';
@@ -904,7 +910,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Axis maxima
 	response->cat("],\"axisMaxes\":");
 	ch = '[';
-	for (size_t axis = 0; axis < AXES; axis++)
+	for (size_t axis = 0; axis < numAxes; axis++)
 	{
 		response->catf("%c%.2f", ch, platform->AxisMaximum(axis));
 		ch = ',';
@@ -1066,20 +1072,21 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send XYZ positions
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	float liveCoordinates[DRIVES];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates);
 	const Tool* currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
 		const float *offset = currentTool->GetOffset();
-		for (size_t i = 0; i < AXES; ++i)
+		for (size_t i = 0; i < numAxes; ++i)
 		{
 			liveCoordinates[i] += offset[i];
 		}
 	}
 	response->catf(",\"pos\":");		// announce the XYZ position
 	ch = '[';
-	for (size_t drive = 0; drive < AXES; drive++)
+	for (size_t drive = 0; drive < numAxes; drive++)
 	{
 		response->catf("%c%.2f", ch, liveCoordinates[drive]);
 		ch = ',';
@@ -1138,10 +1145,14 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->catf("],\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-	response->catf(",\"homed\":[%d,%d,%d]",
-			(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
-			(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
-			(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
+	response->cat(",\"homed\":");
+	ch = '[';
+	for (size_t axis = 0; axis < numAxes; ++axis)
+	{
+		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+		ch = ',';
+	}
+	response->cat(']');
 
 	if (printMonitor->IsPrinting())
 	{
@@ -1170,7 +1181,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 	}
 
-	int auxSeq = (int)gCodes->GetAuxSeq();
+	int auxSeq = (int)platform->GetAuxSeq();
 	if (type < 2 || (seq != -1 && (int)auxSeq != seq))
 	{
 
@@ -1178,7 +1189,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->catf(",\"seq\":%u,\"resp\":", auxSeq);					// send the response sequence number
 
 		// Send the JSON response
-		response->EncodeReply(gCodes->GetAuxGCodeReply(), true);			// also releases the OutputBuffer chain
+		response->EncodeReply(platform->GetAuxGCodeReply(), true);			// also releases the OutputBuffer chain
 	}
 
 	response->cat("}");
@@ -1328,7 +1339,7 @@ void RepRap::Beep(int freq, int ms)
 	beepFrequency = freq;
 	beepDuration = ms;
 
-	if (gCodes->HaveAux())
+	if (platform->HaveAux())
 	{
 		// If there is an LCD device present, make it beep
 		platform->Beep(freq, ms);
@@ -1341,7 +1352,7 @@ void RepRap::SetMessage(const char *msg)
 	strncpy(message, msg, MESSAGE_LENGTH);
 	message[MESSAGE_LENGTH] = 0;
 
-	if (gCodes->HaveAux())
+	if (platform->HaveAux())
 	{
 		platform->SendMessage(msg);
 	}

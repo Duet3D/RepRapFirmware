@@ -82,16 +82,17 @@ void DDA::DebugPrintVector(const char *name, const float *vec, size_t len) const
 
 void DDA::DebugPrint() const
 {
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	debugPrintf("DDA:");
 	if (endCoordinatesValid)
 	{
-		float startCoordinates[AXES];
-		for (size_t i = 0; i < AXES; ++i)
+		float startCoordinates[MAX_AXES];
+		for (size_t i = 0; i < numAxes; ++i)
 		{
 			startCoordinates[i] = endCoordinates[i] - (totalDistance * directionVector[i]);
 		}
-		DebugPrintVector(" start", startCoordinates, AXES);
-		DebugPrintVector(" end", endCoordinates, AXES);
+		DebugPrintVector(" start", startCoordinates, numAxes);
+		DebugPrintVector(" end", endCoordinates, numAxes);
 	}
 
 	debugPrintf(" d=%f", totalDistance);
@@ -100,14 +101,15 @@ void DDA::DebugPrint() const
 				"daccel=%f ddecel=%f cks=%u\n",
 				acceleration, requestedSpeed, topSpeed, startSpeed, endSpeed,
 				accelDistance, decelDistance, clocksNeeded);
-	ddm[0].DebugPrint('x', isDeltaMovement);
-	ddm[1].DebugPrint('y', isDeltaMovement);
-	ddm[2].DebugPrint('z', isDeltaMovement);
-	for (size_t i = AXES; i < DRIVES; ++i)
+	for (size_t axis = 0; axis < numAxes; ++axis)
+	{
+		ddm[axis].DebugPrint(reprap.GetGCodes()->axisLetters[axis], isDeltaMovement);
+	}
+	for (size_t i = numAxes; i < DRIVES; ++i)
 	{
 		if (ddm[i].state != DMState::idle)
 		{
-			ddm[i].DebugPrint((char)('0' + (i - AXES)), false);
+			ddm[i].DebugPrint((char)('0' + (i - numAxes)), false);
 		}
 	}
 }
@@ -148,16 +150,17 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	const bool isSpecialDeltaMove = (move->IsDeltaMode() && !doMotorMapping);
 	float accelerations[DRIVES];
 	const float *normalAccelerations = reprap.GetPlatform()->Accelerations();
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
 		accelerations[drive] = normalAccelerations[drive];
-		if (drive >= AXES || !doMotorMapping)
+		if (drive >= numAxes || !doMotorMapping)
 		{
 			endPoint[drive] = Move::MotorEndPointToMachine(drive, nextMove.coords[drive]);
 		}
 
 		int32_t delta;
-		if (drive < AXES)
+		if (drive < numAxes)
 		{
 			endCoordinates[drive] = nextMove.coords[drive];
 			delta = endPoint[drive] - positionNow[drive];
@@ -168,7 +171,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 		}
 
 		DriveMovement& dm = ddm[drive];
-		if (drive < AXES && !isSpecialDeltaMove)
+		if (drive < numAxes && !isSpecialDeltaMove)
 		{
 			directionVector[drive] = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
 			dm.state = (isDeltaMovement || delta != 0)
@@ -187,12 +190,12 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 			dm.direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 			realMove = true;
 
-			if (drive < Z_AXIS)
+			if (drive < numAxes && drive != Z_AXIS)
 			{
 				xyMoving = true;
 			}
 
-			if (drive >= AXES && xyMoving)
+			if (drive >= numAxes && xyMoving)
 			{
 				if (delta > 0)
 				{
@@ -228,20 +231,27 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
 	if (xyMoving || ddm[Z_AXIS].state == DMState::moving)
 	{
-		totalDistance = Normalise(directionVector, DRIVES, AXES);
+		if (isDeltaMovement)
+		{
+			// Add on the Z movement needed to compensate for bed tilt
+			const DeltaParameters& dparams = move->GetDeltaParams();
+			directionVector[Z_AXIS] += (directionVector[X_AXIS] * dparams.GetXTilt()) + (directionVector[Y_AXIS] * dparams.GetYTilt());
+		}
+
+		totalDistance = Normalise(directionVector, DRIVES, numAxes);
 		if (isDeltaMovement)
 		{
 			// The following are only needed when doing delta movements. We could defer computing them until Prepare(), which would make simulation faster.
 			a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
 			cKc = (int32_t)(directionVector[Z_AXIS] * DriveMovement::Kc);
 
-			const DeltaParameters& dparams = move->GetDeltaParams();
 			const float initialX = prev->GetEndCoordinate(X_AXIS, false);
 			const float initialY = prev->GetEndCoordinate(Y_AXIS, false);
+			const DeltaParameters& dparams = move->GetDeltaParams();
 			const float diagonalSquared = fsquare(dparams.GetDiagonal());
 			const float a2b2D2 = a2plusb2 * diagonalSquared;
 
-			for (size_t drive = 0; drive < AXES; ++drive)
+			for (size_t drive = 0; drive < DELTA_AXES; ++drive)
 			{
 				const float A = initialX - dparams.GetTowerX(drive);
 				const float B = initialY - dparams.GetTowerY(drive);
@@ -271,11 +281,10 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 					if (drev > 0.0 && drev < totalDistance)		// if the reversal point is within range
 					{
 						// Calculate how many steps we need to move up before reversing
-						float hrev = directionVector[Z_AXIS] * drev + sqrt(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - a2plusb2 * fsquare(drev));
+						const float hrev = directionVector[Z_AXIS] * drev + sqrt(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - a2plusb2 * fsquare(drev));
 						int32_t numStepsUp = (int32_t)((hrev - h0MinusZ0) * stepsPerMm);
 
 						// We may be almost at the peak height already, in which case we don't really have a reversal.
-						// We must not set reverseStartStep to 1, because then we would set the direction when Prepare() calls CalcStepTime(), before the previous move finishes.
 						if (numStepsUp < 1 || (dm.direction && (uint32_t)numStepsUp <= dm.totalSteps))
 						{
 							dm.mp.delta.reverseStartStep = dm.totalSteps + 1;
@@ -326,7 +335,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 		// We use the Cartesian motion system to implement these moves, so the feed rate will be interpreted in Cartesian coordinates.
 		// This is wrong, we want the feed rate to apply to the drive that is moving the farthest.
 		float maxDistance = 0.0;
-		for (size_t axis = 0; axis < AXES; ++axis)
+		for (size_t axis = 0; axis < DELTA_AXES; ++axis)
 		{
 			if (normalisedDirectionVector[axis] > maxDistance)
 			{
@@ -616,7 +625,7 @@ void DDA::CalcNewSpeeds()
 }
 
 // This is called by Move::CurrentMoveCompleted to update the live coordinates from the move that has just finished
-bool DDA::FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords[AXES])
+bool DDA::FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords[MAX_AXES])
 {
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
@@ -624,7 +633,7 @@ bool DDA::FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords
 	}
 	if (endCoordinatesValid)
 	{
-		for (size_t axis = 0; axis < AXES; ++axis)
+		for (size_t axis = 0; axis < MAX_AXES; ++axis)
 		{
 			endCoords[axis] = endCoordinates[axis];
 		}
@@ -635,7 +644,8 @@ bool DDA::FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords
 void DDA::SetPositions(const float move[DRIVES], size_t numDrives)
 {
 	reprap.GetMove()->EndPointToMachine(move, endPoint, numDrives);
-	for (size_t axis = 0; axis < AXES; ++axis)
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	for (size_t axis = 0; axis < numAxes; ++axis)
 	{
 		endCoordinates[axis] = move[axis];
 	}
@@ -652,9 +662,10 @@ pre(disableDeltaMapping || drive < AXES)
 	}
 	else
 	{
-		if (drive < AXES && !endCoordinatesValid)
+		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+		if (drive < numAxes && !endCoordinatesValid)
 		{
-			reprap.GetMove()->MachineToEndPoint(endPoint, endCoordinates, AXES);
+			reprap.GetMove()->MachineToEndPoint(endPoint, endCoordinates, numAxes);
 			endCoordinatesValid = true;
 		}
 		return endCoordinates[drive];
@@ -733,6 +744,7 @@ void DDA::Prepare()
 	goingSlow = false;
 	firstDM = nullptr;
 
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		DriveMovement& dm = ddm[drive];
@@ -740,7 +752,7 @@ void DDA::Prepare()
 		{
 			dm.drive = drive;
 			reprap.GetPlatform()->EnableDrive(drive);
-			if (drive >= AXES)
+			if (drive >= numAxes)
 			{
 				dm.PrepareExtruder(*this, params, usePressureAdvance);
 
@@ -782,7 +794,7 @@ void DDA::Prepare()
 			dm.nextStepTime = 0;
 			dm.stepInterval = 999999;						// initialise to a large value so that we will calculate the time for just one step
 			dm.stepsTillRecalc = 0;							// so that we don't skip the calculation
-			bool stepsToDo = (isDeltaMovement && drive < AXES)
+			bool stepsToDo = (isDeltaMovement && drive < numAxes)
 							? dm.CalcNextStepTimeDelta(*this, false)
 							: dm.CalcNextStepTimeCartesian(*this, false);
 			if (stepsToDo)
@@ -834,21 +846,22 @@ pre(state == frozen)
 	else
 	{
 		unsigned int extrusions = 0, retractions = 0;		// bitmaps of extruding and retracting drives
+		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 		for (size_t i = 0; i < DRIVES; ++i)
 		{
 			DriveMovement& dm = ddm[i];
 			if (dm.state == DMState::moving)
 			{
 				reprap.GetPlatform()->SetDirection(i, dm.direction);
-				if (i >= AXES)
+				if (i >= numAxes)
 				{
 					if (dm.direction == FORWARDS)
 					{
-						extrusions |= (1 << (i - AXES));
+						extrusions |= (1 << (i - numAxes));
 					}
 					else
 					{
-						retractions |= (1 << (i - AXES));
+						retractions |= (1 << (i - numAxes));
 					}
 				}
 			}
@@ -860,8 +873,8 @@ pre(state == frozen)
 			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
 			for (DriveMovement **dmpp = &firstDM; *dmpp != nullptr; )
 			{
-				bool thisDriveExtruding = (*dmpp)->drive >= AXES;
-				if (thisDriveExtruding && (prohibitedMovements & (1 << ((*dmpp)->drive - AXES))) != 0)
+				bool thisDriveExtruding = (*dmpp)->drive >= numAxes;
+				if (thisDriveExtruding && (prohibitedMovements & (1 << ((*dmpp)->drive - numAxes))) != 0)
 				{
 					*dmpp = (*dmpp)->nextDM;
 				}
@@ -932,7 +945,8 @@ bool DDA::Step()
 				}
 			}
 
-			for (size_t drive = 0; drive < AXES; ++drive)
+			const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+			for (size_t drive = 0; drive < numAxes; ++drive)
 			{
 				if ((endStopsToCheck & (1 << drive)) != 0)
 				{
@@ -1019,7 +1033,7 @@ bool DDA::Step()
 		firstDM = dm;													// remove the chain from the list
 		while (dmToInsert != dm)										// note that both of these may be nullptr
 		{
-			const bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < AXES)
+			const bool hasMoreSteps = (isDeltaMovement && dmToInsert->drive < DELTA_AXES)
 					? dmToInsert->CalcNextStepTimeDelta(*this, true)
 					: dmToInsert->CalcNextStepTimeCartesian(*this, true);
 			DriveMovement * const nextToInsert = dmToInsert->nextDM;
@@ -1084,7 +1098,7 @@ void DDA::StopDrive(size_t drive)
 			endPoint[drive] += stepsLeft;			// we were going backwards
 		}
 		dm.state = DMState::idle;
-		if (drive < AXES)
+		if (drive < reprap.GetGCodes()->GetNumAxes())
 		{
 			endCoordinatesValid = false;			// the XYZ position is no longer valid
 		}
@@ -1126,6 +1140,14 @@ void DDA::ReduceHomingSpeed()
 				RemoveDM(dm.drive);
 				InsertDM(&dm);
 			}
+		}
+
+		// We also need to adjust the total clocks needed, to prevent step errors being recorded
+		const uint32_t clocksSoFar = Platform::GetInterruptClocks() - moveStartTime;
+		if (clocksSoFar < clocksNeeded)
+		{
+			const uint32_t clocksLeft = clocksNeeded - clocksSoFar;
+			clocksNeeded += (uint32_t)(clocksLeft * (factor - 1.0));
 		}
 	}
 }

@@ -26,6 +26,8 @@ public:
     float GetEndstopAdjustment(size_t axis) const { return endstopAdjustments[axis]; }
     float GetHomedCarriageHeight(size_t axis) const { return homedCarriageHeight + endstopAdjustments[axis]; }
     float GetPrintRadiusSquared() const { return printRadiusSquared; }
+    float GetXTilt() const { return xTilt; }
+    float GetYTilt() const { return yTilt; }
 
     void Init();
     void SetDiagonal(float d) { diagonal = d; Recalc(); }
@@ -37,12 +39,14 @@ public:
     void SetXCorrection(float angle) { xCorrection = angle; Recalc(); }
     void SetYCorrection(float angle) { yCorrection = angle; Recalc(); }
     void SetZCorrection(float angle) { zCorrection = angle; Recalc(); }
+    void SetXTilt(float tilt) { xTilt = tilt; }
+    void SetYTilt(float tilt) { yTilt = tilt; }
 
-    float Transform(const float machinePos[AXES], size_t axis) const;				// Calculate the motor position for a single tower from a Cartesian coordinate
-    void InverseTransform(float Ha, float Hb, float Hc, float machinePos[AXES]) const;	// Calculate the Cartesian position from the motor positions
+    float Transform(const float machinePos[DELTA_AXES], size_t axis) const;			// Calculate the motor position for a single tower from a Cartesian coordinate
+    void InverseTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const; // Calculate the Cartesian position from the motor positions
 
-    float ComputeDerivative(unsigned int deriv, float ha, float hb, float hc);		// Compute the derivative of height with respect to a parameter at a set of motor endpoints
-    void Adjust(size_t numFactors, const float v[]);								// Perform 3-, 4-, 6- or 7-factor adjustment
+    floatc_t ComputeDerivative(unsigned int deriv, float ha, float hb, float hc);	// Compute the derivative of height with respect to a parameter at a set of motor endpoints
+    void Adjust(size_t numFactors, const floatc_t v[]);								// Perform 3-, 4-, 6- or 7-factor adjustment
     void PrintParameters(StringRef& reply) const;									// Print all the parameters for debugging
 
 private:
@@ -56,14 +60,15 @@ private:
     float diagonal;										// The diagonal rod length, all 3 are assumed to be the same length
     float radius;										// The nominal delta radius, before any fine tuning of tower positions
     float xCorrection, yCorrection, zCorrection;		// Tower position corrections
-    float endstopAdjustments[AXES];						// How much above or below the ideal position each endstop is
+    float endstopAdjustments[DELTA_AXES];				// How much above or below the ideal position each endstop is
     float printRadius;
     float homedHeight;
+    float xTilt, yTilt;									// How much we need to raise Z for each unit of movement in the +X and +Y directions
 
     // Derived values
     bool deltaMode;										// True if this is a delta printer
-    float towerX[AXES];									// The X coordinate of each tower
-    float towerY[AXES];									// The Y coordinate of each tower
+    float towerX[DELTA_AXES];							// The X coordinate of each tower
+    float towerY[DELTA_AXES];							// The Y coordinate of each tower
     float printRadiusSquared;
     float homedCarriageHeight;
 	float Xbc, Xca, Xab, Ybc, Yca, Yab;

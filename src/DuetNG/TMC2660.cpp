@@ -13,34 +13,6 @@ static size_t numTmc2660Drivers;
 
 static bool driversPowered = false;
 
-// Connections between Duet 0.6 and TMC2660-EVAL board:
-
-// Driver signal name  	Eval board pin	Our signal name   	Duet 0.6 expansion connector pin #
-// SDI                 	29				MOSI              	11 (TXD1)
-// SDO                  28 				MISO               	12 (RXD1)
-// SCK                  27 				SCLK               	33 (AD7/PA16)
-// /CS                  24				/CS                	17 (PC5_PWMH1/E1_EN)
-// GND					2,3,43,44		GND					2  (GND)
-// INT_STEP				17				E1_STEP				15 (PC9_PWMH3)
-// INT_DIR				18				E1_DIR				16 (PC3_PWMH0)
-// ENN					8				connect to ground	2  (GND)
-// CLK					23				connect to ground	2  (GND
-// 5V_USB				5				+3.3V				3  (+3.3V)
-
-// Connections between DuetNG 0.6 and TMC2660-EVAL board (now using USART0):
-
-// Driver signal name  	Eval board pin	Our signal name   	DuetNG 0.6 expansion connector pin #
-// SDI                 	29				SPI1_MOSI           13 (SPI0_MOSI) was 29
-// SDO                  28 				SPI1_MISO           14 (SPI0_MISO) was 30
-// SCK                  27 				SPI1_SCLK           12 (SPI0_SCLK) was 28
-// /CS                  24				/CS                	24 (E2_EN)
-// GND					2,3,43,44		GND					2  (GND)
-// INT_STEP				19				E2_STEP				19 (E2_STEP)
-// INT_DIR				20				E2_DIR				20 (E2_DIR)
-// ENN					8				connect to ground	2  (GND)
-// CLK					23				connect to ground	2  (GND
-// 5V_USB				5				+3.3V				3  (+3.3V)
-
 // Pin assignments for the second prototype, using USART1 SPI
 const Pin DriversClockPin = 15;								// PB15/TIOA1
 const Pin DriversMosiPin = 22;								// PA13

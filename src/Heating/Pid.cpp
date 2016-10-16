@@ -50,6 +50,7 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid)
 	useModel = true;						// by default we use the model in this first release
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
+	temperature = BAD_ERROR_TEMPERATURE;
 
 	// Time the sensor was last sampled.  During startup, we use the current
 	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
@@ -59,10 +60,10 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid)
 // Set the process model
 bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 {
-	bool rslt = model.SetParameters(gain, tc, td, maxPwm, usePid);
+	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, usePid);
 	if (rslt)
 	{
-		float safeGain = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater())
+		const float safeGain = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater())
 								? 170.0 : 480.0;
 		if (gain > safeGain)
 		{
@@ -105,6 +106,7 @@ void PID::SwitchOn()
 	}
 	else
 	{
+//debugPrintf("Heater %d on temp %.1f\n", heater, temperature);
 		const float target = (active) ? activeTemperature : standbyTemperature;
 		const HeaterMode oldMode = mode;
 		mode = (temperature + TEMPERATURE_CLOSE_ENOUGH < target) ? HeaterMode::heating

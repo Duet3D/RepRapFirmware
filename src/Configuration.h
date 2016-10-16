@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.15e"
+# define VERSION "1.16beta1"
 #endif
 
 #ifndef DATE
-# define DATE "2016-10-02"
+# define DATE "2016-10-16"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -193,17 +193,6 @@ const float FILAMENT_WIDTH = 1.75;					// Millimetres
 
 #define CONFIG_FILE "config.g"
 #define DEFAULT_FILE "default.g"
-#define HOME_X_G "homex.g"
-#define HOME_Y_G "homey.g"
-#define HOME_Z_G "homez.g"
-#define HOME_ALL_G "homeall.g"
-#define HOME_DELTA_G "homedelta.g"
-#define BED_EQUATION_G "bed.g"
-#define PAUSE_G "pause.g"
-#define RESUME_G "resume.g"
-#define CANCEL_G "cancel.g"
-#define STOP_G "stop.g"
-#define SLEEP_G "sleep.g"
 
 #define EOF_STRING "<!-- **EoF** -->"
 

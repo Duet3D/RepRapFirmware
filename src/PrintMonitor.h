@@ -55,7 +55,7 @@ struct GCodeFileInfo
 	FilePosition fileSize;
 	float firstLayerHeight;
 	float objectHeight;
-	float filamentNeeded[DRIVES - AXES];
+	float filamentNeeded[DRIVES - MIN_AXES];
 	unsigned int numFilaments;
 	float layerHeight;
 	char generatedBy[50];

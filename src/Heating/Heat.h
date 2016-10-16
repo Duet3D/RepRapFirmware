@@ -42,11 +42,17 @@ public:
 	void AllowColdExtrude();									// Allow cold extrusion
 	void DenyColdExtrude();										// Deny cold extrusion
 
-	int8_t GetBedHeater() const;								// Get hot bed heater number
-	void SetBedHeater(int8_t heater);							// Set hot bed heater number
+	int8_t GetBedHeater() const									// Get hot bed heater number
+	post(-1 <= result; result < HEATERS);
 
-	int8_t GetChamberHeater() const;							// Get chamber heater number
-	void SetChamberHeater(int8_t heater);						// Set chamber heater number
+	void SetBedHeater(int8_t heater)							// Set hot bed heater number
+	pre(-1 <= heater; heater < HEATERS);
+
+	int8_t GetChamberHeater() const								// Get chamber heater number
+	post(-1 <= result; result < HEATERS);
+
+	void SetChamberHeater(int8_t heater)						// Set chamber heater number
+	pre(-1 <= heater; heater < HEATERS);
 
 	void SetActiveTemperature(int8_t heater, float t);
 	float GetActiveTemperature(int8_t heater) const;
@@ -62,41 +68,40 @@ public:
 	bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
 	bool HeaterAtSetTemperature(int8_t heater) const;			// Is a specific heater at temperature within tolerance?
 	void Diagnostics(MessageType mtype);						// Output useful information
-	float GetAveragePWM(int8_t heater) const;					// Return the running average PWM to the heater as a fraction in [0, 1].
+
+	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
+	pre(heater < HEATERS);
 
 	bool UseSlowPwm(int8_t heater) const;						// Queried by the Platform class
-	uint32_t GetLastSampleTime(int8_t heater) const;
+
+	uint32_t GetLastSampleTime(size_t heater) const
+	pre(heater < HEATERS);
 
 	void StartAutoTune(size_t heater, float temperature, float maxPwm, StringRef& reply) // Auto tune a PID
-		pre(heater < HEATERS);
+	pre(heater < HEATERS);
 
 	bool IsTuning(size_t heater) const							// Return true if the specified heater is auto tuning
-		pre(heater < HEATERS);
+	pre(heater < HEATERS);
 
 	void GetAutoTuneStatus(StringRef& reply) const;				// Get the status of the current or last auto tune
 
 	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
-		pre(heater < HEATERS);
+	pre(heater < HEATERS);
 
-	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, bool usePid); // Set the heater process model
+	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, bool usePid) // Set the heater process model
+	pre(heater < HEATERS);
 
 	bool IsModelUsed(size_t heater) const						// Is the heater using the PID parameters calculated form the model?
-		pre(heater < HEATERS);
+	pre(heater < HEATERS);
 
 	void UseModel(size_t heater, bool b)						// Use or don't use the model to provide the PID parameters
-		pre(heater < HEATERS);
+	pre(heater < HEATERS);
 
 	void GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
-	pre(heater < HEATERS)
-	{
-		pids[heater]->GetHeaterProtection(maxTempExcursion, maxFaultTime);
-	}
+	pre(heater < HEATERS);
 
 	void SetHeaterProtection(size_t heater, float maxTempExcursion, float maxFaultTime)
-	pre(heater < HEATERS)
-	{
-		pids[heater]->SetHeaterProtection(maxTempExcursion, maxFaultTime);
-	}
+	pre(heater < HEATERS);
 
 private:
 	Platform* platform;											// The instance of the RepRap hardware class
@@ -172,6 +177,16 @@ inline bool Heat::IsModelUsed(size_t heater) const
 inline void Heat::UseModel(size_t heater, bool b)
 {
 	pids[heater]->UseModel(b);
+}
+
+inline void Heat::GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
+{
+	pids[heater]->GetHeaterProtection(maxTempExcursion, maxFaultTime);
+}
+
+inline void Heat::SetHeaterProtection(size_t heater, float maxTempExcursion, float maxFaultTime)
+{
+	pids[heater]->SetHeaterProtection(maxTempExcursion, maxFaultTime);
 }
 
 #endif

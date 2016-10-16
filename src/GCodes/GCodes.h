@@ -127,8 +127,13 @@ public:
     void Diagnostics(MessageType mtype);								// Send helpful information out
     bool HaveIncomingData() const;										// Is there something that we have to do?
 	size_t GetStackPointer() const;										// Returns the current stack pointer
-    bool GetAxisIsHomed(uint8_t axis) const { return axisIsHomed[axis]; } // Is the axis at 0?
-    void SetAxisIsHomed(uint8_t axis) { axisIsHomed[axis] = true; }		// Tell us that the axis is now homed
+
+	bool GetAxisIsHomed(unsigned int axis) const						// Has the axis been homed?
+    	{ return (axesHomed & (1 << axis)) != 0; }
+    void SetAxisIsHomed(unsigned int axis)								// Tell us that the axis is now homed
+    	{ axesHomed |= (1 << axis); }
+    void SetAxisNotHomed(unsigned int axis)								// Tell us that the axis is not homed
+    	{ axesHomed &= ~(1 << axis); }
 
     float GetSpeedFactor() const { return speedFactor * minutesToSeconds; }	// Return the current speed factor
     float GetExtrusionFactor(size_t extruder) { return extrusionFactors[extruder]; } // Return the current extrusion factors
@@ -136,10 +141,7 @@ public:
     float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
     float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
     
-    bool HaveAux() const { return auxDetected; }						// Any device on the AUX line?
 	bool IsFlashing() const { return isFlashing; }						// Is a new firmware binary going to be flashed?
-	OutputBuffer *GetAuxGCodeReply();									// Returns cached G-Code reply for AUX devices and clears its reference
-    uint32_t GetAuxSeq() { return auxSeq; }
 
 	bool IsPaused() const;
 	bool IsPausing() const;
@@ -151,8 +153,15 @@ public:
 
     void CancelPrint();													// Cancel the current print
 
+    void MoveStoppedByZProbe() { zProbeTriggered = true; }				// Called from the step ISR when the Z probe is triggered, causing the move to be aborted
+
+    size_t GetNumAxes() const { return numAxes; }
+
+    static const char axisLetters[MAX_AXES]; 							// 'X', 'Y', 'Z'
+
 private:
-  
+    enum class CannedMoveType : uint8_t { none, relative, absolute };
+
     void FillGCodeBuffers();											// Get new data into the gcode buffers
     void StartNextGCode(StringRef& reply);								// Fetch a new GCode and process it
     void DoFilePrint(GCodeBuffer* gb, StringRef& reply);				// Get G Codes from a file and print them
@@ -216,6 +225,7 @@ private:
     GCodeBuffer* auxGCode;						// this one is for the LCD display on the async serial interface
     GCodeBuffer* fileMacroGCode;				// ...
     GCodeBuffer *gbCurrent;
+
     bool active;								// Live and running?
     bool isPaused;								// true if the print has been paused
     bool dwellWaiting;							// We are in a dwell
@@ -232,19 +242,20 @@ private:
 	bool axesRelative;
     GCodeMachineState stack[StackSize];			// State that we save when calling macro files
     unsigned int stackPointer;					// Push and Pop stack pointer
-    static const char axisLetters[AXES]; 		// 'X', 'Y', 'Z'
-	float axisScaleFactors[AXES];				// Scale XYZ coordinates by this factor (for Delta configurations)
-    float lastRawExtruderPosition[DRIVES - AXES];	// Extruder position of the last move fed into the Move class
-    float rawExtruderTotalByDrive[DRIVES - AXES];	// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive
+    size_t numAxes;								// How many axes we have. DEDFAULT
+	float axisScaleFactors[MAX_AXES];			// Scale XYZ coordinates by this factor (for Delta configurations)
+    float lastRawExtruderPosition[DRIVES - MIN_AXES];	// Extruder position of the last move fed into the Move class
+    float rawExtruderTotalByDrive[DRIVES - MIN_AXES];	// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive
     float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 	float record[DRIVES];						// Temporary store for move positions
-	float moveToDo[DRIVES+1];					// Where to go set by G1 etc
-	bool activeDrive[DRIVES];					// Is this drive involved in a move?
+	float cannedMoveCoords[DRIVES];				// Where to go or how much to move by in a canned cycle move, last is feed rate
+	float cannedFeedRate;						// How fast to do it
+	CannedMoveType cannedMoveType[DRIVES];		// Is this drive involved in a canned cycle move?
 	bool offSetSet;								// Are any axis offsets non-zero?
     float distanceScale;						// MM or inches
     FileData fileBeingPrinted;
     FileData fileToPrint;
-    FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) in
+    FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) to
     uint16_t toBeHomed;							// Bitmap of axes still to be homed
     bool doingFileMacro;						// Are we executing a macro file?
     int oldToolNumber, newToolNumber;			// Tools being changed
@@ -254,18 +265,18 @@ private:
     int probeCount;								// Counts multiple probe points
     int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
     bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
-    bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
     float longWait;								// Timer for things that happen occasionally (seconds)
     bool limitAxes;								// Don't think outside the box.
-    bool axisIsHomed[AXES];						// These record which of the axes have been homed
+    uint32_t axesHomed;							// Bitmap of which axes have been homed
     float pausedFanValues[NUM_FANS];			// Fan speeds when the print was paused
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
-    float extrusionFactors[DRIVES - AXES];		// extrusion factors (normally 1.0)
-    float lastProbedZ;							// the last height at which the Z probe stopped
+    float extrusionFactors[DRIVES - MIN_AXES];	// extrusion factors (normally 1.0)
 
-    bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
-	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)
-	uint32_t auxSeq;							// Sequence number for AUX devices
+    // Z probe
+    float lastProbedZ;							// the last height at which the Z probe stopped
+    bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
+    volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
+
     float simulationTime;						// Accumulated simulation time
     uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
     FilePosition filePos;						// The position we got up to in the file being printed
@@ -308,26 +319,9 @@ inline bool GCodes::HaveIncomingData() const
 			platform->GCodeAvailable(SerialSource::AUX);
 }
 
-inline bool GCodes::AllAxesAreHomed() const
-{
-	return axisIsHomed[X_AXIS] && axisIsHomed[Y_AXIS] && axisIsHomed[Z_AXIS];
-}
-
-inline void GCodes::SetAllAxesNotHomed()
-{
-	axisIsHomed[X_AXIS] = axisIsHomed[Y_AXIS] = axisIsHomed[Z_AXIS] = false;
-}
-
 inline size_t GCodes::GetStackPointer() const
 {
 	return stackPointer;
-}
-
-inline OutputBuffer *GCodes::GetAuxGCodeReply()
-{
-	OutputBuffer *temp = auxGCodeReply;
-	auxGCodeReply = nullptr;
-	return temp;
 }
 
 #endif

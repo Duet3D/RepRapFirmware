@@ -10,15 +10,18 @@
 
 #include "DDA.h"
 #include "Libraries/Math/Matrix.h"
-#include "DeltaParameters.h"
-#include "DeltaProbe.h"
 
 #ifdef DUET_NG
 const unsigned int DdaRingLength = 40;
+typedef double floatc_t;					// type of matrix element used for delta calibration
 #else
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
+typedef float floatc_t;						// type of matrix element used for delta calibration
 #endif
+
+#include "DeltaParameters.h"
+#include "DeltaProbe.h"
 
 enum PointCoordinateSet
 {
@@ -82,12 +85,12 @@ public:
     int GetCoreXYMode() const { return coreXYMode; }
     void SetCoreXYMode(int mode) { coreXYMode = mode; }
     float GetCoreAxisFactor(size_t axis) const { return axisFactors[axis]; }
-    void setCoreAxisFactor(size_t axis, float f) { axisFactors[axis] = f; }
+    void SetCoreAxisFactor(size_t axis, float f) { axisFactors[axis] = f; }
     bool IsCoreXYAxis(size_t axis) const;											// Return true if the specified axis shares its motors with another
 
     void CurrentMoveCompleted();													// Signal that the current move has just been completed
     bool TryStartNextMove(uint32_t startTime);										// Try to start another move, returning true if Step() needs to be called immediately
-    void MotorTransform(const float machinePos[AXES], int32_t motorPos[AXES]) const;				// Convert Cartesian coordinates to delta motor coordinates
+    void MotorTransform(const float machinePos[MAX_AXES], int32_t motorPos[MAX_AXES]) const;				// Convert Cartesian coordinates to delta motor coordinates
     float MotorFactor(size_t drive, const float directionVector[]) const;							// Calculate the movement fraction for a single axis motor of a Cartesian or CoreXY printer
     void MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_t numDrives) const;	// Convert motor coordinates to machine coordinates
     void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const;
@@ -116,21 +119,21 @@ private:
     bool StartNextMove(uint32_t startTime);											// start the next move, returning true if Step() needs to be called immediately
     void SetProbedBedEquation(size_t numPoints, StringRef& reply);					// When we have a full set of probed points, work out the bed's equation
     void DoDeltaCalibration(size_t numPoints, StringRef& reply);
-    void BedTransform(float move[AXES]) const;										// Take a position and apply the bed compensations
-    void GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const;	// Get the current position in untransformed coords
-    void InverseBedTransform(float move[AXES]) const;								// Go from a bed-transformed point back to user coordinates
-    void AxisTransform(float move[AXES]) const;										// Take a position and apply the axis-angle compensations
-    void InverseAxisTransform(float move[AXES]) const;								// Go from an axis transformed point back to user coordinates
+    void BedTransform(float move[MAX_AXES]) const;									// Take a position and apply the bed compensations
+    void GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const; // Get the current position in untransformed coords
+    void InverseBedTransform(float move[MAX_AXES]) const;							// Go from a bed-transformed point back to user coordinates
+    void AxisTransform(float move[MAX_AXES]) const;									// Take a position and apply the axis-angle compensations
+    void InverseAxisTransform(float move[MAX_AXES]) const;							// Go from an axis transformed point back to user coordinates
     void BarycentricCoordinates(size_t p0, size_t p1,   							// Compute the barycentric coordinates of a point in a triangle
     		size_t p2, float x, float y, float& l1,     							// (see http://en.wikipedia.org/wiki/Barycentric_coordinate_system).
     		float& l2, float& l3) const;
     float TriangleZ(float x, float y) const;										// Interpolate onto a triangular grid
-    void AdjustDeltaParameters(const float v[], size_t numFactors);					// Perform delta adjustment
+    void AdjustDeltaParameters(const floatc_t v[], size_t numFactors);				// Perform delta adjustment
     void JustHomed(size_t axis, float hitPoint, DDA* hitDDA);						// deal with setting positions after a drive has been homed
     void DeltaProbeInterrupt();														// step ISR when using the experimental delta probe
 
-    static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0);	// for debugging
-    static void PrintVector(const char *s, const float *v, size_t numElems);		// for debugging
+    static void PrintMatrix(const char* s, const MathMatrix<floatc_t>& m, size_t numRows = 0, size_t maxCols = 0);	// for debugging
+    static void PrintVector(const char *s, const floatc_t *v, size_t numElems);		// for debugging
 
     bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
     DDA* DDARingGet();									// Get the next DDA ring entry to be run
@@ -177,7 +180,7 @@ private:
     uint32_t deltaProbingStartTime;
     bool deltaProbing;
     int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ
-    float axisFactors[AXES];							// How much further the motors need to move for each axis movement, on a CoreXY/CoreXZ/CoreYZ machine
+    float axisFactors[MAX_AXES];						// How much further the motors need to move for each axis movement, on a CoreXY/CoreXZ/CoreYZ machine
     unsigned int stepErrors;							// count of step errors, for diagnostics
 };
 
