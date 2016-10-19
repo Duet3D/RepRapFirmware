@@ -1,6 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-*.inf binary
+*.inf binary -text
 
 # Custom for Visual Studio
 *.cs     diff=csharp
