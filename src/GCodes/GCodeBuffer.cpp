@@ -84,7 +84,7 @@ bool GCodeBuffer::Put(char c)
 			{
 				if (Seen('N'))
 				{
-					snprintf(gcodeBuffer, GCODE_LENGTH, "M998 P%d", GetIValue());
+					snprintf(gcodeBuffer, GCODE_LENGTH, "M998 P%ld", GetIValue());
 				}
 				Init();
 				return true;
@@ -334,9 +334,8 @@ const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 	return result;
 }
 
-// Get an long after a G Code letter
-
-long GCodeBuffer::GetLValue()
+// Get an int32 after a G Code letter
+int32_t GCodeBuffer::GetIValue()
 {
 	if (readPointer < 0)
 	{
@@ -344,9 +343,29 @@ long GCodeBuffer::GetLValue()
 		readPointer = -1;
 		return 0;
 	}
-	long result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+	int32_t result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
 	readPointer = -1;
 	return result;
+}
+
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave value and seen alone.
+void GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
+{
+	if (Seen(c))
+	{
+		val = GetFValue();
+		seen = true;
+	}
+}
+
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave value and seen alone.
+void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
+{
+	if (Seen(c))
+	{
+		val = GetIValue();
+		seen = true;
+	}
 }
 
 // Return true if this buffer contains a poll request or empty request that can be executed while macros etc. from another source are being completed

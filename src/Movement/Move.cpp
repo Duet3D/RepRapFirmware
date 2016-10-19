@@ -1580,7 +1580,7 @@ int Move::DoDeltaProbe(float frequency, float amplitude, float rate, float dista
 	{
 		for (size_t j = 0; j < maxCols; ++j)
 		{
-			debugPrintf("%7.3f%c", m(i, j), (j == maxCols - 1) ? '\n' : ' ');
+			debugPrintf("%7.4f%c", m(i, j), (j == maxCols - 1) ? '\n' : ' ');
 		}
 	}
 }
@@ -1590,7 +1590,7 @@ int Move::DoDeltaProbe(float frequency, float amplitude, float rate, float dista
 	debugPrintf("%s:", s);
 	for (size_t i = 0; i < numElems; ++i)
 	{
-		debugPrintf(" %7.3f", v[i]);
+		debugPrintf(" %7.4f", v[i]);
 	}
 	debugPrintf("\n");
 }

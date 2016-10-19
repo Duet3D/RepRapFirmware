@@ -37,7 +37,16 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid)
 	maxHeatingFaultTime = DefaultMaxHeatingFaultTime;
 	model.SetParameters(pGain, pTc, pTd, 1.0, usePid);
 
+	Reset();
 	SetHeater(0.0);
+
+	// Time the sensor was last sampled.  During startup, we use the current
+	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
+	lastSampleTime = millis();
+}
+
+void PID::Reset()
+{
 	mode = HeaterMode::off;
 	previousTemperaturesGood = 0;
 	previousTemperatureIndex = 0;
@@ -51,10 +60,6 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid)
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
 	temperature = BAD_ERROR_TEMPERATURE;
-
-	// Time the sensor was last sampled.  During startup, we use the current
-	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
-	lastSampleTime = millis();
 }
 
 // Set the process model
@@ -63,13 +68,20 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, usePid);
 	if (rslt)
 	{
-		const float safeGain = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater())
-								? 170.0 : 480.0;
-		if (gain > safeGain)
+		if (model.IsEnabled())
 		{
-			platform->MessageF(GENERIC_MESSAGE,
-					"Warning: Heater %u appears to be over-powered and a fire risk! If left on at full power, its temperature is predicted to reach %uC.\n",
-					heater, (unsigned int)gain + 20);
+			const float safeGain = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater())
+									? 170.0 : 480.0;
+			if (gain > safeGain)
+			{
+				platform->MessageF(GENERIC_MESSAGE,
+						"Warning: Heater %u appears to be over-powered and a fire risk! If left on at full power, its temperature is predicted to reach %uC.\n",
+						heater, (unsigned int)gain + 20);
+			}
+		}
+		else
+		{
+			Reset();
 		}
 	}
 	return rslt;
@@ -104,7 +116,7 @@ void PID::SwitchOn()
 			platform->MessageF(GENERIC_MESSAGE, "Heater %d not switched on due to temperature fault\n", heater);
 		}
 	}
-	else
+	else if (model.IsEnabled())
 	{
 //debugPrintf("Heater %d on temp %.1f\n", heater, temperature);
 		const float target = (active) ? activeTemperature : standbyTemperature;
@@ -131,240 +143,246 @@ void PID::SwitchOn()
 void PID::SwitchOff()
 {
 	lastPwm = 0.0;
-	SetHeater(0.0);
-	if (IsTuning())
+	if (model.IsEnabled())
 	{
-		delete tuningTempReadings;
-		tuningTempReadings = nullptr;
-	}
-	if (mode > HeaterMode::off)
-	{
-		mode = HeaterMode::off;
-		if (reprap.Debug(Module::moduleHeat))
+		SetHeater(0.0);
+		if (IsTuning())
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Heater %d switched off\n", heater);
+			delete tuningTempReadings;
+			tuningTempReadings = nullptr;
+		}
+		if (mode > HeaterMode::off)
+		{
+			mode = HeaterMode::off;
+			if (reprap.Debug(Module::moduleHeat))
+			{
+				platform->MessageF(GENERIC_MESSAGE, "Heater %d switched off\n", heater);
+			}
 		}
 	}
 }
 
-// This is the meain heater control loop function
+// This is the main heater control loop function
 void PID::Spin()
 {
-	// Read the temperature
-	const TemperatureError err = ReadTemperature();
-	const PidParameters& pp = platform->GetPidParameters(heater);
-
-	// Handle any temperature reading error and calculate the temperature rate of change, if possible
-	if (err != TemperatureError::success)
+	if (model.IsEnabled())
 	{
-		previousTemperaturesGood <<= 1;				// this reading isn't a good one
-		if (mode > HeaterMode::off)					// don't worry about errors when reading heaters that are switched off or flagged as having faults
+		// Read the temperature
+		const TemperatureError err = ReadTemperature();
+		const PidParameters& pp = platform->GetPidParameters(heater);
+
+		// Handle any temperature reading error and calculate the temperature rate of change, if possible
+		if (err != TemperatureError::success)
 		{
-			// Error may be a temporary error and may correct itself after a few additional reads
-			badTemperatureCount++;
-			if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
+			previousTemperaturesGood <<= 1;				// this reading isn't a good one
+			if (mode > HeaterMode::off)					// don't worry about errors when reading heaters that are switched off or flagged as having faults
 			{
-				lastPwm = 0.0;
-				SetHeater(0.0);						// do this here just to be sure, in case the call to platform->Message causes a delay
-				if (IsTuning())
-				{
-					delete tuningTempReadings;
-					tuningTempReadings = nullptr;
-				}
-				mode = HeaterMode::fault;
-				platform->MessageF(GENERIC_MESSAGE, "Error: Temperature reading fault on heater %d: %s\n", heater, TemperatureErrorString(err));
-				reprap.FlagTemperatureFault(heater);
-			}
-		}
-		// We leave lastPWM alone if we have a temporary temperature reading error
-	}
-	else
-	{
-		// We have an apparently-good temperature reading. Calculate the derivative, if possible.
-		float derivative = 0.0;
-		bool gotDerivative = false;
-		badTemperatureCount = 0;
-		if ((previousTemperaturesGood & (1 << (NumPreviousTemperatures - 1))) != 0)
-		{
-			const float tentativeDerivative = SecondsToMillis * (temperature - previousTemperatures[previousTemperatureIndex])
-							/ (float)(platform->HeatSampleInterval() * NumPreviousTemperatures);
-			// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
-			if (fabsf(tentativeDerivative) <= 10.0)
-			{
-				derivative = tentativeDerivative;
-				gotDerivative = true;
-			}
-		}
-		previousTemperatures[previousTemperatureIndex] = temperature;
-		previousTemperaturesGood = (previousTemperaturesGood << 1) | 1;
-
-		// Get the target temperature and the error
-		const float targetTemperature = (active) ? activeTemperature : standbyTemperature;
-		const float error = targetTemperature - temperature;
-
-		// Do the heating checks
-		switch(mode)
-		{
-		case HeaterMode::heating:
-			{
-				if (error <= TEMPERATURE_CLOSE_ENOUGH)
-				{
-					mode = HeaterMode::stable;
-					heatingFaultCount = 0;
-				}
-				else if (gotDerivative)
-				{
-					const float expectedRate = GetExpectedHeatingRate();
-					if (derivative + AllowedTemperatureDerivativeNoise < expectedRate
-						&& (float)(millis() - timeSetHeating) > model.GetDeadTime() * SecondsToMillis * 2)
-					{
-						++heatingFaultCount;
-						if (heatingFaultCount * platform->HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
-						{
-							SetHeater(0.0);					// do this here just to be sure
-							mode = HeaterMode::fault;
-							reprap.GetGCodes()->CancelPrint();
-							platform->MessageF(GENERIC_MESSAGE,
-										"Error: heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
-										heater, expectedRate);
-							reprap.FlagTemperatureFault(heater);
-						}
-					}
-					else if (heatingFaultCount != 0)
-					{
-						--heatingFaultCount;
-					}
-				}
-				else
-				{
-					// Leave the heating fault count alone
-				}
-			}
-			break;
-
-		case HeaterMode::stable:
-			if (fabsf(error) > maxTempExcursion && temperature > MaxAmbientTemperature)
-			{
-				++heatingFaultCount;
-				if (heatingFaultCount * platform->HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
-				{
-					SetHeater(0.0);					// do this here just to be sure
-					mode = HeaterMode::fault;
-					reprap.GetGCodes()->CancelPrint();
-					platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion exceeded %.1fC\n", heater, maxTempExcursion);
-				}
-			}
-			else if (heatingFaultCount != 0)
-			{
-				--heatingFaultCount;
-			}
-			break;
-
-		case HeaterMode::cooling:
-			if (-error <= TEMPERATURE_CLOSE_ENOUGH && targetTemperature > MaxAmbientTemperature)
-			{
-				// We have cooled to close to the target temperature, so we should now maintain that temperature
-				mode = HeaterMode::stable;
-				heatingFaultCount = 0;
-			}
-			else
-			{
-				// We could check for temperature excessive or not falling here, but without an alarm or a power-off mechanism, there is not much we can do
-				// TODO emergency stop?
-			}
-			break;
-
-		default:		// this covers off, fault, and the auto tuning states
-			break;
-		}
-
-		// Calculate the PWM
-		if (mode <= HeaterMode::off)
-		{
-			lastPwm = 0.0;
-		}
-		else if (mode < HeaterMode::tuning0)
-		{
-			// Performing normal temperature control
-			bool usingPid = (useModel) ? model.UsePid() : pp.UsePID();
-			float maxPwm = (useModel) ? model.GetMaxPwm() : pp.kS;
-			if (usingPid)
-			{
-				// Using PID mode. Determine the PID parameters to use.
-				float kP, recipTi, tD, gain;
-				bool inLoadMode;
-				if (useModel)
-				{
-					inLoadMode = (mode == HeaterMode::stable);	// use standard PID when maintaining temperature
-					const PidParams& params = model.GetPidParameters(inLoadMode);
-					kP = params.kP;
-					recipTi = params.recipTi;
-					tD = params.tD;
-					gain = model.GetGain();
-				}
-				else
-				{
-					inLoadMode = true;							// use standard PID always
-					kP = (pp.kP * pp.kS) * (1.0/255.0);
-					recipTi = pp.kI/pp.kP;
-					tD = pp.kD/pp.kP;
-					gain = 255.0/pp.kT;
-				}
-
-				// If the P and D terms together demand that the heater is full on or full off, disregard the I term
-				const float errorMinusDterm = error - (tD * derivative);
-				const float pPlusD = kP * errorMinusDterm;
-				const float expectedPwm = constrain<float>((temperature - NormalAmbientTemperature)/gain, 0.0, maxPwm);
-				if (pPlusD + expectedPwm > maxPwm)
-				{
-					lastPwm = maxPwm;
-					// If we are heating up, preset the I term to the expected PWM at this temperature, ready for the switch over to PID
-					if (mode == HeaterMode::heating && error > 0.0 && derivative > 0.0)
-					{
-						iAccumulator = expectedPwm;
-					}
-				}
-				else if (pPlusD + expectedPwm < 0.0)
+				// Error may be a temporary error and may correct itself after a few additional reads
+				badTemperatureCount++;
+				if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
 				{
 					lastPwm = 0.0;
-				}
-				else
-				{
-					// In the following we use a modified PID when the temperature is a long way off target.
-					// During initial heating or cooling, the D term represents expected overshoot, which we don't want to add to the I accumulator.
-					// When we are in load mode, the I term is much larger and the D term doesn't represent overshoot, so use normal PID.
-					const float errorToUse = (inLoadMode) ? error : errorMinusDterm;
-					iAccumulator = constrain<float>(iAccumulator + (errorToUse * kP * recipTi * platform->HeatSampleInterval() * MillisToSeconds),
-													0.0, maxPwm);
-					lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, maxPwm);
+					SetHeater(0.0);						// do this here just to be sure, in case the call to platform->Message causes a delay
+					if (IsTuning())
+					{
+						delete tuningTempReadings;
+						tuningTempReadings = nullptr;
+					}
+					mode = HeaterMode::fault;
+					platform->MessageF(GENERIC_MESSAGE, "Error: Temperature reading fault on heater %d: %s\n", heater, TemperatureErrorString(err));
+					reprap.FlagTemperatureFault(heater);
 				}
 			}
-			else
-			{
-				// Using bang-bang mode
-				lastPwm = (error > 0.0) ? maxPwm : 0.0;
-			}
+			// We leave lastPWM alone if we have a temporary temperature reading error
 		}
 		else
 		{
-			DoTuningStep();
+			// We have an apparently-good temperature reading. Calculate the derivative, if possible.
+			float derivative = 0.0;
+			bool gotDerivative = false;
+			badTemperatureCount = 0;
+			if ((previousTemperaturesGood & (1 << (NumPreviousTemperatures - 1))) != 0)
+			{
+				const float tentativeDerivative = SecondsToMillis * (temperature - previousTemperatures[previousTemperatureIndex])
+								/ (float)(platform->HeatSampleInterval() * NumPreviousTemperatures);
+				// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
+				if (fabsf(tentativeDerivative) <= 10.0)
+				{
+					derivative = tentativeDerivative;
+					gotDerivative = true;
+				}
+			}
+			previousTemperatures[previousTemperatureIndex] = temperature;
+			previousTemperaturesGood = (previousTemperaturesGood << 1) | 1;
+
+			// Get the target temperature and the error
+			const float targetTemperature = (active) ? activeTemperature : standbyTemperature;
+			const float error = targetTemperature - temperature;
+
+			// Do the heating checks
+			switch(mode)
+			{
+			case HeaterMode::heating:
+				{
+					if (error <= TEMPERATURE_CLOSE_ENOUGH)
+					{
+						mode = HeaterMode::stable;
+						heatingFaultCount = 0;
+					}
+					else if (gotDerivative)
+					{
+						const float expectedRate = GetExpectedHeatingRate();
+						if (derivative + AllowedTemperatureDerivativeNoise < expectedRate
+							&& (float)(millis() - timeSetHeating) > model.GetDeadTime() * SecondsToMillis * 2)
+						{
+							++heatingFaultCount;
+							if (heatingFaultCount * platform->HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
+							{
+								SetHeater(0.0);					// do this here just to be sure
+								mode = HeaterMode::fault;
+								reprap.GetGCodes()->CancelPrint();
+								platform->MessageF(GENERIC_MESSAGE,
+											"Error: heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
+											heater, expectedRate);
+								reprap.FlagTemperatureFault(heater);
+							}
+						}
+						else if (heatingFaultCount != 0)
+						{
+							--heatingFaultCount;
+						}
+					}
+					else
+					{
+						// Leave the heating fault count alone
+					}
+				}
+				break;
+
+			case HeaterMode::stable:
+				if (fabsf(error) > maxTempExcursion && temperature > MaxAmbientTemperature)
+				{
+					++heatingFaultCount;
+					if (heatingFaultCount * platform->HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
+					{
+						SetHeater(0.0);					// do this here just to be sure
+						mode = HeaterMode::fault;
+						reprap.GetGCodes()->CancelPrint();
+						platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion exceeded %.1fC\n", heater, maxTempExcursion);
+					}
+				}
+				else if (heatingFaultCount != 0)
+				{
+					--heatingFaultCount;
+				}
+				break;
+
+			case HeaterMode::cooling:
+				if (-error <= TEMPERATURE_CLOSE_ENOUGH && targetTemperature > MaxAmbientTemperature)
+				{
+					// We have cooled to close to the target temperature, so we should now maintain that temperature
+					mode = HeaterMode::stable;
+					heatingFaultCount = 0;
+				}
+				else
+				{
+					// We could check for temperature excessive or not falling here, but without an alarm or a power-off mechanism, there is not much we can do
+					// TODO emergency stop?
+				}
+				break;
+
+			default:		// this covers off, fault, and the auto tuning states
+				break;
+			}
+
+			// Calculate the PWM
+			if (mode <= HeaterMode::off)
+			{
+				lastPwm = 0.0;
+			}
+			else if (mode < HeaterMode::tuning0)
+			{
+				// Performing normal temperature control
+				bool usingPid = (useModel) ? model.UsePid() : pp.UsePID();
+				float maxPwm = (useModel) ? model.GetMaxPwm() : pp.kS;
+				if (usingPid)
+				{
+					// Using PID mode. Determine the PID parameters to use.
+					float kP, recipTi, tD, gain;
+					bool inLoadMode;
+					if (useModel)
+					{
+						inLoadMode = (mode == HeaterMode::stable);	// use standard PID when maintaining temperature
+						const PidParams& params = model.GetPidParameters(inLoadMode);
+						kP = params.kP;
+						recipTi = params.recipTi;
+						tD = params.tD;
+						gain = model.GetGain();
+					}
+					else
+					{
+						inLoadMode = true;							// use standard PID always
+						kP = (pp.kP * pp.kS) * (1.0/255.0);
+						recipTi = pp.kI/pp.kP;
+						tD = pp.kD/pp.kP;
+						gain = 255.0/pp.kT;
+					}
+
+					// If the P and D terms together demand that the heater is full on or full off, disregard the I term
+					const float errorMinusDterm = error - (tD * derivative);
+					const float pPlusD = kP * errorMinusDterm;
+					const float expectedPwm = constrain<float>((temperature - NormalAmbientTemperature)/gain, 0.0, maxPwm);
+					if (pPlusD + expectedPwm > maxPwm)
+					{
+						lastPwm = maxPwm;
+						// If we are heating up, preset the I term to the expected PWM at this temperature, ready for the switch over to PID
+						if (mode == HeaterMode::heating && error > 0.0 && derivative > 0.0)
+						{
+							iAccumulator = expectedPwm;
+						}
+					}
+					else if (pPlusD + expectedPwm < 0.0)
+					{
+						lastPwm = 0.0;
+					}
+					else
+					{
+						// In the following we use a modified PID when the temperature is a long way off target.
+						// During initial heating or cooling, the D term represents expected overshoot, which we don't want to add to the I accumulator.
+						// When we are in load mode, the I term is much larger and the D term doesn't represent overshoot, so use normal PID.
+						const float errorToUse = (inLoadMode) ? error : errorMinusDterm;
+						iAccumulator = constrain<float>(iAccumulator + (errorToUse * kP * recipTi * platform->HeatSampleInterval() * MillisToSeconds),
+														0.0, maxPwm);
+						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, maxPwm);
+					}
+				}
+				else
+				{
+					// Using bang-bang mode
+					lastPwm = (error > 0.0) ? maxPwm : 0.0;
+				}
+			}
+			else
+			{
+				DoTuningStep();
+			}
 		}
+
+		// Set the heater power and update the average PWM
+		SetHeater(lastPwm);
+		averagePWM = averagePWM * (1.0 - platform->HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis)) + lastPwm;
+		previousTemperatureIndex = (previousTemperatureIndex + 1) % NumPreviousTemperatures;
+
+		// For temperature sensors which do not require frequent sampling and averaging,
+		// their temperature is read here and error/safety handling performed.  However,
+		// unlike the Tick ISR, this code is not executed at interrupt level and consequently
+		// runs the risk of having undesirable delays between calls.  To guard against this,
+		// we record for each PID object when it was last sampled and have the Tick ISR
+		// take action if there is a significant delay since the time of last sampling.
+		lastSampleTime = millis();
+
+//  	debugPrintf("Heater %d: e=%f, P=%f, I=%f, d=%f, r=%f\n", heater, error, pp.kP*error, temp_iState, temp_dState, result);
 	}
-
-	// Set the heater power and update the average PWM
-	SetHeater(lastPwm);
-	averagePWM = averagePWM * (1.0 - platform->HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis)) + lastPwm;
-	previousTemperatureIndex = (previousTemperatureIndex + 1) % NumPreviousTemperatures;
-
-	// For temperature sensors which do not require frequent sampling and averaging,
-	// their temperature is read here and error/safety handling performed.  However,
-	// unlike the Tick ISR, this code is not executed at interrupt level and consequently
-	// runs the risk of having undesirable delays between calls.  To guard against this,
-	// we record for each PID object when it was last sampled and have the Tick ISR
-	// take action if there is a significant delay since the time of last sampling.
-	lastSampleTime = millis();
-
-//  debugPrintf("Heater %d: e=%f, P=%f, I=%f, d=%f, r=%f\n", heater, error, pp.kP*error, temp_iState, temp_dState, result);
 }
 
 void PID::SetActiveTemperature(float t)

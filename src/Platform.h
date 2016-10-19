@@ -56,10 +56,14 @@ Licence: GPL
 
 #include "Storage/FileStore.h"
 #include "MessageType.h"
+
+// Definitions needed by Fan.h
+const float SecondsToMillis = 1000.0;
+const float MillisToSeconds = 0.001;
+
 #include "Fan.h"
 
 // Definitions needed by Pins.h
-
 const bool FORWARDS = true;
 const bool BACKWARDS = !FORWARDS;
 
@@ -68,17 +72,11 @@ const bool BACKWARDS = !FORWARDS;
 
 /**************************************************************************************************/
 
-// Some numbers...
-
+// Some constants
 #define TIME_TO_REPRAP 1.0e6 		// Convert seconds to the units used by the machine (usually microseconds)
 #define TIME_FROM_REPRAP 1.0e-6 	// Convert the units used by the machine (usually microseconds) to seconds
 
-const float SecondsToMillis = 1000.0;
-const float MillisToSeconds = 0.001;
-
 #define DEGREE_SYMBOL	"\xC2\xB0"	// Unicode degree-symbol as UTF8
-
-/**************************************************************************************************/
 
 #if SUPPORT_INKJET
 
@@ -100,8 +98,8 @@ const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2
 const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;				// The indices of the 3 tower motors of a delta printer in drive arrays
 
-const float AXIS_MINIMA[MAX_AXES] = { 0.0, 0.0, 0.0 };			// mm
-const float AXIS_MAXIMA[MAX_AXES] = { 230.0, 210.0, 200.0 };	// mm
+const float AXIS_MINIMA[MAX_AXES] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };			// mm
+const float AXIS_MAXIMA[MAX_AXES] = { 230.0, 210.0, 200.0, 0.0, 0.0, 0.0 };		// mm
 
 const float defaultPrintRadius = 50;							// mm
 const float defaultDeltaHomedHeight = 200;						// mm
@@ -260,7 +258,7 @@ public:
 
 struct ZProbeParameters
 {
-	int adcValue;					// the target ADC value
+	int32_t adcValue;				// the target ADC value
 	float xOffset, yOffset;			// the offset of the probe relative to the print head
 	float height;					// the nozzle height at which the target ADC value is returned
 	float calibTemperature;			// the temperature at which we did the calibration
@@ -616,17 +614,14 @@ public:
 	bool AnyHeaterHot(uint16_t heaters, float t);			// called to see if we need to turn on the hot end fan
 
 	// Fans
+	Fan& GetFan(size_t fanNumber)									// Get access to the fan control object
+	pre(fanNumber < NUM_FANS)
+	{
+		return fans[fanNumber];
+	}
 
 	float GetFanValue(size_t fan) const;					// Result is returned in percent
 	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1 and 1..255
-	bool GetCoolingInverted(size_t fan) const;
-	void SetCoolingInverted(size_t fan, bool inv);
-	float GetFanPwmFrequency(size_t fan) const;
-	void SetFanPwmFrequency(size_t fan, float freq);
-	float GetTriggerTemperature(size_t fan) const;
-	void SetTriggerTemperature(size_t fan, float t);
-	uint16_t GetHeatersMonitored(size_t fan) const;
-	void SetHeatersMonitored(size_t fan, uint16_t h);
 	float GetFanRPM();
 
 	// Flash operations
@@ -751,11 +746,11 @@ private:
 	float accelerations[DRIVES];
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
-	float pressureAdvance[DRIVES - MIN_AXES];
+	float pressureAdvance[MaxExtruders];
 	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
 	AxisDriversConfig axisDrivers[MAX_AXES];		// the driver numbers assigned to each axis
-	uint8_t extruderDrivers[DRIVES - MIN_AXES];		// the driver number assigned to each extruder
+	uint8_t extruderDrivers[MaxExtruders];			// the driver number assigned to each extruder
 	uint32_t driveDriverBits[DRIVES];				// the bitmap of driver port bits for each axis or extruder
 	uint32_t slowDriverStepPulseClocks;				// minimum high and low step pulse widths, in processor clocks
 	uint32_t slowDrivers;							// bitmap of driver port bits that need extended step pulse timing
@@ -1164,7 +1159,7 @@ inline void Platform::ExtrudeOn()
 {
 	if (extrusionAncilliaryPWM > 0.0)
 	{
-		SetFanValue(0,extrusionAncilliaryPWM); //@TODO T3P3 currently only turns fan0 on
+		SetFanValue(0,extrusionAncilliaryPWM);
 	}
 }
 
@@ -1175,7 +1170,7 @@ inline void Platform::ExtrudeOff()
 {
 	if (extrusionAncilliaryPWM > 0.0)
 	{
-		SetFanValue(0,0.0); //@TODO T3P3 currently only turns fan0 off
+		SetFanValue(0,0.0);
 	}
 }
 
@@ -1239,7 +1234,7 @@ inline const uint8_t* Platform::MACAddress() const
 
 inline float Platform::GetPressureAdvance(size_t extruder) const
 {
-	return (extruder < DRIVES - MIN_AXES) ? pressureAdvance[extruder] : 0.0;
+	return (extruder < MaxExtruders) ? pressureAdvance[extruder] : 0.0;
 }
 
 inline void Platform::SetEndStopConfiguration(size_t axis, EndStopType esType, bool logicLevel)

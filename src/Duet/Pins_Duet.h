@@ -22,7 +22,12 @@ const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers 
 const int8_t HEATERS = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g }
 
-const size_t AXES = 3;							// The number of movement axes in the machine, usually just X, Y and Z. <= DRIVES
+const size_t MAX_AXES = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+const size_t MIN_AXES = 3;						// The minimum and default number of axes
+const size_t DELTA_AXES = 3;					// The number of axis involved in delta movement
+const size_t CART_AXES = 3;						// The number of Cartesian axes
+const size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
+
 const size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
@@ -137,9 +142,8 @@ const Pin ROLAND_RTS_PIN = 17;											// Expansion pin 12, PA13_RXD1
 // TXD0 aka PA11 aka pin 18
 // RXD0 aka PA10 aka pin 19
 // PC4_PWML1 aka PC4 aka pin 36
-// AD13 aka PB20 aka pin 66
 // AD14 aka PB21 aka pin 52
-// PB16 aka pin 67 (could possibly allow analog output on this one)
+// PB16 aka pin 67 (not available on Duet 0.8.5 because it is used for E1 motor current setting; could possibly allow analog output on this one)
 // RTS1 aka PA14 aka pin 23
 // TWD1 aka PB12 aka pin 20
 // TWCK1 aka PB13 aka pin 21
@@ -155,7 +159,7 @@ const size_t NUM_PINS_ALLOWED = 72;
 	/* pins 40-47 */	0,			\
 	/* pins 48-55 */	0b00010000,	\
 	/* pins 56-63 */	0,			\
-	/* pins 64-71 */	0b00001100	\
+	/* pins 64-71 */	0b00001000	\
 }
 
 // SAM3X Flash locations (may be expanded in the future)

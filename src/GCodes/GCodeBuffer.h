@@ -20,8 +20,9 @@ class GCodeBuffer
     bool IsEmpty() const;								// Does this buffer contain any code?
     bool Seen(char c);									// Is a character present?
     float GetFValue();									// Get a float after a key letter
-    int GetIValue();									// Get an integer after a key letter
-    long GetLValue();									// Get a long integer after a key letter
+    int32_t GetIValue();								// Get an integer after a key letter
+    void TryGetFValue(char c, float& val, bool& seen);
+    void TryGetIValue(char c, int32_t& val, bool& seen);
     const char* GetUnprecedentedString(bool optional = false);	// Get a string with no preceding key letter
     const char* GetString();							// Get a string after a key letter
     const void GetFloatArray(float a[], size_t& length, bool doPad); // Get a :-separated list of floats after a key letter
@@ -63,12 +64,6 @@ class GCodeBuffer
     int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
     const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
 };
-
-// Get an Int after a G Code letter
-inline int GCodeBuffer::GetIValue()
-{
-	return static_cast<int>(GetLValue());
-}
 
 inline const char* GCodeBuffer::Buffer() const
 {

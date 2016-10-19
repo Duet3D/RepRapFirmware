@@ -495,8 +495,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	response->printf("{\"status\":\"%c\",\"coords\":{", ch);
 
 	// Coordinates
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	{
-		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 		float liveCoordinates[DRIVES + 1];
 #if SUPPORT_ROLAND
 		if (roland->Active())
@@ -745,7 +745,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%d", endstops);
 
 		// Delta configuration, number of disk volumes, and machine name
-		response->catf(",\"geometry\":\"%s\",\"volumes\":%u,\"name\":", move->GetGeometryString(), NumSdCards);
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"name\":", move->GetGeometryString(), numAxes, NumSdCards);
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 
 		/* Probe */
@@ -789,14 +789,25 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 					}
 				}
 
+				// Axis mapping. Currently we only map the X axis, but we return an array of arrays to allow for mapping otyher axes in future.
+				response->cat("],\"axisMap\":[[");
+				for(size_t xi = 0; xi < tool->GetAxisMapCount(); ++xi)
+				{
+					response->catf("%d", tool->GetAxisMap()[xi]);
+					if (xi + 1 < tool->GetAxisMapCount())
+					{
+						response->cat(",");
+					}
+				}
+
 				// Do we have any more tools?
 				if (tool->Next() != nullptr)
 				{
-					response->cat("]},");
+					response->cat("]]},");
 				}
 				else
 				{
-					response->cat("]}");
+					response->cat("]]}");
 				}
 			}
 			response->cat("]");
@@ -1177,7 +1188,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	else if (type == 3)
 	{
 		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
-		response->catf(",\"geometry\":\"%s\",\"volumes\":%u,\"myName\":", move->GetGeometryString(), NumSdCards);
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"myName\":", move->GetGeometryString(), numAxes, NumSdCards);
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 	}
 

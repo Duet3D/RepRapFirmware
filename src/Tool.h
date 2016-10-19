@@ -30,7 +30,7 @@ class Tool
 {
 public:
 
-	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount);
+	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount);
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
@@ -50,6 +50,8 @@ public:
 	float MaxFeedrate() const;
 	float InstantDv() const;
 	void Print(StringRef& reply);
+	size_t GetAxisMapCount() const { return xmapCount; }
+	const int *GetAxisMap() const { return xMapping; }
 
 	friend class RepRap;
 
@@ -70,14 +72,16 @@ private:
 	void ResetTemperatureFault(int8_t wasDudHeater);
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
 	int myNumber;
-	int drives[DRIVES - MIN_AXES];
-	float mix[DRIVES - MIN_AXES];
+	int drives[MaxExtruders];
+	float mix[MaxExtruders];
 	bool mixing;
 	size_t driveCount;
 	int heaters[HEATERS];
 	float activeTemperatures[HEATERS];
 	float standbyTemperatures[HEATERS];
 	size_t heaterCount;
+	int xMapping[MAX_AXES];
+	size_t xmapCount;
 	Tool* next;
 	bool active;
 	bool heaterFault;

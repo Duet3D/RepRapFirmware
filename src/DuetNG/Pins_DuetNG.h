@@ -33,6 +33,7 @@ const size_t MAX_AXES = 6;						// The maximum number of movement axes in the ma
 const size_t MIN_AXES = 3;						// The minimum and default number of axes
 const size_t DELTA_AXES = 3;					// The number of axis involved in delta movement
 const size_t CART_AXES = 3;						// The number of Cartesian axes
+const size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
 
 const size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB

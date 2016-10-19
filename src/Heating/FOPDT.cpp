@@ -11,6 +11,13 @@
 // Check the model parameters are sensible, if they are then save them and return true.
 bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pUsePid)
 {
+	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
+	{
+		// Setting all parameters to -1 disabled the heater control completely so we can use the pin for other purposes
+		enabled = false;
+		return true;
+	}
+
 	if (pg > 10.0 && pg < 1500.0 && pdt > 0.1 && ptc > 2 * pdt && pMaxPwm > 0.2 && pMaxPwm <= 1.0)
 	{
 		gain = pg;
@@ -18,6 +25,7 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pU
 		deadTime = pdt;
 		maxPwm = pMaxPwm;
 		usePid = pUsePid;
+		enabled = true;
 		CalcPidConstants();
 		return true;
 	}

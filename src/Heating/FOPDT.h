@@ -27,6 +27,7 @@ public:
 	float GetDeadTime() const { return deadTime; }
 	float GetMaxPwm() const { return maxPwm; }
 	bool UsePid() const { return usePid; }
+	bool IsEnabled() const { return enabled; }
 
 	const PidParams& GetPidParameters(bool forLoadChange) const
 	{
@@ -41,6 +42,7 @@ private:
 	float deadTime;
 	float maxPwm;
 	bool usePid;
+	bool enabled;
 
 	PidParams setpointChangeParams;		// parameters for handling changes in the setpoint
 	PidParams loadChangeParams;			// parameters for handling changes in the load

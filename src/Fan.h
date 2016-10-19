@@ -14,7 +14,10 @@ class Fan
 {
 private:
 	float val;
+	float minVal;
 	float triggerTemperature;
+	uint32_t blipTime;						// in milliseconds
+	uint32_t blipStartTime;
 	uint16_t freq;
 	uint16_t heatersMonitored;
 	Pin pin;
@@ -26,6 +29,8 @@ private:
 
 public:
 	float GetValue() const { return val; }
+	float GetMinValue() const { return minVal; }
+	float GetBlipTime() const { return (float)blipTime * MillisToSeconds; }
 	float GetPwmFrequency() const { return freq; }
 	bool GetInverted() const { return inverted; }
 	uint16_t GetHeatersMonitored() const { return heatersMonitored; }
@@ -33,6 +38,8 @@ public:
 
 	void Init(Pin p_pin, bool hwInverted);
 	void SetValue(float speed);
+	void SetMinValue(float speed);
+	void SetBlipTime(float t);
 	void SetInverted(bool inv);
 	void SetPwmFrequency(float p_freq);
 	void SetTriggerTemperature(float t) { triggerTemperature = t; }

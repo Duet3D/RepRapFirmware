@@ -162,6 +162,14 @@ public:
 private:
     enum class CannedMoveType : uint8_t { none, relative, absolute };
 
+    struct RestorePoint
+    {
+    	float moveCoords[DRIVES];
+    	float feedRate;
+    	RestorePoint() { Init(); }
+    	void Init();
+    };
+
     void FillGCodeBuffers();											// Get new data into the gcode buffers
     void StartNextGCode(StringRef& reply);								// Fetch a new GCode and process it
     void DoFilePrint(GCodeBuffer* gb, StringRef& reply);				// Get G Codes from a file and print them
@@ -233,10 +241,9 @@ private:
     float dwellTime;							// How long a pause for a dwell (seconds)?
     float feedRate;								// The feed rate of the last G0/G1 command that had an F parameter
     RawMove moveBuffer;							// Move details to pass to Move class
-    float savedMoveBuffer[DRIVES];				// The position when we started the current simulation
-    float savedFeedRate;						// The feed rate when we started the current simulation
-    float pausedMoveBuffer[DRIVES];		 		// The position at which we paused the print
-    float pausedFeedRate;						// The feed rate when we paused the print
+    RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
+    RestorePoint pauseRestorePoint;				// The position and feed rate when we paused the print
+    RestorePoint toolChangeRestorePoint;		// The position and feed rate when we freed a tool
     GCodeState state;							// The main state variable of the GCode state machine
 	bool drivesRelative;
 	bool axesRelative;
@@ -244,8 +251,8 @@ private:
     unsigned int stackPointer;					// Push and Pop stack pointer
     size_t numAxes;								// How many axes we have. DEDFAULT
 	float axisScaleFactors[MAX_AXES];			// Scale XYZ coordinates by this factor (for Delta configurations)
-    float lastRawExtruderPosition[DRIVES - MIN_AXES];	// Extruder position of the last move fed into the Move class
-    float rawExtruderTotalByDrive[DRIVES - MIN_AXES];	// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive
+    float lastRawExtruderPosition[MaxExtruders]; // Extruder position of the last move fed into the Move class
+    float rawExtruderTotalByDrive[MaxExtruders]; // Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive
     float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 	float record[DRIVES];						// Temporary store for move positions
 	float cannedMoveCoords[DRIVES];				// Where to go or how much to move by in a canned cycle move, last is feed rate
@@ -270,7 +277,7 @@ private:
     uint32_t axesHomed;							// Bitmap of which axes have been homed
     float pausedFanValues[NUM_FANS];			// Fan speeds when the print was paused
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
-    float extrusionFactors[DRIVES - MIN_AXES];	// extrusion factors (normally 1.0)
+    float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 
     // Z probe
     float lastProbedZ;							// the last height at which the Z probe stopped

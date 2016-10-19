@@ -37,6 +37,7 @@ public:
 
 	PID(Platform* p, int8_t h);
 	void Init(float pGain, float pTc, float pTd, bool usePid);	// (Re)Set everything to start
+	void Reset();
 	void Spin();									// Called in a tight loop to keep things running
 	void SetActiveTemperature(float t);
 	float GetActiveTemperature() const;

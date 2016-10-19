@@ -2118,20 +2118,6 @@ float Platform::GetFanValue(size_t fan) const
 	return (fan < NUM_FANS) ? fans[fan].GetValue() : -1;
 }
 
-bool Platform::GetCoolingInverted(size_t fan) const
-{
-	return (fan < NUM_FANS) ? fans[fan].GetInverted() : -1;
-
-}
-
-void Platform::SetCoolingInverted(size_t fan, bool inv)
-{
-	if (fan < NUM_FANS)
-	{
-		fans[fan].SetInverted(inv);
-	}
-}
-
 // This is a bit of a compromise - old RepRaps used fan speeds in the range
 // [0, 255], which is very hardware dependent.  It makes much more sense
 // to specify speeds in [0.0, 1.0].  This looks at the value supplied (which
@@ -2183,58 +2169,6 @@ void Platform::InitFans()
 	if (coolingFanRpmPin != NoPin)
 	{
 		pinModeDuet(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)
-	}
-}
-
-float Platform::GetFanPwmFrequency(size_t fan) const
-{
-	if (fan < NUM_FANS)
-	{
-		return (float)fans[fan].GetPwmFrequency();
-	}
-	return 0.0;
-}
-
-void Platform::SetFanPwmFrequency(size_t fan, float freq)
-{
-	if (fan < NUM_FANS)
-	{
-		fans[fan].SetPwmFrequency(freq);
-	}
-}
-
-float Platform::GetTriggerTemperature(size_t fan) const
-{
-	if (fan < NUM_FANS)
-	{
-		return fans[fan].GetTriggerTemperature();
-	}
-	return ABS_ZERO;
-
-}
-
-void Platform::SetTriggerTemperature(size_t fan, float t)
-{
-	if (fan < NUM_FANS)
-	{
-		fans[fan].SetTriggerTemperature(t);
-	}
-}
-
-uint16_t Platform::GetHeatersMonitored(size_t fan) const
-{
-	if (fan < NUM_FANS)
-	{
-		return fans[fan].GetHeatersMonitored();
-	}
-	return 0;
-}
-
-void Platform::SetHeatersMonitored(size_t fan, uint16_t h)
-{
-	if (fan < NUM_FANS)
-	{
-		fans[fan].SetHeatersMonitored(h);
 	}
 }
 
@@ -2520,7 +2454,7 @@ void Platform::SetAtxPower(bool on)
 
 void Platform::SetPressureAdvance(size_t extruder, float factor)
 {
-	if (extruder < DRIVES - MIN_AXES)
+	if (extruder < MaxExtruders)
 	{
 		pressureAdvance[extruder] = factor;
 	}

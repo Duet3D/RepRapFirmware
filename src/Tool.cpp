@@ -27,7 +27,7 @@
 
 Tool * Tool::freelist = nullptr;
 
-/*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount)
+/*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount)
 {
 	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	if (dCount > DRIVES - numAxes)
@@ -60,6 +60,7 @@ Tool * Tool::freelist = nullptr;
 	t->active = false;
 	t->driveCount = dCount;
 	t->heaterCount = hCount;
+	t->xmapCount = xCount;
 	t->heaterFault = false;
 	t->mixing = false;
 	t->displayColdExtrudeWarning = false;
@@ -71,8 +72,7 @@ Tool * Tool::freelist = nullptr;
 
 	if (t->driveCount > 0)
 	{
-		float r = 1.0 / (float) (t->driveCount);
-
+		const float r = 1.0 / (float) (t->driveCount);
 		for (size_t drive = 0; drive < t->driveCount; drive++)
 		{
 			t->drives[drive] = d[drive];
@@ -80,14 +80,16 @@ Tool * Tool::freelist = nullptr;
 		}
 	}
 
-	if (t->heaterCount > 0)
+	for (size_t heater = 0; heater < t->heaterCount; heater++)
 	{
-		for (size_t heater = 0; heater < t->heaterCount; heater++)
-		{
-			t->heaters[heater] = h[heater];
-			t->activeTemperatures[heater] = ABS_ZERO;
-			t->standbyTemperatures[heater] = ABS_ZERO;
-		}
+		t->heaters[heater] = h[heater];
+		t->activeTemperatures[heater] = ABS_ZERO;
+		t->standbyTemperatures[heater] = ABS_ZERO;
+	}
+
+	for (size_t xi = 0; xi < t->xmapCount; ++xi)
+	{
+		t->xMapping[xi] = xMap[xi];
 	}
 
 	return t;
@@ -104,29 +106,31 @@ Tool * Tool::freelist = nullptr;
 
 void Tool::Print(StringRef& reply)
 {
-	reply.printf("Tool %d - drives: ", myNumber);
-	char comma = ',';
+	reply.printf("Tool %d - drives:", myNumber);
+	char sep = ' ';
 	for (size_t drive = 0; drive < driveCount; drive++)
 	{
-		if (drive >= driveCount - 1)
-		{
-			comma = ';';
-		}
-		reply.catf("%d%c", drives[drive], comma);
+		reply.catf("%c%d", sep, drives[drive]);
+		sep = ',';
 	}
 
-	reply.cat(" heaters (active/standby temps): ");
-	comma = ',';
+	reply.cat("; heaters (active/standby temps):");
+	sep = ' ';
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		if (heater >= heaterCount - 1)
-		{
-			comma = ';';
-		}
-		reply.catf("%d (%.1f/%.1f)%c", heaters[heater], activeTemperatures[heater], standbyTemperatures[heater], comma);
+		reply.catf("%c%d (%.1f/%.1f)", sep, heaters[heater], activeTemperatures[heater], standbyTemperatures[heater]);
+		sep = ',';
 	}
 
-	reply.catf(" status: %s", active ? "selected" : "standby");
+	reply.cat("; xmap:");
+	sep = ' ';
+	for (size_t xi = 0; xi < xmapCount; ++xi)
+	{
+		reply.catf("%c%c", sep, GCodes::axisLetters[xi]);
+		sep = ',';
+	}
+
+	reply.catf("; status: %s", active ? "selected" : "standby");
 }
 
 float Tool::MaxFeedrate() const
