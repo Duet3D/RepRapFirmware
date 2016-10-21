@@ -3244,7 +3244,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				reply.copy("Steps/mm: ");
 				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
-					reply.catf("%c: %.3f, ", platform->DriveStepsPerUnit(axis));
+					reply.catf("%c: %.3f, ", axisLetters[axis], platform->DriveStepsPerUnit(axis));
 				}
 				reply.catf("E: ");
 				for (size_t drive = numAxes; drive < DRIVES; drive++)
@@ -3846,8 +3846,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			reply.printf("Accelerations: ");
 			for (size_t axis = 0; axis < numAxes; ++axis)
 			{
-				reply.catf("%c: %.1f, ", platform->Acceleration(axis) / distanceScale);
+				reply.catf("%c: %.1f, ", axisLetters[axis], platform->Acceleration(axis) / distanceScale);
 			}
+			reply.cat("E: ");
 			for (size_t drive = numAxes; drive < DRIVES; drive++)
 			{
 				reply.catf("%.1f", platform->Acceleration(drive) / distanceScale);
@@ -3864,7 +3865,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 203: // Set/print maximum feedrates
 		{
 			bool seen = false;
-			for (size_t axis = 0; axis < numAxes; axis++)
+			for (size_t axis = 0; axis < numAxes; ++axis)
 			{
 				if (gb->Seen(axisLetters[axis]))
 				{
@@ -3888,9 +3889,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.copy("Maximum feedrates: ");
-				for (size_t axis = 0; axis < numAxes; axis++)
+				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", platform->MaxFeedrate(axis) / (distanceScale * secondsToMinutes));
+					reply.catf("%c: %.1f, ", axisLetters[axis], platform->MaxFeedrate(axis) / (distanceScale * secondsToMinutes));
 				}
 				reply.cat("E: ");
 				for (size_t drive = numAxes; drive < DRIVES; drive++)
@@ -4697,7 +4698,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			reply.copy("Maximum jerk rates: ");
 			for (size_t axis = 0; axis < numAxes; ++axis)
 			{
-				reply.catf("%c: %.1f, ", platform->ConfiguredInstantDv(axis) / (distanceScale * secondsToMinutes));
+				reply.catf("%c: %.1f, ", axisLetters[axis], platform->ConfiguredInstantDv(axis) / (distanceScale * secondsToMinutes));
 			}
 			reply.cat("E:");
 			char sep = ' ';
@@ -5170,6 +5171,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		break;
 
 	case 584: // Set axis/extruder to stepper driver(s) mapping
+		if (!AllMovesAreFinishedAndMoveBufferIsLoaded())	// we also rely on this to retrieve the current motor positions to moveBuffer
+		{
+			return false;
+		}
 		{
 			bool seen = false, badDrive = false;
 			for (size_t drive = 0; drive < MAX_AXES; ++drive)
@@ -5204,9 +5209,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					{
 						while (numAxes <= drive)
 						{
-							moveBuffer.coords[numAxes] = 0.0;		// user has defined a new axis
+							moveBuffer.coords[numAxes] = 0.0;		// user has defined a new axis, so set its position
 							++numAxes;
 						}
+						SetPositions(moveBuffer.coords);			// tell the Move system where any new axes are
 						platform->SetAxisDriversConfig(drive, config);
 					}
 				}

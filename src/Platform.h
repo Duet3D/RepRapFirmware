@@ -50,7 +50,9 @@ Licence: GPL
 #include "OutputMemory.h"
 #include "Libraries/Fatfs/ff.h"
 
-#if !defined(DUET_NG) || defined(PROTOTYPE_1)
+#if defined(DUET_NG)
+# include "SX1509B.h"
+#else
 # include "Libraries/MCP4461/MCP4461.h"
 #endif
 
@@ -186,11 +188,7 @@ enum class BoardType : uint8_t
 {
 	Auto = 0,
 #ifdef DUET_NG
-# ifdef PROTOTYPE_1
-	DuetWiFi_06 = 1
-# else
 	DuetWiFi_10 = 1
-# endif
 #elif defined(__RADDS__)
 	RADDS_15 = 1
 #else
@@ -757,11 +755,11 @@ private:
 	float idleCurrentFactor;
 	float maxAverageAcceleration;
 
-	// Digipots
-
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
+	SX1509B expansion;								// I/O expander on DueXn board
 	size_t numTMC2660Drivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
 #else
+	// Digipots
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
 	Pin potWipes[8];								// we have only 8 digipots, on the Duet 0.8.5 we use the DAC for the 9th

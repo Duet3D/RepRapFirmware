@@ -527,8 +527,8 @@ void Move::MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_
 		}
 	}
 
-	// Convert the extruders
-	for (size_t drive = reprap.GetGCodes()->GetNumAxes(); drive < numDrives; ++drive)
+	// Convert any additional axes and the extruders
+	for (size_t drive = MIN_AXES; drive < numDrives; ++drive)
 	{
 		machinePos[drive] = motorPos[drive]/stepsPerUnit[drive];
 	}
@@ -1220,18 +1220,7 @@ void Move::HitLowStop(size_t axis, DDA* hitDDA)
 {
 	if (axis < reprap.GetGCodes()->GetNumAxes() && !IsDeltaMode())		// should always be true
 	{
-		float hitPoint;
-		if (axis == Z_AXIS)
-		{
-			// Special case of doing a G1 S1 Z move on a Cartesian printer. This is not how we normally home the Z axis, we use G30 instead.
-			// But I think it used to work, so let's not break it.
-			hitPoint = reprap.GetPlatform()->ZProbeStopHeight();
-		}
-		else
-		{
-			hitPoint = reprap.GetPlatform()->AxisMinimum(axis);
-		}
-		JustHomed(axis, hitPoint, hitDDA);
+		JustHomed(axis, reprap.GetPlatform()->AxisMinimum(axis), hitDDA);
 	}
 }
 
@@ -1323,7 +1312,7 @@ void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType) const
 // Interrupts are assumed enabled on entry, so do not call this from an ISR
 void Move::LiveCoordinates(float m[DRIVES])
 {
-	// The live coordinates and live endpoints are modified by the ISR, to be careful to get a self-consistent set of them
+	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	cpu_irq_disable();
 	if (liveCoordinatesValid)
 	{

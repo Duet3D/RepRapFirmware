@@ -26,8 +26,8 @@
 #include "sam/drivers/hsmci/hsmci.h"
 #include "sd_mmc.h"
 
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
-# include <TMC2660.h>
+#if defined(DUET_NG)
+# include "TMC2660.h"
 #endif
 
 #ifdef DUET_NG
@@ -213,7 +213,7 @@ void Platform::Init()
 
 	fileStructureInitialised = true;
 
-#if !defined(DUET_NG) || defined(PROTOTYPE_1)
+#if !defined(DUET_NG)
 	mcpDuet.begin();							// only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
 	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
 #endif
@@ -237,7 +237,7 @@ void Platform::Init()
 	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
 	ARRAY_INIT(instantDvs, INSTANT_DVS);
 
-#if !defined(DUET_NG) || defined(PROTOTYPE_1)
+#if !defined(DUET_NG)
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
@@ -337,7 +337,24 @@ void Platform::Init()
 	slowDrivers = 0;											// assume no drivers need extended step pulse timing
 
 #ifdef DUET_NG
-	numTMC2660Drivers = 5;										// until we have the DueX5 expansion board, assume that additional drivers are dumb enable/step/dir ones
+	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
+	ExpansionBoardType et = expansion.Init();
+	switch (et)
+	{
+	case ExpansionBoardType::DueX2:
+		numTMC2660Drivers = 7;
+		break;
+	case ExpansionBoardType::DueX5:
+		numTMC2660Drivers = 10;
+		break;
+	case ExpansionBoardType::none:
+	case ExpansionBoardType::DueX0:
+	default:
+		numTMC2660Drivers = 5;									// assume that additional drivers are dumb enable/step/dir ones
+		break;
+	}
+
+	// Initialise TMC2660 drivers
 	driversPowered = false;
 	TMC2660::Init(ENABLE_PINS, numTMC2660Drivers);
 #endif
@@ -1781,7 +1798,7 @@ void Platform::EnableDriver(size_t driver)
 		driverState[driver] = DriverStatus::enabled;
 		UpdateMotorCurrent(driver);						// the current may have been reduced by the idle timeout
 
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
 		if (driver < numTMC2660Drivers)
 		{
 			TMC2660::EnableDrive(driver, true);
@@ -1790,7 +1807,7 @@ void Platform::EnableDriver(size_t driver)
 		{
 #endif
 			digitalWrite(ENABLE_PINS[driver], enableValues[driver]);
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
 		}
 #endif
 	}
@@ -1801,7 +1818,7 @@ void Platform::DisableDriver(size_t driver)
 {
 	if (driver < DRIVES)
 	{
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
 		if (driver < numTMC2660Drivers)
 		{
 			TMC2660::EnableDrive(driver, false);
@@ -1810,7 +1827,7 @@ void Platform::DisableDriver(size_t driver)
 		{
 #endif
 			digitalWrite(ENABLE_PINS[driver], !enableValues[driver]);
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
 		}
 #endif
 		driverState[driver] = DriverStatus::disabled;
@@ -1915,7 +1932,7 @@ void Platform::UpdateMotorCurrent(size_t driver)
 			current *= motorCurrentFraction[driver];
 		}
 
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
 		if (driver < numTMC2660Drivers)
 		{
 			TMC2660::SetCurrent(driver, current);
@@ -1999,7 +2016,7 @@ bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
 {
 	if (driver < DRIVES)
 	{
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
 		if (driver < numTMC2660Drivers)
 		{
 			return TMC2660::SetMicrostepping(driver, microsteps, mode);
@@ -2010,7 +2027,7 @@ bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
 			// Other drivers only support x16 microstepping.
 			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
 			return microsteps == 16;
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
 		}
 #endif
 	}
@@ -2040,7 +2057,7 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 // Get the microstepping for a driver
 unsigned int Platform::GetDriverMicrostepping(size_t driver, bool& interpolation) const
 {
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
+#if defined(DUET_NG)
 	if (driver < numTMC2660Drivers)
 	{
 		return TMC2660::GetMicrostepping(driver, interpolation);
@@ -2537,11 +2554,7 @@ void Platform::SetBoardType(BoardType bt)
 	if (bt == BoardType::Auto)
 	{
 #ifdef DUET_NG
-# ifdef PROTOTYPE_1
-		board = BoardType::DuetWiFi_06;
-# else
 		board = BoardType::DuetWiFi_10;
-# endif
 #elif defined(__RADDS__)
 		board = BoardType::RADDS_15;
 #else
@@ -2572,11 +2585,7 @@ const char* Platform::GetElectronicsString() const
 	switch (board)
 	{
 #ifdef DUET_NG
-# ifdef PROTOTYPE_1
-	case BoardType::DuetWiFi_06:			return "Duet WiFi 0.6";
-# else
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0";
-# endif
 #elif defined(__RADDS__)
 	case BoardType::RADDS_15:				return "RADDS 1.5";
 #else
@@ -2594,11 +2603,7 @@ const char* Platform::GetBoardString() const
 	switch (board)
 	{
 #ifdef DUET_NG
-# ifdef PROTOTYPE_1
-	case BoardType::DuetWiFi_06:			return "duetwifi06";
-# else
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
-# endif
 #elif defined(__RADDS__)
 	case BoardType::RADDS_15:				return "radds15";
 #else

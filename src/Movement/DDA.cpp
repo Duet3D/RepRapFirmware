@@ -633,7 +633,8 @@ bool DDA::FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords
 	}
 	if (endCoordinatesValid)
 	{
-		for (size_t axis = 0; axis < MAX_AXES; ++axis)
+		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+		for (size_t axis = 0; axis < numAxes; ++axis)
 		{
 			endCoords[axis] = endCoordinates[axis];
 		}
@@ -654,7 +655,7 @@ void DDA::SetPositions(const float move[DRIVES], size_t numDrives)
 
 // Get a Cartesian end coordinate from this move
 float DDA::GetEndCoordinate(size_t drive, bool disableDeltaMapping)
-pre(disableDeltaMapping || drive < AXES)
+pre(disableDeltaMapping || drive < MAX_AXES)
 {
 	if (disableDeltaMapping)
 	{
