@@ -29,19 +29,35 @@ Tool * Tool::freelist = nullptr;
 
 /*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount)
 {
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
-	if (dCount > DRIVES - numAxes)
+	const size_t numExtruders = reprap.GetGCodes()->GetNumExtruders();
+	if (dCount > ARRAY_SIZE(Tool::drives))
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE,
-				"Error: Tool creation: attempt to use more drives than there are in the RepRap");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: too many drives");
 		return nullptr;
 	}
 
-	if (hCount > HEATERS)
+	if (hCount > ARRAY_SIZE(Tool::heaters))
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE,
-				"Error: Tool creation: attempt to use more heaters than there are in the RepRap");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: too many heaters");
 		return nullptr;
+	}
+
+	// Validate the heater and extruder numbers
+	for (size_t i = 0; i < dCount; ++i)
+	{
+		if (d[i] < 0 || d[i] >= (int)numExtruders)
+		{
+			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: bad drive number");
+			return nullptr;
+		}
+	}
+	for (size_t i = 0; i < hCount; ++i)
+	{
+		if (h[i] < 0 || h[i] >= HEATERS)
+		{
+			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: bad heater number");
+			return nullptr;
+		}
 	}
 
 	Tool *t;
@@ -325,9 +341,10 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 		}
 	}
 
+	const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		if (heaters[heater] != BED_HEATER && heaters[heater] >= numHeaters)
+		if (heaters[heater] != bedHeater && heaters[heater] >= numHeaters)
 		{
 			numHeaters = heaters[heater] + 1;
 		}

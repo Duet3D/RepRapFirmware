@@ -156,6 +156,7 @@ public:
     void MoveStoppedByZProbe() { zProbeTriggered = true; }				// Called from the step ISR when the Z probe is triggered, causing the move to be aborted
 
     size_t GetNumAxes() const { return numAxes; }
+    size_t GetNumExtruders() const { return numExtruders; }
 
     static const char axisLetters[MAX_AXES]; 							// 'X', 'Y', 'Z'
 
@@ -192,8 +193,7 @@ private:
     bool SetPrintZProbe(GCodeBuffer *gb, StringRef& reply);				// Either return the probe value, or set its threshold
     void SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb);			// Deal with a G10
     bool SetPositions(GCodeBuffer *gb);									// Deal with a G92
-    bool LoadMoveBufferFromGCode(GCodeBuffer *gb,  						// Set up a move for the Move class
-    		bool doingG92, bool applyLimits);
+    bool LoadMoveBufferFromGCode(GCodeBuffer *gb, int moveType);		// Set up a move for the Move class
     bool NoHome() const;												// Are we homing and not finished?
     void Push();														// Push feedrate etc on the stack
     void Pop();															// Pop feedrate etc
@@ -249,7 +249,8 @@ private:
 	bool axesRelative;
     GCodeMachineState stack[StackSize];			// State that we save when calling macro files
     unsigned int stackPointer;					// Push and Pop stack pointer
-    size_t numAxes;								// How many axes we have. DEDFAULT
+    size_t numAxes;								// How many axes we have
+    size_t numExtruders;						// How many extruders we have, or may have
 	float axisScaleFactors[MAX_AXES];			// Scale XYZ coordinates by this factor (for Delta configurations)
     float lastRawExtruderPosition[MaxExtruders]; // Extruder position of the last move fed into the Move class
     float rawExtruderTotalByDrive[MaxExtruders]; // Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive

@@ -256,7 +256,7 @@ public:
 
 struct ZProbeParameters
 {
-	int32_t adcValue;				// the target ADC value
+	int32_t adcValue;				// the target ADC value, after inversion if enabled
 	float xOffset, yOffset;			// the offset of the probe relative to the print head
 	float height;					// the nozzle height at which the target ADC value is returned
 	float calibTemperature;			// the temperature at which we did the calibration
@@ -265,6 +265,7 @@ struct ZProbeParameters
 	float probeSpeed;				// the initial speed of probing
 	float travelSpeed;				// the speed at which we travel to the probe point
 	float param1, param2;			// extra parameters used by some types of probe e.g. Delta probe
+	bool invertReading;				// true if we need to invert the reading
 
 	void Init(float h)
 	{
@@ -277,6 +278,7 @@ struct ZProbeParameters
 		probeSpeed = DEFAULT_PROBE_SPEED;
 		travelSpeed = DEFAULT_TRAVEL_SPEED;
 		param1 = param2 = 0.0;
+		invertReading = false;
 	}
 
 	float GetStopHeight(float temperature) const
@@ -296,7 +298,8 @@ struct ZProbeParameters
 				&& probeSpeed == other.probeSpeed
 				&& travelSpeed == other.travelSpeed
 				&& param1 == other.param1
-				&& param2 == other.param2;
+				&& param2 == other.param2
+				&& invertReading == other.invertReading;
 	}
 
 	bool operator!=(const ZProbeParameters& other) const
@@ -692,7 +695,7 @@ private:
 	struct FlashData
 	{
 		static const uint16_t magicValue = 0xE6C4;	// value we use to recognise that the flash data has been written
-		static const uint16_t versionValue = 3;		// increment this whenever this struct changes
+		static const uint16_t versionValue = 4;		// increment this whenever this struct changes
 		static const uint32_t nvAddress = (SoftwareResetData::nvAddress + sizeof(SoftwareResetData) + 3) & (~3);
 
 		uint16_t magic;

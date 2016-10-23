@@ -71,10 +71,10 @@ private:
 	void SetTemperatureFault(int8_t dudHeater);
 	void ResetTemperatureFault(int8_t wasDudHeater);
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
+
 	int myNumber;
 	int drives[MaxExtruders];
 	float mix[MaxExtruders];
-	bool mixing;
 	size_t driveCount;
 	int heaters[HEATERS];
 	float activeTemperatures[HEATERS];
@@ -83,10 +83,11 @@ private:
 	int xMapping[MAX_AXES];
 	size_t xmapCount;
 	Tool* next;
-	bool active;
-	bool heaterFault;
 	float offset[MAX_AXES];
 
+	bool mixing;
+	bool active;
+	bool heaterFault;
 	volatile bool displayColdExtrudeWarning;
 };
 

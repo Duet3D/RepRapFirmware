@@ -543,6 +543,7 @@ void Platform::InitZProbe()
 // The ADC readings are 12 bits, so we convert them to 10-bit readings for compatibility with the old firmware.
 int Platform::ZProbe() const
 {
+	int zProbeVal = 0;			// initialised to avoid spurious compiler warning
 	if (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid())
 	{
 		switch (nvData.zProbeType)
@@ -551,22 +552,25 @@ int Platform::ZProbe() const
 		case 3:		// Alternate sensor
 		case 4:		// Switch connected to E0 endstop input
 		case 5:		// Switch connected to Z probe input
-			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
+			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
+			break;
 
 		case 2:		// Dumb modulated IR sensor.
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
-			return (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum())
-					/ (int)(4 * Z_PROBE_AVERAGE_READINGS));
+			zProbeVal = (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum()) / (int)(4 * Z_PROBE_AVERAGE_READINGS));
+			break;
 
-		case 6:
-			return (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));	//TODO this is temporary
+		case 6:		// Delta humming probe
+			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));	//TODO this is temporary
+			break;
 
 		default:
-			break;
+			return 0;
 		}
 	}
-	return 0;	// Z probe not turned on or not initialised yet
+
+	return (GetZProbeParameters().invertReading) ? 1023 - zProbeVal : zProbeVal;
 }
 
 // Return the Z probe secondary values.
@@ -618,57 +622,17 @@ float Platform::GetZProbeTemperature()
 
 float Platform::ZProbeStopHeight()
 {
-	const float temperature = GetZProbeTemperature();
-	switch (nvData.zProbeType)
-	{
-	case 1:
-	case 2:
-		return nvData.irZProbeParameters.GetStopHeight(temperature);
-	case 3:
-	case 6:
-		return nvData.alternateZProbeParameters.GetStopHeight(temperature);
-	case 4:
-	case 5:
-		return nvData.switchZProbeParameters.GetStopHeight(temperature);
-	default:
-		return 0;
-	}
+	return GetZProbeParameters().GetStopHeight(GetZProbeTemperature());
 }
 
 float Platform::GetZProbeDiveHeight() const
 {
-	switch (nvData.zProbeType)
-	{
-	case 1:
-	case 2:
-		return nvData.irZProbeParameters.diveHeight;
-	case 3:
-	case 6:
-		return nvData.alternateZProbeParameters.diveHeight;
-	case 4:
-	case 5:
-		return nvData.switchZProbeParameters.diveHeight;
-	default:
-		return DEFAULT_Z_DIVE;
-	}
+	return GetZProbeParameters().diveHeight;
 }
 
 float Platform::GetZProbeTravelSpeed() const
 {
-	switch (nvData.zProbeType)
-	{
-	case 1:
-	case 2:
-		return nvData.irZProbeParameters.travelSpeed;
-	case 3:
-	case 6:
-		return nvData.alternateZProbeParameters.travelSpeed;
-	case 4:
-	case 5:
-		return nvData.switchZProbeParameters.travelSpeed;
-	default:
-		return DEFAULT_TRAVEL_SPEED;
-	}
+	return GetZProbeParameters().travelSpeed;
 }
 
 void Platform::SetZProbeType(int pt)
