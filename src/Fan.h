@@ -28,6 +28,7 @@ private:
 	void SetHardwarePwm(float pwmVal);
 
 public:
+	bool IsEnabled() const { return pin != NoPin; }
 	float GetValue() const { return val; }
 	float GetMinValue() const { return minVal; }
 	float GetBlipTime() const { return (float)blipTime * MillisToSeconds; }
@@ -45,6 +46,7 @@ public:
 	void SetTriggerTemperature(float t) { triggerTemperature = t; }
 	void SetHeatersMonitored(uint16_t h);
 	void Check();
+	void Disable() { pin = NoPin; }
 };
 
 #endif /* SRC_FAN_H_ */

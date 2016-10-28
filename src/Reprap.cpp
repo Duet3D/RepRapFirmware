@@ -946,8 +946,15 @@ OutputBuffer *RepRap::GetConfigResponse()
 	}
 
 	// Firmware details
-	response->catf("],\"firmwareElectronics\":\"%s\"", platform->GetElectronicsString());
-	response->catf(",\"firmwareName\":\"%s\"", NAME);
+	response->catf("],\"firmwareElectronics\":\"%s", platform->GetElectronicsString());
+#ifdef DUET_NG
+	const char* expansionName = DuetExpansion::GetExpansionBoardName();
+	if (expansionName != nullptr)
+	{
+		response->catf(" + %s", expansionName);
+	}
+#endif
+	response->catf("\",\"firmwareName\":\"%s\"", NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
 #ifdef DUET_NG
 	response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());

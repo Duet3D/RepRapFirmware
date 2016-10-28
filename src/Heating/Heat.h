@@ -103,6 +103,9 @@ public:
 	void SetHeaterProtection(size_t heater, float maxTempExcursion, float maxFaultTime)
 	pre(heater < HEATERS);
 
+	bool IsHeaterEnabled(size_t heater) const					// Is this heater enabled?
+	pre(heater < HEATERS);
+
 private:
 	Platform* platform;											// The instance of the RepRap hardware class
 	PID* pids[HEATERS];											// A PID controller for each heater
@@ -177,6 +180,12 @@ inline bool Heat::IsModelUsed(size_t heater) const
 inline void Heat::UseModel(size_t heater, bool b)
 {
 	pids[heater]->UseModel(b);
+}
+
+// Is the heater enabled?
+inline bool Heat::IsHeaterEnabled(size_t heater) const
+{
+	return pids[heater]->IsHeaterEnabled();
 }
 
 inline void Heat::GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const

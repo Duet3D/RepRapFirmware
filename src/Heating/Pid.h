@@ -68,6 +68,9 @@ public:
 	void UseModel(bool b)							// Use or don't use the model to provide the PID parameters
 		{ useModel = b; }
 
+	bool IsHeaterEnabled() const					// Is this heater enabled?
+		{ return model.IsEnabled(); }
+
 	void GetHeaterProtection(float& pMaxTempExcursion, float& pMaxFaultTime) const
 		{ pMaxTempExcursion = maxTempExcursion; pMaxFaultTime = maxHeatingFaultTime; }
 

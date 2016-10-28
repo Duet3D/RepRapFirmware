@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.16beta5"
+# define VERSION "1.16beta10"
 #endif
 
 #ifndef DATE
-# define DATE "2016-10-23"
+# define DATE "2016-10-28"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -114,6 +114,7 @@ const unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200..
 const unsigned int SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
 const unsigned int NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
 const unsigned int DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
+const unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes
 
 // Default Z probe values
 

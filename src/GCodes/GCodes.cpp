@@ -45,6 +45,9 @@ const char* HOME_DELTA_G = "homedelta.g";
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
+const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
+const uint16_t ServoRefreshFrequency = 50;
+
 void GCodes::RestorePoint::Init()
 {
 	for (size_t i = 0; i < DRIVES; ++i)
@@ -103,7 +106,8 @@ void GCodes::Init()
 		pausedFanValues[i] = 0.0;
 	}
 
-	retractLength = retractExtra = retractSpeed = retractHop = 0.0;
+	retractLength = retractExtra = retractHop = 0.0;
+	retractSpeed = unRetractSpeed = 600.0;
 }
 
 // This is called from Init and when doing an emergency stop
@@ -2511,7 +2515,7 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 // Retract or un-retract filament, returning true if movement has been queued, false if this needs to be called again
 bool GCodes::RetractFilament(bool retract)
 {
-	if (retractLength != 0.0 || retractHop != 0.0 || (retract && retractExtra != 0.0))
+	if (retractLength != 0.0 || retractHop != 0.0 || (!retract && retractExtra != 0.0))
 	{
 		const Tool *tool = reprap.GetCurrentTool();
 		if (tool != nullptr)
@@ -2530,13 +2534,15 @@ bool GCodes::RetractFilament(bool retract)
 					moveBuffer.coords[i] = 0.0;
 				}
 				// Set the feed rate. If there is any Z hop then we need to pass the Z speed, else we pass the extrusion speed.
+				const float speedToUse = (retract) ? retractSpeed : unRetractSpeed;
 				moveBuffer.feedRate = (retractHop == 0.0)
-										? retractSpeed * secondsToMinutes
-										: retractSpeed * secondsToMinutes * retractHop/retractLength;
-				moveBuffer.coords[Z_AXIS] += ((retract) ? retractHop : -retractHop);
+										? speedToUse * secondsToMinutes
+										: speedToUse * secondsToMinutes * retractHop/retractLength;
+				moveBuffer.coords[Z_AXIS] += (retract) ? retractHop : -retractHop;
+				const float lengthToUse = (retract) ? -retractLength : retractLength + retractExtra;
 				for (size_t i = 0; i < nDrives; ++i)
 				{
-					moveBuffer.coords[E0_AXIS + tool->Drive(i)] = (retract) ? -retractLength : retractLength + retractExtra;
+					moveBuffer.coords[E0_AXIS + tool->Drive(i)] = lengthToUse;
 				}
 
 				moveBuffer.isFirmwareRetraction = true;
@@ -3190,16 +3196,31 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 42:	// Turn an output pin on or off
 		if (gb->Seen('P'))
 		{
-			int pin = gb->GetIValue();
-			if (gb->Seen('S'))
+			const int logicalPin = gb->GetIValue();
+			Pin pin;
+			bool invert;
+			if (platform->GetFirmwarePin(logicalPin, PinAccess::write, pin, invert))
 			{
-				int val = gb->GetIValue();
-				bool success = platform->SetPin(pin, val);
-				if (!success)
+				if (gb->Seen('S'))
 				{
-					error = true;
-					reply.printf("Setting pin %d to %d is not supported", pin, val);
+					float val = gb->GetFValue();
+					if (val > 1.0)
+					{
+						val /= 255.0;
+					}
+					val = constrain<float>(val, 0.0, 1.0);
+					if (invert)
+					{
+						val = 1.0 - val;
+					}
+					Platform::WriteAnalog(pin, val, DefaultPinWritePwmFreq);
 				}
+				// Ignore the command if no S parameter provided
+			}
+			else
+			{
+				reply.printf("Logical pin %d is not available for writing", logicalPin);
+				error = true;
 			}
 		}
 		break;
@@ -3392,7 +3413,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 				if (gb->Seen('I'))		// Invert cooling
 				{
-					fan.SetInverted(gb->GetIValue() > 0);
+					int invert = gb->GetIValue();
+					if (invert < 0)
+					{
+						fan.Disable();
+					}
+					else
+					{
+						fan.SetInverted(gb->GetIValue() > 0);
+					}
 					seen = true;
 				}
 
@@ -3550,7 +3579,15 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s DATE: %s", NAME, VERSION, platform->GetElectronicsString(), DATE);
+			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", NAME, VERSION, platform->GetElectronicsString());
+#ifdef DUET_NG
+			const char* expansionName = DuetExpansion::GetExpansionBoardName();
+			if (expansionName != nullptr)
+			{
+				reply.catf(" + %s", expansionName);
+			}
+#endif
+			reply.catf(" FIRMWARE_DATE: %s", DATE);
 		}
 		break;
 
@@ -3956,12 +3993,17 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			if (gb->Seen('R'))
 			{
-				retractExtra = max<float>(gb->GetFValue(), 0.0);
+				retractExtra = max<float>(gb->GetFValue(), -retractLength);
 				seen = true;
 			}
 			if (gb->Seen('F'))
 			{
-				retractSpeed = max<float>(gb->GetFValue(), 60.0);
+				unRetractSpeed = retractSpeed = max<float>(gb->GetFValue(), 60.0);
+				seen = true;
+			}
+			if (gb->Seen('T'))	// must do this one after 'F'
+			{
+				unRetractSpeed = max<float>(gb->GetFValue(), 60.0);
 				seen = true;
 			}
 			if (gb->Seen('Z'))
@@ -3971,8 +4013,8 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			}
 			if (!seen)
 			{
-				reply.printf("Retraction settings: length %.2fmm, extra length %.2fmm, speed %dmm/min, Z hop %.2fmm",
-						retractLength, retractExtra, (int)retractSpeed, retractHop);
+				reply.printf("Retraction settings: length %.2f/%.2fmm, speed %d/%dmm/min, Z hop %.2fmm",
+						retractLength, retractLength + retractExtra, (int)retractSpeed, (int)unRetractSpeed, retractHop);
 			}
 		}
 		break;
@@ -4072,6 +4114,50 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 		// For case 226, see case 25
 
+	case 280:	// Servos
+		if (gb->Seen('P'))
+		{
+			const int servoIndex = gb->GetIValue();
+			Pin servoPin;
+			bool invert;
+			if (platform->GetFirmwarePin(servoIndex, PinAccess::servo, servoPin, invert))
+			{
+				if (gb->Seen('S'))
+				{
+					float angleOrWidth = gb->GetFValue();
+					if (angleOrWidth < 0.0)
+					{
+						// Disable the servo by setting the pulse width to zero
+						Platform::WriteAnalog(servoPin, 0.0, ServoRefreshFrequency);
+					}
+					else
+					{
+						if (angleOrWidth < MinServoPulseWidth)
+						{
+							// User gave an angle so convert it to a pulse width in microseconds
+							angleOrWidth = (min<float>(angleOrWidth, 180.0) * ((MaxServoPulseWidth - MinServoPulseWidth) / 180.0)) + MinServoPulseWidth;
+						}
+						else if (angleOrWidth > MaxServoPulseWidth)
+						{
+							angleOrWidth = MaxServoPulseWidth;
+						}
+						float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
+						if (invert)
+						{
+							pwm = 1.0 - pwm;
+						}
+						Platform::WriteAnalog(servoPin, pwm, ServoRefreshFrequency);
+					}
+				}
+				// We don't currently allow the servo position to be read back
+			}
+			else
+			{
+				platform->MessageF(GENERIC_MESSAGE, "Error: Invalid servo index %d in M280 command\n", servoIndex);
+			}
+		}
+		break;
+
 	case 300:	// Beep
 		{
 			int ms = (gb->Seen('P')) ? gb->GetIValue() : 1000;			// time in milliseconds
@@ -4165,6 +4251,10 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 					{
 						reply.copy("Error: bad model parameters");
 					}
+				}
+				else if (!model.IsEnabled())
+				{
+					reply.printf("Heater %u is disabled");
 				}
 				else
 				{

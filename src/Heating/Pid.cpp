@@ -36,9 +36,12 @@ void PID::Init(float pGain, float pTc, float pTd, bool usePid)
 	maxTempExcursion = DefaultMaxTempExcursion;
 	maxHeatingFaultTime = DefaultMaxHeatingFaultTime;
 	model.SetParameters(pGain, pTc, pTd, 1.0, usePid);
-
 	Reset();
-	SetHeater(0.0);
+
+	if (model.IsEnabled())
+	{
+		SetHeater(0.0);
+	}
 
 	// Time the sensor was last sampled.  During startup, we use the current
 	// time as the initial value so as to not trigger an immediate warning from the Tick ISR.
@@ -68,6 +71,13 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, usePid);
 	if (rslt)
 	{
+#if !defined(DUET_NG) && !defined(__RADDS__)
+		if (heater == HEATERS - 1)
+		{
+			// The last heater on the Duet 0.8.5 + DueX4 shares its pin with Fan1
+			reprap.GetPlatform()->EnableSharedFan(!model.IsEnabled());
+		}
+#endif
 		if (model.IsEnabled())
 		{
 			const float safeGain = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater())
@@ -462,7 +472,11 @@ float PID::GetExpectedHeatingRate() const
 void PID::StartAutoTune(float maxTemp, float maxPwm, StringRef& reply)
 {
 	// Starting an auto tune
-	if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
+	if (!model.IsEnabled())
+	{
+		reply.printf("Error: heater %d cannot be auto tuned while it is disabled", heater);
+	}
+	else if (lastPwm > 0.0 || GetAveragePWM() > 0.02)
 	{
 		reply.printf("Error: heater %d must be off and cold before auto tuning it", heater);
 	}

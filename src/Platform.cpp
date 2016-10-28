@@ -141,8 +141,6 @@ bool PidParameters::operator==(const PidParameters& other) const
 //*************************************************************************************************
 // Platform class
 
-/*static*/ const uint8_t Platform::pinAccessAllowed[NUM_PINS_ALLOWED/8] = PINS_ALLOWED;
-
 Platform::Platform() :
 		autoSaveEnabled(false), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
 		auxGCodeReply(nullptr), fileStructureInitialised(false), tickState(0), debugCode(0)
@@ -320,10 +318,6 @@ void Platform::Init()
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[drive], OUTPUT_LOW);
 		pinMode(ENABLE_PINS[drive], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
-		if (endStopPins[drive] != NoPin)
-		{
-			pinMode(endStopPins[drive], INPUT_PULLUP);			// enable pullup resistor so that expansion connector pins can be used as trigger inputs
-		}
 
 		const PinDescription& pinDesc = g_APinDescription[STEP_PINS[drive]];
 		pinDesc.pPort->PIO_OWER = pinDesc.ulPin;				// enable parallel writes to the step pins
@@ -338,7 +332,9 @@ void Platform::Init()
 
 #ifdef DUET_NG
 	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
-	ExpansionBoardType et = expansion.Init();
+	// The SX1509B has an independent power on reset, so give it some time
+	delay(200);
+	ExpansionBoardType et = DuetExpansion::Init();
 	switch (et)
 	{
 	case ExpansionBoardType::DueX2:
@@ -428,7 +424,7 @@ void Platform::Init()
 #endif
 
 	// Clear the spare pin configuration
-	memset(pinInitialised, 0, sizeof(pinInitialised));
+	memset(logicalPinModes, PIN_MODE_NOT_CONFIGURED, sizeof(logicalPinModes));		// set all pins to "not configured"
 
 	// Kick everything off
 	lastTime = Time();
@@ -535,6 +531,12 @@ void Platform::InitZProbe()
 	case 6:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
+		pinMode(endStopPins[E0_AXIS + 1], INPUT_PULLUP);
+		break;
+
+	case 7:
+		AnalogInEnableChannel(zProbeAdcChannel, false);
+		pinMode(zProbePin, INPUT_PULLUP);
 		break;	//TODO (DeltaProbe)
 	}
 }
@@ -552,6 +554,7 @@ int Platform::ZProbe() const
 		case 3:		// Alternate sensor
 		case 4:		// Switch connected to E0 endstop input
 		case 5:		// Switch connected to Z probe input
+		case 6:		// Switch connected to E1 endstop input
 			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
 			break;
 
@@ -561,7 +564,7 @@ int Platform::ZProbe() const
 			zProbeVal = (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum()) / (int)(4 * Z_PROBE_AVERAGE_READINGS));
 			break;
 
-		case 6:		// Delta humming probe
+		case 7:		// Delta humming probe
 			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));	//TODO this is temporary
 			break;
 
@@ -637,7 +640,7 @@ float Platform::GetZProbeTravelSpeed() const
 
 void Platform::SetZProbeType(int pt)
 {
-	int newZProbeType = (pt >= 0 && pt <= 6) ? pt : 0;
+	int newZProbeType = (pt >= 0 && pt <= 7) ? pt : 0;
 	if (newZProbeType != nvData.zProbeType)
 	{
 		nvData.zProbeType = newZProbeType;
@@ -657,54 +660,44 @@ const ZProbeParameters& Platform::GetZProbeParameters() const
 	case 2:
 		return nvData.irZProbeParameters;
 	case 3:
-	case 6:
+	case 7:
 		return nvData.alternateZProbeParameters;
 	case 4:
 	case 5:
+	case 6:
 	default:
 		return nvData.switchZProbeParameters;
 	}
 }
 
-bool Platform::SetZProbeParameters(const struct ZProbeParameters& params)
+void Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 {
-	switch (nvData.zProbeType)
+	if (GetZProbeParameters() != params)
 	{
-	case 1:
-	case 2:
-		if (nvData.irZProbeParameters != params)
+		switch (nvData.zProbeType)
 		{
+		case 1:
+		case 2:
 			nvData.irZProbeParameters = params;
-			if (autoSaveEnabled)
-			{
-				WriteNvData();
-			}
-		}
-		return true;
-	case 3:
-	case 6:
-		if (nvData.alternateZProbeParameters != params)
-		{
+			break;
+
+		case 3:
+		case 7:
 			nvData.alternateZProbeParameters = params;
-			if (autoSaveEnabled)
-			{
-				WriteNvData();
-			}
-		}
-		return true;
-	case 4:
-	case 5:
-		if (nvData.switchZProbeParameters != params)
-		{
+			break;
+
+		case 4:
+		case 5:
+		case 6:
+		default:
 			nvData.switchZProbeParameters = params;
-			if (autoSaveEnabled)
-			{
-				WriteNvData();
-			}
+			break;
 		}
-		return true;
-	default:
-		return false;
+
+		if (autoSaveEnabled)
+		{
+			WriteNvData();
+		}
 	}
 }
 
@@ -1657,7 +1650,7 @@ void Platform::SetHeater(size_t heater, float power)
 	if (heatOnPins[heater] != NoPin)
 	{
 		uint16_t freq = (reprap.GetHeat()->UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
-		AnalogOut(heatOnPins[heater], (HEAT_ON) ? power : 1.0 - power, freq);
+		WriteAnalog(heatOnPins[heater], (HEAT_ON) ? power : 1.0 - power, freq);
 	}
 }
 
@@ -1691,17 +1684,26 @@ void Platform::UpdateConfiguredHeaters()
 
 EndStopHit Platform::Stopped(size_t drive) const
 {
-	if (endStopType[drive] == EndStopType::noEndStop)
+	if (drive < DRIVES && endStopPins[drive] != NoPin)
 	{
-		// No homing switch is configured for this axis, so see if we should use the Z probe
-		if (nvData.zProbeType > 0 && drive < reprap.GetGCodes()->GetNumAxes() && (nvData.zProbeAxes & (1 << drive)) != 0)
+		if (drive >= reprap.GetGCodes()->GetNumAxes())
 		{
-			return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
+			// Endstop not used for an axis, so no configuration data available.
+			// To allow us to see its status in DWC, pretend it is configured as a high-end active high endstop.
+			if (ReadPin(endStopPins[drive]))
+			{
+				return EndStopHit::highHit;
+			}
 		}
-	}
-	else if (endStopPins[drive] != NoPin)
-	{
-		if (digitalRead(endStopPins[drive]) == endStopLogicLevel[drive])
+		else if (endStopType[drive] == EndStopType::noEndStop)
+		{
+			// No homing switch is configured for this axis, so see if we should use the Z probe
+			if (nvData.zProbeType > 0 && drive < reprap.GetGCodes()->GetNumAxes() && (nvData.zProbeAxes & (1 << drive)) != 0)
+			{
+				return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
+			}
+		}
+		else if (ReadPin(endStopPins[drive]) == endStopLogicLevel[drive])
 		{
 			return (endStopType[drive] == EndStopType::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 		}
@@ -1716,7 +1718,7 @@ uint32_t Platform::GetAllEndstopStates() const
 	for (unsigned int drive = 0; drive < DRIVES; ++drive)
 	{
 		const Pin pin = endStopPins[drive];
-		if (pin != NoPin && digitalRead(pin))
+		if (pin != NoPin && ReadPin(pin))
 		{
 			rslt |= (1 << drive);
 		}
@@ -1728,10 +1730,7 @@ uint32_t Platform::GetAllEndstopStates() const
 EndStopHit Platform::GetZProbeResult() const
 {
 	const int zProbeVal = ZProbe();
-	const int zProbeADValue =
-			(nvData.zProbeType == 4 || nvData.zProbeType == 5) ? nvData.switchZProbeParameters.adcValue
-			: (nvData.zProbeType == 3 || nvData.zProbeType == 6) ? nvData.alternateZProbeParameters.adcValue
-				: nvData.irZProbeParameters.adcValue;
+	const int zProbeADValue = GetZProbeParameters().adcValue;
 	return (zProbeVal >= zProbeADValue) ? EndStopHit::lowHit
 			: (zProbeVal * 10 >= zProbeADValue * 9) ? EndStopHit::lowNear	// if we are at/above 90% of the target value
 				: EndStopHit::noStop;
@@ -2112,6 +2111,17 @@ void Platform::SetFanValue(size_t fan, float speed)
 	}
 }
 
+#if !defined(DUET_NG) && !defined(__RADDS__)
+
+// Enable or disable the fan that shares its PWM pin with the last heater. Called when we disable or enable the last heater.
+void Platform::EnableSharedFan(bool enable)
+{
+	fans[NUM_FANS - 1].Init((enable) ? COOLING_FAN_PINS[NUM_FANS - 1] : NoPin, FansHardwareInverted());
+}
+
+#endif
+
+
 // Get current fan RPM
 float Platform::GetFanRPM()
 {
@@ -2124,18 +2134,21 @@ float Platform::GetFanRPM()
 			: 0.0;															// else assume fan is off or tacho not connected
 }
 
+bool Platform::FansHardwareInverted() const
+{
+#if defined(DUET_NG) || defined(__RADDS__)
+	return false;
+#else
+	// The cooling fan output pin gets inverted on a Duet 0.6 or 0.7
+	return board == BoardType::Duet_06 || board == BoardType::Duet_07;
+#endif
+}
+
 void Platform::InitFans()
 {
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		fans[i].Init(COOLING_FAN_PINS[i],
-#if defined(DUET_NG) || defined(__RADDS__)
-				false
-#else
-				// The cooling fan output pin gets inverted if HEAT_ON == 0 on a Duet 0.6 or 0.7
-				!HEAT_ON && (board == BoardType::Duet_06 || board == BoardType::Duet_07)
-#endif
-				);
+		fans[i].Init(COOLING_FAN_PINS[i], FansHardwareInverted());
 	}
 
 	if (NUM_FANS > 1)
@@ -2424,12 +2437,12 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 
 bool Platform::AtxPower() const
 {
-	return (digitalRead(ATX_POWER_PIN));
+	return ReadPin(ATX_POWER_PIN);
 }
 
 void Platform::SetAtxPower(bool on)
 {
-	digitalWrite(ATX_POWER_PIN, on);
+	WriteDigital(ATX_POWER_PIN, on);
 }
 
 
@@ -2579,19 +2592,85 @@ const char* Platform::GetBoardString() const
 	}
 }
 
-// Direct pin operations
-// Set the specified pin to the specified output level. Return true if success, false if not allowed.
-bool Platform::SetPin(int pin, float level)
+// User I/O and servo support
+bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin, bool& invert)
 {
-	if (pin >= 0 && (unsigned int)pin < NUM_PINS_ALLOWED)
+#ifdef __RADDS__
+# error This needs to be modified for RADDS
+#endif
+	firmwarePin = NoPin;										// assume failure
+	invert = false;												// this is the common case
+	if (logicalPin < 0 || logicalPin > HighestLogicalPin)
 	{
-		const size_t index = (unsigned int)pin/8;
-		const uint8_t mask = 1 << ((unsigned int)pin & 7);
-		if ((pinAccessAllowed[index] & mask) != 0)
+		// Pin number out of range, so nothing to do here
+	}
+	else if (logicalPin < HEATERS)								// pins 0-9 correspond to heater channels
+	{
+		// For safety, we don't allow a heater channel to be used for servos until the heater has been disabled
+		if (!reprap.GetHeat()->IsHeaterEnabled(logicalPin))
 		{
-			AnalogOut(pin, level);
-			return true;
+			firmwarePin = heatOnPins[logicalPin];
+			invert = !HEAT_ON;
 		}
+	}
+	else if (logicalPin >= 20 && logicalPin < 20 + (int)NUM_FANS)	// pins 100-107 correspond to fan channels
+	{
+		// Don't allow a fan channel to be used unless the fan has been disabled
+		if (!fans[logicalPin - 20].IsEnabled()
+#ifdef DUET_NG
+			// Fan pins on the DueX2/DueX5 cannot be used to control servos because the frequency is not well-defined.
+			&& (logicalPin <= 22 || access != PinAccess::servo)
+#endif
+		   )
+		{
+			firmwarePin = COOLING_FAN_PINS[logicalPin - 20];
+		}
+	}
+	else if (logicalPin >= 40 && logicalPin < 40 + (int)ARRAY_SIZE(endStopPins))	// pins 40-49 correspond to endstop pins
+	{
+		if (access == PinAccess::read
+#ifdef DUET_NG
+			// Endstop pins on the DueX2/DueX5 can be used as digital outputs too
+			|| (access == PinAccess::write && logicalPin >= 45)
+#endif
+		   )
+		{
+			firmwarePin = endStopPins[logicalPin - 40];
+		}
+	}
+	else if (logicalPin >= 60 && logicalPin < 60 + (int)ARRAY_SIZE(SpecialPinMap))
+	{
+		firmwarePin = SpecialPinMap[logicalPin - 60];
+	}
+#ifdef DUET_NG
+	else if (logicalPin >= 100 && logicalPin <= 103)			// Pins 100-103 are the GPIO pins on the DueX2/X5
+	{
+		static const Pin DueX5GpioPinMap[] = { 211, 210, 209, 208 };
+		if (access != PinAccess::servo)
+		{
+			firmwarePin = DueX5GpioPinMap[logicalPin - 100];
+		}
+	}
+#endif
+
+	if (firmwarePin != NoPin)
+	{
+		// Check that the pin mode has been defined suitably
+		PinMode desiredMode;
+		if (access == PinAccess::write || access == PinAccess::servo)
+		{
+			desiredMode = (firmwarePin >= 100) ? OUTPUT_PWM : OUTPUT_LOW;
+		}
+		else
+		{
+			desiredMode = INPUT_PULLUP;
+		}
+		if (logicalPinModes[logicalPin] != (int8_t)desiredMode)
+		{
+			SetPinMode(firmwarePin, desiredMode);
+			logicalPinModes[logicalPin] = (int8_t)desiredMode;
+		}
+		return true;
 	}
 	return false;
 }

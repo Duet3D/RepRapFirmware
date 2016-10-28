@@ -51,7 +51,7 @@ Licence: GPL
 #include "Libraries/Fatfs/ff.h"
 
 #if defined(DUET_NG)
-# include "SX1509B.h"
+# include "DueXn.h"
 #else
 # include "Libraries/MCP4461/MCP4461.h"
 #endif
@@ -110,7 +110,7 @@ const float defaultDeltaHomedHeight = 200;						// mm
 
 const float Z_PROBE_STOP_HEIGHT = 0.7;							// Millimetres
 const unsigned int Z_PROBE_AVERAGE_READINGS = 8;				// We average this number of readings with IR on, and the same number with IR off
-const int ZProbeTypeDelta = 6;									// Z probe type for experimental delta probe
+const int ZProbeTypeDelta = 7;									// Z probe type for experimental delta probe
 
 #ifdef DUET_NG
 const int Z_PROBE_AD_VALUE = 500;								// Default for the Z probe - should be overwritten by experiment
@@ -235,6 +235,14 @@ enum class DiagnosticTestType : int
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
 	TestSerialBlock = 1003,			// test what happens when we write a blocking message via debugPrintf()
 	PrintMoves = 100				// print summary of recent moves
+};
+
+// Enumeration to describe what we want to do with a logical pin
+enum class PinAccess : int
+{
+	read,
+	write,
+	servo
 };
 
 // Info returned by FindFirst/FindNext calls
@@ -586,7 +594,7 @@ public:
 	void SetZProbeAxes(uint32_t axes);
 	uint32_t GetZProbeAxes() const { return nvData.zProbeAxes; }
 	const ZProbeParameters& GetZProbeParameters() const;
-	bool SetZProbeParameters(const struct ZProbeParameters& params);
+	void SetZProbeParameters(const struct ZProbeParameters& params);
 	bool MustHomeXYBeforeZ() const;
 
 	void SetExtrusionAncilliaryPWM(float v);
@@ -615,7 +623,7 @@ public:
 	bool AnyHeaterHot(uint16_t heaters, float t);			// called to see if we need to turn on the hot end fan
 
 	// Fans
-	Fan& GetFan(size_t fanNumber)									// Get access to the fan control object
+	Fan& GetFan(size_t fanNumber)							// Get access to the fan control object
 	pre(fanNumber < NUM_FANS)
 	{
 		return fans[fanNumber];
@@ -623,6 +631,9 @@ public:
 
 	float GetFanValue(size_t fan) const;					// Result is returned in percent
 	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1 and 1..255
+#ifndef DUET_NG
+	void EnableSharedFan(bool enable);						// enable/disable the fan that shares its PWM pin with the last heater
+#endif
 	float GetFanRPM();
 
 	// Flash operations
@@ -649,18 +660,24 @@ public:
 	// So you can test for inkjet presence with if(platform->Inkjet(0))
 	bool Inkjet(int bitPattern);
 
-	// Direct pin operations
-	bool SetPin(int pin, float level);
-
 	// MCU temperature
 	void GetMcuTemperatures(float& minT, float& currT, float& maxT) const;
 	void SetMcuTemperatureAdjust(float v) { mcuTemperatureAdjust = v; }
 	float GetMcuTemperatureAdjust() const { return mcuTemperatureAdjust; }
 
+	// Low level port access
+	static void SetPinMode(Pin p, PinMode mode);
+	static bool ReadPin(Pin p);
+	static void WriteDigital(Pin p, bool high);
+	static void WriteAnalog(Pin p, float pwm, uint16_t frequency);
+
 #ifdef DUET_NG
 	// Power in voltage
 	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
 #endif
+
+	// User I/O and servo support
+	bool GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin, bool& invert);
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -759,7 +776,6 @@ private:
 	float maxAverageAcceleration;
 
 #if defined(DUET_NG)
-	SX1509B expansion;								// I/O expander on DueXn board
 	size_t numTMC2660Drivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
 #else
 	// Digipots
@@ -808,6 +824,7 @@ private:
 	Pin coolingFanRpmPin;											// we currently support only one fan RPM input
 	float lastRpmResetTime;
 	void InitFans();
+	bool FansHardwareInverted() const;
 
   	// Serial/USB
 
@@ -892,8 +909,7 @@ private:
 #endif
 
 	// Direct pin manipulation
-	static const uint8_t pinAccessAllowed[NUM_PINS_ALLOWED/8];
-	uint8_t pinInitialised[NUM_PINS_ALLOWED/8];
+	int8_t logicalPinModes[HighestLogicalPin + 1];		// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 };
 
 // Small class to hold an open file and data relating to it.
@@ -996,6 +1012,70 @@ private:
 	// Private copy constructor to prevent us copying these objects
 	FileData(const FileData&);
 };
+
+/*static*/ inline void Platform::SetPinMode(Pin pin, PinMode mode)
+{
+#ifdef DUET_NG
+	if (pin >= ExpansionStart)
+	{
+		DuetExpansion::SetPinMode(pin - ExpansionStart, mode);
+	}
+	else
+	{
+		pinMode(pin, mode);
+	}
+#else
+	pinMode(pin, mode);
+#endif
+}
+
+/*static*/ inline bool Platform::ReadPin(Pin pin)
+{
+#ifdef DUET_NG
+	if (pin >= ExpansionStart)
+	{
+		return DuetExpansion::DigitalRead(pin - ExpansionStart);
+	}
+	else
+	{
+		return digitalRead(pin);
+	}
+#else
+	return digitalRead(pin);
+#endif
+}
+
+/*static*/ inline void Platform::WriteDigital(Pin pin, bool high)
+{
+#ifdef DUET_NG
+	if (pin >= ExpansionStart)
+	{
+		DuetExpansion::DigitalWrite(pin - ExpansionStart, high);
+	}
+	else
+	{
+		digitalWrite(pin, high);
+	}
+#else
+	digitalWrite(pin, high);
+#endif
+}
+
+/*static*/ inline void Platform::WriteAnalog(Pin pin, float pwm, uint16_t freq)
+{
+#ifdef DUET_NG
+	if (pin >= ExpansionStart)
+	{
+		DuetExpansion::AnalogOut(pin - ExpansionStart, pwm);
+	}
+	else
+	{
+		AnalogOut(pin, pwm, freq);
+	}
+#else
+	AnalogOut(pin, pwm);
+#endif
+}
 
 // Where the htm etc files are
 
@@ -1265,7 +1345,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	{
 	case 4:
 		{
-			bool b = digitalRead(endStopPins[E0_AXIS]);
+			bool b = ReadPin(endStopPins[E0_AXIS]);
 			if (!endStopLogicLevel[MAX_AXES])
 			{
 				b = !b;
@@ -1274,7 +1354,7 @@ inline uint16_t Platform::GetRawZProbeReading() const
 		}
 
 	case 5:
-		return (digitalRead(zProbePin)) ? 4000 : 0;
+		return (ReadPin(zProbePin)) ? 4000 : 0;
 
 	default:
 		return AnalogInReadChannel(zProbeAdcChannel);

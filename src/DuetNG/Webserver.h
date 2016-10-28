@@ -122,6 +122,8 @@ private:
 	HttpSession *FindSession(uint32_t ip);			// find an existing session for this requester
 	void DeleteSession(uint32_t ip);				// delete a session
 
+	const char* GetKeyValue(const char *key) const;	// return the value of the specified key, or nullptr if not present
+
 	// Response from GCodes class
 	OutputStack *gcodeReply;
 

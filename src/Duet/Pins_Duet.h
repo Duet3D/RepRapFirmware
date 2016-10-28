@@ -60,7 +60,7 @@ const float STEPPER_DAC_VOLTAGE_OFFSET = -0.025;						// Stepper motor current o
 const bool HEAT_ON = false;												// false for inverted heater (e.g. Duet v0.6), true for not (e.g. Duet v0.4)
 
 const Pin TEMP_SENSE_PINS[HEATERS] = { 5, 4, 0, 7, 8, 9, 11 };			// Analogue pin numbers
-const Pin HEAT_ON_PINS[HEATERS] = { 6, X5, X7, 7, 8, 9, NoPin };		// Heater Channel 7 (pin X17) is shared with Fan1. Only define 1 or the other
+const Pin HEAT_ON_PINS[HEATERS] = { 6, X5, X7, 7, 8, 9, X17 };			// Heater Channel 7 (pin X17) is shared with Fan1
 
 // Default thermistor parameters
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
@@ -133,34 +133,17 @@ const Pin ROLAND_RTS_PIN = 17;											// Expansion pin 12, PA13_RXD1
 
 #endif
 
-// Definition of which pins we allow to be controlled using M42
-//
-// The allowed pins are these ones on the DueX4 expansion connector:
-//
-// TXD1 aka PA13 aka pin 16
-// RXD1 aka PA12 aka pin 17
-// TXD0 aka PA11 aka pin 18
-// RXD0 aka PA10 aka pin 19
-// PC4_PWML1 aka PC4 aka pin 36
-// AD14 aka PB21 aka pin 52
-// PB16 aka pin 67 (not available on Duet 0.8.5 because it is used for E1 motor current setting; could possibly allow analog output on this one)
-// RTS1 aka PA14 aka pin 23
-// TWD1 aka PB12 aka pin 20
-// TWCK1 aka PB13 aka pin 21
+// M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
+// This is the mapping from logical pins 60+ to firmware pin numbers
+const Pin SpecialPinMap[] =
+{
+	19, 18,	17, 16, 23, 	// PA10/RXD0 PA11/TXD0 PA12/RXD1 PA13/TXD1 PA14/RTS1
+	20, 21, 52, 			// PB12/TWD1 PB13/TWCK1 PB21/AD14
+	36						// PC4
+};
 
-const size_t NUM_PINS_ALLOWED = 72;
-
-#define PINS_ALLOWED {				\
-	/* pins 00-07 */	0,			\
-	/* pins 08-15 */	0,			\
-	/* pins 16-23 */	0b10111111,	\
-	/* pins 24-31 */	0,			\
-	/* pins 32-39 */	0b00010000,	\
-	/* pins 40-47 */	0,			\
-	/* pins 48-55 */	0b00010000,	\
-	/* pins 56-63 */	0,			\
-	/* pins 64-71 */	0b00001000	\
-}
+// This next definition defines the highest one.
+const int HighestLogicalPin = 60 + ARRAY_SIZE(SpecialPinMap) - 1;		// highest logical pin number on this electronics
 
 // SAM3X Flash locations (may be expanded in the future)
 const uint32_t IAP_FLASH_START = 0x000F0000;

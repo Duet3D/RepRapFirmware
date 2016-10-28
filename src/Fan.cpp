@@ -61,14 +61,14 @@ void Fan::SetInverted(bool inv)
 
 void Fan::SetHardwarePwm(float pwmVal)
 {
-	if (pin >= 0)
+	if (pin != NoPin)
 	{
 		bool invert = hardwareInverted;
 		if (inverted)
 		{
 			invert = !invert;
 		}
-		AnalogOut(pin, (invert) ? (1.0 - pwmVal) : pwmVal, freq);
+		Platform::WriteAnalog(pin, (invert) ? (1.0 - pwmVal) : pwmVal, freq);
 	}
 }
 
