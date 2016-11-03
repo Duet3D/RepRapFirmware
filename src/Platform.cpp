@@ -20,7 +20,8 @@
  ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-#include "Libraries/Flash/DueFlashStorage.h"
+#include "DueFlashStorage.h"
+#include "RTCDue.h"
 
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"
@@ -168,6 +169,10 @@ void Platform::Init()
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
 
 	SetBoardType(BoardType::Auto);
+
+	// Real-time clock
+
+	RTCDue::Init();
 
 	// Comms
 
@@ -1428,13 +1433,20 @@ void Platform::Diagnostics(MessageType mtype)
 				AdcReadingToCpuTemperature(lowestMcuTemperature), AdcReadingToCpuTemperature(currentMcuTemperature), AdcReadingToCpuTemperature(highestMcuTemperature));
 	lowestMcuTemperature = highestMcuTemperature = currentMcuTemperature;
 
-	#ifdef DUET_NG
+#ifdef DUET_NG
 	// Show the supply voltage
 	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %u, over voltage events: %u\n",
 				AdcReadingToPowerVoltage(lowestVin), AdcReadingToPowerVoltage(currentVin), AdcReadingToPowerVoltage(highestVin),
 				numUnderVoltageEvents, numOverVoltageEvents);
 	lowestVin = highestVin = currentVin;
 #endif
+
+	// Show current RTC time
+	const time_t timeNow = RTCDue::GetDateTime();
+	const struct tm * const timeInfo = localtime(&timeNow);
+	MessageF(mtype, "Current date and time: %04u-%02u-%02u %02u:%02u:%02u\n",
+			timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+			timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
 
 // Debug
 //MessageF(mtype, "TC_FMR = %08x, PWM_FPE = %08x, PWM_FSR = %08x\n", TC2->TC_FMR, PWM->PWM_FPE, PWM->PWM_FSR);
@@ -2780,6 +2792,32 @@ void Platform::GetPowerVoltages(float& minV, float& currV, float& maxV) const
 }
 #endif
 
+// Real-time clock
+
+bool Platform::IsDateTimeSet() const
+{
+	return RTCDue::IsDateTimeSet();
+}
+
+time_t Platform::GetDateTime() const
+{
+	return RTCDue::GetDateTime();
+}
+
+bool Platform::SetDateTime(time_t time)
+{
+	return RTCDue::SetDateTime(time);
+}
+
+bool Platform::SetDate(time_t date)
+{
+	return RTCDue::SetDate(date);
+}
+
+bool Platform::SetTime(time_t time)
+{
+	return RTCDue::SetTime(time);
+}
 
 // Pragma pop_options is not supported on this platform, so we put this time-critical code right at the end of the file
 //#pragma GCC push_options

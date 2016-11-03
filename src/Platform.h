@@ -41,6 +41,7 @@ Licence: GPL
 #include <malloc.h>
 #include <cstdlib>
 #include <climits>
+#include <ctime>
 
 // Platform-specific includes
 
@@ -57,6 +58,7 @@ Licence: GPL
 #endif
 
 #include "Storage/FileStore.h"
+#include "Storage/FileData.h"
 #include "MessageType.h"
 
 // Definitions needed by Fan.h
@@ -243,19 +245,6 @@ enum class PinAccess : int
 	read,
 	write,
 	servo
-};
-
-// Info returned by FindFirst/FindNext calls
-class FileInfo
-{
-public:
-
-	bool isDirectory;
-	unsigned long size;
-	uint8_t day;
-	uint8_t month;
-	uint16_t year;
-	char fileName[FILENAME_LENGTH];
 };
 
 /***************************************************************************************************************/
@@ -468,7 +457,15 @@ public:
 	static bool ScheduleInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableStepInterrupt();				// Make sure we get no step interrupts
 	void Tick();
-  
+
+	// Real-time clock
+
+	bool IsDateTimeSet() const;						// Has the RTC been set yet?
+	time_t GetDateTime() const;						// Retrieves the current RTC datetime and returns true if it's valid
+	bool SetDateTime(time_t time);					// Sets the current RTC date and time or returns false on error
+	bool SetDate(time_t date);						// Sets the current RTC date or returns false on error
+	bool SetTime(time_t time);						// Sets the current RTC time or returns false on error
+
   	// Communications and data storage
   
 	bool GCodeAvailable(const SerialSource source) const;
@@ -910,107 +907,6 @@ private:
 
 	// Direct pin manipulation
 	int8_t logicalPinModes[HighestLogicalPin + 1];		// what mode each logical pin is set to - would ideally be class PinMode not int8_t
-};
-
-// Small class to hold an open file and data relating to it.
-// This is designed so that files are never left open and we never duplicate a file reference.
-class FileData
-{
-public:
-	FileData() : f(NULL) {}
-
-	// Set this to refer to a newly-opened file
-	void Set(FileStore* pfile)
-	{
-		Close();	// close any existing file
-		f = pfile;
-	}
-
-	bool IsLive() const { return f != NULL; }
-
-	bool Close()
-	{
-		if (f != NULL)
-		{
-			bool ok = f->Close();
-			f = NULL;
-			return ok;
-		}
-		return false;
-	}
-
-	bool Read(char& b)
-	{
-		return f->Read(b);
-	}
-
-	bool Write(char b)
-	{
-		return f->Write(b);
-	}
-
-	bool Write(const char *s, unsigned int len)
-	{
-		return f->Write(s, len);
-	}
-
-	bool Flush()
-	{
-		return f->Flush();
-	}
-
-	FilePosition GetPosition() const
-	{
-		return f->Position();
-	}
-
-	bool Seek(FilePosition position)
-	{
-		return f->Seek(position);
-	}
-
-	float FractionRead() const
-	{
-		return (f == NULL ? -1.0 : f->FractionRead());
-	}
-
-	FilePosition Length() const
-	{
-		return f->Length();
-	}
-
-	// Assignment operator
-	void CopyFrom(const FileData& other)
-	{
-		Close();
-		f = other.f;
-		if (f != NULL)
-		{
-			f->Duplicate();
-		}
-	}
-
-	// Move operator
-	void MoveFrom(FileData& other)
-	{
-		Close();
-		f = other.f;
-		other.Init();
-	}
-
-private:
-	FileStore *f;
-
-	void Init()
-	{
-		f = NULL;
-	}
-
-	// Private assignment operator to prevent us assigning these objects
-	FileData& operator=(const FileData&);
-
-	// Private copy constructor to prevent us copying these objects
-	FileData(const FileData&);
 };
 
 /*static*/ inline void Platform::SetPinMode(Pin pin, PinMode mode)

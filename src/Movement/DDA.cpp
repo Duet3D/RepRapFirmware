@@ -159,16 +159,8 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 			endPoint[drive] = Move::MotorEndPointToMachine(drive, nextMove.coords[drive]);
 		}
 
-		int32_t delta;
-		if (drive < numAxes)
-		{
-			endCoordinates[drive] = nextMove.coords[drive];
-			delta = endPoint[drive] - positionNow[drive];
-		}
-		else
-		{
-			delta = endPoint[drive];
-		}
+		endCoordinates[drive] = nextMove.coords[drive];
+		const int32_t delta = (drive < numAxes) ? endPoint[drive] - positionNow[drive] : endPoint[drive];
 
 		DriveMovement& dm = ddm[drive];
 		if (drive < numAxes && !isSpecialDeltaMove)
@@ -625,20 +617,28 @@ void DDA::CalcNewSpeeds()
 }
 
 // This is called by Move::CurrentMoveCompleted to update the live coordinates from the move that has just finished
-bool DDA::FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords[MAX_AXES])
+bool DDA::FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords[DRIVES])
 {
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
 		ep[drive] = endPoint[drive];
 	}
 	if (endCoordinatesValid)
 	{
-		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 		for (size_t axis = 0; axis < numAxes; ++axis)
 		{
 			endCoords[axis] = endCoordinates[axis];
 		}
 	}
+
+	// Extrusion amounts are always valid
+	for (size_t eDrive = numAxes; eDrive < DRIVES; ++eDrive)
+	{
+		endCoords[eDrive] += endCoordinates[eDrive];
+	}
+
 	return endCoordinatesValid;
 }
 

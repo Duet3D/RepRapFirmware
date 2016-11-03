@@ -234,7 +234,6 @@ class Webserver
 
 			char gcodeBuffer[gcodeBufferLength];
 			uint16_t gcodeReadIndex, gcodeWriteIndex;		// head and tail indices into gcodeBuffer
-			uint32_t seq;									// sequence number for G-Code replies
 
 			void LoadGcodeBuffer(const char* gc);
 			void ProcessGcode(const char* gc);
@@ -242,10 +241,12 @@ class Webserver
 
 			// Responses from GCodes class
 
+			uint32_t seq;									// Sequence number for G-Code replies
 			OutputStack *gcodeReply;
 
 			// File uploads
 			uint32_t postFileLength, uploadedBytes;			// How many POST bytes do we expect and how many have already been written?
+			time_t fileLastModified;
 
 			// Deferred requests (rr_fileinfo)
 			ConnectionState * volatile deferredRequestConnection;	// Which connection expects a response for a deferred request?
@@ -284,7 +285,7 @@ class Webserver
 			uint8_t connectedClients;
 
 			char clientMessage[ftpMessageLength];
-			unsigned int clientPointer;
+			size_t clientPointer;
 
 			char filename[FILENAME_LENGTH];
 			char currentDir[FILENAME_LENGTH];
@@ -336,7 +337,7 @@ class Webserver
 
 			bool processNextLine;
 			char clientMessage[GCODE_LENGTH];
-			uint16_t clientPointer;
+			size_t clientPointer;
 
 			bool ProcessLine();
 

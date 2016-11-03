@@ -222,6 +222,7 @@ private:
     bool CheckTriggers();												// Check for and execute triggers
     void DoEmergencyStop();												// Execute an emergency stop
     void DoPause(bool externalToFile);									// Pause the print
+    void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
 
     Platform* platform;							// The RepRap machine
     Webserver* webserver;						// The webserver class
@@ -277,6 +278,7 @@ private:
     bool limitAxes;								// Don't think outside the box.
     uint32_t axesHomed;							// Bitmap of which axes have been homed
     float pausedFanValues[NUM_FANS];			// Fan speeds when the print was paused
+    float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
     float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
     float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 

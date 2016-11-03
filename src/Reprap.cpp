@@ -1,4 +1,5 @@
 #include "RepRapFirmware.h"
+#include <ctime>
 
 // RepRap member functions.
 
@@ -744,8 +745,22 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 		response->catf(",\"endstops\":%d", endstops);
 
-		// Delta configuration, number of disk volumes, and machine name
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"name\":", move->GetGeometryString(), numAxes, NumSdCards);
+		// Delta configuration and number of axes
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u", move->GetGeometryString(), numAxes);
+
+		// Total and mounted volumes
+		size_t mountedCards = 0;
+		for(size_t i = 0; i < NumSdCards; i++)
+		{
+			if (reprap.GetPlatform()->GetMassStorage()->IsDriveMounted(i))
+			{
+				mountedCards |= (1 << i);
+			}
+		}
+		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", NumSdCards, mountedCards);
+
+		// Machine name
+		response->cat(",\"name\":");
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 
 		/* Probe */
@@ -818,8 +833,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			float minT, currT, maxT;
 			platform->GetMcuTemperatures(minT, currT, maxT);
 			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", minT, currT, maxT);
-			// TEMPORARY for DWC 1.11: send mcutemp.cur as cputemp as well
-			response->catf(",\"cputemp\":%.1f", currT);
 		}
 
 #ifdef DUET_NG
@@ -1312,6 +1325,20 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 		return nullptr;
 	}
 
+	// If the requested volume is not mounted, report an error
+	if (!reprap.GetPlatform()->GetMassStorage()->CheckDriveMounted(dir))
+	{
+		response->copy("{\"err\":1}");
+		return response;
+	}
+
+	// Check if the directory exists
+	if (!reprap.GetPlatform()->GetMassStorage()->DirectoryExists(dir))
+	{
+		response->copy("{\"err\":2}");
+		return response;
+	}
+
 	response->copy("{\"dir\":");
 	response->EncodeString(dir, strlen(dir), false);
 	response->cat(",\"files\":[");
@@ -1326,7 +1353,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 		if (fileInfo.fileName[0] != '.')			// ignore Mac resource files and Linux hidden files
 		{
 			// Make sure we can end this response properly
-			if (bytesLeft < strlen(fileInfo.fileName) + 32)
+			if (bytesLeft < strlen(fileInfo.fileName) + 80)
 			{
 				// No more space available - stop here
 				break;
@@ -1342,7 +1369,12 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 			// Write another file entry
 			bytesLeft -= response->catf("{\"type\":\"%c\",\"name\":", fileInfo.isDirectory ? 'd' : 'f');
 			bytesLeft -= response->EncodeString(fileInfo.fileName, FILENAME_LENGTH, false);
-			bytesLeft -= response->catf(",\"size\":%u}", fileInfo.size);
+			bytesLeft -= response->catf(",\"size\":%u", fileInfo.size);
+
+			struct tm *timeInfo = localtime(&fileInfo.lastModified);
+			bytesLeft -= response->catf(",\"lastModified\":\"%04u-%02u-%02uT%02u:%02u:%02u\"}",
+					timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+					timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
 		}
 		gotFile = platform->GetMassStorage()->FindNext(fileInfo);
 	}

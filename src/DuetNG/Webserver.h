@@ -87,6 +87,8 @@ private:
 		uint32_t nextFragment;
 		uint32_t lastQueryTime;
 		FileData fileBeingUploaded;
+		char filenameBeingUploaded[FILENAME_LENGTH];
+		time_t fileLastModified;
 		uint32_t postLength;
 		uint32_t bytesWritten;
 		UploadState uploadState;
@@ -101,7 +103,7 @@ private:
 	bool CharFromClient(char c, const char* &error);
 	bool ProcessFirstFragment(HttpSession& session, const char* command, bool isOnlyFragment);
 	void ProcessUploadFragment(HttpSession& session, const char* request, size_t length, uint32_t fragment);
-	void StartUpload(HttpSession& session, const char* fileName, uint32_t fileLength);
+	void StartUpload(HttpSession& session, const char* fileName, uint32_t fileLength, time_t lastModified);
 	void FinishUpload(HttpSession& session);
 	void CancelUpload(HttpSession& session);
 	bool GetJsonResponse(uint32_t remoteIp, const char* request, OutputBuffer *&response, const char* key, const char* value, size_t valueLength, bool& keepOpen);

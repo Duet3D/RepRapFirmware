@@ -27,9 +27,10 @@
 
  The supported requests are GET requests for files (for which the root is the www directory on the
  SD card), and the following. These all start with "/rr_". Ordinary files used for the web interface
- must not have names starting "/rr_" or they will not be found.
+ must not have names starting "/rr_" or they will not be found. Times should be generally specified
+ in the format YYYY-MM-DDTHH:MM:SS so the firmware can parse them.
 
- rr_connect?password=xxx
+ rr_connect?password=xxx&time=yyy
              Sent by the web interface software to establish an initial connection, indicating that
  	 	 	 any state variables relating to the web interface (e.g. file upload in progress) should
  	 	 	 be reset. This only happens if the password could be verified.
@@ -64,7 +65,7 @@
  rr_download?name=xxx
 			 Download a specified file from the SD card
 
- rr_upload?name=xxx
+ rr_upload?name=xxx&time=yyy
  	 	 	 Upload a specified file using a POST request. The payload of this request has to be
  	 	 	 the file content. Only one file may be uploaded at once. When the upload has finished,
  	 	 	 a JSON response with the variable "err" will be returned, which will be 0 if the job
@@ -681,8 +682,18 @@ void Webserver::HttpInterpreter::DoFastUpload()
 			}
 		}
 
-		// We're done, flush the remaining upload data and send the JSON response
+		// Grab a copy of the filename and finish this upload
+		char filename[FILENAME_LENGTH];
+		strncpy(filename, filenameBeingUploaded, FILENAME_LENGTH);
 		FinishUpload(postFileLength);
+
+		// Update the file timestamp if it was specified before
+		if (fileLastModified != 0)
+		{
+			(void)platform->GetMassStorage()->SetLastModifiedTime(filename, fileLastModified);
+		}
+
+		// Eventually send the JSON response
 		SendJsonResponse("upload");
 	}
 	else if (uploadState != uploadOK || !transaction->HasMoreDataToRead())
@@ -949,6 +960,17 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			// Password OK
 			if (Authenticate())
 			{
+				// See if we can update the current RTC date and time
+				if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time") && !platform->IsDateTimeSet())
+				{
+					struct tm timeInfo;
+					if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+					{
+						time_t newTime = mktime(&timeInfo);
+						platform->SetDateTime(newTime);
+					}
+				}
+
 				// Client has been logged in
 				response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", httpSessionTimeout, platform->GetBoardString());
 			}
@@ -1561,6 +1583,24 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 				if (!StartUpload(file, qualifiers[0].value))
 				{
 					return RejectMessage("could not start file upload");
+				}
+
+				// Try to get the last modified file date and time
+				if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time"))
+				{
+					struct tm timeInfo;
+					if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+					{
+						fileLastModified  = mktime(&timeInfo);
+					}
+					else
+					{
+						fileLastModified = 0;
+					}
+				}
+				else
+				{
+					fileLastModified = 0;
 				}
 
 				if (reprap.Debug(moduleWebserver))
@@ -2293,10 +2333,10 @@ void Webserver::FtpInterpreter::ProcessLine()
 							// Example for a typical UNIX-like file list:
 							// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
 							const char dirChar = (fileInfo.isDirectory) ? 'd' : '-';
-							const uint8_t month = (fileInfo.month == 0) ? 1 : fileInfo.month;		// without this check FileZilla won't display incomplete uploads properly
+							struct tm *timeInfo = localtime(&fileInfo.lastModified);
 							dataTransaction->Printf("%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
-									dirChar, fileInfo.size, platform->GetMassStorage()->GetMonthName(month),
-									fileInfo.day, fileInfo.year, fileInfo.fileName);
+									dirChar, fileInfo.size, platform->GetMassStorage()->GetMonthName(timeInfo->tm_mon + 1),
+									timeInfo->tm_mday, timeInfo->tm_year + 1900, fileInfo.fileName);
 						} while (platform->GetMassStorage()->FindNext(fileInfo));
 					}
 
@@ -2524,8 +2564,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 //********************************************************************************************
 
 Webserver::TelnetInterpreter::TelnetInterpreter(Platform *p, Webserver *ws, Network *n)
-: ProtocolInterpreter(p, ws, n), connectedClients(0), processNextLine(false),
-gcodeReadIndex(0), gcodeWriteIndex(0), gcodeReply(nullptr)
+	: ProtocolInterpreter(p, ws, n), connectedClients(0), processNextLine(false), gcodeReadIndex(0), gcodeWriteIndex(0), gcodeReply(nullptr)
 {
 	ResetState();
 }

@@ -105,6 +105,7 @@ void GCodes::Init()
 	{
 		pausedFanValues[i] = 0.0;
 	}
+	lastDefaultFanSpeed = 0.0;
 
 	retractLength = retractExtra = retractHop = 0.0;
 	retractSpeed = unRetractSpeed = 600.0;
@@ -1736,10 +1737,7 @@ void GCodes::WriteHTMLToFile(char b, GCodeBuffer *gb)
 
 	if (eofStringCounter != 0 && b != eofString[eofStringCounter])
 	{
-		for (size_t i = 0; i < eofStringCounter; ++i)
-		{
-			fileBeingWritten->Write(eofString[i]);
-		}
+		fileBeingWritten->Write(eofString);
 		eofStringCounter = 0;
 	}
 
@@ -1887,7 +1885,6 @@ bool GCodes::DoDwell(GCodeBuffer *gb)
 bool GCodes::DoDwellTime(float dwell)
 {
 	// Are we already in the dwell?
-
 	if (dwellWaiting)
 	{
 		if (platform->Time() - dwellTime >= 0.0)
@@ -1900,14 +1897,12 @@ bool GCodes::DoDwellTime(float dwell)
 	}
 
 	// New dwell - set it up
-
 	dwellWaiting = true;
 	dwellTime = platform->Time() + dwell;
 	return false;
 }
 
 // Set offset, working and standby temperatures for a tool. I.e. handle a G10.
-
 void GCodes::SetOrReportOffsets(StringRef& reply, GCodeBuffer *gb)
 {
 	if (gb->Seen('P'))
@@ -2045,6 +2040,29 @@ void GCodes::ManageTool(GCodeBuffer *gb, StringRef& reply)
 		xMapping[0] = 0;
 	}
 
+	// Check for fan mapping
+	uint32_t fanMap;
+	if (gb->Seen('F'))
+	{
+		long fanMapping[NUM_FANS];
+		size_t fanCount = NUM_FANS;
+		gb->GetLongArray(fanMapping, fanCount);
+		fanMap = 0;
+		for (size_t i = 0; i < fanCount; ++i)
+		{
+			const long f = fanMapping[i];
+			if (f >= 0 && (unsigned long)f < NUM_FANS)
+			{
+				fanMap |= 1u << (unsigned int)f;
+			}
+		}
+		seen = true;
+	}
+	else
+	{
+		fanMap = 1;					// by default map fan 0 to fan 0
+	}
+
 	if (seen)
 	{
 		// Add or delete tool, so start by deleting the old one with this number, if any
@@ -2057,7 +2075,7 @@ void GCodes::ManageTool(GCodeBuffer *gb, StringRef& reply)
 		}
 		else
 		{
-			Tool* tool = Tool::Create(toolNumber, drives, dCount, heaters, hCount, xMapping, xCount);
+			Tool* tool = Tool::Create(toolNumber, drives, dCount, heaters, hCount, xMapping, xCount, fanMap);
 			if (tool != nullptr)
 			{
 				reprap.AddTool(tool);
@@ -2184,6 +2202,26 @@ bool GCodes::ChangeMicrostepping(size_t drive, int microsteps, int mode) const
 		}
 	}
 	return success;
+}
+
+// Set the speeds of fans mapped for the current tool to lastDefaultFanSpeed
+void GCodes::SetMappedFanSpeed()
+{
+	if (reprap.GetCurrentTool() == nullptr)
+	{
+		platform->SetFanValue(0, lastDefaultFanSpeed);
+	}
+	else
+	{
+		const uint32_t fanMap = reprap.GetCurrentTool()->GetFanMapping();
+		for (size_t i = 0; i < NUM_FANS; ++i)
+		{
+			if ((fanMap & (1u << i)) != 0)
+			{
+				platform->SetFanValue(i, lastDefaultFanSpeed);
+			}
+		}
+	}
 }
 
 // Handle sending a reply back to the appropriate interface(s).
@@ -2957,7 +2995,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				if (fileToPrint.IsLive())
 				{
 					reprap.GetPrintMonitor()->StartingPrint(filename);
-					if (platform->Emulating() == marlin && gb == serialGCode)
+					if (platform->Emulating() == marlin && (gb == serialGCode || gb == telnetGCode))
 					{
 						reply.copy("File opened\nFile selected");
 					}
@@ -3399,9 +3437,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 	case 106: // Set/report fan values
 		{
-			bool dummy;
+			bool seenFanNum = false;
 			int32_t fanNum = 0;			// Default to the first fan
-			gb->TryGetIValue('P', fanNum, dummy);
+			gb->TryGetIValue('P', fanNum, seenFanNum);
 			if (fanNum < 0 || fanNum > (int)NUM_FANS)
 			{
 				reply.printf("Fan number %d is invalid, must be between 0 and %u", fanNum, NUM_FANS);
@@ -3413,14 +3451,14 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 				if (gb->Seen('I'))		// Invert cooling
 				{
-					int invert = gb->GetIValue();
+					const int invert = gb->GetIValue();
 					if (invert < 0)
 					{
 						fan.Disable();
 					}
 					else
 					{
-						fan.SetInverted(gb->GetIValue() > 0);
+						fan.SetInverted(invert > 0);
 					}
 					seen = true;
 				}
@@ -3474,17 +3512,38 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 
 				if (gb->Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
 				{
-					seen = true;
 					const float f = constrain<float>(gb->GetFValue(), 0.0, 255.0);
-					platform->SetFanValue(fanNum, f);
+					if (seen || seenFanNum)
+					{
+						platform->SetFanValue(fanNum, f);
+					}
+					else
+					{
+						// We are processing an M106 S### command with no other recognised parameters and we have a tool selected.
+						// Apply the fan speed setting to the fans in the fan mapping for the current tool.
+						lastDefaultFanSpeed = f;
+						SetMappedFanSpeed();
+					}
 				}
 				else if (gb->Seen('R'))
 				{
-					seen = true;
-					platform->SetFanValue(fanNum, pausedFanValues[fanNum]);
+					const int i = gb->GetIValue();
+					switch(i)
+					{
+					case 0:
+					case 1:
+						// Restore fan speed to value when print was paused
+						platform->SetFanValue(fanNum, pausedFanValues[fanNum]);
+						break;
+					case 2:
+						// Set the speeds of mapped fans to the last known value. Fan number is ignored.
+						SetMappedFanSpeed();
+						break;
+					default:
+						break;
+					}
 				}
-
-				if (!seen)
+				else if (!seen)
 				{
 					reply.printf("Fan%i frequency: %dHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s",
 									fanNum,
@@ -5567,6 +5626,75 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
 					reply.catf(" %c:%f", axisLetters[axis], move->GetCoreAxisFactor(axis));
+				}
+			}
+		}
+		break;
+
+	case 905: // Set current RTC date and time
+		{
+			const time_t now = platform->GetDateTime();
+			struct tm * const timeInfo = localtime(&now);
+			bool seen = false;
+
+			if (gb->Seen('P'))
+			{
+				// Set date
+				const char * const dateString = gb->GetString();
+				if (strptime(dateString, "%Y-%m-%d", timeInfo) != nullptr)
+				{
+					if (!platform->SetDate(mktime(timeInfo)))
+					{
+						reply.copy("Could not set date");
+						error = true;
+						break;
+					}
+				}
+				else
+				{
+					reply.copy("Invalid date format");
+					error = true;
+					break;
+				}
+
+				seen = true;
+			}
+
+			if (gb->Seen('S'))
+			{
+				// Set time
+				const char * const timeString = gb->GetString();
+				if (strptime(timeString, "%H:%M:%S", timeInfo) != nullptr)
+				{
+					if (!platform->SetTime(mktime(timeInfo)))
+					{
+						reply.copy("Could not set time");
+						error = true;
+						break;
+					}
+				}
+				else
+				{
+					reply.copy("Invalid time format");
+					error = true;
+					break;
+				}
+
+				seen = true;
+			}
+
+			// TODO: Add correction parameters for SAM4E
+
+			if (!seen)
+			{
+				// Report current date and time
+				reply.printf("Current date and time: %04u-%02u-%02u %02u:%02u:%02u",
+						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+
+				if (!platform->IsDateTimeSet())
+				{
+					reply.cat("\nWarning: RTC has not been configured yet!");
 				}
 			}
 		}

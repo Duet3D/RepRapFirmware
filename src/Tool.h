@@ -30,7 +30,7 @@ class Tool
 {
 public:
 
-	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount);
+	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount, uint32_t fanMap);
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
@@ -43,7 +43,7 @@ public:
 	int Number() const;
 	void SetVariables(const float* standby, const float* active);
 	void GetVariables(float* standby, float* active) const;
-	void DefineMix(float* m);
+	void DefineMix(const float m[]);
 	const float* GetMix() const;
 	void SetMixing(bool b);
 	bool GetMixing() const;
@@ -52,6 +52,7 @@ public:
 	void Print(StringRef& reply);
 	size_t GetAxisMapCount() const { return xmapCount; }
 	const int *GetAxisMap() const { return xMapping; }
+	uint32_t GetFanMapping() const { return fanMapping; }
 
 	friend class RepRap;
 
@@ -84,6 +85,7 @@ private:
 	size_t xmapCount;
 	Tool* next;
 	float offset[MAX_AXES];
+	uint32_t fanMapping;
 
 	bool mixing;
 	bool active;
@@ -114,14 +116,6 @@ inline Tool* Tool::Next() const
 inline int Tool::Number() const
 {
 	return myNumber;
-}
-
-inline void Tool::DefineMix(float* m)
-{
-	for(size_t drive = 0; drive < driveCount; drive++)
-	{
-		mix[drive] = m[drive];
-	}
 }
 
 inline const float* Tool::GetMix() const

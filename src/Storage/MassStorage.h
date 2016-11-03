@@ -1,9 +1,18 @@
 #ifndef MASSSTORAGE_H
-
 #define MASSSTORAGE_H
 
+#include <ctime>
+
 class Platform;
-class FileInfo;
+
+// Info returned by FindFirst/FindNext calls
+struct FileInfo
+{
+	bool isDirectory;
+	char fileName[FILENAME_LENGTH];
+	unsigned long size;
+	time_t lastModified;
+};
 
 class MassStorage
 {
@@ -21,8 +30,10 @@ public:
 	bool FileExists(const char* directory, const char *fileName) const;
 	bool DirectoryExists(const char *path) const;
 	bool DirectoryExists(const char* directory, const char* subDirectory);
+	bool SetLastModifiedTime(const char *file, time_t time);
 	bool Mount(size_t card, StringRef& reply, bool reportSuccess);
 	bool Unmount(size_t card, StringRef& reply);
+	bool IsDriveMounted(size_t drive) const { return drive < NumSdCards && isMounted[drive]; }
 	bool CheckDriveMounted(const char* path);
 
 friend class Platform;

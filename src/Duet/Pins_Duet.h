@@ -114,7 +114,7 @@ const Pin COOLING_FAN_RPM_PIN = 23;										// Pin PA15
 const size_t NumSdCards = 2;
 const Pin SdCardDetectPins[NumSdCards] = {13, NoPin};
 const Pin SdWriteProtectPins[NumSdCards] = {NoPin, NoPin};
-const Pin SdSpiCSPins[1] = {66};										// Note: this clashes with inkjet support
+const Pin SdSpiCSPins[1] = {67};										// Note: this clashes with inkjet support
 
 #if SUPPORT_INKJET
 // Inkjet control pins
@@ -138,7 +138,7 @@ const Pin ROLAND_RTS_PIN = 17;											// Expansion pin 12, PA13_RXD1
 const Pin SpecialPinMap[] =
 {
 	19, 18,	17, 16, 23, 	// PA10/RXD0 PA11/TXD0 PA12/RXD1 PA13/TXD1 PA14/RTS1
-	20, 21, 52, 			// PB12/TWD1 PB13/TWCK1 PB21/AD14
+	20, 21, 67, 52, 		// PB12/TWD1 PB13/TWCK1 PB16/DAC1 PB21/AD14
 	36						// PC4
 };
 

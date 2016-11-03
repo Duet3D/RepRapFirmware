@@ -27,9 +27,10 @@
 
  The supported requests are GET requests for files (for which the root is the www directory on the
  SD card), and the following. These all start with "/rr_". Ordinary files used for the web interface
- must not have names starting "/rr_" or they will not be found.
+ must not have names starting "/rr_" or they will not be found. Times should be generally specified
+ in the format YYYY-MM-DDTHH:MM:SS so the firmware can parse them.
 
- rr_connect?password=xxx
+ rr_connect?password=xxx&time=yyy
              Sent by the web interface software to establish an initial connection, indicating that
  	 	 	 any state variables relating to the web interface (e.g. file upload in progress) should
  	 	 	 be reset. This only happens if the password could be verified.
@@ -64,7 +65,7 @@
  rr_download?name=xxx
 			 Download a specified file from the SD card
 
- rr_upload?name=xxx
+ rr_upload?name=xxx&time=yyy
  	 	 	 Upload a specified file using a POST request. The payload of this request has to be
  	 	 	 the file content. Only one file may be uploaded at once. When the upload has finished,
  	 	 	 a JSON response with the variable "err" will be returned, which will be 0 if the job
@@ -180,7 +181,7 @@ void Webserver::Spin()
 }
 
 // This is called to process a file upload request.
-void Webserver::StartUpload(HttpSession& session, const char* fileName, uint32_t fileLength)
+void Webserver::StartUpload(HttpSession& session, const char* fileName, uint32_t fileLength, time_t lastModified)
 {
 	CancelUpload(session);
 	if (uploadIp != 0)
@@ -197,6 +198,8 @@ void Webserver::StartUpload(HttpSession& session, const char* fileName, uint32_t
 		else
 		{
 			session.fileBeingUploaded.Set(file);
+			strncpy(session.filenameBeingUploaded, fileName, FILENAME_LENGTH);
+			session.fileLastModified = lastModified;
 			session.postLength = fileLength;
 			session.bytesWritten = 0;
 			session.nextFragment = 1;
@@ -222,6 +225,11 @@ void Webserver::FinishUpload(HttpSession& session)
 		else if (session.bytesWritten != session.postLength)
 		{
 			session.uploadState = wrongLength;
+		}
+		else if (session.fileLastModified != 0)
+		{
+			// Upload OK, update the file timestamp if it was specified before
+			(void)platform->GetMassStorage()->SetLastModifiedTime(session.filenameBeingUploaded, session.fileLastModified);
 		}
 	}
 
@@ -450,9 +458,6 @@ void Webserver::HandleGCodeReply(const WebSource source, OutputBuffer *reply)
 	switch (source)
 	{
 	case WebSource::HTTP:
-#if 0
-		OutputBuffer::ReleaseAll(reply);
-#else
 		if (reply != nullptr)
 		{
 			if (numSessions > 0)
@@ -469,7 +474,6 @@ void Webserver::HandleGCodeReply(const WebSource source, OutputBuffer *reply)
 				OutputBuffer::ReleaseAll(reply);
 			}
 		}
-#endif
 		break;
 
 	case WebSource::Telnet:
@@ -485,8 +489,6 @@ void Webserver::HandleGCodeReply(const WebSource source, const char *reply)
 	switch (source)
 	{
 	case WebSource::HTTP:
-#if 0
-#else
 		if (numSessions > 0)
 		{
 			OutputBuffer *buffer = gcodeReply->GetLastItem();
@@ -503,7 +505,6 @@ void Webserver::HandleGCodeReply(const WebSource source, const char *reply)
 			buffer->cat(reply);
 			seq++;
 		}
-#endif
 		break;
 
 	case WebSource::Telnet:
@@ -538,7 +539,19 @@ bool Webserver::ProcessFirstFragment(HttpSession& session, const char* command, 
 		{
 			if (session.isAuthenticated || reprap.CheckPassword(GetKeyValue("password")))
 			{
-				// Password OK
+				// Password is OK, see if we can update the current RTC date and time
+				const char *timeVal = GetKeyValue("time");
+				if (timeVal != nullptr && !platform->IsDateTimeSet())
+				{
+					struct tm timeInfo;
+					if (strptime(timeVal, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+					{
+						time_t newTime = mktime(&timeInfo);
+						platform->SetDateTime(newTime);
+					}
+				}
+
+				// Client has logged in
 				session.isAuthenticated = true;
 				response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", httpSessionTimeout, platform->GetBoardString());
 			}
@@ -604,11 +617,20 @@ bool Webserver::ProcessFirstFragment(HttpSession& session, const char* command, 
 	{
 		const char* nameVal = GetKeyValue("name");
 		const char* lengthVal = GetKeyValue("length");
+		const char* timeVal = GetKeyValue("time");
 		if (nameVal != nullptr && lengthVal != nullptr)
 		{
+			// Try to obtain the last modified time
+			time_t fileLastModified = 0;
+			struct tm timeInfo;
+			if (timeVal != nullptr && strptime(timeVal, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+			{
+				fileLastModified = mktime(&timeInfo);
+			}
+
 			// Deal with file upload request
 			uint32_t fileLength = atol(lengthVal);
-			StartUpload(session, nameVal, fileLength);
+			StartUpload(session, nameVal, fileLength, fileLastModified);
 			if (session.uploadState == uploading)
 			{
 				if (isOnlyFragment)

@@ -27,7 +27,7 @@
 
 Tool * Tool::freelist = nullptr;
 
-/*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount)
+/*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount, uint32_t fanMap)
 {
 	const size_t numExtruders = reprap.GetGCodes()->GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -77,6 +77,7 @@ Tool * Tool::freelist = nullptr;
 	t->driveCount = dCount;
 	t->heaterCount = hCount;
 	t->xmapCount = xCount;
+	t->fanMapping = fanMap;
 	t->heaterFault = false;
 	t->mixing = false;
 	t->displayColdExtrudeWarning = false;
@@ -144,6 +145,17 @@ void Tool::Print(StringRef& reply)
 	{
 		reply.catf("%c%c", sep, GCodes::axisLetters[xi]);
 		sep = ',';
+	}
+
+	reply.cat("; fans:");
+	sep = ' ';
+	for (size_t fi = 0; fi < NUM_FANS; ++fi)
+	{
+		if ((fanMapping & (1u << fi)) != 0)
+		{
+			reply.catf("%c%u", sep, fi);
+			sep = ',';
+		}
 	}
 
 	reply.catf("; status: %s", active ? "selected" : "standby");
@@ -356,6 +368,14 @@ bool Tool::DisplayColdExtrudeWarning()
 	bool result = displayColdExtrudeWarning;
 	displayColdExtrudeWarning = false;
 	return result;
+}
+
+void Tool::DefineMix(const float m[])
+{
+	for(size_t drive = 0; drive < driveCount; drive++)
+	{
+		mix[drive] = m[drive];
+	}
 }
 
 // End

@@ -152,20 +152,23 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 			if (StringEquals(entry.fname, ".") || StringEquals(entry.fname, "..")) continue;
 
 			file_info.isDirectory = (entry.fattrib & AM_DIR);
-			file_info.size = entry.fsize;
-			uint16_t day = entry.fdate & 0x1F;
-			if (day == 0)
-			{
-				// This can happen if a transfer hasn't been processed completely.
-				day = 1;
-			}
-			file_info.day = day;
-			file_info.month = (entry.fdate & 0x01E0) >> 5;
-			file_info.year = (entry.fdate >> 9) + 1980;
+
 			if (file_info.fileName[0] == 0)
 			{
 				strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
 			}
+
+			file_info.size = entry.fsize;
+
+			struct tm timeInfo;
+			timeInfo.tm_year = (entry.fdate >> 9) + 80;
+			timeInfo.tm_mon = (entry.fdate & 0x1DF) >> 5;
+			timeInfo.tm_mday = max<int>(entry.fdate & 0x1F, 1);
+			timeInfo.tm_hour = (entry.ftime >> 11) & 0x1F;
+			timeInfo.tm_min = (entry.ftime >> 5) & 0x3F;
+			timeInfo.tm_sec = entry.ftime & 0x1F;
+			timeInfo.tm_isdst = -1;
+			file_info.lastModified = mktime(&timeInfo);
 
 			return true;
 		}
@@ -190,19 +193,21 @@ bool MassStorage::FindNext(FileInfo &file_info)
 
 	file_info.isDirectory = (entry.fattrib & AM_DIR);
 	file_info.size = entry.fsize;
-	uint16_t day = entry.fdate & 0x1F;
-	if (day == 0)
-	{
-		// This can happen if a transfer hasn't been processed completely.
-		day = 1;
-	}
-	file_info.day = day;
-	file_info.month = (entry.fdate & 0x01E0) >> 5;
-	file_info.year = (entry.fdate >> 9) + 1980;
+
 	if (file_info.fileName[0] == 0)
 	{
 		strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
 	}
+
+	struct tm timeInfo;
+	timeInfo.tm_year = (entry.fdate >> 9) + 80;
+	timeInfo.tm_mon = (entry.fdate & 0x1DF) >> 5;
+	timeInfo.tm_mday = max<int>(entry.fdate & 0x1F, 1);
+	timeInfo.tm_hour = (entry.ftime >> 11) & 0x1F;
+	timeInfo.tm_min = (entry.ftime >> 5) & 0x3F;
+	timeInfo.tm_sec = entry.ftime & 0x1F;
+	timeInfo.tm_isdst = -1;
+	file_info.lastModified = mktime(&timeInfo);
 
 	return true;
 }
@@ -290,6 +295,22 @@ bool MassStorage::DirectoryExists(const char *path) const
 bool MassStorage::DirectoryExists(const char* directory, const char* subDirectory)
 {
 	return DirectoryExists(CombineName(directory, subDirectory));
+}
+
+bool MassStorage::SetLastModifiedTime(const char *file, time_t time)
+{
+	FILINFO fno;
+	const struct tm * const timeInfo = localtime(&time);
+
+    fno.fdate = (WORD)(((timeInfo->tm_year - 80) * 512U) | (timeInfo->tm_mon + 1) * 32U | timeInfo->tm_mday);
+    fno.ftime = (WORD)(timeInfo->tm_hour * 2048U | timeInfo->tm_min * 32U | timeInfo->tm_sec / 2U);
+
+    const bool ok = (f_utime(file, &fno) == FR_OK);
+    if (!ok)
+	{
+		reprap.GetPlatform()->MessageF(HTTP_MESSAGE, "SetLastModifiedTime didn't work for file '%s'\n", file);
+	}
+    return ok;
 }
 
 // Mount the specified SD card, returning true if done, false if needs to be called again.

@@ -66,16 +66,18 @@ uint32_t get_fattime(void);
  */
 uint32_t get_fattime(void)
 {
-	/**@TODO FIX THIS - real time clock required*/
-	/*
+	if (rtc_get_valid_entry(RTC) != 0)
+	{
+		// Date and time have not been set, return default timestamp instead
+		return 0x210001;
+	}
+
+	// Retrieve current date and time from RTC
 	uint32_t ul_time;
 	uint32_t ul_hour, ul_minute, ul_second;
 	uint32_t ul_year, ul_month, ul_day, ul_week;
-
-
-	// Retrieve date and time
-	//rtc_get_time(RTC, &ul_hour, &ul_minute, &ul_second);
-	//rtc_get_date(RTC, &ul_year, &ul_month, &ul_day, &ul_week);
+	rtc_get_time(RTC, &ul_hour, &ul_minute, &ul_second);
+	rtc_get_date(RTC, &ul_year, &ul_month, &ul_day, &ul_week);
 
 	ul_time = ((ul_year - 1980) << 25)
 			| (ul_month << 21)
@@ -85,7 +87,5 @@ uint32_t get_fattime(void)
 			| (ul_second << 0);
 
 	return ul_time;
-	*/
-	return 0x210001; //set datetime
 }
 
