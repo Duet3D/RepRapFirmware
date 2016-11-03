@@ -1,0 +1,87 @@
+Summary of important changes in recent versions
+===============================================
+
+Version 1.16
+
+- Support the DueX2 and DueX5 expansion boards
+- Add support for up to 3 additional axes U, V and W. The number of axes is reported to DWC and to PanelDue.
+- Add support for X axis remapping in M563 tool creation command
+- Add support for default fan remapping ni M563 tool creation command
+- Support dual material prints and dual simultaneous prints on IDEX (indepedent dual X carriage) printers. See [https://duet3d.com/wiki/Configuring_multiple_independent_X-carriages_on_a_Cartesian_printer].
+- Support minimum fan speeds and fan PWM blipping when starting fans from standstill
+- Files uploaded to SD card are now time-stamped
+- Sending M307 A-1 C-1 D-1 disables the PID for a heater channel, allowing its pin and driver to be used for other purposes
+- Sending M106 P# I-1 disables the specified fan so that its control pin can be used as for general purpose output (M42) or a servo (M280). Caution: the polarity may not be what you expect.
+- Changed M42 pin numbering, see [https://duet3d.com/wiki/Using_servos_and_controlling_unused_I/O_pins]
+- Added M280 servo support, see [https://duet3d.com/wiki/Using_servos_and_controlling_unused_I/O_pins]
+- Allow separate firmware un-retract speed to be configured in M207
+- Allow negative extra un-retraction in M207
+- Support expansion connector pin PB6 and use it by default for a cooling fan tacho input
+- Added Z probe type 6 (switch on E1 endstop connector)
+- Support heater 6 on Duet 0.8.5 (untested and probably incomplete). You need to send a M307 H6 command with valid model parameters to enable heater 6, and Fan 1 will be disabled (they share the same control signal).
+
+Upgrade notes:
+
+- If you are nusing M42 then you will need to adjust the pin numbers in your M42 commands.
+
+Version 1.15
+
+- Implemented automatic heating model calibration and PID tuning. See [https://duet3d.com/wiki/Tuning_the_heater_temperature_control] for details and instructions.
+- Implemented much better heater safety monitoring, based on a model (first-order-plus-time-delay) of each heater/sensor system, using default models if none have been configured
+- Implemented M38 (thanks Chrishamm).
+- Added support for an SD card socket on the SPI bus, and implemented M21/M22 to support this. This was done primarily for the Duet WiFi and has not yet been tested on the wired Duets.
+- Added support for new Duet Web Control functions, in particular the sys file editor (thanks chrishamm)
+- Increased the PWM resolution
+- Included the status of the SD card-detect signal in the M122 response
+- Further improvements to the speed of step pulse generation
+- Improved motion smoothness when printing circles and complex shapes at high speed
+- Bug fix: PID parameters entered using M301 had the I parameter doubled and the D parameter halved, and vice versa for PID parameters reported by M301
+- Bug fix: the object height was sometimes incorrectly extracted from gcode files
+- Bug fix: slicer comments in gcode files that included certain characters (e.g. '\') would give ajax errors when the file information was returned
+- Bug fix (1.15e): using some nonzero values of M572 pressure advance could cause incorrect extruder movement and layer shifts
+- Bug fix (1.15e): step errors were not always recorded
+- Further changes specific to the Duet WiFi firmware build, see [https://www.duet3d.com/forum/thread.php?pid=1104#p1104] for details
+
+Upgrade notes:
+
+- You may get heating faults reported if you do not tune the heaters
+- If you want to continur using tour own PID parameters instead of auto-tuning, you must double your I parameters and halve your D parameters in your M301 commands
+
+Version 1.14
+
+- When multiple motors are due to step, generate all the step pulses simultaneously
+- Added support for multiple drivers for a single axis (M584)
+- Added support for extended step pulse width when using external drivers (T parameter on M569 command)
+- Removed XYZE parameters from M569 (use M584 instead)
+- Added M913 command (set motor % of normal current), allowing the motor current to be temporarily reduced e.g. for homing and loading filament
+- Added Z probe type 5, which is a normally-closed switch or active-high 3.3V digital signal connected to the IN pin of the Z probe connector on the Duet 0.8.5 and Duet WiFi
+- Duet WiFi default Z probe threshold is now 500 (the recommende dvalue for most types of Z probe)
+- Duet WiFi defaults to using a low end homing switch on the X axis (Ormerod and Huxley, users take note!)
+
+Upgrade notes:
+
+- If you are using M569 commands to remap axes and extruders to different drives, that will no longer work. Use the new M584 command instead.
+- If you use the M584 command, it should come before any M350 and M906 commands in your config.g file.
+
+Version 1.13
+
+* First firmware release for the new Duet WiFi
+* Added support for M581 and M582 commands, including 'only if printing a file' condition in M581 command
+* Fixed M117 for PanelDue (needs PanelDue firmware version 1.14)
+* Firmware update messages are now sent to USB and PanelDue (needs PanelDue version 1.14 firmware to display them)
+* M122 responses are now sent only to the comms channel that requested them
+* Added gcode queue underrun counter, displayed in M122 Move diagnostic info
+* SD card interface speed is included in M122 Platform diagnostic info
+* Added support in M997 command to update additional firmware modules on Duet WiFi
+* Corrected a possible problem with multiple incompatible gcodes being executed concurrently
+* Support H parameter on M0 and M1 commands
+* Treat M25 within the file being printed the same as M226
+* Added additional M37 simulation modes to help identify bottlenecks
+* Process M0 and M1 when in simulation mode
+* When executing M0/M1 commands and no print is paused, execute stop.g/sleep.g if they exist
+* Reduced interrupt latency, by not disabling all interrupts when starting a new move, to avoid losing characters sent by PanelDue
+* Temporary fix for RTD temperature spikes causing failed prints
+* Don't print extruder positions in M114 because they are always zero
+* Allow setting of fan PWM from 50% upwards when a fan is in thermostatic mode
+* Reduced default extruder heater PWM frequency to 500Hz
+* Axes are flagged as not homed after using M350 to set microstepping
