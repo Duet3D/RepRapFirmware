@@ -3,26 +3,27 @@ Summary of important changes in recent versions
 
 Version 1.16
 
-- Support the DueX2 and DueX5 expansion boards
+- Support the DueX2 and DueX5 expansion boards for the Duet WiFi
 - Add support for up to 3 additional axes U, V and W. The number of axes is reported to DWC and to PanelDue.
-- Add support for X axis remapping in M563 tool creation command
-- Add support for default fan remapping ni M563 tool creation command
-- Support dual material prints and dual simultaneous prints on IDEX (indepedent dual X carriage) printers. See [https://duet3d.com/wiki/Configuring_multiple_independent_X-carriages_on_a_Cartesian_printer].
+- Add support for X axis remapping in the M563 tool creation command
+- Add support for default fan remapping in the M563 tool creation command
+- Support dual material prints and dual simultaneous prints on IDEX (independent dual X carriage) printers. See [https://duet3d.com/wiki/Configuring_multiple_independent_X-carriages_on_a_Cartesian_printer].
 - Support minimum fan speeds and fan PWM blipping when starting fans from standstill
-- Files uploaded to SD card are now time-stamped
+- Files uploaded to SD card are now time-stamped (thanks chrishamm)
 - Sending M307 A-1 C-1 D-1 disables the PID for a heater channel, allowing its pin and driver to be used for other purposes
 - Sending M106 P# I-1 disables the specified fan so that its control pin can be used as for general purpose output (M42) or a servo (M280). Caution: the polarity may not be what you expect.
 - Changed M42 pin numbering, see [https://duet3d.com/wiki/Using_servos_and_controlling_unused_I/O_pins]
 - Added M280 servo support, see [https://duet3d.com/wiki/Using_servos_and_controlling_unused_I/O_pins]
 - Allow separate firmware un-retract speed to be configured in M207
 - Allow negative extra un-retraction in M207
-- Support expansion connector pin PB6 and use it by default for a cooling fan tacho input
+- Support expansion connector pin PB6 on the Duet WiFi and use it by default for a cooling fan tacho input
 - Added Z probe type 6 (switch on E1 endstop connector)
 - Support heater 6 on Duet 0.8.5 (untested and probably incomplete). You need to send a M307 H6 command with valid model parameters to enable heater 6, and Fan 1 will be disabled (they share the same control signal).
 
 Upgrade notes:
 
-- If you are nusing M42 then you will need to adjust the pin numbers in your M42 commands.
+- If you are using M42 then you will need to adjust the pin numbers in your M42 commands.
+- The recommended web interface if DWC 1.13
 
 Version 1.15
 
@@ -46,6 +47,7 @@ Upgrade notes:
 
 - You may get heating faults reported if you do not tune the heaters
 - If you want to continur using tour own PID parameters instead of auto-tuning, you must double your I parameters and halve your D parameters in your M301 commands
+- The recommended web interface is DWC 1.12
 
 Version 1.14
 
@@ -85,3 +87,26 @@ Version 1.13
 * Allow setting of fan PWM from 50% upwards when a fan is in thermostatic mode
 * Reduced default extruder heater PWM frequency to 500Hz
 * Axes are flagged as not homed after using M350 to set microstepping
+
+Upgrade notes:
+
+The recommended web interface is DWC 1.11 for ther Duet, and 1.11a-dc42 for the Duet WiFi.
+
+Version 1.12
+
+* PT100 and other RTD sensors are now supported
+* When a print is paused and then cancelled, the firmware now attempts to run file sys/cancel.g. It only turns the heaters off if that file is not found.
+* The file upload speed over the web interface has been increased. Those who were getting slow file upload speeds are likely to see the most benefit.
+* If a chamber heater is configured, it is now exempted from the heater timeout, just like the bed heater
+* Two changes have been made to improve print quality when printing at high speeds. First, enabling extruder pressure advance is less likely to result in sequences of short moves having sawtooth velocity profiles. Second, a "Maximum average printing acceleration" can now be configured (M201 P parameter). Using this to restrict average acceleration will flatten out any remaining sawtooth velocity profiles.
+* The firmware now reports itself to the USB subsystem as "Duet 3D printer control electronics",instead of as an Arduino Due. A Windows driver file is provided.
+* The default maximum hot end temperature is reduced to 260C.
+* Bug fix: the USB interface exposed by firmware version 1.11 was not recognised by some versions of Windows on some computers, resulting in a driver installation error
+* Bug fix: simulation mode (M37) did not work
+* Bug fix: setting the motor current on the non-existent 9th driver on a Duet 0.6 might have undesirable side-effects
+
+Upgrade notes:
+
+- If you are using Windows, please install the driver at [https://github.com/dc42/RepRapFirmware/tree/dev/Driver]. This driver does not install any new binaries, it simply tells Windows to use its usbser.sys driver to communicate with a Duet. If you are using Windows 10 then you don't need to install the driver if you don't want to, but then the Duet will show up as "USB Serial Device".
+- If you print with hot end temperatures above 260C then you will need to add a M143 command in config.g, for example M143 S280 will increase the temperature limit to 280C.
+-The recommended web interface is DWC 1.11.
