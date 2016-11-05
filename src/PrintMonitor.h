@@ -53,6 +53,7 @@ struct GCodeFileInfo
 {
 	bool isValid;
 	FilePosition fileSize;
+	time_t lastModifiedTime;
 	float firstLayerHeight;
 	float objectHeight;
 	float filamentNeeded[DRIVES - MIN_AXES];

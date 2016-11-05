@@ -6,6 +6,7 @@
  */
 
 #include "RepRapFirmware.h"
+#include "TMC2660.h"
 
 #if !defined(PROTOTYPE_1)
 
@@ -25,7 +26,8 @@ const Pin DriversSclkPin = 23;								// PA23
 #define TMC_CLOCK_CHAN		1
 #define TMC_CLOCK_ID		ID_TC1							// this is channel 1 on TC0
 
-const uint32_t DriversSpiClockFrequency = 1000000;			// 1MHz SPI clock for now
+const uint32_t DriversSpiClockFrequency = 4000000;			// 4MHz SPI clock
+const int StallGuardThreshold = 1;							// Range is -64..63. Zero seems to be too sensitive. Higher values reduce sensitivity of stall detection.
 
 // TMC2660 registers
 const uint32_t TMC_REG_DRVCTRL = 0;
@@ -100,15 +102,6 @@ const uint32_t TMC_SMARTEN_SEDN_1 = 3 << 13;
 const uint32_t TMC_SMARTEN_SEIMIN_HALF = 0 << 15;
 const uint32_t TMC_SMARTEN_SEIMIN_QTR = 1 << 15;
 
-// Read response. The microstep counter can also be read, but we don't include that here.
-const uint32_t TMC_RR_SG = 1 << 0;		// stall detected
-const uint32_t TMC_RR_OT = 1 << 1;		// over temperature shutdown
-const uint32_t TMC_RR_OTPW = 1 << 2;	// over temperature warning
-const uint32_t TMC_RR_S2G = 3 << 3;		// short to ground counter (2 bits)
-const uint32_t TMC_RR_OLA = 1 << 5;		// open load A
-const uint32_t TMC_RR_OLB = 1 << 6;		// open load B
-const uint32_t TMC_RR_STST = 1 << 7;	// standstill detected
-
 const unsigned int NumWriteRegisters = 5;
 
 // Chopper control register defaults
@@ -125,7 +118,7 @@ const uint32_t defaultChopConfToff = 4;	// default value for TOFF when drive is 
 // StallGuard configuration register
 const uint32_t defaultSgscConfReg =
 	  TMC_REG_SGCSCONF
-	| 0;								// minimum current until user has set it
+	| TMC_SGCSCONF_SGT(StallGuardThreshold);
 
 // Driver configuration register
 const uint32_t defaultDrvConfReg =

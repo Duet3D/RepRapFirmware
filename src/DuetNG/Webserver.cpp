@@ -544,6 +544,7 @@ bool Webserver::ProcessFirstFragment(HttpSession& session, const char* command, 
 				if (timeVal != nullptr && !platform->IsDateTimeSet())
 				{
 					struct tm timeInfo;
+					memset(&timeInfo, 0, sizeof(timeInfo));
 					if (strptime(timeVal, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 					{
 						time_t newTime = mktime(&timeInfo);
@@ -623,6 +624,7 @@ bool Webserver::ProcessFirstFragment(HttpSession& session, const char* command, 
 			// Try to obtain the last modified time
 			time_t fileLastModified = 0;
 			struct tm timeInfo;
+			memset(&timeInfo, 0, sizeof(timeInfo));
 			if (timeVal != nullptr && strptime(timeVal, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 			{
 				fileLastModified = mktime(&timeInfo);

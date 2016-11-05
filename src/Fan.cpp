@@ -12,13 +12,13 @@ void Fan::Init(Pin p_pin, bool hwInverted)
 	val = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
 	blipTime = 100;				// 100ms fan blip
-	blipStartTime = 0;
 	freq = DefaultFanPwmFreq;
 	pin = p_pin;
 	hardwareInverted = hwInverted;
-	inverted = false;
+	inverted = blipping = false;
 	heatersMonitored = 0;
 	triggerTemperature = HOT_END_FAN_TEMPERATURE;
+	lastPwm = -1.0;
 	Refresh();
 }
 
@@ -28,10 +28,11 @@ void Fan::SetValue(float speed)
 	{
 		speed /= 255.0;
 	}
-	const float newVal = (speed > 0.0) ? constrain<float>(speed, minVal, 1.0) : 0.0;
-	if (val == 0.0 && newVal < 1.0 && blipTime != 0)
+	const float newVal = constrain<float>(speed, 0.0, 1.0);
+	if (val == 0.0 && newVal > 0.0 && newVal < 1.0 && blipTime != 0)
 	{
 		// Starting the fan from standstill, so blip the fan
+		blipping = true;
 		blipStartTime = millis();
 	}
 	val = newVal;
@@ -68,7 +69,17 @@ void Fan::SetHardwarePwm(float pwmVal)
 		{
 			invert = !invert;
 		}
-		Platform::WriteAnalog(pin, (invert) ? (1.0 - pwmVal) : pwmVal, freq);
+		if (invert)
+		{
+			pwmVal = 1.0 - pwmVal;
+		}
+
+		// Only set the PWM if it has changed, to avoid a lot of I2C traffic when we have a DueX5 connected
+		if (pwmVal != lastPwm)
+		{
+			lastPwm = pwmVal;
+			Platform::WriteAnalog(pin, pwmVal, freq);
+		}
 	}
 }
 
@@ -91,23 +102,31 @@ void Fan::Refresh()
 					: (reprap.GetPlatform()->AnyHeaterHot(heatersMonitored, triggerTemperature))
 						? max<float>(0.5, val)			// make sure that thermostatic fans always run at 50% speed or more
 						: 0.0;
-	if (reqVal > 0.0 && millis() - blipStartTime < blipTime)
+	if (reqVal > 0.0)
 	{
-		SetHardwarePwm(1.0);
+		if (reqVal < minVal)
+		{
+			reqVal = minVal;
+		}
+
+		if (blipping)
+		{
+			if (millis() - blipStartTime < blipTime)
+			{
+				reqVal = 1.0;
+			}
+			else
+			{
+				blipping = false;
+			}
+		}
 	}
-	else if (reqVal > 0.0 && reqVal < minVal)
-	{
-		SetHardwarePwm(minVal);
-	}
-	else
-	{
-		SetHardwarePwm(reqVal);
-	}
+	SetHardwarePwm(reqVal);
 }
 
 void Fan::Check()
 {
-	if (heatersMonitored != 0 || blipTime != 0)
+	if (heatersMonitored != 0 || blipping)
 	{
 		Refresh();
 	}

@@ -244,6 +244,7 @@ enum class PinAccess : int
 {
 	read,
 	write,
+	pwm,
 	servo
 };
 
@@ -734,6 +735,9 @@ private:
 	bool autoSaveEnabled;
 
 	BoardType board;
+#ifdef DUET_NG
+	ExpansionBoardType expansionBoard;
+#endif
 
 	float lastTime;
 	float longWait;
@@ -802,8 +806,8 @@ private:
 
 	float axisMaxima[MAX_AXES];
 	float axisMinima[MAX_AXES];
-	EndStopType endStopType[MAX_AXES+1];
-	bool endStopLogicLevel[MAX_AXES+1];
+	EndStopType endStopType[MAX_AXES];
+	bool endStopLogicLevel[MAX_AXES];
   
 	// Heaters - bed is assumed to be the first
 
@@ -1215,14 +1219,14 @@ inline float Platform::GetPressureAdvance(size_t extruder) const
 }
 
 inline void Platform::SetEndStopConfiguration(size_t axis, EndStopType esType, bool logicLevel)
-pre(axis < AXES)
+pre(axis < MAX_AXES)
 {
 	endStopType[axis] = esType;
 	endStopLogicLevel[axis] = logicLevel;
 }
 
 inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, bool& logicLevel) const
-pre(axis < AXES)
+pre(axis < MAX_AXES)
 {
 	esType = endStopType[axis];
 	logicLevel = endStopLogicLevel[axis];
@@ -1241,19 +1245,21 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	{
 	case 4:
 		{
-			bool b = ReadPin(endStopPins[E0_AXIS]);
-			if (!endStopLogicLevel[MAX_AXES])
-			{
-				b = !b;
-			}
+			const bool b = ReadPin(endStopPins[E0_AXIS]);
 			return (b) ? 4000 : 0;
 		}
 
 	case 5:
 		return (ReadPin(zProbePin)) ? 4000 : 0;
 
+	case 6:
+		{
+			const bool b = ReadPin(endStopPins[E0_AXIS + 1]);
+			return (b) ? 4000 : 0;
+		}
+
 	default:
-		return AnalogInReadChannel(zProbeAdcChannel);
+		return min<uint16_t>(AnalogInReadChannel(zProbeAdcChannel), 4000);
 	}
 }
 

@@ -3237,7 +3237,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			const int logicalPin = gb->GetIValue();
 			Pin pin;
 			bool invert;
-			if (platform->GetFirmwarePin(logicalPin, PinAccess::write, pin, invert))
+			if (platform->GetFirmwarePin(logicalPin, PinAccess::pwm, pin, invert))
 			{
 				if (gb->Seen('S'))
 				{
@@ -4313,7 +4313,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 				}
 				else if (!model.IsEnabled())
 				{
-					reply.printf("Heater %u is disabled");
+					reply.printf("Heater %u is disabled", heater);
 				}
 				else
 				{
@@ -5071,10 +5071,9 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 		{
 			bool seen = false;
 			bool logicLevel = (gb->Seen('S')) ? (gb->GetIValue() != 0) : true;
-			for (size_t axis = 0; axis <= numAxes; ++axis)
+			for (size_t axis = 0; axis < numAxes; ++axis)
 			{
-				const char letter = (axis == numAxes) ? extrudeLetter : axisLetters[axis];
-				if (gb->Seen(letter))
+				if (gb->Seen(axisLetters[axis]))
 				{
 					int ival = gb->GetIValue();
 					if (ival >= 0 && ival <= 3)
@@ -5096,8 +5095,6 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 							(config == EndStopType::highEndStop) ? "high end" : (config == EndStopType::lowEndStop) ? "low end" : "none",
 							(config == EndStopType::noEndStop) ? "" : (logic) ? "high" : "low");
 				}
-				platform->GetEndStopConfiguration(E0_AXIS, config, logic);
-				reply.catf(" E (active %s)", (logic) ? "high" : "low");
 			}
 		}
 		break;
@@ -5634,7 +5631,7 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 	case 905: // Set current RTC date and time
 		{
 			const time_t now = platform->GetDateTime();
-			struct tm * const timeInfo = localtime(&now);
+			struct tm * const timeInfo = gmtime(&now);
 			bool seen = false;
 
 			if (gb->Seen('P'))

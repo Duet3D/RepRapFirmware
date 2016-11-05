@@ -10,6 +10,15 @@
 
 #include "Pins.h"
 
+// TMC2660 Read response. The microstep counter can also be read, but we don't include that here.
+const uint32_t TMC_RR_SG = 1 << 0;		// stall detected
+const uint32_t TMC_RR_OT = 1 << 1;		// over temperature shutdown
+const uint32_t TMC_RR_OTPW = 1 << 2;	// over temperature warning
+const uint32_t TMC_RR_S2G = 3 << 3;		// short to ground counter (2 bits)
+const uint32_t TMC_RR_OLA = 1 << 5;		// open load A
+const uint32_t TMC_RR_OLB = 1 << 6;		// open load B
+const uint32_t TMC_RR_STST = 1 << 7;	// standstill detected
+
 namespace TMC2660
 {
 	void Init(const Pin[DRIVES], size_t numTmcDrivers)

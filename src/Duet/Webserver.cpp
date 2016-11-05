@@ -964,6 +964,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 				if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time") && !platform->IsDateTimeSet())
 				{
 					struct tm timeInfo;
+					memset(&timeInfo, 0, sizeof(timeInfo));
 					if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 					{
 						time_t newTime = mktime(&timeInfo);
@@ -1589,6 +1590,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 				if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time"))
 				{
 					struct tm timeInfo;
+					memset(&timeInfo, 0, sizeof(timeInfo));
 					if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 					{
 						fileLastModified  = mktime(&timeInfo);
@@ -2333,7 +2335,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 							// Example for a typical UNIX-like file list:
 							// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
 							const char dirChar = (fileInfo.isDirectory) ? 'd' : '-';
-							struct tm *timeInfo = localtime(&fileInfo.lastModified);
+							const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
 							dataTransaction->Printf("%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
 									dirChar, fileInfo.size, platform->GetMassStorage()->GetMonthName(timeInfo->tm_mon + 1),
 									timeInfo->tm_mday, timeInfo->tm_year + 1900, fileInfo.fileName);

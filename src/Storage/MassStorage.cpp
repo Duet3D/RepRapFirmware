@@ -159,16 +159,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 			}
 
 			file_info.size = entry.fsize;
-
-			struct tm timeInfo;
-			timeInfo.tm_year = (entry.fdate >> 9) + 80;
-			timeInfo.tm_mon = (entry.fdate & 0x1DF) >> 5;
-			timeInfo.tm_mday = max<int>(entry.fdate & 0x1F, 1);
-			timeInfo.tm_hour = (entry.ftime >> 11) & 0x1F;
-			timeInfo.tm_min = (entry.ftime >> 5) & 0x3F;
-			timeInfo.tm_sec = entry.ftime & 0x1F;
-			timeInfo.tm_isdst = -1;
-			file_info.lastModified = mktime(&timeInfo);
+			file_info.lastModified = ConvertTimeStamp(entry.fdate, entry.ftime);
 
 			return true;
 		}
@@ -199,16 +190,7 @@ bool MassStorage::FindNext(FileInfo &file_info)
 		strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
 	}
 
-	struct tm timeInfo;
-	timeInfo.tm_year = (entry.fdate >> 9) + 80;
-	timeInfo.tm_mon = (entry.fdate & 0x1DF) >> 5;
-	timeInfo.tm_mday = max<int>(entry.fdate & 0x1F, 1);
-	timeInfo.tm_hour = (entry.ftime >> 11) & 0x1F;
-	timeInfo.tm_min = (entry.ftime >> 5) & 0x3F;
-	timeInfo.tm_sec = entry.ftime & 0x1F;
-	timeInfo.tm_isdst = -1;
-	file_info.lastModified = mktime(&timeInfo);
-
+	file_info.lastModified = ConvertTimeStamp(entry.fdate, entry.ftime);
 	return true;
 }
 
@@ -297,14 +279,28 @@ bool MassStorage::DirectoryExists(const char* directory, const char* subDirector
 	return DirectoryExists(CombineName(directory, subDirectory));
 }
 
+// Return the last modified time of a file, or zero if failure
+time_t MassStorage::GetLastModifiedTime(const char* directory, const char *fileName) const
+{
+	const char *location = (directory != nullptr)
+							? platform->GetMassStorage()->CombineName(directory, fileName)
+							: fileName;
+	FILINFO fil;
+	fil.lfname = nullptr;
+	if (f_stat(location, &fil) == FR_OK)
+	{
+		return ConvertTimeStamp(fil.fdate, fil.ftime);
+	}
+	return 0;
+}
+
 bool MassStorage::SetLastModifiedTime(const char *file, time_t time)
 {
 	FILINFO fno;
-	const struct tm * const timeInfo = localtime(&time);
+	const struct tm * const timeInfo = gmtime(&time);
 
     fno.fdate = (WORD)(((timeInfo->tm_year - 80) * 512U) | (timeInfo->tm_mon + 1) * 32U | timeInfo->tm_mday);
     fno.ftime = (WORD)(timeInfo->tm_hour * 2048U | timeInfo->tm_min * 32U | timeInfo->tm_sec / 2U);
-
     const bool ok = (f_utime(file, &fno) == FR_OK);
     if (!ok)
 	{
@@ -424,6 +420,21 @@ bool MassStorage::CheckDriveMounted(const char* path)
 	}
 
 	return card < NumSdCards && isMounted[card];
+}
+
+/*static*/ time_t MassStorage::ConvertTimeStamp(uint16_t fdate, uint16_t ftime)
+{
+	struct tm timeInfo;
+	memset(&timeInfo, 0, sizeof(timeInfo));
+	timeInfo.tm_year = (fdate >> 9) + 80;
+	const uint16_t month = (fdate >> 5) & 0x0F;
+	timeInfo.tm_mon = (month == 0) ? month : month - 1;		// month is 1..12 in FAT but 0..11 in struct tm
+	timeInfo.tm_mday = max<int>(fdate & 0x1F, 1);
+	timeInfo.tm_hour = (ftime >> 11) & 0x1F;
+	timeInfo.tm_min = (ftime >> 5) & 0x3F;
+	timeInfo.tm_sec = ftime & 0x1F;
+	timeInfo.tm_isdst = 0;
+	return mktime(&timeInfo);
 }
 
 // End

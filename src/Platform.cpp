@@ -339,8 +339,8 @@ void Platform::Init()
 	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
 	// The SX1509B has an independent power on reset, so give it some time
 	delay(200);
-	ExpansionBoardType et = DuetExpansion::Init();
-	switch (et)
+	expansionBoard = DuetExpansion::Init();
+	switch (expansionBoard)
 	{
 	case ExpansionBoardType::DueX2:
 		numTMC2660Drivers = 7;
@@ -578,7 +578,7 @@ int Platform::ZProbe() const
 		}
 	}
 
-	return (GetZProbeParameters().invertReading) ? 1023 - zProbeVal : zProbeVal;
+	return (GetZProbeParameters().invertReading) ? 1000 - zProbeVal : zProbeVal;
 }
 
 // Return the Z probe secondary values.
@@ -1439,11 +1439,34 @@ void Platform::Diagnostics(MessageType mtype)
 				AdcReadingToPowerVoltage(lowestVin), AdcReadingToPowerVoltage(currentVin), AdcReadingToPowerVoltage(highestVin),
 				numUnderVoltageEvents, numOverVoltageEvents);
 	lowestVin = highestVin = currentVin;
+
+	// Show the motor stall status
+	if (expansionBoard == ExpansionBoardType::DueX2 || expansionBoard == ExpansionBoardType::DueX5)
+	{
+		const bool stalled = digitalRead(DueX_SG);
+		MessageF(mtype, "Expansion motor(s) stall indication: %s\n", (stalled) ? "yes" : "no");
+	}
+
+	for (size_t drive = 0; drive < numTMC2660Drivers; ++drive)
+	{
+		const uint32_t stat = TMC2660::GetStatus(drive);
+		MessageF(mtype, "Driver %d:%s%s%s%s%s%s\n", drive,
+						(stat & TMC_RR_SG) ? " stalled" : "",
+						(stat & TMC_RR_OT) ? " temperature-shutdown!"
+							: (stat & TMC_RR_OTPW) ? " temperature-warning" : "",
+						(stat & TMC_RR_S2G) ? " short-to-ground" : "",
+						((stat & TMC_RR_OLA) && !(stat & TMC_RR_STST)) ? " open-load-A" : "",
+						((stat & TMC_RR_OLB) && !(stat & TMC_RR_STST)) ? " open-load-B" : "",
+						(stat & TMC_RR_STST) ? " standstill"
+							: (stat & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB))
+							  ? "" : " ok"
+				);
+	}
 #endif
 
 	// Show current RTC time
 	const time_t timeNow = RTCDue::GetDateTime();
-	const struct tm * const timeInfo = localtime(&timeNow);
+	const struct tm * const timeInfo = gmtime(&timeNow);
 	MessageF(mtype, "Current date and time: %04u-%02u-%02u %02u:%02u:%02u\n",
 			timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
 			timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
@@ -2165,9 +2188,14 @@ void Platform::InitFans()
 
 	if (NUM_FANS > 1)
 	{
+#ifdef DUET_NG
 		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed heater
 		fans[1].SetHeatersMonitored(0xFFFF & ~(1 << BED_HEATER));
 		fans[1].SetValue(1.0);												// set it full on
+#else
+		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
+		fans[1].SetValue(1.0);												// set it full on
+#endif
 	}
 
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
@@ -2655,9 +2683,8 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 		firmwarePin = SpecialPinMap[logicalPin - 60];
 	}
 #ifdef DUET_NG
-	else if (logicalPin >= 100 && logicalPin <= 103)			// Pins 100-103 are the GPIO pins on the DueX2/X5
+	else if (logicalPin >= 100 && logicalPin < 100 + (int)ARRAY_SIZE(DueX5GpioPinMap))	// Pins 100-103 are the GPIO pins on the DueX2/X5
 	{
-		static const Pin DueX5GpioPinMap[] = { 211, 210, 209, 208 };
 		if (access != PinAccess::servo)
 		{
 			firmwarePin = DueX5GpioPinMap[logicalPin - 100];
@@ -2669,9 +2696,13 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 	{
 		// Check that the pin mode has been defined suitably
 		PinMode desiredMode;
-		if (access == PinAccess::write || access == PinAccess::servo)
+		if (access == PinAccess::write)
 		{
-			desiredMode = (firmwarePin >= 100) ? OUTPUT_PWM : OUTPUT_LOW;
+			desiredMode = (invert) ? OUTPUT_HIGH : OUTPUT_LOW;
+		}
+		else if (access == PinAccess::pwm || access == PinAccess::servo)
+		{
+			desiredMode = OUTPUT_PWM;
 		}
 		else
 		{

@@ -16,6 +16,7 @@ private:
 	float val;
 	float minVal;
 	float triggerTemperature;
+	float lastPwm;
 	uint32_t blipTime;						// in milliseconds
 	uint32_t blipStartTime;
 	uint16_t freq;
@@ -23,6 +24,7 @@ private:
 	Pin pin;
 	bool inverted;
 	bool hardwareInverted;
+	bool blipping;
 
 	void Refresh();
 	void SetHardwarePwm(float pwmVal);

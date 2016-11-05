@@ -1353,7 +1353,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 		if (fileInfo.fileName[0] != '.')			// ignore Mac resource files and Linux hidden files
 		{
 			// Make sure we can end this response properly
-			if (bytesLeft < strlen(fileInfo.fileName) + 80)
+			if (bytesLeft < strlen(fileInfo.fileName) + 70)
 			{
 				// No more space available - stop here
 				break;
@@ -1371,10 +1371,18 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 			bytesLeft -= response->EncodeString(fileInfo.fileName, FILENAME_LENGTH, false);
 			bytesLeft -= response->catf(",\"size\":%u", fileInfo.size);
 
-			struct tm *timeInfo = localtime(&fileInfo.lastModified);
-			bytesLeft -= response->catf(",\"lastModified\":\"%04u-%02u-%02uT%02u:%02u:%02u\"}",
-					timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
-					timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+			const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
+			if (timeInfo->tm_year <= /*19*/80)
+			{
+				// Don't send the last modified date if it is invalid
+				bytesLeft -= response->cat('}');
+			}
+			else
+			{
+				bytesLeft -= response->catf(",\"date\":\"%04u-%02u-%02uT%02u:%02u:%02u\"}",
+						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+			}
 		}
 		gotFile = platform->GetMassStorage()->FindNext(fileInfo);
 	}

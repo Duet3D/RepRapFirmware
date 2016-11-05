@@ -54,7 +54,6 @@ const Pin DueX_INT = 17;			// DueX interrupt pin = PA17 (was E6_STOP)
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-//const Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 96, 97, 98, 99, 17 };
 const Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 200, 203, 202, 201, 213 };
 
 // HEATERS

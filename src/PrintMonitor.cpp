@@ -297,6 +297,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 		// Set up the info struct
 		parsedFileInfo.isValid = true;
 		parsedFileInfo.fileSize = fileBeingParsed->Length();
+		parsedFileInfo.lastModifiedTime = reprap.GetPlatform()->GetMassStorage()->GetLastModifiedTime(directory, fileName);
 		parsedFileInfo.firstLayerHeight = 0.0;
 		parsedFileInfo.objectHeight = 0.0;
 		parsedFileInfo.layerHeight = 0.0;
@@ -613,8 +614,17 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 				return false;
 			}
 
-			response->printf("{\"err\":0,\"size\":%lu,\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,\"filament\":",
-							info.fileSize, info.objectHeight, info.firstLayerHeight, info.layerHeight);
+			response->printf("{\"err\":0,\"size\":%lu,",info.fileSize);
+			const struct tm * const timeInfo = gmtime(&info.lastModifiedTime);
+			if (timeInfo->tm_year > /*19*/80)
+			{
+				response->catf("\"lastModified\":\"%04u-%02u-%02uT%02u:%02u:%02u\",",
+						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+			}
+
+			response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,\"filament\":",
+							info.objectHeight, info.firstLayerHeight, info.layerHeight);
 			char ch = '[';
 			if (info.numFilaments == 0)
 			{

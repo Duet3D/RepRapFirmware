@@ -60,7 +60,7 @@ uint32_t get_fattime(void);
  *
  * bit10:5   Minute (0..59)
  *
- * bit4:0    Second (0..59)
+ * bit4:0    Second/2 (0..29)
  *
  * \return Current time.
  */
@@ -84,7 +84,7 @@ uint32_t get_fattime(void)
 			| (ul_day << 16)
 			| (ul_hour << 11)
 			| (ul_minute << 5)
-			| (ul_second << 0);
+			| (ul_second >> 1);
 
 	return ul_time;
 }

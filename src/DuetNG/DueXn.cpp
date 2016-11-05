@@ -7,12 +7,14 @@
 
 #include "DueXn.h"
 #include "SX1509.h"
+#include "Platform.h"
 
 namespace DuetExpansion
 {
 	static SX1509 expander;
 	static uint16_t inputMask;
 	static ExpansionBoardType boardType = ExpansionBoardType::none;
+	static uint16_t inputBits;
 
 	const uint8_t DueXnAddress = 0x3E;				// address of the SX1509B on the DueX0/DueX2/DueX5
 
@@ -33,7 +35,8 @@ namespace DuetExpansion
 	const unsigned int E4StopBit = 2;
 	const unsigned int E5StopBit = 1;
 	const unsigned int E6StopBit = 13;
-	const uint16_t AllStopBits = (1u << E2StopBit) | (1u << E3StopBit) | (1u << E4StopBit) | (1u << E5StopBit) | (1u << E6StopBit);
+	const uint16_t AllStopBitsX2 = (1u << E2StopBit) | (1u << E3StopBit);
+	const uint16_t AllStopBitsX5 = AllStopBitsX2 | (1u << E4StopBit) | (1u << E5StopBit) | (1u << E6StopBit);
 
 	const unsigned int Gpio1Bit = 11;
 	const unsigned int Gpio2Bit = 10;
@@ -64,16 +67,21 @@ namespace DuetExpansion
 
 		if (boardType != ExpansionBoardType::none)
 		{
+			pinMode(DueX_INT, INPUT_PULLUP);
+			pinMode(DueX_SG, INPUT_PULLUP);
+
 			expander.pinModeMultiple(AllFanBits, OUTPUT_PWM);			// Initialise the PWM pins
-			expander.pinModeMultiple(AllStopBits, INPUT);				// Initialise the endstop inputs (no pullups because 5V-tolerant)
+			const uint16_t stopBits = (boardType == ExpansionBoardType::DueX5) ? AllStopBitsX5 : AllStopBitsX2;	// I am assuming that the X0 has 2 endstop inputs
+			expander.pinModeMultiple(stopBits, INPUT);					// Initialise the endstop inputs (no pullups because 5V-tolerant)
 			expander.pinModeMultiple(AllGpioBits, INPUT);				// Initialise the GPIO pins as inputs
 
 			// Set up the interrupt on any input change
-			inputMask = AllStopBits | AllGpioBits;
+			inputMask = stopBits | AllGpioBits;
 			expander.enableInterruptMultiple(inputMask, CHANGE);
 
 			// Clear any initial interrupts
-			expander.interruptSource(true);
+			(void)expander.interruptSource(true);
+			inputBits = expander.digitalReadAll();
 		}
 
 		return boardType;
@@ -114,6 +122,10 @@ namespace DuetExpansion
 				case OUTPUT_PWM:
 					mode = OUTPUT_PWM_OPEN_DRAIN;
 					break;
+				case INPUT_PULLUP:
+				case INPUT_PULLDOWN:
+					mode = INPUT;			// we are using 5rV-tolerant input with external pullup resistors, so don't enable internal pullup/pulldown resistors
+					break;
 				default:
 					break;
 				}
@@ -127,9 +139,18 @@ namespace DuetExpansion
 	// We need to use the SX15089 interrupt to read the data register using interrupts, and just retrieve that value here.
 	bool DigitalRead(Pin pin)
 	{
-		return (boardType != ExpansionBoardType::none)
-				? expander.digitalRead(pin)
-				: false;
+		if (boardType == ExpansionBoardType::none || pin >= 16)
+		{
+			return false;
+		}
+
+		if (!digitalRead(DueX_INT))
+		{
+			// Interrupt is active, so input data may have changed
+			inputBits = expander.digitalReadAll();
+		}
+
+		return (inputBits & (1 << pin)) != 0;
 	}
 
 	// Write a pin
