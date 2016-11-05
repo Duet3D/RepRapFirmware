@@ -20,12 +20,14 @@ Version 1.16
 - Added Z probe type 6 (switch on E1 endstop connector)
 - Added optional I1 parameter to the M558 command to reverse the sense of the Z probe reading. This replaces M574 E0 S0 when using Z probe type 4 and also works with other types of Z probe.
 - Support heater 6 on Duet 0.8.5 (untested and probably incomplete). You need to send a M307 H6 command with valid model parameters to enable heater 6, and Fan 1 will be disabled (they share the same control signal).
+- On the Duet 0.8.5, Fan 1 no longer defaukts to thermostatic but instead defaults to fully on. This is in case you have heater 6 connected.
 - Sending a T command to select a tool no longer runs the tool change macros if the specified tool is already selected
 
 Upgrade notes:
 
 - If you are using M42 then you will need to adjust the pin numbers in your M42 commands
 - If you are using a type 4 Z probe (i.e. switch connected to E0 endstop input) and you are using M574 E0 S0 to invert the polarity, you will need to use the I1 parameter on the M558 command instead
+- If you are using a Duet 0.8.5 and you were relying on Fan 1 being thermostatic by default, you will need to configure it yourself by adding command M106 P1 T45 H1:2:3:4:5:6 to config.g. 
 - The recommended web interface is DWC 1.13
 
 Version 1.15
