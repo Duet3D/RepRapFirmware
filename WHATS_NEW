@@ -22,6 +22,7 @@ Version 1.16
 - Support heater 6 on Duet 0.8.5 (untested and probably incomplete). You need to send a M307 H6 command with valid model parameters to enable heater 6, and Fan 1 will be disabled (they share the same control signal).
 - On the Duet 0.8.5, Fan 1 no longer defaukts to thermostatic but instead defaults to fully on. This is in case you have heater 6 connected.
 - Sending a T command to select a tool no longer runs the tool change macros if the specified tool is already selected
+- M122 command now includes the status of all TMC2660 drivers on the Duet WiFi
 
 Upgrade notes:
 
