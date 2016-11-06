@@ -20,6 +20,8 @@ struct PidParams
 class FopDt
 {
 public:
+	FopDt();
+
 	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pUsePid);
 
 	float GetGain() const { return gain; }

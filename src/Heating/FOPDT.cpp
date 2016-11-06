@@ -7,13 +7,26 @@
 
 #include "FOPDT.h"
 #include "Core.h"
+#include "Configuration.h"
+
+FopDt::FopDt()
+{
+	// Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
+	// Set up sensible defaults in case the user enables the heater without specifying values for all the parameters.
+	enabled = false;
+	gain = DefaultHotEndHeaterGain;
+	timeConstant = DefaultHotEndHeaterTimeConstant;
+	deadTime = DefaultHotEndHeaterDeadTime;
+	maxPwm = 1.0;
+	usePid = true;
+}
 
 // Check the model parameters are sensible, if they are then save them and return true.
 bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pUsePid)
 {
 	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
 	{
-		// Setting all parameters to -1 disabled the heater control completely so we can use the pin for other purposes
+		// Setting all parameters to -1 disables the heater control completely so we can use the pin for other purposes
 		enabled = false;
 		return true;
 	}
