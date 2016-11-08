@@ -27,6 +27,7 @@ namespace DuetExpansion
 	bool DigitalRead(Pin pin);						// Read a pin
 	void DigitalWrite(Pin pin, bool high);			// Write a pin
 	void AnalogOut(Pin pin, float pwm);				// Set the PWM value on this pin
+	uint16_t DiagnosticRead();						// Diagnose the SX1509 by setting all pins as inputs and reading them
 };
 
 #endif /* SRC_DUETNG_DUEXN_H_ */

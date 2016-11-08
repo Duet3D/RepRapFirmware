@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.16rc3"
+# define VERSION "1.16"
 #endif
 
 #ifndef DATE
-# define DATE "2016-11-06"
+# define DATE "2016-11-08"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -155,10 +155,13 @@ const size_t FILENAME_LENGTH = 100;
 #ifdef DUET_NG
 const uint16_t OUTPUT_BUFFER_SIZE = 256;			// How many bytes does each OutputBuffer hold?
 const size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
+const size_t RESERVED_OUTPUT_BUFFERS = 1;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #else
 const uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuffer hold?
 const size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
+const size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #endif
+
 
 // Move system
 

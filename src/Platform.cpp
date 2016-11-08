@@ -1507,6 +1507,12 @@ void Platform::DiagnosticTest(int d)
 		DDA::PrintMoves();
 		break;
 
+#ifdef DUET_NG
+	case (int)DiagnosticTestType::PrintExpanderStatus:
+		MessageF(GENERIC_MESSAGE, "Expander status %04X\n", DuetExpansion::DiagnosticRead());
+		break;
+#endif
+
 	default:
 		break;
 	}

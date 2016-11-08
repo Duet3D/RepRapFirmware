@@ -87,24 +87,31 @@ void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 	switch (inOut)
 	{
 	case INPUT:
+		clearBitsInWord(REG_LED_DRIVER_ENABLE_B, pins);
+		clearBitsInWord(REG_INPUT_DISABLE_B, pins);
 		setBitsInWord(REG_DIR_B, pins);
 		clearBitsInWord(REG_PULL_UP_B, pins);
 		clearBitsInWord(REG_PULL_DOWN_B, pins);
 		break;
 
 	case INPUT_PULLUP:
+		clearBitsInWord(REG_LED_DRIVER_ENABLE_B, pins);
+		clearBitsInWord(REG_INPUT_DISABLE_B, pins);
 		setBitsInWord(REG_DIR_B, pins);
-		setBitsInWord(REG_PULL_UP_B, pins);
 		clearBitsInWord(REG_PULL_DOWN_B, pins);
+		setBitsInWord(REG_PULL_UP_B, pins);
 		break;
 
 	case INPUT_PULLDOWN:
+		clearBitsInWord(REG_LED_DRIVER_ENABLE_B, pins);
+		clearBitsInWord(REG_INPUT_DISABLE_B, pins);
 		setBitsInWord(REG_DIR_B, pins);
 		clearBitsInWord(REG_PULL_UP_B, pins);
 		setBitsInWord(REG_PULL_DOWN_B, pins);
 		break;
 
 	case OUTPUT_LOW:
+		clearBitsInWord(REG_LED_DRIVER_ENABLE_B, pins);
 		clearBitsInWord(REG_PULL_UP_B, pins);
 		clearBitsInWord(REG_PULL_DOWN_B, pins);
 		clearBitsInWord(REG_DATA_B, pins);
@@ -113,6 +120,7 @@ void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 		break;
 
 	case OUTPUT_HIGH:
+		clearBitsInWord(REG_LED_DRIVER_ENABLE_B, pins);
 		clearBitsInWord(REG_PULL_UP_B, pins);
 		clearBitsInWord(REG_PULL_DOWN_B, pins);
 		setBitsInWord(REG_DATA_B, pins);
@@ -121,6 +129,7 @@ void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 		break;
 
 	case OUTPUT_LOW_OPEN_DRAIN:
+		clearBitsInWord(REG_LED_DRIVER_ENABLE_B, pins);
 		clearBitsInWord(REG_PULL_UP_B, pins);
 		clearBitsInWord(REG_PULL_DOWN_B, pins);
 		clearBitsInWord(REG_DATA_B, pins);
@@ -129,6 +138,7 @@ void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 		break;
 
 	case OUTPUT_HIGH_OPEN_DRAIN:
+		clearBitsInWord(REG_LED_DRIVER_ENABLE_B, pins);
 		clearBitsInWord(REG_PULL_UP_B, pins);
 		clearBitsInWord(REG_PULL_DOWN_B, pins);
 		setBitsInWord(REG_DATA_B, pins);

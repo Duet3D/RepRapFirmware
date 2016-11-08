@@ -786,7 +786,7 @@ void PID::FitCurve()
 void PID::DisplayBuffer(const char *intro)
 {
 	OutputBuffer *buf;
-	if (OutputBuffer::Allocate(buf, false))
+	if (OutputBuffer::Allocate(buf))
 	{
 		buf->catf("%s: interval %.1f sec, readings", intro, tuningReadingInterval * MillisToSeconds);
 		for (size_t i = 0; i < tuningReadingsTaken; ++i)

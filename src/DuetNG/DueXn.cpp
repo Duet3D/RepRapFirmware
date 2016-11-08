@@ -72,8 +72,7 @@ namespace DuetExpansion
 
 			expander.pinModeMultiple(AllFanBits, OUTPUT_PWM);			// Initialise the PWM pins
 			const uint16_t stopBits = (boardType == ExpansionBoardType::DueX5) ? AllStopBitsX5 : AllStopBitsX2;	// I am assuming that the X0 has 2 endstop inputs
-			expander.pinModeMultiple(stopBits, INPUT);					// Initialise the endstop inputs (no pullups because 5V-tolerant)
-			expander.pinModeMultiple(AllGpioBits, INPUT);				// Initialise the GPIO pins as inputs
+			expander.pinModeMultiple(stopBits | AllGpioBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
 
 			// Set up the interrupt on any input change
 			inputMask = stopBits | AllGpioBits;
@@ -169,6 +168,16 @@ namespace DuetExpansion
 		{
 			expander.analogWrite(pin, (uint8_t)(constrain<float>(pwm, 0.0, 1.0) * 255));
 		}
+	}
+
+	// Diagnose the SX1509 by setting all pins as inputs and reading them
+	uint16_t DiagnosticRead()
+	{
+		expander.pinModeMultiple(AllStopBitsX5 | AllGpioBits | AllFanBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
+		delay(1);
+		const uint16_t retval = expander.digitalReadAll();	// read all inputs with pullup resistors on fans
+		Init();															// back to normal
+		return retval;
 	}
 }			// end namespace
 

@@ -4181,13 +4181,20 @@ bool GCodes::HandleMcode(GCodeBuffer* gb, StringRef& reply)
 			bool invert;
 			if (platform->GetFirmwarePin(servoIndex, PinAccess::servo, servoPin, invert))
 			{
+				if (gb->Seen('I'))
+				{
+					if (gb->GetIValue() > 0)
+					{
+						invert = !invert;
+					}
+				}
 				if (gb->Seen('S'))
 				{
 					float angleOrWidth = gb->GetFValue();
 					if (angleOrWidth < 0.0)
 					{
 						// Disable the servo by setting the pulse width to zero
-						Platform::WriteAnalog(servoPin, 0.0, ServoRefreshFrequency);
+						Platform::WriteAnalog(servoPin, (invert) ? 1.0 : 0.0, ServoRefreshFrequency);
 					}
 					else
 					{

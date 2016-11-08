@@ -236,7 +236,10 @@ enum class DiagnosticTestType : int
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
 	TestSerialBlock = 1003,			// test what happens when we write a blocking message via debugPrintf()
-	PrintMoves = 100				// print summary of recent moves
+	PrintMoves = 100,				// print summary of recent moves
+#ifdef DUET_NG
+	PrintExpanderStatus = 101,		// print DueXn expander status
+#endif
 };
 
 // Enumeration to describe what we want to do with a logical pin

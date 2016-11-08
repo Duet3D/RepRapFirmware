@@ -896,14 +896,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	if (source == ResponseSource::AUX)
 	{
-		OutputBuffer *response = platform->GetAuxGCodeReply();
+		OutputBuffer *reply = platform->GetAuxGCodeReply();
 		if (response != nullptr)
 		{
 			// Send the response to the last command. Do this last
 			response->catf(",\"seq\":%u,\"resp\":", platform->GetAuxSeq());			// send the response sequence number
 
 			// Send the JSON response
-			response->EncodeReply(response, true);									// also releases the OutputBuffer chain
+			response->EncodeReply(reply, true);										// also releases the OutputBuffer chain
 		}
 	}
 	response->cat("}");

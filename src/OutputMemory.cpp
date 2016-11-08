@@ -86,37 +86,34 @@ const char *OutputBuffer::Read(size_t len)
 	return data + offset;
 }
 
-int OutputBuffer::printf(const char *fmt, ...)
+size_t OutputBuffer::printf(const char *fmt, ...)
 {
 	char formatBuffer[FORMAT_STRING_LENGTH];
 	va_list vargs;
 	va_start(vargs, fmt);
-	int ret = vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
+	vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 	va_end(vargs);
 
-	copy(formatBuffer);
-	return ret;
+	return copy(formatBuffer);
 }
 
-int OutputBuffer::vprintf(const char *fmt, va_list vargs)
+size_t OutputBuffer::vprintf(const char *fmt, va_list vargs)
 {
 	char formatBuffer[FORMAT_STRING_LENGTH];
-	int res = vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
+	vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 
-	cat(formatBuffer);
-	return res;
+	return cat(formatBuffer);
 }
 
-int OutputBuffer::catf(const char *fmt, ...)
+size_t OutputBuffer::catf(const char *fmt, ...)
 {
 	char formatBuffer[FORMAT_STRING_LENGTH];
 	va_list vargs;
 	va_start(vargs, fmt);
-	int ret = vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
+	vsnprintf(formatBuffer, ARRAY_SIZE(formatBuffer), fmt, vargs);
 	va_end(vargs);
 
-	cat(formatBuffer);
-	return ret;
+	return cat(formatBuffer);
 }
 
 size_t OutputBuffer::copy(const char c)
@@ -157,7 +154,7 @@ size_t OutputBuffer::copy(const char *src, size_t len)
 		OutputBuffer *currentBuffer;
 		size_t bytesCopied = OUTPUT_BUFFER_SIZE;
 		do {
-			if (!Allocate(currentBuffer, true))
+			if (!Allocate(currentBuffer))
 			{
 				// We cannot store the whole string, stop here
 				break;
@@ -207,7 +204,7 @@ size_t OutputBuffer::cat(const char c)
 	{
 		// No - allocate a new item and copy the data
 		OutputBuffer *nextBuffer;
-		if (!Allocate(nextBuffer, true))
+		if (!Allocate(nextBuffer))
 		{
 			// We cannot store any more data. Should never happen
 			return 0;
@@ -247,7 +244,7 @@ size_t OutputBuffer::cat(const char *src, size_t len)
 	{
 		// Yes - copy what we couldn't write into a new chain
 		OutputBuffer *nextBuffer;
-		if (!Allocate(nextBuffer, true))
+		if (!Allocate(nextBuffer))
 		{
 			// We cannot store any more data, stop here
 			return copyLength;
@@ -360,7 +357,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 }
 
 // Allocates an output buffer instance which can be used for (large) string outputs
-/*static*/ bool OutputBuffer::Allocate(OutputBuffer *&buf, bool isAppending)
+/*static*/ bool OutputBuffer::Allocate(OutputBuffer *&buf)
 {
 	const irqflags_t flags = cpu_irq_save();
 
@@ -371,18 +368,6 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 
 		buf = nullptr;
 		return false;
-	}
-	else if (isAppending)
-	{
-		// It's a good idea to leave at least one OutputBuffer available if we're
-		// writing a large chunk of data...
-		if (freeOutputBuffers->next == nullptr)
-		{
-			cpu_irq_restore(flags);
-
-			buf = nullptr;
-			return false;
-		}
 	}
 
 	buf = freeOutputBuffers;
@@ -407,32 +392,28 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 // Get the number of bytes left for continuous writing
 /*static*/ size_t OutputBuffer::GetBytesLeft(const OutputBuffer *writingBuffer)
 {
-	// If writingBuffer is NULL, just return how much space there is left for continuous writing
+	size_t freeOutputBuffers = OUTPUT_BUFFER_COUNT - usedOutputBuffers;
 	if (writingBuffer == nullptr)
 	{
-		if (usedOutputBuffers == OUTPUT_BUFFER_COUNT)
-		{
-			// No more instances can be allocated
-			return 0;
-		}
-
-		return (OUTPUT_BUFFER_COUNT - usedOutputBuffers - 1) * OUTPUT_BUFFER_SIZE;
+		// Only return the total number of bytes left
+		return freeOutputBuffers * OUTPUT_BUFFER_SIZE;
 	}
 
-	// Do we have any more buffers left for writing?
-	if (usedOutputBuffers == OUTPUT_BUFFER_COUNT)
+	// We're doing a possibly long response like a filelist
+	size_t bytesLeft = OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength();
+
+	if (freeOutputBuffers < RESERVED_OUTPUT_BUFFERS)
 	{
-		// No - refer to this one only
-		return OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength();
+		// Keep some space left to encapsulate the respones (e.g. via an HTTP header)
+		return bytesLeft;
 	}
 
-	// Yes - we know how many buffers are in use, so there is no need to work through the free list
-	return (OUTPUT_BUFFER_SIZE - writingBuffer->last->DataLength() + (OUTPUT_BUFFER_COUNT - usedOutputBuffers - 1) * OUTPUT_BUFFER_SIZE);
+	return bytesLeft + (freeOutputBuffers - RESERVED_OUTPUT_BUFFERS) * OUTPUT_BUFFER_SIZE;
 }
 
 
 // Truncate an output buffer to free up more memory. Returns the number of released bytes.
-/*static */ size_t OutputBuffer::Truncate(OutputBuffer *buffer, size_t bytesNeeded )
+/*static */ size_t OutputBuffer::Truncate(OutputBuffer *buffer, size_t bytesNeeded)
 {
 	// Can we free up space from this chain? Don't break it up if it's referenced anywhere else
 	if (buffer == nullptr || buffer->Next() == nullptr || buffer->IsReferenced())
