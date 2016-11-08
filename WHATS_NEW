@@ -20,9 +20,10 @@ Version 1.16
 - Added Z probe type 6 (switch on E1 endstop connector)
 - Added optional I1 parameter to the M558 command to reverse the sense of the Z probe reading. This replaces M574 E0 S0 when using Z probe type 4 and also works with other types of Z probe.
 - Support heater 6 on Duet 0.8.5 (untested and probably incomplete). You need to send a M307 H6 command with valid model parameters to enable heater 6, and Fan 1 will be disabled (they share the same control signal).
-- On the Duet 0.8.5, Fan 1 no longer defaukts to thermostatic but instead defaults to fully on. This is in case you have heater 6 connected.
+- On the Duet 0.8.5, Fan 1 no longer defaults to thermostatic but instead defaults to fully on. This is in case you have heater 6 connected.
 - Sending a T command to select a tool no longer runs the tool change macros if the specified tool is already selected
-- M122 command now includes the status of all TMC2660 drivers on the Duet WiFi
+- M122 command now includes the status of all TMC2660 drivers on the Duet WiFi and expansion boards
+- Bug fix: if there were very many files in the /gcodes folder of the SD card then DWC would give and Ajax error when trying to load the files list (thanks chrishamm)
 
 Upgrade notes:
 
