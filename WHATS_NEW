@@ -31,6 +31,7 @@ Upgrade notes:
 - If you are using a type 4 Z probe (i.e. switch connected to E0 endstop input) and you are using M574 E0 S0 to invert the polarity, you will need to use the I1 parameter on the M558 command instead
 - If you are using a Duet 0.8.5 and you were relying on Fan 1 being thermostatic by default, you will need to configure it yourself by adding command M106 P1 T45 H1:2:3:4:5:6 to config.g. 
 - The recommended web interface is DWC 1.13
+- You can use either DuetWebServer-1.03-ch or DuetWebServer-1.02 with this release. You may find that the -1.03-ch version is faster and provides a more reliable connection.
 
 Version 1.15
 
