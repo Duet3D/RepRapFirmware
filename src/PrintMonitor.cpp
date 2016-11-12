@@ -88,7 +88,7 @@ void PrintMonitor::Spin()
 					// Check if this heater is assigned to a tool and if it has reached its set temperature yet
 					if (reprap.IsHeaterAssignedToTool(heater))
 					{
-						if (!reprap.GetHeat()->HeaterAtSetTemperature(heater))
+						if (!reprap.GetHeat()->HeaterAtSetTemperature(heater, false))
 						{
 							nozzleAtHighTemperature = false;
 							break;

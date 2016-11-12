@@ -120,23 +120,9 @@ bool PidParameters::UsePID() const
 	return kP >= 0;
 }
 
-float PidParameters::GetThermistorR25() const
-{
-	return thermistorInfR * exp(thermistorBeta / (25.0 - ABS_ZERO));
-}
-
-void PidParameters::SetThermistorR25AndBeta(float r25, float beta)
-{
-	thermistorInfR = r25 * exp(-beta / (25.0 - ABS_ZERO));
-	thermistorBeta = beta;
-}
-
 bool PidParameters::operator==(const PidParameters& other) const
 {
-	return kI == other.kI && kD == other.kD && kP == other.kP && kT == other.kT && kS == other.kS
-			&& thermistorBeta == other.thermistorBeta && thermistorInfR == other.thermistorInfR
-			&& thermistorSeriesR == other.thermistorSeriesR && adcLowOffset == other.adcLowOffset
-			&& adcHighOffset == other.adcHighOffset;
+	return kI == other.kI && kD == other.kD && kP == other.kP && kT == other.kT && kS == other.kS;
 }
 
 //*************************************************************************************************
@@ -232,15 +218,14 @@ void Platform::Init()
 
 	// DRIVES
 
-	ARRAY_INIT(directions, DIRECTIONS);
-	ARRAY_INIT(enableValues, ENABLE_VALUES);
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
 	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
 	ARRAY_INIT(accelerations, ACCELERATIONS);
 	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
 	ARRAY_INIT(instantDvs, INSTANT_DVS);
 
-#if !defined(DUET_NG)
+#if !defined(DUET_NG) && !defined(RADDS)
+	// Motor current setting on Duet 0.6 and 0.8.5
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
 	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
@@ -263,21 +248,7 @@ void Platform::Init()
 
 	idleCurrentFactor = DEFAULT_IDLE_CURRENT_FACTOR;
 
-	// HEATERS - Bed is assumed to be the first
-
-	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
-	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
-	ARRAY_INIT(spiTempSenseCsPins, SpiTempSensorCsPins);
-
-	configuredHeaters = (BED_HEATER >= 0) ? (1 << BED_HEATER) : 0;
-	heatSampleTicks = HEAT_SAMPLE_TIME * SecondsToMillis;
-
-	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
-	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
-	for (size_t i = 0; i < MaxSpiTempSensors; ++i)
-	{
-		setPullup(SpiTempSensorCsPins[i], true);
-	}
+	// SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
 	{
 		const Pin p = SdCardDetectPins[i];
@@ -296,6 +267,9 @@ void Platform::Init()
 
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
+		enableValues[drive] = false;				// assume active low enable signal
+		directions[drive] = true;					// drive moves forwards by default
+
 		// Map axes and extruders straight through
 		if (drive < MAX_AXES)
 		{
@@ -362,7 +336,20 @@ void Platform::Init()
 
 	extrusionAncilliaryPWM = 0.0;
 
-	// HEATERS - Bed is assumed to be index 0
+	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
+	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
+	ARRAY_INIT(spiTempSenseCsPins, SpiTempSensorCsPins);
+
+	configuredHeaters = (DefaultBedHeater >= 0) ? (1 << DefaultBedHeater) : 0;
+	heatSampleTicks = HEAT_SAMPLE_TIME * SecondsToMillis;
+
+	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
+	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
+	for (size_t i = 0; i < MaxSpiTempSensors; ++i)
+	{
+		setPullup(SpiTempSensorCsPins[i], true);
+	}
+
 	for (size_t heater = 0; heater < HEATERS; heater++)
 	{
 		if (heatOnPins[heater] != NoPin)
@@ -374,11 +361,17 @@ void Platform::Init()
 		thermistorAdcChannels[heater] = chan;
 		AnalogInEnableChannel(chan, true);
 
-		SetThermistorNumber(heater, heater);					// map the thermistor straight through
+		SetThermistorNumber(heater, heater);								// map the thermistor straight through
+		thermistors[heater].SetParameters(
+				(heater == DefaultBedHeater) ? BED_R25 : EXT_R25,
+				(heater == DefaultBedHeater) ? BED_BETA : EXT_BETA,
+				(heater == DefaultBedHeater) ? BED_SHC : EXT_SHC,
+				THERMISTOR_SERIES_RS);										// initialise the thermistor parameters
 		thermistorFilters[heater].Init(0);
 	}
 	SetTemperatureLimit(DEFAULT_TEMPERATURE_LIMIT);
 
+	// Fans
 	InitFans();
 
 	// Hotend configuration
@@ -460,15 +453,6 @@ bool Platform::AnyFileOpen(const FATFS *fs) const
 void Platform::SetTemperatureLimit(float t)
 {
 	temperatureLimit = t;
-	for (size_t heater = 0; heater < HEATERS; heater++)
-	{
-		// Calculate and store the ADC average sum that corresponds to an overheat condition, so that we can check it quickly in the tick ISR
-		float thermistorOverheatResistance = nvData.pidParams[heater].GetRInf()
-				* exp(-nvData.pidParams[heater].GetBeta() / (temperatureLimit - ABS_ZERO));
-		float thermistorOverheatAdcValue = (AD_RANGE_REAL + 1) * thermistorOverheatResistance
-				/ (thermistorOverheatResistance + nvData.pidParams[heater].thermistorSeriesR);
-		thermistorOverheatSums[heater] = (uint32_t) (thermistorOverheatAdcValue + 0.9) * THERMISTOR_AVERAGE_READINGS;
-	}
 }
 
 // Specify which thermistor channel a particular heater uses
@@ -734,14 +718,11 @@ void Platform::ResetNvData()
 	for (size_t i = 0; i < HEATERS; ++i)
 	{
 		PidParameters& pp = nvData.pidParams[i];
-		pp.thermistorSeriesR = defaultThermistorSeriesRs[i];
-		pp.SetThermistorR25AndBeta(defaultThermistor25RS[i], defaultThermistorBetas[i]);
 		pp.kI = defaultPidKis[i];
 		pp.kD = defaultPidKds[i];
 		pp.kP = defaultPidKps[i];
 		pp.kT = defaultPidKts[i];
 		pp.kS = defaultPidKss[i];
-		pp.adcLowOffset = pp.adcHighOffset = 0.0;
 	}
 
 #if FLASH_SAVE_ENABLED
@@ -1579,40 +1560,18 @@ float Platform::GetTemperature(size_t heater, TemperatureError& err)
 		const volatile ThermistorAveragingFilter& filter = thermistorFilters[heater];
 		if (filter.IsValid())
 		{
-			int rawTemp = filter.GetSum()/(THERMISTOR_AVERAGE_READINGS >> AD_OVERSAMPLE_BITS);
+			const int32_t averagedReading = filter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
+			const float temp = thermistors[heater].CalcTemperature(averagedReading);
 
-			// If the ADC reading is N then for an ideal ADC, the input voltage is at least N/(AD_RANGE + 1) and less than (N + 1)/(AD_RANGE + 1), times the analog reference.
-			// So we add 0.5 to to the reading to get a better estimate of the input.
-			float reading = (float) rawTemp + 0.5;
-
-			// Recognise the special case of thermistor disconnected.
-			// For some ADCs, the high-end offset is negative, meaning that the ADC never returns a high enough value. We need to allow for this here.
-			const PidParameters& p = nvData.pidParams[heater];
-			if (p.adcHighOffset < 0.0)
-			{
-				rawTemp -= (int) p.adcHighOffset;
-			}
-			if (rawTemp >= (int)AD_DISCONNECTED_VIRTUAL)
+			if (temp < MinimumConnectedTemperature)
 			{
 				// thermistor is disconnected
 				err = TemperatureError::openCircuit;
 				return ABS_ZERO;
 			}
 
-			// Correct for the low and high ADC offsets
-			reading -= p.adcLowOffset;
-			reading *= (AD_RANGE_VIRTUAL + 1) / (AD_RANGE_VIRTUAL + 1 + p.adcHighOffset - p.adcLowOffset);
-
-			float resistance = reading * p.thermistorSeriesR / ((AD_RANGE_VIRTUAL + 1) - reading);
-			if (resistance > p.GetRInf())
-			{
-				err = TemperatureError::success;
-				return ABS_ZERO + p.GetBeta() / log(resistance / p.GetRInf());
-			}
-
-			// Thermistor short circuit, return a high temperature
-			err = TemperatureError::shortCircuit;
-			return BAD_ERROR_TEMPERATURE;
+			err = TemperatureError::success;
+			return temp;
 		}
 
 		// Filter is not ready yet
@@ -2196,7 +2155,7 @@ void Platform::InitFans()
 	{
 #ifdef DUET_NG
 		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed heater
-		fans[1].SetHeatersMonitored(0xFFFF & ~(1 << BED_HEATER));
+		fans[1].SetHeatersMonitored(0xFFFF & ~(1 << DefaultBedHeater));
 		fans[1].SetValue(1.0);												// set it full on
 #else
 		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
@@ -2940,41 +2899,25 @@ void Platform::Tick()
 	{
 	case 1:			// last conversion started was a thermistor
 	case 3:
+		if (IsThermistorChannel(currentHeater))
 		{
-			if (IsThermistorChannel(currentHeater))
-			{
-				ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-				currentFilter.ProcessReading(AnalogInReadChannel(thermistorAdcChannels[heaterTempChannels[currentHeater]]));
-				if (currentFilter.IsValid() && (configuredHeaters & (1 << currentHeater)) != 0)
-				{
-					uint32_t sum = currentFilter.GetSum();
-					if (sum < thermistorOverheatSums[currentHeater] || sum >= AD_DISCONNECTED_REAL * THERMISTOR_AVERAGE_READINGS)
-					{
-						// We have an over-temperature or disconnected reading from this thermistor, so turn off the heater
-						SetHeater(currentHeater, 0.0);
-						LogError(ErrorCode::BadTemp);
-					}
-				}
-			}
-			else
-			{
-				// Thermocouple case: oversampling is not necessary as the MAX31855 is itself continuously sampling and
-				// averaging.  As such, the temperature reading is taken directly by Platform::GetTemperature() and
-				// periodically called by PID::Spin() where temperature fault handling is taken care of.  However, we
-				// must guard against overly long delays between successive calls of PID::Spin().
-				// Do not call Time() here, it isn't safe. We use millis() instead.
-				if ((millis() - reprap.GetHeat()->GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
-				{
-					SetHeater(currentHeater, 0.0);
-					LogError(ErrorCode::BadTemp);
-				}
-			}
+			// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here
+			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
+			currentFilter.ProcessReading(AnalogInReadChannel(thermistorAdcChannels[heaterTempChannels[currentHeater]]));
+		}
 
-			++currentHeater;
-			if (currentHeater == HEATERS)
-			{
-				currentHeater = 0;
-			}
+		// Guard against overly long delays between successive calls of PID::Spin().
+		// Do not call Time() here, it isn't safe. We use millis() instead.
+		if ((configuredHeaters & (1 << currentHeater)) != 0 && (millis() - reprap.GetHeat()->GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
+		{
+			SetHeater(currentHeater, 0.0);
+			LogError(ErrorCode::BadTemp);
+		}
+
+		++currentHeater;
+		if (currentHeater == HEATERS)
+		{
+			currentHeater = 0;
 		}
 		++tickState;
 		break;

@@ -43,10 +43,8 @@ const Pin ExpansionStart = 200;					// Pin numbers at/above this are on the I/O 
 
 const Pin GlobalTmcEnablePin = 38;				// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
 const Pin ENABLE_PINS[DRIVES] = { 78, 41, 42, 49, 57, 87, 88, 89, 90, 31 };
-const bool ENABLE_VALUES[DRIVES] = { false, false, false, false, false, false, false, false, false, false };	// What to send to enable a drive
 const Pin STEP_PINS[DRIVES] = { 70, 71, 72, 69, 68, 66, 65, 64, 67, 91 };
 const Pin DIRECTION_PINS[DRIVES] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32 };
-const bool DIRECTIONS[DRIVES] = { FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS, FORWARDS };	// What each axis needs to make it go forwards - defaults
 
 const Pin DueX_SG = 96;				// DueX stallguard detect pin = PE0 (was E2_STOP)
 const Pin DueX_INT = 17;			// DueX interrupt pin = PA17 (was E6_STOP)
@@ -63,12 +61,12 @@ const Pin TEMP_SENSE_PINS[HEATERS] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Ther
 const Pin HEAT_ON_PINS[HEATERS] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
 
 // Default thermistor parameters
-// Bed thermistor: now assuming 100K
-// Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
 const float BED_R25 = 100000.0;
 const float BED_BETA = 3988.0;
+const float BED_SHC = 0.0;
 const float EXT_R25 = 100000.0;
 const float EXT_BETA = 4388.0;
+const float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
 const float THERMISTOR_SERIES_RS = 4700.0;

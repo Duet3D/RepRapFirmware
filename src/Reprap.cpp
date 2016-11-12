@@ -680,7 +680,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 			// Current temperatures
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetTemperature(heater));
 				ch = ',';
@@ -690,7 +690,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Active temperatures
 			response->catf(",\"active\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
 				ch = ',';
@@ -700,7 +700,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Standby temperatures
 			response->catf(",\"standby\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
 				ch = ',';
@@ -710,7 +710,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Heater statuses (0=off, 1=standby, 2=active, 3=fault)
 			response->cat(",\"state\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
 				ch = ',';
@@ -747,6 +747,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// Delta configuration and number of axes
 		response->catf(",\"geometry\":\"%s\",\"axes\":%u", move->GetGeometryString(), numAxes);
+
+		// Firmware name, for PanelDue
+		response->catf(",\"firmwareName\":\"%s\"", NAME);
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
@@ -1041,7 +1044,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		ch = '[';
 	}
-	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetTemperature(heater));
 		ch = ',';
@@ -1059,7 +1062,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		ch = '[';
 	}
-	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
 		ch = ',';
@@ -1077,7 +1080,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		ch = '[';
 	}
-	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
 		ch = ',';
@@ -1095,7 +1098,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		ch = '[';
 	}
-	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
 		ch = ',';

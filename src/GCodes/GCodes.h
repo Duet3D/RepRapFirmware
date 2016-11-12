@@ -212,7 +212,7 @@ private:
     void SetHeaterParameters(GCodeBuffer *gb, StringRef& reply);		 // Set the thermistor and ADC parameters for a heater
     void ManageTool(GCodeBuffer *gb, StringRef& reply);					// Create a new tool definition
     void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
-    bool ToolHeatersAtSetTemperatures(const Tool *tool) const;			// Wait for the heaters associated with the specified tool to reach their set temperatures
+    bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const;	// Wait for the heaters associated with the specified tool to reach their set temperatures
     void SetAllAxesNotHomed();											// Flag all axes as not homed
     void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
     const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text

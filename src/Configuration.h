@@ -26,11 +26,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.16"
+# define VERSION "1.17dev1"
 #endif
 
 #ifndef DATE
-# define DATE "2016-11-08"
+# define DATE "2016-11-12"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -103,6 +103,7 @@ const float AllowedTemperatureDerivativeNoise = 0.25;	// How much fluctuation in
 const float MaxAmbientTemperature = 45.0;			// We expect heaters to cool to this temperature or lower when switched off
 const float NormalAmbientTemperature = 25.0;		// The ambient temperature we assume - allow for the printer heating its surroundings a little
 const float DefaultMaxTempExcursion = 10.0;			// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
+const float MinimumConnectedTemperature = -5.0;		// Temperatures below this we treat as a disconnected thermistor
 
 static_assert(DefaultMaxTempExcursion > TEMPERATURE_CLOSE_ENOUGH, "DefaultMaxTempExcursion is too low");
 
@@ -200,7 +201,7 @@ const float FILAMENT_WIDTH = 1.75;					// Millimetres
 
 #define EOF_STRING "<!-- **EoF** -->"
 
-// Firmware update files are now defined in the Pins file
+// Firmware update file names are now defined in the Pins file
 
 // List defaults
 

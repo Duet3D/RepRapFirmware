@@ -47,6 +47,7 @@ Licence: GPL
 
 #include "Core.h"
 #include "Heating/TemperatureSensor.h"
+#include "Heating/Thermistor.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
 #include "Libraries/Fatfs/ff.h"
@@ -124,32 +125,10 @@ const uint32_t Z_PROBE_AXES = (1 << X_AXIS) | (1 << Z_AXIS);	// Axes for which t
 
 // HEATERS - The bed is assumed to be the at index 0
 
+// The thermistors used in the R3epRapPro Ormerod are:
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
 // Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
-const float defaultThermistorBetas[HEATERS] = HEATERS_(BED_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA, EXT_BETA); // Bed thermistor: B57861S104F40; Extruder thermistor: RS 198-961
-const float defaultThermistorSeriesRs[HEATERS] = HEATERS_(THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS,
-													THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS, THERMISTOR_SERIES_RS);
-const float defaultThermistor25RS[HEATERS] = HEATERS_(BED_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25, EXT_R25); // Thermistor ohms at 25 C = 298.15 K
 
-// Note on hot end PID parameters:
-// The system is highly nonlinear because the heater power is limited to a maximum value and cannot go negative.
-// If we try to run a traditional PID when there are large temperature errors, this causes the I-accumulator to go out of control,
-// which causes a large amount of overshoot at lower temperatures. There are at least two ways of avoiding this:
-//
-// 1. Allow the PID to operate even with very large errors, but choose a very small I-term, just the right amount so that when heating up
-//    from cold, the I-accumulator is approximately the value needed to maintain the correct power when the target temperature is reached.
-//    This works well most of the time. However if the Duet board is reset when the extruder is hot and is then
-//    commanded to heat up again before the extruder has cooled, the I-accumulator doesn't grow large enough, so the
-//    temperature undershoots. The small value of the I-term then causes it to take a long time to reach the correct temperature.
-//
-// 2. Only allow the PID to operate when the temperature error is small enough for the PID to operate in the linear region.
-//    So we set FULL_PID_BAND to a small value. It needs to be at least 15C because that is how much the temperature overshoots by
-//    on an Ormerod when we turn the heater off from full power at about 180C. When we transition to PID, we set the I-term to the
-//    value we expect to be needed to maintain the target temperature. We use an additional T parameter to allow this value to be
-//    estimated.
-//
-// The default values use method (2).
-//
 // Note: a negative P, I or D value means do not use PID for this heater, use bang-bang control instead.
 // This allows us to switch between PID and bang-bang using the M301 and M304 commands.
 
@@ -160,28 +139,20 @@ const float defaultPidKps[HEATERS] = HEATERS_(-1.0, 10.0, 10.0, 10.0, 10.0, 10.0
 const float defaultPidKts[HEATERS] = HEATERS_(2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4);			// approximate PWM value needed to maintain temperature, per degC above room temperature
 const float defaultPidKss[HEATERS] = HEATERS_(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);			// PWM scaling factor, to allow for variation in heater power and supply voltage
 
-// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
-const unsigned int AD_OVERSAMPLE_BITS = 1;		// Number of bits we oversample when reading temperatures
-
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ** AD_OVERSAMPLE_BITS.
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
-const unsigned int THERMISTOR_AVERAGE_READINGS = 32;
-const unsigned int AD_RANGE_REAL = 4095;													// The ADC that measures temperatures gives an int this big as its max value
-const unsigned int AD_RANGE_VIRTUAL = ((AD_RANGE_REAL + 1) << AD_OVERSAMPLE_BITS) - 1;		// The max value we can get using oversampling
-const unsigned int AD_DISCONNECTED_REAL = AD_RANGE_REAL - 3;								// We consider an ADC reading at/above this value to indicate that the thermistor is disconnected
-const unsigned int AD_DISCONNECTED_VIRTUAL = AD_DISCONNECTED_REAL << AD_OVERSAMPLE_BITS;
+const unsigned int ThermistorAverageReadings = 32;
 
 const uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
 
-const size_t BED_HEATER = 0;					// Index of the heated bed
-const size_t E0_HEATER = 1;						// Index of the first extruder heater
+const size_t DefaultBedHeater = 0;				// Index of the default bed heater
+const size_t DefaultE0Heater = 1;				// Index of the default first extruder heater
 
 /****************************************************************************************************/
 
 // File handling
 
 const size_t MAX_FILES = 10;					// Must be large enough to handle the max number of simultaneous web requests + files being printed
-
 const size_t FILE_BUFFER_SIZE = 256;
 
 /****************************************************************************************************/
@@ -312,21 +283,10 @@ struct ZProbeParameters
 class PidParameters
 {
 	// If you add any more variables to this class, don't forget to change the definition of operator== in Platform.cpp!
-private:
-	float thermistorBeta, thermistorInfR;				// private because these must be changed together
-
 public:
 	float kI, kD, kP, kT, kS;
-	float thermistorSeriesR;
-	float adcLowOffset, adcHighOffset;
-
-	float GetBeta() const { return thermistorBeta; }
-	float GetRInf() const { return thermistorInfR; }
 
 	bool UsePID() const;
-	float GetThermistorR25() const;
-	void SetThermistorR25AndBeta(float r25, float beta);
-
 	bool operator==(const PidParameters& other) const;
 	bool operator!=(const PidParameters& other) const
 	{
@@ -393,7 +353,7 @@ private:
 	//invariant(index < numAveraged)
 };
 
-typedef AveragingFilter<THERMISTOR_AVERAGE_READINGS> ThermistorAveragingFilter;
+typedef AveragingFilter<ThermistorAverageReadings> ThermistorAveragingFilter;
 typedef AveragingFilter<Z_PROBE_AVERAGE_READINGS> ZProbeAveragingFilter;
 
 // Enumeration of error condition bits
@@ -613,6 +573,11 @@ public:
 	float GetHeatSampleTime() const;
 	void SetPidParameters(size_t heater, const PidParameters& params);
 	const PidParameters& GetPidParameters(size_t heater) const;
+	Thermistor& GetThermistor(size_t heater)
+	pre (heater < HEATERS)
+	{
+		return thermistors[heater];
+	}
 	void SetThermistorNumber(size_t heater, size_t thermistor);
 	int GetThermistorNumber(size_t heater) const;
 	bool IsThermistorChannel(uint8_t heater) const;
@@ -713,7 +678,7 @@ private:
 	struct FlashData
 	{
 		static const uint16_t magicValue = 0xE6C4;	// value we use to recognise that the flash data has been written
-		static const uint16_t versionValue = 4;		// increment this whenever this struct changes
+		static const uint16_t versionValue = 5;		// increment this whenever this struct changes
 		static const uint32_t nvAddress = (SoftwareResetData::nvAddress + sizeof(SoftwareResetData) + 3) & (~3);
 
 		uint16_t magic;
@@ -816,6 +781,7 @@ private:
 
 	Pin tempSensePins[HEATERS];
 	Pin heatOnPins[HEATERS];
+	Thermistor thermistors[HEATERS];
 	TemperatureSensor SpiTempSensors[MaxSpiTempSensors];
 	Pin spiTempSenseCsPins[MaxSpiTempSensors];
 	uint32_t configuredHeaters;										// bitmask of all heaters in use
@@ -889,7 +855,6 @@ private:
 	unsigned int heaterTempChannels[HEATERS];
 	AnalogChannelNumber thermistorAdcChannels[HEATERS];
 	AnalogChannelNumber zProbeAdcChannel;
-	uint32_t thermistorOverheatSums[HEATERS];
 	uint8_t tickState;
 	size_t currentHeater;
 	int debugCode;

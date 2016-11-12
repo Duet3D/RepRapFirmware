@@ -22,7 +22,7 @@ Licence: GPL
 #include "Pid.h"
 
 Heat::Heat(Platform* p)
-	: platform(p), active(false), coldExtrude(false), bedHeater(BED_HEATER), chamberHeater(-1), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: platform(p), active(false), coldExtrude(false), bedHeater(DefaultBedHeater), chamberHeater(-1), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	for (size_t heater = 0; heater < HEATERS; heater++)
 	{
@@ -105,12 +105,9 @@ void Heat::Diagnostics(MessageType mtype)
 
 bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
 {
-	size_t firstHeater = 	(bedHeater == -1) ? E0_HEATER :
-							(includingBed) ? min<int8_t>(bedHeater, E0_HEATER) : E0_HEATER;
-
-	for(size_t heater = firstHeater; heater < HEATERS; heater++)
+	for(int8_t heater = 0; heater < HEATERS; heater++)
 	{
-		if (!HeaterAtSetTemperature(heater))
+		if (!HeaterAtSetTemperature(heater, true) && (includingBed || heater != bedHeater))
 		{
 			return false;
 		}
@@ -119,7 +116,7 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
 }
 
 //query an individual heater
-bool Heat::HeaterAtSetTemperature(int8_t heater) const
+bool Heat::HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling) const
 {
 	// If it hasn't anything to do, it must be right wherever it is...
 	if (heater < 0 || heater >= HEATERS || pids[heater]->SwitchedOff() || pids[heater]->FaultOccurred())
@@ -129,7 +126,9 @@ bool Heat::HeaterAtSetTemperature(int8_t heater) const
 
 	const float dt = GetTemperature(heater);
 	const float target = (pids[heater]->Active()) ? GetActiveTemperature(heater) : GetStandbyTemperature(heater);
-	return (target < TEMPERATURE_LOW_SO_DONT_CARE) || (fabsf(dt - target) <= TEMPERATURE_CLOSE_ENOUGH);
+	return (target < TEMPERATURE_LOW_SO_DONT_CARE)
+		|| (fabsf(dt - target) <= TEMPERATURE_CLOSE_ENOUGH)
+		|| (target < dt && !waitWhenCooling);
 }
 
 Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
