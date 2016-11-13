@@ -5,8 +5,11 @@ Version 1.17 (in development)
 
 - M109 and M190 commands now support both R and S parameters in the same way as Marlin. If you specify temperature using the S parameter, the firmware will wait for the heater to heat up but not to cool down. If you specify temperature using the R parameter, the firmware will wait both when heating up and when cooling down.
 - M191 (set chamber temperature and wait) is now supported, with both R and S parameters as for M190. However you may wish instead to use M141 followed by M116 later to wait for all temperatures.
-- You can now specify a Stenhart-Hart C coefficient in the M305 command, for better thermistor accuracy over a wide temperature range.
+- You can now specify a Stenhart-Hart C coefficient in the M305 command, for better thermistor accuracy over a wide temperature range. If you do use a non-zero C coefficient then you will need to change the B (beta) parameter as well. The B parameter should be the reciprocal of the Steinhart-Hart B coefficient.
 - The thermistor disconnected detection now takes account of the thermistor parameters configured with M305. This should allow the Dyze thermistor to be used without getting so many 'thermistor disconnected' reports. You may need to use a small negative H parameter in your M305 command to make it reliable.
+- M143 now takes an H parameter to specify the heater whose temperature limit you are setting. If it is not provided then heater 1 is assumed.
+- Thermistor parameters are no longer saved to flash memory by M500
+- Bug fix: M300 now causes a beep on PanelDue again (was broken in 1.16).
 
 Upgrade notes:
 
@@ -14,6 +17,8 @@ Upgrade notes:
 - On the Duet 0.6 and Duet 0.8.5 the default thermistor series resistance is now 4.7K (as it is for the Duet WiFi, and as fitted to later Duet 0.6 and all Duet 0.8.5 boards). If you have an older Duet 0.6 with 1K series resistors, or a DueX4 expansion board with 1K series resistors, you will need to add parameter R1000 to the corresponding M305 commands if they don't have the R parameter already.
 - On the Duet 0.6 and 0.85 the default bed thermistor resistance at 25C is now 100K (as it is for the Duet WiFi). If you have an Ormerod, Huxley Duo or RepRapPro Mendel printer with a 10K bed thermistor, you will need to add parameter T10000 to the M305 P0 command in config.g if you don't have that already.
 - On the Duet 0.6 and 0.85 the default hot end heater thermistor parameters are changed to match the Semtec thermistor used in the E3DV6 and other popular hot ends. If you have a printer built from a kit supplied by RepRapPro then you should use the following parameters in your M305 P1 command to restore the previous behaviour: B4138 C0
+- The default bed temperature limit is 125C. Use M143 H0 S### if you need to increase it.
+- If your printer has multiple hot end heaters and you use the M143 command to change the temperature limit, you will need to use one M143 command with an appropriate H parameter for each heater.
 
 Version 1.16
 
