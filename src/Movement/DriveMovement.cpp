@@ -39,7 +39,7 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	}
 
 	// No reverse phase
-	mp.cart.reverseStartStep = totalSteps + 1;
+	reverseStartStep = totalSteps + 1;
 	mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA = 0;
 }
 
@@ -106,7 +106,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 	if (dda.decelDistance * stepsPerMm < 0.5)		// if less than 1 deceleration step
 	{
 		totalSteps = (uint)max<int32_t>(netSteps, 0);
-		mp.cart.decelStartStep = mp.cart.reverseStartStep = netSteps + 1;
+		mp.cart.decelStartStep = reverseStartStep = netSteps + 1;
 		topSpeedTimesCdivAPlusDecelStartClocks = 0;
 		mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA = 0;
 		twoDistanceToStopTimesCsquaredDivA = 0;
@@ -130,27 +130,27 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 		{
 			// No reverse phase
 			totalSteps = (uint)max<int32_t>(netSteps, 0);
-			mp.cart.reverseStartStep = netSteps + 1;
+			reverseStartStep = netSteps + 1;
 			mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA = 0;
 		}
 		else
 		{
-			mp.cart.reverseStartStep = (initialDecelSpeed < 0.0)
-									? mp.cart.decelStartStep
-									: (twoDistanceToStopTimesCsquaredDivA/mp.cart.twoCsquaredTimesMmPerStepDivA) + 1;
+			reverseStartStep = (initialDecelSpeed < 0.0)
+								? mp.cart.decelStartStep
+								: (twoDistanceToStopTimesCsquaredDivA/mp.cart.twoCsquaredTimesMmPerStepDivA) + 1;
 			// Because the step numbers are rounded down, we may sometimes get a situation in which netSteps = 1 and reverseStartStep = 1.
 			// This would lead to totalSteps = -1, which must be avoided.
-			const int32_t overallSteps = (int32_t)(2 * (mp.cart.reverseStartStep - 1)) - netSteps;
+			const int32_t overallSteps = (int32_t)(2 * (reverseStartStep - 1)) - netSteps;
 			if (overallSteps > 0)
 			{
 				totalSteps = overallSteps;
 				mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA =
-						(int64_t)((2 * (mp.cart.reverseStartStep - 1)) * mp.cart.twoCsquaredTimesMmPerStepDivA) - (int64_t)twoDistanceToStopTimesCsquaredDivA;
+						(int64_t)((2 * (reverseStartStep - 1)) * mp.cart.twoCsquaredTimesMmPerStepDivA) - (int64_t)twoDistanceToStopTimesCsquaredDivA;
 			}
 			else
 			{
 				totalSteps = (uint)max<int32_t>(netSteps, 0);
-				mp.cart.reverseStartStep = totalSteps + 1;
+				reverseStartStep = totalSteps + 1;
 				mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA = 0;
 			}
 		}
@@ -161,25 +161,24 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 {
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c%s dir=%c steps=%u next=%u interval=%u sstcda=%u "
+		debugPrintf("DM%c%s dir=%c steps=%u next=%u rev=%u interval=%u sstcda=%u "
 					"acmadtcdts=%d tstcdapdsc=%u 2dtstc2diva=%" PRIu64 "\n",
-					c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, stepInterval, startSpeedTimesCdivA,
+					c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, startSpeedTimesCdivA,
 					accelClocksMinusAccelDistanceTimesCdivTopSpeed, topSpeedTimesCdivAPlusDecelStartClocks, twoDistanceToStopTimesCsquaredDivA);
 
 		if (isDeltaMovement)
 		{
-			debugPrintf("revss=%d hmz0sK=%d minusAaPlusBbTimesKs=%d dSquaredMinusAsquaredMinusBsquared=%" PRId64 "\n"
+			debugPrintf("hmz0sK=%d minusAaPlusBbTimesKs=%d dSquaredMinusAsquaredMinusBsquared=%" PRId64 "\n"
 						"2c2mmsdak=%u asdsk=%u dsdsk=%u mmstcdts=%u\n",
-						mp.delta.reverseStartStep, mp.delta.hmz0sK, mp.delta.minusAaPlusBbTimesKs, mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared,
+						mp.delta.hmz0sK, mp.delta.minusAaPlusBbTimesKs, mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared,
 						mp.delta.twoCsquaredTimesMmPerStepDivAK, mp.delta.accelStopDsK, mp.delta.decelStartDsK, mp.delta.mmPerStepTimesCdivtopSpeedK
 						);
 		}
 		else
 		{
-			debugPrintf("accelStopStep=%u decelStartStep=%u revStartStep=%u nextStep=%u nextStepTime=%u 2CsqtMmPerStepDivA=%" PRIu64 "\n",
-						mp.cart.accelStopStep, mp.cart.decelStartStep, mp.cart.reverseStartStep, nextStep, nextStepTime, mp.cart.twoCsquaredTimesMmPerStepDivA
-						);
-			debugPrintf(" mmPerStepTimesCdivtopSpeed=%u fmsdmtstdca2=%" PRId64 "\n",
+			debugPrintf("accelStopStep=%u decelStartStep=%u 2CsqtMmPerStepDivA=%" PRIu64 "\n"
+						"mmPerStepTimesCdivtopSpeed=%u fmsdmtstdca2=%" PRId64 "\n",
+						mp.cart.accelStopStep, mp.cart.decelStartStep, mp.cart.twoCsquaredTimesMmPerStepDivA,
 						mp.cart.mmPerStepTimesCdivtopSpeed, mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA
 						);
 		}
@@ -203,8 +202,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	uint32_t shiftFactor;
 	if (stepInterval < DDA::MinCalcIntervalCartesian)
 	{
-		uint32_t stepsToLimit = ((nextStep <= mp.cart.reverseStartStep && mp.cart.reverseStartStep <= totalSteps)
-									? mp.cart.reverseStartStep
+		uint32_t stepsToLimit = ((nextStep <= reverseStartStep && reverseStartStep <= totalSteps)
+									? reverseStartStep
 									: totalSteps
 								) - nextStep;
 		if (stepInterval < DDA::MinCalcIntervalCartesian/4 && stepsToLimit > 8)
@@ -242,7 +241,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		// steady speed phase
 		nextStepTime = (uint32_t)((int32_t)(((uint64_t)mp.cart.mmPerStepTimesCdivtopSpeed * nextCalcStep)/K1) + accelClocksMinusAccelDistanceTimesCdivTopSpeed);
 	}
-	else if (nextCalcStep < mp.cart.reverseStartStep)
+	else if (nextCalcStep < reverseStartStep)
 	{
 		// deceleration phase, not reversed yet
 		uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep;
@@ -254,7 +253,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	else
 	{
 		// deceleration phase, reversing or already reversed
-		if (nextCalcStep == mp.cart.reverseStartStep)
+		if (nextCalcStep == reverseStartStep)
 		{
 			direction = !direction;
 			if (live)
@@ -299,8 +298,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	uint32_t shiftFactor;
 	if (stepInterval < DDA::MinCalcIntervalDelta)
 	{
-		const uint32_t stepsToLimit = ((nextStep < mp.delta.reverseStartStep && mp.delta.reverseStartStep <= totalSteps)
-										? mp.delta.reverseStartStep
+		const uint32_t stepsToLimit = ((nextStep < reverseStartStep && reverseStartStep <= totalSteps)
+										? reverseStartStep
 										: totalSteps
 									  ) - nextStep;
 		if (stepInterval < DDA::MinCalcIntervalDelta/8 && stepsToLimit > 16)
@@ -330,7 +329,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	}
 	stepsTillRecalc = (1u << shiftFactor) - 1;					// store number of additional steps to generate
 
-	if (nextStep == mp.delta.reverseStartStep)
+	if (nextStep == reverseStartStep)
 	{
 		direction = false;
 		if (live)

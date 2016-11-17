@@ -31,8 +31,9 @@ PID::PID(Platform* p, int8_t h) : platform(p), heater(h), mode(HeaterMode::off)
 {
 }
 
-void PID::Init(float pGain, float pTc, float pTd, bool usePid)
+void PID::Init(float pGain, float pTc, float pTd, float tempLimit, bool usePid)
 {
+	temperatureLimit = tempLimit;
 	maxTempExcursion = DefaultMaxTempExcursion;
 	maxHeatingFaultTime = DefaultMaxHeatingFaultTime;
 	model.SetParameters(pGain, pTc, pTd, 1.0, usePid);
@@ -108,7 +109,7 @@ TemperatureError PID::ReadTemperature()
 		{
 			err = TemperatureError::openCircuit;
 		}
-		else if (temperature > platform->GetTemperatureLimit())
+		else if (temperature > temperatureLimit)
 		{
 			err = TemperatureError::tooHigh;
 		}
@@ -397,7 +398,7 @@ void PID::Spin()
 
 void PID::SetActiveTemperature(float t)
 {
-	if (t > platform->GetTemperatureLimit())
+	if (t > temperatureLimit)
 	{
 		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
 	}
@@ -413,7 +414,7 @@ void PID::SetActiveTemperature(float t)
 
 void PID::SetStandbyTemperature(float t)
 {
-	if (t > platform->GetTemperatureLimit())
+	if (t > temperatureLimit)
 	{
 		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
 	}

@@ -10,6 +10,12 @@
 
 #include "DriveMovement.h"
 
+#ifdef DUET_NG
+#define DDA_LOG_PROBE_CHANGES	1
+#else
+#define DDA_LOG_PROBE_CHANGES	0		// save memory on the wired Duet
+#endif
+
 /**
  * This defines a single linear movement of the print head
  */
@@ -80,6 +86,12 @@ public:
 
 	static void PrintMoves();										// print saved moves for debugging
 
+#if DDA_LOG_PROBE_CHANGES
+	static const size_t MaxLoggedProbePositions = 40;
+	static size_t numLoggedProbePositions;
+	static int32_t loggedProbePositions[MIN_AXES * MaxLoggedProbePositions];
+#endif
+
 private:
 	void RecalculateMove();
 	void CalcNewSpeeds();
@@ -139,6 +151,12 @@ private:
 	// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 	uint32_t clocksNeeded;					// in clocks
 	uint32_t moveStartTime;					// clock count at which the move was started
+
+#if DDA_LOG_PROBE_CHANGES
+	static bool probeTriggered;
+
+	void LogProbePosition();
+#endif
 
     DriveMovement* firstDM;					// the contained DM that needs the first step
 

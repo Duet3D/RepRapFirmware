@@ -71,7 +71,9 @@ const float EXT_BETA = 4388.0;
 const float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
-const float THERMISTOR_SERIES_RS = 4700.0;
+// On later Duet 0.6 and all Duet 0.8.5 boards it is 4700 ohms. However, if we change the default then machines that have 1K series resistors
+// and don't have R1000 in the M305 commands in config.g will overheat. So for safety we leave the default as 1000.
+const float THERMISTOR_SERIES_RS = 1000.0;
 
 // Number of SPI temperature sensors to support
 

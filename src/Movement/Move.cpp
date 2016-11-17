@@ -423,12 +423,27 @@ extern uint64_t lastNum;
 
 void Move::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform()->Message(mtype, "=== Move ===\n");
-	reprap.GetPlatform()->MessageF(mtype, "MaxReps: %u, StepErrors: %u, MaxWait: %ums, Underruns: %u, %u\n",
+	Platform * const p = reprap.GetPlatform();
+	p->Message(mtype, "=== Move ===\n");
+	p->MessageF(mtype, "MaxReps: %u, StepErrors: %u, MaxWait: %ums, Underruns: %u, %u\n",
 											maxReps, stepErrors, longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	maxReps = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 	longestGcodeWaitInterval = 0;
+
+#if DDA_LOG_PROBE_CHANGES
+	// Temporary code to print Z probe trigger positions
+	p->Message(mtype, "Probe change coordinates:");
+	char ch = ' ';
+	for (size_t i = 0; i < DDA::numLoggedProbePositions; ++i)
+	{
+		float xyzPos[MIN_AXES];
+		MachineToEndPoint(DDA::loggedProbePositions + (MIN_AXES * i), xyzPos, MIN_AXES);
+		p->MessageF(mtype, "%c%.2f,%.2f", ch, xyzPos[X_AXIS], xyzPos[Y_AXIS]);
+		ch = ',';
+	}
+	p->Message(mtype, "\n");
+#endif
 
 #if 0
 	// For debugging
@@ -1170,7 +1185,7 @@ void Move::DeltaProbeInterrupt()
 		}
 
 		bool dir = deltaProbe.GetDirection();
-		Platform *platform = reprap.GetPlatform();
+		Platform * const platform = reprap.GetPlatform();
 		platform->SetDirection(X_AXIS, dir);
 		platform->SetDirection(Y_AXIS, dir);
 		platform->SetDirection(Z_AXIS, dir);
@@ -1535,7 +1550,7 @@ int Move::DoDeltaProbe(float frequency, float amplitude, float rate, float dista
 		const uint32_t firstInterruptTime = deltaProbe.Start();
 		if (firstInterruptTime != 0xFFFFFFFF)
 		{
-			Platform *platform = reprap.GetPlatform();
+			Platform * const platform = reprap.GetPlatform();
 			platform->EnableDrive(X_AXIS);
 			platform->EnableDrive(Y_AXIS);
 			platform->EnableDrive(Z_AXIS);

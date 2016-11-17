@@ -9,10 +9,10 @@
 
 #include "RepRapFirmware.h"
 
-// This class stores a single G Code and provides functions to allow it to be parsed
-
-GCodeBuffer::GCodeBuffer(Platform* p, const char* id, MessageType mt)
-	: platform(p), identity(id), checksumRequired(false), writingFileDirectory(nullptr), toolNumberAdjust(0), responseMessageType(mt)
+// Create a default GCodeBuffer
+GCodeBuffer::GCodeBuffer(const char* id, MessageType mt)
+	: machineState(new GCodeMachineState()), identity(id), checksumRequired(false), writingFileDirectory(nullptr),
+	  toolNumberAdjust(0), responseMessageType(mt)
 {
 	Init();
 }
@@ -22,23 +22,23 @@ void GCodeBuffer::Init()
 	gcodePointer = 0;
 	readPointer = -1;
 	inComment = false;
-	state = GCodeState::idle;
+	bufferState = GCodeBufferState::idle;
 }
 
 void GCodeBuffer::Diagnostics(MessageType mtype)
 {
-	switch (state)
+	switch (bufferState)
 	{
-		case GCodeState::idle:
-			platform->MessageF(mtype, "%s is idle\n", identity);
+		case GCodeBufferState::idle:
+			reprap.GetPlatform()->MessageF(mtype, "%s is idle\n", identity);
 			break;
 
-		case GCodeState::ready:
-			platform->MessageF(mtype, "%s is ready with \"%s\"\n", identity, Buffer());
+		case GCodeBufferState::ready:
+			reprap.GetPlatform()->MessageF(mtype, "%s is ready with \"%s\"\n", identity, Buffer());
 			break;
 
-		case GCodeState::executing:
-			platform->MessageF(mtype, "%s is doing \"%s\"\n", identity, Buffer());
+		case GCodeBufferState::executing:
+			reprap.GetPlatform()->MessageF(mtype, "%s is doing \"%s\"\n", identity, Buffer());
 	}
 }
 
@@ -72,7 +72,7 @@ bool GCodeBuffer::Put(char c)
 		gcodeBuffer[gcodePointer] = 0;
 		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] != 0 && !writingFileDirectory) // Don't bother with blank/comment lines
 		{
-			platform->MessageF(DEBUG_MESSAGE, "%s: %s\n", identity, gcodeBuffer);
+			reprap.GetPlatform()->MessageF(DEBUG_MESSAGE, "%s: %s\n", identity, gcodeBuffer);
 		}
 
 		// Deal with line numbers and checksums
@@ -116,7 +116,7 @@ bool GCodeBuffer::Put(char c)
 			}
 			gcodeBuffer[gp2] = 0;
 		}
-		else if (checksumRequired || IsEmpty())
+		else if ((checksumRequired && machineState->previous == nullptr) || IsEmpty())
 		{
 			// Checksum not found or buffer empty - cannot do anything
 			gcodeBuffer[0] = 0;
@@ -124,7 +124,7 @@ bool GCodeBuffer::Put(char c)
 			return false;
 		}
 		Init();
-		state = GCodeState::ready;
+		bufferState = GCodeBufferState::ready;
 		return true;
 	}
 	else if (!inComment || writingFileDirectory)
@@ -132,7 +132,7 @@ bool GCodeBuffer::Put(char c)
 		gcodeBuffer[gcodePointer++] = c;
 		if (gcodePointer >= (int)GCODE_LENGTH)
 		{
-			platform->Message(GENERIC_MESSAGE, "Error: G-Code buffer length overflow.\n");
+			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: G-Code buffer length overflow.\n");
 			gcodePointer = 0;
 			gcodeBuffer[0] = 0;
 		}
@@ -174,7 +174,7 @@ bool GCodeBuffer::Seen(char c)
 	readPointer = 0;
 	for (;;)
 	{
-		char b = gcodeBuffer[readPointer];
+		const char b = gcodeBuffer[readPointer];
 		if (b == 0 || b == ';') break;
 		if (b == c) return true;
 		++readPointer;
@@ -188,7 +188,7 @@ float GCodeBuffer::GetFValue()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float before a search.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float before a search.\n");
 		readPointer = -1;
 		return 0.0;
 	}
@@ -202,7 +202,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 {
 	if(readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array before a search.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array before a search.\n");
 		readPointer = -1;
 		returnedLength = 0;
 		return;
@@ -214,7 +214,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 	{
 		if (length >= returnedLength)		// array limit has been set in here
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
+			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -253,7 +253,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 {
 	if (readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
 		readPointer = -1;
 		return;
 	}
@@ -264,7 +264,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 	{
 		if (length >= returnedLength) // Array limit has been set in here
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
+			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -290,11 +290,11 @@ const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
 		readPointer = -1;
 		return "";
 	}
-	const char* result = &gcodeBuffer[readPointer + 1];
+	const char* const result = &gcodeBuffer[readPointer + 1];
 	readPointer = -1;
 	return result;
 }
@@ -324,12 +324,12 @@ const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 		readPointer = -1;
 		if (!optional)
 		{
-			platform->Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
+			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
 		}
 		return nullptr;
 	}
 
-	const char* result = &gcodeBuffer[readPointer + 1];
+	const char* const result = &gcodeBuffer[readPointer + 1];
 	readPointer = -1;
 	return result;
 }
@@ -339,11 +339,11 @@ int32_t GCodeBuffer::GetIValue()
 {
 	if (readPointer < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode int before a search.\n");
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode int before a search.\n");
 		readPointer = -1;
 		return 0;
 	}
-	int32_t result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+	const int32_t result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
 	readPointer = -1;
 	return result;
 }
@@ -368,27 +368,60 @@ void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 	}
 }
 
-// Return true if this buffer contains a poll request or empty request that can be executed while macros etc. from another source are being completed
-bool GCodeBuffer::IsPollRequest()
+// Get the original machine state before we pushed anything
+GCodeMachineState& GCodeBuffer::OriginalMachineState() const
 {
-	if (state == GCodeState::ready)
-	{	if (IsEmpty())
-		{
-			return true;
-		}
-		if (Seen('M'))
-		{
-			return IsPollCode(GetIValue());
-		}
+	GCodeMachineState *ms = machineState;
+	while (ms->previous != nullptr)
+	{
+		ms = ms->previous;
 	}
-	return false;
+	return *ms;
 }
 
-// Return true if the specified M code can be executed concurrently with other requests.
-// These should be codes that do not modify the state (we make an exception for M111) and are always executed in a single call to function HandleMCode.
-/*static*/ bool GCodeBuffer::IsPollCode(int code)
+// Push state returning true if successful (i.e. stack not overflowed)
+bool GCodeBuffer::PushState()
 {
-	return code == 27 || code == 105 || code == 111 || code == 114 || code == 119 || code == 122 || code == 408 || code == 573;
+	// Check the current stack depth
+	unsigned int depth = 0;
+	for (const GCodeMachineState *m1 = machineState; m1 != nullptr; m1 = m1->previous)
+	{
+		++depth;
+	}
+	if (depth >= MaxStackDepth + 1)				// the +1 is to allow for the initial state record
+	{
+		return false;
+	}
+
+	GCodeMachineState * const ms = GCodeMachineState::Allocate();
+	ms->previous = machineState;
+	ms->feedrate = machineState->feedrate;
+	ms->drivesRelative = machineState->drivesRelative;
+	ms->axesRelative = machineState->axesRelative;
+	ms->doingFileMacro = machineState->doingFileMacro;
+	ms->lockedResources = machineState->lockedResources;
+	machineState = ms;
+	return true;
+}
+
+// Pop state returning true if successful (i.e. no stack underrun)
+bool GCodeBuffer::PopState()
+{
+	GCodeMachineState * const ms = machineState;
+	if (ms->previous == nullptr)
+	{
+		return false;
+	}
+
+	machineState = ms->previous;
+	GCodeMachineState::Release(ms);
+	return true;
+}
+
+// Return true if this source is executing a file macro
+bool GCodeBuffer::IsDoingFileMacro() const
+{
+	return machineState->doingFileMacro;
 }
 
 // End

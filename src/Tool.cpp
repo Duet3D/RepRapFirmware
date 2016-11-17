@@ -173,7 +173,7 @@ float Tool::MaxFeedrate() const
 	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	for (size_t d = 0; d < driveCount; d++)
 	{
-		float mf = reprap.GetPlatform()->MaxFeedrate(drives[d] + numAxes);
+		const float mf = reprap.GetPlatform()->MaxFeedrate(drives[d] + numAxes);
 		if (mf > result)
 		{
 			result = mf;
@@ -193,7 +193,7 @@ float Tool::InstantDv() const
 	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	for (size_t d = 0; d < driveCount; d++)
 	{
-		float idv = reprap.GetPlatform()->ActualInstantDv(drives[d] + numAxes);
+		const float idv = reprap.GetPlatform()->ActualInstantDv(drives[d] + numAxes);
 		if (idv < result)
 		{
 			result = idv;
@@ -306,7 +306,7 @@ void Tool::SetVariables(const float* standby, const float* active)
 		}
 		else
 		{
-			const float temperatureLimit = reprap.GetPlatform()->GetTemperatureLimit();
+			const float temperatureLimit = reprap.GetHeat()->GetTemperatureLimit(heaters[heater]);
 			if (active[heater] < temperatureLimit)
 			{
 				activeTemperatures[heater] = active[heater];

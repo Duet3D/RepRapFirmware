@@ -58,6 +58,8 @@ public:
 	float GetActiveTemperature(int8_t heater) const;
 	void SetStandbyTemperature(int8_t heater, float t);
 	float GetStandbyTemperature(int8_t heater) const;
+	void SetTemperatureLimit(int8_t heater, float t);
+	float GetTemperatureLimit(int8_t heater) const;
 	void Activate(int8_t heater);								// Turn on a heater
 	void Standby(int8_t heater);								// Set a heater idle
 	float GetTemperature(int8_t heater) const;					// Get the temperature of a heater
@@ -105,6 +107,8 @@ public:
 
 	bool IsHeaterEnabled(size_t heater) const					// Is this heater enabled?
 	pre(heater < HEATERS);
+
+	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit of any heater
 
 private:
 	Platform* platform;											// The instance of the RepRap hardware class

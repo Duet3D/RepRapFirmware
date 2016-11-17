@@ -70,7 +70,7 @@ namespace DuetExpansion
 			pinMode(DueX_INT, INPUT_PULLUP);
 			pinMode(DueX_SG, INPUT_PULLUP);
 
-			expander.pinModeMultiple(AllFanBits, OUTPUT_PWM);			// Initialise the PWM pins
+			expander.pinModeMultiple(AllFanBits, OUTPUT_PWM_LOW);		// Initialise the PWM pins
 			const uint16_t stopBits = (boardType == ExpansionBoardType::DueX5) ? AllStopBitsX5 : AllStopBitsX2;	// I am assuming that the X0 has 2 endstop inputs
 			expander.pinModeMultiple(stopBits | AllGpioBits, INPUT);	// Initialise the endstop inputs and GPIO pins (no pullups because 5V-tolerant)
 
@@ -118,7 +118,8 @@ namespace DuetExpansion
 				case OUTPUT_HIGH:
 					mode = OUTPUT_HIGH_OPEN_DRAIN;
 					break;
-				case OUTPUT_PWM:
+				case OUTPUT_PWM_LOW:
+				case OUTPUT_PWM_HIGH:
 					mode = OUTPUT_PWM_OPEN_DRAIN;
 					break;
 				case INPUT_PULLUP:

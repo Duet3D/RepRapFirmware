@@ -369,7 +369,6 @@ void Platform::Init()
 				THERMISTOR_SERIES_RS);										// initialise the thermistor parameters
 		thermistorFilters[heater].Init(0);
 	}
-	SetTemperatureLimit(DEFAULT_TEMPERATURE_LIMIT);
 
 	// Fans
 	InitFans();
@@ -450,14 +449,8 @@ bool Platform::AnyFileOpen(const FATFS *fs) const
 	return false;
 }
 
-void Platform::SetTemperatureLimit(float t)
-{
-	temperatureLimit = t;
-}
-
 // Specify which thermistor channel a particular heater uses
 void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
-pre(heater < HEATERS && thermistor < HEATERS)
 {
 	heaterTempChannels[heater] = thermistor;
 
@@ -1635,7 +1628,6 @@ void Platform::SetPidParameters(size_t heater, const PidParameters& params)
 		{
 			WriteNvData();
 		}
-		SetTemperatureLimit(temperatureLimit);		// recalculate the thermistor resistance at max allowed temperature for the tick ISR
 	}
 }
 const PidParameters& Platform::GetPidParameters(size_t heater) const
@@ -2221,11 +2213,24 @@ void Platform::AppendAuxReply(const char *msg)
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (msg[0] != 0 && HaveAux())
 	{
-		// Regular text-based responses for AUX are currently stored and processed by M105/M408
-		if (auxGCodeReply != nullptr || OutputBuffer::Allocate(auxGCodeReply))
+		if (msg[0] == '{')
 		{
-			auxSeq++;
-			auxGCodeReply->cat(msg);
+			// JSON responses are always sent directly to the AUX device
+			OutputBuffer *buf;
+			if (OutputBuffer::Allocate(buf))
+			{
+				buf->copy(msg);
+				auxOutput->Push(buf);
+			}
+		}
+		else
+		{
+			// Regular text-based responses for AUX are currently stored and processed by M105/M408
+			if (auxGCodeReply != nullptr || OutputBuffer::Allocate(auxGCodeReply))
+			{
+				auxSeq++;
+				auxGCodeReply->cat(msg);
+			}
 		}
 	}
 }
@@ -2302,22 +2307,6 @@ void Platform::Message(MessageType type, const char *message)
 						return;
 					}
 					usbOutput->Push(usbOutputBuffer);
-				}
-
-				// Check if we need to write the indentation chars first
-				const size_t stackPointer = reprap.GetGCodes()->GetStackPointer();
-				if (stackPointer > 0)
-				{
-					// First, make sure we get the indentation right
-					char indentation[StackSize * 2 + 1];
-					for(size_t i = 0; i < stackPointer * 2; i++)
-					{
-						indentation[i] = ' ';
-					}
-					indentation[stackPointer * 2] = 0;
-
-					// Append the indentation string
-					usbOutputBuffer->cat(indentation);
 				}
 
 				// Append the message string
@@ -2667,7 +2656,7 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 		}
 		else if (access == PinAccess::pwm || access == PinAccess::servo)
 		{
-			desiredMode = OUTPUT_PWM;
+			desiredMode = (invert) ? OUTPUT_PWM_HIGH : OUTPUT_PWM_LOW;
 		}
 		else
 		{

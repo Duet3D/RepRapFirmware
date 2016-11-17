@@ -713,7 +713,7 @@ void WifiFirmwareUploader::Spin()
 // Try to upload the given file at the given address
 void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uint32_t address)
 {
-	Platform *platform = reprap.GetPlatform();
+	Platform * const platform = reprap.GetPlatform();
 	uploadFile = platform->GetFileStore(dir, file, false);
 	if (uploadFile == nullptr)
 	{

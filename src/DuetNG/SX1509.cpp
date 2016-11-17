@@ -146,7 +146,8 @@ void SX1509::pinModeMultiple(uint16_t pins, PinMode inOut)
 		clearBitsInWord(REG_DIR_B, pins);
 		break;
 
-	case OUTPUT_PWM:
+	case OUTPUT_PWM_LOW:
+	case OUTPUT_PWM_HIGH:
 		ledDriverInitMultiple(pins, false, false);
 		break;
 

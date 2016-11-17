@@ -36,18 +36,18 @@ void Heat::Init()
 	{
 		if (heater == bedHeater || heater == chamberHeater)
 		{
-			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, false);
+			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, DefaultBedTemperatureLimit, false);
 		}
 #ifndef DUET_NG
 		else if (heater == HEATERS - 1)
 		{
 			// Heater 6 pin is shared with fan 1. By default we support fan 1, so disable heater 6.
-			pids[heater]->Init(-1.0, -1.0, -1.0, true);
+			pids[heater]->Init(-1.0, -1.0, -1.0, DefaultExtruderTemperatureLimit, true);
 		}
 #endif
 		else
 		{
-			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, true);
+			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, DefaultExtruderTemperatureLimit, true);
 		}
 	}
 	lastTime = millis() - platform->HeatSampleInterval();		// flag the PIDS as due for spinning
@@ -171,6 +171,19 @@ float Heat::GetStandbyTemperature(int8_t heater) const
 	return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
 }
 
+void Heat::SetTemperatureLimit(int8_t heater, float t)
+{
+	if (heater >= 0 && heater < HEATERS)
+	{
+		pids[heater]->SetTemperatureLimit(t);
+	}
+}
+
+float Heat::GetTemperatureLimit(int8_t heater) const
+{
+	return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetTemperatureLimit() : ABS_ZERO;
+}
+
 float Heat::GetTemperature(int8_t heater) const
 {
 	return (heater >= 0 && heater < HEATERS) ? pids[heater]->GetTemperature() : ABS_ZERO;
@@ -262,6 +275,24 @@ void Heat::GetAutoTuneStatus(StringRef& reply) const
 	{
 		reply.copy("No heater has been tuned yet");
 	}
+}
+
+// Get the highest temperature limit of any heater
+float Heat::GetHighestTemperatureLimit() const
+{
+	float limit = ABS_ZERO;
+	for (size_t h = 0; h < HEATERS; ++h)
+	{
+		if (h < reprap.GetToolHeatersInUse() || (int)h == bedHeater || (int)h == chamberHeater)
+		{
+			const float t = pids[h]->GetTemperatureLimit();
+			if (t > limit)
+			{
+				limit = t;
+			}
+		}
+	}
+	return limit;
 }
 
 // End

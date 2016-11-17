@@ -481,10 +481,10 @@ public:
 	void SetPhysicalDrives(size_t drive, uint32_t physicalDrives);
 	uint32_t GetPhysicalDrives(size_t drive) const;
 	void SetDirection(size_t drive, bool direction);
-	void SetDirectionValue(size_t drive, bool dVal);
-	bool GetDirectionValue(size_t drive) const;
-	void SetEnableValue(size_t drive, bool eVal);
-	bool GetEnableValue(size_t drive) const;
+	void SetDirectionValue(size_t driver, bool dVal);
+	bool GetDirectionValue(size_t driver) const;
+	void SetEnableValue(size_t driver, bool eVal);
+	bool GetEnableValue(size_t driver) const;
 	void EnableDriver(size_t driver);
 	void DisableDriver(size_t driver);
 	void EnableDrive(size_t drive);
@@ -565,26 +565,43 @@ public:
 
 	// Heat and temperature
 
-	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
+	float GetTemperature(size_t heater, TemperatureError& err) // Result is in degrees Celsius
+	pre (heater < HEATERS);
+
 	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
-	void SetHeater(size_t heater, float power);				// power is a fraction in [0,1]
+
+	void SetHeater(size_t heater, float power)				// power is a fraction in [0,1]
+	pre (heater < HEATERS);
+
 	uint32_t HeatSampleInterval() const;
 	void SetHeatSampleTime(float st);
 	float GetHeatSampleTime() const;
 	void SetPidParameters(size_t heater, const PidParameters& params);
-	const PidParameters& GetPidParameters(size_t heater) const;
+
+	const PidParameters& GetPidParameters(size_t heater) const
+	pre (heater < HEATERS);
+
 	Thermistor& GetThermistor(size_t heater)
 	pre (heater < HEATERS)
 	{
 		return thermistors[heater];
 	}
-	void SetThermistorNumber(size_t heater, size_t thermistor);
-	int GetThermistorNumber(size_t heater) const;
-	bool IsThermistorChannel(uint8_t heater) const;
-	bool IsThermocoupleChannel(uint8_t heater) const;
-	bool IsRtdChannel(uint8_t heater) const;
-	void SetTemperatureLimit(float t);
-	float GetTemperatureLimit() const { return temperatureLimit; }
+
+	void SetThermistorNumber(size_t heater, size_t thermistor)
+	pre(heater < HEATERS; thermistor < HEATERS);
+
+	int GetThermistorNumber(size_t heater) const
+	pre (heater < HEATERS);
+
+	bool IsThermistorChannel(uint8_t heater) const
+	pre(heater < HEATERS);
+
+	bool IsThermocoupleChannel(uint8_t heater) const
+	pre(heater < HEATERS);
+
+	bool IsRtdChannel(uint8_t heater) const
+	pre(heater < HEATERS);
+
 	void UpdateConfiguredHeaters();
 	bool AnyHeaterHot(uint16_t heaters, float t);			// called to see if we need to turn on the hot end fan
 
@@ -722,7 +739,9 @@ private:
 
 	void SetDriverCurrent(size_t driver, float current, bool isPercent);
 	void UpdateMotorCurrent(size_t driver);
-	void SetDriverDirection(uint8_t driver, bool direction);
+	void SetDriverDirection(uint8_t driver, bool direction)
+	pre(driver < DRIVES);
+
 	static uint32_t CalcDriverBitmap(size_t driver);			// calculate the step bit for this driver
 
 	volatile DriverStatus driverState[DRIVES];
@@ -786,7 +805,6 @@ private:
 	Pin spiTempSenseCsPins[MaxSpiTempSensors];
 	uint32_t configuredHeaters;										// bitmask of all heaters in use
 	uint32_t heatSampleTicks;
-	float temperatureLimit;
 
 	// Fans
 
@@ -1048,21 +1066,19 @@ inline bool Platform::GetDirectionValue(size_t drive) const
 
 inline void Platform::SetDriverDirection(uint8_t driver, bool direction)
 {
-	if (driver < DRIVES)
-	{
-		bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
-		digitalWrite(DIRECTION_PINS[driver], d);
-	}
+	bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
+	digitalWrite(DIRECTION_PINS[driver], d);
 }
 
-inline void Platform::SetEnableValue(size_t drive, bool eVal)
+inline void Platform::SetEnableValue(size_t driver, bool eVal)
 {
-	enableValues[drive] = eVal;
+	enableValues[driver] = eVal;
+	DisableDriver(driver);				// disable the drive, because the enable polarity may have been wrong before
 }
 
-inline bool Platform::GetEnableValue(size_t drive) const
+inline bool Platform::GetEnableValue(size_t driver) const
 {
-	return enableValues[drive];
+	return enableValues[driver];
 }
 
 inline float Platform::AxisMaximum(size_t axis) const

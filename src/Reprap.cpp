@@ -59,9 +59,9 @@ void RepRap::Init()
 		configFile = platform->GetDefaultFile();
 	}
 
-	if (gCodes->DoFileMacro(configFile, false))
+	if (gCodes->RunConfigFile(configFile))
 	{
-		while (gCodes->DoingFileMacro())
+		while (gCodes->IsRunningConfigFile())
 		{
 			// GCodes::Spin will read the macro and ensure DoingFileMacro returns false when it's done
 			Spin();
@@ -730,8 +730,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"coldExtrudeTemp\":%1.f", heat->ColdExtrude() ? 0 : HOT_ENOUGH_TO_EXTRUDE);
 		response->catf(",\"coldRetractTemp\":%1.f", heat->ColdExtrude() ? 0 : HOT_ENOUGH_TO_RETRACT);
 
-		// Maximum hotend temperature
-		response->catf(",\"tempLimit\":%1.f", platform->GetTemperatureLimit());
+		// Maximum hotend temperature - DWC just wants the highest one
+		response->catf(",\"tempLimit\":%1.f", heat->GetHighestTemperatureLimit());
 
 		// Endstops
 		uint16_t endstops = 0;
@@ -755,7 +755,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		size_t mountedCards = 0;
 		for(size_t i = 0; i < NumSdCards; i++)
 		{
-			if (reprap.GetPlatform()->GetMassStorage()->IsDriveMounted(i))
+			if (platform->GetMassStorage()->IsDriveMounted(i))
 			{
 				mountedCards |= (1 << i);
 			}
@@ -1329,14 +1329,14 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 	}
 
 	// If the requested volume is not mounted, report an error
-	if (!reprap.GetPlatform()->GetMassStorage()->CheckDriveMounted(dir))
+	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
 	{
 		response->copy("{\"err\":1}");
 		return response;
 	}
 
 	// Check if the directory exists
-	if (!reprap.GetPlatform()->GetMassStorage()->DirectoryExists(dir))
+	if (!platform->GetMassStorage()->DirectoryExists(dir))
 	{
 		response->copy("{\"err\":2}");
 		return response;

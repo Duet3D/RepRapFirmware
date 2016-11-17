@@ -40,6 +40,7 @@ public:
 	void PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation);
 	void ReduceSpeed(const DDA& dda, float inverseSpeedFactor);
 	void DebugPrint(char c, bool withDelta) const;
+	int32_t GetNetStepsLeft() const;
 
 private:
 	bool CalcNextStepTimeCartesianFull(const DDA &dda, bool live);
@@ -63,6 +64,7 @@ public:
 
 	// These values change as the step is executed
 	uint32_t nextStep;									// number of steps already done
+	uint32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 	DriveMovement *nextDM;								// link to next DM that needs a step
@@ -78,7 +80,6 @@ public:
 			// The following depend on how the move is executed, so they must be set up in Prepare()
 			uint32_t accelStopStep;						// the first step number at which we are no longer accelerating
 			uint32_t decelStartStep;					// the first step number at which we are decelerating
-			uint32_t reverseStartStep;					// the first step number for which we need to reverse direction due to pressure advance
 			uint32_t mmPerStepTimesCdivtopSpeed;		// mmPerStepInHyperCuboidSpace * clock / topSpeed
 
 			// The following only need to be stored per-drive if we are supporting pressure advance
@@ -89,7 +90,6 @@ public:
 		{
 			// The following don't depend on how the move is executed, so they can be set up in Init
 			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
-			uint32_t reverseStartStep;
 			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
 			int32_t minusAaPlusBbTimesKs;
 			uint32_t twoCsquaredTimesMmPerStepDivAK;	// this could be stored in the DDA if all towers use the same steps/mm
@@ -148,6 +148,18 @@ inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live)
 
 	state = DMState::idle;
 	return false;
+}
+
+// Return the number of net steps left for the move in the forwards direction.
+inline int32_t DriveMovement::GetNetStepsLeft() const
+{
+	const int32_t netStepsLeft =
+			(  (nextStep >= reverseStartStep || reverseStartStep >= totalSteps)
+			 ? totalSteps									// no reverse due, or we have already reversed
+			 : 2 * reverseStartStep - totalSteps			// we have yet to reverse
+			)
+			- nextStep + 1;
+	return (direction) ? netStepsLeft : -netStepsLeft;
 }
 
 #endif /* DRIVEMOVEMENT_H_ */
