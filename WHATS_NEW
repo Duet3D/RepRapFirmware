@@ -8,8 +8,12 @@ Version 1.17 (in development)
 - You can now specify a Stenhart-Hart C coefficient in the M305 command, for better thermistor accuracy over a wide temperature range. If you do use a non-zero C coefficient then you will need to change the B (beta) parameter as well. The B parameter should be the reciprocal of the Steinhart-Hart B coefficient.
 - The thermistor disconnected detection now takes account of the thermistor parameters configured with M305. This should allow the Dyze thermistor to be used without getting so many 'thermistor disconnected' reports. You may need to use a small negative H parameter in your M305 command to make it reliable.
 - M143 now takes an H parameter to specify the heater whose temperature limit you are setting. If it is not provided then heater 1 is assumed.
-- Thermistor parameters are no longer saved to flash memory by M500
+- Multiple commands from different sources that do not interfere are executed concurrently. Previously, only a few status reporting commands could be executed concurrently with other commands. 
+- Thermistor parameters are no longer saved to flash memory by M500.
+- If the M569 command is used with the 'R' parameter to set the enable polarity then the corresponding driver is disabled after the polarity is set.
+- Experimental code has been added to log Z probe transitoins during amove, for use when calibrating nozzle offsets.
 - Bug fix: M300 now causes a beep on PanelDue again (was broken in 1.16).
+- Bug fix: when a move was aborted, the head positon was incorrectly calculated if the move has a direction reversal scheduled later on. In practice this situation did not arise.
 
 Upgrade notes - VERY IMPORTANT TO AVOID DAMAGE!!!
 
