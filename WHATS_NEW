@@ -18,7 +18,6 @@ Version 1.17 (in development)
 Upgrade notes - VERY IMPORTANT TO AVOID DAMAGE!!!
 
 - On the Duet 0.6 and 0.85 the default direction for the X motor is now forwards (as it is for all other motors and on the Duet WiFi). If you do not have a M569 P0 command in your config.g file then you will need to add M569 P0 S0 in order to keep the previous behaviour.
-- On the Duet 0.6 and Duet 0.8.5 the default thermistor series resistance is now 4.7K (as it is for the Duet WiFi, and as fitted to later Duet 0.6 and all Duet 0.8.5 boards). If you have an older Duet 0.6 with 1K series resistors, or a DueX4 expansion board with 1K series resistors, you will need to add parameter R1000 to the corresponding M305 commands if they don't have the R parameter already.
 - On the Duet 0.6 and 0.85 the default bed thermistor resistance at 25C is now 100K (as it is for the Duet WiFi). If you have an Ormerod, Huxley Duo or RepRapPro Mendel printer with a 10K bed thermistor, you will need to add parameter T10000 to the M305 P0 command in config.g if you don't have that already.
 - On the Duet 0.6 and 0.85 the default hot end heater thermistor parameters are changed to match the Semtec thermistor used in the E3DV6 and other popular hot ends. If you have a printer built from a kit supplied by RepRapPro then you should use the following parameters in your M305 P1 command to restore the previous behaviour: B4138 C0
 - The default bed temperature limit is 125C. Use M143 H0 S### if you need to increase it.
