@@ -652,7 +652,7 @@ const ZProbeParameters& Platform::GetZProbeParameters() const
 	}
 }
 
-void Platform::SetZProbeParameters(const struct ZProbeParameters& params)
+void Platform::SetZProbeParameters(const ZProbeParameters& params)
 {
 	if (GetZProbeParameters() != params)
 	{
@@ -681,6 +681,16 @@ void Platform::SetZProbeParameters(const struct ZProbeParameters& params)
 			WriteNvData();
 		}
 	}
+}
+
+// Return true if the specified point is accessible to the Z probe
+bool Platform::IsAccessibleProbePoint(float x, float y) const
+{
+	x -= GetZProbeParameters().xOffset;
+	y -= GetZProbeParameters().yOffset;
+	return (reprap.GetMove()->IsDeltaMode())
+			? x * x + y * y < reprap.GetMove()->GetDeltaParams().GetPrintRadiusSquared()
+			: x >= axisMinima[X_AXIS] && y >= axisMinima[Y_AXIS] && x <= axisMaxima[X_AXIS] && y <= axisMaxima[Y_AXIS];
 }
 
 // Return true if we must home X and Y before we home Z (i.e. we are using a bed probe)
@@ -1379,7 +1389,7 @@ void Platform::Diagnostics(MessageType mtype)
 
 	// Show the current probe position heights
 	Message(mtype, "Bed probe heights:");
-	for (size_t i = 0; i < MAX_PROBE_POINTS; ++i)
+	for (size_t i = 0; i < MaxProbePoints; ++i)
 	{
 		MessageF(mtype, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
 	}

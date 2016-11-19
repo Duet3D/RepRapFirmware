@@ -524,6 +524,7 @@ public:
 	float AxisMinimum(size_t axis) const;
 	void SetAxisMinimum(size_t axis, float value);
 	float AxisTotalLength(size_t axis) const;
+	bool IsAccessibleProbePoint(float x, float y) const;
 	float GetPressureAdvance(size_t drive) const;
 	void SetPressureAdvance(size_t extruder, float factor);
 	void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel);

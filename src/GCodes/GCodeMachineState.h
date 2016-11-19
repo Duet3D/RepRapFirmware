@@ -32,7 +32,11 @@ enum class GCodeState : uint8_t
 	flashing1,
 	flashing2,
 	stopping,
-	sleeping
+	sleeping,
+	gridProbing1,
+	gridProbing2,
+	gridProbing3,
+	gridProbing4
 };
 
 // Class to hold the state of gcode execution for some input source

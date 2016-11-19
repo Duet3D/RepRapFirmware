@@ -22,6 +22,7 @@ typedef float floatc_t;						// type of matrix element used for delta calibratio
 
 #include "DeltaParameters.h"
 #include "DeltaProbe.h"
+#include "Grid.h"
 
 enum PointCoordinateSet
 {
@@ -112,6 +113,15 @@ public:
 
 	bool IsExtruding() const;														// Is filament being extruded?
 
+	const GridDefinition& GetBedProbeGrid() const { return grid; }					// Access the bed probing grid
+
+	void SetBedProbeGrid(const GridDefinition& newGrid)								// Set a new grid
+	pre(newGrid.IsValid());
+
+	void ClearGridHeights();														// Clear all grid height corrections
+	void SetGridHeight(size_t xIndex, size_t yIndex, float height);					// Set the height of a grid point
+	void UseHeightMap() { useGridHeights = true; }									// Start using the height map
+
 private:
 
     enum class IdleState : uint8_t { idle, busy, timing };
@@ -158,17 +168,22 @@ private:
     volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
     volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
 
-    float xBedProbePoints[MAX_PROBE_POINTS];			// The X coordinates of the points on the bed at which to probe
-    float yBedProbePoints[MAX_PROBE_POINTS];			// The Y coordinates of the points on the bed at which to probe
-    float zBedProbePoints[MAX_PROBE_POINTS];			// The Z coordinates of the points on the bed at which to probe
+    // Variable for G32 bed probing, for bed compensation and delta calibration
+    float xBedProbePoints[MaxProbePoints];				// The X coordinates of the points on the bed at which to probe
+    float yBedProbePoints[MaxProbePoints];				// The Y coordinates of the points on the bed at which to probe
+    float zBedProbePoints[MaxGridProbePoints];			// The Z coordinates of the points on the bed that were probed
     float baryXBedProbePoints[5];						// The X coordinates of the triangle corner points
     float baryYBedProbePoints[5];						// The Y coordinates of the triangle corner points
     float baryZBedProbePoints[5];						// The Z coordinates of the triangle corner points
-    uint8_t probePointSet[MAX_PROBE_POINTS];			// Has the XY of this point been set?  Has the Z been probed?
+    uint8_t probePointSet[MaxProbePoints];				// Has the XY of this point been set?  Has the Z been probed?
     float aX, aY, aC; 									// Bed plane explicit equation z' = z + aX*x + aY*y + aC
     float tanXY, tanYZ, tanXZ; 							// Axis compensation - 90 degrees + angle gives angle between axes
     int numBedCompensationPoints;						// The number of points we are actually using for bed compensation, 0 means identity bed transform
     float xRectangle, yRectangle;						// The side lengths of the rectangle used for second-degree bed compensation
+
+    GridDefinition grid;    							// Grid definition for G29 bed probing. The probe heights are stored in zBedProbePoints, see above.
+    uint32_t gridHeightSet[MaxGridProbePoints/32];		// Bitmap of which points have been probed
+    bool useGridHeights;								// True if the zBedProbePoints came from valid bed probing and relate to the current grid
 
     float idleTimeout;									// How long we wait with no activity before we reduce motor currents to idle
     float lastMoveTime;									// The approximate time at which the last move was completed, or 0

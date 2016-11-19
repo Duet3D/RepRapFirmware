@@ -202,7 +202,7 @@ void GCodes::Spin()
 	StringRef reply(replyBuffer, ARRAY_SIZE(replyBuffer));
 	reply.Clear();
 
-	if (gb.MachineState().state == GCodeState::normal)
+	if (gb.GetState() == GCodeState::normal)
 	{
 		StartNextGCode(gb, reply);
 	}
@@ -211,19 +211,19 @@ void GCodes::Spin()
 		// Perform the next operation of the state machine for this gcode source
 		bool error = false;
 
-		switch (gb.MachineState().state)
+		switch (gb.GetState())
 		{
 		case GCodeState::waitingForMoveToComplete:
 			if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 			{
-				gb.MachineState().state = GCodeState::normal;
+				gb.SetState(GCodeState::normal);
 			}
 			break;
 
 		case GCodeState::homing:
 			if (toBeHomed == 0)
 			{
-				gb.MachineState().state = GCodeState::normal;
+				gb.SetState(GCodeState::normal);
 			}
 			else
 			{
@@ -243,7 +243,7 @@ void GCodes::Spin()
 		case GCodeState::setBed1:
 			reprap.GetMove()->SetIdentityTransform();
 			probeCount = 0;
-			gb.MachineState().state = GCodeState::setBed2;
+			gb.SetState(GCodeState::setBed2);
 			// no break
 
 		case GCodeState::setBed2:
@@ -256,7 +256,7 @@ void GCodes::Spin()
 					{
 						zProbesSet = true;
 						reprap.GetMove()->FinishedBedProbing(0, reply);
-						gb.MachineState().state = GCodeState::normal;
+						gb.SetState(GCodeState::normal);
 					}
 				}
 			}
@@ -270,7 +270,7 @@ void GCodes::Spin()
 					reprap.StandbyTool(oldTool->Number());
 				}
 			}
-			gb.MachineState().state = GCodeState::toolChange2;
+			gb.SetState(GCodeState::toolChange2);
 			if (reprap.GetTool(newToolNumber) != nullptr && AllAxesAreHomed())
 			{
 				scratchString.printf("tpre%d.g", newToolNumber);
@@ -280,7 +280,7 @@ void GCodes::Spin()
 
 		case GCodeState::toolChange2: // Select the new tool (even if it doesn't exist - that just deselects all tools)
 			reprap.SelectTool(newToolNumber);
-			gb.MachineState().state = GCodeState::toolChange3;
+			gb.SetState(GCodeState::toolChange3);
 			if (reprap.GetTool(newToolNumber) != nullptr && AllAxesAreHomed())
 			{
 				scratchString.printf("tpost%d.g", newToolNumber);
@@ -289,13 +289,13 @@ void GCodes::Spin()
 			break;
 
 		case GCodeState::toolChange3:
-			gb.MachineState().state = GCodeState::normal;
+			gb.SetState(GCodeState::normal);
 			break;
 
 		case GCodeState::pausing1:
 			if (AllMovesAreFinishedAndMoveBufferIsLoaded())
 			{
-				gb.MachineState().state = GCodeState::pausing2;
+				gb.SetState(GCodeState::pausing2);
 				DoFileMacro(gb, PAUSE_G);
 			}
 			break;
@@ -324,16 +324,16 @@ void GCodes::Spin()
 				moveBuffer.endStopsToCheck = 0;
 				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = noFilePosition;
-				if (gb.MachineState().state == GCodeState::resuming1 && currentZ > pauseRestorePoint.moveCoords[Z_AXIS])
+				if (gb.GetState() == GCodeState::resuming1 && currentZ > pauseRestorePoint.moveCoords[Z_AXIS])
 				{
 					// First move the head to the correct XY point, then move it down in a separate move
 					moveBuffer.coords[Z_AXIS] = currentZ;
-					gb.MachineState().state = GCodeState::resuming2;
+					gb.SetState(GCodeState::resuming2);
 				}
 				else
 				{
 					// Just move to the saved position in one go
-					gb.MachineState().state = GCodeState::resuming3;
+					gb.SetState(GCodeState::resuming3);
 				}
 				moveAvailable = true;
 			}
@@ -353,7 +353,7 @@ void GCodes::Spin()
 				feedRate = pauseRestorePoint.feedRate;
 				isPaused = false;
 				reply.copy("Printing resumed");
-				gb.MachineState().state = GCodeState::normal;
+				gb.SetState(GCodeState::normal);
 			}
 			break;
 
@@ -375,11 +375,11 @@ void GCodes::Spin()
 				}
 				if (!updating)
 				{
-					gb.MachineState().state = GCodeState::flashing2;
+					gb.SetState(GCodeState::flashing2);
 				}
 			}
 #else
-			gb.MachineState().state = GCodeState::flashing2;
+			gb.SetState(GCodeState::flashing2;
 #endif
 			break;
 
@@ -392,7 +392,7 @@ void GCodes::Spin()
 				// The above call does not return unless an error occurred
 			}
 			isFlashing = false;
-			gb.MachineState().state = GCodeState::normal;
+			gb.SetState(GCodeState::normal);
 			break;
 
 		case GCodeState::stopping:		// MO after executing stop.g if present
@@ -410,7 +410,7 @@ void GCodes::Spin()
 
 			// chrishamm 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
 			// I think M1 is sufficient for this purpose. Leave M0 for a normal reset.
-			if (gb.MachineState().state == GCodeState::sleeping)
+			if (gb.GetState() == GCodeState::sleeping)
 			{
 				DisableDrives();
 			}
@@ -418,14 +418,147 @@ void GCodes::Spin()
 			{
 				platform->SetDriversIdle();
 			}
-			gb.MachineState().state = GCodeState::normal;
+			gb.SetState(GCodeState::normal);
+			break;
+
+		case GCodeState::gridProbing1:	// ready to move to next grid probe point
+			{
+				// Move to the current probe point
+				const GridDefinition grid = reprap.GetMove()->GetBedProbeGrid();
+				const float x = grid.GetXCoordinate(gridXindex);
+				const float y = grid.GetYCoordinate(gridYindex);
+				if (grid.IsInRadius(x, y) && platform->IsAccessibleProbePoint(x, y))
+				{
+					moveBuffer.moveType = 0;
+					moveBuffer.endStopsToCheck = 0;
+					moveBuffer.usePressureAdvance = false;
+					moveBuffer.filePos = noFilePosition;
+					moveBuffer.coords[X_AXIS] = x - platform->GetZProbeParameters().xOffset;
+					moveBuffer.coords[Y_AXIS] = y - platform->GetZProbeParameters().yOffset;
+					moveBuffer.coords[Z_AXIS] = platform->GetZProbeDiveHeight();
+					moveBuffer.feedRate = platform->GetZProbeTravelSpeed();
+					moveAvailable = true;
+					gb.SetState(GCodeState::gridProbing2);
+				}
+				else
+				{
+					gb.SetState(GCodeState::gridProbing4);
+				}
+			}
+			break;
+
+		case GCodeState::gridProbing2:	// ready to probe the current grid probe point
+			if (AllMovesAreFinishedAndMoveBufferIsLoaded())
+			{
+				// Probe the bed at the current XY coordinates
+				// Check for probe already triggered at start
+				if (reprap.GetPlatform()->GetZProbeResult() == EndStopHit::lowHit)
+				{
+					reply.copy("Z probe already triggered before probing move started");
+					error = true;
+					gb.SetState(GCodeState::normal);
+					break;
+				}
+
+				zProbeTriggered = false;
+				moveBuffer.moveType = 0;
+				moveBuffer.endStopsToCheck = ZProbeActive;
+				moveBuffer.usePressureAdvance = false;
+				moveBuffer.filePos = noFilePosition;
+				moveBuffer.coords[Z_AXIS] = -platform->GetZProbeDiveHeight();
+				moveBuffer.feedRate = platform->GetZProbeParameters().probeSpeed;
+				moveAvailable = true;
+				gb.SetState(GCodeState::gridProbing3);
+			}
+			break;
+
+		case GCodeState::gridProbing3:	// ready to lift the probe after probing the current grid probe point
+			if (AllMovesAreFinishedAndMoveBufferIsLoaded())
+			{
+				if (!zProbeTriggered)
+				{
+					reply.copy("Z probe was not triggered during probing move");
+					error = true;
+					gb.SetState(GCodeState::normal);
+					break;
+				}
+
+				const float heightError = moveBuffer.coords[Z_AXIS] - platform->ZProbeStopHeight();
+				reprap.GetMove()->SetGridHeight(gridXindex, gridYindex, heightError);
+				++numPointsProbed;
+				heightSum += (double)heightError;
+				heightSquaredSum += (double)heightError * (double)heightError;
+
+				// Move back up to the dive height
+				moveBuffer.moveType = 0;
+				moveBuffer.endStopsToCheck = 0;
+				moveBuffer.usePressureAdvance = false;
+				moveBuffer.filePos = noFilePosition;
+				moveBuffer.coords[Z_AXIS] = platform->GetZProbeDiveHeight();
+				moveBuffer.feedRate = platform->GetZProbeTravelSpeed();
+				moveAvailable = true;
+				gb.SetState(GCodeState::gridProbing4);
+			}
+			break;
+
+		case GCodeState::gridProbing4:	// ready to compute the next probe point
+			if (AllMovesAreFinishedAndMoveBufferIsLoaded())
+			{
+				const GridDefinition grid = reprap.GetMove()->GetBedProbeGrid();
+				if (gridYindex & 1)
+				{
+					// Odd row, so decreasing X
+					if (gridXindex == 0)
+					{
+						++gridYindex;
+					}
+					else
+					{
+						--gridXindex;
+					}
+				}
+				else
+				{
+					// Even row, so increasing X
+					if (gridXindex + 1 == grid.NumXpoints())
+					{
+						++gridYindex;
+					}
+					else
+					{
+						++gridXindex;
+					}
+				}
+				if (gridYindex == grid.NumYpoints())
+				{
+					if (numPointsProbed >= 4)
+					{
+						reprap.GetMove()->UseHeightMap();
+						const double mean = heightSum/numPointsProbed;
+						const double deviation = sqrt(((heightSquaredSum * numPointsProbed) - (heightSum * heightSum)))/numPointsProbed;
+						reply.printf("%u points probed, mean error %.2f, deviation %.2f", numPointsProbed, mean, deviation);
+					}
+					else
+					{
+						reply.copy("Too few points probed");
+						error = true;
+					}
+					gb.SetState(GCodeState::normal);
+				}
+				else
+				{
+					gb.SetState(GCodeState::gridProbing1);
+				}
+			}
 			break;
 
 		default:				// should not happen
+			platform->Message(GENERIC_MESSAGE, "Error: undefined GCodeState\n");
+			gb.SetState(GCodeState::normal);
 			break;
 		}
 
-		if (gb.MachineState().state == GCodeState::normal)
+		if (gb.GetState() == GCodeState::normal)
 		{
 			// We completed a command, so unlock resources and tell the host about it
 			UnlockAll(gb);
@@ -588,7 +721,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 					// Finished a macro
 					Pop(gb);
 					gb.Init();
-					if (gb.MachineState().state == GCodeState::normal)
+					if (gb.GetState() == GCodeState::normal)
 					{
 						UnlockAll(gb);
 						HandleReply(gb, false, "");
@@ -719,7 +852,7 @@ void GCodes::DoPause(bool externalToFile)
 	{
 		pausedFanValues[i] = platform->GetFanValue(i);
 	}
-	fileGCode->MachineState().state = GCodeState::pausing1;
+	fileGCode->SetState(GCodeState::pausing1);
 	isPaused = true;
 }
 
@@ -889,7 +1022,7 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 				{
 					moveArg += moveBuffer.coords[axis];
 				}
-				else if (currentTool != nullptr)
+				else if (currentTool != nullptr && moveType == 0)
 				{
 					moveArg -= currentTool->GetOffset()[axis];	// adjust requested position to compensate for tool offset
 				}
@@ -950,7 +1083,6 @@ bool GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 // If the Move class can't receive the move (i.e. things have to wait), return 0.
 // If we have queued the move and the caller doesn't need to wait for it to complete, return 1.
 // If we need to wait for the move to complete before doing another one (e.g. because endstops are checked in this move), return 2.
-
 int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 {
 	// Last one gone yet?
@@ -1089,7 +1221,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	}
 	gb.MachineState().fileState.Set(f);
 	gb.MachineState().doingFileMacro = true;
-	gb.MachineState().state = GCodeState::normal;
+	gb.SetState(GCodeState::normal);
 	gb.Init();
 	return true;
 }
@@ -1314,7 +1446,7 @@ bool GCodes::DoHome(GCodeBuffer& gb, StringRef& reply, bool& error)
 		}
 		else
 		{
-			gb.MachineState().state = GCodeState::homing;
+			gb.SetState(GCodeState::homing);
 		}
 	}
 	return true;
@@ -1522,7 +1654,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer& gb, StringRef& reply)
 	}
 
 	int probePointIndex = gb.GetIValue();
-	if (probePointIndex < 0 || (unsigned int)probePointIndex >= MAX_PROBE_POINTS)
+	if (probePointIndex < 0 || (unsigned int)probePointIndex >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point index out of range.\n");
 		return true;
@@ -1630,6 +1762,106 @@ bool GCodes::SetPrintZProbe(GCodeBuffer& gb, StringRef& reply)
 		}
 	}
 	return true;
+}
+
+// Define the probing grid, returning true if error
+// Called when we see an M557 command with no P parameter
+bool GCodes::DefineGrid(GCodeBuffer& gb, StringRef &reply)
+{
+	bool seenX = false, seenY = false, seenR = false, seenS = false;
+	float xValues[2];
+	float yValues[2];
+
+	if (gb.Seen('X'))
+	{
+		size_t count = 2;
+		gb.GetFloatArray(xValues, count, false);
+		if (count == 2)
+		{
+			seenX = true;
+		}
+		else
+		{
+			reply.copy("ERROR: Wrong number of X values in M577, need 2");
+			return true;
+		}
+	}
+	if (gb.Seen('Y'))
+	{
+		size_t count = 2;
+		gb.GetFloatArray(yValues, count, false);
+		if (count == 2)
+		{
+			seenY = true;
+		}
+		else
+		{
+			reply.copy("ERROR: Wrong number of Y values in M577, need 2");
+			return true;
+		}
+	}
+
+	float radius = -1.0;
+	gb.TryGetFValue('R', radius, seenR);
+	float spacing = DefaultGridSpacing;
+	gb.TryGetFValue('S', spacing, seenS);
+
+	if (!seenX && !seenY && !seenR && !seenS)
+	{
+		// Just print the existing grid parameters
+		const GridDefinition& grid = reprap.GetMove()->GetBedProbeGrid();
+		if (grid.IsValid())
+		{
+			reply.copy("Grid: ");
+			grid.PrintParameters(reply);
+		}
+		else
+		{
+			reply.copy("Grid is not defined");
+		}
+		return false;
+	}
+
+	if (seenX != seenY)
+	{
+		reply.copy("ERROR: specify both or neither of X and Y in M577");
+		return true;
+	}
+
+	if (!seenX && !seenR)
+	{
+		// Must have given just the S parameter
+		reply.copy("ERROR: specify at least radius or X,Y ranges in M577");
+		return true;
+
+	}
+
+	if (!seenX)
+	{
+		if (radius > 0)
+		{
+			const float effectiveRadius = floor((radius - 0.1)/spacing) * spacing;
+			xValues[0] = yValues[0] = -effectiveRadius;
+			xValues[1] = yValues[1] = effectiveRadius + 0.1;
+		}
+		else
+		{
+			reply.copy("ERROR: M577 radius must be positive unless X and Y are specified");
+			return true;
+		}
+	}
+	GridDefinition newGrid(xValues, yValues, radius, spacing);					// create a new grid
+	if (newGrid.IsValid())
+	{
+		reprap.GetMove()->SetBedProbeGrid(newGrid);
+		return false;
+	}
+	else
+	{
+		reply.copy("ERROR: bad grid definition: ");
+		newGrid.PrintError(reply);
+		return true;
+	}
 }
 
 // Return the current coordinates as a printable string.
@@ -2647,7 +2879,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 				int res = SetUpMove(gb, reply);
 				if (res == 2)
 				{
-					gb.MachineState().state = GCodeState::waitingForMoveToComplete;
+					gb.SetState(GCodeState::waitingForMoveToComplete);
 				}
 				result = (res != 0);
 			}
@@ -2696,6 +2928,30 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		result = DoHome(gb, reply, error);
 		break;
 
+	case 29: // Grid-based bed probing
+		LockMovementAndWaitForStandstill(gb);		// do this first to make sure that a new grid isn't being defined
+
+		if (!reprap.GetMove()->GetBedProbeGrid().IsValid())
+		{
+			reply.copy("No valid grid defined for G29 bed probing");
+			error = true;
+		}
+		else if (!AllAxesAreHomed())
+		{
+			reply.copy("Must home printer before G29 bed probing");
+			error = true;
+		}
+		else
+		{
+			gridXindex = gridYindex = 0;
+			numPointsProbed = 0;
+			heightSum = heightSquaredSum = 0.0;
+
+			reprap.GetMove()->ClearGridHeights();
+			gb.SetState(GCodeState::gridProbing1);
+		}
+		break;
+
 	case 30: // Z probe/manually set at a position and set that as point P
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
@@ -2732,7 +2988,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 			// If we get here then we are not on a delta printer and there is no bed.g file
 			if (GetAxisIsHomed(X_AXIS) && GetAxisIsHomed(Y_AXIS))
 			{
-				gb.MachineState().state = GCodeState::setBed1;		// no bed.g file, so use the coordinates specified by M557
+				gb.SetState(GCodeState::setBed1);		// no bed.g file, so use the coordinates specified by M557
 			}
 			else
 			{
@@ -2760,7 +3016,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		reply.printf("invalid G Code: %s", gb.Buffer());
 	}
 
-	if (result && gb.MachineState().state == GCodeState::normal)
+	if (result && gb.GetState() == GCodeState::normal)
 	{
 		UnlockAll(gb);
 		HandleReply(gb, error, reply.Pointer());
@@ -2804,7 +3060,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 		}
 
-		gb.MachineState().state = (code == 0) ? GCodeState::stopping : GCodeState::sleeping;
+		gb.SetState((code == 0) ? GCodeState::stopping : GCodeState::sleeping);
 		DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false);
 		break;
 
@@ -3019,7 +3275,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 		if (isPaused)
 		{
-			gb.MachineState().state = GCodeState::resuming1;
+			gb.SetState(GCodeState::resuming1);
 			DoFileMacro(gb, RESUME_G);
 		}
 		else if (!fileToPrint.IsLive())
@@ -4748,7 +5004,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			int point = gb.GetIValue();
-			if (point < 0 || (unsigned int)point >= MAX_PROBE_POINTS)
+			if (point < 0 || (unsigned int)point >= MaxProbePoints)
 			{
 				reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point index out of range.\n");
 			}
@@ -4771,6 +5027,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					reply.printf("Probe point %d - [%.1f, %.1f]", point, reprap.GetMove()->XBedProbePoint(point), reprap.GetMove()->YBedProbePoint(point));
 				}
 			}
+		}
+		else
+		{
+			LockMovement(gb);							// to ensure that probing is not already in progress
+			error = DefineGrid(gb, reply);
 		}
 		break;
 
@@ -5911,7 +6172,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 
-		gb.MachineState().state = GCodeState::flashing1;
+		gb.SetState(GCodeState::flashing1);
 		break;
 
 	case 998:
@@ -5944,7 +6205,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		reply.printf("unsupported command: %s", gb.Buffer());
 	}
 
-	if (result && gb.MachineState().state == GCodeState::normal)
+	if (result && gb.GetState() == GCodeState::normal)
 	{
 		UnlockAll(gb);
 		HandleReply(gb, error, reply.Pointer());
@@ -5975,7 +6236,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
 		if (oldTool->Number() != newToolNumber)
 		{
-			gb.MachineState().state = GCodeState::toolChange1;
+			gb.SetState(GCodeState::toolChange1);
 			if (oldTool != nullptr && AllAxesAreHomed())
 			{
 				scratchString.printf("tfree%d.g", oldTool->Number());

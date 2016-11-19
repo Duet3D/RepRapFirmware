@@ -206,6 +206,8 @@ private:
 	void DoPause(bool externalToFile);									// Pause the print
 	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
 
+	bool DefineGrid(GCodeBuffer& gb, StringRef &reply);					// Define the probing grid, returning true if error
+
 	Platform* platform;													// The RepRap machine
 	Webserver* webserver;												// The webserver class
 
@@ -265,6 +267,9 @@ private:
 	float lastProbedZ;							// the last height at which the Z probe stopped
 	bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
+	size_t gridXindex, gridYindex;				// Which grid probe point is next
+	size_t numPointsProbed;
+	double heightSum, heightSquaredSum;
 
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging

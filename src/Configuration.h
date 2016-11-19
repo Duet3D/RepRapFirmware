@@ -28,11 +28,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.17dev4"
+# define VERSION "1.17dev5"
 #endif
 
 #ifndef DATE
-# define DATE "2016-11-17"
+# define DATE "2016-11-19"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -124,15 +124,22 @@ const unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency for M4
 
 // The maximum number of probe points is constrained by RAM usage:
 // - Each probe point uses 12 bytes of static RAM. So 16 points use 192 bytes
-// - The delta probe points use the same static ram, but when auto-calibrating we temporarily need another 44 bytes per probe point to hold the matrices etc.
+// - The delta calibration points use the same static ram, but when auto-calibrating we temporarily need another 44 bytes per calibration point to hold the matrices etc.
 //   So 16 points need 704 bytes of stack space.
 #ifdef DUET_NG
-const size_t MAX_PROBE_POINTS = 64;					// Maximum number of probe points
-const size_t MAX_DELTA_PROBE_POINTS = 64;			// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
+const size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
+const size_t MaxProbePoints = 64;					// Maximum number of probe points
+const size_t MaxDeltaCalibrationPoints = 64;		// Should a power of 2 for speed
 #else
-const size_t MAX_PROBE_POINTS = 32;					// Maximum number of probe points
-const size_t MAX_DELTA_PROBE_POINTS = 32;			// Must be <= MaxProbePoints, may be smaller to reduce matrix storage requirements. Preferably a power of 2.
+const size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 at 20mm intervals
+const size_t MaxProbePoints = 32;					// Maximum number of probe points
+const size_t MaxDeltaCalibrationPoints = 32;		// Should a power of 2 for speed
 #endif
+
+const float DefaultGridSpacing = 20.0;				// Default bed probing grid spacing in mm
+
+static_assert(MaxProbePoints <= MaxGridProbePoints, "MaxProbePoints must be <= MaxGridProbePoints");
+static_assert(MaxDeltaCalibrationPoints <= MaxProbePoints, "MaxDeltaCalibrationPoints must be <= MaxProbePoints");
 
 const float DEFAULT_Z_DIVE = 5.0;					// Millimetres
 const float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed mm/sec

@@ -46,6 +46,8 @@ public:
 	bool PushState();									// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState();									// Pop state returning true if successful (i.e. no stack underrun)
 	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
+	GCodeState GetState() const;
+	void SetState(GCodeState newState);
 
 private:
 
@@ -104,6 +106,16 @@ inline const char* GCodeBuffer::WritingFileDirectory() const
 inline void GCodeBuffer::SetWritingFileDirectory(const char* wfd)
 {
 	writingFileDirectory = wfd;
+}
+
+inline GCodeState GCodeBuffer::GetState() const
+{
+	return machineState->state;
+}
+
+inline void GCodeBuffer::SetState(GCodeState newState)
+{
+	machineState->state = newState;
 }
 
 #endif /* GCODEBUFFER_H_ */

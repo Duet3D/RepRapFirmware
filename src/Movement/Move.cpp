@@ -66,7 +66,7 @@ void Move::Init()
 	SetPositions(move);
 
 	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
-	for (size_t point = 0; point < MAX_PROBE_POINTS; point++)
+	for (size_t point = 0; point < MaxProbePoints; point++)
 	{
 		if (point < 4)
 		{
@@ -89,6 +89,7 @@ void Move::Init()
 	simulationTime = 0.0;
 	longestGcodeWaitInterval = 0;
 	waitingForMove = false;
+	useGridHeights = false;
 
 	active = true;
 }
@@ -865,7 +866,7 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 
 	// Clear out the Z heights so that we don't re-use old points.
 	// This allows us to use different numbers of probe point on different occasions.
-	for (size_t i = 0; i < MAX_PROBE_POINTS; ++i)
+	for (size_t i = 0; i < MaxProbePoints; ++i)
 	{
 		probePointSet[i] &= ~zSet;
 	}
@@ -996,8 +997,8 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	//uint32_t startTime = reprap.GetPlatform()->GetInterruptClocks();
 
 	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
-	FixedMatrix<floatc_t, MAX_DELTA_PROBE_POINTS, DELTA_AXES> probeMotorPositions;
-	floatc_t corrections[MAX_DELTA_PROBE_POINTS];
+	FixedMatrix<floatc_t, MaxDeltaCalibrationPoints, DELTA_AXES> probeMotorPositions;
+	floatc_t corrections[MaxDeltaCalibrationPoints];
 	float_t initialSumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{
@@ -1028,7 +1029,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	for (;;)
 	{
 		// Build a Nx9 matrix of derivatives with respect to xa, xb, yc, za, zb, zc, diagonal.
-		FixedMatrix<floatc_t, MAX_DELTA_PROBE_POINTS, NumDeltaFactors> derivativeMatrix;
+		FixedMatrix<floatc_t, MaxDeltaCalibrationPoints, NumDeltaFactors> derivativeMatrix;
 		for (size_t i = 0; i < numPoints; ++i)
 		{
 			for (size_t j = 0; j < numFactors; ++j)
@@ -1079,7 +1080,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 			PrintVector("Solution", solution, numFactors);
 
 			// Calculate and display the residuals
-			floatc_t residuals[MAX_DELTA_PROBE_POINTS];
+			floatc_t residuals[MaxDeltaCalibrationPoints];
 			for (size_t i = 0; i < numPoints; ++i)
 			{
 				residuals[i] = zBedProbePoints[i];
@@ -1096,7 +1097,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 
 		// Calculate the expected probe heights using the new parameters
 		{
-			floatc_t expectedResiduals[MAX_DELTA_PROBE_POINTS];
+			floatc_t expectedResiduals[MaxDeltaCalibrationPoints];
 			floatc_t sumOfSquares = 0.0;
 			for (size_t i = 0; i < numPoints; ++i)
 			{
@@ -1383,7 +1384,7 @@ void Move::ResetExtruderPositions()
 
 void Move::SetXBedProbePoint(size_t index, float x)
 {
-	if (index >= MAX_PROBE_POINTS)
+	if (index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point X index out of range.\n");
 		return;
@@ -1394,7 +1395,7 @@ void Move::SetXBedProbePoint(size_t index, float x)
 
 void Move::SetYBedProbePoint(size_t index, float y)
 {
-	if (index >= MAX_PROBE_POINTS)
+	if (index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point Y index out of range.\n");
 		return;
@@ -1405,12 +1406,13 @@ void Move::SetYBedProbePoint(size_t index, float y)
 
 void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError)
 {
-	if (index >= MAX_PROBE_POINTS)
+	if (index >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point Z index out of range.\n");
 	}
 	else
 	{
+		useGridHeights = false;
 		zBedProbePoints[index] = z;
 		probePointSet[index] |= zSet;
 		if (wasXyCorrected)
@@ -1459,26 +1461,55 @@ bool Move::XYProbeCoordinatesSet(int index) const
 
 size_t Move::NumberOfProbePoints() const
 {
-	for(size_t i = 0; i < MAX_PROBE_POINTS; i++)
+	for(size_t i = 0; i < MaxProbePoints; i++)
 	{
 		if(!AllProbeCoordinatesSet(i))
 		{
 			return i;
 		}
 	}
-	return MAX_PROBE_POINTS;
+	return MaxProbePoints;
 }
 
 size_t Move::NumberOfXYProbePoints() const
 {
-	for(size_t i = 0; i < MAX_PROBE_POINTS; i++)
+	for(size_t i = 0; i < MaxProbePoints; i++)
 	{
 		if(!XYProbeCoordinatesSet(i))
 		{
 			return i;
 		}
 	}
-	return MAX_PROBE_POINTS;
+	return MaxProbePoints;
+}
+
+// Set a new grid
+void Move::SetBedProbeGrid(const GridDefinition& newGrid)
+{
+	useGridHeights = false;
+	grid = newGrid;
+	grid.SetStorage(zBedProbePoints, gridHeightSet);
+}
+
+void Move::ClearGridHeights()
+{
+	useGridHeights = false;
+	SetIdentityTransform();
+	for (size_t i = 0; i < ARRAY_SIZE(gridHeightSet); ++i)
+	{
+		gridHeightSet[i] = 0;
+	}
+}
+
+// Set the height of a grid point
+void Move::SetGridHeight(size_t xIndex, size_t yIndex, float height)
+{
+	size_t index = yIndex * grid.NumXpoints() + xIndex;
+	if (index < MaxGridProbePoints)
+	{
+		zBedProbePoints[index] = height;
+		gridHeightSet[index/32] |= 1u << (index & 31u);
+	}
 }
 
 // Enter or leave simulation mode

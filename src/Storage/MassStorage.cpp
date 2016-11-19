@@ -242,6 +242,13 @@ bool MassStorage::MakeDirectory(const char *directory)
 // Rename a file or directory
 bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
 {
+	if (newFilename[0] >= '0' && newFilename[0] <= '9' && newFilename[1] == ':')
+	{
+		// Workaround for DWC 1.13 which send a volume specification at the start of the new path.
+		// f_rename can't handle this, so skip past the volume specification.
+		// We are assuming that the user isn't really trying to rename across volumes. This is a safe assumption when the client is DWC.
+		newFilename += 2;
+	}
 	if (f_rename(oldFilename, newFilename) != FR_OK)
 	{
 		platform->MessageF(GENERIC_MESSAGE, "Can't rename file or directory %s to %s\n", oldFilename, newFilename);
