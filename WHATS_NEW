@@ -3,6 +3,13 @@ Summary of important changes in recent versions
 
 Version 1.17 (in development)
 
+dev5 build:
+- Workaround for DWC 1.13 including a volume ID in the new file path when renaming files across directories
+- Tool offset is no longer applied to G1 moves with S1 or S2 modifiers
+- M557 can now be used to define a probing grid
+- G29 can now be used to do bed probing, however the results are not used yet
+
+dev4 build:
 - M109 and M190 commands now support both R and S parameters in the same way as Marlin. If you specify temperature using the S parameter, the firmware will wait for the heater to heat up but not to cool down. If you specify temperature using the R parameter, the firmware will wait both when heating up and when cooling down.
 - M191 (set chamber temperature and wait) is now supported, with both R and S parameters as for M190. However you may wish instead to use M141 followed by M116 later to wait for all temperatures.
 - You can now specify a Stenhart-Hart C coefficient in the M305 command, for better thermistor accuracy over a wide temperature range. If you do use a non-zero C coefficient then you will need to change the B (beta) parameter as well. The B parameter should be the reciprocal of the Steinhart-Hart B coefficient.
@@ -13,7 +20,7 @@ Version 1.17 (in development)
 - If the M569 command is used with the 'R' parameter to set the enable polarity then the corresponding driver is disabled after the polarity is set.
 - Experimental code has been added to log Z probe transitoins during amove, for use when calibrating nozzle offsets.
 - Bug fix: M300 now causes a beep on PanelDue again (was broken in 1.16).
-- Bug fix: when a move was aborted, the head positon was incorrectly calculated if the move has a direction reversal scheduled later on. In practice this situation did not arise.
+- Bug fix: when a move was aborted, the head position was incorrectly calculated if the move has a direction reversal scheduled later on. In practice this situation did not arise.
 
 Upgrade notes - VERY IMPORTANT TO AVOID DAMAGE!!!
 
