@@ -3,6 +3,10 @@ Summary of important changes in recent versions
 
 Version 1.17 (in development)
 
+dev6 build:
+- G29 grid bed compensation is fully implemented except for G29 S2
+- Fix for adjusting the mix ratio during printing when using absolute extruder coordinates with mixing extruders, except for pause/resume
+
 dev5 build:
 - Workaround for DWC 1.13 including a volume ID in the new file path when renaming files across directories
 - Tool offset is no longer applied to G1 moves with S1 or S2 modifiers
