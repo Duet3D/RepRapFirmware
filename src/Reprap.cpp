@@ -507,7 +507,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		else
 #endif
 		{
-			move->LiveCoordinates(liveCoordinates);
+			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
 		}
 
 		if (currentTool != nullptr)
@@ -807,14 +807,22 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 					}
 				}
 
-				// Axis mapping. Currently we only map the X axis, but we return an array of arrays to allow for mapping otyher axes in future.
+				// Axis mapping. Currently we only map the X axis, but we return an array of arrays to allow for mapping other axes in future.
 				response->cat("],\"axisMap\":[[");
-				for(size_t xi = 0; xi < tool->GetAxisMapCount(); ++xi)
+				bool first = true;
+				for (size_t xi = 0; xi < MAX_AXES; ++xi)
 				{
-					response->catf("%d", tool->GetAxisMap()[xi]);
-					if (xi + 1 < tool->GetAxisMapCount())
+					if ((tool->GetXAxisMap() & (1u << xi)) != 0)
 					{
-						response->cat(",");
+						if (first)
+						{
+							first = false;
+						}
+						else
+						{
+							response->cat(",");
+						}
+						response->catf("%u", xi);
 					}
 				}
 
@@ -1108,7 +1116,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send XYZ positions
 	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	float liveCoordinates[DRIVES];
-	reprap.GetMove()->LiveCoordinates(liveCoordinates);
+	reprap.GetMove()->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
 	const Tool* currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
@@ -1519,6 +1527,12 @@ void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);
 	}
+}
+
+// Get the current axes used as X axes
+uint32_t RepRap::GetCurrentXAxes() const
+{
+	return (currentTool == nullptr) ? DefaultXAxisMapping : currentTool->GetXAxisMap();
 }
 
 // End

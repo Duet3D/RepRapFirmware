@@ -27,7 +27,7 @@
 
 Tool * Tool::freelist = nullptr;
 
-/*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount, uint32_t fanMap)
+/*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap)
 {
 	const size_t numExtruders = reprap.GetGCodes()->GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -76,11 +76,12 @@ Tool * Tool::freelist = nullptr;
 	t->active = false;
 	t->driveCount = dCount;
 	t->heaterCount = hCount;
-	t->xmapCount = xCount;
+	t->xMapping = xMap;
 	t->fanMapping = fanMap;
 	t->heaterFault = false;
 	t->mixing = false;
 	t->displayColdExtrudeWarning = false;
+	t->virtualExtruderPosition = 0.0;
 
 	for (size_t axis = 0; axis < MAX_AXES; axis++)
 	{
@@ -102,11 +103,6 @@ Tool * Tool::freelist = nullptr;
 		t->heaters[heater] = h[heater];
 		t->activeTemperatures[heater] = ABS_ZERO;
 		t->standbyTemperatures[heater] = ABS_ZERO;
-	}
-
-	for (size_t xi = 0; xi < t->xmapCount; ++xi)
-	{
-		t->xMapping[xi] = xMap[xi];
 	}
 
 	return t;
@@ -141,10 +137,13 @@ void Tool::Print(StringRef& reply)
 
 	reply.cat("; xmap:");
 	sep = ' ';
-	for (size_t xi = 0; xi < xmapCount; ++xi)
+	for (size_t xi = 0; xi < MAX_AXES; ++xi)
 	{
-		reply.catf("%c%c", sep, GCodes::axisLetters[xi]);
-		sep = ',';
+		if ((xMapping & (1u << xi)) != 0)
+		{
+			reply.catf("%c%c", sep, GCodes::axisLetters[xi]);
+			sep = ',';
+		}
 	}
 
 	reply.cat("; fans:");

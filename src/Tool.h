@@ -26,11 +26,13 @@ Licence: GPL
 #ifndef TOOL_H_
 #define TOOL_H_
 
+const uint32_t DefaultXAxisMapping = 0x0001;	// by default, X is mapped to X
+
 class Tool
 {
 public:
 
-	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, long xMap[], size_t xCount, uint32_t fanMap);
+	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap);
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
@@ -50,9 +52,10 @@ public:
 	float MaxFeedrate() const;
 	float InstantDv() const;
 	void Print(StringRef& reply);
-	size_t GetAxisMapCount() const { return xmapCount; }
-	const int *GetAxisMap() const { return xMapping; }
+	uint32_t GetXAxisMap() const { return xMapping; }
 	uint32_t GetFanMapping() const { return fanMapping; }
+
+	float virtualExtruderPosition;
 
 	friend class RepRap;
 
@@ -81,11 +84,10 @@ private:
 	float activeTemperatures[HEATERS];
 	float standbyTemperatures[HEATERS];
 	size_t heaterCount;
-	int xMapping[MAX_AXES];
-	size_t xmapCount;
-	Tool* next;
 	float offset[MAX_AXES];
+	uint32_t xMapping;
 	uint32_t fanMapping;
+	Tool* next;
 
 	bool mixing;
 	bool active;

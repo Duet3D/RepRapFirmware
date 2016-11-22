@@ -209,7 +209,7 @@ void Move::Spin()
 					bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
 					if (doMotorMapping)
 					{
-						Transform(nextMove.coords);
+						Transform(nextMove.coords, nextMove.xAxes);
 					}
 					if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
 					{
@@ -323,7 +323,7 @@ void Move::Spin()
 // Returns the file position of the first queue move we are going to skip, or noFilePosition we we are not skipping any moves.
 // We update 'positions' to the positions and feed rate expected for the next move, and the amount of extrusion in the moves we skipped.
 // If we are not skipping any moves then the feed rate is left alone, therefore the caller should set this up first.
-FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate)
+FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, uint32_t xAxes)
 {
 	// Find a move we can pause after.
 	// Ideally, we would adjust a move if necessary and possible so that we can pause after it, but for now we don't do that.
@@ -408,7 +408,7 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate)
 	}
 	else
 	{
-		GetCurrentUserPosition(positions, 0);		// gets positions and clears out extrusion values
+		GetCurrentUserPosition(positions, 0, xAxes);		// gets positions and clears out extrusion values
 	}
 
 	return fPos;
@@ -627,78 +627,124 @@ float Move::MotorFactor(size_t drive, const float directionVector[]) const
 void Move::AxisTransform(float xyzPoint[MAX_AXES]) const
 {
 	//TODO should we transform U axis instead of/as well as X if we are in dual carriage mode?
-	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] + tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
-	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] + tanYZ*xyzPoint[Z_AXIS];
+	xyzPoint[X_AXIS] += tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
+	xyzPoint[Y_AXIS] += tanYZ*xyzPoint[Z_AXIS];
 }
 
 // Invert the Axis transform AFTER the bed transform
 void Move::InverseAxisTransform(float xyzPoint[MAX_AXES]) const
 {
 	//TODO should we transform U axis instead of/as well as X if we are in dual carriage mode?
-	xyzPoint[Y_AXIS] = xyzPoint[Y_AXIS] - tanYZ*xyzPoint[Z_AXIS];
-	xyzPoint[X_AXIS] = xyzPoint[X_AXIS] - (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
+	xyzPoint[Y_AXIS] -= tanYZ*xyzPoint[Z_AXIS];
+	xyzPoint[X_AXIS] -= (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
 }
 
-void Move::Transform(float xyzPoint[MAX_AXES]) const
+void Move::Transform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 {
 	AxisTransform(xyzPoint);
-	BedTransform(xyzPoint);
+	BedTransform(xyzPoint, xAxes);
 }
 
-void Move::InverseTransform(float xyzPoint[MAX_AXES]) const
+void Move::InverseTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 {
-	InverseBedTransform(xyzPoint);
+	InverseBedTransform(xyzPoint, xAxes);
 	InverseAxisTransform(xyzPoint);
 }
 
 // Do the bed transform AFTER the axis transform
-void Move::BedTransform(float xyzPoint[MAX_AXES]) const
+void Move::BedTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 {
-	switch(numBedCompensationPoints)
+	float zCorrection = 0.0;
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	unsigned int numXAxes = 0;
+
+	// Transform the Z coordinate based on the average correction for each axis used as an X axis.
+	// We are assuming that the tool Y offsets are small enough to be ignored.
+	for (uint32_t axis = 0; axis < numAxes; ++axis)
 	{
-	case 0:
-		break;
+		if ((xAxes & (1u << axis)) != 0)
+		{
+			const float xCoord = xyzPoint[axis];
+			switch(numBedCompensationPoints)
+			{
+			case 0:
+				if (useGridHeights)
+				{
+					zCorrection += grid.ComputeHeightError(xCoord, xyzPoint[Y_AXIS]);
+				}
+				break;
 
-	case 3:
-		xyzPoint[Z_AXIS] += aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC;
-		break;
+			case 3:
+				zCorrection += aX * xCoord + aY * xyzPoint[Y_AXIS] + aC;
+				break;
 
-	case 4:
-		xyzPoint[Z_AXIS] += SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-		break;
+			case 4:
+				zCorrection += SecondDegreeTransformZ(xCoord, xyzPoint[Y_AXIS]);
+				break;
 
-	case 5:
-		xyzPoint[Z_AXIS] += TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-		break;
+			case 5:
+				zCorrection += TriangleZ(xCoord, xyzPoint[Y_AXIS]);
+				break;
 
-	default:
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "BedTransform: wrong number of sample points.");
+			default:
+				break;
+			}
+			++numXAxes;
+		}
 	}
+	if (numXAxes > 1)
+	{
+		zCorrection /= numXAxes;			// take an average
+	}
+	xyzPoint[Z_AXIS] += zCorrection;
 }
 
 // Invert the bed transform BEFORE the axis transform
-void Move::InverseBedTransform(float xyzPoint[MAX_AXES]) const
+void Move::InverseBedTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 {
-	switch(numBedCompensationPoints)
+	float zCorrection = 0.0;
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	unsigned int numXAxes = 0;
+
+	// Transform the Z coordinate based on the average correction for each axis used as an X axis.
+	// We are assuming that the tool Y offsets are small enough to be ignored.
+	for (uint32_t axis = 0; axis < numAxes; ++axis)
 	{
-	case 0:
-		break;
+		if ((xAxes & (1u << axis)) != 0)
+		{
+			const float xCoord = xyzPoint[axis];
+			switch(numBedCompensationPoints)
+			{
+			case 0:
+				if (useGridHeights)
+				{
+					zCorrection += grid.ComputeHeightError(xCoord, xyzPoint[Y_AXIS]);
+				}
+				break;
 
-	case 3:
-		xyzPoint[Z_AXIS] -= (aX*xyzPoint[X_AXIS] + aY*xyzPoint[Y_AXIS] + aC);
-		break;
+			case 3:
+				zCorrection += aX * xCoord + aY * xyzPoint[Y_AXIS] + aC;
+				break;
 
-	case 4:
-		xyzPoint[Z_AXIS] -= SecondDegreeTransformZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-		break;
+			case 4:
+				zCorrection += SecondDegreeTransformZ(xCoord, xyzPoint[Y_AXIS]);
+				break;
 
-	case 5:
-		xyzPoint[Z_AXIS] -= TriangleZ(xyzPoint[X_AXIS], xyzPoint[Y_AXIS]);
-		break;
+			case 5:
+				zCorrection += TriangleZ(xCoord, xyzPoint[Y_AXIS]);
+				break;
 
-	default:
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "InverseBedTransform: wrong number of sample points.");
+			default:
+				break;
+			}
+			++numXAxes;
+		}
 	}
+	if (numXAxes > 1)
+	{
+		zCorrection /= numXAxes;			// take an average
+	}
+	xyzPoint[Z_AXIS] -= zCorrection;
 }
 
 void Move::SetIdentityTransform()
@@ -1315,18 +1361,18 @@ bool Move::IsExtruding() const
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType) const
+void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xAxes) const
 {
 	GetCurrentMachinePosition(m, moveType == 2 || (moveType == 1 && IsDeltaMode()));
 	if (moveType == 0)
 	{
-		InverseTransform(m);
+		InverseTransform(m, xAxes);
 	}
 }
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry, so do not call this from an ISR
-void Move::LiveCoordinates(float m[DRIVES])
+void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes)
 {
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	cpu_irq_disable();
@@ -1355,7 +1401,7 @@ void Move::LiveCoordinates(float m[DRIVES])
 		}
 		cpu_irq_enable();
 	}
-	InverseTransform(m);
+	InverseTransform(m, xAxes);
 }
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
@@ -1494,7 +1540,6 @@ void Move::SetBedProbeGrid(const GridDefinition& newGrid)
 void Move::ClearGridHeights()
 {
 	useGridHeights = false;
-	SetIdentityTransform();
 	for (size_t i = 0; i < ARRAY_SIZE(gridHeightSet); ++i)
 	{
 		gridHeightSet[i] = 0;
@@ -1510,6 +1555,60 @@ void Move::SetGridHeight(size_t xIndex, size_t yIndex, float height)
 		zBedProbePoints[index] = height;
 		gridHeightSet[index/32] |= 1u << (index & 31u);
 	}
+}
+
+// Load the height map
+bool Move::LoadHeightMapFromFile(const char *fname, StringRef& reply)
+{
+	Platform *platform = reprap.GetPlatform();
+	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), fname, false);
+	bool err;
+	if (f == nullptr)
+	{
+		reply.printf("Height map file %s not found", fname);
+		err = true;
+	}
+	else
+	{
+		//TODO
+		err = grid.LoadFromFile(f);
+		f->Close();
+	}
+
+	if (err)
+	{
+		ClearGridHeights();			// make sure we don't end up with a partial height map
+	}
+	return err;
+}
+
+// Save the height map and write the success or error message to 'reply'
+// Returning true if an error occurred
+bool Move::SaveHeightMapToFile(const char *fname, StringRef& reply) const
+{
+	Platform *platform = reprap.GetPlatform();
+	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), fname, true);
+	bool err;
+	if (f == nullptr)
+	{
+		reply.printf("Failed to create height map file %s", fname);
+		err = true;
+	}
+	else
+	{
+		err = grid.SaveToFile(f);
+		f->Close();
+		if (err)
+		{
+			platform->GetMassStorage()->Delete(platform->GetSysDir(), fname);
+			reply.printf("Failed to save height map to file %s", fname);
+		}
+		else
+		{
+			reply.printf("Height map saved to file %s", fname);
+		}
+	}
+	return err;
 }
 
 // Enter or leave simulation mode

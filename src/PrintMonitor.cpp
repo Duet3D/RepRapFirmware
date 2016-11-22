@@ -110,7 +110,7 @@ void PrintMonitor::Spin()
 		else if (!gCodes->DoingFileMacro() && reprap.GetMove()->IsExtruding())
 		{
 			float liveCoordinates[DRIVES];
-			reprap.GetMove()->LiveCoordinates(liveCoordinates);
+			reprap.GetMove()->LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes());
 
 			// See if we need to determine the first layer height (usually smaller than the nozzle diameter)
 			if (printingFileInfo.firstLayerHeight == 0.0)

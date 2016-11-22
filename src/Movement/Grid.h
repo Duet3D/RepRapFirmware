@@ -12,6 +12,8 @@
 #include "ecv.h"
 #include "Libraries/General/StringRef.h"
 
+class FileStore;
+
 // This class defines the bed probing grid
 class GridDefinition
 {
@@ -29,8 +31,14 @@ public:
 	bool IsValid() const { return isValid; }
 
 	void PrintParameters(StringRef& r) const;
+
 	void PrintError(StringRef& r) const
 	pre(!IsValid());
+
+	bool SaveToFile(FileStore *f) const					// Save the grid to file returning true if an error occurred
+	pre(IsValid());
+
+	bool LoadFromFile(FileStore *f);					// Load the grid from file returning true if an error occurred
 
 	float ComputeHeightError(float x, float y) const		// Compute the height error at the specified point
 	pre(IsValid(); gridHeights != nullptr; gridHeights.upb >= NumPoints());
@@ -58,9 +66,7 @@ private:
 	float InterpolateY(uint32_t xIndex, uint32_t yIndex, float yFrac) const;
 	float InterpolateXY(uint32_t xIndex, uint32_t yIndex, float xFrac, float yFrac) const;
 	float Interpolate2(uint32_t index1, uint32_t index2, float frac) const;
-	float DiagonalInterpolate(uint32_t index1, uint32_t index2, float xFrac, float yFrac) const;
-	float Interpolate3(uint32_t cornerIndex, uint32_t indexX, uint32_t indexY, float xFrac, float yFrac) const;
-	float Interpolate4(uint32_t index1, uint32_t index2, uint32_t index3, uint32_t index4, float xFrac, float yFrac) const;
+	float InterpolateCorner(uint32_t cornerIndex, uint32_t indexX, uint32_t indexY, float xFrac, float yFrac) const;
 };
 
 #endif /* SRC_MOVEMENT_GRID_H_ */

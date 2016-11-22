@@ -59,6 +59,7 @@ public:
     Tool* GetCurrentTool() const;
     Tool* GetTool(int toolNumber) const;
     Tool* GetOnlyTool() const;
+	uint32_t GetCurrentXAxes() const;									// Get the current axes used as X axes
     //Tool* GetToolByDrive(int driveNumber);
     void SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures);
 	bool ToolWarningsAllowed();

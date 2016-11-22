@@ -68,6 +68,7 @@ public:
 		float coords[DRIVES];											// new positions for the axes, amount of movement for the extruders
 		float feedRate;													// feed rate of this move
 		FilePosition filePos;											// offset in the file being printed that this move was read from
+		uint32_t xAxes;													// axes that X is mapped to
 		EndstopChecks endStopsToCheck;									// endstops to check
 		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
 		bool isFirmwareRetraction;										// true if this is a firmware retraction/un-retraction move
@@ -203,13 +204,16 @@ private:
 	void ListTriggers(StringRef reply, TriggerMask mask);				// Append a list of trigger endstops to a message
 	void CheckTriggers();												// Check for and execute triggers
 	void DoEmergencyStop();												// Execute an emergency stop
-	void DoPause(bool externalToFile);									// Pause the print
+	void DoPause(GCodeBuffer& gb);										// Pause the print
 	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
 
 	bool DefineGrid(GCodeBuffer& gb, StringRef &reply);					// Define the probing grid, returning true if error
+	bool ProbeGrid(GCodeBuffer& gb, StringRef& reply);					// Start probing the grid, returning true if we didn't because of an error
+
+	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
 	Platform* platform;													// The RepRap machine
-	Webserver* webserver;												// The webserver class
+	Webserver* webserver;												// The web server class
 
 	GCodeBuffer* gcodeSources[6];										// The various sources of gcodes
 
@@ -270,6 +274,7 @@ private:
 	size_t gridXindex, gridYindex;				// Which grid probe point is next
 	size_t numPointsProbed;
 	double heightSum, heightSquaredSum;
+	const char *heightMapFile;
 
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
