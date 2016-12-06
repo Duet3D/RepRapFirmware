@@ -8,6 +8,9 @@ dev7 build:
 - Default max temperature excursion increased to 15C
 - M571 now accepts a P parameter to select the output pin
 - Removed Duet WiFi prototype 1 build configuration and added RADDS build configuration
+- M104 and M109 default to tool 0 if no tool selected and no T parameter provided
+- M109 now selects the tool after setting the active temperature if it was ont already selected
+- M558 now uses the R parameter to set the Z probe recovery time
 
 dev6 build:
 - G29 grid bed compensation is fully implemented except for G29 S1 (load height map from file)
