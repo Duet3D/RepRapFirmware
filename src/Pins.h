@@ -5,7 +5,11 @@
 
 #if !defined(PLATFORM)
 # if defined(__SAM3X8E__)
-#  define PLATFORM Duet
+#  if defined(__RADDS__)
+#   define PLATFORM RADDS
+#  else
+#   define PLATFORM Duet
+#  endif
 # elif defined(__SAM4E8E__)
 #  define PLATFORM DuetNG
 # else

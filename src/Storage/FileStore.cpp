@@ -265,6 +265,40 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 	return (int)bytes_read;
 }
 
+// As Read but stop after '\n' or '\r\n' and null-terminate the string.
+// If the next line is too long to fit in the buffer then the line will be split.
+int FileStore::ReadLine(char* buf, size_t nBytes)
+{
+	const FilePosition lineStart = Position();
+	const int r = Read(buf, nBytes);
+	if (r < 0)
+	{
+		return r;
+	}
+
+	int i = 0;
+	while (i < r && buf[i] != '\r' && buf[i] != '\n')
+	{
+		++i;
+	}
+
+	if (i + 1 < r && buf[i] == '\r' && buf[i + 1] == '\n')	// if stopped at CRLF (Windows-style line end)
+	{
+		Seek(lineStart + i + 2);							// seek to just after the CRLF
+	}
+	else if (i < r)											// if stopped at CR or LF
+	{
+		Seek(lineStart + i + 1);							// seek to just after the CR or LF
+	}
+	else if (i == (int)nBytes)
+	{
+		--i;												// make room for the null terminator
+		Seek(lineStart + i);
+	}
+	buf[i] = 0;
+	return i;
+}
+
 bool FileStore::WriteBuffer()
 {
 	if (bufferPointer != 0)

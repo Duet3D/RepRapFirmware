@@ -48,6 +48,8 @@ public:
 	bool IsDoingFileMacro() const;						// Return true if this source is executing a file macro
 	GCodeState GetState() const;
 	void SetState(GCodeState newState);
+	void AdvanceState();
+	const char *GetIdentity() const { return identity; }
 
 private:
 
@@ -116,6 +118,11 @@ inline GCodeState GCodeBuffer::GetState() const
 inline void GCodeBuffer::SetState(GCodeState newState)
 {
 	machineState->state = newState;
+}
+
+inline void GCodeBuffer::AdvanceState()
+{
+	machineState->state = static_cast<GCodeState>(static_cast<uint8_t>(machineState->state) + 1);
 }
 
 #endif /* GCODEBUFFER_H_ */

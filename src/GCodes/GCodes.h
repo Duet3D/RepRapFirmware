@@ -33,9 +33,6 @@ typedef uint16_t EndstopChecks;							// must be large enough to hold a bitmap o
 const EndstopChecks ZProbeActive = 1 << 15;				// must be distinct from 1 << (any drive number)
 const EndstopChecks LogProbeChanges = 1 << 14;			// must be distinct from 1 << (any drive number)
 
-const float minutesToSeconds = 60.0;
-const float secondsToMinutes = 1.0/minutesToSeconds;
-
 typedef uint16_t TriggerMask;
 
 struct Trigger
@@ -66,6 +63,7 @@ public:
 	struct RawMove
 	{
 		float coords[DRIVES];											// new positions for the axes, amount of movement for the extruders
+		float initialCoords[MAX_AXES];									// the initial positions of the axes
 		float feedRate;													// feed rate of this move
 		FilePosition filePos;											// offset in the file being printed that this move was read from
 		uint32_t xAxes;													// axes that X is mapped to
@@ -156,7 +154,6 @@ private:
 
 	void StartNextGCode(GCodeBuffer& gb, StringRef& reply);				// Fetch a new or old GCode and process it
 	void DoFilePrint(GCodeBuffer& gb, StringRef& reply);				// Get G Codes from a file and print them
-	bool AllMovesAreFinishedAndMoveBufferIsLoaded();					// Wait for move queue to exhaust and the current position is loaded
     bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing = true);	// Run a GCode macro in a file, optionally report error if not found
 	bool DoCannedCycleMove(GCodeBuffer& gb, EndstopChecks ce);			// Do a move from an internally programmed canned cycle
 	void FileMacroCyclesReturn(GCodeBuffer& gb);						// End a macro
@@ -176,7 +173,7 @@ private:
 	bool SetPrintZProbe(GCodeBuffer& gb, StringRef& reply);				// Either return the probe value, or set its threshold
 	bool SetOrReportOffsets(GCodeBuffer& gb, StringRef& reply);			// Deal with a G10
 	bool SetPositions(GCodeBuffer& gb);									// Deal with a G92
-	bool LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType);		// Set up a move for the Move class
+	unsigned int LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType); // Set up a move for the Move class
 	bool NoHome() const;												// Are we homing and not finished?
 	bool Push(GCodeBuffer& gb);											// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);											// Pop feedrate etc
@@ -185,17 +182,18 @@ private:
 	void SetMACAddress(GCodeBuffer& gb);								// Deals with an M540
 	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
-	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory,							// Start saving GCodes in a file
-			const char* fileName);
+	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName);	// Start saving GCodes in a file
 	void WriteGCodeToFile(GCodeBuffer& gb);								// Write this GCode into a file
 	bool SendConfigToLine();											// Deal with M503
 	void WriteHTMLToFile(GCodeBuffer& gb, char b);						// Save an HTML file (usually to upload a new web interface)
 	bool OffsetAxes(GCodeBuffer& gb);									// Set offsets - deprecated, use G10
-	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply);	// Set the P/I/D parameters for a heater
-	void SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);		 // Set the thermistor and ADC parameters for a heater
+	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
+	void SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);		// Set the thermistor and ADC parameters for a heater
 	void ManageTool(GCodeBuffer& gb, StringRef& reply);					// Create a new tool definition
 	void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
-	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const;	// Wait for the heaters associated with the specified tool to reach their set temperatures
+	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
+	void StartToolChange(GCodeBuffer& gb, bool inM109);					// Begin the tool change sequence
+
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
 	void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
 	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
@@ -204,11 +202,15 @@ private:
 	void ListTriggers(StringRef reply, TriggerMask mask);				// Append a list of trigger endstops to a message
 	void CheckTriggers();												// Check for and execute triggers
 	void DoEmergencyStop();												// Execute an emergency stop
-	void DoPause(GCodeBuffer& gb);										// Pause the print
+
+	void DoPause(GCodeBuffer& gb)										// Pause the print
+	pre(resourceOwners[movementResource] = &gb);
+
 	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
 
 	bool DefineGrid(GCodeBuffer& gb, StringRef &reply);					// Define the probing grid, returning true if error
 	bool ProbeGrid(GCodeBuffer& gb, StringRef& reply);					// Start probing the grid, returning true if we didn't because of an error
+	bool SaveHeightMapToFile(StringRef& reply) const;					// Save the height map to file
 
 	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
@@ -230,9 +232,8 @@ private:
 	bool active;								// Live and running?
 	bool isPaused;								// true if the print has been paused
 	bool dwellWaiting;							// We are in a dwell
-	bool moveAvailable;							// Have we seen a move G Code and set it up?
+	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	float dwellTime;							// How long a pause for a dwell (seconds)?
-	float feedRate;								// The feed rate of the last G0/G1 command that had an F parameter
 	RawMove moveBuffer;							// Move details to pass to Move class
 	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
 	RestorePoint pauseRestorePoint;				// The position and feed rate when we paused the print
@@ -269,6 +270,7 @@ private:
 
 	// Z probe
 	float lastProbedZ;							// the last height at which the Z probe stopped
+	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridXindex, gridYindex;				// Which grid probe point is next

@@ -161,8 +161,8 @@ void DDA::Init()
 bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 {
 	// 1. Compute the new endpoints and the movement vector
-	const int32_t *positionNow = prev->DriveCoordinates();
-	const Move *move = reprap.GetMove();
+	const int32_t * const positionNow = prev->DriveCoordinates();
+	const Move * const move = reprap.GetMove();
 	if (doMotorMapping)
 	{
 		move->MotorTransform(nextMove.coords, endPoint);			// transform the axis coordinates if on a delta or CoreXY printer

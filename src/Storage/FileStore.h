@@ -28,6 +28,7 @@ public:
 	uint8_t Status();								// Returns OR of IOStatus
 	bool Read(char& b);								// Read 1 byte
 	int Read(char* buf, size_t nBytes);				// Read a block of nBytes length
+	int ReadLine(char* buf, size_t nBytes);			// As Read but stop after '\n' or '\r\n' and null-terminate
 	bool Write(char b);								// Write 1 byte
 	bool Write(const char *s, size_t len);			// Write a block of len bytes
 	bool Write(const char* s);						// Write a string

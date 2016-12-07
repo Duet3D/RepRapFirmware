@@ -11,6 +11,7 @@
 #include <cstdint>
 #include "ecv.h"
 #include "Libraries/General/StringRef.h"
+#include "Configuration.h"
 
 class FileStore;
 
@@ -18,9 +19,10 @@ class FileStore;
 class GridDefinition
 {
 public:
+	friend class HeightMap;
+
 	GridDefinition();
 	GridDefinition(const float xRange[2], const float yRange[2], float pRadius, float pSpacing);
-	void SetStorage(const float *heightStorage, const uint32_t *heightSetStorage);
 
 	uint32_t NumXpoints() const { return numX; }
 	uint32_t NumYpoints() const { return numY; }
@@ -31,35 +33,62 @@ public:
 	bool IsValid() const { return isValid; }
 
 	void PrintParameters(StringRef& r) const;
+	void WriteHeadingAndParameters(StringRef& r) const;
+	static bool CheckHeading(const StringRef& s);
+	bool ReadParameters(const StringRef& s);
 
 	void PrintError(StringRef& r) const
 	pre(!IsValid());
 
-	bool SaveToFile(FileStore *f) const					// Save the grid to file returning true if an error occurred
-	pre(IsValid());
-
-	bool LoadFromFile(FileStore *f);					// Load the grid from file returning true if an error occurred
-
-	float ComputeHeightError(float x, float y) const		// Compute the height error at the specified point
-	pre(IsValid(); gridHeights != nullptr; gridHeights.upb >= NumPoints());
-
 private:
-	static constexpr float MinSpacing = 0.1;			// The minimum point spacing allowed
-	static constexpr float MinRange = 1.0;				// The minimum X and Y range allowed
+	void CheckValidity();
+
+	static constexpr float MinSpacing = 0.1;						// The minimum point spacing allowed
+	static constexpr float MinRange = 1.0;							// The minimum X and Y range allowed
+	static const char *HeightMapLabelLine;							// The line we write to the height map file listing the parameter names
 
 	// Primary parameters
-	float xMin, xMax, yMin, yMax;						// The edges of the grid for G29 probing
-	float radius;										// The grid radius to probe
-	float spacing;										// The spacing of the grid probe points
-	const float *gridHeights;							// The map of grid heights
-	const uint32_t *gridHeightSet;							// Bitmap of which heights are set
+	float xMin, xMax, yMin, yMax;									// The edges of the grid for G29 probing
+	float radius;													// The grid radius to probe
+	float spacing;													// The spacing of the grid probe points
 
 	// Derived parameters
 	uint32_t numX, numY;
 	float recipSpacing;
 	bool isValid;
 
-	uint32_t GetMapIndex(uint32_t xIndex, uint32_t yIndex) const { return (yIndex * numX) + xIndex; }
+};
+
+// Class to represent the height map
+class HeightMap
+{
+public:
+	HeightMap(float *heightStorage);
+
+	const GridDefinition& GetGrid() const { return def; }
+	void SetGrid(const GridDefinition& gd);
+
+	float ComputeHeightError(float x, float y) const				// Compute the height error at the specified point
+	pre(IsValid(); gridHeights != nullptr; gridHeights.upb >= NumPoints());
+
+	void ClearGridHeights();										// Clear all grid height corrections
+	void SetGridHeight(size_t xIndex, size_t yIndex, float height);	// Set the height of a grid point
+
+	bool SaveToFile(FileStore *f) const								// Save the grid to file returning true if an error occurred
+	pre(IsValid());
+
+	bool LoadFromFile(FileStore *f, StringRef& r);					// Load the grid from file returning true if an error occurred
+
+	unsigned int GetMinimumSegments(float distance) const;			// Return the minimum number of segments for a move by this X or Y amount
+
+private:
+	static const char *HeightMapComment;							// The start of the comment we write at the start of the height map file
+
+	GridDefinition def;
+	float *gridHeights;												// The map of grid heights, must have at least MaxGridProbePoints entries
+	uint32_t gridHeightSet[MaxGridProbePoints/32];					// Bitmap of which heights are set
+
+	uint32_t GetMapIndex(uint32_t xIndex, uint32_t yIndex) const { return (yIndex * def.NumXpoints()) + xIndex; }
 	bool IsHeightSet(uint32_t index) const { return (gridHeightSet[index/32] & (1 << (index & 31))) != 0; }
 	float GetHeightError(uint32_t xIndex, uint32_t yIndex) const;
 	float InterpolateX(uint32_t xIndex, uint32_t yIndex, float xFrac) const;

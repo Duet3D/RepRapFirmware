@@ -7,7 +7,7 @@
 
 #include "RepRapFirmware.h"
 
-Move::Move(Platform* p, GCodes* g) : currentDda(NULL)
+Move::Move(Platform* p, GCodes* g) : currentDda(NULL), grid(zBedProbePoints)
 {
 	active = false;
 
@@ -66,18 +66,26 @@ void Move::Init()
 	SetPositions(move);
 
 	// Set up default bed probe points. This is only a guess, because we don't know the bed size yet.
-	for (size_t point = 0; point < MaxProbePoints; point++)
+	for (size_t point = 0; point < ARRAY_SIZE(zBedProbePoints); point++)
 	{
 		if (point < 4)
 		{
-			xBedProbePoints[point] = (0.3 + 0.6*(float)(point%2))*reprap.GetPlatform()->AxisMaximum(X_AXIS);
-			yBedProbePoints[point] = (0.0 + 0.9*(float)(point/2))*reprap.GetPlatform()->AxisMaximum(Y_AXIS);
+			xBedProbePoints[point] = (0.1 + 0.8 * (float)(point%2)) * reprap.GetPlatform()->AxisMaximum(X_AXIS);
+			yBedProbePoints[point] = (0.1 + 0.8 * (float)(point/2)) * reprap.GetPlatform()->AxisMaximum(Y_AXIS);
+		}
+		else if (point == 4)
+		{
+			xBedProbePoints[point] = 0.5 * reprap.GetPlatform()->AxisMaximum(X_AXIS);
+			yBedProbePoints[point] = 0.5 * reprap.GetPlatform()->AxisMaximum(Y_AXIS);
 		}
 		zBedProbePoints[point] = 0.0;
-		probePointSet[point] = unset;
+		if (point < ARRAY_SIZE(probePointSet))
+		{
+			probePointSet[point] = unset;
+		}
 	}
 
-	xRectangle = 1.0/(0.8*reprap.GetPlatform()->AxisMaximum(X_AXIS));
+	xRectangle = 1.0/(0.8 * reprap.GetPlatform()->AxisMaximum(X_AXIS));
 	yRectangle = xRectangle;
 
 	longWait = reprap.GetPlatform()->Time();
@@ -174,38 +182,6 @@ void Move::Spin()
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
 
-#if 0	//*** This code is not finished yet ***
-					// If we are doing bed compensation and the move crosses a compensation boundary by a significant amount,
-					// segment it so that we can apply proper bed compensation
-					// Issues here:
-					// 1. Are there enough DDAs? need to make nextMove static and remember whether we have the remains of a move in there.
-					// 2. Pause/restart: if we restart a segmented move when we have already executed part of it, we will extrude too much.
-					// Perhaps remember how much of the last move we executed? Or always insist on completing all the segments in a move?
-					bool isSegmented;
-					do
-					{
-						GCodes::RawMove tempMove = nextMove;
-						isSegmented = SegmentMove(tempMove);
-						if (isSegmented)
-						{
-							// Extruder moves are relative, so we need to adjust the extrusion amounts in the original move
-							for (size_t drive = AXES; drive < DRIVES; ++drive)
-							{
-								nextMove.coords[drive] -= tempMove.coords[drive];
-							}
-						}
-						bool doMotorMapping = (moveType == 0) || (moveType == 1 && !IsDeltaMode());
-						if (doMotorMapping)
-						{
-							Transform(tempMove);
-						}
-						if (ddaRingAddPointer->Init(tempMove.coords, nextMove.feedRate, nextMove.endStopsToCheck, doMotorMapping, nextMove.filePos))
-						{
-							ddaRingAddPointer = ddaRingAddPointer->GetNext();
-							idleCount = 0;
-						}
-					} while (isSegmented);
-#else	// Use old code
 					bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
 					if (doMotorMapping)
 					{
@@ -216,7 +192,6 @@ void Move::Spin()
 						ddaRingAddPointer = ddaRingAddPointer->GetNext();
 						idleCount = 0;
 					}
-#endif
 				}
 			}
 			else
@@ -431,6 +406,14 @@ void Move::Diagnostics(MessageType mtype)
 	maxReps = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 	longestGcodeWaitInterval = 0;
+
+	// Show the current probe position heights
+	p->Message(mtype, "Bed probe heights:");
+	for (size_t i = 0; i < MaxProbePoints; ++i)
+	{
+		p->MessageF(mtype, " %.3f", ZBedProbePoint(i));
+	}
+	p->Message(mtype, "\n");
 
 #if DDA_LOG_PROBE_CHANGES
 	// Temporary code to print Z probe trigger positions
@@ -1527,88 +1510,6 @@ size_t Move::NumberOfXYProbePoints() const
 		}
 	}
 	return MaxProbePoints;
-}
-
-// Set a new grid
-void Move::SetBedProbeGrid(const GridDefinition& newGrid)
-{
-	useGridHeights = false;
-	grid = newGrid;
-	grid.SetStorage(zBedProbePoints, gridHeightSet);
-}
-
-void Move::ClearGridHeights()
-{
-	useGridHeights = false;
-	for (size_t i = 0; i < ARRAY_SIZE(gridHeightSet); ++i)
-	{
-		gridHeightSet[i] = 0;
-	}
-}
-
-// Set the height of a grid point
-void Move::SetGridHeight(size_t xIndex, size_t yIndex, float height)
-{
-	size_t index = yIndex * grid.NumXpoints() + xIndex;
-	if (index < MaxGridProbePoints)
-	{
-		zBedProbePoints[index] = height;
-		gridHeightSet[index/32] |= 1u << (index & 31u);
-	}
-}
-
-// Load the height map
-bool Move::LoadHeightMapFromFile(const char *fname, StringRef& reply)
-{
-	Platform *platform = reprap.GetPlatform();
-	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), fname, false);
-	bool err;
-	if (f == nullptr)
-	{
-		reply.printf("Height map file %s not found", fname);
-		err = true;
-	}
-	else
-	{
-		//TODO
-		err = grid.LoadFromFile(f);
-		f->Close();
-	}
-
-	if (err)
-	{
-		ClearGridHeights();			// make sure we don't end up with a partial height map
-	}
-	return err;
-}
-
-// Save the height map and write the success or error message to 'reply'
-// Returning true if an error occurred
-bool Move::SaveHeightMapToFile(const char *fname, StringRef& reply) const
-{
-	Platform *platform = reprap.GetPlatform();
-	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), fname, true);
-	bool err;
-	if (f == nullptr)
-	{
-		reply.printf("Failed to create height map file %s", fname);
-		err = true;
-	}
-	else
-	{
-		err = grid.SaveToFile(f);
-		f->Close();
-		if (err)
-		{
-			platform->GetMassStorage()->Delete(platform->GetSysDir(), fname);
-			reply.printf("Failed to save height map to file %s", fname);
-		}
-		else
-		{
-			reply.printf("Height map saved to file %s", fname);
-		}
-	}
-	return err;
 }
 
 // Enter or leave simulation mode

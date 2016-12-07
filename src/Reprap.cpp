@@ -166,8 +166,8 @@ void RepRap::Spin()
 
 	// Keep track of the loop time
 
-	float t = platform->Time();
-	float dt = t - lastTime;
+	const float t = platform->Time();
+	const float dt = t - lastTime;
 	if(dt < fastLoop)
 	{
 		fastLoop = dt;
@@ -279,6 +279,7 @@ void RepRap::PrintDebug()
 
 // Add a tool.
 // Prior to calling this, delete any existing tool with the same number
+// The tool list is maintained in tool number order.
 void RepRap::AddTool(Tool* tool)
 {
 	Tool** t = &toolList;
@@ -401,9 +402,12 @@ Tool* RepRap::GetTool(int toolNumber) const
 	return nullptr; // Not an error
 }
 
-Tool* RepRap::GetOnlyTool() const
+// Get the current tool, or failing that the default tool. May return nullptr if we can't
+// Called when a M104 or M109 command doesn't specify a tool number.
+Tool* RepRap::GetCurrentOrDefaultTool() const
 {
-	return (toolList != nullptr && toolList->Next() == nullptr) ? toolList : nullptr;
+	// If a tool is already selected, use that one, else use the lowest-numbered tool which is the one at the start of the tool list
+	return (currentTool != nullptr) ? currentTool : toolList;
 }
 
 void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures)
@@ -447,6 +451,16 @@ bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 	}
 
 	return false;
+}
+
+unsigned int RepRap::GetNumberOfContiguousTools() const
+{
+	unsigned int numTools = 0;
+	while (GetTool(numTools) != nullptr)
+	{
+		++numTools;
+	}
+	return numTools;
 }
 
 void RepRap::Tick()
@@ -561,7 +575,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	}
 
 	// Current tool number
-	int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
+	const int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
 	response->catf("]},\"currentTool\":%d", toolNumber);
 
 	// Output - only reported once
@@ -633,7 +647,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->cat(",\"sensors\":{");
 
 		// Probe
-		int v0 = platform->ZProbe();
+		const int v0 = platform->ZProbe();
 		int v1, v2;
 		switch (platform->GetZProbeSecondaryValues(v1, v2))
 		{
@@ -1117,7 +1131,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	float liveCoordinates[DRIVES];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
-	const Tool* currentTool = reprap.GetCurrentTool();
+	const Tool* const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
 		const float *offset = currentTool->GetOffset();
@@ -1155,11 +1169,11 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the current tool number
-	int toolNumber = (currentTool == nullptr) ? 0 : currentTool->Number();
+	const int toolNumber = (currentTool == nullptr) ? 0 : currentTool->Number();
 	response->catf(",\"tool\":%d", toolNumber);
 
 	// Send the Z probe value
-	int v0 = platform->ZProbe();
+	const int v0 = platform->ZProbe();
 	int v1, v2;
 	switch (platform->GetZProbeSecondaryValues(v1, v2))
 	{
@@ -1218,24 +1232,24 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 	else if (type == 3)
 	{
-		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"myName\":", move->GetGeometryString(), numAxes, NumSdCards);
+		// Add the static fields
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"numTools\":%u,\"myName\":",
+						move->GetGeometryString(), numAxes, NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 	}
 
-	int auxSeq = (int)platform->GetAuxSeq();
-	if (type < 2 || (seq != -1 && (int)auxSeq != seq))
+	const int auxSeq = (int)platform->GetAuxSeq();
+	if (type < 2 || (seq != -1 && auxSeq != seq))
 	{
 
 		// Send the response to the last command. Do this last because it can be long and may need to be truncated.
-		response->catf(",\"seq\":%u,\"resp\":", auxSeq);					// send the response sequence number
+		response->catf(",\"seq\":%d,\"resp\":", auxSeq);					// send the response sequence number
 
 		// Send the JSON response
 		response->EncodeReply(platform->GetAuxGCodeReply(), true);			// also releases the OutputBuffer chain
 	}
 
 	response->cat("}");
-
 	return response;
 }
 

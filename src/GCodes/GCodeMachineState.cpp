@@ -12,7 +12,7 @@ unsigned int GCodeMachineState::numAllocated = 0;
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState()
-	: previous(nullptr), feedrate(DEFAULT_FEEDRATE), fileState(), lockedResources(0), state(GCodeState::normal),
+	: previous(nullptr), feedrate(DEFAULT_FEEDRATE/minutesToSeconds), fileState(), lockedResources(0), state(GCodeState::normal),
 	  drivesRelative(false), axesRelative(false), doingFileMacro(false)
 {
 }

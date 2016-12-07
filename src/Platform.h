@@ -236,7 +236,8 @@ struct ZProbeParameters
 	float diveHeight;				// the dive height we use when probing
 	float probeSpeed;				// the initial speed of probing
 	float travelSpeed;				// the speed at which we travel to the probe point
-	float param1, param2;			// extra parameters used by some types of probe e.g. Delta probe
+	float recoveryTime;				// Z probe recovery time
+	float extraParam;				// extra parameters used by some types of probe e.g. Delta probe
 	bool invertReading;				// true if we need to invert the reading
 
 	void Init(float h)
@@ -249,7 +250,7 @@ struct ZProbeParameters
 		diveHeight = DEFAULT_Z_DIVE;
 		probeSpeed = DEFAULT_PROBE_SPEED;
 		travelSpeed = DEFAULT_TRAVEL_SPEED;
-		param1 = param2 = 0.0;
+		recoveryTime = extraParam = 0.0;
 		invertReading = false;
 	}
 
@@ -269,8 +270,8 @@ struct ZProbeParameters
 				&& diveHeight == other.diveHeight
 				&& probeSpeed == other.probeSpeed
 				&& travelSpeed == other.travelSpeed
-				&& param1 == other.param1
-				&& param2 == other.param2
+				&& recoveryTime == other.recoveryTime
+				&& extraParam == other.extraParam
 				&& invertReading == other.invertReading;
 	}
 
@@ -527,8 +528,13 @@ public:
 	bool IsAccessibleProbePoint(float x, float y) const;
 	float GetPressureAdvance(size_t drive) const;
 	void SetPressureAdvance(size_t extruder, float factor);
-	void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel);
-	void GetEndStopConfiguration(size_t axis, EndStopType& endstopType, bool& logicLevel) const;
+
+	void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel)
+	pre(axis < MAX_AXES);
+
+	void GetEndStopConfiguration(size_t axis, EndStopType& endstopType, bool& logicLevel) const
+	pre(axis < MAX_AXES);
+
 	uint32_t GetAllEndstopStates() const;
 	void SetAxisDriversConfig(size_t drive, const AxisDriversConfig& config);
 	const AxisDriversConfig& GetAxisDriversConfig(size_t drive) const
@@ -559,8 +565,10 @@ public:
 	void SetZProbeParameters(const struct ZProbeParameters& params);
 	bool MustHomeXYBeforeZ() const;
 
-	void SetExtrusionAncilliaryPWM(float v);
-	float GetExtrusionAncilliaryPWM() const;
+	void SetExtrusionAncilliaryPwmValue(float v);
+	float GetExtrusionAncilliaryPwmValue() const;
+	bool SetExtrusionAncilliaryPwmPin(int logicalPin);
+	int GetExtrusionAncilliaryPwmPin() const { return extrusionAncilliaryPwmLogicalPin; }
 	void ExtrudeOn();
 	void ExtrudeOff();
 
@@ -766,7 +774,7 @@ private:
 
 #if defined(DUET_NG)
 	size_t numTMC2660Drivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
-#else
+#elif !defined(__RADDS__)
 	// Digipots
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
@@ -784,7 +792,10 @@ private:
 	volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
 	volatile ThermistorAveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
 
-	float extrusionAncilliaryPWM;
+	float extrusionAncilliaryPwmValue;
+	int extrusionAncilliaryPwmLogicalPin;
+	Pin extrusionAncilliaryPwmFirmwarePin;
+	bool extrusionAncilliaryPwmInvert;
 
 	void InitZProbe();
 	uint16_t GetRawZProbeReading() const;
@@ -831,12 +842,6 @@ private:
 	MassStorage* massStorage;
 	FileStore* files[MAX_FILES];
 	bool fileStructureInitialised;
-	const char* webDir;
-	const char* gcodeDir;
-	const char* sysDir;
-	const char* macroDir;
-	const char* configFile;
-	const char* defaultFile;
   
 	// Data used by the tick interrupt handler
 
@@ -895,6 +900,10 @@ private:
 	volatile uint32_t numOverVoltageEvents;
 	bool driversPowered;
 #endif
+
+	// RTC
+	time_t realTime;									// the current date/time, or zero if never set
+	uint32_t timeLastUpdatedMillis;						// the milliseconds counter when we last incremented the time
 
 	// Direct pin manipulation
 	int8_t logicalPinModes[HighestLogicalPin + 1];		// what mode each logical pin is set to - would ideally be class PinMode not int8_t
@@ -968,38 +977,37 @@ private:
 
 inline const char* Platform::GetWebDir() const
 {
-  return webDir;
+	return WEB_DIR;
 }
 
 // Where the gcodes are
 
 inline const char* Platform::GetGCodeDir() const
 {
-  return gcodeDir;
+	return GCODE_DIR;
 }
 
 // Where the system files are
 
 inline const char* Platform::GetSysDir() const
 {
-  return sysDir;
+	return SYS_DIR;
 }
 
 inline const char* Platform::GetMacroDir() const
 {
-	return macroDir;
+	return MACRO_DIR;
 }
 
 inline const char* Platform::GetConfigFile() const
 {
-  return configFile;
+	return CONFIG_FILE;
 }
 
 inline const char* Platform::GetDefaultFile() const
 {
-  return defaultFile;
+	return DEFAULT_FILE;
 }
-
 
 //*****************************************************************************************************************
 
@@ -1007,12 +1015,12 @@ inline const char* Platform::GetDefaultFile() const
 
 inline float Platform::DriveStepsPerUnit(size_t drive) const
 {
-  return driveStepsPerUnit[drive]; 
+	return driveStepsPerUnit[drive];
 }
 
 inline void Platform::SetDriveStepsPerUnit(size_t drive, float value)
 {
-  driveStepsPerUnit[drive] = value;
+	driveStepsPerUnit[drive] = value;
 }
 
 inline float Platform::Acceleration(size_t drive) const
@@ -1032,7 +1040,7 @@ inline void Platform::SetAcceleration(size_t drive, float value)
 
 inline float Platform::MaxFeedrate(size_t drive) const
 {
-  return maxFeedrates[drive];
+	return maxFeedrates[drive];
 }
 
 inline const float* Platform::MaxFeedrates() const
@@ -1067,7 +1075,7 @@ inline bool Platform::GetDirectionValue(size_t drive) const
 
 inline void Platform::SetDriverDirection(uint8_t driver, bool direction)
 {
-	bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
+	const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
 	digitalWrite(DIRECTION_PINS[driver], d);
 }
 
@@ -1107,14 +1115,14 @@ inline float Platform::AxisTotalLength(size_t axis) const
 	return axisMaxima[axis] - axisMinima[axis];
 }
 
-inline void Platform::SetExtrusionAncilliaryPWM(float v)
+inline void Platform::SetExtrusionAncilliaryPwmValue(float v)
 {
-	extrusionAncilliaryPWM = v;
+	extrusionAncilliaryPwmValue = v;
 }
 
-inline float Platform::GetExtrusionAncilliaryPWM() const
+inline float Platform::GetExtrusionAncilliaryPwmValue() const
 {
-	return extrusionAncilliaryPWM;
+	return extrusionAncilliaryPwmValue;
 }
 
 // For the Duet we use the fan output for this
@@ -1123,9 +1131,9 @@ inline float Platform::GetExtrusionAncilliaryPWM() const
 // Caution: this is often called from an ISR, or with interrupts disabled!
 inline void Platform::ExtrudeOn()
 {
-	if (extrusionAncilliaryPWM > 0.0)
+	if (extrusionAncilliaryPwmValue > 0.0)
 	{
-		SetFanValue(0,extrusionAncilliaryPWM);
+		WriteAnalog(extrusionAncilliaryPwmFirmwarePin, extrusionAncilliaryPwmValue, DefaultPinWritePwmFreq);
 	}
 }
 
@@ -1134,9 +1142,9 @@ inline void Platform::ExtrudeOn()
 // Caution: this is often called from an ISR, or with interrupts disabled!
 inline void Platform::ExtrudeOff()
 {
-	if (extrusionAncilliaryPWM > 0.0)
+	if (extrusionAncilliaryPwmValue > 0.0)
 	{
-		SetFanValue(0,0.0);
+		WriteAnalog(extrusionAncilliaryPwmFirmwarePin, 0.0, DefaultPinWritePwmFreq);
 	}
 }
 
@@ -1204,14 +1212,12 @@ inline float Platform::GetPressureAdvance(size_t extruder) const
 }
 
 inline void Platform::SetEndStopConfiguration(size_t axis, EndStopType esType, bool logicLevel)
-pre(axis < MAX_AXES)
 {
 	endStopType[axis] = esType;
 	endStopLogicLevel[axis] = logicLevel;
 }
 
 inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, bool& logicLevel) const
-pre(axis < MAX_AXES)
 {
 	esType = endStopType[axis];
 	logicLevel = endStopLogicLevel[axis];
@@ -1325,7 +1331,7 @@ inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
 #if defined(DUET_NG)
 	return pinDesc.ulPin;
 #elif defined(__RADDS__)
-# error needs writing
+	return (pinDesc.pPort == PIOC) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
 #else
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
 #endif
@@ -1339,7 +1345,10 @@ inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
 #elif defined(__RADDS__)
-# error need to write this
+	PIOA->PIO_ODSR = driverMap;
+	PIOB->PIO_ODSR = driverMap;
+	PIOD->PIO_ODSR = driverMap;
+	PIOC->PIO_ODSR = driverMap >> 1;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
 #else	// Duet
 	PIOD->PIO_ODSR = driverMap;
 	PIOC->PIO_ODSR = driverMap;
@@ -1355,7 +1364,10 @@ inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
 #elif defined(__RADDS__)
-# error need to write this
+	PIOD->PIO_ODSR = 0;
+	PIOC->PIO_ODSR = 0;
+	PIOB->PIO_ODSR = 0;
+	PIOA->PIO_ODSR = 0;
 #else	// Duet
 	PIOD->PIO_ODSR = 0;
 	PIOC->PIO_ODSR = 0;

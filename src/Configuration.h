@@ -28,11 +28,11 @@ Licence: GPL
 // Firmware name is now defined in the Pins file
 
 #ifndef VERSION
-# define VERSION "1.17dev6"
+# define VERSION "1.17dev7"
 #endif
 
 #ifndef DATE
-# define DATE "2016-11-22"
+# define DATE "2016-12-07"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"
@@ -105,7 +105,7 @@ const float DefaultMaxHeatingFaultTime = 5.0;		// How many seconds we allow a he
 const float AllowedTemperatureDerivativeNoise = 0.25;	// How much fluctuation in the averaged temperature derivative we allow
 const float MaxAmbientTemperature = 45.0;			// We expect heaters to cool to this temperature or lower when switched off
 const float NormalAmbientTemperature = 25.0;		// The ambient temperature we assume - allow for the printer heating its surroundings a little
-const float DefaultMaxTempExcursion = 10.0;			// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
+const float DefaultMaxTempExcursion = 15.0;			// How much error we tolerate when maintaining temperature before deciding that a heater fault has occurred
 const float MinimumConnectedTemperature = -5.0;		// Temperatures below this we treat as a disconnected thermistor
 
 static_assert(DefaultMaxTempExcursion > TEMPERATURE_CLOSE_ENOUGH, "DefaultMaxTempExcursion is too low");
@@ -172,7 +172,6 @@ const uint16_t OUTPUT_BUFFER_SIZE = 128;			// How many bytes does each OutputBuf
 const size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
 const size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #endif
-
 
 // Move system
 

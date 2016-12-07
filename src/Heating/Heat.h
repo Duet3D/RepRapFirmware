@@ -39,8 +39,7 @@ public:
 	void Exit();												// Shut everything down
 
 	bool ColdExtrude() const;									// Is cold extrusion allowed?
-	void AllowColdExtrude();									// Allow cold extrusion
-	void DenyColdExtrude();										// Deny cold extrusion
+	void AllowColdExtrude(bool b);								// Allow or deny cold extrusion
 
 	int8_t GetBedHeater() const									// Get hot bed heater number
 	post(-1 <= result; result < HEATERS);
@@ -132,14 +131,9 @@ inline bool Heat::ColdExtrude() const
 	return coldExtrude;
 }
 
-inline void Heat::AllowColdExtrude()
+inline void Heat::AllowColdExtrude(bool b)
 {
-	coldExtrude = true;
-}
-
-inline void Heat::DenyColdExtrude()
-{
-	coldExtrude = false;
+	coldExtrude = b;
 }
 
 inline int8_t Heat::GetBedHeater() const

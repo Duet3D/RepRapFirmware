@@ -21,7 +21,6 @@
 
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
-#include "RTCDue.h"
 
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"
@@ -53,6 +52,12 @@ static volatile uint32_t fanLastResetTime = 0;		// time (microseconds) at which 
 static volatile uint32_t fanInterval = 0;			// written by ISR, read outside the ISR
 
 const float minStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
+
+const int Heater0LogicalPin = 0;
+const int Fan0LogicalPin = 20;
+const int EndstopXLogicalPin = 40;
+const int Special0LogicalPin = 60;
+const int DueX5Gpio0LogicalPin = 100;
 
 //#define MOVE_DEBUG
 
@@ -157,8 +162,7 @@ void Platform::Init()
 	SetBoardType(BoardType::Auto);
 
 	// Real-time clock
-
-	RTCDue::Init();
+	realTime = 0;
 
 	// Comms
 
@@ -202,22 +206,12 @@ void Platform::Init()
 
 	fileStructureInitialised = true;
 
-#if !defined(DUET_NG)
+#if !defined(DUET_NG) && !defined(__RADDS__)
 	mcpDuet.begin();							// only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
 	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
 #endif
 
-	// Directories
-
-	sysDir = SYS_DIR;
-	macroDir = MACRO_DIR;
-	webDir = WEB_DIR;
-	gcodeDir = GCODE_DIR;
-	configFile = CONFIG_FILE;
-	defaultFile = DEFAULT_FILE;
-
 	// DRIVES
-
 	ARRAY_INIT(endStopPins, END_STOP_PINS);
 	ARRAY_INIT(maxFeedrates, MAX_FEEDRATES);
 	ARRAY_INIT(accelerations, ACCELERATIONS);
@@ -236,13 +230,11 @@ void Platform::Init()
 	maxAverageAcceleration = 10000.0;			// high enough to have no effect until it is changed
 
 	// Z PROBE
-
 	zProbePin = Z_PROBE_PIN;
 	zProbeAdcChannel = PinToAdcChannel(zProbePin);
 	InitZProbe();		// this also sets up zProbeModulationPin
 
 	// AXES
-
 	ARRAY_INIT(axisMaxima, AXIS_MAXIMA);
 	ARRAY_INIT(axisMinima, AXIS_MINIMA);
 
@@ -334,7 +326,11 @@ void Platform::Init()
 	TMC2660::Init(ENABLE_PINS, numTMC2660Drivers);
 #endif
 
-	extrusionAncilliaryPWM = 0.0;
+	extrusionAncilliaryPwmValue = 0.0;
+	extrusionAncilliaryPwmLogicalPin = -1;
+	extrusionAncilliaryPwmFirmwarePin = NoPin;
+	extrusionAncilliaryPwmInvert = false;
+	SetExtrusionAncilliaryPwmPin(Fan0LogicalPin);
 
 	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
@@ -1204,6 +1200,16 @@ void Platform::Spin()
 	TMC2660::SetDriversPowered(driversPowered);
 #endif
 
+	// Update the time
+	if (realTime != 0)
+	{
+		if (millis() - timeLastUpdatedMillis >= 1000)
+		{
+			++realTime;							// this assumes that time_t is a seconds-since-epoch counter, which is not guaranteed by the C standard
+			timeLastUpdatedMillis += 1000;
+		}
+	}
+
 	ClassReport(longWait);
 }
 
@@ -1372,7 +1378,7 @@ void Platform::Diagnostics(MessageType mtype)
 			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
 
-	// Show the error code stored at the last software reset
+	// Show the reset code stored at the last software reset
 	{
 		SoftwareResetData temp;
 		temp.magic = 0;
@@ -1386,14 +1392,6 @@ void Platform::Diagnostics(MessageType mtype)
 
 	// Show the current error codes
 	MessageF(mtype, "Error status: %u\n", errorCodeBits);
-
-	// Show the current probe position heights
-	Message(mtype, "Bed probe heights:");
-	for (size_t i = 0; i < MaxProbePoints; ++i)
-	{
-		MessageF(mtype, " %.3f", reprap.GetMove()->ZBedProbePoint(i));
-	}
-	Message(mtype, "\n");
 
 	// Show the number of free entries in the file table
 	unsigned int numFreeFiles = 0;
@@ -1449,11 +1447,13 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 
 	// Show current RTC time
-	const time_t timeNow = RTCDue::GetDateTime();
-	const struct tm * const timeInfo = gmtime(&timeNow);
-	MessageF(mtype, "Current date and time: %04u-%02u-%02u %02u:%02u:%02u\n",
-			timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
-			timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+	struct tm timeInfo;
+	if (gmtime_r(&realTime, &timeInfo) != nullptr)
+	{
+		MessageF(mtype, "Current date and time: %04u-%02u-%02u %02u:%02u:%02u\n",
+				timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
+				timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+	}
 
 // Debug
 //MessageF(mtype, "TC_FMR = %08x, PWM_FPE = %08x, PWM_FSR = %08x\n", TC2->TC_FMR, PWM->PWM_FPE, PWM->PWM_FSR);
@@ -2608,50 +2608,50 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 	{
 		// Pin number out of range, so nothing to do here
 	}
-	else if (logicalPin < HEATERS)								// pins 0-9 correspond to heater channels
+	else if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + HEATERS)		// pins 0-9 correspond to heater channels
 	{
 		// For safety, we don't allow a heater channel to be used for servos until the heater has been disabled
-		if (!reprap.GetHeat()->IsHeaterEnabled(logicalPin))
+		if (!reprap.GetHeat()->IsHeaterEnabled(logicalPin - Heater0LogicalPin))
 		{
-			firmwarePin = heatOnPins[logicalPin];
+			firmwarePin = heatOnPins[logicalPin - Heater0LogicalPin];
 			invert = !HEAT_ON;
 		}
 	}
-	else if (logicalPin >= 20 && logicalPin < 20 + (int)NUM_FANS)	// pins 100-107 correspond to fan channels
+	else if (logicalPin >= Fan0LogicalPin && logicalPin < Fan0LogicalPin + (int)NUM_FANS)		// pins 20- correspond to fan channels
 	{
 		// Don't allow a fan channel to be used unless the fan has been disabled
-		if (!fans[logicalPin - 20].IsEnabled()
+		if (!fans[logicalPin - Fan0LogicalPin].IsEnabled()
 #ifdef DUET_NG
 			// Fan pins on the DueX2/DueX5 cannot be used to control servos because the frequency is not well-defined.
-			&& (logicalPin <= 22 || access != PinAccess::servo)
+			&& (logicalPin <= Fan0LogicalPin + 2 || access != PinAccess::servo)
 #endif
 		   )
 		{
-			firmwarePin = COOLING_FAN_PINS[logicalPin - 20];
+			firmwarePin = COOLING_FAN_PINS[logicalPin - Fan0LogicalPin];
 		}
 	}
-	else if (logicalPin >= 40 && logicalPin < 40 + (int)ARRAY_SIZE(endStopPins))	// pins 40-49 correspond to endstop pins
+	else if (logicalPin >= EndstopXLogicalPin && logicalPin < EndstopXLogicalPin + (int)ARRAY_SIZE(endStopPins))	// pins 40-49 correspond to endstop pins
 	{
 		if (access == PinAccess::read
 #ifdef DUET_NG
 			// Endstop pins on the DueX2/DueX5 can be used as digital outputs too
-			|| (access == PinAccess::write && logicalPin >= 45)
+			|| (access == PinAccess::write && logicalPin >= EndstopXLogicalPin + 5)
 #endif
 		   )
 		{
-			firmwarePin = endStopPins[logicalPin - 40];
+			firmwarePin = endStopPins[logicalPin - EndstopXLogicalPin];
 		}
 	}
-	else if (logicalPin >= 60 && logicalPin < 60 + (int)ARRAY_SIZE(SpecialPinMap))
+	else if (logicalPin >= Special0LogicalPin && logicalPin < Special0LogicalPin + (int)ARRAY_SIZE(SpecialPinMap))
 	{
-		firmwarePin = SpecialPinMap[logicalPin - 60];
+		firmwarePin = SpecialPinMap[logicalPin - Special0LogicalPin];
 	}
 #ifdef DUET_NG
-	else if (logicalPin >= 100 && logicalPin < 100 + (int)ARRAY_SIZE(DueX5GpioPinMap))	// Pins 100-103 are the GPIO pins on the DueX2/X5
+	else if (logicalPin >= DueX5Gpio0LogicalPin && logicalPin < DueX5Gpio0LogicalPin + (int)ARRAY_SIZE(DueX5GpioPinMap))	// Pins 100-103 are the GPIO pins on the DueX2/X5
 	{
 		if (access != PinAccess::servo)
 		{
-			firmwarePin = DueX5GpioPinMap[logicalPin - 100];
+			firmwarePin = DueX5GpioPinMap[logicalPin - DueX5Gpio0LogicalPin];
 		}
 	}
 #endif
@@ -2680,6 +2680,11 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 		return true;
 	}
 	return false;
+}
+
+bool Platform::SetExtrusionAncilliaryPwmPin(int logicalPin)
+{
+	return GetFirmwarePin(logicalPin, PinAccess::pwm, extrusionAncilliaryPwmFirmwarePin, extrusionAncilliaryPwmInvert);
 }
 
 #if SUPPORT_INKJET
@@ -2791,27 +2796,76 @@ void Platform::GetPowerVoltages(float& minV, float& currV, float& maxV) const
 
 bool Platform::IsDateTimeSet() const
 {
-	return RTCDue::IsDateTimeSet();
+	return realTime != 0;
 }
 
 time_t Platform::GetDateTime() const
 {
-	return RTCDue::GetDateTime();
+	return realTime;
 }
 
 bool Platform::SetDateTime(time_t time)
 {
-	return RTCDue::SetDateTime(time);
+	struct tm brokenDateTime;
+	const bool ok = (gmtime_r(&time, &brokenDateTime) != nullptr);
+	if (ok)
+	{
+		realTime = time;
+		timeLastUpdatedMillis = millis();
+	}
+	return ok;
 }
 
 bool Platform::SetDate(time_t date)
 {
-	return RTCDue::SetDate(date);
+	// Check the validity of the date passed in
+	struct tm brokenNewDate;
+	const bool ok = (gmtime_r(&date, &brokenNewDate) != nullptr);
+	if (ok)
+	{
+		struct tm brokenTimeNow;
+		if (realTime == 0 || gmtime_r(&realTime, &brokenTimeNow) == nullptr)
+		{
+			// We didn't have a valid date/time set, so set the date and time to the value passed in
+			realTime = date;
+			timeLastUpdatedMillis = millis();
+		}
+		else
+		{
+			// Merge the existing time into the date passed in
+			brokenNewDate.tm_hour = brokenTimeNow.tm_hour;
+			brokenNewDate.tm_min = brokenTimeNow.tm_min;
+			brokenNewDate.tm_sec = brokenTimeNow.tm_sec;
+			realTime = mktime(&brokenNewDate);
+		}
+	}
+	return ok;
 }
 
 bool Platform::SetTime(time_t time)
 {
-	return RTCDue::SetTime(time);
+	// Check the validity of the date passed in
+	struct tm brokenNewTime;
+	const bool ok = (gmtime_r(&time, &brokenNewTime) != nullptr);
+	if (ok)
+	{
+		struct tm brokenTimeNow;
+		if (realTime == 0 || gmtime_r(&realTime, &brokenTimeNow) == nullptr)
+		{
+			// We didn't have a valid date/time set, so set the date and time to the value passed in
+			realTime = time;
+		}
+		else
+		{
+			// Merge the new time into the current date/time
+			brokenTimeNow.tm_hour = brokenNewTime.tm_hour;
+			brokenTimeNow.tm_min = brokenNewTime.tm_min;
+			brokenTimeNow.tm_sec = brokenNewTime.tm_sec;
+			realTime = mktime(&brokenTimeNow);
+		}
+		timeLastUpdatedMillis = millis();
+	}
+	return ok;
 }
 
 // Pragma pop_options is not supported on this platform, so we put this time-critical code right at the end of the file

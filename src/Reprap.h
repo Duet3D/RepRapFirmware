@@ -58,12 +58,12 @@ public:
     void StandbyTool(int toolNumber);
     Tool* GetCurrentTool() const;
     Tool* GetTool(int toolNumber) const;
-    Tool* GetOnlyTool() const;
+    Tool* GetCurrentOrDefaultTool() const;
 	uint32_t GetCurrentXAxes() const;									// Get the current axes used as X axes
-    //Tool* GetToolByDrive(int driveNumber);
     void SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures);
 	bool ToolWarningsAllowed();
 	bool IsHeaterAssignedToTool(int8_t heater) const;
+	unsigned int GetNumberOfContiguousTools() const;
 
     unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions);
     void PrintTool(int toolNumber, StringRef& reply) const;
