@@ -6,7 +6,7 @@ Version 1.17 (in development)
 dev7 build:
 - Implemented G29 S1
 - Default max temperature excursion increased to 15C
-- M571 now accepts a P parameter to select the output pin
+- M571 now accepts a P parameter to select the output pin (edit: M571 isn't working correctly in this release)
 - Removed Duet WiFi prototype 1 build configuration and added RADDS build configuration
 - M104 and M109 default to tool 0 if no tool selected and no T parameter provided
 - M109 now selects the tool after setting the active temperature if it was ont already selected
