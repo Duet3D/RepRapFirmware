@@ -3,6 +3,13 @@ Summary of important changes in recent versions
 
 Version 1.17 (in development)
 
+dev8 build:
+- Fixed bugs introduced in dev7 build
+- Software reset code storage/retrieval now works on Duet WiFi
+- Added F parameter to M571 command to set PWM frequency
+- Removed M201 max average printing acceleration parameter
+- Setting the temperature of a tool heater no longer sets the heater temperature unless the tool is currently selected or no tool is selected
+
 dev7 build:
 - Implemented G29 S1 (load bed height map from file)
 - Long moves are now segmented when grid compensation is in use so as to follow the contours of the bed
