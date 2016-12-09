@@ -148,7 +148,7 @@ void GCodes::Reset()
 	simulationMode = 0;
 	simulationTime = 0.0;
 	isPaused = false;
-	filePos = moveBuffer.filePos = noFilePosition;
+	moveBuffer.filePos = noFilePosition;
 	lastEndstopStates = platform->GetAllEndstopStates();
 	firmwareUpdateModuleMap = 0;
 
@@ -699,11 +699,6 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 		char b;
 		if (fd.Read(b))
 		{
-			if (gb.StartingNewCode() && &gb == fileGCode && gb.MachineState().previous == nullptr)
-			{
-				filePos = fd.GetPosition() - 1;
-				//debugPrintf("Set file pos %u\n", filePos);
-			}
 			if (gb.Put(b))
 			{
 				gb.SetFinished(ActOnCode(gb, reply));
@@ -732,6 +727,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 				if (gb.MachineState().previous == nullptr)
 				{
 					// Finished printing SD card file
+					UnlockAll(gb);
 					reprap.GetPrintMonitor()->StoppedPrint();
 					if (platform->Emulating() == marlin)
 					{
@@ -947,7 +943,7 @@ void GCodes::Pop(GCodeBuffer& gb)
 // Move expects all axis movements to be absolute, and all extruder drive moves to be relative.  This function serves that.
 // 'moveType' is the S parameter in the G0 or G1 command, or -1 if we are doing G92.
 // For regular (type 0) moves, we apply limits and do X axis mapping.
-// Returns the number of segments if we have a legal move (or 1 if we are doing G92), or zero if this gcode should be discarded
+// Returns the number of segments if we have a legal move, 1 if we are doing G92, or zero if this gcode should be discarded
 unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 {
 	// Zero every extruder drive as some drives may not be changed
@@ -1214,7 +1210,7 @@ int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 		}
 	}
 
-	// Load the last position and feed rate into moveBuffer
+	// Load the last position into moveBuffer
 #if SUPPORT_ROLAND
 	if (reprap.GetRoland()->Active())
 	{
@@ -1227,24 +1223,25 @@ int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 	}
 
 	// Load the move buffer with either the absolute movement required or the relative movement required
-	float oldCoords[MAX_AXES];
-	memcpy(oldCoords, moveBuffer.coords, sizeof(oldCoords));
+	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numAxes * sizeof(moveBuffer.initialCoords[0]));
 	segmentsLeft = LoadMoveBufferFromGCode(gb, moveBuffer.moveType);
+
 	if (segmentsLeft != 0)
 	{
 		// Flag whether we should use pressure advance, if there is any extrusion in this move.
-		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XY movement.
-		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XY movement here.
+		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU.. movement.
+		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU.. movement here.
 		moveBuffer.usePressureAdvance = false;
 		for (size_t axis = 0; axis < numAxes; ++axis)
 		{
-			if (axis != Z_AXIS && moveBuffer.coords[axis] != oldCoords[axis])
+			if (axis != Z_AXIS && moveBuffer.coords[axis] != moveBuffer.initialCoords[axis])
 			{
 				moveBuffer.usePressureAdvance = true;
 				break;
 			}
 		}
-		moveBuffer.filePos = (&gb == fileGCode) ? filePos : noFilePosition;
+		moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() : noFilePosition;
+		moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
 		//debugPrintf("Queue move pos %u\n", moveFilePos);
 	}
 	return (moveBuffer.moveType != 0 || moveBuffer.endStopsToCheck != 0) ? 2 : 1;
@@ -1266,7 +1263,9 @@ bool GCodes::ReadMove(RawMove& m)
 	}
 	else
 	{
-		// This move needs to be divided into 2 or more segments
+		// This move needs to be divided into 2 or more segments. We can only pause after the final segment.
+		m.canPauseAfter = false;
+
 		// Do the axes
 		for (size_t drive = 0; drive < numAxes; ++drive)
 		{
@@ -1375,52 +1374,65 @@ bool GCodes::DoCannedCycleMove(GCodeBuffer& gb, EndstopChecks ce)
 	return false;
 }
 
-// This handles G92
+// This handles G92. Return true if completed, false if it needs to be called again.
 bool GCodes::SetPositions(GCodeBuffer& gb)
 {
-	// Don't pause the machine if only extruder drives are being reset (DC, 2015-09-06).
-	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
-	bool includingAxes = false;
-	for (size_t drive = 0; drive < numAxes; ++drive)
+	if (gb.Seen('R') && gb.GetIValue() == 1)
 	{
-		if (gb.Seen(axisLetters[drive]))
+		// Babystepping command. All coordinates except Z are ignored.
+		if (gb.Seen('Z'))
 		{
-			includingAxes = true;
-			break;
+			const float babystepAmount = gb.GetFValue() * distanceScale;
+			if (fabs(babystepAmount) <= 1.0)		// limit babystepping to 1mm
+			{
+				reprap.GetMove()->Babystep(babystepAmount);
+			}
 		}
 	}
-
-	if (includingAxes)
+	else
 	{
-		if (!LockMovementAndWaitForStandstill(gb))
+		// Don't pause the machine if only extruder drives are being reset (DC, 2015-09-06).
+		// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
+		bool includingAxes = false;
+		for (size_t drive = 0; drive < numAxes; ++drive)
+		{
+			if (gb.Seen(axisLetters[drive]))
+			{
+				includingAxes = true;
+				break;
+			}
+		}
+
+		if (includingAxes)
+		{
+			if (!LockMovementAndWaitForStandstill(gb))	// lock movement and get current coordinates
+			{
+				return false;
+			}
+		}
+		else if (segmentsLeft != 0)			// wait for previous move to be taken so that GetCurrentUserPosition returns the correct value
 		{
 			return false;
 		}
-	}
-	else if (segmentsLeft != 0)			// wait for previous move to be taken so that GetCurrentUserPosition returns the correct value
-	{
-		return false;
-	}
 
-	reprap.GetMove()->GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes());	// make sure move buffer is up to date
-	bool ok = LoadMoveBufferFromGCode(gb, -1);
-	if (ok && includingAxes)
-	{
-#if SUPPORT_ROLAND
-		if (reprap.GetRoland()->Active())
+		const bool ok = LoadMoveBufferFromGCode(gb, -1);
+		if (ok && includingAxes)
 		{
-			for(size_t axis = 0; axis < AXES; axis++)
+#if SUPPORT_ROLAND
+			if (reprap.GetRoland()->Active())
 			{
-				if (!reprap.GetRoland()->ProcessG92(moveBuffer[axis], axis))
+				for(size_t axis = 0; axis < AXES; axis++)
 				{
-					return false;
+					if (!reprap.GetRoland()->ProcessG92(moveBuffer[axis], axis))
+					{
+						return false;
+					}
 				}
 			}
-		}
 #endif
-		SetPositions(moveBuffer.coords);
+			SetPositions(moveBuffer.coords);
+		}
 	}
-
 	return true;
 }
 
@@ -2974,7 +2986,7 @@ void GCodes::StartToolChange(GCodeBuffer& gb, bool inM109)
 }
 
 // Retract or un-retract filament, returning true if movement has been queued, false if this needs to be called again
-bool GCodes::RetractFilament(bool retract)
+bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 {
 	if (retractLength != 0.0 || retractHop != 0.0 || (!retract && retractExtra != 0.0))
 	{
@@ -3008,7 +3020,8 @@ bool GCodes::RetractFilament(bool retract)
 
 				moveBuffer.isFirmwareRetraction = true;
 				moveBuffer.usePressureAdvance = false;
-				moveBuffer.filePos = filePos;
+				moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() : noFilePosition;
+				moveBuffer.canPauseAfter = !retract;			// don't pause after a retraction because that could cause too much retraction
 				moveBuffer.xAxes = reprap.GetCurrentXAxes();
 				segmentsLeft = 1;
 			}

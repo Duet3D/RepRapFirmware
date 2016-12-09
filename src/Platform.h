@@ -509,10 +509,6 @@ public:
 	float Acceleration(size_t drive) const;
 	const float* Accelerations() const;
 	void SetAcceleration(size_t drive, float value);
-	const float GetMaxAverageAcceleration() const
-		{ return maxAverageAcceleration; }
-	void SetMaxAverageAcceleration(float f)
-		{ maxAverageAcceleration = f; }
 	float MaxFeedrate(size_t drive) const;
 	const float* MaxFeedrates() const;
 	void SetMaxFeedrate(size_t drive, float value);
@@ -567,6 +563,8 @@ public:
 
 	void SetExtrusionAncilliaryPwmValue(float v);
 	float GetExtrusionAncilliaryPwmValue() const;
+	void SetExtrusionAncilliaryPwmFrequency(float f);
+	float GetExtrusionAncilliaryPwmFrequency() const;
 	bool SetExtrusionAncilliaryPwmPin(int logicalPin);
 	int GetExtrusionAncilliaryPwmPin() const { return extrusionAncilliaryPwmLogicalPin; }
 	void ExtrudeOn();
@@ -681,31 +679,41 @@ private:
 	static float AdcReadingToPowerVoltage(uint16_t reading);
 #endif
 
-	// These are the structures used to hold out non-volatile data.
-	// The SAM3X doesn't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
+	// These are the structures used to hold our non-volatile data.
+	// The SAM3X and SAM4E don't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
 	// every time we reprogram the firmware via bossa, but it can be retained when firmware updates are performed
 	// via the web interface. That's why it's a good idea to implement versioning here - increase these values
 	// whenever the fields of the following structs have changed.
-
+	//
+	// The SAM4E has a large page erase size (8K). For this reason we store the software reset data in the 512-byte user signature area
+	// instead, which doesn't get cleared when the Erase button is pressed. The SoftareResetData struct must have at least one 32-bit
+	// field to guarantee that values of this type will be 32-bit aligned. It must have no virtual members because it is read/written
+	// directly form/to flash memory.
 	struct SoftwareResetData
 	{
-		static const uint16_t magicValue = 0x7C5F;	// value we use to recognise that all the flash data has been written
-		static const uint16_t versionValue = 1;		// increment this whenever this struct changes
+		static const uint16_t versionValue = 2;		// increment this whenever this struct changes
+		static const uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written
 		static const uint32_t nvAddress = 0;		// must be 4-byte aligned
+		static const size_t numberOfSlots = 8;		// number of storage slots used to implement wear levelling
 
-		uint16_t magic;
-		uint16_t version;
-
+		uint16_t magic;								// the magic number, including the version
 		uint16_t resetReason;						// this records why we did a software reset, for diagnostic purposes
-		uint16_t dummy;								// padding to align the next field (should happen automatically I think)
-		size_t neverUsedRam;						// the amount of never used RAM at the last abnormal software reset
+		uint32_t neverUsedRam;						// the amount of never used RAM at the last abnormal software reset
+
+		bool isVacant() const						// return true if this struct can be written without erasing it first
+		{
+			return magic == 0xFFFF && resetReason == 0xFFFF && neverUsedRam == 0xFFFFFFFF;
+		}
 	};
 
+	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in SAM4E user signature area");
+
+	// The following struct is due to be replaced by the config-override.g file.
 	struct FlashData
 	{
 		static const uint16_t magicValue = 0xE6C4;	// value we use to recognise that the flash data has been written
 		static const uint16_t versionValue = 5;		// increment this whenever this struct changes
-		static const uint32_t nvAddress = (SoftwareResetData::nvAddress + sizeof(SoftwareResetData) + 3) & (~3);
+		static const uint32_t nvAddress = SoftwareResetData::nvAddress + (SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData));
 
 		uint16_t magic;
 		uint16_t version;
@@ -742,7 +750,7 @@ private:
 	uint32_t errorCodeBits;
 
 	void InitialiseInterrupts();
-	void GetStackUsage(size_t* currentStack, size_t* maxStack, size_t* neverUsed) const;
+	void GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed) const;
 
 	// DRIVES
 
@@ -770,7 +778,6 @@ private:
 	uint32_t slowDriverStepPulseClocks;				// minimum high and low step pulse widths, in processor clocks
 	uint32_t slowDrivers;							// bitmap of driver port bits that need extended step pulse timing
 	float idleCurrentFactor;
-	float maxAverageAcceleration;
 
 #if defined(DUET_NG)
 	size_t numTMC2660Drivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
@@ -793,6 +800,7 @@ private:
 	volatile ThermistorAveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
 
 	float extrusionAncilliaryPwmValue;
+	float extrusionAncilliaryPwmFrequency;
 	int extrusionAncilliaryPwmLogicalPin;
 	Pin extrusionAncilliaryPwmFirmwarePin;
 	bool extrusionAncilliaryPwmInvert;
@@ -1125,6 +1133,16 @@ inline float Platform::GetExtrusionAncilliaryPwmValue() const
 	return extrusionAncilliaryPwmValue;
 }
 
+inline void Platform::SetExtrusionAncilliaryPwmFrequency(float f)
+{
+	extrusionAncilliaryPwmFrequency = f;
+}
+
+inline float Platform::GetExtrusionAncilliaryPwmFrequency() const
+{
+	return extrusionAncilliaryPwmFrequency;
+}
+
 // For the Duet we use the fan output for this
 // DC 2015-03-21: To allow users to control the cooling fan via gcodes generated by slic3r etc.,
 // only turn the fan on/off if the extruder ancilliary PWM has been set nonzero.
@@ -1133,7 +1151,8 @@ inline void Platform::ExtrudeOn()
 {
 	if (extrusionAncilliaryPwmValue > 0.0)
 	{
-		WriteAnalog(extrusionAncilliaryPwmFirmwarePin, extrusionAncilliaryPwmValue, DefaultPinWritePwmFreq);
+		WriteAnalog(extrusionAncilliaryPwmFirmwarePin,
+					(extrusionAncilliaryPwmInvert) ? 1.0 - extrusionAncilliaryPwmValue : extrusionAncilliaryPwmValue, extrusionAncilliaryPwmFrequency);
 	}
 }
 
@@ -1144,7 +1163,8 @@ inline void Platform::ExtrudeOff()
 {
 	if (extrusionAncilliaryPwmValue > 0.0)
 	{
-		WriteAnalog(extrusionAncilliaryPwmFirmwarePin, 0.0, DefaultPinWritePwmFreq);
+		WriteAnalog(extrusionAncilliaryPwmFirmwarePin,
+					(extrusionAncilliaryPwmInvert) ? 1.0 : 0.0, extrusionAncilliaryPwmFrequency);
 	}
 }
 

@@ -133,7 +133,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				return false;
 			}
-			result = RetractFilament(true);
+			result = RetractFilament(gb, true);
 		}
 		break;
 
@@ -142,7 +142,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			return false;
 		}
-		result = RetractFilament(false);
+		result = RetractFilament(gb, false);
 		break;
 
 	case 20: // Inches (which century are we living in, here?)
@@ -913,121 +913,127 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				bool seen = false;
 				Fan& fan = platform->GetFan(fanNum);
-
-				if (gb.Seen('I'))		// Invert cooling
+				if (!fan.IsEnabled())
 				{
-					const int invert = gb.GetIValue();
-					if (invert < 0)
+					reply.printf("Fan number %d is disabled", fanNum);
+				}
+				else
+				{
+					bool seen = false;
+					if (gb.Seen('I'))		// Invert cooling
 					{
-						fan.Disable();
-					}
-					else
-					{
-						fan.SetInverted(invert > 0);
-					}
-					seen = true;
-				}
-
-				if (gb.Seen('F'))		// Set PWM frequency
-				{
-					fan.SetPwmFrequency(gb.GetFValue());
-					seen = true;
-				}
-
-				if (gb.Seen('T'))		// Set thermostatic trigger temperature
-				{
-					seen = true;
-					fan.SetTriggerTemperature(gb.GetFValue());
-				}
-
-				if (gb.Seen('B'))		// Set blip time
-				{
-					seen = true;
-					fan.SetBlipTime(gb.GetFValue());
-				}
-
-				if (gb.Seen('L'))		// Set minimum speed
-				{
-					seen = true;
-					fan.SetMinValue(gb.GetFValue());
-				}
-
-				if (gb.Seen('H'))		// Set thermostatically-controller heaters
-				{
-					seen = true;
-					long heaters[HEATERS];
-					size_t numH = HEATERS;
-					gb.GetLongArray(heaters, numH);
-					// Note that M106 H-1 disables thermostatic mode. The following code implements that automatically.
-					uint16_t hh = 0;
-					for (size_t h = 0; h < numH; ++h)
-					{
-						const int hnum = heaters[h];
-						if (hnum >= 0 && hnum < HEATERS)
+						const int invert = gb.GetIValue();
+						if (invert < 0)
 						{
-							hh |= (1u << (unsigned int)hnum);
+							fan.Disable();
+						}
+						else
+						{
+							fan.SetInverted(invert > 0);
+						}
+						seen = true;
+					}
+
+					if (gb.Seen('F'))		// Set PWM frequency
+					{
+						fan.SetPwmFrequency(gb.GetFValue());
+						seen = true;
+					}
+
+					if (gb.Seen('T'))		// Set thermostatic trigger temperature
+					{
+						seen = true;
+						fan.SetTriggerTemperature(gb.GetFValue());
+					}
+
+					if (gb.Seen('B'))		// Set blip time
+					{
+						seen = true;
+						fan.SetBlipTime(gb.GetFValue());
+					}
+
+					if (gb.Seen('L'))		// Set minimum speed
+					{
+						seen = true;
+						fan.SetMinValue(gb.GetFValue());
+					}
+
+					if (gb.Seen('H'))		// Set thermostatically-controller heaters
+					{
+						seen = true;
+						long heaters[HEATERS];
+						size_t numH = HEATERS;
+						gb.GetLongArray(heaters, numH);
+						// Note that M106 H-1 disables thermostatic mode. The following code implements that automatically.
+						uint16_t hh = 0;
+						for (size_t h = 0; h < numH; ++h)
+						{
+							const int hnum = heaters[h];
+							if (hnum >= 0 && hnum < HEATERS)
+							{
+								hh |= (1u << (unsigned int)hnum);
+							}
+						}
+						if (hh != 0)
+						{
+							platform->SetFanValue(fanNum, 1.0);			// default the fan speed to full for safety
+						}
+						fan.SetHeatersMonitored(hh);
+					}
+
+					if (gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
+					{
+						const float f = constrain<float>(gb.GetFValue(), 0.0, 255.0);
+						if (seen || seenFanNum)
+						{
+							platform->SetFanValue(fanNum, f);
+						}
+						else
+						{
+							// We are processing an M106 S### command with no other recognised parameters and we have a tool selected.
+							// Apply the fan speed setting to the fans in the fan mapping for the current tool.
+							lastDefaultFanSpeed = f;
+							SetMappedFanSpeed();
 						}
 					}
-					if (hh != 0)
+					else if (gb.Seen('R'))
 					{
-						platform->SetFanValue(fanNum, 1.0);			// default the fan speed to full for safety
-					}
-					fan.SetHeatersMonitored(hh);
-				}
-
-				if (gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
-				{
-					const float f = constrain<float>(gb.GetFValue(), 0.0, 255.0);
-					if (seen || seenFanNum)
-					{
-						platform->SetFanValue(fanNum, f);
-					}
-					else
-					{
-						// We are processing an M106 S### command with no other recognised parameters and we have a tool selected.
-						// Apply the fan speed setting to the fans in the fan mapping for the current tool.
-						lastDefaultFanSpeed = f;
-						SetMappedFanSpeed();
-					}
-				}
-				else if (gb.Seen('R'))
-				{
-					const int i = gb.GetIValue();
-					switch(i)
-					{
-					case 0:
-					case 1:
-						// Restore fan speed to value when print was paused
-						platform->SetFanValue(fanNum, pausedFanValues[fanNum]);
-						break;
-					case 2:
-						// Set the speeds of mapped fans to the last known value. Fan number is ignored.
-						SetMappedFanSpeed();
-						break;
-					default:
-						break;
-					}
-				}
-				else if (!seen)
-				{
-					reply.printf("Fan%i frequency: %dHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s",
-									fanNum,
-									(int)(fan.GetPwmFrequency()),
-									(int)(fan.GetValue() * 100.0),
-									(int)(fan.GetMinValue() * 100.0),
-									fan.GetBlipTime(),
-									(fan.GetInverted()) ? "yes" : "no");
-					uint16_t hh = fan.GetHeatersMonitored();
-					if (hh != 0)
-					{
-						reply.catf(", trigger: %dC, heaters:", (int)fan.GetTriggerTemperature());
-						for (unsigned int i = 0; i < HEATERS; ++i)
+						const int i = gb.GetIValue();
+						switch(i)
 						{
-							if ((hh & (1u << i)) != 0)
+						case 0:
+						case 1:
+							// Restore fan speed to value when print was paused
+							platform->SetFanValue(fanNum, pausedFanValues[fanNum]);
+							break;
+						case 2:
+							// Set the speeds of mapped fans to the last known value. Fan number is ignored.
+							SetMappedFanSpeed();
+							break;
+						default:
+							break;
+						}
+					}
+					else if (!seen)
+					{
+						reply.printf("Fan%i frequency: %dHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s",
+										fanNum,
+										(int)(fan.GetPwmFrequency()),
+										(int)(fan.GetValue() * 100.0),
+										(int)(fan.GetMinValue() * 100.0),
+										fan.GetBlipTime(),
+										(fan.GetInverted()) ? "yes" : "no");
+						uint16_t hh = fan.GetHeatersMonitored();
+						if (hh != 0)
+						{
+							reply.catf(", trigger: %dC, heaters:", (int)fan.GetTriggerTemperature());
+							for (unsigned int i = 0; i < HEATERS; ++i)
 							{
-								reply.catf(" %u", i);
+								if ((hh & (1u << i)) != 0)
+								{
+									reply.catf(" %u", i);
+								}
 							}
 						}
 					}
@@ -1491,13 +1497,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 			}
 
-			if (gb.Seen('P'))
-			{
-				// Set max average printing acceleration
-				platform->SetMaxAverageAcceleration(gb.GetFValue() * distanceScale);
-				seen = true;
-			}
-
 			if (!seen)
 			{
 				reply.printf("Accelerations: ");
@@ -1512,7 +1511,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					reply.catf("%c%.1f", sep, platform->Acceleration(extruder + numAxes) / distanceScale);
 					sep = ':';
 				}
-				reply.catf(", avg. printing: %.1f", platform->GetMaxAverageAcceleration());
 			}
 		}
 		break;
@@ -2591,6 +2589,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				seen = true;
 			}
+			if (gb.Seen('F'))
+			{
+				platform->SetExtrusionAncilliaryPwmFrequency(gb.GetFValue());
+			}
 			if (gb.Seen('S'))
 			{
 				platform->SetExtrusionAncilliaryPwmValue(gb.GetFValue());
@@ -2598,8 +2600,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			if (!seen)
 			{
-				reply.printf("Extrusion ancillary PWM %.3f on pin %u",
-								platform->GetExtrusionAncilliaryPwmValue(), platform->GetExtrusionAncilliaryPwmPin());
+				reply.printf("Extrusion ancillary PWM %.3f at %.1fHz on pin %u",
+								platform->GetExtrusionAncilliaryPwmValue(),
+								platform->GetExtrusionAncilliaryPwmFrequency(),
+								platform->GetExtrusionAncilliaryPwmPin());
 			}
 		}
 		break;

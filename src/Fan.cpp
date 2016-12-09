@@ -132,4 +132,14 @@ void Fan::Check()
 	}
 }
 
+void Fan::Disable()
+{
+	if (pin != NoPin)
+	{
+		inverted = false;
+		SetHardwarePwm(0.0);
+	}
+	pin = NoPin;
+}
+
 // End

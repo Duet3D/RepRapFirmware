@@ -48,7 +48,7 @@ public:
 	void SetTriggerTemperature(float t) { triggerTemperature = t; }
 	void SetHeatersMonitored(uint16_t h);
 	void Check();
-	void Disable() { pin = NoPin; }
+	void Disable();
 };
 
 #endif /* SRC_FAN_H_ */

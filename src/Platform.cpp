@@ -227,8 +227,6 @@ void Platform::Init()
 	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
 #endif
 
-	maxAverageAcceleration = 10000.0;			// high enough to have no effect until it is changed
-
 	// Z PROBE
 	zProbePin = Z_PROBE_PIN;
 	zProbeAdcChannel = PinToAdcChannel(zProbePin);
@@ -326,12 +324,17 @@ void Platform::Init()
 	TMC2660::Init(ENABLE_PINS, numTMC2660Drivers);
 #endif
 
+	// Allow extrusion ancilliary PWM to use FAN0 even if FAN0 has not been disabled, for backwards compatibility
 	extrusionAncilliaryPwmValue = 0.0;
-	extrusionAncilliaryPwmLogicalPin = -1;
-	extrusionAncilliaryPwmFirmwarePin = NoPin;
-	extrusionAncilliaryPwmInvert = false;
-	SetExtrusionAncilliaryPwmPin(Fan0LogicalPin);
-
+	extrusionAncilliaryPwmFrequency = DefaultPinWritePwmFreq;
+	extrusionAncilliaryPwmLogicalPin = Fan0LogicalPin;
+	extrusionAncilliaryPwmFirmwarePin = COOLING_FAN_PINS[0];
+	extrusionAncilliaryPwmInvert =
+#if defined(DUET_NG) || defined(__RADDS__)
+			false;
+#else
+			(board == BoardType::Duet_06 || board == BoardType::Duet_07);
+#endif
 	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
 	ARRAY_INIT(spiTempSenseCsPins, SpiTempSensorCsPins);
@@ -1243,14 +1246,41 @@ void Platform::SoftwareReset(uint16_t reason)
 		reason |= (uint16_t)reprap.GetSpinningModule();
 
 		// Record the reason for the software reset
-		SoftwareResetData temp;
-		temp.magic = SoftwareResetData::magicValue;
-		temp.version = SoftwareResetData::versionValue;
-		temp.resetReason = reason;
-		GetStackUsage(NULL, NULL, &temp.neverUsedRam);
+		// First find a free slot (wear levelling)
+		size_t slot = SoftwareResetData::numberOfSlots;
+		SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
 
-		// Save diagnostics data to Flash and reset the software
-		DueFlashStorage::write(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
+#ifdef DUET_NG
+		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
+#else
+		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
+#endif
+		{
+			while (slot != 0 && srdBuf[slot - 1].isVacant())
+			{
+				--slot;
+			}
+		}
+
+		if (slot == SoftwareResetData::numberOfSlots)
+		{
+			// No free slots, so erase the area
+#ifdef DUET_NG
+			flash_erase_user_signature();
+#endif
+			memset(srdBuf, 0xFF, sizeof(srdBuf));
+			slot = 0;
+		}
+		srdBuf[slot].magic = SoftwareResetData::magicValue;
+		srdBuf[slot].resetReason = reason;
+		GetStackUsage(NULL, NULL, &srdBuf[slot].neverUsedRam);
+
+		// Save diagnostics data to Flash
+#ifdef DUET_NG
+		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
+#else
+		DueFlashStorage::write(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
+#endif
 	}
 	Reset();
 	for(;;) {}
@@ -1365,7 +1395,7 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Program static ram used: %d\n", &_end - ramstart);
 	MessageF(mtype, "Dynamic ram used: %d\n", mi.uordblks);
 	MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
-	size_t currentStack, maxStack, neverUsed;
+	uint32_t currentStack, maxStack, neverUsed;
 	GetStackUsage(&currentStack, &maxStack, &neverUsed);
 	MessageF(mtype, "Current stack ram used: %d\n", currentStack);
 	MessageF(mtype, "Maximum stack ram used: %d\n", maxStack);
@@ -1373,20 +1403,40 @@ void Platform::Diagnostics(MessageType mtype)
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)Time();		// get up time in seconds
-	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "external", "?", "?", "?" };
+	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "reset button", "?", "?", "?" };
 	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n",
 			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
 
 	// Show the reset code stored at the last software reset
+	Message(mtype, "Last software reset code & available RAM: ");
 	{
-		SoftwareResetData temp;
-		temp.magic = 0;
-		DueFlashStorage::read(SoftwareResetData::nvAddress, &temp, sizeof(SoftwareResetData));
-		if (temp.magic == SoftwareResetData::magicValue && temp.version == SoftwareResetData::versionValue)
+		SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
+		memset(srdBuf, 0, sizeof(srdBuf));
+		int slot = -1;
+
+#ifdef DUET_NG
+		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
+#else
+		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
+#endif
 		{
-			MessageF(mtype, "Last software reset code & available RAM: 0x%04x, %u\n", temp.resetReason, temp.neverUsedRam);
-			MessageF(mtype, "Spinning module during software reset: %s\n", moduleName[temp.resetReason & 0x0F]);
+			// Find the last slot written
+			slot = SoftwareResetData::numberOfSlots - 1;
+			while (slot >= 0 && srdBuf[slot].magic == 0xFFFF)
+			{
+				--slot;
+			}
+		}
+
+		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
+		{
+			MessageF(mtype, "0x%04x, %u (slot %d)\n", srdBuf[slot].resetReason, srdBuf[slot].neverUsedRam, slot);
+			MessageF(mtype, "Spinning module during software reset: %s\n", moduleName[srdBuf[slot].resetReason & 0x0F]);
+		}
+		else
+		{
+			Message(mtype, "not available\n");
 		}
 	}
 
@@ -1447,12 +1497,17 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 
 	// Show current RTC time
+	Message(mtype, "Current date and time: ");
 	struct tm timeInfo;
 	if (gmtime_r(&realTime, &timeInfo) != nullptr)
 	{
-		MessageF(mtype, "Current date and time: %04u-%02u-%02u %02u:%02u:%02u\n",
+		MessageF(mtype, "%04u-%02u-%02u %02u:%02u:%02u\n",
 				timeInfo.tm_year + 1900, timeInfo.tm_mon + 1, timeInfo.tm_mday,
 				timeInfo.tm_hour, timeInfo.tm_min, timeInfo.tm_sec);
+	}
+	else
+	{
+		Message(mtype, "clock not set\n");
 	}
 
 // Debug
@@ -1503,24 +1558,24 @@ void Platform::DiagnosticTest(int d)
 }
 
 // Return the stack usage and amount of memory that has never been used, in bytes
-void Platform::GetStackUsage(size_t* currentStack, size_t* maxStack, size_t* neverUsed) const
+void Platform::GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed) const
 {
-	const char *ramend = (const char *)
-#ifdef DUET_NG
-		0x20020000;			// 0x20000000 + 128Kb
+	const char * const ramend = (const char *)
+#if SAM4E
+			IRAM_ADDR + IRAM_SIZE;
 #else
-		0x20088000;			// 0x20070000 + 96Kb
+			IRAM0_ADDR + IRAM_SIZE;
 #endif
 	register const char * stack_ptr asm ("sp");
-	const char *heapend = sbrk(0);
-	const char* stack_lwm = heapend;
+	const char * const heapend = sbrk(0);
+	const char * stack_lwm = heapend;
 	while (stack_lwm < stack_ptr && *stack_lwm == memPattern)
 	{
 		++stack_lwm;
 	}
-	if (currentStack) { *currentStack = ramend - stack_ptr; }
-	if (maxStack) { *maxStack = ramend - stack_lwm; }
-	if (neverUsed) { *neverUsed = stack_lwm - heapend; }
+	if (currentStack != nullptr) { *currentStack = ramend - stack_ptr; }
+	if (maxStack != nullptr) { *maxStack = ramend - stack_lwm; }
+	if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
 }
 
 void Platform::ClassReport(float &lastTime)
@@ -2541,11 +2596,11 @@ void Platform::SetBoardType(BoardType bt)
 #else
 		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
 		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
-		// So we enable the pullup (value 150K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
+		// So we enable the pullup (value 100K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
 		// This may fail if anyone connects a load to the DAC0 pin on a Duet 0.6, hence we implement board selection in M115 as well.
 		pinMode(Dac0DigitalPin, INPUT_PULLUP);
 		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
-		pinMode(Dac0DigitalPin, INPUT);	// turn pullup off
+		pinMode(Dac0DigitalPin, INPUT);			// turn pullup off
 #endif
 	}
 	else
@@ -2628,6 +2683,9 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 		   )
 		{
 			firmwarePin = COOLING_FAN_PINS[logicalPin - Fan0LogicalPin];
+#if !defined(DUET_NG) && !defined(__RADDS__)
+			invert = (board == BoardType::Duet_06 || board == BoardType::Duet_07);
+#endif
 		}
 	}
 	else if (logicalPin >= EndstopXLogicalPin && logicalPin < EndstopXLogicalPin + (int)ARRAY_SIZE(endStopPins))	// pins 40-49 correspond to endstop pins

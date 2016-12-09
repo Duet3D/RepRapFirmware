@@ -65,12 +65,13 @@ public:
 		float coords[DRIVES];											// new positions for the axes, amount of movement for the extruders
 		float initialCoords[MAX_AXES];									// the initial positions of the axes
 		float feedRate;													// feed rate of this move
-		FilePosition filePos;											// offset in the file being printed that this move was read from
+		FilePosition filePos;											// offset in the file being printed at the end of reading this move
 		uint32_t xAxes;													// axes that X is mapped to
 		EndstopChecks endStopsToCheck;									// endstops to check
 		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
 		bool isFirmwareRetraction;										// true if this is a firmware retraction/un-retraction move
 		bool usePressureAdvance;										// true if we want to us extruder pressure advance, if there is any extrusion
+		bool canPauseAfter;												// true if we can pause just after this move and successfully restart
 	};
   
     GCodes(Platform* p, Webserver* w);
@@ -197,7 +198,7 @@ private:
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
 	void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
 	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
-	bool RetractFilament(bool retract);									// Retract or un-retract filaments
+	bool RetractFilament(GCodeBuffer& gb, bool retract);				// Retract or un-retract filaments
 	bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive
 	void ListTriggers(StringRef reply, TriggerMask mask);				// Append a list of trigger endstops to a message
 	void CheckTriggers();												// Check for and execute triggers
@@ -280,7 +281,6 @@ private:
 
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
-	FilePosition filePos;						// The position we got up to in the file being printed
 
 	// Firmware retraction settings
 	float retractLength, retractExtra;			// retraction length and extra length to un-retract

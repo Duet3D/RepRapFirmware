@@ -240,6 +240,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 
 	// 3. Store some values
 	endStopsToCheck = nextMove.endStopsToCheck;
+	canPauseAfter = nextMove.canPauseAfter;
 	filePos = nextMove.filePos;
 	usePressureAdvance = nextMove.usePressureAdvance;
 	hadLookaheadUnderrun = false;
@@ -564,15 +565,14 @@ void DDA::RecalculateMove()
 		topSpeed = requestedSpeed;
 	}
 
-	canPause = (endStopsToCheck == 0);
-	if (canPause && endSpeed != 0.0)
+	if (canPauseAfter && endSpeed != 0.0)
 	{
 		const Platform * const p = reprap.GetPlatform();
 		for (size_t drive = 0; drive < DRIVES; ++drive)
 		{
 			if (ddm[drive].state == DMState::moving && endSpeed * fabsf(directionVector[drive]) > p->ActualInstantDv(drive))
 			{
-				canPause = false;
+				canPauseAfter = false;
 				break;
 			}
 		}
@@ -723,44 +723,6 @@ void DDA::Prepare()
 	float accelStopTime = (topSpeed - startSpeed)/acceleration;
 	float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
 	float totalTime = decelStartTime + (topSpeed - endSpeed)/acceleration;
-
-	// Enforce the maximum average acceleration
-	if (isPrintingMove && topSpeed > startSpeed && topSpeed > endSpeed)
-	{
-		const float maxAverageAcceleration = reprap.GetPlatform()->GetMaxAverageAcceleration();
-		if (2 * topSpeed - startSpeed - endSpeed > totalTime * maxAverageAcceleration)
-		{
-			// Reduce the top speed to comply with the maximum average acceleration
-			const float a2 = fsquare(acceleration);
-			const float am2 = fsquare(maxAverageAcceleration);
-			const float aam = acceleration * maxAverageAcceleration;
-			const float discriminant = (a2 + (2 * aam) - am2) * (fsquare(startSpeed) + fsquare(endSpeed))
-					+ (2 * a2 + 2 * am2 - 4 * aam) * startSpeed * endSpeed
-					+ (8 * a2 * maxAverageAcceleration - 4 * acceleration * am2) * totalDistance;
-			const float oldTopSpeed = topSpeed;
-			if (discriminant < 0.0)
-			{
-				topSpeed = max<float>(startSpeed, endSpeed);
-			}
-			else
-			{
-				const float temp =  (sqrtf(discriminant) + (acceleration - maxAverageAcceleration) * (startSpeed + endSpeed))
-										/(4 * acceleration - 2 * maxAverageAcceleration);
-				topSpeed = max<float>(max<float>(temp, startSpeed), endSpeed);
-			}
-
-			//DEBUG
-			debugPrintf("ots %f nts %f ss %f es %f\n", oldTopSpeed, topSpeed, startSpeed, endSpeed);
-
-			// Recalculate parameters
-			accelDistance = (fsquare(topSpeed) - fsquare(startSpeed))/(2 * acceleration);
-			decelDistance = (fsquare(topSpeed) - fsquare(endSpeed))/(2 * acceleration);
-			params.decelStartDistance = totalDistance - decelDistance;
-			accelStopTime = (topSpeed - startSpeed)/acceleration;
-			decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
-			totalTime = decelStartTime + (topSpeed - endSpeed)/acceleration;
-		}
-	}
 
 	clocksNeeded = (uint32_t)(totalTime * stepClockRate);
 

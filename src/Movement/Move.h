@@ -117,6 +117,7 @@ public:
 
 	void UseHeightMap(bool b) { useGridHeights = b; }								// Start or stop using the height map
 	bool UsingHeightMap() const { return useGridHeights; }							// Are we doing grid bed compensation?
+	void Babystep(float zMovement);													// Request babystepping
 
 private:
 
@@ -192,6 +193,8 @@ private:
 	int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ
 	float axisFactors[MAX_AXES];						// How much further the motors need to move for each axis movement, on a CoreXY/CoreXZ/CoreYZ machine
 	unsigned int stepErrors;							// count of step errors, for diagnostics
+
+	float babysteppingLeft;								// the amount of Z babystepping left to do
 };
 
 //******************************************************************************************************

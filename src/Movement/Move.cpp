@@ -46,6 +46,7 @@ void Move::Init()
 
 	currentDda = nullptr;
 	addNoMoreMoves = false;
+	babysteppingLeft = 0.0;
 	stepErrors = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 
@@ -311,11 +312,13 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 	const DDA *savedDdaRingAddPointer = ddaRingAddPointer;
 	cpu_irq_disable();
 	DDA *dda = currentDda;
+	FilePosition fPos = noFilePosition;
 	if (dda != nullptr)
 	{
 		// A move is being executed. See if we can safely pause at the end of it.
-		if (dda->CanPause())
+		if (dda->CanPauseAfter())
 		{
+			fPos = dda->GetFilePosition();
 			ddaRingAddPointer = dda->GetNext();
 		}
 		else
@@ -325,8 +328,9 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 			dda = ddaRingGetPointer;
 			while (dda != ddaRingAddPointer)
 			{
-				if (dda->CanPause())
+				if (dda->CanPauseAfter())
 				{
+					fPos = dda->GetFilePosition();
 					ddaRingAddPointer = dda->GetNext();
 					if (ddaRingAddPointer->GetState() == DDA::frozen)
 					{
@@ -346,8 +350,6 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 	}
 
 	cpu_irq_enable();
-
-	FilePosition fPos = noFilePosition;
 
 	if (ddaRingAddPointer != savedDdaRingAddPointer)
 	{
@@ -372,10 +374,6 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 			{
 				positions[drive] += dda->GetEndCoordinate(drive, true);		// update the amount of extrusion we are going to skip
 			}
-			if (fPos == noFilePosition)
-			{
-				fPos = dda->GetFilePosition();
-			}
 			(void)dda->Free();
 			dda = dda->GetNext();
 		}
@@ -387,6 +385,13 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 	}
 
 	return fPos;
+}
+
+// Request babystepping
+void Move::Babystep(float zMovement)
+{
+	babysteppingLeft += zMovement;
+	// TODO use this value somewhere
 }
 
 uint32_t maxReps = 0;
@@ -402,7 +407,7 @@ void Move::Diagnostics(MessageType mtype)
 	Platform * const p = reprap.GetPlatform();
 	p->Message(mtype, "=== Move ===\n");
 	p->MessageF(mtype, "MaxReps: %u, StepErrors: %u, MaxWait: %ums, Underruns: %u, %u\n",
-											maxReps, stepErrors, longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
+						maxReps, stepErrors, longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	maxReps = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 	longestGcodeWaitInterval = 0;
