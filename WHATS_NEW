@@ -7,7 +7,12 @@ RC1 build:
 - Added support for M374 (save height map) and M375 (load height map)
 - Added M376 (set bed compensation taper height)
 - Added T parameter to G31 command
-- M500, M501 and M502 now use config_override.g instead of flash memory
+- M500, M501 and M502 now use config_override.g instead of flash memory. The parameters saved and respored are:
+-- M307 auto tune results
+-- PID parameters, if you used M301 to override the auto tune PID settings
+-- Delta printer M665 and M666 settings
+-- G31 trigger height, trigger value and X and Y offsets
+- The M501 auto save option has been removed
 - Removed S and T parameters from M301 command. Use M307 command instead.
 - M301 with negative P parameter no longer sets bang-bang mode. Use M307 instead.
 - Z probe offsets are now applied during G30 probing with specirf8ied XY coordinates, including during delta auto calibration
@@ -65,6 +70,9 @@ Upgrade notes - VERY IMPORTANT TO AVOID DAMAGE!!!
 - On the Duet 0.6 and 0.85 the default hot end heater thermistor parameters are changed to match the Semtec thermistor used in the E3DV6 and other popular hot ends. If you have a printer built from a kit supplied by RepRapPro then you should use the following parameters in your M305 P1 command to restore the previous behaviour: B4138 C0
 - The default bed temperature limit is 125C. Use M143 H0 S### if you need to increase it.
 - If your printer has multiple hot end heaters and you use the M143 command to change the temperature limit, you will need to use one M143 command with an appropriate H parameter for each heater.
+- If upgrading to RC1 or later and you limit the maximum heater PWM using the S parameter in a M301 command, you will now have to use M307 to do this instead. Similarly the M307 A parameter takes the place of the M301 T parameter (divide the T parameter by 255 and take the reciprocal to get the A parameter).
+- On the Duet 0.8.5 any parameters you saved to flash memory will be lost when upgrading to RC1 or later.
+- You will need to add M501 in your config.g file, at the end or just before the T0 command if you have one, if you want to load saved values automatically at startup
 
 Version 1.16
 
