@@ -3,6 +3,20 @@ Summary of important changes in recent versions
 
 Version 1.17 (in development)
 
+RC1 build:
+- Added support for M374 (save height map) and M375 (load height map)
+- Added M376 (set bed compensation taper height)
+- Added T parameter to G31 command
+- M500, M501 and M502 now use config_override.g instead of flash memory
+- Removed S and T parameters from M301 command. Use M307 command instead.
+- M301 with negative P parameter no longer sets bang-bang mode. Use M307 instead.
+- Z probe offsets are now applied during G30 probing with specirf8ied XY coordinates, including during delta auto calibration
+- Z probe recovery time is now applied from the end of the travel move just before probing
+- Fixed bad dive height when using G29 with a large trigger height
+- Fixed bad JSON message during printing when there were no active extruders
+- Added exception handlers and store a software reset code when an exception occurs
+- Fixed reset reason text because on the Duet WiFi a watchdog reset can look like an external reset
+
 dev8 build:
 - Fixed bugs introduced in dev7 build
 - Software reset code storage/retrieval now works on Duet WiFi
