@@ -284,10 +284,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/header_files}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/preprocessor}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/thirdparty/CMSIS/Include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/duet}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet/Lwip}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet/Lwip/lwip/src/include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet/EMAC}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/RADDS}&quot;"/>
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.2017188375" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
@@ -298,15 +295,15 @@
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.1692168928" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.1755453550" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver"/>
-							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT}  ${LINK_FLAGS_1} ${workspace_loc:/${CoreName}/SAM3X8E/cores/arduino/syscalls.o} ${INPUTS} ${LINK_FLAGS_2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.1176271302" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
+							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT}  ${LINK_FLAGS_1} ${workspace_loc:/${CoreName}/RADDS/cores/arduino/syscalls.o} ${INPUTS} ${LINK_FLAGS_2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.1176271302" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
 								<option id="gnu.cpp.link.option.nostdlibs.706270025" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" value="false" valueType="boolean"/>
 								<option id="gnu.cpp.link.option.paths.1160723414" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" valueType="libPaths">
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAM3X8E/}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/RADDS/}&quot;"/>
 								</option>
 								<option id="gnu.cpp.link.option.libs.1006761104" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 									<listOptionValue builtIn="false" value="${CoreName}"/>
 								</option>
-								<option id="gnu.cpp.link.option.flags.827167716" name="Linker flags" superClass="gnu.cpp.link.option.flags" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T${workspace_loc:/${CoreName}/variants/duet/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${ProjName}.map" valueType="string"/>
+								<option id="gnu.cpp.link.option.flags.827167716" name="Linker flags" superClass="gnu.cpp.link.option.flags" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m3 -T${workspace_loc:/${CoreName}/variants/RADDS/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${ProjName}.map" valueType="string"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.99895855" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
 									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
 									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
@@ -337,11 +334,9 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/header_files}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/preprocessor}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/thirdparty/CMSIS/Include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/duet}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/RADDS}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet/Lwip}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Duet/EMAC}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/RADDS}&quot;"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1179781669" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
@@ -352,8 +347,20 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289.62271758" name="/" resourcePath="src/Libraries/MCP4461">
+						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.1207187116" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release" unusedChildren="">
+							<option id="cdt.managedbuild.option.gnu.cross.path.2092504710.568185483" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path.2092504710"/>
+							<option id="cdt.managedbuild.option.gnu.cross.prefix.1606498191.1764935754" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix.1606498191"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.1617689584" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.764246283"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.21931543" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler.2077096750"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.324302204" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker.1692168928"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.linker.2147196606" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker.1176271302"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.785177243" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver.1755453550"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1614859543" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler.863511428"/>
+						</toolChain>
+					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Duet|src/Duet/Lwip/lwip/src/core/ipv6|src/DuetNG|src/Duet/Lwip/lwip/test" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Libraries/MCP4461|src/Duet|src/Duet/Lwip/lwip/src/core/ipv6|src/DuetNG|src/Duet/Lwip/lwip/test" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

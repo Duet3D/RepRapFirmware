@@ -43,8 +43,10 @@ enum class GCodeState : uint8_t
 	flashing2,
 	stopping,
 	sleeping,
+	// These next 5 must be contiguous
 	gridProbing1,
 	gridProbing2,
+	gridProbing2a,
 	gridProbing3,
 	gridProbing4
 };
@@ -64,7 +66,8 @@ public:
 		drivesRelative : 1,
 		axesRelative : 1,
 		doingFileMacro : 1,
-		waitWhileCooling : 1;
+		waitWhileCooling : 1,
+		runningM502 : 1;
 
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);

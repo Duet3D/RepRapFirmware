@@ -46,6 +46,7 @@ Licence: GPL
 // Platform-specific includes
 
 #include "Core.h"
+#include "DueFlashStorage.h"
 #include "Heating/TemperatureSensor.h"
 #include "Heating/Thermistor.h"
 #include "Heating/TemperatureError.h"
@@ -54,7 +55,7 @@ Licence: GPL
 
 #if defined(DUET_NG)
 # include "DueXn.h"
-#else
+#elif !defined(__RADDS__)
 # include "Libraries/MCP4461/MCP4461.h"
 #endif
 
@@ -125,20 +126,6 @@ const uint32_t Z_PROBE_AXES = (1 << X_AXIS) | (1 << Z_AXIS);	// Axes for which t
 
 // HEATERS - The bed is assumed to be the at index 0
 
-// The thermistors used in the R3epRapPro Ormerod are:
-// Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930
-// Hot end thermistor: http://www.digikey.co.uk/product-search/en?x=20&y=11&KeyWords=480-3137-ND
-
-// Note: a negative P, I or D value means do not use PID for this heater, use bang-bang control instead.
-// This allows us to switch between PID and bang-bang using the M301 and M304 commands.
-
-// We use method 2 (see above)
-const float defaultPidKis[HEATERS] = HEATERS_(5.0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2); 			// Integral PID constants
-const float defaultPidKds[HEATERS] = HEATERS_(500.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0); // Derivative PID constants
-const float defaultPidKps[HEATERS] = HEATERS_(-1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0);	// Proportional PID constants, negative values indicate use bang-bang instead of PID
-const float defaultPidKts[HEATERS] = HEATERS_(2.7, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4);			// approximate PWM value needed to maintain temperature, per degC above room temperature
-const float defaultPidKss[HEATERS] = HEATERS_(1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0);			// PWM scaling factor, to allow for variation in heater power and supply voltage
-
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ** AD_OVERSAMPLE_BITS.
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
 const unsigned int ThermistorAverageReadings = 32;
@@ -190,11 +177,17 @@ enum class EndStopType
 /***************************************************************************************************/
 
 // Enumeration describing the reasons for a software reset.
-// The spin state gets or'ed into this, so keep the lower ~4 bits unused.
+// The spin state gets or'ed into this, so keep the lower 4 bits unused.
 enum class SoftwareResetReason : uint16_t
 {
 	user = 0,						// M999 command
-	erase = 55,						// special M999 command to erase firmware and reset
+	erase = 0x10,					// special M999 command to erase firmware and reset
+	NMI = 0x20,
+	hardFault = 0x30,
+	memManage = 0x40,
+	busFault = 0x50,
+	usageFault = 0x60,
+	otherFault = 0x70,
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
 	stuckInSpin = 0x1000,			// we got stuck in a Spin() function for too long
 	inLwipSpin = 0x2000,			// we got stuck in a call to LWIP for too long
@@ -240,64 +233,13 @@ struct ZProbeParameters
 	float extraParam;				// extra parameters used by some types of probe e.g. Delta probe
 	bool invertReading;				// true if we need to invert the reading
 
-	void Init(float h)
-	{
-		adcValue = Z_PROBE_AD_VALUE;
-		xOffset = yOffset = 0.0;
-		height = h;
-		calibTemperature = 20.0;
-		temperatureCoefficient = 0.0;	// no default temperature correction
-		diveHeight = DEFAULT_Z_DIVE;
-		probeSpeed = DEFAULT_PROBE_SPEED;
-		travelSpeed = DEFAULT_TRAVEL_SPEED;
-		recoveryTime = extraParam = 0.0;
-		invertReading = false;
-	}
-
-	float GetStopHeight(float temperature) const
-	{
-		return ((temperature - calibTemperature) * temperatureCoefficient) + height;
-	}
-
-	bool operator==(const ZProbeParameters& other) const
-	{
-		return adcValue == other.adcValue
-				&& height == other.height
-				&& xOffset == other.xOffset
-				&& yOffset == other.yOffset
-				&& calibTemperature == other.calibTemperature
-				&& temperatureCoefficient == other.temperatureCoefficient
-				&& diveHeight == other.diveHeight
-				&& probeSpeed == other.probeSpeed
-				&& travelSpeed == other.travelSpeed
-				&& recoveryTime == other.recoveryTime
-				&& extraParam == other.extraParam
-				&& invertReading == other.invertReading;
-	}
-
-	bool operator!=(const ZProbeParameters& other) const
-	{
-		return !operator==(other);
-	}
-};
-
-class PidParameters
-{
-	// If you add any more variables to this class, don't forget to change the definition of operator== in Platform.cpp!
-public:
-	float kI, kD, kP, kT, kS;
-
-	bool UsePID() const;
-	bool operator==(const PidParameters& other) const;
-	bool operator!=(const PidParameters& other) const
-	{
-		return !operator==(other);
-	}
+	void Init(float h);
+	float GetStopHeight(float temperature) const;
+	bool WriteParameters(FileStore *f, unsigned int probeType) const;
 };
 
 // Class to perform averaging of values read from the ADC
 // numAveraged should be a power of 2 for best efficiency
-
 template<size_t numAveraged> class AveragingFilter
 {
 public:
@@ -547,19 +489,25 @@ public:
 
 	// Z probe
 
+	void SetZProbeDefaults();
 	float ZProbeStopHeight();
 	float GetZProbeDiveHeight() const;
+	float GetZProbeStartingHeight();
 	float GetZProbeTravelSpeed() const;
-	int ZProbe() const;
+	int GetZProbeReading() const;
 	EndStopHit GetZProbeResult() const;
 	int GetZProbeSecondaryValues(int& v1, int& v2);
 	void SetZProbeType(int iZ);
-	int GetZProbeType() const;
+	int GetZProbeType() const { return zProbeType; }
 	void SetZProbeAxes(uint32_t axes);
-	uint32_t GetZProbeAxes() const { return nvData.zProbeAxes; }
-	const ZProbeParameters& GetZProbeParameters() const;
-	void SetZProbeParameters(const struct ZProbeParameters& params);
+	uint32_t GetZProbeAxes() const { return zProbeAxes; }
+	const ZProbeParameters& GetZProbeParameters(int32_t probeType) const;
+	const ZProbeParameters& GetCurrentZProbeParameters() const { return GetZProbeParameters(zProbeType); }
+	void SetZProbeParameters(int32_t probeType, const struct ZProbeParameters& params);
 	bool MustHomeXYBeforeZ() const;
+	bool WriteZProbeParameters(FileStore *f) const;
+
+	// Ancilliary PWM
 
 	void SetExtrusionAncilliaryPwmValue(float v);
 	float GetExtrusionAncilliaryPwmValue() const;
@@ -573,23 +521,19 @@ public:
 	// Heat and temperature
 
 	float GetTemperature(size_t heater, TemperatureError& err) // Result is in degrees Celsius
-	pre (heater < HEATERS);
+	pre(heater < HEATERS);
 
 	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
 
 	void SetHeater(size_t heater, float power)				// power is a fraction in [0,1]
-	pre (heater < HEATERS);
+	pre(heater < HEATERS);
 
 	uint32_t HeatSampleInterval() const;
 	void SetHeatSampleTime(float st);
 	float GetHeatSampleTime() const;
-	void SetPidParameters(size_t heater, const PidParameters& params);
-
-	const PidParameters& GetPidParameters(size_t heater) const
-	pre (heater < HEATERS);
 
 	Thermistor& GetThermistor(size_t heater)
-	pre (heater < HEATERS)
+	pre(heater < HEATERS)
 	{
 		return thermistors[heater];
 	}
@@ -598,7 +542,7 @@ public:
 	pre(heater < HEATERS; thermistor < HEATERS);
 
 	int GetThermistorNumber(size_t heater) const
-	pre (heater < HEATERS);
+	pre(heater < HEATERS);
 
 	bool IsThermistorChannel(uint8_t heater) const
 	pre(heater < HEATERS);
@@ -627,11 +571,6 @@ public:
 	float GetFanRPM();
 
 	// Flash operations
-	void ResetNvData();
-	void ReadNvData();
-	void WriteNvData();
-	void SetAutoSave(bool enabled);
-
 	void UpdateFirmware();
 	bool CheckFirmwareUpdatePrerequisites();
 
@@ -651,7 +590,9 @@ public:
 	bool Inkjet(int bitPattern);
 
 	// MCU temperature
+#ifndef __RADDS
 	void GetMcuTemperatures(float& minT, float& currT, float& maxT) const;
+#endif
 	void SetMcuTemperatureAdjust(float v) { mcuTemperatureAdjust = v; }
 	float GetMcuTemperatureAdjust() const { return mcuTemperatureAdjust; }
 
@@ -706,35 +647,22 @@ private:
 		}
 	};
 
+#ifdef DUET_NG
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in SAM4E user signature area");
+#else
+	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
+#endif
 
-	// The following struct is due to be replaced by the config-override.g file.
-	struct FlashData
-	{
-		static const uint16_t magicValue = 0xE6C4;	// value we use to recognise that the flash data has been written
-		static const uint16_t versionValue = 5;		// increment this whenever this struct changes
-		static const uint32_t nvAddress = SoftwareResetData::nvAddress + (SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData));
-
-		uint16_t magic;
-		uint16_t version;
-
-		// The remaining data could alternatively be saved to SD card.
-		// Note however that if we save them as G codes, we need to provide a way of saving IR and ultrasonic G31 parameters separately.
-		ZProbeParameters switchZProbeParameters;	// Z probe values for the switch Z-probe
-		ZProbeParameters irZProbeParameters;		// Z probe values for the IR sensor
-		ZProbeParameters alternateZProbeParameters;	// Z probe values for the alternate sensor
-		int zProbeType;								// the type of Z probe we are currently using
-		uint32_t zProbeAxes;						// Z probe is used for these axes (bitmap)
-		PidParameters pidParams[HEATERS];
-		byte ipAddress[4];
-		byte netMask[4];
-		byte gateWay[4];
-		uint8_t macAddress[6];
-		Compatibility compatibility;
-	};
-
-	FlashData nvData;
-	bool autoSaveEnabled;
+	ZProbeParameters switchZProbeParameters;		// Z probe values for the switch Z-probe
+	ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
+	ZProbeParameters alternateZProbeParameters;		// Z probe values for the alternate sensor
+	int zProbeType;									// the type of Z probe we are currently using
+	uint32_t zProbeAxes;							// Z probe is used for these axes (bitmap)
+	byte ipAddress[4];
+	byte netMask[4];
+	byte gateWay[4];
+	uint8_t macAddress[6];
+	Compatibility compatibility;
 
 	BoardType board;
 #ifdef DUET_NG
@@ -896,9 +824,11 @@ private:
 	float nozzleDiameter;
 
 	// Temperature and power monitoring
+#ifndef __RADDS__		// reading temperature on the RADDS messes up one of the heater pins, so don't do it
 	AnalogChannelNumber temperatureAdcChannel;
 	uint16_t currentMcuTemperature, highestMcuTemperature, lowestMcuTemperature;
 	uint16_t mcuAlarmTemperature;
+#endif
 	float mcuTemperatureAdjust;
 
 #ifdef DUET_NG
@@ -1208,22 +1138,22 @@ inline bool Platform::IsRtdChannel(uint8_t heater) const
 
 inline const uint8_t* Platform::IPAddress() const
 {
-	return nvData.ipAddress;
+	return ipAddress;
 }
 
 inline const uint8_t* Platform::NetMask() const
 {
-	return nvData.netMask;
+	return netMask;
 }
 
 inline const uint8_t* Platform::GateWay() const
 {
-	return nvData.gateWay;
+	return gateWay;
 }
 
 inline const uint8_t* Platform::MACAddress() const
 {
-	return nvData.macAddress;
+	return macAddress;
 }
 
 inline float Platform::GetPressureAdvance(size_t extruder) const
@@ -1252,7 +1182,7 @@ inline void Platform::GetEndStopConfiguration(size_t axis, EndStopType& esType, 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
 inline uint16_t Platform::GetRawZProbeReading() const
 {
-	switch (nvData.zProbeType)
+	switch (zProbeType)
 	{
 	case 4:
 		{

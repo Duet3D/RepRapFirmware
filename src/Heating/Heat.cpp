@@ -30,15 +30,35 @@ Heat::Heat(Platform* p)
 	}
 }
 
+// Reset all heater models to defaults. Called when running M502.
+void Heat::ResetHeaterModels()
+{
+	for (int heater = 0; heater < HEATERS; heater++)
+	{
+		if (pids[heater]->IsHeaterEnabled())
+		{
+			if (heater == DefaultBedHeater)
+			{
+				pids[heater]->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, false);
+			}
+			else
+			{
+				pids[heater]->SetModel(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, 1.0, true);
+			}
+		}
+	}
+}
+
 void Heat::Init()
 {
 	for (int heater = 0; heater < HEATERS; heater++)
 	{
-		if (heater == bedHeater || heater == chamberHeater)
+		if (heater == DefaultBedHeater)
 		{
-			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, DefaultBedTemperatureLimit, false);
+			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime,
+								DefaultBedTemperatureLimit, false);
 		}
-#ifndef DUET_NG
+#if !defined(DUET_NG) && !defined(__RADDS__)
 		else if (heater == HEATERS - 1)
 		{
 			// Heater 6 pin is shared with fan 1. By default we support fan 1, so disable heater 6.
@@ -47,9 +67,11 @@ void Heat::Init()
 #endif
 		else
 		{
-			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, DefaultExtruderTemperatureLimit, true);
+			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime,
+								DefaultExtruderTemperatureLimit, true);
 		}
 	}
+
 	lastTime = millis() - platform->HeatSampleInterval();		// flag the PIDS as due for spinning
 	longWait = platform->Time();
 	coldExtrude = false;
@@ -293,6 +315,27 @@ float Heat::GetHighestTemperatureLimit() const
 		}
 	}
 	return limit;
+}
+
+// Override the model-generated PID parameters
+void Heat::SetM301PidParameters(size_t heater, const M301PidParameters& params)
+{
+	pids[heater]->SetM301PidParameters(params);
+}
+
+// Write heater model parameters to file returning true if no error
+bool Heat::WriteModelParameters(FileStore *f) const
+{
+	bool ok = f->Write("; Heater model parameters\n");
+	for (size_t h = 0; ok && h < HEATERS; ++h)
+	{
+		const FopDt& model = pids[h]->GetModel();
+		if (model.IsEnabled())
+		{
+			ok = model.WriteParameters(f, h);
+		}
+	}
+	return ok;
 }
 
 // End

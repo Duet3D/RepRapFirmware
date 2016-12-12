@@ -83,14 +83,13 @@ public:
     void ClearMove();
     void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
     void DeleteFile(const char* fileName);								// Does what it says
-    bool GetProbeCoordinates(int count, float& x, float& y, float& z) const;	// Get pre-recorded probe coordinates
     void GetCurrentCoordinates(StringRef& s) const;						// Write where we are into a string
     bool DoingFileMacro() const;										// Or still busy processing a macro file?
     float FractionOfFilePrinted() const;								// Get fraction of file printed
     void Diagnostics(MessageType mtype);								// Send helpful information out
 
     bool RunConfigFile(const char* fileName);							// Start running the config file
-    bool IsRunningConfigFile() const;									// Are we still running the config file?
+    bool IsDaemonBusy() const;											// Return true if the daemon is busy running config.g or a trigger file
 
 	bool GetAxisIsHomed(unsigned int axis) const						// Has the axis been homed?
     	{ return (axesHomed & (1 << axis)) != 0; }
@@ -155,7 +154,8 @@ private:
 
 	void StartNextGCode(GCodeBuffer& gb, StringRef& reply);				// Fetch a new or old GCode and process it
 	void DoFilePrint(GCodeBuffer& gb, StringRef& reply);				// Get G Codes from a file and print them
-    bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing = true);	// Run a GCode macro in a file, optionally report error if not found
+    bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, bool runningM502 = false);
+    																	// Run a GCode macro file, optionally report error if not found
 	bool DoCannedCycleMove(GCodeBuffer& gb, EndstopChecks ce);			// Do a move from an internally programmed canned cycle
 	void FileMacroCyclesReturn(GCodeBuffer& gb);						// End a macro
 	bool ActOnCode(GCodeBuffer& gb, StringRef& reply);					// Do a G, M or T Code
@@ -167,7 +167,7 @@ private:
 	bool DoDwellTime(float dwell);										// Really wait for a bit
 	bool DoHome(GCodeBuffer& gb, StringRef& reply, bool& error);		// Home some axes
 	bool DoSingleZProbeAtPoint(GCodeBuffer& gb, int probePointIndex, float heightAdjust);	// Probe at a given point
-	bool DoSingleZProbe(GCodeBuffer& gb, bool reportOnly, float heightAdjust);	// Probe where we are
+	bool DoSingleZProbe(GCodeBuffer& gb, StringRef& reply, bool reportOnly, float heightAdjust); // Probe where we are
 	int DoZProbe(GCodeBuffer& gb, float distance);						// Do a Z probe cycle up to the maximum specified distance
 	bool SetSingleZProbeAtAPosition(GCodeBuffer& gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
 	void SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation
@@ -211,7 +211,11 @@ private:
 
 	bool DefineGrid(GCodeBuffer& gb, StringRef &reply);					// Define the probing grid, returning true if error
 	bool ProbeGrid(GCodeBuffer& gb, StringRef& reply);					// Start probing the grid, returning true if we didn't because of an error
-	bool SaveHeightMapToFile(StringRef& reply) const;					// Save the height map to file
+	bool LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Load the height map from file
+	bool SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Save the height map to file
+	void ClearHeightMap() const;										// Clear the height map
+
+	bool WriteConfigOverrideFile(StringRef& reply, const char *fileName) const; // Write the config-override file
 
 	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
@@ -272,12 +276,8 @@ private:
 	// Z probe
 	float lastProbedZ;							// the last height at which the Z probe stopped
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
-	bool zProbesSet;							// True if all Z probing is done and we can set the bed equation
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridXindex, gridYindex;				// Which grid probe point is next
-	size_t numPointsProbed;
-	double heightSum, heightSquaredSum;
-	const char *heightMapFile;
 
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging

@@ -45,7 +45,9 @@ public:
     void Init();													// Start me up
     void Spin();													// Called in a tight loop to keep the class going
     void Exit();													// Shut down
-    void GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xAxes) const; // Return the position (after all queued moves have been executed) in transformed coords
+
+	void GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const; // Get the current position in untransformed coords
+	void GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xAxes) const; // Return the position (after all queued moves have been executed) in transformed coords
     int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } // Get the current position of a motor
     void LiveCoordinates(float m[DRIVES], uint32_t xAxes);			// Gives the last point at the end of the last complete DDA transformed to user coords
     void Interrupt();												// The hardware's (i.e. platform's)  interrupt should call this.
@@ -69,6 +71,7 @@ public:
     size_t NumberOfXYProbePoints() const;							// How many XY coordinates of probe points have been set (Zs may not have been probed yet)
     bool AllProbeCoordinatesSet(int index) const;					// XY, and Z all set for this one?
     bool XYProbeCoordinatesSet(int index) const;					// Just XY set for this one?
+    float GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const; // Get pre-recorded probe coordinates
     void FinishedBedProbing(int sParam, StringRef& reply);			// Calibrate or set the bed equation after probing
     float SecondDegreeTransformZ(float x, float y) const;			// Used for second degree bed equation
     void SetAxisCompensation(int8_t axis, float tangent);			// Set an axis-pair compensation angle
@@ -76,6 +79,7 @@ public:
     void SetIdentityTransform();									// Cancel the bed equation; does not reset axis angle compensation
     void Transform(float move[], uint32_t xAxes) const;				// Take a position and apply the bed and the axis-angle compensations
     void InverseTransform(float move[], uint32_t xAxes) const;		// Go from a transformed point back to user coordinates
+
     void Diagnostics(MessageType mtype);							// Report useful stuff
 
     const DeltaParameters& GetDeltaParams() const { return deltaParams; }
@@ -115,8 +119,6 @@ public:
 
 	HeightMap& AccessBedProbeGrid() { return grid; }								// Access the bed probing grid
 
-	void UseHeightMap(bool b) { useGridHeights = b; }								// Start or stop using the height map
-	bool UsingHeightMap() const { return useGridHeights; }							// Are we doing grid bed compensation?
 	void Babystep(float zMovement);													// Request babystepping
 
 private:
@@ -127,7 +129,6 @@ private:
 	void SetProbedBedEquation(size_t numPoints, StringRef& reply);					// When we have a full set of probed points, work out the bed's equation
 	void DoDeltaCalibration(size_t numPoints, StringRef& reply);
 	void BedTransform(float move[MAX_AXES], uint32_t xAxes) const;					// Take a position and apply the bed compensations
-	void GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const; // Get the current position in untransformed coords
 	void InverseBedTransform(float move[MAX_AXES], uint32_t xAxes) const;			// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MAX_AXES]) const;									// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MAX_AXES]) const;							// Go from an axis transformed point back to user coordinates
@@ -179,7 +180,6 @@ private:
 	float xRectangle, yRectangle;						// The side lengths of the rectangle used for second-degree bed compensation
 
 	HeightMap grid;    									// Grid definition and height map for G29 bed probing. The probe heights are stored in zBedProbePoints, see above.
-	bool useGridHeights;								// True if the zBedProbePoints came from valid bed probing and relate to the current grid
 
 	float idleTimeout;									// How long we wait with no activity before we reduce motor currents to idle
 	float lastMoveTime;									// The approximate time at which the last move was completed, or 0

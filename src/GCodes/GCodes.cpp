@@ -84,7 +84,6 @@ void GCodes::Init()
 	eofStringCounter = 0;
 	eofStringLength = strlen(eofString);
 	offSetSet = false;
-	zProbesSet = false;
 	active = true;
 	longWait = platform->Time();
 	dwellTime = longWait;
@@ -158,8 +157,6 @@ void GCodes::Reset()
 	{
 		resourceOwners[i] = nullptr;
 	}
-
-	lastProbedTime =  millis();
 }
 
 float GCodes::FractionOfFilePrinted() const
@@ -175,8 +172,8 @@ bool GCodes::RunConfigFile(const char* fileName)
 	return DoFileMacro(*daemonGCode, fileName, false);
 }
 
-// Are we still running the config file?
-bool GCodes::IsRunningConfigFile() const
+// Return true if the daemon is busy running config.g or a trigger file
+bool GCodes::IsDaemonBusy() const
 {
 	return daemonGCode->MachineState().fileState.IsLive();
 }
@@ -229,7 +226,7 @@ void GCodes::Spin()
 					if ((toBeHomed & (1u << axis)) != 0 && (axis != Z_AXIS || toBeHomed == (1u << Z_AXIS)))
 					{
 						toBeHomed &= ~(1u << axis);
-						DoFileMacro(gb, HomingFileNames[axis]);
+						DoFileMacro(gb, HomingFileNames[axis], true);
 						break;
 					}
 				}
@@ -250,7 +247,6 @@ void GCodes::Spin()
 					probeCount++;
 					if (probeCount >= numProbePoints)
 					{
-						zProbesSet = true;
 						reprap.GetMove()->FinishedBedProbing(0, reply);
 						gb.SetState(GCodeState::normal);
 					}
@@ -304,7 +300,7 @@ void GCodes::Spin()
 			if (LockMovementAndWaitForStandstill(gb))
 			{
 				gb.SetState(GCodeState::pausing2);
-				DoFileMacro(gb, PAUSE_G);
+				DoFileMacro(gb, PAUSE_G, true);
 			}
 			break;
 
@@ -445,13 +441,13 @@ void GCodes::Spin()
 					moveBuffer.endStopsToCheck = 0;
 					moveBuffer.usePressureAdvance = false;
 					moveBuffer.filePos = noFilePosition;
-					moveBuffer.coords[X_AXIS] = x - platform->GetZProbeParameters().xOffset;
-					moveBuffer.coords[Y_AXIS] = y - platform->GetZProbeParameters().yOffset;
-					moveBuffer.coords[Z_AXIS] = platform->GetZProbeDiveHeight();
+					moveBuffer.coords[X_AXIS] = x - platform->GetCurrentZProbeParameters().xOffset;
+					moveBuffer.coords[Y_AXIS] = y - platform->GetCurrentZProbeParameters().yOffset;
+					moveBuffer.coords[Z_AXIS] = platform->GetZProbeStartingHeight();
 					moveBuffer.feedRate = platform->GetZProbeTravelSpeed();
 					moveBuffer.xAxes = 0;
 					segmentsLeft = 1;
-					gb.SetState(GCodeState::gridProbing2);
+					gb.AdvanceState();
 				}
 				else
 				{
@@ -461,9 +457,15 @@ void GCodes::Spin()
 			break;
 
 		case GCodeState::gridProbing2:	// ready to probe the current grid probe point
-			if (LockMovementAndWaitForStandstill(gb)
-				&& millis() - lastProbedTime >= (uint32_t)(reprap.GetPlatform()->GetZProbeParameters().recoveryTime * SecondsToMillis)
-			   )
+			if (LockMovementAndWaitForStandstill(gb))
+			{
+				lastProbedTime = millis();
+				gb.AdvanceState();
+			}
+			break;
+
+		case GCodeState::gridProbing2a:	// ready to probe the current grid probe point
+			if (millis() - lastProbedTime >= (uint32_t)(reprap.GetPlatform()->GetCurrentZProbeParameters().recoveryTime * SecondsToMillis))
 			{
 				// Probe the bed at the current XY coordinates
 				// Check for probe already triggered at start
@@ -481,7 +483,7 @@ void GCodes::Spin()
 				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = noFilePosition;
 				moveBuffer.coords[Z_AXIS] = -platform->GetZProbeDiveHeight();
-				moveBuffer.feedRate = platform->GetZProbeParameters().probeSpeed;
+				moveBuffer.feedRate = platform->GetCurrentZProbeParameters().probeSpeed;
 				moveBuffer.xAxes = 0;
 				segmentsLeft = 1;
 				gb.SetState(GCodeState::gridProbing3);
@@ -499,19 +501,15 @@ void GCodes::Spin()
 					break;
 				}
 
-				lastProbedTime = millis();
 				const float heightError = moveBuffer.coords[Z_AXIS] - platform->ZProbeStopHeight();
 				reprap.GetMove()->AccessBedProbeGrid().SetGridHeight(gridXindex, gridYindex, heightError);
-				++numPointsProbed;
-				heightSum += (double)heightError;
-				heightSquaredSum += (double)heightError * (double)heightError;
 
 				// Move back up to the dive height
 				moveBuffer.moveType = 0;
 				moveBuffer.endStopsToCheck = 0;
 				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = noFilePosition;
-				moveBuffer.coords[Z_AXIS] = platform->GetZProbeDiveHeight();
+				moveBuffer.coords[Z_AXIS] = platform->GetZProbeStartingHeight();
 				moveBuffer.feedRate = platform->GetZProbeTravelSpeed();
 				moveBuffer.xAxes = 0;
 				segmentsLeft = 1;
@@ -550,13 +548,13 @@ void GCodes::Spin()
 				if (gridYindex == grid.NumYpoints())
 				{
 					// Finished probing the grid
+					float mean, deviation;
+					const uint32_t numPointsProbed = reprap.GetMove()->AccessBedProbeGrid().GetStatistics(mean, deviation);
 					if (numPointsProbed >= 4)
 					{
-						error = SaveHeightMapToFile(reply);
-						const double mean = heightSum/numPointsProbed;
-						const double deviation = sqrt(((heightSquaredSum * numPointsProbed) - (heightSum * heightSum)))/numPointsProbed;
-						reply.catf(" - %u points probed, mean error %.2f, deviation %.2f", numPointsProbed, mean, deviation);
-						reprap.GetMove()->UseHeightMap(true);
+						reply.printf("%u points probed, mean error %.2f, deviation %.2f\n", numPointsProbed, mean, deviation);
+						error = SaveHeightMap(gb, reply);
+						reprap.GetMove()->AccessBedProbeGrid().UseHeightMap(true);
 					}
 					else
 					{
@@ -783,7 +781,7 @@ void GCodes::CheckTriggers()
 		DoEmergencyStop();
 	}
 	else if (lowestTriggerPending < MaxTriggers						// if a trigger is pending
-			 && !daemonGCode->MachineState().fileState.IsLive()
+			 && !IsDaemonBusy()
 			 && daemonGCode->GetState() == GCodeState::normal		// and we are not already executing a trigger or config.g
 			)
 	{
@@ -1061,9 +1059,10 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 						{
 							mappedMoveArg -= currentTool->GetOffset()[mappedAxis];	// adjust requested position to compensate for tool offset
 						}
-						if (reprap.GetMove()->UsingHeightMap())
+						const HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
+						if (heightMap.UsingHeightMap())
 						{
-							const unsigned int minSegments = reprap.GetMove()->AccessBedProbeGrid().GetMinimumSegments(fabs(mappedMoveArg - moveBuffer.coords[mappedAxis]));
+							const unsigned int minSegments = heightMap.GetMinimumSegments(fabs(mappedMoveArg - moveBuffer.coords[mappedAxis]));
 							if (minSegments > numSegments)
 							{
 								numSegments = minSegments;
@@ -1084,12 +1083,16 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 					moveArg -= currentTool->GetOffset()[axis];	// adjust requested position to compensate for tool offset
 				}
 
-				if (axis < Z_AXIS && moveType == 0 && reprap.GetMove()->UsingHeightMap())
+				if (axis < Z_AXIS && moveType == 0)
 				{
-					const unsigned int minSegments = reprap.GetMove()->AccessBedProbeGrid().GetMinimumSegments(fabs(moveArg - moveBuffer.coords[axis]));
-					if (minSegments > numSegments)
+					const HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
+					if (heightMap.UsingHeightMap())
 					{
-						numSegments = minSegments;
+						const unsigned int minSegments = reprap.GetMove()->AccessBedProbeGrid().GetMinimumSegments(fabs(moveArg - moveBuffer.coords[axis]));
+						if (minSegments > numSegments)
+						{
+							numSegments = minSegments;
+						}
 					}
 				}
 				moveBuffer.coords[axis] = moveArg;
@@ -1296,7 +1299,7 @@ void GCodes::ClearMove()
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
 // Return true if the file was found or it wasn't and we were asked to report that fact.
-bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing)
+bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, bool runningM502)
 {
 	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), fileName, false);
 	if (f == nullptr)
@@ -1316,6 +1319,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	}
 	gb.MachineState().fileState.Set(f);
 	gb.MachineState().doingFileMacro = true;
+	gb.MachineState().runningM502 = runningM502;
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 	return true;
@@ -1524,7 +1528,7 @@ bool GCodes::DoHome(GCodeBuffer& gb, StringRef& reply, bool& error)
 	if (reprap.GetMove()->IsDeltaMode())
 	{
 		SetAllAxesNotHomed();
-		DoFileMacro(gb, HOME_DELTA_G);
+		DoFileMacro(gb, HOME_DELTA_G, true);
 	}
 	else
 	{
@@ -1542,7 +1546,7 @@ bool GCodes::DoHome(GCodeBuffer& gb, StringRef& reply, bool& error)
 		{
 			// Homing everything
 			SetAllAxesNotHomed();
-			DoFileMacro(gb, HOME_ALL_G);
+			DoFileMacro(gb, HOME_ALL_G, true);
 		}
 		else if (   platform->MustHomeXYBeforeZ()
 				 && ((toBeHomed & (1u << Z_AXIS)) != 0)
@@ -1577,7 +1581,7 @@ bool GCodes::DoSingleZProbeAtPoint(GCodeBuffer& gb, int probePointIndex, float h
 	switch (cannedCycleMoveCount)
 	{
 	case 0: // Move Z to the dive height. This only does anything on the first move; on all the others Z is already there
-		cannedMoveCoords[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
+		cannedMoveCoords[Z_AXIS] = platform->GetZProbeStartingHeight();
 		cannedMoveType[Z_AXIS] = CannedMoveType::absolute;
 		cannedFeedRate = platform->GetZProbeTravelSpeed();
 		if (DoCannedCycleMove(gb, 0))
@@ -1587,19 +1591,20 @@ bool GCodes::DoSingleZProbeAtPoint(GCodeBuffer& gb, int probePointIndex, float h
 		return false;
 
 	case 1:	// Move to the correct XY coordinates
-		GetProbeCoordinates(probePointIndex, cannedMoveCoords[X_AXIS], cannedMoveCoords[Y_AXIS], cannedMoveCoords[Z_AXIS]);
+		(void)reprap.GetMove()->GetProbeCoordinates(probePointIndex, cannedMoveCoords[X_AXIS], cannedMoveCoords[Y_AXIS], true);
 		cannedMoveType[X_AXIS] = CannedMoveType::absolute;
 		cannedMoveType[Y_AXIS] = CannedMoveType::absolute;
 		// NB - we don't use the Z value
 		cannedFeedRate = platform->GetZProbeTravelSpeed();
 		if (DoCannedCycleMove(gb, 0))
 		{
+			lastProbedTime = millis();
 			cannedCycleMoveCount++;
 		}
 		return false;
 
 	case 2:	// Probe the bed
-		if (millis() - lastProbedTime >= (uint32_t)(platform->GetZProbeParameters().recoveryTime * SecondsToMillis))
+		if (millis() - lastProbedTime >= (uint32_t)(platform->GetCurrentZProbeParameters().recoveryTime * SecondsToMillis))
 		{
 			const float height = (GetAxisIsHomed(Z_AXIS))
 									? 2 * platform->GetZProbeDiveHeight()			// Z axis has been homed, so no point in going very far
@@ -1622,7 +1627,6 @@ bool GCodes::DoSingleZProbeAtPoint(GCodeBuffer& gb, int probePointIndex, float h
 
 			case 2:
 				// Successful probing
-				lastProbedTime = millis();
 				if (GetAxisIsHomed(Z_AXIS))
 				{
 					lastProbedZ = moveBuffer.coords[Z_AXIS] - (platform->ZProbeStopHeight() + heightAdjust);
@@ -1646,7 +1650,7 @@ bool GCodes::DoSingleZProbeAtPoint(GCodeBuffer& gb, int probePointIndex, float h
 		return false;
 
 	case 3:	// Raise the head back up to the dive height
-		cannedMoveCoords[Z_AXIS] = platform->GetZProbeDiveHeight() + max<float>(platform->ZProbeStopHeight(), 0.0);
+		cannedMoveCoords[Z_AXIS] = platform->GetZProbeStartingHeight();
 		cannedMoveType[Z_AXIS] = CannedMoveType::absolute;
 		cannedFeedRate = platform->GetZProbeTravelSpeed();
 		if (DoCannedCycleMove(gb, 0))
@@ -1664,7 +1668,7 @@ bool GCodes::DoSingleZProbeAtPoint(GCodeBuffer& gb, int probePointIndex, float h
 
 // This simply moves down till the Z probe/switch is triggered. Call it repeatedly until it returns true.
 // Called when we do a G30 with no P parameter.
-bool GCodes::DoSingleZProbe(GCodeBuffer& gb, bool reportOnly, float heightAdjust)
+bool GCodes::DoSingleZProbe(GCodeBuffer& gb, StringRef& reply, bool reportOnly, float heightAdjust)
 {
 	switch (DoZProbe(gb, 1.1 * platform->AxisTotalLength(Z_AXIS)))
 	{
@@ -1677,7 +1681,13 @@ bool GCodes::DoSingleZProbe(GCodeBuffer& gb, bool reportOnly, float heightAdjust
 		return true;
 
 	case 2:		// success
-		if (!reportOnly)
+		if (reportOnly)
+		{
+			float m[DRIVES];
+			reprap.GetMove()->GetCurrentMachinePosition(m, false);
+			reply.printf("Stopped at height %.3f mm", m[Z_AXIS]);
+		}
+		else
 		{
 			moveBuffer.coords[Z_AXIS] = platform->ZProbeStopHeight() + heightAdjust;
 			SetPositions(moveBuffer.coords);
@@ -1700,7 +1710,7 @@ int GCodes::DoZProbe(GCodeBuffer& gb, float distance)
 {
 	if (platform->GetZProbeType() == ZProbeTypeDelta)
 	{
-		const ZProbeParameters& params = platform->GetZProbeParameters();
+		const ZProbeParameters& params = platform->GetCurrentZProbeParameters();
 		return reprap.GetMove()->DoDeltaProbe(params.extraParam, 1.0, params.probeSpeed, distance);	//TODO second parameter
 	}
 	else
@@ -1723,7 +1733,7 @@ int GCodes::DoZProbe(GCodeBuffer& gb, float distance)
 
 		cannedMoveCoords[Z_AXIS] = -distance;
 		cannedMoveType[Z_AXIS] = CannedMoveType::relative;
-		cannedFeedRate = platform->GetZProbeParameters().probeSpeed;
+		cannedFeedRate = platform->GetCurrentZProbeParameters().probeSpeed;
 
 		if (DoCannedCycleMove(gb, ZProbeActive))
 		{
@@ -1756,24 +1766,20 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer& gb, StringRef& reply)
 
 	if (!gb.Seen('P'))
 	{
-		bool reportOnly = false;
-		if (gb.Seen('S') && gb.GetIValue() < 0)
-		{
-			reportOnly = true;
-		}
-		return DoSingleZProbe(gb, reportOnly, heightAdjust);
+		const bool reportOnly = (gb.Seen('S') && gb.GetIValue() < 0);
+		return DoSingleZProbe(gb, reply, reportOnly, heightAdjust);
 	}
 
-	int probePointIndex = gb.GetIValue();
+	const int probePointIndex = gb.GetIValue();
 	if (probePointIndex < 0 || (unsigned int)probePointIndex >= MaxProbePoints)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point index out of range.\n");
 		return true;
 	}
 
-	float x = (gb.Seen(axisLetters[X_AXIS])) ? gb.GetFValue() : moveBuffer.coords[X_AXIS];
-	float y = (gb.Seen(axisLetters[Y_AXIS])) ? gb.GetFValue() : moveBuffer.coords[Y_AXIS];
-	float z = (gb.Seen(axisLetters[Z_AXIS])) ? gb.GetFValue() : moveBuffer.coords[Z_AXIS];
+	const float x = (gb.Seen(axisLetters[X_AXIS])) ? gb.GetFValue() : moveBuffer.coords[X_AXIS];
+	const float y = (gb.Seen(axisLetters[Y_AXIS])) ? gb.GetFValue() : moveBuffer.coords[Y_AXIS];
+	const float z = (gb.Seen(axisLetters[Z_AXIS])) ? gb.GetFValue() : moveBuffer.coords[Z_AXIS];
 
 	reprap.GetMove()->SetXBedProbePoint(probePointIndex, x);
 	reprap.GetMove()->SetYBedProbePoint(probePointIndex, y);
@@ -1783,7 +1789,6 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer& gb, StringRef& reply)
 		reprap.GetMove()->SetZBedProbePoint(probePointIndex, z, false, false);
 		if (gb.Seen('S'))
 		{
-			zProbesSet = true;
 			reprap.GetMove()->FinishedBedProbing(gb.GetIValue(), reply);
 		}
 		return true;
@@ -1794,8 +1799,7 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer& gb, StringRef& reply)
 		{
 			if (gb.Seen('S'))
 			{
-				zProbesSet = true;
-				int sParam = gb.GetIValue();
+				const int sParam = gb.GetIValue();
 				if (sParam == 1)
 				{
 					// G30 with a silly Z value and S=1 is equivalent to G30 with no parameters in that it sets the current Z height
@@ -1816,20 +1820,18 @@ bool GCodes::SetSingleZProbeAtAPosition(GCodeBuffer& gb, StringRef& reply)
 	return false;
 }
 
-// This returns the (X, Y) points to probe the bed at probe point count.  When probing, it returns false.
-// If called after probing has ended it returns true, and the Z coordinate probed is also returned.
-bool GCodes::GetProbeCoordinates(int count, float& x, float& y, float& z) const
-{
-	const ZProbeParameters& rp = platform->GetZProbeParameters();
-	x = reprap.GetMove()->XBedProbePoint(count) - rp.xOffset;
-	y = reprap.GetMove()->YBedProbePoint(count) - rp.yOffset;
-	z = reprap.GetMove()->ZBedProbePoint(count);
-	return zProbesSet;
-}
-
+// Set or print the Z probe. Called by G31.
+// Note that G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
 bool GCodes::SetPrintZProbe(GCodeBuffer& gb, StringRef& reply)
 {
-	ZProbeParameters params = platform->GetZProbeParameters();
+	int32_t zProbeType = 0;
+	bool seenT = false;
+	gb.TryGetIValue('T',zProbeType, seenT);
+	if (zProbeType == 0)
+	{
+		zProbeType = platform->GetZProbeType();
+	}
+	ZProbeParameters params = platform->GetZProbeParameters(zProbeType);
 	bool seen = false;
 	gb.TryGetFValue(axisLetters[X_AXIS], params.xOffset, seen);
 	gb.TryGetFValue(axisLetters[Y_AXIS], params.yOffset, seen);
@@ -1853,11 +1855,20 @@ bool GCodes::SetPrintZProbe(GCodeBuffer& gb, StringRef& reply)
 
 	if (seen)
 	{
-		platform->SetZProbeParameters(params);
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
+		platform->SetZProbeParameters(zProbeType, params);
+	}
+	else if (seenT)
+	{
+		// Don't bother printing temperature coefficient and calibration temperature because we will probably remove them soon
+		reply.printf("Threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, params.height, params.xOffset, params.yOffset);
 	}
 	else
 	{
-		const int v0 = platform->ZProbe();
+		const int v0 = platform->GetZProbeReading();
 		int v1, v2;
 		switch (platform->GetZProbeSecondaryValues(v1, v2))
 		{
@@ -1879,8 +1890,6 @@ bool GCodes::SetPrintZProbe(GCodeBuffer& gb, StringRef& reply)
 // Called when we see an M557 command with no P parameter
 bool GCodes::DefineGrid(GCodeBuffer& gb, StringRef &reply)
 {
-	reprap.GetMove()->UseHeightMap(false);
-
 	bool seenX = false, seenY = false, seenR = false, seenS = false;
 	float xValues[2];
 	float yValues[2];
@@ -1963,7 +1972,7 @@ bool GCodes::DefineGrid(GCodeBuffer& gb, StringRef &reply)
 			return true;
 		}
 	}
-	GridDefinition newGrid(xValues, yValues, radius, spacing);					// create a new grid
+	GridDefinition newGrid(xValues, yValues, radius, spacing);		// create a new grid
 	if (newGrid.IsValid())
 	{
 		reprap.GetMove()->AccessBedProbeGrid().SetGrid(newGrid);
@@ -1981,100 +1990,90 @@ bool GCodes::DefineGrid(GCodeBuffer& gb, StringRef &reply)
 // Prior to calling this the movement system must be locked.
 bool GCodes::ProbeGrid(GCodeBuffer& gb, StringRef& reply)
 {
-	int32_t sParam = 0;
-	bool dummy;
-	gb.TryGetIValue('S', sParam, dummy);
+	Move * const move = reprap.GetMove();
+	if (!move->AccessBedProbeGrid().GetGrid().IsValid())
+	{
+		reply.copy("No valid grid defined for G29 bed probing");
+		return true;
+	}
 
+	if (!AllAxesAreHomed())
+	{
+		reply.copy("Must home printer before G29 bed probing");
+		return true;
+	}
+
+	gridXindex = gridYindex = 0;
+
+	HeightMap& heightMap = move->AccessBedProbeGrid();
+	heightMap.UseHeightMap(false);
+	heightMap.ClearGridHeights();
+	move->SetIdentityTransform();
+	gb.SetState(GCodeState::gridProbing1);
+	return false;
+}
+
+bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
+{
+	const char* heightMapFileName;
 	if (gb.Seen('P'))
 	{
-		heightMapFile = gb.GetString();
+		heightMapFileName = gb.GetString();
 	}
 	else
 	{
-		heightMapFile = DefaultHeightMapFile;
+		heightMapFileName = DefaultHeightMapFile;
 	}
+	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), heightMapFileName, false);
 
-	Move * const move = reprap.GetMove();
-	switch(sParam)
+	if (f == nullptr)
 	{
-	case 0:	// Probe the bed and save to file
-		if (!move->AccessBedProbeGrid().GetGrid().IsValid())
-		{
-			reply.copy("No valid grid defined for G29 bed probing");
-			return true;
-		}
-
-		if (!AllAxesAreHomed())
-		{
-			reply.copy("Must home printer before G29 bed probing");
-			return true;
-		}
-
-		gridXindex = gridYindex = 0;
-		numPointsProbed = 0;
-		heightSum = heightSquaredSum = 0.0;
-
-		move->AccessBedProbeGrid().ClearGridHeights();
-		move->UseHeightMap(false);
-		move->SetIdentityTransform();
-		gb.SetState(GCodeState::gridProbing1);
-		return false;
-
-	case 1:	// Load height map from file
-		{
-			const char* locHeightMapFileName;
-			if (gb.Seen('P'))
-			{
-				locHeightMapFileName = gb.GetString();
-			}
-			else
-			{
-				locHeightMapFileName = DefaultHeightMapFile;
-			}
-			FileStore * const f = platform->GetFileStore(platform->GetSysDir(), locHeightMapFileName, false);
-
-			if (f == nullptr)
-			{
-				reply.printf("Height map file %s not found", locHeightMapFileName);
-				return true;
-			}
-
-			reply.printf("Failed to load height map from file %s: ", heightMapFile);	// set up error message to append to
-			const bool err = move->AccessBedProbeGrid().LoadFromFile(f, reply);
-			f->Close();
-			if (err)
-			{
-				move->AccessBedProbeGrid().ClearGridHeights();			// make sure we don't end up with a partial height map
-			}
-			else
-			{
-				reply.Clear();											// wipe the error message
-			}
-
-			move->UseHeightMap(!err);
-			return err;
-		}
-
-	case 2:	// Clear height map
-		move->AccessBedProbeGrid().ClearGridHeights();
-		move->UseHeightMap(false);
-		return false;
-
-	default:
-		reply.copy("Invalid S parameter in G29 command");
+		reply.printf("Height map file %s not found", heightMapFileName);
 		return true;
 	}
+
+	reply.printf("Failed to load height map from file %s: ", heightMapFileName);	// set up error message to append to
+	HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
+	const bool err = heightMap.LoadFromFile(f, reply);
+	f->Close();
+	if (err)
+	{
+		heightMap.ClearGridHeights();			// make sure we don't end up with a partial height map
+	}
+	else
+	{
+		reply.Clear();											// wipe the error message
+	}
+
+	heightMap.UseHeightMap(!err);
+	return err;
 }
 
-// Save the height map and write the success or error message to 'reply', returning true if an error occurred
-bool GCodes::SaveHeightMapToFile(StringRef& reply) const
+// Save the height map and append the success or error message to 'reply', returning true if an error occurred
+// Called by G29 and M374. Both use the P parameter to provide the filename.
+bool GCodes::SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const
 {
-	Platform *platform = reprap.GetPlatform();
-	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), heightMapFile, true);
+	const char* heightMapFileName;
+	if (gb.Seen('P'))
+	{
+		heightMapFileName = gb.GetString();
+		if (heightMapFileName[0] == 0)
+		{
+			reply.cat("No height map file name provided");
+			return false;							// no file name provided, which is legitimate for G29
+		}
+	}
+	else
+	{
+		heightMapFileName = DefaultHeightMapFile;
+	}
+
+	Platform * const platform = reprap.GetPlatform();
+	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), heightMapFileName, true);
 	bool err;
 	if (f == nullptr)
 	{
-		reply.printf("Failed to create height map file %s", heightMapFile);
+		reply.catf("Failed to create height map file %s", heightMapFileName);
 		err = true;
 	}
 	else
@@ -2083,15 +2082,23 @@ bool GCodes::SaveHeightMapToFile(StringRef& reply) const
 		f->Close();
 		if (err)
 		{
-			platform->GetMassStorage()->Delete(platform->GetSysDir(), heightMapFile);
-			reply.printf("Failed to save height map to file %s", heightMapFile);
+			platform->GetMassStorage()->Delete(platform->GetSysDir(), heightMapFileName);
+			reply.catf("Failed to save height map to file %s", heightMapFileName);
 		}
 		else
 		{
-			reply.printf("Height map saved to file %s", heightMapFile);
+			reply.catf("Height map saved to file %s", heightMapFileName);
 		}
 	}
 	return err;
+}
+
+// Clear the height map
+void GCodes::ClearHeightMap() const
+{
+	HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
+	heightMap.ClearGridHeights();
+	heightMap.UseHeightMap(false);
 }
 
 // Return the current coordinates as a printable string.
@@ -2868,22 +2875,28 @@ void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply)
 
 	if (heater >= 0 && heater < HEATERS)
 	{
-		PidParameters pp = platform->GetPidParameters(heater);
+		const FopDt& model = reprap.GetHeat()->GetHeaterModel(heater);
+		M301PidParameters pp = model.GetM301PidParameters(false);
 		bool seen = false;
 		gb.TryGetFValue('P', pp.kP, seen);
 		gb.TryGetFValue('I', pp.kI, seen);
 		gb.TryGetFValue('D', pp.kD, seen);
-		gb.TryGetFValue('T', pp.kT, seen);
-		gb.TryGetFValue('S', pp.kS, seen);
 
 		if (seen)
 		{
-			platform->SetPidParameters(heater, pp);
-			reprap.GetHeat()->UseModel(heater, false);
+			reprap.GetHeat()->SetM301PidParameters(heater, pp);
+		}
+		else if (!model.UsePid())
+		{
+			reply.printf("Heater %d is in bang-bang mode", heater);
+		}
+		else if (model.ArePidParametersOverridden())
+		{
+			reply.printf("Heater %d P:%.1f I:%.3f D:%.1f", heater, pp.kP, pp.kI, pp.kD);
 		}
 		else
 		{
-			reply.printf("Heater %d P:%.2f I:%.3f D:%.2f T:%.2f S:%.2f", heater, pp.kP, pp.kI, pp.kD, pp.kT, pp.kS);
+			reply.printf("Heater %d uses model-derived PID parameters. Use M307 H%d to view them", heater, heater);
 		}
 	}
 }
@@ -3215,6 +3228,41 @@ bool GCodes::AllAxesAreHomed() const
 void GCodes::SetAllAxesNotHomed()
 {
 	axesHomed = 0;
+}
+
+// Write the config-override file returning true if an error occurred
+bool GCodes::WriteConfigOverrideFile(StringRef& reply, const char *fileName) const
+{
+	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), fileName, true);
+	if (f == nullptr)
+	{
+		reply.printf("Failed to create file %s", fileName);
+		return true;
+	}
+
+	bool ok = f->Write("; This is a system-generated file - do not edit\n");
+	if (ok)
+	{
+		ok = reprap.GetMove()->GetDeltaParams().WriteParameters(f);
+	}
+	if (ok)
+	{
+		ok = reprap.GetHeat()->WriteModelParameters(f);
+	}
+	if (ok)
+	{
+		ok = platform->WriteZProbeParameters(f);
+	}
+	if (!f->Close())
+	{
+		ok = false;
+	}
+	if (!ok)
+	{
+		reply.printf("Failed to write file %s", fileName);
+		platform->GetMassStorage()->Delete(platform->GetSysDir(), fileName);
+	}
+	return !ok;
 }
 
 // Resource locking/unlocking

@@ -31,7 +31,7 @@ public:
 	bool DirectoryExists(const char *path) const;
 	bool DirectoryExists(const char* directory, const char* subDirectory);
 	time_t GetLastModifiedTime(const char* directory, const char *fileName) const;
-	bool SetLastModifiedTime(const char *file, time_t time);
+	bool SetLastModifiedTime(const char* directory, const char *file, time_t time);
 	bool Mount(size_t card, StringRef& reply, bool reportSuccess);
 	bool Unmount(size_t card, StringRef& reply);
 	bool IsDriveMounted(size_t drive) const { return drive < NumSdCards && isMounted[drive]; }

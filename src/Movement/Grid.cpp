@@ -109,10 +109,11 @@ void GridDefinition::PrintError(StringRef& r) const
 // Increase the version number in the following string whenever we change the format of the height map file.
 const char *HeightMap::HeightMapComment = "RepRapFirmware height map file v1";
 
-HeightMap::HeightMap(float *heightStorage) : gridHeights(heightStorage) { }
+HeightMap::HeightMap(float *heightStorage) : gridHeights(heightStorage), useMap(false), useTaper(false) { }
 
 void HeightMap::SetGrid(const GridDefinition& gd)
 {
+	useMap = false;
 	def = gd;
 	ClearGridHeights();
 }
@@ -157,7 +158,9 @@ bool HeightMap::SaveToFile(FileStore *f) const
 		buf.catf(" generated at %04u-%02u-%02u %02u:%02u",
 						timeInfo->tm_year + 1900, timeInfo->tm_mon, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);
 	}
-	buf.cat('\n');
+	float mean, deviation;
+	(void)GetStatistics(mean, deviation);
+	buf.catf(", mean error %.2f, deviation %.2f\n", mean, deviation);
 	if (!f->Write(buf.Pointer()))
 	{
 		return true;
@@ -170,7 +173,7 @@ bool HeightMap::SaveToFile(FileStore *f) const
 		return true;
 	}
 
-	// Write the grid heights
+	// Write the grid heights. We use a fixed field with of 6 characters to make is easier to view.
 	uint32_t index = 0;
 	for (uint32_t i = 0; i < def.numY; ++i)
 	{
@@ -183,11 +186,11 @@ bool HeightMap::SaveToFile(FileStore *f) const
 			}
 			if (IsHeightSet(index))
 			{
-				buf.catf("%.3f%", gridHeights[index]);
+				buf.catf("%7.3f%", gridHeights[index]);
 			}
 			else
 			{
-				buf.cat("0");					// write 0 with no decimal point where we didn't probe, so we can tell when we reload it
+				buf.cat("      0");				// write 0 with no decimal point where we didn't probe, so we can tell when we reload it
 			}
 			++index;
 		}
@@ -281,9 +284,86 @@ bool HeightMap::LoadFromFile(FileStore *f, StringRef& r)
 	return true;											// an error occurred
 }
 
-// Compute the height error at the specified point
-float HeightMap::ComputeHeightError(float x, float y) const
+// Return number of points probed, mean and RMS deviation
+unsigned int HeightMap::GetStatistics(float& mean, float& deviation) const
 {
+	double heightSum = 0.0, heightSquaredSum = 0.0;
+	unsigned int numProbed = 0;
+	for (uint32_t i = 0; i < def.NumPoints(); ++i)
+	{
+		if (IsHeightSet(i))
+		{
+			++numProbed;
+			const double heightError = (double)gridHeights[i];
+			heightSum += heightError;
+			heightSquaredSum += heightError * heightError;
+		}
+	}
+	if (numProbed == 0)
+	{
+		mean = deviation = 0.0;
+	}
+	else
+	{
+		mean = (float)(heightSum/numProbed);
+		deviation = (float)sqrt(((heightSquaredSum * numProbed) - (heightSum * heightSum)))/numProbed;
+	}
+	return numProbed;
+}
+
+void HeightMap::UseHeightMap(bool b)
+{
+	useMap = b && def.IsValid();
+}
+
+void HeightMap::SetTaperHeight(float h)
+{
+	useTaper = (h > 1.0);
+	if (useTaper)
+	{
+		taperHeight = h;
+		recipTaperHeight = 1.0/h;
+	}
+}
+
+// Compute the height error at the specified point i.e. value that needs to be added to the Z coordinate
+float HeightMap::ComputeHeightError(float x, float y, float z) const
+{
+	if (!useMap || (useTaper && z >= taperHeight))
+	{
+		return 0.0;
+	}
+
+	const float rawError = GetInterpolatedHeightError(x, y);
+	return (useTaper) ? (taperHeight - z) * recipTaperHeight * rawError : rawError;
+}
+
+// Compute the inverse height error at the specified point i.e. value that needs to be subtracted form the Z coordinate
+float HeightMap::ComputeInverseHeightError(float x, float y, float z) const
+{
+	if (!useMap)
+	{
+		return 0.0;
+	}
+
+	const float rawError = GetInterpolatedHeightError(x, y);
+	if (!useTaper || rawError > taperHeight)		// need check on rawError to avoid possible divide by zero
+	{
+		return rawError;
+	}
+
+	const float zreq = (z - rawError)/(1.0 - (rawError * recipTaperHeight));
+	return (zreq >= taperHeight) ? 0.0 : z - zreq;
+}
+
+// Compute the height error at the specified point
+float HeightMap::GetInterpolatedHeightError(float x, float y) const
+{
+	if (!useMap)
+	{
+		return 0.0;
+	}
+
 	const float xf = (x - def.xMin) * def.recipSpacing;
 	const float xFloor = floor(xf);
 	const int32_t xIndex = (int32_t)xFloor;

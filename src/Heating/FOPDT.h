@@ -10,12 +10,25 @@
 #ifndef SRC_HEATING_FOPDT_H_
 #define SRC_HEATING_FOPDT_H_
 
-struct PidParams
+#include <cstddef>
+
+// This is how PID parameters are stored internally
+struct PidParameters
 {
 	float kP;			// controller (not model) gain
 	float recipTi;		// reciprocal of controller integral time
 	float tD;			// controller differential time
 };
+
+// This is how PID parameters are given in M301 commands
+struct M301PidParameters
+{
+	float kP;
+	float kI;
+	float kD;
+};
+
+class FileStore;
 
 class FopDt
 {
@@ -30,11 +43,16 @@ public:
 	float GetMaxPwm() const { return maxPwm; }
 	bool UsePid() const { return usePid; }
 	bool IsEnabled() const { return enabled; }
+	bool ArePidParametersOverridden() const { return pidParametersOverridden; }
+	M301PidParameters GetM301PidParameters(bool forLoadChange) const;
+	void SetM301PidParameters(const M301PidParameters& params);
 
-	const PidParams& GetPidParameters(bool forLoadChange) const
+	const PidParameters& GetPidParameters(bool forLoadChange) const
 	{
 		return (forLoadChange) ? loadChangeParams : setpointChangeParams;
 	}
+
+	bool WriteParameters(FileStore *f, size_t heater) const;		// Write the model parameters to file returning true if no error
 
 private:
 	void CalcPidConstants();
@@ -43,11 +61,12 @@ private:
 	float timeConstant;
 	float deadTime;
 	float maxPwm;
-	bool usePid;
 	bool enabled;
+	bool usePid;
+	bool pidParametersOverridden;
 
-	PidParams setpointChangeParams;		// parameters for handling changes in the setpoint
-	PidParams loadChangeParams;			// parameters for handling changes in the load
+	PidParameters setpointChangeParams;		// parameters for handling changes in the setpoint
+	PidParameters loadChangeParams;			// parameters for handling changes in the load
 };
 
 #endif /* SRC_HEATING_FOPDT_H_ */

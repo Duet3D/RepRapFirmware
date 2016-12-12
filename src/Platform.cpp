@@ -20,17 +20,13 @@
  ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-#include "DueFlashStorage.h"
 
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"
 #include "sd_mmc.h"
 
-#if defined(DUET_NG)
-# include "TMC2660.h"
-#endif
-
 #ifdef DUET_NG
+# include "TMC2660.h"
 # include "FirmwareUpdater.h"
 #endif
 
@@ -68,6 +64,8 @@ uint32_t nextInterruptTime = 0;
 uint32_t nextInterruptScheduledAt = 0;
 uint32_t lastInterruptTime = 0;
 #endif
+
+// Global functions
 
 // Urgent initialisation function
 // This is called before general init has been done, and before constructors for C++ static data have been called.
@@ -115,26 +113,51 @@ extern "C"
 		reprap.Tick();
 		return 0;
 	}
+
+	void NMI_Handler        () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
+	void HardFault_Handler  () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::hardFault); }
+	void MemManage_Handler  () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::memManage); }
+	void BusFault_Handler   () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::busFault); }
+	void UsageFault_Handler () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
+	void SVC_Handler		() { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
+	void DebugMon_Handler   () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
+	void PendSV_Handler		() { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
 }
 
-//*************************************************************************************************
-// PidParameters class
 
-bool PidParameters::UsePID() const
+
+// ZProbeParameters class
+
+void ZProbeParameters::Init(float h)
 {
-	return kP >= 0;
+	adcValue = Z_PROBE_AD_VALUE;
+	xOffset = yOffset = 0.0;
+	height = h;
+	calibTemperature = 20.0;
+	temperatureCoefficient = 0.0;	// no default temperature correction
+	diveHeight = DEFAULT_Z_DIVE;
+	probeSpeed = DEFAULT_PROBE_SPEED;
+	travelSpeed = DEFAULT_TRAVEL_SPEED;
+	recoveryTime = extraParam = 0.0;
+	invertReading = false;
 }
 
-bool PidParameters::operator==(const PidParameters& other) const
+float ZProbeParameters::GetStopHeight(float temperature) const
 {
-	return kI == other.kI && kD == other.kD && kP == other.kP && kT == other.kT && kS == other.kS;
+	return ((temperature - calibTemperature) * temperatureCoefficient) + height;
+}
+
+bool ZProbeParameters::WriteParameters(FileStore *f, unsigned int probeType) const
+{
+	scratchString.printf("G31 T%u P%d X%.1f Y%.1f Z%.2f\n", probeType, adcValue, xOffset, yOffset, height);
+	return f->Write(scratchString.Pointer());
 }
 
 //*************************************************************************************************
 // Platform class
 
 Platform::Platform() :
-		autoSaveEnabled(false), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
+		board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
 		auxGCodeReply(nullptr), fileStructureInitialised(false), tickState(0), debugCode(0)
 {
 	// Output
@@ -165,7 +188,6 @@ void Platform::Init()
 	realTime = 0;
 
 	// Comms
-
 	baudRates[0] = MAIN_BAUD_RATE;
 	baudRates[1] = AUX_BAUD_RATE;
 #if NUM_SERIAL_CHANNELS >= 2
@@ -186,9 +208,20 @@ void Platform::Init()
 	SERIAL_AUX2_DEVICE.begin(baudRates[2]);
 #endif
 
-	static_assert(sizeof(FlashData) + sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
+	compatibility = marlin;				// default to Marlin because the common host programs expect the "OK" response to commands
+	ARRAY_INIT(ipAddress, IP_ADDRESS);
+	ARRAY_INIT(netMask, NET_MASK);
+	ARRAY_INIT(gateWay, GATE_WAY);
 
-	ResetNvData();
+#ifdef DUET_NG
+	memset(macAddress, 0xFF, sizeof(macAddress));
+#else
+	ARRAY_INIT(macAddress, MAC_ADDRESS);
+#endif
+
+	zProbeType = 0;	// Default is to use no Z probe switch
+	zProbeAxes = Z_PROBE_AXES;
+	SetZProbeDefaults();
 
 	// We need to initialise at least some of the time stuff before we call MassStorage::Init()
 	addToTime = 0.0;
@@ -218,7 +251,7 @@ void Platform::Init()
 	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
 	ARRAY_INIT(instantDvs, INSTANT_DVS);
 
-#if !defined(DUET_NG) && !defined(RADDS)
+#if !defined(DUET_NG) && !defined(__RADDS__)
 	// Motor current setting on Duet 0.6 and 0.8.5
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
@@ -403,12 +436,14 @@ void Platform::Init()
 #endif
 
 	// MCU temperature and power monitoring
+#ifndef __RADDS__
 	temperatureAdcChannel = GetTemperatureAdcChannel();
 	AnalogInEnableChannel(temperatureAdcChannel, true);
 	currentMcuTemperature = highestMcuTemperature = 0;
 	lowestMcuTemperature = 4095;
-	mcuTemperatureAdjust = 0.0;
 	mcuAlarmTemperature = 80.0;			// need to set the quite high here because the sensor is not be calibrated yet
+#endif
+	mcuTemperatureAdjust = 0.0;
 
 #ifdef DUET_NG
 	vInMonitorAdcChannel = PinToAdcChannel(PowerMonitorVinDetectPin);
@@ -471,6 +506,13 @@ int Platform::GetThermistorNumber(size_t heater) const
 	return heaterTempChannels[heater];
 }
 
+void Platform::SetZProbeDefaults()
+{
+	switchZProbeParameters.Init(0.0);
+	irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
+	alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
+}
+
 void Platform::InitZProbe()
 {
 	zProbeOnFilter.Init(0);
@@ -482,7 +524,7 @@ void Platform::InitZProbe()
 	zProbeModulationPin = (board == BoardType::Duet_07 || board == BoardType::Duet_085) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
 #endif
 
-	switch (nvData.zProbeType)
+	switch (zProbeType)
 	{
 	case 1:
 	case 2:
@@ -524,12 +566,12 @@ void Platform::InitZProbe()
 
 // Return the Z probe data.
 // The ADC readings are 12 bits, so we convert them to 10-bit readings for compatibility with the old firmware.
-int Platform::ZProbe() const
+int Platform::GetZProbeReading() const
 {
 	int zProbeVal = 0;			// initialised to avoid spurious compiler warning
 	if (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid())
 	{
-		switch (nvData.zProbeType)
+		switch (zProbeType)
 		{
 		case 1:		// Simple or intelligent IR sensor
 		case 3:		// Alternate sensor
@@ -554,7 +596,7 @@ int Platform::ZProbe() const
 		}
 	}
 
-	return (GetZProbeParameters().invertReading) ? 1000 - zProbeVal : zProbeVal;
+	return (GetCurrentZProbeParameters().invertReading) ? 1000 - zProbeVal : zProbeVal;
 }
 
 // Return the Z probe secondary values.
@@ -562,7 +604,7 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 {
 	if (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid())
 	{
-		switch (nvData.zProbeType)
+		switch (zProbeType)
 		{
 		case 2:		// modulated IR sensor
 			v1 = (int) (zProbeOnFilter.GetSum() / (4 * Z_PROBE_AVERAGE_READINGS));	// pass back the reading with IR turned on
@@ -574,18 +616,9 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 	return 0;
 }
 
-int Platform::GetZProbeType() const
-{
-	return nvData.zProbeType;
-}
-
 void Platform::SetZProbeAxes(uint32_t axes)
 {
-	nvData.zProbeAxes = axes;
-	if (autoSaveEnabled)
-	{
-		WriteNvData();
-	}
+	zProbeAxes = axes;
 }
 
 // Get our best estimate of the Z probe temperature
@@ -606,87 +639,77 @@ float Platform::GetZProbeTemperature()
 
 float Platform::ZProbeStopHeight()
 {
-	return GetZProbeParameters().GetStopHeight(GetZProbeTemperature());
+	return GetCurrentZProbeParameters().GetStopHeight(GetZProbeTemperature());
 }
 
 float Platform::GetZProbeDiveHeight() const
 {
-	return GetZProbeParameters().diveHeight;
+	return GetCurrentZProbeParameters().diveHeight;
+}
+
+float Platform::GetZProbeStartingHeight()
+{
+	const ZProbeParameters& params = GetCurrentZProbeParameters();
+	return params.diveHeight + max<float>(params.GetStopHeight(GetZProbeTemperature()), 0.0);
 }
 
 float Platform::GetZProbeTravelSpeed() const
 {
-	return GetZProbeParameters().travelSpeed;
+	return GetCurrentZProbeParameters().travelSpeed;
 }
 
 void Platform::SetZProbeType(int pt)
 {
-	int newZProbeType = (pt >= 0 && pt <= 7) ? pt : 0;
-	if (newZProbeType != nvData.zProbeType)
-	{
-		nvData.zProbeType = newZProbeType;
-		if (autoSaveEnabled)
-		{
-			WriteNvData();
-		}
-	}
+	zProbeType = (pt >= 0 && pt <= 7) ? pt : 0;
 	InitZProbe();
 }
 
-const ZProbeParameters& Platform::GetZProbeParameters() const
+const ZProbeParameters& Platform::GetZProbeParameters(int32_t probeType) const
 {
-	switch (nvData.zProbeType)
+	switch (probeType)
 	{
 	case 1:
 	case 2:
-		return nvData.irZProbeParameters;
+	case 5:
+		return irZProbeParameters;
 	case 3:
 	case 7:
-		return nvData.alternateZProbeParameters;
+		return alternateZProbeParameters;
 	case 4:
-	case 5:
 	case 6:
 	default:
-		return nvData.switchZProbeParameters;
+		return switchZProbeParameters;
 	}
 }
 
-void Platform::SetZProbeParameters(const ZProbeParameters& params)
+void Platform::SetZProbeParameters(int32_t probeType, const ZProbeParameters& params)
 {
-	if (GetZProbeParameters() != params)
+	switch (probeType)
 	{
-		switch (nvData.zProbeType)
-		{
-		case 1:
-		case 2:
-			nvData.irZProbeParameters = params;
-			break;
+	case 1:
+	case 2:
+	case 5:
+		irZProbeParameters = params;
+		break;
 
-		case 3:
-		case 7:
-			nvData.alternateZProbeParameters = params;
-			break;
+	case 3:
+	case 7:
+		alternateZProbeParameters = params;
+		break;
 
-		case 4:
-		case 5:
-		case 6:
-		default:
-			nvData.switchZProbeParameters = params;
-			break;
-		}
-
-		if (autoSaveEnabled)
-		{
-			WriteNvData();
-		}
+	case 4:
+	case 6:
+	default:
+		switchZProbeParameters = params;
+		break;
 	}
 }
 
 // Return true if the specified point is accessible to the Z probe
 bool Platform::IsAccessibleProbePoint(float x, float y) const
 {
-	x -= GetZProbeParameters().xOffset;
-	y -= GetZProbeParameters().yOffset;
+	x -= GetCurrentZProbeParameters().xOffset;
+	y -= GetCurrentZProbeParameters().yOffset;
 	return (reprap.GetMove()->IsDeltaMode())
 			? x * x + y * y < reprap.GetMove()->GetDeltaParams().GetPrintRadiusSquared()
 			: x >= axisMinima[X_AXIS] && y >= axisMinima[Y_AXIS] && x <= axisMaxima[X_AXIS] && y <= axisMaxima[Y_AXIS];
@@ -695,75 +718,7 @@ bool Platform::IsAccessibleProbePoint(float x, float y) const
 // Return true if we must home X and Y before we home Z (i.e. we are using a bed probe)
 bool Platform::MustHomeXYBeforeZ() const
 {
-	return (nvData.zProbeType != 0) && ((nvData.zProbeAxes & (1 << Z_AXIS)) != 0);
-}
-
-void Platform::ResetNvData()
-{
-	nvData.compatibility = marlin;				// default to Marlin because the common host programs expect the "OK" response to commands
-	ARRAY_INIT(nvData.ipAddress, IP_ADDRESS);
-	ARRAY_INIT(nvData.netMask, NET_MASK);
-	ARRAY_INIT(nvData.gateWay, GATE_WAY);
-
-#ifdef DUET_NG
-	memset(nvData.macAddress, 0xFF, sizeof(nvData.macAddress));
-#else
-	ARRAY_INIT(nvData.macAddress, MAC_ADDRESS);
-#endif
-
-	nvData.zProbeType = 0;	// Default is to use no Z probe switch
-	nvData.zProbeAxes = Z_PROBE_AXES;
-	nvData.switchZProbeParameters.Init(0.0);
-	nvData.irZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
-	nvData.alternateZProbeParameters.Init(Z_PROBE_STOP_HEIGHT);
-
-	for (size_t i = 0; i < HEATERS; ++i)
-	{
-		PidParameters& pp = nvData.pidParams[i];
-		pp.kI = defaultPidKis[i];
-		pp.kD = defaultPidKds[i];
-		pp.kP = defaultPidKps[i];
-		pp.kT = defaultPidKts[i];
-		pp.kS = defaultPidKss[i];
-	}
-
-#if FLASH_SAVE_ENABLED
-	nvData.magic = FlashData::magicValue;
-	nvData.version = FlashData::versionValue;
-#endif
-}
-
-void Platform::ReadNvData()
-{
-#if FLASH_SAVE_ENABLED
-	DueFlashStorage::read(FlashData::nvAddress, &nvData, sizeof(nvData));
-	if (nvData.magic != FlashData::magicValue || nvData.version != FlashData::versionValue)
-	{
-		// Nonvolatile data has not been initialized since the firmware was last written, so set up default values
-		ResetNvData();
-		// No point in writing it back here
-	}
-#else
-	Message(BOTH_ERROR_MESSAGE, "Cannot load non-volatile data, because Flash support has been disabled!\n");
-#endif
-}
-
-void Platform::WriteNvData()
-{
-#if FLASH_SAVE_ENABLED
-	DueFlashStorage::write(FlashData::nvAddress, &nvData, sizeof(nvData));
-#else
-	Message(BOTH_ERROR_MESSAGE, "Cannot write non-volatile data, because Flash support has been disabled!\n");
-#endif
-}
-
-void Platform::SetAutoSave(bool enabled)
-{
-#if FLASH_SAVE_ENABLED
-	autoSaveEnabled = enabled;
-#else
-	Message(BOTH_ERROR_MESSAGE, "Cannot enable auto-save, because Flash support has been disabled!\n");
-#endif
+	return (zProbeType != 0) && ((zProbeAxes & (1 << Z_AXIS)) != 0);
 }
 
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print as message and return false.
@@ -1011,7 +966,7 @@ void Platform::Exit()
 
 Compatibility Platform::Emulating() const
 {
-	return (nvData.compatibility == reprapFirmware) ? me : nvData.compatibility;
+	return (compatibility == reprapFirmware) ? me : compatibility;
 }
 
 void Platform::SetEmulating(Compatibility c)
@@ -1025,46 +980,30 @@ void Platform::SetEmulating(Compatibility c)
 	{
 		c = me;
 	}
-	if (c != nvData.compatibility)
-	{
-		nvData.compatibility = c;
-		if (autoSaveEnabled)
-		{
-			WriteNvData();
-		}
-	}
+	compatibility = c;
 }
 
 void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])
 {
-	bool changed = false;
 	for (uint8_t i = 0; i < 4; i++)
 	{
-		if (dst[i] != src[i])
-		{
-			dst[i] = src[i];
-			changed = true;
-		}
-	}
-	if (changed && autoSaveEnabled)
-	{
-		WriteNvData();
+		dst[i] = src[i];
 	}
 }
 
 void Platform::SetIPAddress(byte ip[])
 {
-	UpdateNetworkAddress(nvData.ipAddress, ip);
+	UpdateNetworkAddress(ipAddress, ip);
 }
 
 void Platform::SetGateWay(byte gw[])
 {
-	UpdateNetworkAddress(nvData.gateWay, gw);
+	UpdateNetworkAddress(gateWay, gw);
 }
 
 void Platform::SetNetMask(byte nm[])
 {
-	UpdateNetworkAddress(nvData.netMask, nm);
+	UpdateNetworkAddress(netMask, nm);
 }
 
 // Flush messages to USB and aux, returning true if there is more to send
@@ -1165,6 +1104,7 @@ void Platform::Spin()
 	}
 
 	// Check the MCU max and min temperatures
+#ifndef __RADDS__
 	if (currentMcuTemperature > highestMcuTemperature)
 	{
 		highestMcuTemperature= currentMcuTemperature;
@@ -1173,6 +1113,7 @@ void Platform::Spin()
 	{
 		lowestMcuTemperature = currentMcuTemperature;
 	}
+#endif
 
 	// Diagnostics test
 	if (debugCode == (int)DiagnosticTestType::TestSpinLockup)
@@ -1218,6 +1159,7 @@ void Platform::Spin()
 
 void Platform::SoftwareReset(uint16_t reason)
 {
+	wdt_restart(WDT);							// kick the watchdog
 	if (reason == (uint16_t)SoftwareResetReason::erase)
 	{
 		EraseAndReset();
@@ -1403,13 +1345,19 @@ void Platform::Diagnostics(MessageType mtype)
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)Time();		// get up time in seconds
-	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software", "reset button", "?", "?", "?" };
+	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
+#ifdef DUET_NG
+	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin
+									"reset button or watchdog",
+#else
+									"reset button",
+#endif
+									"?", "?", "?" };
 	MessageF(mtype, "Last reset %02d:%02d:%02d ago, cause: %s\n",
 			(unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60),
 			resetReasons[(REG_RSTC_SR & RSTC_SR_RSTTYP_Msk) >> RSTC_SR_RSTTYP_Pos]);
 
 	// Show the reset code stored at the last software reset
-	Message(mtype, "Last software reset code & available RAM: ");
 	{
 		SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
 		memset(srdBuf, 0, sizeof(srdBuf));
@@ -1429,9 +1377,10 @@ void Platform::Diagnostics(MessageType mtype)
 			}
 		}
 
+		Message(mtype, "Last software reset code: ");
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
-			MessageF(mtype, "0x%04x, %u (slot %d)\n", srdBuf[slot].resetReason, srdBuf[slot].neverUsedRam, slot);
+			MessageF(mtype, "0x%04x, available RAM %u bytes (slot %d)\n", srdBuf[slot].resetReason, srdBuf[slot].neverUsedRam, slot);
 			MessageF(mtype, "Spinning module during software reset: %s\n", moduleName[srdBuf[slot].resetReason & 0x0F]);
 		}
 		else
@@ -1455,15 +1404,21 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Free file entries: %u\n", numFreeFiles);
 
 	// Show the HSMCI CD pin and speed
+#ifdef __RADDS__
+	MessageF(mtype, "SD card 0 %s\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"));
+#else
 	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"), (float)hsmci_get_speed()/1000000.0);
+#endif
 
 	// Show the longest SD card write time
 	MessageF(mtype, "SD card longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
 
+#ifndef __RADDS__
 	// Show the MCU temperatures
 	MessageF(mtype, "MCU temperature: min %.1f, current %.1f, max %.1f\n",
 				AdcReadingToCpuTemperature(lowestMcuTemperature), AdcReadingToCpuTemperature(currentMcuTemperature), AdcReadingToCpuTemperature(highestMcuTemperature));
 	lowestMcuTemperature = highestMcuTemperature = currentMcuTemperature;
+#endif
 
 #ifdef DUET_NG
 	// Show the supply voltage
@@ -1683,25 +1638,7 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 	return false;
 }
 
-// Update the heater PID parameters or thermistor resistance etc.
-void Platform::SetPidParameters(size_t heater, const PidParameters& params)
-{
-	if (heater < HEATERS && params != nvData.pidParams[heater])
-	{
-		nvData.pidParams[heater] = params;
-		if (autoSaveEnabled)
-		{
-			WriteNvData();
-		}
-	}
-}
-const PidParameters& Platform::GetPidParameters(size_t heater) const
-{
-	return nvData.pidParams[heater];
-}
-
-// power is a fraction in [0,1]
-
+// Power is a fraction in [0,1]
 void Platform::SetHeater(size_t heater, float power)
 {
 	if (heatOnPins[heater] != NoPin)
@@ -1755,7 +1692,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 		else if (endStopType[drive] == EndStopType::noEndStop)
 		{
 			// No homing switch is configured for this axis, so see if we should use the Z probe
-			if (nvData.zProbeType > 0 && drive < reprap.GetGCodes()->GetNumAxes() && (nvData.zProbeAxes & (1 << drive)) != 0)
+			if (zProbeType > 0 && drive < reprap.GetGCodes()->GetNumAxes() && (zProbeAxes & (1 << drive)) != 0)
 			{
 				return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
 			}
@@ -1786,11 +1723,30 @@ uint32_t Platform::GetAllEndstopStates() const
 // Return the Z probe result. We assume that if the Z probe is used as an endstop, it is used as the low stop.
 EndStopHit Platform::GetZProbeResult() const
 {
-	const int zProbeVal = ZProbe();
-	const int zProbeADValue = GetZProbeParameters().adcValue;
+	const int zProbeVal = GetZProbeReading();
+	const int zProbeADValue = GetCurrentZProbeParameters().adcValue;
 	return (zProbeVal >= zProbeADValue) ? EndStopHit::lowHit
 			: (zProbeVal * 10 >= zProbeADValue * 9) ? EndStopHit::lowNear	// if we are at/above 90% of the target value
 				: EndStopHit::noStop;
+}
+
+// Write the Z probe parameters to file
+bool Platform::WriteZProbeParameters(FileStore *f) const
+{
+	bool ok = f->Write("; Z probe parameters\n");
+	if (ok)
+	{
+		ok = irZProbeParameters.WriteParameters(f, 1);
+	}
+	if (ok)
+	{
+		ok = alternateZProbeParameters.WriteParameters(f, 3);
+	}
+	if (ok)
+	{
+		ok = switchZProbeParameters.WriteParameters(f, 4);
+	}
+	return ok;
 }
 
 // This is called from the step ISR as well as other places, so keep it fast
@@ -2230,18 +2186,9 @@ void Platform::InitFans()
 
 void Platform::SetMACAddress(uint8_t mac[])
 {
-	bool changed = false;
 	for (size_t i = 0; i < 6; i++)
 	{
-		if (nvData.macAddress[i] != mac[i])
-		{
-			nvData.macAddress[i] = mac[i];
-			changed = true;
-		}
-	}
-	if (changed && autoSaveEnabled)
-	{
-		WriteNvData();
+		macAddress[i] = mac[i];
 	}
 }
 
@@ -2654,9 +2601,6 @@ const char* Platform::GetBoardString() const
 // User I/O and servo support
 bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin, bool& invert)
 {
-#ifdef __RADDS__
-# error This needs to be modified for RADDS
-#endif
 	firmwarePin = NoPin;										// assume failure
 	invert = false;												// this is the common case
 	if (logicalPin < 0 || logicalPin > HighestLogicalPin)
@@ -2832,6 +2776,7 @@ char Platform::ReadFromSource(const SerialSource source)
 	return 0;
 }
 
+#ifndef __RADDS__
 // CPU temperature
 void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const
 {
@@ -2839,6 +2784,7 @@ void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const
 	currT = AdcReadingToCpuTemperature(currentMcuTemperature);
 	maxT = AdcReadingToCpuTemperature(highestMcuTemperature);
 }
+#endif
 
 #ifdef DUET_NG
 // Power in voltage
@@ -3035,13 +2981,15 @@ void Platform::Tick()
 
 	case 2:			// last conversion started was the Z probe, with IR LED on
 		const_cast<ZProbeAveragingFilter&>(zProbeOnFilter).ProcessReading(GetRawZProbeReading());
-		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
+		if (zProbeType == 2)									// if using a modulated IR sensor
 		{
 			digitalWrite(zProbeModulationPin, LOW);				// turn off the IR emitter
 		}
 
 		// Read the MCU temperature as well (no need to do it in every state)
+#ifndef __RADDS__
 		currentMcuTemperature = AnalogInReadChannel(temperatureAdcChannel);
+#endif
 
 		++tickState;
 		break;
@@ -3051,7 +2999,7 @@ void Platform::Tick()
 		// no break
 	case 0:			// this is the state after initialisation, no conversion has been started
 	default:
-		if (nvData.zProbeType == 2)								// if using a modulated IR sensor
+		if (zProbeType == 2)									// if using a modulated IR sensor
 		{
 			digitalWrite(zProbeModulationPin, HIGH);			// turn on the IR emitter
 		}

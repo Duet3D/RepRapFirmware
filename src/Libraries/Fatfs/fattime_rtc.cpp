@@ -40,11 +40,8 @@
  * \asf_license_stop
  *
  */
-#include "compiler.h"
-#include "rtc.h"
+#include "RepRapFirmware.h"
 
-
-uint32_t get_fattime(void);
 /**
  * \brief Current time returned is packed into a DWORD value.
  *
@@ -64,28 +61,26 @@ uint32_t get_fattime(void);
  *
  * \return Current time.
  */
-uint32_t get_fattime(void)
+extern "C" uint32_t get_fattime()
 {
-	if (rtc_get_valid_entry(RTC) != 0)
+	Platform *platform = reprap.GetPlatform();
+	if (!platform->IsDateTimeSet())
 	{
 		// Date and time have not been set, return default timestamp instead
 		return 0x210001;
 	}
 
 	// Retrieve current date and time from RTC
-	uint32_t ul_time;
-	uint32_t ul_hour, ul_minute, ul_second;
-	uint32_t ul_year, ul_month, ul_day, ul_week;
-	rtc_get_time(RTC, &ul_hour, &ul_minute, &ul_second);
-	rtc_get_date(RTC, &ul_year, &ul_month, &ul_day, &ul_week);
+	time_t timeNow = platform->GetDateTime();
+	struct tm timeInfo;
+	gmtime_r(&timeNow, &timeInfo);
 
-	ul_time = ((ul_year - 1980) << 25)
-			| (ul_month << 21)
-			| (ul_day << 16)
-			| (ul_hour << 11)
-			| (ul_minute << 5)
-			| (ul_second >> 1);
-
+	uint32_t ul_time = ((timeInfo.tm_year + 1900 - 1980) << 25)
+						| ((timeInfo.tm_mon + 1) << 21)
+						| (timeInfo.tm_mday << 16)
+						| (timeInfo.tm_hour << 11)
+						| (timeInfo.tm_min << 5)
+						| (timeInfo.tm_sec >> 1);
 	return ul_time;
 }
 

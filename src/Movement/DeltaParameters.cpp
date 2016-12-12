@@ -237,7 +237,7 @@ void DeltaParameters::Adjust(size_t numFactors, const floatc_t v[])
 	homedCarriageHeight -= heightError;
 
 	// Note: if we adjusted the X and Y tilts, and there are any endstop adjustments, then the homed position won't be exactly in the centre
-	// and changing the tilt will therefore affect the homed height. We ignore this for now. If it is ever significant, a second sutocalibration
+	// and changing the tilt will therefore affect the homed height. We ignore this for now. If it is ever significant, a second autocalibration
 	// run will correct it.
 }
 
@@ -246,6 +246,32 @@ void DeltaParameters::PrintParameters(StringRef& reply) const
 	reply.printf("Stops X%.3f Y%.3f Z%.3f height %.3f diagonal %.3f radius %.3f xcorr %.2f ycorr %.2f zcorr %.2f xtilt %.3f%% ytilt %.3f%%\n",
 					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, radius,
 					xCorrection, yCorrection, zCorrection, xTilt * 100.0, yTilt * 100.0);
+}
+
+// Write parameters to file if in delta mode, returning true if no error
+// Values are written in mm
+bool DeltaParameters::WriteParameters(FileStore *f) const
+{
+	if (!IsDeltaMode())
+	{
+		return true;
+	}
+
+	bool ok = f->Write("; Delta parameters\n");
+	if (ok)
+	{
+		scratchString.printf("M665 L%.3f R%.3f H%.3f B%.1f X%.3f Y%.3f Z%.3f\n",
+					 GetDiagonal(), GetRadius(), GetHomedHeight(), GetPrintRadius(), GetXCorrection(), GetYCorrection(), GetZCorrection());
+		ok = f->Write(scratchString.Pointer());
+	}
+	if (ok)
+	{
+		scratchString.printf("M666 X%.3f Y%.3f Z%.3f A%.2f B%.2f\n",
+				GetEndstopAdjustment(X_AXIS), GetEndstopAdjustment(Y_AXIS), GetEndstopAdjustment(Z_AXIS),
+				GetXTilt() * 100.0, GetYTilt() * 100.0);
+		ok = f->Write(scratchString.Pointer());
+	}
+	return ok;
 }
 
 // End

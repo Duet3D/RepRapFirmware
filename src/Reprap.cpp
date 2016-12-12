@@ -61,7 +61,7 @@ void RepRap::Init()
 
 	if (gCodes->RunConfigFile(configFile))
 	{
-		while (gCodes->IsRunningConfigFile())
+		while (gCodes->IsDaemonBusy())
 		{
 			// GCodes::Spin will read the macro and ensure DoingFileMacro returns false when it's done
 			Spin();
@@ -647,7 +647,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->cat(",\"sensors\":{");
 
 		// Probe
-		const int v0 = platform->ZProbe();
+		const int v0 = platform->GetZProbeReading();
 		int v1, v2;
 		switch (platform->GetZProbeSecondaryValues(v1, v2))
 		{
@@ -759,11 +759,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 		response->catf(",\"endstops\":%d", endstops);
 
-		// Delta configuration and number of axes
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u", move->GetGeometryString(), numAxes);
-
-		// Firmware name, for PanelDue
-		response->catf(",\"firmwareName\":\"%s\"", NAME);
+		// Firmware name, machine geometry and number of axes
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u", NAME, move->GetGeometryString(), numAxes);
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
@@ -782,7 +779,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		/* Probe */
 		{
-			const ZProbeParameters probeParams = platform->GetZProbeParameters();
+			const ZProbeParameters probeParams = platform->GetCurrentZProbeParameters();
 
 			// Trigger threshold
 			response->catf(",\"probe\":{\"threshold\":%d", probeParams.adcValue);
@@ -854,11 +851,13 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// MCU temperatures
+#ifndef __RADDS__
 		{
 			float minT, currT, maxT;
 			platform->GetMcuTemperatures(minT, currT, maxT);
 			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", minT, currT, maxT);
 		}
+#endif
 
 #ifdef DUET_NG
 		// Power in voltages
@@ -887,7 +886,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 		if (ch == '[')
 		{
-			response->cat("]");
+			response->cat(ch);		// no extruders
 		}
 
 		// Fraction of file printed
@@ -1173,7 +1172,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->catf(",\"tool\":%d", toolNumber);
 
 	// Send the Z probe value
-	const int v0 = platform->ZProbe();
+	const int v0 = platform->GetZProbeReading();
 	int v1, v2;
 	switch (platform->GetZProbeSecondaryValues(v1, v2))
 	{
@@ -1236,6 +1235,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"numTools\":%u,\"myName\":",
 						move->GetGeometryString(), numAxes, NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
+		response->cat(",\"firmwareName\":");
+		response->EncodeString(NAME, strlen(NAME), false);
 	}
 
 	const int auxSeq = (int)platform->GetAuxSeq();

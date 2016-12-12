@@ -37,6 +37,7 @@ public:
 	void Spin();												// Called in a tight loop to keep everything going
 	void Init();												// Set everything up
 	void Exit();												// Shut everything down
+	void ResetHeaterModels();									// Reset all active heater models to defaults
 
 	bool ColdExtrude() const;									// Is cold extrusion allowed?
 	void AllowColdExtrude(bool b);								// Allow or deny cold extrusion
@@ -92,12 +93,6 @@ public:
 	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, bool usePid) // Set the heater process model
 	pre(heater < HEATERS);
 
-	bool IsModelUsed(size_t heater) const						// Is the heater using the PID parameters calculated form the model?
-	pre(heater < HEATERS);
-
-	void UseModel(size_t heater, bool b)						// Use or don't use the model to provide the PID parameters
-	pre(heater < HEATERS);
-
 	void GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
 	pre(heater < HEATERS);
 
@@ -108,6 +103,11 @@ public:
 	pre(heater < HEATERS);
 
 	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit of any heater
+
+	void SetM301PidParameters(size_t heater, const M301PidParameters& params)
+	pre(heater < HEATERS);
+
+	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
 
 private:
 	Platform* platform;											// The instance of the RepRap hardware class
@@ -166,18 +166,6 @@ inline const FopDt& Heat::GetHeaterModel(size_t heater) const
 inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, bool usePid)
 {
 	return pids[heater]->SetModel(gain, tc, td, maxPwm, usePid);
-}
-
-// Is the heater using the PID parameters calculated form the model?
-inline bool Heat::IsModelUsed(size_t heater) const
-{
-	return pids[heater]->IsModelUsed();
-}
-
-// Use or don't use the model to provide the PID parameters
-inline void Heat::UseModel(size_t heater, bool b)
-{
-	pids[heater]->UseModel(b);
 }
 
 // Is the heater enabled?

@@ -229,7 +229,7 @@ void Webserver::FinishUpload(HttpSession& session)
 		else if (session.fileLastModified != 0)
 		{
 			// Upload OK, update the file timestamp if it was specified before
-			(void)platform->GetMassStorage()->SetLastModifiedTime(session.filenameBeingUploaded, session.fileLastModified);
+			(void)platform->GetMassStorage()->SetLastModifiedTime(nullptr, session.filenameBeingUploaded, session.fileLastModified);
 		}
 	}
 

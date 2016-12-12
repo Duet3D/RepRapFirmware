@@ -301,17 +301,19 @@ time_t MassStorage::GetLastModifiedTime(const char* directory, const char *fileN
 	return 0;
 }
 
-bool MassStorage::SetLastModifiedTime(const char *file, time_t time)
+bool MassStorage::SetLastModifiedTime(const char* directory, const char *fileName, time_t time)
 {
-	FILINFO fno;
+	const char *location = (directory != nullptr)
+							? platform->GetMassStorage()->CombineName(directory, fileName)
+							: fileName;
 	const struct tm * const timeInfo = gmtime(&time);
-
+	FILINFO fno;
     fno.fdate = (WORD)(((timeInfo->tm_year - 80) * 512U) | (timeInfo->tm_mon + 1) * 32U | timeInfo->tm_mday);
     fno.ftime = (WORD)(timeInfo->tm_hour * 2048U | timeInfo->tm_min * 32U | timeInfo->tm_sec / 2U);
-    const bool ok = (f_utime(file, &fno) == FR_OK);
+    const bool ok = (f_utime(location, &fno) == FR_OK);
     if (!ok)
 	{
-		reprap.GetPlatform()->MessageF(HTTP_MESSAGE, "SetLastModifiedTime didn't work for file '%s'\n", file);
+		reprap.GetPlatform()->MessageF(HTTP_MESSAGE, "SetLastModifiedTime didn't work for file '%s'\n", location);
 	}
     return ok;
 }

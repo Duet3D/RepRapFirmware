@@ -8,17 +8,17 @@
 #include "FOPDT.h"
 #include "Core.h"
 #include "Configuration.h"
+#include "Storage/FileStore.h"
+#include "Libraries/General/StringRef.h"
 
+extern StringRef scratchString;
+
+// Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
+// Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt()
+	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0),
+	  enabled(false), usePid(true), pidParametersOverridden(false)
 {
-	// Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
-	// Set up sensible defaults in case the user enables the heater without specifying values for all the parameters.
-	enabled = false;
-	gain = DefaultHotEndHeaterGain;
-	timeConstant = DefaultHotEndHeaterTimeConstant;
-	deadTime = DefaultHotEndHeaterDeadTime;
-	maxPwm = 1.0;
-	usePid = true;
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
@@ -43,6 +43,41 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pU
 		return true;
 	}
 	return false;
+}
+
+// Get the PID parameters as reported by M301
+M301PidParameters FopDt::GetM301PidParameters(bool forLoadChange) const
+{
+	M301PidParameters rslt;
+	const PidParameters& pp = GetPidParameters(forLoadChange);
+	const float reportedKp = pp.kP * 255.0;
+	rslt.kP = reportedKp;
+	rslt.kI = pp.recipTi * reportedKp;
+	rslt.kD = pp.tD * reportedKp;
+	return rslt;
+}
+
+// Override the PID parameters. We set both sets to the same parameters.
+void FopDt::SetM301PidParameters(const M301PidParameters& pp)
+{
+	loadChangeParams.kP = setpointChangeParams.kP = pp.kP * (1.0/255.0);
+	loadChangeParams.recipTi = setpointChangeParams.recipTi = pp.kI/pp.kP;
+	loadChangeParams.tD = setpointChangeParams.tD = pp.kD/pp.kP;
+	pidParametersOverridden = true;
+}
+
+// Write the model parameters to file returning true if no error
+bool FopDt::WriteParameters(FileStore *f, size_t heater) const
+{
+	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f B%d\n", heater, gain, timeConstant, deadTime, maxPwm, (usePid) ? 0 : 1);
+	bool ok = f->Write(scratchString.Pointer());
+	if (ok && pidParametersOverridden)
+	{
+		const M301PidParameters pp = GetM301PidParameters(false);
+		scratchString.printf("M301 H%u P%.1f I%.3f D%.1f\n", heater, pp.kP, pp.kI, pp.kD);
+		ok = f->Write(scratchString.Pointer());
+	}
+	return ok;
 }
 
 /* Re-calculate the PID parameters.
@@ -86,6 +121,8 @@ void FopDt::CalcPidConstants()
 	setpointChangeParams.kP = 0.7/(gain * timeFrac);
 	setpointChangeParams.recipTi = 1.0/timeConstant;										// Ti = time constant
 	setpointChangeParams.tD = deadTime * 0.7;
+
+	pidParametersOverridden = false;
 }
 
 // End

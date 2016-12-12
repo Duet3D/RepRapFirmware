@@ -86,8 +86,10 @@ const Pin HEAT_ON_PINS[HEATERS] = HEATERS_(7, 13, 12, 11, e, f, g, h); // bed, h
 // Default thermistor betas
 const float BED_R25 = 10000.0;
 const float BED_BETA = 4066.0;
+const float BED_SHC = 0.0;
 const float EXT_R25 = 100000.0;
 const float EXT_BETA = 4066.0;
+const float EXT_SHC = 0.0;
 
 // Thermistor series resistor value in Ohms
 const float THERMISTOR_SERIES_RS = 4700.0;
@@ -106,14 +108,8 @@ const Pin ATX_POWER_PIN = 40;
 const Pin Z_PROBE_PIN = 5;  // RADDS "ADC" pin
 
 // Digital pin number to turn the IR LED on (high) or off (low)
-// channel 1: Z_PROBE_MOD_PIN07
-// channel 0: Z_PROBE_MOD_PIN
-// Make channel 0 == channel 1 for RADDS.  Difference in channels
-// is an artifact of difference in different versions of Duet electronics
-//
 // D34 -- unused X-max on RADDS
 const Pin Z_PROBE_MOD_PIN = 34;
-const Pin Z_PROBE_MOD_PIN07 = 34;
 
 // Use a PWM capable pin
 // Firmware uses SamNonDue so feel free to use a non-Arduino pin
@@ -128,12 +124,11 @@ const Pin COOLING_FAN_RPM_PIN = 25;
 
 // SD cards
 const size_t NumSdCards = 1;
-const Pin SdCardDetectPins[NumSdCards] = {NoPin};
+const Pin SdCardDetectPins[NumSdCards] = { 14 };
 const Pin SdWriteProtectPins[NumSdCards] = { NoPin};
-const Pin SdSpiCSPins[1] = {zz};			//FIXME
+const Pin SdSpiCSPins[1] = { 77 };
 
 // Definition of which pins we allow to be controlled using M42
-//
 // Spare pins on the Arduino Due are
 //
 //  D5 / TIOA6  / C.25
@@ -150,20 +145,16 @@ const Pin SdSpiCSPins[1] = {zz};			//FIXME
 // D72 / RX LED / C.30
 // D73 / TX LED / A.21
 
-const size_t NUM_PINS_ALLOWED = 80;
-#define PINS_ALLOWED {					\
-	/* pins 00-07 */   	0b01100000,		\
-	/* pins 08-15 */   	0,				\
-	/* pins 16-23 */	0,				\
-	/* pins 24-31 */	0,				\
-	/* pins 32-39 */	0b00000000,		\
-	/* pins 40-47 */	0,				\
-	/* pins 48-55 */	0,				\
-	/* pins 56-63 */	0b00001100,		\
-	/* pins 64-71 */	0b11111100,		\
-	/* pins 72-79 */	0b00000011		\
-}
+// M42 and M208 commands now use logical pin numbers, not firmware pin numbers.
+// This is the mapping from logical pins 60+ to firmware pin numbers
+const Pin SpecialPinMap[] =
+{
+	5, 6, 58, 59,
+	66, 67, 68, 69, 70, 71, 73, 73
+};
 
+// This next definition defines the highest one.
+const int HighestLogicalPin = 60 + ARRAY_SIZE(SpecialPinMap) - 1;		// highest logical pin number on this electronics
 
 // SAM3X Flash locations (may be expanded in the future)
 const uint32_t IAP_FLASH_START = 0x000F0000;
@@ -180,13 +171,6 @@ const uint32_t IAP_FLASH_END = 0x000FFBFF;		// don't touch the last 1KB, it's us
 #define STEP_TC_IRQN		TC3_IRQn
 #define STEP_TC_HANDLER		TC3_Handler
 
-// Hardware SPI support for SD cards
-
-// SD select
-#define SD_SS            4
-#define SD_DETECT_PIN   14 // card detect switch; needs pullup asserted
-#define SD_DETECT_VAL    0 // detect switch active low
-#define SD_DETECT_PIO_ID ID_PIOD
 
 #ifdef LCD_UI
 

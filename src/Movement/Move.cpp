@@ -98,7 +98,6 @@ void Move::Init()
 	simulationTime = 0.0;
 	longestGcodeWaitInterval = 0;
 	waitingForMove = false;
-	useGridHeights = false;
 
 	active = true;
 }
@@ -656,10 +655,7 @@ void Move::BedTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 			switch(numBedCompensationPoints)
 			{
 			case 0:
-				if (useGridHeights)
-				{
-					zCorrection += grid.ComputeHeightError(xCoord, xyzPoint[Y_AXIS]);
-				}
+				zCorrection += grid.ComputeHeightError(xCoord, xyzPoint[Y_AXIS], xyzPoint[Z_AXIS]);
 				break;
 
 			case 3:
@@ -704,10 +700,7 @@ void Move::InverseBedTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 			switch(numBedCompensationPoints)
 			{
 			case 0:
-				if (useGridHeights)
-				{
-					zCorrection += grid.ComputeHeightError(xCoord, xyzPoint[Y_AXIS]);
-				}
+				zCorrection += grid.ComputeInverseHeightError(xCoord, xyzPoint[Y_AXIS], xyzPoint[Z_AXIS]);
 				break;
 
 			case 3:
@@ -738,6 +731,7 @@ void Move::InverseBedTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 void Move::SetIdentityTransform()
 {
 	numBedCompensationPoints = 0;
+	grid.ClearGridHeights();
 }
 
 float Move::AxisCompensation(int8_t axis) const
@@ -1038,23 +1032,14 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	{
 		corrections[i] = 0.0;
 		float machinePos[DELTA_AXES];
-		float xp = xBedProbePoints[i], yp = yBedProbePoints[i];
-		if (probePointSet[i] & xyCorrected)
-		{
-			// The point was probed with the sensor at the specified XY coordinates, so subtract the sensor offset to get the head position
-			const ZProbeParameters& zparams = reprap.GetPlatform()->GetZProbeParameters();
-			xp -= zparams.xOffset;
-			yp -= zparams.yOffset;
-		}
-		machinePos[X_AXIS] = xp;
-		machinePos[Y_AXIS] = yp;
+		float zp = GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], (probePointSet[i] & xyCorrected) != 0);
 		machinePos[Z_AXIS] = 0.0;
 
 		probeMotorPositions(i, A_AXIS) = deltaParams.Transform(machinePos, A_AXIS);
 		probeMotorPositions(i, B_AXIS) = deltaParams.Transform(machinePos, B_AXIS);
 		probeMotorPositions(i, C_AXIS) = deltaParams.Transform(machinePos, C_AXIS);
 
-		initialSumOfSquares += fsquare(zBedProbePoints[i]);
+		initialSumOfSquares += fsquare(zp);
 	}
 
 	// Do 1 or more Newton-Raphson iterations
@@ -1446,7 +1431,7 @@ void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wa
 	}
 	else
 	{
-		useGridHeights = false;
+		grid.UseHeightMap(false);
 		zBedProbePoints[index] = z;
 		probePointSet[index] |= zSet;
 		if (wasXyCorrected)
@@ -1491,6 +1476,22 @@ bool Move::AllProbeCoordinatesSet(int index) const
 bool Move::XYProbeCoordinatesSet(int index) const
 {
 	return (probePointSet[index]  & xSet) && (probePointSet[index]  & ySet);
+}
+
+// This returns the (X, Y) points to probe the bed at probe point count.  When probing, it returns false.
+// If called after probing has ended it returns true, and the Z coordinate probed is also returned.
+// If 'wantNozzlePosition is true then we return the nozzle position when the point is probed, else we return the probe point itself
+float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const
+{
+	x = xBedProbePoints[count];
+	y = yBedProbePoints[count];
+	if (wantNozzlePosition)
+	{
+		const ZProbeParameters& rp = reprap.GetPlatform()->GetCurrentZProbeParameters();
+		x -= rp.xOffset;
+		y -= rp.yOffset;
+	}
+	return zBedProbePoints[count];
 }
 
 size_t Move::NumberOfProbePoints() const

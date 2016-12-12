@@ -65,12 +65,6 @@ public:
 
 	bool SetModel(float gain, float tc, float td, float maxPwm, bool usePid);	// Set the process model
 
-	bool IsModelUsed() const						// Is the model being used to determine the PID parameters?
-		{ return useModel; }
-
-	void UseModel(bool b)							// Use or don't use the model to provide the PID parameters
-		{ useModel = b; }
-
 	bool IsHeaterEnabled() const					// Is this heater enabled?
 		{ return model.IsEnabled(); }
 
@@ -79,6 +73,9 @@ public:
 
 	void SetHeaterProtection(float pMaxTempExcursion, float pMaxFaultTime)
 		{ maxTempExcursion = pMaxTempExcursion; maxHeatingFaultTime = pMaxFaultTime; }
+
+	void SetM301PidParameters(const M301PidParameters& params)
+		{ model.SetM301PidParameters(params); }
 
 private:
 
@@ -116,7 +113,6 @@ private:
 	HeaterMode mode;								// Current state of the heater
 	bool active;									// Are we active or standby?
 	bool tuned;										// True if tuning was successful
-	bool useModel;									// Use the model to calculate the PID parameters
 	uint8_t badTemperatureCount;					// Count of sequential dud readings
 
 	static_assert(sizeof(previousTemperaturesGood) * 8 >= NumPreviousTemperatures, "too few bits in previousTemperaturesGood");

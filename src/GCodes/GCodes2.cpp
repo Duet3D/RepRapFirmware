@@ -18,6 +18,9 @@ const char* RESUME_G = "resume.g";
 const char* CANCEL_G = "cancel.g";
 const char* STOP_G = "stop.g";
 const char* SLEEP_G = "sleep.g";
+const char* CONFIG_OVERRIDE_G = "config-override.g";
+const char* DEPLOYPROBE_G = "deployprobe.g";
+const char* RETRACTPROBE_G = "retractprobe.g";
 
 const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
 const uint16_t ServoRefreshFrequency = 50;
@@ -65,6 +68,10 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 	if (simulationMode != 0 && code != 0 && code != 1 && code != 4 && code != 10 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
 	{
 		return true;			// we only simulate some gcodes
+	}
+	if (gb.MachineState().runningM502 && code != 31)
+	{
+		return true;			// when running M502 the only gcode we execute is G31
 	}
 
 	switch (code)
@@ -162,7 +169,23 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			return false;
 		}
-		error = ProbeGrid(gb, reply);
+		{
+			const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
+			switch(sparam)
+			{
+			case 0:		// probe and save height map
+				error = ProbeGrid(gb, reply);
+				break;
+
+			case 1:		// load height map file
+				error = LoadHeightMap(gb, reply);
+				break;
+
+			default:	// clear height map
+				reprap.GetMove()->AccessBedProbeGrid().ClearGridHeights();
+				break;
+			}
+		}
 		break;
 
 	case 30: // Z probe/manually set at a position and set that as point P
@@ -182,10 +205,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 31: // Return the probe value, or set probe variables
-		if (!LockMovementAndWaitForStandstill(gb))
-		{
-			return false;
-		}
 		result = SetPrintZProbe(gb, reply);
 		break;
 
@@ -246,6 +265,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	if (simulationMode != 0 && (code < 20 || code > 37) && code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 111 && code != 112 && code != 122 && code != 408 && code != 999)
 	{
 		return true;			// we don't yet simulate most M codes
+	}
+	if (gb.MachineState().runningM502 && code != 301 && code != 307 && code != 558 && code != 665 && code != 666)
+	{
+		return true;			// when running M502 the only mcodes we execute are 301, 307, 558, 665 and 666
 	}
 
 	switch (code)
@@ -489,7 +512,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		if (isPaused)
 		{
 			gb.SetState(GCodeState::resuming1);
-			DoFileMacro(gb, RESUME_G);
+			DoFileMacro(gb, RESUME_G, true);
 		}
 		else if (!fileToPrint.IsLive())
 		{
@@ -843,7 +866,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 98: // Call Macro/Subprogram
 		if (gb.Seen('P'))
 		{
-			DoFileMacro(gb, gb.GetString());
+			DoFileMacro(gb, gb.GetString(), true);
 		}
 		break;
 
@@ -1557,10 +1580,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 205: //M205 advanced settings:  minimum travel speed S=while printing T=travel only,  B=minimum segment time X= maximum xy jerk, Z=maximum Z jerk
-		// This is superseded in this firmware by M codes for the separate types (e.g. M566).
-		break;
-
 	case 206:  // Offset axes - Deprecated
 		result = OffsetAxes(gb);
 		break;
@@ -1826,11 +1845,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 				if (seen)
 				{
-					if (reprap.GetHeat()->SetHeaterModel(heater, gain, tc, td, maxPwm, dontUsePid == 0))
-					{
-						reprap.GetHeat()->UseModel(heater, true);
-					}
-					else
+					if (!reprap.GetHeat()->SetHeaterModel(heater, gain, tc, td, maxPwm, dontUsePid == 0))
 					{
 						reply.copy("Error: bad model parameters");
 					}
@@ -1841,21 +1856,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, in use: %s, mode: %s",
-							heater, model.GetGain(), model.GetTimeConstant(), model.GetDeadTime(), model.GetMaxPwm(),
-							(reprap.GetHeat()->IsModelUsed(heater)) ? "yes" : "no",
-							(model.UsePid()) ? "PID" : "bang-bang");
+					const char* mode = (!model.UsePid()) ? "bang-bang"
+										: (model.ArePidParametersOverridden()) ? "custom PID"
+											: "PID";
+					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, mode: %s",
+							heater, model.GetGain(), model.GetTimeConstant(), model.GetDeadTime(), model.GetMaxPwm(), mode);
 					if (model.UsePid())
 					{
 						// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
-						const PidParams& spParams = model.GetPidParameters(false);
-						const float scaledSpKp = 255.0 * spParams.kP;
-						reply.catf("\nSetpoint change: P%.1f, I%.2f, D%.1f",
-								scaledSpKp, scaledSpKp * spParams.recipTi, scaledSpKp * spParams.tD);
-						const PidParams& ldParams = model.GetPidParameters(true);
-						const float scaledLoadKp = 255.0 * ldParams.kP;
-						reply.catf("\nLoad change: P%.1f, I%.2f, D%.1f",
-								scaledLoadKp, scaledLoadKp * ldParams.recipTi, scaledLoadKp * ldParams.tD);
+						M301PidParameters params = model.GetM301PidParameters(false);
+						reply.catf("\nSetpoint change: P%.1f, I%.3f, D%.1f", params.kP, params.kI, params.kD);
+						params = model.GetM301PidParameters(true);
+						reply.catf("\nLoad change: P%.1f, I%.3f, D%.1f", params.kP, params.kI, params.kD);
 					}
 				}
 			}
@@ -1932,11 +1944,49 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
+	case 374: // Save grid and height map to file
+		error = SaveHeightMap(gb, reply);
+		break;
+
+	case 375: // Load grid and height map from file and enable compensation
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
+		error = LoadHeightMap(gb, reply);
+		break;
+
+	case 376: // Set taper height
+		{
+			HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
+			if (gb.Seen('H'))
+			{
+				heightMap.SetTaperHeight(gb.GetFValue());
+			}
+			else if (heightMap.GetTaperHeight() > 0.0)
+			{
+				reply.printf("Bed compensation taper height is %.1fmm", heightMap.GetTaperHeight());
+			}
+			else
+			{
+				reply.copy("Bed compensation is not tapered");
+			}
+		}
+		break;
+
 	case 400: // Wait for current moves to finish
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return false;
 		}
+		break;
+
+	case 401: // Deploy Z probe
+		DoFileMacro(gb, DEPLOYPROBE_G, false);
+		break;
+
+	case 402: // Retract Z probe
+		DoFileMacro(gb, RETRACTPROBE_G, false);
 		break;
 
 	case 404: // Filament width and nozzle diameter
@@ -1996,19 +2046,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 500: // Store parameters in EEPROM
-		reprap.GetPlatform()->WriteNvData();
+		error = WriteConfigOverrideFile(reply, CONFIG_OVERRIDE_G);
 		break;
 
 	case 501: // Load parameters from EEPROM
-		reprap.GetPlatform()->ReadNvData();
-		if (gb.Seen('S'))
-		{
-			reprap.GetPlatform()->SetAutoSave(gb.GetIValue() > 0);
-		}
+		DoFileMacro(gb, "config-override.g", true);
 		break;
 
 	case 502: // Revert to default "factory settings"
-		reprap.GetPlatform()->ResetNvData();
+		reprap.GetHeat()->ResetHeaterModels();				// in case some heaters have no M307 commands in config.g
+		reprap.GetMove()->AccessDeltaParams().Init();		// in case M665 and M666 in config.g don't define all the parameters
+		platform->SetZProbeDefaults();
+		DoFileMacro(gb, "config.g", true, true);
 		break;
 
 	case 503: // List variable settings
@@ -2281,7 +2330,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seenType = true;
 			}
 
-			ZProbeParameters params = platform->GetZProbeParameters();
+			ZProbeParameters params = platform->GetCurrentZProbeParameters();
 			gb.TryGetFValue('H', params.diveHeight, seenParam);		// dive height
 
 			if (gb.Seen('F'))		// feed rate i.e. probing speed
@@ -2307,7 +2356,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (seenParam)
 			{
-				platform->SetZProbeParameters(params);
+				platform->SetZProbeParameters(platform->GetZProbeType(), params);
 			}
 
 			if (!(seenAxes || seenType || seenParam))
@@ -2363,7 +2412,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	}
 		break;
 
-	case 561:
+	case 561: // Set identity transform (also clears bed probe grid)
 		reprap.GetMove()->SetIdentityTransform();
 		break;
 
@@ -3040,17 +3089,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (gb.Seen('L'))
 			{
-				params.SetDiagonal(gb.GetFValue() * distanceScale);
+				params.SetDiagonal(gb.GetFValue());
 				seen = true;
 			}
 			if (gb.Seen('R'))
 			{
-				params.SetRadius(gb.GetFValue() * distanceScale);
+				params.SetRadius(gb.GetFValue());
 				seen = true;
 			}
 			if (gb.Seen('B'))
 			{
-				params.SetPrintRadius(gb.GetFValue() * distanceScale);
+				params.SetPrintRadius(gb.GetFValue());
 				seen = true;
 			}
 			if (gb.Seen('X'))
@@ -3075,7 +3124,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			// The homed height must be done last, because it gets recalculated when some of the other factors are changed
 			if (gb.Seen('H'))
 			{
-				params.SetHomedHeight(gb.GetFValue() * distanceScale);
+				params.SetHomedHeight(gb.GetFValue());
 				seen = true;
 			}
 
@@ -3097,8 +3146,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					reply.printf("Diagonal %.3f, delta radius %.3f, homed height %.3f, bed radius %.1f"
 								 ", X %.3f" DEGREE_SYMBOL ", Y %.3f" DEGREE_SYMBOL ", Z %.3f" DEGREE_SYMBOL,
-								 	 params.GetDiagonal() / distanceScale, params.GetRadius() / distanceScale,
-								 	 params.GetHomedHeight() / distanceScale, params.GetPrintRadius() / distanceScale,
+								 	 params.GetDiagonal(), params.GetRadius(),
+								 	 params.GetHomedHeight(), params.GetPrintRadius(),
 								 	 params.GetXCorrection(), params.GetYCorrection(), params.GetZCorrection());
 				}
 				else
@@ -3450,6 +3499,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 {
+	if (gb.MachineState().runningM502)
+	{
+		return true;			// when running M502 we don't execute T commands
+	}
+
 	if (!LockMovementAndWaitForStandstill(gb))
 	{
 		return false;
