@@ -7,7 +7,7 @@ RC1 build:
 - Added support for M374 (save height map) and M375 (load height map)
 - Added M376 (set bed compensation taper height)
 - Added T parameter to G31 command
-- M500, M501 and M502 now use config_override.g instead of flash memory. The parameters saved and respored are:
+- M500, M501 and M502 now use config_override.g instead of flash memory. The parameters saved and restored are:
 -- M307 auto tune results
 -- PID parameters, if you used M301 to override the auto tune PID settings
 -- Delta printer M665 and M666 settings
@@ -15,7 +15,8 @@ RC1 build:
 - The M501 auto save option has been removed
 - Removed S and T parameters from M301 command. Use M307 command instead.
 - M301 with negative P parameter no longer sets bang-bang mode. Use M307 instead.
-- Z probe offsets are now applied during G30 probing with specirf8ied XY coordinates, including during delta auto calibration
+- Added P parameter to the G31 command to specify Z probe type. This allows you to view the parameters for the Z probe(s) and to set parameters for a particular Z probe type without selecting that type. G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
+- Z probe offsets are now applied during G30 probing with specified XY coordinates, including during delta auto calibration
 - Z probe recovery time is now applied from the end of the travel move just before probing
 - Fixed bad dive height when using G29 with a large trigger height
 - Fixed bad JSON message during printing when there were no active extruders
@@ -72,7 +73,8 @@ Upgrade notes - VERY IMPORTANT TO AVOID DAMAGE!!!
 - If your printer has multiple hot end heaters and you use the M143 command to change the temperature limit, you will need to use one M143 command with an appropriate H parameter for each heater.
 - If upgrading to RC1 or later and you limit the maximum heater PWM using the S parameter in a M301 command, you will now have to use M307 to do this instead. Similarly the M307 A parameter takes the place of the M301 T parameter (divide the T parameter by 255 and take the reciprocal to get the A parameter).
 - On the Duet 0.8.5 any parameters you saved to flash memory will be lost when upgrading to RC1 or later.
-- You will need to add M501 in your config.g file, at the end or just before the T0 command if you have one, if you want to load saved values automatically at startup
+- You will need to add M501 in your config.g file, at the end or just before the T0 command if you have one, if you want to load saved values automatically at startup.
+- If you use auto delta calibration and you have Z probe X and/or Y offsets defined, you should adjust your probe points to allow for the fact that the firmware will now place the probe over the points you specify instead of the nozzle
 
 Version 1.16
 
