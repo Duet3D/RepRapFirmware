@@ -7,7 +7,10 @@
 
 #include "FirmwareUpdater.h"
 #include "RepRapFirmware.h"
+
+#ifdef DUET_WIFI
 #include "WifiFirmwareUploader.h"
+#endif
 
 namespace FirmwareUpdater
 {
@@ -19,6 +22,7 @@ namespace FirmwareUpdater
 	// Return true if yes, else print a message and return false.
 	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap)
 	{
+#ifdef DUET_WIFI
 		if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & ((1 << WifiFirmwareModule) | (1 << WifiFilesModule))) != 0)
 		{
 			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Invalid combination of firmware update modules\n");
@@ -34,16 +38,23 @@ namespace FirmwareUpdater
 			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "File %s not found\n", WIFI_WEB_FILE);
 			return false;
 		}
+#endif
 		return true;
 	}
 
 	bool IsReady()
 	{
+#ifdef DUET_WIFI
 		return reprap.GetNetwork()->GetWifiUploader()->IsReady();
+#endif
+#ifdef DUET_ETHERNET
+		return true;
+#endif
 	}
 
 	void UpdateModule(unsigned int module)
 	{
+#ifdef DUET_WIFI
 		switch(module)
 		{
 		case WifiExternalFirmwareModule:
@@ -58,6 +69,7 @@ namespace FirmwareUpdater
 			reprap.GetNetwork()->GetWifiUploader()->SendUpdateFile(WIFI_WEB_FILE, SYS_DIR, WifiFirmwareUploader::WebFilesAddress);
 			break;
 		}
+#endif
 	}
 }
 

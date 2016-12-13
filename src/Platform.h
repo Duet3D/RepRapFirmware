@@ -56,7 +56,7 @@ Licence: GPL
 #if defined(DUET_NG)
 # include "DueXn.h"
 #elif !defined(__RADDS__)
-# include "Libraries/MCP4461/MCP4461.h"
+# include "MCP4461/MCP4461.h"
 #endif
 
 #include "Storage/FileStore.h"

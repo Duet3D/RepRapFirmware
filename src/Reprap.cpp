@@ -44,7 +44,7 @@ void RepRap::Init()
 	Platform::EnableWatchdog();		// do this after all init calls are made
 	active = true;					// must do this before we start the network, else the watchdog may time out
 
-	platform->MessageF(HOST_MESSAGE, "%s Version %s dated %s\n", NAME, VERSION, DATE);
+	platform->MessageF(HOST_MESSAGE, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
 	// Run the configuration file
 	const char *configFile = platform->GetConfigFile();
@@ -94,7 +94,7 @@ void RepRap::Init()
 	}
 #endif
 
-	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", NAME);
+	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", FIRMWARE_NAME);
 	fastLoop = FLT_MAX;
 	slowLoop = 0.0;
 	lastTime = platform->Time();
@@ -760,7 +760,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%d", endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u", NAME, move->GetGeometryString(), numAxes);
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u", FIRMWARE_NAME, move->GetGeometryString(), numAxes);
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
@@ -991,9 +991,9 @@ OutputBuffer *RepRap::GetConfigResponse()
 		response->catf(" + %s", expansionName);
 	}
 #endif
-	response->catf("\",\"firmwareName\":\"%s\"", NAME);
+	response->catf("\",\"firmwareName\":\"%s\"", FIRMWARE_NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
-#ifdef DUET_NG
+#if defined(DUET_NG) && defined(DUET_WIFI)
 	response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());
 #endif
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);
@@ -1236,7 +1236,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 						move->GetGeometryString(), numAxes, NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 		response->cat(",\"firmwareName\":");
-		response->EncodeString(NAME, strlen(NAME), false);
+		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
 	}
 
 	const int auxSeq = (int)platform->GetAuxSeq();

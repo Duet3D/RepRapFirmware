@@ -1,7 +1,7 @@
 #ifndef PINS_DUET_H__
 #define PINS_DUET_H__
 
-#define NAME "RepRapFirmware for Duet"
+#define FIRMWARE_NAME "RepRapFirmware for RADDS"
 
 const size_t NumFirmwareUpdateModules = 1;
 #define IAP_UPDATE_FILE "iapradds.bin"
@@ -9,7 +9,7 @@ const size_t NumFirmwareUpdateModules = 1;
 
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::RADDS_15
-#define ELECTRONICS "RADDS (+ Extension)"
+#define ELECTRONICS "RADDS"
 
 #define SUPPORT_INKJET		0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill

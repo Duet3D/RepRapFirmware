@@ -1,7 +1,7 @@
 #ifndef PINS_DUET_H__
 #define PINS_DUET_H__
 
-#define NAME "RepRapFirmware for Duet"
+#define FIRMWARE_NAME "RepRapFirmware for Duet"
 
 const size_t NumFirmwareUpdateModules = 1;
 #define IAP_UPDATE_FILE "iap.bin"

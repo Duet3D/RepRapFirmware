@@ -1168,7 +1168,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", NAME, VERSION, platform->GetElectronicsString());
+			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform->GetElectronicsString());
 #ifdef DUET_NG
 			const char* expansionName = DuetExpansion::GetExpansionBoardName();
 			if (expansionName != nullptr)
@@ -1628,7 +1628,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					float value = gb.GetFValue() * distanceScale;
+					const float value = gb.GetFValue() * distanceScale;
 					if (setMin)
 					{
 						platform->SetAxisMinimum(axis, value);

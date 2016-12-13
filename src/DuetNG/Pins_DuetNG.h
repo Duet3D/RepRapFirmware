@@ -1,7 +1,13 @@
 #ifndef PINS_DUETNG_H__
 #define PINS_DUETNG_H__
 
-#define NAME "RepRapFirmware for Duet WiFi"
+#if defined(DUET_WIFI)
+# define FIRMWARE_NAME "RepRapFirmware for Duet WiFi"
+#elif defined(DUET_ETHERNET)
+# define FIRMWARE_NAME "RepRapFirmware for Duet Ethernet"
+#else
+# error Firmware name not defined
+#endif
 
 const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual upload to WiFi module
 #define IAP_UPDATE_FILE		"iap4e.bin"
