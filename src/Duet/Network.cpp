@@ -87,7 +87,7 @@ static struct mdns_service mdns_services[] = {
 const size_t MDNS_HTTP_SERVICE_INDEX = 1;	// Index of the mDNS HTTP service above
 
 static const char *mdns_txt_records[] = {
-	"product=" NAME,
+	"product=" FIRMWARE_NAME,
 	"version=" VERSION,
 	NULL
 };

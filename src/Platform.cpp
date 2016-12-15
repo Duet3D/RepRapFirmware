@@ -549,6 +549,7 @@ void Platform::InitZProbe()
 	default:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
+		pinMode(zProbeModulationPin, OUTPUT_HIGH);		// set high to take trash80's HE280 probe Teensy adapter out of reset
 		break;
 
 	case 6:
