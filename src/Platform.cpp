@@ -213,7 +213,7 @@ void Platform::Init()
 	ARRAY_INIT(netMask, NET_MASK);
 	ARRAY_INIT(gateWay, GATE_WAY);
 
-#ifdef DUET_NG
+#if defined(DUET_NG) && defined(DUET_WIFI)
 	memset(macAddress, 0xFF, sizeof(macAddress));
 #else
 	ARRAY_INIT(macAddress, MAC_ADDRESS);

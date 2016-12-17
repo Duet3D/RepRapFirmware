@@ -71,11 +71,6 @@ public:
 	void SetHostname(const char *name);
 	void EspRequestsTransfer();
 
-#if 0
-	void AcquireBus();
-	void ReleaseBus();
-#endif
-
 	const char *GetRequest(uint32_t& ip, size_t& length, uint32_t& fragment) const;
 	void SendReply(uint32_t ip, unsigned int code, OutputBuffer *body);
 	void SendReply(uint32_t ip, unsigned int code, const char *text);

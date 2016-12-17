@@ -385,7 +385,7 @@ public:
     void SetAuxDetected() { auxDetected = true; }
 
 	void SetIPAddress(uint8_t ip[]);
-	const uint8_t* IPAddress() const;
+	const uint8_t* GetIPAddress() const;
 	void SetNetMask(uint8_t nm[]);
 	const uint8_t* NetMask() const;
 	void SetGateWay(uint8_t gw[]);
@@ -1136,7 +1136,7 @@ inline bool Platform::IsRtdChannel(uint8_t heater) const
 			&& heaterTempChannels[heater] - FirstRtdChannel < MaxSpiTempSensors;
 }
 
-inline const uint8_t* Platform::IPAddress() const
+inline const uint8_t* Platform::GetIPAddress() const
 {
 	return ipAddress;
 }
