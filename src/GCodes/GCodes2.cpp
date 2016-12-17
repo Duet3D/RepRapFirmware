@@ -2173,8 +2173,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (!seen)
 			{
-				const byte *config_ip = platform->IPAddress();
-				const byte *actual_ip = reprap.GetNetwork()->IPAddress();
+				const byte *config_ip = platform->GetIPAddress();
+				const byte *actual_ip = reprap.GetNetwork()->GetIPAddress();
 				reply.printf("Network is %s, configured IP address: %d.%d.%d.%d, actual IP address: %d.%d.%d.%d, HTTP port: %d",
 						reprap.GetNetwork()->IsEnabled() ? "enabled" : "disabled",
 						config_ip[0], config_ip[1], config_ip[2], config_ip[3], actual_ip[0], actual_ip[1], actual_ip[2], actual_ip[3],

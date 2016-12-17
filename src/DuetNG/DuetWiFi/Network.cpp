@@ -4,7 +4,6 @@
 
  ****************************************************************************************************/
 
-#include "WifiFirmwareUploader.h"
 #include "RepRapFirmware.h"
 #include "compiler.h"
 #include "Pins.h"

@@ -123,10 +123,10 @@ const Pin COOLING_FAN_PINS[NUM_FANS] = { 9, 8 }; // Fan 0, Fan 1
 const Pin COOLING_FAN_RPM_PIN = 25;
 
 // SD cards
-const size_t NumSdCards = 1;
-const Pin SdCardDetectPins[NumSdCards] = { 14 };
-const Pin SdWriteProtectPins[NumSdCards] = { NoPin};
-const Pin SdSpiCSPins[1] = { 77 };
+const size_t NumSdCards = 2;
+const Pin SdCardDetectPins[NumSdCards] = { 14, 14 };
+const Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
+const Pin SdSpiCSPins[2] = { 87, 77 };
 
 // Definition of which pins we allow to be controlled using M42
 // Spare pins on the Arduino Due are
