@@ -418,7 +418,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 					parsedFileInfo.generatedBy[i] = 0;
 				}
 
-				// Cura
+				// Older Cura Engine
 				const char* slicedAtString = ";Sliced at: ";
 				pos = strstr(buf, slicedAtString);
 				if (pos != nullptr)
@@ -440,6 +440,15 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 						parsedFileInfo.generatedBy[i++] = c;
 					}
 					parsedFileInfo.generatedBy[i] = 0;
+				}
+				
+				// The newer Cura Engine does not include a time stamp
+				const char* generatedWithCura = "with Cura";
+				pos = strstr(buf, generatedWithCura);
+				if (pos != nullptr)
+				{
+					strcpy(parsedFileInfo.generatedBy, "Cura");
+					parsedFileInfo.generatedBy[4] = 0;
 				}
 
 				// KISSlicer
