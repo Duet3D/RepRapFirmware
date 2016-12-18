@@ -169,7 +169,7 @@ class Network
 
 		// Global settings
 
-		const uint8_t *IPAddress() const;
+		const uint8_t *GetIPAddress() const;
 		void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
 		void SetHostname(const char *name);
 

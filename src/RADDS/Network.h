@@ -28,7 +28,7 @@ public:
 	void SetHostname(const char *name) const { };
 	void SetHttpPort(uint16_t port) const { };
 	uint16_t GetHttpPort() const { return (uint16_t)0; }
-	const uint8_t *IPAddress() const;
+	const uint8_t *GetIPAddress() const;
 };
 
 #endif

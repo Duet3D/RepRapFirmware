@@ -617,7 +617,6 @@ void Webserver::HttpInterpreter::DoFastUpload()
 	if (transaction->ReadBuffer(buffer, len))
 	{
 		network->Unlock();
-#if 1
 		// Write data in sector-aligned chunks. This also means that the buffer in fatfs is only used to hold the FAT.
 		static const size_t writeBufLength = 2048;				// use a multiple of the 512b sector size
 		static uint32_t writeBufStorage[writeBufLength/4];		// aligned buffer for file writes
@@ -652,18 +651,6 @@ void Webserver::HttpInterpreter::DoFastUpload()
 				}
 			}
 		}
-#else
-		if (!fileBeingUploaded.Write(buffer, len))
-		{
-			platform->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
-			CancelUpload();
-
-			while (!network->Lock());
-			SendJsonResponse("upload");
-			return;
-		}
-		uploadedBytes += len;
-#endif
 		while (!network->Lock());
 	}
 
@@ -710,6 +697,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 {
 	NetworkTransaction *transaction = webserver->currentTransaction;
 	FileStore *fileToSend;
+	bool zip = false;
 
 	if (isWebFile)
 	{
@@ -722,15 +710,31 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 			}
 		}
 		fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
-		if (fileToSend == nullptr)
+
+		// If we failed to open the file, see if we can open a file with the same name and a ".gz" extension
+		if (fileToSend == nullptr && !StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= FILENAME_LENGTH)
+		{
+			char nameBuf[FILENAME_LENGTH + 1];
+			strcpy(nameBuf, nameOfFileToSend);
+			strcat(nameBuf, ".gz");
+			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameBuf, false);
+			if (fileToSend != nullptr)
+			{
+				zip = true;
+			}
+		}
+
+		// If we still couldn't find the file and it was an HTML file, return the 404 error page
+		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
 			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
-			if (fileToSend == nullptr)
-			{
-				RejectMessage("not found", 404);
-				return;
-			}
+		}
+
+		if (fileToSend == nullptr)
+		{
+			RejectMessage("not found", 404);
+			return;
 		}
 		transaction->SetFileToWrite(fileToSend);
 	}
@@ -761,7 +765,6 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 	}
 
 	const char* contentType;
-	bool zip = false;
 	if (StringEndsWith(nameOfFileToSend, ".png"))
 	{
 		contentType = "image/png";
@@ -1541,7 +1544,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 		}
 		else
 		{
-			SendFile(commandWords[1]);
+			SendFile(commandWords[1], true);
 		}
 
 		ResetState();
@@ -2175,7 +2178,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			else if (StringEquals(clientMessage, "PASV"))
 			{
 				/* get local IP address */
-				const byte *ip_address = network->IPAddress();
+				const uint8_t * const ip_address = network->GetIPAddress();
 
 				/* open random port > 1023 */
 				//rand();		// TRNG doesn't require this
