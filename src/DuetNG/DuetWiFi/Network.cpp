@@ -736,7 +736,7 @@ bool Network::IsEnabled() const
 	return state != disabled;
 }
 
-const uint8_t *Network::IPAddress() const
+const uint8_t *Network::GetIPAddress() const
 {
 	return ipAddress;
 }

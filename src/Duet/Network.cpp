@@ -471,7 +471,7 @@ void Network::Spin()
 	{
 		if (!ethernetStarted)
 		{
-			start_ethernet(platform->IPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
+			start_ethernet(platform->GetIPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
 			ethernetStarted = true;
 
 			// Initialise this one here, because it requires a configured IGMP network interface
@@ -479,7 +479,7 @@ void Network::Spin()
 		}
 		else
 		{
-			ethernet_set_configuration(platform->IPAddress(), platform->NetMask(), platform->GateWay());
+			ethernet_set_configuration(platform->GetIPAddress(), platform->NetMask(), platform->GateWay());
 		}
 		state = NetworkObtainingIP;
 	}
@@ -736,7 +736,7 @@ bool Network::InLwip() const
 	return lwipLocked;
 }
 
-const uint8_t *Network::IPAddress() const
+const uint8_t *Network::GetIPAddress() const
 {
 	return ethernet_get_ipaddress();
 }
