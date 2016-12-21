@@ -3,6 +3,14 @@ Summary of important changes in recent versions
 
 Version 1.17 (in development)
 
+RC3 build:
+
+- Bed compensation taper now applies to G32 3/4/5-point compensation as well as to G29
+- Recognise generated-with comment written by newer versions of Cura
+- Firmware retraction with Z hop now works when using 'retract on layer change' in slic3r
+- A 2nd controlled fan using an external mosfet driven by expansion connector pin 25 on a Duet 0.6 is no longer inverted
+- The Duet 0.8.5 web server looks for gzipped versions of requested files first, then regular versions
+
 RC1 build:
 - Added support for M374 (save height map) and M375 (load height map)
 - Added M376 (set bed compensation taper height)
