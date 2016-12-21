@@ -68,8 +68,7 @@ public:
 	const GridDefinition& GetGrid() const { return def; }
 	void SetGrid(const GridDefinition& gd);
 
-	float ComputeHeightError(float x, float y, float z) const;		// Compute the height error at the specified point
-	float ComputeInverseHeightError(float x, float y, float z) const; // Compute the inverse height error at the specified point
+	float GetInterpolatedHeightError(float x, float y) const;		// Compute the interpolated height error at the specified point
 	void ClearGridHeights();										// Clear all grid height corrections
 	void SetGridHeight(size_t xIndex, size_t yIndex, float height);	// Set the height of a grid point
 
@@ -82,8 +81,6 @@ public:
 
 	void UseHeightMap(bool b);
 	bool UsingHeightMap() const { return useMap; }
-	float GetTaperHeight() const { return (useTaper) ? taperHeight : 0.0; }
-	void SetTaperHeight(float h);
 
 	unsigned int GetStatistics(float& mean, float& deviation) const; // Return number of points probed, mean and RMS deviation
 
@@ -93,16 +90,10 @@ private:
 	GridDefinition def;
 	float *gridHeights;												// The map of grid heights, must have at least MaxGridProbePoints entries
 	uint32_t gridHeightSet[MaxGridProbePoints/32];					// Bitmap of which heights are set
-	float taperHeight;												// Height over which we taper
-	float recipTaperHeight;											// Reciprocal of the taper height
 	bool useMap;													// True to do bed compensation
-	bool useTaper;													// True to taper off the compensation
 
 	uint32_t GetMapIndex(uint32_t xIndex, uint32_t yIndex) const { return (yIndex * def.NumXpoints()) + xIndex; }
 	bool IsHeightSet(uint32_t index) const { return (gridHeightSet[index/32] & (1 << (index & 31))) != 0; }
-
-	float GetInterpolatedHeightError(float x, float y) const		// Compute the interpolated height error at the specified point
-	pre(useMap);
 
 	float GetHeightError(uint32_t xIndex, uint32_t yIndex) const;
 	float InterpolateX(uint32_t xIndex, uint32_t yIndex, float xFrac) const;

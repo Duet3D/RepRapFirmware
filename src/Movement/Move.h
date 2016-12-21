@@ -79,6 +79,8 @@ public:
     void SetIdentityTransform();									// Cancel the bed equation; does not reset axis angle compensation
     void Transform(float move[], uint32_t xAxes) const;				// Take a position and apply the bed and the axis-angle compensations
     void InverseTransform(float move[], uint32_t xAxes) const;		// Go from a transformed point back to user coordinates
+	float GetTaperHeight() const { return (useTaper) ? taperHeight : 0.0; }
+	void SetTaperHeight(float h);
 
     void Diagnostics(MessageType mtype);							// Report useful stuff
 
@@ -178,6 +180,9 @@ private:
 	float tanXY, tanYZ, tanXZ; 							// Axis compensation - 90 degrees + angle gives angle between axes
 	int numBedCompensationPoints;						// The number of points we are actually using for bed compensation, 0 means identity bed transform
 	float xRectangle, yRectangle;						// The side lengths of the rectangle used for second-degree bed compensation
+	float taperHeight;									// Height over which we taper
+	float recipTaperHeight;								// Reciprocal of the taper height
+	bool useTaper;										// True to taper off the compensation
 
 	HeightMap grid;    									// Grid definition and height map for G29 bed probing. The probe heights are stored in zBedProbePoints, see above.
 

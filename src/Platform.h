@@ -760,7 +760,7 @@ private:
 	Pin coolingFanRpmPin;											// we currently support only one fan RPM input
 	float lastRpmResetTime;
 	void InitFans();
-	bool FansHardwareInverted() const;
+	bool FansHardwareInverted(size_t fanNumber) const;
 
   	// Serial/USB
 

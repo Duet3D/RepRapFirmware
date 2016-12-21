@@ -2130,7 +2130,8 @@ void Platform::SetFanValue(size_t fan, float speed)
 // Enable or disable the fan that shares its PWM pin with the last heater. Called when we disable or enable the last heater.
 void Platform::EnableSharedFan(bool enable)
 {
-	fans[NUM_FANS - 1].Init((enable) ? COOLING_FAN_PINS[NUM_FANS - 1] : NoPin, FansHardwareInverted());
+	const size_t sharedFanNumber = NUM_FANS - 1;
+	fans[sharedFanNumber].Init((enable) ? COOLING_FAN_PINS[sharedFanNumber] : NoPin, FansHardwareInverted(sharedFanNumber));
 }
 
 #endif
@@ -2148,13 +2149,14 @@ float Platform::GetFanRPM()
 			: 0.0;															// else assume fan is off or tacho not connected
 }
 
-bool Platform::FansHardwareInverted() const
+bool Platform::FansHardwareInverted(size_t fanNumber) const
 {
 #if defined(DUET_NG) || defined(__RADDS__)
 	return false;
 #else
-	// The cooling fan output pin gets inverted on a Duet 0.6 or 0.7
-	return board == BoardType::Duet_06 || board == BoardType::Duet_07;
+	// The cooling fan output pin gets inverted on a Duet 0.6 or 0.7.
+	// We allow a second fan controlled by a mosfet on the PC4 pin, which is not inverted.
+	return fanNumber == 0 && (board == BoardType::Duet_06 || board == BoardType::Duet_07);
 #endif
 }
 
@@ -2162,7 +2164,7 @@ void Platform::InitFans()
 {
 	for (size_t i = 0; i < NUM_FANS; ++i)
 	{
-		fans[i].Init(COOLING_FAN_PINS[i], FansHardwareInverted());
+		fans[i].Init(COOLING_FAN_PINS[i], FansHardwareInverted(i));
 	}
 
 	if (NUM_FANS > 1)

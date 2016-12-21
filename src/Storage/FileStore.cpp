@@ -47,6 +47,36 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 	writing = write;
 	lastBufferEntry = FileBufLen;
 
+	// Try to create the path of this file if we want to write to it
+	if (writing)
+	{
+		char filePathBuffer[FILENAME_LENGTH];
+		StringRef filePath(filePathBuffer, FILENAME_LENGTH);
+		filePath.copy(location);
+
+		bool isVolume = isdigit(filePath[0]);
+		for(size_t i = 1; i < filePath.strlen(); i++)
+		{
+			if (filePath[i] == '/')
+			{
+				if (isVolume)
+				{
+					isVolume = false;
+					continue;
+				}
+
+				filePath[i] = 0;
+				if (!platform->GetMassStorage()->DirectoryExists(filePath.Pointer()) && !platform->GetMassStorage()->MakeDirectory(filePath.Pointer()))
+				{
+					platform->MessageF(GENERIC_MESSAGE, "Failed to create directory %s while trying to open file %s\n",
+							filePath.Pointer(), location);
+					return false;
+				}
+				filePath[i] = '/';
+			}
+		}
+	}
+
 	FRESULT openReturn = f_open(&file, location, (writing) ?  FA_CREATE_ALWAYS | FA_WRITE : FA_OPEN_EXISTING | FA_READ);
 	if (openReturn != FR_OK)
 	{

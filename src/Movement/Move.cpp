@@ -88,6 +88,7 @@ void Move::Init()
 
 	xRectangle = 1.0/(0.8 * reprap.GetPlatform()->AxisMaximum(X_AXIS));
 	yRectangle = xRectangle;
+	useTaper = false;
 
 	longWait = reprap.GetPlatform()->Time();
 	idleTimeout = DEFAULT_IDLE_TIMEOUT;
@@ -641,46 +642,51 @@ void Move::InverseTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 // Do the bed transform AFTER the axis transform
 void Move::BedTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 {
-	float zCorrection = 0.0;
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
-	unsigned int numXAxes = 0;
-
-	// Transform the Z coordinate based on the average correction for each axis used as an X axis.
-	// We are assuming that the tool Y offsets are small enough to be ignored.
-	for (uint32_t axis = 0; axis < numAxes; ++axis)
+	if (!useTaper || xyzPoint[Z_AXIS] < taperHeight)
 	{
-		if ((xAxes & (1u << axis)) != 0)
+		float zCorrection = 0.0;
+		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+		unsigned int numXAxes = 0;
+
+		// Transform the Z coordinate based on the average correction for each axis used as an X axis.
+		// We are assuming that the tool Y offsets are small enough to be ignored.
+		for (uint32_t axis = 0; axis < numAxes; ++axis)
 		{
-			const float xCoord = xyzPoint[axis];
-			switch(numBedCompensationPoints)
+			if ((xAxes & (1u << axis)) != 0)
 			{
-			case 0:
-				zCorrection += grid.ComputeHeightError(xCoord, xyzPoint[Y_AXIS], xyzPoint[Z_AXIS]);
-				break;
+				const float xCoord = xyzPoint[axis];
+				switch(numBedCompensationPoints)
+				{
+				case 0:
+					zCorrection += grid.GetInterpolatedHeightError(xCoord, xyzPoint[Y_AXIS]);
+					break;
 
-			case 3:
-				zCorrection += aX * xCoord + aY * xyzPoint[Y_AXIS] + aC;
-				break;
+				case 3:
+					zCorrection += aX * xCoord + aY * xyzPoint[Y_AXIS] + aC;
+					break;
 
-			case 4:
-				zCorrection += SecondDegreeTransformZ(xCoord, xyzPoint[Y_AXIS]);
-				break;
+				case 4:
+					zCorrection += SecondDegreeTransformZ(xCoord, xyzPoint[Y_AXIS]);
+					break;
 
-			case 5:
-				zCorrection += TriangleZ(xCoord, xyzPoint[Y_AXIS]);
-				break;
+				case 5:
+					zCorrection += TriangleZ(xCoord, xyzPoint[Y_AXIS]);
+					break;
 
-			default:
-				break;
+				default:
+					break;
+				}
+				++numXAxes;
 			}
-			++numXAxes;
 		}
+
+		if (numXAxes > 1)
+		{
+			zCorrection /= numXAxes;			// take an average
+		}
+
+		xyzPoint[Z_AXIS] += (useTaper) ? (taperHeight - xyzPoint[Z_AXIS]) * recipTaperHeight * zCorrection : zCorrection;
 	}
-	if (numXAxes > 1)
-	{
-		zCorrection /= numXAxes;			// take an average
-	}
-	xyzPoint[Z_AXIS] += zCorrection;
 }
 
 // Invert the bed transform BEFORE the axis transform
@@ -700,7 +706,7 @@ void Move::InverseBedTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 			switch(numBedCompensationPoints)
 			{
 			case 0:
-				zCorrection += grid.ComputeInverseHeightError(xCoord, xyzPoint[Y_AXIS], xyzPoint[Z_AXIS]);
+				zCorrection += grid.GetInterpolatedHeightError(xCoord, xyzPoint[Y_AXIS]);
 				break;
 
 			case 3:
@@ -721,17 +727,40 @@ void Move::InverseBedTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
 			++numXAxes;
 		}
 	}
+
 	if (numXAxes > 1)
 	{
-		zCorrection /= numXAxes;			// take an average
+		zCorrection /= numXAxes;					// take an average
 	}
-	xyzPoint[Z_AXIS] -= zCorrection;
+
+	if (!useTaper || zCorrection >= taperHeight)	// need check on zCorrection to avoid possible divide by zero
+	{
+		xyzPoint[Z_AXIS] -= zCorrection;
+	}
+	else
+	{
+		const float zreq = (xyzPoint[Z_AXIS] - zCorrection)/(1.0 - (zCorrection * recipTaperHeight));
+		if (zreq < taperHeight)
+		{
+			xyzPoint[Z_AXIS] = zreq;
+		}
+	}
 }
 
 void Move::SetIdentityTransform()
 {
 	numBedCompensationPoints = 0;
 	grid.ClearGridHeights();
+}
+
+void Move::SetTaperHeight(float h)
+{
+	useTaper = (h > 1.0);
+	if (useTaper)
+	{
+		taperHeight = h;
+		recipTaperHeight = 1.0/h;
+	}
 }
 
 float Move::AxisCompensation(int8_t axis) const

@@ -101,6 +101,7 @@ void GCodes::Init()
 
 	retractLength = retractExtra = retractHop = 0.0;
 	retractSpeed = unRetractSpeed = 600.0;
+	isRetracted = false;
 }
 
 // This is called from Init and when doing an emergency stop
@@ -233,23 +234,14 @@ void GCodes::Spin()
 			}
 			break;
 
-		case GCodeState::setBed1:
-			reprap.GetMove()->SetIdentityTransform();
-			probeCount = 0;
-			gb.SetState(GCodeState::setBed2);
-			// no break
-
-		case GCodeState::setBed2:
+		case GCodeState::setBed:
+			if (DoSingleZProbeAtPoint(gb, probeCount, 0.0))
 			{
-				int numProbePoints = reprap.GetMove()->NumberOfXYProbePoints();
-				if (DoSingleZProbeAtPoint(gb, probeCount, 0.0))
+				probeCount++;
+				if (probeCount >= reprap.GetMove()->NumberOfXYProbePoints())
 				{
-					probeCount++;
-					if (probeCount >= numProbePoints)
-					{
-						reprap.GetMove()->FinishedBedProbing(0, reply);
-						gb.SetState(GCodeState::normal);
-					}
+					reprap.GetMove()->FinishedBedProbing(0, reply);
+					gb.SetState(GCodeState::normal);
 				}
 			}
 			break;
@@ -1078,12 +1070,19 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 				{
 					moveArg += moveBuffer.coords[axis];
 				}
-				else if (currentTool != nullptr && moveType == 0)
+				else if (moveType == 0)
 				{
-					moveArg -= currentTool->GetOffset()[axis];	// adjust requested position to compensate for tool offset
+					if (axis == Z_AXIS && isRetracted)
+					{
+						moveArg += retractHop;						// handle firmware retraction on layer change
+					}
+					if (currentTool != nullptr)
+					{
+						moveArg -= currentTool->GetOffset()[axis];	// adjust requested position to compensate for tool offset
+					}
 				}
 
-				if (axis < Z_AXIS && moveType == 0)
+				if (axis != Z_AXIS && moveType == 0)
 				{
 					const HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
 					if (heightMap.UsingHeightMap())
@@ -1352,6 +1351,7 @@ bool GCodes::DoCannedCycleMove(GCodeBuffer& gb, EndstopChecks ce)
 		{
 			return true;				// stack overflow
 		}
+		gb.MachineState().state = gb.MachineState().previous->state;	// stay in the same state
 
 		for (size_t drive = 0; drive < DRIVES; drive++)
 		{
@@ -1569,7 +1569,7 @@ bool GCodes::DoHome(GCodeBuffer& gb, StringRef& reply, bool& error)
 // probes the bed height, and records the Z coordinate probed.  If you want to program any general
 // internal canned cycle, this shows how to do it.
 // On entry, probePointIndex specifies which of the points this is.
-bool GCodes::DoSingleZProbeAtPoint(GCodeBuffer& gb, int probePointIndex, float heightAdjust)
+bool GCodes::DoSingleZProbeAtPoint(GCodeBuffer& gb, size_t probePointIndex, float heightAdjust)
 {
 	reprap.GetMove()->SetIdentityTransform(); 		// It doesn't matter if these are called repeatedly
 
@@ -3001,7 +3001,7 @@ void GCodes::StartToolChange(GCodeBuffer& gb, bool inM109)
 // Retract or un-retract filament, returning true if movement has been queued, false if this needs to be called again
 bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 {
-	if (retractLength != 0.0 || retractHop != 0.0 || (!retract && retractExtra != 0.0))
+	if (retract != isRetracted && (retractLength != 0.0 || retractHop != 0.0 || (!retract && retractExtra != 0.0)))
 	{
 		const Tool *tool = reprap.GetCurrentTool();
 		if (tool != nullptr)
@@ -3039,6 +3039,7 @@ bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				segmentsLeft = 1;
 			}
 		}
+		isRetracted = retract;
 	}
 	return true;
 }

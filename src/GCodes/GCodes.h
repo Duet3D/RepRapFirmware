@@ -166,7 +166,7 @@ private:
 	bool DoDwell(GCodeBuffer& gb);										// Wait for a bit
 	bool DoDwellTime(float dwell);										// Really wait for a bit
 	bool DoHome(GCodeBuffer& gb, StringRef& reply, bool& error);		// Home some axes
-	bool DoSingleZProbeAtPoint(GCodeBuffer& gb, int probePointIndex, float heightAdjust);	// Probe at a given point
+	bool DoSingleZProbeAtPoint(GCodeBuffer& gb, size_t probePointIndex, float heightAdjust); // Probe at a given point
 	bool DoSingleZProbe(GCodeBuffer& gb, StringRef& reply, bool reportOnly, float heightAdjust); // Probe where we are
 	int DoZProbe(GCodeBuffer& gb, float distance);						// Do a Z probe cycle up to the maximum specified distance
 	bool SetSingleZProbeAtAPosition(GCodeBuffer& gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
@@ -262,7 +262,7 @@ private:
 	const char* eofString;						// What's at the end of an HTML file?
 	uint8_t eofStringCounter;					// Check the...
 	uint8_t eofStringLength;					// ... EoF string as we read.
-	int probeCount;								// Counts multiple probe points
+	size_t probeCount;							// Counts multiple probe points
 	int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
 	bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
 	float longWait;								// Timer for things that happen occasionally (seconds)
@@ -287,6 +287,7 @@ private:
 	float retractSpeed;							// retract speed in mm/min
 	float unRetractSpeed;						// un=retract speed in mm/min
 	float retractHop;							// Z hop when retracting
+	bool isRetracted;							// true if filament has been firmware-retracted
 
 	// Triggers
 	Trigger triggers[MaxTriggers];				// Trigger conditions

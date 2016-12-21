@@ -696,7 +696,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isWebFile)
 {
 	NetworkTransaction *transaction = webserver->currentTransaction;
-	FileStore *fileToSend;
+	FileStore *fileToSend = nullptr;
 	bool zip = false;
 
 	if (isWebFile)
@@ -709,10 +709,9 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 				nameOfFileToSend = INDEX_PAGE_FILE;
 			}
 		}
-		fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
 
-		// If we failed to open the file, see if we can open a file with the same name and a ".gz" extension
-		if (fileToSend == nullptr && !StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= FILENAME_LENGTH)
+		// Try to open a gzipped version of the file first
+		if (!StringEndsWith(nameOfFileToSend, ".gz") && strlen(nameOfFileToSend) + 3 <= FILENAME_LENGTH)
 		{
 			char nameBuf[FILENAME_LENGTH + 1];
 			strcpy(nameBuf, nameOfFileToSend);
@@ -722,6 +721,12 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 			{
 				zip = true;
 			}
+		}
+
+		// If that failed, try to open the normal version of the file
+		if (fileToSend == nullptr)
+		{
+			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page

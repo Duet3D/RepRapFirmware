@@ -21,9 +21,7 @@ enum class GCodeState : uint8_t
 	normal,												// not doing anything and ready to process a new GCode
 	waitingForMoveToComplete,							// doing a homing move, so we must wait for it to finish before processing another GCode
 	homing,
-	setBed1,
-	setBed2,
-	setBed3,
+	setBed,
 
 	// These next 3 must be contiguous
 	toolChange1,

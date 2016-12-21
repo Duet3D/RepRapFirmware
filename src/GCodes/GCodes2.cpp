@@ -220,7 +220,9 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 			// If we get here then we are not on a delta printer and there is no bed.g file
 			if (GetAxisIsHomed(X_AXIS) && GetAxisIsHomed(Y_AXIS))
 			{
-				gb.SetState(GCodeState::setBed1);		// no bed.g file, so use the coordinates specified by M557
+				probeCount = 0;
+				reprap.GetMove()->SetIdentityTransform();
+				gb.SetState(GCodeState::setBed);		// no bed.g file, so use the coordinates specified by M557
 			}
 			else
 			{
@@ -1958,14 +1960,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 376: // Set taper height
 		{
-			HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
+			Move *move = reprap.GetMove();
 			if (gb.Seen('H'))
 			{
-				heightMap.SetTaperHeight(gb.GetFValue());
+				move->SetTaperHeight(gb.GetFValue());
 			}
-			else if (heightMap.GetTaperHeight() > 0.0)
+			else if (move->GetTaperHeight() > 0.0)
 			{
-				reply.printf("Bed compensation taper height is %.1fmm", heightMap.GetTaperHeight());
+				reply.printf("Bed compensation taper height is %.1fmm", move->GetTaperHeight());
 			}
 			else
 			{

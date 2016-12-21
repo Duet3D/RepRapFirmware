@@ -109,7 +109,7 @@ void GridDefinition::PrintError(StringRef& r) const
 // Increase the version number in the following string whenever we change the format of the height map file.
 const char *HeightMap::HeightMapComment = "RepRapFirmware height map file v1";
 
-HeightMap::HeightMap(float *heightStorage) : gridHeights(heightStorage), useMap(false), useTaper(false) { }
+HeightMap::HeightMap(float *heightStorage) : gridHeights(heightStorage), useMap(false) { }
 
 void HeightMap::SetGrid(const GridDefinition& gd)
 {
@@ -314,46 +314,6 @@ unsigned int HeightMap::GetStatistics(float& mean, float& deviation) const
 void HeightMap::UseHeightMap(bool b)
 {
 	useMap = b && def.IsValid();
-}
-
-void HeightMap::SetTaperHeight(float h)
-{
-	useTaper = (h > 1.0);
-	if (useTaper)
-	{
-		taperHeight = h;
-		recipTaperHeight = 1.0/h;
-	}
-}
-
-// Compute the height error at the specified point i.e. value that needs to be added to the Z coordinate
-float HeightMap::ComputeHeightError(float x, float y, float z) const
-{
-	if (!useMap || (useTaper && z >= taperHeight))
-	{
-		return 0.0;
-	}
-
-	const float rawError = GetInterpolatedHeightError(x, y);
-	return (useTaper) ? (taperHeight - z) * recipTaperHeight * rawError : rawError;
-}
-
-// Compute the inverse height error at the specified point i.e. value that needs to be subtracted form the Z coordinate
-float HeightMap::ComputeInverseHeightError(float x, float y, float z) const
-{
-	if (!useMap)
-	{
-		return 0.0;
-	}
-
-	const float rawError = GetInterpolatedHeightError(x, y);
-	if (!useTaper || rawError > taperHeight)		// need check on rawError to avoid possible divide by zero
-	{
-		return rawError;
-	}
-
-	const float zreq = (z - rawError)/(1.0 - (rawError * recipTaperHeight));
-	return (zreq >= taperHeight) ? 0.0 : z - zreq;
 }
 
 // Compute the height error at the specified point
