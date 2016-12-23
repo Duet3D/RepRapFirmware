@@ -33,12 +33,12 @@ const size_t NETWORK_TRANSACTION_COUNT = 24;							// Number of NetworkTransacti
 const uint32_t TCP_WRITE_TIMEOUT = 4000;	 							// Miliseconds to wait for data we have written to be acknowledged
 const uint32_t TCP_MAX_SEND_RETRIES = 8;								// How many times can we attempt to write data
 
-const uint8_t MAC_ADDRESS[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };	// Need some sort of default...
-const uint8_t IP_ADDRESS[4] = { 192, 168, 1, 10 };
-const uint8_t NET_MASK[4] = { 255, 255, 255, 0 };
-const uint8_t GATE_WAY[4] = { 192, 168, 1, 1 };
+const uint8_t DefaultMacAddress[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };	// Need some sort of default...
+const uint8_t DefaultIpAddress[4] = { 192, 168, 1, 10 };
+const uint8_t DefaultNetMask[4] = { 255, 255, 255, 0 };
+const uint8_t DefaultGateway[4] = { 192, 168, 1, 1 };
 
-const uint16_t DEFAULT_HTTP_PORT = 80;
+const uint16_t DefaultHttpPort = 80;
 const uint16_t FTP_PORT = 21;
 const uint16_t TELNET_PORT = 23;
 

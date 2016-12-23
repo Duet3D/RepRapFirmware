@@ -53,6 +53,7 @@
 #include <cstddef>
 #include <cstring>
 #include "wizchip_conf.h"
+#include "WizSpi.h"
 
 /**
  * @\ref WIZCHIP instance data
@@ -181,8 +182,9 @@ void wizchip_sw_reset(void)
 	setSIPR(sip);
 }
 
-int8_t wizchip_init(uint8_t* txsize, uint8_t* rxsize)
+int8_t wizchip_init(const uint8_t* txsize, const uint8_t* rxsize)
 {
+	WizSpi::Init();
 	wizchip_sw_reset();
 	if (txsize != nullptr)
 	{

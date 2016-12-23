@@ -743,7 +743,7 @@ const uint8_t *Network::GetIPAddress() const
 
 uint16_t Network::GetHttpPort() const
 {
-	return DEFAULT_HTTP_PORT;
+	return DefaultHttpPort;
 }
 
 void Network::SetHttpPort(uint16_t port)

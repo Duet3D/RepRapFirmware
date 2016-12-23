@@ -72,7 +72,7 @@ static struct mdns_service mdns_services[] = {
 	},
 	{
 		.name = "\x05_http\x04_tcp\x05local",
-		.port = DEFAULT_HTTP_PORT,
+		.port = DefaultHttpPort,
 	},
 	{
 		.name = "\x04_ftp\x04_tcp\x05local",
@@ -102,7 +102,7 @@ static uint16_t sendingWindowSize, sentDataOutstanding;
 static uint8_t sendingRetries;
 static err_t writeResult, outputResult;
 
-static uint16_t httpPort = DEFAULT_HTTP_PORT;
+static uint16_t httpPort = DefaultHttpPort;
 
 /*-----------------------------------------------------------------------------------*/
 

@@ -2266,7 +2266,7 @@ static inline uint16_t getSn_TxMAX(uint8_t sn)
  * @param len Data length
  * @sa wiz_recv_data()
  */
-void wiz_send_data(uint8_t sn, uint8_t *wizdata, uint16_t len);
+void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len);
 
 /**
  * @ingroup Basic_IO_function

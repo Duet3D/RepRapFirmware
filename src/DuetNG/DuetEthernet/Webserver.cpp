@@ -121,36 +121,26 @@ void Webserver::Init()
 // Deal with input/output from/to the client (if any)
 void Webserver::Spin()
 {
-	if (webserverActive)
+	// Check if we are enabled and we can actually send something back to the client
+	if (webserverActive && OutputBuffer::GetBytesLeft(nullptr) != 0)
 	{
-		// Check if we can actually send something back to the client
-		if (OutputBuffer::GetBytesLeft(nullptr) == 0)
-		{
-			platform->ClassReport(longWait);
-			return;
-		}
-
 		// We must ensure that we have exclusive access to LWIP
 		if (!network->Lock())
 		{
-			platform->ClassReport(longWait);
-			return;
-		}
+			// Allow each ProtocolInterpreter to do something
+			httpInterpreter->Spin();
+			ftpInterpreter->Spin();
+			telnetInterpreter->Spin();
 
-		// Allow each ProtocolInterpreter to do something
-		httpInterpreter->Spin();
-		ftpInterpreter->Spin();
-		telnetInterpreter->Spin();
-
-		// See if we have new data to process
-		currentTransaction = network->GetTransaction(readingConnection);
-		if (currentTransaction != nullptr)
-		{
-			// Take care of different protocol types here
-			ProtocolInterpreter *interpreter;
-			uint16_t localPort = currentTransaction->GetLocalPort();
-			switch (localPort)
+			// See if we have new data to process
+			currentTransaction = network->GetTransaction(readingConnection);
+			if (currentTransaction != nullptr)
 			{
+				// Take care of different protocol types here
+				ProtocolInterpreter *interpreter;
+				const uint16_t localPort = currentTransaction->GetLocalPort();
+				switch (localPort)
+				{
 				case FTP_PORT:		/* FTP */
 					interpreter = ftpInterpreter;
 					break;
@@ -169,82 +159,82 @@ void Webserver::Spin()
 						interpreter = ftpInterpreter;
 					}
 					break;
-			}
-
-			// See if we have to print some debug info
-			if (reprap.Debug(moduleWebserver))
-			{
-				const char *type;
-				switch (currentTransaction->GetStatus())
-				{
-					case released: type = "released"; break;
-					case connected: type = "connected"; break;
-					case receiving: type = "receiving"; break;
-					case sending: type = "sending"; break;
-					case disconnected: type = "disconnected"; break;
-					case deferred: type = "deferred"; break;
-					case acquired: type = "acquired"; break;
-					default: type = "unknown"; break;
 				}
-				platform->MessageF(HOST_MESSAGE, "Incoming transaction: Type %s at local port %d (remote port %d)\n",
-						type, localPort, currentTransaction->GetRemotePort());
-			}
 
-			// For protocols other than HTTP it is important to send a HELO message
-			TransactionStatus status = currentTransaction->GetStatus();
-			if (status == connected)
-			{
-				interpreter->ConnectionEstablished();
-			}
-			// Graceful disconnects are handled here, because prior NetworkTransactions might still contain valid
-			// data. That's why it's a bad idea to close these connections immediately in the Network class.
-			else if (status == disconnected)
-			{
-				// This will call the disconnect events and effectively close the connection
-				currentTransaction->Discard();
-			}
-			// Check for fast uploads via this connection
-			else if (interpreter->DoingFastUpload())
-			{
-				interpreter->DoFastUpload();
-			}
-			// Process other messages (if we can)
-			else if (interpreter->CanParseData())
-			{
-				readingConnection = currentTransaction->GetConnection();
-				for(size_t i = 0; i < TCP_MSS / 3; i++)
+				// See if we have to print some debug info
+				if (reprap.Debug(moduleWebserver))
 				{
-					char c;
-					if (currentTransaction->Read(c))
+					const char *type;
+					switch (currentTransaction->GetStatus())
 					{
-						// Each ProtocolInterpreter must take care of the current NetworkTransaction by
-						// calling either Commit(), Discard() or Defer()
-						if (interpreter->CharFromClient(c))
+						case released: type = "released"; break;
+						case connected: type = "connected"; break;
+						case receiving: type = "receiving"; break;
+						case sending: type = "sending"; break;
+						case disconnected: type = "disconnected"; break;
+						case deferred: type = "deferred"; break;
+						case acquired: type = "acquired"; break;
+						default: type = "unknown"; break;
+					}
+					platform->MessageF(HOST_MESSAGE, "Incoming transaction: Type %s at local port %d (remote port %d)\n",
+							type, localPort, currentTransaction->GetRemotePort());
+				}
+
+				// For protocols other than HTTP it is important to send a HELO message
+				TransactionStatus status = currentTransaction->GetStatus();
+				if (status == connected)
+				{
+					interpreter->ConnectionEstablished();
+				}
+				// Graceful disconnects are handled here, because prior NetworkTransactions might still contain valid
+				// data. That's why it's a bad idea to close these connections immediately in the Network class.
+				else if (status == disconnected)
+				{
+					// This will call the disconnect events and effectively close the connection
+					currentTransaction->Discard();
+				}
+				// Check for fast uploads via this connection
+				else if (interpreter->DoingFastUpload())
+				{
+					interpreter->DoFastUpload();
+				}
+				// Process other messages (if we can)
+				else if (interpreter->CanParseData())
+				{
+					readingConnection = currentTransaction->GetConnection();
+					for (size_t i = 0; i < TCP_MSS / 3; i++)
+					{
+						char c;
+						if (currentTransaction->Read(c))
 						{
+							// Each ProtocolInterpreter must take care of the current NetworkTransaction by calling either Commit(), Discard() or Defer()
+							if (interpreter->CharFromClient(c))
+							{
+								readingConnection = nullptr;
+								break;
+							}
+						}
+						else
+						{
+							// We ran out of data before finding a complete request. This happens when the incoming
+							// message length exceeds the TCP MSS. Notify the current ProtocolInterpreter about this,
+							// which will remove the current transaction too
+							interpreter->NoMoreDataAvailable();
 							readingConnection = nullptr;
 							break;
 						}
 					}
-					else
-					{
-						// We ran out of data before finding a complete request. This happens when the incoming
-						// message length exceeds the TCP MSS. Notify the current ProtocolInterpreter about this,
-						// which will remove the current transaction too
-						interpreter->NoMoreDataAvailable();
-						readingConnection = nullptr;
-						break;
-					}
 				}
 			}
+			else if (readingConnection != nullptr)
+			{
+				// We failed to find a transaction for a reading connection.
+				// This should never happen, but if it does, terminate this connection instantly
+				platform->Message(HOST_MESSAGE, "Error: Transaction for reading connection not found\n");
+				readingConnection->Terminate();
+			}
+			network->Unlock();		// unlock LWIP again
 		}
-		else if (readingConnection != nullptr)
-		{
-			// We failed to find a transaction for a reading connection.
-			// This should never happen, but if it does, terminate this connection instantly
-			platform->Message(HOST_MESSAGE, "Error: Transaction for reading connection not found\n");
-			readingConnection->Terminate();
-		}
-		network->Unlock();		// unlock LWIP again
 	}
 	platform->ClassReport(longWait);
 }

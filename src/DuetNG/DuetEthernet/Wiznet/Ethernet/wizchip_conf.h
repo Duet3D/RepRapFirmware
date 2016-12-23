@@ -305,7 +305,7 @@ int8_t ctlnetwork(ctlnetwork_type cntype, void* arg);
  * @ingroup extra_functions
  * @brief Reset WIZCHIP by softly.
  */ 
-void   wizchip_sw_reset(void);
+void wizchip_sw_reset(void);
 
 /**
  * @ingroup extra_functions
@@ -315,7 +315,7 @@ void   wizchip_sw_reset(void);
  * @return 0 : succcess \n
  *        -1 : fail. Invalid buffer size
  */
-int8_t wizchip_init(uint8_t* txsize, uint8_t* rxsize);
+int8_t wizchip_init(const uint8_t* txsize, const uint8_t* rxsize);
 
 /** 
  * @ingroup extra_functions

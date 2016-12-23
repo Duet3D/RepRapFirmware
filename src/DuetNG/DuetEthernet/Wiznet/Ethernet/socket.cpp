@@ -55,6 +55,18 @@
 //*****************************************************************************
 #include "socket.h"
 
+#define _SOCKET_DEBUG_
+
+#ifdef _SOCKET_DEBUG_
+extern "C" void debugPrintf(const char *fmt, ...);
+extern "C" void delay(uint32_t);
+# define DEBUG_PRINTF(...) debugPrintf(__VA_ARGS__)
+#else
+# define DEBUG_PRINTF(_fmt, ...)
+#endif
+
+
+
 #define SOCK_ANY_PORT_NUM  0xC000
 
 static uint16_t sock_any_port = SOCK_ANY_PORT_NUM;
@@ -82,7 +94,7 @@ uint8_t sock_pack_info[_WIZCHIP_SOCK_NUM_] = {0,};
 
 static void ExecCommand(uint8_t sn, uint8_t cmd)
 {
-	setSn_CR(sn, Sn_CR_OPEN);
+	setSn_CR(sn, cmd);
 	while(getSn_CR(sn) != 0) { }
 }
 
@@ -309,6 +321,7 @@ int32_t send(uint8_t sn, uint8_t * buf, uint16_t len)
 		{
 			break;
 		}
+		DEBUG_PRINTF("Socket %u need %u free %u\n", sn, len, freesize);
 	}
 	wiz_send_data(sn, buf, len);
 
@@ -373,7 +386,7 @@ int32_t recv(uint8_t sn, uint8_t * buf, uint16_t len)
 	return (int32_t)len;
 }
 
-int32_t sendto(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16_t port)
+int32_t sendto(uint8_t sn, const uint8_t * buf, uint16_t len, const uint8_t * addr, uint16_t port)
 {
 	switch(getSn_MR(sn) & 0x0F)
 	{
@@ -426,10 +439,10 @@ int32_t sendto(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16_t
 		{
 			break;
 		}
+		DEBUG_PRINTF("Socket %u need %u free %u\n", sn, len, freesize);
 	};
 
 	wiz_send_data(sn, buf, len);
-
 	ExecCommand(sn, Sn_CR_SEND);
 
 	while(1)
@@ -445,6 +458,10 @@ int32_t sendto(uint8_t sn, uint8_t * buf, uint16_t len, uint8_t * addr, uint16_t
 			setSn_IR(sn, Sn_IR_TIMEOUT);
 			return SOCKERR_TIMEOUT;
 		}
+		DEBUG_PRINTF("Socket %u waiting for send to complete, IR=%02x\n", sn, tmp);
+#ifdef _SOCKET_DEBUG_
+		delay(10);		// to avoid too many messages
+#endif
 	}
 	return (int32_t)len;
 }

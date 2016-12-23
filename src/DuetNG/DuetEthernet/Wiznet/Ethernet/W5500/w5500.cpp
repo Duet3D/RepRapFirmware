@@ -53,6 +53,7 @@
 //*****************************************************************************
 
 #include "w5500.h"
+#include "WizSpi.h"
 
 #define _W5500_SPI_VDM_OP_          0x00
 #define _W5500_SPI_FDM_OP_LEN1_     0x01
@@ -63,35 +64,35 @@
 
 uint8_t WIZCHIP_READ(uint32_t AddrSel)
 {
-	SpiAssertSS();
-	SpiSendAddress(AddrSel | (_W5500_SPI_READ_ | _W5500_SPI_VDM_OP_));
-	const uint8_t ret = SpiReadByte();
-	SpiReleaseSS();
+	WizSpi::AssertSS();
+	WizSpi::SendAddress(AddrSel | (_W5500_SPI_READ_ | _W5500_SPI_VDM_OP_));
+	const uint8_t ret = WizSpi::ExchangeByte(0xFF, true);
+	WizSpi::ReleaseSS();
 	return ret;
 }
 
 void WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb )
 {
-	SpiAssertSS();
-	SpiSendAddress(AddrSel | (_W5500_SPI_WRITE_ | _W5500_SPI_VDM_OP_));
-	SpiSendByte(wb);
-	SpiReleaseSS();
+	WizSpi::AssertSS();
+	WizSpi::SendAddress(AddrSel | (_W5500_SPI_WRITE_ | _W5500_SPI_VDM_OP_));
+	WizSpi::ExchangeByte(wb, true);
+	WizSpi::ReleaseSS();
 }
          
 void WIZCHIP_READ_BUF (uint32_t AddrSel, uint8_t* pBuf, uint16_t len)
 {
-	SpiAssertSS();
-	SpiSendAddress(AddrSel | (_W5500_SPI_READ_ | _W5500_SPI_VDM_OP_));
-	SpiReadBurst(pBuf, len);
-	SpiReleaseSS();
+	WizSpi::AssertSS();
+	WizSpi::SendAddress(AddrSel | (_W5500_SPI_READ_ | _W5500_SPI_VDM_OP_));
+	WizSpi::ReadBurst(pBuf, len);
+	WizSpi::ReleaseSS();
 }
 
 void WIZCHIP_WRITE_BUF(uint32_t AddrSel, const uint8_t* pBuf, uint16_t len)
 {
-	SpiAssertSS();
-	SpiSendAddress(AddrSel | (_W5500_SPI_WRITE_ | _W5500_SPI_VDM_OP_));
-	SpiSendBurst(pBuf, len);
-	SpiReleaseSS();
+	WizSpi::AssertSS();
+	WizSpi::SendAddress(AddrSel | (_W5500_SPI_WRITE_ | _W5500_SPI_VDM_OP_));
+	WizSpi::SendBurst(pBuf, len);
+	WizSpi::ReleaseSS();
 }
 
 
@@ -128,7 +129,7 @@ uint16_t getSn_RX_RSR(uint8_t sn)
 	return val;
 }
 
-void wiz_send_data(uint8_t sn, uint8_t *wizdata, uint16_t len)
+void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len)
 {
 	if (len != 0)
 	{
