@@ -82,6 +82,7 @@ Upgrade notes for 1.17 - VERY IMPORTANT TO AVOID DAMAGE!!!
 - On the Duet 0.8.5 any parameters you saved to flash memory will be lost when upgrading to RC1 or later.
 - You will need to add M501 in your config.g file, at the end or just before the T0 command if you have one, if you want to load saved values automatically at startup.
 - If you use auto delta calibration and you have Z probe X and/or Y offsets defined, you should adjust your probe points to allow for the fact that the firmware will now place the probe over the points you specify instead of the nozzle
+- If your pause.g and resume.g contain any extruder movement commands to retract or prime filament, make sure these files have the M83 command at the start to select relative extruder coordinates
 - The recommended web interface is Duet WebControl 1.14. To use DWC 1.14 on the Duet WiFi, you must be using version 1.02 or later of DuetWiFiServer. Version 1.03-ch is recommended.
 
 Version 1.16
