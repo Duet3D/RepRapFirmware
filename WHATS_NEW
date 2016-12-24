@@ -2,6 +2,9 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.17
+============
+
 Implemented grid bed compensation:
 - M557 defines the grid
 - G29 probes the grid, and saves the height map to file and activates it
@@ -10,6 +13,7 @@ Implemented grid bed compensation:
 - M374 also saves the height map, and M375 loads a height map
 - M376 sets the compensatoin taper height
 - Long moves are segmented when grid compensation is in use so as to follow the contours of the bed
+- Duet Web Control 1.14 can display the height map graphically
 
 Changes to information extraction from gccdoe files:
 - Recognise generated-with comment written by newer versions of Cura
@@ -67,7 +71,7 @@ Miscallaneous changes:
 - Tool offset is no longer applied to G1 moves with S1 or S2 modifiers
 - A 2nd controlled fan using an external mosfet driven by expansion connector pin 25 on a Duet 0.6 is no longer inverted
 
-Upgrade notes - VERY IMPORTANT TO AVOID DAMAGE!!!
+Upgrade notes for 1.17 - VERY IMPORTANT TO AVOID DAMAGE!!!
 
 - On the Duet 0.6 and 0.85 the default direction for the X motor is now forwards (as it is for all other motors and on the Duet WiFi). If you do not have a M569 P0 command in your config.g file then you will need to add M569 P0 S0 in order to keep the previous behaviour.
 - On the Duet 0.6 and 0.85 the default bed thermistor resistance at 25C is now 100K (as it is for the Duet WiFi). If you have an Ormerod, Huxley Duo or RepRapPro Mendel printer with a 10K bed thermistor, you will need to add parameter T10000 to the M305 P0 command in config.g if you don't have that already.
@@ -78,8 +82,10 @@ Upgrade notes - VERY IMPORTANT TO AVOID DAMAGE!!!
 - On the Duet 0.8.5 any parameters you saved to flash memory will be lost when upgrading to RC1 or later.
 - You will need to add M501 in your config.g file, at the end or just before the T0 command if you have one, if you want to load saved values automatically at startup.
 - If you use auto delta calibration and you have Z probe X and/or Y offsets defined, you should adjust your probe points to allow for the fact that the firmware will now place the probe over the points you specify instead of the nozzle
+- The recommended web interface is Duet WebControl 1.14. To use DWC 1.14 on the Duet WiFi, you must be using version 1.02 or later of DuetWiFiServer. Version 1.03-ch is recommended.
 
 Version 1.16
+============
 
 - Support the DueX2 and DueX5 expansion boards for the Duet WiFi
 - Add support for up to 3 additional axes U, V and W. The number of axes is reported to DWC and to PanelDue.
@@ -112,6 +118,7 @@ Upgrade notes:
 - You can use either DuetWebServer-1.03-ch or DuetWebServer-1.02 with this release. You may find that the -1.03-ch version is faster and provides a more reliable connection.
 
 Version 1.15
+============
 
 - Implemented automatic heating model calibration and PID tuning. See [https://duet3d.com/wiki/Tuning_the_heater_temperature_control] for details and instructions.
 - Implemented much better heater safety monitoring, based on a model (first-order-plus-time-delay) of each heater/sensor system, using default models if none have been configured
@@ -136,6 +143,7 @@ Upgrade notes:
 - The recommended web interface is DWC 1.12
 
 Version 1.14
+============
 
 - When multiple motors are due to step, generate all the step pulses simultaneously
 - Added support for multiple drivers for a single axis (M584)
@@ -152,6 +160,7 @@ Upgrade notes:
 - If you use the M584 command, it should come before any M350 and M906 commands in your config.g file.
 
 Version 1.13
+============
 
 * First firmware release for the new Duet WiFi
 * Added support for M581 and M582 commands, including 'only if printing a file' condition in M581 command
@@ -176,9 +185,10 @@ Version 1.13
 
 Upgrade notes:
 
-The recommended web interface is DWC 1.11 for ther Duet, and 1.11a-dc42 for the Duet WiFi.
+The recommended web interface is DWC 1.11 for the Duet, and 1.11a-dc42 for the Duet WiFi.
 
 Version 1.12
+============
 
 * PT100 and other RTD sensors are now supported
 * When a print is paused and then cancelled, the firmware now attempts to run file sys/cancel.g. It only turns the heaters off if that file is not found.
@@ -195,4 +205,4 @@ Upgrade notes:
 
 - If you are using Windows, please install the driver at [https://github.com/dc42/RepRapFirmware/tree/dev/Driver]. This driver does not install any new binaries, it simply tells Windows to use its usbser.sys driver to communicate with a Duet. If you are using Windows 10 then you don't need to install the driver if you don't want to, but then the Duet will show up as "USB Serial Device".
 - If you print with hot end temperatures above 260C then you will need to add a M143 command in config.g, for example M143 S280 will increase the temperature limit to 280C.
--The recommended web interface is DWC 1.11.
+- The recommended web interface is DWC 1.11.
