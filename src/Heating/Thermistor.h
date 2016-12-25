@@ -8,7 +8,7 @@
 #ifndef SRC_HEATING_THERMISTOR_H_
 #define SRC_HEATING_THERMISTOR_H_
 
-#include "Core.h"
+#include "RepRapFirmware.h"
 
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3

@@ -5,7 +5,9 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
+#include "Move.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 Move::Move(Platform* p, GCodes* g) : currentDda(NULL), grid(zBedProbePoints)
 {

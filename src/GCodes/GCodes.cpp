@@ -23,7 +23,15 @@
 
  ****************************************************************************************************/
 
-#include "RepRapFirmware.h"
+#include "GCodes.h"
+#include "GCodeBuffer.h"
+#include "Heating/Heat.h"
+#include "Platform.h"
+#include "Movement/Move.h"
+#include "PrintMonitor.h"
+#include "RepRap.h"
+#include "Tool.h"
+#include "Webserver.h"
 
 #ifdef DUET_NG
 #include "FirmwareUpdater.h"
@@ -158,6 +166,11 @@ void GCodes::Reset()
 	{
 		resourceOwners[i] = nullptr;
 	}
+}
+
+bool GCodes::DoingFileMacro() const
+{
+	return fileGCode->IsDoingFileMacro();
 }
 
 float GCodes::FractionOfFilePrinted() const

@@ -30,6 +30,9 @@ Licence: GPL
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
+#include "RepRapFirmware.h"
+#include "MessageType.h"
+#include "Storage/FileData.h"
 
 // List of protocols that can execute G-Codes
 enum class WebSource

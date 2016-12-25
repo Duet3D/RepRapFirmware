@@ -36,22 +36,19 @@ Licence: GPL
 
 // Language-specific includes
 
-#include <cctype>
-#include <cstring>
-#include <malloc.h>
-#include <cstdlib>
-#include <climits>
-#include <ctime>
-
 // Platform-specific includes
 
-#include "Core.h"
+#include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
+#include "Fan.h"
 #include "Heating/TemperatureSensor.h"
 #include "Heating/Thermistor.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
-#include "Libraries/Fatfs/ff.h"
+#include "Storage/FileStore.h"
+#include "Storage/FileData.h"
+#include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
+#include "MessageType.h"
 
 #if defined(DUET_NG)
 # include "DueXn.h"
@@ -59,22 +56,8 @@ Licence: GPL
 # include "MCP4461/MCP4461.h"
 #endif
 
-#include "Storage/FileStore.h"
-#include "Storage/FileData.h"
-#include "MessageType.h"
-
-// Definitions needed by Fan.h
-const float SecondsToMillis = 1000.0;
-const float MillisToSeconds = 0.001;
-
-#include "Fan.h"
-
-// Definitions needed by Pins.h
 const bool FORWARDS = true;
 const bool BACKWARDS = !FORWARDS;
-
-#include "Pins.h"
-#include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
 
 /**************************************************************************************************/
 
@@ -101,14 +84,8 @@ const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2
 
 // AXES
 
-const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
-const size_t A_AXIS = 0, B_AXIS = 1, C_AXIS = 2;				// The indices of the 3 tower motors of a delta printer in drive arrays
-
 const float AXIS_MINIMA[MAX_AXES] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };			// mm
 const float AXIS_MAXIMA[MAX_AXES] = { 230.0, 210.0, 200.0, 0.0, 0.0, 0.0 };		// mm
-
-const float defaultPrintRadius = 50;							// mm
-const float defaultDeltaHomedHeight = 200;						// mm
 
 // Z PROBE
 
@@ -131,9 +108,6 @@ const uint32_t Z_PROBE_AXES = (1 << X_AXIS) | (1 << Z_AXIS);	// Axes for which t
 const unsigned int ThermistorAverageReadings = 32;
 
 const uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
-
-const size_t DefaultBedHeater = 0;				// Index of the default bed heater
-const size_t DefaultE0Heater = 1;				// Index of the default first extruder heater
 
 /****************************************************************************************************/
 

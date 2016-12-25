@@ -49,7 +49,7 @@
 //
 //*****************************************************************************
 
-#include "socket.h"
+#include <socketlib.h>
 #include "dhcp.h"
 #include <cstring>
 

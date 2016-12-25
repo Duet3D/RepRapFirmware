@@ -1,46 +1,102 @@
 /*
- * NetworkTransacrion.cpp
+ * NetworkTransaction.cpp
  *
- *  Created on: 23 Dec 2016
+ *  Created on: 25 Dec 2016
  *      Author: David
  */
 
 #include "NetworkTransaction.h"
-#include <cstdarg>
 
-//***************************************************************************************************
+#include "ConnectionState.h"
+#include "Network.h"
+#include "OutputMemory.h"
+#include "Platform.h"
+#include "RepRap.h"
+#include "Storage/FileStore.h"
 
-// ConnectionState class
+#include "lwip/src/include/lwip/tcp.h"
+#include "lwip/src/include/lwip/tcp_impl.h"
 
-#if 0
-void ConnectionState::Init(tcp_pcb *p)
+extern "C" {
+
+static err_t conn_poll(void *arg, tcp_pcb *pcb)
 {
-	pcb = p;
-	localPort = p->local_port;
-	remoteIPAddress = p->remote_ip.addr;
-	remotePort = p->remote_port;
-	next = nullptr;
-	sendingTransaction = nullptr;
-	persistConnection = true;
-	isTerminated = false;
-}
-#endif
-
-void ConnectionState::Terminate()
-{
-	//TODO
-#if 0
-	if (pcb != nullptr)
+	ConnectionState *cs = (ConnectionState*)arg;
+	if (cs == sendingConnection)
 	{
-		tcp_abort(pcb);
+		// Data could not be sent last time, check if the connection has to be timed out
+		sendingRetries++;
+		if (sendingRetries == TCP_MAX_SEND_RETRIES)
+		{
+			reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Could not transmit data after %.1f seconds\n", (float)TCP_WRITE_TIMEOUT / 1000.0);
+			tcp_abort(pcb);
+			return ERR_ABRT;
+		}
+
+		// Try to write the remaining data once again (if required)
+		if (writeResult != ERR_OK)
+		{
+			writeResult = tcp_write(pcb, sendingWindow + (sendingWindowSize - sentDataOutstanding), sentDataOutstanding, 0);
+			if (ERR_IS_FATAL(writeResult))
+			{
+				reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to write data in conn_poll (code %d)\n", writeResult);
+				tcp_abort(pcb);
+				return ERR_ABRT;
+			}
+
+			if (writeResult != ERR_OK && reprap.Debug(moduleNetwork))
+			{
+				reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: tcp_write resulted in error code %d\n", writeResult);
+			}
+		}
+
+		// If that worked, try to output the remaining data (if required)
+		if (outputResult != ERR_OK)
+		{
+			outputResult = tcp_output(pcb);
+			if (ERR_IS_FATAL(outputResult))
+			{
+				reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to output data in conn_poll (code %d)\n", outputResult);
+				tcp_abort(pcb);
+				return ERR_ABRT;
+			}
+
+			if (outputResult != ERR_OK && reprap.Debug(moduleNetwork))
+			{
+				reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: tcp_output resulted in error code %d\n", outputResult);
+			}
+		}
 	}
-#endif
+	else
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_poll!\n");
+	}
+	return ERR_OK;
 }
 
-bool ConnectionState::IsConnected() const
+static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 {
-	//TODO
-	return false;
+	ConnectionState *cs = (ConnectionState*)arg;
+	if (cs == sendingConnection)
+	{
+		if (sentDataOutstanding > len)
+		{
+			sentDataOutstanding -= len;
+		}
+		else
+		{
+			tcp_poll(pcb, nullptr, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
+			sendingConnection = nullptr;
+		}
+	}
+	else
+	{
+		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_sent!\n");
+	}
+	return ERR_OK;
+}
+
+
 }
 
 //***************************************************************************************************
@@ -51,33 +107,22 @@ NetworkTransaction::NetworkTransaction(NetworkTransaction *n) : next(n), status(
 	sendStack = new OutputStack();
 }
 
-#if 0
 void NetworkTransaction::Set(pbuf *p, ConnectionState *c, TransactionStatus s)
 {
 	cs = c;
-//	pb = readingPb = p;
+	pb = readingPb = p;
 	status = s;
-//	inputPointer = 0;
+	inputPointer = 0;
 	sendBuffer = nullptr;
 	fileBeingSent = nullptr;
 	closeRequested = false;
 	nextWrite = nullptr;
 	dataAcknowledged = false;
 }
-#endif
-
-bool NetworkTransaction::HasMoreDataToRead() const
-{
-	//TODO
-	return false;
-}
 
 // Read one char from the NetworkTransaction
 bool NetworkTransaction::Read(char& b)
 {
-#if 1
-	return false;
-#else
 	if (readingPb == nullptr)
 	{
 		b = 0;
@@ -91,15 +136,11 @@ bool NetworkTransaction::Read(char& b)
 		inputPointer = 0;
 	}
 	return true;
-#endif
 }
 
 // Read data from the NetworkTransaction and return true on success
 bool NetworkTransaction::ReadBuffer(const char *&buffer, size_t &len)
 {
-#if 1
-	return false;
-#else
 	if (readingPb == nullptr)
 	{
 		return false;
@@ -120,7 +161,6 @@ bool NetworkTransaction::ReadBuffer(const char *&buffer, size_t &len)
 	readingPb = readingPb->next;
 	inputPointer = 0;
 	return true;
-#endif
 }
 
 void NetworkTransaction::Write(char b)
@@ -223,9 +263,6 @@ void NetworkTransaction::SetFileToWrite(FileStore *file)
 // Send exactly one TCP window of data and return true when this transaction can be released
 bool NetworkTransaction::Send()
 {
-#if 1
-	return true;
-#else
 	// Free up this transaction if the connection is supposed to be closed
 	if (closeRequested)
 	{
@@ -320,14 +357,12 @@ bool NetworkTransaction::Send()
 	sendingRetries = 0;
 	sendingWindowSize = sentDataOutstanding = bytesBeingSent;
 	return false;
-#endif
 }
 
 // This is called by the Webserver to send output data to a client. If keepConnectionAlive is set to false,
 // the current connection will be terminated once everything has been sent.
 void NetworkTransaction::Commit(bool keepConnectionAlive)
 {
-#if 0
 	// If the connection has been terminated (e.g. RST received while writing upload data), discard this transaction
 	if (!IsConnected() || status == released)
 	{
@@ -420,7 +455,6 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 		}
 		mySendingTransaction->nextWrite = this;
 	}
-#endif
 }
 
 // Call this to perform some networking tasks while processing deferred requests,
@@ -435,7 +469,6 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 //
 void NetworkTransaction::Defer(DeferralMode mode)
 {
-#if 0
 	if (mode == DeferralMode::ResetData)
 	{
 		// Reset the reading pointers and send an ACK
@@ -504,7 +537,6 @@ void NetworkTransaction::Defer(DeferralMode mode)
 			item = item->next;
 		}
 	}
-#endif
 }
 
 
@@ -512,7 +544,6 @@ void NetworkTransaction::Defer(DeferralMode mode)
 // don't want to interfere with the connection state. May also be called from ISR!
 void NetworkTransaction::Discard()
 {
-#if 0
 	// Can we do anything?
 	if (status == released)
 	{
@@ -565,7 +596,6 @@ void NetworkTransaction::Discard()
 		}
 		reprap.GetNetwork()->ConnectionClosed(cs, false);
 	}
-#endif
 }
 
 uint32_t NetworkTransaction::GetRemoteIP() const
@@ -585,11 +615,31 @@ uint16_t NetworkTransaction::GetLocalPort() const
 
 void NetworkTransaction::Close()
 {
-#if 0
 	tcp_pcb *pcb = cs->pcb;
 	tcp_recv(pcb, nullptr);
 	closeRequested = true;
-#endif
+}
+
+void NetworkTransaction::FreePbuf()
+{
+	// See if we have to send an ACK to the client
+	if (IsConnected() && pb != nullptr && !dataAcknowledged)
+	{
+		tcp_recved(cs->pcb, pb->tot_len);
+		dataAcknowledged = true;
+	}
+
+	// Free all pbufs (pbufs are thread-safe)
+	if (pb != nullptr)
+	{
+		pbuf_free(pb);
+		pb = readingPb = nullptr;
+	}
+}
+
+bool NetworkTransaction::IsConnected() const
+{
+	return (cs != nullptr && cs->IsConnected());
 }
 
 // End

@@ -9,11 +9,7 @@ Separated out from Platform.h by dc42 and extended by zpl
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include <cctype>
-#include <cstring>
-#include <cstdlib>
-#include <climits>
-
+#include "RepRapFirmware.h"
 #include "MessageType.h"
 
 // Return code definitions

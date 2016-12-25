@@ -8,12 +8,8 @@
 #ifndef SRC_GCODES_GCODEMACHINESTATE_H_
 #define SRC_GCODES_GCODEMACHINESTATE_H_
 
-#include <cstdint>
-#include "Configuration.h"
+#include "RepRapFirmware.h"
 #include "Storage/FileData.h"
-
-const float minutesToSeconds = 60.0;
-const float secondsToMinutes = 1.0/minutesToSeconds;
 
 // Enumeration to list all the possible states that the Gcode processing machine may be in
 enum class GCodeState : uint8_t

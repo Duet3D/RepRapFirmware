@@ -20,6 +20,8 @@ Licence: GPL
 #ifndef PRINTMONITOR_H
 #define PRINTMONITOR_H
 
+#include "RepRapFirmware.h"
+
 const FilePosition GCODE_HEADER_SIZE = 8192uL;		// How many bytes to read from the header
 const FilePosition GCODE_FOOTER_SIZE = 400000uL;	// How many bytes to read from the footer
 

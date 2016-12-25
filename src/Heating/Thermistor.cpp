@@ -6,8 +6,6 @@
  */
 
 #include "Thermistor.h"
-#include "Pins.h"
-#include "Configuration.h"
 
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3

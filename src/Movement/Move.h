@@ -8,16 +8,16 @@
 #ifndef MOVE_H_
 #define MOVE_H_
 
-#include "DDA.h"
+#include "RepRapFirmware.h"
+#include "MessageType.h"
+#include "DDA.h"								// needed because of our inline functions
 #include "Libraries/Math/Matrix.h"
 
 #ifdef DUET_NG
 const unsigned int DdaRingLength = 40;
-typedef double floatc_t;					// type of matrix element used for delta calibration
 #else
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
-typedef float floatc_t;						// type of matrix element used for delta calibration
 #endif
 
 #include "DeltaParameters.h"

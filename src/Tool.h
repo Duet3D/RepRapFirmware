@@ -26,6 +26,8 @@ Licence: GPL
 #ifndef TOOL_H_
 #define TOOL_H_
 
+#include "RepRapFirmware.h"
+
 const uint32_t DefaultXAxisMapping = 0x0001;	// by default, X is mapped to X
 
 class Tool

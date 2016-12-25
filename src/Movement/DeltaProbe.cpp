@@ -5,7 +5,10 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
+#include "Deltaprobe.h"
+#include "DDA.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 // Set up to probe
 bool DeltaProbe::Init(float frequency, float amplitude, float rate, float height)

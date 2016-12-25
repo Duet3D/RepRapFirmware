@@ -6,7 +6,8 @@
  */
 
 #include "OutputMemory.h"
-#include "RepRapFirmware.h"
+#include "Platform.h"
+#include "RepRap.h"
 #include <cstdarg>
 
 /*static*/ OutputBuffer * volatile OutputBuffer::freeOutputBuffers = nullptr;		// Messages may also be sent by ISRs,

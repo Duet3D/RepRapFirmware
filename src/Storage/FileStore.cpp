@@ -4,6 +4,7 @@
 #include "FileStore.h"
 #include "MassStorage.h"
 #include "Platform.h"
+#include "RepRap.h"
 
 uint32_t FileStore::longestWriteTime = 0;
 

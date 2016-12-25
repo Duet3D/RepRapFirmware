@@ -5,10 +5,9 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
-#include "compiler.h"
-#include "Pins.h"
-#include "IPAddress.h"
+#include "Network.h"
+#include "NetworkTransaction.h"
+#include "Platform.h"
 #include "wizchip_conf.h"
 #include "Wiznet/Internet/DHCP/dhcp.h"
 
@@ -35,6 +34,7 @@ void Network::Init()
 	state = NetworkState::disabled;
 	longWait = platform->Time();
 	lastTickMillis = millis();
+	InitSockets();
 }
 
 // This is called at the end of config.g processing.
@@ -78,6 +78,7 @@ void Network::Spin()
 			else
 			{
 				debugPrintf("Link established, network running\n");
+				InitSockets();
 				state = NetworkState::active;
 			}
 		}
@@ -100,12 +101,14 @@ void Network::Spin()
 				// Send mDNS announcement so that some routers can perform hostname mapping
 				// if this board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
 				//mdns_announce();
+				InitSockets();
 				state = NetworkState::active;
 			}
 		}
 		else
 		{
 			DHCP_stop();
+			TerminateSockets();
 			state = NetworkState::establishingLink;
 		}
 		break;
@@ -128,9 +131,13 @@ void Network::Spin()
 				}
 			}
 
-			// See if we can read any packets
-//			ethernet_task();
-
+			sockets[nextSocketToPoll].Poll();
+			++nextSocketToPoll;
+			if (nextSocketToPoll == NumTcpSockets)
+			{
+				nextSocketToPoll = 0;
+			}
+#if 0
 			// See if we can send anything
 			NetworkTransaction *transaction = writingTransactions;
 			if (transaction != nullptr /*&& sendingConnection == nullptr*/ )
@@ -159,10 +166,12 @@ void Network::Spin()
 					}
 				}
 			}
+#endif
 		}
 		else
 		{
 			DHCP_stop();
+			TerminateSockets();
 			state = NetworkState::establishingLink;
 		}
 		break;
@@ -303,7 +312,7 @@ bool Network::InLwip() const
 // This method also ensures that the retrieved transaction is moved to the first item of
 // readyTransactions, so that a subsequent call with a NULL cs parameter will return exactly
 // the same instance.
-NetworkTransaction *Network::GetTransaction(const ConnectionState *cs)
+NetworkTransaction *Network::GetTransaction(Connection conn)
 {
 #if 1
 	return nullptr;
@@ -416,26 +425,17 @@ void Network::CloseDataPort()
 // These methods keep track of our connections in case we need to send to one of them
 void Network::SaveDataConnection()
 {
-	//TODO
-#if 0
-	dataCs = readyTransactions->cs;
-#endif
+//	dataCs = readyTransactions->cs->GetNumber();
 }
 
 void Network::SaveFTPConnection()
 {
-	//TODO
-#if 0
-	ftpCs = readyTransactions->cs;
-#endif
+//	ftpCs = readyTransactions->cs->GetNumber();
 }
 
 void Network::SaveTelnetConnection()
 {
-	//TODO
-#if 0
-	telnetCs = readyTransactions->cs;
-#endif
+//	telnetCs = readyTransactions->cs->GetNumber();
 }
 
 bool Network::AcquireFTPTransaction()
@@ -464,5 +464,33 @@ bool Network::AcquireTelnetTransaction()
 	return AcquireTransaction(telnetCs);
 #endif
 }
+
+void Network::InitSockets()
+{
+	for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
+	{
+		sockets[skt].Init(skt, httpPort);
+	}
+	sockets[FtpSocketNumber].Init(FtpSocketNumber, FTP_PORT);
+	sockets[FtpDataSocketNumber].Init(FtpDataSocketNumber, 0);			// FTP data port is allocated dynamically
+	sockets[TelnetSocketNumber].Init(TelnetSocketNumber, TELNET_PORT);
+	nextSocketToProcess = nextSocketToPoll = 0;
+}
+
+void Network::TerminateSockets()
+{
+	for (SocketNumber skt = 0; skt < NumTcpSockets; ++skt)
+	{
+		sockets[skt].Terminate();
+	}
+
+}
+
+/*static*/ uint16_t Network::GetLocalPort(Connection conn) { return conn->GetLocalPort(); }
+/*static*/ uint16_t Network::GetRemotePort(Connection conn) { return conn->GetRemotePort(); }
+/*static*/ uint32_t Network::GetRemoteIP(Connection conn) { return conn->GetRemoteIP(); }
+/*static*/ bool Network::IsConnected(Connection conn) { return conn->IsConnected(); }
+/*static*/ bool Network::IsTerminated(Connection conn) { return conn->IsTerminated(); }
+/*static*/ void Network::Terminate(Connection conn) { conn->Terminate(); }
 
 // End

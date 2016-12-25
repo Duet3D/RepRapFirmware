@@ -5,7 +5,9 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
+#include "Fan.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 void Fan::Init(Pin p_pin, bool hwInverted)
 {

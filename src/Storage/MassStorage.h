@@ -1,9 +1,10 @@
 #ifndef MASSSTORAGE_H
 #define MASSSTORAGE_H
 
+#include "RepRapFirmware.h"
+#include "Pins.h"
+#include "Libraries/FatFs/ff.h"
 #include <ctime>
-
-class Platform;
 
 // Info returned by FindFirst/FindNext calls
 struct FileInfo

@@ -6,7 +6,11 @@
  */
 
 #include "FirmwareUpdater.h"
+
 #include "RepRapFirmware.h"
+#include "Network.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 #ifdef DUET_WIFI
 #include "WifiFirmwareUploader.h"

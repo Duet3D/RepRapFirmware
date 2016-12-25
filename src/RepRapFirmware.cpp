@@ -158,6 +158,10 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+#include "MessageType.h"
+#include "Platform.h"
+#include "RepRap.h"
+
 // We just need one instance of RepRap; everything else is contained within it and hidden
 
 RepRap reprap;

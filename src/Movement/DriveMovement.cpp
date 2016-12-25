@@ -5,7 +5,10 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
+#include "DriveMovement.h"
+#include "DDA.h"
+#include "Move.h"
+#include "RepRap.h"
 #include "Libraries/Math/Isqrt.h"
 
 // Prepare this DM for a Cartesian axis move

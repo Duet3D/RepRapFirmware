@@ -17,7 +17,13 @@ Licence: GPL
 
 ****************************************************************************************************/
 
-#include "RepRapFirmware.h"
+#include "PrintMonitor.h"
+
+#include "GCodes/GCodes.h"
+#include "Heating/Heat.h"
+#include "Movement/Move.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 PrintMonitor::PrintMonitor(Platform *p, GCodes *gc) : platform(p), gCodes(gc), isPrinting(false),
 	printStartTime(0), pauseStartTime(0.0), totalPauseTime(0.0), heatingUp(false), currentLayer(0), warmUpDuration(0.0),

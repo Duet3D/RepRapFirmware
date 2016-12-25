@@ -7,7 +7,9 @@
 
 //*************************************************************************************
 
-#include "RepRapFirmware.h"
+#include "GCodeBuffer.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(const char* id, MessageType mt)

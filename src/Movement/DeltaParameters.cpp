@@ -5,7 +5,10 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
+#include "DeltaParameters.h"
+#include "Pins.h"
+#include "Configuration.h"
+#include "Storage/FileStore.h"
 
 void DeltaParameters::Init()
 {

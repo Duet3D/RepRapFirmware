@@ -18,11 +18,12 @@ Licence: GPL
 
 ****************************************************************************************************/
 
-#include "RepRapFirmware.h"
-#include "Pid.h"
+#include "Heat.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 Heat::Heat(Platform* p)
-	: platform(p), active(false), coldExtrude(false), bedHeater(DefaultBedHeater), chamberHeater(-1), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: platform(p), active(false), coldExtrude(false), bedHeater(DefaultBedHeater), chamberHeater(DefaultChamberHeater), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	for (size_t heater = 0; heater < HEATERS; heater++)
 	{
@@ -37,7 +38,7 @@ void Heat::ResetHeaterModels()
 	{
 		if (pids[heater]->IsHeaterEnabled())
 		{
-			if (heater == DefaultBedHeater)
+			if (heater == DefaultBedHeater || heater == DefaultChamberHeater)
 			{
 				pids[heater]->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, false);
 			}
@@ -53,7 +54,7 @@ void Heat::Init()
 {
 	for (int heater = 0; heater < HEATERS; heater++)
 	{
-		if (heater == DefaultBedHeater)
+		if (heater == DefaultBedHeater || heater == DefaultChamberHeater)
 		{
 			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime,
 								DefaultBedTemperatureLimit, false);

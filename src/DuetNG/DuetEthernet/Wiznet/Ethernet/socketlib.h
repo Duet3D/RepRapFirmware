@@ -226,6 +226,8 @@ int8_t  connect(uint8_t sn, uint8_t * addr, uint16_t port);
  */
 int8_t  disconnect(uint8_t sn);
 
+void disconnectNoWait(uint8_t sn);
+
 /**
  * @ingroup WIZnet_socket_APIs
  * @brief	Send data to the connected peer in TCP socket.

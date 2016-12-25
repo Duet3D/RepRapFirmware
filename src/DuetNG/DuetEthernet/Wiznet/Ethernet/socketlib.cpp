@@ -53,7 +53,7 @@
 //! THE POSSIBILITY OF SUCH DAMAGE.
 //
 //*****************************************************************************
-#include "socket.h"
+#include <socketlib.h>
 
 #define _SOCKET_DEBUG_
 
@@ -270,6 +270,11 @@ int8_t disconnect(uint8_t sn)
 		}
 	}
 	return SOCK_OK;
+}
+
+void disconnectNoWait(uint8_t sn)
+{
+	ExecCommand(sn, Sn_CR_DISCON);
 }
 
 int32_t send(uint8_t sn, uint8_t * buf, uint16_t len)

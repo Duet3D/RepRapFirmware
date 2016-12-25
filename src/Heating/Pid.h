@@ -12,7 +12,9 @@
  * This class implements a PID controller for the heaters
  */
 
+#include "RepRapFirmware.h"
 #include "FOPDT.h"
+#include "TemperatureError.h"
 
 class PID
 {
@@ -180,11 +182,6 @@ inline uint32_t PID::GetLastSampleTime() const
 inline float PID::GetAccumulator() const
 {
 	return iAccumulator;
-}
-
-inline void PID::SetHeater(float power) const
-{
-	platform->SetHeater(heater, power);
 }
 
 inline bool PID::IsTuning() const

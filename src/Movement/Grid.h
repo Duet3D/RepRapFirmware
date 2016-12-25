@@ -9,11 +9,8 @@
 #define SRC_MOVEMENT_GRID_H_
 
 #include <cstdint>
-#include "ecv.h"
+#include "RepRapFirmware.h"
 #include "Libraries/General/StringRef.h"
-#include "Configuration.h"
-
-class FileStore;
 
 // This class defines the bed probing grid
 class GridDefinition

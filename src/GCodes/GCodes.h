@@ -22,8 +22,11 @@ Licence: GPL
 #ifndef GCODES_H
 #define GCODES_H
 
-#include "GCodeBuffer.h"
+#include "RepRapFirmware.h"
 #include "Libraries/sha1/sha1.h"
+#include "Platform.h"		// for type EndStopHit
+
+class GCodeBuffer;
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
@@ -311,10 +314,5 @@ private:
 };
 
 //*****************************************************************************************************
-
-inline bool GCodes::DoingFileMacro() const
-{
-	return fileGCode->IsDoingFileMacro();
-}
 
 #endif

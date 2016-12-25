@@ -1,5 +1,6 @@
 #include "TemperatureSensor.h"
-#include "RepRapFirmware.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 // MAX31855 thermocouple chip
 //

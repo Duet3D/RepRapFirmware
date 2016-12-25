@@ -7,7 +7,16 @@
  *  This file contains the code to see what G, M or T command we have and start processing it.
  */
 
-#include "RepRapFirmware.h"
+#include "GCodes.h"
+
+#include "GCodeBuffer.h"
+#include "Heating/Heat.h"
+#include "Movement/Move.h"
+#include "Network.h"
+#include "PrintMonitor.h"
+#include "RepRap.h"
+#include "Tool.h"
+#include "Version.h"
 
 #ifdef DUET_NG
 #include "FirmwareUpdater.h"

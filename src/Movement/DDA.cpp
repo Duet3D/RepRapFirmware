@@ -5,7 +5,10 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
+#include "DDA.h"
+#include "RepRap.h"
+#include "Platform.h"
+#include "Move.h"
 
 #ifdef DUET_NG
 # define DDA_MOVE_DEBUG	(1)

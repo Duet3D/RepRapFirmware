@@ -6,7 +6,9 @@
  */
 
 #include "Grid.h"
-#include "RepRapFirmware.h"
+#include "Platform.h"
+#include "RepRap.h"
+#include "Storage/FileStore.h"
 #include <cmath>
 
 const char *GridDefinition::HeightMapLabelLine = "xmin,xmax,ymin,ymax,radius,spacing,xnum,ynum";

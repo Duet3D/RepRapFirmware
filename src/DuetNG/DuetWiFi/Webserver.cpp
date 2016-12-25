@@ -82,7 +82,13 @@
 
  ****************************************************************************************************/
 
-#include "RepRapFirmware.h"
+#include "Webserver.h"
+
+#include "GCodes/GCodes.h"
+#include "Network.h"
+#include "Platform.h"
+#include "PrintMonitor.h"
+#include "RepRap.h"
 
 const char* overflowResponse = "overflow";
 const char* badEscapeResponse = "bad escape";

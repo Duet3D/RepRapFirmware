@@ -25,7 +25,9 @@ Licence: GPL
  * The master class that controls all the heaters in the RepRap machine
  */
 
+#include "RepRapFirmware.h"
 #include "Pid.h"
+#include "MessageType.h"
 
 class Heat
 {

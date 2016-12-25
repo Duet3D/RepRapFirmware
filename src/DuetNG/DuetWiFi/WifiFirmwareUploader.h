@@ -8,8 +8,7 @@
 #ifndef SRC_DUETNG_WIFIFIRMWAREUPLOADER_H_
 #define SRC_DUETNG_WIFIFIRMWAREUPLOADER_H_
 
-#include "Core.h"
-#include "Storage/FileStore.h"
+#include "RepRapFirmware.h"
 
 class WifiFirmwareUploader
 {

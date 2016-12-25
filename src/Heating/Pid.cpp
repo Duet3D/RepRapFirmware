@@ -5,8 +5,11 @@
  *      Author: David
  */
 
-#include "RepRapFirmware.h"
 #include "Pid.h"
+#include "GCodes/GCodes.h"
+#include "Heat.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 // Private constants
 const uint32_t InitialTuningReadingInterval = 250;	// the initial reading interval in milliseconds
@@ -29,6 +32,11 @@ float PID::tuningFastestRate;				// the fastest temperature rise
 
 PID::PID(Platform* p, int8_t h) : platform(p), heater(h), mode(HeaterMode::off)
 {
+}
+
+inline void PID::SetHeater(float power) const
+{
+	platform->SetHeater(heater, power);
 }
 
 void PID::Init(float pGain, float pTc, float pTd, float tempLimit, bool usePid)

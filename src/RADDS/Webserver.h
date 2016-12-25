@@ -1,8 +1,8 @@
 #ifndef WEBSERVER_H
 #define WEBSERVER_H
 
-#include <inttypes.h>
-#include "OutputMemory.h"
+#include "RepRapFirmware.h"
+#include "MessageType.h"
 
 // List of protocols that can execute G-Codes
 enum class WebSource
@@ -32,7 +32,9 @@ public:
 inline void Webserver::HandleGCodeReply(const WebSource source, OutputBuffer *reply) const
 {
 	if (reply != (OutputBuffer *)0)
+	{
 		OutputBuffer::ReleaseAll(reply);
+	}
 }
 
 #endif

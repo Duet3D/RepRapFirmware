@@ -8,6 +8,8 @@
 #ifndef DELTAPROBE_H_
 #define DELTAPROBE_H_
 
+#include "RepRapFirmware.h"
+
 // Class to hold the parameters for my new Z probing method
 class DeltaProbe
 {

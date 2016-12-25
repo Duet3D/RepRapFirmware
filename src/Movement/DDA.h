@@ -8,7 +8,9 @@
 #ifndef DDA_H_
 #define DDA_H_
 
+#include "RepRapFirmware.h"
 #include "DriveMovement.h"
+#include "GCodes/GCodes.h"			// for class RawMove
 
 #ifdef DUET_NG
 #define DDA_LOG_PROBE_CHANGES	1

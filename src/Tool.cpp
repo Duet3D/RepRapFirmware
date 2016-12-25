@@ -23,7 +23,12 @@
 
  ****************************************************************************************************/
 
-#include "RepRapFirmware.h"
+#include "Tool.h"
+
+#include "GCodes/GCodes.h"
+#include "Heating/Heat.h"
+#include "Platform.h"
+#include "RepRap.h"
 
 Tool * Tool::freelist = nullptr;
 

@@ -8,7 +8,7 @@
 #ifndef DRIVEMOVEMENT_H_
 #define DRIVEMOVEMENT_H_
 
-class DDA;
+#include "RepRapFirmware.h"
 
 // Struct for passing parameters to the DriveMovement Prepare methods
 struct PrepParams

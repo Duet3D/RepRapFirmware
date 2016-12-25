@@ -19,7 +19,14 @@
 
  ****************************************************************************************************/
 
-#include "RepRapFirmware.h"
+#include "Platform.h"
+
+#include "Heating/Heat.h"
+#include "Movement/DDA.h"
+#include "Movement/Move.h"
+#include "Network.h"
+#include "RepRap.h"
+#include "Webserver.h"
 
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"
@@ -29,6 +36,9 @@
 # include "TMC2660.h"
 # include "FirmwareUpdater.h"
 #endif
+
+#include <climits>
+#include <malloc.h>
 
 extern char _end;
 extern "C" char *sbrk(int i);

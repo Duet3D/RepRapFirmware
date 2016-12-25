@@ -1,8 +1,8 @@
 #ifndef TEMPERATURESENSOR_H
 #define TEMPERATURESENSOR_H
 
+#include "RepRapFirmware.h"
 #include "TemperatureError.h"		// for result codes
-#include "Core.h"
 #include "SharedSpi.h"				// for sspi_device
 
 class TemperatureSensor

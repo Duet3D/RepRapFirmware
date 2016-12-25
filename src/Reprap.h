@@ -21,6 +21,9 @@ Licence: GPL
 #ifndef REPRAP_H
 #define REPRAP_H
 
+#include "RepRapFirmware.h"
+#include "MessageType.h"
+
 enum class ResponseSource
 {
 	HTTP,

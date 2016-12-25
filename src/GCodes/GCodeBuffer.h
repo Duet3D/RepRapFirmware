@@ -8,7 +8,9 @@
 #ifndef GCODEBUFFER_H_
 #define GCODEBUFFER_H_
 
+#include "RepRapFirmware.h"
 #include "GCodeMachineState.h"
+#include "MessageType.h"
 
 // Class to hold an individual GCode and provide functions to allow it to be parsed
 class GCodeBuffer

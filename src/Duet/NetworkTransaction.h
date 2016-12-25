@@ -1,20 +1,17 @@
 /*
  * NetworkTransaction.h
  *
- *  Created on: 23 Dec 2016
+ *  Created on: 25 Dec 2016
  *      Author: David
  */
 
-#ifndef SRC_DUETNG_DUETETHERNET_NETWORKTRANSACTION_H_
-#define SRC_DUETNG_DUETETHERNET_NETWORKTRANSACTION_H_
+#ifndef SRC_DUET_NETWORKTRANSACTION_H_
+#define SRC_DUET_NETWORKTRANSACTION_H_
 
 #include <NetworkDefs.h>
-#include <cstdint>
-#include <cstddef>
-#include "Libraries/General/StringRef.h"
-#include "OutputMemory.h"
-#include "Storage/FileStore.h"
-#include "NetworkBuffer.h"
+#include "RepRapFirmware.h"
+
+class pbuf;
 
 // Assign a status to each NetworkTransaction
 enum TransactionStatus
@@ -44,11 +41,11 @@ public:
 	friend class Network;
 
 	NetworkTransaction(NetworkTransaction* n);
-//	void Set(pbuf *p, ConnectionState* c, TransactionStatus s);
+	void Set(pbuf *p, ConnectionState* c, TransactionStatus s);
 	TransactionStatus GetStatus() const { return status; }
 	bool IsConnected() const;
 
-	bool HasMoreDataToRead() const; // { return readingPb != nullptr; }
+	bool HasMoreDataToRead() const { return readingPb != nullptr; }
 	bool Read(char& b);
 	bool ReadBuffer(const char *&buffer, size_t &len);
 	void Write(char b);
@@ -60,35 +57,38 @@ public:
 	void Printf(const char *fmt, ...);
 	void SetFileToWrite(FileStore *file);
 
-	Connection GetConnection() const { return cs; }
-	Port GetLocalPort() const;
+	ConnectionState *GetConnection() const { return cs; }
+	uint16_t GetLocalPort() const;
 	uint32_t GetRemoteIP() const;
-	Port GetRemotePort() const;
+	uint16_t GetRemotePort() const;
 
-	bool Send();
 	void Commit(bool keepConnectionAlive);
 	void Defer(DeferralMode mode);
 	void Discard();
 
-	NetworkTransaction *GetNext() const { return next; }
-	NetworkTransaction *GetNextWrite() const { return nextWrite; }
-
 private:
 	bool CanWrite() const;
+	bool Send();
 	void Close();
+	void FreePbuf();
 
-	Socket* cs;									// the network socket that this transaction cam from
-	NetworkTransaction* next;					// next NetworkTransaction in the list we are in
-	NetworkTransaction* nextWrite;				// next NetworkTransaction queued to write to assigned connection
-//	NetworkBuffer *pb, *readingPb;				// received packet queue and a pointer to the pbuf being read from
-//	size_t inputPointer;						// amount of data already taken from the first packet buffer
+	ConnectionState* cs;
+	NetworkTransaction* volatile next;			// next NetworkTransaction in the list we are in
+	NetworkTransaction* volatile nextWrite;		// next NetworkTransaction queued to write to assigned connection
+	pbuf *pb, *readingPb;						// received packet queue and a pointer to the pbuf being read from
+	size_t inputPointer;						// amount of data already taken from the first packet buffer
 
 	OutputBuffer *sendBuffer;
 	OutputStack *sendStack;
 	FileStore * volatile fileBeingSent;
 
-	/*volatile*/ TransactionStatus status;
-	/*volatile*/ bool closeRequested, dataAcknowledged;
+	volatile TransactionStatus status;
+	volatile bool closeRequested, dataAcknowledged;
 };
 
-#endif /* SRC_DUETNG_DUETETHERNET_NETWORKTRANSACTION_H_ */
+inline bool NetworkTransaction::CanWrite() const
+{
+	return (IsConnected() && status != released);
+}
+
+#endif /* SRC_DUET_NETWORKTRANSACTION_H_ */

@@ -6,7 +6,11 @@
  */
 
 #include "WifiFirmwareUploader.h"
-#include "RepRapFirmware.h"
+
+#include "Network.h"
+#include "Platform.h"
+#include "RepRap.h"
+#include "Storage/FileStore.h"
 
 // ESP8266 command codes
 const uint8_t ESP_FLASH_BEGIN = 0x02;

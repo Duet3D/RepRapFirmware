@@ -1,13 +1,13 @@
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include <inttypes.h>
-#include "Platform.h"
+#include "RepRapFirmware.h"
+#include "MessageType.h"
 
-const uint8_t MAC_ADDRESS[6] = { 0, 0, 0, 0, 0, 0 };
-const uint8_t IP_ADDRESS[4] = { 0, 0, 0, 0 };
-const uint8_t NET_MASK[4] = { 0, 0, 0, 0 };
-const uint8_t GATE_WAY[4] = { 0, 0, 0, 0 };
+const uint8_t DefaultMacAddress[6] = { 0, 0, 0, 0, 0, 0 };
+const uint8_t DefaultIpAddress[4] = { 0, 0, 0, 0 };
+const uint8_t DefaultNetMask[4] = { 0, 0, 0, 0 };
+const uint8_t DefaultGateway[4] = { 0, 0, 0, 0 };
 
 // The main network class that drives the network.
 class Network
@@ -23,8 +23,8 @@ public:
 	void Interrupt() const { };
 	void Diagnostics(MessageType mtype) const { };
 
-	boolean IsEnabled() const { return false; }
-	boolean InLwip() const { return false; }
+	bool IsEnabled() const { return false; }
+	bool InLwip() const { return false; }
 	void SetHostname(const char *name) const { };
 	void SetHttpPort(uint16_t port) const { };
 	uint16_t GetHttpPort() const { return (uint16_t)0; }

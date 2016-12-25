@@ -10,7 +10,7 @@
 #ifndef SRC_HEATING_FOPDT_H_
 #define SRC_HEATING_FOPDT_H_
 
-#include <cstddef>
+#include "RepRapFirmware.h"
 
 // This is how PID parameters are stored internally
 struct PidParameters

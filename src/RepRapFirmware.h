@@ -26,8 +26,10 @@ Licence: GPL
 #include <cfloat>
 #include <cstdarg>
 
+#include "ecv.h"
 #include "Core.h"
 #include "Configuration.h"
+#include "Pins.h"
 #include "Libraries/General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
@@ -49,50 +51,51 @@ enum Module : uint8_t
 
 extern const char *moduleName[];
 
-// Warn of what's to come, so we can use pointers to classes...
-
+// Warn of what's to come, so we can use pointers to classes without including the entire header files
 class Network;
 class Platform;
 class Webserver;
 class GCodes;
 class Move;
+class DDA;
 class Heat;
 class Tool;
 class Roland;
 class PrintMonitor;
 class RepRap;
 class FileStore;
+class OutputBuffer;
+class OutputStack;
 
 // A single instance of the RepRap class contains all the others
-
 extern RepRap reprap;
 
 // Functions and globals not part of any class
-
 extern "C" void debugPrintf(const char* fmt, ...);
 
 bool StringEndsWith(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
 bool StringEquals(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
-  
-// Macro to assign an array from an initializer list
+
+// Macro to assign an array from an initialiser list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
 
+// A string buffer used for temporary purposes
 extern StringRef scratchString;
 
-#include "OutputMemory.h"
-#include "Network.h"
-#include "Platform.h"
-#include "Webserver.h"
-#include "GCodes/GCodes.h"
-#include "Movement/Move.h"
-#include "Heating/Heat.h"
-#include "Tool.h"
-#include "Roland.h"
-#include "PrintMonitor.h"
-#include "Reprap.h"
+// Common definitions used by more than one module
+const size_t CART_AXES = 3;										// The number of Cartesian axes
+const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
+
+// Common conversion factors
+const float minutesToSeconds = 60.0;
+const float secondsToMinutes = 1.0/minutesToSeconds;
+const float SecondsToMillis = 1000.0;
+const float MillisToSeconds = 0.001;
+
+// Type of an offset in a file
+typedef uint32_t FilePosition;
+const FilePosition noFilePosition = 0xFFFFFFFF;
 
 #endif
-
-

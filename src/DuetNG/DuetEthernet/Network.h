@@ -9,26 +9,18 @@ Separated out from Platform.h by dc42 and extended by zpl
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include <cstdint>
-#include <cctype>
-#include <cstring>
-#include <cstdlib>
-
+#include "NetworkDefs.h"
+#include "RepRapFirmware.h"
 #include "MessageType.h"
-#include "NetworkTransaction.h"
+#include "Socket.h"
 
-const uint8_t DefaultMacAddress[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };	// Need some sort of default...
-const uint8_t DefaultIpAddress[4] = { 0, 0, 0, 0 };				// Need some sort of default...
-const uint8_t DefaultNetMask[4] = { 255, 255, 255, 0 };
-const uint8_t DefaultGateway[4] = { 0, 0, 0, 0 };
-
-const uint16_t DefaultHttpPort = 80;
-const uint16_t FTP_PORT = 21;
-const uint16_t TELNET_PORT = 23;
-
-// We have 8 sockets available on the W5500. We reserve one for DHCP, leaving 7 for TCP/IP transactions i.e. HTTP, FTP and Telnet.
+// We have 8 sockets available on the W5500.
+const size_t NumHttpSockets = 4;				// sockets 0-3 are for HTTP
+const SocketNumber FtpSocketNumber = 4;
+const SocketNumber FtpDataSocketNumber = 5;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
+const SocketNumber TelnetSocketNumber = 6;
 const size_t NumTcpSockets = 7;
-const uint8_t DhcpSocketNumber = 7;
+const SocketNumber DhcpSocketNumber = 7;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
 
 class Platform;
 
@@ -63,7 +55,7 @@ public:
 
 	// Interfaces for the Webserver
 
-	NetworkTransaction *GetTransaction(const ConnectionState *cs = nullptr);
+	NetworkTransaction *GetTransaction(Connection conn = NoConnection);
 
 	void OpenDataPort(uint16_t port);
 	uint16_t GetDataPort() const;
@@ -77,6 +69,13 @@ public:
 	bool AcquireDataTransaction();
 	bool AcquireTelnetTransaction();
 
+	static uint16_t GetLocalPort(Connection conn);
+	static uint16_t GetRemotePort(Connection conn);
+	static uint32_t GetRemoteIP(Connection conn);
+	static bool IsConnected(Connection conn);
+	static bool IsTerminated(Connection conn);
+	static void Terminate(Connection conn);
+
 private:
 	enum class NetworkState
 	{
@@ -87,13 +86,20 @@ private:
 		active
 	};
 
+	void AppendTransaction(NetworkTransaction* * list, NetworkTransaction *r);
+	void PrependTransaction(NetworkTransaction* * list, NetworkTransaction *r);
+	bool AcquireTransaction(Socket *cs);
+
+	void InitSockets();
+	void TerminateSockets();
+
 	Platform *platform;
     float longWait;
     uint32_t lastTickMillis;
 
-	void AppendTransaction(NetworkTransaction* * list, NetworkTransaction *r);
-	void PrependTransaction(NetworkTransaction* * list, NetworkTransaction *r);
-	bool AcquireTransaction(ConnectionState *cs);
+    Socket sockets[NumTcpSockets];
+    size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
+    size_t nextSocketToProcess;						// next TCP socket number to process an incoming request from
 
 	NetworkTransaction * freeTransactions;
 	NetworkTransaction * readyTransactions;
@@ -105,7 +111,7 @@ private:
 	uint8_t gateway[4];
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 
-    NetworkState state;
+	NetworkState state;
     bool activated;
     bool usingDhcp;
 };
