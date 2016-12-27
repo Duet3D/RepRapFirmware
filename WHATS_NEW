@@ -85,6 +85,10 @@ Upgrade notes for 1.17 - VERY IMPORTANT TO AVOID DAMAGE!!!
 - If your pause.g and resume.g contain any extruder movement commands to retract or prime filament, make sure these files have the M83 command at the start to select relative extruder coordinates
 - The recommended web interface is Duet WebControl 1.14. To use DWC 1.14 on the Duet WiFi, you must be using version 1.02 or later of DuetWiFiServer. Version 1.03-ch is recommended.
 
+Known issues for 1.17:
+
+- The M120 (Push) command doesn't work in macro or gcode files, because it causes execution of the file to be terminated
+
 Version 1.16
 ============
 
