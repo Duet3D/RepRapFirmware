@@ -14,7 +14,7 @@
 #include "Libraries/Math/Matrix.h"
 
 #ifdef DUET_NG
-const unsigned int DdaRingLength = 40;
+const unsigned int DdaRingLength = 30;
 #else
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;

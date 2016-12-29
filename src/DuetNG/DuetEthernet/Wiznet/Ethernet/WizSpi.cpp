@@ -11,7 +11,7 @@
 
 // Define exactly one of the following as 1, the other as zero
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
-#define USE_PDC		0		// use peripheral DMA controller
+#define USE_PDC		1		// use peripheral DMA controller
 #define USE_DMAC	0		// use general DMA controller
 
 #if USE_PDC
@@ -30,9 +30,11 @@ const unsigned int SpiPeripheralChannelId = 0;			// we use NPCS0 as the slave se
 
 #if USE_PDC
 static Pdc *spi_pdc;
+
 static inline void spi_rx_dma_enable()
 {
 	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_RXTEN);
+	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN);				// we have to transmit in order to receive
 }
 
 static inline void spi_tx_dma_enable()
@@ -43,6 +45,7 @@ static inline void spi_tx_dma_enable()
 static inline void spi_rx_dma_disable()
 {
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_RXTDIS);
+	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS);				// we have to transmit in order to receive
 }
 
 static inline void spi_tx_dma_disable()
@@ -52,23 +55,24 @@ static inline void spi_tx_dma_disable()
 
 static bool spi_dma_check_rx_complete()
 {
-	return true;
+	return pdc_read_rx_counter(spi_pdc) == 0;
 }
 
-static void spi_tx_dma_setup(const TransactionBuffer *buf, uint32_t maxTransmitLength)
+static void spi_tx_dma_setup(const uint8_t *buf, uint32_t length)
 {
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
-	pdc_spi_packet.ul_size = buf->PacketLength() * 4;			// need length in bytes
+	pdc_spi_packet.ul_size = length;
 	pdc_tx_init(spi_pdc, &pdc_spi_packet, NULL);
 }
 
-static void spi_rx_dma_setup(const TransactionBuffer *buf)
+static void spi_rx_dma_setup(uint8_t *buf, uint32_t length)
 {
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
-	pdc_spi_packet.ul_size = TransactionBuffer::MaxReceiveBytes;
+	pdc_spi_packet.ul_size = length;
 	pdc_rx_init(spi_pdc, &pdc_spi_packet, NULL);
+	pdc_tx_init(spi_pdc, &pdc_spi_packet, NULL);					// we have to transmit in order to receive
 }
 
 #endif
@@ -152,51 +156,6 @@ static void spi_dma_disable()
 	spi_rx_dma_disable();
 }
 
-#if 0
-/**
- * \brief Set SPI slave transfer.
- */
-static void spi_slave_dma_setup(bool dataToSend, bool allowReceive)
-{
-#if USE_PDC
-	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
-
-	TransactionBuffer *outBufPointer = (dataToSend) ? &outBuffer : reinterpret_cast<TransactionBuffer*>(&dummyOutBuffer);
-	spi_tx_dma_setup(outBufPointer);
-	if (allowReceive)
-	{
-		outBufPointer->SetDataTaken();
-		spi_rx_dma_setup(&inBuffer);
-		pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
-	}
-	else
-	{
-		outBufPointer->ClearDataTaken();
-		pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN);
-	}
-#endif
-
-#if USE_DMAC
-	spi_dma_disable();
-
-	TransactionBuffer *outBufPointer = (dataToSend) ? &outBuffer : reinterpret_cast<TransactionBuffer*>(&dummyOutBuffer);
-	if (allowReceive)
-	{
-		spi_rx_dma_setup(&inBuffer);
-		spi_rx_dma_enable();
-//		outBufPointer->SetDataTaken();
-	}
-	else
-	{
-//		outBufPointer->ClearDataTaken();
-	}
-
-//	spi_tx_dma_setup(outBufPointer, (dataToSend) ? TransactionBuffer::MaxTransferBytes : 4 * TransactionBuffer::headerDwords);
-	spi_tx_dma_enable();
-#endif
-}
-#endif
-
 #endif
 
 namespace WizSpi
@@ -204,16 +163,16 @@ namespace WizSpi
 	// Initialise the SPI interface
 	void Init()
 	{
-	#if USE_PDC
+#if USE_PDC
 		spi_pdc = spi_get_pdc_base(SPI);
-		// The PDCs are masters 2 and 3 and the SRAM is slave 0. Give the PDCs the highest priority.
+		// The PDCs are masters 2 and 3 and the SRAM is slave 0. Give the receive PDCs the highest priority.
 		matrix_set_master_burst_type(0, MATRIX_ULBT_8_BEAT_BURST);
 		matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
 		matrix_set_slave_priority(0, (3 << MATRIX_PRAS0_M2PR_Pos) | (3 << MATRIX_PRAS0_M3PR_Pos));
 		matrix_set_slave_slot_cycle(0, 8);
-	#endif
+#endif
 
-	#if USE_DMAC
+#if USE_DMAC
 		pmc_enable_periph_clk(ID_DMAC);
 		dmac_init(DMAC);
 		dmac_set_priority_mode(DMAC, DMAC_PRIORITY_ROUND_ROBIN);
@@ -225,7 +184,7 @@ namespace WizSpi
 		// If we leave it at the default value of 511 clock cycles, we get transmit underruns due to the HSMCI using the bus for too long.
 		// A value of 8 seems to work. I haven't tried other values yet.
 		matrix_set_slave_slot_cycle(0, 8);
-	#endif
+#endif
 
 		// Set up the SPI pins
 		ConfigurePin(g_APinDescription[APIN_SPI_SCK]);
@@ -402,6 +361,17 @@ namespace WizSpi
 				(void)SPI->SPI_RDR;						// clear previous data
 			}
 
+#if USE_PDC
+			spi_rx_dma_setup(rx_data, len);
+			spi_rx_dma_enable();
+			while (pdc_read_tx_counter(spi_pdc) != 0) { }
+			uint32_t timeout = SPI_TIMEOUT;
+			while (!spi_dma_check_rx_complete() && timeout != 0)
+			{
+				--timeout;
+			}
+			spi_rx_dma_disable();
+#else
 			const uint32_t dOut = 0x000000FF;
 			SPI->SPI_TDR = dOut;						// send first byte
 			while (--len != 0)
@@ -428,6 +398,7 @@ namespace WizSpi
 			}
 
 			*rx_data++ = (uint8_t)SPI->SPI_RDR;			// Get last byte from receive register
+#endif
 		}
 		return SPI_OK;
 	}
@@ -435,24 +406,24 @@ namespace WizSpi
 	// Send some data
 	spi_status_t SendBurst(const uint8_t* tx_data, size_t len)
 	{
+#if USE_PDC
+		spi_tx_dma_setup(tx_data, len);
+		spi_tx_dma_enable();
+		while (pdc_read_tx_counter(spi_pdc) != 0) { }
+		spi_tx_dma_disable();
+#else
 		for (uint32_t i = 0; i < len; ++i)
 		{
 			uint32_t dOut = (uint32_t)*tx_data++;
-			if (i + 1 == len)
-			{
-				dOut |= SPI_TDR_LASTXFER;
-			}
-
 			if (waitForTxReady())
 			{
 				return SPI_ERROR_TIMEOUT;
 			}
 
-			// Write to transmit register
-			SPI->SPI_TDR = dOut;
+			SPI->SPI_TDR = dOut;						// write to transmit register
 			(void)SPI->SPI_RDR;
 		}
-
+#endif
 		return SPI_OK;
 	}
 
