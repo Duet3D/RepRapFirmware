@@ -180,7 +180,12 @@ void Network::Start()
 	Platform::WriteDigital(EspResetPin, HIGH);	// raise /Reset pin
 	delay(55);									// W5500 needs 50ms to start up
 
-	static const uint8_t bufSizes[8] = { 2, 2, 2, 2, 2, 2, 2, 2 };
+#ifdef USE_3K_BUFFERS
+	static const uint8_t bufSizes[8] = { 3, 3, 3, 3, 1, 1, 1, 1 };	// 3K buffers for http, 1K for everything else (FTP will be slow)
+#else
+	static const uint8_t bufSizes[8] = { 2, 2, 2, 2, 2, 2, 2, 2 };	// 2K buffers for everything
+#endif
+
 	wizchip_init(bufSizes, bufSizes);
 
 	setSHAR(platform->MACAddress());
@@ -195,7 +200,6 @@ void Network::Stop()
 {
 	if (state != NetworkState::disabled)
 	{
-//TODO		Ethernet.stop();
 		if (usingDhcp)
 		{
 			DHCP_stop();

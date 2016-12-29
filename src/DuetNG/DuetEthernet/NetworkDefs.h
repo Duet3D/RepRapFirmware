@@ -36,6 +36,10 @@ const Port TELNET_PORT = 23;
 const unsigned int TCP_MSS = 1460;
 
 const size_t NetworkTransactionCount = 8;				// number of NetworkTransactions to be used for network IO
-const size_t NetworkBufferCount = 12;					// number of 2K network buffers
+const size_t NetworkBufferCount = 12;					// number of 2K or 3K network buffers
+
+// Define the following to use 3K buffers on the W5500 for the HTTP sockets and smaller buffers for everything else
+// It doesn't seem to work, the chip keeps telling us that 1 byte is available.
+//#define USE_3K_BUFFERS	1
 
 #endif /* SRC_DUETNG_DUETETHERNET_NETWORKDEFS_H_ */

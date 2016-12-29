@@ -136,7 +136,7 @@ bool Socket::ReadBuffer(const char *&buffer, size_t &len)
 		return false;
 	}
 
-	len = 2048;										// initial value passed to TakeData is the maximum amount we will take
+	len = NetworkBuffer::bufferSize;				// initial value passed to TakeData is the maximum amount we will take
 	buffer = reinterpret_cast<const char*>(receivedData->TakeData(len));
 //	debugPrintf("Taking %d bytes\n", len);
 	return true;

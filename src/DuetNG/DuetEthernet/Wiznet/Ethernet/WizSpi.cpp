@@ -231,11 +231,7 @@ namespace WizSpi
 		ConfigurePin(g_APinDescription[APIN_SPI_SCK]);
 		ConfigurePin(g_APinDescription[APIN_SPI_MOSI]);
 		ConfigurePin(g_APinDescription[APIN_SPI_MISO]);
-#if 1
-		pinMode(APIN_SPI_SS0, OUTPUT_HIGH);					// use manual SS control for now
-#else
-		ConfigurePin(g_APinDescription[APIN_SPI_SS0]);
-#endif
+		pinMode(APIN_SPI_SS0, OUTPUT_HIGH);					// use manual SS control
 
 		pmc_enable_periph_clk(ID_SPI);
 
@@ -279,7 +275,10 @@ namespace WizSpi
 #endif
 	}
 
-	// Wait for transmitter ready returning true if timed out
+// The remaining functions are speed-critical, so use full optimisation
+#pragma GCC optimize ("O3")
+
+	// Wait for transmit buffer empty, returning true if timed out
 	static inline bool waitForTxReady()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
@@ -293,7 +292,7 @@ namespace WizSpi
 		return false;
 	}
 
-	// Wait for transmitter empty returning true if timed out
+	// Wait for transmitter empty, returning true if timed out
 	static inline bool waitForTxEmpty()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
@@ -307,7 +306,7 @@ namespace WizSpi
 		return false;
 	}
 
-	// Wait for receive data available returning true if timed out
+	// Wait for receive data available, returning true if timed out
 	static inline bool waitForRxReady()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
@@ -369,7 +368,7 @@ namespace WizSpi
 			{
 				(void)SPI->SPI_RDR;						// clear previous data
 			}
-			SPI->SPI_TDR = 0x000000FF | SPI_TDR_LASTXFER;
+			SPI->SPI_TDR = 0x000000FF;
 			if (!waitForRxReady())
 			{
 				return (uint8_t)SPI->SPI_RDR;
@@ -381,49 +380,59 @@ namespace WizSpi
 	// Write a single byte. Called after sending the address.
 	void WriteByte(uint8_t b)
 	{
-		const uint32_t dOut = b | SPI_TDR_LASTXFER;
+		const uint32_t dOut = b;
 		if (!waitForTxReady())
 		{
 			SPI->SPI_TDR = dOut;
 		}
 	}
 
+	// Read some data
 	spi_status_t ReadBurst(uint8_t* rx_data, size_t len)
 	{
-		if (waitForTxEmpty())
+		if (len != 0)
 		{
-			return SPI_ERROR_TIMEOUT;
-		}
-
-		while ((SPI->SPI_SR & SPI_SR_RDRF) != 0)
-		{
-			(void)SPI->SPI_RDR;						// clear previous data
-		}
-
-		for (size_t i = 0; i < len; ++i)
-		{
-			const uint32_t dOut = ((i + 1) == len) ? 0x000000FF | SPI_TDR_LASTXFER : 0x000000FF;
-			if (waitForTxReady())
+			if (waitForTxEmpty())
 			{
 				return SPI_ERROR_TIMEOUT;
 			}
 
-			// Write to transmit register
-			SPI->SPI_TDR = dOut;
+			while ((SPI->SPI_SR & SPI_SR_RDRF) != 0)
+			{
+				(void)SPI->SPI_RDR;						// clear previous data
+			}
 
-			// Wait for receive register
+			const uint32_t dOut = 0x000000FF;
+			SPI->SPI_TDR = dOut;						// send first byte
+			while (--len != 0)
+			{
+				// Wait for receive data available and transmit buffer empty
+				uint32_t timeout = SPI_TIMEOUT + 1;
+				do
+				{
+					if (--timeout == 0)
+					{
+						return SPI_ERROR_TIMEOUT;
+					}
+				}
+				while ((SPI->SPI_SR & (SPI_SR_RDRF | SPI_SR_TDRE)) != (SPI_SR_RDRF | SPI_SR_TDRE));
+
+				const uint32_t din = SPI->SPI_RDR;		// get data from receive register
+				SPI->SPI_TDR = dOut;					// write to transmit register immediately
+				*rx_data++ = (uint8_t)din;
+			}
+
 			if (waitForRxReady())
 			{
 				return SPI_ERROR_TIMEOUT;
 			}
 
-			// Get data from receive register
-			*rx_data++ = (uint8_t)SPI->SPI_RDR;
+			*rx_data++ = (uint8_t)SPI->SPI_RDR;			// Get last byte from receive register
 		}
-
 		return SPI_OK;
 	}
 
+	// Send some data
 	spi_status_t SendBurst(const uint8_t* tx_data, size_t len)
 	{
 		for (uint32_t i = 0; i < len; ++i)
@@ -441,13 +450,6 @@ namespace WizSpi
 
 			// Write to transmit register
 			SPI->SPI_TDR = dOut;
-			// Wait for receive register
-			if (waitForRxReady())
-			{
-				return SPI_ERROR_TIMEOUT;
-			}
-
-			// Get data from receive register
 			(void)SPI->SPI_RDR;
 		}
 

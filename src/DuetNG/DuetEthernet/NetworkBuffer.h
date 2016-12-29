@@ -9,6 +9,7 @@
 #define SRC_DUETNG_DUETETHERNET_NETWORKBUFFER_H_
 
 #include "RepRapFirmware.h"
+#include "NetworkDefs.h"
 
 // Network buffer class. These buffers are 2K long so that they can accept as much data as the W5500 can provide in one go.
 class NetworkBuffer
@@ -55,7 +56,12 @@ public:
 	// Alocate buffers and put them in the freelist
 	static void AllocateBuffers(unsigned int number);
 
-	static const size_t bufferSize = 2048;
+	static const size_t bufferSize =
+#ifdef USE_3K_BUFFERS
+									 3 * 1024;
+#else
+									 2 * 1024;
+#endif
 
 private:
 	NetworkBuffer(NetworkBuffer *n);
