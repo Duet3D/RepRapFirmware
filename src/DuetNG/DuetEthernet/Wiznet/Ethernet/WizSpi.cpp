@@ -25,7 +25,7 @@
 #include "matrix.h"
 
 // Functions called by the W5500 module to transfer data to/from the W5500 via SPI
-const uint32_t SpiClockFrequency = 10000000;			// use 10MHz for now, increase it later
+const uint32_t SpiClockFrequency = 40000000;
 const unsigned int SpiPeripheralChannelId = 0;			// we use NPCS0 as the slave select signal
 
 #if USE_PDC
@@ -283,7 +283,7 @@ namespace WizSpi
 	static inline bool waitForTxReady()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
-		while (!spi_is_tx_ready(SPI))
+		while ((SPI->SPI_SR & SPI_SR_TDRE) == 0)
 		{
 			if (--timeout == 0)
 			{
@@ -297,7 +297,7 @@ namespace WizSpi
 	static inline bool waitForTxEmpty()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
-		while (!spi_is_tx_empty(SPI))
+		while ((SPI->SPI_SR & SPI_SR_TXEMPTY) == 0)
 		{
 			if (!timeout--)
 			{
@@ -311,7 +311,7 @@ namespace WizSpi
 	static inline bool waitForRxReady()
 	{
 		uint32_t timeout = SPI_TIMEOUT;
-		while (!spi_is_rx_ready(SPI))
+		while ((SPI->SPI_SR & SPI_SR_RDRF) == 0)
 		{
 			if (--timeout == 0)
 			{
@@ -326,6 +326,7 @@ namespace WizSpi
 	{
 		spi_set_peripheral_chip_select_value(SPI, spi_get_pcs(SpiPeripheralChannelId));
 		digitalWrite(SamCsPin, LOW);
+		(void)SPI->SPI_RDR;						// clear receive register
 	}
 
 	// Set the SS pin high again
@@ -335,53 +336,79 @@ namespace WizSpi
 		digitalWrite(SamCsPin, HIGH);
 	}
 
+	// Send the 3-byte address and control bits. On return there may be data still being received.
 	void SendAddress(uint32_t addr)
 	{
-		(void)ExchangeByte((uint8_t)(addr >> 16), false);
-		(void)ExchangeByte((uint8_t)(addr >> 8), false);
-		(void)ExchangeByte((uint8_t)addr, false);
+		uint32_t dout = (addr >> 16) & 0x000000FF;
+		if (!waitForTxReady())
+		{
+			SPI->SPI_TDR = dout;
+			(void)SPI->SPI_RDR;
+			dout = (addr >> 8) & 0x000000FF;
+			if (!waitForTxReady())
+			{
+				SPI->SPI_TDR = dout;
+				(void)SPI->SPI_RDR;
+				dout = addr & 0x000000FF;
+				if (!waitForTxReady())
+				{
+					SPI->SPI_TDR = dout;
+					(void)SPI->SPI_RDR;
+				}
+			}
+		}
 	}
 
-	uint8_t ExchangeByte(uint8_t b, bool isLast)
+	// Read a single byte. Called after sending the 3-byte address.
+	uint8_t ReadByte()
 	{
-		if (waitForTxReady())
+		(void)SPI->SPI_RDR;
+		if (!waitForTxEmpty())
 		{
-			return 0;
+			while ((SPI->SPI_SR & SPI_SR_RDRF) != 0)
+			{
+				(void)SPI->SPI_RDR;						// clear previous data
+			}
+			SPI->SPI_TDR = 0x000000FF | SPI_TDR_LASTXFER;
+			if (!waitForRxReady())
+			{
+				return (uint8_t)SPI->SPI_RDR;
+			}
 		}
+		return 0;
+	}
 
-		// Write to transmit register
-		uint32_t dOut = b;
-		if (isLast)
+	// Write a single byte. Called after sending the address.
+	void WriteByte(uint8_t b)
+	{
+		const uint32_t dOut = b | SPI_TDR_LASTXFER;
+		if (!waitForTxReady())
 		{
-			dOut |= SPI_TDR_LASTXFER;
+			SPI->SPI_TDR = dOut;
 		}
-		SPI->SPI_TDR = dOut;
-
-		// Wait for receive register
-		if (waitForRxReady())
-		{
-			return 0;
-		}
-
-		// Get data from receive register
-		return (uint8_t)SPI->SPI_RDR;
 	}
 
 	spi_status_t ReadBurst(uint8_t* rx_data, size_t len)
 	{
+		if (waitForTxEmpty())
+		{
+			return SPI_ERROR_TIMEOUT;
+		}
+
+		while ((SPI->SPI_SR & SPI_SR_RDRF) != 0)
+		{
+			(void)SPI->SPI_RDR;						// clear previous data
+		}
+
 		for (size_t i = 0; i < len; ++i)
 		{
-			uint32_t dOut = 0x000000FF;
+			const uint32_t dOut = ((i + 1) == len) ? 0x000000FF | SPI_TDR_LASTXFER : 0x000000FF;
 			if (waitForTxReady())
 			{
 				return SPI_ERROR_TIMEOUT;
 			}
 
 			// Write to transmit register
-			if (i + 1 == len)
-			{
-				dOut |= SPI_TDR_LASTXFER;
-			}
 			SPI->SPI_TDR = dOut;
 
 			// Wait for receive register
@@ -402,16 +429,17 @@ namespace WizSpi
 		for (uint32_t i = 0; i < len; ++i)
 		{
 			uint32_t dOut = (uint32_t)*tx_data++;
+			if (i + 1 == len)
+			{
+				dOut |= SPI_TDR_LASTXFER;
+			}
+
 			if (waitForTxReady())
 			{
 				return SPI_ERROR_TIMEOUT;
 			}
 
 			// Write to transmit register
-			if (i + 1 == len)
-			{
-				dOut |= SPI_TDR_LASTXFER;
-			}
 			SPI->SPI_TDR = dOut;
 			// Wait for receive register
 			if (waitForRxReady())

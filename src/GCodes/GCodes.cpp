@@ -55,7 +55,7 @@ void GCodes::RestorePoint::Init()
 	{
 		moveCoords[i] = 0.0;
 	}
-	feedRate = DEFAULT_FEEDRATE/minutesToSeconds;
+	feedRate = DefaultFeedrate/minutesToSeconds;
 }
 
 GCodes::GCodes(Platform* p, Webserver* w) :
@@ -107,8 +107,9 @@ void GCodes::Init()
 	}
 	lastDefaultFanSpeed = 0.0;
 
-	retractLength = retractExtra = retractHop = 0.0;
-	retractSpeed = unRetractSpeed = 600.0;
+	retractLength = retractExtra = DefaultRetractLength;
+	retractHop = 0.0;
+	retractSpeed = unRetractSpeed = DefaultRetractSpeed * secondsToMinutes;
 	isRetracted = false;
 }
 
@@ -332,7 +333,7 @@ void GCodes::Spin()
 				{
 					moveBuffer.coords[drive] = 0.0;
 				}
-				moveBuffer.feedRate = DEFAULT_FEEDRATE/minutesToSeconds;	// ask for a good feed rate, we may have paused during a slow move
+				moveBuffer.feedRate = DefaultFeedrate/minutesToSeconds;	// ask for a good feed rate, we may have paused during a slow move
 				moveBuffer.moveType = 0;
 				moveBuffer.endStopsToCheck = 0;
 				moveBuffer.usePressureAdvance = false;
@@ -926,7 +927,7 @@ bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb)
 // Save (some of) the state of the machine for recovery in the future.
 bool GCodes::Push(GCodeBuffer& gb)
 {
-	bool ok = gb.PushState();
+	const bool ok = gb.PushState();
 	if (!ok)
 	{
 		platform->Message(GENERIC_MESSAGE, "Push(): stack overflow!\n");
@@ -1488,7 +1489,7 @@ bool GCodes::OffsetAxes(GCodeBuffer& gb)
 		}
 		else
 		{
-			cannedFeedRate = DEFAULT_FEEDRATE;
+			cannedFeedRate = DefaultFeedrate;
 		}
 
 		offSetSet = true;
@@ -3035,8 +3036,8 @@ bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				// Set the feed rate. If there is any Z hop then we need to pass the Z speed, else we pass the extrusion speed.
 				const float speedToUse = (retract) ? retractSpeed : unRetractSpeed;
 				moveBuffer.feedRate = (retractHop == 0.0)
-										? speedToUse * secondsToMinutes
-										: speedToUse * secondsToMinutes * retractHop/retractLength;
+										? speedToUse
+										: speedToUse * retractHop/retractLength;
 				moveBuffer.coords[Z_AXIS] += (retract) ? retractHop : -retractHop;
 				const float lengthToUse = (retract) ? -retractLength : retractLength + retractExtra;
 				for (size_t i = 0; i < nDrives; ++i)

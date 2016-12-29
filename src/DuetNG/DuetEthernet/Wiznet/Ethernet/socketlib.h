@@ -481,4 +481,7 @@ int8_t  setsockopt(uint8_t sn, sockopt_type sotype, void* arg);
   */
 int8_t  getsockopt(uint8_t sn, sockopt_type sotype, void* arg);
 
+// Execute a command
+void ExecCommand(uint8_t sn, uint8_t cmd);
+
 #endif   // _SOCKET_H_

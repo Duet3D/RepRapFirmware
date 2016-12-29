@@ -17,7 +17,7 @@
 #include "NetworkBuffer.h"
 
 // Assign a status to each NetworkTransaction
-enum TransactionStatus
+enum class TransactionStatus
 {
 	released,
 	connected,
@@ -25,7 +25,8 @@ enum TransactionStatus
 	sending,
 	disconnected,
 	deferred,
-	acquired
+	acquired,
+	finished
 };
 
 // How is a deferred request supposed to be handled?
@@ -41,14 +42,13 @@ enum class DeferralMode
 class NetworkTransaction
 {
 public:
-	friend class Network;
-
 	NetworkTransaction(NetworkTransaction* n);
-//	void Set(pbuf *p, ConnectionState* c, TransactionStatus s);
+	void Set(Socket *skt, TransactionStatus s);
 	TransactionStatus GetStatus() const { return status; }
 	bool IsConnected() const;
+	bool IsSending() const;
 
-	bool HasMoreDataToRead() const; // { return readingPb != nullptr; }
+	bool HasMoreDataToRead() const;
 	bool Read(char& b);
 	bool ReadBuffer(const char *&buffer, size_t &len);
 	void Write(char b);
@@ -65,30 +65,31 @@ public:
 	uint32_t GetRemoteIP() const;
 	Port GetRemotePort() const;
 
-	bool Send();
+	const uint8_t *GetDataToSend(size_t& length);
 	void Commit(bool keepConnectionAlive);
 	void Defer(DeferralMode mode);
 	void Discard();
+	NetworkTransaction *Release();
 
-	NetworkTransaction *GetNext() const { return next; }
-	NetworkTransaction *GetNextWrite() const { return nextWrite; }
+	static void AllocateTransactions(unsigned int number);
+	static NetworkTransaction *Allocate();
 
 private:
 	bool CanWrite() const;
-	void Close();
 
-	Socket* cs;									// the network socket that this transaction cam from
+	static NetworkTransaction *freelist;
+
+	Socket* cs;									// the network socket that this transaction came from
 	NetworkTransaction* next;					// next NetworkTransaction in the list we are in
-	NetworkTransaction* nextWrite;				// next NetworkTransaction queued to write to assigned connection
-//	NetworkBuffer *pb, *readingPb;				// received packet queue and a pointer to the pbuf being read from
-//	size_t inputPointer;						// amount of data already taken from the first packet buffer
+	NetworkBuffer *fileBuffer;					// buffer holding the file chunk we are writing
 
 	OutputBuffer *sendBuffer;
 	OutputStack *sendStack;
-	FileStore * volatile fileBeingSent;
+	FileStore *fileBeingSent;
 
-	/*volatile*/ TransactionStatus status;
-	/*volatile*/ bool closeRequested, dataAcknowledged;
+	TransactionStatus status;
+	bool closeAfterSending;
+	bool closeRequested;
 };
 
 #endif /* SRC_DUETNG_DUETETHERNET_NETWORKTRANSACTION_H_ */

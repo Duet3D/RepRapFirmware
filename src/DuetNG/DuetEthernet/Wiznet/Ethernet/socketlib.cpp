@@ -92,7 +92,7 @@ uint8_t sock_pack_info[_WIZCHIP_SOCK_NUM_] = {0,};
       if(len == 0) return SOCKERR_DATALEN;   \
    }while(0);              \
 
-static void ExecCommand(uint8_t sn, uint8_t cmd)
+void ExecCommand(uint8_t sn, uint8_t cmd)
 {
 	setSn_CR(sn, cmd);
 	while(getSn_CR(sn) != 0) { }
@@ -206,7 +206,6 @@ int8_t listen(uint8_t sn)
 	}
 	return SOCK_OK;
 }
-
 
 int8_t connect(uint8_t sn, uint8_t * addr, uint16_t port)
 {

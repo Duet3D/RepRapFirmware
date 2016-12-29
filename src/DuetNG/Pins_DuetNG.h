@@ -2,23 +2,27 @@
 #define PINS_DUETNG_H__
 
 #if defined(DUET_WIFI)
+
 # define FIRMWARE_NAME "RepRapFirmware for Duet WiFi"
+# define DEFAULT_BOARD_TYPE BoardType::DuetWiFi_10
+const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module
+# define IAP_FIRMWARE_FILE	"DuetWiFiFirmware.bin"
+# define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
+# define WIFI_WEB_FILE		"DuetWebControl.bin"
+
 #elif defined(DUET_ETHERNET)
+
 # define FIRMWARE_NAME "RepRapFirmware for Duet Ethernet"
+# define DEFAULT_BOARD_TYPE BoardType::DuetEthernet_10
+# define IAP_FIRMWARE_FILE	"DuetEthernetFirmware.bin"
+const size_t NumFirmwareUpdateModules = 1;		// 1 module
+
 #else
 # error Firmware name not defined
 #endif
 
-const size_t NumFirmwareUpdateModules = 4;			// 3 modules, plus one for manual upload to WiFi module
-#define IAP_UPDATE_FILE		"iap4e.bin"
-#define IAP_FIRMWARE_FILE	"DuetWiFiFirmware.bin"
-#define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
-#define WIFI_WEB_FILE		"DuetWebControl.bin"
+#define IAP_UPDATE_FILE		"iap4e.bin"			// hoping eventually to use the same IAP file for both Duet WiFi and Duet Ethernet
 
-// Default board type
-#define DEFAULT_BOARD_TYPE BoardType::DuetWiFi_10
-
-#define SUPPORT_ETHERNET	0					// set nonzero to support embedded web interface over Ethernet
 #define SUPPORT_INKJET		0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
 

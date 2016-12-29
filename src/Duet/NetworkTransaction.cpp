@@ -603,12 +603,12 @@ uint32_t NetworkTransaction::GetRemoteIP() const
 	return (cs != nullptr) ? cs->GetRemoteIP() : 0;
 }
 
-uint16_t NetworkTransaction::GetRemotePort() const
+Port NetworkTransaction::GetRemotePort() const
 {
 	return (cs != nullptr) ? cs->GetRemotePort() : 0;
 }
 
-uint16_t NetworkTransaction::GetLocalPort() const
+Port NetworkTransaction::GetLocalPort() const
 {
 	return (cs != nullptr) ? cs->GetLocalPort() : 0;
 }

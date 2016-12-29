@@ -1,12 +1,12 @@
 /*
- * NetworkCommon.h
+ * NetworkDefs.h
  *
  *  Created on: 25 Dec 2016
  *      Author: David
  */
 
-#ifndef SRC_DUETNG_DUETETHERNET_NETWORKCOMMON_H_
-#define SRC_DUETNG_DUETETHERNET_NETWORKCOMMON_H_
+#ifndef SRC_DUETNG_DUETETHERNET_NETWORKDEFS_H_
+#define SRC_DUETNG_DUETETHERNET_NETWORKDEFS_H_
 
 #include <cstdint>
 
@@ -35,4 +35,4 @@ const Port TELNET_PORT = 23;
 // MSS is defined in lwip
 #include "Lwip/lwipopts.h"
 
-#endif /* SRC_DUETNG_DUETETHERNET_NETWORKCOMMON_H_ */
+#endif /* SRC_DUETNG_DUETETHERNET_NETWORKDEFS_H_ */

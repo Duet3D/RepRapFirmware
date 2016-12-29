@@ -10,6 +10,19 @@
 #include "Webserver.h"
 #include "Version.h"
 
+#ifndef __RADDS__
+# include "sam/drivers/hsmci/hsmci.h"
+#endif
+
+// Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
+extern "C" void hsmciIdle()
+{
+	if (reprap.GetSpinningModule() != moduleNetwork)	// I don't think this should ever be false because the Network module doesn't do file access, but just in case...
+	{
+		reprap.GetNetwork()->Spin(false);
+	}
+}
+
 // RepRap member functions.
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
@@ -103,6 +116,9 @@ void RepRap::Init()
 	}
 #endif
 
+#ifndef __RADDS__
+	hsmci_set_idle_func(hsmciIdle);
+#endif
 	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", FIRMWARE_NAME);
 	fastLoop = FLT_MAX;
 	slowLoop = 0.0;
@@ -132,7 +148,7 @@ void RepRap::Spin()
 
 	spinningModule = moduleNetwork;
 	ticksInSpinState = 0;
-	network->Spin();
+	network->Spin(true);
 
 	spinningModule = moduleWebserver;
 	ticksInSpinState = 0;

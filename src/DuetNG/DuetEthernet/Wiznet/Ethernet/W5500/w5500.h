@@ -2268,6 +2268,9 @@ static inline uint16_t getSn_TxMAX(uint8_t sn)
  */
 void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len);
 
+// Alternative to wiz_send_data to work around an apparent bug
+void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t ptr);
+
 /**
  * @ingroup Basic_IO_function
  * @brief It copies data to your buffer from internal RX memory

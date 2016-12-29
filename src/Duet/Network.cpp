@@ -109,7 +109,7 @@ uint16_t sendingWindowSize, sentDataOutstanding;
 uint8_t sendingRetries;
 err_t writeResult, outputResult;
 
-static uint16_t httpPort = DefaultHttpPort;
+static Port httpPort = DefaultHttpPort;
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -296,6 +296,10 @@ Network::Network(Platform* p) :
 	state(NetworkInactive), isEnabled(true), resetCallback(false),
 	dataCs(nullptr), ftpCs(nullptr), telnetCs(nullptr), freeConnections(nullptr)
 {
+}
+
+void Network::Init()
+{
 	for (size_t i = 0; i < NETWORK_TRANSACTION_COUNT; i++)
 	{
 		freeTransactions = new NetworkTransaction(freeTransactions);
@@ -309,10 +313,6 @@ Network::Network(Platform* p) :
 	}
 
 	strcpy(hostname, HOSTNAME);
-}
-
-void Network::Init()
-{
 	init_ethernet();
 
 	httpd_init();
@@ -323,98 +323,96 @@ void Network::Init()
 	longWait = platform->Time();
 }
 
-void Network::Spin()
+void Network::Spin(bool full)
 {
-	// Basically we can't do anything if we can't interact with LWIP
-
-	if (!LockLWIP())
+	if (LockLWIP())							// basically we can't do anything if we can't interact with LWIP
 	{
-		platform->ClassReport(longWait);
-		return;
-	}
-
-	if (state == NetworkObtainingIP || state == NetworkActive)
-	{
-		// Is the link still up?
-		if (!ethernet_link_established())
+		if (state == NetworkObtainingIP || state == NetworkActive)
 		{
-			state = NetworkEstablishingLink;
-			UnlockLWIP();
-
-			platform->ClassReport(longWait);
-			return;
-		}
-
-		// See if we can read any packets. They may include DHCP responses too
-		ethernet_task();
-		if (resetCallback)
-		{
-			resetCallback = false;
-			ethernet_set_rx_callback(&ethernet_rx_callback);
-		}
-
-		// Have we obtained a valid IP address yet?
-		if (state == NetworkObtainingIP)
-		{
-			const uint8_t *ip = ethernet_get_ipaddress();
-			if (ip[0] != 0 && ip[1] != 0 && ip[2] != 0 && ip[3] != 0)
+			// Is the link still up?
+			if (!ethernet_link_established())
 			{
-				// Yes - we're good to go now
-				state = NetworkActive;
+				state = NetworkEstablishingLink;
+				UnlockLWIP();
 
-				// Send mDNS announcement so that some routers can perform hostname mapping
-				// if ths board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
-				mdns_announce();
-			}
-		}
-
-		// See if we can send anything
-		NetworkTransaction *transaction = writingTransactions;
-		if (transaction != nullptr && sendingConnection == nullptr)
-		{
-			if (transaction->next != nullptr)
-			{
-				// Data is supposed to be sent and the last packet has been acknowledged.
-				// Rotate the transactions so every client is served even while multiple files are sent
-				NetworkTransaction *next = transaction->next;
-				writingTransactions = next;
-				AppendTransaction(&writingTransactions, transaction);
-				transaction = next;
+				platform->ClassReport(longWait);
+				return;
 			}
 
-			if (transaction->Send())
+			// See if we can read any packets. They may include DHCP responses too
+			ethernet_task();
+			if (resetCallback)
 			{
-				// This transaction can be released, do this here
-				writingTransactions = transaction->next;
-				PrependTransaction(&freeTransactions, transaction);
+				resetCallback = false;
+				ethernet_set_rx_callback(&ethernet_rx_callback);
+			}
 
-				// If there is more data to write on this connection, do it sometime soon
-				NetworkTransaction *nextWrite = transaction->nextWrite;
-				if (nextWrite != nullptr)
+			// Have we obtained a valid IP address yet?
+			if (state == NetworkObtainingIP)
+			{
+				const uint8_t *ip = ethernet_get_ipaddress();
+				if (ip[0] != 0 && ip[1] != 0 && ip[2] != 0 && ip[3] != 0)
 				{
-					PrependTransaction(&writingTransactions, nextWrite);
+					// Yes - we're good to go now
+					state = NetworkActive;
+
+					// Send mDNS announcement so that some routers can perform hostname mapping
+					// if ths board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
+					mdns_announce();
+				}
+			}
+
+			// See if we can send anything - only if full spin i.e. not in the middle of file i/o
+			if (full)
+			{
+				NetworkTransaction *transaction = writingTransactions;
+				if (transaction != nullptr && sendingConnection == nullptr)
+				{
+					if (transaction->next != nullptr)
+					{
+						// Data is supposed to be sent and the last packet has been acknowledged.
+						// Rotate the transactions so every client is served even while multiple files are sent
+						NetworkTransaction *next = transaction->next;
+						writingTransactions = next;
+						AppendTransaction(&writingTransactions, transaction);
+						transaction = next;
+					}
+
+					if (transaction->Send())
+					{
+						// This transaction can be released, do this here
+						writingTransactions = transaction->next;
+						PrependTransaction(&freeTransactions, transaction);
+
+						// If there is more data to write on this connection, do it sometime soon
+						NetworkTransaction *nextWrite = transaction->nextWrite;
+						if (nextWrite != nullptr)
+						{
+							PrependTransaction(&writingTransactions, nextWrite);
+						}
+					}
 				}
 			}
 		}
-	}
-	else if (state == NetworkEstablishingLink && ethernet_establish_link())
-	{
-		if (!ethernetStarted)
+		else if (state == NetworkEstablishingLink && ethernet_establish_link())
 		{
-			start_ethernet(platform->GetIPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
-			ethernetStarted = true;
+			if (!ethernetStarted)
+			{
+				start_ethernet(platform->GetIPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
+				ethernetStarted = true;
 
-			// Initialise this one here, because it requires a configured IGMP network interface
-			mdns_responder_init(mdns_services, ARRAY_SIZE(mdns_services), mdns_txt_records);
+				// Initialise this one here, because it requires a configured IGMP network interface
+				mdns_responder_init(mdns_services, ARRAY_SIZE(mdns_services), mdns_txt_records);
+			}
+			else
+			{
+				ethernet_set_configuration(platform->GetIPAddress(), platform->NetMask(), platform->GateWay());
+			}
+			state = NetworkObtainingIP;
 		}
-		else
-		{
-			ethernet_set_configuration(platform->GetIPAddress(), platform->NetMask(), platform->GateWay());
-		}
-		state = NetworkObtainingIP;
+
+		UnlockLWIP();
 	}
-
-	UnlockLWIP();
 	platform->ClassReport(longWait);
 }
 
@@ -800,7 +798,7 @@ void Network::PrependTransaction(NetworkTransaction* volatile* list, NetworkTran
 	*list = r;
 }
 
-void Network::OpenDataPort(uint16_t port)
+void Network::OpenDataPort(Port port)
 {
 	closingDataPort = false;
 	tcp_pcb* pcb = tcp_new();
@@ -809,17 +807,17 @@ void Network::OpenDataPort(uint16_t port)
 	tcp_accept(ftp_pasv_pcb, conn_accept);
 }
 
-uint16_t Network::GetDataPort() const
+Port Network::GetDataPort() const
 {
 	return (closingDataPort || (ftp_pasv_pcb == nullptr) ? 0 : ftp_pasv_pcb->local_port);
 }
 
-uint16_t Network::GetHttpPort() const
+Port Network::GetHttpPort() const
 {
 	return httpPort;
 }
 
-void Network::SetHttpPort(uint16_t port)
+void Network::SetHttpPort(Port port)
 {
 	if (port != httpPort)
 	{
@@ -932,8 +930,8 @@ bool Network::AcquireTransaction(ConnectionState *cs)
 	return true;
 }
 
-/*static*/ uint16_t Network::GetLocalPort(Connection conn) { return conn->GetLocalPort(); }
-/*static*/ uint16_t Network::GetRemotePort(Connection conn) { return conn->GetRemotePort(); }
+/*static*/ Port Network::GetLocalPort(Connection conn) { return conn->GetLocalPort(); }
+/*static*/ Port Network::GetRemotePort(Connection conn) { return conn->GetRemotePort(); }
 /*static*/ uint32_t Network::GetRemoteIP(Connection conn) { return conn->GetRemoteIP(); }
 /*static*/ bool Network::IsConnected(Connection conn) { return conn->IsConnected(); }
 /*static*/ bool Network::IsTerminated(Connection conn) { return conn->IsTerminated(); }

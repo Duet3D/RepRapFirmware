@@ -96,12 +96,7 @@
 const char* overflowResponse = "overflow";
 const char* badEscapeResponse = "bad escape";
 
-//********************************************************************************************
-//
 //**************************** Generic Webserver implementation ******************************
-//
-//********************************************************************************************
-
 
 // Constructor and initialisation
 Webserver::Webserver(Platform* p, Network *n) : platform(p), network(n), webserverActive(false)
@@ -154,7 +149,7 @@ void Webserver::Spin()
 		{
 			// Take care of different protocol types here
 			ProtocolInterpreter *interpreter;
-			uint16_t localPort = currentTransaction->GetLocalPort();
+			const uint16_t localPort = currentTransaction->GetLocalPort();
 			switch (localPort)
 			{
 				case FTP_PORT:		/* FTP */
@@ -183,13 +178,13 @@ void Webserver::Spin()
 				const char *type;
 				switch (currentTransaction->GetStatus())
 				{
-					case released: type = "released"; break;
-					case connected: type = "connected"; break;
-					case receiving: type = "receiving"; break;
-					case sending: type = "sending"; break;
-					case disconnected: type = "disconnected"; break;
-					case deferred: type = "deferred"; break;
-					case acquired: type = "acquired"; break;
+					case TransactionStatus::released: type = "released"; break;
+					case TransactionStatus::connected: type = "connected"; break;
+					case TransactionStatus::receiving: type = "receiving"; break;
+					case TransactionStatus::sending: type = "sending"; break;
+					case TransactionStatus::disconnected: type = "disconnected"; break;
+					case TransactionStatus::deferred: type = "deferred"; break;
+					case TransactionStatus::acquired: type = "acquired"; break;
 					default: type = "unknown"; break;
 				}
 				platform->MessageF(HOST_MESSAGE, "Incoming transaction: Type %s at local port %d (remote port %d)\n",
@@ -198,13 +193,13 @@ void Webserver::Spin()
 
 			// For protocols other than HTTP it is important to send a HELO message
 			TransactionStatus status = currentTransaction->GetStatus();
-			if (status == connected)
+			if (status == TransactionStatus::connected)
 			{
 				interpreter->ConnectionEstablished();
 			}
 			// Graceful disconnects are handled here, because prior NetworkTransactions might still contain valid
 			// data. That's why it's a bad idea to close these connections immediately in the Network class.
-			else if (status == disconnected)
+			else if (status == TransactionStatus::disconnected)
 			{
 				// This will call the disconnect events and effectively close the connection
 				currentTransaction->Discard();
@@ -561,7 +556,7 @@ void Webserver::HttpInterpreter::Spin()
 
 	// Verify HTTP sessions
 	const uint32_t now = millis();
-	for(int i = numSessions - 1; i >= 0; i--)
+	for(int i = (int)numSessions - 1; i >= 0; i--)
 	{
 		if (sessions[i].isPostUploading)
 		{
@@ -624,10 +619,15 @@ void Webserver::HttpInterpreter::DoFastUpload()
 	{
 		network->Unlock();
 		// Write data in sector-aligned chunks. This also means that the buffer in fatfs is only used to hold the FAT.
-		static const size_t writeBufLength = 2048;				// use a multiple of the 512b sector size
+		// Buffer size must be a multiple of the 512b sector size.
+#ifdef DUET_NG
+		static const size_t writeBufLength = 4096;
+#else
+		static const size_t writeBufLength = 2048;
+#endif
 		static uint32_t writeBufStorage[writeBufLength/4];		// aligned buffer for file writes
 		static size_t writeBufIndex;
-		char* const writeBuf = (char *)writeBufStorage;
+		char* const writeBuf = reinterpret_cast<char *>(writeBufStorage);
 
 		if (uploadedBytes == 0)
 		{
@@ -636,7 +636,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 
 		while (len != 0)
 		{
-			size_t lengthToCopy = min<size_t>(writeBufLength - writeBufIndex, len);
+			const size_t lengthToCopy = min<size_t>(writeBufLength - writeBufIndex, len);
 			memcpy(writeBuf + writeBufIndex, buffer, lengthToCopy);
 			writeBufIndex += lengthToCopy;
 			uploadedBytes += lengthToCopy;
@@ -644,7 +644,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 			len -= lengthToCopy;
 			if (writeBufIndex == writeBufLength || uploadedBytes >= postFileLength)
 			{
-				bool success = fileBeingUploaded.Write(writeBuf, writeBufIndex);
+				const bool success = fileBeingUploaded.Write(writeBuf, writeBufIndex);
 				writeBufIndex = 0;
 				if (!success)
 				{
@@ -923,7 +923,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 
 	// Check special cases of deferred requests (rr_fileinfo) and rejected messages
 	NetworkTransaction *transaction = webserver->currentTransaction;
-	if (transaction->GetStatus() == deferred || transaction->GetStatus() == sending)
+	if (transaction->GetStatus() == TransactionStatus::deferred || transaction->GetStatus() == TransactionStatus::sending)
 	{
 		OutputBuffer::Release(jsonResponse);
 		return;
@@ -2638,14 +2638,14 @@ bool Webserver::TelnetInterpreter::CanParseData()
 {
 	// Is this an acquired transaction using which we can send the G-code reply?
 	TransactionStatus status = webserver->currentTransaction->GetStatus();
-	if (status == acquired)
+	if (status == TransactionStatus::acquired)
 	{
 		SendGCodeReply();
 		return false;
 	}
 
 	// Is this connection still live? Check that for deferred requests
-	if (status == deferred && !webserver->currentTransaction->IsConnected())
+	if (status == TransactionStatus::deferred && !webserver->currentTransaction->IsConnected())
 	{
 		webserver->currentTransaction->Discard();
 		return false;

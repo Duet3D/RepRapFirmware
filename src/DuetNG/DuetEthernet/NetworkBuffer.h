@@ -8,8 +8,7 @@
 #ifndef SRC_DUETNG_DUETETHERNET_NETWORKBUFFER_H_
 #define SRC_DUETNG_DUETETHERNET_NETWORKBUFFER_H_
 
-#include <cstdint>
-#include <cstddef>
+#include "RepRapFirmware.h"
 
 // Network buffer class. These buffers are 2K long so that they can accept as much data as the W5500 can provide in one go.
 class NetworkBuffer
@@ -24,7 +23,7 @@ public:
 	bool ReadChar(char& b);
 
 	// Read some data
-	size_t ReadBuffer(uint8_t *buffer, size_t maxLen);
+	const uint8_t* TakeData(size_t &len);
 
 	// Return the amount of data available, not including continuation buffers
 	size_t Remaining() const { return dataLength - readPointer; }
@@ -32,21 +31,40 @@ public:
 	// Return the amount of data available, including continuation buffers
 	size_t TotalRemaining() const;
 
+	// Return true if there no data left to read
 	bool IsEmpty() const { return readPointer == dataLength; }
 
+	// Return the length available for writing
+	size_t SpaceLeft() const { return bufferSize - dataLength; }
+
+	// Append some data, returning the amount appended
+	size_t AppendData(const uint8_t *source, size_t length);
+
+	// Read into the buffer from a file
+	int ReadFromFile(FileStore *f);
+
+	// Clear this buffer and release any successors
+	void Empty();
+
+	// Append a buffer to a list
+	static void AppendToList(NetworkBuffer **list, NetworkBuffer *b);
+
+	// Allocate a buffer
 	static NetworkBuffer *Allocate();
 
+	// Alocate buffers and put them in the freelist
 	static void AllocateBuffers(unsigned int number);
 
 	static const size_t bufferSize = 2048;
 
 private:
 	NetworkBuffer(NetworkBuffer *n);
+	uint8_t *Data() { return reinterpret_cast<uint8_t*>(data32); }
 
 	NetworkBuffer *next;
 	size_t dataLength;
 	size_t readPointer;
-	uint8_t data[bufferSize];
+	uint32_t data32[bufferSize/sizeof(uint32_t)];			// 32-bit aligned buffer so we can do direct DMA
 
 	static NetworkBuffer *freelist;
 };

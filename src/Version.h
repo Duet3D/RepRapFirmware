@@ -13,7 +13,7 @@
 #endif
 
 #ifndef DATE
-# define DATE "2016-12-25"
+# define DATE "2016-12-29"
 #endif
 
 #define AUTHORS "reprappro, dc42, zpl, t3p3, dnewman"

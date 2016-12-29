@@ -20,21 +20,23 @@ void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[
 
 Network::Network(Platform* p)
 	: platform(p), lastTickMillis(0),
-	  freeTransactions(nullptr), readyTransactions(nullptr), writingTransactions(nullptr),
 	  httpPort(DefaultHttpPort), state(NetworkState::disabled), activated(false)
 {
-	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
-	strcpy(hostname, HOSTNAME);
 }
 
 void Network::Init()
 {
-	// Ensure that the chip is in the reset state
+	// Ensure that the W5500 chip is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 	state = NetworkState::disabled;
 	longWait = platform->Time();
 	lastTickMillis = millis();
-	InitSockets();
+
+	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
+	NetworkTransaction::AllocateTransactions(NetworkTransactionCount);
+
+	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
+	strcpy(hostname, HOSTNAME);
 }
 
 // This is called at the end of config.g processing.
@@ -53,7 +55,8 @@ void Network::Exit()
 	Stop();
 }
 
-void Network::Spin()
+// Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
+void Network::Spin(bool full)
 {
 	switch(state)
 	{
@@ -63,9 +66,8 @@ void Network::Spin()
 		break;
 
 	case NetworkState::establishingLink:
-		if (wizphy_getphylink() == PHY_LINK_ON)
+		if (full && wizphy_getphylink() == PHY_LINK_ON)
 		{
-
 			usingDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
 			if (usingDhcp)
 			{
@@ -85,38 +87,44 @@ void Network::Spin()
 		break;
 
 	case NetworkState::obtainingIP:
-		if (wizphy_getphylink() == PHY_LINK_ON)
+		if (full)
 		{
-			const uint32_t now = millis();
-			if (now - lastTickMillis >= 1000)
+			if (wizphy_getphylink() == PHY_LINK_ON)
 			{
-				lastTickMillis += 1000;
-				DHCP_time_handler();
+				const uint32_t now = millis();
+				if (now - lastTickMillis >= 1000)
+				{
+					lastTickMillis += 1000;
+					DHCP_time_handler();
+				}
+				const DhcpRunResult ret = DHCP_run();
+				if (ret == DhcpRunResult::DHCP_IP_ASSIGN)
+				{
+					debugPrintf("IP address obtained, network running\n");
+					getSIPR(ipAddress);
+					// Send mDNS announcement so that some routers can perform hostname mapping
+					// if this board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
+					//mdns_announce();
+					InitSockets();
+					state = NetworkState::active;
+				}
 			}
-			const DhcpRunResult ret = DHCP_run();
-			if (ret == DhcpRunResult::DHCP_IP_ASSIGN)
+			else
 			{
-				debugPrintf("IP address obtained, network running\n");
-				getSIPR(ipAddress);
-				// Send mDNS announcement so that some routers can perform hostname mapping
-				// if this board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
-				//mdns_announce();
-				InitSockets();
-				state = NetworkState::active;
+				debugPrintf("Lost phy link\n");
+				DHCP_stop();
+				TerminateSockets();
+				state = NetworkState::establishingLink;
 			}
-		}
-		else
-		{
-			DHCP_stop();
-			TerminateSockets();
-			state = NetworkState::establishingLink;
 		}
 		break;
 
 	case NetworkState::active:
+		// Check that the link is still up
 		if (wizphy_getphylink() == PHY_LINK_ON)
 		{
-			if (usingDhcp)
+			// Maintain DHCP
+			if (full && usingDhcp)
 			{
 				const uint32_t now = millis();
 				if (now - lastTickMillis >= 1000)
@@ -127,50 +135,28 @@ void Network::Spin()
 				const DhcpRunResult ret = DHCP_run();
 				if (ret == DhcpRunResult::DHCP_IP_CHANGED)
 				{
+					debugPrintf("IP address changed\n");
 					getSIPR(ipAddress);
 				}
 			}
 
-			sockets[nextSocketToPoll].Poll();
+			// Poll the next TCP socket
+			sockets[nextSocketToPoll].Poll(full);
+
+			// Move on to the next TCP socket for next time
 			++nextSocketToPoll;
 			if (nextSocketToPoll == NumTcpSockets)
 			{
 				nextSocketToPoll = 0;
 			}
-#if 0
-			// See if we can send anything
-			NetworkTransaction *transaction = writingTransactions;
-			if (transaction != nullptr /*&& sendingConnection == nullptr*/ )
-			{
-				if (transaction->GetNext() != nullptr)
-				{
-					// Data is supposed to be sent and the last packet has been acknowledged.
-					// Rotate the transactions so every client is served even while multiple files are sent
-					NetworkTransaction *next = transaction->GetNext();
-					writingTransactions = next;
-					AppendTransaction(&writingTransactions, transaction);
-					transaction = next;
-				}
-
-				if (transaction->Send())
-				{
-					// This transaction can be released, do this here
-					writingTransactions = transaction->GetNext();
-					PrependTransaction(&freeTransactions, transaction);
-
-					// If there is more data to write on this connection, do it sometime soon
-					NetworkTransaction *nextWrite = transaction->GetNextWrite();
-					if (nextWrite != nullptr)
-					{
-						PrependTransaction(&writingTransactions, nextWrite);
-					}
-				}
-			}
-#endif
 		}
-		else
+		else if (full)
 		{
-			DHCP_stop();
+			debugPrintf("Lost phy link\n");
+			if (usingDhcp)
+			{
+				DHCP_stop();
+			}
 			TerminateSockets();
 			state = NetworkState::establishingLink;
 		}
@@ -236,7 +222,7 @@ void Network::Disable()
 	if (activated && state != NetworkState::disabled)
 	{
 		Stop();
-		platform->Message(GENERIC_MESSAGE, "WiFi server stopped\n");
+		platform->Message(GENERIC_MESSAGE, "Network stopped\n");
 	}
 }
 
@@ -289,180 +275,103 @@ void Network::SetHostname(const char *name)
 
 bool Network::Lock()
 {
-	//TODO
 	return true;
 }
 
 void Network::Unlock()
 {
-	//TODO
 }
 
 bool Network::InLwip() const
 {
-	//TODO
 	return false;
 }
 
 // This is called by the web server to get the next networking transaction.
 //
-// If cs is NULL, the transaction from the head of readyTransactions will be retrieved.
-// If cs is not NULL, the first transaction with the matching connection will be returned.
+// If conn is NoConnection, the transaction from the head of readyTransactions will be retrieved.
+// If conn is not NoConnection, the first transaction with the matching connection will be returned.
 //
-// This method also ensures that the retrieved transaction is moved to the first item of
-// readyTransactions, so that a subsequent call with a NULL cs parameter will return exactly
-// the same instance.
+// This method also ensures that a subsequent call with a null connection parameter will return exactly the same instance.
 NetworkTransaction *Network::GetTransaction(Connection conn)
 {
-#if 1
-	return nullptr;
-#else
-	// See if there is any transaction at all
-	NetworkTransaction *transaction = readyTransactions;
-	if (transaction == nullptr)
+	if (state == NetworkState::active)
 	{
-		return nullptr;
-	}
-
-	// If no specific connection is specified or if the first item already matches the
-	// connection we are looking for, just return it
-	if (cs == nullptr || transaction->GetConnection() == cs)
-	{
-		return transaction;
-	}
-
-	// We are looking for a specific transaction, but it's not the first item.
-	// Search for it and move it to the head of readyTransactions
-	NetworkTransaction *previous = transaction;
-	for(NetworkTransaction *item = transaction->next; item != nullptr; item = item->next)
-	{
-		if (item->GetConnection() == cs)
+		if (conn != NoConnection)
 		{
-			previous->next = item->next;
-			item->next = readyTransactions;
-			readyTransactions = item;
-			return item;
+			NetworkTransaction *tr = conn->GetTransaction();
+			if (tr != nullptr && !tr->IsSending())
+			{
+				currentTransactionSocketNumber = conn->GetNumber();
+				return tr;
+			}
+			return nullptr;
 		}
-		previous = item;
+
+		size_t socketNum = currentTransactionSocketNumber;
+		do
+		{
+			NetworkTransaction *tr = sockets[socketNum].GetTransaction();
+			if (tr != nullptr && !tr->IsSending())
+			{
+				currentTransactionSocketNumber = socketNum;
+				return tr;
+			}
+			++socketNum;
+			if (socketNum == NumTcpSockets)
+			{
+				socketNum = 0;
+			}
+		} while (socketNum != currentTransactionSocketNumber);
 	}
 
-	// We failed to find a valid transaction for the given connection
 	return nullptr;
-#endif
 }
 
-void Network::AppendTransaction(NetworkTransaction* * list, NetworkTransaction *r)
+void Network::OpenDataPort(Port port)
 {
-	r->next = nullptr;
-	while (*list != nullptr)
-	{
-		list = &((*list)->next);
-	}
-	*list = r;
+	sockets[FtpSocketNumber].Init(FtpSocketNumber, port);
+	sockets[FtpSocketNumber].Poll(false);
 }
 
-void Network::PrependTransaction(NetworkTransaction* * list, NetworkTransaction *r)
+Port Network::GetDataPort() const
 {
-	r->next = *list;
-	*list = r;
-}
-
-void Network::OpenDataPort(uint16_t port)
-{
-	//TODO
-#if 0
-	closingDataPort = false;
-	tcp_pcb* pcb = tcp_new();
-	tcp_bind(pcb, IP_ADDR_ANY, port);
-	ftp_pasv_pcb = tcp_listen(pcb);
-	tcp_accept(ftp_pasv_pcb, conn_accept);
-#endif
-}
-
-uint16_t Network::GetDataPort() const
-{
-#if 1
-	return 0;	//TODO
-#else
-	return (closingDataPort || (ftp_pasv_pcb == nullptr) ? 0 : ftp_pasv_pcb->local_port);
-#endif
+	return sockets[FtpSocketNumber].GetLocalPort();
 }
 
 // Close FTP data port and purge associated PCB
 void Network::CloseDataPort()
 {
-	//TODO
-#if 0
-	// See if it's already being closed
-	if (closingDataPort)
-	{
-		return;
-	}
-	closingDataPort = true;
-
-	// Close remote connection of our data port or do it as soon as the last packet has been sent
-	if (dataCs != nullptr)
-	{
-		NetworkTransaction *mySendingTransaction = dataCs->sendingTransaction;
-		if (mySendingTransaction != nullptr)
-		{
-			mySendingTransaction->Close();
-			return;
-		}
-	}
-
-	// We can close it now, so do it here
-	if (ftp_pasv_pcb != nullptr)
-	{
-		tcp_accept(ftp_pasv_pcb, nullptr);
-		tcp_close(ftp_pasv_pcb);
-		ftp_pasv_pcb = nullptr;
-	}
-	closingDataPort = false;
-#endif
-}
-
-// These methods keep track of our connections in case we need to send to one of them
-void Network::SaveDataConnection()
-{
-//	dataCs = readyTransactions->cs->GetNumber();
-}
-
-void Network::SaveFTPConnection()
-{
-//	ftpCs = readyTransactions->cs->GetNumber();
-}
-
-void Network::SaveTelnetConnection()
-{
-//	telnetCs = readyTransactions->cs->GetNumber();
+	sockets[FtpSocketNumber].Close();
 }
 
 bool Network::AcquireFTPTransaction()
 {
-#if 1
-	return false;	//TODO
-#else
-	return AcquireTransaction(ftpCs);
-#endif
+	return AcquireTransaction(FtpSocketNumber);
 }
 
 bool Network::AcquireDataTransaction()
 {
-#if 1
-	return false;	//TODO
-#else
-	return AcquireTransaction(dataCs);
-#endif
+	return AcquireTransaction(FtpDataSocketNumber);
 }
 
 bool Network::AcquireTelnetTransaction()
 {
-#if 1
-	return false;	//TODO
-#else
-	return AcquireTransaction(telnetCs);
-#endif
+	return AcquireTransaction(TelnetSocketNumber);
+}
+
+bool Network::AcquireTransaction(SocketNumber skt)
+{
+	if (   sockets[skt].GetTransaction() != nullptr
+		&& sockets[skt].GetTransaction()->GetStatus() != TransactionStatus::sending
+		&& sockets[skt].GetTransaction()->GetStatus() != TransactionStatus::finished
+	   )
+	{
+		currentTransactionSocketNumber = skt;
+		return true;
+	}
+
+	return false;
 }
 
 void Network::InitSockets()
@@ -474,7 +383,7 @@ void Network::InitSockets()
 	sockets[FtpSocketNumber].Init(FtpSocketNumber, FTP_PORT);
 	sockets[FtpDataSocketNumber].Init(FtpDataSocketNumber, 0);			// FTP data port is allocated dynamically
 	sockets[TelnetSocketNumber].Init(TelnetSocketNumber, TELNET_PORT);
-	nextSocketToProcess = nextSocketToPoll = 0;
+	nextSocketToPoll = currentTransactionSocketNumber = 0;
 }
 
 void Network::TerminateSockets()
@@ -483,11 +392,23 @@ void Network::TerminateSockets()
 	{
 		sockets[skt].Terminate();
 	}
-
 }
 
-/*static*/ uint16_t Network::GetLocalPort(Connection conn) { return conn->GetLocalPort(); }
-/*static*/ uint16_t Network::GetRemotePort(Connection conn) { return conn->GetRemotePort(); }
+void Network::Defer(NetworkTransaction *tr)
+{
+	const Socket *skt = tr->GetConnection();
+	if (skt != nullptr && skt->GetNumber() == currentTransactionSocketNumber)
+	{
+		++currentTransactionSocketNumber;
+		if (currentTransactionSocketNumber == NumTcpSockets)
+		{
+			currentTransactionSocketNumber = 0;
+		}
+	}
+}
+
+/*static*/ Port Network::GetLocalPort(Connection conn) { return conn->GetLocalPort(); }
+/*static*/ Port Network::GetRemotePort(Connection conn) { return conn->GetRemotePort(); }
 /*static*/ uint32_t Network::GetRemoteIP(Connection conn) { return conn->GetRemoteIP(); }
 /*static*/ bool Network::IsConnected(Connection conn) { return conn->IsConnected(); }
 /*static*/ bool Network::IsTerminated(Connection conn) { return conn->IsTerminated(); }

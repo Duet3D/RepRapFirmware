@@ -165,7 +165,7 @@ void Network::Stop()
 	}
 }
 
-void Network::Spin()
+void Network::Spin(bool full)
 {
 //	static float lastTime = 0.0;
 
@@ -176,14 +176,17 @@ void Network::Spin()
 	switch (state)
 	{
 	case starting:
-		// See if the ESP8266 has set CS high yet
-		if (digitalRead(SamCsPin))
+		if (full)
 		{
-			// Setup the SPI controller in slave mode and assign the CS pin to it
-			platform->Message(HOST_MESSAGE, "WiFi server starting up\n");
-			SetupSpi();						// set up the SPI subsystem
-			state = idle;
-			TryStartTransfer();
+			// See if the ESP8266 has set CS high yet
+			if (digitalRead(SamCsPin))
+			{
+				// Setup the SPI controller in slave mode and assign the CS pin to it
+				platform->Message(HOST_MESSAGE, "WiFi server starting up\n");
+				SetupSpi();						// set up the SPI subsystem
+				state = idle;
+				TryStartTransfer();
+			}
 		}
 		break;
 
@@ -242,7 +245,7 @@ void Network::Spin()
 		state = sending;
 		// no break
 	case sending:
-		if (outBuffer.IsEmpty())
+		if (full && outBuffer.IsEmpty())
 		{
 			// See if we have more of the current response to send
 			if (responseBody != nullptr)
@@ -368,7 +371,10 @@ void Network::Spin()
 		break;
 
 	case disabled:
-		uploader->Spin();
+		if (full)
+		{
+			uploader->Spin();
+		}
 		break;
 
 	default:

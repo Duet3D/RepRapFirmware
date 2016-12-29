@@ -121,8 +121,10 @@ const size_t FILE_BUFFER_SIZE = 256;
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#ifdef DUET_NG
+#if defined(DUET_NG) && defined(DUET_WIFI)
 	DuetWiFi_10 = 1
+#elif defined(DUET_NG) && defined(DUET_ETHERNET)
+	DuetEthernet_10 = 1
 #elif defined(__RADDS__)
 	RADDS_15 = 1
 #else

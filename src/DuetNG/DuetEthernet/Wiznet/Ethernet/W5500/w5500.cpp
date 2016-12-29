@@ -66,7 +66,7 @@ uint8_t WIZCHIP_READ(uint32_t AddrSel)
 {
 	WizSpi::AssertSS();
 	WizSpi::SendAddress(AddrSel | (_W5500_SPI_READ_ | _W5500_SPI_VDM_OP_));
-	const uint8_t ret = WizSpi::ExchangeByte(0xFF, true);
+	const uint8_t ret = WizSpi::ReadByte();
 	WizSpi::ReleaseSS();
 	return ret;
 }
@@ -75,7 +75,7 @@ void WIZCHIP_WRITE(uint32_t AddrSel, uint8_t wb )
 {
 	WizSpi::AssertSS();
 	WizSpi::SendAddress(AddrSel | (_W5500_SPI_WRITE_ | _W5500_SPI_VDM_OP_));
-	WizSpi::ExchangeByte(wb, true);
+	WizSpi::WriteByte(wb);
 	WizSpi::ReleaseSS();
 }
          
@@ -112,7 +112,6 @@ uint16_t getSn_TX_FSR(uint8_t sn)
 	return val;
 }
 
-
 uint16_t getSn_RX_RSR(uint8_t sn)
 {
 	uint16_t val = 0, val1 = 0;
@@ -134,8 +133,23 @@ void wiz_send_data(uint8_t sn, const uint8_t *wizdata, uint16_t len)
 	if (len != 0)
 	{
 		uint16_t ptr = getSn_TX_WR(sn);
-		uint32_t addrsel = ((uint32_t)ptr << 8) + (WIZCHIP_TXBUF_BLOCK(sn) << 3);
-		WIZCHIP_WRITE_BUF(addrsel,wizdata, len);
+		const uint32_t addrsel = ((uint32_t)ptr << 8) + (WIZCHIP_TXBUF_BLOCK(sn) << 3);
+		WIZCHIP_WRITE_BUF(addrsel, wizdata, len);
+
+		ptr += len;
+		setSn_TX_WR(sn, ptr);
+	}
+}
+
+// Function wiz_send_data doesn't work properly when we send TCP/IP data in multiple chunks,
+// because the getSn_TX_WR call doesn't read back the incremented value after we wrote to it.
+// So use this instead.
+void wiz_send_data_at(uint8_t sn, const uint8_t *wizdata, uint16_t len, uint16_t ptr)
+{
+	if (len != 0)
+	{
+		const uint32_t addrsel = ((uint32_t)ptr << 8) + (WIZCHIP_TXBUF_BLOCK(sn) << 3);
+		WIZCHIP_WRITE_BUF(addrsel, wizdata, len);
 
 		ptr += len;
 		setSn_TX_WR(sn,ptr);
@@ -147,7 +161,7 @@ void wiz_recv_data(uint8_t sn, uint8_t *wizdata, uint16_t len)
 	if (len != 0)
 	{
 		uint16_t ptr = getSn_RX_RD(sn);
-		uint32_t addrsel = ((uint32_t)ptr << 8) + (WIZCHIP_RXBUF_BLOCK(sn) << 3);
+		const uint32_t addrsel = ((uint32_t)ptr << 8) + (WIZCHIP_RXBUF_BLOCK(sn) << 3);
 		WIZCHIP_READ_BUF(addrsel, wizdata, len);
 		ptr += len;
 

@@ -49,7 +49,7 @@ public:
 	void Init();
 	void Activate();
 	void Exit();
-	void Spin();
+	void Spin(bool full);
 	void SpiInterrupt();
 	void Diagnostics(MessageType mtype);
 	void Start();

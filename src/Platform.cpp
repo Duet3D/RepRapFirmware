@@ -2550,8 +2550,10 @@ void Platform::SetBoardType(BoardType bt)
 {
 	if (bt == BoardType::Auto)
 	{
-#ifdef DUET_NG
+#if defined(DUET_NG) && defined(DUET_WIFI)
 		board = BoardType::DuetWiFi_10;
+#elif defined(DUET_NG) && defined(DUET_ETHERNET)
+		board = BoardType::DuetEthernet_10;
 #elif defined(__RADDS__)
 		board = BoardType::RADDS_15;
 #else
@@ -2581,8 +2583,10 @@ const char* Platform::GetElectronicsString() const
 {
 	switch (board)
 	{
-#ifdef DUET_NG
+#if defined(DUET_NG) && defined(DUET_WIFI)
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0";
+#elif defined(DUET_NG) && defined(DUET_ETHERNET)
+	case BoardType::DuetEthernet_10:		return "Duet Ethernet 1.0";
 #elif defined(__RADDS__)
 	case BoardType::RADDS_15:				return "RADDS 1.5";
 #else
@@ -2599,8 +2603,10 @@ const char* Platform::GetBoardString() const
 {
 	switch (board)
 	{
-#ifdef DUET_NG
+#if defined(DUET_NG) && defined(DUET_WIFI)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
+#elif defined(DUET_NG) && defined(DUET_ETHERNET)
+	case BoardType::DuetEthernet_10:		return "duetethernet10";
 #elif defined(__RADDS__)
 	case BoardType::RADDS_15:				return "radds15";
 #else

@@ -35,7 +35,7 @@ public:
 	void Init();
 	void Activate();
 	void Exit();
-	void Spin();
+	void Spin(bool full);
 	void Diagnostics(MessageType mtype);
 	void Start();
 	void Stop();
@@ -48,8 +48,8 @@ public:
 	void Disable();
 	bool IsEnabled() const;
 
-	void SetHttpPort(uint16_t port);
-	uint16_t GetHttpPort() const;
+	void SetHttpPort(Port port);
+	Port GetHttpPort() const;
 
 	void SetHostname(const char *name);
 
@@ -57,20 +57,22 @@ public:
 
 	NetworkTransaction *GetTransaction(Connection conn = NoConnection);
 
-	void OpenDataPort(uint16_t port);
-	uint16_t GetDataPort() const;
+	void OpenDataPort(Port port);
+	Port GetDataPort() const;
 	void CloseDataPort();
 
-	void SaveDataConnection();
-	void SaveFTPConnection();
-	void SaveTelnetConnection();
+	void SaveDataConnection() {}
+	void SaveFTPConnection() {}
+	void SaveTelnetConnection() {}
 
 	bool AcquireFTPTransaction();
 	bool AcquireDataTransaction();
 	bool AcquireTelnetTransaction();
 
-	static uint16_t GetLocalPort(Connection conn);
-	static uint16_t GetRemotePort(Connection conn);
+	void Defer(NetworkTransaction *tr);
+
+	static Port GetLocalPort(Connection conn);
+	static Port GetRemotePort(Connection conn);
 	static uint32_t GetRemoteIP(Connection conn);
 	static bool IsConnected(Connection conn);
 	static bool IsTerminated(Connection conn);
@@ -86,34 +88,28 @@ private:
 		active
 	};
 
-	void AppendTransaction(NetworkTransaction* * list, NetworkTransaction *r);
-	void PrependTransaction(NetworkTransaction* * list, NetworkTransaction *r);
-	bool AcquireTransaction(Socket *cs);
+	bool AcquireTransaction(SocketNumber skt);
 
 	void InitSockets();
 	void TerminateSockets();
 
 	Platform *platform;
-    float longWait;
-    uint32_t lastTickMillis;
+	float longWait;
+	uint32_t lastTickMillis;
 
-    Socket sockets[NumTcpSockets];
-    size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
-    size_t nextSocketToProcess;						// next TCP socket number to process an incoming request from
+	Socket sockets[NumTcpSockets];
+	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
+	size_t currentTransactionSocketNumber;			// the socket number of the last transaction we passed to the web server
 
-	NetworkTransaction * freeTransactions;
-	NetworkTransaction * readyTransactions;
-	NetworkTransaction * writingTransactions;
-
-    uint16_t httpPort;
+	Port httpPort;
 	uint8_t ipAddress[4];
 	uint8_t netmask[4];
 	uint8_t gateway[4];
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 
 	NetworkState state;
-    bool activated;
-    bool usingDhcp;
+	bool activated;
+	bool usingDhcp;
 };
 
 #endif

@@ -165,7 +165,10 @@ const size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers
 
 // Move system
 
-const float DEFAULT_FEEDRATE = 3000.0;				// The initial requested feed rate after resetting the printer
+const float DefaultFeedrate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
+const float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm
+const float DefaultRetractLength = 1.0;
+
 const float DEFAULT_IDLE_TIMEOUT = 30.0;			// Seconds
 const float DEFAULT_IDLE_CURRENT_FACTOR = 0.3;		// Proportion of normal motor current that we use for idle hold
 

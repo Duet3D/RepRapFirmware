@@ -6,46 +6,47 @@
  */
 
 #include "NetworkTransaction.h"
+
+#include "Network.h"
+#include "RepRap.h"
 #include "Socket.h"
 #include <cstdarg>
 
 //***************************************************************************************************
 // NetworkTransaction class
 
-NetworkTransaction::NetworkTransaction(NetworkTransaction *n) : next(n), status(released)
+NetworkTransaction *NetworkTransaction::freelist = nullptr;
+
+NetworkTransaction::NetworkTransaction(NetworkTransaction *n)
+	: next(n), fileBuffer(nullptr), sendBuffer(nullptr), sendStack(new OutputStack()), fileBeingSent(nullptr), status(TransactionStatus::released)
 {
-	sendStack = new OutputStack();
 }
 
-#if 0
-void NetworkTransaction::Set(pbuf *p, ConnectionState *c, TransactionStatus s)
+void NetworkTransaction::Set(Socket *skt, TransactionStatus s)
 {
-	cs = c;
-//	pb = readingPb = p;
+	cs = skt;
 	status = s;
-//	inputPointer = 0;
-	sendBuffer = nullptr;
-	fileBeingSent = nullptr;
 	closeRequested = false;
-	nextWrite = nullptr;
-	dataAcknowledged = false;
 }
-#endif
 
 bool NetworkTransaction::HasMoreDataToRead() const
 {
-	//TODO
-	return false;
+	return cs != nullptr && cs->HasMoreDataToRead();
 }
 
 bool NetworkTransaction::IsConnected() const
 {
-	return (cs != nullptr && cs->IsConnected());
+	return cs != nullptr && cs->IsConnected();
+}
+
+bool NetworkTransaction::IsSending() const
+{
+	return status == TransactionStatus::sending || status == TransactionStatus::finished;
 }
 
 bool NetworkTransaction::CanWrite() const
 {
-	return (IsConnected() && status != released);
+	return status != TransactionStatus::released && cs != nullptr && cs->CanWrite();
 }
 
 // Read one char from the NetworkTransaction
@@ -63,30 +64,7 @@ bool NetworkTransaction::Read(char& b)
 // Read data from the NetworkTransaction and return true on success
 bool NetworkTransaction::ReadBuffer(const char *&buffer, size_t &len)
 {
-#if 1
-	return false;
-#else
-	if (readingPb == nullptr)
-	{
-		return false;
-	}
-
-	if (inputPointer >= readingPb->len)
-	{
-		readingPb = readingPb->next;
-		inputPointer = 0;
-		if (readingPb == nullptr)
-		{
-			return false;
-		}
-	}
-
-	buffer = (const char*)readingPb->payload + inputPointer;
-	len = readingPb->len - inputPointer;
-	readingPb = readingPb->next;
-	inputPointer = 0;
-	return true;
-#endif
+	return cs != NoConnection && cs->ReadBuffer(buffer, len);
 }
 
 void NetworkTransaction::Write(char b)
@@ -182,211 +160,86 @@ void NetworkTransaction::SetFileToWrite(FileStore *file)
 	}
 	else if (file != nullptr)
 	{
+		debugPrintf("Want to write file but can't write\n");
 		file->Close();
 	}
 }
 
-// Send exactly one TCP window of data and return true when this transaction can be released
-bool NetworkTransaction::Send()
+// Get some data to send up to the specified length, which must be nonzero.
+// A null return means there is nothing left to send or we couldn't allocate a buffer.
+// If there was nothing left to send then the status is changed to 'finished'.
+const uint8_t *NetworkTransaction::GetDataToSend(size_t& length)
 {
-#if 1
-	return true;
-#else
-	// Free up this transaction if the connection is supposed to be closed
-	if (closeRequested)
+	// Discard any empty output buffers
+	while (sendBuffer != nullptr && sendBuffer->BytesLeft() == 0)
 	{
-		reprap.GetNetwork()->ConnectionClosed(cs, true);	// This will release the transaction too
-		return false;
-	}
-
-	// Fill up the TCP window with some data chunks from our OutputBuffer instances
-	size_t bytesBeingSent = 0, bytesLeftToSend = TCP_WND;
-	while (sendBuffer != nullptr && bytesLeftToSend > 0)
-	{
-		size_t copyLength = min<size_t>(bytesLeftToSend, sendBuffer->BytesLeft());
-		memcpy(sendingWindow + bytesBeingSent, sendBuffer->Read(copyLength), copyLength);
-		bytesBeingSent += copyLength;
-		bytesLeftToSend -= copyLength;
-
-		if (sendBuffer->BytesLeft() == 0)
+		sendBuffer = OutputBuffer::Release(sendBuffer);
+		if (sendBuffer == nullptr)
 		{
-			sendBuffer = OutputBuffer::Release(sendBuffer);
-			if (sendBuffer == nullptr)
-			{
-				sendBuffer = sendStack->Pop();
-			}
+			sendBuffer = sendStack->Pop();
 		}
 	}
 
-	// We also intend to send a file, so check if we can fill up the TCP window
-	if (sendBuffer == nullptr && bytesLeftToSend != 0 && fileBeingSent != nullptr)
+	// If we have an output buffer, send it
+	if (sendBuffer != nullptr)
 	{
-		// For HSMCI efficiency, read from the file in multiples of 4 bytes except at the end.
-		// This ensures that the second and subsequent chunks can be DMA'd directly into sendingWindow.
-		size_t bytesToRead = bytesLeftToSend & (~3);
-		if (bytesToRead != 0)
+		if (length > sendBuffer->BytesLeft())
 		{
-			int bytesRead = fileBeingSent->Read(sendingWindow + bytesBeingSent, bytesToRead);
-			if (bytesRead > 0)
-			{
-				bytesBeingSent += bytesRead;
-			}
+			length = sendBuffer->BytesLeft();
+		}
+		return reinterpret_cast<const uint8_t*>(sendBuffer->Read(length));
+	}
 
-			if (bytesRead != (int)bytesToRead)
+	// If we have a file to send, send it
+	if (fileBeingSent != nullptr && fileBuffer == nullptr)
+	{
+		fileBuffer = NetworkBuffer::Allocate();
+		if (fileBuffer == nullptr)
+		{
+			return nullptr;			// no buffer available
+		}
+	}
+
+	// If we have a file buffer here, we must be in the process of sending a file
+	if (fileBuffer != nullptr)
+	{
+		if (fileBuffer->IsEmpty() && fileBeingSent != nullptr)
+		{
+			const int bytesRead = fileBuffer->ReadFromFile(fileBeingSent);
+			if (bytesRead != (int)NetworkBuffer::bufferSize)
 			{
 				fileBeingSent->Close();
 				fileBeingSent = nullptr;
 			}
 		}
-	}
 
-	if (bytesBeingSent == 0)
-	{
-		// If we have no data to send, this connection can be closed next time
-		if (!cs->persistConnection && nextWrite == nullptr)
+		if (!fileBuffer->IsEmpty())
 		{
-			Close();
-			return false;
+			if (length > fileBuffer->Remaining())
+			{
+				length = fileBuffer->Remaining();
+			}
+			return fileBuffer->TakeData(length);
 		}
 
-		// We want to send data from another transaction as well, so only free up this one
-		cs->sendingTransaction = nextWrite;
-		return true;
+		fileBuffer->Release();
+		fileBuffer = nullptr;
 	}
 
-	// The TCP window has been filled up as much as possible, so send it now. There is no need to check
-	// the available space in the SNDBUF queue, because we really write only one TCP window at once.
-	writeResult = tcp_write(cs->pcb, sendingWindow, bytesBeingSent, 0);
-	if (ERR_IS_FATAL(writeResult))
-	{
-		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to write data in Send (code %d)\n", writeResult);
-		tcp_abort(cs->pcb);
-		return false;
-	}
-
-	outputResult = tcp_output(cs->pcb);
-	if (ERR_IS_FATAL(outputResult))
-	{
-		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to output data in Send (code %d)\n", outputResult);
-		tcp_abort(cs->pcb);
-		return false;
-	}
-
-	if (outputResult != ERR_OK && reprap.Debug(moduleNetwork))
-	{
-		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: tcp_output resulted in error code %d\n", outputResult);
-	}
-
-	// Set LwIP callbacks for ACK and retransmission handling
-	tcp_poll(cs->pcb, conn_poll, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
-	tcp_sent(cs->pcb, conn_sent);
-
-	// Set all values for the send process
-	sendingConnection = cs;
-	sendingRetries = 0;
-	sendingWindowSize = sentDataOutstanding = bytesBeingSent;
-	return false;
-#endif
+	status = TransactionStatus::finished;
+	return nullptr;
 }
 
 // This is called by the Webserver to send output data to a client. If keepConnectionAlive is set to false,
 // the current connection will be terminated once everything has been sent.
 void NetworkTransaction::Commit(bool keepConnectionAlive)
 {
-#if 0
-	// If the connection has been terminated (e.g. RST received while writing upload data), discard this transaction
-	if (!IsConnected() || status == released)
+	closeAfterSending = !keepConnectionAlive;
+	status = TransactionStatus::sending;
+	if (closeAfterSending)
 	{
-		Discard();
-		return;
+		cs->DiscardReceivedData();
 	}
-
-	// Free buffer holding the incoming data and prepare some values for the sending process
-	FreePbuf();
-	cs->persistConnection = keepConnectionAlive;
-	if (sendBuffer == nullptr)
-	{
-		sendBuffer = sendStack->Pop();
-	}
-	status = sending;
-
-	// Unlink the item(s) from the list of ready transactions
-	if (keepConnectionAlive)
-	{
-		// Our connection is still of interest, remove only this transaction from the list
-		NetworkTransaction *previous = nullptr;
-		for(NetworkTransaction *item = reprap.GetNetwork()->readyTransactions; item != nullptr; item = item->next)
-		{
-			if (item == this)
-			{
-				if (previous == nullptr)
-				{
-					reprap.GetNetwork()->readyTransactions = next;
-				}
-				else
-				{
-					previous->next = next;
-				}
-				break;
-			}
-			previous = item;
-		}
-	}
-	else
-	{
-		// We will close this connection soon, stop receiving data from this PCB
-		tcp_recv(cs->pcb, nullptr);
-
-		// Also remove all ready transactions pointing to our ConnectionState
-		NetworkTransaction *previous = nullptr, *item = reprap.GetNetwork()->readyTransactions;
-		while (item != nullptr)
-		{
-			if (item->cs == cs)
-			{
-				if (item == this)
-				{
-					// Only unlink this item
-					if (previous == nullptr)
-					{
-						reprap.GetNetwork()->readyTransactions = next;
-					}
-					else
-					{
-						previous->next = next;
-					}
-					item = next;
-				}
-				else
-				{
-					// Remove all others
-					item->Discard();
-					item = (previous == nullptr) ? reprap.GetNetwork()->readyTransactions : previous->next;
-				}
-			}
-			else
-			{
-				previous = item;
-				item = item->next;
-			}
-		}
-	}
-
-	// Enqueue this transaction, so it's sent in the right order
-	NetworkTransaction *mySendingTransaction = cs->sendingTransaction;
-	if (mySendingTransaction == nullptr)
-	{
-		cs->sendingTransaction = this;
-		reprap.GetNetwork()->AppendTransaction(&reprap.GetNetwork()->writingTransactions, this);
-	}
-	else
-	{
-		while (mySendingTransaction->nextWrite != nullptr)
-		{
-			mySendingTransaction = mySendingTransaction->nextWrite;
-		}
-		mySendingTransaction->nextWrite = this;
-	}
-#endif
 }
 
 // Call this to perform some networking tasks while processing deferred requests,
@@ -397,98 +250,77 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 //               This will ensure that zero-window packets are sent back to the client
 // 2) ResetData: Reset the read pointers and acknowledge that the data has been processed
 // 3) DiscardData: Free the processed data, acknowledge it and append this transaction as
-//                 an empty item again without payload (i.e. without pbufs)
+//                 an empty item again without payload
 //
 void NetworkTransaction::Defer(DeferralMode mode)
 {
-#if 0
-	if (mode == DeferralMode::ResetData)
+	if (mode == DeferralMode::DiscardData)
 	{
-		// Reset the reading pointers and send an ACK
-		inputPointer = 0;
-		readingPb = pb;
-		if (IsConnected() && pb != nullptr && !dataAcknowledged)
-		{
-			tcp_recved(cs->pcb, pb->tot_len);
-			dataAcknowledged = true;
-		}
-	}
-	else if (mode == DeferralMode::DiscardData)
-	{
-		// Discard the incoming data, because we don't need to process it any more
-		FreePbuf();
+		cs->DiscardReceivedData();		// discard the incoming data, because we don't need to process it any more
 	}
 
-	status = deferred;
-
-	// Unlink this transaction from the list of ready transactions and append it again
-	Network *network = reprap.GetNetwork();
-	NetworkTransaction *item, *previous = nullptr;
-	for(item = network->readyTransactions; item != nullptr; item = item->next)
-	{
-		if (item == this)
-		{
-			if (previous == nullptr)
-			{
-				network->readyTransactions = next;
-			}
-			else
-			{
-				previous->next = next;
-			}
-			break;
-		}
-		previous = item;
-	}
-	network->AppendTransaction(&network->readyTransactions, this);
-
-	// Append all other transactions that are associated to this connection, so that the
-	// Webserver gets a chance to deal with all connected clients even while multiple
-	// deferred requests are present in the list.
-	item = network->readyTransactions;
-	previous = nullptr;
-	while (item != this)
-	{
-		if (item->cs == cs)
-		{
-			NetworkTransaction *nextItem = item->next;
-			if (previous == nullptr)
-			{
-				network->readyTransactions = item->next;
-				network->AppendTransaction(&network->readyTransactions, item);
-			}
-			else
-			{
-				previous->next = item->next;
-				network->AppendTransaction(&network->readyTransactions, item);
-			}
-			item = nextItem;
-		}
-		else
-		{
-			previous = item;
-			item = item->next;
-		}
-	}
-#endif
+	status = TransactionStatus::deferred;
+	reprap.GetNetwork()->Defer(this);
 }
-
 
 // This method should be called if we don't want to send data to the client and if we
 // don't want to interfere with the connection state. May also be called from ISR!
 void NetworkTransaction::Discard()
 {
-#if 0
-	// Can we do anything?
-	if (status == released)
+	status = TransactionStatus::finished;
+	cs->ReleaseTransaction();
+}
+
+uint32_t NetworkTransaction::GetRemoteIP() const
+{
+	return (cs != nullptr) ? cs->GetRemoteIP() : 0;
+}
+
+Port NetworkTransaction::GetRemotePort() const
+{
+	return (cs != nullptr) ? cs->GetRemotePort() : 0;
+}
+
+Port NetworkTransaction::GetLocalPort() const
+{
+	return (cs != nullptr) ? cs->GetLocalPort() : 0;
+}
+
+// Create the specified number of buffers and put them on the freelist
+/*static*/ void NetworkTransaction::AllocateTransactions(unsigned int number)
+{
+	if (freelist == nullptr)
 	{
-		// No - don't free up released items multiple times
-		return;
+		while (number != 0)
+		{
+			freelist = new NetworkTransaction(freelist);
+			--number;
+		}
 	}
+}
 
-	// Free up some resources
-	FreePbuf();
+// Allocate a buffer from the freelist
+/*static*/ NetworkTransaction *NetworkTransaction::Allocate()
+{
+	NetworkTransaction *ret = freelist;
+	if (ret != nullptr)
+	{
+		freelist = ret->next;
+		ret->next = nullptr;
+		ret->fileBuffer = nullptr;
+		ret->fileBeingSent = nullptr;
+	}
+	return ret;
+}
 
+// Free resources and recycle this buffer
+NetworkTransaction *NetworkTransaction::Release()
+{
+	if (fileBuffer != nullptr)
+	{
+		fileBuffer->Release();
+		fileBuffer = nullptr;
+	}
 	if (fileBeingSent != nullptr)
 	{
 		fileBeingSent->Close();
@@ -498,64 +330,10 @@ void NetworkTransaction::Discard()
 	OutputBuffer::ReleaseAll(sendBuffer);
 	sendStack->ReleaseAll();
 
-	// Unlink this transactions from the list of ready transactions and free it. It is then appended to the list of
-	// free transactions because we don't want to risk reusing it when the ethernet ISR processes incoming data
-	NetworkTransaction *previous = nullptr;
-	for(NetworkTransaction *item = reprap.GetNetwork()->readyTransactions; item != nullptr; item = item->next)
-	{
-		if (item == this)
-		{
-			if (previous == nullptr)
-			{
-				reprap.GetNetwork()->readyTransactions = next;
-			}
-			else
-			{
-				previous->next = next;
-			}
-			break;
-		}
-		previous = item;
-	}
-	reprap.GetNetwork()->AppendTransaction(&reprap.GetNetwork()->freeTransactions, this);
-	bool callDisconnectHandler = (cs != nullptr && status == disconnected);
-	status = released;
-
-	// Call disconnect event if this transaction indicates a graceful disconnect and if the connection
-	// still persists (may not be the case if a RST packet was received before)
-	if (callDisconnectHandler)
-	{
-		if (reprap.Debug(moduleNetwork))
-		{
-			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Discard() is handling a graceful disconnect\n");
-		}
-		reprap.GetNetwork()->ConnectionClosed(cs, false);
-	}
-#endif
-}
-
-uint32_t NetworkTransaction::GetRemoteIP() const
-{
-	return (cs != nullptr) ? cs->GetRemoteIP() : 0;
-}
-
-uint16_t NetworkTransaction::GetRemotePort() const
-{
-	return (cs != nullptr) ? cs->GetRemotePort() : 0;
-}
-
-uint16_t NetworkTransaction::GetLocalPort() const
-{
-	return (cs != nullptr) ? cs->GetLocalPort() : 0;
-}
-
-void NetworkTransaction::Close()
-{
-#if 0
-	tcp_pcb *pcb = cs->pcb;
-	tcp_recv(pcb, nullptr);
-	closeRequested = true;
-#endif
+	NetworkTransaction *ret = next;
+	next = freelist;
+	freelist = this;
+	return ret;
 }
 
 // End

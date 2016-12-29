@@ -1603,19 +1603,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				retractLength = max<float>(gb.GetFValue(), 0.0);
 				seen = true;
 			}
-			if (gb.Seen('R'))
+			if (gb.Seen('R'))	// must do this one after 'S'
 			{
 				retractExtra = max<float>(gb.GetFValue(), -retractLength);
 				seen = true;
 			}
 			if (gb.Seen('F'))
 			{
-				unRetractSpeed = retractSpeed = max<float>(gb.GetFValue(), 60.0);
+				unRetractSpeed = retractSpeed = max<float>(gb.GetFValue(), 60.0) * secondsToMinutes;
 				seen = true;
 			}
 			if (gb.Seen('T'))	// must do this one after 'F'
 			{
-				unRetractSpeed = max<float>(gb.GetFValue(), 60.0);
+				unRetractSpeed = max<float>(gb.GetFValue(), 60.0) * secondsToMinutes;
 				seen = true;
 			}
 			if (gb.Seen('Z'))
@@ -1625,8 +1625,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			if (!seen)
 			{
-				reply.printf("Retraction settings: length %.2f/%.2fmm, speed %d/%dmm/min, Z hop %.2fmm",
-						retractLength, retractLength + retractExtra, (int)retractSpeed, (int)unRetractSpeed, retractHop);
+				reply.printf("Retraction/un-retraction settings: length %.2f/%.2fmm, speed %d/%dmm/min, Z hop %.2fmm",
+						retractLength, retractLength + retractExtra, (int)(retractSpeed * minutesToSeconds), (int)(unRetractSpeed * minutesToSeconds), retractHop);
 			}
 		}
 		break;

@@ -17,7 +17,8 @@ namespace WizSpi
 	void AssertSS();
 	void ReleaseSS();
 	void SendAddress(uint32_t addr);
-	uint8_t ExchangeByte(uint8_t b, bool isLast);
+	uint8_t ReadByte();
+	void WriteByte(uint8_t b);
 	spi_status_t ReadBurst(uint8_t* rx_data, size_t len);
 	spi_status_t SendBurst(const uint8_t* tx_data, size_t len);
 }

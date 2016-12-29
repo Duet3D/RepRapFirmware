@@ -6,7 +6,8 @@
  */
 
 #include "NetworkBuffer.h"
-#include <cstring>
+
+#include "Storage/FileStore.h"
 
 NetworkBuffer *NetworkBuffer::freelist = nullptr;
 
@@ -28,7 +29,7 @@ bool NetworkBuffer::ReadChar(char& b)
 {
 	if (readPointer < dataLength)
 	{
-		b = data[readPointer++];
+		b = Data()[readPointer++];
 		return true;
 	}
 
@@ -36,16 +37,15 @@ bool NetworkBuffer::ReadChar(char& b)
 	return false;
 }
 
-// Read some data, but not more than the amount in the first buffer
-size_t NetworkBuffer::ReadBuffer(uint8_t *buffer, size_t maxLen)
+const uint8_t* NetworkBuffer::TakeData(size_t &len)
 {
-	if (maxLen > Remaining())
+	const uint8_t* ret = Data() + readPointer;
+	if (len > dataLength - readPointer)
 	{
-		maxLen = Remaining();
+		len = dataLength - readPointer;
 	}
-	memcpy((void*)buffer, data + readPointer, maxLen);
-	readPointer += maxLen;
-	return maxLen;
+	readPointer += len;
+	return ret;
 }
 
 // Return the amount of data available, including continuation buffers
@@ -56,8 +56,50 @@ size_t NetworkBuffer::TotalRemaining() const
 	while (b != nullptr)
 	{
 		ret += b->Remaining();
+		b = b->next;
 	}
 	return ret;
+}
+
+// Append some data, returning the amount appended
+size_t NetworkBuffer::AppendData(const uint8_t *source, size_t length)
+{
+	if (length > SpaceLeft())
+	{
+		length = SpaceLeft();
+	}
+	memcpy(Data() + dataLength, source, length);
+	dataLength += length;
+	return length;
+}
+
+// Read into the buffer from a file returning the number of bytes read
+int NetworkBuffer::ReadFromFile(FileStore *f)
+{
+	const int ret = f->Read(reinterpret_cast<char*>(data32), bufferSize);
+	dataLength = (ret > 0) ? (size_t)ret : 0;
+	readPointer = 0;
+	return ret;
+}
+
+// Clear this buffer and release any successors
+void NetworkBuffer::Empty()
+{
+	readPointer = dataLength = 0;
+	while (next != nullptr)
+	{
+		next = next->Release();
+	}
+}
+
+/*static*/ void NetworkBuffer::AppendToList(NetworkBuffer **list, NetworkBuffer *b)
+{
+	b->next = nullptr;
+	while (*list != nullptr)
+	{
+		list = &((*list)->next);
+	}
+	*list = b;
 }
 
 /*static*/ NetworkBuffer *NetworkBuffer::Allocate()
@@ -67,6 +109,7 @@ size_t NetworkBuffer::TotalRemaining() const
 	{
 		freelist = ret->next;
 		ret->next = nullptr;
+		ret->dataLength = ret->readPointer = 0;
 	}
 	return ret;
 }

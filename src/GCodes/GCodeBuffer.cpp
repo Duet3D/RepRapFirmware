@@ -401,6 +401,7 @@ bool GCodeBuffer::PushState()
 	ms->drivesRelative = machineState->drivesRelative;
 	ms->axesRelative = machineState->axesRelative;
 	ms->doingFileMacro = machineState->doingFileMacro;
+	ms->fileState.CopyFrom(machineState->fileState);
 	ms->lockedResources = machineState->lockedResources;
 	machineState = ms;
 	return true;

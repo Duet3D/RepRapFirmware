@@ -19,7 +19,7 @@ public:
 	void Disable() const { };
 	void Enable() const { };
 	void Exit() const { }
-	void Spin() const { };
+	void Spin(bool full) const { };
 	void Interrupt() const { };
 	void Diagnostics(MessageType mtype) const { };
 

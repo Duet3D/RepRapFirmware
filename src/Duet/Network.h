@@ -50,7 +50,7 @@ public:
 	Network(Platform* p);
 	void Init();
 	void Exit() {}
-	void Spin();
+	void Spin(bool full);
 	void Interrupt();
 	void Diagnostics(MessageType mtype);
 
@@ -80,12 +80,12 @@ public:
 
 	NetworkTransaction *GetTransaction(const ConnectionState *cs = nullptr);
 
-	void OpenDataPort(uint16_t port);
-	uint16_t GetDataPort() const;
+	void OpenDataPort(Port port);
+	Port GetDataPort() const;
 	void CloseDataPort();
 
-	void SetHttpPort(uint16_t port);
-	uint16_t GetHttpPort() const;
+	void SetHttpPort(Port port);
+	Port GetHttpPort() const;
 
 	void SaveDataConnection();
 	void SaveFTPConnection();
@@ -95,8 +95,8 @@ public:
 	bool AcquireDataTransaction();
 	bool AcquireTelnetTransaction();
 
-	static uint16_t GetLocalPort(Connection conn);
-	static uint16_t GetRemotePort(Connection conn);
+	static Port GetLocalPort(Connection conn);
+	static Port GetRemotePort(Connection conn);
 	static uint32_t GetRemoteIP(Connection conn);
 	static bool IsConnected(Connection conn);
 	static bool IsTerminated(Connection conn);

@@ -8,9 +8,8 @@
 #ifndef SRC_DUETNG_DUETETHERNET_SOCKET_H_
 #define SRC_DUETNG_DUETETHERNET_SOCKET_H_
 
-#include <NetworkDefs.h>
-#include <cstdint>
-#include <cstddef>
+#include "RepRapFirmware.h"
+#include "NetworkDefs.h"
 
 // Socket structure that we use to track TCP connections
 class Socket
@@ -18,15 +17,23 @@ class Socket
 public:
 	Socket();
 	void Init(SocketNumber s, Port serverPort);
-	void Poll();
+	void Poll(bool full);
 	Port GetLocalPort() const { return localPort; }
 	uint32_t GetRemoteIP() const { return remoteIPAddress; }
 	Port GetRemotePort() const { return remotePort; }
 	bool IsConnected() const;
 	bool IsTerminated() const { return isTerminated; }
+	void Close();
 	void Terminate();
 	SocketNumber GetNumber() const { return socketNum; }
+	NetworkTransaction *GetTransaction() const { return currentTransaction; }
 	bool ReadChar(char& c);
+	bool ReadBuffer(const char *&buffer, size_t &len);
+	bool HasMoreDataToRead() const;
+	void ReleaseTransaction();
+	bool IsPersistentConnection() const { return persistConnection; }
+	bool CanWrite() const;
+	void DiscardReceivedData();
 
 private:
 	enum class SocketState : uint8_t
@@ -40,15 +47,20 @@ private:
 	};
 
 	void ReInit();
+	bool IsSending() const;								// Return true if we are in the sending phase
+
+	bool TrySendData()									// Try to send data, returning true if all data has been sent and we ought to close the socket
+	pre(IsSending());
 
 	Port localPort, remotePort;							// The local and remote ports
 	uint32_t remoteIPAddress;							// The remote IP address
-	NetworkBuffer *receivedData;						// Chain of buffers holding received data
-	NetworkTransaction * /*volatile*/ sendingTransaction;	// NetworkTransaction that is currently sending via this connection
+	NetworkTransaction *currentTransaction;				// The transaction currently being processed on this socket
+	NetworkBuffer *receivedData;						// List of buffers holding received data
 	bool persistConnection;								// Do we expect this connection to stay alive?
 	bool isTerminated;									// Will be true if the connection has gone down unexpectedly (TCP RST)
 	SocketNumber socketNum;								// The W5500 socket number we are using
 	SocketState state;
+	bool isSending;
 };
 
 #endif /* SRC_DUETNG_DUETETHERNET_SOCKET_H_ */
