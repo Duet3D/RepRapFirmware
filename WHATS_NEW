@@ -13,11 +13,11 @@ Implemented grid bed compensation:
 - M374 also saves the height map, and M375 loads a height map
 - M376 sets the compensation taper height
 - Long moves are segmented when grid compensation is in use so as to follow the contours of the bed
-- Duet Web Control 1.14 can display the height map graphically
+- Duet Web Control 1.14 can display the height map graphically (thanks chrishamm)
 
 Changes to information extraction from gcode files:
 - Recognise generated-with comment written by newer versions of Cura
-- Recognise filament usage info in kisslicer-generated gcode files
+- Recognise filament usage info in kisslicer-generated gcode files (thanks chrishamm)
 
  M500, M501 and M502 now use config_override.g instead of flash memory. The parameters saved and restored are:
 - M307 auto tune results
@@ -72,7 +72,7 @@ Miscellaneous changes:
 - A 2nd controlled fan using an external mosfet driven by expansion connector pin 25 on a Duet 0.6 is no longer inverted
 
 Upgrade notes for 1.17 - VERY IMPORTANT TO AVOID DAMAGE!!!
-
+----------------------------------------------------------
 - On the Duet 0.6 and 0.85 the default direction for the X motor is now forward (as it is for all other motors and on the Duet WiFi). If you do not have a M569 P0 command in your config.g file then you will need to add M569 P0 S0 in order to keep the previous behaviour.
 - On the Duet 0.6 and 0.85 the default bed thermistor resistance at 25C is now 100K (as it is for the Duet WiFi). If you have an Ormerod, Huxley Duo or RepRapPro Mendel printer with a 10K bed thermistor, you will need to add parameter T10000 to the M305 P0 command in config.g if you don't have that already.
 - On the Duet 0.6 and 0.85 the default hot end heater thermistor parameters are changed to match the Semitec thermistor used in the E3DV6 and other popular hot ends. If you have a printer built from a kit supplied by RepRapPro then you should use the following parameters in your M305 P1 command to restore the previous behaviour: B4138 C0
@@ -85,9 +85,10 @@ Upgrade notes for 1.17 - VERY IMPORTANT TO AVOID DAMAGE!!!
 - If your pause.g and resume.g contain any extruder movement commands to retract or prime filament, make sure these files have the M83 command at the start to select relative extruder coordinates
 - The recommended web interface is Duet Web Control 1.14. To use DWC 1.14 on the Duet WiFi, you must be using version 1.02 or later of DuetWiFiServer. Version 1.03-ch is recommended.
 
-Known issues for 1.17:
-
+Known issues for 1.17
+---------------------
 - The M120 (Push) command doesn't work in macro or gcode files, because it causes execution of the file to be terminated
+- Setting relative extruder movement (M83) or a feed rate (G1 Fxxx) in config.g has no effect once config.g has completed
 
 Version 1.16
 ============
