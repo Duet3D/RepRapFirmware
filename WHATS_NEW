@@ -89,6 +89,7 @@ Known issues for 1.17
 ---------------------
 - The M120 (Push) command doesn't work in macro or gcode files, because it causes execution of the file to be terminated
 - Setting relative extruder movement (M83) or a feed rate (G1 Fxxx) in config.g has no effect once config.g has completed
+- The F (feed rate) parameter is not processed correctly on a G1 command with the R parameter. In the resume.g file, you can use a G1 Fxxx command to set the feed rate, then leave the F parameter off the G1 R1 command.
 
 Version 1.16
 ============
