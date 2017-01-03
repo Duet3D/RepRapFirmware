@@ -12,6 +12,9 @@ Bug fixes:
 - Fixed the M120 (Push) command
 - Setting relative extruder movement (M83) or a feed rate (G1 Fxxx) in config.g now works again
 - The F (feed rate) parameter is now processed correctly on a G1 command with the R parameter
+- If you used M106 to change a fan PWM frequency, the change did not take place until you next changed the speed
+- On boards with SAM3X processors, due to a chip bug the fan speed was sometimes incorrect if you changed the PWM frequency
+- If an http client requested a non-existent file that was not an HTML file, the server incorrectly returned a 404 HTML page
 
 For upgrade notes, see version 1.17.
 
