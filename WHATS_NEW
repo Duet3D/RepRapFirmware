@@ -2,6 +2,19 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.17a
+=============
+
+Homing speeds:
+- The speed factor (M220 command, or speed control in DWC and PanelDue) no longer affects the speed of homing moves or other special moves (i.e. G1 commands with S1 or S2 parameter)
+
+Bug fixes:
+- Fixed the M120 (Push) command
+- Setting relative extruder movement (M83) or a feed rate (G1 Fxxx) in config.g now works again
+- The F (feed rate) parameter is now processed correctly on a G1 command with the R parameter
+
+For upgrade notes, see version 1.17.
+
 Version 1.17
 ============
 
