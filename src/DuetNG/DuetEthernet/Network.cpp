@@ -351,31 +351,17 @@ void Network::CloseDataPort()
 
 bool Network::AcquireFTPTransaction()
 {
-	return AcquireTransaction(FtpSocketNumber);
+	return sockets[FtpSocketNumber].AcquireTransaction();
 }
 
 bool Network::AcquireDataTransaction()
 {
-	return AcquireTransaction(FtpDataSocketNumber);
+	return sockets[FtpDataSocketNumber].AcquireTransaction();
 }
 
 bool Network::AcquireTelnetTransaction()
 {
-	return AcquireTransaction(TelnetSocketNumber);
-}
-
-bool Network::AcquireTransaction(SocketNumber skt)
-{
-	if (   sockets[skt].GetTransaction() != nullptr
-		&& sockets[skt].GetTransaction()->GetStatus() != TransactionStatus::sending
-		&& sockets[skt].GetTransaction()->GetStatus() != TransactionStatus::finished
-	   )
-	{
-		currentTransactionSocketNumber = skt;
-		return true;
-	}
-
-	return false;
+	return sockets[TelnetSocketNumber].AcquireTransaction();
 }
 
 void Network::InitSockets()

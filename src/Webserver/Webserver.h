@@ -199,7 +199,7 @@ protected:
 		void SendFile(const char* nameOfFileToSend, bool isWebFile);
 		void SendGCodeReply();
 		void SendJsonResponse(const char* command);
-		void GetJsonResponse(const char* request, OutputBuffer *&response, const char* key, const char* value, size_t valueLength, bool& keepOpen);
+		void GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen);
 		bool ProcessMessage();
 		bool RejectMessage(const char* s, unsigned int code = 500);
 
@@ -232,6 +232,7 @@ protected:
 		bool IsAuthenticated() const;
 		void UpdateAuthentication();
 		bool RemoveAuthentication();
+		const char* GetKeyValue(const char *key) const;	// return the value of the specified key, or nullptr if not present
 
 		// Deal with incoming G-Codes
 

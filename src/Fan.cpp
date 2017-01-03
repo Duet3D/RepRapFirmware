@@ -20,7 +20,7 @@ void Fan::Init(Pin p_pin, bool hwInverted)
 	inverted = blipping = false;
 	heatersMonitored = 0;
 	triggerTemperature = HOT_END_FAN_TEMPERATURE;
-	lastPwm = -1.0;
+	lastPwm = -1.0;				// force a refresh
 	Refresh();
 }
 
@@ -62,6 +62,8 @@ void Fan::SetInverted(bool inv)
 	Refresh();
 }
 
+// Set the hardware PWM
+// If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
 void Fan::SetHardwarePwm(float pwmVal)
 {
 	if (pin != NoPin)
@@ -88,6 +90,7 @@ void Fan::SetHardwarePwm(float pwmVal)
 void Fan::SetPwmFrequency(float p_freq)
 {
 	freq = (uint16_t)constrain<float>(p_freq, 1.0, 65535.0);
+	lastPwm = -1.0;										// force the PWM to be updated
 	Refresh();
 }
 
@@ -97,6 +100,8 @@ void Fan::SetHeatersMonitored(uint16_t h)
 	Refresh();
 }
 
+// Refresh the fan PWM
+// If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
 void Fan::Refresh()
 {
 	float reqVal = (heatersMonitored == 0)
@@ -139,6 +144,7 @@ void Fan::Disable()
 	if (pin != NoPin)
 	{
 		inverted = false;
+		lastPwm = -1;
 		SetHardwarePwm(0.0);
 	}
 	pin = NoPin;

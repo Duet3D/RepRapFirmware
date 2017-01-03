@@ -43,10 +43,6 @@ const float ABS_ZERO = -273.15;						// Celsius
 const float NEARLY_ABS_ZERO = -273.0;				// Celsius
 const float ROOM_TEMPERATURE = 21.0;				// Celsius
 
-const float INCH_TO_MM = 25.4;
-const float MINUTES_TO_SECONDS = 60.0;
-const float SECONDS_TO_MINUTES = 1.0 / MINUTES_TO_SECONDS;
-
 const float LONG_TIME = 300.0;						// Seconds
 const float MINIMUM_TOOL_WARNING_INTERVAL = 4.0;	// Seconds
 

@@ -621,7 +621,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 		// Write data in sector-aligned chunks. This also means that the buffer in fatfs is only used to hold the FAT.
 		// Buffer size must be a multiple of the 512b sector size.
 #ifdef DUET_NG
-		static const size_t writeBufLength = 4096;
+		static const size_t writeBufLength = 8192;
 #else
 		static const size_t writeBufLength = 2048;
 #endif
@@ -754,13 +754,8 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		fileToSend = platform->GetFileStore(FS_PREFIX, nameOfFileToSend, false);
 		if (fileToSend == nullptr)
 		{
-			nameOfFileToSend = FOUR04_PAGE_FILE;
-			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
-			if (fileToSend == nullptr)
-			{
-				RejectMessage("not found", 404);
-				return;
-			}
+			RejectMessage("not found", 404);
+			return;
 		}
 		transaction->SetFileToWrite(fileToSend);
 	}
@@ -914,11 +909,11 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	bool mayKeepOpen;
 	if (numQualKeys == 0)
 	{
-		GetJsonResponse(command, jsonResponse, "", "", 0, mayKeepOpen);
+		GetJsonResponse(command, jsonResponse, mayKeepOpen);
 	}
 	else
 	{
-		GetJsonResponse(command, jsonResponse, qualifiers[0].key, qualifiers[0].value, qualifiers[1].key - qualifiers[0].value - 1, mayKeepOpen);
+		GetJsonResponse(command, jsonResponse, mayKeepOpen);
 	}
 
 	// Check special cases of deferred requests (rr_fileinfo) and rejected messages
@@ -963,13 +958,13 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 
 // Get the Json response for this command.
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matters when uploading files.
-void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuffer *&response, const char* key, const char* value, size_t valueLength, bool& keepOpen)
+void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen)
 {
 	keepOpen = false;	// assume we don't want to persist the connection
 
-	if (StringEquals(request, "connect") && StringEquals(key, "password"))
+	if (StringEquals(request, "connect") && GetKeyValue("password") != nullptr)
 	{
-		if (IsAuthenticated() || reprap.CheckPassword(value))
+		if (IsAuthenticated() || reprap.CheckPassword(GetKeyValue("password")))
 		{
 			// Password OK
 			if (Authenticate())
@@ -1012,10 +1007,10 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	else if (StringEquals(request, "status"))
 	{
 		int type = 0;
-		if (StringEquals(key, "type"))
+		if (GetKeyValue("type") != nullptr)
 		{
 			// New-style JSON status responses
-			type = atoi(value);
+			type = atoi(GetKeyValue("type"));
 			if (type < 1 || type > 3)
 			{
 				type = 1;
@@ -1031,36 +1026,34 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			response = reprap.GetLegacyStatusResponse(1, 0);
 		}
 	}
-	else if (StringEquals(request, "gcode") && StringEquals(key, "gcode"))
+	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
-		LoadGcodeBuffer(value);
+		LoadGcodeBuffer(GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", GetGCodeBufferSpace());
 	}
 	else if (StringEquals(request, "upload"))
 	{
 		response->printf("{\"err\":%d}", (uploadedBytes == postFileLength) ? 0 : 1);
 	}
-	else if (StringEquals(request, "delete") && StringEquals(key, "name"))
+	else if (StringEquals(request, "delete") && GetKeyValue("name") != nullptr)
 	{
-		bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, value);
+		bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
-	else if (StringEquals(request, "filelist"))
+	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
 	{
 		OutputBuffer::Release(response);
-		response = reprap.GetFilelistResponse(value);
+		response = reprap.GetFilelistResponse(GetKeyValue("dir"));
 	}
 	else if (StringEquals(request, "files"))
 	{
-		const char* dir = (StringEquals(key, "dir")) ? value : platform->GetGCodeDir();
-		bool flagDirs = false;
-		if (numQualKeys >= 2)
+		const char* dir = GetKeyValue("dir");
+		if (dir == nullptr)
 		{
-			if (StringEquals(qualifiers[1].key, "flagDirs"))
-			{
-				flagDirs = StringEquals(qualifiers[1].value, "1");
-			}
+			dir = platform->GetGCodeDir();
 		}
+		const char* const flagDirsVal = GetKeyValue("flagDirs");
+		const bool flagDirs = flagDirsVal != nullptr && atoi(flagDirsVal) == 1;
 		OutputBuffer::Release(response);
 		response = reprap.GetFilesResponse(dir, flagDirs);
 	}
@@ -1073,10 +1066,11 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		}
 		else
 		{
-			if (StringEquals(qualifiers[0].key, "name"))
+			const char* const nameVal = GetKeyValue("name");
+			if (nameVal != nullptr)
 			{
 				// Regular rr_fileinfo?name=xxx call
-				strncpy(filenameBeingProcessed, value, ARRAY_SIZE(filenameBeingProcessed));
+				strncpy(filenameBeingProcessed, nameVal, ARRAY_SIZE(filenameBeingProcessed));
 				filenameBeingProcessed[ARRAY_UPB(filenameBeingProcessed)] = 0;
 			}
 			else
@@ -1091,26 +1085,24 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	}
 	else if (StringEquals(request, "move"))
 	{
-		if (numQualKeys >= 2)
+		const char* const oldVal = GetKeyValue("old");
+		const char* const newVal = GetKeyValue("new");
+		bool success = false;
+		if (oldVal != nullptr && newVal != nullptr)
 		{
-			if (StringEquals(key, "old") && StringEquals(qualifiers[1].key, "new"))
-			{
-				response->printf("{\"err\":%d}", platform->GetMassStorage()->Rename(value, qualifiers[1].value) ? 0 : 1);
-			}
-			else
-			{
-				response->printf("{\"err\":1}");
-			}
+			success = platform->GetMassStorage()->Rename(oldVal, newVal);
 		}
-		else
-		{
-			response->printf("{\"err\":1}");
-		}
+		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
-	else if (StringEquals(request, "mkdir") && StringEquals(key, "dir"))
+	else if (StringEquals(request, "mkdir"))
 	{
-		bool ok = (platform->GetMassStorage()->MakeDirectory(value));
-		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
+		const char* dirVal = GetKeyValue("dir");
+		bool success = false;
+		if (dirVal != nullptr)
+		{
+			success = (platform->GetMassStorage()->MakeDirectory(dirVal));
+		}
+		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
 	else if (StringEquals(request, "config"))
 	{
@@ -1121,6 +1113,18 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	{
 		RejectMessage("Unknown request", 500);
 	}
+}
+
+const char* Webserver::HttpInterpreter::GetKeyValue(const char *key) const
+{
+	for (size_t i = 0; i < numQualKeys; ++i)
+	{
+		if (StringEquals(qualifiers[i].key, key))
+		{
+			return qualifiers[i].value;
+		}
+	}
+	return nullptr;
 }
 
 void Webserver::HttpInterpreter::ResetState()

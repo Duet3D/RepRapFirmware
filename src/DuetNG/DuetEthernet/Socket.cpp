@@ -9,12 +9,15 @@
 
 #include "NetworkTransaction.h"
 #include "NetworkBuffer.h"
+#include "Network.h"
+#include "RepRap.h"
+#include "Webserver.h"
 #include "socketlib.h"
 
 //***************************************************************************************************
 // Socket class
 
-Socket::Socket() : currentTransaction(nullptr), receivedData(nullptr)
+Socket::Socket() : currentTransaction(nullptr), receivedData(nullptr), state(SocketState::inactive)
 {
 }
 
@@ -38,12 +41,11 @@ void Socket::ReInit()
 	persistConnection = true;
 	isTerminated = false;
 	isSending = false;
+	needTransaction = false;
 	state = SocketState::inactive;
 
 	// Re-initialise the socket on the W5500
-//debugPrintf("About to initialise socket %u\n", socketNum);
 	socket(socketNum, Sn_MR_TCP, localPort, 0x00);
-//debugPrintf("Initialised socket %u\n", socketNum);
 }
 
 // Close a connection when the last packet has been sent
@@ -152,6 +154,7 @@ void Socket::Poll(bool full)
 		if (localPort != 0)			// localPort for the FTP data socket is 0 until we have decided what port number to use
 		{
 			ExecCommand(socketNum, Sn_CR_LISTEN);
+			state = SocketState::listening;
 		}
 		break;
 
@@ -167,40 +170,57 @@ void Socket::Poll(bool full)
 			setSn_IR(socketNum, Sn_IR_CON);
 		}
 
-		// See if the socket has received any data
+		if (state == SocketState::listening)		// if it is a new connection
 		{
+			needTransaction = false;
+			if (socketNum == FtpSocketNumber || socketNum == TelnetSocketNumber)
+			{
+				// FTP and Telnet protocols need a connection reply, so tell the Webserver module about the new connection
+				if (currentTransaction == nullptr)
+				{
+					currentTransaction = NetworkTransaction::Allocate();
+					if (currentTransaction != nullptr)
+					{
+						currentTransaction->Set(this, TransactionStatus::connected);
+					}
+				}
+				else
+				{
+					// This should not happen
+					debugPrintf("ERROR:currentTransation should be null but isn't\n");
+				}
+			}
+			state = SocketState::connected;
+		}
+
+		{
+			// See if the socket has received any data
 			const uint16_t len = getSn_RX_RSR(socketNum);
 			if (len != 0)
 			{
 //				debugPrintf("%u available\n", len);
 				// There is data available, so allocate a buffer
+				//TODO: if there is already a buffer and it is in an appropriate state (i.e. receiving) and it has enough room, we could just append the data
 				NetworkBuffer * const buf = NetworkBuffer::Allocate();
 				if (buf != nullptr)
 				{
-					const int32_t ret = recv(socketNum, buf->Data(), min<size_t>(len, NetworkBuffer::bufferSize));
-//					debugPrintf("ret %d\n", ret);
-					if (ret > 0)
-					{
-						buf->dataLength = (size_t)ret;
-						buf->readPointer = 0;
-						NetworkBuffer::AppendToList(&receivedData, buf);
-					}
-					else
-					{
-						buf->Release();
-//						debugPrintf("Bad receive, code = %d\n", ret);
-					}
+					wiz_recv_data(socketNum, buf->Data(), len);
+					ExecCommand(socketNum, Sn_CR_RECV);
+					buf->dataLength = (size_t)len;
+					buf->readPointer = 0;
+					NetworkBuffer::AppendToList(&receivedData, buf);
 				}
-				else debugPrintf("no buffer\n");
+//				else debugPrintf("no buffer\n");
 			}
+		}
 
-			if (receivedData != nullptr && currentTransaction == nullptr)
+		if (currentTransaction == nullptr && (receivedData != nullptr || needTransaction))
+		{
+			currentTransaction = NetworkTransaction::Allocate();
+			if (currentTransaction != nullptr)
 			{
-				currentTransaction = NetworkTransaction::Allocate();
-				if (currentTransaction != nullptr)
-				{
-					currentTransaction->Set(this, TransactionStatus::receiving);
-				}
+				currentTransaction->Set(this, (needTransaction) ? TransactionStatus::acquired : TransactionStatus::receiving);
+				needTransaction = false;
 			}
 		}
 
@@ -209,8 +229,14 @@ void Socket::Poll(bool full)
 		// We could use a buffer locking mechanism instead. However, the speed of sending is not critical, so we don't do that yet.
 		if (full && IsSending() && TrySendData())
 		{
+			const bool closeAfterSending = currentTransaction->CloseAfterSending();
 			ReleaseTransaction();
-			ExecCommand(socketNum, Sn_CR_DISCON);
+			if (closeAfterSending)
+			{
+				ExecCommand(socketNum, Sn_CR_DISCON);
+				state = SocketState::closing;
+				DiscardReceivedData();
+			}
 		}
 		break;
 
@@ -218,10 +244,30 @@ void Socket::Poll(bool full)
 #ifdef _HTTPSERVER_DEBUG_
 		printf("> HTTPSocket[%d] : ClOSE_WAIT\r\n", socketNum);
 #endif
-		if (!IsSending() || TrySendData())
+		state = SocketState::clientDisconnecting;
+		if (IsSending() && TrySendData())
 		{
-			ReleaseTransaction();
-			ExecCommand(socketNum, Sn_CR_DISCON);
+			ReleaseTransaction();				// finished sending
+		}
+
+		// Although there is a transaction status for a client disconnecting, the webserver module does nothing with those transactions.
+		// So we don't bother to generate them here.
+		if (!IsSending() && currentTransaction == nullptr)
+		{
+			if (HasMoreDataToRead())
+			{
+				// We have more received data, so make it available to the webserver to process
+				currentTransaction = NetworkTransaction::Allocate();
+				if (currentTransaction != nullptr)
+				{
+					currentTransaction->Set(this, TransactionStatus::receiving);
+				}
+			}
+			else
+			{
+				ExecCommand(socketNum, Sn_CR_DISCON);
+				state = SocketState::closing;
+			}
 		}
 		break;
 
@@ -229,7 +275,10 @@ void Socket::Poll(bool full)
 #ifdef _HTTPSERVER_DEBUG_
 		printf("> HTTPSocket[%d] : CLOSED\r\n", s);
 #endif
-		if (socket(socketNum, Sn_MR_TCP, localPort, 0x00) == socketNum)    // Reinitialize the socket
+		reprap.GetWebserver()->ConnectionLost(this);						// the webserver needs this to be called for both graceful and disgraceful disconnects
+		state = SocketState::inactive;
+
+		if (socket(socketNum, Sn_MR_TCP, localPort, 0x00) == socketNum)		// Reinitialize the socket
 		{
 #ifdef _HTTPSERVER_DEBUG_
 			printf("> HTTPSocket[%d] : OPEN\r\n", socketNum);
@@ -295,6 +344,7 @@ bool Socket::TrySendData()
 		ptr += (uint16_t)length;
 		sent = true;
 	}
+
 	if (sent)
 	{
 		//debugPrintf("Sending data, rp=%04x tp=%04x\n", getSn_TX_RD(socketNum), getSn_TX_WR(socketNum));
@@ -316,6 +366,24 @@ void Socket::DiscardReceivedData()
 	{
 		receivedData = receivedData->Release();
 	}
+}
+
+// The webserver calls this to tell the socket that it needs a transaction, e.g. for sending a Telnet os FTP response.
+// An empty transaction will do.
+// Return true if we can do it, false if the connection is closed or closing.
+bool Socket::AcquireTransaction()
+{
+	if (currentTransaction != nullptr && currentTransaction->GetStatus() == TransactionStatus::acquired)
+	{
+		return true;
+	}
+
+	if (getSn_SR(socketNum) == SOCK_ESTABLISHED)
+	{
+		needTransaction = true;
+		return true;
+	}
+	return false;
 }
 
 // End

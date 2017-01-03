@@ -55,7 +55,7 @@ void GCodes::RestorePoint::Init()
 	{
 		moveCoords[i] = 0.0;
 	}
-	feedRate = DefaultFeedrate/minutesToSeconds;
+	feedRate = DefaultFeedrate * secondsToMinutes;
 }
 
 GCodes::GCodes(Platform* p, Webserver* w) :
@@ -92,6 +92,7 @@ void GCodes::Init()
 	eofStringCounter = 0;
 	eofStringLength = strlen(eofString);
 	offSetSet = false;
+	runningConfigFile = false;
 	active = true;
 	longWait = platform->Time();
 	dwellTime = longWait;
@@ -132,7 +133,7 @@ void GCodes::Reset()
 	probeCount = 0;
 	cannedCycleMoveCount = 0;
 	cannedCycleMoveQueued = false;
-	speedFactor = 1.0 / minutesToSeconds;				// default is just to convert from mm/minute to mm/second
+	speedFactor = secondsToMinutes;						// default is just to convert from mm/minute to mm/second
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
 		extrusionFactors[i] = 1.0;
@@ -184,13 +185,23 @@ float GCodes::FractionOfFilePrinted() const
 // We use triggerCGode as the source to prevent any triggers being executed until we have finished
 bool GCodes::RunConfigFile(const char* fileName)
 {
-	return DoFileMacro(*daemonGCode, fileName, false);
+	runningConfigFile = DoFileMacro(*daemonGCode, fileName, false);
+	return runningConfigFile;
 }
 
 // Return true if the daemon is busy running config.g or a trigger file
 bool GCodes::IsDaemonBusy() const
 {
 	return daemonGCode->MachineState().fileState.IsLive();
+}
+
+// Copy the feed rate etc. from the daemon to the input channels
+void GCodes::CopyConfigFinalValues(GCodeBuffer& gb)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
+	{
+		gcodeSources[i]->MachineState().CopyStateFrom(gb.MachineState());
+	}
 }
 
 void GCodes::Spin()
@@ -333,7 +344,7 @@ void GCodes::Spin()
 				{
 					moveBuffer.coords[drive] = 0.0;
 				}
-				moveBuffer.feedRate = DefaultFeedrate/minutesToSeconds;	// ask for a good feed rate, we may have paused during a slow move
+				moveBuffer.feedRate = DefaultFeedrate * secondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
 				moveBuffer.moveType = 0;
 				moveBuffer.endStopsToCheck = 0;
 				moveBuffer.usePressureAdvance = false;
@@ -741,7 +752,12 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					// Finished a macro
+					// Finished a macro or finished processing config.g
+					if (runningConfigFile)
+					{
+						CopyConfigFinalValues(gb);
+						runningConfigFile = false;
+					}
 					Pop(gb);
 					gb.Init();
 					if (gb.GetState() == GCodeState::normal)
@@ -957,14 +973,17 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 	}
 
 	// Deal with feed rate
-	if (gb.Seen(feedrateLetter))
+	if (moveType >= 0 && gb.Seen(feedrateLetter))
 	{
-		gb.MachineState().feedrate = gb.GetFValue() * distanceScale * speedFactor;
+		const float rate = gb.GetFValue() * distanceScale;
+		gb.MachineState().feedrate = (moveType == 0)
+										? rate * speedFactor
+										: rate * secondsToMinutes;		// don't apply the speed factor to homing and other special moves
 	}
 	moveBuffer.feedRate = gb.MachineState().feedrate;
 
 	// First do extrusion, and check, if we are extruding, that we have a tool to extrude with
-	Tool* tool = reprap.GetCurrentTool();
+	Tool* const tool = reprap.GetCurrentTool();
 	if (gb.Seen(extrudeLetter))
 	{
 		if (tool == nullptr)
@@ -972,7 +991,7 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 			platform->Message(GENERIC_MESSAGE, "Attempting to extrude with no tool selected.\n");
 			return 0;
 		}
-		size_t eMoveCount = tool->DriveCount();
+		const size_t eMoveCount = tool->DriveCount();
 		if (eMoveCount > 0)
 		{
 			// Set the drive values for this tool.
@@ -1485,7 +1504,7 @@ bool GCodes::OffsetAxes(GCodeBuffer& gb)
 
 		if (gb.Seen(feedrateLetter)) // Has the user specified a feedrate?
 		{
-			cannedFeedRate = gb.GetFValue() * distanceScale * SECONDS_TO_MINUTES;
+			cannedFeedRate = gb.GetFValue() * distanceScale * secondsToMinutes;
 		}
 		else
 		{

@@ -235,11 +235,11 @@ const uint8_t *NetworkTransaction::GetDataToSend(size_t& length)
 void NetworkTransaction::Commit(bool keepConnectionAlive)
 {
 	closeAfterSending = !keepConnectionAlive;
-	status = TransactionStatus::sending;
-	if (closeAfterSending)
+	if (sendBuffer == nullptr)
 	{
-		cs->DiscardReceivedData();
+		sendBuffer = sendStack->Pop();
 	}
+	status = TransactionStatus::sending;
 }
 
 // Call this to perform some networking tasks while processing deferred requests,

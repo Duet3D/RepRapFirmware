@@ -47,6 +47,7 @@ public:
 	TransactionStatus GetStatus() const { return status; }
 	bool IsConnected() const;
 	bool IsSending() const;
+	bool CloseAfterSending() const { return closeAfterSending; }
 
 	bool HasMoreDataToRead() const;
 	bool Read(char& b);

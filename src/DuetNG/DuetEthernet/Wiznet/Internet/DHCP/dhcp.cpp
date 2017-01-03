@@ -55,7 +55,7 @@
 
 /* If you want to display debug & processing message, Define _DHCP_DEBUG_ in dhcp.h */
 
-#define _DHCP_DEBUG_
+//#define _DHCP_DEBUG_
 
 #ifdef _DHCP_DEBUG_
 extern "C" void debugPrintf(const char *fmt, ...);

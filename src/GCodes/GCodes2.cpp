@@ -114,7 +114,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					moveBuffer.coords[drive] = 0.0;
 				}
-				moveBuffer.feedRate = (gb.Seen(feedrateLetter)) ? gb.GetFValue() : gb.MachineState().feedrate;
+				moveBuffer.feedRate = (gb.Seen(feedrateLetter)) ? gb.GetFValue() * secondsToMinutes : gb.MachineState().feedrate;
 				moveBuffer.filePos = noFilePosition;
 				moveBuffer.usePressureAdvance = false;
 				segmentsLeft = 1;
@@ -162,7 +162,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 20: // Inches (which century are we living in, here?)
-		distanceScale = INCH_TO_MM;
+		distanceScale = InchToMm;
 		break;
 
 	case 21: // mm
@@ -1673,7 +1673,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 220:	// Set/report speed factor override percentage
 		if (gb.Seen('S'))
 		{
-			float newSpeedFactor = (gb.GetFValue() / 100.0) * secondsToMinutes;	// include the conversion from mm/minute to mm/second
+			float newSpeedFactor = (gb.GetFValue() * 0.01) * secondsToMinutes;	// include the conversion from mm/minute to mm/second
 			if (newSpeedFactor > 0.0)
 			{
 				gb.MachineState().feedrate *= newSpeedFactor / speedFactor;

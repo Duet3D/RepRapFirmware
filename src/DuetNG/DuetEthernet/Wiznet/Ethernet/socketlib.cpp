@@ -55,7 +55,7 @@
 //*****************************************************************************
 #include <socketlib.h>
 
-#define _SOCKET_DEBUG_
+//#define _SOCKET_DEBUG_
 
 #ifdef _SOCKET_DEBUG_
 extern "C" void debugPrintf(const char *fmt, ...);
@@ -64,8 +64,6 @@ extern "C" void delay(uint32_t);
 #else
 # define DEBUG_PRINTF(_fmt, ...)
 #endif
-
-
 
 #define SOCK_ANY_PORT_NUM  0xC000
 

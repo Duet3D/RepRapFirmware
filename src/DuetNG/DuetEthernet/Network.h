@@ -88,8 +88,6 @@ private:
 		active
 	};
 
-	bool AcquireTransaction(SocketNumber skt);
-
 	void InitSockets();
 	void TerminateSockets();
 

@@ -34,16 +34,16 @@ public:
 	bool IsPersistentConnection() const { return persistConnection; }
 	bool CanWrite() const;
 	void DiscardReceivedData();
+	bool AcquireTransaction();
 
 private:
 	enum class SocketState : uint8_t
 	{
 		inactive,
-		idle,
-		requestInProgress,
-		requestDone,
-		responseInProgress,
-		responseDone
+		listening,
+		connected,
+		clientDisconnecting,
+		closing
 	};
 
 	void ReInit();
@@ -60,7 +60,8 @@ private:
 	bool isTerminated;									// Will be true if the connection has gone down unexpectedly (TCP RST)
 	SocketNumber socketNum;								// The W5500 socket number we are using
 	SocketState state;
-	bool isSending;
+	bool isSending;										// True if we have written data to the W5500 to send and have not yet seen success or timeout
+	bool needTransaction;								// True if the web server has asked for a transaction
 };
 
 #endif /* SRC_DUETNG_DUETETHERNET_SOCKET_H_ */

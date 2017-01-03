@@ -1351,9 +1351,9 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
 	uint32_t currentStack, maxStack, neverUsed;
 	GetStackUsage(&currentStack, &maxStack, &neverUsed);
-	MessageF(mtype, "Current stack ram used: %d\n", currentStack);
-	MessageF(mtype, "Maximum stack ram used: %d\n", maxStack);
-	MessageF(mtype, "Never used ram: %d\n", neverUsed);
+	MessageF(mtype, "Current stack ram used: %u\n", currentStack);
+	MessageF(mtype, "Maximum stack ram used: %u\n", maxStack);
+	MessageF(mtype, "Never used ram: %u\n", neverUsed);
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)Time();		// get up time in seconds
@@ -1403,6 +1403,11 @@ void Platform::Diagnostics(MessageType mtype)
 
 	// Show the current error codes
 	MessageF(mtype, "Error status: %u\n", errorCodeBits);
+
+	//***TEMPORARY show the maximum PWM loop count, which should never exceed 1
+	extern uint32_t maxPwmLoopCount;
+	MessageF(mtype, "Max PWM loop count %u\n", maxPwmLoopCount);
+	maxPwmLoopCount = 0;
 
 	// Show the number of free entries in the file table
 	unsigned int numFreeFiles = 0;
@@ -1524,15 +1529,12 @@ void Platform::DiagnosticTest(int d)
 	}
 }
 
+extern "C" uint32_t _estack;		// this is defined in the linker script
+
 // Return the stack usage and amount of memory that has never been used, in bytes
 void Platform::GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_t* neverUsed) const
 {
-	const char * const ramend = (const char *)
-#if SAM4E
-			IRAM_ADDR + IRAM_SIZE;
-#else
-			IRAM0_ADDR + IRAM_SIZE;
-#endif
+	const char * const ramend = (const char *)&_estack;
 	register const char * stack_ptr asm ("sp");
 	const char * const heapend = sbrk(0);
 	const char * stack_lwm = heapend;

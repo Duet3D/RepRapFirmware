@@ -66,6 +66,14 @@ public:
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);
 
+	// Copy values that may have been altered by config.g into this state record
+	void CopyStateFrom(const GCodeMachineState& other)
+	{
+		drivesRelative = other.drivesRelative;
+		axesRelative = other.axesRelative;
+		feedrate = other.feedrate;
+	}
+
 	static void Release(GCodeMachineState *ms);
 	static unsigned int GetNumAllocated() { return numAllocated; }
 	static unsigned int GetNumInUse();
