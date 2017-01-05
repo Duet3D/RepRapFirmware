@@ -1,3 +1,3 @@
-IMPORTANT!
+These are the Windows device driver files for Duet electroncis running RepRapFirmware 1.12 and later.
 
-To install this Windows driver, download both the .inf file and the .cat file in Raw mode into the same folder on your PC. If you don't use Raw mode then the digital signature information will be invalid.
+Doe to the difficulties of downloading text files ffom github without the line endings getting changed (which messes up the digital signature), I recommend you download the Zip file and extract the contents to a folder on your PC.
