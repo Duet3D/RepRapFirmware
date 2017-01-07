@@ -113,6 +113,7 @@ public:
 	bool IsPausing() const;
 	bool IsResuming() const;
 	bool IsRunning() const;
+	bool IsDoingToolChange() const { return doingToolChange; }
 
 	bool AllAxesAreHomed() const;										// Return true if all axes are homed
 
@@ -196,7 +197,6 @@ private:
 	void ManageTool(GCodeBuffer& gb, StringRef& reply);					// Create a new tool definition
 	void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
-	void StartToolChange(GCodeBuffer& gb, bool inM109);					// Begin the tool change sequence
 
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
 	void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
@@ -242,6 +242,8 @@ private:
 	bool isPaused;								// true if the print has been paused
 	bool dwellWaiting;							// We are in a dwell
 	bool runningConfigFile;						// We are running config.g during the startup process
+	bool doingToolChange;						// We are running tool change macros
+
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	float dwellTime;							// How long a pause for a dwell (seconds)?
 	RawMove moveBuffer;							// Move details to pass to Move class

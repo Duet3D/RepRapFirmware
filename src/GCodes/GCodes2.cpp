@@ -1133,7 +1133,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 
 				newToolNumber = tool->Number();
-				StartToolChange(gb, true);
+				gb.SetState(GCodeState::m109ToolChange0);
 			}
 			else
 			{
@@ -3536,7 +3536,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
 		if (oldTool == nullptr || oldTool->Number() != newToolNumber)
 		{
-			StartToolChange(gb, false);
+			gb.SetState(GCodeState::toolChange0);
 			return true;							// proceeding with state machine, so don't unlock or send a reply
 		}
 	}

@@ -19,11 +19,13 @@ enum class GCodeState : uint8_t
 	homing,
 	setBed,
 
-	// These next 3 must be contiguous
+	// These next 4 must be contiguous
+	toolChange0,
 	toolChange1,
 	toolChange2,
 	toolChangeComplete,
-	// These next 3 must be contiguous
+	// These next 4 must be contiguous
+	m109ToolChange0,
 	m109ToolChange1,
 	m109ToolChange2,
 	m109ToolChangeComplete,

@@ -93,6 +93,7 @@ void GCodes::Init()
 	eofStringLength = strlen(eofString);
 	offSetSet = false;
 	runningConfigFile = false;
+	doingToolChange = false;
 	active = true;
 	longWait = platform->Time();
 	dwellTime = longWait;
@@ -271,8 +272,22 @@ void GCodes::Spin()
 			}
 			break;
 
-		case GCodeState::toolChange1: // Release the old tool (if any)
-		case GCodeState::m109ToolChange1: // Release the old tool (if any)
+		case GCodeState::toolChange0: 		// Run tfree for the old tool (if any)
+		case GCodeState::m109ToolChange0:	// Run tfree for the old tool (if any)
+			doingToolChange = true;
+			gb.AdvanceState();
+			{
+				const Tool * const oldTool = reprap.GetCurrentTool();
+				if (oldTool != nullptr && AllAxesAreHomed())
+				{
+					scratchString.printf("tfree%d.g", oldTool->Number());
+					DoFileMacro(gb, scratchString.Pointer(), false);
+				}
+			}
+			break;
+
+		case GCodeState::toolChange1:		// Release the old tool (if any), then run tpre for the new tool
+		case GCodeState::m109ToolChange1:	// Release the old tool (if any), then run tpre for the new tool
 			{
 				const Tool *oldTool = reprap.GetCurrentTool();
 				if (oldTool != NULL)
@@ -288,8 +303,8 @@ void GCodes::Spin()
 			}
 			break;
 
-		case GCodeState::toolChange2: // Select the new tool (even if it doesn't exist - that just deselects all tools)
-		case GCodeState::m109ToolChange2: // Select the new tool (even if it doesn't exist - that just deselects all tools)
+		case GCodeState::toolChange2:		// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
+		case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 			reprap.SelectTool(newToolNumber);
 			gb.AdvanceState();
 			if (reprap.GetTool(newToolNumber) != nullptr && AllAxesAreHomed())
@@ -300,10 +315,13 @@ void GCodes::Spin()
 			break;
 
 		case GCodeState::toolChangeComplete:
+			doingToolChange = false;
 			gb.SetState(GCodeState::normal);
 			break;
 
 		case GCodeState::m109ToolChangeComplete:
+			doingToolChange = false;
+			UnlockAll(gb);									// allow movement again
 			if (cancelWait || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling))
 			{
 				cancelWait = isWaiting = false;
@@ -3024,18 +3042,6 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 		active[h] = temperature;
 	}
 	tool->SetVariables(standby, active);
-}
-
-// Begin the tool change sequence
-void GCodes::StartToolChange(GCodeBuffer& gb, bool inM109)
-{
-	gb.SetState((inM109) ? GCodeState:: m109ToolChange1 : GCodeState::toolChange1);
-	const Tool * const oldTool = reprap.GetCurrentTool();
-	if (oldTool != nullptr && AllAxesAreHomed())
-	{
-		scratchString.printf("tfree%d.g", oldTool->Number());
-		DoFileMacro(gb, scratchString.Pointer(), false);
-	}
 }
 
 // Retract or un-retract filament, returning true if movement has been queued, false if this needs to be called again

@@ -1475,6 +1475,7 @@ char RepRap::GetStatusCharacter() const
 			: (IsStopped()) 											? 'H'	// Halted
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
+			: (gCodes->IsDoingToolChange())								? 'T'	// Running tool change macros
 			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
 			: (printMonitor->IsPrinting())								? 'P'	// Printing
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
