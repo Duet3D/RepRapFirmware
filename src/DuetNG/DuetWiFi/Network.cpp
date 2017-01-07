@@ -5,13 +5,14 @@
  ****************************************************************************************************/
 
 #include "Network.h"
+
 #include "Platform.h"
 #include "RepRap.h"
 #include "TransactionBuffer.h"
 #include "TransactionBufferReader.h"
 #include "WifiFirmwareUploader.h"
 
-// Define exactly one of the following as 1, thje other as zero
+// Define exactly one of the following as 1, the other as zero
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
 #define USE_PDC		0		// use peripheral DMA controller
 #define USE_DMAC	1		// use general DMA controller

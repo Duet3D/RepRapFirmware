@@ -482,6 +482,7 @@ public:
 	void SetZProbeParameters(int32_t probeType, const struct ZProbeParameters& params);
 	bool MustHomeXYBeforeZ() const;
 	bool WriteZProbeParameters(FileStore *f) const;
+	void SetProbing(bool isProbing);
 
 	// Ancilliary PWM
 

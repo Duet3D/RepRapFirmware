@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "Deltaprobe.h"
+#include "DeltaProbe.h"
 #include "DDA.h"
 #include "Platform.h"
 #include "RepRap.h"

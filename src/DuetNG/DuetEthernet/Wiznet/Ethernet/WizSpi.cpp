@@ -25,7 +25,7 @@
 #include "matrix.h"
 
 // Functions called by the W5500 module to transfer data to/from the W5500 via SPI
-const uint32_t SpiClockFrequency = 40000000;
+const uint32_t SpiClockFrequency = 60000000;
 const unsigned int SpiPeripheralChannelId = 0;			// we use NPCS0 as the slave select signal
 
 #if USE_PDC

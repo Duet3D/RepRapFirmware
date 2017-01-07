@@ -554,24 +554,27 @@ void Platform::InitZProbe()
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
 		pinMode(endStopPins[E0_AXIS], INPUT_PULLUP);
+		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 
 	case 5:
 	default:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(zProbeModulationPin, OUTPUT_HIGH);		// set high to take trash80's HE280 probe Teensy adapter out of reset
+		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 
 	case 6:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
 		pinMode(endStopPins[E0_AXIS + 1], INPUT_PULLUP);
+		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 
 	case 7:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
+		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;	//TODO (DeltaProbe)
 	}
 }
@@ -674,6 +677,15 @@ void Platform::SetZProbeType(int pt)
 {
 	zProbeType = (pt >= 0 && pt <= 7) ? pt : 0;
 	InitZProbe();
+}
+
+void Platform::SetProbing(bool isProbing)
+{
+	if (zProbeType > 3)
+	{
+		// For Z probe types other than 1/2/3 we set the modulation pin high at the start of a probing move and low at the end
+		digitalWrite(zProbeModulationPin, isProbing);
+	}
 }
 
 const ZProbeParameters& Platform::GetZProbeParameters(int32_t probeType) const

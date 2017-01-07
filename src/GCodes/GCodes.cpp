@@ -495,6 +495,7 @@ void GCodes::Spin()
 				}
 
 				zProbeTriggered = false;
+				platform->SetProbing(true);
 				moveBuffer.moveType = 0;
 				moveBuffer.endStopsToCheck = ZProbeActive;
 				moveBuffer.usePressureAdvance = false;
@@ -510,6 +511,7 @@ void GCodes::Spin()
 		case GCodeState::gridProbing3:	// ready to lift the probe after probing the current grid probe point
 			if (LockMovementAndWaitForStandstill(gb))
 			{
+				platform->SetProbing(false);
 				if (!zProbeTriggered)
 				{
 					reply.copy("Z probe was not triggered during probing move");
@@ -614,7 +616,7 @@ void GCodes::Spin()
 // Start a new gcode, or continue to execute one that has already been started:
 void GCodes::StartNextGCode(GCodeBuffer& gb, StringRef& reply)
 {
-	if (isPaused && &gb == fileGCode)
+	if (IsPaused() && &gb == fileGCode)
 	{
 		// We are paused, so don't process any more gcodes from the file being printed.
 		// There is a potential issue here if fileGCode holds any locks, so unlock everything.
@@ -1407,6 +1409,10 @@ bool GCodes::DoCannedCycleMove(GCodeBuffer& gb, EndstopChecks ce)
 		moveBuffer.usePressureAdvance = false;
 		segmentsLeft = 1;
 		cannedCycleMoveQueued = true;
+		if ((ce & ZProbeActive) != 0)
+		{
+			platform->SetProbing(true);
+		}
 	}
 	return false;
 }
@@ -1770,6 +1776,7 @@ int GCodes::DoZProbe(GCodeBuffer& gb, float distance)
 
 		if (DoCannedCycleMove(gb, ZProbeActive))
 		{
+			platform->SetProbing(false);
 			return (zProbeTriggered) ? 2 : 1;
 		}
 		return -1;
