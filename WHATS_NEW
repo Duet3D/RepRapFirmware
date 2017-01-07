@@ -9,6 +9,8 @@ Printer status:
 - New printer status "Tool change" implemented. This is recognised by DWC 1.14 and the forthcoming PanelDue firmware 1.16.
 Bug fix:
 - M226 (gcode-initiated pause) was hanging the printer (thanks chrishamm for the fix)
+Z probe:
+- For Z probe types 4 and higher, the MOD signal on the Z probe connector is driven high at the start of a probing move and low at the end. This is to help with certain types of Z probe, in particular accelerometer-based Z probes.
 Other:
 - Upgraded DWC files to 1.14 release (thanks chrishamm)
 
