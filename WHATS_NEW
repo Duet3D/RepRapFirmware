@@ -2,6 +2,18 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.17b
+=============
+
+Printer status:
+- New printer status "Tool change" implemented. This is recognised by DWC 1.14 and the forthcoming PanelDue firmware 1.16.
+Bug fix:
+- M226 (gcode-initiated pause) was hanging the printer (thanks chrishamm for the fix)
+Other:
+- Upgraded DWC files to 1.14 release (thanks chrishamm)
+
+For upgrade notes, see version 1.17.
+
 Version 1.17a
 =============
 
