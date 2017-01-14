@@ -170,7 +170,6 @@ bool GCodeBuffer::IsEmpty() const
 
 // Is 'c' in the G Code string?
 // Leave the pointer there for a subsequent read.
-
 bool GCodeBuffer::Seen(char c)
 {
 	readPointer = 0;
@@ -183,6 +182,24 @@ bool GCodeBuffer::Seen(char c)
 	}
 	readPointer = -1;
 	return false;
+}
+
+// Return the first G, M or T command letter. Needed so that we don't pick up a spurious command letter form inside a string parameter.
+char GCodeBuffer::GetCommandLetter()
+{
+	readPointer = 0;
+	for (;;)
+	{
+		const char b = gcodeBuffer[readPointer];
+		if (b == 0 || b == ';') break;
+		if (b == 'G' || b == 'M' || b == 'T')
+		{
+			return b;
+		}
+		++readPointer;
+	}
+	readPointer = -1;
+	return 0;
 }
 
 // Get a float after a G Code letter found by a call to Seen()

@@ -199,7 +199,7 @@ private:
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
 
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
-	void SetPositions(float positionNow[DRIVES]);						// Set the current position to be this
+	void SetPositions(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
 	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
 	bool RetractFilament(GCodeBuffer& gb, bool retract);				// Retract or un-retract filaments
 	bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive

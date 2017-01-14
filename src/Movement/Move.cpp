@@ -185,10 +185,10 @@ void Move::Spin()
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
 
-					bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
+					const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
 					if (doMotorMapping)
 					{
-						Transform(nextMove.coords, nextMove.xAxes);
+						Transform(nextMove.coords, nextMove.xAxes, true);
 					}
 					if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
 					{
@@ -481,7 +481,7 @@ int32_t Move::MotorEndPointToMachine(size_t drive, float coord)
 // This is computationally expensive on a delta, so only call it when necessary, and never from the step ISR.
 void Move::MachineToEndPoint(const int32_t motorPos[], float machinePos[], size_t numDrives) const
 {
-	const float *stepsPerUnit = reprap.GetPlatform()->GetDriveStepsPerUnit();
+	const float * const stepsPerUnit = reprap.GetPlatform()->GetDriveStepsPerUnit();
 
 	// Convert the axes
 	if (IsDeltaMode())
@@ -629,10 +629,13 @@ void Move::InverseAxisTransform(float xyzPoint[MAX_AXES]) const
 	xyzPoint[X_AXIS] -= (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
 }
 
-void Move::Transform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
+void Move::Transform(float xyzPoint[MAX_AXES], uint32_t xAxes, bool useBedCompensation) const
 {
 	AxisTransform(xyzPoint);
-	BedTransform(xyzPoint, xAxes);
+	if (useBedCompensation)
+	{
+		BedTransform(xyzPoint, xAxes);
+	}
 }
 
 void Move::InverseTransform(float xyzPoint[MAX_AXES], uint32_t xAxes) const
@@ -804,13 +807,13 @@ void Move::SetAxisCompensation(int8_t axis, float tangent)
 
 void Move::BarycentricCoordinates(size_t p1, size_t p2, size_t p3, float x, float y, float& l1, float& l2, float& l3) const
 {
-	float y23 = baryYBedProbePoints[p2] - baryYBedProbePoints[p3];
-	float x3 = x - baryXBedProbePoints[p3];
-	float x32 = baryXBedProbePoints[p3] - baryXBedProbePoints[p2];
-	float y3 = y - baryYBedProbePoints[p3];
-	float x13 = baryXBedProbePoints[p1] - baryXBedProbePoints[p3];
-	float y13 = baryYBedProbePoints[p1] - baryYBedProbePoints[p3];
-	float iDet = 1.0 / (y23 * x13 + x32 * y13);
+	const float y23 = baryYBedProbePoints[p2] - baryYBedProbePoints[p3];
+	const float x3 = x - baryXBedProbePoints[p3];
+	const float x32 = baryXBedProbePoints[p3] - baryXBedProbePoints[p2];
+	const float y3 = y - baryYBedProbePoints[p3];
+	const float x13 = baryXBedProbePoints[p1] - baryXBedProbePoints[p3];
+	const float y13 = baryYBedProbePoints[p1] - baryYBedProbePoints[p3];
+	const float iDet = 1.0 / (y23 * x13 + x32 * y13);
 	l1 = (y23 * x3 + x32 * y3) * iDet;
 	l2 = (-y13 * x3 + x13 * y3) * iDet;
 	l3 = 1.0 - l1 - l2;
@@ -831,7 +834,7 @@ float Move::TriangleZ(float x, float y) const
 {
 	for (size_t i = 0; i < 4; i++)
 	{
-		size_t j = (i + 1) % 4;
+		const size_t j = (i + 1) % 4;
 		float l1, l2, l3;
 		BarycentricCoordinates(i, j, 4, x, y, l1, l2, l3);
 		if (l1 > TRIANGLE_ZERO && l2 > TRIANGLE_ZERO && l3 > TRIANGLE_ZERO)
@@ -1173,7 +1176,10 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 		// Decide whether to do another iteration. Two is slightly better than one, but three doesn't improve things.
 		// Alternatively, we could stop when the expected RMS error is only slightly worse than the RMS of the residuals.
 		++iteration;
-		if (iteration == 2) break;
+		if (iteration == 2)
+		{
+			break;
+		}
 	}
 
 	// Print out the calculation time
@@ -1235,7 +1241,7 @@ void Move::DeltaProbeInterrupt()
 			deltaProbe.Trigger();
 		}
 
-		bool dir = deltaProbe.GetDirection();
+		const bool dir = deltaProbe.GetDirection();
 		Platform * const platform = reprap.GetPlatform();
 		platform->SetDirection(X_AXIS, dir);
 		platform->SetDirection(Y_AXIS, dir);
@@ -1245,7 +1251,7 @@ void Move::DeltaProbeInterrupt()
 		Platform::StepDriversHigh(steppersMoving);
 		ShortDelay();
 		Platform::StepDriversLow();
-		uint32_t tim = deltaProbe.CalcNextStepTime();
+		const uint32_t tim = deltaProbe.CalcNextStepTime();
 		again = (tim != 0xFFFFFFFF && platform->ScheduleInterrupt(tim + deltaProbingStartTime));
 	} while (again);
 }
@@ -1295,11 +1301,9 @@ void Move::HitHighStop(size_t axis, DDA* hitDDA)
 {
 	if (axis < reprap.GetGCodes()->GetNumAxes())		// should always be true
 	{
-		float hitPoint = (IsDeltaMode())
-							? deltaParams.GetHomedCarriageHeight(axis)
-							        // this is a delta printer, so the motor is at the homed carriage height for this drive
-							: reprap.GetPlatform()->AxisMaximum(axis);
-									// this is a Cartesian printer, so we're at the maximum for this axis
+		const float hitPoint = (IsDeltaMode())
+								? deltaParams.GetHomedCarriageHeight(axis)	// this is a delta printer, so the motor is at the homed carriage height for this drive
+								: reprap.GetPlatform()->AxisMaximum(axis);	// this is a Cartesian printer, so we're at the maximum for this axis
 		JustHomed(axis, hitPoint, hitDDA);
 	}
 }
@@ -1335,7 +1339,7 @@ void Move::ZProbeTriggered(DDA* hitDDA)
 // Return the untransformed machine coordinates
 void Move::GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const
 {
-	DDA *lastQueuedMove = ddaRingAddPointer->GetPrevious();
+	DDA * const lastQueuedMove = ddaRingAddPointer->GetPrevious();
 	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	for (size_t i = 0; i < DRIVES; i++)
 	{
@@ -1359,7 +1363,7 @@ void Move::GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) 
 bool Move::IsExtruding() const
 {
 	cpu_irq_disable();
-	bool rslt = currentDda != nullptr && currentDda->IsPrintingMove();
+	const bool rslt = currentDda != nullptr && currentDda->IsPrintingMove();
 	cpu_irq_enable();
 	return rslt;
 }

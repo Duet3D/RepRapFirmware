@@ -178,7 +178,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 
 	isPrintingMove = false;
-	bool realMove = false, xyMoving = false;
+	bool realMove = false, xyMoving = false, xyzMoving = false;
 	const bool isSpecialDeltaMove = (move->IsDeltaMode() && !doMotorMapping);
 	float accelerations[DRIVES];
 	const float * const normalAccelerations = reprap.GetPlatform()->Accelerations();
@@ -197,7 +197,16 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 		DriveMovement& dm = ddm[drive];
 		if (drive < numAxes && !isSpecialDeltaMove)
 		{
-			directionVector[drive] = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
+			const float positionDelta = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
+			directionVector[drive] = positionDelta;
+			if (positionDelta != 0)
+			{
+				xyzMoving = true;
+				if (drive != Z_AXIS)
+				{
+					xyMoving = true;
+				}
+			}
 			dm.state = (isDeltaMovement || delta != 0)
 						? DMState::moving				// on a delta printer, if one tower moves then we assume they all do
 						: DMState::idle;
@@ -214,22 +223,20 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 			dm.direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 			realMove = true;
 
-			if (drive < numAxes && drive != Z_AXIS)
-			{
-				xyMoving = true;
-			}
-
 			if (drive >= numAxes && xyMoving)
 			{
 				if (delta > 0)
 				{
 					isPrintingMove = true;				// we have both movement and extrusion
 				}
-				const float compensationTime = reprap.GetPlatform()->GetPressureAdvance(drive);
-				if (compensationTime > 0.0)
+				if (nextMove.usePressureAdvance)
 				{
-					// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-					accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform()->ConfiguredInstantDv(drive)/compensationTime);
+					const float compensationTime = reprap.GetPlatform()->GetPressureAdvance(drive - numAxes);
+					if (compensationTime > 0.0)
+					{
+						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
+						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform()->ConfiguredInstantDv(drive)/compensationTime);
+					}
 				}
 			}
 		}
@@ -252,10 +259,11 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	endCoordinatesValid = (endStopsToCheck == 0) && (doMotorMapping || !move->IsDeltaMode());
 
 	// 4. Normalise the direction vector and compute the amount of motion.
-	// If there is any XYZ movement, then we normalise it so that the total XYZ movement has unit length.
-	// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
-	if (xyMoving || ddm[Z_AXIS].state == DMState::moving)
+	if (xyzMoving)
 	{
+		// There is some XYZ movement, so normalise the direction vector so that the total XYZ movement has unit length and 'totalDistance' is the XYZ distance moved.
+		// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
+		// First do the bed tilt compensation for deltas.
 		if (isDeltaMovement)
 		{
 			// Add on the Z movement needed to compensate for bed tilt
@@ -299,7 +307,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 				}
 				else
 				{
-					// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being above the bed,
+					// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
 					// the other root corresponds to the carriages being above the bed.
 					const float drev = ((directionVector[Z_AXIS] * sqrt(a2b2D2 - fsquare(A * directionVector[Y_AXIS] - B * directionVector[X_AXIS])))
 										- aAplusbB)/a2plusb2;
@@ -342,16 +350,22 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 	else
 	{
+		// Extruder-only movement.
+		// Currently we normalise vector sum of all extruder movement to unit length.
+		// Alternatives would be:
+		// 1. Normalise the largest one to unit length. This means that when retracting multiple filaments, they all get the requested retract speed.
+		// 2. Normalise the sum to unit length. This means that when we use mixing, we get the requested extrusion rate at the nozzle.
+		// 3. Normalise the sum to the sum of the mixing coefficients (which we would have to include in the move details).
 		totalDistance = Normalise(directionVector, DRIVES, DRIVES);
 	}
 
-	// 5. Compute the maximum acceleration available and maximum top speed
+	// 5. Compute the maximum acceleration available
 	float normalisedDirectionVector[DRIVES];			// Used to hold a unit-length vector in the direction of motion
 	memcpy(normalisedDirectionVector, directionVector, sizeof(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, DRIVES);
 	acceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations, DRIVES);
 
-	// Set the speed to the smaller of the requested and maximum speed.
+	// 6. Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.
 	float reqSpeed = nextMove.feedRate;
 	if (isSpecialDeltaMove)
@@ -372,13 +386,13 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 			reqSpeed /= maxDistance;		// because normalisedDirectionVector is unit-normalised
 		}
 	}
-	requestedSpeed = max<float>(0.5, min<float>(reqSpeed, VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform()->MaxFeedrates(), DRIVES)));
+	requestedSpeed = constrain<float>(reqSpeed, 0.5, VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform()->MaxFeedrates(), DRIVES));
 
 	// On a Cartesian or CoreXY printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
 	if (isDeltaMovement)
 	{
-		const float xyFactor = sqrt(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[X_AXIS]));
+		const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[X_AXIS]));
 		const float maxSpeed = reprap.GetPlatform()->MaxFeedrates()[X_AXIS];
 		if (requestedSpeed * xyFactor > maxSpeed)
 		{
@@ -392,7 +406,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 		}
 	}
 
-	// 6. Calculate the provisional accelerate and decelerate distances and the top speed
+	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 	endSpeed = 0.0;					// until the next move asks us to adjust it
 
 	if (prev->state != provisional)
@@ -827,13 +841,13 @@ void DDA::Prepare()
 float DDA::VectorBoxIntersection(const float v[], const float box[], size_t dimensions)
 {
 	// Generate a vector length that is guaranteed to exceed the size of the box
-	float biggerThanBoxDiagonal = 2.0*Magnitude(box, dimensions);
+	const float biggerThanBoxDiagonal = 2.0*Magnitude(box, dimensions);
 	float magnitude = biggerThanBoxDiagonal;
 	for (size_t d = 0; d < dimensions; d++)
 	{
 		if (biggerThanBoxDiagonal*v[d] > box[d])
 		{
-			float a = box[d]/v[d];
+			const float a = box[d]/v[d];
 			if (a < magnitude)
 			{
 				magnitude = a;
@@ -863,8 +877,7 @@ float DDA::Magnitude(const float v[], size_t dimensions)
 	{
 		magnitude += v[d]*v[d];
 	}
-	magnitude = sqrtf(magnitude);
-	return magnitude;
+	return sqrtf(magnitude);
 }
 
 // Multiply a vector by a scalar

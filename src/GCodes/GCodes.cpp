@@ -589,7 +589,7 @@ void GCodes::Spin()
 					const uint32_t numPointsProbed = reprap.GetMove()->AccessBedProbeGrid().GetStatistics(mean, deviation);
 					if (numPointsProbed >= 4)
 					{
-						reply.printf("%u points probed, mean error %.2f, deviation %.2f\n", numPointsProbed, mean, deviation);
+						reply.printf("%u points probed, mean error %.3f, deviation %.3f\n", numPointsProbed, mean, deviation);
 						error = SaveHeightMap(gb, reply);
 						reprap.GetMove()->AccessBedProbeGrid().UseHeightMap(true);
 					}
@@ -1747,8 +1747,9 @@ bool GCodes::DoSingleZProbe(GCodeBuffer& gb, StringRef& reply, bool reportOnly, 
 		else
 		{
 			moveBuffer.coords[Z_AXIS] = platform->ZProbeStopHeight() + heightAdjust;
-			SetPositions(moveBuffer.coords);
+			SetPositions(moveBuffer.coords, false);		// set positions WITHOUT (very important) applying bed compensation
 			SetAxisIsHomed(Z_AXIS);
+			reprap.GetMove()->GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes());	// update the user position
 			lastProbedZ = 0.0;
 		}
 		return true;
@@ -3049,10 +3050,10 @@ bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 {
 	if (retract != isRetracted && (retractLength != 0.0 || retractHop != 0.0 || (!retract && retractExtra != 0.0)))
 	{
-		const Tool *tool = reprap.GetCurrentTool();
+		const Tool * const tool = reprap.GetCurrentTool();
 		if (tool != nullptr)
 		{
-			size_t nDrives = tool->DriveCount();
+			const size_t nDrives = tool->DriveCount();
 			if (nDrives != 0)
 			{
 				if (segmentsLeft != 0)
@@ -3060,28 +3061,30 @@ bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 					return false;
 				}
 
-				reprap.GetMove()->GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes());
+				const uint32_t xAxes = reprap.GetCurrentXAxes();
+				reprap.GetMove()->GetCurrentUserPosition(moveBuffer.coords, 0, xAxes);
 				for (size_t i = numAxes; i < DRIVES; ++i)
 				{
 					moveBuffer.coords[i] = 0.0;
 				}
 				// Set the feed rate. If there is any Z hop then we need to pass the Z speed, else we pass the extrusion speed.
 				const float speedToUse = (retract) ? retractSpeed : unRetractSpeed;
-				moveBuffer.feedRate = (retractHop == 0.0)
+				moveBuffer.feedRate = (retractHop == 0.0 || retractLength == 0.0)
 										? speedToUse
 										: speedToUse * retractHop/retractLength;
 				moveBuffer.coords[Z_AXIS] += (retract) ? retractHop : -retractHop;
 				const float lengthToUse = (retract) ? -retractLength : retractLength + retractExtra;
 				for (size_t i = 0; i < nDrives; ++i)
 				{
-					moveBuffer.coords[E0_AXIS + tool->Drive(i)] = lengthToUse;
+					moveBuffer.coords[numAxes + tool->Drive(i)] = lengthToUse;
 				}
 
+				moveBuffer.moveType = 0;
 				moveBuffer.isFirmwareRetraction = true;
 				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() : noFilePosition;
 				moveBuffer.canPauseAfter = !retract;			// don't pause after a retraction because that could cause too much retraction
-				moveBuffer.xAxes = reprap.GetCurrentXAxes();
+				moveBuffer.xAxes = xAxes;
 				segmentsLeft = 1;
 			}
 		}
@@ -3134,14 +3137,14 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 	return true;
 }
 
-// Set the current position
-void GCodes::SetPositions(float positionNow[DRIVES])
+// Set the current position, optionally applying bed and axis compensation
+void GCodes::SetPositions(const float positionNow[DRIVES], bool doBedCompensation)
 {
-	// Transform the position so that e.g. if the user does G92 Z0,
-	// the position we report (which gets inverse-transformed) really is Z=0 afterwards
-	reprap.GetMove()->Transform(positionNow, reprap.GetCurrentXAxes());
-	reprap.GetMove()->SetLiveCoordinates(positionNow);
-	reprap.GetMove()->SetPositions(positionNow);
+	float newPos[DRIVES];
+	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
+	reprap.GetMove()->Transform(newPos, reprap.GetCurrentXAxes(), doBedCompensation);
+	reprap.GetMove()->SetLiveCoordinates(newPos);
+	reprap.GetMove()->SetPositions(newPos);
 }
 
 bool GCodes::IsPaused() const

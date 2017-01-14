@@ -45,27 +45,21 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, StringRef& reply)
 		return true;
 	}
 
-	// M-code parameters might contain letters T and G, e.g. in filenames.
-	// dc42 assumes that G-and T-code parameters never contain the letter M.
-	// Therefore we must check for an M-code first.
-	if (gb.Seen('M'))
+	// G29 string parameters may contain the letter M, and various M-code string parameter may contain the letter G.
+	// So we now look for the first G, M or T in the command.
+	switch (gb.GetCommandLetter())
 	{
-		return HandleMcode(gb, reply);
-	}
-	// dc42 doesn't think a G-code parameter ever contains letter T, or a T-code ever contains letter G.
-	// So it doesn't matter in which order we look for them.
-	if (gb.Seen('G'))
-	{
+	case 'G':
 		return HandleGcode(gb, reply);
-	}
-	if (gb.Seen('T'))
-	{
+	case 'M':
+		return HandleMcode(gb, reply);
+	case 'T':
 		return HandleTcode(gb, reply);
+	default:
+		// An invalid command gets discarded
+		HandleReply(gb, false, "");
+		return true;
 	}
-
-	// An invalid or queued buffer gets discarded
-	HandleReply(gb, false, "");
-	return true;
 }
 
 bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
@@ -73,7 +67,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 	bool result = true;
 	bool error = false;
 
-	int code = gb.GetIValue();
+	const int code = gb.GetIValue();
 	if (simulationMode != 0 && code != 0 && code != 1 && code != 4 && code != 10 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
 	{
 		return true;			// we only simulate some gcodes
@@ -885,6 +879,22 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		FileMacroCyclesReturn(gb);
 		break;
 
+	case 101: // Un-retract
+		if (!LockMovement(gb))
+		{
+			return false;
+		}
+		result = RetractFilament(gb, false);
+		break;
+
+	case 103: // Retract
+		if (!LockMovement(gb))
+		{
+			return false;
+		}
+		result = RetractFilament(gb, true);
+		break;
+
 	case 104: // Deprecated.  This sets the active temperature of every heater of the active tool
 		if (gb.Seen('S'))
 		{
@@ -1676,11 +1686,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			float newSpeedFactor = (gb.GetFValue() * 0.01) * secondsToMinutes;	// include the conversion from mm/minute to mm/second
 			if (newSpeedFactor > 0.0)
 			{
-				gb.MachineState().feedrate *= newSpeedFactor / speedFactor;
+				// Update the feed rate for ALL input sources, and all feed rates on the stack
+				const float speedFactorRatio = newSpeedFactor / speedFactor;
+				for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
+				{
+					GCodeMachineState *ms = &gcodeSources[i]->MachineState();
+					while (ms != nullptr)
+					{
+						ms->feedrate *= speedFactorRatio;
+						ms = ms->previous;
+					}
+				}
+				// If the last move hasn't gone yet, update its feed rate too if it is not a firmware retraction
 				if (segmentsLeft != 0 && !moveBuffer.isFirmwareRetraction)
 				{
-					// The last move has not gone yet, so we can update it
-					moveBuffer.feedRate *= newSpeedFactor / speedFactor;
+					moveBuffer.feedRate *= speedFactorRatio;
 				}
 				speedFactor = newSpeedFactor;
 			}

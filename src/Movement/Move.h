@@ -77,7 +77,7 @@ public:
     void SetAxisCompensation(int8_t axis, float tangent);			// Set an axis-pair compensation angle
     float AxisCompensation(int8_t axis) const;						// The tangent value
     void SetIdentityTransform();									// Cancel the bed equation; does not reset axis angle compensation
-    void Transform(float move[], uint32_t xAxes) const;				// Take a position and apply the bed and the axis-angle compensations
+    void Transform(float move[], uint32_t xAxes, bool useBedCompensation) const; // Take a position and apply the bed and the axis-angle compensations
     void InverseTransform(float move[], uint32_t xAxes) const;		// Go from a transformed point back to user coordinates
 	float GetTaperHeight() const { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h);

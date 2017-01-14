@@ -23,6 +23,7 @@ public:
 	bool Put(const char *str, size_t len);				// Add an entire string
 	bool IsEmpty() const;								// Does this buffer contain any code?
 	bool Seen(char c);									// Is a character present?
+	char GetCommandLetter();							// Find the first G, M or T command
 	float GetFValue();									// Get a float after a key letter
 	int32_t GetIValue();								// Get an integer after a key letter
 	void TryGetFValue(char c, float& val, bool& seen);
