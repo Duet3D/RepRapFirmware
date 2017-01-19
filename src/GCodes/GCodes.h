@@ -101,7 +101,7 @@ public:
 	void SetAxisNotHomed(unsigned int axis)								// Tell us that the axis is not homed
 		{ axesHomed &= ~(1 << axis); }
 
-	float GetSpeedFactor() const { return speedFactor * minutesToSeconds; }	// Return the current speed factor
+	float GetSpeedFactor() const { return speedFactor * MinutesToSeconds; }	// Return the current speed factor
 	float GetExtrusionFactor(size_t extruder) { return extrusionFactors[extruder]; } // Return the current extrusion factors
 	float GetRawExtruderPosition(size_t drive) const;					// Get the actual extruder position, after adjusting the extrusion factor
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
@@ -158,8 +158,8 @@ private:
 
 	void StartNextGCode(GCodeBuffer& gb, StringRef& reply);				// Fetch a new or old GCode and process it
 	void DoFilePrint(GCodeBuffer& gb, StringRef& reply);				// Get G Codes from a file and print them
-    bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, bool runningM502 = false);
-    																	// Run a GCode macro file, optionally report error if not found
+	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, bool runningM502 = false);
+																		// Run a GCode macro file, optionally report error if not found
 	bool DoCannedCycleMove(GCodeBuffer& gb, EndstopChecks ce);			// Do a move from an internally programmed canned cycle
 	void FileMacroCyclesReturn(GCodeBuffer& gb);						// End a macro
 	bool ActOnCode(GCodeBuffer& gb, StringRef& reply);					// Do a G, M or T Code
@@ -177,9 +177,13 @@ private:
 	void SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation
 	bool SetPrintZProbe(GCodeBuffer& gb, StringRef& reply);				// Either return the probe value, or set its threshold
 	bool SetOrReportOffsets(GCodeBuffer& gb, StringRef& reply);			// Deal with a G10
+
 	bool SetPositions(GCodeBuffer& gb);									// Deal with a G92
-	unsigned int LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType); // Set up a move for the Move class
-	bool NoHome() const;												// Are we homing and not finished?
+	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType); // Set up the extrusion and feed rate of a move for the Move class
+	unsigned int LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType); // Set up the axis coordinates of a move for the Move class
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
+		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
+
 	bool Push(GCodeBuffer& gb);											// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);											// Pop feedrate etc
 	void DisableDrives();												// Turn the motors off
@@ -223,8 +227,8 @@ private:
 
 	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
-	Platform* platform;													// The RepRap machine
-	Webserver* webserver;												// The web server class
+	Platform* const platform;													// The RepRap machine
+	Webserver* const webserver;												// The web server class
 
 	GCodeBuffer* gcodeSources[6];										// The various sources of gcodes
 
@@ -244,9 +248,18 @@ private:
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
 
-	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	float dwellTime;							// How long a pause for a dwell (seconds)?
+
+	// The following contain the details of moves that the Move module fetches
 	RawMove moveBuffer;							// Move details to pass to Move class
+	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
+	float arcCentre[MAX_AXES];
+	float arcRadius;
+	float arcCurrentAngle;
+	float arcAngleIncrement;
+	uint32_t arcAxesMoving;
+	bool doingArcMove;
+
 	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
 	RestorePoint pauseRestorePoint;				// The position and feed rate when we paused the print
 	RestorePoint toolChangeRestorePoint;		// The position and feed rate when we freed a tool
@@ -262,6 +275,7 @@ private:
 	CannedMoveType cannedMoveType[DRIVES];		// Is this drive involved in a canned cycle move?
 	bool offSetSet;								// Are any axis offsets non-zero?
 	float distanceScale;						// MM or inches
+	float arcSegmentLength;						// Length of segments that we split arc moves into
 	FileData fileToPrint;
 	FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) to
 	uint16_t toBeHomed;							// Bitmap of axes still to be homed

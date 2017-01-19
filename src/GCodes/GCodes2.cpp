@@ -108,7 +108,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					moveBuffer.coords[drive] = 0.0;
 				}
-				moveBuffer.feedRate = (gb.Seen(feedrateLetter)) ? gb.GetFValue() * secondsToMinutes : gb.MachineState().feedrate;
+				moveBuffer.feedRate = (gb.Seen(feedrateLetter)) ? gb.GetFValue() * SecondsToMinutes : gb.MachineState().feedrate;
 				moveBuffer.filePos = noFilePosition;
 				moveBuffer.usePressureAdvance = false;
 				segmentsLeft = 1;
@@ -122,6 +122,24 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				result = (res != 0);
 			}
+		}
+		break;
+
+	case 2: // Clockwise arc
+	case 3: // Anti clockwise arc
+		// We only support X and Y axes in these, but you can map them to other axes in the tool definitions
+		if (!LockMovement(gb))
+		{
+			return false;
+		}
+		if (segmentsLeft != 0)
+		{
+			return false;
+		}
+		if (DoArcMove(gb, code == 2))
+		{
+			reply.copy("Invalid G2 or G3 command");
+			error = true;
 		}
 		break;
 
@@ -1566,7 +1584,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform->SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * secondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
+					platform->SetMaxFeedrate(axis, gb.GetFValue() * distanceScale * SecondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
 					seen = true;
 				}
 			}
@@ -1579,7 +1597,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				gb.GetFloatArray(eVals, eCount, true);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform->SetMaxFeedrate(numAxes + e, eVals[e] * distanceScale * secondsToMinutes);
+					platform->SetMaxFeedrate(numAxes + e, eVals[e] * distanceScale * SecondsToMinutes);
 				}
 			}
 
@@ -1588,13 +1606,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				reply.copy("Maximum feedrates: ");
 				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], platform->MaxFeedrate(axis) / (distanceScale * secondsToMinutes));
+					reply.catf("%c: %.1f, ", axisLetters[axis], platform->MaxFeedrate(axis) / (distanceScale * SecondsToMinutes));
 				}
 				reply.cat("E:");
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, platform->MaxFeedrate(extruder + numAxes) / (distanceScale * secondsToMinutes));
+					reply.catf("%c%.1f", sep, platform->MaxFeedrate(extruder + numAxes) / (distanceScale * SecondsToMinutes));
 					sep = ':';
 				}
 			}
@@ -1620,12 +1638,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			if (gb.Seen('F'))
 			{
-				unRetractSpeed = retractSpeed = max<float>(gb.GetFValue(), 60.0) * secondsToMinutes;
+				unRetractSpeed = retractSpeed = max<float>(gb.GetFValue(), 60.0) * SecondsToMinutes;
 				seen = true;
 			}
 			if (gb.Seen('T'))	// must do this one after 'F'
 			{
-				unRetractSpeed = max<float>(gb.GetFValue(), 60.0) * secondsToMinutes;
+				unRetractSpeed = max<float>(gb.GetFValue(), 60.0) * SecondsToMinutes;
 				seen = true;
 			}
 			if (gb.Seen('Z'))
@@ -1636,7 +1654,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.printf("Retraction/un-retraction settings: length %.2f/%.2fmm, speed %d/%dmm/min, Z hop %.2fmm",
-						retractLength, retractLength + retractExtra, (int)(retractSpeed * minutesToSeconds), (int)(unRetractSpeed * minutesToSeconds), retractHop);
+						retractLength, retractLength + retractExtra, (int)(retractSpeed * MinutesToSeconds), (int)(unRetractSpeed * MinutesToSeconds), retractHop);
 			}
 		}
 		break;
@@ -1683,7 +1701,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 220:	// Set/report speed factor override percentage
 		if (gb.Seen('S'))
 		{
-			float newSpeedFactor = (gb.GetFValue() * 0.01) * secondsToMinutes;	// include the conversion from mm/minute to mm/second
+			float newSpeedFactor = (gb.GetFValue() * 0.01) * SecondsToMinutes;	// include the conversion from mm/minute to mm/second
 			if (newSpeedFactor > 0.0)
 			{
 				// Update the feed rate for ALL input sources, and all feed rates on the stack
@@ -1712,7 +1730,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Speed factor override: %.1f%%", speedFactor * minutesToSeconds * 100.0);
+			reply.printf("Speed factor override: %.1f%%", speedFactor * MinutesToSeconds * 100.0);
 		}
 		break;
 
@@ -2366,13 +2384,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (gb.Seen('F'))		// feed rate i.e. probing speed
 			{
-				params.probeSpeed = gb.GetFValue() * secondsToMinutes;
+				params.probeSpeed = gb.GetFValue() * SecondsToMinutes;
 				seenParam = true;
 			}
 
 			if (gb.Seen('T'))		// travel speed to probe point
 			{
-				params.travelSpeed = gb.GetFValue() * secondsToMinutes;
+				params.travelSpeed = gb.GetFValue() * SecondsToMinutes;
 				seenParam = true;
 			}
 
@@ -2394,7 +2412,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				reply.printf("Z Probe type %d, invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec",
 								platform->GetZProbeType(), (params.invertReading) ? "yes" : "no", params.diveHeight,
-								(int)(params.probeSpeed * minutesToSeconds), (int)(params.travelSpeed * minutesToSeconds), params.recoveryTime);
+								(int)(params.probeSpeed * MinutesToSeconds), (int)(params.travelSpeed * MinutesToSeconds), params.recoveryTime);
 				if (platform->GetZProbeType() == ZProbeTypeDelta)
 				{
 					reply.catf(", extra parameter %.2f", params.extraParam);
@@ -2485,7 +2503,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			if (gb.Seen(axisLetters[axis]))
 			{
-				platform->SetInstantDv(axis, gb.GetFValue() * distanceScale * secondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
+				platform->SetInstantDv(axis, gb.GetFValue() * distanceScale * SecondsToMinutes); // G Code feedrates are in mm/minute; we need mm/sec
 				seen = true;
 			}
 		}
@@ -2498,7 +2516,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			gb.GetFloatArray(eVals, eCount, true);
 			for (size_t e = 0; e < eCount; e++)
 			{
-				platform->SetInstantDv(numAxes + e, eVals[e] * distanceScale * secondsToMinutes);
+				platform->SetInstantDv(numAxes + e, eVals[e] * distanceScale * SecondsToMinutes);
 			}
 		}
 		else if (!seen)
@@ -2506,13 +2524,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			reply.copy("Maximum jerk rates: ");
 			for (size_t axis = 0; axis < numAxes; ++axis)
 			{
-				reply.catf("%c: %.1f, ", axisLetters[axis], platform->ConfiguredInstantDv(axis) / (distanceScale * secondsToMinutes));
+				reply.catf("%c: %.1f, ", axisLetters[axis], platform->ConfiguredInstantDv(axis) / (distanceScale * SecondsToMinutes));
 			}
 			reply.cat("E:");
 			char sep = ' ';
 			for (size_t extruder = 0; extruder < numExtruders; extruder++)
 			{
-				reply.catf("%c%.1f", sep, platform->ConfiguredInstantDv(extruder + numAxes) / (distanceScale * secondsToMinutes));
+				reply.catf("%c%.1f", sep, platform->ConfiguredInstantDv(extruder + numAxes) / (distanceScale * SecondsToMinutes));
 				sep = ':';
 			}
 		}

@@ -55,7 +55,7 @@ void GCodes::RestorePoint::Init()
 	{
 		moveCoords[i] = 0.0;
 	}
-	feedRate = DefaultFeedrate * secondsToMinutes;
+	feedRate = DefaultFeedrate * SecondsToMinutes;
 }
 
 GCodes::GCodes(Platform* p, Webserver* w) :
@@ -82,6 +82,7 @@ void GCodes::Init()
 	numAxes = MIN_AXES;
 	numExtruders = MaxExtruders;
 	distanceScale = 1.0;
+	arcSegmentLength = DefaultArcSegmentLength;
 	rawExtruderTotal = 0.0;
 	for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
 	{
@@ -111,7 +112,7 @@ void GCodes::Init()
 
 	retractLength = retractExtra = DefaultRetractLength;
 	retractHop = 0.0;
-	retractSpeed = unRetractSpeed = DefaultRetractSpeed * secondsToMinutes;
+	retractSpeed = unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	isRetracted = false;
 }
 
@@ -134,7 +135,7 @@ void GCodes::Reset()
 	probeCount = 0;
 	cannedCycleMoveCount = 0;
 	cannedCycleMoveQueued = false;
-	speedFactor = secondsToMinutes;						// default is just to convert from mm/minute to mm/second
+	speedFactor = SecondsToMinutes;						// default is just to convert from mm/minute to mm/second
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
 		extrusionFactors[i] = 1.0;
@@ -362,7 +363,7 @@ void GCodes::Spin()
 				{
 					moveBuffer.coords[drive] = 0.0;
 				}
-				moveBuffer.feedRate = DefaultFeedrate * secondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
+				moveBuffer.feedRate = DefaultFeedrate * SecondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
 				moveBuffer.moveType = 0;
 				moveBuffer.endStopsToCheck = 0;
 				moveBuffer.usePressureAdvance = false;
@@ -980,11 +981,10 @@ void GCodes::Pop(GCodeBuffer& gb)
 	}
 }
 
-// Move expects all axis movements to be absolute, and all extruder drive moves to be relative.  This function serves that.
-// 'moveType' is the S parameter in the G0 or G1 command, or -1 if we are doing G92.
-// For regular (type 0) moves, we apply limits and do X axis mapping.
-// Returns the number of segments if we have a legal move, 1 if we are doing G92, or zero if this gcode should be discarded
-unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
+// Set up the extrusion and feed rate of a move for the Move class
+// 'moveType' is the S parameter in the G0 or G1 command, or zero for a G2 or G3 command
+// Returns true if this gcode is valid so far, false if it should be discarded
+bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 {
 	// Zero every extruder drive as some drives may not be changed
 	for (size_t drive = numAxes; drive < DRIVES; drive++)
@@ -998,7 +998,7 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 		const float rate = gb.GetFValue() * distanceScale;
 		gb.MachineState().feedrate = (moveType == 0)
 										? rate * speedFactor
-										: rate * secondsToMinutes;		// don't apply the speed factor to homing and other special moves
+										: rate * SecondsToMinutes;		// don't apply the speed factor to homing and other special moves
 	}
 	moveBuffer.feedRate = gb.MachineState().feedrate;
 
@@ -1009,7 +1009,7 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 		if (tool == nullptr)
 		{
 			platform->Message(GENERIC_MESSAGE, "Attempting to extrude with no tool selected.\n");
-			return 0;
+			return false;
 		}
 		const size_t eMoveCount = tool->DriveCount();
 		if (eMoveCount > 0)
@@ -1073,8 +1073,16 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 			}
 		}
 	}
+	return true;
+}
 
-	// Now the movement axes
+// Set up the axis coordinates of a move for the Move class
+// Move expects all axis movements to be absolute, and all extruder drive moves to be relative.  This function serves that.
+// 'moveType' is the S parameter in the G0 or G1 command, or -1 if we are doing G92.
+// For regular (type 0) moves, we apply limits and do X axis mapping.
+// Returns the number of segments if we have a legal move, 1 if we are doing G92, or zero if this gcode should be discarded
+unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
+{
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	unsigned int numSegments = 1;
 	for (size_t axis = 0; axis < numAxes; axis++)
@@ -1216,6 +1224,7 @@ int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 	// Check to see if the move is a 'homing' move that endstops are checked on.
 	moveBuffer.endStopsToCheck = 0;
 	moveBuffer.moveType = 0;
+	doingArcMove = false;
 	moveBuffer.xAxes = reprap.GetCurrentXAxes();
 	if (gb.Seen('S'))
 	{
@@ -1279,31 +1288,157 @@ int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 
 	// Load the move buffer with either the absolute movement required or the relative movement required
 	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numAxes * sizeof(moveBuffer.initialCoords[0]));
-	segmentsLeft = LoadMoveBufferFromGCode(gb, moveBuffer.moveType);
-
-	if (segmentsLeft != 0)
+	if (LoadExtrusionAndFeedrateFromGCode(gb, moveBuffer.moveType))
 	{
-		// Flag whether we should use pressure advance, if there is any extrusion in this move.
-		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU.. movement.
-		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU.. movement here.
-		moveBuffer.usePressureAdvance = false;
-		for (size_t axis = 0; axis < numAxes; ++axis)
+		segmentsLeft = LoadMoveBufferFromGCode(gb, moveBuffer.moveType);
+		if (segmentsLeft != 0)
 		{
-			if (axis != Z_AXIS && moveBuffer.coords[axis] != moveBuffer.initialCoords[axis])
+			// Flag whether we should use pressure advance, if there is any extrusion in this move.
+			// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU.. movement.
+			// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU.. movement here.
+			moveBuffer.usePressureAdvance = false;
+			for (size_t axis = 0; axis < numAxes; ++axis)
 			{
-				moveBuffer.usePressureAdvance = true;
-				break;
+				if (axis != Z_AXIS && moveBuffer.coords[axis] != moveBuffer.initialCoords[axis])
+				{
+					moveBuffer.usePressureAdvance = true;
+					break;
+				}
 			}
+			moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() : noFilePosition;
+			moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
+			//debugPrintf("Queue move pos %u\n", moveFilePos);
 		}
-		moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() : noFilePosition;
-		moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
-		//debugPrintf("Queue move pos %u\n", moveFilePos);
 	}
 	return (moveBuffer.moveType != 0 || moveBuffer.endStopsToCheck != 0) ? 2 : 1;
 }
 
-// The Move class calls this function to find what to do next.
+// Execute an arc move returning true if it was badly-formed
+// We already have the movement lock and the last move has gone
+bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
+{
+	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numAxes * sizeof(moveBuffer.initialCoords[0]));
 
+	// Get the axis parameters. X Y I J are compulsory, Z is optional.
+	if (!gb.Seen('X')) return true;
+	const float xParam = gb.GetFValue();
+	if (!gb.Seen('Y')) return true;
+	const float yParam = gb.GetFValue();
+	if (!gb.Seen('I')) return true;
+	const float iParam = gb.GetFValue();
+	if (!gb.Seen('J')) return true;
+	const float jParam = gb.GetFValue();
+
+	// Adjust them for relative/absolute coordinates, tool offset, and X axis mapping. Also get the optional Z parameter
+	const Tool * const currentTool = reprap.GetCurrentTool();
+	const bool axesRelative = gb.MachineState().axesRelative;
+	if (gb.Seen('Z'))
+	{
+		const float zParam = gb.GetFValue();
+		if (axesRelative)
+		{
+			moveBuffer.coords[Z_AXIS] += zParam;
+		}
+		else
+		{
+			moveBuffer.coords[Z_AXIS] = zParam;
+			if (currentTool != nullptr)
+			{
+				moveBuffer.coords[Z_AXIS] -= currentTool->GetOffset()[Z_AXIS];
+			}
+		}
+	}
+
+	float initialDx = 0.0;
+	if (currentTool != nullptr)
+	{
+		// Record which axes behave like an X axis
+		arcAxesMoving = currentTool->GetXAxisMap() & ~((1 << Y_AXIS) | (1 << Z_AXIS));
+
+		// Sort out the Y axis
+		if (axesRelative)
+		{
+			moveBuffer.coords[Y_AXIS] += yParam;
+			arcCentre[Y_AXIS] = moveBuffer.initialCoords[Y_AXIS] + jParam;
+		}
+		else
+		{
+			moveBuffer.coords[Y_AXIS] = yParam - currentTool->GetOffset()[Y_AXIS];
+			arcCentre[Y_AXIS] = jParam - currentTool->GetOffset()[Y_AXIS];
+		}
+
+		// Deal with the X axes
+		for (size_t axis = 0; axis < numAxes; ++axis)
+		{
+			if ((arcAxesMoving & (1 << axis)) != 0)
+			{
+				if (axesRelative)
+				{
+					moveBuffer.coords[axis] += xParam;
+					arcCentre[axis] = moveBuffer.initialCoords[axis] + iParam;
+					initialDx = -iParam;
+				}
+				else
+				{
+					moveBuffer.coords[axis] = xParam - currentTool->GetOffset()[axis];
+					arcCentre[axis] = iParam + currentTool->GetOffset()[axis];
+					initialDx = moveBuffer.initialCoords[axis] - arcCentre[axis];
+				}
+			}
+		}
+	}
+	else
+	{
+		arcAxesMoving = (1 << X_AXIS);
+		if (axesRelative)
+		{
+			moveBuffer.coords[X_AXIS] += xParam;
+			arcCentre[X_AXIS] = moveBuffer.initialCoords[X_AXIS] + iParam;
+			moveBuffer.coords[Y_AXIS] += yParam;
+			arcCentre[Y_AXIS] = moveBuffer.initialCoords[Y_AXIS] + jParam;;
+			initialDx = -iParam;
+		}
+		else
+		{
+			moveBuffer.coords[X_AXIS] = xParam;
+			arcCentre[X_AXIS] = iParam;
+			moveBuffer.coords[Y_AXIS] = yParam;
+			arcCentre[Y_AXIS] = jParam;
+			initialDx = moveBuffer.initialCoords[X_AXIS] - arcCentre[X_AXIS];
+		}
+	}
+
+	moveBuffer.endStopsToCheck = 0;
+	moveBuffer.moveType = 0;
+	moveBuffer.xAxes = reprap.GetCurrentXAxes();
+	if (LoadExtrusionAndFeedrateFromGCode(gb, moveBuffer.moveType))		// this reports an error if necessary, so no need to return true if it fails
+	{
+		const float initialDy = moveBuffer.initialCoords[Y_AXIS] - arcCentre[Y_AXIS];
+		arcRadius = sqrtf(initialDx * initialDx + initialDy * initialDy);
+		arcCurrentAngle = atan2(initialDy, initialDx);
+		const float finalTheta = atan2(yParam - jParam, xParam - iParam);
+
+		// Calculate the total angle moved, which depends on which way round we are going
+		float totalArc = (clockwise) ? arcCurrentAngle - finalTheta : finalTheta - arcCurrentAngle;
+		if (totalArc < 0)
+		{
+			totalArc += 2 * PI;
+		}
+		segmentsLeft = max<unsigned int>((unsigned int)((arcRadius * totalArc)/arcSegmentLength + 0.8), 1);
+		arcAngleIncrement = totalArc/segmentsLeft;
+		if (clockwise)
+		{
+			arcAngleIncrement = -arcAngleIncrement;
+		}
+		doingArcMove = true;
+		moveBuffer.usePressureAdvance = true;
+//		debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
+//				arcRadius, arcCurrentAngle * RadiansToDegrees, arcAngleIncrement * RadiansToDegrees, segmentsLeft);
+	}
+	return false;
+}
+
+// The Move class calls this function to find what to do next.
 bool GCodes::ReadMove(RawMove& m)
 {
 	if (segmentsLeft == 0)
@@ -1314,6 +1449,7 @@ bool GCodes::ReadMove(RawMove& m)
 	m = moveBuffer;
 	if (segmentsLeft == 1)
 	{
+		// If there is just 1 segment left, it doesn't matter if it is an arc move or not, just move to the end position
 		ClearMove();
 	}
 	else
@@ -1322,10 +1458,30 @@ bool GCodes::ReadMove(RawMove& m)
 		m.canPauseAfter = false;
 
 		// Do the axes
+		if (doingArcMove)
+		{
+			arcCurrentAngle += arcAngleIncrement;
+		}
+
 		for (size_t drive = 0; drive < numAxes; ++drive)
 		{
-			const float movementToDo = (moveBuffer.coords[drive] - moveBuffer.initialCoords[drive])/segmentsLeft;
-			moveBuffer.initialCoords[drive] += movementToDo;
+			if (doingArcMove && drive != Z_AXIS)
+			{
+				if (drive == Y_AXIS)
+				{
+					moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * sinf(arcCurrentAngle);
+				}
+				else if ((arcAxesMoving & (1 << drive)) != 0)
+				{
+					// X axis or a substitute X axis
+					moveBuffer.initialCoords[drive] = arcCentre[drive] + arcRadius * cosf(arcCurrentAngle);
+				}
+			}
+			else
+			{
+				const float movementToDo = (moveBuffer.coords[drive] - moveBuffer.initialCoords[drive])/segmentsLeft;
+				moveBuffer.initialCoords[drive] += movementToDo;
+			}
 			m.coords[drive] = moveBuffer.initialCoords[drive];
 		}
 
@@ -1336,6 +1492,7 @@ bool GCodes::ReadMove(RawMove& m)
 			m.coords[drive] = extrusionToDo;
 			moveBuffer.coords[drive] -= extrusionToDo;
 		}
+
 		--segmentsLeft;
 	}
 	return true;
@@ -1344,6 +1501,7 @@ bool GCodes::ReadMove(RawMove& m)
 void GCodes::ClearMove()
 {
 	segmentsLeft = 0;
+	doingArcMove = false;
 	moveBuffer.endStopsToCheck = 0;
 	moveBuffer.moveType = 0;
 	moveBuffer.isFirmwareRetraction = false;
@@ -1528,7 +1686,7 @@ bool GCodes::OffsetAxes(GCodeBuffer& gb)
 
 		if (gb.Seen(feedrateLetter)) // Has the user specified a feedrate?
 		{
-			cannedFeedRate = gb.GetFValue() * distanceScale * secondsToMinutes;
+			cannedFeedRate = gb.GetFValue() * distanceScale * SecondsToMinutes;
 		}
 		else
 		{

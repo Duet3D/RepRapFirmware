@@ -165,6 +165,8 @@ const float DefaultFeedrate = 3000.0;				// The initial requested feed rate afte
 const float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm
 const float DefaultRetractLength = 1.0;
 
+const float DefaultArcSegmentLength = 0.2;			// G2 and G3 arc movement commands get split into segments this long
+
 const float DEFAULT_IDLE_TIMEOUT = 30.0;			// Seconds
 const float DEFAULT_IDLE_CURRENT_FACTOR = 0.3;		// Proportion of normal motor current that we use for idle hold
 

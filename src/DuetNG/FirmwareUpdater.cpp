@@ -62,7 +62,7 @@ namespace FirmwareUpdater
 		switch(module)
 		{
 		case WifiExternalFirmwareModule:
-			Network::ResetWiFiForExternalUpload();
+			Network::ResetWiFiForUpload(true);
 			break;
 
 		case WifiFirmwareModule:

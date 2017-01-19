@@ -114,7 +114,7 @@ const Pin COOLING_FAN_RPM_PIN = 23;										// Pin PA15
 const size_t NumSdCards = 2;
 const Pin SdCardDetectPins[NumSdCards] = {13, NoPin};
 const Pin SdWriteProtectPins[NumSdCards] = {NoPin, NoPin};
-const Pin SdSpiCSPins[1] = {67};										// Note: this clashes with inkjet support
+const Pin SdSpiCSPins[1] = {67};										// Pin PB16 Note: this clashes with inkjet support
 
 #if SUPPORT_INKJET
 // Inkjet control pins

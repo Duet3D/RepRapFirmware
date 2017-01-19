@@ -76,8 +76,7 @@ public:
 	WifiFirmwareUploader *GetWifiUploader() { return uploader; }
 
 	static void ResetWiFi();
-	static void ResetWiFiForUpload();
-	static void ResetWiFiForExternalUpload();
+	static void ResetWiFiForUpload(bool external);
 
 	const char *GetWiFiServerVersion() const { return wiFiServerVersion; }
 

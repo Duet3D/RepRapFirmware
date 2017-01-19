@@ -89,11 +89,13 @@ const size_t CART_AXES = 3;										// The number of Cartesian axes
 const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 
 // Common conversion factors
-const float minutesToSeconds = 60.0;
-const float secondsToMinutes = 1.0/minutesToSeconds;
+const float MinutesToSeconds = 60.0;
+const float SecondsToMinutes = 1.0/MinutesToSeconds;
 const float SecondsToMillis = 1000.0;
 const float MillisToSeconds = 0.001;
 const float InchToMm = 25.4;
+const float DegreesToRadians = PI/180.0;
+const float RadiansToDegrees = 180.0/PI;
 
 // Type of an offset in a file
 typedef uint32_t FilePosition;

@@ -55,7 +55,7 @@ Network::Network(Platform* p) : platform(p), responseCode(0), responseBody(nullp
 void Network::Init()
 {
 	// Make sure the ESP8266 is held in the reset state
-	pinMode(EspResetPin, OUTPUT_LOW);
+	ResetWiFi();
 	uploader = new WifiFirmwareUploader(Serial1);
 }
 
@@ -118,7 +118,7 @@ void Network::Start()
 	// GPIO0 has to be held high for sufficient time:
 	// - 10ms is not enough
 	// - 18ms after reset is released, an oscillating signal appears on GPIO0 for 55ms
-	// - so 18ms is probably long enough. Use 25ms for safety.
+	// - so 18ms is probably long enough. Use 50ms for safety.
 	delay(50);
 
 	// Relinquish control of our CS pin so that the ESP can take it over
@@ -1120,16 +1120,18 @@ void Network::SpiInterrupt()
 // Reset the ESP8266 and leave held in reset
 void Network::ResetWiFi()
 {
-	pinMode(EspResetPin, OUTPUT_LOW);
+	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
+	pinMode(APIN_UART1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
+	pinMode(APIN_UART1_RXD, INPUT_PULLUP);
 }
 
-// Reset the ESP8266 to take commands from the UART. The caller must wait for the reset to complete after calling this.
+// Reset the ESP8266 to take commands from the UART or from external input. The caller must wait for the reset to complete after calling this.
 // ESP8266 boot modes:
 // GPIO0	GPIO2	GPIO15
 // 0		1		0		Firmware download from UART
 // 1		1		0		Normal boot from flash memory
 // 0		0		1		SD card boot (not used in on Duet)
-void Network::ResetWiFiForUpload()
+void Network::ResetWiFiForUpload(bool external)
 {
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
@@ -1152,17 +1154,18 @@ void Network::ResetWiFiForUpload()
 	// Make sure it has time to reset - no idea how long it needs, but 50ms should be plenty
 	delay(50);
 
+	if (external)
+	{
+		pinMode(APIN_UART1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
+		pinMode(APIN_UART1_RXD, INPUT_PULLUP);
+	}
+	else
+	{
+		ConfigurePin(g_APinDescription[APINS_UART1]);			// connect the pins to UART1
+	}
+
 	// Release the reset on the ESP8266
 	digitalWrite(EspResetPin, HIGH);
-}
-
-// Reset the ESP8266 to take commands from an external input. The caller must wait for the reset to complete after calling this.
-void Network::ResetWiFiForExternalUpload()
-{
-	ResetWiFiForUpload();
-
-	// Set our TxD pin low to make things easier for the FTDI chip to drive the ESP RxD input
-	pinMode(APIN_UART1_TXD, OUTPUT_LOW);
 }
 
 // End
