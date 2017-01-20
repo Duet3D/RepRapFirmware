@@ -102,6 +102,38 @@ pre(state == executing || state == frozen || state == completed)
 			: (int32_t)clocksNeeded;
 }
 
+// Insert the specified drive into the step list, in step time order.
+// We insert the drive before any existing entries with the same step time for best performance. Now that we generate step pulses
+// for multiple motors simultaneously, there is no need to preserve round-robin order.
+inline void DDA::InsertDM(DriveMovement *dm)
+{
+	DriveMovement **dmp = &firstDM;
+	while (*dmp != nullptr && (*dmp)->nextStepTime < dm->nextStepTime)
+	{
+		dmp = &((*dmp)->nextDM);
+	}
+	dm->nextDM = *dmp;
+	*dmp = dm;
+}
+
+// Remove this drive from the list of drives with steps due, and return its DM or nullptr if not there
+// Called from the step ISR only.
+DriveMovement *DDA::RemoveDM(size_t drive)
+{
+	DriveMovement **dmp = &firstDM;
+	while (*dmp != nullptr)
+	{
+		DriveMovement *dm = *dmp;
+		if (dm->drive == drive)
+		{
+			(*dmp) = dm->nextDM;
+			return dm;
+		}
+		dmp = &(dm->nextDM);
+	}
+	return nullptr;
+}
+
 void DDA::DebugPrintVector(const char *name, const float *vec, size_t len) const
 {
 	debugPrintf("%s=", name);
@@ -898,8 +930,107 @@ void DDA::Absolute(float v[], size_t dimensions)
 	}
 }
 
+void DDA::CheckEndstops(Platform *platform)
+{
+	if ((endStopsToCheck & ZProbeActive) != 0)						// if the Z probe is enabled in this move
+	{
+		// Check whether the Z probe has been triggered. On a delta at least, this must be done separately from endstop checks,
+		// because we have both a high endstop and a Z probe, and the Z motor is not the same thing as the Z axis.
+		switch (platform->GetZProbeResult())
+		{
+		case EndStopHit::lowHit:
+			MoveAborted();											// set the state to completed and recalculate the endpoints
+			reprap.GetMove()->ZProbeTriggered(this);
+			break;
+
+		case EndStopHit::lowNear:
+			ReduceHomingSpeed();
+			break;
+
+		default:
+			break;
+		}
+	}
+
+#if DDA_LOG_PROBE_CHANGES
+	else if ((endStopsToCheck & LogProbeChanges) != 0)
+	{
+		switch (platform->GetZProbeResult())
+		{
+		case EndStopHit::lowHit:
+			if (!probeTriggered)
+			{
+				probeTriggered = true;
+				LogProbePosition();
+			}
+			break;
+
+		case EndStopHit::lowNear:
+		case EndStopHit::noStop:
+			if (probeTriggered)
+			{
+				probeTriggered = false;
+				LogProbePosition();
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+#endif
+
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	for (size_t drive = 0; drive < numAxes; ++drive)
+	{
+		if ((endStopsToCheck & (1 << drive)) != 0)
+		{
+			switch(platform->Stopped(drive))
+			{
+			case EndStopHit::lowHit:
+				endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
+				if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
+				{
+					MoveAborted();
+				}
+				else
+				{
+					StopDrive(drive);
+				}
+				reprap.GetMove()->HitLowStop(drive, this);
+				break;
+
+			case EndStopHit::highHit:
+				endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
+				if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
+				{
+					MoveAborted();
+				}
+				else
+				{
+					StopDrive(drive);
+				}
+				reprap.GetMove()->HitHighStop(drive, this);
+				break;
+
+			case EndStopHit::lowNear:
+				// Only reduce homing speed if there are no more axes to be homed.
+				// This allows us to home X and Y simultaneously.
+				if (endStopsToCheck == (1 << drive))
+				{
+					ReduceHomingSpeed();
+				}
+				break;
+
+			default:
+				break;
+			}
+		}
+	}
+}
+
 // The remaining functions are speed-critical, so use full optimisation
-#pragma GCC optimize ("O3")
+// The GCC optimize pragma appears to be broken, if we try to force O3 optimisation here then functions are never inlined
 
 // Start executing this move, returning true if Step() needs to be called immediately. Must be called with interrupts disabled, to avoid a race condition.
 // Returns true if the caller needs to call the step ISR immediately.
@@ -996,103 +1127,9 @@ bool DDA::Step()
 		// Keep this loop as fast as possible, in the case that there are no endstops to check!
 
 		// 1. Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
-		if (endStopsToCheck != 0)											// if any homing switches or the Z probe is enabled in this move
+		if (endStopsToCheck != 0)										// if any homing switches or the Z probe is enabled in this move
 		{
-			if ((endStopsToCheck & ZProbeActive) != 0)						// if the Z probe is enabled in this move
-			{
-				// Check whether the Z probe has been triggered. On a delta at least, this must be done separately from endstop checks,
-				// because we have both a high endstop and a Z probe, and the Z motor is not the same thing as the Z axis.
-				switch (platform->GetZProbeResult())
-				{
-				case EndStopHit::lowHit:
-					MoveAborted();											// set the state to completed and recalculate the endpoints
-					reprap.GetMove()->ZProbeTriggered(this);
-					break;
-
-				case EndStopHit::lowNear:
-					ReduceHomingSpeed();
-					break;
-
-				default:
-					break;
-				}
-			}
-
-#if DDA_LOG_PROBE_CHANGES
-			else if ((endStopsToCheck & LogProbeChanges) != 0)
-			{
-				switch (platform->GetZProbeResult())
-				{
-				case EndStopHit::lowHit:
-					if (!probeTriggered)
-					{
-						probeTriggered = true;
-						LogProbePosition();
-					}
-					break;
-
-				case EndStopHit::lowNear:
-				case EndStopHit::noStop:
-					if (probeTriggered)
-					{
-						probeTriggered = false;
-						LogProbePosition();
-					}
-					break;
-
-				default:
-					break;
-				}
-			}
-#endif
-			const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
-			for (size_t drive = 0; drive < numAxes; ++drive)
-			{
-				if ((endStopsToCheck & (1 << drive)) != 0)
-				{
-					switch(platform->Stopped(drive))
-					{
-					case EndStopHit::lowHit:
-						endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-						if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
-						{
-							MoveAborted();
-						}
-						else
-						{
-							StopDrive(drive);
-						}
-						reprap.GetMove()->HitLowStop(drive, this);
-						break;
-
-					case EndStopHit::highHit:
-						endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-						if (endStopsToCheck == 0 || reprap.GetMove()->IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
-						{
-							MoveAborted();
-						}
-						else
-						{
-							StopDrive(drive);
-						}
-						reprap.GetMove()->HitHighStop(drive, this);
-						break;
-
-					case EndStopHit::lowNear:
-						// Only reduce homing speed if there are no more axes to be homed.
-						// This allows us to home X and Y simultaneously.
-						if (endStopsToCheck == (1 << drive))
-						{
-							ReduceHomingSpeed();
-						}
-						break;
-
-					default:
-						break;
-					}
-				}
-			}
-
+			CheckEndstops(platform);	// Call out to a separate function because this may help cache usage in the more common case where we don't call it
 			if (state == completed)		// we may have completed the move due to triggering an endstop switch or Z probe
 			{
 				break;
@@ -1174,8 +1211,8 @@ bool DDA::Step()
 
 	if (state == completed)
 	{
-		uint32_t finishTime = moveStartTime + clocksNeeded;		// calculate how long this move should take
-		Move *move = reprap.GetMove();
+		const uint32_t finishTime = moveStartTime + clocksNeeded;	// calculate how long this move should take
+		Move * const move = reprap.GetMove();
 		move->CurrentMoveCompleted();							// tell Move that the current move is complete
 		return move->TryStartNextMove(finishTime);				// schedule the next move
 	}
@@ -1255,24 +1292,6 @@ bool DDA::HasStepError() const
 		}
 	}
 	return false;
-}
-
-// Remove this drive from the list of drives with steps due, and return its DM or nullptr if not there
-// Called from the step ISR only.
-DriveMovement *DDA::RemoveDM(size_t drive)
-{
-	DriveMovement **dmp = &firstDM;
-	while (*dmp != nullptr)
-	{
-		DriveMovement *dm = *dmp;
-		if (dm->drive == drive)
-		{
-			(*dmp) = dm->nextDM;
-			return dm;
-		}
-		dmp = &(dm->nextDM);
-	}
-	return nullptr;
 }
 
 // End

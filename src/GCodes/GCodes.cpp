@@ -110,7 +110,8 @@ void GCodes::Init()
 	}
 	lastDefaultFanSpeed = 0.0;
 
-	retractLength = retractExtra = DefaultRetractLength;
+	retractLength = DefaultRetractLength;
+	retractExtra = 0.0;
 	retractHop = 0.0;
 	retractSpeed = unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	isRetracted = false;
@@ -1025,9 +1026,18 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 				}
 				else
 				{
-					const float requestedExtrusionAmount = (gb.MachineState().drivesRelative)
-															? moveArg
-															: moveArg - tool->virtualExtruderPosition;
+					float requestedExtrusionAmount;
+					if (gb.MachineState().drivesRelative)
+					{
+						requestedExtrusionAmount = moveArg;
+						tool->virtualExtruderPosition += moveArg;
+					}
+					else
+					{
+						requestedExtrusionAmount = moveArg - tool->virtualExtruderPosition;
+						tool->virtualExtruderPosition = moveArg;
+					}
+
 					for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
 					{
 						const int drive = tool->Drive(eDrive);

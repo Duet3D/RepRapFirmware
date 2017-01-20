@@ -104,6 +104,7 @@ private:
 	DriveMovement *RemoveDM(size_t drive);
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
+	void CheckEndstops(Platform *platform);
 
 	static void DoLookahead(DDA *laDDA);							// called by AdjustEndSpeed to do the real work
     static float Normalise(float v[], size_t dim1, size_t dim2);  	// Normalise a vector of dim1 dimensions to unit length in the first dim1 dimensions
@@ -178,20 +179,6 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 {
 	endPoint[drive] = a;
 	endCoordinatesValid = false;
-}
-
-// Insert the specified drive into the step list, in step time order.
-// We insert the drive before any existing entries with the same step time for best performance. Now that we generate step pulses
-// for multiple motors simultaneously, there is no need to preserve round-robin order.
-inline void DDA::InsertDM(DriveMovement *dm)
-{
-	DriveMovement **dmp = &firstDM;
-	while (*dmp != nullptr && (*dmp)->nextStepTime < dm->nextStepTime)
-	{
-		dmp = &((*dmp)->nextDM);
-	}
-	dm->nextDM = *dmp;
-	*dmp = dm;
 }
 
 #endif /* DDA_H_ */

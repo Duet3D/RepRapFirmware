@@ -163,7 +163,7 @@ const size_t RESERVED_OUTPUT_BUFFERS = 2;			// Number of reserved output buffers
 
 const float DefaultFeedrate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
 const float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm
-const float DefaultRetractLength = 1.0;
+const float DefaultRetractLength = 2.0;
 
 const float DefaultArcSegmentLength = 0.2;			// G2 and G3 arc movement commands get split into segments this long
 

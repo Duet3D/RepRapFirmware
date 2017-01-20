@@ -2906,10 +2906,6 @@ bool Platform::SetTime(time_t time)
 	return ok;
 }
 
-// Pragma pop_options is not supported on this platform, so we put this time-critical code right at the end of the file
-//#pragma GCC push_options
-#pragma GCC optimize ("O3")
-
 // Step pulse timer interrupt
 void STEP_TC_HANDLER()
 {

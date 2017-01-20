@@ -192,9 +192,6 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 	}
 }
 
-// The remaining functions are speed-critical, so use full optimisation
-#pragma GCC optimize ("O3")
-
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do.
 // This is also used for extruders on delta machines.
