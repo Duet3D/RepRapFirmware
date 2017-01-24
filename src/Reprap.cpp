@@ -1576,4 +1576,16 @@ uint32_t RepRap::GetCurrentXAxes() const
 	return (currentTool == nullptr) ? DefaultXAxisMapping : currentTool->GetXAxisMap();
 }
 
+// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
+/*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)
+{
+	return a/b;
+}
+
+// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate unaligned memory read
+/*static*/ uint32_t RepRap::ReadDword(const char* p)
+{
+	return *reinterpret_cast<const uint32_t*>(p);
+}
+
 // End

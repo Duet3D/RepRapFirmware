@@ -1359,7 +1359,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		}
 	}
 
-	float initialDx = 0.0;
+	// The I and J parameters are always relative to present position
+	arcCentre[Y_AXIS] = moveBuffer.initialCoords[Y_AXIS] + jParam;
+
 	if (currentTool != nullptr)
 	{
 		// Record which axes behave like an X axis
@@ -1369,30 +1371,25 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		if (axesRelative)
 		{
 			moveBuffer.coords[Y_AXIS] += yParam;
-			arcCentre[Y_AXIS] = moveBuffer.initialCoords[Y_AXIS] + jParam;
 		}
 		else
 		{
 			moveBuffer.coords[Y_AXIS] = yParam - currentTool->GetOffset()[Y_AXIS];
-			arcCentre[Y_AXIS] = jParam - currentTool->GetOffset()[Y_AXIS];
 		}
 
 		// Deal with the X axes
 		for (size_t axis = 0; axis < numAxes; ++axis)
 		{
+			arcCentre[axis] = moveBuffer.initialCoords[axis] + iParam;
 			if ((arcAxesMoving & (1 << axis)) != 0)
 			{
 				if (axesRelative)
 				{
 					moveBuffer.coords[axis] += xParam;
-					arcCentre[axis] = moveBuffer.initialCoords[axis] + iParam;
-					initialDx = -iParam;
 				}
 				else
 				{
 					moveBuffer.coords[axis] = xParam - currentTool->GetOffset()[axis];
-					arcCentre[axis] = iParam + currentTool->GetOffset()[axis];
-					initialDx = moveBuffer.initialCoords[axis] - arcCentre[axis];
 				}
 			}
 		}
@@ -1400,21 +1397,16 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	else
 	{
 		arcAxesMoving = (1 << X_AXIS);
+		arcCentre[X_AXIS] = moveBuffer.initialCoords[X_AXIS] + iParam;
 		if (axesRelative)
 		{
 			moveBuffer.coords[X_AXIS] += xParam;
-			arcCentre[X_AXIS] = moveBuffer.initialCoords[X_AXIS] + iParam;
 			moveBuffer.coords[Y_AXIS] += yParam;
-			arcCentre[Y_AXIS] = moveBuffer.initialCoords[Y_AXIS] + jParam;;
-			initialDx = -iParam;
 		}
 		else
 		{
 			moveBuffer.coords[X_AXIS] = xParam;
-			arcCentre[X_AXIS] = iParam;
 			moveBuffer.coords[Y_AXIS] = yParam;
-			arcCentre[Y_AXIS] = jParam;
-			initialDx = moveBuffer.initialCoords[X_AXIS] - arcCentre[X_AXIS];
 		}
 	}
 
@@ -1423,10 +1415,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	moveBuffer.xAxes = reprap.GetCurrentXAxes();
 	if (LoadExtrusionAndFeedrateFromGCode(gb, moveBuffer.moveType))		// this reports an error if necessary, so no need to return true if it fails
 	{
-		const float initialDy = moveBuffer.initialCoords[Y_AXIS] - arcCentre[Y_AXIS];
-		arcRadius = sqrtf(initialDx * initialDx + initialDy * initialDy);
-		arcCurrentAngle = atan2(initialDy, initialDx);
-		const float finalTheta = atan2(yParam - jParam, xParam - iParam);
+		arcRadius = sqrtf(iParam * iParam + jParam * jParam);
+		arcCurrentAngle = atan2(-jParam, -iParam);
+		const float finalTheta = atan2(moveBuffer.coords[Y_AXIS] - arcCentre[Y_AXIS], moveBuffer.coords[X_AXIS] - arcCentre[X_AXIS]);
 
 		// Calculate the total angle moved, which depends on which way round we are going
 		float totalArc = (clockwise) ? arcCurrentAngle - finalTheta : finalTheta - arcCurrentAngle;

@@ -160,9 +160,6 @@ enum class SoftwareResetReason : uint16_t
 	erase = 0x10,					// special M999 command to erase firmware and reset
 	NMI = 0x20,
 	hardFault = 0x30,
-	memManage = 0x40,
-	busFault = 0x50,
-	usageFault = 0x60,
 	otherFault = 0x70,
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
 	stuckInSpin = 0x1000,			// we got stuck in a Spin() function for too long
@@ -176,6 +173,9 @@ enum class DiagnosticTestType : int
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
 	TestSerialBlock = 1003,			// test what happens when we write a blocking message via debugPrintf()
+	DivideByZero = 1004,			// do an integer divide by zero to test exception handling
+	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
+
 	PrintMoves = 100,				// print summary of recent moves
 #ifdef DUET_NG
 	PrintExpanderStatus = 101,		// print DueXn expander status
@@ -326,7 +326,7 @@ public:
 	void ClassReport(float &lastTime);  			// Called on Spin() return to check everything's live.
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
-	void SoftwareReset(uint16_t reason);
+	void SoftwareReset(uint16_t reason, uint32_t pc = 0);
 	bool AtxPower() const;
 	void SetAtxPower(bool on);
 	void SetBoardType(BoardType bt);
@@ -606,10 +606,10 @@ private:
 	// The SAM4E has a large page erase size (8K). For this reason we store the software reset data in the 512-byte user signature area
 	// instead, which doesn't get cleared when the Erase button is pressed. The SoftareResetData struct must have at least one 32-bit
 	// field to guarantee that values of this type will be 32-bit aligned. It must have no virtual members because it is read/written
-	// directly form/to flash memory.
+	// directly from/to flash memory.
 	struct SoftwareResetData
 	{
-		static const uint16_t versionValue = 2;		// increment this whenever this struct changes
+		static const uint16_t versionValue = 4;		// increment this whenever this struct changes
 		static const uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written
 		static const uint32_t nvAddress = 0;		// must be 4-byte aligned
 		static const size_t numberOfSlots = 8;		// number of storage slots used to implement wear levelling
@@ -617,10 +617,14 @@ private:
 		uint16_t magic;								// the magic number, including the version
 		uint16_t resetReason;						// this records why we did a software reset, for diagnostic purposes
 		uint32_t neverUsedRam;						// the amount of never used RAM at the last abnormal software reset
+		uint32_t hfsr;								// hard fault status register
+		uint32_t cfsr;								// configurable fault status register
+		uint32_t pc;								// program counter when the exception occurred
 
 		bool isVacant() const						// return true if this struct can be written without erasing it first
 		{
-			return magic == 0xFFFF && resetReason == 0xFFFF && neverUsedRam == 0xFFFFFFFF;
+			return magic == 0xFFFF && resetReason == 0xFFFF && neverUsedRam == 0xFFFFFFFF
+					&& hfsr == 0xFFFFFFFF && cfsr == 0xFFFFFFFF && pc == 0xFFFFFFFF;
 		}
 	};
 

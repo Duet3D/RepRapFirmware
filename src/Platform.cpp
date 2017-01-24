@@ -84,7 +84,7 @@ void UrgentInit()
 {
 #ifdef DUET_NG
 	// When the reset button is pressed on pre-production Duet WiFi boards, if the TMC2660 drivers were previously enabled then we get
-	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the drivers early here.
+	// uncommanded motor movements if the STEP lines pick up any noise. Try to reduce that by initialising the pins that control the drivers early here.
 	// On the production boards the ENN line is pulled high and that prevents motor movements.
 	for (size_t drive = 0; drive < DRIVES; ++drive)
 	{
@@ -107,6 +107,16 @@ void setup()
 		*heapend++ = memPattern;
 	}
 
+	// Trap integer divide-by-zero.
+	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
+	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
+
+	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it
+	// being held in the capacitor and changing the reset reason form Software to User. So enable it again here. We hope that the reset signal
+	// will have gone away by now.
+	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD | RSTC_MR_URSTEN;	// ignore any signal on the NRST pin for now so that the reset reason will show as Software
+
+	// Go on and do the main initialisation
 	reprap.Init();
 }
 
@@ -124,17 +134,41 @@ extern "C"
 		return 0;
 	}
 
+	// Exception handlers
+	// By default the Usage Fault, Bus Fault and Memory Management fault handlers are not enabled,
+	// so they escalate to a Hard Fault and we don't need to provide separate exception handlers for them.
+	// We can get information on what caused a Hard Fault form the status registers.
+	// Also get the program counter when the exception occurred.
+	void prvGetRegistersFromStack(const uint32_t *pulFaultStackAddress)
+	{
+		const uint32_t pc = pulFaultStackAddress[6];
+	    reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pc);
+	}
+
+	// The fault handler implementation calls a function called prvGetRegistersFromStack()
+	void HardFault_Handler() __attribute__((naked));
+	void HardFault_Handler()
+	{
+	    __asm volatile
+	    (
+	        " tst lr, #4                                                \n"
+	        " ite eq                                                    \n"
+	        " mrseq r0, msp                                             \n"
+	        " mrsne r0, psp                                             \n"
+	        " ldr r1, [r0, #24]                                         \n"
+	        " ldr r2, handler2_address_const                            \n"
+	        " bx r2                                                     \n"
+	        " handler2_address_const: .word prvGetRegistersFromStack    \n"
+	    );
+	}
+
+	// We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
+	// however these exceptions are unlikely to occur, so for now we just report the exception type.
 	void NMI_Handler        () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
-	void HardFault_Handler  () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::hardFault); }
-	void MemManage_Handler  () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::memManage); }
-	void BusFault_Handler   () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::busFault); }
-	void UsageFault_Handler () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::usageFault); }
 	void SVC_Handler		() { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
 	void DebugMon_Handler   () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
 	void PendSV_Handler		() { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
 }
-
-
 
 // ZProbeParameters class
 
@@ -1181,7 +1215,7 @@ void Platform::Spin()
 	ClassReport(longWait);
 }
 
-void Platform::SoftwareReset(uint16_t reason)
+void Platform::SoftwareReset(uint16_t reason, uint32_t pc)
 {
 	wdt_restart(WDT);							// kick the watchdog
 	if (reason == (uint16_t)SoftwareResetReason::erase)
@@ -1240,6 +1274,9 @@ void Platform::SoftwareReset(uint16_t reason)
 		srdBuf[slot].magic = SoftwareResetData::magicValue;
 		srdBuf[slot].resetReason = reason;
 		GetStackUsage(NULL, NULL, &srdBuf[slot].neverUsedRam);
+		srdBuf[slot].hfsr = SCB->HFSR;
+		srdBuf[slot].cfsr = SCB->CFSR;
+		srdBuf[slot].pc = pc;
 
 		// Save diagnostics data to Flash
 #ifdef DUET_NG
@@ -1248,13 +1285,13 @@ void Platform::SoftwareReset(uint16_t reason)
 		DueFlashStorage::write(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
 #endif
 	}
+
+	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
 	Reset();
 	for(;;) {}
 }
 
-
 //*****************************************************************************************************************
-
 // Interrupts
 
 #ifndef DUET_NG
@@ -1401,10 +1438,11 @@ void Platform::Diagnostics(MessageType mtype)
 			}
 		}
 
-		Message(mtype, "Last software reset code: ");
+		Message(mtype, "Last software reset code ");
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
-			MessageF(mtype, "0x%04x, available RAM %u bytes (slot %d)\n", srdBuf[slot].resetReason, srdBuf[slot].neverUsedRam, slot);
+			MessageF(mtype, "0x%04x, PC 0x%08x, HFSR 0x%08x, CFSR 0x%08x, available RAM %u bytes (slot %d)\n",
+					srdBuf[slot].resetReason, srdBuf[slot].pc, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].neverUsedRam, slot);
 			MessageF(mtype, "Spinning module during software reset: %s\n", moduleName[srdBuf[slot].resetReason & 0x0F]);
 		}
 		else
@@ -1512,6 +1550,8 @@ void Platform::Diagnostics(MessageType mtype)
 
 void Platform::DiagnosticTest(int d)
 {
+	static const uint32_t dummy[2] = { 0, 0 };
+
 	switch (d)
 	{
 	case (int)DiagnosticTestType::TestWatchdog:
@@ -1524,6 +1564,15 @@ void Platform::DiagnosticTest(int d)
 
 	case (int)DiagnosticTestType::TestSerialBlock:		// write an arbitrary message via debugPrintf()
 		debugPrintf("Diagnostic Test\n");
+		break;
+
+	case (int)DiagnosticTestType::DivideByZero:			// do an integer divide by zero to test exception handling
+		(void)RepRap::DoDivide(1, 0);					// call function in another module so it can't be optimised away
+		break;
+
+	case (int)DiagnosticTestType::UnalignedMemoryAccess:	// do an unaligned memory access to test exception handling
+		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;			// by default, unaligned memory accesses are allowed, so change that
+		(void)RepRap::ReadDword(reinterpret_cast<const char*>(dummy) + 1);	// call function in another module so it can't be optimised away
 		break;
 
 	case (int)DiagnosticTestType::PrintMoves:

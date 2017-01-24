@@ -554,7 +554,10 @@ pre(state == provisional)
 			// Still going up
 			laDDA = laDDA->prev;
 			++laDepth;
-			if (reprap.Debug(moduleDda)) debugPrintf("Recursion start %u\n", laDepth);
+			if (reprap.Debug(moduleDda))
+			{
+				debugPrintf("Recursion start %u\n", laDepth);
+			}
 		}
 		else
 		{
