@@ -2,6 +2,21 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.17c+2
+===============
+
+New features:
+- G2 and G3 arc movement commands are implemented.
+- If the controller is reset because of a Hard Fault exception, additional debugging information is stored in the Software Reset Data and displayed by M112
+
+Bug fixes:
+- If tool mixing was used with absolute extruder coordinates, the extrusoin amount was calculated incorrectly.
+
+Known issues
+------------
+- If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
+- If G20 is used to set the units to inches, this isn't taken into account by the G2 and G3 commands.
+
 Version 1.17c
 =============
 
