@@ -8,6 +8,7 @@ Version 1.17c+2
 New features:
 - G2 and G3 arc movement commands are implemented.
 - If the controller is reset because of a Hard Fault exception, additional debugging information is stored in the Software Reset Data and displayed by M112
+- Faster step pulse generation - now up to 180kHz simultaneously on 3 motors on the Duet WiFi
 
 Bug fixes:
 - If tool mixing was used with absolute extruder coordinates, the extrusoin amount was calculated incorrectly.
