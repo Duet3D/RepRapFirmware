@@ -983,11 +983,11 @@ void GCodes::Pop(GCodeBuffer& gb)
 }
 
 // Set up the extrusion and feed rate of a move for the Move class
-// 'moveType' is the S parameter in the G0 or G1 command, or zero for a G2 or G3 command
+// 'moveType' is the S parameter in the G0 or G1 command, or zero for a G2 or G3 command, or -1 for a G92 command
 // Returns true if this gcode is valid so far, false if it should be discarded
 bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 {
-	// Zero every extruder drive as some drives may not be changed
+	// Zero every extruder drive as some drives may not be moved
 	for (size_t drive = numAxes; drive < DRIVES; drive++)
 	{
 		moveBuffer.coords[drive] = 0.0;
@@ -1004,9 +1004,9 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 	moveBuffer.feedRate = gb.MachineState().feedrate;
 
 	// First do extrusion, and check, if we are extruding, that we have a tool to extrude with
-	Tool* const tool = reprap.GetCurrentTool();
 	if (gb.Seen(extrudeLetter))
 	{
+		Tool* const tool = reprap.GetCurrentTool();
 		if (tool == nullptr)
 		{
 			platform->Message(GENERIC_MESSAGE, "Attempting to extrude with no tool selected.\n");
@@ -1057,7 +1057,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 				if (eMoveCount != mc)
 				{
 					platform->MessageF(GENERIC_MESSAGE, "Wrong number of extruder drives for the selected tool: %s\n", gb.Buffer());
-					return 0;
+					return false;
 				}
 
 				for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
@@ -1066,7 +1066,6 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 					const float moveArg = eMovement[eDrive] * distanceScale;
 					if (moveType == -1)
 					{
-						moveBuffer.coords[drive + numAxes] = moveArg;
 						lastRawExtruderPosition[drive] = moveArg;
 					}
 					else
@@ -1090,7 +1089,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 // Move expects all axis movements to be absolute, and all extruder drive moves to be relative.  This function serves that.
 // 'moveType' is the S parameter in the G0 or G1 command, or -1 if we are doing G92.
 // For regular (type 0) moves, we apply limits and do X axis mapping.
-// Returns the number of segments if we have a legal move, 1 if we are doing G92, or zero if this gcode should be discarded
+// Returns the number of segments in the move
 unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
@@ -1155,6 +1154,7 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 
 				if (axis != Z_AXIS && moveType == 0)
 				{
+					// Segment the move if necessary
 					const HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
 					if (heightMap.UsingHeightMap())
 					{
@@ -1327,24 +1327,24 @@ int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 // We already have the movement lock and the last move has gone
 bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 {
-	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numAxes * sizeof(moveBuffer.initialCoords[0]));
-
 	// Get the axis parameters. X Y I J are compulsory, Z is optional.
 	if (!gb.Seen('X')) return true;
-	const float xParam = gb.GetFValue();
+	const float xParam = gb.GetFValue() * distanceScale;
 	if (!gb.Seen('Y')) return true;
-	const float yParam = gb.GetFValue();
+	const float yParam = gb.GetFValue() * distanceScale;
 	if (!gb.Seen('I')) return true;
-	const float iParam = gb.GetFValue();
+	const float iParam = gb.GetFValue() * distanceScale;
 	if (!gb.Seen('J')) return true;
-	const float jParam = gb.GetFValue();
+	const float jParam = gb.GetFValue() * distanceScale;
 
 	// Adjust them for relative/absolute coordinates, tool offset, and X axis mapping. Also get the optional Z parameter
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	const bool axesRelative = gb.MachineState().axesRelative;
+	memcpy(moveBuffer.initialCoords, moveBuffer.coords, numAxes * sizeof(moveBuffer.initialCoords[0]));
+
 	if (gb.Seen('Z'))
 	{
-		const float zParam = gb.GetFValue();
+		const float zParam = gb.GetFValue() * distanceScale;
 		if (axesRelative)
 		{
 			moveBuffer.coords[Z_AXIS] += zParam;
@@ -1635,9 +1635,13 @@ bool GCodes::SetPositions(GCodeBuffer& gb)
 			return false;
 		}
 
-		const bool ok = LoadMoveBufferFromGCode(gb, -1);
-		if (ok && includingAxes)
+		// Handle any E parameter in the G92 command. If we get an error, ignore it and do the axes anyway.
+		(void)LoadExtrusionAndFeedrateFromGCode(gb, -1);
+
+		if (includingAxes)
 		{
+			(void)LoadMoveBufferFromGCode(gb, -1);
+
 #if SUPPORT_ROLAND
 			if (reprap.GetRoland()->Active())
 			{
@@ -1675,7 +1679,7 @@ bool GCodes::OffsetAxes(GCodeBuffer& gb)
 				record[drive] = moveBuffer.coords[drive];
 				if (gb.Seen(axisLetters[drive]))
 				{
-					cannedMoveCoords[drive] = gb.GetFValue();
+					cannedMoveCoords[drive] = gb.GetFValue() * distanceScale;
 					cannedMoveType[drive] = CannedMoveType::relative;
 				}
 			}

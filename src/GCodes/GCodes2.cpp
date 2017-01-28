@@ -905,6 +905,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		result = RetractFilament(gb, false);
 		break;
 
+	case 102:
+		// S3D generates this command once at the start of he print job if firmware retraction is enabled.
+		// It's not documented, so we just ignore it rather than generate an error message.
+		break;
+
 	case 103: // Retract
 		if (!LockMovement(gb))
 		{
