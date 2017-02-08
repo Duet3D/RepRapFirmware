@@ -838,9 +838,9 @@ void DDA::Prepare()
 			dm.nextStepTime = 0;
 			dm.stepInterval = 999999;						// initialise to a large value so that we will calculate the time for just one step
 			dm.stepsTillRecalc = 0;							// so that we don't skip the calculation
-			bool stepsToDo = (isDeltaMovement && drive < numAxes)
-							? dm.CalcNextStepTimeDelta(*this, false)
-							: dm.CalcNextStepTimeCartesian(*this, false);
+			const bool stepsToDo = (isDeltaMovement && drive < numAxes)
+									? dm.CalcNextStepTimeDelta(*this, false)
+									: dm.CalcNextStepTimeCartesian(*this, false);
 			if (stepsToDo)
 			{
 				InsertDM(&dm);

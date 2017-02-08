@@ -180,6 +180,7 @@ enum class DiagnosticTestType : int
 #ifdef DUET_NG
 	PrintExpanderStatus = 101,		// print DueXn expander status
 #endif
+	TimeSquareRoot = 102			// do a timing test on the square roor function
 };
 
 // Enumeration to describe what we want to do with a logical pin
@@ -326,7 +327,7 @@ public:
 	void ClassReport(float &lastTime);  			// Called on Spin() return to check everything's live.
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
-	void SoftwareReset(uint16_t reason, uint32_t pc = 0);
+	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
 	bool AtxPower() const;
 	void SetAtxPower(bool on);
 	void SetBoardType(BoardType bt);
@@ -609,22 +610,30 @@ private:
 	// directly from/to flash memory.
 	struct SoftwareResetData
 	{
-		static const uint16_t versionValue = 4;		// increment this whenever this struct changes
+		static const uint16_t versionValue = 6;		// increment this whenever this struct changes
 		static const uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written
-		static const uint32_t nvAddress = 0;		// must be 4-byte aligned
-		static const size_t numberOfSlots = 8;		// number of storage slots used to implement wear levelling
+		static const size_t numberOfSlots = 6;		// number of storage slots used to implement wear levelling
 
 		uint16_t magic;								// the magic number, including the version
 		uint16_t resetReason;						// this records why we did a software reset, for diagnostic purposes
 		uint32_t neverUsedRam;						// the amount of never used RAM at the last abnormal software reset
 		uint32_t hfsr;								// hard fault status register
 		uint32_t cfsr;								// configurable fault status register
-		uint32_t pc;								// program counter when the exception occurred
+		uint32_t icsr;								// interrupt control and state register
+		uint32_t stack[16];							// stack when the exception occurred, with the program counter at the bottom
 
 		bool isVacant() const						// return true if this struct can be written without erasing it first
 		{
-			return magic == 0xFFFF && resetReason == 0xFFFF && neverUsedRam == 0xFFFFFFFF
-					&& hfsr == 0xFFFFFFFF && cfsr == 0xFFFFFFFF && pc == 0xFFFFFFFF;
+			const uint32_t *p = reinterpret_cast<const uint32_t*>(this);
+			for (size_t i = 0; i < sizeof(*this)/sizeof(uint32_t); ++i)
+			{
+				if (*p != 0xFFFFFFFF)
+				{
+					return false;
+				}
+				++p;
+			}
+			return true;
 		}
 	};
 

@@ -1,8 +1,5 @@
 #include "RepRapFirmware.h"
 
-// The remaining functions are speed-critical, so use full optimisation
-#pragma GCC optimize ("O3")
-
 // Fast 62-bit integer square root function (thanks dmould)
 uint32_t isqrt64(uint64_t num)
 {
@@ -58,7 +55,7 @@ uint32_t isqrt64(uint64_t num)
 		iter64a(14) iter64a(12) iter64a(10) iter64a(8)
 		iter64a(6)  iter64a(4)  iter64a(2)  iter64a(0)
 
-		// resHigh is twice the square root of the msw, in the range 0..2^17-1
+		// resHigh is twice the square root of the msw, in the range 0..2^16-1 with the input restricted to 62 bits
 		uint64_t numAll = ((uint64_t)numHigh << 32) | (uint32_t)num;
 
 #define iter64b(N) 										\
@@ -74,7 +71,7 @@ uint32_t isqrt64(uint64_t num)
 
 		// We need to do 16 iterations.
 		// After the last iteration, numAll may be between 0 and (1 + 2 * res) inclusive.
-		// So to take square roots of numbers up to 64 bits, we need to do all these iterations using 64 bit maths.
+		// So to take square roots of numbers up to 62 bits, we need to do all these iterations using 64 bit maths.
 		// If we restricted the input to e.g. 48 bits, then we could do some of the final iterations using 32-bit maths.
 		iter64b(30) iter64b(28) iter64b(26) iter64b(24)
 		iter64b(22) iter64b(20) iter64b(18) iter64b(16)

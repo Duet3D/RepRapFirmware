@@ -27,6 +27,7 @@
 #include "Network.h"
 #include "RepRap.h"
 #include "Webserver.h"
+#include "Libraries/Math/Isqrt.h"
 
 #include "sam/drivers/tc/tc.h"
 #include "sam/drivers/hsmci/hsmci.h"
@@ -145,8 +146,7 @@ extern "C"
 	// Also get the program counter when the exception occurred.
 	void prvGetRegistersFromStack(const uint32_t *pulFaultStackAddress)
 	{
-		const uint32_t pc = pulFaultStackAddress[6];
-	    reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pc);
+	    reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 6);
 	}
 
 	// The fault handler implementation calls a function called prvGetRegistersFromStack()
@@ -1219,7 +1219,8 @@ void Platform::Spin()
 	ClassReport(longWait);
 }
 
-void Platform::SoftwareReset(uint16_t reason, uint32_t pc)
+// Perform a software reset. 'stk' points to the program counter on the stack if the cause is an exception, otherwise it is nullptr.
+void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 {
 	wdt_restart(WDT);							// kick the watchdog
 	if (reason == (uint16_t)SoftwareResetReason::erase)
@@ -1280,7 +1281,14 @@ void Platform::SoftwareReset(uint16_t reason, uint32_t pc)
 		GetStackUsage(NULL, NULL, &srdBuf[slot].neverUsedRam);
 		srdBuf[slot].hfsr = SCB->HFSR;
 		srdBuf[slot].cfsr = SCB->CFSR;
-		srdBuf[slot].pc = pc;
+		srdBuf[slot].icsr = SCB->ICSR;
+		if (stk != nullptr)
+		{
+			for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
+			{
+				srdBuf[slot].stack[i] = stk[i];
+			}
+		}
 
 		// Save diagnostics data to Flash
 #ifdef DUET_NG
@@ -1331,10 +1339,10 @@ void Platform::InitialiseInterrupts()
 
 	// Timer interrupt for stepper motors
 	// The clock rate we use is a compromise. Too fast and the 64-bit square roots take a long time to execute. Too slow and we lose resolution.
-	// We choose a clock divisor of 32, which gives us 0.38us resolution. The next option is 128 which would give 1.524us resolution.
+	// We choose a clock divisor of 128 which gives 1.524us resolution on the Duet 085 (84MHz clock) and 0.9375us resolution on the Duet WiFi.
 	pmc_set_writeprotect(false);
 	pmc_enable_periph_clk((uint32_t) STEP_TC_IRQN);
-	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK3);
+	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4);
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0; // interrupts disabled for now
 	tc_start(STEP_TC, STEP_TC_CHAN);
 	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
@@ -1445,9 +1453,15 @@ void Platform::Diagnostics(MessageType mtype)
 		Message(mtype, "Last software reset code ");
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
-			MessageF(mtype, "0x%04x, PC 0x%08x, HFSR 0x%08x, CFSR 0x%08x, available RAM %u bytes (slot %d)\n",
-					srdBuf[slot].resetReason, srdBuf[slot].pc, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].neverUsedRam, slot);
-			MessageF(mtype, "Spinning module during software reset: %s\n", moduleName[srdBuf[slot].resetReason & 0x0F]);
+			scratchString.Clear();
+			for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
+			{
+				scratchString.catf(" %08x", srdBuf[slot].stack[i]);
+			}
+			MessageF(mtype, "0x%04x, HFSR 0x%08x, CFSR 0x%08x, ICSR 0x%08x\nStack:%s\n",
+					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, scratchString.Pointer());
+			MessageF(mtype, "Spinning module during software reset: %s, available RAM %u bytes (slot %d)\n",
+					moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
 		}
 		else
 		{
@@ -1581,6 +1595,23 @@ void Platform::DiagnosticTest(int d)
 
 	case (int)DiagnosticTestType::PrintMoves:
 		DDA::PrintMoves();
+		break;
+
+	case (int)DiagnosticTestType::TimeSquareRoot:		// Show the square root calculation time. The displayed value is subject to interrupts.
+		{
+			const uint32_t num1 = 0x7265ac3d;
+			const uint32_t now1 = Platform::GetInterruptClocks();
+			const uint32_t num1a = isqrt64((uint64_t)num1 * num1);
+			const uint32_t tim1 = Platform::GetInterruptClocks() - now1;
+
+			const uint32_t num2 = 0x0000a4c5;
+			const uint32_t now2 = Platform::GetInterruptClocks();
+			const uint32_t num2a = isqrt64((uint64_t)num2 * num2);
+			const uint32_t tim2 = Platform::GetInterruptClocks() - now2;
+			MessageF(GENERIC_MESSAGE, "Square roots: 64-bit %.1fus %s, 32-bit %.1fus %s\n",
+					(float)(tim1 * 1000000)/DDA::stepClockRate, (num1a == num1) ? "ok" : "ERROR",
+							(float)(tim2 * 1000000)/DDA::stepClockRate, (num2a == num2) ? "ok" : "ERROR");
+		}
 		break;
 
 #ifdef DUET_NG

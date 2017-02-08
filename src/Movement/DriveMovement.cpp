@@ -199,7 +199,7 @@ bool DriveMovement::CalcNextStepTimeCartesianFull(const DDA &dda, bool live)
 pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
-	uint32_t shiftFactor;
+	uint32_t shiftFactor = 0;		// assume single stepping
 	if (stepInterval < DDA::MinCalcIntervalCartesian)
 	{
 		uint32_t stepsToLimit = ((nextStep <= reverseStartStep && reverseStartStep <= totalSteps)
@@ -218,19 +218,12 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		{
 			shiftFactor = 1;		// double stepping
 		}
-		else
-		{
-			shiftFactor = 0;		// single stepping
-		}
 	}
-	else
-	{
-		shiftFactor = 0;			// single stepping
-	}
+
 	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 
-	uint32_t nextCalcStep = nextStep + stepsTillRecalc;
-	uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
+	const uint32_t nextCalcStep = nextStep + stepsTillRecalc;
+	const uint32_t lastStepTime = nextStepTime;					// pick up the time of the last step
 	if (nextCalcStep < mp.cart.accelStopStep)
 	{
 		// acceleration phase
@@ -244,7 +237,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	else if (nextCalcStep < reverseStartStep)
 	{
 		// deceleration phase, not reversed yet
-		uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep;
+		const uint64_t temp = mp.cart.twoCsquaredTimesMmPerStepDivA * nextCalcStep;
 		// Allow for possible rounding error when the end speed is zero or very small
 		nextStepTime = (twoDistanceToStopTimesCsquaredDivA > temp)
 						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
@@ -273,7 +266,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
 		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
-		if (nextStep == totalSteps || nextStep + 1 == totalSteps)
+		if (nextStep + 1 >= totalSteps)
 		{
 			nextStepTime = dda.clocksNeeded;
 		}
@@ -295,7 +288,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
 	// The simulator suggests that at 200steps/mm, the minimum step pulse interval for 400mm/sec movement is 4.5us
-	uint32_t shiftFactor;
+	uint32_t shiftFactor = 0;		// assume single stepping
 	if (stepInterval < DDA::MinCalcIntervalDelta)
 	{
 		const uint32_t stepsToLimit = ((nextStep < reverseStartStep && reverseStartStep <= totalSteps)
@@ -318,15 +311,8 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		{
 			shiftFactor = 1;		// double stepping
 		}
-		else
-		{
-			shiftFactor = 0;		// single stepping
-		}
 	}
-	else
-	{
-		shiftFactor = 0;			// single stepping
-	}
+
 	stepsTillRecalc = (1u << shiftFactor) - 1;					// store number of additional steps to generate
 
 	if (nextStep == reverseStartStep)
@@ -339,19 +325,19 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	}
 
 	// Calculate d*s*K as an integer, where d = distance the head has travelled, s = steps/mm for this drive, K = a power of 2 to reduce the rounding errors
-	if (direction)
 	{
-		mp.delta.hmz0sK += (int32_t)(K2 << shiftFactor);
-	}
-	else
-	{
-		mp.delta.hmz0sK -= (int32_t)(K2 << shiftFactor);
+		int32_t shiftedK2 = (int32_t)(K2 << shiftFactor);
+		if (!direction)
+		{
+			shiftedK2 = -shiftedK2;
+		}
+		mp.delta.hmz0sK += shiftedK2;
 	}
 
 	const int32_t hmz0scK = (int32_t)(((int64_t)mp.delta.hmz0sK * dda.cKc)/Kc);
 	const int32_t t1 = mp.delta.minusAaPlusBbTimesKs + hmz0scK;
 	// Due to rounding error we can end up trying to take the square root of a negative number if we do not take precautions here
-	const int64_t t2a = (int64_t)isquare64(t1) + mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - (int64_t)isquare64(mp.delta.hmz0sK);
+	const int64_t t2a = mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared - (int64_t)isquare64(mp.delta.hmz0sK) + (int64_t)isquare64(t1);
 	const int32_t t2 = (t2a > 0) ? isqrt64(t2a) : 0;
 	const int32_t dsK = (direction) ? t1 - t2 : t1 + t2;
 
@@ -363,7 +349,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		return false;
 	}
 
-	uint32_t lastStepTime = nextStepTime;			// pick up the time of the last step
+	const uint32_t lastStepTime = nextStepTime;		// pick up the time of the last step
 	if ((uint32_t)dsK < mp.delta.accelStopDsK)
 	{
 		// Acceleration phase
@@ -376,7 +362,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	}
 	else
 	{
-		uint64_t temp = (uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK;
+		const uint64_t temp = (uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK;
 		// Because of possible rounding error when the end speed is zero or very small, we need to check that the square root will work OK
 		nextStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
 						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)
@@ -391,13 +377,13 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
 		// Very rarely, the penultimate step may be calculated late, so allow for that too.
-		if (nextStep == totalSteps || nextStep + 1 == totalSteps)
+		if (nextStep + 1 >= totalSteps)
 		{
 			nextStepTime = dda.clocksNeeded;
 		}
 		else
 		{
-			// We don't expect any step except the last to be late
+			// We don't expect any steps except the last two to be late
 			state = DMState::stepError;
 			stepInterval = 10000000 + nextStepTime;		// so we can tell what happened in the debug print
 			return false;

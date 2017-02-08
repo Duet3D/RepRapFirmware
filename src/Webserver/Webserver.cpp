@@ -343,32 +343,32 @@ uint16_t Webserver::GetGCodeBufferSpace(const WebSource source) const
 void Webserver::ConnectionLost(Connection conn)
 {
 	// Inform protocol handlers that this connection has been lost
-	uint16_t localPort = Network::GetLocalPort(conn);
+	const uint16_t localPort = Network::GetLocalPort(conn);
 	ProtocolInterpreter *interpreter;
 	switch (localPort)
 	{
-		case FTP_PORT:		/* FTP */
+	case FTP_PORT:		/* FTP */
+		interpreter = ftpInterpreter;
+		break;
+
+	case TELNET_PORT:	/* Telnet */
+		interpreter = telnetInterpreter;
+		break;
+
+	default:			/* HTTP and FTP data */
+		if (localPort == network->GetHttpPort())
+		{
+			interpreter = httpInterpreter;
+			break;
+		}
+		else if (localPort == network->GetDataPort())
+		{
 			interpreter = ftpInterpreter;
 			break;
+		}
 
-		case TELNET_PORT:	/* Telnet */
-			interpreter = telnetInterpreter;
-			break;
-
-		default:			/* HTTP and FTP data */
-			if (localPort == network->GetHttpPort())
-			{
-				interpreter = httpInterpreter;
-				break;
-			}
-			else if (localPort == network->GetDataPort())
-			{
-				interpreter = ftpInterpreter;
-				break;
-			}
-
-			platform->MessageF(GENERIC_MESSAGE, "Error: Webserver should handle disconnect event at local port %d, but no handler was found!\n", localPort);
-			return;
+		platform->MessageF(GENERIC_MESSAGE, "Error: Webserver should handle disconnect event at local port %d, but no handler was found!\n", localPort);
+		return;
 	}
 
 	// Print some debug information and notify the protocol interpreter
