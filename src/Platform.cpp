@@ -146,7 +146,7 @@ extern "C"
 	// Also get the program counter when the exception occurred.
 	void prvGetRegistersFromStack(const uint32_t *pulFaultStackAddress)
 	{
-	    reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 6);
+	    reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
 	}
 
 	// The fault handler implementation calls a function called prvGetRegistersFromStack()
@@ -400,7 +400,7 @@ void Platform::Init()
 		break;
 	}
 
-	// Initialise TMC2660 drivers
+	// Initialise TMC2660 driver module
 	driversPowered = false;
 	TMC2660::Init(ENABLE_PINS, numTMC2660Drivers);
 #endif
@@ -1278,12 +1278,14 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		}
 		srdBuf[slot].magic = SoftwareResetData::magicValue;
 		srdBuf[slot].resetReason = reason;
-		GetStackUsage(NULL, NULL, &srdBuf[slot].neverUsedRam);
+		GetStackUsage(nullptr, nullptr, &srdBuf[slot].neverUsedRam);
 		srdBuf[slot].hfsr = SCB->HFSR;
 		srdBuf[slot].cfsr = SCB->CFSR;
 		srdBuf[slot].icsr = SCB->ICSR;
+		srdBuf[slot].bfar = SCB->BFAR;
 		if (stk != nullptr)
 		{
+			srdBuf[slot].sp = reinterpret_cast<uint32_t>(stk);
 			for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
 			{
 				srdBuf[slot].stack[i] = stk[i];
@@ -1458,8 +1460,8 @@ void Platform::Diagnostics(MessageType mtype)
 			{
 				scratchString.catf(" %08x", srdBuf[slot].stack[i]);
 			}
-			MessageF(mtype, "0x%04x, HFSR 0x%08x, CFSR 0x%08x, ICSR 0x%08x\nStack:%s\n",
-					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, scratchString.Pointer());
+			MessageF(mtype, "0x%04x, HFSR 0x%08x, CFSR 0x%08x, ICSR 0x%08x, BFAR 0x%08x, SP 0x%08x\nStack:%s\n",
+					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp, scratchString.Pointer());
 			MessageF(mtype, "Spinning module during software reset: %s, available RAM %u bytes (slot %d)\n",
 					moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
 		}
@@ -1591,6 +1593,15 @@ void Platform::DiagnosticTest(int d)
 	case (int)DiagnosticTestType::UnalignedMemoryAccess:	// do an unaligned memory access to test exception handling
 		SCB->CCR |= SCB_CCR_UNALIGN_TRP_Msk;			// by default, unaligned memory accesses are allowed, so change that
 		(void)RepRap::ReadDword(reinterpret_cast<const char*>(dummy) + 1);	// call function in another module so it can't be optimised away
+		break;
+
+	case (int)DiagnosticTestType::BusFault:
+		// Read from the "Undefined (Abort)" area
+#ifdef DUET_NG
+		(void)RepRap::ReadDword(reinterpret_cast<const char*>(0x20800000));
+#else
+		(void)RepRap::ReadDword(reinterpret_cast<const char*>(0x20200000));
+#endif
 		break;
 
 	case (int)DiagnosticTestType::PrintMoves:

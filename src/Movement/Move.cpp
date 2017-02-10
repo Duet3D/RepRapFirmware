@@ -414,7 +414,16 @@ void Move::Diagnostics(MessageType mtype)
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 	longestGcodeWaitInterval = 0;
 
-	// Show the current probe position heights
+	// Show the current probe position heights and type of bed compensation in use
+	p->Message(mtype, "Bed compensation in use: ");
+	if (numBedCompensationPoints == 0)
+	{
+		p->MessageF(mtype, "%s\n", (grid.UsingHeightMap()) ? "mesh" : "none");
+	}
+	else
+	{
+		p->MessageF(mtype, "%d point\n", numBedCompensationPoints);
+	}
 	p->Message(mtype, "Bed probe heights:");
 	for (size_t i = 0; i < MaxProbePoints; ++i)
 	{

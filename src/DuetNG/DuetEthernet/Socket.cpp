@@ -147,6 +147,12 @@ bool Socket::ReadBuffer(const char *&buffer, size_t &len)
 // Poll a socket to see if it needs to be serviced
 void Socket::Poll(bool full)
 {
+	// Recycle any receive buffers that are now empty
+	while (receivedData != nullptr && receivedData->IsEmpty())
+	{
+		receivedData = receivedData->Release();		// discard empty buffer at head of chain
+	}
+
 	switch(getSn_SR(socketNum))
 	{
 	case SOCK_INIT:

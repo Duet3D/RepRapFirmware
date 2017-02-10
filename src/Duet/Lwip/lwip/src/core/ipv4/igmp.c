@@ -697,12 +697,16 @@ igmp_timeout(struct igmp_group *group)
 static void
 igmp_start_timer(struct igmp_group *group, u8_t max_time)
 {
+#if 1	// dc42 fix for divide by zero error (this has been confirmed to occur in Duet085 firmware 1.17d)
+  group->timer = (max_time > 2) ? (LWIP_RAND() % (max_time - 1)) + 1 : 1;
+#else
   /* ensure the input value is > 0 */
   if (max_time == 0) {
     max_time = 1;
   }
   /* ensure the random value is > 0 */
   group->timer = (LWIP_RAND() % (max_time - 1)) + 1;
+#endif
 }
 
 /**
@@ -721,7 +725,6 @@ igmp_delaying_member(struct igmp_group *group, u8_t maxresp)
     group->group_state = IGMP_GROUP_DELAYING_MEMBER;
   }
 }
-
 
 /**
  * Sends an IP packet on a network interface. This function constructs the IP header

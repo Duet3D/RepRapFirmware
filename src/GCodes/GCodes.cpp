@@ -2237,6 +2237,7 @@ bool GCodes::ProbeGrid(GCodeBuffer& gb, StringRef& reply)
 
 bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 {
+	reprap.GetMove()->SetIdentityTransform();					// stop using old-style bed compensation and clear the height map
 	const char* heightMapFileName;
 	if (gb.Seen('P'))
 	{
@@ -2247,7 +2248,6 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 		heightMapFileName = DefaultHeightMapFile;
 	}
 	FileStore * const f = platform->GetFileStore(platform->GetSysDir(), heightMapFileName, false);
-
 	if (f == nullptr)
 	{
 		reply.printf("Height map file %s not found", heightMapFileName);
