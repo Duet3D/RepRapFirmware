@@ -71,7 +71,7 @@ void Network::Spin(bool full)
 			usingDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
 			if (usingDhcp)
 			{
-				debugPrintf("Link established, getting IP address\n");
+//				debugPrintf("Link established, getting IP address\n");
 				// IP address is all zeros, so use DHCP
 				DHCP_init(DhcpSocketNumber, hostname);
 				lastTickMillis = millis();
@@ -79,7 +79,7 @@ void Network::Spin(bool full)
 			}
 			else
 			{
-				debugPrintf("Link established, network running\n");
+//				debugPrintf("Link established, network running\n");
 				InitSockets();
 				state = NetworkState::active;
 			}
@@ -100,7 +100,7 @@ void Network::Spin(bool full)
 				const DhcpRunResult ret = DHCP_run();
 				if (ret == DhcpRunResult::DHCP_IP_ASSIGN)
 				{
-					debugPrintf("IP address obtained, network running\n");
+//					debugPrintf("IP address obtained, network running\n");
 					getSIPR(ipAddress);
 					// Send mDNS announcement so that some routers can perform hostname mapping
 					// if this board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
@@ -111,7 +111,7 @@ void Network::Spin(bool full)
 			}
 			else
 			{
-				debugPrintf("Lost phy link\n");
+//				debugPrintf("Lost phy link\n");
 				DHCP_stop();
 				TerminateSockets();
 				state = NetworkState::establishingLink;
@@ -135,7 +135,7 @@ void Network::Spin(bool full)
 				const DhcpRunResult ret = DHCP_run();
 				if (ret == DhcpRunResult::DHCP_IP_CHANGED)
 				{
-					debugPrintf("IP address changed\n");
+//					debugPrintf("IP address changed\n");
 					getSIPR(ipAddress);
 				}
 			}
@@ -152,7 +152,7 @@ void Network::Spin(bool full)
 		}
 		else if (full)
 		{
-			debugPrintf("Lost phy link\n");
+//			debugPrintf("Lost phy link\n");
 			if (usingDhcp)
 			{
 				DHCP_stop();
@@ -204,7 +204,7 @@ void Network::Stop()
 		{
 			DHCP_stop();
 		}
-		digitalWrite(EspResetPin, LOW);	// put the ESP back into reset
+		digitalWrite(EspResetPin, LOW);			// put the W5500 back into reset
 		state = NetworkState::disabled;
 	}
 }
@@ -334,34 +334,29 @@ NetworkTransaction *Network::GetTransaction(Connection conn)
 
 void Network::OpenDataPort(Port port)
 {
-	sockets[FtpSocketNumber].Init(FtpSocketNumber, port);
-	sockets[FtpSocketNumber].Poll(false);
+	sockets[FtpDataSocketNumber].Init(FtpDataSocketNumber, port);
+	sockets[FtpDataSocketNumber].Poll(false);
 }
 
 Port Network::GetDataPort() const
 {
-	return sockets[FtpSocketNumber].GetLocalPort();
+	return sockets[FtpDataSocketNumber].GetLocalPort();
 }
 
 // Close FTP data port and purge associated PCB
 void Network::CloseDataPort()
 {
-	sockets[FtpSocketNumber].Close();
+	sockets[FtpDataSocketNumber].Close();
 }
 
-bool Network::AcquireFTPTransaction()
+bool Network::AcquireTransaction(size_t socketNumber)
 {
-	return sockets[FtpSocketNumber].AcquireTransaction();
-}
-
-bool Network::AcquireDataTransaction()
-{
-	return sockets[FtpDataSocketNumber].AcquireTransaction();
-}
-
-bool Network::AcquireTelnetTransaction()
-{
-	return sockets[TelnetSocketNumber].AcquireTransaction();
+	const bool success = sockets[socketNumber].AcquireTransaction();
+//	if (success)
+//	{
+//		currentTransactionSocketNumber = socketNumber;
+//	}
+	return success;
 }
 
 void Network::InitSockets()

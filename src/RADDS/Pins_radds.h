@@ -5,7 +5,7 @@
 
 const size_t NumFirmwareUpdateModules = 1;
 #define IAP_UPDATE_FILE "iapradds.bin"
-#define IAP_FIRMWARE_FILE "RepRapFirmware.bin"
+#define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"
 
 // Default board type
 #define DEFAULT_BOARD_TYPE BoardType::RADDS_15
@@ -32,7 +32,7 @@ const int8_t HEATERS = 4;
 // defaultPidKis[HEATERS] = {HEATERS_(5.0, 0.1, 0.1, 0.1, 0.1, 0.1)};
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d }
 
-const size_t MAX_AXES = 6;						// FIXME The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+const size_t MAX_AXES = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 const size_t MIN_AXES = 3;						// The minimum and default number of axes
 const size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
 
@@ -41,11 +41,10 @@ const size_t NUM_SERIAL_CHANNELS = 2;
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial1
 
-// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to -1 to flag unavailability.
+// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 // DRIVES
 //                                    X   Y   Z  E1  E2  E3  E4  E5
 const Pin ENABLE_PINS[DRIVES] =    { 26, 22, 15, 62, 65, 49, 37, 31 };
-const bool ENABLE_VALUES[DRIVES] = {  false, false, false, false, false, false, false, false };
 //                                  A15 D04 B25 A02 B19 C12 C03 D06
 const Pin STEP_PINS[DRIVES] =      { 24, 17,  2, 61, 64, 51, 35, 29 };
 const Pin DIRECTION_PINS[DRIVES] = { 23, 16,  3, 60, 63, 53, 33, 27 };
@@ -110,7 +109,6 @@ const Pin Z_PROBE_PIN = 5;  // RADDS "ADC" pin
 const Pin Z_PROBE_MOD_PIN = 34;
 
 // Use a PWM capable pin
-// Firmware uses SamNonDue so feel free to use a non-Arduino pin
 const size_t NUM_FANS = 2;
 const Pin COOLING_FAN_PINS[NUM_FANS] = { 9, 8 }; // Fan 0, Fan 1
 

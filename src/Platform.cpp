@@ -113,7 +113,7 @@ void setup()
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it
-	// being held in the capacitor and changing the reset reason form Software to User. So enable it again here. We hope that the reset signal
+	// being held in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal
 	// will have gone away by now.
 #ifndef RSTC_MR_KEY_PASSWD
 // Definition of RSTC_MR_KEY_PASSWD is missing in the SAM3X ASF files
@@ -828,8 +828,6 @@ void Platform::UpdateFirmware()
 #if (SAM4S || SAM4E)
 	// The EWP command is not supported for non-8KByte sectors in the SAM4 series.
 	// So we have to unlock and erase the complete 64Kb sector first.
-	// TODO save the NVRAM area and restore it later
-
 	flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
 	flash_erase_sector(IAP_FLASH_START);
 
@@ -936,7 +934,7 @@ void Platform::UpdateFirmware()
 	Message(FIRMWARE_UPDATE_MESSAGE, "Updating main firmware\n");
 
 	// Allow time for the firmware update message to be sent
-	uint32_t now = millis();
+	const uint32_t now = millis();
 	while (FlushMessages() && millis() - now < 2000) { }
 
 	// Step 2 - Let the firmware do whatever is necessary before we exit this program
@@ -946,15 +944,29 @@ void Platform::UpdateFirmware()
 	// This does essentially what the Atmel AT02333 paper suggests (see 3.2.2 ff)
 
 	// Disable all IRQs
+	SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk;	// disable the system tick exception
 	cpu_irq_disable();
-	for(size_t i = 0; i < 8; i++)
+	for (size_t i = 0; i < 8; i++)
 	{
-		NVIC->ICER[i] = 0xFFFFFFFF;		// Disable IRQs
-		NVIC->ICPR[i] = 0xFFFFFFFF;		// Clear pending IRQs
+		NVIC->ICER[i] = 0xFFFFFFFF;					// Disable IRQs
+		NVIC->ICPR[i] = 0xFFFFFFFF;					// Clear pending IRQs
 	}
 
-	// Our SAM3X doesn't support disabling the watchdog, so leave it running.
-	// The IAP binary will kick it as soon as it's started
+	// Newer versions of iap4e.bin reserve space above the stack for us to pass the firmware filename
+	static const char filename[] = "0:/sys/" IAP_FIRMWARE_FILE;
+	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_FLASH_START);
+	if (topOfStack + sizeof(filename) <=
+#if (SAM4S || SAM4E)
+						IRAM_ADDR + IRAM_SIZE
+#else
+						IRAM1_ADDR + IRAM1_SIZE
+#endif
+	   )
+	{
+		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
+	}
+
+	wdt_restart(WDT);								// kick the watchdog one last time
 
 	// Modify vector table location
 	__DSB();
@@ -963,12 +975,13 @@ void Platform::UpdateFirmware()
 	__DSB();
 	__ISB();
 
-	// Reset stack pointer, enable IRQs again and start the new IAP binary
-	__set_MSP(*(uint32_t *)IAP_FLASH_START);
 	cpu_irq_enable();
 
-	void *entryPoint = (void *)(*(uint32_t *)(IAP_FLASH_START + 4));
-	goto *entryPoint;
+	__asm volatile ("mov r3, %0" : : "r" (IAP_FLASH_START) : "r3");
+	__asm volatile ("ldr sp, [r3]");
+	__asm volatile ("ldr r1, [r3, #4]");
+	__asm volatile ("orr r1, r1, #1");
+	__asm volatile ("bx r1");
 }
 
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
@@ -1008,7 +1021,7 @@ float Platform::Time()
 void Platform::Exit()
 {
 	// Close all files
-	for(size_t i = 0; i < MAX_FILES; i++)
+	for (size_t i = 0; i < MAX_FILES; i++)
 	{
 		while (files[i]->inUse)
 		{
@@ -1024,6 +1037,14 @@ void Platform::Exit()
 
 	// Stop processing data. Don't try to send a message because it will probably never get there.
 	active = false;
+
+	// Close down USB and serial ports
+	SERIAL_MAIN_DEVICE.end();
+	SERIAL_AUX_DEVICE.end();
+#ifdef SERIAL_AUX2_DEVICE
+	SERIAL_AUX2_DEVICE.end();
+#endif
+
 }
 
 Compatibility Platform::Emulating() const
@@ -1455,13 +1476,19 @@ void Platform::Diagnostics(MessageType mtype)
 		Message(mtype, "Last software reset code ");
 		if (slot >= 0 && srdBuf[slot].magic == SoftwareResetData::magicValue)
 		{
-			scratchString.Clear();
-			for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
+			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
+			MessageF(mtype, "0x%04x, HFSR 0x%08x, CFSR 0x%08x, ICSR 0x%08x, BFAR 0x%08x, SP 0x%08x\n",
+						srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp);
+			if (srdBuf[slot].sp != 0xFFFFFFFF)
 			{
-				scratchString.catf(" %08x", srdBuf[slot].stack[i]);
+				// We saved a stack dump, so print it
+				scratchString.Clear();
+				for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
+				{
+					scratchString.catf(" %08x", srdBuf[slot].stack[i]);
+				}
+				MessageF(mtype, "Stack:%s\n", scratchString.Pointer());
 			}
-			MessageF(mtype, "0x%04x, HFSR 0x%08x, CFSR 0x%08x, ICSR 0x%08x, BFAR 0x%08x, SP 0x%08x\nStack:%s\n",
-					srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp, scratchString.Pointer());
 			MessageF(mtype, "Spinning module during software reset: %s, available RAM %u bytes (slot %d)\n",
 					moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
 		}

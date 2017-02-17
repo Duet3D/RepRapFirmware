@@ -225,10 +225,12 @@ private:
 	bool WriteConfigOverrideFile(StringRef& reply, const char *fileName) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels
 
+	void ClearBabyStepping();
+
 	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
-	Platform* const platform;													// The RepRap machine
-	Webserver* const webserver;												// The web server class
+	Platform* const platform;											// The RepRap machine
+	Webserver* const webserver;											// The web server class
 
 	GCodeBuffer* gcodeSources[6];										// The various sources of gcodes
 
@@ -293,6 +295,8 @@ private:
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
 	float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
+	float currentBabyStepZOffset;				// The accumulated Z offset due to baby stepping requests
+	float pendingBabyStepZOffset;				// The amount of additional baby stepping requested but not yet acted on
 
 	// Z probe
 	float lastProbedZ;							// the last height at which the Z probe stopped

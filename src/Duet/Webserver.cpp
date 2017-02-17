@@ -651,13 +651,13 @@ void Webserver::HttpInterpreter::DoFastUpload()
 					platform->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
 					CancelUpload();
 
-					while (!network->Lock());
+					while (!network->Lock()) { }
 					SendJsonResponse("upload");
 					return;
 				}
 			}
 		}
-		while (!network->Lock());
+		while (!network->Lock()) { }
 	}
 
 	// See if the upload has finished
@@ -2196,7 +2196,6 @@ void Webserver::FtpInterpreter::ProcessLine()
 				const uint8_t * const ip_address = network->GetIPAddress();
 
 				/* open random port > 1023 */
-				//rand();		// TRNG doesn't require this
 				uint16_t pasv_port = random(1024, 65535);
 				network->OpenDataPort(pasv_port);
 				portOpenTime = millis();

@@ -94,7 +94,7 @@ a lot of data that needs to be copied, this should be set high. */
 
 
 /* --------- IGMP options ---------- */
-#define LWIP_IGMP					1
+#define LWIP_IGMP					1	/* looks like this is needed for mdns support */
 
 #ifdef __SAM3X8E__
 # define LWIP_RAND					trueRandom

@@ -160,7 +160,7 @@ void NetworkTransaction::SetFileToWrite(FileStore *file)
 	}
 	else if (file != nullptr)
 	{
-		debugPrintf("Want to write file but can't write\n");
+//		debugPrintf("Want to write file but can't write\n");
 		file->Close();
 	}
 }

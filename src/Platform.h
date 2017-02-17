@@ -167,7 +167,7 @@ enum class SoftwareResetReason : uint16_t
 	inUsbOutput = 0x4000			// this bit is or'ed in if we were in USB output at the time
 };
 
-// Enumeration to describe various tests we do in response to the M111 command
+// Enumeration to describe various tests we do in response to the M122 command
 enum class DiagnosticTestType : int
 {
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops

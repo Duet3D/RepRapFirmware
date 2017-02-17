@@ -151,6 +151,7 @@ void GCodes::Reset()
 	toolChangeRestorePoint.Init();
 
 	ClearMove();
+	ClearBabyStepping();
 
 	for (size_t i = 0; i < MaxTriggers; ++i)
 	{
@@ -171,6 +172,11 @@ void GCodes::Reset()
 	{
 		resourceOwners[i] = nullptr;
 	}
+}
+
+void GCodes::ClearBabyStepping()
+{
+	pendingBabyStepZOffset = currentBabyStepZOffset = 0.0;
 }
 
 bool GCodes::DoingFileMacro() const
@@ -756,14 +762,14 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 
 			gb.Init();								// mark buffer as empty
 
-			// Don't close the file until all moves have been completed, in case the print gets paused.
-			// Also, this keeps the state as 'Printing' until the print really has finished.
-			if (LockMovementAndWaitForStandstill(gb))
+			if (gb.MachineState().previous == nullptr)
 			{
-				fd.Close();
-				if (gb.MachineState().previous == nullptr)
+				// Finished printing SD card file
+				// Don't close the file until all moves have been completed, in case the print gets paused.
+				// Also, this keeps the state as 'Printing' until the print really has finished.
+				if (LockMovementAndWaitForStandstill(gb))
 				{
-					// Finished printing SD card file
+					fd.Close();
 					UnlockAll(gb);
 					reprap.GetPrintMonitor()->StoppedPrint();
 					if (platform->Emulating() == marlin)
@@ -772,21 +778,22 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 						HandleReply(gb, false, "Done printing file");
 					}
 				}
-				else
+			}
+			else
+			{
+				// Finished a macro or finished processing config.g
+				fd.Close();
+				if (runningConfigFile)
 				{
-					// Finished a macro or finished processing config.g
-					if (runningConfigFile)
-					{
-						CopyConfigFinalValues(gb);
-						runningConfigFile = false;
-					}
-					Pop(gb);
-					gb.Init();
-					if (gb.GetState() == GCodeState::normal)
-					{
-						UnlockAll(gb);
-						HandleReply(gb, false, "");
-					}
+					CopyConfigFinalValues(gb);
+					runningConfigFile = false;
+				}
+				Pop(gb);
+				gb.Init();
+				if (gb.GetState() == GCodeState::normal)
+				{
+					UnlockAll(gb);
+					HandleReply(gb, false, "");
 				}
 			}
 			return;
@@ -952,9 +959,6 @@ bool GCodes::LockMovementAndWaitForStandstill(const GCodeBuffer& gb)
 	{
 		return false;
 	}
-
-	// Allow movement again
-	reprap.GetMove()->ResumeMoving();
 
 	// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
 	reprap.GetMove()->GetCurrentUserPosition(moveBuffer.coords, 0, reprap.GetCurrentXAxes());
@@ -1142,6 +1146,7 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 				}
 				else if (moveType == 0)
 				{
+					moveArg += currentBabyStepZOffset;
 					if (axis == Z_AXIS && isRetracted)
 					{
 						moveArg += retractHop;						// handle firmware retraction on layer change
@@ -1351,7 +1356,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		}
 		else
 		{
-			moveBuffer.coords[Z_AXIS] = zParam;
+			moveBuffer.coords[Z_AXIS] = zParam + currentBabyStepZOffset + retractHop;		// handle firmware retraction on layer change
 			if (currentTool != nullptr)
 			{
 				moveBuffer.coords[Z_AXIS] -= currentTool->GetOffset()[Z_AXIS];
@@ -1448,6 +1453,7 @@ bool GCodes::ReadMove(RawMove& m)
 	}
 
 	m = moveBuffer;
+
 	if (segmentsLeft == 1)
 	{
 		// If there is just 1 segment left, it doesn't matter if it is an arc move or not, just move to the end position
@@ -1495,6 +1501,31 @@ bool GCodes::ReadMove(RawMove& m)
 		}
 
 		--segmentsLeft;
+	}
+
+	// Check for pending baby stepping
+	if (m.moveType == 0 && pendingBabyStepZOffset != 0.0)
+	{
+		// Calculate the move length, to see how much new babystepping is appropriate for this move
+		float xMoveLength = 0.0;
+		for (size_t drive = 0; drive < numAxes; ++drive)
+		{
+			if ((arcAxesMoving & (1 << drive)) != 0)
+			{
+				xMoveLength = max<float>(xMoveLength, fabs(m.coords[drive] - m.initialCoords[drive]));
+			}
+		}
+		const float distance = sqrtf(fsquare(xMoveLength) + fsquare(m.coords[Y_AXIS] - m.initialCoords[Y_AXIS]) + fsquare(m.coords[Z_AXIS] - m.initialCoords[Z_AXIS]));
+
+		// The maximum Z speed change due to baby stepping that we allow is the Z jerk rate, to avoid slowing the print down too much
+		const float minMoveTime = distance/m.feedRate;
+		const float maxBabyStepping = minMoveTime * platform->ConfiguredInstantDv(Z_AXIS);
+		const float babySteppingToDo = constrain<float>(pendingBabyStepZOffset, -maxBabyStepping, maxBabyStepping);
+		m.coords[Z_AXIS] += babySteppingToDo;
+		moveBuffer.initialCoords[Z_AXIS] = m.coords[Z_AXIS];
+		moveBuffer.coords[Z_AXIS] += babySteppingToDo;
+		pendingBabyStepZOffset -= babySteppingToDo;
+		currentBabyStepZOffset += babySteppingToDo;
 	}
 	return true;
 }
@@ -1603,9 +1634,9 @@ bool GCodes::SetPositions(GCodeBuffer& gb)
 		if (gb.Seen('Z'))
 		{
 			const float babystepAmount = gb.GetFValue() * distanceScale;
-			if (fabs(babystepAmount) <= 1.0)		// limit babystepping to 1mm
+			if (fabs(babystepAmount) <= 1.0)			// limit babystepping to 1mm
 			{
-				reprap.GetMove()->Babystep(babystepAmount);
+				pendingBabyStepZOffset += babystepAmount;
 			}
 		}
 	}
@@ -1629,8 +1660,9 @@ bool GCodes::SetPositions(GCodeBuffer& gb)
 			{
 				return false;
 			}
+			ClearBabyStepping();						// G92 on any axis clears pending babystepping
 		}
-		else if (segmentsLeft != 0)			// wait for previous move to be taken so that GetCurrentUserPosition returns the correct value
+		else if (segmentsLeft != 0)						// wait for previous move to be taken so that GetCurrentUserPosition returns the correct value
 		{
 			return false;
 		}
@@ -1748,6 +1780,7 @@ bool GCodes::DoHome(GCodeBuffer& gb, StringRef& reply, bool& error)
 	if (reprap.GetMove()->IsDeltaMode())
 	{
 		SetAllAxesNotHomed();
+		ClearBabyStepping();
 		DoFileMacro(gb, HOME_DELTA_G, true);
 	}
 	else
@@ -1762,6 +1795,10 @@ bool GCodes::DoHome(GCodeBuffer& gb, StringRef& reply, bool& error)
 			}
 		}
 
+		if (toBeHomed == 0 || (toBeHomed & (1u << Z_AXIS)) != 0)
+		{
+			ClearBabyStepping();
+		}
 		if (toBeHomed == 0 || toBeHomed == ((1u << numAxes) - 1))
 		{
 			// Homing everything
@@ -2537,7 +2574,6 @@ bool GCodes::DoDwellTime(float dwell)
 		if (platform->Time() - dwellTime >= 0.0)
 		{
 			dwellWaiting = false;
-			reprap.GetMove()->ResumeMoving();
 			return true;
 		}
 		return false;

@@ -259,7 +259,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 			{
 				if (delta > 0)
 				{
-					isPrintingMove = true;				// we have both movement and extrusion
+					isPrintingMove = true;				// we have both XY movement and extrusion
 				}
 				if (nextMove.usePressureAdvance)
 				{
@@ -304,81 +304,6 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 		}
 
 		totalDistance = Normalise(directionVector, DRIVES, numAxes);
-		if (isDeltaMovement)
-		{
-			// The following are only needed when doing delta movements. We could defer computing them until Prepare(), which would make simulation faster.
-			a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
-			cKc = (int32_t)(directionVector[Z_AXIS] * DriveMovement::Kc);
-
-			const float initialX = prev->GetEndCoordinate(X_AXIS, false);
-			const float initialY = prev->GetEndCoordinate(Y_AXIS, false);
-			const DeltaParameters& dparams = move->GetDeltaParams();
-			const float diagonalSquared = fsquare(dparams.GetDiagonal());
-			const float a2b2D2 = a2plusb2 * diagonalSquared;
-
-			for (size_t drive = 0; drive < DELTA_AXES; ++drive)
-			{
-				const float A = initialX - dparams.GetTowerX(drive);
-				const float B = initialY - dparams.GetTowerY(drive);
-				const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive);
-				DriveMovement& dm = ddm[drive];
-				const float aAplusbB = A * directionVector[X_AXIS] + B * directionVector[Y_AXIS];
-				const float dSquaredMinusAsquaredMinusBsquared = diagonalSquared - fsquare(A) - fsquare(B);
-				float h0MinusZ0 = sqrtf(dSquaredMinusAsquaredMinusBsquared);
-				dm.mp.delta.hmz0sK = (int32_t)(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
-				dm.mp.delta.minusAaPlusBbTimesKs = -(int32_t)(aAplusbB * stepsPerMm * DriveMovement::K2);
-				dm.mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared =
-						(int64_t)(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
-
-				// Calculate the distance at which we need to reverse direction.
-				if (a2plusb2 <= 0.0)
-				{
-					// Pure Z movement. We can't use the main calculation because it divides by a2plusb2.
-					dm.direction = (directionVector[Z_AXIS] >= 0.0);
-					dm.reverseStartStep = dm.totalSteps + 1;
-				}
-				else
-				{
-					// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
-					// the other root corresponds to the carriages being above the bed.
-					const float drev = ((directionVector[Z_AXIS] * sqrt(a2b2D2 - fsquare(A * directionVector[Y_AXIS] - B * directionVector[X_AXIS])))
-										- aAplusbB)/a2plusb2;
-					if (drev > 0.0 && drev < totalDistance)		// if the reversal point is within range
-					{
-						// Calculate how many steps we need to move up before reversing
-						const float hrev = directionVector[Z_AXIS] * drev + sqrt(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - a2plusb2 * fsquare(drev));
-						int32_t numStepsUp = (int32_t)((hrev - h0MinusZ0) * stepsPerMm);
-
-						// We may be almost at the peak height already, in which case we don't really have a reversal.
-						if (numStepsUp < 1 || (dm.direction && (uint32_t)numStepsUp <= dm.totalSteps))
-						{
-							dm.reverseStartStep = dm.totalSteps + 1;
-						}
-						else
-						{
-							dm.reverseStartStep = (uint32_t)numStepsUp + 1;
-
-							// Correct the initial direction and the total number of steps
-							if (dm.direction)
-							{
-								// Net movement is up, so we will go up a bit and then down by a lesser amount
-								dm.totalSteps = (2 * numStepsUp) - dm.totalSteps;
-							}
-							else
-							{
-								// Net movement is down, so we will go up first and then down by a greater amount
-								dm.direction = true;
-								dm.totalSteps = (2 * numStepsUp) + dm.totalSteps;
-							}
-						}
-					}
-					else
-					{
-						dm.reverseStartStep = dm.totalSteps + 1;
-					}
-				}
-			}
-		}
 	}
 	else
 	{
@@ -424,7 +349,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
 	if (isDeltaMovement)
 	{
-		const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[X_AXIS]));
+		const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
 		const float maxSpeed = reprap.GetPlatform()->MaxFeedrates()[X_AXIS];
 		if (requestedSpeed * xyFactor > maxSpeed)
 		{
@@ -766,15 +691,93 @@ float DDA::CalcTime() const
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare()
 {
-//debugPrintf("Prep\n");
+	if (isDeltaMovement)
+	{
+		// This code used to be in DDA::Init but we moved it here so that we can implement babystepping in it,
+		// also it speeds up simulation because we no longer execute this code when simulating.
+		// However, this code assumes that the previous move in the DDA ring is the previously-executed move, because it fetches the X and Y end coordinates from that move.
+		// Therefore the Move code must not store a new move in that entry until this one has been prepared! (It took me ages to track this down.)
+		// Ideally we would store the initial X any Y coordinates in the DDA, but we need to be economical with memory in the Duet 06/085 build.
+		a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
+		cKc = (int32_t)(directionVector[Z_AXIS] * DriveMovement::Kc);
+
+		const float initialX = prev->GetEndCoordinate(X_AXIS, false);
+		const float initialY = prev->GetEndCoordinate(Y_AXIS, false);
+		const DeltaParameters& dparams = reprap.GetMove()->GetDeltaParams();
+		const float diagonalSquared = fsquare(dparams.GetDiagonal());
+		const float a2b2D2 = a2plusb2 * diagonalSquared;
+
+		for (size_t drive = 0; drive < DELTA_AXES; ++drive)
+		{
+			const float A = initialX - dparams.GetTowerX(drive);
+			const float B = initialY - dparams.GetTowerY(drive);
+			const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive);
+			DriveMovement& dm = ddm[drive];
+			const float aAplusbB = A * directionVector[X_AXIS] + B * directionVector[Y_AXIS];
+			const float dSquaredMinusAsquaredMinusBsquared = diagonalSquared - fsquare(A) - fsquare(B);
+			const float h0MinusZ0 = sqrtf(dSquaredMinusAsquaredMinusBsquared);
+			dm.mp.delta.hmz0sK = (int32_t)(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
+			dm.mp.delta.minusAaPlusBbTimesKs = -(int32_t)(aAplusbB * stepsPerMm * DriveMovement::K2);
+			dm.mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared =
+					(int64_t)(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
+
+			// Calculate the distance at which we need to reverse direction.
+			if (a2plusb2 <= 0.0)
+			{
+				// Pure Z movement. We can't use the main calculation because it divides by a2plusb2.
+				dm.direction = (directionVector[Z_AXIS] >= 0.0);
+				dm.reverseStartStep = dm.totalSteps + 1;
+			}
+			else
+			{
+				// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
+				// the other root corresponds to the carriages being above the bed.
+				const float drev = ((directionVector[Z_AXIS] * sqrt(a2b2D2 - fsquare(A * directionVector[Y_AXIS] - B * directionVector[X_AXIS])))
+									- aAplusbB)/a2plusb2;
+				if (drev > 0.0 && drev < totalDistance)		// if the reversal point is within range
+				{
+					// Calculate how many steps we need to move up before reversing
+					const float hrev = directionVector[Z_AXIS] * drev + sqrt(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - a2plusb2 * fsquare(drev));
+					const int32_t numStepsUp = (int32_t)((hrev - h0MinusZ0) * stepsPerMm);
+
+					// We may be almost at the peak height already, in which case we don't really have a reversal.
+					if (numStepsUp < 1 || (dm.direction && (uint32_t)numStepsUp <= dm.totalSteps))
+					{
+						dm.reverseStartStep = dm.totalSteps + 1;
+					}
+					else
+					{
+						dm.reverseStartStep = (uint32_t)numStepsUp + 1;
+
+						// Correct the initial direction and the total number of steps
+						if (dm.direction)
+						{
+							// Net movement is up, so we will go up a bit and then down by a lesser amount
+							dm.totalSteps = (2 * numStepsUp) - dm.totalSteps;
+						}
+						else
+						{
+							// Net movement is down, so we will go up first and then down by a greater amount
+							dm.direction = true;
+							dm.totalSteps = (2 * numStepsUp) + dm.totalSteps;
+						}
+					}
+				}
+				else
+				{
+					dm.reverseStartStep = dm.totalSteps + 1;
+				}
+			}
+		}
+	}
 
 	PrepParams params;
 	params.decelStartDistance = totalDistance - decelDistance;
 
 	// Convert the accelerate/decelerate distances to times
-	float accelStopTime = (topSpeed - startSpeed)/acceleration;
-	float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
-	float totalTime = decelStartTime + (topSpeed - endSpeed)/acceleration;
+	const float accelStopTime = (topSpeed - startSpeed)/acceleration;
+	const float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
+	const float totalTime = decelStartTime + (topSpeed - endSpeed)/acceleration;
 
 	clocksNeeded = (uint32_t)(totalTime * stepClockRate);
 

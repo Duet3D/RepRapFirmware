@@ -65,9 +65,9 @@ public:
 	void SaveFTPConnection() {}
 	void SaveTelnetConnection() {}
 
-	bool AcquireFTPTransaction();
-	bool AcquireDataTransaction();
-	bool AcquireTelnetTransaction();
+	bool AcquireFTPTransaction() { return AcquireTransaction(FtpSocketNumber); }
+	bool AcquireDataTransaction() { return AcquireTransaction(FtpDataSocketNumber); }
+	bool AcquireTelnetTransaction() { return AcquireTransaction(TelnetSocketNumber); }
 
 	void Defer(NetworkTransaction *tr);
 
@@ -90,6 +90,7 @@ private:
 
 	void InitSockets();
 	void TerminateSockets();
+	bool AcquireTransaction(size_t socketNumber);
 
 	Platform *platform;
 	float longWait;

@@ -8,7 +8,7 @@
 #include "RepRapFirmware.h"
 #include "TMC2660.h"
 
-#if !defined(PROTOTYPE_1)
+const float MaximumMotorCurrent = 2500.0;
 
 static size_t numTmc2660Drivers;
 
@@ -239,50 +239,16 @@ void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 // Set the motor current
 void TmcDriverState::SetCurrent(float current)
 {
-#if defined(DUET_NG) && !defined(PROTOTYPE_1)
-
 	// The current sense resistor on the production Duet WiFi is 0.051 ohms.
 	// This gives us a range of 101mA to 3.236A in 101mA steps in the high sensitivity range (VSENSE = 1)
 	drvConfReg |= TMC_DRVCONF_VSENSE;							// this should always be set, but send it again just in case
 	SpiSendWord(drvConfReg);
 
-	const uint32_t iCurrent = static_cast<uint32_t>(constrain<float>(current, 100.0, 2000.0));
+	const uint32_t iCurrent = static_cast<uint32_t>(constrain<float>(current, 100.0, MaximumMotorCurrent));
 	const uint32_t csBits = (32 * iCurrent - 1600)/3236;		// formula checked by simulation on a spreadsheet
 	sgcsConfReg &= ~TMC_SGCSCONF_CS_MASK;
 	sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
 	SpiSendWord(sgcsConfReg);
-
-#else
-
-	// The current sense resistor is 0.1 ohms on the evaluation board.
-	// This gives us a range of 95mA to 3.05A in 95mA steps when VSENSE is low (but max allowed RMS current is 2A),
-	// or 52mA to 1.65A in 52mA steps when VSENSE is high.
-	if (current > 1650.0)
-	{
-		// Need VSENSE = 0, but set up the current first to avoid temporarily exceeding the 2A rating
-		const uint32_t iCurrent = (current > 2000.0) ? 2000 : (uint32_t)current;
-		const uint32_t csBits = (32 * iCurrent - 1500)/3050;	// formula checked by simulation on a spreadsheet
-		sgcsConfReg &= ~TMC_SGCSCONF_CS_MASK;
-		sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
-		SpiSendWord(sgcsConfReg);
-
-		drvConfReg &= ~TMC_DRVCONF_VSENSE;
-		SpiSendWord(drvConfReg);
-	}
-	else
-	{
-		// Use VSENSE = 1
-		drvConfReg |= TMC_DRVCONF_VSENSE;
-		SpiSendWord(drvConfReg);
-
-		const uint32_t iCurrent = (current < 50) ? 50 : (uint32_t)current;
-		const uint32_t csBits = (32 * iCurrent - 800)/1650;		// formula checked by simulation on a spreadsheet
-		sgcsConfReg &= ~TMC_SGCSCONF_CS_MASK;
-		sgcsConfReg |= TMC_SGCSCONF_CS(csBits);
-		SpiSendWord(sgcsConfReg);
-	}
-
-	#endif
 }
 
 // Enable or disable the driver
@@ -459,8 +425,6 @@ namespace TMC2660
 	}
 
 };	// end namespace
-
-#endif
 
 // End
 

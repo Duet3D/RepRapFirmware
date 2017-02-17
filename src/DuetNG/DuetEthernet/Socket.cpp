@@ -147,10 +147,17 @@ bool Socket::ReadBuffer(const char *&buffer, size_t &len)
 // Poll a socket to see if it needs to be serviced
 void Socket::Poll(bool full)
 {
-	// Recycle any receive buffers that are now empty
-	while (receivedData != nullptr && receivedData->IsEmpty())
+	// The mechanism used by class OutputBuffer and now by NetworkBuffer of marking data taken as soon as we return a pointer to it
+	// is DANGEROUS and will have to be rewritten for RTOS. We need to recycle empty buffers, otherwise multiple file uploads get stalled.
+	// However, we MUST NOT do this until the data had DEFINITELY been finished with. Temporarily use this conditional to avoid a bug
+	// with data corruption when this is not the case.
+	if (full)
 	{
-		receivedData = receivedData->Release();		// discard empty buffer at head of chain
+		// Recycle any receive buffers that are now empty
+		while (receivedData != nullptr && receivedData->IsEmpty())
+		{
+			receivedData = receivedData->Release();		// discard empty buffer at head of chain
+		}
 	}
 
 	switch(getSn_SR(socketNum))
@@ -193,7 +200,7 @@ void Socket::Poll(bool full)
 				else
 				{
 					// This should not happen
-					debugPrintf("ERROR:currentTransation should be null but isn't\n");
+//					debugPrintf("ERROR:currentTransation should be null but isn't\n");
 				}
 			}
 			state = SocketState::connected;
@@ -374,7 +381,7 @@ void Socket::DiscardReceivedData()
 	}
 }
 
-// The webserver calls this to tell the socket that it needs a transaction, e.g. for sending a Telnet os FTP response.
+// The webserver calls this to tell the socket that it needs a transaction, e.g. for sending a Telnet or FTP response.
 // An empty transaction will do.
 // Return true if we can do it, false if the connection is closed or closing.
 bool Socket::AcquireTransaction()

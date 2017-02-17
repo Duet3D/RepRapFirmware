@@ -234,9 +234,6 @@ namespace WizSpi
 #endif
 	}
 
-// The remaining functions are speed-critical, so use full optimisation
-#pragma GCC optimize ("O3")
-
 	// Wait for transmit buffer empty, returning true if timed out
 	static inline bool waitForTxReady()
 	{

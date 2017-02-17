@@ -47,8 +47,6 @@ void Move::Init()
 	} while (dda != ddaRingAddPointer);
 
 	currentDda = nullptr;
-	addNoMoreMoves = false;
-	babysteppingLeft = 0.0;
 	stepErrors = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 
@@ -145,9 +143,11 @@ void Move::Spin()
 	// See if we can add another move to the ring
 	if (
 #if SUPPORT_ROLAND
-			!reprap.GetRoland()->Active() &&
+		   !reprap.GetRoland()->Active() &&
 #endif
-			!addNoMoreMoves && ddaRingAddPointer->GetState() == DDA::empty)
+		   ddaRingAddPointer->GetState() == DDA::empty
+		&& ddaRingAddPointer->GetNext()->GetState() != DDA::provisional		// function Prepare needs to access the endpoints in the previous move, so don't change them
+	   )
 	{
 		// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
 		// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is
@@ -387,13 +387,6 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 	}
 
 	return fPos;
-}
-
-// Request babystepping
-void Move::Babystep(float zMovement)
-{
-	babysteppingLeft += zMovement;
-	// TODO use this value somewhere
 }
 
 uint32_t maxReps = 0;

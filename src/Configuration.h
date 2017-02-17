@@ -136,7 +136,6 @@ const float SILLY_Z_VALUE = -9999.0;				// Millimetres
 
 // String lengths
 
-//const size_t LONG_STRING_LENGTH = 1024;
 const size_t FORMAT_STRING_LENGTH = 256;
 const size_t MACHINE_NAME_LENGTH = 40;
 const size_t PASSWORD_LENGTH = 20;

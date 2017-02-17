@@ -53,7 +53,6 @@ public:
     void Interrupt();												// The hardware's (i.e. platform's)  interrupt should call this.
     void InterruptTime();											// Test function - not used
     bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
-    void ResumeMoving();											// Allow moves to be added after a call to AllMovesAreFinished()
     void DoLookAhead();												// Run the look-ahead procedure
     void HitLowStop(size_t axis, DDA* hitDDA);						// What to do when a low endstop is hit
     void HitHighStop(size_t axis, DDA* hitDDA);						// What to do when a high endstop is hit
@@ -121,8 +120,6 @@ public:
 
 	HeightMap& AccessBedProbeGrid() { return grid; }								// Access the bed probing grid
 
-	void Babystep(float zMovement);													// Request babystepping
-
 private:
 
 	enum class IdleState : uint8_t { idle, busy, timing };
@@ -154,7 +151,6 @@ private:
 	DDA* volatile ddaRingGetPointer;
 	DDA* ddaRingCheckPointer;
 
-	bool addNoMoreMoves;								// If true, allow no more moves to be added to the look-ahead
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
 	bool waitingForMove;								// True if we are waiting for a new move
@@ -198,8 +194,6 @@ private:
 	int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ
 	float axisFactors[MAX_AXES];						// How much further the motors need to move for each axis movement, on a CoreXY/CoreXZ/CoreYZ machine
 	unsigned int stepErrors;							// count of step errors, for diagnostics
-
-	float babysteppingLeft;								// the amount of Z babystepping left to do
 };
 
 //******************************************************************************************************
@@ -219,13 +213,7 @@ inline bool Move::NoLiveMovement() const
 // Then call ResumeMoving() otherwise nothing more will ever happen.
 inline bool Move::AllMovesAreFinished()
 {
-	addNoMoreMoves = true;
 	return NoLiveMovement();
-}
-
-inline void Move::ResumeMoving()
-{
-	addNoMoreMoves = false;
 }
 
 // Start the next move. Must be called with interrupts disabled, to avoid a race with the step ISR.

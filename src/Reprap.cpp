@@ -490,28 +490,24 @@ unsigned int RepRap::GetNumberOfContiguousTools() const
 
 void RepRap::Tick()
 {
-	if (active)
+	if (active && !resetting)
 	{
-		Platform::KickWatchdog();
-		if (!resetting)
+		platform->Tick();
+		++ticksInSpinState;
+		if (ticksInSpinState >= 20000)	// if we stall for 20 seconds, save diagnostic data and reset
 		{
-			platform->Tick();
-			++ticksInSpinState;
-			if (ticksInSpinState >= 20000)	// if we stall for 20 seconds, save diagnostic data and reset
+			resetting = true;
+			for(size_t i = 0; i < HEATERS; i++)
 			{
-				resetting = true;
-				for(size_t i = 0; i < HEATERS; i++)
-				{
-					platform->SetHeater(i, 0.0);
-				}
-				for(size_t i = 0; i < DRIVES; i++)
-				{
-					platform->DisableDrive(i);
-					// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
-				}
-
-				platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin);
+				platform->SetHeater(i, 0.0);
 			}
+			for(size_t i = 0; i < DRIVES; i++)
+			{
+				platform->DisableDrive(i);
+				// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
+			}
+
+			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin);
 		}
 	}
 }
