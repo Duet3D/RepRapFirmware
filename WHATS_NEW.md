@@ -19,6 +19,9 @@ Bug fixes
 Known issues
 - If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
 
+Upgrade notes
+- It is recommended that you re-run heater auto tuning when upgrading to 1.18 from an earlier release
+
 Version 1.17e
 =============
 
