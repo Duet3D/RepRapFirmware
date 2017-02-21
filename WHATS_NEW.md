@@ -8,8 +8,8 @@ Version 1.18beta1
 New features:
 - Baby stepping is now implemented using the M290 command. The accumulated baby stepping amount is reported in M408 replies.
 - Faster and easier-to-use auto tune algorithm with more consistent dead time measurement
-- M109, M190 and M191 commands now send the temperatures ponce a second if the command cam form the USB port and Marlin emulation is chosen
-- The name of the firmware file to load is now passed to IAP, so that iap4e.bin cab be used on both the Duet WiFi and the Duet Ethernet
+- M109, M190 and M191 commands now send the temperatures once a second if the command came from the USB port and Marlin emulation is chosen
+- The name of the firmware file to load is now passed to IAP, so that iap4e.bin can be used on both the Duet WiFi and the Duet Ethernet
 - Reduced the Duet WiFi VIN over-voltage detection threshold from 29.5V to 29.0V
 
 Bug fixes
