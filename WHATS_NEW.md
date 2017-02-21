@@ -2,6 +2,31 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.18beta1
+=================
+
+New features:
+- Baby stepping is now implemented using the M290 command. The accumulated baby stepping amount is reported in M408 replies.
+- Faster and easier-to-use auto tune algorithm with more consistent dead time measurement
+- M109, M190 and M191 commands now send the temperatures ponce a second if the command cam form the USB port and Marlin emulation is chosen
+- The name of the firmware file to load is now passed to IAP, so that iap4e.bin cab be used on both the Duet WiFi and the Duet Ethernet
+- Reduced the Duet WiFi VIN over-voltage detection threshold from 29.5V to 29.0V
+
+Bug fixes
+- On the Duet WiFi, if you sent command M122 while the machine was printing then occasionally it would stop and reset due to a watchdog timeout
+- If multiple input sources sent overlapping G4 (dwell) commands, either or both of them wold not be executed correctly
+
+Known issues
+- If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
+
+Version 1.17e
+=============
+
+Bug fixes:
+- Fixed an integer divide-by-zero bug in the LWP library that could cause the Duet 0.8.5/0.6 build of RepRapFirmware to crash with a hard fault
+
+For known issues, see version 1.17d.
+
 Version 1.17d
 =============
 
@@ -19,7 +44,6 @@ Bug fixes:
 - Also fixed bug with absolute extruder coordinates introduced in temporary versions 1.17c+1 and +2
 
 Known issues
-------------
 - If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
 
 Version 1.17c
