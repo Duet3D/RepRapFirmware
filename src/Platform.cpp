@@ -47,7 +47,7 @@ extern "C" char *sbrk(int i);
 #ifdef DUET_NG
 const uint16_t driverPowerOnAdcReading = (uint16_t)(4096 * 10.0/PowerFailVoltageRange);			// minimum voltage at which we initialise the drivers
 const uint16_t driverPowerOffAdcReading = (uint16_t)(4096 * 9.5/PowerFailVoltageRange);			// voltages below this flag the drivers as unusable
-const uint16_t driverOverVoltageAdcReading = (uint16_t)(4096 * 29.5/PowerFailVoltageRange);		// voltages above this cause driver shutdown
+const uint16_t driverOverVoltageAdcReading = (uint16_t)(4096 * 29.0/PowerFailVoltageRange);		// voltages above this cause driver shutdown
 const uint16_t driverNormalVoltageAdcReading = (uint16_t)(4096 * 27.5/PowerFailVoltageRange);	// voltages at or below this are normal
 #endif
 
@@ -1460,7 +1460,12 @@ void Platform::Diagnostics(MessageType mtype)
 		int slot = -1;
 
 #ifdef DUET_NG
-		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
+		// Work around bug in ASF flash library: flash_read_user_signature calls a RAMFUNC wito7ut disabling interrupts first.
+		// This caused a crash (watchdog timeout) sometimes if we run M122 while a print is in progress
+		const irqflags_t flags = cpu_irq_save();
+		const uint32_t rc = flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t));
+		cpu_irq_restore(flags);
+		if (rc == FLASH_RC_OK)
 #else
 		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
 #endif
@@ -1500,11 +1505,6 @@ void Platform::Diagnostics(MessageType mtype)
 
 	// Show the current error codes
 	MessageF(mtype, "Error status: %u\n", errorCodeBits);
-
-	//***TEMPORARY show the maximum PWM loop count, which should never exceed 1
-	extern uint32_t maxPwmLoopCount;
-	MessageF(mtype, "Max PWM loop count %u\n", maxPwmLoopCount);
-	maxPwmLoopCount = 0;
 
 	// Show the number of free entries in the file table
 	unsigned int numFreeFiles = 0;

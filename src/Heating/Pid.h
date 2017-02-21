@@ -16,6 +16,8 @@
 #include "FOPDT.h"
 #include "TemperatureError.h"
 
+#define NEW_TUNING	(1)
+
 class PID
 {
 	enum class HeaterMode : uint8_t
@@ -30,7 +32,12 @@ class PID
 		tuning0,
 		tuning1,
 		tuning2,
+#ifdef NEW_TUNING
+		tuning3,
+		lastTuningMode = tuning3
+#else
 		lastTuningMode = tuning2
+#endif
 	};
 
 	static const size_t NumPreviousTemperatures = 4; // How many samples we average the temperature derivative over
@@ -58,7 +65,7 @@ public:
 	float GetAveragePWM() const;					// Return the running average PWM to the heater. Answer is a fraction in [0, 1].
 	uint32_t GetLastSampleTime() const;				// Return when the temp sensor was last sampled
 	float GetAccumulator() const;					// Return the integral accumulator
-	void StartAutoTune(float maxTemp, float maxPwm, StringRef& reply);	// Start an auto tune cycle for this PID
+	void StartAutoTune(float targetTemp, float maxPwm, StringRef& reply);	// Start an auto tune cycle for this PID
 	bool IsTuning() const;
 	void GetAutoTuneStatus(StringRef& reply);		// Get the auto tune status or last result
 
@@ -85,11 +92,17 @@ private:
 	void SetHeater(float power) const;				// Power is a fraction in [0,1]
 	TemperatureError ReadTemperature();				// Read and store the temperature of this heater
 	void DoTuningStep();							// Called on each temperature sample when auto tuning
-	bool ReadingsStable(size_t numReadings, float maxDiff) const
+	static bool ReadingsStable(size_t numReadings, float maxDiff)
 		pre(numReadings >= 2; numReadings <= MaxTuningTempReadings);
+#ifdef NEW_TUNING
+	static int GetPeakTempIndex();					// Auto tune helper function
+	static int IdentifyPeak(size_t numToAverage);	// Auto tune helper function
+	void CalculateModel();							// Calculate G, td and tc from the accumulated readings
+#else
 	static size_t GetMaxRateIndex();				// Auto tune helper function
-	void DisplayBuffer(const char *intro);			// Debug helper
 	void FitCurve();								// Calculate G, td and tc from the accumulated readings
+#endif
+	void DisplayBuffer(const char *intro);			// Debug helper
 	float GetExpectedHeatingRate() const;			// Get the minimum heating rate we expect
 
 	Platform* platform;								// The instance of the class that is the RepRap hardware
@@ -119,20 +132,30 @@ private:
 
 	static_assert(sizeof(previousTemperaturesGood) * 8 >= NumPreviousTemperatures, "too few bits in previousTemperaturesGood");
 
+	// Variables used during heater tuning
+	static const size_t MaxTuningTempReadings = 128; // The maximum number of readings we keep. Must be an even number.
+
 	static float *tuningTempReadings;				// the readings from the heater being tuned
 	static float tuningStartTemp;					// the temperature when we turned on the heater
 	static float tuningPwm;							// the PWM to use, 0..1
-	static float tuningMaxTemp;						// the maximum temperature we are allowed to reach
+	static float tuningTargetTemp;						// the maximum temperature we are allowed to reach
 	static uint32_t tuningBeginTime;				// when we started the tuning process
 	static uint32_t tuningPhaseStartTime;			// when we started the current tuning phase
 	static uint32_t tuningReadingInterval;			// how often we are sampling, in milliseconds
 	static size_t tuningReadingsTaken;				// how many temperature samples we have taken
+
+#ifdef NEW_TUNING
+	static float tuningHeaterOffTemp;				// the temperature when we turned the heater off
+	static float tuningPeakTemperature;				// the peak temperature reached, averaged over 3 readings (so slightly less than the true peak)
+	static uint32_t tuningHeatingTime;				// how long we had the heating on for
+	static uint32_t tuningPeakDelay;				// how many milliseconds the temperature continues to rise after turning the heater off
+#else
 	static float tuningTimeOfFastestRate;			// how long after turn-on the fastest temperature rise occurred
 	static float tuningFastestRate;					// the fastest temperature rise
-
-	static const size_t MaxTuningTempReadings = 128; // The maximum number of readings we keep. Must be an even number.
-
+#endif
 };
+
+
 
 inline bool PID::Active() const
 {

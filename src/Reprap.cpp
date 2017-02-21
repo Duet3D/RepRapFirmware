@@ -651,7 +651,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			response->catf("%c%.2f", ch, gCodes->GetExtrusionFactor(extruder) * 100.0);
 			ch = ',';
 		}
-		response->cat((ch == '[') ? "[]}" : "]}");
+		response->cat((ch == '[') ? "[]" : "]");
+		response->catf(",\"babystep\":%.03f}", gCodes->GetBabyStepOffset());
 	}
 
 	// G-code reply sequence for webserver (seqence number for AUX is handled later)
@@ -1187,6 +1188,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		ch = ',';
 	}
 	response->cat((ch == '[') ? "[]" : "]");
+
+	// Send the baby stepping offset
+	response->catf(",\"babystep\":%.03f", gCodes->GetBabyStepOffset());
 
 	// Send the current tool number
 	const int toolNumber = (currentTool == nullptr) ? 0 : currentTool->Number();

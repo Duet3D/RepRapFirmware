@@ -106,8 +106,9 @@ private:
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
 	void CheckEndstops(Platform *platform);
+	void AdvanceBabyStepping(float amount);							// Try to push babystepping earlier in the move queue
 
-	static void DoLookahead(DDA *laDDA);							// called by AdjustEndSpeed to do the real work
+	static void DoLookahead(DDA *laDDA);							// Try to smooth out moves in the queue
     static float Normalise(float v[], size_t dim1, size_t dim2);  	// Normalise a vector of dim1 dimensions to unit length in the first dim1 dimensions
     static void Absolute(float v[], size_t dimensions);				// Put a vector in the positive hyperquadrant
     static float Magnitude(const float v[], size_t dimensions);  	// Return the length of a vector

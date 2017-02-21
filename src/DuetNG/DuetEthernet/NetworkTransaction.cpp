@@ -302,7 +302,7 @@ Port NetworkTransaction::GetLocalPort() const
 // Allocate a buffer from the freelist
 /*static*/ NetworkTransaction *NetworkTransaction::Allocate()
 {
-	NetworkTransaction *ret = freelist;
+	NetworkTransaction * const ret = freelist;
 	if (ret != nullptr)
 	{
 		freelist = ret->next;

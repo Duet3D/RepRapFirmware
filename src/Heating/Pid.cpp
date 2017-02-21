@@ -20,13 +20,21 @@ const uint32_t TempSettleTimeout = 20000;	// how long we allow the initial tempe
 float *PID::tuningTempReadings = nullptr;	// the readings from the heater being tuned
 float PID::tuningStartTemp;					// the temperature when we turned on the heater
 float PID::tuningPwm;						// the PWM to use
-float PID::tuningMaxTemp;					// the maximum temperature we are allowed to reach
+float PID::tuningTargetTemp;					// the maximum temperature we are allowed to reach
 uint32_t PID::tuningBeginTime;				// when we started the tuning process
 uint32_t PID::tuningPhaseStartTime;			// when we started the current tuning phase
 uint32_t PID::tuningReadingInterval;		// how often we are sampling
 size_t PID::tuningReadingsTaken;			// how many samples we have taken
+
+#ifdef NEW_TUNING
+float PID::tuningHeaterOffTemp;				// the temperature when we turned the heater off
+float PID::tuningPeakTemperature;			// the peak temperature reached, averaged over 3 readings (so slightly less than the true peak)
+uint32_t PID::tuningHeatingTime;			// how long we had the heating on for
+uint32_t PID::tuningPeakDelay;				// how many milliseconds the temperature continues to rise after turning the heater off
+#else
 float PID::tuningTimeOfFastestRate;			// how long after turn-on the fastest temperature rise occurred
 float PID::tuningFastestRate;				// the fastest temperature rise
+#endif
 
 // Member functions and constructors
 
@@ -458,7 +466,7 @@ float PID::GetExpectedHeatingRate() const
 }
 
 // Auto tune this PID
-void PID::StartAutoTune(float maxTemp, float maxPwm, StringRef& reply)
+void PID::StartAutoTune(float targetTemp, float maxPwm, StringRef& reply)
 {
 	// Starting an auto tune
 	if (!model.IsEnabled())
@@ -488,8 +496,8 @@ void PID::StartAutoTune(float maxTemp, float maxPwm, StringRef& reply)
 			tuningTempReadings[0] = temperature;
 			tuningReadingInterval = platform->HeatSampleInterval();
 			tuningPwm = min<float>(maxPwm, model.GetMaxPwm());
-			tuningMaxTemp = maxTemp;
-			reply.printf("Auto tuning heater %d - do not leave printer unattended", heater);
+			tuningTargetTemp = targetTemp;
+			reply.printf("Auto tuning heater %d using target temperature %.1fC and PWM %.2f - do not leave printer unattended", heater, targetTemp, maxPwm);
 		}
 	}
 }
@@ -591,11 +599,129 @@ void PID::DoTuningStep()
 	tuningTempReadings[tuningReadingsTaken] = temperature;
 	++tuningReadingsTaken;
 
+#ifdef NEW_TUNING
+	switch(mode)
+	{
+	case HeaterMode::tuning0:
+		// Waiting for initial temperature to settle after any thermostatic fans have turned on
+		if (ReadingsStable(6000/platform->HeatSampleInterval(), 2.0))	// expect temperature to be stable within a 2C band for 6 seconds
+		{
+			// Starting temperature is stable, so move on
+			tuningReadingsTaken = 1;
+			tuningTempReadings[0] = tuningStartTemp = temperature;
+			timeSetHeating = tuningPhaseStartTime = millis();
+			lastPwm = tuningPwm;										// turn on heater at specified power
+			tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
+			mode = HeaterMode::tuning1;
+			platform->Message(GENERIC_MESSAGE, "Auto tune phase 1, heater on\n");
+			return;
+		}
+		if (millis() - tuningPhaseStartTime < 20000)
+		{
+			// Allow up to 20 seconds for starting temperature to settle
+			return;
+		}
+		platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because starting temperature is not stable\n");
+		break;
+
+	case HeaterMode::tuning1:
+		// Heating up
+		{
+			const uint32_t heatingTime = millis() - tuningPhaseStartTime;
+			if (heatingTime > (uint32_t)(model.GetDeadTime() * SecondsToMillis) + (30 * 1000) && (temperature - tuningStartTemp) < 3.0)
+			{
+				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not increasing\n");
+				break;
+			}
+
+			const uint32_t timeoutMinutes = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater()) ? 20 : 5;
+			if (heatingTime >= timeoutMinutes * 60 * 1000)
+			{
+				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because target temperature was not reached\n");
+				break;
+			}
+
+			if (temperature >= tuningTargetTemp)							// if reached target
+			{
+				tuningHeatingTime = heatingTime;
+
+				// Move on to next phase
+				tuningReadingsTaken = 1;
+				tuningHeaterOffTemp = tuningTempReadings[0] = temperature;
+				tuningPhaseStartTime = millis();
+				tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
+				mode = HeaterMode::tuning2;
+				lastPwm = 0.0;
+				SetHeater(0.0);
+				platform->Message(GENERIC_MESSAGE, "Auto tune phase 2, heater off\n");
+			}
+		}
+		return;
+
+	case HeaterMode::tuning2:
+		// Heater turned off, looking for peak temperature
+		{
+			const int peakIndex = GetPeakTempIndex();
+			if (peakIndex < 0)
+			{
+				if (millis() - tuningPhaseStartTime < 60 * 1000)
+				{
+					return;			// still waiting for peak temperature
+				}
+				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not falling\n");
+			}
+			else if (peakIndex == 0)
+			{
+				if (reprap.Debug(moduleHeat))
+				{
+					DisplayBuffer("At no peak found");
+				}
+				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature peak was not identified\n");
+			}
+			else
+			{
+				tuningPeakTemperature = tuningTempReadings[peakIndex];
+				tuningPeakDelay = peakIndex * tuningReadingInterval;
+
+				// Move on to next phase
+				tuningReadingsTaken = 1;
+				tuningTempReadings[0] = temperature;
+				tuningPhaseStartTime = millis();
+				tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
+				mode = HeaterMode::tuning3;
+				platform->MessageF(GENERIC_MESSAGE, "Auto tune phase 3, peak temperature was %.1f\n", tuningPeakTemperature);
+				return;
+			}
+		}
+		break;
+
+	case HeaterMode::tuning3:
+		{
+			// Heater is past the peak temperature and cooling down. Wait until it is part way back to the starting temperature so we can measure the cooling rate.
+			// In the case of a bed that shows a reservoir effect, the choice of how far we wait for it to cool down will effect the result.
+			// If we wait for it to cool down by 50% then we get a short time constant and a low gain, which causes overshoot. So try a bit more.
+			const float coolDownProportion = 0.6;
+			if (temperature > (tuningTempReadings[0] * (1.0 - coolDownProportion)) + (tuningStartTemp * coolDownProportion))
+			{
+				return;
+			}
+			CalculateModel();
+		}
+		break;
+
+	default:
+		// Should not happen, but if it does then quit
+		break;
+	}
+
+	// If we get here, we have finished
+	SwitchOff();								// sets mode and lastPWM, also deletes tuningTempReadings
+#else
 	if (temperature > tuningMaxTemp)
 	{
 		platform->MessageF(GENERIC_MESSAGE,
 				"Auto tune of heater %u with P=%.2f S=%.1f cancelled because temperature limit exceeded. Use lower P or higher S in m303 command.\n",
-				heater, tuningPwm, tuningMaxTemp);
+				heater, tuningPwm, tuningTargetTemp);
 	}
 	else
 	{
@@ -681,10 +807,11 @@ void PID::DoTuningStep()
 
 	// If we get here, we have finished
 	SwitchOff();								// sets mode and lastPWM, also deletes tuningTempReadings
+#endif
 }
 
 // Return true if the last 'numReadings' readings are stable
-bool PID::ReadingsStable(size_t numReadings, float maxDiff) const
+/*static*/ bool PID::ReadingsStable(size_t numReadings, float maxDiff)
 {
 	if (tuningTempReadings == nullptr || tuningReadingsTaken < numReadings)
 	{
@@ -702,6 +829,94 @@ bool PID::ReadingsStable(size_t numReadings, float maxDiff) const
 
 	return maxReading - minReading <= maxDiff;
 }
+
+#ifdef NEW_TUNING
+
+// Calculate which reading gave us the peak temperature.
+// Return -1 if peak not identified yet, 0 if we failed to find a peak, else the index of the peak (which can't be zero because we always average 3 readings)
+/*static*/ int PID::GetPeakTempIndex()
+{
+	// Check we have enough readings to look for the peak
+	if (tuningReadingsTaken < 15)
+	{
+		return -1;							// too few readings
+	}
+
+	// Look for the peak
+	int peakIndex = IdentifyPeak(1);
+	if (peakIndex < 0)
+	{
+		peakIndex = IdentifyPeak(3);
+		if (peakIndex < 0)
+		{
+			peakIndex = IdentifyPeak(5);
+			if (peakIndex < 0)
+			{
+				return 0;					// more than one peak
+			}
+		}
+	}
+
+	// If we have found one peak and it's not too near the end of the readings, return it
+	return ((size_t)peakIndex + 6 < tuningReadingsTaken) ? peakIndex : -1;
+}
+
+// See if there is exactly one peak in the readings.
+// Return -1 if more than one peak, else the index of the peak. The so-called peak may be right at the end , in which case it isn't really a peak.
+/*static*/ int PID::IdentifyPeak(size_t numToAverage)
+{
+	int firstPeakIndex = -1;
+	float peakTempTimesN = -999.0;
+	for (size_t i = 0; i + numToAverage <= tuningReadingsTaken; ++i)
+	{
+		float peak = 0.0;
+		for (size_t j = 0; j < numToAverage; ++j)
+		{
+			peak += tuningTempReadings[i + j];
+		}
+		if (peak >= peakTempTimesN)
+		{
+			if ((int)i == firstPeakIndex + 1)
+			{
+				firstPeakIndex = (int)i;	// readings still going up or staying the same, so advance the first peak index
+				peakTempTimesN = peak;
+			}
+			else
+			{
+				return -1;					// error, more than one peak
+			}
+		}
+	}
+	return firstPeakIndex + (numToAverage - 1)/2;
+}
+
+// Calculate the heater model from the accumulated heater parameters
+void PID::CalculateModel()
+{
+	if (reprap.Debug(moduleHeat))
+	{
+		DisplayBuffer("At completion");
+	}
+	const float tc = (float)((tuningReadingsTaken - 1) * tuningReadingInterval)/(1000.0 * log((tuningTempReadings[0] - tuningStartTemp)/(tuningTempReadings[tuningReadingsTaken - 1] - tuningStartTemp)));
+	const float td = (float)tuningPeakDelay * 0.001;
+	const float heatingTime = (tuningHeatingTime - tuningPeakDelay) * 0.001;
+	const float gain = (tuningHeaterOffTemp - tuningStartTemp)/(1.0 - exp(-heatingTime/tc));
+
+	tuned = SetModel(gain, tc, td, model.GetMaxPwm(), true);
+	if (tuned)
+	{
+		platform->MessageF(GENERIC_MESSAGE,
+				"Auto tune heater %d completed in %u sec\n"
+				"Use M307 H%d to see the result, or M500 to save the result in config-override.g\n",
+				heater, (millis() - tuningBeginTime)/(uint32_t)SecondsToMillis, heater);
+	}
+	else
+	{
+		platform->MessageF(GENERIC_MESSAGE, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, gain, tc, td);
+	}
+}
+
+#else
 
 // Return the index in the temperature readings of the maximum rate of increase
 // In view of the poor resolution of most thermistors at low temperatures, we measure over 4 time intervals instead of 2.
@@ -770,6 +985,8 @@ void PID::FitCurve()
 		platform->MessageF(GENERIC_MESSAGE, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, gain, tc, td);
 	}
 }
+
+#endif
 
 void PID::DisplayBuffer(const char *intro)
 {

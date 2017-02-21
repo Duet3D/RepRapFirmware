@@ -17,6 +17,8 @@
 //***************************************************************************************************
 // Socket class
 
+#define IMMEDIATE_ACQUIRE	1
+
 Socket::Socket() : currentTransaction(nullptr), receivedData(nullptr), state(SocketState::inactive)
 {
 }
@@ -227,6 +229,16 @@ void Socket::Poll(bool full)
 			}
 		}
 
+#ifdef IMMEDIATE_ACQUIRE
+		if (currentTransaction == nullptr && receivedData != nullptr)
+		{
+			currentTransaction = NetworkTransaction::Allocate();
+			if (currentTransaction != nullptr)
+			{
+				currentTransaction->Set(this, TransactionStatus::receiving);
+			}
+		}
+#else
 		if (currentTransaction == nullptr && (receivedData != nullptr || needTransaction))
 		{
 			currentTransaction = NetworkTransaction::Allocate();
@@ -236,6 +248,7 @@ void Socket::Poll(bool full)
 				needTransaction = false;
 			}
 		}
+#endif
 
 		// See if we can send any data.
 		// Currently we don't send if we are being called from hsmci because we don't want to risk releasing a buffer that we may be reading data into.
@@ -386,15 +399,24 @@ void Socket::DiscardReceivedData()
 // Return true if we can do it, false if the connection is closed or closing.
 bool Socket::AcquireTransaction()
 {
-	if (currentTransaction != nullptr && currentTransaction->GetStatus() == TransactionStatus::acquired)
+	if (currentTransaction != nullptr)
 	{
-		return true;
+		return currentTransaction->GetStatus() == TransactionStatus::acquired;
 	}
 
 	if (getSn_SR(socketNum) == SOCK_ESTABLISHED)
 	{
+#ifdef IMMEDIATE_ACQUIRE
+		currentTransaction = NetworkTransaction::Allocate();
+		if (currentTransaction != nullptr)
+		{
+			currentTransaction->Set(this, TransactionStatus::acquired);
+			return true;
+		}
+#else
 		needTransaction = true;
 		return true;
+#endif
 	}
 	return false;
 }

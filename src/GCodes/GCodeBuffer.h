@@ -54,6 +54,9 @@ public:
 	void AdvanceState();
 	const char *GetIdentity() const { return identity; }
 
+	uint32_t whenTimerStarted;							// when we started waiting
+	bool timerRunning;									// true if we are waiting
+
 private:
 
 	enum class GCodeBufferState

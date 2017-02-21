@@ -942,35 +942,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 105: // Get temperatures
-		{
-			const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
-			const int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
-			reply.copy("T:");
-			for (int8_t heater = 0; heater < HEATERS; heater++)
-			{
-				if (heater != bedHeater && heater != chamberHeater)
-				{
-					Heat::HeaterStatus hs = reprap.GetHeat()->GetStatus(heater);
-					if (hs != Heat::HS_off && hs != Heat::HS_fault)
-					{
-						reply.catf("%.1f ", reprap.GetHeat()->GetTemperature(heater));
-					}
-				}
-			}
-			if (bedHeater >= 0)
-			{
-				reply.catf("B:%.1f", reprap.GetHeat()->GetTemperature(bedHeater));
-			}
-			else
-			{
-				// I'm not sure whether Pronterface etc. can handle a missing bed temperature, so return zero
-				reply.cat("B:0.0");
-			}
-			if (chamberHeater >= 0.0)
-			{
-				reply.catf(" C:%.1f", reprap.GetHeat()->GetTemperature(chamberHeater));
-			}
-		}
+		GenerateTemperatureReport(reply);
 		break;
 
 	case 106: // Set/report fan values
@@ -1317,7 +1289,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 122:
 		{
-			int val = (gb.Seen('P')) ? gb.GetIValue() : 0;
+			const int val = (gb.Seen('P')) ? gb.GetIValue() : 0;
 			if (val == 0)
 			{
 				reprap.Diagnostics(gb.GetResponseMessageType());
@@ -1537,7 +1509,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					cancelWait = isWaiting = false;
 					break;
 				}
-				// In Marlin emulation mode we should return some sort of (undocumented) message here every second...
+
+				// In Marlin emulation mode we should return some sort of undocumented message here every second. Try a standard temperature report.
+				if (platform->Emulating() == marlin && gb.GetResponseMessageType() == MessageType::HOST_MESSAGE)
+				{
+					const uint32_t now = millis();
+					if (gb.timerRunning)
+					{
+						if (now - gb.whenTimerStarted >= 1000)
+						{
+							gb.whenTimerStarted = now;
+							GenerateTemperatureReport(reply);
+							reply.cat('\n');
+							platform->Message(HOST_MESSAGE, reply.Pointer());
+						}
+					}
+					else
+					{
+						gb.whenTimerStarted = now;
+						gb.timerRunning = true;
+					}
+				}
 				isWaiting = true;
 				return false;
 			}
@@ -1822,6 +1814,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
+	case 290:	// Baby stepping
+		if (gb.Seen('S'))
+		{
+			const float babystepAmount = gb.GetFValue();
+			if (fabs(babystepAmount) <= 1.0)			// limit babystepping to 1mm
+			{
+				pendingBabyStepZOffset += babystepAmount;
+			}
+		}
+		else
+		{
+			reply.printf("Baby stepping offset is %.3d", GetBabyStepOffset());
+		}
+		break;
+
 	case 300:	// Beep
 		{
 			const int ms = (gb.Seen('P')) ? gb.GetIValue() : 1000;			// time in milliseconds
@@ -1849,10 +1856,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 303: // Run PID tuning
 		if (gb.Seen('H'))
 		{
-			const size_t heater = gb.GetIValue();
-			const float temperature = (gb.Seen('S')) ? gb.GetFValue() : 225.0;
-			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : 0.5;
-			if (heater < HEATERS && maxPwm >= 0.1 && maxPwm <= 1.0 && temperature >= 55.0 && temperature <= reprap.GetHeat()->GetTemperatureLimit(heater))
+			const int heater = gb.GetIValue();
+			const float temperature = (gb.Seen('S')) ? gb.GetFValue()
+										: heater == reprap.GetHeat()->GetBedHeater() ? 75.0
+										: heater == reprap.GetHeat()->GetChamberHeater() ? 50.0
+										: 200.0;
+			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : 1.0;
+			if (heater >= 0 && heater < HEATERS && maxPwm >= 0.1 && maxPwm <= 1.0 && temperature <= reprap.GetHeat()->GetTemperatureLimit(heater))
 			{
 				reprap.GetHeat()->StartAutoTune(heater, temperature, maxPwm, reply);
 			}
@@ -1923,9 +1933,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					{
 						// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
 						M301PidParameters params = model.GetM301PidParameters(false);
-						reply.catf("\nSetpoint change: P%.1f, I%.3f, D%.1f", params.kP, params.kI, params.kD);
+						reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", params.kP, params.kI, params.kD);
 						params = model.GetM301PidParameters(true);
-						reply.catf("\nLoad change: P%.1f, I%.3f, D%.1f", params.kP, params.kI, params.kD);
+						reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", params.kP, params.kI, params.kD);
 					}
 				}
 			}
@@ -3509,7 +3519,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 		// If we get here then we have the module map, and all prerequisites are satisfied
 		isFlashing = true;					// this tells the web interface and PanelDue that we are about to flash firmware
-		if (!DoDwellTime(1.0))				// wait a second so all HTTP clients and PanelDue are notified
+		if (!DoDwellTime(gb, 1000))			// wait a second so all HTTP clients and PanelDue are notified
 		{
 			return false;
 		}
@@ -3531,7 +3541,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 999:
-		result = DoDwellTime(0.5);			// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
+		result = DoDwellTime(gb, 500);		// wait half a second to allow the response to be sent back to the web server, otherwise it may retry
 		if (result)
 		{
 			reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
@@ -3549,6 +3559,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	if (result && gb.GetState() == GCodeState::normal)
 	{
+		gb.timerRunning = false;
 		UnlockAll(gb);
 		HandleReply(gb, error, reply.Pointer());
 	}

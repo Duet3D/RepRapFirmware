@@ -195,6 +195,12 @@ void DDA::Init()
 // Set up a real move. Return true if it represents real movement, else false.
 bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 {
+	// 0. Try to push any new babystepping forward through the lookahead queue
+	if (nextMove.newBabyStepping != 0.0 && nextMove.moveType == 0 && nextMove.endStopsToCheck == 0)
+	{
+		AdvanceBabyStepping(nextMove.newBabyStepping);
+	}
+
 	// 1. Compute the new endpoints and the movement vector
 	const int32_t * const positionNow = prev->DriveCoordinates();
 	const Move * const move = reprap.GetMove();
@@ -502,6 +508,105 @@ pre(state == provisional)
 	}
 }
 
+// Try to push babystepping earlier in the move queue
+void DDA::AdvanceBabyStepping(float amount)
+{
+	DDA *cdda = this;
+	while (cdda->prev->state == DDAState::provisional)
+	{
+		cdda = cdda->prev;
+	}
+
+	// cdda addresses the earliest un-prepared move, which is the first one we can apply babystepping to
+	// Allow babystepping Z speed up to 10% of the move top speed or up to half the Z jerk rate, whichever is lower
+	float babySteppingDone = 0.0;
+	while(cdda != this)
+	{
+		float babySteppingToDo = 0.0;
+		if (amount != 0.0)
+		{
+			// Limit the babystepping Z speed to the lower of 0.1 times the original XYZ speed and 0.5 times the Z jerk
+			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * reprap.GetPlatform()->ConfiguredInstantDv(Z_AXIS)/cdda->topSpeed);
+			babySteppingToDo = constrain<float>(amount, -maxBabySteppingAmount, maxBabySteppingAmount);
+			cdda->directionVector[Z_AXIS] += babySteppingToDo/cdda->totalDistance;
+			cdda->totalDistance *= Normalise(cdda->directionVector, DRIVES, reprap.GetGCodes()->GetNumAxes());
+			cdda->RecalculateMove();
+			babySteppingDone += babySteppingToDo;
+			amount -= babySteppingToDo;
+		}
+
+		// Even if there is no babystepping to do this move, we may need to adjust the end coordinates
+		cdda->endCoordinates[Z_AXIS] += babySteppingDone;
+		if (cdda->isDeltaMovement)
+		{
+			for (size_t tower = 0; tower < DELTA_AXES; ++tower)
+			{
+				cdda->endPoint[tower] += (int32_t)(babySteppingDone * reprap.GetPlatform()->DriveStepsPerUnit(tower));
+				if (babySteppingToDo != 0.0)
+				{
+					int32_t steps = (int32_t)(babySteppingToDo * reprap.GetPlatform()->DriveStepsPerUnit(tower));
+					DriveMovement& dm = cdda->ddm[tower];
+					if (dm.direction)		// if moving up
+					{
+						steps += (int32_t)dm.totalSteps;
+					}
+					else
+					{
+						steps -= (int32_t)dm.totalSteps;
+					}
+					if (steps >= 0)
+					{
+						dm.direction = true;
+						dm.totalSteps = (uint32_t)steps;
+					}
+					else
+					{
+						dm.direction = false;
+						dm.totalSteps = (uint32_t)(-steps);
+					}
+				}
+			}
+		}
+		else
+		{
+			cdda->endPoint[Z_AXIS] += (int32_t)(babySteppingDone * reprap.GetPlatform()->DriveStepsPerUnit(Z_AXIS));
+			if (babySteppingToDo != 0.0)
+			{
+				int32_t steps = (int32_t)(babySteppingToDo * reprap.GetPlatform()->DriveStepsPerUnit(Z_AXIS));
+				DriveMovement& dm = cdda->ddm[Z_AXIS];
+				if (dm.state == DMState::moving)
+				{
+					if (dm.direction)		// if moving up
+					{
+						steps += (int32_t)dm.totalSteps;
+					}
+					else
+					{
+						steps -= (int32_t)dm.totalSteps;
+					}
+				}
+				else
+				{
+					dm.state = DMState::moving;
+				}
+				if (steps >= 0)
+				{
+					dm.direction = true;
+					dm.totalSteps = (uint32_t)steps;
+				}
+				else
+				{
+					dm.direction = false;
+					dm.totalSteps = (uint32_t)(-steps);
+				}
+			}
+		}
+
+		// Now do the next move
+		cdda = cdda->next;
+	}
+}
+
 // Recalculate the top speed, acceleration distance and deceleration distance, and whether we can pause after this move
 // This may cause a move that we intended to be a deceleration-only move to have a tiny acceleration segment at the start
 void DDA::RecalculateMove()
@@ -522,19 +627,25 @@ void DDA::RecalculateMove()
 			decelDistance = totalDistance - accelDistance;
 			topSpeed = sqrtf(vsquared);
 		}
-		else if (startSpeed < endSpeed)
-		{
-			// This would ideally never happen, but might because of rounding errors
-			accelDistance = totalDistance;
-			decelDistance = 0.0;
-			topSpeed = endSpeed;
-		}
 		else
 		{
-			// This would ideally never happen, but might because of rounding errors
-			accelDistance = 0.0;
-			decelDistance = totalDistance;
-			topSpeed = startSpeed;
+			// It's an accelerate-only or decelerate-only move.
+			// Due to rounding errors and babystepping adjustments, we may have to adjust the acceleration slightly.
+			if (startSpeed < endSpeed)
+			{
+				// This would ideally never happen, but might because of rounding errors
+				accelDistance = totalDistance;
+				decelDistance = 0.0;
+				topSpeed = endSpeed;
+				acceleration = (fsquare(endSpeed) - fsquare(startSpeed))/(2.0 * totalDistance);
+			}
+			else
+			{
+				accelDistance = 0.0;
+				decelDistance = totalDistance;
+				topSpeed = startSpeed;
+				acceleration = (fsquare(startSpeed) - fsquare(endSpeed))/(2.0 * totalDistance);
+			}
 		}
 	}
 	else

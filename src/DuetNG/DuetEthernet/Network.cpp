@@ -352,10 +352,10 @@ void Network::CloseDataPort()
 bool Network::AcquireTransaction(size_t socketNumber)
 {
 	const bool success = sockets[socketNumber].AcquireTransaction();
-//	if (success)
-//	{
-//		currentTransactionSocketNumber = socketNumber;
-//	}
+	if (success)
+	{
+		currentTransactionSocketNumber = socketNumber;
+	}
 	return success;
 }
 
