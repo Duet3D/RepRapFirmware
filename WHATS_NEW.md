@@ -14,7 +14,7 @@ New features:
 
 Bug fixes
 - On the Duet WiFi, if you sent command M122 while the machine was printing then occasionally it would stop and reset due to a watchdog timeout
-- If multiple input sources sent overlapping G4 (dwell) commands, either or both of them wold not be executed correctly
+- If multiple input sources sent overlapping G4 (dwell) commands, either or both of them would not be executed correctly
 
 Known issues
 - If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
