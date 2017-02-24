@@ -17,8 +17,6 @@
 //***************************************************************************************************
 // Socket class
 
-#define IMMEDIATE_ACQUIRE	1
-
 Socket::Socket() : currentTransaction(nullptr), receivedData(nullptr), state(SocketState::inactive)
 {
 }
@@ -43,7 +41,6 @@ void Socket::ReInit()
 	persistConnection = true;
 	isTerminated = false;
 	isSending = false;
-	needTransaction = false;
 	state = SocketState::inactive;
 
 	// Re-initialise the socket on the W5500
@@ -187,8 +184,7 @@ void Socket::Poll(bool full)
 
 		if (state == SocketState::listening)		// if it is a new connection
 		{
-			needTransaction = false;
-			if (socketNum == FtpSocketNumber || socketNum == TelnetSocketNumber)
+			if (socketNum == FtpSocketNumber || socketNum == FtpDataSocketNumber || socketNum == TelnetSocketNumber)
 			{
 				// FTP and Telnet protocols need a connection reply, so tell the Webserver module about the new connection
 				if (currentTransaction == nullptr)
@@ -229,7 +225,6 @@ void Socket::Poll(bool full)
 			}
 		}
 
-#ifdef IMMEDIATE_ACQUIRE
 		if (currentTransaction == nullptr && receivedData != nullptr)
 		{
 			currentTransaction = NetworkTransaction::Allocate();
@@ -238,17 +233,6 @@ void Socket::Poll(bool full)
 				currentTransaction->Set(this, TransactionStatus::receiving);
 			}
 		}
-#else
-		if (currentTransaction == nullptr && (receivedData != nullptr || needTransaction))
-		{
-			currentTransaction = NetworkTransaction::Allocate();
-			if (currentTransaction != nullptr)
-			{
-				currentTransaction->Set(this, (needTransaction) ? TransactionStatus::acquired : TransactionStatus::receiving);
-				needTransaction = false;
-			}
-		}
-#endif
 
 		// See if we can send any data.
 		// Currently we don't send if we are being called from hsmci because we don't want to risk releasing a buffer that we may be reading data into.
@@ -298,27 +282,16 @@ void Socket::Poll(bool full)
 		break;
 
 	case SOCK_CLOSED:
-#ifdef _HTTPSERVER_DEBUG_
-		printf("> HTTPSocket[%d] : CLOSED\r\n", s);
-#endif
-		reprap.GetWebserver()->ConnectionLost(this);						// the webserver needs this to be called for both graceful and disgraceful disconnects
-		state = SocketState::inactive;
-
-		if (socket(socketNum, Sn_MR_TCP, localPort, 0x00) == socketNum)		// Reinitialize the socket
+		if (full)									// don't make a call to webserver if we might be in it already
 		{
-#ifdef _HTTPSERVER_DEBUG_
-			printf("> HTTPSocket[%d] : OPEN\r\n", socketNum);
-#endif
+			reprap.GetWebserver()->ConnectionLost(this);	// the webserver needs this to be called for both graceful and disgraceful disconnects
+			ReInit();
 		}
 		break;
 
 	default:
 		break;
-	} // end of switch
-
-#ifdef _USE_WATCHDOG_
-	HTTPServer_WDT_Reset();
-#endif
+	}
 }
 
 // Try to send data, returning true if all data has been sent and we ought to close the socket
@@ -333,7 +306,7 @@ bool Socket::TrySendData()
 			setSn_IR(socketNum, Sn_IR_SENDOK);		// if yes
 			isSending = false;
 		}
-		else if(tmp & Sn_IR_TIMEOUT)				// did it time out?
+		else if (tmp & Sn_IR_TIMEOUT)				// did it time out?
 		{
 			isSending = false;
 			disconnectNoWait(socketNum);			// if so, close the socket
@@ -406,17 +379,12 @@ bool Socket::AcquireTransaction()
 
 	if (getSn_SR(socketNum) == SOCK_ESTABLISHED)
 	{
-#ifdef IMMEDIATE_ACQUIRE
 		currentTransaction = NetworkTransaction::Allocate();
 		if (currentTransaction != nullptr)
 		{
 			currentTransaction->Set(this, TransactionStatus::acquired);
 			return true;
 		}
-#else
-		needTransaction = true;
-		return true;
-#endif
 	}
 	return false;
 }

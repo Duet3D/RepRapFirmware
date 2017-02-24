@@ -1955,7 +1955,7 @@ void Webserver::FtpInterpreter::ConnectionEstablished()
 	}
 
 	// Is this a new connection on the data port?
-	NetworkTransaction *transaction = webserver->currentTransaction;
+	NetworkTransaction * const transaction = webserver->currentTransaction;
 	if (transaction->GetLocalPort() != FTP_PORT)
 	{
 		if (state == waitingForPasvPort)
@@ -2343,7 +2343,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 					SendReply(150, "Here comes the directory listing.");
 
 					// send directory listing via data port
-					NetworkTransaction *dataTransaction = network->GetTransaction();
+					NetworkTransaction * const dataTransaction = network->GetTransaction();
 
 					FileInfo fileInfo;
 					if (platform->GetMassStorage()->FindFirst(currentDir, fileInfo))

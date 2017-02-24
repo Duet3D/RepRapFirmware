@@ -81,18 +81,20 @@ public:
 private:
 	enum class NetworkState
 	{
-		disabled,					// WiFi not active
-		enabled,					// WiFi enabled but not started yet
-		establishingLink,			// starting up (waiting for initialisation)
-		obtainingIP,
-		active
+		disabled,					// Network disabled
+		enabled,					// Network enabled but not started yet
+		establishingLink,			// starting up, waiting for link
+		obtainingIP,				// link established, waiting for DHCP
+		active						// network running
 	};
 
 	void InitSockets();
 	void TerminateSockets();
-	bool AcquireTransaction(size_t socketNumber);
 
-	Platform *platform;
+	bool AcquireTransaction(size_t socketNumber)
+	pre(socketNumber < NumTcpSockets);
+
+	Platform * const platform;
 	float longWait;
 	uint32_t lastTickMillis;
 

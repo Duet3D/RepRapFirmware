@@ -1063,7 +1063,7 @@ void Move::DoDeltaCalibration(size_t numFactors, StringRef& reply)
 	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
 	FixedMatrix<floatc_t, MaxDeltaCalibrationPoints, DELTA_AXES> probeMotorPositions;
 	floatc_t corrections[MaxDeltaCalibrationPoints];
-	float_t initialSumOfSquares = 0.0;
+	float initialSumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{
 		corrections[i] = 0.0;

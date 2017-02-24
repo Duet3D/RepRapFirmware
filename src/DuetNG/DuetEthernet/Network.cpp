@@ -8,6 +8,7 @@
 #include "Network.h"
 #include "NetworkTransaction.h"
 #include "Platform.h"
+#include "RepRap.h"
 #include "wizchip_conf.h"
 #include "Wiznet/Internet/DHCP/dhcp.h"
 
@@ -356,6 +357,10 @@ bool Network::AcquireTransaction(size_t socketNumber)
 	{
 		currentTransactionSocketNumber = socketNumber;
 	}
+	else if (reprap.Debug(moduleNetwork))
+	{
+		debugPrintf("Failed to acquire transaction for socket %u\n", socketNumber);
+	}
 	return success;
 }
 
@@ -381,7 +386,7 @@ void Network::TerminateSockets()
 
 void Network::Defer(NetworkTransaction *tr)
 {
-	const Socket *skt = tr->GetConnection();
+	const Socket * const skt = tr->GetConnection();
 	if (skt != nullptr && skt->GetNumber() == currentTransactionSocketNumber)
 	{
 		++currentTransactionSocketNumber;

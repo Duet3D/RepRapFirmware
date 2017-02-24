@@ -61,7 +61,6 @@ private:
 	SocketNumber socketNum;								// The W5500 socket number we are using
 	SocketState state;
 	bool isSending;										// True if we have written data to the W5500 to send and have not yet seen success or timeout
-	bool needTransaction;								// True if the web server has asked for a transaction
 };
 
 #endif /* SRC_DUETNG_DUETETHERNET_SOCKET_H_ */
