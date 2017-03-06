@@ -406,7 +406,7 @@ float HeightMap::Interpolate2(uint32_t index1, uint32_t index2, float frac) cons
 {
 	const bool b1 = IsHeightSet(index1);
 	const bool b2 = IsHeightSet(index2);
-	return (b1 && b2) ? (frac * gridHeights[index1]) + ((1.0 - frac) * gridHeights[index2])
+	return (b1 && b2) ? ((1.0 - frac) * gridHeights[index1]) + (frac * gridHeights[index2])
 			: (b1) ? gridHeights[index1]
 			: (b2) ? gridHeights[index2]
 			: 0.0;
