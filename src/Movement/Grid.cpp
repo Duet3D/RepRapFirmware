@@ -74,6 +74,7 @@ bool GridDefinition::ReadParameters(const StringRef& s)
 	if (ok)
 	{
 		CheckValidity();
+		recipSpacing = 1.0 / spacing;
 	}
 	else
 	{
@@ -340,29 +341,29 @@ float HeightMap::GetInterpolatedHeightError(float x, float y) const
 			// We are off the bottom left corner of the grid
 			return GetHeightError(0, 0);
 		}
-		else if (yIndex >= (int)def.numY)
+		else if (yIndex >= (int)def.numY - 1)
 		{
-			return GetHeightError(0, def.numY);
+			return GetHeightError(0, def.numY - 1);
 		}
 		else
 		{
 			return InterpolateY(0, yIndex, yf - yFloor);
 		}
 	}
-	else if (xIndex >= (int)def.numX)
+	else if (xIndex >= (int)def.numX - 1)
 	{
 		if (yIndex < 0)
 		{
 			// We are off the bottom left corner of the grid
-			return GetHeightError(def.numX, 0);
+			return GetHeightError(def.numX - 1, 0);
 		}
-		else if (yIndex >= (int)def.numY)
+		else if (yIndex >= (int)def.numY - 1)
 		{
-			return GetHeightError(def.numX, def.numY);
+			return GetHeightError(def.numX - 1, def.numY - 1);
 		}
 		else
 		{
-			return InterpolateY(def.numX, yIndex, yf - yFloor);
+			return InterpolateY(def.numX - 1, yIndex, yf - yFloor);
 		}
 	}
 	else
@@ -372,9 +373,9 @@ float HeightMap::GetInterpolatedHeightError(float x, float y) const
 			// We are off the bottom left corner of the grid
 			return InterpolateX(xIndex, 0, xf - xFloor);
 		}
-		else if (yIndex >= (int)def.numY)
+		else if (yIndex >= (int)def.numY - 1)
 		{
-			return InterpolateX(xIndex, def.numY, xf - xFloor);
+			return InterpolateX(xIndex, def.numY - 1, xf - xFloor);
 		}
 		else
 		{
@@ -405,7 +406,7 @@ float HeightMap::Interpolate2(uint32_t index1, uint32_t index2, float frac) cons
 {
 	const bool b1 = IsHeightSet(index1);
 	const bool b2 = IsHeightSet(index2);
-	return (b1 && b2) ? (frac * gridHeights[index1]) + ((1.0 - frac) * gridHeights[index2])
+	return (b1 && b2) ? ((1.0 - frac) * gridHeights[index1]) + (frac * gridHeights[index2])
 			: (b1) ? gridHeights[index1]
 			: (b2) ? gridHeights[index2]
 			: 0.0;
