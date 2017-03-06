@@ -74,6 +74,7 @@ bool GridDefinition::ReadParameters(const StringRef& s)
 	if (ok)
 	{
 		CheckValidity();
+		recipSpacing = 1.0 / spacing;
 	}
 	else
 	{
