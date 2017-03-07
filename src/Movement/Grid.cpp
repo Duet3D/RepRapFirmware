@@ -284,6 +284,8 @@ bool HeightMap::LoadFromFile(FileStore *f, StringRef& r)
 		}
 		return false;										// success!
 	}
+
+	ExtrapolateMissing();
 	return true;											// an error occurred
 }
 
@@ -327,6 +329,18 @@ float HeightMap::GetInterpolatedHeightError(float x, float y) const
 		return 0.0;
 	}
 
+	//last grid point
+	const float xLast = def.xMin + (def.numX-1)*def.spacing;
+	const float yLast = def.yMin + (def.numY-1)*def.spacing;
+
+	//clamp to rectangle so InterpolateXY will always have valid parameters
+	const float fEPSILON = 0.01;
+	if (x < def.xMin) { x = def.xMin; }
+	if (y < def.yMin) {	y = def.yMin; }
+	if (x > xLast -fEPSILON) { x = xLast -fEPSILON; }
+	if (y > yLast -fEPSILON) { y = yLast -fEPSILON; }
+
+
 	const float xf = (x - def.xMin) * def.recipSpacing;
 	const float xFloor = floor(xf);
 	const int32_t xIndex = (int32_t)xFloor;
@@ -334,82 +348,7 @@ float HeightMap::GetInterpolatedHeightError(float x, float y) const
 	const float yFloor = floor(yf);
 	const int32_t yIndex = (int32_t)yFloor;
 
-	if (xIndex < 0)
-	{
-		if (yIndex < 0)
-		{
-			// We are off the bottom left corner of the grid
-			return GetHeightError(0, 0);
-		}
-		else if (yIndex >= (int)def.numY - 1)
-		{
-			return GetHeightError(0, def.numY - 1);
-		}
-		else
-		{
-			return InterpolateY(0, yIndex, yf - yFloor);
-		}
-	}
-	else if (xIndex >= (int)def.numX - 1)
-	{
-		if (yIndex < 0)
-		{
-			// We are off the bottom left corner of the grid
-			return GetHeightError(def.numX - 1, 0);
-		}
-		else if (yIndex >= (int)def.numY - 1)
-		{
-			return GetHeightError(def.numX - 1, def.numY - 1);
-		}
-		else
-		{
-			return InterpolateY(def.numX - 1, yIndex, yf - yFloor);
-		}
-	}
-	else
-	{
-		if (yIndex < 0)
-		{
-			// We are off the bottom left corner of the grid
-			return InterpolateX(xIndex, 0, xf - xFloor);
-		}
-		else if (yIndex >= (int)def.numY - 1)
-		{
-			return InterpolateX(xIndex, def.numY - 1, xf - xFloor);
-		}
-		else
-		{
-			return InterpolateXY(xIndex, yIndex, xf - xFloor, yf - yFloor);
-		}
-	}
-}
-
-float HeightMap::GetHeightError(uint32_t xIndex, uint32_t yIndex) const
-{
-	const uint32_t index = GetMapIndex(xIndex, yIndex);
-	return (IsHeightSet(index)) ? gridHeights[index] : 0.0;
-}
-
-float HeightMap::InterpolateX(uint32_t xIndex, uint32_t yIndex, float xFrac) const
-{
-	const uint32_t index1 = GetMapIndex(xIndex, yIndex);
-	return Interpolate2(index1, index1 + 1, xFrac);
-}
-
-float HeightMap::InterpolateY(uint32_t xIndex, uint32_t yIndex, float yFrac) const
-{
-	const uint32_t index1 = GetMapIndex(xIndex, yIndex);
-	return Interpolate2(index1, index1 + def.numX, yFrac);
-}
-
-float HeightMap::Interpolate2(uint32_t index1, uint32_t index2, float frac) const
-{
-	const bool b1 = IsHeightSet(index1);
-	const bool b2 = IsHeightSet(index2);
-	return (b1 && b2) ? ((1.0 - frac) * gridHeights[index1]) + (frac * gridHeights[index2])
-			: (b1) ? gridHeights[index1]
-			: (b2) ? gridHeights[index2]
-			: 0.0;
+	return InterpolateXY(xIndex, yIndex, xf - xFloor, yf - yFloor);
 }
 
 float HeightMap::InterpolateXY(uint32_t xIndex, uint32_t yIndex, float xFrac, float yFrac) const
@@ -418,57 +357,99 @@ float HeightMap::InterpolateXY(uint32_t xIndex, uint32_t yIndex, float xFrac, fl
 	const uint32_t indexX1Y0 = indexX0Y0 + 1;						// (X1,Y0)
 	const uint32_t indexX0Y1 = indexX0Y0 + def.numX;				// (X0 Y1)
 	const uint32_t indexX1Y1 = indexX0Y1 + 1;						// (X1,Y1)
-	const unsigned int cc = ((unsigned int)IsHeightSet(indexX0Y0) << 0)
-							+ ((unsigned int)IsHeightSet(indexX1Y0) << 1)
-							+ ((unsigned int)IsHeightSet(indexX0Y1) << 2)
-							+ ((unsigned int)IsHeightSet(indexX1Y1) << 3);
-	switch(cc)
-	{
-	case 0:		// no points defined
-	default:
-		return 0.0;
-	case 1:		// (X0,Y0) defined
-		return gridHeights[indexX0Y0];
-	case 2:		// (X1,Y0) defined
-		return gridHeights[indexX1Y0];
-	case 3:		// (X0,Y0) and (X1,Y0) defined
-		return (xFrac * gridHeights[indexX1Y0]) + ((1.0 - xFrac) * gridHeights[indexX0Y0]);
-	case 4:		// (X0,Y1) defined
-		return gridHeights[indexX0Y1];
-	case 5:		// (X0,Y0) and (X0,Y1) defined
-		return (yFrac * gridHeights[indexX0Y1]) + ((1.0 - yFrac) * gridHeights[indexX0Y0]);
-	case 6:		// (X1,Y0) and (X0,Y1) defined - diagonal interpolation
-		return (((xFrac + 1.0 - yFrac) * gridHeights[indexX1Y0]) + ((yFrac + 1.0 - xFrac) * gridHeights[indexX0Y1]))/2;
-	case 7:		// (X0,Y0), (X1,Y0) and (X0,Y1) defined - 3-way interpolation
-		return InterpolateCorner(indexX0Y0, indexX1Y0, indexX0Y1, xFrac, yFrac);
-	case 8:		// (X1,Y1) defined
-		return gridHeights[indexX1Y1];
-	case 9:		// (X0,Y0) and (X1,Y1) defined - diagonal interpolation
-		return ((xFrac + yFrac) * gridHeights[indexX1Y1]) + ((2.0 - (xFrac + yFrac)) * gridHeights[indexX0Y0])/2;
-	case 10:	// (X1,Y0) and (X1,Y1) defined
-		return (yFrac * gridHeights[indexX1Y1]) + ((1.0 - yFrac) * gridHeights[indexX1Y0]);
-	case 11:	// (X0,Y0), (X1,Y0) and (X1,Y1) defined - 3-way interpolation
-		return InterpolateCorner(indexX1Y0, indexX0Y0, indexX1Y1, xFrac, yFrac);
-	case 12:	// (X0,Y1) and (X1,Y1) defined
-		return (xFrac * gridHeights[indexX1Y1]) + ((1.0 - xFrac) * gridHeights[indexX0Y1]);
-	case 13:	// (X0,Y0), (X0,Y1) and (X1,Y1) defined - 3-way interpolation
-		return InterpolateCorner(indexX0Y1, indexX1Y1, indexX0Y0, xFrac, 1.0 - yFrac);
-	case 14:	// (X1,Y0), (X0,Y1) and (X1,Y1) defined - 3-way interpolation
-		return InterpolateCorner(indexX1Y1, indexX0Y1, indexX1Y0, 1.0 - xFrac, 1.0 - yFrac);
-	case 15:	// All points defined
-		{
-			const float xyFrac = xFrac * yFrac;
-			return (gridHeights[indexX0Y0] * (1.0 - xFrac - yFrac + xyFrac))
-				 + (gridHeights[indexX1Y0] * (xFrac - xyFrac))
-				 + (gridHeights[indexX0Y1] * (yFrac - xyFrac))
-				 + (gridHeights[indexX1Y1] * xyFrac);
-		}
-	}
+
+	const float xyFrac = xFrac * yFrac;
+	return (gridHeights[indexX0Y0] * (1.0 - xFrac - yFrac + xyFrac))
+			+ (gridHeights[indexX1Y0] * (xFrac - xyFrac))
+			+ (gridHeights[indexX0Y1] * (yFrac - xyFrac))
+			+ (gridHeights[indexX1Y1] * xyFrac);
 }
 
-float HeightMap::InterpolateCorner(uint32_t cornerIndex, uint32_t indexX, uint32_t indexY, float xFrac, float yFrac) const
+void HeightMap::ExtrapolateMissing()
 {
-	return ((xFrac * gridHeights[indexX]) + (yFrac * gridHeights[indexY]) + ((2.0 - xFrac - yFrac) * gridHeights[cornerIndex]))/2;
+	//1: calculating the bed plane by least squares fit
+	//2: filling in missing points
+
+	//algorithm: http://www.ilikebigbits.com/blog/2015/3/2/plane-from-points
+	float sumX = 0, sumY = 0, sumZ = 0;
+	int n = 0;
+	for (int iY = 0; iY < def.numY; iY++)
+	{
+		for (int iX = 0; iX < def.numX; iX++)
+		{
+			int index = GetMapIndex(iX, iY);
+			if (!IsHeightSet(index)) { continue; }
+			float fX = (def.spacing * iX) + def.xMin;
+			float fY = (def.spacing * iY) + def.yMin;
+			float fZ = gridHeights[index];
+
+			n++;
+			sumX += fX; sumY += fY; sumZ += fZ;
+		}
+	}
+
+	float invN = 1.0 / float(n);
+	float centX = sumX * invN, centY = sumY * invN, centZ = sumZ * invN;
+
+	// Calc full 3x3 covariance matrix, excluding symmetries:
+	float xx = 0.0; float xy = 0.0; float xz = 0.0;
+	float yy = 0.0; float yz = 0.0; float zz = 0.0;
+
+	for (int iY = 0; iY < def.numY; iY++)
+	{
+		for (int iX = 0; iX < def.numX; iX++)
+		{
+			int index = GetMapIndex(iX, iY);
+			if (!IsHeightSet(index)) { continue; }
+			float fX = (def.spacing * iX) + def.xMin;
+			float fY = (def.spacing * iY) + def.yMin;
+			float fZ = gridHeights[index];
+
+			float rX = fX - centX;
+			float rY = fY - centY;
+			float rZ = fZ - centZ;
+
+			xx += rX * rX;
+			xy += rX * rY;
+			xz += rX * rZ;
+			yy += rY * rY;
+			yz += rY * rZ;
+			zz += rZ * rZ;
+		}
+	}
+
+	const float detZ = xx*yy - xy*xy;
+	if (detZ <= 0) {
+		//not a valid plane (or a vertical one)
+		return;
+	}
+
+	//plane equation: ax+by+cz=d -> z = (d-(ax+by))/c
+	float a = (yz*xy - xz*yy) / detZ;
+	float b = (xz*xy - yz*xx) / detZ;
+	float c = 1.0;
+	float normLenInv=1.0/sqrtf(a*a + b*b + 1);
+	a *= normLenInv;
+	b *= normLenInv;
+	c *= normLenInv;
+	float d = centX*a + centY*b + centZ*c;
+
+
+	//fill in the blanks
+	float invC = 1.0 / c;
+	for (int iY = 0; iY < def.numY; iY++)
+	{
+		for (int iX = 0; iX < def.numX; iX++)
+		{
+			int index = GetMapIndex(iX, iY);
+			if (IsHeightSet(index)) { continue; }
+			float fX = (def.spacing * iX) + def.xMin;
+			float fY = (def.spacing * iY) + def.yMin;
+
+			float fZ = (d - (a * fX + b * fY)) * invC;
+			gridHeights[index] = fZ;	//fill in Z but don't mark it as set so we can always differentiate between measured and extrapolated
+		}
+	}
 }
 
 // End

@@ -620,6 +620,7 @@ void GCodes::Spin()
 					{
 						reply.printf("%u points probed, mean error %.3f, deviation %.3f\n", numPointsProbed, mean, deviation);
 						error = SaveHeightMap(gb, reply);
+						reprap.GetMove()->AccessBedProbeGrid().ExtrapolateMissing();
 						reprap.GetMove()->AccessBedProbeGrid().UseHeightMap(true);
 					}
 					else
