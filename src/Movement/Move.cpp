@@ -184,8 +184,7 @@ void Move::Spin()
 				// We have a new move
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
-
-					const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
+					const bool doMotorMapping = (nextMove.moveType == 0);
 					if (doMotorMapping)
 					{
 						Transform(nextMove.coords, nextMove.xAxes, true);
@@ -936,76 +935,122 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 	}
 }
 
+// Check that the probe points are in the right order
+bool Move::GoodProbePointOrdering(size_t numPoints) const
+{
+	if (numPoints >= 2 && yBedProbePoints[1] <= yBedProbePoints[0])
+	{
+		return false;
+	}
+	if (numPoints >= 3 && xBedProbePoints[2] <= xBedProbePoints[1])
+	{
+		return false;
+	}
+	if (numPoints >= 4 && yBedProbePoints[3] >= yBedProbePoints[2])
+	{
+		return false;
+	}
+	if (numPoints >= 4 && xBedProbePoints[0] >= xBedProbePoints[3])
+	{
+		return false;
+	}
+	if (numPoints >= 5
+		&& (   xBedProbePoints[4] <= xBedProbePoints[0]
+			|| xBedProbePoints[4] <= xBedProbePoints[1]
+			|| xBedProbePoints[4] >= xBedProbePoints[2]
+			|| xBedProbePoints[4] >= xBedProbePoints[3]
+			|| yBedProbePoints[4] <= yBedProbePoints[0]
+			|| yBedProbePoints[4] >= yBedProbePoints[1]
+			|| yBedProbePoints[4] >= yBedProbePoints[2]
+			|| yBedProbePoints[4] <= yBedProbePoints[3]
+		   )
+	   )
+	{
+		return false;
+	}
+	return true;
+}
+
 void Move::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 {
-	switch(numPoints)
+	if (!GoodProbePointOrdering(numPoints))
 	{
-	case 3:
-		/*
-		 * Transform to a plane
-		 */
-
+		reply.printf("Error: probe points P0 to P%u must be in clockwise order starting near X=0 Y=0", min<unsigned int>(numPoints, 4) - 1);
+		if (numPoints >= 5)
 		{
-			float x10 = xBedProbePoints[1] - xBedProbePoints[0];
-			float y10 = yBedProbePoints[1] - yBedProbePoints[0];
-			float z10 = zBedProbePoints[1] - zBedProbePoints[0];
-			float x20 = xBedProbePoints[2] - xBedProbePoints[0];
-			float y20 = yBedProbePoints[2] - yBedProbePoints[0];
-			float z20 = zBedProbePoints[2] - zBedProbePoints[0];
-			float a = y10 * z20 - z10 * y20;
-			float b = z10 * x20 - x10 * z20;
-			float c = x10 * y20 - y10 * x20;
-			float d = -(xBedProbePoints[1] * a + yBedProbePoints[1] * b + zBedProbePoints[1] * c);
-			aX = -a / c;
-			aY = -b / c;
-			aC = -d / c;
+			reply.cat(" and P4 must be near the centre");
 		}
-		break;
-
-	case 4:
-		/*
-		 * Transform to a ruled-surface quadratic.  The corner points for interpolation are indexed:
-		 *
-		 *   ^  [1]      [2]
-		 *   |
-		 *   Y
-		 *   |
-		 *   |  [0]      [3]
-		 *      -----X---->
-		 *
-		 *   These are the scaling factors to apply to x and y coordinates to get them into the
-		 *   unit interval [0, 1].
-		 */
-		xRectangle = 1.0 / (xBedProbePoints[3] - xBedProbePoints[0]);
-		yRectangle = 1.0 / (yBedProbePoints[1] - yBedProbePoints[0]);
-		break;
-
-	case 5:
-		for (size_t i = 0; i < 4; i++)
-		{
-			float x10 = xBedProbePoints[i] - xBedProbePoints[4];
-			float y10 = yBedProbePoints[i] - yBedProbePoints[4];
-			float z10 = zBedProbePoints[i] - zBedProbePoints[4];
-			baryXBedProbePoints[i] = xBedProbePoints[4] + 2.0 * x10;
-			baryYBedProbePoints[i] = yBedProbePoints[4] + 2.0 * y10;
-			baryZBedProbePoints[i] = zBedProbePoints[4] + 2.0 * z10;
-		}
-		baryXBedProbePoints[4] = xBedProbePoints[4];
-		baryYBedProbePoints[4] = yBedProbePoints[4];
-		baryZBedProbePoints[4] = zBedProbePoints[4];
-		break;
-
-	default:
-		reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Bed calibration error: %d points provided but only 3, 4 and 5 supported\n", numPoints);
-		return;
 	}
-
-    numBedCompensationPoints = numPoints;
-
-	reply.copy("Bed equation fits points");
-	for (size_t point = 0; point < numPoints; point++)
+	else
 	{
-		reply.catf(" [%.1f, %.1f, %.3f]", xBedProbePoints[point], yBedProbePoints[point], zBedProbePoints[point]);
+		switch(numPoints)
+		{
+		case 3:
+			/*
+			 * Transform to a plane
+			 */
+			{
+				float x10 = xBedProbePoints[1] - xBedProbePoints[0];
+				float y10 = yBedProbePoints[1] - yBedProbePoints[0];
+				float z10 = zBedProbePoints[1] - zBedProbePoints[0];
+				float x20 = xBedProbePoints[2] - xBedProbePoints[0];
+				float y20 = yBedProbePoints[2] - yBedProbePoints[0];
+				float z20 = zBedProbePoints[2] - zBedProbePoints[0];
+				float a = y10 * z20 - z10 * y20;
+				float b = z10 * x20 - x10 * z20;
+				float c = x10 * y20 - y10 * x20;
+				float d = -(xBedProbePoints[1] * a + yBedProbePoints[1] * b + zBedProbePoints[1] * c);
+				aX = -a / c;
+				aY = -b / c;
+				aC = -d / c;
+			}
+			break;
+
+		case 4:
+			/*
+			 * Transform to a ruled-surface quadratic.  The corner points for interpolation are indexed:
+			 *
+			 *   ^  [1]      [2]
+			 *   |
+			 *   Y
+			 *   |
+			 *   |  [0]      [3]
+			 *      -----X---->
+			 *
+			 *   These are the scaling factors to apply to x and y coordinates to get them into the
+			 *   unit interval [0, 1].
+			 */
+			xRectangle = 1.0 / (xBedProbePoints[3] - xBedProbePoints[0]);
+			yRectangle = 1.0 / (yBedProbePoints[1] - yBedProbePoints[0]);
+			break;
+
+		case 5:
+			for (size_t i = 0; i < 4; i++)
+			{
+				float x10 = xBedProbePoints[i] - xBedProbePoints[4];
+				float y10 = yBedProbePoints[i] - yBedProbePoints[4];
+				float z10 = zBedProbePoints[i] - zBedProbePoints[4];
+				baryXBedProbePoints[i] = xBedProbePoints[4] + 2.0 * x10;
+				baryYBedProbePoints[i] = yBedProbePoints[4] + 2.0 * y10;
+				baryZBedProbePoints[i] = zBedProbePoints[4] + 2.0 * z10;
+			}
+			baryXBedProbePoints[4] = xBedProbePoints[4];
+			baryYBedProbePoints[4] = yBedProbePoints[4];
+			baryZBedProbePoints[4] = zBedProbePoints[4];
+			break;
+
+		default:
+			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Bed calibration error: %d points provided but only 3, 4 and 5 supported\n", numPoints);
+			return;
+		}
+
+		numBedCompensationPoints = numPoints;
+
+		reply.copy("Bed equation fits points");
+		for (size_t point = 0; point < numPoints; point++)
+		{
+			reply.catf(" [%.1f, %.1f, %.3f]", xBedProbePoints[point], yBedProbePoints[point], zBedProbePoints[point]);
+		}
 	}
 	reply.cat("\n");
 }

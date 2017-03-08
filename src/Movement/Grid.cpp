@@ -282,10 +282,9 @@ bool HeightMap::LoadFromFile(FileStore *f, StringRef& r)
 				}
 			}
 		}
+		ExtrapolateMissing();
 		return false;										// success!
 	}
-
-	ExtrapolateMissing();
 	return true;											// an error occurred
 }
 
@@ -329,11 +328,11 @@ float HeightMap::GetInterpolatedHeightError(float x, float y) const
 		return 0.0;
 	}
 
-	//last grid point
+	// Last grid point
 	const float xLast = def.xMin + (def.numX-1)*def.spacing;
 	const float yLast = def.yMin + (def.numY-1)*def.spacing;
 
-	//clamp to rectangle so InterpolateXY will always have valid parameters
+	// Clamp to rectangle so InterpolateXY will always have valid parameters
 	const float fEPSILON = 0.01;
 	if (x < def.xMin) { x = def.xMin; }
 	if (y < def.yMin) {	y = def.yMin; }
@@ -373,81 +372,85 @@ void HeightMap::ExtrapolateMissing()
 	//algorithm: http://www.ilikebigbits.com/blog/2015/3/2/plane-from-points
 	float sumX = 0, sumY = 0, sumZ = 0;
 	int n = 0;
-	for (int iY = 0; iY < def.numY; iY++)
+	for (uint32_t iY = 0; iY < def.numY; iY++)
 	{
-		for (int iX = 0; iX < def.numX; iX++)
+		for (uint32_t iX = 0; iX < def.numX; iX++)
 		{
-			int index = GetMapIndex(iX, iY);
-			if (!IsHeightSet(index)) { continue; }
-			float fX = (def.spacing * iX) + def.xMin;
-			float fY = (def.spacing * iY) + def.yMin;
-			float fZ = gridHeights[index];
+			const uint32_t index = GetMapIndex(iX, iY);
+			if (IsHeightSet(index))
+			{
+				const float fX = (def.spacing * iX) + def.xMin;
+				const float fY = (def.spacing * iY) + def.yMin;
+				const float fZ = gridHeights[index];
 
-			n++;
-			sumX += fX; sumY += fY; sumZ += fZ;
+				n++;
+				sumX += fX; sumY += fY; sumZ += fZ;
+			}
 		}
 	}
 
-	float invN = 1.0 / float(n);
-	float centX = sumX * invN, centY = sumY * invN, centZ = sumZ * invN;
+	const float invN = 1.0 / float(n);
+	const float centX = sumX * invN, centY = sumY * invN, centZ = sumZ * invN;
 
 	// Calc full 3x3 covariance matrix, excluding symmetries:
 	float xx = 0.0; float xy = 0.0; float xz = 0.0;
 	float yy = 0.0; float yz = 0.0; float zz = 0.0;
 
-	for (int iY = 0; iY < def.numY; iY++)
+	for (uint32_t iY = 0; iY < def.numY; iY++)
 	{
-		for (int iX = 0; iX < def.numX; iX++)
+		for (uint32_t iX = 0; iX < def.numX; iX++)
 		{
-			int index = GetMapIndex(iX, iY);
-			if (!IsHeightSet(index)) { continue; }
-			float fX = (def.spacing * iX) + def.xMin;
-			float fY = (def.spacing * iY) + def.yMin;
-			float fZ = gridHeights[index];
+			const uint32_t index = GetMapIndex(iX, iY);
+			if (IsHeightSet(index))
+			{
+				const float fX = (def.spacing * iX) + def.xMin;
+				const float fY = (def.spacing * iY) + def.yMin;
+				const float fZ = gridHeights[index];
 
-			float rX = fX - centX;
-			float rY = fY - centY;
-			float rZ = fZ - centZ;
+				const float rX = fX - centX;
+				const float rY = fY - centY;
+				const float rZ = fZ - centZ;
 
-			xx += rX * rX;
-			xy += rX * rY;
-			xz += rX * rZ;
-			yy += rY * rY;
-			yz += rY * rZ;
-			zz += rZ * rZ;
+				xx += rX * rX;
+				xy += rX * rY;
+				xz += rX * rZ;
+				yy += rY * rY;
+				yz += rY * rZ;
+				zz += rZ * rZ;
+			}
 		}
 	}
 
 	const float detZ = xx*yy - xy*xy;
-	if (detZ <= 0) {
-		//not a valid plane (or a vertical one)
+	if (detZ <= 0)
+	{
+		// Not a valid plane (or a vertical one)
 		return;
 	}
 
-	//plane equation: ax+by+cz=d -> z = (d-(ax+by))/c
+	// Plane equation: ax+by+cz=d -> z = (d-(ax+by))/c
 	float a = (yz*xy - xz*yy) / detZ;
 	float b = (xz*xy - yz*xx) / detZ;
-	float c = 1.0;
-	float normLenInv=1.0/sqrtf(a*a + b*b + 1);
+	const float invC = sqrtf(a*a + b*b + 1.0);
+	const float normLenInv = 1.0 / invC;
 	a *= normLenInv;
 	b *= normLenInv;
-	c *= normLenInv;
-	float d = centX*a + centY*b + centZ*c;
+	const float c = normLenInv;
+	const float d = centX*a + centY*b + centZ*c;
 
-
-	//fill in the blanks
-	float invC = 1.0 / c;
-	for (int iY = 0; iY < def.numY; iY++)
+	// Fill in the blanks
+	for (uint32_t iY = 0; iY < def.numY; iY++)
 	{
-		for (int iX = 0; iX < def.numX; iX++)
+		for (uint32_t iX = 0; iX < def.numX; iX++)
 		{
-			int index = GetMapIndex(iX, iY);
-			if (IsHeightSet(index)) { continue; }
-			float fX = (def.spacing * iX) + def.xMin;
-			float fY = (def.spacing * iY) + def.yMin;
-
-			float fZ = (d - (a * fX + b * fY)) * invC;
-			gridHeights[index] = fZ;	//fill in Z but don't mark it as set so we can always differentiate between measured and extrapolated
+			const uint32_t index = GetMapIndex(iX, iY);
+			if (!IsHeightSet(index))
+			{
+				const float fX = (def.spacing * iX) + def.xMin;
+				const float fY = (def.spacing * iY) + def.yMin;
+				const float fZ = (d - (a * fX + b * fY)) * invC;
+				gridHeights[index] = fZ;	// fill in Z but don't mark it as set so we can always differentiate between measured and extrapolated
+			}
 		}
 	}
 }

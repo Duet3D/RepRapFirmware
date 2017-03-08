@@ -81,7 +81,7 @@ public:
 
 	unsigned int GetStatistics(float& mean, float& deviation) const; // Return number of points probed, mean and RMS deviation
 
-	void ExtrapolateMissing();										//extrapolate missing points to ensure consistency
+	void ExtrapolateMissing();										// Extrapolate missing points to ensure consistency
 
 private:
 	static const char *HeightMapComment;							// The start of the comment we write at the start of the height map file

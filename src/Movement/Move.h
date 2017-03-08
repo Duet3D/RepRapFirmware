@@ -125,6 +125,7 @@ private:
 	enum class IdleState : uint8_t { idle, busy, timing };
 
 	bool StartNextMove(uint32_t startTime);											// start the next move, returning true if Step() needs to be called immediately
+	bool GoodProbePointOrdering(size_t numPoints) const;							// Check that the probe points are in the right order
 	void SetProbedBedEquation(size_t numPoints, StringRef& reply);					// When we have a full set of probed points, work out the bed's equation
 	void DoDeltaCalibration(size_t numPoints, StringRef& reply);
 	void BedTransform(float move[MAX_AXES], uint32_t xAxes) const;					// Take a position and apply the bed compensations
