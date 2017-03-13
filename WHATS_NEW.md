@@ -12,7 +12,7 @@ Bug fixes:
 - Interpolation neat the edges of the bed was incorrect when mesh bed compensatoin was used (thanks ChristophPech)
 
 Other changes
-- M552 no longer includes the optpon to set the HTTP number. Use M586 instead.
+- M552 no longer includes the option to set the HTTP number. Use M586 instead.
 - M557 P parameter to set probing points is no longer supported. Use a bed.g file instead.
 - Temperatures default to 0C instead of -273C
 
