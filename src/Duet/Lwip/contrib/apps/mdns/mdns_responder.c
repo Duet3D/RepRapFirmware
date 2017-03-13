@@ -59,6 +59,9 @@
 #include <string.h>
 #include <stdlib.h>			// for strtol
 
+#if 1	//dc42
+#include <stdbool.h>
+#endif
 
 #ifndef ip_set_option
 #define ip_set_option(pcb, opt)   ((pcb)->so_options |= (opt))
@@ -589,6 +592,18 @@ err_t mdns_responder_init(const struct mdns_service *services,
                           int num_services,
                           const char *txt_records[])
 {
+#if 1	// dc42 changes to allow the set of services to be changed after initialisation
+	static bool initialised = false;
+	if (initialised)
+	{
+	    mdns_state.services = services;
+	    mdns_state.num_services = num_services;
+	    // Ideally we would also update the text records again here, but RRF never changes them
+	    return ERR_OK;
+	}
+	initialised = true;
+#endif
+
     err_t ret;
 
     memset(&mdns_state, 0, sizeof(mdns_state));

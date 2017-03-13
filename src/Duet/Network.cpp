@@ -67,33 +67,38 @@ extern "C"
 static volatile bool lwipLocked = false;
 static bool ethernetStarted = false;
 
-static tcp_pcb *http_pcb = nullptr;
-static tcp_pcb *ftp_main_pcb = nullptr;
-static tcp_pcb *ftp_pasv_pcb = nullptr;
-static tcp_pcb *telnet_pcb = nullptr;
+const size_t NumProtocols = 3;																		// number of network protocols we support
+const size_t HttpProtocolIndex = 0, FtpProtocolIndex = 1, TelnetProtocolIndex = 2;					// index of theHTTP service above
+const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
+const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
+const char * const MdnsServiceStrings[NumProtocols] = { "\x05_http\x04_tcp\x05local", "\x04_ftp\x04_tcp\x05local", "\x07_telnet\x04_tcp\x05local" };
 
-static struct mdns_service mdns_services[] = {
+static Port portNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };		// port number used for each protocol
+static bool protocolEnabled[NumProtocols] = { true, false, false };									// by default only HTTP is enabled
+static tcp_pcb *pcbs[NumProtocols] = { nullptr, nullptr, nullptr };
+static tcp_pcb *ftp_pasv_pcb = nullptr;
+
+const size_t NumMdnsFixedProtocols = 1;			// what we need to add to the protocol index in order to access the corresponding entry in mdns_services
+static struct mdns_service mdns_services[NumMdnsFixedProtocols + NumProtocols] =
+{
 	{
 		.name = "\x05_echo\x04_tcp\x05local",
 		.port = 7,
 	},
 	{
-		.name = "\x05_http\x04_tcp\x05local",
-		.port = DefaultHttpPort,
+		0
 	},
 	{
-		.name = "\x04_ftp\x04_tcp\x05local",
-		.port = FTP_PORT
+		0
 	},
 	{
-		.name = "\x07_telnet\x04_tcp\x05local",
-		.port = TELNET_PORT
+		0
 	}
 };
 
-const size_t MDNS_HTTP_SERVICE_INDEX = 1;	// Index of the mDNS HTTP service above
 
-static const char *mdns_txt_records[] = {
+static const char *mdns_txt_records[] =
+{
 	"product=" FIRMWARE_NAME,
 	"version=" VERSION,
 	NULL
@@ -108,8 +113,6 @@ char * const sendingWindow = reinterpret_cast<char *>(sendingWindow32);
 uint16_t sendingWindowSize, sentDataOutstanding;
 uint8_t sendingRetries;
 err_t writeResult, outputResult;
-
-static Port httpPort = DefaultHttpPort;
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -229,63 +232,40 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 	LWIP_UNUSED_ARG(arg);
 	LWIP_UNUSED_ARG(err);
 
-	/* Allocate a new ConnectionState for this connection */
-	ConnectionState *cs = reprap.GetNetwork()->ConnectionAccepted(pcb);
-	if (cs == nullptr)
+	// Keep the listening PCBs running
+	tcp_pcb *targetPcb = nullptr;
+	for (size_t i = 0; i < NumProtocols && targetPcb == nullptr; ++i)
 	{
-		tcp_abort(pcb);
-		return ERR_ABRT;
+		if (pcbs[i] != nullptr && pcb->local_port == portNumbers[i])
+		{
+			targetPcb = pcbs[i];
+		}
 	}
 
-	/* Keep the listening PCBs running */
-	switch (pcb->local_port)		// tell LWIP to accept further connections on the listening PCB
+	if (targetPcb == nullptr && ftp_pasv_pcb != nullptr && pcb->local_port == ftp_pasv_pcb->local_port)
 	{
-		case FTP_PORT:		// FTP
-			tcp_accepted(ftp_main_pcb);
-			break;
-
-		case TELNET_PORT:	// Telnet
-			tcp_accepted(telnet_pcb);
-			break;
-
-		default:			// HTTP and FTP data
-			tcp_accepted((pcb->local_port == httpPort) ? http_pcb : ftp_pasv_pcb);
-			break;
+		targetPcb = ftp_pasv_pcb;
 	}
-	tcp_arg(pcb, cs);			// tell LWIP that this is the structure we wish to be passed for our callbacks
-	tcp_recv(pcb, conn_recv);	// tell LWIP that we wish to be informed of incoming data by a call to the conn_recv() function
-	tcp_err(pcb, conn_err);
 
-	return ERR_OK;
+	if (targetPcb != nullptr)
+	{
+		// Allocate a new ConnectionState for this connection
+		ConnectionState *cs = reprap.GetNetwork()->ConnectionAccepted(pcb);
+		if (cs != nullptr)
+		{
+			tcp_accepted(targetPcb);
+			tcp_arg(pcb, cs);			// tell LWIP that this is the structure we wish to be passed for our callbacks
+			tcp_recv(pcb, conn_recv);	// tell LWIP that we wish to be informed of incoming data by a call to the conn_recv() function
+			tcp_err(pcb, conn_err);
+			return ERR_OK;
+		}
+	}
+
+	tcp_abort(pcb);
+	return ERR_ABRT;
 }
 
 } // end extern "C"
-
-/*-----------------------------------------------------------------------------------*/
-
-void httpd_init()
-{
-	tcp_pcb* pcb = tcp_new();
-	tcp_bind(pcb, IP_ADDR_ANY, httpPort);
-	http_pcb = tcp_listen(pcb);
-	tcp_accept(http_pcb, conn_accept);
-}
-
-void ftpd_init()
-{
-	tcp_pcb* pcb = tcp_new();
-	tcp_bind(pcb, IP_ADDR_ANY, FTP_PORT);
-	ftp_main_pcb = tcp_listen(pcb);
-	tcp_accept(ftp_main_pcb, conn_accept);
-}
-
-void telnetd_init()
-{
-	tcp_pcb* pcb = tcp_new();
-	tcp_bind(pcb, IP_ADDR_ANY, TELNET_PORT);
-	telnet_pcb = tcp_listen(pcb);
-	tcp_accept(telnet_pcb, conn_accept);
-}
 
 //***************************************************************************************************
 
@@ -314,13 +294,121 @@ void Network::Init()
 
 	strcpy(hostname, HOSTNAME);
 	init_ethernet();
-
-	httpd_init();
-	ftpd_init();
-	telnetd_init();
 	netbios_init();
 
 	longWait = platform->Time();
+}
+
+void Network::EnableProtocol(int protocol, int port, int secure, StringRef& reply)
+{
+	if (secure != 0 && secure != -1)
+	{
+		reply.copy("Error: this firmware does not support TLS");
+	}
+	else if (protocol >= 0 && protocol < (int)NumProtocols)
+	{
+		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+		if (portToUse != portNumbers[protocol])
+		{
+			// We need to shut down and restart the protocol if it is active because the port number has changed
+			ShutdownProtocol(protocol);
+			protocolEnabled[protocol] = false;
+		}
+		portNumbers[protocol] = portToUse;
+		if (!protocolEnabled[protocol])
+		{
+			protocolEnabled[protocol] = true;
+			StartProtocol(protocol);
+			if (state == NetworkActive)
+			{
+				DoMdnsAnnounce();
+			}
+		}
+		ReportOneProtocol(protocol, reply);
+	}
+	else
+	{
+		reply.copy("Invalid protocol parameter");
+	}
+}
+
+void Network::DisableProtocol(int protocol, StringRef& reply)
+{
+	if (protocol >= 0 && protocol < (int)NumProtocols)
+	{
+		ShutdownProtocol(protocol);
+		protocolEnabled[protocol] = false;
+		ReportOneProtocol(protocol, reply);
+	}
+	else
+	{
+		reply.copy("Invalid protocol parameter");
+	}
+}
+
+void Network::StartProtocol(size_t protocol)
+{
+	if (pcbs[protocol] == nullptr)
+	{
+		tcp_pcb* pcb = tcp_new();
+		tcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]);
+		pcbs[protocol] = tcp_listen(pcb);
+		tcp_accept(pcbs[protocol], conn_accept);
+	}
+}
+
+void Network::ShutdownProtocol(size_t protocol)
+{
+	if (pcbs[protocol] != nullptr)
+	{
+		tcp_close(pcbs[protocol]);
+		pcbs[protocol] = nullptr;
+	}
+}
+
+// Report the protocols and ports in use
+void Network::ReportProtocols(StringRef& reply) const
+{
+	reply.Clear();
+	for (size_t i = 0; i < NumProtocols; ++i)
+	{
+		if (i != 0)
+		{
+			reply.cat('\n');
+		}
+		ReportOneProtocol(i, reply);
+	}
+}
+
+void Network::ReportOneProtocol(size_t protocol, StringRef& reply) const
+{
+	if (protocolEnabled[protocol])
+	{
+		reply.catf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
+	}
+	else
+	{
+		reply.catf("%s is disabled", ProtocolNames[protocol]);
+	}
+}
+
+void Network::DoMdnsAnnounce()
+{
+	// Fill in the table of services
+	size_t numServices = NumMdnsFixedProtocols;
+	for (size_t i = 0; i < NumProtocols; ++i)
+	{
+		if (protocolEnabled[i])
+		{
+			mdns_services[numServices].name = MdnsServiceStrings[i];
+			mdns_services[numServices].port = portNumbers[i];
+			++numServices;
+		}
+	}
+
+	// We have patched mdns_responder_init so that it can be called more than once
+	mdns_responder_init(mdns_services, numServices, mdns_txt_records);
+	mdns_announce();
 }
 
 void Network::Spin(bool full)
@@ -347,24 +435,32 @@ void Network::Spin(bool full)
 				ethernet_set_rx_callback(&ethernet_rx_callback);
 			}
 
-			// Have we obtained a valid IP address yet?
-			if (state == NetworkObtainingIP)
-			{
-				const uint8_t *ip = ethernet_get_ipaddress();
-				if (ip[0] != 0 && ip[1] != 0 && ip[2] != 0 && ip[3] != 0)
-				{
-					// Yes - we're good to go now
-					state = NetworkActive;
-
-					// Send mDNS announcement so that some routers can perform hostname mapping
-					// if ths board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
-					mdns_announce();
-				}
-			}
-
 			// See if we can send anything - only if full spin i.e. not in the middle of file i/o
 			if (full)
 			{
+				// Have we obtained a valid IP address yet?
+				if (state == NetworkObtainingIP)
+				{
+					const uint8_t * const ip = ethernet_get_ipaddress();
+					if (ip[0] != 0 && ip[1] != 0 && ip[2] != 0 && ip[3] != 0)
+					{
+						// Yes - we're good to go now
+						state = NetworkActive;
+
+						for (size_t i = 0; i < NumProtocols; ++i)
+						{
+							if (protocolEnabled[i])
+							{
+								StartProtocol(i);
+							}
+						}
+
+						// Send mDNS announcement so that some routers can perform hostname mapping
+						// if the board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
+						DoMdnsAnnounce();
+					}
+				}
+
 				NetworkTransaction *transaction = writingTransactions;
 				if (transaction != nullptr && sendingConnection == nullptr)
 				{
@@ -400,9 +496,6 @@ void Network::Spin(bool full)
 			{
 				start_ethernet(platform->GetIPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
 				ethernetStarted = true;
-
-				// Initialise this one here, because it requires a configured IGMP network interface
-				mdns_responder_init(mdns_services, ARRAY_SIZE(mdns_services), mdns_txt_records);
 			}
 			else
 			{
@@ -732,6 +825,10 @@ void Network::Disable()
 {
 	if (state != NetworkInactive)
 	{
+		for (size_t i = 0; i < NumProtocols; ++i)
+		{
+			ShutdownProtocol(i);
+		}
 		resetCallback = false;
 		ethernet_set_rx_callback(nullptr);
 		state = NetworkInactive;
@@ -798,6 +895,26 @@ void Network::PrependTransaction(NetworkTransaction* volatile* list, NetworkTran
 	*list = r;
 }
 
+Port Network::GetHttpPort()
+{
+	return portNumbers[HttpProtocolIndex];
+}
+
+Port Network::GetFtpPort()
+{
+	return portNumbers[FtpProtocolIndex];
+}
+
+Port Network::GetTelnetPort()
+{
+	return portNumbers[TelnetProtocolIndex];
+}
+
+Port Network::GetDataPort()
+{
+	return (closingDataPort || ftp_pasv_pcb == nullptr) ? 0 : ftp_pasv_pcb->local_port;
+}
+
 void Network::OpenDataPort(Port port)
 {
 	closingDataPort = false;
@@ -805,34 +922,6 @@ void Network::OpenDataPort(Port port)
 	tcp_bind(pcb, IP_ADDR_ANY, port);
 	ftp_pasv_pcb = tcp_listen(pcb);
 	tcp_accept(ftp_pasv_pcb, conn_accept);
-}
-
-Port Network::GetDataPort() const
-{
-	return (closingDataPort || (ftp_pasv_pcb == nullptr) ? 0 : ftp_pasv_pcb->local_port);
-}
-
-Port Network::GetHttpPort() const
-{
-	return httpPort;
-}
-
-void Network::SetHttpPort(Port port)
-{
-	if (port != httpPort)
-	{
-		// Close the old HTTP PCB and create a new one
-		tcp_close(http_pcb);
-		httpPort = port;
-		httpd_init();
-
-		// Update mDNS service
-		mdns_services[MDNS_HTTP_SERVICE_INDEX].port = port;
-		if (state == NetworkActive)
-		{
-			mdns_announce();
-		}
-	}
 }
 
 // Close FTP data port and purge associated PCB

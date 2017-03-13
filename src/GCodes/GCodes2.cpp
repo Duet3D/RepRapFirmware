@@ -68,7 +68,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 	bool error = false;
 
 	const int code = gb.GetIValue();
-	if (simulationMode != 0 && code != 0 && code != 1 && code != 4 && code != 10 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
+	if (simulationMode != 0 && code > 4 && code != 10 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
 	{
 		return true;			// we only simulate some gcodes
 	}
@@ -2219,12 +2219,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				SetEthernetAddress(gb, code);
 			}
 
-			if (gb.Seen('R'))
-			{
-				reprap.GetNetwork()->SetHttpPort(gb.GetIValue());
-				seen = true;
-			}
-
 			// Process this one last in case the IP address is changed and the network enabled in the same command
 			if (gb.Seen('S')) // Has the user turned the network on or off?
 			{
@@ -2243,10 +2237,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				const byte *config_ip = platform->GetIPAddress();
 				const byte *actual_ip = reprap.GetNetwork()->GetIPAddress();
-				reply.printf("Network is %s, configured IP address: %d.%d.%d.%d, actual IP address: %d.%d.%d.%d, HTTP port: %d",
+				reply.printf("Network is %s, configured IP address: %d.%d.%d.%d, actual IP address: %d.%d.%d.%d",
 						reprap.GetNetwork()->IsEnabled() ? "enabled" : "disabled",
-						config_ip[0], config_ip[1], config_ip[2], config_ip[3], actual_ip[0], actual_ip[1], actual_ip[2], actual_ip[3],
-						reprap.GetNetwork()->GetHttpPort());
+						config_ip[0], config_ip[1], config_ip[2], config_ip[3], actual_ip[0], actual_ip[1], actual_ip[2], actual_ip[3]);
 			}
 		}
 		break;
@@ -2335,30 +2328,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 557: // Set/report Z probe point coordinates
 		if (gb.Seen('P'))
 		{
-			const int point = gb.GetIValue();
-			if (point < 0 || (unsigned int)point >= MaxProbePoints)
-			{
-				reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Z probe point index out of range.\n");
-			}
-			else
-			{
-				bool seen = false;
-				if (gb.Seen(axisLetters[X_AXIS]))
-				{
-					reprap.GetMove()->SetXBedProbePoint(point, gb.GetFValue());
-					seen = true;
-				}
-				if (gb.Seen(axisLetters[Y_AXIS]))
-				{
-					reprap.GetMove()->SetYBedProbePoint(point, gb.GetFValue());
-					seen = true;
-				}
-
-				if (!seen)
-				{
-					reply.printf("Probe point %d - [%.1f, %.1f]", point, reprap.GetMove()->XBedProbePoint(point), reprap.GetMove()->YBedProbePoint(point));
-				}
-			}
+			reply.copy("Error: M557 P parameter is no longer supported. use a bed.g file instead.\n");
 		}
 		else
 		{
@@ -3140,6 +3110,31 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 			}
 		}
+		break;
+
+	case 586: // Configure network protocols
+		if (gb.Seen('P'))
+		{
+			const int protocol = gb.GetIValue();
+			if (gb.Seen('S'))
+			{
+				const bool enable = (gb.GetIValue() == 1);
+				if (enable)
+				{
+					const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
+					const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
+					reprap.GetNetwork()->EnableProtocol(protocol, port, secure, reply);
+				}
+				else
+				{
+					reprap.GetNetwork()->DisableProtocol(protocol, reply);
+				}
+				break;
+			}
+		}
+
+		// Default to reporting current protocols if P or S parameter missing
+		reprap.GetNetwork()->ReportProtocols(reply);
 		break;
 
 	case 665: // Set delta configuration

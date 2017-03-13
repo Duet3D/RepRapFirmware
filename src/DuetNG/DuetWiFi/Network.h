@@ -20,7 +20,6 @@ const uint32_t rcKeepOpen = 0x00020000;
 static const uint8_t DefaultIpAddress[4] = { 192, 168, 1, 10 };				// Need some sort of default...
 static const uint8_t DefaultNetMask[4] = { 255, 255, 255, 0 };
 static const uint8_t DefaultGateway[4] = { 192, 168, 1, 1 };
-static const uint16_t DefaultHttpPort = 80;
 
 class TransactionBuffer;
 class WifiFirmwareUploader;
@@ -55,14 +54,15 @@ public:
 	void Start();
 	void Stop();
 
+	void EnableProtocol(int protocol, int port, bool secure, StringRef& reply);
+	void DisableProtocol(int protocol, StringRef& reply);
+	void ReportProtocols(StringRef& reply) const;
+
 	bool InLwip() const { return false; }
 
 	void Enable();
 	void Disable();
 	bool IsEnabled() const;
-
-	void SetHttpPort(uint16_t port);
-	uint16_t GetHttpPort() const;
 
 	void SetHostname(const char *name);
 	void EspRequestsTransfer();
@@ -88,6 +88,15 @@ private:
 	void TryStartTransfer();
 	void DebugPrintResponse();
 
+	void StartProtocol(size_t protocol)
+	pre(protocol < NumProtocols);
+
+	void ShutdownProtocol(size_t protocol)
+	pre(protocol < NumProtocols);
+
+	void ReportOneProtocol(size_t protocol, StringRef& reply) const
+	pre(protocol < NumProtocols);
+
 	static const char* TranslateEspResetReason(uint32_t reason);
 
 	Platform *platform;
@@ -108,6 +117,7 @@ private:
     TransferState state;
     bool activated;
     bool connectedToAp;
+
     uint8_t ipAddress[4];
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 	char wiFiServerVersion[16];

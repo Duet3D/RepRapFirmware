@@ -54,6 +54,10 @@ public:
 	void Interrupt();
 	void Diagnostics(MessageType mtype);
 
+	void EnableProtocol(int protocol, int port, int secure, StringRef& reply);
+	void DisableProtocol(int protocol, StringRef& reply);
+	void ReportProtocols(StringRef& reply) const;
+
 	// Deal with LwIP
 
 	void ResetCallback();
@@ -81,11 +85,7 @@ public:
 	NetworkTransaction *GetTransaction(const ConnectionState *cs = nullptr);
 
 	void OpenDataPort(Port port);
-	Port GetDataPort() const;
 	void CloseDataPort();
-
-	void SetHttpPort(Port port);
-	Port GetHttpPort() const;
 
 	void SaveDataConnection();
 	void SaveFTPConnection();
@@ -94,6 +94,11 @@ public:
 	bool AcquireFTPTransaction();
 	bool AcquireDataTransaction();
 	bool AcquireTelnetTransaction();
+
+	static Port GetHttpPort();
+	static Port GetFtpPort();
+	static Port GetTelnetPort();
+	static Port GetDataPort();
 
 	static Port GetLocalPort(Connection conn);
 	static Port GetRemotePort(Connection conn);
@@ -110,6 +115,17 @@ private:
 	void AppendTransaction(NetworkTransaction* volatile * list, NetworkTransaction *r);
 	void PrependTransaction(NetworkTransaction* volatile * list, NetworkTransaction *r);
 	bool AcquireTransaction(ConnectionState *cs);
+
+	void StartProtocol(size_t protocol)
+	pre(protocol < NumProtocols);
+
+	void ShutdownProtocol(size_t protocol)
+	pre(protocol < NumProtocols);
+
+	void ReportOneProtocol(size_t protocol, StringRef& reply) const
+	pre(protocol < NumProtocols);
+
+	void DoMdnsAnnounce();
 
 	NetworkTransaction * volatile freeTransactions;
 	NetworkTransaction * volatile readyTransactions;

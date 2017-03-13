@@ -59,6 +59,22 @@ void Network::Init()
 	uploader = new WifiFirmwareUploader(Serial1);
 }
 
+void Network::EnableProtocol(int protocol, int port, bool secure, StringRef& reply)
+{
+	reply.copy("M586 is not yet implemented on this platform");
+}
+
+void Network::DisableProtocol(int protocol, StringRef& reply)
+{
+	reply.copy("M586 is not yet implemented on this platform");
+
+}
+
+void Network::ReportProtocols(StringRef& reply) const
+{
+	reply.copy("M586 is not yet implemented on this platform");
+}
+
 void Network::Activate()
 {
 	activated = true;
@@ -746,16 +762,6 @@ bool Network::IsEnabled() const
 const uint8_t *Network::GetIPAddress() const
 {
 	return ipAddress;
-}
-
-uint16_t Network::GetHttpPort() const
-{
-	return DefaultHttpPort;
-}
-
-void Network::SetHttpPort(uint16_t port)
-{
-	// Not supported
 }
 
 // Set the DHCP hostname. Removes all whitespaces and converts the name to lower-case.

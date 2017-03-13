@@ -23,6 +23,10 @@ public:
 	void Interrupt() const { };
 	void Diagnostics(MessageType mtype) const { };
 
+	void EnableProtocol(int protocol, int port, bool secure, StringRef& reply) { }
+	void DisableProtocol(int protocol, StringRef& reply) { }
+	void ReportProtocols(StringRef& reply) const;
+
 	bool IsEnabled() const { return false; }
 	bool InLwip() const { return false; }
 	void SetHostname(const char *name) const { };
