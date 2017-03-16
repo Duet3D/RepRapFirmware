@@ -2,6 +2,23 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.18beta3
+=================
+
+New features:
+- M997 command now checks that the start of the main firmware file looks sensible
+- The rate at which "No tool selected" and "Attempt to move before homing a delta printer" messages are generated is now limited
+- Added VSSA fault detection if the hardware supports it
+- If there are too many probe points miplied by a M557 grid definition command, the firmware displays a suggested increased spacing
+
+Bug fixes:
+- Fixed CoreXY homing which was broken in 1.18beta2
+- Fixed issue with loading height map file when the number of probve points along the X axis is large
+- M290 with no parzameters now correctly reports the current babystepping offset
+
+Upgrade notes:
+- See under 1.18beta2
+
 Version 1.18beta2
 =================
 
@@ -9,7 +26,7 @@ New features:
 - On the wired Duets, M586 can be used to set which netework protocols are supported and which port numbers are used. By default, http is enabled, ftp and telnet are disabled.
 
 Bug fixes:
-- Interpolation neat the edges of the bed was incorrect when mesh bed compensatoin was used (thanks ChristophPech)
+- Interpolation near the edges of the bed was incorrect when mesh bed compensatoin was used (thanks ChristophPech)
 
 Other changes
 - M552 no longer includes the option to set the HTTP number. Use M586 instead.
