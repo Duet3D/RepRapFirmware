@@ -108,6 +108,8 @@ const Pin PowerMonitor5vDetectPin = 29;									// AFE1_AD1/PB3 5V regulator inp
 
 const float PowerFailVoltageRange = 11.0 * 3.3;							// we use an 11:1 voltage divider
 
+const Pin VssaSensePin = 103;
+
 // Digital pin number to turn the IR LED on (high) or off (low)
 const Pin Z_PROBE_MOD_PIN = 34;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
 

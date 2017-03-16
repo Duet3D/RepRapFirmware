@@ -12,6 +12,10 @@
 #include "wizchip_conf.h"
 #include "Wiznet/Internet/DHCP/dhcp.h"
 
+const size_t HttpProtocolIndex = 0, FtpProtocolIndex = 1, TelnetProtocolIndex = 2;		// index of theHTTP service above
+const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
+const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
+
 void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[])
 {
 	memcpy(ipAddress, p_ipAddress, sizeof(ipAddress));
@@ -21,8 +25,13 @@ void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[
 
 Network::Network(Platform* p)
 	: platform(p), lastTickMillis(0),
-	  httpPort(DefaultHttpPort), state(NetworkState::disabled), activated(false)
+	  state(NetworkState::disabled), activated(false)
 {
+	for (size_t i = 0; i < NumProtocols; ++i)
+	{
+		portNumbers[i] = DefaultPortNumbers[i];
+		protocolEnabled[i] = (i == HttpProtocolIndex);
+	}
 }
 
 void Network::Init()
@@ -38,6 +47,136 @@ void Network::Init()
 
 	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 	strcpy(hostname, HOSTNAME);
+}
+
+void Network::EnableProtocol(int protocol, int port, int secure, StringRef& reply)
+{
+	if (secure != 0 && secure != -1)
+	{
+		reply.copy("Error: this firmware does not support TLS");
+	}
+	else if (protocol >= 0 && protocol < (int)NumProtocols)
+	{
+		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
+		{
+			// We need to shut down and restart the protocol if it is active because the port number has changed
+			ShutdownProtocol(protocol);
+			protocolEnabled[protocol] = false;
+		}
+		portNumbers[protocol] = portToUse;
+		if (!protocolEnabled[protocol])
+		{
+			protocolEnabled[protocol] = true;
+			if (state == NetworkState::active)
+			{
+				StartProtocol(protocol);
+#if 0	// mdns not implemented yet
+				if (state == NetworkState::active)
+				{
+					DoMdnsAnnounce();
+				}
+#endif
+			}
+		}
+		ReportOneProtocol(protocol, reply);
+	}
+	else
+	{
+		reply.copy("Invalid protocol parameter");
+	}
+}
+
+void Network::DisableProtocol(int protocol, StringRef& reply)
+{
+	if (protocol >= 0 && protocol < (int)NumProtocols)
+	{
+		if (state == NetworkState::active)
+		{
+			ShutdownProtocol(protocol);
+		}
+		protocolEnabled[protocol] = false;
+		ReportOneProtocol(protocol, reply);
+	}
+	else
+	{
+		reply.copy("Invalid protocol parameter");
+	}
+}
+
+void Network::StartProtocol(size_t protocol)
+{
+	switch(protocol)
+	{
+	case HttpProtocolIndex:
+		for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
+		{
+			sockets[skt].Init(skt, portNumbers[HttpProtocolIndex]);
+		}
+		break;
+
+	case FtpProtocolIndex:
+		sockets[FtpSocketNumber].Init(FtpSocketNumber, portNumbers[FtpProtocolIndex]);
+		break;
+
+	case TelnetProtocolIndex:
+		sockets[TelnetSocketNumber].Init(TelnetSocketNumber, portNumbers[TelnetProtocolIndex]);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void Network::ShutdownProtocol(size_t protocol)
+{
+	switch(protocol)
+	{
+	case HttpProtocolIndex:
+		for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
+		{
+			sockets[skt].TerminateAndDisable();
+		}
+		break;
+
+	case FtpProtocolIndex:
+		sockets[FtpSocketNumber].TerminateAndDisable();
+		sockets[FtpDataSocketNumber].TerminateAndDisable();
+		break;
+
+	case TelnetProtocolIndex:
+		sockets[TelnetSocketNumber].TerminateAndDisable();
+		break;
+
+	default:
+		break;
+	}
+}
+
+// Report the protocols and ports in use
+void Network::ReportProtocols(StringRef& reply) const
+{
+	reply.Clear();
+	for (size_t i = 0; i < NumProtocols; ++i)
+	{
+		if (i != 0)
+		{
+			reply.cat('\n');
+		}
+		ReportOneProtocol(i, reply);
+	}
+}
+
+void Network::ReportOneProtocol(size_t protocol, StringRef& reply) const
+{
+	if (protocolEnabled[protocol])
+	{
+		reply.catf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
+	}
+	else
+	{
+		reply.catf("%s is disabled", ProtocolNames[protocol]);
+	}
 }
 
 // This is called at the end of config.g processing.
@@ -81,8 +220,8 @@ void Network::Spin(bool full)
 			else
 			{
 //				debugPrintf("Link established, network running\n");
-				InitSockets();
 				state = NetworkState::active;
+				InitSockets();
 			}
 		}
 		break;
@@ -106,8 +245,8 @@ void Network::Spin(bool full)
 					// Send mDNS announcement so that some routers can perform hostname mapping
 					// if this board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
 					//mdns_announce();
-					InitSockets();
 					state = NetworkState::active;
+					InitSockets();
 				}
 			}
 			else
@@ -241,16 +380,6 @@ const uint8_t *Network::GetIPAddress() const
 	return ipAddress;
 }
 
-void Network::SetHttpPort(uint16_t port)
-{
-	httpPort = port;
-}
-
-uint16_t Network::GetHttpPort() const
-{
-	return httpPort;
-}
-
 void Network::SetHostname(const char *name)
 {
 	size_t i = 0;
@@ -333,15 +462,31 @@ NetworkTransaction *Network::GetTransaction(Connection conn)
 	return nullptr;
 }
 
-void Network::OpenDataPort(Port port)
+Port Network::GetHttpPort() const
 {
-	sockets[FtpDataSocketNumber].Init(FtpDataSocketNumber, port);
-	sockets[FtpDataSocketNumber].Poll(false);
+	return portNumbers[HttpProtocolIndex];
+}
+
+Port Network::GetFtpPort() const
+{
+	return portNumbers[FtpProtocolIndex];
+}
+
+Port Network::GetTelnetPort() const
+{
+	return portNumbers[TelnetProtocolIndex];
 }
 
 Port Network::GetDataPort() const
 {
 	return sockets[FtpDataSocketNumber].GetLocalPort();
+}
+
+void Network::OpenDataPort(Port port)
+{
+	sockets[FtpDataSocketNumber].Init(FtpDataSocketNumber, port);
+	delayMicroseconds(100);							// give the W5500 time to process the command (not sure we need this)
+	sockets[FtpDataSocketNumber].Poll(true);
 }
 
 // Close FTP data port and purge associated PCB
@@ -366,13 +511,13 @@ bool Network::AcquireTransaction(size_t socketNumber)
 
 void Network::InitSockets()
 {
-	for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
+	for (size_t i = 0; i < NumProtocols; ++i)
 	{
-		sockets[skt].Init(skt, httpPort);
+		if (protocolEnabled[i])
+		{
+			StartProtocol(i);
+		}
 	}
-	sockets[FtpSocketNumber].Init(FtpSocketNumber, FTP_PORT);
-	sockets[FtpDataSocketNumber].Init(FtpDataSocketNumber, 0);			// FTP data port is allocated dynamically
-	sockets[TelnetSocketNumber].Init(TelnetSocketNumber, TELNET_PORT);
 	nextSocketToPoll = currentTransactionSocketNumber = 0;
 }
 

@@ -47,6 +47,9 @@ public:
 	// Clear this buffer and release any successors
 	void Empty();
 
+	// Reset the data pointer to the start of the buffer
+	void ResetPointer() { readPointer = 0; }
+
 	// Append a buffer to a list
 	static void AppendToList(NetworkBuffer **list, NetworkBuffer *b);
 

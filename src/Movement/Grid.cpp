@@ -26,12 +26,13 @@ GridDefinition::GridDefinition(const float xRange[2], const float yRange[2], flo
 	numX = (xMax - xMin >= MinRange && spacing >= MinSpacing) ? (uint32_t)((xMax - xMin) * recipSpacing) + 1 : 0;
 	numY = (yMax - yMin >= MinRange && spacing >= MinSpacing) ? (uint32_t)((yMax - yMin) * recipSpacing) + 1 : 0;
 	CheckValidity();
-
 }
 
 void GridDefinition::CheckValidity()
 {
-	isValid = NumPoints() != 0 && NumPoints() <= MaxGridProbePoints && (radius < 0.0 || radius >= 1.0);
+	isValid = NumPoints() != 0 && NumPoints() <= MaxGridProbePoints
+			&& (radius < 0.0 || radius >= 1.0)
+			&& NumXpoints() <= MaxXGridPoints;
 }
 
 float GridDefinition::GetXCoordinate(unsigned int xIndex) const
@@ -84,7 +85,7 @@ bool GridDefinition::ReadParameters(const StringRef& s)
 }
 
 // Print what is wrong with the grid, appending it to the existing string
-void GridDefinition::PrintError(StringRef& r) const
+void GridDefinition::PrintError(float originalXrange, float originalYrange, StringRef& r) const
 {
 	if (spacing < MinSpacing)
 	{
@@ -98,9 +99,16 @@ void GridDefinition::PrintError(StringRef& r) const
 	{
 		r.cat("Y range too small");
 	}
-	else if (numX > MaxGridProbePoints || numY > MaxGridProbePoints || NumPoints() > MaxGridProbePoints)	// check X and Y individually in case X*Y overflows
+	else if (   numX > MaxXGridPoints
+			 || numX > MaxGridProbePoints || numY > MaxGridProbePoints		// check X and Y individually in case X*Y overflows
+			 || NumPoints() > MaxGridProbePoints
+			)
 	{
-		r.catf("Too many grid points (maximum %d, needed %d)", MaxGridProbePoints, NumPoints());
+		const float totalRange = originalXrange + originalYrange;
+		const float area = originalXrange * originalYrange;
+		const float minSpacing = (totalRange + sqrtf(fsquare(totalRange) + 4.0 * (MaxGridProbePoints - 1) * area))/(2.0 * (MaxGridProbePoints - 1));
+		const float minXspacing = originalXrange/(MaxXGridPoints - 1);
+		r.catf("Too many grid points; suggest increase spacing to %.1fmm", max<float>(minSpacing, minXspacing));
 	}
 	else
 	{
@@ -210,7 +218,7 @@ bool HeightMap::SaveToFile(FileStore *f) const
 // Load the grid from file, returning true if an error occurred with the error reason appended to the buffer
 bool HeightMap::LoadFromFile(FileStore *f, StringRef& r)
 {
-	const size_t MaxLineLength = 200;						// maximum length of a line in the height map file
+	const size_t MaxLineLength = (MaxXGridPoints * 8) + 2;						// maximum length of a line in the height map file, need 8 characters per grid point
 	const char* const readFailureText = "failed to read line from file";
 	char buffer[MaxLineLength + 1];
 	StringRef s(buffer, ARRAY_SIZE(buffer));

@@ -184,10 +184,10 @@ void Move::Spin()
 				// We have a new move
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
-					const bool doMotorMapping = (nextMove.moveType == 0);
+					const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
 					if (doMotorMapping)
 					{
-						Transform(nextMove.coords, nextMove.xAxes, true);
+						Transform(nextMove.coords, nextMove.xAxes, nextMove.moveType == 0);
 					}
 					if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
 					{

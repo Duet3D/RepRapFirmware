@@ -17,6 +17,7 @@ class Socket
 public:
 	Socket();
 	void Init(SocketNumber s, Port serverPort);
+	void TerminateAndDisable();
 	void Poll(bool full);
 	Port GetLocalPort() const { return localPort; }
 	uint32_t GetRemoteIP() const { return remoteIPAddress; }
@@ -34,11 +35,13 @@ public:
 	bool IsPersistentConnection() const { return persistConnection; }
 	bool CanWrite() const;
 	void DiscardReceivedData();
+	void ResetDataPointer();
 	bool AcquireTransaction();
 
 private:
 	enum class SocketState : uint8_t
 	{
+		disabled,
 		inactive,
 		listening,
 		connected,

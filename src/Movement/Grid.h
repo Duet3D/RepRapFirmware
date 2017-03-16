@@ -34,7 +34,7 @@ public:
 	static bool CheckHeading(const StringRef& s);
 	bool ReadParameters(const StringRef& s);
 
-	void PrintError(StringRef& r) const
+	void PrintError(float originalXrange, float originalYrange, StringRef& r) const
 	pre(!IsValid());
 
 private:

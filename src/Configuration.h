@@ -44,7 +44,7 @@ const float NEARLY_ABS_ZERO = -273.0;				// Celsius
 const float ROOM_TEMPERATURE = 21.0;				// Celsius
 
 const float LONG_TIME = 300.0;						// Seconds
-const float MINIMUM_TOOL_WARNING_INTERVAL = 4.0;	// Seconds
+const uint32_t MinimumWarningInterval = 4000;		// Milliseconds
 
 // Comms defaults
 
@@ -114,11 +114,13 @@ const unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency for M4
 //   So 16 points need 704 bytes of stack space.
 #ifdef DUET_NG
 const size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
-const size_t MaxProbePoints = 64;					// Maximum number of probe points
+const size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
+const size_t MaxProbePoints = 64;					// Maximum number of G30 probe points
 const size_t MaxDeltaCalibrationPoints = 64;		// Should a power of 2 for speed
 #else
 const size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 at 20mm intervals
-const size_t MaxProbePoints = 32;					// Maximum number of probe points
+const size_t MaxXGridPoints = 21;					// Maximum number of grid points in one X row
+const size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 const size_t MaxDeltaCalibrationPoints = 32;		// Should a power of 2 for speed
 #endif
 

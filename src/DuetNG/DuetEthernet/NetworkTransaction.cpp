@@ -254,7 +254,11 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 //
 void NetworkTransaction::Defer(DeferralMode mode)
 {
-	if (mode == DeferralMode::DiscardData)
+	if (mode == DeferralMode::ResetData)
+	{
+		cs->ResetDataPointer();
+	}
+	else if (mode == DeferralMode::DiscardData)
 	{
 		cs->DiscardReceivedData();		// discard the incoming data, because we don't need to process it any more
 	}

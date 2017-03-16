@@ -64,7 +64,6 @@ public:
     Tool* GetCurrentOrDefaultTool() const;
 	uint32_t GetCurrentXAxes() const;									// Get the current axes used as X axes
     void SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures);
-	bool ToolWarningsAllowed();
 	bool IsHeaterAssignedToTool(int8_t heater) const;
 	unsigned int GetNumberOfContiguousTools() const;
 
@@ -119,7 +118,7 @@ private:
 
     Tool* toolList;
     Tool* currentTool;
-	float lastToolWarningTime;
+	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 
 	uint16_t activeExtruders;
     uint16_t activeToolHeaters;

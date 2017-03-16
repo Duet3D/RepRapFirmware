@@ -30,8 +30,8 @@ const uint8_t DefaultNetMask[4] = { 255, 255, 255, 0 };
 const uint8_t DefaultGateway[4] = { 0, 0, 0, 0 };
 
 const Port DefaultHttpPort = 80;
-const Port FTP_PORT = 21;
-const Port TELNET_PORT = 23;
+const Port DefaultFtpPort = 21;
+const Port DefaultTelnetPort = 23;
 
 const unsigned int TCP_MSS = 1460;
 

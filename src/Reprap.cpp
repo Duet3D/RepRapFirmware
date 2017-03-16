@@ -27,7 +27,7 @@ extern "C" void hsmciIdle()
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastToolWarningTime(0.0), activeExtruders(0),
+RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0)
 {
@@ -180,24 +180,27 @@ void RepRap::Spin()
 	ticksInSpinState = 0;
 
 	// Check if we need to display a cold extrusion warning
-
-	for (Tool *t = toolList; t != nullptr; t = t->Next())
+	const uint32_t now = millis();
+	if (now - lastWarningMillis >= MinimumWarningInterval)
 	{
-		if (t->DisplayColdExtrudeWarning() && ToolWarningsAllowed())
+		for (Tool *t = toolList; t != nullptr; t = t->Next())
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
+			if (t->DisplayColdExtrudeWarning())
+			{
+				platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
+				lastWarningMillis = now;
+			}
 		}
 	}
 
 	// Keep track of the loop time
-
 	const float t = platform->Time();
 	const float dt = t - lastTime;
-	if(dt < fastLoop)
+	if (dt < fastLoop)
 	{
 		fastLoop = dt;
 	}
-	if(dt > slowLoop)
+	if (dt > slowLoop)
 	{
 		slowLoop = dt;
 	}
@@ -446,19 +449,6 @@ void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, 
 	{
 		platform->MessageF(GENERIC_MESSAGE, "Error: Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 	}
-}
-
-// chrishamm 02-10-2015: I don't think it's a good idea to write tool warning message after every
-// short move, so only print them in a reasonable interval.
-bool RepRap::ToolWarningsAllowed()
-{
-	const float now = platform->Time();
-	if (now - lastToolWarningTime > MINIMUM_TOOL_WARNING_INTERVAL)
-	{
-		lastToolWarningTime = platform->Time();
-		return true;
-	}
-	return false;
 }
 
 bool RepRap::IsHeaterAssignedToTool(int8_t heater) const

@@ -288,7 +288,6 @@ private:
 	size_t probeCount;							// Counts multiple probe points
 	int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
 	bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
-	float longWait;								// Timer for things that happen occasionally (seconds)
 	bool limitAxes;								// Don't think outside the box.
 	uint32_t axesHomed;							// Bitmap of which axes have been homed
 	float pausedFanValues[NUM_FANS];			// Fan speeds when the print was paused
@@ -331,8 +330,12 @@ private:
 	bool AdvanceHash(StringRef &reply);
 
 	// Misc
+	float longWait;								// Timer for things that happen occasionally (seconds)
+	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting
+	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
+	bool displayDeltaNotHomedWarning;			// True if we need to display a 'attempt to move before homing on a delta printer' message
 };
 
 //*****************************************************************************************************

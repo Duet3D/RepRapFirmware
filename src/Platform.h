@@ -832,7 +832,9 @@ private:
 	volatile uint16_t currentVin, highestVin, lowestVin;
 	uint32_t numUnderVoltageEvents;
 	volatile uint32_t numOverVoltageEvents;
+	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	bool driversPowered;
+	bool vssaSenseWorking;
 #endif
 
 	// RTC

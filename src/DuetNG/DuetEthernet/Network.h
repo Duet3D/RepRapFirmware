@@ -22,6 +22,8 @@ const SocketNumber TelnetSocketNumber = 6;
 const size_t NumTcpSockets = 7;
 const SocketNumber DhcpSocketNumber = 7;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
 
+const size_t NumProtocols = 3;					// number of network protocols we support
+
 class Platform;
 
 // The main network class that drives the network.
@@ -40,6 +42,10 @@ public:
 	void Start();
 	void Stop();
 
+	void EnableProtocol(int protocol, int port, int secure, StringRef& reply);
+	void DisableProtocol(int protocol, StringRef& reply);
+	void ReportProtocols(StringRef& reply) const;
+
 	bool Lock();
 	void Unlock();
 	bool InLwip() const;
@@ -48,8 +54,9 @@ public:
 	void Disable();
 	bool IsEnabled() const;
 
-	void SetHttpPort(Port port);
 	Port GetHttpPort() const;
+	Port GetFtpPort() const;
+	Port GetTelnetPort() const;
 
 	void SetHostname(const char *name);
 
@@ -94,6 +101,15 @@ private:
 	bool AcquireTransaction(size_t socketNumber)
 	pre(socketNumber < NumTcpSockets);
 
+	void StartProtocol(size_t protocol)
+	pre(protocol < NumProtocols);
+
+	void ShutdownProtocol(size_t protocol)
+	pre(protocol < NumProtocols);
+
+	void ReportOneProtocol(size_t protocol, StringRef& reply) const
+	pre(protocol < NumProtocols);
+
 	Platform * const platform;
 	float longWait;
 	uint32_t lastTickMillis;
@@ -102,15 +118,17 @@ private:
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 	size_t currentTransactionSocketNumber;			// the socket number of the last transaction we passed to the web server
 
-	Port httpPort;
-	uint8_t ipAddress[4];
-	uint8_t netmask[4];
-	uint8_t gateway[4];
-	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
+    Port portNumbers[NumProtocols];					// port number used for each protocol
+    bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 
 	NetworkState state;
 	bool activated;
 	bool usingDhcp;
+
+	uint8_t ipAddress[4];
+	uint8_t netmask[4];
+	uint8_t gateway[4];
+	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 };
 
 #endif

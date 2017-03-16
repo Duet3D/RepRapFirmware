@@ -1825,7 +1825,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Baby stepping offset is %.3d", GetBabyStepOffset());
+			reply.printf("Baby stepping offset is %.3fmm", GetBabyStepOffset());
 		}
 		break;
 

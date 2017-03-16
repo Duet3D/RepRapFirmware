@@ -150,26 +150,17 @@ void Webserver::Spin()
 			// Take care of different protocol types here
 			ProtocolInterpreter *interpreter;
 			const uint16_t localPort = currentTransaction->GetLocalPort();
-			switch (localPort)
+			if (localPort == network->GetHttpPort())
 			{
-				case FTP_PORT:		/* FTP */
-					interpreter = ftpInterpreter;
-					break;
-
-				case TELNET_PORT:	/* Telnet */
-					interpreter = telnetInterpreter;
-					break;
-
-				default:			/* HTTP and FTP data */
-					if (localPort == network->GetHttpPort())
-					{
-						interpreter = httpInterpreter;
-					}
-					else
-					{
-						interpreter = ftpInterpreter;
-					}
-					break;
+				interpreter = httpInterpreter;
+			}
+			else if (localPort == network->GetTelnetPort())
+			{
+				interpreter = telnetInterpreter;
+			}
+			else
+			{
+				interpreter = ftpInterpreter;
 			}
 
 			// See if we have to print some debug info
@@ -345,28 +336,20 @@ void Webserver::ConnectionLost(Connection conn)
 	// Inform protocol handlers that this connection has been lost
 	const uint16_t localPort = Network::GetLocalPort(conn);
 	ProtocolInterpreter *interpreter;
-	switch (localPort)
+	if (localPort == network->GetHttpPort())
 	{
-	case FTP_PORT:		/* FTP */
+		interpreter = httpInterpreter;
+	}
+	else if (localPort == network->GetFtpPort() || localPort == network->GetDataPort())
+	{
 		interpreter = ftpInterpreter;
-		break;
-
-	case TELNET_PORT:	/* Telnet */
+	}
+	else if (localPort == network->GetTelnetPort())
+	{
 		interpreter = telnetInterpreter;
-		break;
-
-	default:			/* HTTP and FTP data */
-		if (localPort == network->GetHttpPort())
-		{
-			interpreter = httpInterpreter;
-			break;
-		}
-		else if (localPort == network->GetDataPort())
-		{
-			interpreter = ftpInterpreter;
-			break;
-		}
-
+	}
+	else
+	{
 		platform->MessageF(GENERIC_MESSAGE, "Error: Webserver should handle disconnect event at local port %d, but no handler was found!\n", localPort);
 		return;
 	}
@@ -1956,7 +1939,7 @@ void Webserver::FtpInterpreter::ConnectionEstablished()
 
 	// Is this a new connection on the data port?
 	NetworkTransaction * const transaction = webserver->currentTransaction;
-	if (transaction->GetLocalPort() != FTP_PORT)
+	if (transaction->GetLocalPort() != network->GetFtpPort())
 	{
 		if (state == waitingForPasvPort)
 		{
@@ -1995,7 +1978,7 @@ void Webserver::FtpInterpreter::ConnectionLost(Connection conn)
 {
 	connectedClients--;
 
-	if (Network::GetLocalPort(conn) != FTP_PORT)
+	if (Network::GetLocalPort(conn) != network->GetFtpPort())
 	{
 		// Did everything work out? Usually this is only called for uploads
 		if (network->AcquireFTPTransaction())
@@ -2196,7 +2179,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				const uint8_t * const ip_address = network->GetIPAddress();
 
 				/* open random port > 1023 */
-				uint16_t pasv_port = random(1024, 65535);
+				const uint16_t pasv_port = random(1024, 65535);
 				network->OpenDataPort(pasv_port);
 				portOpenTime = millis();
 				state = waitingForPasvPort;
@@ -2327,7 +2310,6 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				webserver->currentTransaction->Defer(DeferralMode::ResetData);
 			}
-
 			break;
 
 		case pasvPortConnected:
