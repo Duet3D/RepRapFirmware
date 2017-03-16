@@ -9,11 +9,11 @@ New features:
 - M997 command now checks that the start of the main firmware file looks sensible
 - The rate at which "No tool selected" and "Attempt to move before homing a delta printer" messages are generated is now limited
 - Added VSSA fault detection if the hardware supports it
-- If there are too many probe points miplied by a M557 grid definition command, the firmware displays a suggested increased spacing
+- If there are too many probe points implied by a M557 grid definition command, the firmware displays a suggested increased spacing
 
 Bug fixes:
 - Fixed CoreXY homing which was broken in 1.18beta2
-- Fixed issue with loading height map file when the number of probve points along the X axis is large
+- Fixed issue with loading height map file when the number of probe points along the X axis is large
 - M290 with no parzameters now correctly reports the current babystepping offset
 
 Upgrade notes:
