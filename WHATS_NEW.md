@@ -19,6 +19,10 @@ Bug fixes:
 Upgrade notes:
 - See under 1.18beta2
 
+Known issues
+- If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
+- If you use M586 to disable FTP or Telnet after you have previously enabled them, the firmware refuses new connections but does not terminate any existing connections.
+
 Version 1.18beta2
 =================
 
