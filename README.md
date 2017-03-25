@@ -7,7 +7,7 @@ General design principles:
 * "G-code everywhere". All firmware configuration is done using gcodes in the config.g file. Most type of change can be done on the fly so that you can experiment with different configurations without even having to restart the printer.
 * Use high-integrity coding standards to help ensure that the firmware is reliable. In particular, don't use dynamic memory allocation after the initialisation phase. The MISRA-C++ 2008 coding standard serves as a guide as to what is acceptable practice, but compliance to it is not rigidly enforced in order to allow features from later versions of the C++ language to be used.
 * Use an appropriate degree of modularity. Too little modularity makes the code hard to understand and maintain. Too much makes it hard to introduce new features when the existing module boundaries turn out to be inappropriate.
-* Use object-based and object-oriented design principles where it is appropriate. In particular, class data should normally be private. Use 'friend'# sparingly or not at all.
+* Use object-based and object-oriented design principles where it is appropriate. In particular, class data should normally be private. Use 'friend' sparingly or not at all.
 
 RepRapFirmware has pioneered a number of advances in 3D printing including:
 
