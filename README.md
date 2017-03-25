@@ -2,11 +2,11 @@ This is firmware for controlling 3D printers and related devices using electroni
 
 General design principles:
 
-* Unlike most other 3D printer firmwares, this is not intended to be portable to outdated processors with limited CPU power. So make good use of the power of modern inexpensive ARM processors to implement advanced features.
+* Unlike most other 3D printer firmwares, it is not intended to be portable to outdated processors with limited CPU power. So make good use of the power of modern inexpensive ARM processors to implement advanced features.
 * "One binary to rule them all". For a given electronics board, all features if interest to many 3D printer owners are supported by a single binary. Users do not need to recompile the firmware unless they have unusual requirements.
 * "G-code everywhere". All firmware configuration is done using gcodes in the config.g file. Most type of change can be done on the fly so that you can experiment with different configurations without even having to restart the printer.
 * Use high-integrity coding standards to help ensure that the firmware is reliable. In particular, don't use dynamic memory allocation after the initialisation phase. The MISRA-C++ 2008 coding standard serves as a guide as to what is acceptable practice, but compliance to it is not rigidlty enforced in order to allow features from later versions of the C++ language to be used.
-* Use an appoprriate degree of modularity. Too little modularity makes the code hard to understand and maintain. Too much makes it hard to intruduce new features when the exising module boundaries turn out to be inappropriate.
+* Use an appoprriate degree of modularity. Too little modularity makes the code hard to understand and maintain. Too much makes it hard to introduce new features when the exising module boundaries turn out to be inappropriate.
 * Use object-based and object-oriented design principles where it is appropriate. In particular, class data should normally be private. Use 'friend'# sparingly or not at all.
 
 RepRapFirmware has pioneered a number of advances in 3D printing including:
