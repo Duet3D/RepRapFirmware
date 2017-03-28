@@ -3,7 +3,7 @@
 
 #include "RepRapFirmware.h"
 #include "Pins.h"
-#include "Libraries/FatFs/ff.h"
+#include "Libraries/Fatfs/ff.h"
 #include <ctime>
 
 // Info returned by FindFirst/FindNext calls

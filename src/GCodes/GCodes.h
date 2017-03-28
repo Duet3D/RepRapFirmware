@@ -23,10 +23,13 @@ Licence: GPL
 #define GCODES_H
 
 #include "RepRapFirmware.h"
+#include "RepRap.h"			// for type ResponseSource
 #include "Libraries/sha1/sha1.h"
 #include "Platform.h"		// for type EndStopHit
+#include "GCodeInput.h"
 
 class GCodeBuffer;
+class GCodeQueue;
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
@@ -108,6 +111,12 @@ public:
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
 	float GetBabyStepOffset() const;									// Get the current baby stepping Z offset
+
+	RegularGCodeInput *GetHTTPInput() const { return httpInput; }
+	RegularGCodeInput *GetTelnetInput() const { return telnetInput; }
+
+	void WriteGCodeToFile(GCodeBuffer& gb);								// Write this GCode into a file
+	void WriteHTMLToFile(GCodeBuffer& gb, char b);						// Save an HTML file (usually to upload a new web interface)
 
 	bool IsFlashing() const { return isFlashing; }						// Is a new firmware binary going to be flashed?
 
@@ -194,16 +203,16 @@ private:
 	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
 	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName);	// Start saving GCodes in a file
-	void WriteGCodeToFile(GCodeBuffer& gb);								// Write this GCode into a file
 	bool SendConfigToLine();											// Deal with M503
-	void WriteHTMLToFile(GCodeBuffer& gb, char b);						// Save an HTML file (usually to upload a new web interface)
 	bool OffsetAxes(GCodeBuffer& gb);									// Set offsets - deprecated, use G10
 	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
 	void SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);		// Set the thermistor and ADC parameters for a heater
 	void ManageTool(GCodeBuffer& gb, StringRef& reply);					// Create a new tool definition
 	void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
-	void GenerateTemperatureReport(StringRef& reply);					// Store a standard-format temperature report in reply
+	void GenerateTemperatureReport(StringRef& reply) const;				// Store a standard-format temperature report in reply
+	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const;	// Generate a M408 response
+	void CheckReportDue(GCodeBuffer& gb, StringRef& reply) const;		// Check whether we need to report temperatures or status
 
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
 	void SetPositions(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
@@ -223,7 +232,6 @@ private:
 	bool ProbeGrid(GCodeBuffer& gb, StringRef& reply);					// Start probing the grid, returning true if we didn't because of an error
 	bool LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Load the height map from file
 	bool SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Save the height map to file
-	void ClearHeightMap() const;										// Clear the height map
 
 	bool WriteConfigOverrideFile(StringRef& reply, const char *fileName) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels
@@ -235,7 +243,13 @@ private:
 	Platform* const platform;											// The RepRap machine
 	Webserver* const webserver;											// The web server class
 
-	GCodeBuffer* gcodeSources[6];										// The various sources of gcodes
+	RegularGCodeInput* httpInput;										// These cache incoming G-codes...
+	RegularGCodeInput* telnetInput;										// ...
+	FileGCodeInput* fileInput;											// ...
+	StreamGCodeInput* serialInput;										// ...
+	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
+
+	GCodeBuffer* gcodeSources[7];										// The various sources of gcodes
 
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
@@ -243,6 +257,7 @@ private:
 	GCodeBuffer*& serialGCode = gcodeSources[3];
 	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the LCD display on the async serial interface
 	GCodeBuffer*& daemonGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
+	GCodeBuffer*& queuedGCode = gcodeSources[6];
 	size_t nextGcodeSource;												// The one to check next
 
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
@@ -323,6 +338,9 @@ private:
 	uint8_t firmwareUpdateModuleMap;			// Bitmap of firmware modules to be updated
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
 
+	// Code queue
+	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution
+
 	// SHA1 hashing
 	FileStore *fileBeingHashed;
 	SHA1Context hash;
@@ -332,6 +350,7 @@ private:
 	// Misc
 	float longWait;								// Timer for things that happen occasionally (seconds)
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
+	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning

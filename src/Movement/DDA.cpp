@@ -327,6 +327,10 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	memcpy(normalisedDirectionVector, directionVector, sizeof(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, DRIVES);
 	acceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations, DRIVES);
+	if (xyMoving)
+	{
+		acceleration = min<float>(acceleration, (isPrintingMove) ? reprap.GetPlatform()->GetMaxPrintingAcceleration() : reprap.GetPlatform()->GetMaxTravelAcceleration());
+	}
 
 	// 6. Set the speed to the smaller of the requested and maximum speed.
 	// Also enforce a minimum speed of 0.5mm/sec. We need a minimum speed to avoid overflow in the movement calculations.

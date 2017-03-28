@@ -664,7 +664,7 @@ void PID::DoTuningStep()
 			const int peakIndex = GetPeakTempIndex();
 			if (peakIndex < 0)
 			{
-				if (millis() - tuningPhaseStartTime < 60 * 1000)
+				if (millis() - tuningPhaseStartTime < 120 * 1000)			// allow 2 minutes for the bed temperature to start falling
 				{
 					return;			// still waiting for peak temperature
 				}

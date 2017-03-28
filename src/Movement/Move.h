@@ -118,6 +118,10 @@ public:
 
 	bool IsExtruding() const;														// Is filament being extruded?
 
+	uint32_t GetScheduledMoves() const { return scheduledMoves; }					// How many moves have been scheduled?
+	uint32_t GetCompletedMoves() const { return completedMoves; }					// How many moves have been completed?
+	void ResetMoveCounters() { scheduledMoves = completedMoves = 0; }
+
 	HeightMap& AccessBedProbeGrid() { return grid; }								// Access the bed probing grid
 
 private:
@@ -195,6 +199,9 @@ private:
 	int coreXYMode;										// 0 = Cartesian, 1 = CoreXY, 2 = CoreXZ, 3 = CoreYZ
 	float axisFactors[MAX_AXES];						// How much further the motors need to move for each axis movement, on a CoreXY/CoreXZ/CoreYZ machine
 	unsigned int stepErrors;							// count of step errors, for diagnostics
+
+	uint32_t scheduledMoves;							// Move counters for the code queue
+	volatile uint32_t completedMoves;					// This one is modified by an ISR, hence volatile
 };
 
 //******************************************************************************************************

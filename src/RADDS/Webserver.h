@@ -20,10 +20,7 @@ public:
 	void Exit() const { };
 	void Diagnostics(MessageType mtype) const { };
 
-	bool GCodeAvailable(const WebSource source) const { return false; }
-	char ReadGCode(const WebSource source) const { return '\0'; }
 	uint32_t GetReplySeq() const { return (uint32_t)0; }
-	uint16_t GetGCodeBufferSpace(const WebSource source) const { return 0; }
 
 	void HandleGCodeReply(const WebSource source, OutputBuffer *reply) const;
 	void HandleGCodeReply(const WebSource source, const char *reply) const { };

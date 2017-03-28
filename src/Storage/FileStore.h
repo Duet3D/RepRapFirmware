@@ -8,22 +8,11 @@
 
 const size_t FileBufLen = 256;						// 512 would be more efficient, but need to free up some RAM first
 
-enum class IOStatus : uint8_t
-{
-	nothing = 0,
-	byteAvailable = 1,
-	atEoF = 2,
-	clientLive = 4,
-	clientConnected = 8
-};
-
 class Platform;
 
 class FileStore
 {
 public:
-
-	uint8_t Status();								// Returns OR of IOStatus
 	bool Read(char& b);								// Read 1 byte
 	int Read(char* buf, size_t nBytes);				// Read a block of nBytes length
 	int ReadLine(char* buf, size_t nBytes);			// As Read but stop after '\n' or '\r\n' and null-terminate
@@ -57,17 +46,9 @@ protected:
     bool Open(const char* directory, const char* fileName, bool write);
 
 private:
-	bool ReadBuffer();
-	bool WriteBuffer();
-	bool InternalWriteBlock(const char *s, size_t len);
-	uint8_t *GetBuffer() { return reinterpret_cast<uint8_t*>(buf32); }
-
-    uint32_t buf32[FileBufLen/4];
 	Platform* platform;
-    unsigned int bufferPointer;
 
 	FIL file;
-	unsigned int lastBufferEntry;
 	volatile unsigned int openCount;
 	volatile bool closeRequested;
 

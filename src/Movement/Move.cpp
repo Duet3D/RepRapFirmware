@@ -9,7 +9,7 @@
 #include "Platform.h"
 #include "RepRap.h"
 
-Move::Move(Platform* p, GCodes* g) : currentDda(NULL), grid(zBedProbePoints)
+Move::Move(Platform* p, GCodes* g) : currentDda(NULL), grid(zBedProbePoints), scheduledMoves(0), completedMoves(0)
 {
 	active = false;
 
@@ -193,6 +193,7 @@ void Move::Spin()
 					{
 						ddaRingAddPointer = ddaRingAddPointer->GetNext();
 						idleCount = 0;
+						scheduledMoves++;
 					}
 				}
 			}
@@ -377,6 +378,7 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 			}
 			(void)dda->Free();
 			dda = dda->GetNext();
+			scheduledMoves--;
 		}
 		while (dda != savedDdaRingAddPointer);
 	}
@@ -406,6 +408,8 @@ void Move::Diagnostics(MessageType mtype)
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 	longestGcodeWaitInterval = 0;
 
+	reprap.GetPlatform()->MessageF(mtype, "Scheduled moves: %u, completed moves: %u\n", scheduledMoves, completedMoves);
+
 	// Show the current probe position heights and type of bed compensation in use
 	p->Message(mtype, "Bed compensation in use: ");
 	if (numBedCompensationPoints == 0)
@@ -417,7 +421,8 @@ void Move::Diagnostics(MessageType mtype)
 		p->MessageF(mtype, "%d point\n", numBedCompensationPoints);
 	}
 	p->Message(mtype, "Bed probe heights:");
-	for (size_t i = 0; i < MaxProbePoints; ++i)
+	// To keep the response short so that it doesn't get truncates when sending it via HTTP, we only show the first 5 bed probe points
+	for (size_t i = 0; i < 5; ++i)
 	{
 		p->MessageF(mtype, " %.3f", ZBedProbePoint(i));
 	}
@@ -757,6 +762,7 @@ void Move::SetIdentityTransform()
 {
 	numBedCompensationPoints = 0;
 	grid.ClearGridHeights();
+	grid.UseHeightMap(false);
 }
 
 void Move::SetTaperHeight(float h)
@@ -1312,6 +1318,7 @@ void Move::CurrentMoveCompleted()
 	currentDda->Complete();
 	currentDda = nullptr;
 	ddaRingGetPointer = ddaRingGetPointer->GetNext();
+	completedMoves++;
 }
 
 // Try to start another move. Must be called with interrupts disabled, to avoid a race condition.
@@ -1430,6 +1437,7 @@ void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xA
 void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes)
 {
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();		// do this before we disable interrupts
 	cpu_irq_disable();
 	if (liveCoordinatesValid)
 	{
@@ -1440,7 +1448,6 @@ void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes)
 	else
 	{
 		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
-		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 		memcpy(m + numAxes, const_cast<const float *>(liveCoordinates + numAxes), sizeof(m[0]) * (DRIVES - numAxes));
 		int32_t tempEndPoints[MAX_AXES];
 		memcpy(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints));

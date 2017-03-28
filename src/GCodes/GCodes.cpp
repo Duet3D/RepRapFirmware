@@ -25,6 +25,7 @@
 
 #include "GCodes.h"
 #include "GCodeBuffer.h"
+#include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #include "Platform.h"
 #include "Movement/Move.h"
@@ -49,6 +50,7 @@ const char* DefaultHeightMapFile = "heightmap.csv";
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
+
 void GCodes::RestorePoint::Init()
 {
 	for (size_t i = 0; i < DRIVES; ++i)
@@ -62,12 +64,21 @@ GCodes::GCodes(Platform* p, Webserver* w) :
 	platform(p), webserver(w), active(false), isFlashing(false),
 	fileBeingHashed(nullptr), lastWarningMillis(0)
 {
-	httpGCode = new GCodeBuffer("http", HTTP_MESSAGE);
-	telnetGCode = new GCodeBuffer("telnet", TELNET_MESSAGE);
-	fileGCode = new GCodeBuffer("file", GENERIC_MESSAGE);
-	serialGCode = new GCodeBuffer("serial", HOST_MESSAGE);
-	auxGCode = new GCodeBuffer("aux", AUX_MESSAGE);
-	daemonGCode = new GCodeBuffer("daemon", GENERIC_MESSAGE);
+	httpInput = new RegularGCodeInput(true);
+	telnetInput = new RegularGCodeInput(true);
+	fileInput = new FileGCodeInput();
+	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
+	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
+
+	httpGCode = new GCodeBuffer("http", HTTP_MESSAGE, false);
+	telnetGCode = new GCodeBuffer("telnet", TELNET_MESSAGE, true);
+	fileGCode = new GCodeBuffer("file", GENERIC_MESSAGE, true);
+	serialGCode = new GCodeBuffer("serial", HOST_MESSAGE, true);
+	auxGCode = new GCodeBuffer("aux", AUX_MESSAGE, false);
+	daemonGCode = new GCodeBuffer("daemon", GENERIC_MESSAGE, false);
+	queuedGCode = new GCodeBuffer("queue", GENERIC_MESSAGE, false);
+
+	codeQueue = new GCodeQueue();
 }
 
 void GCodes::Exit()
@@ -94,7 +105,6 @@ void GCodes::Init()
 	eofStringLength = strlen(eofString);
 	offSetSet = false;
 	runningConfigFile = false;
-	doingToolChange = false;
 	active = true;
 	longWait = platform->Time();
 	limitAxes = true;
@@ -114,18 +124,22 @@ void GCodes::Init()
 	retractHop = 0.0;
 	retractSpeed = unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	isRetracted = false;
+	lastAuxStatusReportType = -1;						// no status reports requested yet
 }
 
 // This is called from Init and when doing an emergency stop
 void GCodes::Reset()
 {
-	httpGCode->Init();
-	telnetGCode->Init();
-	fileGCode->Init();
-	serialGCode->Init();
-	auxGCode->Init();
+	// Here we could reset the input sources as well, but this would mess up M122\nM999
+	// because both codes are sent at once from the web interface. Hence we don't do this here
+
+	httpGCode->Reset();
+	telnetGCode->Reset();
+	fileGCode->Reset();
+	serialGCode->Reset();
+	auxGCode->Reset();
 	auxGCode->SetCommsProperties(1);					// by default, we require a checksum on the aux port
-	daemonGCode->Init();
+	daemonGCode->Reset();
 
 	nextGcodeSource = 0;
 
@@ -160,10 +174,12 @@ void GCodes::Reset()
 	simulationMode = 0;
 	simulationTime = 0.0;
 	isPaused = false;
+	doingToolChange = false;
 	moveBuffer.filePos = noFilePosition;
 	lastEndstopStates = platform->GetAllEndstopStates();
 	firmwareUpdateModuleMap = 0;
 
+	codeQueue->Clear();
 	cancelWait = isWaiting = displayNoToolWarning = displayDeltaNotHomedWarning = false;
 
 	for (size_t i = 0; i < NumResources; ++i)
@@ -335,28 +351,8 @@ void GCodes::Spin()
 			}
 			else
 			{
+				CheckReportDue(gb, reply);
 				isWaiting = true;
-
-				// In Marlin emulation mode we should return some sort of undocumented message here every second. Try a standard temperature report.
-				if (platform->Emulating() == marlin && gb.GetResponseMessageType() == MessageType::HOST_MESSAGE)
-				{
-					const uint32_t now = millis();
-					if (gb.timerRunning)
-					{
-						if (now - gb.whenTimerStarted >= 1000)
-						{
-							gb.whenTimerStarted = now;
-							GenerateTemperatureReport(reply);
-							reply.cat('\n');
-							platform->Message(HOST_MESSAGE, reply.Pointer());
-						}
-					}
-					else
-					{
-						gb.whenTimerStarted = now;
-						gb.timerRunning = true;
-					}
-				}
 			}
 			break;
 
@@ -696,80 +692,33 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, StringRef& reply)
 	{
 		DoFilePrint(gb, reply);
 	}
+	else if (&gb == queuedGCode)
+	{
+		// Code queue
+		codeQueue->FillBuffer(queuedGCode);
+	}
 	else if (&gb == httpGCode)
 	{
 		// Webserver
-		for (unsigned int i = 0; i < 16 && webserver->GCodeAvailable(WebSource::HTTP); ++i)
-		{
-			const char b = webserver->ReadGCode(WebSource::HTTP);
-			if (gb.Put(b))
-			{
-				// We have a complete gcode
-				if (gb.WritingFileDirectory() != nullptr)
-				{
-					WriteGCodeToFile(gb);
-					gb.SetFinished(true);
-				}
-				else
-				{
-					gb.SetFinished(ActOnCode(gb, reply));
-				}
-				break;
-			}
-		}
+		httpInput->FillBuffer(httpGCode);
 	}
 	else if (&gb == telnetGCode)
 	{
 		// Telnet
-		for (unsigned int i = 0; i < GCODE_LENGTH && webserver->GCodeAvailable(WebSource::Telnet); ++i)
-		{
-			char b = webserver->ReadGCode(WebSource::Telnet);
-			if (gb.Put(b))
-			{
-				gb.SetFinished(ActOnCode(gb, reply));
-				break;
-			}
-		}
+		telnetInput->FillBuffer(telnetGCode);
 	}
 	else if (&gb == serialGCode)
 	{
 		// USB interface
-		for (unsigned int i = 0; i < 16 && platform->GCodeAvailable(SerialSource::USB); ++i)
-		{
-			const char b = platform->ReadFromSource(SerialSource::USB);
-			// Check the special case of uploading the reprap.htm file
-			if (gb.WritingFileDirectory() == platform->GetWebDir())
-			{
-				WriteHTMLToFile(gb, b);
-			}
-			else if (gb.Put(b))	// add char to buffer and test whether the gcode is complete
-			{
-				// We have a complete gcode
-				if (gb.WritingFileDirectory() != nullptr)
-				{
-					WriteGCodeToFile(gb);
-					gb.SetFinished(true);
-				}
-				else
-				{
-					gb.SetFinished(ActOnCode(gb, reply));
-				}
-				break;
-			}
-		}
+		serialInput->FillBuffer(serialGCode);
 	}
 	else if (&gb == auxGCode)
 	{
 		// Aux serial port (typically PanelDue)
-		for (unsigned int i = 0; i < 16 && platform->GCodeAvailable(SerialSource::AUX); ++i)
+		if (auxInput->FillBuffer(auxGCode))
 		{
-			char b = platform->ReadFromSource(SerialSource::AUX);
-			if (gb.Put(b))	// add char to buffer and test whether the gcode is complete
-			{
-				platform->SetAuxDetected();
-				gb.SetFinished(ActOnCode(gb, reply));
-				break;
-			}
+			// by default we assume no PanelDue is attached
+			platform->SetAuxDetected();
 		}
 	}
 }
@@ -777,66 +726,65 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, StringRef& reply)
 void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 {
 	FileData& fd = gb.MachineState().fileState;
-	for (int i = 0; i < 50 && fd.IsLive(); ++i)
+
+	// Do we have more data to process?
+	if (fileInput->ReadFromFile(fd))
 	{
-		char b;
-		if (fd.Read(b))
+		// Yes - fill up the GCodeBuffer and run the next code
+		if (fileInput->FillBuffer(&gb))
 		{
-			if (gb.Put(b))
+			gb.SetFinished(ActOnCode(gb, reply));
+		}
+	}
+	else
+	{
+		// We have reached the end of the file. Check for the last line of gcode not ending in newline.
+		if (!gb.StartingNewCode())				// if there is something in the buffer
+		{
+			if (gb.Put('\n')) 					// in case there wasn't a newline ending the file
 			{
 				gb.SetFinished(ActOnCode(gb, reply));
 				return;
 			}
 		}
+
+		gb.Init();								// mark buffer as empty
+
+		if (gb.MachineState().previous == nullptr)
+		{
+			// Finished printing SD card file
+			// Don't close the file until all moves have been completed, in case the print gets paused.
+			// Also, this keeps the state as 'Printing' until the print really has finished.
+			if (LockMovementAndWaitForStandstill(gb))
+			{
+				fileInput->Reset();
+				fd.Close();
+				UnlockAll(gb);
+				reprap.GetPrintMonitor()->StoppedPrint();
+				if (platform->Emulating() == marlin)
+				{
+					// Pronterface expects a "Done printing" message
+					HandleReply(gb, false, "Done printing file");
+				}
+			}
+		}
 		else
 		{
-			// We have reached the end of the file. Check for the last line of gcode not ending in newline.
-			if (!gb.StartingNewCode())				// if there is something in the buffer
+			// Finished a macro or finished processing config.g
+			fileInput->Reset();
+			fd.Close();
+			if (runningConfigFile)
 			{
-				if (gb.Put('\n')) 					// in case there wasn't a newline ending the file
-				{
-					gb.SetFinished(ActOnCode(gb, reply));
-					return;
-				}
+				CopyConfigFinalValues(gb);
+				runningConfigFile = false;
 			}
-
-			gb.Init();								// mark buffer as empty
-
-			if (gb.MachineState().previous == nullptr)
+			Pop(gb);
+			gb.Init();
+			if (gb.GetState() == GCodeState::normal)
 			{
-				// Finished printing SD card file
-				// Don't close the file until all moves have been completed, in case the print gets paused.
-				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (LockMovementAndWaitForStandstill(gb))
-				{
-					fd.Close();
-					UnlockAll(gb);
-					reprap.GetPrintMonitor()->StoppedPrint();
-					if (platform->Emulating() == marlin)
-					{
-						// Pronterface expects a "Done printing" message
-						HandleReply(gb, false, "Done printing file");
-					}
-				}
+				UnlockAll(gb);
+				HandleReply(gb, false, "");
 			}
-			else
-			{
-				// Finished a macro or finished processing config.g
-				fd.Close();
-				if (runningConfigFile)
-				{
-					CopyConfigFinalValues(gb);
-					runningConfigFile = false;
-				}
-				Pop(gb);
-				gb.Init();
-				if (gb.GetState() == GCodeState::normal)
-				{
-					UnlockAll(gb);
-					HandleReply(gb, false, "");
-				}
-			}
-			return;
 		}
 	}
 }
@@ -934,6 +882,9 @@ void GCodes::DoPause(GCodeBuffer& gb)
 		{
 			fdata.Seek(fPos);														// replay the abandoned instructions if/when we resume
 		}
+		fileInput->Reset();
+		codeQueue->PurgeEntries();
+
 		if (segmentsLeft != 0)
 		{
 			for (size_t drive = numAxes; drive < DRIVES; ++drive)
@@ -969,13 +920,15 @@ void GCodes::Diagnostics(MessageType mtype)
 	platform->Message(mtype, "=== GCodes ===\n");
 	platform->MessageF(mtype, "Segments left: %u\n", segmentsLeft);
 	platform->MessageF(mtype, "Stack records: %u allocated, %u in use\n", GCodeMachineState::GetNumAllocated(), GCodeMachineState::GetNumInUse());
-	const GCodeBuffer *movementOwner = resourceOwners[MoveResource];
+	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
 	platform->MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetIdentity());
 
 	for (size_t i = 0; i < ARRAY_SIZE(gcodeSources); ++i)
 	{
 		gcodeSources[i]->Diagnostics(mtype);
 	}
+
+	codeQueue->Diagnostics(mtype);
 }
 
 // Lock movement and wait for pending moves to finish.
@@ -1360,7 +1313,7 @@ int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 					break;
 				}
 			}
-			moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() : noFilePosition;
+			moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() - fileInput->BytesCached() : noFilePosition;
 			moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
 			//debugPrintf("Queue move pos %u\n", moveFilePos);
 		}
@@ -1425,16 +1378,19 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		// Deal with the X axes
 		for (size_t axis = 0; axis < numAxes; ++axis)
 		{
-			arcCentre[axis] = moveBuffer.initialCoords[axis] + iParam;
-			if ((arcAxesMoving & (1 << axis)) != 0)
+			if (axis != Y_AXIS)
 			{
-				if (axesRelative)
+				arcCentre[axis] = moveBuffer.initialCoords[axis] + iParam;
+				if ((arcAxesMoving & (1 << axis)) != 0)
 				{
-					moveBuffer.coords[axis] += xParam;
-				}
-				else
-				{
-					moveBuffer.coords[axis] = xParam - currentTool->GetOffset()[axis];
+					if (axesRelative)
+					{
+						moveBuffer.coords[axis] += xParam;
+					}
+					else
+					{
+						moveBuffer.coords[axis] = xParam - currentTool->GetOffset()[axis];
+					}
 				}
 			}
 		}
@@ -1548,9 +1504,10 @@ bool GCodes::ReadMove(RawMove& m)
 	{
 		// Calculate the move length, to see how much new babystepping is appropriate for this move
 		float xMoveLength = 0.0;
+		const uint32_t xAxes = reprap.GetCurrentXAxes();
 		for (size_t drive = 0; drive < numAxes; ++drive)
 		{
-			if ((arcAxesMoving & (1 << drive)) != 0)
+			if ((xAxes & (1 << drive)) != 0)
 			{
 				xMoveLength = max<float>(xMoveLength, fabs(m.coords[drive] - m.initialCoords[drive]));
 			}
@@ -2389,24 +2346,16 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const
 	return err;
 }
 
-// Clear the height map
-void GCodes::ClearHeightMap() const
-{
-	HeightMap& heightMap = reprap.GetMove()->AccessBedProbeGrid();
-	heightMap.ClearGridHeights();
-	heightMap.UseHeightMap(false);
-}
-
 // Return the current coordinates as a printable string.
 // Coordinates are updated at the end of each movement, so this won't tell you where you are mid-movement.
 void GCodes::GetCurrentCoordinates(StringRef& s) const
 {
 	float liveCoordinates[DRIVES];
 	reprap.GetMove()->LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes());
-	const Tool *currentTool = reprap.GetCurrentTool();
+	const Tool * const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
-		const float *offset = currentTool->GetOffset();
+		const float * const offset = currentTool->GetOffset();
 		for (size_t i = 0; i < numAxes; ++i)
 		{
 			liveCoordinates[i] += offset[i];
@@ -2416,7 +2365,7 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	s.Clear();
 	for (size_t axis = 0; axis < numAxes; ++axis)
 	{
-		s.catf("%c: %.2f ", axisLetters[axis], liveCoordinates[axis]);
+		s.catf("%c: %.3f ", axisLetters[axis], liveCoordinates[axis]);
 	}
 	for (size_t i = numAxes; i < DRIVES; i++)
 	{
@@ -2477,6 +2426,8 @@ void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
 	}
 	else
 	{
+		// NB: This approach isn't very efficient, but I (chrishamm) think the whole uploading
+		// code should be rewritten anyway in the future and moved away from the GCodes class.
 		fileBeingWritten->Write(b);
 	}
 }
@@ -2969,21 +2920,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, const char* reply)
 	}
 
 	const Compatibility c = (&gb == serialGCode || &gb == telnetGCode) ? platform->Emulating() : me;
-	MessageType type = GENERIC_MESSAGE;
-	if (&gb == httpGCode)
-	{
-		type = HTTP_MESSAGE;
-	}
-	else if (&gb == telnetGCode)
-	{
-		type = TELNET_MESSAGE;
-	}
-	else if (&gb == serialGCode)
-	{
-		type = HOST_MESSAGE;
-	}
-
-	const char* response = (gb.Seen('M') && gb.GetIValue() == 998) ? "rs " : "ok";
+	const MessageType type = gb.GetResponseMessageType();
+	const char* const response = (gb.Seen('M') && gb.GetIValue() == 998) ? "rs " : "ok";
 	const char* emulationType = 0;
 
 	switch (c)
@@ -3072,21 +3010,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
 	}
 
 	const Compatibility c = (&gb == serialGCode || &gb == telnetGCode) ? platform->Emulating() : me;
-	MessageType type = GENERIC_MESSAGE;
-	if (&gb == httpGCode)
-	{
-		type = HTTP_MESSAGE;
-	}
-	else if (&gb == telnetGCode)
-	{
-		type = TELNET_MESSAGE;
-	}
-	else if (&gb == serialGCode)
-	{
-		type = HOST_MESSAGE;
-	}
-
-	const char* response = (gb.Seen('M') && gb.GetIValue() == 998) ? "rs " : "ok";
+	const MessageType type = gb.GetResponseMessageType();
+	const char* const response = (gb.Seen('M') && gb.GetIValue() == 998) ? "rs " : "ok";
 	const char* emulationType = nullptr;
 
 	switch (c)
@@ -3325,7 +3250,7 @@ bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				moveBuffer.moveType = 0;
 				moveBuffer.isFirmwareRetraction = true;
 				moveBuffer.usePressureAdvance = false;
-				moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() : noFilePosition;
+				moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() - fileInput->BytesCached() : noFilePosition;
 				moveBuffer.canPauseAfter = !retract;			// don't pause after a retraction because that could cause too much retraction
 				moveBuffer.xAxes = xAxes;
 				segmentsLeft = 1;
@@ -3354,7 +3279,9 @@ void GCodes::CancelPrint()
 	segmentsLeft = 0;
 	isPaused = false;
 
+	fileInput->Reset();
 	fileGCode->Init();
+
 	FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 	if (fileBeingPrinted.IsLive())
 	{
@@ -3362,6 +3289,9 @@ void GCodes::CancelPrint()
 	}
 
 	reprap.GetPrintMonitor()->StoppedPrint();
+
+	reprap.GetMove()->ResetMoveCounters();
+	codeQueue->Clear();
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures
@@ -3559,7 +3489,7 @@ bool GCodes::WriteConfigOverrideFile(StringRef& reply, const char *fileName) con
 }
 
 // Store a standard-format temperature report in 'reply'. This doesn't put a newline character at the end.
-void GCodes::GenerateTemperatureReport(StringRef& reply)
+void GCodes::GenerateTemperatureReport(StringRef& reply) const
 {
 	const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
 	const int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
@@ -3588,6 +3518,70 @@ void GCodes::GenerateTemperatureReport(StringRef& reply)
 	{
 		reply.catf(" C:%.1f", reprap.GetHeat()->GetTemperature(chamberHeater));
 	}
+}
+
+// Check whether we need to report temperatures or status.
+// 'reply' is a convenient buffer that is free for us to use.
+void GCodes::CheckReportDue(GCodeBuffer& gb, StringRef& reply) const
+{
+	const uint32_t now = millis();
+	if (gb.timerRunning)
+	{
+		if (now - gb.whenTimerStarted >= 1000)
+		{
+			if (platform->Emulating() == marlin && (&gb == serialGCode || &gb == telnetGCode))
+			{
+				// In Marlin emulation mode we should return a standard temperature report every second
+				GenerateTemperatureReport(reply);
+				reply.cat('\n');
+				platform->Message(HOST_MESSAGE, reply.Pointer());
+			}
+			if (lastAuxStatusReportType >= 0)
+			{
+				// Send a standard status response for PanelDue
+				OutputBuffer * const statusBuf = GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);
+				if (statusBuf != nullptr)
+				{
+					platform->AppendAuxReply(statusBuf);
+				}
+			}
+			gb.whenTimerStarted = now;
+		}
+	}
+	else
+	{
+		gb.whenTimerStarted = now;
+		gb.timerRunning = true;
+	}
+}
+
+// Generate a M408 response
+// Return the output buffer containing the response, or nullptr if we failed
+OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const
+{
+	OutputBuffer *statusResponse = nullptr;
+	switch (type)
+	{
+		case 0:
+		case 1:
+			statusResponse = reprap.GetLegacyStatusResponse(type + 2, seq);
+			break;
+
+		case 2:
+		case 3:
+		case 4:
+			statusResponse = reprap.GetStatusResponse(type - 1, source);
+			break;
+
+		case 5:
+			statusResponse = reprap.GetConfigResponse();
+			break;
+	}
+	if (statusResponse != nullptr)
+	{
+		statusResponse->cat('\n');
+	}
+	return statusResponse;
 }
 
 // Resource locking/unlocking

@@ -12,10 +12,16 @@
 #include "RepRap.h"
 
 // Create a default GCodeBuffer
-GCodeBuffer::GCodeBuffer(const char* id, MessageType mt)
+GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
 	: machineState(new GCodeMachineState()), identity(id), checksumRequired(false), writingFileDirectory(nullptr),
-	  toolNumberAdjust(0), responseMessageType(mt)
+	  toolNumberAdjust(0), responseMessageType(mt), queueCodes(usesCodeQueue)
 {
+	Init();
+}
+
+void GCodeBuffer::Reset()
+{
+	while (PopState()) { }
 	Init();
 }
 
@@ -31,17 +37,28 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 {
 	switch (bufferState)
 	{
-		case GCodeBufferState::idle:
-			reprap.GetPlatform()->MessageF(mtype, "%s is idle\n", identity);
-			break;
+	case GCodeBufferState::idle:
+		scratchString.printf("%s is idle", identity);
+		break;
 
-		case GCodeBufferState::ready:
-			reprap.GetPlatform()->MessageF(mtype, "%s is ready with \"%s\"\n", identity, Buffer());
-			break;
+	case GCodeBufferState::ready:
+		scratchString.printf("%s is ready with \"%s\"", identity, Buffer());
+		break;
 
-		case GCodeBufferState::executing:
-			reprap.GetPlatform()->MessageF(mtype, "%s is doing \"%s\"\n", identity, Buffer());
+	case GCodeBufferState::executing:
+		scratchString.printf("%s is doing \"%s\"", identity, Buffer());
 	}
+
+	scratchString.cat(" in state(s)");
+	const GCodeMachineState *ms = machineState;
+	do
+	{
+		scratchString.catf(" %d", ms->state);
+		ms = ms->previous;
+	}
+	while (ms != nullptr);
+	scratchString.cat('\n');
+	reprap.GetPlatform()->Message(mtype, scratchString.Pointer());
 }
 
 int GCodeBuffer::CheckSum() const

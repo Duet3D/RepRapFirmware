@@ -10,6 +10,7 @@
 #include "GCodes.h"
 
 #include "GCodeBuffer.h"
+#include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
 #include "Network.h"
@@ -42,6 +43,13 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, StringRef& reply)
 	// Discard empty buffers right away
 	if (gb.IsEmpty())
 	{
+		return true;
+	}
+
+	// Can we queue this code?
+	if (gb.CanQueueCodes() && codeQueue->QueueCode(gb, segmentsLeft))
+	{
+		HandleReply(gb, false, "");
 		return true;
 	}
 
@@ -203,7 +211,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 				break;
 
 			default:	// clear height map
-				reprap.GetMove()->AccessBedProbeGrid().ClearGridHeights();
+				reprap.GetMove()->SetIdentityTransform();
 				break;
 			}
 		}
@@ -1210,6 +1218,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				toolNumber += gb.GetToolNumberAdjust();
 				if (!cancelWait && !ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber), true))
 				{
+					CheckReportDue(gb, reply);				// check whether we need to send a temperature or status report
 					isWaiting = true;
 					return false;
 				}
@@ -1228,6 +1237,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					{
 						if (!reprap.GetHeat()->HeaterAtSetTemperature(heaters[i], true))
 						{
+							CheckReportDue(gb, reply);		// check whether we need to send a temperature or status report
 							isWaiting = true;
 							return false;
 						}
@@ -1244,6 +1254,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					if (!cancelWait && !reprap.GetHeat()->HeaterAtSetTemperature(chamberHeater, true))
 					{
+						CheckReportDue(gb, reply);			// check whether we need to send a temperature or status report
 						isWaiting = true;
 						return false;
 					}
@@ -1254,6 +1265,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			// Wait for all heaters to be ready
 			if (!seen && !cancelWait && !reprap.GetHeat()->AllHeatersAtSetTemperatures(true))
 			{
+				CheckReportDue(gb, reply);					// check whether we need to send a temperature or status report
 				isWaiting = true;
 				return false;
 			}
@@ -1510,26 +1522,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					break;
 				}
 
-				// In Marlin emulation mode we should return some sort of undocumented message here every second. Try a standard temperature report.
-				if (platform->Emulating() == marlin && gb.GetResponseMessageType() == MessageType::HOST_MESSAGE)
-				{
-					const uint32_t now = millis();
-					if (gb.timerRunning)
-					{
-						if (now - gb.whenTimerStarted >= 1000)
-						{
-							gb.whenTimerStarted = now;
-							GenerateTemperatureReport(reply);
-							reply.cat('\n');
-							platform->Message(HOST_MESSAGE, reply.Pointer());
-						}
-					}
-					else
-					{
-						gb.whenTimerStarted = now;
-						gb.timerRunning = true;
-					}
-				}
+				CheckReportDue(gb, reply);			// check whether we need to send a temperature or status report
 				isWaiting = true;
 				return false;
 			}
@@ -1620,7 +1613,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 206:  // Offset axes - Deprecated
+	case 204: // Set max travel and printing accelerations
+		{
+			bool seen = false;
+			if (gb.Seen('P'))
+			{
+				platform->SetMaxPrintingAcceleration(gb.GetFValue());
+				seen = true;
+			}
+			if (gb.Seen('T'))
+			{
+				platform->SetMaxTravelAcceleration(gb.GetFValue());
+				seen = true;
+			}
+			if (!seen)
+			{
+				reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", platform->GetMaxPrintingAcceleration(), platform->GetMaxTravelAcceleration());
+			}
+		}
+		break;
+
+	case 206: // Offset axes - Deprecated
 		result = OffsetAxes(gb);
 		break;
 
@@ -2081,32 +2094,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 408: // Get status in JSON format
 		{
-			int type = gb.Seen('S') ? gb.GetIValue() : 0;
-			int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-
-			OutputBuffer *statusResponse = nullptr;
-			switch (type)
+			const int type = gb.Seen('S') ? gb.GetIValue() : 0;
+			const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
+			if (&gb == auxGCode)
 			{
-				case 0:
-				case 1:
-					statusResponse = reprap.GetLegacyStatusResponse(type + 2, seq);
-					break;
-
-				case 2:
-				case 3:
-				case 4:
-					statusResponse = reprap.GetStatusResponse(type - 1, (&gb == auxGCode) ? ResponseSource::AUX : ResponseSource::Generic);
-					break;
-
-				case 5:
-					statusResponse = reprap.GetConfigResponse();
-					break;
+				lastAuxStatusReportType = type;
 			}
+
+			OutputBuffer * const statusResponse = GenerateJsonStatusResponse(type, seq, (&gb == auxGCode) ? ResponseSource::AUX : ResponseSource::Generic);
 
 			if (statusResponse != nullptr)
 			{
 				UnlockAll(gb);
-				statusResponse->cat('\n');
 				HandleReply(gb, false, statusResponse);
 				return true;
 			}
@@ -2419,35 +2418,35 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 559: // Upload config.g or another gcode file to put in the sys directory
-	{
-		const char* str = (gb.Seen('P') ? gb.GetString() : platform->GetConfigFile());
-		const bool ok = OpenFileToWrite(gb, platform->GetSysDir(), str);
-		if (ok)
 		{
-			reply.printf("Writing to file: %s", str);
+			const char* str = (gb.Seen('P') ? gb.GetString() : platform->GetConfigFile());
+			const bool ok = OpenFileToWrite(gb, platform->GetSysDir(), str);
+			if (ok)
+			{
+				reply.printf("Writing to file: %s", str);
+			}
+			else
+			{
+				reply.printf("Can't open file %s for writing.", str);
+				error = true;
+			}
 		}
-		else
-		{
-			reply.printf("Can't open file %s for writing.", str);
-			error = true;
-		}
-	}
 		break;
 
 	case 560: // Upload reprap.htm or another web interface file
-	{
-		const char* str = (gb.Seen('P') ? gb.GetString() : INDEX_PAGE_FILE);
-		const bool ok = OpenFileToWrite(gb, platform->GetWebDir(), str);
-		if (ok)
 		{
-			reply.printf("Writing to file: %s", str);
+			const char* str = (gb.Seen('P') ? gb.GetString() : INDEX_PAGE_FILE);
+			const bool ok = OpenFileToWrite(gb, platform->GetWebDir(), str);
+			if (ok)
+			{
+				reply.printf("Writing to file: %s", str);
+			}
+			else
+			{
+				reply.printf("Can't open file %s for writing.", str);
+				error = true;
+			}
 		}
-		else
-		{
-			reply.printf("Can't open file %s for writing.", str);
-			error = true;
-		}
-	}
 		break;
 
 	case 561: // Set identity transform (also clears bed probe grid)

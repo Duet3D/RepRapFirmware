@@ -96,7 +96,6 @@ const char* badEscapeResponse = "bad escape";
 // Constructor and initialisation
 Webserver::Webserver(Platform* p, Network *n) : state(doingFilename), platform(p), network(n), numSessions(0), clientsServed(0)
 {
-	gcodeReadIndex = gcodeWriteIndex = 0;
 	gcodeReply = new OutputStack();
 	processingDeferredRequest = false;
 	seq = 0;
@@ -423,42 +422,6 @@ void Webserver::Diagnostics(MessageType mtype)
 	platform->MessageF(mtype, "HTTP sessions: %d of %d\n", numSessions, maxHttpSessions);
 }
 
-bool Webserver::GCodeAvailable(const WebSource source) const
-{
-	switch (source)
-	{
-	case WebSource::HTTP:
-		return gcodeReadIndex != gcodeWriteIndex;
-
-	case WebSource::Telnet:
-		// Telnet not supported
-		return false;
-	}
-
-	return false;
-}
-
-char Webserver::ReadGCode(const WebSource source)
-{
-	switch (source)
-	{
-	case WebSource::HTTP:
-		if (gcodeReadIndex != gcodeWriteIndex)
-		{
-			char c = gcodeBuffer[gcodeReadIndex];
-			gcodeReadIndex = (gcodeReadIndex + 1u) % gcodeBufferLength;
-			return c;
-		}
-		break;
-
-	case WebSource::Telnet:
-		// Telnet not supported
-		return 0;
-	}
-
-	return 0;
-}
-
 void Webserver::HandleGCodeReply(const WebSource source, OutputBuffer *reply)
 {
 	switch (source)
@@ -733,10 +696,11 @@ bool Webserver::ProcessFirstFragment(HttpSession& session, const char* command, 
 		const char* gcodeVal = GetKeyValue("gcode");
 		if (gcodeVal != nullptr)
 		{
-			LoadGcodeBuffer(gcodeVal);
+			RegularGCodeInput * const httpInput = reprap.GetGCodes()->GetHTTPInput();
+			httpInput->Put(HTTP_MESSAGE, gcodeVal);
 			if (OutputBuffer::Allocate(response))
 			{
-				response->printf("{\"buff\":%u}", GetGCodeBufferSpace());
+				response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 			}
 		}
 		else
@@ -1013,98 +977,6 @@ void Webserver::CheckSessions()
 			OutputBuffer::ReleaseAll(gcodeReply->Pop());
 		}
 		clientsServed = 0;
-	}
-}
-
-// Process a received string of gcodes
-void Webserver::LoadGcodeBuffer(const char* gc)
-{
-	char gcodeTempBuf[GCODE_LENGTH];
-	uint16_t gtp = 0;
-	bool inComment = false;
-	for (;;)
-	{
-		char c = *gc++;
-		if (c == 0)
-		{
-			gcodeTempBuf[gtp] = 0;
-			ProcessGcode(gcodeTempBuf);
-			return;
-		}
-
-		if (c == '\n')
-		{
-			gcodeTempBuf[gtp] = 0;
-			ProcessGcode(gcodeTempBuf);
-			gtp = 0;
-			inComment = false;
-		}
-		else
-		{
-			if (c == ';')
-			{
-				inComment = true;
-			}
-
-			if (gtp == ARRAY_UPB(gcodeTempBuf))
-			{
-				// gcode is too long, we haven't room for another character and a null
-				if (c != ' ' && !inComment)
-				{
-					platform->Message(HOST_MESSAGE, "Error: GCode local buffer overflow in HTTP webserver.\n");
-					return;
-				}
-				// else we're either in a comment or the current character is a space.
-				// If we're in a comment, we'll silently truncate it.
-				// If the current character is a space, we'll wait until we see a non-comment character before reporting an error,
-				// in case the next character is end-of-line or the start of a comment.
-			}
-			else
-			{
-				gcodeTempBuf[gtp++] = c;
-			}
-		}
-	}
-}
-
-// Process a null-terminated gcode
-// We intercept one M Codes so we can deal with emergencies.  That
-// way things don't get out of sync, and - as a file name can contain
-// a valid G code (!) - confusion is avoided.
-void Webserver::ProcessGcode(const char* gc)
-{
-	if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
-	{
-		reprap.EmergencyStop();
-		gcodeReadIndex = gcodeWriteIndex;					// clear the buffer
-		reprap.GetGCodes()->Reset();
-	}
-	else
-	{
-		StoreGcodeData(gc, strlen(gc) + 1);
-	}
-}
-
-// Process a received string of gcodes
-void Webserver::StoreGcodeData(const char* data, uint16_t len)
-{
-	if (len > GetGCodeBufferSpace())
-	{
-		platform->Message(HOST_MESSAGE, "Error: GCode buffer overflow in HTTP Webserver!\n");
-	}
-	else
-	{
-		uint16_t remaining = gcodeBufferLength - gcodeWriteIndex;
-		if (len <= remaining)
-		{
-			memcpy(gcodeBuffer + gcodeWriteIndex, data, len);
-		}
-		else
-		{
-			memcpy(gcodeBuffer + gcodeWriteIndex, data, remaining);
-			memcpy(gcodeBuffer, data + remaining, len - remaining);
-		}
-		gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufferLength;
 	}
 }
 

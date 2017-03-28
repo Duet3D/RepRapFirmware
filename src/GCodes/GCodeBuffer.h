@@ -16,8 +16,9 @@
 class GCodeBuffer
 {
 public:
-	GCodeBuffer(const char* id, MessageType mt);
-	void Init(); 										// Set it up
+	GCodeBuffer(const char* id, MessageType mt, bool useCodeQueue);
+	void Reset();										// Reset it to its state after start-up
+	void Init(); 										// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);				// Write some debug info
 	bool Put(char c);									// Add a character to the end
 	bool Put(const char *str, size_t len);				// Add an entire string
@@ -53,6 +54,7 @@ public:
 	void SetState(GCodeState newState);
 	void AdvanceState();
 	const char *GetIdentity() const { return identity; }
+	const bool CanQueueCodes() const { return queueCodes; }
 
 	uint32_t whenTimerStarted;							// when we started waiting
 	bool timerRunning;									// true if we are waiting
@@ -75,10 +77,11 @@ private:
 	int readPointer;									// Where in the buffer to read next
 	bool inComment;										// Are we after a ';' character?
 	bool checksumRequired;								// True if we only accept commands with a valid checksum
-	GCodeBufferState bufferState;									// Idle, executing or paused
+	GCodeBufferState bufferState;						// Idle, executing or paused
 	const char* writingFileDirectory;					// If the G Code is going into a file, where that is
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
+	bool queueCodes;									// Can we queue certain G-codes from this source?
 };
 
 inline const char* GCodeBuffer::Buffer() const

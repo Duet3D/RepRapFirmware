@@ -433,7 +433,7 @@ NetworkTransaction *Network::GetTransaction(Connection conn)
 	{
 		if (conn != NoConnection)
 		{
-			NetworkTransaction *tr = conn->GetTransaction();
+			NetworkTransaction * const tr = conn->GetTransaction();
 			if (tr != nullptr && !tr->IsSending())
 			{
 				currentTransactionSocketNumber = conn->GetNumber();
@@ -445,7 +445,7 @@ NetworkTransaction *Network::GetTransaction(Connection conn)
 		size_t socketNum = currentTransactionSocketNumber;
 		do
 		{
-			NetworkTransaction *tr = sockets[socketNum].GetTransaction();
+			NetworkTransaction * const tr = sockets[socketNum].GetTransaction();
 			if (tr != nullptr && !tr->IsSending())
 			{
 				currentTransactionSocketNumber = socketNum;

@@ -259,34 +259,6 @@ void Webserver::Diagnostics(MessageType mtype)
 	telnetInterpreter->Diagnostics(mtype);
 }
 
-bool Webserver::GCodeAvailable(const WebSource source) const
-{
-	switch (source)
-	{
-		case WebSource::HTTP:
-			return httpInterpreter->GCodeAvailable();
-
-		case WebSource::Telnet:
-			return telnetInterpreter->GCodeAvailable();
-	}
-
-	return false;
-}
-
-char Webserver::ReadGCode(const WebSource source)
-{
-	switch (source)
-	{
-		case WebSource::HTTP:
-			return httpInterpreter->ReadGCode();
-
-		case WebSource::Telnet:
-			return telnetInterpreter->ReadGCode();
-	}
-
-	return 0;
-}
-
 void Webserver::HandleGCodeReply(const WebSource source, OutputBuffer *reply)
 {
 	switch (source)
@@ -313,20 +285,6 @@ void Webserver::HandleGCodeReply(const WebSource source, const char *reply)
 			telnetInterpreter->HandleGCodeReply(reply);
 			break;
 	}
-}
-
-uint16_t Webserver::GetGCodeBufferSpace(const WebSource source) const
-{
-	switch (source)
-	{
-		case WebSource::HTTP:
-			return httpInterpreter->GetGCodeBufferSpace();
-
-		case WebSource::Telnet:
-			return telnetInterpreter->GetGCodeBufferSpace();
-	}
-
-	return 0;
 }
 
 // Handle immediate disconnects here (cs will be freed after this call)
@@ -521,7 +479,6 @@ bool ProtocolInterpreter::FinishUpload(uint32_t fileLength)
 Webserver::HttpInterpreter::HttpInterpreter(Platform *p, Webserver *ws, Network *n)
 	: ProtocolInterpreter(p, ws, n), state(doingCommandWord), numSessions(0), clientsServed(0)
 {
-	gcodeReadIndex = gcodeWriteIndex = 0;
 	gcodeReply = new OutputStack();
 	deferredRequestConnection = NoConnection;
 	seq = 0;
@@ -751,6 +708,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
 		transaction->Write("Pragma: no-cache\n");
 		transaction->Write("Expires: 0\n");
+		transaction->Write("Access-Control-Allow-Origin: *\n");
 	}
 
 	const char* contentType;
@@ -830,6 +788,7 @@ void Webserver::HttpInterpreter::SendGCodeReply()
 	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
 	transaction->Write("Pragma: no-cache\n");
 	transaction->Write("Expires: 0\n");
+	transaction->Write("Access-Control-Allow-Origin: *\n");
 	transaction->Write("Content-Type: text/plain\n");
 	transaction->Printf("Content-Length: %u\n", gcodeReply->DataLength());
 	transaction->Write("Connection: close\n\n");
@@ -888,16 +847,8 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		return;
 	}
 
-	bool keepOpen = false;
 	bool mayKeepOpen;
-	if (numQualKeys == 0)
-	{
-		GetJsonResponse(command, jsonResponse, mayKeepOpen);
-	}
-	else
-	{
-		GetJsonResponse(command, jsonResponse, mayKeepOpen);
-	}
+	GetJsonResponse(command, jsonResponse, mayKeepOpen);
 
 	// Check special cases of deferred requests (rr_fileinfo) and rejected messages
 	NetworkTransaction *transaction = webserver->currentTransaction;
@@ -908,7 +859,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	}
 
 	// Send the JSON response
-
+	bool keepOpen = false;
 	if (mayKeepOpen)
 	{
 		// Check that the browser wants to persist the connection too
@@ -927,6 +878,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 	transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
 	transaction->Write("Pragma: no-cache\n");
 	transaction->Write("Expires: 0\n");
+	transaction->Write("Access-Control-Allow-Origin: *\n");
 	transaction->Write("Content-Type: application/json\n");
 	transaction->Printf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
 	transaction->Printf("Connection: %s\n\n", keepOpen ? "keep-alive" : "close");
@@ -1011,8 +963,9 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	}
 	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
-		LoadGcodeBuffer(GetKeyValue("gcode"));
-		response->printf("{\"buff\":%u}", GetGCodeBufferSpace());
+		RegularGCodeInput * const httpInput = reprap.GetGCodes()->GetHTTPInput();
+		httpInput->Put(HTTP_MESSAGE, GetKeyValue("gcode"));
+		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
 	else if (StringEquals(request, "upload"))
 	{
@@ -1548,7 +1501,27 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 		ResetState();
 		return true;
 	}
-	else if (IsAuthenticated() && StringEquals(commandWords[0], "POST"))
+
+	if (StringEquals(commandWords[0], "OPTIONS"))
+	{
+		NetworkTransaction *transaction = webserver->currentTransaction;
+
+		transaction->Write("HTTP/1.1 200 OK\n");
+		transaction->Write("Allow: OPTIONS, GET, POST\n");
+		transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
+		transaction->Write("Pragma: no-cache\n");
+		transaction->Write("Expires: 0\n");
+		transaction->Write("Access-Control-Allow-Origin: *\n");
+		transaction->Write("Access-Control-Allow-Headers: Content-Type\n");
+		transaction->Write("Content-Length: 0\n");
+		transaction->Write("\n");
+		transaction->Commit(false);
+
+		ResetState();
+		return true;
+	}
+
+	if (IsAuthenticated() && StringEquals(commandWords[0], "POST"))
 	{
 		const bool isUploadRequest = (StringEquals(commandWords[1], KO_START "upload"))
 								  || (commandWords[1][0] == '/' && StringEquals(commandWords[1] + 1, KO_START "upload"));
@@ -1715,114 +1688,6 @@ bool Webserver::HttpInterpreter::RemoveAuthentication()
 	return false;
 }
 
-// Process a received string of gcodes
-void Webserver::HttpInterpreter::LoadGcodeBuffer(const char* gc)
-{
-	char gcodeTempBuf[GCODE_LENGTH];
-	uint16_t gtp = 0;
-	bool inComment = false;
-	for (;;)
-	{
-		char c = *gc++;
-		if (c == 0)
-		{
-			gcodeTempBuf[gtp] = 0;
-			ProcessGcode(gcodeTempBuf);
-			return;
-		}
-
-		if (c == '\n')
-		{
-			gcodeTempBuf[gtp] = 0;
-			ProcessGcode(gcodeTempBuf);
-			gtp = 0;
-			inComment = false;
-		}
-		else
-		{
-			if (c == ';')
-			{
-				inComment = true;
-			}
-
-			if (gtp == ARRAY_UPB(gcodeTempBuf))
-			{
-				// gcode is too long, we haven't room for another character and a null
-				if (c != ' ' && !inComment)
-				{
-					platform->Message(HOST_MESSAGE, "Error: GCode local buffer overflow in HTTP webserver.\n");
-					return;
-				}
-				// else we're either in a comment or the current character is a space.
-				// If we're in a comment, we'll silently truncate it.
-				// If the current character is a space, we'll wait until we see a non-comment character before reporting an error,
-				// in case the next character is end-of-line or the start of a comment.
-			}
-			else
-			{
-				gcodeTempBuf[gtp++] = c;
-			}
-		}
-	}
-}
-
-// Process a null-terminated gcode
-// We intercept one M Codes so we can deal with emergencies.  That
-// way things don't get out of sync, and - as a file name can contain
-// a valid G code (!) - confusion is avoided.
-void Webserver::HttpInterpreter::ProcessGcode(const char* gc)
-{
-	if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
-	{
-		reprap.EmergencyStop();
-		gcodeReadIndex = gcodeWriteIndex;					// clear the buffer
-		reprap.GetGCodes()->Reset();
-	}
-	else
-	{
-		StoreGcodeData(gc, strlen(gc) + 1);
-	}
-}
-
-// Process a received string of gcodes
-void Webserver::HttpInterpreter::StoreGcodeData(const char* data, uint16_t len)
-{
-	if (len > GetGCodeBufferSpace())
-	{
-		platform->Message(HOST_MESSAGE, "Error: GCode buffer overflow in HTTP Webserver!\n");
-	}
-	else
-	{
-		uint16_t remaining = gcodeBufferLength - gcodeWriteIndex;
-		if (len <= remaining)
-		{
-			memcpy(gcodeBuffer + gcodeWriteIndex, data, len);
-		}
-		else
-		{
-			memcpy(gcodeBuffer + gcodeWriteIndex, data, remaining);
-			memcpy(gcodeBuffer, data + remaining, len - remaining);
-		}
-		gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufferLength;
-	}
-}
-
-// Feeding G Codes to the GCodes class
-char Webserver::HttpInterpreter::ReadGCode()
-{
-	char c;
-	if (gcodeReadIndex == gcodeWriteIndex)
-	{
-		c = 0;
-	}
-	else
-	{
-		c = gcodeBuffer[gcodeReadIndex];
-		gcodeReadIndex = (gcodeReadIndex + 1u) % gcodeBufferLength;
-	}
-	return c;
-}
-
 // Handle a G Code reply from the GCodes class
 void Webserver::HttpInterpreter::HandleGCodeReply(OutputBuffer *reply)
 {
@@ -1891,6 +1756,7 @@ void Webserver::HttpInterpreter::ProcessDeferredRequest()
 			transaction->Write("Cache-Control: no-cache, no-store, must-revalidate\n");
 			transaction->Write("Pragma: no-cache\n");
 			transaction->Write("Expires: 0\n");
+			transaction->Write("Access-Control-Allow-Origin: *\n");
 			transaction->Write("Content-Type: application/json\n");
 			transaction->Printf("Content-Length: %u\n", (jsonResponse != nullptr) ? jsonResponse->Length() : 0);
 			transaction->Printf("Connection: close\n\n");
@@ -2295,7 +2161,6 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				SendReply(500, "Unknown command.");
 			}
-
 			break;
 
 		case waitingForPasvPort:
@@ -2565,7 +2430,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 //********************************************************************************************
 
 Webserver::TelnetInterpreter::TelnetInterpreter(Platform *p, Webserver *ws, Network *n)
-	: ProtocolInterpreter(p, ws, n), connectedClients(0), processNextLine(false), gcodeReadIndex(0), gcodeWriteIndex(0), gcodeReply(nullptr)
+	: ProtocolInterpreter(p, ws, n), connectedClients(0), processNextLine(false), gcodeReply(nullptr)
 {
 	ResetState();
 }
@@ -2637,7 +2502,8 @@ bool Webserver::TelnetInterpreter::CanParseData()
 	}
 
 	// In order to support TCP streaming mode, check if we can store any more data at this time
-	if (GetGCodeBufferSpace() < clientPointer + 1)
+	RegularGCodeInput * const telnetInput = reprap.GetGCodes()->GetTelnetInput();
+	if (telnetInput->BufferSpaceLeft() < clientPointer + 1)
 	{
 		webserver->currentTransaction->Defer(DeferralMode::DeferOnly);
 		return false;
@@ -2696,7 +2562,8 @@ bool Webserver::TelnetInterpreter::CharFromClient(char c)
 			{
 				// This line is complete, do we have enough space left to store it?
 				clientMessage[clientPointer] = 0;
-				if (GetGCodeBufferSpace() < clientPointer + 1)
+				RegularGCodeInput * const telnetInput = reprap.GetGCodes()->GetTelnetInput();
+				if (telnetInput->BufferSpaceLeft() < clientPointer + 1)
 				{
 					// No - defer this transaction, so we can process more of it next time
 					webserver->currentTransaction->Defer(DeferralMode::DeferOnly);
@@ -2730,7 +2597,6 @@ void Webserver::TelnetInterpreter::ResetState()
 	state = idle;
 	connectTime = 0;
 	clientPointer = 0;
-	gcodeReadIndex = gcodeWriteIndex;					// clear the buffer
 }
 
 // Usually we should not try to send any data here, because that would purge the packet's
@@ -2773,68 +2639,13 @@ bool Webserver::TelnetInterpreter::ProcessLine()
 				transaction->Commit(false);
 				return true;
 			}
+
 			// All other codes are stored for the GCodes class
-			ProcessGcode(clientMessage);
+			RegularGCodeInput * const telnetInput = reprap.GetGCodes()->GetTelnetInput();
+			telnetInput->Put(TELNET_MESSAGE, clientMessage);
 			break;
 	}
 	return false;
-}
-
-// Process a null-terminated gcode
-// We intercept one M Codes so we can deal with emergencies.  That
-// way things don't get out of sync, and - as a file name can contain
-// a valid G code (!) - confusion is avoided.
-void Webserver::TelnetInterpreter::ProcessGcode(const char* gc)
-{
-	if (StringStartsWith(gc, "M112") && !isdigit(gc[4]))	// emergency stop
-	{
-		reprap.EmergencyStop();
-		gcodeReadIndex = gcodeWriteIndex;					// clear the buffer
-		reprap.GetGCodes()->Reset();
-	}
-	else
-	{
-		StoreGcodeData(gc, strlen(gc) + 1);
-	}
-}
-
-// Process a received string of gcodes
-void Webserver::TelnetInterpreter::StoreGcodeData(const char* data, uint16_t len)
-{
-	if (len > GetGCodeBufferSpace())
-	{
-		platform->Message(HOST_MESSAGE, "Error: GCode buffer overflow in Telnet Webserver!\n");
-	}
-	else
-	{
-		uint16_t remaining = gcodeBufferLength - gcodeWriteIndex;
-		if (len <= remaining)
-		{
-			memcpy(gcodeBuffer + gcodeWriteIndex, data, len);
-		}
-		else
-		{
-			memcpy(gcodeBuffer + gcodeWriteIndex, data, remaining);
-			memcpy(gcodeBuffer, data + remaining, len - remaining);
-		}
-		gcodeWriteIndex = (gcodeWriteIndex + len) % gcodeBufferLength;
-	}
-}
-
-// Feeding G Codes to the GCodes class
-char Webserver::TelnetInterpreter::ReadGCode()
-{
-	char c;
-	if (gcodeReadIndex == gcodeWriteIndex)
-	{
-		c = 0;
-	}
-	else
-	{
-		c = gcodeBuffer[gcodeReadIndex];
-		gcodeReadIndex = (gcodeReadIndex + 1u) % gcodeBufferLength;
-	}
-	return c;
 }
 
 // Handle a G-Code reply from the GCodes class; replace \n with \r\n
