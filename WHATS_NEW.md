@@ -43,6 +43,7 @@ Upgrade notes
 - If you use FTP or Telnet on a wired Duet, you will need to enable them using M586
 - It is recommended that you re-run heater auto tuning when upgrading to 1.18 from an earlier release
 - You may find that your Z probe trigger height is slightly higher than before, so you should re-measure it
+- When upgrading to this firmware, also upgrade iap.bin or iap4e.bin to latest version
 
 Version 1.17e
 =============
