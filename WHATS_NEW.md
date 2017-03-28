@@ -1,65 +1,48 @@
-
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.18beta3
-=================
+Version 1.18RC1
+===============
 
 New features:
+- First official release for Duet Ethernet
+- M204 is now implemented (P and T parameters only)
 - M997 command now checks that the start of the main firmware file looks sensible
 - The rate at which "No tool selected" and "Attempt to move before homing a delta printer" messages are generated is now limited
 - Added VSSA fault detection if the hardware supports it
 - If there are too many probe points implied by a M557 grid definition command, the firmware displays a suggested increased spacing
+- On the wired Duets, M586 can be used to set which network protocols are supported and which port numbers are used. By default, http is enabled, ftp and telnet are disabled.
+- Baby stepping is now implemented using the M290 command. The accumulated baby stepping amount is reported in M408 replies.
+- Faster and easier-to-use auto tune algorithm with more consistent dead time measurement
+- M109, M190 and M191 commands now send the temperatures once a second if the command came from the USB port and Marlin emulation is chosen
+- The name of the firmware file to load is now passed to IAP, so that iap4e.bin can be used on both the Duet WiFi and the Duet Ethernet
+- Added code queue so that fan commands etc. are synchronised to movement (thanks chrishamm)
+- Added chrishamm's input buffering code (thanks chrishamm)
+- Reduced the Duet WiFi VIN over-voltage detection threshold from 29.5V to 29.0V
+- Live coordinates are now reported to 3 decimal places instead of 2
+- When using a Z probe type other than 2, the probe output is sampled every 1ms instead of every 2ms for faster response
 
 Bug fixes:
-- Fixed CoreXY homing which was broken in 1.18beta2
 - Fixed issue with loading height map file when the number of probe points along the X axis is large
-- M290 with no parzameters now correctly reports the current babystepping offset
-
-Upgrade notes:
-- See under 1.18beta2
-
-Known issues
-- If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
-- If you use M586 to disable FTP or Telnet on the Duet 085 or 06 after you have previously enabled them, the firmware refuses new connections but does not terminate any existing connections.
-
-Version 1.18beta2
-=================
-
-New features:
-- On the wired Duets, M586 can be used to set which netework protocols are supported and which port numbers are used. By default, http is enabled, ftp and telnet are disabled.
-
-Bug fixes:
-- Interpolation near the edges of the bed was incorrect when mesh bed compensatoin was used (thanks ChristophPech)
+- Interpolation near the edges of the bed was incorrect when mesh bed compensation was used (thanks ChristophPech)
+- On the Duet WiFi, if you sent command M122 while the machine was printing then occasionally it would stop and reset due to a watchdog timeout
+- If multiple input sources sent overlapping G4 (dwell) commands, either or both of them would not be executed correctly
 
 Other changes
 - M552 no longer includes the option to set the HTTP number. Use M586 instead.
 - M557 P parameter to set probing points is no longer supported. Use a bed.g file instead.
 - Temperatures default to 0C instead of -273C
 
+Known issues
+- If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
+- If you use M586 to disable FTP or Telnet on the Duet 085 or 06 after you have previously enabled them, the firmware refuses new connections but does not terminate any existing connections.
+- FTP on the Duet Ethernet cannot be used to do file transfers
+
 Upgrade notes
 - If you use the M552 R parameter to change the HTTP port number on a wired Duet, you will need to use M586 instead
 - If you use FTP or Telnet on a wired Duet, you will need to enable them using M586
-
-Version 1.18beta1
-=================
-
-New features:
-- Baby stepping is now implemented using the M290 command. The accumulated baby stepping amount is reported in M408 replies.
-- Faster and easier-to-use auto tune algorithm with more consistent dead time measurement
-- M109, M190 and M191 commands now send the temperatures once a second if the command came from the USB port and Marlin emulation is chosen
-- The name of the firmware file to load is now passed to IAP, so that iap4e.bin can be used on both the Duet WiFi and the Duet Ethernet
-- Reduced the Duet WiFi VIN over-voltage detection threshold from 29.5V to 29.0V
-
-Bug fixes
-- On the Duet WiFi, if you sent command M122 while the machine was printing then occasionally it would stop and reset due to a watchdog timeout
-- If multiple input sources sent overlapping G4 (dwell) commands, either or both of them would not be executed correctly
-
-Known issues
-- If you enable tool mixing, you should use relative extrusion only. If you use absolute extrusion, then if you pause and resume the print, the extruder is likely to extrude the wrong amount of filament in the first move after resuming.
-
-Upgrade notes
 - It is recommended that you re-run heater auto tuning when upgrading to 1.18 from an earlier release
+- You may find that your Z probe trigger height is slightly higher than before, so you should re-measure it
 
 Version 1.17e
 =============
