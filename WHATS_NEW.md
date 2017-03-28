@@ -21,6 +21,7 @@ New features:
 - Reduced the Duet WiFi VIN over-voltage detection threshold from 29.5V to 29.0V
 - Live coordinates are now reported to 3 decimal places instead of 2
 - When using a Z probe type other than 2, the probe output is sampled every 1ms instead of every 2ms for faster response
+- PanelDue status responses continue to be sent while executing M109/116/190/191 commands
 
 Bug fixes:
 - Fixed issue with loading height map file when the number of probe points along the X axis is large
