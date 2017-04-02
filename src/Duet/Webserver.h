@@ -96,9 +96,9 @@ class ProtocolInterpreter
 
 	protected:
 
-		Platform *platform;
-		Webserver *webserver;
-		Network *network;
+		Platform * const platform;
+		Webserver * const webserver;
+		Network * const network;
 
 		// Information for file uploading
 		enum UploadState

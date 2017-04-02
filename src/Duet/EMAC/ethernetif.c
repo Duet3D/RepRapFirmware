@@ -214,7 +214,6 @@ void ethernetif_hardware_init(void)
 	if (ethernet_phy_init(EMAC, BOARD_EMAC_PHY_ADDR, SystemCoreClock) != EMAC_OK)
 	{
 		LWIP_DEBUGF(LWIP_DBG_TRACE, ("PHY Initialize ERROR!\r"));
-		return;
 	}
 }
 
@@ -254,7 +253,7 @@ bool ethernetif_link_established(void)
 		LWIP_DEBUGF(LWIP_DBG_TRACE, ("PHY Register Read ERROR!\r"));
 		return false;
 	}       //  MII_LINK_STATUS       (1u << 2) /**< Link Status */
-	return (p_ul_reg_cont & (1u << 2)) ? true : false;
+	return (p_ul_reg_cont & (1u << 2)) != 0;
 }
 
 /**

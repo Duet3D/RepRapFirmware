@@ -99,7 +99,7 @@ private:
 
 	static const char* TranslateEspResetReason(uint32_t reason);
 
-	Platform *platform;
+	Platform * const platform;
 	WifiFirmwareUploader *uploader;
 
 	uint32_t responseIp;

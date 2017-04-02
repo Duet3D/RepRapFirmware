@@ -163,8 +163,7 @@ private:
 	void LogProbePosition();
 #endif
 
-    DriveMovement* firstDM;					// the contained DM that needs the first step
-
+    DriveMovement* firstDM;					// list of contained DMs that need steps, in step time order
 	DriveMovement ddm[DRIVES];				// These describe the state of each drive movement
 };
 

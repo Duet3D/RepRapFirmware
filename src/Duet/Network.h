@@ -109,7 +109,7 @@ public:
 
 private:
 
-	Platform* platform;
+	Platform* const platform;
 	float longWait;
 
 	void AppendTransaction(NetworkTransaction* volatile * list, NetworkTransaction *r);
@@ -117,7 +117,7 @@ private:
 	bool AcquireTransaction(ConnectionState *cs);
 
 	void StartProtocol(size_t protocol)
-	pre(protocol < NumProtocols);
+	pre(protocol < NumProtocols; state == NetworkActive);
 
 	void ShutdownProtocol(size_t protocol)
 	pre(protocol < NumProtocols);
@@ -125,13 +125,14 @@ private:
 	void ReportOneProtocol(size_t protocol, StringRef& reply) const
 	pre(protocol < NumProtocols);
 
-	void DoMdnsAnnounce();
+	void DoMdnsAnnounce()
+	pre(state == NetworkActive);
 
 	NetworkTransaction * volatile freeTransactions;
 	NetworkTransaction * volatile readyTransactions;
 	NetworkTransaction * volatile writingTransactions;
 
-	enum { NetworkInactive, NetworkEstablishingLink, NetworkObtainingIP, NetworkActive } state;
+	enum { NotStarted, NetworkInactive, NetworkEstablishingLink, NetworkObtainingIP, NetworkActive } state;
 	bool isEnabled;
 	volatile bool resetCallback;
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0

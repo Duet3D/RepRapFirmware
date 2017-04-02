@@ -273,7 +273,7 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 
 Network::Network(Platform* p) :
 	platform(p), freeTransactions(nullptr), readyTransactions(nullptr), writingTransactions(nullptr),
-	state(NetworkInactive), isEnabled(true), resetCallback(false),
+	state(NotStarted), isEnabled(true), resetCallback(false),
 	dataCs(nullptr), ftpCs(nullptr), telnetCs(nullptr), freeConnections(nullptr)
 {
 }
@@ -293,9 +293,6 @@ void Network::Init()
 	}
 
 	strcpy(hostname, HOSTNAME);
-	init_ethernet();
-	netbios_init();
-
 	longWait = platform->Time();
 }
 
@@ -318,9 +315,9 @@ void Network::EnableProtocol(int protocol, int port, int secure, StringRef& repl
 		if (!protocolEnabled[protocol])
 		{
 			protocolEnabled[protocol] = true;
-			StartProtocol(protocol);
 			if (state == NetworkActive)
 			{
+				StartProtocol(protocol);
 				DoMdnsAnnounce();
 			}
 		}
@@ -511,7 +508,7 @@ void Network::Spin(bool full)
 
 void Network::Interrupt()
 {
-	if (state != NetworkInactive && LockLWIP())
+	if (state != NotStarted && state != NetworkInactive && LockLWIP())
 	{
 		ethernet_timers_update();
 		UnlockLWIP();
@@ -807,15 +804,17 @@ void Network::SetHostname(const char *name)
 
 void Network::Enable()
 {
+	if (state == NotStarted)
+	{
+		// Allow the MAC address to be set only before LwIP is started...
+		ethernet_configure_interface(platform->MACAddress(), hostname);
+		init_ethernet();
+		netbios_init();
+		state = NetworkInactive;
+	}
 	if (state == NetworkInactive)
 	{
-		if (!ethernetStarted)
-		{
-			// Allow the MAC address to be set only before LwIP is started...
-			ethernet_configure_interface(platform->MACAddress(), hostname);
-		}
-
-		resetCallback = true;	// Reset EMAC RX callback on next Spin calls
+		resetCallback = true;			// reset EMAC RX callback on next Spin calls
 		state = NetworkEstablishingLink;
 		isEnabled = true;
 	}
@@ -823,7 +822,7 @@ void Network::Enable()
 
 void Network::Disable()
 {
-	if (state != NetworkInactive)
+	if (state != NotStarted && state != NetworkInactive)
 	{
 		for (size_t i = 0; i < NumProtocols; ++i)
 		{
@@ -847,7 +846,7 @@ void Network::Disable()
 NetworkTransaction *Network::GetTransaction(const ConnectionState *cs)
 {
 	// See if there is any transaction at all
-	NetworkTransaction *transaction = readyTransactions;
+	NetworkTransaction * const transaction = readyTransactions;
 	if (transaction == nullptr)
 	{
 		return nullptr;
@@ -863,7 +862,7 @@ NetworkTransaction *Network::GetTransaction(const ConnectionState *cs)
 	// We are looking for a specific transaction, but it's not the first item.
 	// Search for it and move it to the head of readyTransactions
 	NetworkTransaction *previous = transaction;
-	for(NetworkTransaction *item = transaction->next; item != nullptr; item = item->next)
+	for (NetworkTransaction *item = transaction->next; item != nullptr; item = item->next)
 	{
 		if (item->GetConnection() == cs)
 		{

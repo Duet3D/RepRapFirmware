@@ -100,8 +100,8 @@ class PrintMonitor
 		float GetFirstLayerHeight() const;
 
 	private:
-		Platform *platform;
-		GCodes *gCodes;
+		Platform * const platform;
+		GCodes * const gCodes;
 		float longWait;
 		uint32_t lastUpdateTime;
 
