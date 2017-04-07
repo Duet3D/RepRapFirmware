@@ -79,6 +79,7 @@ public:
 	void Enable();
 	void Disable();
 	bool IsEnabled() const { return isEnabled; }
+	void Activate();
 
 	// Interfaces for the Webserver
 
@@ -116,6 +117,9 @@ private:
 	void PrependTransaction(NetworkTransaction* volatile * list, NetworkTransaction *r);
 	bool AcquireTransaction(ConnectionState *cs);
 
+	void Start();
+	void Stop();
+
 	void StartProtocol(size_t protocol)
 	pre(protocol < NumProtocols; state == NetworkActive);
 
@@ -134,6 +138,7 @@ private:
 
 	enum { NotStarted, NetworkInactive, NetworkEstablishingLink, NetworkObtainingIP, NetworkActive } state;
 	bool isEnabled;
+	bool activated;
 	volatile bool resetCallback;
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 

@@ -97,24 +97,11 @@ void RepRap::Init()
 	processingConfig = false;
 
 	// Enable network (unless it's disabled)
-#ifdef DUET_NG
 	network->Activate();			// Need to do this here, as the configuration GCodes may set IP address etc.
 	if (!network->IsEnabled())
 	{
 		platform->Message(HOST_MESSAGE, "Network disabled.\n");
 	}
-#else
-	if (network->IsEnabled())
-	{
-		// Need to do this here, as the configuration GCodes may set IP address etc.
-		platform->Message(HOST_MESSAGE, "Starting network...\n");
-		network->Enable();
-	}
-	else
-	{
-		platform->Message(HOST_MESSAGE, "Network disabled.\n");
-	}
-#endif
 
 #ifndef __RADDS__
 	hsmci_set_idle_func(hsmciIdle);

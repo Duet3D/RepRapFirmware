@@ -1875,13 +1875,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 										: heater == reprap.GetHeat()->GetChamberHeater() ? 50.0
 										: 200.0;
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : 1.0;
-			if (heater >= 0 && heater < HEATERS && maxPwm >= 0.1 && maxPwm <= 1.0 && temperature <= reprap.GetHeat()->GetTemperatureLimit(heater))
+			if (heater < 0 || heater >= HEATERS)
 			{
-				reprap.GetHeat()->StartAutoTune(heater, temperature, maxPwm, reply);
+				reply.copy("Bad heater number in M303 command");
+			}
+			else if (temperature >= reprap.GetHeat()->GetTemperatureLimit(heater))
+			{
+				reply.copy("Target temperature must be below temperature limit for this heater");
+			}
+			else if (maxPwm < 0.1 || maxPwm > 1.0)
+			{
+				reply.copy("Invalid PWM in M303 command");
 			}
 			else
 			{
-				reply.printf("Bad parameter in M303 command");
+				reprap.GetHeat()->StartAutoTune(heater, temperature, maxPwm, reply);
 			}
 		}
 		else
@@ -1958,9 +1966,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 350: // Set/report microstepping
 		{
 			// interp is currently an int not a bool, because we use special values of interp to set the chopper control register
-			int32_t interp = 0;
+			int32_t mode = 0;						// this is usually the interpolation rwquested (0 = off, 1 = on)
 			bool dummy;
-			gb.TryGetIValue('I', interp, dummy);
+			gb.TryGetIValue('I', mode, dummy);
 
 			bool seen = false;
 			for (size_t axis = 0; axis < numAxes; axis++)
@@ -1973,14 +1981,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					}
 					seen = true;
 					const int microsteps = gb.GetIValue();
-					if (ChangeMicrostepping(axis, microsteps, interp))
+					if (ChangeMicrostepping(axis, microsteps, mode))
 					{
 						SetAxisNotHomed(axis);
 					}
 					else
 					{
 						platform->MessageF(GENERIC_MESSAGE, "Drive %c does not support %dx microstepping%s\n",
-												axisLetters[axis], microsteps, (interp) ? " with interpolation" : "");
+												axisLetters[axis], microsteps, (mode) ? " with interpolation" : "");
 					}
 				}
 			}
@@ -1997,10 +2005,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				gb.GetLongArray(eVals, eCount);
 				for (size_t e = 0; e < eCount; e++)
 				{
-					if (!ChangeMicrostepping(numAxes + e, (int)eVals[e], interp))
+					if (!ChangeMicrostepping(numAxes + e, (int)eVals[e], mode))
 					{
 						platform->MessageF(GENERIC_MESSAGE, "Drive E%u does not support %dx microstepping%s\n",
-												e, (int)eVals[e], (interp) ? " with interpolation" : "");
+												e, (int)eVals[e], (mode) ? " with interpolation" : "");
 					}
 				}
 			}
@@ -2011,14 +2019,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				for (size_t axis = 0; axis < numAxes; ++axis)
 				{
 					bool interp;
-					const int microsteps = platform->GetMicrostepping(axis, interp);
+					const int microsteps = platform->GetMicrostepping(axis, mode, interp);
 					reply.catf("%c:%d%s, ", axisLetters[axis], microsteps, (interp) ? "(on)" : "");
 				}
 				reply.cat("E");
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
 					bool interp;
-					const int microsteps = platform->GetMicrostepping(extruder + numAxes, interp);
+					const int microsteps = platform->GetMicrostepping(extruder + numAxes, mode, interp);
 					reply.catf(":%d%s", microsteps, (interp) ? "(on)" : "");
 				}
 			}

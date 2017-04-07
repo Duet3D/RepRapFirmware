@@ -471,6 +471,18 @@ void Network::ProcessIncomingData(TransactionBuffer &buf)
 		//		16 chars of WiFi firmware version
 		//		64 chars of host name, null terminated
 		//		32 chars of ssid (either ssid we are connected to or our own AP name), null terminated
+
+		// Format 2:
+		//		4 bytes of IP address
+		//		4 bytes of free heap
+		//		4 bytes of reset reason
+		//		4 bytes of flash chip size
+		//		4 bytes of RSSI (added for info version 2)
+		//		2 bytes of operating state (1 = client, 2 = access point)
+		//		2 bytes of ESP8266 Vcc according to its ADC
+		//		16 chars of WiFi firmware version
+		//		64 chars of host name, null terminated
+		//		32 chars of ssid (either ssid we are connected to or our own AP name), null terminated
 		{
 			TransactionBufferReader reader(buf);
 			uint32_t infoVersion = reader.GetPrimitive<uint32_t>();

@@ -123,7 +123,9 @@ extern "C"
 bool LockLWIP()
 {
 	if (lwipLocked)
+	{
 		return false;
+	}
 
 	lwipLocked = true;
 	return true;
@@ -135,23 +137,6 @@ void UnlockLWIP()
 }
 
 // Callback functions for the EMAC driver and for LwIP
-
-// Callback to report when the network interface has gone up or down.
-// Note that this is only a rough indicator and may not be called when
-// the IP address is changed on-the-fly!
-static void ethernet_status_callback(struct netif *netif)
-{
-	if (netif_is_up(netif))
-	{
-		char ip[16];
-		ipaddr_ntoa_r(&(netif->ip_addr), ip, sizeof(ip));
-		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network up, IP=%s\n", ip);
-	}
-	else
-	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network down\n");
-	}
-}
 
 // Called from ISR
 static void ethernet_rx_callback(uint32_t ul_status)
@@ -250,10 +235,10 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 	if (targetPcb != nullptr)
 	{
 		// Allocate a new ConnectionState for this connection
-		ConnectionState *cs = reprap.GetNetwork()->ConnectionAccepted(pcb);
+		ConnectionState * const cs = reprap.GetNetwork()->ConnectionAccepted(pcb);
 		if (cs != nullptr)
 		{
-			tcp_accepted(targetPcb);
+			tcp_accepted(targetPcb);	// keep the listening PCB running
 			tcp_arg(pcb, cs);			// tell LWIP that this is the structure we wish to be passed for our callbacks
 			tcp_recv(pcb, conn_recv);	// tell LWIP that we wish to be informed of incoming data by a call to the conn_recv() function
 			tcp_err(pcb, conn_err);
@@ -273,7 +258,7 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 
 Network::Network(Platform* p) :
 	platform(p), freeTransactions(nullptr), readyTransactions(nullptr), writingTransactions(nullptr),
-	state(NotStarted), isEnabled(true), resetCallback(false),
+	state(NotStarted), isEnabled(true), activated(false), resetCallback(false),
 	dataCs(nullptr), ftpCs(nullptr), telnetCs(nullptr), freeConnections(nullptr)
 {
 }
@@ -412,34 +397,34 @@ void Network::Spin(bool full)
 {
 	if (LockLWIP())							// basically we can't do anything if we can't interact with LWIP
 	{
-		if (state == NetworkObtainingIP || state == NetworkActive)
+		if (full)
 		{
-			// Is the link still up?
-			if (!ethernet_link_established())
+			if (state == NetworkObtainingIP || state == NetworkActive)
 			{
-				state = NetworkEstablishingLink;
-				UnlockLWIP();
+				// Is the link still up?
+				if (!ethernet_link_established())
+				{
+					state = NetworkEstablishingLink;
+					UnlockLWIP();
 
-				platform->ClassReport(longWait);
-				return;
-			}
+					reprap.GetPlatform()->Message(HOST_MESSAGE, "Network down\n");
+					platform->ClassReport(longWait);
+					return;
+				}
 
-			// See if we can read any packets. They may include DHCP responses too
-			ethernet_task();
-			if (resetCallback)
-			{
-				resetCallback = false;
-				ethernet_set_rx_callback(&ethernet_rx_callback);
-			}
+				// See if we can read any packets. They may include DHCP responses too
+				ethernet_task();
+				if (resetCallback)
+				{
+					resetCallback = false;
+					ethernet_set_rx_callback(&ethernet_rx_callback);
+				}
 
-			// See if we can send anything - only if full spin i.e. not in the middle of file i/o
-			if (full)
-			{
 				// Have we obtained a valid IP address yet?
 				if (state == NetworkObtainingIP)
 				{
 					const uint8_t * const ip = ethernet_get_ipaddress();
-					if (ip[0] != 0 && ip[1] != 0 && ip[2] != 0 && ip[3] != 0)
+					if (ip[0] != 0 || ip[1] != 0 || ip[2] != 0 || ip[3] != 0)
 					{
 						// Yes - we're good to go now
 						state = NetworkActive;
@@ -452,9 +437,14 @@ void Network::Spin(bool full)
 							}
 						}
 
-						// Send mDNS announcement so that some routers can perform hostname mapping
-						// if the board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
+						// Send mDNS announcement so that some routers can perform hostname mapping if the board is
+						// connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
 						DoMdnsAnnounce();
+
+						UnlockLWIP();
+						reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network up, IP=%d.%d.%d.%d\n", ip[0], ip[1], ip[2], ip[3]);
+						platform->ClassReport(longWait);
+						return;
 					}
 				}
 
@@ -486,19 +476,24 @@ void Network::Spin(bool full)
 					}
 				}
 			}
+			else if (state == NetworkEstablishingLink && ethernet_establish_link())
+			{
+				if (!ethernetStarted)
+				{
+					start_ethernet(platform->GetIPAddress(), platform->NetMask(), platform->GateWay(), NULL);
+					ethernetStarted = true;
+				}
+				else
+				{
+					ethernet_set_configuration(platform->GetIPAddress(), platform->NetMask(), platform->GateWay());
+				}
+				state = NetworkObtainingIP;
+			}
 		}
-		else if (state == NetworkEstablishingLink && ethernet_establish_link())
+		else
 		{
-			if (!ethernetStarted)
-			{
-				start_ethernet(platform->GetIPAddress(), platform->NetMask(), platform->GateWay(), &ethernet_status_callback);
-				ethernetStarted = true;
-			}
-			else
-			{
-				ethernet_set_configuration(platform->GetIPAddress(), platform->NetMask(), platform->GateWay());
-			}
-			state = NetworkObtainingIP;
+			// We have been called while waiting for an SD transfer to complete. Just See if we can read any packets.
+			ethernet_task();
 		}
 
 		UnlockLWIP();
@@ -536,6 +531,9 @@ void Network::Diagnostics(MessageType mtype)
 		freeTrans = freeTrans->next;
 	}
 	platform->MessageF(mtype, "Free transactions: %d of %d\n", numFreeTransactions, NETWORK_TRANSACTION_COUNT);
+
+	// Extra debug to help track down the problems a few people are having
+	platform->MessageF(mtype, "Locked: %d, state: %d, listening: %p, %p, %p\n", (int)lwipLocked, (int)state, pcbs[0], pcbs[1], pcbs[2]);
 
 #if LWIP_STATS
 	// Normally we should NOT try to display LWIP stats here, because it uses debugPrintf(), which will hang the system if no USB cable is connected.
@@ -633,15 +631,18 @@ void Network::ConnectionClosed(ConnectionState* cs, bool closeConnection)
 
 	// Remove all callbacks and close the PCB if requested
 	tcp_pcb *pcb = cs->pcb;
-	tcp_sent(pcb, nullptr);
-	tcp_recv(pcb, nullptr);
-	tcp_poll(pcb, nullptr, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
-	if (pcb != nullptr && closeConnection)
+	if (pcb != nullptr)
 	{
-		tcp_err(pcb, nullptr);
-		tcp_close(pcb);
+		tcp_sent(pcb, nullptr);
+		tcp_recv(pcb, nullptr);
+		tcp_poll(pcb, nullptr, TCP_WRITE_TIMEOUT / TCP_SLOW_INTERVAL / TCP_MAX_SEND_RETRIES);
+		if (closeConnection)
+		{
+			tcp_err(pcb, nullptr);
+			tcp_close(pcb);
+		}
+		cs->pcb = nullptr;
 	}
-	cs->pcb = nullptr;
 
 	// Inform the Webserver that we are about to remove an existing connection
 	reprap.GetWebserver()->ConnectionLost(cs);
@@ -804,6 +805,33 @@ void Network::SetHostname(const char *name)
 
 void Network::Enable()
 {
+	isEnabled = true;
+	if (activated)
+	{
+		Start();
+	}
+}
+
+void Network::Disable()
+{
+	isEnabled = false;
+	if (activated)
+	{
+		Stop();
+	}
+}
+
+void Network::Activate()
+{
+	activated = true;
+	if (isEnabled)
+	{
+		Start();
+	}
+}
+
+void Network::Start()
+{
 	if (state == NotStarted)
 	{
 		// Allow the MAC address to be set only before LwIP is started...
@@ -816,11 +844,10 @@ void Network::Enable()
 	{
 		resetCallback = true;			// reset EMAC RX callback on next Spin calls
 		state = NetworkEstablishingLink;
-		isEnabled = true;
 	}
 }
 
-void Network::Disable()
+void Network::Stop()
 {
 	if (state != NotStarted && state != NetworkInactive)
 	{
@@ -831,7 +858,6 @@ void Network::Disable()
 		resetCallback = false;
 		ethernet_set_rx_callback(nullptr);
 		state = NetworkInactive;
-		isEnabled = false;
 	}
 }
 

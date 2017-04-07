@@ -8,7 +8,7 @@
 #include "RepRapFirmware.h"
 #include "TMC2660.h"
 
-const float MaximumMotorCurrent = 2500.0;
+const float MaximumMotorCurrent = 2400.0;
 
 static size_t numTmc2660Drivers;
 
@@ -19,6 +19,8 @@ const Pin DriversClockPin = 15;								// PB15/TIOA1
 const Pin DriversMosiPin = 22;								// PA13
 const Pin DriversMisoPin = 21;								// PA22
 const Pin DriversSclkPin = 23;								// PA23
+
+const int ChopperControlRegisterMode = 999;					// mode passed to get/set microstepping to indicate we want the chopper control register
 
 #define USART_EXT_DRV		USART1
 #define ID_USART_EXT_DRV	ID_USART1
@@ -105,15 +107,15 @@ const uint32_t TMC_SMARTEN_SEIMIN_QTR = 1 << 15;
 const unsigned int NumWriteRegisters = 5;
 
 // Chopper control register defaults
+// 0x901B4 as per datasheet example
+// CHM bit not set, so uses spread cycle mode
 const uint32_t defaultChopConfReg =
 	  TMC_REG_CHOPCONF
-	| TMC_CHOPCONF_TBL(2)
-	| TMC_CHOPCONF_HDEC(0)
-	| TMC_CHOPCONF_HEND(3)
-	| TMC_CHOPCONF_HSTRT(3)
-	| TMC_CHOPCONF_TOFF(0);				// 0x901B4 as per datasheet example except TOFF set to zero to disable driver
-
-const uint32_t defaultChopConfToff = 4;	// default value for TOFF when drive is enabled
+	| TMC_CHOPCONF_TBL(2)				// blanking time 36 clocks which is about 2.4us typical (should maybe use 16 or 24 instead?)
+	| TMC_CHOPCONF_HDEC(0)				// no hysteresis decrement
+	| TMC_CHOPCONF_HEND(3)				// HEND = 0
+	| TMC_CHOPCONF_HSTRT(3)				// HSTRT = 4
+	| TMC_CHOPCONF_TOFF(4);				// TOFF = 9.2us
 
 // StallGuard configuration register
 const uint32_t defaultSgscConfReg =
@@ -149,6 +151,7 @@ struct TmcDriverState
 	uint32_t drvConfReg;
 	uint32_t lastReadValue;
 	uint32_t pin;
+	uint32_t configuredChopConfReg;
 
 	void Init(uint32_t p_pin);
 	void WriteAll();
@@ -165,7 +168,8 @@ void TmcDriverState::Init(uint32_t p_pin)
 pre(!driversPowered)
 {
 	drvCtrlReg = defaultDrvCtrlReg;
-	chopConfReg = defaultChopConfReg;
+	configuredChopConfReg = defaultChopConfReg;
+	chopConfReg = configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK;		// disable driver at startup
 	smartEnReg = defaultSmartEnReg;
 	sgcsConfReg = defaultSgscConfReg;
 	drvConfReg = defaultDrvConfReg;
@@ -216,8 +220,8 @@ void TmcDriverState::WriteAll()
 // Set the chopper control register
 void TmcDriverState::SetChopConf(uint32_t newVal)
 {
-	chopConfReg = (newVal & 0x0001FFFF) | TMC_REG_CHOPCONF;
-	SpiSendWord(chopConfReg);
+	configuredChopConfReg = (newVal & 0x0001FFFF) | TMC_REG_CHOPCONF;		// save the new value
+	Enable((chopConfReg & TMC_CHOPCONF_TOFF_MASK) != 0);					// send the new value, keeping the current Enable status
 }
 
 // Set the microstepping and microstep interpolation
@@ -251,14 +255,10 @@ void TmcDriverState::SetCurrent(float current)
 	SpiSendWord(sgcsConfReg);
 }
 
-// Enable or disable the driver
+// Enable or disable the driver. Also called from SetChopConf after the chopper control configuration has been changed.
 void TmcDriverState::Enable(bool en)
 {
-	chopConfReg &= ~TMC_CHOPCONF_TOFF_MASK;
-	if (en)
-	{
-		chopConfReg |= TMC_CHOPCONF_TOFF(defaultChopConfToff);
-	}
+	chopConfReg = (en) ? configuredChopConfReg : (configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK);
 	SpiSendWord(chopConfReg);
 }
 
@@ -359,13 +359,15 @@ namespace TMC2660
 		return (drive < numTmc2660Drivers) ? driverStates[drive].ReadStatus() : 0;
 	}
 
+	// Set microstepping or chopper control register
 	bool SetMicrostepping(size_t drive, int microsteps, int mode)
 	{
 		if (drive < numTmc2660Drivers)
 		{
-			if (mode == 999 && microsteps >= 0)
+			if (mode == ChopperControlRegisterMode && microsteps >= 0)
 			{
 				driverStates[drive].SetChopConf((uint32_t)microsteps);	// set the chopper control register
+				return true;
 			}
 			else if (microsteps > 0 && (mode == 0 || mode == 1))
 			{
@@ -387,14 +389,22 @@ namespace TMC2660
 		return false;
 	}
 
-	unsigned int GetMicrostepping(size_t drive, bool& interpolation)
+	// Get microstepping or chopper control register
+	unsigned int GetMicrostepping(size_t drive, int mode, bool& interpolation)
 	{
 		if (drive < numTmc2660Drivers)
 		{
 			const uint32_t drvCtrl = driverStates[drive].drvCtrlReg;
 			interpolation = (drvCtrl & TMC_DRVCTRL_INTPOL) != 0;
-			const uint32_t mresBits = (drvCtrl & TMC_DRVCTRL_MRES_MASK) >> TMC_DRVCTRL_MRES_SHIFT;
-			return 256 >> mresBits;
+			if (mode == ChopperControlRegisterMode)
+			{
+				return driverStates[drive].configuredChopConfReg & TMC_DATA_MASK;
+			}
+			else
+			{
+				const uint32_t mresBits = (drvCtrl & TMC_DRVCTRL_MRES_MASK) >> TMC_DRVCTRL_MRES_SHIFT;
+				return 256 >> mresBits;
+			}
 		}
 		return 1;
 	}

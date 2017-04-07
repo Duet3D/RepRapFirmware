@@ -407,9 +407,9 @@ public:
 	float GetIdleCurrentFactor() const
 		{ return idleCurrentFactor; }
 	bool SetDriverMicrostepping(size_t driver, int microsteps, int mode);
-	unsigned int GetDriverMicrostepping(size_t drive, bool& interpolation) const;
+	unsigned int GetDriverMicrostepping(size_t drive, int mode, bool& interpolation) const;
 	bool SetMicrostepping(size_t drive, int microsteps, int mode);
-	unsigned int GetMicrostepping(size_t drive, bool& interpolation) const;
+	unsigned int GetMicrostepping(size_t drive, int mode, bool& interpolation) const;
 	void SetDriverStepTiming(size_t driver, float microseconds);
 	float GetDriverStepTiming(size_t driver) const;
 	float DriveStepsPerUnit(size_t drive) const;

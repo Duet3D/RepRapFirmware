@@ -1,41 +1,58 @@
 ; Windows 2000, XP, Vista, 7 and 8 (x32 and x64) setup file for Duet 3D printer control electronics
-; Copyright (c) 2000-2013 ATMEL, Inc.
+
+[Strings] 
+Provider = "Escher 3D"
+DriverPackageDisplayName = "Duet3D USB driver"
+DUET = "Duet 3D printer control electronics with pre-1.18 firmware"
+DUET06 = "Duet 06 or 085 3D printer control electronics"
+DUETNG = "Duet WiFi or Ethernet 3D printer control electronics"
+Serial.SvcDesc = "USB Serial emulation driver" 
+BOSSAPORT = "Bossa Program Port"
+
+[DefaultInstall]
+CopyINF = duet.inf
 
 [Version] 
 Signature   = "$Windows NT$" 
 Class       = Ports 
 ClassGuid   = {4D36E978-E325-11CE-BFC1-08002BE10318} 
-
+DriverPackageDisplayName = %DriverPackageDisplayName%
 Provider    = %Provider% 
 CatalogFile = duetinf.cat
-DriverVer   = 05/01/2016,1.12.0.0 
+DriverVer   = 04/07/2017,1.18.0.0	; date in US format
 
-;----------------------------------------------------------
-; Targets
-;----------------------------------------------------------
 [Manufacturer] 
-%Provider%=DeviceList, NTAMD64, NT 
+%Provider% = DeviceList, NTAMD64, NT 
+
+[DestinationDirs] 
+DefaultDestDir = 12 
+FakeModemCopyFileSection = 12 
 
 [DeviceList] 
-%DUET%=DriverInstall, USB\VID_03EB&PID_2404 
+%BOSSAPORT% = DriverInstall, USB\VID_03EB&PID_6124
+%DUET% = DriverInstall, USB\VID_03EB&PID_2404 
+%DUET06% = DriverInstall, USB\VID_1209&PID_60EC 
+%DUETNG% = DriverInstall, USB\VID_1209&PID_60ED 
 
 [DeviceList.NTAMD64]
-%DUET%=DriverInstall.NTamd64, USB\VID_03EB&PID_2404 
+%BOSSAPORT% = DriverInstall, USB\VID_03EB&PID_6124
+%DUET% = DriverInstall.NTamd64, USB\VID_03EB&PID_2404 
+%DUET06% = DriverInstall.NTamd64, USB\VID_1209&PID_60EC 
+%DUETNG% = DriverInstall.NTamd64, USB\VID_1209&PID_60ED 
 
 [DeviceList.NT]
-%DUET%=DriverInstall.NT, USB\VID_03EB&PID_2404 
+%BOSSAPORT% = DriverInstall, USB\VID_03EB&PID_6124
+%DUET% = DriverInstall.NT, USB\VID_03EB&PID_2404 
+%DUET06% = DriverInstall.NT, USB\VID_1209&PID_60EC 
+%DUETNG% = DriverInstall.NT, USB\VID_1209&PID_60ED 
 
 ;------------------------------------------------------------
 ; Windows XP, Vista, Windows 7, Windows 8, Windows 10 - 32bit
 ;------------------------------------------------------------
-[DestinationDirs] 
-DefaultDestDir=12 
-FakeModemCopyFileSection=12 
-
 [DriverInstall.NT] 
-include=mdmcpq.inf
-CopyFiles=FakeModemCopyFileSection
-AddReg=DriverInstall.NT.AddReg 
+include = mdmcpq.inf,usb.inf
+CopyFiles = FakeModemCopyFileSection
+AddReg = DriverInstall.NT.AddReg 
 
 [DriverInstall.NT.AddReg]
 HKR,,DevLoader,,*ntkern 
@@ -57,9 +74,9 @@ LoadOrderGroup = Base
 ; Windows XP, Vista, Windows 7, Windows 8, Windows 10 - 64bit
 ;------------------------------------------------------------
 [DriverInstall.NTamd64]
-include=mdmcpq.inf
-CopyFiles=FakeModemCopyFileSection
-AddReg=DriverInstall.NTamd64.AddReg
+include = mdmcpq.inf,usb.inf
+CopyFiles = FakeModemCopyFileSection
+AddReg = DriverInstall.NTamd64.AddReg
 
 [DriverInstall.NTamd64.AddReg]
 HKR,,DevLoader,,*ntkern
@@ -67,20 +84,13 @@ HKR,,NTMPDriver,,usbser.sys
 HKR,,EnumPropPages32,,"MsPorts.dll,SerialPortPropPageProvider"
 
 [DriverInstall.NTamd64.Services]
-AddService=usbser, 0x00000002, DriverService.NTamd64
+AddService = usbser, 0x00000002, DriverService.NTamd64
 
 [DriverService.NTamd64]
-DisplayName=%Serial.SvcDesc%
-ServiceType=1
-StartType=3
-ErrorControl=1
-ServiceBinary=%12%\usbser.sys
+DisplayName = %Serial.SvcDesc%
+ServiceType = 1 ; SERVICE_KERNEL_DRIVER 
+StartType = 3 ; SERVICE_DEMAND_START 
+ErrorControl = 1 ; SERVICE_ERROR_NORMAL 
+ServiceBinary = %12%\usbser.sys
 
-;----------------------------------------------------------
-; String
-;----------------------------------------------------------
-[Strings] 
-Provider = "Duet 3D printer electronics driver" 
-DUET = "Duet 3D printer control electronics"
-Serial.SvcDesc = "USB Serial emulation driver" 
-
+; End

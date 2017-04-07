@@ -27,7 +27,7 @@ namespace TMC2660
 	void EnableDrive(size_t drive, bool en);
 	uint32_t GetStatus(size_t drive);
 	bool SetMicrostepping(size_t drive, int microsteps, int mode);
-	unsigned int GetMicrostepping(size_t drive, bool& interpolation);
+	unsigned int GetMicrostepping(size_t drive, int mode, bool& interpolation);
 	void SetDriversPowered(bool powered);
 };
 

@@ -1316,6 +1316,14 @@ int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 			moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() - fileInput->BytesCached() : noFilePosition;
 			moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
 			//debugPrintf("Queue move pos %u\n", moveFilePos);
+#if 0
+			//temporary code to use 0.5mm segments
+			if (moveBuffer.moveType == 0)
+			{
+				const float length = sqrtf(fsquare(moveBuffer.coords[X_AXIS] - moveBuffer.initialCoords[X_AXIS]) + fsquare(moveBuffer.coords[Y_AXIS] - moveBuffer.initialCoords[Y_AXIS]));
+				segmentsLeft = max<unsigned int>(segmentsLeft, length/0.5);
+			}
+#endif
 		}
 	}
 	return (moveBuffer.moveType != 0 || moveBuffer.endStopsToCheck != 0) ? 2 : 1;
@@ -2866,7 +2874,7 @@ void GCodes::SetMACAddress(GCodeBuffer& gb)
 bool GCodes::ChangeMicrostepping(size_t drive, int microsteps, int mode) const
 {
 	bool dummy;
-	unsigned int oldSteps = platform->GetMicrostepping(drive, dummy);
+	unsigned int oldSteps = platform->GetMicrostepping(drive, mode, dummy);
 	bool success = platform->SetMicrostepping(drive, microsteps, mode);
 	if (success && mode <= 1)							// modes higher than 1 are used for special functions
 	{

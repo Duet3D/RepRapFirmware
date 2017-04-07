@@ -2219,12 +2219,12 @@ bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 }
 
 // Get the microstepping for a driver
-unsigned int Platform::GetDriverMicrostepping(size_t driver, bool& interpolation) const
+unsigned int Platform::GetDriverMicrostepping(size_t driver, int mode, bool& interpolation) const
 {
 #if defined(DUET_NG)
 	if (driver < numTMC2660Drivers)
 	{
-		return TMC2660::GetMicrostepping(driver, interpolation);
+		return TMC2660::GetMicrostepping(driver, mode, interpolation);
 	}
 #endif
 	// On-board drivers only support x16 microstepping without interpolation
@@ -2233,16 +2233,16 @@ unsigned int Platform::GetDriverMicrostepping(size_t driver, bool& interpolation
 }
 
 // Get the microstepping for an axis or extruder
-unsigned int Platform::GetMicrostepping(size_t drive, bool& interpolation) const
+unsigned int Platform::GetMicrostepping(size_t drive, int mode, bool& interpolation) const
 {
 	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	if (drive < numAxes)
 	{
-		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], interpolation);
+		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], mode, interpolation);
 	}
 	else if (drive < DRIVES)
 	{
-		return GetDriverMicrostepping(extruderDrivers[drive - numAxes], interpolation);
+		return GetDriverMicrostepping(extruderDrivers[drive - numAxes], mode, interpolation);
 	}
 	else
 	{
