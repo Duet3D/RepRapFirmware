@@ -1,10 +1,33 @@
-#include "RepRapFirmware.h"
+#include "RepRap.h"
+
+#include "Network.h"
+#include "Movement/Move.h"
+#include "GCodes/GCodes.h"
+#include "Heating/Heat.h"
+#include "Platform.h"
+#include "PrintMonitor.h"
+#include "Tool.h"
+#include "Webserver.h"
+#include "Version.h"
+
+#ifndef __RADDS__
+# include "sam/drivers/hsmci/hsmci.h"
+#endif
+
+// Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
+extern "C" void hsmciIdle()
+{
+	if (reprap.GetSpinningModule() != moduleNetwork)	// I don't think this should ever be false because the Network module doesn't do file access, but just in case...
+	{
+		reprap.GetNetwork()->Spin(false);
+	}
+}
 
 // RepRap member functions.
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastToolWarningTime(0.0), activeExtruders(0),
+RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0)
 {
@@ -43,7 +66,7 @@ void RepRap::Init()
 	Platform::EnableWatchdog();		// do this after all init calls are made
 	active = true;					// must do this before we start the network, else the watchdog may time out
 
-	platform->MessageF(HOST_MESSAGE, "%s Version %s dated %s\n", NAME, VERSION, DATE);
+	platform->MessageF(HOST_MESSAGE, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
 	// Run the configuration file
 	const char *configFile = platform->GetConfigFile();
@@ -58,11 +81,11 @@ void RepRap::Init()
 		configFile = platform->GetDefaultFile();
 	}
 
-	if (gCodes->DoFileMacro(configFile, false))
+	if (gCodes->RunConfigFile(configFile))
 	{
-		while (gCodes->DoingFileMacro())
+		while (gCodes->IsDaemonBusy())
 		{
-			// GCodes::Spin will read the macro and ensure DoFileMacro returns true when it's done
+			// GCodes::Spin will read the macro and ensure DoingFileMacro returns false when it's done
 			Spin();
 		}
 		platform->Message(HOST_MESSAGE, "Done!\n");
@@ -74,18 +97,16 @@ void RepRap::Init()
 	processingConfig = false;
 
 	// Enable network (unless it's disabled)
-	if (network->IsEnabled())
-	{
-		// Need to do this here, as the configuration GCodes may set IP address etc.
-		platform->Message(HOST_MESSAGE, "Starting network...\n");
-		network->Enable();
-	}
-	else
+	network->Activate();			// Need to do this here, as the configuration GCodes may set IP address etc.
+	if (!network->IsEnabled())
 	{
 		platform->Message(HOST_MESSAGE, "Network disabled.\n");
 	}
 
-	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", NAME);
+#ifndef __RADDS__
+	hsmci_set_idle_func(hsmciIdle);
+#endif
+	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", FIRMWARE_NAME);
 	fastLoop = FLT_MAX;
 	slowLoop = 0.0;
 	lastTime = platform->Time();
@@ -114,7 +135,7 @@ void RepRap::Spin()
 
 	spinningModule = moduleNetwork;
 	ticksInSpinState = 0;
-	network->Spin();
+	network->Spin(true);
 
 	spinningModule = moduleWebserver;
 	ticksInSpinState = 0;
@@ -146,53 +167,53 @@ void RepRap::Spin()
 	ticksInSpinState = 0;
 
 	// Check if we need to display a cold extrusion warning
-
-	for (Tool *t = toolList; t != nullptr; t = t->Next())
+	const uint32_t now = millis();
+	if (now - lastWarningMillis >= MinimumWarningInterval)
 	{
-		if (t->DisplayColdExtrudeWarning() && ToolWarningsAllowed())
+		for (Tool *t = toolList; t != nullptr; t = t->Next())
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
+			if (t->DisplayColdExtrudeWarning())
+			{
+				platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
+				lastWarningMillis = now;
+			}
 		}
 	}
 
 	// Keep track of the loop time
-
-	float t = platform->Time();
-	float dt = t - lastTime;
-	if(dt < fastLoop)
+	const float t = platform->Time();
+	const float dt = t - lastTime;
+	if (dt < fastLoop)
 	{
 		fastLoop = dt;
 	}
-	if(dt > slowLoop)
+	if (dt > slowLoop)
 	{
 		slowLoop = dt;
 	}
 	lastTime = t;
 }
 
-void RepRap::Timing()
+void RepRap::Timing(MessageType mtype)
 {
-	platform->MessageF(GENERIC_MESSAGE, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
+	platform->MessageF(mtype, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
 	fastLoop = FLT_MAX;
 	slowLoop = 0.0;
 }
 
-void RepRap::Diagnostics()
+void RepRap::Diagnostics(MessageType mtype)
 {
-	platform->Message(GENERIC_MESSAGE, "Diagnostics\n");
-	OutputBuffer::Diagnostics();
-	platform->Diagnostics();				// this includes a call to our Timing() function
-	move->Diagnostics();
-	heat->Diagnostics();
-	gCodes->Diagnostics();
-	network->Diagnostics();
-	webserver->Diagnostics();
+	platform->Message(mtype, "=== Diagnostics ===\n");
+	OutputBuffer::Diagnostics(mtype);
+	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
+	move->Diagnostics(mtype);
+	heat->Diagnostics(mtype);
+	gCodes->Diagnostics(mtype);
+	network->Diagnostics(mtype);
+	webserver->Diagnostics(mtype);
 }
 
-// Turn off the heaters, disable the motors, and
-// deactivate the Heat and Move classes.  Leave everything else
-// working.
-
+// Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
 void RepRap::EmergencyStop()
 {
 	stopped = true;
@@ -219,7 +240,7 @@ void RepRap::EmergencyStop()
 		move->Exit();
 		for(size_t drive = 0; drive < DRIVES; drive++)
 		{
-			platform->SetMotorCurrent(drive, 0.0);
+			platform->SetMotorCurrent(drive, 0.0, false);
 			platform->DisableDrive(drive);
 		}
 	}
@@ -273,6 +294,7 @@ void RepRap::PrintDebug()
 
 // Add a tool.
 // Prior to calling this, delete any existing tool with the same number
+// The tool list is maintained in tool number order.
 void RepRap::AddTool(Tool* tool)
 {
 	Tool** t = &toolList;
@@ -395,9 +417,12 @@ Tool* RepRap::GetTool(int toolNumber) const
 	return nullptr; // Not an error
 }
 
-Tool* RepRap::GetOnlyTool() const
+// Get the current tool, or failing that the default tool. May return nullptr if we can't
+// Called when a M104 or M109 command doesn't specify a tool number.
+Tool* RepRap::GetCurrentOrDefaultTool() const
 {
-	return (toolList != nullptr && toolList->Next() == nullptr) ? toolList : nullptr;
+	// If a tool is already selected, use that one, else use the lowest-numbered tool which is the one at the start of the tool list
+	return (currentTool != nullptr) ? currentTool : toolList;
 }
 
 void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures)
@@ -411,19 +436,6 @@ void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, 
 	{
 		platform->MessageF(GENERIC_MESSAGE, "Error: Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 	}
-}
-
-// chrishamm 02-10-2015: I don't think it's a good idea to write tool warning message after every
-// short move, so only print them in a reasonable interval.
-bool RepRap::ToolWarningsAllowed()
-{
-	const float now = platform->Time();
-	if (now - lastToolWarningTime > MINIMUM_TOOL_WARNING_INTERVAL)
-	{
-		lastToolWarningTime = platform->Time();
-		return true;
-	}
-	return false;
 }
 
 bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
@@ -443,30 +455,36 @@ bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 	return false;
 }
 
+unsigned int RepRap::GetNumberOfContiguousTools() const
+{
+	unsigned int numTools = 0;
+	while (GetTool(numTools) != nullptr)
+	{
+		++numTools;
+	}
+	return numTools;
+}
+
 void RepRap::Tick()
 {
-	if (active)
+	if (active && !resetting)
 	{
-		Platform::KickWatchdog();
-		if (!resetting)
+		platform->Tick();
+		++ticksInSpinState;
+		if (ticksInSpinState >= 20000)	// if we stall for 20 seconds, save diagnostic data and reset
 		{
-			platform->Tick();
-			++ticksInSpinState;
-			if (ticksInSpinState >= 20000)	// if we stall for 20 seconds, save diagnostic data and reset
+			resetting = true;
+			for(size_t i = 0; i < HEATERS; i++)
 			{
-				resetting = true;
-				for(size_t i = 0; i < HEATERS; i++)
-				{
-					platform->SetHeater(i, 0.0);
-				}
-				for(size_t i = 0; i < DRIVES; i++)
-				{
-					platform->DisableDrive(i);
-					// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
-				}
-
-				platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin);
+				platform->SetHeater(i, 0.0);
 			}
+			for(size_t i = 0; i < DRIVES; i++)
+			{
+				platform->DisableDrive(i);
+				// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
+			}
+
+			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin);
 		}
 	}
 }
@@ -489,7 +507,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	char ch = GetStatusCharacter();
 	response->printf("{\"status\":\"%c\",\"coords\":{", ch);
 
-	/* Coordinates */
+	// Coordinates
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	{
 		float liveCoordinates[DRIVES + 1];
 #if SUPPORT_ROLAND
@@ -500,35 +519,38 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		else
 #endif
 		{
-			move->LiveCoordinates(liveCoordinates);
+			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
 		}
 
 		if (currentTool != nullptr)
 		{
 			const float *offset = currentTool->GetOffset();
-			for (size_t i = 0; i < AXES; ++i)
+			for (size_t i = 0; i < numAxes; ++i)
 			{
 				liveCoordinates[i] += offset[i];
 			}
 		}
 
 		// Homed axes
-		response->catf("\"axesHomed\":[%d,%d,%d]",
-				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
+		response->cat("\"axesHomed\":");
+		ch = '[';
+		for (size_t axis = 0; axis < numAxes; ++axis)
+		{
+			response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+			ch = ',';
+		}
 
 		// Actual and theoretical extruder positions since power up, last G92 or last M23
-		response->catf(",\"extr\":");		// announce actual extruder positions
+		response->catf("],\"extr\":");		// announce actual extruder positions
 		ch = '[';
 		for (size_t extruder = 0; extruder < GetExtrudersInUse(); extruder++)
 		{
-			response->catf("%c%.1f", ch, liveCoordinates[AXES + extruder]);
+			response->catf("%c%.1f", ch, liveCoordinates[numAxes + extruder]);
 			ch = ',';
 		}
 		if (ch == '[')
 		{
-			response->cat("[");
+			response->cat(ch);
 		}
 
 		// XYZ positions
@@ -542,24 +564,23 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		{
 			// On Cartesian printers, the live coordinates are (usually) valid
 			ch = '[';
-			for (size_t axis = 0; axis < AXES; axis++)
+			for (size_t axis = 0; axis < numAxes; axis++)
 			{
-				response->catf("%c%.2f", ch, liveCoordinates[axis]);
+				response->catf("%c%.3f", ch, liveCoordinates[axis]);
 				ch = ',';
 			}
 		}
 	}
 
 	// Current tool number
-	int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
+	const int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
 	response->catf("]},\"currentTool\":%d", toolNumber);
 
-	/* Output - only reported once */
+	// Output - only reported once
 	{
 		bool sendBeep = (beepDuration != 0 && beepFrequency != 0);
 		bool sendMessage = (message[0] != 0);
-		bool sourceRight = (gCodes->HaveAux() && source == ResponseSource::AUX) || (!gCodes->HaveAux() && source == ResponseSource::HTTP);
-		if ((sendBeep || message[0] != 0) && sourceRight)
+		if (sendBeep || sendMessage)
 		{
 			response->cat(",\"output\":{");
 
@@ -571,7 +592,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				{
 					response->cat(",");
 				}
-
 				beepFrequency = beepDuration = 0;
 			}
 
@@ -586,23 +606,18 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 	}
 
-	/* Parameters */
+	// Parameters
 	{
 		// ATX power
 		response->catf(",\"params\":{\"atxPower\":%d", platform->AtxPower() ? 1 : 0);
 
 		// Cooling fan value
-		response->cat(",\"fanPercent\":[");
+		response->cat(",\"fanPercent\":");
+		ch = '[';
 		for(size_t i = 0; i < NUM_FANS; i++)
 		{
-			if (i == NUM_FANS - 1)
-			{
-				response->catf("%.2f", platform->GetFanValue(i) * 100.0);
-			}
-			else
-			{
-				response->catf("%.2f,", platform->GetFanValue(i) * 100.0);
-			}
+			response->catf("%c%.2f", ch, platform->GetFanValue(i) * 100.0);
+			ch = ',';
 		}
 
 		// Speed and Extrusion factors
@@ -613,7 +628,8 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			response->catf("%c%.2f", ch, gCodes->GetExtrusionFactor(extruder) * 100.0);
 			ch = ',';
 		}
-		response->cat((ch == '[') ? "[]}" : "]}");
+		response->cat((ch == '[') ? "[]" : "]");
+		response->catf(",\"babystep\":%.03f}", gCodes->GetBabyStepOffset());
 	}
 
 	// G-code reply sequence for webserver (seqence number for AUX is handled later)
@@ -630,7 +646,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->cat(",\"sensors\":{");
 
 		// Probe
-		int v0 = platform->ZProbe();
+		const int v0 = platform->GetZProbeReading();
 		int v1, v2;
 		switch (platform->GetZProbeSecondaryValues(v1, v2))
 		{
@@ -677,7 +693,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 			// Current temperatures
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetTemperature(heater));
 				ch = ',';
@@ -687,7 +703,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Active temperatures
 			response->catf(",\"active\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
 				ch = ',';
@@ -697,7 +713,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Standby temperatures
 			response->catf(",\"standby\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
 				ch = ',';
@@ -707,7 +723,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			// Heater statuses (0=off, 1=standby, 2=active, 3=fault)
 			response->cat(",\"state\":");
 			ch = '[';
-			for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+			for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 			{
 				response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
 				ch = ',';
@@ -727,6 +743,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"coldExtrudeTemp\":%1.f", heat->ColdExtrude() ? 0 : HOT_ENOUGH_TO_EXTRUDE);
 		response->catf(",\"coldRetractTemp\":%1.f", heat->ColdExtrude() ? 0 : HOT_ENOUGH_TO_RETRACT);
 
+		// Maximum hotend temperature - DWC just wants the highest one
+		response->catf(",\"tempLimit\":%1.f", heat->GetHighestTemperatureLimit());
+
 		// Endstops
 		uint16_t endstops = 0;
 		for(size_t drive = 0; drive < DRIVES; drive++)
@@ -739,8 +758,19 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 		response->catf(",\"endstops\":%d", endstops);
 
-		// Delta configuration
-		response->catf(",\"geometry\":\"%s\"", move->GetGeometryString());
+		// Firmware name, machine geometry and number of axes
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u", FIRMWARE_NAME, move->GetGeometryString(), numAxes);
+
+		// Total and mounted volumes
+		size_t mountedCards = 0;
+		for(size_t i = 0; i < NumSdCards; i++)
+		{
+			if (platform->GetMassStorage()->IsDriveMounted(i))
+			{
+				mountedCards |= (1 << i);
+			}
+		}
+		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", NumSdCards, mountedCards);
 
 		// Machine name
 		response->cat(",\"name\":");
@@ -748,7 +778,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		/* Probe */
 		{
-			const ZProbeParameters probeParams = platform->GetZProbeParameters();
+			const ZProbeParameters probeParams = platform->GetCurrentZProbeParameters();
 
 			// Trigger threshold
 			response->catf(",\"probe\":{\"threshold\":%d", probeParams.adcValue);
@@ -787,18 +817,55 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 					}
 				}
 
+				// Axis mapping. Currently we only map the X axis, but we return an array of arrays to allow for mapping other axes in future.
+				response->cat("],\"axisMap\":[[");
+				bool first = true;
+				for (size_t xi = 0; xi < MAX_AXES; ++xi)
+				{
+					if ((tool->GetXAxisMap() & (1u << xi)) != 0)
+					{
+						if (first)
+						{
+							first = false;
+						}
+						else
+						{
+							response->cat(",");
+						}
+						response->catf("%u", xi);
+					}
+				}
+
 				// Do we have any more tools?
 				if (tool->Next() != nullptr)
 				{
-					response->cat("]},");
+					response->cat("]]},");
 				}
 				else
 				{
-					response->cat("]}");
+					response->cat("]]}");
 				}
 			}
 			response->cat("]");
 		}
+
+		// MCU temperatures
+#ifndef __RADDS__
+		{
+			float minT, currT, maxT;
+			platform->GetMcuTemperatures(minT, currT, maxT);
+			response->catf(",\"mcutemp\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", minT, currT, maxT);
+		}
+#endif
+
+#ifdef DUET_NG
+		// Power in voltages
+		{
+			float minV, currV, maxV;
+			platform->GetPowerVoltages(minV, currV, maxV);
+			response->catf(",\"vin\":{\"min\":%.1f,\"cur\":%.1f,\"max\":%.1f}", minV, currV, maxV);
+		}
+#endif
 	}
 	else if (type == 3)
 	{
@@ -818,7 +885,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 		if (ch == '[')
 		{
-			response->cat("]");
+			response->cat(ch);		// no extruders
 		}
 
 		// Fraction of file printed
@@ -852,14 +919,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	if (source == ResponseSource::AUX)
 	{
-		OutputBuffer *response = gCodes->GetAuxGCodeReply();
+		OutputBuffer *reply = platform->GetAuxGCodeReply();
 		if (response != nullptr)
 		{
 			// Send the response to the last command. Do this last
-			response->catf(",\"seq\":%u,\"resp\":", gCodes->GetAuxSeq());			// send the response sequence number
+			response->catf(",\"seq\":%u,\"resp\":", platform->GetAuxSeq());			// send the response sequence number
 
 			// Send the JSON response
-			response->EncodeReply(response, true);									// also releases the OutputBuffer chain
+			response->EncodeReply(reply, true);										// also releases the OutputBuffer chain
 		}
 	}
 	response->cat("}");
@@ -876,10 +943,12 @@ OutputBuffer *RepRap::GetConfigResponse()
 		return nullptr;
 	}
 
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+
 	// Axis minima
 	response->copy("{\"axisMins\":");
 	char ch = '[';
-	for (size_t axis = 0; axis < AXES; axis++)
+	for (size_t axis = 0; axis < numAxes; axis++)
 	{
 		response->catf("%c%.2f", ch, platform->AxisMinimum(axis));
 		ch = ',';
@@ -888,7 +957,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 	// Axis maxima
 	response->cat("],\"axisMaxes\":");
 	ch = '[';
-	for (size_t axis = 0; axis < AXES; axis++)
+	for (size_t axis = 0; axis < numAxes; axis++)
 	{
 		response->catf("%c%.2f", ch, platform->AxisMaximum(axis));
 		ch = ',';
@@ -908,14 +977,24 @@ OutputBuffer *RepRap::GetConfigResponse()
 	ch = '[';
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
-		response->catf("%c%.2f", ch, platform->MotorCurrent(drive));
+		response->catf("%c%.2f", ch, platform->GetMotorCurrent(drive, false));
 		ch = ',';
 	}
 
 	// Firmware details
-	response->catf("],\"firmwareElectronics\":\"%s\"", ELECTRONICS);
-	response->catf(",\"firmwareName\":\"%s\"", NAME);
+	response->catf("],\"firmwareElectronics\":\"%s", platform->GetElectronicsString());
+#ifdef DUET_NG
+	const char* expansionName = DuetExpansion::GetExpansionBoardName();
+	if (expansionName != nullptr)
+	{
+		response->catf(" + %s", expansionName);
+	}
+#endif
+	response->catf("\",\"firmwareName\":\"%s\"", FIRMWARE_NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);
+#if defined(DUET_NG) && defined(DUET_WIFI)
+	response->catf(",\"dwsVersion\":\"%s\"", network->GetWiFiServerVersion());
+#endif
 	response->catf(",\"firmwareDate\":\"%s\"", DATE);
 
 	// Motor idle parameters
@@ -940,60 +1019,8 @@ OutputBuffer *RepRap::GetConfigResponse()
 		ch = ',';
 	}
 
-	// Configuration File (whitespaces are skipped, otherwise we easily risk overflowing the response buffer)
-	response->cat("],\"configFile\":\"");
-	FileStore *configFile = platform->GetFileStore(platform->GetSysDir(), platform->GetConfigFile(), false);
-	if (configFile == nullptr)
-	{
-		response->cat("not found");
-	}
-	else
-	{
-		char c, esc;
-		bool readingWhitespace = false;
-		size_t bytesWritten = 0, bytesLeft = OutputBuffer::GetBytesLeft(response);
-		while (configFile->Read(c) && bytesWritten + 4 < bytesLeft)		// need 4 bytes to finish this response
-		{
-			if (!readingWhitespace || (c != ' ' && c != '\t'))
-			{
-				switch (c)
-				{
-					case '\r':
-						esc = 'r';
-						break;
-					case '\n':
-						esc = 'n';
-						break;
-					case '\t':
-						esc = 't';
-						break;
-					case '"':
-						esc = '"';
-						break;
-					case '\\':
-						esc = '\\';
-						break;
-					default:
-						esc = 0;
-						break;
-				}
-
-				if (esc)
-				{
-					response->catf("\\%c", esc);
-					bytesWritten += 2;
-				}
-				else
-				{
-					response->cat(c);
-					bytesWritten++;
-				}
-			}
-			readingWhitespace = (c == ' ' || c == '\t');
-		}
-		configFile->Close();
-	}
-	response->cat("\"}");
+	// Config file is no longer included, because we can use rr_configfile or M503 instead
+	response->cat("]}");
 
 	return response;
 }
@@ -1037,7 +1064,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		ch = '[';
 	}
-	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetTemperature(heater));
 		ch = ',';
@@ -1055,7 +1082,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		ch = '[';
 	}
-	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetActiveTemperature(heater));
 		ch = ',';
@@ -1073,14 +1100,14 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		ch = '[';
 	}
-	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, heat->GetStandbyTemperature(heater));
 		ch = ',';
 	}
 	response->cat((ch == '[') ? "[]" : "]");
 
-	// Send the heater statuses (0=off, 1=standby, 2=active)
+	// Send the heater statuses (0=off, 1=standby, 2=active, 3 = fault)
 	response->cat(",\"hstat\":");
 	if (bedHeater != -1)
 	{
@@ -1091,7 +1118,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	{
 		ch = '[';
 	}
-	for (size_t heater = E0_HEATER; heater < GetToolHeatersInUse(); heater++)
+	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
 		ch = ',';
@@ -1099,22 +1126,23 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send XYZ positions
+	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
 	float liveCoordinates[DRIVES];
-	reprap.GetMove()->LiveCoordinates(liveCoordinates);
-	const Tool* currentTool = reprap.GetCurrentTool();
+	reprap.GetMove()->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
+	const Tool* const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
 		const float *offset = currentTool->GetOffset();
-		for (size_t i = 0; i < AXES; ++i)
+		for (size_t i = 0; i < numAxes; ++i)
 		{
 			liveCoordinates[i] += offset[i];
 		}
 	}
 	response->catf(",\"pos\":");		// announce the XYZ position
 	ch = '[';
-	for (size_t drive = 0; drive < AXES; drive++)
+	for (size_t drive = 0; drive < numAxes; drive++)
 	{
-		response->catf("%c%.2f", ch, liveCoordinates[drive]);
+		response->catf("%c%.3f", ch, liveCoordinates[drive]);
 		ch = ',';
 	}
 
@@ -1126,7 +1154,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
 		ch = ',';
 	}
-	response->cat((ch == ']') ? "[]" : "]");
+	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the speed and extruder override factors
 	response->catf(",\"sfactor\":%.2f,\"efactor\":", gCodes->GetSpeedFactor() * 100.0);
@@ -1138,12 +1166,15 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 	response->cat((ch == '[') ? "[]" : "]");
 
+	// Send the baby stepping offset
+	response->catf(",\"babystep\":%.03f", gCodes->GetBabyStepOffset());
+
 	// Send the current tool number
-	int toolNumber = (currentTool == nullptr) ? 0 : currentTool->Number();
+	const int toolNumber = (currentTool == nullptr) ? 0 : currentTool->Number();
 	response->catf(",\"tool\":%d", toolNumber);
 
 	// Send the Z probe value
-	int v0 = platform->ZProbe();
+	const int v0 = platform->GetZProbeReading();
 	int v1, v2;
 	switch (platform->GetZProbeSecondaryValues(v1, v2))
 	{
@@ -1158,27 +1189,27 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		break;
 	}
 
-	// Send the fan0 settings (for PanelDue firmware 1.13)
-	response->catf(",\"fanPercent\":[%.02f,%.02f]", platform->GetFanValue(0) * 100.0, platform->GetFanValue(1) * 100.0);
+	// Send the fan settings, for PanelDue firmware 1.13 and later
+	response->catf(",\"fanPercent\":");
+	ch = '[';
+	for (size_t i = 0; i < NUM_FANS; ++i)
+	{
+		response->catf("%c%.02f", ch, platform->GetFanValue(i) * 100.0);
+		ch = ',';
+	}
 
-	// Send fan RPM value
-	response->catf(",\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
+	// Send fan RPM value (we only support one)
+	response->catf("],\"fanRPM\":%u", static_cast<unsigned int>(platform->GetFanRPM()));
 
 	// Send the home state. To keep the messages short, we send 1 for homed and 0 for not homed, instead of true and false.
-	if (type != 0)
+	response->cat(",\"homed\":");
+	ch = '[';
+	for (size_t axis = 0; axis < numAxes; ++axis)
 	{
-		response->catf(",\"homed\":[%d,%d,%d]",
-				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
+		response->catf("%c%d", ch, (gCodes->GetAxisIsHomed(axis)) ? 1 : 0);
+		ch = ',';
 	}
-	else
-	{
-		response->catf(",\"hx\":%d,\"hy\":%d,\"hz\":%d",
-				(gCodes->GetAxisIsHomed(0)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(1)) ? 1 : 0,
-				(gCodes->GetAxisIsHomed(2)) ? 1 : 0);
-	}
+	response->cat(']');
 
 	if (printMonitor->IsPrinting())
 	{
@@ -1186,14 +1217,10 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		response->catf(",\"fraction_printed\":%.4f", max<float>(0.0, gCodes->FractionOfFilePrinted()));
 	}
 
-	response->cat(",\"message\":");
-	response->EncodeString(message, ARRAY_SIZE(message), false);
+	// Short messages are now pushed directly to PanelDue, so don't include them here as well
+	// We no longer send the amount of http buffer space here because the web interface doesn't use these formns of status response
 
-	if (type < 2)
-	{
-		response->catf(",\"buff\":%u", webserver->GetGCodeBufferSpace(WebSource::HTTP));	// send the amount of buffer space available for gcodes
-	}
-	else if (type == 2)
+	if (type == 2)
 	{
 		if (printMonitor->IsPrinting())
 		{
@@ -1206,24 +1233,26 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 	else if (type == 3)
 	{
-		// Add the static fields. For now this is just geometry and the machine name, but other fields could be added e.g. axis lengths.
-		response->catf(",\"geometry\":\"%s\",\"myName\":", move->GetGeometryString());
+		// Add the static fields
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"numTools\":%u,\"myName\":",
+						move->GetGeometryString(), numAxes, NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
+		response->cat(",\"firmwareName\":");
+		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
 	}
 
-	int auxSeq = (int)gCodes->GetAuxSeq();
-	if (type < 2 || (seq != -1 && (int)auxSeq != seq))
+	const int auxSeq = (int)platform->GetAuxSeq();
+	if (type < 2 || (seq != -1 && auxSeq != seq))
 	{
 
 		// Send the response to the last command. Do this last because it can be long and may need to be truncated.
-		response->catf(",\"seq\":%u,\"resp\":", auxSeq);					// send the response sequence number
+		response->catf(",\"seq\":%d,\"resp\":", auxSeq);					// send the response sequence number
 
 		// Send the JSON response
-		response->EncodeReply(gCodes->GetAuxGCodeReply(), true);			// also releases the OutputBuffer chain
+		response->EncodeReply(platform->GetAuxGCodeReply(), true);			// also releases the OutputBuffer chain
 	}
 
 	response->cat("}");
-
 	return response;
 }
 
@@ -1257,46 +1286,131 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 	response->copy("{\"dir\":");
 	response->EncodeString(dir, strlen(dir), false);
 	response->cat(",\"files\":[");
+	unsigned int err;
+
+	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
+	{
+		err = 1;
+	}
+	else
+	{
+		err = 0;
+		FileInfo fileInfo;
+		bool firstFile = true;
+		bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);	// TODO error handling here
+
+		size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
+		char filename[FILENAME_LENGTH];
+		filename[0] = '*';
+		const char *fname;
+
+		while (gotFile)
+		{
+			if (fileInfo.fileName[0] != '.')						// ignore Mac resource files and Linux hidden files
+			{
+				// Get the long filename if possible
+				if (flagsDirs && fileInfo.isDirectory)
+				{
+					strncpy(filename + sizeof(char), fileInfo.fileName, FILENAME_LENGTH - 1);
+					filename[FILENAME_LENGTH - 1] = 0;
+					fname = filename;
+				}
+				else
+				{
+					fname = fileInfo.fileName;
+				}
+
+				// Make sure we can end this response properly
+				if (bytesLeft < strlen(fname) * 2 + 4)
+				{
+					// No more space available - stop here
+					break;
+				}
+
+				// Write separator and filename
+				if (!firstFile)
+				{
+					bytesLeft -= response->cat(',');
+				}
+				bytesLeft -= response->EncodeString(fname, FILENAME_LENGTH, false);
+
+				firstFile = false;
+			}
+			gotFile = platform->GetMassStorage()->FindNext(fileInfo);	// TODO error handling here
+		}
+	}
+	response->catf("],\"err\":%u}", err);
+	return response;
+}
+
+// Get a JSON-style filelist including file types and sizes
+OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
+{
+	// Need something to write to...
+	OutputBuffer *response;
+	if (!OutputBuffer::Allocate(response))
+	{
+		return nullptr;
+	}
+
+	// If the requested volume is not mounted, report an error
+	if (!platform->GetMassStorage()->CheckDriveMounted(dir))
+	{
+		response->copy("{\"err\":1}");
+		return response;
+	}
+
+	// Check if the directory exists
+	if (!platform->GetMassStorage()->DirectoryExists(dir))
+	{
+		response->copy("{\"err\":2}");
+		return response;
+	}
+
+	response->copy("{\"dir\":");
+	response->EncodeString(dir, strlen(dir), false);
+	response->cat(",\"files\":[");
 
 	FileInfo fileInfo;
 	bool firstFile = true;
 	bool gotFile = platform->GetMassStorage()->FindFirst(dir, fileInfo);
 	size_t bytesLeft = OutputBuffer::GetBytesLeft(response);	// don't write more bytes than we can
-	char filename[FILENAME_LENGTH];
-	filename[0] = '*';
-	const char *fname;
 
 	while (gotFile)
 	{
 		if (fileInfo.fileName[0] != '.')			// ignore Mac resource files and Linux hidden files
 		{
-			// Get the long filename if possible
-			if (flagsDirs && fileInfo.isDirectory)
-			{
-				strncpy(filename + sizeof(char), fileInfo.fileName, FILENAME_LENGTH - 1);
-				filename[FILENAME_LENGTH - 1] = 0;
-				fname = filename;
-			}
-			else
-			{
-				fname = fileInfo.fileName;
-			}
-
 			// Make sure we can end this response properly
-			if (bytesLeft < strlen(fname) * 2 + 4)
+			if (bytesLeft < strlen(fileInfo.fileName) + 70)
 			{
 				// No more space available - stop here
 				break;
 			}
 
-			// Write separator and filename
+			// Write delimiter
 			if (!firstFile)
 			{
 				bytesLeft -= response->cat(',');
 			}
-			bytesLeft -= response->EncodeString(fname, FILENAME_LENGTH, false);
-
 			firstFile = false;
+
+			// Write another file entry
+			bytesLeft -= response->catf("{\"type\":\"%c\",\"name\":", fileInfo.isDirectory ? 'd' : 'f');
+			bytesLeft -= response->EncodeString(fileInfo.fileName, FILENAME_LENGTH, false);
+			bytesLeft -= response->catf(",\"size\":%u", fileInfo.size);
+
+			const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
+			if (timeInfo->tm_year <= /*19*/80)
+			{
+				// Don't send the last modified date if it is invalid
+				bytesLeft -= response->cat('}');
+			}
+			else
+			{
+				bytesLeft -= response->catf(",\"date\":\"%04u-%02u-%02uT%02u:%02u:%02u\"}",
+						timeInfo->tm_year + 1900, timeInfo->tm_mon + 1, timeInfo->tm_mday,
+						timeInfo->tm_hour, timeInfo->tm_min, timeInfo->tm_sec);
+			}
 		}
 		gotFile = platform->GetMassStorage()->FindNext(fileInfo);
 	}
@@ -1305,25 +1419,29 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 	return response;
 }
 
+// Send a beep. We send it to both PanelDue and the web interface.
 void RepRap::Beep(int freq, int ms)
 {
-	if (gCodes->HaveAux())
+	beepFrequency = freq;
+	beepDuration = ms;
+
+	if (platform->HaveAux())
 	{
 		// If there is an LCD device present, make it beep
 		platform->Beep(freq, ms);
 	}
-	else
-	{
-		// Otherwise queue it until the webserver can process it
-		beepFrequency = freq;
-		beepDuration = ms;
-	}
 }
 
+// Send a short message. We send it to both PanelDue and the web interface.
 void RepRap::SetMessage(const char *msg)
 {
 	strncpy(message, msg, MESSAGE_LENGTH);
 	message[MESSAGE_LENGTH] = 0;
+
+	if (platform->HaveAux())
+	{
+		platform->SendAuxMessage(msg);
+	}
 }
 
 // Get the status character for the new-style status response
@@ -1334,6 +1452,7 @@ char RepRap::GetStatusCharacter() const
 			: (IsStopped()) 											? 'H'	// Halted
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
+			: (gCodes->IsDoingToolChange())								? 'T'	// Running tool change macros
 			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
 			: (printMonitor->IsPrinting())								? 'P'	// Printing
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy
@@ -1426,6 +1545,24 @@ void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);
 	}
+}
+
+// Get the current axes used as X axes
+uint32_t RepRap::GetCurrentXAxes() const
+{
+	return (currentTool == nullptr) ? DefaultXAxisMapping : currentTool->GetXAxisMap();
+}
+
+// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
+/*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)
+{
+	return a/b;
+}
+
+// Helper function for diagnostic tests in Platform.cpp, to cause a deliberate unaligned memory read
+/*static*/ uint32_t RepRap::ReadDword(const char* p)
+{
+	return *reinterpret_cast<const uint32_t*>(p);
 }
 
 // End
