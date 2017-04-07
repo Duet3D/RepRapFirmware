@@ -20,7 +20,7 @@ G90                       ; back to absolute mode
 
 ; The following code assumes you are using a Z probe to do Z homing. Remove it if you are using a microswitch.
 ; Adjust the XY coordinates in the following to place the Z probe over a suitable spot,
-; preferably near the centred of the bed if your Z probe supports that
+; preferably near the centre of the bed if your Z probe supports that
 
 G1 X100 Y100 F2000
 G30

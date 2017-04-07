@@ -158,6 +158,10 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+#include "MessageType.h"
+#include "Platform.h"
+#include "RepRap.h"
+
 // We just need one instance of RepRap; everything else is contained within it and hidden
 
 RepRap reprap;
@@ -173,7 +177,8 @@ const char *moduleName[] =
 	"DDA",
 	"Roland",
 	"PrintMonitor",
-	"?","?","?","?","?","?",
+	"Storage",
+	"?","?","?","?","?",
 	"none"
 };
 
@@ -181,7 +186,7 @@ const char *moduleName[] =
 
 // Utilities and storage not part of any class
 
-static char scratchStringBuffer[120];		// this is now used only for short messages; needs to be long enough to print delta parameters
+static char scratchStringBuffer[170];		// this needs to be long enough to print delta parameters and 18 words of stack (162 bytes)
 StringRef scratchString(scratchStringBuffer, ARRAY_SIZE(scratchStringBuffer));
 
 // For debug use

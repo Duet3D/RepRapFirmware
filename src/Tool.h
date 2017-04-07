@@ -26,15 +26,19 @@ Licence: GPL
 #ifndef TOOL_H_
 #define TOOL_H_
 
+#include "RepRapFirmware.h"
+
+const uint32_t DefaultXAxisMapping = 0x0001;	// by default, X is mapped to X
+
 class Tool
 {
 public:
 
-	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount);
+	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap);
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
-	void SetOffset(const float offs[AXES]);
+	void SetOffset(const float offs[MAX_AXES]);
 	size_t DriveCount() const;
 	int Drive(int driveNumber) const;
 	bool ToolCanDrive(bool extrude);
@@ -43,13 +47,17 @@ public:
 	int Number() const;
 	void SetVariables(const float* standby, const float* active);
 	void GetVariables(float* standby, float* active) const;
-	void DefineMix(float* m);
+	void DefineMix(const float m[]);
 	const float* GetMix() const;
 	void SetMixing(bool b);
 	bool GetMixing() const;
 	float MaxFeedrate() const;
 	float InstantDv() const;
 	void Print(StringRef& reply);
+	uint32_t GetXAxisMap() const { return xMapping; }
+	uint32_t GetFanMapping() const { return fanMapping; }
+
+	float virtualExtruderPosition;
 
 	friend class RepRap;
 
@@ -69,20 +77,23 @@ private:
 	void SetTemperatureFault(int8_t dudHeater);
 	void ResetTemperatureFault(int8_t wasDudHeater);
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
+
 	int myNumber;
-	int drives[DRIVES - AXES];
-	float mix[DRIVES - AXES];
-	bool mixing;
+	int drives[MaxExtruders];
+	float mix[MaxExtruders];
 	size_t driveCount;
 	int heaters[HEATERS];
 	float activeTemperatures[HEATERS];
 	float standbyTemperatures[HEATERS];
 	size_t heaterCount;
+	float offset[MAX_AXES];
+	uint32_t xMapping;
+	uint32_t fanMapping;
 	Tool* next;
+
+	bool mixing;
 	bool active;
 	bool heaterFault;
-	float offset[AXES];
-
 	volatile bool displayColdExtrudeWarning;
 };
 
@@ -111,14 +122,6 @@ inline int Tool::Number() const
 	return myNumber;
 }
 
-inline void Tool::DefineMix(float* m)
-{
-	for(size_t drive = 0; drive < driveCount; drive++)
-	{
-		mix[drive] = m[drive];
-	}
-}
-
 inline const float* Tool::GetMix() const
 {
 	return mix;
@@ -144,9 +147,9 @@ inline const float *Tool::GetOffset() const
 	return offset;
 }
 
-inline void Tool::SetOffset(const float offs[AXES])
+inline void Tool::SetOffset(const float offs[MAX_AXES])
 {
-	for(size_t i = 0; i < AXES; ++i)
+	for(size_t i = 0; i < MAX_AXES; ++i)
 	{
 		offset[i] = offs[i];
 	}

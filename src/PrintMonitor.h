@@ -20,10 +20,18 @@ Licence: GPL
 #ifndef PRINTMONITOR_H
 #define PRINTMONITOR_H
 
+#include "RepRapFirmware.h"
+
 const FilePosition GCODE_HEADER_SIZE = 8192uL;		// How many bytes to read from the header
-const FilePosition GCODE_FOOTER_SIZE = 192000uL;	// How many bytes to read from the footer
-const size_t GCODE_READ_SIZE = 1024;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 4 for read efficiency)
-const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (should be a multple of 4 as well)
+const FilePosition GCODE_FOOTER_SIZE = 400000uL;	// How many bytes to read from the footer
+
+#ifdef DUET_NG
+const size_t GCODE_READ_SIZE = 4096;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
+#else
+const size_t GCODE_READ_SIZE = 1024;				// How many bytes to read in one go in GetFileInfo() (should be a multiple of 512 for read efficiency)
+#endif
+
+const size_t GCODE_OVERLAP_SIZE = 100;				// Size of the overlapping buffer for searching (should be a multiple of 4)
 
 const float LAYER_HEIGHT_TOLERANCE = 0.015;			// Tolerance for comparing two Z heights (in mm)
 
@@ -33,6 +41,7 @@ const float ESTIMATION_MIN_FILE_USAGE = 0.001;		// Minium per cent of the file t
 const float FIRST_LAYER_SPEED_FACTOR = 0.25;		// First layer speed factor compared to other layers (only for layer-based estimation)
 
 const uint32_t PRINTMONITOR_UPDATE_INTERVAL = 200;	// Update interval in milliseconds
+const uint32_t MAX_FILEINFO_PROCESS_TIME = 200;		// Maximum time to spend polling for file info in each call
 
 enum PrintEstimationMethod
 {
@@ -46,9 +55,10 @@ struct GCodeFileInfo
 {
 	bool isValid;
 	FilePosition fileSize;
+	time_t lastModifiedTime;
 	float firstLayerHeight;
 	float objectHeight;
-	float filamentNeeded[DRIVES - AXES];
+	float filamentNeeded[DRIVES - MIN_AXES];
 	unsigned int numFilaments;
 	float layerHeight;
 	char generatedBy[50];
@@ -90,8 +100,8 @@ class PrintMonitor
 		float GetFirstLayerHeight() const;
 
 	private:
-		Platform *platform;
-		GCodes *gCodes;
+		Platform * const platform;
+		GCodes * const gCodes;
 		float longWait;
 		uint32_t lastUpdateTime;
 
@@ -116,8 +126,6 @@ class PrintMonitor
 		float fileProgressPerLayer[MAX_LAYER_SAMPLES];
 		float layerEstimatedTimeLeft;
 
-		float RawFilamentExtruded() const;
-
 		// We parse G-Code files in multiple stages. These variables hold the required information
 		volatile FileParseState parseState;
 		char filenameBeingParsed[FILENAME_LENGTH];
@@ -137,7 +145,7 @@ class PrintMonitor
 		bool FindLayerHeight(const char* buf, size_t len, float& layerHeight) const;
 		unsigned int FindFilamentUsed(const char* buf, size_t len, float *filamentUsed, unsigned int maxFilaments) const;
 
-		float accumulatedParseTime, accumulatedReadTime;
+		uint32_t accumulatedParseTime, accumulatedReadTime, accumulatedSeekTime;
 };
 
 inline bool PrintMonitor::IsPrinting() const { return isPrinting; }

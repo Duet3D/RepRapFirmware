@@ -8,9 +8,8 @@
 #ifndef OUTPUTMEMORY_H_
 #define OUTPUTMEMORY_H_
 
-#include "Arduino.h"
-#include "Configuration.h"
-#include "StringRef.h"
+#include "RepRapFirmware.h"
+#include "MessageType.h"
 
 const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can be pushed onto one stack instance
 
@@ -38,9 +37,9 @@ class OutputBuffer
 		const char *Read(size_t len);
 		size_t BytesLeft() const { return dataLength - bytesRead; }	// How many bytes have not been sent yet?
 
-		int printf(const char *fmt, ...);
-		int vprintf(const char *fmt, va_list vargs);
-		int catf(const char *fmt, ...);
+		size_t printf(const char *fmt, ...);
+		size_t vprintf(const char *fmt, va_list vargs);
+		size_t catf(const char *fmt, ...);
 
 		size_t copy(const char c);
 		size_t copy(const char *src);
@@ -60,8 +59,7 @@ class OutputBuffer
 		static void Init();
 
 		// Allocate an unused OutputBuffer instance. Returns true on success or false if no instance could be allocated.
-		// Setting isAppending to true will guarantee that one OutputBuffer will remain available for single allocation.
-		static bool Allocate(OutputBuffer *&buf, bool isAppending = false);
+		static bool Allocate(OutputBuffer *&buf);
 
 		// Get the number of bytes left for allocation. If writingBuffer is not NULL, this returns the number of free bytes for
 		// continuous writes, i.e. for writes that need to allocate an extra OutputBuffer instance to finish the message.
@@ -76,7 +74,7 @@ class OutputBuffer
 		// Release all OutputBuffer objects in a chain
 		static void ReleaseAll(OutputBuffer *buf);
 
-		static void Diagnostics();
+		static void Diagnostics(MessageType mtype);
 
 	private:
 
