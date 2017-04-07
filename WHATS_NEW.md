@@ -1,8 +1,8 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.18RC1
-===============
+Version 1.18
+============
 
 New features:
 - First official release for Duet Ethernet
@@ -22,6 +22,10 @@ New features:
 - Live coordinates are now reported to 3 decimal places instead of 2
 - When using a Z probe type other than 2, the probe output is sampled every 1ms instead of every 2ms for faster response
 - PanelDue status responses continue to be sent while executing M109/116/190/191 commands
+- Increased maximum permitted motor current on TMC2660 drivers to 2.4A
+- Improved error messages when a M303 command has an out-of-range parameter
+- We now use a USB VID/PID allocated to us instead oif Atmel's CDC example ones
+- The Windows device driver now supports the Bossa Program Port, so you can now use bossac even if you don't have the Atmel or Arduino device driver for it installed
 
 Bug fixes:
 - Fixed issue with loading height map file when the number of probe points along the X axis is large
@@ -40,6 +44,7 @@ Known issues
 - FTP on the Duet Ethernet cannot be used to do file transfers
 
 Upgrade notes
+- If you connect via USB from a Windows PC you should install the updated device driver in the Drivers folder of this repository
 - If you use the M552 R parameter to change the HTTP port number on a wired Duet, you will need to use M586 instead
 - If you use FTP or Telnet on a wired Duet, you will need to enable them using M586
 - It is recommended that you re-run heater auto tuning when upgrading to 1.18 from an earlier release
