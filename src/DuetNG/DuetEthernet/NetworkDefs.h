@@ -11,23 +11,22 @@
 #include <cstdint>
 #include <cstddef>
 
-class NetworkTransaction;
 class Socket;
 class NetworkBuffer;
-
-// Definition of how a Connection is represented, for Webserver module
-typedef Socket *Connection;
-const Connection NoConnection = nullptr;
 
 typedef uint8_t SocketNumber;
 const SocketNumber NoSocket = 255;
 
 typedef uint16_t Port;
+typedef uint8_t Protocol;
 
 const uint8_t DefaultMacAddress[6] = { 0xBE, 0xEF, 0xDE, 0xAD, 0xFE, 0xED };
 const uint8_t DefaultIpAddress[4] = { 0, 0, 0, 0 };
 const uint8_t DefaultNetMask[4] = { 255, 255, 255, 0 };
 const uint8_t DefaultGateway[4] = { 0, 0, 0, 0 };
+
+const size_t NumProtocols = 3;					// number of network protocols we support, not counting FtpDataProtocol or AnyProtocol
+const Protocol HttpProtocol = 0, FtpProtocol = 1, TelnetProtocol = 2, FtpDataProtocol = 3, AnyProtocol = 255;
 
 const Port DefaultHttpPort = 80;
 const Port DefaultFtpPort = 21;

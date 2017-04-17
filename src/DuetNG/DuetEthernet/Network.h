@@ -12,6 +12,9 @@ Separated out from Platform.h by dc42 and extended by zpl
 #include "NetworkDefs.h"
 #include "RepRapFirmware.h"
 #include "MessageType.h"
+#include "NetworkResponder.h"
+#include "FtpResponder.h"
+#include "TelnetResponder.h"
 #include "Socket.h"
 
 // We have 8 sockets available on the W5500.
@@ -22,7 +25,7 @@ const SocketNumber TelnetSocketNumber = 6;
 const size_t NumTcpSockets = 7;
 const SocketNumber DhcpSocketNumber = 7;		// TODO can we allocate this dynamically when required, to allow more http sockets most of the time?
 
-const size_t NumProtocols = 3;					// number of network protocols we support
+const unsigned int NumHttpResponders = 4;		// the number of concurrent HTTP requests we can process
 
 class Platform;
 
@@ -46,44 +49,20 @@ public:
 	void DisableProtocol(int protocol, StringRef& reply);
 	void ReportProtocols(StringRef& reply) const;
 
-	bool Lock();
-	void Unlock();
-	bool InLwip() const;
-
-	void Enable();
-	void Disable();
-	bool IsEnabled() const;
-
-	Port GetHttpPort() const;
-	Port GetFtpPort() const;
-	Port GetTelnetPort() const;
+	void Enable(int mode, StringRef& reply);			// enable or disable the network
+	int EnableState() const;
 
 	void SetHostname(const char *name);
 
-	// Interfaces for the Webserver
+	bool FindResponder(Socket *skt, Protocol protocol);
 
-	NetworkTransaction *GetTransaction(Connection conn = NoConnection);
+	bool GetNetworkState(StringRef& reply);
 
-	void OpenDataPort(Port port);
-	Port GetDataPort() const;
-	void CloseDataPort();
-
-	void SaveDataConnection() {}
-	void SaveFTPConnection() {}
-	void SaveTelnetConnection() {}
-
-	bool AcquireFTPTransaction() { return AcquireTransaction(FtpSocketNumber); }
-	bool AcquireDataTransaction() { return AcquireTransaction(FtpDataSocketNumber); }
-	bool AcquireTelnetTransaction() { return AcquireTransaction(TelnetSocketNumber); }
-
-	void Defer(NetworkTransaction *tr);
-
-	static Port GetLocalPort(Connection conn);
-	static Port GetRemotePort(Connection conn);
-	static uint32_t GetRemoteIP(Connection conn);
-	static bool IsConnected(Connection conn);
-	static bool IsTerminated(Connection conn);
-	static void Terminate(Connection conn);
+	void HandleHttpGCodeReply(const char *msg);
+	void HandleTelnetGCodeReply(const char *msg);
+	void HandleHttpGCodeReply(OutputBuffer *buf);
+	void HandleTelnetGCodeReply(OutputBuffer *buf);
+	uint32_t GetHttpReplySeq();
 
 private:
 	enum class NetworkState
@@ -92,6 +71,7 @@ private:
 		enabled,					// Network enabled but not started yet
 		establishingLink,			// starting up, waiting for link
 		obtainingIP,				// link established, waiting for DHCP
+		connected,					// just established a connection
 		active						// network running
 	};
 
@@ -101,16 +81,20 @@ private:
 	bool AcquireTransaction(size_t socketNumber)
 	pre(socketNumber < NumTcpSockets);
 
-	void StartProtocol(size_t protocol)
+	void StartProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);
 
-	void ShutdownProtocol(size_t protocol)
+	void ShutdownProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);
 
-	void ReportOneProtocol(size_t protocol, StringRef& reply) const
+	void ReportOneProtocol(Protocol protocol, StringRef& reply) const
 	pre(protocol < NumProtocols);
 
 	Platform * const platform;
+	NetworkResponder *responders;
+	NetworkResponder *nextResponderToPoll;
+	FtpResponder *ftpResponder;
+	TelnetResponder *telnetResponder;
 	float longWait;
 	uint32_t lastTickMillis;
 

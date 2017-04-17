@@ -8,8 +8,6 @@
 
 #include "Platform.h"
 #include "RepRap.h"
-#include "TransactionBuffer.h"
-#include "TransactionBufferReader.h"
 #include "WifiFirmwareUploader.h"
 
 // Define exactly one of the following as 1, the other as zero
@@ -27,14 +25,36 @@
 
 #include "matrix.h"
 
+const uint32_t WifiResponseTimeoutMillis = 1000;
+const uint32_t WiFiStartupMillis = 300;
+
 // Forward declarations of static functions
 static void spi_dma_disable();
 static bool spi_dma_check_rx_complete();
 
-static TransactionBuffer inBuffer, outBuffer;
-static uint32_t dummyOutBuffer[TransactionBuffer::headerDwords] = {0, 0, 0, 0, 0};
+struct MessageBufferOut
+{
+	MessageHeaderSamToEsp hdr;
+	uint8_t data[MaxDataLength];	// data to send
+};
 
-void EspTransferRequestIsr()
+struct MessageBufferIn
+{
+	MessageHeaderEspToSam hdr;
+	uint8_t data[MaxDataLength];	// data to send
+};
+
+static MessageBufferOut bufferOut;
+static MessageBufferIn bufferIn;
+static volatile bool transferPending = false;
+
+static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
+{
+	const uint32_t *b = reinterpret_cast<const uint32_t *>(buf);
+	debugPrintf("%s %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x\n", msg, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9]);
+}
+
+static void EspTransferRequestIsr()
 {
 	reprap.GetNetwork()->EspRequestsTransfer();
 }
@@ -42,10 +62,9 @@ void EspTransferRequestIsr()
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-Network::Network(Platform* p) : platform(p), responseCode(0), responseBody(nullptr), responseText(nullptr), responseFile(nullptr),
+Network::Network(Platform* p) : platform(p), uploader(nullptr), responseCode(0), responseBody(nullptr), responseText(nullptr), responseFile(nullptr),
 		spiTxUnderruns(0), spiRxOverruns(0),
-		state(disabled), activated(false), connectedToAp(false)
-
+		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false), espStatusChanged(false)
 {
 	strcpy(hostname, HOSTNAME);
 	ClearIpAddress();
@@ -75,18 +94,53 @@ void Network::ReportProtocols(StringRef& reply) const
 	reply.copy("M586 is not yet implemented on this platform");
 }
 
+// This is called at the end of config.g processing.
+// Start the network if it was enabled
 void Network::Activate()
 {
-	activated = true;
-	if (state == enabled)
+	if (!activated)
 	{
-		Start();
+		activated = true;
+		if (requestedMode != WiFiState::disabled)
+		{
+			Start();
+		}
+		else
+		{
+			platform->Message(HOST_MESSAGE, "Network disabled.\n");
+		}
 	}
 }
 
 void Network::Exit()
 {
 	Stop();
+}
+
+// Get the network state into the reply buffer, returning true if there is some sort of error
+bool Network::GetNetworkState(StringRef& reply)
+{
+	switch (state)
+	{
+	case NetworkState::disabled:
+		reply.copy("WiFi module is disabled");
+		break;
+	case NetworkState::starting:
+		reply.copy("WiFi module is being started");
+		break;
+	case NetworkState::changingMode:
+		reply.copy("WiFi module is changing mode");
+		break;
+	case NetworkState::running:
+		reply.copy("WiFi module is");
+		reply.cat(TranslateWiFiState(currentMode));
+		break;
+	default:
+		reply.copy("Unknown network state");
+		return true;
+		break;
+	}
+	return false;
 }
 
 void Network::ClearIpAddress()
@@ -142,34 +196,22 @@ void Network::Start()
 
 	// Set the data request pin to be an input
 	pinMode(EspTransferRequestPin, INPUT_PULLUP);
+	// we don't use an interrupt for this yetr
 	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING);
 
-	// The ESP takes about 300ms before it starts talking to use, so don't wait for it here, do that in Spin()
-
-	// Clear the transaction buffers
-	inBuffer.Clear();
-	outBuffer.Clear();
-
-	state = starting;
-
-	(void) SPI->SPI_SR;				// clear any pending interrupt
-	NVIC_SetPriority(SPI_IRQn, 10);
-	NVIC_EnableIRQ(SPI_IRQn);
-
-	connectedToAp = false;
+	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
 	spiTxUnderruns = spiRxOverruns = 0;
+
+	timer = millis();
+	state = NetworkState::starting;
 }
 
 // Stop the ESP
 void Network::Stop()
 {
-	if (state != disabled)
+	if (state != NetworkState::disabled)
 	{
 		digitalWrite(SamTfrReadyPin, LOW);			// tell the ESP we can't receive
-		for (int i = 0; i < 10 && (state == receivePending || state == sendReceivePending); ++i)
-		{
-			delay(1);
-		}
 		digitalWrite(EspResetPin, LOW);	// put the ESP back into reset
 		NVIC_DisableIRQ(SPI_IRQn);
 		spi_disable(SPI);
@@ -177,220 +219,109 @@ void Network::Stop()
 		spi_dma_disable();
 
 		ClearIpAddress();
-		state = disabled;
-		connectedToAp = false;
+		state = NetworkState::disabled;
+		currentMode = WiFiState::disabled;
 	}
 }
 
 void Network::Spin(bool full)
 {
-//	static float lastTime = 0.0;
-
 	// Main state machine.
-	// Take care with this, because ISRs may cause the following state transitions:
-	//  idle -> transferPending
-	//  transferPending -> processing
 	switch (state)
 	{
-	case starting:
-		if (full)
+	case NetworkState::starting:
+		// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
+		if (full && (millis() - timer) >= WiFiStartupMillis)
 		{
 			// See if the ESP8266 has set CS high yet
-			if (digitalRead(SamCsPin))
+			if (digitalRead(SamCsPin) && digitalRead(EspTransferRequestPin))
 			{
 				// Setup the SPI controller in slave mode and assign the CS pin to it
-				platform->Message(HOST_MESSAGE, "WiFi server starting up\n");
+				platform->Message(HOST_MESSAGE, "WiFi module started\n");
 				SetupSpi();						// set up the SPI subsystem
-				state = idle;
-				TryStartTransfer();
+				state = NetworkState::running;
+				currentMode = WiFiState::idle;				// wifi module is running but inactive
 			}
 		}
 		break;
 
-	case transferDone:
-//		platform->Message(HOST_MESSAGE, "Transfer done\n");
-		if (spi_dma_check_rx_complete())
-		{
-			if (inBuffer.IsReady())
-			{
-//				platform->MessageF(DEBUG_MESSAGE, "Rec %u\n", inBuffer.GetFragment());
-				if (inBuffer.IsValid())
-				{
-					inBuffer.AppendNull();
-//					platform->Message(HOST_MESSAGE, "Got data\n");
-				}
-				else
-				{
-					if (reprap.Debug(moduleNetwork))
-					{
-						platform->MessageF(DEBUG_MESSAGE, "Bad msg in: ip=%u.%u.%u.%u opcode=%04x frag=%u length=%u\n",
-								inBuffer.GetIp() & 255,
-								(inBuffer.GetIp() >> 8) & 255,
-								(inBuffer.GetIp() >> 16) & 255,
-								(inBuffer.GetIp() >> 24) & 255,
-								inBuffer.GetOpcode(),
-								inBuffer.GetFragment(),
-								inBuffer.GetLength()
-								);
-					}
-					inBuffer.Clear();
-				}
-			}
-			else
-			{
-//				platform->MessageF(DEBUG_MESSAGE, "Rec null %u %u %u %u %u\n",
-//						inBuffer.GetOpcode(), inBuffer.GetIp(), inBuffer.GetSeq(), inBuffer.GetFragment(), inBuffer.GetLength());
-			}
-			state = processing;
-		}
-		else
-		{
-			break;
-		}
-		// no break
-	case processing:
-		// Deal with incoming data, if any
-		if (inBuffer.IsReady())
-		{
-			ProcessIncomingData(inBuffer);			// this may or may not clear inBuffer
-		}
-		if (!inBuffer.IsEmpty())
-		{
-			break;									// still processing
-		}
-		responseFragment = 0;
-		state = sending;
-		// no break
-	case sending:
-		if (full && outBuffer.IsEmpty())
-		{
-			// See if we have more of the current response to send
-			if (responseBody != nullptr)
-			{
-				// We have a reply contained in an OutputBuffer
-				outBuffer.SetMessage(trTypeResponse | ttRr, responseIp, responseFragment);
-				if (responseFragment == 0)
-				{
-					// Put the return code and content length at the start of the message
-					outBuffer.AppendU32(responseCode);
-					outBuffer.AppendU32(responseBody->Length());
-				}
-
-				do
-				{
-					const size_t len = responseBody->BytesLeft();
-					const size_t bytesWritten = outBuffer.AppendData(responseBody->Read(0), len);
-					if (bytesWritten < len)
-					{
-						// Output buffer is full so will will need to send another fragment
-						(void)responseBody->Read(bytesWritten);		// say how much data we have taken from the buffer
-						break;
-					}
-					responseBody = OutputBuffer::Release(responseBody);
-				}
-				while (responseBody != nullptr);
-
-				if (responseBody == nullptr)
-				{
-					outBuffer.SetLastFragment();
-					DebugPrintResponse();
-					state = idle;
-				}
-				else
-				{
-					++responseFragment;
-					DebugPrintResponse();
-				}
-			}
-			else if (responseText != nullptr)
-			{
-				// We have a simple text reply to send
-				outBuffer.SetMessage(trTypeResponse | ttRr, responseIp, responseFragment);
-				if (responseFragment == 0)
-				{
-					// Put the return code and content length at the start of the message
-					outBuffer.AppendU32(responseCode);
-					outBuffer.AppendU32(strlen(responseText));
-				}
-
-				const size_t len = strlen(responseText);
-				const size_t lenSent = outBuffer.AppendData(responseText, len);
-				if (lenSent < len)
-				{
-					responseText += lenSent;
-					++responseFragment;
-					DebugPrintResponse();
-				}
-				else
-				{
-					responseText = nullptr;
-					outBuffer.SetLastFragment();
-					DebugPrintResponse();
-					state = idle;
-				}
-			}
-			else if (responseFile != nullptr)
-			{
-				// We have a file reply to send
-				outBuffer.SetMessage(trTypeResponse | ttRr, responseIp, responseFragment);
-				if (responseFragment == 0)
-				{
-					// Put the return code and content length at the start of the message
-					outBuffer.AppendU32(responseCode);
-					outBuffer.AppendU32(responseFileBytes);
-				}
-
-				size_t spaceLeft;
-				char *p = outBuffer.GetBuffer(spaceLeft);
-				uint32_t bytesToRead = min<uint32_t>(spaceLeft, responseFileBytes);
-				int bytesRead = responseFile->Read(p, bytesToRead);
-				if (bytesRead >= 0 && (uint32_t)bytesRead <= bytesToRead)
-				{
-					outBuffer.DataAppended((uint32_t)bytesRead);
-				}
-
-				bool finished;
-				if (bytesRead == (int)bytesToRead)
-				{
-					responseFileBytes -= (uint32_t)bytesRead;
-					finished = (responseFileBytes == 0);
-				}
-				else
-				{
-					// We have a file read error, however it's too late to signal it unless this is the first fragment
-					finished = true;
-				}
-
-				if (finished)
-				{
-					responseFile->Close();
-					responseFile = nullptr;
-					outBuffer.SetLastFragment();
-					DebugPrintResponse();
-					state = idle;
-				}
-				else
-				{
-					++responseFragment;
-					DebugPrintResponse();
-				}
-			}
-			else
-			{
-				state = idle;
-			}
-			TryStartTransfer();
-		}
-		break;
-
-	case idle:
-		TryStartTransfer();
-		break;
-
-	case disabled:
+	case NetworkState::disabled:
 		if (full)
 		{
 			uploader->Spin();
+		}
+		break;
+
+	case NetworkState::running:
+		if (full)
+		{
+			if (espStatusChanged && digitalRead(EspTransferRequestPin))
+			{
+				// The ESP is signalling to us that an error occurred or there was a state change
+				char messageBuffer[100];
+				const int32_t rslt = SendCommand(NetworkCommand::networkGetLastError, 0, nullptr, 0, messageBuffer, sizeof(messageBuffer));
+				messageBuffer[ARRAY_UPB(messageBuffer)] = 0;
+				if (rslt < 0)
+				{
+					platform->Message(GENERIC_MESSAGE, "Error retrieving WiFi status message\n");
+				}
+				else if (rslt > 0 && messageBuffer[0] != 0)
+				{
+					platform->MessageF(GENERIC_MESSAGE, "WiFi reported error: %s\n", messageBuffer);
+				}
+			}
+			else if (currentMode != requestedMode && currentMode != WiFiState::connecting)
+			{
+				// Tell the wifi module to change mode
+				int32_t rslt = ResponseUnknownError;
+				if (currentMode != WiFiState::idle)
+				{
+					// We must set WiFi module back to idle before changing to the new state
+					rslt = SendCommand(NetworkCommand::networkStop, 0, nullptr, 0, nullptr, 0);
+				}
+				else if (requestedMode == WiFiState::connected)
+				{
+					rslt = SendCommand(NetworkCommand::networkStartClient, 0, nullptr, 0, nullptr, 0);
+				}
+				else if (requestedMode == WiFiState::runningAsAccessPoint)
+				{
+					rslt = SendCommand(NetworkCommand::networkStartAccessPoint, 0, nullptr, 0, nullptr, 0);
+				}
+
+				if (rslt >= 0)
+				{
+					state = NetworkState::changingMode;
+				}
+				else
+				{
+					Stop();
+					platform->MessageF(GENERIC_MESSAGE, "Failed to change WiFi mode (code %d)\n", rslt);
+				}
+			}
+		}
+		break;
+
+	case NetworkState::changingMode:
+		if (full && espStatusChanged && digitalRead(EspTransferRequestPin))
+		{
+			// Retrieve the new status and any error message there is
+			char messageBuffer[100];
+			const int32_t rslt = SendCommand(NetworkCommand::networkGetLastError, 0, nullptr, 0, messageBuffer, sizeof(messageBuffer));
+			messageBuffer[ARRAY_UPB(messageBuffer)] = 0;
+			if (rslt < 0)
+			{
+				platform->Message(GENERIC_MESSAGE, "Error retrieving WiFi error message\n");
+			}
+			else if (rslt > 0 && messageBuffer[0] != 0)
+			{
+				platform->MessageF(GENERIC_MESSAGE, "WiFi reported error: %s\n", messageBuffer);
+			}
+			if (currentMode != WiFiState::connecting)
+			{
+				requestedMode = currentMode;				// don't keep repeating the request
+				state = NetworkState::running;
+				platform->MessageF(HOST_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
+			}
 		}
 		break;
 
@@ -399,38 +330,6 @@ void Network::Spin(bool full)
 	}
 
 	platform->ClassReport(longWait);
-}
-
-void Network::DebugPrintResponse()
-{
-	if (reprap.Debug(moduleNetwork))
-	{
-		char buffer[200];
-		StringRef reply(buffer, ARRAY_SIZE(buffer));
-		outBuffer.AppendNull();
-		size_t len;
-		const char* s = (const char*)outBuffer.GetData(len);
-		uint32_t frag = outBuffer.GetFragment() & ~lastFragment;
-
-		reply.printf("Resp %u: ", outBuffer.GetFragment());
-		if (frag == 0 && len >= 8)
-		{
-			// First fragment, so there is a 2-word header
-			reply.catf("%08x %08x ", *(const uint32_t*)s, *(const uint32_t*)(s + 4));
-			s += 8;
-			len -= 8;
-		}
-		if (len < 38)
-		{
-			reply.catf("%s\n", s);
-		}
-		else
-		{
-			reply.catf("%c%c%c%c...s\n", s[0], s[1], s[2], s[3], s + len - 30);
-		}
-
-		platform->Message(HOST_MESSAGE, reply.Pointer());
-	}
 }
 
 // Translate a ESP8266 reset reason to text
@@ -453,237 +352,57 @@ const char* Network::TranslateEspResetReason(uint32_t reason)
 			: "Unknown";
 }
 
-void Network::ProcessIncomingData(TransactionBuffer &buf)
+const char* Network::TranslateNetworkState() const
 {
-	uint32_t opcode = inBuffer.GetOpcode();
-	switch(opcode & 0xFF0000FF)
+	switch (state)
 	{
-	case trTypeInfo | ttNetworkInfo:
-		// Network info received from host
-		// The first 4 bytes specify the format of the remaining data, as follows:
-		// Format 1:
-		//		4 bytes of IP address
-		//		4 bytes of free heap
-		//		4 bytes of reset reason
-		//		4 bytes of flash chip size
-		//		2 bytes of operating state (1 = client, 2 = access point)
-		//		2 bytes of ESP8266 Vcc according to its ADC
-		//		16 chars of WiFi firmware version
-		//		64 chars of host name, null terminated
-		//		32 chars of ssid (either ssid we are connected to or our own AP name), null terminated
+	case NetworkState::disabled:		return "disabled";
+	case NetworkState::starting:		return "starting";
+	case NetworkState::running:			return "running";
+	case NetworkState::changingMode:	return "changing mode";
+	default:							return "unknown";
+	}
+}
 
-		// Format 2:
-		//		4 bytes of IP address
-		//		4 bytes of free heap
-		//		4 bytes of reset reason
-		//		4 bytes of flash chip size
-		//		4 bytes of RSSI (added for info version 2)
-		//		2 bytes of operating state (1 = client, 2 = access point)
-		//		2 bytes of ESP8266 Vcc according to its ADC
-		//		16 chars of WiFi firmware version
-		//		64 chars of host name, null terminated
-		//		32 chars of ssid (either ssid we are connected to or our own AP name), null terminated
-		{
-			TransactionBufferReader reader(buf);
-			uint32_t infoVersion = reader.GetPrimitive<uint32_t>();
-			if (infoVersion == 1 || infoVersion == 2)
-			{
-				reader.GetArray(ipAddress, 4);
-				const uint32_t freeHeap = reader.GetPrimitive<uint32_t>();
-				const char *resetReason = TranslateEspResetReason(reader.GetPrimitive<uint32_t>());
-				const uint32_t flashSize = reader.GetPrimitive<uint32_t>();
-				int32_t rssi;
-				if (infoVersion == 2)
-				{
-					rssi = reader.GetPrimitive<int32_t>();
-				}
-				const uint16_t wifiState = reader.GetPrimitive<uint16_t>();
-				const uint16_t espVcc = reader.GetPrimitive<uint16_t>();
-				const char *firmwareVersion = reader.GetString(16);
-				strncpy(wiFiServerVersion, firmwareVersion, ARRAY_SIZE(wiFiServerVersion));
-				const char *hostName = reader.GetString(64);
-				const char *ssid = reader.GetString(32);
-				if (reader.IsOk())
-				{
-					platform->MessageF(HOST_MESSAGE,
-										"DuetWiFiServer version %s\n"
-										"Flash size %u, free RAM %u bytes, WiFi Vcc %.2fV, host name: %s, reset reason: %s\n",
-										firmwareVersion, flashSize, freeHeap, (float)espVcc/1024, hostName, resetReason);
-					if (wifiState == 1)
-					{
-						if (infoVersion == 2)
-						{
-							platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u, signal strength=%ddBm\n",
-												ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3], rssi);
-						}
-						else
-						{
-							platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u\n",
-												ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
-						}
-					}
-					else if (wifiState == 2)
-					{
-						platform->MessageF(HOST_MESSAGE, "WiFi is running as an access point with name %s\n", ssid);
-					}
-					else
-					{
-						platform->MessageF(HOST_MESSAGE, "Unknown WiFi state %d\n", wifiState);
-					}
-					connectedToAp = true;
-				}
-			}
-		}
-		inBuffer.Clear();
-		break;
-
-	case trTypeInfo | ttNetworkInfoOld:
-		// Old style network info received from host. Remove this code when everyone is using updated DuetWiFiServer firmware.
-		// Data is 4 bytes of IP address, 4 bytes of free heap, 4 bytes of reset reason, 64 chars of host name, and 32 bytes of ssid
-		{
-			TransactionBufferReader reader(buf);
-			reader.GetArray(ipAddress, 4);
-			uint32_t freeHeap = reader.GetPrimitive<uint32_t>();
-			const char *resetReason = TranslateEspResetReason(reader.GetPrimitive<uint32_t>());
-			const char *hostName = reader.GetString(64);
-			const char *ssid = reader.GetString(32);
-			if (reader.IsOk())
-			{
-				platform->MessageF(HOST_MESSAGE, "WiFi server connected to access point %s, IP=%u.%u.%u.%u\n",
-									ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
-				platform->MessageF(HOST_MESSAGE, "WiFi host name %s, free memory %u bytes, reset reason: %s\n", hostName, freeHeap, resetReason);
-				connectedToAp = true;
-			}
-		}
-		inBuffer.Clear();
-		break;
-
-	case trTypeRequest | ttRr:
-#if 0
-		{
-			size_t length;
-			const char* data = (const char*)inBuffer.GetData(length);
-			if (length > 30) { data += (length - 30); }
-			platform->MessageF(DEBUG_MESSAGE, "IP %u.%u.%u.%u Frag %u %s\n",
-								inBuffer.GetIp() & 255,
-								(inBuffer.GetIp() >> 8) & 255,
-								(inBuffer.GetIp() >> 16) & 255,
-								(inBuffer.GetIp() >> 24) & 255,
-								inBuffer.GetFragment(),
-								data);
-		}
-#else
-		// Do nothing - the webserver module will pick it up
-#endif
-		break;
-
-	default:
-		{
-			size_t length;
-			const char* data = (const char*)inBuffer.GetData(length);
-			platform->MessageF(DEBUG_MESSAGE, "Received opcode %08x length %u data %s\n", opcode, length, data);
-		}
-		inBuffer.Clear();
-		break;
+/*static*/ const char* Network::TranslateWiFiState(WiFiState w)
+{
+	switch (w)
+	{
+	case WiFiState::disabled:				return "disabled";
+	case WiFiState::idle:					return "idle";
+	case WiFiState::connecting:				return "trying to connect";
+	case WiFiState::connected:				return "connected to an access point";
+	case WiFiState::runningAsAccessPoint:	return "providing an access point";
+	default:								return "in an unknown state";
 	}
 }
 
 // Called by the webserver module to get an incoming request
 const char *Network::GetRequest(uint32_t& ip, size_t& length, uint32_t& fragment) const
 {
-	if (state == processing)
-	{
-		uint32_t opcode = inBuffer.GetOpcode();
-		if ((opcode & 0xFF0000FF) == (trTypeRequest | ttRr))
-		{
-			const void *data = inBuffer.GetData(length);
-			if (length > 0)
-			{
-				ip = inBuffer.GetIp();
-				fragment = inBuffer.GetFragment();
-				if ((fragment & 0x7FFFFFFF) == 0)
-				{
-					length += 1;					// allow client to read the null at the end too
-				}
-//				platform->MessageF(HOST_MESSAGE, "Req: %s\n", (const char*)data);
-				return (const char*)data;
-			}
-			else
-			{
-				platform->Message(DEBUG_MESSAGE, "Bad request\n");
-				inBuffer.Clear();					// bad request
-			}
-		}
-	}
+	//TODO
 	return nullptr;
 }
 
 // Send a reply from an OutputBuffer chain. Release the chain when we have finished with it.
 void Network::SendReply(uint32_t ip, unsigned int code, OutputBuffer *body)
 {
-	if (responseBody != nullptr || responseText != nullptr || responseFile != nullptr)
+	//TODO
+	while (body != nullptr)
 	{
-		platform->Message(HOST_MESSAGE, "response already being sent in SendReply(ob*)\n");
-	}
-	else
-	{
-		responseIp = ip;
-		responseCode = code;
-		responseBody = body;
-
-#if 0
-		//debug
-		{
-			char buf[101];
-			size_t len = min<size_t>(ARRAY_UPB(buf), responseBody->DataLength());
-			strncpy(buf, responseBody->Data(), len);
-			buf[len] = 0;
-			platform->MessageF(HOST_MESSAGE, "%s %u %s\n", (responseCode & rcJson) ? "JSON reply" : "Reply", responseCode & rcNumber, buf);
-		}
-#endif
-		// Say we have taken the request
-		if (state == processing)
-		{
-			uint32_t opcode = inBuffer.GetOpcode();
-			if ((opcode & 0xFF0000FF) == (trTypeRequest | ttRr))
-			{
-				inBuffer.Clear();
-			}
-		}
+		body = OutputBuffer::Release(body);
 	}
 }
 
 // Send a reply from a null-terminated string
 void Network::SendReply(uint32_t ip, unsigned int code, const char *text)
 {
-	if (responseBody != nullptr || responseText != nullptr || responseFile != nullptr)
-	{
-		platform->Message(HOST_MESSAGE, "response already being sent in SendReply(cc*)\n");
-	}
-	else
-	{
-		responseIp = ip;
-		responseCode = code;
-		responseText = text;
-
-		//debug
-		//platform->MessageF(HOST_MESSAGE, "%s %u %s\n", (responseCode & rcJson) ? "JSON reply" : "Reply", responseCode & rcNumber, text);
-
-		// Say we have taken the request
-		if (state == processing)
-		{
-			uint32_t opcode = inBuffer.GetOpcode();
-			if ((opcode & 0xFF0000FF) == (trTypeRequest | ttRr))
-			{
-				inBuffer.Clear();
-			}
-		}
-	}
 }
 
 // Send a file as the reply. Close the file at the end.
 void Network::SendReply(uint32_t ip, unsigned int code, FileStore *file)
 {
+#if 0
 	if (responseBody != nullptr || responseText != nullptr || responseFile != nullptr)
 	{
 		platform->Message(HOST_MESSAGE, "response already being sent in SendReply(fs*)\n");
@@ -706,74 +425,103 @@ void Network::SendReply(uint32_t ip, unsigned int code, FileStore *file)
 			}
 		}
 	}
+#endif
 }
 
 // This is called when we have read a message fragment and there is no reply to send
 void Network::DiscardMessage()
 {
-	if (responseBody != nullptr || responseText != nullptr || responseFile != nullptr)
-	{
-		platform->Message(HOST_MESSAGE, "response being sent in DiscardMessage\n");
-	}
-
-	//debug
-	//platform->MessageF(HOST_MESSAGE, "%s %u %s\n", (responseCode & rcJson) ? "JSON reply" : "Reply", responseCode & rcNumber, text);
-
-	// Say we have taken the request
-	if (state == processing)
-	{
-		uint32_t opcode = inBuffer.GetOpcode();
-		if ((opcode & 0xFF0000FF) == (trTypeRequest | ttRr))
-		{
-			inBuffer.Clear();
-		}
-
-		// For faster response, change the state to idle so we can accept another packet immediately
-		state = idle;
-		TryStartTransfer();
-	}
 }
 
 void Network::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "=== Network ===\n");
-	const char* text = (state == starting) ? "starting"
-						: (state == disabled) ? "disabled"
-							: (state == enabled) ? "enabled but not running"
-								: "running";
-	platform->MessageF(mtype, "WiFiServer is %s\n", text);
+	platform->MessageF(mtype, "Network state is %s\n", TranslateNetworkState());
+	platform->MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
 	platform->MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
-}
-
-void Network::Enable()
-{
-	if (state == disabled)
+	if (state != NetworkState::disabled && state != NetworkState::starting)
 	{
-		state = enabled;
-		if (activated)
+		NetworkStatusResponse status;
+		if (SendCommand(NetworkCommand::networkGetStatus, 0, nullptr, 0, &status, sizeof(status)) > 0)
 		{
-			Start();
+			platform->MessageF(mtype, "WiFi IP address %d.%d.%d.%d, MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+								(status.ipAddress >> 24) & 255, (status.ipAddress >> 16) & 255, (status.ipAddress >> 8) & 255, status.ipAddress & 255,
+								status.macAddress[0], status.macAddress[1], status.macAddress[2], status.macAddress[3], status.macAddress[4], status.macAddress[5]);
+			platform->MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (float)status.vcc/1024, TranslateEspResetReason(status.resetReason));
+			platform->MessageF(mtype, "WiFi flash size %u, free heap %u\n", status.flashSize, status.freeHeap);
+			platform->MessageF(mtype, "WiFi signal strength %ddb\n", status.rssi);
+			status.versionText[ARRAY_UPB(status.versionText)] = 0;
+			platform->MessageF(mtype, "WiFi firmware version %s\n", status.versionText);
+			// status, ssid and hostName not displayed
+		}
+		else
+		{
+			platform->Message(mtype, "Failed to get WiFi status\n");
 		}
 	}
 }
 
-void Network::Disable()
+void Network::Enable(int mode, StringRef& reply)
 {
-	if (activated && state != disabled)
+	// Translate enable mode to desired WiFi mode
+	WiFiState modeRequested = (mode == 0) ? WiFiState::idle
+								: (mode == 1) ? WiFiState::connected
+									: (mode == 2) ? WiFiState::runningAsAccessPoint
+										: WiFiState::disabled;
+	if (activated)
 	{
-		Stop();
-		platform->Message(GENERIC_MESSAGE, "WiFi server stopped\n");
+		if (modeRequested == WiFiState::disabled)
+		{
+			// Shut down WiFi module completely
+			if (state != NetworkState::disabled)
+			{
+				Stop();
+				platform->Message(GENERIC_MESSAGE, "WiFi module stopped\n");
+			}
+		}
+		else
+		{
+			if (state == NetworkState::disabled)
+			{
+				requestedMode = modeRequested;
+				Start();
+			}
+			else if (modeRequested == currentMode || (modeRequested == WiFiState::connected && currentMode == WiFiState::connecting))
+			{
+				// Nothing to do, but make sure the requested mode is correct
+				requestedMode = modeRequested;
+			}
+			else if (currentMode != WiFiState::idle && modeRequested != WiFiState::idle)
+			{
+				reply.copy("Turn off the current WiFi mode before selecting a new one");
+			}
+			else
+			{
+				requestedMode = modeRequested;
+			}
+		}
+	}
+	else
+	{
+		requestedMode = modeRequested;
 	}
 }
 
-bool Network::IsEnabled() const
+int Network::EnableState() const
 {
-	return state != disabled;
+	return (requestedMode == WiFiState::idle) ? 0
+			: (requestedMode == WiFiState::connected) ? 1
+				: (requestedMode == WiFiState::runningAsAccessPoint) ? 2
+						: -1;
 }
 
 const uint8_t *Network::GetIPAddress() const
 {
 	return ipAddress;
+}
+
+void Network::EspRequestsTransfer()
+{
+	espStatusChanged = true;
 }
 
 // Set the DHCP hostname. Removes all whitespaces and converts the name to lower-case.
@@ -877,7 +625,7 @@ static bool spi_dma_check_rx_complete()
 #endif
 
 #if USE_DMAC
-	uint32_t status = DMAC->DMAC_CHSR;
+	const uint32_t status = DMAC->DMAC_CHSR;
 	if (   ((status & (DMAC_CHSR_ENA0 << CONF_SPI_DMAC_RX_CH)) == 0)	// controller is not enabled, perhaps because it finished a full buffer transfer
 		|| ((status & (DMAC_CHSR_EMPT0 << CONF_SPI_DMAC_RX_CH)) != 0)	// controller is enabled, probably suspended, and the FIFO is empty
 	   )
@@ -891,12 +639,12 @@ static bool spi_dma_check_rx_complete()
 #endif
 }
 
-static void spi_tx_dma_setup(const TransactionBuffer *buf, uint32_t maxTransmitLength)
+static void spi_tx_dma_setup(const void *buf, uint32_t transferLength)
 {
 #if USE_PDC
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
-	pdc_spi_packet.ul_size = buf->PacketLength() * 4;			// need length in bytes
+	pdc_spi_packet.ul_size = transferLength;
 	pdc_tx_init(spi_pdc, &pdc_spi_packet, NULL);
 #endif
 
@@ -906,18 +654,18 @@ static void spi_tx_dma_setup(const TransactionBuffer *buf, uint32_t maxTransmitL
 	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(buf));
 	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_TX_CH, reinterpret_cast<uint32_t>(& SPI->SPI_TDR));
 	dmac_channel_set_descriptor_addr(DMAC, CONF_SPI_DMAC_TX_CH, 0);
-	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_TX_CH, maxTransmitLength | DMAC_CTRLA_SRC_WIDTH_WORD | DMAC_CTRLA_DST_WIDTH_BYTE);
+	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_TX_CH, transferLength | DMAC_CTRLA_SRC_WIDTH_WORD | DMAC_CTRLA_DST_WIDTH_BYTE);
 	dmac_channel_set_ctrlB(DMAC, CONF_SPI_DMAC_TX_CH,
 		DMAC_CTRLB_SRC_DSCR | DMAC_CTRLB_DST_DSCR | DMAC_CTRLB_FC_MEM2PER_DMA_FC | DMAC_CTRLB_SRC_INCR_INCREMENTING | DMAC_CTRLB_DST_INCR_FIXED);
 #endif
 }
 
-static void spi_rx_dma_setup(const TransactionBuffer *buf)
+static void spi_rx_dma_setup(const void *buf, uint32_t transferLength)
 {
 #if USE_PDC
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
-	pdc_spi_packet.ul_size = TransactionBuffer::MaxReceiveBytes;
+	pdc_spi_packet.ul_size = transferLength;
 	pdc_rx_init(spi_pdc, &pdc_spi_packet, NULL);
 #endif
 
@@ -927,7 +675,7 @@ static void spi_rx_dma_setup(const TransactionBuffer *buf)
 	dmac_channel_set_source_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(& SPI->SPI_RDR));
 	dmac_channel_set_destination_addr(DMAC, CONF_SPI_DMAC_RX_CH, reinterpret_cast<uint32_t>(buf));
 	dmac_channel_set_descriptor_addr(DMAC, CONF_SPI_DMAC_RX_CH, 0);
-	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_RX_CH, TransactionBuffer::MaxTransferBytes | DMAC_CTRLA_SRC_WIDTH_BYTE | DMAC_CTRLA_DST_WIDTH_WORD);
+	dmac_channel_set_ctrlA(DMAC, CONF_SPI_DMAC_RX_CH, transferLength | DMAC_CTRLA_SRC_WIDTH_BYTE | DMAC_CTRLA_DST_WIDTH_WORD);
 	dmac_channel_set_ctrlB(DMAC, CONF_SPI_DMAC_RX_CH,
 		DMAC_CTRLB_SRC_DSCR | DMAC_CTRLB_DST_DSCR | DMAC_CTRLB_FC_PER2MEM_DMA_FC | DMAC_CTRLB_SRC_INCR_FIXED | DMAC_CTRLB_DST_INCR_INCREMENTING);
 #endif
@@ -936,42 +684,21 @@ static void spi_rx_dma_setup(const TransactionBuffer *buf)
 /**
  * \brief Set SPI slave transfer.
  */
-static void spi_slave_dma_setup(bool dataToSend, bool allowReceive)
+static void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize)
 {
 #if USE_PDC
 	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
-
-	TransactionBuffer *outBufPointer = (dataToSend) ? &outBuffer : reinterpret_cast<TransactionBuffer*>(&dummyOutBuffer);
-	spi_tx_dma_setup(outBufPointer);
-	if (allowReceive)
-	{
-		outBufPointer->SetDataTaken();
-		spi_rx_dma_setup(&inBuffer);
-		pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
-	}
-	else
-	{
-		outBufPointer->ClearDataTaken();
-		pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN);
-	}
+	spi_rx_dma_setup(&bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
+	spi_tx_dma_setup(&bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
+	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
 #endif
 
 #if USE_DMAC
 	spi_dma_disable();
 
-	TransactionBuffer *outBufPointer = (dataToSend) ? &outBuffer : reinterpret_cast<TransactionBuffer*>(&dummyOutBuffer);
-	if (allowReceive)
-	{
-		spi_rx_dma_setup(&inBuffer);
-		spi_rx_dma_enable();
-		outBufPointer->SetDataTaken();
-	}
-	else
-	{
-		outBufPointer->ClearDataTaken();
-	}
-
-	spi_tx_dma_setup(outBufPointer, (dataToSend) ? TransactionBuffer::MaxTransferBytes : 4 * TransactionBuffer::headerDwords);
+	spi_rx_dma_setup(&bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
+	spi_rx_dma_enable();
+	spi_tx_dma_setup(&bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
 	spi_tx_dma_enable();
 #endif
 }
@@ -1021,49 +748,43 @@ void Network::SetupSpi()
 	dmac_channel_set_configuration(DMAC, CONF_SPI_DMAC_TX_CH,
 			DMAC_CFG_DST_PER(DMA_HW_ID_SPI_TX) | DMAC_CFG_DST_H2SEL | DMAC_CFG_SOD | DMAC_CFG_FIFOCFG_ASAP_CFG);
 #endif
+
+	(void)SPI->SPI_SR;				// clear any pending interrupt
+	NVIC_SetPriority(SPI_IRQn, 10);
+	NVIC_EnableIRQ(SPI_IRQn);
 }
 
-// Start a transfer if necessary. Not called from an ISR.
-void Network::TryStartTransfer()
+// Send a command to the ESP and get the result
+int32_t Network::SendCommand(NetworkCommand cmd, uint8_t socket, const void * dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength)
 {
-	cpu_irq_disable();
-	if (state == idle)
+	if (state == NetworkState::disabled)
 	{
-		if (outBuffer.IsReady())
-		{
-			PrepareForTransfer(true, true);
-		}
-		else if (digitalRead(EspTransferRequestPin))
-		{
-			PrepareForTransfer(false, true);
-		}
+		debugPrintf("ResponseNetworkDisabled\n");
+		return ResponseNetworkDisabled;
 	}
-	else if (state == sending && outBuffer.IsReady())
-	{
-		PrepareForTransfer(true, false);
-	}
-	cpu_irq_enable();
-}
 
-// This is called from the ISR when the ESP requests to send data
-void Network::EspRequestsTransfer()
-{
-	irqflags_t flags = cpu_irq_save();
-	if (state == idle)
+	if (!digitalRead(EspTransferRequestPin) || transferPending || !spi_dma_check_rx_complete())
 	{
-		PrepareForTransfer(false, true);
+		debugPrintf("ResponseBusy\n");
+		return ResponseBusy;
 	}
-	cpu_irq_restore(flags);
-}
 
-// Set up the DMA controller and assert transfer ready. Must be called with interrupts disabled.
-void Network::PrepareForTransfer(bool dataToSend, bool allowReceive)
-pre(state == idle || state == sending)
-{
-	if (allowReceive)
+	espStatusChanged = false;
+	bufferOut.hdr.formatVersion = MyFormatVersion;
+	bufferOut.hdr.command = cmd;
+	bufferOut.hdr.param32 = 0;
+	bufferOut.hdr.param8 = 0;
+	bufferOut.hdr.dataLength = (uint16_t)dataOutLength;
+	bufferOut.hdr.dataBufferAvailable = (uint16_t)dataInLength;
+	if (dataOut != nullptr)
 	{
-		state = (dataToSend) ? sendReceivePending : receivePending;
+		memcpy(bufferOut.data, dataOut, dataOutLength);
 	}
+	bufferIn.hdr.formatVersion = InvalidFormatVersion;
+	transferPending = true;
+
+	//debug
+	debugPrintBuffer("Send", &bufferOut, dataOutLength);
 
 	// DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
 	// The only way I can find to do this is to issue a software reset to the SPI system.
@@ -1072,7 +793,7 @@ pre(state == idle || state == sending)
 	spi_set_bits_per_transfer(SPI, 0, SPI_CSR_BITS_8_BIT);
 
 	// Set up the DMA controller
-	spi_slave_dma_setup(dataToSend, allowReceive);
+	spi_slave_dma_setup(dataOutLength, dataInLength);
 	spi_enable(SPI);
 
 	// Enable the end-of transfer interrupt
@@ -1081,6 +802,36 @@ pre(state == idle || state == sending)
 
 	// Tell the ESP that we are ready to accept data
 	digitalWrite(SamTfrReadyPin, HIGH);
+
+	// Wait for the DMA complete interrupt, with timeout
+	const uint32_t now = millis();
+	while (transferPending || !spi_dma_check_rx_complete())
+	{
+		if (millis() - now > WifiResponseTimeoutMillis)
+		{
+			debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
+			return ResponseTimeout;
+		}
+	}
+
+	// Look at the response
+	int32_t response;
+	if (bufferIn.hdr.formatVersion != MyFormatVersion)
+	{
+		response = ResponseBadReplyFormatVersion;
+	}
+	else
+	{
+		currentMode = bufferIn.hdr.state;
+		response = bufferIn.hdr.response;
+		if (response > 0 && dataIn != nullptr)
+		{
+			memcpy(dataIn, bufferIn.data, min<size_t>(dataInLength, (size_t)response));
+		}
+	}
+	debugPrintBuffer("Recv", &bufferIn, (size_t)max<int>(0, response));
+
+	return response;
 }
 
 // SPI interrupt handler, called when NSS goes high
@@ -1091,47 +842,29 @@ void SPI_Handler()
 
 void Network::SpiInterrupt()
 {
-	uint32_t status = SPI->SPI_SR;			// read status and clear interrupt
-	SPI->SPI_IDR = SPI_IER_NSSR;			// disable the interrupt
+	const uint32_t status = SPI->SPI_SR;					// read status and clear interrupt
+	SPI->SPI_IDR = SPI_IER_NSSR;							// disable the interrupt
 	if ((status & SPI_SR_NSSR) != 0)
 	{
-		if (state == sendReceivePending || state == receivePending)
-		{
 #if USE_PDC
-			pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
+		pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
 #endif
 
 #if USE_DMAC
-			spi_tx_dma_disable();
-			dmac_channel_suspend(DMAC, CONF_SPI_DMAC_RX_CH);	// suspend the receive channel, don't disable it because the FIFO needs to empty first
+		spi_tx_dma_disable();
+		dmac_channel_suspend(DMAC, CONF_SPI_DMAC_RX_CH);	// suspend the receive channel, don't disable it because the FIFO needs to empty first
 #endif
-			spi_disable(SPI);
-			digitalWrite(SamTfrReadyPin, LOW);
-			if (state == sendReceivePending)
-			{
-				outBuffer.Clear();								// don't send the data again
-			}
-			if ((status & SPI_SR_OVRES) != 0)
-			{
-				++spiRxOverruns;
-			}
-			if (state == sendReceivePending && (status & SPI_SR_UNDES) != 0)
-			{
-				++spiTxUnderruns;
-			}
-			state = transferDone;
-		}
-		else if (state == sending)
+		spi_disable(SPI);
+		digitalWrite(SamTfrReadyPin, LOW);
+		if ((status & SPI_SR_OVRES) != 0)
 		{
-			spi_tx_dma_disable();
-			spi_disable(SPI);
-			digitalWrite(SamTfrReadyPin, LOW);
-			outBuffer.Clear();									// don't send the data again
-			if ((status & SPI_SR_UNDES) != 0)
-			{
-				++spiTxUnderruns;
-			}
+			++spiRxOverruns;
 		}
+		if ((status & SPI_SR_UNDES) != 0)
+		{
+			++spiTxUnderruns;
+		}
+		transferPending = false;
 	}
 }
 

@@ -190,11 +190,65 @@ bool GCodeBuffer::IsEmpty() const
 bool GCodeBuffer::Seen(char c)
 {
 	readPointer = 0;
+	bool inQuotes = false;
 	for (;;)
 	{
 		const char b = gcodeBuffer[readPointer];
-		if (b == 0 || b == ';') break;
-		if (b == c) return true;
+		if (b == 0)
+		{
+			break;
+		}
+		if (b == '"')
+		{
+			inQuotes = !inQuotes;
+		}
+		else if (!inQuotes)
+		{
+			if (b == ';')
+			{
+				break;
+			}
+			if (b == c)
+			{
+				return true;
+			}
+		}
+		++readPointer;
+	}
+	readPointer = -1;
+	return false;
+}
+
+// As Seen but require a space before the letter. Needed when there are string parameters in the command.
+bool GCodeBuffer::SeenAfterSpace(char c)
+{
+	readPointer = 0;
+	bool seenSpace = false;
+	bool inQuotes = false;
+	for (;;)
+	{
+		const char b = gcodeBuffer[readPointer];
+		if (b == 0)
+		{
+			break;
+		}
+		if (b == '"')
+		{
+			inQuotes = !inQuotes;
+			seenSpace = false;
+		}
+		else if (!inQuotes)
+		{
+			if (b == c && seenSpace)
+			{
+				return true;
+			}
+			if (b == ';' )
+			{
+				break;
+			}
+			seenSpace = (b == ' ');
+		}
 		++readPointer;
 	}
 	readPointer = -1;
@@ -225,7 +279,6 @@ float GCodeBuffer::GetFValue()
 	if (readPointer < 0)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float before a search.\n");
-		readPointer = -1;
 		return 0.0;
 	}
 	float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
@@ -236,10 +289,9 @@ float GCodeBuffer::GetFValue()
 // Get a :-separated list of floats after a key letter
 const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool doPad)
 {
-	if(readPointer < 0)
+	if (readPointer < 0)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array before a search.\n");
-		readPointer = -1;
 		returnedLength = 0;
 		return;
 	}
@@ -290,7 +342,6 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 	if (readPointer < 0)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
-		readPointer = -1;
 		return;
 	}
 
@@ -322,17 +373,80 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 
 // Get a string after a G Code letter found by a call to Seen().
 // It will be the whole of the rest of the GCode string, so strings should always be the last parameter.
+// Use the other overload of GetString to get strings that may not be the last parameter.
 const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)
 	{
 		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
-		readPointer = -1;
 		return "";
 	}
 	const char* const result = &gcodeBuffer[readPointer + 1];
 	readPointer = -1;
 	return result;
+}
+
+// Get and copy a possibly quoted string
+bool GCodeBuffer::GetString(char *buf, size_t buflen)
+{
+	if (readPointer < 0)
+	{
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		return false;
+	}
+	++readPointer;				// skip the character that introduced the string
+	char c = gcodeBuffer[readPointer++];
+	size_t i = 0;
+	if (c == '"')
+	{
+		// Quoted string
+		for (;;)
+		{
+			c = gcodeBuffer[readPointer++];
+			if (c < ' ')
+			{
+				return false;
+			}
+			if (c == '"')
+			{
+				if (gcodeBuffer[readPointer++] != '"')
+				{
+					if (i < buflen)
+					{
+						buf[i] = 0;
+					}
+					return i <= buflen;
+				}
+			}
+			if (i < buflen)
+			{
+				buf[i] = c;
+			}
+			++i;
+		}
+	}
+	else
+	{
+		// Non-quoted string, terminate it on space or semicolon or control character
+		for (;;)
+		{
+			if (c <= ' ' || c == ';')
+			{
+				if (i < buflen)
+				{
+					buf[i] = 0;
+				}
+				return i != 0 && i <= buflen;					// no string found
+			}
+			if (i < buflen)
+			{
+				buf[i] = c;
+			}
+			++i;
+			c = gcodeBuffer[readPointer++];
+		}
+	}
+	return false;		// to keep Eclipse happy
 }
 
 // This returns a pointer to the end of the buffer where a
@@ -402,6 +516,55 @@ void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 		val = GetIValue();
 		seen = true;
 	}
+}
+
+// Get an IP address quad after a key letter
+bool GCodeBuffer::GetIPAddress(uint8_t ip[4])
+{
+	if (readPointer < 0)
+	{
+		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		return false;
+	}
+	const char* p = &gcodeBuffer[readPointer + 1];
+	unsigned int n = 0;
+	for (;;)
+	{
+		char *pp;
+		const unsigned long v = strtoul(p, &pp, 10);
+		if (pp == p || v > 255)
+		{
+			readPointer = -1;
+			return false;
+		}
+		ip[n] = (uint8_t)v;
+		++n;
+		p = pp;
+		if (*p != '.')
+		{
+			break;
+		}
+		if (n == 4)
+		{
+			readPointer = -1;
+			return false;
+		}
+		++p;
+	}
+	readPointer = -1;
+	return n == 4;
+}
+
+// Get an IP address quad after a key letter
+bool GCodeBuffer::GetIPAddress(uint32_t& ip)
+{
+	uint8_t ipa[4];
+	const bool ok = GetIPAddress(ipa);
+	if (ok)
+	{
+		ip = (uint32_t)ipa[0] | ((uint32_t)ipa[1] << 8) | ((uint32_t)ipa[2] << 16) | ((uint32_t)ipa[3] << 24);
+	}
+	return ok;
 }
 
 // Get the original machine state before we pushed anything

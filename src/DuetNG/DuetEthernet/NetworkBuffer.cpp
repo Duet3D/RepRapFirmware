@@ -123,4 +123,15 @@ void NetworkBuffer::Empty()
 	}
 }
 
+// Count how many buffers there are in a chain
+/*static*/ unsigned int NetworkBuffer::Count(NetworkBuffer*& ptr)
+{
+	unsigned int ret = 0;
+	for (NetworkBuffer *n = ptr; n != nullptr; n = n->next)
+	{
+		++ret;
+	}
+	return ret;
+}
+
 // End

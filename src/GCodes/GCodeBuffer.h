@@ -24,13 +24,17 @@ public:
 	bool Put(const char *str, size_t len);				// Add an entire string
 	bool IsEmpty() const;								// Does this buffer contain any code?
 	bool Seen(char c);									// Is a character present?
+	bool SeenAfterSpace(char c);						// Is a character present?
 	char GetCommandLetter();							// Find the first G, M or T command
 	float GetFValue();									// Get a float after a key letter
 	int32_t GetIValue();								// Get an integer after a key letter
+	bool GetIPAddress(uint8_t ip[4]);					// Get an IP address quad after a key letter
+	bool GetIPAddress(uint32_t& ip);					// Get an IP address quad after a key letter
 	void TryGetFValue(char c, float& val, bool& seen);
 	void TryGetIValue(char c, int32_t& val, bool& seen);
 	const char* GetUnprecedentedString(bool optional = false);	// Get a string with no preceding key letter
 	const char* GetString();							// Get a string after a key letter
+	bool GetString(char *buf, size_t buflen);			// Get and copy a possibly quoted string
 	const void GetFloatArray(float a[], size_t& length, bool doPad); // Get a :-separated list of floats after a key letter
 	const void GetLongArray(long l[], size_t& length);	// Get a :-separated list of longs after a key letter
 	const char* Buffer() const;

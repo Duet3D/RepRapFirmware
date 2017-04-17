@@ -32,7 +32,6 @@
 #include "PrintMonitor.h"
 #include "RepRap.h"
 #include "Tool.h"
-#include "Webserver.h"
 
 #ifdef DUET_NG
 #include "FirmwareUpdater.h"
@@ -60,8 +59,8 @@ void GCodes::RestorePoint::Init()
 	feedRate = DefaultFeedrate * SecondsToMinutes;
 }
 
-GCodes::GCodes(Platform* p, Webserver* w) :
-	platform(p), webserver(w), active(false), isFlashing(false),
+GCodes::GCodes(Platform* p) :
+	platform(p), active(false), isFlashing(false),
 	fileBeingHashed(nullptr), lastWarningMillis(0)
 {
 	httpInput = new RegularGCodeInput(true);
@@ -2278,7 +2277,7 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 {
 	reprap.GetMove()->SetIdentityTransform();					// stop using old-style bed compensation and clear the height map
 	const char* heightMapFileName;
-	if (gb.Seen('P'))
+	if (gb.SeenAfterSpace('P'))
 	{
 		heightMapFileName = gb.GetString();
 	}
@@ -2315,7 +2314,7 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 bool GCodes::SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const
 {
 	const char* heightMapFileName;
-	if (gb.Seen('P'))
+	if (gb.SeenAfterSpace('P'))
 	{
 		heightMapFileName = gb.GetString();
 		if (heightMapFileName[0] == 0)
@@ -2780,58 +2779,6 @@ void GCodes::DisableDrives()
 		platform->DisableDrive(drive);
 	}
 	SetAllAxesNotHomed();
-}
-
-// Does what it says.
-void GCodes::SetEthernetAddress(GCodeBuffer& gb, int mCode)
-{
-	byte eth[4];
-	const char* ipString = gb.GetString();
-	uint8_t sp = 0;
-	uint8_t spp = 0;
-	uint8_t ipp = 0;
-	while (ipString[sp])
-	{
-		if (ipString[sp] == '.')
-		{
-			eth[ipp] = atoi(&ipString[spp]);
-			ipp++;
-			if (ipp > 3)
-			{
-				platform->MessageF(GENERIC_MESSAGE, "Dud IP address: %s\n", gb.Buffer());
-				return;
-			}
-			sp++;
-			spp = sp;
-		}
-		else
-		{
-			sp++;
-		}
-	}
-	eth[ipp] = atoi(&ipString[spp]);
-	if (ipp == 3)
-	{
-		switch (mCode)
-		{
-		case 552:
-			platform->SetIPAddress(eth);
-			break;
-		case 553:
-			platform->SetNetMask(eth);
-			break;
-		case 554:
-			platform->SetGateWay(eth);
-			break;
-
-		default:
-			platform->Message(GENERIC_MESSAGE, "Setting ether parameter - dud code.\n");
-		}
-	}
-	else
-	{
-		platform->MessageF(GENERIC_MESSAGE, "Dud IP address: %s\n", gb.Buffer());
-	}
 }
 
 void GCodes::SetMACAddress(GCodeBuffer& gb)

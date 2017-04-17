@@ -6,13 +6,15 @@
  */
 
 #include "Network.h"
-#include "NetworkTransaction.h"
+#include "NetworkBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "HttpResponder.h"
+#include "FtpResponder.h"
+#include "TelnetResponder.h"
 #include "wizchip_conf.h"
 #include "Wiznet/Internet/DHCP/dhcp.h"
 
-const size_t HttpProtocolIndex = 0, FtpProtocolIndex = 1, TelnetProtocolIndex = 2;		// index of theHTTP service above
 const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
 const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
 
@@ -24,13 +26,21 @@ void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[
 }
 
 Network::Network(Platform* p)
-	: platform(p), lastTickMillis(0),
+	: platform(p), nextResponderToPoll(nullptr), lastTickMillis(0),
 	  state(NetworkState::disabled), activated(false)
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
 		portNumbers[i] = DefaultPortNumbers[i];
-		protocolEnabled[i] = (i == HttpProtocolIndex);
+		protocolEnabled[i] = (i == HttpProtocol);
+	}
+
+	// Create the responders
+	responders = telnetResponder = new TelnetResponder(nullptr);
+	responders = ftpResponder = new FtpResponder(responders);
+	for (unsigned int i = 0; i < NumHttpResponders; ++i)
+	{
+		responders = new HttpResponder(responders);
 	}
 }
 
@@ -43,7 +53,6 @@ void Network::Init()
 	lastTickMillis = millis();
 
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
-	NetworkTransaction::AllocateTransactions(NetworkTransactionCount);
 
 	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
 	strcpy(hostname, HOSTNAME);
@@ -104,23 +113,23 @@ void Network::DisableProtocol(int protocol, StringRef& reply)
 	}
 }
 
-void Network::StartProtocol(size_t protocol)
+void Network::StartProtocol(Protocol protocol)
 {
 	switch(protocol)
 	{
-	case HttpProtocolIndex:
+	case HttpProtocol:
 		for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
 		{
-			sockets[skt].Init(skt, portNumbers[HttpProtocolIndex]);
+			sockets[skt].Init(skt, portNumbers[protocol], protocol);
 		}
 		break;
 
-	case FtpProtocolIndex:
-		sockets[FtpSocketNumber].Init(FtpSocketNumber, portNumbers[FtpProtocolIndex]);
+	case FtpProtocol:
+		sockets[FtpSocketNumber].Init(FtpSocketNumber, portNumbers[protocol], protocol);
 		break;
 
-	case TelnetProtocolIndex:
-		sockets[TelnetSocketNumber].Init(TelnetSocketNumber, portNumbers[TelnetProtocolIndex]);
+	case TelnetProtocol:
+		sockets[TelnetSocketNumber].Init(TelnetSocketNumber, portNumbers[protocol], protocol);
 		break;
 
 	default:
@@ -128,23 +137,28 @@ void Network::StartProtocol(size_t protocol)
 	}
 }
 
-void Network::ShutdownProtocol(size_t protocol)
+void Network::ShutdownProtocol(Protocol protocol)
 {
+	for (NetworkResponder* r = responders; r != nullptr; r = r->GetNext())
+	{
+		r->Terminate(protocol);
+	}
 	switch(protocol)
 	{
-	case HttpProtocolIndex:
+	case HttpProtocol:
 		for (SocketNumber skt = 0; skt < NumHttpSockets; ++skt)
 		{
 			sockets[skt].TerminateAndDisable();
 		}
 		break;
 
-	case FtpProtocolIndex:
+	case FtpProtocol:
 		sockets[FtpSocketNumber].TerminateAndDisable();
 		sockets[FtpDataSocketNumber].TerminateAndDisable();
+		//TODO we may have a second FTP  socket on the main port
 		break;
 
-	case TelnetProtocolIndex:
+	case TelnetProtocol:
 		sockets[TelnetSocketNumber].TerminateAndDisable();
 		break;
 
@@ -167,7 +181,7 @@ void Network::ReportProtocols(StringRef& reply) const
 	}
 }
 
-void Network::ReportOneProtocol(size_t protocol, StringRef& reply) const
+void Network::ReportOneProtocol(Protocol protocol, StringRef& reply) const
 {
 	if (protocolEnabled[protocol])
 	{
@@ -183,16 +197,34 @@ void Network::ReportOneProtocol(size_t protocol, StringRef& reply) const
 // Start the network if it was enabled
 void Network::Activate()
 {
-	activated = true;
-	if (state == NetworkState::enabled)
+	if (!activated)
 	{
-		Start();
+		activated = true;
+		if (state == NetworkState::enabled)
+		{
+			Start();
+		}
+		else
+		{
+			platform->Message(HOST_MESSAGE, "Network disabled.\n");
+		}
 	}
 }
 
 void Network::Exit()
 {
 	Stop();
+}
+
+// Get the network state into the reply buffer, returning true if there is some sort of error
+bool Network::GetNetworkState(StringRef& reply)
+{
+	const uint8_t * const config_ip = platform->GetIPAddress();
+	const int enableState = reprap.GetNetwork()->EnableState();
+	reply.printf("Network is %s, configured IP address: %u.%u.%u.%u, actual IP address: %u.%u.%u.%u",
+			(enableState == 0) ? "disabled" : "enabled",
+					config_ip[0], config_ip[1], config_ip[2], config_ip[3], ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+	return false;
 }
 
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
@@ -211,8 +243,8 @@ void Network::Spin(bool full)
 			usingDhcp = (ipAddress[0] == 0 && ipAddress[1] == 0 && ipAddress[2] == 0 && ipAddress[3] == 0);
 			if (usingDhcp)
 			{
-//				debugPrintf("Link established, getting IP address\n");
 				// IP address is all zeros, so use DHCP
+//				debugPrintf("Link established, getting IP address\n");
 				DHCP_init(DhcpSocketNumber, hostname);
 				lastTickMillis = millis();
 				state = NetworkState::obtainingIP;
@@ -220,8 +252,7 @@ void Network::Spin(bool full)
 			else
 			{
 //				debugPrintf("Link established, network running\n");
-				state = NetworkState::active;
-				InitSockets();
+				state = NetworkState::connected;
 			}
 		}
 		break;
@@ -245,8 +276,7 @@ void Network::Spin(bool full)
 					// Send mDNS announcement so that some routers can perform hostname mapping
 					// if this board is connected via a non-IGMP capable WiFi bridge (like the TP-Link WR701N)
 					//mdns_announce();
-					state = NetworkState::active;
-					InitSockets();
+					state = NetworkState::connected;
 				}
 			}
 			else
@@ -257,6 +287,12 @@ void Network::Spin(bool full)
 				state = NetworkState::establishingLink;
 			}
 		}
+		break;
+
+	case NetworkState::connected:
+		InitSockets();
+		platform->MessageF(GENERIC_MESSAGE, "Network running, IP address = %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+		state = NetworkState::active;
 		break;
 
 	case NetworkState::active:
@@ -289,6 +325,23 @@ void Network::Spin(bool full)
 			{
 				nextSocketToPoll = 0;
 			}
+
+			// Poll the responders
+			if (full)
+			{
+				NetworkResponder *nr = nextResponderToPoll;
+				bool doneSomething = false;
+				do
+				{
+					if (nr == nullptr)
+					{
+						nr = responders;		// 'responders' can't be null at this point
+					}
+					doneSomething = nr->Spin();
+					nr = nr->GetNext();
+				} while (!doneSomething && nr != nextResponderToPoll);
+				nextResponderToPoll = nr;
+			}
 		}
 		else if (full)
 		{
@@ -310,6 +363,9 @@ void Network::Diagnostics(MessageType mtype)
 {
 	platform->Message(mtype, "=== Network ===\n");
 	platform->MessageF(mtype, "State: %d\n", (int)state);
+	HttpResponder::Diagnostics(mtype);
+	ftpResponder->Diagnostics(mtype);
+	telnetResponder->Diagnostics(mtype);
 }
 
 void Network::Start()
@@ -340,6 +396,10 @@ void Network::Stop()
 {
 	if (state != NetworkState::disabled)
 	{
+		for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+		{
+			r->Terminate(AnyProtocol);
+		}
 		if (usingDhcp)
 		{
 			DHCP_stop();
@@ -349,30 +409,32 @@ void Network::Stop()
 	}
 }
 
-void Network::Enable()
+// Enable or disable the network
+void Network::Enable(int mode, StringRef& reply)
 {
-	if (state == NetworkState::disabled)
+	if (!activated)
+	{
+		state = (mode == 0) ? NetworkState::disabled : NetworkState::enabled;
+	}
+	else if (mode == 0)
+	{
+		if (state != NetworkState::disabled)
+		{
+			Stop();
+			platform->Message(GENERIC_MESSAGE, "Network stopped\n");
+		}
+
+	}
+	else if (state == NetworkState::disabled)
 	{
 		state = NetworkState::enabled;
-		if (activated)
-		{
-			Start();
-		}
+		Start();
 	}
 }
 
-void Network::Disable()
+int Network::EnableState() const
 {
-	if (activated && state != NetworkState::disabled)
-	{
-		Stop();
-		platform->Message(GENERIC_MESSAGE, "Network stopped\n");
-	}
-}
-
-bool Network::IsEnabled() const
-{
-	return state != NetworkState::disabled;
+	return (state == NetworkState::disabled) ? 0 : 1;
 }
 
 const uint8_t *Network::GetIPAddress() const
@@ -407,108 +469,6 @@ void Network::SetHostname(const char *name)
 	}
 }
 
-bool Network::Lock()
-{
-	return true;
-}
-
-void Network::Unlock()
-{
-}
-
-bool Network::InLwip() const
-{
-	return false;
-}
-
-// This is called by the web server to get the next networking transaction.
-//
-// If conn is NoConnection, the transaction from the head of readyTransactions will be retrieved.
-// If conn is not NoConnection, the first transaction with the matching connection will be returned.
-//
-// This method also ensures that a subsequent call with a null connection parameter will return exactly the same instance.
-NetworkTransaction *Network::GetTransaction(Connection conn)
-{
-	if (state == NetworkState::active)
-	{
-		if (conn != NoConnection)
-		{
-			NetworkTransaction * const tr = conn->GetTransaction();
-			if (tr != nullptr && !tr->IsSending())
-			{
-				currentTransactionSocketNumber = conn->GetNumber();
-				return tr;
-			}
-			return nullptr;
-		}
-
-		size_t socketNum = currentTransactionSocketNumber;
-		do
-		{
-			NetworkTransaction * const tr = sockets[socketNum].GetTransaction();
-			if (tr != nullptr && !tr->IsSending())
-			{
-				currentTransactionSocketNumber = socketNum;
-				return tr;
-			}
-			++socketNum;
-			if (socketNum == NumTcpSockets)
-			{
-				socketNum = 0;
-			}
-		} while (socketNum != currentTransactionSocketNumber);
-	}
-
-	return nullptr;
-}
-
-Port Network::GetHttpPort() const
-{
-	return portNumbers[HttpProtocolIndex];
-}
-
-Port Network::GetFtpPort() const
-{
-	return portNumbers[FtpProtocolIndex];
-}
-
-Port Network::GetTelnetPort() const
-{
-	return portNumbers[TelnetProtocolIndex];
-}
-
-Port Network::GetDataPort() const
-{
-	return sockets[FtpDataSocketNumber].GetLocalPort();
-}
-
-void Network::OpenDataPort(Port port)
-{
-	sockets[FtpDataSocketNumber].Init(FtpDataSocketNumber, port);
-	delayMicroseconds(100);							// give the W5500 time to process the command (not sure we need this)
-	sockets[FtpDataSocketNumber].Poll(true);
-}
-
-// Close FTP data port and purge associated PCB
-void Network::CloseDataPort()
-{
-	sockets[FtpDataSocketNumber].Close();
-}
-
-bool Network::AcquireTransaction(size_t socketNumber)
-{
-	const bool success = sockets[socketNumber].AcquireTransaction();
-	if (success)
-	{
-		currentTransactionSocketNumber = socketNumber;
-	}
-	else if (reprap.Debug(moduleNetwork))
-	{
-		debugPrintf("Failed to acquire transaction for socket %u\n", socketNumber);
-	}
-	return success;
-}
-
 void Network::InitSockets()
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -529,24 +489,42 @@ void Network::TerminateSockets()
 	}
 }
 
-void Network::Defer(NetworkTransaction *tr)
+// Find a responder to process a new connection
+bool Network::FindResponder(Socket *skt, Protocol protocol)
 {
-	const Socket * const skt = tr->GetConnection();
-	if (skt != nullptr && skt->GetNumber() == currentTransactionSocketNumber)
+	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
 	{
-		++currentTransactionSocketNumber;
-		if (currentTransactionSocketNumber == NumTcpSockets)
+		if (r->Accept(skt, protocol))
 		{
-			currentTransactionSocketNumber = 0;
+			return true;
 		}
 	}
+	return false;
 }
 
-/*static*/ Port Network::GetLocalPort(Connection conn) { return conn->GetLocalPort(); }
-/*static*/ Port Network::GetRemotePort(Connection conn) { return conn->GetRemotePort(); }
-/*static*/ uint32_t Network::GetRemoteIP(Connection conn) { return conn->GetRemoteIP(); }
-/*static*/ bool Network::IsConnected(Connection conn) { return conn->IsConnected(); }
-/*static*/ bool Network::IsTerminated(Connection conn) { return conn->IsTerminated(); }
-/*static*/ void Network::Terminate(Connection conn) { conn->Terminate(); }
+void Network::HandleHttpGCodeReply(const char *msg)
+{
+	HttpResponder::HandleGCodeReply(msg);
+}
+
+void Network::HandleTelnetGCodeReply(const char *msg)
+{
+	telnetResponder->HandleGCodeReply(msg);
+}
+
+void Network::HandleHttpGCodeReply(OutputBuffer *buf)
+{
+	HttpResponder::HandleGCodeReply(buf);
+}
+
+void Network::HandleTelnetGCodeReply(OutputBuffer *buf)
+{
+	telnetResponder->HandleGCodeReply(buf);
+}
+
+uint32_t Network::GetHttpReplySeq()
+{
+	return HttpResponder::GetReplySeq();
+}
 
 // End

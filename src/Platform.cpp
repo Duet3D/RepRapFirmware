@@ -26,7 +26,6 @@
 #include "Movement/Move.h"
 #include "Network.h"
 #include "RepRap.h"
-#include "Webserver.h"
 #include "Libraries/Math/Isqrt.h"
 
 #include "sam/drivers/tc/tc.h"
@@ -213,7 +212,9 @@ Platform::Platform() :
 {
 	// Output
 	auxOutput = new OutputStack();
+#ifdef SERIAL_AUX2_DEVICE
 	aux2Output = new OutputStack();
+#endif
 	usbOutput = new OutputStack();
 
 	// Files
@@ -1144,11 +1145,11 @@ bool Platform::FlushMessages()
 		}
 	}
 
+#ifdef SERIAL_AUX2_DEVICE
 	// Write non-blocking data to the second AUX line
 	OutputBuffer *aux2OutputBuffer = aux2Output->GetFirstItem();
 	if (aux2OutputBuffer != nullptr)
 	{
-#ifdef SERIAL_AUX2_DEVICE
 		size_t bytesToWrite = min<size_t>(SERIAL_AUX2_DEVICE.canWrite(), aux2OutputBuffer->BytesLeft());
 		if (bytesToWrite > 0)
 		{
@@ -1160,10 +1161,8 @@ bool Platform::FlushMessages()
 			aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
 			aux2Output->SetFirstItem(aux2OutputBuffer);
 		}
-#else
-		aux2OutputBuffer = OutputBuffer::Release(aux2OutputBuffer);
-#endif
 	}
+#endif
 
 	// Write non-blocking data to the USB line
 	OutputBuffer *usbOutputBuffer = usbOutput->GetFirstItem();
@@ -1193,7 +1192,9 @@ bool Platform::FlushMessages()
 	}
 
 	return auxOutput->GetFirstItem() != nullptr
+#ifdef SERIAL_AUX2_DEVICE
 		|| aux2Output->GetFirstItem() != nullptr
+#endif
 		|| usbOutput->GetFirstItem() != nullptr;
 }
 
@@ -1299,10 +1300,12 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 			{
 				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
+#if !defined(DUET_NG) && !defined(__RADDS__)
 			if (reprap.GetNetwork()->InLwip())
 			{
 				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
 			}
+#endif
 			if (SERIAL_AUX_DEVICE.canWrite() == 0
 #ifdef SERIAL_AUX2_DEVICE
 				|| SERIAL_AUX2_DEVICE.canWrite() == 0
@@ -2469,74 +2472,74 @@ void Platform::Message(MessageType type, const char *message)
 {
 	switch (type)
 	{
-		case AUX_MESSAGE:
-			AppendAuxReply(message);
-			break;
+	case AUX_MESSAGE:
+		AppendAuxReply(message);
+		break;
 
-		case AUX2_MESSAGE:
+	case AUX2_MESSAGE:
 #ifdef SERIAL_AUX2_DEVICE
-			// Message that is to be sent to the second auxiliary device (blocking)
-			if (!aux2Output->IsEmpty())
-			{
-				// If we're still busy sending a response to the USART device, append this message to the output buffer
-				aux2Output->GetLastItem()->cat(message);
-			}
-			else
-			{
-				// Send short strings immediately through the aux channel. There is no flow control on this port, so it can't block for long
-				SERIAL_AUX2_DEVICE.write(message);
-				SERIAL_AUX2_DEVICE.flush();
-			}
+		// Message that is to be sent to the second auxiliary device (blocking)
+		if (!aux2Output->IsEmpty())
+		{
+			// If we're still busy sending a response to the USART device, append this message to the output buffer
+			aux2Output->GetLastItem()->cat(message);
+		}
+		else
+		{
+			// Send short strings immediately through the aux channel. There is no flow control on this port, so it can't block for long
+			SERIAL_AUX2_DEVICE.write(message);
+			SERIAL_AUX2_DEVICE.flush();
+		}
 #endif
-			break;
+		break;
 
-		case DEBUG_MESSAGE:
-			// Debug messages in blocking mode - potentially DANGEROUS, use with care!
-			SERIAL_MAIN_DEVICE.write(message);
-			SERIAL_MAIN_DEVICE.flush();
-			break;
+	case DEBUG_MESSAGE:
+		// Debug messages in blocking mode - potentially DANGEROUS, use with care!
+		SERIAL_MAIN_DEVICE.write(message);
+		SERIAL_MAIN_DEVICE.flush();
+		break;
 
-		case HOST_MESSAGE:
-			// Message that is to be sent via the USB line (non-blocking)
+	case HOST_MESSAGE:
+		// Message that is to be sent via the USB line (non-blocking)
+		{
+			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
+			OutputBuffer *usbOutputBuffer = usbOutput->GetLastItem();
+			if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 			{
-				// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-				OutputBuffer *usbOutputBuffer = usbOutput->GetLastItem();
-				if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
+				if (!OutputBuffer::Allocate(usbOutputBuffer))
 				{
-					if (!OutputBuffer::Allocate(usbOutputBuffer))
-					{
-						// Should never happen
-						return;
-					}
-					usbOutput->Push(usbOutputBuffer);
+					// Should never happen
+					return;
 				}
-
-				// Append the message string
-				usbOutputBuffer->cat(message);
+				usbOutput->Push(usbOutputBuffer);
 			}
-			break;
 
-		case HTTP_MESSAGE:
-			reprap.GetWebserver()->HandleGCodeReply(WebSource::HTTP, message);
-			break;
+			// Append the message string
+			usbOutputBuffer->cat(message);
+		}
+		break;
 
-		case TELNET_MESSAGE:
-			reprap.GetWebserver()->HandleGCodeReply(WebSource::Telnet, message);
-			break;
+	case HTTP_MESSAGE:
+		reprap.GetNetwork()->HandleHttpGCodeReply(message);
+		break;
 
-		case FIRMWARE_UPDATE_MESSAGE:
-			Message(HOST_MESSAGE, message);			// send message to USB
-			SendAuxMessage(message);				// send message to aux
-			break;
+	case TELNET_MESSAGE:
+		reprap.GetNetwork()->HandleTelnetGCodeReply(message);
+		break;
 
-		case GENERIC_MESSAGE:
-			// Message that is to be sent to the web & host. Make this the default one, too.
-		default:
-			Message(HTTP_MESSAGE, message);
-			Message(TELNET_MESSAGE, message);
-			Message(HOST_MESSAGE, message);
-			Message(AUX_MESSAGE, message);
-			break;
+	case FIRMWARE_UPDATE_MESSAGE:
+		Message(HOST_MESSAGE, message);			// send message to USB
+		SendAuxMessage(message);				// send message to aux
+		break;
+
+	case GENERIC_MESSAGE:
+		// Message that is to be sent to the web & host. Make this the default one, too.
+	default:
+		Message(HTTP_MESSAGE, message);
+		Message(TELNET_MESSAGE, message);
+		Message(HOST_MESSAGE, message);
+		Message(AUX_MESSAGE, message);
+		break;
 	}
 }
 
@@ -2544,66 +2547,70 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 {
 	switch (type)
 	{
-		case AUX_MESSAGE:
-			AppendAuxReply(buffer);
-			break;
+	case AUX_MESSAGE:
+		AppendAuxReply(buffer);
+		break;
 
-		case AUX2_MESSAGE:
-			// Send this message to the second UART device
-			aux2Output->Push(buffer);
-			break;
+	case AUX2_MESSAGE:
+#ifdef SERIAL_AUX2_DEVICE
+		// Send this message to the second UART device
+		aux2Output->Push(buffer);
+#else
+		OutputBuffer::ReleaseAll(buffer);
+#endif
+		break;
 
-		case DEBUG_MESSAGE:
-			// Probably rarely used, but supported.
-			while (buffer != nullptr)
-			{
-				SERIAL_MAIN_DEVICE.write(buffer->Data(), buffer->DataLength());
-				SERIAL_MAIN_DEVICE.flush();
+	case DEBUG_MESSAGE:
+		// Probably rarely used, but supported.
+		while (buffer != nullptr)
+		{
+			SERIAL_MAIN_DEVICE.write(buffer->Data(), buffer->DataLength());
+			SERIAL_MAIN_DEVICE.flush();
 
-				buffer = OutputBuffer::Release(buffer);
-			}
-			break;
+			buffer = OutputBuffer::Release(buffer);
+		}
+		break;
 
-		case HOST_MESSAGE:
-			if (!SERIAL_MAIN_DEVICE)
-			{
-				// If the serial USB line is not open, discard the message right away
-				OutputBuffer::ReleaseAll(buffer);
-			}
-			else
-			{
-				// Else append incoming data to the stack
-				usbOutput->Push(buffer);
-			}
-			break;
-
-		case HTTP_MESSAGE:
-			reprap.GetWebserver()->HandleGCodeReply(WebSource::HTTP, buffer);
-			break;
-
-		case TELNET_MESSAGE:
-			reprap.GetWebserver()->HandleGCodeReply(WebSource::Telnet, buffer);
-			break;
-
-		case GENERIC_MESSAGE:
-			// Message that is to be sent to the web & host.
-			buffer->IncreaseReferences(3);		// This one is handled by three additional destinations
-			Message(HTTP_MESSAGE, buffer);
-			Message(TELNET_MESSAGE, buffer);
-			Message(HOST_MESSAGE, buffer);
-			Message(AUX_MESSAGE, buffer);
-			break;
-
-		case FIRMWARE_UPDATE_MESSAGE:
-			// We don't generate any of these with an OutputBuffer argument, but if do we get one, just send it to USB
-			Message(HOST_MESSAGE, buffer);
-			break;
-
-		default:
-			// Everything else is unsupported (and probably not used)
+	case HOST_MESSAGE:
+		if (!SERIAL_MAIN_DEVICE)
+		{
+			// If the serial USB line is not open, discard the message right away
 			OutputBuffer::ReleaseAll(buffer);
-			MessageF(HOST_MESSAGE, "Error: Unsupported Message call for type %u!\n", type);
-			break;
+		}
+		else
+		{
+			// Else append incoming data to the stack
+			usbOutput->Push(buffer);
+		}
+		break;
+
+	case HTTP_MESSAGE:
+		reprap.GetNetwork()->HandleHttpGCodeReply(buffer);
+		break;
+
+	case TELNET_MESSAGE:
+		reprap.GetNetwork()->HandleTelnetGCodeReply(buffer);
+		break;
+
+	case GENERIC_MESSAGE:
+		// Message that is to be sent to the web & host.
+		buffer->IncreaseReferences(3);		// This one is handled by three additional destinations
+		Message(HTTP_MESSAGE, buffer);
+		Message(TELNET_MESSAGE, buffer);
+		Message(HOST_MESSAGE, buffer);
+		Message(AUX_MESSAGE, buffer);
+		break;
+
+	case FIRMWARE_UPDATE_MESSAGE:
+		// We don't generate any of these with an OutputBuffer argument, but if do we get one, just send it to USB
+		Message(HOST_MESSAGE, buffer);
+		break;
+
+	default:
+		// Everything else is unsupported (and probably not used)
+		OutputBuffer::ReleaseAll(buffer);
+		MessageF(HOST_MESSAGE, "Error: Unsupported Message call for type %u!\n", type);
+		break;
 	}
 }
 

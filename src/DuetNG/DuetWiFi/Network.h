@@ -11,33 +11,28 @@ Separated out from Platform.h by dc42 and extended by zpl
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
+#include "MessageFormats.h"
 
 // Return code definitions
 const uint32_t rcNumber = 0x0000FFFF;
 const uint32_t rcJson = 0x00010000;
 const uint32_t rcKeepOpen = 0x00020000;
 
-static const uint8_t DefaultIpAddress[4] = { 192, 168, 1, 10 };				// Need some sort of default...
+static const uint8_t DefaultIpAddress[4] = { 192, 168, 1, 10 };
 static const uint8_t DefaultNetMask[4] = { 255, 255, 255, 0 };
 static const uint8_t DefaultGateway[4] = { 192, 168, 1, 1 };
 
-class TransactionBuffer;
 class WifiFirmwareUploader;
 
 // The main network class that drives the network.
 class Network
 {
-	enum TransferState
+	enum class NetworkState
 	{
-		disabled,					// WiFi not active
-		enabled,					// WiFi enabled but not started yet
-		starting,					// starting up (waiting for WiFi to initialise)
-		idle,						// nothing happening
-		receivePending,				// we have asserted TransferReady and await completion of a receive-only transaction
-		sendReceivePending,			// we have asserted TransferReady and await completion of a transmit/receive
-		transferDone,				// transfer completed but receive DMA fifo may not have been flushed yet
-		processing,					// a transaction has been completed but we haven't released the input buffer yet
-		sending						// a transaction has been completed and we are sending the response
+		disabled,					// WiFi module disabled
+		starting,					// starting up
+		running,					// running, but not necessarily in the requested mode
+		changingMode,				// running and in the process of switching between modes
 	};
 
 public:
@@ -60,13 +55,10 @@ public:
 
 	bool InLwip() const { return false; }
 
-	void Enable();
-	void Disable();
-	bool IsEnabled() const;
+	void Enable(int mode, StringRef& reply);			// enable or disable the network
+	int EnableState() const;
 
 	void SetHostname(const char *name);
-	void EspRequestsTransfer();
-
 	const char *GetRequest(uint32_t& ip, size_t& length, uint32_t& fragment) const;
 	void SendReply(uint32_t ip, unsigned int code, OutputBuffer *body);
 	void SendReply(uint32_t ip, unsigned int code, const char *text);
@@ -79,14 +71,17 @@ public:
 	static void ResetWiFiForUpload(bool external);
 
 	const char *GetWiFiServerVersion() const { return wiFiServerVersion; }
+	int32_t SendCommand(NetworkCommand cmd, uint8_t socket, const void * dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength);
+
+	bool GetNetworkState(StringRef& reply);
+	const char* TranslateNetworkState() const;
+	static const char* TranslateWiFiState(WiFiState w);
+
+	void EspRequestsTransfer();
 
 private:
 	void SetupSpi();
-	void PrepareForTransfer(bool dataToSend, bool allowReceive);
-	void ProcessIncomingData(TransactionBuffer &buf);
 	void ClearIpAddress();
-	void TryStartTransfer();
-	void DebugPrintResponse();
 
 	void StartProtocol(size_t protocol)
 	pre(protocol < NumProtocols);
@@ -113,10 +108,14 @@ private:
 	uint32_t spiTxUnderruns;
 	uint32_t spiRxOverruns;
 
+	uint32_t timer;
+
     float longWait;
-    TransferState state;
+    NetworkState state;
+    WiFiState requestedMode;
+    WiFiState currentMode;
     bool activated;
-    bool connectedToAp;
+    volatile bool espStatusChanged;
 
     uint8_t ipAddress[4];
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0

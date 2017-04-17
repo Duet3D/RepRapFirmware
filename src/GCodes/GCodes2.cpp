@@ -20,7 +20,10 @@
 #include "Version.h"
 
 #ifdef DUET_NG
-#include "FirmwareUpdater.h"
+# include "FirmwareUpdater.h"
+# ifdef DUET_WIFI
+#  include "MessageFormats.h"
+# endif
 #endif
 
 const char* BED_EQUATION_G = "bed.g";
@@ -53,7 +56,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, StringRef& reply)
 		return true;
 	}
 
-	// G29 string parameters may contain the letter M, and various M-code string parameter may contain the letter G.
+	// G29 string parameters may contain the letter M, and various M-code string parameters may contain the letter G.
 	// So we now look for the first G, M or T in the command.
 	switch (gb.GetCommandLetter())
 	{
@@ -199,7 +202,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
+			const int sparam = (gb.SeenAfterSpace('S')) ? gb.GetIValue() : 0;
 			switch(sparam)
 			{
 			case 0:		// probe and save height map
@@ -2223,30 +2226,29 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (gb.Seen('P'))
 			{
 				seen = true;
-				SetEthernetAddress(gb, code);
+				uint8_t eth[4];
+				if (gb.GetIPAddress(eth))
+				{
+					platform->SetIPAddress(eth);
+				}
+				else
+				{
+					reply.copy("Bad IP address");
+					error = true;
+					break;
+				}
 			}
 
 			// Process this one last in case the IP address is changed and the network enabled in the same command
 			if (gb.Seen('S')) // Has the user turned the network on or off?
 			{
 				seen = true;
-				if (gb.GetIValue() != 0)
-				{
-					reprap.GetNetwork()->Enable();
-				}
-				else
-				{
-					reprap.GetNetwork()->Disable();
-				}
+				reprap.GetNetwork()->Enable(gb.GetIValue(), reply);
 			}
 
 			if (!seen)
 			{
-				const byte *config_ip = platform->GetIPAddress();
-				const byte *actual_ip = reprap.GetNetwork()->GetIPAddress();
-				reply.printf("Network is %s, configured IP address: %d.%d.%d.%d, actual IP address: %d.%d.%d.%d",
-						reprap.GetNetwork()->IsEnabled() ? "enabled" : "disabled",
-						config_ip[0], config_ip[1], config_ip[2], config_ip[3], actual_ip[0], actual_ip[1], actual_ip[2], actual_ip[3]);
+				error = reprap.GetNetwork()->GetNetworkState(reply);
 			}
 		}
 		break;
@@ -2254,11 +2256,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 553: // Set/Get netmask
 		if (gb.Seen('P'))
 		{
-			SetEthernetAddress(gb, code);
+			uint8_t eth[4];
+			if (gb.GetIPAddress(eth))
+			{
+				platform->SetNetMask(eth);
+			}
+			else
+			{
+				reply.copy("Bad IP address");
+				error = true;
+			}
 		}
 		else
 		{
-			const byte *nm = platform->NetMask();
+			const uint8_t * const nm = platform->NetMask();
 			reply.printf("Net mask: %d.%d.%d.%d ", nm[0], nm[1], nm[2], nm[3]);
 		}
 		break;
@@ -2266,11 +2277,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 554: // Set/Get gateway
 		if (gb.Seen('P'))
 		{
-			SetEthernetAddress(gb, code);
+			uint8_t eth[4];
+			if (gb.GetIPAddress(eth))
+			{
+				platform->SetGateWay(eth);
+			}
+			else
+			{
+				reply.copy("Bad IP address");
+				error = true;
+			}
 		}
 		else
 		{
-			const byte *gw = platform->GateWay();
+			const uint8_t * const gw = platform->GateWay();
 			reply.printf("Gateway: %d.%d.%d.%d ", gw[0], gw[1], gw[2], gw[3]);
 		}
 		break;
@@ -2702,7 +2722,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 572: // Set/report elastic compensation
+	case 572: // Set/report pressure advance
 		if (gb.Seen('D'))
 		{
 			// New usage: specify the extruder drive using the D parameter
@@ -3143,6 +3163,152 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		// Default to reporting current protocols if P or S parameter missing
 		reprap.GetNetwork()->ReportProtocols(reply);
 		break;
+
+#ifdef DUET_WIFI
+	case 587:	// Add WiFi network or list remembered networks
+		if (gb.SeenAfterSpace('S'))
+		{
+			WirelessConfigurationData config;
+			memset(&config, 0, sizeof(config));
+			bool ok = gb.GetString(config.ssid, ARRAY_SIZE(config.ssid));
+			if (ok)
+			{
+				ok = gb.SeenAfterSpace('P') && gb.GetString(config.password, ARRAY_SIZE(config.password));
+			}
+			if (ok && gb.SeenAfterSpace('I'))
+			{
+				ok = gb.GetIPAddress(config.ip);
+			}
+			if (ok && gb.SeenAfterSpace('J'))
+			{
+				ok = gb.GetIPAddress(config.gateway);
+			}
+			if (ok && gb.SeenAfterSpace('K'))
+			{
+				ok = gb.GetIPAddress(config.netmask);
+			}
+			if (ok)
+			{
+				const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkAddSsid, 0, &config, sizeof(config), nullptr, 0);
+				if (rslt != ResponseEmpty)
+				{
+					reply.copy("Failed to add SSID to remembered list");
+					error = true;
+				}
+			}
+			else
+			{
+				reply.copy("Bad parameter in M587 command");
+				error = true;
+			}
+		}
+		else
+		{
+			// List remembered networks
+			const size_t declaredBufferLength = MaxRememberedNetworks * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with null terminator, plus an extra null
+			uint32_t buffer[NumDwords(declaredBufferLength + 1)];
+			const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkListSsids, 0, nullptr, 0, buffer, declaredBufferLength);
+			if (rslt >= 0)
+			{
+				char* const cbuf = reinterpret_cast<char *>(buffer);
+				cbuf[declaredBufferLength] = 0;
+				size_t len = strlen(cbuf);
+				if (len != 0 && cbuf[len - 1] == '\n')
+				{
+					--len;
+					cbuf[len] = 0;
+				}
+				if (len == 0)
+				{
+					reply.copy("No remembered networks");
+				}
+				else
+				{
+					OutputBuffer *response;
+					if (!OutputBuffer::Allocate(response))
+					{
+						return false;		// try again later
+					}
+					response->copy("Remembered networks:\n");
+					response->cat(cbuf);
+					HandleReply(gb, false, response);
+					return true;
+				}
+			}
+			else
+			{
+				reply.copy("Failed to retrieve network list");
+				error = true;
+			}
+		}
+		break;
+
+	case 588:	// Forget WiFi network
+		if (gb.SeenAfterSpace('S'))
+		{
+			uint32_t ssid[NumDwords(SsidLength)];
+			if (gb.GetString(reinterpret_cast<char*>(ssid), SsidLength))
+			{
+				const char* const pssid = reinterpret_cast<const char*>(ssid);
+				if (strcmp(pssid, "ALL") == 0)
+				{
+					const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkFactoryReset, 0, nullptr, 0, nullptr, 0);
+					if (rslt != ResponseEmpty)
+					{
+						reply.copy("Failed to reset the WiFi module to factory settings");
+						error = true;
+					}
+				}
+				else
+				{
+					const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkDeleteSsid, 0, ssid, SsidLength, nullptr, 0);
+					if (rslt != ResponseEmpty)
+					{
+						reply.copy("Failed to remove SSID from remembered list");
+						error = true;
+					}
+				}
+			}
+			else
+			{
+				reply.copy("Bad parameter in M588 command");
+				error = true;
+			}
+		}
+		break;
+
+	case 589:	// Configure access point
+		if (gb.SeenAfterSpace('S'))
+		{
+			WirelessConfigurationData config;
+			memset(&config, 0, sizeof(config));
+			bool ok = gb.GetString(config.ssid, ARRAY_SIZE(config.ssid));
+			if (ok)
+			{
+				ok = gb.SeenAfterSpace('P') && gb.GetString(config.password, ARRAY_SIZE(config.password));
+			}
+			if (ok && gb.SeenAfterSpace('I'))
+			{
+				ok = gb.GetIPAddress(config.ip);
+			}
+			if (ok)
+			{
+				config.channel = (gb.SeenAfterSpace('C')) ? gb.GetIValue() : 0;
+				const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, &config, sizeof(config), nullptr, 0);
+				if (rslt != ResponseEmpty)
+				{
+					reply.copy("Failed to configure access point parameters");
+					error = true;
+				}
+			}
+			else
+			{
+				reply.copy("Bad parameter in M589 command");
+				error = true;
+			}
+		}
+		break;
+#endif
 
 	case 665: // Set delta configuration
 		if (!LockMovementAndWaitForStandstill(gb))

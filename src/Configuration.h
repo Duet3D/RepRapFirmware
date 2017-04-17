@@ -66,7 +66,7 @@ const float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
 
 const uint8_t MAX_BAD_TEMPERATURE_COUNT = 4;		// Number of bad temperature samples permitted before a heater fault is reported
 const float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
-const float DefaultExtruderTemperatureLimit = 262.0; // Celsius
+const float DefaultExtruderTemperatureLimit = 288.0; // Celsius - E3D say to tighten the hot end at 285C
 const float DefaultBedTemperatureLimit = 125.0;		// Celsius
 const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
 const float BAD_ERROR_TEMPERATURE = 2000.0;			// Must exceed any reasonable 5temperature limit including DEFAULT_TEMPERATURE_LIMIT

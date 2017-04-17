@@ -35,6 +35,7 @@ class OutputBuffer
 		char& operator[](size_t index);
 		char operator[](size_t index) const;
 		const char *Read(size_t len);
+		void Taken(size_t len) { bytesRead += len; }
 		size_t BytesLeft() const { return dataLength - bytesRead; }	// How many bytes have not been sent yet?
 
 		size_t printf(const char *fmt, ...);

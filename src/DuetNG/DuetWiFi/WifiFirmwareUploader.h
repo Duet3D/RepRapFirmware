@@ -89,7 +89,7 @@ private:
 	uint32_t lastResetTime;
 	UploadState state;
 	EspUploadResult uploadResult;
-	bool restartOnCompletion;
+	int restartModeOnCompletion;
 };
 
 #endif /* SRC_DUETNG_WIFIFIRMWAREUPLOADER_H_ */

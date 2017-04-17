@@ -763,7 +763,9 @@ private:
 	uint32_t baudRates[NUM_SERIAL_CHANNELS];
 	uint8_t commsParams[NUM_SERIAL_CHANNELS];
 	OutputStack *auxOutput;
+#ifdef SERIAL_AUX2_DEVICE
 	OutputStack *aux2Output;
+#endif
 	OutputStack *usbOutput;
     bool auxDetected;							// Have we processed at least one G-Code from an AUX device?
 	OutputBuffer *auxGCodeReply;				// G-Code reply for AUX devices (special one because it is actually encapsulated before sending)

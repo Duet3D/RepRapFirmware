@@ -54,7 +54,6 @@ extern const char *moduleName[];
 // Warn of what's to come, so we can use pointers to classes without including the entire header files
 class Network;
 class Platform;
-class Webserver;
 class GCodes;
 class Move;
 class DDA;

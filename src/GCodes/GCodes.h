@@ -81,7 +81,7 @@ public:
 		bool canPauseAfter;												// true if we can pause just after this move and successfully restart
 	};
   
-	GCodes(Platform* p, Webserver* w);
+	GCodes(Platform* p);
 	void Spin();														// Called in a tight loop to make this class work
 	void Init();														// Set it up
 	void Exit();														// Shut it down
@@ -198,7 +198,6 @@ private:
 	bool Push(GCodeBuffer& gb);											// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);											// Pop feedrate etc
 	void DisableDrives();												// Turn the motors off
-	void SetEthernetAddress(GCodeBuffer& gb, int mCode);				// Does what it says
 	void SetMACAddress(GCodeBuffer& gb);								// Deals with an M540
 	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
@@ -241,7 +240,6 @@ private:
 	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
 	Platform* const platform;											// The RepRap machine
-	Webserver* const webserver;											// The web server class
 
 	RegularGCodeInput* httpInput;										// These cache incoming G-codes...
 	RegularGCodeInput* telnetInput;										// ...

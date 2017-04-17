@@ -24,7 +24,7 @@ GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 {
 	// Don't queue anything if no moves are being performed
-	uint32_t scheduledMoves = reprap.GetMove()->GetScheduledMoves() + segmentsLeft;
+	const uint32_t scheduledMoves = reprap.GetMove()->GetScheduledMoves() + segmentsLeft;
 	if (scheduledMoves == reprap.GetMove()->GetCompletedMoves())
 	{
 		return false;
@@ -42,32 +42,45 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 	bool queueCode = false;
 	switch (gb.GetCommandLetter())
 	{
-		case 'G':
+	case 'G':
 		{
 			const int code = gb.GetIValue();
 
 			// Set active/standby temperatures
 			queueCode = (code == 10 && gb.Seen('P'));
-			break;
 		}
+		break;
 
-		case 'M':
+	case 'M':
 		{
 			const int code = gb.GetIValue();
+			switch(code)
+			{
+			case 3:		// spindle control
+			case 4:
+			case 5:
+			case 42:	// set IO pin
+			case 106:	// fan control
+			case 107:
+			case 104:	// set temperatures and return immediately
+			case 140:
+			case 141:
+			case 144:
+			case 117:	// display message
+			case 280:	// set servo
+			case 300:	// beep
+			case 420:	// set RGB colour
+				queueCode = true;
+				break;
 
-			// Fan control
-			queueCode |= (code == 106 || code == 107);
-
-			// Set temperatures and return immediately
-			queueCode |= (code == 104 || code == 140 || code == 141 || code == 144);
-
-			// Display Message (LCD), Beep, RGB colour, Set servo position
-			queueCode |= (code == 117 || code == 300 || code == 280 || code == 420);
-
-			// Valve control
-			queueCode |= (code == 126 || code == 127);
-			break;
+			default:
+				break;
+			}
 		}
+		break;
+
+	default:
+		break;
 	}
 
 	// Does it make sense to queue this code?

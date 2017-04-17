@@ -691,7 +691,7 @@ void WifiFirmwareUploader::Spin()
 		if (uploadResult == EspUploadResult::success)
 		{
 			reprap.GetPlatform()->Message(FIRMWARE_UPDATE_MESSAGE, "Upload successful\n");
-			if (restartOnCompletion)
+			if (restartModeOnCompletion == 1)
 			{
 				reprap.GetNetwork()->Start();
 			}
@@ -735,7 +735,7 @@ void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uin
 
 	// Stop the network
 	Network *network = reprap.GetNetwork();
-	restartOnCompletion = network->IsEnabled();
+	restartModeOnCompletion = network->EnableState();
 	network->Stop();
 
 	// Set up the state so that subsequent calls to Spin() will attempt the upload
