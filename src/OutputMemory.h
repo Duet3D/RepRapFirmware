@@ -29,6 +29,7 @@ class OutputBuffer
 		void IncreaseReferences(size_t refs);
 
 		const char *Data() const { return data; }
+		const char *UnreadData() const { return data + bytesRead; }
 		size_t DataLength() const { return dataLength; }	// How many bytes have been written to this instance?
 		size_t Length() const;								// How many bytes have been written to the whole chain?
 

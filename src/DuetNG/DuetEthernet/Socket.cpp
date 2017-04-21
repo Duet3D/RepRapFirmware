@@ -286,16 +286,13 @@ size_t Socket::Send(const uint8_t *data, size_t length)
 		}
 		wiz_send_data_at(socketNum, data, length, wizTxBufferPtr);
 		wizTxBufferLeft -= length;
+		wizTxBufferPtr += length;
 		if (wizTxBufferLeft == 0)
 		{
-			// Buffer is full so send it
-			ExecCommand(socketNum, Sn_CR_SEND);
-			isSending = true;
-			sendOutstanding = false;
+			Send();
 		}
 		else
 		{
-			wizTxBufferPtr += length;
 			sendOutstanding = true;
 		}
 		return length;
@@ -307,6 +304,7 @@ void Socket::Send()
 {
 	if (CanSend() && sendOutstanding)
 	{
+		setSn_TX_WR(socketNum, wizTxBufferPtr);
 		ExecCommand(socketNum, Sn_CR_SEND);
 		isSending = true;
 		sendOutstanding = false;

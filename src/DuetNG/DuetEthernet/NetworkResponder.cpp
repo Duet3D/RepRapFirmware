@@ -78,7 +78,7 @@ void NetworkResponder::SendData()
 		}
 		else
 		{
-			const size_t sent = skt->Send(reinterpret_cast<const uint8_t *>(outBuf->Data()), bytesLeft);
+			const size_t sent = skt->Send(reinterpret_cast<const uint8_t *>(outBuf->UnreadData()), bytesLeft);
 			if (sent == 0)
 			{
 				// Check whether the connection has been closed
