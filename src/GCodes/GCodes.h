@@ -226,6 +226,7 @@ private:
 	pre(resourceOwners[movementResource] = &gb);
 
 	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
+	void SaveFanSpeeds();												// Save the speeds of all fans
 
 	bool DefineGrid(GCodeBuffer& gb, StringRef &reply);					// Define the probing grid, returning true if error
 	bool ProbeGrid(GCodeBuffer& gb, StringRef& reply);					// Start probing the grid, returning true if we didn't because of an error
@@ -303,8 +304,9 @@ private:
 	bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
 	bool limitAxes;								// Don't think outside the box.
 	uint32_t axesHomed;							// Bitmap of which axes have been homed
-	float pausedFanValues[NUM_FANS];			// Fan speeds when the print was paused
+	float pausedFanSpeeds[NUM_FANS];			// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
+	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
 	float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float currentBabyStepZOffset;				// The accumulated Z offset due to baby stepping requests

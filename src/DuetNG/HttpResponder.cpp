@@ -1092,40 +1092,35 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 // It tries to process a chunk of uploaded data and changes the state if finished.
 void HttpResponder::DoFastUpload()
 {
-	// Write some data on the SD card
-	const char *buffer;
+	if (uploadedBytes == 0)
+	{
+		writeBufIndex = 0;
+	}
+
+	const uint8_t *buffer;
 	size_t len;
 	if (skt->ReadBuffer(buffer, len))
 	{
 		// Write data in sector-aligned chunks. This also means that the buffer in fatfs is only used to hold the FAT.
 		// Buffer size must be a multiple of the 512b sector size.
 		char* const writeBuf = reinterpret_cast<char *>(writeBufStorage);
-
-		if (uploadedBytes == 0)
+		const size_t lengthToCopy = min<size_t>(writeBufLength - writeBufIndex, len);
+		memcpy(writeBuf + writeBufIndex, buffer, lengthToCopy);
+		writeBufIndex += lengthToCopy;
+		uploadedBytes += lengthToCopy;
+		buffer += lengthToCopy;
+		skt->Taken(lengthToCopy);
+		if (writeBufIndex == writeBufLength || uploadedBytes >= postFileLength)
 		{
+			const bool success = fileBeingUploaded.Write(writeBuf, writeBufIndex);
 			writeBufIndex = 0;
-		}
-
-		while (len != 0)
-		{
-			const size_t lengthToCopy = min<size_t>(writeBufLength - writeBufIndex, len);
-			memcpy(writeBuf + writeBufIndex, buffer, lengthToCopy);
-			writeBufIndex += lengthToCopy;
-			uploadedBytes += lengthToCopy;
-			buffer += lengthToCopy;
-			len -= lengthToCopy;
-			if (writeBufIndex == writeBufLength || uploadedBytes >= postFileLength)
+			if (!success)
 			{
-				const bool success = fileBeingUploaded.Write(writeBuf, writeBufIndex);
-				writeBufIndex = 0;
-				if (!success)
-				{
-					uploadError = true;
-					reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
-					CancelUpload();
-					SendJsonResponse("upload");
-					return;
-				}
+				uploadError = true;
+				reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+				CancelUpload();
+				SendJsonResponse("upload");
+				return;
 			}
 		}
 	}

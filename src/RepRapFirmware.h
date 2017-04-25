@@ -96,6 +96,8 @@ const float InchToMm = 25.4;
 const float DegreesToRadians = PI/180.0;
 const float RadiansToDegrees = 180.0/PI;
 
+#define DEGREE_SYMBOL	"\xC2\xB0"								// degree-symbol encoding in UTF8
+
 // Type of an offset in a file
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;

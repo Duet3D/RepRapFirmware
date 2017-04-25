@@ -222,7 +222,8 @@ void NetworkResponder::CancelUpload()
 // Overridden in function HttpResponder
 void NetworkResponder::DoFastUpload()
 {
-	const char *buffer;
+	// TODO combine this code with the version in HttpResponder
+	const uint8_t *buffer;
 	size_t len;
 	if (skt->ReadBuffer(buffer, len))
 	{
@@ -231,7 +232,9 @@ void NetworkResponder::DoFastUpload()
 			GetPlatform()->MessageF(HOST_MESSAGE, "Writing %u bytes of upload data\n", len);
 		}
 
-		if (!fileBeingUploaded.Write(buffer, len))
+		const bool success = fileBeingUploaded.Write(reinterpret_cast<const char*>(buffer), len);
+		skt->Taken(len);
+		if (!success)
 		{
 			uploadError = true;
 			GetPlatform()->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");

@@ -74,17 +74,6 @@ void Socket::Terminate()
 	}
 }
 
-// Test whether we have a connection on this socket
-bool Socket::IsConnected() const
-{
-	if (state == SocketState::disabled)
-	{
-		return false;
-	}
-	const uint8_t stat = getSn_SR(socketNum);
-	return stat == SOCK_ESTABLISHED || stat == SOCK_CLOSE_WAIT;
-}
-
 // Return true if there is or may soon be more data to read
 bool Socket::CanRead() const
 {
@@ -100,42 +89,44 @@ bool Socket::CanSend() const
 // Read 1 character from the receive buffers, returning true if successful
 bool Socket::ReadChar(char& c)
 {
-	while (receivedData != nullptr && receivedData->IsEmpty())
+	if (receivedData != nullptr)
 	{
-		receivedData = receivedData->Release();		// discard empty buffer at head of chain
+		const bool ret = receivedData->ReadChar(c);
+		if (receivedData->IsEmpty())
+		{
+			receivedData = receivedData->Release();
+		}
+		return ret;
 	}
 
-	if (receivedData == nullptr)
-	{
-		c = 0;
-		return false;
-	}
-
-	bool ret = receivedData->ReadChar(c);
-	if (receivedData->IsEmpty())
-	{
-		receivedData = receivedData->Release();
-	}
-	return ret;
+	c = 0;
+	return false;
 }
 
 // Return a pointer to data in a buffer and a length available, and mark the data as taken
-bool Socket::ReadBuffer(const char *&buffer, size_t &len)
+bool Socket::ReadBuffer(const uint8_t *&buffer, size_t &len)
 {
-	while (receivedData != nullptr && receivedData->IsEmpty())
+	if (receivedData != nullptr)
 	{
-		receivedData = receivedData->Release();		// discard empty buffer at head of chain
+		len = receivedData->Remaining();
+		buffer = receivedData->UnreadData();
+		return true;
 	}
 
-	if (receivedData == nullptr)
-	{
-		return false;
-	}
+	return false;
+}
 
-	len = NetworkBuffer::bufferSize;				// initial value passed to TakeData is the maximum amount we will take
-	buffer = reinterpret_cast<const char*>(receivedData->TakeData(len));
-//	debugPrintf("Taking %d bytes\n", len);
-	return true;
+// Flag some data as taken from the receive buffers. We never take data from more than one buffer at a time.
+void Socket::Taken(size_t len)
+{
+	if (receivedData != nullptr)
+	{
+		receivedData->Taken(len);
+		if (receivedData->IsEmpty())
+		{
+			receivedData = receivedData->Release();		// discard empty buffer at head of chain
+		}
+	}
 }
 
 // Poll a socket to see if it needs to be serviced
@@ -143,19 +134,6 @@ void Socket::Poll(bool full)
 {
 	if (state != SocketState::disabled)
 	{
-		// The mechanism used by class OutputBuffer and now by NetworkBuffer of marking data taken as soon as we return a pointer to it
-		// is DANGEROUS and will have to be rewritten for RTOS. We need to recycle empty buffers, otherwise multiple file uploads get stalled.
-		// However, we MUST NOT do this until the data had DEFINITELY been finished with. Temporarily use this conditional to avoid a bug
-		// with data corruption when this is not the case.
-		if (full)
-		{
-			// Recycle any receive buffers that are now empty
-			while (receivedData != nullptr && receivedData->IsEmpty())
-			{
-				receivedData = receivedData->Release();		// discard empty buffer at head of chain
-			}
-		}
-
 		switch(getSn_SR(socketNum))
 		{
 		case SOCK_INIT:
@@ -300,6 +278,7 @@ size_t Socket::Send(const uint8_t *data, size_t length)
 	return 0;
 }
 
+// Tell the interface to send the otstanding data
 void Socket::Send()
 {
 	if (CanSend() && sendOutstanding)

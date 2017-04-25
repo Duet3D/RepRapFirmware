@@ -1053,20 +1053,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					}
 					else if (gb.Seen('R'))
 					{
-						const int i = gb.GetIValue();
-						switch(i)
+						// Restore fan speed to value when print was paused
+						if (seenFanNum)
 						{
-						case 0:
-						case 1:
-							// Restore fan speed to value when print was paused
-							platform->SetFanValue(fanNum, pausedFanValues[fanNum]);
-							break;
-						case 2:
-							// Set the speeds of mapped fans to the last known value. Fan number is ignored.
+							platform->SetFanValue(fanNum, pausedFanSpeeds[fanNum]);
+						}
+						else
+						{
+							lastDefaultFanSpeed = pausedDefaultFanSpeed;
 							SetMappedFanSpeed();
-							break;
-						default:
-							break;
 						}
 					}
 					else if (!seen)
@@ -3316,80 +3311,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			float positionNow[DRIVES];
 			Move *move = reprap.GetMove();
-			move->GetCurrentUserPosition(positionNow, 0, reprap.GetCurrentXAxes()); // get the current position, we may need it later
-			DeltaParameters& params = move->AccessDeltaParams();
-			const bool wasInDeltaMode = params.IsDeltaMode();						// remember whether we were in delta mode
-			bool seen = false;
-
-			if (gb.Seen('L'))
+			float positionNow[DRIVES];
+			bool changedMode = false;
+			if ((gb.Seen('L') || gb.Seen('D')) && !move->IsDeltaMode())
 			{
-				params.SetDiagonal(gb.GetFValue());
-				seen = true;
+				// Not in delta mode, so switch to it
+				changedMode = true;
+				//TODO tell Move to switch to delta - currently this is done implicitly when we set the parameters
+				move->GetCurrentUserPosition(positionNow, 0, reprap.GetCurrentXAxes()); // get the current position, we may need it later
 			}
-			if (gb.Seen('R'))
+			DeltaKinematics& params = move->AccessDeltaParams();
+			const bool changed = params.SetOrReportParameters(code, gb, reply, error);
+			if (changed)
 			{
-				params.SetRadius(gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('B'))
-			{
-				params.SetPrintRadius(gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('X'))
-			{
-				// X tower position correction
-				params.SetXCorrection(gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('Y'))
-			{
-				// Y tower position correction
-				params.SetYCorrection(gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('Z'))
-			{
-				// Y tower position correction
-				params.SetZCorrection(gb.GetFValue());
-				seen = true;
-			}
-
-			// The homed height must be done last, because it gets recalculated when some of the other factors are changed
-			if (gb.Seen('H'))
-			{
-				params.SetHomedHeight(gb.GetFValue());
-				seen = true;
-			}
-
-			if (seen)
-			{
-				move->SetCoreXYMode(0);		// CoreXYMode needs to be zero when executing special moves on a delta
-
-				// If we have changed between Cartesian and Delta mode, we need to reset the motor coordinates to agree with the XYZ coordinates.
-				// This normally happens only when we process the M665 command in config.g. Also flag that the machine is not homed.
-				if (params.IsDeltaMode() != wasInDeltaMode)
-				{
-					SetPositions(positionNow);
-				}
 				SetAllAxesNotHomed();
 			}
-			else
+			if (changedMode)
 			{
-				if (params.IsDeltaMode())
-				{
-					reply.printf("Diagonal %.3f, delta radius %.3f, homed height %.3f, bed radius %.1f"
-								 ", X %.3f" DEGREE_SYMBOL ", Y %.3f" DEGREE_SYMBOL ", Z %.3f" DEGREE_SYMBOL,
-								 	 params.GetDiagonal(), params.GetRadius(),
-								 	 params.GetHomedHeight(), params.GetPrintRadius(),
-								 	 params.GetXCorrection(), params.GetYCorrection(), params.GetZCorrection());
-				}
-				else
-				{
-					reply.printf("Printer is not in delta mode");
-				}
+				// If we have changed between Cartesian and Delta mode, we need to reset the motor coordinates to agree with the XYZ coordinates.
+				// This normally happens only when we process the M665 command in config.g. Also flag that the machine is not homed.
+				move->SetCoreXYMode(0);		// CoreXYMode needs to be zero when executing special moves on a delta
+				SetPositions(positionNow);
 			}
 		}
 		break;
@@ -3400,43 +3343,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			DeltaParameters& params = reprap.GetMove()->AccessDeltaParams();
-			bool seen = false;
-			if (gb.Seen('X'))
-			{
-				params.SetEndstopAdjustment(X_AXIS, gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('Y'))
-			{
-				params.SetEndstopAdjustment(Y_AXIS, gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('Z'))
-			{
-				params.SetEndstopAdjustment(Z_AXIS, gb.GetFValue());
-				seen = true;
-			}
-			if (gb.Seen('A'))
-			{
-				params.SetXTilt(gb.GetFValue() * 0.01);
-				seen = true;
-			}
-			if (gb.Seen('B'))
-			{
-				params.SetYTilt(gb.GetFValue() * 0.01);
-				seen = true;
-			}
-
-			if (seen)
+			DeltaKinematics& params = reprap.GetMove()->AccessDeltaParams();
+			const bool changed = params.SetOrReportParameters(code, gb, reply, error);
+			if (changed)
 			{
 				SetAllAxesNotHomed();
-			}
-			else
-			{
-				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f, tilt X%.2f%% Y%.2f%%",
-						params.GetEndstopAdjustment(X_AXIS), params.GetEndstopAdjustment(Y_AXIS), params.GetEndstopAdjustment(Z_AXIS),
-						params.GetXTilt() * 100.0, params.GetYTilt() * 100.0);
 			}
 		}
 		break;

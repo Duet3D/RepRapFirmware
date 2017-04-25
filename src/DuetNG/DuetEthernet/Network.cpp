@@ -18,13 +18,6 @@
 const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
 const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
 
-void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[])
-{
-	memcpy(ipAddress, p_ipAddress, sizeof(ipAddress));
-	memcpy(netmask, p_netmask, sizeof(netmask));
-	memcpy(gateway, p_gateway, sizeof(gateway));
-}
-
 Network::Network(Platform* p)
 	: platform(p), nextResponderToPoll(nullptr), lastTickMillis(0),
 	  state(NetworkState::disabled), activated(false)
@@ -48,7 +41,6 @@ void Network::Init()
 {
 	// Ensure that the W5500 chip is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
-	state = NetworkState::disabled;
 	longWait = platform->Time();
 	lastTickMillis = millis();
 
@@ -227,6 +219,49 @@ bool Network::GetNetworkState(StringRef& reply)
 	return false;
 }
 
+// Start up the network
+void Network::Start()
+{
+	SetIPAddress(platform->GetIPAddress(), platform->NetMask(), platform->GateWay());
+	pinMode(EspResetPin, OUTPUT_LOW);
+	delayMicroseconds(550);						// W550 reset pulse must be at least 500us long
+	Platform::WriteDigital(EspResetPin, HIGH);	// raise /Reset pin
+	delay(55);									// W5500 needs 50ms to start up
+
+#ifdef USE_3K_BUFFERS
+	static const uint8_t bufSizes[8] = { 3, 3, 3, 3, 1, 1, 1, 1 };	// 3K buffers for http, 1K for everything else (FTP will be slow)
+#else
+	static const uint8_t bufSizes[8] = { 2, 2, 2, 2, 2, 2, 2, 2 };	// 2K buffers for everything
+#endif
+
+	wizchip_init(bufSizes, bufSizes);
+
+	setSHAR(platform->MACAddress());
+	setSIPR(ipAddress);
+	setGAR(gateway);
+	setSUBR(netmask);
+
+	state = NetworkState::establishingLink;
+}
+
+// Stop the network
+void Network::Stop()
+{
+	if (state != NetworkState::disabled)
+	{
+		for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+		{
+			r->Terminate(AnyProtocol);
+		}
+		if (usingDhcp)
+		{
+			DHCP_stop();
+		}
+		digitalWrite(EspResetPin, LOW);			// put the W5500 back into reset
+		state = NetworkState::disabled;
+	}
+}
+
 // Main spin loop. If 'full' is true then we are being called from the main spin loop. If false then we are being called during HSMCI idle time.
 void Network::Spin(bool full)
 {
@@ -368,47 +403,6 @@ void Network::Diagnostics(MessageType mtype)
 	telnetResponder->Diagnostics(mtype);
 }
 
-void Network::Start()
-{
-	SetIPAddress(platform->GetIPAddress(), platform->NetMask(), platform->GateWay());
-	pinMode(EspResetPin, OUTPUT_LOW);
-	delayMicroseconds(550);						// W550 reset pulse must be at least 500us long
-	Platform::WriteDigital(EspResetPin, HIGH);	// raise /Reset pin
-	delay(55);									// W5500 needs 50ms to start up
-
-#ifdef USE_3K_BUFFERS
-	static const uint8_t bufSizes[8] = { 3, 3, 3, 3, 1, 1, 1, 1 };	// 3K buffers for http, 1K for everything else (FTP will be slow)
-#else
-	static const uint8_t bufSizes[8] = { 2, 2, 2, 2, 2, 2, 2, 2 };	// 2K buffers for everything
-#endif
-
-	wizchip_init(bufSizes, bufSizes);
-
-	setSHAR(platform->MACAddress());
-	setSIPR(ipAddress);
-	setGAR(gateway);
-	setSUBR(netmask);
-
-	state = NetworkState::establishingLink;
-}
-
-void Network::Stop()
-{
-	if (state != NetworkState::disabled)
-	{
-		for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
-		{
-			r->Terminate(AnyProtocol);
-		}
-		if (usingDhcp)
-		{
-			DHCP_stop();
-		}
-		digitalWrite(EspResetPin, LOW);			// put the W5500 back into reset
-		state = NetworkState::disabled;
-	}
-}
-
 // Enable or disable the network
 void Network::Enable(int mode, StringRef& reply)
 {
@@ -437,9 +431,11 @@ int Network::EnableState() const
 	return (state == NetworkState::disabled) ? 0 : 1;
 }
 
-const uint8_t *Network::GetIPAddress() const
+void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[])
 {
-	return ipAddress;
+	memcpy(ipAddress, p_ipAddress, sizeof(ipAddress));
+	memcpy(netmask, p_netmask, sizeof(netmask));
+	memcpy(gateway, p_gateway, sizeof(gateway));
 }
 
 void Network::SetHostname(const char *name)
@@ -469,6 +465,17 @@ void Network::SetHostname(const char *name)
 	}
 }
 
+void Network::OpenDataPort(Port port)
+{
+	sockets[FtpDataSocketNumber].Init(FtpDataSocketNumber, port, FtpDataProtocol);
+}
+
+// Close FTP data port and purge associated resources
+void Network::CloseDataPort()
+{
+	sockets[FtpDataSocketNumber].Close();
+}
+
 void Network::InitSockets()
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -478,7 +485,7 @@ void Network::InitSockets()
 			StartProtocol(i);
 		}
 	}
-	nextSocketToPoll = currentTransactionSocketNumber = 0;
+	nextSocketToPoll = 0;
 }
 
 void Network::TerminateSockets()

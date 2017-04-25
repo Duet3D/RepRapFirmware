@@ -5,39 +5,50 @@
  *      Author: David
  */
 
-#include "DeltaParameters.h"
+#include "DeltaKinematics.h"
 #include "Pins.h"
 #include "Configuration.h"
 #include "Storage/FileStore.h"
 
-void DeltaParameters::Init()
+DeltaKinematics::DeltaKinematics() : Kinematics(CART_AXES, DELTA_AXES)
+{
+	Init();
+}
+
+// Return the name of the current kinematics
+const char *DeltaKinematics::GetName() const
+{
+	return "Delta";
+}
+
+void DeltaKinematics::Init()
 {
     deltaMode = false;
 	diagonal = 0.0;
 	radius = 0.0;
-	xCorrection = yCorrection = zCorrection = 0.0;
 	xTilt = yTilt = 0.0;
 	printRadius = defaultPrintRadius;
 	homedHeight = defaultDeltaHomedHeight;
 
     for (size_t axis = 0; axis < DELTA_AXES; ++axis)
     {
+    	angleCorrections[axis] = 0.0;
     	endstopAdjustments[axis] = 0.0;
     	towerX[axis] = towerY[axis] = 0.0;
     }
 }
 
-void DeltaParameters::Recalc()
+void DeltaKinematics::Recalc()
 {
 	deltaMode = (radius > 0.0 && diagonal > radius);
 	if (deltaMode)
 	{
-		towerX[A_AXIS] = -(radius * cos((30 + xCorrection) * degreesToRadians));
-		towerY[A_AXIS] = -(radius * sin((30 + xCorrection) * degreesToRadians));
-		towerX[B_AXIS] = +(radius * cos((30 - yCorrection) * degreesToRadians));
-		towerY[B_AXIS] = -(radius * sin((30 - yCorrection) * degreesToRadians));
-		towerX[C_AXIS] = -(radius * sin(zCorrection * degreesToRadians));
-		towerY[C_AXIS] = +(radius * cos(zCorrection * degreesToRadians));
+		towerX[A_AXIS] = -(radius * cos((30 + angleCorrections[A_AXIS]) * DegreesToRadians));
+		towerY[A_AXIS] = -(radius * sin((30 + angleCorrections[A_AXIS]) * DegreesToRadians));
+		towerX[B_AXIS] = +(radius * cos((30 - angleCorrections[B_AXIS]) * DegreesToRadians));
+		towerY[B_AXIS] = -(radius * sin((30 - angleCorrections[B_AXIS]) * DegreesToRadians));
+		towerX[C_AXIS] = -(radius * sin(angleCorrections[C_AXIS] * DegreesToRadians));
+		towerY[C_AXIS] = +(radius * cos(angleCorrections[C_AXIS] * DegreesToRadians));
 
 		Xbc = towerX[C_AXIS] - towerX[B_AXIS];
 		Xca = towerX[A_AXIS] - towerX[C_AXIS];
@@ -57,11 +68,12 @@ void DeltaParameters::Recalc()
 		float machinePos[DELTA_AXES];
 		InverseTransform(tempHeight, tempHeight, tempHeight, machinePos);
 		homedCarriageHeight = homedHeight + tempHeight - machinePos[Z_AXIS];
+		printRadiusSquared = fsquare(printRadius);
 	}
 }
 
 // Make the average of the endstop adjustments zero, without changing the individual homed carriage heights
-void DeltaParameters::NormaliseEndstopAdjustments()
+void DeltaKinematics::NormaliseEndstopAdjustments()
 {
 	const float eav = (endstopAdjustments[A_AXIS] + endstopAdjustments[B_AXIS] + endstopAdjustments[C_AXIS])/3.0;
 	endstopAdjustments[A_AXIS] -= eav;
@@ -72,7 +84,7 @@ void DeltaParameters::NormaliseEndstopAdjustments()
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.
-float DeltaParameters::Transform(const float machinePos[DELTA_AXES], size_t axis) const
+float DeltaKinematics::Transform(const float machinePos[DELTA_AXES], size_t axis) const
 {
 	return sqrt(D2 - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]))
 		 + machinePos[Z_AXIS]
@@ -81,7 +93,7 @@ float DeltaParameters::Transform(const float machinePos[DELTA_AXES], size_t axis
 }
 
 // Calculate the Cartesian coordinates from the motor coordinates.
-void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const
+void DeltaKinematics::InverseTransform(float Ha, float Hb, float Hc, float machinePos[DELTA_AXES]) const
 {
 	const float Fa = coreFa + fsquare(Ha);
 	const float Fb = coreFb + fsquare(Hb);
@@ -121,10 +133,10 @@ void DeltaParameters::InverseTransform(float Ha, float Hb, float Hc, float machi
 // 5 = Y tower correction
 // 6 = diagonal rod length
 // 7, 8 = X tilt, Y tilt. We scale these by the printable radius to get sensible values in the range -1..1
-floatc_t DeltaParameters::ComputeDerivative(unsigned int deriv, float ha, float hb, float hc)
+floatc_t DeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, float hb, float hc)
 {
 	const float perturb = 0.2;			// perturbation amount in mm or degrees
-	DeltaParameters hiParams(*this), loParams(*this);
+	DeltaKinematics hiParams(*this), loParams(*this);
 	switch(deriv)
 	{
 	case 0:
@@ -141,15 +153,15 @@ floatc_t DeltaParameters::ComputeDerivative(unsigned int deriv, float ha, float 
 		break;
 
 	case 4:
-		hiParams.xCorrection += perturb;
-		loParams.xCorrection -= perturb;
+		hiParams.angleCorrections[A_AXIS] += perturb;
+		loParams.angleCorrections[A_AXIS] -= perturb;
 		hiParams.Recalc();
 		loParams.Recalc();
 		break;
 
 	case 5:
-		hiParams.yCorrection += perturb;
-		loParams.yCorrection -= perturb;
+		hiParams.angleCorrections[B_AXIS] += perturb;
+		loParams.angleCorrections[B_AXIS] -= perturb;
 		hiParams.Recalc();
 		loParams.Recalc();
 		break;
@@ -194,7 +206,7 @@ floatc_t DeltaParameters::ComputeDerivative(unsigned int deriv, float ha, float 
 //  Diagonal rod length adjustment - omitted if doing 8-factor calibration (remainder are moved down)
 //  X tilt adjustment
 //  Y tilt adjustment
-void DeltaParameters::Adjust(size_t numFactors, const floatc_t v[])
+void DeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 {
 	const float oldCarriageHeightA = GetHomedCarriageHeight(A_AXIS);	// save for later
 
@@ -210,8 +222,8 @@ void DeltaParameters::Adjust(size_t numFactors, const floatc_t v[])
 
 		if (numFactors >= 6)
 		{
-			xCorrection += v[4];
-			yCorrection += v[5];
+			angleCorrections[A_AXIS] += v[4];
+			angleCorrections[B_AXIS] += v[5];
 
 			if (numFactors == 7 || numFactors == 9)
 			{
@@ -244,16 +256,16 @@ void DeltaParameters::Adjust(size_t numFactors, const floatc_t v[])
 	// run will correct it.
 }
 
-void DeltaParameters::PrintParameters(StringRef& reply) const
+void DeltaKinematics::PrintParameters(StringRef& reply) const
 {
 	reply.printf("Stops X%.3f Y%.3f Z%.3f height %.3f diagonal %.3f radius %.3f xcorr %.2f ycorr %.2f zcorr %.2f xtilt %.3f%% ytilt %.3f%%\n",
 					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, radius,
-					xCorrection, yCorrection, zCorrection, xTilt * 100.0, yTilt * 100.0);
+					angleCorrections[A_AXIS], angleCorrections[B_AXIS], angleCorrections[C_AXIS], xTilt * 100.0, yTilt * 100.0);
 }
 
 // Write parameters to file if in delta mode, returning true if no error
 // Values are written in mm
-bool DeltaParameters::WriteParameters(FileStore *f) const
+bool DeltaKinematics::WriteParameters(FileStore *f) const
 {
 	if (!IsDeltaMode())
 	{
@@ -264,17 +276,125 @@ bool DeltaParameters::WriteParameters(FileStore *f) const
 	if (ok)
 	{
 		scratchString.printf("M665 L%.3f R%.3f H%.3f B%.1f X%.3f Y%.3f Z%.3f\n",
-					 GetDiagonal(), GetRadius(), GetHomedHeight(), GetPrintRadius(), GetXCorrection(), GetYCorrection(), GetZCorrection());
+					 diagonal, radius, homedHeight, printRadius, angleCorrections[A_AXIS], angleCorrections[B_AXIS], angleCorrections[C_AXIS]);
 		ok = f->Write(scratchString.Pointer());
 	}
 	if (ok)
 	{
 		scratchString.printf("M666 X%.3f Y%.3f Z%.3f A%.2f B%.2f\n",
-				GetEndstopAdjustment(X_AXIS), GetEndstopAdjustment(Y_AXIS), GetEndstopAdjustment(Z_AXIS),
+			endstopAdjustments[X_AXIS], endstopAdjustments[Y_AXIS], endstopAdjustments[Z_AXIS],
 				GetXTilt() * 100.0, GetYTilt() * 100.0);
 		ok = f->Write(scratchString.Pointer());
 	}
 	return ok;
+}
+
+// Set the parameters from a M665, M666 or M669 command
+// Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
+bool DeltaKinematics::SetOrReportParameters(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
+{
+	switch(mCode)
+	{
+	case 665:
+		{
+			bool seen = false;
+			if (gb.Seen('L'))
+			{
+				diagonal = gb.GetFValue();
+				seen = true;
+			}
+			if (gb.Seen('R'))
+			{
+				radius = gb.GetFValue();
+				seen = true;
+			}
+			if (gb.Seen('B'))
+			{
+				printRadius = gb.GetFValue();
+				seen = true;
+			}
+			if (gb.Seen('X'))
+			{
+				// X tower position correction
+				angleCorrections[A_AXIS] = gb.GetFValue();
+				seen = true;
+			}
+			if (gb.Seen('Y'))
+			{
+				// Y tower position correction
+				angleCorrections[B_AXIS] = gb.GetFValue();
+				seen = true;
+			}
+			if (gb.Seen('Z'))
+			{
+				// Y tower position correction
+				angleCorrections[C_AXIS] = gb.GetFValue();
+				seen = true;
+			}
+
+			// The homed height must be done last, because it gets recalculated when some of the other factors are changed
+			if (gb.Seen('H'))
+			{
+				homedHeight = gb.GetFValue();
+				seen = true;
+			}
+
+			if (seen)
+			{
+				Recalc();
+			}
+			else
+			{
+				reply.printf("Diagonal %.3f, delta radius %.3f, homed height %.3f, bed radius %.1f"
+							 ", X %.3f" DEGREE_SYMBOL ", Y %.3f" DEGREE_SYMBOL ", Z %.3f" DEGREE_SYMBOL,
+								 diagonal, radius,
+								 homedHeight, printRadius,
+								 angleCorrections[A_AXIS], angleCorrections[B_AXIS], angleCorrections[C_AXIS]);
+			}
+			return seen;
+		}
+
+	case 666:
+		{
+			bool seen = false;
+			if (gb.Seen('X'))
+			{
+				endstopAdjustments[X_AXIS] = gb.GetFValue();
+				seen = true;
+			}
+			if (gb.Seen('Y'))
+			{
+				endstopAdjustments[Y_AXIS] = gb.GetFValue();
+				seen = true;
+			}
+			if (gb.Seen('Z'))
+			{
+				endstopAdjustments[Z_AXIS] = gb.GetFValue();
+				seen = true;
+			}
+			if (gb.Seen('A'))
+			{
+				xTilt = gb.GetFValue() * 0.01;
+				seen = true;
+			}
+			if (gb.Seen('B'))
+			{
+				yTilt = gb.GetFValue() * 0.01;
+				seen = true;
+			}
+
+			if (!seen)
+			{
+				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f, tilt X%.2f%% Y%.2f%%",
+					endstopAdjustments[X_AXIS], endstopAdjustments[Y_AXIS], endstopAdjustments[Z_AXIS],
+					xTilt * 100.0, yTilt * 100.0);
+			}
+			return seen;
+		}
+
+	default:
+		return Kinematics::SetOrReportParameters(mCode, gb, reply, error);
+	}
 }
 
 // End

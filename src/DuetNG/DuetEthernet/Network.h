@@ -12,10 +12,12 @@ Separated out from Platform.h by dc42 and extended by zpl
 #include "NetworkDefs.h"
 #include "RepRapFirmware.h"
 #include "MessageType.h"
-#include "NetworkResponder.h"
-#include "FtpResponder.h"
-#include "TelnetResponder.h"
 #include "Socket.h"
+
+class NetworkResponder;
+class HttpResponder;
+class FtpResponder;
+class TelnetResponder;
 
 // We have 8 sockets available on the W5500.
 const size_t NumHttpSockets = 4;				// sockets 0-3 are for HTTP
@@ -33,10 +35,8 @@ class Platform;
 class Network
 {
 public:
-	const uint8_t *GetIPAddress() const;
-	void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]);
-
 	Network(Platform* p);
+
 	void Init();
 	void Activate();
 	void Exit();
@@ -50,13 +50,15 @@ public:
 	void ReportProtocols(StringRef& reply) const;
 
 	void Enable(int mode, StringRef& reply);			// enable or disable the network
+	bool GetNetworkState(StringRef& reply);
 	int EnableState() const;
 
 	void SetHostname(const char *name);
 
 	bool FindResponder(Socket *skt, Protocol protocol);
 
-	bool GetNetworkState(StringRef& reply);
+	void OpenDataPort(Port port);
+	void CloseDataPort();
 
 	void HandleHttpGCodeReply(const char *msg);
 	void HandleTelnetGCodeReply(const char *msg);
@@ -78,9 +80,6 @@ private:
 	void InitSockets();
 	void TerminateSockets();
 
-	bool AcquireTransaction(size_t socketNumber)
-	pre(socketNumber < NumTcpSockets);
-
 	void StartProtocol(Protocol protocol)
 	pre(protocol < NumProtocols);
 
@@ -89,6 +88,8 @@ private:
 
 	void ReportOneProtocol(Protocol protocol, StringRef& reply) const
 	pre(protocol < NumProtocols);
+
+	void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]);
 
 	Platform * const platform;
 	NetworkResponder *responders;
@@ -100,10 +101,9 @@ private:
 
 	Socket sockets[NumTcpSockets];
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
-	size_t currentTransactionSocketNumber;			// the socket number of the last transaction we passed to the web server
 
-    Port portNumbers[NumProtocols];					// port number used for each protocol
-    bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+	Port portNumbers[NumProtocols];					// port number used for each protocol
+	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 
 	NetworkState state;
 	bool activated;

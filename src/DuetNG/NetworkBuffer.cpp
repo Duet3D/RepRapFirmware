@@ -37,17 +37,6 @@ bool NetworkBuffer::ReadChar(char& b)
 	return false;
 }
 
-const uint8_t* NetworkBuffer::TakeData(size_t &len)
-{
-	const uint8_t* ret = Data() + readPointer;
-	if (len > dataLength - readPointer)
-	{
-		len = dataLength - readPointer;
-	}
-	readPointer += len;
-	return ret;
-}
-
 // Return the amount of data available, including continuation buffers
 size_t NetworkBuffer::TotalRemaining() const
 {

@@ -1,6 +1,9 @@
 #include "Network.h"
+#include "OutputMemory.h"
 
 static const uint8_t dummy_ipv4[4] = { 0, 0, 0, 0 };
+
+const char *notSupportedText = "Networking is not supported on this hardware";
 
 const uint8_t *Network::GetIPAddress() const
 {
@@ -9,7 +12,28 @@ const uint8_t *Network::GetIPAddress() const
 
 void Network::ReportProtocols(StringRef& reply) const
 {
-	reply.copy("Networking is not supported on this hardware");
+	reply.copy(notSupportedText);
+}
+
+void Network::Enable(int mode, StringRef& reply)
+{
+	reply.copy(notSupportedText);
+}
+
+bool Network::GetNetworkState(StringRef& reply)
+{
+	reply.copy(notSupportedText);
+	return false;
+}
+
+void Network::HandleHttpGCodeReply(OutputBuffer *buf)
+{
+	OutputBuffer::ReleaseAll(buf);
+}
+
+void Network::HandleTelnetGCodeReply(OutputBuffer *buf)
+{
+	OutputBuffer::ReleaseAll(buf);
 }
 
 // End

@@ -257,7 +257,7 @@ static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
 // Network/Ethernet class
 
 Network::Network(Platform* p) :
-	platform(p), freeTransactions(nullptr), readyTransactions(nullptr), writingTransactions(nullptr),
+	platform(p), webserver(nullptr), freeTransactions(nullptr), readyTransactions(nullptr), writingTransactions(nullptr),
 	state(NotStarted), isEnabled(true), activated(false), resetCallback(false),
 	dataCs(nullptr), ftpCs(nullptr), telnetCs(nullptr), freeConnections(nullptr)
 {
@@ -278,7 +278,15 @@ void Network::Init()
 	}
 
 	strcpy(hostname, HOSTNAME);
+
+	webserver = new Webserver(platform, this);
+	webserver->Init();
 	longWait = platform->Time();
+}
+
+void Network::Exit()
+{
+	webserver->Exit();
 }
 
 void Network::EnableProtocol(int protocol, int port, int secure, StringRef& reply)
@@ -499,6 +507,7 @@ void Network::Spin(bool full)
 		UnlockLWIP();
 	}
 	platform->ClassReport(longWait);
+	webserver->Spin();
 }
 
 void Network::Interrupt()
@@ -645,7 +654,7 @@ void Network::ConnectionClosed(ConnectionState* cs, bool closeConnection)
 	}
 
 	// Inform the Webserver that we are about to remove an existing connection
-	reprap.GetWebserver()->ConnectionLost(cs);
+	webserver->ConnectionLost(cs);
 
 	// Remove all transactions that point to cs from the list of ready transactions
 	NetworkTransaction *previous = nullptr, *item = readyTransactions;
@@ -803,22 +812,35 @@ void Network::SetHostname(const char *name)
 	}
 }
 
-void Network::Enable()
+void Network::Enable(int mode, StringRef& reply)
 {
-	isEnabled = true;
-	if (activated)
+	if (mode != 0)
 	{
-		Start();
+		isEnabled = true;
+		if (activated)
+		{
+			Start();
+		}
+	}
+	else
+	{
+		isEnabled = false;
+		if (activated)
+		{
+			Stop();
+		}
 	}
 }
 
-void Network::Disable()
+// Get the network state into the reply buffer, returning true if there is some sort of error
+bool Network::GetNetworkState(StringRef& reply)
 {
-	isEnabled = false;
-	if (activated)
-	{
-		Stop();
-	}
+	const uint8_t * const config_ip = platform->GetIPAddress();
+	const uint8_t * const ipAddress = ethernet_get_ipaddress();
+	reply.printf("Network is %s, configured IP address: %u.%u.%u.%u, actual IP address: %u.%u.%u.%u",
+		(isEnabled) ? "enabled" : "disabled",
+					config_ip[0], config_ip[1], config_ip[2], config_ip[3], ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+	return false;
 }
 
 void Network::Activate()
@@ -1042,6 +1064,31 @@ bool Network::AcquireTransaction(ConnectionState *cs)
 	PrependTransaction(&readyTransactions, acquiredTransaction);
 
 	return true;
+}
+
+void Network::HandleHttpGCodeReply(const char *msg)
+{
+	webserver->HandleGCodeReply(WebSource::HTTP, msg);
+}
+
+void Network::HandleTelnetGCodeReply(const char *msg)
+{
+	webserver->HandleGCodeReply(WebSource::Telnet, msg);
+}
+
+void Network::HandleHttpGCodeReply(OutputBuffer *buf)
+{
+	webserver->HandleGCodeReply(WebSource::HTTP, buf);
+}
+
+void Network::HandleTelnetGCodeReply(OutputBuffer *buf)
+{
+	webserver->HandleGCodeReply(WebSource::Telnet, buf);
+}
+
+uint32_t Network::GetHttpReplySeq()
+{
+	return webserver->GetReplySeq();
 }
 
 /*static*/ Port Network::GetLocalPort(Connection conn) { return conn->GetLocalPort(); }

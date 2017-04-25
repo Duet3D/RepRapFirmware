@@ -305,7 +305,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 		if (isDeltaMovement)
 		{
 			// Add on the Z movement needed to compensate for bed tilt
-			const DeltaParameters& dparams = move->GetDeltaParams();
+			const DeltaKinematics& dparams = move->GetDeltaParams();
 			directionVector[Z_AXIS] += (directionVector[X_AXIS] * dparams.GetXTilt()) + (directionVector[Y_AXIS] * dparams.GetYTilt());
 		}
 
@@ -818,7 +818,7 @@ void DDA::Prepare()
 
 		const float initialX = prev->GetEndCoordinate(X_AXIS, false);
 		const float initialY = prev->GetEndCoordinate(Y_AXIS, false);
-		const DeltaParameters& dparams = reprap.GetMove()->GetDeltaParams();
+		const DeltaKinematics& dparams = reprap.GetMove()->GetDeltaParams();
 		const float diagonalSquared = fsquare(dparams.GetDiagonal());
 		const float a2b2D2 = a2plusb2 * diagonalSquared;
 

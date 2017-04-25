@@ -5,9 +5,11 @@
  ****************************************************************************************************/
 
 #include "Network.h"
-
 #include "Platform.h"
 #include "RepRap.h"
+#include "HttpResponder.h"
+#include "FtpResponder.h"
+#include "TelnetResponder.h"
 #include "WifiFirmwareUploader.h"
 
 // Define exactly one of the following as 1, the other as zero
@@ -27,6 +29,11 @@
 
 const uint32_t WifiResponseTimeoutMillis = 1000;
 const uint32_t WiFiStartupMillis = 300;
+
+const unsigned int MaxHttpConnections = 4;
+
+const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
+const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
 
 // Forward declarations of static functions
 static void spi_dma_disable();
@@ -62,12 +69,24 @@ static void EspTransferRequestIsr()
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-Network::Network(Platform* p) : platform(p), uploader(nullptr), responseCode(0), responseBody(nullptr), responseText(nullptr), responseFile(nullptr),
-		spiTxUnderruns(0), spiRxOverruns(0),
-		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false), espStatusChanged(false)
+Network::Network(Platform* p) : platform(p), uploader(nullptr),
+		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false), espStatusChanged(false),
+		spiTxUnderruns(0), spiRxOverruns(0)
 {
-	strcpy(hostname, HOSTNAME);
-	ClearIpAddress();
+	for (size_t i = 0; i < NumProtocols; ++i)
+	{
+		portNumbers[i] = DefaultPortNumbers[i];
+		protocolEnabled[i] = (i == HttpProtocol);
+	}
+
+	// Create the responders
+	responders = telnetResponder = new TelnetResponder(nullptr);
+	responders = ftpResponder = new FtpResponder(responders);
+	for (unsigned int i = 0; i < NumHttpResponders; ++i)
+	{
+		responders = new HttpResponder(responders);
+	}
+
 	wiFiServerVersion[0] = 0;
 }
 
@@ -75,23 +94,154 @@ void Network::Init()
 {
 	// Make sure the ESP8266 is held in the reset state
 	ResetWiFi();
+	longWait = platform->Time();
+	lastTickMillis = millis();
+
+	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
+
+	SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
+	strcpy(hostname, HOSTNAME);
+
+	for (size_t i = 0; i < NumTcpSockets; ++i)
+	{
+		sockets[i].Init(i);
+	}
+
 	uploader = new WifiFirmwareUploader(Serial1);
 }
 
 void Network::EnableProtocol(int protocol, int port, bool secure, StringRef& reply)
 {
-	reply.copy("M586 is not yet implemented on this platform");
+	if (secure != 0 && secure != -1)
+	{
+		reply.copy("Error: this firmware does not support TLS");
+	}
+	else if (protocol >= 0 && protocol < (int)NumProtocols)
+	{
+		const Port portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
+		if (portToUse != portNumbers[protocol] && state == NetworkState::active)
+		{
+			// We need to shut down and restart the protocol if it is active because the port number has changed
+			ShutdownProtocol(protocol);
+			protocolEnabled[protocol] = false;
+		}
+		portNumbers[protocol] = portToUse;
+		if (!protocolEnabled[protocol])
+		{
+			protocolEnabled[protocol] = true;
+			if (state == NetworkState::active)
+			{
+				StartProtocol(protocol);
+#if 0	// mdns not implemented yet
+				if (state == NetworkState::active)
+				{
+					DoMdnsAnnounce();
+				}
+#endif
+			}
+		}
+		ReportOneProtocol(protocol, reply);
+	}
+	else
+	{
+		reply.copy("Invalid protocol parameter");
+	}
 }
 
 void Network::DisableProtocol(int protocol, StringRef& reply)
 {
-	reply.copy("M586 is not yet implemented on this platform");
-
+	if (protocol >= 0 && protocol < (int)NumProtocols)
+	{
+		if (state == NetworkState::active)
+		{
+			ShutdownProtocol(protocol);
+		}
+		protocolEnabled[protocol] = false;
+		ReportOneProtocol(protocol, reply);
+	}
+	else
+	{
+		reply.copy("Invalid protocol parameter");
+	}
 }
 
+void Network::StartProtocol(Protocol protocol)
+{
+	switch(protocol)
+	{
+	case HttpProtocol:
+		SendListenCommand(portNumbers[protocol], MaxHttpConnections);
+		break;
+
+	case FtpProtocol:
+		SendListenCommand(portNumbers[protocol], 2);
+		break;
+
+	case TelnetProtocol:
+		SendListenCommand(portNumbers[protocol], 1);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void Network::ShutdownProtocol(Protocol protocol)
+{
+	for (NetworkResponder* r = responders; r != nullptr; r = r->GetNext())
+	{
+		r->Terminate(protocol);
+	}
+	switch(protocol)
+	{
+	case HttpProtocol:
+		SendListenCommand(portNumbers[protocol], 0);
+		TerminateSockets(portNumbers[protocol]);
+		break;
+
+	case FtpProtocol:
+		SendListenCommand(portNumbers[protocol], 0);
+		TerminateSockets(portNumbers[protocol]);
+		if (ftpDataPort != 0)
+		{
+			TerminateSockets(ftpDataPort);
+		}
+		break;
+
+	case TelnetProtocol:
+		SendListenCommand(portNumbers[protocol], 0);
+		TerminateSockets(portNumbers[protocol]);
+		break;
+
+	default:
+		break;
+	}
+}
+
+// Report the protocols and ports in use
 void Network::ReportProtocols(StringRef& reply) const
 {
-	reply.copy("M586 is not yet implemented on this platform");
+	reply.Clear();
+	for (size_t i = 0; i < NumProtocols; ++i)
+	{
+		if (i != 0)
+		{
+			reply.cat('\n');
+		}
+		ReportOneProtocol(i, reply);
+	}
+}
+
+void Network::ReportOneProtocol(Protocol protocol, StringRef& reply) const
+{
+	if (protocolEnabled[protocol])
+	{
+		reply.catf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
+	}
+	else
+	{
+		reply.catf("%s is disabled", ProtocolNames[protocol]);
+	}
 }
 
 // This is called at the end of config.g processing.
@@ -131,8 +281,8 @@ bool Network::GetNetworkState(StringRef& reply)
 	case NetworkState::changingMode:
 		reply.copy("WiFi module is changing mode");
 		break;
-	case NetworkState::running:
-		reply.copy("WiFi module is");
+	case NetworkState::active:
+		reply.copy("WiFi module is ");
 		reply.cat(TranslateWiFiState(currentMode));
 		break;
 	default:
@@ -141,14 +291,6 @@ bool Network::GetNetworkState(StringRef& reply)
 		break;
 	}
 	return false;
-}
-
-void Network::ClearIpAddress()
-{
-	for (size_t i = 0; i < ARRAY_SIZE(ipAddress); ++i)
-	{
-		ipAddress[i] = 0;
-	}
 }
 
 // Start up the ESP. We assume it is not already started.
@@ -202,7 +344,7 @@ void Network::Start()
 	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
 	spiTxUnderruns = spiRxOverruns = 0;
 
-	timer = millis();
+	lastTickMillis = millis();
 	state = NetworkState::starting;
 }
 
@@ -218,7 +360,6 @@ void Network::Stop()
 		spi_dma_check_rx_complete();
 		spi_dma_disable();
 
-		ClearIpAddress();
 		state = NetworkState::disabled;
 		currentMode = WiFiState::disabled;
 	}
@@ -231,7 +372,7 @@ void Network::Spin(bool full)
 	{
 	case NetworkState::starting:
 		// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
-		if (full && (millis() - timer) >= WiFiStartupMillis)
+		if (full && (millis() - lastTickMillis) >= WiFiStartupMillis)
 		{
 			// See if the ESP8266 has set CS high yet
 			if (digitalRead(SamCsPin) && digitalRead(EspTransferRequestPin))
@@ -239,7 +380,7 @@ void Network::Spin(bool full)
 				// Setup the SPI controller in slave mode and assign the CS pin to it
 				platform->Message(HOST_MESSAGE, "WiFi module started\n");
 				SetupSpi();						// set up the SPI subsystem
-				state = NetworkState::running;
+				state = NetworkState::active;
 				currentMode = WiFiState::idle;				// wifi module is running but inactive
 			}
 		}
@@ -252,7 +393,7 @@ void Network::Spin(bool full)
 		}
 		break;
 
-	case NetworkState::running:
+	case NetworkState::active:
 		if (full)
 		{
 			if (espStatusChanged && digitalRead(EspTransferRequestPin))
@@ -319,7 +460,7 @@ void Network::Spin(bool full)
 			if (currentMode != WiFiState::connecting)
 			{
 				requestedMode = currentMode;				// don't keep repeating the request
-				state = NetworkState::running;
+				state = NetworkState::active;
 				platform->MessageF(HOST_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
 			}
 		}
@@ -358,79 +499,10 @@ const char* Network::TranslateNetworkState() const
 	{
 	case NetworkState::disabled:		return "disabled";
 	case NetworkState::starting:		return "starting";
-	case NetworkState::running:			return "running";
+	case NetworkState::active:			return "running";
 	case NetworkState::changingMode:	return "changing mode";
 	default:							return "unknown";
 	}
-}
-
-/*static*/ const char* Network::TranslateWiFiState(WiFiState w)
-{
-	switch (w)
-	{
-	case WiFiState::disabled:				return "disabled";
-	case WiFiState::idle:					return "idle";
-	case WiFiState::connecting:				return "trying to connect";
-	case WiFiState::connected:				return "connected to an access point";
-	case WiFiState::runningAsAccessPoint:	return "providing an access point";
-	default:								return "in an unknown state";
-	}
-}
-
-// Called by the webserver module to get an incoming request
-const char *Network::GetRequest(uint32_t& ip, size_t& length, uint32_t& fragment) const
-{
-	//TODO
-	return nullptr;
-}
-
-// Send a reply from an OutputBuffer chain. Release the chain when we have finished with it.
-void Network::SendReply(uint32_t ip, unsigned int code, OutputBuffer *body)
-{
-	//TODO
-	while (body != nullptr)
-	{
-		body = OutputBuffer::Release(body);
-	}
-}
-
-// Send a reply from a null-terminated string
-void Network::SendReply(uint32_t ip, unsigned int code, const char *text)
-{
-}
-
-// Send a file as the reply. Close the file at the end.
-void Network::SendReply(uint32_t ip, unsigned int code, FileStore *file)
-{
-#if 0
-	if (responseBody != nullptr || responseText != nullptr || responseFile != nullptr)
-	{
-		platform->Message(HOST_MESSAGE, "response already being sent in SendReply(fs*)\n");
-		file->Close();
-	}
-	else
-	{
-		responseIp = ip;
-		responseCode = code;
-		responseFile = file;
-		responseFileBytes = file->Length();
-
-		// Say we have taken the request
-		if (state == processing)
-		{
-			uint32_t opcode = inBuffer.GetOpcode();
-			if ((opcode & 0xFF0000FF) == (trTypeRequest | ttRr))
-			{
-				inBuffer.Clear();
-			}
-		}
-	}
-#endif
-}
-
-// This is called when we have read a message fragment and there is no reply to send
-void Network::DiscardMessage()
-{
 }
 
 void Network::Diagnostics(MessageType mtype)
@@ -458,6 +530,9 @@ void Network::Diagnostics(MessageType mtype)
 			platform->Message(mtype, "Failed to get WiFi status\n");
 		}
 	}
+	HttpResponder::Diagnostics(mtype);
+	ftpResponder->Diagnostics(mtype);
+	telnetResponder->Diagnostics(mtype);
 }
 
 void Network::Enable(int mode, StringRef& reply)
@@ -514,14 +589,29 @@ int Network::EnableState() const
 						: -1;
 }
 
-const uint8_t *Network::GetIPAddress() const
+/*static*/ const char* Network::TranslateWiFiState(WiFiState w)
 {
-	return ipAddress;
+	switch (w)
+	{
+	case WiFiState::disabled:				return "disabled";
+	case WiFiState::idle:					return "idle";
+	case WiFiState::connecting:				return "trying to connect";
+	case WiFiState::connected:				return "connected to an access point";
+	case WiFiState::runningAsAccessPoint:	return "providing an access point";
+	default:								return "in an unknown state";
+	}
 }
 
 void Network::EspRequestsTransfer()
 {
 	espStatusChanged = true;
+}
+
+void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[])
+{
+	memcpy(ipAddress, p_ipAddress, sizeof(ipAddress));
+	memcpy(netmask, p_netmask, sizeof(netmask));
+	memcpy(gateway, p_gateway, sizeof(gateway));
 }
 
 // Set the DHCP hostname. Removes all whitespaces and converts the name to lower-case.
@@ -550,6 +640,93 @@ void Network::SetHostname(const char *name)
 	{
 		strcpy(hostname, HOSTNAME);
 	}
+}
+
+void Network::InitSockets()
+{
+	for (size_t i = 0; i < NumProtocols; ++i)
+	{
+		if (protocolEnabled[i])
+		{
+			StartProtocol(i);
+		}
+	}
+	currentSocket = 0;
+}
+
+void Network::TerminateSockets()
+{
+	for (SocketNumber skt = 0; skt < NumTcpSockets; ++skt)
+	{
+		sockets[skt].Terminate();
+	}
+}
+
+void Network::TerminateSockets(Port port)
+{
+	for (SocketNumber skt = 0; skt < NumTcpSockets; ++skt)
+	{
+		if (sockets[skt].GetLocalPort() == port)
+		{
+			sockets[skt].Terminate();
+		}
+	}
+}
+
+// Find a responder to process a new connection
+bool Network::FindResponder(Socket *skt, Protocol protocol)
+{
+	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	{
+		if (r->Accept(skt, protocol))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+// Open the FTP data port
+void Network::OpenDataPort(Port port)
+{
+	ftpDataPort = port;
+	SendListenCommand(ftpDataPort, 1);
+}
+
+// Close FTP data port and purge associated resources
+void Network::CloseDataPort()
+{
+	if (ftpDataPort != 0)
+	{
+		SendListenCommand(ftpDataPort, 0);
+		TerminateSockets(ftpDataPort);				// if the FTP responder want to close the socket cleanly, it should have closed it itself
+		ftpDataPort = 0;
+	}
+}
+
+void Network::HandleHttpGCodeReply(const char *msg)
+{
+	HttpResponder::HandleGCodeReply(msg);
+}
+
+void Network::HandleTelnetGCodeReply(const char *msg)
+{
+	telnetResponder->HandleGCodeReply(msg);
+}
+
+void Network::HandleHttpGCodeReply(OutputBuffer *buf)
+{
+	HttpResponder::HandleGCodeReply(buf);
+}
+
+void Network::HandleTelnetGCodeReply(OutputBuffer *buf)
+{
+	telnetResponder->HandleGCodeReply(buf);
+}
+
+uint32_t Network::GetHttpReplySeq()
+{
+	return HttpResponder::GetReplySeq();
 }
 
 #if USE_PDC
@@ -832,6 +1009,15 @@ int32_t Network::SendCommand(NetworkCommand cmd, uint8_t socket, const void * da
 	debugPrintBuffer("Recv", &bufferIn, (size_t)max<int>(0, response));
 
 	return response;
+}
+
+void Network::SendListenCommand(Port port, unsigned int maxConnections)
+{
+	ListenOrConnectData lcb;
+	lcb.port = port;
+	lcb.remoteIp = AnyIp;
+	lcb.maxConnections = maxConnections;
+	SendCommand(NetworkCommand::networkListen, 0, &lcb, sizeof(lcb), nullptr, 0);
 }
 
 // SPI interrupt handler, called when NSS goes high

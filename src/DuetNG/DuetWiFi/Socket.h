@@ -1,23 +1,21 @@
 /*
- * Socket.h
+ * WiFiSocket.h
  *
- *  Created on: 25 Dec 2016
+ *  Created on: 22 Apr 2017
  *      Author: David
  */
 
-#ifndef SRC_DUETNG_DUETETHERNET_SOCKET_H_
-#define SRC_DUETNG_DUETETHERNET_SOCKET_H_
+#ifndef SRC_DUETNG_DUETWIFI_SOCKET_H_
+#define SRC_DUETNG_DUETWIFI_SOCKET_H_
 
 #include "RepRapFirmware.h"
 #include "NetworkDefs.h"
 
-// Socket structure that we use to track TCP connections
 class Socket
 {
 public:
 	Socket();
-	void Init(SocketNumber s, Port serverPort, Protocol p);
-	void TerminateAndDisable();
+	void Init(SocketNumber n);
 	void Poll(bool full);
 	Port GetLocalPort() const { return localPort; }
 	uint32_t GetRemoteIP() const { return remoteIPAddress; }
@@ -51,16 +49,12 @@ private:
 	Protocol protocol;									// What protocol this socket is for
 	uint32_t remoteIPAddress;							// The remote IP address
 	NetworkBuffer *receivedData;						// List of buffers holding received data
-	//invariant(!receivedData->IsEmpty())
 	uint32_t whenConnected;
 	bool persistConnection;								// Do we expect this connection to stay alive?
-	bool isTerminated;									// Will be true if the connection has gone down unexpectedly (TCP RST)
-	SocketNumber socketNum;								// The W5500 socket number we are using
+	SocketNumber socketNum;								// The WiFi socket number we are using
 	SocketState state;
 	bool sendOutstanding;								// True if we have written data to the socket but not flushed it
-	bool isSending;										// True if we have written data to the W5500 to send and have not yet seen success or timeout
-	uint16_t wizTxBufferPtr;							// Current offset into the Wizchip send buffer, if sendOutstanding is true
-	uint16_t wizTxBufferLeft;							// Transmit buffer space left, if sendOutstanding is true
+	bool isSending;										// True if we have written data to send and have not yet seen success or timeout
 };
 
-#endif /* SRC_DUETNG_DUETETHERNET_SOCKET_H_ */
+#endif /* SRC_DUETNG_DUETWIFI_SOCKET_H_ */

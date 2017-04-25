@@ -20,7 +20,7 @@ const unsigned int DdaRingLength = 30;
 const unsigned int DdaRingLength = 20;
 #endif
 
-#include "DeltaParameters.h"
+#include "DeltaKinematics.h"
 #include "DeltaProbe.h"
 #include "Grid.h"
 
@@ -83,8 +83,9 @@ public:
 
     void Diagnostics(MessageType mtype);							// Report useful stuff
 
-    const DeltaParameters& GetDeltaParams() const { return deltaParams; }
-    DeltaParameters& AccessDeltaParams() { return deltaParams; }
+    Kinematics& GetKinematics() { return deltaParams; }				// temporary definition
+    const DeltaKinematics& GetDeltaParams() const { return deltaParams; }
+    DeltaKinematics& AccessDeltaParams() { return deltaParams; }
     bool IsDeltaMode() const { return deltaParams.IsDeltaMode(); }
     const char* GetGeometryString() const;
 
@@ -192,7 +193,7 @@ private:
 	float longWait;										// A long time for things that need to be done occasionally
 	IdleState iState;									// whether the idle timer is active
 
-	DeltaParameters deltaParams;						// Information about the delta parameters of this machine
+	DeltaKinematics deltaParams;						// Information about the delta parameters of this machine
 	DeltaProbe deltaProbe;								// Delta probing state
 	uint32_t deltaProbingStartTime;
 	bool deltaProbing;

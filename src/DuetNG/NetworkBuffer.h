@@ -23,9 +23,6 @@ public:
 	// Read 1 character, returning true of successful, false if no data left
 	bool ReadChar(char& b);
 
-	// Read some data
-	const uint8_t* TakeData(size_t &len);
-
 	const uint8_t* UnreadData() const { return Data() + readPointer; }
 
 	// Return the amount of data available, not including continuation buffers
