@@ -57,6 +57,8 @@ protected:
 		// FTP responder additional states
 		waitingForPasvPort,
 		pasvPortOpened,
+		sendingPasvData,
+		pasvTransferComplete,
 
 		// Telnet responder additional states
 		justConnected,
@@ -66,7 +68,7 @@ protected:
 	NetworkResponder(NetworkResponder *n);
 
 	void Commit(ResponderState nextState = ResponderState::free);
-	void SendData();
+	virtual void SendData();
 	virtual void ConnectionLost();
 
 	bool GetUploadLock() const { return uploadLock.Acquire(this); }
@@ -74,10 +76,10 @@ protected:
 
 	void StartUpload(FileStore *file, const char *fileName);
 	void FinishUpload(uint32_t fileLength, time_t fileLastModified);
-	virtual void DoFastUpload();
 	virtual void CancelUpload();
 
 	static Platform *GetPlatform() { return reprap.GetPlatform(); }
+	static Network *GetNetwork() { return reprap.GetNetwork(); }
 
 	// General state
 	NetworkResponder *next;								// next responder in the list

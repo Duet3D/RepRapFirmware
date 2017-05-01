@@ -115,7 +115,7 @@ bool HttpResponder::Spin()
 		return true;
 
 	case ResponderState::uploading:
-		DoFastUpload();
+		DoUpload();
 		return true;
 
 	case ResponderState::sending:
@@ -1090,7 +1090,7 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 
 // This function overrides the one in class NetworkResponder.
 // It tries to process a chunk of uploaded data and changes the state if finished.
-void HttpResponder::DoFastUpload()
+void HttpResponder::DoUpload()
 {
 	if (uploadedBytes == 0)
 	{

@@ -26,6 +26,7 @@
 #include "Movement/Move.h"
 #include "Network.h"
 #include "RepRap.h"
+#include "Scanner.h"
 #include "Libraries/Math/Isqrt.h"
 
 #include "sam/drivers/tc/tc.h"
@@ -2501,6 +2502,9 @@ void Platform::Message(MessageType type, const char *message)
 
 	case HOST_MESSAGE:
 		// Message that is to be sent via the USB line (non-blocking)
+#if SUPPORT_SCANNER
+		if (!reprap.GetScanner()->IsRegistered() || reprap.GetScanner()->DoingGCodes())
+#endif
 		{
 			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
 			OutputBuffer *usbOutputBuffer = usbOutput->GetLastItem();
@@ -2572,7 +2576,11 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		break;
 
 	case HOST_MESSAGE:
-		if (!SERIAL_MAIN_DEVICE)
+		if (!SERIAL_MAIN_DEVICE
+#if SUPPORT_SCANNER
+				|| (reprap.GetScanner()->IsRegistered() && !reprap.GetScanner()->DoingGCodes())
+#endif
+			)
 		{
 			// If the serial USB line is not open, discard the message right away
 			OutputBuffer::ReleaseAll(buffer);

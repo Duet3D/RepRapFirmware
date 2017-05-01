@@ -32,60 +32,60 @@ enum class ResponseSource
 };
 
 class RepRap
-{    
+{
 public:
-      
-    RepRap();
-    void EmergencyStop();
-    void Init();
-    void Spin();
-    void Exit();
-    void Diagnostics(MessageType mtype);
-    void Timing(MessageType mtype);
+	RepRap();
+	void EmergencyStop();
+	void Init();
+	void Spin();
+	void Exit();
+	void Diagnostics(MessageType mtype);
+	void Timing(MessageType mtype);
 
-    bool Debug(Module module) const;
-    void SetDebug(Module m, bool enable);
-    void SetDebug(bool enable);
-    void PrintDebug();
-    Module GetSpinningModule() const;
+	bool Debug(Module module) const;
+	void SetDebug(Module m, bool enable);
+	void SetDebug(bool enable);
+	void PrintDebug();
+	Module GetSpinningModule() const;
 
-    const char *GetName() const;
-    void SetName(const char* nm);
-    bool NoPasswordSet() const;
-    bool CheckPassword(const char* pw) const;
-    void SetPassword(const char* pw);
+	const char *GetName() const;
+	void SetName(const char* nm);
+	bool NoPasswordSet() const;
+	bool CheckPassword(const char* pw) const;
+	void SetPassword(const char* pw);
 
-    void AddTool(Tool* t);
-    void DeleteTool(Tool* t);
-    void SelectTool(int toolNumber);
-    void StandbyTool(int toolNumber);
-    Tool* GetCurrentTool() const;
-    Tool* GetTool(int toolNumber) const;
-    Tool* GetCurrentOrDefaultTool() const;
+	void AddTool(Tool* t);
+	void DeleteTool(Tool* t);
+	void SelectTool(int toolNumber);
+	void StandbyTool(int toolNumber);
+	Tool* GetCurrentTool() const;
+	Tool* GetTool(int toolNumber) const;
+	Tool* GetCurrentOrDefaultTool() const;
 	uint32_t GetCurrentXAxes() const;									// Get the current axes used as X axes
-    void SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures);
+	void SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures);
 	bool IsHeaterAssignedToTool(int8_t heater) const;
 	unsigned int GetNumberOfContiguousTools() const;
 
-    unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions);
-    void PrintTool(int toolNumber, StringRef& reply) const;
-    void FlagTemperatureFault(int8_t dudHeater);
-    void ClearTemperatureFault(int8_t wasDudHeater);
+	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions);
+	void PrintTool(int toolNumber, StringRef& reply) const;
+	void FlagTemperatureFault(int8_t dudHeater);
+	void ClearTemperatureFault(int8_t wasDudHeater);
 
-    Platform* GetPlatform() const;
-    Move* GetMove() const;
-    Heat* GetHeat() const;
-    GCodes* GetGCodes() const;
-    Network* GetNetwork() const;
+	Platform* GetPlatform() const;
+	Move* GetMove() const;
+	Heat* GetHeat() const;
+	GCodes* GetGCodes() const;
+	Network* GetNetwork() const;
 	Roland* GetRoland() const;
-    PrintMonitor* GetPrintMonitor() const;
+	Scanner* GetScanner() const;
+	PrintMonitor* GetPrintMonitor() const;
 
-    void Tick();
-    uint16_t GetTicksInSpinState() const;
-    bool IsStopped() const;
+	void Tick();
+	uint16_t GetTicksInSpinState() const;
+	bool IsStopped() const;
 
-    uint16_t GetExtrudersInUse() const;
-    uint16_t GetToolHeatersInUse() const;
+	uint16_t GetExtrudersInUse() const;
+	uint16_t GetToolHeatersInUse() const;
 
 	OutputBuffer *GetStatusResponse(uint8_t type, ResponseSource source);
 	OutputBuffer *GetConfigResponse();
@@ -96,47 +96,47 @@ public:
 	void Beep(int freq, int ms);
 	void SetMessage(const char *msg);
 
-    static void CopyParameterText(const char* src, char *dst, size_t length);
-    static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
-    static uint32_t ReadDword(const char* p);				// helper function for diagnostic tests
+	static void CopyParameterText(const char* src, char *dst, size_t length);
+	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
+	static uint32_t ReadDword(const char* p);				// helper function for diagnostic tests
 
 private:
+	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0);
 
-    static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0);
-  
-    char GetStatusCharacter() const;
+	char GetStatusCharacter() const;
 
-    Platform* platform;
-    Network* network;
-    Move* move;
-    Heat* heat;
-    GCodes* gCodes;
+	Platform* platform;
+	Network* network;
+	Move* move;
+	Heat* heat;
+	GCodes* gCodes;
 	Roland* roland;
-    PrintMonitor* printMonitor;
+	Scanner* scanner;
+ 	PrintMonitor* printMonitor;
 
-    Tool* toolList;
-    Tool* currentTool;
+	Tool* toolList;
+	Tool* currentTool;
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 
 	uint16_t activeExtruders;
-    uint16_t activeToolHeaters;
+	uint16_t activeToolHeaters;
 
-    uint16_t ticksInSpinState;
-    Module spinningModule;
-    float fastLoop, slowLoop;
-    float lastTime;
+	uint16_t ticksInSpinState;
+	Module spinningModule;
+	float fastLoop, slowLoop;
+	float lastTime;
 
-    uint16_t debug;
-    bool stopped;
-    bool active;
-    bool resetting;
-    bool processingConfig;
+	uint16_t debug;
+	bool stopped;
+	bool active;
+	bool resetting;
+	bool processingConfig;
 
-    char password[PASSWORD_LENGTH + 1];
-    char myName[MACHINE_NAME_LENGTH + 1];
+	char password[PASSWORD_LENGTH + 1];
+	char myName[MACHINE_NAME_LENGTH + 1];
 
-    int beepFrequency, beepDuration;
-    char message[MESSAGE_LENGTH + 1];
+	int beepFrequency, beepDuration;
+	char message[MESSAGE_LENGTH + 1];
 };
 
 inline Platform* RepRap::GetPlatform() const { return platform; }
@@ -145,6 +145,7 @@ inline Heat* RepRap::GetHeat() const { return heat; }
 inline GCodes* RepRap::GetGCodes() const { return gCodes; }
 inline Network* RepRap::GetNetwork() const { return network; }
 inline Roland* RepRap::GetRoland() const { return roland; }
+inline Scanner* RepRap::GetScanner() const { return scanner; }
 inline PrintMonitor* RepRap::GetPrintMonitor() const { return printMonitor; }
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }

@@ -177,28 +177,15 @@ void Socket::Poll(bool full)
 			if (state == SocketState::connected)
 			{
 				// See if the socket has received any data
-				//TODO limit the number of buffers used by each socket
-				const uint16_t len = getSn_RX_RSR(socketNum);
-				if (len != 0 && NetworkBuffer::Count(receivedData) < MaxBuffersPerSocket)
-				{
-//					debugPrintf("%u available\n", len);
-					// There is data available, so allocate a buffer
-					//TODO: if there is already a buffer and it is in an appropriate state (i.e. receiving) and it has enough room, we could just append the data
-					NetworkBuffer * const buf = NetworkBuffer::Allocate();
-					if (buf != nullptr)
-					{
-						wiz_recv_data(socketNum, buf->Data(), len);
-						ExecCommand(socketNum, Sn_CR_RECV);
-						buf->dataLength = (size_t)len;
-						buf->readPointer = 0;
-						NetworkBuffer::AppendToList(&receivedData, buf);
-					}
-//					else debugPrintf("no buffer\n");
-				}
+				ReceiveData();
 			}
 			break;
 
 		case SOCK_CLOSE_WAIT:			// A client has asked to disconnect
+			// Check for further incoming packets before this socket is finally closed.
+			// This must be done to ensure that FTP uploads are not cut off.
+			ReceiveData();
+
 			state = SocketState::clientDisconnecting;
 			break;
 
@@ -209,6 +196,28 @@ void Socket::Poll(bool full)
 		default:
 			break;
 		}
+	}
+}
+
+// Try to receive more incoming data from the socket
+void Socket::ReceiveData()
+{
+	const uint16_t len = getSn_RX_RSR(socketNum);
+	if (len != 0 && NetworkBuffer::Count(receivedData) < MaxBuffersPerSocket)
+	{
+//		debugPrintf("%u available\n", len);
+		// There is data available, so allocate a buffer
+		//TODO: if there is already a buffer and it has enough room, we could just append the data
+		NetworkBuffer * const buf = NetworkBuffer::Allocate();
+		if (buf != nullptr)
+		{
+			wiz_recv_data(socketNum, buf->Data(), len);
+			ExecCommand(socketNum, Sn_CR_RECV);
+			buf->dataLength = (size_t)len;
+			buf->readPointer = 0;
+			NetworkBuffer::AppendToList(&receivedData, buf);
+		}
+//		else debugPrintf("no buffer\n");
 	}
 }
 
@@ -265,20 +274,17 @@ size_t Socket::Send(const uint8_t *data, size_t length)
 		wiz_send_data_at(socketNum, data, length, wizTxBufferPtr);
 		wizTxBufferLeft -= length;
 		wizTxBufferPtr += length;
+		sendOutstanding = true;
 		if (wizTxBufferLeft == 0)
 		{
 			Send();
-		}
-		else
-		{
-			sendOutstanding = true;
 		}
 		return length;
 	}
 	return 0;
 }
 
-// Tell the interface to send the otstanding data
+// Tell the interface to send the outstanding data
 void Socket::Send()
 {
 	if (CanSend() && sendOutstanding)

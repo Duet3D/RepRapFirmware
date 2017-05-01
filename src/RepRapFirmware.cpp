@@ -39,7 +39,7 @@ Naming conventions:
 
 Structure:
 
-There are nine main classes:
+There are ten main classes:
 
   * RepRap
   * GCodes
@@ -48,7 +48,8 @@ There are nine main classes:
   * Platform
   * Network
   * Webserver
-  * Roland, and
+  * Roland
+  * Scanner, and
   * PrintMonitor
 
 RepRap:
@@ -89,6 +90,9 @@ Roland:
 
 This class can interface with a Roland mill (e.g. Roland MDX-20/15) and allows the underlying hardware
 to act as a G-Code proxy, which translates G-Codes to internal Roland commands.
+
+Scanner:
+This is an extension meant for 3D scanner boards. Refer to M750 ff. for the exact usage of this module.
 
 PrintMonitor:
 
@@ -176,9 +180,10 @@ const char *moduleName[] =
 	"Heat",
 	"DDA",
 	"Roland",
+	"Scanner",
 	"PrintMonitor",
 	"Storage",
-	"?","?","?","?","?",
+	"?","?","?","?",
 	"none"
 };
 

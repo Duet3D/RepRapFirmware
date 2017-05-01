@@ -171,7 +171,7 @@ void TelnetResponder::CharFromClient(char c)
 	case '\n':
 		if (clientPointer != 0)
 		{
-			// This line is complete, do we have enough space left to store it?
+			// This line is complete
 			clientMessage[clientPointer] = 0;
 			haveCompleteLine = true;
 		}

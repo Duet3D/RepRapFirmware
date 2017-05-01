@@ -55,11 +55,31 @@ static MessageBufferOut bufferOut;
 static MessageBufferIn bufferIn;
 static volatile bool transferPending = false;
 
+#if 0
 static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
 {
-	const uint32_t *b = reinterpret_cast<const uint32_t *>(buf);
-	debugPrintf("%s %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x\n", msg, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9]);
+	const size_t MaxDataToPrint = 20;
+	const uint8_t * const data = reinterpret_cast<const uint8_t *>(buf);
+	debugPrintf("%s %02x %02x %02x %02x %04x %04x %08x",
+		msg,
+		data[0], data[1], data[2], data[3],
+		*reinterpret_cast<const uint16_t*>(data + 4), *reinterpret_cast<const uint16_t*>(data + 6),
+		*reinterpret_cast<const uint32_t*>(data + 8));
+	if (dataLength != 0)
+	{
+		debugPrintf(" ");
+		for (size_t i = 0; i < min<size_t>(dataLength, MaxDataToPrint); ++i)
+		{
+			debugPrintf("%02x", data[i + 12]);
+		}
+		if (dataLength > MaxDataToPrint)
+		{
+			debugPrintf("...");
+		}
+	}
+	debugPrintf("\n");
 }
+#endif
 
 static void EspTransferRequestIsr()
 {
@@ -69,7 +89,7 @@ static void EspTransferRequestIsr()
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-Network::Network(Platform* p) : platform(p), uploader(nullptr),
+Network::Network(Platform* p) : platform(p), nextResponderToPoll(nullptr), uploader(nullptr), currentSocket(0),
 		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false), espStatusChanged(false),
 		spiTxUnderruns(0), spiRxOverruns(0)
 {
@@ -108,6 +128,7 @@ void Network::Init()
 	}
 
 	uploader = new WifiFirmwareUploader(Serial1);
+	currentSocket = 0;
 }
 
 void Network::EnableProtocol(int protocol, int port, bool secure, StringRef& reply)
@@ -398,18 +419,11 @@ void Network::Spin(bool full)
 		{
 			if (espStatusChanged && digitalRead(EspTransferRequestPin))
 			{
-				// The ESP is signalling to us that an error occurred or there was a state change
-				char messageBuffer[100];
-				const int32_t rslt = SendCommand(NetworkCommand::networkGetLastError, 0, nullptr, 0, messageBuffer, sizeof(messageBuffer));
-				messageBuffer[ARRAY_UPB(messageBuffer)] = 0;
-				if (rslt < 0)
+				if (reprap.Debug(moduleNetwork))
 				{
-					platform->Message(GENERIC_MESSAGE, "Error retrieving WiFi status message\n");
+					debugPrintf("ESP reported status change\n");
 				}
-				else if (rslt > 0 && messageBuffer[0] != 0)
-				{
-					platform->MessageF(GENERIC_MESSAGE, "WiFi reported error: %s\n", messageBuffer);
-				}
+				GetNewStatus();
 			}
 			else if (currentMode != requestedMode && currentMode != WiFiState::connecting)
 			{
@@ -418,15 +432,15 @@ void Network::Spin(bool full)
 				if (currentMode != WiFiState::idle)
 				{
 					// We must set WiFi module back to idle before changing to the new state
-					rslt = SendCommand(NetworkCommand::networkStop, 0, nullptr, 0, nullptr, 0);
+					rslt = SendCommand(NetworkCommand::networkStop, 0, 0, nullptr, 0, nullptr, 0);
 				}
 				else if (requestedMode == WiFiState::connected)
 				{
-					rslt = SendCommand(NetworkCommand::networkStartClient, 0, nullptr, 0, nullptr, 0);
+					rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, nullptr, 0, nullptr, 0);
 				}
 				else if (requestedMode == WiFiState::runningAsAccessPoint)
 				{
-					rslt = SendCommand(NetworkCommand::networkStartAccessPoint, 0, nullptr, 0, nullptr, 0);
+					rslt = SendCommand(NetworkCommand::networkStartAccessPoint, 0, 0, nullptr, 0, nullptr, 0);
 				}
 
 				if (rslt >= 0)
@@ -439,29 +453,58 @@ void Network::Spin(bool full)
 					platform->MessageF(GENERIC_MESSAGE, "Failed to change WiFi mode (code %d)\n", rslt);
 				}
 			}
+			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
+			{
+				// Poll the next socket
+				sockets[currentSocket].Poll(full);
+				++currentSocket;
+				if (currentSocket == NumTcpSockets)
+				{
+					currentSocket = 0;
+				}
+
+				// Poll the responders
+				if (full)
+				{
+					NetworkResponder *nr = nextResponderToPoll;
+					bool doneSomething = false;
+					do
+					{
+						if (nr == nullptr)
+						{
+							nr = responders;		// 'responders' can't be null at this point
+						}
+						doneSomething = nr->Spin();
+						nr = nr->GetNext();
+					} while (!doneSomething && nr != nextResponderToPoll);
+					nextResponderToPoll = nr;
+				}
+			}
+		}
+		else if (currentMode == requestedMode && (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint))
+		{
+			sockets[currentSocket].Poll(full);
+			++currentSocket;
+			if (currentSocket == NumTcpSockets)
+			{
+				currentSocket = 0;
+			}
 		}
 		break;
 
 	case NetworkState::changingMode:
 		if (full && espStatusChanged && digitalRead(EspTransferRequestPin))
 		{
-			// Retrieve the new status and any error message there is
-			char messageBuffer[100];
-			const int32_t rslt = SendCommand(NetworkCommand::networkGetLastError, 0, nullptr, 0, messageBuffer, sizeof(messageBuffer));
-			messageBuffer[ARRAY_UPB(messageBuffer)] = 0;
-			if (rslt < 0)
-			{
-				platform->Message(GENERIC_MESSAGE, "Error retrieving WiFi error message\n");
-			}
-			else if (rslt > 0 && messageBuffer[0] != 0)
-			{
-				platform->MessageF(GENERIC_MESSAGE, "WiFi reported error: %s\n", messageBuffer);
-			}
+			GetNewStatus();
 			if (currentMode != WiFiState::connecting)
 			{
 				requestedMode = currentMode;				// don't keep repeating the request
 				state = NetworkState::active;
 				platform->MessageF(HOST_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
+				if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
+				{
+					InitSockets();
+				}
 			}
 		}
 		break;
@@ -470,7 +513,10 @@ void Network::Spin(bool full)
 		break;
 	}
 
-	platform->ClassReport(longWait);
+	if (full)
+	{
+		platform->ClassReport(longWait);
+	}
 }
 
 // Translate a ESP8266 reset reason to text
@@ -512,17 +558,22 @@ void Network::Diagnostics(MessageType mtype)
 	platform->MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
 	if (state != NetworkState::disabled && state != NetworkState::starting)
 	{
-		NetworkStatusResponse status;
-		if (SendCommand(NetworkCommand::networkGetStatus, 0, nullptr, 0, &status, sizeof(status)) > 0)
+		Receiver<NetworkStatusResponse> status;
+		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
 		{
-			platform->MessageF(mtype, "WiFi IP address %d.%d.%d.%d, MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
-								(status.ipAddress >> 24) & 255, (status.ipAddress >> 16) & 255, (status.ipAddress >> 8) & 255, status.ipAddress & 255,
-								status.macAddress[0], status.macAddress[1], status.macAddress[2], status.macAddress[3], status.macAddress[4], status.macAddress[5]);
-			platform->MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (float)status.vcc/1024, TranslateEspResetReason(status.resetReason));
-			platform->MessageF(mtype, "WiFi flash size %u, free heap %u\n", status.flashSize, status.freeHeap);
-			platform->MessageF(mtype, "WiFi signal strength %ddb\n", status.rssi);
-			status.versionText[ARRAY_UPB(status.versionText)] = 0;
-			platform->MessageF(mtype, "WiFi firmware version %s\n", status.versionText);
+			NetworkStatusResponse& r = status.Value();
+			r.versionText[ARRAY_UPB(r.versionText)] = 0;
+			platform->MessageF(mtype, "WiFi firmware version %s\n", r.versionText);
+			platform->MessageF(mtype, "WiFi MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
+			platform->MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (float)r.vcc/1024, TranslateEspResetReason(r.resetReason));
+			platform->MessageF(mtype, "WiFi flash size %u, free heap %u\n", r.flashSize, r.freeHeap);
+			if (currentMode == WiFiState::connected)
+			{
+				platform->MessageF(mtype, "WiFi IP address %d.%d.%d.%d\n",
+					r.ipAddress & 255, (r.ipAddress >> 8) & 255, (r.ipAddress >> 16) & 255, (r.ipAddress >> 24) & 255);
+				platform->MessageF(mtype, "WiFi signal strength %ddb\n", r.rssi);
+			}
 			// status, ssid and hostName not displayed
 		}
 		else
@@ -547,6 +598,7 @@ void Network::Enable(int mode, StringRef& reply)
 		if (modeRequested == WiFiState::disabled)
 		{
 			// Shut down WiFi module completely
+			requestedMode = modeRequested;
 			if (state != NetworkState::disabled)
 			{
 				Stop();
@@ -674,16 +726,23 @@ void Network::TerminateSockets(Port port)
 }
 
 // Find a responder to process a new connection
-bool Network::FindResponder(Socket *skt, Protocol protocol)
+bool Network::FindResponder(Socket *skt, Port localPort)
 {
-	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	for (size_t i = 0; i < NumProtocols; ++i)
 	{
-		if (r->Accept(skt, protocol))
+		if (protocolEnabled[i] && portNumbers[i] == localPort)
 		{
-			return true;
+			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+			{
+				if (r->Accept(skt, i))
+				{
+					return true;
+				}
+			}
+			return false;	// no free responder, or protocol disabled
 		}
 	}
-	return false;
+	return false;			// unknown port number
 }
 
 // Open the FTP data port
@@ -932,7 +991,7 @@ void Network::SetupSpi()
 }
 
 // Send a command to the ESP and get the result
-int32_t Network::SendCommand(NetworkCommand cmd, uint8_t socket, const void * dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength)
+int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength)
 {
 	if (state == NetworkState::disabled)
 	{
@@ -946,11 +1005,11 @@ int32_t Network::SendCommand(NetworkCommand cmd, uint8_t socket, const void * da
 		return ResponseBusy;
 	}
 
-	espStatusChanged = false;
 	bufferOut.hdr.formatVersion = MyFormatVersion;
 	bufferOut.hdr.command = cmd;
+	bufferOut.hdr.socketNumber = socketNum;
+	bufferOut.hdr.flags = flags;
 	bufferOut.hdr.param32 = 0;
-	bufferOut.hdr.param8 = 0;
 	bufferOut.hdr.dataLength = (uint16_t)dataOutLength;
 	bufferOut.hdr.dataBufferAvailable = (uint16_t)dataInLength;
 	if (dataOut != nullptr)
@@ -960,8 +1019,13 @@ int32_t Network::SendCommand(NetworkCommand cmd, uint8_t socket, const void * da
 	bufferIn.hdr.formatVersion = InvalidFormatVersion;
 	transferPending = true;
 
-	//debug
-	debugPrintBuffer("Send", &bufferOut, dataOutLength);
+#if 0
+	//***TEMP debug
+	if (cmd != NetworkCommand::connGetStatus)
+	{
+		debugPrintBuffer("Send", &bufferOut, (dataOut == nullptr) ? 0 : dataOutLength);
+	}
+#endif
 
 	// DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
 	// The only way I can find to do this is to issue a software reset to the SPI system.
@@ -1006,7 +1070,19 @@ int32_t Network::SendCommand(NetworkCommand cmd, uint8_t socket, const void * da
 			memcpy(dataIn, bufferIn.data, min<size_t>(dataInLength, (size_t)response));
 		}
 	}
-	debugPrintBuffer("Recv", &bufferIn, (size_t)max<int>(0, response));
+
+	if (response < 0 && reprap.Debug(moduleNetwork))
+	{
+		debugPrintf("Network command %d socket %u returned error %d\n", (int)cmd, response);
+	}
+
+#if 0
+	//***TEMP debug
+	if (cmd != NetworkCommand::connGetStatus)
+	{
+		debugPrintBuffer("Recv", &bufferIn, (dataIn == nullptr) ? 0 : (size_t)max<int>(0, response));
+	}
+#endif
 
 	return response;
 }
@@ -1017,7 +1093,29 @@ void Network::SendListenCommand(Port port, unsigned int maxConnections)
 	lcb.port = port;
 	lcb.remoteIp = AnyIp;
 	lcb.maxConnections = maxConnections;
-	SendCommand(NetworkCommand::networkListen, 0, &lcb, sizeof(lcb), nullptr, 0);
+	SendCommand(NetworkCommand::networkListen, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
+}
+
+// This is called when ESP is signalling to us that an error occurred or there was a state change
+void Network::GetNewStatus()
+{
+	struct MessageResponse
+	{
+		char messageBuffer[100];
+	};
+	Receiver<MessageResponse> rcvr;
+
+	espStatusChanged = false;
+	const int32_t rslt = SendCommand(NetworkCommand::networkGetLastError, 0, 0, nullptr, 0, rcvr);
+	rcvr.Value().messageBuffer[ARRAY_UPB(rcvr.Value().messageBuffer)] = 0;
+	if (rslt < 0)
+	{
+		platform->Message(GENERIC_MESSAGE, "Error retrieving WiFi status message\n");
+	}
+	else if (rslt > 0 && rcvr.Value().messageBuffer[0] != 0)
+	{
+		platform->MessageF(GENERIC_MESSAGE, "WiFi reported error: %s\n", rcvr.Value().messageBuffer);
+	}
 }
 
 // SPI interrupt handler, called when NSS goes high

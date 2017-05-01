@@ -14,6 +14,7 @@
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
 #include "Network.h"
+#include "Scanner.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"
 #include "Tool.h"
@@ -1148,6 +1149,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 
 				newToolNumber = tool->Number();
+				toolChangeParam = DefaultToolChangeParam;
 				gb.SetState(GCodeState::m109ToolChange0);
 			}
 			else
@@ -3184,7 +3186,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			if (ok)
 			{
-				const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkAddSsid, 0, &config, sizeof(config), nullptr, 0);
+				const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkAddSsid, 0, 0, &config, sizeof(config), nullptr, 0);
 				if (rslt != ResponseEmpty)
 				{
 					reply.copy("Failed to add SSID to remembered list");
@@ -3202,7 +3204,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			// List remembered networks
 			const size_t declaredBufferLength = MaxRememberedNetworks * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with null terminator, plus an extra null
 			uint32_t buffer[NumDwords(declaredBufferLength + 1)];
-			const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkListSsids, 0, nullptr, 0, buffer, declaredBufferLength);
+			const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkListSsids, 0, 0, nullptr, 0, buffer, declaredBufferLength);
 			if (rslt >= 0)
 			{
 				char* const cbuf = reinterpret_cast<char *>(buffer);
@@ -3247,7 +3249,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const char* const pssid = reinterpret_cast<const char*>(ssid);
 				if (strcmp(pssid, "ALL") == 0)
 				{
-					const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkFactoryReset, 0, nullptr, 0, nullptr, 0);
+					const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
 					if (rslt != ResponseEmpty)
 					{
 						reply.copy("Failed to reset the WiFi module to factory settings");
@@ -3256,7 +3258,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkDeleteSsid, 0, ssid, SsidLength, nullptr, 0);
+					const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid, SsidLength, nullptr, 0);
 					if (rslt != ResponseEmpty)
 					{
 						reply.copy("Failed to remove SSID from remembered list");
@@ -3289,7 +3291,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (ok)
 			{
 				config.channel = (gb.SeenAfterSpace('C')) ? gb.GetIValue() : 0;
-				const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, &config, sizeof(config), nullptr, 0);
+				const int32_t rslt = reprap.GetNetwork()->SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
 				if (rslt != ResponseEmpty)
 				{
 					reply.copy("Failed to configure access point parameters");
@@ -3391,6 +3393,162 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 		}
 		break;
+
+#if SUPPORT_SCANNER
+	case 750: // Enable 3D scanner extension
+		reprap.GetScanner()->Enable();
+		break;
+
+	case 751: // Register 3D scanner extension over USB
+		if (&gb == serialGCode)
+		{
+			if (reprap.GetScanner()->IsEnabled())
+			{
+				result = reprap.GetScanner()->Register();
+			}
+			else
+			{
+				reply.copy("Scanner extension is not enabled");
+				error = true;
+			}
+		}
+		else
+		{
+			reply.copy("Invalid source for this M-code");
+			error = true;
+		}
+		break;
+
+	case 752: // Start 3D scan
+		if (gb.Seen('P'))
+		{
+			const char *file = gb.GetString();
+			if (gb.Seen('S'))
+			{
+				const int sParam = gb.GetIValue();
+				if (reprap.GetScanner()->IsEnabled())
+				{
+					if (reprap.GetScanner()->IsRegistered())
+					{
+						result = reprap.GetScanner()->StartScan(file, sParam);
+					}
+					else
+					{
+						reply.copy("Scanner is not registered");
+						error = true;
+					}
+				}
+				else
+				{
+					reply.copy("Scanner extension is not enabled");
+					error = true;
+				}
+			}
+			else
+			{
+				reply.copy("Missing length/degree parameter");
+				error = true;
+			}
+		}
+		else
+		{
+			reply.copy("Missing filename");
+			error = true;
+		}
+		break;
+
+	case 753: // Cancel current 3D scanner action
+		if (reprap.GetScanner()->IsEnabled())
+		{
+			if (reprap.GetScanner()->IsRegistered())
+			{
+				result = reprap.GetScanner()->Cancel();
+			}
+			else
+			{
+				reply.copy("Scanner is not registered");
+				error = true;
+			}
+		}
+		else
+		{
+			reply.copy("Scanner extension is not enabled");
+			error = true;
+		}
+		break;
+
+	case 754: // Calibrate scanner
+		if (reprap.GetScanner()->IsEnabled())
+		{
+			if (reprap.GetScanner()->IsRegistered())
+			{
+				result = reprap.GetScanner()->Calibrate();
+			}
+			else
+			{
+				reply.copy("Scanner is not registered");
+				error = true;
+			}
+		}
+		else
+		{
+			reply.copy("Scanner extension is not enabled");
+			error = true;
+		}
+		break;
+
+	case 755: // Set alignment mode for 3D scanner
+		if (reprap.GetScanner()->IsEnabled())
+		{
+			if (reprap.GetScanner()->IsRegistered())
+			{
+				bool on = (gb.Seen('P') && gb.GetIValue() > 0);
+				result = reprap.GetScanner()->SetAlignment(on);
+			}
+			else
+			{
+				reply.copy("Scanner is not registered");
+				error = true;
+			}
+		}
+		else
+		{
+			reply.copy("Scanner extension is not enabled");
+			error = true;
+		}
+		break;
+
+	case 756: // Shutdown 3D scanner
+		if (reprap.GetScanner()->IsEnabled())
+		{
+			if (reprap.GetScanner()->IsRegistered())
+			{
+				result = reprap.GetScanner()->Shutdown();
+			}
+			else
+			{
+				reply.copy("Scanner is not registered");
+				error = true;
+			}
+		}
+		else
+		{
+			reply.copy("Scanner extension is not enabled");
+			error = true;
+		}
+		break;
+#else
+	case 750:
+	case 751:
+	case 752:
+	case 753:
+	case 754:
+	case 755:
+	case 756:
+		reply.copy("Scanner support not built-in");
+		error = true;
+		break;
+#endif
 
 	case 905: // Set current RTC date and time
 		{
@@ -3673,6 +3831,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
 		if (oldTool == nullptr || oldTool->Number() != newToolNumber)
 		{
+			toolChangeParam = gb.Seen('P') ? gb.GetIValue() : DefaultToolChangeParam;
 			gb.SetState(GCodeState::toolChange0);
 			return true;							// proceeding with state machine, so don't unlock or send a reply
 		}

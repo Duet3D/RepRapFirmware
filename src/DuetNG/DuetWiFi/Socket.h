@@ -18,7 +18,7 @@ public:
 	void Init(SocketNumber n);
 	void Poll(bool full);
 	Port GetLocalPort() const { return localPort; }
-	uint32_t GetRemoteIP() const { return remoteIPAddress; }
+	uint32_t GetRemoteIP() const { return remoteIp; }
 	Port GetRemotePort() const { return remotePort; }
 	void Close();
 	void Terminate();
@@ -33,24 +33,24 @@ public:
 private:
 	enum class SocketState : uint8_t
 	{
-		disabled,
 		inactive,
-		listening,
+		waitingForResponder,
 		connected,
 		clientDisconnecting,
 		closing,
-		aborted
+		broken
 	};
 
 	void ReInit();
+	void ReceiveData();
 	void DiscardReceivedData();
 
 	Port localPort, remotePort;							// The local and remote ports
 	Protocol protocol;									// What protocol this socket is for
-	uint32_t remoteIPAddress;							// The remote IP address
+	uint32_t remoteIp;									// The remote IP address
 	NetworkBuffer *receivedData;						// List of buffers holding received data
 	uint32_t whenConnected;
-	bool persistConnection;								// Do we expect this connection to stay alive?
+	uint16_t txBufferSpace;								// How much free transmit buffer space the WiFi mofule reported
 	SocketNumber socketNum;								// The WiFi socket number we are using
 	SocketState state;
 	bool sendOutstanding;								// True if we have written data to the socket but not flushed it

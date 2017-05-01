@@ -43,9 +43,10 @@ enum Module : uint8_t
 	moduleHeat = 5,
 	moduleDda = 6,
 	moduleRoland = 7,
-	modulePrintMonitor = 8,
-	moduleStorage = 9,
-	numModules = 10,				// make this one greater than the last module number
+	moduleScanner = 8,
+	modulePrintMonitor = 9,
+	moduleStorage = 10,
+	numModules = 11,				// make this one greater than the last module number
 	noModule = 15
 };
 
@@ -60,6 +61,7 @@ class DDA;
 class Heat;
 class Tool;
 class Roland;
+class Scanner;
 class PrintMonitor;
 class RepRap;
 class FileStore;

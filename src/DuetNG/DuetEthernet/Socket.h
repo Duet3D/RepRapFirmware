@@ -45,6 +45,7 @@ private:
 	};
 
 	void ReInit();
+	void ReceiveData();
 	void DiscardReceivedData();
 
 	Port localPort, remotePort;							// The local and remote ports

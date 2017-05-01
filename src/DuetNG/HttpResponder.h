@@ -80,7 +80,7 @@ private:
 	void RejectMessage(const char* s, unsigned int code = 500);
 	bool SendFileInfo();
 
-	void DoFastUpload() override;
+	void DoUpload();
 
 	const char* GetKeyValue(const char *key) const;	// return the value of the specified key, or nullptr if not present
 

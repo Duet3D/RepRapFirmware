@@ -147,7 +147,6 @@ void Network::ShutdownProtocol(Protocol protocol)
 	case FtpProtocol:
 		sockets[FtpSocketNumber].TerminateAndDisable();
 		sockets[FtpDataSocketNumber].TerminateAndDisable();
-		//TODO we may have a second FTP  socket on the main port
 		break;
 
 	case TelnetProtocol:
@@ -325,9 +324,12 @@ void Network::Spin(bool full)
 		break;
 
 	case NetworkState::connected:
-		InitSockets();
-		platform->MessageF(GENERIC_MESSAGE, "Network running, IP address = %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
-		state = NetworkState::active;
+		if (full)
+		{
+			InitSockets();
+			platform->MessageF(GENERIC_MESSAGE, "Network running, IP address = %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+			state = NetworkState::active;
+		}
 		break;
 
 	case NetworkState::active:
@@ -391,7 +393,10 @@ void Network::Spin(bool full)
 		break;
 	}
 
-	platform->ClassReport(longWait);
+	if (full)
+	{
+		platform->ClassReport(longWait);
+	}
 }
 
 void Network::Diagnostics(MessageType mtype)

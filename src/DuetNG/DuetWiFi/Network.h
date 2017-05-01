@@ -23,6 +23,18 @@ class WifiFirmwareUploader;
 
 const unsigned int NumHttpResponders = 4;		// the number of concurrent HTTP requests we can process
 
+// Class to allow us to receive some data allowing for some extra bytes being stored by the DMAC
+template<class T> class Receiver
+{
+public:
+	void *DmaPointer() { return &object; }
+	size_t Size() const { return sizeof(T); }
+	T& Value() { return object; }
+private:
+	T object;
+	uint32_t padding;
+};
+
 // The main network class that drives the network.
 class Network
 {
@@ -47,8 +59,9 @@ public:
 
 	void SetHostname(const char *name);
 
-	bool FindResponder(Socket *skt, Protocol protocol);
+	bool FindResponder(Socket *skt, Port localPort);
 
+	const uint8_t *GetIPAddress() const { return ipAddress; }
 	void OpenDataPort(Port port);
 	void CloseDataPort();
 
@@ -65,7 +78,13 @@ public:
 	static void ResetWiFiForUpload(bool external);
 
 	const char *GetWiFiServerVersion() const { return wiFiServerVersion; }
-	int32_t SendCommand(NetworkCommand cmd, uint8_t socket, const void * dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength);
+
+	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength);
+
+	template<class T> int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, Receiver<T>& recvr)
+	{
+		return SendCommand(cmd, socket, flags, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
+	}
 
 	const char* TranslateNetworkState() const;
 	static const char* TranslateWiFiState(WiFiState w);
@@ -100,6 +119,7 @@ private:
 	void SetupSpi();
 
 	void SendListenCommand(Port port, unsigned int maxConnections);
+	void GetNewStatus();
 
 	static const char* TranslateEspResetReason(uint32_t reason);
 

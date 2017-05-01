@@ -29,6 +29,7 @@
 #include "Heating/Heat.h"
 #include "Platform.h"
 #include "Movement/Move.h"
+#include "Scanner.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"
 #include "Tool.h"
@@ -102,6 +103,8 @@ void GCodes::Init()
 	eofStringLength = strlen(eofString);
 	offSetSet = false;
 	runningConfigFile = false;
+	doingToolChange = false;
+	toolChangeParam = DefaultToolChangeParam;
 	active = true;
 	longWait = platform->Time();
 	limitAxes = true;
@@ -122,6 +125,10 @@ void GCodes::Init()
 	retractSpeed = unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	isRetracted = false;
 	lastAuxStatusReportType = -1;						// no status reports requested yet
+
+#if SUPPORT_SCANNER
+	reprap.GetScanner()->SetGCodeBuffer(serialGCode);
+#endif
 }
 
 // This is called from Init and when doing an emergency stop
@@ -296,6 +303,7 @@ void GCodes::Spin()
 			doingToolChange = true;
 			SaveFanSpeeds();
 			gb.AdvanceState();
+			if ((toolChangeParam & TFreeBit) != 0)
 			{
 				const Tool * const oldTool = reprap.GetCurrentTool();
 				if (oldTool != nullptr && AllAxesAreHomed())
@@ -316,7 +324,7 @@ void GCodes::Spin()
 				}
 			}
 			gb.AdvanceState();
-			if (reprap.GetTool(newToolNumber) != nullptr && AllAxesAreHomed())
+			if (reprap.GetTool(newToolNumber) != nullptr && AllAxesAreHomed() && (toolChangeParam & TPreBit) != 0)
 			{
 				scratchString.printf("tpre%d.g", newToolNumber);
 				DoFileMacro(gb, scratchString.Pointer(), false);
@@ -327,7 +335,7 @@ void GCodes::Spin()
 		case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 			reprap.SelectTool(newToolNumber);
 			gb.AdvanceState();
-			if (reprap.GetTool(newToolNumber) != nullptr && AllAxesAreHomed())
+			if (reprap.GetTool(newToolNumber) != nullptr && AllAxesAreHomed() && (toolChangeParam & TPostBit) != 0)
 			{
 				scratchString.printf("tpost%d.g", newToolNumber);
 				DoFileMacro(gb, scratchString.Pointer(), false);
@@ -758,9 +766,13 @@ void GCodes::StartNextGCode(GCodeBuffer& gb, StringRef& reply)
 		// Telnet
 		telnetInput->FillBuffer(telnetGCode);
 	}
-	else if (&gb == serialGCode)
+	else if (   &gb == serialGCode
+#if SUPPORT_SCANNER
+			 && !reprap.GetScanner()->IsRegistered()
+#endif
+			)
 	{
-		// USB interface
+		// USB interface. This line may be shared with a 3D scanner
 		serialInput->FillBuffer(serialGCode);
 	}
 	else if (&gb == auxGCode)

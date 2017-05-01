@@ -218,39 +218,6 @@ void NetworkResponder::CancelUpload()
 	}
 }
 
-// Try to upload some more data, returning true if we finished
-// Overridden in function HttpResponder
-void NetworkResponder::DoFastUpload()
-{
-	// TODO combine this code with the version in HttpResponder
-	const uint8_t *buffer;
-	size_t len;
-	if (skt->ReadBuffer(buffer, len))
-	{
-		if (reprap.Debug(moduleWebserver))
-		{
-			GetPlatform()->MessageF(HOST_MESSAGE, "Writing %u bytes of upload data\n", len);
-		}
-
-		const bool success = fileBeingUploaded.Write(reinterpret_cast<const char*>(buffer), len);
-		skt->Taken(len);
-		if (!success)
-		{
-			uploadError = true;
-			GetPlatform()->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
-			CancelUpload();
-			//TODO write some sort of reply here
-			Commit();
-			return;
-		}
-	}
-
-	if (!skt->CanRead())
-	{
-		ConnectionLost();
-	}
-}
-
 // Finish a file upload. Set variable uploadError if anything goes wrong.
 void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified)
 {

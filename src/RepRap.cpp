@@ -5,6 +5,7 @@
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
 #include "Platform.h"
+#include "Scanner.h"
 #include "PrintMonitor.h"
 #include "Tool.h"
 #include "Version.h"
@@ -16,7 +17,7 @@
 // Callback function from the hsmci driver, called while it is waiting for an SD card operation to complete
 extern "C" void hsmciIdle()
 {
-	if (reprap.GetSpinningModule() != moduleNetwork)	// I don't think this should ever be false because the Network module doesn't do file access, but just in case...
+	if (reprap.GetSpinningModule() != moduleNetwork)
 	{
 		reprap.GetNetwork()->Spin(false);
 	}
@@ -40,6 +41,9 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 #if SUPPORT_ROLAND
 	roland = new Roland(platform);
 #endif
+#if SUPPORT_SCANNER
+	scanner = new Scanner(platform);
+#endif
 
 	printMonitor = new PrintMonitor(platform, gCodes);
 
@@ -58,6 +62,9 @@ void RepRap::Init()
 	heat->Init();
 #if SUPPORT_ROLAND
 	roland->Init();
+#endif
+#if SUPPORT_SCANNER
+	scanner->Init();
 #endif
 	printMonitor->Init();
 	Platform::EnableWatchdog();		// do this after all init calls are made
@@ -111,6 +118,9 @@ void RepRap::Exit()
 	heat->Exit();
 	move->Exit();
 	gCodes->Exit();
+#if SUPPORT_SCANNER
+	scanner->Exit();
+#endif
 	network->Exit();
 	platform->Message(GENERIC_MESSAGE, "RepRap class exited.\n");
 	platform->Exit();
@@ -148,6 +158,12 @@ void RepRap::Spin()
 	spinningModule = moduleRoland;
 	ticksInSpinState = 0;
 	roland->Spin();
+#endif
+
+#if SUPPORT_SCANNER
+	spinningModule = moduleScanner;
+	ticksInSpinState = 0;
+	scanner->Spin();
 #endif
 
 	spinningModule = modulePrintMonitor;
@@ -722,6 +738,15 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 	// Time since last reset
 	response->catf(",\"time\":%.1f", platform->Time());
+
+#if SUPPORT_SCANNER
+	// Scanner
+	if (scanner->IsEnabled())
+	{
+		response->catf(",\"scanner\":{\"status\":\"%c\"", scanner->GetStatusCharacter());
+		response->catf(",\"progress\":%.1f}", scanner->GetProgress());
+	}
+#endif
 
 	/* Extended Status Response */
 	if (type == 2)
@@ -1439,7 +1464,7 @@ char RepRap::GetStatusCharacter() const
 			: (IsStopped()) 											? 'H'	// Halted
 			: (gCodes->IsPausing()) 									? 'D'	// Pausing / Decelerating
 			: (gCodes->IsResuming()) 									? 'R'	// Resuming
-			: (gCodes->IsDoingToolChange())								? 'T'	// Running tool change macros
+			: (gCodes->IsDoingToolChange())								? 'T'	// Changing tool
 			: (gCodes->IsPaused()) 										? 'S'	// Paused / Stopped
 			: (printMonitor->IsPrinting())								? 'P'	// Printing
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement()) 	? 'B'	// Busy

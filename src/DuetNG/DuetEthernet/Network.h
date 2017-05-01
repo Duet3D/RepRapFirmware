@@ -10,7 +10,6 @@ Separated out from Platform.h by dc42 and extended by zpl
 #define NETWORK_H
 
 #include "NetworkDefs.h"
-#include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "Socket.h"
 
@@ -57,6 +56,7 @@ public:
 
 	bool FindResponder(Socket *skt, Protocol protocol);
 
+	const uint8_t *GetIPAddress() const { return ipAddress; }
 	void OpenDataPort(Port port);
 	void CloseDataPort();
 
