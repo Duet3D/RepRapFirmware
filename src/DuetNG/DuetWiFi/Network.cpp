@@ -107,7 +107,8 @@ Network::Network(Platform* p) : platform(p), nextResponderToPoll(nullptr), uploa
 		responders = new HttpResponder(responders);
 	}
 
-	wiFiServerVersion[0] = 0;
+	strcpy(ssid, "(unknown)");
+	strcpy(wiFiServerVersion, "(unknown)");
 }
 
 void Network::Init()
@@ -131,7 +132,7 @@ void Network::Init()
 	currentSocket = 0;
 }
 
-void Network::EnableProtocol(int protocol, int port, bool secure, StringRef& reply)
+void Network::EnableProtocol(int protocol, int port, int secure, StringRef& reply)
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -153,7 +154,7 @@ void Network::EnableProtocol(int protocol, int port, bool secure, StringRef& rep
 			if (state == NetworkState::active)
 			{
 				StartProtocol(protocol);
-#if 0	// mdns not implemented yet
+#if 0	// mdns not implemented yet, if we are going to implement it then we need to send the WiFi module a command to do it here and pass the protocol set
 				if (state == NetworkState::active)
 				{
 					DoMdnsAnnounce();
@@ -305,6 +306,10 @@ bool Network::GetNetworkState(StringRef& reply)
 	case NetworkState::active:
 		reply.copy("WiFi module is ");
 		reply.cat(TranslateWiFiState(currentMode));
+		if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
+		{
+			reply.cat(ssid);
+		}
 		break;
 	default:
 		reply.copy("Unknown network state");
@@ -403,6 +408,13 @@ void Network::Spin(bool full)
 				SetupSpi();						// set up the SPI subsystem
 				state = NetworkState::active;
 				currentMode = WiFiState::idle;				// wifi module is running but inactive
+
+				// Read the status to get the WiFi server version
+				Receiver<NetworkStatusResponse> status;
+				if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
+				{
+					SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+				}
 			}
 		}
 		break;
@@ -455,7 +467,22 @@ void Network::Spin(bool full)
 			}
 			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
-				// Poll the next socket
+				// Find the next socket to poll
+				const size_t startingSocket = currentSocket;
+				do
+				{
+					if (sockets[currentSocket].NeedsPolling())
+					{
+						break;
+					}
+					++currentSocket;
+					if (currentSocket == NumTcpSockets)
+					{
+						currentSocket = 0;
+					}
+				} while (currentSocket != startingSocket);
+
+				// Either the current socket needs polling, or no sockets do but we must still poll one of them to get notified of any new connections
 				sockets[currentSocket].Poll(full);
 				++currentSocket;
 				if (currentSocket == NumTcpSockets)
@@ -498,12 +525,31 @@ void Network::Spin(bool full)
 			GetNewStatus();
 			if (currentMode != WiFiState::connecting)
 			{
-				requestedMode = currentMode;				// don't keep repeating the request
+				requestedMode = currentMode;				// don't keep repeating the request if it failed
 				state = NetworkState::active;
-				platform->MessageF(HOST_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
 				if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 				{
+					// Get our IP address, this needs to be correct for FTP to work
+					Receiver<NetworkStatusResponse> status;
+					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
+					{
+						uint32_t ip = status.Value().ipAddress;
+						for (size_t i = 0; i < 4; ++i)
+						{
+							ipAddress[i] = (uint8_t)(ip & 255);
+							ip >>= 8;
+						}
+						SafeStrncpy(ssid, status.Value().ssid, SsidLength);
+					}
 					InitSockets();
+					platform->MessageF(HOST_MESSAGE, "Wifi module is %s%s, IP address %u.%u.%u.%u\n",
+						TranslateWiFiState(currentMode),
+						ssid,
+						ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+				}
+				else
+				{
+					platform->MessageF(HOST_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
 				}
 			}
 		}
@@ -641,6 +687,8 @@ int Network::EnableState() const
 						: -1;
 }
 
+// Translate the wifi state to text.
+// The 'connected' and 'runningAsAccessPoint' states include a space at the end because the caller is expected to append the access point name.
 /*static*/ const char* Network::TranslateWiFiState(WiFiState w)
 {
 	switch (w)
@@ -648,8 +696,8 @@ int Network::EnableState() const
 	case WiFiState::disabled:				return "disabled";
 	case WiFiState::idle:					return "idle";
 	case WiFiState::connecting:				return "trying to connect";
-	case WiFiState::connected:				return "connected to an access point";
-	case WiFiState::runningAsAccessPoint:	return "providing an access point";
+	case WiFiState::connected:				return "connected to access point ";
+	case WiFiState::runningAsAccessPoint:	return "providing access point ";
 	default:								return "in an unknown state";
 	}
 }
@@ -725,6 +773,18 @@ void Network::TerminateSockets(Port port)
 	}
 }
 
+// This is called to tell the network which sockets are active
+void Network::UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets)
+{
+	for (size_t i = 0; i < NumTcpSockets; ++i)
+	{
+		if (((connectedSockets | otherEndClosedSockets) & (1u << i)) != 0)
+		{
+			sockets[i].SetNeedsPolling();
+		}
+	}
+}
+
 // Find a responder to process a new connection
 bool Network::FindResponder(Socket *skt, Port localPort)
 {
@@ -758,7 +818,7 @@ void Network::CloseDataPort()
 	if (ftpDataPort != 0)
 	{
 		SendListenCommand(ftpDataPort, 0);
-		TerminateSockets(ftpDataPort);				// if the FTP responder want to close the socket cleanly, it should have closed it itself
+		TerminateSockets(ftpDataPort);				// if the FTP responder wants to close the socket cleanly, it should have closed it itself
 		ftpDataPort = 0;
 	}
 }

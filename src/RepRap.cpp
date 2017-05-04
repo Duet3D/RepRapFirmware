@@ -1323,8 +1323,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, bool flagsDirs)
 				// Get the long filename if possible
 				if (flagsDirs && fileInfo.isDirectory)
 				{
-					strncpy(filename + sizeof(char), fileInfo.fileName, FILENAME_LENGTH - 1);
-					filename[FILENAME_LENGTH - 1] = 0;
+					SafeStrncpy(filename + 1, fileInfo.fileName, ARRAY_SIZE(fileInfo.fileName) - 1);
 					fname = filename;
 				}
 				else
@@ -1447,8 +1446,7 @@ void RepRap::Beep(int freq, int ms)
 // Send a short message. We send it to both PanelDue and the web interface.
 void RepRap::SetMessage(const char *msg)
 {
-	strncpy(message, msg, MESSAGE_LENGTH);
-	message[MESSAGE_LENGTH] = 0;
+	SafeStrncpy(message, msg, ARRAY_SIZE(message));
 
 	if (platform->HaveAux())
 	{

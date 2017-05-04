@@ -195,8 +195,7 @@ void NetworkResponder::ConnectionLost()
 void NetworkResponder::StartUpload(FileStore *file, const char *fileName)
 {
 	fileBeingUploaded.Set(file);
-	strncpy(filenameBeingUploaded, fileName, ARRAY_SIZE(filenameBeingUploaded));
-	filenameBeingUploaded[ARRAY_UPB(filenameBeingUploaded)] = 0;
+	SafeStrncpy(filenameBeingUploaded, fileName, ARRAY_SIZE(filenameBeingUploaded));
 	responderState = ResponderState::uploading;
 	uploadError = false;
 }

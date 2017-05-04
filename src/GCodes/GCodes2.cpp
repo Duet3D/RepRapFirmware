@@ -22,19 +22,16 @@
 
 #ifdef DUET_NG
 # include "FirmwareUpdater.h"
-# ifdef DUET_WIFI
-#  include "MessageFormats.h"
-# endif
 #endif
 
-const char* BED_EQUATION_G = "bed.g";
-const char* RESUME_G = "resume.g";
-const char* CANCEL_G = "cancel.g";
-const char* STOP_G = "stop.g";
-const char* SLEEP_G = "sleep.g";
-const char* CONFIG_OVERRIDE_G = "config-override.g";
-const char* DEPLOYPROBE_G = "deployprobe.g";
-const char* RETRACTPROBE_G = "retractprobe.g";
+const char* const BED_EQUATION_G = "bed.g";
+const char* const RESUME_G = "resume.g";
+const char* const CANCEL_G = "cancel.g";
+const char* const STOP_G = "stop.g";
+const char* const SLEEP_G = "sleep.g";
+const char* const CONFIG_OVERRIDE_G = "config-override.g";
+const char* const DEPLOYPROBE_G = "deployprobe.g";
+const char* const RETRACTPROBE_G = "retractprobe.g";
 
 const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
 const uint16_t ServoRefreshFrequency = 50;
@@ -324,13 +321,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (wasPaused)
 			{
 				reply.copy("Print cancelled");
-				// If we are cancelling a paused print with M0 and cancel.g exists then run it and do nothing else
-				if (code == 0)
+				// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
+				if (code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
 				{
-					if (DoFileMacro(gb, CANCEL_G, false))
-					{
-						break;
-					}
+					break;
 				}
 			}
 		}
@@ -551,7 +545,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		if (isPaused)
 		{
 			gb.SetState(GCodeState::resuming1);
-			DoFileMacro(gb, RESUME_G, true);
+			if (AllAxesAreHomed())
+			{
+				DoFileMacro(gb, RESUME_G, true);
+			}
 		}
 		else if (!fileToPrint.IsLive())
 		{

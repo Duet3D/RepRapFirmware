@@ -619,8 +619,7 @@ void FtpResponder::ProcessLine()
 			{
 				filename = GetPlatform()->GetMassStorage()->CombineName(currentDirectory, filename);
 			}
-			strncpy(fileToMove, filename, FILENAME_LENGTH);
-			fileToMove[FILENAME_LENGTH - 1] = 0;
+			SafeStrncpy(fileToMove, filename, ARRAY_SIZE(fileToMove));
 
 			if (GetPlatform()->GetMassStorage()->FileExists(fileToMove))
 			{
@@ -802,8 +801,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		// Prepare the new directory path
 		if (newDirectory[0] == '/')		// Absolute path
 		{
-			strncpy(combinedPath, newDirectory, FILENAME_LENGTH);
-			combinedPath[FILENAME_LENGTH - 1] = 0;
+			SafeStrncpy(combinedPath, newDirectory, ARRAY_SIZE(combinedPath));
 		}
 		else							// Relative path
 		{
@@ -818,8 +816,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 				}
 
 				// No - find the parent directory
-				strncpy(combinedPath, currentDirectory, FILENAME_LENGTH);
-				combinedPath[ARRAY_UPB(combinedPath)] = 0;
+				SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
 				for(int i = strlen(combinedPath) - 2; i >= 0; i--)
 				{
 					if (combinedPath[i] == '/')
@@ -831,13 +828,12 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 			}
 			else									// Go to child directory
 			{
-				strncpy(combinedPath, currentDirectory, FILENAME_LENGTH);
+				SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
 				if (!StringEndsWith(combinedPath, "/") && strlen(combinedPath) > 1)
 				{
-					strncat(combinedPath, "/", FILENAME_LENGTH);
+					SafeStrncat(combinedPath, "/", ARRAY_SIZE(combinedPath));
 				}
-				strncat(combinedPath, newDirectory, FILENAME_LENGTH);
-				combinedPath[ARRAY_UPB(combinedPath)] = 0;
+				SafeStrncat(combinedPath, newDirectory, ARRAY_SIZE(combinedPath));
 			}
 		}
 
@@ -850,7 +846,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		// Verify the final path and change it if possible
 		if (GetPlatform()->GetMassStorage()->DirectoryExists(combinedPath))
 		{
-			strncpy(currentDirectory, combinedPath, FILENAME_LENGTH);
+			SafeStrncpy(currentDirectory, combinedPath, ARRAY_SIZE(currentDirectory));
 			outBuf->copy("250 Directory successfully changed.\r\n");
 			Commit(responderState);
 		}

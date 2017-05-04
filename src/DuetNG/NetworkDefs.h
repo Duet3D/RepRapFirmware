@@ -36,7 +36,7 @@ const Port DefaultTelnetPort = 23;
 
 const unsigned int TCP_MSS = 1460;
 
-const size_t NetworkBufferCount = 16;					// number of 2K or 3K network buffers
+const size_t NetworkBufferCount = 8;					// number of 2K network buffers
 
 // Define the following to use 3K buffers on the W5500 for the HTTP sockets and smaller buffers for everything else
 // It doesn't seem to work, the chip keeps telling us that 1 byte is available.

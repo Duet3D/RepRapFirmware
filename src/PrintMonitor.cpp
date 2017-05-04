@@ -167,8 +167,7 @@ float PrintMonitor::GetWarmUpDuration() const
 void PrintMonitor::StartingPrint(const char* filename)
 {
 	printingFileParsed = GetFileInfo(platform->GetGCodeDir(), filename, printingFileInfo);
-	strncpy(filenameBeingPrinted, filename, ARRAY_SIZE(filenameBeingPrinted));
-	filenameBeingPrinted[ARRAY_UPB(filenameBeingPrinted)] = 0;
+	SafeStrncpy(filenameBeingPrinted, filename, ARRAY_SIZE(filenameBeingPrinted));
 }
 
 // Tell this class that the file set for printing is now actually processed
@@ -296,8 +295,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 		}
 
 		// File has been opened, let's start now
-		strncpy(filenameBeingParsed, fileName, ARRAY_SIZE(filenameBeingParsed));
-		filenameBeingParsed[ARRAY_UPB(filenameBeingParsed)] = 0;
+		SafeStrncpy(filenameBeingParsed, fileName, ARRAY_SIZE(filenameBeingParsed));
 		fileOverlapLength = 0;
 
 		// Set up the info struct

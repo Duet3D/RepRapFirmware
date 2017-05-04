@@ -216,7 +216,8 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 
 	isPrintingMove = false;
-	bool realMove = false, xyMoving = false, xyzMoving = false;
+	bool realMove = false, xyzMoving = false;
+	xyMoving = false;
 	const bool isSpecialDeltaMove = (move->IsDeltaMode() && !doMotorMapping);
 	float accelerations[DRIVES];
 	const float * const normalAccelerations = reprap.GetPlatform()->Accelerations();
@@ -239,10 +240,13 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 			directionVector[drive] = positionDelta;
 			if (positionDelta != 0)
 			{
-				xyzMoving = true;
-				if (drive != Z_AXIS)
+				if (drive == Z_AXIS)
 				{
-					xyMoving = true;
+					xyzMoving = true;
+				}
+				else if (drive == Y_AXIS || ((1 << drive) & nextMove.xAxes) != 0)
+				{
+					xyMoving = xyzMoving = true;
 				}
 			}
 			dm.state = (isDeltaMovement || delta != 0)
@@ -287,6 +291,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 
 	// 3. Store some values
+	xAxes = nextMove.xAxes;
 	endStopsToCheck = nextMove.endStopsToCheck;
 	canPauseAfter = nextMove.canPauseAfter;
 	filePos = nextMove.filePos;
@@ -309,7 +314,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 			directionVector[Z_AXIS] += (directionVector[X_AXIS] * dparams.GetXTilt()) + (directionVector[Y_AXIS] * dparams.GetYTilt());
 		}
 
-		totalDistance = Normalise(directionVector, DRIVES, numAxes);
+		totalDistance = NormaliseXYZ();
 	}
 	else
 	{
@@ -527,13 +532,13 @@ void DDA::AdvanceBabyStepping(float amount)
 	while(cdda != this)
 	{
 		float babySteppingToDo = 0.0;
-		if (amount != 0.0)
+		if (amount != 0.0 && cdda->xyMoving)
 		{
 			// Limit the babystepping Z speed to the lower of 0.1 times the original XYZ speed and 0.5 times the Z jerk
 			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * reprap.GetPlatform()->ConfiguredInstantDv(Z_AXIS)/cdda->topSpeed);
 			babySteppingToDo = constrain<float>(amount, -maxBabySteppingAmount, maxBabySteppingAmount);
 			cdda->directionVector[Z_AXIS] += babySteppingToDo/cdda->totalDistance;
-			cdda->totalDistance *= Normalise(cdda->directionVector, DRIVES, reprap.GetGCodes()->GetNumAxes());
+			cdda->totalDistance *= cdda->NormaliseXYZ();
 			cdda->RecalculateMove();
 			babySteppingDone += babySteppingToDo;
 			amount -= babySteppingToDo;
@@ -991,7 +996,7 @@ void DDA::Prepare()
 
 // Take a unit positive-hyperquadrant vector, and return the factor needed to obtain
 // length of the vector as projected to touch box[].
-float DDA::VectorBoxIntersection(const float v[], const float box[], size_t dimensions)
+/*static*/ float DDA::VectorBoxIntersection(const float v[], const float box[], size_t dimensions)
 {
 	// Generate a vector length that is guaranteed to exceed the size of the box
 	const float biggerThanBoxDiagonal = 2.0*Magnitude(box, dimensions);
@@ -1011,9 +1016,9 @@ float DDA::VectorBoxIntersection(const float v[], const float box[], size_t dime
 }
 
 // Normalise a vector with dim1 dimensions so that it is unit in the first dim2 dimensions, and also return its previous magnitude in dim2 dimensions
-float DDA::Normalise(float v[], size_t dim1, size_t dim2)
+/*static*/ float DDA::Normalise(float v[], size_t dim1, size_t dim2)
 {
-	float magnitude = Magnitude(v, dim2);
+	const float magnitude = Magnitude(v, dim2);
 	if (magnitude <= 0.0)
 	{
 		return 0.0;
@@ -1022,8 +1027,37 @@ float DDA::Normalise(float v[], size_t dim1, size_t dim2)
 	return magnitude;
 }
 
+// Make the direction vector unit-normal in XYZ and return the previous magnitude
+float DDA::NormaliseXYZ()
+{
+	// First calculate the magnitude of the vector. If there is more than one X axis, take an average of their movements (they should be equal).
+	float magSquared = 0.0;
+	unsigned int numXaxes = 0;
+	for (size_t d = 0; d < MAX_AXES; ++d)
+	{
+		if (((1 << d) & xAxes) != 0)
+		{
+			magSquared += fsquare(directionVector[d]);
+			++numXaxes;
+		}
+	}
+	if (numXaxes != 0)
+	{
+		magSquared /= numXaxes;
+	}
+	const float magnitude = sqrtf(magSquared + fsquare(directionVector[Y_AXIS]) + fsquare(directionVector[Z_AXIS]));
+	if (magnitude <= 0.0)
+	{
+		return 0.0;
+	}
+
+	// Now normalise it
+	Scale(directionVector, 1.0/magnitude, DRIVES);
+	return magnitude;
+}
+
 // Return the magnitude of a vector
-float DDA::Magnitude(const float v[], size_t dimensions)
+/*static*/ float DDA::Magnitude(const float v[], size_t dimensions)
 {
 	float magnitude = 0.0;
 	for (size_t d = 0; d < dimensions; d++)
@@ -1034,18 +1068,18 @@ float DDA::Magnitude(const float v[], size_t dimensions)
 }
 
 // Multiply a vector by a scalar
-void DDA::Scale(float v[], float scale, size_t dimensions)
+/*static*/ void DDA::Scale(float v[], float scale, size_t dimensions)
 {
-	for(size_t d = 0; d < dimensions; d++)
+	for (size_t d = 0; d < dimensions; d++)
 	{
-		v[d] = scale*v[d];
+		v[d] *= scale;
 	}
 }
 
 // Move a vector into the positive hyperquadrant
-void DDA::Absolute(float v[], size_t dimensions)
+/*static*/ void DDA::Absolute(float v[], size_t dimensions)
 {
-	for(size_t d = 0; d < dimensions; d++)
+	for (size_t d = 0; d < dimensions; d++)
 	{
 		v[d] = fabsf(v[d]);
 	}

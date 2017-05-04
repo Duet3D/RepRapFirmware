@@ -17,7 +17,7 @@
 const uint32_t FindResponderTimeout = 2000;			// how long we wait for a responder to become available
 const unsigned int MaxBuffersPerSocket = 4;
 
-Socket::Socket() : localPort(0), receivedData(nullptr), state(SocketState::inactive)
+Socket::Socket() : localPort(0), receivedData(nullptr), state(SocketState::inactive), needsPolling(false)
 {
 }
 
@@ -118,8 +118,9 @@ void Socket::Taken(size_t len)
 void Socket::Poll(bool full)
 {
 	// Get the socket status
+	Network * const network = reprap.GetNetwork();
 	Receiver<ConnStatusResponse> resp;
-	const int32_t ret = reprap.GetNetwork()->SendCommand(NetworkCommand::connGetStatus, socketNum, 0, nullptr, 0, resp);
+	const int32_t ret = network->SendCommand(NetworkCommand::connGetStatus, socketNum, 0, nullptr, 0, resp);
 	if (ret != (int32_t)resp.Size())
 	{
 		// We can't do much here other than disable and restart wifi, or hope the next status call succeeds
@@ -129,6 +130,10 @@ void Socket::Poll(bool full)
 		}
 		return;
 	}
+
+	// As well as getting the status for the socket we asked about, we also received bitmaps of connected sockets.
+	// Pass these to the Network module so that it can avoid polling idle sockets.
+	network->UpdateSocketStatus(resp.Value().connectedSockets, resp.Value().otherEndClosedSockets);
 
 	switch (resp.Value().state)
 	{
@@ -148,7 +153,7 @@ void Socket::Poll(bool full)
 			{
 				whenConnected = millis();
 			}
-			if (reprap.GetNetwork()->FindResponder(this, localPort))
+			if (network->FindResponder(this, localPort))
 			{
 				state = SocketState::connected;
 				if (reprap.Debug(moduleNetwork))
@@ -204,6 +209,8 @@ void Socket::Poll(bool full)
 		}
 		break;
 	}
+
+	needsPolling = false;
 }
 
 // Try to receive more incoming data from the socket
@@ -279,6 +286,12 @@ void Socket::Send()
 			Terminate();						// something is not right, so terminate the socket for safety
 		}
 	}
+}
+
+// Return true if we need to poll this socket
+bool Socket::NeedsPolling() const
+{
+	return state != SocketState::inactive || needsPolling;
 }
 
 // End

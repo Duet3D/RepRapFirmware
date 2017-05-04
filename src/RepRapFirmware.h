@@ -78,6 +78,8 @@ bool StringEndsWith(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);
 bool StringEquals(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
+void SafeStrncpy(char *dst, const char *src, size_t length) pre(length != 0);
+void SafeStrncat(char *dst, const char *src, size_t length) pre(length != 0);
 
 // Macro to assign an array from an initialiser list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));

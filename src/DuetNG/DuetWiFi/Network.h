@@ -49,7 +49,7 @@ public:
 	void Start();
 	void Stop();
 
-	void EnableProtocol(int protocol, int port, bool secure, StringRef& reply);
+	void EnableProtocol(int protocol, int port, int secure, StringRef& reply);
 	void DisableProtocol(int protocol, StringRef& reply);
 	void ReportProtocols(StringRef& reply) const;
 
@@ -91,6 +91,7 @@ public:
 
 	void SpiInterrupt();
 	void EspRequestsTransfer();
+	void UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets);
 
 private:
 	enum class NetworkState
@@ -150,6 +151,7 @@ private:
 	uint8_t netmask[4];
 	uint8_t gateway[4];
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
+	char ssid[SsidLength + 1];
 
 	uint32_t spiTxUnderruns;
 	uint32_t spiRxOverruns;

@@ -29,6 +29,8 @@ public:
 	bool CanSend() const;
 	size_t Send(const uint8_t *data, size_t length);
 	void Send();
+	void SetNeedsPolling() { needsPolling = true; }
+	bool NeedsPolling() const;
 
 private:
 	enum class SocketState : uint8_t
@@ -53,8 +55,7 @@ private:
 	uint16_t txBufferSpace;								// How much free transmit buffer space the WiFi mofule reported
 	SocketNumber socketNum;								// The WiFi socket number we are using
 	SocketState state;
-	bool sendOutstanding;								// True if we have written data to the socket but not flushed it
-	bool isSending;										// True if we have written data to send and have not yet seen success or timeout
+	bool needsPolling;
 };
 
 #endif /* SRC_DUETNG_DUETWIFI_SOCKET_H_ */

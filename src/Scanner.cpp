@@ -387,8 +387,7 @@ bool Scanner::StartScan(const char *filename, int param)
 
 	// Copy the scan length/degree and the filename
 	scanParam = param;
-	strncpy(scanFilename, filename, ARRAY_SIZE(scanFilename));
-	scanFilename[ARRAY_UPB(scanFilename)] = 0;
+	SafeStrncpy(scanFilename, filename, ARRAY_SIZE(scanFilename));
 
 	// Run the scan_pre macro and wait for it to finish
 	DoFileMacro(SCAN_PRE_G);

@@ -40,11 +40,11 @@
 
 const char GCodes::axisLetters[MAX_AXES] = { 'X', 'Y', 'Z', 'U', 'V', 'W' };
 
-const char* PAUSE_G = "pause.g";
-const char* HomingFileNames[MAX_AXES] = { "homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g" };
-const char* HOME_ALL_G = "homeall.g";
-const char* HOME_DELTA_G = "homedelta.g";
-const char* DefaultHeightMapFile = "heightmap.csv";
+const char* const PAUSE_G = "pause.g";
+const char* const HomingFileNames[MAX_AXES] = { "homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g" };
+const char* const HOME_ALL_G = "homeall.g";
+const char* const HOME_DELTA_G = "homedelta.g";
+const char* const DefaultHeightMapFile = "heightmap.csv";
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
@@ -366,7 +366,10 @@ void GCodes::Spin()
 			if (LockMovementAndWaitForStandstill(gb))
 			{
 				gb.SetState(GCodeState::pausing2);
-				DoFileMacro(gb, PAUSE_G, true);
+				if (AllAxesAreHomed())
+				{
+					DoFileMacro(gb, PAUSE_G, true);
+				}
 			}
 			break;
 
@@ -511,7 +514,7 @@ void GCodes::Spin()
 					moveBuffer.coords[Y_AXIS] = y - platform->GetCurrentZProbeParameters().yOffset;
 					moveBuffer.coords[Z_AXIS] = platform->GetZProbeStartingHeight();
 					moveBuffer.feedRate = platform->GetZProbeTravelSpeed();
-					moveBuffer.xAxes = 0;
+					moveBuffer.xAxes = DefaultXAxisMapping;
 					segmentsLeft = 1;
 					gb.AdvanceState();
 				}
@@ -551,7 +554,7 @@ void GCodes::Spin()
 				moveBuffer.filePos = noFilePosition;
 				moveBuffer.coords[Z_AXIS] = -platform->GetZProbeDiveHeight();
 				moveBuffer.feedRate = platform->GetCurrentZProbeParameters().probeSpeed;
-				moveBuffer.xAxes = 0;
+				moveBuffer.xAxes = DefaultXAxisMapping;
 				segmentsLeft = 1;
 				gb.SetState(GCodeState::gridProbing3);
 			}
@@ -579,7 +582,7 @@ void GCodes::Spin()
 				moveBuffer.filePos = noFilePosition;
 				moveBuffer.coords[Z_AXIS] = platform->GetZProbeStartingHeight();
 				moveBuffer.feedRate = platform->GetZProbeTravelSpeed();
-				moveBuffer.xAxes = 0;
+				moveBuffer.xAxes = DefaultXAxisMapping;
 				segmentsLeft = 1;
 				gb.SetState(GCodeState::gridProbing4);
 			}
@@ -1300,7 +1303,7 @@ int GCodes::SetUpMove(GCodeBuffer& gb, StringRef& reply)
 		if (ival == 1 || ival == 2)
 		{
 			moveBuffer.moveType = ival;
-			moveBuffer.xAxes = 0;			// don't do bed compensation
+			moveBuffer.xAxes = DefaultXAxisMapping;
 		}
 
 		if (ival == 1)
@@ -1686,7 +1689,7 @@ bool GCodes::DoCannedCycleMove(GCodeBuffer& gb, EndstopChecks ce)
 			}
 		}
 		moveBuffer.feedRate = cannedFeedRate;
-		moveBuffer.xAxes = 0;
+		moveBuffer.xAxes = DefaultXAxisMapping;
 		moveBuffer.endStopsToCheck = ce;
 		moveBuffer.filePos = noFilePosition;
 		moveBuffer.usePressureAdvance = false;

@@ -123,20 +123,11 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 	TCHAR loc[FILENAME_LENGTH + 1];
 
 	// Remove the trailing '/' from the directory name
-	size_t len = strnlen(directory, ARRAY_UPB(loc));
-	if (len == 0)
+	SafeStrncpy(loc, directory, ARRAY_SIZE(loc));
+	const size_t len = strlen(loc);
+	if (len != 0 && loc[len - 1] == '/')
 	{
-		loc[0] = 0;
-	}
-	else if (directory[len - 1] == '/')
-	{
-		strncpy(loc, directory, len - 1);
 		loc[len - 1] = 0;
-	}
-	else
-	{
-		strncpy(loc, directory, len);
-		loc[len] = 0;
 	}
 
 	findDir.lfn = nullptr;
@@ -157,7 +148,7 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info)
 
 			if (file_info.fileName[0] == 0)
 			{
-				strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
+				SafeStrncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
 			}
 
 			file_info.size = entry.fsize;
@@ -189,7 +180,7 @@ bool MassStorage::FindNext(FileInfo &file_info)
 
 	if (file_info.fileName[0] == 0)
 	{
-		strncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
+		SafeStrncpy(file_info.fileName, entry.fname, ARRAY_SIZE(file_info.fileName));
 	}
 
 	file_info.lastModified = ConvertTimeStamp(entry.fdate, entry.ftime);

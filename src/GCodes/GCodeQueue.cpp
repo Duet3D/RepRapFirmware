@@ -95,8 +95,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 			// No - we've run out of free items. Run the first outstanding code
 			queueCode = false;
 			codeToRunLength = strlen(queuedItems->code);
-			strncpy(codeToRun, queuedItems->code, codeToRunLength);
-			codeToRun[ARRAY_UPB(codeToRun)] = 0;
+			SafeStrncpy(codeToRun, queuedItems->code, ARRAY_SIZE(codeToRun));
 
 			// Release the first queued item so that it can be reused later
 			QueuedCode *item = queuedItems;
@@ -106,7 +105,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 		}
 
 		// Unlink a free element and assign gb's code to it
-		QueuedCode *code = freeItems;
+		QueuedCode * const code = freeItems;
 		freeItems = code->next;
 		code->AssignFrom(gb);
 		code->executeAtMove = scheduledMoves;
@@ -223,8 +222,7 @@ void GCodeQueue::Diagnostics(MessageType mtype)
 void QueuedCode::AssignFrom(GCodeBuffer &gb)
 {
 	toolNumberAdjust = gb.GetToolNumberAdjust();
-	strncpy(code, gb.Buffer(), GCODE_LENGTH);
-	code[ARRAY_UPB(code)] = 0;
+	SafeStrncpy(code, gb.Buffer(), ARRAY_SIZE(code));
 }
 
 void QueuedCode::AssignTo(GCodeBuffer *gb)

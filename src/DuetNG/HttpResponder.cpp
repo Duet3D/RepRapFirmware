@@ -543,8 +543,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		if (nameVal != nullptr)
 		{
 			// Regular rr_fileinfo?name=xxx call
-			strncpy(filenameBeingProcessed, nameVal, ARRAY_SIZE(filenameBeingProcessed));
-			filenameBeingProcessed[ARRAY_UPB(filenameBeingProcessed)] = 0;
+			SafeStrncpy(filenameBeingProcessed, nameVal, ARRAY_SIZE(filenameBeingProcessed));
 		}
 		else
 		{
@@ -867,8 +866,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 		{
 			const char *configPath = GetPlatform()->GetMassStorage()->CombineName(GetPlatform()->GetSysDir(), GetPlatform()->GetConfigFile());
 			char fileName[FILENAME_LENGTH];
-			strncpy(fileName, configPath, FILENAME_LENGTH);
-
+			SafeStrncpy(fileName, configPath, ARRAY_SIZE(fileName));
 			SendFile(fileName, false);
 			return;
 		}

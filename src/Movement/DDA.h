@@ -107,6 +107,7 @@ private:
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
 	void CheckEndstops(Platform *platform);
 	void AdvanceBabyStepping(float amount);							// Try to push babystepping earlier in the move queue
+	float NormaliseXYZ();											// Make the direction vector unit-normal in XYZ
 
 	static void DoLookahead(DDA *laDDA);							// Try to smooth out moves in the queue
     static float Normalise(float v[], size_t dim1, size_t dim2);  	// Normalise a vector of dim1 dimensions to unit length in the first dim1 dimensions
@@ -119,7 +120,7 @@ private:
     DDA* next;								// The next one in the ring
 	DDA *prev;								// The previous one in the ring
 
-	volatile DDAState state;				// what state this DDA is in
+	volatile DDAState state;				// What state this DDA is in
 	uint8_t endCoordinatesValid : 1;		// True if endCoordinates can be relied on
 	uint8_t isDeltaMovement : 1;			// True if this is a delta printer movement
 	uint8_t canPauseAfter : 1;				// True if we can pause at the end of this move
@@ -127,10 +128,12 @@ private:
 	uint8_t isPrintingMove : 1;				// True if this move includes XY movement and extrusion
 	uint8_t usePressureAdvance : 1;			// True if pressure advance should be applied to any forward extrusion
 	uint8_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move
+	uint8_t xyMoving : 1;					// True if we have movement along an X axis or the Y axis
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
+    uint32_t xAxes;							// Which axes are behaving as X axes
 
-    FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read fro SD card
+    FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read from SD card
 
 	int32_t endPoint[DRIVES];  				// Machine coordinates of the endpoint
 	float endCoordinates[DRIVES];			// The Cartesian coordinates at the end of the move plus extrusion amounts
