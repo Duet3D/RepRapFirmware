@@ -17,6 +17,7 @@ New features:
 - The F feed rate parameter in G1 commands is now taken to be the feed rate for the combined XYZ movement, ignoring any additional axes unless the X axis is mapped to them in the M563 command for the current tool. Caution: this may have unexpected side-effects on IDEX machines, let me know of you find any.
 - The pause.g, resume.g amnd cancel.g files are not run unless all axes have been homed.
 - The default maximum hot end temperature has been increased to 288C
+- String parameters in gcode commands, such as filenames, can now be enclosed in double quotation marks to avoid ambiguity
 
 Bug fixes:
 - M42 commands are now sychronised with the movement queue
