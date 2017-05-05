@@ -12,10 +12,14 @@ Version 1.19alpha1
 
 New features:
 - On the Duet WiFi the network code has been rewritten. The web server now runs on the Duet instead of on the wifi module. FTP and Telnet are supported if enabled using M586. New commands M587, M588 and M589 are supported. The meaning of the M552 S parameter has changed: S-1 holds the WiFi module in the reset state, S0 holds it in the Idle state allowing it to process M587/M588/M589 commands, S1 starts it in client mode and S2 starts it in access point mode. The M122 diagnostic report includes WiFi module parameters unless the WiFi module is being held in the reset state.
+- On the Duet WiFi, when you download a file it on longer opens it in the browser but gives you a "Save file as" prompt instead.
+- On the Duet Ethernet the HTTP server code has been rewritten. This should make the web interface more responsive when multiple clients access the web interface simultaneously. The same HTTP server code is used on the Duet WiFi.
 - The F feed rate parameter in G1 commands is now taken to be the feed rate for the combined XYZ movement, ignoring any additional axes unless the X axis is mapped to them in the M563 command for the current tool. Caution: this may have unexpected side-effects on IDEX machines, let me know of you find any.
 - The pause.g, resume.g amnd cancel.g files are not run unless all axes have been homed.
+- The default maximum hot end temperature has been increased to 288C
 
 Bug fixes:
+- M42 commands are now sychronised with the movement queue
 - On the Duet Ethernet, FTP is now working.
 
 Known issues:
