@@ -5,7 +5,7 @@ Version 1.19alpha2
 ==================
 
 Bug fixes:
-- The M21 command did not re-initisalise the file system completely. As a result, errors could occur if you removed the SD card, modified it on amnother device, re-inserted it and used M21 to re-mount it.
+- The M21 command did not re-initisalise the file system completely. As a result, errors could occur if you removed the SD card, modified it on another device, re-inserted it and used M21 to re-mount it.
 
 Version 1.19alpha1
 ==================
