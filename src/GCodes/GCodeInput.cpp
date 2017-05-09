@@ -28,17 +28,17 @@ bool StreamGCodeInput::FillBuffer(GCodeBuffer *gb)
 	{
 		char c = static_cast<char>(device.read());
 
-		if (gb->WritingFileDirectory() == reprap.GetPlatform()->GetWebDir())
+		if (gb->WritingFileDirectory() == reprap.GetPlatform().GetWebDir())
 		{
 			// HTML uploads are handled by the GCodes class
-			reprap.GetGCodes()->WriteHTMLToFile(*gb, c);
+			reprap.GetGCodes().WriteHTMLToFile(*gb, c);
 		}
 		else if (gb->Put(c))
 		{
 			// Check if we can finish a file upload
 			if (gb->WritingFileDirectory() != nullptr)
 			{
-				reprap.GetGCodes()->WriteGCodeToFile(*gb);
+				reprap.GetGCodes().WriteGCodeToFile(*gb);
 				gb->SetFinished(true);
 			}
 
@@ -83,17 +83,17 @@ bool RegularGCodeInput::FillBuffer(GCodeBuffer *gb)
 		}
 
 		// Pass it on to the GCodeBuffer
-		if (gb->WritingFileDirectory() == reprap.GetPlatform()->GetWebDir())
+		if (gb->WritingFileDirectory() == reprap.GetPlatform().GetWebDir())
 		{
 			// HTML uploads are handled by the GCodes class
-			reprap.GetGCodes()->WriteHTMLToFile(*gb, c);
+			reprap.GetGCodes().WriteHTMLToFile(*gb, c);
 		}
 		else if (gb->Put(c))
 		{
 			// Check if we can finish a file upload
 			if (gb->WritingFileDirectory() != nullptr)
 			{
-				reprap.GetGCodes()->WriteGCodeToFile(*gb);
+				reprap.GetGCodes().WriteGCodeToFile(*gb);
 				gb->SetFinished(true);
 			}
 
@@ -197,7 +197,7 @@ void RegularGCodeInput::Put(MessageType mtype, const char c)
 			{
 				// Emergency stop requested - perform it now
 				reprap.EmergencyStop();
-				reprap.GetGCodes()->Reset();
+				reprap.GetGCodes().Reset();
 
 				// But don't run it twice
 				Reset();

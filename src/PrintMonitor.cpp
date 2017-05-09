@@ -25,7 +25,7 @@ Licence: GPL
 #include "Platform.h"
 #include "RepRap.h"
 
-PrintMonitor::PrintMonitor(Platform *p, GCodes *gc) : platform(p), gCodes(gc), isPrinting(false),
+PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) : platform(p), gCodes(gc), isPrinting(false),
 	printStartTime(0), pauseStartTime(0.0), totalPauseTime(0.0), heatingUp(false), currentLayer(0), warmUpDuration(0.0),
 	firstLayerDuration(0.0), firstLayerFilament(0.0), firstLayerProgress(0.0), lastLayerChangeTime(0.0),
 	lastLayerFilament(0.0), lastLayerZ(0.0), numLayerSamples(0), layerEstimatedTimeLeft(0.0), parseState(notParsing),
@@ -37,7 +37,7 @@ PrintMonitor::PrintMonitor(Platform *p, GCodes *gc) : platform(p), gCodes(gc), i
 
 void PrintMonitor::Init()
 {
-	longWait = platform->Time();
+	longWait = platform.Time();
 	lastUpdateTime = millis();
 }
 
@@ -46,22 +46,22 @@ void PrintMonitor::Spin()
 	// File information about the file being printed must be available before layer estimations can be made
 	if (filenameBeingPrinted[0] != 0 && !printingFileParsed)
 	{
-		printingFileParsed = GetFileInfo(platform->GetGCodeDir(), filenameBeingPrinted, printingFileInfo);
+		printingFileParsed = GetFileInfo(platform.GetGCodeDir(), filenameBeingPrinted, printingFileInfo);
 		if (!printingFileParsed)
 		{
-			platform->ClassReport(longWait);
+			platform.ClassReport(longWait);
 			return;
 		}
 	}
 
 	// Don't do any updates if the print has been paused
-	if (!gCodes->IsRunning())
+	if (!gCodes.IsRunning())
 	{
 		if (pauseStartTime == 0.0)
 		{
-			pauseStartTime = platform->Time();
+			pauseStartTime = platform.Time();
 		}
-		platform->ClassReport(longWait);
+		platform.ClassReport(longWait);
 		return;
 	}
 
@@ -76,7 +76,7 @@ void PrintMonitor::Spin()
 		// Adjust the actual print time if the print was paused before
 		if (pauseStartTime != 0.0)
 		{
-			totalPauseTime += platform->Time() - pauseStartTime;
+			totalPauseTime += platform.Time() - pauseStartTime;
 			pauseStartTime = 0.0;
 		}
 
@@ -87,14 +87,14 @@ void PrintMonitor::Spin()
 			bool nozzleAtHighTemperature = false;
 			for(int heater = 0; heater < HEATERS; heater++)
 			{
-				if (reprap.GetHeat()->GetStatus(heater) == Heat::HS_active && reprap.GetHeat()->GetActiveTemperature(heater) > TEMPERATURE_LOW_SO_DONT_CARE)
+				if (reprap.GetHeat().GetStatus(heater) == Heat::HS_active && reprap.GetHeat().GetActiveTemperature(heater) > TEMPERATURE_LOW_SO_DONT_CARE)
 				{
 					heatingUp = true;
 
 					// Check if this heater is assigned to a tool and if it has reached its set temperature yet
 					if (reprap.IsHeaterAssignedToTool(heater))
 					{
-						if (!reprap.GetHeat()->HeaterAtSetTemperature(heater, false))
+						if (!reprap.GetHeat().HeaterAtSetTemperature(heater, false))
 						{
 							nozzleAtHighTemperature = false;
 							break;
@@ -105,7 +105,7 @@ void PrintMonitor::Spin()
 			}
 
 			// Yes - do we have live movement?
-			if (nozzleAtHighTemperature && !reprap.GetMove()->NoLiveMovement())
+			if (nozzleAtHighTemperature && !reprap.GetMove().NoLiveMovement())
 			{
 				// Yes - we're actually starting the print
 				WarmUpComplete();
@@ -113,15 +113,15 @@ void PrintMonitor::Spin()
 			}
 		}
 		// Print is in progress and filament is being extruded
-		else if (!gCodes->DoingFileMacro() && reprap.GetMove()->IsExtruding())
+		else if (!gCodes.DoingFileMacro() && reprap.GetMove().IsExtruding())
 		{
 			float liveCoordinates[DRIVES];
-			reprap.GetMove()->LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes());
+			reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes());
 
 			// See if we need to determine the first layer height (usually smaller than the nozzle diameter)
 			if (printingFileInfo.firstLayerHeight == 0.0)
 			{
-				if (liveCoordinates[Z_AXIS] < platform->GetNozzleDiameter() * 1.5)
+				if (liveCoordinates[Z_AXIS] < platform.GetNozzleDiameter() * 1.5)
 				{
 					// This shouldn't be needed because we parse the first layer height anyway, but it won't harm
 					printingFileInfo.firstLayerHeight = liveCoordinates[Z_AXIS];
@@ -151,7 +151,7 @@ void PrintMonitor::Spin()
 		}
 		lastUpdateTime = now;
 	}
-	platform->ClassReport(longWait);
+	platform.ClassReport(longWait);
 }
 
 float PrintMonitor::GetWarmUpDuration() const
@@ -166,7 +166,7 @@ float PrintMonitor::GetWarmUpDuration() const
 // Notifies this class that a file has been set for printing
 void PrintMonitor::StartingPrint(const char* filename)
 {
-	printingFileParsed = GetFileInfo(platform->GetGCodeDir(), filename, printingFileInfo);
+	printingFileParsed = GetFileInfo(platform.GetGCodeDir(), filename, printingFileInfo);
 	SafeStrncpy(filenameBeingPrinted, filename, ARRAY_SIZE(filenameBeingPrinted));
 }
 
@@ -174,7 +174,7 @@ void PrintMonitor::StartingPrint(const char* filename)
 void PrintMonitor::StartedPrint()
 {
 	isPrinting = true;
-	printStartTime = platform->Time();
+	printStartTime = platform.Time();
 }
 
 // This is called as soon as the heaters are at temperature and the actual print has started
@@ -187,9 +187,9 @@ void PrintMonitor::WarmUpComplete()
 // Called when the first layer has been finished
 void PrintMonitor::FirstLayerComplete()
 {
-	firstLayerFilament = gCodes->GetTotalRawExtrusion();
+	firstLayerFilament = gCodes.GetTotalRawExtrusion();
 	firstLayerDuration = GetPrintDuration() - warmUpDuration;
-	firstLayerProgress = gCodes->FractionOfFilePrinted();
+	firstLayerProgress = gCodes.FractionOfFilePrinted();
 
 	// Update layer-based estimation time (if the object and layer heights are known)
 	// This won't be very accurate, but at least something can be sent the web interface and to PanelDue
@@ -204,7 +204,7 @@ void PrintMonitor::FirstLayerComplete()
 void PrintMonitor::LayerComplete()
 {
 	// Record a new set of layer, filament and file stats
-	const float extrRawTotal = gCodes->GetTotalRawExtrusion();
+	const float extrRawTotal = gCodes.GetTotalRawExtrusion();
 	if (numLayerSamples < MAX_LAYER_SAMPLES)
 	{
 		if (numLayerSamples == 0)
@@ -217,7 +217,7 @@ void PrintMonitor::LayerComplete()
 			filamentUsagePerLayer[numLayerSamples] = extrRawTotal - lastLayerFilament;
 			layerDurations[numLayerSamples] = GetPrintDuration() - lastLayerChangeTime;
 		}
-		fileProgressPerLayer[numLayerSamples] = gCodes->FractionOfFilePrinted();
+		fileProgressPerLayer[numLayerSamples] = gCodes.FractionOfFilePrinted();
 		numLayerSamples++;
 	}
 	else
@@ -231,7 +231,7 @@ void PrintMonitor::LayerComplete()
 
 		layerDurations[MAX_LAYER_SAMPLES - 1] = GetPrintDuration() - lastLayerChangeTime;
 		filamentUsagePerLayer[MAX_LAYER_SAMPLES - 1] = extrRawTotal - lastLayerFilament;
-		fileProgressPerLayer[MAX_LAYER_SAMPLES - 1] = gCodes->FractionOfFilePrinted();
+		fileProgressPerLayer[MAX_LAYER_SAMPLES - 1] = gCodes.FractionOfFilePrinted();
 	}
 	lastLayerFilament = extrRawTotal;
 
@@ -280,13 +280,13 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 	{
 		// See if we can access the file
 		// Webserver may call rr_fileinfo for a directory, check this case here
-		if (reprap.GetPlatform()->GetMassStorage()->DirectoryExists(directory, fileName))
+		if (reprap.GetPlatform().GetMassStorage()->DirectoryExists(directory, fileName))
 		{
 			info.isValid = false;
 			return true;
 		}
 
-		fileBeingParsed = platform->GetFileStore(directory, fileName, false);
+		fileBeingParsed = platform.GetFileStore(directory, fileName, false);
 		if (fileBeingParsed == nullptr)
 		{
 			// Something went wrong - we cannot open it
@@ -301,7 +301,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 		// Set up the info struct
 		parsedFileInfo.isValid = true;
 		parsedFileInfo.fileSize = fileBeingParsed->Length();
-		parsedFileInfo.lastModifiedTime = reprap.GetPlatform()->GetMassStorage()->GetLastModifiedTime(directory, fileName);
+		parsedFileInfo.lastModifiedTime = reprap.GetPlatform().GetMassStorage()->GetLastModifiedTime(directory, fileName);
 		parsedFileInfo.firstLayerHeight = 0.0;
 		parsedFileInfo.objectHeight = 0.0;
 		parsedFileInfo.layerHeight = 0.0;
@@ -316,7 +316,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 		if (reprap.Debug(modulePrintMonitor))
 		{
 			accumulatedReadTime = accumulatedParseTime = 0;
-			platform->MessageF(HOST_MESSAGE, "-- Parsing file %s --\n", fileName);
+			platform.MessageF(HOST_MESSAGE, "-- Parsing file %s --\n", fileName);
 		}
 
 		// If the file is empty or not a G-Code file, we don't need to parse anything
@@ -363,7 +363,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			const int nbytes = fileBeingParsed->Read(&buf[fileOverlapLength], sizeToRead);
 			if (nbytes != (int)sizeToRead)
 			{
-				platform->MessageF(HOST_MESSAGE, "Error: Failed to read header of G-Code file \"%s\"\n", fileName);
+				platform.MessageF(HOST_MESSAGE, "Error: Failed to read header of G-Code file \"%s\"\n", fileName);
 				parseState = notParsing;
 				fileBeingParsed->Close();
 				info = parsedFileInfo;
@@ -379,7 +379,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			// Search for filament usage (Cura puts it at the beginning of a G-code file)
 			if (parsedFileInfo.numFilaments == 0)
 			{
-				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes()->GetNumAxes());
+				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes().GetNumAxes());
 				headerInfoComplete &= (parsedFileInfo.numFilaments != 0);
 			}
 
@@ -460,7 +460,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 				// Yes - see if we need to output some debug info
 				if (reprap.Debug(modulePrintMonitor))
 				{
-					platform->MessageF(HOST_MESSAGE, "Header complete, processed %lu bytes, read time %.3fs, parse time %.3fs\n",
+					platform.MessageF(HOST_MESSAGE, "Header complete, processed %lu bytes, read time %.3fs, parse time %.3fs\n",
 										fileBeingParsed->Position(), (float)accumulatedReadTime/1000.0, (float)accumulatedParseTime/1000.0);
 				}
 
@@ -501,7 +501,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			int nbytes = fileBeingParsed->Read(buf, sizeToRead);
 			if (nbytes != (int)sizeToRead)
 			{
-				platform->MessageF(HOST_MESSAGE, "Error: Failed to read footer from G-Code file \"%s\"\n", fileName);
+				platform.MessageF(HOST_MESSAGE, "Error: Failed to read footer from G-Code file \"%s\"\n", fileName);
 				parseState = notParsing;
 				fileBeingParsed->Close();
 				info = parsedFileInfo;
@@ -519,7 +519,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			// Search for filament used
 			if (parsedFileInfo.numFilaments == 0)
 			{
-				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes()->GetNumAxes());
+				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes().GetNumAxes());
 				if (parsedFileInfo.numFilaments == 0)
 				{
 					footerInfoComplete = false;
@@ -552,7 +552,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			{
 				if (reprap.Debug(modulePrintMonitor))
 				{
-					platform->MessageF(HOST_MESSAGE, "Footer complete, processed %lu bytes, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
+					platform.MessageF(HOST_MESSAGE, "Footer complete, processed %lu bytes, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
 										fileBeingParsed->Length() - fileBeingParsed->Position() + GCODE_READ_SIZE,
 										(float)accumulatedReadTime/1000.0, (float)accumulatedParseTime/1000.0, (float)accumulatedSeekTime/1000.0);
 				}
@@ -567,7 +567,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			size_t seekOffset = (size_t)min<FilePosition>(pos, GCODE_READ_SIZE);
 			if (!fileBeingParsed->Seek(pos - seekOffset))
 			{
-				platform->Message(HOST_MESSAGE, "Error: Could not seek from end of file!\n");
+				platform.Message(HOST_MESSAGE, "Error: Could not seek from end of file!\n");
 				parseState = notParsing;
 				fileBeingParsed->Close();
 				info = parsedFileInfo;
@@ -719,7 +719,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 		case fileBased:
 		{
 			// Can we provide an estimation at all?
-			const float fractionPrinted = gCodes->FractionOfFilePrinted();
+			const float fractionPrinted = gCodes.FractionOfFilePrinted();
 			if (fractionPrinted < ESTIMATION_MIN_FILE_USAGE || heatingUp)
 			{
 				// No, we haven't printed enough of the file yet. We can't provide an estimation at this moment
@@ -778,8 +778,8 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 
 			// Sum up the filament usage and the filament needed
 			float totalFilamentNeeded = 0.0;
-			const float extrRawTotal = gCodes->GetTotalRawExtrusion();
-			for(size_t extruder = 0; extruder < DRIVES - reprap.GetGCodes()->GetNumAxes(); extruder++)
+			const float extrRawTotal = gCodes.GetTotalRawExtrusion();
+			for (size_t extruder = 0; extruder < DRIVES - reprap.GetGCodes().GetNumAxes(); extruder++)
 			{
 				totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 			}
@@ -880,7 +880,7 @@ bool PrintMonitor::FindFirstLayerHeight(const char* buf, size_t len, float& heig
 					{
 						//debugPrintf("Found at offset %u text: %.100s\n", i, &buf[i + 1]);
 						float flHeight = strtod(&buf[i + 1], nullptr);
-						if ((height == 0.0 || flHeight < height) && (flHeight <= platform->GetNozzleDiameter() * 3.0))
+						if ((height == 0.0 || flHeight < height) && (flHeight <= platform.GetNozzleDiameter() * 3.0))
 						{
 							height = flHeight;				// Only report first Z height if it's somewhat reasonable
 							foundHeight = true;
@@ -1135,7 +1135,7 @@ unsigned int PrintMonitor::FindFilamentUsed(const char* buf, size_t len, float *
 		if (p != nullptr)
 		{
 			float filamentCMM = strtod(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
-			filamentUsed[filamentsFound++] = filamentCMM / (PI * (platform->GetFilamentWidth() / 2.0) * (platform->GetFilamentWidth() / 2.0));
+			filamentUsed[filamentsFound++] = filamentCMM / (PI * (platform.GetFilamentWidth() / 2.0) * (platform.GetFilamentWidth() / 2.0));
 		}
 	}
 
@@ -1151,11 +1151,11 @@ float PrintMonitor::GetPrintDuration() const
 		return 0.0;
 	}
 
-	float printDuration = platform->Time() - printStartTime - totalPauseTime;
+	float printDuration = platform.Time() - printStartTime - totalPauseTime;
 	if (pauseStartTime != 0.0)
 	{
 		// Take into account how long the machine has been paused
-		printDuration -= platform->Time() - pauseStartTime;
+		printDuration -= platform.Time() - pauseStartTime;
 	}
 	return printDuration;
 }

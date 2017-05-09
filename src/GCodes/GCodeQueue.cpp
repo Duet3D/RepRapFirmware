@@ -24,8 +24,8 @@ GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 {
 	// Don't queue anything if no moves are being performed
-	const uint32_t scheduledMoves = reprap.GetMove()->GetScheduledMoves() + segmentsLeft;
-	if (scheduledMoves == reprap.GetMove()->GetCompletedMoves())
+	const uint32_t scheduledMoves = reprap.GetMove().GetScheduledMoves() + segmentsLeft;
+	if (scheduledMoves == reprap.GetMove().GetCompletedMoves())
 	{
 		return false;
 	}
@@ -139,7 +139,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 bool GCodeQueue::FillBuffer(GCodeBuffer *gb)
 {
 	// Can this buffer be filled?
-	if (queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove()->GetCompletedMoves())
+	if (queuedItems == nullptr || queuedItems->executeAtMove > reprap.GetMove().GetCompletedMoves())
 	{
 		// No - stop here
 		return false;
@@ -163,7 +163,7 @@ void GCodeQueue::PurgeEntries()
 	QueuedCode *item = queuedItems, *lastItem = nullptr;
 	while (item != nullptr)
 	{
-		if (item->executeAtMove > reprap.GetMove()->GetScheduledMoves())
+		if (item->executeAtMove > reprap.GetMove().GetScheduledMoves())
 		{
 			// Release this item
 			QueuedCode *nextItem = item->Next();
@@ -202,7 +202,7 @@ void GCodeQueue::Clear()
 
 void GCodeQueue::Diagnostics(MessageType mtype)
 {
-	reprap.GetPlatform()->MessageF(mtype, "Code queue is %s\n", (queuedItems == nullptr) ? "empty." : "not empty:");
+	reprap.GetPlatform().MessageF(mtype, "Code queue is %s\n", (queuedItems == nullptr) ? "empty." : "not empty:");
 	if (queuedItems != nullptr)
 	{
 		QueuedCode *item = queuedItems;
@@ -210,9 +210,9 @@ void GCodeQueue::Diagnostics(MessageType mtype)
 		do
 		{
 			queueLength++;
-			reprap.GetPlatform()->MessageF(mtype, "Queued '%s' for move %d\n", item->code, item->executeAtMove);
+			reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %d\n", item->code, item->executeAtMove);
 		} while ((item = item->Next()) != nullptr);
-		reprap.GetPlatform()->MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
+		reprap.GetPlatform().MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
 	}
 }
 

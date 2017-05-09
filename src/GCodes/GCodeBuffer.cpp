@@ -58,7 +58,7 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 	}
 	while (ms != nullptr);
 	scratchString.cat('\n');
-	reprap.GetPlatform()->Message(mtype, scratchString.Pointer());
+	reprap.GetPlatform().Message(mtype, scratchString.Pointer());
 }
 
 int GCodeBuffer::CheckSum() const
@@ -84,7 +84,7 @@ bool GCodeBuffer::Put(char c)
 		gcodeBuffer[gcodePointer] = 0;
 		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] != 0 && !writingFileDirectory) // Don't bother with blank/comment lines
 		{
-			reprap.GetPlatform()->MessageF(DEBUG_MESSAGE, "%s: %s\n", identity, gcodeBuffer);
+			reprap.GetPlatform().MessageF(DEBUG_MESSAGE, "%s: %s\n", identity, gcodeBuffer);
 		}
 
 		// Deal with line numbers and checksums
@@ -144,7 +144,7 @@ bool GCodeBuffer::Put(char c)
 		gcodeBuffer[gcodePointer++] = c;
 		if (gcodePointer >= (int)GCODE_LENGTH)
 		{
-			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: G-Code buffer '$s' length overflow\n", identity);
+			reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: G-Code buffer '$s' length overflow\n", identity);
 			gcodePointer = 0;
 			gcodeBuffer[0] = 0;
 		}
@@ -271,7 +271,7 @@ float GCodeBuffer::GetFValue()
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float before a search.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float before a search.\n");
 		return 0.0;
 	}
 	float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
@@ -284,7 +284,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array before a search.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array before a search.\n");
 		returnedLength = 0;
 		return;
 	}
@@ -295,7 +295,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 	{
 		if (length >= returnedLength)		// array limit has been set in here
 		{
-			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
+			reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -334,7 +334,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
 		return;
 	}
 
@@ -344,7 +344,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 	{
 		if (length >= returnedLength) // Array limit has been set in here
 		{
-			reprap.GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
+			reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -371,7 +371,7 @@ const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
 		return "";
 	}
 	const char* const result = &gcodeBuffer[readPointer + 1];
@@ -384,7 +384,7 @@ bool GCodeBuffer::GetString(char *buf, size_t buflen)
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
 		return false;
 	}
 	++readPointer;				// skip the character that introduced the string
@@ -467,7 +467,7 @@ const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 		readPointer = -1;
 		if (!optional)
 		{
-			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
+			reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
 		}
 		return nullptr;
 	}
@@ -482,7 +482,7 @@ int32_t GCodeBuffer::GetIValue()
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode int before a search.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode int before a search.\n");
 		readPointer = -1;
 		return 0;
 	}
@@ -511,12 +511,34 @@ void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 	}
 }
 
+// Try to get a flow array exactly 'numVals' long after parameter letter 'c'.
+// If the wrong number of value is provided, generate an error message and return true.
+// Else set 'seen' if we saw the letter and value, and return false.
+bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen)
+{
+	if (Seen(c))
+	{
+		size_t count = numVals;
+		GetFloatArray(vals, count, false);
+		if (count == numVals)
+		{
+			seen = true;
+		}
+		else
+		{
+			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
+			return true;
+		}
+	}
+	return false;
+}
+
 // Get an IP address quad after a key letter
 bool GCodeBuffer::GetIPAddress(uint8_t ip[4])
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
 		return false;
 	}
 	const char* p = &gcodeBuffer[readPointer + 1];

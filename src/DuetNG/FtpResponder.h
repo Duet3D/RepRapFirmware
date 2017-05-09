@@ -18,7 +18,7 @@ public:
 	bool Accept(Socket *s, Protocol protocol) override;	// ask the responder to accept this connection, returns true if it did
 	void Terminate(Protocol protocol) override;			// terminate the responder if it is serving the specified protocol
 
-	void Diagnostics(MessageType mtype);
+	void Diagnostics(MessageType mtype) const override;
 
 protected:
 	static const size_t ftpMessageLength = 128;			// maximum line length for incoming FTP commands

@@ -439,7 +439,6 @@ public:
 	float AxisMinimum(size_t axis) const;
 	void SetAxisMinimum(size_t axis, float value);
 	float AxisTotalLength(size_t axis) const;
-	bool IsAccessibleProbePoint(float x, float y) const;
 	float GetPressureAdvance(size_t drive) const;
 	void SetPressureAdvance(size_t extruder, float factor);
 
@@ -590,6 +589,8 @@ public:
 //-------------------------------------------------------------------------------------------------------
   
 private:
+	Platform(const Platform&);						// private copy constructor to make sure we don't try to copy a Platform
+
 	void ResetChannel(size_t chan);					// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint16_t reading) const;
 

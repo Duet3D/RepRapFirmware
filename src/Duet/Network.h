@@ -48,7 +48,7 @@ class Network
 public:
 	friend class NetworkTransaction;
 
-	Network(Platform* p);
+	Network(Platform& p);
 	void Init();
 	void Exit();
 	void Spin(bool full);
@@ -113,7 +113,7 @@ public:
 	static void Terminate(Connection conn);
 
 private:
-	Platform* const platform;
+	Platform& platform;
 	Webserver *webserver;
 	float longWait;
 

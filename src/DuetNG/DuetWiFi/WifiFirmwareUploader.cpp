@@ -81,7 +81,7 @@ void WifiFirmwareUploader::MessageF(const char *fmt, ...)
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	reprap.GetPlatform()->MessageF(FIRMWARE_UPDATE_MESSAGE, fmt, vargs);
+	reprap.GetPlatform().MessageF(FIRMWARE_UPDATE_MESSAGE, fmt, vargs);
 	va_end(vargs);
 }
 
@@ -690,21 +690,21 @@ void WifiFirmwareUploader::Spin()
 		uploadPort.end();					// disable the port, it has a high interrupt priority
 		if (uploadResult == EspUploadResult::success)
 		{
-			reprap.GetPlatform()->Message(FIRMWARE_UPDATE_MESSAGE, "Upload successful\n");
+			reprap.GetPlatform().Message(FIRMWARE_UPDATE_MESSAGE, "Upload successful\n");
 			if (restartModeOnCompletion == 1)
 			{
-				reprap.GetNetwork()->Start();
+				reprap.GetNetwork().Start();
 			}
 			else
 			{
-				reprap.GetNetwork()->ResetWiFi();
+				reprap.GetNetwork().ResetWiFi();
 			}
 		}
 		else
 		{
-			reprap.GetPlatform()->MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Installation failed due to %s error\n", resultMessages[(size_t)uploadResult]);
+			reprap.GetPlatform().MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Installation failed due to %s error\n", resultMessages[(size_t)uploadResult]);
 			// Not safe to restart the network
-			reprap.GetNetwork()->ResetWiFi();
+			reprap.GetNetwork().ResetWiFi();
 		}
 		state = UploadState::idle;
 		break;
@@ -717,11 +717,11 @@ void WifiFirmwareUploader::Spin()
 // Try to upload the given file at the given address
 void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uint32_t address)
 {
-	Platform * const platform = reprap.GetPlatform();
-	uploadFile = platform->GetFileStore(dir, file, false);
+	Platform& platform = reprap.GetPlatform();
+	uploadFile = platform.GetFileStore(dir, file, false);
 	if (uploadFile == nullptr)
 	{
-		platform->MessageF(FIRMWARE_UPDATE_MESSAGE, "Failed to open file %s\n", file);
+		platform.MessageF(FIRMWARE_UPDATE_MESSAGE, "Failed to open file %s\n", file);
 		return;
 	}
 
@@ -729,14 +729,14 @@ void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uin
 	if (fileSize == 0)
 	{
 		uploadFile->Close();
-		platform->MessageF(FIRMWARE_UPDATE_MESSAGE, "Upload file is empty %s\n", file);
+		platform.MessageF(FIRMWARE_UPDATE_MESSAGE, "Upload file is empty %s\n", file);
 		return;
 	}
 
 	// Stop the network
-	Network *network = reprap.GetNetwork();
-	restartModeOnCompletion = network->EnableState();
-	network->Stop();
+	Network& network = reprap.GetNetwork();
+	restartModeOnCompletion = network.EnableState();
+	network.Stop();
 
 	// Set up the state so that subsequent calls to Spin() will attempt the upload
 	uploadAddress = address;

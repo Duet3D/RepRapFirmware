@@ -39,7 +39,7 @@ private:
 class Network
 {
 public:
-	Network(Platform* p);
+	Network(Platform& p);
 
 	void Init();
 	void Activate();
@@ -72,7 +72,7 @@ public:
 	uint32_t GetHttpReplySeq();
 
 	// The remaining functions are specific to the WiFi version
-	WifiFirmwareUploader *GetWifiUploader() { return uploader; }
+	WifiFirmwareUploader& GetWifiUploader() { return *uploader; }
 
 	static void ResetWiFi();
 	static void ResetWiFiForUpload(bool external);
@@ -124,7 +124,7 @@ private:
 
 	static const char* TranslateEspResetReason(uint32_t reason);
 
-	Platform * const platform;
+	Platform& platform;
 	NetworkResponder *responders;
 	NetworkResponder *nextResponderToPoll;
 	FtpResponder *ftpResponder;

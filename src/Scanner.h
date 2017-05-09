@@ -41,7 +41,7 @@ class Scanner
 public:
 	friend class GCodes;
 
-	Scanner(Platform *p) : platform(p) { }
+	Scanner(Platform& p) : platform(p) { }
 	void Init();
 	void Exit();
 	void Spin();
@@ -73,7 +73,7 @@ private:
 	bool IsDoingFileMacro() const;
 	void DoFileMacro(const char *filename);
 
-	Platform *platform;
+	Platform& platform;
 	float longWait;
 
 	bool enabled;

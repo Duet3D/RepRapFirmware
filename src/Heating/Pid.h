@@ -44,7 +44,7 @@ class PID
 
 public:
 
-	PID(Platform* p, int8_t h);
+	PID(Platform& p, int8_t h);
 	void Init(float pGain, float pTc, float pTd, float tempLimit, bool usePid);	// (Re)Set everything to start
 	void Reset();
 	void Spin();									// Called in a tight loop to keep things running
@@ -105,7 +105,7 @@ private:
 	void DisplayBuffer(const char *intro);			// Debug helper
 	float GetExpectedHeatingRate() const;			// Get the minimum heating rate we expect
 
-	Platform* platform;								// The instance of the class that is the RepRap hardware
+	Platform& platform;								// The instance of the class that is the RepRap hardware
 	float activeTemperature;						// The required active temperature
 	float standbyTemperature;						// The required standby temperature
 	float temperatureLimit;							// The maximum allowed temperature for this heater

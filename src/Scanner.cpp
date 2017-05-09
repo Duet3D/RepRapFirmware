@@ -23,7 +23,7 @@ const char* CALIBRATE_POST_G = "calibrate_post.g";
 
 void Scanner::Init()
 {
-	longWait = platform->Time();
+	longWait = platform.Time();
 
 	enabled = false;
 	SetState(ScannerState::Disconnected);
@@ -54,7 +54,7 @@ void Scanner::Exit()
 		{
 			fileBeingUploaded->Close();
 			fileBeingUploaded = nullptr;
-			platform->GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
+			platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
 		}
 
 		// Pretend the scanner is no longer connected
@@ -67,7 +67,7 @@ void Scanner::Spin()
 	// Is the 3D scanner extension enabled at all and is a device registered?
 	if (!IsEnabled() || state == ScannerState::Disconnected)
 	{
-		platform->ClassReport(longWait);
+		platform.ClassReport(longWait);
 		return;
 	}
 
@@ -78,7 +78,7 @@ void Scanner::Spin()
 		if (state == ScannerState::ScanningPre || state == ScannerState::Scanning || state == ScannerState::ScanningPost ||
 			state == ScannerState::Uploading)
 		{
-			platform->Message(GENERIC_MESSAGE, "Warning: Scanner disconnected while a 3D scan or upload was in progress");
+			platform.Message(GENERIC_MESSAGE, "Warning: Scanner disconnected while a 3D scan or upload was in progress");
 		}
 
 		// Delete any pending uploads
@@ -86,12 +86,12 @@ void Scanner::Spin()
 		{
 			fileBeingUploaded->Close();
 			fileBeingUploaded = nullptr;
-			platform->GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
+			platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
 		}
 		SetState(ScannerState::Disconnected);
 
 		// Cannot do anything else...
-		platform->ClassReport(longWait);
+		platform.ClassReport(longWait);
 		return;
 	}
 
@@ -189,7 +189,7 @@ void Scanner::Spin()
 					{
 						if (reprap.Debug(moduleScanner))
 						{
-							platform->MessageF(HTTP_MESSAGE, "Finished uploading %u bytes of scan data\n", uploadSize);
+							platform.MessageF(HTTP_MESSAGE, "Finished uploading %u bytes of scan data\n", uploadSize);
 						}
 
 						fileBeingUploaded->Close();
@@ -204,9 +204,9 @@ void Scanner::Spin()
 				{
 					fileBeingUploaded->Close();
 					fileBeingUploaded = nullptr;
-					platform->GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
+					platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
 
-					platform->Message(GENERIC_MESSAGE, "Error: Could not write scan file\n");
+					platform.Message(GENERIC_MESSAGE, "Error: Could not write scan file\n");
 					SetState(ScannerState::Idle);
 				}
 			}
@@ -230,7 +230,7 @@ void Scanner::Spin()
 					buffer[bufferPointer++] = b;
 					if (bufferPointer >= ScanBufferSize)
 					{
-						platform->Message(GENERIC_MESSAGE, "Error: Scan buffer overflow\n");
+						platform.Message(GENERIC_MESSAGE, "Error: Scan buffer overflow\n");
 						bufferPointer = 0;
 					}
 				}
@@ -238,7 +238,7 @@ void Scanner::Spin()
 			break;
 	}
 
-	platform->ClassReport(longWait);
+	platform.ClassReport(longWait);
 }
 
 // Process incoming commands from the scanner board
@@ -247,7 +247,7 @@ void Scanner::ProcessCommand()
 	// Output some info if debugging is enabled
 	if (reprap.Debug(moduleScanner))
 	{
-		platform->MessageF(HTTP_MESSAGE, "Scanner request: '%s'\n", buffer);
+		platform.MessageF(HTTP_MESSAGE, "Scanner request: '%s'\n", buffer);
 	}
 
 	// Register request: M751
@@ -296,19 +296,19 @@ void Scanner::ProcessCommand()
 		if (uploadFilename != nullptr)
 		{
 			uploadBytesLeft = uploadSize;
-			fileBeingUploaded = platform->GetFileStore(SCANS_DIRECTORY, uploadFilename, true);
+			fileBeingUploaded = platform.GetFileStore(SCANS_DIRECTORY, uploadFilename, true);
 			if (fileBeingUploaded != nullptr)
 			{
 				SetState(ScannerState::Uploading);
 				if (reprap.Debug(moduleScanner))
 				{
-					platform->MessageF(HTTP_MESSAGE, "Starting scan upload for file %s (%u bytes total)\n", uploadFilename, uploadSize);
+					platform.MessageF(HTTP_MESSAGE, "Starting scan upload for file %s (%u bytes total)\n", uploadFilename, uploadSize);
 				}
 			}
 		}
 		else
 		{
-			platform->Message(GENERIC_MESSAGE, "Error: Malformed scanner upload request\n");
+			platform.Message(GENERIC_MESSAGE, "Error: Malformed scanner upload request\n");
 		}
 	}
 
@@ -340,7 +340,7 @@ void Scanner::ProcessCommand()
 		// if this command contains a message, report it
 		if (bufferPointer > 6)
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Error: %s\n", &buffer[6]);
+			platform.MessageF(GENERIC_MESSAGE, "Error: %s\n", &buffer[6]);
 		}
 
 		// reset the state
@@ -531,7 +531,7 @@ bool Scanner::IsDoingFileMacro() const
 // Perform a file macro using the GCodeBuffer
 void Scanner::DoFileMacro(const char *filename)
 {
-	if (platform->GetMassStorage()->FileExists(SYS_DIR, filename))
+	if (platform.GetMassStorage()->FileExists(SYS_DIR, filename))
 	{
 		char gcode[FILENAME_LENGTH + 7];
 		snprintf(gcode, ARRAY_SIZE(gcode), "M98 P%s\n", filename);

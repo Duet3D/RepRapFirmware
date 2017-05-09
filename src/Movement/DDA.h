@@ -92,7 +92,7 @@ public:
 #if DDA_LOG_PROBE_CHANGES
 	static const size_t MaxLoggedProbePositions = 40;
 	static size_t numLoggedProbePositions;
-	static int32_t loggedProbePositions[MIN_AXES * MaxLoggedProbePositions];
+	static int32_t loggedProbePositions[CART_AXES * MaxLoggedProbePositions];
 #endif
 
 private:
@@ -105,7 +105,7 @@ private:
 	DriveMovement *RemoveDM(size_t drive);
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
-	void CheckEndstops(Platform *platform);
+	void CheckEndstops(Platform& platform);
 	void AdvanceBabyStepping(float amount);							// Try to push babystepping earlier in the move queue
 	float NormaliseXYZ();											// Make the direction vector unit-normal in XYZ
 

@@ -85,9 +85,10 @@ public:
 		bool isFirmwareRetraction;										// true if this is a firmware retraction/un-retraction move
 		bool usePressureAdvance;										// true if we want to us extruder pressure advance, if there is any extrusion
 		bool canPauseAfter;												// true if we can pause just after this move and successfully restart
+		bool hasExtrusion;												// true if the move includes extrusion - only valid if the move was set up by SetupMove
 	};
   
-	GCodes(Platform* p);
+	GCodes(Platform& p);
 	void Spin();														// Called in a tight loop to make this class work
 	void Init();														// Set it up
 	void Exit();														// Shut it down
@@ -144,6 +145,8 @@ public:
 	static const char axisLetters[MAX_AXES]; 							// 'X', 'Y', 'Z'
 
 private:
+	GCodes(const GCodes&);												// private copy constructor to prevent copying
+
 	enum class CannedMoveType : uint8_t { none, relative, absolute };
 
 	struct RestorePoint
@@ -246,7 +249,7 @@ private:
 
 	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
-	Platform* const platform;											// The RepRap machine
+	Platform& platform;													// The RepRap machine
 
 	RegularGCodeInput* httpInput;										// These cache incoming G-codes...
 	RegularGCodeInput* telnetInput;										// ...

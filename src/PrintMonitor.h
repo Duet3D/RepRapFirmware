@@ -74,7 +74,7 @@ enum FileParseState
 class PrintMonitor
 {
 	public:
-		PrintMonitor(Platform *p, GCodes *gc);
+		PrintMonitor(Platform& p, GCodes& gc);
 		void Spin();
 		void Init();
 
@@ -100,8 +100,8 @@ class PrintMonitor
 		float GetFirstLayerHeight() const;
 
 	private:
-		Platform * const platform;
-		GCodes * const gCodes;
+		Platform& platform;
+		GCodes& gCodes;
 		float longWait;
 		uint32_t lastUpdateTime;
 

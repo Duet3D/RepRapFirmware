@@ -160,7 +160,7 @@ void Socket::Poll(bool full)
 
 			if (full && state == SocketState::listening)		// if it is a new connection
 			{
-				if (reprap.GetNetwork()->FindResponder(this, protocol))
+				if (reprap.GetNetwork().FindResponder(this, protocol))
 				{
 					state = SocketState::connected;
 					sendOutstanding = false;

@@ -146,7 +146,7 @@ extern "C"
 	// Also get the program counter when the exception occurred.
 	void prvGetRegistersFromStack(const uint32_t *pulFaultStackAddress)
 	{
-	    reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
+	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::hardFault, pulFaultStackAddress + 5);
 	}
 
 	// The fault handler implementation calls a function called prvGetRegistersFromStack()
@@ -168,10 +168,10 @@ extern "C"
 
 	// We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
 	// however these exceptions are unlikely to occur, so for now we just report the exception type.
-	void NMI_Handler        () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
-	void SVC_Handler		() { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
-	void DebugMon_Handler   () { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
-	void PendSV_Handler		() { reprap.GetPlatform()->SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
+	void NMI_Handler        () { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
+	void SVC_Handler		() { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
+	void DebugMon_Handler   () { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
+	void PendSV_Handler		() { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::otherFault); }
 }
 
 // ZProbeParameters class
@@ -568,7 +568,7 @@ void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
 		SpiTempSensors[thermistor - FirstRtdChannel].InitRtd(spiTempSenseCsPins[thermistor - FirstRtdChannel]);
 	}
 
-	reprap.GetHeat()->ResetFault(heater);
+	reprap.GetHeat().ResetFault(heater);
 }
 
 int Platform::GetThermistorNumber(size_t heater) const
@@ -698,7 +698,7 @@ void Platform::SetZProbeAxes(uint32_t axes)
 // Get our best estimate of the Z probe temperature
 float Platform::GetZProbeTemperature()
 {
-	const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
+	const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
 	if (bedHeater >= 0)
 	{
 		TemperatureError err;
@@ -786,16 +786,6 @@ void Platform::SetZProbeParameters(int32_t probeType, const ZProbeParameters& pa
 		switchZProbeParameters = params;
 		break;
 	}
-}
-
-// Return true if the specified point is accessible to the Z probe
-bool Platform::IsAccessibleProbePoint(float x, float y) const
-{
-	x -= GetCurrentZProbeParameters().xOffset;
-	y -= GetCurrentZProbeParameters().yOffset;
-	return (reprap.GetMove()->IsDeltaMode())
-			? x * x + y * y < reprap.GetMove()->GetDeltaParams().GetPrintRadiusSquared()
-			: x >= axisMinima[X_AXIS] && y >= axisMinima[Y_AXIS] && x <= axisMaxima[X_AXIS] && y <= axisMaxima[Y_AXIS];
 }
 
 // Return true if we must home X and Y before we home Z (i.e. we are using a bed probe)
@@ -1302,7 +1292,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
 #if !defined(DUET_NG) && !defined(__RADDS__)
-			if (reprap.GetNetwork()->InLwip())
+			if (reprap.GetNetwork().InLwip())
 			{
 				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
 			}
@@ -1380,7 +1370,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 void NETWORK_TC_HANDLER()
 {
 	tc_get_status(NETWORK_TC, NETWORK_TC_CHAN);
-	reprap.GetNetwork()->Interrupt();
+	reprap.GetNetwork().Interrupt();
 }
 #endif
 
@@ -1811,10 +1801,10 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 	{
 		// Check if this heater is both monitored by this fan and in use
 		if (   ((1 << h) & heaters) != 0
-			&& (h < reprap.GetToolHeatersInUse() || (int)h == reprap.GetHeat()->GetBedHeater() || (int)h == reprap.GetHeat()->GetChamberHeater())
+			&& (h < reprap.GetToolHeatersInUse() || (int)h == reprap.GetHeat().GetBedHeater() || (int)h == reprap.GetHeat().GetChamberHeater())
 		   )
 		{
-			if (reprap.GetHeat()->IsTuning(h))
+			if (reprap.GetHeat().IsTuning(h))
 			{
 				return true;			// when turning the PID for a monitored heater, turn the fan on
 			}
@@ -1835,7 +1825,7 @@ void Platform::SetHeater(size_t heater, float power)
 {
 	if (heatOnPins[heater] != NoPin)
 	{
-		uint16_t freq = (reprap.GetHeat()->UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
+		uint16_t freq = (reprap.GetHeat().UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
 		WriteAnalog(heatOnPins[heater], (HEAT_ON) ? power : 1.0 - power, freq);
 	}
 }
@@ -1845,14 +1835,14 @@ void Platform::UpdateConfiguredHeaters()
 	configuredHeaters = 0;
 
 	// Check bed heater
-	const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
+	const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
 	if (bedHeater >= 0)
 	{
 		configuredHeaters |= (1 << bedHeater);
 	}
 
 	// Check chamber heater
-	const int8_t chamberHeater = reprap.GetHeat()->GetChamberHeater();
+	const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater();
 	if (chamberHeater >= 0)
 	{
 		configuredHeaters |= (1 << chamberHeater);
@@ -1872,7 +1862,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 {
 	if (drive < DRIVES && endStopPins[drive] != NoPin)
 	{
-		if (drive >= reprap.GetGCodes()->GetNumAxes())
+		if (drive >= reprap.GetGCodes().GetNumAxes())
 		{
 			// Endstop not used for an axis, so no configuration data available.
 			// To allow us to see its status in DWC, pretend it is configured as a high-end active high endstop.
@@ -1884,7 +1874,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 		else if (endStopType[drive] == EndStopType::noEndStop)
 		{
 			// No homing switch is configured for this axis, so see if we should use the Z probe
-			if (zProbeType > 0 && drive < reprap.GetGCodes()->GetNumAxes() && (zProbeAxes & (1 << drive)) != 0)
+			if (zProbeType > 0 && drive < reprap.GetGCodes().GetNumAxes() && (zProbeAxes & (1 << drive)) != 0)
 			{
 				return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
 			}
@@ -1944,7 +1934,7 @@ bool Platform::WriteZProbeParameters(FileStore *f) const
 // This is called from the step ISR as well as other places, so keep it fast
 void Platform::SetDirection(size_t drive, bool direction)
 {
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2005,7 +1995,7 @@ void Platform::DisableDriver(size_t driver)
 // Enable the drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableDrive(size_t drive)
 {
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2022,7 +2012,7 @@ void Platform::EnableDrive(size_t drive)
 // Disable the drivers for a drive
 void Platform::DisableDrive(size_t drive)
 {
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2070,7 +2060,7 @@ void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, bool isPe
 // Set the current for all drivers on an axis or extruder. Current is in mA.
 void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, bool isPercent)
 {
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2156,7 +2146,7 @@ float Platform::GetMotorCurrent(size_t drive, bool isPercent) const
 {
 	if (drive < DRIVES)
 	{
-		const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+		const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 		const uint8_t driver = (drive < numAxes) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - numAxes];
 		if (driver < DRIVES)
 		{
@@ -2205,7 +2195,7 @@ bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
 // Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
 bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 {
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	if (drive < numAxes)
 	{
 		bool ok = true;
@@ -2239,7 +2229,7 @@ unsigned int Platform::GetDriverMicrostepping(size_t driver, int mode, bool& int
 // Get the microstepping for an axis or extruder
 unsigned int Platform::GetMicrostepping(size_t drive, int mode, bool& interpolation) const
 {
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	if (drive < numAxes)
 	{
 		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], mode, interpolation);
@@ -2270,7 +2260,7 @@ void Platform::SetAxisDriversConfig(size_t drive, const AxisDriversConfig& confi
 void Platform::SetExtruderDriver(size_t extruder, uint8_t driver)
 {
 	extruderDrivers[extruder] = driver;
-	driveDriverBits[extruder + reprap.GetGCodes()->GetNumAxes()] = CalcDriverBitmap(driver);
+	driveDriverBits[extruder + reprap.GetGCodes().GetNumAxes()] = CalcDriverBitmap(driver);
 }
 
 void Platform::SetDriverStepTiming(size_t driver, float microseconds)
@@ -2503,7 +2493,7 @@ void Platform::Message(MessageType type, const char *message)
 	case HOST_MESSAGE:
 		// Message that is to be sent via the USB line (non-blocking)
 #if SUPPORT_SCANNER
-		if (!reprap.GetScanner()->IsRegistered() || reprap.GetScanner()->DoingGCodes())
+		if (!reprap.GetScanner().IsRegistered() || reprap.GetScanner().DoingGCodes())
 #endif
 		{
 			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
@@ -2524,11 +2514,11 @@ void Platform::Message(MessageType type, const char *message)
 		break;
 
 	case HTTP_MESSAGE:
-		reprap.GetNetwork()->HandleHttpGCodeReply(message);
+		reprap.GetNetwork().HandleHttpGCodeReply(message);
 		break;
 
 	case TELNET_MESSAGE:
-		reprap.GetNetwork()->HandleTelnetGCodeReply(message);
+		reprap.GetNetwork().HandleTelnetGCodeReply(message);
 		break;
 
 	case FIRMWARE_UPDATE_MESSAGE:
@@ -2578,7 +2568,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 	case HOST_MESSAGE:
 		if (!SERIAL_MAIN_DEVICE
 #if SUPPORT_SCANNER
-				|| (reprap.GetScanner()->IsRegistered() && !reprap.GetScanner()->DoingGCodes())
+				|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
 #endif
 			)
 		{
@@ -2593,11 +2583,11 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		break;
 
 	case HTTP_MESSAGE:
-		reprap.GetNetwork()->HandleHttpGCodeReply(buffer);
+		reprap.GetNetwork().HandleHttpGCodeReply(buffer);
 		break;
 
 	case TELNET_MESSAGE:
-		reprap.GetNetwork()->HandleTelnetGCodeReply(buffer);
+		reprap.GetNetwork().HandleTelnetGCodeReply(buffer);
 		break;
 
 	case GENERIC_MESSAGE:
@@ -2666,7 +2656,7 @@ void Platform::SetPressureAdvance(size_t extruder, float factor)
 float Platform::ActualInstantDv(size_t drive) const
 {
 	const float idv = instantDvs[drive];
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	if (drive >= numAxes)
 	{
 		const float eComp = pressureAdvance[drive - numAxes];
@@ -2819,7 +2809,7 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 	else if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + HEATERS)		// pins 0-9 correspond to heater channels
 	{
 		// For safety, we don't allow a heater channel to be used for servos until the heater has been disabled
-		if (!reprap.GetHeat()->IsHeaterEnabled(logicalPin - Heater0LogicalPin))
+		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
 		{
 			firmwarePin = heatOnPins[logicalPin - Heater0LogicalPin];
 			invert = !HEAT_ON;
@@ -3047,7 +3037,7 @@ void STEP_TC_HANDLER()
 	++numInterruptsExecuted;
 	lastInterruptTime = Platform::GetInterruptClocks();
 #endif
-	reprap.GetMove()->Interrupt();
+	reprap.GetMove().Interrupt();
 }
 
 // Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
@@ -3129,7 +3119,7 @@ void Platform::Tick()
 
 		// Guard against overly long delays between successive calls of PID::Spin().
 		// Do not call Time() here, it isn't safe. We use millis() instead.
-		if ((configuredHeaters & (1 << currentHeater)) != 0 && (millis() - reprap.GetHeat()->GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
+		if ((configuredHeaters & (1 << currentHeater)) != 0 && (millis() - reprap.GetHeat().GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
 		{
 			SetHeater(currentHeater, 0.0);
 			LogError(ErrorCode::BadTemp);

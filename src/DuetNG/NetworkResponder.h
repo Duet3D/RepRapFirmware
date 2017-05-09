@@ -40,6 +40,7 @@ public:
 	virtual bool Spin() = 0;							// do some work, returning true if we did anything significant
 	virtual bool Accept(Socket *s, Protocol protocol) = 0;	// ask the responder to accept this connection, returns true if it did
 	virtual void Terminate(Protocol protocol) = 0;		// terminate the responder if it is serving the specified protocol
+	virtual void Diagnostics(MessageType mtype) const = 0;
 
 protected:
 	// States machine control. Not all derived classes use all states.
@@ -78,8 +79,8 @@ protected:
 	void FinishUpload(uint32_t fileLength, time_t fileLastModified);
 	virtual void CancelUpload();
 
-	static Platform *GetPlatform() { return reprap.GetPlatform(); }
-	static Network *GetNetwork() { return reprap.GetNetwork(); }
+	static Platform& GetPlatform() { return reprap.GetPlatform(); }
+	static Network& GetNetwork() { return reprap.GetNetwork(); }
 
 	// General state
 	NetworkResponder *next;								// next responder in the list

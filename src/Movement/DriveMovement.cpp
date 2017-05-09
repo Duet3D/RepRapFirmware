@@ -14,7 +14,7 @@
 // Prepare this DM for a Cartesian axis move
 void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
 {
-	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabsf(reprap.GetMove()->MotorFactor(drive, dda.directionVector));
+	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(reprap.GetMove().MotorFactor(drive, dda.directionVector));
 	mp.cart.twoCsquaredTimesMmPerStepDivA = (uint64_t)(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
 
 	// Acceleration phase parameters
@@ -49,7 +49,7 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 // Prepare this DM for a Delta axis move
 void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 {
-	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive);
+	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
 	mp.delta.twoCsquaredTimesMmPerStepDivAK = (uint32_t)((float)DDA::stepClockRateSquared/(stepsPerMm * dda.acceleration * (K2/2)));
 
 	// Acceleration phase parameters
@@ -81,11 +81,11 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation)
 {
 	const float dv = dda.directionVector[drive];
-	const float stepsPerMm = reprap.GetPlatform()->DriveStepsPerUnit(drive) * fabsf(dv);
+	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dv);
 	mp.cart.twoCsquaredTimesMmPerStepDivA = (uint64_t)(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
 
 	// Calculate the pressure advance parameter
-	const float compensationTime = (doCompensation && dv > 0.0) ? reprap.GetPlatform()->GetPressureAdvance(drive - reprap.GetGCodes()->GetNumAxes()) : 0.0;
+	const float compensationTime = (doCompensation && dv > 0.0) ? reprap.GetPlatform().GetPressureAdvance(drive - reprap.GetGCodes().GetNumAxes()) : 0.0;
 	const uint32_t compensationClocks = (uint32_t)(compensationTime * DDA::stepClockRate);
 
 	// Calculate the net total step count to allow for compensation. It may be negative.
@@ -251,7 +251,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 			direction = !direction;
 			if (live)
 			{
-				reprap.GetPlatform()->SetDirection(drive, direction);
+				reprap.GetPlatform().SetDirection(drive, direction);
 			}
 		}
 		nextStepTime = topSpeedTimesCdivAPlusDecelStartClocks
@@ -320,7 +320,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 		direction = false;
 		if (live)
 		{
-			reprap.GetPlatform()->SetDirection(drive, false);	// going down now
+			reprap.GetPlatform().SetDirection(drive, false);	// going down now
 		}
 	}
 

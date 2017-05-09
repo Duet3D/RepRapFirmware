@@ -20,7 +20,7 @@ public:
 
 	void HandleGCodeReply(const char *reply);
 	void HandleGCodeReply(OutputBuffer *reply);
-	void Diagnostics(MessageType mtype);
+	void Diagnostics(MessageType mtype) const override;
 
 private:
 	void CharFromClient(char c);

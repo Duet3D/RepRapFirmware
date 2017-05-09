@@ -306,7 +306,7 @@ bool MassStorage::SetLastModifiedTime(const char* directory, const char *fileNam
     const bool ok = (f_utime(location, &fno) == FR_OK);
     if (!ok)
 	{
-		reprap.GetPlatform()->MessageF(HTTP_MESSAGE, "SetLastModifiedTime didn't work for file '%s'\n", location);
+		reprap.GetPlatform().MessageF(HTTP_MESSAGE, "SetLastModifiedTime didn't work for file '%s'\n", location);
 	}
     return ok;
 }
@@ -334,6 +334,7 @@ bool MassStorage::Mount(size_t card, StringRef& reply, bool reportSuccess)
 
 	if (!mounting)
 	{
+		f_mount(card, NULL);			// un-mount it from FATFS
 		sd_mmc_unmount(card);			// this forces it to re-initialise the card
 		isMounted[card] = false;
 		startTime = millis();
@@ -351,12 +352,12 @@ bool MassStorage::Mount(size_t card, StringRef& reply, bool reportSuccess)
 	mounting = false;
 	if (err != SD_MMC_OK)
 	{
-		f_mount(card, NULL);
 		reply.printf("Cannot initialise SD card %u: %s", card, TranslateCardError(err));
 	}
 	else
 	{
 		// Mount the file systems
+		memset(&fileSystems[card], 0, sizeof(FATFS));					// f_mount doesn't initialise the file structure, we must do it ourselves
 		FRESULT mounted = f_mount(card, &fileSystems[card]);
 		if (mounted != FR_OK)
 		{

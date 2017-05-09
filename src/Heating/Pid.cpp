@@ -38,13 +38,13 @@ float PID::tuningFastestRate;				// the fastest temperature rise
 
 // Member functions and constructors
 
-PID::PID(Platform* p, int8_t h) : platform(p), heater(h), mode(HeaterMode::off)
+PID::PID(Platform& p, int8_t h) : platform(p), heater(h), mode(HeaterMode::off)
 {
 }
 
 inline void PID::SetHeater(float power) const
 {
-	platform->SetHeater(heater, power);
+	platform.SetHeater(heater, power);
 }
 
 void PID::Init(float pGain, float pTc, float pTd, float tempLimit, bool usePid)
@@ -91,16 +91,16 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 		if (heater == HEATERS - 1)
 		{
 			// The last heater on the Duet 0.8.5 + DueX4 shares its pin with Fan1
-			reprap.GetPlatform()->EnableSharedFan(!model.IsEnabled());
+			platform.EnableSharedFan(!model.IsEnabled());
 		}
 #endif
 		if (model.IsEnabled())
 		{
-			const float safeGain = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater())
+			const float safeGain = (heater == reprap.GetHeat().GetBedHeater() || heater == reprap.GetHeat().GetChamberHeater())
 									? 170.0 : 480.0;
 			if (gain > safeGain)
 			{
-				platform->MessageF(GENERIC_MESSAGE,
+				platform.MessageF(GENERIC_MESSAGE,
 						"Warning: Heater %u appears to be over-powered and a fire risk! If left on at full power, its temperature is predicted to reach %uC.\n",
 						heater, (unsigned int)gain + 20);
 			}
@@ -117,7 +117,7 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 TemperatureError PID::ReadTemperature()
 {
 	TemperatureError err = TemperatureError::success;				// assume no error
-	temperature = platform->GetTemperature(heater, err);			// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+	temperature = platform.GetTemperature(heater, err);			// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
 	if (err == TemperatureError::success)
 	{
 		if (temperature < BAD_LOW_TEMPERATURE)
@@ -139,7 +139,7 @@ void PID::SwitchOn()
 	{
 		if (reprap.Debug(Module::moduleHeat))
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Heater %d not switched on due to temperature fault\n", heater);
+			platform.MessageF(GENERIC_MESSAGE, "Heater %d not switched on due to temperature fault\n", heater);
 		}
 	}
 	else if (model.IsEnabled())
@@ -159,7 +159,7 @@ void PID::SwitchOn()
 			}
 			if (reprap.Debug(Module::moduleHeat) && oldMode == HeaterMode::off)
 			{
-				platform->MessageF(GENERIC_MESSAGE, "Heater %d switched on\n", heater);
+				platform.MessageF(GENERIC_MESSAGE, "Heater %d switched on\n", heater);
 			}
 		}
 	}
@@ -182,7 +182,7 @@ void PID::SwitchOff()
 			mode = HeaterMode::off;
 			if (reprap.Debug(Module::moduleHeat))
 			{
-				platform->MessageF(GENERIC_MESSAGE, "Heater %d switched off\n", heater);
+				platform.MessageF(GENERIC_MESSAGE, "Heater %d switched off\n", heater);
 			}
 		}
 	}
@@ -207,14 +207,14 @@ void PID::Spin()
 				if (badTemperatureCount > MAX_BAD_TEMPERATURE_COUNT)
 				{
 					lastPwm = 0.0;
-					SetHeater(0.0);						// do this here just to be sure, in case the call to platform->Message causes a delay
+					SetHeater(0.0);						// do this here just to be sure, in case the call to platform.Message causes a delay
 					if (IsTuning())
 					{
 						delete tuningTempReadings;
 						tuningTempReadings = nullptr;
 					}
 					mode = HeaterMode::fault;
-					platform->MessageF(GENERIC_MESSAGE, "Error: Temperature reading fault on heater %d: %s\n", heater, TemperatureErrorString(err));
+					platform.MessageF(GENERIC_MESSAGE, "Error: Temperature reading fault on heater %d: %s\n", heater, TemperatureErrorString(err));
 					reprap.FlagTemperatureFault(heater);
 				}
 			}
@@ -229,7 +229,7 @@ void PID::Spin()
 			if ((previousTemperaturesGood & (1 << (NumPreviousTemperatures - 1))) != 0)
 			{
 				const float tentativeDerivative = SecondsToMillis * (temperature - previousTemperatures[previousTemperatureIndex])
-								/ (float)(platform->HeatSampleInterval() * NumPreviousTemperatures);
+								/ (float)(platform.HeatSampleInterval() * NumPreviousTemperatures);
 				// Some sensors give occasional temperature spikes. We don't expect the temperature to increase by more than 10C/second.
 				if (fabsf(tentativeDerivative) <= 10.0)
 				{
@@ -261,12 +261,12 @@ void PID::Spin()
 							&& (float)(millis() - timeSetHeating) > model.GetDeadTime() * SecondsToMillis * 2)
 						{
 							++heatingFaultCount;
-							if (heatingFaultCount * platform->HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
+							if (heatingFaultCount * platform.HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
 							{
 								SetHeater(0.0);					// do this here just to be sure
 								mode = HeaterMode::fault;
-								reprap.GetGCodes()->CancelPrint();
-								platform->MessageF(GENERIC_MESSAGE,
+								reprap.GetGCodes().CancelPrint();
+								platform.MessageF(GENERIC_MESSAGE,
 											"Error: heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
 											heater, expectedRate);
 								reprap.FlagTemperatureFault(heater);
@@ -288,12 +288,12 @@ void PID::Spin()
 				if (fabsf(error) > maxTempExcursion && temperature > MaxAmbientTemperature)
 				{
 					++heatingFaultCount;
-					if (heatingFaultCount * platform->HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
+					if (heatingFaultCount * platform.HeatSampleInterval() > maxHeatingFaultTime * SecondsToMillis)
 					{
 						SetHeater(0.0);					// do this here just to be sure
 						mode = HeaterMode::fault;
-						reprap.GetGCodes()->CancelPrint();
-						platform->MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion exceeded %.1fC\n", heater, maxTempExcursion);
+						reprap.GetGCodes().CancelPrint();
+						platform.MessageF(GENERIC_MESSAGE, "Error: heating fault on heater %d, temperature excursion exceeded %.1fC\n", heater, maxTempExcursion);
 					}
 				}
 				else if (heatingFaultCount != 0)
@@ -358,7 +358,7 @@ void PID::Spin()
 						// When we are in load mode, the I term is much larger and the D term doesn't represent overshoot, so use normal PID.
 						const float errorToUse = (inLoadMode || model.ArePidParametersOverridden()) ? error : errorMinusDterm;
 						iAccumulator = constrain<float>
-										(iAccumulator + (errorToUse * params.kP * params.recipTi * platform->HeatSampleInterval() * MillisToSeconds),
+										(iAccumulator + (errorToUse * params.kP * params.recipTi * platform.HeatSampleInterval() * MillisToSeconds),
 											0.0, model.GetMaxPwm());
 						lastPwm = constrain<float>(pPlusD + iAccumulator, 0.0, model.GetMaxPwm());
 					}
@@ -377,7 +377,7 @@ void PID::Spin()
 
 		// Set the heater power and update the average PWM
 		SetHeater(lastPwm);
-		averagePWM = averagePWM * (1.0 - platform->HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis)) + lastPwm;
+		averagePWM = averagePWM * (1.0 - platform.HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis)) + lastPwm;
 		previousTemperatureIndex = (previousTemperatureIndex + 1) % NumPreviousTemperatures;
 
 		// For temperature sensors which do not require frequent sampling and averaging,
@@ -396,7 +396,7 @@ void PID::SetActiveTemperature(float t)
 {
 	if (t > temperatureLimit)
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
+		platform.MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
 	}
 	else
 	{
@@ -412,7 +412,7 @@ void PID::SetStandbyTemperature(float t)
 {
 	if (t > temperatureLimit)
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
+		platform.MessageF(GENERIC_MESSAGE, "Error: Temperature %.1f too high for heater %d!\n", t, heater);
 	}
 	else
 	{
@@ -451,7 +451,7 @@ void PID::ResetFault()
 
 float PID::GetAveragePWM() const
 {
-	return averagePWM * platform->HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis);
+	return averagePWM * platform.HeatSampleInterval()/(HEAT_PWM_AVERAGE_TIME * SecondsToMillis);
 }
 
 // Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
@@ -494,7 +494,7 @@ void PID::StartAutoTune(float targetTemp, float maxPwm, StringRef& reply)
 			// would be wasteful to allocate a permanent array just in case we are going to run it, so we make an exception here.
 			tuningTempReadings = new float[MaxTuningTempReadings];
 			tuningTempReadings[0] = temperature;
-			tuningReadingInterval = platform->HeatSampleInterval();
+			tuningReadingInterval = platform.HeatSampleInterval();
 			tuningPwm = min<float>(maxPwm, model.GetMaxPwm());
 			tuningTargetTemp = targetTemp;
 			reply.printf("Auto tuning heater %d using target temperature %.1fC and PWM %.2f - do not leave printer unattended", heater, targetTemp, maxPwm);
@@ -604,16 +604,16 @@ void PID::DoTuningStep()
 	{
 	case HeaterMode::tuning0:
 		// Waiting for initial temperature to settle after any thermostatic fans have turned on
-		if (ReadingsStable(6000/platform->HeatSampleInterval(), 2.0))	// expect temperature to be stable within a 2C band for 6 seconds
+		if (ReadingsStable(6000/platform.HeatSampleInterval(), 2.0))	// expect temperature to be stable within a 2C band for 6 seconds
 		{
 			// Starting temperature is stable, so move on
 			tuningReadingsTaken = 1;
 			tuningTempReadings[0] = tuningStartTemp = temperature;
 			timeSetHeating = tuningPhaseStartTime = millis();
 			lastPwm = tuningPwm;										// turn on heater at specified power
-			tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
+			tuningReadingInterval = platform.HeatSampleInterval();		// reset sampling interval
 			mode = HeaterMode::tuning1;
-			platform->Message(GENERIC_MESSAGE, "Auto tune phase 1, heater on\n");
+			platform.Message(GENERIC_MESSAGE, "Auto tune phase 1, heater on\n");
 			return;
 		}
 		if (millis() - tuningPhaseStartTime < 20000)
@@ -621,7 +621,7 @@ void PID::DoTuningStep()
 			// Allow up to 20 seconds for starting temperature to settle
 			return;
 		}
-		platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because starting temperature is not stable\n");
+		platform.Message(GENERIC_MESSAGE, "Auto tune cancelled because starting temperature is not stable\n");
 		break;
 
 	case HeaterMode::tuning1:
@@ -630,14 +630,14 @@ void PID::DoTuningStep()
 			const uint32_t heatingTime = millis() - tuningPhaseStartTime;
 			if (heatingTime > (uint32_t)(model.GetDeadTime() * SecondsToMillis) + (30 * 1000) && (temperature - tuningStartTemp) < 3.0)
 			{
-				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not increasing\n");
+				platform.Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not increasing\n");
 				break;
 			}
 
-			const uint32_t timeoutMinutes = (heater == reprap.GetHeat()->GetBedHeater() || heater == reprap.GetHeat()->GetChamberHeater()) ? 20 : 5;
+			const uint32_t timeoutMinutes = (heater == reprap.GetHeat().GetBedHeater() || heater == reprap.GetHeat().GetChamberHeater()) ? 20 : 5;
 			if (heatingTime >= timeoutMinutes * 60 * 1000)
 			{
-				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because target temperature was not reached\n");
+				platform.Message(GENERIC_MESSAGE, "Auto tune cancelled because target temperature was not reached\n");
 				break;
 			}
 
@@ -649,11 +649,11 @@ void PID::DoTuningStep()
 				tuningReadingsTaken = 1;
 				tuningHeaterOffTemp = tuningTempReadings[0] = temperature;
 				tuningPhaseStartTime = millis();
-				tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
+				tuningReadingInterval = platform.HeatSampleInterval();		// reset sampling interval
 				mode = HeaterMode::tuning2;
 				lastPwm = 0.0;
 				SetHeater(0.0);
-				platform->Message(GENERIC_MESSAGE, "Auto tune phase 2, heater off\n");
+				platform.Message(GENERIC_MESSAGE, "Auto tune phase 2, heater off\n");
 			}
 		}
 		return;
@@ -668,7 +668,7 @@ void PID::DoTuningStep()
 				{
 					return;			// still waiting for peak temperature
 				}
-				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not falling\n");
+				platform.Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not falling\n");
 			}
 			else if (peakIndex == 0)
 			{
@@ -676,7 +676,7 @@ void PID::DoTuningStep()
 				{
 					DisplayBuffer("At no peak found");
 				}
-				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature peak was not identified\n");
+				platform.Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature peak was not identified\n");
 			}
 			else
 			{
@@ -687,9 +687,9 @@ void PID::DoTuningStep()
 				tuningReadingsTaken = 1;
 				tuningTempReadings[0] = temperature;
 				tuningPhaseStartTime = millis();
-				tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
+				tuningReadingInterval = platform.HeatSampleInterval();		// reset sampling interval
 				mode = HeaterMode::tuning3;
-				platform->MessageF(GENERIC_MESSAGE, "Auto tune phase 3, peak temperature was %.1f\n", tuningPeakTemperature);
+				platform.MessageF(GENERIC_MESSAGE, "Auto tune phase 3, peak temperature was %.1f\n", tuningPeakTemperature);
 				return;
 			}
 		}
@@ -719,7 +719,7 @@ void PID::DoTuningStep()
 #else
 	if (temperature > tuningMaxTemp)
 	{
-		platform->MessageF(GENERIC_MESSAGE,
+		platform.MessageF(GENERIC_MESSAGE,
 				"Auto tune of heater %u with P=%.2f S=%.1f cancelled because temperature limit exceeded. Use lower P or higher S in m303 command.\n",
 				heater, tuningPwm, tuningTargetTemp);
 	}
@@ -729,14 +729,14 @@ void PID::DoTuningStep()
 		{
 		case HeaterMode::tuning0:
 			// Waiting for initial temperature to settle after any thermostatic fans have turned on
-			if (ReadingsStable(6000/platform->HeatSampleInterval(), 0.5))	// expect temperature to be stable within a 0.5C band for 6 seconds
+			if (ReadingsStable(6000/platform.HeatSampleInterval(), 0.5))	// expect temperature to be stable within a 0.5C band for 6 seconds
 			{
 				// Starting temperature is stable, so move on
 				tuningReadingsTaken = 1;
 				tuningTempReadings[0] = tuningStartTemp = temperature;
 				timeSetHeating = tuningPhaseStartTime = millis();
 				lastPwm = tuningPwm;										// turn on heater at specified power
-				tuningReadingInterval = platform->HeatSampleInterval();		// reset sampling interval
+				tuningReadingInterval = platform.HeatSampleInterval();		// reset sampling interval
 				mode = HeaterMode::tuning1;
 				return;
 			}
@@ -745,13 +745,13 @@ void PID::DoTuningStep()
 				// Allow up to 20 seconds for starting temperature to settle
 				return;
 			}
-			platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because starting temperature is not stable\n");
+			platform.Message(GENERIC_MESSAGE, "Auto tune cancelled because starting temperature is not stable\n");
 			break;
 
 		case HeaterMode::tuning1:
 			if (millis() - tuningPhaseStartTime > (uint32_t)(model.GetDeadTime() * SecondsToMillis) + 30000 && (temperature - tuningStartTemp) < 3.0)
 			{
-				platform->Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not increasing\n");
+				platform.Message(GENERIC_MESSAGE, "Auto tune cancelled because temperature is not increasing\n");
 				break;
 			}
 
@@ -905,14 +905,14 @@ void PID::CalculateModel()
 	tuned = SetModel(gain, tc, td, model.GetMaxPwm(), true);
 	if (tuned)
 	{
-		platform->MessageF(GENERIC_MESSAGE,
+		platform.MessageF(GENERIC_MESSAGE,
 				"Auto tune heater %d completed in %u sec\n"
 				"Use M307 H%d to see the result, or M500 to save the result in config-override.g\n",
 				heater, (millis() - tuningBeginTime)/(uint32_t)SecondsToMillis, heater);
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, gain, tc, td);
+		platform.MessageF(GENERIC_MESSAGE, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, gain, tc, td);
 	}
 }
 
@@ -975,14 +975,14 @@ void PID::FitCurve()
 	tuned = SetModel(gain, tc, td, model.GetMaxPwm(), true);
 	if (tuned)
 	{
-		platform->MessageF(GENERIC_MESSAGE,
+		platform.MessageF(GENERIC_MESSAGE,
 				"Auto tune heater %d with PWM=%.2f completed in %u sec, maximum temperature reached %.1fC\n"
 				"Use M307 H%d to see the result\n",
 				heater, tuningPwm, (millis() - tuningBeginTime)/(uint32_t)SecondsToMillis, tuningTempReadings[tuningReadingsTaken - 1], heater);
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, gain, tc, td);
+		platform.MessageF(GENERIC_MESSAGE, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, gain, tc, td);
 	}
 }
 
@@ -999,7 +999,7 @@ void PID::DisplayBuffer(const char *intro)
 			buf->catf(" %.1f", tuningTempReadings[i]);
 		}
 		buf->cat("\n");
-		platform->Message(HOST_MESSAGE, buf);
+		platform.Message(HOST_MESSAGE, buf);
 	}
 }
 

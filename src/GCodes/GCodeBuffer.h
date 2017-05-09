@@ -32,6 +32,7 @@ public:
 	bool GetIPAddress(uint32_t& ip);					// Get an IP address quad after a key letter
 	void TryGetFValue(char c, float& val, bool& seen);
 	void TryGetIValue(char c, int32_t& val, bool& seen);
+	bool TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen);
 	const char* GetUnprecedentedString(bool optional = false);	// Get a string with no preceding key letter
 	const char* GetString();							// Get a string after a key letter
 	bool GetString(char *buf, size_t buflen);			// Get and copy a possibly quoted string

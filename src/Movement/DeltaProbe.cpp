@@ -22,7 +22,7 @@ debugPrintf("Start probe f=%.1f a=%.2f r=%.2f h=%.1f\n", frequency, amplitude, r
 
 debugPrintf("ok so far\n");
 	// Calculate the number of steps for the peak to peak amplitude
-	const float zRate = reprap.GetPlatform()->DriveStepsPerUnit(Z_AXIS);
+	const float zRate = reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS);
 	normalSteps = (size_t)(amplitude * zRate);
 	if (normalSteps > MaxSteps)
 	{

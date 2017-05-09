@@ -106,7 +106,7 @@ void Fan::Refresh()
 {
 	float reqVal = (heatersMonitored == 0)
 					? val
-					: (reprap.GetPlatform()->AnyHeaterHot(heatersMonitored, triggerTemperature))
+					: (reprap.GetPlatform().AnyHeaterHot(heatersMonitored, triggerTemperature))
 						? max<float>(0.5, val)			// make sure that thermostatic fans always run at 50% speed or more
 						: 0.0;
 	if (reqVal > 0.0)

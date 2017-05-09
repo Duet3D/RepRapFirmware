@@ -83,13 +83,13 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
 
 static void EspTransferRequestIsr()
 {
-	reprap.GetNetwork()->EspRequestsTransfer();
+	reprap.GetNetwork().EspRequestsTransfer();
 }
 
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-Network::Network(Platform* p) : platform(p), nextResponderToPoll(nullptr), uploader(nullptr), currentSocket(0),
+Network::Network(Platform& p) : platform(p), nextResponderToPoll(nullptr), uploader(nullptr), currentSocket(0),
 		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false), espStatusChanged(false),
 		spiTxUnderruns(0), spiRxOverruns(0)
 {
@@ -115,7 +115,7 @@ void Network::Init()
 {
 	// Make sure the ESP8266 is held in the reset state
 	ResetWiFi();
-	longWait = platform->Time();
+	longWait = platform.Time();
 	lastTickMillis = millis();
 
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
@@ -279,7 +279,7 @@ void Network::Activate()
 		}
 		else
 		{
-			platform->Message(HOST_MESSAGE, "Network disabled.\n");
+			platform.Message(HOST_MESSAGE, "Network disabled.\n");
 		}
 	}
 }
@@ -404,7 +404,7 @@ void Network::Spin(bool full)
 			if (digitalRead(SamCsPin) && digitalRead(EspTransferRequestPin))
 			{
 				// Setup the SPI controller in slave mode and assign the CS pin to it
-				platform->Message(HOST_MESSAGE, "WiFi module started\n");
+				platform.Message(HOST_MESSAGE, "WiFi module started\n");
 				SetupSpi();						// set up the SPI subsystem
 				state = NetworkState::active;
 				currentMode = WiFiState::idle;				// wifi module is running but inactive
@@ -462,7 +462,7 @@ void Network::Spin(bool full)
 				else
 				{
 					Stop();
-					platform->MessageF(GENERIC_MESSAGE, "Failed to change WiFi mode (code %d)\n", rslt);
+					platform.MessageF(GENERIC_MESSAGE, "Failed to change WiFi mode (code %d)\n", rslt);
 				}
 			}
 			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
@@ -542,14 +542,14 @@ void Network::Spin(bool full)
 						SafeStrncpy(ssid, status.Value().ssid, SsidLength);
 					}
 					InitSockets();
-					platform->MessageF(HOST_MESSAGE, "Wifi module is %s%s, IP address %u.%u.%u.%u\n",
+					platform.MessageF(HOST_MESSAGE, "Wifi module is %s%s, IP address %u.%u.%u.%u\n",
 						TranslateWiFiState(currentMode),
 						ssid,
 						ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 				}
 				else
 				{
-					platform->MessageF(HOST_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
+					platform.MessageF(HOST_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
 				}
 			}
 		}
@@ -561,7 +561,7 @@ void Network::Spin(bool full)
 
 	if (full)
 	{
-		platform->ClassReport(longWait);
+		platform.ClassReport(longWait);
 	}
 }
 
@@ -599,9 +599,12 @@ const char* Network::TranslateNetworkState() const
 
 void Network::Diagnostics(MessageType mtype)
 {
-	platform->MessageF(mtype, "Network state is %s\n", TranslateNetworkState());
-	platform->MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
-	platform->MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
+	platform.MessageF(mtype, "Network state is %s\n", TranslateNetworkState());
+	platform.MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
+#if 0
+	// The underrun/overrun counters don't work at present
+	platform.MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
+#endif
 	if (state != NetworkState::disabled && state != NetworkState::starting)
 	{
 		Receiver<NetworkStatusResponse> status;
@@ -609,27 +612,31 @@ void Network::Diagnostics(MessageType mtype)
 		{
 			NetworkStatusResponse& r = status.Value();
 			r.versionText[ARRAY_UPB(r.versionText)] = 0;
-			platform->MessageF(mtype, "WiFi firmware version %s\n", r.versionText);
-			platform->MessageF(mtype, "WiFi MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			platform.MessageF(mtype, "WiFi firmware version %s\n", r.versionText);
+			platform.MessageF(mtype, "WiFi MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
-			platform->MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (float)r.vcc/1024, TranslateEspResetReason(r.resetReason));
-			platform->MessageF(mtype, "WiFi flash size %u, free heap %u\n", r.flashSize, r.freeHeap);
+			platform.MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (float)r.vcc/1024, TranslateEspResetReason(r.resetReason));
+			platform.MessageF(mtype, "WiFi flash size %u, free heap %u\n", r.flashSize, r.freeHeap);
 			if (currentMode == WiFiState::connected)
 			{
-				platform->MessageF(mtype, "WiFi IP address %d.%d.%d.%d\n",
+				platform.MessageF(mtype, "WiFi IP address %d.%d.%d.%d\n",
 					r.ipAddress & 255, (r.ipAddress >> 8) & 255, (r.ipAddress >> 16) & 255, (r.ipAddress >> 24) & 255);
-				platform->MessageF(mtype, "WiFi signal strength %ddb\n", r.rssi);
+				platform.MessageF(mtype, "WiFi signal strength %ddb\n", r.rssi);
 			}
 			// status, ssid and hostName not displayed
 		}
 		else
 		{
-			platform->Message(mtype, "Failed to get WiFi status\n");
+			platform.Message(mtype, "Failed to get WiFi status\n");
 		}
 	}
-	HttpResponder::Diagnostics(mtype);
-	ftpResponder->Diagnostics(mtype);
-	telnetResponder->Diagnostics(mtype);
+	HttpResponder::CommonDiagnostics(mtype);
+	platform.Message(mtype, "Responder states:");
+	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	{
+		r->Diagnostics(mtype);
+	}
+	platform.Message(mtype, "\n");
 }
 
 void Network::Enable(int mode, StringRef& reply)
@@ -648,7 +655,7 @@ void Network::Enable(int mode, StringRef& reply)
 			if (state != NetworkState::disabled)
 			{
 				Stop();
-				platform->Message(GENERIC_MESSAGE, "WiFi module stopped\n");
+				platform.Message(GENERIC_MESSAGE, "WiFi module stopped\n");
 			}
 		}
 		else
@@ -1170,18 +1177,18 @@ void Network::GetNewStatus()
 	rcvr.Value().messageBuffer[ARRAY_UPB(rcvr.Value().messageBuffer)] = 0;
 	if (rslt < 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error retrieving WiFi status message\n");
+		platform.Message(GENERIC_MESSAGE, "Error retrieving WiFi status message\n");
 	}
 	else if (rslt > 0 && rcvr.Value().messageBuffer[0] != 0)
 	{
-		platform->MessageF(GENERIC_MESSAGE, "WiFi reported error: %s\n", rcvr.Value().messageBuffer);
+		platform.MessageF(GENERIC_MESSAGE, "WiFi reported error: %s\n", rcvr.Value().messageBuffer);
 	}
 }
 
 // SPI interrupt handler, called when NSS goes high
 void SPI_Handler()
 {
-	reprap.GetNetwork()->SpiInterrupt();
+	reprap.GetNetwork().SpiInterrupt();
 }
 
 void Network::SpiInterrupt()

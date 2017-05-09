@@ -33,7 +33,7 @@ void Socket::Close()
 {
 	if (state == SocketState::connected || state == SocketState::clientDisconnecting)
 	{
-		const int32_t reply = reprap.GetNetwork()->SendCommand(NetworkCommand::connClose, socketNum, 0, nullptr, 0, nullptr, 0);
+		const int32_t reply = reprap.GetNetwork().SendCommand(NetworkCommand::connClose, socketNum, 0, nullptr, 0, nullptr, 0);
 		if (reply == ResponseEmpty)
 		{
 			state = (state == SocketState::connected) ? SocketState::closing : SocketState::inactive;
@@ -52,7 +52,7 @@ void Socket::Close()
 // So we can call this after any sort of error on a socket.
 void Socket::Terminate()
 {
-	const int32_t reply = reprap.GetNetwork()->SendCommand(NetworkCommand::connAbort, socketNum, 0, nullptr, 0, nullptr, 0);
+	const int32_t reply = reprap.GetNetwork().SendCommand(NetworkCommand::connAbort, socketNum, 0, nullptr, 0, nullptr, 0);
 	state = (reply != 0) ? SocketState::broken : SocketState::inactive;
 	DiscardReceivedData();
 	txBufferSpace = 0;
@@ -118,9 +118,9 @@ void Socket::Taken(size_t len)
 void Socket::Poll(bool full)
 {
 	// Get the socket status
-	Network * const network = reprap.GetNetwork();
+	Network& network = reprap.GetNetwork();
 	Receiver<ConnStatusResponse> resp;
-	const int32_t ret = network->SendCommand(NetworkCommand::connGetStatus, socketNum, 0, nullptr, 0, resp);
+	const int32_t ret = network.SendCommand(NetworkCommand::connGetStatus, socketNum, 0, nullptr, 0, resp);
 	if (ret != (int32_t)resp.Size())
 	{
 		// We can't do much here other than disable and restart wifi, or hope the next status call succeeds
@@ -133,7 +133,7 @@ void Socket::Poll(bool full)
 
 	// As well as getting the status for the socket we asked about, we also received bitmaps of connected sockets.
 	// Pass these to the Network module so that it can avoid polling idle sockets.
-	network->UpdateSocketStatus(resp.Value().connectedSockets, resp.Value().otherEndClosedSockets);
+	network.UpdateSocketStatus(resp.Value().connectedSockets, resp.Value().otherEndClosedSockets);
 
 	switch (resp.Value().state)
 	{
@@ -153,7 +153,7 @@ void Socket::Poll(bool full)
 			{
 				whenConnected = millis();
 			}
-			if (network->FindResponder(this, localPort))
+			if (network.FindResponder(this, localPort))
 			{
 				state = SocketState::connected;
 				if (reprap.Debug(moduleNetwork))
@@ -225,7 +225,7 @@ void Socket::ReceiveData()
 		if (buf != nullptr)
 		{
 			//TODO if an error occurs in the following transaction and 'full' is not set, it would be better not to call Platform::Message in SendCommand()
-			const int32_t ret = reprap.GetNetwork()->SendCommand(NetworkCommand::connRead, socketNum, 0, nullptr, 0, buf->Data(), NetworkBuffer::bufferSize);
+			const int32_t ret = reprap.GetNetwork().SendCommand(NetworkCommand::connRead, socketNum, 0, nullptr, 0, buf->Data(), NetworkBuffer::bufferSize);
 			if (ret > 0)
 			{
 				buf->dataLength = (size_t)ret;
@@ -260,7 +260,7 @@ size_t Socket::Send(const uint8_t *data, size_t length)
 {
 	if (state == SocketState::connected && txBufferSpace != 0)
 	{
-		const int32_t reply = reprap.GetNetwork()->SendCommand(NetworkCommand::connWrite, socketNum, 0, data, min<size_t>(length, txBufferSpace), nullptr, 0);
+		const int32_t reply = reprap.GetNetwork().SendCommand(NetworkCommand::connWrite, socketNum, 0, data, min<size_t>(length, txBufferSpace), nullptr, 0);
 		if (reply >= 0)
 		{
 			txBufferSpace -= (size_t)reply;
@@ -280,7 +280,7 @@ void Socket::Send()
 {
 	if (state == SocketState::connected)
 	{
-		const int32_t reply = reprap.GetNetwork()->SendCommand(NetworkCommand::connWrite, socketNum, MessageHeaderSamToEsp::FlagPush, nullptr, 0, nullptr, 0);
+		const int32_t reply = reprap.GetNetwork().SendCommand(NetworkCommand::connWrite, socketNum, MessageHeaderSamToEsp::FlagPush, nullptr, 0, nullptr, 0);
 		if (reply < 0)
 		{
 			Terminate();						// something is not right, so terminate the socket for safety

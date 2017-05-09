@@ -13,7 +13,7 @@ const uint8_t DefaultGateway[4] = { 0, 0, 0, 0 };
 class Network
 {
 public:
-	Network(Platform* p) { }
+	Network(Platform& p) { }
 	void Init() const { }
 	void Activate() const { }
 	void Enable(int mode, StringRef& reply);

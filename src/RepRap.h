@@ -71,14 +71,14 @@ public:
 	void FlagTemperatureFault(int8_t dudHeater);
 	void ClearTemperatureFault(int8_t wasDudHeater);
 
-	Platform* GetPlatform() const;
-	Move* GetMove() const;
-	Heat* GetHeat() const;
-	GCodes* GetGCodes() const;
-	Network* GetNetwork() const;
-	Roland* GetRoland() const;
-	Scanner* GetScanner() const;
-	PrintMonitor* GetPrintMonitor() const;
+	Platform& GetPlatform() const;
+	Move& GetMove() const;
+	Heat& GetHeat() const;
+	GCodes& GetGCodes() const;
+	Network& GetNetwork() const;
+	Roland& GetRoland() const;
+	Scanner& GetScanner() const;
+	PrintMonitor& GetPrintMonitor() const;
 
 	void Tick();
 	uint16_t GetTicksInSpinState() const;
@@ -139,14 +139,14 @@ private:
 	char message[MESSAGE_LENGTH + 1];
 };
 
-inline Platform* RepRap::GetPlatform() const { return platform; }
-inline Move* RepRap::GetMove() const { return move; }
-inline Heat* RepRap::GetHeat() const { return heat; }
-inline GCodes* RepRap::GetGCodes() const { return gCodes; }
-inline Network* RepRap::GetNetwork() const { return network; }
-inline Roland* RepRap::GetRoland() const { return roland; }
-inline Scanner* RepRap::GetScanner() const { return scanner; }
-inline PrintMonitor* RepRap::GetPrintMonitor() const { return printMonitor; }
+inline Platform& RepRap::GetPlatform() const { return *platform; }
+inline Move& RepRap::GetMove() const { return *move; }
+inline Heat& RepRap::GetHeat() const { return *heat; }
+inline GCodes& RepRap::GetGCodes() const { return *gCodes; }
+inline Network& RepRap::GetNetwork() const { return *network; }
+inline Roland& RepRap::GetRoland() const { return *roland; }
+inline Scanner& RepRap::GetScanner() const { return *scanner; }
+inline PrintMonitor& RepRap::GetPrintMonitor() const { return *printMonitor; }
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
 inline Module RepRap::GetSpinningModule() const { return spinningModule; }

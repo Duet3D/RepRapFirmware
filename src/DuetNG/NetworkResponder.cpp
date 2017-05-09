@@ -210,7 +210,7 @@ void NetworkResponder::CancelUpload()
 			fileBeingUploaded.Close();
 			if (filenameBeingUploaded[0] != 0)
 			{
-				GetPlatform()->GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
+				GetPlatform().GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
 			}
 		}
 		uploadLock.Release(this);
@@ -224,14 +224,14 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 	if (!fileBeingUploaded.Flush())
 	{
 		uploadError = true;
-		GetPlatform()->Message(GENERIC_MESSAGE, "Error: Could not flush remaining data while finishing upload!\n");
+		GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not flush remaining data while finishing upload!\n");
 	}
 
 	// Check the file length is as expected
 	if (fileLength != 0 && fileBeingUploaded.Length() != fileLength)
 	{
 		uploadError = true;
-		GetPlatform()->MessageF(GENERIC_MESSAGE, "Error: Uploaded file size is different (%u vs. expected %u bytes)!\n", fileBeingUploaded.Length(), fileLength);
+		GetPlatform().MessageF(GENERIC_MESSAGE, "Error: Uploaded file size is different (%u vs. expected %u bytes)!\n", fileBeingUploaded.Length(), fileLength);
 	}
 
 	// Close the file
@@ -245,12 +245,12 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 	{
 		if (uploadError)
 		{
-			GetPlatform()->GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
+			GetPlatform().GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
 		}
 		else if (fileLastModified != 0)
 		{
 			// Update the file timestamp if it was specified
-			(void)reprap.GetPlatform()->GetMassStorage()->SetLastModifiedTime(nullptr, filenameBeingUploaded, fileLastModified);
+			(void)GetPlatform().GetMassStorage()->SetLastModifiedTime(nullptr, filenameBeingUploaded, fileLastModified);
 		}
 	}
 

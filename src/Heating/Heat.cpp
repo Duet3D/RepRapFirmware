@@ -19,10 +19,11 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "Heat.h"
+
 #include "Platform.h"
 #include "RepRap.h"
 
-Heat::Heat(Platform* p)
+Heat::Heat(Platform& p)
 	: platform(p), active(false), coldExtrude(false), bedHeater(DefaultBedHeater), chamberHeater(DefaultChamberHeater), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
 	for (size_t heater = 0; heater < HEATERS; heater++)
@@ -73,8 +74,8 @@ void Heat::Init()
 		}
 	}
 
-	lastTime = millis() - platform->HeatSampleInterval();		// flag the PIDS as due for spinning
-	longWait = platform->Time();
+	lastTime = millis() - platform.HeatSampleInterval();		// flag the PIDS as due for spinning
+	longWait = platform.Time();
 	coldExtrude = false;
 	active = true;
 }
@@ -85,7 +86,7 @@ void Heat::Exit()
 	{
 		pids[heater]->SwitchOff();
 	}
-	platform->Message(HOST_MESSAGE, "Heat class exited.\n");
+	platform.Message(HOST_MESSAGE, "Heat class exited.\n");
 	active = false;
 }
 
@@ -95,7 +96,7 @@ void Heat::Spin()
 	{
 		// See if it is time to spin the PIDs
 		const uint32_t now = millis();
-		if (now - lastTime >= platform->HeatSampleInterval())
+		if (now - lastTime >= platform.HeatSampleInterval())
 		{
 			lastTime = now;
 			for (size_t heater=0; heater < HEATERS; heater++)
@@ -111,17 +112,17 @@ void Heat::Spin()
 			}
 		}
 	}
-	platform->ClassReport(longWait);
+	platform.ClassReport(longWait);
 }
 
 void Heat::Diagnostics(MessageType mtype)
 {
-	platform->MessageF(mtype, "=== Heat ===\nBed heater = %d, chamber heater = %d\n", bedHeater, chamberHeater);
+	platform.MessageF(mtype, "=== Heat ===\nBed heater = %d, chamber heater = %d\n", bedHeater, chamberHeater);
 	for (size_t heater=0; heater < HEATERS; heater++)
 	{
 		if (pids[heater]->Active())
 		{
-			platform->MessageF(mtype, "Heater %d is on, I-accum = %.1f\n", heater, pids[heater]->GetAccumulator());
+			platform.MessageF(mtype, "Heater %d is on, I-accum = %.1f\n", heater, pids[heater]->GetAccumulator());
 		}
 	}
 }

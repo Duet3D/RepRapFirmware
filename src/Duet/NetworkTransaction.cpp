@@ -28,7 +28,7 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 		sendingRetries++;
 		if (sendingRetries == TCP_MAX_SEND_RETRIES)
 		{
-			reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Could not transmit data after %.1f seconds\n", (float)TCP_WRITE_TIMEOUT / 1000.0);
+			reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Could not transmit data after %.1f seconds\n", (float)TCP_WRITE_TIMEOUT / 1000.0);
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}
@@ -39,14 +39,14 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 			writeResult = tcp_write(pcb, sendingWindow + (sendingWindowSize - sentDataOutstanding), sentDataOutstanding, 0);
 			if (ERR_IS_FATAL(writeResult))
 			{
-				reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to write data in conn_poll (code %d)\n", writeResult);
+				reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Failed to write data in conn_poll (code %d)\n", writeResult);
 				tcp_abort(pcb);
 				return ERR_ABRT;
 			}
 
 			if (writeResult != ERR_OK && reprap.Debug(moduleNetwork))
 			{
-				reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: tcp_write resulted in error code %d\n", writeResult);
+				reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: tcp_write resulted in error code %d\n", writeResult);
 			}
 		}
 
@@ -56,20 +56,20 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 			outputResult = tcp_output(pcb);
 			if (ERR_IS_FATAL(outputResult))
 			{
-				reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to output data in conn_poll (code %d)\n", outputResult);
+				reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Failed to output data in conn_poll (code %d)\n", outputResult);
 				tcp_abort(pcb);
 				return ERR_ABRT;
 			}
 
 			if (outputResult != ERR_OK && reprap.Debug(moduleNetwork))
 			{
-				reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: tcp_output resulted in error code %d\n", outputResult);
+				reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: tcp_output resulted in error code %d\n", outputResult);
 			}
 		}
 	}
 	else
 	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_poll!\n");
+		reprap.GetPlatform().Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_poll!\n");
 	}
 	return ERR_OK;
 }
@@ -91,7 +91,7 @@ static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 	}
 	else
 	{
-		reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_sent!\n");
+		reprap.GetPlatform().Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_sent!\n");
 	}
 	return ERR_OK;
 }
@@ -266,7 +266,7 @@ bool NetworkTransaction::Send()
 	// Free up this transaction if the connection is supposed to be closed
 	if (closeRequested)
 	{
-		reprap.GetNetwork()->ConnectionClosed(cs, true);	// This will release the transaction too
+		reprap.GetNetwork().ConnectionClosed(cs, true);	// This will release the transaction too
 		return false;
 	}
 
@@ -330,7 +330,7 @@ bool NetworkTransaction::Send()
 	writeResult = tcp_write(cs->pcb, sendingWindow, bytesBeingSent, 0);
 	if (ERR_IS_FATAL(writeResult))
 	{
-		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to write data in Send (code %d)\n", writeResult);
+		reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Failed to write data in Send (code %d)\n", writeResult);
 		tcp_abort(cs->pcb);
 		return false;
 	}
@@ -338,14 +338,14 @@ bool NetworkTransaction::Send()
 	outputResult = tcp_output(cs->pcb);
 	if (ERR_IS_FATAL(outputResult))
 	{
-		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: Failed to output data in Send (code %d)\n", outputResult);
+		reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Failed to output data in Send (code %d)\n", outputResult);
 		tcp_abort(cs->pcb);
 		return false;
 	}
 
 	if (outputResult != ERR_OK && reprap.Debug(moduleNetwork))
 	{
-		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Network: tcp_output resulted in error code %d\n", outputResult);
+		reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: tcp_output resulted in error code %d\n", outputResult);
 	}
 
 	// Set LwIP callbacks for ACK and retransmission handling
@@ -384,13 +384,13 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 	{
 		// Our connection is still of interest, remove only this transaction from the list
 		NetworkTransaction *previous = nullptr;
-		for(NetworkTransaction *item = reprap.GetNetwork()->readyTransactions; item != nullptr; item = item->next)
+		for(NetworkTransaction *item = reprap.GetNetwork().readyTransactions; item != nullptr; item = item->next)
 		{
 			if (item == this)
 			{
 				if (previous == nullptr)
 				{
-					reprap.GetNetwork()->readyTransactions = next;
+					reprap.GetNetwork().readyTransactions = next;
 				}
 				else
 				{
@@ -407,7 +407,7 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 		tcp_recv(cs->pcb, nullptr);
 
 		// Also remove all ready transactions pointing to our ConnectionState
-		NetworkTransaction *previous = nullptr, *item = reprap.GetNetwork()->readyTransactions;
+		NetworkTransaction *previous = nullptr, *item = reprap.GetNetwork().readyTransactions;
 		while (item != nullptr)
 		{
 			if (item->cs == cs)
@@ -417,7 +417,7 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 					// Only unlink this item
 					if (previous == nullptr)
 					{
-						reprap.GetNetwork()->readyTransactions = next;
+						reprap.GetNetwork().readyTransactions = next;
 					}
 					else
 					{
@@ -429,7 +429,7 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 				{
 					// Remove all others
 					item->Discard();
-					item = (previous == nullptr) ? reprap.GetNetwork()->readyTransactions : previous->next;
+					item = (previous == nullptr) ? reprap.GetNetwork().readyTransactions : previous->next;
 				}
 			}
 			else
@@ -445,7 +445,7 @@ void NetworkTransaction::Commit(bool keepConnectionAlive)
 	if (mySendingTransaction == nullptr)
 	{
 		cs->sendingTransaction = this;
-		reprap.GetNetwork()->AppendTransaction(&reprap.GetNetwork()->writingTransactions, this);
+		reprap.GetNetwork().AppendTransaction(&reprap.GetNetwork().writingTransactions, this);
 	}
 	else
 	{
@@ -489,15 +489,15 @@ void NetworkTransaction::Defer(DeferralMode mode)
 	status = deferred;
 
 	// Unlink this transaction from the list of ready transactions and append it again
-	Network *network = reprap.GetNetwork();
+	Network& network = reprap.GetNetwork();
 	NetworkTransaction *item, *previous = nullptr;
-	for(item = network->readyTransactions; item != nullptr; item = item->next)
+	for(item = network.readyTransactions; item != nullptr; item = item->next)
 	{
 		if (item == this)
 		{
 			if (previous == nullptr)
 			{
-				network->readyTransactions = next;
+				network.readyTransactions = next;
 			}
 			else
 			{
@@ -507,12 +507,12 @@ void NetworkTransaction::Defer(DeferralMode mode)
 		}
 		previous = item;
 	}
-	network->AppendTransaction(&network->readyTransactions, this);
+	network.AppendTransaction(&network.readyTransactions, this);
 
 	// Append all other transactions that are associated to this connection, so that the
 	// Webserver gets a chance to deal with all connected clients even while multiple
 	// deferred requests are present in the list.
-	item = network->readyTransactions;
+	item = network.readyTransactions;
 	previous = nullptr;
 	while (item != this)
 	{
@@ -521,13 +521,13 @@ void NetworkTransaction::Defer(DeferralMode mode)
 			NetworkTransaction *nextItem = item->next;
 			if (previous == nullptr)
 			{
-				network->readyTransactions = item->next;
-				network->AppendTransaction(&network->readyTransactions, item);
+				network.readyTransactions = item->next;
+				network.AppendTransaction(&network.readyTransactions, item);
 			}
 			else
 			{
 				previous->next = item->next;
-				network->AppendTransaction(&network->readyTransactions, item);
+				network.AppendTransaction(&network.readyTransactions, item);
 			}
 			item = nextItem;
 		}
@@ -566,13 +566,13 @@ void NetworkTransaction::Discard()
 	// Unlink this transactions from the list of ready transactions and free it. It is then appended to the list of
 	// free transactions because we don't want to risk reusing it when the ethernet ISR processes incoming data
 	NetworkTransaction *previous = nullptr;
-	for(NetworkTransaction *item = reprap.GetNetwork()->readyTransactions; item != nullptr; item = item->next)
+	for(NetworkTransaction *item = reprap.GetNetwork().readyTransactions; item != nullptr; item = item->next)
 	{
 		if (item == this)
 		{
 			if (previous == nullptr)
 			{
-				reprap.GetNetwork()->readyTransactions = next;
+				reprap.GetNetwork().readyTransactions = next;
 			}
 			else
 			{
@@ -582,7 +582,7 @@ void NetworkTransaction::Discard()
 		}
 		previous = item;
 	}
-	reprap.GetNetwork()->AppendTransaction(&reprap.GetNetwork()->freeTransactions, this);
+	reprap.GetNetwork().AppendTransaction(&reprap.GetNetwork().freeTransactions, this);
 	bool callDisconnectHandler = (cs != nullptr && status == disconnected);
 	status = released;
 
@@ -592,9 +592,9 @@ void NetworkTransaction::Discard()
 	{
 		if (reprap.Debug(moduleNetwork))
 		{
-			reprap.GetPlatform()->Message(HOST_MESSAGE, "Network: Discard() is handling a graceful disconnect\n");
+			reprap.GetPlatform().Message(HOST_MESSAGE, "Network: Discard() is handling a graceful disconnect\n");
 		}
-		reprap.GetNetwork()->ConnectionClosed(cs, false);
+		reprap.GetNetwork().ConnectionClosed(cs, false);
 	}
 }
 

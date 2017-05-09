@@ -1,0 +1,40 @@
+/*
+ * CartesianKinematics.cpp
+ *
+ *  Created on: 6 May 2017
+ *      Author: David
+ */
+
+#include "CartesianKinematics.h"
+
+CartesianKinematics::CartesianKinematics() : Kinematics(KinematicsType::cartesian, MotionType::linear)
+{
+}
+
+// Return the name of the current kinematics
+const char *CartesianKinematics::GetName(bool forStatusReport) const
+{
+	return (forStatusReport) ? "cartesian" : "Cartesian";
+}
+
+// Convert Cartesian coordinates to motor coordinates
+bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const
+{
+	for (size_t axis = 0; axis < numAxes; ++axis)
+	{
+		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
+	}
+	return true;
+}
+
+// Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
+void CartesianKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const
+{
+	// Convert all axes and the extruders
+	for (size_t drive = 0; drive < numDrives; ++drive)
+	{
+		machinePos[drive] = motorPos[drive]/stepsPerMm[drive];
+	}
+}
+
+// End

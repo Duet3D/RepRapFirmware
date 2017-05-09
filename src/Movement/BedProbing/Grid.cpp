@@ -120,7 +120,7 @@ void GridDefinition::PrintError(float originalXrange, float originalYrange, Stri
 // Increase the version number in the following string whenever we change the format of the height map file.
 const char *HeightMap::HeightMapComment = "RepRapFirmware height map file v1";
 
-HeightMap::HeightMap(float *heightStorage) : gridHeights(heightStorage), useMap(false) { }
+HeightMap::HeightMap() : useMap(false) { }
 
 void HeightMap::SetGrid(const GridDefinition& gd)
 {
@@ -162,9 +162,9 @@ bool HeightMap::SaveToFile(FileStore *f) const
 
 	// Write the header comment
 	buf.copy(HeightMapComment);
-	if (reprap.GetPlatform()->IsDateTimeSet())
+	if (reprap.GetPlatform().IsDateTimeSet())
 	{
-		time_t timeNow = reprap.GetPlatform()->GetDateTime();
+		time_t timeNow = reprap.GetPlatform().GetDateTime();
 		const struct tm * const timeInfo = gmtime(&timeNow);
 		buf.catf(" generated at %04u-%02u-%02u %02u:%02u",
 						timeInfo->tm_year + 1900, timeInfo->tm_mon, timeInfo->tm_mday, timeInfo->tm_hour, timeInfo->tm_min);

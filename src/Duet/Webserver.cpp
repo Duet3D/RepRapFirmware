@@ -99,7 +99,7 @@ const char* badEscapeResponse = "bad escape";
 //**************************** Generic Webserver implementation ******************************
 
 // Constructor and initialisation
-Webserver::Webserver(Platform* p, Network *n) : platform(p), network(n), webserverActive(false)
+Webserver::Webserver(Platform *p, Network *n) : platform(p), network(n), webserverActive(false)
 {
 	httpInterpreter = new HttpInterpreter(p, this, n);
 	ftpInterpreter = new FtpInterpreter(p, this, n);
@@ -963,7 +963,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	}
 	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
-		RegularGCodeInput * const httpInput = reprap.GetGCodes()->GetHTTPInput();
+		RegularGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
 		httpInput->Put(HTTP_MESSAGE, GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
@@ -1084,7 +1084,7 @@ void Webserver::HttpInterpreter::ConnectionLost(Connection conn)
 	// Make sure deferred requests are cancelled
 	if (deferredRequestConnection == conn)
 	{
-		reprap.GetPrintMonitor()->StopParsing(filenameBeingProcessed);
+		reprap.GetPrintMonitor().StopParsing(filenameBeingProcessed);
 		deferredRequestConnection = NoConnection;
 	}
 
@@ -1739,7 +1739,7 @@ void Webserver::HttpInterpreter::ProcessDeferredRequest()
 	// At the moment only file info requests are deferred.
 	// Parsing the file may take a while, so keep LwIP running while we're waiting
 	network->Unlock();
-	bool gotFileInfo = reprap.GetPrintMonitor()->GetFileInfoResponse(filenameBeingProcessed, jsonResponse);
+	bool gotFileInfo = reprap.GetPrintMonitor().GetFileInfoResponse(filenameBeingProcessed, jsonResponse);
 	while (!network->Lock());
 
 	// Because LwIP was unlocked before, there is a chance that the ConnectionLost() call has already
@@ -2502,7 +2502,7 @@ bool Webserver::TelnetInterpreter::CanParseData()
 	}
 
 	// In order to support TCP streaming mode, check if we can store any more data at this time
-	RegularGCodeInput * const telnetInput = reprap.GetGCodes()->GetTelnetInput();
+	RegularGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
 	if (telnetInput->BufferSpaceLeft() < clientPointer + 1)
 	{
 		webserver->currentTransaction->Defer(DeferralMode::DeferOnly);
@@ -2562,7 +2562,7 @@ bool Webserver::TelnetInterpreter::CharFromClient(char c)
 			{
 				// This line is complete, do we have enough space left to store it?
 				clientMessage[clientPointer] = 0;
-				RegularGCodeInput * const telnetInput = reprap.GetGCodes()->GetTelnetInput();
+				RegularGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
 				if (telnetInput->BufferSpaceLeft() < clientPointer + 1)
 				{
 					// No - defer this transaction, so we can process more of it next time
@@ -2641,7 +2641,7 @@ bool Webserver::TelnetInterpreter::ProcessLine()
 			}
 
 			// All other codes are stored for the GCodes class
-			RegularGCodeInput * const telnetInput = reprap.GetGCodes()->GetTelnetInput();
+			RegularGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
 			telnetInput->Put(TELNET_MESSAGE, clientMessage);
 			break;
 	}

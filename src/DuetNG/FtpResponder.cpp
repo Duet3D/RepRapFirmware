@@ -144,9 +144,9 @@ bool FtpResponder::Spin()
 	}
 }
 
-void FtpResponder::Diagnostics(MessageType mt)
+void FtpResponder::Diagnostics(MessageType mt) const
 {
-	GetPlatform()->MessageF(mt, "FTP state %d\n", (int)responderState);
+	GetPlatform().MessageF(mt, " FTP(%d)", (int)responderState);
 }
 
 // This must be called only for the main FTP port
@@ -349,7 +349,7 @@ void FtpResponder::DoUpload()
 	{
 		if (reprap.Debug(moduleWebserver))
 		{
-			GetPlatform()->MessageF(HOST_MESSAGE, "Writing %u bytes of upload data\n", len);
+			GetPlatform().MessageF(HOST_MESSAGE, "Writing %u bytes of upload data\n", len);
 		}
 
 		const bool success = fileBeingUploaded.Write(reinterpret_cast<const char*>(buffer), len);
@@ -357,7 +357,7 @@ void FtpResponder::DoUpload()
 		if (!success)
 		{
 			uploadError = true;
-			GetPlatform()->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+			GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
 			CancelUpload();
 
 			responderState = ResponderState::pasvTransferComplete;
@@ -426,7 +426,7 @@ void FtpResponder::CharFromClient(char c)
 		if (clientPointer > ARRAY_UPB(clientMessage))
 		{
 			clientPointer = 0;
-			GetPlatform()->Message(HOST_MESSAGE, "Webserver: Buffer overflow in FTP server!\n");
+			GetPlatform().Message(HOST_MESSAGE, "Webserver: Buffer overflow in FTP server!\n");
 		}
 		break;
 	}
@@ -546,14 +546,14 @@ void FtpResponder::ProcessLine()
 			passivePort = random(1024, 65535);
 			passivePortOpenTime = millis();
 
-			GetNetwork()->OpenDataPort(passivePort);
+			GetNetwork().OpenDataPort(passivePort);
 			if (reprap.Debug(moduleWebserver))
 			{
 				debugPrintf("FTP data port open at port %u\n", passivePort);
 			}
 
 			// send FTP response
-			const uint8_t * const ipAddress = GetNetwork()->GetIPAddress();
+			const uint8_t * const ipAddress = GetNetwork().GetIPAddress();
 			outBuf->printf("227 Entering Passive Mode (%d,%d,%d,%d,%d,%d)\r\n",
 					ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3],
 					passivePort / 256, passivePort % 256);
@@ -569,7 +569,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "DELE"))
 		{
 			const char *filename = GetParameter("DELE");
-			if (GetPlatform()->GetMassStorage()->Delete(currentDirectory, filename))
+			if (GetPlatform().GetMassStorage()->Delete(currentDirectory, filename))
 			{
 				outBuf->copy("250 Delete operation successful.\r\n");
 			}
@@ -583,7 +583,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RMD"))
 		{
 			const char *filename = GetParameter("RMD");
-			if (GetPlatform()->GetMassStorage()->Delete(currentDirectory, filename))
+			if (GetPlatform().GetMassStorage()->Delete(currentDirectory, filename))
 			{
 				outBuf->copy("250 Remove directory operation successful.\r\n");
 			}
@@ -599,9 +599,9 @@ void FtpResponder::ProcessLine()
 			const char *filename = GetParameter("MKD");
 			const char *location = (filename[0] == '/')
 										? filename
-										: GetPlatform()->GetMassStorage()->CombineName(currentDirectory, filename);
+										: GetPlatform().GetMassStorage()->CombineName(currentDirectory, filename);
 
-			if (GetPlatform()->GetMassStorage()->MakeDirectory(location))
+			if (GetPlatform().GetMassStorage()->MakeDirectory(location))
 			{
 				outBuf->printf("257 \"%s\" created\r\n", location);
 			}
@@ -617,11 +617,11 @@ void FtpResponder::ProcessLine()
 			const char *filename = GetParameter("RNFR");
 			if (filename[0] != '/')
 			{
-				filename = GetPlatform()->GetMassStorage()->CombineName(currentDirectory, filename);
+				filename = GetPlatform().GetMassStorage()->CombineName(currentDirectory, filename);
 			}
 			SafeStrncpy(fileToMove, filename, ARRAY_SIZE(fileToMove));
 
-			if (GetPlatform()->GetMassStorage()->FileExists(fileToMove))
+			if (GetPlatform().GetMassStorage()->FileExists(fileToMove))
 			{
 				outBuf->copy("350 Ready to RNTO.\r\n");
 			}
@@ -636,10 +636,10 @@ void FtpResponder::ProcessLine()
 			const char *filename = GetParameter("RNTO");
 			if (filename[0] != '/')
 			{
-				filename = GetPlatform()->GetMassStorage()->CombineName(currentDirectory, filename);
+				filename = GetPlatform().GetMassStorage()->CombineName(currentDirectory, filename);
 			}
 
-			if (GetPlatform()->GetMassStorage()->Rename(fileToMove, filename))
+			if (GetPlatform().GetMassStorage()->Rename(fileToMove, filename))
 			{
 				outBuf->copy("250 Rename successful.\r\n");
 			}
@@ -678,7 +678,7 @@ void FtpResponder::ProcessLine()
 			Commit(ResponderState::sendingPasvData);
 
 			// build directory listing, dataBuf is sent later in the Spin loop
-			MassStorage * const massStorage = GetPlatform()->GetMassStorage();
+			MassStorage * const massStorage = GetPlatform().GetMassStorage();
 			FileInfo fileInfo;
 			if (massStorage->FindFirst(currentDirectory, fileInfo))
 			{
@@ -697,7 +697,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "STOR"))
 		{
 			const char *filename = GetParameter("STOR");
-			FileStore *file = GetPlatform()->GetFileStore(currentDirectory, filename, true);
+			FileStore *file = GetPlatform().GetFileStore(currentDirectory, filename, true);
 			if (file != nullptr)
 			{
 				StartUpload(file, filename);
@@ -715,7 +715,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RETR"))
 		{
 			const char *filename = GetParameter("RETR");
-			fileBeingSent = GetPlatform()->GetFileStore(currentDirectory, filename, false);
+			fileBeingSent = GetPlatform().GetFileStore(currentDirectory, filename, false);
 			if (fileBeingSent != nullptr)
 			{
 				outBuf->printf("150 Opening data connection for %s (%lu bytes).\r\n", filename, fileBeingSent->Length());
@@ -844,7 +844,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		}
 
 		// Verify the final path and change it if possible
-		if (GetPlatform()->GetMassStorage()->DirectoryExists(combinedPath))
+		if (GetPlatform().GetMassStorage()->DirectoryExists(combinedPath))
 		{
 			SafeStrncpy(currentDirectory, combinedPath, ARRAY_SIZE(currentDirectory));
 			outBuf->copy("250 Directory successfully changed.\r\n");
@@ -875,7 +875,7 @@ void FtpResponder::CloseDataPort()
 		dataSocket->Close();
 		dataSocket = nullptr;
 	}
-	GetNetwork()->CloseDataPort();
+	GetNetwork().CloseDataPort();
 
 	OutputBuffer::ReleaseAll(dataBuf);
 	dataBuf = nullptr;

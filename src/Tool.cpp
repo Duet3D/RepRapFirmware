@@ -34,16 +34,16 @@ Tool * Tool::freelist = nullptr;
 
 /*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap)
 {
-	const size_t numExtruders = reprap.GetGCodes()->GetNumExtruders();
+	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: too many drives");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: too many drives");
 		return nullptr;
 	}
 
 	if (hCount > ARRAY_SIZE(Tool::heaters))
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: too many heaters");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: too many heaters");
 		return nullptr;
 	}
 
@@ -52,7 +52,7 @@ Tool * Tool::freelist = nullptr;
 	{
 		if (d[i] < 0 || d[i] >= (int)numExtruders)
 		{
-			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: bad drive number");
+			reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: bad drive number");
 			return nullptr;
 		}
 	}
@@ -60,7 +60,7 @@ Tool * Tool::freelist = nullptr;
 	{
 		if (h[i] < 0 || h[i] >= HEATERS)
 		{
-			reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Tool creation: bad heater number");
+			reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: bad heater number");
 			return nullptr;
 		}
 	}
@@ -169,15 +169,15 @@ float Tool::MaxFeedrate() const
 {
 	if (driveCount <= 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE,
+		reprap.GetPlatform().Message(GENERIC_MESSAGE,
 				"Error: Attempt to get maximum feedrate for a tool with no drives.\n");
 		return 1.0;
 	}
 	float result = 0.0;
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	for (size_t d = 0; d < driveCount; d++)
 	{
-		const float mf = reprap.GetPlatform()->MaxFeedrate(drives[d] + numAxes);
+		const float mf = reprap.GetPlatform().MaxFeedrate(drives[d] + numAxes);
 		if (mf > result)
 		{
 			result = mf;
@@ -190,14 +190,14 @@ float Tool::InstantDv() const
 {
 	if (driveCount <= 0)
 	{
-		reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Attempt to get InstantDv for a tool with no drives.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Attempt to get InstantDv for a tool with no drives.\n");
 		return 1.0;
 	}
 	float result = FLT_MAX;
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	for (size_t d = 0; d < driveCount; d++)
 	{
-		const float idv = reprap.GetPlatform()->ActualInstantDv(drives[d] + numAxes);
+		const float idv = reprap.GetPlatform().ActualInstantDv(drives[d] + numAxes);
 		if (idv < result)
 		{
 			result = idv;
@@ -259,7 +259,7 @@ bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		const float temperature = reprap.GetHeat()->GetTemperature(heaters[heater]);
+		const float temperature = reprap.GetHeat().GetTemperature(heaters[heater]);
 		if (temperature < HOT_ENOUGH_TO_RETRACT || (temperature < HOT_ENOUGH_TO_EXTRUDE && forExtrusion))
 		{
 			return false;
@@ -278,9 +278,9 @@ void Tool::Activate(Tool* currentlyActive)
 		}
 		for (size_t heater = 0; heater < heaterCount; heater++)
 		{
-			reprap.GetHeat()->SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
-			reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-			reprap.GetHeat()->Activate(heaters[heater]);
+			reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
+			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+			reprap.GetHeat().Activate(heaters[heater]);
 		}
 		active = true;
 	}
@@ -292,8 +292,8 @@ void Tool::Standby()
 	{
 		for (size_t heater = 0; heater < heaterCount; heater++)
 		{
-			reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-			reprap.GetHeat()->Standby(heaters[heater]);
+			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+			reprap.GetHeat().Standby(heaters[heater]);
 		}
 		active = false;
 	}
@@ -306,18 +306,18 @@ void Tool::SetVariables(const float* standby, const float* active)
 		if (active[heater] < NEARLY_ABS_ZERO && standby[heater] < NEARLY_ABS_ZERO)
 		{
 			// Temperatures close to ABS_ZERO turn off all associated heaters
-			reprap.GetHeat()->SwitchOff(heaters[heater]);
+			reprap.GetHeat().SwitchOff(heaters[heater]);
 		}
 		else
 		{
-			const float temperatureLimit = reprap.GetHeat()->GetTemperatureLimit(heaters[heater]);
+			const float temperatureLimit = reprap.GetHeat().GetTemperatureLimit(heaters[heater]);
 			const Tool * const currentTool = reprap.GetCurrentTool();
 			if (active[heater] < temperatureLimit)
 			{
 				activeTemperatures[heater] = active[heater];
 				if (currentTool == nullptr || currentTool == this)
 				{
-					reprap.GetHeat()->SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
+					reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
 				}
 			}
 			if (standby[heater] < temperatureLimit)
@@ -325,7 +325,7 @@ void Tool::SetVariables(const float* standby, const float* active)
 				standbyTemperatures[heater] = standby[heater];
 				if (currentTool == nullptr || currentTool == this)
 				{
-					reprap.GetHeat()->SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+					reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 				}
 			}
 		}
@@ -364,7 +364,7 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 		}
 	}
 
-	const int8_t bedHeater = reprap.GetHeat()->GetBedHeater();
+	const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
 		if (heaters[heater] != bedHeater && heaters[heater] >= numHeaters)

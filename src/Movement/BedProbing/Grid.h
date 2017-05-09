@@ -60,7 +60,7 @@ private:
 class HeightMap
 {
 public:
-	HeightMap(float *heightStorage);
+	HeightMap();
 
 	const GridDefinition& GetGrid() const { return def; }
 	void SetGrid(const GridDefinition& gd);
@@ -87,7 +87,7 @@ private:
 	static const char *HeightMapComment;							// The start of the comment we write at the start of the height map file
 
 	GridDefinition def;
-	float *gridHeights;												// The map of grid heights, must have at least MaxGridProbePoints entries
+	float gridHeights[MaxGridProbePoints];							// The Z coordinates of the points on the bed that were probed
 	uint32_t gridHeightSet[MaxGridProbePoints/32];					// Bitmap of which heights are set
 	bool useMap;													// True to do bed compensation
 

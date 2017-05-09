@@ -19,7 +19,7 @@ extern "C" void hsmciIdle()
 {
 	if (reprap.GetSpinningModule() != moduleNetwork)
 	{
-		reprap.GetNetwork()->Spin(false);
+		reprap.GetNetwork().Spin(false);
 	}
 }
 
@@ -33,19 +33,19 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 {
 	OutputBuffer::Init();
 	platform = new Platform();
-	network = new Network(platform);
-	gCodes = new GCodes(platform);
-	move = new Move(platform, gCodes);
-	heat = new Heat(platform);
+	network = new Network(*platform);
+	gCodes = new GCodes(*platform);
+	move = new Move();
+	heat = new Heat(*platform);
 
 #if SUPPORT_ROLAND
-	roland = new Roland(platform);
+	roland = new Roland(*platform);
 #endif
 #if SUPPORT_SCANNER
-	scanner = new Scanner(platform);
+	scanner = new Scanner(*platform);
 #endif
 
-	printMonitor = new PrintMonitor(platform, gCodes);
+	printMonitor = new PrintMonitor(*platform, *gCodes);
 
 	SetPassword(DEFAULT_PASSWORD);
 	SetName(DEFAULT_NAME);
@@ -331,7 +331,7 @@ void RepRap::DeleteTool(Tool* tool)
 	// Switch off any associated heater
 	for (size_t i = 0; i < tool->HeaterCount(); i++)
 	{
-		reprap.GetHeat()->SwitchOff(tool->Heater(i));
+		reprap.GetHeat().SwitchOff(tool->Heater(i));
 	}
 
 	// Purge any references to this tool
@@ -514,7 +514,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	response->printf("{\"status\":\"%c\",\"coords\":{", ch);
 
 	// Coordinates
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	{
 		float liveCoordinates[DRIVES + 1];
 #if SUPPORT_ROLAND
@@ -561,20 +561,19 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		// XYZ positions
 		response->cat("],\"xyz\":");
-		if (!gCodes->AllAxesAreHomed() && move->IsDeltaMode())
+		if (gCodes->AllAxesAreHomed() || move->GetKinematics().ShowCoordinatesWhenNotHomed())
 		{
-			// If in Delta mode, skip these coordinates if some axes are not homed
-			response->cat("[0.00,0.00,0.00");
-		}
-		else
-		{
-			// On Cartesian printers, the live coordinates are (usually) valid
 			ch = '[';
 			for (size_t axis = 0; axis < numAxes; axis++)
 			{
 				response->catf("%c%.3f", ch, liveCoordinates[axis]);
 				ch = ',';
 			}
+		}
+		else
+		{
+			// If in Delta mode, skip these coordinates if some axes are not homed
+			response->cat("[0.00,0.00,0.00");
 		}
 	}
 
@@ -955,7 +954,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 		return nullptr;
 	}
 
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 
 	// Axis minima
 	response->copy("{\"axisMins\":");
@@ -1138,9 +1137,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send XYZ positions
-	const size_t numAxes = reprap.GetGCodes()->GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
 	float liveCoordinates[DRIVES];
-	reprap.GetMove()->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
+	reprap.GetMove().LiveCoordinates(liveCoordinates, GetCurrentXAxes());
 	const Tool* const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
@@ -1504,7 +1503,7 @@ void RepRap::SetName(const char* nm)
 // This may be called by an ISR!
 unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions)
 {
-	if (GetHeat()->ColdExtrude())
+	if (GetHeat().ColdExtrude())
 	{
 		return 0;
 	}
@@ -1550,7 +1549,7 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater)
 
 void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 {
-	reprap.GetHeat()->ResetFault(wasDudHeater);
+	reprap.GetHeat().ResetFault(wasDudHeater);
 	if (toolList != nullptr)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);

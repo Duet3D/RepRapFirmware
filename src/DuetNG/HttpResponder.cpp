@@ -460,19 +460,19 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		}
 
 		// See if we can update the current RTC date and time
-		if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time") && !reprap.GetPlatform()->IsDateTimeSet())
+		if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time") && !GetPlatform().IsDateTimeSet())
 		{
 			struct tm timeInfo;
 			memset(&timeInfo, 0, sizeof(timeInfo));
 			if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 			{
 				time_t newTime = mktime(&timeInfo);
-				reprap.GetPlatform()->SetDateTime(newTime);
+				GetPlatform().SetDateTime(newTime);
 			}
 		}
 
 		// Client has been logged in
-		response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", HttpSessionTimeout, reprap.GetPlatform()->GetBoardString());
+		response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", HttpSessionTimeout, GetPlatform().GetBoardString());
 	}
 	else if (!CheckAuthenticated())
 	{
@@ -507,7 +507,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
-		RegularGCodeInput * const httpInput = reprap.GetGCodes()->GetHTTPInput();
+		RegularGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
 		httpInput->Put(HTTP_MESSAGE, GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
@@ -517,7 +517,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEquals(request, "delete") && GetKeyValue("name") != nullptr)
 	{
-		bool ok = reprap.GetPlatform()->GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
+		bool ok = GetPlatform().GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
@@ -530,7 +530,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		const char* dir = GetKeyValue("dir");
 		if (dir == nullptr)
 		{
-			dir = reprap.GetPlatform()->GetGCodeDir();
+			dir = GetPlatform().GetGCodeDir();
 		}
 		const char* const flagDirsVal = GetKeyValue("flagDirs");
 		const bool flagDirs = flagDirsVal != nullptr && atoi(flagDirsVal) == 1;
@@ -560,7 +560,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		bool success = false;
 		if (oldVal != nullptr && newVal != nullptr)
 		{
-			success = reprap.GetPlatform()->GetMassStorage()->Rename(oldVal, newVal);
+			success = GetPlatform().GetMassStorage()->Rename(oldVal, newVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
@@ -570,7 +570,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		bool success = false;
 		if (dirVal != nullptr)
 		{
-			success = (reprap.GetPlatform()->GetMassStorage()->MakeDirectory(dirVal));
+			success = (GetPlatform().GetMassStorage()->MakeDirectory(dirVal));
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
@@ -604,7 +604,7 @@ const char* HttpResponder::GetKeyValue(const char *key) const
 bool HttpResponder::SendFileInfo()
 {
 	OutputBuffer *jsonResponse = nullptr;
-	const bool gotFileInfo = reprap.GetPrintMonitor()->GetFileInfoResponse(filenameBeingProcessed, jsonResponse);
+	const bool gotFileInfo = reprap.GetPrintMonitor().GetFileInfoResponse(filenameBeingProcessed, jsonResponse);
 	if (gotFileInfo)
 	{
 		// Got it - send the response now
@@ -704,7 +704,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 			char nameBuf[FILENAME_LENGTH + 1];
 			strcpy(nameBuf, nameOfFileToSend);
 			strcat(nameBuf, ".gz");
-			fileToSend = GetPlatform()->GetFileStore(GetPlatform()->GetWebDir(), nameBuf, false);
+			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameBuf, false);
 			if (fileToSend != nullptr)
 			{
 				zip = true;
@@ -714,14 +714,14 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		// If that failed, try to open the normal version of the file
 		if (fileToSend == nullptr)
 		{
-			fileToSend = GetPlatform()->GetFileStore(GetPlatform()->GetWebDir(), nameOfFileToSend, false);
+			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameOfFileToSend, false);
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
 		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
-			fileToSend = GetPlatform()->GetFileStore(GetPlatform()->GetWebDir(), nameOfFileToSend, false);
+			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameOfFileToSend, false);
 		}
 
 		if (fileToSend == nullptr)
@@ -733,7 +733,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	}
 	else
 	{
-		fileToSend = GetPlatform()->GetFileStore(FS_PREFIX, nameOfFileToSend, false);
+		fileToSend = GetPlatform().GetFileStore(FS_PREFIX, nameOfFileToSend, false);
 		if (fileToSend == nullptr)
 		{
 			RejectMessage("not found", 404);
@@ -821,7 +821,7 @@ void HttpResponder::SendGCodeReply()
 
 		if (reprap.Debug(moduleWebserver))
 		{
-			GetPlatform()->MessageF(HOST_MESSAGE, "Sending G-Code reply to client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
+			GetPlatform().MessageF(HOST_MESSAGE, "Sending G-Code reply to client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
 		}
 	}
 
@@ -864,7 +864,7 @@ void HttpResponder::SendJsonResponse(const char* command)
 
 		if (StringEquals(command, "configfile"))	// rr_configfile [DEPRECATED]
 		{
-			const char *configPath = GetPlatform()->GetMassStorage()->CombineName(GetPlatform()->GetSysDir(), GetPlatform()->GetConfigFile());
+			const char *configPath = GetPlatform().GetMassStorage()->CombineName(GetPlatform().GetSysDir(), GetPlatform().GetConfigFile());
 			char fileName[FILENAME_LENGTH];
 			SafeStrncpy(fileName, configPath, ARRAY_SIZE(fileName));
 			SendFile(fileName, false);
@@ -932,18 +932,18 @@ void HttpResponder::ProcessMessage()
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		reprap.GetPlatform()->MessageF(HOST_MESSAGE, "HTTP req, command words {", numCommandWords);
+		GetPlatform().MessageF(HOST_MESSAGE, "HTTP req, command words {", numCommandWords);
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
-			reprap.GetPlatform()->MessageF(HOST_MESSAGE, " %s", commandWords[i]);
+			GetPlatform().MessageF(HOST_MESSAGE, " %s", commandWords[i]);
 		}
-		reprap.GetPlatform()->Message(HOST_MESSAGE, " }, parameters {");
+		GetPlatform().Message(HOST_MESSAGE, " }, parameters {");
 
 		for (size_t i = 0; i < numQualKeys; ++i)
 		{
-			reprap.GetPlatform()->MessageF(HOST_MESSAGE, " %s=%s", qualifiers[i].key, qualifiers[i].value);
+			GetPlatform().MessageF(HOST_MESSAGE, " %s=%s", qualifiers[i].key, qualifiers[i].value);
 		}
-		reprap.GetPlatform()->Message(HOST_MESSAGE, " }\n");
+		GetPlatform().Message(HOST_MESSAGE, " }\n");
 	}
 
 	if (numCommandWords < 2)
@@ -1020,7 +1020,7 @@ void HttpResponder::ProcessMessage()
 				}
 
 				// Start a new file upload
-				FileStore *file = reprap.GetPlatform()->GetFileStore(FS_PREFIX, qualifiers[0].value, true);
+				FileStore *file = GetPlatform().GetFileStore(FS_PREFIX, qualifiers[0].value, true);
 				if (file == nullptr)
 				{
 					ReleaseUploadLock();
@@ -1051,7 +1051,7 @@ void HttpResponder::ProcessMessage()
 
 				if (reprap.Debug(moduleWebserver))
 				{
-					reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
+					GetPlatform().MessageF(HOST_MESSAGE, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
 				}
 				uploadedBytes = 0;
 
@@ -1081,7 +1081,7 @@ void HttpResponder::ProcessMessage()
 // Reject the current message
 void HttpResponder::RejectMessage(const char* response, unsigned int code)
 {
-	reprap.GetPlatform()->MessageF(HOST_MESSAGE, "Webserver: rejecting message with: %s\n", response);
+	GetPlatform().MessageF(HOST_MESSAGE, "Webserver: rejecting message with: %s\n", response);
 	outBuf->printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
 	Commit();
 }
@@ -1115,7 +1115,7 @@ void HttpResponder::DoUpload()
 			if (!success)
 			{
 				uploadError = true;
-				reprap.GetPlatform()->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+				GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
 				CancelUpload();
 				SendJsonResponse("upload");
 				return;
@@ -1181,6 +1181,11 @@ void HttpResponder::CancelUpload()
 		}
 	}
 	NetworkResponder::CancelUpload();
+}
+
+void HttpResponder::Diagnostics(MessageType mt) const
+{
+	GetPlatform().MessageF(mt, " HTTP(%d)", (int)responderState);
 }
 
 /*static*/ void HttpResponder::HandleGCodeReply(const char *reply)
@@ -1254,9 +1259,9 @@ void HttpResponder::CancelUpload()
 	}
 }
 
-/*static*/ void HttpResponder::Diagnostics(MessageType mtype)
+/*static*/ void HttpResponder::CommonDiagnostics(MessageType mtype)
 {
-	GetPlatform()->MessageF(mtype, "HTTP sessions: %u of %u\n", numSessions, MaxHttpSessions);
+	GetPlatform().MessageF(mtype, "HTTP sessions: %u of %u\n", numSessions, MaxHttpSessions);
 }
 
 // Static data

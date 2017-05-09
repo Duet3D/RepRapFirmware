@@ -184,7 +184,7 @@ void TelnetResponder::CharFromClient(char c)
 		if (clientPointer > ARRAY_UPB(clientMessage))
 		{
 			clientPointer = 0;
-			GetPlatform()->Message(HOST_MESSAGE, "Webserver: Buffer overflow in Telnet server!\n");
+			GetPlatform().Message(HOST_MESSAGE, "Webserver: Buffer overflow in Telnet server!\n");
 		}
 		break;
 	}
@@ -207,10 +207,10 @@ void TelnetResponder::ProcessLine()
 			Commit();
 		}
 	}
-	else if (reprap.GetGCodes()->GetTelnetInput()->BufferSpaceLeft() >= clientPointer + 1)
+	else if (reprap.GetGCodes().GetTelnetInput()->BufferSpaceLeft() >= clientPointer + 1)
 	{
 		// All other codes are stored for the GCodes class
-		RegularGCodeInput * const telnetInput = reprap.GetGCodes()->GetTelnetInput();
+		RegularGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
 		telnetInput->Put(TELNET_MESSAGE, clientMessage);
 		haveCompleteLine = false;
 		clientPointer = 0;
@@ -290,9 +290,9 @@ void TelnetResponder::HandleGCodeReply(OutputBuffer *reply)
 	}
 }
 
-void TelnetResponder::Diagnostics(MessageType mt)
+void TelnetResponder::Diagnostics(MessageType mt) const
 {
-	GetPlatform()->MessageF(mt, "Telnet state %d\n", (int)responderState);
+	GetPlatform().MessageF(mt, " Telnet(%d)", (int)responderState);
 }
 
 // End

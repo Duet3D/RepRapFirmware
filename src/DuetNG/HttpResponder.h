@@ -17,12 +17,13 @@ public:
 	bool Spin() override;								// do some work, returning true if we did anything significant
 	bool Accept(Socket *s, Protocol protocol) override;	// ask the responder to accept this connection, returns true if it did
 	void Terminate(Protocol protocol) override;			// terminate the responder if it is serving the specified protocol
+	void Diagnostics(MessageType mtype) const override;
 
 	static void HandleGCodeReply(const char *reply);
 	static void HandleGCodeReply(OutputBuffer *reply);
 	static uint32_t GetReplySeq() { return seq; }
 	static void CheckSessions();
-	static void Diagnostics(MessageType mtype);
+	static void CommonDiagnostics(MessageType mtype);
 
 protected:
 	void ConnectionLost() override;

@@ -34,7 +34,7 @@ class Platform;
 class Network
 {
 public:
-	Network(Platform* p);
+	Network(Platform& p);
 
 	void Init();
 	void Activate();
@@ -91,7 +91,7 @@ private:
 
 	void SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[]);
 
-	Platform * const platform;
+	Platform& platform;
 	NetworkResponder *responders;
 	NetworkResponder *nextResponderToPoll;
 	FtpResponder *ftpResponder;

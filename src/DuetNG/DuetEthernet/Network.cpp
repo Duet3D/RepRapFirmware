@@ -18,7 +18,7 @@
 const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
 const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
 
-Network::Network(Platform* p)
+Network::Network(Platform& p)
 	: platform(p), nextResponderToPoll(nullptr), lastTickMillis(0),
 	  state(NetworkState::disabled), activated(false)
 {
@@ -41,7 +41,7 @@ void Network::Init()
 {
 	// Ensure that the W5500 chip is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
-	longWait = platform->Time();
+	longWait = platform.Time();
 	lastTickMillis = millis();
 
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
@@ -197,7 +197,7 @@ void Network::Activate()
 		}
 		else
 		{
-			platform->Message(HOST_MESSAGE, "Network disabled.\n");
+			platform.Message(HOST_MESSAGE, "Network disabled.\n");
 		}
 	}
 }
@@ -210,8 +210,8 @@ void Network::Exit()
 // Get the network state into the reply buffer, returning true if there is some sort of error
 bool Network::GetNetworkState(StringRef& reply)
 {
-	const uint8_t * const config_ip = platform->GetIPAddress();
-	const int enableState = reprap.GetNetwork()->EnableState();
+	const uint8_t * const config_ip = platform.GetIPAddress();
+	const int enableState = EnableState();
 	reply.printf("Network is %s, configured IP address: %u.%u.%u.%u, actual IP address: %u.%u.%u.%u",
 			(enableState == 0) ? "disabled" : "enabled",
 					config_ip[0], config_ip[1], config_ip[2], config_ip[3], ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
@@ -221,7 +221,7 @@ bool Network::GetNetworkState(StringRef& reply)
 // Start up the network
 void Network::Start()
 {
-	SetIPAddress(platform->GetIPAddress(), platform->NetMask(), platform->GateWay());
+	SetIPAddress(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
 	pinMode(EspResetPin, OUTPUT_LOW);
 	delayMicroseconds(550);						// W550 reset pulse must be at least 500us long
 	Platform::WriteDigital(EspResetPin, HIGH);	// raise /Reset pin
@@ -235,7 +235,7 @@ void Network::Start()
 
 	wizchip_init(bufSizes, bufSizes);
 
-	setSHAR(platform->MACAddress());
+	setSHAR(platform.MACAddress());
 	setSIPR(ipAddress);
 	setGAR(gateway);
 	setSUBR(netmask);
@@ -327,7 +327,7 @@ void Network::Spin(bool full)
 		if (full)
 		{
 			InitSockets();
-			platform->MessageF(GENERIC_MESSAGE, "Network running, IP address = %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+			platform.MessageF(GENERIC_MESSAGE, "Network running, IP address = %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 			state = NetworkState::active;
 		}
 		break;
@@ -395,17 +395,21 @@ void Network::Spin(bool full)
 
 	if (full)
 	{
-		platform->ClassReport(longWait);
+		platform.ClassReport(longWait);
 	}
 }
 
 void Network::Diagnostics(MessageType mtype)
 {
-	platform->Message(mtype, "=== Network ===\n");
-	platform->MessageF(mtype, "State: %d\n", (int)state);
-	HttpResponder::Diagnostics(mtype);
-	ftpResponder->Diagnostics(mtype);
-	telnetResponder->Diagnostics(mtype);
+	platform.Message(mtype, "=== Network ===\n");
+	platform.MessageF(mtype, "State: %d\n", (int)state);
+	HttpResponder::CommonDiagnostics(mtype);
+	platform.Message(mtype, "Responder states:");
+	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	{
+		r->Diagnostics(mtype);
+	}
+	platform.Message(mtype, "\n");
 }
 
 // Enable or disable the network
@@ -420,7 +424,7 @@ void Network::Enable(int mode, StringRef& reply)
 		if (state != NetworkState::disabled)
 		{
 			Stop();
-			platform->Message(GENERIC_MESSAGE, "Network stopped\n");
+			platform.Message(GENERIC_MESSAGE, "Network stopped\n");
 		}
 
 	}
