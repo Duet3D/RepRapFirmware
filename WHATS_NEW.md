@@ -1,11 +1,23 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.19alpha3
+==================
+
+CAUTION: CoreXY and CoreXZ kinematics have not been tested in this version!
+
+New features:
+- Major refactoring of movement and bed probing code to better support additional kinematics
+- Initial implementation of SCARA kinematics, configured using M669 command. Homing not implemented yet.
+- CoreYZ kinematics on longer suported
+- M122 on Duet WiFi and Duet Ethernet now reports status of each HTTP responder
+- M122 on Duet WiFi no longer reports underrun/overrun counts
+
 Version 1.19alpha2
 ==================
 
 Bug fixes:
-- The M21 command did not re-initisalise the file system completely. As a result, errors could occur if you removed the SD card, modified it on another device, re-inserted it and used M21 to re-mount it.
+- The M21 command did not re-initialise the file system completely. As a result, errors could occur if you removed the SD card, modified it on another device, re-inserted it and used M21 to re-mount it.
 
 Version 1.19alpha1
 ==================
