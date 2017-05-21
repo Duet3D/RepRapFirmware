@@ -40,6 +40,9 @@ public:
 	// Return the length available for writing
 	size_t SpaceLeft() const { return bufferSize - dataLength; }
 
+	// Return a pointer to the space available for writing
+	uint8_t* UnwrittenData() { return Data() + dataLength; }
+
 	// Append some data, returning the amount appended
 	size_t AppendData(const uint8_t *source, size_t length);
 
@@ -51,6 +54,9 @@ public:
 
 	// Append a buffer to a list
 	static void AppendToList(NetworkBuffer **list, NetworkBuffer *b);
+
+	// Find the last buffer in a list
+	static NetworkBuffer *FindLast(NetworkBuffer *list);
 
 	// Allocate a buffer
 	static NetworkBuffer *Allocate();

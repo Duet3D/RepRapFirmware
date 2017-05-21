@@ -168,23 +168,13 @@ void Scanner::Spin()
 			break;
 
 		case ScannerState::Uploading:
-		{
-			// Copy incoming scan data from USB to the buffer
-			size_t bytesToCopy = min<size_t>(SERIAL_MAIN_DEVICE.available(), ScanBufferSize - bufferPointer);
-			bytesToCopy = min<size_t>(bytesToCopy, uploadBytesLeft);
-
-			for(size_t i = 0; i < bytesToCopy; i++)
+			// Write incoming scan data from USB to the file
+			while (SERIAL_MAIN_DEVICE.available() > 0)
 			{
 				char b = static_cast<char>(SERIAL_MAIN_DEVICE.read());
-				buffer[bufferPointer++] = b;
-			}
-			uploadBytesLeft -= bytesToCopy;
-
-			// When this buffer is full or the upload is complete, write the next chunk
-			if (uploadBytesLeft == 0 || bufferPointer == ScanBufferSize)
-			{
-				if (fileBeingUploaded->Write(buffer, bufferPointer))
+				if (fileBeingUploaded->Write(&b, sizeof(char)))
 				{
+					uploadBytesLeft--;
 					if (uploadBytesLeft == 0)
 					{
 						if (reprap.Debug(moduleScanner))
@@ -196,9 +186,8 @@ void Scanner::Spin()
 						fileBeingUploaded = nullptr;
 
 						SetState(ScannerState::Idle);
+						break;
 					}
-
-					bufferPointer = 0;
 				}
 				else
 				{
@@ -208,10 +197,10 @@ void Scanner::Spin()
 
 					platform.Message(GENERIC_MESSAGE, "Error: Could not write scan file\n");
 					SetState(ScannerState::Idle);
+					break;
 				}
 			}
 			break;
-		}
 
 		default:
 			// Pick up incoming commands only if the GCodeBuffer is idle.

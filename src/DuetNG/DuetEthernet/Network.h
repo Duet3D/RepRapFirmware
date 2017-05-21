@@ -2,7 +2,7 @@
 
 RepRapFirmware - Network: RepRapPro Ormerod with Duet controller
 
-Separated out from Platform.h by dc42 and extended by zpl
+Separated out from Platform.h by dc42 and extended by chrishamm
 
 ****************************************************************************************************/
 

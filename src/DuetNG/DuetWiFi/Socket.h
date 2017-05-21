@@ -16,12 +16,14 @@ class Socket
 public:
 	Socket();
 	void Init(SocketNumber n);
+	int State() const { return (int)state; }				// used only for reporting debug info, hence the 'int' return
 	void Poll(bool full);
 	Port GetLocalPort() const { return localPort; }
 	uint32_t GetRemoteIP() const { return remoteIp; }
 	Port GetRemotePort() const { return remotePort; }
 	void Close();
 	void Terminate();
+	void TerminatePolitely();
 	bool ReadChar(char& c);
 	bool ReadBuffer(const uint8_t *&buffer, size_t &len);
 	void Taken(size_t len);
@@ -44,7 +46,7 @@ private:
 	};
 
 	void ReInit();
-	void ReceiveData();
+	void ReceiveData(uint16_t bytesAvailable);
 	void DiscardReceivedData();
 
 	Port localPort, remotePort;							// The local and remote ports

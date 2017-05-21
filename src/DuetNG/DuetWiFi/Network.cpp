@@ -27,7 +27,7 @@
 
 #include "matrix.h"
 
-const uint32_t WifiResponseTimeoutMillis = 1000;
+const uint32_t WifiResponseTimeoutMillis = 200;
 const uint32_t WiFiStartupMillis = 300;
 
 const unsigned int MaxHttpConnections = 4;
@@ -89,9 +89,9 @@ static void EspTransferRequestIsr()
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
-Network::Network(Platform& p) : platform(p), nextResponderToPoll(nullptr), uploader(nullptr), currentSocket(0),
-		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false), espStatusChanged(false),
-		spiTxUnderruns(0), spiRxOverruns(0)
+Network::Network(Platform& p) : platform(p), nextResponderToPoll(nullptr), uploader(nullptr), currentSocket(0), ftpDataPort(0),
+		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
+		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0)
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
@@ -154,12 +154,7 @@ void Network::EnableProtocol(int protocol, int port, int secure, StringRef& repl
 			if (state == NetworkState::active)
 			{
 				StartProtocol(protocol);
-#if 0	// mdns not implemented yet, if we are going to implement it then we need to send the WiFi module a command to do it here and pass the protocol set
-				if (state == NetworkState::active)
-				{
-					DoMdnsAnnounce();
-				}
-#endif
+				// mDNS announcement is done by the WiFi Server firmware
 			}
 		}
 		ReportOneProtocol(protocol, reply);
@@ -192,15 +187,15 @@ void Network::StartProtocol(Protocol protocol)
 	switch(protocol)
 	{
 	case HttpProtocol:
-		SendListenCommand(portNumbers[protocol], MaxHttpConnections);
+		SendListenCommand(portNumbers[protocol], protocol, MaxHttpConnections);
 		break;
 
 	case FtpProtocol:
-		SendListenCommand(portNumbers[protocol], 2);
+		SendListenCommand(portNumbers[protocol], protocol, 1);
 		break;
 
 	case TelnetProtocol:
-		SendListenCommand(portNumbers[protocol], 1);
+		SendListenCommand(portNumbers[protocol], protocol, 1);
 		break;
 
 	default:
@@ -217,12 +212,12 @@ void Network::ShutdownProtocol(Protocol protocol)
 	switch(protocol)
 	{
 	case HttpProtocol:
-		SendListenCommand(portNumbers[protocol], 0);
+		SendListenCommand(portNumbers[protocol], protocol, 0);
 		TerminateSockets(portNumbers[protocol]);
 		break;
 
 	case FtpProtocol:
-		SendListenCommand(portNumbers[protocol], 0);
+		SendListenCommand(portNumbers[protocol], protocol, 0);
 		TerminateSockets(portNumbers[protocol]);
 		if (ftpDataPort != 0)
 		{
@@ -231,7 +226,7 @@ void Network::ShutdownProtocol(Protocol protocol)
 		break;
 
 	case TelnetProtocol:
-		SendListenCommand(portNumbers[protocol], 0);
+		SendListenCommand(portNumbers[protocol], protocol, 0);
 		TerminateSockets(portNumbers[protocol]);
 		break;
 
@@ -364,7 +359,8 @@ void Network::Start()
 
 	// Set the data request pin to be an input
 	pinMode(EspTransferRequestPin, INPUT_PULLUP);
-	// we don't use an interrupt for this yetr
+	// FIXME: Attaching the ISR here is a possible reason for watchdog resets (if the ESP firmware is broken),
+	// but without this call the WiFi chip doesn't boot up any more if the firmware image is valid
 	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING);
 
 	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
@@ -380,7 +376,9 @@ void Network::Stop()
 	if (state != NetworkState::disabled)
 	{
 		digitalWrite(SamTfrReadyPin, LOW);			// tell the ESP we can't receive
-		digitalWrite(EspResetPin, LOW);	// put the ESP back into reset
+		digitalWrite(EspResetPin, LOW);				// put the ESP back into reset
+		detachInterrupt(EspTransferRequestPin);		// ignore IRQs from the transfer request pin
+
 		NVIC_DisableIRQ(SPI_IRQn);
 		spi_disable(SPI);
 		spi_dma_check_rx_complete();
@@ -405,7 +403,8 @@ void Network::Spin(bool full)
 			{
 				// Setup the SPI controller in slave mode and assign the CS pin to it
 				platform.Message(HOST_MESSAGE, "WiFi module started\n");
-				SetupSpi();						// set up the SPI subsystem
+				SetupSpi();									// set up the SPI subsystem
+
 				state = NetworkState::active;
 				currentMode = WiFiState::idle;				// wifi module is running but inactive
 
@@ -414,6 +413,19 @@ void Network::Spin(bool full)
 				if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
 				{
 					SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+
+					// Set the hostname before anything else is done
+					if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
+					{
+						reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not set WiFi hostname\n");
+					}
+				}
+				else
+				{
+					// Something went wrong, maybe a bad firmware image was flashed
+					// Disable the WiFi chip again in this case
+					platform.Message(HOST_MESSAGE, "Error: Failed to initialise WiFi module!\n");
+					Stop();
 				}
 			}
 		}
@@ -624,6 +636,12 @@ void Network::Diagnostics(MessageType mtype)
 				platform.MessageF(mtype, "WiFi signal strength %ddb\n", r.rssi);
 			}
 			// status, ssid and hostName not displayed
+
+			// Print LwIP stats and other values over the ESP's UART line
+			if (SendCommand(NetworkCommand::diagnostics, 0, 0, nullptr, 0, nullptr, 0) != ResponseEmpty)
+			{
+				platform.Message(mtype, "Failed to request ESP stats\n");
+			}
 		}
 		else
 		{
@@ -631,7 +649,12 @@ void Network::Diagnostics(MessageType mtype)
 		}
 	}
 	HttpResponder::CommonDiagnostics(mtype);
-	platform.Message(mtype, "Responder states:");
+	platform.Message(mtype, "Socket states: ");
+	for (size_t i = 0; i < NumTcpSockets; i++)
+	{
+		platform.MessageF(mtype, " %d", sockets[i].State());
+	}
+	platform.Message(mtype, "\nResponder states:");
 	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
 	{
 		r->Diagnostics(mtype);
@@ -724,6 +747,7 @@ void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[
 // Set the DHCP hostname. Removes all whitespaces and converts the name to lower-case.
 void Network::SetHostname(const char *name)
 {
+	// Filter out illegal characters
 	size_t i = 0;
 	while (*name && i < ARRAY_UPB(hostname))
 	{
@@ -739,13 +763,22 @@ void Network::SetHostname(const char *name)
 		}
 	}
 
-	if (i)
+	if (i != 0)
 	{
 		hostname[i] = 0;
 	}
 	else
 	{
 		strcpy(hostname, HOSTNAME);
+	}
+
+	// Update the hostname if possible
+	if (state == NetworkState::active)
+	{
+		if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
+		{
+			platform.Message(GENERIC_MESSAGE, "Error: Could not set WiFi hostname\n");
+		}
 	}
 }
 
@@ -795,28 +828,48 @@ void Network::UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClo
 // Find a responder to process a new connection
 bool Network::FindResponder(Socket *skt, Port localPort)
 {
-	for (size_t i = 0; i < NumProtocols; ++i)
+	// Get the right protocol
+	Protocol protocol;
+	if (localPort == ftpDataPort)
 	{
-		if (protocolEnabled[i] && portNumbers[i] == localPort)
+		protocol = FtpDataProtocol;
+	}
+	else
+	{
+		bool protocolFound = false;
+		for (size_t i = 0; i < NumProtocols; ++i)
 		{
-			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+			if (protocolEnabled[i] && portNumbers[i] == localPort)
 			{
-				if (r->Accept(skt, i))
-				{
-					return true;
-				}
+				protocol = i;
+				protocolFound = true;
+				break;
 			}
-			return false;	// no free responder, or protocol disabled
+		}
+
+		if (!protocolFound)
+		{
+			// Protocol is disabled
+			return false;
 		}
 	}
-	return false;			// unknown port number
+
+	// Try to find a responder to deal with this connection
+	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	{
+		if (r->Accept(skt, protocol))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 // Open the FTP data port
 void Network::OpenDataPort(Port port)
 {
 	ftpDataPort = port;
-	SendListenCommand(ftpDataPort, 1);
+	SendListenCommand(ftpDataPort, FtpDataProtocol, 1);
 }
 
 // Close FTP data port and purge associated resources
@@ -824,8 +877,14 @@ void Network::CloseDataPort()
 {
 	if (ftpDataPort != 0)
 	{
-		SendListenCommand(ftpDataPort, 0);
-		TerminateSockets(ftpDataPort);				// if the FTP responder wants to close the socket cleanly, it should have closed it itself
+		SendListenCommand(ftpDataPort, FtpDataProtocol, 0);
+		for (SocketNumber skt = 0; skt < NumTcpSockets; ++skt)
+		{
+			if (sockets[skt].GetLocalPort() == ftpDataPort)
+			{
+				sockets[skt].TerminatePolitely();
+			}
+		}
 		ftpDataPort = 0;
 	}
 }
@@ -1140,7 +1199,7 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 
 	if (response < 0 && reprap.Debug(moduleNetwork))
 	{
-		debugPrintf("Network command %d socket %u returned error %d\n", (int)cmd, response);
+		debugPrintf("Network command %d socket %u returned error %d\n", (int)cmd, socketNum, response);
 	}
 
 #if 0
@@ -1154,10 +1213,11 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 	return response;
 }
 
-void Network::SendListenCommand(Port port, unsigned int maxConnections)
+void Network::SendListenCommand(Port port, Protocol protocol, unsigned int maxConnections)
 {
 	ListenOrConnectData lcb;
 	lcb.port = port;
+	lcb.protocol = protocol;
 	lcb.remoteIp = AnyIp;
 	lcb.maxConnections = maxConnections;
 	SendCommand(NetworkCommand::networkListen, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
@@ -1173,6 +1233,7 @@ void Network::GetNewStatus()
 	Receiver<MessageResponse> rcvr;
 
 	espStatusChanged = false;
+
 	const int32_t rslt = SendCommand(NetworkCommand::networkGetLastError, 0, 0, nullptr, 0, rcvr);
 	rcvr.Value().messageBuffer[ARRAY_UPB(rcvr.Value().messageBuffer)] = 0;
 	if (rslt < 0)

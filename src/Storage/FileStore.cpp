@@ -8,7 +8,7 @@
 
 uint32_t FileStore::longestWriteTime = 0;
 
-FileStore::FileStore(Platform* p) : platform(p)
+FileStore::FileStore(Platform* p) : platform(p), writeBuffer(nullptr)
 {
 }
 
@@ -45,9 +45,9 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 								: fileName;
 	writing = write;
 
-	// Try to create the path of this file if we want to write to it
 	if (writing)
 	{
+		// Try to create the path of this file if we want to write to it
 		char filePathBuffer[FILENAME_LENGTH];
 		StringRef filePath(filePathBuffer, FILENAME_LENGTH);
 		filePath.copy(location);
@@ -73,6 +73,9 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 				filePath[i] = '/';
 			}
 		}
+
+		// Also try to allocate a write buffer so we can perform faster writes
+		writeBuffer = platform->GetMassStorage()->AllocateWriteBuffer();
 	}
 
 	FRESULT openReturn = f_open(&file, location, (writing) ?  FA_CREATE_ALWAYS | FA_WRITE : FA_OPEN_EXISTING | FA_READ);
@@ -147,6 +150,12 @@ bool FileStore::Close()
 	if (writing)
 	{
 		ok = Flush();
+	}
+
+	if (writeBuffer != nullptr)
+	{
+		platform->GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
+		writeBuffer = nullptr;
 	}
 
 	FRESULT fr = f_close(&file);
@@ -277,16 +286,47 @@ bool FileStore::Write(const char *s, size_t len)
 		return false;
 	}
 
-	size_t bytesWritten;
-	uint32_t time = micros();
-
-	FRESULT writeStatus = f_write(&file, s, len, &bytesWritten);
-	time = micros() - time;
-	if (time > longestWriteTime)
+	size_t totalBytesWritten = 0;
+	FRESULT writeStatus = FR_OK;
+	if (writeBuffer == nullptr)
 	{
-		longestWriteTime = time;
+		uint32_t time = micros();
+		writeStatus = f_write(&file, s, len, &totalBytesWritten);
+		time = micros() - time;
+		if (time > longestWriteTime)
+		{
+			longestWriteTime = time;
+		}
 	}
-	if ((writeStatus != FR_OK) || (bytesWritten != len))
+	else
+	{
+		do
+		{
+			size_t bytesStored = writeBuffer->Store(s + totalBytesWritten, len - totalBytesWritten);
+			if (writeBuffer->BytesLeft() == 0)
+			{
+				size_t bytesToWrite = writeBuffer->BytesStored(), bytesWritten;
+				uint32_t time = micros();
+				writeStatus = f_write(&file, writeBuffer->Data(), bytesToWrite, &bytesWritten);
+				time = micros() - time;
+				if (time > longestWriteTime)
+				{
+					longestWriteTime = time;
+				}
+				writeBuffer->DataTaken();
+
+				if (bytesToWrite != bytesWritten)
+				{
+					// Something went wrong
+					break;
+				}
+			}
+			totalBytesWritten += bytesStored;
+		}
+		while (writeStatus == FR_OK && totalBytesWritten != len);
+	}
+
+	if ((writeStatus != FR_OK) || (totalBytesWritten != len))
 	{
 		platform->Message(GENERIC_MESSAGE, "Error: Cannot write to file. Drive may be full.\n");
 		return false;
@@ -301,6 +341,26 @@ bool FileStore::Flush()
 		platform->Message(GENERIC_MESSAGE, "Error: Attempt to flush a non-open file.\n");
 		return false;
 	}
+
+	if (writeBuffer != nullptr)
+	{
+		size_t bytesToWrite = writeBuffer->BytesStored(), bytesWritten;
+		uint32_t time = micros();
+		FRESULT writeStatus = f_write(&file, writeBuffer->Data(), bytesToWrite, &bytesWritten);
+		time = micros() - time;
+		if (time > longestWriteTime)
+		{
+			longestWriteTime = time;
+		}
+		writeBuffer->DataTaken();
+
+		if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
+		{
+			platform->Message(GENERIC_MESSAGE, "Error: Cannot write to file. Drive may be full.\n");
+			return false;
+		}
+	}
+
 	return f_sync(&file) == FR_OK;
 }
 

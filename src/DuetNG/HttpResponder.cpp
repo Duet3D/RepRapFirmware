@@ -1012,18 +1012,10 @@ void HttpResponder::ProcessMessage()
 					return;
 				}
 
-				// We cannot upload more than one file at once
-				if (!GetUploadLock())
-				{
-					RejectMessage("cannot upload more than one file at once");
-					return;
-				}
-
 				// Start a new file upload
 				FileStore *file = GetPlatform().GetFileStore(FS_PREFIX, qualifiers[0].value, true);
 				if (file == nullptr)
 				{
-					ReleaseUploadLock();
 					RejectMessage("could not create file");
 					return;
 
@@ -1090,36 +1082,20 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 // It tries to process a chunk of uploaded data and changes the state if finished.
 void HttpResponder::DoUpload()
 {
-	if (uploadedBytes == 0)
-	{
-		writeBufIndex = 0;
-	}
-
 	const uint8_t *buffer;
 	size_t len;
 	if (skt->ReadBuffer(buffer, len))
 	{
-		// Write data in sector-aligned chunks. This also means that the buffer in fatfs is only used to hold the FAT.
-		// Buffer size must be a multiple of the 512b sector size.
-		char* const writeBuf = reinterpret_cast<char *>(writeBufStorage);
-		const size_t lengthToCopy = min<size_t>(writeBufLength - writeBufIndex, len);
-		memcpy(writeBuf + writeBufIndex, buffer, lengthToCopy);
-		writeBufIndex += lengthToCopy;
-		uploadedBytes += lengthToCopy;
-		buffer += lengthToCopy;
-		skt->Taken(lengthToCopy);
-		if (writeBufIndex == writeBufLength || uploadedBytes >= postFileLength)
+		skt->Taken(len);
+		uploadedBytes += len;
+
+		if (!fileBeingUploaded.Write(buffer, len))
 		{
-			const bool success = fileBeingUploaded.Write(writeBuf, writeBufIndex);
-			writeBufIndex = 0;
-			if (!success)
-			{
-				uploadError = true;
-				GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
-				CancelUpload();
-				SendJsonResponse("upload");
-				return;
-			}
+			uploadError = true;
+			GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+			CancelUpload();
+			SendJsonResponse("upload");
+			return;
 		}
 	}
 

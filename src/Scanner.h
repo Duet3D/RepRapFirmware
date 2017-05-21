@@ -13,7 +13,7 @@
 
 #if SUPPORT_SCANNER
 
-const size_t ScanBufferSize = 512;						// Buffer for incoming codes and upload chunks
+const size_t ScanBufferSize = 128;						// Buffer for incoming commands
 
 enum class ScannerState
 {

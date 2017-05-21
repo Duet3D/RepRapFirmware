@@ -2,7 +2,7 @@
  * FtpResponder.h
  *
  *  Created on: 14 Apr 2017
- *      Author: David
+ *      Authors: David and Christian
  */
 
 #ifndef SRC_DUETNG_DUETETHERNET_FTPRESPONDER_H_

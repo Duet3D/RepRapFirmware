@@ -2,7 +2,7 @@
 
 RepRapFirmware - Network: RepRapPro Ormerod with Duet controller
 
-Separated out from Platform.h by dc42 and extended by zpl
+Separated out from Platform.h by dc42 and extended by chrishamm
 
 ****************************************************************************************************/
 
@@ -119,7 +119,7 @@ private:
 
 	void SetupSpi();
 
-	void SendListenCommand(Port port, unsigned int maxConnections);
+	void SendListenCommand(Port port, Protocol protocol, unsigned int maxConnections);
 	void GetNewStatus();
 
 	static const char* TranslateEspResetReason(uint32_t reason);

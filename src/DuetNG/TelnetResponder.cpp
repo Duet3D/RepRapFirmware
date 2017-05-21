@@ -61,6 +61,7 @@ bool TelnetResponder::Spin()
 			// Discard the setup message
 			char c;
 			while (skt->ReadChar(c)) { }
+			connectTime = 0;
 			return true;
 		}
 

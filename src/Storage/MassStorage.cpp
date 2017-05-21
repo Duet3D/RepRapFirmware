@@ -55,6 +55,12 @@ MassStorage::MassStorage(Platform* p) : platform(p)
 
 void MassStorage::Init()
 {
+	freeWriteBuffers = nullptr;
+	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
+	{
+		freeWriteBuffers = new FileWriteBuffer(freeWriteBuffers);
+	}
+
 	for (size_t i = 0; i < NumSdCards; ++i)
 	{
 		isMounted[i] = false;
@@ -71,6 +77,25 @@ void MassStorage::Init()
 		delay(3000);		// Wait a few seconds so users have a chance to see this
 		platform->Message(HOST_MESSAGE, reply.Pointer());
 	}
+}
+
+FileWriteBuffer *MassStorage::AllocateWriteBuffer()
+{
+	if (freeWriteBuffers == nullptr)
+	{
+		return nullptr;
+	}
+
+	FileWriteBuffer *buffer = freeWriteBuffers;
+	freeWriteBuffers = buffer->Next();
+	buffer->SetNext(nullptr);
+	return buffer;
+}
+
+void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer)
+{
+	buffer->SetNext(freeWriteBuffers);
+	freeWriteBuffers = buffer;
 }
 
 const char* MassStorage::CombineName(const char* directory, const char* fileName)

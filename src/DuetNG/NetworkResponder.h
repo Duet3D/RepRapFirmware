@@ -72,9 +72,6 @@ protected:
 	virtual void SendData();
 	virtual void ConnectionLost();
 
-	bool GetUploadLock() const { return uploadLock.Acquire(this); }
-	void ReleaseUploadLock() const { return uploadLock.Release(this); }
-
 	void StartUpload(FileStore *file, const char *fileName);
 	void FinishUpload(uint32_t fileLength, time_t fileLastModified);
 	virtual void CancelUpload();
@@ -101,11 +98,6 @@ protected:
 	uint32_t postFileLength, uploadedBytes;				// How many POST bytes do we expect and how many have already been written?
 	time_t fileLastModified;
 	bool uploadError;
-
-	static NetworkResponderLock uploadLock;
-	static const size_t writeBufLength = 8192;
-	static uint32_t writeBufStorage[writeBufLength/4];	// aligned buffer for file writes
-	static size_t writeBufIndex;
 };
 
 #endif /* SRC_DUETNG_DUETETHERNET_NETWORKRESPONDER_H_ */

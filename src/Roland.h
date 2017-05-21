@@ -26,6 +26,7 @@ Licence: GPL
 // See: http://www.rolanddg.com/product/3d/3d/mdx-20_15/mdx-20_15.html
 //      http://altlab.org/d/content/m/pangelo/ideas/rml_command_guide_en_v100.pdf
 
+#include "RepRapFirmware.h"
 #include "Core.h"
 #include "Platform.h"
 

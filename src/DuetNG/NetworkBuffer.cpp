@@ -91,6 +91,19 @@ void NetworkBuffer::Empty()
 	*list = b;
 }
 
+// Find the last buffer in a list
+/*static*/ NetworkBuffer *NetworkBuffer::FindLast(NetworkBuffer *list)
+{
+	if (list != nullptr)
+	{
+		while (list->next != nullptr)
+		{
+			list = list->next;
+		}
+	}
+	return list;
+}
+
 /*static*/ NetworkBuffer *NetworkBuffer::Allocate()
 {
 	NetworkBuffer *ret = freelist;

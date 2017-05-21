@@ -6,9 +6,8 @@
 #include "Core.h"
 #include "Libraries/Fatfs/ff.h"
 
-const size_t FileBufLen = 256;						// 512 would be more efficient, but need to free up some RAM first
-
 class Platform;
+class FileWriteBuffer;
 
 class FileStore
 {
@@ -18,6 +17,7 @@ public:
 	int ReadLine(char* buf, size_t nBytes);			// As Read but stop after '\n' or '\r\n' and null-terminate
 	bool Write(char b);								// Write 1 byte
 	bool Write(const char *s, size_t len);			// Write a block of len bytes
+	bool Write(const uint8_t *s, size_t len);		// Write a block of len bytes
 	bool Write(const char* s);						// Write a string
 	bool Close();									// Shut the file and tidy up
 	bool Seek(FilePosition pos);					// Jump to pos in the file
@@ -49,6 +49,7 @@ private:
 	Platform* platform;
 
 	FIL file;
+	FileWriteBuffer *writeBuffer;
 	volatile unsigned int openCount;
 	volatile bool closeRequested;
 
@@ -57,5 +58,7 @@ private:
 
 	static uint32_t longestWriteTime;
 };
+
+inline bool FileStore::Write(const uint8_t *s, size_t len) { return Write(reinterpret_cast<const char *>(s), len); }
 
 #endif

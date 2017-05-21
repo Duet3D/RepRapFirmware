@@ -178,16 +178,25 @@ void NetworkResponder::ConnectionLost()
 	CancelUpload();
 	OutputBuffer::ReleaseAll(outBuf);
 	outStack->ReleaseAll();
+
 	if (fileBeingSent != nullptr)
 	{
 		fileBeingSent->Close();
 		fileBeingSent = nullptr;
 	}
+
+	if (fileBuffer != nullptr)
+	{
+		fileBuffer->Release();
+		fileBuffer = nullptr;
+	}
+
 	if (skt != nullptr)
 	{
 		skt->Terminate();
 		skt = nullptr;
 	}
+
 	responderState = ResponderState::free;
 }
 
@@ -203,17 +212,13 @@ void NetworkResponder::StartUpload(FileStore *file, const char *fileName)
 // If this responder has an upload in progress, cancel it
 void NetworkResponder::CancelUpload()
 {
-	if (uploadLock.IsOwnedBy(this))
+	if (fileBeingUploaded.IsLive())
 	{
-		if (fileBeingUploaded.IsLive())
+		fileBeingUploaded.Close();
+		if (filenameBeingUploaded[0] != 0)
 		{
-			fileBeingUploaded.Close();
-			if (filenameBeingUploaded[0] != 0)
-			{
-				GetPlatform().GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
-			}
+			GetPlatform().GetMassStorage()->Delete(FS_PREFIX, filenameBeingUploaded);
 		}
-		uploadLock.Release(this);
 	}
 }
 
@@ -256,12 +261,6 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 
 	// Clean up again
 	filenameBeingUploaded[0] = 0;
-	uploadLock.Release(this);
 }
-
-// NetworkResponder static data
-NetworkResponderLock NetworkResponder::uploadLock;
-uint32_t NetworkResponder::writeBufStorage[writeBufLength/4];
-size_t NetworkResponder::writeBufIndex;
 
 // End

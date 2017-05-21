@@ -3,6 +3,7 @@
 
 #include "RepRapFirmware.h"
 #include "Pins.h"
+#include "FileWriteBuffer.h"
 #include "Libraries/Fatfs/ff.h"
 #include <ctime>
 
@@ -39,11 +40,15 @@ public:
 	bool CheckDriveMounted(const char* path);
 
 friend class Platform;
+friend class FileStore;
 
 protected:
 
 	MassStorage(Platform* p);
 	void Init();
+
+	FileWriteBuffer *AllocateWriteBuffer();
+	void ReleaseWriteBuffer(FileWriteBuffer *buffer);
 
 private:
 	static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime);
@@ -53,6 +58,8 @@ private:
 	DIR findDir;
 	bool isMounted[NumSdCards];
 	char combinedName[FILENAME_LENGTH + 1];
+
+	FileWriteBuffer *freeWriteBuffers;
 };
 
 #endif

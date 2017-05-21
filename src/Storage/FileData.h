@@ -46,7 +46,7 @@ public:
 		return f->Read(b);
 	}
 
-	int Read(char* buf, size_t nBytes)
+	int Read(char *buf, size_t nBytes)
 	{
 		return f->Read(buf, nBytes);
 	}
@@ -56,7 +56,12 @@ public:
 		return f->Write(b);
 	}
 
-	bool Write(const char *s, unsigned int len)
+	bool Write(const char *s, size_t len)
+	{
+		return f->Write(s, len);
+	}
+
+	bool Write(const uint8_t *s, size_t len)
 	{
 		return f->Write(s, len);
 	}

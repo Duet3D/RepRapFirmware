@@ -135,6 +135,7 @@ void Network::ShutdownProtocol(Protocol protocol)
 	{
 		r->Terminate(protocol);
 	}
+
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -464,7 +465,7 @@ void Network::SetHostname(const char *name)
 		}
 	}
 
-	if (i)
+	if (i != 0)
 	{
 		hostname[i] = 0;
 	}
