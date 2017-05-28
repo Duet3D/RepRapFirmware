@@ -60,7 +60,7 @@ void Heat::Init()
 			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime,
 								DefaultBedTemperatureLimit, false);
 		}
-#if !defined(DUET_NG) && !defined(__RADDS__)
+#if !defined(DUET_NG) && !defined(__RADDS__) && !defined(__ALLIGATOR__)
 		else if (heater == HEATERS - 1)
 		{
 			// Heater 6 pin is shared with fan 1. By default we support fan 1, so disable heater 6.

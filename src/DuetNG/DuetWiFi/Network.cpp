@@ -29,6 +29,7 @@
 
 const uint32_t WifiResponseTimeoutMillis = 200;
 const uint32_t WiFiStartupMillis = 300;
+const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
 
@@ -84,6 +85,16 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
 static void EspTransferRequestIsr()
 {
 	reprap.GetNetwork().EspRequestsTransfer();
+}
+
+static inline void EnableEspInterrupt()
+{
+	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING);
+}
+
+static inline void DisableEspInterrupt()
+{
+	detachInterrupt(EspTransferRequestPin);
 }
 
 /*-----------------------------------------------------------------------------------*/
@@ -292,7 +303,8 @@ bool Network::GetNetworkState(StringRef& reply)
 	case NetworkState::disabled:
 		reply.copy("WiFi module is disabled");
 		break;
-	case NetworkState::starting:
+	case NetworkState::starting1:
+	case NetworkState::starting2:
 		reply.copy("WiFi module is being started");
 		break;
 	case NetworkState::changingMode:
@@ -359,15 +371,12 @@ void Network::Start()
 
 	// Set the data request pin to be an input
 	pinMode(EspTransferRequestPin, INPUT_PULLUP);
-	// FIXME: Attaching the ISR here is a possible reason for watchdog resets (if the ESP firmware is broken),
-	// but without this call the WiFi chip doesn't boot up any more if the firmware image is valid
-	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING);
 
 	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
 	spiTxUnderruns = spiRxOverruns = 0;
 
 	lastTickMillis = millis();
-	state = NetworkState::starting;
+	state = NetworkState::starting1;
 }
 
 // Stop the ESP
@@ -377,7 +386,7 @@ void Network::Stop()
 	{
 		digitalWrite(SamTfrReadyPin, LOW);			// tell the ESP we can't receive
 		digitalWrite(EspResetPin, LOW);				// put the ESP back into reset
-		detachInterrupt(EspTransferRequestPin);		// ignore IRQs from the transfer request pin
+		DisableEspInterrupt();						// ignore IRQs from the transfer request pin
 
 		NVIC_DisableIRQ(SPI_IRQn);
 		spi_disable(SPI);
@@ -394,39 +403,60 @@ void Network::Spin(bool full)
 	// Main state machine.
 	switch (state)
 	{
-	case NetworkState::starting:
-		// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
-		if (full && (millis() - lastTickMillis) >= WiFiStartupMillis)
+	case NetworkState::starting1:
+		if (full)
 		{
-			// See if the ESP8266 has set CS high yet
-			if (digitalRead(SamCsPin) && digitalRead(EspTransferRequestPin))
+			// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
+			const uint32_t now = millis();
+			if (now - lastTickMillis >= WiFiStartupMillis)
 			{
-				// Setup the SPI controller in slave mode and assign the CS pin to it
-				platform.Message(HOST_MESSAGE, "WiFi module started\n");
-				SetupSpi();									// set up the SPI subsystem
+				lastTickMillis = now;
+				state = NetworkState::starting2;
+			}
+		}
+		break;
 
-				state = NetworkState::active;
-				currentMode = WiFiState::idle;				// wifi module is running but inactive
-
-				// Read the status to get the WiFi server version
-				Receiver<NetworkStatusResponse> status;
-				if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
+	case NetworkState::starting2:
+		if (full)
+		{
+			// See if the ESP8266 has kept its pins at their stable values for long enough
+			const uint32_t now = millis();
+			if (digitalRead(SamCsPin) && digitalRead(EspTransferRequestPin) && !digitalRead(APIN_SPI_SCK))
+			{
+				if (now - lastTickMillis >= WiFiStableMillis)
 				{
-					SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+					// Setup the SPI controller in slave mode and assign the CS pin to it
+					platform.Message(NETWORK_INFO_MESSAGE, "WiFi module started\n");
+					SetupSpi();									// set up the SPI subsystem
 
-					// Set the hostname before anything else is done
-					if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
+					// Read the status to get the WiFi server version
+					Receiver<NetworkStatusResponse> status;
+					const int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
+					if (rc > 0)
 					{
-						reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not set WiFi hostname\n");
+						SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+
+						// Set the hostname before anything else is done
+						if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
+						{
+							reprap.GetPlatform().Message(NETWORK_INFO_MESSAGE, "Error: Could not set WiFi hostname\n");
+						}
+
+						state = NetworkState::active;
+						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
+					}
+					else
+					{
+						// Something went wrong, maybe a bad firmware image was flashed
+						// Disable the WiFi chip again in this case
+						platform.MessageF(NETWORK_INFO_MESSAGE, "Error: Failed to initialise WiFi module, code %d\n", rc);
+						Stop();
 					}
 				}
-				else
-				{
-					// Something went wrong, maybe a bad firmware image was flashed
-					// Disable the WiFi chip again in this case
-					platform.Message(HOST_MESSAGE, "Error: Failed to initialise WiFi module!\n");
-					Stop();
-				}
+			}
+			else
+			{
+				lastTickMillis = now;
 			}
 		}
 		break;
@@ -474,7 +504,7 @@ void Network::Spin(bool full)
 				else
 				{
 					Stop();
-					platform.MessageF(GENERIC_MESSAGE, "Failed to change WiFi mode (code %d)\n", rslt);
+					platform.MessageF(NETWORK_INFO_MESSAGE, "Failed to change WiFi mode (code %d)\n", rslt);
 				}
 			}
 			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
@@ -554,14 +584,14 @@ void Network::Spin(bool full)
 						SafeStrncpy(ssid, status.Value().ssid, SsidLength);
 					}
 					InitSockets();
-					platform.MessageF(HOST_MESSAGE, "Wifi module is %s%s, IP address %u.%u.%u.%u\n",
+					platform.MessageF(NETWORK_INFO_MESSAGE, "Wifi module is %s%s, IP address %u.%u.%u.%u\n",
 						TranslateWiFiState(currentMode),
 						ssid,
 						ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 				}
 				else
 				{
-					platform.MessageF(HOST_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
+					platform.MessageF(NETWORK_INFO_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
 				}
 			}
 		}
@@ -602,7 +632,8 @@ const char* Network::TranslateNetworkState() const
 	switch (state)
 	{
 	case NetworkState::disabled:		return "disabled";
-	case NetworkState::starting:		return "starting";
+	case NetworkState::starting1:
+	case NetworkState::starting2:		return "starting";
 	case NetworkState::active:			return "running";
 	case NetworkState::changingMode:	return "changing mode";
 	default:							return "unknown";
@@ -617,7 +648,7 @@ void Network::Diagnostics(MessageType mtype)
 	// The underrun/overrun counters don't work at present
 	platform.MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
 #endif
-	if (state != NetworkState::disabled && state != NetworkState::starting)
+	if (state != NetworkState::disabled && state != NetworkState::starting1 && state != NetworkState::starting2)
 	{
 		Receiver<NetworkStatusResponse> status;
 		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
@@ -665,10 +696,10 @@ void Network::Diagnostics(MessageType mtype)
 void Network::Enable(int mode, StringRef& reply)
 {
 	// Translate enable mode to desired WiFi mode
-	WiFiState modeRequested = (mode == 0) ? WiFiState::idle
-								: (mode == 1) ? WiFiState::connected
-									: (mode == 2) ? WiFiState::runningAsAccessPoint
-										: WiFiState::disabled;
+	const WiFiState modeRequested = (mode == 0) ? WiFiState::idle
+									: (mode == 1) ? WiFiState::connected
+										: (mode == 2) ? WiFiState::runningAsAccessPoint
+											: WiFiState::disabled;
 	if (activated)
 	{
 		if (modeRequested == WiFiState::disabled)
@@ -735,6 +766,7 @@ int Network::EnableState() const
 void Network::EspRequestsTransfer()
 {
 	espStatusChanged = true;
+	DisableEspInterrupt();				// don't allow more interrupts until we have acknowledged this one
 }
 
 void Network::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_netmask[], const uint8_t p_gateway[])
@@ -1091,15 +1123,15 @@ void Network::SetupSpi()
 	matrix_set_slave_slot_cycle(0, 8);
 #endif
 
-	pmc_enable_periph_clk(ID_SPI);
-	spi_dma_disable();
-	spi_reset(SPI);				// this clears the transmit and receive registers and puts the SPI into slave mode
-
 	// Set up the SPI pins
 	ConfigurePin(g_APinDescription[APIN_SPI_SCK]);
 	ConfigurePin(g_APinDescription[APIN_SPI_MOSI]);
 	ConfigurePin(g_APinDescription[APIN_SPI_MISO]);
 	ConfigurePin(g_APinDescription[APIN_SPI_SS0]);
+
+	pmc_enable_periph_clk(ID_SPI);
+	spi_dma_disable();
+	spi_reset(SPI);					// this clears the transmit and receive registers and puts the SPI into slave mode
 
 #if USE_DMAC
 	// Configure DMA RX channel
@@ -1112,7 +1144,9 @@ void Network::SetupSpi()
 #endif
 
 	(void)SPI->SPI_SR;				// clear any pending interrupt
-	NVIC_SetPriority(SPI_IRQn, 10);
+	SPI->SPI_IDR = SPI_IER_NSSR;	// disable the interrupt
+
+	NVIC_SetPriority(SPI_IRQn, NvicPrioritySpi);
 	NVIC_EnableIRQ(SPI_IRQn);
 }
 
@@ -1121,13 +1155,19 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 {
 	if (state == NetworkState::disabled)
 	{
-		debugPrintf("ResponseNetworkDisabled\n");
+		if (reprap.Debug(moduleNetwork))
+		{
+			debugPrintf("ResponseNetworkDisabled\n");
+		}
 		return ResponseNetworkDisabled;
 	}
 
 	if (!digitalRead(EspTransferRequestPin) || transferPending || !spi_dma_check_rx_complete())
 	{
-		debugPrintf("ResponseBusy\n");
+		if (reprap.Debug(moduleNetwork))
+		{
+			debugPrintf("ResponseBusy\n");
+		}
 		return ResponseBusy;
 	}
 
@@ -1144,14 +1184,6 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 	}
 	bufferIn.hdr.formatVersion = InvalidFormatVersion;
 	transferPending = true;
-
-#if 0
-	//***TEMP debug
-	if (cmd != NetworkCommand::connGetStatus)
-	{
-		debugPrintBuffer("Send", &bufferOut, (dataOut == nullptr) ? 0 : dataOutLength);
-	}
-#endif
 
 	// DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
 	// The only way I can find to do this is to issue a software reset to the SPI system.
@@ -1176,7 +1208,10 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 	{
 		if (millis() - now > WifiResponseTimeoutMillis)
 		{
-			debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
+			if (reprap.Debug(moduleNetwork))
+			{
+				debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
+			}
 			return ResponseTimeout;
 		}
 	}
@@ -1233,16 +1268,17 @@ void Network::GetNewStatus()
 	Receiver<MessageResponse> rcvr;
 
 	espStatusChanged = false;
+	EnableEspInterrupt();
 
 	const int32_t rslt = SendCommand(NetworkCommand::networkGetLastError, 0, 0, nullptr, 0, rcvr);
 	rcvr.Value().messageBuffer[ARRAY_UPB(rcvr.Value().messageBuffer)] = 0;
 	if (rslt < 0)
 	{
-		platform.Message(GENERIC_MESSAGE, "Error retrieving WiFi status message\n");
+		platform.Message(NETWORK_INFO_MESSAGE, "Error retrieving WiFi status message\n");
 	}
 	else if (rslt > 0 && rcvr.Value().messageBuffer[0] != 0)
 	{
-		platform.MessageF(GENERIC_MESSAGE, "WiFi reported error: %s\n", rcvr.Value().messageBuffer);
+		platform.MessageF(NETWORK_INFO_MESSAGE, "WiFi reported error: %s\n", rcvr.Value().messageBuffer);
 	}
 }
 
@@ -1286,6 +1322,7 @@ void Network::ResetWiFi()
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
 	pinMode(APIN_UART1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
 	pinMode(APIN_UART1_RXD, INPUT_PULLUP);
+	currentMode = WiFiState::disabled;
 }
 
 // Reset the ESP8266 to take commands from the UART or from external input. The caller must wait for the reset to complete after calling this.

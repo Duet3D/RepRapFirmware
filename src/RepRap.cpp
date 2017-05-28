@@ -10,7 +10,7 @@
 #include "Tool.h"
 #include "Version.h"
 
-#ifndef __RADDS__
+#if !defined(__RADDS__) && !defined(__ALLIGATOR__)
 # include "sam/drivers/hsmci/hsmci.h"
 #endif
 
@@ -67,7 +67,6 @@ void RepRap::Init()
 	scanner->Init();
 #endif
 	printMonitor->Init();
-	Platform::EnableWatchdog();		// do this after all init calls are made
 	active = true;					// must do this before we start the network, else the watchdog may time out
 
 	platform->MessageF(HOST_MESSAGE, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
@@ -103,7 +102,7 @@ void RepRap::Init()
 	// Enable network (unless it's disabled)
 	network->Activate();			// Need to do this here, as the configuration GCodes may set IP address etc.
 
-#ifndef __RADDS__
+#if !defined(__RADDS__) && !defined(__ALLIGATOR__)
 	hsmci_set_idle_func(hsmciIdle);
 #endif
 	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", FIRMWARE_NAME);
@@ -560,20 +559,13 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// XYZ positions
+		// TODO ideally we would report "unknown" or similar for axis positions that are not known because we haven't homed them, but that requires changes to DWC and PanelDue.
 		response->cat("],\"xyz\":");
-		if (gCodes->AllAxesAreHomed() || move->GetKinematics().ShowCoordinatesWhenNotHomed())
+		ch = '[';
+		for (size_t axis = 0; axis < numAxes; axis++)
 		{
-			ch = '[';
-			for (size_t axis = 0; axis < numAxes; axis++)
-			{
-				response->catf("%c%.3f", ch, liveCoordinates[axis]);
-				ch = ',';
-			}
-		}
-		else
-		{
-			// If in Delta mode, skip these coordinates if some axes are not homed
-			response->cat("[0.00,0.00,0.00");
+			response->catf("%c%.3f", ch, liveCoordinates[axis]);
+			ch = ',';
 		}
 	}
 

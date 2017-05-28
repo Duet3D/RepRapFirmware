@@ -56,7 +56,6 @@ public:
 	DDA* GetNext() const { return next; }
 	DDA* GetPrevious() const { return prev; }
 	int32_t GetTimeLeft() const;
-	float GetMotorPosition(size_t drive) const;						// Get the real mm position of a motor at the planned endpoint of this move
 	const int32_t *DriveCoordinates() const { return endPoint; }	// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(int32_t a, size_t drive);				// Force an end point
 	void SetFeedRate(float rate) { requestedSpeed = rate; }

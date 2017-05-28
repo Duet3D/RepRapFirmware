@@ -7,6 +7,8 @@
 # if defined(__SAM3X8E__)
 #  if defined(__RADDS__)
 #   define PLATFORM RADDS
+#  elif defined(__ALLIGATOR__)
+#	define PLATFORM Alligator
 #  else
 #   define PLATFORM Duet
 #  endif

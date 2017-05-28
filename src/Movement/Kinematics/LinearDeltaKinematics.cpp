@@ -134,9 +134,15 @@ void LinearDeltaKinematics::InverseTransform(float Ha, float Hb, float Hc, float
 bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const
 {
 	//TODO return false if we can't transform the position
-	for (size_t axis = 0; axis < numAxes; ++axis)
+	for (size_t axis = 0; axis < min<size_t>(numAxes, DELTA_AXES); ++axis)
 	{
 		motorPos[axis] = (int32_t)roundf(Transform(machinePos, axis) * stepsPerMm[axis]);
+	}
+
+	// Transform any additional axes linearly
+	for (size_t axis = DELTA_AXES; axis < numAxes; ++axis)
+	{
+		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
 	}
 	return true;
 }
@@ -146,8 +152,8 @@ void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 {
 	InverseTransform(motorPos[A_AXIS]/stepsPerMm[A_AXIS], motorPos[B_AXIS]/stepsPerMm[B_AXIS], motorPos[C_AXIS]/stepsPerMm[C_AXIS], machinePos);
 
-	// Convert any additional axes and the extruders
-	for (size_t drive = MIN_AXES; drive < numDrives; ++drive)
+	// Convert any additional axes linearly
+	for (size_t drive = DELTA_AXES; drive < numDrives; ++drive)
 	{
 		machinePos[drive] = motorPos[drive]/stepsPerMm[drive];
 	}
@@ -179,6 +185,16 @@ void LinearDeltaKinematics::LimitPosition(float coords[], size_t numAxes, uint16
 		// Constrain the end height of the move to be no greater than the homed height and no lower than M208 minimum Z
 		coords[Z_AXIS] = max<float>(reprap.GetPlatform().AxisMinimum(Z_AXIS), min<float>(coords[Z_AXIS], homedHeight));
 	}
+}
+
+// Return the initial Cartesian coordinates we assume after switching to this kinematics
+void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
+{
+	for (size_t i = 0; i < numAxes; ++i)
+	{
+		positions[i] = 0.0;
+	}
+	positions[Z_AXIS] = homedHeight;
 }
 
 // Auto calibrate from a set of probe points

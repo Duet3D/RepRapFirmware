@@ -43,8 +43,8 @@ public:
 	float GetTiltCorrection(size_t axis) const override;
 	bool IsReachable(float x, float y) const override;
 	void LimitPosition(float coords[], size_t numAxes, uint16_t axesHomed) const override;
+	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	uint16_t AxesToHomeBeforeProbing() const override { return (1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS); }
-	bool ShowCoordinatesWhenNotHomed() const override { return false; }
 
     // Public functions specific to this class
 	float GetDiagonalSquared() const { return D2; }

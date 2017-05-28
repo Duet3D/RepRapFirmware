@@ -571,7 +571,7 @@ void WifiFirmwareUploader::Spin()
 		if (connectAttemptNumber == ARRAY_SIZE(uploadBaudRates) * retriesPerBaudRate)
 		{
 			// Time to give up
-			Network::ResetWiFi();
+			reprap.GetNetwork().ResetWiFi();
 			uploadResult = EspUploadResult::connect;
 			state = UploadState::done;
 		}

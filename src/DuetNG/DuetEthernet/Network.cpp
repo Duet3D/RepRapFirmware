@@ -198,7 +198,7 @@ void Network::Activate()
 		}
 		else
 		{
-			platform.Message(HOST_MESSAGE, "Network disabled.\n");
+			platform.Message(NETWORK_INFO_MESSAGE, "Network disabled.\n");
 		}
 	}
 }
@@ -328,7 +328,7 @@ void Network::Spin(bool full)
 		if (full)
 		{
 			InitSockets();
-			platform.MessageF(GENERIC_MESSAGE, "Network running, IP address = %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+			platform.MessageF(NETWORK_INFO_MESSAGE, "Network running, IP address = %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 			state = NetworkState::active;
 		}
 		break;
@@ -425,7 +425,7 @@ void Network::Enable(int mode, StringRef& reply)
 		if (state != NetworkState::disabled)
 		{
 			Stop();
-			platform.Message(GENERIC_MESSAGE, "Network stopped\n");
+			platform.Message(NETWORK_INFO_MESSAGE, "Network stopped\n");
 		}
 
 	}

@@ -18,14 +18,19 @@ const size_t NumFirmwareUpdateModules = 1;
 
 const size_t DRIVES = 9;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h,i }
-const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 const int8_t HEATERS = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g }
+const unsigned int FirstVirtualHeater = 100;
+const unsigned int NumVirtualHeaters = 1;		// CPU temperature only
 
 const size_t MAX_AXES = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
+#define AXES_(a,b,c,d,e,f) { a,b,c,d,e,f }
+
 const size_t MIN_AXES = 3;						// The minimum and default number of axes
 const size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
+const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 const size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
 #define SERIAL_MAIN_DEVICE SerialUSB

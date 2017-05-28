@@ -25,6 +25,7 @@ private:
 	bool inverted;
 	bool hardwareInverted;
 	bool blipping;
+	bool thermostatIsOn;					// if it is a thermostatic fan, true if it is turned on
 
 	void Refresh();
 	void SetHardwarePwm(float pwmVal);

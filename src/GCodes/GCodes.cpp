@@ -38,10 +38,10 @@
 #include "FirmwareUpdater.h"
 #endif
 
-const char GCodes::axisLetters[MAX_AXES] = { 'X', 'Y', 'Z', 'U', 'V', 'W' };
+const char GCodes::axisLetters[MAX_AXES] = AXES_('X', 'Y', 'Z', 'U', 'V', 'W');
 
 const char* const PAUSE_G = "pause.g";
-const char* const HomingFileNames[MAX_AXES] = { "homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g" };
+const char* const HomingFileNames[MAX_AXES] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g");
 const char* const HOME_ALL_G = "homeall.g";
 const char* const HOME_DELTA_G = "homedelta.g";
 const char* const DefaultHeightMapFile = "heightmap.csv";
@@ -157,11 +157,12 @@ void GCodes::Reset()
 	{
 		extrusionFactors[i] = 1.0;
 	}
-	for (size_t i = 0; i < DRIVES; ++i)
+	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numAxes, moveBuffer.coords);
+	moveBuffer.xAxes = DefaultXAxisMapping;
+	for (size_t i = numAxes; i < DRIVES; ++i)
 	{
 		moveBuffer.coords[i] = 0.0;
 	}
-	moveBuffer.xAxes = DefaultXAxisMapping;
 
 	pauseRestorePoint.Init();
 	toolChangeRestorePoint.Init();
@@ -1224,8 +1225,9 @@ unsigned int GCodes::LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType)
 	}
 
 	// If doing a regular move and applying limits, limit all axes
-	if (   moveType == 0
-		&& limitAxes
+	if (   (   (moveType == 0 && limitAxes)
+			|| moveType == -1						// always limit G92 commands, for the benefit of SCARA machines
+		   )
 #if SUPPORT_ROLAND
 		&& !reprap.GetRoland()->Active()
 #endif

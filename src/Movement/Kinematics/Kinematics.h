@@ -65,10 +65,6 @@ public:
 	// 'machinePos' is the output set of converted axis and extruder positions
 	virtual void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const = 0;
 
-	// Calculate the movement fraction for a single axis motor of a Cartesian-like printer.
-	// The default implementation just returns directionVector[drive] but this needs to be overridden for CoreXY and CoreXZ printers.
-	virtual float MotorFactor(size_t drive, const float directionVector[]) const;
-
 	// Return true if the kinematics supports auto calibration based on bed probing.
 	// Normally returns false, but overridden for delta kinematics.
 	virtual bool SupportsAutoCalibration() const { return false; }
@@ -89,10 +85,6 @@ public:
 	// Usually this is only relevant if we are auto calibrating the bed tilt, however you can also specify bed tilt manually if you wanted to.
 	virtual float GetTiltCorrection(size_t axis) const { return 0.0; }
 
-	// Return true if we should show coordinates in the interfaces when the machine is not homed.
-	// I suggest true if there is a linear relationship between motor positions and Cartesian coordinates, otherwise false.
-	virtual bool ShowCoordinatesWhenNotHomed() const = 0;
-
 	// Return true if the specified XY position is reachable by the print head reference point.
 	// The default implementation assumes a rectangular reachable area, so it just used the bed dimensions give in the M208 commands.
 	virtual bool IsReachable(float x, float y) const;
@@ -104,6 +96,9 @@ public:
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)
 	virtual uint16_t AxesToHomeBeforeProbing() const { return (1 << X_AXIS) | (1 << Y_AXIS); }
+
+	// Return the initial Cartesian coordinates we assume after switching to this kinematics
+	virtual void GetAssumedInitialPosition(size_t numAxes, float positions[]) const;
 
 	// Override the virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }

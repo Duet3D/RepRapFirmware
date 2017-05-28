@@ -18,6 +18,8 @@ public:
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	const char *GetName(bool forStatusReport) const override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const override;
+
+protected:
 	float MotorFactor(size_t drive, const float directionVector[]) const override;
 };
 

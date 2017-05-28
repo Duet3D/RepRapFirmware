@@ -993,7 +993,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						fan.SetMinValue(gb.GetFValue());
 					}
 
-					if (gb.Seen('H'))		// Set thermostatically-controller heaters
+					if (gb.Seen('H'))		// Set thermostatically-controlled heaters
 					{
 						seen = true;
 						long heaters[HEATERS];
@@ -1007,6 +1007,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 							if (hnum >= 0 && hnum < HEATERS)
 							{
 								hh |= (1u << (unsigned int)hnum);
+							}
+							else if (hnum >= (int)FirstVirtualHeater && hnum < (int)(FirstVirtualHeater + NumVirtualHeaters))
+							{
+								// Heaters 100, 101... are virtual heaters i.e. CPU and driver temperatures
+								hh |= (1u << (HEATERS + (unsigned int)hnum - FirstVirtualHeater));
 							}
 						}
 						if (hh != 0)
@@ -1046,6 +1051,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					}
 					else if (!seen)
 					{
+						// Report the configuration of the specified fan
 						reply.printf("Fan%i frequency: %dHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s",
 										fanNum,
 										(int)(fan.GetPwmFrequency()),
@@ -1057,11 +1063,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						if (hh != 0)
 						{
 							reply.catf(", trigger: %dC, heaters:", (int)fan.GetTriggerTemperature());
-							for (unsigned int i = 0; i < HEATERS; ++i)
+							for (unsigned int i = 0; i < HEATERS + NumVirtualHeaters; ++i)
 							{
 								if ((hh & (1u << i)) != 0)
 								{
-									reply.catf(" %u", i);
+									reply.catf(" %u", (i < HEATERS) ? i : FirstVirtualHeater + i - HEATERS);
 								}
 							}
 						}
@@ -1597,6 +1603,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 204: // Set max travel and printing accelerations
 		{
 			bool seen = false;
+			if (gb.Seen('S') && platform.Emulating() == marlin)
+			{
+				// For backwards compatibility e.g. with Cura, set both accelerations as Marlin does.
+				const float acc = gb.GetFValue();
+				platform.SetMaxPrintingAcceleration(acc);
+				platform.SetMaxTravelAcceleration(acc);
+				seen = true;
+			}
 			if (gb.Seen('P'))
 			{
 				platform.SetMaxPrintingAcceleration(gb.GetFValue());
@@ -3306,16 +3320,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				move.SetKinematics(KinematicsType::linearDelta);
 			}
 			const bool changed = move.GetKinematics().SetOrReportParameters(code, gb, reply, error);
-			if (changed || changedMode)
-			{
-				SetAllAxesNotHomed();
-			}
-
 			if (changedMode)
 			{
-				// If we have changed between Cartesian and Delta mode, we need to reset the motor coordinates to agree with the XYZ coordinates.
-				// This normally happens only when we process the M665 command in config.g. Also flag that the machine is not homed.
+				move.GetKinematics().GetAssumedInitialPosition(numAxes, positionNow);
+			}
+			if (changed || changedMode)
+			{
 				SetPositions(positionNow);
+				SetAllAxesNotHomed();
 			}
 		}
 		break;
@@ -3343,6 +3355,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			Move& move = reprap.GetMove();
 			float positionNow[DRIVES];
 			move.GetCurrentUserPosition(positionNow, 0, reprap.GetCurrentXAxes());		// get the current position, we may need it later
+			const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
 
 			bool seen = false;
 			bool changedToCartesian = false;
@@ -3384,6 +3397,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (seen)
 			{
 				// We changed something, so reset the positions and set all axes not homed
+				if (move.GetKinematics().GetKinematicsType() != oldK)
+				{
+					move.GetKinematics().GetAssumedInitialPosition(numAxes, positionNow);
+				}
 				SetPositions(positionNow);
 				SetAllAxesNotHomed();
 			}
@@ -3399,6 +3416,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			Move& move = reprap.GetMove();
 			float positionNow[DRIVES];
 			move.GetCurrentUserPosition(positionNow, 0, reprap.GetCurrentXAxes());		// get the current position, we may need it later
+			const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
 
 			bool seen = false;
 			if (gb.Seen('K'))
@@ -3406,7 +3424,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const int nk = gb.GetIValue();
 				if (nk < 0 || nk >= (int)KinematicsType::unknown || !move.SetKinematics(static_cast<KinematicsType>(nk)))
 				{
-					reply.copy("Unknow kinematics type in M669 command");
+					reply.printf("Unknown kinematics type %d in M669 command", nk);
 					error = true;
 					break;
 				}
@@ -3420,6 +3438,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (seen)
 			{
 				// We changed something, so reset the positions and set all axes not homed
+				if (move.GetKinematics().GetKinematicsType() != oldK)
+				{
+					move.GetKinematics().GetAssumedInitialPosition(numAxes, positionNow);
+				}
 				SetPositions(positionNow);
 				SetAllAxesNotHomed();
 			}
@@ -3732,6 +3754,32 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	// For case 913, see 906
+
+#if defined(__ALLIGATOR__)
+	case 914: 				// Set/Get J14 Expansion Voltage Level Translator on Port J5, 5.5V or 3.3V
+			  	  	  	  	// Get Piggy module presence status
+		if (gb.Seen('S'))
+		{
+			const int voltageValue = gb.GetIValue();
+			if (voltageValue != 5 && voltageValue != 3 )
+			{
+				reply.printf("The Expansion Voltage Translator does not support %dV. \n Only 5V or 3V are supported.",voltageValue);
+			}
+			else
+			{
+				// Change Voltage translator level
+				digitalWrite(ExpansionVoltageLevelPin, voltageValue == 5);
+			}
+		}
+		else
+		{
+			// Change Voltage translator level Status
+			reply.printf("The Voltage of Expansion Translator is %dV \nPiggy module %s",
+					digitalRead(ExpansionVoltageLevelPin) ? 5 : 3 ,
+					digitalRead(ExpansionPiggyDetectPin) ? "not detected" : "detected");
+		}
+		break;
+#endif
 
 	case 997: // Perform firmware update
 		if (!LockMovementAndWaitForStandstill(gb))

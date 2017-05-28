@@ -19,9 +19,12 @@ public:
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const override final;
 	bool SetOrReportParameters(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) override final;
 	bool SupportsAutoCalibration() const override final { return false; }
-	bool ShowCoordinatesWhenNotHomed() const override { return true; }
 
 protected:
+	// Calculate the movement fraction for a single axis motor of a Cartesian-like printer.
+	// The default implementation just returns directionVector[drive] but this needs to be overridden for CoreXY and CoreXZ printers.
+	virtual float MotorFactor(size_t drive, const float directionVector[]) const = 0;
+
 	float axisFactors[CART_AXES];
 };
 

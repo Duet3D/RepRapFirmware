@@ -74,7 +74,7 @@ public:
 	// The remaining functions are specific to the WiFi version
 	WifiFirmwareUploader& GetWifiUploader() { return *uploader; }
 
-	static void ResetWiFi();
+	void ResetWiFi();
 	static void ResetWiFiForUpload(bool external);
 
 	const char *GetWiFiServerVersion() const { return wiFiServerVersion; }
@@ -97,7 +97,8 @@ private:
 	enum class NetworkState
 	{
 		disabled,					// WiFi module disabled
-		starting,					// starting up
+		starting1,					// starting up
+		starting2,					// starting up
 		active,						// running, but not necessarily in the requested mode
 		changingMode,				// running and in the process of switching between modes
 	};

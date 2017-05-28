@@ -33,27 +33,26 @@ public:
 	bool SupportsAutoCalibration() const override { return false; }
 	bool IsReachable(float x, float y) const override;
 	void LimitPosition(float position[], size_t numAxes, uint16_t axesHomed) const override;
-	bool ShowCoordinatesWhenNotHomed() const override { return false; }
+	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 
 private:
-	const float DefaultSegmentsPerSecond = 200.0;
-	const float DefaultMinSegmentSize = 0.2;
-	const float DefaultProximalArmLength = 100.0;
-	const float DefaultDistalArmLength = 100.0;
-	const float DefaultMinTheta = -180.0;								// minimum proximal joint angle
-	const float DefaultMaxTheta = 180.0;								// maximum proximal joint angle
-	const float DefaultMinPhiMinusTheta = -270.0;						// minimum distal joint angle
-	const float DefaultMaxPhiMinusTheta = 270.0;						// maximum distal joint angle
+	static constexpr float DefaultSegmentsPerSecond = 200.0;
+	static constexpr float DefaultMinSegmentSize = 0.2;
+	static constexpr float DefaultProximalArmLength = 100.0;
+	static constexpr float DefaultDistalArmLength = 100.0;
+	static constexpr float DefaultMinTheta = -90.0;								// minimum proximal joint angle
+	static constexpr float DefaultMaxTheta = 90.0;								// maximum proximal joint angle
+	static constexpr float DefaultMinPhiMinusTheta = -135.0;					// minimum distal joint angle
+	static constexpr float DefaultMaxPhiMinusTheta = 135.0;						// maximum distal joint angle
 
 	void Recalc();
 
 	// Primary parameters
 	float proximalArmLength;
 	float distalArmLength;
-	float xToYcrosstalk;						// if we rotate the proximal arm, the distal arm also rotates by this fraction of it
-	float crosstalk[3];							// if we rotate the distal arm motor, for each full rotation the Z height goes up by this amount
-	float thetaLimits[2];						// minimum proximal joint angle
-	float phiMinusThetaLimits[2];				// minimum distal joint angle
+	float thetaLimits[2];							// minimum proximal joint angle
+	float phiMinusThetaLimits[2];					// minimum distal joint angle
+	float crosstalk[3];								// if we rotate the distal arm motor, for each full rotation the Z height goes up by this amount
 
 	// Derived parameters
 	float minRadius;

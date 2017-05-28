@@ -18,7 +18,8 @@ enum MessageType
 	HTTP_MESSAGE,						// A message that is to be sent to the web (HTTP)
 	TELNET_MESSAGE,						// A message that is to be sent to a Telnet client
 	GENERIC_MESSAGE,					// A message that is to be sent to the web, USB and panel
-	FIRMWARE_UPDATE_MESSAGE				// A message that conveys progress of a firmware update
+	FIRMWARE_UPDATE_MESSAGE,			// A message that conveys progress of a firmware update
+	NETWORK_INFO_MESSAGE				// A message that conveys information about the state of the network interface
 };
 
 #endif /* MESSAGETYPE_H_ */

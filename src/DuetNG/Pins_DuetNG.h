@@ -29,16 +29,21 @@ const size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 // The physical capabilities of the machine
 
-const size_t DRIVES = 10;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
+const size_t DRIVES = 10;						// The number of drives in the machine, including X, Y and Z plus extruder drives
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h,i,j }
 
 const int8_t HEATERS = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g,h }
-const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+const unsigned int FirstVirtualHeater = 100;
+const unsigned int NumVirtualHeaters = 3;		// CPU temperature, on-board driver temperatures, DueX driver temperatures
 
 const size_t MAX_AXES = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+// Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
+#define AXES_(a,b,c,d,e,f) { a,b,c,d,e,f }
+
 const size_t MIN_AXES = 3;						// The minimum and default number of axes
 const size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
+const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 const size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE SerialUSB
@@ -154,7 +159,7 @@ const int HighestLogicalPin = 100 + ARRAY_SIZE(DueX5GpioPinMap) - 1;	// highest 
 
 // SAM4E Flash locations (may be expanded in the future)
 const uint32_t IAP_FLASH_START = 0x00470000;
-const uint32_t IAP_FLASH_END = 0x0047FBFF;
+const uint32_t IAP_FLASH_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
 
 // Duet pin numbers to control the WiFi interface
 const Pin EspResetPin = 100;			// Low on this in holds the WiFi module in reset (ESP_RESET)

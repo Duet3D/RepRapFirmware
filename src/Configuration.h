@@ -69,6 +69,7 @@ const float BAD_LOW_TEMPERATURE = -10.0;			// Celsius
 const float DefaultExtruderTemperatureLimit = 288.0; // Celsius - E3D say to tighten the hot end at 285C
 const float DefaultBedTemperatureLimit = 125.0;		// Celsius
 const float HOT_END_FAN_TEMPERATURE = 45.0;			// Temperature at which a thermostatic hot end fan comes on
+const float ThermostatHysteresis = 1.0;				// How much hysteresis we use to prevent noise turning fans on/off too often
 const float BAD_ERROR_TEMPERATURE = 2000.0;			// Must exceed any reasonable 5temperature limit including DEFAULT_TEMPERATURE_LIMIT
 
 // Heating model default parameters. For the chamber heater, we use the same values as for the bed heater.

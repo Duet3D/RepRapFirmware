@@ -399,11 +399,6 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	return true;
 }
 
-float DDA::GetMotorPosition(size_t drive) const
-{
-	return Move::MotorEndpointToPosition(endPoint[drive], drive);
-}
-
 // Return true if this move is or might have been intended to be a deceleration-only move
 // A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error
 // We declare this inline because it is only used once, in DDA::DoLookahead
@@ -934,7 +929,7 @@ void DDA::Prepare()
 					DebugPrint();
 				}
 			}
-			else if (isDeltaMovement)
+			else if (isDeltaMovement && drive < DELTA_AXES)			// for now, additional axes are assumed to be not part of the delta mechanism
 			{
 				dm.PrepareDeltaAxis(*this, params);
 

@@ -106,4 +106,21 @@ const float RadiansToDegrees = 180.0/PI;
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
+// Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
+#if SAM4S || SAM4E
+const uint32_t NvicPriorityWatchdog = 0;		// watchdog has highest priority (SAM4 only)
+#endif
+
+const uint32_t NvicPriorityUart = 1;			// UART is next to avoid character loss
+const uint32_t NvicPrioritySystick = 2;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
+const uint32_t NvicPriorityStep = 3;			// step interrupt is next highest, it can preempt most other interrupts
+
+#if !defined(DUET_NG) && !defined(__RADDS__)
+const uint32_t NvicPriorityNetworkTick = 4;		// priority for network tick interrupt
+const uint32_t NvicPriorityEthernet = 4;		// priority for Ethernet interface
+#endif
+
+const uint32_t NvicPrioritySpi = 5;				// SPI used for network transfers on Duet WiFi/Duet vEthernet
+const uint32_t NvicPriorityPins = 6;			// priority for GPIO pin interrupts
+
 #endif

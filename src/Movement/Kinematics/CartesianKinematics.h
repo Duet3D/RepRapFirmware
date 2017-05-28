@@ -20,7 +20,6 @@ public:
     bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const override;
     void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const override;
 	bool SupportsAutoCalibration() const override { return false; }
-	bool ShowCoordinatesWhenNotHomed() const override { return true; }
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_CARTESIANKINEMATICS_H_ */

@@ -68,8 +68,6 @@ public:
 	bool SetKinematics(KinematicsType k);											// Set kinematics, return true if successful
 	bool CartesianToMotorSteps(const float machinePos[MAX_AXES], int32_t motorPos[MAX_AXES]) const;
 																					// Convert Cartesian coordinates to delta motor coordinates, return true if successful
-	float MotorFactor(size_t drive, const float directionVector[]) const { return kinematics->MotorFactor(drive, directionVector); }
-																					// Calculate the movement fraction for a single axis motor of a Cartesian or CoreXY printer
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numDrives, float machinePos[]) const;
 																					// Convert motor coordinates to machine coordinates
 	void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const;

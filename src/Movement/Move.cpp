@@ -410,6 +410,11 @@ void Move::Diagnostics(MessageType mtype)
 
 	reprap.GetPlatform().MessageF(mtype, "Scheduled moves: %u, completed moves: %u\n", scheduledMoves, completedMoves);
 
+#if defined(__ALLIGATOR__)
+	// Motor Fault Diagnostic
+	reprap.GetPlatform().MessageF(mtype, "Motor Fault status: %s\n", digitalRead(MotorFaultDetectPin) ? "none" : "FAULT detected!" );
+#endif
+
 	// Show the current probe position heights and type of bed compensation in use
 	p.Message(mtype, "Bed compensation in use: ");
 	if (usingMesh)
@@ -483,7 +488,7 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 	}
 }
 
-// Returns steps from units (mm) for a particular drive
+// Convert distance to steps for a particular drive
 int32_t Move::MotorEndPointToMachine(size_t drive, float coord)
 {
 	return (int32_t)roundf(coord * reprap.GetPlatform().DriveStepsPerUnit(drive));
@@ -496,19 +501,20 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numDrives, flo
 	kinematics->MotorStepsToCartesian(motorPos, reprap.GetPlatform().GetDriveStepsPerUnit(), numDrives, machinePos);
 }
 
-// Convert Cartesian coordinates to motor steps, axes only, returning true if successful
+// Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
+// Used to perform movement and G92 commands.
 bool Move::CartesianToMotorSteps(const float machinePos[MAX_AXES], int32_t motorPos[MAX_AXES]) const
 {
-	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(), DELTA_AXES, motorPos);
+	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(), reprap.GetGCodes().GetNumAxes(), motorPos);
 	if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
 	{
 		if (b)
 		{
-			debugPrintf("Transformed %f %f %f to %d %d %d\n", machinePos[0], machinePos[1], machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
+			debugPrintf("Transformed %.2f %.2f %.2f to %d %d %d\n", machinePos[0], machinePos[1], machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 		}
 		else
 		{
-			debugPrintf("Unable to transform $f %f %f\n", machinePos[0], machinePos[1], machinePos[2]);
+			debugPrintf("Unable to transform %.2f %.2f %.2f\n", machinePos[0], machinePos[1], machinePos[2]);
 		}
 	}
 	return b;
@@ -913,7 +919,7 @@ void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xA
 }
 
 // Return the current live XYZ and extruder coordinates
-// Interrupts are assumed enabled on entry, so do not call this from an ISR
+// Interrupts are assumed enabled on entry
 void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes)
 {
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
@@ -948,23 +954,21 @@ void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes)
 }
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
-// Interrupts are assumed enabled on entry, so do not call this from an ISR
+// The caller must make sure that no moves are in progress or pending when calling this
 void Move::SetLiveCoordinates(const float coords[DRIVES])
 {
-	cpu_irq_disable();
-	for(size_t drive = 0; drive < DRIVES; drive++)
+	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
 		liveCoordinates[drive] = coords[drive];
 	}
 	liveCoordinatesValid = true;
 	EndPointToMachine(coords, const_cast<int32_t *>(liveEndPoints), reprap.GetGCodes().GetNumAxes());
-	cpu_irq_enable();
 }
 
 void Move::ResetExtruderPositions()
 {
 	cpu_irq_disable();
-	for(size_t eDrive = reprap.GetGCodes().GetNumAxes(); eDrive < DRIVES; eDrive++)
+	for (size_t eDrive = reprap.GetGCodes().GetNumAxes(); eDrive < DRIVES; eDrive++)
 	{
 		liveCoordinates[eDrive] = 0.0;
 	}

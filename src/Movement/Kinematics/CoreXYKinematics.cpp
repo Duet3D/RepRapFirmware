@@ -34,7 +34,7 @@ void CoreXYKinematics::MotorStepsToCartesian(const int32_t motorPos[], const flo
 	}
 }
 
-// Calculate the movement fraction for a single axis motor of a Cartesian-like printer
+// Calculate the movement fraction for a single axis motor
 float CoreXYKinematics::MotorFactor(size_t drive, const float directionVector[]) const
 {
 	switch(drive)

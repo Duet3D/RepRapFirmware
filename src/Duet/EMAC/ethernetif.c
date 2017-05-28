@@ -204,8 +204,7 @@ void ethernetif_hardware_init(void)
 	/* Init EMAC driver structure */
 	emac_dev_init(EMAC, &gs_emac_dev, &emac_option);
 
-	/* Set IRQ priority */
-	NVIC_SetPriority(EMAC_IRQn, 4);
+	/* Set IRQ priority is now done in Platform.cpp because it has access to the priority definitions */
 
 	/* Enable Interrupt */
 	NVIC_EnableIRQ(EMAC_IRQn);

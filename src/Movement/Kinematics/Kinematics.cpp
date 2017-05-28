@@ -35,14 +35,6 @@ bool Kinematics::SetOrReportParameters(unsigned int mCode, GCodeBuffer& gb, Stri
 	return false;
 }
 
-// Calculate the movement fraction for one axis motor
-// Used to scale linear motor movements on CoreXY and CoreXZ printers
-// This definition is overridden in the CoreXY and CoreXZ classes
-float Kinematics::MotorFactor(size_t drive, const float directionVector[]) const
-{
-	return directionVector[drive];
-}
-
 // Return true if the specified XY position is reachable by the print head reference point.
 // This default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M280 command.
 bool Kinematics::IsReachable(float x, float y) const
@@ -70,6 +62,16 @@ void Kinematics::LimitPosition(float coords[], size_t numAxes, uint16_t axesHome
 				f = platform.AxisMaximum(axis);
 			}
 		}
+	}
+}
+
+// Return the initial Cartesian coordinates we assume after switching to this kinematics
+// This default is suitable for Cartesian and CoreXY printers.
+void Kinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
+{
+	for (size_t i = 0; i < numAxes; ++i)
+	{
+		positions[i] = 0.0;
 	}
 }
 

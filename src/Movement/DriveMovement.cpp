@@ -14,7 +14,7 @@
 // Prepare this DM for a Cartesian axis move
 void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
 {
-	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(reprap.GetMove().MotorFactor(drive, dda.directionVector));
+	const float stepsPerMm = (float)totalSteps/dda.totalDistance;
 	mp.cart.twoCsquaredTimesMmPerStepDivA = (uint64_t)(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
 
 	// Acceleration phase parameters

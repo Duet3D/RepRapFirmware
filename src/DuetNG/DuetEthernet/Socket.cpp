@@ -103,7 +103,7 @@ bool Socket::ReadChar(char& c)
 	return false;
 }
 
-// Return a pointer to data in a buffer and a length available, and mark the data as taken
+// Return a pointer to data in a buffer and a length available
 bool Socket::ReadBuffer(const uint8_t *&buffer, size_t &len)
 {
 	if (receivedData != nullptr)
@@ -203,19 +203,34 @@ void Socket::Poll(bool full)
 void Socket::ReceiveData()
 {
 	const uint16_t len = getSn_RX_RSR(socketNum);
-	if (len != 0 && NetworkBuffer::Count(receivedData) < MaxBuffersPerSocket)
+	if (len != 0)
 	{
 //		debugPrintf("%u available\n", len);
-		// There is data available, so allocate a buffer
-		//TODO: if there is already a buffer and it has enough room, we could just append the data
-		NetworkBuffer * const buf = NetworkBuffer::Allocate();
-		if (buf != nullptr)
+		NetworkBuffer * const lastBuffer = NetworkBuffer::FindLast(receivedData);
+		if (lastBuffer != nullptr && (lastBuffer->SpaceLeft() >= len || (lastBuffer->SpaceLeft() != 0 && NetworkBuffer::Count(receivedData) >= MaxBuffersPerSocket)))
 		{
-			wiz_recv_data(socketNum, buf->Data(), len);
-			ExecCommand(socketNum, Sn_CR_RECV);
-			buf->dataLength = (size_t)len;
-			buf->readPointer = 0;
-			NetworkBuffer::AppendToList(&receivedData, buf);
+			const size_t lengthToRead = min<size_t>((size_t)len, lastBuffer->SpaceLeft());
+			wiz_recv_data(socketNum, lastBuffer->UnwrittenData(), (uint16_t)lengthToRead);
+			lastBuffer->dataLength += lengthToRead;
+			if (reprap.Debug(moduleNetwork))
+			{
+				debugPrintf("Received %u bytes\n", (unsigned int)lengthToRead);
+			}
+		}
+		else if (NetworkBuffer::Count(receivedData) < MaxBuffersPerSocket)
+		{
+			NetworkBuffer * const buf = NetworkBuffer::Allocate();
+			if (buf != nullptr)
+			{
+				wiz_recv_data(socketNum, buf->Data(), len);
+				ExecCommand(socketNum, Sn_CR_RECV);
+				buf->dataLength = (size_t)len;
+				NetworkBuffer::AppendToList(&receivedData, buf);
+				if (reprap.Debug(moduleNetwork))
+				{
+					debugPrintf("Received %u bytes\n", (unsigned int)len);
+				}
+			}
 		}
 //		else debugPrintf("no buffer\n");
 	}

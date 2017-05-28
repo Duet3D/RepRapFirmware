@@ -148,7 +148,7 @@ void Socket::Poll(bool full)
 	case ConnState::otherEndClosed:
 		// Check for further incoming packets before this socket is finally closed.
 		// This must be done to ensure that FTP uploads are not cut off.
-		ReceiveData(resp.Value().bytesAvailable != 0);
+		ReceiveData(resp.Value().bytesAvailable);
 
 		if (state == SocketState::clientDisconnecting)
 		{
@@ -207,7 +207,7 @@ void Socket::Poll(bool full)
 		if (state == SocketState::connected)
 		{
 			txBufferSpace = resp.Value().writeBufferSpace;
-			ReceiveData(resp.Value().bytesAvailable != 0);
+			ReceiveData(resp.Value().bytesAvailable);
 		}
 		break;
 

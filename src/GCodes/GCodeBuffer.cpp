@@ -491,7 +491,7 @@ int32_t GCodeBuffer::GetIValue()
 	return result;
 }
 
-// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave value and seen alone.
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 void GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
 {
 	if (Seen(c))
@@ -501,7 +501,7 @@ void GCodeBuffer::TryGetFValue(char c, float& val, bool& seen)
 	}
 }
 
-// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave value and seen alone.
+// If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 {
 	if (Seen(c))

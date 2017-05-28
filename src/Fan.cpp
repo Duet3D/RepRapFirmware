@@ -20,6 +20,7 @@ void Fan::Init(Pin p_pin, bool hwInverted)
 	inverted = blipping = false;
 	heatersMonitored = 0;
 	triggerTemperature = HOT_END_FAN_TEMPERATURE;
+	thermostatIsOn = false;
 	lastPwm = -1.0;				// force a refresh
 	Refresh();
 }
@@ -97,6 +98,7 @@ void Fan::SetPwmFrequency(float p_freq)
 void Fan::SetHeatersMonitored(uint16_t h)
 {
 	heatersMonitored = h;
+	thermostatIsOn = false;
 	Refresh();
 }
 
@@ -104,11 +106,22 @@ void Fan::SetHeatersMonitored(uint16_t h)
 // If you want make sure that the PWM is definitely updated, set lastPWM negative before calling this
 void Fan::Refresh()
 {
-	float reqVal = (heatersMonitored == 0)
-					? val
-					: (reprap.GetPlatform().AnyHeaterHot(heatersMonitored, triggerTemperature))
-						? max<float>(0.5, val)			// make sure that thermostatic fans always run at 50% speed or more
-						: 0.0;
+	float reqVal;
+	if (heatersMonitored == 0)
+	{
+		reqVal = val;
+	}
+	else if (reprap.GetPlatform().AnyHeaterHot(heatersMonitored, (thermostatIsOn) ? triggerTemperature - ThermostatHysteresis : triggerTemperature))
+	{
+		thermostatIsOn = true;
+		reqVal = max<float>(0.5, val);			// make sure that thermostatic fans always run at 50% speed or more
+	}
+	else
+	{
+		thermostatIsOn = false;
+		reqVal = 0.0;
+	}
+
 	if (reqVal > 0.0)
 	{
 		if (reqVal < minVal)
