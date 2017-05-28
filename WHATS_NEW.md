@@ -1,6 +1,24 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.19beta2
+=================
+
+New features:
+- SCARA kinematics is believed to be mostly working, except for homing
+- Thermostatic fans can now depend on heater numbers 100 (CPU temperature), 101 (TMC2660 drivers on Duet WiFi/Ethernet) and 102 (TMC2660 drivers on DueXn expansion board)
+- MCU temperature measurement now includes an averaging filter to reduce noise
+- Thermostatic fans now have a 1C hysteresis to reduce the effects of noise
+- M204 S parameter is supported for backwards compatibility e.g. with Cura
+- Some other exceptions now record a stack trace, as Hard Fault exceptions already did
+- M122 now displays additional information: firmware name and version, hardware type, last software reset reason, and unique board ID if available
+- On the Duet Ethenet, the default MAC address is generated from the board ID
+
+Bug fixes:
+- Improved reliability of the new Duet WiFi network interface
+- Additional axes on a delta printer are handled (they are assumed to behave linearly)
+- Additional axes on Cartesian printers are belived to be working again
+
 Version 1.19beta1
 ==================
 
