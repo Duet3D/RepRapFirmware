@@ -15,14 +15,14 @@
 #include "Platform.h"
 
 // Constructor for non-segmented kinematics
-Kinematics::Kinematics(KinematicsType t, MotionType mt)
-	: useSegmentation(false), useRawG0(true), type(t), motionType(mt)
+Kinematics::Kinematics(KinematicsType t)
+	: useSegmentation(false), useRawG0(true), type(t)
 {
 }
 
 // Constructor for segmented kinematics
 Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0)
-	: segmentsPerSecond(segsPerSecond), minSegmentLength(minSegLength), useSegmentation(true), useRawG0(doUseRawG0), type(t), motionType(MotionType::linear)
+	: segmentsPerSecond(segsPerSecond), minSegmentLength(minSegLength), useSegmentation(true), useRawG0(doUseRawG0), type(t)
 {
 }
 

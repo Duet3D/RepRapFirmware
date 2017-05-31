@@ -60,6 +60,7 @@ public:
 	void InverseAxisAndBedTransform(float move[], uint32_t xAxes) const;	// Go from a transformed point back to user coordinates
 	float GetTaperHeight() const { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h);
+	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
 
 	void Diagnostics(MessageType mtype);							// Report useful stuff
 

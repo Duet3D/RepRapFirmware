@@ -45,6 +45,11 @@ const float ROOM_TEMPERATURE = 21.0;				// Celsius
 
 const float LONG_TIME = 300.0;						// Seconds
 const uint32_t MinimumWarningInterval = 4000;		// Milliseconds
+const uint32_t FanCheckInterval = 500;				// Milliseconds
+const uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
+
+// FanCheckInterval must be lower than MinimumWarningInterval to avoid giving driver over temperature warnings too soon when thermostatic control of electronics cooling fans is used
+static_assert(FanCheckInterval < MinimumWarningInterval, "FanCheckInterval too large");
 
 // Comms defaults
 

@@ -616,7 +616,7 @@ void GCodes::Spin()
 						reply.printf("%u points probed, mean error %.3f, deviation %.3f\n", numPointsProbed, mean, deviation);
 						error = SaveHeightMap(gb, reply);
 						reprap.GetMove().AccessBedProbeGrid().ExtrapolateMissing();
-						reprap.GetMove().AccessBedProbeGrid().UseHeightMap(true);
+						reprap.GetMove().UseMesh(true);
 					}
 					else
 					{
@@ -2280,9 +2280,7 @@ bool GCodes::ProbeGrid(GCodeBuffer& gb, StringRef& reply)
 
 	gridXindex = gridYindex = 0;
 
-	HeightMap& heightMap = move.AccessBedProbeGrid();
-	heightMap.UseHeightMap(false);
-	heightMap.ClearGridHeights();
+	move.AccessBedProbeGrid().ClearGridHeights();
 	move.SetIdentityTransform();
 	gb.SetState(GCodeState::gridProbing1);
 	return false;
@@ -2320,7 +2318,7 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 		reply.Clear();											// wipe the error message
 	}
 
-	heightMap.UseHeightMap(!err);
+	reprap.GetMove().UseMesh(!err);
 	return err;
 }
 

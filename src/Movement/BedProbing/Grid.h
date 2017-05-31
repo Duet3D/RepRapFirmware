@@ -76,7 +76,7 @@ public:
 
 	unsigned int GetMinimumSegments(float distance) const;			// Return the minimum number of segments for a move by this X or Y amount
 
-	void UseHeightMap(bool b);
+	bool UseHeightMap(bool b);
 	bool UsingHeightMap() const { return useMap; }
 
 	unsigned int GetStatistics(float& mean, float& deviation) const; // Return number of points probed, mean and RMS deviation

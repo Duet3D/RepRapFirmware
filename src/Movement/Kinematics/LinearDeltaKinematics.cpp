@@ -12,7 +12,7 @@
 #include "RepRap.h"
 #include "Storage/FileStore.h"
 
-LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, MotionType::segmentFreeDelta)
+LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta)
 {
 	Init();
 }
@@ -368,6 +368,12 @@ void LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f\n",
 			numFactors, numPoints, sqrt(initialSumOfSquares/numPoints), expectedRmsError);
+}
+
+// Return the type of motion computation needed by an axis
+MotionType LinearDeltaKinematics::GetMotionType(size_t axis) const
+{
+	return (axis < DELTA_AXES) ? MotionType::segmentFreeDelta : MotionType::linear;
 }
 
 // Compute the derivative of height with respect to a parameter at the specified motor endpoints.

@@ -225,10 +225,11 @@ bool ZProbeParameters::WriteParameters(FileStore *f, unsigned int probeType) con
 // Platform class
 
 Platform::Platform() :
-		board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
+		board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0), lastFanCheckTime(0),
 		auxGCodeReply(nullptr), fileStructureInitialised(false), tickState(0), debugCode(0)
 #ifdef DUET_NG
-		, lastWarningMillis(0), nextDriveToPoll(0)
+		, lastWarningMillis(0), nextDriveToPoll(0),
+		onBoardDriversFanRunning(false), offBoardDriversFanRunning(false), onBoardDriversFanStartMillis(0), offBoardDriversFanStartMillis(0)
 #endif
 {
 	// Output
@@ -492,6 +493,7 @@ void Platform::Init()
 	}
 
 	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadDrivers = 0;
+	onBoardDriversFanRunning = offBoardDriversFanRunning = false;
 #endif
 
 	// Allow extrusion ancilliary PWM to use FAN0 even if FAN0 has not been disabled, for backwards compatibility
@@ -1375,35 +1377,52 @@ void Platform::Spin()
 #endif
 
 	// Thermostatically-controlled fans (do this after getting TMC driver status)
-	for (size_t fan = 0; fan < NUM_FANS; ++fan)
+	const uint32_t now = millis();
+	if (now - lastFanCheckTime >= FanCheckInterval)
 	{
-		fans[fan].Check();
-	}
+		lastFanCheckTime = now;
+		for (size_t fan = 0; fan < NUM_FANS; ++fan)
+		{
+			fans[fan].Check();
+		}
 
 #ifdef DUET_NG
-	// Check whether it is time to report any faults
-	const uint32_t now = millis();
-	if (now - lastWarningMillis > MinimumWarningInterval)
-	{
-		bool reported = false;
-		ReportDrivers(shortToGroundDrivers, "Short-to-ground", reported);
-		ReportDrivers(temperatureShutdownDrivers, "Over temperature shutdown", reported);
-		ReportDrivers(temperatureWarningDrivers, "Over temperature warning", reported);
-		ReportDrivers(temperatureWarningDrivers, "Open load", reported);
-
-		// Check for a VSSA fault
-		if (vssaSenseWorking && digitalRead(VssaSensePin))
+		// Check whether it is time to report any faults (do this after checking fans in case driver cooling fans are turned on)
+		if (now - lastWarningMillis > MinimumWarningInterval)
 		{
-			Message(GENERIC_MESSAGE, "Error: VSSA fault, check thermistor wiring\n");
-			reported = true;
-		}
+			bool reported = false;
+			ReportDrivers(shortToGroundDrivers, "Error: Short-to-ground", reported);
+			ReportDrivers(temperatureShutdownDrivers, "Error: Over temperature shutdown", reported);
+			ReportDrivers(openLoadDrivers, "Error: Open load", reported);
 
-		if (reported)
-		{
-			lastWarningMillis = now;
+			// Don't want about a hot driver if we recently turned on a fan to cool it
+			if (temperatureWarningDrivers != 0)
+			{
+				// Don't warn about over-temperature drivers if we have recently turned on a fan to cool them
+				const bool onBoardOtw = (temperatureWarningDrivers & ((1u << 5) - 1)) != 0;
+				const bool offBoardOtw = (temperatureWarningDrivers & ~((1u << 5) - 1)) != 0;
+				if (   (onBoardOtw && (!onBoardDriversFanRunning || now - onBoardDriversFanStartMillis >= DriverCoolingTimeout))
+					|| (offBoardOtw && (!offBoardDriversFanRunning || now - offBoardDriversFanStartMillis >= DriverCoolingTimeout))
+				   )
+				{
+					ReportDrivers(temperatureWarningDrivers, "Warning: high temperature", reported);
+				}
+			}
+
+			// Check for a VSSA fault
+			if (vssaSenseWorking && digitalRead(VssaSensePin))
+			{
+				Message(GENERIC_MESSAGE, "Error: VSSA fault, check thermistor wiring\n");
+				reported = true;
+			}
+
+			if (reported)
+			{
+				lastWarningMillis = now;
+			}
 		}
-	}
 #endif
+	}
 
 	// Update the time
 	if (realTime != 0)
@@ -1425,7 +1444,7 @@ void Platform::ReportDrivers(uint16_t whichDrivers, const char* text, bool& repo
 {
 	if (whichDrivers != 0)
 	{
-		scratchString.printf("Error: %s on drivers", text);
+		scratchString.printf("%s on drivers", text);
 		for (unsigned int drive = 0; whichDrivers != 0; ++drive)
 		{
 			if ((whichDrivers & 1) != 0)
@@ -2098,15 +2117,26 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 
 #ifdef DUET_NG
 	// Duet NG has driver temperature monitoring too
+	bool turnFanOn = false;
+
 	if ((heaters & (1 << (HEATERS + 1))) != 0)
 	{
 		const uint16_t onBoardDriversMask = (1u << 5) - 1;
 		const float onBoardDriversTemperature = ((temperatureShutdownDrivers & onBoardDriversMask) != 0) ? 150.0
 												: ((temperatureWarningDrivers & onBoardDriversMask) != 0) ? 100.0
 													: 0.0;
-		if (t >= onBoardDriversTemperature)
+		if (onBoardDriversTemperature >= t)
 		{
-			return true;
+			if (!onBoardDriversFanRunning)
+			{
+				onBoardDriversFanStartMillis = millis();
+			}
+			onBoardDriversFanRunning = true;
+			turnFanOn = true;
+		}
+		else
+		{
+			onBoardDriversFanRunning = false;
 		}
 	}
 
@@ -2116,14 +2146,25 @@ bool Platform::AnyHeaterHot(uint16_t heaters, float t)
 		const float offBoardDriversTemperature = ((temperatureShutdownDrivers & offBoardDriversMask) != 0) ? 150.0
 												: ((temperatureWarningDrivers & offBoardDriversMask) != 0) ? 100.0
 													: 0.0;
-		if (t >= offBoardDriversTemperature)
+		if (offBoardDriversTemperature >= t)
 		{
-			return true;
+			if (!offBoardDriversFanRunning)
+			{
+				offBoardDriversFanStartMillis = millis();
+			}
+			offBoardDriversFanRunning = true;
+			turnFanOn = true;
+		}
+		else
+		{
+			offBoardDriversFanRunning = false;
 		}
 	}
-#endif
 
+	return turnFanOn;
+#else
 	return false;
+#endif
 }
 
 // Power is a fraction in [0,1]
@@ -2682,7 +2723,6 @@ void Platform::InitFans()
 	}
 
 	coolingFanRpmPin = COOLING_FAN_RPM_PIN;
-	lastRpmResetTime = 0.0;
 	if (coolingFanRpmPin != NoPin)
 	{
 		pinModeDuet(coolingFanRpmPin, INPUT_PULLUP, 1500);	// enable pullup and 1500Hz debounce filter (500Hz only worked up to 7000RPM)

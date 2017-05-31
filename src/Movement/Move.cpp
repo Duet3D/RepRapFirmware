@@ -652,6 +652,13 @@ void Move::SetTaperHeight(float h)
 	}
 }
 
+// Enable mesh bed compensation
+bool Move::UseMesh(bool b)
+{
+	usingMesh = grid.UseHeightMap(b);
+	return usingMesh;
+}
+
 float Move::AxisCompensation(int8_t axis) const
 {
 	switch(axis)
@@ -995,7 +1002,6 @@ void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wa
 	}
 	else
 	{
-		grid.UseHeightMap(false);
 		probePoints.SetZBedProbePoint(index, z, wasXyCorrected, wasError);
 	}
 }

@@ -8,11 +8,11 @@
 #include "CoreBaseKinematics.h"
 #include "GCodes/GCodes.h"
 
-CoreBaseKinematics::CoreBaseKinematics(KinematicsType t) : Kinematics(t, MotionType::linear)
+CoreBaseKinematics::CoreBaseKinematics(KinematicsType t) : Kinematics(t)
 {
 	for (size_t axis = 0; axis < CART_AXES; ++axis)
 	{
-		axisFactors[axis] = 0;
+		axisFactors[axis] = 1.0;
 	}
 }
 

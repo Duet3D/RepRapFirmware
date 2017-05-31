@@ -100,6 +100,9 @@ public:
 	// Return the initial Cartesian coordinates we assume after switching to this kinematics
 	virtual void GetAssumedInitialPosition(size_t numAxes, float positions[]) const;
 
+	// Override this one if any axes do not use the line motion (e.g. for segmentation-free delta motion)
+	virtual MotionType GetMotionType(size_t axis) const { return MotionType::linear; }
+
 	// Override the virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }
 
@@ -109,7 +112,6 @@ public:
 
 	// Functions that return information held in this base class
 	KinematicsType GetKinematicsType() const { return type; }
-	MotionType GetMotionType() const { return motionType; }
 
 	bool UseSegmentation() const { return useSegmentation; }
 	bool UseRawG0() const { return useRawG0; }
@@ -118,7 +120,7 @@ public:
 
 protected:
 	// This constructor is used by derived classes that implement non-segmented linear motion
-	Kinematics(KinematicsType t, MotionType m);
+	Kinematics(KinematicsType t);
 
 	// This constructor is used by derived classes that implement segmented linear motion
 	Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0);
@@ -130,7 +132,6 @@ private:
 	bool useSegmentation;					// true if we have to approximate linear movement using segmentation
 	bool useRawG0;							// true if we normally use segmentation but we do not need to segment travel moves
 	KinematicsType type;
-	MotionType motionType;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_H_ */

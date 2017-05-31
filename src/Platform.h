@@ -771,7 +771,7 @@ private:
 
 	Fan fans[NUM_FANS];
 	Pin coolingFanRpmPin;											// we currently support only one fan RPM input
-	float lastRpmResetTime;
+	uint32_t lastFanCheckTime;
 	void InitFans();
 	bool FansHardwareInverted(size_t fanNumber) const;
 
@@ -850,11 +850,15 @@ private:
 	volatile uint16_t currentVin, highestVin, lowestVin;
 	uint32_t numUnderVoltageEvents;
 	volatile uint32_t numOverVoltageEvents;
-	uint32_t lastWarningMillis;						// When we last sent a warning message about a Vssa short
+	uint32_t lastWarningMillis;							// When we last sent a warning message about a Vssa short
 	uint16_t temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadDrivers;
 	uint8_t nextDriveToPoll;
 	bool driversPowered;
 	bool vssaSenseWorking;
+	bool onBoardDriversFanRunning;						// true if a fan is running to cool the on-board drivers
+	bool offBoardDriversFanRunning;						// true if a fan is running to cool the drivers on the DueX
+	uint32_t onBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
+	uint32_t offBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
 #endif
 
 	// RTC

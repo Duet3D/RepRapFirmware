@@ -7,7 +7,7 @@
 
 #include "CartesianKinematics.h"
 
-CartesianKinematics::CartesianKinematics() : Kinematics(KinematicsType::cartesian, MotionType::linear)
+CartesianKinematics::CartesianKinematics() : Kinematics(KinematicsType::cartesian)
 {
 }
 

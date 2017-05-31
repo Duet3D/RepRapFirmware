@@ -323,9 +323,11 @@ unsigned int HeightMap::GetStatistics(float& mean, float& deviation) const
 	return numProbed;
 }
 
-void HeightMap::UseHeightMap(bool b)
+// Try to turn mesh compensation on or off and report the state achieved
+bool HeightMap::UseHeightMap(bool b)
 {
 	useMap = b && def.IsValid();
+	return useMap;
 }
 
 // Compute the height error at the specified point
