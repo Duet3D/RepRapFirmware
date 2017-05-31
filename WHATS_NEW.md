@@ -1,7 +1,7 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.19beta2
+Version 1.19beta3
 =================
 
 New features:
