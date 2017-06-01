@@ -1393,7 +1393,7 @@ void Platform::Spin()
 			bool reported = false;
 			ReportDrivers(shortToGroundDrivers, "Error: Short-to-ground", reported);
 			ReportDrivers(temperatureShutdownDrivers, "Error: Over temperature shutdown", reported);
-			ReportDrivers(openLoadDrivers, "Error: Open load", reported);
+//			ReportDrivers(openLoadDrivers, "Error: Open load", reported);
 
 			// Don't want about a hot driver if we recently turned on a fan to cool it
 			if (temperatureWarningDrivers != 0)
