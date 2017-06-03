@@ -14,7 +14,7 @@ RepRapFirmware has pioneered a number of advances in 3D printing including:
 * Support for mixing extruders (July 2014)
 * Precise timing of step pulses, even during acceleration (Janury 2015)
 * Segmentation-free delta motion (January 2015)
-* Least-squares auto calibratoin of delta printers (April 2015)
+* Least-squares auto calibration of delta printers (April 2015)
 * Accurate extruder pressure advance, including retraction before the end of a move when needed (January 2015)
 
 For documentation on supported gcodes and configuration, see https://duet3d.com/wiki. There is a tool for generating the config.g file and homing files at https://configurator.reprapfirmware.org/.
