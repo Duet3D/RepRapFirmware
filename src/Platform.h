@@ -537,6 +537,9 @@ public:
 	bool IsRtdChannel(uint8_t heater) const
 	pre(heater < HEATERS);
 
+	bool IsLinearAdcChannel(uint8_t heater) const
+	pre(heater < HEATERS);
+
 	void UpdateConfiguredHeaters();
 	bool AnyHeaterHot(uint16_t heaters, float t);			// called to see if we need to turn on the hot end fan
 
@@ -1156,6 +1159,12 @@ inline bool Platform::IsRtdChannel(uint8_t heater) const
 {
 	return heaterTempChannels[heater] >= FirstRtdChannel
 			&& heaterTempChannels[heater] - FirstRtdChannel < MaxSpiTempSensors;
+}
+
+inline bool Platform::IsLinearAdcChannel(uint8_t heater) const
+{
+	return heaterTempChannels[heater] >= FirstLinearAdcChannel
+			&& heaterTempChannels[heater] - FirstLinearAdcChannel < MaxSpiTempSensors;
 }
 
 inline const uint8_t* Platform::GetIPAddress() const

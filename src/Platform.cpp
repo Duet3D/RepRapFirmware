@@ -640,6 +640,10 @@ void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
 	{
 		SpiTempSensors[thermistor - FirstRtdChannel].InitRtd(spiTempSenseCsPins[thermistor - FirstRtdChannel]);
 	}
+	else if (thermistor >= FirstLinearAdcChannel && thermistor < FirstLinearAdcChannel + MaxSpiTempSensors)
+	{
+		SpiTempSensors[thermistor - FirstRtdChannel].InitLinearAdc(spiTempSenseCsPins[thermistor - FirstLinearAdcChannel]);
+	}
 
 	reprap.GetHeat().ResetFault(heater);
 }
@@ -2067,7 +2071,7 @@ float Platform::GetTemperature(size_t heater, TemperatureError& err)
 	{
 		// MAX31855 thermocouple chip
 		float temp;
-		err = SpiTempSensors[heaterTempChannels[heater] - FirstThermocoupleChannel].GetThermocoupleTemperature(&temp);
+		err = SpiTempSensors[heaterTempChannels[heater] - FirstThermocoupleChannel].GetThermocoupleTemperature(temp);
 		return (err == TemperatureError::success) ? temp : BAD_ERROR_TEMPERATURE;
 	}
 
@@ -2075,7 +2079,15 @@ float Platform::GetTemperature(size_t heater, TemperatureError& err)
 	{
 		// MAX31865 RTD chip
 		float temp;
-		err = SpiTempSensors[heaterTempChannels[heater] - FirstRtdChannel].GetRtdTemperature(&temp);
+		err = SpiTempSensors[heaterTempChannels[heater] - FirstRtdChannel].GetRtdTemperature(temp);
+		return (err == TemperatureError::success) ? temp : BAD_ERROR_TEMPERATURE;
+	}
+
+	if (IsLinearAdcChannel(heater))
+	{
+		// MAX31865 RTD chip
+		float temp;
+		err = SpiTempSensors[heaterTempChannels[heater] - FirstRtdChannel].GetLinearAdcTemperature(temp);
 		return (err == TemperatureError::success) ? temp : BAD_ERROR_TEMPERATURE;
 	}
 
@@ -2929,9 +2941,9 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer)
 		break;
 
 	case HOST_MESSAGE:
-		if (!SERIAL_MAIN_DEVICE
+		if (   !SERIAL_MAIN_DEVICE
 #if SUPPORT_SCANNER
-				|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
+			|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
 #endif
 			)
 		{

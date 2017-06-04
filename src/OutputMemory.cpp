@@ -408,7 +408,7 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 /*static */ OutputBuffer *OutputBuffer::Release(OutputBuffer *buf)
 {
 	const irqflags_t flags = cpu_irq_save();
-	OutputBuffer *nextBuffer = buf->next;
+	OutputBuffer * const nextBuffer = buf->next;
 
 	// If this one is reused by another piece of code, don't free it up
 	if (buf->references > 1)

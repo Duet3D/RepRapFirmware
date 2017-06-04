@@ -48,16 +48,19 @@
 
 const uint32_t MAX31855_Frequency = 4000000;	// maximum for MAX31855 is 5MHz
 const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is also 5MHz
+const uint32_t MCP3204_Frequency = 1000000;		// maximum for MCP3204 is 1MHz @ 2.7V, will be slightly higher at 3.3V
 
 // SPI modes:
 // If the inactive state of SCL is LOW (CPOL = 0) (in the case of the MAX31865, this is sampled on the falling edge of CS):
-// The MAX31855 sets up the first data bit after the falling edge of CS, and changes the data on each falling clock edge.
+// The MAX31855 sets up the first data bit after the falling edge of CLK, and changes the data on each falling clock edge.
 // So the SAM needs to sample data on the rising clock edge. This requires NCPHA = 1.
-// The MAX31865 changes data after the rising edge of CS, and samples input data on the falling edge.
+// The MAX31865 changes data after the rising edge of CLK, and samples input data on the falling edge.
 // This requires NCPHA = 0.
+// The MCP3204 samples input data on the rising edge and changes the output data on the rising edge.
 
 const uint8_t MAX31855_SpiMode = SPI_MODE_0;
 const uint8_t MAX31865_SpiMode = SPI_MODE_1;
+const uint8_t MCP3204_SpiMode = SPI_MODE_0;
 
 // Define the minimum interval between readings. The MAX31865 needs 62.5ms in 50Hz filter mode.
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds
@@ -175,11 +178,38 @@ TemperatureError TemperatureSensor::TryInitRtd() const
 				: sts;
 }
 
-TemperatureError TemperatureSensor::GetThermocoupleTemperature(float *t)
+// Initialise the linear ADC
+void TemperatureSensor::InitLinearAdc(uint8_t cs)
+{
+	device.csPin = cs;
+	device.spiMode = MCP3204_SpiMode;
+	device.clockFrequency = MCP3204_Frequency;
+	sspi_master_init(&device, 8);
+
+	for (unsigned int i = 0; i < 3; ++i)		// try 3 times
+	{
+		TryGetLinearAdcTemperature();
+		if (lastResult == TemperatureError::success)
+		{
+			break;
+		}
+		delay(MinimumReadInterval);
+	}
+
+	lastReadingTime = millis();
+
+	if (lastResult != TemperatureError::success)
+	{
+		reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: failed to initialise daughter board ADC: %s\n", TemperatureErrorString(lastResult));
+	}
+
+}
+
+TemperatureError TemperatureSensor::GetThermocoupleTemperature(float& t)
 {
 	if (inInterrupt() || millis() - lastReadingTime < MinimumReadInterval)
 	{
-		*t = lastTemperature;
+		t = lastTemperature;
 	}
 	else
 	{
@@ -247,7 +277,7 @@ TemperatureError TemperatureSensor::GetThermocoupleTemperature(float *t)
 				rawVal |= (0 - (rawVal & 0x2000));		// sign-extend the sign bit
 
 				// And convert to from units of 1/4C to 1C
-				*t = lastTemperature = (float)(0.25 * (float)(int32_t)rawVal);
+				t = lastTemperature = (float)(0.25 * (float)(int32_t)rawVal);
 				lastResult = TemperatureError::success;
 			}
 		}
@@ -255,11 +285,11 @@ TemperatureError TemperatureSensor::GetThermocoupleTemperature(float *t)
 	return lastResult;
 }
 
-TemperatureError TemperatureSensor::GetRtdTemperature(float *t)
+TemperatureError TemperatureSensor::GetRtdTemperature(float& t)
 {
 	if (inInterrupt() || millis() - lastReadingTime < MinimumReadInterval)
 	{
-		*t = lastTemperature;
+		t = lastTemperature;
 	}
 	else
 	{
@@ -325,7 +355,7 @@ TemperatureError TemperatureSensor::GetRtdTemperature(float *t)
 				else
 				{
 					const float interpolationFraction = (float)(adcVal - tempTable[low - 1].adcReading)/(float)(tempTable[low].adcReading - tempTable[low - 1].adcReading);
-					*t = lastTemperature = ((float)(tempTable[low].temperature - tempTable[low - 1].temperature) * interpolationFraction)
+					t = lastTemperature = ((float)(tempTable[low].temperature - tempTable[low - 1].temperature) * interpolationFraction)
 							+ (float)tempTable[low - 1].temperature;
 					//debugPrintf("raw %u low %u interp %f temp %f\n", adcVal, low, interpolationFraction, *t);
 					lastResult = TemperatureError::success;
@@ -334,6 +364,49 @@ TemperatureError TemperatureSensor::GetRtdTemperature(float *t)
 		}
 	}
 	return lastResult;
+}
+
+TemperatureError TemperatureSensor::GetLinearAdcTemperature(float& t)
+{
+	if (!inInterrupt() && millis() - lastReadingTime >= MinimumReadInterval)
+	{
+		TryGetLinearAdcTemperature();
+	}
+
+	t = lastTemperature;
+	return lastResult;
+}
+
+// Try to get a temperature reading from the linear ADC by doing an SPI transaction
+void TemperatureSensor::TryGetLinearAdcTemperature()
+{
+	// The MCP3204 waits for a high input input bit before it does anything. Call this clock 1.
+	// The next input bit it high for single-ended operation, low for differential. This is clock 2.
+	// The next 3 input bits are the channel selection bits. These are clocks 3..5.
+	// Clock 6 produces a null bit on its trailing edge, which is read by the processor on clock 7.
+	// Clocks 7..18 produce data bits B11..B0 on their trailing edges, which are read by the MCU on the leading edges of clocks 8-19.
+	// If we supply further clocks, then clocks 18..29 are the same data but LSB first, omitting bit 0.
+	// Clocks 30 onwards will be zeros.
+	// So we need to use at least 19 clocks. We round this up to 24 clocks, and we check that the extra 5 bits we receive are the 5 least significant data bits in reverse order.
+
+	static const uint8_t adcData[] = { 0xC0, 0x00, 0x00 };		// start bit, single ended, channel 0
+	uint32_t rawVal;
+	lastResult = DoSpiTransaction(adcData, 3, rawVal);
+	//debugPrintf("ADC data %u\n", rawVal);
+
+	if (lastResult == TemperatureError::success)
+	{
+		const uint32_t adcVal1 = (rawVal >> 5) & ((1 << 13) - 1);
+		const uint32_t adcVal2 = ((rawVal & 1) << 5) | ((rawVal & 2) << 3) | ((rawVal & 4) << 1) | ((rawVal & 8) >> 1) | ((rawVal & 16) >> 3) | ((rawVal & 32) >> 5);
+		if (adcVal1 >= 4096 || adcVal2 != (adcVal1 & ((1 << 6) - 1)))
+		{
+			lastResult = TemperatureError::badResponse;
+		}
+		else
+		{
+			lastTemperature = MinLinearAdcTemp + (LinearAdcDegCPerCount * (float)adcVal1);
+		}
+	}
 }
 
 // Send and receive 1 to 4 bytes of data and return the result as a single 32-bit word

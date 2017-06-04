@@ -489,7 +489,9 @@ void RepRap::Tick()
 				// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
 			}
 
-			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin);
+			// We now save the stack when we get stuck in a spin loop
+			register const uint32_t * stackPtr asm ("sp");
+			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin, stackPtr + 5);
 		}
 	}
 }
