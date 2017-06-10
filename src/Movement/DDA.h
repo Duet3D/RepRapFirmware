@@ -91,7 +91,7 @@ public:
 #if DDA_LOG_PROBE_CHANGES
 	static const size_t MaxLoggedProbePositions = 40;
 	static size_t numLoggedProbePositions;
-	static int32_t loggedProbePositions[CART_AXES * MaxLoggedProbePositions];
+	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
 #endif
 
 private:

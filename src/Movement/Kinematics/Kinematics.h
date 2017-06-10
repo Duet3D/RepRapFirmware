@@ -44,11 +44,11 @@ public:
 
 	// Set or report the parameters from a M665, M666 or M669 command
 	// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 665, 666, 667 or 669)
-	// then search for parameters used to configure the current kinematics. if any are found, perform appropriate actions and return true.
+	// then search for parameters used to configure the current kinematics. If any are found, perform appropriate actions and return true.
 	// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
 	// If no relevant parameters are found, print the existing ones to 'reply' and return false.
-	// if 'mCode' does not apply to this kinematics, call the base class version of this function, which will print a suitable error message.
-	virtual bool SetOrReportParameters(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error);
+	// If 'mCode' does not apply to this kinematics, call the base class version of this function, which will print a suitable error message.
+	virtual bool Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error);
 
 	// Convert Cartesian coordinates to motor positions measured in steps from reference position
 	// 'machinePos' is a set of axis and extruder positions to convert
@@ -56,14 +56,14 @@ public:
 	// 'numAxes' is the number of machine axes to convert, which will always be at least 3
 	// 'motorPos' is the output vector of motor positions
 	// Return true if successful, false if we were unable to convert
-	virtual bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const = 0;
+	virtual bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const = 0;
 
 	// Convert motor positions (measured in steps from reference position) to Cartesian coordinates
 	// 'motorPos' is the input vector of motor positions
 	// 'stepsPerMm' is as configured in M92. On a Scara or polar machine this would actually be steps per degree.
 	// 'numDrives' is the number of machine drives to convert, which will always be at least 3
 	// 'machinePos' is the output set of converted axis and extruder positions
-	virtual void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const = 0;
+	virtual void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const = 0;
 
 	// Return true if the kinematics supports auto calibration based on bed probing.
 	// Normally returns false, but overridden for delta kinematics.
@@ -91,7 +91,7 @@ public:
 
 	// Limit the Cartesian position that the user wants to move to
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-	virtual void LimitPosition(float coords[], size_t numAxes, uint16_t axesHomed) const;
+	virtual void LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const;
 
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)
@@ -100,10 +100,16 @@ public:
 	// Return the initial Cartesian coordinates we assume after switching to this kinematics
 	virtual void GetAssumedInitialPosition(size_t numAxes, float positions[]) const;
 
-	// Override this one if any axes do not use the line motion (e.g. for segmentation-free delta motion)
+	// Override this one if any axes do not use the linear motion code (e.g. for segmentation-free delta motion)
 	virtual MotionType GetMotionType(size_t axis) const { return MotionType::linear; }
 
-	// Override the virtual destructor if your constructor allocates any dynamic memory
+	// Override this if the number of homing buttons (excluding the home all button) is not the same as the number of visible axes (e.g. on a delta printer)
+	virtual size_t NumHomingButtons(size_t numVisibleAxes) const { return numVisibleAxes; }
+
+	// Override this if the homing buttons are not named after the axes (e.g. SCARA printer)
+	virtual const char* HomingButtonNames() const { return "XYZUVW"; }
+
+	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }
 
 	// Factory function to create a particular kinematics object and return a pointer to it.

@@ -58,7 +58,7 @@ Tool * Tool::freelist = nullptr;
 	}
 	for (size_t i = 0; i < hCount; ++i)
 	{
-		if (h[i] < 0 || h[i] >= HEATERS)
+		if (h[i] < 0 || h[i] >= (int)Heaters)
 		{
 			reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: bad heater number");
 			return nullptr;
@@ -88,7 +88,7 @@ Tool * Tool::freelist = nullptr;
 	t->displayColdExtrudeWarning = false;
 	t->virtualExtruderPosition = 0.0;
 
-	for (size_t axis = 0; axis < MAX_AXES; axis++)
+	for (size_t axis = 0; axis < MaxAxes; axis++)
 	{
 		t->offset[axis] = 0.0;
 	}
@@ -142,7 +142,7 @@ void Tool::Print(StringRef& reply)
 
 	reply.cat("; xmap:");
 	sep = ' ';
-	for (size_t xi = 0; xi < MAX_AXES; ++xi)
+	for (size_t xi = 0; xi < MaxAxes; ++xi)
 	{
 		if ((xMapping & (1u << xi)) != 0)
 		{
@@ -169,12 +169,11 @@ float Tool::MaxFeedrate() const
 {
 	if (driveCount <= 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE,
-				"Error: Attempt to get maximum feedrate for a tool with no drives.\n");
+		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Attempt to get maximum feedrate for a tool with no drives.\n");
 		return 1.0;
 	}
 	float result = 0.0;
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	for (size_t d = 0; d < driveCount; d++)
 	{
 		const float mf = reprap.GetPlatform().MaxFeedrate(drives[d] + numAxes);
@@ -194,7 +193,7 @@ float Tool::InstantDv() const
 		return 1.0;
 	}
 	float result = FLT_MAX;
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	for (size_t d = 0; d < driveCount; d++)
 	{
 		const float idv = reprap.GetPlatform().ActualInstantDv(drives[d] + numAxes);

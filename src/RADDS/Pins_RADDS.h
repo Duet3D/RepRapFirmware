@@ -26,15 +26,14 @@ const size_t DRIVES = 8;
 
 // The number of heaters in the machine
 // 0 is the heated bed even if there isn't one.
-const int8_t HEATERS = 4;
+const size_t Heaters = 4;
 
 // Initialization macro used in statements needing to initialize values in arrays of size HEATERS.  E.g.,
 // defaultPidKis[HEATERS] = {HEATERS_(5.0, 0.1, 0.1, 0.1, 0.1, 0.1)};
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d }
-const unsigned int FirstVirtualHeater = 100;
-const unsigned int NumVirtualHeaters = 0;		// no virtual heaters on RADDS
 
-const size_t MAX_AXES = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+const size_t MinAxes = 3;						// The minimum and default number of axes
+const size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f) { a,b,c,d,e,f }
 
@@ -77,14 +76,14 @@ const Pin END_STOP_PINS[DRIVES] = { 28, 30, 32, 39, NoPin, NoPin, NoPin, NoPin }
 const bool HEAT_ON = true;
 
 // Analogue pin numbers
-const Pin TEMP_SENSE_PINS[HEATERS] = HEATERS_(4, 0, 1, 2, e, f, g, h);
+const Pin TEMP_SENSE_PINS[Heaters] = HEATERS_(4, 0, 1, 2, e, f, g, h);
 
 // Heater outputs
 // Bed PMW: D7 has hardware PWM so bed has PWM
 // h0, h1 PMW: D13 & D12 are on TIOB0 & B8 which are both TC B channels, so they get PWM
 // h2 bang-bang: D11 is on TIOA8 which is a TC A channel shared with h1, it gets bang-bang control
 
-const Pin HEAT_ON_PINS[HEATERS] = HEATERS_(7, 13, 12, 11, e, f, g, h); // bed, h0, h1, h2
+const Pin HEAT_ON_PINS[Heaters] = HEATERS_(7, 13, 12, 11, e, f, g, h); // bed, h0, h1, h2
 
 // Default thermistor betas
 const float BED_R25 = 10000.0;

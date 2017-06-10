@@ -85,7 +85,7 @@ void PrintMonitor::Spin()
 		{
 			// Check if there are any active heaters
 			bool nozzleAtHighTemperature = false;
-			for(int heater = 0; heater < HEATERS; heater++)
+			for (int heater = 0; heater < (int)Heaters; heater++)
 			{
 				if (reprap.GetHeat().GetStatus(heater) == Heat::HS_active && reprap.GetHeat().GetActiveTemperature(heater) > TEMPERATURE_LOW_SO_DONT_CARE)
 				{
@@ -307,7 +307,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 		parsedFileInfo.layerHeight = 0.0;
 		parsedFileInfo.numFilaments = 0;
 		parsedFileInfo.generatedBy[0] = 0;
-		for(size_t extr = 0; extr < DRIVES - MIN_AXES; extr++)
+		for(size_t extr = 0; extr < MaxExtruders; extr++)
 		{
 			parsedFileInfo.filamentNeeded[extr] = 0.0;
 		}
@@ -379,7 +379,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			// Search for filament usage (Cura puts it at the beginning of a G-code file)
 			if (parsedFileInfo.numFilaments == 0)
 			{
-				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes().GetNumAxes());
+				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes().GetTotalAxes());
 				headerInfoComplete &= (parsedFileInfo.numFilaments != 0);
 			}
 
@@ -519,7 +519,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			// Search for filament used
 			if (parsedFileInfo.numFilaments == 0)
 			{
-				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes().GetNumAxes());
+				parsedFileInfo.numFilaments = FindFilamentUsed(buf, sizeToScan, parsedFileInfo.filamentNeeded, DRIVES - reprap.GetGCodes().GetTotalAxes());
 				if (parsedFileInfo.numFilaments == 0)
 				{
 					footerInfoComplete = false;
@@ -779,7 +779,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const
 			// Sum up the filament usage and the filament needed
 			float totalFilamentNeeded = 0.0;
 			const float extrRawTotal = gCodes.GetTotalRawExtrusion();
-			for (size_t extruder = 0; extruder < DRIVES - reprap.GetGCodes().GetNumAxes(); extruder++)
+			for (size_t extruder = 0; extruder < DRIVES - reprap.GetGCodes().GetTotalAxes(); extruder++)
 			{
 				totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 			}

@@ -18,7 +18,7 @@ const char *CoreXZKinematics::GetName(bool forStatusReport) const
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
-void CoreXZKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const
+void CoreXZKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
 	machinePos[X_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Z_AXIS]) - (motorPos[Z_AXIS] * stepsPerMm[X_AXIS]))
 								/(2 * axisFactors[X_AXIS] * stepsPerMm[X_AXIS] * stepsPerMm[Z_AXIS]);
@@ -26,8 +26,8 @@ void CoreXZKinematics::MotorStepsToCartesian(const int32_t motorPos[], const flo
 	machinePos[Z_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Z_AXIS]) + (motorPos[Z_AXIS] * stepsPerMm[X_AXIS]))
 								/(2 * axisFactors[Z_AXIS] * stepsPerMm[X_AXIS] * stepsPerMm[Z_AXIS]);
 
-	// Convert any additional axes and the extruders
-	for (size_t drive = MIN_AXES; drive < numDrives; ++drive)
+	// Convert any additional axes linearly
+	for (size_t drive = XYZ_AXES; drive < numVisibleAxes; ++drive)
 	{
 		machinePos[drive] = motorPos[drive]/stepsPerMm[drive];
 	}

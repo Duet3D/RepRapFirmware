@@ -415,7 +415,7 @@ void Platform::Init()
 		directions[drive] = true;					// drive moves forwards by default
 
 		// Map axes and extruders straight through
-		if (drive < MAX_AXES)
+		if (drive < MaxAxes)
 		{
 			axisDrivers[drive].numDrivers = 1;
 			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
@@ -430,11 +430,6 @@ void Platform::Init()
 			endStopLogicLevel[drive] = true;					// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
 
-		if (drive >= MIN_AXES)
-		{
-			extruderDrivers[drive - MIN_AXES] = (uint8_t)drive;
-			SetPressureAdvance(drive - MIN_AXES, 0.0);
-		}
 		driveDriverBits[drive] = CalcDriverBitmap(drive);
 
 		// Set up the control pins and endstops
@@ -452,6 +447,12 @@ void Platform::Init()
 
 	slowDriverStepPulseClocks = 0;								// no extended driver timing configured yet
 	slowDrivers = 0;											// assume no drivers need extended step pulse timing
+
+	for (size_t extr = 0; extr < MaxExtruders; ++extr)
+	{
+		extruderDrivers[extr] = (uint8_t)(extr + MinAxes);		// set up default extruder drive mapping
+		SetPressureAdvance(extr, 0.0);
+	}
 
 #ifdef DUET_NG
 	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
@@ -521,7 +522,7 @@ void Platform::Init()
 		setPullup(SpiTempSensorCsPins[i], true);
 	}
 
-	for (size_t heater = 0; heater < HEATERS; heater++)
+	for (size_t heater = 0; heater < Heaters; heater++)
 	{
 		if (heatOnPins[heater] != NoPin)
 		{
@@ -531,13 +532,6 @@ void Platform::Init()
 		pinMode(tempSensePins[heater], AIN);
 		thermistorAdcChannels[heater] = chan;
 		AnalogInEnableChannel(chan, true);
-
-		SetThermistorNumber(heater, heater);								// map the thermistor straight through
-		thermistors[heater].SetParameters(
-				(heater == DefaultBedHeater) ? BED_R25 : EXT_R25,
-				(heater == DefaultBedHeater) ? BED_BETA : EXT_BETA,
-				(heater == DefaultBedHeater) ? BED_SHC : EXT_SHC,
-				THERMISTOR_SERIES_RS);										// initialise the thermistor parameters
 		thermistorFilters[heater].Init(0);
 	}
 
@@ -624,33 +618,6 @@ bool Platform::AnyFileOpen(const FATFS *fs) const
 		}
 	}
 	return false;
-}
-
-// Specify which thermistor channel a particular heater uses
-void Platform::SetThermistorNumber(size_t heater, size_t thermistor)
-{
-	heaterTempChannels[heater] = thermistor;
-
-	// Initialize the associated SPI temperature sensor?
-	if (thermistor >= FirstThermocoupleChannel && thermistor < FirstThermocoupleChannel + MaxSpiTempSensors)
-	{
-		SpiTempSensors[thermistor - FirstThermocoupleChannel].InitThermocouple(SpiTempSensorCsPins[thermistor - FirstThermocoupleChannel]);
-	}
-	else if (thermistor >= FirstRtdChannel && thermistor < FirstRtdChannel + MaxSpiTempSensors)
-	{
-		SpiTempSensors[thermistor - FirstRtdChannel].InitRtd(spiTempSenseCsPins[thermistor - FirstRtdChannel]);
-	}
-	else if (thermistor >= FirstLinearAdcChannel && thermistor < FirstLinearAdcChannel + MaxSpiTempSensors)
-	{
-		SpiTempSensors[thermistor - FirstRtdChannel].InitLinearAdc(spiTempSenseCsPins[thermistor - FirstLinearAdcChannel]);
-	}
-
-	reprap.GetHeat().ResetFault(heater);
-}
-
-int Platform::GetThermistorNumber(size_t heater) const
-{
-	return heaterTempChannels[heater];
 }
 
 void Platform::SetZProbeDefaults()
@@ -779,7 +746,7 @@ float Platform::GetZProbeTemperature()
 	if (bedHeater >= 0)
 	{
 		TemperatureError err;
-		const float temp = GetTemperature(bedHeater, err);
+		const float temp = reprap.GetHeat().GetTemperature(bedHeater, err);
 		if (err == TemperatureError::success)
 		{
 			return temp;
@@ -811,7 +778,7 @@ float Platform::GetZProbeTravelSpeed() const
 
 void Platform::SetZProbeType(int pt)
 {
-	zProbeType = (pt >= 0 && pt <= 7) ? pt : 0;
+	zProbeType = (pt >= 0 && pt <= 6) ? pt : 0;
 	InitZProbe();
 }
 
@@ -2021,163 +1988,22 @@ void Platform::ClassReport(float &lastTime)
 	}
 }
 
-//===========================================================================
-//=============================Thermal Settings  ============================
-//===========================================================================
-
-// See http://en.wikipedia.org/wiki/Thermistor#B_or_.CE.B2_parameter_equation
-
-// BETA is the B value
-// RS is the value of the series resistor in ohms
-// R_INF is R0.exp(-BETA/T0), where R0 is the thermistor resistance at T0 (T0 is in kelvin)
-// Normally T0 is 298.15K (25 C).
-
-// If the A->D converter has a range of 0..1023 and the measured voltage is V (between 0 and 1023)
-// then the thermistor resistance, R = V.RS/(1024 - V)
-// and the temperature, T = BETA/ln(R/R_INF)
-// To get degrees celsius (instead of kelvin) add -273.15 to T
-
-// Result is in degrees celsius
-
-float Platform::GetTemperature(size_t heater, TemperatureError& err)
-{
-	// Note that at this point we're actually getting an averaged ADC read, not a "raw" temp.  For thermistors,
-	// we're getting an averaged voltage reading which we'll convert to a temperature.
-	if (IsThermistorChannel(heater))
-	{
-		const volatile ThermistorAveragingFilter& filter = thermistorFilters[heater];
-		if (filter.IsValid())
-		{
-			const int32_t averagedReading = filter.GetSum()/(ThermistorAverageReadings >> Thermistor::AdcOversampleBits);
-			const float temp = thermistors[heater].CalcTemperature(averagedReading);
-
-			if (temp < MinimumConnectedTemperature)
-			{
-				// thermistor is disconnected
-				err = TemperatureError::openCircuit;
-				return ABS_ZERO;
-			}
-
-			err = TemperatureError::success;
-			return temp;
-		}
-
-		// Filter is not ready yet
-		err = TemperatureError::busBusy;
-		return BAD_ERROR_TEMPERATURE;
-	}
-
-	if (IsThermocoupleChannel(heater))
-	{
-		// MAX31855 thermocouple chip
-		float temp;
-		err = SpiTempSensors[heaterTempChannels[heater] - FirstThermocoupleChannel].GetThermocoupleTemperature(temp);
-		return (err == TemperatureError::success) ? temp : BAD_ERROR_TEMPERATURE;
-	}
-
-	if (IsRtdChannel(heater))
-	{
-		// MAX31865 RTD chip
-		float temp;
-		err = SpiTempSensors[heaterTempChannels[heater] - FirstRtdChannel].GetRtdTemperature(temp);
-		return (err == TemperatureError::success) ? temp : BAD_ERROR_TEMPERATURE;
-	}
-
-	if (IsLinearAdcChannel(heater))
-	{
-		// MAX31865 RTD chip
-		float temp;
-		err = SpiTempSensors[heaterTempChannels[heater] - FirstRtdChannel].GetLinearAdcTemperature(temp);
-		return (err == TemperatureError::success) ? temp : BAD_ERROR_TEMPERATURE;
-	}
-
-	err = TemperatureError::unknownChannel;
-	return BAD_ERROR_TEMPERATURE;
-}
-
-// See if we need to turn on a thermostatically-controlled fan
-bool Platform::AnyHeaterHot(uint16_t heaters, float t)
-{
-	for (size_t h = 0; h < HEATERS; ++h)
-	{
-		// Check if this heater is both monitored by this fan and in use
-		if (   ((1 << h) & heaters) != 0
-			&& (h < reprap.GetToolHeatersInUse() || (int)h == reprap.GetHeat().GetBedHeater() || (int)h == reprap.GetHeat().GetChamberHeater())
-		   )
-		{
-			if (reprap.GetHeat().IsTuning(h))
-			{
-				return true;			// when turning the PID for a monitored heater, turn the fan on
-			}
-
-			TemperatureError err;
-			const float ht = GetTemperature(h, err);
-			if (err != TemperatureError::success || ht >= t || ht < BAD_LOW_TEMPERATURE)
-			{
-				return true;
-			}
-		}
-	}
-
-#ifndef __RADDS__
-	// All boards except RADDS have CPU temperature monitoring
-	if ((heaters & (1 << HEATERS)) != 0 && AdcReadingToCpuTemperature(cpuTemperatureFilter.GetSum()) >= t)
-	{
-		return true;
-	}
-#endif
-
 #ifdef DUET_NG
-	// Duet NG has driver temperature monitoring too
-	bool turnFanOn = false;
-
-	if ((heaters & (1 << (HEATERS + 1))) != 0)
+// This is called when a fan that monitors driver temperatures is turned on when it was off
+void Platform::DriverCoolingFansOn(uint32_t driverChannelsMonitored)
+{
+	if (driverChannelsMonitored & 1)
 	{
-		const uint16_t onBoardDriversMask = (1u << 5) - 1;
-		const float onBoardDriversTemperature = ((temperatureShutdownDrivers & onBoardDriversMask) != 0) ? 150.0
-												: ((temperatureWarningDrivers & onBoardDriversMask) != 0) ? 100.0
-													: 0.0;
-		if (onBoardDriversTemperature >= t)
-		{
-			if (!onBoardDriversFanRunning)
-			{
-				onBoardDriversFanStartMillis = millis();
-			}
-			onBoardDriversFanRunning = true;
-			turnFanOn = true;
-		}
-		else
-		{
-			onBoardDriversFanRunning = false;
-		}
+		onBoardDriversFanStartMillis = millis();
+		onBoardDriversFanRunning = true;
 	}
-
-	if ((heaters & (1 << (HEATERS + 2))) != 0)
+	if (driverChannelsMonitored & 2)
 	{
-		const uint16_t offBoardDriversMask = ((1u << 5) - 1) << 5;
-		const float offBoardDriversTemperature = ((temperatureShutdownDrivers & offBoardDriversMask) != 0) ? 150.0
-												: ((temperatureWarningDrivers & offBoardDriversMask) != 0) ? 100.0
-													: 0.0;
-		if (offBoardDriversTemperature >= t)
-		{
-			if (!offBoardDriversFanRunning)
-			{
-				offBoardDriversFanStartMillis = millis();
-			}
-			offBoardDriversFanRunning = true;
-			turnFanOn = true;
-		}
-		else
-		{
-			offBoardDriversFanRunning = false;
-		}
+		offBoardDriversFanStartMillis = millis();
+		offBoardDriversFanRunning = true;
 	}
-
-	return turnFanOn;
-#else
-	return false;
-#endif
 }
+#endif
 
 // Power is a fraction in [0,1]
 void Platform::SetHeater(size_t heater, float power)
@@ -2208,7 +2034,7 @@ void Platform::UpdateConfiguredHeaters()
 	}
 
 	// Check tool heaters
-	for(size_t heater = 0; heater < HEATERS; heater++)
+	for(size_t heater = 0; heater < Heaters; heater++)
 	{
 		if (reprap.IsHeaterAssignedToTool(heater))
 		{
@@ -2221,7 +2047,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 {
 	if (drive < DRIVES && endStopPins[drive] != NoPin)
 	{
-		if (drive >= reprap.GetGCodes().GetNumAxes())
+		if (drive >= reprap.GetGCodes().GetTotalAxes())
 		{
 			// Endstop not used for an axis, so no configuration data available.
 			// To allow us to see its status in DWC, pretend it is configured as a high-end active high endstop.
@@ -2233,7 +2059,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 		else if (endStopType[drive] == EndStopType::noEndStop)
 		{
 			// No homing switch is configured for this axis, so see if we should use the Z probe
-			if (zProbeType > 0 && drive < reprap.GetGCodes().GetNumAxes() && (zProbeAxes & (1 << drive)) != 0)
+			if (zProbeType > 0 && drive < reprap.GetGCodes().GetVisibleAxes() && (zProbeAxes & (1 << drive)) != 0)
 			{
 				return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
 			}
@@ -2293,7 +2119,7 @@ bool Platform::WriteZProbeParameters(FileStore *f) const
 // This is called from the step ISR as well as other places, so keep it fast
 void Platform::SetDirection(size_t drive, bool direction)
 {
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2354,7 +2180,7 @@ void Platform::DisableDriver(size_t driver)
 // Enable the drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableDrive(size_t drive)
 {
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2371,7 +2197,7 @@ void Platform::EnableDrive(size_t drive)
 // Disable the drivers for a drive
 void Platform::DisableDrive(size_t drive)
 {
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2419,7 +2245,7 @@ void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, bool isPe
 // Set the current for all drivers on an axis or extruder. Current is in mA.
 void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, bool isPercent)
 {
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
@@ -2515,7 +2341,7 @@ float Platform::GetMotorCurrent(size_t drive, bool isPercent) const
 {
 	if (drive < DRIVES)
 	{
-		const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		const uint8_t driver = (drive < numAxes) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - numAxes];
 		if (driver < DRIVES)
 		{
@@ -2566,7 +2392,7 @@ bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
 // Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
 bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 {
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
 		bool ok = true;
@@ -2603,7 +2429,7 @@ unsigned int Platform::GetDriverMicrostepping(size_t driver, int mode, bool& int
 // Get the microstepping for an axis or extruder
 unsigned int Platform::GetMicrostepping(size_t drive, int mode, bool& interpolation) const
 {
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
 		return GetDriverMicrostepping(axisDrivers[drive].driverNumbers[0], mode, interpolation);
@@ -2634,7 +2460,7 @@ void Platform::SetAxisDriversConfig(size_t drive, const AxisDriversConfig& confi
 void Platform::SetExtruderDriver(size_t extruder, uint8_t driver)
 {
 	extruderDrivers[extruder] = driver;
-	driveDriverBits[extruder + reprap.GetGCodes().GetNumAxes()] = CalcDriverBitmap(driver);
+	driveDriverBits[extruder + reprap.GetGCodes().GetTotalAxes()] = CalcDriverBitmap(driver);
 }
 
 void Platform::SetDriverStepTiming(size_t driver, float microseconds)
@@ -2659,6 +2485,23 @@ float Platform::GetDriverStepTiming(size_t driver) const
 	return ((slowDrivers & CalcDriverBitmap(driver)) != 0)
 			? (float)slowDriverStepPulseClocks * 1000000.0/(float)DDA::stepClockRate
 			: 0.0;
+}
+
+// Set or report the parameters for the specified fan
+// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 106 or 107)
+// then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
+// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
+// If no relevant parameters are found, print the existing ones to 'reply' and return false.
+bool Platform::ConfigureFan(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& reply, bool& error)
+{
+	if (fanNum < 0 || fanNum >= (int)NUM_FANS)
+	{
+		reply.printf("Fan number %d is invalid, must be between 0 and %u", fanNum, NUM_FANS - 1);
+		error = true;
+		return false;
+	}
+
+	return fans[fanNum].Configure(mcode, fanNum, gb, reply, error);
 }
 
 // Get current cooling fan speed on a scale between 0 and 1
@@ -2693,7 +2536,7 @@ void Platform::EnableSharedFan(bool enable)
 
 
 // Get current fan RPM
-float Platform::GetFanRPM()
+float Platform::GetFanRPM() const
 {
 	// The ISR sets fanInterval to the number of microseconds it took to get fanMaxInterruptCount interrupts.
 	// We get 2 tacho pulses per revolution, hence 2 interrupts per revolution.
@@ -2726,7 +2569,7 @@ void Platform::InitFans()
 	{
 #if defined(DUET_NG) || defined(__RADDS__) || defined(__ALLIGATOR__)
 		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed heater
-		fans[1].SetHeatersMonitored(((1 << HEATERS) - 1) & ~(1 << DefaultBedHeater));
+		fans[1].SetHeatersMonitored(((1 << Heaters) - 1) & ~(1 << DefaultBedHeater));
 		fans[1].SetValue(1.0);												// set it full on
 #else
 		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
@@ -3026,7 +2869,7 @@ void Platform::SetPressureAdvance(size_t extruder, float factor)
 float Platform::ActualInstantDv(size_t drive) const
 {
 	const float idv = instantDvs[drive];
-	const size_t numAxes = reprap.GetGCodes().GetNumAxes();
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive >= numAxes)
 	{
 		const float eComp = pressureAdvance[drive - numAxes];
@@ -3182,7 +3025,7 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 	{
 		// Pin number out of range, so nothing to do here
 	}
-	else if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + HEATERS)		// pins 0-9 correspond to heater channels
+	else if (logicalPin >= Heater0LogicalPin && logicalPin < Heater0LogicalPin + (int)Heaters)		// pins 0-9 correspond to heater channels
 	{
 		// For safety, we don't allow a heater channel to be used for servos until the heater has been disabled
 		if (!reprap.GetHeat().IsHeaterEnabled(logicalPin - Heater0LogicalPin))
@@ -3320,6 +3163,7 @@ void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const
 #endif
 
 #ifdef DUET_NG
+
 // Power in voltage
 void Platform::GetPowerVoltages(float& minV, float& currV, float& maxV) const
 {
@@ -3327,6 +3171,16 @@ void Platform::GetPowerVoltages(float& minV, float& currV, float& maxV) const
 	currV = AdcReadingToPowerVoltage(currentVin);
 	maxV = AdcReadingToPowerVoltage(highestVin);
 }
+
+// TMC driver temperatures
+float Platform::GetTmcDriversTemperature(unsigned int board) const
+{
+	const uint16_t mask = ((1u << 5) - 1) << (5 * board);			// there are 5 driver son each board
+	return ((temperatureShutdownDrivers & mask) != 0) ? 150.0
+			: ((temperatureWarningDrivers & mask) != 0) ? 100.0
+				: 0.0;
+}
+
 #endif
 
 // Real-time clock
@@ -3479,36 +3333,36 @@ void Platform::Tick()
 	{
 	case 1:
 	case 3:
-		// We process a thermistor reading on alternate ticks
-		if (IsThermistorChannel(currentHeater))
 		{
-			// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here
+			// We read a thermistor channel on alternate ticks
+			// Because we are in the tick ISR and no other ISR reads the averaging filter, we can cast away 'volatile' here.
+			// The following code assumes number of thermistor channels = number of heater channels
 			ThermistorAveragingFilter& currentFilter = const_cast<ThermistorAveragingFilter&>(thermistorFilters[currentHeater]);
-			currentFilter.ProcessReading(AnalogInReadChannel(thermistorAdcChannels[heaterTempChannels[currentHeater]]));
-		}
+			currentFilter.ProcessReading(AnalogInReadChannel(thermistorAdcChannels[currentHeater]));
 
-		// Guard against overly long delays between successive calls of PID::Spin().
-		// Do not call Time() here, it isn't safe. We use millis() instead.
-		if ((configuredHeaters & (1 << currentHeater)) != 0 && (millis() - reprap.GetHeat().GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
-		{
-			SetHeater(currentHeater, 0.0);
-			LogError(ErrorCode::BadTemp);
-		}
+			// Guard against overly long delays between successive calls of PID::Spin().
+			// Do not call Time() here, it isn't safe. We use millis() instead.
+			if ((configuredHeaters & (1 << currentHeater)) != 0 && (millis() - reprap.GetHeat().GetLastSampleTime(currentHeater)) > maxPidSpinDelay)
+			{
+				SetHeater(currentHeater, 0.0);
+				LogError(ErrorCode::BadTemp);
+			}
 
-		++currentHeater;
-		if (currentHeater == HEATERS)
-		{
-			currentHeater = 0;
-		}
+			++currentHeater;
+			if (currentHeater == Heaters)
+			{
+				currentHeater = 0;
+			}
 
-		// If we are not using a simple modulated IR sensor, process the Z probe reading on every tick for a faster response.
-		// If we are using a simple modulated IR sensor then we need to allow the reading to settle after turning the IR emitter on or off,
-		// so on alternate ticks we read it and switch the emitter
-		if (zProbeType != 2)
-		{
-			const_cast<ZProbeAveragingFilter&>((tickState == 1) ? zProbeOnFilter : zProbeOffFilter).ProcessReading(GetRawZProbeReading());
+			// If we are not using a simple modulated IR sensor, process the Z probe reading on every tick for a faster response.
+			// If we are using a simple modulated IR sensor then we need to allow the reading to settle after turning the IR emitter on or off,
+			// so on alternate ticks we read it and switch the emitter
+			if (zProbeType != 2)
+			{
+				const_cast<ZProbeAveragingFilter&>((tickState == 1) ? zProbeOnFilter : zProbeOffFilter).ProcessReading(GetRawZProbeReading());
+			}
+			++tickState;
 		}
-		++tickState;
 		break;
 
 	case 2:

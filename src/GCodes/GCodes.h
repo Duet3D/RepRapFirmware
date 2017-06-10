@@ -75,7 +75,7 @@ public:
 	struct RawMove
 	{
 		float coords[DRIVES];											// new positions for the axes, amount of movement for the extruders
-		float initialCoords[MAX_AXES];									// the initial positions of the axes
+		float initialCoords[MaxAxes];									// the initial positions of the axes
 		float feedRate;													// feed rate of this move
 		FilePosition filePos;											// offset in the file being printed at the end of reading this move
 		uint32_t xAxes;													// axes that X is mapped to
@@ -139,10 +139,11 @@ public:
 
 	void MoveStoppedByZProbe() { zProbeTriggered = true; }				// Called from the step ISR when the Z probe is triggered, causing the move to be aborted
 
-	size_t GetNumAxes() const { return numAxes; }
+	size_t GetTotalAxes() const { return numTotalAxes; }
+	size_t GetVisibleAxes() const { return numVisibleAxes; }
 	size_t GetNumExtruders() const { return numExtruders; }
 
-	static const char axisLetters[MAX_AXES]; 							// 'X', 'Y', 'Z'
+	static const char axisLetters[MaxAxes]; 							// 'X', 'Y', 'Z'
 
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying
@@ -163,7 +164,7 @@ private:
 	static const Resource MoveResource = 0;								// Movement system, including canned cycle variables
 	static const Resource FileSystemResource = 1;						// Non-sharable parts of the file system
 	static const Resource HeaterResourceBase = 2;
-	static const Resource FanResourceBase = HeaterResourceBase + HEATERS;
+	static const Resource FanResourceBase = HeaterResourceBase + Heaters;
 	static const size_t NumResources = FanResourceBase + NUM_FANS;
 
 	static_assert(NumResources <= 32, "Too many resources to keep a bitmap of them in class GCodeMachineState");
@@ -214,7 +215,7 @@ private:
 	bool SendConfigToLine();											// Deal with M503
 	bool OffsetAxes(GCodeBuffer& gb);									// Set offsets - deprecated, use G10
 	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
-	void SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);		// Set the thermistor and ADC parameters for a heater
+	bool SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);		// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
 	void ManageTool(GCodeBuffer& gb, StringRef& reply);					// Create a new tool definition
 	void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature.  For M104...
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
@@ -278,7 +279,7 @@ private:
 	// The following contain the details of moves that the Move module fetches
 	RawMove moveBuffer;							// Move details to pass to Move class
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
-	float arcCentre[MAX_AXES];
+	float arcCentre[MaxAxes];
 	float arcRadius;
 	float arcCurrentAngle;
 	float arcAngleIncrement;
@@ -288,9 +289,10 @@ private:
 	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
 	RestorePoint pauseRestorePoint;				// The position and feed rate when we paused the print
 	RestorePoint toolChangeRestorePoint;		// The position and feed rate when we freed a tool
-	size_t numAxes;								// How many axes we have
+	size_t numTotalAxes;						// How many axes we have
+	size_t numVisibleAxes;						// How many axes are visible
 	size_t numExtruders;						// How many extruders we have, or may have
-	float axisScaleFactors[MAX_AXES];			// Scale XYZ coordinates by this factor (for Delta configurations)
+	float axisScaleFactors[MaxAxes];			// Scale XYZ coordinates by this factor (for Delta configurations)
 	float lastRawExtruderPosition[MaxExtruders]; // Extruder position of the last move fed into the Move class
 	float rawExtruderTotalByDrive[MaxExtruders]; // Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives

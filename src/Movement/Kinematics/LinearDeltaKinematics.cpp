@@ -131,16 +131,16 @@ void LinearDeltaKinematics::InverseTransform(float Ha, float Hb, float Hc, float
 }
 
 // Convert Cartesian coordinates to motor steps
-bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const
+bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
 {
 	//TODO return false if we can't transform the position
-	for (size_t axis = 0; axis < min<size_t>(numAxes, DELTA_AXES); ++axis)
+	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)
 	{
 		motorPos[axis] = (int32_t)roundf(Transform(machinePos, axis) * stepsPerMm[axis]);
 	}
 
 	// Transform any additional axes linearly
-	for (size_t axis = DELTA_AXES; axis < numAxes; ++axis)
+	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
 	{
 		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
 	}
@@ -148,12 +148,12 @@ bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
-void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const
+void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
 	InverseTransform(motorPos[A_AXIS]/stepsPerMm[A_AXIS], motorPos[B_AXIS]/stepsPerMm[B_AXIS], motorPos[C_AXIS]/stepsPerMm[C_AXIS], machinePos);
 
 	// Convert any additional axes linearly
-	for (size_t drive = DELTA_AXES; drive < numDrives; ++drive)
+	for (size_t drive = DELTA_AXES; drive < numVisibleAxes; ++drive)
 	{
 		machinePos[drive] = motorPos[drive]/stepsPerMm[drive];
 	}
@@ -166,7 +166,7 @@ bool LinearDeltaKinematics::IsReachable(float x, float y) const
 }
 
 // Limit the Cartesian position that the user wants to move to
-void LinearDeltaKinematics::LimitPosition(float coords[], size_t numAxes, uint16_t axesHomed) const
+void LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
 {
 	const uint16_t allAxes = (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS);
 	if ((axesHomed & allAxes) == allAxes)
@@ -541,7 +541,7 @@ float LinearDeltaKinematics::GetTiltCorrection(size_t axis) const
 
 // Set the parameters from a M665, M666 or M669 command
 // Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
-bool LinearDeltaKinematics::SetOrReportParameters(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
+bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
 {
 	switch(mCode)
 	{
@@ -643,7 +643,7 @@ bool LinearDeltaKinematics::SetOrReportParameters(unsigned int mCode, GCodeBuffe
 		}
 
 	default:
-		return Kinematics::SetOrReportParameters(mCode, gb, reply, error);
+		return Kinematics::Configure(mCode, gb, reply, error);
 	}
 }
 

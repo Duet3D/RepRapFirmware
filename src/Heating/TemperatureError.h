@@ -24,7 +24,9 @@ enum class TemperatureError : uint8_t
 	hardwareError,
 	busBusy,
 	badResponse,
-	unknownChannel
+	unknownChannel,
+	notInitialised,
+	unknownHeater
 };
 
 const char* TemperatureErrorString(TemperatureError err);

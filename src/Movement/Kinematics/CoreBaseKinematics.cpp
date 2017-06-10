@@ -10,16 +10,16 @@
 
 CoreBaseKinematics::CoreBaseKinematics(KinematicsType t) : Kinematics(t)
 {
-	for (size_t axis = 0; axis < CART_AXES; ++axis)
+	for (size_t axis = 0; axis < XYZ_AXES; ++axis)
 	{
 		axisFactors[axis] = 1.0;
 	}
 }
 
 // Convert Cartesian coordinates to motor coordinates
-bool CoreBaseKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const
+bool CoreBaseKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
 {
-	for (size_t axis = 0; axis < numAxes; ++axis)
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		motorPos[axis] = (int32_t)roundf(MotorFactor(axis, machinePos) * stepsPerMm[axis]);
 	}
@@ -28,12 +28,12 @@ bool CoreBaseKinematics::CartesianToMotorSteps(const float machinePos[], const f
 
 // Set the parameters from a M665, M666 or M669 command
 // Return true if we changed any parameters. Set 'error' true if there was an error, otherwise leave it alone.
-bool CoreBaseKinematics::SetOrReportParameters(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
+bool CoreBaseKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
 {
 	if (mCode == 667)
 	{
 		bool seen = false;
-		for (size_t axis = 0; axis < CART_AXES; ++axis)
+		for (size_t axis = 0; axis < XYZ_AXES; ++axis)
 		{
 			if (gb.Seen(GCodes::axisLetters[axis]))
 			{
@@ -44,7 +44,7 @@ bool CoreBaseKinematics::SetOrReportParameters(unsigned int mCode, GCodeBuffer& 
 		if (!seen && !gb.Seen('S'))
 		{
 			reply.printf("Printer mode is %s with axis factors", GetName());
-			for (size_t axis = 0; axis < CART_AXES; ++axis)
+			for (size_t axis = 0; axis < XYZ_AXES; ++axis)
 			{
 				reply.catf(" %c:%f", GCodes::axisLetters[axis], axisFactors[axis]);
 			}
@@ -53,7 +53,7 @@ bool CoreBaseKinematics::SetOrReportParameters(unsigned int mCode, GCodeBuffer& 
 	}
 	else
 	{
-		return Kinematics::SetOrReportParameters(mCode, gb, reply, error);
+		return Kinematics::Configure(mCode, gb, reply, error);
 	}
 }
 

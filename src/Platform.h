@@ -41,8 +41,6 @@ Licence: GPL
 #include "RepRapFirmware.h"
 #include "DueFlashStorage.h"
 #include "Fan.h"
-#include "Heating/TemperatureSensor.h"
-#include "Heating/Thermistor.h"
 #include "Heating/TemperatureError.h"
 #include "OutputMemory.h"
 #include "Storage/FileStore.h"
@@ -88,14 +86,13 @@ const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2
 
 // AXES
 
-const float AXIS_MINIMA[MAX_AXES] = AXES_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);			// mm
-const float AXIS_MAXIMA[MAX_AXES] = AXES_(230.0, 210.0, 200.0, 0.0, 0.0, 0.0);		// mm
+const float AXIS_MINIMA[MaxAxes] = AXES_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);			// mm
+const float AXIS_MAXIMA[MaxAxes] = AXES_(230.0, 210.0, 200.0, 0.0, 0.0, 0.0);		// mm
 
 // Z PROBE
 
 const float Z_PROBE_STOP_HEIGHT = 0.7;							// Millimetres
 const unsigned int Z_PROBE_AVERAGE_READINGS = 8;				// We average this number of readings with IR on, and the same number with IR off
-const int ZProbeTypeDelta = 7;									// Z probe type for experimental delta probe
 
 #ifdef DUET_NG
 const int Z_PROBE_AD_VALUE = 500;								// Default for the Z probe - should be overwritten by experiment
@@ -451,10 +448,10 @@ public:
 	void SetPressureAdvance(size_t extruder, float factor);
 
 	void SetEndStopConfiguration(size_t axis, EndStopType endstopType, bool logicLevel)
-	pre(axis < MAX_AXES);
+	pre(axis < MaxAxes);
 
 	void GetEndStopConfiguration(size_t axis, EndStopType& endstopType, bool& logicLevel) const
-	pre(axis < MAX_AXES);
+	pre(axis < MaxAxes);
 
 	uint32_t GetAllEndstopStates() const;
 	void SetAxisDriversConfig(size_t drive, const AxisDriversConfig& config);
@@ -503,59 +500,32 @@ public:
 	void ExtrudeOff();
 
 	// Heat and temperature
-
-	float GetTemperature(size_t heater, TemperatureError& err) // Result is in degrees Celsius
-	pre(heater < HEATERS);
-
 	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
 
+	volatile ThermistorAveragingFilter& GetThermistorFilter(size_t channel)
+	pre(channel < ARRAY_SIZE(thermistorFilters))
+	{
+		return thermistorFilters[channel];
+	}
+
 	void SetHeater(size_t heater, float power)				// power is a fraction in [0,1]
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	uint32_t HeatSampleInterval() const;
 	void SetHeatSampleTime(float st);
 	float GetHeatSampleTime() const;
-
-	Thermistor& GetThermistor(size_t heater)
-	pre(heater < HEATERS)
-	{
-		return thermistors[heater];
-	}
-
-	void SetThermistorNumber(size_t heater, size_t thermistor)
-	pre(heater < HEATERS; thermistor < HEATERS);
-
-	int GetThermistorNumber(size_t heater) const
-	pre(heater < HEATERS);
-
-	bool IsThermistorChannel(uint8_t heater) const
-	pre(heater < HEATERS);
-
-	bool IsThermocoupleChannel(uint8_t heater) const
-	pre(heater < HEATERS);
-
-	bool IsRtdChannel(uint8_t heater) const
-	pre(heater < HEATERS);
-
-	bool IsLinearAdcChannel(uint8_t heater) const
-	pre(heater < HEATERS);
-
 	void UpdateConfiguredHeaters();
-	bool AnyHeaterHot(uint16_t heaters, float t);			// called to see if we need to turn on the hot end fan
 
 	// Fans
-	Fan& GetFan(size_t fanNumber)							// Get access to the fan control object
-	pre(fanNumber < NUM_FANS)
-	{
-		return fans[fanNumber];
-	}
+	bool ConfigureFan(unsigned int mcode, int fanNumber, GCodeBuffer& gb, StringRef& reply, bool& error);
 
 	float GetFanValue(size_t fan) const;					// Result is returned in percent
 	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1 and 1..255
-#ifndef DUET_NG
+#if !defined(DUET_NG) && !defined(__RADDS__) & !defined(__ALLIGATOR__)
 	void EnableSharedFan(bool enable);						// enable/disable the fan that shares its PWM pin with the last heater
 #endif
-	float GetFanRPM();
+
+	float GetFanRPM() const;
 
 	// Flash operations
 	void UpdateFirmware();
@@ -592,6 +562,8 @@ public:
 #ifdef DUET_NG
 	// Power in voltage
 	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
+	float GetTmcDriversTemperature(unsigned int board) const;
+	void DriverCoolingFansOn(uint32_t driverChannelsMonitored);
 #endif
 
 	// User I/O and servo support
@@ -709,7 +681,7 @@ private:
 	float pressureAdvance[MaxExtruders];
 	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
-	AxisDriversConfig axisDrivers[MAX_AXES];		// the driver numbers assigned to each axis
+	AxisDriversConfig axisDrivers[MaxAxes];		// the driver numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];			// the driver number assigned to each extruder
 	uint32_t driveDriverBits[DRIVES];				// the bitmap of driver port bits for each axis or extruder
 	uint32_t slowDriverStepPulseClocks;				// minimum high and low step pulse widths, in processor clocks
@@ -738,7 +710,7 @@ private:
 	Pin zProbeModulationPin;
 	volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
 	volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
-	volatile ThermistorAveragingFilter thermistorFilters[HEATERS];	// bed and extruder thermistor readings
+	volatile ThermistorAveragingFilter thermistorFilters[Heaters];	// bed and extruder thermistor readings
 #ifndef __RADDS__
 	volatile ThermistorAveragingFilter cpuTemperatureFilter;		// MCU temperature readings
 #endif
@@ -755,19 +727,17 @@ private:
 
 	// Axes and endstops
 
-	float axisMaxima[MAX_AXES];
-	float axisMinima[MAX_AXES];
-	EndStopType endStopType[MAX_AXES];
-	bool endStopLogicLevel[MAX_AXES];
+	float axisMaxima[MaxAxes];
+	float axisMinima[MaxAxes];
+	EndStopType endStopType[MaxAxes];
+	bool endStopLogicLevel[MaxAxes];
   
 	// Heaters - bed is assumed to be the first
 
-	Pin tempSensePins[HEATERS];
-	Pin heatOnPins[HEATERS];
-	Thermistor thermistors[HEATERS];
-	TemperatureSensor SpiTempSensors[MaxSpiTempSensors];
+	Pin tempSensePins[Heaters];
+	Pin heatOnPins[Heaters];
 	Pin spiTempSenseCsPins[MaxSpiTempSensors];
-	uint32_t configuredHeaters;										// bitmask of all heaters in use
+	uint32_t configuredHeaters;										// bitmask of all real heaters in use
 	uint32_t heatSampleTicks;
 
 	// Fans
@@ -830,8 +800,7 @@ private:
 	// of the M305 command (e.g., SetThermistorNumber() and array lookups assume range
 	// checking has already been performed.
 
-	unsigned int heaterTempChannels[HEATERS];
-	AnalogChannelNumber thermistorAdcChannels[HEATERS];
+	AnalogChannelNumber thermistorAdcChannels[Heaters];
 	AnalogChannelNumber zProbeAdcChannel;
 	uint8_t tickState;
 	size_t currentHeater;
@@ -1142,29 +1111,6 @@ inline void Platform::SetHeatSampleTime(float st)
 	{
 		heatSampleTicks = (uint32_t)(st * 1000.0);
 	}
-}
-
-inline bool Platform::IsThermistorChannel(uint8_t heater) const
-{
-	return heaterTempChannels[heater] < HEATERS;
-}
-
-inline bool Platform::IsThermocoupleChannel(uint8_t heater) const
-{
-	return heaterTempChannels[heater] >= FirstThermocoupleChannel
-			&& heaterTempChannels[heater] - FirstThermocoupleChannel < MaxSpiTempSensors;
-}
-
-inline bool Platform::IsRtdChannel(uint8_t heater) const
-{
-	return heaterTempChannels[heater] >= FirstRtdChannel
-			&& heaterTempChannels[heater] - FirstRtdChannel < MaxSpiTempSensors;
-}
-
-inline bool Platform::IsLinearAdcChannel(uint8_t heater) const
-{
-	return heaterTempChannels[heater] >= FirstLinearAdcChannel
-			&& heaterTempChannels[heater] - FirstLinearAdcChannel < MaxSpiTempSensors;
 }
 
 inline const uint8_t* Platform::GetIPAddress() const

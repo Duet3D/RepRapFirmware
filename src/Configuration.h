@@ -87,6 +87,11 @@ const int8_t DefaultBedHeater = 0;
 const int8_t DefaultChamberHeater = -1;
 const int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater
 
+const unsigned int FirstVirtualHeater = 100;		// the heater number at which virtual heaters start
+const unsigned int MaxVirtualHeaters = 10;			// the number of virtual heaters supported
+
+const size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
+
 // These parameters are about right for a typical PCB bed heater that maxes out at 110C
 const float DefaultBedHeaterGain = 90.0;
 const float DefaultBedHeaterTimeConstant = 700.0;
@@ -103,9 +108,13 @@ const float MinimumConnectedTemperature = -5.0;		// Temperatures below this we t
 static_assert(DefaultMaxTempExcursion > TEMPERATURE_CLOSE_ENOUGH, "DefaultMaxTempExcursion is too low");
 
 // Temperature sense channels
+const unsigned int FirstThermistorChannel = 0;		// Temperature sensor channels 0... are thermistors
 const unsigned int FirstThermocoupleChannel = 100;	// Temperature sensor channels 100... are thermocouples
 const unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200... are RTDs
 const unsigned int FirstLinearAdcChannel = 300;		// Temperature sensor channels 300... use an ADC that provides a linear output over a temperature range
+const unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCJU's own temperature sensor
+const unsigned int FirstTmcDriversSenseChannel = 1001; // Sensors 1001..1002 are the TMC2660 driver temperature sense
+const unsigned int NumTmcDriversSenseChannels = 2;	// Sensors 1001..1002 are the TMC2660 driver temperature sense
 
 // PWM frequencies
 const unsigned int SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs

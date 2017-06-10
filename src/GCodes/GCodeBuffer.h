@@ -25,19 +25,23 @@ public:
 	bool IsEmpty() const;								// Does this buffer contain any code?
 	bool Seen(char c);									// Is a character present?
 	bool SeenAfterSpace(char c);						// Is a character present?
+
 	char GetCommandLetter();							// Find the first G, M or T command
 	float GetFValue();									// Get a float after a key letter
 	int32_t GetIValue();								// Get an integer after a key letter
 	bool GetIPAddress(uint8_t ip[4]);					// Get an IP address quad after a key letter
 	bool GetIPAddress(uint32_t& ip);					// Get an IP address quad after a key letter
+	const char* GetUnprecedentedString(bool optional = false);	// Get a string with no preceding key letter
+	const char* GetString();							// Get a string after a key letter
+	bool GetQuotedString(char *buf, size_t buflen);		// Get and copy a quoted string
+	const void GetFloatArray(float a[], size_t& length, bool doPad); // Get a :-separated list of floats after a key letter
+	const void GetLongArray(long l[], size_t& length);	// Get a :-separated list of longs after a key letter
+
 	void TryGetFValue(char c, float& val, bool& seen);
 	void TryGetIValue(char c, int32_t& val, bool& seen);
 	bool TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen);
-	const char* GetUnprecedentedString(bool optional = false);	// Get a string with no preceding key letter
-	const char* GetString();							// Get a string after a key letter
-	bool GetString(char *buf, size_t buflen);			// Get and copy a possibly quoted string
-	const void GetFloatArray(float a[], size_t& length, bool doPad); // Get a :-separated list of floats after a key letter
-	const void GetLongArray(long l[], size_t& length);	// Get a :-separated list of longs after a key letter
+	void TryGetQuotedString(char c, char *buf, size_t buflen, bool& seen);
+
 	const char* Buffer() const;
 	bool IsIdle() const;
 	bool IsReady() const;								// Return true if a gcode is ready but hasn't been started yet
@@ -80,6 +84,7 @@ private:
 	const char* identity;								// Where we are from (web, file, serial line etc)
 	int gcodePointer;									// Index in the buffer
 	int readPointer;									// Where in the buffer to read next
+	bool inQuotes;										// Are we inside double quotation marks?
 	bool inComment;										// Are we after a ';' character?
 	bool checksumRequired;								// True if we only accept commands with a valid checksum
 	GCodeBufferState bufferState;						// Idle, executing or paused

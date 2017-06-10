@@ -19,17 +19,15 @@ const size_t NumFirmwareUpdateModules = 1;
 const size_t DRIVES = 9;						// The number of drives in the machine, including X, Y, and Z plus extruder drives
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h,i }
 
-const int8_t HEATERS = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
+const size_t Heaters = 7;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g }
-const unsigned int FirstVirtualHeater = 100;
-const unsigned int NumVirtualHeaters = 1;		// CPU temperature only
 
-const size_t MAX_AXES = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
+const size_t MinAxes = 3;						// The minimum and default number of axes
+const size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
 #define AXES_(a,b,c,d,e,f) { a,b,c,d,e,f }
 
-const size_t MIN_AXES = 3;						// The minimum and default number of axes
-const size_t MaxExtruders = DRIVES - MIN_AXES;	// The maximum number of extruders
+const size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
 const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
 
 const size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB and two auxiliary UARTs)
@@ -61,8 +59,8 @@ const float STEPPER_DAC_VOLTAGE_OFFSET = -0.025;						// Stepper motor current o
 
 const bool HEAT_ON = false;												// false for inverted heater (e.g. Duet v0.6), true for not (e.g. Duet v0.4)
 
-const Pin TEMP_SENSE_PINS[HEATERS] = { 5, 4, 0, 7, 8, 9, 11 };			// Analogue pin numbers
-const Pin HEAT_ON_PINS[HEATERS] = { 6, X5, X7, 7, 8, 9, X17 };			// Heater Channel 7 (pin X17) is shared with Fan1
+const Pin TEMP_SENSE_PINS[Heaters] = { 5, 4, 0, 7, 8, 9, 11 };			// Analogue pin numbers
+const Pin HEAT_ON_PINS[Heaters] = { 6, X5, X7, 7, 8, 9, X17 };			// Heater Channel 7 (pin X17) is shared with Fan1
 
 // Default thermistor parameters
 // Bed thermistor: http://uk.farnell.com/epcos/b57863s103f040/sensor-miniature-ntc-10k/dp/1299930?Ntt=129-9930

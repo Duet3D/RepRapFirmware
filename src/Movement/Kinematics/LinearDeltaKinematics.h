@@ -33,19 +33,20 @@ public:
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	const char *GetName(bool forStatusReport) const override;
-	bool SetOrReportParameters(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) override;
-	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const override;
-	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const override;
+	bool Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) override;
+	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const override;
+	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
 	bool SupportsAutoCalibration() const override { return true; }
 	void DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply) override;
 	void SetCalibrationDefaults() override { Init(); }
 	bool WriteCalibrationParameters(FileStore *f) const override;
 	float GetTiltCorrection(size_t axis) const override;
 	bool IsReachable(float x, float y) const override;
-	void LimitPosition(float coords[], size_t numAxes, uint16_t axesHomed) const override;
+	void LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	uint16_t AxesToHomeBeforeProbing() const override { return (1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS); }
 	MotionType GetMotionType(size_t axis) const override;
+	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
 
     // Public functions specific to this class
 	float GetDiagonalSquared() const { return D2; }

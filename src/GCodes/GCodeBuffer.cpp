@@ -29,7 +29,7 @@ void GCodeBuffer::Init()
 {
 	gcodePointer = 0;
 	readPointer = -1;
-	inComment = timerRunning = false;
+	inQuotes = inComment = timerRunning = false;
 	bufferState = GCodeBufferState::idle;
 }
 
@@ -75,7 +75,7 @@ int GCodeBuffer::CheckSum() const
 // not yet complete.  If true, it is complete and ready to be acted upon.
 bool GCodeBuffer::Put(char c)
 {
-	if (c == ';')
+	if (!inQuotes && c == ';')
 	{
 		inComment = true;
 	}
@@ -141,12 +141,18 @@ bool GCodeBuffer::Put(char c)
 	}
 	else if (!inComment || writingFileDirectory)
 	{
-		gcodeBuffer[gcodePointer++] = c;
 		if (gcodePointer >= (int)GCODE_LENGTH)
 		{
 			reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: G-Code buffer '$s' length overflow\n", identity);
-			gcodePointer = 0;
-			gcodeBuffer[0] = 0;
+			Init();
+		}
+		else
+		{
+			gcodeBuffer[gcodePointer++] = c;
+			if (c == '"' && !inComment)
+			{
+				inQuotes = !inQuotes;
+			}
 		}
 	}
 
@@ -366,7 +372,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 
 // Get a string after a G Code letter found by a call to Seen().
 // It will be the whole of the rest of the GCode string, so strings should always be the last parameter.
-// Use the other overload of GetString to get strings that may not be the last parameter.
+// Use the other overload of GetString to get strings that may not be the last parameter, or may be quoted.
 const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)
@@ -379,8 +385,8 @@ const char* GCodeBuffer::GetString()
 	return result;
 }
 
-// Get and copy a possibly quoted string
-bool GCodeBuffer::GetString(char *buf, size_t buflen)
+// Get and copy a quoted string
+bool GCodeBuffer::GetQuotedString(char *buf, size_t buflen)
 {
 	if (readPointer < 0)
 	{
@@ -407,8 +413,9 @@ bool GCodeBuffer::GetString(char *buf, size_t buflen)
 					if (i < buflen)
 					{
 						buf[i] = 0;
+						return true;
 					}
-					return i <= buflen;
+					return false;
 				}
 			}
 			if (i < buflen)
@@ -418,28 +425,7 @@ bool GCodeBuffer::GetString(char *buf, size_t buflen)
 			++i;
 		}
 	}
-	else
-	{
-		// Non-quoted string, terminate it on space or semicolon or control character
-		for (;;)
-		{
-			if (c <= ' ' || c == ';')
-			{
-				if (i < buflen)
-				{
-					buf[i] = 0;
-				}
-				return i != 0 && i <= buflen;					// no string found
-			}
-			if (i < buflen)
-			{
-				buf[i] = c;
-			}
-			++i;
-			c = gcodeBuffer[readPointer++];
-		}
-	}
-	return false;		// to keep Eclipse happy
+	return false;
 }
 
 // This returns a pointer to the end of the buffer where a
@@ -511,7 +497,7 @@ void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 	}
 }
 
-// Try to get a flow array exactly 'numVals' long after parameter letter 'c'.
+// Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of value is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
 bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen)
@@ -531,6 +517,16 @@ bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], StringR
 		}
 	}
 	return false;
+}
+
+// Try to get a quoted string after parameter letter.
+// If we found it then set 'seen' true, else leave 'seen' alone
+void GCodeBuffer::TryGetQuotedString(char c, char *buf, size_t buflen, bool& seen)
+{
+	if (Seen(c) && GetQuotedString(buf, buflen))
+	{
+		seen = true;
+	}
 }
 
 // Get an IP address quad after a key letter

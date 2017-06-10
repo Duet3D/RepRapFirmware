@@ -38,7 +38,7 @@ public:
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
-	void SetOffset(const float offs[MAX_AXES]);
+	void SetOffset(const float offs[MaxAxes]);
 	size_t DriveCount() const;
 	int Drive(int driveNumber) const;
 	bool ToolCanDrive(bool extrude);
@@ -82,11 +82,11 @@ private:
 	int drives[MaxExtruders];
 	float mix[MaxExtruders];
 	size_t driveCount;
-	int heaters[HEATERS];
-	float activeTemperatures[HEATERS];
-	float standbyTemperatures[HEATERS];
+	int heaters[Heaters];
+	float activeTemperatures[Heaters];
+	float standbyTemperatures[Heaters];
 	size_t heaterCount;
-	float offset[MAX_AXES];
+	float offset[MaxAxes];
 	uint32_t xMapping;
 	uint32_t fanMapping;
 	Tool* next;
@@ -147,9 +147,9 @@ inline const float *Tool::GetOffset() const
 	return offset;
 }
 
-inline void Tool::SetOffset(const float offs[MAX_AXES])
+inline void Tool::SetOffset(const float offs[MaxAxes])
 {
-	for(size_t i = 0; i < MAX_AXES; ++i)
+	for(size_t i = 0; i < MaxAxes; ++i)
 	{
 		offset[i] = offs[i];
 	}

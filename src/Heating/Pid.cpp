@@ -83,7 +83,7 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 	if (rslt)
 	{
 #if !defined(DUET_NG) && !defined(__RADDS__) && !defined(__ALLIGATOR__)
-		if (heater == HEATERS - 1)
+		if (heater == Heaters - 1)
 		{
 			// The last heater on the Duet 0.8.5 + DueX4 shares its pin with Fan1
 			platform.EnableSharedFan(!model.IsEnabled());
@@ -112,17 +112,10 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 TemperatureError PID::ReadTemperature()
 {
 	TemperatureError err = TemperatureError::success;				// assume no error
-	temperature = platform.GetTemperature(heater, err);			// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
-	if (err == TemperatureError::success)
+	temperature = reprap.GetHeat().GetTemperature(heater, err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
+	if (err == TemperatureError::success && temperature > temperatureLimit)
 	{
-		if (temperature < BAD_LOW_TEMPERATURE)
-		{
-			err = TemperatureError::openCircuit;
-		}
-		else if (temperature > temperatureLimit)
-		{
-			err = TemperatureError::tooHigh;
-		}
+		err = TemperatureError::tooHigh;
 	}
 	return err;
 }

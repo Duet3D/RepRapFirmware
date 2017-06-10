@@ -8,10 +8,12 @@
 #include "Fan.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "GCodes/GCodeBuffer.h"
+#include "Heating/Heat.h"
 
 void Fan::Init(Pin p_pin, bool hwInverted)
 {
-	val = 0.0;
+	val = lastVal = 0.0;
 	minVal = 0.1;				// 10% minimum fan speed
 	blipTime = 100;				// 100ms fan blip
 	freq = DefaultFanPwmFreq;
@@ -19,10 +21,141 @@ void Fan::Init(Pin p_pin, bool hwInverted)
 	hardwareInverted = hwInverted;
 	inverted = blipping = false;
 	heatersMonitored = 0;
-	triggerTemperature = HOT_END_FAN_TEMPERATURE;
-	thermostatIsOn = false;
+	triggerTemperatures[0] = triggerTemperatures[1] = HOT_END_FAN_TEMPERATURE;
 	lastPwm = -1.0;				// force a refresh
 	Refresh();
+}
+
+// Set or report the parameters for this fan
+// If 'mcode' is an M-code used to set parameters for the current kinematics (which should only ever be 106)
+// then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
+// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
+// If no relevant parameters are found, print the existing ones to 'reply' and return false.
+// Exceptions:
+// 1. Only process the S parameter unless other values were processed.
+// 2. Don't process the R parameter, but if it is present don't print the existing configuration.
+bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& reply, bool& error)
+{
+	if (!IsEnabled())
+	{
+		reply.printf("Fan %d is disabled", fanNum);
+		error = true;
+		return true;											// say we have processed it
+	}
+
+	bool seen = false;
+	if (mcode == 106)
+	{
+		if (gb.Seen('I'))		// Invert cooling
+		{
+			seen = true;
+			const int invert = gb.GetIValue();
+			if (invert < 0)
+			{
+				Disable();
+			}
+			else
+			{
+				inverted = (invert > 0);
+			}
+		}
+
+		if (gb.Seen('F'))										// Set PWM frequency
+		{
+			seen = true;
+			freq = (uint16_t)constrain<int>(gb.GetIValue(), 1, 65535);
+			lastPwm = -1.0;										// force the PWM to be updated
+			Refresh();
+		}
+
+		if (gb.Seen('T'))
+		{
+			seen = true;
+			size_t numTemps = 2;
+			gb.GetFloatArray(triggerTemperatures, numTemps, true);
+		}
+
+		if (gb.Seen('B'))										// Set blip time
+		{
+			seen = true;
+			blipTime = (uint32_t)(max<float>(gb.GetFValue(), 0.0) * SecondsToMillis);
+		}
+
+		if (gb.Seen('L'))		// Set minimum speed
+		{
+			seen = true;
+			float speed = gb.GetFValue();
+			if (speed > 1.0)
+			{
+				speed /= 255.0;
+			}
+			minVal = constrain<float>(speed, 0.0, 1.0);
+		}
+
+		if (gb.Seen('H'))		// Set thermostatically-controlled heaters
+		{
+			seen = true;
+			long heaters[Heaters + MaxVirtualHeaters];
+			size_t numH = ARRAY_SIZE(heaters);
+			gb.GetLongArray(heaters, numH);
+
+			// Note that M106 H-1 disables thermostatic mode. The following code implements that automatically.
+			heatersMonitored = 0;
+			for (size_t h = 0; h < numH; ++h)
+			{
+				const int hnum = heaters[h];
+				if (hnum >= 0 && hnum < (int)Heaters)
+				{
+					heatersMonitored |= (1u << (unsigned int)hnum);
+				}
+				else if (hnum >= (int)FirstVirtualHeater && hnum < (int)(FirstVirtualHeater + MaxVirtualHeaters))
+				{
+					// Heaters 100, 101... are virtual heaters i.e. CPU and driver temperatures
+					heatersMonitored |= (1u << (Heaters + (unsigned int)hnum - FirstVirtualHeater));
+				}
+			}
+			if (heatersMonitored != 0)
+			{
+				SetValue(1.0);			// default the fan speed to full for safety
+			}
+		}
+
+		// We only act on the 'S' parameter here if we have processed other parameters
+		if (seen && gb.Seen('S'))		// Set new fan value - process this after processing 'H' or it may not be acted on
+		{
+			const float f = constrain<float>(gb.GetFValue(), 0.0, 255.0);
+			SetValue(f);
+		}
+
+		if (seen)
+		{
+			Refresh();
+		}
+		else if (!gb.Seen('R') && !gb.Seen('S'))
+		{
+			// Report the configuration of the specified fan
+			reply.printf("Fan%i frequency: %uHz, speed: %d%%, min: %d%%, blip: %.2f, inverted: %s",
+							fanNum,
+							(unsigned int)freq,
+							(int)(val * 100.0),
+							(int)(minVal * 100.0),
+							(float)blipTime * MillisToSeconds,
+							(inverted) ? "yes" : "no");
+			if (heatersMonitored != 0)
+			{
+				reply.catf(", temperature: %.1f:%.1fC, heaters:", triggerTemperatures[0], triggerTemperatures[1]);
+				for (unsigned int i = 0; i < Heaters + MaxVirtualHeaters; ++i)
+				{
+					if ((heatersMonitored & (1u << i)) != 0)
+					{
+						reply.catf(" %u", (i < Heaters) ? i : FirstVirtualHeater + i - Heaters);
+					}
+				}
+			}
+		}
+	}
+
+	return seen;
 }
 
 void Fan::SetValue(float speed)
@@ -31,35 +164,7 @@ void Fan::SetValue(float speed)
 	{
 		speed /= 255.0;
 	}
-	const float newVal = constrain<float>(speed, 0.0, 1.0);
-	if (val == 0.0 && newVal > 0.0 && newVal < 1.0 && blipTime != 0)
-	{
-		// Starting the fan from standstill, so blip the fan
-		blipping = true;
-		blipStartTime = millis();
-	}
-	val = newVal;
-	Refresh();
-}
-
-void Fan::SetMinValue(float speed)
-{
-	if (speed > 1.0)
-	{
-		speed /= 255.0;
-	}
-	minVal = constrain<float>(speed, 0.0, 1.0);
-	Refresh();
-}
-
-void Fan::SetBlipTime(float t)
-{
-	blipTime = (uint32_t)(max<float>(t, 0.0) * SecondsToMillis);
-}
-
-void Fan::SetInverted(bool inv)
-{
-	inverted = inv;
+	val = constrain<float>(speed, 0.0, 1.0);
 	Refresh();
 }
 
@@ -88,17 +193,9 @@ void Fan::SetHardwarePwm(float pwmVal)
 	}
 }
 
-void Fan::SetPwmFrequency(float p_freq)
-{
-	freq = (uint16_t)constrain<float>(p_freq, 1.0, 65535.0);
-	lastPwm = -1.0;										// force the PWM to be updated
-	Refresh();
-}
-
 void Fan::SetHeatersMonitored(uint16_t h)
 {
 	heatersMonitored = h;
-	thermostatIsOn = false;
 	Refresh();
 }
 
@@ -107,19 +204,59 @@ void Fan::SetHeatersMonitored(uint16_t h)
 void Fan::Refresh()
 {
 	float reqVal;
+#ifdef DUET_NG
+	uint32_t driverChannelsMonitored = 0;
+#endif
+
 	if (heatersMonitored == 0)
 	{
 		reqVal = val;
 	}
-	else if (reprap.GetPlatform().AnyHeaterHot(heatersMonitored, (thermostatIsOn) ? triggerTemperature - ThermostatHysteresis : triggerTemperature))
-	{
-		thermostatIsOn = true;
-		reqVal = max<float>(0.5, val);			// make sure that thermostatic fans always run at 50% speed or more
-	}
 	else
 	{
-		thermostatIsOn = false;
 		reqVal = 0.0;
+		const bool bangBangMode = (triggerTemperatures[1] <= triggerTemperatures[0]);
+		for (size_t h = 0; h < Heaters + MaxVirtualHeaters; ++h)
+		{
+			// Check if this heater is both monitored by this fan and in use
+			if (   ((1 << h) & heatersMonitored) != 0
+				&& (h < reprap.GetToolHeatersInUse() || h >= Heaters || (int)h == reprap.GetHeat().GetBedHeater() || (int)h == reprap.GetHeat().GetChamberHeater())
+			   )
+			{
+				// This heater is both monitored and potentially active
+				if (h < Heaters && reprap.GetHeat().IsTuning(h))
+				{
+					reqVal = 1.0;			// when turning the PID for a monitored heater, turn the fan on
+				}
+				else
+				{
+					const size_t heaterHumber = (h >= Heaters) ? (h - Heaters) + FirstVirtualHeater : h;
+					TemperatureError err;
+					const float ht = reprap.GetHeat().GetTemperature(heaterHumber, err);
+					if (err != TemperatureError::success || ht < BAD_LOW_TEMPERATURE || ht >= triggerTemperatures[1])
+					{
+						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : 1.0);
+					}
+					else if (!bangBangMode && ht > triggerTemperatures[0])
+					{
+						// We already know that ht < triggerTemperatures[1], therefore unless we have NaNs it is safe to divide by (triggerTemperatures[1] - triggerTemperatures[0])
+						reqVal = max<float>(reqVal, (ht - triggerTemperatures[0])/(triggerTemperatures[1] - triggerTemperatures[0]));
+					}
+					else if (lastVal != 0.0 && ht + ThermostatHysteresis > triggerTemperatures[0])
+					{
+						// If the fan is on, add a hysteresis before turning it off
+						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : minVal);
+					}
+#ifdef DUET_NG
+					const unsigned int channel = reprap.GetHeat().GetHeaterChannel(heaterHumber);
+					if (channel >= FirstTmcDriversSenseChannel && channel < FirstTmcDriversSenseChannel + NumTmcDriversSenseChannels)
+					{
+						driverChannelsMonitored |= 1 << (channel - FirstTmcDriversSenseChannel);
+					}
+#endif
+				}
+			}
+		}
 	}
 
 	if (reqVal > 0.0)
@@ -127,6 +264,23 @@ void Fan::Refresh()
 		if (reqVal < minVal)
 		{
 			reqVal = minVal;
+		}
+
+		if (lastVal == 0.0)
+		{
+			// We are turning this fan on
+#ifdef DUET_NG
+			if (driverChannelsMonitored != 0)
+			{
+				reprap.GetPlatform().DriverCoolingFansOn(driverChannelsMonitored);		// tell Platform that we have started a fan that cools drivers
+			}
+#endif
+			if (reqVal < 1.0 && blipTime != 0)
+			{
+				// Starting the fan from standstill, so blip the fan
+				blipping = true;
+				blipStartTime = millis();
+			}
 		}
 
 		if (blipping)
@@ -141,7 +295,9 @@ void Fan::Refresh()
 			}
 		}
 	}
+
 	SetHardwarePwm(reqVal);
+	lastVal = reqVal;
 }
 
 void Fan::Check()

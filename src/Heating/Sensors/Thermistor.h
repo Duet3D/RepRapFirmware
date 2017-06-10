@@ -8,7 +8,7 @@
 #ifndef SRC_HEATING_THERMISTOR_H_
 #define SRC_HEATING_THERMISTOR_H_
 
-#include "RepRapFirmware.h"
+#include "TemperatureSensor.h"
 
 // The Steinhart-Hart equation for thermistor resistance is:
 // 1/T = A + B ln(R) + C [ln(R)]^3
@@ -18,10 +18,15 @@
 //
 // The parameters that can be configured in RRF are R25 (the resistance at 25C), Beta, and optionally C.
 
-class Thermistor
+class Thermistor : public TemperatureSensor
 {
 public:
-	Thermistor();															// create an instance with default values
+	Thermistor(unsigned int channel);										// create an instance with default values
+	bool Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error) override; // configure the sensor from M305 parameters
+	void Init() override;
+	TemperatureError GetTemperature(float& t) override;
+
+private:
 	float CalcTemperature(int32_t adcReading) const;						// calculate temperature from an ADC reading in the range 0..1
 	int32_t CalcAdcReading(float temperature) const;						// calculate expected ADC reading at a particular temperature
 
@@ -32,14 +37,12 @@ public:
 	int8_t GetLowOffset() const { return adcLowOffset; }
 	int8_t GetHighOffset() const { return adcHighOffset; }
 
-	void SetParameters(float p_r25, float p_beta, float p_shC, float p_seriesR); // initialise the main parameters
 	void SetLowOffset(int8_t p_offset) { adcLowOffset = p_offset; }
 	void SetHighOffset(int8_t p_offset) { adcHighOffset = p_offset; }
 
 	// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 	static const unsigned int AdcOversampleBits = 1	;						// we use 1-bit oversampling
 
-private:
 	void CalcDerivedParameters();											// calculate shA and shB
 
 	// The following are configurable parameters

@@ -10,12 +10,32 @@
 
 #include "RepRapFirmware.h"
 
+class GCodeBuffer;
+
 class Fan
 {
+public:
+	// Set or report the parameters for this fan
+	// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 106 or 107)
+	// then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
+	// If errors were discovered while processing parameters, put an appropriate error message in 'reply' and set 'error' to true.
+	// If no relevant parameters are found, print the existing ones to 'reply' and return false.
+	bool Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& reply, bool& error);
+
+	bool IsEnabled() const { return pin != NoPin; }
+	float GetValue() const { return val; }
+
+	void Init(Pin p_pin, bool hwInverted);
+	void SetValue(float speed);
+	void SetHeatersMonitored(uint16_t h);
+	void Check();
+	void Disable();
+
 private:
 	float val;
+	float lastVal;
 	float minVal;
-	float triggerTemperature;
+	float triggerTemperatures[2];
 	float lastPwm;
 	uint32_t blipTime;						// in milliseconds
 	uint32_t blipStartTime;
@@ -25,31 +45,9 @@ private:
 	bool inverted;
 	bool hardwareInverted;
 	bool blipping;
-	bool thermostatIsOn;					// if it is a thermostatic fan, true if it is turned on
 
 	void Refresh();
 	void SetHardwarePwm(float pwmVal);
-
-public:
-	bool IsEnabled() const { return pin != NoPin; }
-	float GetValue() const { return val; }
-	float GetMinValue() const { return minVal; }
-	float GetBlipTime() const { return (float)blipTime * MillisToSeconds; }
-	float GetPwmFrequency() const { return freq; }
-	bool GetInverted() const { return inverted; }
-	uint16_t GetHeatersMonitored() const { return heatersMonitored; }
-	float GetTriggerTemperature() const { return triggerTemperature; }
-
-	void Init(Pin p_pin, bool hwInverted);
-	void SetValue(float speed);
-	void SetMinValue(float speed);
-	void SetBlipTime(float t);
-	void SetInverted(bool inv);
-	void SetPwmFrequency(float p_freq);
-	void SetTriggerTemperature(float t) { triggerTemperature = t; }
-	void SetHeatersMonitored(uint16_t h);
-	void Check();
-	void Disable();
 };
 
 #endif /* SRC_FAN_H_ */

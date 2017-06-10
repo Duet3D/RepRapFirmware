@@ -84,11 +84,38 @@ void SafeStrncat(char *dst, const char *src, size_t length) pre(length != 0);
 // Macro to assign an array from an initialiser list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
 
+// Classes to facilitate range-based for loops that iterate from 0 up to just below a limit
+template<class T> class SimpleRangeIterator
+{
+public:
+	SimpleRangeIterator(T value_) : val(value_) {}
+    bool operator != (SimpleRangeIterator<T> const& other) const { return val != other.val;     }
+    T const& operator*() const { return val; }
+    SimpleRangeIterator& operator++() { ++val; return *this; }
+
+private:
+    T val;
+};
+
+template<class T> class SimpleRange
+{
+public:
+	SimpleRange(T limit) : _end(limit) {}
+	SimpleRangeIterator<T> begin() const { return SimpleRangeIterator<T>(0); }
+	SimpleRangeIterator<T> end() const { return SimpleRangeIterator<T>(_end); 	}
+
+private:
+	const T _end;
+};
+
+// Macro to create a SimpleRange from an array
+#define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
+
 // A string buffer used for temporary purposes
 extern StringRef scratchString;
 
 // Common definitions used by more than one module
-const size_t CART_AXES = 3;										// The number of Cartesian axes
+const size_t XYZ_AXES = 3;										// The number of Cartesian axes
 const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
 
 // Common conversion factors

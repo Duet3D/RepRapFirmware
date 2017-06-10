@@ -15,7 +15,6 @@
 #include "BedProbing/RandomProbePointSet.h"
 #include "BedProbing/Grid.h"
 #include "Kinematics/Kinematics.h"
-#include "DeltaProbe.h"
 
 #ifdef DUET_NG
 const unsigned int DdaRingLength = 30;
@@ -67,9 +66,9 @@ public:
 	// Kinematics and related functions
 	Kinematics& GetKinematics() const { return *kinematics; }
 	bool SetKinematics(KinematicsType k);											// Set kinematics, return true if successful
-	bool CartesianToMotorSteps(const float machinePos[MAX_AXES], int32_t motorPos[MAX_AXES]) const;
+	bool CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes]) const;
 																					// Convert Cartesian coordinates to delta motor coordinates, return true if successful
-	void MotorStepsToCartesian(const int32_t motorPos[], size_t numDrives, float machinePos[]) const;
+	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const;
 																					// Convert motor coordinates to machine coordinates
 	void EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const;
 	void AdjustMotorPositions(const float_t adjustment[], size_t numMotors);		// Perform motor endpoint adjustment
@@ -93,8 +92,6 @@ public:
 	FilePosition PausePrint(float positions[DRIVES], float& pausedFeedRate, uint32_t xAxes); // Pause the print as soon as we can
 	bool NoLiveMovement() const;													// Is a move running, or are there any queued?
 
-	int DoDeltaProbe(float frequency, float amplitude, float rate, float distance);
-
 	bool IsExtruding() const;														// Is filament being extruded?
 
 	uint32_t GetScheduledMoves() const { return scheduledMoves; }					// How many moves have been scheduled?
@@ -110,12 +107,11 @@ private:
 	enum class IdleState : uint8_t { idle, busy, timing };
 
 	bool StartNextMove(uint32_t startTime);											// start the next move, returning true if Step() needs to be called immediately
-	void BedTransform(float move[MAX_AXES], uint32_t xAxes) const;					// Take a position and apply the bed compensations
-	void InverseBedTransform(float move[MAX_AXES], uint32_t xAxes) const;			// Go from a bed-transformed point back to user coordinates
-	void AxisTransform(float move[MAX_AXES]) const;									// Take a position and apply the axis-angle compensations
-	void InverseAxisTransform(float move[MAX_AXES]) const;							// Go from an axis transformed point back to user coordinates
+	void BedTransform(float move[MaxAxes], uint32_t xAxes) const;					// Take a position and apply the bed compensations
+	void InverseBedTransform(float move[MaxAxes], uint32_t xAxes) const;			// Go from a bed-transformed point back to user coordinates
+	void AxisTransform(float move[MaxAxes]) const;									// Take a position and apply the axis-angle compensations
+	void InverseAxisTransform(float move[MaxAxes]) const;							// Go from an axis transformed point back to user coordinates
 	void JustHomed(size_t axis, float hitPoint, DDA* hitDDA);						// Deal with setting positions after a drive has been homed
-	void DeltaProbeInterrupt();														// Step ISR when using the experimental delta probe
 
 	bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
 	DDA* DDARingGet();									// Get the next DDA ring entry to be run
@@ -158,11 +154,6 @@ private:
 	unsigned int stepErrors;							// count of step errors, for diagnostics
 	uint32_t scheduledMoves;							// Move counters for the code queue
 	volatile uint32_t completedMoves;					// This one is modified by an ISR, hence volatile
-
-	// Parameters for the experimental accoustic delta probe
-	DeltaProbe deltaProbe;								// Delta probing state
-	uint32_t deltaProbingStartTime;
-	bool deltaProbing;
 };
 
 //******************************************************************************************************
@@ -201,10 +192,6 @@ inline void Move::Interrupt()
 		do
 		{
 		} while (currentDda->Step());
-	}
-	else if (deltaProbing)
-	{
-		DeltaProbeInterrupt();
 	}
 }
 

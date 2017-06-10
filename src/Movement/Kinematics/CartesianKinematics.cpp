@@ -18,9 +18,9 @@ const char *CartesianKinematics::GetName(bool forStatusReport) const
 }
 
 // Convert Cartesian coordinates to motor coordinates
-bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numAxes, int32_t motorPos[]) const
+bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
 {
-	for (size_t axis = 0; axis < numAxes; ++axis)
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
 	}
@@ -28,10 +28,10 @@ bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const 
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
-void CartesianKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numDrives, float machinePos[]) const
+void CartesianKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
-	// Convert all axes and the extruders
-	for (size_t drive = 0; drive < numDrives; ++drive)
+	// Convert all axes
+	for (size_t drive = 0; drive < numVisibleAxes; ++drive)
 	{
 		machinePos[drive] = motorPos[drive]/stepsPerMm[drive];
 	}

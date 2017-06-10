@@ -23,6 +23,8 @@ const char* TemperatureErrorString(TemperatureError err)
 	case TemperatureError::busBusy:			return "sensor bus busy";
 	case TemperatureError::badResponse:		return "bad response from sensor";
 	case TemperatureError::unknownChannel:	return "unknown temperature sensor channel";
+	case TemperatureError::notInitialised:	return "sensor not initialised";
+	case TemperatureError::unknownHeater:	return "unknown heater";
 	default:								return "unknown temperature sense error";
 	}
 }

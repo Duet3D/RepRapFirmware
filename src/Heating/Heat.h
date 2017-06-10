@@ -29,6 +29,9 @@ Licence: GPL
 #include "Pid.h"
 #include "MessageType.h"
 
+class TemperatureSensor;
+class GCodeBuffer;
+
 class Heat
 {
 public:
@@ -45,16 +48,16 @@ public:
 	void AllowColdExtrude(bool b);								// Allow or deny cold extrusion
 
 	int8_t GetBedHeater() const									// Get hot bed heater number
-	post(-1 <= result; result < HEATERS);
+	post(-1 <= result; result < Heaters);
 
 	void SetBedHeater(int8_t heater)							// Set hot bed heater number
-	pre(-1 <= heater; heater < HEATERS);
+	pre(-1 <= heater; heater < Heaters);
 
 	int8_t GetChamberHeater() const								// Get chamber heater number
-	post(-1 <= result; result < HEATERS);
+	post(-1 <= result; result < Heaters);
 
 	void SetChamberHeater(int8_t heater)						// Set chamber heater number
-	pre(-1 <= heater; heater < HEATERS);
+	pre(-1 <= heater; heater < Heaters);
 
 	void SetActiveTemperature(int8_t heater, float t);
 	float GetActiveTemperature(int8_t heater) const;
@@ -74,48 +77,60 @@ public:
 	void Diagnostics(MessageType mtype);						// Output useful information
 
 	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	bool UseSlowPwm(int8_t heater) const;						// Queried by the Platform class
 
 	uint32_t GetLastSampleTime(size_t heater) const
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	void StartAutoTune(size_t heater, float temperature, float maxPwm, StringRef& reply) // Auto tune a PID
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	bool IsTuning(size_t heater) const							// Return true if the specified heater is auto tuning
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	void GetAutoTuneStatus(StringRef& reply) const;				// Get the status of the current or last auto tune
 
 	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, bool usePid) // Set the heater process model
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	void GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	void SetHeaterProtection(size_t heater, float maxTempExcursion, float maxFaultTime)
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	bool IsHeaterEnabled(size_t heater) const					// Is this heater enabled?
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	float GetHighestTemperatureLimit() const;					// Get the highest temperature limit of any heater
 
 	void SetM301PidParameters(size_t heater, const M301PidParameters& params)
-	pre(heater < HEATERS);
+	pre(heater < Heaters);
 
 	bool WriteModelParameters(FileStore *f) const;				// Write heater model parameters to file returning true if no error
 
+	int GetHeaterChannel(size_t heater) const;					// Return the channel used by a particular heater, or -1 if not configured
+	bool SetHeaterChannel(size_t heater, int channel);			// Set the channel used by a heater, returning true if bad heater or channel number
+	bool ConfigureHeaterSensor(size_t heater, unsigned int mcode, GCodeBuffer& gb, StringRef& reply, bool& error);	// Configure the temperature sensor for a channel
+	const char *GetHeaterName(size_t heater) const;				// Get the name of a heater, or nullptr if it hasn't been named
+
+	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
+
 private:
-	Heat(const Heat&);											// private copy constructor to prevent copying
+	Heat(const Heat&);											// Private copy constructor to prevent copying
+	TemperatureSensor **GetSensor(size_t heater);				// Get a pointer to the temperature sensor entry
+	TemperatureSensor * const *GetSensor(size_t heater) const;	// Get a pointer to the temperature sensor entry
 
 	Platform& platform;											// The instance of the RepRap hardware class
-	PID* pids[HEATERS];											// A PID controller for each heater
+
+	PID* pids[Heaters];											// A PID controller for each heater
+	TemperatureSensor *heaterSensors[Heaters];					// The sensor used by the real heaters
+	TemperatureSensor *virtualHeaterSensors[MaxVirtualHeaters];	// Sensors for virtual heaters
 
 	uint32_t lastTime;											// The last time our Spin() was called
 	float longWait;												// Long time for things that happen occasionally
