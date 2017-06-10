@@ -11,10 +11,15 @@ New features:
 - Fans can be thermostatically controlled in proportional mode by specifying a temperature range e.g. T40:50. If you specify only one temperature, or the second temperature is not greater than the first, bang-band mode will be used as before. In proportional mode the S parameter is not used but the L value is honoured.
 - Current loop temperature sensors are now supported (sensor channels 300-307). M305 parameters L and H set the temperatures corresponding to 4mA and 20mA current respectively.
 - M305 with just a P parameter now reports the sensor type along with the other parameters.
+- It is now possible to create additional axes that are not visible in the user interface. To do this, add parameter P# to yor M584 command where # is the number of axes you want to be visible (e.g. 3 = just X,Y,Z).
 
 Bug fixes:
 - G10 with no parameters (firmware retraction command) was extruding filament instead of retracting it
 - WiFi passwords that contained a semicolon character could not be used in M587 commands
+
+Internal changes:
+- Major refactoring of temperature sensing code
+- Major refactoring of fan control code
 
 Version 1.19beta4 and 1.19beta5
 ===============================
