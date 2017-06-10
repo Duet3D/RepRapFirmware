@@ -20,6 +20,10 @@ Bug fixes:
 Internal changes:
 - Major refactoring of temperature sensing code
 - Major refactoring of fan control code
+- Removed accoustic delta probe code
+
+Upgrade notes:
+- Every heater that you use must now be configured using a M305 command with a P parameter that identifies the heater. Previously, if a heater used default thermistor parameters, you cold omit the M305 command for that heater.
 
 Version 1.19beta4 and 1.19beta5
 ===============================
