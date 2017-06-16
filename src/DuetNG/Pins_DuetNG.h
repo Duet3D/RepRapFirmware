@@ -114,8 +114,8 @@ const Pin VssaSensePin = 103;
 const Pin Z_PROBE_MOD_PIN = 34;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
 
 // COOLING FANS
-const size_t NUM_FANS = 8;
-const Pin COOLING_FAN_PINS[NUM_FANS] = { 55, 58, 00, 212, 207, 206, 205, 204 };
+const size_t NUM_FANS = 9;
+const Pin COOLING_FAN_PINS[NUM_FANS] = { 55, 58, 00, 212, 207, 206, 205, 204, 215 };
 const Pin COOLING_FAN_RPM_PIN = 102;									// PB6 on expansion connector
 
 // SD cards

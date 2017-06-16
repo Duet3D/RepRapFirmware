@@ -958,9 +958,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			bool seenFanNum = false;
 			int32_t fanNum = 0;			// Default to the first fan
 			gb.TryGetIValue('P', fanNum, seenFanNum);
-			if (fanNum < 0 || fanNum > (int)NUM_FANS)
+			if (fanNum < 0 || fanNum >= (int)NUM_FANS)
 			{
-				reply.printf("Fan number %d is invalid, must be between 0 and %u", fanNum, NUM_FANS);
+				reply.printf("Fan number %d is invalid, must be between 0 and %u", fanNum, NUM_FANS - 1);
 			}
 			else
 			{

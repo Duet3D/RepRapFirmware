@@ -18,17 +18,20 @@ namespace DuetExpansion
 
 	const uint8_t DueXnAddress = 0x3E;				// address of the SX1509B on the DueX0/DueX2/DueX5
 
-	const uint16_t BoardTypePins = (1u << 14) | (1u << 15);
+	// The original DueX2 and DueX5 boards had 2 board ID pins, bits 14 an 15.
+	// The new ones use bit 15 for fan 8, so not we just have bit 14.
+	// If we want any more variants, they will have to use a different I2C address.
+	const uint16_t BoardTypePins = (1u << 14);
 	const unsigned int BoardTypeShift = 14;
-	const ExpansionBoardType boardTypes[] =
-		{ ExpansionBoardType::DueX5, ExpansionBoardType::DueX2, ExpansionBoardType::DueX0, ExpansionBoardType::none };
+	const ExpansionBoardType boardTypes[] = { ExpansionBoardType::DueX5, ExpansionBoardType::DueX2 };
 
 	const unsigned int Fan3Bit = 12;
 	const unsigned int Fan4Bit = 7;
 	const unsigned int Fan5Bit = 6;
 	const unsigned int Fan6Bit = 5;
 	const unsigned int Fan7Bit = 4;
-	const uint16_t AllFanBits = (1u << Fan3Bit) | (1u << Fan4Bit) | (1u << Fan5Bit) | (1u << Fan6Bit) | (1u << Fan7Bit);
+	const unsigned int Fan8Bit = 15;
+	const uint16_t AllFanBits = (1u << Fan3Bit) | (1u << Fan4Bit) | (1u << Fan5Bit) | (1u << Fan6Bit) | (1u << Fan7Bit) | (1 << Fan8Bit);
 
 	const unsigned int E2StopBit = 0;
 	const unsigned int E3StopBit = 3;

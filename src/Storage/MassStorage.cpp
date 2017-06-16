@@ -366,6 +366,7 @@ bool MassStorage::Mount(size_t card, StringRef& reply, bool reportSuccess)
 	else
 	{
 		// Mount the file systems
+		memset(&fileSystems[card], 0, sizeof(FATFS));					// f_mount doesn't initialise the file structure, we must do it ourselves
 		FRESULT mounted = f_mount(card, &fileSystems[card]);
 		if (mounted != FR_OK)
 		{
