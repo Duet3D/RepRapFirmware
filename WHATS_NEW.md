@@ -79,6 +79,24 @@ Upgrade notes:
 - The compatible companion software and firmware are DuetWebControl 1.15c and DuetWiFiServer 1.19beta1.
 - If you are installing this on a Duet WiFi then you must install the Duet Web Control 1.15c files in /www on the SD card, do a simultaneous update of the main firmware and the wifi firmware, and use a macro to set up access to your network. See https://duet3d.com/wiki/DuetWiFiFirmware_1.19_alpha.
 
+Version 1.18.2
+==============
+
+New features:
+- On the Duet WiFi and Duet Ethernet, recognise the latest production DueX2 and DueX5 boards
+- Support fan 8 on the latest DueX5 boards
+
+Bug fixes:
+- M42 gcode commands were not synchronised with movement
+- M21 did not full reset the SD card state, which could lead to errors if the SD card was modified outside the Duet and then remounted using M21
+- The M106 command accepted a fan number (P parameter) one higher than it should
+
+Version 1.18.1
+==============
+
+Bug fixes:
+- Corrected USB VID/PID
+
 Version 1.18
 ============
 
