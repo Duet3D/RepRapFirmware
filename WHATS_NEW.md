@@ -1,6 +1,29 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.19beta7
+=================
+
+New features:
+- M291 command is provided to display a message box with options for timeout, acknowledgement and Z jog buttons
+- M292 command is provided to acknowledge M291 messages
+- Manual delta calibration and bed compensation is supported (use P0 in the M558 command to indicate that there is no Z probe)
+- Minimum value for S parameter (maximum heater PWM) in M307 command is reduced from 20% to 1%
+- Core XYU kinematics are now supported (thanks Lars)
+- RADDS build now supports 9 motors (thanks Tom)
+- If a homing move uses parameter S3 instead of S1 then the axis minimum or maximum value is set to the current position instead of vice versa
+
+Bug fixes:
+- Tool X offsets are now applied on the next move even if it has no Z parameter
+- The tool change restore point coordinates now take account of X axis mapping
+- M588 P"*" command (forget all access points) now works
+- After using M589 to set up access point parameters, when M552 S2 was sent to start the WiFi module in AP mode it reported "WiFi reported error: invalid access point configuration"
+
+Areas of code refactored (so watch out for new bugs):
+- G30 bed probing
+- Baby stepping
+- Tool offset implementation
+
 Version 1.19beta6
 =================
 
