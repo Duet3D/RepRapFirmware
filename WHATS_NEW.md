@@ -12,6 +12,7 @@ New features:
 - Core XYU kinematics are now supported (thanks Lars)
 - RADDS build now supports 9 motors (thanks Tom)
 - If a homing move uses parameter S3 instead of S1 then the axis minimum or maximum value is set to the current position instead of vice versa
+- M589 with no parameters reports the Duet's own SSID
 
 Bug fixes:
 - Tool X offsets are now applied on the next move even if it has no Z parameter
