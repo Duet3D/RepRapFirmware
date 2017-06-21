@@ -12,7 +12,8 @@ New features:
 - Core XYU kinematics are now supported (thanks Lars)
 - RADDS build now supports 9 motors (thanks Tom)
 - If a homing move uses parameter S3 instead of S1 then the axis minimum or maximum value is set to the current position instead of vice versa
-- M589 with no parameters reports the Duet's own SSID
+- M589 with no parameters now reports the Duet's own SSID
+- M589 S"*" now deletes the Duet WiFi's own access point details
 
 Bug fixes:
 - Tool X offsets are now applied on the next move even if it has no Z parameter
@@ -24,6 +25,11 @@ Areas of code refactored (so watch out for new bugs):
 - G30 bed probing
 - Baby stepping
 - Tool offset implementation
+
+Upgrade notes:
+- SSIDs and passwords in M587, M588 and M589 commands must now be enclosed in double quotes
+- Height map filenames in G29, M374 and M375 commands must now be enclosed in double quotes
+- On a Duet WiFi you should also upgrade DuetWiFiServer.bin to version 1.19beta7. You do not need to perform a simultaneous upgrade, but M587 and M589 reporting functionality won't work correctly if your DuetWiFiFirmware and DuetWiFiServer versions are out of step.
 
 Version 1.19beta6
 =================
