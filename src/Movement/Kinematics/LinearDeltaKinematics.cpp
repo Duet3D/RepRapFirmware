@@ -31,12 +31,14 @@ void LinearDeltaKinematics::Init()
 	printRadius = defaultPrintRadius;
 	homedHeight = defaultDeltaHomedHeight;
 
-    for (size_t axis = 0; axis < DELTA_AXES; ++axis)
-    {
-    	angleCorrections[axis] = 0.0;
-    	endstopAdjustments[axis] = 0.0;
-    	towerX[axis] = towerY[axis] = 0.0;
-    }
+	for (size_t axis = 0; axis < DELTA_AXES; ++axis)
+	{
+		angleCorrections[axis] = 0.0;
+		endstopAdjustments[axis] = 0.0;
+		towerX[axis] = towerY[axis] = 0.0;
+	}
+
+	Recalc();
 }
 
 void LinearDeltaKinematics::Recalc()
@@ -166,9 +168,10 @@ bool LinearDeltaKinematics::IsReachable(float x, float y) const
 }
 
 // Limit the Cartesian position that the user wants to move to
-void LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
+bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
 {
 	const uint16_t allAxes = (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS);
+	bool limited = false;
 	if ((axesHomed & allAxes) == allAxes)
 	{
 		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
@@ -180,11 +183,26 @@ void LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes,
 			const float factor = sqrtf(printRadiusSquared / diagonalSquared);
 			coords[X_AXIS] *= factor;
 			coords[Y_AXIS] *= factor;
+			limited = true;
 		}
 
-		// Constrain the end height of the move to be no greater than the homed height and no lower than M208 minimum Z
-		coords[Z_AXIS] = max<float>(reprap.GetPlatform().AxisMinimum(Z_AXIS), min<float>(coords[Z_AXIS], homedHeight));
+		if (coords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		{
+			coords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+			limited = true;
+		}
+		else
+		{
+			// Determine the maximum reachable height at this radius, in the worst case when the head is on a radius to a tower
+			const float maxHeight = homedCarriageHeight - sqrtf(D2 - fsquare(radius - sqrtf(diagonalSquared)));
+			if (coords[Z_AXIS] > maxHeight)
+			{
+				coords[Z_AXIS] = maxHeight;
+				limited = true;
+			}
+		}
 	}
+	return limited;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics

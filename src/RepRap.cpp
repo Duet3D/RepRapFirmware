@@ -10,6 +10,10 @@
 #include "Tool.h"
 #include "Version.h"
 
+#if SUPPORT_IOBITS
+# include "PortControl.h"
+#endif
+
 #if !defined(__RADDS__) && !defined(__ALLIGATOR__)
 # include "sam/drivers/hsmci/hsmci.h"
 #endif
@@ -21,6 +25,13 @@ extern "C" void hsmciIdle()
 	{
 		reprap.GetNetwork().Spin(false);
 	}
+
+#if SUPPORT_IOBITS
+	if (reprap.GetSpinningModule() != modulePortControl)
+	{
+		reprap.GetPortControl().Spin(false);
+	}
+#endif
 }
 
 // RepRap member functions.
@@ -44,6 +55,9 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 #if SUPPORT_SCANNER
 	scanner = new Scanner(*platform);
 #endif
+#if SUPPORT_IOBITS
+	portControl = new PortControl();
+#endif
 
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 
@@ -65,6 +79,9 @@ void RepRap::Init()
 #endif
 #if SUPPORT_SCANNER
 	scanner->Init();
+#endif
+#if SUPPORT_IOBITS
+	portControl->Init();
 #endif
 	printMonitor->Init();
 	active = true;					// must do this before we start the network, else the watchdog may time out
@@ -120,6 +137,9 @@ void RepRap::Exit()
 #if SUPPORT_SCANNER
 	scanner->Exit();
 #endif
+#if SUPPORT_IOBITS
+	portControl->Exit();
+#endif
 	network->Exit();
 	platform->Message(GENERIC_MESSAGE, "RepRap class exited.\n");
 	platform->Exit();
@@ -163,6 +183,12 @@ void RepRap::Spin()
 	spinningModule = moduleScanner;
 	ticksInSpinState = 0;
 	scanner->Spin();
+#endif
+
+#if SUPPORT_IOBITS
+	spinningModule = modulePortControl;
+	ticksInSpinState = 0;
+	portControl->Spin(true);
 #endif
 
 	spinningModule = modulePrintMonitor;

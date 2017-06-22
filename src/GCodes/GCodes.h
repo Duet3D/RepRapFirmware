@@ -27,6 +27,7 @@ Licence: GPL
 #include "Libraries/sha1/sha1.h"
 #include "Platform.h"		// for type EndStopHit
 #include "GCodeInput.h"
+#include "RestorePoint.h"
 
 class GCodeBuffer;
 class GCodeQueue;
@@ -38,6 +39,7 @@ const char extrudeLetter = 'E'; 						// GCode extrude
 typedef uint16_t EndstopChecks;							// must be large enough to hold a bitmap of drive numbers or ZProbeActive
 const EndstopChecks ZProbeActive = 1 << 15;				// must be distinct from 1 << (any drive number)
 const EndstopChecks LogProbeChanges = 1 << 14;			// must be distinct from 1 << (any drive number)
+const EndstopChecks HomeAxes = 1 << 13;					// must be distinct from 1 << (any drive number)
 
 typedef uint16_t TriggerMask;
 
@@ -79,8 +81,10 @@ public:
 		float feedRate;													// feed rate of this move
 		FilePosition filePos;											// offset in the file being printed at the end of reading this move
 		uint32_t xAxes;													// axes that X is mapped to
-		float newBabyStepping;											// the adjustment we made to the Z offset in this move
 		EndstopChecks endStopsToCheck;									// endstops to check
+#if SUPPORT_IOBITS
+		IoBits_t ioBits;												// I/O bits to set/clear at the start of this move
+#endif
 		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
 		bool isFirmwareRetraction;										// true if this is a firmware retraction/un-retraction move
 		bool usePressureAdvance;										// true if we want to us extruder pressure advance, if there is any extrusion
@@ -117,7 +121,7 @@ public:
 	float GetRawExtruderPosition(size_t drive) const;					// Get the actual extruder position, after adjusting the extrusion factor
 	float GetRawExtruderTotalByDrive(size_t extruder) const;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const { return rawExtruderTotal; }		// Get the total extrusion since start of print, all drives
-	float GetBabyStepOffset() const;									// Get the current baby stepping Z offset
+	float GetBabyStepOffset() const { return currentBabyStepZOffset; }	// Get the current baby stepping Z offset
 
 	RegularGCodeInput *GetHTTPInput() const { return httpInput; }
 	RegularGCodeInput *GetTelnetInput() const { return telnetInput; }
@@ -150,14 +154,6 @@ private:
 
 	enum class CannedMoveType : uint8_t { none, relative, absolute };
 
-	struct RestorePoint
-	{
-		float moveCoords[DRIVES];
-		float feedRate;
-		RestorePoint() { Init(); }
-		void Init();
-	};
-
 	// Resources that can be locked.
 	// To avoid deadlock, if you need multiple resources then you must lock them in increasing numerical order.
 	typedef unsigned int Resource;
@@ -181,29 +177,27 @@ private:
 	void DoFilePrint(GCodeBuffer& gb, StringRef& reply);				// Get G Codes from a file and print them
 	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, bool runningM502 = false);
 																		// Run a GCode macro file, optionally report error if not found
-	bool DoCannedCycleMove(GCodeBuffer& gb, EndstopChecks ce);			// Do a move from an internally programmed canned cycle
 	void FileMacroCyclesReturn(GCodeBuffer& gb);						// End a macro
+
 	bool ActOnCode(GCodeBuffer& gb, StringRef& reply);					// Do a G, M or T Code
 	bool HandleGcode(GCodeBuffer& gb, StringRef& reply);				// Do a G code
 	bool HandleMcode(GCodeBuffer& gb, StringRef& reply);				// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, StringRef& reply);				// Do a T code
-	int SetUpMove(GCodeBuffer& gb, StringRef& reply);					// Pass a move on to the Move module
+
+	bool DoStraightMove(GCodeBuffer& gb, StringRef& reply);				// Execute a straight move returning true if an error was written to 'reply'
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
+		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
+
 	bool DoDwell(GCodeBuffer& gb);										// Wait for a bit
 	bool DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis);			// Really wait for a bit
 	bool DoHome(GCodeBuffer& gb, StringRef& reply, bool& error);		// Home some axes
-	bool DoSingleZProbeAtPoint(GCodeBuffer& gb, size_t probePointIndex, float heightAdjust); // Probe at a given point
-	bool DoSingleZProbe(GCodeBuffer& gb, StringRef& reply, bool reportOnly, float heightAdjust); // Probe where we are
-	int DoZProbe(GCodeBuffer& gb, float distance);						// Do a Z probe cycle up to the maximum specified distance
-	bool SetSingleZProbeAtAPosition(GCodeBuffer& gb, StringRef& reply);	// Probes at a given position - see the comment at the head of the function itself
+	bool ExecuteG30(GCodeBuffer& gb, StringRef& reply);					// Probes at a given position - see the comment at the head of the function itself
 	void SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation
 	bool SetPrintZProbe(GCodeBuffer& gb, StringRef& reply);				// Either return the probe value, or set its threshold
 	bool SetOrReportOffsets(GCodeBuffer& gb, StringRef& reply);			// Deal with a G10
 
 	bool SetPositions(GCodeBuffer& gb);									// Deal with a G92
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType); // Set up the extrusion and feed rate of a move for the Move class
-	unsigned int LoadMoveBufferFromGCode(GCodeBuffer& gb, int moveType); // Set up the axis coordinates of a move for the Move class
-	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
-		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 
 	bool Push(GCodeBuffer& gb);											// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);											// Pop feedrate etc
@@ -223,8 +217,14 @@ private:
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, StringRef& reply) const;		// Check whether we need to report temperatures or status
 
+	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const;	// Save position to a restore point
+	void RestorePosition(const RestorePoint& rp, GCodeBuffer& gb);		// Restore user position form a restore point
+
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
-	void SetPositions(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
+	void SetMachinePosition(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
+	void GetCurrentUserPosition();										// Get the current position form the Move class
+	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], bool mapXAxis);	// Convert user coordinates to head reference point coordinates
+	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
 	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
 	bool RetractFilament(GCodeBuffer& gb, bool retract);				// Retract or un-retract filaments
 	bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive
@@ -246,7 +246,10 @@ private:
 	bool WriteConfigOverrideFile(StringRef& reply, const char *fileName) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels
 
-	void ClearBabyStepping();
+	void ClearBabyStepping() { currentBabyStepZOffset = 0.0; }
+
+	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;				// Decide which device to display a message box on
+	void DoManualProbe(GCodeBuffer& gb);								// Do a manual bed probe
 
 	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
@@ -276,6 +279,9 @@ private:
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
 
+	float currentUserPosition[MaxAxes];			// The current position of the axes as commanded by the input gcode, before accounting for tool offset and Z hop
+	float currentZHop;							// The amount of Z hop that is currently applied
+
 	// The following contain the details of moves that the Move module fetches
 	RawMove moveBuffer;							// Move details to pass to Move class
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
@@ -292,15 +298,12 @@ private:
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible
 	size_t numExtruders;						// How many extruders we have, or may have
+	float axisOffsets[MaxAxes];					// M206 axis offsets
 	float axisScaleFactors[MaxAxes];			// Scale XYZ coordinates by this factor (for Delta configurations)
 	float lastRawExtruderPosition[MaxExtruders]; // Extruder position of the last move fed into the Move class
 	float rawExtruderTotalByDrive[MaxExtruders]; // Total extrusion amount fed to Move class since starting print, before applying extrusion factor, per drive
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 	float record[DRIVES];						// Temporary store for move positions
-	float cannedMoveCoords[DRIVES];				// Where to go or how much to move by in a canned cycle move, last is feed rate
-	float cannedFeedRate;						// How fast to do it
-	CannedMoveType cannedMoveType[DRIVES];		// Is this drive involved in a canned cycle move?
-	bool offSetSet;								// Are any axis offsets non-zero?
 	float distanceScale;						// MM or inches
 	float arcSegmentLength;						// Length of segments that we split arc moves into
 	FileData fileToPrint;
@@ -312,9 +315,6 @@ private:
 	const char* eofString;						// What's at the end of an HTML file?
 	uint8_t eofStringCounter;					// Check the...
 	uint8_t eofStringLength;					// ... EoF string as we read.
-	size_t probeCount;							// Counts multiple probe points
-	int8_t cannedCycleMoveCount;				// Counts through internal (i.e. not macro) canned cycle moves
-	bool cannedCycleMoveQueued;					// True if a canned cycle move has been set
 	bool limitAxes;								// Don't think outside the box.
 	uint32_t axesHomed;							// Bitmap of which axes have been homed
 	float pausedFanSpeeds[NUM_FANS];			// Fan speeds when the print was paused or a tool change started
@@ -323,13 +323,14 @@ private:
 	float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float currentBabyStepZOffset;				// The accumulated Z offset due to baby stepping requests
-	float pendingBabyStepZOffset;				// The amount of additional baby stepping requested but not yet acted on
 
 	// Z probe
+	int32_t g30ProbePointIndex;					// the index of the point we are probing (G30 P parameter), or -1 if none
 	float lastProbedZ;							// the last height at which the Z probe stopped
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridXindex, gridYindex;				// Which grid probe point is next
+	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
@@ -363,6 +364,7 @@ private:
 	// Misc
 	float longWait;								// Timer for things that happen occasionally (seconds)
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
+	uint16_t axesToSenseLength;					// The axes on which we are performing axis length sensing
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting

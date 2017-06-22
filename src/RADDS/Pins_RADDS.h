@@ -18,11 +18,11 @@ const size_t NumFirmwareUpdateModules = 1;
 // The physical capabilities of the machine
 
 // The number of drives in the machine, including X, Y, and Z plus extruder drives
-const size_t DRIVES = 8;
+const size_t DRIVES = 9;
 
 // Initialization macro used in statements needing to initialize values in arrays of size DRIVES.  E.g.,
-// max_feed_rates[DRIVES] = {DRIVES_(1, 1, 1, 1, 1, 1, 1, 1, 1)}
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h }
+// max_feed_rates[DRIVES] = {DRIVES_(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)}
+#define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h,i }
 
 // The number of heaters in the machine
 // 0 is the heated bed even if there isn't one.
@@ -48,11 +48,11 @@ const size_t NUM_SERIAL_CHANNELS = 2;
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 // DRIVES
-//                                    X   Y   Z  E1  E2  E3  E4  E5
-const Pin ENABLE_PINS[DRIVES] =    { 26, 22, 15, 62, 65, 49, 37, 31 };
-//                                  A15 D04 B25 A02 B19 C12 C03 D06
-const Pin STEP_PINS[DRIVES] =      { 24, 17,  2, 61, 64, 51, 35, 29 };
-const Pin DIRECTION_PINS[DRIVES] = { 23, 16,  3, 60, 63, 53, 33, 27 };
+//                                    X   Y   Z  E1  E2  E3  E4  E5  E6
+const Pin ENABLE_PINS[DRIVES] =    { 26, 22, 15, 62, 65, 49, 37, 31, 68 };
+//                                   A15 A12 A09 A02 B19 C12 C03 D06 B16
+const Pin STEP_PINS[DRIVES] =      { 24, 17,  2, 61, 64, 51, 35, 29, 67 };
+const Pin DIRECTION_PINS[DRIVES] = { 23, 16,  3, 60, 63, 53, 33, 27, 66 };
 
 // Endstops
 // E Stops not currently used
@@ -137,10 +137,10 @@ const Pin SdSpiCSPins[2] = { 87, 77 };
 // ### Removed: now E0_AXIS endstop D39 / PWMH2  / C.7
 // D58 / AD3    / A.6
 // D59 / AD2    / A.4
-// D66 / DAC0   / B.15
-// D67 / DAC1   / B.16
-// D68 / CANRX0 / A.1
-// D69 / CANTX0 / A.0
+// ### Removed: now E6_DIR ExtV3 D66 / DAC0   / B.15
+// ### Removed: now E6_STP ExtV3 D67 / DAC1   / B.16
+// ### Removed: now E6_EN ExtV3 D68 / CANRX0 / A.1
+// ### Removed: now MSi(=3.3V) ExtV3 D69 / CANTX0 / A.0
 // D70 / SDA1   / A.17
 // D71 / SCL1   / A.18
 // D72 / RX LED / C.30
@@ -151,7 +151,7 @@ const Pin SdSpiCSPins[2] = { 87, 77 };
 const Pin SpecialPinMap[] =
 {
 	5, 6, 58, 59,
-	66, 67, 68, 69, 70, 71, 73, 73
+	70, 71, 72, 73
 };
 
 // This next definition defines the highest one.

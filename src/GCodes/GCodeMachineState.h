@@ -23,6 +23,7 @@ enum class GCodeState : uint8_t
 	toolChange1,
 	toolChange2,
 	toolChangeComplete,
+
 	// These next 4 must be contiguous
 	m109ToolChange0,
 	m109ToolChange1,
@@ -38,12 +39,20 @@ enum class GCodeState : uint8_t
 	flashing2,
 	stopping,
 	sleeping,
+
 	// These next 5 must be contiguous
 	gridProbing1,
 	gridProbing2,
 	gridProbing2a,
 	gridProbing3,
 	gridProbing4,
+
+	// These next 4 must be contiguous
+	probingAtPoint1,
+	probingAtPoint2,
+	probingAtPoint3,
+	probingAtPoint4,
+	probingAtPoint5,
 
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction
@@ -65,7 +74,9 @@ public:
 		axesRelative : 1,
 		doingFileMacro : 1,
 		waitWhileCooling : 1,
-		runningM502 : 1;
+		runningM502 : 1,
+		waitingForAcknowledgement : 1,
+		messageAcknowledged : 1;
 
 	static GCodeMachineState *Allocate()
 	post(!result.IsLive(); result.state == GCodeState::normal);

@@ -33,6 +33,13 @@ void CoreXZKinematics::MotorStepsToCartesian(const int32_t motorPos[], const flo
 	}
 }
 
+// Return true if the specified endstop axis uses shared motors.
+// Used to determine whether to abort the whole move or just one motor when an endstop switch is triggered.
+bool CoreXZKinematics::DriveIsShared(size_t drive) const
+{
+	return drive == X_AXIS || drive == Z_AXIS;
+}
+
 // Calculate the movement fraction for a single axis motor of a Cartesian-like printer
 float CoreXZKinematics::MotorFactor(size_t drive, const float directionVector[]) const
 {

@@ -43,10 +43,13 @@ const float ABS_ZERO = -273.15;						// Celsius
 const float NEARLY_ABS_ZERO = -273.0;				// Celsius
 const float ROOM_TEMPERATURE = 21.0;				// Celsius
 
+// Timeouts
 const float LONG_TIME = 300.0;						// Seconds
 const uint32_t MinimumWarningInterval = 4000;		// Milliseconds
 const uint32_t FanCheckInterval = 500;				// Milliseconds
 const uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
+const float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
+
 
 // FanCheckInterval must be lower than MinimumWarningInterval to avoid giving driver over temperature warnings too soon when thermostatic control of electronics cooling fans is used
 static_assert(FanCheckInterval < MinimumWarningInterval, "FanCheckInterval too large");
@@ -89,8 +92,6 @@ const int8_t DefaultE0Heater = 1;					// Index of the default first extruder hea
 
 const unsigned int FirstVirtualHeater = 100;		// the heater number at which virtual heaters start
 const unsigned int MaxVirtualHeaters = 10;			// the number of virtual heaters supported
-
-const size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
 
 // These parameters are about right for a typical PCB bed heater that maxes out at 110C
 const float DefaultBedHeaterGain = 90.0;
@@ -163,6 +164,7 @@ const size_t GCODE_REPLY_LENGTH = 2048;
 const size_t MESSAGE_LENGTH = 256;
 
 const size_t FILENAME_LENGTH = 100;
+const size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
 
 // Output buffer lengths
 

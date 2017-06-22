@@ -9,6 +9,7 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "Move.h"
+#include "Kinematics/LinearDeltaKinematics.h"		// for DELTA_AXES
 
 #ifdef DUET_NG
 # define DDA_MOVE_DEBUG	(1)
@@ -195,12 +196,6 @@ void DDA::Init()
 // Set up a real move. Return true if it represents real movement, else false.
 bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 {
-	// 0. Try to push any new babystepping forward through the lookahead queue
-	if (nextMove.newBabyStepping != 0.0 && nextMove.moveType == 0 && nextMove.endStopsToCheck == 0)
-	{
-		AdvanceBabyStepping(nextMove.newBabyStepping);
-	}
-
 	// 1. Compute the new endpoints and the movement vector
 	const int32_t * const positionNow = prev->DriveCoordinates();
 	const Move& move = reprap.GetMove();
@@ -300,6 +295,10 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	filePos = nextMove.filePos;
 	usePressureAdvance = nextMove.usePressureAdvance;
 	hadLookaheadUnderrun = false;
+
+#if SUPPORT_IOBITS
+	ioBits = nextMove.ioBits;
+#endif
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a special move on a delta printer
 	endCoordinatesValid = (endStopsToCheck == 0) && (doMotorMapping || !move.IsDeltaMode());
@@ -511,8 +510,8 @@ pre(state == provisional)
 	}
 }
 
-// Try to push babystepping earlier in the move queue
-void DDA::AdvanceBabyStepping(float amount)
+// Try to push babystepping earlier in the move queue, returning the amount we pushed
+float DDA::AdvanceBabyStepping(float amount)
 {
 	DDA *cdda = this;
 	while (cdda->prev->state == DDAState::provisional)
@@ -608,6 +607,8 @@ void DDA::AdvanceBabyStepping(float amount)
 		// Now do the next move
 		cdda = cdda->next;
 	}
+
+	return babySteppingDone;
 }
 
 // Recalculate the top speed, acceleration distance and deceleration distance, and whether we can pause after this move
@@ -968,7 +969,7 @@ void DDA::Prepare()
 		}
 	}
 
-	if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))	// temp show the prepared DDA if debug enabled for both modules
+	if (reprap.Debug(moduleDda) && reprap.Debug(moduleMove))		// temp show the prepared DDA if debug enabled for both modules
 	{
 		DebugPrint();
 	}
@@ -1137,8 +1138,9 @@ void DDA::CheckEndstops(Platform& platform)
 			{
 			case EndStopHit::lowHit:
 				endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-				if (endStopsToCheck == 0 || reprap.GetMove().IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
+				if (endStopsToCheck == 0 || reprap.GetMove().GetKinematics().DriveIsShared(drive))
 				{
+					// No more endstops to check, or this axis uses shared motors, so stop the entire move
 					MoveAborted();
 				}
 				else
@@ -1150,8 +1152,9 @@ void DDA::CheckEndstops(Platform& platform)
 
 			case EndStopHit::highHit:
 				endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-				if (endStopsToCheck == 0 || reprap.GetMove().IsCoreXYAxis(drive))	// if no more endstops to check, or this axis uses shared motors
+				if (endStopsToCheck == 0 || reprap.GetMove().GetKinematics().DriveIsShared(drive))
 				{
+					// No more endstops to check, or this axis uses shared motors, so stop the entire move
 					MoveAborted();
 				}
 				else

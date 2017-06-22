@@ -46,7 +46,8 @@ enum Module : uint8_t
 	moduleScanner = 8,
 	modulePrintMonitor = 9,
 	moduleStorage = 10,
-	numModules = 11,				// make this one greater than the last module number
+	modulePortControl = 11,
+	numModules = 12,				// make this one greater than the last module number
 	noModule = 15
 };
 
@@ -67,6 +68,10 @@ class RepRap;
 class FileStore;
 class OutputBuffer;
 class OutputStack;
+
+#if SUPPORT_IOBITS
+class PortControl;
+#endif
 
 // A single instance of the RepRap class contains all the others
 extern RepRap reprap;

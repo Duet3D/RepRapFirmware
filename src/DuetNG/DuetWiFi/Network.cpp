@@ -315,7 +315,7 @@ bool Network::GetNetworkState(StringRef& reply)
 		reply.cat(TranslateWiFiState(currentMode));
 		if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 		{
-			reply.cat(ssid);
+			reply.catf("%s, IP address %u.%u.%u.%u", ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
 		}
 		break;
 	default:

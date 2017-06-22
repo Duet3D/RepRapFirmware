@@ -2847,6 +2847,31 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 	Message(type, formatBuffer);
 }
 
+// Send a message box, which may require an acknowledgement
+void Platform::SendAlert(MessageType mt, const char *messageBuffer, int sParam, float tParam, bool zParam)
+{
+	switch (mt)
+	{
+	case AUX_MESSAGE:
+// Until the PanelDue firmware changes are implemented, use the default code
+//		qq;
+//		break;
+
+	case HTTP_MESSAGE:
+// Until the DWC changes are implemented, use the default code
+//		qq;
+//		break;
+
+	default:
+		MessageF(mt, "%s\n", messageBuffer);
+		if (sParam == 1)
+		{
+			Message(mt, "Send M292 to continue\n");
+		}
+		break;
+	}
+}
+
 bool Platform::AtxPower() const
 {
 	return ReadPin(ATX_POWER_PIN);

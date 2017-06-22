@@ -19,6 +19,7 @@ public:
 	const char *GetName(bool forStatusReport) const override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
 	uint16_t AxesToHomeBeforeProbing() const override { return (1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS); }
+	bool DriveIsShared(size_t drive) const override;
 
 protected:
 	float MotorFactor(size_t drive, const float directionVector[]) const override;

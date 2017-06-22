@@ -149,8 +149,10 @@ void HeightMap::SetGridHeight(size_t xIndex, size_t yIndex, float height)
 }
 
 // Return the minimum number of segments for a move by this X or Y amount
-unsigned int HeightMap::GetMinimumSegments(float distance) const
+// Note that deltaX and deltaY may be negative
+unsigned int HeightMap::GetMinimumSegments(float deltaX, float deltaY) const
 {
+	float distance = max<float>(fabs(deltaX), fabs(deltaY));
 	return (distance > 0.0) ? (unsigned int)(distance * def.recipSpacing + 0.4) : 1;
 }
 

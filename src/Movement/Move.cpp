@@ -8,6 +8,7 @@
 #include "Move.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "Kinematics/LinearDeltaKinematics.h"	// temporary
 
 Move::Move() : currentDda(NULL), scheduledMoves(0), completedMoves(0)
 {
@@ -156,7 +157,7 @@ void Move::Spin()
 				// We have a new move
 				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
-					const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && !IsDeltaMode());
+					const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && kinematics->GetHomingMode() == Kinematics::homeCartesianAxes);
 					if (doMotorMapping)
 					{
 						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.moveType == 0);
@@ -266,6 +267,12 @@ void Move::Spin()
 	reprap.GetPlatform().ClassReport(longWait);
 }
 
+// Try to push some babystepping through the lookahead queue
+float Move::PushBabyStepping(float amount)
+{
+	return ddaRingAddPointer->AdvanceBabyStepping(amount);
+}
+
 // Change the kinematics to the specified type if it isn't already
 // If it is already correct leave its parameters alone.
 // This violates our rule on no dynamic memory allocation after the initialisation phase,
@@ -295,8 +302,8 @@ bool Move::IsAccessibleProbePoint(float x, float y) const
 // Pause the print as soon as we can.
 // Returns the file position of the first queue move we are going to skip, or noFilePosition we we are not skipping any moves.
 // We update 'positions' to the positions and feed rate expected for the next move, and the amount of extrusion in the moves we skipped.
-// If we are not skipping any moves then the feed rate is left alone, therefore the caller should set this up first.
-FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, uint32_t xAxes)
+// If we are not skipping any moves then the feed rate and iobits are left alone, therefore the caller should set them up first.
+FilePosition Move::PausePrint(RestorePoint& rp, uint32_t xAxes)
 {
 	// Find a move we can pause after.
 	// Ideally, we would adjust a move if necessary and possible so that we can pause after it, but for now we don't do that.
@@ -355,13 +362,17 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 		// We are going to skip some moves. dda points to the last move we are going to print.
 		for (size_t axis = 0; axis < numAxes; ++axis)
 		{
-			positions[axis] = dda->GetEndCoordinate(axis, false);
+			rp.moveCoords[axis] = dda->GetEndCoordinate(axis, false);
 		}
 		for (size_t drive = numAxes; drive < DRIVES; ++drive)
 		{
-			positions[drive] = 0.0;		// clear out extruder movement
+			rp.moveCoords[drive] = 0.0;		// clear out extruder movement
 		}
-		pausedFeedRate = dda->GetRequestedSpeed();
+		rp.feedRate = dda->GetRequestedSpeed();
+
+#if SUPPORT_IOBITS
+		rp.ioBits = dda->GetIoBits();
+#endif
 
 		// Free the DDAs for the moves we are going to skip, and work out how much extrusion they would have performed
 		dda = ddaRingAddPointer;
@@ -369,7 +380,7 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 		{
 			for (size_t drive = numAxes; drive < DRIVES; ++drive)
 			{
-				positions[drive] += dda->GetEndCoordinate(drive, true);		// update the amount of extrusion we are going to skip
+				rp.moveCoords[drive] += dda->GetEndCoordinate(drive, true);		// update the amount of extrusion we are going to skip
 			}
 			(void)dda->Free();
 			dda = dda->GetNext();
@@ -379,7 +390,7 @@ FilePosition Move::PausePrint(float positions[DRIVES], float& pausedFeedRate, ui
 	}
 	else
 	{
-		GetCurrentUserPosition(positions, 0, xAxes);		// gets positions and clears out extrusion values
+		GetCurrentUserPosition(rp.moveCoords, 0, xAxes);		// gets positions and clears out extrusion values
 	}
 
 	return fPos;
@@ -456,6 +467,16 @@ void Move::Diagnostics(MessageType mtype)
 		sqSum1 = sqSum2 = sqCount = sqErrors = 0;
 	}
 #endif
+}
+
+// Set the current position to be this
+void Move::SetNewPosition(const float positionNow[DRIVES], bool doBedCompensation)
+{
+	float newPos[DRIVES];
+	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
+	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), doBedCompensation);
+	SetLiveCoordinates(newPos);
+	SetPositions(newPos);
 }
 
 // These are the actual numbers we want in the positions, so don't transform them.
@@ -789,7 +810,7 @@ bool Move::TryStartNextMove(uint32_t startTime)
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 void Move::HitLowStop(size_t axis, DDA* hitDDA)
 {
-	if (axis < reprap.GetGCodes().GetTotalAxes() && !IsDeltaMode())		// should always be true
+	if (axis < reprap.GetGCodes().GetTotalAxes() && !IsDeltaMode() && hitDDA->IsHomingAxes())
 	{
 		JustHomed(axis, reprap.GetPlatform().AxisMinimum(axis), hitDDA);
 	}
@@ -798,7 +819,7 @@ void Move::HitLowStop(size_t axis, DDA* hitDDA)
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 void Move::HitHighStop(size_t axis, DDA* hitDDA)
 {
-	if (axis < reprap.GetGCodes().GetTotalAxes())		// should always be true
+	if (axis < reprap.GetGCodes().GetTotalAxes() && hitDDA->IsHomingAxes())
 	{
 		const float hitPoint = (IsDeltaMode())
 								? ((LinearDeltaKinematics*)kinematics)->GetHomedCarriageHeight(axis)	// this is a delta printer, so the motor is at the homed carriage height for this drive
@@ -810,15 +831,16 @@ void Move::HitHighStop(size_t axis, DDA* hitDDA)
 // This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
 void Move::JustHomed(size_t axisHomed, float hitPoint, DDA* hitDDA)
 {
-	if (IsCoreXYAxis(axisHomed))
+	if (kinematics->DriveIsShared(axisHomed))
 	{
-		float tempCoordinates[XYZ_AXES];
-		for (size_t axis = 0; axis < XYZ_AXES; ++axis)
+		float tempCoordinates[MaxAxes];
+		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+		for (size_t axis = 0; axis < numTotalAxes; ++axis)
 		{
 			tempCoordinates[axis] = hitDDA->GetEndCoordinate(axis, false);
 		}
 		tempCoordinates[axisHomed] = hitPoint;
-		hitDDA->SetPositions(tempCoordinates, XYZ_AXES);
+		hitDDA->SetPositions(tempCoordinates, numTotalAxes);
 	}
 	else
 	{
@@ -991,20 +1013,6 @@ void Move::PrintCurrentDda() const
 	if (currentDda != nullptr)
 	{
 		currentDda->DebugPrint();
-	}
-}
-
-// Return true if the specified axis shares its motors with another. Safe to call for extruders as well as axes.
-bool Move::IsCoreXYAxis(size_t axis) const
-{
-	switch(kinematics->GetKinematicsType())
-	{
-	case KinematicsType::coreXY:
-		return axis == X_AXIS || axis == Y_AXIS;
-	case KinematicsType::coreXZ:
-		return axis == X_AXIS || axis == Z_AXIS;
-	default:
-		return false;
 	}
 }
 

@@ -32,9 +32,11 @@ public:
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
 	bool SupportsAutoCalibration() const override { return false; }
 	bool IsReachable(float x, float y) const override;
-	void LimitPosition(float position[], size_t numAxes, uint16_t axesHomed) const override;
+	bool LimitPosition(float position[], size_t numAxes, uint16_t axesHomed) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	const char* HomingButtonNames() const override { return "PDZUVW"; }
+	bool DriveIsShared(size_t drive) const override;
+	HomingMode GetHomingMode() const override { return homeSharedMotors; }
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 200.0;

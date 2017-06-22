@@ -29,7 +29,8 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pU
 		return true;
 	}
 
-	if (pg > 10.0 && pg < 1500.0 && pdt > 0.1 && ptc > 2 * pdt && pMaxPwm > 0.2 && pMaxPwm <= 1.0)
+	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
+	if (pg > 10.0 && pg <= 1500.0 && pdt > 0.099 && ptc >= 2 * pdt && pMaxPwm > 0.0099 && pMaxPwm <= 1.0)
 	{
 		gain = pg;
 		timeConstant = ptc;

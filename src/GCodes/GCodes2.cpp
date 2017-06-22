@@ -20,6 +20,10 @@
 #include "Tool.h"
 #include "Version.h"
 
+#if SUPPORT_IOBITS
+# include "PortControl.h"
+#endif
+
 #ifdef DUET_NG
 # include "FirmwareUpdater.h"
 #endif
@@ -94,49 +98,19 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			return false;
 		}
+		if (segmentsLeft != 0)
 		{
-			// Check for 'R' parameter here to go back to the coordinates at which the print was paused
-			// NOTE: restore point 2 (tool change) won't work when changing tools on dual axis machines because of X axis mapping.
-			// We could possibly fix this by saving the virtual X axis position instead of the physical axis positions.
-			// However, slicers normally command the tool to the correct place after a tool change, so we don't need this feature anyway.
-			int rParam = (gb.Seen('R')) ? gb.GetIValue() : 0;
-			RestorePoint *rp = (rParam == 1) ? &pauseRestorePoint : (rParam == 2) ? &toolChangeRestorePoint : nullptr;
-			if (rp != nullptr)
-			{
-				if (segmentsLeft != 0)
-				{
-					return false;
-				}
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-				{
-					float offset = gb.Seen(axisLetters[axis]) ? gb.GetFValue() * distanceScale : 0.0;
-					moveBuffer.coords[axis] = rp->moveCoords[axis] + offset;
-				}
-				// For now we don't handle extrusion at the same time
-				for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
-				{
-					moveBuffer.coords[drive] = 0.0;
-				}
-				moveBuffer.feedRate = (gb.Seen(feedrateLetter)) ? gb.GetFValue() * SecondsToMinutes : gb.MachineState().feedrate;
-				moveBuffer.filePos = noFilePosition;
-				moveBuffer.usePressureAdvance = false;
-				segmentsLeft = 1;
-			}
-			else
-			{
-				int res = SetUpMove(gb, reply);
-				if (res == 2)
-				{
-					gb.SetState(GCodeState::waitingForMoveToComplete);
-				}
-				result = (res != 0);
-			}
+			return false;
+		}
+		if (DoStraightMove(gb, reply))
+		{
+			error = true;
 		}
 		break;
 
 	case 2: // Clockwise arc
 	case 3: // Anti clockwise arc
-		// We only support X and Y axes in these, but you can map them to other axes in the tool definitions
+		// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
 		if (!LockMovement(gb))
 		{
 			return false;
@@ -200,7 +174,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			const int sparam = (gb.SeenAfterSpace('S')) ? gb.GetIValue() : 0;
+			const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
 			switch(sparam)
 			{
 			case 0:		// probe and save height map
@@ -231,7 +205,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		else
 		{
 			ClearBabyStepping();
-			result = SetSingleZProbeAtAPosition(gb, reply);
+			error = ExecuteG30(gb, reply);
 		}
 		break;
 
@@ -246,6 +220,13 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		}
 
 		ClearBabyStepping();
+
+		// We need to unlock the movement system here in case there is no Z probe and we are doing manual probing.
+		// Otherwise, even though the bed probing code calls UnlockAll when doing a manual bed probe, the movement system
+		// remains locked because the current MachineState object already held the lock when the macro file was started,
+		// which means that no gcode source other than the one that executed G32 is allowed to jog the Z axis.
+		UnlockAll(gb);
+
 		DoFileMacro(gb, BED_EQUATION_G, true);	// Try to execute bed.g
 		break;
 
@@ -706,7 +687,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			else if (wasSimulating)
 			{
 				// Ending a simulation, so restore the position
-				SetPositions(simulationRestorePoint.moveCoords);
+				RestorePosition(simulationRestorePoint, gb);
+				ToolOffsetTransform(currentUserPosition, moveBuffer.coords, true);
+				reprap.GetMove().SetNewPosition(simulationRestorePoint.moveCoords, true);
 				for (size_t i = 0; i < DRIVES; ++i)
 				{
 					moveBuffer.coords[i] = simulationRestorePoint.moveCoords[i];
@@ -768,7 +751,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					{
 						val = 1.0 - val;
 					}
-					Platform::WriteAnalog(pin, val, DefaultPinWritePwmFreq);
+
+					const uint16_t freq = (gb.Seen('F')) ? (uint16_t)constrain<int32_t>(gb.GetIValue(), 1, 65536) : DefaultPinWritePwmFreq;
+					Platform::WriteAnalog(pin, val, freq);
 				}
 				// Ignore the command if no S parameter provided
 			}
@@ -821,11 +806,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 92: // Set/report steps/mm for some axes
 		{
-			// Save the current positions as we may need them later
-			float positionNow[DRIVES];
-			Move& move = reprap.GetMove();
-			move.GetCurrentUserPosition(positionNow, 0, reprap.GetCurrentXAxes());
-
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
@@ -861,7 +841,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (seen)
 			{
 				// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
-				SetPositions(positionNow);
+				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
 			}
 			else
 			{
@@ -1725,15 +1705,60 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 290:	// Baby stepping
 		if (gb.Seen('S'))
 		{
-			const float babystepAmount = gb.GetFValue();
-			if (fabs(babystepAmount) <= 1.0)			// limit babystepping to 1mm
+			if (!LockMovement(gb))
 			{
-				pendingBabyStepZOffset += babystepAmount;
+				return false;
 			}
+			const float babyStepAmount = constrain<float>(gb.GetFValue(), -1.0, 1.0);
+			currentBabyStepZOffset += babyStepAmount;
+			const float amountPushed = reprap.GetMove().PushBabyStepping(babyStepAmount);
+			moveBuffer.initialCoords[Z_AXIS] += amountPushed;
+
+			// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
+			// This could result in an abrupt Z movement, however the move will be processed as normal so the jerk limit will be honoured.
+			moveBuffer.coords[Z_AXIS] += babyStepAmount;
 		}
 		else
 		{
 			reply.printf("Baby stepping offset is %.3fmm", GetBabyStepOffset());
+		}
+		break;
+
+	case 291:	// Display message, optionally wait for acknowledgement
+		{
+			char messageBuffer[80];
+			bool seen = false;
+			gb.TryGetQuotedString('P', messageBuffer, ARRAY_SIZE(messageBuffer), seen);
+			if (seen)
+			{
+				int32_t sParam = 0;
+				gb.TryGetIValue('S', sParam, seen);
+				float tParam = DefaultMessageTimeout;
+				gb.TryGetFValue('T', tParam, seen);
+				int32_t zParam = 0;
+				gb.TryGetIValue('Z', zParam, seen);
+
+				const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
+
+				// If we need to wait for an acknowledgement, save the state and set waiting
+				if (sParam == 1 && Push(gb))										// stack the machine state including the file position
+				{
+					gb.MachineState().fileState.Close();							// stop reading from file
+					gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
+				}
+
+				platform.SendAlert(mt, messageBuffer, (int)sParam, tParam, zParam == 1);
+			}
+		}
+		break;
+
+	case 292:	// Acknowledge message
+		for (GCodeBuffer* targetGb : gcodeSources)
+		{
+			if (targetGb != nullptr)
+			{
+				targetGb->MessageAcknowledged();
+			}
 		}
 		break;
 
@@ -1810,7 +1835,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 307: // Set heater process model parameters
 		if (gb.Seen('H'))
 		{
-			int heater = gb.GetIValue();
+			const int heater = gb.GetIValue();
 			if (heater >= 0 && heater < (int)Heaters)
 			{
 				const FopDt& model = reprap.GetHeat().GetHeaterModel(heater);
@@ -2970,7 +2995,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 							++numTotalAxes;
 						}
 						numVisibleAxes = numTotalAxes;					// assume all axes are visible unless there is a P parameter
-						SetPositions(moveBuffer.coords);				// tell the Move system where any new axes are
+						reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where any new axes are
 						platform.SetAxisDriversConfig(drive, config);
 						if (numTotalAxes + numExtruders > DRIVES)
 						{
@@ -3075,24 +3100,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 #ifdef DUET_WIFI
 	case 587:	// Add WiFi network or list remembered networks
-		if (gb.SeenAfterSpace('S'))
+		if (gb.Seen('S'))
 		{
 			WirelessConfigurationData config;
 			memset(&config, 0, sizeof(config));
 			bool ok = gb.GetQuotedString(config.ssid, ARRAY_SIZE(config.ssid));
 			if (ok)
 			{
-				ok = gb.SeenAfterSpace('P') && gb.GetQuotedString(config.password, ARRAY_SIZE(config.password));
+				ok = gb.Seen('P') && gb.GetQuotedString(config.password, ARRAY_SIZE(config.password));
 			}
-			if (ok && gb.SeenAfterSpace('I'))
+			if (ok && gb.Seen('I'))
 			{
 				ok = gb.GetIPAddress(config.ip);
 			}
-			if (ok && gb.SeenAfterSpace('J'))
+			if (ok && gb.Seen('J'))
 			{
 				ok = gb.GetIPAddress(config.gateway);
 			}
-			if (ok && gb.SeenAfterSpace('K'))
+			if (ok && gb.Seen('K'))
 			{
 				ok = gb.GetIPAddress(config.netmask);
 			}
@@ -3120,14 +3145,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (rslt >= 0)
 			{
 				char* const cbuf = reinterpret_cast<char *>(buffer);
-				cbuf[declaredBufferLength] = 0;
+				cbuf[declaredBufferLength] = 0;						// ensure null terminated
 				size_t len = strlen(cbuf);
+
+				// If there is a trailing newline, remove it
 				if (len != 0 && cbuf[len - 1] == '\n')
 				{
 					--len;
 					cbuf[len] = 0;
 				}
-				if (len == 0)
+
+				// DuetWiFiServer 1.19beta7 and later include the SSID used in access point mode at the start
+				const char *bufp = strchr(cbuf, '\n');
+				if (bufp == nullptr)
+				{
+					bufp = cbuf;			// must be an old version of DuetWiFiServer
+				}
+				else
+				{
+					++bufp;					// slip the first entry
+				}
+
+				if (strlen(bufp) == 0)
 				{
 					reply.copy("No remembered networks");
 				}
@@ -3139,7 +3178,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						return false;		// try again later
 					}
 					response->copy("Remembered networks:\n");
-					response->cat(cbuf);
+					response->cat(bufp);
 					HandleReply(gb, false, response);
 					return true;
 				}
@@ -3153,13 +3192,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 588:	// Forget WiFi network
-		if (gb.SeenAfterSpace('S'))
+		if (gb.Seen('S'))
 		{
 			uint32_t ssid[NumDwords(SsidLength)];
 			if (gb.GetQuotedString(reinterpret_cast<char*>(ssid), SsidLength))
 			{
 				const char* const pssid = reinterpret_cast<const char*>(ssid);
-				if (strcmp(pssid, "ALL") == 0)
+				if (strcmp(pssid, "*") == 0)
 				{
 					const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
 					if (rslt != ResponseEmpty)
@@ -3187,22 +3226,37 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 589:	// Configure access point
-		if (gb.SeenAfterSpace('S'))
+		if (gb.Seen('S'))
 		{
 			WirelessConfigurationData config;
 			memset(&config, 0, sizeof(config));
 			bool ok = gb.GetQuotedString(config.ssid, ARRAY_SIZE(config.ssid));
 			if (ok)
 			{
-				ok = gb.SeenAfterSpace('P') && gb.GetQuotedString(config.password, ARRAY_SIZE(config.password));
-			}
-			if (ok && gb.SeenAfterSpace('I'))
-			{
-				ok = gb.GetIPAddress(config.ip);
+				if (strcmp(config.ssid, "*") == 0)
+				{
+					// Delete the access point details
+					memset(&config, 0xFF, sizeof(config));
+				}
+				else
+				{
+					ok = gb.Seen('P') && gb.GetQuotedString(config.password, ARRAY_SIZE(config.password));
+					if (ok)
+					{
+						if (gb.Seen('I'))
+						{
+							ok = gb.GetIPAddress(config.ip);
+							config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
+						}
+					}
+					else
+					{
+						ok = false;
+					}
+				}
 			}
 			if (ok)
 			{
-				config.channel = (gb.SeenAfterSpace('C')) ? gb.GetIValue() : 0;
 				const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
 				if (rslt != ResponseEmpty)
 				{
@@ -3212,7 +3266,29 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.copy("Bad parameter in M589 command");
+				reply.copy("Bad or missing parameter in M589 command");
+				error = true;
+			}
+		}
+		else
+		{
+			const size_t declaredBufferLength = MaxRememberedNetworks * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with null terminator, plus an extra null
+			uint32_t buffer[NumDwords(declaredBufferLength + 1)];
+			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkListSsids, 0, 0, nullptr, 0, buffer, declaredBufferLength);
+			if (rslt >= 0)
+			{
+				char* const cbuf = reinterpret_cast<char *>(buffer);
+				cbuf[declaredBufferLength] = 0;						// ensure null terminated
+				char *p = strchr(cbuf, '\n');
+				if (p != nullptr)
+				{
+					*p = 0;
+				}
+				reply.printf("Own SSID: %s", (cbuf[0] == 0) ? "not configured" : cbuf);
+			}
+			else
+			{
+				reply.copy("Failed to remove SSID from remembered list");
 				error = true;
 			}
 		}
@@ -3226,8 +3302,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			Move& move = reprap.GetMove();
-			float positionNow[DRIVES];
-			move.GetCurrentUserPosition(positionNow, 0, reprap.GetCurrentXAxes()); 	// get the current position, we may need it later
 
 			bool changedMode = false;
 			if ((gb.Seen('L') || gb.Seen('D')) && move.GetKinematics().GetKinematicsType() != KinematicsType::linearDelta)
@@ -3239,11 +3313,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const bool changed = move.GetKinematics().Configure(code, gb, reply, error);
 			if (changedMode)
 			{
-				move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, positionNow);
+				move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
+				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}
 			if (changed || changedMode)
 			{
-				SetPositions(positionNow);
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed))
+				{
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
+				}
+				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
 				SetAllAxesNotHomed();
 			}
 		}
@@ -3270,8 +3349,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			Move& move = reprap.GetMove();
-			float positionNow[DRIVES];
-			move.GetCurrentUserPosition(positionNow, 0, reprap.GetCurrentXAxes());		// get the current position, we may need it later
 			const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
 
 			bool seen = false;
@@ -3316,9 +3393,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				// We changed something, so reset the positions and set all axes not homed
 				if (move.GetKinematics().GetKinematicsType() != oldK)
 				{
-					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, positionNow);
+					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
-				SetPositions(positionNow);
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed))
+				{
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
+				}
+				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
 				SetAllAxesNotHomed();
 			}
 		}
@@ -3331,8 +3413,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			Move& move = reprap.GetMove();
-			float positionNow[DRIVES];
-			move.GetCurrentUserPosition(positionNow, 0, reprap.GetCurrentXAxes());		// get the current position, we may need it later
 			const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
 
 			bool seen = false;
@@ -3357,13 +3437,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				// We changed something, so reset the positions and set all axes not homed
 				if (move.GetKinematics().GetKinematicsType() != oldK)
 				{
-					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, positionNow);
+					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
-				SetPositions(positionNow);
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed))
+				{
+					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
+				}
+				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
 				SetAllAxesNotHomed();
 			}
 		}
 		break;
+
+#if SUPPORT_IOBITS
+	case 670:
+		error = reprap.GetPortControl().Configure(gb, reply);
+		break;
+#endif
 
 #if SUPPORT_SCANNER
 	case 750: // Enable 3D scanner extension
@@ -3815,11 +3906,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 	newToolNumber = gb.GetIValue();
 	newToolNumber += gb.GetToolNumberAdjust();
 
-	// TODO for the tool change restore point to be useful, we should undo any X axis mapping and remove any tool offsets
-	for (size_t drive = 0; drive < DRIVES; ++drive)
-	{
-		toolChangeRestorePoint.moveCoords[drive] = moveBuffer.coords[drive];
-	}
+	reprap.GetMove().GetCurrentUserPosition(toolChangeRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes());
 	toolChangeRestorePoint.feedRate = gb.MachineState().feedrate;
 
 	if (simulationMode == 0)						// we don't yet simulate any T codes

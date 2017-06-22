@@ -80,6 +80,10 @@ public:
 	Scanner& GetScanner() const;
 	PrintMonitor& GetPrintMonitor() const;
 
+#if SUPPORT_IOBITS
+ 	PortControl& GetPortControl() const;
+#endif
+
 	void Tick();
 	uint16_t GetTicksInSpinState() const;
 	bool IsStopped() const;
@@ -114,6 +118,10 @@ private:
 	Scanner* scanner;
  	PrintMonitor* printMonitor;
 
+#if SUPPORT_IOBITS
+ 	PortControl *portControl;
+#endif
+
 	Tool* toolList;
 	Tool* currentTool;
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
@@ -147,6 +155,10 @@ inline Network& RepRap::GetNetwork() const { return *network; }
 inline Roland& RepRap::GetRoland() const { return *roland; }
 inline Scanner& RepRap::GetScanner() const { return *scanner; }
 inline PrintMonitor& RepRap::GetPrintMonitor() const { return *printMonitor; }
+
+#if SUPPORT_IOBITS
+inline PortControl& RepRap::GetPortControl() const { return *portControl; }
+#endif
 
 inline bool RepRap::Debug(Module m) const { return debug & (1 << m); }
 inline Module RepRap::GetSpinningModule() const { return spinningModule; }

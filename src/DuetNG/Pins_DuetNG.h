@@ -26,6 +26,7 @@ const size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_INKJET		0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER		1					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_IOBITS		1					// set to support P parameter in G0/G1 commands
 
 // The physical capabilities of the machine
 
@@ -117,9 +118,9 @@ const Pin VssaSensePin = 103;
 // Digital pin number to turn the IR LED on (high) or off (low)
 const Pin Z_PROBE_MOD_PIN = 34;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
 
-// COOLING FANS
-const size_t NUM_FANS = 8;
-const Pin COOLING_FAN_PINS[NUM_FANS] = { 55, 58, 00, 212, 207, 206, 205, 204 };
+// Cooling fans
+const size_t NUM_FANS = 9;
+const Pin COOLING_FAN_PINS[NUM_FANS] = { 55, 58, 00, 212, 207, 206, 205, 204, 215 };
 const Pin COOLING_FAN_RPM_PIN = 102;									// PB6 on expansion connector
 
 // SD cards

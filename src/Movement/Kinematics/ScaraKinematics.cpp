@@ -170,8 +170,9 @@ bool ScaraKinematics::IsReachable(float x, float y) const
 
 // Limit the Cartesian position that the user wants to move to
 // TODO take account of arm angle limits
-void ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
+bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
 {
+	bool limited = false;
 	float& x = coords[X_AXIS];
     float& y = coords[Y_AXIS];
     const float r = sqrtf(fsquare(x) + fsquare(y));
@@ -179,12 +180,15 @@ void ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint1
     {
     	x *= minRadius/r;
     	y *= minRadius/r;
+    	limited = true;
 	}
 	else if (r > maxRadius)
 	{
 		x *= maxRadius/r;
 		y *= maxRadius/r;
+		limited = true;
 	}
+    return limited;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
@@ -194,6 +198,22 @@ void ScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[
 	for (size_t i = Y_AXIS; i < numAxes; ++i)
 	{
 		positions[i] = 0.0;
+	}
+}
+
+// Return true if the specified endstop axis uses shared motors.
+// Used to determine whether to abort the whole move or just one motor when an endstop switch is triggered.
+bool ScaraKinematics::DriveIsShared(size_t drive) const
+{
+	switch (drive)
+	{
+	case X_AXIS:
+		return crosstalk[0] != 0.0 || crosstalk[1] != 0.0;
+	case Y_AXIS:
+		return crosstalk[2] != 0.0;
+	case Z_AXIS:
+	default:
+		return false;
 	}
 }
 

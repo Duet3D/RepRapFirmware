@@ -161,7 +161,6 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "RepRapFirmware.h"
-
 #include "MessageType.h"
 #include "Platform.h"
 #include "RepRap.h"
@@ -183,7 +182,12 @@ const char *moduleName[] =
 	"Scanner",
 	"PrintMonitor",
 	"Storage",
-	"?","?","?","?",
+#if SUPPORT_IOBITS
+	"PortControl",
+#else
+	"?",
+#endif
+	"?","?","?",
 	"none"
 };
 

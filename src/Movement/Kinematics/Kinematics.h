@@ -20,6 +20,7 @@ enum class KinematicsType : uint8_t
 	coreXZ,
 	linearDelta,
 	scara,
+	coreXYU,
 
 	unknown				// this one must be last!
 };
@@ -34,6 +35,14 @@ enum class MotionType : uint8_t
 class Kinematics
 {
 public:
+	// Class used to define homing mode
+	enum HomingMode : uint8_t
+	{
+		homeCartesianAxes,
+		homeIndividualMotors,
+		homeSharedMotors
+	};
+
 	// Functions that must be defined in each derived class that implements a kinematics
 
 	// Return the name of the current kinematics.
@@ -89,9 +98,9 @@ public:
 	// The default implementation assumes a rectangular reachable area, so it just used the bed dimensions give in the M208 commands.
 	virtual bool IsReachable(float x, float y) const;
 
-	// Limit the Cartesian position that the user wants to move to
+	// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-	virtual void LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const;
+	virtual bool LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const;
 
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)
@@ -108,6 +117,13 @@ public:
 
 	// Override this if the homing buttons are not named after the axes (e.g. SCARA printer)
 	virtual const char* HomingButtonNames() const { return "XYZUVW"; }
+
+	// Return true if the specified endstop axis uses shared motors.
+	// Used to determine whether to abort the whole move or just one motor when an endstop switch is triggered.
+	virtual bool DriveIsShared(size_t drive) const = 0;
+
+	// Return the type of homing we do
+	virtual HomingMode GetHomingMode() const = 0;
 
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }

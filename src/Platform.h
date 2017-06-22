@@ -390,6 +390,7 @@ public:
 	void MessageF(const MessageType type, const char *fmt, ...);
 	void MessageF(const MessageType type, const char *fmt, va_list vargs);
 	bool FlushMessages();							// Flush messages to USB and aux, returning true if there is more to send
+	void SendAlert(MessageType mt, const char *messageBuffer, int sParam, float tParam, bool zParam);
 
 	// Movement
 
@@ -1229,7 +1230,8 @@ inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
 //	The PC and PD bit numbers don't overlap, so we use their actual positions.
 //	PA0 clashes with PD0, so we use bit 1 to represent PA0.
 // RADDS:
-//	Step pins are distributed over all 4 ports, but they are in different bit positions except for port C
+//  Step pins are PA2,9,12,15 PB16,19 PC3,12 PD6
+//	PC12 clashes with PA12 so we shift PC3,12 left one bit
 
 // Calculate the step bit for a driver. This doesn't need to be fast.
 /*static*/ inline uint32_t Platform::CalcDriverBitmap(size_t driver)
@@ -1241,7 +1243,7 @@ inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
 	return (pinDesc.pPort == PIOC) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
 #elif defined(__ALLIGATOR__)
 	return pinDesc.ulPin;
-#else
+#else	// Duet 06/085
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
 #endif
 }
@@ -1262,7 +1264,7 @@ inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
 	PIOB->PIO_ODSR = driverMap;
 	PIOD->PIO_ODSR = driverMap;
 	PIOC->PIO_ODSR = driverMap;
-#else	// Duet
+#else	// Duet 06/085
 	PIOD->PIO_ODSR = driverMap;
 	PIOC->PIO_ODSR = driverMap;
 	PIOA->PIO_ODSR = driverMap >> 1;		// do this last, it means the processor doesn't need to preserve the register containing driverMap

@@ -8,13 +8,13 @@
 #ifndef MOVE_H_
 #define MOVE_H_
 
-#include <Movement/Kinematics/LinearDeltaKinematics.h>			// temporary
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "DDA.h"								// needed because of our inline functions
 #include "BedProbing/RandomProbePointSet.h"
 #include "BedProbing/Grid.h"
 #include "Kinematics/Kinematics.h"
+#include "GCodes/RestorePoint.h"
 
 #ifdef DUET_NG
 const unsigned int DdaRingLength = 30;
@@ -45,7 +45,7 @@ public:
 	void HitLowStop(size_t axis, DDA* hitDDA);						// What to do when a low endstop is hit
 	void HitHighStop(size_t axis, DDA* hitDDA);						// What to do when a high endstop is hit
 	void ZProbeTriggered(DDA* hitDDA);								// What to do when a the Z probe is triggered
-	void SetPositions(const float move[DRIVES]);					// Force the coordinates to be these
+	void SetNewPosition(const float positionNow[DRIVES], bool doBedCompensation); // Set the current position to be this
 	void SetLiveCoordinates(const float coords[DRIVES]);			// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions();									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y);		// Record the X and Y coordinates of a probe point
@@ -60,6 +60,8 @@ public:
 	float GetTaperHeight() const { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h);
 	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
+	bool IsUsingMesh() const { return usingMesh; }					// Return true if we are using mesh compensation
+	float PushBabyStepping(float amount);							// Try to push some babystepping through the lookahead queue
 
 	void Diagnostics(MessageType mtype);							// Report useful stuff
 
@@ -77,7 +79,6 @@ public:
 
 	// Temporary kinematics functions
 	bool IsDeltaMode() const { return kinematics->GetKinematicsType() == KinematicsType::linearDelta; }
-	bool IsCoreXYAxis(size_t axis) const;											// Return true if the specified axis shares its motors with another
 	// End temporary functions
 
 	void CurrentMoveCompleted();													// Signal that the current move has just been completed
@@ -89,7 +90,7 @@ public:
 	float GetSimulationTime() const { return simulationTime; }						// Get the accumulated simulation time
 	void PrintCurrentDda() const;													// For debugging
 
-	FilePosition PausePrint(float positions[DRIVES], float& pausedFeedRate, uint32_t xAxes); // Pause the print as soon as we can
+	FilePosition PausePrint(RestorePoint& rp, uint32_t xAxes);						// Pause the print as soon as we can
 	bool NoLiveMovement() const;													// Is a move running, or are there any queued?
 
 	bool IsExtruding() const;														// Is filament being extruded?
@@ -99,6 +100,8 @@ public:
 	void ResetMoveCounters() { scheduledMoves = completedMoves = 0; }
 
 	HeightMap& AccessBedProbeGrid() { return grid; }								// Access the bed probing grid
+
+	const DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move
 
 	static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
 	static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
@@ -112,6 +115,7 @@ private:
 	void AxisTransform(float move[MaxAxes]) const;									// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes]) const;							// Go from an axis transformed point back to user coordinates
 	void JustHomed(size_t axis, float hitPoint, DDA* hitDDA);						// Deal with setting positions after a drive has been homed
+	void SetPositions(const float move[DRIVES]);									// Force the machine coordinates to be these
 
 	bool DDARingAdd();									// Add a processed look-ahead entry to the DDA ring
 	DDA* DDARingGet();									// Get the next DDA ring entry to be run

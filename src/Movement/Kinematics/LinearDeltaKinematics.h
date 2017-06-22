@@ -42,11 +42,13 @@ public:
 	bool WriteCalibrationParameters(FileStore *f) const override;
 	float GetTiltCorrection(size_t axis) const override;
 	bool IsReachable(float x, float y) const override;
-	void LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const override;
+	bool LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	uint16_t AxesToHomeBeforeProbing() const override { return (1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS); }
 	MotionType GetMotionType(size_t axis) const override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
+	bool DriveIsShared(size_t drive) const override { return false; }
+	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
 
     // Public functions specific to this class
 	float GetDiagonalSquared() const { return D2; }

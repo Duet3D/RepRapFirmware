@@ -74,7 +74,7 @@ public:
 
 	bool LoadFromFile(FileStore *f, StringRef& r);					// Load the grid from file returning true if an error occurred
 
-	unsigned int GetMinimumSegments(float distance) const;			// Return the minimum number of segments for a move by this X or Y amount
+	unsigned int GetMinimumSegments(float deltaX, float deltaY) const;	// Return the minimum number of segments for a move by this X or Y amount
 
 	bool UseHeightMap(bool b);
 	bool UsingHeightMap() const { return useMap; }
