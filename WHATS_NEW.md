@@ -14,13 +14,15 @@ New features:
 - If a homing move uses parameter S3 instead of S1 then the axis minimum or maximum value is set to the current position instead of vice versa
 - M589 with no parameters now reports the Duet's own SSID
 - M589 S"*" now deletes the Duet WiFi's own access point details
+- G1 command now take an optoinal P parameter which is a bitmap of output ports to turn on and off for the duration of the move. The mapping of bits to ports and the port switching advance time is configuired using M670.
 
 Bug fixes:
 - Tool X offsets are now applied on the next move even if it has no Z parameter
 - The tool change restore point coordinates now take account of X axis mapping
 - M588 P"*" command (forget all access points) now works
 - On the Duet WiFi, after using M589 to set up access point parameters, when M552 S2 was sent to start the WiFi module in AP mode it reported "WiFi reported error: invalid access point configuration". The fix also needs DuetWiFiServer version 1.19beta7.
-- On a delta printer the effector height is limited to reachable values
+- On a delta printer the nozzle height is now limited to reachable values, to avoid the motors trying to move the carriages past the physical endstpos
+- M552 with no parameters now reports the current IP address as well as the status
 
 Areas of code refactored (so watch out for new bugs):
 - G30 bed probing
@@ -28,7 +30,7 @@ Areas of code refactored (so watch out for new bugs):
 - Tool offset implementation
 
 Upgrade notes:
-- SSIDs and passwords in M587, M588 and M589 commands must now be enclosed in double quotes
+- SSIDs and passwords in M587, M588 and M589 commands must now be enclosed in double quotes. If you use macro files to set up SSIDs and passwords of access point to connect to, check whether they have the quotation marks.
 - Height map filenames in G29, M374 and M375 commands must now be enclosed in double quotes
 - On a Duet WiFi you should also upgrade DuetWiFiServer.bin to version 1.19beta7. You do not need to perform a simultaneous upgrade, but M587 and M589 reporting functionality won't work correctly if your DuetWiFiFirmware and DuetWiFiServer versions are out of step.
 
