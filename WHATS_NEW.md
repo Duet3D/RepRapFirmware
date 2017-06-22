@@ -20,6 +20,7 @@ Bug fixes:
 - The tool change restore point coordinates now take account of X axis mapping
 - M588 P"*" command (forget all access points) now works
 - On the Duet WiFi, after using M589 to set up access point parameters, when M552 S2 was sent to start the WiFi module in AP mode it reported "WiFi reported error: invalid access point configuration". The fix also needs DuetWiFiServer version 1.19beta7.
+- On a delta printer the effector height is limited to reachable values
 
 Areas of code refactored (so watch out for new bugs):
 - G30 bed probing
