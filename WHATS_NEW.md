@@ -5,7 +5,7 @@ Version 1.19beta7
 =================
 
 New features:
-- M291 command is provided to display a message box with options for timeout, acknowledgement and Z jog buttons
+- M291 command is provided to display a message box with options for timeout, acknowledgement and Z jog buttons. This will require additional changes to DWC and PanelDue before it is fully usable.
 - M292 command is provided to acknowledge M291 messages
 - Manual delta calibration and bed compensation is supported (use P0 in the M558 command to indicate that there is no Z probe)
 - Minimum value for S parameter (maximum heater PWM) in M307 command is reduced from 20% to 1%
@@ -14,10 +14,10 @@ New features:
 - If a homing move uses parameter S3 instead of S1 then the axis minimum or maximum value is set to the current position instead of vice versa
 - M589 with no parameters now reports the Duet's own SSID
 - M589 S"*" now deletes the Duet WiFi's own access point details
-- G1 command now take an optoinal P parameter which is a bitmap of output ports to turn on and off for the duration of the move. The mapping of bits to ports and the port switching advance time is configuired using M670.
+- G1 command now take an optional P parameter which is a bitmap of output ports to turn on and off for the duration of the move. The mapping of bits to ports and the port switching advance time is configured using M670.
 
 Bug fixes:
-- Tool X offsets are now applied on the next move even if it has no Z parameter
+- Tool Z offsets are now applied on the next move even if it has no Z parameter
 - The tool change restore point coordinates now take account of X axis mapping
 - M588 P"*" command (forget all access points) now works
 - On the Duet WiFi, after using M589 to set up access point parameters, when M552 S2 was sent to start the WiFi module in AP mode it reported "WiFi reported error: invalid access point configuration". The fix also needs DuetWiFiServer version 1.19beta7.
