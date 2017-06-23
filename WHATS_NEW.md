@@ -15,9 +15,10 @@ New features:
 - M589 with no parameters now reports the Duet's own SSID
 - M589 S"*" now deletes the Duet WiFi's own access point details
 - G1 command now take an optional P parameter which is a bitmap of output ports to turn on and off for the duration of the move. The mapping of bits to ports and the port switching advance time is configured using M670.
+- M42 command now supports F parameter to select the PWM frequency
 
 Bug fixes:
-- Tool Z offsets are now applied on the next move even if it has no Z parameter
+- When the current tool offsets change because of a tool change or a G10 command, the new offsets are applied to the endpoint of the next move even if it has no movement along axes with changed offets
 - The tool change restore point coordinates now take account of X axis mapping
 - M588 P"*" command (forget all access points) now works
 - On the Duet WiFi, after using M589 to set up access point parameters, when M552 S2 was sent to start the WiFi module in AP mode it reported "WiFi reported error: invalid access point configuration". The fix also needs DuetWiFiServer version 1.19beta7.
@@ -33,6 +34,9 @@ Upgrade notes:
 - SSIDs and passwords in M587, M588 and M589 commands must now be enclosed in double quotes. If you use macro files to set up SSIDs and passwords of access point to connect to, check whether they have the quotation marks.
 - Height map filenames in G29, M374 and M375 commands must now be enclosed in double quotes
 - On a Duet WiFi you should also upgrade DuetWiFiServer.bin to version 1.19beta7. You do not need to perform a simultaneous upgrade, but M587 and M589 reporting functionality won't work correctly if your DuetWiFiFirmware and DuetWiFiServer versions are out of step.
+
+Known issues:
+- Although the WiFi module can now be put into access point mode using M589 abnd M552 S1, WiFi access does not work properly in access point mode
 
 Version 1.19beta6
 =================
