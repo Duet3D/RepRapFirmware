@@ -27,7 +27,7 @@ const char *CoreXYUKinematics::GetName(bool forStatusReport) const
 // This function is used for CoreXY and CoreXZ kinematics, but it overridden for CoreXYU kinematics
 bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
 {
-	if (mCode == 668)
+	if (mCode == 667)
 	{
 		bool seen = false;
 		for (size_t axis = 0; axis < CoreXYU_AXES; ++axis)
@@ -36,6 +36,10 @@ bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef
 			{
 				axisFactors[axis] = gb.GetFValue();
 				seen = true;
+			}
+			else
+			{
+				axisFactors[axis] = 1.0;
 			}
 		}
 		if (!seen && !gb.Seen('S'))
@@ -81,7 +85,7 @@ void CoreXYUKinematics::MotorStepsToCartesian(const int32_t motorPos[], const fl
 bool CoreXYUKinematics::DriveIsShared(size_t drive) const
 {
 	return drive == X_AXIS || drive == Y_AXIS
-			|| drive == U_AXIS || drive == V_AXIS;			// U and V don't have endstop switches, but include them here just in case
+			|| drive == U_AXIS || drive == V_AXIS;			// X, Y and U has endstops. V don't have endstop switches, but include them here just in case
 }
 
 // Calculate the movement fraction for a single axis motor
