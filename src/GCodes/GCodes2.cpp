@@ -3372,6 +3372,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					move.SetKinematics(KinematicsType::coreXZ);
 					break;
 
+				case 3:
+					if (numTotalAxes < 5) {
+						platform.MessageF(GENERIC_MESSAGE, "Error: U and V axis must be defined using M584 before M668 command\n", mode);
+					 	error = true;
+					 	return true;
+					}
+					move.SetKinematics(KinematicsType::coreXYU);
+					break;
+
 				default:
 					platform.MessageF(GENERIC_MESSAGE, "Error: mode %d is not value in M667 command\n", mode);
 					error = true;
