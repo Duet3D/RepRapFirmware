@@ -25,7 +25,7 @@ const size_t Heaters = 7;						// The number of heaters in the machine; 0 is the
 const size_t MinAxes = 3;						// The minimum and default number of axes
 const size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
 // Initialization macro used in statements needing to initialize values in arrays of size MAX_AXES
-#define AXES_(a,b,c,d,e,f) { a,b,c,d,e,f }
+#define AXES_(a,b,c,d,e,f,g,h,i) { a,b,c,d,e,f }
 
 const size_t MaxExtruders = DRIVES - MinAxes;	// The maximum number of extruders
 const size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis

@@ -86,8 +86,8 @@ const float INSTANT_DVS[DRIVES] = DRIVES_(15.0, 15.0, 0.2, 2.0, 2.0, 2.0, 2.0, 2
 
 // AXES
 
-const float AXIS_MINIMA[MaxAxes] = AXES_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);			// mm
-const float AXIS_MAXIMA[MaxAxes] = AXES_(230.0, 210.0, 200.0, 0.0, 0.0, 0.0);		// mm
+const float AXIS_MINIMA[MaxAxes] = AXES_(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);				// mm
+const float AXIS_MAXIMA[MaxAxes] = AXES_(230.0, 210.0, 200.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);		// mm
 
 // Z PROBE
 
@@ -390,7 +390,7 @@ public:
 	void MessageF(const MessageType type, const char *fmt, ...);
 	void MessageF(const MessageType type, const char *fmt, va_list vargs);
 	bool FlushMessages();							// Flush messages to USB and aux, returning true if there is more to send
-	void SendAlert(MessageType mt, const char *messageBuffer, int sParam, float tParam, bool zParam);
+	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, bool zParam);
 
 	// Movement
 

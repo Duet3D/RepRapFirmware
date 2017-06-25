@@ -2848,25 +2848,37 @@ void Platform::MessageF(MessageType type, const char *fmt, ...)
 }
 
 // Send a message box, which may require an acknowledgement
-void Platform::SendAlert(MessageType mt, const char *messageBuffer, int sParam, float tParam, bool zParam)
+// sParam = 0 Just display the message box, optional timeout
+// sParam = 1 As for 0 but display a Close button as well
+// sParam = 2 Display the message box with an OK button, wait for acknowledgement (waiting is set up by the caller)
+// sParam = 3 As for 2 but also display a Cancel button
+void Platform::SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, bool zParam)
 {
 	switch (mt)
 	{
+	case HTTP_MESSAGE:
+		// Make the RepRap class cache this message until it's picked up by the HTTP clients
+		reprap.SetAlert(message, title, sParam, tParam, zParam);
+		break;
+
 	case AUX_MESSAGE:
 // Until the PanelDue firmware changes are implemented, use the default code
 //		qq;
 //		break;
 
-	case HTTP_MESSAGE:
-// Until the DWC changes are implemented, use the default code
-//		qq;
-//		break;
-
 	default:
-		MessageF(mt, "%s\n", messageBuffer);
-		if (sParam == 1)
+		if (strlen(title) > 0)
+		{
+			MessageF(mt, "- %s -\n", title);
+		}
+		MessageF(mt, "%s\n", message);
+		if (sParam == 2)
 		{
 			Message(mt, "Send M292 to continue\n");
+		}
+		else if (sParam == 3)
+		{
+			Message(mt, "Send M292 to continue or M292 S1 to cancel\n");
 		}
 		break;
 	}

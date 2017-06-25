@@ -28,13 +28,15 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
+const size_t ToolNameLength = 32;				// maximum allowed length for tool names
 const uint32_t DefaultXAxisMapping = 0x0001;	// by default, X is mapped to X
 
+class Filament;
 class Tool
 {
 public:
 
-	static Tool * Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap);
+	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap);
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
@@ -44,6 +46,7 @@ public:
 	bool ToolCanDrive(bool extrude);
 	size_t HeaterCount() const;
 	int Heater(int heaterNumber) const;
+	const char *GetName() const;
 	int Number() const;
 	void SetVariables(const float* standby, const float* active);
 	void GetVariables(float* standby, float* active) const;
@@ -56,6 +59,7 @@ public:
 	void Print(StringRef& reply);
 	uint32_t GetXAxisMap() const { return xMapping; }
 	uint32_t GetFanMapping() const { return fanMapping; }
+	Filament *GetFilament() const { return filament; }
 
 	float virtualExtruderPosition;
 
@@ -79,6 +83,7 @@ private:
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const;
 
 	int myNumber;
+	char name[ToolNameLength];
 	int drives[MaxExtruders];
 	float mix[MaxExtruders];
 	size_t driveCount;
@@ -89,6 +94,7 @@ private:
 	float offset[MaxAxes];
 	uint32_t xMapping;
 	uint32_t fanMapping;
+	Filament *filament;
 	Tool* next;
 
 	bool mixing;
@@ -115,6 +121,11 @@ inline int Tool::Heater(int heaterNumber) const
 inline Tool* Tool::Next() const
 {
 	return next;
+}
+
+inline const char *Tool::GetName() const
+{
+	return name;
 }
 
 inline int Tool::Number() const

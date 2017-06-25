@@ -24,6 +24,7 @@
  ****************************************************************************************************/
 
 #include "Tool.h"
+#include "Filament.h"
 
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
@@ -32,7 +33,7 @@
 
 Tool * Tool::freelist = nullptr;
 
-/*static*/Tool * Tool::Create(int toolNumber, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap)
+/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap)
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -76,7 +77,21 @@ Tool * Tool::freelist = nullptr;
 		t = new Tool;
 	}
 
+	if (dCount == 1)
+	{
+		// Create only one Filament instance per extruder drive,
+		// and only if this tool is assigned to exactly one extruder
+		Filament *filament = Filament::GetFilamentByExtruder(d[0]);
+		t->filament = (filament == nullptr) ? new Filament(d[0]) : filament;
+	}
+	else
+	{
+		// Don't support filament codes for other tools
+		t->filament = nullptr;
+	}
+
 	t->myNumber = toolNumber;
+	SafeStrncpy(t->name, name, ToolNameLength);
 	t->next = nullptr;
 	t->active = false;
 	t->driveCount = dCount;
@@ -110,13 +125,15 @@ Tool * Tool::freelist = nullptr;
 		t->standbyTemperatures[heater] = ABS_ZERO;
 	}
 
+	t->GetFilament()->LoadAssignment();
 	return t;
 }
 
-/*static*/void Tool::Delete(Tool *t)
+/*static*/ void Tool::Delete(Tool *t)
 {
 	if (t != nullptr)
 	{
+		t->filament = nullptr;
 		t->next = freelist;
 		freelist = t;
 	}
@@ -124,7 +141,13 @@ Tool * Tool::freelist = nullptr;
 
 void Tool::Print(StringRef& reply)
 {
-	reply.printf("Tool %d - drives:", myNumber);
+	reply.printf("Tool %d - ", myNumber);
+	if (!StringEquals(name, ""))
+	{
+		reply.catf("name: %s; ", name);
+	}
+
+	reply.cat("drives:");
 	char sep = ' ';
 	for (size_t drive = 0; drive < driveCount; drive++)
 	{

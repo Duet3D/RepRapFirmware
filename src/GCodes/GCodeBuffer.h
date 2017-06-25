@@ -63,7 +63,7 @@ public:
 	void AdvanceState();
 	const char *GetIdentity() const { return identity; }
 	const bool CanQueueCodes() const { return queueCodes; }
-	void MessageAcknowledged();
+	void MessageAcknowledged(bool cancelled);
 
 	uint32_t whenTimerStarted;							// when we started waiting
 	bool timerRunning;									// true if we are waiting

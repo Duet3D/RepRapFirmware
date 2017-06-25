@@ -607,7 +607,7 @@ bool GCodeBuffer::IsDoingFileMacro() const
 
 // Tell this input source that any message it sent and is waiting on has been acknowledged
 // Allow for the possibility that the source may have started running a macro since it started waiting
-void GCodeBuffer::MessageAcknowledged()
+void GCodeBuffer::MessageAcknowledged(bool cancelled)
 {
 	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->previous)
 	{
@@ -615,6 +615,7 @@ void GCodeBuffer::MessageAcknowledged()
 		{
 			ms->waitingForAcknowledgement = false;
 			ms->messageAcknowledged = true;
+			ms->messageCancelled = cancelled;
 		}
 	}
 }

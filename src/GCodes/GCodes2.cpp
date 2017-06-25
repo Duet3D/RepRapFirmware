@@ -17,7 +17,7 @@
 #include "Scanner.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"
-#include "Tool.h"
+#include "Tools/Tool.h"
 #include "Version.h"
 
 #if SUPPORT_IOBITS
@@ -131,20 +131,31 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 10: // Set/report offsets and temperatures, or retract
-		if (gb.Seen('P'))
 		{
-			if (!SetOrReportOffsets(gb, reply))
+			bool modifyingTool = false;
+			modifyingTool |= gb.Seen('P');
+			modifyingTool |= gb.Seen('R');
+			modifyingTool |= gb.Seen('S');
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
-				return false;
+				modifyingTool |= gb.Seen(axisLetters[axis]);
 			}
-		}
-		else
-		{
-			if (!LockMovement(gb))
+
+			if (modifyingTool)
 			{
-				return false;
+				if (!SetOrReportOffsets(gb, reply))
+				{
+					return false;
+				}
 			}
-			result = RetractFilament(gb, true);
+			else
+			{
+				if (!LockMovement(gb))
+				{
+					return false;
+				}
+				result = RetractFilament(gb, true);
+			}
 		}
 		break;
 
@@ -1726,38 +1737,67 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 291:	// Display message, optionally wait for acknowledgement
 		{
-			char messageBuffer[80];
+			char titleBuffer[MESSAGE_LENGTH];
 			bool seen = false;
+			gb.TryGetQuotedString('R', titleBuffer, ARRAY_SIZE(titleBuffer), seen);
+			if (!seen)
+			{
+				// Title is optional
+				titleBuffer[0] = 0;
+			}
+
+			char messageBuffer[MESSAGE_LENGTH];
 			gb.TryGetQuotedString('P', messageBuffer, ARRAY_SIZE(messageBuffer), seen);
 			if (seen)
 			{
-				int32_t sParam = 0;
+				int32_t sParam = 1;
 				gb.TryGetIValue('S', sParam, seen);
-				float tParam = DefaultMessageTimeout;
-				gb.TryGetFValue('T', tParam, seen);
+				if (sParam < 0 || sParam > 3)
+				{
+					reply.copy("Invalid message box mode");
+					error = true;
+					break;
+				}
+
+				float tParam;
+				if (sParam == 0 || sParam == 1)
+				{
+					tParam = DefaultMessageTimeout;
+					gb.TryGetFValue('T', tParam, seen);
+				}
+				else
+				{
+					tParam = 0.0;
+				}
+
 				int32_t zParam = 0;
 				gb.TryGetIValue('Z', zParam, seen);
 
 				const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
 
 				// If we need to wait for an acknowledgement, save the state and set waiting
-				if (sParam == 1 && Push(gb))										// stack the machine state including the file position
+				if ((sParam == 2 || sParam == 3) && Push(gb))						// stack the machine state including the file position
 				{
 					gb.MachineState().fileState.Close();							// stop reading from file
 					gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 				}
 
-				platform.SendAlert(mt, messageBuffer, (int)sParam, tParam, zParam == 1);
+				platform.SendAlert(mt, messageBuffer, titleBuffer, (int)sParam, tParam, zParam == 1);
 			}
 		}
 		break;
 
 	case 292:	// Acknowledge message
-		for (GCodeBuffer* targetGb : gcodeSources)
 		{
-			if (targetGb != nullptr)
+			reprap.ClearAlert();
+
+			const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
+			for (GCodeBuffer* targetGb : gcodeSources)
 			{
-				targetGb->MessageAcknowledged();
+				if (targetGb != nullptr)
+				{
+					targetGb->MessageAcknowledged(cancelled);
+				}
 			}
 		}
 		break;
@@ -3295,6 +3335,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 #endif
 
+	case 593: // Configure filament properties
+		// TODO: We may need this code later to restrict specific filaments to certain tools or to reset filament counters.
+		break;
+
 	case 665: // Set delta configuration
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
@@ -3455,6 +3499,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		error = reprap.GetPortControl().Configure(gb, reply);
 		break;
 #endif
+
+	case 701: // Load filament
+		result = LoadFilament(gb, reply, error);
+		break;
+
+	case 702: // Unload filament
+		result = UnloadFilament(gb, reply, error);
+		break;
 
 #if SUPPORT_SCANNER
 	case 750: // Enable 3D scanner extension
@@ -3903,27 +3955,44 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		return false;
 	}
 
-	newToolNumber = gb.GetIValue();
-	newToolNumber += gb.GetToolNumberAdjust();
-
-	reprap.GetMove().GetCurrentUserPosition(toolChangeRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes());
-	toolChangeRestorePoint.feedRate = gb.MachineState().feedrate;
-
-	if (simulationMode == 0)						// we don't yet simulate any T codes
+	if (strlen(gb.Buffer()) > 1)
 	{
-		const Tool * const oldTool = reprap.GetCurrentTool();
-		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
-		if (oldTool == nullptr || oldTool->Number() != newToolNumber)
+		// See if the tool can be changed
+		newToolNumber = gb.GetIValue();
+		newToolNumber += gb.GetToolNumberAdjust();
+
+		reprap.GetMove().GetCurrentUserPosition(toolChangeRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes());
+		toolChangeRestorePoint.feedRate = gb.MachineState().feedrate;
+
+		if (simulationMode == 0)						// we don't yet simulate any T codes
 		{
-			toolChangeParam = gb.Seen('P') ? gb.GetIValue() : DefaultToolChangeParam;
-			gb.SetState(GCodeState::toolChange0);
-			return true;							// proceeding with state machine, so don't unlock or send a reply
+			const Tool * const oldTool = reprap.GetCurrentTool();
+			// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
+			if (oldTool == nullptr || oldTool->Number() != newToolNumber)
+			{
+				toolChangeParam = gb.Seen('P') ? gb.GetIValue() : DefaultToolChangeParam;
+				gb.SetState(GCodeState::toolChange0);
+				return true;							// proceeding with state machine, so don't unlock or send a reply
+			}
+		}
+	}
+	else
+	{
+		// Report the tool number in use if no parameter is passed
+		const Tool * const tool = reprap.GetCurrentTool();
+		if (tool == nullptr)
+		{
+			reply.copy("No tool is selected.");
+		}
+		else
+		{
+			reply.printf("Tool %d is selected.", tool->Number());
 		}
 	}
 
 	// If we get here, we have finished
 	UnlockAll(gb);
-	HandleReply(gb, false, "");
+	HandleReply(gb, false, reply.Pointer());
 	return true;
 }
 

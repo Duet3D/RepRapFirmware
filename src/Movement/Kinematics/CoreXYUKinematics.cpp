@@ -27,7 +27,7 @@ const char *CoreXYUKinematics::GetName(bool forStatusReport) const
 // This function is used for CoreXY and CoreXZ kinematics, but it overridden for CoreXYU kinematics
 bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) /*override*/
 {
-	if (mCode == 668)
+	if (mCode == 669)
 	{
 		bool seen = false;
 		for (size_t axis = 0; axis < CoreXYU_AXES; ++axis)
@@ -57,7 +57,7 @@ bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 void CoreXYUKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
-  // Convert the axes
+	// Convert the axes
 	machinePos[X_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Y_AXIS]) - (motorPos[Y_AXIS] * stepsPerMm[X_AXIS]))
 								/(2 * axisFactors[X_AXIS] * stepsPerMm[X_AXIS] * stepsPerMm[Y_AXIS]);
 	machinePos[Y_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Y_AXIS]) + (motorPos[Y_AXIS] * stepsPerMm[X_AXIS]))
@@ -80,8 +80,8 @@ void CoreXYUKinematics::MotorStepsToCartesian(const int32_t motorPos[], const fl
 // Used to determine whether to abort the whole move or just one motor when an endstop switch is triggered.
 bool CoreXYUKinematics::DriveIsShared(size_t drive) const
 {
-	return drive == X_AXIS || drive == Y_AXIS
-			|| drive == U_AXIS || drive == V_AXIS;			// U and V don't have endstop switches, but include them here just in case
+	return drive == X_AXIS || drive == Y_AXIS || drive == U_AXIS
+			 || drive == V_AXIS;			// V doesn't have endstop switches, but include it here just in case
 }
 
 // Calculate the movement fraction for a single axis motor

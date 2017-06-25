@@ -7,7 +7,8 @@
 #include "Platform.h"
 #include "Scanner.h"
 #include "PrintMonitor.h"
-#include "Tool.h"
+#include "Tools/Tool.h"
+#include "Tools/Filament.h"
 #include "Version.h"
 
 #if SUPPORT_IOBITS
@@ -64,6 +65,7 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	SetPassword(DEFAULT_PASSWORD);
 	SetName(DEFAULT_NAME);
 	message[0] = 0;
+	displayMessageBox = false;
 }
 
 void RepRap::Init()
@@ -601,11 +603,19 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	const int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
 	response->catf("]},\"currentTool\":%d", toolNumber);
 
-	// Output - only reported once
+	// Output notifications
 	{
-		bool sendBeep = (beepDuration != 0 && beepFrequency != 0);
+		bool sendBeep = ((source == ResponseSource::AUX || !platform->HaveAux()) && beepDuration != 0 && beepFrequency != 0);
 		bool sendMessage = (message[0] != 0);
-		if (sendBeep || sendMessage)
+
+		float timeLeft = 0.0;
+		if (displayMessageBox && boxTimer != 0)
+		{
+			timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
+			displayMessageBox = (timeLeft > 0.0);
+		}
+
+		if (sendBeep || sendMessage || displayMessageBox)
 		{
 			response->cat(",\"output\":{");
 
@@ -625,7 +635,22 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			{
 				response->cat("\"message\":");
 				response->EncodeString(message, ARRAY_SIZE(message), false);
+				if (displayMessageBox)
+				{
+					response->cat(",");
+				}
 				message[0] = 0;
+			}
+
+			// Report message box
+			if (displayMessageBox)
+			{
+				response->cat("\"msgBox\":{\"msg\":");
+				response->EncodeString(boxMessage, ARRAY_SIZE(boxMessage), false);
+				response->cat(",\"title\":");
+				response->EncodeString(boxTitle, ARRAY_SIZE(boxTitle), false);
+				response->catf(",\"mode\":%d,\"timeout\":%.1f,\"showZ\":%d}",
+						boxMode, timeLeft, boxZControls ? 1 : 0);
 			}
 			response->cat("}");
 		}
@@ -879,11 +904,16 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		/* Tool Mapping */
 		{
 			response->cat(",\"tools\":[");
-			for(Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+			for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 			{
+				// Number and Name
+				const char *toolName = tool->GetName();
+				response->catf("{\"number\":%d,\"name\":", tool->Number());
+				response->EncodeString(toolName, strlen(toolName), false);
+
 				// Heaters
-				response->catf("{\"number\":%d,\"heaters\":[", tool->Number());
-				for(size_t heater=0; heater<tool->HeaterCount(); heater++)
+				response->cat(",\"heaters\":[");
+				for (size_t heater = 0; heater < tool->HeaterCount(); heater++)
 				{
 					response->catf("%d", tool->Heater(heater));
 					if (heater + 1 < tool->HeaterCount())
@@ -894,7 +924,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 				// Extruder drives
 				response->cat("],\"drives\":[");
-				for(size_t drive=0; drive<tool->DriveCount(); drive++)
+				for (size_t drive = 0; drive < tool->DriveCount(); drive++)
 				{
 					response->catf("%d", tool->Drive(drive));
 					if (drive + 1 < tool->DriveCount())
@@ -921,16 +951,18 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 						response->catf("%u", xi);
 					}
 				}
+				response->cat("]]");
+
+				// Filament (if any)
+				if (tool->GetFilament() != nullptr)
+				{
+					const char *filamentName = tool->GetFilament()->GetName();
+					response->catf(",\"filament\":");
+					response->EncodeString(filamentName, strlen(filamentName), false);
+				}
 
 				// Do we have any more tools?
-				if (tool->Next() != nullptr)
-				{
-					response->cat("]]},");
-				}
-				else
-				{
-					response->cat("]]}");
-				}
+				response->cat((tool->Next() != nullptr) ? "}," : "}");
 			}
 			response->cat("]");
 		}
@@ -1526,6 +1558,24 @@ void RepRap::SetMessage(const char *msg)
 	{
 		platform->SendAuxMessage(msg);
 	}
+}
+
+// Display a message box on the web interface
+void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, bool showZControls)
+{
+	SafeStrncpy(boxMessage, msg, ARRAY_SIZE(boxMessage));
+	SafeStrncpy(boxTitle, title, ARRAY_SIZE(boxTitle));
+	boxMode = mode;
+	boxTimer = (timeout <= 0.0) ? 0 : millis();
+	boxTimeout = round(max<float>(timeout, 0.0) * 1000.0);
+	boxZControls = showZControls;
+	displayMessageBox = true;
+}
+
+// Clear pending message box
+void RepRap::ClearAlert()
+{
+	displayMessageBox = false;
 }
 
 // Get the status character for the new-style status response

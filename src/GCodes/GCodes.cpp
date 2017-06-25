@@ -32,19 +32,21 @@
 #include "Scanner.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"
-#include "Tool.h"
+#include "Tools/Tool.h"
 
 #ifdef DUET_NG
 #include "FirmwareUpdater.h"
 #endif
 
-const char GCodes::axisLetters[MaxAxes] = AXES_('X', 'Y', 'Z', 'U', 'V', 'W');
+const char GCodes::axisLetters[MaxAxes] = AXES_('X', 'Y', 'Z', 'U', 'V', 'W', 'A', 'B', 'C');
 
 const char* const PAUSE_G = "pause.g";
-const char* const HomingFileNames[MaxAxes] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g");
+const char* const HomingFileNames[MaxAxes] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g", "homea.g", "homeb.g", "homec.g");
 const char* const HOME_ALL_G = "homeall.g";
 const char* const HOME_DELTA_G = "homedelta.g";
 const char* const DefaultHeightMapFile = "heightmap.csv";
+const char* const LOAD_FILAMENT_G = "load.g";
+const char* const UNLOAD_FILAMENT_G = "unload.g";
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
@@ -244,7 +246,15 @@ void GCodes::Spin()
 	{
 		if (gb.MachineState().messageAcknowledged)
 		{
+			const bool wasCancelled = gb.MachineState().messageCancelled;
 			Pop(gb);
+			if (wasCancelled)
+			{
+				// The user wishes to cancel the current operation.
+				// Let the G-Code processor deal with this request
+				const char *mCode = gb.IsDoingFileMacro() ? "M99\n" : "M0\n";
+				gb.Put(mCode, strlen(mCode));
+			}
 		}
 		else
 		{
@@ -906,6 +916,32 @@ void GCodes::Spin()
 				}
 				gb.SetState(GCodeState::normal);
 			}
+			break;
+
+		case GCodeState::loadingFilament:
+			// We just returned from the filament load macro
+			if (reprap.GetCurrentTool() != nullptr)
+			{
+				reprap.GetCurrentTool()->GetFilament()->Load(filamentToLoad);
+				if (reprap.Debug(moduleGcodes))
+				{
+					platform.MessageF(GENERIC_MESSAGE, "Filament %s loaded", filamentToLoad);
+				}
+			}
+			gb.SetState(GCodeState::normal);
+			break;
+
+		case GCodeState::unloadingFilament:
+			// We just returned from the filament unload macro
+			if (reprap.GetCurrentTool() != nullptr)
+			{
+				if (reprap.Debug(moduleGcodes))
+				{
+					platform.MessageF(GENERIC_MESSAGE, "Filament %s unloaded", reprap.GetCurrentTool()->GetFilament()->GetName());
+				}
+				reprap.GetCurrentTool()->GetFilament()->Unload();
+			}
+			gb.SetState(GCodeState::normal);
 			break;
 
 		default:				// should not happen
@@ -1736,8 +1772,9 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 
 void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb)
 {
-	if (gb.MachineState().doingFileMacro)
+	if (gb.IsDoingFileMacro())
 	{
+		gb.MachineState().fileState.Close();
 		gb.PopState();
 		gb.Init();
 	}
@@ -1988,7 +2025,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb)
 		gb.MachineState().fileState.Close();							// stop reading from file
 		gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
-		platform.SendAlert(mt, "Adjust height until the nozzle just touched the bed, then press OK", 1, 0.0, true);
+		platform.SendAlert(mt, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", 2, 0.0, true);
 	}
 }
 
@@ -2474,78 +2511,90 @@ bool GCodes::DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis)
 // Set offset, working and standby temperatures for a tool. I.e. handle a G10.
 bool GCodes::SetOrReportOffsets(GCodeBuffer &gb, StringRef& reply)
 {
+	Tool *tool;
 	if (gb.Seen('P'))
 	{
-		int8_t toolNumber = gb.GetIValue();
+		int toolNumber = gb.GetIValue();
 		toolNumber += gb.GetToolNumberAdjust();
-		Tool* tool = reprap.GetTool(toolNumber);
-		if (tool == NULL)
+		tool = reprap.GetTool(toolNumber);
+
+		if (tool == nullptr)
 		{
 			reply.printf("Attempt to set/report offsets and temperatures for non-existent tool: %d", toolNumber);
 			return true;
 		}
+	}
+	else
+	{
+		tool = reprap.GetCurrentTool();
 
-		// Deal with setting offsets
-		float offset[MaxAxes];
-		for (size_t i = 0; i < MaxAxes; ++i)
+		if (tool == nullptr)
 		{
-			offset[i] = tool->GetOffset()[i];
+			reply.printf("Attempt to set/report offsets and temperatures for no selected tool");
+			return true;
+		}
+	}
+
+	// Deal with setting offsets
+	float offset[MaxAxes];
+	for (size_t i = 0; i < MaxAxes; ++i)
+	{
+		offset[i] = tool->GetOffset()[i];
+	}
+
+	bool settingOffset = false;
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		gb.TryGetFValue(axisLetters[axis], offset[axis], settingOffset);
+	}
+	if (settingOffset)
+	{
+		if (!LockMovement(gb))
+		{
+			return false;
+		}
+		tool->SetOffset(offset);
+	}
+
+	// Deal with setting temperatures
+	bool settingTemps = false;
+	size_t hCount = tool->HeaterCount();
+	float standby[Heaters];
+	float active[Heaters];
+	if (hCount > 0)
+	{
+		tool->GetVariables(standby, active);
+		if (gb.Seen('R'))
+		{
+			gb.GetFloatArray(standby, hCount, true);
+			settingTemps = true;
+		}
+		if (gb.Seen('S'))
+		{
+			gb.GetFloatArray(active, hCount, true);
+			settingTemps = true;
 		}
 
-		bool settingOffset = false;
+		if (settingTemps && simulationMode == 0)
+		{
+			tool->SetVariables(standby, active);
+		}
+	}
+
+	if (!settingOffset && !settingTemps)
+	{
+		// Print offsets and temperatures
+		reply.printf("Tool %d offsets:", tool->Number());
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			gb.TryGetFValue(axisLetters[axis], offset[axis], settingOffset);
+			reply.catf(" %c%.2f", axisLetters[axis], offset[axis]);
 		}
-		if (settingOffset)
+		if (hCount != 0)
 		{
-			if (!LockMovement(gb))
+			reply.cat(", active/standby temperature(s):");
+			for (size_t heater = 0; heater < hCount; heater++)
 			{
-				return false;
-			}
-			tool->SetOffset(offset);
-		}
-
-		// Deal with setting temperatures
-		bool settingTemps = false;
-		size_t hCount = tool->HeaterCount();
-		float standby[Heaters];
-		float active[Heaters];
-		if (hCount > 0)
-		{
-			tool->GetVariables(standby, active);
-			if (gb.Seen('R'))
-			{
-				gb.GetFloatArray(standby, hCount, true);
-				settingTemps = true;
-			}
-			if (gb.Seen('S'))
-			{
-				gb.GetFloatArray(active, hCount, true);
-				settingTemps = true;
-			}
-
-			if (settingTemps && simulationMode == 0)
-			{
-				tool->SetVariables(standby, active);
-			}
-		}
-
-		if (!settingOffset && !settingTemps)
-		{
-			// Print offsets and temperatures
-			reply.printf("Tool %d offsets:", toolNumber);
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-			{
-				reply.catf(" %c%.2f", axisLetters[axis], offset[axis]);
-			}
-			if (hCount != 0)
-			{
-				reply.cat(", active/standby temperature(s):");
-				for (size_t heater = 0; heater < hCount; heater++)
-				{
-					reply.catf(" %.1f/%.1f", active[heater], standby[heater]);
-				}
+				reply.catf(" %.1f/%.1f", active[heater], standby[heater]);
 			}
 		}
 	}
@@ -2570,8 +2619,24 @@ void GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	const int toolNumber = gb.GetIValue();
 	if (toolNumber < 0)
 	{
-		platform.Message(GENERIC_MESSAGE, "Tool number must be positive!\n");
+		platform.Message(GENERIC_MESSAGE, "Error: Tool number must be positive!\n");
 		return;
+	}
+
+	// Check tool name
+	char name[ToolNameLength];
+	if (gb.Seen('S'))
+	{
+		if (!gb.GetQuotedString(name, ARRAY_SIZE(name)))
+		{
+			platform.Message(GENERIC_MESSAGE, "Error: Invalid tool name!\n");
+			return;
+		}
+		seen = true;
+	}
+	else
+	{
+		strcpy(name, "");
 	}
 
 	// Check drives
@@ -2642,7 +2707,7 @@ void GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			Tool* tool = Tool::Create(toolNumber, drives, dCount, heaters, hCount, xMap, fanMap);
+			Tool* tool = Tool::Create(toolNumber, name, drives, dCount, heaters, hCount, xMap, fanMap);
 			if (tool != nullptr)
 			{
 				reprap.AddTool(tool);
@@ -3114,6 +3179,117 @@ bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 		}
 		isRetracted = retract;
 	}
+	return true;
+}
+
+// Load the specified filament into a tool
+bool GCodes::LoadFilament(GCodeBuffer& gb, StringRef& reply, bool &error)
+{
+	Tool *tool = reprap.GetCurrentTool();
+	if (tool == nullptr)
+	{
+		reply.copy("No tool selected");
+		error = true;
+		return true;
+	}
+
+	if (tool->GetFilament() == nullptr)
+	{
+		reply.copy("Loading filament into the selected tool is not supported");
+		error = true;
+		return true;
+	}
+
+	if (gb.Seen('S'))
+	{
+		char filamentName[FilamentNameLength];
+		if (!gb.GetQuotedString(filamentName, ARRAY_SIZE(filamentName)) || StringEquals(filamentName, ""))
+		{
+			reply.copy("Invalid filament name");
+			error = true;
+			return true;
+		}
+
+		if (StringContains(filamentName, ",") >= 0)
+		{
+			reply.copy("Filament names must not contain commas");
+			error = true;
+			return true;
+		}
+
+		if (StringEquals(filamentName, tool->GetFilament()->GetName()))
+		{
+			// Filament already loaded - nothing to do
+			return true;
+		}
+
+		if (tool->GetFilament()->IsLoaded())
+		{
+			reply.copy("Unload the current filament before you attempt to load another one");
+			error = true;
+			return true;
+		}
+
+		if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(FILAMENTS_DIRECTORY, filamentName))
+		{
+			reply.copy("Filament configuration directory not found");
+			error = true;
+			return true;
+		}
+
+		if (Filament::IsInUse(filamentName))
+		{
+			reply.copy("One filament type can be only assigned to a single tool");
+			error = true;
+			return true;
+		}
+
+		SafeStrncpy(filamentToLoad, filamentName, ARRAY_SIZE(filamentToLoad));
+		gb.SetState(GCodeState::loadingFilament);
+
+		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName, LOAD_FILAMENT_G);
+		DoFileMacro(gb, scratchString.Pointer(), true);
+		return true;
+	}
+	else if (tool->GetFilament()->IsLoaded())
+	{
+		reply.printf("Loaded filament in the selected tool: %s", tool->GetFilament()->GetName());
+		return true;
+	}
+	else
+	{
+		reply.printf("No filament loaded in the selected tool");
+		return true;
+	}
+}
+
+// Unload the current filament from a tool
+bool GCodes::UnloadFilament(GCodeBuffer& gb, StringRef& reply, bool &error)
+{
+	Tool *tool = reprap.GetCurrentTool();
+	if (tool == nullptr)
+	{
+		reply.copy("No tool selected");
+		error = true;
+		return true;
+	}
+
+	if (tool->GetFilament() == nullptr)
+	{
+		reply.copy("Unloading filament from this tool is not supported");
+		error = true;
+		return true;
+	}
+
+	if (!tool->GetFilament()->IsLoaded())
+	{
+		// Filament already unloaded - nothing to do
+		return true;
+	}
+
+	gb.SetState(GCodeState::unloadingFilament);
+	scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, tool->GetFilament()->GetName(), UNLOAD_FILAMENT_G);
+	DoFileMacro(gb, scratchString.Pointer(), true);
 	return true;
 }
 

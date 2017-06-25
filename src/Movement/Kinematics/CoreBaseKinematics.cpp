@@ -10,9 +10,9 @@
 
 CoreBaseKinematics::CoreBaseKinematics(KinematicsType t) : Kinematics(t)
 {
-	for (size_t axis = 0; axis < XYZ_AXES; ++axis)
+	for (float& af : axisFactors)
 	{
-		axisFactors[axis] = 1.0;
+		af = 1.0;
 	}
 }
 
