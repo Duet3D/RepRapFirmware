@@ -225,9 +225,19 @@ float Heat::GetTemperatureLimit(int8_t heater) const
 	return (heater >= 0 && heater < (int)Heaters) ? pids[heater]->GetTemperatureLimit() : ABS_ZERO;
 }
 
+// Get the current temperature of a heater
 float Heat::GetTemperature(int8_t heater) const
 {
 	return (heater >= 0 && heater < (int)Heaters) ? pids[heater]->GetTemperature() : ABS_ZERO;
+}
+
+// Get the target temperature of a heater
+float Heat::GetTargetTemperature(int8_t heater) const
+{
+	const Heat::HeaterStatus hs = GetStatus(heater);
+	return (hs == HS_active) ? GetActiveTemperature(heater)
+			: (hs == HS_standby) ? GetStandbyTemperature(heater)
+				: 0.0;
 }
 
 void Heat::Activate(int8_t heater)

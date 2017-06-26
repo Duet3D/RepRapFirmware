@@ -2857,14 +2857,10 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 	switch (mt)
 	{
 	case HTTP_MESSAGE:
-		// Make the RepRap class cache this message until it's picked up by the HTTP clients
+	case AUX_MESSAGE:
+		// Make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
 		reprap.SetAlert(message, title, sParam, tParam, zParam);
 		break;
-
-	case AUX_MESSAGE:
-// Until the PanelDue firmware changes are implemented, use the default code
-//		qq;
-//		break;
 
 	default:
 		if (strlen(title) > 0)
@@ -2878,7 +2874,7 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 		}
 		else if (sParam == 3)
 		{
-			Message(mt, "Send M292 to continue or M292 S1 to cancel\n");
+			Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
 		}
 		break;
 	}

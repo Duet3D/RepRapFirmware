@@ -1336,7 +1336,29 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 
 	// Short messages are now pushed directly to PanelDue, so don't include them here as well
-	// We no longer send the amount of http buffer space here because the web interface doesn't use these formns of status response
+	// We no longer send the amount of http buffer space here because the web interface doesn't use these forms of status response
+
+	// Deal with the message box, if there is one
+	float timeLeft = 0.0;
+	if (displayMessageBox && boxTimer != 0)
+	{
+		timeLeft = (float)(boxTimeout) / 1000.0 - (float)(millis() - boxTimer) / 1000.0;
+		displayMessageBox = (timeLeft > 0.0);
+	}
+
+	if (displayMessageBox)
+	{
+		response->catf(",\"msgBox.mode\":%d,\"msgBox.timeout\":%.1f,\"msgBox.showZ\":%d",
+				boxMode, timeLeft, boxZControls ? 1 : 0);
+		response->cat(",\"msgBox.msg\":");
+		response->EncodeString(boxMessage, ARRAY_SIZE(boxMessage), false);
+		response->cat(",\"msgBox.title\":");
+		response->EncodeString(boxTitle, ARRAY_SIZE(boxTitle), false);
+	}
+	else
+	{
+		response->cat(",\"msgBox.mode\":-1");					// tell PanelDue that there is no active message box
+	}
 
 	if (type == 2)
 	{

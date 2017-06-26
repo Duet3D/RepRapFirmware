@@ -61,6 +61,7 @@ public:
 	Tool* GetCurrentTool() const;
 	Tool* GetTool(int toolNumber) const;
 	Tool* GetCurrentOrDefaultTool() const;
+	const Tool* GetFirstTool() const { return toolList; }						// Return the lowest-numbered tool
 	uint32_t GetCurrentXAxes() const;									// Get the current axes used as X axes
 	void SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures);
 	bool IsHeaterAssignedToTool(int8_t heater) const;
@@ -124,7 +125,7 @@ private:
  	PortControl *portControl;
 #endif
 
-	Tool* toolList;
+	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 

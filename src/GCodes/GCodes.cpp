@@ -349,10 +349,19 @@ void GCodes::Spin()
 		case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 			reprap.SelectTool(newToolNumber);
 			gb.AdvanceState();
-			if (reprap.GetTool(newToolNumber) != nullptr && AllAxesAreHomed() && (toolChangeParam & TPostBit) != 0)
+			if (AllAxesAreHomed())
 			{
-				scratchString.printf("tpost%d.g", newToolNumber);
-				DoFileMacro(gb, scratchString.Pointer(), false);
+				if (reprap.GetTool(newToolNumber) != nullptr && (toolChangeParam & TPostBit) != 0)
+				{
+					scratchString.printf("tpost%d.g", newToolNumber);
+					DoFileMacro(gb, scratchString.Pointer(), false);
+				}
+			}
+			else
+			{
+				// Tool offsets may have changed, but as some axes have not been homed we should avoid moving those axes when the next movement command is given.
+				// So adjust the current user position to reflect the actual position of the tool.
+				ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 			}
 			break;
 
@@ -1490,10 +1499,12 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 	// Deal with XYZ movement
 	const float initialX = currentUserPosition[X_AXIS];
 	const float initialY = currentUserPosition[Y_AXIS];
+	bool includesAxisMovement = (rp != nullptr);
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
+			includesAxisMovement = true;
 			const float moveArg = gb.GetFValue() * distanceScale;
 			if (moveBuffer.moveType != 0)
 			{
@@ -1528,20 +1539,25 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 	// Deal with extrusion and feed rate
 	LoadExtrusionAndFeedrateFromGCode(gb, moveBuffer.moveType);
 
+	// Set up the move. We must assign segmentsLeft last, so that when we move to RTOS, the move won't be picked up by the Move process before it is complete.
+	// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.
 	if (moveBuffer.moveType != 0)
 	{
 		// It's a raw motor move, so do it in a single segment and wait for it to complete
 		segmentsLeft = 1;
 		gb.SetState(GCodeState::waitingForMoveToComplete);
 	}
+	else if (!includesAxisMovement)
+	{
+		segmentsLeft = 1;														// extruder-only movement
+	}
 	else
 	{
-		// Apply tool offset, baby stepping, Z hop and axis scaling
-		ToolOffsetTransform(currentUserPosition, moveBuffer.coords, true);
+		ToolOffsetTransform(currentUserPosition, moveBuffer.coords, true);		// apply tool offset, baby stepping, Z hop and axis scaling
 		uint32_t effectiveAxesHomed = axesHomed;
 		if (doingManualBedProbe)
 		{
-			effectiveAxesHomed &= ~(1 << Z_AXIS);								// if doing a manual Z probe, son't limit the Z movement
+			effectiveAxesHomed &= ~(1 << Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
 		}
 		if (limitAxes && reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, effectiveAxesHomed))
 		{
@@ -3568,7 +3584,7 @@ bool GCodes::AdvanceHash(StringRef &reply)
 
 bool GCodes::AllAxesAreHomed() const
 {
-	const uint32_t allAxes = (1u << numTotalAxes) - 1;
+	const uint32_t allAxes = (1u << numVisibleAxes) - 1;
 	return (axesHomed & allAxes) == allAxes;
 }
 
@@ -3616,32 +3632,32 @@ bool GCodes::WriteConfigOverrideFile(StringRef& reply, const char *fileName) con
 void GCodes::GenerateTemperatureReport(StringRef& reply) const
 {
 	Heat& heat = reprap.GetHeat();
-	const int8_t bedHeater = heat.GetBedHeater();
-	const int8_t chamberHeater = heat.GetChamberHeater();
-	reply.copy("T:");
-	for (int heater = 0; heater < (int)Heaters; heater++)
+
+	// Pronterface, Repetier etc. expect the temperatures to be reported for T0, T1 etc.
+	// So scan the tool list and report the temperature of the heaters associated with each tool.
+	// If the user configures tools T0, T1 etc. with 1 heater each, that will return what these programs expect.
+	reply.copy("T");
+	char sep = ':';
+	for (const Tool *tool = reprap.GetFirstTool(); tool != nullptr; tool = tool->Next())
 	{
-		if (heater != bedHeater && heater != chamberHeater)
+		for (size_t i = 0; i < tool->HeaterCount(); ++i)
 		{
-			Heat::HeaterStatus hs = heat.GetStatus(heater);
-			if (hs != Heat::HS_off && hs != Heat::HS_fault)
-			{
-				reply.catf("%.1f ", heat.GetTemperature(heater));
-			}
+			const int heater = tool->Heater(i);
+			reply.catf("%c%.1f /%.1f", sep, heat.GetTemperature(heater), heat.GetTargetTemperature(heater));
+			sep = ' ';
 		}
 	}
+
+	const int bedHeater = heat.GetBedHeater();
 	if (bedHeater >= 0)
 	{
-		reply.catf("B:%.1f", heat.GetTemperature(bedHeater));
+		reply.catf(" B:%.1f /%.1f", heat.GetTemperature(bedHeater), heat.GetTargetTemperature(bedHeater));
 	}
-	else
+
+	const int chamberHeater = heat.GetChamberHeater();
+	if (chamberHeater >= 0)
 	{
-		// I'm not sure whether Pronterface etc. can handle a missing bed temperature, so return zero
-		reply.cat("B:0.0");
-	}
-	if (chamberHeater >= 0.0)
-	{
-		reply.catf(" C:%.1f", heat.GetTemperature(chamberHeater));
+		reply.catf(" C:%.1f /%.1f", heat.GetTemperature(chamberHeater), heat.GetTargetTemperature(chamberHeater));
 	}
 }
 

@@ -125,7 +125,11 @@ Tool * Tool::freelist = nullptr;
 		t->standbyTemperatures[heater] = ABS_ZERO;
 	}
 
-	t->GetFilament()->LoadAssignment();
+	if (t->filament != nullptr)
+	{
+		t->filament->LoadAssignment();
+	}
+
 	return t;
 }
 

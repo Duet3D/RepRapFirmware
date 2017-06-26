@@ -42,10 +42,10 @@ public:
 	const float *GetOffset() const;
 	void SetOffset(const float offs[MaxAxes]);
 	size_t DriveCount() const;
-	int Drive(int driveNumber) const;
+	int Drive(size_t driveNumber) const;
 	bool ToolCanDrive(bool extrude);
 	size_t HeaterCount() const;
-	int Heater(int heaterNumber) const;
+	int Heater(size_t heaterNumber) const;
 	const char *GetName() const;
 	int Number() const;
 	void SetVariables(const float* standby, const float* active);
@@ -60,14 +60,13 @@ public:
 	uint32_t GetXAxisMap() const { return xMapping; }
 	uint32_t GetFanMapping() const { return fanMapping; }
 	Filament *GetFilament() const { return filament; }
+	Tool *Next() const { return next; }
 
 	float virtualExtruderPosition;
 
 	friend class RepRap;
 
 protected:
-
-	Tool* Next() const;
 	void Activate(Tool* currentlyActive);
 	void Standby();
 	void FlagTemperatureFault(int8_t dudHeater);
@@ -103,7 +102,7 @@ private:
 	volatile bool displayColdExtrudeWarning;
 };
 
-inline int Tool::Drive(int driveNumber) const
+inline int Tool::Drive(size_t driveNumber) const
 {
 	return drives[driveNumber];
 }
@@ -113,14 +112,9 @@ inline size_t Tool::HeaterCount() const
 	return heaterCount;
 }
 
-inline int Tool::Heater(int heaterNumber) const
+inline int Tool::Heater(size_t heaterNumber) const
 {
 	return heaters[heaterNumber];
-}
-
-inline Tool* Tool::Next() const
-{
-	return next;
 }
 
 inline const char *Tool::GetName() const
