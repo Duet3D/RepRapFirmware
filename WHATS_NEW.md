@@ -23,6 +23,8 @@ Bug fixes:
 - Fixed an undefined-behaviour bug in the new filament management code, although in practice this did not appear to cause any problems
 - Fixed a problem with the implementation of the G1 P parameter whereby timing advance was applied to port on-off transitions but not to off-on transitions
 
+For upgrade notes, see 1.19beta7.
+
 Version 1.19beta7
 =================
 
@@ -56,7 +58,8 @@ Areas of code refactored (so watch out for new bugs):
 Upgrade notes:
 - SSIDs and passwords in M587, M588 and M589 commands must now be enclosed in double quotes. If you use macro files to set up SSIDs and passwords of access point to connect to, check whether they have the quotation marks.
 - Height map filenames in G29, M374 and M375 commands must now be enclosed in double quotes
-- On a Duet WiFi you should also upgrade DuetWiFiServer.bin to version 1.19beta7. You do not need to perform a simultaneous upgrade, but M587 and M589 reporting functionality won't work correctly if your DuetWiFiFirmware and DuetWiFiServer versions are out of step.
+- On a Duet WiFi, if you are upgrading form an earlier 1.19beta then you should also upgrade DuetWiFiServer.bin to version 1.19beta7. You do not need to perform a simultaneous upgrade, but M587 and M589 reporting functionality won't work correctly if your DuetWiFiFirmware and DuetWiFiServer versions are out of step. If yu are upgrading a Duet WiFi form 1.18.2 oe earlier firmware, see the important notes at https://duet3d.com/wiki/DuetWiFiFirmware_1.19beta.
+- Every heater that you use must now be configured using a M305 command with a P parameter that identifies the heater. Previously, if a heater used default thermistor parameters, you could omit the M305 command for that heater.
 
 Known issues:
 - Although the WiFi module can now be put into access point mode using M589 abnd M552 S1, WiFi access does not work properly in access point mode
@@ -83,7 +86,7 @@ Internal changes:
 - Removed accoustic delta probe code
 
 Upgrade notes:
-- Every heater that you use must now be configured using a M305 command with a P parameter that identifies the heater. Previously, if a heater used default thermistor parameters, you cold omit the M305 command for that heater.
+- Every heater that you use must now be configured using a M305 command with a P parameter that identifies the heater. Previously, if a heater used default thermistor parameters, you could omit the M305 command for that heater.
 
 Version 1.19beta4 and 1.19beta5
 ===============================
