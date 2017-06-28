@@ -21,6 +21,7 @@ Bug fixes:
 - When G92 was used to set axis positions, it did not flag the axes concerned as homed
 - When a M563 tool definition mapped X to another axis, commands to change the X position caused by the X axis and the other axis to move
 - Fixed an undefined-behaviour bug in the new filament management code, although in practice this did not appear to cause any problems
+- Fixed a problem with the implementation of the G1 P parameter whereby timing advance was applied to port on-off transitions but not to off-on transitions
 
 Version 1.19beta7
 =================
