@@ -16,6 +16,7 @@ New features:
 - Definition of "all axes are homed" changed to require only visible axes to be homed
 - When grid probing, if a point cannot be reached by the Z probe, a message is emitted
 - Command and parameter letters in gcode commands are now case-insensitive as per the NIST specification
+- On the Duet WiFi and Duet Ethernet up to 9 axes are now supported, named XYZUVWABC.
 
 Bug fixes:
 - When G92 was used to set axis positions, it did not flag the axes concerned as homed
