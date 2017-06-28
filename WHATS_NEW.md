@@ -1,6 +1,27 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.19beta8
+=================
+
+New features:
+- If a PT100 interface reports an error when executing a M105 command with X parameter, the firmware now reports the nature of the error if possible
+- When M305 is used with an X parameter to select a PT100 sensor, a new optional F parameter configures rejection of 50Hz (F50) or 60Hz (F60) interference
+- Added support for prototype thermocouple adapter for type J etc. thermocouples (temperature sensor channels 150 to 157)
+- M408 S0 response now includes message box details for PanelDue (needs new PanelDue firmware)
+- M105 temperature reports are now in tool heater order instead of heater order
+- M105 temperature reports now report the setpoint temperatures as well as the current temperatures, to keep Repetier Host happy
+- Adjustment of head position to account for a changed tool offset is now deferred until the next move that includes axis movement, instead of the next move of any sort
+- If tool offsets are changed when not all axes are homed, instead of adjusting the head position on the next move, the current user position is adjusted. This is to avoid causing implicit axis movement when the printer has not been homed.
+- Definition of "all axes are homed" changed to require only visible axes to be homed
+- When grid probing, if a point cannot be reached by the Z probe, a message is emitted
+- Command and parameter letters in gcode commands are now case-insensitive as per the NIST specification
+
+Bug fixes:
+- When G92 was used to set axis positions, it did not flag the axes concerned as homed
+- When a M563 tool definition mapped X to another axis, commands to change the X position caused by the X axis and the other axis to move
+- Fixed an undefined-behaviour bug in the new filament management code, although in practice this did not appear to cause any problems
+
 Version 1.19beta7
 =================
 
@@ -24,6 +45,7 @@ Bug fixes:
 - On the Duet WiFi, after using M589 to set up access point parameters, when M552 S2 was sent to start the WiFi module in AP mode it reported "WiFi reported error: invalid access point configuration". The fix also needs DuetWiFiServer version 1.19beta7.
 - On a delta printer the nozzle height is now limited to reachable values, to avoid the motors trying to move the carriages past the physical endstpos
 - M552 with no parameters now reports the current IP address as well as the status
+- Some Duets would restart immediately after initial power up and then rnu normally
 
 Areas of code refactored (so watch out for new bugs):
 - G30 bed probing
