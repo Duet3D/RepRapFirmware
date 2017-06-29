@@ -18,7 +18,7 @@ New features:
 - Command and parameter letters in gcode commands are now case-insensitive as per the NIST specification
 - On the Duet WiFi and Duet Ethernet up to 9 axes are now supported, named XYZUVWABC
 - In height map files the mean height error and deviation from the mean are now saved to 3 decimal places instead of 2
-- Z probing moves now use 200mm/sec^2 acceleration unless a lower Z acceleration limit has been configured. This is to avoid triggering nozzle-contact sensors at the start of a probing move.
+- Z probing moves now use 250mm/sec^2 acceleration unless a lower Z acceleration limit has been configured. This is to avoid triggering nozzle-contact sensors at the start of a probing move.
 
 Bug fixes:
 - When G92 was used to set axis positions, it did not flag the axes concerned as homed
@@ -26,7 +26,7 @@ Bug fixes:
 - Fixed an undefined-behaviour bug in the new filament management code, although in practice this did not appear to cause any problems
 - Fixed a problem with the implementation of the G1 P parameter whereby timing advance was applied to port on-off transitions but not to off-on transitions
 - When an extruding move had a lot more acceleration than deceleration, too many extruder steps were scheduled. A check threw the additional steps away so that printing was not affected, but a step error was logged.
-- Except wheh delta kinematics were being used, speeds and accelerations were limited independently for the X and Y axes. This is correct for Cartesian printers, but not for CoreXY, Scara etc. The speed and acceleration of XY movement is now always limited to the lower of the specified maximum X and Y speed and acceleration unless Cartesian kinematics are being used.
+- Except when delta kinematics were being used, speeds and accelerations were limited independently for the X and Y axes. This is correct for Cartesian printers, but not for CoreXY, Scara etc. The speed and acceleration of XY movement is now always limited to the lower of the specified maximum X and Y speed and acceleration unless Cartesian kinematics are being used.
 
 For upgrade notes, see 1.19beta7.
 
