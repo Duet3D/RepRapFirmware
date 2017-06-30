@@ -123,13 +123,13 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 		twoDistanceToStopTimesCsquaredDivA =
 			initialDecelSpeedTimesCdivASquared + (uint64_t)(((params.decelStartDistance + accelCompensationDistance) * (DDA::stepClockRateSquared * 2))/dda.acceleration);
 
+		// Calculate the move distance to the point of zero speed, where reverse motion starts
 		const float initialDecelSpeed = dda.topSpeed - dda.acceleration * compensationTime;
 		const float reverseStartDistance = (initialDecelSpeed > 0.0)
 												? fsquare(initialDecelSpeed)/(2 * dda.acceleration) + params.decelStartDistance
 												: params.decelStartDistance;
-
 		// Reverse phase parameters
-		if (reverseStartDistance >= dda.totalDistance + compensationDistance)
+		if (reverseStartDistance >= dda.totalDistance)
 		{
 			// No reverse phase
 			totalSteps = (uint)max<int32_t>(netSteps, 0);

@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include <Heating/Sensors/CurrentLoopTemperatureSensor.h>
+#include "CurrentLoopTemperatureSensor.h"
 #include "RepRap.h"
 #include "Platform.h"
 #include "GCodes/GCodeBuffer.h"

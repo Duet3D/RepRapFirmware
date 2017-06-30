@@ -39,7 +39,7 @@ public:
 	void TryGetFValue(char c, float& val, bool& seen);
 	void TryGetIValue(char c, int32_t& val, bool& seen);
 	bool TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen);
-	void TryGetQuotedString(char c, char *buf, size_t buflen, bool& seen);
+	bool TryGetQuotedString(char c, char *buf, size_t buflen, bool& seen);
 
 	const char* Buffer() const;
 	bool IsIdle() const;
@@ -64,6 +64,7 @@ public:
 	const char *GetIdentity() const { return identity; }
 	const bool CanQueueCodes() const { return queueCodes; }
 	void MessageAcknowledged(bool cancelled);
+	FilePosition GetFilePosition(size_t bytesCached) const;	// Get the file position at the start of the current command
 
 	uint32_t whenTimerStarted;							// when we started waiting
 	bool timerRunning;									// true if we are waiting
@@ -83,6 +84,7 @@ private:
 	char gcodeBuffer[GCODE_LENGTH];						// The G Code
 	const char* identity;								// Where we are from (web, file, serial line etc)
 	int gcodePointer;									// Index in the buffer
+	unsigned int commandLength;							// Number of characters we read to build this command including the final \r or \n
 	int readPointer;									// Where in the buffer to read next
 	bool inQuotes;										// Are we inside double quotation marks?
 	bool inComment;										// Are we after a ';' character?
@@ -112,11 +114,6 @@ inline bool GCodeBuffer::IsReady() const
 inline bool GCodeBuffer::IsExecuting() const
 {
 	return bufferState == GCodeBufferState::executing;
-}
-
-inline void GCodeBuffer::SetFinished(bool f)
-{
-	bufferState = (f) ? GCodeBufferState::idle : GCodeBufferState::executing;
 }
 
 inline const char* GCodeBuffer::WritingFileDirectory() const

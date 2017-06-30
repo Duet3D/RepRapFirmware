@@ -44,7 +44,7 @@
 // For purposes of setting bit transfer widths and timings, we need to use a
 // Peripheral Channel Select (PCS).  Use channel #3 as it is unlikely to be
 // used by anything else as the Arduino Due leaves pin 78 unconnected.
-//
+
 #include "ThermocoupleSensor31855.h"
 #include "RepRap.h"
 #include "Platform.h"
@@ -53,7 +53,7 @@
 const uint32_t MAX31855_Frequency = 4000000;	// maximum for MAX31855 is 5MHz
 
 // SPI modes:
-// If the inactive state of SCL is LOW (CPOL = 0) (in the case of the MAX31865, this is sampled on the falling edge of CS):
+// If the inactive state of SCL is LOW (CPOL = 0) (in the case of the MAX31855, this is sampled on the falling edge of CS):
 // The MAX31855 sets up the first data bit after the falling edge of CLK, and changes the data on each falling clock edge.
 // So the SAM needs to sample data on the rising clock edge. This requires NCPHA = 1.
 const uint8_t MAX31855_SpiMode = SPI_MODE_0;
@@ -62,7 +62,7 @@ const uint8_t MAX31855_SpiMode = SPI_MODE_0;
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds
 
 ThermocoupleSensor31855::ThermocoupleSensor31855(unsigned int channel)
-	: SpiTemperatureSensor(channel, "Thermocouple (MAX31855)", channel - FirstThermocoupleChannel, MAX31855_SpiMode, MAX31855_Frequency)
+	: SpiTemperatureSensor(channel, "Thermocouple (MAX31855)", channel - FirstMax31855ThermocoupleChannel, MAX31855_SpiMode, MAX31855_Frequency)
 {
 }
 

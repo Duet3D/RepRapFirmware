@@ -2,6 +2,7 @@
 #include "TemperatureSensor.h"
 #include "Thermistor.h"
 #include "ThermocoupleSensor31855.h"
+#include "ThermocoupleSensor31856.h"
 #include "RtdSensor31865.h"
 #include "GCodes/GCodeBuffer.h"
 
@@ -85,9 +86,13 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 	{
 		ts =  new Thermistor(channel);
 	}
-	else if (FirstThermocoupleChannel <= channel && channel < FirstThermocoupleChannel + MaxSpiTempSensors)
+	else if (FirstMax31855ThermocoupleChannel <= channel && channel < FirstMax31855ThermocoupleChannel + MaxSpiTempSensors)
 	{
 		ts =  new ThermocoupleSensor31855(channel);
+	}
+	else if (FirstMax31856ThermocoupleChannel <= channel && channel < FirstMax31856ThermocoupleChannel + MaxSpiTempSensors)
+	{
+		ts =  new ThermocoupleSensor31856(channel);
 	}
 	else if (FirstRtdChannel <= channel && channel < FirstRtdChannel + MaxSpiTempSensors)
 	{

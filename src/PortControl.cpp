@@ -37,10 +37,12 @@ void PortControl::Exit()
 
 void PortControl::Spin(bool full)
 {
+	cpu_irq_disable();
 	const DDA * cdda = reprap.GetMove().GetCurrentDDA();
 	if (cdda == nullptr)
 	{
 		// Movement has stopped, so turn all ports off
+		cpu_irq_enable();
 		UpdatePorts(0);
 	}
 	else
@@ -55,9 +57,10 @@ void PortControl::Spin(bool full)
 			{
 				break;
 			}
-			cdda = cdda->GetPrevious();
+			cdda = cdda->GetNext();
 			st = cdda->GetState();
 		} while (st == DDA::executing || st == DDA::frozen);
+		cpu_irq_enable();
 
 		const IoBits_t bits = (st == DDA::executing || st == DDA::frozen || st == DDA::provisional) ? cdda->GetIoBits() : 0;
 		UpdatePorts(bits);
@@ -130,7 +133,7 @@ void PortControl::UpdatePorts(IoBits_t newPortState)
 		const IoBits_t bitsToSet = newPortState & ~currentPortState;
 		for (size_t i = 0; i < numConfiguredPorts; ++i)
 		{
-			const IoBits_t mask = 1 << i;
+			const IoBits_t mask = 1u << i;
 			if (bitsToClear & mask)
 			{
 				Platform::WriteDigital(portMap[i].pin, portMap[i].invert);

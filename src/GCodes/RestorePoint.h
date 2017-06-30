@@ -18,6 +18,8 @@ struct RestorePoint
 {
 	float moveCoords[DRIVES];
 	float feedRate;
+	float virtualExtruderPosition;
+	FilePosition filePos;
 #if SUPPORT_IOBITS
 	IoBits_t ioBits;
 #endif

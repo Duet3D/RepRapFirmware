@@ -39,8 +39,9 @@ const char extrudeLetter = 'E'; 						// GCode extrude
 // Type for specifying which endstops we want to check
 typedef uint16_t EndstopChecks;							// must be large enough to hold a bitmap of drive numbers or ZProbeActive
 const EndstopChecks ZProbeActive = 1 << 15;				// must be distinct from 1 << (any drive number)
-const EndstopChecks LogProbeChanges = 1 << 14;			// must be distinct from 1 << (any drive number)
-const EndstopChecks HomeAxes = 1 << 13;					// must be distinct from 1 << (any drive number)
+const EndstopChecks HomeAxes = 1 << 14;					// must be distinct from 1 << (any drive number)
+const EndstopChecks GoingSlow = 1 << 13;				// must be distinct from 1 << (any drive number)
+const EndstopChecks LogProbeChanges = 1 << 12;			// must be distinct from 1 << (any drive number)
 
 typedef uint16_t TriggerMask;
 
@@ -80,7 +81,8 @@ public:
 		float coords[DRIVES];											// new positions for the axes, amount of movement for the extruders
 		float initialCoords[MaxAxes];									// the initial positions of the axes
 		float feedRate;													// feed rate of this move
-		FilePosition filePos;											// offset in the file being printed at the end of reading this move
+		float virtualExtruderPosition;									// the virtual extruder position of the current tool at the start of this move
+		FilePosition filePos;											// offset in the file being printed at the start of reading this move
 		uint32_t xAxes;													// axes that X is mapped to
 		EndstopChecks endStopsToCheck;									// endstops to check
 #if SUPPORT_IOBITS
@@ -89,6 +91,7 @@ public:
 		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
 		bool isFirmwareRetraction;										// true if this is a firmware retraction/un-retraction move
 		bool usePressureAdvance;										// true if we want to us extruder pressure advance, if there is any extrusion
+		bool canPauseBefore;											// true if we can pause before this move
 		bool canPauseAfter;												// true if we can pause just after this move and successfully restart
 		bool hasExtrusion;												// true if the move includes extrusion - only valid if the move was set up by SetupMove
 	};
@@ -199,6 +202,7 @@ private:
 
 	bool SetPositions(GCodeBuffer& gb);									// Deal with a G92
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType); // Set up the extrusion and feed rate of a move for the Move class
+	float GetVirtualExtruderPosition() const;							// Get the virtual extruder position of the current tool
 
 	bool Push(GCodeBuffer& gb);											// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb);											// Pop feedrate etc
@@ -224,7 +228,7 @@ private:
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
 	void SetMachinePosition(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
 	void GetCurrentUserPosition();										// Get the current position form the Move class
-	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], bool mapXAxis);	// Convert user coordinates to head reference point coordinates
+	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
 	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
 	bool RetractFilament(GCodeBuffer& gb, bool retract);				// Retract or un-retract filaments

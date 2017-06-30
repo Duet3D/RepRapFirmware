@@ -8,7 +8,7 @@
 #include "RtdSensor31865.h"
 #include "RepRap.h"
 #include "Platform.h"
-#include "Core.h"
+#include "GCodes/GCodeBuffer.h"
 
 const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is also 5MHz
 
@@ -20,6 +20,18 @@ const uint8_t MAX31865_SpiMode = SPI_MODE_1;
 
 // Define the minimum interval between readings. The MAX31865 needs 62.5ms in 50Hz filter mode.
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds
+
+// Default configuration register
+// Note that to get the MAX31865 to do continuous conversions, we need to set the bias bit as well as the continuous-conversion bit
+//  Vbias=1
+//  Conversion mode=1
+//	1shot = 0
+//	3wire=0
+//	Fault detection=00 no action
+//	Fault status=1 clear any existing fault
+//	50/60Hz reject=1 for 50Hz (0 for 60Hz)
+const uint8_t DefaultCr0 = 0b11000011;
+const uint8_t Cr0ReadMask = 0b11011101;		// bits 1 and 5 auto clear, so ignore the value read
 
 // Table of temperature vs. MAX31865 result for PT100 thermistor, from the MAX31865 datasheet
 struct TempTableEntry
@@ -73,8 +85,38 @@ static const TempTableEntry tempTable[] =
 const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 
 RtdSensor31865::RtdSensor31865(unsigned int channel)
-	: SpiTemperatureSensor(channel, "PT100 (MAX31865)", channel - FirstRtdChannel, MAX31865_SpiMode, MAX31865_Frequency)
+	: SpiTemperatureSensor(channel, "PT100 (MAX31865)", channel - FirstRtdChannel, MAX31865_SpiMode, MAX31865_Frequency),
+	  cr0(DefaultCr0)
 {
+}
+
+// Configure this temperature sensor
+bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer& gb, StringRef& reply, bool& error)
+{
+	if (mCode == 305)
+	{
+		bool seen = false;
+		TryConfigureHeaterName(gb, seen);
+		if (gb.Seen('F'))
+		{
+			seen = true;
+			if (gb.GetIValue() == 60)
+			{
+				cr0 &= ~0x01;		// set 60Hz rejection
+			}
+			else
+			{
+				cr0 |= 0x01;		// default to 50Hz rejection
+			}
+		}
+
+		if (!seen && !gb.Seen('X'))
+		{
+			CopyBasicHeaterDetails(heater, reply);
+			reply.catf(", reject %dHz", (cr0 & 0x01) ? 50 : 60);
+		}
+	}
+	return false;
 }
 
 // Perform the actual hardware initialization for attaching and using this device on the SPI hardware bus.
@@ -106,21 +148,23 @@ void RtdSensor31865::Init()
 // Try to initialise the RTD
 TemperatureError RtdSensor31865::TryInitRtd() const
 {
-	// Note that to get the MAX31865 to do continuous conversions, we need to set the bias bit as well as the continuous-conversion bit
-	static const uint8_t modeData[2] = { 0x80, 0xC3 };		// write register 0, bias on, auto conversion, clear errors, 50Hz
+	const uint8_t modeData[2] = { 0x80, cr0 };			// write register 0
 	uint32_t rawVal;
-	TemperatureError sts = DoSpiTransaction(modeData, 2, rawVal);
+	TemperatureError sts = DoSpiTransaction(modeData, ARRAY_SIZE(modeData), rawVal);
 
 	if (sts == TemperatureError::success)
 	{
-		static const uint8_t readData[2] = { 0x00, 0x00 };		// read register 0
-		sts = DoSpiTransaction(readData, 2, rawVal);
+		static const uint8_t readData[2] = { 0x00, 0x00 };	// read register 0
+		sts = DoSpiTransaction(readData, ARRAY_SIZE(readData), rawVal);
 	}
 
 	//debugPrintf("Status %d data %04x\n", (int)sts, rawVal);
-	return (sts == TemperatureError::success && (uint8_t)rawVal != 0xC1)
-				? TemperatureError::badResponse
-				: sts;
+	if (sts == TemperatureError::success && (rawVal & Cr0ReadMask) != (cr0 & Cr0ReadMask))
+	{
+		sts = TemperatureError::badResponse;
+	}
+
+	return sts;
 }
 
 TemperatureError RtdSensor31865::GetTemperature(float& t)
@@ -131,9 +175,9 @@ TemperatureError RtdSensor31865::GetTemperature(float& t)
 	}
 	else
 	{
-		static const uint8_t dataOut[4] = {0, 55, 55, 55};		// read registers 0 (control), 1 (MSB) and 2 (LSB)
+		static const uint8_t dataOut[4] = {0, 0x55, 0x55, 0x55};			// read registers 0 (control), 1 (MSB) and 2 (LSB)
 		uint32_t rawVal;
-		TemperatureError sts = DoSpiTransaction(dataOut, 4, rawVal);
+		const TemperatureError sts = DoSpiTransaction(dataOut, ARRAY_SIZE(dataOut), rawVal);
 
 		if (sts != TemperatureError::success)
 		{
@@ -142,23 +186,27 @@ TemperatureError RtdSensor31865::GetTemperature(float& t)
 		else
 		{
 			lastReadingTime = millis();
-			if (((rawVal & 0x00C10000) != 0xC10000)
-#if 0
-					// We no longer check the error status bit, because it seems to be impossible to clear it once it has been set.
-					// Perhaps we would need to exit continuous reading mode to do so, and then re-enable it afterwards. But this would
-					// take to long.
-#else
-					|| (rawVal & 1) != 0
-#endif
-					)
+			if (   (((rawVal >> 16) & Cr0ReadMask) != (cr0 & Cr0ReadMask))	// if control register not as expected
+				|| (rawVal & 1) != 0										// or fault bit set
+			   )
 			{
-				// Either the continuous conversion bit has got cleared, or the fault bit has been set
-				TryInitRtd();
-				lastResult = TemperatureError::hardwareError;
+				static const uint8_t faultDataOut[2] = {0x07, 0x55};
+				if (DoSpiTransaction(faultDataOut, ARRAY_SIZE(faultDataOut), rawVal)== TemperatureError::success)	// read the fault register
+				{
+					lastResult = (rawVal & 0x04) ? TemperatureError::overOrUnderVoltage
+								: (rawVal & 0x18) ? TemperatureError::openCircuit
+									: TemperatureError::hardwareError;
+				}
+				else
+				{
+					lastResult = TemperatureError::hardwareError;
+				}
+				delayMicroseconds(1);										// MAX31865 requires CS to be high for 400ns minimum
+				TryInitRtd();												// clear the fault and hope for better luck next time
 			}
 			else
 			{
-				uint16_t adcVal = (rawVal >> 1) & 0x7FFF;
+				const uint16_t adcVal = (rawVal >> 1) & 0x7FFF;
 
 				// Formally-verified binary search routine, adapted from one of the eCv examples
 				size_t low = 0u, high = NumTempTableEntries;

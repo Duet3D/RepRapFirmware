@@ -28,6 +28,7 @@ void GCodeBuffer::Reset()
 void GCodeBuffer::Init()
 {
 	gcodePointer = 0;
+	commandLength = 0;
 	readPointer = -1;
 	inQuotes = inComment = timerRunning = false;
 	bufferState = GCodeBufferState::idle;
@@ -75,6 +76,11 @@ int GCodeBuffer::CheckSum() const
 // not yet complete.  If true, it is complete and ready to be acted upon.
 bool GCodeBuffer::Put(char c)
 {
+	if (c != 0)
+	{
+		++commandLength;
+	}
+
 	if (!inQuotes && c == ';')
 	{
 		inComment = true;
@@ -135,7 +141,7 @@ bool GCodeBuffer::Put(char c)
 			Init();
 			return false;
 		}
-		Init();
+		readPointer = -1;;
 		bufferState = GCodeBufferState::ready;
 		return true;
 	}
@@ -172,8 +178,29 @@ bool GCodeBuffer::Put(const char *str, size_t len)
 	return false;
 }
 
-// Does this buffer contain any code?
+void GCodeBuffer::SetFinished(bool f)
+{
+	if (f)
+	{	bufferState = GCodeBufferState::idle;
+		Init();
+	}
+	else
+	{
+		bufferState = GCodeBufferState::executing;
+	}
+}
 
+// Get the file position at the start of the current command
+FilePosition GCodeBuffer::GetFilePosition(size_t bytesCached) const
+{
+	if (machineState->fileState.IsLive())
+	{
+		return machineState->fileState.GetPosition() - bytesCached - commandLength;
+	}
+	return noFilePosition;
+}
+
+// Does this buffer contain any code?
 bool GCodeBuffer::IsEmpty() const
 {
 	const char *buf = gcodeBuffer;
@@ -207,7 +234,7 @@ bool GCodeBuffer::Seen(char c)
 			{
 				break;
 			}
-			if (b == c)
+			if (toupper(b) == c)
 			{
 				return true;
 			}
@@ -224,8 +251,9 @@ char GCodeBuffer::GetCommandLetter()
 	readPointer = 0;
 	for (;;)
 	{
-		const char b = gcodeBuffer[readPointer];
+		char b = gcodeBuffer[readPointer];
 		if (b == 0 || b == ';') break;
+		b = (char)toupper(b);
 		if (b == 'G' || b == 'M' || b == 'T')
 		{
 			return b;
@@ -484,13 +512,15 @@ bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], StringR
 }
 
 // Try to get a quoted string after parameter letter.
-// If we found it then set 'seen' true, else leave 'seen' alone
-void GCodeBuffer::TryGetQuotedString(char c, char *buf, size_t buflen, bool& seen)
+// If we found it then set 'seen' true and return true, else leave 'seen' alone and return false
+bool GCodeBuffer::TryGetQuotedString(char c, char *buf, size_t buflen, bool& seen)
 {
 	if (Seen(c) && GetQuotedString(buf, buflen))
 	{
 		seen = true;
+		return true;
 	}
+	return false;
 }
 
 // Get an IP address quad after a key letter

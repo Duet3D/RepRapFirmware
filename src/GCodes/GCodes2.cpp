@@ -699,7 +699,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				// Ending a simulation, so restore the position
 				RestorePosition(simulationRestorePoint, gb);
-				ToolOffsetTransform(currentUserPosition, moveBuffer.coords, true);
+				ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
 				reprap.GetMove().SetNewPosition(simulationRestorePoint.moveCoords, true);
 				for (size_t i = 0; i < DRIVES; ++i)
 				{

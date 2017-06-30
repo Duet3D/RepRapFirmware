@@ -110,7 +110,8 @@ static_assert(DefaultMaxTempExcursion > TEMPERATURE_CLOSE_ENOUGH, "DefaultMaxTem
 
 // Temperature sense channels
 const unsigned int FirstThermistorChannel = 0;		// Temperature sensor channels 0... are thermistors
-const unsigned int FirstThermocoupleChannel = 100;	// Temperature sensor channels 100... are thermocouples
+const unsigned int FirstMax31855ThermocoupleChannel = 100;	// Temperature sensor channels 100... are MAX31855 thermocouples
+const unsigned int FirstMax31856ThermocoupleChannel = 150;	// Temperature sensor channels 150... are MAX31856 thermocouples
 const unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200... are RTDs
 const unsigned int FirstLinearAdcChannel = 300;		// Temperature sensor channels 300... use an ADC that provides a linear output over a temperature range
 const unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCJU's own temperature sensor
@@ -149,6 +150,7 @@ static_assert(MaxDeltaCalibrationPoints <= MaxProbePoints, "MaxDeltaCalibrationP
 const float DEFAULT_Z_DIVE = 5.0;					// Millimetres
 const float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed mm/sec
 const float DEFAULT_TRAVEL_SPEED = 100.0;			// Default speed for travel to probe points
+const float ZProbeMaxAcceleration = 250.0;			// Maximum Z acceleration to use at the start of a probing move
 
 const float TRIANGLE_ZERO = -0.001;					// Millimetres
 const float SILLY_Z_VALUE = -9999.0;				// Millimetres

@@ -291,14 +291,22 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	// 3. Store some values
 	xAxes = nextMove.xAxes;
 	endStopsToCheck = nextMove.endStopsToCheck;
+	canPauseBefore = nextMove.canPauseBefore;
 	canPauseAfter = nextMove.canPauseAfter;
 	filePos = nextMove.filePos;
 	usePressureAdvance = nextMove.usePressureAdvance;
+	virtualExtruderPosition = nextMove.virtualExtruderPosition;
 	hadLookaheadUnderrun = false;
 
 #if SUPPORT_IOBITS
 	ioBits = nextMove.ioBits;
 #endif
+
+	// If it's a Z probing move, limit the Z acceleration to better handle nozzle-contact probes
+	if ((endStopsToCheck & ZProbeActive) != 0 && accelerations[Z_AXIS] > ZProbeMaxAcceleration)
+	{
+		accelerations[Z_AXIS] = ZProbeMaxAcceleration;
+	}
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a special move on a delta printer
 	endCoordinatesValid = (endStopsToCheck == 0) && (doMotorMapping || !move.IsDeltaMode());
@@ -358,21 +366,38 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 	requestedSpeed = constrain<float>(reqSpeed, 0.5, VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform().MaxFeedrates(), DRIVES));
 
-	// On a Cartesian or CoreXY printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
+	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
-	if (isDeltaMovement)
+	if (doMotorMapping)
 	{
-		const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
-		const float maxSpeed = reprap.GetPlatform().MaxFeedrates()[X_AXIS];
-		if (requestedSpeed * xyFactor > maxSpeed)
+		switch (reprap.GetMove().GetKinematics().GetKinematicsType())
 		{
-			requestedSpeed = maxSpeed/xyFactor;
-		}
+		case KinematicsType::cartesian:
+			// On a Cartesian printer the axes accelerate independently
+			break;
 
-		const float maxAcceleration = normalAccelerations[X_AXIS];
-		if (acceleration * xyFactor > maxAcceleration)
-		{
-			acceleration = maxAcceleration/xyFactor;
+		case KinematicsType::coreXY:
+		case KinematicsType::coreXYU:
+			// Preferably we would specialise these, but for now fall through to the default implementation
+		default:
+			// On other types of printer, the relationship between motor movement and head movement is complex.
+			// Limit all moves to the lower of X and Y speeds and accelerations.
+			{
+				const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
+				const float * const maxSpeeds = reprap.GetPlatform().MaxFeedrates();
+				const float maxSpeed = min<float>(maxSpeeds[X_AXIS], maxSpeeds[Y_AXIS]);
+				if (requestedSpeed * xyFactor > maxSpeed)
+				{
+					requestedSpeed = maxSpeed/xyFactor;
+				}
+
+				const float maxAcceleration = min<float>(normalAccelerations[X_AXIS], normalAccelerations[Y_AXIS]);
+				if (acceleration * xyFactor > maxAcceleration)
+				{
+					acceleration = maxAcceleration/xyFactor;
+				}
+			}
+			break;
 		}
 	}
 
@@ -902,7 +927,6 @@ void DDA::Prepare()
 	params.accelClocksMinusAccelDistanceTimesCdivTopSpeed = (uint32_t)((accelStopTime - (accelDistance/topSpeed)) * stepClockRate);
 	params.compFactor = 1.0 - startSpeed/topSpeed;
 
-	goingSlow = false;
 	firstDM = nullptr;
 
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
@@ -1406,9 +1430,9 @@ void DDA::MoveAborted()
 // As this is only called for homing moves and with very low speeds, we assume that we don't need acceleration or deceleration phases.
 void DDA::ReduceHomingSpeed()
 {
-	if (!goingSlow)
+	if ((endStopsToCheck & GoingSlow) == 0)
 	{
-		goingSlow = true;
+		endStopsToCheck |= GoingSlow;
 		const float factor = 3.0;				// the factor by which we are reducing the speed
 		topSpeed /= factor;
 		for (size_t drive = 0; drive < DRIVES; ++drive)

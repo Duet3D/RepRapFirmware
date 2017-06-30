@@ -25,6 +25,7 @@ const char* TemperatureErrorString(TemperatureError err)
 	case TemperatureError::unknownChannel:	return "unknown temperature sensor channel";
 	case TemperatureError::notInitialised:	return "sensor not initialised";
 	case TemperatureError::unknownHeater:	return "unknown heater";
+	case TemperatureError::overOrUnderVoltage:	return "sensor short to other wiring";
 	default:								return "unknown temperature sense error";
 	}
 }

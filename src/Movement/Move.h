@@ -90,7 +90,7 @@ public:
 	float GetSimulationTime() const { return simulationTime; }						// Get the accumulated simulation time
 	void PrintCurrentDda() const;													// For debugging
 
-	FilePosition PausePrint(RestorePoint& rp, uint32_t xAxes);						// Pause the print as soon as we can
+	bool PausePrint(RestorePoint& rp);												// Pause the print as soon as we can, returning true if we were able to
 	bool NoLiveMovement() const;													// Is a move running, or are there any queued?
 
 	bool IsExtruding() const;														// Is filament being extruded?

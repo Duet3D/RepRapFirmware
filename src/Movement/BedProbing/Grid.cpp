@@ -173,7 +173,7 @@ bool HeightMap::SaveToFile(FileStore *f) const
 	}
 	float mean, deviation;
 	(void)GetStatistics(mean, deviation);
-	buf.catf(", mean error %.2f, deviation %.2f\n", mean, deviation);
+	buf.catf(", mean error %.3f, deviation %.3f\n", mean, deviation);
 	if (!f->Write(buf.Pointer()))
 	{
 		return true;
@@ -310,7 +310,7 @@ unsigned int HeightMap::GetStatistics(float& mean, float& deviation) const
 			++numProbed;
 			const double heightError = (double)gridHeights[i];
 			heightSum += heightError;
-			heightSquaredSum += heightError * heightError;
+			heightSquaredSum += fsquare(heightError);
 		}
 	}
 	if (numProbed == 0)
