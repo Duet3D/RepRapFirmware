@@ -27,6 +27,12 @@ Bug fixes:
 - Fixed a problem with the implementation of the G1 P parameter whereby timing advance was applied to port on-off transitions but not to off-on transitions
 - When an extruding move had a lot more acceleration than deceleration, too many extruder steps were scheduled. A check threw the additional steps away so that printing was not affected, but a step error was logged.
 - Except when delta kinematics were being used, speeds and accelerations were limited independently for the X and Y axes. This is correct for Cartesian printers, but not for CoreXY, Scara etc. The speed and acceleration of XY movement is now always limited to the lower of the specified maximum X and Y speed and acceleration unless Cartesian kinematics are being used.
+- When a print was paused and resumed, it didn't always resume at the correct move
+- When G92 or M374 was used to save a height map using the default filename, sometimes it would save to a random filename instead
+- When G92 S1 or M375 was used to load a height map using the default filename, sometimes it would fail to load
+
+Areas of code refactored (so watch out for new bugs):
+- Pause/resume handling
 
 For upgrade notes, see 1.19beta7.
 
