@@ -80,7 +80,7 @@ Version 1.19beta6
 
 New features:
 - Up to 10 virtual heaters can be defined using M305 commands, numbered 100-109. Virtual heater 100 defaults to sensing the MCU temperature (sensor channel 1000), and on the Duet WiFi/Ethernet virtual heaters 101-102 default to sensing the TMC2660 temperature warning/overheat sensors on the Duet and the DueX expansion board respectively (sensor channels 1001-1002).
-- Heaters can be named by adding parameter H"name" in the M105 command. The quote-marks are compulsory. The temperatures of named virtual heaters are made available to DWC for display.
+- Heaters can be named by adding parameter H"name" in the M305 command. The quote-marks are compulsory. The temperatures of named virtual heaters are made available to DWC for display.
 - Fans can be thermostatically controlled based on the temperatures of any real or virtual heaters.
 - Fans can be thermostatically controlled in proportional mode by specifying a temperature range e.g. T40:50. If you specify only one temperature, or the second temperature is not greater than the first, bang-band mode will be used as before. In proportional mode the S parameter is not used but the L value is honoured.
 - Current loop temperature sensors are now supported (sensor channels 300-307). M305 parameters L and H set the temperatures corresponding to 4mA and 20mA current respectively.
