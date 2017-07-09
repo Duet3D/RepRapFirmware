@@ -1,6 +1,25 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.19beta9
+=================
+
+New and changed features:
+- Experimental resume-after-power-failure support on Duet WiFi/Ethernet. See https://duet3d.com/wiki/Setting_up_to_resume_a_print_after_a_power_failure.
+- If the G10 command is used to set the standby temperature of a tool that is on standby, the live temperature is adjusted accordingly
+- SCARA parameters configured using M669 now include X and Y bed origin offsets
+- Baby stepping is no longer cleared when you home the printer or probe the bed
+- The Y axis can now be mapped in a similar way to the X axis
+- When the WiFi module is in access point mode, M122 displays the number of connected clients (needs DuetWiFiServer 1.19beta9)
+- The M305 command now uses the S parameter to set the heater name instead of the H parameter
+- The meaning of the first M669 crosstalk parameter for a SCARA printer has changed. A zero value now means that the proximal motor does not affect the proximal-to-distal arm angle.
+- Partly implemented bed levelling using multiple independent Z motors (M671)
+
+Bug fixes:
+- G2 and G3 arc movement commands didnlt work when the X axis was mapped
+- On an IDEX machine there was unwanted movement of the new tool after a tool change occurred
+- Duet WiFiServer 1.19-beta9: fixed a bug that sometimes caused WiFi connection failures
+
 Version 1.19beta8
 =================
 
