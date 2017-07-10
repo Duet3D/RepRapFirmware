@@ -23,6 +23,7 @@ Bug fixes:
 - On an IDEX machine there was unwanted movement of the new tool after a tool change occurred
 - Duet WiFiServer 1.19-beta9: fixed a bug that sometimes caused WiFi connection failures
 - On the Duet WiFi, if the own access point parameters were configurds but the list of remembered host access points was empty, the own access point name appeared in the remembered list displayed by M587
+- On a SCARA mnachine, sending G92 X0 Y0 caused the Duet to return position data containing NaNs to Duet Web Control, which caused it to disconnect
 
 Upgrade notes:
 - **Important!** On a CoreXY machine, you need to either swap the X and Y motor connections, or set the Y axis factor to -1 in the M667 command. Similarly for CoreXZ and CoreXYU machines.
