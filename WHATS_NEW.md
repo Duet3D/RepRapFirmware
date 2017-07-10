@@ -6,6 +6,7 @@ Version 1.19beta9
 
 New and changed features:
 - Experimental resume-after-power-failure support on Duet WiFi/Ethernet. See https://duet3d.com/wiki/Setting_up_to_resume_a_print_after_a_power_failure.
+- Partly implemented bed levelling using multiple independent Z motors (M671). See https://duet3d.com/wiki/Bed_levelling_using_multiple_independent_Z_motors.
 - If the G10 command is used to set the standby temperature of a tool that is on standby, the live temperature is adjusted accordingly
 - SCARA parameters configured using M669 now include X and Y bed origin offsets
 - Baby stepping is no longer cleared when you home the printer or probe the bed
@@ -13,7 +14,6 @@ New and changed features:
 - When the WiFi module is in access point mode, M122 displays the number of connected clients (needs DuetWiFiServer 1.19beta9)
 - The M305 command now uses the S parameter to set the heater name instead of the H parameter
 - The meaning of the first M669 crosstalk parameter for a SCARA printer has changed. A zero value now means that the proximal motor does not affect the proximal-to-distal arm angle.
-- Partly implemented bed levelling using multiple independent Z motors (M671)
 - The CoreXY kinematics calculations have been changed to conform to the way they are defined in other firmwares and at CoreXY.com. See the important upgrade notes. The CoreXZ and CoreXYU kinematics have been changhed similarly.
 
 Bug fixes:
