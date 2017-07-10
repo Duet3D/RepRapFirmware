@@ -47,7 +47,7 @@ void PID::Init(float pGain, float pTc, float pTd, float tempLimit, bool usePid)
 	temperatureLimit = tempLimit;
 	maxTempExcursion = DefaultMaxTempExcursion;
 	maxHeatingFaultTime = DefaultMaxHeatingFaultTime;
-	model.SetParameters(pGain, pTc, pTd, 1.0, usePid);
+	model.SetParameters(pGain, pTc, pTd, 1.0, tempLimit, usePid);
 	Reset();
 
 	if (model.IsEnabled())
@@ -74,12 +74,16 @@ void PID::Reset()
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
 	temperature = BAD_ERROR_TEMPERATURE;
+#ifdef DUET_NG
+	suspended = false;
+#endif
 }
 
 // Set the process model
 bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 {
-	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, usePid);
+	const float temperatureLimit = reprap.GetHeat().GetTemperatureLimit(heater);
+	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, temperatureLimit, usePid);
 	if (rslt)
 	{
 #if !defined(DUET_NG) && !defined(__RADDS__) && !defined(__ALLIGATOR__)
@@ -91,13 +95,13 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 #endif
 		if (model.IsEnabled())
 		{
-			const float safeGain = (heater == reprap.GetHeat().GetBedHeater() || heater == reprap.GetHeat().GetChamberHeater())
-									? 170.0 : 480.0;
-			if (gain > safeGain)
+			const float predictedMaxTemp = gain + NormalAmbientTemperature;
+			const float noWarnTemp = (temperatureLimit - NormalAmbientTemperature) * 1.5 + 50.0;		// allow 50% extra power plus enough for an extra 50C
+			if (predictedMaxTemp > noWarnTemp)
 			{
 				platform.MessageF(GENERIC_MESSAGE,
-						"Warning: Heater %u appears to be over-powered. If left on at full power, its temperature is predicted to reach %uC.\n",
-						heater, (unsigned int)gain + 20);
+						"Warning: Heater %u appears to be over-powered. If left on at full power, its temperature is predicted to reach %dC.\n",
+						heater, (int)predictedMaxTemp);
 			}
 		}
 		else
@@ -181,6 +185,13 @@ void PID::Spin()
 {
 	if (model.IsEnabled())
 	{
+#ifdef DUET_NG
+		if (suspended)
+		{
+			SetHeater(0.0);
+			return;
+		}
+#endif
 		// Read the temperature
 		const TemperatureError err = ReadTemperature();
 
@@ -825,5 +836,19 @@ void PID::DisplayBuffer(const char *intro)
 		platform.Message(HOST_MESSAGE, buf);
 	}
 }
+
+#ifdef DUET_NG
+
+// Suspend the heater to conserve power, or resume it
+void PID::Suspend(bool sus)
+{
+	suspended = sus;
+	if (sus && model.IsEnabled())
+	{
+		SetHeater(0.0);
+	}
+}
+
+#endif
 
 // End

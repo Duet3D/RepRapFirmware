@@ -10,14 +10,6 @@
 
 #include "RepRapFirmware.h"
 #include "Kinematics.h"
-#include "Libraries/Math/Matrix.h"
-
-#ifdef DUET_NG
-typedef double floatc_t;					// type of matrix element used for delta calibration
-#else
-// We are more memory-constrained on the SAM3X
-typedef float floatc_t;						// type of matrix element used for delta calibration
-#endif
 
 const size_t DELTA_AXES = 3;
 const size_t A_AXIS = 0;
@@ -44,11 +36,16 @@ public:
 	bool IsReachable(float x, float y) const override;
 	bool LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
-	uint16_t AxesToHomeBeforeProbing() const override { return (1 << X_AXIS) | (1 << Y_AXIS) | (1 << Z_AXIS); }
+	uint32_t AxesToHomeBeforeProbing() const override { return (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS); }
 	MotionType GetMotionType(size_t axis) const override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
 	bool DriveIsShared(size_t drive) const override { return false; }
 	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
+	uint32_t AxesAssumedHomed(uint32_t g92Axes) const override;
+
+#ifdef DUET_NG
+	bool WriteResumeSettings(FileStore *f) const override;
+#endif
 
     // Public functions specific to this class
 	float GetDiagonalSquared() const { return D2; }
@@ -68,9 +65,6 @@ private:
 	void Adjust(size_t numFactors, const floatc_t v[]);								// Perform 3-, 4-, 6- or 7-factor adjustment
 	void PrintParameters(StringRef& reply) const;									// Print all the parameters for debugging
 
-	static void PrintMatrix(const char* s, const MathMatrix<floatc_t>& m, size_t numRows = 0, size_t maxCols = 0);	// for debugging
-	static void PrintVector(const char *s, const floatc_t *v, size_t numElems);		// for debugging
-
 	// Delta parameter defaults
 	const float defaultDiagonal = 215.0;
 	const float defaultDeltaRadius = 105.6;
@@ -87,7 +81,6 @@ private:
     float xTilt, yTilt;									// How much we need to raise Z for each unit of movement in the +X and +Y directions
 
     // Derived values
-    bool deltaMode;										// True if this is a delta printer
     float towerX[DELTA_AXES];							// The X coordinate of each tower
     float towerY[DELTA_AXES];							// The Y coordinate of each tower
     float printRadiusSquared;
@@ -95,6 +88,7 @@ private:
 	float Xbc, Xca, Xab, Ybc, Yca, Yab;
 	float coreFa, coreFb, coreFc;
     float Q, Q2, D2;
+    bool doneAutoCalibration;							// True if we have done auto calibration
 };
 
 #endif /* LINEARDELTAKINEMATICS_H_ */

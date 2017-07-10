@@ -660,11 +660,20 @@ void Network::Diagnostics(MessageType mtype)
 								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
 			platform.MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (float)r.vcc/1024, TranslateEspResetReason(r.resetReason));
 			platform.MessageF(mtype, "WiFi flash size %u, free heap %u\n", r.flashSize, r.freeHeap);
-			if (currentMode == WiFiState::connected)
+
+			if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
 				platform.MessageF(mtype, "WiFi IP address %d.%d.%d.%d\n",
 					r.ipAddress & 255, (r.ipAddress >> 8) & 255, (r.ipAddress >> 16) & 255, (r.ipAddress >> 24) & 255);
-				platform.MessageF(mtype, "WiFi signal strength %ddb\n", r.rssi);
+			}
+
+			if (currentMode == WiFiState::connected)
+			{
+				platform.MessageF(mtype, "WiFi signal strength %ddb\n", (int)r.rssi);
+			}
+			else if (currentMode == WiFiState::runningAsAccessPoint)
+			{
+				platform.MessageF(mtype, "Connected clients %u\n", (unsigned int)r.numClients);
 			}
 			// status, ssid and hostName not displayed
 

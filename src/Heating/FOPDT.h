@@ -35,7 +35,7 @@ class FopDt
 public:
 	FopDt();
 
-	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pUsePid);
+	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, bool pUsePid);
 
 	float GetGain() const { return gain; }
 	float GetTimeConstant() const { return timeConstant; }

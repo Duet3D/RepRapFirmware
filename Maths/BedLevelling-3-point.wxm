@@ -1,0 +1,57 @@
+/* [wxMaxima batch file version 1] [ DO NOT EDIT BY HAND! ]*/
+/* [ Created with wxMaxima version 14.12.1 ] */
+
+/* [wxMaxima: input   start ] */
+eq1:h=H+a*x+b*y;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq2:h0=H+a*x0+b*y0;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq3:h1=H+a*x1+b*y1;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq4:h2=H+a*x2+b*y2;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq5:solve([eq2,eq3,eq4],[a,b,H]);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq6:subst(eq5,eq1);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq7:dhbydh0=factor(diff(rhs(eq6),h0));
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq8:dhbydh1=factor(diff(rhs(eq6),h1));
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq9:dhbydh2=factor(diff(rhs(eq6),h2));
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq10:x1*y2-x0*y2-x2*y1+x0*y1+x2*y0-x1*y0=d;
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq11:subst(eq10,eq7);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq12:subst(eq10,eq8);
+/* [wxMaxima: input   end   ] */
+
+/* [wxMaxima: input   start ] */
+eq13:subst(eq10,eq9);
+/* [wxMaxima: input   end   ] */
+
+/* Maxima can't load/batch files which end with a comment! */
+"Created with wxMaxima"$

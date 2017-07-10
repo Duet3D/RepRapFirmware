@@ -70,7 +70,7 @@ void TemperatureSensor::TryConfigureHeaterName(GCodeBuffer& gb, bool& seen)
 {
 	char buf[MaxHeaterNameLength + 1];
 	bool localSeen = false;
-	gb.TryGetQuotedString('H', buf, ARRAY_SIZE(buf), localSeen);
+	gb.TryGetQuotedString('S', buf, ARRAY_SIZE(buf), localSeen);
 	if (localSeen)
 	{
 		SetHeaterName(buf);

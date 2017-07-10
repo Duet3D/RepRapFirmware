@@ -39,7 +39,7 @@ extern "C" void hsmciIdle()
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
+RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastStandbyTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0)
 {
@@ -425,6 +425,7 @@ void RepRap::StandbyTool(int toolNumber)
 	if (tool != nullptr)
 	{
 		tool->Standby();
+		lastStandbyTool = tool;
 		if (currentTool == tool)
 		{
 			currentTool = nullptr;
@@ -554,7 +555,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		else
 #endif
 		{
-			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes());
+			move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
 		}
 
 		if (currentTool != nullptr)
@@ -933,7 +934,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 					}
 				}
 
-				// Axis mapping. Currently we only map the X axis, but we return an array of arrays to allow for mapping other axes in future.
+				// Axis mapping
 				response->cat("],\"axisMap\":[[");
 				bool first = true;
 				for (size_t xi = 0; xi < MaxAxes; ++xi)
@@ -949,6 +950,23 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 							response->cat(",");
 						}
 						response->catf("%u", xi);
+					}
+				}
+				response->cat("],[");
+				first = true;
+				for (size_t yi = 0; yi < MaxAxes; ++yi)
+				{
+					if ((tool->GetYAxisMap() & (1u << yi)) != 0)
+					{
+						if (first)
+						{
+							first = false;
+						}
+						else
+						{
+							response->cat(",");
+						}
+						response->catf("%u", yi);
 					}
 				}
 				response->cat("]]");
@@ -1246,7 +1264,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send XYZ positions
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
 	float liveCoordinates[DRIVES];
-	reprap.GetMove().LiveCoordinates(liveCoordinates, GetCurrentXAxes());
+	reprap.GetMove().LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
 	const Tool* const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
@@ -1655,7 +1673,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 		return 0;
 	}
 
-	Tool *tool = currentTool;
+	Tool * const tool = currentTool;
 	if (tool == nullptr)
 	{
 		// This should not happen, but if on tool is selected then don't allow any extruder movement
@@ -1708,6 +1726,38 @@ uint32_t RepRap::GetCurrentXAxes() const
 {
 	return (currentTool == nullptr) ? DefaultXAxisMapping : currentTool->GetXAxisMap();
 }
+
+// Get the current axes used as X axes
+uint32_t RepRap::GetCurrentYAxes() const
+{
+	return (currentTool == nullptr) ? DefaultYAxisMapping : currentTool->GetYAxisMap();
+}
+
+#ifdef DUET_NG
+
+// Save some resume information, returning true if successful
+// We assume that the tool configuration doesn't change, only the temperatures and the mix
+bool RepRap::WriteToolSettings(FileStore *f) const
+{
+	// First write the settings of all tools except the current one and the command to select them if they are on standby
+	bool ok = true;
+	for (const Tool *t = toolList; t != nullptr && ok; t = t->Next())
+	{
+		if (t != currentTool)
+		{
+			ok = t->WriteSettings(f);
+		}
+	}
+
+	// Finally write the setting of the active tool and the commands to select it
+	if (ok && currentTool != nullptr)
+	{
+		ok = currentTool->WriteSettings(f);
+	}
+	return ok;
+}
+
+#endif
 
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)

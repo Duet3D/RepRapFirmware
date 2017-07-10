@@ -319,4 +319,22 @@ void Fan::Disable()
 	pin = NoPin;
 }
 
+#ifdef DUET_NG
+
+// Save the settings of this fan if it isn't thermostatic
+bool Fan::WriteSettings(FileStore *f, size_t fanNum) const
+{
+	if (heatersMonitored == 0)
+	{
+		char bufSpace[50];
+		StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
+		buf.printf("M106 P%u S%.2f\n", fanNum, val);
+		return f->Write(buf.Pointer());
+	}
+
+	return true;
+}
+
+#endif
+
 // End

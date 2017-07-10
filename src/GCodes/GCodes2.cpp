@@ -28,18 +28,6 @@
 # include "FirmwareUpdater.h"
 #endif
 
-const char* const BED_EQUATION_G = "bed.g";
-const char* const RESUME_G = "resume.g";
-const char* const CANCEL_G = "cancel.g";
-const char* const STOP_G = "stop.g";
-const char* const SLEEP_G = "sleep.g";
-const char* const CONFIG_OVERRIDE_G = "config-override.g";
-const char* const DEPLOYPROBE_G = "deployprobe.g";
-const char* const RETRACTPROBE_G = "retractprobe.g";
-
-const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
-const uint16_t ServoRefreshFrequency = 50;
-
 // If the code to act on is completed, this returns true,
 // otherwise false.  It is called repeatedly for a given
 // code until it returns true for that code.
@@ -132,10 +120,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 10: // Set/report offsets and temperatures, or retract
 		{
-			bool modifyingTool = false;
-			modifyingTool |= gb.Seen('P');
-			modifyingTool |= gb.Seen('R');
-			modifyingTool |= gb.Seen('S');
+			bool modifyingTool = gb.Seen('P') || gb.Seen('R') || gb.Seen('S');
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
 				modifyingTool |= gb.Seen(axisLetters[axis]);
@@ -143,27 +128,19 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (modifyingTool)
 			{
-				if (!SetOrReportOffsets(gb, reply))
+				if (!SetOrReportOffsets(gb, reply, error))
 				{
 					return false;
 				}
 			}
 			else
 			{
-				if (!LockMovement(gb))
-				{
-					return false;
-				}
 				result = RetractFilament(gb, true);
 			}
 		}
 		break;
 
 	case 11: // Un-retract
-		if (!LockMovement(gb))
-		{
-			return false;
-		}
 		result = RetractFilament(gb, false);
 		break;
 
@@ -215,7 +192,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			ClearBabyStepping();
 			error = ExecuteG30(gb, reply);
 		}
 		break;
@@ -229,8 +205,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			return false;
 		}
-
-		ClearBabyStepping();
 
 		// We need to unlock the movement system here in case there is no Z probe and we are doing manual probing.
 		// Otherwise, even though the bed probing code calls UnlockAll when doing a manual bed probe, the movement system
@@ -467,7 +441,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 23: // Set file to print
 	case 32: // Select file and start SD print
-		if (fileGCode->OriginalMachineState().fileState.IsLive())
+		// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functoinality.
+		if (fileGCode->OriginalMachineState().fileState.IsLive() && (&gb) != fileGCode)
 		{
 			reply.copy("Cannot set file to print, because a file is already being printed");
 			error = true;
@@ -498,7 +473,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 					if (code == 32)
 					{
+						fileToPrint.Seek(fileOffsetToPrint);
 						fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
+						fileInput->Reset();
 						reprap.GetPrintMonitor().StartedPrint();
 					}
 				}
@@ -531,7 +508,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
+			fileToPrint.Seek(fileOffsetToPrint);
 			fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
+			fileInput->Reset();
 			reprap.GetPrintMonitor().StartedPrint();
 		}
 		break;
@@ -543,7 +522,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				return false;
 			}
-			DoPause(gb);
+			DoPause(gb, false);
 		}
 		break;
 
@@ -564,45 +543,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				return false;
 			}
-			DoPause(gb);
+			DoPause(gb, false);
 		}
 		break;
 
 	case 26: // Set SD position
+		// This is used between executing M23 to set up the file to print, and M25 to print it
 		if (gb.Seen('S'))
 		{
-			const FilePosition value = gb.GetIValue();
-			if (value < 0)
-			{
-				reply.copy("SD positions can't be negative!");
-				error = true;
-			}
-			else if (fileGCode->OriginalMachineState().fileState.IsLive())
-			{
-				if (!fileGCode->OriginalMachineState().fileState.Seek(value))
-				{
-					reply.copy("The specified SD position is invalid!");
-					error = true;
-				}
-			}
-			else if (fileToPrint.IsLive())
-			{
-				if (!fileToPrint.Seek(value))
-				{
-					reply.copy("The specified SD position is invalid!");
-					error = true;
-				}
-			}
-			else
-			{
-				reply.copy("Cannot set SD file position, because no print is in progress!");
-				error = true;
-			}
-		}
-		else
-		{
-			reply.copy("You must specify the SD position in bytes using the S parameter.");
-			error = true;
+			// Ideally we would get an unsigned value here in case of the file offset being >2Gb
+			fileOffsetToPrint = (FilePosition)gb.GetIValue();
 		}
 		break;
 
@@ -611,7 +561,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			// Pronterface keeps sending M27 commands if "Monitor status" is checked, and it specifically expects the following response syntax
 			FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-			reply.printf("SD printing byte %lu/%lu", fileBeingPrinted.GetPosition(), fileBeingPrinted.Length());
+			reply.printf("SD printing byte %lu/%lu", fileBeingPrinted.GetPosition() - fileInput->BytesCached(), fileBeingPrinted.Length());
 		}
 		else
 		{
@@ -691,7 +641,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				if (!wasSimulating)
 				{
 					// Starting a new simulation, so save the current position
-					reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes());
+					reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 					simulationRestorePoint.feedRate = gb.MachineState().feedrate;
 				}
 			}
@@ -884,10 +834,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 101: // Un-retract
-		if (!LockMovement(gb))
-		{
-			return false;
-		}
 		result = RetractFilament(gb, false);
 		break;
 
@@ -897,10 +843,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 103: // Retract
-		if (!LockMovement(gb))
-		{
-			return false;
-		}
 		result = RetractFilament(gb, true);
 		break;
 
@@ -2451,7 +2393,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 563: // Define tool
-		ManageTool(gb, reply);
+		error = ManageTool(gb, reply);
 		break;
 
 	case 564: // Think outside the box?
@@ -3179,24 +3121,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		else
 		{
 			// List remembered networks
-			const size_t declaredBufferLength = MaxRememberedNetworks * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with null terminator, plus an extra null
+			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with newline terminator, plus an extra null
 			uint32_t buffer[NumDwords(declaredBufferLength + 1)];
 			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkListSsids, 0, 0, nullptr, 0, buffer, declaredBufferLength);
 			if (rslt >= 0)
 			{
 				char* const cbuf = reinterpret_cast<char *>(buffer);
 				cbuf[declaredBufferLength] = 0;						// ensure null terminated
-				size_t len = strlen(cbuf);
-
-				// If there is a trailing newline, remove it
-				if (len != 0 && cbuf[len - 1] == '\n')
-				{
-					--len;
-					cbuf[len] = 0;
-				}
 
 				// DuetWiFiServer 1.19beta7 and later include the SSID used in access point mode at the start
-				const char *bufp = strchr(cbuf, '\n');
+				char *bufp = strchr(cbuf, '\n');
 				if (bufp == nullptr)
 				{
 					bufp = cbuf;			// must be an old version of DuetWiFiServer
@@ -3204,6 +3138,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				else
 				{
 					++bufp;					// slip the first entry
+				}
+
+				// If there is a trailing newline, remove it
+				{
+					const size_t len = strlen(bufp);
+					if (len != 0 && bufp[len - 1] == '\n')
+					{
+						bufp[len - 1] = 0;
+					}
 				}
 
 				if (strlen(bufp) == 0)
@@ -3312,7 +3255,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			const size_t declaredBufferLength = MaxRememberedNetworks * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with null terminator, plus an extra null
+			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with null terminator, plus an extra null
 			uint32_t buffer[NumDwords(declaredBufferLength + 1)];
 			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkListSsids, 0, 0, nullptr, 0, buffer, declaredBufferLength);
 			if (rslt >= 0)
@@ -3499,6 +3442,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		error = reprap.GetPortControl().Configure(gb, reply);
 		break;
 #endif
+
+	case 671:	// Set Z leadscrew positions
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
+		(void)reprap.GetMove().GetKinematics().Configure(code, gb, reply, error);
+		break;
 
 	case 701: // Load filament
 		result = LoadFilament(gb, reply, error);
@@ -3797,9 +3748,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 911: // Set power monitor threshold voltages
-		reply.printf("M911 not implemented yet");
+#ifdef DUET_NG
+	case 911: // Enable auto save
+		platform.ConfigureAutoSave(gb, reply, error);
 		break;
+#endif
 
 	case 912: // Set electronics temperature monitor adjustment
 		// Currently we ignore the P parameter (i.e. temperature measurement channel)
@@ -3961,7 +3914,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		newToolNumber = gb.GetIValue();
 		newToolNumber += gb.GetToolNumberAdjust();
 
-		reprap.GetMove().GetCurrentUserPosition(toolChangeRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes());
+		reprap.GetMove().GetCurrentUserPosition(toolChangeRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 		toolChangeRestorePoint.feedRate = gb.MachineState().feedrate;
 
 		if (simulationMode == 0)						// we don't yet simulate any T codes

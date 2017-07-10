@@ -8,22 +8,12 @@
 #include "CoreBaseKinematics.h"
 #include "GCodes/GCodes.h"
 
-CoreBaseKinematics::CoreBaseKinematics(KinematicsType t) : Kinematics(t)
+CoreBaseKinematics::CoreBaseKinematics(KinematicsType t) : ZLeadscrewKinematics(t)
 {
 	for (float& af : axisFactors)
 	{
 		af = 1.0;
 	}
-}
-
-// Convert Cartesian coordinates to motor coordinates
-bool CoreBaseKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
-{
-	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-	{
-		motorPos[axis] = (int32_t)roundf(MotorFactor(axis, machinePos) * stepsPerMm[axis]);
-	}
-	return true;
 }
 
 // Set the parameters from a M665, M666 or M669 command

@@ -35,9 +35,9 @@ public:
 	void Exit();													// Shut down
 
 	void GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const; // Get the current position in untransformed coords
-	void GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xAxes) const; // Return the position (after all queued moves have been executed) in transformed coords
+	void GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xAxes, uint32_t yAxes) const; // Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } // Get the current position of a motor
-	void LiveCoordinates(float m[DRIVES], uint32_t xAxes);			// Gives the last point at the end of the last complete DDA transformed to user coords
+	void LiveCoordinates(float m[DRIVES], uint32_t xAxes, uint32_t yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
 	void Interrupt();												// The hardware's (i.e. platform's)  interrupt should call this.
 	void InterruptTime();											// Test function - not used
 	bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
@@ -55,8 +55,8 @@ public:
 	void SetAxisCompensation(int8_t axis, float tangent);			// Set an axis-pair compensation angle
 	float AxisCompensation(int8_t axis) const;						// The tangent value
 	void SetIdentityTransform();									// Cancel the bed equation; does not reset axis angle compensation
-	void AxisAndBedTransform(float move[], uint32_t xAxes, bool useBedCompensation) const; // Take a position and apply the bed and the axis-angle compensations
-	void InverseAxisAndBedTransform(float move[], uint32_t xAxes) const;	// Go from a transformed point back to user coordinates
+	void AxisAndBedTransform(float move[], uint32_t xAxes, uint32_t yAxes, bool useBedCompensation) const; // Take a position and apply the bed and the axis-angle compensations
+	void InverseAxisAndBedTransform(float move[], uint32_t xAxes, uint32_t yAxes) const;	// Go from a transformed point back to user coordinates
 	float GetTaperHeight() const { return (useTaper) ? taperHeight : 0.0; }
 	void SetTaperHeight(float h);
 	bool UseMesh(bool b);											// Try to enable mesh bed compensation and report the final state
@@ -103,6 +103,10 @@ public:
 
 	const DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move
 
+#ifdef DUET_NG
+	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
+#endif
+
 	static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
 	static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
 
@@ -110,8 +114,8 @@ private:
 	enum class IdleState : uint8_t { idle, busy, timing };
 
 	bool StartNextMove(uint32_t startTime);											// start the next move, returning true if Step() needs to be called immediately
-	void BedTransform(float move[MaxAxes], uint32_t xAxes) const;					// Take a position and apply the bed compensations
-	void InverseBedTransform(float move[MaxAxes], uint32_t xAxes) const;			// Go from a bed-transformed point back to user coordinates
+	void BedTransform(float move[MaxAxes], uint32_t xAxes, uint32_t yAxes) const;	// Take a position and apply the bed compensations
+	void InverseBedTransform(float move[MaxAxes], uint32_t xAxes, uint32_t yAxes) const;	// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes]) const;									// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float move[MaxAxes]) const;							// Go from an axis transformed point back to user coordinates
 	void JustHomed(size_t axis, float hitPoint, DDA* hitDDA);						// Deal with setting positions after a drive has been homed

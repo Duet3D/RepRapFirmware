@@ -30,6 +30,7 @@ void LinearDeltaKinematics::Init()
 	xTilt = yTilt = 0.0;
 	printRadius = defaultPrintRadius;
 	homedHeight = defaultDeltaHomedHeight;
+    doneAutoCalibration = false;
 
 	for (size_t axis = 0; axis < DELTA_AXES; ++axis)
 	{
@@ -223,7 +224,7 @@ void LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	if (numFactors < 3 || numFactors > NumDeltaFactors || numFactors == 5)
 	{
-		reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Delta calibration error: %d factors requested but only 3, 4, 6, 7, 8 and 9 supported\n", numFactors);
+		reply.printf("Error: Delta calibration with %d factors requested but only 3, 4, 6, 7, 8 and 9 supported", numFactors);
 		return;
 	}
 
@@ -239,19 +240,19 @@ void LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	// Transform the probing points to motor endpoints and store them in a matrix, so that we can do multiple iterations using the same data
 	FixedMatrix<floatc_t, MaxDeltaCalibrationPoints, DELTA_AXES> probeMotorPositions;
 	floatc_t corrections[MaxDeltaCalibrationPoints];
-	float initialSumOfSquares = 0.0;
+	floatc_t initialSumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{
 		corrections[i] = 0.0;
 		float machinePos[DELTA_AXES];
-		const float zp = reprap.GetMove().GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], probePoints.PointWasCorrected(i));
+		const floatc_t zp = reprap.GetMove().GetProbeCoordinates(i, machinePos[X_AXIS], machinePos[Y_AXIS], probePoints.PointWasCorrected(i));
 		machinePos[Z_AXIS] = 0.0;
 
 		probeMotorPositions(i, A_AXIS) = Transform(machinePos, A_AXIS);
 		probeMotorPositions(i, B_AXIS) = Transform(machinePos, B_AXIS);
 		probeMotorPositions(i, C_AXIS) = Transform(machinePos, C_AXIS);
 
-		initialSumOfSquares += fsquare(zp);
+		initialSumOfSquares += fcsquare(zp);
 	}
 
 	// Do 1 or more Newton-Raphson iterations
@@ -356,7 +357,7 @@ void LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 				InverseTransform(probeMotorPositions(i, A_AXIS), probeMotorPositions(i, B_AXIS), probeMotorPositions(i, C_AXIS), newPosition);
 				corrections[i] = newPosition[Z_AXIS];
 				expectedResiduals[i] = probePoints.GetZHeight(i) + newPosition[Z_AXIS];
-				sumOfSquares += fsquare(expectedResiduals[i]);
+				sumOfSquares += fcsquare(expectedResiduals[i]);
 			}
 
 			expectedRmsError = sqrt(sumOfSquares/numPoints);
@@ -384,8 +385,10 @@ void LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		debugPrintf("%s\n", scratchString.Pointer());
 	}
 
-	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f\n",
+	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
 			numFactors, numPoints, sqrt(initialSumOfSquares/numPoints), expectedRmsError);
+
+    doneAutoCalibration = true;
 }
 
 // Return the type of motion computation needed by an axis
@@ -532,7 +535,7 @@ void LinearDeltaKinematics::PrintParameters(StringRef& reply) const
 					angleCorrections[A_AXIS], angleCorrections[B_AXIS], angleCorrections[C_AXIS], xTilt * 100.0, yTilt * 100.0);
 }
 
-// Write the parameters that are set by auto calibration to the config-override.g file, returning true if success
+// Write the parameters that are set by auto calibration to a file, returning true if success
 bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 {
 	bool ok = f->Write("; Delta parameters\n");
@@ -550,6 +553,16 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 	}
 	return ok;
 }
+
+#ifdef DUET_NG
+
+// Write any calibration data that we need to resume a print after power fail, returning true if successful
+bool LinearDeltaKinematics::WriteResumeSettings(FileStore *f) const
+{
+	return !doneAutoCalibration || WriteCalibrationParameters(f);
+}
+
+#endif
 
 // Get the bed tilt fraction for the specified axis
 float LinearDeltaKinematics::GetTiltCorrection(size_t axis) const
@@ -665,38 +678,16 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, Strin
 	}
 }
 
-/*static*/ void LinearDeltaKinematics::PrintMatrix(const char* s, const MathMatrix<floatc_t>& m, size_t maxRows, size_t maxCols)
+// Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
+uint32_t LinearDeltaKinematics::AxesAssumedHomed(uint32_t g92Axes) const
 {
-	debugPrintf("%s\n", s);
-	if (maxRows == 0)
+	// If all of X, Y and Z have been specified then we know the positions of all 3 tower motors, otherwise we don't
+	const uint32_t xyzAxes = (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS);
+	if ((g92Axes & xyzAxes) != xyzAxes)
 	{
-		maxRows = m.rows();
+		g92Axes &= ~xyzAxes;
 	}
-	if (maxCols == 0)
-	{
-		maxCols = m.cols();
-	}
-
-	for (size_t i = 0; i < maxRows; ++i)
-	{
-		for (size_t j = 0; j < maxCols; ++j)
-		{
-			debugPrintf("%7.4f%c", m(i, j), (j == maxCols - 1) ? '\n' : ' ');
-		}
-	}
-}
-
-/*static*/ void LinearDeltaKinematics::PrintVector(const char *s, const floatc_t *v, size_t numElems)
-{
-	debugPrintf("%s:", s);
-	for (size_t i = 0; i < numElems; ++i)
-	{
-		debugPrintf(" %7.4f", v[i]);
-	}
-	debugPrintf("\n");
+	return g92Axes;
 }
 
 // End
-
-
-

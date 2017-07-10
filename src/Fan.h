@@ -31,6 +31,10 @@ public:
 	void Check();
 	void Disable();
 
+#ifdef DUET_NG
+	bool WriteSettings(FileStore *f, size_t fanNum) const;		// Save the settings of this fan if it isn't thermostatic
+#endif
+
 private:
 	float val;
 	float lastVal;

@@ -20,7 +20,7 @@ FopDt::FopDt()
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pUsePid)
+bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, bool pUsePid)
 {
 	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
 	{
@@ -30,7 +30,8 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, bool pU
 	}
 
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
-	if (pg > 10.0 && pg <= 1500.0 && pdt > 0.099 && ptc >= 2 * pdt && pMaxPwm > 0.0099 && pMaxPwm <= 1.0)
+	const float maxGain = max<float>(1500.0, temperatureLimit + 500.0);
+	if (pg > 10.0 && pg <= maxGain && pdt > 0.099 && ptc >= 2 * pdt && pMaxPwm > 0.0099 && pMaxPwm <= 1.0)
 	{
 		gain = pg;
 		timeConstant = ptc;

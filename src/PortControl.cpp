@@ -37,33 +37,36 @@ void PortControl::Exit()
 
 void PortControl::Spin(bool full)
 {
-	cpu_irq_disable();
-	const DDA * cdda = reprap.GetMove().GetCurrentDDA();
-	if (cdda == nullptr)
+	if (numConfiguredPorts != 0)
 	{
-		// Movement has stopped, so turn all ports off
-		cpu_irq_enable();
-		UpdatePorts(0);
-	}
-	else
-	{
-		const uint32_t now = Platform::GetInterruptClocks() + advanceClocks;
-		uint32_t moveEndTime = cdda->GetMoveStartTime();
-		DDA::DDAState st = cdda->GetState();
-		do
+		cpu_irq_disable();
+		const DDA * cdda = reprap.GetMove().GetCurrentDDA();
+		if (cdda == nullptr)
 		{
-			moveEndTime += cdda->GetClocksNeeded();
-			if ((int32_t)(moveEndTime - now) >= 0)
+			// Movement has stopped, so turn all ports off
+			cpu_irq_enable();
+			UpdatePorts(0);
+		}
+		else
+		{
+			const uint32_t now = Platform::GetInterruptClocks() + advanceClocks;
+			uint32_t moveEndTime = cdda->GetMoveStartTime();
+			DDA::DDAState st = cdda->GetState();
+			do
 			{
-				break;
-			}
-			cdda = cdda->GetNext();
-			st = cdda->GetState();
-		} while (st == DDA::executing || st == DDA::frozen);
-		cpu_irq_enable();
+				moveEndTime += cdda->GetClocksNeeded();
+				if ((int32_t)(moveEndTime - now) >= 0)
+				{
+					break;
+				}
+				cdda = cdda->GetNext();
+				st = cdda->GetState();
+			} while (st == DDA::executing || st == DDA::frozen);
+			cpu_irq_enable();
 
-		const IoBits_t bits = (st == DDA::executing || st == DDA::frozen || st == DDA::provisional) ? cdda->GetIoBits() : 0;
-		UpdatePorts(bits);
+			const IoBits_t bits = (st == DDA::executing || st == DDA::frozen || st == DDA::provisional) ? cdda->GetIoBits() : 0;
+			UpdatePorts(bits);
+		}
 	}
 }
 

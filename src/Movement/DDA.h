@@ -69,6 +69,7 @@ public:
 	float AdvanceBabyStepping(float amount);						// Try to push babystepping earlier in the move queue
 	bool IsHomingAxes() const { return (endStopsToCheck & HomeAxes) != 0; }
 	uint32_t GetXAxes() const { return xAxes; }
+	uint32_t GetYAxes() const { return yAxes; }
 
 #if SUPPORT_IOBITS
 	uint32_t GetMoveStartTime() const { return moveStartTime; }
@@ -142,6 +143,7 @@ private:
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
     uint32_t xAxes;							// Which axes are behaving as X axes
+    uint32_t yAxes;							// Which axes are behaving as Y axes
 
     FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read from SD card
 

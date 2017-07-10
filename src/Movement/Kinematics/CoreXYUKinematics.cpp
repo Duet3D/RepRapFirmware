@@ -54,18 +54,36 @@ bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef
 	}
 }
 
+// Convert Cartesian coordinates to motor coordinates
+bool CoreXYUKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
+{
+	motorPos[X_AXIS] = (int32_t)roundf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) + (machinePos[Y_AXIS] * axisFactors[Y_AXIS])) * stepsPerMm[X_AXIS]);
+	motorPos[Y_AXIS] = (int32_t)roundf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) - (machinePos[Y_AXIS] * axisFactors[Y_AXIS])) * stepsPerMm[Y_AXIS]);
+	motorPos[Z_AXIS] = (int32_t)roundf(machinePos[Z_AXIS] * stepsPerMm[Z_AXIS]);
+	motorPos[U_AXIS] = (int32_t)roundf(((machinePos[U_AXIS] * axisFactors[U_AXIS]) + (machinePos[Y_AXIS] * axisFactors[Y_AXIS])) * stepsPerMm[U_AXIS]);
+	motorPos[V_AXIS] = (int32_t)roundf(((machinePos[U_AXIS] * axisFactors[U_AXIS]) - (machinePos[Y_AXIS] * axisFactors[Y_AXIS])) * stepsPerMm[V_AXIS]);
+
+	for (size_t axis = CoreXYU_AXES; axis < numVisibleAxes; ++axis)
+	{
+		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
+	}
+	return true;
+}
+
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 void CoreXYUKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
-	// Convert the axes
-	machinePos[X_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Y_AXIS]) - (motorPos[Y_AXIS] * stepsPerMm[X_AXIS]))
-								/(2 * axisFactors[X_AXIS] * stepsPerMm[X_AXIS] * stepsPerMm[Y_AXIS]);
-	machinePos[Y_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Y_AXIS]) + (motorPos[Y_AXIS] * stepsPerMm[X_AXIS]))
-								/(2 * axisFactors[Y_AXIS] * stepsPerMm[X_AXIS] * stepsPerMm[Y_AXIS]);
-	machinePos[U_AXIS] = ((motorPos[U_AXIS] * stepsPerMm[V_AXIS]) - (motorPos[V_AXIS] * stepsPerMm[U_AXIS]))
-								/(2 * axisFactors[V_AXIS] * stepsPerMm[U_AXIS] * stepsPerMm[V_AXIS]);
-	machinePos[V_AXIS] = ((motorPos[U_AXIS] * stepsPerMm[V_AXIS]) + (motorPos[V_AXIS] * stepsPerMm[U_AXIS]))
-								/(2 * axisFactors[V_AXIS] * stepsPerMm[U_AXIS] * stepsPerMm[V_AXIS]);
+	// Convert the main axes
+	const float xyStepsMm = stepsPerMm[X_AXIS] * stepsPerMm[Y_AXIS];
+	const float uvStepsMm = stepsPerMm[U_AXIS] * stepsPerMm[V_AXIS];
+	machinePos[X_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Y_AXIS]) + (motorPos[Y_AXIS] * stepsPerMm[X_AXIS]))
+								/(2 * axisFactors[X_AXIS] * xyStepsMm);
+	machinePos[Y_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Y_AXIS]) - (motorPos[Y_AXIS] * stepsPerMm[X_AXIS]))
+								/(2 * axisFactors[Y_AXIS] * xyStepsMm);
+	machinePos[U_AXIS] = ((motorPos[U_AXIS] * stepsPerMm[V_AXIS]) + (motorPos[V_AXIS] * stepsPerMm[U_AXIS]))
+								/(2 * axisFactors[V_AXIS] * uvStepsMm);
+	machinePos[V_AXIS] = ((motorPos[U_AXIS] * stepsPerMm[V_AXIS]) - (motorPos[V_AXIS] * stepsPerMm[U_AXIS]))
+								/(2 * axisFactors[V_AXIS] * uvStepsMm);
 
 	machinePos[Z_AXIS] = motorPos[Z_AXIS]/stepsPerMm[Z_AXIS];
 
@@ -82,24 +100,6 @@ bool CoreXYUKinematics::DriveIsShared(size_t drive) const
 {
 	return drive == X_AXIS || drive == Y_AXIS || drive == U_AXIS
 			 || drive == V_AXIS;			// V doesn't have endstop switches, but include it here just in case
-}
-
-// Calculate the movement fraction for a single axis motor
-float CoreXYUKinematics::MotorFactor(size_t drive, const float directionVector[]) const
-{
-	switch(drive)
-	{
-	case X_AXIS:
-		return (directionVector[X_AXIS] * axisFactors[X_AXIS]) + (directionVector[Y_AXIS] * axisFactors[Y_AXIS]);
-	case Y_AXIS:
-		return (directionVector[Y_AXIS] * axisFactors[Y_AXIS]) - (directionVector[X_AXIS] * axisFactors[X_AXIS]);
-	case U_AXIS: // X2, Use Y and U to calculate
-		return (directionVector[U_AXIS] * axisFactors[U_AXIS]) + (directionVector[Y_AXIS] * axisFactors[Y_AXIS]);
-	case V_AXIS: // Y2, Use Y and U to calculate
-		return (directionVector[Y_AXIS] * axisFactors[Y_AXIS]) - (directionVector[U_AXIS] * axisFactors[U_AXIS]);
-	default:
-		return directionVector[drive];
-	}
 }
 
 // End

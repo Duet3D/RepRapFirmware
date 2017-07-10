@@ -290,6 +290,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 
 	// 3. Store some values
 	xAxes = nextMove.xAxes;
+	yAxes = nextMove.yAxes;
 	endStopsToCheck = nextMove.endStopsToCheck;
 	canPauseBefore = nextMove.canPauseBefore;
 	canPauseAfter = nextMove.canPauseAfter;
@@ -1049,21 +1050,30 @@ void DDA::Prepare()
 float DDA::NormaliseXYZ()
 {
 	// First calculate the magnitude of the vector. If there is more than one X axis, take an average of their movements (they should be equal).
-	float magSquared = 0.0;
-	unsigned int numXaxes = 0;
+	float xMagSquared = 0.0, yMagSquared = 0.0;
+	unsigned int numXaxes = 0, numYaxes = 0;
 	for (size_t d = 0; d < MaxAxes; ++d)
 	{
 		if (((1 << d) & xAxes) != 0)
 		{
-			magSquared += fsquare(directionVector[d]);
+			xMagSquared += fsquare(directionVector[d]);
 			++numXaxes;
 		}
+		if (((1 << d) & yAxes) != 0)
+		{
+			yMagSquared += fsquare(directionVector[d]);
+			++numYaxes;
+		}
 	}
-	if (numXaxes != 0)
+	if (numXaxes > 1)
 	{
-		magSquared /= numXaxes;
+		xMagSquared /= numXaxes;
 	}
-	const float magnitude = sqrtf(magSquared + fsquare(directionVector[Y_AXIS]) + fsquare(directionVector[Z_AXIS]));
+	if (numYaxes > 1)
+	{
+		yMagSquared /= numYaxes;
+	}
+	const float magnitude = sqrtf(xMagSquared + yMagSquared + fsquare(directionVector[Z_AXIS]));
 	if (magnitude <= 0.0)
 	{
 		return 0.0;

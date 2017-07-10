@@ -258,9 +258,9 @@ void Heat::SwitchOff(int8_t heater)
 
 void Heat::SwitchOffAll()
 {
-	for (size_t heater = 0; heater < Heaters; ++heater)
+	for (PID *p : pids)
 	{
-		pids[heater]->SwitchOff();
+		p->SwitchOff();
 	}
 }
 
@@ -467,5 +467,35 @@ float Heat::GetTemperature(size_t heater, TemperatureError& err)
 	}
 	return t;
 }
+
+#ifdef DUET_NG
+
+// Suspend the heaters to conserve power
+void Heat::SuspendHeaters(bool sus)
+{
+	for (PID *p : pids)
+	{
+		p->Suspend(sus);
+	}
+}
+
+// Save some resume information returning true if successful.
+// We assume that the bed and chamber heaters are either on and active, or off (not on standby).
+bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
+{
+	char bufSpace[100];
+	StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
+	if (bedHeater >= 0 && pids[bedHeater]->Active() && !pids[bedHeater]->SwitchedOff())
+	{
+		buf.printf("M140 S%.1f\n", GetActiveTemperature(bedHeater));
+	}
+	if (chamberHeater >= 0 && pids[chamberHeater]->Active() && !pids[chamberHeater]->SwitchedOff())
+	{
+		buf.printf("M141 S%.1f\n", GetActiveTemperature(chamberHeater));
+	}
+	return (buf.Length() == 0) || f->Write(buf.Pointer());
+}
+
+#endif
 
 // End

@@ -17,14 +17,30 @@ const char *CoreXZKinematics::GetName(bool forStatusReport) const
 	return (forStatusReport) ? "coreXZ" : "CoreXZ";
 }
 
+// Convert Cartesian coordinates to motor coordinates
+bool CoreXZKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
+{
+	motorPos[X_AXIS] = (int32_t)roundf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) + (machinePos[Z_AXIS] * axisFactors[Z_AXIS])) * stepsPerMm[X_AXIS]);
+	motorPos[Y_AXIS] = (int32_t)roundf(machinePos[Y_AXIS] * stepsPerMm[Y_AXIS]);
+	motorPos[Z_AXIS] = (int32_t)roundf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) - (machinePos[Z_AXIS] * axisFactors[Z_AXIS])) * stepsPerMm[Z_AXIS]);
+
+	for (size_t axis = XYZ_AXES; axis < numVisibleAxes; ++axis)
+	{
+		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
+	}
+	return true;
+}
+
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 void CoreXZKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
-	machinePos[X_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Z_AXIS]) - (motorPos[Z_AXIS] * stepsPerMm[X_AXIS]))
-								/(2 * axisFactors[X_AXIS] * stepsPerMm[X_AXIS] * stepsPerMm[Z_AXIS]);
+	// Convert the main axes
+	const float xzStepsMmm = stepsPerMm[X_AXIS] * stepsPerMm[Z_AXIS];
+	machinePos[X_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Z_AXIS]) + (motorPos[Z_AXIS] * stepsPerMm[X_AXIS]))
+								/(2 * axisFactors[X_AXIS] * xzStepsMmm);
 	machinePos[Y_AXIS] = motorPos[Y_AXIS]/stepsPerMm[Y_AXIS];
-	machinePos[Z_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Z_AXIS]) + (motorPos[Z_AXIS] * stepsPerMm[X_AXIS]))
-								/(2 * axisFactors[Z_AXIS] * stepsPerMm[X_AXIS] * stepsPerMm[Z_AXIS]);
+	machinePos[Z_AXIS] = ((motorPos[X_AXIS] * stepsPerMm[Z_AXIS]) - (motorPos[Z_AXIS] * stepsPerMm[X_AXIS]))
+								/(2 * axisFactors[Z_AXIS] * xzStepsMmm);
 
 	// Convert any additional axes linearly
 	for (size_t drive = XYZ_AXES; drive < numVisibleAxes; ++drive)
@@ -38,22 +54,6 @@ void CoreXZKinematics::MotorStepsToCartesian(const int32_t motorPos[], const flo
 bool CoreXZKinematics::DriveIsShared(size_t drive) const
 {
 	return drive == X_AXIS || drive == Z_AXIS;
-}
-
-// Calculate the movement fraction for a single axis motor of a Cartesian-like printer
-float CoreXZKinematics::MotorFactor(size_t drive, const float directionVector[]) const
-{
-	switch(drive)
-	{
-	case X_AXIS:
-		return (directionVector[X_AXIS] * axisFactors[X_AXIS]) + (directionVector[Z_AXIS] * axisFactors[Z_AXIS]);
-
-	case Z_AXIS:
-		return (directionVector[Z_AXIS] * axisFactors[Z_AXIS]) - (directionVector[X_AXIS] * axisFactors[X_AXIS]);
-
-	default:
-		return directionVector[drive];
-	}
 }
 
 // End

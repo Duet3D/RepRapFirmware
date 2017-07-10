@@ -33,7 +33,7 @@
 
 Tool * Tool::freelist = nullptr;
 
-/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap)
+/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t yMap, uint32_t fanMap)
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -93,10 +93,11 @@ Tool * Tool::freelist = nullptr;
 	t->myNumber = toolNumber;
 	SafeStrncpy(t->name, name, ToolNameLength);
 	t->next = nullptr;
-	t->active = false;
+	t->state = ToolState::off;
 	t->driveCount = dCount;
 	t->heaterCount = hCount;
 	t->xMapping = xMap;
+	t->yMapping = yMap;
 	t->fanMapping = fanMap;
 	t->heaterFault = false;
 	t->mixing = false;
@@ -178,6 +179,17 @@ void Tool::Print(StringRef& reply)
 		}
 	}
 
+	reply.cat("; ymap:");
+	sep = ' ';
+	for (size_t yi = 0; yi < MaxAxes; ++yi)
+	{
+		if ((yMapping & (1u << yi)) != 0)
+		{
+			reply.catf("%c%c", sep, GCodes::axisLetters[yi]);
+			sep = ',';
+		}
+	}
+
 	reply.cat("; fans:");
 	sep = ' ';
 	for (size_t fi = 0; fi < NUM_FANS; ++fi)
@@ -189,7 +201,7 @@ void Tool::Print(StringRef& reply)
 		}
 	}
 
-	reply.catf("; status: %s", active ? "selected" : "standby");
+	reply.catf("; status: %s", (state == ToolState::active) ? "selected" : (state == ToolState::standby) ? "standby" : "off");
 }
 
 float Tool::MaxFeedrate() const
@@ -296,7 +308,7 @@ bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
 
 void Tool::Activate(Tool* currentlyActive)
 {
-	if (!active)
+	if (state != ToolState::active)
 	{
 		if (currentlyActive != nullptr && currentlyActive != this)
 		{
@@ -308,20 +320,20 @@ void Tool::Activate(Tool* currentlyActive)
 			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 			reprap.GetHeat().Activate(heaters[heater]);
 		}
-		active = true;
+		state = ToolState::active;
 	}
 }
 
 void Tool::Standby()
 {
-	if (active)
+	if (state != ToolState::standby)
 	{
 		for (size_t heater = 0; heater < heaterCount; heater++)
 		{
 			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 			reprap.GetHeat().Standby(heaters[heater]);
 		}
-		active = false;
+		state = ToolState::standby;
 	}
 }
 
@@ -349,7 +361,7 @@ void Tool::SetVariables(const float* standby, const float* active)
 			if (standby[heater] < temperatureLimit)
 			{
 				standbyTemperatures[heater] = standby[heater];
-				if (currentTool == nullptr || currentTool == this)
+				if (currentTool == nullptr || currentTool == this || reprap.GetLastStandbyTool() == this)
 				{
 					reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 				}
@@ -414,5 +426,60 @@ void Tool::DefineMix(const float m[])
 		mix[drive] = m[drive];
 	}
 }
+
+#ifdef DUET_NG
+
+// Write the tool's settings to file returning true if successful
+bool Tool::WriteSettings(FileStore *f) const
+{
+	char bufSpace[50];
+	StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
+
+	// Set up active and standby heater temperatures
+	bool ok = true;
+	if (heaterCount != 0)
+	{
+		buf.copy("G10 ");
+		char c = 'S';
+		for (size_t i = 0; i < heaterCount; ++i)
+		{
+			buf.catf("%c%d", c, (int)activeTemperatures[i]);
+			c = ':';
+		}
+		buf.cat(' ');
+		c = 'R';
+		for (size_t i = 0; i < heaterCount; ++i)
+		{
+			buf.catf("%c%d", c, (int)standbyTemperatures[i]);
+			c = ':';
+		}
+		buf.cat('\n');
+		ok = f->Write(buf.Pointer());
+	}
+
+	if (ok && mixing)
+	{
+		buf.printf("M567 P%d ", myNumber);
+		char c = 'E';
+		for (size_t i = 0; i < driveCount; ++i)
+		{
+			buf.catf("%c%.1f", c, mix[i]);
+			c = ':';
+		}
+		buf.catf("\nM568 P%d S1\n", myNumber);
+		ok = f->Write(buf.Pointer());
+	}
+
+	if (ok && state != ToolState::off)
+	{
+		// Select tool and set virtual extruder position
+		buf.printf("T%d P0\nG92 E%.3f\n", myNumber, virtualExtruderPosition);
+		ok = f->Write(buf.Pointer());
+	}
+
+	return ok;
+}
+
+#endif
 
 // End

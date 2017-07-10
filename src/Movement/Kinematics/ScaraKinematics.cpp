@@ -9,7 +9,7 @@
 
 ScaraKinematics::ScaraKinematics()
 	: Kinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true),
-	  proximalArmLength(DefaultProximalArmLength), distalArmLength(DefaultDistalArmLength)
+	  proximalArmLength(DefaultProximalArmLength), distalArmLength(DefaultDistalArmLength), xOffset(0.0), yOffset(0.0)
 {
 	thetaLimits[0] = DefaultMinTheta;
 	thetaLimits[1] = DefaultMaxTheta;
@@ -26,24 +26,24 @@ const char *ScaraKinematics::GetName(bool forStatusReport) const
 }
 
 // Convert Cartesian coordinates to motor coordinates
-// In the following, theta is the proximal arm angle relative to the X axis, psi is the distal arm angle relative to the X axis
+// In the following, theta is the proximal arm angle relative to the X axis, psi is the distal arm angle relative to the proximal arm
 bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
 {
 	// No need to limit x,y to reachable positions here, we already did that in class GCodes
-	const float x = machinePos[X_AXIS];
-	const float y = machinePos[Y_AXIS];
-	const float cosPsiMinusTheta = (fsquare(x) + fsquare(y) - proximalArmLengthSquared - distalArmLengthSquared) / (2.0f * proximalArmLength * distalArmLength);
+	const float x = machinePos[X_AXIS] + xOffset;
+	const float y = machinePos[Y_AXIS] + yOffset;
+	const float cosPsi = (fsquare(x) + fsquare(y) - proximalArmLengthSquared - distalArmLengthSquared) / (2.0f * proximalArmLength * distalArmLength);
 
 	// SCARA position is undefined if abs(SCARA_C2) >= 1. In reality abs(SCARA_C2) >0.95 can be problematic.
-	const float square = 1.0f - fsquare(cosPsiMinusTheta);
+	const float square = 1.0f - fsquare(cosPsi);
 	if (square < 0.01f)
 	{
 		return false;		// not reachable
 	}
 
 	const float sinPsiMinusTheta = sqrtf(square);
-	float psiMinusTheta = acos(cosPsiMinusTheta);
-	const float SCARA_K1 = proximalArmLength + distalArmLength * cosPsiMinusTheta;
+	float psi = acos(cosPsi);
+	const float SCARA_K1 = proximalArmLength + distalArmLength * cosPsi;
 	const float SCARA_K2 = distalArmLength * sinPsiMinusTheta;
 	float theta;
 
@@ -66,7 +66,7 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 			theta = atan2f(SCARA_K1 * y + SCARA_K2 * x, SCARA_K1 * x - SCARA_K2 * y);
 			if (theta <= thetaLimits[1])
 			{
-				psiMinusTheta = -psiMinusTheta;
+				psi = -psi;
 				break;
 			}
 		}
@@ -79,8 +79,7 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 		switchedMode = true;
 	}
 
-	const float psi = theta + psiMinusTheta;
-//debugPrintf("psiMinusTheta = %.2f, psi = %.2f, theta = %.2f\n", psiMinusTheta * RadiansToDegrees, psi * RadiansToDegrees, theta * RadiansToDegrees);
+//debugPrintf("psi = %.2f, theta = %.2f\n", psi * RadiansToDegrees, theta * RadiansToDegrees);
 
 	motorPos[X_AXIS] = theta * RadiansToDegrees * stepsPerMm[X_AXIS];
 	motorPos[Y_AXIS] = (psi * RadiansToDegrees * stepsPerMm[Y_AXIS]) - (crosstalk[0] * motorPos[X_AXIS]);
@@ -99,10 +98,10 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 void ScaraKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const
 {
 	const float arm1Angle = ((float)motorPos[X_AXIS]/stepsPerMm[X_AXIS]) * DegreesToRadians;
-    const float arm2Angle = (((float)motorPos[Y_AXIS] + ((float)motorPos[X_AXIS] * crosstalk[0]))/stepsPerMm[Y_AXIS]) * DegreesToRadians;
+    const float arm2Angle = (((float)motorPos[Y_AXIS] + ((float)motorPos[X_AXIS] * (1.0 + crosstalk[0])))/stepsPerMm[Y_AXIS]) * DegreesToRadians;
 
-    machinePos[X_AXIS] = cosf(arm1Angle) * proximalArmLength + cosf(arm2Angle) * distalArmLength;
-    machinePos[Y_AXIS] = sinf(arm1Angle) * proximalArmLength + sinf(arm2Angle) * distalArmLength;
+    machinePos[X_AXIS] = (cosf(arm1Angle) * proximalArmLength + cosf(arm2Angle) * distalArmLength) - xOffset;
+    machinePos[Y_AXIS] = (sinf(arm1Angle) * proximalArmLength + sinf(arm2Angle) * distalArmLength) - yOffset;
 
     // On some machines (e.g. Helios), the X and/or Y arm motors also affect the Z height
     machinePos[Z_AXIS] = ((float)motorPos[Z_AXIS] + ((float)motorPos[X_AXIS] * crosstalk[1]) + ((float)motorPos[Y_AXIS] * crosstalk[2]))/stepsPerMm[Z_AXIS];
@@ -125,6 +124,8 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& 
 		gb.TryGetFValue('D', distalArmLength, seen);
 		gb.TryGetFValue('S', segmentsPerSecond, seen);
 		gb.TryGetFValue('T', minSegmentLength, seen);
+		gb.TryGetFValue('X', xOffset, seen);
+		gb.TryGetFValue('Y', yOffset, seen);
 		if (gb.TryGetFloatArray('A', 2, thetaLimits, reply, seen))
 		{
 			return true;
@@ -173,13 +174,22 @@ bool ScaraKinematics::IsReachable(float x, float y) const
 bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
 {
 	bool limited = false;
-	float& x = coords[X_AXIS];
-    float& y = coords[Y_AXIS];
+	float x = coords[X_AXIS] + xOffset;
+    float y = coords[Y_AXIS] + yOffset;
     const float r = sqrtf(fsquare(x) + fsquare(y));
     if (r < minRadius)
     {
-    	x *= minRadius/r;
-    	y *= minRadius/r;
+    	// The user may have specified x=0 y=0 so allow for this
+    	if (r < 1.0)
+    	{
+    		x = minRadius;
+    		y = 0.0;
+    	}
+    	else
+    	{
+			x *= minRadius/r;
+			y *= minRadius/r;
+    	}
     	limited = true;
 	}
 	else if (r > maxRadius)
@@ -188,14 +198,21 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint1
 		y *= maxRadius/r;
 		limited = true;
 	}
+
+    if (limited)
+    {
+    	coords[X_AXIS] = x - xOffset;
+    	coords[Y_AXIS] = y - yOffset;
+    }
     return limited;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
 void ScaraKinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) const
 {
-	positions[X_AXIS] = maxRadius;
-	for (size_t i = Y_AXIS; i < numAxes; ++i)
+	positions[X_AXIS] = maxRadius - xOffset;
+	positions[Y_AXIS] = -yOffset;
+	for (size_t i = Z_AXIS; i < numAxes; ++i)
 	{
 		positions[i] = 0.0;
 	}
@@ -215,6 +232,18 @@ bool ScaraKinematics::DriveIsShared(size_t drive) const
 	default:
 		return false;
 	}
+}
+
+// Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
+uint32_t ScaraKinematics::AxesAssumedHomed(uint32_t g92Axes) const
+{
+	// If both X and Y have been specified then we know the positions of both arm motors, otherwise we don't
+	const uint32_t xyAxes = (1u << X_AXIS) | (1u << Y_AXIS);
+	if ((g92Axes & xyAxes) != xyAxes)
+	{
+		g92Axes &= ~xyAxes;
+	}
+	return g92Axes;
 }
 
 // Recalculate the derived parameters

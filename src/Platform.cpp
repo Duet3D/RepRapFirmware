@@ -46,10 +46,22 @@ extern char _end;
 extern "C" char *sbrk(int i);
 
 #ifdef DUET_NG
-const uint16_t driverPowerOnAdcReading = (uint16_t)(4096 * 10.0/PowerFailVoltageRange);			// minimum voltage at which we initialise the drivers
-const uint16_t driverPowerOffAdcReading = (uint16_t)(4096 * 9.5/PowerFailVoltageRange);			// voltages below this flag the drivers as unusable
-const uint16_t driverOverVoltageAdcReading = (uint16_t)(4096 * 29.0/PowerFailVoltageRange);		// voltages above this cause driver shutdown
-const uint16_t driverNormalVoltageAdcReading = (uint16_t)(4096 * 27.5/PowerFailVoltageRange);	// voltages at or below this are normal
+
+inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal)
+{
+	return adcVal * (PowerMonitorVoltageRange/4096.0);
+}
+
+inline constexpr uint16_t PowerVoltageToAdcReading(float voltage)
+{
+	return (uint16_t)(voltage * (4096.0/PowerMonitorVoltageRange));
+}
+
+constexpr uint16_t driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);			// minimum voltage at which we initialise the drivers
+constexpr uint16_t driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);			// voltages below this flag the drivers as unusable
+constexpr uint16_t driverOverVoltageAdcReading = PowerVoltageToAdcReading(29.0);		// voltages above this cause driver shutdown
+constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5);		// voltages at or below this are normal
+
 #endif
 
 const uint8_t memPattern = 0xA5;
@@ -430,7 +442,7 @@ void Platform::Init()
 			endStopLogicLevel[drive] = true;					// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
 
-		driveDriverBits[drive] = CalcDriverBitmap(drive);
+		driveDriverBits[drive] = driveDriverBits[drive + DRIVES] = CalcDriverBitmap(drive);
 
 		// Set up the control pins and endstops
 		pinMode(STEP_PINS[drive], OUTPUT_LOW);
@@ -495,9 +507,11 @@ void Platform::Init()
 
 	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadDrivers = 0;
 	onBoardDriversFanRunning = offBoardDriversFanRunning = false;
+	autoSaveEnabled = false;
+	autoSaveState = AutoSaveState::normal;
 #endif
 
-	// Allow extrusion ancilliary PWM to use FAN0 even if FAN0 has not been disabled, for backwards compatibility
+	// Allow extrusion ancillary PWM to use FAN0 even if FAN0 has not been disabled, for backwards compatibility
 	extrusionAncilliaryPwmValue = 0.0;
 	extrusionAncilliaryPwmFrequency = DefaultPinWritePwmFreq;
 	extrusionAncilliaryPwmLogicalPin = Fan0LogicalPin;
@@ -1405,10 +1419,60 @@ void Platform::Spin()
 		}
 	}
 
+#ifdef DUET_NG
+	// Check for auto-pause, shutdown or resume
+	if (autoSaveEnabled)
+	{
+		switch (autoSaveState)
+		{
+		case AutoSaveState::normal:
+			if (currentVin < autoPauseReading)
+			{
+				if (reprap.GetGCodes().AutoPause())
+				{
+					autoSaveState = AutoSaveState::autoPaused;
+				}
+			}
+			break;
+
+		case AutoSaveState::autoPaused:
+			if (currentVin < autoShutdownReading)
+			{
+				if (reprap.GetGCodes().AutoShutdown())
+				{
+					autoSaveState = AutoSaveState::autoShutdown;
+				}
+			}
+			else if (currentVin >= autoResumeReading)
+			{
+				if (reprap.GetGCodes().AutoResume())
+				{
+					autoSaveState = AutoSaveState::normal;
+				}
+			}
+			break;
+
+		case AutoSaveState::autoShutdown:
+			if (currentVin >= autoResumeReading)
+			{
+				if (reprap.GetGCodes().AutoResumeAfterShutdown())
+				{
+					autoSaveState = AutoSaveState::normal;
+				}
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+#endif
+
 	ClassReport(longWait);
 }
 
 #ifdef DUET_NG
+
 // Report driver status conditions that require attention.
 // Sets 'reported' if we reported anything, else leaves 'reported' alone.
 void Platform::ReportDrivers(uint16_t whichDrivers, const char* text, bool& reported)
@@ -1428,6 +1492,48 @@ void Platform::ReportDrivers(uint16_t whichDrivers, const char* text, bool& repo
 		reported = true;
 	}
 }
+
+// Configure auto save on power fail
+void Platform::ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply, bool& error)
+{
+	bool seen = false;
+	float autoSaveVoltages[3];
+	if (gb.TryGetFloatArray('S', 3, autoSaveVoltages, reply, seen))
+	{
+		error = true;
+	}
+	else if (seen)
+	{
+		autoSaveEnabled = (autoSaveVoltages[0] >= 5.0 && autoSaveVoltages[1] > autoSaveVoltages[0] && autoSaveVoltages[2] > autoSaveVoltages[1]);
+		if (autoSaveEnabled)
+		{
+			autoShutdownReading = PowerVoltageToAdcReading(autoSaveVoltages[0]);
+			autoPauseReading = PowerVoltageToAdcReading(autoSaveVoltages[1]);
+			autoResumeReading = PowerVoltageToAdcReading(autoSaveVoltages[2]);
+		}
+	}
+	else if (!autoSaveEnabled)
+	{
+		reply.copy("Auto save is disabled");
+	}
+	else
+	{
+		reply.printf(" Auto shutdown at %.1fV, save/pause at %.1fV, resume at %.1fV",
+			AdcReadingToPowerVoltage(autoShutdownReading), AdcReadingToPowerVoltage(autoPauseReading), AdcReadingToPowerVoltage(autoResumeReading));
+	}
+}
+
+// Save some resume information
+bool Platform::WriteFanSettings(FileStore *f) const
+{
+	bool ok = true;
+	for (size_t fanNum = 0; ok && fanNum < NUM_FANS; ++fanNum)
+	{
+		ok = fans[fanNum].WriteSettings(f, fanNum);
+	}
+	return ok;
+}
+
 #endif
 
 float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const

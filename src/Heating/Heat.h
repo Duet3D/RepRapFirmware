@@ -122,6 +122,11 @@ public:
 
 	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
 
+#ifdef DUET_NG
+	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
+	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
+#endif
+
 private:
 	Heat(const Heat&);											// Private copy constructor to prevent copying
 	TemperatureSensor **GetSensor(size_t heater);				// Get a pointer to the temperature sensor entry

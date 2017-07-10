@@ -28,15 +28,16 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-const size_t ToolNameLength = 32;				// maximum allowed length for tool names
-const uint32_t DefaultXAxisMapping = 0x0001;	// by default, X is mapped to X
+const size_t ToolNameLength = 32;					// maximum allowed length for tool names
+const uint32_t DefaultXAxisMapping = 1u << X_AXIS;	// by default, X is mapped to X
+const uint32_t DefaultYAxisMapping = 1u << Y_AXIS;	// by default, Y is mapped to Y
 
 class Filament;
 class Tool
 {
 public:
 
-	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t fanMap);
+	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t yMap, uint32_t fanMap);
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
@@ -58,9 +59,14 @@ public:
 	float InstantDv() const;
 	void Print(StringRef& reply);
 	uint32_t GetXAxisMap() const { return xMapping; }
+	uint32_t GetYAxisMap() const { return yMapping; }
 	uint32_t GetFanMapping() const { return fanMapping; }
 	Filament *GetFilament() const { return filament; }
 	Tool *Next() const { return next; }
+
+#ifdef DUET_NG
+	bool WriteSettings(FileStore *f) const;			// write the tool's settings to file
+#endif
 
 	float virtualExtruderPosition;
 
@@ -91,13 +97,20 @@ private:
 	float standbyTemperatures[Heaters];
 	size_t heaterCount;
 	float offset[MaxAxes];
-	uint32_t xMapping;
+	uint32_t xMapping, yMapping;
 	uint32_t fanMapping;
 	Filament *filament;
 	Tool* next;
 
+	enum class ToolState : uint8_t
+	{
+		off = 0,
+		active,
+		standby
+	};
+	ToolState state;
+
 	bool mixing;
-	bool active;
 	bool heaterFault;
 	volatile bool displayColdExtrudeWarning;
 };

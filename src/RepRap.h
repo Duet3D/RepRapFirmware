@@ -59,10 +59,12 @@ public:
 	void SelectTool(int toolNumber);
 	void StandbyTool(int toolNumber);
 	Tool* GetCurrentTool() const;
+	Tool* GetLastStandbyTool() const { return lastStandbyTool; }
 	Tool* GetTool(int toolNumber) const;
 	Tool* GetCurrentOrDefaultTool() const;
-	const Tool* GetFirstTool() const { return toolList; }						// Return the lowest-numbered tool
+	const Tool* GetFirstTool() const { return toolList; }				// Return the lowest-numbered tool
 	uint32_t GetCurrentXAxes() const;									// Get the current axes used as X axes
+	uint32_t GetCurrentYAxes() const;									// Get the current axes used as Y axes
 	void SetToolVariables(int toolNumber, const float* standbyTemperatures, const float* activeTemperatures);
 	bool IsHeaterAssignedToTool(int8_t heater) const;
 	unsigned int GetNumberOfContiguousTools() const;
@@ -103,6 +105,10 @@ public:
 	void SetAlert(const char *msg, const char *title, int mode, float timeout, bool showZControls);
 	void ClearAlert();
 
+#ifdef DUET_NG
+	bool WriteToolSettings(FileStore *f) const;				// Save some resume information
+#endif
+
 	static void CopyParameterText(const char* src, char *dst, size_t length);
 	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
 	static uint32_t ReadDword(const char* p);				// helper function for diagnostic tests
@@ -127,6 +133,7 @@ private:
 
 	Tool* toolList;								// the tool list is sorted in order of increasing tool number
 	Tool* currentTool;
+	Tool* lastStandbyTool;
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 
 	uint16_t activeExtruders;

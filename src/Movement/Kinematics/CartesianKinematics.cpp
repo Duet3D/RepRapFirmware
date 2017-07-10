@@ -7,7 +7,7 @@
 
 #include "CartesianKinematics.h"
 
-CartesianKinematics::CartesianKinematics() : Kinematics(KinematicsType::cartesian)
+CartesianKinematics::CartesianKinematics() : ZLeadscrewKinematics(KinematicsType::cartesian)
 {
 }
 

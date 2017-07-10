@@ -395,8 +395,6 @@ public:
 	// Movement
 
 	void EmergencyStop();
-	void SetPhysicalDrives(size_t drive, uint32_t physicalDrives);
-	uint32_t GetPhysicalDrives(size_t drive) const;
 	void SetDirection(size_t drive, bool direction);
 	void SetDirectionValue(size_t driver, bool dVal);
 	bool GetDirectionValue(size_t driver) const;
@@ -565,6 +563,8 @@ public:
 	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
 	float GetTmcDriversTemperature(unsigned int board) const;
 	void DriverCoolingFansOn(uint32_t driverChannelsMonitored);
+	void ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply, bool& error);
+	bool WriteFanSettings(FileStore *f) const;		// Save some resume information
 #endif
 
 	// User I/O and servo support
@@ -579,7 +579,6 @@ private:
 	float AdcReadingToCpuTemperature(uint32_t reading) const;
 
 #ifdef DUET_NG
-	static float AdcReadingToPowerVoltage(uint16_t reading);
 	void ReportDrivers(uint16_t whichDrivers, const char* text, bool& reported);
 #endif
 
@@ -682,9 +681,9 @@ private:
 	float pressureAdvance[MaxExtruders];
 	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
-	AxisDriversConfig axisDrivers[MaxAxes];		// the driver numbers assigned to each axis
+	AxisDriversConfig axisDrivers[MaxAxes];			// the driver numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];			// the driver number assigned to each extruder
-	uint32_t driveDriverBits[DRIVES];				// the bitmap of driver port bits for each axis or extruder
+	uint32_t driveDriverBits[2 * DRIVES];			// the bitmap of driver port bits for each axis or extruder, followed by the raw versions
 	uint32_t slowDriverStepPulseClocks;				// minimum high and low step pulse widths, in processor clocks
 	uint32_t slowDrivers;							// bitmap of driver port bits that need extended step pulse timing
 	float idleCurrentFactor;
@@ -832,6 +831,16 @@ private:
 	bool offBoardDriversFanRunning;						// true if a fan is running to cool the drivers on the DueX
 	uint32_t onBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
 	uint32_t offBoardDriversFanStartMillis;				// how many times we have suppressed a temperature warning
+	uint16_t autoShutdownReading, autoPauseReading, autoResumeReading;
+	bool autoSaveEnabled;
+
+	enum class AutoSaveState : uint8_t
+	{
+		normal = 0,
+		autoPaused,
+		autoShutdown
+	};
+	AutoSaveState autoSaveState;
 #endif
 
 	// RTC
@@ -1213,13 +1222,6 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	auxGCodeReply = nullptr;
 	return temp;
 }
-
-#ifdef DUET_NG
-inline float Platform::AdcReadingToPowerVoltage(uint16_t adcVal)
-{
-	return adcVal * (PowerFailVoltageRange/4096.0);
-}
-#endif
 
 // *** These next two functions must use the same bit assignments in the drivers bitmap ***
 // The bitmaps are organised like this:

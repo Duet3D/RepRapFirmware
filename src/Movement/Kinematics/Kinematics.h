@@ -10,6 +10,19 @@
 
 #include "GCodes/GCodeBuffer.h"
 #include "Movement/BedProbing/RandomProbePointSet.h"
+#include "Libraries/Math/Matrix.h"
+
+#ifdef DUET_NG
+typedef double floatc_t;					// type of matrix element used for calibration
+#else
+// We are more memory-constrained on the SAM3X
+typedef float floatc_t;						// type of matrix element used for calibration
+#endif
+
+inline floatc_t fcsquare(floatc_t a)
+{
+	return a * a;
+}
 
 // Different types of kinematics we support. Each of these has a class to represent it.
 // These must have the same numeric assignments as the K parameter of the M669 command, as documented in ???
@@ -75,7 +88,7 @@ public:
 	virtual void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const = 0;
 
 	// Return true if the kinematics supports auto calibration based on bed probing.
-	// Normally returns false, but overridden for delta kinematics.
+	// Normally returns false, but overridden for delta kinematics and kinematics with multiple independently-drive Z leadscrews.
 	virtual bool SupportsAutoCalibration() const { return false; }
 
 	// Perform auto calibration. Override this implementation in kinematics that support it.
@@ -104,7 +117,7 @@ public:
 
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)
-	virtual uint16_t AxesToHomeBeforeProbing() const { return (1 << X_AXIS) | (1 << Y_AXIS); }
+	virtual uint32_t AxesToHomeBeforeProbing() const { return (1u << X_AXIS) | (1u << Y_AXIS); }
 
 	// Return the initial Cartesian coordinates we assume after switching to this kinematics
 	virtual void GetAssumedInitialPosition(size_t numAxes, float positions[]) const;
@@ -124,6 +137,15 @@ public:
 
 	// Return the type of homing we do
 	virtual HomingMode GetHomingMode() const = 0;
+
+	// Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
+	// This default is good for Cartesian and Core printers, but not deltas or SCARA
+	virtual uint32_t AxesAssumedHomed(uint32_t g92Axes) const { return g92Axes; }
+
+#ifdef DUET_NG
+	// Write any calibration data that we need to resume a print after power fail, returning true if successful. Override where necessary.
+	virtual bool WriteResumeSettings(FileStore *f) const { return true; }
+#endif
 
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }
@@ -146,6 +168,10 @@ protected:
 
 	// This constructor is used by derived classes that implement segmented linear motion
 	Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0);
+
+	// Debugging functions
+	static void PrintMatrix(const char* s, const MathMatrix<floatc_t>& m, size_t numRows = 0, size_t maxCols = 0);
+	static void PrintVector(const char *s, const floatc_t *v, size_t numElems);
 
 	float segmentsPerSecond;				// if we are using segmentation, the target number of segments/second
 	float minSegmentLength;					// if we are using segmentation, the minimum segment size

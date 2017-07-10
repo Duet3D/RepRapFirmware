@@ -111,7 +111,7 @@ const Pin Z_PROBE_PIN = 33;												// AFE1_AD4/PC1 Z probe analog input
 const Pin PowerMonitorVinDetectPin = 36;								// AFE1_AD7/PC4 Vin monitor
 const Pin PowerMonitor5vDetectPin = 29;									// AFE1_AD1/PB3 5V regulator input monitor
 
-const float PowerFailVoltageRange = 11.0 * 3.3;							// we use an 11:1 voltage divider
+const float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltage divider
 
 const Pin VssaSensePin = 103;
 

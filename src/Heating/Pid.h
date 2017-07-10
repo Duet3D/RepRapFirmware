@@ -86,6 +86,10 @@ public:
 	void SetM301PidParameters(const M301PidParameters& params)
 		{ model.SetM301PidParameters(params); }
 
+#ifdef DUET_NG
+	void Suspend(bool sus);							// Suspend the heater to conserve power
+#endif
+
 private:
 
 	void SwitchOn();								// Turn the heater on and set the mode
@@ -128,6 +132,9 @@ private:
 	HeaterMode mode;								// Current state of the heater
 	bool active;									// Are we active or standby?
 	bool tuned;										// True if tuning was successful
+#ifdef DUET_NG
+	bool suspended;									// True if suspended to save power
+#endif
 	uint8_t badTemperatureCount;					// Count of sequential dud readings
 
 	static_assert(sizeof(previousTemperaturesGood) * 8 >= NumPreviousTemperatures, "too few bits in previousTemperaturesGood");
@@ -154,7 +161,6 @@ private:
 	static float tuningFastestRate;					// the fastest temperature rise
 #endif
 };
-
 
 
 inline bool PID::Active() const

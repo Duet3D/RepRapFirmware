@@ -159,7 +159,7 @@ void Move::Spin()
 					const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && kinematics->GetHomingMode() == Kinematics::homeCartesianAxes);
 					if (doMotorMapping)
 					{
-						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.moveType == 0);
+						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, nextMove.moveType == 0);
 					}
 					if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
 					{
@@ -371,7 +371,7 @@ bool Move::PausePrint(RestorePoint& rp)
 		rp.moveCoords[axis] = prevDda->GetEndCoordinate(axis, false);
 	}
 
-	InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes());	// we assume that xAxes hasn't changed between the moves
+	InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes(), prevDda->GetYAxes());	// we assume that xAxes hasn't changed between the moves
 
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
@@ -482,7 +482,7 @@ void Move::SetNewPosition(const float positionNow[DRIVES], bool doBedCompensatio
 {
 	float newPos[DRIVES];
 	memcpy(newPos, positionNow, sizeof(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), doBedCompensation);
+	AxisAndBedTransform(newPos, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes(), doBedCompensation);
 	SetLiveCoordinates(newPos);
 	SetPositions(newPos);
 }
@@ -544,18 +544,18 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 	return b;
 }
 
-void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, bool useBedCompensation) const
+void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes, bool useBedCompensation) const
 {
 	AxisTransform(xyzPoint);
 	if (useBedCompensation)
 	{
-		BedTransform(xyzPoint, xAxes);
+		BedTransform(xyzPoint, xAxes, yAxes);
 	}
 }
 
-void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes) const
+void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes) const
 {
-	InverseBedTransform(xyzPoint, xAxes);
+	InverseBedTransform(xyzPoint, xAxes, yAxes);
 	InverseAxisTransform(xyzPoint);
 }
 
@@ -576,36 +576,43 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes]) const
 }
 
 // Do the bed transform AFTER the axis transform
-void Move::BedTransform(float xyzPoint[MaxAxes], uint32_t xAxes) const
+void Move::BedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes) const
 {
 	if (!useTaper || xyzPoint[Z_AXIS] < taperHeight)
 	{
 		float zCorrection = 0.0;
 		const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-		unsigned int numXAxes = 0;
+		unsigned int numCorrections = 0;
 
 		// Transform the Z coordinate based on the average correction for each axis used as an X axis.
 		// We are assuming that the tool Y offsets are small enough to be ignored.
-		for (uint32_t axis = 0; axis < numAxes; ++axis)
+		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 		{
-			if ((xAxes & (1u << axis)) != 0)
+			if ((xAxes & (1u << xAxis)) != 0)
 			{
-				const float xCoord = xyzPoint[axis];
-				if (usingMesh)
+				const float xCoord = xyzPoint[xAxis];
+				for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
 				{
-					zCorrection += grid.GetInterpolatedHeightError(xCoord, xyzPoint[Y_AXIS]);
+					if ((yAxes & (1u << yAxis)) != 0)
+					{
+						const float yCoord = xyzPoint[yAxis];
+						if (usingMesh)
+						{
+							zCorrection += grid.GetInterpolatedHeightError(xCoord, yCoord);
+						}
+						else
+						{
+							zCorrection += probePoints.GetInterpolatedHeightError(xCoord, yCoord);
+						}
+						++numCorrections;
+					}
 				}
-				else
-				{
-					zCorrection += probePoints.GetInterpolatedHeightError(xCoord, xyzPoint[Y_AXIS]);
-				}
-				++numXAxes;
 			}
 		}
 
-		if (numXAxes > 1)
+		if (numCorrections > 1)
 		{
-			zCorrection /= numXAxes;			// take an average
+			zCorrection /= numCorrections;			// take an average
 		}
 
 		xyzPoint[Z_AXIS] += (useTaper) ? (taperHeight - xyzPoint[Z_AXIS]) * recipTaperHeight * zCorrection : zCorrection;
@@ -613,35 +620,41 @@ void Move::BedTransform(float xyzPoint[MaxAxes], uint32_t xAxes) const
 }
 
 // Invert the bed transform BEFORE the axis transform
-void Move::InverseBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes) const
+void Move::InverseBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes) const
 {
 	float zCorrection = 0.0;
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-	unsigned int numXAxes = 0;
+	unsigned int numCorrections = 0;
 
 	// Transform the Z coordinate based on the average correction for each axis used as an X axis.
 	// We are assuming that the tool Y offsets are small enough to be ignored.
-	for (uint32_t axis = 0; axis < numAxes; ++axis)
+	for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 	{
-		if ((xAxes & (1u << axis)) != 0)
+		if ((xAxes & (1u << xAxis)) != 0)
 		{
-			const float xCoord = xyzPoint[axis];
-			if (usingMesh)
+			const float xCoord = xyzPoint[xAxis];
+			for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
 			{
-				zCorrection += grid.GetInterpolatedHeightError(xCoord, xyzPoint[Y_AXIS]);
+				if ((yAxes & (1u << yAxis)) != 0)
+				{
+					const float yCoord = xyzPoint[yAxis];
+					if (usingMesh)
+					{
+						zCorrection += grid.GetInterpolatedHeightError(xCoord, yCoord);
+					}
+					else
+					{
+						zCorrection += probePoints.GetInterpolatedHeightError(xCoord, yCoord);
+					}
+					++numCorrections;
+				}
 			}
-			else
-			{
-				zCorrection += probePoints.GetInterpolatedHeightError(xCoord, xyzPoint[Y_AXIS]);
-
-			}
-			++numXAxes;
 		}
 	}
 
-	if (numXAxes > 1)
+	if (numCorrections > 1)
 	{
-		zCorrection /= numXAxes;					// take an average
+		zCorrection /= numCorrections;				// take an average
 	}
 
 	if (!useTaper || zCorrection >= taperHeight)	// need check on zCorrection to avoid possible divide by zero
@@ -898,18 +911,18 @@ bool Move::IsExtruding() const
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xAxes) const
+void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xAxes, uint32_t yAxes) const
 {
 	GetCurrentMachinePosition(m, moveType == 2 || (moveType == 1 && IsDeltaMode()));
 	if (moveType == 0)
 	{
-		InverseAxisAndBedTransform(m, xAxes);
+		InverseAxisAndBedTransform(m, xAxes, yAxes);
 	}
 }
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry
-void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes)
+void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes, uint32_t yAxes)
 {
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
@@ -940,7 +953,7 @@ void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes)
 		}
 		cpu_irq_enable();
 	}
-	InverseAxisAndBedTransform(m, xAxes);
+	InverseAxisAndBedTransform(m, xAxes, yAxes);
 }
 
 // These are the actual numbers that we want to be the coordinates, so don't transform them.
@@ -1009,11 +1022,23 @@ float Move::GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePo
 void Move::Simulate(uint8_t simMode)
 {
 	simulationMode = simMode;
-	if (simMode)
+	if (simMode != 0)
 	{
 		simulationTime = 0.0;
 	}
 }
+
+#ifdef DUET_NG
+
+// Write settings for resuming the print
+// The GCodes module deals with the head position so all we need worry about is the bed compensation
+// We don't handle random probe point bed compensation, and we assume that if a height map is being used it is the default one.
+bool Move::WriteResumeSettings(FileStore *f) const
+{
+	return kinematics->WriteResumeSettings(f) && (!usingMesh || f->Write("G29 S1\n"));
+}
+
+#endif
 
 // For debugging
 void Move::PrintCurrentDda() const

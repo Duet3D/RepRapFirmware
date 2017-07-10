@@ -490,7 +490,7 @@ void GCodeBuffer::TryGetIValue(char c, int32_t& val, bool& seen)
 }
 
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
-// If the wrong number of value is provided, generate an error message and return true.
+// If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
 bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen)
 {
