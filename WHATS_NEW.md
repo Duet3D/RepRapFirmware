@@ -15,6 +15,8 @@ New and changed features:
 - The M305 command now uses the S parameter to set the heater name instead of the H parameter
 - The meaning of the first M669 crosstalk parameter for a SCARA printer has changed. A zero value now means that the proximal motor does not affect the proximal-to-distal arm angle.
 - The CoreXY kinematics calculations have been changed to conform to the way they are defined in other firmwares and at CoreXY.com. See the important upgrade notes. The CoreXZ and CoreXYU kinematics have been changhed similarly.
+- The maximum allowed target temperature for auto tuning now depends on the configured maximum temperature for that heater
+- The heater gain that provokes a warning when setting heater model parameters with M307 or after auto tuning now depends on the configured maximum temperature for that heater
 
 Bug fixes:
 - G2 and G3 arc movement commands didnlt work when the X axis was mapped
