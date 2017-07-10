@@ -14,14 +14,15 @@ New and changed features:
 - When the WiFi module is in access point mode, M122 displays the number of connected clients (needs DuetWiFiServer 1.19beta9)
 - The M305 command now uses the S parameter to set the heater name instead of the H parameter
 - The meaning of the first M669 crosstalk parameter for a SCARA printer has changed. A zero value now means that the proximal motor does not affect the proximal-to-distal arm angle.
-- The CoreXY kinematics calculations have been changed to conform to the way they are defined in other firmwares and at CoreXY.com. See the important upgrade notes. The CoreXZ and CoreXYU kinematics have been changhed similarly.
+- The CoreXY kinematics calculations have been changed to conform to the way they are defined in other firmwares and at CoreXY.com. See the important upgrade notes. The CoreXZ and CoreXYU kinematics have been changed similarly.
 - The maximum allowed target temperature for auto tuning now depends on the configured maximum temperature for that heater
 - The heater gain that provokes a warning when setting heater model parameters with M307 or after auto tuning now depends on the configured maximum temperature for that heater
 
 Bug fixes:
-- G2 and G3 arc movement commands didnlt work when the X axis was mapped
+- G2 and G3 arc movement commands didn't work when the X axis was mapped
 - On an IDEX machine there was unwanted movement of the new tool after a tool change occurred
 - Duet WiFiServer 1.19-beta9: fixed a bug that sometimes caused WiFi connection failures
+- On the Duet WiFi, if the own access point parameters were configurds but the list of remembered host access points was empty, the own access point name appeared in the remembered list displayed by M587
 
 Upgrade notes:
 - **Important!** On a CoreXY machine, you need to either swap the X and Y motor connections, or set the Y axis factor to -1 in the M667 command. Similarly for CoreXZ and CoreXYU machines.
