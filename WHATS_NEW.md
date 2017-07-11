@@ -1,6 +1,12 @@
 Summary of important changes in recent versions
 ===============================================
 
+Post 1.19beta9 (no binary releases yet):
+
+- Clear HSMCI callback when exiting RepRap module e.g. to flash new firmware
+- M669 with no parameters now reports the bed offset on a SCARA machine as well as the other parameters
+- M671 with no parameters now reports the maximum correction as well as the leadscrew positions
+
 Version 1.19beta9
 =================
 
