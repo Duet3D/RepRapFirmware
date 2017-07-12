@@ -21,4 +21,25 @@ Instructions for building dc42 fork of RepRapFirmware under Windows
 
 9. Build CoreNG first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS build of RRF has its own build of CoreNG.
 
-D Crocker, updated 2017-06-18.
+Instructions for building dc42 fork of RepRapFirmware under macOS
+===================================================================
+
+1. Download and install Arduino IDE, and start it.
+
+2. Go to: Tools -> Board -> Boards Manager... and install "Arduino SAM Boards"
+
+3. Download and install Eclipse. Oxygen Release (4.7.0) exists while writing these instructions.
+
+4. Download or clone the RepRapFirmware, CoreNG and DuetWiFiSocketServer projects into your workspace. Keep the folder names as is.
+
+5. Open Eclipse and import RepRapFirmware and CoreNG projects.
+
+6. Right click "RepRapFirmware" project and select Properties. Go To "C/C++ Build -> Settings" and change the path: `/Users/<YOUR USER NAME>/Library/Arduino15/packages/arduino/tools/arm-none-eabi-gcc/4.8.3-2014q1/bin`. You better visit that folder before changing on Eclipse to check whether it exists. If it does not, go to `/Users/<YOUR USER NAME>/Library/Arduino15/packages/arduino/tools/arm-none-eabi-gcc` and find the toolchain path.
+
+7. Do the same for CoreNG project.
+
+8. Again Right click "RepRapFirmware" project and select Properties. Go To "C/C++ Build -> Settings". Under "Cross GCC Compiler" and "Cross G++ Compiler" you will see "Includes". Add DuetWiFiSocketServer's `src/includes` folder to the "Include paths (-I)" of both "Cross GCC Compiler" and "Cross G++ Compiler".
+
+9. Build CoreNG first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS build of RRF has its own build of CoreNG.
+
+D Crocker, updated 2017-07-12.
