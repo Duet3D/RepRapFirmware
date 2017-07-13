@@ -2625,12 +2625,6 @@ void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
 		return;
 	}
 
-	if (eofStringCounter != 0 && b != eofString[eofStringCounter])
-	{
-		fileBeingWritten->Write(eofString);
-		eofStringCounter = 0;
-	}
-
 	if (b == eofString[eofStringCounter])
 	{
 		eofStringCounter++;
@@ -2646,6 +2640,14 @@ void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
 	}
 	else
 	{
+		if (eofStringCounter != 0)
+		{
+			for (int i=0; i < eofStringCounter; i++)
+			{
+				fileBeingWritten->Write(eofString[i]);
+			}
+		}
+		eofStringCounter = 0;
 		// NB: This approach isn't very efficient, but I (chrishamm) think the whole uploading
 		// code should be rewritten anyway in the future and moved away from the GCodes class.
 		fileBeingWritten->Write(b);
