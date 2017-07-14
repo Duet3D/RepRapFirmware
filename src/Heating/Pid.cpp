@@ -808,7 +808,7 @@ void PID::CalculateModel()
 	const float heatingTime = (tuningHeatingTime - tuningPeakDelay) * 0.001;
 	const float gain = (tuningHeaterOffTemp - tuningStartTemp)/(1.0 - exp(-heatingTime/tc));
 
-	tuned = SetModel(gain, tc, td, model.GetMaxPwm(), true);
+	tuned = SetModel(gain, tc, td, tuningPwm, true);
 	if (tuned)
 	{
 		platform.MessageF(GENERIC_MESSAGE,
