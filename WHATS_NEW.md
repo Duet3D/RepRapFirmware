@@ -1,21 +1,24 @@
 Summary of important changes in recent versions
 ===============================================
 
-Post 1.19beta9 (no binary releases yet):
+1.19beta10 (release pending):
 
 - Clear HSMCI callback when exiting RepRap module e.g. to flash new firmware
 - M669 with no parameters now reports the bed offset on a SCARA machine as well as the other parameters
 - M671 with no parameters now reports the maximum correction as well as the leadscrew positions
-- Refactored and completed 4-leadscrew bed levelling code, pending testing
+- Refactored and completed 4-leadscrew bed levelling code
 - M577 now allows separate X and Y spacings, use Sxxx:yyy
 - Reduced the maximum number of random probe points on Duet WiFi/Ethernet to 32 to avoid running out of memory during delta auto calibration
-- Simplified the axis configuration code
-- Added new bitmap types and function templates to work on them
+- Simplified the axis orthogonality correction code
+- Added new bitmap types along with function templates to work on them
 - Merged in chrishamm's changes to heater reporting for DWC, gcode input buffer resetting, and '(' comments in gcode
 - TEMPERATURE_CLOSE_ENOUGH reduced from 2.5C to 1.0C
 - Use lrintf() instead of round()
 - Heater model max PWM is now set to tuning PWM after auto tuning (user-contributed)
+- Heater tuning peak detection algorithm changed (but still needs more work)
+- Volumetric extrusion is now supported (M200)
 - Bug fix for uploading HTML file over USB if the data contains a partial EOF string (user-contributed)
+- DriveMovement structures are now allocated dynamically from a freelist, to allow more moves ot be queued in typical cases
 
 Version 1.19beta9
 =================
