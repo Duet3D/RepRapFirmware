@@ -14,7 +14,7 @@
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(const char* id, MessageType mt, bool usesCodeQueue)
 	: machineState(new GCodeMachineState()), identity(id), checksumRequired(false), writingFileDirectory(nullptr),
-	  toolNumberAdjust(0), responseMessageType(mt), queueCodes(usesCodeQueue)
+	  toolNumberAdjust(0), responseMessageType(mt), queueCodes(usesCodeQueue), binaryWriting(false)
 {
 	Init();
 }

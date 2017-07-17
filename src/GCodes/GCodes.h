@@ -218,7 +218,8 @@ private:
 	void SetMACAddress(GCodeBuffer& gb);								// Deals with an M540
 	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
-	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName);	// Start saving GCodes in a file
+	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite);	// Start saving GCodes in a file
+	void FinishWrite(GCodeBuffer& gb);									// Finish writing to the file and respond
 	bool SendConfigToLine();											// Deal with M503
 	bool OffsetAxes(GCodeBuffer& gb);									// Set offsets - deprecated, use G10
 	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
@@ -336,6 +337,8 @@ private:
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
 	FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) to
+	FilePosition fileSize;						// Size of the file being written
+	FilePosition writtenSize;					// Written data size to the file
 	uint16_t toBeHomed;							// Bitmap of axes still to be homed
 	int oldToolNumber, newToolNumber;			// Tools being changed
 	int toolChangeParam;						// Bitmap of all the macros to be run during a tool change

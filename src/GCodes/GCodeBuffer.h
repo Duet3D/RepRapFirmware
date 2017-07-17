@@ -65,6 +65,8 @@ public:
 	const bool CanQueueCodes() const { return queueCodes; }
 	void MessageAcknowledged(bool cancelled);
 	FilePosition GetFilePosition(size_t bytesCached) const;	// Get the file position at the start of the current command
+	bool IsWritingBinary() const;		// returns true if writing binary
+	void SetBinaryWriting(bool state);	// set true if writing binary
 
 	uint32_t whenTimerStarted;							// when we started waiting
 	bool timerRunning;									// true if we are waiting
@@ -94,7 +96,18 @@ private:
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
 	bool queueCodes;									// Can we queue certain G-codes from this source?
+	bool binaryWriting;									// Executing gcode or writing binary file?
 };
+
+inline bool GCodeBuffer::IsWritingBinary() const
+{
+	return binaryWriting;
+}
+
+inline void GCodeBuffer::SetBinaryWriting(bool state)
+{
+	binaryWriting = state;
+}
 
 inline const char* GCodeBuffer::Buffer() const
 {

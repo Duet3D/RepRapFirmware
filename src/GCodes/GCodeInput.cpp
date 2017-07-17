@@ -28,7 +28,7 @@ bool StreamGCodeInput::FillBuffer(GCodeBuffer *gb)
 	{
 		char c = static_cast<char>(device.read());
 
-		if (gb->WritingFileDirectory() == reprap.GetPlatform().GetWebDir())
+		if (gb->IsWritingBinary())
 		{
 			// HTML uploads are handled by the GCodes class
 			reprap.GetGCodes().WriteHTMLToFile(*gb, c);
@@ -83,7 +83,7 @@ bool RegularGCodeInput::FillBuffer(GCodeBuffer *gb)
 		}
 
 		// Pass it on to the GCodeBuffer
-		if (gb->WritingFileDirectory() == reprap.GetPlatform().GetWebDir())
+		if (gb->IsWritingBinary())
 		{
 			// HTML uploads are handled by the GCodes class
 			reprap.GetGCodes().WriteHTMLToFile(*gb, c);

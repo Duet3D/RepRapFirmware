@@ -574,7 +574,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const char* str = gb.GetUnprecedentedString();
 			if (str != nullptr)
 			{
-				bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), str);
+				bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), str, 0, false);
 				if (ok)
 				{
 					reply.printf("Writing to file: %s", str);
@@ -2340,37 +2340,30 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 559: // Upload config.g or another gcode file to put in the sys directory
+	case 559:
+	case 560: // Binary writing
+	{
+		const char* folder = platform.GetSysDir();
+		const char* defaultFile = platform.GetConfigFile();
+		if (code == 560)
 		{
-			const char* str = (gb.Seen('P') ? gb.GetString() : platform.GetConfigFile());
-			const bool ok = OpenFileToWrite(gb, platform.GetSysDir(), str);
-			if (ok)
-			{
-				reply.printf("Writing to file: %s", str);
-			}
-			else
-			{
-				reply.printf("Can't open file %s for writing.", str);
-				error = true;
-			}
+			folder = platform.GetWebDir();
+			defaultFile = INDEX_PAGE_FILE;
 		}
-		break;
-
-	case 560: // Upload reprap.htm or another web interface file
+		const char* filename = (gb.Seen('P') ? gb.GetString() : defaultFile);
+		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
+		const bool ok = OpenFileToWrite(gb, folder, filename, size, true);
+		if (ok)
 		{
-			const char* str = (gb.Seen('P') ? gb.GetString() : INDEX_PAGE_FILE);
-			const bool ok = OpenFileToWrite(gb, platform.GetWebDir(), str);
-			if (ok)
-			{
-				reply.printf("Writing to file: %s", str);
-			}
-			else
-			{
-				reply.printf("Can't open file %s for writing.", str);
-				error = true;
-			}
+			reply.printf("Writing to file: %s", filename);
 		}
-		break;
+		else
+		{
+			reply.printf("Can't open file %s for writing.", filename);
+			error = true;
+		}
+	}
+	break;
 
 	case 561: // Set identity transform (also clears bed probe grid)
 		reprap.GetMove().SetIdentityTransform();
