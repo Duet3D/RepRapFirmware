@@ -11,22 +11,12 @@
 #include "GCodes.h"
 
 
-// G-code input class for wrapping around Stream-based hardware ports
-
-void StreamGCodeInput::Reset()
+bool GCodeInput::FillBuffer(GCodeBuffer *gb)
 {
-	while (device.available() > 0)
-	{
-		device.read();
-	}
-}
-
-bool StreamGCodeInput::FillBuffer(GCodeBuffer *gb)
-{
-	size_t bytesToPass = min<size_t>(device.available(), GCODE_LENGTH);
+	size_t bytesToPass = min<size_t>(BytesCached(), GCODE_LENGTH);
 	for(size_t i = 0; i < bytesToPass; i++)
 	{
-		char c = static_cast<char>(device.read());
+		char c = ReadByte();
 
 		if (gb->IsWritingBinary())
 		{
@@ -48,6 +38,21 @@ bool StreamGCodeInput::FillBuffer(GCodeBuffer *gb)
 	}
 
 	return false;
+}
+
+// G-code input class for wrapping around Stream-based hardware ports
+
+void StreamGCodeInput::Reset()
+{
+	while (device.available() > 0)
+	{
+		device.read();
+	}
+}
+
+char StreamGCodeInput::ReadByte()
+{
+	return static_cast<char>(device.read());
 }
 
 size_t StreamGCodeInput::BytesCached() const
@@ -70,40 +75,16 @@ void RegularGCodeInput::Reset()
 	writingPointer = readingPointer = 0;
 }
 
-bool RegularGCodeInput::FillBuffer(GCodeBuffer *gb)
+char RegularGCodeInput::ReadByte()
 {
-	size_t bytesToPass = min<size_t>(BytesCached(), GCODE_LENGTH);
-	for(size_t i = 0; i < bytesToPass; i++)
+	char c = buffer[readingPointer++];
+	if (readingPointer == GCodeInputBufferSize)
 	{
-		// Get a char from the buffer
-		char c = buffer[readingPointer++];
-		if (readingPointer == GCodeInputBufferSize)
-		{
-			readingPointer = 0;
-		}
-
-		// Pass it on to the GCodeBuffer
-		if (gb->IsWritingBinary())
-		{
-			// HTML uploads are handled by the GCodes class
-			reprap.GetGCodes().WriteHTMLToFile(*gb, c);
-		}
-		else if (gb->Put(c))
-		{
-			// Check if we can finish a file upload
-			if (gb->WritingFileDirectory() != nullptr)
-			{
-				reprap.GetGCodes().WriteGCodeToFile(*gb);
-				gb->SetFinished(true);
-			}
-
-			// Code is complete, stop here
-			return true;
-		}
+		readingPointer = 0;
 	}
-
-	return false;
+	return c;
 }
+
 
 size_t RegularGCodeInput::BytesCached() const
 {
