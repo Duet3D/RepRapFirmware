@@ -820,7 +820,6 @@ void PID::CalculateModel()
 	const float heatingTime = (tuningHeatingTime - tuningPeakDelay) * 0.001;
 	const float gain = (tuningHeaterOffTemp - tuningStartTemp)/(1.0 - exp(-heatingTime/tc));
 
-<<<<<<< HEAD
 	// There are two ways of calculating the dead time:
 	// 1. Based on the delay to peak temperature after we turned the heater off. Adding 0.5sec and then taking 65% of the result is about right.
 	// 2. Based on the peak temperature compared to the temperature at which we turned the heater off.
@@ -828,8 +827,6 @@ void PID::CalculateModel()
 	//const float td = (float)(tuningPeakDelay + 500) * 0.00065;		// take the dead time as 65% of the delay to peak rounded up to a half second
 	const float td = tc * logf((gain + tuningStartTemp - tuningHeaterOffTemp)/(gain + tuningStartTemp - tuningPeakTemperature)) * 1.3;
 
-=======
->>>>>>> origin/dev
 	tuned = SetModel(gain, tc, td, tuningPwm, true);
 	if (tuned)
 	{
