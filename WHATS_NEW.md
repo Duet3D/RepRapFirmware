@@ -1,12 +1,46 @@
 Summary of important changes in recent versions
 ===============================================
 
-Post 1.19beta9 (no binary releases yet):
+Version 1.19beta10
+==================
 
-- Clear HSMCI callback when exiting RepRap module e.g. to flash new firmware
+New features:
+- Refactored and completed 4-leadscrew bed levelling code
+- Probe deployment and retraction for G30 and G29 commands is now handled automatically. You should still include a M401 command before the first G30 command in bed.g and a M402 command after the last one, so that the probe deploys and retracts once for the entire sequence instead of once per G30 command.
+- M577 now allows separate X and Y spacings, use Sxxx:yyy
+- Volumetric extrusion is now supported (M200)
+- Additional tool/heater data is provided to DWC (thanks chrishamm). Using Heater 0 as a tool heater should now work.
+- The '(' character in a gcode file now introduces a comment, just as the ';' character does. The comment is terminated at end-of-line. This is not the same as in some CNC gcodes, where a comment introduced by '(' is terminated by ')'.
+- Heater tuning peak detection algorithm changed (but still needs more work). This may fix some "no peak detected" reports during auto tuning.
+- The heater dead time is how taken as 60% of the peak delay time intead of 100%, which results in more aggressive PID parameters.
+
+Bug fixes:
 - M669 with no parameters now reports the bed offset on a SCARA machine as well as the other parameters
 - M671 with no parameters now reports the maximum correction as well as the leadscrew positions
-- Refactored 4-leadscrew bed levelling code
+- Heater model max PWM is now set to tuning PWM after auto tuning (thanks cangelis)
+- If an HTML file uploaded over USB contained an embedded leading substring of the EOF string, incorrect data was written to file (thanks cangelis)
+- Fixed incorrect movement following a tool change on an IDEX machine (thanks lars)
+- RADDS build would not start up
+
+Other changes:
+- TEMPERATURE_CLOSE_ENOUGH reduced from 2.5C to 1.0C
+- Reduced the maximum number of random probe points on Duet WiFi/Ethernet to 32 to avoid running out of memory during delta auto calibration
+- Simplified the axis orthogonality correction code
+- Added new bitmap types along with function templates to work on them
+- Clear HSMCI callback when exiting RepRap module e.g. to flash new firmware
+- Use lrintf() instead of round()
+- DriveMovement structures are now allocated dynamically from a freelist, to allow more moves to be queued in typical cases. The number free and minimum ever free is included in the M122 report.
+
+Known issues:
+- Some Duet WiFi and Duet Ethernet users report that over-the-web firmware updates do not work. The firmware update process hangs (the PanelDue message gets stuck at "Upgrading main firmware") and when you restart the Duet, the previous firmware is still running. Until we resolve this, if you are affected then you will need to use SAM-BA or Bossa/bossac 1.8 to instal new firmware over USB.
+- Although the WiFi module can be put into access point mode using M589 and M552 S1, WiFi access does not work properly in access point mode.
+
+Upgrade notes:
+- The recommended version of DWC is 1.17+1.
+- The recommended version of DuetWiFiServer is 1.19beta9.
+- **Important!** If you use an IR Z probe or some other type that does not need to be deployed, delete the files sys/deployprobe and sys/retractprobe.g if they exist, because they are now called automatically. You can do this in the System Files Editor of the web interface.
+- **Important!** On a CoreXY machine, if upgrading from a version prior to 1.19beta9, you need to either swap the X and Y motor connections, or set the Y axis factor to -1 in the M667 command. Similarly for CoreXZ and CoreXYU machines.
+- When upgrading a Duet WiFi from 1.18.2 or earlier firmware, see the important notes at https://duet3d.com/wiki/DuetWiFiFirmware_1.19beta. When upgrading from a 1.19beta version earlier than 1.19beta9 then you should also upgrade DuetWiFiServer.bin to version 1.19beta9 but you do not need to perform a simultaneous upgrade in this case. 
 
 Version 1.19beta9
 =================
@@ -103,11 +137,11 @@ Areas of code refactored (so watch out for new bugs):
 Upgrade notes:
 - SSIDs and passwords in M587, M588 and M589 commands must now be enclosed in double quotes. If you use macro files to set up SSIDs and passwords of access point to connect to, check whether they have the quotation marks.
 - Height map filenames in G29, M374 and M375 commands must now be enclosed in double quotes
-- On a Duet WiFi, if you are upgrading form an earlier 1.19beta then you should also upgrade DuetWiFiServer.bin to version 1.19beta7. You do not need to perform a simultaneous upgrade, but M587 and M589 reporting functionality won't work correctly if your DuetWiFiFirmware and DuetWiFiServer versions are out of step. If yu are upgrading a Duet WiFi form 1.18.2 oe earlier firmware, see the important notes at https://duet3d.com/wiki/DuetWiFiFirmware_1.19beta.
+- On a Duet WiFi, if you are upgrading from an earlier 1.19beta then you should also upgrade DuetWiFiServer.bin to version 1.19beta7. You do not need to perform a simultaneous upgrade, but M587 and M589 reporting functionality won't work correctly if your DuetWiFiFirmware and DuetWiFiServer versions are out of step. If yu are upgrading a Duet WiFi from 1.18.2 ot earlier firmware, see the important notes at https://duet3d.com/wiki/DuetWiFiFirmware_1.19beta.
 - Every heater that you use must now be configured using a M305 command with a P parameter that identifies the heater. Previously, if a heater used default thermistor parameters, you could omit the M305 command for that heater.
 
 Known issues:
-- Although the WiFi module can now be put into access point mode using M589 abnd M552 S1, WiFi access does not work properly in access point mode
+- Although the WiFi module can now be put into access point mode using M589 and M552 S1, WiFi access does not work properly in access point mode
 
 Version 1.19beta6
 =================
