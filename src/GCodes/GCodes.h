@@ -37,18 +37,18 @@ const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
 
 // Type for specifying which endstops we want to check
-typedef uint16_t EndstopChecks;							// must be large enough to hold a bitmap of drive numbers or ZProbeActive
-const EndstopChecks ZProbeActive = 1 << 15;				// must be distinct from 1 << (any drive number)
-const EndstopChecks HomeAxes = 1 << 14;					// must be distinct from 1 << (any drive number)
-const EndstopChecks GoingSlow = 1 << 13;				// must be distinct from 1 << (any drive number)
-const EndstopChecks LogProbeChanges = 1 << 12;			// must be distinct from 1 << (any drive number)
+typedef AxesBitmap EndstopChecks;						// must be large enough to hold a bitmap of drive numbers or ZProbeActive
+const EndstopChecks ZProbeActive = 1 << 31;				// must be distinct from 1 << (any drive number)
+const EndstopChecks HomeAxes = 1 << 30;					// must be distinct from 1 << (any drive number)
+const EndstopChecks LogProbeChanges = 1 << 29;			// must be distinct from 1 << (any drive number)
 
-typedef uint16_t TriggerMask;
+typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
+typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
 
 struct Trigger
 {
-	TriggerMask rising;
-	TriggerMask falling;
+	TriggerInputsBitmap rising;
+	TriggerInputsBitmap falling;
 	uint8_t condition;
 
 	void Init()
@@ -83,8 +83,8 @@ public:
 		float feedRate;													// feed rate of this move
 		float virtualExtruderPosition;									// the virtual extruder position of the current tool at the start of this move
 		FilePosition filePos;											// offset in the file being printed at the start of reading this move
-		uint32_t xAxes;													// axes that X is mapped to
-		uint32_t yAxes;													// axes that Y is mapped to
+		AxesBitmap xAxes;												// axes that X is mapped to
+		AxesBitmap yAxes;												// axes that Y is mapped to
 		EndstopChecks endStopsToCheck;									// endstops to check
 #if SUPPORT_IOBITS
 		IoBits_t ioBits;												// I/O bits to set/clear at the start of this move
@@ -115,11 +115,11 @@ public:
 	bool IsDaemonBusy() const;											// Return true if the daemon is busy running config.g or a trigger file
 
 	bool GetAxisIsHomed(unsigned int axis) const						// Has the axis been homed?
-		{ return (axesHomed & (1 << axis)) != 0; }
+		{ return IsBitSet(axesHomed, axis); }
 	void SetAxisIsHomed(unsigned int axis)								// Tell us that the axis is now homed
-		{ axesHomed |= (1 << axis); }
+		{ SetBit(axesHomed, axis); }
 	void SetAxisNotHomed(unsigned int axis)								// Tell us that the axis is not homed
-		{ axesHomed &= ~(1 << axis); }
+		{ ClearBit(axesHomed, axis); }
 
 	float GetSpeedFactor() const { return speedFactor * MinutesToSeconds; }	// Return the current speed factor
 	float GetExtrusionFactor(size_t extruder) { return extrusionFactors[extruder]; } // Return the current extrusion factors
@@ -243,7 +243,7 @@ private:
 	bool LoadFilament(GCodeBuffer& gb, StringRef& reply, bool &error);	// Load the specified filament into a tool
 	bool UnloadFilament(GCodeBuffer& gb, StringRef& reply, bool &error); // Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive
-	void ListTriggers(StringRef reply, TriggerMask mask);				// Append a list of trigger endstops to a message
+	void ListTriggers(StringRef reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
 	void CheckTriggers();												// Check for and execute triggers
 	void DoEmergencyStop();												// Execute an emergency stop
 
@@ -269,8 +269,6 @@ private:
 #ifdef DUET_NG
 	void SaveResumeInfo();
 #endif
-
-	static uint32_t LongArrayToBitMap(const long *arr, size_t numEntries);	// Convert an array of longs to a bit map
 
 	Platform& platform;													// The RepRap machine
 
@@ -336,7 +334,7 @@ private:
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
 	FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) to
-	uint16_t toBeHomed;							// Bitmap of axes still to be homed
+	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	int oldToolNumber, newToolNumber;			// Tools being changed
 	int toolChangeParam;						// Bitmap of all the macros to be run during a tool change
 
@@ -344,21 +342,25 @@ private:
 	uint8_t eofStringCounter;					// Check the...
 	uint8_t eofStringLength;					// ... EoF string as we read.
 	bool limitAxes;								// Don't think outside the box.
-	uint32_t axesHomed;							// Bitmap of which axes have been homed
+	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 	float pausedFanSpeeds[NUM_FANS];			// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
 	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
 	float speedFactor;							// speed factor, including the conversion from mm/min to mm/sec, normally 1/60
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
+	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepZOffset;				// The accumulated Z offset due to baby stepping requests
 
 	// Z probe
 	int32_t g30ProbePointIndex;					// the index of the point we are probing (G30 P parameter), or -1 if none
+	int g30SValue;								// S parameter in the G30 command, or -2 if there wasn't one
 	float lastProbedZ;							// the last height at which the Z probe stopped
+	float zStoppedHeight;						// the height to report after running G30 S-1
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridXindex, gridYindex;				// Which grid probe point is next
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
+	bool probeIsDeployed;						// true if M401 has been used to deploy the probe and M402 has not yet been used t0 retract it
 
 	float simulationTime;						// Accumulated simulation time
 	uint8_t simulationMode;						// 0 = not simulating, 1 = simulating, >1 are simulation modes for debugging
@@ -372,9 +374,9 @@ private:
 
 	// Triggers
 	Trigger triggers[MaxTriggers];				// Trigger conditions
-	TriggerMask lastEndstopStates;				// States of the endstop inputs last time we looked
+	TriggerInputsBitmap lastEndstopStates;		// States of the trigger inputs last time we looked
 	static_assert(MaxTriggers <= 32, "Too many triggers");
-	uint32_t triggersPending;					// Bitmap of triggers pending but not yet executed
+	TriggerNumbersBitmap triggersPending;		// Bitmap of triggers pending but not yet executed
 
 	// Firmware update
 	uint8_t firmwareUpdateModuleMap;			// Bitmap of firmware modules to be updated
@@ -392,7 +394,7 @@ private:
 	// Misc
 	float longWait;								// Timer for things that happen occasionally (seconds)
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
-	uint16_t axesToSenseLength;					// The axes on which we are performing axis length sensing
+	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting

@@ -2756,4 +2756,4 @@ void Webserver::TelnetInterpreter::SendGCodeReply()
 	gcodeReply = nullptr;
 }
 
-// vim: ts=4:sw=4
+// End

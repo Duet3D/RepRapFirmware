@@ -478,8 +478,8 @@ public:
 	int GetZProbeSecondaryValues(int& v1, int& v2);
 	void SetZProbeType(int iZ);
 	int GetZProbeType() const { return zProbeType; }
-	void SetZProbeAxes(uint32_t axes);
-	uint32_t GetZProbeAxes() const { return zProbeAxes; }
+	void SetZProbeAxes(AxesBitmap axes);
+	AxesBitmap GetZProbeAxes() const { return zProbeAxes; }
 	const ZProbeParameters& GetZProbeParameters(int32_t probeType) const;
 	const ZProbeParameters& GetCurrentZProbeParameters() const { return GetZProbeParameters(zProbeType); }
 	void SetZProbeParameters(int32_t probeType, const struct ZProbeParameters& params);
@@ -636,7 +636,7 @@ private:
 	ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
 	ZProbeParameters alternateZProbeParameters;		// Z probe values for the alternate sensor
 	int zProbeType;									// the type of Z probe we are currently using
-	uint32_t zProbeAxes;							// Z probe is used for these axes (bitmap)
+	AxesBitmap zProbeAxes;							// Z probe is used for these axes (bitmap)
 	byte ipAddress[4];
 	byte netMask[4];
 	byte gateWay[4];

@@ -58,7 +58,6 @@ size_t StreamGCodeInput::BytesCached() const
 
 // Dynamic G-code input class for caching codes from software-defined sources
 
-
 RegularGCodeInput::RegularGCodeInput(bool removeComments): stripComments(removeComments),
 	state(GCodeInputState::idle), buffer(reinterpret_cast<char * const>(buf32)), writingPointer(0), readingPointer(0)
 {
@@ -264,6 +263,15 @@ void FileGCodeInput::Reset()
 {
 	lastFile = nullptr;
 	RegularGCodeInput::Reset();
+}
+
+// Reset this input. Should be called when a specific G-code or macro file is closed outside of the reading context
+void FileGCodeInput::Reset(const FileData &file)
+{
+	if (file.f == lastFile)
+	{
+		Reset();
+	}
 }
 
 // Read another chunk of G-codes from the file and return true if more data is available

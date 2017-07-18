@@ -96,7 +96,8 @@ class FileGCodeInput : public RegularGCodeInput
 public:
 	FileGCodeInput() : RegularGCodeInput(false), lastFile(nullptr) { }
 
-	void Reset() override;								// This should be called when the last file is being closed
+	void Reset() override;								// This should be called when the associated file is being closed
+	void Reset(const FileData &file);					// Should be called when a specific G-code or macro file is closed outside the reading context
 
 	bool ReadFromFile(FileData &file);					// Read another chunk of G-codes from the file and return true if more data is available
 

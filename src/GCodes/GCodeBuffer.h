@@ -38,7 +38,7 @@ public:
 
 	void TryGetFValue(char c, float& val, bool& seen);
 	void TryGetIValue(char c, int32_t& val, bool& seen);
-	bool TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen);
+	bool TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen, bool doPad = false);
 	bool TryGetQuotedString(char c, char *buf, size_t buflen, bool& seen);
 
 	const char* Buffer() const;

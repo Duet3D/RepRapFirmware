@@ -88,7 +88,7 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 	// Transform any additional axes linearly
 	for (size_t axis = XYZ_AXES; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
+		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
 	}
 	return true;
 }
@@ -172,7 +172,7 @@ bool ScaraKinematics::IsReachable(float x, float y) const
 
 // Limit the Cartesian position that the user wants to move to
 // TODO take account of arm angle limits
-bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
+bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const
 {
 	bool limited = false;
 	float x = coords[X_AXIS] + xOffset;
@@ -236,10 +236,10 @@ bool ScaraKinematics::DriveIsShared(size_t drive) const
 }
 
 // Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
-uint32_t ScaraKinematics::AxesAssumedHomed(uint32_t g92Axes) const
+AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 {
 	// If both X and Y have been specified then we know the positions of both arm motors, otherwise we don't
-	const uint32_t xyAxes = (1u << X_AXIS) | (1u << Y_AXIS);
+	const AxesBitmap xyAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS);
 	if ((g92Axes & xyAxes) != xyAxes)
 	{
 		g92Axes &= ~xyAxes;

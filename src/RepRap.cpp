@@ -39,7 +39,7 @@ extern "C" void hsmciIdle()
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
-RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastStandbyTool(nullptr), lastWarningMillis(0), activeExtruders(0),
+RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
 	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0)
 {
@@ -107,7 +107,7 @@ void RepRap::Init()
 	{
 		while (gCodes->IsDaemonBusy())
 		{
-			// GCodes::Spin will read the macro and ensure DoingFileMacro returns false when it's done
+			// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
 			Spin();
 		}
 		platform->Message(HOST_MESSAGE, "Done!\n");
@@ -358,7 +358,7 @@ void RepRap::DeleteTool(Tool* tool)
 		SelectTool(-1);
 	}
 
-	// Switch off any associated heater
+	// Switch off any associated heater and remove heater references
 	for (size_t i = 0; i < tool->HeaterCount(); i++)
 	{
 		reprap.GetHeat().SwitchOff(tool->Heater(i));
@@ -428,8 +428,7 @@ void RepRap::StandbyTool(int toolNumber)
 	if (tool != nullptr)
 	{
 		tool->Standby();
-		lastStandbyTool = tool;
-		if (currentTool == tool)
+  		if (currentTool == tool)				if (currentTool == tool)
 		{
 			currentTool = nullptr;
 		}
@@ -724,22 +723,44 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		const int8_t bedHeater = heat->GetBedHeater();
 		if (bedHeater != -1)
 		{
-			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d},",
+			response->catf("\"bed\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
 					heat->GetTemperature(bedHeater), heat->GetActiveTemperature(bedHeater),
-					heat->GetStatus(bedHeater));
+					heat->GetStatus(bedHeater), bedHeater);
 		}
 
 		/* Chamber */
 		const int8_t chamberHeater = heat->GetChamberHeater();
 		if (chamberHeater != -1)
 		{
-			response->catf("\"chamber\":{\"current\":%.1f,", heat->GetTemperature(chamberHeater));
-			response->catf("\"active\":%.1f,", heat->GetActiveTemperature(chamberHeater));
-			response->catf("\"state\":%d},", static_cast<int>(heat->GetStatus(chamberHeater)));
+			response->catf("\"chamber\":{\"current\":%.1f,\"active\":%.1f,\"state\":%d,\"heater\":%d},",
+					heat->GetTemperature(chamberHeater), heat->GetActiveTemperature(chamberHeater),
+					heat->GetStatus(chamberHeater), chamberHeater);
 		}
 
-		/* Heads */
-		response->cat("\"heads\":{\"current\":");
+		/* Heaters */
+
+		// Current temperatures
+		response->cat("\"current\":");
+		ch = '[';
+		for (size_t heater = 0; heater < Heaters; heater++)
+		{
+			response->catf("%c%.1f", ch, heat->GetTemperature(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		// Current states
+		response->cat(",\"state\":");
+		ch = '[';
+		for (size_t heater = 0; heater < Heaters; heater++)
+		{
+			response->catf("%c%d", ch, heat->GetStatus(heater));
+			ch = ',';
+		}
+		response->cat((ch == '[') ? "[]" : "]");
+
+		/* Heads - NOTE: This field is subject to deprecation and will be removed in v1.20 */
+		response->cat(",\"heads\":{\"current\":");
 
 		// Current temperatures
 		ch = '[';

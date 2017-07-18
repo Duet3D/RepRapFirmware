@@ -11,6 +11,58 @@
 #include "RepRap.h"
 #include "Libraries/Math/Isqrt.h"
 
+// Static members
+
+DriveMovement *DriveMovement::freeList = nullptr;
+int DriveMovement::numFree = 0;
+int DriveMovement::minFree = 0;
+
+void DriveMovement::InitialAllocate(unsigned int num)
+{
+	while (num != 0)
+	{
+		freeList = new DriveMovement(freeList);
+		++numFree;
+		--num;
+	}
+	ResetMinFree();
+}
+
+DriveMovement *DriveMovement::Allocate(size_t drive, DMState st)
+{
+	DriveMovement *dm = freeList;
+	if (dm != nullptr)
+	{
+		freeList = dm->nextDM;
+		--numFree;
+		if (numFree < minFree)
+		{
+			minFree = numFree;
+		}
+		dm->nextDM = nullptr;
+		dm->drive = (uint8_t)drive;
+		dm->state = st;
+	}
+	return dm;
+}
+
+void DriveMovement::Release(DriveMovement *item)
+{
+	if (item != nullptr)
+	{
+		item->nextDM = freeList;
+		freeList = item;
+		++numFree;
+	}
+}
+
+// Constructors
+DriveMovement::DriveMovement(DriveMovement *next) : nextDM(next)
+{
+}
+
+// Non static members
+
 // Prepare this DM for a Cartesian axis move
 void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params)
 {

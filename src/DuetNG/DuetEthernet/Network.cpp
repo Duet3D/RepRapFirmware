@@ -269,6 +269,7 @@ void Network::Spin(bool full)
 	{
 	case NetworkState::enabled:
 	case NetworkState::disabled:
+	default:
 		// Nothing to do
 		break;
 

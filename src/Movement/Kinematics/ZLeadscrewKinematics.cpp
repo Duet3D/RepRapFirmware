@@ -19,36 +19,33 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, String
 {
 	if (mCode == 671 && GetKinematicsType() != KinematicsType::coreXZ)
 	{
-		// Configuring leadscrew positions
-		const size_t numZDrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
-		if (numZDrivers < 2 || numZDrivers > MaxLeadscrews)
-		{
-			reply.copy("Configure 2 to 4 Z drivers before sending M671");
-			return true;
-		}
-
+		// Configuring leadscrew positions.
+		// We no longer require the number of leadscrews to equal the number of motors. If there is a mismatch then auto calibration just prints the corrections.
 		bool seenX = false, seenY = false;
-		if (gb.TryGetFloatArray('X', numZDrivers, leadscrewX, reply, seenX))
+		size_t xSize = MaxLeadscrews, ySize = MaxLeadscrews;
+		if (gb.Seen('X'))
 		{
-			return true;
+			gb.GetFloatArray(leadscrewX, xSize, false);
+			seenX = true;
 		}
-		if (gb.TryGetFloatArray('Y', numZDrivers, leadscrewY, reply, seenY))
+		if (gb.Seen('Y'))
 		{
-			return true;
+			gb.GetFloatArray(leadscrewY, ySize, false);
+			seenY = true;
 		}
 
-		bool seenS;
+		bool seenS = false;
 		gb.TryGetFValue('S', maxCorrection, seenS);
 
-		if (seenX && seenY)
+		if (seenX && seenY && xSize == ySize && xSize > 1)
 		{
-			numLeadscrews = numZDrivers;
+			numLeadscrews = xSize;
 			return false;							// successful configuration
 		}
 
 		if (seenX || seenY)
 		{
-			reply.copy("Specify both X and Y coordinates in M671");
+			reply.copy("Specify 2, 3 or 4 X and Y coordinates in M671");
 			return true;
 		}
 
@@ -81,7 +78,7 @@ bool ZLeadscrewKinematics::SupportsAutoCalibration() const
 	return numLeadscrews >= 2;
 }
 
-// Perform auto calibration. Override this implementation in kinematics that support it.
+// Perform auto calibration. Override this implementation in kinematics that support it. Caller already owns the GCode movement lock.
 void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
 {
 	if (!SupportsAutoCalibration())			// should be checked by caller, but check it here too
@@ -110,19 +107,23 @@ void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		{
 		case 2:
 			{
-				const floatc_t d2 = fcsquare(leadscrewX[1] - leadscrewX[0]) + fcsquare(leadscrewY[1] - leadscrewY[0]);
+				const float &x0 = leadscrewX[0], &x1 = leadscrewX[1];
+				const float &y0 = leadscrewY[0], &y1 = leadscrewY[1];
 				// There are lot of common subexpressions in the following, but the optimiser should find them
-				derivativeMatrix(i, 0) = (fcsquare(leadscrewY[1]) - leadscrewY[0] * leadscrewY[1] - y * (leadscrewY[1] - leadscrewY[0]) + fcsquare(leadscrewX[1]) - leadscrewX[0] * leadscrewX[1] - x * (leadscrewX[1] - leadscrewX[0]))/d2;
-				derivativeMatrix(i, 1) = (fcsquare(leadscrewY[0]) - leadscrewY[0] * leadscrewY[1] + y * (leadscrewY[1] - leadscrewY[0]) + fcsquare(leadscrewX[0]) - leadscrewX[0] * leadscrewX[1] + x * (leadscrewX[1] - leadscrewX[0]))/d2;
+				const floatc_t d2 = fcsquare(x1 - x0) + fcsquare(y1 - y0);
+				derivativeMatrix(i, 0) = (fcsquare(y1) - y0*y1 - y*(y1 - y0) + fcsquare(x1) - x0*x1 - x*(x1 - x0))/d2;
+				derivativeMatrix(i, 1) = (fcsquare(y0) - y0*y1 + y*(y1 - y0) + fcsquare(x0) - x0*x1 + x*(x1 - x0))/d2;
 			}
 			break;
 
 		case 3:
 			{
-				const floatc_t d2 = leadscrewX[1] * leadscrewY[2] - leadscrewX[0] * leadscrewY[2] - leadscrewX[2] * leadscrewY[1] + leadscrewX[0] * leadscrewY[1] + leadscrewX[2] * leadscrewY[0] - leadscrewX[1] * leadscrewY[0];
-				derivativeMatrix(i, 0) = (leadscrewX[1] * leadscrewY[2] - x * leadscrewY[2] - leadscrewX[2] * leadscrewY[1] + x * leadscrewY[1] + leadscrewX[2] * y - leadscrewX[1] * y)/d2;
-				derivativeMatrix(i, 1) = (leadscrewX[0] * leadscrewY[2] - x * leadscrewY[2] - leadscrewX[2] * leadscrewY[0] + x * leadscrewY[0] + leadscrewX[2] * y - leadscrewX[0] * y)/d2;
-				derivativeMatrix(i, 2) = (leadscrewX[0] * leadscrewY[1] - x * leadscrewY[1] - leadscrewX[1] * leadscrewY[0] + x * leadscrewY[0] + leadscrewX[1] * y - leadscrewX[0] * y)/d2;
+				const float &x0 = leadscrewX[0], &x1 = leadscrewX[1], &x2 = leadscrewX[2];
+				const float &y0 = leadscrewY[0], &y1 = leadscrewY[1], &y2 = leadscrewY[2];
+				const floatc_t d2 = x1*y2 - x0*y2 - x2*y1 + x0*y1 + x2*y0 - x1*y0;
+				derivativeMatrix(i, 0) = (x1*y2 - x*y2 - x2*y1 + x*y1 + x2*y - x1*y)/d2;
+				derivativeMatrix(i, 1) = (x0*y2 - x*y2 - x2*y0 + x*y0 + x2*y - x0*y)/d2;
+				derivativeMatrix(i, 2) = (x0*y1 - x*y1 - x1*y0 + x*y0 + x1*y - x0*y)/d2;
 			}
 			break;
 
@@ -257,22 +258,38 @@ void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 	if (haveNaN)
 	{
 		reply.printf("Error: calibration failed, computed corrections:");
+		AppendCorrections(solution, reply);
 	}
 	else if (haveLargeCorrection)
 	{
-		reply.printf("Error: computed corrections exceed 1mm:");
+		reply.printf("Error: some computed corrections exceed configured limit of %.02fmm:", maxCorrection);
+		AppendCorrections(solution, reply);
 	}
 	else
 	{
-		//TODO adjust the motors here
-		reply.printf("Simulated calibrating %d leadscrews using %d points, deviation before %.3f after %.3f, corrections:",
-						numFactors, numPoints, sqrt(initialSumOfSquares/numPoints), sqrtf(sumOfSquares/numPoints));
+		const size_t numZDrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
+		if (numZDrivers == numLeadscrews)
+		{
+			reprap.GetMove().AdjustLeadscrews(solution);
+			reply.printf("Leadscrew adjustments made:");
+		}
+		else
+		{
+			// User wants manual corrections for bed levelling screws
+			reply.printf("Corrections required:");
+		}
+		AppendCorrections(solution, reply);
+		reply.catf(", points used %d, deviation before %.3f after %.3f",
+					numPoints, sqrt(initialSumOfSquares/numPoints), sqrtf(sumOfSquares/numPoints));
 	}
+}
 
-	// Append the corrections to the reply in all cases
-	for (size_t i = 0; i < numFactors; ++i)
+// Append the list of leadscrew corrections to 'reply'
+void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], StringRef& reply) const
+{
+	for (size_t i = 0; i < numLeadscrews; ++i)
 	{
-		reply.catf(" %.3f", solution[i]);
+		reply.catf(" %.3f", corrections[i]);
 	}
 }
 

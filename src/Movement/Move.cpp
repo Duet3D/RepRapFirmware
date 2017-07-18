@@ -10,14 +10,14 @@
 #include "RepRap.h"
 #include "Kinematics/LinearDeltaKinematics.h"	// temporary
 
-Move::Move() : currentDda(NULL), scheduledMoves(0), completedMoves(0)
+Move::Move() : currentDda(nullptr), scheduledMoves(0), completedMoves(0)
 {
 	active = false;
 
 	kinematics = Kinematics::Create(KinematicsType::cartesian);			// default to Cartesian
 
 	// Build the DDA ring
-	DDA *dda = new DDA(NULL);
+	DDA *dda = new DDA(nullptr);
 	ddaRingGetPointer = ddaRingAddPointer = dda;
 	for (size_t i = 1; i < DdaRingLength; i++)
 	{
@@ -27,6 +27,8 @@ Move::Move() : currentDda(NULL), scheduledMoves(0), completedMoves(0)
 	}
 	ddaRingAddPointer->SetNext(dda);
 	dda->SetPrevious(ddaRingAddPointer);
+
+	DriveMovement::InitialAllocate(NumDms);
 }
 
 void Move::Init()
@@ -70,7 +72,7 @@ void Move::Init()
 	simulationMode = 0;
 	simulationTime = 0.0;
 	longestGcodeWaitInterval = 0;
-	waitingForMove = false;
+	waitingForMove = specialMoveAvailable = false;
 
 	active = true;
 }
@@ -119,6 +121,7 @@ void Move::Spin()
 #endif
 		   ddaRingAddPointer->GetState() == DDA::empty
 		&& ddaRingAddPointer->GetNext()->GetState() != DDA::provisional		// function Prepare needs to access the endpoints in the previous move, so don't change them
+		&& DriveMovement::NumFree() >= (int)DRIVES							// check that we won't run out of DMs
 	   )
 	{
 		// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
@@ -140,42 +143,58 @@ void Move::Spin()
 
 		if (unPreparedTime < 0.5 || unPreparedTime + prevMoveTime < 2.0)
 		{
-			// If there's a G Code move available, add it to the DDA ring for processing.
-			GCodes::RawMove nextMove;
-			if (reprap.GetGCodes().ReadMove(nextMove))
+			// First check for a special move
+			if (specialMoveAvailable)
 			{
-				if (waitingForMove)
+				if (simulationMode < 2)
 				{
-					waitingForMove = false;
-					const uint32_t timeWaiting = millis() - gcodeWaitStartTime;
-					if (timeWaiting > longestGcodeWaitInterval)
-					{
-						longestGcodeWaitInterval = timeWaiting;
-					}
-				}
-				// We have a new move
-				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
-				{
-					const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && kinematics->GetHomingMode() == Kinematics::homeCartesianAxes);
-					if (doMotorMapping)
-					{
-						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, nextMove.moveType == 0);
-					}
-					if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
+					if (ddaRingAddPointer->Init(specialMoveCoords))
 					{
 						ddaRingAddPointer = ddaRingAddPointer->GetNext();
 						idleCount = 0;
-						scheduledMoves++;
 					}
 				}
+				specialMoveAvailable = false;
 			}
 			else
 			{
-				// We wanted another move, but none was available
-				if (currentDda != nullptr && !waitingForMove)
+				// If there's a G Code move available, add it to the DDA ring for processing.
+				GCodes::RawMove nextMove;
+				if (reprap.GetGCodes().ReadMove(nextMove))
 				{
-					gcodeWaitStartTime = millis();
-					waitingForMove = true;
+					if (waitingForMove)
+					{
+						waitingForMove = false;
+						const uint32_t timeWaiting = millis() - gcodeWaitStartTime;
+						if (timeWaiting > longestGcodeWaitInterval)
+						{
+							longestGcodeWaitInterval = timeWaiting;
+						}
+					}
+					// We have a new move
+					if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
+					{
+						const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && kinematics->GetHomingMode() == Kinematics::homeCartesianAxes);
+						if (doMotorMapping)
+						{
+							AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, nextMove.moveType == 0);
+						}
+						if (ddaRingAddPointer->Init(nextMove, doMotorMapping))
+						{
+							ddaRingAddPointer = ddaRingAddPointer->GetNext();
+							idleCount = 0;
+							scheduledMoves++;
+						}
+					}
+				}
+				else
+				{
+					// We wanted another move, but none was available
+					if (currentDda != nullptr && !waitingForMove)
+					{
+						gcodeWaitStartTime = millis();
+						waitingForMove = true;
+					}
 				}
 			}
 		}
@@ -259,6 +278,7 @@ void Move::Spin()
 //DEBUG
 //currentDda->DebugPrint();
 			simulationTime += currentDda->CalcTime();
+			currentDda->Complete();
 			CurrentMoveCompleted();
 		}
 	}
@@ -416,11 +436,12 @@ void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
-	p.MessageF(mtype, "MaxReps: %u, StepErrors: %u, MaxWait: %ums, Underruns: %u, %u\n",
-						maxReps, stepErrors, longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
+	p.MessageF(mtype, "MaxReps: %u, StepErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %ums, Underruns: %u, %u\n",
+						maxReps, stepErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	maxReps = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 	longestGcodeWaitInterval = 0;
+	DriveMovement::ResetMinFree();
 
 	reprap.GetPlatform().MessageF(mtype, "Scheduled moves: %u, completed moves: %u\n", scheduledMoves, completedMoves);
 
@@ -515,7 +536,7 @@ void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrive
 // Convert distance to steps for a particular drive
 int32_t Move::MotorEndPointToMachine(size_t drive, float coord)
 {
-	return (int32_t)roundf(coord * reprap.GetPlatform().DriveStepsPerUnit(drive));
+	return lrintf(coord * reprap.GetPlatform().DriveStepsPerUnit(drive));
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
@@ -588,12 +609,12 @@ void Move::BedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes)
 		// We are assuming that the tool Y offsets are small enough to be ignored.
 		for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 		{
-			if ((xAxes & (1u << xAxis)) != 0)
+			if (IsBitSet(xAxes, xAxis))
 			{
 				const float xCoord = xyzPoint[xAxis];
 				for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
 				{
-					if ((yAxes & (1u << yAxis)) != 0)
+					if (IsBitSet(yAxes, yAxis))
 					{
 						const float yCoord = xyzPoint[yAxis];
 						if (usingMesh)
@@ -630,12 +651,12 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t
 	// We are assuming that the tool Y offsets are small enough to be ignored.
 	for (uint32_t xAxis = 0; xAxis < numAxes; ++xAxis)
 	{
-		if ((xAxes & (1u << xAxis)) != 0)
+		if (IsBitSet(xAxes, xAxis))
 		{
 			const float xCoord = xyzPoint[xAxis];
 			for (uint32_t yAxis = 0; yAxis < numAxes; ++yAxis)
 			{
-				if ((yAxes & (1u << yAxis)) != 0)
+				if (IsBitSet(yAxes, yAxis))
 				{
 					const float yCoord = xyzPoint[yAxis];
 					if (usingMesh)
@@ -696,45 +717,22 @@ bool Move::UseMesh(bool b)
 	return usingMesh;
 }
 
-float Move::AxisCompensation(int8_t axis) const
+float Move::AxisCompensation(unsigned int axis) const
 {
-	switch(axis)
-	{
-		case X_AXIS:
-			return tanXY;
-
-		case Y_AXIS:
-			return tanYZ;
-
-		case Z_AXIS:
-			return tanXZ;
-
-		default:
-			reprap.GetPlatform().Message(GENERIC_MESSAGE, "Axis compensation requested for non-existent axis.\n");
-	}
-	return 0.0;
+	return (axis < ARRAY_SIZE(tangents)) ? tangents[axis] : 0.0;
 }
 
-void Move::SetAxisCompensation(int8_t axis, float tangent)
+void Move::SetAxisCompensation(unsigned int axis, float tangent)
 {
-	switch(axis)
+	if (axis < ARRAY_SIZE(tangents))
 	{
-	case X_AXIS:
-		tanXY = tangent;
-		break;
-	case Y_AXIS:
-		tanYZ = tangent;
-		break;
-	case Z_AXIS:
-		tanXZ = tangent;
-		break;
-	default:
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "SetAxisCompensation: dud axis.\n");
+		tangents[axis] = tangent;
 	}
 }
 
 // Calibrate or set the bed equation after probing.
 // sParam is the value of the S parameter in the G30 command that provoked this call.
+// Caller already owns the GCode movement lock.
 void Move::FinishedBedProbing(int sParam, StringRef& reply)
 {
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -802,7 +800,6 @@ void Move::CurrentMoveCompleted()
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 
-	currentDda->Complete();
 	currentDda = nullptr;
 	ddaRingGetPointer = ddaRingGetPointer->GetNext();
 	completedMoves++;
@@ -1026,6 +1023,22 @@ void Move::Simulate(uint8_t simMode)
 	{
 		simulationTime = 0.0;
 	}
+}
+
+// Adjust the leadscrews
+// This is only ever called after bed probing, so we can assume that no such move is already pending.
+void Move::AdjustLeadscrews(const floatc_t corrections[])
+{
+	for (float& smc : specialMoveCoords)
+	{
+		smc = 0.0;
+	}
+	const AxisDriversConfig& config = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS);
+	for (size_t i = 0; i < config.numDrivers; ++i)
+	{
+		specialMoveCoords[config.driverNumbers[i]] = corrections[i];
+	}
+	specialMoveAvailable = true;
 }
 
 #ifdef DUET_NG

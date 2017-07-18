@@ -39,6 +39,7 @@ public:
 	DDA(DDA* n);
 
 	bool Init(const GCodes::RawMove &nextMove, bool doMotorMapping); // Set up a new move, returning true if it represents real movement
+	bool Init(const float_t steps[DRIVES]);							// Set up a raw (unmapped) motor move
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim);										// Start executing the DDA, i.e. move the move.
 	bool Step();													// Take one step of the DDA, called by timed interrupt.
@@ -114,6 +115,7 @@ private:
 	void MoveAborted();
 	void InsertDM(DriveMovement *dm);
 	DriveMovement *RemoveDM(size_t drive);
+	void ReleaseDMs();
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;
 	void CheckEndstops(Platform& platform);
@@ -139,11 +141,12 @@ private:
 	uint8_t usePressureAdvance : 1;			// True if pressure advance should be applied to any forward extrusion
 	uint8_t hadLookaheadUnderrun : 1;		// True if the lookahead queue was not long enough to optimise this move
 	uint8_t xyMoving : 1;					// True if we have movement along an X axis or the Y axis
-	// Bit 'goingSlow' has now been moved into endstopChecks to avoid overflowing this byte
+	uint8_t goingSlow : 1;					// True if we have slowed the movement because the Z probe is approaching its threshold
+	uint8_t isLeadscrewAdjustmentMove : 1;	// True if this is a leadscrews adjustment move
 
     EndstopChecks endStopsToCheck;			// Which endstops we are checking on this move
-    uint32_t xAxes;							// Which axes are behaving as X axes
-    uint32_t yAxes;							// Which axes are behaving as Y axes
+    AxesBitmap xAxes;						// Which axes are behaving as X axes
+    AxesBitmap yAxes;						// Which axes are behaving as Y axes
 
     FilePosition filePos;					// The position in the SD card file after this move was read, or zero if not read from SD card
 
@@ -184,16 +187,8 @@ private:
 #endif
 
     DriveMovement* firstDM;					// list of contained DMs that need steps, in step time order
-	DriveMovement ddm[DRIVES];				// These describe the state of each drive movement
+	DriveMovement *pddm[DRIVES];			// These describe the state of each drive movement
 };
-
-// Free up this DDA, returning true if the lookahead underrun flag was set
-inline bool DDA::Free()
-{
-	state = empty;
-	return hadLookaheadUnderrun;
-}
-
 
 // Force an end point
 inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)

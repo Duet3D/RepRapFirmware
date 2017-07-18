@@ -46,7 +46,7 @@ bool Kinematics::IsReachable(float x, float y) const
 
 // Limit the Cartesian position that the user wants to move to
 // This default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-bool Kinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
+bool Kinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const
 {
 	const Platform& platform = reprap.GetPlatform();
 	bool limited = false;

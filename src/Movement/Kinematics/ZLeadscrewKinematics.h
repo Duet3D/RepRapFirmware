@@ -23,6 +23,8 @@ public:
 #endif
 
 private:
+	void AppendCorrections(const floatc_t corrections[], StringRef& reply) const;
+
 	static const unsigned int MaxLeadscrews = 4;
 
 	unsigned int numLeadscrews;

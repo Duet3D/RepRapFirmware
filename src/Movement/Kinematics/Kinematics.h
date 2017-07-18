@@ -12,13 +12,6 @@
 #include "Movement/BedProbing/RandomProbePointSet.h"
 #include "Libraries/Math/Matrix.h"
 
-#ifdef DUET_NG
-typedef double floatc_t;					// type of matrix element used for calibration
-#else
-// We are more memory-constrained on the SAM3X
-typedef float floatc_t;						// type of matrix element used for calibration
-#endif
-
 inline floatc_t fcsquare(floatc_t a)
 {
 	return a * a;
@@ -91,7 +84,7 @@ public:
 	// Normally returns false, but overridden for delta kinematics and kinematics with multiple independently-drive Z leadscrews.
 	virtual bool SupportsAutoCalibration() const { return false; }
 
-	// Perform auto calibration. Override this implementation in kinematics that support it.
+	// Perform auto calibration. Override this implementation in kinematics that support it. Caller already owns the movement lock.
 	virtual void DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
 	pre(SupportsAutoCalibration()) { }
 
@@ -113,11 +106,11 @@ public:
 
 	// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-	virtual bool LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const;
+	virtual bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const;
 
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)
-	virtual uint32_t AxesToHomeBeforeProbing() const { return (1u << X_AXIS) | (1u << Y_AXIS); }
+	virtual AxesBitmap AxesToHomeBeforeProbing() const { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS); }
 
 	// Return the initial Cartesian coordinates we assume after switching to this kinematics
 	virtual void GetAssumedInitialPosition(size_t numAxes, float positions[]) const;
@@ -140,7 +133,7 @@ public:
 
 	// Return the axes that we can assume are homed after executing a G92 command to set the specified axis coordinates
 	// This default is good for Cartesian and Core printers, but not deltas or SCARA
-	virtual uint32_t AxesAssumedHomed(uint32_t g92Axes) const { return g92Axes; }
+	virtual AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const { return g92Axes; }
 
 #ifdef DUET_NG
 	// Write any calibration data that we need to resume a print after power fail, returning true if successful. Override where necessary.

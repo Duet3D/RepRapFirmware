@@ -48,14 +48,14 @@ void Filament::LoadAssignment()
 		return;
 	}
 
-	char buffer[FilamentNameLength + 16];
+	char buffer[FilamentNameLength + 64];
 	if (file->ReadLine(buffer, sizeof(buffer)) > 0 && StringStartsWith(buffer, FilamentAssignmentFileComment))
 	{
 		if (file->ReadLine(buffer, sizeof(buffer)) > 0)
 		{
 			while (file->ReadLine(buffer, sizeof(buffer)) > 0)
 			{
-				if (atoi(buffer) == extruder)
+				if (isdigit(buffer[0]) && atoi(buffer) == extruder)
 				{
 					const char *filament = buffer;
 					while (*filament != 0)
@@ -85,7 +85,7 @@ void Filament::LoadAssignment()
 		return;
 	}
 
-	char bufferSpace[FilamentNameLength + 16];
+	char bufferSpace[FilamentNameLength + 64];
 	StringRef buf(bufferSpace, ARRAY_SIZE(bufferSpace));
 
 	// Write header

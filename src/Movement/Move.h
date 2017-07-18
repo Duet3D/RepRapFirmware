@@ -16,11 +16,18 @@
 #include "Kinematics/Kinematics.h"
 #include "GCodes/RestorePoint.h"
 
+// Define the number of DDAs and DMs.
+// A DDA represents a move in the queue.
+// Each DDA needs one DM per drive that it moves.
+// However, DM's are large, so we provide fewer than DRIVES * DdaRingLength of them. The planner checks that enough DMs are available before filling in a new DDA.
+
 #ifdef DUET_NG
 const unsigned int DdaRingLength = 30;
+const unsigned int NumDms = DdaRingLength * 8;						// suitable for e.g. a delta + 5 input hot end
 #else
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
+const unsigned int NumDms = DdaRingLength * 5;						// suitable for e.g. a delta + 1-input hot end
 #endif
 
 /**
@@ -52,8 +59,8 @@ public:
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
 	float GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const; // Get pre-recorded probe coordinates
 	void FinishedBedProbing(int sParam, StringRef& reply);			// Calibrate or set the bed equation after probing
-	void SetAxisCompensation(int8_t axis, float tangent);			// Set an axis-pair compensation angle
-	float AxisCompensation(int8_t axis) const;						// The tangent value
+	void SetAxisCompensation(unsigned int axis, float tangent);		// Set an axis-pair compensation angle
+	float AxisCompensation(unsigned int axis) const;				// The tangent value
 	void SetIdentityTransform();									// Cancel the bed equation; does not reset axis angle compensation
 	void AxisAndBedTransform(float move[], uint32_t xAxes, uint32_t yAxes, bool useBedCompensation) const; // Take a position and apply the bed and the axis-angle compensations
 	void InverseAxisAndBedTransform(float move[], uint32_t xAxes, uint32_t yAxes) const;	// Go from a transformed point back to user coordinates
@@ -103,6 +110,8 @@ public:
 
 	const DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move
 
+	void AdjustLeadscrews(const floatc_t corrections[]);							// Called by some Kinematics classes to adjust the leadscrews
+
 #ifdef DUET_NG
 	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
 #endif
@@ -143,7 +152,11 @@ private:
 	volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
 	volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
 
-	float tanXY, tanYZ, tanXZ; 							// Axis compensation - 90 degrees + angle gives angle between axes
+	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
+	float& tanXY = tangents[0];
+	float& tanYZ = tangents[1];
+	float& tanXZ = tangents[2];
+
 	float recipTaperHeight;								// Reciprocal of the taper height
 	bool useTaper;										// True to taper off the compensation
 
@@ -162,13 +175,17 @@ private:
 	unsigned int stepErrors;							// count of step errors, for diagnostics
 	uint32_t scheduledMoves;							// Move counters for the code queue
 	volatile uint32_t completedMoves;					// This one is modified by an ISR, hence volatile
+
+	float specialMoveCoords[DRIVES];					// Amounts by which to move individual motors (leadscrew adjustment move)
+	bool specialMoveAvailable;							// True if a leadscrew adjustment move is pending
 };
 
 //******************************************************************************************************
 
 inline bool Move::DDARingEmpty() const
 {
-	return ddaRingGetPointer == ddaRingAddPointer;
+	return ddaRingGetPointer == ddaRingAddPointer		// by itself this means the ring is empty or full
+		&& ddaRingAddPointer->GetState() == DDA::DDAState::empty;
 }
 
 inline bool Move::NoLiveMovement() const

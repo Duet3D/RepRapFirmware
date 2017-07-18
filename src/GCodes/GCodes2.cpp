@@ -185,6 +185,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			return false;
 		}
+
 		if ((reprap.GetMove().GetKinematics().AxesToHomeBeforeProbing() & ~axesHomed) != 0)
 		{
 			reply.copy("Insufficient axes homed for bed probing");
@@ -1153,9 +1154,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					// Make sure we stay within reasonable boundaries...
 					bedHeater = -1;
-
-					// If we're disabling the hot bed, make sure the old heater is turned off
-					heat.SwitchOff(heat.GetBedHeater());
 				}
 				else if (bedHeater >= (int)Heaters)
 				{
@@ -1213,12 +1211,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				int heater = gb.GetIValue();
 				if (heater < 0)
 				{
-					const int8_t currentHeater = heat.GetChamberHeater();
-					if (currentHeater != -1)
-					{
-						heat.SwitchOff(currentHeater);
-					}
-
 					heat.SetChamberHeater(-1);
 				}
 				else if (heater < (int)Heaters)
@@ -1306,7 +1298,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
 			if (bedHeater >= 0)
 			{
-				reprap.GetHeat().Standby(bedHeater);
+				reprap.GetHeat().Standby(bedHeater, nullptr);
 			}
 		}
 		break;
@@ -1345,6 +1337,36 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				CheckReportDue(gb, reply);			// check whether we need to send a temperature or status report
 				isWaiting = true;
 				return false;
+			}
+		}
+		break;
+
+	case 200: // Set filament diameter for volumetric extrusion
+		if (gb.Seen('D'))
+		{
+			float diameters[MaxExtruders];
+			size_t len = MaxExtruders;
+			gb.GetFloatArray(diameters, len, true);
+			for (size_t i = 0; i < len; ++i)
+			{
+				const float d = diameters[i];
+				volumetricExtrusionFactors[i] = (d <= 0.0) ? 1.0 : 4.0/(fsquare(d) * PI);
+			}
+		}
+		else
+		{
+			reply.copy("Filament diameters for volumentric extrusion:");
+			for (size_t i = 0; i < numExtruders; ++i)
+			{
+				const float vef = volumetricExtrusionFactors[i];
+				if (vef == 1.0)
+				{
+					reply.cat(" n/a");
+				}
+				else
+				{
+					reply.catf(" %.03f", 2.0 * sqrtf(vef/PI));
+				}
 			}
 		}
 		break;
@@ -1973,11 +1995,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 401: // Deploy Z probe
-		DoFileMacro(gb, DEPLOYPROBE_G, false);
+		if (platform.GetZProbeType() != 0)
+		{
+			probeIsDeployed = true;
+			DoFileMacro(gb, DEPLOYPROBE_G, false);
+		}
 		break;
 
 	case 402: // Retract Z probe
-		DoFileMacro(gb, RETRACTPROBE_G, false);
+		if (platform.GetZProbeType() != 0)
+		{
+			probeIsDeployed = false;
+			DoFileMacro(gb, RETRACTPROBE_G, false);
+		}
 		break;
 
 	case 404: // Filament width and nozzle diameter
@@ -2266,18 +2296,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 558: // Set or report Z probe type and for which axes it is used
 		{
 			bool seenAxes = false, seenType = false, seenParam = false;
-			uint32_t zProbeAxes = platform.GetZProbeAxes();
+			AxesBitmap zProbeAxes = platform.GetZProbeAxes();
 			for (size_t axis = 0; axis < numVisibleAxes; axis++)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
 					if (gb.GetIValue() > 0)
 					{
-						zProbeAxes |= (1u << axis);
+						SetBit(zProbeAxes, axis);
 					}
 					else
 					{
-						zProbeAxes &= ~(1u << axis);
+						ClearBit(zProbeAxes, axis);
 					}
 					seenAxes = true;
 				}
@@ -2331,7 +2361,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				reply.cat(", used for axes:");
 				for (size_t axis = 0; axis < numVisibleAxes; axis++)
 				{
-					if ((zProbeAxes & (1u << axis)) != 0)
+					if (IsBitSet(zProbeAxes, axis))
 					{
 						reply.catf(" %c", axisLetters[axis]);
 					}
@@ -2453,7 +2483,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			int8_t tNumber = gb.GetIValue();
 			Tool* const tool = reprap.GetTool(tNumber);
-			if (tool != NULL)
+			if (tool != nullptr)
 			{
 				if (gb.Seen(extrudeLetter))
 				{
@@ -2487,7 +2517,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			Tool* const tool = reprap.GetTool(gb.GetIValue());
-			if (tool != NULL)
+			if (tool != nullptr)
 			{
 				if (gb.Seen('S'))
 				{
@@ -2846,7 +2876,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					uint32_t states = platform.GetAllEndstopStates();
 					if ((triggers[triggerNumber].rising & states) != 0 || (triggers[triggerNumber].falling & ~states) != 0)
 					{
-						triggersPending |= (1u << triggerNumber);
+						SetBit(triggersPending, triggerNumber);
 					}
 				}
 				else
@@ -2865,12 +2895,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					{
 						seen = true;
 						int sval = gb.GetIValue();
-						TriggerMask triggerMask = 0;
+						TriggerInputsBitmap triggerMask = 0;
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
 							if (gb.Seen(axisLetters[axis]))
 							{
-								triggerMask |= (1u << axis);
+								SetBit(triggerMask, axis);
 							}
 						}
 						if (gb.Seen(extrudeLetter))
@@ -2882,7 +2912,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 							{
 								if (eStops[i] >= 0 && (unsigned long)eStops[i] < MaxExtruders)
 								{
-									triggerMask |= (1u << (eStops[i] + E0_AXIS));
+									SetBit(triggerMask, eStops[i] + E0_AXIS);
 								}
 							}
 						}

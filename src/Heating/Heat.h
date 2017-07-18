@@ -66,7 +66,7 @@ public:
 	void SetTemperatureLimit(int8_t heater, float t);
 	float GetTemperatureLimit(int8_t heater) const;
 	void Activate(int8_t heater);								// Turn on a heater
-	void Standby(int8_t heater);								// Set a heater idle
+	void Standby(int8_t heater, const Tool* tool);				// Set a heater to standby
 	float GetTemperature(int8_t heater) const;					// Get the temperature of a heater
 	float GetTargetTemperature(int8_t heater) const;			// Get the target temperature
 	HeaterStatus GetStatus(int8_t heater) const;				// Get the off/standby/active status
@@ -122,6 +122,12 @@ public:
 
 	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
 
+	const Tool* GetLastStandbyTool(int heater) const
+	pre(heater >= 0; heater < Heaters)
+	{
+		return lastStandbyTools[heater];
+	}
+
 #ifdef DUET_NG
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
@@ -135,6 +141,8 @@ private:
 	Platform& platform;											// The instance of the RepRap hardware class
 
 	PID* pids[Heaters];											// A PID controller for each heater
+	const Tool* lastStandbyTools[Heaters];						// The last tool that caused the corresponding heater to be set to standby
+
 	TemperatureSensor *heaterSensors[Heaters];					// The sensor used by the real heaters
 	TemperatureSensor *virtualHeaterSensors[MaxVirtualHeaters];	// Sensors for virtual heaters
 
@@ -166,19 +174,9 @@ inline int8_t Heat::GetBedHeater() const
 	return bedHeater;
 }
 
-inline void Heat::SetBedHeater(int8_t heater)
-{
-	bedHeater = heater;
-}
-
 inline int8_t Heat::GetChamberHeater() const
 {
 	return chamberHeater;
-}
-
-inline void Heat::SetChamberHeater(int8_t heater)
-{
-	chamberHeater = heater;
 }
 
 // Get the process model for the specified heater

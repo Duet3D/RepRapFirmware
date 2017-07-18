@@ -139,13 +139,13 @@ bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	//TODO return false if we can't transform the position
 	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)
 	{
-		motorPos[axis] = (int32_t)roundf(Transform(machinePos, axis) * stepsPerMm[axis]);
+		motorPos[axis] = lrintf(Transform(machinePos, axis) * stepsPerMm[axis]);
 	}
 
 	// Transform any additional axes linearly
 	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
+		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
 	}
 	return true;
 }
@@ -169,9 +169,9 @@ bool LinearDeltaKinematics::IsReachable(float x, float y) const
 }
 
 // Limit the Cartesian position that the user wants to move to
-bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const
+bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const
 {
-	const uint16_t allAxes = (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS);
+	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
 	if ((axesHomed & allAxes) == allAxes)
 	{
@@ -312,17 +312,19 @@ void LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			PrintVector("Solution", solution, numFactors);
 
 			// Calculate and display the residuals
-			floatc_t residuals[MaxDeltaCalibrationPoints];
+			// Save a little stack by not allocating a residuals vector, because stack for it doesn't only get reserved when debug is enabled.
+			debugPrintf("Residuals:");
 			for (size_t i = 0; i < numPoints; ++i)
 			{
-				residuals[i] = probePoints.GetZHeight(i);
+				floatc_t residual = probePoints.GetZHeight(i);
 				for (size_t j = 0; j < numFactors; ++j)
 				{
-					residuals[i] += solution[j] * derivativeMatrix(i, j);
+					residual += solution[j] * derivativeMatrix(i, j);
 				}
+				debugPrintf(" %7.4f", residual);
 			}
 
-			PrintVector("Residuals", residuals, numPoints);
+			debugPrintf("\n");
 		}
 
 		// Save the old homed carriage heights before we change the endstop corrections
