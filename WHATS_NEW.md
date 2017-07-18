@@ -20,6 +20,7 @@ Bug fixes:
 - Heater model max PWM is now set to tuning PWM after auto tuning (thanks cangelis)
 - If an HTML file uploaded over USB contained an embedded leading substring of the EOF string, incorrect data was written to file (thanks cangelis)
 - Fixed incorrect movement following a tool change on an IDEX machine (thanks lars)
+- RADDS build would not start up
 
 Other changes:
 - TEMPERATURE_CLOSE_ENOUGH reduced from 2.5C to 1.0C
@@ -35,7 +36,7 @@ Known issues:
 - Although the WiFi module can be put into access point mode using M589 and M552 S1, WiFi access does not work properly in access point mode.
 
 Upgrade notes:
-- The recommended version of DWC is 1.17.
+- The recommended version of DWC is 1.17+1.
 - The recommended version of DuetWiFiServer is 1.19beta9.
 - **Important!** If you use an IR Z probe or some other type that does not need to be deployed, delete the files sys/deployprobe and sys/retractprobe.g if they exist, because they are now called automatically. You can do this in the System Files Editor of the web interface.
 - **Important!** On a CoreXY machine, if upgrading from a version prior to 1.19beta9, you need to either swap the X and Y motor connections, or set the Y axis factor to -1 in the M667 command. Similarly for CoreXZ and CoreXYU machines.
