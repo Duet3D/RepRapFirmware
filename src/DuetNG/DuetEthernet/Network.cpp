@@ -482,9 +482,9 @@ void Network::OpenDataPort(Port port)
 }
 
 // Close FTP data port and purge associated resources
-void Network::CloseDataPort()
+void Network::TerminateDataPort()
 {
-	sockets[FtpDataSocketNumber].Close();
+	sockets[FtpDataSocketNumber].Terminate();
 }
 
 void Network::InitSockets()

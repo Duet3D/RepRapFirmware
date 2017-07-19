@@ -1128,7 +1128,7 @@ void HttpResponder::DoUpload()
 // This is called to force termination if we implement the specified protocol
 void HttpResponder::Terminate(Protocol protocol)
 {
-	if (protocol == HttpProtocol || protocol == AnyProtocol)
+	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol))
 	{
 		ConnectionLost();
 	}

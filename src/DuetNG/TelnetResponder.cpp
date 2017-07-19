@@ -40,7 +40,7 @@ bool TelnetResponder::Accept(Socket *s, Protocol protocol)
 // This is called to force termination if we implement the specified protocol
 void TelnetResponder::Terminate(Protocol protocol)
 {
-	if (protocol == TelnetProtocol || protocol == AnyProtocol)
+	if (responderState != ResponderState::free && (protocol == TelnetProtocol || protocol == AnyProtocol))
 	{
 		ConnectionLost();
 	}

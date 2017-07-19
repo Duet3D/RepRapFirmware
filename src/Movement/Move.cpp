@@ -79,7 +79,6 @@ void Move::Init()
 
 void Move::Exit()
 {
-	reprap.GetPlatform().Message(HOST_MESSAGE, "Move class exited.\n");
 	active = false;
 }
 

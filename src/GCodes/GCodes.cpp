@@ -68,7 +68,6 @@ GCodes::GCodes(Platform& p) :
 
 void GCodes::Exit()
 {
-	platform.Message(HOST_MESSAGE, "GCodes class exited.\n");
 	active = false;
 }
 

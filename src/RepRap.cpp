@@ -146,7 +146,6 @@ void RepRap::Exit()
 	portControl->Exit();
 #endif
 	network->Exit();
-	platform->Message(GENERIC_MESSAGE, "RepRap class exited.\n");
 	platform->Exit();
 }
 
@@ -428,7 +427,7 @@ void RepRap::StandbyTool(int toolNumber)
 	if (tool != nullptr)
 	{
 		tool->Standby();
-  		if (currentTool == tool)				if (currentTool == tool)
+  		if (currentTool == tool)
 		{
 			currentTool = nullptr;
 		}

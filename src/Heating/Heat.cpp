@@ -122,7 +122,6 @@ void Heat::Exit()
 	{
 		pid->SwitchOff();
 	}
-	platform.Message(HOST_MESSAGE, "Heat class exited.\n");
 	active = false;
 }
 

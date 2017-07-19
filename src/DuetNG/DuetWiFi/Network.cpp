@@ -914,7 +914,7 @@ void Network::OpenDataPort(Port port)
 }
 
 // Close FTP data port and purge associated resources
-void Network::CloseDataPort()
+void Network::TerminateDataPort()
 {
 	if (ftpDataPort != 0)
 	{

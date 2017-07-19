@@ -1060,6 +1060,10 @@ void Platform::UpdateFirmware()
 		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
 	}
 
+#ifdef DUET_NG
+	WriteDigital(Z_PROBE_MOD_PIN, false);			// turn the DIAG LED off
+#endif
+
 	wdt_restart(WDT);								// kick the watchdog one last time
 
 	// Modify vector table location
@@ -1115,11 +1119,11 @@ float Platform::Time()
 void Platform::Exit()
 {
 	// Close all files
-	for (size_t i = 0; i < MAX_FILES; i++)
+	for (FileStore*& f : files)
 	{
-		while (files[i]->inUse)
+		while (f->inUse)
 		{
-			files[i]->Close();
+			f->Close();
 		}
 	}
 

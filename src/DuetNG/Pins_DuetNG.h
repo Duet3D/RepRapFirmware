@@ -115,8 +115,8 @@ const float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 voltag
 
 const Pin VssaSensePin = 103;
 
-// Digital pin number to turn the IR LED on (high) or off (low)
-const Pin Z_PROBE_MOD_PIN = 34;											// Digital pin number to turn the IR LED on (high) or off (low) on Duet v0.6 and v1.0 (PB21)
+// Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
+const Pin Z_PROBE_MOD_PIN = 34;
 
 // Cooling fans
 const size_t NUM_FANS = 9;

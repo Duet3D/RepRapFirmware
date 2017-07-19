@@ -117,7 +117,7 @@ bool FileStore::Close()
 			return false;
 		}
 
-		irqflags_t flags = cpu_irq_save();
+		const irqflags_t flags = cpu_irq_save();
 		if (openCount > 1)
 		{
 			--openCount;
@@ -136,7 +136,7 @@ bool FileStore::Close()
 		return false;
 	}
 
-	irqflags_t flags = cpu_irq_save();
+	const irqflags_t flags = cpu_irq_save();
 	--openCount;
 	bool leaveOpen = (openCount != 0);
 	cpu_irq_restore(flags);

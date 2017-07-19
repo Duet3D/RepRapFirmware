@@ -1162,6 +1162,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					break;
 				}
 				heat.SetBedHeater(bedHeater);
+				platform.UpdateConfiguredHeaters();
 
 				if (bedHeater < 0)
 				{
@@ -1211,16 +1212,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				int heater = gb.GetIValue();
 				if (heater < 0)
 				{
-					heat.SetChamberHeater(-1);
+					heater = -1;
 				}
-				else if (heater < (int)Heaters)
-				{
-					heat.SetChamberHeater(heater);
-				}
-				else
+				else if (heater >= (int)Heaters)
 				{
 					reply.copy("Bad heater number specified!");
 					error = true;
+					break;
+				}
+				else
+				{
+					heat.SetChamberHeater(heater);
+					platform.UpdateConfiguredHeaters();
 				}
 			}
 
