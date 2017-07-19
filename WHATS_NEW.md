@@ -1,6 +1,13 @@
 Summary of important changes in recent versions
 ===============================================
 
+Post 1.19beta19:
+
+Bug fixes:
+
+Fixed a bug that sometimes caused M997 firmware upgrades to hang on Duet Ethernet
+Heater 0 output can now be used for general output after its model was disabled
+
 Version 1.19beta10
 ==================
 
