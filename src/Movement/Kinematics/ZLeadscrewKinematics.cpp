@@ -93,7 +93,7 @@ void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 
 	const size_t numPoints = probePoints.NumberOfProbePoints();
 
-	// Build a Nx4 matrix of derivatives with respect to the leadscrew adjustments
+	// Build a N x 2, 3 or 4 matrix of derivatives with respect to the leadscrew adjustments
 	// See the wxMaxima documents for the maths involved
 	FixedMatrix<floatc_t, MaxDeltaCalibrationPoints, MaxLeadscrews> derivativeMatrix;
 	floatc_t initialSumOfSquares = 0.0;
@@ -122,7 +122,7 @@ void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 				const float &y0 = leadscrewY[0], &y1 = leadscrewY[1], &y2 = leadscrewY[2];
 				const floatc_t d2 = x1*y2 - x0*y2 - x2*y1 + x0*y1 + x2*y0 - x1*y0;
 				derivativeMatrix(i, 0) = (x1*y2 - x*y2 - x2*y1 + x*y1 + x2*y - x1*y)/d2;
-				derivativeMatrix(i, 1) = (x0*y2 - x*y2 - x2*y0 + x*y0 + x2*y - x0*y)/d2;
+				derivativeMatrix(i, 1) = -(x0*y2 - x*y2 - x2*y0 + x*y0 + x2*y - x0*y)/d2;
 				derivativeMatrix(i, 2) = (x0*y1 - x*y1 - x1*y0 + x*y0 + x1*y - x0*y)/d2;
 			}
 			break;

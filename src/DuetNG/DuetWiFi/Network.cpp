@@ -669,7 +669,7 @@ void Network::Diagnostics(MessageType mtype)
 
 			if (currentMode == WiFiState::connected)
 			{
-				platform.MessageF(mtype, "WiFi signal strength %ddb\n", (int)r.rssi);
+				platform.MessageF(mtype, "WiFi signal strength %ddBm\n", (int)r.rssi);
 			}
 			else if (currentMode == WiFiState::runningAsAccessPoint)
 			{
