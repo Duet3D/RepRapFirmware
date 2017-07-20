@@ -5,8 +5,9 @@ Post 1.19beta19:
 
 Bug fixes:
 
-Fixed a bug that sometimes caused M997 firmware upgrades to hang on Duet Ethernet
+1.19b10+1: Fixed a bug that sometimes caused M997 firmware upgrades to hang on Duet Ethernet
 Heater 0 output can now be used for general output after its model was disabled
+1.19b10+2: Fixed bug in sign of second leadscrew correction in the 3-leadscrew case
 
 Version 1.19beta10
 ==================
