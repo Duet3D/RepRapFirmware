@@ -1,13 +1,18 @@
 Summary of important changes in recent versions
 ===============================================
 
-Post 1.19beta19:
+Post 1.19beta19 (1.19beta10+4):
 
 Bug fixes:
 
-- 1.19b10+1: Fixed a bug that sometimes caused M997 firmware upgrades to hang on Duet Ethernet
-Heater 0 output can now be used for general output after its model was disabled
-- 1.19b10+2: Fixed bug in sign of second leadscrew correction in the 3-leadscrew case
+- Fixed a bug that sometimes caused M997 firmware upgrades to hang on Duet Ethernet
+- Heater 0 output can now be used for general output after its model is disabled
+- Leadscrew corrections were incorrect. The 3-leadscrew case is now know to work. The 2- and 4-leadscrew cases need to be tested on suitable printers.
+- Fixed "Can't delete 0:/sys/resurrect.g" messages
+- Added support for M591 command to configure filament sensors (but filament sensor support still incomplete)
+- Added support for M672 command to program the Duet3D delta effector (tested and fully working)
+- Changes to support new CoreNG that supports a parameter in attachInterrupt callbacks
+- Separate fix to DuetWiFiServer-1.10beta10 to fix problem when client MSS < 1460
 
 Version 1.19beta10
 ==================
