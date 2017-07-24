@@ -69,6 +69,9 @@ class RepRap;
 class FileStore;
 class OutputBuffer;
 class OutputStack;
+class GCodeBuffer;
+class GCodeQueue;
+class FilamentSensor;
 
 #if SUPPORT_IOBITS
 class PortControl;

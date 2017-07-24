@@ -153,6 +153,7 @@ const float DEFAULT_Z_DIVE = 5.0;					// Millimetres
 const float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed mm/sec
 const float DEFAULT_TRAVEL_SPEED = 100.0;			// Default speed for travel to probe points
 const float ZProbeMaxAcceleration = 250.0;			// Maximum Z acceleration to use at the start of a probing move
+const size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
 
 const float TRIANGLE_ZERO = -0.001;					// Millimetres
 const float SILLY_Z_VALUE = -9999.0;				// Millimetres

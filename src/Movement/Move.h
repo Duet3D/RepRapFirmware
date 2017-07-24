@@ -210,6 +210,7 @@ pre(ddaRingGetPointer->GetState() == DDA::frozen)
 }
 
 // This is the function that is called by the timer interrupt to step the motors.
+// This may occasionally get called prematurely.
 inline void Move::Interrupt()
 {
 	if (currentDda != nullptr)

@@ -13,7 +13,7 @@
 #include "GCodes/GCodes.h"			// for class RawMove
 
 #ifdef DUET_NG
-#define DDA_LOG_PROBE_CHANGES	1
+#define DDA_LOG_PROBE_CHANGES	0
 #else
 #define DDA_LOG_PROBE_CHANGES	0		// save memory on the wired Duet
 #endif

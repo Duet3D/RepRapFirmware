@@ -82,14 +82,14 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
 }
 #endif
 
-static void EspTransferRequestIsr()
+static void EspTransferRequestIsr(void*)
 {
 	reprap.GetNetwork().EspRequestsTransfer();
 }
 
 static inline void EnableEspInterrupt()
 {
-	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING);
+	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING, nullptr);
 }
 
 static inline void DisableEspInterrupt()

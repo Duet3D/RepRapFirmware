@@ -18,6 +18,7 @@
 #include "PrintMonitor.h"
 #include "RepRap.h"
 #include "Tools/Tool.h"
+#include "FilamentSensors/FilamentSensor.h"
 #include "Version.h"
 
 #if SUPPORT_IOBITS
@@ -3311,6 +3312,33 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 #endif
 
+	case 591: // Configure filament sensor
+		if (gb.Seen('D'))
+		{
+			int extruder = gb.GetIValue();
+			if (extruder >= 0 && extruder < (int)numExtruders)
+			{
+				bool seen = false;
+				long sensorType;
+				gb.TryGetIValue('P', sensorType, seen);
+				if (seen)
+				{
+					platform.SetFilamentSensorType(extruder, sensorType);
+				}
+
+				FilamentSensor *sensor = platform.GetFilamentSensor(extruder);
+				if (sensor != nullptr)
+				{
+					error = sensor->Configure(gb, reply, seen);
+				}
+				else if (!seen)
+				{
+					reply.printf("Extruder drive %d has no filament sensor", extruder);
+				}
+			}
+		}
+		break;
+
 	case 593: // Configure filament properties
 		// TODO: We may need this code later to restrict specific filaments to certain tools or to reset filament counters.
 		break;
@@ -3482,6 +3510,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		(void)reprap.GetMove().GetKinematics().Configure(code, gb, reply, error);
+		break;
+
+	case 672: // Program Z probe
+		error = platform.ProgramZProbe(gb, reply);
 		break;
 
 	case 701: // Load filament

@@ -1189,7 +1189,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 				UnlockAll(gb);
 				reprap.GetPrintMonitor().StoppedPrint();
 #ifdef DUET_NG
-				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G);
+				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
 #endif
 				if (platform.Emulating() == marlin)
 				{
@@ -1541,7 +1541,7 @@ void GCodes::SaveResumeInfo()
 			}
 			else
 			{
-				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G);
+				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
 				platform.MessageF(GENERIC_MESSAGE, "Error: failed to write or close file %s\n", RESUME_AFTER_POWER_FAIL_G);
 			}
 		}

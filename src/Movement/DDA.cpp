@@ -1386,8 +1386,9 @@ pre(state == frozen)
 			DriveMovement* const pdm = pddm[i];
 			if (pdm != nullptr && pdm->state == DMState::moving)
 			{
-				reprap.GetPlatform().SetDirection(i, pdm->direction);
-				if (i >= numAxes)
+				const size_t drive = pdm->drive;
+				reprap.GetPlatform().SetDirection(drive, pdm->direction);
+				if (drive >= numAxes && drive < DRIVES)
 				{
 					if (pdm->direction == FORWARDS)
 					{
@@ -1407,8 +1408,9 @@ pre(state == frozen)
 			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
 			for (DriveMovement **dmpp = &firstDM; *dmpp != nullptr; )
 			{
-				bool thisDriveExtruding = (*dmpp)->drive >= numAxes;
-				if (thisDriveExtruding && (prohibitedMovements & (1 << ((*dmpp)->drive - numAxes))) != 0)
+				const size_t drive = (*dmpp)->drive;
+				const bool thisDriveExtruding = drive >= numAxes && drive < DRIVES;
+				if (thisDriveExtruding && (prohibitedMovements & (1 << (drive - numAxes))) != 0)
 				{
 					*dmpp = (*dmpp)->nextDM;
 				}
@@ -1432,7 +1434,7 @@ pre(state == frozen)
 
 		if (firstDM != nullptr)
 		{
-			return platform.ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
+			return platform.ScheduleStepInterrupt(firstDM->nextStepTime + moveStartTime);
 		}
 	}
 
@@ -1445,6 +1447,7 @@ extern uint32_t maxReps;
 // This is called by the interrupt service routine to execute steps.
 // It returns true if it needs to be called again on the DDA of the new current move, otherwise false.
 // This must be as fast as possible, because it determines the maximum movement speed.
+// This may occasionally get called prematurely, so it must check that a step is actually due before generating one.
 bool DDA::Step()
 {
 	Platform& platform = reprap.GetPlatform();
@@ -1530,7 +1533,7 @@ bool DDA::Step()
 		}
 
 		// 7. Schedule next interrupt, or if it would be too soon, generate more steps immediately
-		repeat = platform.ScheduleInterrupt(firstDM->nextStepTime + moveStartTime);
+		repeat = platform.ScheduleStepInterrupt(firstDM->nextStepTime + moveStartTime);
 	} while (repeat);
 
 	if (numReps > maxReps)

@@ -40,9 +40,9 @@ bool FileStore::IsOpenOn(const FATFS *fs) const
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* directory, const char* fileName, bool write)
 {
-	const char* location = (directory != nullptr)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-								: fileName;
+	const char* const location = (directory != nullptr)
+									? platform->GetMassStorage()->CombineName(directory, fileName)
+										: fileName;
 	writing = write;
 
 	if (writing)

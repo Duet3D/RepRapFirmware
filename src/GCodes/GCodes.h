@@ -30,9 +30,6 @@ Licence: GPL
 #include "Tools/Filament.h"
 #include "RestorePoint.h"
 
-class GCodeBuffer;
-class GCodeQueue;
-
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
 

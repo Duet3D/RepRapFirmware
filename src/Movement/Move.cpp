@@ -79,6 +79,7 @@ void Move::Init()
 
 void Move::Exit()
 {
+	Platform::DisableStepInterrupt();
 	active = false;
 }
 

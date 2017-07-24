@@ -24,10 +24,12 @@
 #include "Heating/Heat.h"
 #include "Movement/DDA.h"
 #include "Movement/Move.h"
+#include "FilamentSensors/FilamentSensor.h"
 #include "Network.h"
 #include "RepRap.h"
 #include "Scanner.h"
 #include "Version.h"
+#include "SoftTimer.h"
 #include "Libraries/Math/Isqrt.h"
 
 #include "sam/drivers/tc/tc.h"
@@ -87,6 +89,13 @@ unsigned int numInterruptsExecuted = 0;
 uint32_t nextInterruptTime = 0;
 uint32_t nextInterruptScheduledAt = 0;
 uint32_t lastInterruptTime = 0;
+#endif
+
+//#define SOFT_TIMER_DEBUG
+
+#ifdef SOFT_TIMER_DEBUG
+unsigned int numSoftTimerInterruptsExecuted = 0;
+uint32_t lastSoftTimerInterruptScheduledAt = 0;
 #endif
 
 // Global functions
@@ -463,7 +472,8 @@ void Platform::Init()
 	for (size_t extr = 0; extr < MaxExtruders; ++extr)
 	{
 		extruderDrivers[extr] = (uint8_t)(extr + MinAxes);		// set up default extruder drive mapping
-		SetPressureAdvance(extr, 0.0);
+		SetPressureAdvance(extr, 0.0);							// no pressure advance
+		filamentSensors[extr] = nullptr;						// no filament sensor
 	}
 
 #ifdef DUET_NG
@@ -844,6 +854,38 @@ void Platform::SetZProbeParameters(int32_t probeType, const ZProbeParameters& pa
 		switchZProbeParameters = params;
 		break;
 	}
+}
+
+// Program the Z probe, returning true if error
+bool Platform::ProgramZProbe(GCodeBuffer& gb, StringRef& reply)
+{
+	if (gb.Seen('S'))
+	{
+		long zProbeProgram[MaxZProbeProgramBytes];
+		size_t len = MaxZProbeProgramBytes;
+		gb.GetLongArray(zProbeProgram, len);
+		if (len != 0)
+		{
+			for (size_t i = 0; i < len; ++i)
+			{
+				if (zProbeProgram[i] < 0 || zProbeProgram[i] > 255)
+				{
+					reply.copy("Out of range value in program bytes");
+					return true;
+				}
+			}
+			zProbeProg.SendProgram(zProbeProgram, len);
+			return false;
+		}
+	}
+	reply.copy("No program bytes provided");
+	return true;
+}
+
+// Set the state of the Z probe modulation pin
+void Platform::SetZProbeModState(bool b) const
+{
+	WriteDigital(zProbeModulationPin, b);
 }
 
 // Return true if we must home X and Y before we home Z (i.e. we are using a bed probe)
@@ -1650,7 +1692,7 @@ void NETWORK_TC_HANDLER()
 }
 #endif
 
-void FanInterrupt()
+static void FanInterrupt(void*)
 {
 	++fanInterruptCount;
 	if (fanInterruptCount == fanMaxInterruptCount)
@@ -1678,7 +1720,7 @@ void Platform::InitialiseInterrupts()
 	// We choose a clock divisor of 128 which gives 1.524us resolution on the Duet 085 (84MHz clock) and 0.9375us resolution on the Duet WiFi.
 	pmc_set_writeprotect(false);
 	pmc_enable_periph_clk((uint32_t) STEP_TC_IRQN);
-	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4);
+	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK4 | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = ~(uint32_t)0; // interrupts disabled for now
 	tc_start(STEP_TC, STEP_TC_CHAN);
 	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
@@ -1713,7 +1755,7 @@ void Platform::InitialiseInterrupts()
 	// Interrupt for 4-pin PWM fan sense line
 	if (coolingFanRpmPin != NoPin)
 	{
-		attachInterrupt(coolingFanRpmPin, FanInterrupt, FALLING);
+		attachInterrupt(coolingFanRpmPin, FanInterrupt, FALLING, nullptr);
 	}
 
 	// Tick interrupt for ADC conversions
@@ -1997,6 +2039,11 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Interrupts scheduled %u, done %u, last %u, next %u sched at %u, now %u\n",
 			numInterruptsScheduled, numInterruptsExecuted, lastInterruptTime, nextInterruptTime, nextInterruptScheduledAt, GetInterruptClocks());
 #endif
+
+#ifdef SOFT_TIMER_DEBUG
+	MessageF(mtype, "Soft timer interrupts executed %u, next %u scheduled at %u, now %u\n",
+		numSoftTimerInterruptsExecuted, STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB, lastSoftTimerInterruptScheduledAt, GetInterruptClocks());
+#endif
 }
 
 void Platform::DiagnosticTest(int d)
@@ -2227,6 +2274,7 @@ bool Platform::WriteZProbeParameters(FileStore *f) const
 }
 
 // This is called from the step ISR as well as other places, so keep it fast
+// If drive >= DRIVES then we are setting an individual motor direction
 void Platform::SetDirection(size_t drive, bool direction)
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
@@ -2240,6 +2288,10 @@ void Platform::SetDirection(size_t drive, bool direction)
 	else if (drive < DRIVES)
 	{
 		SetDriverDirection(extruderDrivers[drive - numAxes], direction);
+	}
+	else if (drive < 2 * DRIVES)
+	{
+		SetDriverDirection(drive - DRIVES, direction);
 	}
 }
 
@@ -3250,6 +3302,38 @@ bool Platform::SetExtrusionAncilliaryPwmPin(int logicalPin)
 	return GetFirmwarePin(logicalPin, PinAccess::pwm, extrusionAncilliaryPwmFirmwarePin, extrusionAncilliaryPwmInvert);
 }
 
+// Filament sensor support
+// Get the filament sensor object for an extruder, or nullptr if there isn't one
+FilamentSensor *Platform::GetFilamentSensor(int extruder) const
+{
+	return (extruder >= 0 && extruder < (int)MaxExtruders) ? filamentSensors[extruder] : nullptr;
+}
+
+// Set the filament sensor type for an extruder, returning true if it has changed
+bool Platform::SetFilamentSensorType(int extruder, int newSensorType)
+{
+	if  (extruder >= 0 && extruder < (int)MaxExtruders)
+	{
+		FilamentSensor*& sensor = filamentSensors[extruder];
+		const int oldSensorType = (sensor == nullptr) ? 0 : sensor->GetType();
+		if (newSensorType != oldSensorType)
+		{
+			delete sensor;
+			sensor = FilamentSensor::Create(newSensorType);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Get the firmware pin number for an endstop, or NoPin if it is out of range
+Pin Platform::GetEndstopPin(int endstop) const
+{
+	return (endstop >= 0 && endstop < (int)ARRAY_SIZE(endStopPins)) ? endStopPins[endstop] : NoPin;
+}
+
+
 #if SUPPORT_INKJET
 
 // Fire the inkjet (if any) in the given pattern
@@ -3405,27 +3489,47 @@ bool Platform::SetTime(time_t time)
 // Step pulse timer interrupt
 void STEP_TC_HANDLER()
 {
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;	// disable the interrupt
+	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;		// read the status register, which clears the interrupt
+	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;				// select only enabled interrupts
+	if ((tcsr & TC_SR_CPAS) != 0)									// the step interrupt uses RA compare
+	{
+		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;		// disable the interrupt
 #ifdef MOVE_DEBUG
-	++numInterruptsExecuted;
-	lastInterruptTime = Platform::GetInterruptClocks();
+		++numInterruptsExecuted;
+		lastInterruptTime = Platform::GetInterruptClocks();
 #endif
-	reprap.GetMove().Interrupt();
+		reprap.GetMove().Interrupt();								// execute the step interrupt
+	}
+
+	if ((tcsr & TC_SR_CPBS) != 0)
+	{
+		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;		// disable the interrupt
+#ifdef SOFT_TIMER_DEBUG
+		++numSoftTimerInterruptsExecuted;
+#endif
+		SoftTimer::Interrupt();
+	}
 }
 
 // Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
-// Must be called with interrupts disabled,
-/*static*/ bool Platform::ScheduleInterrupt(uint32_t tim)
+/*static*/ bool Platform::ScheduleStepInterrupt(uint32_t tim)
 {
-	tc_write_ra(STEP_TC, STEP_TC_CHAN, tim);				// set up the compare register
-	tc_get_status(STEP_TC, STEP_TC_CHAN);					// clear any pending interrupt
-	int32_t diff = (int32_t)(tim - GetInterruptClocks());	// see how long we have to go
-	if (diff < (int32_t)DDA::minInterruptInterval)			// if less than about 2us or already passed
+	const irqflags_t flags = cpu_irq_save();
+	const int32_t diff = (int32_t)(tim - GetInterruptClocks());		// see how long we have to go
+	if (diff < (int32_t)DDA::minInterruptInterval)					// if less than about 2us or already passed
 	{
-		return true;										// tell the caller to simulate an interrupt instead
+		cpu_irq_restore(flags);
+		return true;												// tell the caller to simulate an interrupt instead
 	}
 
-	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;	// enable the interrupt
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RA = tim;					// set up the compare register
+
+	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
+	// Unfortunately, this would clear any other pending interrupts from the same TC.
+	// So we don't, and the step ISR must allow for getting called prematurely.
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPAS;			// enable the interrupt
+	cpu_irq_restore(flags);
+
 #ifdef MOVE_DEBUG
 		++numInterruptsScheduled;
 		nextInterruptTime = tim;
@@ -3438,6 +3542,37 @@ void STEP_TC_HANDLER()
 /*static*/ void Platform::DisableStepInterrupt()
 {
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPAS;
+}
+
+// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
+/*static*/ bool Platform::ScheduleSoftTimerInterrupt(uint32_t tim)
+{
+	const irqflags_t flags = cpu_irq_save();
+	const int32_t diff = (int32_t)(tim - GetInterruptClocks());		// see how long we have to go
+	if (diff < (int32_t)DDA::minInterruptInterval)					// if less than about 2us or already passed
+	{
+		cpu_irq_restore(flags);
+		return true;												// tell the caller to simulate an interrupt instead
+	}
+
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_RB = tim;					// set up the compare register
+
+	// We would like to clear any pending step interrupt. To do this, we must read the TC status register.
+	// Unfortunately, this would clear any other pending interrupts from the same TC.
+	// So we don't, and the timer ISR must allow for getting called prematurely.
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IER = TC_IER_CPBS;			// enable the interrupt
+	cpu_irq_restore(flags);
+
+#ifdef SOFT_TIMER_DEBUG
+	lastSoftTimerInterruptScheduledAt = GetInterruptClocks();
+#endif
+	return false;
+}
+
+// Make sure we get no step interrupts
+/*static*/ void Platform::DisableSoftTimerInterrupt()
+{
+	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;
 }
 
 // Process a 1ms tick interrupt

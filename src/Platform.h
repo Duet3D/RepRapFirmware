@@ -47,6 +47,7 @@ Licence: GPL
 #include "Storage/FileData.h"
 #include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
 #include "MessageType.h"
+#include "ZProbeProgrammer.h"
 
 #if defined(DUET_NG)
 # include "DueXn.h"
@@ -329,11 +330,13 @@ public:
 
 	// Timing
   
-	float Time();									// Returns elapsed seconds since some arbitrary time
-	static uint32_t GetInterruptClocks();			// Get the interrupt clock count
-	static bool ScheduleInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
-	static void DisableStepInterrupt();				// Make sure we get no step interrupts
-	void Tick();
+	float Time();											// Returns elapsed seconds since some arbitrary time - DEPRECATED
+	static uint32_t GetInterruptClocks();					// Get the interrupt clock count
+	static bool ScheduleStepInterrupt(uint32_t tim);		// Schedule an interrupt at the specified clock count, or return true if it has passed already
+	static void DisableStepInterrupt();						// Make sure we get no step interrupts
+	static bool ScheduleSoftTimerInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
+	static void DisableSoftTimerInterrupt();				// Make sure we get no software timer interrupts
+	void Tick();											// Process a systick interrupt
 
 	// Real-time clock
 
@@ -486,6 +489,8 @@ public:
 	bool MustHomeXYBeforeZ() const;
 	bool WriteZProbeParameters(FileStore *f) const;
 	void SetProbing(bool isProbing);
+	bool ProgramZProbe(GCodeBuffer& gb, StringRef& reply);
+	void SetZProbeModState(bool b) const;
 
 	// Ancilliary PWM
 
@@ -569,6 +574,11 @@ public:
 
 	// User I/O and servo support
 	bool GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin, bool& invert);
+
+	// Filament sensor support
+	FilamentSensor *GetFilamentSensor(int extruder) const;
+	bool SetFilamentSensorType(int extruder, int newSensorType);
+	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -679,6 +689,7 @@ private:
 	float driveStepsPerUnit[DRIVES];
 	float instantDvs[DRIVES];
 	float pressureAdvance[MaxExtruders];
+	FilamentSensor *filamentSensors[MaxExtruders];
 	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
 	AxisDriversConfig axisDrivers[MaxAxes];			// the driver numbers assigned to each axis
@@ -708,8 +719,11 @@ private:
 
 	Pin zProbePin;
 	Pin zProbeModulationPin;
+	ZProbeProgrammer zProbeProg;
 	volatile ZProbeAveragingFilter zProbeOnFilter;					// Z probe readings we took with the IR turned on
 	volatile ZProbeAveragingFilter zProbeOffFilter;					// Z probe readings we took with the IR turned off
+
+	// Thermistors
 	volatile ThermistorAveragingFilter thermistorFilters[Heaters];	// bed and extruder thermistor readings
 #ifndef __RADDS__
 	volatile ThermistorAveragingFilter cpuTemperatureFilter;		// MCU temperature readings
