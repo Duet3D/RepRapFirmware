@@ -30,8 +30,8 @@ const size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 // The physical capabilities of the machine
 
-const size_t DRIVES = 10;						// The number of drives in the machine, including X, Y and Z plus extruder drives
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h,i,j }
+const size_t DRIVES = 12;						// The maximum number of drives supported by the electronics
+#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
 const size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g,h }
@@ -55,9 +55,9 @@ const Pin ExpansionStart = 200;					// Pin numbers at/above this are on the I/O 
 // DRIVES
 
 const Pin GlobalTmcEnablePin = 38;				// The pin that drives ENN of all TMC2660 drivers on production boards (on pre-production boards they are grounded)
-const Pin ENABLE_PINS[DRIVES] = { 78, 41, 42, 49, 57, 87, 88, 89, 90, 31 };
-const Pin STEP_PINS[DRIVES] = { 70, 71, 72, 69, 68, 66, 65, 64, 67, 91 };
-const Pin DIRECTION_PINS[DRIVES] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32 };
+const Pin ENABLE_PINS[DRIVES] = { 78, 41, 42, 49, 57, 87, 88, 89, 90, 31, 82, 60 };
+const Pin STEP_PINS[DRIVES] = { 70, 71, 72, 69, 68, 66, 65, 64, 67, 91, 84, 85 };
+const Pin DIRECTION_PINS[DRIVES] = { 75, 76, 77, 01, 73, 92, 86, 80, 81, 32, 83, 25 };
 
 const Pin DueX_SG = 96;				// DueX stallguard detect pin = PE0 (was E2_STOP)
 const Pin DueX_INT = 17;			// DueX interrupt pin = PA17 (was E6_STOP)
@@ -65,7 +65,7 @@ const Pin DueX_INT = 17;			// DueX interrupt pin = PA17 (was E6_STOP)
 // Endstops
 // RepRapFirmware only has a single endstop per axis.
 // Gcode defines if it is a max ("high end") or min ("low end") endstop and sets if it is active HIGH or LOW.
-const Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 200, 203, 202, 201, 213 };
+const Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 200, 203, 202, 201, 213, 39, 8 };
 
 // HEATERS
 

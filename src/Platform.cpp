@@ -1752,6 +1752,8 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(PIOE_IRQn, NvicPriorityPins);
 #endif
 
+	NVIC_SetPriority(TWI1_IRQn, NvicPriorityTwi);
+
 	// Interrupt for 4-pin PWM fan sense line
 	if (coolingFanRpmPin != NoPin)
 	{

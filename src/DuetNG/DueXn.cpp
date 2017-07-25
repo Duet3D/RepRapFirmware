@@ -105,6 +105,17 @@ namespace DuetExpansion
 		}
 	}
 
+	// Update the input bits. The purpose of this is so that the step interrupt can pick up values that are fairly up-to-date,
+	// even though it is not safe for it to call expander.digitalReadAll(). When we move to RTOS, this will be a high priority task.
+	void Spin(bool full)
+	{
+		if (!digitalRead(DueX_INT))
+		{
+			// Interrupt is active, so input data may have changed
+			inputBits = expander.digitalReadAll();
+		}
+	}
+
 	// Set the I/O mode of a pin
 	void SetPinMode(Pin pin, PinMode mode)
 	{
@@ -147,7 +158,7 @@ namespace DuetExpansion
 			return false;
 		}
 
-		if (!digitalRead(DueX_INT))
+		if (!digitalRead(DueX_INT) && !inInterrupt())		// we must not call expander.digitalRead() from within an ISR
 		{
 			// Interrupt is active, so input data may have changed
 			inputBits = expander.digitalReadAll();

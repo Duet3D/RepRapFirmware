@@ -11,6 +11,10 @@
 #include "Tools/Filament.h"
 #include "Version.h"
 
+#ifdef DUET_NG
+#include "DueXn.h"
+#endif
+
 #if SUPPORT_IOBITS
 # include "PortControl.h"
 #endif
@@ -33,6 +37,14 @@ extern "C" void hsmciIdle()
 		reprap.GetPortControl().Spin(false);
 	}
 #endif
+
+#ifdef DUET_NG
+	if (reprap.GetSpinningModule() != moduleDuetExpansion)
+	{
+		DuetExpansion::Spin(false);
+	}
+#endif
+
 }
 
 // RepRap member functions.
@@ -198,6 +210,12 @@ void RepRap::Spin()
 	spinningModule = modulePrintMonitor;
 	ticksInSpinState = 0;
 	printMonitor->Spin();
+
+#ifdef DUET_NG
+	spinningModule = moduleDuetExpansion;
+	ticksInSpinState = 0;
+	DuetExpansion::Spin(true);
+#endif
 
 	spinningModule = noModule;
 	ticksInSpinState = 0;

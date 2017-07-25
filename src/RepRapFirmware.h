@@ -48,7 +48,8 @@ enum Module : uint8_t
 	modulePrintMonitor = 9,
 	moduleStorage = 10,
 	modulePortControl = 11,
-	numModules = 12,				// make this one greater than the last module number
+	moduleDuetExpansion = 12,
+	numModules = 13,				// make this one greater than the last module number
 	noModule = 15
 };
 
@@ -217,5 +218,6 @@ const uint32_t NvicPriorityEthernet = 4;		// priority for Ethernet interface
 
 const uint32_t NvicPrioritySpi = 5;				// SPI used for network transfers on Duet WiFi/Duet vEthernet
 const uint32_t NvicPriorityPins = 6;			// priority for GPIO pin interrupts
+const uint32_t NvicPriorityTwi = 7;				// TWI used to read endstop and other inputs on the DueXn
 
 #endif
