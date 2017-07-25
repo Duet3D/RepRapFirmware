@@ -1,18 +1,28 @@
 Summary of important changes in recent versions
 ===============================================
 
-Post 1.19beta19 (1.19beta10+4):
+Version 1.19beta11
+==================
+
+New features:
+- Support 2 additional external drivers connected to the CONN_LCD socket
+- Added support for M591 command to configure filament sensors (but filament sensor support still incomplete)
+- Added support for M672 command to program the Duet3D delta effector sensitivity (tested and fully working)
 
 Bug fixes:
-
 - Fixed a bug that sometimes caused M997 firmware upgrades to hang on Duet Ethernet
 - Heater 0 output can now be used for general output after its model is disabled
-- Leadscrew corrections were incorrect. The 3-leadscrew case is now know to work. The 2- and 4-leadscrew cases need to be tested on suitable printers.
+- Leadscrew corrections were incorrect. The 3-leadscrew case is now known to work. The 2- and 4-leadscrew cases await testing on suitable printers.
 - Fixed "Can't delete 0:/sys/resurrect.g" messages
-- Added support for M591 command to configure filament sensors (but filament sensor support still incomplete)
-- Added support for M672 command to program the Duet3D delta effector (tested and fully working)
-- Changes to support new CoreNG that supports a parameter in attachInterrupt callbacks
 - Separate fix to DuetWiFiServer-1.10beta10 to fix problem when client MSS < 1460
+
+Other changes:
+- Changes to support new CoreNG that passes a parameter in attachInterrupt callbacks
+
+Upgrade notes:
+- Recommended DuetWebControl version is 1.17+2 or later
+- Recommended DuetWiFiServer version is 1.19beta10
+- See also upgrade notes for 1.19beta10 if upgrading from a version earlier than that
 
 Version 1.19beta10
 ==================
