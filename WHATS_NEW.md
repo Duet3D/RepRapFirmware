@@ -14,6 +14,7 @@ Bug fixes:
 - Heater 0 output can now be used for general output after its model is disabled
 - Leadscrew corrections were incorrect. The 3-leadscrew case is now known to work. The 2- and 4-leadscrew cases await testing on suitable printers.
 - Fixed "Can't delete 0:/sys/resurrect.g" messages
+- Fixed issue with homing axes using endstop connectors on DueXn expansoin board
 - Separate fix to DuetWiFiServer-1.10beta10 to fix problem when client MSS < 1460
 
 Other changes:
