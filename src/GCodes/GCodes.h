@@ -218,7 +218,7 @@ private:
 	void SetMACAddress(GCodeBuffer& gb);								// Deals with an M540
 	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
-	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite);	// Start saving GCodes in a file
+	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);	// Start saving GCodes in a file
 	void FinishWrite(GCodeBuffer& gb);									// Finish writing to the file and respond
 	bool SendConfigToLine();											// Deal with M503
 	bool OffsetAxes(GCodeBuffer& gb);									// Set offsets - deprecated, use G10

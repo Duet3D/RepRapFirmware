@@ -574,7 +574,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const char* str = gb.GetUnprecedentedString();
 			if (str != nullptr)
 			{
-				bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), str, 0, false);
+				bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), str, 0, false, 0);
 				if (ok)
 				{
 					reply.printf("Writing to file: %s", str);
@@ -2352,7 +2352,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		const char* filename = (gb.Seen('P') ? gb.GetString() : defaultFile);
 		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
-		const bool ok = OpenFileToWrite(gb, folder, filename, size, true);
+		const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
+		const bool ok = OpenFileToWrite(gb, folder, filename, size, true, crc32);
 		if (ok)
 		{
 			reply.printf("Writing to file: %s", filename);

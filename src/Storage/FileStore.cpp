@@ -5,6 +5,7 @@
 #include "MassStorage.h"
 #include "Platform.h"
 #include "RepRap.h"
+#include "CRC32.h"
 
 uint32_t FileStore::longestWriteTime = 0;
 
@@ -89,7 +90,7 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 		}
 		return false;
 	}
-
+	crc.Reset();
 	inUse = true;
 	openCount = 1;
 	return true;
@@ -291,6 +292,7 @@ bool FileStore::Write(const char *s, size_t len)
 	if (writeBuffer == nullptr)
 	{
 		uint32_t time = micros();
+		crc.Update(s, len);
 		writeStatus = f_write(&file, s, len, &totalBytesWritten);
 		time = micros() - time;
 		if (time > longestWriteTime)
@@ -307,6 +309,7 @@ bool FileStore::Write(const char *s, size_t len)
 			{
 				size_t bytesToWrite = writeBuffer->BytesStored(), bytesWritten;
 				uint32_t time = micros();
+				crc.Update(writeBuffer->Data(), bytesToWrite);
 				writeStatus = f_write(&file, writeBuffer->Data(), bytesToWrite, &bytesWritten);
 				time = micros() - time;
 				if (time > longestWriteTime)
@@ -346,6 +349,7 @@ bool FileStore::Flush()
 	{
 		size_t bytesToWrite = writeBuffer->BytesStored(), bytesWritten;
 		uint32_t time = micros();
+		crc.Update(writeBuffer->Data(), bytesToWrite);
 		FRESULT writeStatus = f_write(&file, writeBuffer->Data(), bytesToWrite, &bytesWritten);
 		time = micros() - time;
 		if (time > longestWriteTime)

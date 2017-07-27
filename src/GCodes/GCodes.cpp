@@ -2603,7 +2603,7 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	}
 }
 
-bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite)
+bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {
 	fileBeingWritten = platform.GetFileStore(directory, fileName, true);
 	eofStringCounter = 0;
@@ -2616,6 +2616,7 @@ bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char*
 	}
 	else
 	{
+		gb.SetCRC32(fileCRC32);
 		gb.SetBinaryWriting(binaryWrite);
 		gb.SetWritingFileDirectory(directory);
 		return true;
@@ -2660,11 +2661,20 @@ void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
 
 void GCodes::FinishWrite(GCodeBuffer& gb)
 {
+	const char* r;
 	fileBeingWritten->Close();
+	if ((gb.GetCRC32() != fileBeingWritten->GetCRC32()) && (gb.GetCRC32() != 0))
+	{
+		r = "Error: CRC32 checksum doesn't match";
+	}
+	else
+	{
+		r = (platform.Emulating() == marlin) ? "Done saving file." : "";
+	}
 	fileBeingWritten = NULL;
 	gb.SetBinaryWriting(false);
 	gb.SetWritingFileDirectory(NULL);
-	const char* r = (platform.Emulating() == marlin) ? "Done saving file." : "";
+	
 	HandleReply(gb, false, r);
 }
 
