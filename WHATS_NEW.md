@@ -63,7 +63,7 @@ Upgrade notes:
 - The recommended version of DWC is 1.17+1.
 - The recommended version of DuetWiFiServer is 1.19beta9.
 - **Important!** If you use an IR Z probe or some other type that does not need to be deployed, delete the files sys/deployprobe and sys/retractprobe.g if they exist, because they are now called automatically. You can do this in the System Files Editor of the web interface.
-- **Important!** On a CoreXY machine, if upgrading from a version prior to 1.19beta9, you need to either swap the X and Y motor connections, or set the Y axis factor to -1 in the M667 command. Similarly for CoreXZ and CoreXYU machines.
+- **Important!** On a CoreXY machine, if upgrading from a version prior to 1.19beta9, you need to reverse the Y motor direction. Similarly for CoreXZ and CoreXYU machines.
 - When upgrading a Duet WiFi from 1.18.2 or earlier firmware, see the important notes at https://duet3d.com/wiki/DuetWiFiFirmware_1.19beta. When upgrading from a 1.19beta version earlier than 1.19beta9 then you should also upgrade DuetWiFiServer.bin to version 1.19beta9 but you do not need to perform a simultaneous upgrade in this case. 
 
 Version 1.19beta9
