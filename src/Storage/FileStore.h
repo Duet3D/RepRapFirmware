@@ -46,6 +46,7 @@ protected:
 	FileStore(Platform* p);
 	void Init();
     bool Open(const char* directory, const char* fileName, bool write);
+    FRESULT Store(const char *s, size_t len, size_t *bytesWritten); // Write data to the non-volatile storage
 
 private:
 	Platform* platform;

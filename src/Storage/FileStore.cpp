@@ -5,7 +5,6 @@
 #include "MassStorage.h"
 #include "Platform.h"
 #include "RepRap.h"
-#include "CRC32.h"
 
 uint32_t FileStore::longestWriteTime = 0;
 
@@ -269,6 +268,19 @@ int FileStore::ReadLine(char* buf, size_t nBytes)
 	return i;
 }
 
+FRESULT FileStore::Store(const char *s, size_t len, size_t *bytesWritten)
+{
+	uint32_t time = micros();
+	crc.Update(s, len);
+	FRESULT writeStatus = f_write(&file, s, len, bytesWritten);
+	time = micros() - time;
+	if (time > longestWriteTime)
+	{
+		longestWriteTime = time;
+	}
+	return writeStatus;
+}
+
 bool FileStore::Write(char b)
 {
 	return Write(&b, sizeof(char));
@@ -291,14 +303,7 @@ bool FileStore::Write(const char *s, size_t len)
 	FRESULT writeStatus = FR_OK;
 	if (writeBuffer == nullptr)
 	{
-		uint32_t time = micros();
-		crc.Update(s, len);
-		writeStatus = f_write(&file, s, len, &totalBytesWritten);
-		time = micros() - time;
-		if (time > longestWriteTime)
-		{
-			longestWriteTime = time;
-		}
+		writeStatus = Store(s, len, &totalBytesWritten);
 	}
 	else
 	{
@@ -308,14 +313,7 @@ bool FileStore::Write(const char *s, size_t len)
 			if (writeBuffer->BytesLeft() == 0)
 			{
 				size_t bytesToWrite = writeBuffer->BytesStored(), bytesWritten;
-				uint32_t time = micros();
-				crc.Update(writeBuffer->Data(), bytesToWrite);
-				writeStatus = f_write(&file, writeBuffer->Data(), bytesToWrite, &bytesWritten);
-				time = micros() - time;
-				if (time > longestWriteTime)
-				{
-					longestWriteTime = time;
-				}
+				writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
 				writeBuffer->DataTaken();
 
 				if (bytesToWrite != bytesWritten)
@@ -348,14 +346,7 @@ bool FileStore::Flush()
 	if (writeBuffer != nullptr)
 	{
 		size_t bytesToWrite = writeBuffer->BytesStored(), bytesWritten;
-		uint32_t time = micros();
-		crc.Update(writeBuffer->Data(), bytesToWrite);
-		FRESULT writeStatus = f_write(&file, writeBuffer->Data(), bytesToWrite, &bytesWritten);
-		time = micros() - time;
-		if (time > longestWriteTime)
-		{
-			longestWriteTime = time;
-		}
+		FRESULT writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
 		writeBuffer->DataTaken();
 
 		if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
