@@ -57,9 +57,16 @@ void Socket::ReInit()
 // Close a connection when the last packet has been sent
 void Socket::Close()
 {
-	ExecCommand(socketNum, Sn_CR_DISCON);
-	state = SocketState::closing;
-	DiscardReceivedData();
+	if (state != SocketState::disabled && state != SocketState::inactive)
+	{
+		ExecCommand(socketNum, Sn_CR_DISCON);
+		state = SocketState::closing;
+		DiscardReceivedData();
+		if (protocol == FtpDataProtocol)
+		{
+			localPort = 0;					// don't re-listen automatically
+		}
+	}
 }
 
 // Terminate a connection immediately

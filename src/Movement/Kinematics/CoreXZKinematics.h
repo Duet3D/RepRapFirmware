@@ -19,7 +19,7 @@ public:
 	const char *GetName(bool forStatusReport) const override;
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
-	uint32_t AxesToHomeBeforeProbing() const override { return (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS); }
+	AxesBitmap AxesToHomeBeforeProbing() const override { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS); }
 	bool DriveIsShared(size_t drive) const override;
 	bool SupportsAutoCalibration() const override { return false; }
 };

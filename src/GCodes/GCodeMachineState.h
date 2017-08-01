@@ -40,19 +40,23 @@ enum class GCodeState : uint8_t
 	stopping,
 	sleeping,
 
-	// These next 5 must be contiguous
+	// These next 6 must be contiguous
 	gridProbing1,
 	gridProbing2,
-	gridProbing2a,
 	gridProbing3,
 	gridProbing4,
+	gridProbing5,
+	gridprobing6,
 
-	// These next 4 must be contiguous
+	// These next 8 must be contiguous
+	probingAtPoint0,
 	probingAtPoint1,
 	probingAtPoint2,
 	probingAtPoint3,
 	probingAtPoint4,
 	probingAtPoint5,
+	probingAtPoint6,
+	probingAtPoint7,
 
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction,
@@ -64,12 +68,13 @@ enum class GCodeState : uint8_t
 class GCodeMachineState
 {
 public:
+	typedef uint32_t ResourceBitmap;
 	GCodeMachineState();
 
 	GCodeMachineState *previous;
 	float feedrate;
 	FileData fileState;
-	uint32_t lockedResources;
+	ResourceBitmap lockedResources;
 	GCodeState state;
 	unsigned int
 		drivesRelative : 1,

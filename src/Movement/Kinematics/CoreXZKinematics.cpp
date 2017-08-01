@@ -20,13 +20,13 @@ const char *CoreXZKinematics::GetName(bool forStatusReport) const
 // Convert Cartesian coordinates to motor coordinates
 bool CoreXZKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
 {
-	motorPos[X_AXIS] = (int32_t)roundf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) + (machinePos[Z_AXIS] * axisFactors[Z_AXIS])) * stepsPerMm[X_AXIS]);
-	motorPos[Y_AXIS] = (int32_t)roundf(machinePos[Y_AXIS] * stepsPerMm[Y_AXIS]);
-	motorPos[Z_AXIS] = (int32_t)roundf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) - (machinePos[Z_AXIS] * axisFactors[Z_AXIS])) * stepsPerMm[Z_AXIS]);
+	motorPos[X_AXIS] = lrintf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) + (machinePos[Z_AXIS] * axisFactors[Z_AXIS])) * stepsPerMm[X_AXIS]);
+	motorPos[Y_AXIS] = lrintf(machinePos[Y_AXIS] * stepsPerMm[Y_AXIS]);
+	motorPos[Z_AXIS] = lrintf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) - (machinePos[Z_AXIS] * axisFactors[Z_AXIS])) * stepsPerMm[Z_AXIS]);
 
 	for (size_t axis = XYZ_AXES; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
+		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
 	}
 	return true;
 }

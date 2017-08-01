@@ -67,7 +67,7 @@ const uint32_t SERIAL_MAIN_TIMEOUT = 1000;			// timeout in ms for sending data t
 const float HEAT_SAMPLE_TIME = 0.5;					// Seconds
 const float HEAT_PWM_AVERAGE_TIME = 5.0;			// Seconds
 
-const float TEMPERATURE_CLOSE_ENOUGH = 2.5;			// Celsius
+const float TEMPERATURE_CLOSE_ENOUGH = 1.0;			// Celsius
 const float TEMPERATURE_LOW_SO_DONT_CARE = 40.0;	// Celsius
 const float HOT_ENOUGH_TO_EXTRUDE = 160.0;			// Celsius
 const float HOT_ENOUGH_TO_RETRACT = 90.0;			// Celsius
@@ -128,13 +128,15 @@ const unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency for M4
 
 // The maximum number of probe points is constrained by RAM usage:
 // - Each probe point uses 12 bytes of static RAM. So 16 points use 192 bytes
-// - The delta calibration points use the same static ram, but when auto-calibrating we temporarily need another 44 bytes per calibration point to hold the matrices etc.
-//   So 16 points need 704 bytes of stack space.
+// - The delta calibration points use the same static ram, but when auto-calibrating we temporarily need more to hold the matrices etc. as follows:
+//     Using single-precision maths and up to 9-factor calibration: (9 + 5) * 4 bytes per point
+//     Using double-precision maths and up to 9-factor calibration: (9 + 5) * 8 bytes per point
+//   So 32 points using double precision arithmetic need 3584 bytes of stack space.
 #ifdef DUET_NG
 const size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
 const size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
-const size_t MaxProbePoints = 64;					// Maximum number of G30 probe points
-const size_t MaxDeltaCalibrationPoints = 64;		// Should a power of 2 for speed
+const size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
+const size_t MaxDeltaCalibrationPoints = 32;		// Should a power of 2 for speed
 #else
 const size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 at 20mm intervals
 const size_t MaxXGridPoints = 21;					// Maximum number of grid points in one X row
@@ -151,6 +153,7 @@ const float DEFAULT_Z_DIVE = 5.0;					// Millimetres
 const float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed mm/sec
 const float DEFAULT_TRAVEL_SPEED = 100.0;			// Default speed for travel to probe points
 const float ZProbeMaxAcceleration = 250.0;			// Maximum Z acceleration to use at the start of a probing move
+const size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
 
 const float TRIANGLE_ZERO = -0.001;					// Millimetres
 const float SILLY_Z_VALUE = -9999.0;				// Millimetres

@@ -82,14 +82,14 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
 }
 #endif
 
-static void EspTransferRequestIsr()
+static void EspTransferRequestIsr(void*)
 {
 	reprap.GetNetwork().EspRequestsTransfer();
 }
 
 static inline void EnableEspInterrupt()
 {
-	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING);
+	attachInterrupt(EspTransferRequestPin, EspTransferRequestIsr, RISING, nullptr);
 }
 
 static inline void DisableEspInterrupt()
@@ -669,7 +669,7 @@ void Network::Diagnostics(MessageType mtype)
 
 			if (currentMode == WiFiState::connected)
 			{
-				platform.MessageF(mtype, "WiFi signal strength %ddb\n", (int)r.rssi);
+				platform.MessageF(mtype, "WiFi signal strength %ddBm\n", (int)r.rssi);
 			}
 			else if (currentMode == WiFiState::runningAsAccessPoint)
 			{
@@ -914,7 +914,7 @@ void Network::OpenDataPort(Port port)
 }
 
 // Close FTP data port and purge associated resources
-void Network::CloseDataPort()
+void Network::TerminateDataPort()
 {
 	if (ftpDataPort != 0)
 	{

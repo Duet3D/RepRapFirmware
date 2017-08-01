@@ -34,14 +34,14 @@ public:
 	bool WriteCalibrationParameters(FileStore *f) const override;
 	float GetTiltCorrection(size_t axis) const override;
 	bool IsReachable(float x, float y) const override;
-	bool LimitPosition(float coords[], size_t numVisibleAxes, uint16_t axesHomed) const override;
+	bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
-	uint32_t AxesToHomeBeforeProbing() const override { return (1u << X_AXIS) | (1u << Y_AXIS) | (1u << Z_AXIS); }
+	AxesBitmap AxesToHomeBeforeProbing() const override { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS); }
 	MotionType GetMotionType(size_t axis) const override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
 	bool DriveIsShared(size_t drive) const override { return false; }
 	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
-	uint32_t AxesAssumedHomed(uint32_t g92Axes) const override;
+	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
 
 #ifdef DUET_NG
 	bool WriteResumeSettings(FileStore *f) const override;

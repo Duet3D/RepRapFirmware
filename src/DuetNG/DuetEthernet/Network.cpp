@@ -269,6 +269,7 @@ void Network::Spin(bool full)
 	{
 	case NetworkState::enabled:
 	case NetworkState::disabled:
+	default:
 		// Nothing to do
 		break;
 
@@ -481,9 +482,9 @@ void Network::OpenDataPort(Port port)
 }
 
 // Close FTP data port and purge associated resources
-void Network::CloseDataPort()
+void Network::TerminateDataPort()
 {
-	sockets[FtpDataSocketNumber].Close();
+	sockets[FtpDataSocketNumber].Terminate();
 }
 
 void Network::InitSockets()

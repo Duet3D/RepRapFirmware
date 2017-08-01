@@ -37,7 +37,7 @@ class Tool
 {
 public:
 
-	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t yMap, uint32_t fanMap);
+	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap);
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
@@ -58,9 +58,9 @@ public:
 	float MaxFeedrate() const;
 	float InstantDv() const;
 	void Print(StringRef& reply);
-	uint32_t GetXAxisMap() const { return xMapping; }
-	uint32_t GetYAxisMap() const { return yMapping; }
-	uint32_t GetFanMapping() const { return fanMapping; }
+	AxesBitmap GetXAxisMap() const { return xMapping; }
+	AxesBitmap GetYAxisMap() const { return yMapping; }
+	FansBitmap GetFanMapping() const { return fanMapping; }
 	Filament *GetFilament() const { return filament; }
 	Tool *Next() const { return next; }
 
@@ -97,8 +97,8 @@ private:
 	float standbyTemperatures[Heaters];
 	size_t heaterCount;
 	float offset[MaxAxes];
-	uint32_t xMapping, yMapping;
-	uint32_t fanMapping;
+	AxesBitmap xMapping, yMapping;
+	FansBitmap fanMapping;
 	Filament *filament;
 	Tool* next;
 

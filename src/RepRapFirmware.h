@@ -25,6 +25,7 @@ Licence: GPL
 #include <cstddef>		// for size_t
 #include <cfloat>
 #include <cstdarg>
+#include <climits>		// for CHAR_BIT
 
 #include "ecv.h"
 #include "Core.h"
@@ -47,7 +48,8 @@ enum Module : uint8_t
 	modulePrintMonitor = 9,
 	moduleStorage = 10,
 	modulePortControl = 11,
-	numModules = 12,				// make this one greater than the last module number
+	moduleDuetExpansion = 12,
+	numModules = 13,				// make this one greater than the last module number
 	noModule = 15
 };
 
@@ -68,10 +70,24 @@ class RepRap;
 class FileStore;
 class OutputBuffer;
 class OutputStack;
+class GCodeBuffer;
+class GCodeQueue;
+class FilamentSensor;
 
 #if SUPPORT_IOBITS
 class PortControl;
 #endif
+
+// Define floating point type to use for calculations where we would like high precision in matrix calculations
+#ifdef DUET_NG
+typedef double floatc_t;					// type of matrix element used for calibration
+#else
+// We are more memory-constrained on the SAM3X
+typedef float floatc_t;						// type of matrix element used for calibration
+#endif
+
+typedef uint32_t AxesBitmap;				// Type of a bitmap representing a set of axes
+typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
 
 // A single instance of the RepRap class contains all the others
 extern RepRap reprap;
@@ -112,6 +128,54 @@ public:
 private:
 	const T _end;
 };
+
+// Helper functions to work on bitmaps of various lengths.
+// The primary purpose of these is to allow us to switch between 16, 32 and 64-bit bitmaps.
+
+// Convert an unsigned integer to a bit in a bitmap
+template<typename BitmapType> inline constexpr BitmapType MakeBitmap(unsigned int n)
+{
+	return (BitmapType)1u << n;
+}
+
+// Make a bitmap with the lowest n bits set
+template<typename BitmapType> inline constexpr BitmapType LowestNBits(unsigned int n)
+{
+	return ((BitmapType)1u << n) - 1;
+}
+
+// Check if a particular bit is set in a bitmap
+template<typename BitmapType> inline constexpr bool IsBitSet(BitmapType b, unsigned int n)
+{
+	return (b & ((BitmapType)1u << n)) != 0;
+}
+
+// Set a bit in a bitmap
+template<typename BitmapType> inline void SetBit(BitmapType &b, unsigned int n)
+{
+	b |= ((BitmapType)1u << n);
+}
+
+// Clear a bit in a bitmap
+template<typename BitmapType> inline void ClearBit(BitmapType &b, unsigned int n)
+{
+	b &= ~((BitmapType)1u << n);
+}
+
+// Convert an array of longs to a bit map with overflow checking
+template<typename BitmapType> BitmapType LongArrayToBitMap(const long *arr, size_t numEntries)
+{
+	BitmapType res = 0;
+	for (size_t i = 0; i < numEntries; ++i)
+	{
+		const long f = arr[i];
+		if (f >= 0 && f < sizeof(BitmapType) * CHAR_BIT)
+		{
+			SetBit(res, (unsigned int)f);
+		}
+	}
+	return res;
+}
 
 // Macro to create a SimpleRange from an array
 #define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
@@ -154,5 +218,6 @@ const uint32_t NvicPriorityEthernet = 4;		// priority for Ethernet interface
 
 const uint32_t NvicPrioritySpi = 5;				// SPI used for network transfers on Duet WiFi/Duet vEthernet
 const uint32_t NvicPriorityPins = 6;			// priority for GPIO pin interrupts
+const uint32_t NvicPriorityTwi = 7;				// TWI used to read endstop and other inputs on the DueXn
 
 #endif

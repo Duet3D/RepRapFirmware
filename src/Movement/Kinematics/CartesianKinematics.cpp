@@ -22,7 +22,7 @@ bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const 
 {
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		motorPos[axis] = (int32_t)roundf(machinePos[axis] * stepsPerMm[axis]);
+		motorPos[axis] = lrintf(machinePos[axis] * stepsPerMm[axis]);
 	}
 	return true;
 }

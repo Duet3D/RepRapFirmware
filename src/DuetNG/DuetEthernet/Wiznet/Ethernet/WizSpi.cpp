@@ -63,7 +63,7 @@ static void spi_tx_dma_setup(const uint8_t *buf, uint32_t length)
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
 	pdc_spi_packet.ul_size = length;
-	pdc_tx_init(spi_pdc, &pdc_spi_packet, NULL);
+	pdc_tx_init(spi_pdc, &pdc_spi_packet, nullptr);
 }
 
 static void spi_rx_dma_setup(uint8_t *buf, uint32_t length)
@@ -71,8 +71,8 @@ static void spi_rx_dma_setup(uint8_t *buf, uint32_t length)
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
 	pdc_spi_packet.ul_size = length;
-	pdc_rx_init(spi_pdc, &pdc_spi_packet, NULL);
-	pdc_tx_init(spi_pdc, &pdc_spi_packet, NULL);					// we have to transmit in order to receive
+	pdc_rx_init(spi_pdc, &pdc_spi_packet, nullptr);
+	pdc_tx_init(spi_pdc, &pdc_spi_packet, nullptr);					// we have to transmit in order to receive
 }
 
 #endif
@@ -368,6 +368,10 @@ namespace WizSpi
 				--timeout;
 			}
 			spi_rx_dma_disable();
+			if (timeout == 0)
+			{
+				return SPI_ERROR_TIMEOUT;
+			}
 #else
 			const uint32_t dOut = 0x000000FF;
 			SPI->SPI_TDR = dOut;						// send first byte

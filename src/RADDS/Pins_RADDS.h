@@ -22,7 +22,7 @@ const size_t DRIVES = 9;
 
 // Initialization macro used in statements needing to initialize values in arrays of size DRIVES.  E.g.,
 // max_feed_rates[DRIVES] = {DRIVES_(1, 1, 1, 1, 1, 1, 1, 1, 1, 1)}
-#define DRIVES_(a,b,c,d,e,f,g,h,i,j) { a,b,c,d,e,f,g,h,i }
+#define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i }
 
 // The number of heaters in the machine
 // 0 is the heated bed even if there isn't one.

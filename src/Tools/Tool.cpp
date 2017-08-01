@@ -33,7 +33,7 @@
 
 Tool * Tool::freelist = nullptr;
 
-/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, uint32_t xMap, uint32_t yMap, uint32_t fanMap)
+/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap)
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -331,7 +331,7 @@ void Tool::Standby()
 		for (size_t heater = 0; heater < heaterCount; heater++)
 		{
 			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-			reprap.GetHeat().Standby(heaters[heater]);
+			reprap.GetHeat().Standby(heaters[heater], this);
 		}
 		state = ToolState::standby;
 	}
@@ -353,6 +353,7 @@ void Tool::SetVariables(const float* standby, const float* active)
 			if (active[heater] < temperatureLimit)
 			{
 				activeTemperatures[heater] = active[heater];
+
 				if (currentTool == nullptr || currentTool == this)
 				{
 					reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
@@ -361,7 +362,8 @@ void Tool::SetVariables(const float* standby, const float* active)
 			if (standby[heater] < temperatureLimit)
 			{
 				standbyTemperatures[heater] = standby[heater];
-				if (currentTool == nullptr || currentTool == this || reprap.GetLastStandbyTool() == this)
+				const Tool *lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heaters[heater]);
+				if (currentTool == nullptr || currentTool == this || lastStandbyTool == nullptr || lastStandbyTool  == this)
 				{
 					reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
 				}

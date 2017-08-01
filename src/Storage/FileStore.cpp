@@ -40,9 +40,9 @@ bool FileStore::IsOpenOn(const FATFS *fs) const
 // This is protected - only Platform can access it.
 bool FileStore::Open(const char* directory, const char* fileName, bool write)
 {
-	const char* location = (directory != nullptr)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-								: fileName;
+	const char* const location = (directory != nullptr)
+									? platform->GetMassStorage()->CombineName(directory, fileName)
+										: fileName;
 	writing = write;
 
 	if (writing)
@@ -117,7 +117,7 @@ bool FileStore::Close()
 			return false;
 		}
 
-		irqflags_t flags = cpu_irq_save();
+		const irqflags_t flags = cpu_irq_save();
 		if (openCount > 1)
 		{
 			--openCount;
@@ -136,7 +136,7 @@ bool FileStore::Close()
 		return false;
 	}
 
-	irqflags_t flags = cpu_irq_save();
+	const irqflags_t flags = cpu_irq_save();
 	--openCount;
 	bool leaveOpen = (openCount != 0);
 	cpu_irq_restore(flags);

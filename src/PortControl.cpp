@@ -33,6 +33,7 @@ void PortControl::Init()
 void PortControl::Exit()
 {
 	UpdatePorts(0);
+	numConfiguredPorts = 0;
 }
 
 void PortControl::Spin(bool full)

@@ -104,7 +104,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 	size_t inIndex = 0;
 
 	// DC 2015-11-25 Only prepend the directory if the filename does not have an absolute path or volume specifier
-	if (directory != NULL && fileName[0] != '/' && (strlen(fileName) < 2 || !isdigit(fileName[0]) || fileName[1] != ':'))
+	if (directory != nullptr && fileName[0] != '/' && (strlen(fileName) < 2 || !isdigit(fileName[0]) || fileName[1] != ':'))
 	{
 		while (directory[inIndex] != 0 && directory[inIndex] != '\n')
 		{
@@ -222,14 +222,17 @@ const char* MassStorage::GetMonthName(const uint8_t month)
 }
 
 // Delete a file or directory
-bool MassStorage::Delete(const char* directory, const char* fileName)
+bool MassStorage::Delete(const char* directory, const char* fileName, bool silent)
 {
-	const char* location = (directory != NULL)
+	const char* location = (directory != nullptr)
 							? platform->GetMassStorage()->CombineName(directory, fileName)
 								: fileName;
 	if (f_unlink(location) != FR_OK)
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Can't delete file %s\n", location);
+		if (!silent)
+		{
+			platform->MessageF(GENERIC_MESSAGE, "Can't delete file %s\n", location);
+		}
 		return false;
 	}
 	return true;
@@ -359,7 +362,7 @@ bool MassStorage::Mount(size_t card, StringRef& reply, bool reportSuccess)
 
 	if (!mounting)
 	{
-		f_mount(card, NULL);			// un-mount it from FATFS
+		f_mount(card, nullptr);			// un-mount it from FATFS
 		sd_mmc_unmount(card);			// this forces it to re-initialise the card
 		isMounted[card] = false;
 		startTime = millis();
@@ -426,7 +429,7 @@ bool MassStorage::Unmount(size_t card, StringRef& reply)
 	}
 
 	platform->InvalidateFiles(&fileSystems[card]);
-	f_mount(card, NULL);
+	f_mount(card, nullptr);
 	sd_mmc_unmount(card);
 	isMounted[card] = false;
 	reply.Clear();

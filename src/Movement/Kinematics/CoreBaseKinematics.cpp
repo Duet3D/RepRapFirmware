@@ -44,7 +44,7 @@ bool CoreBaseKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRe
 	}
 	else
 	{
-		return Kinematics::Configure(mCode, gb, reply, error);
+		return ZLeadscrewKinematics::Configure(mCode, gb, reply, error);
 	}
 }
 

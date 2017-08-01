@@ -19,7 +19,7 @@ public:
 	friend class HeightMap;
 
 	GridDefinition();
-	GridDefinition(const float xRange[2], const float yRange[2], float pRadius, float pSpacing);
+	GridDefinition(const float xRange[2], const float yRange[2], float pRadius, const float pSpacings[2]);
 
 	uint32_t NumXpoints() const { return numX; }
 	uint32_t NumYpoints() const { return numY; }
@@ -31,8 +31,8 @@ public:
 
 	void PrintParameters(StringRef& r) const;
 	void WriteHeadingAndParameters(StringRef& r) const;
-	static bool CheckHeading(const StringRef& s);
-	bool ReadParameters(const StringRef& s);
+	static int CheckHeading(const StringRef& s);
+	bool ReadParameters(const StringRef& s, int version);
 
 	void PrintError(float originalXrange, float originalYrange, StringRef& r) const
 	pre(!IsValid());
@@ -42,18 +42,17 @@ private:
 
 	static constexpr float MinSpacing = 0.1;						// The minimum point spacing allowed
 	static constexpr float MinRange = 1.0;							// The minimum X and Y range allowed
-	static const char *HeightMapLabelLine;							// The line we write to the height map file listing the parameter names
+	static const char * const HeightMapLabelLines[];				// The line we write to the height map file listing the parameter names
 
 	// Primary parameters
 	float xMin, xMax, yMin, yMax;									// The edges of the grid for G29 probing
 	float radius;													// The grid radius to probe
-	float spacing;													// The spacing of the grid probe points
+	float xSpacing, ySpacing;										// The spacing of the grid probe points
 
 	// Derived parameters
 	uint32_t numX, numY;
-	float recipSpacing;
+	float recipXspacing, recipYspacing;
 	bool isValid;
-
 };
 
 // Class to represent the height map

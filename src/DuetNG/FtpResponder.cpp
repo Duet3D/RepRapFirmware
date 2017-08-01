@@ -52,7 +52,7 @@ bool FtpResponder::Accept(Socket *s, Protocol protocol)
 // This is called to force termination if we implement the specified protocol
 void FtpResponder::Terminate(Protocol protocol)
 {
-	if (protocol == FtpProtocol || protocol == AnyProtocol)
+	if (responderState != ResponderState::free && (protocol == FtpProtocol || protocol == AnyProtocol))
 	{
 		ConnectionLost();
 	}
@@ -872,10 +872,13 @@ void FtpResponder::CloseDataPort()
 
 	if (dataSocket != nullptr)
 	{
-		dataSocket->Close();
+		dataSocket->Close();					// close it gracefully
 		dataSocket = nullptr;
 	}
-	GetNetwork().CloseDataPort();
+	else
+	{
+		GetNetwork().TerminateDataPort();			// in case it has been partially set up
+	}
 
 	OutputBuffer::ReleaseAll(dataBuf);
 	dataBuf = nullptr;

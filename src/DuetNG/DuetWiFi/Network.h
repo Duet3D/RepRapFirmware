@@ -63,7 +63,7 @@ public:
 
 	const uint8_t *GetIPAddress() const { return ipAddress; }
 	void OpenDataPort(Port port);
-	void CloseDataPort();
+	void TerminateDataPort();
 
 	void HandleHttpGCodeReply(const char *msg);
 	void HandleTelnetGCodeReply(const char *msg);
