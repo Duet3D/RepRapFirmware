@@ -92,6 +92,8 @@ void GCodes::Init()
 	doingToolChange = false;
 	toolChangeParam = DefaultToolChangeParam;
 	active = true;
+	fileSize = 0;
+	writtenSize = 0;
 	longWait = platform.Time();
 	limitAxes = true;
 	SetAllAxesNotHomed();
@@ -2683,10 +2685,12 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	}
 }
 
-bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName)
+bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {
 	fileBeingWritten = platform.GetFileStore(directory, fileName, true);
 	eofStringCounter = 0;
+	fileSize = size;
+	writtenSize = 0;
 	if (fileBeingWritten == nullptr)
 	{
 		platform.MessageF(GENERIC_MESSAGE, "Can't open GCode file \"%s\" for writing.\n", fileName);
@@ -2694,6 +2698,8 @@ bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char*
 	}
 	else
 	{
+		gb.SetCRC32(fileCRC32);
+		gb.SetBinaryWriting(binaryWrite);
 		gb.SetWritingFileDirectory(directory);
 		return true;
 	}
@@ -2707,17 +2713,12 @@ void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
 		return;
 	}
 
-	if (b == eofString[eofStringCounter])
+	if ((b == eofString[eofStringCounter]) && (fileSize == 0))
 	{
 		eofStringCounter++;
 		if (eofStringCounter >= eofStringLength)
 		{
-			fileBeingWritten->Close();
-			fileBeingWritten = nullptr;
-			gb.SetWritingFileDirectory(nullptr);
-			const char* r = (platform.Emulating() == marlin) ? "Done saving file." : "";
-			HandleReply(gb, false, r);
-			return;
+			FinishWrite(gb);
 		}
 	}
 	else
@@ -2731,7 +2732,30 @@ void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
 			eofStringCounter = 0;
 		}
 		fileBeingWritten->Write(b);		// writing one character at a time isn't very efficient, but uploading HTML files via USB is rarely done these days
+		writtenSize++;
+		if ((fileSize > 0) && (writtenSize >= fileSize)) {
+			FinishWrite(gb);
+		}
 	}
+}
+
+void GCodes::FinishWrite(GCodeBuffer& gb)
+{
+	const char* r;
+	fileBeingWritten->Close();
+	if ((gb.GetCRC32() != fileBeingWritten->GetCRC32()) && (gb.GetCRC32() != 0))
+	{
+		r = "Error: CRC32 checksum doesn't match";
+	}
+	else
+	{
+		r = (platform.Emulating() == marlin) ? "Done saving file." : "";
+	}
+	fileBeingWritten = nullptr;
+	gb.SetBinaryWriting(false);
+	gb.SetWritingFileDirectory(nullptr);
+	
+	HandleReply(gb, false, r);
 }
 
 void GCodes::WriteGCodeToFile(GCodeBuffer& gb)

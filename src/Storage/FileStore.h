@@ -5,6 +5,7 @@
 
 #include "Core.h"
 #include "Libraries/Fatfs/ff.h"
+#include "CRC32.h"
 
 class Platform;
 class FileWriteBuffer;
@@ -31,6 +32,7 @@ public:
 	bool Flush();									// Write remaining buffer data
 	void Invalidate(const FATFS *fs);				// Invalidate the file if it uses the specified FATFS object
 	bool IsOpenOn(const FATFS *fs) const;			// Return true if the file is open on the specified file system
+	uint32_t GetCRC32() const;
 
 #if 0	// not currently used
 	bool SetClusterMap(uint32_t[]);					// Provide a cluster map for fast seeking
@@ -44,6 +46,7 @@ protected:
 	FileStore(Platform* p);
 	void Init();
     bool Open(const char* directory, const char* fileName, bool write);
+    FRESULT Store(const char *s, size_t len, size_t *bytesWritten); // Write data to the non-volatile storage
 
 private:
 	Platform* platform;
@@ -55,10 +58,16 @@ private:
 
 	bool inUse;
 	bool writing;
+	CRC32 crc;
 
 	static uint32_t longestWriteTime;
 };
 
 inline bool FileStore::Write(const uint8_t *s, size_t len) { return Write(reinterpret_cast<const char *>(s), len); }
+
+inline uint32_t FileStore::GetCRC32() const
+{
+	return crc.Get();
+}
 
 #endif

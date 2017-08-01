@@ -23,22 +23,23 @@ class GCodeInput
 {
 public:
 	virtual void Reset() = 0;							// Clean all the cached data from this input
-	virtual bool FillBuffer(GCodeBuffer *gb) = 0;		// Fill a GCodeBuffer with the last available G-code
+	bool FillBuffer(GCodeBuffer *gb);					// Fill a GCodeBuffer with the last available G-code
 	virtual size_t BytesCached() const = 0;				// How many bytes have been cached?
+	virtual char ReadByte() = 0;						// Get the next byte from the source
 };
 
 
 // This class wraps around an existing Stream device which lets us avoid double buffering.
 // The only downside is that we cannot (yet) look through the hardware buffer and check for requested emergency stops.
 // TODO: This will require some more work in the Arduino core.
-class StreamGCodeInput : GCodeInput
+class StreamGCodeInput : public GCodeInput
 {
 public:
 	StreamGCodeInput(Stream &dev) : device(dev) { }
 
 	void Reset() override;
-	bool FillBuffer(GCodeBuffer *gb) override;			// Fill a GCodeBuffer with the last available G-code
 	size_t BytesCached() const override;				// How many bytes have been cached?
+	char ReadByte() override;
 
 private:
 	Stream &device;
@@ -64,14 +65,14 @@ enum class GCodeInputState
 // This class allows caching of dynamic content (from web-based sources) and implements a simple ring buffer.
 // In addition, incoming codes are checked for M112 (emergency stop) to execute perform emergency stops as quickly
 // as possible. Comments can be optionally stripped from sources where comments are not needed (e.g. HTTP).
-class RegularGCodeInput : GCodeInput
+class RegularGCodeInput : public GCodeInput
 {
 public:
 	RegularGCodeInput(bool removeComments);
 
 	void Reset() override;
-	bool FillBuffer(GCodeBuffer *gb) override;			// Fill a GCodeBuffer with the last available G-code
 	size_t BytesCached() const override;				// How many bytes have been cached?
+	char ReadByte() override;
 
 	void Put(MessageType mtype, const char c);			// Append a single character
 	void Put(MessageType mtype, const char *buf);		// Append a null-terminated string to the buffer
