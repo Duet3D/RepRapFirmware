@@ -8,10 +8,12 @@
 #include "Duet3DFilamentSensor.h"
 #include "GCodes/GCodeBuffer.h"
 
+// Constructors
 Duet3DFilamentSensor::Duet3DFilamentSensor(int type) : FilamentSensor(type), mmPerRev(DefaultMmPerRev), tolerance(DefaultTolerance), withSwitch(type == 4)
 {
 }
 
+// Configure this sensor returning true if error
 bool Duet3DFilamentSensor::Configure(GCodeBuffer& gb, StringRef& reply, bool& seen)
 {
 	if (ConfigurePin(gb, reply, seen))
@@ -39,6 +41,12 @@ bool Duet3DFilamentSensor::Configure(GCodeBuffer& gb, StringRef& reply, bool& se
 	}
 
 	return false;
+}
+
+// ISR for when the pin state changes
+void Duet3DFilamentSensor::Interrupt()
+{
+	//TODO
 }
 
 // End

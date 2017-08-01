@@ -16,6 +16,7 @@ public:
 	Duet3DFilamentSensor(int type);
 
 	bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) override;
+	void Interrupt() override;
 
 private:
 	static constexpr float DefaultMmPerRev = 15.0;

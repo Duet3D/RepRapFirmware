@@ -215,7 +215,8 @@ private:
 	void SetMACAddress(GCodeBuffer& gb);								// Deals with an M540
 	void HandleReply(GCodeBuffer& gb, bool error, const char *reply);	// Handle G-Code replies
 	void HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply);
-	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);	// Start saving GCodes in a file
+	bool OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32);
+																		// Start saving GCodes in a file
 	void FinishWrite(GCodeBuffer& gb);									// Finish writing to the file and respond
 	bool SendConfigToLine();											// Deal with M503
 	bool OffsetAxes(GCodeBuffer& gb);									// Set offsets - deprecated, use G10
@@ -264,6 +265,8 @@ private:
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;				// Decide which device to display a message box on
 	void DoManualProbe(GCodeBuffer& gb);								// Do a manual bed probe
 
+	void AppendAxes(StringRef& reply, AxesBitmap axes) const;			// Append a list of axes to a string
+
 #ifdef DUET_NG
 	void SaveResumeInfo();
 #endif
@@ -296,6 +299,7 @@ private:
 
 	bool active;								// Live and running?
 	bool isPaused;								// true if the print has been paused manually or automatically
+	bool pausePending;							// true if we have been asked to pause but we are running a macro
 #ifdef DUET_NG
 	bool isAutoPaused;							// true if the print was paused automatically
 	bool resumeInfoSaved;						// true if we have saved resume info at this pause point
@@ -329,12 +333,13 @@ private:
 	float record[DRIVES];						// Temporary store for move positions
 	float distanceScale;						// MM or inches
 	float arcSegmentLength;						// Length of segments that we split arc moves into
+
 	FileData fileToPrint;						// The next file to print
 	FilePosition fileOffsetToPrint;				// The offset to print from
+
 	FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) to
 	FilePosition fileSize;						// Size of the file being written
-	FilePosition writtenSize;					// Written data size to the file
-	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
+
 	int oldToolNumber, newToolNumber;			// Tools being changed
 	int toolChangeParam;						// Bitmap of all the macros to be run during a tool change
 
@@ -342,7 +347,10 @@ private:
 	uint8_t eofStringCounter;					// Check the...
 	uint8_t eofStringLength;					// ... EoF string as we read.
 	bool limitAxes;								// Don't think outside the box.
+
+	AxesBitmap toBeHomed;						// Bitmap of axes still to be homed
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
+
 	float pausedFanSpeeds[NUM_FANS];			// Fan speeds when the print was paused or a tool change started
 	float lastDefaultFanSpeed;					// Last speed given in a M106 command with on fan number
 	float pausedDefaultFanSpeed;				// The speed of the default print cooling fan when the print was paused or a tool change started
@@ -401,8 +409,6 @@ private:
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
 	bool displayDeltaNotHomedWarning;			// True if we need to display a 'attempt to move before homing on a delta printer' message
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
-
-	static const char* const HomingFileNames[MaxAxes];
 
 	static constexpr const char* BED_EQUATION_G = "bed.g";
 	static constexpr const char* RESUME_G = "resume.g";

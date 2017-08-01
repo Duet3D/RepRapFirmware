@@ -106,12 +106,12 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& 
 				const int hnum = heaters[h];
 				if (hnum >= 0 && hnum < (int)Heaters)
 				{
-					heatersMonitored |= (1u << (unsigned int)hnum);
+					SetBit(heatersMonitored, (unsigned int)hnum);
 				}
 				else if (hnum >= (int)FirstVirtualHeater && hnum < (int)(FirstVirtualHeater + MaxVirtualHeaters))
 				{
 					// Heaters 100, 101... are virtual heaters i.e. CPU and driver temperatures
-					heatersMonitored |= (1u << (Heaters + (unsigned int)hnum - FirstVirtualHeater));
+					SetBit(heatersMonitored, Heaters + (unsigned int)hnum - FirstVirtualHeater);
 				}
 			}
 			if (heatersMonitored != 0)
@@ -146,7 +146,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& 
 				reply.catf(", temperature: %.1f:%.1fC, heaters:", triggerTemperatures[0], triggerTemperatures[1]);
 				for (unsigned int i = 0; i < Heaters + MaxVirtualHeaters; ++i)
 				{
-					if ((heatersMonitored & (1u << i)) != 0)
+					if (IsBitSet(heatersMonitored, i))
 					{
 						reply.catf(" %u", (i < Heaters) ? i : FirstVirtualHeater + i - Heaters);
 					}
@@ -219,8 +219,8 @@ void Fan::Refresh()
 		for (size_t h = 0; h < Heaters + MaxVirtualHeaters; ++h)
 		{
 			// Check if this heater is both monitored by this fan and in use
-			if (   ((1 << h) & heatersMonitored) != 0
-				&& (h < reprap.GetToolHeatersInUse() || h >= Heaters || (int)h == reprap.GetHeat().GetBedHeater() || (int)h == reprap.GetHeat().GetChamberHeater())
+			if (   IsBitSet(heatersMonitored, h)
+				&& (h < reprap.GetToolHeatersInUse() || (h >= Heaters && h < Heaters + MaxVirtualHeaters) || (int)h == reprap.GetHeat().GetBedHeater() || (int)h == reprap.GetHeat().GetChamberHeater())
 			   )
 			{
 				// This heater is both monitored and potentially active

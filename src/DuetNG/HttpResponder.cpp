@@ -1073,7 +1073,10 @@ void HttpResponder::ProcessMessage()
 // Reject the current message
 void HttpResponder::RejectMessage(const char* response, unsigned int code)
 {
-	GetPlatform().MessageF(HOST_MESSAGE, "Webserver: rejecting message with: %s\n", response);
+	if (reprap.Debug(moduleWebserver))
+	{
+		GetPlatform().MessageF(HOST_MESSAGE, "Webserver: rejecting message with: %u %s\n", code, response);
+	}
 	outBuf->printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
 	Commit();
 }

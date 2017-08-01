@@ -486,7 +486,7 @@ public:
 	const ZProbeParameters& GetZProbeParameters(int32_t probeType) const;
 	const ZProbeParameters& GetCurrentZProbeParameters() const { return GetZProbeParameters(zProbeType); }
 	void SetZProbeParameters(int32_t probeType, const struct ZProbeParameters& params);
-	bool MustHomeXYBeforeZ() const;
+	bool HomingZWithProbe() const;
 	bool WriteZProbeParameters(FileStore *f) const;
 	void SetProbing(bool isProbing);
 	bool ProgramZProbe(GCodeBuffer& gb, StringRef& reply);
@@ -868,9 +868,9 @@ private:
 /*static*/ inline void Platform::SetPinMode(Pin pin, PinMode mode)
 {
 #ifdef DUET_NG
-	if (pin >= ExpansionStart)
+	if (pin >= DueXnExpansionStart)
 	{
-		DuetExpansion::SetPinMode(pin - ExpansionStart, mode);
+		DuetExpansion::SetPinMode(pin, mode);
 	}
 	else
 	{
@@ -884,9 +884,9 @@ private:
 /*static*/ inline bool Platform::ReadPin(Pin pin)
 {
 #ifdef DUET_NG
-	if (pin >= ExpansionStart)
+	if (pin >= DueXnExpansionStart)
 	{
-		return DuetExpansion::DigitalRead(pin - ExpansionStart);
+		return DuetExpansion::DigitalRead(pin);
 	}
 	else
 	{
@@ -900,9 +900,9 @@ private:
 /*static*/ inline void Platform::WriteDigital(Pin pin, bool high)
 {
 #ifdef DUET_NG
-	if (pin >= ExpansionStart)
+	if (pin >= DueXnExpansionStart)
 	{
-		DuetExpansion::DigitalWrite(pin - ExpansionStart, high);
+		DuetExpansion::DigitalWrite(pin, high);
 	}
 	else
 	{
@@ -916,9 +916,9 @@ private:
 /*static*/ inline void Platform::WriteAnalog(Pin pin, float pwm, uint16_t freq)
 {
 #ifdef DUET_NG
-	if (pin >= ExpansionStart)
+	if (pin >= DueXnExpansionStart)
 	{
-		DuetExpansion::AnalogOut(pin - ExpansionStart, pwm);
+		DuetExpansion::AnalogOut(pin, pwm);
 	}
 	else
 	{

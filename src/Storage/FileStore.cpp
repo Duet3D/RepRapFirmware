@@ -195,7 +195,8 @@ FilePosition FileStore::Length() const
 		platform->Message(GENERIC_MESSAGE, "Error: Attempt to size non-open file.\n");
 		return 0;
 	}
-	return file.fsize;
+
+	return (writeBuffer != nullptr) ? file.fsize + writeBuffer->BytesStored() : file.fsize;
 }
 
 float FileStore::FractionRead() const

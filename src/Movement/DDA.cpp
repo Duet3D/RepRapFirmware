@@ -1267,7 +1267,7 @@ void DDA::CheckEndstops(Platform& platform)
 		{
 		case EndStopHit::lowHit:
 			MoveAborted();											// set the state to completed and recalculate the endpoints
-			reprap.GetMove().ZProbeTriggered(this);
+			reprap.GetGCodes().MoveStoppedByZProbe();
 			break;
 
 		case EndStopHit::lowNear:
@@ -1310,36 +1310,30 @@ void DDA::CheckEndstops(Platform& platform)
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	for (size_t drive = 0; drive < numAxes; ++drive)
 	{
-		if ((endStopsToCheck & (1 << drive)) != 0)
+		if (IsBitSet(endStopsToCheck, drive))
 		{
-			switch(platform.Stopped(drive))
+			const EndStopHit esh = platform.Stopped(drive);
+			switch (esh)
 			{
 			case EndStopHit::lowHit:
-				endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-				if (endStopsToCheck == 0 || reprap.GetMove().GetKinematics().DriveIsShared(drive))
-				{
-					// No more endstops to check, or this axis uses shared motors, so stop the entire move
-					MoveAborted();
-				}
-				else
-				{
-					StopDrive(drive);
-				}
-				reprap.GetMove().HitLowStop(drive, this);
-				break;
-
 			case EndStopHit::highHit:
-				endStopsToCheck &= ~(1 << drive);					// clear this check so that we can check for more
-				if (endStopsToCheck == 0 || reprap.GetMove().GetKinematics().DriveIsShared(drive))
 				{
-					// No more endstops to check, or this axis uses shared motors, so stop the entire move
-					MoveAborted();
+					ClearBit(endStopsToCheck, drive);					// clear this check so that we can check for more
+					StopDrive(drive);									// we must stop the drive before we mess with its coordinates
+					bool stopAll = (endStopsToCheck == 0);
+					if (drive < reprap.GetGCodes().GetTotalAxes() && IsHomingAxes())
+					{
+						if (reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(drive, esh == EndStopHit::highHit, reprap.GetPlatform().GetDriveStepsPerUnit(), *this))
+						{
+							stopAll = true;
+						}
+						reprap.GetGCodes().SetAxisIsHomed(drive);
+					}
+					if (stopAll)
+					{
+						MoveAborted();									// no more endstops to check, or this axis uses shared motors, so stop the entire move
+					}
 				}
-				else
-				{
-					StopDrive(drive);
-				}
-				reprap.GetMove().HitHighStop(drive, this);
 				break;
 
 			case EndStopHit::lowNear:

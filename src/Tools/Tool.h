@@ -28,9 +28,9 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 
-const size_t ToolNameLength = 32;					// maximum allowed length for tool names
-const uint32_t DefaultXAxisMapping = 1u << X_AXIS;	// by default, X is mapped to X
-const uint32_t DefaultYAxisMapping = 1u << Y_AXIS;	// by default, Y is mapped to Y
+const size_t ToolNameLength = 32;						// maximum allowed length for tool names
+const AxesBitmap DefaultXAxisMapping = 1u << X_AXIS;	// by default, X is mapped to X
+const AxesBitmap DefaultYAxisMapping = 1u << Y_AXIS;	// by default, Y is mapped to Y
 
 class Filament;
 class Tool

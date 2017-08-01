@@ -14,9 +14,9 @@
 bool GCodeInput::FillBuffer(GCodeBuffer *gb)
 {
 	size_t bytesToPass = min<size_t>(BytesCached(), GCODE_LENGTH);
-	for(size_t i = 0; i < bytesToPass; i++)
+	for (size_t i = 0; i < bytesToPass; i++)
 	{
-		char c = ReadByte();
+		const char c = ReadByte();
 
 		if (gb->IsWritingBinary())
 		{

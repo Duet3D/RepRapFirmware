@@ -15,6 +15,9 @@
 #include "RepRap.h"
 #include "Platform.h"
 
+const char *Kinematics::HomeAllFileName = "homeall.g";
+const char * const Kinematics::StandardHomingFileNames[] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g", "homea.g", "homeb.g", "homec.g");
+
 // Constructor for non-segmented kinematics
 Kinematics::Kinematics(KinematicsType t)
 	: useSegmentation(false), useRawG0(true), type(t)
@@ -78,6 +81,36 @@ void Kinematics::GetAssumedInitialPosition(size_t numAxes, float positions[]) co
 	{
 		positions[i] = 0.0;
 	}
+}
+
+// This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
+// If we can proceed with homing some axes, return the name of the homing file to be called.
+// If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
+// This default is suitable for most kinematics.
+const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+{
+	const AxesBitmap allAxes = LowestNBits<AxesBitmap>(numVisibleAxes);
+	if ((toBeHomed & allAxes) == allAxes)
+	{
+		return HomeAllFileName;
+	}
+
+	// If Z homing is done using a Z probe then X and Y must be homed before Z
+	const bool homeZLast = (IsBitSet(toBeHomed, Z_AXIS) && reprap.GetPlatform().HomingZWithProbe());
+	const AxesBitmap homeFirst = AxesToHomeBeforeProbing();
+
+	// Return the homing file for the lowest axis that we have been asked to home
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		if (IsBitSet(toBeHomed, axis) && (axis != Z_AXIS || !homeZLast || (alreadyHomed & homeFirst) == homeFirst))
+		{
+			return StandardHomingFileNames[axis];
+		}
+	}
+
+	// Error, we can't home any axes that we were asked to home. It can onjly be because we can't home the Z axis.
+	mustHomeFirst = homeFirst & ~alreadyHomed;
+	return nullptr;
 }
 
 /*static*/ Kinematics *Kinematics::Create(KinematicsType k)

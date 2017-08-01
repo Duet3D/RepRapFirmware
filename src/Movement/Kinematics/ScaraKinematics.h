@@ -35,9 +35,9 @@ public:
 	bool LimitPosition(float position[], size_t numAxes, AxesBitmap axesHomed) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	const char* HomingButtonNames() const override { return "PDZUVW"; }
-	bool DriveIsShared(size_t drive) const override;
 	HomingMode GetHomingMode() const override { return homeSharedMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
+	bool OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 
 private:
 	static constexpr float DefaultSegmentsPerSecond = 200.0;

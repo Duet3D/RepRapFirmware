@@ -39,7 +39,6 @@
 #endif
 
 const char GCodes::axisLetters[MaxAxes] = AXES_('X', 'Y', 'Z', 'U', 'V', 'W', 'A', 'B', 'C');
-const char* const GCodes::HomingFileNames[MaxAxes] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g", "homea.g", "homeb.g", "homec.g");
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
@@ -93,7 +92,6 @@ void GCodes::Init()
 	toolChangeParam = DefaultToolChangeParam;
 	active = true;
 	fileSize = 0;
-	writtenSize = 0;
 	longWait = platform.Time();
 	limitAxes = true;
 	SetAllAxesNotHomed();
@@ -182,6 +180,7 @@ void GCodes::Reset()
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
+	pausePending = false;
 	probeIsDeployed = false;
 	moveBuffer.filePos = noFilePosition;
 	lastEndstopStates = platform.GetAllEndstopStates();
@@ -309,22 +308,53 @@ void GCodes::Spin()
 			}
 			break;
 
-		case GCodeState::homing:
+		case GCodeState::homing1:
 			if (toBeHomed == 0)
 			{
 				gb.SetState(GCodeState::normal);
 			}
 			else
 			{
-				for (size_t axis = 0; axis < numTotalAxes; ++axis)
+				AxesBitmap mustHomeFirst;
+				const char *nextHomingFile = reprap.GetMove().GetKinematics().GetHomingFileName(toBeHomed, axesHomed, numVisibleAxes, mustHomeFirst);
+				if (nextHomingFile == nullptr)
 				{
-					// Leave the Z axis until all other axes are done
-					if (IsBitSet<AxesBitmap>(toBeHomed, axis) && (axis != Z_AXIS || toBeHomed == MakeBitmap<AxesBitmap>(Z_AXIS)))
+					// Error, can't home this axes
+					reply.copy("Must home these axes:");
+					AppendAxes(reply, mustHomeFirst);
+					reply.cat(" before homing these:");
+					AppendAxes(reply, toBeHomed);
+					error = true;
+					toBeHomed = 0;
+					gb.SetState(GCodeState::normal);
+				}
+				else
+				{
+					gb.SetState(GCodeState::homing2);
+					if (!DoFileMacro(gb, nextHomingFile, false))
 					{
-						ClearBit(toBeHomed, axis);
-						DoFileMacro(gb, HomingFileNames[axis], true);
-						break;
+						reply.printf("Homing file %s not found", nextHomingFile);
+						error = true;
+						gb.SetState(GCodeState::normal);
 					}
+				}
+			}
+			break;
+
+		case GCodeState::homing2:
+			if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for the previous homing move to complete
+			{
+				// Test whether the previous homing move homed any axes
+				if ((toBeHomed & axesHomed) == 0)
+				{
+					reply.copy("Homing failed");
+					error = true;
+					gb.SetState(GCodeState::normal);
+				}
+				else
+				{
+					toBeHomed &= ~axesHomed;
+					gb.SetState((toBeHomed == 0) ? GCodeState::normal : GCodeState::homing1);
 				}
 			}
 			break;
@@ -978,8 +1008,8 @@ void GCodes::Spin()
 			// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 			if (segmentsLeft == 0)
 			{
-				const uint32_t xAxes = reprap.GetCurrentXAxes();
-				const uint32_t yAxes = reprap.GetCurrentYAxes();
+				const AxesBitmap xAxes = reprap.GetCurrentXAxes();
+				const AxesBitmap yAxes = reprap.GetCurrentYAxes();
 				reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, 0, xAxes, yAxes);
 				for (size_t i = numTotalAxes; i < DRIVES; ++i)
 				{
@@ -1190,6 +1220,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 				fd.Close();
 				UnlockAll(gb);
 				reprap.GetPrintMonitor().StoppedPrint();
+				pausePending = false;
 #ifdef DUET_NG
 				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
 #endif
@@ -1216,6 +1247,12 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 			{
 				UnlockAll(gb);
 				HandleReply(gb, false, "");
+				if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
+				{
+					const char* const m226Command = "M226\n";
+					gb.Put(m226Command, strlen(m226Command));
+					pausePending = false;
+				}
 			}
 		}
 	}
@@ -2268,44 +2305,24 @@ bool GCodes::DoHome(GCodeBuffer& gb, StringRef& reply, bool& error)
 	}
 #endif
 
-	if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
+	// Find out which axes we have been asked to home
+	toBeHomed = 0;
+	for (size_t axis = 0; axis < numTotalAxes; ++axis)
 	{
-		// Homing on a delta printer uses homedelta.g instead of homeall.g and we can only home all towers at once
-		SetAllAxesNotHomed();
-		DoFileMacro(gb, HOME_DELTA_G, true);
-	}
-	else
-	{
-		toBeHomed = 0;
-		for (size_t axis = 0; axis < numTotalAxes; ++axis)
+		if (gb.Seen(axisLetters[axis]))
 		{
-			if (gb.Seen(axisLetters[axis]))
-			{
-				SetBit(toBeHomed, axis);
-				SetAxisNotHomed(axis);
-			}
+			SetBit(toBeHomed, axis);
+			SetAxisNotHomed(axis);
 		}
+	}
 
-		if (toBeHomed == 0 || toBeHomed == LowestNBits<AxesBitmap>(numTotalAxes))
-		{
-			// Homing everything
-			SetAllAxesNotHomed();
-			DoFileMacro(gb, HOME_ALL_G, true);
-		}
-		else if (   platform.MustHomeXYBeforeZ()
-				 && IsBitSet(toBeHomed, Z_AXIS)
-				 && (!IsBitSet(toBeHomed | axesHomed, X_AXIS) || !IsBitSet(toBeHomed | axesHomed, Y_AXIS))
-				)
-		{
-			// We can only home Z if both X and Y have already been homed or are being homed
-			reply.copy("Must home all other axes before homing Z");
-			error = true;
-		}
-		else
-		{
-			gb.SetState(GCodeState::homing);
-		}
+	if (toBeHomed == 0)
+	{
+		SetAllAxesNotHomed();		// homing everything
+		toBeHomed = LowestNBits<AxesBitmap>(numVisibleAxes);
 	}
+
+	gb.SetState(GCodeState::homing1);
 	return true;
 }
 
@@ -2690,7 +2707,6 @@ bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char*
 	fileBeingWritten = platform.GetFileStore(directory, fileName, true);
 	eofStringCounter = 0;
 	fileSize = size;
-	writtenSize = 0;
 	if (fileBeingWritten == nullptr)
 	{
 		platform.MessageF(GENERIC_MESSAGE, "Can't open GCode file \"%s\" for writing.\n", fileName);
@@ -2732,8 +2748,8 @@ void GCodes::WriteHTMLToFile(GCodeBuffer& gb, char b)
 			eofStringCounter = 0;
 		}
 		fileBeingWritten->Write(b);		// writing one character at a time isn't very efficient, but uploading HTML files via USB is rarely done these days
-		writtenSize++;
-		if ((fileSize > 0) && (writtenSize >= fileSize)) {
+		if (fileSize > 0 && fileBeingWritten->Length() >= fileSize)
+		{
 			FinishWrite(gb);
 		}
 	}
@@ -2754,7 +2770,7 @@ void GCodes::FinishWrite(GCodeBuffer& gb)
 	fileBeingWritten = nullptr;
 	gb.SetBinaryWriting(false);
 	gb.SetWritingFileDirectory(nullptr);
-	
+
 	HandleReply(gb, false, r);
 }
 
@@ -4200,6 +4216,18 @@ void GCodes::UnlockAll(const GCodeBuffer& gb)
 		{
 			resourceOwners[i] = nullptr;
 			ClearBit(gb.MachineState().lockedResources, i);
+		}
+	}
+}
+
+// Append a list of axes to a string
+void GCodes::AppendAxes(StringRef& reply, AxesBitmap axes) const
+{
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		if (IsBitSet(axes, axis))
+		{
+			reply.cat(axisLetters[axis]);
 		}
 	}
 }

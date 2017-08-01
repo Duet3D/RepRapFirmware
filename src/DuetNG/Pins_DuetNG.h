@@ -48,7 +48,8 @@ const size_t NUM_SERIAL_CHANNELS = 2;			// The number of serial IO channels (USB
 #define SERIAL_MAIN_DEVICE SerialUSB
 #define SERIAL_AUX_DEVICE Serial
 
-const Pin ExpansionStart = 200;					// Pin numbers at/above this are on the I/O expander
+const Pin DueXnExpansionStart = 200;			// Pin numbers 200-215 are on the I/O expander
+const Pin AdditionalIoExpansionStart = 220;		// Pin numbers 220-235 are on the additional I/O expander
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 

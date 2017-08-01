@@ -565,7 +565,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// Coordinates
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
 	{
-		float liveCoordinates[DRIVES + 1];
+		float liveCoordinates[DRIVES];
 #if SUPPORT_ROLAND
 		if (roland->Active())
 		{
@@ -609,12 +609,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// XYZ positions
-		// TODO ideally we would report "unknown" or similar for axis positions that are not known because we haven't homed them, but that requires changes to DWC and PanelDue.
+		// TODO ideally we would report "unknown" or similar for axis positions that are not known because we haven't homed them, but that requires changes to both DWC and PanelDue.
 		response->cat("],\"xyz\":");
 		ch = '[';
 		for (size_t axis = 0; axis < numAxes; axis++)
 		{
-			response->catf("%c%.3f", ch, liveCoordinates[axis]);
+			// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs by 999.9 to prevent JSON parsing errors.
+			const float coord = liveCoordinates[axis];
+			response->catf("%c%.3f", ch, (std::isnan(coord) || std::isinf(coord)) ? 999.9 : coord);
 			ch = ',';
 		}
 	}
@@ -1763,13 +1765,13 @@ void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 }
 
 // Get the current axes used as X axes
-uint32_t RepRap::GetCurrentXAxes() const
+AxesBitmap RepRap::GetCurrentXAxes() const
 {
 	return (currentTool == nullptr) ? DefaultXAxisMapping : currentTool->GetXAxisMap();
 }
 
 // Get the current axes used as X axes
-uint32_t RepRap::GetCurrentYAxes() const
+AxesBitmap RepRap::GetCurrentYAxes() const
 {
 	return (currentTool == nullptr) ? DefaultYAxisMapping : currentTool->GetYAxisMap();
 }

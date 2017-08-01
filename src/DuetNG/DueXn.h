@@ -21,7 +21,8 @@ enum class ExpansionBoardType : uint8_t
 
 namespace DuetExpansion
 {
-	ExpansionBoardType Init();						// Initialise the device and identify which expansion board is attached
+	ExpansionBoardType DueXnInit();					// Look for a DueXn, initialise it and return which expansion board is attached
+	bool AdditionalOutputInit();					// Look for an additional output pin expander
 	const char* array null GetExpansionBoardName();	// Return the name of the expansion board, or nullptr if no expansion board
 	void SetPinMode(Pin pin, PinMode mode);			// Set the I/O mode of a pin
 	bool DigitalRead(Pin pin);						// Read a pin

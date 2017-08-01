@@ -565,39 +565,75 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 	return b;
 }
 
-void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes, bool useBedCompensation) const
+void Move::AxisAndBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes, bool useBedCompensation) const
 {
-	AxisTransform(xyzPoint);
+	AxisTransform(xyzPoint, xAxes, yAxes);
 	if (useBedCompensation)
 	{
 		BedTransform(xyzPoint, xAxes, yAxes);
 	}
 }
 
-void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes) const
+void Move::InverseAxisAndBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
 {
 	InverseBedTransform(xyzPoint, xAxes, yAxes);
-	InverseAxisTransform(xyzPoint);
+	InverseAxisTransform(xyzPoint, xAxes, yAxes);
 }
 
 // Do the Axis transform BEFORE the bed transform
-void Move::AxisTransform(float xyzPoint[MaxAxes]) const
+void Move::AxisTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
 {
-	//TODO should we transform U axis instead of/as well as X if we are in dual carriage mode?
-	xyzPoint[X_AXIS] += tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS];
-	xyzPoint[Y_AXIS] += tanYZ*xyzPoint[Z_AXIS];
+	// Identify the lowest Y axis
+	const size_t NumVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	for (size_t yAxis = Y_AXIS; yAxis < NumVisibleAxes; ++yAxis)
+	{
+		if (IsBitSet(yAxes, yAxis))
+		{
+			// Found a Y axis. Use this one when correcting the X coordinate.
+			for (size_t axis = 0; axis < NumVisibleAxes; ++axis)
+			{
+				if (IsBitSet(xAxes, axis))
+				{
+					xyzPoint[axis] += tanXY*xyzPoint[yAxis] + tanXZ*xyzPoint[Z_AXIS];
+				}
+				if (IsBitSet(yAxes, axis))
+				{
+					xyzPoint[axis] += tanYZ*xyzPoint[Z_AXIS];
+				}
+			}
+			break;
+		}
+	}
 }
 
 // Invert the Axis transform AFTER the bed transform
-void Move::InverseAxisTransform(float xyzPoint[MaxAxes]) const
+void Move::InverseAxisTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
 {
-	//TODO should we transform U axis instead of/as well as X if we are in dual carriage mode?
-	xyzPoint[Y_AXIS] -= tanYZ*xyzPoint[Z_AXIS];
-	xyzPoint[X_AXIS] -= (tanXY*xyzPoint[Y_AXIS] + tanXZ*xyzPoint[Z_AXIS]);
+	// Identify the lowest Y axis
+	const size_t NumVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	for (size_t yAxis = Y_AXIS; yAxis < NumVisibleAxes; ++yAxis)
+	{
+		if (IsBitSet(yAxes, yAxis))
+		{
+			// Found a Y axis. Use this one when correcting the X coordinate.
+			for (size_t axis = 0; axis < NumVisibleAxes; ++axis)
+			{
+				if (IsBitSet(yAxes, axis))
+				{
+					xyzPoint[axis] -= tanYZ*xyzPoint[Z_AXIS];
+				}
+				if (IsBitSet(xAxes, axis))
+				{
+					xyzPoint[axis] -= (tanXY*xyzPoint[yAxis] + tanXZ*xyzPoint[Z_AXIS]);
+				}
+			}
+			break;
+		}
+	}
 }
 
 // Do the bed transform AFTER the axis transform
-void Move::BedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes) const
+void Move::BedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
 {
 	if (!useTaper || xyzPoint[Z_AXIS] < taperHeight)
 	{
@@ -641,7 +677,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes)
 }
 
 // Invert the bed transform BEFORE the axis transform
-void Move::InverseBedTransform(float xyzPoint[MaxAxes], uint32_t xAxes, uint32_t yAxes) const
+void Move::InverseBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const
 {
 	float zCorrection = 0.0;
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -825,56 +861,6 @@ bool Move::TryStartNextMove(uint32_t startTime)
 	}
 }
 
-// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
-void Move::HitLowStop(size_t axis, DDA* hitDDA)
-{
-	if (axis < reprap.GetGCodes().GetTotalAxes() && !IsDeltaMode() && hitDDA->IsHomingAxes())
-	{
-		JustHomed(axis, reprap.GetPlatform().AxisMinimum(axis), hitDDA);
-	}
-}
-
-// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
-void Move::HitHighStop(size_t axis, DDA* hitDDA)
-{
-	if (axis < reprap.GetGCodes().GetTotalAxes() && hitDDA->IsHomingAxes())
-	{
-		const float hitPoint = (IsDeltaMode())
-								? ((LinearDeltaKinematics*)kinematics)->GetHomedCarriageHeight(axis)	// this is a delta printer, so the motor is at the homed carriage height for this drive
-								: reprap.GetPlatform().AxisMaximum(axis);	// this is a Cartesian printer, so we're at the maximum for this axis
-		JustHomed(axis, hitPoint, hitDDA);
-	}
-}
-
-// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR must be declared 'volatile'.
-void Move::JustHomed(size_t axisHomed, float hitPoint, DDA* hitDDA)
-{
-	if (kinematics->DriveIsShared(axisHomed))
-	{
-		float tempCoordinates[MaxAxes];
-		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-		for (size_t axis = 0; axis < numTotalAxes; ++axis)
-		{
-			tempCoordinates[axis] = hitDDA->GetEndCoordinate(axis, false);
-		}
-		tempCoordinates[axisHomed] = hitPoint;
-		hitDDA->SetPositions(tempCoordinates, numTotalAxes);
-	}
-	else
-	{
-		hitDDA->SetDriveCoordinate(MotorEndPointToMachine(axisHomed, hitPoint), axisHomed);
-	}
-	reprap.GetGCodes().SetAxisIsHomed(axisHomed);
-
-}
-
-// This is called from the step ISR. Any variables it modifies that are also read by code outside the ISR should be declared 'volatile'.
-// The move has already been aborted when this is called, so the endpoints in the DDA are the current motor positions.
-void Move::ZProbeTriggered(DDA* hitDDA)
-{
-	reprap.GetGCodes().MoveStoppedByZProbe();
-}
-
 // Return the untransformed machine coordinates
 void Move::GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const
 {
@@ -908,7 +894,7 @@ bool Move::IsExtruding() const
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xAxes, uint32_t yAxes) const
+void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const
 {
 	GetCurrentMachinePosition(m, moveType == 2 || (moveType == 1 && IsDeltaMode()));
 	if (moveType == 0)
@@ -919,10 +905,11 @@ void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, uint32_t xA
 
 // Return the current live XYZ and extruder coordinates
 // Interrupts are assumed enabled on entry
-void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes, uint32_t yAxes)
+void Move::LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes)
 {
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();			// do this before we disable interrupts
 	cpu_irq_disable();
 	if (liveCoordinatesValid)
 	{
@@ -932,7 +919,6 @@ void Move::LiveCoordinates(float m[DRIVES], uint32_t xAxes, uint32_t yAxes)
 	}
 	else
 	{
-		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();		// do this before we disable interrupts
 		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
 		memcpy(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), sizeof(m[0]) * (DRIVES - numTotalAxes));
 		int32_t tempEndPoints[MaxAxes];

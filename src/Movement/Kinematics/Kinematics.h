@@ -8,8 +8,7 @@
 #ifndef SRC_MOVEMENT_KINEMATICS_H_
 #define SRC_MOVEMENT_KINEMATICS_H_
 
-#include "GCodes/GCodeBuffer.h"
-#include "Movement/BedProbing/RandomProbePointSet.h"
+#include "RepRapFirmware.h"
 #include "Libraries/Math/Matrix.h"
 
 inline floatc_t fcsquare(floatc_t a)
@@ -124,9 +123,16 @@ public:
 	// Override this if the homing buttons are not named after the axes (e.g. SCARA printer)
 	virtual const char* HomingButtonNames() const { return "XYZUVW"; }
 
-	// Return true if the specified endstop axis uses shared motors.
-	// Used to determine whether to abort the whole move or just one motor when an endstop switch is triggered.
-	virtual bool DriveIsShared(size_t drive) const = 0;
+	// This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
+	// If we can proceed with homing some axes, return the name of the homing file to be called. Optionally, update 'alreadyHomed' to indicate
+	// that some additional axes should be considered not homed.
+	// If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
+	virtual const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const;
+
+	// This function is called from the step ISR when an endstop switch is triggered during homing.
+	// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() or dda.SetPositions().
+	// Return true if the entire move should be stopped, false if only the motor concerned should be stopped.
+	virtual bool OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const = 0;
 
 	// Return the type of homing we do
 	virtual HomingMode GetHomingMode() const = 0;
@@ -168,6 +174,9 @@ protected:
 
 	float segmentsPerSecond;				// if we are using segmentation, the target number of segments/second
 	float minSegmentLength;					// if we are using segmentation, the minimum segment size
+
+	static const char *HomeAllFileName;
+	static const char * const StandardHomingFileNames[];
 
 private:
 	bool useSegmentation;					// true if we have to approximate linear movement using segmentation

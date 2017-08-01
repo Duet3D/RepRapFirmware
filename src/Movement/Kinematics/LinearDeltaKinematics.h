@@ -39,9 +39,10 @@ public:
 	AxesBitmap AxesToHomeBeforeProbing() const override { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS); }
 	MotionType GetMotionType(size_t axis) const override;
 	size_t NumHomingButtons(size_t numVisibleAxes) const override { return 0; }
-	bool DriveIsShared(size_t drive) const override { return false; }
 	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
+	const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const override;
+	bool OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 
 #ifdef DUET_NG
 	bool WriteResumeSettings(FileStore *f) const override;

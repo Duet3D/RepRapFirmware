@@ -73,6 +73,7 @@ class OutputStack;
 class GCodeBuffer;
 class GCodeQueue;
 class FilamentSensor;
+class RandomProbePointSet;
 
 #if SUPPORT_IOBITS
 class PortControl;

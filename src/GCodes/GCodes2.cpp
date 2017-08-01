@@ -518,13 +518,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 226: // Gcode Initiated Pause
-		if (&gb == fileGCode)			// ignore M226 if it did't come from within a file being printed
+		if (&gb == fileGCode)						// ignore M226 if it did't come from within a file being printed
 		{
-			if (!LockMovement(gb))					// lock movement before calling DoPause
+			if (gb.IsDoingFileMacro())
 			{
-				return false;
+				pausePending = true;
 			}
-			DoPause(gb, false);
+			else
+			{
+				if (!LockMovement(gb))					// lock movement before calling DoPause
+				{
+					return false;
+				}
+				DoPause(gb, false);
+			}
 		}
 		break;
 
@@ -538,6 +545,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			reply.copy("Cannot pause print, because no file is being printed!");
 			error = true;
+		}
+		else if (fileGCode->IsDoingFileMacro())
+		{
+			pausePending = true;
 		}
 		else
 		{
@@ -752,7 +763,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 83:	// Use relative extruder positioning
-		if (!gb.MachineState().drivesRelative)	// don't reset the absolute extruder position if it was already relative
+		if (!gb.MachineState().drivesRelative)		// don't reset the absolute extruder position if it was already relative
 		{
 			for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
 			{

@@ -13,10 +13,14 @@
 class FilamentSensor
 {
 public:
-	virtual ~FilamentSensor();
-
 	// Configure this sensor returning true if error
 	virtual bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) = 0;
+
+	// ISR for when the pin state changes
+	virtual void Interrupt() = 0;
+
+	// Override the virtual destructor if your derived class allocates any dynamic memory
+	virtual ~FilamentSensor();
 
 	// Return the type of this sensor
 	int GetType() const { return type; }
@@ -32,6 +36,8 @@ protected:
 	int GetEndstopNumber() const { return endstopNumber; }
 
 private:
+	static void InterruptEntry(void *param);
+
 	int type;
 	int endstopNumber;
 	Pin pin;

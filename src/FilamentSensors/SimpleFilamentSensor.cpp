@@ -11,6 +11,7 @@ SimpleFilamentSensor::SimpleFilamentSensor(int type) : FilamentSensor(type), hig
 {
 }
 
+// Configure this sensor returning true if error
 bool SimpleFilamentSensor::Configure(GCodeBuffer& gb, StringRef& reply, bool& seen)
 {
 	if (ConfigurePin(gb, reply, seen))
@@ -24,6 +25,12 @@ bool SimpleFilamentSensor::Configure(GCodeBuffer& gb, StringRef& reply, bool& se
 	}
 
 	return false;
+}
+
+// ISR for when the pin state changes
+void SimpleFilamentSensor::Interrupt()
+{
+	//TODO
 }
 
 // End

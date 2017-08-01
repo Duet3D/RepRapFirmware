@@ -480,7 +480,7 @@ void Platform::Init()
 	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
 	// The SX1509B has an independent power on reset, so give it some time
 	delay(200);
-	expansionBoard = DuetExpansion::Init();
+	expansionBoard = DuetExpansion::DueXnInit();
 	switch (expansionBoard)
 	{
 	case ExpansionBoardType::DueX2:
@@ -888,8 +888,8 @@ void Platform::SetZProbeModState(bool b) const
 	WriteDigital(zProbeModulationPin, b);
 }
 
-// Return true if we must home X and Y before we home Z (i.e. we are using a bed probe)
-bool Platform::MustHomeXYBeforeZ() const
+// Return true if we are using a bed probe to home Z
+bool Platform::HomingZWithProbe() const
 {
 	return (zProbeType != 0) && ((zProbeAxes & (1 << Z_AXIS)) != 0);
 }

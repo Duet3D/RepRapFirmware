@@ -16,6 +16,7 @@ public:
 	SimpleFilamentSensor(int type);
 
 	bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) override;
+	void Interrupt() override;
 
 private:
 	bool highWhenNoFilament;
