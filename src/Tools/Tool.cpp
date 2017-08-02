@@ -33,18 +33,19 @@
 
 Tool * Tool::freelist = nullptr;
 
-/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap)
+// Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
+/*static*/ Tool *Tool::Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, StringRef& reply)
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: too many drives");
+		reply.copy("Tool creation: too many drives");
 		return nullptr;
 	}
 
 	if (hCount > ARRAY_SIZE(Tool::heaters))
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: too many heaters");
+		reply.copy("Tool creation: too many heaters");
 		return nullptr;
 	}
 
@@ -53,7 +54,7 @@ Tool * Tool::freelist = nullptr;
 	{
 		if (d[i] < 0 || d[i] >= (int)numExtruders)
 		{
-			reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: bad drive number");
+			reply.copy("Tool creation: bad drive number");
 			return nullptr;
 		}
 	}
@@ -61,7 +62,7 @@ Tool * Tool::freelist = nullptr;
 	{
 		if (h[i] < 0 || h[i] >= (int)Heaters)
 		{
-			reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Tool creation: bad heater number");
+			reply.copy("Tool creation: bad heater number");
 			return nullptr;
 		}
 	}
@@ -79,8 +80,7 @@ Tool * Tool::freelist = nullptr;
 
 	if (dCount == 1)
 	{
-		// Create only one Filament instance per extruder drive,
-		// and only if this tool is assigned to exactly one extruder
+		// Create only one Filament instance per extruder drive, and only if this tool is assigned to exactly one extruder
 		Filament *filament = Filament::GetFilamentByExtruder(d[0]);
 		t->filament = (filament == nullptr) ? new Filament(d[0]) : filament;
 	}
@@ -100,7 +100,6 @@ Tool * Tool::freelist = nullptr;
 	t->yMapping = yMap;
 	t->fanMapping = fanMap;
 	t->heaterFault = false;
-	t->mixing = false;
 	t->displayColdExtrudeWarning = false;
 	t->virtualExtruderPosition = 0.0;
 
@@ -109,14 +108,10 @@ Tool * Tool::freelist = nullptr;
 		t->offset[axis] = 0.0;
 	}
 
-	if (t->driveCount > 0)
+	for (size_t drive = 0; drive < t->driveCount; drive++)
 	{
-		const float r = 1.0 / (float) (t->driveCount);
-		for (size_t drive = 0; drive < t->driveCount; drive++)
-		{
-			t->drives[drive] = d[drive];
-			t->mix[drive] = r;
-		}
+		t->drives[drive] = d[drive];
+		t->mix[drive] = (drive == 0) ? 1.0 : 0.0;		// initial mix ratio is 1:1:0
 	}
 
 	for (size_t heater = 0; heater < t->heaterCount; heater++)
@@ -456,19 +451,6 @@ bool Tool::WriteSettings(FileStore *f) const
 			c = ':';
 		}
 		buf.cat('\n');
-		ok = f->Write(buf.Pointer());
-	}
-
-	if (ok && mixing)
-	{
-		buf.printf("M567 P%d ", myNumber);
-		char c = 'E';
-		for (size_t i = 0; i < driveCount; ++i)
-		{
-			buf.catf("%c%.1f", c, mix[i]);
-			c = ':';
-		}
-		buf.catf("\nM568 P%d S1\n", myNumber);
 		ok = f->Write(buf.Pointer());
 	}
 

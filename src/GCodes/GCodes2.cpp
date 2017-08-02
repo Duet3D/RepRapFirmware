@@ -1749,8 +1749,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					tParam = 0.0;
 				}
 
-				int32_t zParam = 0;
-				gb.TryGetIValue('Z', zParam, seen);
+				AxesBitmap axisControls = 0;
+				for (size_t axis = 0; axis < numTotalAxes; axis++)
+				{
+					if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
+					{
+						SetBit(axisControls, axis);
+					}
+				}
 
 				const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
 
@@ -1761,7 +1767,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 				}
 
-				platform.SendAlert(mt, messageBuffer, titleBuffer, (int)sParam, tParam, zParam == 1);
+				platform.SendAlert(mt, messageBuffer, titleBuffer, (int)sParam, tParam, axisControls);
 			}
 		}
 		break;
@@ -2490,7 +2496,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 567: // Set/report tool mix ratios
 		if (gb.Seen('P'))
 		{
-			int8_t tNumber = gb.GetIValue();
+			const int8_t tNumber = gb.GetIValue();
 			Tool* const tool = reprap.GetTool(tNumber);
 			if (tool != nullptr)
 			{
@@ -2523,21 +2529,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 568: // Turn on/off automatic tool mixing
-		if (gb.Seen('P'))
-		{
-			Tool* const tool = reprap.GetTool(gb.GetIValue());
-			if (tool != nullptr)
-			{
-				if (gb.Seen('S'))
-				{
-					tool->SetMixing(gb.GetIValue() != 0);
-				}
-				else
-				{
-					reply.printf("Tool %d mixing is %s", tool->Number(), (tool->GetMixing()) ? "enabled" : "disabled");
-				}
-			}
-		}
+		reply.copy("The M568 command is no longer needed");
 		break;
 
 	case 569: // Set/report axis direction

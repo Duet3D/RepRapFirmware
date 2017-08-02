@@ -1691,12 +1691,17 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 		}
 
 		const size_t eMoveCount = tool->DriveCount();
-		if (eMoveCount > 0)
+		if (eMoveCount != 0)
 		{
 			// Set the drive values for this tool
-			if (tool->GetMixing())
+			float eMovement[MaxExtruders];
+			size_t mc = eMoveCount;
+			gb.GetFloatArray(eMovement, mc, false);
+
+			if (mc == 1 && eMoveCount > 1)
 			{
-				const float moveArg = gb.GetFValue() * distanceScale;
+				// There are multiple extruders present but only one value has been specified, so use mixing
+				const float moveArg = eMovement[0] * distanceScale;
 				float requestedExtrusionAmount;
 				if (gb.MachineState().drivesRelative)
 				{
@@ -1718,13 +1723,11 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 					rawExtruderTotal += extrusionAmount;
 					moveBuffer.coords[drive + numTotalAxes] = extrusionAmount * extrusionFactors[drive] * volumetricExtrusionFactors[drive];
 				}
+
 			}
 			else
 			{
-				float eMovement[MaxExtruders];
-				size_t mc = eMoveCount;
-				gb.GetFloatArray(eMovement, mc, false);
-
+				// Either there is only one extruder associated with this tool, or individual extrusion amounts have been provided
 				for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
 				{
 					const int drive = tool->Drive(eDrive);
@@ -2217,15 +2220,16 @@ bool GCodes::SetPositions(GCodeBuffer& gb)
 			const size_t eMoveCount = tool->DriveCount();
 			if (eMoveCount != 0)
 			{
-				if (tool->GetMixing())
+				float eMovement[MaxExtruders];
+				size_t mc = eMoveCount;
+				gb.GetFloatArray(eMovement, mc, false);
+				if (mc == 1 && eMoveCount > 1)
 				{
+					// The tool has multiple extruders, but only one position was given. Treat it as the mix position.
 					tool->virtualExtruderPosition = gb.GetFValue() * distanceScale;
 				}
 				else
 				{
-					float eMovement[MaxExtruders];
-					size_t mc = eMoveCount;
-					gb.GetFloatArray(eMovement, mc, false);
 					for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
 					{
 						lastRawExtruderPosition[tool->Drive(eDrive)] = eMovement[eDrive] * distanceScale;
@@ -3145,11 +3149,12 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			Tool* const tool = Tool::Create(toolNumber, name, drives, dCount, heaters, hCount, xMap, yMap, fanMap);
-			if (tool != nullptr)
+			Tool* const tool = Tool::Create(toolNumber, name, drives, dCount, heaters, hCount, xMap, yMap, fanMap, reply);
+			if (tool == nullptr)
 			{
-				reprap.AddTool(tool);
+				return true;
 			}
+			reprap.AddTool(tool);
 		}
 	}
 	else

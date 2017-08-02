@@ -37,7 +37,7 @@ class Tool
 {
 public:
 
-	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap);
+	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, StringRef& reply);
 	static void Delete(Tool *t);
 
 	const float *GetOffset() const;
@@ -53,8 +53,6 @@ public:
 	void GetVariables(float* standby, float* active) const;
 	void DefineMix(const float m[]);
 	const float* GetMix() const;
-	void SetMixing(bool b);
-	bool GetMixing() const;
 	float MaxFeedrate() const;
 	float InstantDv() const;
 	void Print(StringRef& reply);
@@ -110,7 +108,6 @@ private:
 	};
 	ToolState state;
 
-	bool mixing;
 	bool heaterFault;
 	volatile bool displayColdExtrudeWarning;
 };
@@ -143,16 +140,6 @@ inline int Tool::Number() const
 inline const float* Tool::GetMix() const
 {
 	return mix;
-}
-
-inline void Tool::SetMixing(bool b)
-{
-	mixing = b;
-}
-
-inline bool Tool::GetMixing() const
-{
-	return mixing;
 }
 
 inline size_t Tool::DriveCount() const
