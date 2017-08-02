@@ -5,11 +5,13 @@ Version 1.19beta12 (under development)
 - Homing functionality is now handled by the Kinematic classes. SCARA homing is supported.
 - Added support for binary file upload in M559 and M560
 - Added support for an additional SX1509B port expander
-- Pause commands issued while a macro is being executed are deferred until the macro has completed and they can be resumed
+- Pause commands issued while a macro is being executed are deferred until the macro has completed, and they can be resumed
 - Bug fix: XYZ coordinates could be reported as NaN in DWC status responses, causing AJAX errors
 - Axis compensation now takes account of X and Y axis mapping
 - Messages rejected by webserver now generate a generic message only if debug is enabled
-- More work on filament sensor support
+- M568 command to enable/disable mixing no longer does anything because mixing is always enabled. Mixing is not used if the E parameter in the G1 command has multiple values.
+- Filament sensors are now read and their status displayed in the M122 report, but no action is taken on the status yet
+- Message boxes can now have other axis jog buttons as well as Z (thanks chrishamm)
 
 Version 1.19beta11
 ==================
