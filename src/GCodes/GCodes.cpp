@@ -379,7 +379,7 @@ void GCodes::Spin()
 		case GCodeState::toolChange1:		// Release the old tool (if any), then run tpre for the new tool
 		case GCodeState::m109ToolChange1:	// Release the old tool (if any), then run tpre for the new tool
 			{
-				const Tool *oldTool = reprap.GetCurrentTool();
+				const Tool * const oldTool = reprap.GetCurrentTool();
 				if (oldTool != nullptr)
 				{
 					reprap.StandbyTool(oldTool->Number());
@@ -396,12 +396,6 @@ void GCodes::Spin()
 		case GCodeState::toolChange2:		// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 		case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 			reprap.SelectTool(newToolNumber);
-
-			// The user position reflects the position of the old tool, but on an IDEX machine the new tool is at a different place
-			// Also tool offsets may have changed, but as some axes may not have been homed we should avoid moving those axes when the next movement command is given.
-			// So adjust the current user position to reflect the actual position of the tool.
-			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
-
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{

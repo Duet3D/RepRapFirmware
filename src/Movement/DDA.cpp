@@ -1568,9 +1568,12 @@ void DDA::StopDrive(size_t drive)
 // It adjusts the end points of the current move to account for how far through the move we got.
 void DDA::MoveAborted()
 {
-	for (size_t drive = 0; drive < DRIVES; ++drive)
+	if (state == executing)
 	{
-		StopDrive(drive);
+		for (size_t drive = 0; drive < DRIVES; ++drive)
+		{
+			StopDrive(drive);
+		}
 	}
 	state = completed;
 }

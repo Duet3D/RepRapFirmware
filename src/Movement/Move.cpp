@@ -80,13 +80,29 @@ void Move::Init()
 void Move::Exit()
 {
 	Platform::DisableStepInterrupt();
-	active = false;
+
+	// Clear the DDA ring so that we don't report any moves as pending
+	currentDda = nullptr;
+	while (ddaRingGetPointer != ddaRingAddPointer)
+	{
+		ddaRingGetPointer->Complete();
+		ddaRingGetPointer = ddaRingGetPointer->GetNext();
+	}
+
+	while (ddaRingCheckPointer->GetState() == DDA::completed)
+	{
+		(void)ddaRingCheckPointer->Free();
+		ddaRingCheckPointer = ddaRingCheckPointer->GetNext();
+	}
+	active = false;												// don't accept any more moves
 }
 
 void Move::Spin()
 {
 	if (!active)
 	{
+		GCodes::RawMove nextMove;
+		(void) reprap.GetGCodes().ReadMove(nextMove);			// throw away any move that GCodes tries to pass us
 		return;
 	}
 
