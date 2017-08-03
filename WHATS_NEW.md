@@ -6,7 +6,7 @@ Version 1.19RC1
 
 New features:
 - Resume-after-power-failure support on Duet WiFi/Ethernet. See https://duet3d.com/wiki/Setting_up_to_resume_a_print_after_a_power_failure.
-- Partly implemented bed levelling using multiple independent Z motors (M671). See https://duet3d.com/wiki/Bed_levelling_using_multiple_independent_Z_motors.
+- Bed levelling using multiple independent Z motors (M671). See https://duet3d.com/wiki/Bed_levelling_using_multiple_independent_Z_motors.
 - Support 2 additional external drivers connected to the CONN_LCD socket
 - FTP and Telnet are now supported on the Duet WiFi but are disabled by default. Use M586 to enable them.
 - Added support for M591 command to configure filament sensors (but filament sensor support still incomplete)
@@ -121,6 +121,7 @@ Upgrade notes:
 
 Known issues:
 - Although the WiFi module can now be put into access point mode using M589 and M552 S1, WiFi access does not work properly in access point mode
+- When a power fail occurs and power fail action has been configured, the firmware has to wait for some or all moves in the print queue to complete before the powerfail.g command can be run. This means that you may run out of power before powerfail.g is run, which could result in a few moves being skipped and the nozzle becoming stuck to the print.
 
 Version 1.18.2
 ==============
