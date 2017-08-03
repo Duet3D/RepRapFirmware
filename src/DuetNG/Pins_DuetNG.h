@@ -154,8 +154,9 @@ const Pin SpecialPinMap[] =
 {
 	24, 97, 98, 99														// We allow CS5-CS8 to be used because few users need >4 thermocouples or RTDs
 };
-const Pin DueX5GpioPinMap[] = { 211, 210, 209, 208 };					// GPIO 1-4 on DueX5
-const int HighestLogicalPin = 100 + ARRAY_SIZE(DueX5GpioPinMap) - 1;	// highest logical pin number on this electronics
+const Pin DueX5GpioPinMap[] = { 211, 210, 209, 208 };					// Pins 100-103 map to GPIO 1-4 on DueX5
+// We also allow pins 120-135 to be used if there is an additional SX1509B expander
+const int HighestLogicalPin = 135;										// highest logical pin number on this electronics
 
 // SAM4E Flash locations (may be expanded in the future)
 const uint32_t IAP_FLASH_START = 0x00470000;

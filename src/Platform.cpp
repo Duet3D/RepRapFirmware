@@ -79,7 +79,11 @@ const int Heater0LogicalPin = 0;
 const int Fan0LogicalPin = 20;
 const int EndstopXLogicalPin = 40;
 const int Special0LogicalPin = 60;
+
+#ifdef DUET_NG
 const int DueX5Gpio0LogicalPin = 100;
+const int AdditionalExpansionLogicalPin = 120;
+#endif
 
 //#define MOVE_DEBUG
 
@@ -495,6 +499,7 @@ void Platform::Init()
 		numTMC2660Drivers = 5;									// assume that additional drivers are dumb enable/step/dir ones
 		break;
 	}
+	DuetExpansion::AdditionalOutputInit();
 
 	// Initialise TMC2660 driver module
 	driversPowered = false;
@@ -1514,6 +1519,15 @@ void Platform::Spin()
 	}
 #endif
 
+	// Filament sensors
+	for (size_t i = 0; i < MaxExtruders; ++i)
+	{
+		if (filamentSensors[i] != nullptr)
+		{
+			filamentSensors[i]->Poll();
+		}
+	}
+
 	ClassReport(longWait);
 }
 
@@ -2012,6 +2026,15 @@ void Platform::Diagnostics(MessageType mtype)
 				);
 	}
 #endif
+
+	// Filament sensors
+	for (size_t i = 0; i < MaxExtruders; ++i)
+	{
+		if (filamentSensors[i] != nullptr)
+		{
+			filamentSensors[i]->Diagnostics(mtype, i);
+		}
+	}
 
 	// Show current RTC time
 	Message(mtype, "Date/time: ");
@@ -3266,9 +3289,18 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 #ifdef DUET_NG
 	else if (logicalPin >= DueX5Gpio0LogicalPin && logicalPin < DueX5Gpio0LogicalPin + (int)ARRAY_SIZE(DueX5GpioPinMap))	// Pins 100-103 are the GPIO pins on the DueX2/X5
 	{
+		// GPIO pins on DueX5
 		if (access != PinAccess::servo)
 		{
 			firmwarePin = DueX5GpioPinMap[logicalPin - DueX5Gpio0LogicalPin];
+		}
+	}
+	else if (logicalPin >= AdditionalExpansionLogicalPin && logicalPin <= AdditionalExpansionLogicalPin + 15)
+	{
+		// Pins on additional SX1509B expansion
+		if (access != PinAccess::servo)
+		{
+			firmwarePin = AdditionalIoExpansionStart + (logicalPin - AdditionalExpansionLogicalPin);
 		}
 	}
 #endif
@@ -3311,10 +3343,11 @@ FilamentSensor *Platform::GetFilamentSensor(int extruder) const
 	return (extruder >= 0 && extruder < (int)MaxExtruders) ? filamentSensors[extruder] : nullptr;
 }
 
-// Set the filament sensor type for an extruder, returning true if it has changed
+// Set the filament sensor type for an extruder, returning true if it has changed.
+// Passing newSensorType as 0 sets no sensor.
 bool Platform::SetFilamentSensorType(int extruder, int newSensorType)
 {
-	if  (extruder >= 0 && extruder < (int)MaxExtruders)
+	if (extruder >= 0 && extruder < (int)MaxExtruders)
 	{
 		FilamentSensor*& sensor = filamentSensors[extruder];
 		const int oldSensorType = (sensor == nullptr) ? 0 : sensor->GetType();

@@ -61,7 +61,7 @@ public:
 	const int32_t *DriveCoordinates() const { return endPoint; }	// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(int32_t a, size_t drive);				// Force an end point
 	void SetFeedRate(float rate) { requestedSpeed = rate; }
-	float GetEndCoordinate(size_t drive, bool disableDeltaMapping);
+	float GetEndCoordinate(size_t drive, bool disableMotorMapping);
 	bool FetchEndPosition(volatile int32_t ep[DRIVES], volatile float endCoords[DRIVES]);
     void SetPositions(const float move[], size_t numDrives);		// Force the endpoints to be these
     FilePosition GetFilePosition() const { return filePos; }

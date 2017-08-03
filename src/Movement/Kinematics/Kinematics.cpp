@@ -108,7 +108,7 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alre
 		}
 	}
 
-	// Error, we can't home any axes that we were asked to home. It can onjly be because we can't home the Z axis.
+	// Error, we can't home any axes that we were asked to home. It can only be because we can't home the Z axis.
 	mustHomeFirst = homeFirst & ~alreadyHomed;
 	return nullptr;
 }

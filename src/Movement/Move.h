@@ -88,6 +88,8 @@ public:
 	bool IsDeltaMode() const { return kinematics->GetKinematicsType() == KinematicsType::linearDelta; }
 	// End temporary functions
 
+	bool IsRawMotorMove(uint8_t moveType) const;									// Return true if this is a raw motor move
+
 	void CurrentMoveCompleted();													// Signal that the current move has just been completed
 	bool TryStartNextMove(uint32_t startTime);										// Try to start another move, returning true if Step() needs to be called immediately
 	float IdleTimeout() const { return idleTimeout; }								// Returns the idle timeout in seconds

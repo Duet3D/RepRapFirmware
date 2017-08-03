@@ -287,6 +287,7 @@ void GCodes::Spin()
 		case GCodeState::waitingForMoveToComplete:
 			if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for standstill and fetch the current position
 			{
+				// Check whether we made any G1 S3 moves and need to set the axis limits
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
 					if (IsBitSet<AxesBitmap>(axesToSenseLength, axis))
@@ -1122,7 +1123,7 @@ void GCodes::Spin()
 		}
 		if (displayDeltaNotHomedWarning)
 		{
-			platform.Message(GENERIC_MESSAGE, "Attempt to move the head of a delta printer before homing the towers\n");
+			platform.Message(GENERIC_MESSAGE, "Attempt to move the head of a Delta or SCARA printer before homing the towers\n");
 			displayDeltaNotHomedWarning = false;
 			lastWarningMillis = now;
 		}
@@ -1804,19 +1805,12 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 		}
 	}
 
-	// Check for damaging moves on a delta printer
-	if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
+	// Check for damaging moves on a delta or SCARA printer
+	const KinematicsType kinType = reprap.GetMove().GetKinematics().GetKinematicsType();
+	if (moveBuffer.moveType == 0)
 	{
-		// Extra checks to avoid damaging delta printers
-		if (moveBuffer.moveType != 0 && !gb.MachineState().axesRelative)
-		{
-			// We have been asked to do a move without delta mapping on a delta machine, but the move is not relative.
-			// This may be damaging and is almost certainly a user mistake, so ignore the move.
-			reply.copy("Attempt to move the motors of a delta printer to absolute positions");
-			return true;
-		}
-
-		if (moveBuffer.moveType == 0 && !AllAxesAreHomed())
+		// Regular move. If it's a delta or SCARA printer, all axes must be homed first.
+		if (!AllAxesAreHomed() && (kinType == KinematicsType::linearDelta || kinType == KinematicsType::scara))
 		{
 			// The user may be attempting to move a delta printer to an XYZ position before homing the axes
 			// This may be damaging and is almost certainly a user mistake, so ignore the move. But allow extruder-only moves.
@@ -1825,6 +1819,15 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 				displayDeltaNotHomedWarning = true;
 				return false;
 			}
+		}
+	}
+	else
+	{
+		// Special move. If on a delta, movement must be relative.
+		if (!gb.MachineState().axesRelative && kinType == KinematicsType::linearDelta)
+		{
+			reply.copy("Attempt to move the motors of a Delta printer to absolute positions");
+			return true;
 		}
 	}
 
@@ -1851,7 +1854,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 	}
 #endif
 
-	if (moveBuffer.moveType != 0)
+	if (reprap.GetMove().IsRawMotorMove(moveBuffer.moveType))
 	{
 		// This is a raw motor move, so we need the current raw motor positions in moveBuffer.coords
 		reprap.GetMove().GetCurrentUserPosition(moveBuffer.coords, moveBuffer.moveType, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());

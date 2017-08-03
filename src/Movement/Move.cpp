@@ -174,7 +174,7 @@ void Move::Spin()
 					// We have a new move
 					if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 					{
-						const bool doMotorMapping = (nextMove.moveType == 0) || (nextMove.moveType == 1 && kinematics->GetHomingMode() == Kinematics::homeCartesianAxes);
+						const bool doMotorMapping = !IsRawMotorMove(nextMove.moveType);
 						if (doMotorMapping)
 						{
 							AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, nextMove.moveType == 0);
@@ -309,6 +309,12 @@ bool Move::SetKinematics(KinematicsType k)
 		kinematics = nk;
 	}
 	return true;
+}
+
+// Return true if this is a raw motor move
+bool Move::IsRawMotorMove(uint8_t moveType) const
+{
+	return moveType == 2 || ((moveType == 1 || moveType == 3) && kinematics->GetHomingMode() != Kinematics::HomingMode::homeCartesianAxes);
 }
 
 // Return true if the specified point is accessible to the Z probe
@@ -896,7 +902,7 @@ bool Move::IsExtruding() const
 // Return the transformed machine coordinates
 void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const
 {
-	GetCurrentMachinePosition(m, moveType == 2 || (moveType == 1 && IsDeltaMode()));
+	GetCurrentMachinePosition(m, IsRawMotorMove(moveType));
 	if (moveType == 0)
 	{
 		InverseAxisAndBedTransform(m, xAxes, yAxes);

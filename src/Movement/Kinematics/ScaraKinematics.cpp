@@ -235,6 +235,17 @@ AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 	return g92Axes;
 }
 
+// This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
+// If we can proceed with homing some axes, return the name of the homing file to be called.
+// If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
+const char* ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+{
+	const char* ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, mustHomeFirst);
+	return (ret == StandardHomingFileNames[X_AXIS]) ? HomeProximalFileName
+			: (ret == StandardHomingFileNames[Y_AXIS]) ? HomeDistalFileName
+				: ret;
+}
+
 // This function is called from the step ISR when an endstop switch is triggered during homing.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() or dda.SetPositions().
 // Return true if the entire move should be stopped, false if only the motor concerned should be stopped.

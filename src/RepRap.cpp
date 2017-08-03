@@ -1168,6 +1168,11 @@ OutputBuffer *RepRap::GetConfigResponse()
 	{
 		response->catf(" + %s", expansionName);
 	}
+	const char* additionalExpansionName = DuetExpansion::GetAdditionalExpansionBoardName();
+	if (additionalExpansionName != nullptr)
+	{
+		response->catf(" + %s", additionalExpansionName);
+	}
 #endif
 	response->catf("\",\"firmwareName\":\"%s\"", FIRMWARE_NAME);
 	response->catf(",\"firmwareVersion\":\"%s\"", VERSION);

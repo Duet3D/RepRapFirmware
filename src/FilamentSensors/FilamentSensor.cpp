@@ -32,12 +32,18 @@ bool FilamentSensor::ConfigurePin(GCodeBuffer& gb, StringRef& reply, bool& seen)
 		const Pin p = reprap.GetPlatform().GetEndstopPin(endstop);
 		if (p == NoPin)
 		{
-			reply.copy("Bad endstop number");
+			reply.copy("bad endstop number");
 			return true;
 		}
 		endstopNumber = endstop;
 		pin = p;
 		attachInterrupt(pin, InterruptEntry, CHANGE, this);
+	}
+	else if (seen)
+	{
+		// We already had a P parameter, therefore it is an error not to have a C parameter too
+		reply.copy("no endstop number given");
+		return true;
 	}
 	return false;
 }

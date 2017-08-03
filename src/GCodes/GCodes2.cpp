@@ -1029,10 +1029,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
 #ifdef DUET_NG
-			const char* expansionName = DuetExpansion::GetExpansionBoardName();
+			const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 			if (expansionName != nullptr)
 			{
 				reply.catf(" + %s", expansionName);
+			}
+			const char* const additionalExpansionName = DuetExpansion::GetAdditionalExpansionBoardName();
+			if (additionalExpansionName != nullptr)
+			{
+				reply.catf(" + %s", additionalExpansionName);
 			}
 #endif
 			reply.catf(" FIRMWARE_DATE: %s", DATE);
@@ -3326,7 +3331,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				FilamentSensor *sensor = platform.GetFilamentSensor(extruder);
 				if (sensor != nullptr)
 				{
+					// Configure the sensor
 					error = sensor->Configure(gb, reply, seen);
+					if (error)
+					{
+						platform.SetFilamentSensorType(extruder, 0);		// delete the sensor
+					}
 				}
 				else if (!seen)
 				{
