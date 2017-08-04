@@ -71,7 +71,7 @@ void Duet3DFilamentSensor::Poll()
 	static const uint32_t NominalBitLength = DDA::stepClockRate/BitsPerSecond;
 	static const uint32_t MinBitLength = (NominalBitLength * 10)/13;	// allow 30% clock speed tolerance
 	static const uint32_t MaxBitLength = (NominalBitLength * 13)/10;	// allow 30% clock speed tolerance
-	static const uint32_t ErrorRecoveryDelayBits = 25;					// after an error we wait for the line to be low for this long
+	static const uint32_t ErrorRecoveryDelayBits = 12;					// after an error we wait for the line to be low for this long
 	static const uint32_t ErrorRecoveryTime = NominalBitLength * ErrorRecoveryDelayBits;
 
 	const size_t numEdgesCaptured = numberOfEdgesCaptured;				// capture volatile variable
@@ -107,10 +107,10 @@ void Duet3DFilamentSensor::Poll()
 				uint8_t currentNibble = 0;
 				for (uint8_t numBits = 0; numBits < 5; ++numBits)
 				{
-					if (bitChangeIndex < numEdgesCaptured && edgeCaptures[bitChangeIndex] - edgeCaptures[1] < samplePoint)
+					if (bitChangeIndex < numEdgesCaptured && edgeCaptures[bitChangeIndex] - nibbleStartTime < samplePoint)
 					{
 						++bitChangeIndex;
-						if (bitChangeIndex < numEdgesCaptured && edgeCaptures[bitChangeIndex] - edgeCaptures[1] < samplePoint)
+						if (bitChangeIndex < numEdgesCaptured && edgeCaptures[bitChangeIndex] - nibbleStartTime < samplePoint)
 						{
 							state = RxdState::errorRecovery;		// there should be at most 1 transition per bit
 							return;
@@ -184,7 +184,9 @@ void Duet3DFilamentSensor::Diagnostics(MessageType mtype, unsigned int extruder)
 									: ((sensorValue & ErrorBit) != 0) ? "error"
 										: (withSwitch && (sensorValue & SwitchOpenBit) != 0) ? "no filament"
 											: "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: angle %u, %s\n", extruder, sensorValue, statusText);
+	// The sensor angle
+	const float sensorAngle = (sensorValue & AngleMask) * (360.0/1024.0);
+	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: angle %.1f, %s\n", extruder, sensorAngle, statusText);
 }
 
 // End

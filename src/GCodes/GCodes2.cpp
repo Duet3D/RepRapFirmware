@@ -3986,9 +3986,6 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		newToolNumber = gb.GetIValue();
 		newToolNumber += gb.GetToolNumberAdjust();
 
-		reprap.GetMove().GetCurrentUserPosition(toolChangeRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-		toolChangeRestorePoint.feedRate = gb.MachineState().feedrate;
-
 		if (simulationMode == 0)						// we don't yet simulate any T codes
 		{
 			const Tool * const oldTool = reprap.GetCurrentTool();

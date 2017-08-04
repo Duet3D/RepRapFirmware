@@ -364,6 +364,8 @@ void GCodes::Spin()
 		case GCodeState::m109ToolChange0:	// Run tfree for the old tool (if any)
 			doingToolChange = true;
 			SaveFanSpeeds();
+			memcpy(toolChangeRestorePoint.moveCoords, currentUserPosition, ARRAY_SIZE(currentUserPosition) * sizeof(currentUserPosition[0]));
+			toolChangeRestorePoint.feedRate = gb.MachineState().feedrate;
 			gb.AdvanceState();
 			if ((toolChangeParam & TFreeBit) != 0)
 			{
@@ -378,6 +380,7 @@ void GCodes::Spin()
 
 		case GCodeState::toolChange1:		// Release the old tool (if any), then run tpre for the new tool
 		case GCodeState::m109ToolChange1:	// Release the old tool (if any), then run tpre for the new tool
+			toolChangeMappedAxes = reprap.GetCurrentYAxes() | reprap.GetCurrentYAxes();
 			{
 				const Tool * const oldTool = reprap.GetCurrentTool();
 				if (oldTool != nullptr)
@@ -396,6 +399,15 @@ void GCodes::Spin()
 		case GCodeState::toolChange2:		// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 		case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 			reprap.SelectTool(newToolNumber);
+			toolChangeMappedAxes |= reprap.GetCurrentXAxes() | reprap.GetCurrentYAxes();
+			toolChangeMappedAxes &= ~LowestNBits<AxesBitmap>(Z_AXIS);			// remove XYZ axes
+
+			// The user position reflects the position of the old tool, but on an IDEX machine the new tool is at a different place
+ 			// So adjust the current user position to reflect the actual position of the tool so that commands in tpost.g work properly.
+			// By itself this would cause the tool offset (in particular, the Z offset) to be incorrect after the tool change,
+			// however we will restore the original user coordinates later.
+ 			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
 			{
@@ -408,22 +420,36 @@ void GCodes::Spin()
 			break;
 
 		case GCodeState::toolChangeComplete:
-			doingToolChange = false;
-			gb.SetState(GCodeState::normal);
-			break;
-
 		case GCodeState::m109ToolChangeComplete:
-			doingToolChange = false;
-			UnlockAll(gb);									// allow movement again
-			if (cancelWait || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling))
+			// Restore the desired user position
+			for (size_t axis = 0; axis < MaxAxes; ++axis)
 			{
-				cancelWait = isWaiting = false;
+				if (!IsBitSet(toolChangeMappedAxes, axis))
+				{
+					currentUserPosition[axis] = toolChangeRestorePoint.moveCoords[axis];
+				}
+			}
+			gb.MachineState().feedrate = toolChangeRestorePoint.feedRate;
+			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
+			doingToolChange = false;
+
+			if (gb.GetState() == GCodeState::toolChangeComplete)
+			{
 				gb.SetState(GCodeState::normal);
 			}
 			else
 			{
-				CheckReportDue(gb, reply);
-				isWaiting = true;
+				UnlockAll(gb);									// allow movement again
+				if (cancelWait || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling))
+				{
+					cancelWait = isWaiting = false;
+					gb.SetState(GCodeState::normal);
+				}
+				else
+				{
+					CheckReportDue(gb, reply);
+					isWaiting = true;
+				}
 			}
 			break;
 
@@ -1693,9 +1719,9 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 			size_t mc = eMoveCount;
 			gb.GetFloatArray(eMovement, mc, false);
 
-			if (mc == 1 && eMoveCount > 1)
+			if (mc == 1)
 			{
-				// There are multiple extruders present but only one value has been specified, so use mixing
+				// There may be multiple extruders present but only one value has been specified, so use mixing
 				const float moveArg = eMovement[0] * distanceScale;
 				float requestedExtrusionAmount;
 				if (gb.MachineState().drivesRelative)
@@ -1722,7 +1748,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 			}
 			else
 			{
-				// Either there is only one extruder associated with this tool, or individual extrusion amounts have been provided
+				// Individual extrusion amounts have been provided
 				for (size_t eDrive = 0; eDrive < eMoveCount; eDrive++)
 				{
 					const int drive = tool->Drive(eDrive);
@@ -2220,10 +2246,11 @@ bool GCodes::SetPositions(GCodeBuffer& gb)
 				float eMovement[MaxExtruders];
 				size_t mc = eMoveCount;
 				gb.GetFloatArray(eMovement, mc, false);
-				if (mc == 1 && eMoveCount > 1)
+				if (mc == 1)
 				{
 					// The tool has multiple extruders, but only one position was given. Treat it as the mix position.
-					tool->virtualExtruderPosition = gb.GetFValue() * distanceScale;
+					tool->virtualExtruderPosition = eMovement[0] * distanceScale;
+					lastRawExtruderPosition[tool->Drive(0)] = eMovement[0] * distanceScale;
 				}
 				else
 				{

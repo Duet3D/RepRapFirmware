@@ -5,7 +5,8 @@ Provider = "Escher 3D"
 DriverPackageDisplayName = "Duet3D USB driver"
 DUET = "Duet 3D printer control electronics with pre-1.18 firmware"
 DUET06 = "Duet 06 or 085 3D printer control electronics"
-DUETNG = "Duet WiFi or Ethernet 3D printer control electronics"
+ALLIGATOR = "Alligator 3D printer control electronics"
+DUETNG = "Duet WiFi or Duet Ethernet 3D printer control electronics"
 Serial.SvcDesc = "USB Serial emulation driver" 
 BOSSAPORT = "Bossa Program Port"
 
@@ -19,7 +20,7 @@ ClassGuid   = {4D36E978-E325-11CE-BFC1-08002BE10318}
 DriverPackageDisplayName = %DriverPackageDisplayName%
 Provider    = %Provider% 
 CatalogFile = duetinf.cat
-DriverVer   = 04/09/2017,1.18.1.0	; date in US format
+DriverVer   = 08/04/2017,1.19.0.0	; date in US format
 
 [Manufacturer] 
 %Provider% = DeviceList, NTAMD64, NT 
@@ -30,21 +31,24 @@ FakeModemCopyFileSection = 12
 
 [DeviceList] 
 %BOSSAPORT% = DriverInstall, USB\VID_03EB&PID_6124
-%DUET% = DriverInstall, USB\VID_03EB&PID_2404 
-%DUET06% = DriverInstall, USB\VID_1209&PID_D3D8 
-%DUETNG% = DriverInstall, USB\VID_1D50&PID_60EC 
+%DUET% = DriverInstall, USB\VID_03EB&PID_2404
+%DUET06% = DriverInstall, USB\VID_1209&PID_D3D8
+%ALLIGATOR% = DriverInstall, USB\VID_1209&PID_AB3D
+%DUETNG% = DriverInstall, USB\VID_1D50&PID_60EC
 
 [DeviceList.NTAMD64]
 %BOSSAPORT% = DriverInstall, USB\VID_03EB&PID_6124
-%DUET% = DriverInstall.NTamd64, USB\VID_03EB&PID_2404 
-%DUET06% = DriverInstall.NTamd64, USB\VID_1209&PID_D3D8 
-%DUETNG% = DriverInstall.NTamd64, USB\VID_1D50&PID_60EC 
+%DUET% = DriverInstall.NTamd64, USB\VID_03EB&PID_2404
+%DUET06% = DriverInstall.NTamd64, USB\VID_1209&PID_D3D8
+%ALLIGATOR% = DriverInstall.NTamd64, USB\VID_1209&PID_AB3D
+%DUETNG% = DriverInstall.NTamd64, USB\VID_1D50&PID_60EC
 
 [DeviceList.NT]
 %BOSSAPORT% = DriverInstall, USB\VID_03EB&PID_6124
-%DUET% = DriverInstall.NT, USB\VID_03EB&PID_2404 
-%DUET06% = DriverInstall.NT, USB\VID_1209&PID_D3D8 
-%DUETNG% = DriverInstall.NT, USB\VID_1D50&PID_60EC 
+%DUET% = DriverInstall.NT, USB\VID_03EB&PID_2404
+%DUET06% = DriverInstall.NT, USB\VID_1209&PID_D3D8
+%ALLIGATOR% = DriverInstall.NT, USB\VID_1209&PID_AB3D
+%DUETNG% = DriverInstall.NT, USB\VID_1D50&PID_60EC
 
 ;------------------------------------------------------------
 ; Windows XP, Vista, Windows 7, Windows 8, Windows 10 - 32bit

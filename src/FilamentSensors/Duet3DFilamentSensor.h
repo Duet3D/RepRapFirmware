@@ -27,6 +27,7 @@ private:
 
 	static constexpr uint16_t SwitchOpenBit = 0x4000u;
 	static constexpr uint16_t ErrorBit = 0x8000u;
+	static constexpr uint16_t AngleMask = 0x03FF;		// 10-bit sensor angle
 
 	float mmPerRev;
 	float tolerance;
