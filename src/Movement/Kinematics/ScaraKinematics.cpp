@@ -247,9 +247,15 @@ const char* ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap&
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() or dda.SetPositions().
-// Return true if the entire move should be stopped, false if only the motor concerned should be stopped.
-bool ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
+// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
+bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const
+{
+	return false;
+}
+
+// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
+// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
+void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
 	const float hitPoint = (axis == 0)
 							? ((highEnd) ? thetaLimits[1] : thetaLimits[0])						// proximal joint homing switch
@@ -259,7 +265,6 @@ bool ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 									? reprap.GetPlatform().AxisMaximum(axis)					// other axis (e.g. Z) high end homing switch
 									  : reprap.GetPlatform().AxisMinimum(axis);					// other axis (e.g. Z) low end homing switch
 	dda.SetDriveCoordinate(hitPoint * stepsPerMm[axis], axis);
-	return false;
 }
 
 // Recalculate the derived parameters

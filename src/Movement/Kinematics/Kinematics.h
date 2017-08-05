@@ -130,9 +130,12 @@ public:
 	virtual const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const;
 
 	// This function is called from the step ISR when an endstop switch is triggered during homing.
-	// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() or dda.SetPositions().
-	// Return true if the entire move should be stopped, false if only the motor concerned should be stopped.
-	virtual bool OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const = 0;
+	// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
+	virtual bool QueryTerminateHomingMove(size_t axis) const = 0;
+
+	// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
+	// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
+	virtual void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const = 0;
 
 	// Return the type of homing we do
 	virtual HomingMode GetHomingMode() const = 0;

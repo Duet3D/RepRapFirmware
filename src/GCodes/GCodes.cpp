@@ -380,7 +380,7 @@ void GCodes::Spin()
 
 		case GCodeState::toolChange1:		// Release the old tool (if any), then run tpre for the new tool
 		case GCodeState::m109ToolChange1:	// Release the old tool (if any), then run tpre for the new tool
-			toolChangeMappedAxes = reprap.GetCurrentYAxes() | reprap.GetCurrentYAxes();
+			toolChangeMappedAxes = reprap.GetCurrentXAxes() | reprap.GetCurrentYAxes();
 			{
 				const Tool * const oldTool = reprap.GetCurrentTool();
 				if (oldTool != nullptr)
@@ -400,13 +400,7 @@ void GCodes::Spin()
 		case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 			reprap.SelectTool(newToolNumber);
 			toolChangeMappedAxes |= reprap.GetCurrentXAxes() | reprap.GetCurrentYAxes();
-			toolChangeMappedAxes &= ~LowestNBits<AxesBitmap>(Z_AXIS);			// remove XYZ axes
-
-			// The user position reflects the position of the old tool, but on an IDEX machine the new tool is at a different place
- 			// So adjust the current user position to reflect the actual position of the tool so that commands in tpost.g work properly.
-			// By itself this would cause the tool offset (in particular, the Z offset) to be incorrect after the tool change,
-			// however we will restore the original user coordinates later.
- 			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+			GetCurrentUserPosition();									// get the new position of X and Y in case they are mapped, and the new position of Z
 
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
@@ -421,10 +415,10 @@ void GCodes::Spin()
 
 		case GCodeState::toolChangeComplete:
 		case GCodeState::m109ToolChangeComplete:
-			// Restore the desired user position
-			for (size_t axis = 0; axis < MaxAxes; ++axis)
+			// Restore the desired user position, apart from any additional axes that were used for mapping XY
+ 			for (size_t axis = 0; axis < MaxAxes; ++axis)
 			{
-				if (!IsBitSet(toolChangeMappedAxes, axis))
+				if (axis <= Z_AXIS || !IsBitSet(toolChangeMappedAxes, axis))
 				{
 					currentUserPosition[axis] = toolChangeRestorePoint.moveCoords[axis];
 				}

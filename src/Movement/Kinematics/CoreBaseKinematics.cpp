@@ -50,9 +50,15 @@ bool CoreBaseKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRe
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
-// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() or dda.SetPositions().
-// Return true if the entire move should be stopped, false if only the motor concerned should be stopped.
-bool CoreBaseKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
+// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
+bool CoreBaseKinematics::QueryTerminateHomingMove(size_t axis) const
+{
+	return DriveIsShared(axis);
+}
+
+// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
+// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
+void CoreBaseKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
 	const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
 	if (DriveIsShared(axis))
@@ -65,12 +71,11 @@ bool CoreBaseKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, cons
 		}
 		tempCoordinates[axis] = hitPoint;
 		dda.SetPositions(tempCoordinates, numTotalAxes);
-
-		return true;
 	}
-
-	dda.SetDriveCoordinate(hitPoint * stepsPerMm[axis], axis);
-	return false;
+	else
+	{
+		dda.SetDriveCoordinate(hitPoint * stepsPerMm[axis], axis);
+	}
 }
 
 // End

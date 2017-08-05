@@ -1318,19 +1318,19 @@ void DDA::CheckEndstops(Platform& platform)
 			case EndStopHit::highHit:
 				{
 					ClearBit(endStopsToCheck, drive);					// clear this check so that we can check for more
-					StopDrive(drive);									// we must stop the drive before we mess with its coordinates
-					bool stopAll = (endStopsToCheck == 0);
-					if (drive < reprap.GetGCodes().GetTotalAxes() && IsHomingAxes())
-					{
-						if (reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(drive, esh == EndStopHit::highHit, reprap.GetPlatform().GetDriveStepsPerUnit(), *this))
-						{
-							stopAll = true;
-						}
-						reprap.GetGCodes().SetAxisIsHomed(drive);
-					}
-					if (stopAll)
+					const Kinematics& kin = reprap.GetMove().GetKinematics();
+					if (endStopsToCheck == 0 || kin.QueryTerminateHomingMove(drive))
 					{
 						MoveAborted();									// no more endstops to check, or this axis uses shared motors, so stop the entire move
+					}
+					else
+					{
+						StopDrive(drive);								// we must stop the drive before we mess with its coordinates
+					}
+					if (drive < reprap.GetGCodes().GetTotalAxes() && IsHomingAxes())
+					{
+						kin.OnHomingSwitchTriggered(drive, esh == EndStopHit::highHit, reprap.GetPlatform().GetDriveStepsPerUnit(), *this);
+						reprap.GetGCodes().SetAxisIsHomed(drive);
 					}
 				}
 				break;

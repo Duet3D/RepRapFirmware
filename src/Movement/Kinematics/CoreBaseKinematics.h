@@ -18,7 +18,8 @@ public:
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) override;
 	HomingMode GetHomingMode() const override { return homeCartesianAxes; }
-	bool OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
+	bool QueryTerminateHomingMove(size_t axis) const override;
+	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 
 protected:
 	// Return true if the specified endstop axis uses shared motors.
