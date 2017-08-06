@@ -141,10 +141,16 @@ void GCodes::Reset()
 	{
 		extrusionFactors[i] = volumetricExtrusionFactors[i] = 1.0;
 	}
+
 	for (size_t i = 0; i < MaxAxes; ++i)
 	{
 		axisOffsets[i] = 0.0;
 		axisScaleFactors[i] = 1.0;
+	}
+
+	for (size_t i = 0; i < DRIVES; ++i)
+	{
+		moveBuffer.coords[i] = 0.0;						// clear out all axis and extruder coordinates
 	}
 
 	ClearMove();
@@ -157,11 +163,6 @@ void GCodes::Reset()
 
 	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 	ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
-
-	for (size_t i = numTotalAxes; i < DRIVES; ++i)
-	{
-		moveBuffer.coords[i] = 0.0;
-	}
 
 	pauseRestorePoint.Init();
 	toolChangeRestorePoint.Init();
@@ -284,7 +285,7 @@ void GCodes::Spin()
 
 		switch (gb.GetState())
 		{
-		case GCodeState::waitingForMoveToComplete:
+		case GCodeState::waitingForSpecialMoveToComplete:
 			if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for standstill and fetch the current position
 			{
 				// Check whether we made any G1 S3 moves and need to set the axis limits
@@ -380,7 +381,6 @@ void GCodes::Spin()
 
 		case GCodeState::toolChange1:		// Release the old tool (if any), then run tpre for the new tool
 		case GCodeState::m109ToolChange1:	// Release the old tool (if any), then run tpre for the new tool
-			toolChangeMappedAxes = reprap.GetCurrentXAxes() | reprap.GetCurrentYAxes();
 			{
 				const Tool * const oldTool = reprap.GetCurrentTool();
 				if (oldTool != nullptr)
@@ -399,8 +399,7 @@ void GCodes::Spin()
 		case GCodeState::toolChange2:		// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 		case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 			reprap.SelectTool(newToolNumber);
-			toolChangeMappedAxes |= reprap.GetCurrentXAxes() | reprap.GetCurrentYAxes();
-			GetCurrentUserPosition();									// get the new position of X and Y in case they are mapped, and the new position of Z
+			GetCurrentUserPosition();									// get the actual position of the new tool
 
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
@@ -415,14 +414,8 @@ void GCodes::Spin()
 
 		case GCodeState::toolChangeComplete:
 		case GCodeState::m109ToolChangeComplete:
-			// Restore the desired user position, apart from any additional axes that were used for mapping XY
- 			for (size_t axis = 0; axis < MaxAxes; ++axis)
-			{
-				if (axis <= Z_AXIS || !IsBitSet(toolChangeMappedAxes, axis))
-				{
-					currentUserPosition[axis] = toolChangeRestorePoint.moveCoords[axis];
-				}
-			}
+			// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
+			currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
 			gb.MachineState().feedrate = toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
 			doingToolChange = false;
@@ -1926,7 +1919,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 	{
 		// It's a raw motor move, so do it in a single segment and wait for it to complete
 		segmentsLeft = 1;
-		gb.SetState(GCodeState::waitingForMoveToComplete);
+		gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 	}
 	else if (!includesAxisMovement)
 	{
@@ -2721,6 +2714,13 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	for (size_t i = 0; i < numVisibleAxes; ++i)
 	{
 		s.catf(" %d", reprap.GetMove().GetEndPoint(i));
+	}
+
+	// Add the user coordinates because they may be different from the machine coordinates under some conditions
+	s.cat(" User");
+	for (size_t i = 0; i < numVisibleAxes; ++i)
+	{
+		s.catf(" %.1f", currentUserPosition[i]);
 	}
 }
 

@@ -16,7 +16,7 @@ enum class GCodeState : uint8_t
 {
 	normal,												// not doing anything and ready to process a new GCode
 
-	waitingForMoveToComplete,							// doing a special move, so we must wait for it to finish before processing another GCode
+	waitingForSpecialMoveToComplete,							// doing a special move, so we must wait for it to finish before processing another GCode
 
 	homing1,
 	homing2,

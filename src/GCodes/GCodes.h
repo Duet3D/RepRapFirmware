@@ -342,7 +342,6 @@ private:
 
 	int oldToolNumber, newToolNumber;			// Tools being changed
 	int toolChangeParam;						// Bitmap of all the macros to be run during a tool change
-	AxesBitmap toolChangeMappedAxes;			// Axes that X or Y were mapped tp in either the old or the new tool
 
 	const char* eofString;						// What's at the end of an HTML file?
 	uint8_t eofStringCounter;					// Check the...

@@ -3010,6 +3010,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						while (numTotalAxes <= drive)
 						{
 							moveBuffer.coords[numTotalAxes] = 0.0;		// user has defined a new axis, so set its position
+							currentUserPosition[numTotalAxes] = 0.0;	// set its requested user position too in case it is visible
 							++numTotalAxes;
 						}
 						numVisibleAxes = numTotalAxes;					// assume all axes are visible unless there is a P parameter

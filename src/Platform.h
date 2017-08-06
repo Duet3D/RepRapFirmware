@@ -850,7 +850,8 @@ private:
 
 	enum class AutoSaveState : uint8_t
 	{
-		normal = 0,
+		starting = 0,
+		normal,
 		autoPaused,
 		autoShutdown
 	};
