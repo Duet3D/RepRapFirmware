@@ -291,7 +291,7 @@ void RepRap::EmergencyStop()
 	for(int i = 0; i < 2; i++)
 	{
 		move->Exit();
-		for(size_t drive = 0; drive < DRIVES; drive++)
+		for (size_t drive = 0; drive < DRIVES; drive++)
 		{
 			platform->SetMotorCurrent(drive, 0.0, false);
 			platform->DisableDrive(drive);
@@ -1330,18 +1330,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 		ch = ',';
 	}
 
-	// Send extruder total extrusion since power up, last G92 or last M23
-	response->cat("],\"extr\":");		// announce the extruder positions
-	ch = '[';
-	for (size_t drive = 0; drive < reprap.GetExtrudersInUse(); drive++)		// loop through extruders
-	{
-		response->catf("%c%.1f", ch, gCodes->GetRawExtruderPosition(drive));
-		ch = ',';
-	}
-	response->cat((ch == '[') ? "[]" : "]");
-
 	// Send the speed and extruder override factors
-	response->catf(",\"sfactor\":%.2f,\"efactor\":", gCodes->GetSpeedFactor() * 100.0);
+	response->catf("],\"sfactor\":%.2f,\"efactor\":", gCodes->GetSpeedFactor() * 100.0);
 	ch = '[';
 	for (size_t i = 0; i < reprap.GetExtrudersInUse(); ++i)
 	{

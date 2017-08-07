@@ -621,6 +621,7 @@ bool GCodeBuffer::PushState()
 	ms->doingFileMacro = machineState->doingFileMacro;
 	ms->waitWhileCooling = machineState->waitWhileCooling;
 	ms->runningM502 = machineState->runningM502;
+	ms->volumetricExtrusion = false;
 	ms->messageAcknowledged = false;
 	ms->waitingForAcknowledgement = false;
 	machineState = ms;

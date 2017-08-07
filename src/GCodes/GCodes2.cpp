@@ -510,7 +510,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			fileToPrint.Seek(fileOffsetToPrint);
+			if (fileOffsetToPrint != 0)
+			{
+				// We executed M23 to set the file offset, which normally means that we are executing resurrect.g.
+				// We need to copy the absolute/relative and volumetric extrusion flags over
+				fileGCode->OriginalMachineState().drivesRelative = gb.MachineState().drivesRelative;
+				fileGCode->OriginalMachineState().volumetricExtrusion = gb.MachineState().volumetricExtrusion;
+				fileToPrint.Seek(fileOffsetToPrint);
+			}
 			fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 			fileInput->Reset();
 			reprap.GetPrintMonitor().StartedPrint();
@@ -752,25 +759,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 82:	// Use absolute extruder positioning
-		if (gb.MachineState().drivesRelative)		// don't reset the absolute extruder position if it was already absolute
-		{
-			for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
-			{
-				lastRawExtruderPosition[extruder] = 0.0;
-			}
-			gb.MachineState().drivesRelative = false;
-		}
+		gb.MachineState().drivesRelative = false;
 		break;
 
 	case 83:	// Use relative extruder positioning
-		if (!gb.MachineState().drivesRelative)		// don't reset the absolute extruder position if it was already relative
-		{
-			for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
-			{
-				lastRawExtruderPosition[extruder] = 0.0;
-			}
-			gb.MachineState().drivesRelative = true;
-		}
+		gb.MachineState().drivesRelative = true;
 		break;
 
 		// For case 84, see case 18
@@ -1361,7 +1354,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 200: // Set filament diameter for volumetric extrusion
+	case 200: // Set filament diameter for volumetric extrusion and enable/disable volumetric extrusion
 		if (gb.Seen('D'))
 		{
 			float diameters[MaxExtruders];
@@ -1372,10 +1365,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const float d = diameters[i];
 				volumetricExtrusionFactors[i] = (d <= 0.0) ? 1.0 : 4.0/(fsquare(d) * PI);
 			}
+			gb.MachineState().volumetricExtrusion = (diameters[0] > 0.0);
+		}
+		else if (!gb.MachineState().volumetricExtrusion)
+		{
+			reply.copy("Volumetric extrusion is disabled for this input source");
 		}
 		else
 		{
-			reply.copy("Filament diameters for volumentric extrusion:");
+			reply.copy("Filament diameters for volumetric extrusion:");
 			for (size_t i = 0; i < numExtruders; ++i)
 			{
 				const float vef = volumetricExtrusionFactors[i];

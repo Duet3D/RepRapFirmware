@@ -30,6 +30,7 @@ private:
 	unsigned int numLeadscrews;
 	float leadscrewX[MaxLeadscrews], leadscrewY[MaxLeadscrews];
 	float maxCorrection;
+	float screwPitch;
 };
 
 #endif /* SRC_MOVEMENT_KINEMATICS_ZLEADSCREWKINEMATICS_H_ */

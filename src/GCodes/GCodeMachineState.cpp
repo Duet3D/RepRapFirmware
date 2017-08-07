@@ -13,7 +13,7 @@ unsigned int GCodeMachineState::numAllocated = 0;
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState()
 	: previous(nullptr), feedrate(DefaultFeedrate * SecondsToMinutes), fileState(), lockedResources(0), state(GCodeState::normal),
-	  drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM502(false), waitingForAcknowledgement(false), messageAcknowledged(false)
+	  drivesRelative(false), axesRelative(false), doingFileMacro(false), runningM502(false), volumetricExtrusion(false), waitingForAcknowledgement(false), messageAcknowledged(false)
 {
 }
 

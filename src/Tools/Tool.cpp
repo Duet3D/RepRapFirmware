@@ -101,7 +101,6 @@ Tool * Tool::freelist = nullptr;
 	t->fanMapping = fanMap;
 	t->heaterFault = false;
 	t->displayColdExtrudeWarning = false;
-	t->virtualExtruderPosition = 0.0;
 
 	for (size_t axis = 0; axis < MaxAxes; axis++)
 	{
@@ -456,8 +455,8 @@ bool Tool::WriteSettings(FileStore *f) const
 
 	if (ok && state != ToolState::off)
 	{
-		// Select tool and set virtual extruder position
-		buf.printf("T%d P0\nG92 E%.3f\n", myNumber, virtualExtruderPosition);
+		// Select tool
+		buf.printf("T%d P0\n", myNumber);
 		ok = f->Write(buf.Pointer());
 	}
 

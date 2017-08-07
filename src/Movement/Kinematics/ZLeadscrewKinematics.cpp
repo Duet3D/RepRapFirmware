@@ -10,7 +10,9 @@
 #include "Platform.h"
 #include "Movement/Move.h"
 
-ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k) : Kinematics(k), numLeadscrews(0), maxCorrection(1.0)
+const float M3ScrewPitch = 0.5;
+
+ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k) : Kinematics(k), numLeadscrews(0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 
@@ -37,6 +39,9 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, String
 		bool seenS = false;
 		gb.TryGetFValue('S', maxCorrection, seenS);
 
+		bool seenP = false;
+		gb.TryGetFValue('P', screwPitch, seenP);
+
 		if (seenX && seenY && xSize == ySize && xSize > 1)
 		{
 			numLeadscrews = xSize;
@@ -50,9 +55,9 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, String
 		}
 
 		// If no parameters provided so just report the existing setup
-		if (seenS)
+		if (seenS || seenP)
 		{
-			return true;							// just changed the maximum correction
+			return true;							// just changed the maximum correction or screw pitch
 		}
 		else if (numLeadscrews < 2)
 		{
@@ -65,7 +70,7 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, String
 			{
 				reply.catf(" (%.1f,%.1f)", leadscrewX[i], leadscrewY[i]);
 			}
-			reply.catf(", maximum correction %.02fmm", maxCorrection);
+			reply.catf(", maximum correction %.02fmm, manual adjusting screw pitch %.02fmm", maxCorrection, screwPitch);
 		}
 		return false;
 	}
@@ -272,15 +277,19 @@ void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		{
 			reprap.GetMove().AdjustLeadscrews(solution);
 			reply.printf("Leadscrew adjustments made:");
+			AppendCorrections(solution, reply);
+			reply.catf(", points used %d, deviation before %.3f after %.3f",
+						numPoints, sqrt(initialSumOfSquares/numPoints), sqrtf(sumOfSquares/numPoints));
 		}
 		else
 		{
 			// User wants manual corrections for bed levelling screws
-			reply.printf("Corrections required:");
+			reply.printf("Manual corrections required:");
+			for (size_t i = 0; i < numLeadscrews; ++i)
+			{
+				reply.catf(" %.2f turn %s (%.2fmm)", fabs(solution[i])/screwPitch, (solution[i] > 0) ? "down" : "up", solution[i]);
+			}
 		}
-		AppendCorrections(solution, reply);
-		reply.catf(", points used %d, deviation before %.3f after %.3f",
-					numPoints, sqrt(initialSumOfSquares/numPoints), sqrtf(sumOfSquares/numPoints));
 	}
 }
 
@@ -298,7 +307,7 @@ void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], Strin
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
 bool ZLeadscrewKinematics::WriteResumeSettings(FileStore *f) const
 {
-	//TODO write leadscrew corrections, there is a chance that they will be the same as before
+	//TODO we could write leadscrew corrections here, but they may not be the same as before
 	return true;
 }
 

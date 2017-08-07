@@ -66,8 +66,6 @@ public:
 	bool WriteSettings(FileStore *f) const;			// write the tool's settings to file
 #endif
 
-	float virtualExtruderPosition;
-
 	friend class RepRap;
 
 protected:

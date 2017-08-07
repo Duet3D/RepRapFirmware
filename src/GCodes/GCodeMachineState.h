@@ -85,6 +85,7 @@ public:
 		doingFileMacro : 1,
 		waitWhileCooling : 1,
 		runningM502 : 1,
+		volumetricExtrusion : 1,
 		// Caution: these next 3 will be modified out-of-process when we use RTOS, so they will need to be individual bool variables
 		waitingForAcknowledgement : 1,
 		messageAcknowledged : 1,

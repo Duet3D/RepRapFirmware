@@ -1536,6 +1536,8 @@ bool DDA::Step()
 
 	if (state == completed)
 	{
+		// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
+		// However, following a move that checks endstops or the Z probe, we always wait fot the move to complete before we schedule another, so this doesn't matter.
 		const uint32_t finishTime = moveStartTime + clocksNeeded;	// calculate how long this move should take
 		Move& move = reprap.GetMove();
 		move.CurrentMoveCompleted();							// tell Move that the current move is complete
