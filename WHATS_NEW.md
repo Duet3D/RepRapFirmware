@@ -73,7 +73,7 @@ New features since 1.18.2:
 - On the Duet Ethernet, the default MAC address is generated from the board ID
 - The pause.g, resume.g and cancel.g files are not run unless all axes have been homed.
 - The default maximum hot end temperature has been increased to 288C
-- String parameters in gcode commands, such as filenames, can now be enclosed in double quotation marks to avoid ambiguity
+- String parameters in some gcode commands, such as filenames, can now be enclosed in double quotation marks to avoid ambiguity
 - When tuning a bed or chamber heater, more time is allowed for the temperature to start rising
 - On the Duet WiFi the network code has been rewritten. The web server now runs on the Duet instead of on the WiFi module. FTP and Telnet are supported if enabled using M586. New commands M587, M588 and M589 are supported. The meaning of the M552 S parameter has changed: S-1 holds the WiFi module in the reset state, S0 holds it in the Idle state allowing it to process M587/M588/M589 commands, S1 starts it in client mode and S2 starts it in access point mode. The M122 diagnostic report includes WiFi module parameters unless the WiFi module is being held in the reset state.
 
