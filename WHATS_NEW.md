@@ -18,7 +18,6 @@ New features:
 - M568 command to enable/disable mixing no longer does anything because mixing is always enabled. Mixing is not used if the E parameter in the G1 command has multiple values.
 - Filament sensors are now read and their status displayed in the M122 report, but no action is taken on the status yet
 - Message boxes can now have other axis jog buttons as well as Z (thanks chrishamm)
-- Refactored and completed 4-leadscrew bed levelling code
 - Probe deployment and retraction for G30 and G29 commands is now handled automatically. You should still include a M401 command before the first G30 command in bed.g and a M402 command after the last one, so that the probe deploys and retracts once for the entire sequence instead of once per G30 command.
 - M577 now allows separate X and Y spacings, use Sxxx:yyy
 - Volumetric extrusion is now supported (M200)
@@ -118,6 +117,7 @@ Upgrade notes:
 - Every heater that you use must now be configured using a M305 command with a P parameter that identifies the heater. Previously, if a heater used default thermistor parameters, you could omit the M305 command for that heater.
 - If you are using a Duet Ethernet and you are letting your router allocate an IP address automatically, the IP address will change, because the default MAC address now depends on the board unique ID
 - If you have more than 32 probe points in your bed.g file, you will have to reduce the number to 32
+- If you send a G1 command with multiple E parameters (e.g. G1 X10 Y20 E1.0:1.5:2.0) then this is now only allowed when in relative extrusion mode (M83). If you try doing this in absolute extrusion mode, no extrusion will take place and an error message will be generated.
 
 Known issues:
 - Although the WiFi module can now be put into access point mode using M589 and M552 S1, WiFi access does not work properly in access point mode
