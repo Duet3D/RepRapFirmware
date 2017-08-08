@@ -4,7 +4,7 @@ Summary of important changes in recent versions
 Version 1.19RC5
 ===============
 
-New features:
+New features since 1.18.2:
 - Resume-after-power-failure support on Duet WiFi/Ethernet. See https://duet3d.com/wiki/Setting_up_to_resume_a_print_after_a_power_failure.
 - Bed levelling using multiple independent Z motors (M671). See https://duet3d.com/wiki/Bed_levelling_using_multiple_independent_Z_motors. In Cartesian/CoreXY printers without multiple independent Z motors, this facility can be used to determine what adjustments to make to bed leveling screws instead.
 - Support 2 additional external drivers connected to the CONN_LCD socket
