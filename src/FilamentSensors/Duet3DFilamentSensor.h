@@ -16,24 +16,34 @@ public:
 	Duet3DFilamentSensor(int type);
 
 	bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) override;
-	void Poll() override;
-	const char *Check(float filamentConsumed) override;
+	FilamentSensorStatus Check(float filamentConsumed) override;
+	FilamentSensorStatus Clear() override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) override;
 	void Interrupt() override;
 
 private:
 	static constexpr float DefaultMmPerRev = 15.0;
 	static constexpr float DefaultTolerance = 0.2;
+	static constexpr float DefaultAbsTolerance = 1.0;
+	static constexpr float DefaultMinimumExtrusionCheckLength = 3.0;
 
 	static constexpr uint16_t SwitchOpenBit = 0x4000u;
 	static constexpr uint16_t ErrorBit = 0x8000u;
 	static constexpr uint16_t AngleMask = 0x03FF;		// 10-bit sensor angle
 
+	void Poll();
+
+	// Configuration parameters
 	float mmPerRev;
 	float tolerance;
+	float absTolerance;
+	float minimumExtrusionCheckLength;
 	bool withSwitch;
 
+	// Other data
 	uint16_t sensorValue;
+	float accumulatedExtrusionCommanded;
+	float accumulatedExtrusionMeasured;
 
 	static constexpr size_t MaxEdgeCaptures = 30;
 	volatile size_t numberOfEdgesCaptured;

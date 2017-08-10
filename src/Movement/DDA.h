@@ -72,6 +72,8 @@ public:
 	uint32_t GetXAxes() const { return xAxes; }
 	uint32_t GetYAxes() const { return yAxes; }
 
+	int32_t GetStepsTaken(size_t drive) const;
+
 #if SUPPORT_IOBITS
 	uint32_t GetMoveStartTime() const { return moveStartTime; }
 	uint32_t GetClocksNeeded() const { return clocksNeeded; }
@@ -195,6 +197,13 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 {
 	endPoint[drive] = a;
 	endCoordinatesValid = false;
+}
+
+// Return the number of steps already taken in this move by a particular drive
+inline int32_t DDA::GetStepsTaken(size_t drive) const
+{
+	const DriveMovement * const dmp = pddm[drive];
+	return (dmp == nullptr) ? 0 : (int32_t)dmp->nextStep;
 }
 
 #endif /* DDA_H_ */

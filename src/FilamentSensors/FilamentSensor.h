@@ -11,19 +11,27 @@
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 
+enum class FilamentSensorStatus : uint8_t
+{
+	ok,
+	noFilament,
+	tooLittleMovement,
+	tooMuchMovement,
+	sensorError
+};
+
 class FilamentSensor
 {
 public:
-	// Configure this sensor returning true if error
+	// Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
 	virtual bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) = 0;
-
-	// Call the following regularly to keep the status up to date
-	virtual void Poll() = 0;
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-	// Return nullptr if everything is OK, else an error message.
-	virtual const char *Check(float filamentConsumed) = 0;
+	virtual FilamentSensorStatus Check(float filamentConsumed) = 0;
+
+	// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
+	virtual FilamentSensorStatus Clear() = 0;
 
 	// Print diagnostic info for this sensor
 	virtual void Diagnostics(MessageType mtype, unsigned int extruder) = 0;
@@ -39,6 +47,9 @@ public:
 
 	// Create a filament sensor returning null if not a valid sensor type
 	static FilamentSensor *Create(int type);
+
+	// Return an error message corresponding to a status code
+	static const char *GetErrorMessage(FilamentSensorStatus f);
 
 protected:
 	FilamentSensor(int t) : type(t), pin(NoPin) { }

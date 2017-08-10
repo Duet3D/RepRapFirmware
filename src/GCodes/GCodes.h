@@ -28,6 +28,7 @@ Licence: GPL
 #include "Platform.h"		// for type EndStopHit
 #include "GCodeInput.h"
 #include "Tools/Filament.h"
+#include "FilamentSensors/FilamentSensor.h"
 #include "RestorePoint.h"
 
 const char feedrateLetter = 'F';						// GCode feedrate
@@ -102,6 +103,7 @@ public:
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
 	void ClearMove();
 	void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
+	void StartPrinting();												// Start printing the file already selected
 	void DeleteFile(const char* fileName);								// Does what it says
 	void GetCurrentCoordinates(StringRef& s) const;						// Write where we are into a string
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
@@ -147,6 +149,8 @@ public:
 	size_t GetTotalAxes() const { return numTotalAxes; }
 	size_t GetVisibleAxes() const { return numVisibleAxes; }
 	size_t GetNumExtruders() const { return numExtruders; }
+
+	void FilamentError(size_t extruder, FilamentSensorStatus fstat);
 
 #ifdef DUET_NG
 	bool AutoPause();
@@ -396,6 +400,10 @@ private:
 	SHA1Context hash;
 	bool StartHash(const char* filename);
 	bool AdvanceHash(StringRef &reply);
+
+	// Filament monitoring
+	FilamentSensorStatus lastFilamentError;
+	size_t lastFilamentErrorExtruder;
 
 	// Misc
 	float longWait;								// Timer for things that happen occasionally (seconds)

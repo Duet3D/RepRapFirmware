@@ -68,6 +68,20 @@ bool FilamentSensor::ConfigurePin(GCodeBuffer& gb, StringRef& reply, bool& seen)
 	}
 }
 
+// Return an error message corresponding to a status code
+/*static*/ const char *FilamentSensor::GetErrorMessage(FilamentSensorStatus f)
+{
+	switch(f)
+	{
+	case FilamentSensorStatus::ok:					return "no error";
+	case FilamentSensorStatus::noFilament:			return "no filament";
+	case FilamentSensorStatus::tooLittleMovement:	return "too little movement";
+	case FilamentSensorStatus::tooMuchMovement:		return "too much movement";
+	case FilamentSensorStatus::sensorError:			return "sensor not working";
+	default:										return "unknown error";
+	}
+}
+
 // ISR
 /*static*/ void FilamentSensor::InterruptEntry(void *param)
 {

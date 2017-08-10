@@ -237,7 +237,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 
 	isPrintingMove = false;
-	bool realMove = false, xyzMoving = false;
+	bool realMove = false;
 	xyMoving = false;
 	float accelerations[DRIVES];
 	const float * const normalAccelerations = reprap.GetPlatform().Accelerations();
@@ -258,16 +258,9 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 		{
 			const float positionDelta = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
 			directionVector[drive] = positionDelta;
-			if (positionDelta != 0)
+			if (positionDelta != 0 && (IsBitSet(nextMove.yAxes, drive) || IsBitSet(nextMove.xAxes, drive)))
 			{
-				if (drive == Z_AXIS)
-				{
-					xyzMoving = true;
-				}
-				else if (drive == Y_AXIS || ((1 << drive) & nextMove.xAxes) != 0)
-				{
-					xyMoving = xyzMoving = true;
-				}
+				xyMoving = true;
 			}
 			if (isDeltaMovement || delta != 0)
 			{
@@ -342,9 +335,9 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	endCoordinatesValid = (endStopsToCheck == 0) && doMotorMapping;
 
 	// 4. Normalise the direction vector and compute the amount of motion.
-	if (xyzMoving)
+	if (xyMoving)
 	{
-		// There is some XYZ movement, so normalise the direction vector so that the total XYZ movement has unit length and 'totalDistance' is the XYZ distance moved.
+		// There is some XY movement, so normalise the direction vector so that the total XYZ movement has unit length and 'totalDistance' is the XYZ distance moved.
 		// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
 		// First do the bed tilt compensation for deltas.
 		const Kinematics& k = move.GetKinematics();
@@ -354,8 +347,8 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 	else
 	{
-		// Extruder-only movement.
-		// Currently we normalise vector sum of all extruder movement to unit length.
+		// Extruder-only movement, or movement of additional axes, or a combination.
+		// Currently we normalise vector sum of all drive movement to unit length.
 		// Alternatives would be:
 		// 1. Normalise the largest one to unit length. This means that when retracting multiple filaments, they all get the requested retract speed.
 		// 2. Normalise the sum to unit length. This means that when we use mixing, we get the requested extrusion rate at the nozzle.
@@ -1192,17 +1185,17 @@ void DDA::Prepare()
 // Make the direction vector unit-normal in XYZ and return the previous magnitude
 float DDA::NormaliseXYZ()
 {
-	// First calculate the magnitude of the vector. If there is more than one X axis, take an average of their movements (they should be equal).
+	// First calculate the magnitude of the vector. If there is more than one X or Y axis, take an average of their movements (they should be equal).
 	float xMagSquared = 0.0, yMagSquared = 0.0;
 	unsigned int numXaxes = 0, numYaxes = 0;
 	for (size_t d = 0; d < MaxAxes; ++d)
 	{
-		if (((1 << d) & xAxes) != 0)
+		if (IsBitSet(xAxes, d))
 		{
 			xMagSquared += fsquare(directionVector[d]);
 			++numXaxes;
 		}
-		if (((1 << d) & yAxes) != 0)
+		if (IsBitSet(yAxes, d))
 		{
 			yMagSquared += fsquare(directionVector[d]);
 			++numYaxes;

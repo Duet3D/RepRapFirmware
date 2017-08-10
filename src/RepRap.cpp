@@ -1404,7 +1404,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	if (displayMessageBox)
 	{
-		response->catf(",\"msgBox.mode\":%d,\"msgBox.timeout\":%.1f,\"msgBox.axes\":%u",
+		response->catf(",\"msgBox.mode\":%d,\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u",
 				boxMode, timeLeft, boxControls);
 		response->cat(",\"msgBox.msg\":");
 		response->EncodeString(boxMessage, ARRAY_SIZE(boxMessage), false);

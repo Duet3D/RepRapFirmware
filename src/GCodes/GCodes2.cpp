@@ -475,10 +475,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 					if (code == 32)
 					{
-						fileToPrint.Seek(fileOffsetToPrint);
-						fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
-						fileInput->Reset();
-						reprap.GetPrintMonitor().StartedPrint();
+						StartPrinting();
 					}
 				}
 				else
@@ -518,9 +515,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				fileGCode->OriginalMachineState().volumetricExtrusion = gb.MachineState().volumetricExtrusion;
 				fileToPrint.Seek(fileOffsetToPrint);
 			}
-			fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
-			fileInput->Reset();
-			reprap.GetPrintMonitor().StartedPrint();
+			StartPrinting();
 		}
 		break;
 

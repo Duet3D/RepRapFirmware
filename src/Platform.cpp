@@ -24,6 +24,7 @@
 #include "Heating/Heat.h"
 #include "Movement/DDA.h"
 #include "Movement/Move.h"
+#include "PrintMonitor.h"
 #include "FilamentSensors/FilamentSensor.h"
 #include "Network.h"
 #include "RepRap.h"
@@ -1531,11 +1532,24 @@ void Platform::Spin()
 #endif
 
 	// Filament sensors
-	for (size_t i = 0; i < MaxExtruders; ++i)
+	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
 	{
-		if (filamentSensors[i] != nullptr)
+		if (filamentSensors[extruder] != nullptr)
 		{
-			filamentSensors[i]->Poll();
+			const float extrusionCommanded = reprap.GetMove().GetAccumulatedExtrusion(extruder);		// get and clear the Move extrusion commanded
+			GCodes& gCodes = reprap.GetGCodes();
+			if (reprap.GetPrintMonitor().IsPrinting() && !gCodes.IsPausing() && !gCodes.IsResuming() && !gCodes.IsPaused())
+			{
+				const FilamentSensorStatus fstat = filamentSensors[extruder]->Check(extrusionCommanded);
+				if (fstat != FilamentSensorStatus::ok && extrusionCommanded > 0.0)
+				{
+					gCodes.FilamentError(extruder, fstat);
+				}
+			}
+			else
+			{
+				filamentSensors[extruder]->Clear();
+			}
 		}
 	}
 
