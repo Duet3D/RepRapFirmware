@@ -1,8 +1,26 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.19RC5
+Version 1.19RC6
 ===============
+
+Upgrade notes:
+- Recommended DuetWebControl version is 1.19RC1
+- Recommended DuetWiFiServer version is 1.19beta10
+- **Important!** If you use an IR Z probe or some other type that does not need to be deployed, delete the files sys/deployprobe and sys/retractprobe.g if they exist, because they are now called automatically. You can do this in the System Files Editor of the web interface.
+- **Important!** On a CoreXY machine, if upgrading from a version prior to 1.19beta9, you need to reverse the Y motor direction in the M569 command. Similarly for CoreXYU machines.
+- **Important!**  When upgrading a Duet WiFi from 1.18.2 or earlier firmware, see the important notes at https://duet3d.com/wiki/DuetWiFiFirmware_1.19beta.
+- Height map files created with firmware 1.18 or earlier cannot be read by firmware 1.19, so you will need to run G29 S0 again to generate a new heightmap.csv file
+- Height map filenames in G29, M374 and M375 commands must now be enclosed in double quotes
+- Every heater that you use must now be configured using a M305 command with a P parameter that identifies the heater. Previously, if a heater used default thermistor parameters, you could omit the M305 command for that heater.
+- If you are using a Duet Ethernet and you are letting your router allocate an IP address automatically, the IP address will change, because the default MAC address now depends on the board unique ID
+- If you have more than 32 probe points in your bed.g file, you will have to reduce the number to 32
+- If you send a G1 command with multiple E parameters (e.g. G1 X10 Y20 E1.0:1.5:2.0) then this is now only allowed when in relative extrusion mode (M83). If you try doing this in absolute extrusion mode, no extrusion will take place and an error message will be generated.
+- The behaviour of the R parameter in G1 commands has changed. Previously, G1 R1 with no additional parameters restored the head position for all axes to the values just prior to the last pause command, and G1 R2 with no additional parameters restored the head position for all axes to the values just prior to the last tool change. The behaviour now is that only axes that are mentioned in the G1 command have their values restored. So instead of using G1 R1 in resume.g to restore the head position, you must now use G1 R1 X0 Y0 Z0. As before, any non-zero axis parameters will be added to the saved position of that axis. This change has been made so that additional axes used as substitute X and Y axis are not automatically restored.
+
+Known issues:
+- Although the WiFi module can now be put into access point mode using M589 and M552 S1, WiFi access does not work properly in access point mode.
+- When a power fail occurs and power fail action has been configured, the firmware has to wait for some or all moves in the print queue to complete before the powerfail.g command can be run. This means that you may run out of power before powerfail.g is run, which could result in a few moves being skipped and the nozzle becoming stuck to the print.
 
 New features since 1.18.2:
 - Resume-after-power-failure support on Duet WiFi/Ethernet. See https://duet3d.com/wiki/Setting_up_to_resume_a_print_after_a_power_failure.
@@ -16,7 +34,6 @@ New features since 1.18.2:
 - Added support for an additional SX1509B port expander
 - Pause commands issued while a macro is being executed are deferred until the macro has completed, and they can be resumed
 - M568 command to enable/disable mixing no longer does anything because mixing is always enabled. Mixing is not used if the E parameter in the G1 command has multiple values.
-- Filament sensors are now read and their status displayed in the M122 report, but no action is taken on the status yet
 - Message boxes can now have other axis jog buttons as well as Z (thanks chrishamm)
 - Probe deployment and retraction for G30 and G29 commands is now handled automatically. You should still include a M401 command before the first G30 command in bed.g and a M402 command after the last one, so that the probe deploys and retracts once for the entire sequence instead of once per G30 command.
 - M577 now allows separate X and Y spacings, use Sxxx:yyy
@@ -76,6 +93,7 @@ New features since 1.18.2:
 - String parameters in some gcode commands, such as filenames, can now be enclosed in double quotation marks to avoid ambiguity
 - When tuning a bed or chamber heater, more time is allowed for the temperature to start rising
 - On the Duet WiFi the network code has been rewritten. The web server now runs on the Duet instead of on the WiFi module. FTP and Telnet are supported if enabled using M586. New commands M587, M588 and M589 are supported. The meaning of the M552 S parameter has changed: S-1 holds the WiFi module in the reset state, S0 holds it in the Idle state allowing it to process M587/M588/M589 commands, S1 starts it in client mode and S2 starts it in access point mode. The M122 diagnostic report includes WiFi module parameters unless the WiFi module is being held in the reset state.
+- Support for simple switch-based filament sensors and the Duet3D filament sensor is partly implemented, but should not be relied on in this release.
 
 Bug fixes:
 - XYZ coordinates could be reported as NaN in DWC status responses, causing AJAX errors
@@ -101,27 +119,7 @@ Bug fixes:
 - Thermostatic fans can now depend on heater numbers 100 (CPU temperature), 101 (TMC2660 drivers on Duet WiFi/Ethernet) and 102 (TMC2660 drivers on DueXn expansion board)
 - MCU temperature measurement now includes an averaging filter to reduce noise
 - On the Duet WiFi, when you download a file it no longer opens it in the browser but gives you a "Save file as" prompt instead.
-- M42 commands are now synchronized with the movement queue
 - FTP is now working on the Duet Ethernet
-- The M21 command did not re-initialise the file system completely. As a result, errors could occur if you removed the SD card, modified it on another device, re-inserted it and used M21 to re-mount it.
-
-Upgrade notes:
-- Recommended DuetWebControl version is 1.17+2, or 1.19 when it is released
-- Recommended DuetWiFiServer version is 1.19beta10
-- See also upgrade notes for 1.19beta10 if upgrading from a version earlier than that
-- **Important!** If you use an IR Z probe or some other type that does not need to be deployed, delete the files sys/deployprobe and sys/retractprobe.g if they exist, because they are now called automatically. You can do this in the System Files Editor of the web interface.
-- **Important!** On a CoreXY machine, if upgrading from a version prior to 1.19beta9, you need to reverse the Y motor direction. Similarly for CoreXZ and CoreXYU machines.
-- **Important!**  When upgrading a Duet WiFi from 1.18.2 or earlier firmware, see the important notes at https://duet3d.com/wiki/DuetWiFiFirmware_1.19beta.
-- Height map files created with firmware 1.19 or earlier cannot be read by firmware 1.19, so you will need to run G29 S0 again to generate a new heightmap.csv file
-- Height map filenames in G29, M374 and M375 commands must now be enclosed in double quotes
-- Every heater that you use must now be configured using a M305 command with a P parameter that identifies the heater. Previously, if a heater used default thermistor parameters, you could omit the M305 command for that heater.
-- If you are using a Duet Ethernet and you are letting your router allocate an IP address automatically, the IP address will change, because the default MAC address now depends on the board unique ID
-- If you have more than 32 probe points in your bed.g file, you will have to reduce the number to 32
-- If you send a G1 command with multiple E parameters (e.g. G1 X10 Y20 E1.0:1.5:2.0) then this is now only allowed when in relative extrusion mode (M83). If you try doing this in absolute extrusion mode, no extrusion will take place and an error message will be generated.
-
-Known issues:
-- Although the WiFi module can now be put into access point mode using M589 and M552 S1, WiFi access does not work properly in access point mode
-- When a power fail occurs and power fail action has been configured, the firmware has to wait for some or all moves in the print queue to complete before the powerfail.g command can be run. This means that you may run out of power before powerfail.g is run, which could result in a few moves being skipped and the nozzle becoming stuck to the print.
 
 Version 1.18.2
 ==============
