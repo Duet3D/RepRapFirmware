@@ -120,6 +120,7 @@ Bug fixes:
 - MCU temperature measurement now includes an averaging filter to reduce noise
 - On the Duet WiFi, when you download a file it no longer opens it in the browser but gives you a "Save file as" prompt instead.
 - FTP is now working on the Duet Ethernet
+- Filament consumed during tool change macros is no longer added to the total filament consumed for the purpose of estimated the percentage completion of the print
 
 Version 1.18.2
 ==============
