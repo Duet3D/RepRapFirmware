@@ -14,7 +14,8 @@
 Duet3DFilamentSensor::Duet3DFilamentSensor(int type)
 	: FilamentSensor(type), mmPerRev(DefaultMmPerRev),
 	  tolerance(DefaultTolerance), absTolerance(DefaultAbsTolerance), minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), withSwitch(type == 4),
-	  sensorValue(0), accumulatedExtrusionCommanded(0.0), accumulatedExtrusionMeasured(0.0), numberOfEdgesCaptured(0), state(RxdState::waitingForStartBit), dataReceived(false)
+	  sensorValue(0), accumulatedExtrusionCommanded(0.0), accumulatedExtrusionMeasured(0.0), extrusionCommandedAtLastMeasurement(0.0),tentativeExtrusionCommanded(0.0),
+	  numberOfEdgesCaptured(0), lastMeasurementTime(0), state(RxdState::waitingForStartBit), samplesReceived(0)
 {
 }
 
@@ -44,14 +45,15 @@ bool Duet3DFilamentSensor::Configure(GCodeBuffer& gb, StringRef& reply, bool& se
 
 	if (seen)
 	{
-		dataReceived = false;
+		samplesReceived = 0;
 		numberOfEdgesCaptured = 0;
-		accumulatedExtrusionCommanded = accumulatedExtrusionMeasured = 0.0;
+		lastMeasurementTime = 0;
+		accumulatedExtrusionCommanded = accumulatedExtrusionMeasured = extrusionCommandedAtLastMeasurement = tentativeExtrusionCommanded = 0.0;
 	}
 	else
 	{
-		reply.printf("Duet3D filament sensor on endstop %u, %s microswitch, %.1fmm per rev, check every %.1fmm, tolerance %.1f%% + %.1fmm",
-						GetEndstopNumber(), (withSwitch) ? "with" : "no", mmPerRev, minimumExtrusionCheckLength, tolerance * 100.0, absTolerance);
+		reply.printf("Duet3D filament sensor on endstop %u, %s microswitch, %.1fmm per rev, check every %.1fmm, tolerance %.1f%% + %.1fmm, current angle %.1f",
+						GetEndstopNumber(), (withSwitch) ? "with" : "no", mmPerRev, minimumExtrusionCheckLength, tolerance * 100.0, absTolerance, GetCurrentAngle());
 	}
 
 	return false;
@@ -92,6 +94,7 @@ void Duet3DFilamentSensor::Poll()
 				bitChangeIndex = 2;
 				valueBeingAssembled = 0;
 				nibblesAssembled = 0;
+				tentativeExtrusionCommanded = accumulatedExtrusionCommanded;
 				state = RxdState::waitingForNibble;
 			}
 			else
@@ -141,14 +144,20 @@ void Duet3DFilamentSensor::Poll()
 				if (nibblesAssembled == 4)
 				{
 					numberOfEdgesCaptured = 0;				// ready for a new byte
-					if (dataReceived)
+					if (samplesReceived != 0)
 					{
 						const uint16_t angleChange = (valueBeingAssembled - sensorValue) & AngleMask;		// angle change in range 0..1023
 						const int32_t movement = (angleChange <= 512) ? (int32_t)angleChange : (int32_t)angleChange - 1024;
 						accumulatedExtrusionMeasured += (float)movement * mmPerRev * (1.0/1024.0);
 					}
+
+					lastMeasurementTime = millis();
+					extrusionCommandedAtLastMeasurement = tentativeExtrusionCommanded;
 					sensorValue = valueBeingAssembled;
-					dataReceived = true;
+					if (samplesReceived < 100)
+					{
+						++samplesReceived;
+					}
 					state = RxdState::waitingForStartBit;
 				}
 			}
@@ -169,6 +178,12 @@ void Duet3DFilamentSensor::Poll()
 	}
 }
 
+// Return the current wheel angle
+float Duet3DFilamentSensor::GetCurrentAngle() const
+{
+	return (sensorValue & AngleMask) * (360.0/1024.0);
+}
+
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 // 'filamentConsumed' is the net amount of extrusion since the last call to this function.
 FilamentSensorStatus Duet3DFilamentSensor::Check(float filamentConsumed)
@@ -185,39 +200,63 @@ FilamentSensorStatus Duet3DFilamentSensor::Check(float filamentConsumed)
 	{
 		ret = FilamentSensorStatus::noFilament;
 	}
-	else if (accumulatedExtrusionCommanded >= minimumExtrusionCheckLength)
+	else if (samplesReceived >= 10)
 	{
-		const float minExtrusionExpected = ( (accumulatedExtrusionCommanded >= 0.0)
-											 ? accumulatedExtrusionCommanded * (1.0 - tolerance)
-												: accumulatedExtrusionCommanded * (1.0 + tolerance)
-										   )
-										   - absTolerance;
-		if (accumulatedExtrusionMeasured < minExtrusionExpected)
+		if (extrusionCommandedAtLastMeasurement >= minimumExtrusionCheckLength)
 		{
-			ret = FilamentSensorStatus::tooLittleMovement;
+			ret = CheckFilament(extrusionCommandedAtLastMeasurement);
 		}
-		else
+		else if (accumulatedExtrusionCommanded >= minimumExtrusionCheckLength && millis() - lastMeasurementTime > 110)
 		{
-			const float maxExtrusionExpected = ( (accumulatedExtrusionCommanded >= 0.0)
-												 ? accumulatedExtrusionCommanded * (1.0 + tolerance)
-													: accumulatedExtrusionCommanded * (1.0 - tolerance)
-											   )
-											   + absTolerance;
-			if (accumulatedExtrusionMeasured > maxExtrusionExpected)
-			{
-				ret = FilamentSensorStatus::tooMuchMovement;
-			}
+			ret = CheckFilament(accumulatedExtrusionCommanded);
 		}
-		accumulatedExtrusionCommanded = accumulatedExtrusionMeasured = 0.0;
 	}
 
+	return ret;
+}
+
+// Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
+FilamentSensorStatus Duet3DFilamentSensor::CheckFilament(float amountCommanded)
+{
+	if (reprap.Debug(moduleFilamentSensors))
+	{
+		debugPrintf("Extr req %.3f meas %.3f\n", amountCommanded, accumulatedExtrusionMeasured);
+	}
+
+	FilamentSensorStatus ret = FilamentSensorStatus::ok;
+	const float minExtrusionExpected = ( (amountCommanded >= 0.0)
+										 ? amountCommanded * (1.0 - tolerance)
+											: amountCommanded * (1.0 + tolerance)
+									   )
+									   - absTolerance;
+	if (accumulatedExtrusionMeasured < minExtrusionExpected)
+	{
+		ret = FilamentSensorStatus::tooLittleMovement;
+	}
+	else
+	{
+		const float maxExtrusionExpected = ( (amountCommanded >= 0.0)
+											 ? amountCommanded * (1.0 + tolerance)
+												: amountCommanded * (1.0 - tolerance)
+										   )
+										   + absTolerance;
+		if (accumulatedExtrusionMeasured > maxExtrusionExpected)
+		{
+			ret = FilamentSensorStatus::tooMuchMovement;
+		}
+	}
+
+	accumulatedExtrusionCommanded -= amountCommanded;
+	extrusionCommandedAtLastMeasurement = accumulatedExtrusionMeasured = 0.0;
 	return ret;
 }
 
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
 FilamentSensorStatus Duet3DFilamentSensor::Clear()
 {
-	accumulatedExtrusionCommanded = accumulatedExtrusionMeasured = 0.0;
+	Poll();								// to keep the diagnostics up to date
+	accumulatedExtrusionCommanded = accumulatedExtrusionMeasured = extrusionCommandedAtLastMeasurement = tentativeExtrusionCommanded = 0.0;
+	samplesReceived = 0;
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
 	if ((sensorValue & ErrorBit) != 0)
 	{
@@ -234,12 +273,11 @@ FilamentSensorStatus Duet3DFilamentSensor::Clear()
 void Duet3DFilamentSensor::Diagnostics(MessageType mtype, unsigned int extruder)
 {
 	Poll();
-	const char* const statusText = (!dataReceived) ? "no data received"
+	const char* const statusText = (samplesReceived == 0) ? "no data received"
 									: ((sensorValue & ErrorBit) != 0) ? "error"
 										: (withSwitch && (sensorValue & SwitchOpenBit) != 0) ? "no filament"
 											: "ok";
-	const float sensorAngle = (sensorValue & AngleMask) * (360.0/1024.0);
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: angle %.1f, %s\n", extruder, sensorAngle, statusText);
+	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: angle %.1f, %s\n", extruder, GetCurrentAngle(), statusText);
 }
 
 // End

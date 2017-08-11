@@ -686,7 +686,7 @@ void Platform::InitZProbe()
 	case 4:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(endStopPins[E0_AXIS], INPUT_PULLUP);
+		pinMode(endStopPins[E0_AXIS], INPUT);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 
@@ -700,7 +700,7 @@ void Platform::InitZProbe()
 	case 6:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(endStopPins[E0_AXIS + 1], INPUT_PULLUP);
+		pinMode(endStopPins[E0_AXIS + 1], INPUT);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
 
@@ -1536,14 +1536,22 @@ void Platform::Spin()
 	{
 		if (filamentSensors[extruder] != nullptr)
 		{
-			const float extrusionCommanded = reprap.GetMove().GetAccumulatedExtrusion(extruder);		// get and clear the Move extrusion commanded
 			GCodes& gCodes = reprap.GetGCodes();
+			const float extrusionCommanded = (float)reprap.GetMove().GetAccumulatedExtrusion(extruder)/driveStepsPerUnit[extruder + gCodes.GetTotalAxes()];
+																													// get and clear the Move extrusion commanded
 			if (reprap.GetPrintMonitor().IsPrinting() && !gCodes.IsPausing() && !gCodes.IsResuming() && !gCodes.IsPaused())
 			{
 				const FilamentSensorStatus fstat = filamentSensors[extruder]->Check(extrusionCommanded);
 				if (fstat != FilamentSensorStatus::ok && extrusionCommanded > 0.0)
 				{
-					gCodes.FilamentError(extruder, fstat);
+					if (reprap.Debug(moduleFilamentSensors))
+					{
+						debugPrintf("Filament error: extruder %u reports %s\n", extruder, FilamentSensor::GetErrorMessage(fstat));
+					}
+					else
+					{
+						gCodes.FilamentError(extruder, fstat);
+					}
 				}
 			}
 			else
@@ -3070,6 +3078,7 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 	{
 	case HTTP_MESSAGE:
 	case AUX_MESSAGE:
+	case GENERIC_MESSAGE:
 		// Make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
 		reprap.SetAlert(message, title, sParam, tParam, zParam);
 		break;

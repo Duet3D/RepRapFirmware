@@ -49,7 +49,8 @@ enum Module : uint8_t
 	moduleStorage = 10,
 	modulePortControl = 11,
 	moduleDuetExpansion = 12,
-	numModules = 13,				// make this one greater than the last module number
+	moduleFilamentSensors = 13,
+	numModules = 14,				// make this one greater than the last module number
 	noModule = 15
 };
 

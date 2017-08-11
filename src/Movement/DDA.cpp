@@ -1625,4 +1625,44 @@ bool DDA::Free()
 	return hadLookaheadUnderrun;
 }
 
+// Return the number of net steps already taken in this move by a particular drive
+int32_t DDA::GetStepsTaken(size_t drive) const
+{
+	const DriveMovement * const dmp = pddm[drive];
+	int32_t ret;
+	if (dmp == nullptr)
+	{
+		ret = 0;
+	}
+	else
+	{
+		const uint32_t ns = dmp->nextStep;
+		if (ns == 0)
+		{
+			ret = 0;						// not taken any steps yet
+		}
+		else
+		{
+			const uint32_t rss = dmp->reverseStartStep;
+			if (ns <= rss)
+			{
+				ret = (int32_t)ns;				// get number of steps already taken
+				if (!dmp->direction)			// if backwards movement
+				{
+					ret = -ret;					// invert sign
+				}
+			}
+			else
+			{
+				ret = (int)(2 * rss) - (int)ns;
+				if (dmp->direction)
+				{
+					ret = -ret;
+				}
+			}
+		}
+	}
+	return ret;
+}
+
 // End

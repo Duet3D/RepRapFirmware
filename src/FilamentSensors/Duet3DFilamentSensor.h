@@ -31,7 +31,11 @@ private:
 	static constexpr uint16_t ErrorBit = 0x8000u;
 	static constexpr uint16_t AngleMask = 0x03FF;		// 10-bit sensor angle
 
+	static constexpr size_t MaxEdgeCaptures = 30;
+
 	void Poll();
+	float GetCurrentAngle() const;
+	FilamentSensorStatus CheckFilament(float amountCommanded);
 
 	// Configuration parameters
 	float mmPerRev;
@@ -44,9 +48,11 @@ private:
 	uint16_t sensorValue;
 	float accumulatedExtrusionCommanded;
 	float accumulatedExtrusionMeasured;
+	float extrusionCommandedAtLastMeasurement;
+	float tentativeExtrusionCommanded;
 
-	static constexpr size_t MaxEdgeCaptures = 30;
 	volatile size_t numberOfEdgesCaptured;
+	uint32_t lastMeasurementTime;
 	uint32_t edgeCaptures[MaxEdgeCaptures];
 
 	enum class RxdState : uint8_t
@@ -62,7 +68,7 @@ private:
 	size_t bitChangeIndex;
 	uint16_t valueBeingAssembled;
 	uint8_t nibblesAssembled;
-	bool dataReceived;
+	uint8_t samplesReceived;
 };
 
 #endif /* SRC_FILAMENTSENSORS_DUET3DFILAMENTSENSOR_H_ */

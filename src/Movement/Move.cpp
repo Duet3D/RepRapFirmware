@@ -863,8 +863,13 @@ void Move::CurrentMoveCompleted()
 {
 	// Save the current motor coordinates, and the machine Cartesian coordinates if known
 	liveCoordinatesValid = currentDda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
-
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+	for (size_t drive = numAxes; drive < DRIVES; ++drive)
+	{
+		extrusionAccumulators[drive - numAxes] += currentDda->GetStepsTaken(drive);
+	}
 	currentDda = nullptr;
+
 	ddaRingGetPointer = ddaRingGetPointer->GetNext();
 	completedMoves++;
 }

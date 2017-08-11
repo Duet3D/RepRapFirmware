@@ -1314,17 +1314,23 @@ void GCodes::CheckTriggers()
 			DoFileMacro(*daemonGCode, filename.Pointer(), true);
 		}
 	}
-	else if (lastFilamentError != FilamentSensorStatus::ok)			// check for a filament error
+	else if (   lastFilamentError != FilamentSensorStatus::ok		// check for a filament error
+			 && reprap.GetPrintMonitor().IsPrinting()
+			 && !isPaused
+			 && LockMovement(*daemonGCode)							// need to lock movement before executing the pause macro
+		 	)
 	{
-		platform.MessageF(GENERIC_MESSAGE, "Filament error on extruder %u: %s\n", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
+		scratchString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
+		platform.SendAlert(GENERIC_MESSAGE, scratchString.Pointer(), "Filament error", 1, 0.0, false);
 		DoPause(*daemonGCode, false);
+		lastFilamentError = FilamentSensorStatus::ok;
 	}
 }
 
 // Log a filament error. Called by Platform when a filament sensor reports an incorrect status and a print is in progress.
 void GCodes::FilamentError(size_t extruder, FilamentSensorStatus fstat)
 {
-	if (lastFilamentError != FilamentSensorStatus::ok)
+	if (lastFilamentError == FilamentSensorStatus::ok)
 	{
 		lastFilamentErrorExtruder = extruder;
 		lastFilamentError = fstat;

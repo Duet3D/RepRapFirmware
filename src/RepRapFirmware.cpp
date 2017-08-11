@@ -182,12 +182,10 @@ const char *moduleName[] =
 	"Scanner",
 	"PrintMonitor",
 	"Storage",
-#if SUPPORT_IOBITS
 	"PortControl",
-#else
+	"DuetExpansion",
+	"FilamentSensors",
 	"?",
-#endif
-	"?","?","?",
 	"none"
 };
 

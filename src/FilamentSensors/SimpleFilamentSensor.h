@@ -22,6 +22,8 @@ public:
 	void Interrupt() override;
 
 private:
+	void Poll();
+
 	bool highWhenNoFilament;
 	bool filamentPresent;
 };

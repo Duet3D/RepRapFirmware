@@ -40,28 +40,31 @@ void SimpleFilamentSensor::Interrupt()
 	detachInterrupt(GetPin());
 }
 
+// Call the following regularly to keep the status up to date
+void SimpleFilamentSensor::Poll()
+{
+	const bool b = Platform::ReadPin(GetPin());
+	filamentPresent = (highWhenNoFilament) ? !b : b;
+}
+
 // Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 // 'filamentConsumed' is the net amount of extrusion since the last call to this function.
 FilamentSensorStatus SimpleFilamentSensor::Check(float filamentConsumed)
 {
-	const bool b = Platform::ReadPin(GetPin());
-	filamentPresent = (highWhenNoFilament) ? !b : b;
+	Poll();
 	return (filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
 FilamentSensorStatus SimpleFilamentSensor::Clear()
 {
-	const bool b = Platform::ReadPin(GetPin());
-	filamentPresent = (highWhenNoFilament) ? !b : b;
+	Poll();
 	return (filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Print diagnostic info for this sensor
 void SimpleFilamentSensor::Diagnostics(MessageType mtype, unsigned int extruder)
 {
-	const bool b = Platform::ReadPin(GetPin());
-	filamentPresent = (highWhenNoFilament) ? !b : b;
 	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: %s\n", extruder, (filamentPresent) ? "ok" : "no filament");
 }
 

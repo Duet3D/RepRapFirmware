@@ -199,11 +199,4 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 	endCoordinatesValid = false;
 }
 
-// Return the number of steps already taken in this move by a particular drive
-inline int32_t DDA::GetStepsTaken(size_t drive) const
-{
-	const DriveMovement * const dmp = pddm[drive];
-	return (dmp == nullptr) ? 0 : (int32_t)dmp->nextStep;
-}
-
 #endif /* DDA_H_ */
