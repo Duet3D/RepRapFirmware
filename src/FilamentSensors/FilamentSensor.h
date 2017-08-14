@@ -28,10 +28,10 @@ public:
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
-	virtual FilamentSensorStatus Check(float filamentConsumed) = 0;
+	virtual FilamentSensorStatus Check(bool full, float filamentConsumed) = 0;
 
 	// Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
-	virtual FilamentSensorStatus Clear() = 0;
+	virtual FilamentSensorStatus Clear(bool full) = 0;
 
 	// Print diagnostic info for this sensor
 	virtual void Diagnostics(MessageType mtype, unsigned int extruder) = 0;
@@ -45,11 +45,20 @@ public:
 	// Return the type of this sensor
 	int GetType() const { return type; }
 
-	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentSensor *Create(int type);
-
 	// Return an error message corresponding to a status code
 	static const char *GetErrorMessage(FilamentSensorStatus f);
+
+	// Poll the filament sensors
+	static void Spin(bool full);
+
+	// Return the filament sensor associated with a particular extruder
+	static FilamentSensor *GetFilamentSensor(int extruder);
+
+	// Set the filament sensor associated with a particular extruder
+	static bool SetFilamentSensorType(int extruder, int newSensorType);
+
+	// Send diagnostics info
+	static void Diagnostics(MessageType mtype);
 
 protected:
 	FilamentSensor(int t) : type(t), pin(NoPin) { }
@@ -61,7 +70,12 @@ protected:
 	Pin GetPin() const { return pin; }
 
 private:
+	// Create a filament sensor returning null if not a valid sensor type
+	static FilamentSensor *Create(int type);
+
 	static void InterruptEntry(void *param);
+
+	static FilamentSensor *filamentSensors[MaxExtruders];
 
 	int type;
 	int endstopNumber;

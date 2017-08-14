@@ -3320,17 +3320,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				gb.TryGetIValue('P', sensorType, seen);
 				if (seen)
 				{
-					platform.SetFilamentSensorType(extruder, sensorType);
+					FilamentSensor::SetFilamentSensorType(extruder, sensorType);
 				}
 
-				FilamentSensor *sensor = platform.GetFilamentSensor(extruder);
+				FilamentSensor *sensor = FilamentSensor::GetFilamentSensor(extruder);
 				if (sensor != nullptr)
 				{
 					// Configure the sensor
 					error = sensor->Configure(gb, reply, seen);
 					if (error)
 					{
-						platform.SetFilamentSensorType(extruder, 0);		// delete the sensor
+						FilamentSensor::SetFilamentSensorType(extruder, 0);		// delete the sensor
 					}
 				}
 				else if (!seen)

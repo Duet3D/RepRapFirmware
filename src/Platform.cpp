@@ -478,7 +478,6 @@ void Platform::Init()
 	{
 		extruderDrivers[extr] = (uint8_t)(extr + MinAxes);		// set up default extruder drive mapping
 		SetPressureAdvance(extr, 0.0);							// no pressure advance
-		filamentSensors[extr] = nullptr;						// no filament sensor
 	}
 
 #ifdef DUET_NG
@@ -1531,36 +1530,6 @@ void Platform::Spin()
 	}
 #endif
 
-	// Filament sensors
-	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
-	{
-		if (filamentSensors[extruder] != nullptr)
-		{
-			GCodes& gCodes = reprap.GetGCodes();
-			const float extrusionCommanded = (float)reprap.GetMove().GetAccumulatedExtrusion(extruder)/driveStepsPerUnit[extruder + gCodes.GetTotalAxes()];
-																													// get and clear the Move extrusion commanded
-			if (reprap.GetPrintMonitor().IsPrinting() && !gCodes.IsPausing() && !gCodes.IsResuming() && !gCodes.IsPaused())
-			{
-				const FilamentSensorStatus fstat = filamentSensors[extruder]->Check(extrusionCommanded);
-				if (fstat != FilamentSensorStatus::ok && extrusionCommanded > 0.0)
-				{
-					if (reprap.Debug(moduleFilamentSensors))
-					{
-						debugPrintf("Filament error: extruder %u reports %s\n", extruder, FilamentSensor::GetErrorMessage(fstat));
-					}
-					else
-					{
-						gCodes.FilamentError(extruder, fstat);
-					}
-				}
-			}
-			else
-			{
-				filamentSensors[extruder]->Clear();
-			}
-		}
-	}
-
 	ClassReport(longWait);
 }
 
@@ -1799,6 +1768,12 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(PIOE_IRQn, NvicPriorityPins);
 #endif
 
+#if SAM3XA
+	NVIC_SetPriority(UOTGHS_IRQn, NvicPriorityUSB);
+#endif
+#if SAM4E
+	NVIC_SetPriority(UDP_IRQn, NvicPriorityUSB);
+#endif
 	NVIC_SetPriority(TWI1_IRQn, NvicPriorityTwi);
 
 	// Interrupt for 4-pin PWM fan sense line
@@ -1814,7 +1789,7 @@ void Platform::InitialiseInterrupts()
 	// Set up the timeout of the regulator watchdog, and set up the backup watchdog if there is one
 	// The clock frequency for both watchdogs is 32768/128 = 256Hz
 	const uint16_t timeout = 32768/128;												// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
-	wdt_init(WDT, WDT_MR_WDRSTEN, timeout,timeout);									// reset the processor on a watchdog fault
+	wdt_init(WDT, WDT_MR_WDRSTEN, timeout, timeout);								// reset the processor on a watchdog fault
 
 	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
@@ -2059,15 +2034,6 @@ void Platform::Diagnostics(MessageType mtype)
 				);
 	}
 #endif
-
-	// Filament sensors
-	for (size_t i = 0; i < MaxExtruders; ++i)
-	{
-		if (filamentSensors[i] != nullptr)
-		{
-			filamentSensors[i]->Diagnostics(mtype, i);
-		}
-	}
 
 	// Show current RTC time
 	Message(mtype, "Date/time: ");
@@ -3370,38 +3336,11 @@ bool Platform::SetExtrusionAncilliaryPwmPin(int logicalPin)
 	return GetFirmwarePin(logicalPin, PinAccess::pwm, extrusionAncilliaryPwmFirmwarePin, extrusionAncilliaryPwmInvert);
 }
 
-// Filament sensor support
-// Get the filament sensor object for an extruder, or nullptr if there isn't one
-FilamentSensor *Platform::GetFilamentSensor(int extruder) const
-{
-	return (extruder >= 0 && extruder < (int)MaxExtruders) ? filamentSensors[extruder] : nullptr;
-}
-
-// Set the filament sensor type for an extruder, returning true if it has changed.
-// Passing newSensorType as 0 sets no sensor.
-bool Platform::SetFilamentSensorType(int extruder, int newSensorType)
-{
-	if (extruder >= 0 && extruder < (int)MaxExtruders)
-	{
-		FilamentSensor*& sensor = filamentSensors[extruder];
-		const int oldSensorType = (sensor == nullptr) ? 0 : sensor->GetType();
-		if (newSensorType != oldSensorType)
-		{
-			delete sensor;
-			sensor = FilamentSensor::Create(newSensorType);
-			return true;
-		}
-	}
-
-	return false;
-}
-
 // Get the firmware pin number for an endstop, or NoPin if it is out of range
 Pin Platform::GetEndstopPin(int endstop) const
 {
 	return (endstop >= 0 && endstop < (int)ARRAY_SIZE(endStopPins)) ? endStopPins[endstop] : NoPin;
 }
-
 
 #if SUPPORT_INKJET
 

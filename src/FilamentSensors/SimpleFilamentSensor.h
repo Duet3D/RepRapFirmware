@@ -16,8 +16,8 @@ public:
 	SimpleFilamentSensor(int type);
 
 	bool Configure(GCodeBuffer& gb, StringRef& reply, bool& seen) override;
-	FilamentSensorStatus Check(float filamentConsumed) override;
-	FilamentSensorStatus Clear() override;
+	FilamentSensorStatus Check(bool full, float filamentConsumed) override;
+	FilamentSensorStatus Clear(bool full) override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) override;
 	void Interrupt() override;
 

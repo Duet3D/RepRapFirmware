@@ -1530,7 +1530,7 @@ bool DDA::Step()
 	if (state == completed)
 	{
 		// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
-		// However, following a move that checks endstops or the Z probe, we always wait fot the move to complete before we schedule another, so this doesn't matter.
+		// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
 		const uint32_t finishTime = moveStartTime + clocksNeeded;	// calculate how long this move should take
 		Move& move = reprap.GetMove();
 		move.CurrentMoveCompleted();							// tell Move that the current move is complete
@@ -1629,40 +1629,7 @@ bool DDA::Free()
 int32_t DDA::GetStepsTaken(size_t drive) const
 {
 	const DriveMovement * const dmp = pddm[drive];
-	int32_t ret;
-	if (dmp == nullptr)
-	{
-		ret = 0;
-	}
-	else
-	{
-		const uint32_t ns = dmp->nextStep;
-		if (ns == 0)
-		{
-			ret = 0;						// not taken any steps yet
-		}
-		else
-		{
-			const uint32_t rss = dmp->reverseStartStep;
-			if (ns <= rss)
-			{
-				ret = (int32_t)ns;				// get number of steps already taken
-				if (!dmp->direction)			// if backwards movement
-				{
-					ret = -ret;					// invert sign
-				}
-			}
-			else
-			{
-				ret = (int)(2 * rss) - (int)ns;
-				if (dmp->direction)
-				{
-					ret = -ret;
-				}
-			}
-		}
-	}
-	return ret;
+	return (dmp != nullptr) ? dmp->GetNetStepsTaken() : 0;
 }
 
 // End

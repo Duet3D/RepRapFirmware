@@ -45,6 +45,10 @@ extern "C" void hsmciIdle()
 	}
 #endif
 
+	if (reprap.GetSpinningModule() != moduleFilamentSensors)
+	{
+		FilamentSensor::Spin(false);
+	}
 }
 
 // RepRap member functions.
@@ -217,6 +221,10 @@ void RepRap::Spin()
 	DuetExpansion::Spin(true);
 #endif
 
+	spinningModule = moduleFilamentSensors;
+	ticksInSpinState = 0;
+	FilamentSensor::Spin(true);
+
 	spinningModule = noModule;
 	ticksInSpinState = 0;
 
@@ -264,6 +272,7 @@ void RepRap::Diagnostics(MessageType mtype)
 	heat->Diagnostics(mtype);
 	gCodes->Diagnostics(mtype);
 	network->Diagnostics(mtype);
+	FilamentSensor::Diagnostics(mtype);
 }
 
 // Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
@@ -288,7 +297,7 @@ void RepRap::EmergencyStop()
 	}
 
 	// We do this twice, to avoid an interrupt switching a drive back on. move->Exit() should prevent interrupts doing this.
-	for(int i = 0; i < 2; i++)
+	for (int i = 0; i < 2; i++)
 	{
 		move->Exit();
 		for (size_t drive = 0; drive < DRIVES; drive++)

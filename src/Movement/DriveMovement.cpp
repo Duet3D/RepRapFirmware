@@ -251,6 +251,7 @@ bool DriveMovement::CalcNextStepTimeCartesianFull(const DDA &dda, bool live)
 pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
+	// The last step before reverseStartStep must be single stepped to make sure that we don't reverse the direction too soon.
 	uint32_t shiftFactor = 0;		// assume single stepping
 	if (stepInterval < DDA::MinCalcIntervalCartesian)
 	{
@@ -339,6 +340,7 @@ bool DriveMovement::CalcNextStepTimeDeltaFull(const DDA &dda, bool live)
 pre(nextStep < totalSteps; stepsTillRecalc == 0)
 {
 	// Work out how many steps to calculate at a time.
+	// The last step before reverseStartStep must be single stepped to make sure that we don't reverse the direction too soon.
 	// The simulator suggests that at 200steps/mm, the minimum step pulse interval for 400mm/sec movement is 4.5us
 	uint32_t shiftFactor = 0;		// assume single stepping
 	if (stepInterval < DDA::MinCalcIntervalDelta)

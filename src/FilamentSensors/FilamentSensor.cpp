@@ -11,7 +11,13 @@
 #include "RepRap.h"
 #include "Platform.h"
 #include "GCodes/GCodeBuffer.h"
+#include "Movement/Move.h"
+#include "PrintMonitor.h"
 
+// Static data
+FilamentSensor *FilamentSensor::filamentSensors[MaxExtruders] = { 0 };
+
+// Default destructor
 FilamentSensor::~FilamentSensor()
 {
 	if (pin != NoPin)
@@ -86,6 +92,81 @@ bool FilamentSensor::ConfigurePin(GCodeBuffer& gb, StringRef& reply, bool& seen)
 /*static*/ void FilamentSensor::InterruptEntry(void *param)
 {
 	static_cast<FilamentSensor*>(param)->Interrupt();
+}
+
+/*static*/ void FilamentSensor::Spin(bool full)
+{
+	// Filament sensors
+	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
+	{
+		if (filamentSensors[extruder] != nullptr)
+		{
+			GCodes& gCodes = reprap.GetGCodes();
+			const float extrusionCommanded = (float)reprap.GetMove().GetAccumulatedExtrusion(extruder)/reprap.GetPlatform().DriveStepsPerUnit(extruder + gCodes.GetTotalAxes());
+																													// get and clear the Move extrusion commanded
+			if (reprap.GetPrintMonitor().IsPrinting() && !gCodes.IsPausing() && !gCodes.IsResuming() && !gCodes.IsPaused())
+			{
+				const FilamentSensorStatus fstat = filamentSensors[extruder]->Check(full, extrusionCommanded);
+				if (full && fstat != FilamentSensorStatus::ok && extrusionCommanded > 0.0)
+				{
+					if (reprap.Debug(moduleFilamentSensors))
+					{
+						debugPrintf("Filament error: extruder %u reports %s\n", extruder, FilamentSensor::GetErrorMessage(fstat));
+					}
+					else
+					{
+						gCodes.FilamentError(extruder, fstat);
+					}
+				}
+			}
+			else
+			{
+				filamentSensors[extruder]->Clear(full);
+			}
+		}
+	}
+}
+
+// Return the filament sensor associated with a particular extruder
+/*static*/ FilamentSensor *FilamentSensor::GetFilamentSensor(int extruder)
+{
+	return (extruder >= 0 && extruder < (int)MaxExtruders) ? filamentSensors[extruder] : nullptr;
+}
+
+// Set the filament sensor associated with a particular extruder
+/*static*/ bool FilamentSensor::SetFilamentSensorType(int extruder, int newSensorType)
+{
+	if (extruder >= 0 && extruder < (int)MaxExtruders)
+	{
+		FilamentSensor*& sensor = filamentSensors[extruder];
+		const int oldSensorType = (sensor == nullptr) ? 0 : sensor->GetType();
+		if (newSensorType != oldSensorType)
+		{
+			delete sensor;
+			sensor = Create(newSensorType);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Send diagnostics info
+/*static*/ void FilamentSensor::Diagnostics(MessageType mtype)
+{
+	bool first = true;
+	for (size_t i = 0; i < MaxExtruders; ++i)
+	{
+		if (filamentSensors[i] != nullptr)
+		{
+			if (first)
+			{
+				reprap.GetPlatform().Message(mtype, "=== Filament sensors ===\n");
+				first = false;
+			}
+			filamentSensors[i]->Diagnostics(mtype, i);
+		}
+	}
 }
 
 // End
