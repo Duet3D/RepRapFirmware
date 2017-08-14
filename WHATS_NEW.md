@@ -1,12 +1,12 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.19RC6
-===============
+Version 1.19
+============
 
 Upgrade notes:
-- Recommended DuetWebControl version is 1.19RC1
-- Recommended DuetWiFiServer version is 1.19beta10
+- Recommended DuetWebControl version is 1.19
+- Recommended DuetWiFiServer version is 1.19
 - **Important!** If you use an IR Z probe or some other type that does not need to be deployed, delete the files sys/deployprobe and sys/retractprobe.g if they exist, because they are now called automatically. You can do this in the System Files Editor of the web interface.
 - **Important!** On a CoreXY machine, if upgrading from a version prior to 1.19beta9, you need to reverse the Y motor direction in the M569 command. Similarly for CoreXYU machines.
 - **Important!**  When upgrading a Duet WiFi from 1.18.2 or earlier firmware, see the important notes at https://duet3d.com/wiki/DuetWiFiFirmware_1.19beta.
@@ -93,7 +93,7 @@ New features since 1.18.2:
 - String parameters in some gcode commands, such as filenames, can now be enclosed in double quotation marks to avoid ambiguity
 - When tuning a bed or chamber heater, more time is allowed for the temperature to start rising
 - On the Duet WiFi the network code has been rewritten. The web server now runs on the Duet instead of on the WiFi module. FTP and Telnet are supported if enabled using M586. New commands M587, M588 and M589 are supported. The meaning of the M552 S parameter has changed: S-1 holds the WiFi module in the reset state, S0 holds it in the Idle state allowing it to process M587/M588/M589 commands, S1 starts it in client mode and S2 starts it in access point mode. The M122 diagnostic report includes WiFi module parameters unless the WiFi module is being held in the reset state.
-- Support for simple switch-based filament sensors and the Duet3D filament sensor is partly implemented, but should not be relied on in this release.
+- Added support for simple switch-based filament sensors and the Duet3D filament sensor.
 
 Bug fixes:
 - XYZ coordinates could be reported as NaN in DWC status responses, causing AJAX errors
