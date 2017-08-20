@@ -203,6 +203,13 @@ bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes,
 			}
 		}
 	}
+
+	// Limit any additional axes according to the M208 limits
+	if (LimitPositionFromAxis(coords, Z_AXIS + 1, numVisibleAxes, axesHomed))
+	{
+		limited = true;
+	}
+
 	return limited;
 }
 

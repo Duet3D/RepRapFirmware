@@ -46,10 +46,10 @@ private:
 	static constexpr float DefaultMinSegmentSize = 0.2;
 	static constexpr float DefaultProximalArmLength = 100.0;
 	static constexpr float DefaultDistalArmLength = 100.0;
-	static constexpr float DefaultMinTheta = -90.0;								// minimum proximal joint angle
-	static constexpr float DefaultMaxTheta = 90.0;								// maximum proximal joint angle
-	static constexpr float DefaultMinPhiMinusTheta = -135.0;					// minimum distal joint angle
-	static constexpr float DefaultMaxPhiMinusTheta = 135.0;						// maximum distal joint angle
+	static constexpr float DefaultMinTheta = -90.0;					// minimum proximal joint angle
+	static constexpr float DefaultMaxTheta = 90.0;					// maximum proximal joint angle
+	static constexpr float DefaultMinPhi = -135.0;					// minimum distal joint angle
+	static constexpr float DefaultMaxPhi = 135.0;					// maximum distal joint angle
 
 	static constexpr const char *HomeProximalFileName = "homeproximal.g";
 	static constexpr const char *HomeDistalFileName = "homedistal.g";
@@ -60,7 +60,7 @@ private:
 	float proximalArmLength;
 	float distalArmLength;
 	float thetaLimits[2];							// minimum proximal joint angle
-	float phiMinusThetaLimits[2];					// minimum distal joint angle
+	float phiLimits[2];								// minimum distal joint angle
 	float crosstalk[3];								// if we rotate the distal arm motor, for each full rotation the Z height goes up by this amount
 	float xOffset;									// where bed X=0 is relative to the proximal joint
 	float yOffset;									// where bed Y=0 is relative to the proximal joint

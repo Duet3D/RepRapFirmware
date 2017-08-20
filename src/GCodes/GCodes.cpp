@@ -1250,7 +1250,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 				if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
 				{
 					const char* const m226Command = "M226\n";
-					gb.Put(m226Command, strlen(m226Command));
+					gb.Put(m226Command, strlen(m226Command) + 1);
 					pausePending = false;
 				}
 			}
@@ -1796,7 +1796,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 
 // Execute a straight move returning true if an error was written to 'reply'
 // We have already acquired the movement lock and waited for the previous move to be taken.
-bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
+bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated)
 {
 	// Set up default move parameters
 	moveBuffer.endStopsToCheck = 0;
@@ -1908,12 +1908,12 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 	// Deal with XYZ movement
 	const float initialX = currentUserPosition[X_AXIS];
 	const float initialY = currentUserPosition[Y_AXIS];
-	bool includesAxisMovement = (rp != nullptr);
+	AxesBitmap axesMentioned = 0;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-			includesAxisMovement = true;
+			SetBit(axesMentioned, axis);
 			const float moveArg = gb.GetFValue() * distanceScale;
 			if (moveBuffer.moveType != 0)
 			{
@@ -1955,13 +1955,13 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 		segmentsLeft = 1;
 		gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 	}
-	else if (!includesAxisMovement)
+	else if (axesMentioned == 0)
 	{
 		segmentsLeft = 1;														// extruder-only movement
 	}
 	else
 	{
-		ToolOffsetTransform(currentUserPosition, moveBuffer.coords);			// apply tool offset, baby stepping, Z hop and axis scaling
+		ToolOffsetTransform(currentUserPosition, moveBuffer.coords, axesMentioned);	// apply tool offset, axis mapping, baby stepping, Z hop and axis scaling
 		AxesBitmap effectiveAxesHomed = axesHomed;
 		if (doingManualBedProbe)
 		{
@@ -1975,19 +1975,16 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply)
 		// Flag whether we should use pressure advance, if there is any extrusion in this move.
 		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU.. movement.
 		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU.. movement here.
-		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			if (axis != Z_AXIS && moveBuffer.coords[axis] != moveBuffer.initialCoords[axis])
-			{
-				moveBuffer.usePressureAdvance = true;
-				break;
-			}
+			AxesBitmap axesMentionedExceptZ = axesMentioned;
+			ClearBit(axesMentionedExceptZ, Z_AXIS);
+			moveBuffer.usePressureAdvance = (axesMentionedExceptZ != 0);
 		}
 
 		// Apply segmentation if necessary
 		// Note for when we use RTOS: as soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
-		if (kin.UseSegmentation() && (moveBuffer.hasExtrusion || !kin.UseRawG0()))
+		if (kin.UseSegmentation() && (moveBuffer.hasExtrusion || isCoordinated || !kin.UseRawG0()))
 		{
 			// This kinematics approximates linear motion by means of segmentation
 			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialX) + fsquare(currentUserPosition[Y_AXIS] - initialY));
@@ -3871,7 +3868,7 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer& gb)
 
 // Convert user coordinates to head reference point coordinates, optionally allowing for X axis mapping
 // If the X axis is mapped to some other axes not including X, then the X coordinate of coordsOut will be left unchanged. So make sure it is suitably initialised before calling this.
-void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes])
+void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes)
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	if (currentTool == nullptr)
@@ -3887,14 +3884,15 @@ void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[
 		const AxesBitmap yAxes = currentTool->GetYAxisMap();
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			if (   (axis != X_AXIS || IsBitSet<AxesBitmap>(xAxes, X_AXIS))
-				&& (axis != Y_AXIS || IsBitSet<AxesBitmap>(yAxes, Y_AXIS))
+			if (   (axis != X_AXIS || IsBitSet(xAxes, X_AXIS))
+				&& (axis != Y_AXIS || IsBitSet(yAxes, Y_AXIS))
 			   )
 			{
 				const float totalOffset = currentTool->GetOffset()[axis] + axisOffsets[axis];
-				const size_t inputAxis = (IsBitSet<AxesBitmap>(xAxes, axis)) ? X_AXIS
-										: (IsBitSet<AxesBitmap>(yAxes, axis)) ? Y_AXIS
-											: axis;
+				const size_t inputAxis = (IsBitSet(explicitAxes, axis)) ? axis
+										: (IsBitSet(xAxes, axis)) ? X_AXIS
+											: (IsBitSet(yAxes, axis)) ? Y_AXIS
+												: axis;
 				coordsOut[axis] = (coordsIn[inputAxis] * axisScaleFactors[axis]) - totalOffset;
 			}
 		}

@@ -15,12 +15,17 @@
 
 GCodeQueue::GCodeQueue() : freeItems(nullptr), queuedItems(nullptr)
 {
-	for(size_t i = 0; i < maxQueuedCodes; i++)
+	for (size_t i = 0; i < maxQueuedCodes; i++)
 	{
 		freeItems = new QueuedCode(freeItems);
 	}
 }
 
+// If moves are scheduled and the command in the passed GCodeBuffer can be queued, try to queue it.
+// If successful, return true to indicate it has been queued and the caller should not execute it.
+// If it is not a command that should be queued, return false.
+// If the queue is full, free up the oldest queued entry by copying its command to our own gcode buffer
+// so that we have room to queue the original command.
 bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 {
 	// Don't queue anything if no moves are being performed
@@ -61,11 +66,11 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 			case 5:
 			case 42:	// set IO pin
 			case 106:	// fan control
-			case 107:
+			case 107:	// fan off
 			case 104:	// set temperatures and return immediately
-			case 140:
-			case 141:
-			case 144:
+			case 140:	// set bed temperature and return immediately
+			case 141:	// set chamber temperature and return immediately
+			case 144:	// bed standby
 			case 117:	// display message
 			case 280:	// set servo
 			case 300:	// beep
@@ -94,11 +99,11 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 		{
 			// No - we've run out of free items. Run the first outstanding code
 			queueCode = false;
-			codeToRunLength = strlen(queuedItems->code);
+			codeToRunLength = strlen(queuedItems->code) + 1;
 			SafeStrncpy(codeToRun, queuedItems->code, ARRAY_SIZE(codeToRun));
 
 			// Release the first queued item so that it can be reused later
-			QueuedCode *item = queuedItems;
+			QueuedCode * const item = queuedItems;
 			queuedItems = item->next;
 			item->next = nullptr;
 			freeItems = item;
@@ -109,6 +114,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 		freeItems = code->next;
 		code->AssignFrom(gb);
 		code->executeAtMove = scheduledMoves;
+		code->next = nullptr;
 
 		// Append it to the list of queued codes
 		if (queuedItems == nullptr)
@@ -124,12 +130,18 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 			}
 			last->next = code;
 		}
-		code->next = nullptr;
 
 		// Overwrite the passed gb's content if we could not store its original code
-		if (!queueCode && !gb.Put(codeToRun, codeToRunLength))
+		if (!queueCode)
 		{
-			gb.Put('\n');
+			if (reprap.Debug(moduleGcodes))
+			{
+				reprap.GetPlatform().Message(DEBUG_MESSAGE, "(swap) ");
+			}
+			if (!gb.Put(codeToRun, codeToRunLength))
+			{
+				gb.Put('\n');
+			}
 		}
 	}
 
@@ -216,7 +228,6 @@ void GCodeQueue::Diagnostics(MessageType mtype)
 	}
 }
 
-
 // QueuedCode class
 
 void QueuedCode::AssignFrom(GCodeBuffer &gb)
@@ -228,7 +239,7 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb)
 void QueuedCode::AssignTo(GCodeBuffer *gb)
 {
 	gb->SetToolNumberAdjust(toolNumberAdjust);
-	if (!gb->Put(code, strlen(code)))
+	if (!gb->Put(code, strlen(code) + 1))
 	{
 		gb->Put('\n');
 	}

@@ -40,11 +40,13 @@ bool Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer&
 	bool seen = false;
 	if (mCode == 305)
 	{
-		// We must set the 25C resistance and beta together in order to calculate Rinf. Check for these first.
-
-		gb.TryGetFValue('T', r25, seen);
 		gb.TryGetFValue('B', beta, seen);
+		if (seen)
+		{
+			shC = 0.0;						// if user changes B and doesn't define C, assume C=0
+		}
 		gb.TryGetFValue('C', shC, seen);
+		gb.TryGetFValue('T', r25, seen);
 		gb.TryGetFValue('R', seriesR, seen);
 		if (seen)
 		{

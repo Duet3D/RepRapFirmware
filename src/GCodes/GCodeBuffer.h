@@ -21,7 +21,7 @@ public:
 	void Init(); 										// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);				// Write some debug info
 	bool Put(char c);									// Add a character to the end
-	bool Put(const char *str, size_t len);				// Add an entire string
+	bool Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
 	bool IsEmpty() const;								// Does this buffer contain any code?
 	bool Seen(char c);									// Is a character present?
 

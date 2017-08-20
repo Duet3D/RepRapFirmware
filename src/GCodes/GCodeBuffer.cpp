@@ -88,7 +88,7 @@ bool GCodeBuffer::Put(char c)
 	else if (c == '\n' || c == '\r' || c == 0)
 	{
 		gcodeBuffer[gcodePointer] = 0;
-		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] != 0 && !writingFileDirectory) // Don't bother with blank/comment lines
+		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] != 0 && !writingFileDirectory)		// don't bother echoing blank/comment lines
 		{
 			reprap.GetPlatform().MessageF(DEBUG_MESSAGE, "%s: %s\n", identity, gcodeBuffer);
 		}
@@ -165,9 +165,11 @@ bool GCodeBuffer::Put(char c)
 	return false;
 }
 
+// Add an entire string, overwriting any existing content
 bool GCodeBuffer::Put(const char *str, size_t len)
 {
-	for(size_t i = 0; i <= len; i++)
+	Init();
+	for (size_t i = 0; i < len; i++)
 	{
 		if (Put(str[i]))
 		{

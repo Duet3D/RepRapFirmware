@@ -91,7 +91,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			return false;
 		}
-		if (DoStraightMove(gb, reply))
+		if (DoStraightMove(gb, reply, code == 1))
 		{
 			error = true;
 		}
@@ -1188,7 +1188,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (gb.Seen('S'))
 			{
-				float temperature = gb.GetFValue();
+				const float temperature = gb.GetFValue();
 				if (temperature < NEARLY_ABS_ZERO)
 				{
 					heat.SwitchOff(bedHeater);
@@ -1239,8 +1239,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const int8_t currentHeater = heat.GetChamberHeater();
 				if (currentHeater != -1)
 				{
-					float temperature = gb.GetFValue();
-
+					const float temperature = gb.GetFValue();
 					if (temperature < NEARLY_ABS_ZERO)
 					{
 						heat.SwitchOff(currentHeater);
@@ -3484,7 +3483,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (seen)
 			{
-				// We changed something, so reset the positions and set all axes not homed
+				// We changed something significant, so reset the positions and set all axes not homed
 				if (move.GetKinematics().GetKinematicsType() != oldK)
 				{
 					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);

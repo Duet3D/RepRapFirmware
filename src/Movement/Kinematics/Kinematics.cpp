@@ -34,8 +34,15 @@ Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength
 // This is the fallback function for when the derived class doesn't use the specified M-code
 bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error)
 {
-	reply.printf("M%u parameters do not apply to %s kinematics", mCode, GetName());
-	error = true;
+	if (mCode == 669)
+	{
+		reply.printf("Current kinematics is %s", GetName());
+	}
+	else
+	{
+		reply.printf("M%u parameters do not apply to %s kinematics", mCode, GetName());
+		error = true;
+	}
 	return false;
 }
 
@@ -51,11 +58,18 @@ bool Kinematics::IsReachable(float x, float y) const
 // This default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
 bool Kinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const
 {
+	return LimitPositionFromAxis(coords, 0, numVisibleAxes, axesHomed);
+}
+
+// Apply the M208 limits to the Cartesian position that the user wants to move to for all axes from the specified one upwards
+// Return true if any coordinates were changed
+bool Kinematics::LimitPositionFromAxis(float coords[], size_t firstAxis, size_t numVisibleAxes, AxesBitmap axesHomed) const
+{
 	const Platform& platform = reprap.GetPlatform();
 	bool limited = false;
-	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	for (size_t axis = firstAxis; axis < numVisibleAxes; axis++)
 	{
-		if ((axesHomed & (1 << axis)) != 0)
+		if (IsBitSet(axesHomed, axis))
 		{
 			float& f = coords[axis];
 			if (f < platform.AxisMinimum(axis))

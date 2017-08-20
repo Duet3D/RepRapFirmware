@@ -196,7 +196,7 @@ private:
 	bool HandleMcode(GCodeBuffer& gb, StringRef& reply);				// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, StringRef& reply);				// Do a T code
 
-	bool DoStraightMove(GCodeBuffer& gb, StringRef& reply);				// Execute a straight move returning true if an error was written to 'reply'
+	bool DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated);	// Execute a straight move returning true if an error was written to 'reply'
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 
@@ -237,7 +237,7 @@ private:
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
 	void SetMachinePosition(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
 	void GetCurrentUserPosition();										// Get the current position form the Move class
-	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert user coordinates to head reference point coordinates
+	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0);	// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
 	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
 	bool RetractFilament(GCodeBuffer& gb, bool retract);				// Retract or un-retract filaments

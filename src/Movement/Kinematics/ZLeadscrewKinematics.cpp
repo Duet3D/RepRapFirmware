@@ -283,11 +283,21 @@ void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		}
 		else
 		{
-			// User wants manual corrections for bed levelling screws
+			// User wants manual corrections for bed levelling screws.
+			// Pick the one with the smallest adjustment to leave alone.
+			float smallestCorrection = solution[0];
+			for (size_t i = 1; i < numLeadscrews; ++i)
+			{
+				if (fabs(solution[i]) < fabs(smallestCorrection))
+				{
+					smallestCorrection = solution[i];
+				}
+			}
 			reply.printf("Manual corrections required:");
 			for (size_t i = 0; i < numLeadscrews; ++i)
 			{
-				reply.catf(" %.2f turn %s (%.2fmm)", fabs(solution[i])/screwPitch, (solution[i] > 0) ? "down" : "up", solution[i]);
+				const float netAdjustment = solution[i] - smallestCorrection;
+				reply.catf(" %.2f turn %s (%.2fmm)", fabs(netAdjustment)/screwPitch, (netAdjustment > 0) ? "down" : "up", netAdjustment);
 			}
 		}
 	}
