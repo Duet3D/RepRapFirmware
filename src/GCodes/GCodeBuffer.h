@@ -32,15 +32,18 @@ public:
 	bool GetIPAddress(uint8_t ip[4]);					// Get an IP address quad after a key letter
 	bool GetIPAddress(uint32_t& ip);					// Get an IP address quad after a key letter
 	const char* GetUnprecedentedString(bool optional = false);	// Get a string with no preceding key letter
-	const char* GetString();							// Get a string after a key letter
-	bool GetQuotedString(char *buf, size_t buflen);		// Get and copy a quoted string
+	const char* GetString();							// Get an unquoted string after a key letter
+	bool GetQuotedString(const StringRef& str);			// Get and copy a quoted string
+	bool GetPossiblyQuotedString(const StringRef& str);	// Get and copy a string which may or may not be quoted
 	const void GetFloatArray(float a[], size_t& length, bool doPad); // Get a :-separated list of floats after a key letter
 	const void GetLongArray(long l[], size_t& length);	// Get a :-separated list of longs after a key letter
 
 	void TryGetFValue(char c, float& val, bool& seen);
 	void TryGetIValue(char c, int32_t& val, bool& seen);
-	bool TryGetFloatArray(char c, size_t numVals, float vals[], StringRef& reply, bool& seen, bool doPad = false);
-	bool TryGetQuotedString(char c, char *buf, size_t buflen, bool& seen);
+	void TryGetUIValue(char c, uint32_t& val, bool& seen);
+	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false);
+	bool TryGetQuotedString(char c, const StringRef& str, bool& seen);
+	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen);
 
 	const char* Buffer() const;
 	bool IsIdle() const;

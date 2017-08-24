@@ -70,7 +70,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 	bool error = false;
 
 	const int code = gb.GetIValue();
-	if (simulationMode != 0 && code > 4 && code != 10 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
+	if (simulationMode != 0 && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
 	{
 		return true;			// we only simulate some gcodes
 	}
@@ -129,7 +129,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (modifyingTool)
 			{
-				if (!SetOrReportOffsets(gb, reply, error))
+				if (simulationMode == 0 && !SetOrReportOffsets(gb, reply, error))
 				{
 					return false;
 				}
@@ -248,7 +248,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	bool error = false;
 
 	const int code = gb.GetIValue();
-	if (simulationMode != 0 && (code < 20 || code > 37) && code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 111 && code != 112 && code != 122 && code != 408 && code != 999)
+	if (   simulationMode != 0
+		&& (code < 20 || code > 37)
+		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
+		&& code != 204 && code != 207 && code != 408 && code != 999)
 	{
 		return true;			// we don't yet simulate most M codes
 	}
@@ -267,7 +270,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
-			CancelPrint();
+			CancelPrint(true, true);
 			if (wasPaused)
 			{
 				reply.copy("Print cancelled");
@@ -443,7 +446,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 23: // Set file to print
 	case 32: // Select file and start SD print
-		// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functoinality.
+		// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functionality.
 		if (fileGCode->OriginalMachineState().fileState.IsLive() && (&gb) != fileGCode)
 		{
 			reply.copy("Cannot set file to print, because a file is already being printed");
@@ -481,6 +484,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				else
 				{
 					reply.printf("Failed to open file %s", filename);
+					error = true;
 				}
 			}
 		}
@@ -617,7 +621,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-		// For case 32, see case 24
+		// For case 32, see case 23
 
 	case 36:	// Return file information
 		if (!LockFileSystem(gb))									// getting file info takes several calls and isn't reentrant
@@ -638,45 +642,83 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 37:	// Simulation mode on/off
-		if (gb.Seen('S'))
+	case 37:	// Simulation mode on/off, or simulate a whole file
 		{
-			if (!LockMovementAndWaitForStandstill(gb))
+			bool seen = false;
+			uint32_t newSimulationMode;
+			String<FILENAME_LENGTH> simFileName;
+
+			gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
+			if (seen)
 			{
-				return false;
+				newSimulationMode = 1;			// default to simulation mode 1 when a filename is given
+			}
+			else
+			{
+				gb.TryGetUIValue('S', newSimulationMode, seen);
 			}
 
-			bool wasSimulating = (simulationMode != 0);
-			simulationMode = (uint8_t)gb.GetIValue();
-			reprap.GetMove().Simulate(simulationMode);
+			if (seen && newSimulationMode != simulationMode)
+			{
+				if (!LockMovementAndWaitForStandstill(gb))
+				{
+					return false;
+				}
 
-			if (simulationMode != 0)
-			{
-				simulationTime = 0.0;
-				if (!wasSimulating)
+				const bool wasSimulating = (simulationMode != 0);
+				simulationMode = (uint8_t)newSimulationMode;
+				reprap.GetMove().Simulate(simulationMode);
+				if (simFileName.IsEmpty() || simulationMode == 0)
 				{
-					// Starting a new simulation, so save the current position
-					reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-					simulationRestorePoint.feedRate = gb.MachineState().feedrate;
+					// It's a simulation mode change command
+					exitSimulationWhenFileComplete = false;
+					if (simulationMode != 0)
+					{
+						simulationTime = 0.0;
+						if (!wasSimulating)
+						{
+							// Starting a new simulation, so save the current position
+							reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+							simulationRestorePoint.feedRate = gb.MachineState().feedrate;
+						}
+					}
+					else if (wasSimulating)
+					{
+						EndSimulation(&gb);
+					}
+				}
+				else
+				{
+					// Simulate a whole file and then stop simulating
+					simulationTime = 0.0;
+					if (!wasSimulating)
+					{
+						// Starting a new simulation, so save the current position
+						reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
+						simulationRestorePoint.feedRate = gb.MachineState().feedrate;
+					}
+					QueueFileToPrint(simFileName.c_str());
+					if (fileToPrint.IsLive())
+					{
+						exitSimulationWhenFileComplete = true;
+						reprap.GetPrintMonitor().StartingPrint(simFileName.c_str());
+						StartPrinting();
+						reply.printf("Simulating print of file %s", simFileName.c_str());
+					}
+					else
+					{
+						simulationMode = 0;
+						reprap.GetMove().Simulate(0);
+						reply.printf("Failed to open file %s", simFileName.c_str());
+						error = true;
+					}
 				}
 			}
-			else if (wasSimulating)
+			else
 			{
-				// Ending a simulation, so restore the position
-				RestorePosition(simulationRestorePoint, gb);
-				ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-				reprap.GetMove().SetNewPosition(simulationRestorePoint.moveCoords, true);
-				for (size_t i = 0; i < DRIVES; ++i)
-				{
-					moveBuffer.coords[i] = simulationRestorePoint.moveCoords[i];
-				}
-				gb.MachineState().feedrate = simulationRestorePoint.feedRate;
+				reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
+						(simulationMode != 0) ? "on" : "off", reprap.GetMove().GetSimulationTime(), simulationTime);
 			}
-		}
-		else
-		{
-			reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
-					(simulationMode != 0) ? "on" : "off", reprap.GetMove().GetSimulationTime(), simulationTime);
 		}
 		break;
 
@@ -952,7 +994,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				tool = reprap.GetCurrentOrDefaultTool();
 			}
 
-			SetToolHeaters(tool, temperature);
+			if (simulationMode == 0)
+			{
+				SetToolHeaters(tool, temperature);
+			}
 			if (tool == nullptr)
 			{
 				break;			// SetToolHeaters will already have generated an error message
@@ -968,7 +1013,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 
 				newToolNumber = tool->Number();
-				toolChangeParam = DefaultToolChangeParam;
+				toolChangeParam = (simulationMode == 0) ? 0 : DefaultToolChangeParam;
 				gb.SetState(GCodeState::m109ToolChange0);
 			}
 			else
@@ -1713,17 +1758,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 291:	// Display message, optionally wait for acknowledgement
 		{
-			char titleBuffer[MESSAGE_LENGTH];
+			String<MESSAGE_LENGTH> title;
 			bool seen = false;
-			gb.TryGetQuotedString('R', titleBuffer, ARRAY_SIZE(titleBuffer), seen);
-			if (!seen)
-			{
-				// Title is optional
-				titleBuffer[0] = 0;
-			}
+			gb.TryGetQuotedString('R', title.GetRef(), seen);
 
-			char messageBuffer[MESSAGE_LENGTH];
-			gb.TryGetQuotedString('P', messageBuffer, ARRAY_SIZE(messageBuffer), seen);
+			String<MESSAGE_LENGTH> message;
+			gb.TryGetQuotedString('P', message.GetRef(), seen);
 			if (seen)
 			{
 				int32_t sParam = 1;
@@ -1765,7 +1805,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				// TODO: consider displaying the message box on all relevant devices. Acknowledging any one of them needs to clear them all.
 				// Currently, if mt is http or aux or generic, we display the message box both in DWC and on PanelDue.
 				const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
-				platform.SendAlert(mt, messageBuffer, titleBuffer, (int)sParam, tParam, axisControls);
+				platform.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls);
 			}
 		}
 		break;
@@ -2151,20 +2191,30 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 550: // Set/report machine name
-		if (gb.Seen('P'))
 		{
-			reprap.SetName(gb.GetString());
-		}
-		else
-		{
-			reply.printf("RepRap name: %s", reprap.GetName());
+			String<MACHINE_NAME_LENGTH> name;
+			bool seen = false;
+			gb.TryGetPossiblyQuotedString('P', name.GetRef(), seen);
+			if (seen)
+			{
+				reprap.SetName(name.c_str());
+			}
+			else
+			{
+				reply.printf("RepRap name: %s", reprap.GetName());
+			}
 		}
 		break;
 
 	case 551: // Set password (no option to report it)
-		if (gb.Seen('P'))
 		{
-			reprap.SetPassword(gb.GetString());
+			String<PASSWORD_LENGTH> password;
+			bool seen = false;
+			gb.TryGetPossiblyQuotedString('P', password.GetRef(), seen);
+			if (seen)
+			{
+				reprap.SetPassword(password.c_str());
+			}
 		}
 		break;
 
@@ -3116,10 +3166,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			WirelessConfigurationData config;
 			memset(&config, 0, sizeof(config));
-			bool ok = gb.GetQuotedString(config.ssid, ARRAY_SIZE(config.ssid));
+			String<ARRAY_SIZE(config.ssid)> ssid;
+			bool ok = gb.GetQuotedString(ssid.GetRef());
 			if (ok)
 			{
-				ok = gb.Seen('P') && gb.GetQuotedString(config.password, ARRAY_SIZE(config.password));
+				SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
+				String<ARRAY_SIZE(config.password)> password;
+				ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
+				if (ok)
+				{
+					SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+				}
 			}
 			if (ok && gb.Seen('I'))
 			{
@@ -3207,11 +3264,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 588:	// Forget WiFi network
 		if (gb.Seen('S'))
 		{
-			uint32_t ssid[NumDwords(SsidLength)];
-			if (gb.GetQuotedString(reinterpret_cast<char*>(ssid), SsidLength))
+			String<SsidLength> ssidText;
+			if (gb.GetQuotedString(ssidText.GetRef()))
 			{
-				const char* const pssid = reinterpret_cast<const char*>(ssid);
-				if (strcmp(pssid, "*") == 0)
+				if (strcmp(ssidText.c_str(), "*") == 0)
 				{
 					const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
 					if (rslt != ResponseEmpty)
@@ -3222,7 +3278,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid, SsidLength, nullptr, 0);
+					uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
+					memcpy(ssid32, ssidText.c_str(), SsidLength);
+					const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
 					if (rslt != ResponseEmpty)
 					{
 						reply.copy("Failed to remove SSID from remembered list");
@@ -3243,19 +3301,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			WirelessConfigurationData config;
 			memset(&config, 0, sizeof(config));
-			bool ok = gb.GetQuotedString(config.ssid, ARRAY_SIZE(config.ssid));
+			String<SsidLength> ssid;
+			bool ok = gb.GetQuotedString(ssid.GetRef());
 			if (ok)
 			{
-				if (strcmp(config.ssid, "*") == 0)
+				if (strcmp(ssid.c_str(), "*") == 0)
 				{
 					// Delete the access point details
 					memset(&config, 0xFF, sizeof(config));
 				}
 				else
 				{
-					ok = gb.Seen('P') && gb.GetQuotedString(config.password, ARRAY_SIZE(config.password));
+					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
+					String<ARRAY_SIZE(config.password)> password;
+					ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
 					if (ok)
 					{
+						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 						if (gb.Seen('I'))
 						{
 							ok = gb.GetIPAddress(config.ip);
@@ -3980,16 +4042,15 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		newToolNumber = gb.GetIValue();
 		newToolNumber += gb.GetToolNumberAdjust();
 
-		if (simulationMode == 0)						// we don't yet simulate any T codes
+		const Tool * const oldTool = reprap.GetCurrentTool();
+		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
+		if (oldTool == nullptr || oldTool->Number() != newToolNumber)
 		{
-			const Tool * const oldTool = reprap.GetCurrentTool();
-			// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
-			if (oldTool == nullptr || oldTool->Number() != newToolNumber)
-			{
-				toolChangeParam = gb.Seen('P') ? gb.GetIValue() : DefaultToolChangeParam;
-				gb.SetState(GCodeState::toolChange0);
-				return true;							// proceeding with state machine, so don't unlock or send a reply
-			}
+			toolChangeParam = (simulationMode != 0) ? 0
+								: gb.Seen('P') ? gb.GetIValue()
+									: DefaultToolChangeParam;
+			gb.SetState(GCodeState::toolChange0);
+			return true;							// proceeding with state machine, so don't unlock or send a reply
 		}
 	}
 	else

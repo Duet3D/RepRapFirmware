@@ -34,15 +34,16 @@ public:
 	bool IsReachable(float x, float y) const override;
 	bool LimitPosition(float position[], size_t numAxes, AxesBitmap axesHomed) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
+	size_t NumHomingButtons(size_t numVisibleAxes) const override;
 	const char* HomingButtonNames() const override { return "PDZUVW"; }
 	HomingMode GetHomingMode() const override { return homeIndividualMotors; }
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const override;
-	const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const override;
+	const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const override;
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 
 private:
-	static constexpr float DefaultSegmentsPerSecond = 200.0;
+	static constexpr float DefaultSegmentsPerSecond = 100.0;
 	static constexpr float DefaultMinSegmentSize = 0.2;
 	static constexpr float DefaultProximalArmLength = 100.0;
 	static constexpr float DefaultDistalArmLength = 100.0;
@@ -66,10 +67,11 @@ private:
 	float yOffset;									// where bed Y=0 is relative to the proximal joint
 
 	// Derived parameters
-	float minRadius;
-	float maxRadius;
+	float minRadius, minRadiusSquared;
+	float maxRadius, maxRadiusSquared;
 	float proximalArmLengthSquared;
 	float distalArmLengthSquared;
+	float twoPd;
 
 	// State variables
 	mutable bool isDefaultArmMode;					// this should be moved into class Move when it knows about different arm modes

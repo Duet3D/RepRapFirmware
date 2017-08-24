@@ -128,7 +128,7 @@ public:
 	// If we can proceed with homing some axes, return the name of the homing file to be called. Optionally, update 'alreadyHomed' to indicate
 	// that some additional axes should be considered not homed.
 	// If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-	virtual const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const;
+	virtual const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const;
 
 	// This function is called from the step ISR when an endstop switch is triggered during homing.
 	// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.

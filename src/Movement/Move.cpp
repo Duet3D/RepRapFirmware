@@ -231,7 +231,7 @@ void Move::Spin()
 			DDA *dda = ddaRingGetPointer;
 			if (dda->GetState() == DDA::provisional)
 			{
-				dda->Prepare();
+				dda->Prepare(simulationMode);
 			}
 			if (dda->GetState() == DDA::frozen)
 			{
@@ -286,7 +286,7 @@ void Move::Spin()
 				&& preparedCount < DdaRingLength/2					// but don't prepare more than half the ring
 			  )
 		{
-			cdda->Prepare();
+			cdda->Prepare(simulationMode);
 			preparedTime += cdda->GetTimeLeft();
 			++preparedCount;
 			cdda = cdda->GetNext();

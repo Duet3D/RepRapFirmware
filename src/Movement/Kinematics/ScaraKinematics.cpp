@@ -8,6 +8,7 @@
 #include "ScaraKinematics.h"
 #include "RepRap.h"
 #include "Platform.h"
+#include "Storage/MassStorage.h"
 #include "GCodes/GCodeBuffer.h"
 #include "Movement/DDA.h"
 
@@ -36,7 +37,7 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 	// No need to limit x,y to reachable positions here, we already did that in class GCodes
 	const float x = machinePos[X_AXIS] + xOffset;
 	const float y = machinePos[Y_AXIS] + yOffset;
-	const float cosPsi = (fsquare(x) + fsquare(y) - proximalArmLengthSquared - distalArmLengthSquared) / (2.0f * proximalArmLength * distalArmLength);
+	const float cosPsi = (fsquare(x) + fsquare(y) - proximalArmLengthSquared - distalArmLengthSquared) / twoPd;
 
 	// SCARA position is undefined if abs(SCARA_C2) >= 1. In reality abs(SCARA_C2) >0.95 can be problematic.
 	const float square = 1.0f - fsquare(cosPsi);
@@ -46,7 +47,7 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 	}
 
 	const float sinPsi = sqrtf(square);
-	float psi = acos(cosPsi);
+	float psi = acosf(cosPsi);
 	const float SCARA_K1 = proximalArmLength + distalArmLength * cosPsi;
 	const float SCARA_K2 = distalArmLength * sinPsi;
 	float theta;
@@ -182,9 +183,10 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 	bool limited = false;
 	float x = coords[X_AXIS] + xOffset;
 	float y = coords[Y_AXIS] + yOffset;
-	const float r = sqrtf(fsquare(x) + fsquare(y));
-	if (r < minRadius)
+	const float r2 = fsquare(x) + fsquare(y);
+	if (r2 < minRadiusSquared)
 	{
+		const float r = sqrtf(r2);
 		// The user may have specified x=0 y=0 so allow for this
 		if (r < 1.0)
 		{
@@ -198,8 +200,9 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 		}
 		limited = true;
 	}
-	else if (r > maxRadius)
+	else if (r2 > maxRadiusSquared)
 	{
+		const float r = sqrtf(r2);
 		x *= maxRadius/r;
 		y *= maxRadius/r;
 		limited = true;
@@ -243,15 +246,48 @@ AxesBitmap ScaraKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 	return g92Axes;
 }
 
+size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const
+{
+	const MassStorage *storage = reprap.GetPlatform().GetMassStorage();
+	if (!storage->FileExists(SYS_DIR, HomeProximalFileName))
+	{
+		return 0;
+	}
+	if (!storage->FileExists(SYS_DIR, HomeDistalFileName))
+	{
+		return 1;
+	}
+	if (!storage->FileExists(SYS_DIR, StandardHomingFileNames[Z_AXIS]))
+	{
+		return 2;
+	}
+	return numVisibleAxes;
+}
+
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
-const char* ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap& alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
+const char* ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
 {
+	// Ask the base class which homing file we should call first
 	const char* ret = Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, mustHomeFirst);
-	return (ret == StandardHomingFileNames[X_AXIS]) ? HomeProximalFileName
-			: (ret == StandardHomingFileNames[Y_AXIS]) ? HomeDistalFileName
-				: ret;
+	// Change the returned name if it is X or Y
+	if (ret == StandardHomingFileNames[X_AXIS])
+	{
+		ret = HomeProximalFileName;
+	}
+	else if (ret == StandardHomingFileNames[Y_AXIS])
+	{
+		ret = HomeDistalFileName;
+	}
+
+	// Some SCARA printers cannot have individual axes homed safely. So it the user doesn't provide the homing file for an axis, default to homeall.
+	const MassStorage *storage = reprap.GetPlatform().GetMassStorage();
+	if (!storage->FileExists(SYS_DIR, ret))
+	{
+		ret = HomeAllFileName;
+	}
+	return ret;
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.
@@ -278,13 +314,24 @@ void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 // Recalculate the derived parameters
 void ScaraKinematics::Recalc()
 {
-	minRadius = (proximalArmLength + distalArmLength * min<float>(cosf(phiLimits[0] * DegreesToRadians), cosf(phiLimits[1] * DegreesToRadians))) * 1.005;
-	maxRadius = ((phiLimits[0] < 0.0 && phiLimits[1] > 0.0)
-					? (proximalArmLength + distalArmLength)
-						: (proximalArmLength + distalArmLength * max<float>(cosf(phiLimits[0] * DegreesToRadians), cosf(phiLimits[1] * DegreesToRadians)))
-				) * 0.995;
 	proximalArmLengthSquared = fsquare(proximalArmLength);
 	distalArmLengthSquared = fsquare(distalArmLength);
+	twoPd = proximalArmLength * distalArmLength * 2.0f;
+
+	minRadius = (proximalArmLength + distalArmLength * min<float>(cosf(phiLimits[0] * DegreesToRadians), cosf(phiLimits[1] * DegreesToRadians))) * 1.005;
+	if (phiLimits[0] < 0.0 && phiLimits[1] > 0.0)
+	{
+		// Zero distal arm angle is reachable
+		maxRadius = proximalArmLength + distalArmLength;
+	}
+	else
+	{
+		const float minAngle = min<float>(fabs(phiLimits[0]), fabs(phiLimits[1])) * DegreesToRadians;
+		maxRadius = sqrtf(proximalArmLengthSquared + distalArmLengthSquared + (twoPd * cosf(minAngle)));
+	}
+	maxRadius *= 0.995;
+	minRadiusSquared = fsquare(minRadius);
+	maxRadiusSquared = fsquare(maxRadius);
 }
 
 // End

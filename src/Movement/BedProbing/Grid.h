@@ -87,7 +87,7 @@ private:
 
 	GridDefinition def;
 	float gridHeights[MaxGridProbePoints];							// The Z coordinates of the points on the bed that were probed
-	uint32_t gridHeightSet[MaxGridProbePoints/32];					// Bitmap of which heights are set
+	uint32_t gridHeightSet[(MaxGridProbePoints + 31)/32];			// Bitmap of which heights are set
 	bool useMap;													// True to do bed compensation
 
 	uint32_t GetMapIndex(uint32_t xIndex, uint32_t yIndex) const { return (yIndex * def.NumXpoints()) + xIndex; }

@@ -169,7 +169,7 @@ void HeightMap::SetGrid(const GridDefinition& gd)
 
 void HeightMap::ClearGridHeights()
 {
-	for (size_t i = 0; i < MaxGridProbePoints/32; ++i)
+	for (size_t i = 0; i < ARRAY_SIZE(gridHeightSet); ++i)
 	{
 		gridHeightSet[i] = 0;
 	}

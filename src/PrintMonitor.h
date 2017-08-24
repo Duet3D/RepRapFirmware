@@ -99,9 +99,7 @@ class PrintMonitor
 		float GetFirstLayerDuration() const;
 		float GetFirstLayerHeight() const;
 
-#ifdef DUET_NG
 		const char *GetPrintingFilename() const { return (isPrinting) ? filenameBeingPrinted : nullptr; }
-#endif
 
 	private:
 		Platform& platform;

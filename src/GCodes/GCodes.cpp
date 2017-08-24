@@ -173,6 +173,7 @@ void GCodes::Reset()
 	triggersPending = 0;
 
 	simulationMode = 0;
+	exitSimulationWhenFileComplete = false;
 	simulationTime = 0.0;
 	isPaused = false;
 #ifdef DUET_NG
@@ -265,7 +266,7 @@ void GCodes::Spin()
 			{
 				if (gb.MachineState().previous == nullptr)
 				{
-					CancelPrint();
+					CancelPrint(false, false);
 				}
 				else
 				{
@@ -398,7 +399,7 @@ void GCodes::Spin()
 
 		case GCodeState::toolChange2:		// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 		case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
-			reprap.SelectTool(newToolNumber);
+			reprap.SelectTool(newToolNumber, simulationMode != 0);
 			GetCurrentUserPosition();									// get the actual position of the new tool
 
 			gb.AdvanceState();
@@ -459,9 +460,16 @@ void GCodes::Spin()
 			if (LockMovementAndWaitForStandstill(gb))
 			{
 #ifdef DUET_NG
-				reprap.GetHeat().SuspendHeaters(false);			// resume the heaters, we may have turned them off while we executed the pause macro
+				if (isAutoPaused)
+				{
+					platform.Message(GENERIC_MESSAGE, "Print auto-paused due to low voltage\n");
+					reprap.GetHeat().SuspendHeaters(false);			// resume the heaters, we may have turned them off while we executed the pause macro
+				}
+				else
 #endif
-				reply.copy("Printing paused");
+				{
+					reply.copy("Printing paused");
+				}
 				gb.SetState(GCodeState::normal);
 			}
 			break;
@@ -1211,24 +1219,13 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 
 		if (gb.MachineState().previous == nullptr)
 		{
-			// Finished printing SD card file
+			// Finished printing SD card file.
+			// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 			// Don't close the file until all moves have been completed, in case the print gets paused.
 			// Also, this keeps the state as 'Printing' until the print really has finished.
 			if (LockMovementAndWaitForStandstill(gb))
 			{
-				fileInput->Reset();
-				fd.Close();
-				UnlockAll(gb);
-				reprap.GetPrintMonitor().StoppedPrint();
-				pausePending = false;
-#ifdef DUET_NG
-				platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
-#endif
-				if (platform.Emulating() == marlin)
-				{
-					// Pronterface expects a "Done printing" message
-					HandleReply(gb, false, "Done printing file");
-				}
+				CancelPrint(true, true);
 			}
 		}
 		else
@@ -1256,6 +1253,15 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 			}
 		}
 	}
+}
+
+// Restore positions etc. when exiting simulation mode
+void GCodes::EndSimulation(GCodeBuffer *gb)
+{
+	// Ending a simulation, so restore the position
+	RestorePosition(simulationRestorePoint, gb);
+	ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
+	reprap.GetMove().SetNewPosition(simulationRestorePoint.moveCoords, true);
 }
 
 // Check for and execute triggers
@@ -1489,7 +1495,6 @@ bool GCodes::AutoPause()
 		reprap.GetHeat().SuspendHeaters(true);			// turn heaters off to conserve power for the motors to execute the pause
 		DoPause(*autoPauseGCode, true);
 		SaveResumeInfo();
-		platform.Message(GENERIC_MESSAGE, "Print auto-paused due to low voltage\n");
 	}
 	return true;
 }
@@ -1503,7 +1508,7 @@ bool GCodes::AutoShutdown()
 		{
 			return false;
 		}
-		CancelPrint();
+		CancelPrint(false, false);
 		platform.Message(GENERIC_MESSAGE, "Print cancelled due to low voltage\n");
 		return true;
 	}
@@ -1850,7 +1855,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinate
 	if (moveBuffer.moveType == 0)
 	{
 		// Regular move. If it's a delta or SCARA printer, all axes must be homed first.
-		if (!AllAxesAreHomed() && (kinType == KinematicsType::linearDelta || kinType == KinematicsType::scara))
+		if (!AllAxesAreHomed() && (kinType == KinematicsType::linearDelta || kinType == KinematicsType::scara) && simulationMode == 0)
 		{
 			// The user may be attempting to move a delta printer to an XYZ position before homing the axes
 			// This may be damaging and is almost certainly a user mistake, so ignore the move. But allow extruder-only moves.
@@ -2622,28 +2627,28 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 {
 	reprap.GetMove().SetIdentityTransform();					// stop using old-style bed compensation and clear the height map
 
-	char heightMapFileName[FILENAME_LENGTH];
+	String<FILENAME_LENGTH> heightMapFileName;
 	bool seen = false;
-	gb.TryGetQuotedString('P', heightMapFileName, ARRAY_SIZE(heightMapFileName), seen);
+	gb.TryGetQuotedString('P', heightMapFileName.GetRef(), seen);
 	if (!seen)
 	{
-		strcpy(heightMapFileName, DefaultHeightMapFile);
+		heightMapFileName.GetRef().copy(DefaultHeightMapFile);
 	}
 
-	FileStore * const f = platform.GetFileStore(platform.GetSysDir(), heightMapFileName, false);
+	FileStore * const f = platform.GetFileStore(platform.GetSysDir(), heightMapFileName.c_str(), false);
 	if (f == nullptr)
 	{
-		reply.printf("Height map file %s not found", heightMapFileName);
+		reply.printf("Height map file %s not found", heightMapFileName.c_str());
 		return true;
 	}
 
-	reply.printf("Failed to load height map from file %s: ", heightMapFileName);	// set up error message to append to
+	reply.printf("Failed to load height map from file %s: ", heightMapFileName.c_str());	// set up error message to append to
 	HeightMap& heightMap = reprap.GetMove().AccessBedProbeGrid();
 	const bool err = heightMap.LoadFromFile(f, reply);
 	f->Close();
 	if (err)
 	{
-		heightMap.ClearGridHeights();			// make sure we don't end up with a partial height map
+		heightMap.ClearGridHeights();							// make sure we don't end up with a partial height map
 	}
 	else
 	{
@@ -2658,19 +2663,19 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 // Called by G29 and M374. Both use the P parameter to provide the filename.
 bool GCodes::SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const
 {
-	char heightMapFileName[FILENAME_LENGTH];
+	String<FILENAME_LENGTH> heightMapFileName;
 	bool seen = false;
-	gb.TryGetQuotedString('P', heightMapFileName, ARRAY_SIZE(heightMapFileName), seen);
+	gb.TryGetQuotedString('P', heightMapFileName.GetRef(), seen);
 	if (!seen)
 	{
-		strcpy(heightMapFileName, DefaultHeightMapFile);
+		heightMapFileName.GetRef().copy(DefaultHeightMapFile);
 	}
 
-	FileStore * const f = platform.GetFileStore(platform.GetSysDir(), heightMapFileName, true);
+	FileStore * const f = platform.GetFileStore(platform.GetSysDir(), heightMapFileName.c_str(), true);
 	bool err;
 	if (f == nullptr)
 	{
-		reply.catf("Failed to create height map file %s", heightMapFileName);
+		reply.catf("Failed to create height map file %s", heightMapFileName.c_str());
 		err = true;
 	}
 	else
@@ -2679,12 +2684,12 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const
 		f->Close();
 		if (err)
 		{
-			platform.GetMassStorage()->Delete(platform.GetSysDir(), heightMapFileName);
-			reply.catf("Failed to save height map to file %s", heightMapFileName);
+			platform.GetMassStorage()->Delete(platform.GetSysDir(), heightMapFileName.c_str());
+			reply.catf("Failed to save height map to file %s", heightMapFileName.c_str());
 		}
 		else
 		{
-			reply.catf("Height map saved to file %s", heightMapFileName);
+			reply.catf("Height map saved to file %s", heightMapFileName.c_str());
 		}
 	}
 	return err;
@@ -2854,7 +2859,7 @@ void GCodes::QueueFileToPrint(const char* fileName)
 		// Cancel current print if there is any
 		if (!reprap.GetPrintMonitor().IsPrinting())
 		{
-			CancelPrint();
+			CancelPrint(false, true);
 		}
 
 		fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
@@ -3081,19 +3086,15 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 	}
 
 	// Check tool name
-	char name[ToolNameLength];
+	String<ToolNameLength> name;
 	if (gb.Seen('S'))
 	{
-		if (!gb.GetQuotedString(name, ARRAY_SIZE(name)))
+		if (!gb.GetQuotedString(name.GetRef()))
 		{
 			reply.copy("Invalid tool name");
 			return true;
 		}
 		seen = true;
-	}
-	else
-	{
-		strcpy(name, "");
 	}
 
 	// Check drives
@@ -3185,7 +3186,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			Tool* const tool = Tool::Create(toolNumber, name, drives, dCount, heaters, hCount, xMap, yMap, fanMap, reply);
+			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, reply);
 			if (tool == nullptr)
 			{
 				return true;
@@ -3584,6 +3585,12 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 	for (size_t h = 0; h < tool->HeaterCount(); h++)
 	{
 		active[h] = temperature;
+		if (tool->GetState() == ToolState::standby)
+		{
+			// Using M104 to set the temperature of a tool that is on standby.
+			// Cura uses M104 to preheat the next tool shortly before a tool change, so set the standby temperature too in this case.
+			standby[h] = temperature;
+		}
 	}
 	tool->SetVariables(standby, active);
 }
@@ -3671,7 +3678,7 @@ bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 // Load the specified filament into a tool
 bool GCodes::LoadFilament(GCodeBuffer& gb, StringRef& reply, bool &error)
 {
-	Tool *tool = reprap.GetCurrentTool();
+	Tool * const tool = reprap.GetCurrentTool();
 	if (tool == nullptr)
 	{
 		reply.copy("No tool selected");
@@ -3688,22 +3695,22 @@ bool GCodes::LoadFilament(GCodeBuffer& gb, StringRef& reply, bool &error)
 
 	if (gb.Seen('S'))
 	{
-		char filamentName[FilamentNameLength];
-		if (!gb.GetQuotedString(filamentName, ARRAY_SIZE(filamentName)) || StringEquals(filamentName, ""))
+		String<FilamentNameLength> filamentName;
+		if (!gb.GetQuotedString(filamentName.GetRef()) || filamentName.IsEmpty())
 		{
 			reply.copy("Invalid filament name");
 			error = true;
 			return true;
 		}
 
-		if (StringContains(filamentName, ",") >= 0)
+		if (StringContains(filamentName.c_str(), ",") >= 0)
 		{
 			reply.copy("Filament names must not contain commas");
 			error = true;
 			return true;
 		}
 
-		if (StringEquals(filamentName, tool->GetFilament()->GetName()))
+		if (StringEquals(filamentName.c_str(), tool->GetFilament()->GetName()))
 		{
 			// Filament already loaded - nothing to do
 			return true;
@@ -3716,24 +3723,24 @@ bool GCodes::LoadFilament(GCodeBuffer& gb, StringRef& reply, bool &error)
 			return true;
 		}
 
-		if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(FILAMENTS_DIRECTORY, filamentName))
+		if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(FILAMENTS_DIRECTORY, filamentName.c_str()))
 		{
 			reply.copy("Filament configuration directory not found");
 			error = true;
 			return true;
 		}
 
-		if (Filament::IsInUse(filamentName))
+		if (Filament::IsInUse(filamentName.c_str()))
 		{
 			reply.copy("One filament type can be only assigned to a single tool");
 			error = true;
 			return true;
 		}
 
-		SafeStrncpy(filamentToLoad, filamentName, ARRAY_SIZE(filamentToLoad));
+		SafeStrncpy(filamentToLoad, filamentName.c_str(), ARRAY_SIZE(filamentToLoad));
 		gb.SetState(GCodeState::loadingFilament);
 
-		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName, LOAD_FILAMENT_G);
+		scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filamentName.c_str(), LOAD_FILAMENT_G);
 		DoFileMacro(gb, scratchString.Pointer(), true);
 		return true;
 	}
@@ -3786,10 +3793,10 @@ float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const
 
 // Cancel the current SD card print.
 // This is called from Pid.cpp when there is a heater fault, and from elsewhere in this module.
-void GCodes::CancelPrint()
+void GCodes::CancelPrint(bool printStats, bool deleteResumeFile)
 {
 	segmentsLeft = 0;
-	isPaused = false;
+	isPaused = pausePending = false;
 
 	FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
 
@@ -3801,10 +3808,49 @@ void GCodes::CancelPrint()
 		fileBeingPrinted.Close();
 	}
 
-	reprap.GetPrintMonitor().StoppedPrint();
-
 	reprap.GetMove().ResetMoveCounters();
 	codeQueue->Clear();
+
+	UnlockAll(*fileGCode);
+
+	const char *printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
+	if (printingFilename == nullptr)
+	{
+		printingFilename = "(unknown)";
+	}
+
+	if (exitSimulationWhenFileComplete)
+	{
+		exitSimulationWhenFileComplete = false;
+		simulationMode = 0;
+		reprap.GetMove().Simulate(simulationMode);
+		EndSimulation(nullptr);
+		const uint32_t simMinutes = lrintf((reprap.GetMove().GetSimulationTime() + simulationTime)/60.0);
+		platform.MessageF(GENERIC_MESSAGE, "File %s will print in %uh %um plus heating time\n",
+								printingFilename, simMinutes/60u, simMinutes % 60u);
+	}
+	else if (reprap.GetPrintMonitor().IsPrinting())
+	{
+		if (platform.Emulating() == marlin)
+		{
+			// Pronterface expects a "Done printing" message
+			platform.Message(HOST_MESSAGE, "Done printing file");
+		}
+		if (printStats)
+		{
+			const uint32_t printMinutes = lrintf(reprap.GetPrintMonitor().GetPrintDuration()/60.0);
+			platform.MessageF(GENERIC_MESSAGE, "File %s print time was %uh %um\n",
+				printingFilename, printMinutes/60u, printMinutes % 60u);
+		}
+	}
+
+	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details because it clears the filename
+#ifdef DUET_NG
+	if (deleteResumeFile)
+	{
+		platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
+	}
+#endif
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures
@@ -3854,13 +3900,17 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const
 }
 
 // Restore user position form a restore point
-void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer& gb)
+void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb)
 {
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		currentUserPosition[axis] = rp.moveCoords[axis];
 	}
-	gb.MachineState().feedrate = rp.feedRate;
+	if (gb != nullptr)
+	{
+		gb->MachineState().feedrate = rp.feedRate;
+	}
+
 #if SUPPORT_IOBITS
 	moveBuffer.ioBits = rp.ioBits;
 #endif

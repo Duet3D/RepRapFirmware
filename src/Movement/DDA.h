@@ -47,7 +47,7 @@ public:
 	void SetPrevious(DDA *p) { prev = p; }
 	void Complete() { state = completed; }
 	bool Free();
-	void Prepare();													// Calculate all the values and freeze this DDA
+	void Prepare(uint8_t simMode);									// Calculate all the values and freeze this DDA
 	float CalcTime() const;											// Calculate the time needed for this move (used for simulation)
 	bool HasStepError() const;
 	bool CanPauseAfter() const { return canPauseAfter; }

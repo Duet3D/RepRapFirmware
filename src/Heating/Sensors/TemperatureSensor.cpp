@@ -68,12 +68,12 @@ void TemperatureSensor::CopyBasicHeaterDetails(unsigned int heater, StringRef& r
 // Configure then heater name, if it is provided
 void TemperatureSensor::TryConfigureHeaterName(GCodeBuffer& gb, bool& seen)
 {
-	char buf[MaxHeaterNameLength + 1];
+	String<MaxHeaterNameLength> buf;
 	bool localSeen = false;
-	gb.TryGetQuotedString('S', buf, ARRAY_SIZE(buf), localSeen);
+	gb.TryGetQuotedString('S', buf.GetRef(), localSeen);
 	if (localSeen)
 	{
-		SetHeaterName(buf);
+		SetHeaterName(buf.c_str());
 		seen = true;
 	}
 }

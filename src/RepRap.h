@@ -56,7 +56,7 @@ public:
 
 	void AddTool(Tool* t);
 	void DeleteTool(Tool* t);
-	void SelectTool(int toolNumber);
+	void SelectTool(int toolNumber, bool simulating);
 	void StandbyTool(int toolNumber);
 	Tool* GetCurrentTool() const;
 	Tool* GetTool(int toolNumber) const;
@@ -108,7 +108,6 @@ public:
 	bool WriteToolSettings(FileStore *f) const;				// Save some resume information
 #endif
 
-	static void CopyParameterText(const char* src, char *dst, size_t length);
 	static uint32_t DoDivide(uint32_t a, uint32_t b);		// helper function for diagnostic tests
 	static uint32_t ReadDword(const char* p);				// helper function for diagnostic tests
 

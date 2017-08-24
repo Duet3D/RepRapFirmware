@@ -18,7 +18,7 @@ size_t StringRef::strlen() const
 	return strnlen(p, len - 1);
 }
 
-int StringRef::printf(const char *fmt, ...)
+int StringRef::printf(const char *fmt, ...) const
 {
 	va_list vargs;
 	va_start(vargs, fmt);
@@ -27,12 +27,12 @@ int StringRef::printf(const char *fmt, ...)
 	return ret;
 }
 
-int StringRef::vprintf(const char *fmt, va_list vargs)
+int StringRef::vprintf(const char *fmt, va_list vargs) const
 {
 	return vsnprintf(p, len, fmt, vargs);
 }
 
-int StringRef::catf(const char *fmt, ...)
+int StringRef::catf(const char *fmt, ...) const
 {
 	size_t n = strlen();
 	if (n + 1 < len)		// if room for at least 1 more character and a null
@@ -47,7 +47,7 @@ int StringRef::catf(const char *fmt, ...)
 }
 
 // This is quicker than printf for printing constant strings
-size_t StringRef::copy(const char* src)
+size_t StringRef::copy(const char* src) const
 {
 	size_t length = strnlen(src, len - 1);
 	memcpy(p, src, length);
@@ -56,7 +56,7 @@ size_t StringRef::copy(const char* src)
 }
 
 // This is quicker than catf for printing constant strings
-size_t StringRef::cat(const char* src)
+size_t StringRef::cat(const char* src) const
 {
 	size_t length = strlen();
 	size_t toCopy = strnlen(src, len - length - 1);
@@ -66,8 +66,8 @@ size_t StringRef::cat(const char* src)
 	return length;
 }
 
-// Append a character
-size_t StringRef::cat(char c)
+// Append a character and return the resulting length
+size_t StringRef::cat(char c) const
 {
 	size_t length = strlen();
 	if (length + 1 < len)
@@ -76,6 +76,18 @@ size_t StringRef::cat(char c)
 		p[length] = 0;
 	}
 	return length;
+}
+
+// Remove trailing spaces from the string and return its new length
+size_t StringRef::StripTrailingSpaces() const
+{
+	size_t slen = strlen();
+	while (slen != 0 && p[slen - 1] == ' ')
+	{
+		--slen;
+		p[slen] = 0;
+	}
+	return slen;
 }
 
 // End

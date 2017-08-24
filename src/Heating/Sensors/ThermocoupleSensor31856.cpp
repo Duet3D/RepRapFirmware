@@ -79,11 +79,11 @@ bool ThermocoupleSensor31856::Configure(unsigned int mCode, unsigned int heater,
 			}
 		}
 
-		char buf[2];
-		if (gb.TryGetQuotedString('T', buf, 2, seen))
+		String<2> buf;
+		if (gb.TryGetQuotedString('T', buf.GetRef(), seen))
 		{
 			const char *p;
-			if (buf[1] == 0 && buf[0] != 0 && (p = strchr(TypeLetters, buf[0])) != nullptr)
+			if (buf.strlen() == 1 && (p = strchr(TypeLetters, buf.c_str()[0])) != nullptr)
 			{
 				thermocoupleType = p - TypeLetters;
 			}

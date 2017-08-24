@@ -32,6 +32,13 @@ const size_t ToolNameLength = 32;						// maximum allowed length for tool names
 const AxesBitmap DefaultXAxisMapping = 1u << X_AXIS;	// by default, X is mapped to X
 const AxesBitmap DefaultYAxisMapping = 1u << Y_AXIS;	// by default, Y is mapped to Y
 
+enum class ToolState : uint8_t
+{
+	off = 0,
+	active,
+	standby
+};
+
 class Filament;
 class Tool
 {
@@ -61,6 +68,7 @@ public:
 	FansBitmap GetFanMapping() const { return fanMapping; }
 	Filament *GetFilament() const { return filament; }
 	Tool *Next() const { return next; }
+	ToolState GetState() const { return state; }
 
 #ifdef DUET_NG
 	bool WriteSettings(FileStore *f) const;			// write the tool's settings to file
@@ -98,14 +106,7 @@ private:
 	Filament *filament;
 	Tool* next;
 
-	enum class ToolState : uint8_t
-	{
-		off = 0,
-		active,
-		standby
-	};
 	ToolState state;
-
 	bool heaterFault;
 	volatile bool displayColdExtrudeWarning;
 };
