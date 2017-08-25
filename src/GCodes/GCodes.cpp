@@ -1327,7 +1327,7 @@ void GCodes::CheckTriggers()
 		 	)
 	{
 		scratchString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
-		platform.SendAlert(GENERIC_MESSAGE, scratchString.Pointer(), "Filament error", 1, 0.0, false);
+		platform.SendAlert(GENERIC_MESSAGE, scratchString.Pointer(), "Filament error", 1, 0.0, 0);
 		DoPause(*daemonGCode, false);
 		lastFilamentError = FilamentSensorStatus::ok;
 	}
@@ -2435,7 +2435,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb)
 		gb.MachineState().fileState.Close();							// stop reading from file
 		gb.MachineState().waitingForAcknowledgement = true;				// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
-		platform.SendAlert(mt, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", 2, 0.0, true);
+		platform.SendAlert(mt, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", 2, 0.0, axisLetters[Z_AXIS]);
 	}
 }
 
