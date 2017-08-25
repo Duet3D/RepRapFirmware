@@ -393,7 +393,7 @@ public:
 	void MessageF(const MessageType type, const char *fmt, ...);
 	void MessageF(const MessageType type, const char *fmt, va_list vargs);
 	bool FlushMessages();							// Flush messages to USB and aux, returning true if there is more to send
-	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, bool zParam);
+	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls);
 
 	// Movement
 
