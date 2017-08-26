@@ -1,6 +1,36 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.19.1
+==============
+
+Upgrade notes:
+- If your printer is a SCARA then you now need to set appropriate M208 lower and upper limits for X and Y (as well as for Z)
+- **Important!** See also the upgrade notes for version 1.19 if you are upgrading from 1.18.2 or earlier
+- Recommended DuetWebControl version is 1.19
+- Recommended DuetWiFiServer version is 1.19
+
+New and changed features:
+- M37 P parameter is supported. If you send M37 P"file.g" then printing file.g will be simulated and the expected print time reported.
+- The bed adjusting wizard now leaves one of the screws alone when suggesting corrections
+- The machine name and the password in the M550 and M551 commands may now be quoted, optionally
+- If M104 T# is used and tool # is currently in standby, then its standby temperature will be set as well as its active temperature
+- SCARA kinematic calculations have been speeded up
+- SCARA segments/second now defaults to 100
+- SCARA printers now apply the M208 axis limits to X and Y as well as to other axes. Minimum and maximum radius limits are still applied too.
+- SCARA M669 S and T parameters can be changed on the fly, i.e. re-homing is no longer required when they are changed
+- Minimum limits are applied to the parameters of M92, M201 and M203 commands to avoid firmware crashes if bad values are supplied
+
+Bug fixes:
+- Incorrect, very large height errors were sometimes shown in the G29 height map when the number of probe points used approached the maximum supported
+- M669 was supposed to report the current kinematics, but didn't except for SCARA printers
+- SCARA kinematics didn't apply limits to the Z axis or to any additional axes. Delta printers didn't apply limits to any additional axes.
+- SCARA forward kinematics were wrong
+- SCARA minimum radius limit was wrong
+- If the number of commands in the deferred command queue exceeded 8, commands could be lost
+- If a G1 command was used with a coordinate for an axis that X or Y was mapped, that coordinate was ignored unless the S1 or D2 command modifier was used. This affected tool change files on IDEX machines.
+- If a reset was forced by the software watchdog because it got stuck in a spin loop, the reset reason in M122 was displayed as 'User'
+
 Version 1.19
 ============
 
