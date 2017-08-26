@@ -5,7 +5,7 @@ Version 1.19.1
 ==============
 
 Upgrade notes:
-- If your printer is a SCARA then you now need to set appropriate M208 lower and upper limits for X and Y (as well as for Z)
+- If your printer is a SCARA then you now need to set appropriate M208 lower and upper limits for X and Y
 - **Important!** See also the upgrade notes for version 1.19 if you are upgrading from 1.18.2 or earlier
 - Recommended DuetWebControl version is 1.19
 - Recommended DuetWiFiServer version is 1.19
