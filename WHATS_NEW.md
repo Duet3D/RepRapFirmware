@@ -28,7 +28,7 @@ Bug fixes:
 - SCARA forward kinematics were wrong
 - SCARA minimum radius limit was wrong
 - If the number of commands in the deferred command queue exceeded 8, commands could be lost
-- If a G1 command was used with a coordinate for an axis that X or Y was mapped, that coordinate was ignored unless the S1 or D2 command modifier was used. This affected tool change files on IDEX machines.
+- If a G1 command was used with a coordinate for an axis that X or Y was mapped, that coordinate was ignored unless the S1 or S2 command modifier was used. This affected tool change files on IDEX machines.
 - If a reset was forced by the software watchdog because it got stuck in a spin loop, the reset reason in M122 was displayed as 'User'
 
 Version 1.19
