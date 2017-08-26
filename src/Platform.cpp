@@ -1948,8 +1948,9 @@ void Platform::Diagnostics(MessageType mtype)
 			const char* const reasonText = (reason == (uint32_t)SoftwareResetReason::user) ? "User"
 											: (reason == (uint32_t)SoftwareResetReason::NMI) ? "NMI"
 												: (reason == (uint32_t)SoftwareResetReason::hardFault) ? "Hard fault"
-													: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
-														: "Unknown";
+													: (reason == (uint32_t)SoftwareResetReason::stuckInSpin) ? "Stuck in spin loop"
+														: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
+															: "Unknown";
 			MessageF(mtype, "%s, spinning module %s, available RAM %u bytes (slot %d)\n",
 					reasonText, moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
