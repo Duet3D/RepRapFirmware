@@ -180,7 +180,11 @@ bool ScaraKinematics::IsReachable(float x, float y) const
 // TODO take account of arm angle limits
 bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const
 {
-	bool limited = false;
+	// First limit all axes according to M208
+	const bool m208Limited = Kinematics::LimitPosition(coords, numVisibleAxes, axesHomed);
+
+	// Now check that the XY position is within radius limits, in case the M208 limits are too generous
+	bool radiusLimited = false;
 	float x = coords[X_AXIS] + xOffset;
 	float y = coords[Y_AXIS] + yOffset;
 	const float r2 = fsquare(x) + fsquare(y);
@@ -198,29 +202,23 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 			x *= minRadius/r;
 			y *= minRadius/r;
 		}
-		limited = true;
+		radiusLimited = true;
 	}
 	else if (r2 > maxRadiusSquared)
 	{
 		const float r = sqrtf(r2);
 		x *= maxRadius/r;
 		y *= maxRadius/r;
-		limited = true;
+		radiusLimited = true;
 	}
 
-	if (limited)
+	if (radiusLimited)
 	{
 		coords[X_AXIS] = x - xOffset;
 		coords[Y_AXIS] = y - yOffset;
 	}
 
-	// Limit Z and any additional axes according to the M208 limits
-	if (LimitPositionFromAxis(coords, Z_AXIS, numVisibleAxes, axesHomed))
-	{
-		limited = true;
-	}
-
-	return limited;
+	return m208Limited || radiusLimited;
 }
 
 // Return the initial Cartesian coordinates we assume after switching to this kinematics
