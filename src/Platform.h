@@ -164,9 +164,9 @@ enum class SoftwareResetReason : uint16_t
 	erase = 0x10,					// special M999 command to erase firmware and reset
 	NMI = 0x20,
 	hardFault = 0x30,				// most exceptions get escalated to a hard fault
+	stuckInSpin = 0x40,				// we got stuck in a Spin() function for too long
 	otherFault = 0x70,
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
-	stuckInSpin = 0x1000,			// we got stuck in a Spin() function for too long
 	inLwipSpin = 0x2000,			// we got stuck in a call to LWIP for too long
 	inUsbOutput = 0x4000			// this bit is or'ed in if we were in USB output at the time
 };
@@ -974,7 +974,7 @@ inline float Platform::DriveStepsPerUnit(size_t drive) const
 
 inline void Platform::SetDriveStepsPerUnit(size_t drive, float value)
 {
-	driveStepsPerUnit[drive] = value;
+	driveStepsPerUnit[drive] = max<float>(value, 1.0);	// don't allow zero or negative
 }
 
 inline float Platform::Acceleration(size_t drive) const
@@ -989,7 +989,7 @@ inline const float* Platform::Accelerations() const
 
 inline void Platform::SetAcceleration(size_t drive, float value)
 {
-	accelerations[drive] = value;
+	accelerations[drive] = max<float>(value, 1.0);		// don't allow zero or negative
 }
 
 inline float Platform::MaxFeedrate(size_t drive) const
@@ -1004,7 +1004,7 @@ inline const float* Platform::MaxFeedrates() const
 
 inline void Platform::SetMaxFeedrate(size_t drive, float value)
 {
-	maxFeedrates[drive] = value;
+	maxFeedrates[drive] = max<float>(value, 1.0);		// don't allow zero or negative
 }
 
 inline float Platform::ConfiguredInstantDv(size_t drive) const
@@ -1014,7 +1014,7 @@ inline float Platform::ConfiguredInstantDv(size_t drive) const
 
 inline void Platform::SetInstantDv(size_t drive, float value)
 {
-	instantDvs[drive] = value;
+	instantDvs[drive] = max<float>(value, 1.0);			// don't allow zero or negative values, they causes Move to loop indefinitely
 }
 
 inline void Platform::SetDirectionValue(size_t drive, bool dVal)
