@@ -6,9 +6,10 @@ Version 1.19.1
 
 Upgrade notes:
 - If your printer is a SCARA then you now need to set appropriate M208 lower and upper limits for X and Y
+- If you are upgrading a Duet WiFi from firmware 1.19, install DuetWiFiFirmware 1.19.1 first, and confirm that the new version is running before installing DuetWiFiServer 1.19.1
 - **Important!** See also the upgrade notes for version 1.19 if you are upgrading from 1.18.2 or earlier
 - Recommended DuetWebControl version is 1.19
-- Recommended DuetWiFiServer version is 1.19
+- Recommended DuetWiFiServer version is 1.19.1
 
 New and changed features:
 - M37 P parameter is supported. If you send M37 P"file.g" then printing file.g will be simulated and the expected print time reported.
@@ -20,6 +21,8 @@ New and changed features:
 - SCARA printers now apply the M208 axis limits to X and Y as well as to other axes. Minimum and maximum radius limits are still applied too.
 - SCARA M669 S and T parameters can be changed on the fly, i.e. re-homing is no longer required when they are changed
 - Minimum limits are applied to the parameters of M92, M201 and M203 commands to avoid firmware crashes if bad values are supplied
+- In conjunction with DuetWiFiServer 1.19.1, if connection to the access point is lost and the automatic reconnection attempt fails, the WiFi module will attempt a manual reconnect. Reconnection attempts are reported to PanelDue and to USB, and the reconnect count is included in the M122 report.
+- Jerk is no longer applied to the boundaries between travel moves and printing moves
 
 Bug fixes:
 - Incorrect, very large height errors were sometimes shown in the G29 height map when the number of probe points used approached the maximum supported
@@ -30,6 +33,8 @@ Bug fixes:
 - If the number of commands in the deferred command queue exceeded 8, commands could be lost
 - If a G1 command was used with a coordinate for an axis that X or Y was mapped, that coordinate was ignored unless the S1 or S2 command modifier was used. This affected tool change files on IDEX machines.
 - If a reset was forced by the software watchdog because it got stuck in a spin loop, the reset reason in M122 was displayed as 'User'
+- The progress bar on PanelDue and the estimated end time based on filament usage were slightly ahead of the true values, especially for small gcode files
+- If a move had a tiny amount of XY movement and a much larger amount of extrusion, an extrusion speed in excess of the extruder speed limit set in M203 might be used. This could also be triggered if a move that was too short to need any steps was followed by a pure extrusion move.
 
 Version 1.19
 ============
