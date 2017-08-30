@@ -63,9 +63,10 @@ void Move::Init()
 		SetPositions(move);
 	}
 
-	for (size_t i = 0; i < ARRAY_SIZE(extrusionAccumulators); ++i)
+	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
 		extrusionAccumulators[i] = 0;
+		extrusionPending[i] = 0.0;
 	}
 
 	usingMesh = false;
@@ -183,7 +184,7 @@ void Move::Spin()
 			{
 				// If there's a G Code move available, add it to the DDA ring for processing.
 				GCodes::RawMove nextMove;
-				if (reprap.GetGCodes().ReadMove(nextMove))
+				if (reprap.GetGCodes().ReadMove(nextMove))		// if we have a new move
 				{
 					if (waitingForMove)
 					{
@@ -194,9 +195,16 @@ void Move::Spin()
 							longestGcodeWaitInterval = timeWaiting;
 						}
 					}
-					// We have a new move
 					if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 					{
+#if 0	// disabled this because it causes jerky movements on the SCARA printer
+						// Add on the extrusion left over from last time.
+						const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+						for (size_t drive = numAxes; drive < DRIVES; ++drive)
+						{
+							nextMove.coords[drive] += extrusionPending[drive - numAxes];
+						}
+#endif
 						if (nextMove.moveType == 0)
 						{
 							AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, true);
@@ -207,6 +215,13 @@ void Move::Spin()
 							idleCount = 0;
 							scheduledMoves++;
 						}
+#if 0	// see above
+						// Save the amount of extrusion not done
+						for (size_t drive = numAxes; drive < DRIVES; ++drive)
+						{
+							extrusionPending[drive - numAxes] = nextMove.coords[drive];
+						}
+#endif
 					}
 				}
 				else
@@ -994,6 +1009,7 @@ void Move::ResetExtruderPositions()
 	cpu_irq_enable();
 }
 
+// Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
 int32_t Move::GetAccumulatedExtrusion(size_t extruder)
 {
 	const size_t drive = extruder + reprap.GetGCodes().GetTotalAxes();

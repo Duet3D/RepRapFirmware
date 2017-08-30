@@ -27,7 +27,6 @@ public:
 	bool GoToEnd();									// Position the file at the end (so you can write on the end).
 #endif
 	FilePosition Length() const;					// File size in bytes
-	float FractionRead() const;						// How far in we are
 	void Duplicate();								// Create a second reference to this file
 	bool Flush();									// Write remaining buffer data
 	void Invalidate(const FATFS *fs);				// Invalidate the file if it uses the specified FATFS object

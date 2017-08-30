@@ -264,12 +264,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	{
 	case 0: // Stop
 	case 1: // Sleep
-		if (!LockMovementAndWaitForStandstill(gb))
+		if (   !LockMovementAndWaitForStandstill(gb)	// wait until everything has stopped
+			|| !IsCodeQueueIdle()						// must also wait until deferred command queue has caught up
+		   )
 		{
 			return false;
 		}
 		{
-			bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
+			bool wasPaused = isPaused;					// isPaused gets cleared by CancelPrint
 			CancelPrint(true, true);
 			if (wasPaused)
 			{

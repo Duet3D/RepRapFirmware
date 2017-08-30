@@ -212,7 +212,18 @@ bool GCodes::DoingFileMacro() const
 float GCodes::FractionOfFilePrinted() const
 {
 	const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-	return (fileBeingPrinted.IsLive()) ? fileBeingPrinted.FractionRead() : -1.0;
+	if (!fileBeingPrinted.IsLive())
+	{
+		return -1.0;
+	}
+
+	const FilePosition len = fileBeingPrinted.Length();
+	if (len == 0)
+	{
+		return 0.0;
+	}
+
+	return (float)(fileBeingPrinted.GetPosition() - fileInput->BytesCached()) / (float)len;
 }
 
 // Start running the config file
@@ -692,7 +703,7 @@ void GCodes::Spin()
 					platform.SetProbing(false);
 					if (!zProbeTriggered)
 					{
-						platform.Message(GENERIC_MESSAGE, "Error: Z probe was not triggered during probing move");
+						platform.Message(GENERIC_MESSAGE, "Error: Z probe was not triggered during probing move\n");
 						gb.SetState(GCodeState::normal);
 						if (platform.GetZProbeType() != 0 && !probeIsDeployed)
 						{
@@ -1223,7 +1234,9 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 			// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 			// Don't close the file until all moves have been completed, in case the print gets paused.
 			// Also, this keeps the state as 'Printing' until the print really has finished.
-			if (LockMovementAndWaitForStandstill(gb))
+			if (   LockMovementAndWaitForStandstill(gb)					// wait until movement has finished
+				&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
+			   )
 			{
 				CancelPrint(true, true);
 			}
@@ -3789,6 +3802,12 @@ bool GCodes::UnloadFilament(GCodeBuffer& gb, StringRef& reply, bool &error)
 float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const
 {
 	return (extruder < numExtruders) ? rawExtruderTotalByDrive[extruder] : 0.0;
+}
+
+// Return true if the code queue is idle
+bool GCodes::IsCodeQueueIdle() const
+{
+	return queuedGCode->IsIdle() && codeQueue->IsIdle();
 }
 
 // Cancel the current SD card print.

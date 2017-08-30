@@ -217,7 +217,8 @@ void DDA::Init()
 }
 
 // Set up a real move. Return true if it represents real movement, else false.
-bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
+// Either way, return the amount of extrusion we didn't do in the extruder coordinates of nextMove
+bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 {
 	// 1. Compute the new endpoints and the movement vector
 	const int32_t * const positionNow = prev->DriveCoordinates();
@@ -237,8 +238,8 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	}
 
 	isPrintingMove = false;
-	bool realMove = false;
 	xyMoving = false;
+	bool realMove = false;
 	float accelerations[DRIVES];
 	const float * const normalAccelerations = reprap.GetPlatform().Accelerations();
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
@@ -253,48 +254,47 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 		endCoordinates[drive] = nextMove.coords[drive];
 		const int32_t delta = (drive < numAxes) ? endPoint[drive] - positionNow[drive] : endPoint[drive];
 
-		DriveMovement*& pdm = pddm[drive];
 		if (drive < numAxes && doMotorMapping)
 		{
 			const float positionDelta = nextMove.coords[drive] - prev->GetEndCoordinate(drive, false);
 			directionVector[drive] = positionDelta;
-			if (positionDelta != 0 && (IsBitSet(nextMove.yAxes, drive) || IsBitSet(nextMove.xAxes, drive)))
+			if (positionDelta != 0.0 && (IsBitSet(nextMove.yAxes, drive) || IsBitSet(nextMove.xAxes, drive)))
 			{
 				xyMoving = true;
-			}
-			if (isDeltaMovement || delta != 0)
-			{
-				pdm = DriveMovement::Allocate(drive, DMState::moving);	// on a delta printer, if one tower moves then we assume they all do
 			}
 		}
 		else
 		{
 			directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
-			if (delta != 0)
-			{
-				pdm = DriveMovement::Allocate(drive, DMState::moving);
-			}
 		}
 
-		if (pdm != nullptr)
+		if (delta != 0)
 		{
+			realMove = true;
+			DriveMovement*& pdm = pddm[drive];
+			pdm = DriveMovement::Allocate(drive, DMState::moving);
 			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
-			realMove = true;
 
-			if (drive >= numAxes && xyMoving)
+			if (drive >= numAxes)
 			{
-				if (delta > 0)
+				// It's an extruder movement
+				nextMove.coords[drive] -= directionVector[drive];
+														// subtract the amount of extrusion we actually did to leave the residue outstanding
+				if (xyMoving)
 				{
-					isPrintingMove = true;				// we have both XY movement and extrusion
-				}
-				if (nextMove.usePressureAdvance)
-				{
-					const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - numAxes);
-					if (compensationTime > 0.0)
+					if (delta > 0)
 					{
-						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().ConfiguredInstantDv(drive)/compensationTime);
+						isPrintingMove = true;			// we have both XY movement and forward extrusion
+					}
+					if (nextMove.usePressureAdvance)
+					{
+						const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - numAxes);
+						if (compensationTime > 0.0)
+						{
+							// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
+							accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().ConfiguredInstantDv(drive)/compensationTime);
+						}
 					}
 				}
 			}
@@ -304,8 +304,30 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	// 2. Throw it away if there's no real movement.
 	if (!realMove)
 	{
-		ReleaseDMs();
+		// Update the end position in the previous move, so that on the next move we don't think there is XY movement when the user didn't ask for any
+		if (doMotorMapping)
+		{
+			for (size_t drive = 0; drive < numAxes; ++drive)
+			{
+				prev->endCoordinates[drive] = nextMove.coords[drive];
+			}
+		}
 		return false;
+	}
+
+	// 2a. If it's a delta move, we need a DM for each tower even if its carriage has no net movement
+	if (isDeltaMovement)
+	{
+		for (size_t drive = 0; drive < DELTA_AXES; ++drive)
+		{
+			DriveMovement*& pdm = pddm[drive];
+			if (pdm == nullptr)
+			{
+				pdm = DriveMovement::Allocate(drive, DMState::moving);
+				pdm->totalSteps = 0;
+				pdm->direction = true;
+			}
+		}
 	}
 
 	// 3. Store some values
@@ -387,7 +409,10 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 			reqSpeed /= maxDistance;		// because normalisedDirectionVector is unit-normalised
 		}
 	}
-	requestedSpeed = constrain<float>(reqSpeed, 0.5, VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform().MaxFeedrates(), DRIVES));
+
+	// Don't use the constrain function in the following, because if we have a very small XY movement and a lot of extrusion, we may have to make the
+	// speed lower than the 0.5mm/sec minimum. We must apply the minimum speed first and then limit it if necessary after that.
+	requestedSpeed = min<float>(max<float>(reqSpeed, 0.5), VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform().MaxFeedrates(), DRIVES));
 
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On a delta, this is not OK and any movement in the XY plane should be limited to the X/Y axis values, which we assume to be equal.
@@ -427,7 +452,7 @@ bool DDA::Init(const GCodes::RawMove &nextMove, bool doMotorMapping)
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 	endSpeed = 0.0;					// until the next move asks us to adjust it
 
-	if (prev->state != provisional)
+	if (prev->state != provisional || isPrintingMove != prev->isPrintingMove)
 	{
 		// There is no previous move that we can adjust, so this move must start at zero speed.
 		startSpeed = 0.0;

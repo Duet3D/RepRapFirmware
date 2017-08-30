@@ -270,6 +270,7 @@ private:
 	void AppendAxes(StringRef& reply, AxesBitmap axes) const;			// Append a list of axes to a string
 
 	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
+	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
 
 #ifdef DUET_NG
 	void SaveResumeInfo();

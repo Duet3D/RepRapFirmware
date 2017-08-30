@@ -23,6 +23,7 @@ class GCodeQueue
 		bool FillBuffer(GCodeBuffer *gb);							// If there is another move to execute at this time, fill a buffer
 		void PurgeEntries();										// Remove stored codes when a print is being paused
 		void Clear();												// Clean up all the stored codes
+		bool IsIdle() const;										// Return true if there is nothing to do
 
 		void Diagnostics(MessageType mtype);
 

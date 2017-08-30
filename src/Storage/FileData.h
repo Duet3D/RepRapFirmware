@@ -81,11 +81,6 @@ public:
 		return f->Seek(position);
 	}
 
-	float FractionRead() const
-	{
-		return (f == nullptr ? -1.0 : f->FractionRead());
-	}
-
 	FilePosition Length() const
 	{
 		return f->Length();

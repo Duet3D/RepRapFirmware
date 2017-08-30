@@ -28,6 +28,7 @@
 #include "matrix.h"
 
 const uint32_t WifiResponseTimeoutMillis = 200;
+const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 300;
 const uint32_t WiFiStableMillis = 100;
 
@@ -374,6 +375,7 @@ void Network::Start()
 
 	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
 	spiTxUnderruns = spiRxOverruns = 0;
+	reconnectCount = 0;
 
 	lastTickMillis = millis();
 	state = NetworkState::starting1;
@@ -479,7 +481,11 @@ void Network::Spin(bool full)
 				}
 				GetNewStatus();
 			}
-			else if (currentMode != requestedMode && currentMode != WiFiState::connecting)
+			else if (   currentMode != requestedMode
+					 && currentMode != WiFiState::connecting
+					 && currentMode != WiFiState::reconnecting
+					 && currentMode != WiFiState::autoReconnecting
+					)
 			{
 				// Tell the wifi module to change mode
 				int32_t rslt = ResponseUnknownError;
@@ -584,6 +590,7 @@ void Network::Spin(bool full)
 						SafeStrncpy(ssid, status.Value().ssid, SsidLength);
 					}
 					InitSockets();
+					reconnectCount = 0;
 					platform.MessageF(NETWORK_INFO_MESSAGE, "Wifi module is %s%s, IP address %u.%u.%u.%u\n",
 						TranslateWiFiState(currentMode),
 						ssid,
@@ -669,7 +676,7 @@ void Network::Diagnostics(MessageType mtype)
 
 			if (currentMode == WiFiState::connected)
 			{
-				platform.MessageF(mtype, "WiFi signal strength %ddBm\n", (int)r.rssi);
+				platform.MessageF(mtype, "WiFi signal strength %ddBm\nReconnections %u\n", (int)r.rssi, reconnectCount);
 			}
 			else if (currentMode == WiFiState::runningAsAccessPoint)
 			{
@@ -768,6 +775,8 @@ int Network::EnableState() const
 	case WiFiState::connecting:				return "trying to connect";
 	case WiFiState::connected:				return "connected to access point ";
 	case WiFiState::runningAsAccessPoint:	return "providing access point ";
+	case WiFiState::autoReconnecting:		return "auto-reconnecting";
+	case WiFiState::reconnecting:			return "reconnecting";
 	default:								return "in an unknown state";
 	}
 }
@@ -1171,13 +1180,29 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 		return ResponseNetworkDisabled;
 	}
 
-	if (!digitalRead(EspTransferRequestPin) || transferPending || !spi_dma_check_rx_complete())
+	if (transferPending)
 	{
 		if (reprap.Debug(moduleNetwork))
 		{
 			debugPrintf("ResponseBusy\n");
 		}
 		return ResponseBusy;
+	}
+
+	// Wait for the ESP to be ready, with timeout
+	{
+		const uint32_t now = millis();
+		while (!digitalRead(EspTransferRequestPin))
+		{
+			if (millis() - now > WiFiWaitReadyMillis)
+			{
+				if (reprap.Debug(moduleNetwork))
+				{
+					debugPrintf("ResponseBusy\n");
+				}
+				return ResponseBusy;
+			}
+		}
 	}
 
 	bufferOut.hdr.formatVersion = MyFormatVersion;
@@ -1212,16 +1237,20 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 	digitalWrite(SamTfrReadyPin, HIGH);
 
 	// Wait for the DMA complete interrupt, with timeout
-	const uint32_t now = millis();
-	while (transferPending || !spi_dma_check_rx_complete())
 	{
-		if (millis() - now > WifiResponseTimeoutMillis)
+		const uint32_t now = millis();
+		while (transferPending || !spi_dma_check_rx_complete())
 		{
-			if (reprap.Debug(moduleNetwork))
+			if (millis() - now > WifiResponseTimeoutMillis)
 			{
-				debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
+				if (reprap.Debug(moduleNetwork))
+				{
+					debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
+				}
+				transferPending = false;
+				spi_dma_disable();
+				return ResponseTimeout;
 			}
-			return ResponseTimeout;
 		}
 	}
 
@@ -1233,6 +1262,12 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 	}
 	else
 	{
+		if (   (bufferIn.hdr.state == WiFiState::autoReconnecting || bufferIn.hdr.state == WiFiState::reconnecting)
+			&& currentMode != WiFiState::autoReconnecting && currentMode != WiFiState::reconnecting
+		   )
+		{
+			++reconnectCount;
+		}
 		currentMode = bufferIn.hdr.state;
 		response = bufferIn.hdr.response;
 		if (response > 0 && dataIn != nullptr)

@@ -199,17 +199,6 @@ FilePosition FileStore::Length() const
 	return (writeBuffer != nullptr) ? file.fsize + writeBuffer->BytesStored() : file.fsize;
 }
 
-float FileStore::FractionRead() const
-{
-	FilePosition len = Length();
-	if (len == 0)
-	{
-		return 0.0;
-	}
-
-	return (float)Position() / (float)len;
-}
-
 // Single character read
 bool FileStore::Read(char& b)
 {

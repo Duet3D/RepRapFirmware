@@ -154,8 +154,9 @@ private:
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 	char ssid[SsidLength + 1];
 
-	uint32_t spiTxUnderruns;
-	uint32_t spiRxOverruns;
+	unsigned int spiTxUnderruns;
+	unsigned int spiRxOverruns;
+	unsigned int reconnectCount;
 
 	char wiFiServerVersion[16];
 };

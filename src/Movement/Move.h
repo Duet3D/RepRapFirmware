@@ -151,10 +151,11 @@ private:
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new gcode
 	uint32_t gcodeWaitStartTime;						// When we last asked for a gcode and didn't get one
 	float simulationTime;								// Print time since we started simulating
+
+	float extrusionPending[MaxExtruders];				// Extrusion not done due to rounding to nearest step
 	volatile float liveCoordinates[DRIVES];				// The endpoint that the machine moved to in the last completed move
 	volatile bool liveCoordinatesValid;					// True if the XYZ live coordinates are reliable (the extruder ones always are)
 	volatile int32_t liveEndPoints[DRIVES];				// The XYZ endpoints of the last completed move in motor coordinates
-
 	volatile int32_t extrusionAccumulators[MaxExtruders]; // Accumulated extruder motor steps
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
