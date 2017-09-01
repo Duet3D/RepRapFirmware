@@ -239,6 +239,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 
 	isPrintingMove = false;
 	xyMoving = false;
+	bool extruding = false;												// we set this true if extrusion was commanded, even if it is too small to do
 	bool realMove = false;
 	float accelerations[DRIVES];
 	const float * const normalAccelerations = reprap.GetPlatform().Accelerations();
@@ -266,6 +267,10 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 		else
 		{
 			directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
+			if (drive >= numAxes && nextMove.coords[drive] > 0.0)
+			{
+				extruding = true;
+			}
 		}
 
 		if (delta != 0)
@@ -281,20 +286,13 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 				// It's an extruder movement
 				nextMove.coords[drive] -= directionVector[drive];
 														// subtract the amount of extrusion we actually did to leave the residue outstanding
-				if (xyMoving)
+				if (xyMoving && nextMove.usePressureAdvance)
 				{
-					if (delta > 0)
+					const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - numAxes);
+					if (compensationTime > 0.0)
 					{
-						isPrintingMove = true;			// we have both XY movement and forward extrusion
-					}
-					if (nextMove.usePressureAdvance)
-					{
-						const float compensationTime = reprap.GetPlatform().GetPressureAdvance(drive - numAxes);
-						if (compensationTime > 0.0)
-						{
-							// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-							accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().ConfiguredInstantDv(drive)/compensationTime);
-						}
+						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
+						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().ConfiguredInstantDv(drive)/compensationTime);
 					}
 				}
 			}
@@ -337,6 +335,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	canPauseBefore = nextMove.canPauseBefore;
 	canPauseAfter = nextMove.canPauseAfter;
 	filePos = nextMove.filePos;
+	isPrintingMove = xyMoving && extruding;
 	usePressureAdvance = nextMove.usePressureAdvance;
 	virtualExtruderPosition = nextMove.virtualExtruderPosition;
 	hadLookaheadUnderrun = false;
