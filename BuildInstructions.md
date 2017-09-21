@@ -3,7 +3,7 @@ Instructions for building dc42 fork of RepRapFirmware under Windows
 
 1. Download and install the gcc cross-compiler. A simple way of doing this is to download Arduino version 1.5.8 and install it into folder C:/Arduino-1.5.8. The compiler and associated tools will then be in folder C:\Arduino-1.5.8\hardware\tools\gcc-arm-none-eabi-4.8.3-2014q1\bin. If you already have a later version of Arduino installed including the add-on for SAM processors, you will find the compiler and tools in a different folder, for example C:\Users\<YOUR USER NAME>\AppData\Local\Arduino15\packages\arduino\tools\arm-none-eabi-gcc\4.8.3-2014q1\bin.
 
-2. Download and install Eclipse Neon 2. You no longer need the Arduino add-on.
+2. Download and install Eclipse Oxygen. You do not need the Arduino add-on.
 
 3. In Eclipse create new workspace C:/Eclipse/Firmware. Then exit Eclipse.
 
@@ -19,7 +19,7 @@ Instructions for building dc42 fork of RepRapFirmware under Windows
 
 8. Ensure there is a copy of make.exe on your PATH. If you installed Arduino 1.5.8 into C:/Arduino-1.5.8 then there will be one in C:\Arduino-1.5.8\hardware\arduino\sam\system\CMSIS\Examples\cmsis_example\gcc_arm.
 
-9. Build CoreNG first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS build of RRF has its own build of CoreNG.
+9. Build CoreNG first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS and Alligartor builds of RRF have their own builds of CoreNG.
 
 Instructions for building dc42 fork of RepRapFirmware under macOS
 ===================================================================
@@ -42,4 +42,4 @@ Instructions for building dc42 fork of RepRapFirmware under macOS
 
 9. Build CoreNG first, then RepRapFirmware. The Duet WiFi and Duet Ethernet builds of RRF use the SAM4E build of CoreNG. The Duet085 build of RRF (which also runs on the Duet06) uses the SAM3X build of CoreNG. The RADDS build of RRF has its own build of CoreNG.
 
-D Crocker, updated 2017-07-12.
+D Crocker, updated 2017-09-21.
