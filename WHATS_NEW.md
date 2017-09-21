@@ -1,6 +1,29 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20 (in development)
+=============================
+
+Upgrade notes from 1.19.2:
+- If installing this release on a Duet WiFi, install DuetWiFiServer version 1.20 alpha first, available at https://github.com/dc42/DuetWiFiSocketServer/blob/master/Release/DuetWiFiServer.bin.
+- Recommended Duet Web Control version is still 1.19
+
+New and changed features:
+- Added event logging, controlled by the M929 command
+- On the Duet WiFi the M552 command takes an optional SSID parameter, allowing you to connect to a specified SSID even if it is hidden
+- M572 command now allows multiple colon-separate D values
+- When M591 and G32 are used to produce manual bed levelling adjustments, the first screw defined in the M671 command is left alone. Previously the screw needing the smallest correction was left alone.
+- SCARA printers can now use the manual bed levelling assistant
+- The thermocouple type letter in the M305 command to configure a MAX31856-based thermocouple adapter may now be in lower case
+- Added protection against a dud command line containing letter M being interpreted as a M0 command
+- When doing a firmware upgrade, the message sent to the USB port now warns that the USB will be disconnected
+
+Bug fixes:
+- When G29 was run on a SCARA printer, probe points could be incorrectly skipped and spurious "not reachable" messages generated
+- Pullup resistors are now enabled on endstop inputs 10 and 11 on the CONN_SD connector
+- Fixed duplicate error message when a gcode file is not found
+- Fixed reference to homing the towers of a SCARA printer in an error message
+
 Version 1.19.2
 ==============
 
