@@ -44,9 +44,10 @@ const float NEARLY_ABS_ZERO = -273.0;				// Celsius
 const float ROOM_TEMPERATURE = 21.0;				// Celsius
 
 // Timeouts
-const float LONG_TIME = 300.0;						// Seconds
+const uint32_t LongTime = 300000;					// Milliseconds (5 minutes)
 const uint32_t MinimumWarningInterval = 4000;		// Milliseconds
 const uint32_t FanCheckInterval = 500;				// Milliseconds
+const uint32_t LogFlushInterval = 15000;			// Milliseconds
 const uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 const float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
 
@@ -191,8 +192,8 @@ const float DefaultRetractLength = 2.0;
 
 const float DefaultArcSegmentLength = 0.2;			// G2 and G3 arc movement commands get split into segments this long
 
-const float DEFAULT_IDLE_TIMEOUT = 30.0;			// Seconds
-const float DEFAULT_IDLE_CURRENT_FACTOR = 0.3;		// Proportion of normal motor current that we use for idle hold
+const uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
+const float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold
 
 // Triggers
 
@@ -226,6 +227,7 @@ const unsigned int MaxStackDepth = 5;				// Maximum depth of stack
 
 #define CONFIG_FILE "config.g"
 #define DEFAULT_FILE "default.g"
+#define DEFAULT_LOG_FILE "eventlog.txt"
 
 #define EOF_STRING "<!-- **EoF** -->"
 

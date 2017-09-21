@@ -201,7 +201,7 @@ void debugPrintf(const char* fmt, ...)
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	reprap.GetPlatform().MessageF(DEBUG_MESSAGE, fmt, vargs);
+	reprap.GetPlatform().MessageF(DebugMessage, fmt, vargs);
 	va_end(vargs);
 }
 

@@ -72,15 +72,16 @@ void RandomProbePointSet::ClearProbeHeights()
 	}
 }
 
-void RandomProbePointSet::SetProbedBedEquation(size_t numPoints, StringRef& reply)
+bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, StringRef& reply)
 {
 	if (!GoodProbePointOrdering(numPoints))
 	{
-		reply.printf("Error: probe points P0 to P%u must be in clockwise order starting near X=0 Y=0", min<unsigned int>(numPoints, 4) - 1);
+		reply.printf("Probe points P0 to P%u must be in clockwise order starting near X=0 Y=0", min<unsigned int>(numPoints, 4) - 1);
 		if (numPoints >= 5)
 		{
 			reply.cat(" and P4 must be near the centre");
 		}
+		return true;
 	}
 	else
 	{
@@ -141,8 +142,8 @@ void RandomProbePointSet::SetProbedBedEquation(size_t numPoints, StringRef& repl
 			break;
 
 		default:
-			reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Bed calibration error: %d points provided but only 3, 4 and 5 supported\n", numPoints);
-			return;
+			reply.printf("Bed calibration: %d points provided but only 3, 4 and 5 supported", numPoints);
+			return true;
 		}
 
 		numBedCompensationPoints = numPoints;
@@ -154,7 +155,7 @@ void RandomProbePointSet::SetProbedBedEquation(size_t numPoints, StringRef& repl
 			reply.catf(" [%.1f, %.1f, %.3f]", xBedProbePoints[point], yBedProbePoints[point], zBedProbePoints[point]);
 		}
 	}
-	reply.cat("\n");
+	return false;
 }
 
 // Compute the interpolated height error at the specified point
@@ -295,7 +296,7 @@ float RandomProbePointSet::TriangleZ(float x, float y) const
 			return l1 * baryZBedProbePoints[i] + l2 * baryZBedProbePoints[j] + l3 * baryZBedProbePoints[4];
 		}
 	}
-	reprap.GetPlatform().Message(GENERIC_MESSAGE, "Triangle interpolation: point outside all triangles!\n");
+	reprap.GetPlatform().Message(WarningMessage, "Triangle interpolation: point outside all triangles!\n");
 	return 0.0;
 }
 

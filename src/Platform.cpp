@@ -251,7 +251,7 @@ bool ZProbeParameters::WriteParameters(FileStore *f, unsigned int probeType) con
 // Platform class
 
 Platform::Platform() :
-		board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0), lastFanCheckTime(0),
+		logger(nullptr), lastLogFlushTime(0), board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0), lastFanCheckTime(0),
 		auxGCodeReply(nullptr), fileStructureInitialised(false), tickState(0), debugCode(0)
 #ifdef DUET_NG
 		, lastWarningMillis(0), nextDriveToPoll(0),
@@ -266,7 +266,6 @@ Platform::Platform() :
 	usbOutput = new OutputStack();
 
 	// Files
-
 	massStorage = new MassStorage(this);
 
 	for (size_t i = 0; i < MAX_FILES; i++)
@@ -345,16 +344,6 @@ void Platform::Init()
 	ARRAY_INIT(macAddress, DefaultMacAddress);
 #endif
 
-	zProbeType = 0;	// Default is to use no Z probe switch
-	zProbeAxes = Z_PROBE_AXES;
-	SetZProbeDefaults();
-
-	// We need to initialise at least some of the time stuff before we call MassStorage::Init()
-	addToTime = 0.0;
-	lastTimeCall = 0;
-	lastTime = Time();
-	longWait = lastTime;
-
 	// File management
 	massStorage->Init();
 
@@ -408,15 +397,18 @@ void Platform::Init()
 #endif
 
 	// Z PROBE
+	zProbeType = 0;								// default is to use no Z probe
+	zProbeAxes = Z_PROBE_AXES;
 	zProbePin = Z_PROBE_PIN;
 	zProbeAdcChannel = PinToAdcChannel(zProbePin);
-	InitZProbe();		// this also sets up zProbeModulationPin
+	SetZProbeDefaults();
+	InitZProbe();								// this also sets up zProbeModulationPin
 
 	// AXES
 	ARRAY_INIT(axisMaxima, AXIS_MAXIMA);
 	ARRAY_INIT(axisMinima, AXIS_MINIMA);
 
-	idleCurrentFactor = DEFAULT_IDLE_CURRENT_FACTOR;
+	idleCurrentFactor = DefaultIdleCurrentFactor;
 
 	// SD card interfaces
 	for (size_t i = 0; i < NumSdCards; ++i)
@@ -434,6 +426,9 @@ void Platform::Init()
 	PIOB->PIO_OWDR = 0xFFFFFFFF;
 	PIOC->PIO_OWDR = 0xFFFFFFFF;
 	PIOD->PIO_OWDR = 0xFFFFFFFF;
+#ifdef PIOE
+	PIOE->PIO_OWDR = 0xFFFFFFFF;
+#endif
 
 	for (size_t drive = 0; drive < DRIVES; drive++)
 	{
@@ -469,6 +464,20 @@ void Platform::Init()
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 		driverState[drive] = DriverStatus::disabled;
+
+		// Enable pullup resistors on endstop inputs here if necessary.
+#if defined(DUET_NG)
+		// The Duets have hardware pullup resistors/LEDs except for the two on the CONN_LCD connector.
+		// They have RC filtering on the main endstop inputs, so best not to enable the pullup resistors on these.
+		if (drive >= 10)
+		{
+			setPullup(endStopPins[drive], true);				// enable pullup on CONN_LCD endstop input
+		}
+#endif
+#if defined(__RADDS__) || defined(__ALLIGATOR__)
+		// I don't know whether RADDS and Alligator have hardware pullup resistors or not. I'll assume they might not.
+		setPullup(endStopPins[drive], true);
+#endif
 	}
 
 	slowDriverStepPulseClocks = 0;								// no extended driver timing configured yet
@@ -624,8 +633,7 @@ void Platform::Init()
 	memset(logicalPinModes, PIN_MODE_NOT_CONFIGURED, sizeof(logicalPinModes));		// set all pins to "not configured"
 
 	// Kick everything off
-	lastTime = Time();
-	longWait = lastTime;
+	longWait = millis();
 	InitialiseInterrupts();		// also sets 'active' to true
 }
 
@@ -702,12 +710,6 @@ void Platform::InitZProbe()
 		pinMode(endStopPins[E0_AXIS + 1], INPUT);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
-
-	case 7:
-		AnalogInEnableChannel(zProbeAdcChannel, false);
-		pinMode(zProbePin, INPUT_PULLUP);
-		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
-		break;	//TODO (DeltaProbe)
 	}
 }
 
@@ -732,10 +734,6 @@ int Platform::GetZProbeReading() const
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			zProbeVal = (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum()) / (int)(4 * Z_PROBE_AVERAGE_READINGS));
-			break;
-
-		case 7:		// Delta humming probe
-			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));	//TODO this is temporary
 			break;
 
 		default:
@@ -829,7 +827,6 @@ const ZProbeParameters& Platform::GetZProbeParameters(int32_t probeType) const
 	case 5:
 		return irZProbeParameters;
 	case 3:
-	case 7:
 		return alternateZProbeParameters;
 	case 4:
 	case 6:
@@ -849,7 +846,6 @@ void Platform::SetZProbeParameters(int32_t probeType, const ZProbeParameters& pa
 		break;
 
 	case 3:
-	case 7:
 		alternateZProbeParameters = params;
 		break;
 
@@ -902,10 +898,10 @@ bool Platform::HomingZWithProbe() const
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print as message and return false.
 bool Platform::CheckFirmwareUpdatePrerequisites()
 {
-	FileStore * const firmwareFile = GetFileStore(GetSysDir(), IAP_FIRMWARE_FILE, false);
+	FileStore * const firmwareFile = GetFileStore(GetSysDir(), IAP_FIRMWARE_FILE, OpenMode::read);
 	if (firmwareFile == nullptr)
 	{
-		MessageF(GENERIC_MESSAGE, "Error: Firmware binary \"%s\" not found\n", IAP_FIRMWARE_FILE);
+		MessageF(ErrorMessage, "Firmware binary \"%s\" not found\n", IAP_FIRMWARE_FILE);
 		return false;
 	}
 
@@ -920,13 +916,13 @@ bool Platform::CheckFirmwareUpdatePrerequisites()
 #endif
 			)
 	{
-		MessageF(GENERIC_MESSAGE, "Error: Firmware binary \"%s\" is not valid for this electronics\n", IAP_FIRMWARE_FILE);
+		MessageF(ErrorMessage, "Firmware binary \"%s\" is not valid for this electronics\n", IAP_FIRMWARE_FILE);
 		return false;
 	}
 
 	if (!GetMassStorage()->FileExists(GetSysDir(), IAP_UPDATE_FILE))
 	{
-		MessageF(GENERIC_MESSAGE, "Error: In-application programming binary \"%s\" not found\n", IAP_UPDATE_FILE);
+		MessageF(ErrorMessage, "In-application programming binary \"%s\" not found\n", IAP_UPDATE_FILE);
 		return false;
 	}
 
@@ -936,10 +932,10 @@ bool Platform::CheckFirmwareUpdatePrerequisites()
 // Update the firmware. Prerequisites should be checked before calling this.
 void Platform::UpdateFirmware()
 {
-	FileStore * const iapFile = GetFileStore(GetSysDir(), IAP_UPDATE_FILE, false);
+	FileStore * const iapFile = GetFileStore(GetSysDir(), IAP_UPDATE_FILE, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		MessageF(FIRMWARE_UPDATE_MESSAGE, "IAP not found\n");
+		MessageF(FirmwareUpdateMessage, "IAP not found\n");
 		return;
 	}
 
@@ -982,13 +978,13 @@ void Platform::UpdateFirmware()
 
 			if (rc != FLASH_RC_OK)
 			{
-				MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Flash write failed, code=%u, address=0x%08x\n", rc, flashAddr);
+				MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%u, address=0x%08x\n", rc, flashAddr);
 				return;
 			}
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
-				MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Verify during flash write failed, address=0x%08x\n", flashAddr);
+				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08x\n", flashAddr);
 				return;
 			}
 		}
@@ -1039,13 +1035,13 @@ void Platform::UpdateFirmware()
 
 			if (rc != FLASH_RC_OK)
 			{
-				MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Flash %s failed, code=%u, address=0x%08x\n", op, rc, flashAddr);
+				MessageF(FirmwareUpdateErrorMessage, "flash %s failed, code=%u, address=0x%08x\n", op, rc, flashAddr);
 				return;
 			}
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
-				MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Verify during flash write failed, address=0x%08x\n", flashAddr);
+				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08x\n", flashAddr);
 				return;
 			}
 		}
@@ -1063,7 +1059,9 @@ void Platform::UpdateFirmware()
 #endif
 
 	iapFile->Close();
-	Message(FIRMWARE_UPDATE_MESSAGE, "Updating main firmware\n");
+
+	Message(LcdMessage, "Updating main firmware\n");
+	Message(UsbMessage, "Shutting down USB interface to update main firmware. Try reconnecting after 30 seconds.\n");
 
 	// Allow time for the firmware update message to be sent
 	const uint32_t now = millis();
@@ -1132,7 +1130,7 @@ void Platform::UpdateFirmware()
 // Send the beep command to the aux channel. There is no flow control on this port, so it can't block for long.
 void Platform::Beep(int freq, int ms)
 {
-	MessageF(AUX_MESSAGE, "{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
+	MessageF(LcdMessage, "{\"beep_freq\":%d,\"beep_length\":%d}\n", freq, ms);
 }
 
 // Send a short message to the aux channel. There is no flow control on this port, so it can't block for long.
@@ -1144,27 +1142,14 @@ void Platform::SendAuxMessage(const char* msg)
 		buf->copy("{\"message\":");
 		buf->EncodeString(msg, strlen(msg), false, true);
 		buf->cat("}\n");
-		Message(AUX_MESSAGE, buf);
+		Message(LcdMessage, buf);
 	}
-}
-
-// Note: the use of floating point time will cause the resolution to degrade over time.
-// For example, 1ms time resolution will only be available for about half an hour from startup.
-// Personally, I (dc42) would rather just maintain and provide the time in milliseconds in a uint32_t.
-// This would wrap round after about 49 days, but that isn't difficult to handle.
-float Platform::Time()
-{
-	unsigned long now = micros();
-	if (now < lastTimeCall) // Has timer overflowed?
-	{
-		addToTime += ((float) ULONG_MAX) * TIME_FROM_REPRAP;
-	}
-	lastTimeCall = now;
-	return addToTime + TIME_FROM_REPRAP * (float) now;
 }
 
 void Platform::Exit()
 {
+	StopLogging();
+
 	// Close all files
 	for (FileStore*& f : files)
 	{
@@ -1201,14 +1186,16 @@ void Platform::SetEmulating(Compatibility c)
 {
 	if (c != me && c != reprapFirmware && c != marlin)
 	{
-		Message(GENERIC_MESSAGE, "Attempt to emulate unsupported firmware.\n");
-		return;
+		Message(ErrorMessage, "Attempt to emulate unsupported firmware.\n");
 	}
-	if (c == reprapFirmware)
+	else
 	{
-		c = me;
+		if (c == reprapFirmware)
+		{
+			c = me;
+		}
+		compatibility = c;
 	}
-	compatibility = c;
 }
 
 void Platform::UpdateNetworkAddress(byte dst[4], const byte src[4])
@@ -1415,8 +1402,19 @@ void Platform::Spin()
 	TMC2660::SetDriversPowered(driversPowered);
 #endif
 
-	// Thermostatically-controlled fans (do this after getting TMC driver status)
 	const uint32_t now = millis();
+
+	// Update the time
+	if (realTime != 0)
+	{
+		if (now - timeLastUpdatedMillis >= 1000)
+		{
+			++realTime;							// this assumes that time_t is a seconds-since-epoch counter, which is not guaranteed by the C standard
+			timeLastUpdatedMillis += 1000;
+		}
+	}
+
+	// Thermostatically-controlled fans (do this after getting TMC driver status)
 	if (now - lastFanCheckTime >= FanCheckInterval)
 	{
 		lastFanCheckTime = now;
@@ -1452,7 +1450,7 @@ void Platform::Spin()
 			// Check for a VSSA fault
 			if (vssaSenseWorking && digitalRead(VssaSensePin))
 			{
-				Message(GENERIC_MESSAGE, "Error: VSSA fault, check thermistor wiring\n");
+				Message(ErrorMessage, "VSSA fault, check thermistor wiring\n");
 				reported = true;
 			}
 
@@ -1462,16 +1460,6 @@ void Platform::Spin()
 			}
 		}
 #endif
-	}
-
-	// Update the time
-	if (realTime != 0)
-	{
-		if (millis() - timeLastUpdatedMillis >= 1000)
-		{
-			++realTime;							// this assumes that time_t is a seconds-since-epoch counter, which is not guaranteed by the C standard
-			timeLastUpdatedMillis += 1000;
-		}
 	}
 
 #ifdef DUET_NG
@@ -1530,6 +1518,16 @@ void Platform::Spin()
 	}
 #endif
 
+	// Flush the log file it it is time. This may take some time, so do it last.
+	if (logger != nullptr)
+	{
+		if (now - lastLogFlushTime >= LogFlushInterval)
+		{
+			logger->Flush();
+			lastLogFlushTime = now;
+		}
+	}
+
 	ClassReport(longWait);
 }
 
@@ -1550,21 +1548,22 @@ void Platform::ReportDrivers(uint16_t whichDrivers, const char* text, bool& repo
 			}
 			whichDrivers >>= 1;
 		}
-		MessageF(GENERIC_MESSAGE, "%s\n", scratchString);
+		MessageF(GenericMessage, "%s\n", scratchString);
 		reported = true;
 	}
 }
 
 // Configure auto save on power fail
-void Platform::ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply, bool& error)
+bool Platform::ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply)
 {
 	bool seen = false;
 	float autoSaveVoltages[3];
 	if (gb.TryGetFloatArray('S', 3, autoSaveVoltages, reply, seen))
 	{
-		error = true;
+		return true;
 	}
-	else if (seen)
+
+	if (seen)
 	{
 		autoSaveEnabled = (autoSaveVoltages[0] >= 5.0 && autoSaveVoltages[1] > autoSaveVoltages[0] && autoSaveVoltages[2] > autoSaveVoltages[1]);
 		if (autoSaveEnabled)
@@ -1583,6 +1582,7 @@ void Platform::ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply, bool& error)
 		reply.printf(" Auto shutdown at %.1fV, save/pause at %.1fV, resume at %.1fV",
 			AdcReadingToPowerVoltage(autoShutdownReading), AdcReadingToPowerVoltage(autoPauseReading), AdcReadingToPowerVoltage(autoResumeReading));
 	}
+	return false;
 }
 
 // Save some resume information
@@ -1903,7 +1903,7 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Never used ram: %u\n", neverUsed);
 
 	// Show the up time and reason for the last reset
-	const uint32_t now = (uint32_t)Time();		// get up time in seconds
+	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
 #ifdef DUET_NG
 	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin
@@ -2122,7 +2122,7 @@ void Platform::DiagnosticTest(int d)
 			const uint32_t now2 = Platform::GetInterruptClocks();
 			const uint32_t num2a = isqrt64((uint64_t)num2 * num2);
 			const uint32_t tim2 = Platform::GetInterruptClocks() - now2;
-			MessageF(GENERIC_MESSAGE, "Square roots: 64-bit %.1fus %s, 32-bit %.1fus %s\n",
+			MessageF(GenericMessage, "Square roots: 64-bit %.1fus %s, 32-bit %.1fus %s\n",
 					(float)(tim1 * 1000000)/DDA::stepClockRate, (num1a == num1) ? "ok" : "ERROR",
 							(float)(tim2 * 1000000)/DDA::stepClockRate, (num2a == num2) ? "ok" : "ERROR");
 		}
@@ -2130,7 +2130,7 @@ void Platform::DiagnosticTest(int d)
 
 #ifdef DUET_NG
 	case (int)DiagnosticTestType::PrintExpanderStatus:
-		MessageF(GENERIC_MESSAGE, "Expander status %04X\n", DuetExpansion::DiagnosticRead());
+		MessageF(GenericMessage, "Expander status %04X\n", DuetExpansion::DiagnosticRead());
 		break;
 #endif
 
@@ -2157,15 +2157,16 @@ void Platform::GetStackUsage(uint32_t* currentStack, uint32_t* maxStack, uint32_
 	if (neverUsed != nullptr) { *neverUsed = stack_lwm - heapend; }
 }
 
-void Platform::ClassReport(float &lastTime)
+void Platform::ClassReport(uint32_t &lastTime)
 {
 	const Module spinningModule = reprap.GetSpinningModule();
 	if (reprap.Debug(spinningModule))
 	{
-		if (Time() - lastTime >= LONG_TIME)
+		const uint32_t now = millis();
+		if (now - lastTime >= LongTime)
 		{
-			lastTime = Time();
-			MessageF(HOST_MESSAGE, "Class %s spinning.\n", moduleName[spinningModule]);
+			lastTime = now;
+			MessageF(UsbMessage, "Class %s spinning\n", moduleName[spinningModule]);
 		}
 	}
 }
@@ -2395,6 +2396,16 @@ void Platform::DisableDrive(size_t drive)
 	else if (drive < DRIVES)
 	{
 		DisableDriver(extruderDrivers[drive - numAxes]);
+	}
+}
+
+// Disable all drives
+void Platform::DisableAllDrives()
+{
+	for (size_t drive = 0; drive < DRIVES; drive++)
+	{
+		SetDriverCurrent(drive, 0.0, false);
+		DisableDriver(drive);
 	}
 }
 
@@ -2781,7 +2792,7 @@ void Platform::SetMACAddress(uint8_t mac[])
 
 //-----------------------------------------------------------------------------------------------------
 
-FileStore* Platform::GetFileStore(const char* directory, const char* fileName, bool write)
+FileStore* Platform::GetFileStore(const char* directory, const char* fileName, OpenMode mode)
 {
 	if (!fileStructureInitialised)
 	{
@@ -2792,7 +2803,7 @@ FileStore* Platform::GetFileStore(const char* directory, const char* fileName, b
 	{
 		if (!files[i]->inUse)
 		{
-			if (files[i]->Open(directory, fileName, write))
+			if (files[i]->Open(directory, fileName, mode))
 			{
 				files[i]->inUse = true;
 				return files[i];
@@ -2803,7 +2814,7 @@ FileStore* Platform::GetFileStore(const char* directory, const char* fileName, b
 			}
 		}
 	}
-	Message(HOST_MESSAGE, "Max open file count exceeded.\n");
+	Message(UsbMessage, "Max open file count exceeded.\n");
 	return nullptr;
 }
 
@@ -2862,15 +2873,37 @@ void Platform::AppendAuxReply(OutputBuffer *reply)
 	}
 }
 
-void Platform::Message(MessageType type, const char *message)
+// Send the specified message to the specified destinations. The Error and Warning flags have already been handled.
+void Platform::RawMessage(MessageType type, const char *message)
 {
-	switch (type)
+	// Deal with logging
+	if ((type & LogMessage) != 0 && logger != nullptr)
 	{
-	case AUX_MESSAGE:
-		AppendAuxReply(message);
-		break;
+		logger->LogMessage(realTime, message);
+	}
 
-	case AUX2_MESSAGE:
+	// Send the nessage to the destinations
+	if ((type & ImmediateLcdMessage) != 0)
+	{
+		SendAuxMessage(message);
+	}
+	else if ((type & LcdMessage) != 0)
+	{
+		AppendAuxReply(message);
+	}
+
+	if ((type & HttpMessage) != 0)
+	{
+		reprap.GetNetwork().HandleHttpGCodeReply(message);
+	}
+
+	if ((type & TelnetMessage) != 0)
+	{
+		reprap.GetNetwork().HandleTelnetGCodeReply(message);
+	}
+
+	if ((type & AuxMessage) != 0)
+	{
 #ifdef SERIAL_AUX2_DEVICE
 		// Message that is to be sent to the second auxiliary device (blocking)
 		if (!aux2Output->IsEmpty())
@@ -2885,15 +2918,16 @@ void Platform::Message(MessageType type, const char *message)
 			SERIAL_AUX2_DEVICE.flush();
 		}
 #endif
-		break;
+	}
 
-	case DEBUG_MESSAGE:
+	if ((type & BlockingUsbMessage) != 0)
+	{
 		// Debug messages in blocking mode - potentially DANGEROUS, use with care!
 		SERIAL_MAIN_DEVICE.write(message);
 		SERIAL_MAIN_DEVICE.flush();
-		break;
-
-	case HOST_MESSAGE:
+	}
+	else if ((type & UsbMessage) != 0)
+	{
 		// Message that is to be sent via the USB line (non-blocking)
 #if SUPPORT_SCANNER
 		if (!reprap.GetScanner().IsRegistered() || reprap.GetScanner().DoingGCodes())
@@ -2914,101 +2948,94 @@ void Platform::Message(MessageType type, const char *message)
 			// Append the message string
 			usbOutputBuffer->cat(message);
 		}
-		break;
-
-	case HTTP_MESSAGE:
-		reprap.GetNetwork().HandleHttpGCodeReply(message);
-		break;
-
-	case TELNET_MESSAGE:
-		reprap.GetNetwork().HandleTelnetGCodeReply(message);
-		break;
-
-	case FIRMWARE_UPDATE_MESSAGE:
-		Message(HOST_MESSAGE, message);			// send message to USB
-		SendAuxMessage(message);				// send message to aux
-		break;
-
-	case GENERIC_MESSAGE:
-		// Message that is to be sent to the web & host. Make this the default one, too.
-	default:
-		Message(HTTP_MESSAGE, message);
-		Message(TELNET_MESSAGE, message);
-		// no break
-	case NETWORK_INFO_MESSAGE:
-		Message(HOST_MESSAGE, message);
-		Message(AUX_MESSAGE, message);
-		break;
 	}
 }
 
+// Note: this overload of Platform::Message does not process the special action flags in the MessageType.
+// Also it treats calls to send a blocking USB message the same as ordinary USB messages,
+// and calls to send an immediate LCD message the same as ordinary LCD messages
 void Platform::Message(const MessageType type, OutputBuffer *buffer)
 {
-	switch (type)
+	// First deal with logging because it doesn't hand on to the buffer
+	if ((type & LogMessage) != 0 && logger != nullptr)
 	{
-	case AUX_MESSAGE:
-		AppendAuxReply(buffer);
-		break;
+		logger->LogMessage(realTime, buffer);
+	}
 
-	case AUX2_MESSAGE:
+	// Now send the message to all the destinations
+	size_t numDestinations = 0;
+	if ((type & (LcdMessage | ImmediateLcdMessage)) != 0)
+	{
+		++numDestinations;
+	}
+	if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
+	{
+		++numDestinations;
+	}
+	if ((type & HttpMessage) != 0)
+	{
+		++numDestinations;
+	}
+	if ((type & TelnetMessage) != 0)
+	{
+		++numDestinations;
+	}
+
 #ifdef SERIAL_AUX2_DEVICE
-		// Send this message to the second UART device
-		aux2Output->Push(buffer);
-#else
-		OutputBuffer::ReleaseAll(buffer);
+	if ((type & AuxMessage) != 0)
+	{
+		++numDestinations;
+	}
 #endif
-		break;
 
-	case DEBUG_MESSAGE:
-		// Probably rarely used, but supported.
-		while (buffer != nullptr)
+	if (numDestinations == 0)
+	{
+		OutputBuffer::ReleaseAll(buffer);
+	}
+	else
+	{
+		buffer->IncreaseReferences(numDestinations - 1);
+
+		if ((type & (LcdMessage | ImmediateLcdMessage)) != 0)
 		{
-			SERIAL_MAIN_DEVICE.write(buffer->Data(), buffer->DataLength());
-			SERIAL_MAIN_DEVICE.flush();
-
-			buffer = OutputBuffer::Release(buffer);
+			AppendAuxReply(buffer);
 		}
-		break;
 
-	case HOST_MESSAGE:
-		if (   !SERIAL_MAIN_DEVICE
+		if ((type & HttpMessage) != 0)
+		{
+			reprap.GetNetwork().HandleHttpGCodeReply(buffer);
+		}
+
+		if ((type & TelnetMessage) != 0)
+		{
+			reprap.GetNetwork().HandleTelnetGCodeReply(buffer);
+		}
+
+#ifdef SERIAL_AUX2_DEVICE
+		if ((type & AuxMessage) != 0)
+		{
+			// Send this message to the second UART device
+			aux2Output->Push(buffer);
+		}
+#endif
+
+		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
+		{
+			if (   !SERIAL_MAIN_DEVICE
 #if SUPPORT_SCANNER
-			|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
+				|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
 #endif
-			)
-		{
-			// If the serial USB line is not open, discard the message right away
-			OutputBuffer::ReleaseAll(buffer);
+			   )
+			{
+				// If the serial USB line is not open, discard the message right away
+				OutputBuffer::ReleaseAll(buffer);
+			}
+			else
+			{
+				// Else append incoming data to the stack
+				usbOutput->Push(buffer);
+			}
 		}
-		else
-		{
-			// Else append incoming data to the stack
-			usbOutput->Push(buffer);
-		}
-		break;
-
-	case HTTP_MESSAGE:
-		reprap.GetNetwork().HandleHttpGCodeReply(buffer);
-		break;
-
-	case TELNET_MESSAGE:
-		reprap.GetNetwork().HandleTelnetGCodeReply(buffer);
-		break;
-
-	case GENERIC_MESSAGE:
-		// Message that is to be sent to the web & host.
-		buffer->IncreaseReferences(3);		// This one is handled by three additional destinations
-		Message(HTTP_MESSAGE, buffer);
-		Message(TELNET_MESSAGE, buffer);
-		Message(HOST_MESSAGE, buffer);
-		Message(AUX_MESSAGE, buffer);
-		break;
-
-	default:
-		// Everything else is unsupported (and probably not used)
-		OutputBuffer::ReleaseAll(buffer);
-		MessageF(HOST_MESSAGE, "Error: Unsupported Message call for type %u!\n", type);
-		break;
 	}
 }
 
@@ -3016,22 +3043,46 @@ void Platform::MessageF(MessageType type, const char *fmt, va_list vargs)
 {
 	char formatBuffer[FORMAT_STRING_LENGTH];
 	StringRef formatString(formatBuffer, ARRAY_SIZE(formatBuffer));
-	formatString.vprintf(fmt, vargs);
+	if ((type & ErrorMessageFlag) != 0)
+	{
+		formatString.copy("Error: ");
+		formatString.vcatf(fmt, vargs);
+	}
+	else if ((type & WarningMessageFlag) != 0)
+	{
+		formatString.copy("Warning: ");
+		formatString.vcatf(fmt, vargs);
+	}
+	else
+	{
+		formatString.vprintf(fmt, vargs);
+	}
 
-	Message(type, formatBuffer);
+	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatBuffer);
 }
 
 void Platform::MessageF(MessageType type, const char *fmt, ...)
 {
-	char formatBuffer[FORMAT_STRING_LENGTH];
-	StringRef formatString(formatBuffer, ARRAY_SIZE(formatBuffer));
-
 	va_list vargs;
 	va_start(vargs, fmt);
-	formatString.vprintf(fmt, vargs);
+	MessageF(type, fmt, vargs);
 	va_end(vargs);
+}
 
-	Message(type, formatBuffer);
+void Platform::Message(MessageType type, const char *message)
+{
+	if ((type & (ErrorMessageFlag | WarningMessageFlag)) == 0)
+	{
+		RawMessage(type, message);
+	}
+	else
+	{
+		char formatBuffer[FORMAT_STRING_LENGTH];
+		StringRef formatString(formatBuffer, ARRAY_SIZE(formatBuffer));
+		formatString.copy(((type & ErrorMessageFlag) != 0) ? "Error: " : "Warning: ");
+		formatString.cat(message);
+		RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatBuffer);
+	}
 }
 
 // Send a message box, which may require an acknowledgement
@@ -3043,9 +3094,9 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 {
 	switch (mt)
 	{
-	case HTTP_MESSAGE:
-	case AUX_MESSAGE:
-	case GENERIC_MESSAGE:
+	case HttpMessage:
+	case LcdMessage:
+	case GenericMessage:
 		// Make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
 		reprap.SetAlert(message, title, sParam, tParam, controls);
 		break;
@@ -3065,6 +3116,57 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 			Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
 		}
 		break;
+	}
+}
+
+// Configure logging according to the M929 command received, returning true if error
+bool Platform::ConfigureLogging(GCodeBuffer& gb, StringRef& reply)
+{
+	if (gb.Seen('S'))
+	{
+		StopLogging();
+		if (gb.GetIValue() > 0)
+		{
+			// Start logging
+			if (logger == nullptr)
+			{
+				logger = new Logger();
+			}
+			else
+			{
+				StopLogging();
+			}
+
+			char buf[FILENAME_LENGTH + 1];
+			StringRef filename(buf, ARRAY_SIZE(buf));
+			if (gb.Seen('P'))
+			{
+				if (!gb.GetQuotedString(filename))
+				{
+					reply.copy("Missing filename in M929 command");
+					return true;
+				}
+			}
+			else
+			{
+				filename.copy(DEFAULT_LOG_FILE);
+			}
+			logger->Start(realTime, filename);
+		}
+	}
+	else
+	{
+		reply.printf("Event logging is %s", (logger != nullptr && logger->IsActive()) ? "enabled" : "disabled");
+	}
+	return false;
+}
+
+// This is called form EmergencyStop. It closes the log file and stops logging.
+void Platform::StopLogging()
+{
+	if (logger != nullptr)
+	{
+		logger->Stop(realTime);
 	}
 }
 

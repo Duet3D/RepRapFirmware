@@ -141,7 +141,7 @@ void RtdSensor31865::Init()
 
 	if (rslt != TemperatureError::success)
 	{
-		reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: failed to initialise RTD: %s\n", TemperatureErrorString(rslt));
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise RTD: %s\n", TemperatureErrorString(rslt));
 	}
 }
 

@@ -10,6 +10,7 @@
 
 #include "RepRapFirmware.h"
 #include "MessageType.h"
+#include "Storage/FileData.h"
 
 const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can be pushed onto one stack instance
 
@@ -56,6 +57,9 @@ class OutputBuffer
 		size_t EncodeReply(OutputBuffer *src, bool allowControlChars);
 
 		uint32_t GetAge() const;
+
+		// Write the buffer to file returning true if successful
+		bool WriteToFile(FileData& f) const;
 
 		// Initialise the output buffers manager
 		static void Init();

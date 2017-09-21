@@ -53,7 +53,6 @@
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.571434619" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1642892736" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
@@ -106,7 +105,6 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1548770846" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.948285998" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
@@ -170,7 +168,6 @@
 									<listOptionValue builtIn="false" value="__SAM4E8E__"/>
 									<listOptionValue builtIn="false" value="CORE_NG"/>
 									<listOptionValue builtIn="false" value="DUET_NG"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.763992947" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
@@ -229,7 +226,6 @@
 									<listOptionValue builtIn="false" value="CORE_NG"/>
 									<listOptionValue builtIn="false" value="DUET_NG"/>
 									<listOptionValue builtIn="false" value="DUET_WIFI"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.151249281" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
@@ -292,7 +288,6 @@
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.2017188375" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
 									<listOptionValue builtIn="false" value="__RADDS__"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.110609707" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
@@ -344,7 +339,6 @@
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1179781669" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
 									<listOptionValue builtIn="false" value="__RADDS__"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1578939493" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
@@ -410,7 +404,6 @@
 									<listOptionValue builtIn="false" value="__SAM4E8E__"/>
 									<listOptionValue builtIn="false" value="CORE_NG"/>
 									<listOptionValue builtIn="false" value="DUET_NG"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.786131774" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
@@ -469,7 +462,6 @@
 									<listOptionValue builtIn="false" value="CORE_NG"/>
 									<listOptionValue builtIn="false" value="DUET_NG"/>
 									<listOptionValue builtIn="false" value="DUET_ETHERNET"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.2135034744" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
@@ -554,7 +546,6 @@
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.680004295" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
 									<listOptionValue builtIn="false" value="__ALLIGATOR__"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.1020546177" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.files.1091766282" name="Include files (-include)" superClass="gnu.c.compiler.option.include.files" useByScannerDiscovery="false"/>
@@ -611,7 +602,6 @@
 								<option id="gnu.cpp.compiler.option.preprocessor.def.890621467" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
 									<listOptionValue builtIn="false" value="__ALLIGATOR__"/>
-									<listOptionValue builtIn="false" value="printf=iprintf"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.undef.913409309" name="Undefined symbols (-U)" superClass="gnu.cpp.compiler.option.preprocessor.undef" useByScannerDiscovery="false"/>
 								<option id="gnu.cpp.compiler.option.dialect.std.603621474" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>

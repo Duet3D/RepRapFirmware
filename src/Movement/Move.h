@@ -56,7 +56,7 @@ public:
 	void SetXYBedProbePoint(size_t index, float x, float y);		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
 	float GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const; // Get pre-recorded probe coordinates
-	void FinishedBedProbing(int sParam, StringRef& reply);			// Calibrate or set the bed equation after probing
+	bool FinishedBedProbing(int sParam, StringRef& reply);			// Calibrate or set the bed equation after probing
 	void SetAxisCompensation(unsigned int axis, float tangent);		// Set an axis-pair compensation angle
 	float AxisCompensation(unsigned int axis) const;				// The tangent value
 	void SetIdentityTransform();									// Cancel the bed equation; does not reset axis angle compensation
@@ -92,8 +92,8 @@ public:
 
 	void CurrentMoveCompleted();													// Signal that the current move has just been completed
 	bool TryStartNextMove(uint32_t startTime);										// Try to start another move, returning true if Step() needs to be called immediately
-	float IdleTimeout() const { return idleTimeout; }								// Returns the idle timeout in seconds
-	void SetIdleTimeout(float timeout) { idleTimeout = timeout; }					// Set the idle timeout in seconds
+	float IdleTimeout() const;														// Returns the idle timeout in seconds
+	void SetIdleTimeout(float timeout);												// Set the idle timeout in seconds
 
 	void Simulate(uint8_t simMode);													// Enter or leave simulation mode
 	float GetSimulationTime() const { return simulationTime; }						// Get the accumulated simulation time
@@ -171,9 +171,9 @@ private:
 	bool usingMesh;										// true if we are using the height map, false if we are using the random probe point set
 	float taperHeight;									// Height over which we taper
 
-	float idleTimeout;									// How long we wait with no activity before we reduce motor currents to idle
-	float lastMoveTime;									// The approximate time at which the last move was completed, or 0
-	float longWait;										// A long time for things that need to be done occasionally
+	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
+	uint32_t lastMoveTime;								// The approximate time at which the last move was completed
+	uint32_t longWait;									// A long time for things that need to be done occasionally
 	IdleState iState;									// whether the idle timer is active
 
 	Kinematics *kinematics;								// What kinematics we are using

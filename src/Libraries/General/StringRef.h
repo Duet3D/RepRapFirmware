@@ -36,6 +36,7 @@ public:
 	int printf(const char *fmt, ...) const;
 	int vprintf(const char *fmt, va_list vargs) const;
 	int catf(const char *fmt, ...) const;
+	int vcatf(const char *fmt, va_list vargs) const;
 	size_t copy(const char* src) const;
 	size_t cat(const char *src) const;
 	size_t cat(char c) const;

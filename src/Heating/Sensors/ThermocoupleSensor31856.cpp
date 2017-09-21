@@ -83,7 +83,7 @@ bool ThermocoupleSensor31856::Configure(unsigned int mCode, unsigned int heater,
 		if (gb.TryGetQuotedString('T', buf.GetRef(), seen))
 		{
 			const char *p;
-			if (buf.strlen() == 1 && (p = strchr(TypeLetters, buf.c_str()[0])) != nullptr)
+			if (buf.strlen() == 1 && (p = strchr(TypeLetters, toupper(buf.c_str()[0]))) != nullptr)
 			{
 				thermocoupleType = p - TypeLetters;
 			}
@@ -125,7 +125,7 @@ void ThermocoupleSensor31856::Init()
 
 	if (rslt != TemperatureError::success)
 	{
-		reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: failed to initialise thermocouple: %s\n", TemperatureErrorString(rslt));
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to initialise thermocouple: %s\n", TemperatureErrorString(rslt));
 	}
 }
 

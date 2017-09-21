@@ -230,14 +230,14 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 	if (!fileBeingUploaded.Flush())
 	{
 		uploadError = true;
-		GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not flush remaining data while finishing upload!\n");
+		GetPlatform().Message(ErrorMessage, "Could not flush remaining data while finishing upload!\n");
 	}
 
 	// Check the file length is as expected
 	if (fileLength != 0 && fileBeingUploaded.Length() != fileLength)
 	{
 		uploadError = true;
-		GetPlatform().MessageF(GENERIC_MESSAGE, "Error: Uploaded file size is different (%u vs. expected %u bytes)!\n", fileBeingUploaded.Length(), fileLength);
+		GetPlatform().MessageF(ErrorMessage, "Uploaded file size is different (%u vs. expected %u bytes)!\n", fileBeingUploaded.Length(), fileLength);
 	}
 
 	// Close the file
@@ -262,6 +262,11 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 
 	// Clean up again
 	filenameBeingUploaded[0] = 0;
+}
+
+uint32_t NetworkResponder::GetRemoteIP() const
+{
+	return (skt == nullptr) ? 0 : skt->GetRemoteIP();
 }
 
 // End

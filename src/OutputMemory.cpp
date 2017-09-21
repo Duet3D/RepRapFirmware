@@ -45,7 +45,7 @@ void OutputBuffer::IncreaseReferences(size_t refs)
 size_t OutputBuffer::Length() const
 {
 	size_t totalLength = 0;
-	for(const OutputBuffer *current = this; current != nullptr; current = current->Next())
+	for (const OutputBuffer *current = this; current != nullptr; current = current->Next())
 	{
 		totalLength += current->DataLength();
 	}
@@ -301,11 +301,37 @@ size_t OutputBuffer::EncodeReply(OutputBuffer *src, bool allowControlChars)
 	return bytesWritten;
 }
 
+// Write all the data to file, but don't release the buffers
+// Returns true if successful
+bool OutputBuffer::WriteToFile(FileData& f) const
+{
+	bool endedInNewline = false;
+	const OutputBuffer *current = this;
+	do
+	{
+		if (current->dataLength != 0)
+		{
+			if (!f.Write(current->data, current->dataLength))
+			{
+				return false;
+			}
+			endedInNewline = current->data[current->dataLength - 1] == '\n';
+		}
+		current = current->Next();
+	} while (current != nullptr);
+
+	if (!endedInNewline)
+	{
+		return f.Write('\n');
+	}
+	return true;
+}
+
 // Initialise the output buffers manager
 /*static*/ void OutputBuffer::Init()
 {
 	freeOutputBuffers = nullptr;
-	for(size_t i = 0; i < OUTPUT_BUFFER_COUNT; i++)
+	for (size_t i = 0; i < OUTPUT_BUFFER_COUNT; i++)
 	{
 		freeOutputBuffers = new OutputBuffer(freeOutputBuffers);
 	}

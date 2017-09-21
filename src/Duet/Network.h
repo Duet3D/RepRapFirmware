@@ -115,7 +115,7 @@ public:
 private:
 	Platform& platform;
 	Webserver *webserver;
-	float longWait;
+	uint32_t longWait;
 
 	void AppendTransaction(NetworkTransaction* volatile * list, NetworkTransaction *r);
 	void PrependTransaction(NetworkTransaction* volatile * list, NetworkTransaction *r);

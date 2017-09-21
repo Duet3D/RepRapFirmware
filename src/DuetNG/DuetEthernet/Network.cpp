@@ -14,6 +14,7 @@
 #include "TelnetResponder.h"
 #include "wizchip_conf.h"
 #include "Wiznet/Internet/DHCP/dhcp.h"
+#include "Libraries/General/IP4String.h"
 
 const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
 const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
@@ -41,7 +42,7 @@ void Network::Init()
 {
 	// Ensure that the W5500 chip is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
-	longWait = platform.Time();
+	longWait = millis();
 	lastTickMillis = millis();
 
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
@@ -198,7 +199,7 @@ void Network::Activate()
 		}
 		else
 		{
-			platform.Message(NETWORK_INFO_MESSAGE, "Network disabled.\n");
+			platform.Message(NetworkInfoMessage, "Network disabled.\n");
 		}
 	}
 }
@@ -213,9 +214,9 @@ bool Network::GetNetworkState(StringRef& reply)
 {
 	const uint8_t * const config_ip = platform.GetIPAddress();
 	const int enableState = EnableState();
-	reply.printf("Network is %s, configured IP address: %u.%u.%u.%u, actual IP address: %u.%u.%u.%u",
+	reply.printf("Network is %s, configured IP address: %s, actual IP address: %s",
 			(enableState == 0) ? "disabled" : "enabled",
-					config_ip[0], config_ip[1], config_ip[2], config_ip[3], ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+					IP4String(config_ip).c_str(), IP4String(ipAddress).c_str());
 	return false;
 }
 
@@ -329,7 +330,7 @@ void Network::Spin(bool full)
 		if (full)
 		{
 			InitSockets();
-			platform.MessageF(NETWORK_INFO_MESSAGE, "Network running, IP address = %u.%u.%u.%u\n", ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+			platform.MessageF(NetworkInfoMessage, "Network running, IP address = %s\n", IP4String(ipAddress).c_str());
 			state = NetworkState::active;
 		}
 		break;
@@ -426,7 +427,7 @@ void Network::Enable(int mode, StringRef& reply)
 		if (state != NetworkState::disabled)
 		{
 			Stop();
-			platform.Message(NETWORK_INFO_MESSAGE, "Network stopped\n");
+			platform.Message(NetworkInfoMessage, "Network stopped\n");
 		}
 
 	}

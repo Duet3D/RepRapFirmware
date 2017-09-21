@@ -28,7 +28,7 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 		sendingRetries++;
 		if (sendingRetries == TCP_MAX_SEND_RETRIES)
 		{
-			reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Could not transmit data after %.1f seconds\n", (float)TCP_WRITE_TIMEOUT / 1000.0);
+			reprap.GetPlatform().MessageF(UsbMessage, "Network: Could not transmit data after %.1f seconds\n", (float)TCP_WRITE_TIMEOUT / 1000.0);
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}
@@ -39,14 +39,14 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 			writeResult = tcp_write(pcb, sendingWindow + (sendingWindowSize - sentDataOutstanding), sentDataOutstanding, 0);
 			if (ERR_IS_FATAL(writeResult))
 			{
-				reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Failed to write data in conn_poll (code %d)\n", writeResult);
+				reprap.GetPlatform().MessageF(UsbMessage, "Network: Failed to write data in conn_poll (code %d)\n", writeResult);
 				tcp_abort(pcb);
 				return ERR_ABRT;
 			}
 
 			if (writeResult != ERR_OK && reprap.Debug(moduleNetwork))
 			{
-				reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: tcp_write resulted in error code %d\n", writeResult);
+				reprap.GetPlatform().MessageF(UsbMessage, "Network: tcp_write resulted in error code %d\n", writeResult);
 			}
 		}
 
@@ -56,20 +56,20 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 			outputResult = tcp_output(pcb);
 			if (ERR_IS_FATAL(outputResult))
 			{
-				reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Failed to output data in conn_poll (code %d)\n", outputResult);
+				reprap.GetPlatform().MessageF(UsbMessage, "Network: Failed to output data in conn_poll (code %d)\n", outputResult);
 				tcp_abort(pcb);
 				return ERR_ABRT;
 			}
 
 			if (outputResult != ERR_OK && reprap.Debug(moduleNetwork))
 			{
-				reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: tcp_output resulted in error code %d\n", outputResult);
+				reprap.GetPlatform().MessageF(UsbMessage, "Network: tcp_output resulted in error code %d\n", outputResult);
 			}
 		}
 	}
 	else
 	{
-		reprap.GetPlatform().Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_poll!\n");
+		reprap.GetPlatform().Message(UsbMessage, "Network: Mismatched pcb in conn_poll!\n");
 	}
 	return ERR_OK;
 }
@@ -91,7 +91,7 @@ static err_t conn_sent(void *arg, tcp_pcb *pcb, u16_t len)
 	}
 	else
 	{
-		reprap.GetPlatform().Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_sent!\n");
+		reprap.GetPlatform().Message(UsbMessage, "Network: Mismatched pcb in conn_sent!\n");
 	}
 	return ERR_OK;
 }
@@ -330,7 +330,7 @@ bool NetworkTransaction::Send()
 	writeResult = tcp_write(cs->pcb, sendingWindow, bytesBeingSent, 0);
 	if (ERR_IS_FATAL(writeResult))
 	{
-		reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Failed to write data in Send (code %d)\n", writeResult);
+		reprap.GetPlatform().MessageF(UsbMessage, "Network: Failed to write data in Send (code %d)\n", writeResult);
 		tcp_abort(cs->pcb);
 		return false;
 	}
@@ -338,14 +338,14 @@ bool NetworkTransaction::Send()
 	outputResult = tcp_output(cs->pcb);
 	if (ERR_IS_FATAL(outputResult))
 	{
-		reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Failed to output data in Send (code %d)\n", outputResult);
+		reprap.GetPlatform().MessageF(UsbMessage, "Network: Failed to output data in Send (code %d)\n", outputResult);
 		tcp_abort(cs->pcb);
 		return false;
 	}
 
 	if (outputResult != ERR_OK && reprap.Debug(moduleNetwork))
 	{
-		reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: tcp_output resulted in error code %d\n", outputResult);
+		reprap.GetPlatform().MessageF(UsbMessage, "Network: tcp_output resulted in error code %d\n", outputResult);
 	}
 
 	// Set LwIP callbacks for ACK and retransmission handling
@@ -592,7 +592,7 @@ void NetworkTransaction::Discard()
 	{
 		if (reprap.Debug(moduleNetwork))
 		{
-			reprap.GetPlatform().Message(HOST_MESSAGE, "Network: Discard() is handling a graceful disconnect\n");
+			reprap.GetPlatform().Message(UsbMessage, "Network: Discard() is handling a graceful disconnect\n");
 		}
 		reprap.GetNetwork().ConnectionClosed(cs, false);
 	}

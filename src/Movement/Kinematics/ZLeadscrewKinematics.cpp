@@ -12,7 +12,13 @@
 
 const float M3ScrewPitch = 0.5;
 
-ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k) : Kinematics(k), numLeadscrews(0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
+ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k)
+	: Kinematics(k, -1.0, 0.0, true), numLeadscrews(0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
+{
+}
+
+ZLeadscrewKinematics::ZLeadscrewKinematics(KinematicsType k, float segsPerSecond, float minSegLength, bool doUseRawG0)
+	: Kinematics(k, segsPerSecond, minSegLength, doUseRawG0), numLeadscrews(0), maxCorrection(1.0), screwPitch(M3ScrewPitch)
 {
 }
 
@@ -84,16 +90,17 @@ bool ZLeadscrewKinematics::SupportsAutoCalibration() const
 }
 
 // Perform auto calibration. Override this implementation in kinematics that support it. Caller already owns the GCode movement lock.
-void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
+bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
 {
 	if (!SupportsAutoCalibration())			// should be checked by caller, but check it here too
 	{
-		return;
+		return false;
 	}
 
 	if (numFactors != numLeadscrews)
 	{
-		reply.printf("Error: Number of calibration factors (%u) not equal to number of leadscrews (%u)", numFactors, numLeadscrews);
+		reply.printf("Number of calibration factors (%u) not equal to number of leadscrews (%u)", numFactors, numLeadscrews);
+		return true;
 	}
 
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -262,44 +269,43 @@ void ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 
 	if (haveNaN)
 	{
-		reply.printf("Error: calibration failed, computed corrections:");
+		reply.printf("Calibration failed, computed corrections:");
 		AppendCorrections(solution, reply);
-	}
-	else if (haveLargeCorrection)
-	{
-		reply.printf("Error: some computed corrections exceed configured limit of %.02fmm:", maxCorrection);
-		AppendCorrections(solution, reply);
+		return true;
 	}
 	else
 	{
 		const size_t numZDrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
 		if (numZDrivers == numLeadscrews)
 		{
-			reprap.GetMove().AdjustLeadscrews(solution);
-			reply.printf("Leadscrew adjustments made:");
-			AppendCorrections(solution, reply);
-			reply.catf(", points used %d, deviation before %.3f after %.3f",
-						numPoints, sqrt(initialSumOfSquares/numPoints), sqrtf(sumOfSquares/numPoints));
+			if (haveLargeCorrection)
+			{
+				reply.printf("Some computed corrections exceed configured limit of %.02fmm:", maxCorrection);
+				AppendCorrections(solution, reply);
+				return true;
+			}
+			else
+			{
+				reprap.GetMove().AdjustLeadscrews(solution);
+				reply.printf("Leadscrew adjustments made:");
+				AppendCorrections(solution, reply);
+				reply.catf(", points used %d, deviation before %.3f after %.3f",
+							numPoints, sqrt(initialSumOfSquares/numPoints), sqrtf(sumOfSquares/numPoints));
+				reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.Pointer());
+			}
 		}
 		else
 		{
 			// User wants manual corrections for bed levelling screws.
-			// Pick the one with the smallest adjustment to leave alone.
-			float smallestCorrection = solution[0];
-			for (size_t i = 1; i < numLeadscrews; ++i)
-			{
-				if (fabs(solution[i]) < fabs(smallestCorrection))
-				{
-					smallestCorrection = solution[i];
-				}
-			}
+			// Leave the first one alone.
 			reply.printf("Manual corrections required:");
 			for (size_t i = 0; i < numLeadscrews; ++i)
 			{
-				const float netAdjustment = solution[i] - smallestCorrection;
+				const float netAdjustment = solution[i] - solution[0];
 				reply.catf(" %.2f turn %s (%.2fmm)", fabs(netAdjustment)/screwPitch, (netAdjustment > 0) ? "down" : "up", netAdjustment);
 			}
 		}
+		return false;
 	}
 }
 

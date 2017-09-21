@@ -90,7 +90,7 @@ bool GCodeBuffer::Put(char c)
 		gcodeBuffer[gcodePointer] = 0;
 		if (reprap.Debug(moduleGcodes) && gcodeBuffer[0] != 0 && !writingFileDirectory)		// don't bother echoing blank/comment lines
 		{
-			reprap.GetPlatform().MessageF(DEBUG_MESSAGE, "%s: %s\n", identity, gcodeBuffer);
+			reprap.GetPlatform().MessageF(DebugMessage, "%s: %s\n", identity, gcodeBuffer);
 		}
 
 		// Deal with line numbers and checksums
@@ -149,7 +149,7 @@ bool GCodeBuffer::Put(char c)
 	{
 		if (gcodePointer >= (int)GCODE_LENGTH)
 		{
-			reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: G-Code buffer '%s' length overflow\n", identity);
+			reprap.GetPlatform().MessageF(ErrorMessage, "G-Code buffer '%s' length overflow\n", identity);
 			Init();
 		}
 		else
@@ -247,18 +247,31 @@ bool GCodeBuffer::Seen(char c)
 	return false;
 }
 
-// Return the first G, M or T command letter. Needed so that we don't pick up a spurious command letter form inside a string parameter.
+// Return the first G, M or T command letter. Needed so that we don't pick up a spurious command letter from inside a string parameter.
 char GCodeBuffer::GetCommandLetter()
 {
 	readPointer = 0;
 	for (;;)
 	{
 		char b = gcodeBuffer[readPointer];
-		if (b == 0 || b == ';') break;
+		if (b == 0 || b == ';' || b == '"' || b == '(')
+		{
+			break;
+		}
 		b = (char)toupper(b);
-		if (b == 'G' || b == 'M' || b == 'T')
+		if (b == 'T')
 		{
 			return b;
+		}
+		if (b == 'G' || b == 'M')
+		{
+			// Check that the command letter is followed by a digit. This is mostly to avoid a malformed string in which the first letter is M being interpreted as M0.
+			const char b2 = gcodeBuffer[readPointer + 1];
+			if (b2 >= '0' && b2 <= '9')
+			{
+				return b;
+			}
+			break;
 		}
 		++readPointer;
 	}
@@ -271,7 +284,7 @@ float GCodeBuffer::GetFValue()
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float before a search.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode float before a search.\n");
 		return 0.0;
 	}
 	float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
@@ -284,7 +297,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array before a search.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode float array before a search.\n");
 		returnedLength = 0;
 		return;
 	}
@@ -295,7 +308,7 @@ const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool do
 	{
 		if (length >= returnedLength)		// array limit has been set in here
 		{
-			reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
+			reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -334,7 +347,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array before a search.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode long array before a search.\n");
 		return;
 	}
 
@@ -344,7 +357,7 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 	{
 		if (length >= returnedLength) // Array limit has been set in here
 		{
-			reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
+			reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
 			readPointer = -1;
 			returnedLength = 0;
 			return;
@@ -371,7 +384,7 @@ const char* GCodeBuffer::GetString()
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode string before a search.\n");
 		return "";
 	}
 	const char* const result = &gcodeBuffer[readPointer + 1];
@@ -385,7 +398,7 @@ bool GCodeBuffer::GetQuotedString(const StringRef& str)
 	str.Clear();
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode string before a search.\n");
 		return false;
 	}
 	++readPointer;				// skip the character that introduced the string
@@ -473,7 +486,7 @@ const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 		readPointer = -1;
 		if (!optional)
 		{
-			reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: String expected but not seen.\n");
+			reprap.GetPlatform().Message(ErrorMessage, "GCodes: String expected but not seen.\n");
 		}
 		return nullptr;
 	}
@@ -488,7 +501,7 @@ int32_t GCodeBuffer::GetIValue()
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode int before a search.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode int before a search.\n");
 		readPointer = -1;
 		return 0;
 	}
@@ -502,7 +515,7 @@ uint32_t GCodeBuffer::GetUIValue()
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode int before a search.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode int before a search.\n");
 		readPointer = -1;
 		return 0;
 	}
@@ -592,7 +605,7 @@ bool GCodeBuffer::GetIPAddress(uint8_t ip[4])
 {
 	if (readPointer < 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: GCodes: Attempt to read a GCode string before a search.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode string before a search.\n");
 		return false;
 	}
 	const char* p = &gcodeBuffer[readPointer + 1];

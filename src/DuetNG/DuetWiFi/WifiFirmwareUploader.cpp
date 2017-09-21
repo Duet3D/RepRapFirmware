@@ -81,7 +81,7 @@ void WifiFirmwareUploader::MessageF(const char *fmt, ...)
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	reprap.GetPlatform().MessageF(FIRMWARE_UPDATE_MESSAGE, fmt, vargs);
+	reprap.GetPlatform().MessageF(FirmwareUpdateMessage, fmt, vargs);
 	va_end(vargs);
 }
 
@@ -690,7 +690,7 @@ void WifiFirmwareUploader::Spin()
 		uploadPort.end();					// disable the port, it has a high interrupt priority
 		if (uploadResult == EspUploadResult::success)
 		{
-			reprap.GetPlatform().Message(FIRMWARE_UPDATE_MESSAGE, "Upload successful\n");
+			reprap.GetPlatform().Message(FirmwareUpdateMessage, "Upload successful\n");
 			if (restartModeOnCompletion == 1)
 			{
 				reprap.GetNetwork().Start();
@@ -702,7 +702,7 @@ void WifiFirmwareUploader::Spin()
 		}
 		else
 		{
-			reprap.GetPlatform().MessageF(FIRMWARE_UPDATE_MESSAGE, "Error: Installation failed due to %s error\n", resultMessages[(size_t)uploadResult]);
+			reprap.GetPlatform().MessageF(FirmwareUpdateMessage, "Error: Installation failed due to %s error\n", resultMessages[(size_t)uploadResult]);
 			// Not safe to restart the network
 			reprap.GetNetwork().ResetWiFi();
 		}
@@ -718,10 +718,10 @@ void WifiFirmwareUploader::Spin()
 void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uint32_t address)
 {
 	Platform& platform = reprap.GetPlatform();
-	uploadFile = platform.GetFileStore(dir, file, false);
+	uploadFile = platform.GetFileStore(dir, file, OpenMode::read);
 	if (uploadFile == nullptr)
 	{
-		platform.MessageF(FIRMWARE_UPDATE_MESSAGE, "Failed to open file %s\n", file);
+		platform.MessageF(FirmwareUpdateMessage, "Failed to open file %s\n", file);
 		return;
 	}
 
@@ -729,7 +729,7 @@ void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uin
 	if (fileSize == 0)
 	{
 		uploadFile->Close();
-		platform.MessageF(FIRMWARE_UPDATE_MESSAGE, "Upload file is empty %s\n", file);
+		platform.MessageF(FirmwareUpdateMessage, "Upload file is empty %s\n", file);
 		return;
 	}
 

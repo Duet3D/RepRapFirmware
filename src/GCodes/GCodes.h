@@ -102,9 +102,8 @@ public:
 	void Reset();														// Reset some parameter to defaults
 	bool ReadMove(RawMove& m);											// Called by the Move class to get a movement set by the last G Code
 	void ClearMove();
-	void QueueFileToPrint(const char* fileName);						// Open a file of G Codes to run
+	bool QueueFileToPrint(const char* fileName, StringRef& reply);		// Open a file of G Codes to run
 	void StartPrinting();												// Start printing the file already selected
-	void DeleteFile(const char* fileName);								// Does what it says
 	void GetCurrentCoordinates(StringRef& s) const;						// Write where we are into a string
 	bool DoingFileMacro() const;										// Or still busy processing a macro file?
 	float FractionOfFilePrinted() const;								// Get fraction of file printed
@@ -410,7 +409,7 @@ private:
 	size_t lastFilamentErrorExtruder;
 
 	// Misc
-	float longWait;								// Timer for things that happen occasionally (seconds)
+	uint32_t longWait;							// Timer for things that happen occasionally (seconds)
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue

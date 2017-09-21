@@ -104,18 +104,18 @@ void RepRap::Init()
 	printMonitor->Init();
 	active = true;					// must do this before we start the network, else the watchdog may time out
 
-	platform->MessageF(HOST_MESSAGE, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
+	platform->MessageF(UsbMessage, "%s Version %s dated %s\n", FIRMWARE_NAME, VERSION, DATE);
 
 	// Run the configuration file
 	const char *configFile = platform->GetConfigFile();
-	platform->Message(HOST_MESSAGE, "\nExecuting ");
+	platform->Message(UsbMessage, "\nExecuting ");
 	if (platform->GetMassStorage()->FileExists(platform->GetSysDir(), configFile))
 	{
-		platform->MessageF(HOST_MESSAGE, "%s...", platform->GetConfigFile());
+		platform->MessageF(UsbMessage, "%s...", platform->GetConfigFile());
 	}
 	else
 	{
-		platform->MessageF(HOST_MESSAGE, "%s (no configuration file found)...", platform->GetDefaultFile());
+		platform->MessageF(UsbMessage, "%s (no configuration file found)...", platform->GetDefaultFile());
 		configFile = platform->GetDefaultFile();
 	}
 
@@ -126,11 +126,11 @@ void RepRap::Init()
 			// GCodes::Spin will read the macro and ensure IsDaemonBusy returns false when it's done
 			Spin();
 		}
-		platform->Message(HOST_MESSAGE, "Done!\n");
+		platform->Message(UsbMessage, "Done!\n");
 	}
 	else
 	{
-		platform->Message(HOST_MESSAGE, "Error, not found\n");
+		platform->Message(UsbMessage, "Error, not found\n");
 	}
 	processingConfig = false;
 
@@ -140,10 +140,10 @@ void RepRap::Init()
 #if !defined(__RADDS__) && !defined(__ALLIGATOR__)
 	hsmci_set_idle_func(hsmciIdle);
 #endif
-	platform->MessageF(HOST_MESSAGE, "%s is up and running.\n", FIRMWARE_NAME);
-	fastLoop = FLT_MAX;
-	slowLoop = 0.0;
-	lastTime = platform->Time();
+	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
+	fastLoop = UINT32_MAX;
+	slowLoop = 0;
+	lastTime = micros();
 }
 
 void RepRap::Exit()
@@ -236,15 +236,15 @@ void RepRap::Spin()
 		{
 			if (t->DisplayColdExtrudeWarning())
 			{
-				platform->MessageF(GENERIC_MESSAGE, "Warning: Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
+				platform->MessageF(WarningMessage, "Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->myNumber);
 				lastWarningMillis = now;
 			}
 		}
 	}
 
 	// Keep track of the loop time
-	const float t = platform->Time();
-	const float dt = t - lastTime;
+	const uint32_t t = micros();
+	const uint32_t dt = t - lastTime;
 	if (dt < fastLoop)
 	{
 		fastLoop = dt;
@@ -258,9 +258,9 @@ void RepRap::Spin()
 
 void RepRap::Timing(MessageType mtype)
 {
-	platform->MessageF(mtype, "Slowest main loop (seconds): %f; fastest: %f\n", slowLoop, fastLoop);
-	fastLoop = FLT_MAX;
-	slowLoop = 0.0;
+	platform->MessageF(mtype, "Slowest main loop (seconds): %f; fastest: %f\n", (float)slowLoop * 0.000001, (float)fastLoop * 0.000001);
+	fastLoop = UINT32_MAX;
+	slowLoop = 0;
 }
 
 void RepRap::Diagnostics(MessageType mtype)
@@ -291,7 +291,7 @@ void RepRap::EmergencyStop()
 	}
 
 	heat->Exit();
-	for(size_t heater = 0; heater < Heaters; heater++)
+	for (size_t heater = 0; heater < Heaters; heater++)
 	{
 		platform->SetHeater(heater, 0.0);
 	}
@@ -300,12 +300,10 @@ void RepRap::EmergencyStop()
 	for (int i = 0; i < 2; i++)
 	{
 		move->Exit();
-		for (size_t drive = 0; drive < DRIVES; drive++)
-		{
-			platform->SetMotorCurrent(drive, 0.0, false);
-			platform->DisableDrive(drive);
-		}
+		platform->DisableAllDrives();
 	}
+
+	platform->StopLogging();
 }
 
 void RepRap::SetDebug(Module m, bool enable)
@@ -330,27 +328,27 @@ void RepRap::PrintDebug()
 {
 	if (debug != 0)
 	{
-		platform->Message(GENERIC_MESSAGE, "Debugging enabled for modules:");
+		platform->Message(GenericMessage, "Debugging enabled for modules:");
 		for (size_t i = 0; i < numModules; i++)
 		{
 			if ((debug & (1 << i)) != 0)
 			{
-				platform->MessageF(GENERIC_MESSAGE, " %s(%u)", moduleName[i], i);
+				platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
 			}
 		}
-		platform->Message(GENERIC_MESSAGE, "\nDebugging disabled for modules:");
+		platform->Message(GenericMessage, "\nDebugging disabled for modules:");
 		for (size_t i = 0; i < numModules; i++)
 		{
 			if ((debug & (1 << i)) == 0)
 			{
-				platform->MessageF(GENERIC_MESSAGE, " %s(%u)", moduleName[i], i);
+				platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
 			}
 		}
-		platform->Message(GENERIC_MESSAGE, "\n");
+		platform->Message(GenericMessage, "\n");
 	}
 	else
 	{
-		platform->Message(GENERIC_MESSAGE, "Debugging disabled\n");
+		platform->Message(GenericMessage, "Debugging disabled\n");
 	}
 }
 
@@ -464,7 +462,7 @@ void RepRap::StandbyTool(int toolNumber)
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Attempt to standby a non-existent tool: %d.\n", toolNumber);
+		platform->MessageF(ErrorMessage, "Attempt to standby a non-existent tool: %d.\n", toolNumber);
 	}
 }
 
@@ -499,7 +497,7 @@ void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, 
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
+		platform->MessageF(ErrorMessage, "Attempt to set variables for a non-existent tool: %d.\n", toolNumber);
 	}
 }
 
@@ -872,7 +870,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		bool first = true;
 		for (size_t heater = FirstVirtualHeater; heater < FirstVirtualHeater + MaxVirtualHeaters; ++heater)
 		{
-			const char *nm = heat->GetHeaterName(heater);
+			const char * const nm = heat->GetHeaterName(heater);
 			if (nm != nullptr)
 			{
 				if (!first)
@@ -892,7 +890,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	}
 
 	// Time since last reset
-	response->catf(",\"time\":%.1f", platform->Time());
+	response->catf(",\"time\":%.1f", (float)millis64() * 0.001);
 
 #if SUPPORT_SCANNER
 	// Scanner
@@ -914,16 +912,16 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"tempLimit\":%1.f", heat->GetHighestTemperatureLimit());
 
 		// Endstops
-		uint16_t endstops = 0;
+		uint32_t endstops = 0;
 		for(size_t drive = 0; drive < DRIVES; drive++)
 		{
 			EndStopHit stopped = platform->Stopped(drive);
 			if (stopped == EndStopHit::highHit || stopped == EndStopHit::lowHit)
 			{
-				endstops |= (1 << drive);
+				endstops |= (1u << drive);
 			}
 		}
-		response->catf(",\"endstops\":%d", endstops);
+		response->catf(",\"endstops\":%u", endstops);
 
 		// Firmware name, machine geometry and number of axes
 		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u", FIRMWARE_NAME, move->GetGeometryString(), numAxes);
@@ -1195,7 +1193,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 
 	// Motor idle parameters
 	response->catf(",\"idleCurrentFactor\":%.1f", platform->GetIdleCurrentFactor() * 100.0);
-	response->catf(",\"idleTimeout\":%.1f", move->IdleTimeout());
+	response->catf(",\"idleTimeout\":%u", move->IdleTimeout());
 
 	// Minimum feedrates
 	response->cat(",\"minFeedrates\":");

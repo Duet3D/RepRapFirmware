@@ -147,7 +147,7 @@ private:
 	TemperatureSensor *virtualHeaterSensors[MaxVirtualHeaters];	// Sensors for virtual heaters
 
 	uint32_t lastTime;											// The last time our Spin() was called
-	float longWait;												// Long time for things that happen occasionally
+	uint32_t longWait;											// Long time for things that happen occasionally
 
 	bool active;												// Are we active?
 	bool coldExtrude;											// Is cold extrusion allowed?

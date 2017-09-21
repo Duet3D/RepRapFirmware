@@ -11,6 +11,7 @@
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
 #include "WifiFirmwareUploader.h"
+#include "Libraries/General/IP4String.h"
 
 // Define exactly one of the following as 1, the other as zero
 // The PDC seems to be too slow to work reliably without getting transmit underruns, so we use the DMAC now.
@@ -119,7 +120,7 @@ Network::Network(Platform& p) : platform(p), nextResponderToPoll(nullptr), uploa
 		responders = new HttpResponder(responders);
 	}
 
-	strcpy(ssid, "(unknown)");
+	strcpy(actualSsid, "(unknown)");
 	strcpy(wiFiServerVersion, "(unknown)");
 }
 
@@ -127,8 +128,7 @@ void Network::Init()
 {
 	// Make sure the ESP8266 is held in the reset state
 	ResetWiFi();
-	longWait = platform.Time();
-	lastTickMillis = millis();
+	longWait = lastTickMillis = millis();
 
 	NetworkBuffer::AllocateBuffers(NetworkBufferCount);
 
@@ -286,7 +286,7 @@ void Network::Activate()
 		}
 		else
 		{
-			platform.Message(HOST_MESSAGE, "Network disabled.\n");
+			platform.Message(UsbMessage, "Network disabled.\n");
 		}
 	}
 }
@@ -316,7 +316,7 @@ bool Network::GetNetworkState(StringRef& reply)
 		reply.cat(TranslateWiFiState(currentMode));
 		if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 		{
-			reply.catf("%s, IP address %u.%u.%u.%u", ssid, ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+			reply.catf("%s, IP address %s", actualSsid, IP4String(ipAddress).c_str());
 		}
 		break;
 	default:
@@ -428,7 +428,7 @@ void Network::Spin(bool full)
 				if (now - lastTickMillis >= WiFiStableMillis)
 				{
 					// Setup the SPI controller in slave mode and assign the CS pin to it
-					platform.Message(NETWORK_INFO_MESSAGE, "WiFi module started\n");
+					platform.Message(NetworkInfoMessage, "WiFi module started\n");
 					SetupSpi();									// set up the SPI subsystem
 
 					// Read the status to get the WiFi server version
@@ -441,7 +441,7 @@ void Network::Spin(bool full)
 						// Set the hostname before anything else is done
 						if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
 						{
-							reprap.GetPlatform().Message(NETWORK_INFO_MESSAGE, "Error: Could not set WiFi hostname\n");
+							reprap.GetPlatform().Message(NetworkInfoMessage, "Error: Could not set WiFi hostname\n");
 						}
 
 						state = NetworkState::active;
@@ -451,7 +451,7 @@ void Network::Spin(bool full)
 					{
 						// Something went wrong, maybe a bad firmware image was flashed
 						// Disable the WiFi chip again in this case
-						platform.MessageF(NETWORK_INFO_MESSAGE, "Error: Failed to initialise WiFi module, code %d\n", rc);
+						platform.MessageF(NetworkInfoMessage, "Error: Failed to initialise WiFi module, code %d\n", rc);
 						Stop();
 					}
 				}
@@ -496,7 +496,7 @@ void Network::Spin(bool full)
 				}
 				else if (requestedMode == WiFiState::connected)
 				{
-					rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, nullptr, 0, nullptr, 0);
+					rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, requestedSsid, SsidLength, nullptr, 0);
 				}
 				else if (requestedMode == WiFiState::runningAsAccessPoint)
 				{
@@ -510,7 +510,7 @@ void Network::Spin(bool full)
 				else
 				{
 					Stop();
-					platform.MessageF(NETWORK_INFO_MESSAGE, "Failed to change WiFi mode (code %d)\n", rslt);
+					platform.MessageF(NetworkInfoMessage, "Failed to change WiFi mode (code %d)\n", rslt);
 				}
 			}
 			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
@@ -587,18 +587,18 @@ void Network::Spin(bool full)
 							ipAddress[i] = (uint8_t)(ip & 255);
 							ip >>= 8;
 						}
-						SafeStrncpy(ssid, status.Value().ssid, SsidLength);
+						SafeStrncpy(actualSsid, status.Value().ssid, SsidLength);
 					}
 					InitSockets();
 					reconnectCount = 0;
-					platform.MessageF(NETWORK_INFO_MESSAGE, "Wifi module is %s%s, IP address %u.%u.%u.%u\n",
+					platform.MessageF(NetworkInfoMessage, "Wifi module is %s%s, IP address %s\n",
 						TranslateWiFiState(currentMode),
-						ssid,
-						ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+						actualSsid,
+						IP4String(ipAddress).c_str());
 				}
 				else
 				{
-					platform.MessageF(NETWORK_INFO_MESSAGE, "Wifi module is %s\n", TranslateWiFiState(currentMode));
+					platform.MessageF(NetworkInfoMessage, "Wifi module is %s\n", TranslateWiFiState(currentMode));
 				}
 			}
 		}
@@ -670,8 +670,7 @@ void Network::Diagnostics(MessageType mtype)
 
 			if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
-				platform.MessageF(mtype, "WiFi IP address %d.%d.%d.%d\n",
-					r.ipAddress & 255, (r.ipAddress >> 8) & 255, (r.ipAddress >> 16) & 255, (r.ipAddress >> 24) & 255);
+				platform.MessageF(mtype, "WiFi IP address %s\n", IP4String(r.ipAddress).c_str());
 			}
 
 			if (currentMode == WiFiState::connected)
@@ -709,13 +708,20 @@ void Network::Diagnostics(MessageType mtype)
 	platform.Message(mtype, "\n");
 }
 
-void Network::Enable(int mode, StringRef& reply)
+// Enable or disable the network
+void Network::Enable(int mode, const StringRef& ssid, StringRef& reply)
 {
 	// Translate enable mode to desired WiFi mode
 	const WiFiState modeRequested = (mode == 0) ? WiFiState::idle
 									: (mode == 1) ? WiFiState::connected
 										: (mode == 2) ? WiFiState::runningAsAccessPoint
 											: WiFiState::disabled;
+	if (modeRequested == WiFiState::connected)
+	{
+		memset(requestedSsid, 0, sizeof(requestedSsid));
+		SafeStrncpy(requestedSsid, ssid.Pointer(), ARRAY_SIZE(requestedSsid));
+	}
+
 	if (activated)
 	{
 		if (modeRequested == WiFiState::disabled)
@@ -725,7 +731,7 @@ void Network::Enable(int mode, StringRef& reply)
 			if (state != NetworkState::disabled)
 			{
 				Stop();
-				platform.Message(GENERIC_MESSAGE, "WiFi module stopped\n");
+				platform.Message(GenericMessage, "WiFi module stopped\n");
 			}
 		}
 		else
@@ -827,7 +833,7 @@ void Network::SetHostname(const char *name)
 	{
 		if (SendCommand(NetworkCommand::networkSetHostName, 0, 0, hostname, HostNameLength, nullptr, 0) != ResponseEmpty)
 		{
-			platform.Message(GENERIC_MESSAGE, "Error: Could not set WiFi hostname\n");
+			platform.Message(GenericMessage, "Error: Could not set WiFi hostname\n");
 		}
 	}
 }
@@ -1318,11 +1324,11 @@ void Network::GetNewStatus()
 	rcvr.Value().messageBuffer[ARRAY_UPB(rcvr.Value().messageBuffer)] = 0;
 	if (rslt < 0)
 	{
-		platform.Message(NETWORK_INFO_MESSAGE, "Error retrieving WiFi status message\n");
+		platform.Message(NetworkInfoMessage, "Error retrieving WiFi status message\n");
 	}
 	else if (rslt > 0 && rcvr.Value().messageBuffer[0] != 0)
 	{
-		platform.MessageF(NETWORK_INFO_MESSAGE, "WiFi reported error: %s\n", rcvr.Value().messageBuffer);
+		platform.MessageF(NetworkInfoMessage, "WiFi reported error: %s\n", rcvr.Value().messageBuffer);
 	}
 }
 

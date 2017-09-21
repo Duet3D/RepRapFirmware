@@ -202,7 +202,7 @@ float Tool::MaxFeedrate() const
 {
 	if (driveCount <= 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Attempt to get maximum feedrate for a tool with no drives.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to get maximum feedrate for a tool with no drives.\n");
 		return 1.0;
 	}
 	float result = 0.0;
@@ -222,7 +222,7 @@ float Tool::InstantDv() const
 {
 	if (driveCount <= 0)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Error: Attempt to get InstantDv for a tool with no drives.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to get InstantDv for a tool with no drives.\n");
 		return 1.0;
 	}
 	float result = FLT_MAX;

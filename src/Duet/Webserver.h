@@ -337,7 +337,7 @@ protected:
 	NetworkTransaction *currentTransaction;
 	volatile Connection readingConnection;
 
-    float longWait;
+    uint32_t longWait;
 };
 
 inline bool ProtocolInterpreter::CanParseData() { return true; }

@@ -12,7 +12,7 @@
 #include "RepRap.h"
 #include "Storage/FileStore.h"
 
-LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta)
+LinearDeltaKinematics::LinearDeltaKinematics() : Kinematics(KinematicsType::linearDelta, -1.0, 0.0, true)
 {
 	Init();
 }
@@ -224,15 +224,15 @@ void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 }
 
 // Auto calibrate from a set of probe points
-void LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
+bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
 {
 	const size_t NumDeltaFactors = 9;		// maximum number of delta machine factors we can adjust
 	const size_t numPoints = probePoints.NumberOfProbePoints();
 
 	if (numFactors < 3 || numFactors > NumDeltaFactors || numFactors == 5)
 	{
-		reply.printf("Error: Delta calibration with %d factors requested but only 3, 4, 6, 7, 8 and 9 supported", numFactors);
-		return;
+		reply.printf("Delta calibration with %d factors requested but only 3, 4, 6, 7, 8 and 9 supported", numFactors);
+		return true;
 	}
 
 	if (reprap.Debug(moduleMove))
@@ -396,8 +396,10 @@ void LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
 			numFactors, numPoints, sqrt(initialSumOfSquares/numPoints), expectedRmsError);
+	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.Pointer());
 
     doneAutoCalibration = true;
+    return false;
 }
 
 // Return the type of motion computation needed by an axis

@@ -72,8 +72,8 @@ void Move::Init()
 	usingMesh = false;
 	useTaper = false;
 
-	longWait = reprap.GetPlatform().Time();
-	idleTimeout = DEFAULT_IDLE_TIMEOUT;
+	longWait = millis();
+	idleTimeout = DefaultIdleTimeout;
 	iState = IdleState::idle;
 	idleCount = 0;
 
@@ -256,7 +256,7 @@ void Move::Spin()
 				}
 				else
 				{
-					Platform::DisableStepInterrupt();					// should be disabled already because we weren't executing a move, but make sure
+					Platform::DisableStepInterrupt();				// should be disabled already because we weren't executing a move, but make sure
 					if (StartNextMove(Platform::GetInterruptClocks()))	// start the next move
 					{
 						Interrupt();
@@ -264,15 +264,18 @@ void Move::Spin()
 				}
 				iState = IdleState::busy;
 			}
-			else if (!simulationMode != 0 && iState == IdleState::busy && !reprap.GetGCodes().IsPaused() && idleTimeout > 0.0)
+			else if (simulationMode != 0)
 			{
-				lastMoveTime = reprap.GetPlatform().Time();			// record when we first noticed that the machine was idle
-				iState = IdleState::timing;
-			}
-			else if (!simulationMode != 0 && iState == IdleState::timing && reprap.GetPlatform().Time() - lastMoveTime >= idleTimeout)
-			{
-				reprap.GetPlatform().SetDriversIdle();					// put all drives in idle hold
-				iState = IdleState::idle;
+				if (iState == IdleState::busy && !reprap.GetGCodes().IsPaused())
+				{
+					lastMoveTime = millis();						// record when we first noticed that the machine was idle
+					iState = IdleState::timing;
+				}
+				else if (iState == IdleState::timing && millis() - lastMoveTime >= idleTimeout)
+				{
+					reprap.GetPlatform().SetDriversIdle();			// put all drives in idle hold
+					iState = IdleState::idle;
+				}
 			}
 		}
 	}
@@ -534,7 +537,7 @@ void Move::Diagnostics(MessageType mtype)
 	// For debugging
 	if (sqCount != 0)
 	{
-		p.AppendMessage(GENERIC_MESSAGE, "Average sqrt times %.2f, %.2f, count %u,  errors %u, last %" PRIu64 " %u %u\n",
+		p.AppendMessage(GenericMessage, "Average sqrt times %.2f, %.2f, count %u,  errors %u, last %" PRIu64 " %u %u\n",
 				(float)sqSum1/sqCount, (float)sqSum2/sqCount, sqCount, sqErrors, lastNum, lastRes1, lastRes2);
 		sqSum1 = sqSum2 = sqCount = sqErrors = 0;
 	}
@@ -560,7 +563,7 @@ void Move::SetPositions(const float move[DRIVES])
 	}
 	else
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "SetPositions called when DDA ring not empty\n");
+		reprap.GetPlatform().Message(ErrorMessage, "SetPositions called when DDA ring not empty\n");
 	}
 }
 
@@ -809,11 +812,12 @@ void Move::SetAxisCompensation(unsigned int axis, float tangent)
 	}
 }
 
-// Calibrate or set the bed equation after probing.
+// Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-void Move::FinishedBedProbing(int sParam, StringRef& reply)
+bool Move::FinishedBedProbing(int sParam, StringRef& reply)
 {
+	bool error = false;
 	const size_t numPoints = probePoints.NumberOfProbePoints();
 
 	if (sParam < 0)
@@ -823,7 +827,8 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 	}
 	else if (numPoints < (size_t)sParam)
 	{
-		reprap.GetPlatform().MessageF(GENERIC_MESSAGE, "Bed calibration error: %d factor calibration requested but only %d points provided\n", sParam, numPoints);
+		reply.printf("Bed calibration : %d factor calibration requested but only %d points provided\n", sParam, numPoints);
+		error = true;
 	}
 	else
 	{
@@ -839,21 +844,23 @@ void Move::FinishedBedProbing(int sParam, StringRef& reply)
 
 		if (!probePoints.GoodProbePoints(numPoints))
 		{
-			reply.cat("Compensation or calibration cancelled due to probing errors");
+			reply.copy("Compensation or calibration cancelled due to probing errors");
+			error = true;
 		}
 		else if (kinematics->SupportsAutoCalibration())
 		{
-			kinematics->DoAutoCalibration(sParam, probePoints, reply);
+			error = kinematics->DoAutoCalibration(sParam, probePoints, reply);
 		}
 		else
 		{
-			probePoints.SetProbedBedEquation(sParam, reply);
+			error = probePoints.SetProbedBedEquation(sParam, reply);
 		}
 	}
 
 	// Clear out the Z heights so that we don't re-use old points.
 	// This allows us to use different numbers of probe point on different occasions.
 	probePoints.ClearProbeHeights();
+	return error;
 }
 
 // Perform motor endpoint adjustment
@@ -1031,7 +1038,7 @@ void Move::SetXYBedProbePoint(size_t index, float x, float y)
 {
 	if (index >= MaxProbePoints)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Z probe point index out of range.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Z probe point index out of range.\n");
 	}
 	else
 	{
@@ -1043,7 +1050,7 @@ void Move::SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wa
 {
 	if (index >= MaxProbePoints)
 	{
-		reprap.GetPlatform().Message(GENERIC_MESSAGE, "Z probe point Z index out of range.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Z probe point Z index out of range.\n");
 	}
 	else
 	{
@@ -1091,6 +1098,18 @@ void Move::AdjustLeadscrews(const floatc_t corrections[])
 		specialMoveCoords[config.driverNumbers[i]] = corrections[i];
 	}
 	specialMoveAvailable = true;
+}
+
+// Return the idle timeout in seconds
+float Move::IdleTimeout() const
+{
+	return (float)idleTimeout * 0.001;
+}
+
+// Set the idle timeout in seconds
+void Move::SetIdleTimeout(float timeout)
+{
+	idleTimeout = (uint32_t)lrintf(timeout * 1000.0);
 }
 
 #ifdef DUET_NG

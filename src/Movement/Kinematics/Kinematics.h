@@ -85,8 +85,9 @@ public:
 	virtual bool SupportsAutoCalibration() const { return false; }
 
 	// Perform auto calibration. Override this implementation in kinematics that support it. Caller already owns the movement lock.
-	virtual void DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
-	pre(SupportsAutoCalibration()) { }
+	// Return true if an error occurred.
+	virtual bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply)
+	pre(SupportsAutoCalibration()) { return false; }
 
 	// Set the default parameters that are changed by auto calibration back to their defaults.
 	// Do nothing if auto calibration is not supported.
@@ -166,10 +167,7 @@ public:
 	float GetMinSegmentLength() const pre(UseSegmentation()) { return minSegmentLength; }
 
 protected:
-	// This constructor is used by derived classes that implement non-segmented linear motion
-	Kinematics(KinematicsType t);
-
-	// This constructor is used by derived classes that implement segmented linear motion
+	// Constructor. Pass segsPerSecond <= 0.0 to get non-segmented motion.
 	Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0);
 
 	// Apply the M208 limits to the Cartesian position that the user wants to move to for all axes from the specified one upwards

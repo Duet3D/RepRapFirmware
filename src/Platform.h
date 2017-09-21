@@ -48,6 +48,7 @@ Licence: GPL
 #include "Storage/MassStorage.h"	// must be after Pins.h because it needs NumSdCards defined
 #include "MessageType.h"
 #include "ZProbeProgrammer.h"
+#include "Logger.h"
 
 #if defined(DUET_NG)
 # include "DueXn.h"
@@ -318,7 +319,7 @@ public:
 	void SetEmulating(Compatibility c);
 	void Diagnostics(MessageType mtype);
 	void DiagnosticTest(int d);
-	void ClassReport(float &lastTime);  			// Called on Spin() return to check everything's live.
+	void ClassReport(uint32_t &lastTime);  			// Called on Spin() return to check everything's live.
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
 	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
@@ -330,7 +331,6 @@ public:
 
 	// Timing
   
-	float Time();											// Returns elapsed seconds since some arbitrary time - DEPRECATED
 	static uint32_t GetInterruptClocks();					// Get the interrupt clock count
 	static bool ScheduleStepInterrupt(uint32_t tim);		// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableStepInterrupt();						// Make sure we get no step interrupts
@@ -376,7 +376,7 @@ public:
 	friend class FileStore;
 
 	MassStorage* GetMassStorage() const;
-	FileStore* GetFileStore(const char* directory, const char* fileName, bool write);
+	FileStore* GetFileStore(const char* directory, const char* fileName, OpenMode mode);
 	const char* GetWebDir() const; 					// Where the html etc files are
 	const char* GetGCodeDir() const; 				// Where the gcodes are
 	const char* GetSysDir() const;  				// Where the system files are
@@ -388,12 +388,13 @@ public:
 
 	// Message output (see MessageType for further details)
 
-	void Message(const MessageType type, const char *message);
-	void Message(const MessageType type, OutputBuffer *buffer);
-	void MessageF(const MessageType type, const char *fmt, ...);
-	void MessageF(const MessageType type, const char *fmt, va_list vargs);
+	void Message(MessageType type, const char *message);
+	void Message(MessageType type, OutputBuffer *buffer);
+	void MessageF(MessageType type, const char *fmt, ...);
+	void MessageF(MessageType type, const char *fmt, va_list vargs);
 	bool FlushMessages();							// Flush messages to USB and aux, returning true if there is more to send
 	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls);
+	void StopLogging();
 
 	// Movement
 
@@ -407,6 +408,7 @@ public:
 	void DisableDriver(size_t driver);
 	void EnableDrive(size_t drive);
 	void DisableDrive(size_t drive);
+	void DisableAllDrives();
 	void SetDriversIdle();
 	void SetMotorCurrent(size_t drive, float current, bool isPercent);
 	float GetMotorCurrent(size_t drive, bool isPercent) const;
@@ -568,7 +570,7 @@ public:
 	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
 	float GetTmcDriversTemperature(unsigned int board) const;
 	void DriverCoolingFansOn(uint32_t driverChannelsMonitored);
-	void ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply, bool& error);
+	bool ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply);
 	bool WriteFanSettings(FileStore *f) const;		// Save some resume information
 #endif
 
@@ -578,10 +580,15 @@ public:
 	// For filament sensor support
 	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
 
+	// Logging support
+	bool ConfigureLogging(GCodeBuffer& gb, StringRef& reply);
+
 //-------------------------------------------------------------------------------------------------------
   
 private:
 	Platform(const Platform&);						// private copy constructor to make sure we don't try to copy a Platform
+
+	void RawMessage(MessageType type, const char *message);	// called by Message after handling error/warning flags
 
 	void ResetChannel(size_t chan);					// re-initialise a serial channel
 	float AdcReadingToCpuTemperature(uint32_t reading) const;
@@ -640,11 +647,17 @@ private:
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
 #endif
 
+	// Logging
+	Logger *logger;
+	uint32_t lastLogFlushTime;
+
+	// Z probes
 	ZProbeParameters switchZProbeParameters;		// Z probe values for the switch Z-probe
 	ZProbeParameters irZProbeParameters;			// Z probe values for the IR sensor
 	ZProbeParameters alternateZProbeParameters;		// Z probe values for the alternate sensor
 	int zProbeType;									// the type of Z probe we are currently using
 	AxesBitmap zProbeAxes;							// Z probe is used for these axes (bitmap)
+
 	byte ipAddress[4];
 	byte netMask[4];
 	byte gateWay[4];
@@ -656,10 +669,7 @@ private:
 	ExpansionBoardType expansionBoard;
 #endif
 
-	float lastTime;
-	float longWait;
-	float addToTime;
-	unsigned long lastTimeCall;
+	uint32_t longWait;
 
 	bool active;
 	uint32_t errorCodeBits;

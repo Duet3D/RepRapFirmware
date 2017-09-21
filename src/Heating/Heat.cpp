@@ -111,7 +111,7 @@ void Heat::Init()
 #endif
 
 	lastTime = millis() - platform.HeatSampleInterval();		// flag the PIDS as due for spinning
-	longWait = platform.Time();
+	longWait = millis();
 	coldExtrude = false;
 	active = true;
 }

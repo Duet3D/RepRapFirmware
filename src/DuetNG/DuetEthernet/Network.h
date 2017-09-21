@@ -96,7 +96,7 @@ private:
 	NetworkResponder *nextResponderToPoll;
 	FtpResponder *ftpResponder;
 	TelnetResponder *telnetResponder;
-	float longWait;
+	uint32_t longWait;
 	uint32_t lastTickMillis;
 
 	Socket sockets[NumTcpSockets];

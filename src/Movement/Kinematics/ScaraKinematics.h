@@ -8,7 +8,7 @@
 #ifndef SRC_MOVEMENT_KINEMATICS_SCARAKINEMATICS_H_
 #define SRC_MOVEMENT_KINEMATICS_SCARAKINEMATICS_H_
 
-#include "Kinematics.h"
+#include "ZLeadscrewKinematics.h"
 
 // Standard setup for SCARA machines assumed by this firmware
 // The X motor output drives the proximal arm joint, unless remapped using M584
@@ -19,7 +19,7 @@
 // Phi is the angle of the distal arm relative to the Cartesian X axis. Therefore the angle of the distal arm joint is (phi - theta).
 // The M92 steps/mm settings for X and Y are interpreted as steps per degree of theta and phi respectively.
 
-class ScaraKinematics : public Kinematics
+class ScaraKinematics : public ZLeadscrewKinematics
 {
 public:
 	// Constructors
@@ -30,7 +30,6 @@ public:
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) override;
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
-	bool SupportsAutoCalibration() const override { return false; }
 	bool IsReachable(float x, float y) const override;
 	bool LimitPosition(float position[], size_t numAxes, AxesBitmap axesHomed) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;

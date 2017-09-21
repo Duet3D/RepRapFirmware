@@ -38,12 +38,12 @@ bool FileStore::IsOpenOn(const FATFS *fs) const
 
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
-bool FileStore::Open(const char* directory, const char* fileName, bool write)
+bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 {
 	const char* const location = (directory != nullptr)
 									? platform->GetMassStorage()->CombineName(directory, fileName)
 										: fileName;
-	writing = write;
+	writing = (mode == OpenMode::write || mode == OpenMode::append);
 
 	if (writing)
 	{
@@ -53,7 +53,7 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 		filePath.copy(location);
 
 		bool isVolume = isdigit(filePath[0]);
-		for(size_t i = 1; i < filePath.strlen(); i++)
+		for (size_t i = 1; i < filePath.strlen(); i++)
 		{
 			if (filePath[i] == '/')
 			{
@@ -66,7 +66,7 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 				filePath[i] = 0;
 				if (!platform->GetMassStorage()->DirectoryExists(filePath.Pointer()) && !platform->GetMassStorage()->MakeDirectory(filePath.Pointer()))
 				{
-					platform->MessageF(GENERIC_MESSAGE, "Failed to create directory %s while trying to open file %s\n",
+					platform->MessageF(ErrorMessage, "Failed to create directory %s while trying to open file %s\n",
 							filePath.Pointer(), location);
 					return false;
 				}
@@ -78,14 +78,17 @@ bool FileStore::Open(const char* directory, const char* fileName, bool write)
 		writeBuffer = platform->GetMassStorage()->AllocateWriteBuffer();
 	}
 
-	FRESULT openReturn = f_open(&file, location, (writing) ?  FA_CREATE_ALWAYS | FA_WRITE : FA_OPEN_EXISTING | FA_READ);
+	const FRESULT openReturn = f_open(&file, location,
+										(mode == OpenMode::write) ?  FA_CREATE_ALWAYS | FA_WRITE
+											: (mode == OpenMode::append) ? FA_WRITE | FA_OPEN_ALWAYS
+												: FA_OPEN_EXISTING | FA_READ);
 	if (openReturn != FR_OK)
 	{
 		// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 		// It is up to the caller to report an error if necessary.
 		if (reprap.Debug(modulePlatform))
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
+			platform->MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
 		}
 		return false;
 	}
@@ -99,7 +102,7 @@ void FileStore::Duplicate()
 {
 	if (!inUse)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Attempt to dup a non-open file.\n");
+		platform->Message(ErrorMessage, "Attempt to dup a non-open file.\n");
 		return;
 	}
 	irqflags_t flags = cpu_irq_save();
@@ -132,7 +135,7 @@ bool FileStore::Close()
 
 	if (!inUse)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Attempt to close a non-open file.\n");
+		platform->Message(ErrorMessage, "Attempt to close a non-open file.\n");
 		return false;
 	}
 
@@ -169,7 +172,7 @@ bool FileStore::Seek(FilePosition pos)
 {
 	if (!inUse)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Attempt to seek on a non-open file.\n");
+		platform->Message(ErrorMessage, "Attempt to seek on a non-open file.\n");
 		return false;
 	}
 	FRESULT fr = f_lseek(&file, pos);
@@ -192,7 +195,7 @@ FilePosition FileStore::Length() const
 {
 	if (!inUse)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Attempt to size non-open file.\n");
+		platform->Message(ErrorMessage, "Attempt to size non-open file.\n");
 		return 0;
 	}
 
@@ -210,7 +213,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 {
 	if (!inUse)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Attempt to read from a non-open file.\n");
+		platform->Message(ErrorMessage, "Attempt to read from a non-open file.\n");
 		return -1;
 	}
 
@@ -218,7 +221,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 	FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
 	if (readStatus != FR_OK)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Cannot read file.\n");
+		platform->Message(ErrorMessage, "Cannot read file.\n");
 		return -1;
 	}
 	return (int)bytes_read;
@@ -285,7 +288,7 @@ bool FileStore::Write(const char *s, size_t len)
 {
 	if (!inUse)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Attempt to write block to a non-open file.\n");
+		platform->Message(ErrorMessage, "Attempt to write block to a non-open file.\n");
 		return false;
 	}
 
@@ -302,7 +305,8 @@ bool FileStore::Write(const char *s, size_t len)
 			size_t bytesStored = writeBuffer->Store(s + totalBytesWritten, len - totalBytesWritten);
 			if (writeBuffer->BytesLeft() == 0)
 			{
-				size_t bytesToWrite = writeBuffer->BytesStored(), bytesWritten;
+				const size_t bytesToWrite = writeBuffer->BytesStored();
+				size_t bytesWritten;
 				writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
 				writeBuffer->DataTaken();
 
@@ -319,7 +323,7 @@ bool FileStore::Write(const char *s, size_t len)
 
 	if ((writeStatus != FR_OK) || (totalBytesWritten != len))
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Cannot write to file. Drive may be full.\n");
+		platform->Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
 		return false;
 	}
 	return true;
@@ -329,20 +333,24 @@ bool FileStore::Flush()
 {
 	if (!inUse)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Attempt to flush a non-open file.\n");
+		platform->Message(ErrorMessage, "Attempt to flush a non-open file.\n");
 		return false;
 	}
 
 	if (writeBuffer != nullptr)
 	{
-		size_t bytesToWrite = writeBuffer->BytesStored(), bytesWritten;
-		FRESULT writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
-		writeBuffer->DataTaken();
-
-		if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
+		const size_t bytesToWrite = writeBuffer->BytesStored();
+		if (bytesToWrite != 0)
 		{
-			platform->Message(GENERIC_MESSAGE, "Error: Cannot write to file. Drive may be full.\n");
-			return false;
+			size_t bytesWritten;
+			const FRESULT writeStatus = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
+			writeBuffer->DataTaken();
+
+			if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
+			{
+				platform->Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
+				return false;
+			}
 		}
 	}
 
@@ -364,7 +372,7 @@ bool FileStore::SetClusterMap(uint32_t tbl[])
 {
 	if (!inUse)
 	{
-		platform->Message(GENERIC_MESSAGE, "Error: Attempt to set cluster map for a non-open file.\n");
+		platform->Message(ErrorMessage, "attempt to set cluster map for a non-open file.\n");
 		return false;
 	}
 

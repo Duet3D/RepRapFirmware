@@ -13,7 +13,7 @@
 #include "Movement/DDA.h"
 
 ScaraKinematics::ScaraKinematics()
-	: Kinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true),
+	: ZLeadscrewKinematics(KinematicsType::scara, DefaultSegmentsPerSecond, DefaultMinSegmentSize, true),
 	  proximalArmLength(DefaultProximalArmLength), distalArmLength(DefaultDistalArmLength), xOffset(0.0), yOffset(0.0)
 {
 	thetaLimits[0] = DefaultMinTheta;
@@ -163,7 +163,7 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& 
 	}
 	else
 	{
-		return Kinematics::Configure(mCode, gb, reply, error);
+		return ZLeadscrewKinematics::Configure(mCode, gb, reply, error);
 	}
 }
 
@@ -172,8 +172,8 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& 
 bool ScaraKinematics::IsReachable(float x, float y) const
 {
 	// TODO The following isn't quite right, in particular it doesn't take account of the maximum arm travel
-    const float r = sqrtf(fsquare(x) + fsquare(y));
-    return r >= minRadius && r <= maxRadius && x > 0.0;
+    const float r = sqrtf(fsquare(x + xOffset) + fsquare(y + yOffset));
+    return r >= minRadius && r <= maxRadius && (x + xOffset) > 0.0;
 }
 
 // Limit the Cartesian position that the user wants to move to

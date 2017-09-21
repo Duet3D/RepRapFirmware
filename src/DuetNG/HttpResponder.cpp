@@ -8,6 +8,7 @@
 #include "HttpResponder.h"
 #include "GCodes/GCodes.h"
 #include "PrintMonitor.h"
+#include "Libraries/General/IP4String.h"
 
 #define KO_START "rr_"
 const size_t KoFirst = 3;
@@ -449,12 +450,14 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			{
 				// Wrong password
 				response->copy("{\"err\":1}");
+				reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s attempted login with incorrect password\n", IP4String(GetRemoteIP()).c_str());
 				return true;
 			}
 			if (!Authenticate())
 			{
 				// No more HTTP sessions available
 				response->copy("{\"err\":2}");
+				reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s attempted login but no more sessions available\n", IP4String(GetRemoteIP()).c_str());
 				return true;
 			}
 		}
@@ -473,6 +476,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 
 		// Client has been logged in
 		response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", HttpSessionTimeout, GetPlatform().GetBoardString());
+		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
 	}
 	else if (!CheckAuthenticated())
 	{
@@ -482,6 +486,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	else if (StringEquals(request, "disconnect"))
 	{
 		response->printf("{\"err\":%d}", (RemoveAuthentication()) ? 0 : 1);
+		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s disconnected\n", IP4String(GetRemoteIP()).c_str());
 	}
 	else if (StringEquals(request, "status"))
 	{
@@ -508,7 +513,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
 		RegularGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
-		httpInput->Put(HTTP_MESSAGE, GetKeyValue("gcode"));
+		httpInput->Put(HttpMessage, GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
 	else if (StringEquals(request, "upload"))
@@ -633,7 +638,7 @@ bool HttpResponder::Authenticate()
 
 	if (numSessions < MaxHttpSessions)
 	{
-		sessions[numSessions].ip = skt->GetRemoteIP();
+		sessions[numSessions].ip = GetRemoteIP();
 		sessions[numSessions].lastQueryTime = millis();
 		sessions[numSessions].isPostUploading = false;
 		numSessions++;
@@ -645,7 +650,7 @@ bool HttpResponder::Authenticate()
 // Check and update the authentication
 bool HttpResponder::CheckAuthenticated()
 {
-	const uint32_t remoteIP = skt->GetRemoteIP();
+	const uint32_t remoteIP = GetRemoteIP();
 	for (size_t i = 0; i < numSessions; i++)
 	{
 		if (sessions[i].ip == remoteIP)
@@ -704,7 +709,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 			char nameBuf[FILENAME_LENGTH + 1];
 			strcpy(nameBuf, nameOfFileToSend);
 			strcat(nameBuf, ".gz");
-			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameBuf, false);
+			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameBuf, OpenMode::read);
 			if (fileToSend != nullptr)
 			{
 				zip = true;
@@ -714,14 +719,14 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		// If that failed, try to open the normal version of the file
 		if (fileToSend == nullptr)
 		{
-			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameOfFileToSend, false);
+			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
 		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
-			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameOfFileToSend, false);
+			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		if (fileToSend == nullptr)
@@ -733,7 +738,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	}
 	else
 	{
-		fileToSend = GetPlatform().GetFileStore(FS_PREFIX, nameOfFileToSend, false);
+		fileToSend = GetPlatform().GetFileStore(FS_PREFIX, nameOfFileToSend, OpenMode::read);
 		if (fileToSend == nullptr)
 		{
 			RejectMessage("not found", 404);
@@ -821,7 +826,7 @@ void HttpResponder::SendGCodeReply()
 
 		if (reprap.Debug(moduleWebserver))
 		{
-			GetPlatform().MessageF(HOST_MESSAGE, "Sending G-Code reply to client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
+			GetPlatform().MessageF(UsbMessage, "Sending G-Code reply to client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
 		}
 	}
 
@@ -932,18 +937,18 @@ void HttpResponder::ProcessMessage()
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		GetPlatform().MessageF(HOST_MESSAGE, "HTTP req, command words {", numCommandWords);
+		GetPlatform().MessageF(UsbMessage, "HTTP req, command words {", numCommandWords);
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
-			GetPlatform().MessageF(HOST_MESSAGE, " %s", commandWords[i]);
+			GetPlatform().MessageF(UsbMessage, " %s", commandWords[i]);
 		}
-		GetPlatform().Message(HOST_MESSAGE, " }, parameters {");
+		GetPlatform().Message(UsbMessage, " }, parameters {");
 
 		for (size_t i = 0; i < numQualKeys; ++i)
 		{
-			GetPlatform().MessageF(HOST_MESSAGE, " %s=%s", qualifiers[i].key, qualifiers[i].value);
+			GetPlatform().MessageF(UsbMessage, " %s=%s", qualifiers[i].key, qualifiers[i].value);
 		}
-		GetPlatform().Message(HOST_MESSAGE, " }\n");
+		GetPlatform().Message(UsbMessage, " }\n");
 	}
 
 	if (numCommandWords < 2)
@@ -1013,7 +1018,7 @@ void HttpResponder::ProcessMessage()
 				}
 
 				// Start a new file upload
-				FileStore *file = GetPlatform().GetFileStore(FS_PREFIX, qualifiers[0].value, true);
+				FileStore *file = GetPlatform().GetFileStore(FS_PREFIX, qualifiers[0].value, OpenMode::write);
 				if (file == nullptr)
 				{
 					RejectMessage("could not create file");
@@ -1043,12 +1048,12 @@ void HttpResponder::ProcessMessage()
 
 				if (reprap.Debug(moduleWebserver))
 				{
-					GetPlatform().MessageF(HOST_MESSAGE, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
+					GetPlatform().MessageF(UsbMessage, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
 				}
 				uploadedBytes = 0;
 
 				// Keep track of the connection that is now uploading
-				const uint32_t remoteIP = skt->GetRemoteIP();
+				const uint32_t remoteIP = GetRemoteIP();
 				const uint16_t remotePort = skt->GetRemotePort();
 				for(size_t i = 0; i < numSessions; i++)
 				{
@@ -1075,7 +1080,7 @@ void HttpResponder::RejectMessage(const char* response, unsigned int code)
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		GetPlatform().MessageF(HOST_MESSAGE, "Webserver: rejecting message with: %u %s\n", code, response);
+		GetPlatform().MessageF(UsbMessage, "Webserver: rejecting message with: %u %s\n", code, response);
 	}
 	outBuf->printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
 	Commit();
@@ -1095,7 +1100,7 @@ void HttpResponder::DoUpload()
 		if (!fileBeingUploaded.Write(buffer, len))
 		{
 			uploadError = true;
-			GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+			GetPlatform().Message(ErrorMessage, "Could not write upload data!\n");
 			CancelUpload();
 			SendJsonResponse("upload");
 			return;
@@ -1106,7 +1111,7 @@ void HttpResponder::DoUpload()
 	if (uploadedBytes >= postFileLength)
 	{
 		// Reset POST upload state for this client
-		const uint32_t remoteIP = skt->GetRemoteIP();
+		const uint32_t remoteIP = GetRemoteIP();
 		for (size_t i = 0; i < numSessions; i++)
 		{
 			if (sessions[i].ip == remoteIP && sessions[i].isPostUploading)

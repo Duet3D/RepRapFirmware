@@ -75,7 +75,7 @@ void MassStorage::Init()
 	if (reply.strlen() != 0)
 	{
 		delay(3000);		// Wait a few seconds so users have a chance to see this
-		platform->Message(HOST_MESSAGE, reply.Pointer());
+		platform->Message(UsbMessage, reply.Pointer());
 	}
 }
 
@@ -113,7 +113,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 			outIndex++;
 			if (outIndex >= ARRAY_SIZE(combinedName))
 			{
-				platform->MessageF(GENERIC_MESSAGE, "CombineName() buffer overflow.");
+				platform->MessageF(ErrorMessage, "CombineName() buffer overflow");
 				outIndex = 0;
 			}
 		}
@@ -133,7 +133,7 @@ const char* MassStorage::CombineName(const char* directory, const char* fileName
 		outIndex++;
 		if (outIndex >= ARRAY_SIZE(combinedName))
 		{
-			platform->Message(GENERIC_MESSAGE, "CombineName() buffer overflow.");
+			platform->Message(ErrorMessage, "CombineName() buffer overflow");
 			outIndex = 0;
 		}
 	}
@@ -231,7 +231,7 @@ bool MassStorage::Delete(const char* directory, const char* fileName, bool silen
 	{
 		if (!silent)
 		{
-			platform->MessageF(GENERIC_MESSAGE, "Can't delete file %s\n", location);
+			platform->MessageF(ErrorMessage, "Failed to delete file %s\n", location);
 		}
 		return false;
 	}
@@ -244,7 +244,7 @@ bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
 	const char* location = platform->GetMassStorage()->CombineName(parentDir, dirName);
 	if (f_mkdir(location) != FR_OK)
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Can't create directory %s\n", location);
+		platform->MessageF(ErrorMessage, "Failed to create directory %s\n", location);
 		return false;
 	}
 	return true;
@@ -254,7 +254,7 @@ bool MassStorage::MakeDirectory(const char *directory)
 {
 	if (f_mkdir(directory) != FR_OK)
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Can't create directory %s\n", directory);
+		platform->MessageF(ErrorMessage, "Failed to create directory %s\n", directory);
 		return false;
 	}
 	return true;
@@ -272,7 +272,7 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename)
 	}
 	if (f_rename(oldFilename, newFilename) != FR_OK)
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Can't rename file or directory %s to %s\n", oldFilename, newFilename);
+		platform->MessageF(ErrorMessage, "Failed to rename file or directory %s to %s\n", oldFilename, newFilename);
 		return false;
 	}
 	return true;
@@ -334,7 +334,7 @@ bool MassStorage::SetLastModifiedTime(const char* directory, const char *fileNam
     const bool ok = (f_utime(location, &fno) == FR_OK);
     if (!ok)
 	{
-		reprap.GetPlatform().MessageF(HTTP_MESSAGE, "SetLastModifiedTime didn't work for file '%s'\n", location);
+		reprap.GetPlatform().MessageF(ErrorMessage, "Failed to set last modified time for file '%s'\n", location);
 	}
     return ok;
 }
@@ -389,7 +389,7 @@ bool MassStorage::Mount(size_t card, StringRef& reply, bool reportSuccess)
 		FRESULT mounted = f_mount(card, &fileSystems[card]);
 		if (mounted != FR_OK)
 		{
-			reply.printf("Can't mount SD card %u: code %d", card, mounted);
+			reply.printf("Cannot mount SD card %u: code %d", card, mounted);
 		}
 		else
 		{

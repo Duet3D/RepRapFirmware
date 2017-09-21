@@ -18,15 +18,9 @@
 const char *Kinematics::HomeAllFileName = "homeall.g";
 const char * const Kinematics::StandardHomingFileNames[] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g", "homea.g", "homeb.g", "homec.g");
 
-// Constructor for non-segmented kinematics
-Kinematics::Kinematics(KinematicsType t)
-	: useSegmentation(false), useRawG0(true), type(t)
-{
-}
-
-// Constructor for segmented kinematics
+// Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
 Kinematics::Kinematics(KinematicsType t, float segsPerSecond, float minSegLength, bool doUseRawG0)
-	: segmentsPerSecond(segsPerSecond), minSegmentLength(minSegLength), useSegmentation(true), useRawG0(doUseRawG0), type(t)
+	: segmentsPerSecond(segsPerSecond), minSegmentLength(minSegLength), useSegmentation(segsPerSecond > 0.0), useRawG0(doUseRawG0), type(t)
 {
 }
 
@@ -47,7 +41,7 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply
 }
 
 // Return true if the specified XY position is reachable by the print head reference point.
-// This default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M280 command.
+// This default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 command.
 bool Kinematics::IsReachable(float x, float y) const
 {
 	const Platform& platform = reprap.GetPlatform();

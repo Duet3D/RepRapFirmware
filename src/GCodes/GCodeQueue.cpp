@@ -136,7 +136,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 		{
 			if (reprap.Debug(moduleGcodes))
 			{
-				reprap.GetPlatform().Message(DEBUG_MESSAGE, "(swap) ");
+				reprap.GetPlatform().Message(DebugMessage, "(swap) ");
 			}
 			if (!gb.Put(codeToRun, codeToRunLength))
 			{

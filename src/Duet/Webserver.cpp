@@ -109,7 +109,7 @@ Webserver::Webserver(Platform *p, Network *n) : platform(p), network(n), webserv
 void Webserver::Init()
 {
 	// initialise the webserver class
-	longWait = platform->Time();
+	longWait = millis();
 	webserverActive = true;
 	readingConnection = NoConnection;
 
@@ -178,7 +178,7 @@ void Webserver::Spin()
 					case TransactionStatus::acquired: type = "acquired"; break;
 					default: type = "unknown"; break;
 				}
-				platform->MessageF(HOST_MESSAGE, "Incoming transaction: Type %s at local port %d (remote port %d)\n",
+				platform->MessageF(UsbMessage, "Incoming transaction: Type %s at local port %d (remote port %d)\n",
 						type, localPort, currentTransaction->GetRemotePort());
 			}
 
@@ -233,7 +233,7 @@ void Webserver::Spin()
 		{
 			// We failed to find a transaction for a reading connection.
 			// This should never happen, but if it does, terminate this connection instantly
-			platform->Message(HOST_MESSAGE, "Error: Transaction for reading connection not found\n");
+			platform->Message(UsbMessage, "Error: Transaction for reading connection not found\n");
 			Network::Terminate(readingConnection);
 		}
 		network->Unlock();		// unlock LWIP again
@@ -247,7 +247,7 @@ void Webserver::Exit()
 	ftpInterpreter->CancelUpload();
 	//telnetInterpreter->CancelUpload();		// Telnet doesn't support fast file uploads
 
-	platform->Message(HOST_MESSAGE, "Webserver class exited.\n");
+	platform->Message(UsbMessage, "Webserver class exited.\n");
 	webserverActive = false;
 }
 
@@ -308,14 +308,14 @@ void Webserver::ConnectionLost(Connection conn)
 	}
 	else
 	{
-		platform->MessageF(GENERIC_MESSAGE, "Error: Webserver should handle disconnect event at local port %d, but no handler was found!\n", localPort);
+		platform->MessageF(GenericMessage, "Error: Webserver should handle disconnect event at local port %d, but no handler was found!\n", localPort);
 		return;
 	}
 
 	// Print some debug information and notify the protocol interpreter
 	if (reprap.Debug(moduleWebserver))
 	{
-		platform->MessageF(HOST_MESSAGE, "ConnectionLost called for local port %d (remote port %d)\n", localPort, Network::GetRemotePort(conn));
+		platform->MessageF(UsbMessage, "ConnectionLost called for local port %d (remote port %d)\n", localPort, Network::GetRemotePort(conn));
 	}
 	interpreter->ConnectionLost(conn);
 
@@ -385,7 +385,7 @@ bool ProtocolInterpreter::StartUpload(FileStore *file, const char *fileName)
 		return true;
 	}
 
-	platform->Message(GENERIC_MESSAGE, "Error: Could not open file while starting upload!\n");
+	platform->Message(GenericMessage, "Error: Could not open file while starting upload!\n");
 	return false;
 }
 
@@ -409,14 +409,14 @@ void ProtocolInterpreter::DoFastUpload()
 		// See if we can output a debug message
 		if (reprap.Debug(moduleWebserver))
 		{
-			platform->MessageF(HOST_MESSAGE, "Writing %u bytes of upload data\n", len);
+			platform->MessageF(UsbMessage, "Writing %u bytes of upload data\n", len);
 		}
 
 		// Writing data usually takes a while, so keep LwIP running while this is being done
 		network->Unlock();
 		if (!fileBeingUploaded.Write(buffer, len))
 		{
-			platform->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+			platform->Message(GenericMessage, "Error: Could not write upload data!\n");
 			CancelUpload();
 
 			while (!network->Lock());
@@ -438,14 +438,14 @@ bool ProtocolInterpreter::FinishUpload(uint32_t fileLength)
 	if (uploadState == uploadOK && !fileBeingUploaded.Flush())
 	{
 		uploadState = uploadError;
-		platform->Message(GENERIC_MESSAGE, "Error: Could not flush remaining data while finishing upload!\n");
+		platform->Message(GenericMessage, "Error: Could not flush remaining data while finishing upload!\n");
 	}
 
 	// Check the file length is as expected
 	if (uploadState == uploadOK && fileLength != 0 && fileBeingUploaded.Length() != fileLength)
 	{
 		uploadState = uploadError;
-		platform->MessageF(GENERIC_MESSAGE, "Error: Uploaded file size is different (%u vs. expected %u bytes)!\n", fileBeingUploaded.Length(), fileLength);
+		platform->MessageF(GenericMessage, "Error: Uploaded file size is different (%u vs. expected %u bytes)!\n", fileBeingUploaded.Length(), fileLength);
 	}
 
 	// Close the file
@@ -588,7 +588,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 				writeBufIndex = 0;
 				if (!success)
 				{
-					platform->Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+					platform->Message(GenericMessage, "Error: Could not write upload data!\n");
 					CancelUpload();
 
 					while (!network->Lock()) { }
@@ -662,7 +662,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 			char nameBuf[FILENAME_LENGTH + 1];
 			strcpy(nameBuf, nameOfFileToSend);
 			strcat(nameBuf, ".gz");
-			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameBuf, false);
+			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameBuf, OpenMode::read);
 			if (fileToSend != nullptr)
 			{
 				zip = true;
@@ -672,14 +672,14 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		// If that failed, try to open the normal version of the file
 		if (fileToSend == nullptr)
 		{
-			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
+			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
 		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
-			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, false);
+			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		if (fileToSend == nullptr)
@@ -691,7 +691,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 	}
 	else
 	{
-		fileToSend = platform->GetFileStore(FS_PREFIX, nameOfFileToSend, false);
+		fileToSend = platform->GetFileStore(FS_PREFIX, nameOfFileToSend, OpenMode::read);
 		if (fileToSend == nullptr)
 		{
 			RejectMessage("not found", 404);
@@ -778,7 +778,7 @@ void Webserver::HttpInterpreter::SendGCodeReply()
 
 		if (reprap.Debug(moduleWebserver))
 		{
-			platform->MessageF(HOST_MESSAGE, "Sending G-Code reply to client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
+			platform->MessageF(UsbMessage, "Sending G-Code reply to client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
 		}
 	}
 
@@ -964,7 +964,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	else if (StringEquals(request, "gcode") && GetKeyValue("gcode") != nullptr)
 	{
 		RegularGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
-		httpInput->Put(HTTP_MESSAGE, GetKeyValue("gcode"));
+		httpInput->Put(HttpMessage, GetKeyValue("gcode"));
 		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
 	}
 	else if (StringEquals(request, "upload"))
@@ -1106,7 +1106,7 @@ void Webserver::HttpInterpreter::ConnectionLost(Connection conn)
 			{
 				if (reprap.Debug(moduleWebserver))
 				{
-					platform->MessageF(HOST_MESSAGE, "POST upload for '%s' has been cancelled!\n", filenameBeingUploaded);
+					platform->MessageF(UsbMessage, "POST upload for '%s' has been cancelled!\n", filenameBeingUploaded);
 				}
 				sessions[i].isPostUploading = false;
 				CancelUpload();
@@ -1464,18 +1464,18 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		platform->MessageF(HOST_MESSAGE, "HTTP req, command words {", numCommandWords);
+		platform->MessageF(UsbMessage, "HTTP req, command words {", numCommandWords);
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
-			platform->MessageF(HOST_MESSAGE, " %s", commandWords[i]);
+			platform->MessageF(UsbMessage, " %s", commandWords[i]);
 		}
-		platform->Message(HOST_MESSAGE, " }, parameters {");
+		platform->Message(UsbMessage, " }, parameters {");
 
 		for (size_t i = 0; i < numQualKeys; ++i)
 		{
-			platform->MessageF(HOST_MESSAGE, " %s=%s", qualifiers[i].key, qualifiers[i].value);
+			platform->MessageF(UsbMessage, " %s=%s", qualifiers[i].key, qualifiers[i].value);
 		}
-		platform->Message(HOST_MESSAGE, " }\n");
+		platform->Message(UsbMessage, " }\n");
 	}
 
 	if (numCommandWords < 2)
@@ -1554,7 +1554,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 				}
 
 				// Start a new file upload
-				FileStore *file = platform->GetFileStore(FS_PREFIX, qualifiers[0].value, true);
+				FileStore *file = platform->GetFileStore(FS_PREFIX, qualifiers[0].value, OpenMode::write);
 				if (!StartUpload(file, qualifiers[0].value))
 				{
 					return RejectMessage("could not start file upload");
@@ -1581,7 +1581,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 
 				if (reprap.Debug(moduleWebserver))
 				{
-					platform->MessageF(HOST_MESSAGE, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
+					platform->MessageF(UsbMessage, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
 				}
 				uploadedBytes = 0;
 
@@ -1613,7 +1613,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 // Reject the current message. Always returns true to indicate that we should stop reading the message.
 bool Webserver::HttpInterpreter::RejectMessage(const char* response, unsigned int code)
 {
-	platform->MessageF(HOST_MESSAGE, "Webserver: rejecting message with: %s\n", response);
+	platform->MessageF(UsbMessage, "Webserver: rejecting message with: %s\n", response);
 
 	NetworkTransaction *transaction = webserver->currentTransaction;
 	transaction->Printf("HTTP/1.1 %u %s\nConnection: close\n\n", code, response);
@@ -1800,7 +1800,7 @@ void Webserver::FtpInterpreter::ConnectionEstablished()
 	connectedClients++;
 	if (reprap.Debug(moduleWebserver))
 	{
-		platform->Message(HOST_MESSAGE, "Webserver: FTP connection established!\n");
+		platform->Message(UsbMessage, "Webserver: FTP connection established!\n");
 	}
 
 	// Is this a new connection on the data port?
@@ -1886,7 +1886,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 	if (clientPointer == ARRAY_UPB(clientMessage))
 	{
 		clientPointer = 0;
-		platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow in FTP server!\n");
+		platform->Message(UsbMessage, "Webserver: Buffer overflow in FTP server!\n");
 		return true;
 	}
 
@@ -1901,7 +1901,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 
 			if (reprap.Debug(moduleWebserver))
 			{
-				platform->MessageF(HOST_MESSAGE, "FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
+				platform->MessageF(UsbMessage, "FtpInterpreter::ProcessLine called with state %d:\n%s\n", state, clientMessage);
 			}
 
 			if (clientPointer > 1) // only process a new line if we actually received data
@@ -1913,7 +1913,7 @@ bool Webserver::FtpInterpreter::CharFromClient(char c)
 
 			if (reprap.Debug(moduleWebserver))
 			{
-				platform->Message(HOST_MESSAGE, "FtpInterpreter::ProcessLine call finished.\n");
+				platform->Message(UsbMessage, "FtpInterpreter::ProcessLine call finished.\n");
 			}
 
 			clientPointer = 0;
@@ -2221,7 +2221,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				ReadFilename(4);
 
-				FileStore *file = platform->GetFileStore(currentDir, filename, true);
+				FileStore *file = platform->GetFileStore(currentDir, filename, OpenMode::write);
 				if (StartUpload(file, filename))
 				{
 					SendReply(150, "OK to send data.");
@@ -2239,7 +2239,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				ReadFilename(4);
 
-				FileStore *file = platform->GetFileStore(currentDir, filename, false);
+				FileStore *file = platform->GetFileStore(currentDir, filename, OpenMode::read);
 				if (file == nullptr)
 				{
 					SendReply(550, "Failed to open file.");
@@ -2583,7 +2583,7 @@ bool Webserver::TelnetInterpreter::CharFromClient(char c)
 			if (clientPointer == ARRAY_UPB(clientMessage))
 			{
 				clientPointer = 0;
-				platform->Message(HOST_MESSAGE, "Webserver: Buffer overflow in Telnet server!\n");
+				platform->Message(UsbMessage, "Webserver: Buffer overflow in Telnet server!\n");
 				return true;
 			}
 			break;
@@ -2642,7 +2642,7 @@ bool Webserver::TelnetInterpreter::ProcessLine()
 
 			// All other codes are stored for the GCodes class
 			RegularGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
-			telnetInput->Put(TELNET_MESSAGE, clientMessage);
+			telnetInput->Put(TelnetMessage, clientMessage);
 			break;
 	}
 	return false;

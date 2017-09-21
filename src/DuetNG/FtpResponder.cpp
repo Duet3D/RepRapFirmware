@@ -350,14 +350,14 @@ void FtpResponder::DoUpload()
 	{
 		if (reprap.Debug(moduleWebserver))
 		{
-			GetPlatform().MessageF(HOST_MESSAGE, "Writing %u bytes of upload data\n", len);
+			GetPlatform().MessageF(UsbMessage, "Writing %u bytes of upload data\n", len);
 		}
 
 		dataSocket->Taken(len);
 		if (!fileBeingUploaded.Write(buffer, len))
 		{
 			uploadError = true;
-			GetPlatform().Message(GENERIC_MESSAGE, "Error: Could not write upload data!\n");
+			GetPlatform().Message(ErrorMessage, "Could not write upload data!\n");
 			CancelUpload();
 
 			responderState = ResponderState::pasvTransferComplete;
@@ -426,7 +426,7 @@ void FtpResponder::CharFromClient(char c)
 		if (clientPointer > ARRAY_UPB(clientMessage))
 		{
 			clientPointer = 0;
-			GetPlatform().Message(HOST_MESSAGE, "Webserver: Buffer overflow in FTP server!\n");
+			GetPlatform().Message(UsbMessage, "Webserver: Buffer overflow in FTP server!\n");
 		}
 		break;
 	}
@@ -697,7 +697,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "STOR"))
 		{
 			const char *filename = GetParameter("STOR");
-			FileStore *file = GetPlatform().GetFileStore(currentDirectory, filename, true);
+			FileStore *file = GetPlatform().GetFileStore(currentDirectory, filename, OpenMode::write);
 			if (file != nullptr)
 			{
 				StartUpload(file, filename);
@@ -715,7 +715,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RETR"))
 		{
 			const char *filename = GetParameter("RETR");
-			fileBeingSent = GetPlatform().GetFileStore(currentDirectory, filename, false);
+			fileBeingSent = GetPlatform().GetFileStore(currentDirectory, filename, OpenMode::read);
 			if (fileBeingSent != nullptr)
 			{
 				outBuf->printf("150 Opening data connection for %s (%lu bytes).\r\n", filename, fileBeingSent->Length());

@@ -12,7 +12,7 @@
 #include "Kinematics/LinearDeltaKinematics.h"		// for DELTA_AXES
 
 #ifdef DUET_NG
-# define DDA_MOVE_DEBUG	(1)
+# define DDA_MOVE_DEBUG	(0)
 #else
 // On the wired Duets we don't have enough RAM to support this
 # define DDA_MOVE_DEBUG	(0)
@@ -48,7 +48,7 @@ static size_t savedMovePointer = 0;
 	for (size_t i = 0; i < NumSavedMoves; ++i)
 	{
 		const MoveParameters& m = savedMoves[savedMovePointer];
-		reprap.GetPlatform().MessageF(DEBUG_MESSAGE, "%f,%f,%f,%f,%f,%f\n", m.accelDistance, m.steadyDistance, m.decelDistance, m.startSpeed, m.topSpeed, m.endSpeed);
+		reprap.GetPlatform().MessageF(DebugMessage, "%f,%f,%f,%f,%f,%f\n", m.accelDistance, m.steadyDistance, m.decelDistance, m.startSpeed, m.topSpeed, m.endSpeed);
 		savedMovePointer = (savedMovePointer + 1) % NumSavedMoves;
 	}
 }

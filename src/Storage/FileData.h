@@ -56,6 +56,11 @@ public:
 		return f->Write(b);
 	}
 
+	bool Write(const char *s)
+	{
+		return f->Write(s, strlen(s));
+	}
+
 	bool Write(const char *s, size_t len)
 	{
 		return f->Write(s, len);

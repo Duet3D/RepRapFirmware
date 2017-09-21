@@ -76,6 +76,8 @@ protected:
 	void FinishUpload(uint32_t fileLength, time_t fileLastModified);
 	virtual void CancelUpload();
 
+	uint32_t GetRemoteIP() const;
+
 	static Platform& GetPlatform() { return reprap.GetPlatform(); }
 	static Network& GetNetwork() { return reprap.GetNetwork(); }
 

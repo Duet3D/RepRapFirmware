@@ -46,6 +46,16 @@ int StringRef::catf(const char *fmt, ...) const
 	return 0;
 }
 
+int StringRef::vcatf(const char *fmt, va_list vargs) const
+{
+	size_t n = strlen();
+	if (n + 1 < len)		// if room for at least 1 more character and a null
+	{
+		return vsnprintf(p + n, len - n, fmt, vargs) + n;
+	}
+	return 0;
+}
+
 // This is quicker than printf for printing constant strings
 size_t StringRef::copy(const char* src) const
 {

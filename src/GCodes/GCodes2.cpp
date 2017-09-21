@@ -340,10 +340,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				seen = true;
 
-				float idleTimeout = gb.GetFValue();
+				const float idleTimeout = gb.GetFValue();
 				if (idleTimeout < 0.0)
 				{
-					reply.copy("Idle timeouts cannot be negative!");
+					reply.copy("Idle timeouts cannot be negative");
 					error = true;
 				}
 				else
@@ -464,8 +464,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const char* filename = gb.GetUnprecedentedString();
 			if (filename != nullptr)
 			{
-				QueueFileToPrint(filename);
-				if (fileToPrint.IsLive())
+				if (QueueFileToPrint(filename, reply))
 				{
 					reprap.GetPrintMonitor().StartingPrint(filename);
 					if (platform.Emulating() == marlin && (&gb == serialGCode || &gb == telnetGCode))
@@ -485,7 +484,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					reply.printf("Failed to open file %s", filename);
 					error = true;
 				}
 			}
@@ -618,7 +616,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const char *filename = gb.GetUnprecedentedString();
 			if (filename != nullptr)
 			{
-				DeleteFile(filename);
+				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename, false);;
 			}
 		}
 		break;
@@ -699,8 +697,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						reprap.GetMove().GetCurrentUserPosition(simulationRestorePoint.moveCoords, 0, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
 						simulationRestorePoint.feedRate = gb.MachineState().feedrate;
 					}
-					QueueFileToPrint(simFileName.c_str());
-					if (fileToPrint.IsLive())
+					if (QueueFileToPrint(simFileName.c_str(), reply))
 					{
 						exitSimulationWhenFileComplete = true;
 						reprap.GetPrintMonitor().StartingPrint(simFileName.c_str());
@@ -711,7 +708,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					{
 						simulationMode = 0;
 						reprap.GetMove().Simulate(0);
-						reply.printf("Failed to open file %s", simFileName.c_str());
 						error = true;
 					}
 				}
@@ -1731,7 +1727,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				platform.MessageF(GENERIC_MESSAGE, "Error: Invalid servo index %d in M280 command\n", servoIndex);
+				platform.MessageF(ErrorMessage, "Invalid servo index %d in M280 command\n", servoIndex);
 			}
 		}
 		break;
@@ -1972,7 +1968,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					}
 					else
 					{
-						platform.MessageF(GENERIC_MESSAGE, "Drive %c does not support %dx microstepping%s\n",
+						platform.MessageF(ErrorMessage, "Drive %c does not support %dx microstepping%s\n",
 												axisLetters[axis], microsteps, (mode) ? " with interpolation" : "");
 					}
 				}
@@ -1992,7 +1988,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					if (!ChangeMicrostepping(numTotalAxes + e, (int)eVals[e], mode))
 					{
-						platform.MessageF(GENERIC_MESSAGE, "Drive E%u does not support %dx microstepping%s\n",
+						platform.MessageF(ErrorMessage, "Drive E%u does not support %dx microstepping%s\n",
 												e, (int)eVals[e], (mode) ? " with interpolation" : "");
 					}
 				}
@@ -2144,7 +2140,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 
 			// Read the entire file
-			FileStore * const f = platform.GetFileStore(platform.GetSysDir(), platform.GetConfigFile(), false);
+			FileStore * const f = platform.GetFileStore(platform.GetSysDir(), platform.GetConfigFile(), OpenMode::read);
 			if (f == nullptr)
 			{
 				error = true;
@@ -2223,6 +2219,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 552: // Enable/Disable network and/or Set/Get IP address
 		{
 			bool seen = false;
+
+#ifdef DUET_WIFI
+			if (gb.Seen('S')) // Has the user turned the network on or off?
+			{
+				const int enableValue = gb.GetIValue();
+				seen = true;
+
+				char ssidBuffer[SsidLength + 1];
+				StringRef ssid(ssidBuffer, ARRAY_SIZE(ssidBuffer));
+				if (gb.Seen('P') && !gb.GetQuotedString(ssid))
+				{
+					reply.copy("Bad or missing SSID in M552 command");
+					error = true;
+				}
+				else
+				{
+					reprap.GetNetwork().Enable(enableValue, ssid, reply);
+				}
+			}
+#else
 			if (gb.Seen('P'))
 			{
 				seen = true;
@@ -2245,6 +2261,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 				reprap.GetNetwork().Enable(gb.GetIValue(), reply);
 			}
+#endif
 
 			if (!seen)
 			{
@@ -2626,7 +2643,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				if (badParameter)
 				{
-					platform.Message(GENERIC_MESSAGE, "Error: M569 no longer accepts XYZE parameters; use M584 instead\n");
+					platform.Message(ErrorMessage, "M569 no longer accepts XYZE parameters; use M584 instead\n");
 				}
 				else if (!seen)
 				{
@@ -2699,17 +2716,34 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 572: // Set/report pressure advance
-		if (gb.Seen('D'))
+		if (gb.Seen('S'))
 		{
-			// New usage: specify the extruder drive using the D parameter
-			const size_t extruder = gb.GetIValue();
-			if (gb.Seen('S'))
+			const float advance = gb.GetFValue();
+			if (gb.Seen('D'))
 			{
-				platform.SetPressureAdvance(extruder, gb.GetFValue());
+				long int eDrive[MaxExtruders];
+				size_t eCount = MaxExtruders;
+				gb.GetLongArray(eDrive, eCount);
+				for (size_t i = 0; i < eCount; i++)
+				{
+					if (eDrive[i] < 0 || (size_t)eDrive[i] >= numExtruders)
+					{
+						reply.printf("Invalid extruder number '%ld'", eDrive[i]);
+						error = true;
+						break;
+					}
+					platform.SetPressureAdvance(eDrive[i], advance);
+				}
 			}
-			else
+		}
+		else
+		{
+			reply.copy("Extruder pressure advance");
+			char c = ':';
+			for (size_t i = 0; i < numExtruders; ++i)
 			{
-				reply.printf("Pressure advance for extruder %u is %.3f seconds", extruder, platform.GetPressureAdvance(extruder));
+				reply.catf("%c %.3f", c, platform.GetPressureAdvance(i));
+				c = ',';
 			}
 		}
 		break;
@@ -2990,7 +3024,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 							break;
 
 						default:
-							platform.Message(GENERIC_MESSAGE, "Bad S parameter in M581 command\n");
+							platform.Message(ErrorMessage, "Bad S parameter in M581 command\n");
 						}
 					}
 					if (!seen)
@@ -3486,35 +3520,38 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					break;
 
 				default:
-					platform.MessageF(GENERIC_MESSAGE, "Error: mode %d is not value in M667 command\n", mode);
+					reply.printf("Mode %d is not valid in M667 command\n", mode);
 					error = true;
-					return true;
+					break;
 				}
 				seen = true;
 			}
 
-			if (!changedToCartesian)		// don't ask the kinematics to process M667 if we switched to Cartesian mode
+			if (!error)
 			{
-				if (move.GetKinematics().Configure(667, gb, reply, error))
+				if (!changedToCartesian)		// don't ask the kinematics to process M667 if we switched to Cartesian mode
 				{
-					seen = true;
+					if (move.GetKinematics().Configure(667, gb, reply, error))
+					{
+						seen = true;
+					}
 				}
-			}
 
-			if (seen)
-			{
-				// We changed something, so reset the positions and set all axes not homed
-				if (move.GetKinematics().GetKinematicsType() != oldK)
+				if (seen)
 				{
-					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
-					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+					// We changed something, so reset the positions and set all axes not homed
+					if (move.GetKinematics().GetKinematicsType() != oldK)
+					{
+						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
+						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
+					}
+					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed))
+					{
+						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
+					}
+					reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
+					SetAllAxesNotHomed();
 				}
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed))
-				{
-					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
-				}
-				reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
-				SetAllAxesNotHomed();
 			}
 		}
 		break;
@@ -3880,7 +3917,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 #ifdef DUET_NG
 	case 911: // Enable auto save
-		platform.ConfigureAutoSave(gb, reply, error);
+		error = platform.ConfigureAutoSave(gb, reply);
 		break;
 #endif
 
@@ -3924,6 +3961,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 #endif
 
+	case 929: // Start/stop event logging
+		error = platform.ConfigureLogging(gb, reply);
+		break;
+
 	case 997: // Perform firmware update
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
@@ -3945,7 +3986,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					long t = modulesToUpdate[i];
 					if (t < 0 || (unsigned long)t >= NumFirmwareUpdateModules)
 					{
-						platform.MessageF(GENERIC_MESSAGE, "Invalid module number '%ld'\n", t);
+						platform.MessageF(ErrorMessage, "Invalid module number '%ld'\n", t);
 						firmwareUpdateModuleMap = 0;
 						break;
 					}

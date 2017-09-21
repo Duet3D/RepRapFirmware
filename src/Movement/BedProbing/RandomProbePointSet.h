@@ -35,7 +35,7 @@ public:
     void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError); // Record the Z coordinate of a probe point
 
 	void ClearProbeHeights();											// Clear out the Z heights so that we don't re-use old points
-	void SetProbedBedEquation(size_t numPoints, StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
+	bool SetProbedBedEquation(size_t numPoints, StringRef& reply);		// When we have a full set of probed points, work out the bed's equation
 	void SetIdentity() { numBedCompensationPoints = 0; }				// Set identity transform
 
 	float GetInterpolatedHeightError(float x, float y) const;			// Compute the interpolated height error at the specified point

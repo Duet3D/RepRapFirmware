@@ -185,7 +185,7 @@ void TelnetResponder::CharFromClient(char c)
 		if (clientPointer > ARRAY_UPB(clientMessage))
 		{
 			clientPointer = 0;
-			GetPlatform().Message(HOST_MESSAGE, "Webserver: Buffer overflow in Telnet server!\n");
+			GetPlatform().Message(UsbMessage, "Webserver: Buffer overflow in Telnet server!\n");
 		}
 		break;
 	}
@@ -212,7 +212,7 @@ void TelnetResponder::ProcessLine()
 	{
 		// All other codes are stored for the GCodes class
 		RegularGCodeInput * const telnetInput = reprap.GetGCodes().GetTelnetInput();
-		telnetInput->Put(TELNET_MESSAGE, clientMessage);
+		telnetInput->Put(TelnetMessage, clientMessage);
 		haveCompleteLine = false;
 		clientPointer = 0;
 	}

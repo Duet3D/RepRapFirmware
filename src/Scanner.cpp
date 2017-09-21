@@ -23,7 +23,7 @@ const char* CALIBRATE_POST_G = "calibrate_post.g";
 
 void Scanner::Init()
 {
-	longWait = platform.Time();
+	longWait = millis();
 
 	enabled = false;
 	SetState(ScannerState::Disconnected);
@@ -78,7 +78,7 @@ void Scanner::Spin()
 		if (state == ScannerState::ScanningPre || state == ScannerState::Scanning || state == ScannerState::ScanningPost ||
 			state == ScannerState::Uploading)
 		{
-			platform.Message(GENERIC_MESSAGE, "Warning: Scanner disconnected while a 3D scan or upload was in progress");
+			platform.Message(WarningMessage, "Scanner disconnected while a 3D scan or upload was in progress");
 		}
 
 		// Delete any pending uploads
@@ -179,7 +179,7 @@ void Scanner::Spin()
 					{
 						if (reprap.Debug(moduleScanner))
 						{
-							platform.MessageF(HTTP_MESSAGE, "Finished uploading %u bytes of scan data\n", uploadSize);
+							platform.MessageF(HttpMessage, "Finished uploading %u bytes of scan data\n", uploadSize);
 						}
 
 						fileBeingUploaded->Close();
@@ -195,7 +195,7 @@ void Scanner::Spin()
 					fileBeingUploaded = nullptr;
 					platform.GetMassStorage()->Delete(SCANS_DIRECTORY, uploadFilename);
 
-					platform.Message(GENERIC_MESSAGE, "Error: Could not write scan file\n");
+					platform.Message(ErrorMessage, "Failed to write scan file\n");
 					SetState(ScannerState::Idle);
 					break;
 				}
@@ -219,7 +219,7 @@ void Scanner::Spin()
 					buffer[bufferPointer++] = b;
 					if (bufferPointer >= ScanBufferSize)
 					{
-						platform.Message(GENERIC_MESSAGE, "Error: Scan buffer overflow\n");
+						platform.Message(ErrorMessage, "Scan buffer overflow\n");
 						bufferPointer = 0;
 					}
 				}
@@ -236,7 +236,7 @@ void Scanner::ProcessCommand()
 	// Output some info if debugging is enabled
 	if (reprap.Debug(moduleScanner))
 	{
-		platform.MessageF(HTTP_MESSAGE, "Scanner request: '%s'\n", buffer);
+		platform.MessageF(HttpMessage, "Scanner request: '%s'\n", buffer);
 	}
 
 	// Register request: M751
@@ -285,19 +285,19 @@ void Scanner::ProcessCommand()
 		if (uploadFilename != nullptr)
 		{
 			uploadBytesLeft = uploadSize;
-			fileBeingUploaded = platform.GetFileStore(SCANS_DIRECTORY, uploadFilename, true);
+			fileBeingUploaded = platform.GetFileStore(SCANS_DIRECTORY, uploadFilename, OpenMode::write);
 			if (fileBeingUploaded != nullptr)
 			{
 				SetState(ScannerState::Uploading);
 				if (reprap.Debug(moduleScanner))
 				{
-					platform.MessageF(HTTP_MESSAGE, "Starting scan upload for file %s (%u bytes total)\n", uploadFilename, uploadSize);
+					platform.MessageF(HttpMessage, "Starting scan upload for file %s (%u bytes total)\n", uploadFilename, uploadSize);
 				}
 			}
 		}
 		else
 		{
-			platform.Message(GENERIC_MESSAGE, "Error: Malformed scanner upload request\n");
+			platform.Message(ErrorMessage, "Malformed scanner upload request\n");
 		}
 	}
 
@@ -329,7 +329,7 @@ void Scanner::ProcessCommand()
 		// if this command contains a message, report it
 		if (bufferPointer > 6)
 		{
-			platform.MessageF(GENERIC_MESSAGE, "Error: %s\n", &buffer[6]);
+			platform.MessageF(ErrorMessage, "%s\n", &buffer[6]);
 		}
 
 		// reset the state

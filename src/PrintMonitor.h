@@ -104,7 +104,7 @@ class PrintMonitor
 	private:
 		Platform& platform;
 		GCodes& gCodes;
-		float longWait;
+		uint32_t longWait;
 		uint32_t lastUpdateTime;
 
 		// Information/Events concerning the file being printed
@@ -113,8 +113,8 @@ class PrintMonitor
 		void LayerComplete();
 
 		bool isPrinting;
-		float printStartTime;
-		float pauseStartTime, totalPauseTime;
+		uint64_t printStartTime;
+		uint64_t pauseStartTime, totalPauseTime;
 
 		bool heatingUp;
 		unsigned int currentLayer;

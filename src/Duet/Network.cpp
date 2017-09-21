@@ -46,6 +46,7 @@
 #include "RepRap.h"
 #include "Webserver.h"
 #include "Version.h"
+#include "Libraries/General/IP4String.h"
 
 extern "C"
 {
@@ -160,7 +161,7 @@ static void ethernet_rx_callback(uint32_t ul_status)
 static void conn_err(void *arg, err_t err)
 {
 	// Report the error to the monitor
-	reprap.GetPlatform().MessageF(HOST_MESSAGE, "Network: Connection error, code %d\n", err);
+	reprap.GetPlatform().MessageF(UsbMessage, "Network: Connection error, code %d\n", err);
 
 	// Tell the higher levels about the error
 	ConnectionState *cs = (ConnectionState*)arg;
@@ -178,7 +179,7 @@ static err_t conn_recv(void *arg, tcp_pcb *pcb, pbuf *p, err_t err)
 	{
 		if (cs->pcb != pcb)
 		{
-			reprap.GetPlatform().Message(HOST_MESSAGE, "Network: Mismatched pcb in conn_recv!\n");
+			reprap.GetPlatform().Message(UsbMessage, "Network: Mismatched pcb in conn_recv!\n");
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}
@@ -281,7 +282,7 @@ void Network::Init()
 
 	webserver = new Webserver(&platform, this);
 	webserver->Init();
-	longWait = platform.Time();
+	longWait = millis();
 }
 
 void Network::Exit()
@@ -415,7 +416,7 @@ void Network::Spin(bool full)
 					state = NetworkEstablishingLink;
 					UnlockLWIP();
 
-					platform.Message(HOST_MESSAGE, "Network down\n");
+					platform.Message(UsbMessage, "Network down\n");
 					platform.ClassReport(longWait);
 					return;
 				}
@@ -450,7 +451,7 @@ void Network::Spin(bool full)
 						DoMdnsAnnounce();
 
 						UnlockLWIP();
-						platform.MessageF(HOST_MESSAGE, "Network up, IP=%d.%d.%d.%d\n", ip[0], ip[1], ip[2], ip[3]);
+						platform.MessageF(UsbMessage, "Network up, IP=%s\n", IP4String(ip).c_str());
 						platform.ClassReport(longWait);
 						return;
 					}
@@ -564,7 +565,7 @@ bool Network::ReceiveInput(pbuf *pb, ConnectionState* cs)
 	NetworkTransaction* r = freeTransactions;
 	if (r == nullptr)
 	{
-		platform.Message(HOST_MESSAGE, "Network::ReceiveInput() - no free transactions!\n");
+		platform.Message(UsbMessage, "Network::ReceiveInput() - no free transactions!\n");
 		return false;
 	}
 
@@ -583,14 +584,14 @@ ConnectionState *Network::ConnectionAccepted(tcp_pcb *pcb)
 	ConnectionState *cs = freeConnections;
 	if (cs == nullptr)
 	{
-		platform.Message(HOST_MESSAGE, "Network::ConnectionAccepted() - no free ConnectionStates!\n");
+		platform.Message(UsbMessage, "Network::ConnectionAccepted() - no free ConnectionStates!\n");
 		return nullptr;
 	}
 
 	NetworkTransaction* transaction = freeTransactions;
 	if (transaction == nullptr)
 	{
-		platform.Message(HOST_MESSAGE, "Network::ConnectionAccepted() - no free transactions!\n");
+		platform.Message(UsbMessage, "Network::ConnectionAccepted() - no free transactions!\n");
 		return nullptr;
 	}
 
@@ -723,7 +724,7 @@ bool Network::ConnectionClosedGracefully(ConnectionState *cs)
 	NetworkTransaction *transaction = freeTransactions;
 	if (transaction == nullptr)
 	{
-		platform.Message(HOST_MESSAGE, "Network::ConnectionClosedGracefully() - no free transactions!\n");
+		platform.Message(UsbMessage, "Network::ConnectionClosedGracefully() - no free transactions!\n");
 		return false;
 	}
 
@@ -835,11 +836,9 @@ void Network::Enable(int mode, StringRef& reply)
 // Get the network state into the reply buffer, returning true if there is some sort of error
 bool Network::GetNetworkState(StringRef& reply)
 {
-	const uint8_t * const config_ip = platform.GetIPAddress();
-	const uint8_t * const ipAddress = ethernet_get_ipaddress();
-	reply.printf("Network is %s, configured IP address: %u.%u.%u.%u, actual IP address: %u.%u.%u.%u",
-		(isEnabled) ? "enabled" : "disabled",
-					config_ip[0], config_ip[1], config_ip[2], config_ip[3], ipAddress[0], ipAddress[1], ipAddress[2], ipAddress[3]);
+	reply.printf("Network is %s, configured IP address: %s, actual IP address: %s",
+					(isEnabled) ? "enabled" : "disabled",
+						IP4String(platform.GetIPAddress()).c_str(), IP4String(ethernet_get_ipaddress()).c_str());
 	return false;
 }
 
@@ -1056,7 +1055,7 @@ bool Network::AcquireTransaction(ConnectionState *cs)
 	NetworkTransaction *acquiredTransaction = freeTransactions;
 	if (acquiredTransaction == nullptr)
 	{
-		platform.Message(HOST_MESSAGE, "Network: Could not acquire free transaction!\n");
+		platform.Message(UsbMessage, "Network: Could not acquire free transaction!\n");
 		return false;
 	}
 	freeTransactions = acquiredTransaction->next;
