@@ -243,7 +243,7 @@ float ZProbeParameters::GetStopHeight(float temperature) const
 
 bool ZProbeParameters::WriteParameters(FileStore *f, unsigned int probeType) const
 {
-	scratchString.printf("G31 T%u P%d X%.1f Y%.1f Z%.2f\n", probeType, adcValue, xOffset, yOffset, height);
+	scratchString.printf("G31 T%u P%d X%.1f Y%.1f Z%.2f\n", probeType, adcValue, (double)xOffset, (double)yOffset, (double)height);
 	return f->Write(scratchString.Pointer());
 }
 
@@ -289,12 +289,12 @@ void Platform::Init()
 	// Comms
 	baudRates[0] = MAIN_BAUD_RATE;
 	baudRates[1] = AUX_BAUD_RATE;
-#if NUM_SERIAL_CHANNELS >= 2
+#ifdef SERIAL_AUX2_DEVICE
 	baudRates[2] = AUX2_BAUD_RATE;
 #endif
 	commsParams[0] = 0;
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
-#if NUM_SERIAL_CHANNELS >= 2
+#ifdef SERIAL_AUX2_DEVICE
 	commsParams[2] = 0;
 #endif
 
@@ -1580,7 +1580,7 @@ bool Platform::ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply)
 	else
 	{
 		reply.printf(" Auto shutdown at %.1fV, save/pause at %.1fV, resume at %.1fV",
-			AdcReadingToPowerVoltage(autoShutdownReading), AdcReadingToPowerVoltage(autoPauseReading), AdcReadingToPowerVoltage(autoResumeReading));
+			(double)AdcReadingToPowerVoltage(autoShutdownReading), (double)AdcReadingToPowerVoltage(autoPauseReading), (double)AdcReadingToPowerVoltage(autoResumeReading));
 	}
 	return false;
 }
@@ -1991,24 +1991,24 @@ void Platform::Diagnostics(MessageType mtype)
 #if defined( __RADDS__) || defined(__ALLIGATOR__)
 	MessageF(mtype, "SD card 0 %s\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"));
 #else
-	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"), (float)hsmci_get_speed()/1000000.0);
+	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed()/1000000.0));
 #endif
 
 	// Show the longest SD card write time
-	MessageF(mtype, "SD card longest block write time: %.1fms\n", FileStore::GetAndClearLongestWriteTime());
+	MessageF(mtype, "SD card longest block write time: %.1fms\n", (double)FileStore::GetAndClearLongestWriteTime());
 
 #if !defined( __RADDS__)
 	// Show the MCU temperatures
 	const uint32_t currentMcuTemperature = cpuTemperatureFilter.GetSum();
 	MessageF(mtype, "MCU temperature: min %.1f, current %.1f, max %.1f\n",
-				AdcReadingToCpuTemperature(lowestMcuTemperature), AdcReadingToCpuTemperature(currentMcuTemperature), AdcReadingToCpuTemperature(highestMcuTemperature));
+		(double)AdcReadingToCpuTemperature(lowestMcuTemperature), (double)AdcReadingToCpuTemperature(currentMcuTemperature), (double)AdcReadingToCpuTemperature(highestMcuTemperature));
 	lowestMcuTemperature = highestMcuTemperature = currentMcuTemperature;
 #endif
 
 #ifdef DUET_NG
 	// Show the supply voltage
 	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %u, over voltage events: %u\n",
-				AdcReadingToPowerVoltage(lowestVin), AdcReadingToPowerVoltage(currentVin), AdcReadingToPowerVoltage(highestVin),
+		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
 				numUnderVoltageEvents, numOverVoltageEvents);
 	lowestVin = highestVin = currentVin;
 
@@ -2123,8 +2123,8 @@ void Platform::DiagnosticTest(int d)
 			const uint32_t num2a = isqrt64((uint64_t)num2 * num2);
 			const uint32_t tim2 = Platform::GetInterruptClocks() - now2;
 			MessageF(GenericMessage, "Square roots: 64-bit %.1fus %s, 32-bit %.1fus %s\n",
-					(float)(tim1 * 1000000)/DDA::stepClockRate, (num1a == num1) ? "ok" : "ERROR",
-							(float)(tim2 * 1000000)/DDA::stepClockRate, (num2a == num2) ? "ok" : "ERROR");
+					(double)(tim1 * 1000000)/DDA::stepClockRate, (num1a == num1) ? "ok" : "ERROR",
+							(double)(tim2 * 1000000)/DDA::stepClockRate, (num2a == num2) ? "ok" : "ERROR");
 		}
 		break;
 

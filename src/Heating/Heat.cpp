@@ -157,7 +157,7 @@ void Heat::Diagnostics(MessageType mtype)
 	{
 		if (pids[heater]->Active())
 		{
-			platform.MessageF(mtype, "Heater %d is on, I-accum = %.1f\n", heater, pids[heater]->GetAccumulator());
+			platform.MessageF(mtype, "Heater %d is on, I-accum = %.1f\n", heater, (double)(pids[heater]->GetAccumulator()));
 		}
 	}
 }
@@ -507,11 +507,11 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 	StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
 	if (bedHeater >= 0 && pids[bedHeater]->Active() && !pids[bedHeater]->SwitchedOff())
 	{
-		buf.printf("M140 S%.1f\n", GetActiveTemperature(bedHeater));
+		buf.printf("M140 S%.1f\n", (double)GetActiveTemperature(bedHeater));
 	}
 	if (chamberHeater >= 0 && pids[chamberHeater]->Active() && !pids[chamberHeater]->SwitchedOff())
 	{
-		buf.printf("M141 S%.1f\n", GetActiveTemperature(chamberHeater));
+		buf.printf("M141 S%.1f\n", (double)GetActiveTemperature(chamberHeater));
 	}
 	return (buf.Length() == 0) || f->Write(buf.Pointer());
 }

@@ -630,7 +630,7 @@ void GCodes::Spin()
 					}
 					else
 					{
-						platform.MessageF(WarningMessage, "Skipping grid point (%.1f, %.1f) because Z probe cannot reach it\n", x, y);
+						platform.MessageF(WarningMessage, "Skipping grid point (%.1f, %.1f) because Z probe cannot reach it\n", (double)x, (double)y);
 						gb.SetState(GCodeState::gridProbing5);
 					}
 				}
@@ -783,7 +783,7 @@ void GCodes::Spin()
 				const uint32_t numPointsProbed = reprap.GetMove().AccessBedProbeGrid().GetStatistics(mean, deviation);
 				if (numPointsProbed >= 4)
 				{
-					reply.printf("%u points probed, mean error %.3f, deviation %.3f\n", numPointsProbed, mean, deviation);
+					reply.printf("%u points probed, mean error %.3f, deviation %.3f\n", numPointsProbed, (double)mean, (double)deviation);
 					error = SaveHeightMap(gb, reply);
 					reprap.GetMove().AccessBedProbeGrid().ExtrapolateMissing();
 					reprap.GetMove().UseMesh(true);
@@ -1020,7 +1020,7 @@ void GCodes::Spin()
 
 		case GCodeState::probingAtPoint7:
 			// Here when we have finished executing G30 S-1 including retracting the probe if necessary
-			reply.printf("Stopped at height %.3f mm", zStoppedHeight);
+			reply.printf("Stopped at height %.3f mm", (double)zStoppedHeight);
 			gb.SetState(GCodeState::normal);
 			break;
 
@@ -1589,12 +1589,12 @@ void GCodes::SaveResumeInfo()
 			}
 			if (ok)
 			{
-				buf.printf("M106 S%.2f\n", lastDefaultFanSpeed);
+				buf.printf("M106 S%.2f\n", (double)lastDefaultFanSpeed);
 				ok = f->Write(buf.Pointer());
 			}
 			if (ok)
 			{
-				buf.printf("M116\nM290 S%.3f\nM23 %s\nM26 S%u\n", currentBabyStepZOffset, printingFilename, pauseRestorePoint.filePos);
+				buf.printf("M116\nM290 S%.3f\nM23 %s\nM26 S%u\n", (double)currentBabyStepZOffset, printingFilename, pauseRestorePoint.filePos);
 				ok = f->Write(buf.Pointer());								// write baby stepping offset, filename and file position
 			}
 			if (ok && fileGCode->OriginalMachineState().volumetricExtrusion)
@@ -1603,7 +1603,7 @@ void GCodes::SaveResumeInfo()
 				char c = 'D';
 				for (size_t i = 0; i < numExtruders; ++i)
 				{
-					buf.catf("%c%.03f", c, volumetricExtrusionFactors[i]);
+					buf.catf("%c%.03f", c, (double)volumetricExtrusionFactors[i]);
 					c = ':';
 				}
 				buf.cat('\n');
@@ -1611,7 +1611,7 @@ void GCodes::SaveResumeInfo()
 			}
 			if (ok)
 			{
-				buf.printf("G92 E%.5f\n%s\n", virtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
+				buf.printf("G92 E%.5f\n%s\n", (double)virtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
 				ok = f->Write(buf.Pointer());								// write virtual extruder position and absolute/relative extrusion flag
 			}
 			if (ok)
@@ -1619,9 +1619,9 @@ void GCodes::SaveResumeInfo()
 				buf.copy("G1 F6000");										// start building command to restore head position
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					buf.catf(" %c%.2f", axisLetters[axis], pauseRestorePoint.moveCoords[axis]);
+					buf.catf(" %c%.2f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
 				}
-				buf.catf("\nG1 F%.1f P%u\nM24\n", pauseRestorePoint.feedRate * MinutesToSeconds, (unsigned int)pauseRestorePoint.ioBits);
+				buf.catf("\nG1 F%.1f P%u\nM24\n", (double)(pauseRestorePoint.feedRate * MinutesToSeconds), (unsigned int)pauseRestorePoint.ioBits);
 				ok = f->Write(buf.Pointer());								// restore feed rate and output bits
 			}
 			if (!f->Close())
@@ -2006,10 +2006,11 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinate
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
 		if (kin.UseSegmentation() && (moveBuffer.hasExtrusion || isCoordinated || !kin.UseRawG0()))
 		{
-			// This kinematics approximates linear motion by means of segmentation
+			// This kinematics approximates linear motion by means of segmentation.
+			// We assume that the segments will be smaller than the mesh spacing.
 			const float xyLength = sqrtf(fsquare(currentUserPosition[X_AXIS] - initialX) + fsquare(currentUserPosition[Y_AXIS] - initialY));
 			const float moveTime = xyLength/moveBuffer.feedRate;			// this is a best-case time, often the move will take longer
-			segmentsLeft = max<unsigned int>(1, min<unsigned int>(xyLength/kin.GetMinSegmentLength(), (unsigned int)(moveTime * kin.GetSegmentsPerSecond())));
+			segmentsLeft = (unsigned int)max<int>(1, min<int>(rintf(xyLength/kin.GetMinSegmentLength()), rintf(moveTime * kin.GetSegmentsPerSecond())));
 		}
 		else if (reprap.GetMove().IsUsingMesh())
 		{
@@ -2498,7 +2499,7 @@ bool GCodes::SetPrintZProbe(GCodeBuffer& gb, StringRef& reply)
 	else if (seenT)
 	{
 		// Don't bother printing temperature coefficient and calibration temperature because we will probably remove them soon
-		reply.printf("Threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, params.height, params.xOffset, params.yOffset);
+		reply.printf("Threshold %d, trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.height, (double)params.xOffset, (double)params.yOffset);
 	}
 	else
 	{
@@ -2579,11 +2580,11 @@ bool GCodes::DefineGrid(GCodeBuffer& gb, StringRef &reply)
 	{
 		if (radius > 0)
 		{
-			const float effectiveXRadius = floor((radius - 0.1)/spacings[0]) * spacings[0];
+			const float effectiveXRadius = floorf((radius - 0.1)/spacings[0]) * spacings[0];
 			xValues[0] = -effectiveXRadius;
 			xValues[1] =  effectiveXRadius + 0.1;
 
-			const float effectiveYRadius = floor((radius - 0.1)/spacings[1]) * spacings[1];
+			const float effectiveYRadius = floorf((radius - 0.1)/spacings[1]) * spacings[1];
 			yValues[0] = -effectiveYRadius;
 			yValues[1] =  effectiveYRadius + 0.1;
 		}
@@ -2729,11 +2730,11 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	s.Clear();
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		s.catf("%c: %.3f ", axisLetters[axis], liveCoordinates[axis]);
+		s.catf("%c: %.3f ", axisLetters[axis], (double)liveCoordinates[axis]);
 	}
 	for (size_t i = numTotalAxes; i < DRIVES; i++)
 	{
-		s.catf("E%u: %.1f ", i - numTotalAxes, liveCoordinates[i]);
+		s.catf("E%u: %.1f ", i - numTotalAxes, (double)liveCoordinates[i]);
 	}
 
 	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.
@@ -2748,7 +2749,7 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	s.cat(" User");
 	for (size_t i = 0; i < numVisibleAxes; ++i)
 	{
-		s.catf(" %.1f", currentUserPosition[i]);
+		s.catf(" %.1f", (double)currentUserPosition[i]);
 	}
 }
 
@@ -3059,14 +3060,14 @@ bool GCodes::SetOrReportOffsets(GCodeBuffer &gb, StringRef& reply, bool& error)
 		reply.printf("Tool %d offsets:", tool->Number());
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			reply.catf(" %c%.2f", axisLetters[axis], offset[axis]);
+			reply.catf(" %c%.2f", axisLetters[axis], (double)offset[axis]);
 		}
 		if (hCount != 0)
 		{
 			reply.cat(", active/standby temperature(s):");
 			for (size_t heater = 0; heater < hCount; heater++)
 			{
-				reply.catf(" %.1f/%.1f", active[heater], standby[heater]);
+				reply.catf(" %.1f/%.1f", (double)active[heater], (double)standby[heater]);
 			}
 		}
 	}
@@ -3503,7 +3504,7 @@ void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply)
 		}
 		else if (model.ArePidParametersOverridden())
 		{
-			reply.printf("Heater %d P:%.1f I:%.3f D:%.1f", heater, pp.kP, pp.kI, pp.kD);
+			reply.printf("Heater %d P:%.1f I:%.3f D:%.1f", heater, (double)pp.kP, (double)pp.kI, (double)pp.kD);
 		}
 		else
 		{
@@ -4151,7 +4152,7 @@ void GCodes::GenerateTemperatureReport(StringRef& reply) const
 		for (size_t i = 0; i < tool->HeaterCount(); ++i)
 		{
 			const int heater = tool->Heater(i);
-			reply.catf("%c%.1f /%.1f", sep, heat.GetTemperature(heater), heat.GetTargetTemperature(heater));
+			reply.catf("%c%.1f /%.1f", sep, (double)heat.GetTemperature(heater), (double)heat.GetTargetTemperature(heater));
 			sep = ' ';
 		}
 	}
@@ -4159,13 +4160,13 @@ void GCodes::GenerateTemperatureReport(StringRef& reply) const
 	const int bedHeater = heat.GetBedHeater();
 	if (bedHeater >= 0)
 	{
-		reply.catf(" B:%.1f /%.1f", heat.GetTemperature(bedHeater), heat.GetTargetTemperature(bedHeater));
+		reply.catf(" B:%.1f /%.1f", (double)heat.GetTemperature(bedHeater), (double)heat.GetTargetTemperature(bedHeater));
 	}
 
 	const int chamberHeater = heat.GetChamberHeater();
 	if (chamberHeater >= 0)
 	{
-		reply.catf(" C:%.1f /%.1f", heat.GetTemperature(chamberHeater), heat.GetTargetTemperature(chamberHeater));
+		reply.catf(" C:%.1f /%.1f", (double)heat.GetTemperature(chamberHeater), (double)heat.GetTargetTemperature(chamberHeater));
 	}
 }
 

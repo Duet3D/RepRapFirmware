@@ -70,7 +70,7 @@ bool Thermistor::Configure(unsigned int mCode, unsigned int heater, GCodeBuffer&
 		{
 			CopyBasicHeaterDetails(heater, reply);
 			reply.catf(", T:%.1f B:%.1f C:%.2e R:%.1f L:%d H:%d",
-					r25, beta, shC, seriesR, adcLowOffset, adcHighOffset);
+				(double)r25, (double)beta, (double)shC, (double)seriesR, adcLowOffset, adcHighOffset);
 		}
 	}
 
@@ -134,7 +134,7 @@ int32_t Thermistor::CalcAdcReading(float temperature) const
 void Thermistor::CalcDerivedParameters()
 {
 	shB = 1.0/beta;
-	const double lnR25 = log(r25);
+	const float lnR25 = logf(r25);
 	shA = 1.0/(25.0 - ABS_ZERO) - shB * lnR25 - shC * lnR25 * lnR25 * lnR25;
 }
 

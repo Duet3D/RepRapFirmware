@@ -65,7 +65,7 @@ bool CurrentLoopTemperatureSensor::Configure(unsigned int mCode, unsigned int he
 		else if (!gb.Seen('X'))
 		{
 			CopyBasicHeaterDetails(heater, reply);
-			reply.catf(", temperature range %.1f to %.1fC", tempAt4mA, tempAt20mA);
+			reply.catf(", temperature range %.1f to %.1fC", (double)tempAt4mA, (double)tempAt20mA);
 		}
 	}
 	return false;

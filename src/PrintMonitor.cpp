@@ -460,7 +460,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 				if (reprap.Debug(modulePrintMonitor))
 				{
 					platform.MessageF(UsbMessage, "Header complete, processed %lu bytes, read time %.3fs, parse time %.3fs\n",
-										fileBeingParsed->Position(), (float)accumulatedReadTime/1000.0, (float)accumulatedParseTime/1000.0);
+										fileBeingParsed->Position(), (double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0));
 				}
 
 				// Go to the last chunk and proceed from there on
@@ -553,7 +553,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 				{
 					platform.MessageF(UsbMessage, "Footer complete, processed %lu bytes, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
 										fileBeingParsed->Length() - fileBeingParsed->Position() + GCODE_READ_SIZE,
-										(float)accumulatedReadTime/1000.0, (float)accumulatedParseTime/1000.0, (float)accumulatedSeekTime/1000.0);
+										(double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0), (double)((float)accumulatedSeekTime/1000.0));
 				}
 				parseState = notParsing;
 				fileBeingParsed->Close();
@@ -612,7 +612,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 			}
 
 			response->catf("\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,\"filament\":",
-							info.objectHeight, info.firstLayerHeight, info.layerHeight);
+				(double)info.objectHeight, (double)info.firstLayerHeight, (double)info.layerHeight);
 			char ch = '[';
 			if (info.numFilaments == 0)
 			{
@@ -622,7 +622,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 			{
 				for(size_t i = 0; i < info.numFilaments; ++i)
 				{
-					response->catf("%c%.1f", ch, info.filamentNeeded[i]);
+					response->catf("%c%.1f", ch, (double)info.filamentNeeded[i]);
 					ch = ',';
 				}
 			}
@@ -652,7 +652,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 
 		// Poll file info about a file currently being printed
 		response->printf("{\"err\":0,\"size\":%lu,\"height\":%.2f,\"firstLayerHeight\":%.2f,\"layerHeight\":%.2f,\"filament\":",
-						printingFileInfo.fileSize, printingFileInfo.objectHeight, printingFileInfo.firstLayerHeight, printingFileInfo.layerHeight);
+						printingFileInfo.fileSize, (double)printingFileInfo.objectHeight, (double)printingFileInfo.firstLayerHeight, (double)printingFileInfo.layerHeight);
 		char ch = '[';
 		if (printingFileInfo.numFilaments == 0)
 		{
@@ -662,7 +662,7 @@ bool PrintMonitor::GetFileInfoResponse(const char *filename, OutputBuffer *&resp
 		{
 			for (size_t i = 0; i < printingFileInfo.numFilaments; ++i)
 			{
-				response->catf("%c%.1f", ch, printingFileInfo.filamentNeeded[i]);
+				response->catf("%c%.1f", ch, (double)printingFileInfo.filamentNeeded[i]);
 				ch = ',';
 			}
 		}
@@ -1133,7 +1133,7 @@ unsigned int PrintMonitor::FindFilamentUsed(const char* buf, size_t len, float *
 		p = strstr(buf, filamentVolumeStr);
 		if (p != nullptr)
 		{
-			float filamentCMM = strtod(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
+			const float filamentCMM = strtof(p + strlen(filamentVolumeStr), nullptr) * 1000.0;
 			filamentUsed[filamentsFound++] = filamentCMM / (PI * (platform.GetFilamentWidth() / 2.0) * (platform.GetFilamentWidth() / 2.0));
 		}
 	}

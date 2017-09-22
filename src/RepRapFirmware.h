@@ -171,7 +171,7 @@ template<typename BitmapType> BitmapType LongArrayToBitMap(const long *arr, size
 	for (size_t i = 0; i < numEntries; ++i)
 	{
 		const long f = arr[i];
-		if (f >= 0 && f < sizeof(BitmapType) * CHAR_BIT)
+		if (f >= 0 && (unsigned long)f < sizeof(BitmapType) * CHAR_BIT)
 		{
 			SetBit(res, (unsigned int)f);
 		}

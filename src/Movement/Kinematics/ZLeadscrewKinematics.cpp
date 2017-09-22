@@ -74,9 +74,9 @@ bool ZLeadscrewKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, String
 			reply.copy("Z leadscrew coordinates");
 			for (unsigned int i = 0; i < numLeadscrews; ++i)
 			{
-				reply.catf(" (%.1f,%.1f)", leadscrewX[i], leadscrewY[i]);
+				reply.catf(" (%.1f,%.1f)", (double)leadscrewX[i], (double)leadscrewY[i]);
 			}
-			reply.catf(", maximum correction %.02fmm, manual adjusting screw pitch %.02fmm", maxCorrection, screwPitch);
+			reply.catf(", maximum correction %.02fmm, manual adjusting screw pitch %.02fmm", (double)maxCorrection, (double)screwPitch);
 		}
 		return false;
 	}
@@ -123,8 +123,8 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 				const float &y0 = leadscrewY[0], &y1 = leadscrewY[1];
 				// There are lot of common subexpressions in the following, but the optimiser should find them
 				const floatc_t d2 = fcsquare(x1 - x0) + fcsquare(y1 - y0);
-				derivativeMatrix(i, 0) = -(fcsquare(y1) - y0*y1 - y*(y1 - y0) + fcsquare(x1) - x0*x1 - x*(x1 - x0))/d2;
-				derivativeMatrix(i, 1) = -(fcsquare(y0) - y0*y1 + y*(y1 - y0) + fcsquare(x0) - x0*x1 + x*(x1 - x0))/d2;
+				derivativeMatrix(i, 0) = -(fcsquare(y1) - (floatc_t)(y0*y1) - (floatc_t)(y*(y1 - y0)) + fcsquare(x1) - (floatc_t)(x0*x1) - (floatc_t)(x*(x1 - x0)))/d2;
+				derivativeMatrix(i, 1) = -(fcsquare(y0) - (floatc_t)(y0*y1) + (floatc_t)(y*(y1 - y0)) + fcsquare(x0) - (floatc_t)(x0*x1) + (floatc_t)(x*(x1 - x0)))/d2;
 			}
 			break;
 
@@ -133,9 +133,9 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 				const float &x0 = leadscrewX[0], &x1 = leadscrewX[1], &x2 = leadscrewX[2];
 				const float &y0 = leadscrewY[0], &y1 = leadscrewY[1], &y2 = leadscrewY[2];
 				const floatc_t d2 = x1*y2 - x0*y2 - x2*y1 + x0*y1 + x2*y0 - x1*y0;
-				derivativeMatrix(i, 0) = -(x1*y2 - x*y2 - x2*y1 + x*y1 + x2*y - x1*y)/d2;
-				derivativeMatrix(i, 1) = (x0*y2 - x*y2 - x2*y0 + x*y0 + x2*y - x0*y)/d2;
-				derivativeMatrix(i, 2) = -(x0*y1 - x*y1 - x1*y0 + x*y0 + x1*y - x0*y)/d2;
+				derivativeMatrix(i, 0) = -(floatc_t)(x1*y2 - x*y2 - x2*y1 + x*y1 + x2*y - x1*y)/d2;
+				derivativeMatrix(i, 1) = (floatc_t)(x0*y2 - x*y2 - x2*y0 + x*y0 + x2*y - x0*y)/d2;
+				derivativeMatrix(i, 2) = -(floatc_t)(x0*y1 - x*y1 - x1*y0 + x*y0 + x1*y - x0*y)/d2;
 			}
 			break;
 
@@ -213,10 +213,10 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 			}
 			normalMatrix(i, j) = temp;
 		}
-		floatc_t temp = derivativeMatrix(0, i) * -(probePoints.GetZHeight(0));
+		floatc_t temp = derivativeMatrix(0, i) * -((floatc_t)probePoints.GetZHeight(0));
 		for (size_t k = 1; k < numPoints; ++k)
 		{
-			temp += derivativeMatrix(k, i) * -(probePoints.GetZHeight(k));
+			temp += derivativeMatrix(k, i) * -((floatc_t)probePoints.GetZHeight(k));
 		}
 		normalMatrix(i, numFactors) = temp;
 	}
@@ -261,7 +261,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		{
 			haveNaN = true;
 		}
-		else if (fabs(solution[i]) > maxCorrection)
+		else if (fabsf(solution[i]) > maxCorrection)
 		{
 			haveLargeCorrection = true;
 		}
@@ -280,7 +280,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		{
 			if (haveLargeCorrection)
 			{
-				reply.printf("Some computed corrections exceed configured limit of %.02fmm:", maxCorrection);
+				reply.printf("Some computed corrections exceed configured limit of %.02fmm:", (double)maxCorrection);
 				AppendCorrections(solution, reply);
 				return true;
 			}
@@ -290,7 +290,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 				reply.printf("Leadscrew adjustments made:");
 				AppendCorrections(solution, reply);
 				reply.catf(", points used %d, deviation before %.3f after %.3f",
-							numPoints, sqrt(initialSumOfSquares/numPoints), sqrtf(sumOfSquares/numPoints));
+							numPoints, (double)sqrtf((float)initialSumOfSquares/numPoints), (double)sqrtf((float)sumOfSquares/numPoints));
 				reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.Pointer());
 			}
 		}
@@ -302,7 +302,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 			for (size_t i = 0; i < numLeadscrews; ++i)
 			{
 				const float netAdjustment = solution[i] - solution[0];
-				reply.catf(" %.2f turn %s (%.2fmm)", fabs(netAdjustment)/screwPitch, (netAdjustment > 0) ? "down" : "up", netAdjustment);
+				reply.catf(" %.2f turn %s (%.2fmm)", (double)(fabsf(netAdjustment)/screwPitch), (netAdjustment > 0) ? "down" : "up", (double)netAdjustment);
 			}
 		}
 		return false;
@@ -314,7 +314,7 @@ void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], Strin
 {
 	for (size_t i = 0; i < numLeadscrews; ++i)
 	{
-		reply.catf(" %.3f", corrections[i]);
+		reply.catf(" %.3f", (double)corrections[i]);
 	}
 }
 

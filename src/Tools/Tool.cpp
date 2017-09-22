@@ -158,7 +158,7 @@ void Tool::Print(StringRef& reply)
 	sep = ' ';
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		reply.catf("%c%d (%.1f/%.1f)", sep, heaters[heater], activeTemperatures[heater], standbyTemperatures[heater]);
+		reply.catf("%c%d (%.1f/%.1f)", sep, heaters[heater], (double)activeTemperatures[heater], (double)standbyTemperatures[heater]);
 		sep = ',';
 	}
 

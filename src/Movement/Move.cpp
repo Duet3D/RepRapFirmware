@@ -515,7 +515,7 @@ void Move::Diagnostics(MessageType mtype)
 	// To keep the response short so that it doesn't get truncated when sending it via HTTP, we only show the first 5 bed probe points
 	for (size_t i = 0; i < 5; ++i)
 	{
-		p.MessageF(mtype, " %.3f", probePoints.GetZHeight(i));
+		p.MessageF(mtype, " %.3f", (double)probePoints.GetZHeight(i));
 	}
 	p.Message(mtype, "\n");
 
@@ -601,11 +601,11 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 	{
 		if (b)
 		{
-			debugPrintf("Transformed %.2f %.2f %.2f to %d %d %d\n", machinePos[0], machinePos[1], machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
+			debugPrintf("Transformed %.2f %.2f %.2f to %d %d %d\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 		}
 		else
 		{
-			debugPrintf("Unable to transform %.2f %.2f %.2f\n", machinePos[0], machinePos[1], machinePos[2]);
+			debugPrintf("Unable to transform %.2f %.2f %.2f\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
 		}
 	}
 	return b;

@@ -160,7 +160,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 	// First check whether there is any deceleration at all, otherwise we may get strange results because of rounding errors
 	if (dda.decelDistance * stepsPerMm < 0.5)		// if less than 1 deceleration step
 	{
-		totalSteps = (uint)max<int32_t>(netSteps, 0);
+		totalSteps = (uint32_t)max<int32_t>(netSteps, 0);
 		mp.cart.decelStartStep = reverseStartStep = netSteps + 1;
 		topSpeedTimesCdivAPlusDecelStartClocks = 0;
 		mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA = 0;
@@ -184,7 +184,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 		if (reverseStartDistance >= dda.totalDistance)
 		{
 			// No reverse phase
-			totalSteps = (uint)max<int32_t>(netSteps, 0);
+			totalSteps = (uint32_t)max<int32_t>(netSteps, 0);
 			reverseStartStep = netSteps + 1;
 			mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA = 0;
 		}
@@ -204,7 +204,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 			}
 			else
 			{
-				totalSteps = (uint)max<int32_t>(netSteps, 0);
+				totalSteps = (uint32_t)max<int32_t>(netSteps, 0);
 				reverseStartStep = totalSteps + 1;
 				mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA = 0;
 			}

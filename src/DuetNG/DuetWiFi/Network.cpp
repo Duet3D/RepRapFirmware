@@ -665,7 +665,7 @@ void Network::Diagnostics(MessageType mtype)
 			platform.MessageF(mtype, "WiFi firmware version %s\n", r.versionText);
 			platform.MessageF(mtype, "WiFi MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
-			platform.MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (float)r.vcc/1024, TranslateEspResetReason(r.resetReason));
+			platform.MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (double)((float)r.vcc/1024), TranslateEspResetReason(r.resetReason));
 			platform.MessageF(mtype, "WiFi flash size %u, free heap %u\n", r.flashSize, r.freeHeap);
 
 			if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)

@@ -116,7 +116,7 @@ const Pin COOLING_FAN_RPM_PIN = 23;										// Pin PA15
 
 // SD cards
 const size_t NumSdCards = 2;
-const Pin SdCardDetectPins[NumSdCards] = {13, NoPin};
+const Pin SdCardDetectPins[NumSdCards] = {NoPin, NoPin};				// Although the Duet PCB supports a CD pin, due to a bug in the SAM3X it is unusable if we enable the temperature sensor
 const Pin SdWriteProtectPins[NumSdCards] = {NoPin, NoPin};
 const Pin SdSpiCSPins[1] = {67};										// Pin PB16 Note: this clashes with inkjet support
 

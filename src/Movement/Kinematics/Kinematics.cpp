@@ -158,7 +158,7 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alrea
 	{
 		for (size_t j = 0; j < maxCols; ++j)
 		{
-			debugPrintf("%7.4f%c", m(i, j), (j == maxCols - 1) ? '\n' : ' ');
+			debugPrintf("%7.4f%c", (double)m(i, j), (j == maxCols - 1) ? '\n' : ' ');
 		}
 	}
 }
@@ -168,7 +168,7 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alrea
 	debugPrintf("%s:", s);
 	for (size_t i = 0; i < numElems; ++i)
 	{
-		debugPrintf(" %7.4f", v[i]);
+		debugPrintf(" %7.4f", (double)v[i]);
 	}
 	debugPrintf("\n");
 }

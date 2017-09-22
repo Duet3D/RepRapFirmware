@@ -38,7 +38,7 @@ bool CoreBaseKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRe
 			reply.printf("Printer mode is %s with axis factors", GetName());
 			for (size_t axis = 0; axis < XYZ_AXES; ++axis)
 			{
-				reply.catf(" %c:%f", GCodes::axisLetters[axis], axisFactors[axis]);
+				reply.catf(" %c:%f", GCodes::axisLetters[axis], (double)axisFactors[axis]);
 			}
 		}
 		return seen;

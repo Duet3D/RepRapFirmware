@@ -101,10 +101,10 @@ template<class T, size_t ROWS, size_t COLS> void FixedMatrix<T, ROWS, COLS>::Gau
 		}
 
 		// Use row i to eliminate the ith element from previous and subsequent rows
-		float v = (*this)(i, i);
+		T v = (*this)(i, i);
 		for (size_t j = 0; j < i; ++j)
 		{
-			float factor = (*this)(j, i)/v;
+			T factor = (*this)(j, i)/v;
 			(*this)(j, i) = 0.0;
 			for (size_t k = i + 1; k <= numRows; ++k)
 			{
@@ -114,7 +114,7 @@ template<class T, size_t ROWS, size_t COLS> void FixedMatrix<T, ROWS, COLS>::Gau
 
 		for (size_t j = i + 1; j < numRows; ++j)
 		{
-			float factor = (*this)(j, i)/v;
+			T factor = (*this)(j, i)/v;
 			(*this)(j, i) = 0.0;
 			for (size_t k = i + 1; k <= numRows; ++k)
 			{

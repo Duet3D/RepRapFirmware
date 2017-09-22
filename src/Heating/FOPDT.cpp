@@ -69,12 +69,12 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp)
 // Write the model parameters to file returning true if no error
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const
 {
-	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f B%d\n", heater, gain, timeConstant, deadTime, maxPwm, (usePid) ? 0 : 1);
+	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f B%d\n", heater, (double)gain, (double)timeConstant, (double)deadTime, (double)maxPwm, (usePid) ? 0 : 1);
 	bool ok = f->Write(scratchString.Pointer());
 	if (ok && pidParametersOverridden)
 	{
 		const M301PidParameters pp = GetM301PidParameters(false);
-		scratchString.printf("M301 H%u P%.1f I%.3f D%.1f\n", heater, pp.kP, pp.kI, pp.kD);
+		scratchString.printf("M301 H%u P%.1f I%.3f D%.1f\n", heater, (double)pp.kP, (double)pp.kI, (double)pp.kD);
 		ok = f->Write(scratchString.Pointer());
 	}
 	return ok;
@@ -115,7 +115,7 @@ void FopDt::CalcPidConstants()
 	const float timeFrac = deadTime/timeConstant;
 	loadChangeParams.kP = 0.7/(gain * timeFrac);
 //	loadChangeParams.recipTi = 1.0/(deadTime * 2.0);										// Ti = 2 * deadTime (this is what we used in version 1.15c)
-	loadChangeParams.recipTi = (1.0/1.14)/(pow(timeConstant, 0.25) * pow(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+	loadChangeParams.recipTi = (1.0/1.14)/(powf(timeConstant, 0.25) * powf(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
 	loadChangeParams.tD = deadTime * 0.7;
 
 	setpointChangeParams.kP = 0.7/(gain * timeFrac);

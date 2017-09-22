@@ -29,14 +29,13 @@ enum MessageType : uint16_t
 
 	// Common combinations
 	DebugMessage = BlockingUsbMessage,										// A debug message to send in blocking mode to USB
-	GenericMessage = UsbMessage | LcdMessage | HttpMessage | TelnetMessage | AuxMessage,
-																			// A message that is to be sent to the web, Telnet, USB and panel
-	LoggedGenericMessage = GenericMessage | LogMessage,						// As GenericMessage that is also logged
+	GenericMessage = UsbMessage | LcdMessage | HttpMessage | TelnetMessage,	// A message that is to be sent to the web, Telnet, USB and panel
+	LoggedGenericMessage = GenericMessage | LogMessage,						// A GenericMessage that is also logged
 	ErrorMessage = GenericMessage | LogMessage | ErrorMessageFlag,			// An error message
 	WarningMessage = GenericMessage | LogMessage | WarningMessageFlag,		// A warning message
 	FirmwareUpdateMessage = UsbMessage | ImmediateLcdMessage,				// A message that conveys progress of a firmware update
 	FirmwareUpdateErrorMessage = FirmwareUpdateMessage | ErrorMessageFlag,	// A message that reports an error during a firmware update
-	NetworkInfoMessage = UsbMessage | LcdMessage | AuxMessage | LogMessage 	// A message that conveys information about the state of the network interface
+	NetworkInfoMessage = UsbMessage | LcdMessage | LogMessage			 	// A message that conveys information about the state of the network interface
 };
 
 #endif /* MESSAGETYPE_H_ */

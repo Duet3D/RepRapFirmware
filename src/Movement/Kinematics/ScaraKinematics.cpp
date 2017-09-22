@@ -153,11 +153,11 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& 
 		{
 			reply.printf("Printer mode is Scara with proximal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL
 							", distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL ", crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f), segments/sec %d, min. segment length %.2f",
-							proximalArmLength, thetaLimits[0], thetaLimits[1],
-							distalArmLength, phiLimits[0], phiLimits[1],
-							crosstalk[0], crosstalk[1], crosstalk[2],
-							xOffset, yOffset,
-							(int)segmentsPerSecond, minSegmentLength);
+							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1],
+							(double)distalArmLength, (double)phiLimits[0], (double)phiLimits[1],
+							(double)crosstalk[0], (double)crosstalk[1], (double)crosstalk[2],
+							(double)xOffset, (double)yOffset,
+							(int)segmentsPerSecond, (double)minSegmentLength);
 		}
 		return seen;
 	}

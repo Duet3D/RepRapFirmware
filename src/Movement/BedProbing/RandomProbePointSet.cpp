@@ -152,7 +152,7 @@ bool RandomProbePointSet::SetProbedBedEquation(size_t numPoints, StringRef& repl
 		reply.copy("Bed equation fits points");
 		for (size_t point = 0; point < numPoints; point++)
 		{
-			reply.catf(" [%.1f, %.1f, %.3f]", xBedProbePoints[point], yBedProbePoints[point], zBedProbePoints[point]);
+			reply.catf(" [%.1f, %.1f, %.3f]", (double)xBedProbePoints[point], (double)yBedProbePoints[point], (double)zBedProbePoints[point]);
 		}
 	}
 	return false;
@@ -245,13 +245,13 @@ void RandomProbePointSet::ReportProbeHeights(size_t numPoints, StringRef& reply)
 		}
 		else
 		{
-			reply.catf(" %.3f", zBedProbePoints[i]);
+			reply.catf(" %.3f", (double)zBedProbePoints[i]);
 			sum += zBedProbePoints[i];
 			sumOfSquares += fsquare(zBedProbePoints[i]);
 		}
 	}
 	const float mean = sum/numPoints;
-	reply.catf(", mean %.3f, deviation from mean %.3f", mean, sqrt(sumOfSquares/numPoints - fsquare(mean)));
+	reply.catf(", mean %.3f, deviation from mean %.3f", (double)mean, (double)sqrtf(sumOfSquares/numPoints - fsquare(mean)));
 }
 
 /*
@@ -321,12 +321,12 @@ void RandomProbePointSet::DebugPrint(size_t numPoints) const
 	float sumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{
-		debugPrintf(" %.3f", zBedProbePoints[i]);
+		debugPrintf(" %.3f", (double)zBedProbePoints[i]);
 		sum += zBedProbePoints[i];
 		sumOfSquares += fsquare(zBedProbePoints[i]);
 	}
 	const float mean = sum/numPoints;
-	debugPrintf(", mean %.3f, deviation from mean %.3f\n", mean, sqrt(sumOfSquares/numPoints - fsquare(mean)));
+	debugPrintf(", mean %.3f, deviation from mean %.3f\n", (double)mean, (double)sqrtf(sumOfSquares/numPoints - fsquare(mean)));
 }
 
 // End

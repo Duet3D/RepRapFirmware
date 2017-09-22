@@ -43,7 +43,7 @@ bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef
 			reply.printf("Printer mode is %s with axis factors", GetName(false));
 			for (size_t axis = 0; axis < CoreXYU_AXES; ++axis)
 			{
-				reply.catf(" %c:%f", GCodes::axisLetters[axis], axisFactors[axis]);
+				reply.catf(" %c:%f", GCodes::axisLetters[axis], (double)axisFactors[axis]);
 			}
 		}
 		return seen;

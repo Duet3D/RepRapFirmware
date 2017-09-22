@@ -139,11 +139,11 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& 
 							(unsigned int)freq,
 							(int)(val * 100.0),
 							(int)(minVal * 100.0),
-							(float)blipTime * MillisToSeconds,
+							(double)(blipTime * MillisToSeconds),
 							(inverted) ? "yes" : "no");
 			if (heatersMonitored != 0)
 			{
-				reply.catf(", temperature: %.1f:%.1fC, heaters:", triggerTemperatures[0], triggerTemperatures[1]);
+				reply.catf(", temperature: %.1f:%.1fC, heaters:", (double)triggerTemperatures[0], (double)triggerTemperatures[1]);
 				for (unsigned int i = 0; i < Heaters + MaxVirtualHeaters; ++i)
 				{
 					if (IsBitSet(heatersMonitored, i))
@@ -328,7 +328,7 @@ bool Fan::WriteSettings(FileStore *f, size_t fanNum) const
 	{
 		char bufSpace[50];
 		StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
-		buf.printf("M106 P%u S%.2f\n", fanNum, val);
+		buf.printf("M106 P%u S%.2f\n", fanNum, (double)val);
 		return f->Write(buf.Pointer());
 	}
 

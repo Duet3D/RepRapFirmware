@@ -407,7 +407,7 @@ bool MassStorage::Mount(size_t card, StringRef& reply, bool reportSuccess)
 				{
 					capUnits = "Mb";
 				}
-				reply.printf("%s card mounted in slot %u, capacity %.2f%s", TranslateCardType(sd_mmc_get_type(card)), card, capacity, capUnits);
+				reply.printf("%s card mounted in slot %u, capacity %.2f%s", TranslateCardType(sd_mmc_get_type(card)), card, (double)capacity, capUnits);
 			}
 			else
 			{

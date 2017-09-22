@@ -54,7 +54,7 @@ bool Duet3DFilamentSensor::Configure(GCodeBuffer& gb, StringRef& reply, bool& se
 	else
 	{
 		reply.printf("Duet3D filament sensor on endstop %u, %s microswitch, %.1fmm per rev, check every %.1fmm, tolerance %.1f%%, current angle %.1f",
-						GetEndstopNumber(), (withSwitch) ? "with" : "no", mmPerRev, minimumExtrusionCheckLength, tolerance * 100.0, GetCurrentAngle());
+						GetEndstopNumber(), (withSwitch) ? "with" : "no", (double)mmPerRev, (double)minimumExtrusionCheckLength, (double)(tolerance * 100.0), (double)GetCurrentAngle());
 	}
 
 	return false;
@@ -298,7 +298,8 @@ FilamentSensorStatus Duet3DFilamentSensor::CheckFilament(float amountCommanded, 
 	const float extrusionMeasured = accumulatedRevsMeasured * mmPerRev;
 	if (reprap.Debug(moduleFilamentSensors))
 	{
-		debugPrintf("Extr req %.3f meas %.3f rem %.3f %s\n", amountCommanded, extrusionMeasured, accumulatedExtrusionCommanded - amountCommanded, (overdue) ? " overdue" : "");
+		debugPrintf("Extr req %.3f meas %.3f rem %.3f %s\n", (double)amountCommanded, (double)extrusionMeasured, (double)(accumulatedExtrusionCommanded - amountCommanded),
+			(overdue) ? " overdue" : "");
 	}
 
 	FilamentSensorStatus ret = FilamentSensorStatus::ok;
@@ -390,14 +391,14 @@ void Duet3DFilamentSensor::Diagnostics(MessageType mtype, unsigned int extruder)
 									: ((sensorValue & ErrorBit) != 0) ? "error"
 										: (withSwitch && (sensorValue & SwitchOpenBit) != 0) ? "no filament"
 											: "ok";
-	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: angle %.1f, %s, ", extruder, GetCurrentAngle(), statusText);
-	if (calibrationStarted && fabs(totalRevsMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
+	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: angle %.1f, %s, ", extruder, (double)GetCurrentAngle(), statusText);
+	if (calibrationStarted && fabsf(totalRevsMeasured) > 1.0 && totalExtrusionCommanded > 20.0)
 	{
 		const float measuredMmPerRev = totalExtrusionCommanded/totalRevsMeasured;
 		const float normalRatio = 1.0/measuredMmPerRev;
 		const int measuredPosTolerance = lrintf(100.0 * (((normalRatio > 0.0) ? maxMovementRatio : minMovementRatio) - normalRatio)/normalRatio);
 		const int measuredNegTolerance = lrintf(100.0 * (normalRatio - ((normalRatio > 0.0) ? minMovementRatio : maxMovementRatio))/normalRatio);
-		reprap.GetPlatform().MessageF(mtype,"%.2fmm/rev, tolerance +%d%% -%d%%\n", measuredMmPerRev, measuredPosTolerance, measuredNegTolerance);
+		reprap.GetPlatform().MessageF(mtype,"%.2fmm/rev, tolerance +%d%% -%d%%\n", (double)measuredMmPerRev, measuredPosTolerance, measuredNegTolerance);
 	}
 	else
 	{

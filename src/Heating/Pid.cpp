@@ -270,7 +270,7 @@ void PID::Spin()
 								reprap.GetGCodes().CancelPrint(false, false);
 								platform.MessageF(ErrorMessage,
 											"Heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
-											heater, expectedRate);
+											heater, (double)expectedRate);
 								reprap.FlagTemperatureFault(heater);
 							}
 						}
@@ -295,8 +295,8 @@ void PID::Spin()
 						SetHeater(0.0);					// do this here just to be sure
 						mode = HeaterMode::fault;
 						reprap.GetGCodes().CancelPrint(false, false);
-						platform.MessageF(ErrorMessage, "Heating fault on heater %d, temperature excursion exceeded %.1fC\n",
-											heater, maxTempExcursion);
+						platform.MessageF(ErrorMessage, "Heating fault on heater %d, temperature excursion exceeded %.1f" DEGREE_SYMBOL "C\n",
+											heater, (double)maxTempExcursion);
 					}
 				}
 				else if (heatingFaultCount != 0)
@@ -399,7 +399,7 @@ void PID::SetActiveTemperature(float t)
 {
 	if (t > temperatureLimit)
 	{
-		platform.MessageF(ErrorMessage, "Temperature %.1f too high for heater %d\n", t, heater);
+		platform.MessageF(ErrorMessage, "Temperature %.1f" DEGREE_SYMBOL "C too high for heater %d\n", (double)t, heater);
 	}
 	else
 	{
@@ -415,7 +415,7 @@ void PID::SetStandbyTemperature(float t)
 {
 	if (t > temperatureLimit)
 	{
-		platform.MessageF(ErrorMessage, "Temperature %.1f too high for heater %d\n", t, heater);
+		platform.MessageF(ErrorMessage, "Temperature %.1f" DEGREE_SYMBOL "C too high for heater %d\n", (double)t, heater);
 	}
 	else
 	{
@@ -500,7 +500,7 @@ void PID::StartAutoTune(float targetTemp, float maxPwm, StringRef& reply)
 			tuningReadingInterval = platform.HeatSampleInterval();
 			tuningPwm = min<float>(maxPwm, model.GetMaxPwm());
 			tuningTargetTemp = targetTemp;
-			reply.printf("Auto tuning heater %d using target temperature %.1fC and PWM %.2f - do not leave printer unattended", heater, targetTemp, maxPwm);
+			reply.printf("Auto tuning heater %d using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended", heater, (double)targetTemp, (double)maxPwm);
 		}
 	}
 }
@@ -693,7 +693,7 @@ void PID::DoTuningStep()
 				tuningPhaseStartTime = millis();
 				tuningReadingInterval = platform.HeatSampleInterval();		// reset sampling interval
 				mode = HeaterMode::tuning3;
-				platform.MessageF(GenericMessage, "Auto tune phase 3, peak temperature was %.1f\n", tuningPeakTemperature);
+				platform.MessageF(GenericMessage, "Auto tune phase 3, peak temperature was %.1f\n", (double)tuningPeakTemperature);
 				return;
 			}
 		}
@@ -817,9 +817,9 @@ void PID::CalculateModel()
 	{
 		DisplayBuffer("At completion");
 	}
-	const float tc = (float)((tuningReadingsTaken - 1) * tuningReadingInterval)/(1000.0 * log((tuningTempReadings[0] - tuningStartTemp)/(tuningTempReadings[tuningReadingsTaken - 1] - tuningStartTemp)));
+	const float tc = (float)((tuningReadingsTaken - 1) * tuningReadingInterval)/(1000.0 * logf((tuningTempReadings[0] - tuningStartTemp)/(tuningTempReadings[tuningReadingsTaken - 1] - tuningStartTemp)));
 	const float heatingTime = (tuningHeatingTime - tuningPeakDelay) * 0.001;
-	const float gain = (tuningHeaterOffTemp - tuningStartTemp)/(1.0 - exp(-heatingTime/tc));
+	const float gain = (tuningHeaterOffTemp - tuningStartTemp)/(1.0 - expf(-heatingTime/tc));
 
 	// There are two ways of calculating the dead time:
 	// 1. Based on the delay to peak temperature after we turned the heater off. Adding 0.5sec and then taking 65% of the result is about right.
@@ -838,7 +838,7 @@ void PID::CalculateModel()
 	}
 	else
 	{
-		platform.MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, gain, tc, td);
+		platform.MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (G=%.1f, tc=%.1f, td=%.1f)\n", heater, (double)gain, (double)tc, (double)td);
 	}
 }
 
@@ -847,10 +847,10 @@ void PID::DisplayBuffer(const char *intro)
 	OutputBuffer *buf;
 	if (OutputBuffer::Allocate(buf))
 	{
-		buf->catf("%s: interval %.1f sec, readings", intro, tuningReadingInterval * MillisToSeconds);
+		buf->catf("%s: interval %.1f sec, readings", intro, (double)(tuningReadingInterval * MillisToSeconds));
 		for (size_t i = 0; i < tuningReadingsTaken; ++i)
 		{
-			buf->catf(" %.1f", tuningTempReadings[i]);
+			buf->catf(" %.1f", (double)tuningTempReadings[i]);
 		}
 		buf->cat("\n");
 		platform.Message(UsbMessage, buf);

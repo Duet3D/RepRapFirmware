@@ -28,7 +28,7 @@ static err_t conn_poll(void *arg, tcp_pcb *pcb)
 		sendingRetries++;
 		if (sendingRetries == TCP_MAX_SEND_RETRIES)
 		{
-			reprap.GetPlatform().MessageF(UsbMessage, "Network: Could not transmit data after %.1f seconds\n", (float)TCP_WRITE_TIMEOUT / 1000.0);
+			reprap.GetPlatform().MessageF(UsbMessage, "Network: Could not transmit data after %.1f seconds\n", (double)((float)TCP_WRITE_TIMEOUT / 1000.0));
 			tcp_abort(pcb);
 			return ERR_ABRT;
 		}

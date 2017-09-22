@@ -715,7 +715,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			else
 			{
 				reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
-						(simulationMode != 0) ? "on" : "off", reprap.GetMove().GetSimulationTime(), simulationTime);
+						(simulationMode != 0) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
 			}
 		}
 		break;
@@ -850,13 +850,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				reply.copy("Steps/mm: ");
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c: %.3f, ", axisLetters[axis], platform.DriveStepsPerUnit(axis));
+					reply.catf("%c: %.3f, ", axisLetters[axis], (double)platform.DriveStepsPerUnit(axis));
 				}
 				reply.catf("E:");
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.3f", sep, platform.DriveStepsPerUnit(extruder + numTotalAxes));
+					reply.catf("%c%.3f", sep, (double)platform.DriveStepsPerUnit(extruder + numTotalAxes));
 					sep = ':';
 				}
 			}
@@ -1187,7 +1187,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Heat sample time is %.3f seconds", platform.GetHeatSampleTime());
+			reply.printf("Heat sample time is %.3f seconds", (double)platform.GetHeatSampleTime());
 		}
 		break;
 
@@ -1305,7 +1305,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const int8_t currentHeater = reprap.GetHeat().GetChamberHeater();
 				if (currentHeater != -1)
 				{
-					reply.printf("Chamber heater %d is currently at %.1fC", currentHeater, reprap.GetHeat().GetTemperature(currentHeater));
+					reply.printf("Chamber heater %d is currently at %.1f" DEGREE_SYMBOL "C", currentHeater, (double)reprap.GetHeat().GetTemperature(currentHeater));
 				}
 				else
 				{
@@ -1338,7 +1338,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Temperature limit for heater %d is %.1fC", heater, reprap.GetHeat().GetTemperatureLimit(heater));
+				reply.printf("Temperature limit for heater %d is %.1f" DEGREE_SYMBOL "C", heater, (double)reprap.GetHeat().GetTemperatureLimit(heater));
 			}
 		}
 		break;
@@ -1420,7 +1420,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					reply.catf(" %.03f", 2.0 * sqrtf(vef/PI));
+					reply.catf(" %.03f", (double)(2.0 * sqrtf(vef/PI)));
 				}
 			}
 		}
@@ -1455,13 +1455,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				reply.printf("Accelerations: ");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], platform.Acceleration(axis) / distanceScale);
+					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.Acceleration(axis) / distanceScale));
 				}
 				reply.cat("E:");
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, platform.Acceleration(extruder + numTotalAxes) / distanceScale);
+					reply.catf("%c%.1f", sep, (double)(platform.Acceleration(extruder + numTotalAxes) / distanceScale));
 					sep = ':';
 				}
 			}
@@ -1497,13 +1497,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				reply.copy("Maximum feedrates: ");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					reply.catf("%c: %.1f, ", axisLetters[axis], platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes));
+					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes)));
 				}
 				reply.cat("E:");
 				char sep = ' ';
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf("%c%.1f", sep, platform.MaxFeedrate(extruder + numTotalAxes) / (distanceScale * SecondsToMinutes));
+					reply.catf("%c%.1f", sep, (double)(platform.MaxFeedrate(extruder + numTotalAxes) / (distanceScale * SecondsToMinutes)));
 					sep = ':';
 				}
 			}
@@ -1533,7 +1533,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			if (!seen)
 			{
-				reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", platform.GetMaxPrintingAcceleration(), platform.GetMaxTravelAcceleration());
+				reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f", (double)platform.GetMaxPrintingAcceleration(), (double)platform.GetMaxTravelAcceleration());
 			}
 		}
 		break;
@@ -1573,7 +1573,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.printf("Retraction/un-retraction settings: length %.2f/%.2fmm, speed %d/%dmm/min, Z hop %.2fmm",
-						retractLength, retractLength + retractExtra, (int)(retractSpeed * MinutesToSeconds), (int)(unRetractSpeed * MinutesToSeconds), retractHop);
+					(double)retractLength, (double)(retractLength + retractExtra), (int)(retractSpeed * MinutesToSeconds), (int)(unRetractSpeed * MinutesToSeconds), (double)retractHop);
 			}
 		}
 		break;
@@ -1605,8 +1605,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				char sep = '-';
 				for (size_t axis = 0; axis < numVisibleAxes; axis++)
 				{
-					reply.catf("%c %c: %.1f min, %.1f max", sep, axisLetters[axis], platform.AxisMinimum(axis),
-							platform.AxisMaximum(axis));
+					reply.catf("%c %c: %.1f min, %.1f max", sep, axisLetters[axis], (double)platform.AxisMinimum(axis), (double)platform.AxisMaximum(axis));
 					sep = ',';
 				}
 			}
@@ -1649,7 +1648,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Speed factor override: %.1f%%", speedFactor * MinutesToSeconds * 100.0);
+			reply.printf("Speed factor override: %.1f%%", (double)(speedFactor * MinutesToSeconds * 100.0));
 		}
 		break;
 
@@ -1675,7 +1674,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					reply.printf("Extrusion factor override for extruder %d: %.1f%%", extruder, extrusionFactors[extruder] * 100.0);
+					reply.printf("Extrusion factor override for extruder %d: %.1f%%", extruder, (double)(extrusionFactors[extruder] * 100.0));
 				}
 			}
 		}
@@ -1750,7 +1749,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("Baby stepping offset is %.3fmm", GetBabyStepOffset());
+			reply.printf("Baby stepping offset is %.3fmm", (double)GetBabyStepOffset());
 		}
 		break;
 
@@ -1930,14 +1929,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 										: (model.ArePidParametersOverridden()) ? "custom PID"
 											: "PID";
 					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, mode: %s",
-							heater, model.GetGain(), model.GetTimeConstant(), model.GetDeadTime(), model.GetMaxPwm(), mode);
+							heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), mode);
 					if (model.UsePid())
 					{
 						// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
 						M301PidParameters params = model.GetM301PidParameters(false);
-						reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", params.kP, params.kI, params.kD);
+						reply.catf("\nComputed PID parameters for setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
 						params = model.GetM301PidParameters(true);
-						reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", params.kP, params.kI, params.kD);
+						reply.catf("\nComputed PID parameters for load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
 					}
 				}
 			}
@@ -2035,7 +2034,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else if (move.GetTaperHeight() > 0.0)
 			{
-				reply.printf("Bed compensation taper height is %.1fmm", move.GetTaperHeight());
+				reply.printf("Bed compensation taper height is %.1fmm", (double)move.GetTaperHeight());
 			}
 			else
 			{
@@ -2084,7 +2083,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (!seen)
 			{
-				reply.printf("Filament width: %.2fmm, nozzle diameter: %.2fmm", platform.GetFilamentWidth(), platform.GetNozzleDiameter());
+				reply.printf("Filament width: %.2fmm, nozzle diameter: %.2fmm", (double)platform.GetFilamentWidth(), (double)platform.GetNozzleDiameter());
 			}
 		}
 		break;
@@ -2364,8 +2363,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		else
 		{
 			reply.printf("Axis compensations - XY: %.5f, YZ: %.5f, ZX: %.5f",
-					reprap.GetMove().AxisCompensation(X_AXIS), reprap.GetMove().AxisCompensation(Y_AXIS),
-					reprap.GetMove().AxisCompensation(Z_AXIS));
+				(double)reprap.GetMove().AxisCompensation(X_AXIS), (double)reprap.GetMove().AxisCompensation(Y_AXIS), (double)reprap.GetMove().AxisCompensation(Z_AXIS));
 		}
 		break;
 
@@ -2444,8 +2442,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!(seenAxes || seenType || seenParam))
 			{
 				reply.printf("Z Probe type %d, invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec",
-								platform.GetZProbeType(), (params.invertReading) ? "yes" : "no", params.diveHeight,
-								(int)(params.probeSpeed * MinutesToSeconds), (int)(params.travelSpeed * MinutesToSeconds), params.recoveryTime);
+								platform.GetZProbeType(), (params.invertReading) ? "yes" : "no", (double)params.diveHeight,
+								(int)(params.probeSpeed * MinutesToSeconds), (int)(params.travelSpeed * MinutesToSeconds), (double)params.recoveryTime);
 				reply.cat(", used for axes:");
 				for (size_t axis = 0; axis < numVisibleAxes; axis++)
 				{
@@ -2547,13 +2545,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			reply.copy("Maximum jerk rates: ");
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
-				reply.catf("%c: %.1f, ", axisLetters[axis], platform.ConfiguredInstantDv(axis) / (distanceScale * SecondsToMinutes));
+				reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.ConfiguredInstantDv(axis) / (distanceScale * SecondsToMinutes)));
 			}
 			reply.cat("E:");
 			char sep = ' ';
 			for (size_t extruder = 0; extruder < numExtruders; extruder++)
 			{
-				reply.catf("%c%.1f", sep, platform.ConfiguredInstantDv(extruder + numTotalAxes) / (distanceScale * SecondsToMinutes));
+				reply.catf("%c%.1f", sep, (double)(platform.ConfiguredInstantDv(extruder + numTotalAxes) / (distanceScale * SecondsToMinutes)));
 				sep = ':';
 			}
 		}
@@ -2587,7 +2585,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					char sep = ' ';
 					for (size_t drive = 0; drive < tool->DriveCount(); drive++)
 					{
-						reply.catf("%c%.3f", sep, tool->GetMix()[drive]);
+						reply.catf("%c%.3f", sep, (double)tool->GetMix()[drive]);
 						sep = ':';
 					}
 				}
@@ -2650,7 +2648,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					reply.printf("A %d sends drive %u forwards, a %d enables it, and the minimum pulse width is %.1f microseconds",
 								(int)platform.GetDirectionValue(drive), drive,
 								(int)platform.GetEnableValue(drive),
-								platform.GetDriverStepTiming(drive));
+								(double)platform.GetDriverStepTiming(drive));
 				}
 			}
 		}
@@ -2673,7 +2671,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					reply.printf("Heater %u allowed excursion %.1fC, fault trigger time %.1f seconds", heater, maxTempExcursion, maxFaultTime);
+					reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heater, (double)maxTempExcursion, (double)maxFaultTime);
 				}
 			}
 		}
@@ -2708,8 +2706,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.printf("Extrusion ancillary PWM %.3f at %.1fHz on pin %u",
-								platform.GetExtrusionAncilliaryPwmValue(),
-								platform.GetExtrusionAncilliaryPwmFrequency(),
+								(double)platform.GetExtrusionAncilliaryPwmValue(),
+								(double)platform.GetExtrusionAncilliaryPwmFrequency(),
 								platform.GetExtrusionAncilliaryPwmPin());
 			}
 		}
@@ -2742,7 +2740,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			char c = ':';
 			for (size_t i = 0; i < numExtruders; ++i)
 			{
-				reply.catf("%c %.3f", c, platform.GetPressureAdvance(i));
+				reply.catf("%c %.3f", c, (double)platform.GetPressureAdvance(i));
 				c = ',';
 			}
 		}
@@ -2754,7 +2752,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const int heater = gb.GetIValue();
 			if (heater >= 0 && heater < (int)Heaters)
 			{
-				reply.printf("Average heater %d PWM: %.3f", heater, reprap.GetHeat().GetAveragePWM(heater));
+				reply.printf("Average heater %d PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
 			}
 		}
 		break;
@@ -2918,7 +2916,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				reply.copy("Axis scale factors");
 				for(size_t axis = 0; axis < numVisibleAxes; axis++)
 				{
-					reply.catf("%c %c: %.3f", sep, axisLetters[axis], axisScaleFactors[axis]);
+					reply.catf("%c %c: %.3f", sep, axisLetters[axis], (double)axisScaleFactors[axis]);
 					sep = ',';
 				}
 			}
@@ -3929,7 +3927,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			reply.printf("MCU temperature calibration adjustment is %.1f" DEGREE_SYMBOL "C", platform.GetMcuTemperatureAdjust());
+			reply.printf("MCU temperature calibration adjustment is %.1f" DEGREE_SYMBOL "C", (double)platform.GetMcuTemperatureAdjust());
 		}
 		break;
 

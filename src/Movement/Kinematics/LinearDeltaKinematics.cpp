@@ -44,12 +44,12 @@ void LinearDeltaKinematics::Init()
 
 void LinearDeltaKinematics::Recalc()
 {
-	towerX[A_AXIS] = -(radius * cos((30 + angleCorrections[A_AXIS]) * DegreesToRadians));
-	towerY[A_AXIS] = -(radius * sin((30 + angleCorrections[A_AXIS]) * DegreesToRadians));
-	towerX[B_AXIS] = +(radius * cos((30 - angleCorrections[B_AXIS]) * DegreesToRadians));
-	towerY[B_AXIS] = -(radius * sin((30 - angleCorrections[B_AXIS]) * DegreesToRadians));
-	towerX[C_AXIS] = -(radius * sin(angleCorrections[C_AXIS] * DegreesToRadians));
-	towerY[C_AXIS] = +(radius * cos(angleCorrections[C_AXIS] * DegreesToRadians));
+	towerX[A_AXIS] = -(radius * cosf((30 + angleCorrections[A_AXIS]) * DegreesToRadians));
+	towerY[A_AXIS] = -(radius * sinf((30 + angleCorrections[A_AXIS]) * DegreesToRadians));
+	towerX[B_AXIS] = +(radius * cosf((30 - angleCorrections[B_AXIS]) * DegreesToRadians));
+	towerY[B_AXIS] = -(radius * sinf((30 - angleCorrections[B_AXIS]) * DegreesToRadians));
+	towerX[C_AXIS] = -(radius * sinf(angleCorrections[C_AXIS] * DegreesToRadians));
+	towerY[C_AXIS] = +(radius * cosf(angleCorrections[C_AXIS] * DegreesToRadians));
 
 	Xbc = towerX[C_AXIS] - towerX[B_AXIS];
 	Xca = towerX[A_AXIS] - towerX[C_AXIS];
@@ -89,7 +89,7 @@ float LinearDeltaKinematics::Transform(const float machinePos[], size_t axis) co
 	//TODO find a way of returning error if we can't transform the position
 	if (axis < DELTA_AXES)
 	{
-		return sqrt(D2 - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]))
+		return sqrtf(D2 - fsquare(machinePos[X_AXIS] - towerX[axis]) - fsquare(machinePos[Y_AXIS] - towerY[axis]))
 			 + machinePos[Z_AXIS]
 			 + (machinePos[X_AXIS] * xTilt)
 			 + (machinePos[Y_AXIS] * yTilt);
@@ -297,10 +297,10 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 				}
 				normalMatrix(i, j) = temp;
 			}
-			floatc_t temp = derivativeMatrix(0, i) * -(probePoints.GetZHeight(0) + corrections[0]);
+			floatc_t temp = derivativeMatrix(0, i) * -((floatc_t)probePoints.GetZHeight(0) + corrections[0]);
 			for (size_t k = 1; k < numPoints; ++k)
 			{
-				temp += derivativeMatrix(k, i) * -(probePoints.GetZHeight(k) + corrections[k]);
+				temp += derivativeMatrix(k, i) * -((floatc_t)probePoints.GetZHeight(k) + corrections[k]);
 			}
 			normalMatrix(i, numFactors) = temp;
 		}
@@ -328,7 +328,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 				{
 					residual += solution[j] * derivativeMatrix(i, j);
 				}
-				debugPrintf(" %7.4f", residual);
+				debugPrintf(" %7.4f", (double)residual);
 			}
 
 			debugPrintf("\n");
@@ -369,7 +369,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 				sumOfSquares += fcsquare(expectedResiduals[i]);
 			}
 
-			expectedRmsError = sqrt(sumOfSquares/numPoints);
+			expectedRmsError = sqrtf((float)(sumOfSquares/numPoints));
 
 			if (reprap.Debug(moduleMove))
 			{
@@ -395,7 +395,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 	}
 
 	reply.printf("Calibrated %d factors using %d points, deviation before %.3f after %.3f",
-			numFactors, numPoints, sqrt(initialSumOfSquares/numPoints), expectedRmsError);
+			numFactors, numPoints, (double)sqrtf(initialSumOfSquares/numPoints), (double)expectedRmsError);
 	reprap.GetPlatform().MessageF(LogMessage, "%s\n", reply.Pointer());
 
     doneAutoCalibration = true;
@@ -477,7 +477,7 @@ floatc_t LinearDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 	loParams.InverseTransform((deriv == 0) ? ha - perturb : ha, (deriv == 1) ? hb - perturb : hb, (deriv == 2) ? hc - perturb : hc, newPos);
 	const float zLo = newPos[Z_AXIS];
 
-	return ((floatc_t)zHi - (floatc_t)zLo)/(2 * perturb);
+	return ((floatc_t)zHi - (floatc_t)zLo)/(floatc_t)(2 * perturb);
 }
 
 // Perform 3, 4, 6, 7, 8 or 9-factor adjustment.
@@ -494,34 +494,34 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 	const float oldCarriageHeightA = GetHomedCarriageHeight(A_AXIS);	// save for later
 
 	// Update endstop adjustments
-	endstopAdjustments[A_AXIS] += v[0];
-	endstopAdjustments[B_AXIS] += v[1];
-	endstopAdjustments[C_AXIS] += v[2];
+	endstopAdjustments[A_AXIS] += (float)v[0];
+	endstopAdjustments[B_AXIS] += (float)v[1];
+	endstopAdjustments[C_AXIS] += (float)v[2];
 	NormaliseEndstopAdjustments();
 
 	if (numFactors >= 4)
 	{
-		radius += v[3];
+		radius += (float)v[3];
 
 		if (numFactors >= 6)
 		{
-			angleCorrections[A_AXIS] += v[4];
-			angleCorrections[B_AXIS] += v[5];
+			angleCorrections[A_AXIS] += (float)v[4];
+			angleCorrections[B_AXIS] += (float)v[5];
 
 			if (numFactors == 7 || numFactors == 9)
 			{
-				diagonal += v[6];
+				diagonal += (float)v[6];
 			}
 
 			if (numFactors == 8)
 			{
-				xTilt += v[6]/printRadius;
-				yTilt += v[7]/printRadius;
+				xTilt += (float)v[6]/printRadius;
+				yTilt += (float)v[7]/printRadius;
 			}
 			else if (numFactors == 9)
 			{
-				xTilt += v[7]/printRadius;
-				yTilt += v[8]/printRadius;
+				xTilt += (float)v[7]/printRadius;
+				yTilt += (float)v[8]/printRadius;
 			}
 		}
 
@@ -530,7 +530,7 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 
 	// Adjusting the diagonal and the tower positions affects the homed carriage height.
 	// We need to adjust homedHeight to allow for this, to get the change that was requested in the endstop corrections.
-	const float heightError = GetHomedCarriageHeight(A_AXIS) - oldCarriageHeightA - v[0];
+	const float heightError = GetHomedCarriageHeight(A_AXIS) - oldCarriageHeightA - (float)v[0];
 	homedHeight -= heightError;
 	homedCarriageHeight -= heightError;
 
@@ -542,8 +542,8 @@ void LinearDeltaKinematics::Adjust(size_t numFactors, const floatc_t v[])
 void LinearDeltaKinematics::PrintParameters(StringRef& reply) const
 {
 	reply.printf("Stops X%.3f Y%.3f Z%.3f height %.3f diagonal %.3f radius %.3f xcorr %.2f ycorr %.2f zcorr %.2f xtilt %.3f%% ytilt %.3f%%\n",
-					endstopAdjustments[A_AXIS], endstopAdjustments[B_AXIS], endstopAdjustments[C_AXIS], homedHeight, diagonal, radius,
-					angleCorrections[A_AXIS], angleCorrections[B_AXIS], angleCorrections[C_AXIS], xTilt * 100.0, yTilt * 100.0);
+		(double)endstopAdjustments[A_AXIS], (double)endstopAdjustments[B_AXIS], (double)endstopAdjustments[C_AXIS], (double)homedHeight, (double)diagonal, (double)radius,
+		(double)angleCorrections[A_AXIS], (double)angleCorrections[B_AXIS], (double)angleCorrections[C_AXIS], (double)(xTilt * 100.0), (double)(yTilt * 100.0));
 }
 
 // Write the parameters that are set by auto calibration to a file, returning true if success
@@ -553,13 +553,13 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 	if (ok)
 	{
 		scratchString.printf("M665 L%.3f R%.3f H%.3f B%.1f X%.3f Y%.3f Z%.3f\n",
-					 diagonal, radius, homedHeight, printRadius, angleCorrections[A_AXIS], angleCorrections[B_AXIS], angleCorrections[C_AXIS]);
+			(double)diagonal, (double)radius, (double)homedHeight, (double)printRadius, (double)angleCorrections[A_AXIS], (double)angleCorrections[B_AXIS], (double)angleCorrections[C_AXIS]);
 		ok = f->Write(scratchString.Pointer());
 	}
 	if (ok)
 	{
 		scratchString.printf("M666 X%.3f Y%.3f Z%.3f A%.2f B%.2f\n",
-			endstopAdjustments[X_AXIS], endstopAdjustments[Y_AXIS], endstopAdjustments[Z_AXIS], xTilt * 100.0, yTilt * 100.0);
+			(double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS], (double)(xTilt * 100.0), (double)(yTilt * 100.0));
 		ok = f->Write(scratchString.Pointer());
 	}
 	return ok;
@@ -639,9 +639,9 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, Strin
 			{
 				reply.printf("Diagonal %.3f, delta radius %.3f, homed height %.3f, bed radius %.1f"
 							 ", X %.3f" DEGREE_SYMBOL ", Y %.3f" DEGREE_SYMBOL ", Z %.3f" DEGREE_SYMBOL,
-								 diagonal, radius,
-								 homedHeight, printRadius,
-								 angleCorrections[A_AXIS], angleCorrections[B_AXIS], angleCorrections[C_AXIS]);
+							 (double)diagonal, (double)radius,
+							 (double)homedHeight, (double)printRadius,
+							 (double)angleCorrections[A_AXIS], (double)angleCorrections[B_AXIS], (double)angleCorrections[C_AXIS]);
 			}
 			return seen;
 		}
@@ -678,8 +678,8 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, Strin
 			if (!seen)
 			{
 				reply.printf("Endstop adjustments X%.2f Y%.2f Z%.2f, tilt X%.2f%% Y%.2f%%",
-					endstopAdjustments[X_AXIS], endstopAdjustments[Y_AXIS], endstopAdjustments[Z_AXIS],
-					xTilt * 100.0, yTilt * 100.0);
+					(double)endstopAdjustments[X_AXIS], (double)endstopAdjustments[Y_AXIS], (double)endstopAdjustments[Z_AXIS],
+					(double)(xTilt * 100.0), (double)(yTilt * 100.0));
 			}
 			return seen;
 		}

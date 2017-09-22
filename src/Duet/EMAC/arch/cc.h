@@ -48,7 +48,9 @@
 #include <stdint.h>
 
 /* Define platform endianness */
-#define BYTE_ORDER LITTLE_ENDIAN
+#ifndef BYTE_ORDER
+# define BYTE_ORDER LITTLE_ENDIAN
+#endif
 
 /* Types based on stdint.h */
 typedef uint8_t            u8_t;
