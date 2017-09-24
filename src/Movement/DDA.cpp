@@ -225,7 +225,7 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	const Move& move = reprap.GetMove();
 	if (doMotorMapping)
 	{
-		if (!move.CartesianToMotorSteps(nextMove.coords, endPoint))		// transform the axis coordinates if on a delta or CoreXY printer
+		if (!move.CartesianToMotorSteps(nextMove.coords, endPoint, !nextMove.isCoordinated))		// transform the axis coordinates if on a delta or CoreXY printer
 		{
 			return false;												// throw away the move if it couldn't be transformed
 		}

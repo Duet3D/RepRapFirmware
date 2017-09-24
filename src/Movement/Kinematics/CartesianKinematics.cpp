@@ -19,7 +19,7 @@ const char *CartesianKinematics::GetName(bool forStatusReport) const
 }
 
 // Convert Cartesian coordinates to motor coordinates
-bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
+bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const
 {
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{

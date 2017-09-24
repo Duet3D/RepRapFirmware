@@ -504,6 +504,7 @@ void GCodes::Spin()
 				}
 				moveBuffer.feedRate = DefaultFeedrate * SecondsToMinutes;	// ask for a good feed rate, we may have paused during a slow move
 				moveBuffer.moveType = 0;
+				moveBuffer.isCoordinated = false;
 				moveBuffer.endStopsToCheck = 0;
 				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = noFilePosition;
@@ -616,6 +617,7 @@ void GCodes::Spin()
 					if (move.IsAccessibleProbePoint(x, y))
 					{
 						moveBuffer.moveType = 0;
+						moveBuffer.isCoordinated = false;
 						moveBuffer.endStopsToCheck = 0;
 						moveBuffer.usePressureAdvance = false;
 						moveBuffer.filePos = noFilePosition;
@@ -677,6 +679,7 @@ void GCodes::Spin()
 					zProbeTriggered = false;
 					platform.SetProbing(true);
 					moveBuffer.moveType = 0;
+					moveBuffer.isCoordinated = false;
 					moveBuffer.endStopsToCheck = ZProbeActive;
 					moveBuffer.usePressureAdvance = false;
 					moveBuffer.filePos = noFilePosition;
@@ -720,6 +723,7 @@ void GCodes::Spin()
 
 				// Move back up to the dive height
 				moveBuffer.moveType = 0;
+				moveBuffer.isCoordinated = false;
 				moveBuffer.endStopsToCheck = 0;
 				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = noFilePosition;
@@ -801,6 +805,7 @@ void GCodes::Spin()
 		case GCodeState::probingAtPoint0:
 			// Initial state when executing G30 with a P parameter. Start by moving to the dive height at the current position.
 			moveBuffer.moveType = 0;
+			moveBuffer.isCoordinated = false;
 			moveBuffer.endStopsToCheck = 0;
 			moveBuffer.usePressureAdvance = false;
 			moveBuffer.filePos = noFilePosition;
@@ -819,6 +824,7 @@ void GCodes::Spin()
 				// Head is at the dive height but needs to be moved to the correct XY position.
 				// The XY coordinates have already been stored.
 				moveBuffer.moveType = 0;
+				moveBuffer.isCoordinated = false;
 				moveBuffer.endStopsToCheck = 0;
 				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = noFilePosition;
@@ -877,6 +883,7 @@ void GCodes::Spin()
 					zProbeTriggered = false;
 					platform.SetProbing(true);
 					moveBuffer.moveType = 0;
+					moveBuffer.isCoordinated = false;
 					moveBuffer.endStopsToCheck = ZProbeActive;
 					moveBuffer.usePressureAdvance = false;
 					moveBuffer.filePos = noFilePosition;
@@ -971,6 +978,7 @@ void GCodes::Spin()
 
 					// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
 					moveBuffer.moveType = 0;
+					moveBuffer.isCoordinated = false;
 					moveBuffer.endStopsToCheck = 0;
 					moveBuffer.usePressureAdvance = false;
 					moveBuffer.filePos = noFilePosition;
@@ -1040,6 +1048,7 @@ void GCodes::Spin()
 				moveBuffer.coords[Z_AXIS] += retractHop;
 				currentZHop = retractHop;
 				moveBuffer.moveType = 0;
+				moveBuffer.isCoordinated = false;
 				moveBuffer.isFirmwareRetraction = true;
 				moveBuffer.usePressureAdvance = false;
 				moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
@@ -1071,6 +1080,7 @@ void GCodes::Spin()
 					}
 					moveBuffer.feedRate = unRetractSpeed;
 					moveBuffer.moveType = 0;
+					moveBuffer.isCoordinated = false;
 					moveBuffer.isFirmwareRetraction = true;
 					moveBuffer.usePressureAdvance = false;
 					moveBuffer.filePos = (&gb == fileGCode) ? gb.MachineState().fileState.GetPosition() - fileInput->BytesCached() : noFilePosition;
@@ -1813,6 +1823,7 @@ bool GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType)
 bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated)
 {
 	// Set up default move parameters
+	moveBuffer.isCoordinated = isCoordinated;
 	moveBuffer.endStopsToCheck = 0;
 	moveBuffer.moveType = 0;
 	doingArcMove = false;
@@ -2086,6 +2097,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;
 	moveBuffer.endStopsToCheck = 0;
 	moveBuffer.usePressureAdvance = true;
+	moveBuffer.isCoordinated = true;
 	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
@@ -3599,6 +3611,7 @@ bool GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			moveBuffer.coords[i] = 0.0;
 		}
 		moveBuffer.moveType = 0;
+		moveBuffer.isCoordinated = false;
 		moveBuffer.isFirmwareRetraction = true;
 		moveBuffer.usePressureAdvance = false;
 		moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;

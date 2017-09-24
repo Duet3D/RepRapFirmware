@@ -88,11 +88,12 @@ public:
 		IoBits_t ioBits;												// I/O bits to set/clear at the start of this move
 #endif
 		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
-		bool isFirmwareRetraction;										// true if this is a firmware retraction/un-retraction move
-		bool usePressureAdvance;										// true if we want to us extruder pressure advance, if there is any extrusion
-		bool canPauseBefore;											// true if we can pause before this move
-		bool canPauseAfter;												// true if we can pause just after this move and successfully restart
-		bool hasExtrusion;												// true if the move includes extrusion - only valid if the move was set up by SetupMove
+		uint8_t isFirmwareRetraction : 1;								// true if this is a firmware retraction/un-retraction move
+		uint8_t usePressureAdvance : 1;									// true if we want to us extruder pressure advance, if there is any extrusion
+		uint8_t canPauseBefore : 1;										// true if we can pause before this move
+		uint8_t canPauseAfter : 1;										// true if we can pause just after this move and successfully restart
+		uint8_t hasExtrusion : 1;										// true if the move includes extrusion - only valid if the move was set up by SetupMove
+		uint8_t isCoordinated : 1;										// true if this is a coordinates move
 	};
   
 	GCodes(Platform& p);

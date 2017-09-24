@@ -32,7 +32,7 @@ const char *ScaraKinematics::GetName(bool forStatusReport) const
 
 // Convert Cartesian coordinates to motor coordinates
 // In the following, theta is the proximal arm angle relative to the X axis, psi is the distal arm angle relative to the proximal arm
-bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
+bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const
 {
 	// No need to limit x,y to reachable positions here, we already did that in class GCodes
 	const float x = machinePos[X_AXIS] + xOffset;
@@ -56,11 +56,11 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 	bool switchedMode = false;
 	for (;;)
 	{
-		if (isDefaultArmMode)
+		if (isDefaultArmMode != switchedMode)
 		{
 			// The following equations choose arm mode 0 i.e. distal arm rotated anticlockwise relative to proximal arm
 			theta = atan2f(SCARA_K1 * y - SCARA_K2 * x, SCARA_K1 * x + SCARA_K2 * y);
-			if (theta >= thetaLimits[0])
+			if (theta >= thetaLimits[0] && theta <= thetaLimits[1] && psi >= phiLimits[0] && psi <= phiLimits[1])
 			{
 				break;
 			}
@@ -69,7 +69,7 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 		{
 			// The following equations choose arm mode 1 i.e. distal arm rotated clockwise relative to proximal arm
 			theta = atan2f(SCARA_K1 * y + SCARA_K2 * x, SCARA_K1 * x - SCARA_K2 * y);
-			if (theta <= thetaLimits[1])
+			if (theta >= thetaLimits[0] && theta <= thetaLimits[1] && psi >= phiLimits[0] && psi <= phiLimits[1])
 			{
 				psi = -psi;
 				break;
@@ -80,8 +80,13 @@ bool ScaraKinematics::CartesianToMotorSteps(const float machinePos[], const floa
 		{
 			return false;		// not reachable
 		}
-		isDefaultArmMode = !isDefaultArmMode;
 		switchedMode = true;
+	}
+
+	// Now that we know we are going to do the move, update the arm mode
+	if (switchedMode)
+	{
+		isDefaultArmMode = !isDefaultArmMode;
 	}
 
 //debugPrintf("psi = %.2f, theta = %.2f\n", psi * RadiansToDegrees, theta * RadiansToDegrees);

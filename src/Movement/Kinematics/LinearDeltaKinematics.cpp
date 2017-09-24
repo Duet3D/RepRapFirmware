@@ -134,7 +134,7 @@ void LinearDeltaKinematics::InverseTransform(float Ha, float Hb, float Hc, float
 }
 
 // Convert Cartesian coordinates to motor steps
-bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const
+bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const
 {
 	//TODO return false if we can't transform the position
 	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)

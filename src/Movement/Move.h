@@ -75,7 +75,7 @@ public:
 	// Kinematics and related functions
 	Kinematics& GetKinematics() const { return *kinematics; }
 	bool SetKinematics(KinematicsType k);											// Set kinematics, return true if successful
-	bool CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes]) const;
+	bool CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool allowModeChange) const;
 																					// Convert Cartesian coordinates to delta motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const;
 																					// Convert motor coordinates to machine coordinates

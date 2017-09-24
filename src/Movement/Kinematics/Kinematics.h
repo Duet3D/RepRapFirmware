@@ -71,7 +71,7 @@ public:
 	// 'numAxes' is the number of machine axes to convert, which will always be at least 3
 	// 'motorPos' is the output vector of motor positions
 	// Return true if successful, false if we were unable to convert
-	virtual bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[]) const = 0;
+	virtual bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const = 0;
 
 	// Convert motor positions (measured in steps from reference position) to Cartesian coordinates
 	// 'motorPos' is the input vector of motor positions

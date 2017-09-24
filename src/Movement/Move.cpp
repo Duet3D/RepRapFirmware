@@ -569,7 +569,7 @@ void Move::SetPositions(const float move[DRIVES])
 
 void Move::EndPointToMachine(const float coords[], int32_t ep[], size_t numDrives) const
 {
-	if (CartesianToMotorSteps(coords, ep))
+	if (CartesianToMotorSteps(coords, ep, true))
 	{
 		const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t drive = numAxes; drive < numDrives; ++drive)
@@ -594,9 +594,10 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes
 
 // Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
 // Used to perform movement and G92 commands.
-bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes]) const
+bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool allowModeChange) const
 {
-	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(), reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos);
+	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
+														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, allowModeChange);
 	if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
 	{
 		if (b)
