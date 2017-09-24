@@ -69,10 +69,7 @@ public:
 	Filament *GetFilament() const { return filament; }
 	Tool *Next() const { return next; }
 	ToolState GetState() const { return state; }
-
-#ifdef DUET_NG
 	bool WriteSettings(FileStore *f) const;			// write the tool's settings to file
-#endif
 
 	friend class RepRap;
 

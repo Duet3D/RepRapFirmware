@@ -19,7 +19,7 @@
 # include "PortControl.h"
 #endif
 
-#if !defined(__RADDS__) && !defined(__ALLIGATOR__)
+#if HAS_HIGH_SPEED_SD
 # include "sam/drivers/hsmci/hsmci.h"
 #endif
 
@@ -137,7 +137,7 @@ void RepRap::Init()
 	// Enable network (unless it's disabled)
 	network->Activate();			// Need to do this here, as the configuration GCodes may set IP address etc.
 
-#if !defined(__RADDS__) && !defined(__ALLIGATOR__)
+#if HAS_HIGH_SPEED_SD
 	hsmci_set_idle_func(hsmciIdle);
 #endif
 	platform->MessageF(UsbMessage, "%s is up and running.\n", FIRMWARE_NAME);
@@ -148,7 +148,7 @@ void RepRap::Init()
 
 void RepRap::Exit()
 {
-#if !defined(__RADDS__) && !defined(__ALLIGATOR__)
+#if HAS_HIGH_SPEED_SD
 	hsmci_set_idle_func(nullptr);
 #endif
 	active = false;
@@ -1038,7 +1038,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 
 		// MCU temperatures
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 		{
 			float minT, currT, maxT;
 			platform->GetMcuTemperatures(minT, currT, maxT);
@@ -1764,8 +1764,6 @@ AxesBitmap RepRap::GetCurrentYAxes() const
 	return (currentTool == nullptr) ? DefaultYAxisMapping : currentTool->GetYAxisMap();
 }
 
-#ifdef DUET_NG
-
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix
 bool RepRap::WriteToolSettings(FileStore *f) const
@@ -1787,8 +1785,6 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 	}
 	return ok;
 }
-
-#endif
 
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)

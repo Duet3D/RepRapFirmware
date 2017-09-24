@@ -128,9 +128,10 @@ public:
 		return lastStandbyTools[heater];
 	}
 
+	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
+
 #ifdef DUET_NG
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
-	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
 #endif
 
 private:

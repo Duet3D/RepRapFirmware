@@ -3,6 +3,11 @@
 
 #define FIRMWARE_NAME "RepRapFirmware for Alligator"
 
+// Features definition
+#define HAS_LWIP_NETWORKING		1
+#define HAS_CPU_TEMP_SENSOR		1
+#define HAS_HIGH_SPEED_SD		0
+
 const size_t NumFirmwareUpdateModules = 1;
 #define IAP_UPDATE_FILE "iapalligator.bin"
 #define IAP_FIRMWARE_FILE "RepRapFirmware-Alligator.bin"

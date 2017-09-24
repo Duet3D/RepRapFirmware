@@ -21,10 +21,7 @@ public:
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) override;
 	bool SupportsAutoCalibration() const override;
 	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply) override;
-
-#ifdef DUET_NG
 	bool WriteResumeSettings(FileStore *f) const override;
-#endif
 
 private:
 	void AppendCorrections(const floatc_t corrections[], StringRef& reply) const;

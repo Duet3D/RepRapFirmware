@@ -10,7 +10,7 @@
 
 #include "TemperatureSensor.h"
 
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 
 class CpuTemperatureSensor : public TemperatureSensor
 {

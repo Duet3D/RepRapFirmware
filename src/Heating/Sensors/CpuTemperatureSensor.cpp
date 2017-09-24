@@ -9,7 +9,7 @@
 #include "Platform.h"
 #include "RepRap.h"
 
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 
 CpuTemperatureSensor::CpuTemperatureSensor(unsigned int channel) : TemperatureSensor(channel, "microcontroller embedded temperature sensor")
 {

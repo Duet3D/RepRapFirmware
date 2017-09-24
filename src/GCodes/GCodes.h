@@ -271,9 +271,7 @@ private:
 	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
 
-#ifdef DUET_NG
 	void SaveResumeInfo();
-#endif
 
 	Platform& platform;													// The RepRap machine
 
@@ -306,7 +304,6 @@ private:
 	bool pausePending;							// true if we have been asked to pause but we are running a macro
 #ifdef DUET_NG
 	bool isAutoPaused;							// true if the print was paused automatically
-	bool resumeInfoSaved;						// true if we have saved resume info at this pause point
 #endif
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
@@ -438,8 +435,9 @@ private:
 #ifdef DUET_NG
 	static constexpr const char* POWER_FAIL_G = "powerfail.g";
 	static constexpr const char* POWER_RESTORE_G = "powerrestore.g";
-	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 #endif
+
+	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
 	static const uint16_t ServoRefreshFrequency = 50;

@@ -30,10 +30,7 @@ public:
 	void SetHeatersMonitored(uint16_t h);
 	void Check();
 	void Disable();
-
-#ifdef DUET_NG
 	bool WriteSettings(FileStore *f, size_t fanNum) const;		// Save the settings of this fan if it isn't thermostatic
-#endif
 
 private:
 	typedef uint32_t HeatersMonitoredBitmap;				// needs to be wide enough for 8 real heaters + 10 virtual heaters

@@ -52,12 +52,12 @@ Licence: GPL
 
 #if defined(DUET_NG)
 # include "DueXn.h"
+#elif defined(DUET_06_085)
+# include "MCP4461/MCP4461.h"
 #elif defined(__ALLIGATOR__)
 # include "DAC/DAC084S085.h"       // SPI DAC for motor current vref
 # include "EUI48/EUI48EEPROM.h"    // SPI EUI48 mac address EEPROM
 # include "Microstepping.h"
-#elif !defined(__RADDS__)
-# include "MCP4461/MCP4461.h"
 #endif
 
 const bool FORWARDS = true;
@@ -96,12 +96,12 @@ const float AXIS_MAXIMA[MaxAxes] = AXES_(230.0, 210.0, 200.0, 0.0, 0.0, 0.0, 0.0
 const float Z_PROBE_STOP_HEIGHT = 0.7;							// Millimetres
 const unsigned int Z_PROBE_AVERAGE_READINGS = 8;				// We average this number of readings with IR on, and the same number with IR off
 
-#ifdef DUET_NG
-const int Z_PROBE_AD_VALUE = 500;								// Default for the Z probe - should be overwritten by experiment
-const uint32_t Z_PROBE_AXES = (1 << Z_AXIS);					// Axes for which the Z-probe is normally used
-#else
+#if defined DUET_06_085
 const int Z_PROBE_AD_VALUE = 400;								// Default for the Z probe - should be overwritten by experiment
 const uint32_t Z_PROBE_AXES = (1 << X_AXIS) | (1 << Z_AXIS);	// Axes for which the Z-probe is normally used
+#else
+const int Z_PROBE_AD_VALUE = 500;								// Default for the Z probe - should be overwritten by experiment
+const uint32_t Z_PROBE_AXES = (1 << Z_AXIS);					// Axes for which the Z-probe is normally used
 #endif
 
 // HEATERS - The bed is assumed to be the at index 0
@@ -128,14 +128,16 @@ enum class BoardType : uint8_t
 	DuetWiFi_10 = 1
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	DuetEthernet_10 = 1
+#elif defined(DUET_06_085)
+	Duet_06 = 1,
+	Duet_07 = 2,
+	Duet_085 = 3
 #elif defined(__RADDS__)
 	RADDS_15 = 1
 #elif defined(__ALLIGATOR__)
 	Alligator_2 = 1
 #else
-	Duet_06 = 1,
-	Duet_07 = 2,
-	Duet_085 = 3
+# error Unknown board
 #endif
 };
 
@@ -527,10 +529,11 @@ public:
 
 	float GetFanValue(size_t fan) const;					// Result is returned in percent
 	void SetFanValue(size_t fan, float speed);				// Accepts values between 0..1 and 1..255
-#if !defined(DUET_NG) && !defined(__RADDS__) & !defined(__ALLIGATOR__)
+#if defined(DUET_06_085)
 	void EnableSharedFan(bool enable);						// enable/disable the fan that shares its PWM pin with the last heater
 #endif
 
+	bool WriteFanSettings(FileStore *f) const;		// Save some resume information
 	float GetFanRPM() const;
 
 	// Flash operations
@@ -553,7 +556,7 @@ public:
 	bool Inkjet(int bitPattern);
 
 	// MCU temperature
-#ifndef __RADDS
+#if HAS_CPU_TEMP_SENSOR
 	void GetMcuTemperatures(float& minT, float& currT, float& maxT) const;
 #endif
 	void SetMcuTemperatureAdjust(float v) { mcuTemperatureAdjust = v; }
@@ -571,7 +574,6 @@ public:
 	float GetTmcDriversTemperature(unsigned int board) const;
 	void DriverCoolingFansOn(uint32_t driverChannelsMonitored);
 	bool ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply);
-	bool WriteFanSettings(FileStore *f) const;		// Save some resume information
 #endif
 
 	// User I/O and servo support
@@ -611,7 +613,7 @@ private:
 	{
 		static const uint16_t versionValue = 7;		// increment this whenever this struct changes
 		static const uint16_t magicValue = 0x7D00 | versionValue;	// value we use to recognise that all the flash data has been written
-#ifndef DUET_NG
+#if SAM3XA
 		static const uint32_t nvAddress = 0;		// must be 4-byte aligned
 #endif
 		static const size_t numberOfSlots = 5;		// number of storage slots used to implement wear levelling - must fit in 512 bytes
@@ -641,7 +643,7 @@ private:
 		}
 	};
 
-#ifdef DUET_NG
+#if SAM4E
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in SAM4E user signature area");
 #else
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
@@ -708,11 +710,7 @@ private:
 
 #if defined(DUET_NG)
 	size_t numTMC2660Drivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
-#elif defined(__ALLIGATOR__)
-	Pin spiDacCS[MaxSpiDac];
-	DAC084S085 dacAlligator;
-	DAC084S085 dacPiggy;
-#elif !defined(__RADDS__)
+#elif defined(DUET_06_085)
 	// Digipots
 	MCP4461 mcpDuet;
 	MCP4461 mcpExpansion;
@@ -720,6 +718,10 @@ private:
 	float senseResistor;
 	float maxStepperDigipotVoltage;
 	float stepperDacVoltageRange, stepperDacVoltageOffset;
+#elif defined(__ALLIGATOR__)
+	Pin spiDacCS[MaxSpiDac];
+	DAC084S085 dacAlligator;
+	DAC084S085 dacPiggy;
 #endif
 
 	// Z probe
@@ -732,7 +734,7 @@ private:
 
 	// Thermistors
 	volatile ThermistorAveragingFilter thermistorFilters[Heaters];	// bed and extruder thermistor readings
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 	volatile ThermistorAveragingFilter cpuTemperatureFilter;		// MCU temperature readings
 #endif
 
@@ -832,7 +834,7 @@ private:
 	float nozzleDiameter;
 
 	// Temperature and power monitoring
-#ifndef __RADDS__		// reading temperature on the RADDS messes up one of the heater pins, so don't do it
+#if HAS_CPU_TEMP_SENSOR		// reading temperature on the RADDS messes up one of the heater pins, so don't do it
 	AnalogChannelNumber temperatureAdcChannel;
 	uint32_t highestMcuTemperature, lowestMcuTemperature;
 #endif
@@ -1263,12 +1265,14 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
 #if defined(DUET_NG)
 	return pinDesc.ulPin;
+#elif defined(DUET_06_085)
+	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
 #elif defined(__RADDS__)
 	return (pinDesc.pPort == PIOC) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
 #elif defined(__ALLIGATOR__)
 	return pinDesc.ulPin;
-#else	// Duet 06/085
-	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
+#else
+# error Unknown board
 #endif
 }
 
@@ -1279,6 +1283,10 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
+#elif defined(DUET_06_085)
+	PIOD->PIO_ODSR = driverMap;
+	PIOC->PIO_ODSR = driverMap;
+	PIOA->PIO_ODSR = driverMap >> 1;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
 #elif defined(__RADDS__)
 	PIOA->PIO_ODSR = driverMap;
 	PIOB->PIO_ODSR = driverMap;
@@ -1288,10 +1296,8 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	PIOB->PIO_ODSR = driverMap;
 	PIOD->PIO_ODSR = driverMap;
 	PIOC->PIO_ODSR = driverMap;
-#else	// Duet 06/085
-	PIOD->PIO_ODSR = driverMap;
-	PIOC->PIO_ODSR = driverMap;
-	PIOA->PIO_ODSR = driverMap >> 1;		// do this last, it means the processor doesn't need to preserve the register containing driverMap
+#else
+# error Unknown board
 #endif
 }
 
@@ -1302,6 +1308,10 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
+#elif defined(DUET_06_085)
+	PIOD->PIO_ODSR = 0;
+	PIOC->PIO_ODSR = 0;
+	PIOA->PIO_ODSR = 0;
 #elif defined(__RADDS__)
 	PIOD->PIO_ODSR = 0;
 	PIOC->PIO_ODSR = 0;
@@ -1311,10 +1321,8 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 	PIOD->PIO_ODSR = 0;
 	PIOC->PIO_ODSR = 0;
 	PIOB->PIO_ODSR = 0;
-#else	// Duet
-	PIOD->PIO_ODSR = 0;
-	PIOC->PIO_ODSR = 0;
-	PIOA->PIO_ODSR = 0;
+#else
+# error Unknown board
 #endif
 }
 

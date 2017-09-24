@@ -272,7 +272,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			bool wasPaused = isPaused;					// isPaused gets cleared by CancelPrint
-			CancelPrint(true, true);
+			CancelPrint(true, &gb == fileGCode);		// if this is normal end-of-print commanded by the file, deleted the ressurrect.g file
 			if (wasPaused)
 			{
 				reply.copy("Print cancelled");

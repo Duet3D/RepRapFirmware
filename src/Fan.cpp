@@ -319,8 +319,6 @@ void Fan::Disable()
 	pin = NoPin;
 }
 
-#ifdef DUET_NG
-
 // Save the settings of this fan if it isn't thermostatic
 bool Fan::WriteSettings(FileStore *f, size_t fanNum) const
 {
@@ -334,7 +332,5 @@ bool Fan::WriteSettings(FileStore *f, size_t fanNum) const
 
 	return true;
 }
-
-#endif
 
 // End

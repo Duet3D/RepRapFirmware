@@ -44,10 +44,7 @@ public:
 	const char* GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const override;
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
-
-#ifdef DUET_NG
 	bool WriteResumeSettings(FileStore *f) const override;
-#endif
 
     // Public functions specific to this class
 	float GetDiagonalSquared() const { return D2; }

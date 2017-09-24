@@ -318,15 +318,11 @@ void ZLeadscrewKinematics::AppendCorrections(const floatc_t corrections[], Strin
 	}
 }
 
-#ifdef DUET_NG
-
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
 bool ZLeadscrewKinematics::WriteResumeSettings(FileStore *f) const
 {
 	//TODO we could write leadscrew corrections here, but they may not be the same as before
 	return true;
 }
-
-#endif
 
 // End

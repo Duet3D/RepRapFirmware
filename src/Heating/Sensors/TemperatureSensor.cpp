@@ -6,7 +6,7 @@
 #include "RtdSensor31865.h"
 #include "GCodes/GCodeBuffer.h"
 
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 #include "CpuTemperatureSensor.h"
 #endif
 
@@ -102,7 +102,7 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 	{
 		ts =  new CurrentLoopTemperatureSensor(channel);
 	}
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 	else if (channel == CpuTemperatureSenseChannel)
 	{
 		ts =  new CpuTemperatureSensor(channel);

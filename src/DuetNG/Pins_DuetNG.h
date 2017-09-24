@@ -21,7 +21,12 @@ const size_t NumFirmwareUpdateModules = 1;		// 1 module
 # error Firmware name not defined
 #endif
 
-#define IAP_UPDATE_FILE		"iap4e.bin"			// hoping eventually to use the same IAP file for both Duet WiFi and Duet Ethernet
+// Features definition
+#define HAS_LWIP_NETWORKING		0
+#define HAS_CPU_TEMP_SENSOR		1
+#define HAS_HIGH_SPEED_SD		1
+
+#define IAP_UPDATE_FILE		"iap4e.bin"			// using the same IAP file for both Duet WiFi and Duet Ethernet
 
 #define SUPPORT_INKJET		0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND		0					// set nonzero to support Roland mill

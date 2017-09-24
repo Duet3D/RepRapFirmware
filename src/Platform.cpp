@@ -48,6 +48,10 @@
 extern char _end;
 extern "C" char *sbrk(int i);
 
+#if !defined(HAS_LWIP_NETWORKING) || !defined(HAS_CPU_TEMP_SENSOR) || !defined(HAS_HIGH_SPEED_SD)
+# error Missing feature definition
+#endif
+
 #ifdef DUET_NG
 
 inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal)
@@ -354,7 +358,7 @@ void Platform::Init()
 
 	fileStructureInitialised = true;
 
-#if !defined(DUET_NG) && !defined(__RADDS__) && !defined(__ALLIGATOR__)
+#if defined(DUET_06_085)
 	mcpDuet.begin();							// only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
 	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
 #endif
@@ -387,7 +391,7 @@ void Platform::Init()
 	ARRAY_INIT(instantDvs, INSTANT_DVS);
 	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
 
-#if !defined(DUET_NG) && !defined(__RADDS__) && !defined(__ALLIGATOR__)
+#if defined(DUET_06_085)
 	// Motor current setting on Duet 0.6 and 0.8.5
 	ARRAY_INIT(potWipes, POT_WIPES);
 	senseResistor = SENSE_RESISTOR;
@@ -441,12 +445,12 @@ void Platform::Init()
 			axisDrivers[drive].numDrivers = 1;
 			axisDrivers[drive].driverNumbers[0] = (uint8_t)drive;
 			endStopType[drive] =
-#if defined(DUET_NG) || defined(__RADDS__) || defined(__ALLIGATOR__)
-									EndStopType::lowEndStop;	// default to low endstop
-#else
+#if defined(DUET_06_085)
 									(drive == Y_AXIS)
 									? EndStopType::lowEndStop	// for Ormerod 2/Huxley/Mendel compatibility
 									: EndStopType::noEndStop;	// for Ormerod/Huxley/Mendel compatibility
+#else
+									EndStopType::lowEndStop;	// default to low endstop
 #endif
 			endStopLogicLevel[drive] = true;					// assume all endstops use active high logic e.g. normally-closed switch to ground
 		}
@@ -541,10 +545,10 @@ void Platform::Init()
 	extrusionAncilliaryPwmLogicalPin = Fan0LogicalPin;
 	extrusionAncilliaryPwmFirmwarePin = COOLING_FAN_PINS[0];
 	extrusionAncilliaryPwmInvert =
-#if defined(DUET_NG) || defined(__RADDS__) || defined(__ALLIGATOR__)
-			false;
-#else
+#ifdef DUET_06_085
 			(board == BoardType::Duet_06 || board == BoardType::Duet_07);
+#else
+			false;
 #endif
 	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
@@ -573,7 +577,7 @@ void Platform::Init()
 		thermistorFilters[heater].Init(0);
 	}
 
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 	cpuTemperatureFilter.Init(0);
 #endif
 
@@ -610,8 +614,8 @@ void Platform::Init()
 	}
 #endif
 
-	// MCU temperature monitoring - doesn't work in RADDS due to pin assignments and SAM3X chip bug
-#ifndef __RADDS__
+	// MCU temperature monitoring
+#if HAS_CPU_TEMP_SENSOR
 	temperatureAdcChannel = GetTemperatureAdcChannel();
 	AnalogInEnableChannel(temperatureAdcChannel, true);
 	highestMcuTemperature = 0;									// the highest output we have seen from the ADC filter
@@ -669,10 +673,10 @@ void Platform::InitZProbe()
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
 
-#if defined(DUET_NG) || defined(__RADDS__) || defined(__ALLIGATOR__)
-	zProbeModulationPin = Z_PROBE_MOD_PIN;
-#else
+#ifdef DUET_06_085
 	zProbeModulationPin = (board == BoardType::Duet_07 || board == BoardType::Duet_085) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
+#else
+	zProbeModulationPin = Z_PROBE_MOD_PIN;
 #endif
 
 	switch (zProbeType)
@@ -1313,7 +1317,7 @@ void Platform::Spin()
 	(void)FlushMessages();
 
 	// Check the MCU max and min temperatures
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 	if (cpuTemperatureFilter.IsValid())
 	{
 		const uint32_t currentMcuTemperature = cpuTemperatureFilter.GetSum();
@@ -1585,6 +1589,8 @@ bool Platform::ConfigureAutoSave(GCodeBuffer& gb, StringRef& reply)
 	return false;
 }
 
+#endif
+
 // Save some resume information
 bool Platform::WriteFanSettings(FileStore *f) const
 {
@@ -1596,14 +1602,12 @@ bool Platform::WriteFanSettings(FileStore *f) const
 	return ok;
 }
 
-#endif
-
 float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const
 {
 	float voltage = (float)adcVal * (3.3/(float)(4096 * ThermistorAverageReadings));
-#ifdef DUET_NG
+#if SAM4E
 	return (voltage - 1.44) * (1000.0/4.7) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-13C
-#else
+#elif SAM3XA
 	return (voltage - 0.8) * (1000.0/2.65) + 27.0 + mcuTemperatureAdjust;			// accuracy at 27C is +/-45C
 #endif
 }
@@ -1625,7 +1629,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 			{
 				reason |= (uint16_t)SoftwareResetReason::inUsbOutput;	// if we are resetting because we are stuck in a Spin function, record whether we are trying to send to USB
 			}
-#if !defined(DUET_NG) && !defined(__RADDS__)
+#if HAS_LWIP_NETWORKING
 			if (reprap.GetNetwork().InLwip())
 			{
 				reason |= (uint16_t)SoftwareResetReason::inLwipSpin;
@@ -1647,7 +1651,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		size_t slot = SoftwareResetData::numberOfSlots;
 		SoftwareResetData srdBuf[SoftwareResetData::numberOfSlots];
 
-#ifdef DUET_NG
+#if SAM4E
 		if (flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t)) == FLASH_RC_OK)
 #else
 		DueFlashStorage::read(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
@@ -1662,7 +1666,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		if (slot == SoftwareResetData::numberOfSlots)
 		{
 			// No free slots, so erase the area
-#ifdef DUET_NG
+#if SAM4E
 			flash_erase_user_signature();
 #endif
 			memset(srdBuf, 0xFF, sizeof(srdBuf));
@@ -1685,7 +1689,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 		}
 
 		// Save diagnostics data to Flash
-#ifdef DUET_NG
+#if SAM4E
 		flash_write_user_signature(srdBuf, sizeof(srdBuf)/sizeof(uint32_t));
 #else
 		DueFlashStorage::write(SoftwareResetData::nvAddress, srdBuf, sizeof(srdBuf));
@@ -1700,7 +1704,7 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 //*****************************************************************************************************************
 // Interrupts
 
-#if !defined(DUET_NG) && !defined(__RADDS__)
+#if HAS_LWIP_NETWORKING
 void NETWORK_TC_HANDLER()
 {
 	tc_get_status(NETWORK_TC, NETWORK_TC_CHAN);
@@ -1725,7 +1729,7 @@ void Platform::InitialiseInterrupts()
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
 	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);	// set priority for tick interrupts
 
-#ifdef DUET_NG
+#if SAM4E
 	NVIC_SetPriority(UART0_IRQn, NvicPriorityUart);			// set priority for UART interrupt - must be higher than step interrupt
 #else
 	NVIC_SetPriority(UART_IRQn, NvicPriorityUart);			// set priority for UART interrupt - must be higher than step interrupt
@@ -1743,7 +1747,7 @@ void Platform::InitialiseInterrupts()
 	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);		// set high priority for this IRQ; it's time-critical
 	NVIC_EnableIRQ(STEP_TC_IRQN);
 
-#if !defined(DUET_NG) && !defined(__RADDS__)
+#if HAS_LWIP_NETWORKING
 	// Timer interrupt to keep the networking timers running (called at 16Hz)
 	pmc_enable_periph_clk((uint32_t) NETWORK_TC_IRQN);
 	tc_init(NETWORK_TC, NETWORK_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP_RC | TC_CMR_TCCLKS_TIMER_CLOCK2);
@@ -1888,10 +1892,12 @@ void Platform::Diagnostics(MessageType mtype)
 
 	// Print memory stats and error codes to USB and copy them to the current webserver reply
 	const char *ramstart =
-#ifdef DUET_NG
+#if SAM4E
 			(char *) 0x20000000;
-#else
+#elif SAM3XA
 			(char *) 0x20070000;
+#else
+# error
 #endif
 	const struct mallinfo mi = mallinfo();
 	MessageF(mtype, "Static ram used: %d\n", &_end - ramstart);
@@ -1905,7 +1911,7 @@ void Platform::Diagnostics(MessageType mtype)
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
-#ifdef DUET_NG
+#if SAM4E
 	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin
 									"reset button or watchdog",
 #else
@@ -1922,7 +1928,7 @@ void Platform::Diagnostics(MessageType mtype)
 		memset(srdBuf, 0, sizeof(srdBuf));
 		int slot = -1;
 
-#ifdef DUET_NG
+#if SAM4E
 		// Work around bug in ASF flash library: flash_read_user_signature calls a RAMFUNC without disabling interrupts first.
 		// This caused a crash (watchdog timeout) sometimes if we run M122 while a print is in progress
 		const irqflags_t flags = cpu_irq_save();
@@ -1988,16 +1994,16 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Free file entries: %u\n", numFreeFiles);
 
 	// Show the HSMCI CD pin and speed
-#if defined( __RADDS__) || defined(__ALLIGATOR__)
-	MessageF(mtype, "SD card 0 %s\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"));
-#else
+#if HAS_HIGH_SPEED_SD
 	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed()/1000000.0));
+#else
+	MessageF(mtype, "SD card 0 %s\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"));
 #endif
 
 	// Show the longest SD card write time
 	MessageF(mtype, "SD card longest block write time: %.1fms\n", (double)FileStore::GetAndClearLongestWriteTime());
 
-#if !defined( __RADDS__)
+#if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
 	const uint32_t currentMcuTemperature = cpuTemperatureFilter.GetSum();
 	MessageF(mtype, "MCU temperature: min %.1f, current %.1f, max %.1f\n",
@@ -2478,9 +2484,36 @@ void Platform::UpdateMotorCurrent(size_t driver)
 		{
 			TMC2660::SetCurrent(driver, current);
 		}
-		// else we can't set the current
-#elif defined (__RADDS__)
-		// we can't set the current on RADDS
+#elif defined (DUET_06_085)
+		unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
+		if (driver < 4)
+		{
+			mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
+			mcpDuet.setVolatileWiper(potWipes[driver], pot);
+		}
+		else
+		{
+			if (board == BoardType::Duet_085)
+			{
+				// Extruder 0 is on DAC channel 0
+				if (driver == 4)
+				{
+					const float dacVoltage = max<float>(current * 0.008 * senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
+					const float dac = dacVoltage/stepperDacVoltageRange;
+					AnalogOut(DAC0, dac);
+				}
+				else
+				{
+					mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
+					mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
+				}
+			}
+			else if (driver < 8)		// on a Duet 0.6 we have a maximum of 8 drives
+			{
+				mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
+				mcpExpansion.setVolatileWiper(potWipes[driver], pot);
+			}
+		}
 #elif defined(__ALLIGATOR__)
 		// Alligator SPI DAC current
 		if (driver < 4)  // Onboard DAC
@@ -2492,43 +2525,7 @@ void Platform::UpdateMotorCurrent(size_t driver)
 			dacPiggy.setChannel(7-driver, current * 0.102);
 		}
 #else
-		unsigned short pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
-		if (driver < 4)
-		{
-			mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
-			mcpDuet.setVolatileWiper(potWipes[driver], pot);
-		}
-		else
-		{
-# ifndef DUET_NG
-			if (board == BoardType::Duet_085)
-			{
-# endif
-				// Extruder 0 is on DAC channel 0
-				if (driver == 4)
-				{
-					const float dacVoltage = max<float>(current * 0.008 * senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
-					const float dac = dacVoltage/stepperDacVoltageRange;
-# ifdef DUET_NG
-					AnalogOut(DAC1, dac);
-# else
-					AnalogOut(DAC0, dac);
-# endif
-				}
-				else
-				{
-					mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
-					mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
-				}
-# ifndef DUET_NG
-			}
-			else if (driver < 8)		// on a Duet 0.6 we have a maximum of 8 drives
-			{
-				mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
-				mcpExpansion.setVolatileWiper(potWipes[driver], pot);
-			}
-# endif
-		}
+		// otherwise we can't set the motor current
 #endif
 	}
 }
@@ -2574,14 +2571,15 @@ bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
 		}
 		else
 		{
-#elif defined(__ALLIGATOR__)
-		return Microstepping::Set(driver, microsteps); // no mode in Alligator board
-#endif
 			// Other drivers only support x16 microstepping.
 			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
 			return microsteps == 16;
-#if defined(DUET_NG)
 		}
+#elif defined(__ALLIGATOR__)
+		return Microstepping::Set(driver, microsteps); // no mode in Alligator board
+#else
+		// Assume only x16 microstepping supported
+		return microsteps == 16;
 #endif
 	}
 	return false;
@@ -2615,13 +2613,16 @@ unsigned int Platform::GetDriverMicrostepping(size_t driver, int mode, bool& int
 	{
 		return TMC2660::GetMicrostepping(driver, mode, interpolation);
 	}
-#elif defined(__ALLIGATOR__)
-	interpolation = false;
-	return Microstepping::Read(driver); // no mode, no interpolation for Alligator
-#endif
 	// On-board drivers only support x16 microstepping without interpolation
 	interpolation = false;
 	return 16;
+#elif defined(__ALLIGATOR__)
+	interpolation = false;
+	return Microstepping::Read(driver); // no mode, no interpolation for Alligator
+#else
+	interpolation = false;
+	return 16;
+#endif
 }
 
 // Get the microstepping for an axis or extruder
@@ -2721,7 +2722,7 @@ void Platform::SetFanValue(size_t fan, float speed)
 	}
 }
 
-#if !defined(DUET_NG) && !defined(__RADDS__) && !defined(__ALLIGATOR__)
+#if defined(DUET_06_085)
 
 // Enable or disable the fan that shares its PWM pin with the last heater. Called when we disable or enable the last heater.
 void Platform::EnableSharedFan(bool enable)
@@ -2747,12 +2748,12 @@ float Platform::GetFanRPM() const
 
 bool Platform::FansHardwareInverted(size_t fanNumber) const
 {
-#if defined(DUET_NG) || defined(__RADDS__) || defined(__ALLIGATOR__)
-	return false;
-#else
+#if defined(DUET_06_085)
 	// The cooling fan output pin gets inverted on a Duet 0.6 or 0.7.
 	// We allow a second fan controlled by a mosfet on the PC4 pin, which is not inverted.
 	return fanNumber == 0 && (board == BoardType::Duet_06 || board == BoardType::Duet_07);
+#else
+	return false;
 #endif
 }
 
@@ -2765,12 +2766,12 @@ void Platform::InitFans()
 
 	if (NUM_FANS > 1)
 	{
-#if defined(DUET_NG) || defined(__RADDS__) || defined(__ALLIGATOR__)
-		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed heater
-		fans[1].SetHeatersMonitored(((1 << Heaters) - 1) & ~(1 << DefaultBedHeater));
+#if defined(DUET_06_085)
+		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
 		fans[1].SetValue(1.0);												// set it full on
 #else
-		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
+		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed heater
+		fans[1].SetHeatersMonitored(((1 << Heaters) - 1) & ~(1 << DefaultBedHeater));
 		fans[1].SetValue(1.0);												// set it full on
 #endif
 	}
@@ -3269,11 +3270,7 @@ void Platform::SetBoardType(BoardType bt)
 		board = BoardType::DuetWiFi_10;
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 		board = BoardType::DuetEthernet_10;
-#elif defined(__RADDS__)
-		board = BoardType::RADDS_15;
-#elif defined(__ALLIGATOR__)
-		board = BoardType::Alligator_2;
-#else
+#elif defined(DUET_06_085)
 		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
 		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
 		// So we enable the pullup (value 100K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
@@ -3281,6 +3278,12 @@ void Platform::SetBoardType(BoardType bt)
 		pinMode(Dac0DigitalPin, INPUT_PULLUP);
 		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
 		pinMode(Dac0DigitalPin, INPUT);			// turn pullup off
+#elif defined(__RADDS__)
+		board = BoardType::RADDS_15;
+#elif defined(__ALLIGATOR__)
+		board = BoardType::Alligator_2;
+#else
+# error Undefined board type
 #endif
 	}
 	else
@@ -3304,14 +3307,16 @@ const char* Platform::GetElectronicsString() const
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0";
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	case BoardType::DuetEthernet_10:		return "Duet Ethernet 1.0";
+#elif defined(DUET_06_085)
+	case BoardType::Duet_06:				return "Duet 0.6";
+	case BoardType::Duet_07:				return "Duet 0.7";
+	case BoardType::Duet_085:				return "Duet 0.85";
 #elif defined(__RADDS__)
 	case BoardType::RADDS_15:				return "RADDS 1.5";
 #elif defined(__ALLIGATOR__)
 	case BoardType::Alligator_2:			return "Alligator r2";
 #else
-	case BoardType::Duet_06:				return "Duet 0.6";
-	case BoardType::Duet_07:				return "Duet 0.7";
-	case BoardType::Duet_085:				return "Duet 0.85";
+# error Undefined board type
 #endif
 	default:								return "Unidentified";
 	}
@@ -3326,14 +3331,16 @@ const char* Platform::GetBoardString() const
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	case BoardType::DuetEthernet_10:		return "duetethernet10";
+#elif defined(DUET_06_085)
+	case BoardType::Duet_06:				return "duet06";
+	case BoardType::Duet_07:				return "duet07";
+	case BoardType::Duet_085:				return "duet085";
 #elif defined(__RADDS__)
 	case BoardType::RADDS_15:				return "radds15";
 #elif defined(__ALLIGATOR__)
 	case BoardType::Alligator_2:			return "alligator2";
 #else
-	case BoardType::Duet_06:				return "duet06";
-	case BoardType::Duet_07:				return "duet07";
-	case BoardType::Duet_085:				return "duet085";
+# error Undefined board type
 #endif
 	default:								return "unknown";
 	}
@@ -3368,7 +3375,7 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 		   )
 		{
 			firmwarePin = COOLING_FAN_PINS[logicalPin - Fan0LogicalPin];
-#if !defined(DUET_NG) && !defined(__RADDS__) && !defined(__ALLIGATOR__)
+#if defined(DUET_06_085)
 			invert = (board == BoardType::Duet_06 || board == BoardType::Duet_07);
 #endif
 		}
@@ -3490,7 +3497,7 @@ bool Platform::Inkjet(int bitPattern)
 }
 #endif
 
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 // CPU temperature
 void Platform::GetMcuTemperatures(float& minT, float& currT, float& maxT) const
 {
@@ -3762,10 +3769,9 @@ void Platform::Tick()
 		}
 
 		// Read the MCU temperature as well (no need to do it in every state)
-#ifndef __RADDS__
+#if HAS_CPU_TEMP_SENSOR
 		const_cast<ThermistorAveragingFilter&>(cpuTemperatureFilter).ProcessReading(AnalogInReadChannel(temperatureAdcChannel));
 #endif
-
 		++tickState;
 		break;
 

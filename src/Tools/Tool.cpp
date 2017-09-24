@@ -423,8 +423,6 @@ void Tool::DefineMix(const float m[])
 	}
 }
 
-#ifdef DUET_NG
-
 // Write the tool's settings to file returning true if successful
 bool Tool::WriteSettings(FileStore *f) const
 {
@@ -462,7 +460,5 @@ bool Tool::WriteSettings(FileStore *f) const
 
 	return ok;
 }
-
-#endif
 
 // End

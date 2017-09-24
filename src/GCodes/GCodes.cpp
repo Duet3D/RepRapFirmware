@@ -177,7 +177,7 @@ void GCodes::Reset()
 	simulationTime = 0.0;
 	isPaused = false;
 #ifdef DUET_NG
-	isAutoPaused = resumeInfoSaved = false;
+	isAutoPaused = false;
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
@@ -1453,12 +1453,13 @@ void GCodes::DoPause(GCodeBuffer& gb, bool isAuto)
 	}
 
 	SaveFanSpeeds();
+	SaveResumeInfo();																	// create the resume file so that we can resume after power down
+
 	gb.SetState(GCodeState::pausing1);
 	isPaused = true;
 
 #ifdef DUET_NG
 	isAutoPaused = isAuto;
-	resumeInfoSaved = false;
 #endif
 }
 
@@ -1494,14 +1495,7 @@ bool GCodes::AutoPause()
 		return false;
 	}
 
-	if (isPaused)
-	{
-		if (!resumeInfoSaved)
-		{
-			SaveResumeInfo();
-		}
-	}
-	else if (reprap.GetPrintMonitor().IsPrinting())
+	if (!isPaused && reprap.GetPrintMonitor().IsPrinting())
 	{
 		if (!LockMovement(*autoPauseGCode))
 		{
@@ -1509,7 +1503,6 @@ bool GCodes::AutoPause()
 		}
 		reprap.GetHeat().SuspendHeaters(true);			// turn heaters off to conserve power for the motors to execute the pause
 		DoPause(*autoPauseGCode, true);
-		SaveResumeInfo();
 	}
 	return true;
 }
@@ -1551,6 +1544,7 @@ bool GCodes::AutoResumeAfterShutdown()
 	// Currently we don't do anything here
 	return true;
 }
+#endif
 
 void GCodes::SaveResumeInfo()
 {
@@ -1621,7 +1615,11 @@ void GCodes::SaveResumeInfo()
 				{
 					buf.catf(" %c%.2f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
 				}
-				buf.catf("\nG1 F%.1f P%u\nM24\n", (double)(pauseRestorePoint.feedRate * MinutesToSeconds), (unsigned int)pauseRestorePoint.ioBits);
+				buf.catf("\nG1 F%.1f", (double)(pauseRestorePoint.feedRate * MinutesToSeconds));
+#if SUPPORT_IOBITS
+				buf.catf(" P%u", (unsigned int)pauseRestorePoint.ioBits);
+#endif
+				buf.cat("\nM24\n");
 				ok = f->Write(buf.Pointer());								// restore feed rate and output bits
 			}
 			if (!f->Close())
@@ -1638,12 +1636,8 @@ void GCodes::SaveResumeInfo()
 				platform.MessageF(ErrorMessage, "Failed to write or close file %s\n", RESUME_AFTER_POWER_FAIL_G);
 			}
 		}
-
-		resumeInfoSaved = true;			// say we saved it even if there was an error, to avoid constant retrying
 	}
 }
-
-#endif
 
 void GCodes::Diagnostics(MessageType mtype)
 {
@@ -2873,12 +2867,6 @@ bool GCodes::QueueFileToPrint(const char* fileName, StringRef& reply)
 	FileStore * const f = platform.GetFileStore(platform.GetGCodeDir(), fileName, OpenMode::read);
 	if (f != nullptr)
 	{
-		// Cancel current print if there is any
-		if (!reprap.GetPrintMonitor().IsPrinting())
-		{
-			CancelPrint(false, true);
-		}
-
 		fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
 		fileGCode->MachineState().volumetricExtrusion = false;			// default to non-volumetric extrusion
 

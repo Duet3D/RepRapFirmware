@@ -86,7 +86,7 @@ bool PID::SetModel(float gain, float tc, float td, float maxPwm, bool usePid)
 	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, temperatureLimit, usePid);
 	if (rslt)
 	{
-#if !defined(DUET_NG) && !defined(__RADDS__) && !defined(__ALLIGATOR__)
+#if defined(DUET_06_085)
 		if (heater == Heaters - 1)
 		{
 			// The last heater on the Duet 0.8.5 + DueX4 shares its pin with Fan1

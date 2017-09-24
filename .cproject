@@ -53,6 +53,7 @@
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.571434619" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
+									<listOptionValue builtIn="false" value="DUET_06_085"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1642892736" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
@@ -105,6 +106,7 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.1548770846" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAM3X8E__"/>
+									<listOptionValue builtIn="false" value="DUET_06_085"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.948285998" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>

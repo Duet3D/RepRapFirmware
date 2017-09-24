@@ -3,6 +3,11 @@
 
 #define FIRMWARE_NAME "RepRapFirmware for RADDS"
 
+// Features definition
+#define HAS_LWIP_NETWORKING		0
+#define HAS_CPU_TEMP_SENSOR		0				// enabling the CPU temperature sensor disables Due pin 13 due to bug in SAM3X
+#define HAS_HIGH_SPEED_SD		0
+
 const size_t NumFirmwareUpdateModules = 1;
 #define IAP_UPDATE_FILE "iapradds.bin"
 #define IAP_FIRMWARE_FILE "RepRapFirmware-RADDS.bin"

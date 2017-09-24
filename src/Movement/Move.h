@@ -116,9 +116,7 @@ public:
 
 	int32_t GetAccumulatedExtrusion(size_t extruder);								// Return ands reset the accumulated extrusion amount
 
-#ifdef DUET_NG
 	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
-#endif
 
 	static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
 	static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position

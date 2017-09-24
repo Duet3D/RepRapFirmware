@@ -215,7 +215,7 @@ const uint32_t NvicPriorityPins = 3;			// priority for GPIO pin interrupts - fil
 const uint32_t NvicPriorityStep = 4;			// step interrupt is next highest, it can preempt most other interrupts
 const uint32_t NvicPriorityUSB = 5;				// USB interrupt
 
-#if !defined(DUET_NG) && !defined(__RADDS__)
+#if HAS_LWIP_NETWORKING
 const uint32_t NvicPriorityNetworkTick = 5;		// priority for network tick interrupt
 const uint32_t NvicPriorityEthernet = 5;		// priority for Ethernet interface
 #endif

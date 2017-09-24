@@ -565,15 +565,11 @@ bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const
 	return ok;
 }
 
-#ifdef DUET_NG
-
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
 bool LinearDeltaKinematics::WriteResumeSettings(FileStore *f) const
 {
 	return !doneAutoCalibration || WriteCalibrationParameters(f);
 }
-
-#endif
 
 // Get the bed tilt fraction for the specified axis
 float LinearDeltaKinematics::GetTiltCorrection(size_t axis) const
