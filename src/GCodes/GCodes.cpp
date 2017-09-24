@@ -1623,12 +1623,25 @@ void GCodes::SaveResumeInfo()
 			}
 			if (ok)
 			{
-				buf.copy("G1 F6000");										// start building command to restore head position
+				// Build the commands to restore the head position. These assume that we are working in mm.
+				// Start with a vertical move to 2mm above the final Z position
+				buf.printf("G0 F1200 Z%.3f\n", (double)(pauseRestorePoint.moveCoords[Z_AXIS] + 2.0));
+
+				// Now set all the other axes
+				buf.cat("G0 F6000");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					buf.catf(" %c%.2f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+					if (axis != Z_AXIS)
+					{
+						buf.catf(" %c%.2f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+					}
 				}
-				buf.catf("\nG1 F%.1f", (double)(pauseRestorePoint.feedRate * MinutesToSeconds));
+
+				// Now move down to the correct Z height
+				buf.catf("\nG0 F1200 Z%.3f\n", (double)pauseRestorePoint.moveCoords[Z_AXIS]);
+
+				// Set the feed rate
+				buf.catf("G1 F%.1f", (double)(pauseRestorePoint.feedRate * MinutesToSeconds));
 #if SUPPORT_IOBITS
 				buf.catf(" P%u", (unsigned int)pauseRestorePoint.ioBits);
 #endif

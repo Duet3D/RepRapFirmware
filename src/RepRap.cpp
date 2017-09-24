@@ -1246,17 +1246,10 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	}
 	response->printf("{\"status\":\"%c\",\"heaters\":", ch);
 
-	// Send the heater actual temperatures
+	// Send the heater actual temperatures. If there is no bed heater, send zero for PanelDue.
 	const int8_t bedHeater = heat->GetBedHeater();
-	if (bedHeater != -1)
-	{
-		ch = ',';
-		response->catf("[%.1f", (double)(heat->GetTemperature(bedHeater)));
-	}
-	else
-	{
-		ch = '[';
-	}
+	ch = ',';
+	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, (double)(heat->GetTemperature(heater)));
@@ -1266,15 +1259,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	// Send the heater active temperatures
 	response->catf(",\"active\":");
-	if (heat->GetBedHeater() != -1)
-	{
-		ch = ',';
-		response->catf("[%.1f", (double)(heat->GetActiveTemperature(heat->GetBedHeater())));
-	}
-	else
-	{
-		ch = '[';
-	}
+	ch = ',';
+	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetActiveTemperature(heat->GetBedHeater())));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, (double)(heat->GetActiveTemperature(heater)));
@@ -1284,15 +1270,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	// Send the heater standby temperatures
 	response->catf(",\"standby\":");
-	if (bedHeater != -1)
-	{
-		ch = ',';
-		response->catf("[%.1f", (double)(heat->GetStandbyTemperature(bedHeater)));
-	}
-	else
-	{
-		ch = '[';
-	}
+	ch = ',';
+	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetStandbyTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
 		response->catf("%c%.1f", ch, (double)(heat->GetStandbyTemperature(heater)));

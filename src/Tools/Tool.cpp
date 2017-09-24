@@ -433,7 +433,7 @@ bool Tool::WriteSettings(FileStore *f) const
 	bool ok = true;
 	if (heaterCount != 0)
 	{
-		buf.copy("G10 ");
+		buf.printf("G10 P%d ", myNumber);
 		char c = 'S';
 		for (size_t i = 0; i < heaterCount; ++i)
 		{
