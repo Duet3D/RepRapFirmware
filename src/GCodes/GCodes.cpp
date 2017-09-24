@@ -1463,7 +1463,10 @@ void GCodes::DoPause(GCodeBuffer& gb, bool isAuto)
 	}
 
 	SaveFanSpeeds();
-	SaveResumeInfo();																	// create the resume file so that we can resume after power down
+	if (simulationMode == 0)
+	{
+		SaveResumeInfo();																// create the resume file so that we can resume after power down
+	}
 
 	gb.SetState(GCodeState::pausing1);
 	isPaused = true;
@@ -2006,10 +2009,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinate
 			moveBuffer.usePressureAdvance = (axesMentionedExceptZ != 0);
 		}
 
-		// Apply segmentation if necessary
+		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
 		// Note for when we use RTOS: as soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 		const Kinematics& kin = reprap.GetMove().GetKinematics();
-		if (kin.UseSegmentation() && (moveBuffer.hasExtrusion || isCoordinated || !kin.UseRawG0()))
+		if (kin.UseSegmentation() && simulationMode != 1 && (moveBuffer.hasExtrusion || isCoordinated || !kin.UseRawG0()))
 		{
 			// This kinematics approximates linear motion by means of segmentation.
 			// We assume that the segments will be smaller than the mesh spacing.
@@ -3843,12 +3846,10 @@ void GCodes::CancelPrint(bool printStats, bool deleteResumeFile)
 	}
 
 	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details because it clears the filename
-#ifdef DUET_NG
-	if (deleteResumeFile)
+	if (deleteResumeFile && simulationMode == 0)
 	{
 		platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
 	}
-#endif
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures
