@@ -1,8 +1,8 @@
 Summary of important changes in recent versions
 ===============================================
 
-Version 1.20 (in development)
-=============================
+Version 1.20alpha4
+==================
 
 Upgrade notes from 1.19.2:
 - If installing this release on a Duet WiFi, install DuetWiFiServer version 1.20 alpha first, available at https://github.com/dc42/DuetWiFiSocketServer/blob/master/Release/DuetWiFiServer.bin.
@@ -17,6 +17,12 @@ New and changed features:
 - The thermocouple type letter in the M305 command to configure a MAX31856-based thermocouple adapter may now be in lower case
 - Added protection against a dud command line containing letter M being interpreted as a M0 command
 - When doing a firmware upgrade, the message sent to the USB port now warns that the USB will be disconnected
+- A resurrect.g file is now created any time the print is paused. This allows for planned power down ands resume.
+
+Internal changes:
+- Upgraded compiler version
+- Changed to use the hardware floating point ABI on the SAM4
+- Simplified conditional directives that depend on the target hardware, by adding new #defines for supported features and a DUET_06_085 #define.
 
 Bug fixes:
 - When G29 was run on a SCARA printer, probe points could be incorrectly skipped and spurious "not reachable" messages generated
