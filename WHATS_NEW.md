@@ -5,6 +5,7 @@ Version 1.20beta1
 =================
 
 New and changed features:
+- Added support for M450-M453
 - Some additional events are now logged
 - The grid defined by M557 is now stored separately from the grid loaded by G29 S1 so that they don't overwrite each other
 - The resurrect.g file is no longer created or deleted during a simulated print
