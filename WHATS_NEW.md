@@ -4,6 +4,9 @@ Summary of important changes in recent versions
 Version 1.20beta1
 =================
 
+Upgrade notes:
+- The 'set output on extrude' function (M571) no longer defaults to FAN0 output. If you use this feature, you must define the output pin explicitly using the P parameter at least once.
+
 New and changed features:
 - Added support for M450-M453
 - Some additional events are now logged
