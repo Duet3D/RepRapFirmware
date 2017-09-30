@@ -9,7 +9,7 @@ New and changed features:
 - Some additional events are now logged
 - The grid defined by M557 is now stored separately from the grid loaded by G29 S1 so that they don't overwrite each other
 - The resurrect.g file is no longer created or deleted during a simulated print
-- SCARA prints are simulated without segmentstion so that the simulation runs much faster. In tests, the difference in the simulation time with/without segmentation was negligible.
+- SCARA prints are simulated without segmentation so that the simulation runs much faster. In tests, the difference in the simulation time with/without segmentation was negligible.
 - The change to fast PID parameters is now made when the temperature is within 5C of the target instead of when within 1C
 - M408 S1/2/3 responses now include dummy values for the bed heater if there is no bed heater
 - The commands to resume printing that are written to resurrect.g now move the head to 2mm above the printing height, then sideways, then down
