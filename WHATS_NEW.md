@@ -19,7 +19,7 @@ New and changed features:
 - The commands to resume printing that are written to resurrect.g now move the head to 2mm above the printing height, then sideways, then down
 
 Bug fixes:
-- If the Duet3D filament sensor was flashing an error code, the error recovery code running on the Duet caused short pauses in the print
+- If a Duet3D filament sensor was connected and congfigured but flashing an error code instead of sending filament data, the error recovery code running on the Duet caused short pauses in the print
 - On a delta printer if you created additonal axes, when you tried to home them it ran homedelta.g instead of e.g. homeu.g
 - On a delta printer with additional axes, you can now do XYZ moves as soon as the towers have been homed
 - Fixed a possible race condition if the time and date were set at midnight
