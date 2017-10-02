@@ -5,6 +5,8 @@ Version 1.20beta1
 =================
 
 Upgrade notes:
+- If installing this release on a Duet WiFi, install DuetWiFiServer version 1.20 alpha first, available at https://github.com/dc42/DuetWiFiSocketServer/blob/master/Release/DuetWiFiServer.bin.
+- Recommended Duet Web Control version is 1.19.3
 - The 'set output on extrude' function (M571) no longer defaults to FAN0 output. If you use this feature, you must define the output pin explicitly using the P parameter at least once.
 
 New and changed features:
