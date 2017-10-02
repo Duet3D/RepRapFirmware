@@ -8,7 +8,8 @@ Upgrade notes:
 - The 'set output on extrude' function (M571) no longer defaults to FAN0 output. If you use this feature, you must define the output pin explicitly using the P parameter at least once.
 
 New and changed features:
-- Added support for M450-M453
+- Added support for M3, M4, M5 and M450-M453
+- Added support for DHT11, DHT21 and DHT22 temperature/humidity sensors (thanks chrishamm)
 - Some additional events are now logged
 - The grid defined by M557 is now stored separately from the grid loaded by G29 S1 so that they don't overwrite each other
 - The resurrect.g file is no longer created or deleted during a simulated print
