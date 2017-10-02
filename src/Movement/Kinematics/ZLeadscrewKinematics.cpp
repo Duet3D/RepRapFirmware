@@ -151,14 +151,14 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 				const floatc_t x03 = x0 * x3;
 				const floatc_t x12 = x1 * x2;
 				const floatc_t x13 = x1 * x3;
-				const floatc_t x23 = x1 * x3;
+				const floatc_t x23 = x2 * x3;
 
 				const floatc_t y01 = y0 * y1;
 				const floatc_t y02 = y0 * y2;
 				const floatc_t y03 = y0 * y3;
 				const floatc_t y12 = y1 * y2;
 				const floatc_t y13 = y1 * y3;
-				const floatc_t y23 = y1 * y3;
+				const floatc_t y23 = y2 * y3;
 
 				const floatc_t d2 =   x13*y23 - x03*y23 - x12*y23 + x02*y23 - x23*y13 + x03*y13 + x12*y13 - x01*y13
 									+ x23*y03 - x13*y03 - x02*y03 + x01*y03 + x23*y12 - x13*y12 - x02*y12 + x01*y12

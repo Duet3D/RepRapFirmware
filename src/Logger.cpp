@@ -128,7 +128,7 @@ bool Logger::WriteDateTime(time_t time)
 	if (time == 0)
 	{
 		const uint32_t timeSincePowerUp = (uint32_t)(millis64()/1000u);
-		buf.printf("power up + %02u:%02u:%02u ", timeSincePowerUp/3600u, (timeSincePowerUp % 3600u)/60u, timeSincePowerUp % 60u);
+		buf.printf("power up + %02" PRIu32 ":%02" PRIu32 ":%02" PRIu32 " ", timeSincePowerUp/3600u, (timeSincePowerUp % 3600u)/60u, timeSincePowerUp % 60u);
 	}
 	else
 	{

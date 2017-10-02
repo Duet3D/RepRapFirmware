@@ -475,7 +475,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		}
 
 		// Client has been logged in
-		response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", HttpSessionTimeout, GetPlatform().GetBoardString());
+		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\"}", HttpSessionTimeout, GetPlatform().GetBoardString());
 		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
 	}
 	else if (!CheckAuthenticated())
@@ -937,7 +937,7 @@ void HttpResponder::ProcessMessage()
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		GetPlatform().MessageF(UsbMessage, "HTTP req, command words {", numCommandWords);
+		GetPlatform().MessageF(UsbMessage, "HTTP req, command words {");
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
 			GetPlatform().MessageF(UsbMessage, " %s", commandWords[i]);

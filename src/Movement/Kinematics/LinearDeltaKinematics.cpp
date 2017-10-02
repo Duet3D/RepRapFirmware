@@ -702,8 +702,23 @@ uint32_t LinearDeltaKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.
 const char* LinearDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, AxesBitmap& mustHomeFirst) const
 {
-	alreadyHomed = 0;			// if we home one axis, we need to home them all
-	return "homedelta.g";
+	// If homing X, Y or Z we must home all the towers
+	if ((toBeHomed & LowestNBits<AxesBitmap>(DELTA_AXES)) != 0)
+	{
+		return "homedelta.g";
+	}
+
+	// Return the homing file for the lowest axis that we have been asked to home
+	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
+	{
+		if (IsBitSet(toBeHomed, axis))
+		{
+			return StandardHomingFileNames[axis];
+		}
+	}
+
+	mustHomeFirst = 0;
+	return nullptr;
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing.

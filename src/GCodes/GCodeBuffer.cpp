@@ -54,7 +54,7 @@ void GCodeBuffer::Diagnostics(MessageType mtype)
 	const GCodeMachineState *ms = machineState;
 	do
 	{
-		scratchString.catf(" %d", ms->state);
+		scratchString.catf(" %d", (int)ms->state);
 		ms = ms->previous;
 	}
 	while (ms != nullptr);
@@ -183,7 +183,8 @@ bool GCodeBuffer::Put(const char *str, size_t len)
 void GCodeBuffer::SetFinished(bool f)
 {
 	if (f)
-	{	bufferState = GCodeBufferState::idle;
+	{
+		bufferState = GCodeBufferState::idle;
 		Init();
 	}
 	else
@@ -282,99 +283,102 @@ char GCodeBuffer::GetCommandLetter()
 // Get a float after a G Code letter found by a call to Seen()
 float GCodeBuffer::GetFValue()
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode float before a search.\n");
-		return 0.0;
+		const float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
+		readPointer = -1;
+		return result;
 	}
-	float result = (float) strtod(&gcodeBuffer[readPointer + 1], 0);
-	readPointer = -1;
-	return result;
+
+	reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode float before a search.\n");
+	return 0.0;
 }
 
 // Get a :-separated list of floats after a key letter
 const void GCodeBuffer::GetFloatArray(float a[], size_t& returnedLength, bool doPad)
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode float array before a search.\n");
-		returnedLength = 0;
-		return;
-	}
+		size_t length = 0;
+		bool inList = true;
+		while(inList)
+		{
+			if (length >= returnedLength)		// array limit has been set in here
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
+				readPointer = -1;
+				returnedLength = 0;
+				return;
+			}
+			a[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
+			length++;
+			do
+			{
+				readPointer++;
+			} while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
+			if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
+			{
+				inList = false;
+			}
+		}
 
-	size_t length = 0;
-	bool inList = true;
-	while(inList)
-	{
-		if (length >= returnedLength)		// array limit has been set in here
+		// Special case if there is one entry and returnedLength requests several.
+		// Fill the array with the first entry.
+		if (doPad && length == 1 && returnedLength > 1)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode float array that is too long: %s\n", gcodeBuffer);
-			readPointer = -1;
-			returnedLength = 0;
-			return;
+			for(size_t i = 1; i < returnedLength; i++)
+			{
+				a[i] = a[0];
+			}
 		}
-		a[length] = (float)strtod(&gcodeBuffer[readPointer + 1], 0);
-		length++;
-		do
+		else
 		{
-			readPointer++;
-		} while(gcodeBuffer[readPointer] && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
-		if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
-		{
-			inList = false;
+			returnedLength = length;
 		}
-	}
 
-	// Special case if there is one entry and returnedLength requests several.
-	// Fill the array with the first entry.
-	if (doPad && length == 1 && returnedLength > 1)
-	{
-		for(size_t i = 1; i < returnedLength; i++)
-		{
-			a[i] = a[0];
-		}
+		readPointer = -1;
 	}
 	else
 	{
-		returnedLength = length;
+		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode float array before a search.\n");
+		returnedLength = 0;
 	}
-
-	readPointer = -1;
 }
 
 // Get a :-separated list of longs after a key letter
 const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
+	{
+		size_t length = 0;
+		bool inList = true;
+		while(inList)
+		{
+			if (length >= returnedLength) // Array limit has been set in here
+			{
+				reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
+				readPointer = -1;
+				returnedLength = 0;
+				return;
+			}
+			l[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+			length++;
+			do
+			{
+				readPointer++;
+			} while(gcodeBuffer[readPointer] != 0 && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
+			if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
+			{
+				inList = false;
+			}
+		}
+		returnedLength = length;
+		readPointer = -1;
+	}
+	else
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode long array before a search.\n");
-		return;
 	}
-
-	size_t length = 0;
-	bool inList = true;
-	while(inList)
-	{
-		if (length >= returnedLength) // Array limit has been set in here
-		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "GCodes: Attempt to read a GCode long array that is too long: %s\n", gcodeBuffer);
-			readPointer = -1;
-			returnedLength = 0;
-			return;
-		}
-		l[length] = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
-		length++;
-		do
-		{
-			readPointer++;
-		} while(gcodeBuffer[readPointer] != 0 && (gcodeBuffer[readPointer] != ' ') && (gcodeBuffer[readPointer] != LIST_SEPARATOR));
-		if (gcodeBuffer[readPointer] != LIST_SEPARATOR)
-		{
-			inList = false;
-		}
-	}
-	returnedLength = length;
-	readPointer = -1;
 }
 
 // Get a string after a G Code letter found by a call to Seen().
@@ -382,83 +386,91 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 // Use the other overload of GetString to get strings that may not be the last parameter, or may be quoted.
 const char* GCodeBuffer::GetString()
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode string before a search.\n");
-		return "";
+		const char* const result = &gcodeBuffer[readPointer + 1];
+		readPointer = -1;
+		return result;
 	}
-	const char* const result = &gcodeBuffer[readPointer + 1];
-	readPointer = -1;
-	return result;
+
+	reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode string before a search.\n");
+	return "";
 }
 
 // Get and copy a quoted string returning true if successful
 bool GCodeBuffer::GetQuotedString(const StringRef& str)
 {
 	str.Clear();
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode string before a search.\n");
+		++readPointer;				// skip the character that introduced the string
+		if (gcodeBuffer[readPointer] == '"')
+		{
+			++readPointer;
+			for (;;)
+			{
+				char c = gcodeBuffer[readPointer++];
+				if (c < ' ')
+				{
+					return false;
+				}
+				if (c == '"')
+				{
+					if (gcodeBuffer[readPointer++] != '"')
+					{
+						return true;
+					}
+				}
+				else if (c == '\'')
+				{
+					if (isalpha(gcodeBuffer[readPointer]))
+					{
+						// Single quote before an alphabetic character forces that character to lower case
+						c = tolower(gcodeBuffer[readPointer++]);
+					}
+					else if (gcodeBuffer[readPointer] == c)
+					{
+						// Two single quotes are used to represent one
+						++readPointer;
+					}
+				}
+				str.cat(c);
+			}
+		}
 		return false;
 	}
-	++readPointer;				// skip the character that introduced the string
-	if (gcodeBuffer[readPointer] == '"')
-	{
-		++readPointer;
-		for (;;)
-		{
-			char c = gcodeBuffer[readPointer++];
-			if (c < ' ')
-			{
-				return false;
-			}
-			if (c == '"')
-			{
-				if (gcodeBuffer[readPointer++] != '"')
-				{
-					return true;
-				}
-			}
-			else if (c == '\'')
-			{
-				if (isalpha(gcodeBuffer[readPointer]))
-				{
-					// Single quote before an alphabetic character forces that character to lower case
-					c = tolower(gcodeBuffer[readPointer++]);
-				}
-				else if (gcodeBuffer[readPointer] == c)
-				{
-					// Two single quotes are used to represent one
-					++readPointer;
-				}
-			}
-			str.cat(c);
-		}
-	}
+
+	reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode string before a search.\n");
 	return false;
 }
 
 // Get and copy a string which may or may not be quoted. If it is not quoted, it ends at the first space or control character.
 bool GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
 {
-	if (gcodeBuffer[readPointer + 1] == '"')
+	if (readPointer >= 0)
 	{
-		return GetQuotedString(str);
+		if (gcodeBuffer[readPointer + 1] == '"')
+		{
+			return GetQuotedString(str);
+		}
+
+		str.Clear();
+		for (;;)
+		{
+			++readPointer;
+			const char c = gcodeBuffer[readPointer];
+			if (c < ' ')
+			{
+				break;
+			}
+			str.cat(c);
+		}
+		str.StripTrailingSpaces();
+		return !str.IsEmpty();
 	}
 
-	str.Clear();
-	for (;;)
-	{
-		++readPointer;
-		const char c = gcodeBuffer[readPointer];
-		if (c < ' ')
-		{
-			break;
-		}
-		str.cat(c);
-	}
-	str.StripTrailingSpaces();
-	return !str.IsEmpty();
+	reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a possibly quoted GCode string before a search.\n");
+	return false;
 }
 
 // This returns a pointer to the end of the buffer where a
@@ -499,29 +511,31 @@ const char* GCodeBuffer::GetUnprecedentedString(bool optional)
 // Get an int32 after a G Code letter
 int32_t GCodeBuffer::GetIValue()
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode int before a search.\n");
+		const int32_t result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
 		readPointer = -1;
-		return 0;
+		return result;
 	}
-	const int32_t result = strtol(&gcodeBuffer[readPointer + 1], 0, 0);
+
+	reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode int before a search.\n");
 	readPointer = -1;
-	return result;
+	return 0;
 }
 
 // Get an uint32 after a G Code letter
 uint32_t GCodeBuffer::GetUIValue()
 {
-	if (readPointer < 0)
+	if (readPointer >= 0)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode int before a search.\n");
+		const uint32_t result = strtoul(&gcodeBuffer[readPointer + 1], 0, 0);
 		readPointer = -1;
-		return 0;
+		return result;
 	}
-	const uint32_t result = strtoul(&gcodeBuffer[readPointer + 1], 0, 0);
+
+	reprap.GetPlatform().Message(ErrorMessage, "GCodes: Attempt to read a GCode unsigned int before a search.\n");
 	readPointer = -1;
-	return result;
+	return 0;
 }
 
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.

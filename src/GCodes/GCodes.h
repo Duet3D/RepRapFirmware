@@ -24,12 +24,14 @@ Licence: GPL
 
 #include "RepRapFirmware.h"
 #include "RepRap.h"			// for type ResponseSource
+#include "GCodeResult.h"
 #include "Libraries/sha1/sha1.h"
 #include "Platform.h"		// for type EndStopHit
 #include "GCodeInput.h"
 #include "Tools/Filament.h"
 #include "FilamentSensors/FilamentSensor.h"
 #include "RestorePoint.h"
+#include "Movement/BedProbing/Grid.h"
 
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
@@ -66,6 +68,14 @@ const int TFreeBit = 1 << 0;
 const int TPreBit = 1 << 1;
 const int TPostBit = 1 << 2;
 const int DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
+
+// Machine type enumeration. The numeric values must be in the same order as the corresponding M451..M453 commands.
+enum class MachineType : uint8_t
+{
+	fff = 0,
+	laser = 1,
+	cnc = 2
+};
 
 //****************************************************************************************************
 
@@ -196,19 +206,19 @@ private:
 	bool HandleMcode(GCodeBuffer& gb, StringRef& reply);				// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, StringRef& reply);				// Do a T code
 
-	bool DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated);	// Execute a straight move returning true if an error was written to 'reply'
+	bool DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning true if an error was written to 'reply'
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 
-	bool DoDwell(GCodeBuffer& gb);										// Wait for a bit
-	bool DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis);			// Really wait for a bit
-	bool DoHome(GCodeBuffer& gb, StringRef& reply, bool& error);		// Home some axes
-	bool ExecuteG30(GCodeBuffer& gb, StringRef& reply);					// Probes at a given position - see the comment at the head of the function itself
+	GCodeResult DoDwell(GCodeBuffer& gb);								// Wait for a bit
+	GCodeResult DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis);		// Really wait for a bit
+	GCodeResult DoHome(GCodeBuffer& gb, StringRef& reply);				// Home some axes
+	GCodeResult ExecuteG30(GCodeBuffer& gb, StringRef& reply);			// Probes at a given position - see the comment at the head of the function itself
 	void SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation
-	bool SetPrintZProbe(GCodeBuffer& gb, StringRef& reply);				// Either return the probe value, or set its threshold
-	bool SetOrReportOffsets(GCodeBuffer& gb, StringRef& reply, bool& error);	// Deal with a G10
+	GCodeResult SetPrintZProbe(GCodeBuffer& gb, StringRef& reply);		// Either return the probe value, or set its threshold
+	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, StringRef& reply);	// Deal with a G10
 
-	bool SetPositions(GCodeBuffer& gb);									// Deal with a G92
+	GCodeResult SetPositions(GCodeBuffer& gb);							// Deal with a G92
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType); // Set up the extrusion and feed rate of a move for the Move class
 
 	bool Push(GCodeBuffer& gb);											// Push feedrate etc on the stack
@@ -221,9 +231,9 @@ private:
 																		// Start saving GCodes in a file
 	void FinishWrite(GCodeBuffer& gb);									// Finish writing to the file and respond
 	bool SendConfigToLine();											// Deal with M503
-	bool OffsetAxes(GCodeBuffer& gb);									// Set offsets - deprecated, use G10
+	GCodeResult OffsetAxes(GCodeBuffer& gb);							// Set offsets - deprecated, use G10
 	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
-	bool SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);		// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
+	GCodeResult SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);	// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
 	bool ManageTool(GCodeBuffer& gb, StringRef& reply);					// Create a new tool definition, returning true if an error was reported
 	void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature, for M104
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
@@ -232,7 +242,7 @@ private:
 	void CheckReportDue(GCodeBuffer& gb, StringRef& reply) const;		// Check whether we need to report temperatures or status
 
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const;	// Save position to a restore point
-	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb);		// Restore user position form a restore point
+	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb);		// Restore user position from a restore point
 
 	void SetAllAxesNotHomed();											// Flag all axes as not homed
 	void SetMachinePosition(const float positionNow[DRIVES], bool doBedCompensation = true); // Set the current position to be this
@@ -240,9 +250,9 @@ private:
 	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = 0);	// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]);	// Convert head reference point coordinates to user coordinates
 	const char *TranslateEndStopResult(EndStopHit es);					// Translate end stop result to text
-	bool RetractFilament(GCodeBuffer& gb, bool retract);				// Retract or un-retract filaments
-	bool LoadFilament(GCodeBuffer& gb, StringRef& reply, bool &error);	// Load the specified filament into a tool
-	bool UnloadFilament(GCodeBuffer& gb, StringRef& reply, bool &error); // Unload the current filament from a tool
+	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);			// Retract or un-retract filaments
+	GCodeResult LoadFilament(GCodeBuffer& gb, StringRef& reply);		// Load the specified filament into a tool
+	GCodeResult UnloadFilament(GCodeBuffer& gb, StringRef& reply);		 // Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive
 	void ListTriggers(StringRef reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
 	void CheckTriggers();												// Check for and execute triggers
@@ -255,9 +265,9 @@ private:
 	void SaveFanSpeeds();												// Save the speeds of all fans
 
 	bool DefineGrid(GCodeBuffer& gb, StringRef &reply);					// Define the probing grid, returning true if error
-	bool ProbeGrid(GCodeBuffer& gb, StringRef& reply);					// Start probing the grid, returning true if we didn't because of an error
 	bool LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Load the height map from file
 	bool SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Save the height map to file
+	GCodeResult ProbeGrid(GCodeBuffer& gb, StringRef& reply);			// Start probing the grid, returning true if we didn't because of an error
 
 	bool WriteConfigOverrideFile(StringRef& reply, const char *fileName) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels
@@ -273,6 +283,8 @@ private:
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
 
 	void SaveResumeInfo();
+
+	const char* GetMachineModeString() const;							// Get the name of the current machine mode
 
 	Platform& platform;													// The RepRap machine
 
@@ -300,6 +312,7 @@ private:
 
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 
+	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?
 	bool isPaused;								// true if the print has been paused manually or automatically
 	bool pausePending;							// true if we have been asked to pause but we are running a macro
@@ -362,10 +375,11 @@ private:
 	float currentBabyStepZOffset;				// The accumulated Z offset due to baby stepping requests
 
 	// Z probe
+	GridDefinition defaultGrid;					// The grid defined by the M557 command in config.g
 	int32_t g30ProbePointIndex;					// the index of the point we are probing (G30 P parameter), or -1 if none
 	int g30SValue;								// S parameter in the G30 command, or -2 if there wasn't one
-	float lastProbedZ;							// the last height at which the Z probe stopped
-	float zStoppedHeight;						// the height to report after running G30 S-1
+	float g30zStoppedHeight;					// the height to report after running G30 S-1
+	float g30zHeightError;						// the height error last time we probed
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridXindex, gridYindex;				// Which grid probe point is next
@@ -400,11 +414,15 @@ private:
 	FileStore *fileBeingHashed;
 	SHA1Context hash;
 	bool StartHash(const char* filename);
-	bool AdvanceHash(StringRef &reply);
+	GCodeResult AdvanceHash(StringRef &reply);
 
 	// Filament monitoring
 	FilamentSensorStatus lastFilamentError;
 	size_t lastFilamentErrorExtruder;
+
+	// CNC and laser
+	float spindleMaxRpm;
+	float laserMaxPower;
 
 	// Misc
 	uint32_t longWait;							// Timer for things that happen occasionally (seconds)

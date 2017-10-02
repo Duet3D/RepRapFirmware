@@ -80,14 +80,14 @@ static volatile uint32_t fanInterval = 0;			// written by ISR, read outside the 
 
 const float minStepPulseTiming = 0.2;				// we assume that we always generate step high and low times at least this wide without special action
 
-const int Heater0LogicalPin = 0;
-const int Fan0LogicalPin = 20;
-const int EndstopXLogicalPin = 40;
-const int Special0LogicalPin = 60;
+const LogicalPin Heater0LogicalPin = 0;
+const LogicalPin Fan0LogicalPin = 20;
+const LogicalPin EndstopXLogicalPin = 40;
+const LogicalPin Special0LogicalPin = 60;
 
 #ifdef DUET_NG
-const int DueX5Gpio0LogicalPin = 100;
-const int AdditionalExpansionLogicalPin = 120;
+const LogicalPin DueX5Gpio0LogicalPin = 100;
+const LogicalPin AdditionalExpansionLogicalPin = 120;
 #endif
 
 //#define MOVE_DEBUG
@@ -247,7 +247,7 @@ float ZProbeParameters::GetStopHeight(float temperature) const
 
 bool ZProbeParameters::WriteParameters(FileStore *f, unsigned int probeType) const
 {
-	scratchString.printf("G31 T%u P%d X%.1f Y%.1f Z%.2f\n", probeType, adcValue, (double)xOffset, (double)yOffset, (double)height);
+	scratchString.printf("G31 T%u P%" PRIu32 " X%.1f Y%.1f Z%.2f\n", probeType, adcValue, (double)xOffset, (double)yOffset, (double)height);
 	return f->Write(scratchString.Pointer());
 }
 
@@ -539,17 +539,8 @@ void Platform::Init()
 	autoSaveState = AutoSaveState::starting;
 #endif
 
-	// Allow extrusion ancillary PWM to use FAN0 even if FAN0 has not been disabled, for backwards compatibility
 	extrusionAncilliaryPwmValue = 0.0;
-	extrusionAncilliaryPwmFrequency = DefaultPinWritePwmFreq;
-	extrusionAncilliaryPwmLogicalPin = Fan0LogicalPin;
-	extrusionAncilliaryPwmFirmwarePin = COOLING_FAN_PINS[0];
-	extrusionAncilliaryPwmInvert =
-#ifdef DUET_06_085
-			(board == BoardType::Duet_06 || board == BoardType::Duet_07);
-#else
-			false;
-#endif
+
 	ARRAY_INIT(tempSensePins, TEMP_SENSE_PINS);
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
 	ARRAY_INIT(spiTempSenseCsPins, SpiTempSensorCsPins);
@@ -890,7 +881,7 @@ bool Platform::ProgramZProbe(GCodeBuffer& gb, StringRef& reply)
 // Set the state of the Z probe modulation pin
 void Platform::SetZProbeModState(bool b) const
 {
-	WriteDigital(zProbeModulationPin, b);
+	IoPort::WriteDigital(zProbeModulationPin, b);
 }
 
 // Return true if we are using a bed probe to home Z
@@ -982,13 +973,13 @@ void Platform::UpdateFirmware()
 
 			if (rc != FLASH_RC_OK)
 			{
-				MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%u, address=0x%08x\n", rc, flashAddr);
+				MessageF(FirmwareUpdateErrorMessage, "flash write failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", rc, flashAddr);
 				return;
 			}
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
-				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08x\n", flashAddr);
+				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
 				return;
 			}
 		}
@@ -1039,13 +1030,13 @@ void Platform::UpdateFirmware()
 
 			if (rc != FLASH_RC_OK)
 			{
-				MessageF(FirmwareUpdateErrorMessage, "flash %s failed, code=%u, address=0x%08x\n", op, rc, flashAddr);
+				MessageF(FirmwareUpdateErrorMessage, "flash %s failed, code=%" PRIu32 ", address=0x%08" PRIx32 "\n", op, rc, flashAddr);
 				return;
 			}
 			// Verify written data
 			if (memcmp(reinterpret_cast<void *>(flashAddr), data, bytesRead) != 0)
 			{
-				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08x\n", flashAddr);
+				MessageF(FirmwareUpdateErrorMessage, "verify during flash write failed, address=0x%08" PRIx32 "\n", flashAddr);
 				return;
 			}
 		}
@@ -1110,7 +1101,7 @@ void Platform::UpdateFirmware()
 	}
 
 #ifdef DUET_NG
-	WriteDigital(Z_PROBE_MOD_PIN, false);			// turn the DIAG LED off
+	IoPort::WriteDigital(Z_PROBE_MOD_PIN, false);		// turn the DIAG LED off
 #endif
 
 	wdt_restart(WDT);								// kick the watchdog one last time
@@ -1552,7 +1543,7 @@ void Platform::ReportDrivers(uint16_t whichDrivers, const char* text, bool& repo
 			}
 			whichDrivers >>= 1;
 		}
-		MessageF(GenericMessage, "%s\n", scratchString);
+		MessageF(GenericMessage, "%s\n", scratchString.Pointer());
 		reported = true;
 	}
 }
@@ -1905,8 +1896,8 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Recycled dynamic ram: %d\n", mi.fordblks);
 	uint32_t currentStack, maxStack, neverUsed;
 	GetStackUsage(&currentStack, &maxStack, &neverUsed);
-	MessageF(mtype, "Stack ram used: %u current, %u maximum\n", currentStack, maxStack);
-	MessageF(mtype, "Never used ram: %u\n", neverUsed);
+	MessageF(mtype, "Stack ram used: %" PRIu32 " current, %" PRIu32 " maximum\n", currentStack, maxStack);
+	MessageF(mtype, "Never used ram: %" PRIu32 "\n", neverUsed);
 
 	// Show the up time and reason for the last reset
 	const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
@@ -1957,10 +1948,10 @@ void Platform::Diagnostics(MessageType mtype)
 													: (reason == (uint32_t)SoftwareResetReason::stuckInSpin) ? "Stuck in spin loop"
 														: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
 															: "Unknown";
-			MessageF(mtype, "%s, spinning module %s, available RAM %u bytes (slot %d)\n",
+			MessageF(mtype, "%s, spinning module %s, available RAM %" PRIu32 " bytes (slot %d)\n",
 					reasonText, moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
-			MessageF(mtype, "Software reset code 0x%04x, HFSR 0x%08x, CFSR 0x%08x, ICSR 0x%08x, BFAR 0x%08x, SP 0x%08x\n",
+			MessageF(mtype, "Software reset code 0x%04x, HFSR 0x%08" PRIx32 ", CFSR 0x%08" PRIx32 ", ICSR 0x%08" PRIx32 ", BFAR 0x%08" PRIx32 ", SP 0x%08" PRIx32 "\n",
 				srdBuf[slot].resetReason, srdBuf[slot].hfsr, srdBuf[slot].cfsr, srdBuf[slot].icsr, srdBuf[slot].bfar, srdBuf[slot].sp);
 			if (srdBuf[slot].sp != 0xFFFFFFFF)
 			{
@@ -1968,7 +1959,7 @@ void Platform::Diagnostics(MessageType mtype)
 				scratchString.Clear();
 				for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
 				{
-					scratchString.catf(" %08x", srdBuf[slot].stack[i]);
+					scratchString.catf(" %08" PRIx32 "", srdBuf[slot].stack[i]);
 				}
 				MessageF(mtype, "Stack:%s\n", scratchString.Pointer());
 			}
@@ -1980,7 +1971,7 @@ void Platform::Diagnostics(MessageType mtype)
 	}
 
 	// Show the current error codes
-	MessageF(mtype, "Error status: %u\n", errorCodeBits);
+	MessageF(mtype, "Error status: %" PRIu32 "\n", errorCodeBits);
 
 	// Show the number of free entries in the file table
 	unsigned int numFreeFiles = 0;
@@ -2013,7 +2004,7 @@ void Platform::Diagnostics(MessageType mtype)
 
 #ifdef DUET_NG
 	// Show the supply voltage
-	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %u, over voltage events: %u\n",
+	MessageF(mtype, "Supply voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 ", over voltage events: %" PRIu32 "\n",
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
 				numUnderVoltageEvents, numOverVoltageEvents);
 	lowestVin = highestVin = currentVin;
@@ -2199,8 +2190,8 @@ void Platform::SetHeater(size_t heater, float power)
 {
 	if (heatOnPins[heater] != NoPin)
 	{
-		uint16_t freq = (reprap.GetHeat().UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
-		WriteAnalog(heatOnPins[heater], (HEAT_ON) ? power : 1.0 - power, freq);
+		const uint16_t freq = (reprap.GetHeat().UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
+		IoPort::WriteAnalog(heatOnPins[heater], (HEAT_ON) ? power : 1.0 - power, freq);
 	}
 }
 
@@ -2240,7 +2231,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 		{
 			// Endstop not used for an axis, so no configuration data available.
 			// To allow us to see its status in DWC, pretend it is configured as a high-end active high endstop.
-			if (ReadPin(endStopPins[drive]))
+			if (IoPort::ReadPin(endStopPins[drive]))
 			{
 				return EndStopHit::highHit;
 			}
@@ -2253,7 +2244,7 @@ EndStopHit Platform::Stopped(size_t drive) const
 				return GetZProbeResult();			// using the Z probe as a low homing stop for this axis, so just get its result
 			}
 		}
-		else if (ReadPin(endStopPins[drive]) == endStopLogicLevel[drive])
+		else if (IoPort::ReadPin(endStopPins[drive]) == endStopLogicLevel[drive])
 		{
 			return (endStopType[drive] == EndStopType::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
 		}
@@ -2268,7 +2259,7 @@ uint32_t Platform::GetAllEndstopStates() const
 	for (unsigned int drive = 0; drive < DRIVES; ++drive)
 	{
 		const Pin pin = endStopPins[drive];
-		if (pin != NoPin && ReadPin(pin))
+		if (pin != NoPin && IoPort::ReadPin(pin))
 		{
 			rslt |= (1 << drive);
 		}
@@ -2815,7 +2806,7 @@ FileStore* Platform::GetFileStore(const char* directory, const char* fileName, O
 			}
 		}
 	}
-	Message(UsbMessage, "Max open file count exceeded.\n");
+	Message(ErrorMessage, "Max open file count exceeded.\n");
 	return nullptr;
 }
 
@@ -3173,12 +3164,12 @@ void Platform::StopLogging()
 
 bool Platform::AtxPower() const
 {
-	return ReadPin(ATX_POWER_PIN);
+	return IoPort::ReadPin(ATX_POWER_PIN);
 }
 
 void Platform::SetAtxPower(bool on)
 {
-	WriteDigital(ATX_POWER_PIN, on);
+	IoPort::WriteDigital(ATX_POWER_PIN, on);
 }
 
 
@@ -3347,11 +3338,11 @@ const char* Platform::GetBoardString() const
 }
 
 // User I/O and servo support
-bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin, bool& invert)
+bool Platform::GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert)
 {
 	firmwarePin = NoPin;										// assume failure
 	invert = false;												// this is the common case
-	if (logicalPin < 0 || logicalPin > HighestLogicalPin)
+	if (logicalPin > HighestLogicalPin)
 	{
 		// Pin number out of range, so nothing to do here
 	}
@@ -3433,7 +3424,7 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 		}
 		if (logicalPinModes[logicalPin] != (int8_t)desiredMode)
 		{
-			SetPinMode(firmwarePin, desiredMode);
+			IoPort::SetPinMode(firmwarePin, desiredMode);
 			logicalPinModes[logicalPin] = (int8_t)desiredMode;
 		}
 		return true;
@@ -3441,9 +3432,63 @@ bool Platform::GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin
 	return false;
 }
 
-bool Platform::SetExtrusionAncilliaryPwmPin(int logicalPin)
+bool Platform::SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin)
 {
-	return GetFirmwarePin(logicalPin, PinAccess::pwm, extrusionAncilliaryPwmFirmwarePin, extrusionAncilliaryPwmInvert);
+	return extrusionAncilliaryPwmPort.Set(logicalPin, PinAccess::pwm);
+}
+
+// CNC and laser support
+void Platform::SetSpindlePwm(float pwm)
+{
+	if (pwm >= 0)
+	{
+		spindleReversePort.WriteAnalog(0.0);
+		spindleForwardPort.WriteAnalog(pwm);
+	}
+	else
+	{
+		spindleForwardPort.WriteAnalog(0.0);
+		spindleReversePort.WriteAnalog(-pwm);
+	}
+}
+
+void Platform::SetLaserPwm(float pwm)
+{
+	laserPort.WriteAnalog(pwm);
+}
+
+bool Platform::SetSpindlePins(LogicalPin lpf, LogicalPin lpr)
+{
+	const bool ok1 = spindleForwardPort.Set(lpf, PinAccess::pwm);
+	if (lpr == NoLogicalPin)
+	{
+		spindleReversePort.Clear();
+		return ok1;
+	}
+	const bool ok2 = spindleReversePort.Set(lpr, PinAccess::pwm);
+	return ok1 && ok2;
+}
+
+void Platform::GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr) const
+{
+	lpf = spindleForwardPort.GetLogicalPin();
+	lpr = spindleReversePort.GetLogicalPin();
+}
+
+void Platform::SetSpindlePwmFrequency(float freq)
+{
+	spindleForwardPort.SetFrequency(freq);
+	spindleReversePort.SetFrequency(freq);
+}
+
+bool Platform::SetLaserPin(LogicalPin lp)
+{
+	return laserPort.Set(lp, PinAccess::pwm);
+}
+
+void Platform::SetLaserPwmFrequency(float freq)
+{
+	laserPort.SetFrequency(freq);
 }
 
 // Get the firmware pin number for an endstop, or NoPin if it is out of range
@@ -3546,59 +3591,8 @@ bool Platform::SetDateTime(time_t time)
 	const bool ok = (gmtime_r(&time, &brokenDateTime) != nullptr);
 	if (ok)
 	{
+		Message(LogMessage, "Time and date set\n");
 		realTime = time;
-		timeLastUpdatedMillis = millis();
-	}
-	return ok;
-}
-
-bool Platform::SetDate(time_t date)
-{
-	// Check the validity of the date passed in
-	struct tm brokenNewDate;
-	const bool ok = (gmtime_r(&date, &brokenNewDate) != nullptr);
-	if (ok)
-	{
-		struct tm brokenTimeNow;
-		if (realTime == 0 || gmtime_r(&realTime, &brokenTimeNow) == nullptr)
-		{
-			// We didn't have a valid date/time set, so set the date and time to the value passed in
-			realTime = date;
-			timeLastUpdatedMillis = millis();
-		}
-		else
-		{
-			// Merge the existing time into the date passed in
-			brokenNewDate.tm_hour = brokenTimeNow.tm_hour;
-			brokenNewDate.tm_min = brokenTimeNow.tm_min;
-			brokenNewDate.tm_sec = brokenTimeNow.tm_sec;
-			realTime = mktime(&brokenNewDate);
-		}
-	}
-	return ok;
-}
-
-bool Platform::SetTime(time_t time)
-{
-	// Check the validity of the date passed in
-	struct tm brokenNewTime;
-	const bool ok = (gmtime_r(&time, &brokenNewTime) != nullptr);
-	if (ok)
-	{
-		struct tm brokenTimeNow;
-		if (realTime == 0 || gmtime_r(&realTime, &brokenTimeNow) == nullptr)
-		{
-			// We didn't have a valid date/time set, so set the date and time to the value passed in
-			realTime = time;
-		}
-		else
-		{
-			// Merge the new time into the current date/time
-			brokenTimeNow.tm_hour = brokenNewTime.tm_hour;
-			brokenTimeNow.tm_min = brokenNewTime.tm_min;
-			brokenTimeNow.tm_sec = brokenNewTime.tm_sec;
-			realTime = mktime(&brokenTimeNow);
-		}
 		timeLastUpdatedMillis = millis();
 	}
 	return ok;

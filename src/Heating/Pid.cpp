@@ -334,7 +334,7 @@ void PID::Spin()
 				if (model.UsePid())
 				{
 					// Using PID mode. Determine the PID parameters to use.
-					const bool inLoadMode = (mode == HeaterMode::stable);	// use standard PID when maintaining temperature
+					const bool inLoadMode = (mode == HeaterMode::stable) || fabsf(error) < 3.0;		// use standard PID when maintaining temperature
 					const PidParameters& params = model.GetPidParameters(inLoadMode);
 
 					// If the P and D terms together demand that the heater is full on or full off, disregard the I term
@@ -520,7 +520,7 @@ void PID::GetAutoTuneStatus(StringRef& reply)	// Get the auto tune status or las
 	}
 	else
 	{
-		reply.printf("Heater %d tuning failed");
+		reply.printf("Heater %d tuning failed", heater);
 	}
 }
 
@@ -832,7 +832,7 @@ void PID::CalculateModel()
 	if (tuned)
 	{
 		platform.MessageF(LoggedGenericMessage,
-				"Auto tune heater %d completed in %u sec\n"
+				"Auto tune heater %d completed in %" PRIu32 " sec\n"
 				"Use M307 H%d to see the result, or M500 to save the result in config-override.g\n",
 				heater, (millis() - tuningBeginTime)/(uint32_t)SecondsToMillis, heater);
 	}

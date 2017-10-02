@@ -439,12 +439,6 @@ bool Move::PausePrint(RestorePoint& rp)
 
 	InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes(), prevDda->GetYAxes());	// we assume that xAxes hasn't changed between the moves
 
-	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
-	{
-		rp.moveCoords[drive] = 0.0;						// clear out extruder movement
-	}
-
 	dda = ddaRingAddPointer;
 	rp.feedRate = dda->GetRequestedSpeed();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
@@ -454,13 +448,9 @@ bool Move::PausePrint(RestorePoint& rp)
 	rp.ioBits = dda->GetIoBits();
 #endif
 
-	// Free the DDAs for the moves we are going to skip, and work out how much extrusion they would have performed
+	// Free the DDAs for the moves we are going to skip
 	do
 	{
-		for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
-		{
-			rp.moveCoords[drive] += dda->GetEndCoordinate(drive, true);		// update the amount of extrusion we are going to skip
-		}
 		(void)dda->Free();
 		dda = dda->GetNext();
 		scheduledMoves--;
@@ -482,14 +472,14 @@ void Move::Diagnostics(MessageType mtype)
 {
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
-	p.MessageF(mtype, "MaxReps: %u, StepErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %ums, Underruns: %u, %u\n",
+	p.MessageF(mtype, "MaxReps: %" PRIu32 ", StepErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
 						maxReps, stepErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
 	maxReps = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 	longestGcodeWaitInterval = 0;
 	DriveMovement::ResetMinFree();
 
-	reprap.GetPlatform().MessageF(mtype, "Scheduled moves: %u, completed moves: %u\n", scheduledMoves, completedMoves);
+	reprap.GetPlatform().MessageF(mtype, "Scheduled moves: %" PRIu32 ", completed moves: %" PRIu32 "\n", scheduledMoves, completedMoves);
 
 #if defined(__ALLIGATOR__)
 	// Motor Fault Diagnostic
@@ -602,7 +592,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 	{
 		if (b)
 		{
-			debugPrintf("Transformed %.2f %.2f %.2f to %d %d %d\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
+			debugPrintf("Transformed %.2f %.2f %.2f to %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", (double)machinePos[0], (double)machinePos[1], (double)machinePos[2], motorPos[0], motorPos[1], motorPos[2]);
 		}
 		else
 		{
@@ -702,7 +692,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBitmap yA
 						const float yCoord = xyzPoint[yAxis];
 						if (usingMesh)
 						{
-							zCorrection += grid.GetInterpolatedHeightError(xCoord, yCoord);
+							zCorrection += heightMap.GetInterpolatedHeightError(xCoord, yCoord);
 						}
 						else
 						{
@@ -744,7 +734,7 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBi
 					const float yCoord = xyzPoint[yAxis];
 					if (usingMesh)
 					{
-						zCorrection += grid.GetInterpolatedHeightError(xCoord, yCoord);
+						zCorrection += heightMap.GetInterpolatedHeightError(xCoord, yCoord);
 					}
 					else
 					{
@@ -778,8 +768,8 @@ void Move::InverseBedTransform(float xyzPoint[MaxAxes], AxesBitmap xAxes, AxesBi
 void Move::SetIdentityTransform()
 {
 	probePoints.SetIdentity();
-	grid.ClearGridHeights();
-	grid.UseHeightMap(false);
+	heightMap.ClearGridHeights();
+	heightMap.UseHeightMap(false);
 	usingMesh = false;
 }
 
@@ -796,7 +786,7 @@ void Move::SetTaperHeight(float h)
 // Enable mesh bed compensation
 bool Move::UseMesh(bool b)
 {
-	usingMesh = grid.UseHeightMap(b);
+	usingMesh = heightMap.UseHeightMap(b);
 	return usingMesh;
 }
 
@@ -918,11 +908,11 @@ bool Move::TryStartNextMove(uint32_t startTime)
 }
 
 // Return the untransformed machine coordinates
-void Move::GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const
+void Move::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const
 {
 	DDA * const lastQueuedMove = ddaRingAddPointer->GetPrevious();
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-	for (size_t i = 0; i < DRIVES; i++)
+	for (size_t i = 0; i < MaxAxes; i++)
 	{
 		if (i < numAxes)
 		{
@@ -950,7 +940,7 @@ bool Move::IsExtruding() const
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const
+void Move::GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const
 {
 	GetCurrentMachinePosition(m, IsRawMotorMove(moveType));
 	if (moveType == 0)

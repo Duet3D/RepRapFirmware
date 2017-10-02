@@ -216,23 +216,23 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 {
 	if (state != DMState::idle)
 	{
-		debugPrintf("DM%c%s dir=%c steps=%u next=%u rev=%u interval=%u sstcda=%u "
-					"acmadtcdts=%d tstcdapdsc=%u 2dtstc2diva=%" PRIu64 "\n",
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " sstcda=%" PRIu32 " "
+					"acmadtcdts=%" PRIi32 " tstcdapdsc=%" PRIu32 " 2dtstc2diva=%" PRIu64 "\n",
 					c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, startSpeedTimesCdivA,
 					accelClocksMinusAccelDistanceTimesCdivTopSpeed, topSpeedTimesCdivAPlusDecelStartClocks, twoDistanceToStopTimesCsquaredDivA);
 
 		if (isDeltaMovement)
 		{
-			debugPrintf("hmz0sK=%d minusAaPlusBbTimesKs=%d dSquaredMinusAsquaredMinusBsquared=%" PRId64 "\n"
-						"2c2mmsdak=%u asdsk=%u dsdsk=%u mmstcdts=%u\n",
+			debugPrintf("hmz0sK=%" PRIi32 " minusAaPlusBbTimesKs=%" PRIi32 " dSquaredMinusAsquaredMinusBsquared=%" PRId64 "\n"
+						"2c2mmsdak=%" PRIu32 " asdsk=%" PRIu32 " dsdsk=%" PRIu32 " mmstcdts=%" PRIu32 "\n",
 						mp.delta.hmz0sK, mp.delta.minusAaPlusBbTimesKs, mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared,
 						mp.delta.twoCsquaredTimesMmPerStepDivAK, mp.delta.accelStopDsK, mp.delta.decelStartDsK, mp.delta.mmPerStepTimesCdivtopSpeedK
 						);
 		}
 		else
 		{
-			debugPrintf("accelStopStep=%u decelStartStep=%u 2CsqtMmPerStepDivA=%" PRIu64 "\n"
-						"mmPerStepTimesCdivtopSpeed=%u fmsdmtstdca2=%" PRId64 "\n",
+			debugPrintf("accelStopStep=%" PRIu32 " decelStartStep=%" PRIu32 " 2CsqtMmPerStepDivA=%" PRIu64 "\n"
+						"mmPerStepTimesCdivtopSpeed=%" PRIu32 " fmsdmtstdca2=%" PRId64 "\n",
 						mp.cart.accelStopStep, mp.cart.decelStartStep, mp.cart.twoCsquaredTimesMmPerStepDivA,
 						mp.cart.mmPerStepTimesCdivtopSpeed, mp.cart.fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA
 						);

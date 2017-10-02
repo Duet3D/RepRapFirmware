@@ -228,7 +228,7 @@ void GCodeQueue::Diagnostics(MessageType mtype)
 		do
 		{
 			queueLength++;
-			reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %d\n", item->code, item->executeAtMove);
+			reprap.GetPlatform().MessageF(mtype, "Queued '%s' for move %" PRIu32 "\n", item->code, item->executeAtMove);
 		} while ((item = item->Next()) != nullptr);
 		reprap.GetPlatform().MessageF(mtype, "%d of %d codes have been queued.\n", queueLength, maxQueuedCodes);
 	}

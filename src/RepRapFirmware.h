@@ -95,7 +95,7 @@ typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan nu
 extern RepRap reprap;
 
 // Functions and globals not part of any class
-extern "C" void debugPrintf(const char* fmt, ...);
+extern "C" void debugPrintf(const char* fmt, ...) __attribute__ ((format (printf, 1, 2)));
 
 bool StringEndsWith(const char* string, const char* ending);
 bool StringStartsWith(const char* string, const char* starting);

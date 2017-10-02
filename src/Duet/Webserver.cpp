@@ -445,7 +445,7 @@ bool ProtocolInterpreter::FinishUpload(uint32_t fileLength)
 	if (uploadState == uploadOK && fileLength != 0 && fileBeingUploaded.Length() != fileLength)
 	{
 		uploadState = uploadError;
-		platform->MessageF(GenericMessage, "Error: Uploaded file size is different (%u vs. expected %u bytes)!\n", fileBeingUploaded.Length(), fileLength);
+		platform->MessageF(GenericMessage, "Error: Uploaded file size is different (%" PRIu32 " vs. expected %" PRIu32 " bytes)!\n", fileBeingUploaded.Length(), fileLength);
 	}
 
 	// Close the file
@@ -917,7 +917,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 				}
 
 				// Client has been logged in
-				response->printf("{\"err\":0,\"sessionTimeout\":%u,\"boardType\":\"%s\"}", httpSessionTimeout, platform->GetBoardString());
+				response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\"}", httpSessionTimeout, platform->GetBoardString());
 			}
 			else
 			{
@@ -1464,7 +1464,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 {
 	if (reprap.Debug(moduleWebserver))
 	{
-		platform->MessageF(UsbMessage, "HTTP req, command words {", numCommandWords);
+		platform->Message(UsbMessage, "HTTP req, command words {");
 		for (size_t i = 0; i < numCommandWords; ++i)
 		{
 			platform->MessageF(UsbMessage, " %s", commandWords[i]);

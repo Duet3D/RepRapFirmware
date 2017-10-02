@@ -43,7 +43,7 @@ void SimpleFilamentSensor::Interrupt()
 // Call the following regularly to keep the status up to date
 void SimpleFilamentSensor::Poll()
 {
-	const bool b = Platform::ReadPin(GetPin());
+	const bool b = IoPort::ReadPin(GetPin());
 	filamentPresent = (highWhenNoFilament) ? !b : b;
 }
 

@@ -188,7 +188,7 @@ void Fan::SetHardwarePwm(float pwmVal)
 		if (pwmVal != lastPwm)
 		{
 			lastPwm = pwmVal;
-			Platform::WriteAnalog(pin, pwmVal, freq);
+			IoPort::WriteAnalog(pin, pwmVal, freq);
 		}
 	}
 }

@@ -191,7 +191,7 @@ void Socket::Poll(bool full)
 				state = (resp.Value().state == ConnState::connected) ? SocketState::connected : SocketState::clientDisconnecting;
 				if (reprap.Debug(moduleNetwork))
 				{
-					debugPrintf("Found responder\n", socketNum);
+					debugPrintf("Found responder\n");
 				}
 			}
 			else if (millis() - whenConnected >= FindResponderTimeout)

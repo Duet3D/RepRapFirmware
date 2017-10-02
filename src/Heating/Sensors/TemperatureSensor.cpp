@@ -11,6 +11,7 @@
 #endif
 
 #ifdef DUET_NG
+#include "DhtSensor.h"
 #include "TmcDriverTemperatureSensor.h"
 #endif
 
@@ -84,34 +85,40 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 	TemperatureSensor *ts = nullptr;
 	if (channel < Heaters)
 	{
-		ts =  new Thermistor(channel);
+		ts = new Thermistor(channel);
 	}
 	else if (FirstMax31855ThermocoupleChannel <= channel && channel < FirstMax31855ThermocoupleChannel + MaxSpiTempSensors)
 	{
-		ts =  new ThermocoupleSensor31855(channel);
+		ts = new ThermocoupleSensor31855(channel);
 	}
 	else if (FirstMax31856ThermocoupleChannel <= channel && channel < FirstMax31856ThermocoupleChannel + MaxSpiTempSensors)
 	{
-		ts =  new ThermocoupleSensor31856(channel);
+		ts = new ThermocoupleSensor31856(channel);
 	}
 	else if (FirstRtdChannel <= channel && channel < FirstRtdChannel + MaxSpiTempSensors)
 	{
-		ts =  new RtdSensor31865(channel);
+		ts = new RtdSensor31865(channel);
 	}
 	else if (FirstLinearAdcChannel <= channel && channel < FirstLinearAdcChannel + MaxSpiTempSensors)
 	{
-		ts =  new CurrentLoopTemperatureSensor(channel);
+		ts = new CurrentLoopTemperatureSensor(channel);
 	}
+#ifdef DUET_NG
+	else if (channel == DhtTemperatureChannel || channel == DhtHumidityChannel)
+	{
+		ts = new DhtSensor(channel);
+	}
+#endif
 #if HAS_CPU_TEMP_SENSOR
 	else if (channel == CpuTemperatureSenseChannel)
 	{
-		ts =  new CpuTemperatureSensor(channel);
+		ts = new CpuTemperatureSensor(channel);
 	}
 #endif
 #ifdef DUET_NG
 	else if (channel >= FirstTmcDriversSenseChannel && channel < FirstTmcDriversSenseChannel + 2)
 	{
-		ts =  new TmcDriverTemperatureSensor(channel);
+		ts = new TmcDriverTemperatureSensor(channel);
 	}
 #endif
 

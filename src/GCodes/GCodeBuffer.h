@@ -20,14 +20,14 @@ public:
 	void Reset();										// Reset it to its state after start-up
 	void Init(); 										// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);				// Write some debug info
-	bool Put(char c);									// Add a character to the end
+	bool Put(char c) __attribute__((hot));				// Add a character to the end
 	bool Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
 	bool IsEmpty() const;								// Does this buffer contain any code?
-	bool Seen(char c);									// Is a character present?
+	bool Seen(char c) __attribute__((hot));				// Is a character present?
 
-	char GetCommandLetter();							// Find the first G, M or T command
-	float GetFValue();									// Get a float after a key letter
-	int32_t GetIValue();								// Get an integer after a key letter
+	char GetCommandLetter() __attribute__((hot));		// Find the first G, M or T command
+	float GetFValue() __attribute__((hot));				// Get a float after a key letter
+	int32_t GetIValue() __attribute__((hot));			// Get an integer after a key letter
 	uint32_t GetUIValue();								// Get an unsigned integer value
 	bool GetIPAddress(uint8_t ip[4]);					// Get an IP address quad after a key letter
 	bool GetIPAddress(uint32_t& ip);					// Get an IP address quad after a key letter
@@ -35,7 +35,7 @@ public:
 	const char* GetString();							// Get an unquoted string after a key letter
 	bool GetQuotedString(const StringRef& str);			// Get and copy a quoted string
 	bool GetPossiblyQuotedString(const StringRef& str);	// Get and copy a string which may or may not be quoted
-	const void GetFloatArray(float a[], size_t& length, bool doPad); // Get a :-separated list of floats after a key letter
+	const void GetFloatArray(float a[], size_t& length, bool doPad) __attribute__((hot)); // Get a :-separated list of floats after a key letter
 	const void GetLongArray(long l[], size_t& length);	// Get a :-separated list of longs after a key letter
 
 	void TryGetFValue(char c, float& val, bool& seen);

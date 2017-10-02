@@ -9,6 +9,7 @@
 #define SRC_PORTCONTROL_H_
 
 #include "RepRapFirmware.h"
+#include "IoPort.h"			// for PinConfiguration
 
 class GCodeBuffer;
 
@@ -29,17 +30,8 @@ private:
 	void UpdatePorts(IoBits_t newPortState);
 
 	static const size_t MaxPorts = 16;		// the port bitmap is currently a 16-bit word
-	static const uint16_t NoPort = 0xFFFF;
 
-	struct PortMapEntry
-	{
-		uint16_t logicalPort;
-		Pin pin;
-		bool invert;
-	};
-	static_assert((sizeof(PortMapEntry) & (sizeof(PortMapEntry) - 1)) == 0, "PortMapEntry is not an efficient size for array inndexing");
-
-	PortMapEntry portMap[MaxPorts];
+	IoPort portMap[MaxPorts];
 	size_t numConfiguredPorts;
 	unsigned int advanceMillis;
 	uint32_t advanceClocks;

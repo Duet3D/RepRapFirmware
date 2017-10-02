@@ -16,7 +16,7 @@
 
 struct RestorePoint
 {
-	float moveCoords[DRIVES];
+	float moveCoords[MaxAxes];
 	float feedRate;
 	float virtualExtruderPosition;
 	FilePosition filePos;

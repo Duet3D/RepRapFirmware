@@ -53,8 +53,21 @@ bool Duet3DFilamentSensor::Configure(GCodeBuffer& gb, StringRef& reply, bool& se
 	}
 	else
 	{
-		reply.printf("Duet3D filament sensor on endstop %u, %s microswitch, %.1fmm per rev, check every %.1fmm, tolerance %.1f%%, current angle %.1f",
-						GetEndstopNumber(), (withSwitch) ? "with" : "no", (double)mmPerRev, (double)minimumExtrusionCheckLength, (double)(tolerance * 100.0), (double)GetCurrentAngle());
+		reply.printf("Duet3D filament sensor on endstop %u, %s microswitch, %.1fmm per rev, check every %.1fmm, tolerance %.1f%%, ",
+						GetEndstopNumber(), (withSwitch) ? "with" : "no", (double)mmPerRev, (double)minimumExtrusionCheckLength, (double)(tolerance * 100.0));
+
+		if (!dataReceived)
+		{
+			reply.cat("no data received");
+		}
+		else if ((sensorValue & ErrorBit) != 0)
+		{
+			reply.cat("error");
+		}
+		else
+		{
+			reply.catf("current angle %.1f", (double)GetCurrentAngle());
+		}
 	}
 
 	return false;
@@ -67,7 +80,7 @@ void Duet3DFilamentSensor::Interrupt()
 	const size_t writePointer = edgeCaptureWritePointer;			// capture volatile variable
 	if ((writePointer + 1) % EdgeCaptureBufferSize != edgeCaptureReadPointer)
 	{
-		if (Platform::ReadPin(GetPin()))
+		if (IoPort::ReadPin(GetPin()))
 		{
 			if ((writePointer & 1) == 0)							// low-to-high transitions should occur on odd indices
 			{
@@ -91,12 +104,12 @@ void Duet3DFilamentSensor::Interrupt()
 // Call the following regularly to keep the status up to date
 void Duet3DFilamentSensor::Poll()
 {
-	static const uint32_t BitsPerSecond = 1000;							// the nominal bit rate that the data is transmitted at
-	static const uint32_t NominalBitLength = DDA::stepClockRate/BitsPerSecond;
-	static const uint32_t MinBitLength = (NominalBitLength * 10)/13;	// allow 30% clock speed tolerance
-	static const uint32_t MaxBitLength = (NominalBitLength * 13)/10;	// allow 30% clock speed tolerance
-	static const uint32_t ErrorRecoveryDelayBits = 8;					// before a start bit we want the line to be low for this long
-	static const uint32_t ErrorRecoveryTime = NominalBitLength * ErrorRecoveryDelayBits;
+	static constexpr uint32_t BitsPerSecond = 1000;							// the nominal bit rate that the data is transmitted at
+	static constexpr uint32_t NominalBitLength = DDA::stepClockRate/BitsPerSecond;
+	static constexpr uint32_t MinBitLength = (NominalBitLength * 10)/13;	// allow 30% clock speed tolerance
+	static constexpr uint32_t MaxBitLength = (NominalBitLength * 13)/10;	// allow 30% clock speed tolerance
+	static constexpr uint32_t ErrorRecoveryDelayBits = 8;					// before a start bit we want the line to be low for this long
+	static constexpr uint32_t ErrorRecoveryTime = NominalBitLength * ErrorRecoveryDelayBits;
 
 	bool again;
 	do
@@ -107,57 +120,58 @@ void Duet3DFilamentSensor::Poll()
 		switch (state)
 		{
 		case RxdState::waitingForStartBit:
-			if ((edgeCaptureReadPointer & 1u) == 0)						// if we are out of sync (this is normal when the last stuffing bit was a 1)
+			if (writePointer != edgeCaptureReadPointer)
 			{
-				if (edgeCaptureReadPointer != edgeCaptureWritePointer)
+				if ((edgeCaptureReadPointer & 1u) == 0)						// if we are out of sync (this is normal when the last stuffing bit was a 1)
 				{
-					edgeCaptureReadPointer = (edgeCaptureReadPointer + 1) % EdgeCaptureBufferSize;
-					again = true;
-				}
-			}
-			else if (writePointer != edgeCaptureReadPointer)
-			{
-				if (edgeCaptures[edgeCaptureReadPointer] - edgeCaptures[(edgeCaptureReadPointer - 1) % EdgeCaptureBufferSize] < ErrorRecoveryTime)
-				{
-					// The input line has not been low for long enough before the start bit
-					edgeCaptureReadPointer = (edgeCaptureReadPointer + 1) % EdgeCaptureBufferSize;
-					state = RxdState::errorRecovery1;
+					edgeCaptureReadPointer = (edgeCaptureReadPointer + 1u) % EdgeCaptureBufferSize;
 					again = true;
 				}
 				else
 				{
-					tentativeExtrusionCommanded = accumulatedExtrusionCommanded;	// we have received what could be the beginning of a start bit
-					state = RxdState::waitingForEndOfStartBit;
-					again = true;
+					if (edgeCaptures[edgeCaptureReadPointer] - edgeCaptures[(edgeCaptureReadPointer - 1) % EdgeCaptureBufferSize] < ErrorRecoveryTime)
+					{
+						// The input line has not been low for long enough before the start bit
+						edgeCaptureReadPointer = (edgeCaptureReadPointer + 1u) % EdgeCaptureBufferSize;		// ignore this start bit
+						state = RxdState::errorRecovery1;
+						again = true;
+					}
+					else
+					{
+						tentativeExtrusionCommanded = accumulatedExtrusionCommanded;	// we have received what could be the beginning of a start bit
+						state = RxdState::waitingForEndOfStartBit;
+						again = true;
+					}
 				}
 			}
 			break;
 
 		case RxdState::waitingForEndOfStartBit:
-			// This state must time out because while we are in it, comparison of filament extruded is suspended
+			// This state must be made to time out because while we are in it, comparison of filament extruded is suspended
 			if ((writePointer - edgeCaptureReadPointer) % EdgeCaptureBufferSize >= 2)
 			{
 				// Check for a valid start bit
 				lastBitChangeIndex = (edgeCaptureReadPointer + 1u) % EdgeCaptureBufferSize;
 				startBitLength = edgeCaptures[lastBitChangeIndex] - edgeCaptures[edgeCaptureReadPointer];
+				edgeCaptureReadPointer = lastBitChangeIndex;
 				if (startBitLength >= MinBitLength && startBitLength <= MaxBitLength)
 				{
 					valueBeingAssembled = 0;
 					nibblesAssembled = 0;
-					edgeCaptureReadPointer = lastBitChangeIndex;
 					state = RxdState::waitingForNibble;
 					again = true;
 					//debugPrintf("sb %u\n", startBitLength);
 				}
 				else
 				{
-					edgeCaptureReadPointer = (edgeCaptureReadPointer + 2) % EdgeCaptureBufferSize;
+					// Start bit too long or too short
 					state = RxdState::errorRecovery2;
 					again = true;
 				}
 			}
 			else if (now - edgeCaptures[edgeCaptureReadPointer] > MaxBitLength)
 			{
+				edgeCaptureReadPointer = (edgeCaptureReadPointer + 1u) % EdgeCaptureBufferSize;
 				state = RxdState::errorRecovery2;
 				again = true;
 			}
@@ -172,13 +186,13 @@ void Duet3DFilamentSensor::Poll()
 					// 6.5 bit times have passed since the start of the bit that preceded the current nibble, so we should have a complete nibble and the following stuffing bit
 					uint32_t samplePoint = (startBitLength * 3)/2;		// sampling time after the end of the start bit for bit 7 (MSB)
 					uint8_t currentNibble = 0;
-					size_t nextBitChangeIndex = (lastBitChangeIndex + 1) % EdgeCaptureBufferSize;
+					size_t nextBitChangeIndex = (lastBitChangeIndex + 1u) % EdgeCaptureBufferSize;
 					for (uint8_t numBits = 0; numBits < 5; ++numBits)
 					{
 						if (nextBitChangeIndex != edgeCaptureWritePointer && edgeCaptures[nextBitChangeIndex] - nibbleStartTime < samplePoint)
 						{
 							lastBitChangeIndex = nextBitChangeIndex;
-							nextBitChangeIndex = (lastBitChangeIndex + 1) % EdgeCaptureBufferSize;
+							nextBitChangeIndex = (lastBitChangeIndex + 1u) % EdgeCaptureBufferSize;
 							if (nextBitChangeIndex != writePointer && edgeCaptures[nextBitChangeIndex] - nibbleStartTime < samplePoint)
 							{
 								edgeCaptureReadPointer = nextBitChangeIndex;

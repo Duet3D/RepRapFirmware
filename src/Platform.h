@@ -39,6 +39,7 @@ Licence: GPL
 // Platform-specific includes
 
 #include "RepRapFirmware.h"
+#include "IoPort.h"
 #include "DueFlashStorage.h"
 #include "Fan.h"
 #include "Heating/TemperatureError.h"
@@ -191,15 +192,6 @@ enum class DiagnosticTestType : int
 	TimeSquareRoot = 102			// do a timing test on the square root function
 };
 
-// Enumeration to describe what we want to do with a logical pin
-enum class PinAccess : int
-{
-	read,
-	write,
-	pwm,
-	servo
-};
-
 /***************************************************************************************************************/
 
 // Struct for holding Z probe parameters
@@ -338,15 +330,13 @@ public:
 	static void DisableStepInterrupt();						// Make sure we get no step interrupts
 	static bool ScheduleSoftTimerInterrupt(uint32_t tim);	// Schedule an interrupt at the specified clock count, or return true if it has passed already
 	static void DisableSoftTimerInterrupt();				// Make sure we get no software timer interrupts
-	void Tick();											// Process a systick interrupt
+	void Tick() __attribute__((hot));						// Process a systick interrupt
 
 	// Real-time clock
 
 	bool IsDateTimeSet() const;						// Has the RTC been set yet?
 	time_t GetDateTime() const;						// Retrieves the current RTC datetime and returns true if it's valid
 	bool SetDateTime(time_t time);					// Sets the current RTC date and time or returns false on error
-	bool SetDate(time_t date);						// Sets the current RTC date or returns false on error
-	bool SetTime(time_t time);						// Sets the current RTC time or returns false on error
 
   	// Communications and data storage
   
@@ -392,7 +382,7 @@ public:
 
 	void Message(MessageType type, const char *message);
 	void Message(MessageType type, OutputBuffer *buffer);
-	void MessageF(MessageType type, const char *fmt, ...);
+	void MessageF(MessageType type, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
 	void MessageF(MessageType type, const char *fmt, va_list vargs);
 	bool FlushMessages();							// Flush messages to USB and aux, returning true if there is more to send
 	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls);
@@ -496,17 +486,6 @@ public:
 	bool ProgramZProbe(GCodeBuffer& gb, StringRef& reply);
 	void SetZProbeModState(bool b) const;
 
-	// Ancilliary PWM
-
-	void SetExtrusionAncilliaryPwmValue(float v);
-	float GetExtrusionAncilliaryPwmValue() const;
-	void SetExtrusionAncilliaryPwmFrequency(float f);
-	float GetExtrusionAncilliaryPwmFrequency() const;
-	bool SetExtrusionAncilliaryPwmPin(int logicalPin);
-	int GetExtrusionAncilliaryPwmPin() const { return extrusionAncilliaryPwmLogicalPin; }
-	void ExtrudeOn();
-	void ExtrudeOff();
-
 	// Heat and temperature
 	float GetZProbeTemperature();							// Get our best estimate of the Z probe temperature
 
@@ -562,12 +541,6 @@ public:
 	void SetMcuTemperatureAdjust(float v) { mcuTemperatureAdjust = v; }
 	float GetMcuTemperatureAdjust() const { return mcuTemperatureAdjust; }
 
-	// Low level port access
-	static void SetPinMode(Pin p, PinMode mode);
-	static bool ReadPin(Pin p);
-	static void WriteDigital(Pin p, bool high);
-	static void WriteAnalog(Pin p, float pwm, uint16_t frequency);
-
 #ifdef DUET_NG
 	// Power in voltage
 	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
@@ -577,13 +550,37 @@ public:
 #endif
 
 	// User I/O and servo support
-	bool GetFirmwarePin(int logicalPin, PinAccess access, Pin& firmwarePin, bool& invert);
+	bool GetFirmwarePin(LogicalPin logicalPin, PinAccess access, Pin& firmwarePin, bool& invert);
 
 	// For filament sensor support
 	Pin GetEndstopPin(int endstop) const;			// Get the firmware pin number for an endstop
 
 	// Logging support
 	bool ConfigureLogging(GCodeBuffer& gb, StringRef& reply);
+
+	// Ancilliary PWM
+	void SetExtrusionAncilliaryPwmValue(float v);
+	float GetExtrusionAncilliaryPwmValue() const;
+	void SetExtrusionAncilliaryPwmFrequency(float f);
+	float GetExtrusionAncilliaryPwmFrequency() const;
+	bool SetExtrusionAncilliaryPwmPin(LogicalPin logicalPin);
+	int GetExtrusionAncilliaryPwmPin() const { return extrusionAncilliaryPwmPort.GetLogicalPin(); }
+	void ExtrudeOn();
+	void ExtrudeOff();
+
+	// CNC and laser support
+	void SetSpindlePwm(float pwm);
+	void SetLaserPwm(float pwm);
+
+	bool SetSpindlePins(LogicalPin lpf, LogicalPin lpr);
+	void GetSpindlePins(LogicalPin& lpf, LogicalPin& lpr) const;
+	void SetSpindlePwmFrequency(float freq);
+	float GetSpindlePwmFrequency() const { return spindleForwardPort.GetFrequency(); }
+
+	bool SetLaserPin(LogicalPin lp);
+	LogicalPin GetLaserPin() const { return laserPort.GetLogicalPin(); }
+	void SetLaserPwmFrequency(float freq);
+	float GetLaserPwmFrequency() const { return laserPort.GetFrequency(); }
 
 //-------------------------------------------------------------------------------------------------------
   
@@ -738,12 +735,6 @@ private:
 	volatile ThermistorAveragingFilter cpuTemperatureFilter;		// MCU temperature readings
 #endif
 
-	float extrusionAncilliaryPwmValue;
-	float extrusionAncilliaryPwmFrequency;
-	int extrusionAncilliaryPwmLogicalPin;
-	Pin extrusionAncilliaryPwmFirmwarePin;
-	bool extrusionAncilliaryPwmInvert;
-
 	void InitZProbe();
 	uint16_t GetRawZProbeReading() const;
 	void UpdateNetworkAddress(byte dst[4], const byte src[4]);
@@ -871,73 +862,14 @@ private:
 	time_t realTime;									// the current date/time, or zero if never set
 	uint32_t timeLastUpdatedMillis;						// the milliseconds counter when we last incremented the time
 
+	// CNC and laser support
+	float extrusionAncilliaryPwmValue;
+	PwmPort extrusionAncilliaryPwmPort;
+	PwmPort spindleForwardPort, spindleReversePort, laserPort;
+
 	// Direct pin manipulation
 	int8_t logicalPinModes[HighestLogicalPin + 1];		// what mode each logical pin is set to - would ideally be class PinMode not int8_t
 };
-
-/*static*/ inline void Platform::SetPinMode(Pin pin, PinMode mode)
-{
-#ifdef DUET_NG
-	if (pin >= DueXnExpansionStart)
-	{
-		DuetExpansion::SetPinMode(pin, mode);
-	}
-	else
-	{
-		pinMode(pin, mode);
-	}
-#else
-	pinMode(pin, mode);
-#endif
-}
-
-/*static*/ inline bool Platform::ReadPin(Pin pin)
-{
-#ifdef DUET_NG
-	if (pin >= DueXnExpansionStart)
-	{
-		return DuetExpansion::DigitalRead(pin);
-	}
-	else
-	{
-		return digitalRead(pin);
-	}
-#else
-	return digitalRead(pin);
-#endif
-}
-
-/*static*/ inline void Platform::WriteDigital(Pin pin, bool high)
-{
-#ifdef DUET_NG
-	if (pin >= DueXnExpansionStart)
-	{
-		DuetExpansion::DigitalWrite(pin, high);
-	}
-	else
-	{
-		digitalWrite(pin, high);
-	}
-#else
-	digitalWrite(pin, high);
-#endif
-}
-
-/*static*/ inline void Platform::WriteAnalog(Pin pin, float pwm, uint16_t freq)
-{
-#ifdef DUET_NG
-	if (pin >= DueXnExpansionStart)
-	{
-		DuetExpansion::AnalogOut(pin, pwm);
-	}
-	else
-	{
-		AnalogOut(pin, pwm, freq);
-	}
-#else
-	AnalogOut(pin, pwm, freq);
-#endif
-}
 
 // Where the htm etc files are
 
@@ -1083,7 +1015,7 @@ inline float Platform::AxisTotalLength(size_t axis) const
 
 inline void Platform::SetExtrusionAncilliaryPwmValue(float v)
 {
-	extrusionAncilliaryPwmValue = v;
+	extrusionAncilliaryPwmValue = min<float>(v, 1.0);			// negative values are OK, they mean don't set the output
 }
 
 inline float Platform::GetExtrusionAncilliaryPwmValue() const
@@ -1093,12 +1025,12 @@ inline float Platform::GetExtrusionAncilliaryPwmValue() const
 
 inline void Platform::SetExtrusionAncilliaryPwmFrequency(float f)
 {
-	extrusionAncilliaryPwmFrequency = f;
+	extrusionAncilliaryPwmPort.SetFrequency(f);
 }
 
 inline float Platform::GetExtrusionAncilliaryPwmFrequency() const
 {
-	return extrusionAncilliaryPwmFrequency;
+	return extrusionAncilliaryPwmPort.GetFrequency();
 }
 
 // For the Duet we use the fan output for this
@@ -1109,8 +1041,7 @@ inline void Platform::ExtrudeOn()
 {
 	if (extrusionAncilliaryPwmValue > 0.0)
 	{
-		WriteAnalog(extrusionAncilliaryPwmFirmwarePin,
-					(extrusionAncilliaryPwmInvert) ? 1.0 - extrusionAncilliaryPwmValue : extrusionAncilliaryPwmValue, extrusionAncilliaryPwmFrequency);
+		extrusionAncilliaryPwmPort.WriteAnalog(extrusionAncilliaryPwmValue);
 	}
 }
 
@@ -1121,8 +1052,7 @@ inline void Platform::ExtrudeOff()
 {
 	if (extrusionAncilliaryPwmValue > 0.0)
 	{
-		WriteAnalog(extrusionAncilliaryPwmFirmwarePin,
-					(extrusionAncilliaryPwmInvert) ? 1.0 : 0.0, extrusionAncilliaryPwmFrequency);
+		extrusionAncilliaryPwmPort.WriteAnalog(0.0);
 	}
 }
 
@@ -1197,16 +1127,16 @@ inline uint16_t Platform::GetRawZProbeReading() const
 	{
 	case 4:
 		{
-			const bool b = ReadPin(endStopPins[E0_AXIS]);
+			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS]);
 			return (b) ? 4000 : 0;
 		}
 
 	case 5:
-		return (ReadPin(zProbePin)) ? 4000 : 0;
+		return (IoPort::ReadPin(zProbePin)) ? 4000 : 0;
 
 	case 6:
 		{
-			const bool b = ReadPin(endStopPins[E0_AXIS + 1]);
+			const bool b = IoPort::ReadPin(endStopPins[E0_AXIS + 1]);
 			return (b) ? 4000 : 0;
 		}
 

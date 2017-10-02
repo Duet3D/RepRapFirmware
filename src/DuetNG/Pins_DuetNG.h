@@ -107,8 +107,11 @@ constexpr Pin SpiTempSensorCsPins[MaxSpiTempSensors] = { 28, 50, 51, 52, 24, 97,
 
 #endif
 
-// Arduino Due pin number that controls the ATX power on/off
-constexpr Pin ATX_POWER_PIN = 79;											// Arduino Due pin number that controls the ATX power on/off
+// DHTxx data pin
+constexpr Pin DhtDataPin = 97;												// Pin CS6
+
+// Pin that controls the ATX power on/off
+constexpr Pin ATX_POWER_PIN = 79;
 
 // Analogue pin numbers
 constexpr Pin Z_PROBE_PIN = 33;												// AFE1_AD4/PC1 Z probe analog input

@@ -589,7 +589,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		if (currentTool != nullptr)
 		{
-			const float *offset = currentTool->GetOffset();
+			const float *offset = currentTool->GetOffsets();
 			for (size_t i = 0; i < numAxes; ++i)
 			{
 				liveCoordinates[i] += offset[i];
@@ -681,7 +681,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				response->EncodeString(boxMessage, ARRAY_SIZE(boxMessage), false);
 				response->cat(",\"title\":");
 				response->EncodeString(boxTitle, ARRAY_SIZE(boxTitle), false);
-				response->catf(",\"mode\":%d,\"timeout\":%.1f,\"controls\":%u}", boxMode, (double)timeLeft, boxControls);
+				response->catf(",\"mode\":%d,\"timeout\":%.1f,\"controls\":%" PRIu32 "}", boxMode, (double)timeLeft, boxControls);
 			}
 			response->cat("}");
 		}
@@ -716,7 +716,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	// G-code reply sequence for webserver (sequence number for AUX is handled later)
 	if (source == ResponseSource::HTTP)
 	{
-		response->catf(",\"seq\":%d", network->GetHttpReplySeq());
+		response->catf(",\"seq\":%" PRIu32, network->GetHttpReplySeq());
 	}
 
 	/* Sensors */
@@ -920,7 +920,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				endstops |= (1u << drive);
 			}
 		}
-		response->catf(",\"endstops\":%u", endstops);
+		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
 		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u", FIRMWARE_NAME, move->GetGeometryString(), numAxes);
@@ -945,7 +945,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 			const ZProbeParameters probeParams = platform->GetCurrentZProbeParameters();
 
 			// Trigger threshold
-			response->catf(",\"probe\":{\"threshold\":%d", probeParams.adcValue);
+			response->catf(",\"probe\":{\"threshold\":%" PRIi32, probeParams.adcValue);
 
 			// Trigger height
 			response->catf(",\"height\":%.2f", (double)probeParams.height);
@@ -1111,7 +1111,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		if (response != nullptr)
 		{
 			// Send the response to the last command. Do this last
-			response->catf(",\"seq\":%u,\"resp\":", platform->GetAuxSeq());			// send the response sequence number
+			response->catf(",\"seq\":%" PRIu32 ",\"resp\":", platform->GetAuxSeq());			// send the response sequence number
 
 			// Send the JSON response
 			response->EncodeReply(reply, true);										// also releases the OutputBuffer chain
@@ -1192,7 +1192,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 
 	// Motor idle parameters
 	response->catf(",\"idleCurrentFactor\":%.1f", (double)(platform->GetIdleCurrentFactor() * 100.0));
-	response->catf(",\"idleTimeout\":%u", (double)(move->IdleTimeout()));
+	response->catf(",\"idleTimeout\":%.1f", (double)(move->IdleTimeout()));
 
 	// Minimum feedrates
 	response->cat(",\"minFeedrates\":");
@@ -1258,44 +1258,28 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat((ch == '[') ? "[]" : "]");
 
 	// Send the heater active temperatures
-	response->catf(",\"active\":");
-	ch = ',';
-	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetActiveTemperature(heat->GetBedHeater())));
+	response->catf(",\"active\":[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetActiveTemperature(heat->GetBedHeater())));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf("%c%.1f", ch, (double)(heat->GetActiveTemperature(heater)));
-		ch = ',';
+		response->catf(",%.1f", (double)(heat->GetActiveTemperature(heater)));
 	}
-	response->cat((ch == '[') ? "[]" : "]");
+	response->cat("]");
 
 	// Send the heater standby temperatures
-	response->catf(",\"standby\":");
-	ch = ',';
-	response->catf("[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetStandbyTemperature(bedHeater)));
+	response->catf(",\"standby\":[%.1f", (double)((bedHeater == -1) ? 0.0 : heat->GetStandbyTemperature(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf("%c%.1f", ch, (double)(heat->GetStandbyTemperature(heater)));
-		ch = ',';
+		response->catf(",%.1f", (double)(heat->GetStandbyTemperature(heater)));
 	}
-	response->cat((ch == '[') ? "[]" : "]");
+	response->cat("]");
 
 	// Send the heater statuses (0=off, 1=standby, 2=active, 3 = fault)
-	response->cat(",\"hstat\":");
-	if (bedHeater != -1)
-	{
-		ch = ',';
-		response->catf("[%d", static_cast<int>(heat->GetStatus(bedHeater)));
-	}
-	else
-	{
-		ch = '[';
-	}
+	response->catf(",\"hstat\":[%d", (bedHeater == -1) ? 0 : static_cast<int>(heat->GetStatus(bedHeater)));
 	for (size_t heater = DefaultE0Heater; heater < GetToolHeatersInUse(); heater++)
 	{
-		response->catf("%c%d", ch, static_cast<int>(heat->GetStatus(heater)));
-		ch = ',';
+		response->catf(",%d", static_cast<int>(heat->GetStatus(heater)));
 	}
-	response->cat((ch == '[') ? "[]" : "]");
+	response->cat("]");
 
 	// Send XYZ positions
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
@@ -1304,7 +1288,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	const Tool* const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
-		const float *offset = currentTool->GetOffset();
+		const float *offset = currentTool->GetOffsets();
 		for (size_t i = 0; i < numAxes; ++i)
 		{
 			liveCoordinates[i] += offset[i];
@@ -1392,8 +1376,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	if (displayMessageBox)
 	{
-		response->catf(",\"msgBox.mode\":%d,\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u",
-				boxMode, (double)timeLeft, boxControls);
+		response->catf(",\"msgBox.mode\":%d,\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "", boxMode, (double)timeLeft, boxControls);
 		response->cat(",\"msgBox.msg\":");
 		response->EncodeString(boxMessage, ARRAY_SIZE(boxMessage), false);
 		response->cat(",\"msgBox.title\":");
@@ -1564,7 +1547,7 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir)
 			// Write another file entry
 			bytesLeft -= response->catf("{\"type\":\"%c\",\"name\":", fileInfo.isDirectory ? 'd' : 'f');
 			bytesLeft -= response->EncodeString(fileInfo.fileName, FILENAME_LENGTH, false);
-			bytesLeft -= response->catf(",\"size\":%u", fileInfo.size);
+			bytesLeft -= response->catf(",\"size\":%" PRIu32, fileInfo.size);
 
 			const struct tm * const timeInfo = gmtime(&fileInfo.lastModified);
 			if (timeInfo->tm_year <= /*19*/80)

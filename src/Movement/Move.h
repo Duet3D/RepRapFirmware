@@ -41,8 +41,8 @@ public:
 	void Spin();													// Called in a tight loop to keep the class going
 	void Exit();													// Shut down
 
-	void GetCurrentMachinePosition(float m[DRIVES], bool disableMotorMapping) const; // Get the current position in untransformed coords
-	void GetCurrentUserPosition(float m[DRIVES], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const;
+	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const; // Get the current position in untransformed coords
+	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, AxesBitmap xAxes, AxesBitmap yAxes) const;
 																	// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } 	// Get the current position of a motor
 	void LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
@@ -108,7 +108,7 @@ public:
 	uint32_t GetCompletedMoves() const { return completedMoves; }					// How many moves have been completed?
 	void ResetMoveCounters() { scheduledMoves = completedMoves = 0; }
 
-	HeightMap& AccessBedProbeGrid() { return grid; }								// Access the bed probing grid
+	HeightMap& AccessHeightMap() { return heightMap; }								// Access the bed probing grid
 
 	const DDA *GetCurrentDDA() const { return currentDda; }							// Return the DDA of the currently-executing move
 
@@ -164,7 +164,7 @@ private:
 	float recipTaperHeight;								// Reciprocal of the taper height
 	bool useTaper;										// True to taper off the compensation
 
-	HeightMap grid;    									// Grid definition and height map for G29 bed probing. The probe heights are stored in zBedProbePoints, see above.
+	HeightMap heightMap;    							// The grid definition in use and height map for G29 bed probing
 	RandomProbePointSet probePoints;					// G30 bed probe points
 	bool usingMesh;										// true if we are using the height map, false if we are using the random probe point set
 	float taperHeight;									// Height over which we taper

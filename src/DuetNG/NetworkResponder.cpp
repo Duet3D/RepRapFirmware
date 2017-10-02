@@ -237,7 +237,7 @@ void NetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLastModified
 	if (fileLength != 0 && fileBeingUploaded.Length() != fileLength)
 	{
 		uploadError = true;
-		GetPlatform().MessageF(ErrorMessage, "Uploaded file size is different (%u vs. expected %u bytes)!\n", fileBeingUploaded.Length(), fileLength);
+		GetPlatform().MessageF(ErrorMessage, "Uploaded file size is different (%lu vs. expected %lu bytes)!\n", fileBeingUploaded.Length(), fileLength);
 	}
 
 	// Close the file

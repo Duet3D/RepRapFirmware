@@ -38,16 +38,16 @@ public:
 
 	DDA(DDA* n);
 
-	bool Init(GCodes::RawMove &nextMove, bool doMotorMapping);		// Set up a new move, returning true if it represents real movement
+	bool Init(GCodes::RawMove &nextMove, bool doMotorMapping) __attribute__ ((hot));	// Set up a new move, returning true if it represents real movement
 	bool Init(const float_t steps[DRIVES]);							// Set up a raw (unmapped) motor move
 	void Init();													// Set up initial positions for machine startup
 	bool Start(uint32_t tim);										// Start executing the DDA, i.e. move the move.
-	bool Step();													// Take one step of the DDA, called by timed interrupt.
+	bool Step() __attribute__ ((hot));								// Take one step of the DDA, called by timed interrupt.
 	void SetNext(DDA *n) { next = n; }
 	void SetPrevious(DDA *p) { prev = p; }
 	void Complete() { state = completed; }
 	bool Free();
-	void Prepare(uint8_t simMode);									// Calculate all the values and freeze this DDA
+	void Prepare(uint8_t simMode) __attribute__ ((hot));			// Calculate all the values and freeze this DDA
 	float CalcTime() const;											// Calculate the time needed for this move (used for simulation)
 	bool HasStepError() const;
 	bool CanPauseAfter() const { return canPauseAfter; }
@@ -82,8 +82,8 @@ public:
 
 	void DebugPrint() const;
 
-	static const uint32_t stepClockRate = VARIANT_MCK/128;			// the frequency of the clock used for stepper pulse timing (see Platform::InitialiseInterrupts)
-	static const uint64_t stepClockRateSquared = (uint64_t)stepClockRate * stepClockRate;
+	static constexpr uint32_t stepClockRate = VARIANT_MCK/128;			// the frequency of the clock used for stepper pulse timing (see Platform::InitialiseInterrupts)
+	static constexpr uint64_t stepClockRateSquared = (uint64_t)stepClockRate * stepClockRate;
 
 	// Note on the following constant:
 	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
@@ -92,13 +92,13 @@ public:
 	// Therefore, where the step interval falls below 60us, we don't calculate on every step.
 	// Note: the above measurements were taken some time ago, before some firmware optimisations.
 #ifdef DUET_NG
-	static const int32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
-	static const int32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
-	static const uint32_t minInterruptInterval = 6;					// about 2us minimum interval between interrupts, in clocks
+	static constexpr int32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr int32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t minInterruptInterval = 6;									// about 2us minimum interval between interrupts, in clocks
 #else
-	static const int32_t MinCalcIntervalDelta = (60 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
-	static const int32_t MinCalcIntervalCartesian = (60 * stepClockRate)/1000000;	// same as delta for now, but could be lower
-	static const uint32_t minInterruptInterval = 6;					// about 2us minimum interval between interrupts, in clocks
+	static constexpr int32_t MinCalcIntervalDelta = (60 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (60us) in step timer clocks
+	static constexpr int32_t MinCalcIntervalCartesian = (60 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t minInterruptInterval = 6;									// about 2us minimum interval between interrupts, in clocks
 #endif
 
 	static void PrintMoves();										// print saved moves for debugging
@@ -110,13 +110,13 @@ public:
 #endif
 
 private:
-	void RecalculateMove();
-	void CalcNewSpeeds();
+	void RecalculateMove() __attribute__ ((hot));
+	void CalcNewSpeeds() __attribute__ ((hot));
 	void ReduceHomingSpeed();										// called to reduce homing speed when a near-endstop is triggered
 	void StopDrive(size_t drive);									// stop movement of a drive and recalculate the endpoint
 	void MoveAborted();
-	void InsertDM(DriveMovement *dm);
-	DriveMovement *RemoveDM(size_t drive);
+	void InsertDM(DriveMovement *dm) __attribute__ ((hot));
+	DriveMovement *RemoveDM(size_t drive) __attribute__ ((hot));
 	void ReleaseDMs();
 	bool IsDecelerationMove() const;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const;

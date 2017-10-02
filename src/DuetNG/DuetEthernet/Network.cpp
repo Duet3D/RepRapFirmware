@@ -226,7 +226,7 @@ void Network::Start()
 	SetIPAddress(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
 	pinMode(EspResetPin, OUTPUT_LOW);
 	delayMicroseconds(550);						// W550 reset pulse must be at least 500us long
-	Platform::WriteDigital(EspResetPin, HIGH);	// raise /Reset pin
+	IoPort::WriteDigital(EspResetPin, HIGH);	// raise /Reset pin
 	delay(55);									// W5500 needs 50ms to start up
 
 #ifdef USE_3K_BUFFERS

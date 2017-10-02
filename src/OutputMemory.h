@@ -40,9 +40,9 @@ class OutputBuffer
 		void Taken(size_t len) { bytesRead += len; }
 		size_t BytesLeft() const { return dataLength - bytesRead; }	// How many bytes have not been sent yet?
 
-		size_t printf(const char *fmt, ...);
+		size_t printf(const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 		size_t vprintf(const char *fmt, va_list vargs);
-		size_t catf(const char *fmt, ...);
+		size_t catf(const char *fmt, ...) __attribute__ ((format (printf, 2, 3)));
 
 		size_t copy(const char c);
 		size_t copy(const char *src);

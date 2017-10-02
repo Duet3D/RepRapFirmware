@@ -451,7 +451,7 @@ void Network::Spin(bool full)
 					{
 						// Something went wrong, maybe a bad firmware image was flashed
 						// Disable the WiFi chip again in this case
-						platform.MessageF(NetworkInfoMessage, "Error: Failed to initialise WiFi module, code %d\n", rc);
+						platform.MessageF(NetworkInfoMessage, "Error: Failed to initialise WiFi module, code %" PRIi32 "\n", rc);
 						Stop();
 					}
 				}
@@ -510,7 +510,7 @@ void Network::Spin(bool full)
 				else
 				{
 					Stop();
-					platform.MessageF(NetworkInfoMessage, "Failed to change WiFi mode (code %d)\n", rslt);
+					platform.MessageF(NetworkInfoMessage, "Failed to change WiFi mode (code %" PRIi32 ")\n", rslt);
 				}
 			}
 			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
@@ -666,7 +666,7 @@ void Network::Diagnostics(MessageType mtype)
 			platform.MessageF(mtype, "WiFi MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
 			platform.MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (double)((float)r.vcc/1024), TranslateEspResetReason(r.resetReason));
-			platform.MessageF(mtype, "WiFi flash size %u, free heap %u\n", r.flashSize, r.freeHeap);
+			platform.MessageF(mtype, "WiFi flash size %" PRIu32 ", free heap %" PRIu32 "\n", r.flashSize, r.freeHeap);
 
 			if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
@@ -1284,7 +1284,7 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 
 	if (response < 0 && reprap.Debug(moduleNetwork))
 	{
-		debugPrintf("Network command %d socket %u returned error %d\n", (int)cmd, socketNum, response);
+		debugPrintf("Network command %d socket %u returned error %" PRIi32 "\n", (int)cmd, socketNum, response);
 	}
 
 #if 0

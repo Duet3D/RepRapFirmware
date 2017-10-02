@@ -14,7 +14,7 @@ RestorePoint::RestorePoint()
 
 void RestorePoint::Init()
 {
-	for (size_t i = 0; i < DRIVES; ++i)
+	for (size_t i = 0; i < MaxAxes; ++i)
 	{
 		moveCoords[i] = 0.0;
 	}

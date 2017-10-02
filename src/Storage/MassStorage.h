@@ -12,7 +12,7 @@ struct FileInfo
 {
 	bool isDirectory;
 	char fileName[FILENAME_LENGTH];
-	unsigned long size;
+	uint32_t size;
 	time_t lastModified;
 };
 

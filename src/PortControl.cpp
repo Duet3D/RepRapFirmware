@@ -6,7 +6,6 @@
  */
 
 #include "PortControl.h"
-#include "Platform.h"
 #include "GCodes/GCodeBuffer.h"
 #include "Movement/Move.h"
 #include "Movement/DDA.h"
@@ -23,11 +22,6 @@ void PortControl::Init()
 	advanceMillis = 0;
 	advanceClocks = 0;
 	currentPortState = 0;
-	for (size_t i = 0; i < MaxPorts; ++i)
-	{
-		portMap[i].logicalPort = NoPort;
-		portMap[i].pin = NoPin;
-	}
 }
 
 void PortControl::Exit()
@@ -87,17 +81,16 @@ bool PortControl::Configure(GCodeBuffer& gb, StringRef& reply)
 			long pnum = portNumbers[i];
 			if (pnum < 0 || pnum > HighestLogicalPin)
 			{
-				reply.printf("Port number %d out of range", pnum);
+				reply.printf("Port number %ld out of range", pnum);
 				return true;
 			}
-			PortMapEntry& pm = portMap[i];
-			pm.logicalPort = pnum;
-			if (!reprap.GetPlatform().GetFirmwarePin(pnum, PinAccess::write, pm.pin, pm.invert))
+			IoPort& pm = portMap[i];
+			if (!pm.Set(pnum, PinAccess::write))
 			{
-				reply.printf("Port number %d is not available", pnum);
+				reply.printf("Port number %ld is not available", pnum);
 				return true;
 			}
-			Platform::WriteDigital(pm.pin, pm.invert);				// ensure the port is off
+			pm.WriteDigital(false);				// ensure the port is off
 			if (i >= numConfiguredPorts)
 			{
 				numConfiguredPorts = i + 1;
@@ -122,7 +115,7 @@ bool PortControl::Configure(GCodeBuffer& gb, StringRef& reply)
 			reply.cat("port numbers");
 			for (size_t i = 0; i < numConfiguredPorts; ++i)
 			{
-				reply.catf(" %u", (unsigned int)portMap[i].logicalPort);
+				reply.catf(" %u", (unsigned int)portMap[i].GetLogicalPin());
 			}
 		}
 	}
@@ -140,11 +133,11 @@ void PortControl::UpdatePorts(IoBits_t newPortState)
 			const IoBits_t mask = 1u << i;
 			if (bitsToClear & mask)
 			{
-				Platform::WriteDigital(portMap[i].pin, portMap[i].invert);
+				portMap[i].WriteDigital(false);
 			}
 			else if (bitsToSet & mask)
 			{
-				Platform::WriteDigital(portMap[i].pin, !portMap[i].invert);
+				portMap[i].WriteDigital(true);
 			}
 		}
 		currentPortState = newPortState;

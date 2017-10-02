@@ -111,6 +111,8 @@ constexpr unsigned int FirstMax31855ThermocoupleChannel = 100;	// Temperature se
 constexpr unsigned int FirstMax31856ThermocoupleChannel = 150;	// Temperature sensor channels 150... are MAX31856 thermocouples
 constexpr unsigned int FirstRtdChannel = 200;			// Temperature sensor channels 200... are RTDs
 constexpr unsigned int FirstLinearAdcChannel = 300;		// Temperature sensor channels 300... use an ADC that provides a linear output over a temperature range
+constexpr unsigned int DhtTemperatureChannel = 400;		// Temperature sensor channel 400 for DHTxx temperature
+constexpr unsigned int DhtHumidityChannel = 401;		// Temperature sensor channel 401 for DHTxx humidity
 constexpr unsigned int CpuTemperatureSenseChannel = 1000;  // Sensor 1000 is the MCJU's own temperature sensor
 constexpr unsigned int FirstTmcDriversSenseChannel = 1001; // Sensors 1001..1002 are the TMC2660 driver temperature sense
 constexpr unsigned int NumTmcDriversSenseChannels = 2;	// Sensors 1001..1002 are the TMC2660 driver temperature sense
@@ -197,6 +199,10 @@ constexpr float NOZZLE_DIAMETER = 0.5;					// Millimetres
 constexpr float FILAMENT_WIDTH = 1.75;					// Millimetres
 
 constexpr unsigned int MaxStackDepth = 5;				// Maximum depth of stack
+
+// CNC and laser support
+constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
+constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
 
 // Webserver stuff
 

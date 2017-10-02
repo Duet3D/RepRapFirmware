@@ -178,7 +178,7 @@ void DDA::DebugPrint() const
 	debugPrintf(" d=%f", (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, 5);
 	debugPrintf("\na=%f reqv=%f topv=%f startv=%f endv=%f\n"
-				"daccel=%f ddecel=%f cks=%u\n",
+				"daccel=%f ddecel=%f cks=%" PRIu32 "\n",
 				(double)acceleration, (double)requestedSpeed, (double)topSpeed, (double)startSpeed, (double)endSpeed,
 				(double)accelDistance, (double)decelDistance, clocksNeeded);
 	for (size_t axis = 0; axis < numAxes; ++axis)
