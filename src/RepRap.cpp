@@ -170,63 +170,63 @@ void RepRap::Spin()
 	if(!active)
 		return;
 
-	spinningModule = modulePlatform;
 	ticksInSpinState = 0;
+	spinningModule = modulePlatform;
 	platform->Spin();
 
-	spinningModule = moduleNetwork;
 	ticksInSpinState = 0;
+	spinningModule = moduleNetwork;
 	network->Spin(true);
 
+	ticksInSpinState = 0;
 	spinningModule = moduleWebserver;
-	ticksInSpinState = 0;
 
-	spinningModule = moduleGcodes;
 	ticksInSpinState = 0;
+	spinningModule = moduleGcodes;
 	gCodes->Spin();
 
-	spinningModule = moduleMove;
 	ticksInSpinState = 0;
+	spinningModule = moduleMove;
 	move->Spin();
 
-	spinningModule = moduleHeat;
 	ticksInSpinState = 0;
+	spinningModule = moduleHeat;
 	heat->Spin();
 
 #if SUPPORT_ROLAND
-	spinningModule = moduleRoland;
 	ticksInSpinState = 0;
+	spinningModule = moduleRoland;
 	roland->Spin();
 #endif
 
 #if SUPPORT_SCANNER
-	spinningModule = moduleScanner;
 	ticksInSpinState = 0;
+	spinningModule = moduleScanner;
 	scanner->Spin();
 #endif
 
 #if SUPPORT_IOBITS
-	spinningModule = modulePortControl;
 	ticksInSpinState = 0;
+	spinningModule = modulePortControl;
 	portControl->Spin(true);
 #endif
 
-	spinningModule = modulePrintMonitor;
 	ticksInSpinState = 0;
+	spinningModule = modulePrintMonitor;
 	printMonitor->Spin();
 
 #ifdef DUET_NG
-	spinningModule = moduleDuetExpansion;
 	ticksInSpinState = 0;
+	spinningModule = moduleDuetExpansion;
 	DuetExpansion::Spin(true);
 #endif
 
-	spinningModule = moduleFilamentSensors;
 	ticksInSpinState = 0;
+	spinningModule = moduleFilamentSensors;
 	FilamentSensor::Spin(true);
 
-	spinningModule = noModule;
 	ticksInSpinState = 0;
+	spinningModule = noModule;
 
 	// Check if we need to display a cold extrusion warning
 	const uint32_t now = millis();
@@ -534,7 +534,7 @@ void RepRap::Tick()
 	{
 		platform->Tick();
 		++ticksInSpinState;
-		if (ticksInSpinState >= 20000)	// if we stall for 20 seconds, save diagnostic data and reset
+		if (ticksInSpinState >= MaxTicksInSpinState)	// if we stall for 20 seconds, save diagnostic data and reset
 		{
 			resetting = true;
 			for(size_t i = 0; i < Heaters; i++)
@@ -552,6 +552,12 @@ void RepRap::Tick()
 			platform->SoftwareReset((uint16_t)SoftwareResetReason::stuckInSpin, stackPtr + 5);
 		}
 	}
+}
+
+// Return true if we are close to timeout
+bool RepRap::SpinTimeoutImminent() const
+{
+	return ticksInSpinState >= HighTicksInSpinState;
 }
 
 // Get the JSON status response for the web server (or later for the M105 command).
@@ -1046,7 +1052,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		}
 #endif
 
-#ifdef DUET_NG
+#if HAS_VOLTAGE_MONITOR
 		// Power in voltages
 		{
 			float minV, currV, maxV;
@@ -1748,6 +1754,30 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 	return ok;
 }
 
+// Save some information in config-override.g
+bool RepRap::WriteToolParameters(FileStore *f) const
+{
+	bool ok = true;
+	for (const Tool *t = toolList; ok && t != nullptr; t = t->Next())
+	{
+		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();
+		if (axesProbed != 0)
+		{
+			scratchString.printf("G10 P%d", t->Number());
+			for (size_t axis = 0; axis < MaxAxes; ++axis)
+			{
+				if (IsBitSet(axesProbed, axis))
+				{
+					scratchString.catf(" %c%.2f", GCodes::axisLetters[axis], (double)(t->GetOffsets()[axis]));
+				}
+			}
+		}
+		scratchString.cat('\n');
+		ok = f->Write(scratchString.Pointer());
+	}
+	return ok;
+}
+
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b)
 {
@@ -1758,6 +1788,12 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 /*static*/ uint32_t RepRap::ReadDword(const char* p)
 {
 	return *reinterpret_cast<const uint32_t*>(p);
+}
+
+// Report an internal error
+void RepRap::ReportInternalError(const char *file, const char *func, int line) const
+{
+	platform->MessageF(ErrorMessage, "Internal Error in %s at %s(%d)\n", func, file, line);
 }
 
 // End

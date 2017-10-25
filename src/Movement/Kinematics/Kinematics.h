@@ -26,6 +26,8 @@ enum class KinematicsType : uint8_t
 	linearDelta,
 	scara,
 	coreXYU,
+	hangprinter,
+	polar,
 
 	unknown				// this one must be last!
 };
@@ -52,7 +54,7 @@ public:
 
 	// Return the name of the current kinematics.
 	// If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
-	// Otherwise it should be in a format suitable fore printing.
+	// Otherwise it should be in a format suitable for printing.
 	// For any new kinematics, the same string can be returned regardless of the parameter.
 	virtual const char *GetName(bool forStatusReport = false) const = 0;
 
@@ -71,7 +73,7 @@ public:
 	// 'numAxes' is the number of machine axes to convert, which will always be at least 3
 	// 'motorPos' is the output vector of motor positions
 	// Return true if successful, false if we were unable to convert
-	virtual bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const = 0;
+	virtual bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const = 0;
 
 	// Convert motor positions (measured in steps from reference position) to Cartesian coordinates
 	// 'motorPos' is the input vector of motor positions
@@ -102,12 +104,12 @@ public:
 	virtual float GetTiltCorrection(size_t axis) const { return 0.0; }
 
 	// Return true if the specified XY position is reachable by the print head reference point.
-	// The default implementation assumes a rectangular reachable area, so it just used the bed dimensions give in the M208 commands.
-	virtual bool IsReachable(float x, float y) const;
+	// The default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 commands.
+	virtual bool IsReachable(float x, float y, bool isCoordinated) const;
 
 	// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-	virtual bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const;
+	virtual bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const;
 
 	// Return the set of axes that must have been homed before bed probing is allowed
 	// The default implementation requires just X and Y, but some kinematics require additional axes to be homed (e.g. delta, CoreXZ)
@@ -123,7 +125,7 @@ public:
 	virtual size_t NumHomingButtons(size_t numVisibleAxes) const { return numVisibleAxes; }
 
 	// Override this if the homing buttons are not named after the axes (e.g. SCARA printer)
-	virtual const char* HomingButtonNames() const { return "XYZUVW"; }
+	virtual const char* HomingButtonNames() const { return "XYZUVWABC"; }
 
 	// This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 	// If we can proceed with homing some axes, return the name of the homing file to be called. Optionally, update 'alreadyHomed' to indicate
@@ -148,6 +150,10 @@ public:
 
 	// Write any calibration data that we need to resume a print after power fail, returning true if successful. Override where necessary.
 	virtual bool WriteResumeSettings(FileStore *f) const { return true; }
+
+	// Limit the speed and acceleration of a move to values that the mechanics can handle.
+	// The speeds along individual Cartesian axes have already been limited before this is called.
+	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const = 0;
 
 	// Override this virtual destructor if your constructor allocates any dynamic memory
 	virtual ~Kinematics() { }

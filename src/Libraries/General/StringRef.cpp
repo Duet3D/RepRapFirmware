@@ -8,6 +8,7 @@
 #include "StringRef.h"
 #include <cstring>
 #include <cstdio>
+#include "WMath.h"
 
 // Need to define strnlen here because it isn't ISO standard
 size_t strnlen(const char *s, size_t n)
@@ -108,6 +109,16 @@ size_t StringRef::StripTrailingSpaces() const
 		p[slen] = 0;
 	}
 	return slen;
+}
+
+size_t StringRef::Prepend(const char *src) const
+{
+	const size_t slen = ::strlen(src);
+	const size_t dlen = strlen();
+	const size_t newLen = min<size_t>(dlen + slen, len - 1);
+	memmove(p + slen, p, newLen - slen + 1);
+	memcpy(p, src, slen);
+	return newLen;
 }
 
 // End

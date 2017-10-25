@@ -49,7 +49,8 @@ public:
 
 	const float *GetOffsets() const;
 	void SetOffsets(const float offs[MaxAxes]);
-	void SetOffset(size_t axis, float offs) pre(axis < MaxAxes);
+	void SetOffset(size_t axis, float offs, bool byProbing) pre(axis < MaxAxes);
+	AxesBitmap GetAxisOffsetsProbed() const { return axisOffsetsProbed; }
 	size_t DriveCount() const;
 	int Drive(size_t driveNumber) const;
 	bool ToolCanDrive(bool extrude);
@@ -99,6 +100,7 @@ private:
 	float standbyTemperatures[Heaters];
 	size_t heaterCount;
 	float offset[MaxAxes];
+	AxesBitmap axisOffsetsProbed;
 	AxesBitmap xMapping, yMapping;
 	FansBitmap fanMapping;
 	Filament *filament;
@@ -147,11 +149,6 @@ inline size_t Tool::DriveCount() const
 inline const float *Tool::GetOffsets() const
 {
 	return offset;
-}
-
-inline void Tool::SetOffset(size_t axis, float offs)
-{
-	offset[axis] = offs;
 }
 
 #endif /* TOOL_H_ */

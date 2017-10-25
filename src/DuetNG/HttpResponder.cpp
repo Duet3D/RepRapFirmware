@@ -463,11 +463,12 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		}
 
 		// See if we can update the current RTC date and time
-		if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time") && !GetPlatform().IsDateTimeSet())
+		const char* const timeString = GetKeyValue("time");
+		if (timeString != nullptr && !GetPlatform().IsDateTimeSet())
 		{
 			struct tm timeInfo;
 			memset(&timeInfo, 0, sizeof(timeInfo));
-			if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+			if (strptime(timeString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 			{
 				time_t newTime = mktime(&timeInfo);
 				GetPlatform().SetDateTime(newTime);
@@ -876,10 +877,14 @@ void HttpResponder::SendJsonResponse(const char* command)
 			return;
 		}
 
-		if (StringEquals(command, "download") && StringEquals(qualifiers[0].key, "name"))
+		if (StringEquals(command, "download"))
 		{
-			SendFile(qualifiers[0].value, false);
-			return;
+			const char* const filename = GetKeyValue("name");
+			if (filename != nullptr)
+			{
+				SendFile(filename, false);
+				return;
+			}
 		}
 	}
 
@@ -996,7 +1001,8 @@ void HttpResponder::ProcessMessage()
 								  || (commandWords[1][0] == '/' && StringEquals(commandWords[1] + 1, KO_START "upload"));
 		if (isUploadRequest)
 		{
-			if (numQualKeys > 0 && StringEquals(qualifiers[0].key, "name"))
+			const char* const filename = GetKeyValue("name");
+			if (filename != nullptr)
 			{
 				// See how many bytes we expect to read
 				bool contentLengthFound = false;
@@ -1018,21 +1024,22 @@ void HttpResponder::ProcessMessage()
 				}
 
 				// Start a new file upload
-				FileStore *file = GetPlatform().GetFileStore(FS_PREFIX, qualifiers[0].value, OpenMode::write);
+				FileStore *file = GetPlatform().GetFileStore(FS_PREFIX, filename, OpenMode::write);
 				if (file == nullptr)
 				{
 					RejectMessage("could not create file");
 					return;
 
 				}
-				StartUpload(file, qualifiers[0].value);
+				StartUpload(file, filename);
 
 				// Try to get the last modified file date and time
-				if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time"))
+				const char* const lastModifiedString = GetKeyValue("time");
+				if (lastModifiedString != nullptr)
 				{
 					struct tm timeInfo;
 					memset(&timeInfo, 0, sizeof(timeInfo));
-					if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+					if (strptime(lastModifiedString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 					{
 						fileLastModified  = mktime(&timeInfo);
 					}
@@ -1048,7 +1055,7 @@ void HttpResponder::ProcessMessage()
 
 				if (reprap.Debug(moduleWebserver))
 				{
-					GetPlatform().MessageF(UsbMessage, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
+					GetPlatform().MessageF(UsbMessage, "Start uploading file %s length %lu\n", filename, postFileLength);
 				}
 				uploadedBytes = 0;
 

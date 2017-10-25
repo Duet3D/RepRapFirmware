@@ -105,7 +105,7 @@ void Heat::Init()
 	virtualHeaterSensors[0] = TemperatureSensor::Create(CpuTemperatureSenseChannel);
 	virtualHeaterSensors[0]->SetHeaterName("MCU");				// name this virtual heater so that it appears in DWC
 #endif
-#ifdef DUET_NG
+#if HAS_SMART_DRIVERS
 	virtualHeaterSensors[1] = TemperatureSensor::Create(FirstTmcDriversSenseChannel);
 	virtualHeaterSensors[2] = TemperatureSensor::Create(FirstTmcDriversSenseChannel + 1);
 #endif
@@ -488,7 +488,7 @@ float Heat::GetTemperature(size_t heater, TemperatureError& err)
 	return t;
 }
 
-#ifdef DUET_NG
+#if HAS_VOLTAGE_MONITOR
 
 // Suspend the heaters to conserve power
 void Heat::SuspendHeaters(bool sus)

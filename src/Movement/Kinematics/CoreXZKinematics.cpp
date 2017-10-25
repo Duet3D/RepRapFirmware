@@ -18,7 +18,7 @@ const char *CoreXZKinematics::GetName(bool forStatusReport) const
 }
 
 // Convert Cartesian coordinates to motor coordinates
-bool CoreXZKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const
+bool CoreXZKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
 	motorPos[X_AXIS] = lrintf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) + (machinePos[Z_AXIS] * axisFactors[Z_AXIS])) * stepsPerMm[X_AXIS]);
 	motorPos[Y_AXIS] = lrintf(machinePos[Y_AXIS] * stepsPerMm[Y_AXIS]);
@@ -54,6 +54,15 @@ void CoreXZKinematics::MotorStepsToCartesian(const int32_t motorPos[], const flo
 bool CoreXZKinematics::DriveIsShared(size_t drive) const
 {
 	return drive == X_AXIS || drive == Z_AXIS;
+}
+
+// Limit the speed and acceleration of a move to values that the mechanics can handle.
+// The speeds in Cartesian space have already been limited.
+void CoreXZKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const
+{
+	// Ideally we would do something here, but for now we don't.
+	// This could mean that a simultaneous X and Z movement with Z at maximum speed up and X at 3x that speed would be under-powered,
+	// but the workaround in that case would be just to lower the maximum Z speed a little, which won't affect printing speed significantly.
 }
 
 // End

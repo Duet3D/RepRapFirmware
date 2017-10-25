@@ -7,6 +7,7 @@
 
 #include "CoreXYUKinematics.h"
 #include "GCodes/GCodes.h"
+#include "Movement/DDA.h"
 
 const size_t CoreXYU_AXES = 5;
 const size_t U_AXIS = 3;			// X2
@@ -55,7 +56,7 @@ bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef
 }
 
 // Convert Cartesian coordinates to motor coordinates
-bool CoreXYUKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const
+bool CoreXYUKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
 	motorPos[X_AXIS] = lrintf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) + (machinePos[Y_AXIS] * axisFactors[Y_AXIS])) * stepsPerMm[X_AXIS]);
 	motorPos[Y_AXIS] = lrintf(((machinePos[X_AXIS] * axisFactors[X_AXIS]) - (machinePos[Y_AXIS] * axisFactors[Y_AXIS])) * stepsPerMm[Y_AXIS]);
@@ -100,6 +101,43 @@ bool CoreXYUKinematics::DriveIsShared(size_t drive) const
 {
 	return drive == X_AXIS || drive == Y_AXIS || drive == U_AXIS
 			 || drive == V_AXIS;			// V doesn't have endstop switches, but include it here just in case
+}
+
+// Limit the speed and acceleration of a move to values that the mechanics can handle.
+// The speeds along individual Cartesian axes have already been limited before this is called.
+void CoreXYUKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const
+{
+	const float vecX = normalisedDirectionVector[0];
+	const float vecY = normalisedDirectionVector[1];
+
+	// Limit the XY motor accelerations
+	const float vecMaxXY = max<float>(fabs(vecX + vecY), fabs(vecX - vecY));		// pick the case for the motor that is working hardest
+	if (vecMaxXY > 0.01)															// avoid division by zero or near-zero
+	{
+		const Platform& platform = reprap.GetPlatform();
+		const float aX = platform.Acceleration(0);
+		const float aY = platform.Acceleration(1);
+		const float vX = platform.MaxFeedrate(0);
+		const float vY = platform.MaxFeedrate(1);
+		const float aMax = (fabs(vecX) + fabs(vecY)) * aX * aY/(vecMaxXY * (fabs(vecX) * aY + fabs(vecY) * aX));
+		const float vMax = (fabs(vecX) + fabs(vecY)) * vX * vY/(vecMaxXY * (fabs(vecX) * vY + fabs(vecY) * vX));
+		dda.LimitSpeedAndAcceleration(vMax, aMax);
+	}
+
+	// Limit the UV motor accelerations
+	const float vecU = normalisedDirectionVector[3];
+	const float vecMaxUV = max<float>(fabs(vecU + vecY), fabs(vecY - vecY));		// pick the case for the motor that is working hardest
+	if (vecMaxUV > 0.01)															// avoid division by zero or near-zero
+	{
+		const Platform& platform = reprap.GetPlatform();
+		const float aU = platform.Acceleration(3);
+		const float aY = platform.Acceleration(1);
+		const float vU = platform.MaxFeedrate(3);
+		const float vY = platform.MaxFeedrate(1);
+		const float aMax = (fabs(vecX) + fabs(vecY)) * aU * aY/(vecMaxUV * (fabs(vecX) * aY + fabs(vecY) * aU));
+		const float vMax = (fabs(vecX) + fabs(vecY)) * vU * vY/(vecMaxUV * (fabs(vecX) * vY + fabs(vecY) * vU));
+		dda.LimitSpeedAndAcceleration(vMax, aMax);
+	}
 }
 
 // End

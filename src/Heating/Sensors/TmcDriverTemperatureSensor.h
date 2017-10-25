@@ -10,7 +10,7 @@
 
 #include "TemperatureSensor.h"
 
-#ifdef DUET_NG
+#if HAS_SMART_DRIVERS
 
 class TmcDriverTemperatureSensor : public TemperatureSensor
 {

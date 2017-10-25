@@ -16,7 +16,9 @@ enum class GCodeState : uint8_t
 {
 	normal,												// not doing anything and ready to process a new GCode
 
-	waitingForSpecialMoveToComplete,							// doing a special move, so we must wait for it to finish before processing another GCode
+	waitingForSpecialMoveToComplete,					// doing a special move, so we must wait for it to finish before processing another GCode
+
+	probingToolOffset,
 
 	homing1,
 	homing2,
@@ -35,11 +37,14 @@ enum class GCodeState : uint8_t
 
 	pausing1,
 	pausing2,
+
 	resuming1,
 	resuming2,
 	resuming3,
+
 	flashing1,
 	flashing2,
+
 	stopping,
 	sleeping,
 
@@ -64,7 +69,11 @@ enum class GCodeState : uint8_t
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction,
 	loadingFilament,
-	unloadingFilament
+	unloadingFilament,
+
+#if HAS_VOLTAGE_MONITOR
+	powerFailPausing1
+#endif
 };
 
 // Class to hold the state of gcode execution for some input source
@@ -79,11 +88,14 @@ public:
 	FileData fileState;
 	ResourceBitmap lockedResources;
 	GCodeState state;
+	uint8_t toolChangeParam;
+	int16_t newToolNumber;
 	unsigned int
 		drivesRelative : 1,
 		axesRelative : 1,
 		doingFileMacro : 1,
 		waitWhileCooling : 1,
+		runningM501 : 1,
 		runningM502 : 1,
 		volumetricExtrusion : 1,
 		// Caution: these next 3 will be modified out-of-process when we use RTOS, so they will need to be individual bool variables

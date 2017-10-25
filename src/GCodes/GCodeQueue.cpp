@@ -49,21 +49,19 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 	{
 	case 'G':
 		{
-			const int code = gb.GetIValue();
+			const int code = gb.GetCommandNumber();
+			queueCode = (code == 10 && gb.Seen('P'));	// Set active/standby temperatures
 
-			// Set active/standby temperatures
-			queueCode = (code == 10 && gb.Seen('P'));
 		}
 		break;
 
 	case 'M':
 		{
-			const int code = gb.GetIValue();
-			switch(code)
+			switch (gb.GetCommandNumber())
 			{
 			case 3:		// spindle control
-			case 4:
-			case 5:
+			case 4:		// spindle control
+			case 5:		// spindle control
 			case 42:	// set IO pin
 			case 106:	// fan control
 			case 107:	// fan off

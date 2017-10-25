@@ -21,7 +21,7 @@
 // Each DDA needs one DM per drive that it moves.
 // However, DM's are large, so we provide fewer than DRIVES * DdaRingLength of them. The planner checks that enough DMs are available before filling in a new DDA.
 
-#ifdef DUET_NG
+#if SAM4E || SAM4S
 const unsigned int DdaRingLength = 30;
 const unsigned int NumDms = DdaRingLength * 8;						// suitable for e.g. a delta + 5 input hot end
 #else
@@ -46,10 +46,9 @@ public:
 																	// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetEndPoint(size_t drive) const { return liveEndPoints[drive]; } 	// Get the current position of a motor
 	void LiveCoordinates(float m[DRIVES], AxesBitmap xAxes, AxesBitmap yAxes);	// Gives the last point at the end of the last complete DDA transformed to user coords
-	void Interrupt();												// The hardware's (i.e. platform's)  interrupt should call this.
-	void InterruptTime();											// Test function - not used
+	void Interrupt() __attribute__ ((hot));							// The hardware's (i.e. platform's)  interrupt should call this.
 	bool AllMovesAreFinished();										// Is the look-ahead ring empty?  Stops more moves being added as well.
-	void DoLookAhead();												// Run the look-ahead procedure
+	void DoLookAhead() __attribute__ ((hot));						// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[DRIVES], bool doBedCompensation); // Set the current position to be this
 	void SetLiveCoordinates(const float coords[DRIVES]);			// Force the live coordinates (see above) to be these
 	void ResetExtruderPositions();									// Resets the extrusion amounts of the live coordinates
@@ -75,7 +74,7 @@ public:
 	// Kinematics and related functions
 	Kinematics& GetKinematics() const { return *kinematics; }
 	bool SetKinematics(KinematicsType k);											// Set kinematics, return true if successful
-	bool CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool allowModeChange) const;
+	bool CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const;
 																					// Convert Cartesian coordinates to delta motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const;
 																					// Convert motor coordinates to machine coordinates
@@ -90,8 +89,8 @@ public:
 
 	bool IsRawMotorMove(uint8_t moveType) const;									// Return true if this is a raw motor move
 
-	void CurrentMoveCompleted();													// Signal that the current move has just been completed
-	bool TryStartNextMove(uint32_t startTime);										// Try to start another move, returning true if Step() needs to be called immediately
+	void CurrentMoveCompleted() __attribute__ ((hot));								// Signal that the current move has just been completed
+	bool TryStartNextMove(uint32_t startTime) __attribute__ ((hot));				// Try to start another move, returning true if Step() needs to be called immediately
 	float IdleTimeout() const;														// Returns the idle timeout in seconds
 	void SetIdleTimeout(float timeout);												// Set the idle timeout in seconds
 
@@ -100,6 +99,8 @@ public:
 	void PrintCurrentDda() const;													// For debugging
 
 	bool PausePrint(RestorePoint& rp);												// Pause the print as soon as we can, returning true if we were able to
+	bool LowPowerPause(RestorePoint& rp);											// Pause the print immediately, returning true if we were able to
+
 	bool NoLiveMovement() const;													// Is a move running, or are there any queued?
 
 	bool IsExtruding() const;														// Is filament being extruded?
@@ -122,9 +123,15 @@ public:
 	static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
 
 private:
-	enum class IdleState : uint8_t { idle, busy, timing };
+	enum class MoveState : uint8_t
+	{
+		idle,			// no moves being executed or in queue, motors are at idle hold
+		collecting,		// no moves currently being executed but we are collecting moves ready to execute them
+		executing,		// we are executing moves
+		timing			// no moves being executed or in queue, motors are at full current
+	};
 
-	bool StartNextMove(uint32_t startTime);														// Start the next move, returning true if Step() needs to be called immediately
+	bool StartNextMove(uint32_t startTime) __attribute__ ((hot));								// Start the next move, returning true if Step() needs to be called immediately
 	void BedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the bed compensations
 	void InverseBedTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;	// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float move[MaxAxes], AxesBitmap xAxes, AxesBitmap yAxes) const;			// Take a position and apply the axis-angle compensations
@@ -142,12 +149,12 @@ private:
 
 	bool active;										// Are we live and running?
 	uint8_t simulationMode;								// Are we simulating, or really printing?
-	bool waitingForMove;								// True if we are waiting for a new move
+	MoveState moveState;								// whether the idle timer is active
+
 	unsigned int numLookaheadUnderruns;					// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;					// How many times we wanted a new move but there were only un-prepared moves in the queue
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
-	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new gcode
-	uint32_t gcodeWaitStartTime;						// When we last asked for a gcode and didn't get one
+	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
 	float simulationTime;								// Print time since we started simulating
 
 	float extrusionPending[MaxExtruders];				// Extrusion not done due to rounding to nearest step
@@ -170,9 +177,8 @@ private:
 	float taperHeight;									// Height over which we taper
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
-	uint32_t lastMoveTime;								// The approximate time at which the last move was completed
+	uint32_t lastStateChangeTime;						// The approximate time at which the state last changed, except we don't record timing->idle
 	uint32_t longWait;									// A long time for things that need to be done occasionally
-	IdleState iState;									// whether the idle timer is active
 
 	Kinematics *kinematics;								// What kinematics we are using
 

@@ -376,6 +376,7 @@ void Network::Start()
 	// The ESP takes about 300ms before it starts talking to us, so don't wait for it here, do that in Spin()
 	spiTxUnderruns = spiRxOverruns = 0;
 	reconnectCount = 0;
+	transferAlreadyPendingCount = readyTimeoutCount = responseTimeoutCount = 0;
 
 	lastTickMillis = millis();
 	state = NetworkState::starting1;
@@ -475,6 +476,7 @@ void Network::Spin(bool full)
 		{
 			if (espStatusChanged && digitalRead(EspTransferRequestPin))
 			{
+				Platform::softwareResetDebugInfo = 1;
 				if (reprap.Debug(moduleNetwork))
 				{
 					debugPrintf("ESP reported status change\n");
@@ -487,6 +489,7 @@ void Network::Spin(bool full)
 					 && currentMode != WiFiState::autoReconnecting
 					)
 			{
+				Platform::softwareResetDebugInfo = 2;
 				// Tell the wifi module to change mode
 				int32_t rslt = ResponseUnknownError;
 				if (currentMode != WiFiState::idle)
@@ -515,6 +518,7 @@ void Network::Spin(bool full)
 			}
 			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
+				Platform::softwareResetDebugInfo = 3;
 				// Find the next socket to poll
 				const size_t startingSocket = currentSocket;
 				do
@@ -549,6 +553,7 @@ void Network::Spin(bool full)
 						{
 							nr = responders;		// 'responders' can't be null at this point
 						}
+						Platform::softwareResetDebugInfo = 4;
 						doneSomething = nr->Spin();
 						nr = nr->GetNext();
 					} while (!doneSomething && nr != nextResponderToPoll);
@@ -558,6 +563,7 @@ void Network::Spin(bool full)
 		}
 		else if (currentMode == requestedMode && (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint))
 		{
+			Platform::softwareResetDebugInfo = 5;
 			sockets[currentSocket].Poll(full);
 			++currentSocket;
 			if (currentSocket == NumTcpSockets)
@@ -608,6 +614,7 @@ void Network::Spin(bool full)
 		break;
 	}
 
+	Platform::softwareResetDebugInfo = 0;
 	if (full)
 	{
 		platform.ClassReport(longWait);
@@ -651,10 +658,13 @@ void Network::Diagnostics(MessageType mtype)
 {
 	platform.MessageF(mtype, "Network state is %s\n", TranslateNetworkState());
 	platform.MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
+	platform.MessageF(mtype, "Failed messages: pending %u, notready %u, noresp %u\n", transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount);
+
 #if 0
 	// The underrun/overrun counters don't work at present
 	platform.MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
 #endif
+
 	if (state != NetworkState::disabled && state != NetworkState::starting1 && state != NetworkState::starting2)
 	{
 		Receiver<NetworkStatusResponse> status;
@@ -675,7 +685,8 @@ void Network::Diagnostics(MessageType mtype)
 
 			if (currentMode == WiFiState::connected)
 			{
-				platform.MessageF(mtype, "WiFi signal strength %ddBm\nReconnections %u\n", (int)r.rssi, reconnectCount);
+				const char* const sleepMode = (r.sleepMode == 1) ? "none" : (r.sleepMode == 2) ? "light" : (r.sleepMode == 3) ? "modem" : "unknown";
+				platform.MessageF(mtype, "WiFi signal strength %ddBm, reconnections %u, sleep mode %s\n", (int)r.rssi, reconnectCount, sleepMode);
 			}
 			else if (currentMode == WiFiState::runningAsAccessPoint)
 			{
@@ -1192,6 +1203,7 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 		{
 			debugPrintf("ResponseBusy\n");
 		}
+		++transferAlreadyPendingCount;
 		return ResponseBusy;
 	}
 
@@ -1206,6 +1218,7 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 				{
 					debugPrintf("ResponseBusy\n");
 				}
+				++readyTimeoutCount;
 				return ResponseBusy;
 			}
 		}
@@ -1255,6 +1268,7 @@ int32_t Network::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t
 				}
 				transferPending = false;
 				spi_dma_disable();
+				++responseTimeoutCount;
 				return ResponseTimeout;
 			}
 		}

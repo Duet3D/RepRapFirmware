@@ -130,7 +130,7 @@ public:
 
 	bool WriteBedAndChamberTempSettings(FileStore *f) const;	// Save some resume information
 
-#ifdef DUET_NG
+#if HAS_VOLTAGE_MONITOR
 	void SuspendHeaters(bool sus);								// Suspend the heaters to conserve power
 #endif
 

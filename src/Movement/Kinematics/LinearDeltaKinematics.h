@@ -26,15 +26,15 @@ public:
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	const char *GetName(bool forStatusReport) const override;
 	bool Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply, bool& error) override;
-	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const override;
+	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const override;
 	bool SupportsAutoCalibration() const override { return true; }
 	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, StringRef& reply) override;
 	void SetCalibrationDefaults() override { Init(); }
 	bool WriteCalibrationParameters(FileStore *f) const override;
 	float GetTiltCorrection(size_t axis) const override;
-	bool IsReachable(float x, float y) const override;
-	bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const override;
+	bool IsReachable(float x, float y, bool isCoordinated) const override;
+	bool LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const override;
 	void GetAssumedInitialPosition(size_t numAxes, float positions[]) const override;
 	AxesBitmap AxesToHomeBeforeProbing() const override { return MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS); }
 	MotionType GetMotionType(size_t axis) const override;
@@ -45,6 +45,7 @@ public:
 	bool QueryTerminateHomingMove(size_t axis) const override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const override;
 	bool WriteResumeSettings(FileStore *f) const override;
+	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const override;
 
     // Public functions specific to this class
 	float GetDiagonalSquared() const { return D2; }

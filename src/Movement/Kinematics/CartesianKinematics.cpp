@@ -19,7 +19,7 @@ const char *CartesianKinematics::GetName(bool forStatusReport) const
 }
 
 // Convert Cartesian coordinates to motor coordinates
-bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const
+bool CartesianKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
@@ -50,7 +50,14 @@ bool CartesianKinematics::QueryTerminateHomingMove(size_t axis) const
 void CartesianKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
 	const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-	dda.SetDriveCoordinate(hitPoint * stepsPerMm[axis], axis);
+	dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+}
+
+// Limit the speed and acceleration of a move to values that the mechanics can handle.
+// The speeds in Cartesian space have already been limited.
+void CartesianKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const
+{
+	// The axes of a Cartesian printer move independently, so there is nothing to do here
 }
 
 // End

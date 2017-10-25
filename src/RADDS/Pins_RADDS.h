@@ -7,6 +7,9 @@
 #define HAS_LWIP_NETWORKING		0
 #define HAS_CPU_TEMP_SENSOR		0				// enabling the CPU temperature sensor disables Due pin 13 due to bug in SAM3X
 #define HAS_HIGH_SPEED_SD		0
+#define HAS_SMART_DRIVERS		0
+#define HAS_VOLTAGE_MONITOR		0
+#define ACTIVE_LOW_HEAT_ON		0
 
 const size_t NumFirmwareUpdateModules = 1;
 #define IAP_UPDATE_FILE "iapradds.bin"
@@ -75,10 +78,6 @@ const Pin DIRECTION_PINS[DRIVES] = { 23, 16,  3, 60, 63, 53, 33, 27, 66 };
 const Pin END_STOP_PINS[DRIVES] = { 28, 30, 32, 39, NoPin, NoPin, NoPin, NoPin };
 
 // HEATERS - The bed is assumed to be the at index 0
-
-// 0 for inverted heater (e.g. Duet v0.6)
-// 1 for not (e.g. Duet v0.4; RADDS)
-const bool HEAT_ON = true;
 
 // Analogue pin numbers
 const Pin TEMP_SENSE_PINS[Heaters] = HEATERS_(4, 0, 1, 2, e, f, g, h);

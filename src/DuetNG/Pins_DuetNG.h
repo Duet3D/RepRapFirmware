@@ -25,6 +25,9 @@ const size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define HAS_LWIP_NETWORKING		0
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
+#define HAS_SMART_DRIVERS		1
+#define HAS_VOLTAGE_MONITOR		1
+#define ACTIVE_LOW_HEAT_ON		1
 
 #define IAP_UPDATE_FILE		"iap4e.bin"			// using the same IAP file for both Duet WiFi and Duet Ethernet
 
@@ -73,7 +76,6 @@ constexpr Pin DueX_INT = 17;						// DueX interrupt pin = PA17 (was E6_STOP)
 constexpr Pin END_STOP_PINS[DRIVES] = { 46, 02, 93, 74, 48, 200, 203, 202, 201, 213, 39, 8 };
 
 // HEATERS
-constexpr bool HEAT_ON = false;												// false for inverted heater (e.g. Duet v0.6), true for not (e.g. Duet v0.4)
 constexpr Pin TEMP_SENSE_PINS[Heaters] = { 45, 47, 44, 61, 62, 63, 59, 18 }; // Thermistor pin numbers
 constexpr Pin HEAT_ON_PINS[Heaters] = { 19, 20, 16, 35, 37, 40, 43, 15 };	// Heater pin numbers (heater 7 pin TBC)
 

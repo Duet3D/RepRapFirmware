@@ -10,6 +10,7 @@
 #include "Move.h"
 #include "RepRap.h"
 #include "Libraries/Math/Isqrt.h"
+#include "Kinematics/LinearDeltaKinematics.h"
 
 // Static members
 
@@ -44,16 +45,6 @@ DriveMovement *DriveMovement::Allocate(size_t drive, DMState st)
 		dm->state = st;
 	}
 	return dm;
-}
-
-void DriveMovement::Release(DriveMovement *item)
-{
-	if (item != nullptr)
-	{
-		item->nextDM = freeList;
-		freeList = item;
-		++numFree;
-	}
 }
 
 // Constructors
@@ -102,6 +93,64 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 {
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
+	const float A = params.initialX - params.dparams->GetTowerX(drive);
+	const float B = params.initialY - params.dparams->GetTowerY(drive);
+	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
+	const float dSquaredMinusAsquaredMinusBsquared = params.diagonalSquared - fsquare(A) - fsquare(B);
+	const float h0MinusZ0 = sqrtf(dSquaredMinusAsquaredMinusBsquared);
+	mp.delta.hmz0sK = (int32_t)(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
+	mp.delta.minusAaPlusBbTimesKs = -(int32_t)(aAplusbB * stepsPerMm * DriveMovement::K2);
+	mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared =
+			(int64_t)(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
+
+	// Calculate the distance at which we need to reverse direction.
+	if (params.a2plusb2 <= 0.0)
+	{
+		// Pure Z movement. We can't use the main calculation because it divides by a2plusb2.
+		direction = (dda.directionVector[Z_AXIS] >= 0.0);
+		reverseStartStep = totalSteps + 1;
+	}
+	else
+	{
+		// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
+		// the other root corresponds to the carriages being above the bed.
+		const float drev = ((dda.directionVector[Z_AXIS] * sqrtf(params.a2b2D2 - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
+							- aAplusbB)/params.a2plusb2;
+		if (drev > 0.0 && drev < dda.totalDistance)		// if the reversal point is within range
+		{
+			// Calculate how many steps we need to move up before reversing
+			const float hrev = dda.directionVector[Z_AXIS] * drev + sqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
+			const int32_t numStepsUp = (int32_t)((hrev - h0MinusZ0) * stepsPerMm);
+
+			// We may be almost at the peak height already, in which case we don't really have a reversal.
+			if (numStepsUp < 1 || (direction && (uint32_t)numStepsUp <= totalSteps))
+			{
+				reverseStartStep = totalSteps + 1;
+			}
+			else
+			{
+				reverseStartStep = (uint32_t)numStepsUp + 1;
+
+				// Correct the initial direction and the total number of steps
+				if (direction)
+				{
+					// Net movement is up, so we will go up a bit and then down by a lesser amount
+					totalSteps = (2 * numStepsUp) - totalSteps;
+				}
+				else
+				{
+					// Net movement is down, so we will go up first and then down by a greater amount
+					direction = true;
+					totalSteps = (2 * numStepsUp) + totalSteps;
+				}
+			}
+		}
+		else
+		{
+			reverseStartStep = totalSteps + 1;
+		}
+	}
+
 	mp.delta.twoCsquaredTimesMmPerStepDivAK = (uint32_t)((float)DDA::stepClockRateSquared/(stepsPerMm * dda.acceleration * (K2/2)));
 
 	// Acceleration phase parameters

@@ -30,6 +30,8 @@ private:
 	void InternalLogMessage(time_t time, const char *message);
 
 	FileData logFile;
+	uint32_t lastFlushTime;
+	FilePosition lastFlushFileSize;
 	bool dirty;
 	bool inLogger;
 };

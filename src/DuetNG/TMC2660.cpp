@@ -85,6 +85,7 @@ const uint32_t TMC_DRVCTRL_INTPOL = 1 << 9;
 const uint32_t TMC_SGCSCONF_CS_MASK = 31;
 #define TMC_SGCSCONF_CS(n) ((((uint32_t)n) & 31) << 0)
 const uint32_t TMC_SGCSCONF_SGT_MASK = 127 << 8;
+const uint32_t TMC_SGCSCONF_SGT_SHIFT = 8;
 #define TMC_SGCSCONF_SGT(n) ((((uint32_t)n) & 127) << 8)
 const uint32_t TMC_SGCSCONF_SGT_SFILT = 1 << 16;
 
@@ -126,6 +127,7 @@ const uint32_t defaultSgscConfReg =
 const uint32_t defaultDrvConfReg =
 	TMC_REG_DRVCONF
 	| TMC_DRVCONF_VSENSE				// use high sensitivity range
+	| TMC_DRVCONF_TS2G_0P8				// fast short-to-ground detection
 	| 0;
 
 // Driver control register
@@ -137,7 +139,7 @@ const uint32_t defaultDrvCtrlReg =
 // coolStep control register
 const uint32_t defaultSmartEnReg =
 	  TMC_REG_SMARTEN
-	| 0;								// disable coolStep, we already do this in the main firmware
+	| 0;								// disable coolStep, it needs to be tuned ot the motor to work properly
 
 //----------------------------------------------------------------------------------------------------------------------------------
 // Private types and methods
@@ -161,6 +163,10 @@ struct TmcDriverState
 	void Enable(bool en);
 	void SpiSendWord(uint32_t dataOut);
 	uint32_t ReadStatus();
+	void SetStallThreshold(int sgThreshold);
+	void SetStallFilter(bool sgFilter);
+	void SetCoolStep(uint16_t coolStepConfig);
+	void AppendStallConfig(StringRef& reply);
 };
 
 // Initialise the state of the driver.
@@ -270,11 +276,48 @@ uint32_t TmcDriverState::ReadStatus()
 	return lastReadValue & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
+void TmcDriverState::SetStallThreshold(int sgThreshold)
+{
+	const uint32_t sgVal = ((uint32_t)constrain<int>(sgThreshold, -64, 63)) & 127;
+	sgcsConfReg = (sgcsConfReg & ~TMC_SGCSCONF_SGT_MASK) | (sgVal << TMC_SGCSCONF_SGT_SHIFT);
+	SpiSendWord(sgcsConfReg);
+}
+
+void TmcDriverState::SetStallFilter(bool sgFilter)
+{
+	if (sgFilter)
+	{
+		sgcsConfReg |= TMC_SGCSCONF_SGT_SFILT;
+	}
+	else
+	{
+		sgcsConfReg &= ~TMC_SGCSCONF_SGT_SFILT;
+	}
+	SpiSendWord(sgcsConfReg);
+}
+
+void TmcDriverState::SetCoolStep(uint16_t coolStepConfig)
+{
+	smartEnReg = TMC_REG_SMARTEN | coolStepConfig;
+	SpiSendWord(smartEnReg);
+}
+
+void TmcDriverState::AppendStallConfig(StringRef& reply)
+{
+	const bool filtered = ((sgcsConfReg & TMC_SGCSCONF_SGT_SFILT) != 0);
+	int threshold = (int)((sgcsConfReg & TMC_SGCSCONF_SGT_MASK) >> TMC_SGCSCONF_SGT_SHIFT);
+	if (threshold >= 64)
+	{
+		threshold -= 128;
+	}
+	reply.catf("stall threshold %d, filter %s, coolstep %" PRIx32, threshold, ((filtered) ? "on" : "off"), smartEnReg & 0xFFFF);
+}
+
 static TmcDriverState driverStates[DRIVES];
 
 //--------------------------- Public interface ---------------------------------
 
-namespace TMC2660
+namespace SmartDrivers
 {
 	// Initialise the driver interface and the drivers, leaving each drive disabled.
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
@@ -431,6 +474,38 @@ namespace TMC2660
 		else if (!powered && wasPowered)
 		{
 			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
+		}
+	}
+
+	void SetStallThreshold(size_t drive, int sgThreshold)
+	{
+		if (drive < numTmc2660Drivers)
+		{
+			driverStates[drive].SetStallThreshold(sgThreshold);
+		}
+	}
+
+	void SetStallFilter(size_t drive, bool sgFilter)
+	{
+		if (drive < numTmc2660Drivers)
+		{
+			driverStates[drive].SetStallFilter(sgFilter);
+		}
+	}
+
+	void SetCoolStep(size_t drive, uint16_t coolStepConfig)
+	{
+		if (drive < numTmc2660Drivers)
+		{
+			driverStates[drive].SetCoolStep(coolStepConfig);
+		}
+	}
+
+	void AppendStallConfig(size_t drive, StringRef& reply)
+	{
+		if (drive < numTmc2660Drivers)
+		{
+			driverStates[drive].AppendStallConfig(reply);
 		}
 	}
 

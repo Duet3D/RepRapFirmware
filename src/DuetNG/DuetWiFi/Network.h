@@ -158,6 +158,9 @@ private:
 	unsigned int spiTxUnderruns;
 	unsigned int spiRxOverruns;
 	unsigned int reconnectCount;
+	unsigned int transferAlreadyPendingCount;
+	unsigned int readyTimeoutCount;
+	unsigned int responseTimeoutCount;
 
 	char wiFiServerVersion[16];
 };

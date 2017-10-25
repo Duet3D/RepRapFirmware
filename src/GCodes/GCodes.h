@@ -41,6 +41,7 @@ typedef AxesBitmap EndstopChecks;						// must be large enough to hold a bitmap 
 const EndstopChecks ZProbeActive = 1 << 31;				// must be distinct from 1 << (any drive number)
 const EndstopChecks HomeAxes = 1 << 30;					// must be distinct from 1 << (any drive number)
 const EndstopChecks LogProbeChanges = 1 << 29;			// must be distinct from 1 << (any drive number)
+const EndstopChecks UseSpecialEndstop = 1 << 28;		// must be distinct from 1 << (any drive number)
 
 typedef uint32_t TriggerInputsBitmap;					// Bitmap of input pins that a single trigger number responds to
 typedef uint32_t TriggerNumbersBitmap;					// Bitmap of trigger numbers
@@ -64,10 +65,10 @@ struct Trigger
 };
 
 // Bits for T-code P-parameter to specify which macros are supposed to be run
-const int TFreeBit = 1 << 0;
-const int TPreBit = 1 << 1;
-const int TPostBit = 1 << 2;
-const int DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
+constexpr uint8_t TFreeBit = 1 << 0;
+constexpr uint8_t TPreBit = 1 << 1;
+constexpr uint8_t TPostBit = 1 << 2;
+constexpr uint8_t DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
 
 // Machine type enumeration. The numeric values must be in the same order as the corresponding M451..M453 commands.
 enum class MachineType : uint8_t
@@ -75,6 +76,21 @@ enum class MachineType : uint8_t
 	fff = 0,
 	laser = 1,
 	cnc = 2
+};
+
+enum class PauseReason
+{
+	user,			// M25 command received
+	gcode,			// M25 or M226 command encountered in the file being printed
+	trigger,		// external switch
+	heaterFault,	// heater fault detected
+	filament,		// filament monitor
+#if HAS_SMART_DRIVERS
+	stall,			// motor stall detected
+#endif
+#if HAS_VOLTAGE_MONITOR
+	lowVoltage		// VIN voltage dropped below configured minimum
+#endif
 };
 
 //****************************************************************************************************
@@ -98,6 +114,8 @@ public:
 		IoBits_t ioBits;												// I/O bits to set/clear at the start of this move
 #endif
 		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
+		uint8_t proportionRemaining;									// what proportion of the entire move remains after this segment
+
 		uint8_t isFirmwareRetraction : 1;								// true if this is a firmware retraction/un-retraction move
 		uint8_t usePressureAdvance : 1;									// true if we want to us extruder pressure advance, if there is any extrusion
 		uint8_t canPauseBefore : 1;										// true if we can pause before this move
@@ -161,11 +179,11 @@ public:
 	size_t GetNumExtruders() const { return numExtruders; }
 
 	void FilamentError(size_t extruder, FilamentSensorStatus fstat);
+	void HandleHeaterFault(int heater);											// Respond to a heater fault
 
-#ifdef DUET_NG
-	bool AutoPause();
-	bool AutoShutdown();
-	bool AutoResume();
+#if HAS_VOLTAGE_MONITOR
+	bool LowVoltagePause();
+	bool LowVoltageResume();
 	bool AutoResumeAfterShutdown();
 #endif
 
@@ -193,11 +211,14 @@ private:
 	bool LockFileSystem(const GCodeBuffer& gb);							// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb);							// Lock movement
 	bool LockMovementAndWaitForStandstill(const GCodeBuffer& gb);		// Lock movement and wait for pending moves to finish
+	void GrabResource(const GCodeBuffer& gb, Resource r);				// Grab a resource even if it is already owned
+	void GrabMovement(const GCodeBuffer& gb);							// Grab the movement lock even if it is already owned
 	void UnlockAll(const GCodeBuffer& gb);								// Release all locks
 
 	void StartNextGCode(GCodeBuffer& gb, StringRef& reply);				// Fetch a new or old GCode and process it
+	void RunStateMachine(GCodeBuffer& gb, StringRef& reply);			// Execute a step of the state machine
 	void DoFilePrint(GCodeBuffer& gb, StringRef& reply);				// Get G Codes from a file and print them
-	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, bool runningM502 = false);
+	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning = 0);
 																		// Run a GCode macro file, optionally report error if not found
 	void FileMacroCyclesReturn(GCodeBuffer& gb);						// End a macro
 
@@ -256,9 +277,10 @@ private:
 	bool ChangeMicrostepping(size_t drive, int microsteps, int mode) const;	// Change microstepping on the specified drive
 	void ListTriggers(StringRef reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
 	void CheckTriggers();												// Check for and execute triggers
+	void CheckFilament();												// Check for and respond to filament errors
 	void DoEmergencyStop();												// Execute an emergency stop
 
-	void DoPause(GCodeBuffer& gb, bool isAuto)							// Pause the print
+	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, ...) __attribute__ ((format (printf, 4, 5)));	// Pause the print
 	pre(resourceOwners[movementResource] = &gb);
 
 	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
@@ -282,7 +304,7 @@ private:
 	void EndSimulation(GCodeBuffer *gb);								// Restore positions etc. when exiting simulation mode
 	bool IsCodeQueueIdle() const;										// Return true if the code queue is idle
 
-	void SaveResumeInfo();
+	void SaveResumeInfo(bool wasPowerFailure);
 
 	const char* GetMachineModeString() const;							// Get the name of the current machine mode
 
@@ -294,12 +316,7 @@ private:
 	StreamGCodeInput* serialInput;										// ...
 	StreamGCodeInput* auxInput;											// ...for the GCodeBuffers below
 
-#ifdef DUET_NG
 	GCodeBuffer* gcodeSources[8];										// The various sources of gcodes
-	GCodeBuffer*& autoPauseGCode = gcodeSources[7];						// GCode state machine used to run pause.g and resume.g
-#else
-	GCodeBuffer* gcodeSources[7];										// The various sources of gcodes
-#endif
 
 	GCodeBuffer*& httpGCode = gcodeSources[0];
 	GCodeBuffer*& telnetGCode = gcodeSources[1];
@@ -308,6 +325,8 @@ private:
 	GCodeBuffer*& auxGCode = gcodeSources[4];							// This one is for the LCD display on the async serial interface
 	GCodeBuffer*& daemonGCode = gcodeSources[5];						// Used for executing config.g and trigger macro files
 	GCodeBuffer*& queuedGCode = gcodeSources[6];
+	GCodeBuffer*& autoPauseGCode = gcodeSources[7];						// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+
 	size_t nextGcodeSource;												// The one to check next
 
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
@@ -316,11 +335,16 @@ private:
 	bool active;								// Live and running?
 	bool isPaused;								// true if the print has been paused manually or automatically
 	bool pausePending;							// true if we have been asked to pause but we are running a macro
-#ifdef DUET_NG
-	bool isAutoPaused;							// true if the print was paused automatically
-#endif
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
+
+	uint8_t moveFractionToStartAt;				// how much of the next move was printed before the power failure
+	uint8_t moveFractionToSkip;
+
+	#if HAS_VOLTAGE_MONITOR
+	bool isPowerFailPaused;						// true if the print was paused automatically because of a power failure
+	char *powerFailScript;						// the commands run when there is a power failure
+#endif
 
 	float currentUserPosition[MaxAxes];			// The current position of the axes as commanded by the input gcode, before accounting for tool offset and Z hop
 	float currentZHop;							// The amount of Z hop that is currently applied
@@ -328,6 +352,7 @@ private:
 	// The following contain the details of moves that the Move module fetches
 	RawMove moveBuffer;							// Move details to pass to Move class
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
+	unsigned int totalSegments;					// The total number of segments left in the complete move
 	float arcCentre[MaxAxes];
 	float arcRadius;
 	float arcCurrentAngle;
@@ -354,9 +379,6 @@ private:
 
 	FileStore* fileBeingWritten;				// A file to write G Codes (or sometimes HTML) to
 	FilePosition fileSize;						// Size of the file being written
-
-	int oldToolNumber, newToolNumber;			// Tools being changed
-	int toolChangeParam;						// Bitmap of all the macros to be run during a tool change
 
 	const char* eofString;						// What's at the end of an HTML file?
 	uint8_t eofStringCounter;					// Check the...
@@ -443,20 +465,14 @@ private:
 	static constexpr const char* CONFIG_OVERRIDE_G = "config-override.g";
 	static constexpr const char* DEPLOYPROBE_G = "deployprobe.g";
 	static constexpr const char* RETRACTPROBE_G = "retractprobe.g";
-	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
 	static constexpr const char* PAUSE_G = "pause.g";
 	static constexpr const char* HOME_ALL_G = "homeall.g";
 	static constexpr const char* HOME_DELTA_G = "homedelta.g";
 	static constexpr const char* DefaultHeightMapFile = "heightmap.csv";
 	static constexpr const char* LOAD_FILAMENT_G = "load.g";
 	static constexpr const char* UNLOAD_FILAMENT_G = "unload.g";
-
-#ifdef DUET_NG
-	static constexpr const char* POWER_FAIL_G = "powerfail.g";
-	static constexpr const char* POWER_RESTORE_G = "powerrestore.g";
-#endif
-
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
+	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
 	static const uint16_t ServoRefreshFrequency = 50;

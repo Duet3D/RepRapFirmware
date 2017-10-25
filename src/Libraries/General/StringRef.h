@@ -33,7 +33,7 @@ public:
 
 	void Clear() const { p[0] = 0; }
 
-	int printf(const char *fmt, ...) const  __attribute__ ((format (printf, 2, 3)));
+	int printf(const char *fmt, ...) const __attribute__ ((format (printf, 2, 3)));
 	int vprintf(const char *fmt, va_list vargs) const;
 	int catf(const char *fmt, ...) const __attribute__ ((format (printf, 2, 3)));
 	int vcatf(const char *fmt, va_list vargs) const;
@@ -41,6 +41,7 @@ public:
 	size_t cat(const char *src) const;
 	size_t cat(char c) const;
 	size_t StripTrailingSpaces() const;
+	size_t Prepend(const char *src) const;
 
 	bool IsEmpty() const { return p[0] == 0; }
 };

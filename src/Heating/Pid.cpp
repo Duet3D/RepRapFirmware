@@ -74,7 +74,7 @@ void PID::Reset()
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
 	temperature = BAD_ERROR_TEMPERATURE;
-#ifdef DUET_NG
+#if HAS_VOLTAGE_MONITOR
 	suspended = false;
 #endif
 }
@@ -188,16 +188,16 @@ void PID::Spin()
 {
 	if (model.IsEnabled())
 	{
-#ifdef DUET_NG
+		// Read the temperature even if the heater is suspended
+		const TemperatureError err = ReadTemperature();
+
+#if HAS_VOLTAGE_MONITOR
 		if (suspended)
 		{
 			SetHeater(0.0);
 			return;
 		}
 #endif
-		// Read the temperature
-		const TemperatureError err = ReadTemperature();
-
 		// Handle any temperature reading error and calculate the temperature rate of change, if possible
 		if (err != TemperatureError::success)
 		{
@@ -267,7 +267,7 @@ void PID::Spin()
 							{
 								SetHeater(0.0);					// do this here just to be sure
 								mode = HeaterMode::fault;
-								reprap.GetGCodes().CancelPrint(false, false);
+								reprap.GetGCodes().HandleHeaterFault(heater);
 								platform.MessageF(ErrorMessage,
 											"Heating fault on heater %d, temperature rising much more slowly than the expected %.1f" DEGREE_SYMBOL "C/sec\n",
 											heater, (double)expectedRate);
@@ -294,7 +294,7 @@ void PID::Spin()
 					{
 						SetHeater(0.0);					// do this here just to be sure
 						mode = HeaterMode::fault;
-						reprap.GetGCodes().CancelPrint(false, false);
+						reprap.GetGCodes().HandleHeaterFault(heater);
 						platform.MessageF(ErrorMessage, "Heating fault on heater %d, temperature excursion exceeded %.1f" DEGREE_SYMBOL "C\n",
 											heater, (double)maxTempExcursion);
 					}
@@ -498,7 +498,7 @@ void PID::StartAutoTune(float targetTemp, float maxPwm, StringRef& reply)
 			tuningTempReadings = new float[MaxTuningTempReadings];
 			tuningTempReadings[0] = temperature;
 			tuningReadingInterval = platform.HeatSampleInterval();
-			tuningPwm = min<float>(maxPwm, model.GetMaxPwm());
+			tuningPwm = maxPwm;
 			tuningTargetTemp = targetTemp;
 			reply.printf("Auto tuning heater %d using target temperature %.1f" DEGREE_SYMBOL "C and PWM %.2f - do not leave printer unattended", heater, (double)targetTemp, (double)maxPwm);
 		}
@@ -857,7 +857,7 @@ void PID::DisplayBuffer(const char *intro)
 	}
 }
 
-#ifdef DUET_NG
+#if HAS_VOLTAGE_MONITOR
 
 // Suspend the heater to conserve power, or resume it
 void PID::Suspend(bool sus)

@@ -134,7 +134,7 @@ void LinearDeltaKinematics::InverseTransform(float Ha, float Hb, float Hc, float
 }
 
 // Convert Cartesian coordinates to motor steps
-bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool allowModeChange) const
+bool LinearDeltaKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const
 {
 	//TODO return false if we can't transform the position
 	for (size_t axis = 0; axis < min<size_t>(numVisibleAxes, DELTA_AXES); ++axis)
@@ -163,20 +163,20 @@ void LinearDeltaKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 }
 
 // Return true if the specified XY position is reachable by the print head reference point.
-bool LinearDeltaKinematics::IsReachable(float x, float y) const
+bool LinearDeltaKinematics::IsReachable(float x, float y, bool isCoordinated) const
 {
 	return fsquare(x) + fsquare(y) < printRadiusSquared;
 }
 
 // Limit the Cartesian position that the user wants to move to
-bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const
+bool LinearDeltaKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
 {
 	const AxesBitmap allAxes = MakeBitmap<AxesBitmap>(X_AXIS) | MakeBitmap<AxesBitmap>(Y_AXIS) | MakeBitmap<AxesBitmap>(Z_AXIS);
 	bool limited = false;
 	if ((axesHomed & allAxes) == allAxes)
 	{
 		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
-		// Skip this check if axes have not been homed, so that extruder-only moved are allowed before homing
+		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
 		// Constrain the move to be within the build radius
 		const float diagonalSquared = fsquare(coords[X_AXIS]) + fsquare(coords[Y_AXIS]);
 		if (diagonalSquared > printRadiusSquared)
@@ -735,7 +735,22 @@ void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 	if (highEnd)
 	{
 		const float hitPoint = GetHomedCarriageHeight(axis);
-		dda.SetDriveCoordinate(hitPoint * stepsPerMm[axis], axis);
+		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+	}
+}
+
+// Limit the speed and acceleration of a move to values that the mechanics can handle.
+// The speeds in Cartesian space have already been limited.
+void LinearDeltaKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector) const
+{
+	// Limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration
+	const float xyFactor = sqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
+	if (xyFactor > 0.01)
+	{
+		const Platform& platform = reprap.GetPlatform();
+		const float maxSpeed = min<float>(platform.MaxFeedrate(X_AXIS), platform.MaxFeedrate(Y_AXIS));
+		const float maxAcceleration = min<float>(platform.Acceleration(X_AXIS), platform.Acceleration(Y_AXIS));
+		dda.LimitSpeedAndAcceleration(maxSpeed/xyFactor, maxAcceleration/xyFactor);
 	}
 }
 

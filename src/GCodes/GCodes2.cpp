@@ -29,17 +29,13 @@
 # include "FirmwareUpdater.h"
 #endif
 
+#include <algorithm>			// for std::swap
+
 // If the code to act on is completed, this returns true,
 // otherwise false.  It is called repeatedly for a given
 // code until it returns true for that code.
 bool GCodes::ActOnCode(GCodeBuffer& gb, StringRef& reply)
 {
-	// Discard empty buffers right away
-	if (gb.IsEmpty())
-	{
-		return true;
-	}
-
 	// Can we queue this code?
 	if (gb.CanQueueCodes() && codeQueue->QueueCode(gb, segmentsLeft))
 	{
@@ -52,22 +48,35 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, StringRef& reply)
 	switch (gb.GetCommandLetter())
 	{
 	case 'G':
-		return HandleGcode(gb, reply);
+		if (gb.HasCommandNumber())
+		{
+			return HandleGcode(gb, reply);
+		}
+		break;
+
 	case 'M':
-		return HandleMcode(gb, reply);
+		if (gb.HasCommandNumber())
+		{
+			return HandleMcode(gb, reply);
+		}
+		break;
+
 	case 'T':
 		return HandleTcode(gb, reply);
+
 	default:
-		// An invalid command gets discarded
-		HandleReply(gb, false, "");
-		return true;
+		break;
 	}
+
+	reply.printf("Bad command: %s", gb.Buffer());
+	HandleReply(gb, true, reply.Pointer());
+	return true;
 }
 
 bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 {
 	GCodeResult result = GCodeResult::ok;
-	const int code = gb.GetIValue();
+	const int code = gb.GetCommandNumber();
 	if (simulationMode != 0 && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && code != 90 && code != 91 && code != 92)
 	{
 		return true;			// we only simulate some gcodes
@@ -108,7 +117,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		if (DoArcMove(gb, code == 2))
 		{
-			reply.copy("Invalid G2 or G3 command");
+			reply.copy("Invalid arc parameters");
 			result = GCodeResult::error;
 		}
 		break;
@@ -229,7 +238,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	default:
-		reply.printf("invalid G Code: %s", gb.Buffer());
+		reply.copy("Unsupported command");
 		result = GCodeResult::error;
 	}
 
@@ -246,6 +255,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 	if (gb.GetState() == GCodeState::normal)
 	{
 		UnlockAll(gb);
+		if (result == GCodeResult::error)
+		{
+			scratchString.printf("G%d: ", code);
+			reply.Prepend(scratchString.Pointer());
+		}
 		HandleReply(gb, result != GCodeResult::ok, reply.Pointer());
 	}
 	return true;
@@ -255,7 +269,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 {
 	GCodeResult result = GCodeResult::ok;
 
-	const int code = gb.GetIValue();
+	const int code = gb.GetCommandNumber();
 	if (   simulationMode != 0
 		&& (code < 20 || code > 37)
 		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
@@ -496,7 +510,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			const size_t card = (gb.Seen('P')) ? gb.GetIValue() : 0;
-			result = GetGCodeResultFromError(platform.GetMassStorage()->Mount(card, reply, true)) ;
+			result = platform.GetMassStorage()->Mount(card, reply, true);
 		}
 		break;
 
@@ -507,7 +521,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			const size_t card = (gb.Seen('P')) ? gb.GetIValue() : 0;
-			result = GetGCodeResultFromError(platform.GetMassStorage()->Unmount(card, reply));
+			result = platform.GetMassStorage()->Unmount(card, reply);
 		}
 		break;
 
@@ -556,35 +570,63 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 24: // Print/resume-printing the selected file
-		if (!LockMovementAndWaitForStandstill(gb))
+		if (IsPausing() || IsResuming())
 		{
-			return false;
-		}
-
-		if (isPaused)
-		{
-			gb.SetState(GCodeState::resuming1);
-			if (AllAxesAreHomed())
-			{
-				DoFileMacro(gb, RESUME_G, true);
-			}
-		}
-		else if (!fileToPrint.IsLive())
-		{
-			reply.copy("Cannot print, because no file is selected!");
-			result = GCodeResult::error;
+			// ignore the resume request
 		}
 		else
 		{
-			if (fileOffsetToPrint != 0)
+			if (!LockMovementAndWaitForStandstill(gb))
 			{
-				// We executed M23 to set the file offset, which normally means that we are executing resurrect.g.
-				// We need to copy the absolute/relative and volumetric extrusion flags over
-				fileGCode->OriginalMachineState().drivesRelative = gb.MachineState().drivesRelative;
-				fileGCode->OriginalMachineState().volumetricExtrusion = gb.MachineState().volumetricExtrusion;
-				fileToPrint.Seek(fileOffsetToPrint);
+				return false;
 			}
-			StartPrinting();
+
+			if (IsPaused())
+			{
+#if HAS_VOLTAGE_MONITOR
+				if (!platform.IsPowerOk())
+				{
+					reply.copy("Cannot resume while power voltage is low");
+					result = GCodeResult::error;
+				}
+				else
+#endif
+				{
+					gb.SetState(GCodeState::resuming1);
+					if (AllAxesAreHomed())
+					{
+						DoFileMacro(gb, RESUME_G, true);
+					}
+				}
+			}
+			else if (!fileToPrint.IsLive())
+			{
+				reply.copy("Cannot print, because no file is selected!");
+				result = GCodeResult::error;
+			}
+			else
+			{
+#if HAS_VOLTAGE_MONITOR
+				if (!platform.IsPowerOk())
+				{
+					reply.copy("Cannot start a print while power voltage is low");
+					result = GCodeResult::error;
+				}
+				else
+#endif
+				{
+					if (fileOffsetToPrint != 0)
+					{
+						// We executed M23 to set the file offset, which normally means that we are executing resurrect.g.
+						// We need to copy the absolute/relative and volumetric extrusion flags over
+						fileGCode->OriginalMachineState().drivesRelative = gb.MachineState().drivesRelative;
+						fileGCode->OriginalMachineState().volumetricExtrusion = gb.MachineState().volumetricExtrusion;
+						fileToPrint.Seek(fileOffsetToPrint);
+						moveFractionToSkip = moveFractionToStartAt;
+					}
+					StartPrinting();
+				}
+			}
 		}
 		break;
 
@@ -601,7 +643,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					return false;
 				}
-				DoPause(gb, false);
+				DoPause(gb, PauseReason::gcode, nullptr);
 			}
 		}
 		break;
@@ -627,7 +669,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				return false;
 			}
-			DoPause(gb, false);
+			DoPause(gb, PauseReason::user, nullptr);
 		}
 		break;
 
@@ -635,8 +677,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		// This is used between executing M23 to set up the file to print, and M25 to print it
 		if (gb.Seen('S'))
 		{
-			// Ideally we would get an unsigned value here in case of the file offset being >2Gb
-			fileOffsetToPrint = (FilePosition)gb.GetIValue();
+			fileOffsetToPrint = (FilePosition)gb.GetUIValue();
+			if (gb.Seen('P'))
+			{
+				moveFractionToStartAt = (uint8_t)constrain<unsigned long>(lrintf(gb.GetFValue()), 0, 255);
+			}
 		}
 		break;
 
@@ -939,16 +984,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		FileMacroCyclesReturn(gb);
 		break;
 
-	case 101: // Un-retract
+	case 101: // Un-retract, generated by S3D if "Include M101/101/103" is enabled
 		result = RetractFilament(gb, false);
 		break;
 
 	case 102:
-		// S3D generates this command once at the start of he print job if firmware retraction is enabled.
+		// S3D generates this command just before each explicit retraction command if both explicit retraction and "Include M101/101/103" are enabled.
+		// Old versions of S3D also generate it once at the start of each prnit file if "Include M101/101/103" is enabled.
 		// It's not documented, so we just ignore it rather than generate an error message.
 		break;
 
-	case 103: // Retract
+	case 103: // Retract, generated by S3D if "Include M101/101/103" is enabled
 		result = RetractFilament(gb, true);
 		break;
 
@@ -1077,8 +1123,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					return false;
 				}
 
-				newToolNumber = tool->Number();
-				toolChangeParam = (simulationMode == 0) ? 0 : DefaultToolChangeParam;
+				gb.MachineState().newToolNumber = tool->Number();
+				gb.MachineState().toolChangeParam = (simulationMode == 0) ? 0 : DefaultToolChangeParam;
 				gb.SetState(GCodeState::m109ToolChange0);
 			}
 			else
@@ -1272,7 +1318,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else if (bedHeater >= (int)Heaters)
 				{
-					reply.copy("Invalid heater number");
+					reply.printf("Invalid heater number '%d'", bedHeater);
 					result = GCodeResult::error;
 					break;
 				}
@@ -1331,7 +1377,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else if (heater >= (int)Heaters)
 				{
-					reply.copy("Bad heater number specified!");
+					reply.printf("Bad heater number '%d'", heater);
 					result = GCodeResult::error;
 					break;
 				}
@@ -1362,7 +1408,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					reply.copy("No chamber heater has been set up yet!");
+					reply.copy("No chamber heater has been configured");
 					result = GCodeResult::error;
 				}
 			}
@@ -1376,7 +1422,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					reply.copy("No chamber heater has been configured yet.");
+					reply.copy("No chamber heater has been configured");
 				}
 			}
 		}
@@ -1387,7 +1433,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			const int heater = (gb.Seen('H')) ? gb.GetIValue() : 1;		// default to extruder 1 if no heater number provided
 			if (heater < 0 || heater >= (int)Heaters)
 			{
-				reply.copy("Invalid heater number");
+				reply.printf("Invalid heater number '%d'", heater);
 				result = GCodeResult::error;
 			}
 			else if (gb.Seen('S'))
@@ -1656,11 +1702,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					const float value = gb.GetFValue() * distanceScale;
 					if (setMin)
 					{
-						platform.SetAxisMinimum(axis, value);
+						platform.SetAxisMinimum(axis, value, gb.MachineState().runningM501);
 					}
 					else
 					{
-						platform.SetAxisMaximum(axis, value);
+						platform.SetAxisMaximum(axis, value, gb.MachineState().runningM501);
 					}
 					seen = true;
 				}
@@ -1709,7 +1755,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.printf("Invalid speed factor specified.");
+				reply.printf("Invalid speed factor");
 				result = GCodeResult::error;
 			}
 		}
@@ -1921,7 +1967,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 										: heater == reprap.GetHeat().GetBedHeater() ? 75.0
 										: heater == reprap.GetHeat().GetChamberHeater() ? 50.0
 										: 200.0;
-			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : 1.0;
+			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
 			if (heater < 0 || heater >= (int)Heaters)
 			{
 				reply.copy("Bad heater number in M303 command");
@@ -2198,7 +2244,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.copy("Bad M452 P parameter");
+				reply.copy("Bad P parameter");
 				result = GCodeResult::error;
 			}
 		}
@@ -2233,7 +2279,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.copy("Bad M453 P parameter");
+				reply.copy("Bad P parameter");
 				result = GCodeResult::error;
 			}
 		}
@@ -2252,14 +2298,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 501: // Load parameters from EEPROM
-		DoFileMacro(gb, "config-override.g", true);
+		DoFileMacro(gb, "config-override.g", true, code);
 		break;
 
 	case 502: // Revert to default "factory settings"
 		reprap.GetHeat().ResetHeaterModels();							// in case some heaters have no M307 commands in config.g
 		reprap.GetMove().GetKinematics().SetCalibrationDefaults();		// in case M665/M666/M667/M669 in config.g don't define all the parameters
 		platform.SetZProbeDefaults();
-		DoFileMacro(gb, "config.g", true, true);
+		DoFileMacro(gb, "config.g", true, code);
 		break;
 
 	case 503: // List variable settings
@@ -2281,7 +2327,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			FileStore * const f = platform.GetFileStore(platform.GetSysDir(), platform.GetConfigFile(), OpenMode::read);
 			if (f == nullptr)
 			{
-				reply.copy("Configuration file not found!");
+				reply.copy("Configuration file not found");
 				result = GCodeResult::error;
 			}
 			else
@@ -2368,7 +2414,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				StringRef ssid(ssidBuffer, ARRAY_SIZE(ssidBuffer));
 				if (gb.Seen('P') && !gb.GetQuotedString(ssid))
 				{
-					reply.copy("Bad or missing SSID in M552 command");
+					reply.copy("Bad or missing SSID");
 					result = GCodeResult::error;
 				}
 				else
@@ -2635,7 +2681,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.copy("Invalid heater number.\n");
+				reply.printf("Invalid heater number '%d'", heater);
 				result = GCodeResult::error;
 			}
 		}
@@ -2758,7 +2804,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					{
 						return false;
 					}
-					platform.SetEnableValue(drive, gb.GetIValue() != 0);
+					platform.SetEnableValue(drive, (int8_t)gb.GetIValue());
 					seen = true;
 				}
 				if (gb.Seen('T'))
@@ -3011,7 +3057,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					const size_t eDrive = eDrives[extruder];
 					if (eDrive >= MaxExtruders)
 					{
-						reply.copy("Invalid extruder drive specified!");
+						reply.printf("Invalid extruder drive '%u'", eDrive);
 						result = GCodeResult::error;
 						break;
 					}
@@ -3261,7 +3307,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (badDrive)
 			{
-				reply.copy("Invalid drive number in M584 command");
+				reply.copy("Invalid drive number");
 				result = GCodeResult::error;
 			}
 			else
@@ -3276,7 +3322,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					}
 					else
 					{
-						reply.copy("Invalid number of visible axes in M584 command");
+						reply.copy("Invalid number of visible axes");
 						result = GCodeResult::error;
 					}
 				}
@@ -3302,6 +3348,79 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						reply.catf("%c%u", c, platform.GetExtruderDriver(extruder));
 						c = ':';
 					}
+				}
+			}
+		}
+		break;
+
+	case 585: // Probe Tool
+		if (reprap.GetCurrentTool() == nullptr)
+		{
+			reply.copy("No tool selected!");
+			result = GCodeResult::error;
+			break;
+		}
+
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			for (size_t axis = 0; axis < numTotalAxes; axis++)
+			{
+				if (gb.Seen(axisLetters[axis]))
+				{
+					// Get parameters first and check them
+					const int endStopToUse = gb.Seen('E') ? gb.GetIValue() : 0;
+					if (endStopToUse < 0 || endStopToUse > (int)DRIVES)
+					{
+						reply.copy("Invalid endstop number");
+						result = GCodeResult::error;
+						break;
+					}
+
+					// Save the current axis coordinates
+					memcpy(toolChangeRestorePoint.moveCoords, currentUserPosition, ARRAY_SIZE(currentUserPosition) * sizeof(currentUserPosition[0]));
+
+					// Prepare another move similar to G1 .. S3
+					moveBuffer.moveType = 3;
+					if (endStopToUse == 0)
+					{
+						moveBuffer.endStopsToCheck = 0;
+						SetBit(moveBuffer.endStopsToCheck, axis);
+					}
+					else
+					{
+						moveBuffer.endStopsToCheck = UseSpecialEndstop;
+						SetBit(moveBuffer.endStopsToCheck, endStopToUse);
+					}
+					moveBuffer.xAxes = DefaultXAxisMapping;
+					moveBuffer.yAxes = DefaultYAxisMapping;
+					moveBuffer.usePressureAdvance = false;
+					moveBuffer.filePos = noFilePosition;
+					moveBuffer.canPauseAfter = false;
+					moveBuffer.canPauseBefore = true;
+
+					// Decide which way and how far to go
+					const float axisLength = platform.AxisMaximum(axis) - platform.AxisMinimum(axis) + 5.0;
+					moveBuffer.coords[axis] = (gb.Seen('S') && gb.GetIValue() == 1) ? axisLength * -1.0 : axisLength;
+
+					// Zero every extruder drive
+					for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
+					{
+						moveBuffer.coords[drive] = 0.0;
+					}
+					moveBuffer.hasExtrusion = false;
+
+					// Deal with feed rate
+					if (gb.Seen(feedrateLetter))
+					{
+						const float rate = gb.GetFValue() * distanceScale;
+						gb.MachineState().feedrate = rate * SecondsToMinutes;	// don't apply the speed factor to homing and other special moves
+					}
+					moveBuffer.feedRate = gb.MachineState().feedrate;
+
+					// Kick off new movement
+					segmentsLeft = 1;
+					gb.SetState(GCodeState::probingToolOffset);
+					break;
 				}
 			}
 		}
@@ -3373,7 +3492,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.copy("Bad parameter in M587 command");
+				reply.copy("Bad parameter");
 				result = GCodeResult::error;
 			}
 		}
@@ -3462,7 +3581,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.copy("Bad parameter in M588 command");
+				reply.copy("Bad parameter");
 				result = GCodeResult::error;
 			}
 		}
@@ -3513,7 +3632,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.copy("Bad or missing parameter in M589 command");
+				reply.copy("Bad or missing parameter");
 				result = GCodeResult::error;
 			}
 		}
@@ -3603,7 +3722,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			if (changed || changedMode)
 			{
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -3661,7 +3780,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					break;
 
 				default:
-					reply.printf("Mode %d is not valid in M667 command\n", mode);
+					reply.printf("Mode %d is not valid", mode);
 					result = GCodeResult::error;
 					break;
 				}
@@ -3688,7 +3807,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 					}
-					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed))
+					if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
 					{
 						ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 					}
@@ -3714,7 +3833,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const int nk = gb.GetIValue();
 				if (nk < 0 || nk >= (int)KinematicsType::unknown || !move.SetKinematics(static_cast<KinematicsType>(nk)))
 				{
-					reply.printf("Unknown kinematics type %d in M669 command", nk);
+					reply.printf("Unknown kinematics type %d", nk);
 					result = GCodeResult::error;
 					break;
 				}
@@ -3735,7 +3854,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveBuffer.coords);
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);
 				}
-				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed))
+				if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, axesHomed, false))
 				{
 					ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);	// make sure the limits are reflected in the user position
 				}
@@ -3795,7 +3914,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			reply.copy("Invalid source for this M-code");
+			reply.copy("Invalid source");
 			result = GCodeResult::error;
 		}
 		break;
@@ -3946,7 +4065,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const char * const dateString = gb.GetString();
 				if (strptime(dateString, "%Y-%m-%d", &timeInfo) == nullptr)
 				{
-					reply.copy("M905: Invalid date format");
+					reply.copy("Invalid date format");
 					result = GCodeResult::error;
 					break;
 				}
@@ -3960,7 +4079,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				const char * const timeString = gb.GetString();
 				if (strptime(timeString, "%H:%M:%S", &timeInfo) == nullptr)
 				{
-					reply.copy("M905: Invalid time format");
+					reply.copy("Invalid time format");
 					result = GCodeResult::error;
 					break;
 				}
@@ -4052,12 +4171,57 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-#ifdef DUET_NG
+#if HAS_VOLTAGE_MONITOR
 	case 911: // Enable auto save
-		result = GetGCodeResultFromError(platform.ConfigureAutoSave(gb, reply));
+		if (gb.Seen('S'))
+		{
+			const float saveVoltage = gb.GetFValue();
+			if (saveVoltage < 10.0)
+			{
+				platform.DisableAutoSave();
+			}
+			else
+			{
+				float resumeVoltage = saveVoltage + 1.0;		// set up default resume voltage
+				bool dummy;
+				gb.TryGetFValue('R', resumeVoltage, dummy);
+
+				String<80> powerFailString;
+				bool seenCommandString = false;
+				gb.TryGetQuotedString('P', powerFailString.GetRef(), seenCommandString);
+				if (seenCommandString)
+				{
+					// Replace the power fail script atomically
+					char *newPowerFailScript = new char[powerFailString.strlen() + 1];
+					strcpy(newPowerFailScript, powerFailString.c_str());
+					std::swap(newPowerFailScript, powerFailScript);
+					delete[] newPowerFailScript;
+				}
+				else if (powerFailScript == nullptr)
+				{
+					reply.copy("No power fail script provided");
+					result = GCodeResult::error;
+					break;
+				}
+				platform.EnableAutoSave(saveVoltage, resumeVoltage);
+			}
+		}
+		else
+		{
+			float saveVoltage, resumeVoltage;
+			if (platform.GetAutoSaveSettings(saveVoltage, resumeVoltage))
+			{
+				reply.printf("Auto save voltage %.1fV, resume %.1fV, script \"%s\"", (double)saveVoltage, (double)resumeVoltage, (powerFailScript == nullptr) ? "" : powerFailScript);
+			}
+			else
+			{
+				reply.copy("Auto save is disabled");
+			}
+		}
 		break;
 #endif
 
+#if HAS_CPU_TEMP_SENSOR
 	case 912: // Set electronics temperature monitor adjustment
 		// Currently we ignore the P parameter (i.e. temperature measurement channel)
 		if (gb.Seen('S'))
@@ -4069,6 +4233,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			reply.printf("MCU temperature calibration adjustment is %.1f" DEGREE_SYMBOL "C", (double)platform.GetMcuTemperatureAdjust());
 		}
 		break;
+#endif
 
 	// For case 913, see 906
 
@@ -4094,6 +4259,31 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			reply.printf("The Voltage of Expansion Translator is %dV \nPiggy module %s",
 					digitalRead(ExpansionVoltageLevelPin) ? 5 : 3 ,
 					digitalRead(ExpansionPiggyDetectPin) ? "not detected" : "detected");
+		}
+		break;
+#endif
+
+#if HAS_SMART_DRIVERS
+	case 915:
+		result = GetGCodeResultFromError(platform.ConfigureStallDetection(gb, reply));
+		break;
+#endif
+
+#if HAS_VOLTAGE_MONITOR
+	case 916:
+		if (!platform.GetMassStorage()->FileExists(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G))
+		{
+			reply.copy("No resume file found");
+			result = GCodeResult::error;
+		}
+		else if (!platform.GetMassStorage()->FileExists(platform.GetSysDir(), RESUME_PROLOGUE_G))
+		{
+			reply.printf("Resume prologue file '%s' not found", RESUME_PROLOGUE_G);
+			result = GCodeResult::error;
+		}
+		else
+		{
+			DoFileMacro(gb, RESUME_AFTER_POWER_FAIL_G, true);
 		}
 		break;
 #endif
@@ -4191,7 +4381,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	default:
-		reply.printf("Unsupported command: %s", gb.Buffer());
+		reply.copy("Unsupported command");
 		result = GCodeResult::error;
 		break;
 	}
@@ -4210,6 +4400,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	{
 		gb.timerRunning = false;
 		UnlockAll(gb);
+		if (result == GCodeResult::error)
+		{
+			scratchString.printf("M%d: ", code);
+			reply.Prepend(scratchString.Pointer());
+		}
 		HandleReply(gb, result != GCodeResult::ok, reply.Pointer());
 	}
 	return true;
@@ -4222,24 +4417,25 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		return true;			// when running M502 we don't execute T commands
 	}
 
-	if (!LockMovementAndWaitForStandstill(gb))
+	if (gb.HasCommandNumber())
 	{
-		return false;
-	}
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return false;
+		}
 
-	if (strlen(gb.Buffer()) > 1)
-	{
 		// See if the tool can be changed
-		newToolNumber = gb.GetIValue();
-		newToolNumber += gb.GetToolNumberAdjust();
+		int toolNum = gb.GetCommandNumber();
+		toolNum += gb.GetToolNumberAdjust();
 
 		const Tool * const oldTool = reprap.GetCurrentTool();
 		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
-		if (oldTool == nullptr || oldTool->Number() != newToolNumber)
+		if (oldTool == nullptr || oldTool->Number() != toolNum)
 		{
-			toolChangeParam = (simulationMode != 0) ? 0
-								: gb.Seen('P') ? gb.GetIValue()
-									: DefaultToolChangeParam;
+			gb.MachineState().newToolNumber = toolNum;
+			gb.MachineState().toolChangeParam = (simulationMode != 0) ? 0
+													: gb.Seen('P') ? gb.GetUIValue()
+														: DefaultToolChangeParam;
 			gb.SetState(GCodeState::toolChange0);
 			return true;							// proceeding with state machine, so don't unlock or send a reply
 		}
@@ -4250,11 +4446,11 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		const Tool * const tool = reprap.GetCurrentTool();
 		if (tool == nullptr)
 		{
-			reply.copy("No tool is selected.");
+			reply.copy("No tool is selected");
 		}
 		else
 		{
-			reply.printf("Tool %d is selected.", tool->Number());
+			reply.printf("Tool %d is selected", tool->Number());
 		}
 	}
 

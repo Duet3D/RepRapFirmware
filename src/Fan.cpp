@@ -204,7 +204,7 @@ void Fan::SetHeatersMonitored(uint16_t h)
 void Fan::Refresh()
 {
 	float reqVal;
-#ifdef DUET_NG
+#if HAS_SMART_DRIVERS
 	uint32_t driverChannelsMonitored = 0;
 #endif
 
@@ -247,7 +247,7 @@ void Fan::Refresh()
 						// If the fan is on, add a hysteresis before turning it off
 						reqVal = max<float>(reqVal, (bangBangMode) ? max<float>(0.5, val) : minVal);
 					}
-#ifdef DUET_NG
+#if HAS_SMART_DRIVERS
 					const unsigned int channel = reprap.GetHeat().GetHeaterChannel(heaterHumber);
 					if (channel >= FirstTmcDriversSenseChannel && channel < FirstTmcDriversSenseChannel + NumTmcDriversSenseChannels)
 					{
@@ -269,7 +269,7 @@ void Fan::Refresh()
 		if (lastVal == 0.0)
 		{
 			// We are turning this fan on
-#ifdef DUET_NG
+#if HAS_SMART_DRIVERS
 			if (driverChannelsMonitored != 0)
 			{
 				reprap.GetPlatform().DriverCoolingFansOn(driverChannelsMonitored);		// tell Platform that we have started a fan that cools drivers

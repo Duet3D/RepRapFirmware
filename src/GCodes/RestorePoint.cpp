@@ -20,6 +20,7 @@ void RestorePoint::Init()
 	}
 	feedRate = DefaultFeedrate * SecondsToMinutes;
 	virtualExtruderPosition = 0.0;
+	proportionDone = 0.0;
 	filePos = noFilePosition;
 #if SUPPORT_IOBITS
 	ioBits = 0;

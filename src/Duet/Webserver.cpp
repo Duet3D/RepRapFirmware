@@ -831,10 +831,14 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 			return;
 		}
 
-		if (StringEquals(command, "download") && StringEquals(qualifiers[0].key, "name"))
+		if (StringEquals(command, "download"))
 		{
-			SendFile(qualifiers[0].value, false);
-			return;
+			const char* const filename = GetKeyValue("name");
+			if (filename != nullptr)
+			{
+				SendFile(filename, false);
+				return;
+			}
 		}
 	}
 
@@ -905,11 +909,12 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			if (Authenticate())
 			{
 				// See if we can update the current RTC date and time
-				if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time") && !platform->IsDateTimeSet())
+				const char* const timeString = GetKeyValue("time");
+				if (timeString != nullptr && !platform->IsDateTimeSet())
 				{
 					struct tm timeInfo;
 					memset(&timeInfo, 0, sizeof(timeInfo));
-					if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+					if (strptime(timeString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 					{
 						time_t newTime = mktime(&timeInfo);
 						platform->SetDateTime(newTime);
@@ -1527,7 +1532,8 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 								  || (commandWords[1][0] == '/' && StringEquals(commandWords[1] + 1, KO_START "upload"));
 		if (isUploadRequest)
 		{
-			if (numQualKeys > 0 && StringEquals(qualifiers[0].key, "name"))
+			const char* const filename = GetKeyValue("name");
+			if (filename != nullptr)
 			{
 				// We cannot upload more than one file at once
 				if (IsUploading())
@@ -1537,7 +1543,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 
 				// See how many bytes we expect to read
 				bool contentLengthFound = false;
-				for(size_t i=0; i<numHeaderKeys; i++)
+				for (size_t i = 0; i < numHeaderKeys; i++)
 				{
 					if (StringEquals(headers[i].key, "Content-Length"))
 					{
@@ -1554,18 +1560,19 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 				}
 
 				// Start a new file upload
-				FileStore *file = platform->GetFileStore(FS_PREFIX, qualifiers[0].value, OpenMode::write);
-				if (!StartUpload(file, qualifiers[0].value))
+				FileStore *file = platform->GetFileStore(FS_PREFIX, filename, OpenMode::write);
+				if (!StartUpload(file, filename))
 				{
 					return RejectMessage("could not start file upload");
 				}
 
 				// Try to get the last modified file date and time
-				if (numQualKeys > 1 && StringEquals(qualifiers[1].key, "time"))
+				const char* const lastModifiedString = GetKeyValue("time");
+				if (lastModifiedString != nullptr)
 				{
 					struct tm timeInfo;
 					memset(&timeInfo, 0, sizeof(timeInfo));
-					if (strptime(qualifiers[1].value, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
+					if (strptime(lastModifiedString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 					{
 						fileLastModified  = mktime(&timeInfo);
 					}
@@ -1581,7 +1588,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 
 				if (reprap.Debug(moduleWebserver))
 				{
-					platform->MessageF(UsbMessage, "Start uploading file %s length %lu\n", qualifiers[0].value, postFileLength);
+					platform->MessageF(UsbMessage, "Start uploading file %s length %lu\n", filename, postFileLength);
 				}
 				uploadedBytes = 0;
 

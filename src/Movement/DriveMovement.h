@@ -10,16 +10,29 @@
 
 #include "RepRapFirmware.h"
 
+class LinearDeltaKinematics;
+
 // Struct for passing parameters to the DriveMovement Prepare methods
 struct PrepParams
 {
+	// Parameters used for all types of motion
 	float decelStartDistance;
 	uint32_t startSpeedTimesCdivA;
 	uint32_t topSpeedTimesCdivA;
 	uint32_t decelStartClocks;
 	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
 	uint32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;
+
+	// Parameters used only for extruders
 	float compFactor;
+
+	// Parameters used only for delta moves
+	float initialX;
+	float initialY;
+	const LinearDeltaKinematics *dparams;
+	float diagonalSquared;
+	float a2plusb2;								// sum of the squares of the X and Y movement fractions
+	float a2b2D2;
 };
 
 enum class DMState : uint8_t
@@ -35,11 +48,11 @@ class DriveMovement
 public:
 	DriveMovement(DriveMovement *next);
 
-	bool CalcNextStepTimeCartesian(const DDA &dda, bool live);
-	bool CalcNextStepTimeDelta(const DDA &dda, bool live);
-	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params);
-	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params);
-	void PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation);
+	bool CalcNextStepTimeCartesian(const DDA &dda, bool live) __attribute__ ((hot));
+	bool CalcNextStepTimeDelta(const DDA &dda, bool live) __attribute__ ((hot));
+	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
+	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
+	void PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation) __attribute__ ((hot));
 	void ReduceSpeed(const DDA& dda, float inverseSpeedFactor);
 	void DebugPrint(char c, bool withDelta) const;
 	int32_t GetNetStepsLeft() const;
@@ -53,8 +66,8 @@ public:
 	static void Release(DriveMovement *item);
 
 private:
-	bool CalcNextStepTimeCartesianFull(const DDA &dda, bool live);
-	bool CalcNextStepTimeDeltaFull(const DDA &dda, bool live);
+	bool CalcNextStepTimeCartesianFull(const DDA &dda, bool live) __attribute__ ((hot));
+	bool CalcNextStepTimeDeltaFull(const DDA &dda, bool live) __attribute__ ((hot));
 
 	static DriveMovement *freeList;
 	static int numFree;
@@ -144,6 +157,7 @@ inline bool DriveMovement::CalcNextStepTimeCartesian(const DDA &dda, bool live)
 
 // Calculate the time since the start of the move when the next step for the specified DriveMovement is due
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1.
+// We inline this part to speed things up when we are doing double/quad/octal stepping.
 inline bool DriveMovement::CalcNextStepTimeDelta(const DDA &dda, bool live)
 {
 	++nextStep;
@@ -199,6 +213,14 @@ inline int32_t DriveMovement::GetNetStepsTaken() const
 		netStepsTaken = (int32_t)nextStep - (int32_t)(2 * reverseStartStep) + 2;	// allowing for direction having changed
 	}
 	return (direction) ? netStepsTaken : -netStepsTaken;
+}
+
+// This is inlined because it is only called from one place
+inline void DriveMovement::Release(DriveMovement *item)
+{
+	item->nextDM = freeList;
+	freeList = item;
+	++numFree;
 }
 
 #endif /* DRIVEMOVEMENT_H_ */

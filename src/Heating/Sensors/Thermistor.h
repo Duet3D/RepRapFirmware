@@ -41,7 +41,7 @@ private:
 	void SetHighOffset(int8_t p_offset) { adcHighOffset = p_offset; }
 
 	// For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
-	static const unsigned int AdcOversampleBits = 1	;						// we use 1-bit oversampling
+	static const unsigned int AdcOversampleBits = 2;						// we use 2-bit oversampling
 
 	void CalcDerivedParameters();											// calculate shA and shB
 

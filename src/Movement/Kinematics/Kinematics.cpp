@@ -12,6 +12,7 @@
 #include "CoreXZKinematics.h"
 #include "ScaraKinematics.h"
 #include "CoreXYUKinematics.h"
+#include "PolarKinematics.h"
 #include "RepRap.h"
 #include "Platform.h"
 
@@ -42,15 +43,15 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply
 
 // Return true if the specified XY position is reachable by the print head reference point.
 // This default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 command.
-bool Kinematics::IsReachable(float x, float y) const
+bool Kinematics::IsReachable(float x, float y, bool isCoordinated) const
 {
 	const Platform& platform = reprap.GetPlatform();
 	return x >= platform.AxisMinimum(X_AXIS) && y >= platform.AxisMinimum(Y_AXIS) && x <= platform.AxisMaximum(X_AXIS) && y <= platform.AxisMaximum(Y_AXIS);
 }
 
-// Limit the Cartesian position that the user wants to move to
+// Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
 // This default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
-bool Kinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed) const
+bool Kinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesBitmap axesHomed, bool isCoordinated) const
 {
 	return LimitPositionFromAxis(coords, 0, numVisibleAxes, axesHomed);
 }
@@ -139,6 +140,8 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alrea
 		return new ScaraKinematics();
 	case KinematicsType::coreXYU:
 		return new CoreXYUKinematics();
+	case KinematicsType::polar:
+		return new PolarKinematics();
 	}
 }
 

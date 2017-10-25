@@ -74,7 +74,7 @@ void CoreBaseKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, cons
 	}
 	else
 	{
-		dda.SetDriveCoordinate(hitPoint * stepsPerMm[axis], axis);
+		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
 }
 

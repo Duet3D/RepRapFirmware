@@ -9,7 +9,7 @@
 #include "Platform.h"
 #include "RepRap.h"
 
-#ifdef DUET_NG
+#if HAS_SMART_DRIVERS
 
 TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int channel) : TemperatureSensor(channel, "TMC2660 temperature warnings")
 {

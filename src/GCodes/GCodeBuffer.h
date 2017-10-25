@@ -22,10 +22,13 @@ public:
 	void Diagnostics(MessageType mtype);				// Write some debug info
 	bool Put(char c) __attribute__((hot));				// Add a character to the end
 	bool Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
-	bool IsEmpty() const;								// Does this buffer contain any code?
 	bool Seen(char c) __attribute__((hot));				// Is a character present?
 
-	char GetCommandLetter() __attribute__((hot));		// Find the first G, M or T command
+	char GetCommandLetter() const { return commandLetter; }
+	bool HasCommandNumber() const { return hasCommandNumber; }
+	int GetCommandNumber() const { return commandNumber; }
+	int8_t GetCommandFraction() const { return commandFraction; }
+
 	float GetFValue() __attribute__((hot));				// Get a float after a key letter
 	int32_t GetIValue() __attribute__((hot));			// Get an integer after a key letter
 	uint32_t GetUIValue();								// Get an unsigned integer value
@@ -55,7 +58,7 @@ public:
 	int GetToolNumberAdjust() const { return toolNumberAdjust; }
 	void SetToolNumberAdjust(int arg) { toolNumberAdjust = arg; }
 	void SetCommsProperties(uint32_t arg) { checksumRequired = (arg & 1); }
-	bool StartingNewCode() const { return gcodePointer == 0; }
+	bool StartingNewCode() const { return gcodeLineEnd == 0; }
 	MessageType GetResponseMessageType() const { return responseMessageType; }
 	GCodeMachineState& MachineState() const { return *machineState; }
 	GCodeMachineState& OriginalMachineState() const;
@@ -79,28 +82,49 @@ public:
 
 private:
 
-	enum class GCodeBufferState
+	enum class GCodeBufferState : uint8_t
 	{
-		idle,			// we don't have a complete gcode ready
-		ready,			// we have a complete gcode but haven't started executing it
-		executing		// we have a complete gcode and have started executing it
+		parseNotStarted,								// we haven't started parsing yet
+		parsingLineNumber,								// we saw N at the start and we are parsing the line number
+		parsingWhitespace,								// parsing whitespace after the line number
+		parsingGCode,									// parsing GCode words
+		parsingBracketedComment,						// inside a (...) comment
+		parsingQuotedString,							// inside a double-quoted string
+		parsingChecksum,								// parsing the checksum after '*'
+		discarding,										// discarding characters after the checksum or an end-of-line comment
+		ready,											// we have a complete gcode but haven't started executing it
+		executing										// we have a complete gcode and have started executing it
 	};
 
-	int CheckSum() const;								// Compute the checksum (if any) at the end of the G Code
+	void AddToChecksum(char c);
+	void StoreAndAddToChecksum(char c);
+	bool LineFinished();								// Deal with receiving end-of-line and return true if we have a command
+	void DecodeCommand();
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 	char gcodeBuffer[GCODE_LENGTH];						// The G Code
-	const char* identity;								// Where we are from (web, file, serial line etc)
-	int gcodePointer;									// Index in the buffer
+	const char* const identity;							// Where we are from (web, file, serial line etc)
+	unsigned int commandStart;							// Index in the buffer of the command letter of this command
+	unsigned int parameterStart;
+	unsigned int commandEnd;							// Index in the buffer of one past the last character of this command
 	unsigned int commandLength;							// Number of characters we read to build this command including the final \r or \n
+	unsigned int gcodeLineEnd;							// Number of characters in the entire line of gcode
 	int readPointer;									// Where in the buffer to read next
-	bool inQuotes;										// Are we inside double quotation marks?
-	bool inComment;										// Are we after a ';' character?
 	bool checksumRequired;								// True if we only accept commands with a valid checksum
 	GCodeBufferState bufferState;						// Idle, executing or paused
 	const char* writingFileDirectory;					// If the G Code is going into a file, where that is
 	int toolNumberAdjust;								// The adjustment to tool numbers in commands we receive
 	const MessageType responseMessageType;				// The message type we use for responses to commands coming from this channel
+	unsigned int lineNumber;
+	unsigned int declaredChecksum;
+	uint8_t computedChecksum;
+	bool hadLineNumber;
+	bool hadChecksum;
+	bool hasCommandNumber;
+	char commandLetter;
+	int commandNumber;
+	int8_t commandFraction;
+
 	bool queueCodes;									// Can we queue certain G-codes from this source?
 	bool binaryWriting;									// Executing gcode or writing binary file?
 	uint32_t crc32;										// crc32 of the binary file
@@ -133,7 +157,7 @@ inline const char* GCodeBuffer::Buffer() const
 
 inline bool GCodeBuffer::IsIdle() const
 {
-	return bufferState == GCodeBufferState::idle;
+	return bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing;
 }
 
 inline bool GCodeBuffer::IsReady() const

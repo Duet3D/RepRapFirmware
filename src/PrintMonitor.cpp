@@ -144,7 +144,10 @@ void PrintMonitor::Spin()
 				LayerComplete();
 				currentLayer++;
 
-				lastLayerZ = liveCoordinates[Z_AXIS];
+				// If we know the layer height, compute what the current layer height should be. This is to handle slicers that use a different layer height for support.
+				lastLayerZ = (printingFileInfo.layerHeight > 0.0)
+								? printingFileInfo.firstLayerHeight + (currentLayer - 1) * printingFileInfo.layerHeight
+									: liveCoordinates[Z_AXIS];
 				lastLayerChangeTime = GetPrintDuration();
 			}
 		}

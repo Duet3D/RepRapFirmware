@@ -62,7 +62,10 @@ class Platform;
 class GCodes;
 class Move;
 class DDA;
+class Kinematics;
 class Heat;
+class PID;
+class TemperatureSensor;
 class Tool;
 class Roland;
 class Scanner;
@@ -75,13 +78,14 @@ class GCodeBuffer;
 class GCodeQueue;
 class FilamentSensor;
 class RandomProbePointSet;
+class Logger;
 
 #if SUPPORT_IOBITS
 class PortControl;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
-#ifdef DUET_NG
+#if SAM4E || SAM4S
 typedef double floatc_t;					// type of matrix element used for calibration
 #else
 // We are more memory-constrained on the SAM3X
@@ -89,6 +93,7 @@ typedef float floatc_t;						// type of matrix element used for calibration
 #endif
 
 typedef uint32_t AxesBitmap;				// Type of a bitmap representing a set of axes
+typedef uint32_t DriversBitmap;				// Type of a bitmap representing a set of driver numbers
 typedef uint32_t FansBitmap;				// Type of a bitmap representing a set of fan numbers
 
 // A single instance of the RepRap class contains all the others

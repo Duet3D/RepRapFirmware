@@ -7,6 +7,9 @@
 #define HAS_LWIP_NETWORKING		1
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
+#define HAS_SMART_DRIVERS		0
+#define HAS_VOLTAGE_MONITOR		0
+#define ACTIVE_LOW_HEAT_ON		1
 
 const size_t NumFirmwareUpdateModules = 1;
 #define IAP_UPDATE_FILE "iap.bin"
@@ -40,9 +43,9 @@ const size_t NUM_SERIAL_CHANNELS = 3;			// The number of serial IO channels (USB
 #define SERIAL_AUX_DEVICE Serial
 #define SERIAL_AUX2_DEVICE Serial1
 
-// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to -1 to flag unavailability.
+// The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
-// DRIVES
+// Drives
 
 const Pin ENABLE_PINS[DRIVES] = { 29, 27, X1, X0, 37, X8, 50, 47, X13 };
 const Pin STEP_PINS[DRIVES] = { 14, 25, 5, X2, 41, 39, X4, 49, X10 };
@@ -61,9 +64,6 @@ const float STEPPER_DAC_VOLTAGE_RANGE = 2.02;							// Stepper motor current ref
 const float STEPPER_DAC_VOLTAGE_OFFSET = -0.025;						// Stepper motor current offset voltage for E1 if using a DAC
 
 // HEATERS
-
-const bool HEAT_ON = false;												// false for inverted heater (e.g. Duet v0.6), true for not (e.g. Duet v0.4)
-
 const Pin TEMP_SENSE_PINS[Heaters] = { 5, 4, 0, 7, 8, 9, 11 };			// Analogue pin numbers
 const Pin HEAT_ON_PINS[Heaters] = { 6, X5, X7, 7, 8, 9, X17 };			// Heater Channel 7 (pin X17) is shared with Fan1
 

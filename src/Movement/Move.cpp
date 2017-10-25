@@ -7,13 +7,12 @@
 
 #include "Move.h"
 #include "Platform.h"
-#include "RepRap.h"
-#include "Kinematics/LinearDeltaKinematics.h"	// temporary
 
-Move::Move() : currentDda(nullptr), scheduledMoves(0), completedMoves(0)
+static constexpr uint32_t UsualMinimumPreparedTime = DDA::stepClockRate/10;			// 100ms
+static constexpr uint32_t AbsoluteMinimumPreparedTime = DDA::stepClockRate/20;		// 50ms
+
+Move::Move() : currentDda(nullptr), active(false), scheduledMoves(0), completedMoves(0)
 {
-	active = false;
-
 	kinematics = Kinematics::Create(KinematicsType::cartesian);			// default to Cartesian
 
 	// Build the DDA ring
@@ -21,7 +20,7 @@ Move::Move() : currentDda(nullptr), scheduledMoves(0), completedMoves(0)
 	ddaRingGetPointer = ddaRingAddPointer = dda;
 	for (size_t i = 1; i < DdaRingLength; i++)
 	{
-		DDA *oldDda = dda;
+		DDA * const oldDda = dda;
 		dda = new DDA(dda);
 		oldDda->SetPrevious(dda);
 	}
@@ -74,13 +73,13 @@ void Move::Init()
 
 	longWait = millis();
 	idleTimeout = DefaultIdleTimeout;
-	iState = IdleState::idle;
+	moveState = MoveState::idle;
 	idleCount = 0;
 
 	simulationMode = 0;
 	simulationTime = 0.0;
 	longestGcodeWaitInterval = 0;
-	waitingForMove = specialMoveAvailable = false;
+	specialMoveAvailable = false;
 
 	active = true;
 }
@@ -119,9 +118,10 @@ void Move::Spin()
 		++idleCount;
 	}
 
-	// Check for DDA errors to print if Move debug is enabled
+	// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
 	while (ddaRingCheckPointer->GetState() == DDA::completed)
 	{
+		// Check for step errors and record/print them if we have any, before we lose the DMs
 		if (ddaRingCheckPointer->HasStepError())
 		{
 			if (reprap.Debug(moduleMove))
@@ -131,6 +131,8 @@ void Move::Spin()
 			++stepErrors;
 			reprap.GetPlatform().LogError(ErrorCode::BadMove);
 		}
+
+		// Now release the DMs and check for underrun
 		if (ddaRingCheckPointer->Free())
 		{
 			++numLookaheadUnderruns;
@@ -139,21 +141,21 @@ void Move::Spin()
 	}
 
 	// See if we can add another move to the ring
-	if (
+	bool canAddMove = (
 #if SUPPORT_ROLAND
-		   !reprap.GetRoland()->Active() &&
+						  !reprap.GetRoland()->Active() &&
 #endif
-		   ddaRingAddPointer->GetState() == DDA::empty
-		&& ddaRingAddPointer->GetNext()->GetState() != DDA::provisional		// function Prepare needs to access the endpoints in the previous move, so don't change them
-		&& DriveMovement::NumFree() >= (int)DRIVES							// check that we won't run out of DMs
-	   )
+						  ddaRingAddPointer->GetState() == DDA::empty
+					   && ddaRingAddPointer->GetNext()->GetState() != DDA::provisional		// function Prepare needs to access the endpoints in the previous move, so don't change them
+					   && DriveMovement::NumFree() >= (int)DRIVES							// check that we won't run out of DMs
+					  );
+	if (canAddMove)
 	{
 		// In order to react faster to speed and extrusion rate changes, only add more moves if the total duration of
-		// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is
-		// less than 0.5 seconds.
+		// all un-frozen moves is less than 2 seconds, or the total duration of all but the first un-frozen move is less than 0.5 seconds.
 		const DDA *dda = ddaRingAddPointer;
-		float unPreparedTime = 0.0;
-		float prevMoveTime = 0.0;
+		uint32_t unPreparedTime = 0;
+		uint32_t prevMoveTime = 0;
 		for(;;)
 		{
 			dda = dda->GetPrevious();
@@ -162,119 +164,124 @@ void Move::Spin()
 				break;
 			}
 			unPreparedTime += prevMoveTime;
-			prevMoveTime = dda->CalcTime();
+			prevMoveTime = dda->GetClocksNeeded();
 		}
 
-		if (unPreparedTime < 0.5 || unPreparedTime + prevMoveTime < 2.0)
+		canAddMove = (unPreparedTime < DDA::stepClockRate/2 || unPreparedTime + prevMoveTime < 2 * DDA::stepClockRate);
+	}
+
+	if (canAddMove)
+	{
+		// OK to add another move. First check if a special move is available.
+		if (specialMoveAvailable)
 		{
-			// First check for a special move
-			if (specialMoveAvailable)
+			if (simulationMode < 2)
 			{
-				if (simulationMode < 2)
+				if (ddaRingAddPointer->Init(specialMoveCoords))
 				{
-					if (ddaRingAddPointer->Init(specialMoveCoords))
+					ddaRingAddPointer = ddaRingAddPointer->GetNext();
+					if (moveState == MoveState::idle || moveState == MoveState::timing)
 					{
-						ddaRingAddPointer = ddaRingAddPointer->GetNext();
-						idleCount = 0;
-					}
-				}
-				specialMoveAvailable = false;
-			}
-			else
-			{
-				// If there's a G Code move available, add it to the DDA ring for processing.
-				GCodes::RawMove nextMove;
-				if (reprap.GetGCodes().ReadMove(nextMove))		// if we have a new move
-				{
-					if (waitingForMove)
-					{
-						waitingForMove = false;
-						const uint32_t timeWaiting = millis() - gcodeWaitStartTime;
+						// We were previously idle, so we have a state change
+						moveState = MoveState::collecting;
+						const uint32_t now = millis();
+						const uint32_t timeWaiting = now - lastStateChangeTime;
 						if (timeWaiting > longestGcodeWaitInterval)
 						{
 							longestGcodeWaitInterval = timeWaiting;
 						}
-					}
-					if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
-					{
-#if 0	// disabled this because it causes jerky movements on the SCARA printer
-						// Add on the extrusion left over from last time.
-						const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
-						for (size_t drive = numAxes; drive < DRIVES; ++drive)
-						{
-							nextMove.coords[drive] += extrusionPending[drive - numAxes];
-						}
-#endif
-						if (nextMove.moveType == 0)
-						{
-							AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, true);
-						}
-						if (ddaRingAddPointer->Init(nextMove, !IsRawMotorMove(nextMove.moveType)))
-						{
-							ddaRingAddPointer = ddaRingAddPointer->GetNext();
-							idleCount = 0;
-							scheduledMoves++;
-						}
-#if 0	// see above
-						// Save the amount of extrusion not done
-						for (size_t drive = numAxes; drive < DRIVES; ++drive)
-						{
-							extrusionPending[drive - numAxes] = nextMove.coords[drive];
-						}
-#endif
+						lastStateChangeTime = now;
 					}
 				}
-				else
+			}
+			specialMoveAvailable = false;
+		}
+		else
+		{
+			// If there's a G Code move available, add it to the DDA ring for processing.
+			GCodes::RawMove nextMove;
+			if (reprap.GetGCodes().ReadMove(nextMove))		// if we have a new move
+			{
+				if (simulationMode < 2)		// in simulation mode 2 and higher, we don't process incoming moves beyond this point
 				{
-					// We wanted another move, but none was available
-					if (currentDda != nullptr && !waitingForMove)
+#if 0	// disabled this because it causes jerky movements on the SCARA printer
+					// Add on the extrusion left over from last time.
+					const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+					for (size_t drive = numAxes; drive < DRIVES; ++drive)
 					{
-						gcodeWaitStartTime = millis();
-						waitingForMove = true;
+						nextMove.coords[drive] += extrusionPending[drive - numAxes];
 					}
+#endif
+					if (nextMove.moveType == 0)
+					{
+						AxisAndBedTransform(nextMove.coords, nextMove.xAxes, nextMove.yAxes, true);
+					}
+					if (ddaRingAddPointer->Init(nextMove, !IsRawMotorMove(nextMove.moveType)))
+					{
+						ddaRingAddPointer = ddaRingAddPointer->GetNext();
+						idleCount = 0;
+						scheduledMoves++;
+						if (moveState == MoveState::idle || moveState == MoveState::timing)
+						{
+							moveState = MoveState::collecting;
+							const uint32_t now = millis();
+							const uint32_t timeWaiting = now - lastStateChangeTime;
+							if (timeWaiting > longestGcodeWaitInterval)
+							{
+								longestGcodeWaitInterval = timeWaiting;
+							}
+							lastStateChangeTime = now;
+						}
+					}
+#if 0	// see above
+					// Save the amount of extrusion not done
+					for (size_t drive = numAxes; drive < DRIVES; ++drive)
+					{
+						extrusionPending[drive - numAxes] = nextMove.coords[drive];
+					}
+#endif
 				}
 			}
 		}
 	}
 
+
 	// See whether we need to kick off a move
 	if (currentDda == nullptr)
 	{
 		// No DDA is executing, so start executing a new one if possible
-		if (idleCount > 10)											// better to have a few moves in the queue so that we can do lookahead
+		if (!canAddMove || idleCount > 10)							// better to have a few moves in the queue so that we can do lookahead
 		{
-			DDA *dda = ddaRingGetPointer;
+			// Prepare one move and execute it. We assume that we will enter the next if-block before it completes, giving us time to prepare more moves.
+			Platform::DisableStepInterrupt();						// should be disabled already because we weren't executing a move, but make sure
+			DDA * const dda = ddaRingGetPointer;					// capture volatile variable
 			if (dda->GetState() == DDA::provisional)
 			{
 				dda->Prepare(simulationMode);
-			}
-			if (dda->GetState() == DDA::frozen)
-			{
 				if (simulationMode != 0)
 				{
 					currentDda = dda;								// pretend we are executing this move
 				}
 				else
 				{
-					Platform::DisableStepInterrupt();				// should be disabled already because we weren't executing a move, but make sure
 					if (StartNextMove(Platform::GetInterruptClocks()))	// start the next move
 					{
 						Interrupt();
 					}
 				}
-				iState = IdleState::busy;
+				moveState = MoveState::executing;
 			}
 			else if (simulationMode != 0)
 			{
-				if (iState == IdleState::busy && !reprap.GetGCodes().IsPaused())
+				if (moveState == MoveState::executing && !reprap.GetGCodes().IsPaused())
 				{
-					lastMoveTime = millis();						// record when we first noticed that the machine was idle
-					iState = IdleState::timing;
+					lastStateChangeTime = millis();					// record when we first noticed that the machine was idle
+					moveState = MoveState::timing;
 				}
-				else if (iState == IdleState::timing && millis() - lastMoveTime >= idleTimeout)
+				else if (moveState == MoveState::timing && millis() - lastStateChangeTime >= idleTimeout)
 				{
 					reprap.GetPlatform().SetDriversIdle();			// put all drives in idle hold
-					iState = IdleState::idle;
+					moveState = MoveState::idle;
 				}
 			}
 		}
@@ -283,7 +290,7 @@ void Move::Spin()
 	DDA *cdda = currentDda;											// currentDda is volatile, so copy it
 	if (cdda != nullptr)
 	{
-		// See whether we need to prepare any moves
+		// See whether we need to prepare any moves. First count how many prepared or executing moves we have and how long they will take.
 		int32_t preparedTime = 0;
 		uint32_t preparedCount = 0;
 		DDA::DDAState st;
@@ -298,13 +305,17 @@ void Move::Spin()
 			}
 		}
 
-		// If the number of prepared moves will execute in less than the minimum time, prepare another move
+		// If the number of prepared moves will execute in less than the minimum time, prepare another move.
+		// Try to avoid preparing deceleration-only moves
 		while (st == DDA::provisional
-				&& preparedTime < (int32_t)(DDA::stepClockRate/8)	// prepare moves one eighth of a second ahead of when they will be needed
-				&& preparedCount < DdaRingLength/2					// but don't prepare more than half the ring
+				&& preparedTime < (int32_t)UsualMinimumPreparedTime		// prepare moves one eighth of a second ahead of when they will be needed
+				&& preparedCount < DdaRingLength/2 - 1					// but don't prepare as much as half the ring
 			  )
 		{
-			cdda->Prepare(simulationMode);
+			if (cdda->IsGoodToPrepare() || preparedTime < (int32_t)AbsoluteMinimumPreparedTime)
+			{
+				cdda->Prepare(simulationMode);
+			}
 			preparedTime += cdda->GetTimeLeft();
 			++preparedCount;
 			cdda = cdda->GetNext();
@@ -317,7 +328,7 @@ void Move::Spin()
 			// Simulate completion of the current move
 //DEBUG
 //currentDda->DebugPrint();
-			simulationTime += currentDda->CalcTime();
+			simulationTime += (float)currentDda->GetClocksNeeded()/DDA::stepClockRate;
 			currentDda->Complete();
 			CurrentMoveCompleted();
 		}
@@ -361,13 +372,10 @@ bool Move::IsRawMotorMove(uint8_t moveType) const
 bool Move::IsAccessibleProbePoint(float x, float y) const
 {
 	const ZProbeParameters& params = reprap.GetPlatform().GetCurrentZProbeParameters();
-	return kinematics->IsReachable(x - params.xOffset, y - params.yOffset);
+	return kinematics->IsReachable(x - params.xOffset, y - params.yOffset, false);
 }
 
-// Pause the print as soon as we can, returning true if we are able to.
-// Returns the file position of the first queue move we are going to skip, or noFilePosition we we are not skipping any moves.
-// We update 'positions' to the positions and feed rate expected for the next move, and the amount of extrusion in the moves we skipped.
-// If we are not skipping any moves then the feed rate, virtual extruder position and iobits are left alone, therefore the caller should set them up first.
+// Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
 bool Move::PausePrint(RestorePoint& rp)
 {
 	// Find a move we can pause after.
@@ -393,7 +401,7 @@ bool Move::PausePrint(RestorePoint& rp)
 	// In general, we can pause after a move if it is the last segment and its end speed is slow enough.
 	// We can pause before a move if it is the first segment in that move.
 
-	const DDA *savedDdaRingAddPointer = ddaRingAddPointer;
+	const DDA * const savedDdaRingAddPointer = ddaRingAddPointer;
 	bool pauseOkHere;
 
 	cpu_irq_disable();
@@ -414,7 +422,6 @@ bool Move::PausePrint(RestorePoint& rp)
 		if (pauseOkHere && dda->CanPauseBefore())
 		{
 			// We can pause before executing this move
-			(void)dda->Free();							// free the DDA we are going to pause before it so that it won't get executed after we enable interrupts
 			ddaRingAddPointer = dda;
 			break;
 		}
@@ -460,7 +467,79 @@ bool Move::PausePrint(RestorePoint& rp)
 	return true;
 }
 
-uint32_t maxReps = 0;
+// Pause the print immediately, returning true if we were able to skip or abort any moves and setting up to the move we aborted
+bool Move::LowPowerPause(RestorePoint& rp)
+{
+	const DDA * const savedDdaRingAddPointer = ddaRingAddPointer;
+	bool abortedMove = false;
+
+	cpu_irq_disable();
+	DDA *dda = currentDda;
+	if (dda != nullptr && dda->GetFilePosition() != noFilePosition)
+	{
+		// We are executing a move that has a file address, so we can interrupt it
+		Platform::DisableStepInterrupt();
+		dda->MoveAborted();
+		CurrentMoveCompleted();							// updates live endpoints, extrusion, ddaRingGetPointer, currentDda etc.
+		--completedMoves;								// this move wasn't really completed
+		abortedMove = true;
+	}
+	else
+	{
+		if (dda == nullptr)
+		{
+			// No move is being executed
+			dda = ddaRingGetPointer;
+		}
+		while (dda != savedDdaRingAddPointer)
+		{
+			if (dda->GetFilePosition() != noFilePosition)
+			{
+				break;									// we can pause before executing this move
+			}
+			dda = dda->GetNext();
+		}
+	}
+
+	cpu_irq_enable();
+
+	if (dda == savedDdaRingAddPointer)
+	{
+		return false;									// we can't skip any moves
+	}
+
+	// We are going to skip some moves, or part of a move.
+	// Store the parameters of the first move we are going to execute when we resume
+	rp.feedRate = dda->GetRequestedSpeed();
+	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
+	rp.filePos = dda->GetFilePosition();
+	rp.proportionDone = dda->GetProportionDone();		// store how much of the complete multi-segment move's extrusion has been done
+
+#if SUPPORT_IOBITS
+	rp.ioBits = dda->GetIoBits();
+#endif
+
+	ddaRingAddPointer = (abortedMove) ? dda->GetNext() : dda;
+
+	// Get the end coordinates of the last move that was or will be completed, or the coordinates of the current move when we aborted it.
+	DDA * const prevDda = ddaRingAddPointer->GetPrevious();
+	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		rp.moveCoords[axis] = prevDda->GetEndCoordinate(axis, false);
+	}
+
+	InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes(), prevDda->GetYAxes());	// we assume that xAxes and yAxes have't changed between the moves
+
+	// Free the DDAs for the moves we are going to skip
+	for (dda = ddaRingAddPointer; dda != savedDdaRingAddPointer; dda = dda->GetNext())
+	{
+		(void)dda->Free();
+		scheduledMoves--;
+	}
+
+	return true;
+}
 
 #if 0
 // For debugging
@@ -473,8 +552,8 @@ void Move::Diagnostics(MessageType mtype)
 	Platform& p = reprap.GetPlatform();
 	p.Message(mtype, "=== Move ===\n");
 	p.MessageF(mtype, "MaxReps: %" PRIu32 ", StepErrors: %u, FreeDm: %d, MinFreeDm %d, MaxWait: %" PRIu32 "ms, Underruns: %u, %u\n",
-						maxReps, stepErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
-	maxReps = 0;
+						DDA::maxReps, stepErrors, DriveMovement::NumFree(), DriveMovement::MinFree(), longestGcodeWaitInterval, numLookaheadUnderruns, numPrepareUnderruns);
+	DDA::maxReps = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = 0;
 	longestGcodeWaitInterval = 0;
 	DriveMovement::ResetMinFree();
@@ -584,10 +663,10 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes
 
 // Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
 // Used to perform movement and G92 commands.
-bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool allowModeChange) const
+bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
-														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, allowModeChange);
+														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
 	if (reprap.Debug(moduleMove) && reprap.Debug(moduleDda))
 	{
 		if (b)
@@ -861,9 +940,9 @@ void Move::AdjustMotorPositions(const float_t adjustment[], size_t numMotors)
 	const int32_t * const endCoordinates = lastQueuedMove->DriveCoordinates();
 	const float * const driveStepsPerUnit = reprap.GetPlatform().GetDriveStepsPerUnit();
 
-	for (size_t drive = 0; drive < DELTA_AXES; ++drive)
+	for (size_t drive = 0; drive < numMotors; ++drive)
 	{
-		const int32_t ep = endCoordinates[drive] + (int32_t)(adjustment[drive] * driveStepsPerUnit[drive]);
+		const int32_t ep = endCoordinates[drive] + lrintf(adjustment[drive] * driveStepsPerUnit[drive]);
 		lastQueuedMove->SetDriveCoordinate(ep, drive);
 		liveEndPoints[drive] = ep;
 	}
