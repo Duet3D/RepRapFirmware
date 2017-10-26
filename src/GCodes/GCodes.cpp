@@ -288,7 +288,7 @@ void GCodes::Spin()
 			{
 				if (gb.MachineState().previous == nullptr)
 				{
-					CancelPrint(false, false);
+					StopPrint(false);
 				}
 				else
 				{
@@ -1089,8 +1089,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				const float *offsets = tool->GetOffsets();
-				tool->SetOffset(Z_AXIS, offsets[Z_AXIS] + g30zHeightError, true);
+				tool->SetOffset(Z_AXIS, tool->GetOffset(Z_AXIS) + g30zHeightError, true);
 			}
 		}
 		else
@@ -1309,7 +1308,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 				&& IsCodeQueueIdle()									// must also wait until deferred command queue has caught up
 			   )
 			{
-				CancelPrint(true, true);
+				StopPrint(true);
 			}
 		}
 		else
@@ -1330,8 +1329,7 @@ void GCodes::DoFilePrint(GCodeBuffer& gb, StringRef& reply)
 				HandleReply(gb, false, "");
 				if (pausePending && &gb == fileGCode && !gb.IsDoingFileMacro())
 				{
-					const char* const m226Command = "M226\n";
-					gb.Put(m226Command, strlen(m226Command) + 1);
+					gb.Put("M226");
 					pausePending = false;
 				}
 			}
@@ -1645,7 +1643,7 @@ bool GCodes::LowVoltagePause()
 		// Run the auto-pause script
 		if (powerFailScript != nullptr)
 		{
-			autoPauseGCode->Put(powerFailScript, strlen(powerFailScript) + 1);
+			autoPauseGCode->Put(powerFailScript);
 		}
 		autoPauseGCode->SetState(GCodeState::powerFailPausing1);
 		isPaused = true;
@@ -2870,10 +2868,9 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 	const Tool * const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
-		const float * const offset = currentTool->GetOffsets();
 		for (size_t i = 0; i < numVisibleAxes; ++i)
 		{
-			liveCoordinates[i] += offset[i];
+			liveCoordinates[i] += currentTool->GetOffset(i);
 		}
 	}
 
@@ -3152,25 +3149,18 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, StringRef& reply)
 		}
 	}
 
-	// Deal with setting offsets
-	float offset[MaxAxes];
-	for (size_t i = 0; i < MaxAxes; ++i)
-	{
-		offset[i] = tool->GetOffsets()[i];
-	}
-
 	bool settingOffset = false;
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		gb.TryGetFValue(axisLetters[axis], offset[axis], settingOffset);
-	}
-	if (settingOffset)
-	{
-		if (!LockMovement(gb))
+		if (gb.Seen(axisLetters[axis]))
 		{
-			return GCodeResult::notFinished;
+			if (!LockMovement(gb))
+			{
+				return GCodeResult::notFinished;
+			}
+			settingOffset = true;
+			tool->SetOffset(axis, gb.GetFValue(), gb.MachineState().runningM501);
 		}
-		tool->SetOffsets(offset);
 	}
 
 	// Deal with setting temperatures
@@ -3204,7 +3194,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, StringRef& reply)
 		reply.printf("Tool %d offsets:", tool->Number());
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			reply.catf(" %c%.2f", axisLetters[axis], (double)offset[axis]);
+			reply.catf(" %c%.2f", axisLetters[axis], (double)tool->GetOffset(axis));
 		}
 		if (hCount != 0)
 		{
@@ -3926,7 +3916,7 @@ bool GCodes::IsCodeQueueIdle() const
 
 // Cancel the current SD card print.
 // This is called from Pid.cpp when there is a heater fault, and from elsewhere in this module.
-void GCodes::CancelPrint(bool printStats, bool deleteResumeFile)
+void GCodes::StopPrint(bool normalCompletion)
 {
 	segmentsLeft = 0;
 	isPaused = pausePending = false;
@@ -3969,16 +3959,14 @@ void GCodes::CancelPrint(bool printStats, bool deleteResumeFile)
 			// Pronterface expects a "Done printing" message
 			platform.Message(UsbMessage, "Done printing file");
 		}
-		if (printStats)
-		{
-			const uint32_t printMinutes = lrintf(reprap.GetPrintMonitor().GetPrintDuration()/60.0);
-			platform.MessageF(LoggedGenericMessage, "Finished printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
-				printingFilename, printMinutes/60u, printMinutes % 60u);
-		}
+		const uint32_t printMinutes = lrintf(reprap.GetPrintMonitor().GetPrintDuration()/60.0);
+		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
+			(normalCompletion) ? "Finished" : "Cancelled",
+			printingFilename, printMinutes/60u, printMinutes % 60u);
 	}
 
 	reprap.GetPrintMonitor().StoppedPrint();		// must do this after printing the simulation details because it clears the filename
-	if (deleteResumeFile && simulationMode == 0)
+	if (normalCompletion && simulationMode == 0)
 	{
 		platform.GetMassStorage()->Delete(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, true);
 	}
@@ -4069,7 +4057,7 @@ void GCodes::ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[
 				&& (axis != Y_AXIS || IsBitSet(yAxes, Y_AXIS))
 			   )
 			{
-				const float totalOffset = currentTool->GetOffsets()[axis] + axisOffsets[axis];
+				const float totalOffset = currentTool->GetOffset(axis) + axisOffsets[axis];
 				const size_t inputAxis = (IsBitSet(explicitAxes, axis)) ? axis
 										: (IsBitSet(xAxes, axis)) ? X_AXIS
 											: (IsBitSet(yAxes, axis)) ? Y_AXIS
@@ -4101,15 +4089,15 @@ void GCodes::ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coo
 		size_t numXAxes = 0, numYAxes = 0;
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			coordsOut[axis] = coordsIn[axis] + currentTool->GetOffsets()[axis];
+			coordsOut[axis] = coordsIn[axis] + currentTool->GetOffset(axis);
 			if (IsBitSet(xAxes, axis))
 			{
-				xCoord += coordsIn[axis]/axisScaleFactors[axis] + currentTool->GetOffsets()[axis];
+				xCoord += coordsIn[axis]/axisScaleFactors[axis] + currentTool->GetOffset(axis);
 				++numXAxes;
 			}
 			if (IsBitSet(yAxes, axis))
 			{
-				yCoord += coordsIn[axis]/axisScaleFactors[axis] + currentTool->GetOffsets()[axis];
+				yCoord += coordsIn[axis]/axisScaleFactors[axis] + currentTool->GetOffset(axis);
 				++numYAxes;
 			}
 		}

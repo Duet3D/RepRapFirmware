@@ -8,9 +8,10 @@
 #ifndef SRC_HEATING_SENSORS_DHTSENSOR_H_
 #define SRC_HEATING_SENSORS_DHTSENSOR_H_
 
-#ifdef DUET_NG
+#include "RepRapFirmware.h"
 
-#include "Heating/Heat.h"
+#if SUPPORT_DHT_SENSOR
+
 #include "TemperatureSensor.h"
 
 enum class DhtSensorType

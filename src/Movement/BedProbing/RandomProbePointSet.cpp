@@ -230,7 +230,7 @@ bool RandomProbePointSet::GoodProbePointOrdering(size_t numPoints) const
 // Print out the probe heights and any errors
 void RandomProbePointSet::ReportProbeHeights(size_t numPoints, StringRef& reply) const
 {
-	reply.copy("Bed probe heights:");
+	reply.copy("G32 bed probe heights:");
 	float sum = 0.0;
 	float sumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)

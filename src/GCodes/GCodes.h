@@ -170,7 +170,7 @@ public:
 
 	bool AllAxesAreHomed() const;										// Return true if all axes are homed
 
-	void CancelPrint(bool printStats, bool deleteResumeFile);			// Cancel the current print
+	void StopPrint(bool normalCompletion);								// Stop the current print
 
 	void MoveStoppedByZProbe() { zProbeTriggered = true; }				// Called from the step ISR when the Z probe is triggered, causing the move to be aborted
 

@@ -293,16 +293,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			bool wasPaused = isPaused;					// isPaused gets cleared by CancelPrint
-			CancelPrint(true, &gb == fileGCode);		// if this is normal end-of-print commanded by the file, deleted the ressurrect.g file
-			if (wasPaused)
+			const bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
+			StopPrint(&gb == fileGCode);				// if this is normal end-of-print commanded by the file, deleted the resurrect.g file
+
+			// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
+			if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
 			{
-				reply.copy("Print cancelled");
-				// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-				if (code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
-				{
-					break;
-				}
+				break;
 			}
 		}
 

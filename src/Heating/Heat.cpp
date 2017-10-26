@@ -23,6 +23,10 @@ Licence: GPL
 #include "RepRap.h"
 #include "Sensors/TemperatureSensor.h"
 
+#if SUPPORT_DHT_SENSOR
+# include "Sensors/DhtSensor.h"
+#endif
+
 Heat::Heat(Platform& p)
 	: platform(p), active(false), coldExtrude(false), bedHeater(DefaultBedHeater), chamberHeater(DefaultChamberHeater), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
@@ -146,6 +150,11 @@ void Heat::Spin()
 				heaterBeingTuned = -1;
 			}
 		}
+
+#if SUPPORT_DHT_SENSOR
+		// If the DHT temperature sensor is active, it needs to be spinned too
+		DhtSensor::Spin();
+#endif
 	}
 	platform.ClassReport(longWait);
 }

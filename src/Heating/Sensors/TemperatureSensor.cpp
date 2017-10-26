@@ -10,7 +10,7 @@
 #include "CpuTemperatureSensor.h"
 #endif
 
-#ifdef DUET_NG
+#if SUPPORT_DHT_SENSOR
 #include "DhtSensor.h"
 #endif
 
@@ -106,7 +106,7 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int channel)
 	{
 		ts = new CurrentLoopTemperatureSensor(channel);
 	}
-#ifdef DUET_NG
+#if SUPPORT_DHT_SENSOR
 	else if (channel == DhtTemperatureChannel || channel == DhtHumidityChannel)
 	{
 		ts = new DhtSensor(channel);

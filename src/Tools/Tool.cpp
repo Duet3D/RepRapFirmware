@@ -462,14 +462,6 @@ bool Tool::WriteSettings(FileStore *f) const
 	return ok;
 }
 
-void Tool::SetOffsets(const float offs[MaxAxes])
-{
-	for (size_t i = 0; i < MaxAxes; ++i)
-	{
-		offset[i] = offs[i];
-	}
-}
-
 void Tool::SetOffset(size_t axis, float offs, bool byProbing)
 {
 	offset[axis] = offs;

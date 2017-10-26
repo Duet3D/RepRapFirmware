@@ -78,11 +78,11 @@ public:
 
 	void MoveAborted();
 
+	uint32_t GetClocksNeeded() const { return clocksNeeded; }
 	bool IsGoodToPrepare() const;
 
 #if SUPPORT_IOBITS
 	uint32_t GetMoveStartTime() const { return moveStartTime; }
-	uint32_t GetClocksNeeded() const { return clocksNeeded; }
 	IoBits_t GetIoBits() const { return ioBits; }
 #endif
 

@@ -10,7 +10,7 @@
 #include "RepRap.h"
 #include "GCodes/GCodeBuffer.h"
 
-#ifdef DUET_NG
+#if SUPPORT_DHT_SENSOR
 
 const uint32_t MinimumReadInterval = 2000;		// ms
 const uint32_t MaximumReadTime = 50;			// ms

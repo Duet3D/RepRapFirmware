@@ -595,10 +595,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 
 		if (currentTool != nullptr)
 		{
-			const float *offset = currentTool->GetOffsets();
 			for (size_t i = 0; i < numAxes; ++i)
 			{
-				liveCoordinates[i] += offset[i];
+				liveCoordinates[i] += currentTool->GetOffset(i);
 			}
 		}
 
@@ -1294,10 +1293,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	const Tool* const currentTool = reprap.GetCurrentTool();
 	if (currentTool != nullptr)
 	{
-		const float *offset = currentTool->GetOffsets();
 		for (size_t i = 0; i < numAxes; ++i)
 		{
-			liveCoordinates[i] += offset[i];
+			liveCoordinates[i] += currentTool->GetOffset(i);
 		}
 	}
 	response->catf(",\"pos\":");		// announce the XYZ position
@@ -1768,7 +1766,7 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 			{
 				if (IsBitSet(axesProbed, axis))
 				{
-					scratchString.catf(" %c%.2f", GCodes::axisLetters[axis], (double)(t->GetOffsets()[axis]));
+					scratchString.catf(" %c%.2f", GCodes::axisLetters[axis], (double)(t->GetOffset(axis)));
 				}
 			}
 		}

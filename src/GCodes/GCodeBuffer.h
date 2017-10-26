@@ -21,7 +21,8 @@ public:
 	void Init(); 										// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype);				// Write some debug info
 	bool Put(char c) __attribute__((hot));				// Add a character to the end
-	bool Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
+	void Put(const char *str, size_t len);				// Add an entire string, overwriting any existing content
+	void Put(const char *str);							// Add a null-terminated string, overwriting any existing content
 	bool Seen(char c) __attribute__((hot));				// Is a character present?
 
 	char GetCommandLetter() const { return commandLetter; }

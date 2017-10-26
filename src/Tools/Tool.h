@@ -47,8 +47,7 @@ public:
 	static Tool *Create(int toolNumber, const char *name, long d[], size_t dCount, long h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, StringRef& reply);
 	static void Delete(Tool *t);
 
-	const float *GetOffsets() const;
-	void SetOffsets(const float offs[MaxAxes]);
+	float GetOffset(size_t axis) const pre(axis < MaxAxes);
 	void SetOffset(size_t axis, float offs, bool byProbing) pre(axis < MaxAxes);
 	AxesBitmap GetAxisOffsetsProbed() const { return axisOffsetsProbed; }
 	size_t DriveCount() const;
@@ -146,9 +145,9 @@ inline size_t Tool::DriveCount() const
 	return driveCount;
 }
 
-inline const float *Tool::GetOffsets() const
+inline float Tool::GetOffset(size_t axis) const
 {
-	return offset;
+	return offset[axis];
 }
 
 #endif /* TOOL_H_ */

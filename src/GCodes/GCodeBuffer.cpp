@@ -348,19 +348,25 @@ void GCodeBuffer::DecodeCommand()
 	bufferState = GCodeBufferState::ready;
 }
 
-// Add an entire string, overwriting any existing content
-bool GCodeBuffer::Put(const char *str, size_t len)
+// Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line
+void GCodeBuffer::Put(const char *str, size_t len)
 {
 	Init();
 	for (size_t i = 0; i < len; i++)
 	{
-		if (Put(str[i]))
+		if (Put(str[i]))	// if the line is complete
 		{
-			return true;
+			return;
 		}
 	}
 
-	return false;
+	(void)Put('\n');		// because there wasn't one at the end of the string
+}
+
+// Add a null-terminated string, overwriting any existing content
+void GCodeBuffer::Put(const char *str)
+{
+	Put(str, strlen(str));
 }
 
 void GCodeBuffer::SetFinished(bool f)

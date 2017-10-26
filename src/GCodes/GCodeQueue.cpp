@@ -136,10 +136,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t segmentsLeft)
 			{
 				reprap.GetPlatform().Message(DebugMessage, "(swap) ");
 			}
-			if (!gb.Put(codeToRun, codeToRunLength))
-			{
-				gb.Put('\n');
-			}
+			gb.Put(codeToRun, codeToRunLength);
 		}
 	}
 
@@ -243,10 +240,7 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb)
 void QueuedCode::AssignTo(GCodeBuffer *gb)
 {
 	gb->SetToolNumberAdjust(toolNumberAdjust);
-	if (!gb->Put(code, strlen(code) + 1))
-	{
-		gb->Put('\n');
-	}
+	gb->Put(code);
 }
 
 // End

@@ -526,7 +526,7 @@ void Scanner::DoFileMacro(const char *filename)
 		snprintf(gcode, ARRAY_SIZE(gcode), "M98 P%s\n", filename);
 		gcode[ARRAY_UPB(gcode)] = 0;
 
-		serialGCode->Put(gcode, strlen(gcode));
+		serialGCode->Put(gcode);
 	}
 }
 
