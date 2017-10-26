@@ -16,9 +16,7 @@ New and changed features:
 - When logging is enabled, a log entry is now written when the date/time is set
 - When logging is enabled, "Maximum open file count exceeded" messages are logged
 - Loss of power is now handled much faster. The print is paused in the middle of a move if necessary. The M911 parameters are changed to facilitate this.
-- When resuming a print after loss of power, the head is now moved up, sideways, and finally down when restoring position
 - Following a power failure, M916 can now be used to resume the print instead of using M98 Presurrect.g
-- The heater control now switches to fast PID parameters when the temperature is within 3C of target, instead of within 1C
 - The TMC2660 Stallguard detection and Coolstep parameters may now be configured using M915. Currently, no action is performed when a stall is signalled.
 - If a heater fault occurs, the print is paused instead of cancelled
 - The start and end speeds of short segmented moves in accelerating or decalerating sequences are more closely matched where possible, which should give smoother motion
