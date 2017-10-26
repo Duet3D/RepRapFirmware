@@ -5,7 +5,7 @@ Version 1.20beta2
 =================
 
 Upgrade notes
-- Duet WiFi user can use either DuetWiFiServer 1.20beta2 (which disables WiFi module sleep) or 1.20alpha1 (which uses the default "modem sleep" mode)
+- Duet WiFi users can use either DuetWiFiServer 1.20beta2 (which disables WiFi module sleep) or 1.20alpha1 (which uses the default "modem sleep" mode)
 - The parameters to the M911 command (which configures power fail handling) have changed. If you use this command in config.g you will have to change it accordingly.
 - On a Duet WiFi, if your M552 command in config.g includes a P parameter with an IP address, you will need to remove them
 
