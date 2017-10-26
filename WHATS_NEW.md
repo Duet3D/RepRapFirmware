@@ -10,6 +10,7 @@ Upgrade notes
 - On a Duet WiFi, if your M552 command in config.g includes a P parameter with an IP address, you will need to remove them
 
 New and changed features:
+- A line of GCode may now contain multiple G- and M-commands. The commands are executed sequentially. A command that takes an un-quoted string parameter must be the last command on the line. A T command must be on a line by itself.
 - On SCARA printers, arm position limits are applied as well as XY size limits
 - Heater 0 values are sent to to PanelDue even if there is no heated bed
 - When logging is enabled, a log entry is now written when the date/time is set
