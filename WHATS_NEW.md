@@ -1,6 +1,14 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20beta4
+=================
+
+Bug fixes:
+
+- Resuming a print after pausing still sometimes gave a "low voltage" error if no M911 command had been used
+- Simulation mode didn't work in 1.20b2 or 1.20b3
+
 Version 1.20beta3
 =================
 
