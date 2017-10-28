@@ -133,43 +133,19 @@ void RegularGCodeInput::Put(MessageType mtype, const char c)
 			break;
 
 		case GCodeInputState::doingMCode:
-			if (c == '1')
-			{
-				state = GCodeInputState::doingMCode1;
-			}
+			state = (c == '1') ? GCodeInputState::doingMCode1 : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode1:
-			if (c == '1')
-			{
-				state = GCodeInputState::doingMCode11;
-			}
-			else if (c == '2')
-			{
-				state = GCodeInputState::doingMCode12;
-			}
-			else
-			{
-				state = GCodeInputState::doingCode;
-			}
+			state = (c == '1') ? GCodeInputState::doingMCode11: (c == '2') ? GCodeInputState::doingMCode12 : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode11:
-			if (c == '2')
-			{
-				state = GCodeInputState::doingMCode112;
-				break;
-			}
-			state = GCodeInputState::doingCode;
+			state = (c == '2') ? GCodeInputState::doingMCode112 : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode12:
-			if (c == '2')
-			{
-				state = GCodeInputState::doingMCode122;
-				break;
-			}
-			state = GCodeInputState::doingCode;
+			state = (c == '2') ? GCodeInputState::doingMCode122 : GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode112:

@@ -1554,7 +1554,7 @@ void Platform::DisableAutoSave()
 
 bool Platform::IsPowerOk() const
 {
-	return currentVin > autoPauseReading;
+	return autoSaveEnabled && currentVin > autoPauseReading;
 }
 
 void Platform::EnableAutoSave(float saveVoltage, float resumeVoltage)
