@@ -830,7 +830,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case GCodeState::gridprobing6:
+	case GCodeState::gridProbing6:
 		// Finished probing the grid, and retracted the probe if necessary
 		{
 			float mean, deviation;
@@ -3096,10 +3096,8 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb)
 		simulationTime += (float)dwell * 0.001;
 		return GCodeResult::ok;
 	}
-	else
-	{
-		return DoDwellTime(gb, (uint32_t)dwell);
-	}
+
+	return DoDwellTime(gb, (uint32_t)dwell);
 }
 
 GCodeResult GCodes::DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis)

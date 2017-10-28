@@ -462,6 +462,10 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			}
 		}
 
+		// Client has been logged in
+		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\"}", HttpSessionTimeout, GetPlatform().GetBoardString());
+		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
+
 		// See if we can update the current RTC date and time
 		const char* const timeString = GetKeyValue("time");
 		if (timeString != nullptr && !GetPlatform().IsDateTimeSet())
@@ -470,14 +474,9 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 			memset(&timeInfo, 0, sizeof(timeInfo));
 			if (strptime(timeString, "%Y-%m-%dT%H:%M:%S", &timeInfo) != nullptr)
 			{
-				time_t newTime = mktime(&timeInfo);
-				GetPlatform().SetDateTime(newTime);
+				GetPlatform().SetDateTime(mktime(&timeInfo));
 			}
 		}
-
-		// Client has been logged in
-		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\"}", HttpSessionTimeout, GetPlatform().GetBoardString());
-		reprap.GetPlatform().MessageF(LogMessage, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
 	}
 	else if (!CheckAuthenticated())
 	{

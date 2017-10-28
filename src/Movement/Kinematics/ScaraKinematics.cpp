@@ -254,7 +254,7 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 	}
 
 	// The requested position was not reachable
-	if (isnan(theta))
+	if (std::isnan(theta))
 	{
 		// We are radius-limited
 		float x = coords[X_AXIS] + xOffset;
@@ -286,7 +286,7 @@ bool ScaraKinematics::LimitPosition(float coords[], size_t numVisibleAxes, AxesB
 	}
 
 	// Recalculate theta and psi, but don't allow arm mode changes this time
-	if (!CalculateThetaAndPsi(coords, true, theta, psi, armMode) && !isnan(theta))
+	if (!CalculateThetaAndPsi(coords, true, theta, psi, armMode) && !std::isnan(theta))
 	{
 		// Radius is in range but at least one arm angle isn't
 		cachedTheta = theta = constrain<float>(theta, thetaLimits[0], thetaLimits[1]);

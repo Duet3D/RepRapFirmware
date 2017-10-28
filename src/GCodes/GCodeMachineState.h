@@ -54,7 +54,7 @@ enum class GCodeState : uint8_t
 	gridProbing3,
 	gridProbing4,
 	gridProbing5,
-	gridprobing6,
+	gridProbing6,
 
 	// These next 8 must be contiguous
 	probingAtPoint0,

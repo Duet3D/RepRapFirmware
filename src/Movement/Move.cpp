@@ -271,7 +271,7 @@ void Move::Spin()
 				}
 				moveState = MoveState::executing;
 			}
-			else if (simulationMode != 0)
+			else if (simulationMode == 0)
 			{
 				if (moveState == MoveState::executing && !reprap.GetGCodes().IsPaused())
 				{

@@ -2296,10 +2296,22 @@ EndStopHit Platform::GetZProbeResult() const
 // Write the platform parameters to file
 bool Platform::WritePlatformParameters(FileStore *f) const
 {
-	bool ok = WriteAxisLimits(f, axisMinimaProbed, axisMinima, 1);
-	if (ok)
+	bool ok;
+	if (axisMinimaProbed != 0 || axisMaximaProbed != 0)
 	{
-		ok = WriteAxisLimits(f, axisMaximaProbed, axisMaxima, 0);
+		ok = f->Write("; Probed axis limits\n");
+		if (ok)
+		{
+			ok = WriteAxisLimits(f, axisMinimaProbed, axisMinima, 1);
+		}
+		if (ok)
+		{
+			ok = WriteAxisLimits(f, axisMaximaProbed, axisMaxima, 0);
+		}
+	}
+	else
+	{
+		ok = true;
 	}
 
 #if 0	// From version 1.20 we no longer write the Z probe parameters, but keep the code for now in case too many users complain

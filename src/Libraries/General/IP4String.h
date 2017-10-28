@@ -1,5 +1,5 @@
 /*
- * IPString.h
+ * IP4String.h
  *
  *  Created on: 19 Sep 2017
  *      Author: David

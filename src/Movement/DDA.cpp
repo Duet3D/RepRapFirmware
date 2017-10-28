@@ -1262,7 +1262,6 @@ void DDA::CheckEndstops(Platform& platform)
 				if ((endStopsToCheck & UseSpecialEndstop) != 0)		// use only one (probably non-default) endstop while probing a tool offset
 				{
 					MoveAborted();
-					return;
 				}
 				else
 				{
@@ -1271,7 +1270,6 @@ void DDA::CheckEndstops(Platform& platform)
 					if (endStopsToCheck == 0 || kin.QueryTerminateHomingMove(drive))
 					{
 						MoveAborted();									// no more endstops to check, or this axis uses shared motors, so stop the entire move
-						return;
 					}
 					else
 					{

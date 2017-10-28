@@ -1755,13 +1755,22 @@ bool RepRap::WriteToolSettings(FileStore *f) const
 // Save some information in config-override.g
 bool RepRap::WriteToolParameters(FileStore *f) const
 {
-	bool ok = true;
+	bool ok = true, written = false;
 	for (const Tool *t = toolList; ok && t != nullptr; t = t->Next())
 	{
 		const AxesBitmap axesProbed = t->GetAxisOffsetsProbed();
 		if (axesProbed != 0)
 		{
-			scratchString.printf("G10 P%d", t->Number());
+			if (written)
+			{
+				scratchString.Clear();
+			}
+			else
+			{
+				scratchString.copy("; Probed tool offsets\n");
+				written = true;
+			}
+			scratchString.catf("G10 P%d", t->Number());
 			for (size_t axis = 0; axis < MaxAxes; ++axis)
 			{
 				if (IsBitSet(axesProbed, axis))
@@ -1769,9 +1778,9 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 					scratchString.catf(" %c%.2f", GCodes::axisLetters[axis], (double)(t->GetOffset(axis)));
 				}
 			}
+			scratchString.cat('\n');
+			ok = f->Write(scratchString.Pointer());
 		}
-		scratchString.cat('\n');
-		ok = f->Write(scratchString.Pointer());
 	}
 	return ok;
 }
