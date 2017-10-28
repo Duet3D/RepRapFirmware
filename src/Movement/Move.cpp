@@ -245,7 +245,6 @@ void Move::Spin()
 		}
 	}
 
-
 	// See whether we need to kick off a move
 	if (currentDda == nullptr)
 	{
@@ -258,6 +257,9 @@ void Move::Spin()
 			if (dda->GetState() == DDA::provisional)
 			{
 				dda->Prepare(simulationMode);
+			}
+			if (dda->GetState() == DDA::frozen)
+			{
 				if (simulationMode != 0)
 				{
 					currentDda = dda;								// pretend we are executing this move
@@ -322,10 +324,9 @@ void Move::Spin()
 			st = cdda->GetState();
 		}
 
-		// If we are simulating and the move pipeline is reasonably full, simulate completion of the current move
-		if (simulationMode != 0 && idleCount >= 10)
+		// If we are simulating, simulate completion of the current move
+		if (simulationMode != 0)
 		{
-			// Simulate completion of the current move
 //DEBUG
 //currentDda->DebugPrint();
 			simulationTime += (float)currentDda->GetClocksNeeded()/DDA::stepClockRate;

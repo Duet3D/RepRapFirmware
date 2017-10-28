@@ -9,7 +9,7 @@
 #define SRC_VERSION_H_
 
 #ifndef VERSION
-# define VERSION "1.20beta3"
+# define VERSION "1.20beta4"
 #endif
 
 #ifndef DATE
