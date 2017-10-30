@@ -317,33 +317,11 @@ TemperatureError RtdSensor31865::GetTemperature(float& t)
 				}
 				else
 				{
-					int hundredths = 0;
-					int iTemp = low - 1 + CelsiusMin;
-					uint16_t Rlower = tempTable[low - 1];
-					uint16_t Rupper = tempTable[low];
+					const float temperatureFraction = (float)(ohmsx100 - tempTable[low - 1])/(float)(tempTable[low] - tempTable[low - 1]);
 
-					if (ohmsx100 == Rupper)
-					{
-						iTemp++;
-						hundredths = 0;
-					}
-					else if (ohmsx100 < Rupper)
-					{
-						hundredths = 100 * (ohmsx100 - Rlower) / (Rupper - Rlower);
-					}
-					else if (ohmsx100 > Rupper)
-					{
-						iTemp++;
-						uint16_t Rnext = tempTable[low + 1];
-						hundredths = 100 * (ohmsx100 - Rupper) / (Rnext - Rupper);
-					}
-					else
-					{
-						hundredths = 100 * (ohmsx100 - Rlower) / (Rupper - Rlower);
-					}
+					t = lastTemperature = low - 1 + CelsiusMin + temperatureFraction;
 
-					t = (float)iTemp + (float)hundredths / 100.0;
-					//debugPrintf("raw %u low %u interp %f temp %f\n", adcVal, low, interpolationFraction, *t);
+					//debugPrintf("raw %f low %u temp %f\n", ohmsx100, low, t);
 					lastResult = TemperatureError::success;
 				}
 			}
