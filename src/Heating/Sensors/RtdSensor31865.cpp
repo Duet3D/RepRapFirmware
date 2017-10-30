@@ -283,7 +283,7 @@ TemperatureError RtdSensor31865::GetTemperature(float& t)
 			}
 			else
 			{
-				const float ohmsx100 = ((rawVal >> 1) & 0x7FFF) * RRef / 32768 * 100;
+				const float ohmsx100 = ((rawVal >> 1) & 0x7FFF) * RRef / 32768.0 * 100;
 
 				// Formally-verified binary search routine, adapted from one of the eCv examples
 				size_t low = 0u, high = NumTempTableEntries;
