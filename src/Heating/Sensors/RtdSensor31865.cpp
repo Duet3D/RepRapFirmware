@@ -307,7 +307,7 @@ TemperatureError RtdSensor31865::GetTemperature(float& t)
 				assert(low == 0 || tempTable[low - 1] < ohmsx100);
 				assert(low == NumTempTableEntries || ohmsx100 <= tempTable[low]);
 
-				if (low == 1)									// if off the bottom of the table
+				if (low == 0)									// if off the bottom of the table
 				{
 					lastResult = TemperatureError::shortCircuit;
 				}
