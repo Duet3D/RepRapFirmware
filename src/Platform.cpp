@@ -1363,6 +1363,7 @@ void Platform::Spin()
 			// Poll one TMC2660 for temperature warning or temperature shutdown
 			if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
 			{
+				SmartDrivers::Poll(nextDriveToPoll);
 				const uint32_t stat = SmartDrivers::GetStatus(nextDriveToPoll);
 				const DriversBitmap mask = MakeBitmap<DriversBitmap>(nextDriveToPoll);
 				if (stat & TMC_RR_OT)

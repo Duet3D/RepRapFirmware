@@ -10,9 +10,6 @@
 #include "Platform.h"
 #include "GCodes/GCodeBuffer.h"
 
-short RRef = 400; // default value of the reference resistor
-const short CelsiusMin = -200; // minimum temperature of the temp table below
-
 const uint32_t MAX31865_Frequency = 4000000;	// maximum for MAX31865 is also 5MHz
 
 // SPI modes:
@@ -36,6 +33,8 @@ const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in
 const uint8_t DefaultCr0 = 0b11000011;
 const uint8_t Cr0ReadMask = 0b11011101;		// bits 1 and 5 auto clear, so ignore the value read
 
+const uint16_t DefaultRef = 400;
+
 //	 pt100rtd list of resistances v temperature
 //
 //	DIN 43760 / IEC 751 resistance values (ohms) were multiplied by 100 and
@@ -45,9 +44,12 @@ const uint8_t Cr0ReadMask = 0b11011101;		// bits 1 and 5 auto clear, so ignore t
 //	1852 represents 18.52 ohms and corresponds to a temperature of -200C.
 //	10000 ==> 100.00 ohms @   0C
 //	13851 ==> 138.51 ohms @ 100C
+
+const float CelsiusMin = -100.0;					// starting temperature of the temp table below
+const float CelsiusInterval = 10.0;
+
 static const uint16_t tempTable[] =
 {
-	1852,  2283,  2710,  3134,  3554,  3972,  4388,  4800,  5211,  5619,
 	6026,  6430,  6833,  7233,  7633,  8031,  8427,  8822,  9216,  9609,
 	10000, 10390, 10779, 11167, 11554, 11940, 12324, 12708, 13090, 13471,
 	13851, 14229, 14607, 14983, 15358, 15733, 16105, 16477, 16848, 17217,
@@ -64,7 +66,7 @@ const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 
 RtdSensor31865::RtdSensor31865(unsigned int channel)
 	: SpiTemperatureSensor(channel, "PT100 (MAX31865)", channel - FirstRtdChannel, MAX31865_SpiMode, MAX31865_Frequency),
-	  cr0(DefaultCr0)
+	  rref(DefaultRef), cr0(DefaultCr0)
 {
 }
 
@@ -91,13 +93,13 @@ bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuf
 		if (gb.Seen('R'))
 		{
 			seen = true;
-			RRef = (short)gb.GetIValue();
+			rref = (uint16_t)gb.GetUIValue();
 		}
 
 		if (!seen && !gb.Seen('X'))
 		{
 			CopyBasicHeaterDetails(heater, reply);
-			reply.catf(", reject %dHz, reference resistor: %d ohms", (cr0 & 0x01) ? 50 : 60, RRef);
+			reply.catf(", reject %dHz, reference resistor %u ohms", (cr0 & 0x01) ? 50 : 60, (unsigned int)rref);
 		}
 	}
 	return false;
@@ -190,7 +192,7 @@ TemperatureError RtdSensor31865::GetTemperature(float& t)
 			}
 			else
 			{
-				const float ohmsx100 = ((rawVal >> 1) & 0x7FFF) * RRef / 32768.0 * 100;
+				const uint16_t ohmsx100 = (uint16_t)((((rawVal >> 1) & 0x7FFF) * rref * 100) >> 15);
 
 				// Formally-verified binary search routine, adapted from one of the eCv examples
 				size_t low = 0u, high = NumTempTableEntries;
@@ -226,7 +228,7 @@ TemperatureError RtdSensor31865::GetTemperature(float& t)
 				{
 					const float temperatureFraction = (float)(ohmsx100 - tempTable[low - 1])/(float)(tempTable[low] - tempTable[low - 1]);
 
-					t = lastTemperature = 10 * (low - 1) + CelsiusMin + 10 * temperatureFraction;
+					t = lastTemperature = CelsiusInterval * (low - 1 + temperatureFraction) + CelsiusMin;
 
 					//debugPrintf("raw %f low %u temp %f\n", ohmsx100, low, t);
 					lastResult = TemperatureError::success;

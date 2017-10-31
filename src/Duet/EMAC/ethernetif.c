@@ -55,8 +55,8 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "lwip/src/include/netif/ppp_oe.h"
 
-#include "emac.h"
-#include "rstc.h"
+#include "emac/emac.h"
+#include "rstc/rstc.h"
 
 #include "ethernet_phy.h"
 #include "ethernetif.h"

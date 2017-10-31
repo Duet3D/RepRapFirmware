@@ -19,14 +19,14 @@
 #define USE_DMAC	1		// use general DMA controller
 
 #if USE_PDC
-#include "pdc.h"
+#include "pds/pdc.h"
 #endif
 
 #if USE_DMAC
-#include "dmac.h"
+#include "dmac/dmac.h"
 #endif
 
-#include "matrix.h"
+#include "matrix/matrix.h"
 
 const uint32_t WifiResponseTimeoutMillis = 200;
 const uint32_t WiFiWaitReadyMillis = 100;

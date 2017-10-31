@@ -2189,7 +2189,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			network->SaveFTPConnection();
 
 			// list directory entries
-			if (StringEquals(clientMessage, "LIST"))
+			if (StringStartsWith(clientMessage, "LIST"))
 			{
 				if (network->AcquireDataTransaction())
 				{
@@ -2222,6 +2222,26 @@ void Webserver::FtpInterpreter::ProcessLine()
 					network->CloseDataPort();
 					state = authenticated;
 				}
+			}
+			// switch transfer mode (sends response, but doesn't have any effects)
+			else if (StringStartsWith(clientMessage, "TYPE"))
+			{
+				for (size_t i = 4; i < clientPointer; i++)
+				{
+					if (clientMessage[i] == 'I')
+					{
+						SendReply(200, "Switching to Binary mode.");
+						break;
+					}
+
+					if (clientMessage[i] == 'A')
+					{
+						SendReply(200, "Switching to ASCII mode.");
+						break;
+					}
+				}
+
+				SendReply(500, "Unknown command.");
 			}
 			// upload a file
 			else if (StringStartsWith(clientMessage, "STOR"))
@@ -2282,7 +2302,6 @@ void Webserver::FtpInterpreter::ProcessLine()
 				network->CloseDataPort();
 				state = authenticated;
 			}
-
 			break;
 
 		case doingPasvIO:
@@ -2307,7 +2326,6 @@ void Webserver::FtpInterpreter::ProcessLine()
 				network->CloseDataPort();
 				state = authenticated;
 			}
-
 			break;
 	}
 }

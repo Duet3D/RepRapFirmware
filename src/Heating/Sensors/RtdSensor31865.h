@@ -21,6 +21,7 @@ public:
 private:
 	TemperatureError TryInitRtd() const;
 
+	uint16_t rref;				// reference resistor in ohms
 	uint8_t cr0;
 };
 

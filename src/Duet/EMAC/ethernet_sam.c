@@ -68,8 +68,6 @@
 #include "lwip/src/include/netif/etharp.h"
 #include "ethernetif.h"
 
-#include "emac.h"
-
 /* Global variable containing MAC Config (hw addr, IP, GW, ...) */
 struct netif gs_net_if;
 

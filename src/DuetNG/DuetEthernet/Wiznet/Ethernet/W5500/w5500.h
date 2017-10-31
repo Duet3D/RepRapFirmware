@@ -51,7 +51,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "../wizchip_conf.h"
-#include "spi.h"
+#include "spi/spi.h"
 
 // The following functions are defined in Network.cpp and used by this module
 extern void SpiAssertSS();

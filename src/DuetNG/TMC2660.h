@@ -8,6 +8,7 @@
 #ifndef TMC2660_H_
 #define TMC2660_H_
 
+#include "RepRapFirmware.h"
 #include "Pins.h"
 #include "Libraries/General/StringRef.h"
 
@@ -34,6 +35,8 @@ namespace SmartDrivers
 	void SetStallFilter(size_t drive, bool sgFilter);
 	void SetCoolStep(size_t drive, uint16_t coolStepConfig);
 	void AppendStallConfig(size_t drive, StringRef& reply);
+
+	void Poll(size_t drive);			// temporary function, until we use interrupts to poll drivers continuously
 };
 
 #endif /* TMC2660_H_ */

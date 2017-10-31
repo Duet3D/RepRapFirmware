@@ -34,7 +34,7 @@ private:
 	static const uint16_t WebMessageLength = TCP_MSS;	// maximum length of the web message we accept after decoding
 	static const size_t MaxCommandWords = 4;			// max number of space-separated words in the command
 	static const size_t MaxQualKeys = 5;				// max number of key/value pairs in the qualifier
-	static const size_t MaxHeaders = 16;				// max number of key/value pairs in the headers
+	static const size_t MaxHeaders = 30;				// max number of key/value pairs in the headers
 	static const uint32_t HttpSessionTimeout = 8000;	// HTTP session timeout in milliseconds
 
 	enum class HttpParseState
