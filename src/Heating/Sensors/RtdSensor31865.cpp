@@ -88,14 +88,16 @@ bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuf
 			}
 		}
 
+		if (gb.Seen('R'))
+		{
+			seen = true;
+			RRef = (short)gb.GetIValue();
+		}
+
 		if (!seen && !gb.Seen('X'))
 		{
 			CopyBasicHeaterDetails(heater, reply);
 			reply.catf(", reject %dHz", (cr0 & 0x01) ? 50 : 60);
-		}
-
-		if (gb.Seen('R')) {
-			RRef = (short)gb.GetIValue();
 		}
 	}
 	return false;
