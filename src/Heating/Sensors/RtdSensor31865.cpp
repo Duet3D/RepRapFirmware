@@ -90,6 +90,19 @@ bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuf
 			}
 		}
 
+		if (gb.Seen('W'))
+		{
+			seen = true;
+			if (gb.GetUIValue() == 3) 
+			{
+				cr0 |= 0x10;
+			} 
+			else 
+			{
+				cr0 &= ~0x10;
+			}
+		}
+
 		if (gb.Seen('R'))
 		{
 			seen = true;
