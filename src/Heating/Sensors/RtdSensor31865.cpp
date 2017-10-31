@@ -97,7 +97,7 @@ bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuf
 		if (!seen && !gb.Seen('X'))
 		{
 			CopyBasicHeaterDetails(heater, reply);
-			reply.catf(", reject %dHz", (cr0 & 0x01) ? 50 : 60);
+			reply.catf(", reject %dHz, reference resistor: %d ohms", (cr0 & 0x01) ? 50 : 60, RRef);
 		}
 	}
 	return false;
