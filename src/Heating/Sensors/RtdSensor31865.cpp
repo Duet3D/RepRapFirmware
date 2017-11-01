@@ -90,6 +90,19 @@ bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuf
 			}
 		}
 
+		if (gb.Seen('W'))
+		{
+			seen = true;
+			if (gb.GetUIValue() == 3) 
+			{
+				cr0 |= 0x10;
+			} 
+			else 
+			{
+				cr0 &= ~0x10;
+			}
+		}
+
 		if (gb.Seen('R'))
 		{
 			seen = true;
@@ -99,7 +112,7 @@ bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuf
 		if (!seen && !gb.Seen('X'))
 		{
 			CopyBasicHeaterDetails(heater, reply);
-			reply.catf(", reject %dHz, reference resistor %u ohms", (cr0 & 0x01) ? 50 : 60, (unsigned int)rref);
+			reply.catf(", %s wires, reject %dHz, reference resistor %u ohms", (cr0 & 0x10) ? "3" : "2/4", (cr0 & 0x01) ? 50 : 60, (unsigned int)rref);
 		}
 	}
 	return false;
