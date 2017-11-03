@@ -1,6 +1,31 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20beta6
+=================
+
+Upgrade notes:
+- If you are using a Duet to control a RepRapPro Ormerod 2, Huxley Duo or Mendel printer or any other printer that uses the Z probe to do X homing, you need to add line M574 X1 S2 to config.g. For an Ormerod 1, add M574 X2 S2.
+- If you are using a Duet 06 or 085 and you don't already set the P parameter in your G31 command, add P400 to that command to get the same behaviour as before.
+
+New features:
+- Implemented M915 motor load monitoring configuration. Only R0 and R1 actions are implemented at present. See https://duet3d.com/wiki/Stall_detection_and_sensorless_homing.
+- Implemented sensorless homing using motor load monitoring (S3 option in M574 command)
+- M574 command has new options S2 to select the Z probe and S3 to select motor load detection, in place of using an endstop switch
+- M584 can now be used to create additional axes using any of the letters UVWABC in any order
+- The value of the reference resistor on MAX31865 PT100 interface boards can now be configured (thanks bpaczkowski)
+- 3-wire PT100 sensors are now supported (thanks zlowred)
+
+Other changes:
+- XYZ options have been removed from the M558 command. Use the new M574 S2 option instead.
+- G31 P parameter now defaults to 500 instead of 400 on the Duet 06/085 build just as it has done in the other builds
+- X homing no longer defaults to using the Z probe in the Duet 06/085 build
+- M906 and M913 commands no longer wait for all movement to stop, so that M913 cdan be used in the power fail script
+
+Bug fixes:
+- Configuring MAX31856 thermocouple boards sometimes resulted in strange behaviour
+- If a filament error was detected, the print was paused and the resume information was saved, but the pause script was not executed and the Duet needed to be restarted before movement was possible again
+
 Version 1.20beta4
 =================
 
