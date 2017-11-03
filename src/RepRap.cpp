@@ -385,7 +385,7 @@ void RepRap::DeleteTool(Tool* tool)
 	// Switch off any associated heater and remove heater references
 	for (size_t i = 0; i < tool->HeaterCount(); i++)
 	{
-		reprap.GetHeat().SwitchOff(tool->Heater(i));
+		heat->SwitchOff(tool->Heater(i));
 	}
 
 	// Purge any references to this tool
@@ -579,7 +579,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	response->printf("{\"status\":\"%c\",\"coords\":{", ch);
 
 	// Coordinates
-	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
+	const size_t numAxes = gCodes->GetVisibleAxes();
 	{
 		float liveCoordinates[DRIVES];
 #if SUPPORT_ROLAND
@@ -928,7 +928,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		response->catf(",\"endstops\":%" PRIu32, endstops);
 
 		// Firmware name, machine geometry and number of axes
-		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u", FIRMWARE_NAME, move->GetGeometryString(), numAxes);
+		response->catf(",\"firmwareName\":\"%s\",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\"", FIRMWARE_NAME, move->GetGeometryString(), numAxes, gCodes->GetAxisLetters());
 
 		// Total and mounted volumes
 		size_t mountedCards = 0;
@@ -1136,7 +1136,7 @@ OutputBuffer *RepRap::GetConfigResponse()
 		return nullptr;
 	}
 
-	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
+	const size_t numAxes = gCodes->GetVisibleAxes();
 
 	// Axis minima
 	response->copy("{\"axisMins\":");
@@ -1287,10 +1287,9 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->cat("]");
 
 	// Send XYZ positions
-	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
+	const size_t numAxes = gCodes->GetVisibleAxes();
 	float liveCoordinates[DRIVES];
-	reprap.GetMove().LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
-	const Tool* const currentTool = reprap.GetCurrentTool();
+	move->LiveCoordinates(liveCoordinates, GetCurrentXAxes(), GetCurrentYAxes());
 	if (currentTool != nullptr)
 	{
 		for (size_t i = 0; i < numAxes; ++i)
@@ -1309,7 +1308,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	// Send the speed and extruder override factors
 	response->catf("],\"sfactor\":%.2f,\"efactor\":", (double)(gCodes->GetSpeedFactor() * 100.0));
 	ch = '[';
-	for (size_t i = 0; i < reprap.GetExtrudersInUse(); ++i)
+	for (size_t i = 0; i < GetExtrudersInUse(); ++i)
 	{
 		response->catf("%c%.2f", ch, (double)(gCodes->GetExtrusionFactor(i) * 100.0));
 		ch = ',';
@@ -1405,8 +1404,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	else if (type == 3)
 	{
 		// Add the static fields
-		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"volumes\":%u,\"numTools\":%u,\"myName\":",
-						move->GetGeometryString(), numAxes, NumSdCards, GetNumberOfContiguousTools());
+		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":",
+						move->GetGeometryString(), numAxes, gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools());
 		response->EncodeString(myName, ARRAY_SIZE(myName), false);
 		response->cat(",\"firmwareName\":");
 		response->EncodeString(FIRMWARE_NAME, strlen(FIRMWARE_NAME), false);
@@ -1711,7 +1710,7 @@ void RepRap::FlagTemperatureFault(int8_t dudHeater)
 
 void RepRap::ClearTemperatureFault(int8_t wasDudHeater)
 {
-	reprap.GetHeat().ResetFault(wasDudHeater);
+	heat->ResetFault(wasDudHeater);
 	if (toolList != nullptr)
 	{
 		toolList->ClearTemperatureFault(wasDudHeater);

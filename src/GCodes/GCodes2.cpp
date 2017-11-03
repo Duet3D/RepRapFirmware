@@ -3284,6 +3284,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						}
 					}
 				}
+				++lettersToTry;
 			}
 
 			if (gb.Seen(extrudeLetter))
