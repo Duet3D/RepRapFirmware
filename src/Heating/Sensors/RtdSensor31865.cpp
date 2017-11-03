@@ -95,11 +95,11 @@ bool RtdSensor31865::Configure(unsigned int mCode, unsigned int heater, GCodeBuf
 			seen = true;
 			if (gb.GetUIValue() == 3) 
 			{
-				cr0 |= 0x10;
+				cr0 |= 0x10;		// 3 wire configuration
 			} 
 			else 
 			{
-				cr0 &= ~0x10;
+				cr0 &= ~0x10;		// 2 or 4 wire configuration
 			}
 		}
 

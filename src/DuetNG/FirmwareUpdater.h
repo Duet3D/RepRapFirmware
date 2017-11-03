@@ -9,10 +9,11 @@
 #define SRC_DUETNG_FIRMWAREUPDATER_H_
 
 #include <cstdint>
+#include "Libraries/General/StringRef.h"
 
 namespace FirmwareUpdater
 {
-	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap);
+	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, StringRef& reply);
 	bool IsReady();
 	void UpdateModule(unsigned int module);
 }

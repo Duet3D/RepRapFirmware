@@ -39,8 +39,6 @@
 #include "FirmwareUpdater.h"
 #endif
 
-const char GCodes::axisLetters[MaxAxes] = AXES_('X', 'Y', 'Z', 'U', 'V', 'W', 'A', 'B', 'C');
-
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
 
 GCodes::GCodes(Platform& p) :
@@ -75,6 +73,11 @@ void GCodes::Exit()
 void GCodes::Init()
 {
 	numVisibleAxes = numTotalAxes = XYZ_AXES;			// must set this up before calling Reset()
+	memset(axisLetters, 0, sizeof(axisLetters));
+	axisLetters[0] = 'X';
+	axisLetters[1] = 'Y';
+	axisLetters[2] = 'Z';
+
 	numExtruders = MaxExtruders;
 	Reset();
 
@@ -261,7 +264,7 @@ void GCodes::Spin()
 
 	// Get the GCodeBuffer that we want to process a command from. Give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
-	if (gbp->GetState() == GCodeState::normal && gbp->IsIdle())
+	if (gbp->IsCompletelyIdle() && !(gbp->MachineState().fileState.IsLive()))
 	{
 		gbp = gcodeSources[nextGcodeSource];
 		++nextGcodeSource;											// move on to the next gcode source ready for next time
@@ -342,14 +345,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			{
 				if (IsBitSet<AxesBitmap>(axesToSenseLength, axis))
 				{
-					EndStopType stopType;
-					bool dummy;
+					EndStopPosition stopType;
+					EndStopInputType dummy;
 					platform.GetEndStopConfiguration(axis, stopType, dummy);
-					if (stopType == EndStopType::highEndStop)
+					if (stopType == EndStopPosition::highEndStop)
 					{
 						platform.SetAxisMaximum(axis, moveBuffer.coords[axis], true);
 					}
-					else if (stopType == EndStopType::lowEndStop)
+					else if (stopType == EndStopPosition::lowEndStop)
 					{
 						platform.SetAxisMinimum(axis, moveBuffer.coords[axis], true);
 					}
@@ -1383,14 +1386,14 @@ void GCodes::CheckTriggers()
 	{
 		if (lowestTriggerPending == 1)
 		{
-			if (isPaused || !reprap.GetPrintMonitor().IsPrinting())
+			if (!IsReallyPrinting())
 			{
 				ClearBit(triggersPending, lowestTriggerPending);	// ignore a pause trigger if we are already paused
 			}
 			else if (LockMovement(*daemonGCode))					// need to lock movement before executing the pause macro
 			{
 				ClearBit(triggersPending, lowestTriggerPending);	// clear the trigger
-				DoPause(*daemonGCode, PauseReason::trigger, nullptr);
+				DoPause(*daemonGCode, PauseReason::trigger, "Print paused by external trigger");
 			}
 		}
 		else
@@ -1408,8 +1411,8 @@ void GCodes::CheckTriggers()
 void GCodes::CheckFilament()
 {
 	if (   lastFilamentError != FilamentSensorStatus::ok			// check for a filament error
-		&& reprap.GetPrintMonitor().IsPrinting()
-		&& !isPaused
+		&& IsReallyPrinting()
+		&& autoPauseGCode->IsCompletelyIdle()
 		&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
 	   )
 	{
@@ -1535,13 +1538,24 @@ bool GCodes::IsPausing() const
 	{
 		return true;
 	}
-#if HAS_VOLTAGE_MONITOR
-	topState = autoPauseGCode->OriginalMachineState().state;
-	if (topState == GCodeState::powerFailPausing1)
+
+	topState = daemonGCode->OriginalMachineState().state;
+	if (topState == GCodeState::pausing1 || topState == GCodeState::pausing2)
 	{
 		return true;
 	}
+
+	topState = autoPauseGCode->OriginalMachineState().state;
+	if (   topState == GCodeState::pausing1
+		|| topState == GCodeState::pausing2
+#if HAS_VOLTAGE_MONITOR
+		|| topState == GCodeState::powerFailPausing1
 #endif
+	   )
+	{
+		return true;
+	}
+
 	return false;
 }
 
@@ -1554,6 +1568,13 @@ bool GCodes::IsResuming() const
 bool GCodes::IsRunning() const
 {
 	return !IsPaused() && !IsPausing() && !IsResuming();
+}
+
+// Return true if we are printing from SD card and not pausing, paused or resuming
+// TODO make this independent of PrintMonitor
+bool GCodes::IsReallyPrinting() const
+{
+	return reprap.GetPrintMonitor().IsPrinting() && IsRunning();
 }
 
 #if HAS_VOLTAGE_MONITOR
@@ -1589,7 +1610,7 @@ bool GCodes::LowVoltagePause()
 
 	if (reprap.GetPrintMonitor().IsPrinting())
 	{
-		if (!autoPauseGCode->IsIdle() || autoPauseGCode->OriginalMachineState().state != GCodeState::normal)
+		if (!autoPauseGCode->IsCompletelyIdle())
 		{
 			return false;							// we can't pause if the auto pause thread is busy already
 		}
@@ -4121,8 +4142,8 @@ const char *GCodes::TranslateEndStopResult(EndStopHit es)
 	case EndStopHit::highHit:
 		return "at max stop";
 
-	case EndStopHit::lowNear:
-		return "near min stop";
+	case EndStopHit::nearStop:
+		return "near stop";
 
 	case EndStopHit::noStop:
 	default:
@@ -4481,7 +4502,7 @@ const char* GCodes::GetMachineModeString() const
 // Respond to a heater fault. The heater has already been turned off and its status set to 'fault' when this is called.
 void GCodes::HandleHeaterFault(int heater)
 {
-	if (reprap.GetPrintMonitor().IsPrinting() && !isPaused)
+	if (IsReallyPrinting())
 	{
 		DoPause(*autoPauseGCode, PauseReason::heaterFault, "Fault on heater %d", heater);
 	}

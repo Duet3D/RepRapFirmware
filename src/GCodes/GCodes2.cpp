@@ -2533,7 +2533,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 556: // Axis compensation (we support only X, Y, Z)
 		if (gb.Seen('S'))
 		{
-			float value = gb.GetFValue();
+			const float value = gb.GetFValue();
 			for (size_t axis = 0; axis <= Z_AXIS; axis++)
 			{
 				if (gb.Seen(axisLetters[axis]))
@@ -2563,27 +2563,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 558: // Set or report Z probe type and for which axes it is used
 		{
-			bool seenAxes = false, seenType = false, seenParam = false;
-			AxesBitmap zProbeAxes = platform.GetZProbeAxes();
-			for (size_t axis = 0; axis < numVisibleAxes; axis++)
-			{
-				if (gb.Seen(axisLetters[axis]))
-				{
-					if (gb.GetIValue() > 0)
-					{
-						SetBit(zProbeAxes, axis);
-					}
-					else
-					{
-						ClearBit(zProbeAxes, axis);
-					}
-					seenAxes = true;
-				}
-			}
-			if (seenAxes)
-			{
-				platform.SetZProbeAxes(zProbeAxes);
-			}
+			bool seenType = false, seenParam = false;
 
 			// We must get and set the Z probe type first before setting the dive height etc., because different probe types may have different parameters
 			if (gb.Seen('P'))		// probe type
@@ -2621,19 +2601,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				platform.SetZProbeParameters(platform.GetZProbeType(), params);
 			}
 
-			if (!(seenAxes || seenType || seenParam))
+			if (!(seenType || seenParam))
 			{
 				reply.printf("Z Probe type %d, invert %s, dive height %.1fmm, probe speed %dmm/min, travel speed %dmm/min, recovery time %.2f sec",
 								platform.GetZProbeType(), (params.invertReading) ? "yes" : "no", (double)params.diveHeight,
 								(int)(params.probeSpeed * MinutesToSeconds), (int)(params.travelSpeed * MinutesToSeconds), (double)params.recoveryTime);
-				reply.cat(", used for axes:");
-				for (size_t axis = 0; axis < numVisibleAxes; axis++)
-				{
-					if (IsBitSet(zProbeAxes, axis))
-					{
-						reply.catf(" %c", axisLetters[axis]);
-					}
-				}
 			}
 		}
 		break;
@@ -2942,7 +2914,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 574: // Set endstop configuration
 		{
 			bool seen = false;
-			const bool logicLevel = (gb.Seen('S')) ? (gb.GetIValue() != 0) : true;
+			const uint8_t inputType = (gb.Seen('S')) ? gb.GetUIValue() : 1;
 			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]))
@@ -2950,7 +2922,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					const int ival = gb.GetIValue();
 					if (ival >= 0 && ival <= 3)
 					{
-						platform.SetEndStopConfiguration(axis, (EndStopType) ival, logicLevel);
+						platform.SetEndStopConfiguration(axis, (EndStopPosition) ival, (EndStopInputType)inputType);
 						seen = true;
 					}
 				}
@@ -2958,14 +2930,29 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.copy("Endstop configuration:");
-				EndStopType config;
-				bool logic;
+				EndStopPosition config;
+				EndStopInputType inputType;
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					platform.GetEndStopConfiguration(axis, config, logic);
-					reply.catf(" %c %s (active %s),", axisLetters[axis],
-							(config == EndStopType::highEndStop) ? "high end" : (config == EndStopType::lowEndStop) ? "low end" : "none",
-							(config == EndStopType::noEndStop) ? "" : (logic) ? "high" : "low");
+					platform.GetEndStopConfiguration(axis, config, inputType);
+					reply.catf(" %c: %s", axisLetters[axis],
+								(config == EndStopPosition::highEndStop) ? "high end"
+									: (config == EndStopPosition::lowEndStop) ? "low end"
+										: "none");
+					if (config == EndStopPosition::noEndStop)
+					{
+						reply.cat(',');
+					}
+					else
+					{
+						reply.catf(" %s,",
+									(inputType == EndStopInputType::activeHigh) ? "active high switch"
+										: (inputType == EndStopInputType::activeHigh) ? "active low switch"
+											: (inputType == EndStopInputType::zProbe) ? "Z probe"
+												: (inputType == EndStopInputType::motorStall) ? "motor stall"
+													: "unknown type"
+									);
+					}
 				}
 			}
 		}
@@ -3023,7 +3010,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					triggerCondition = EndStopHit::highHit;
 					break;
 				case 3:
-					triggerCondition = EndStopHit::lowNear;
+					triggerCondition = EndStopHit::nearStop;
 					break;
 				default:
 					triggerCondition = EndStopHit::noStop;
@@ -3235,48 +3222,65 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			bool seen = false, badDrive = false;
-			for (size_t drive = 0; drive < MaxAxes; ++drive)
+			const char *lettersToTry = "XYZUVWABC";
+			char c;
+			while ((c = *lettersToTry) != 0)
 			{
-				if (gb.Seen(axisLetters[drive]))
+				if (gb.Seen(c))
 				{
+					// Found an axis letter. Get the drivers to assign to this axis.
 					seen = true;
 					size_t numValues = MaxDriversPerAxis;
 					long drivers[MaxDriversPerAxis];
 					gb.GetLongArray(drivers, numValues);
 
-					// Check all the driver numbers are in range
-					bool badAxis = false;
-					AxisDriversConfig config;
-					config.numDrivers = numValues;
-					for (size_t i = 0; i < numValues; ++i)
+					// Find the drive number allocated to this axis, and allocate a new one if necessary
+					size_t drive = 0;
+					while (axisLetters[drive] != c && axisLetters[drive] != 0)
 					{
-						if ((unsigned long)drivers[i] >= DRIVES)
+						++drive;
+					}
+					if (drive < MaxAxes)
+					{
+						if (axisLetters[drive] == 0)
 						{
-							badAxis = true;
+							axisLetters[drive] = c;				// assign the drive to this drive letter
+						}
+
+						// Check all the driver numbers are in range
+						bool badAxis = false;
+						AxisDriversConfig config;
+						config.numDrivers = numValues;
+						for (size_t i = 0; i < numValues; ++i)
+						{
+							if ((unsigned long)drivers[i] >= DRIVES)
+							{
+								badAxis = true;
+							}
+							else
+							{
+								config.driverNumbers[i] = (uint8_t)drivers[i];
+							}
+						}
+						if (badAxis)
+						{
+							badDrive = true;
 						}
 						else
 						{
-							config.driverNumbers[i] = (uint8_t)drivers[i];
-						}
-					}
-					if (badAxis)
-					{
-						badDrive = true;
-					}
-					else
-					{
-						while (numTotalAxes <= drive)
-						{
-							moveBuffer.coords[numTotalAxes] = 0.0;		// user has defined a new axis, so set its position
-							currentUserPosition[numTotalAxes] = 0.0;	// set its requested user position too in case it is visible
-							++numTotalAxes;
-						}
-						numVisibleAxes = numTotalAxes;					// assume all axes are visible unless there is a P parameter
-						reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where any new axes are
-						platform.SetAxisDriversConfig(drive, config);
-						if (numTotalAxes + numExtruders > DRIVES)
-						{
-							numExtruders = DRIVES - numTotalAxes;		// if we added axes, we may have fewer extruders now
+							while (numTotalAxes <= drive)
+							{
+								moveBuffer.coords[numTotalAxes] = 0.0;		// user has defined a new axis, so set its position
+								currentUserPosition[numTotalAxes] = 0.0;	// set its requested user position too in case it is visible
+								++numTotalAxes;
+							}
+							numVisibleAxes = numTotalAxes;					// assume all axes are visible unless there is a P parameter
+							reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where any new axes are
+							platform.SetAxisDriversConfig(drive, config);
+							if (numTotalAxes + numExtruders > DRIVES)
+							{
+								numExtruders = DRIVES - numTotalAxes;		// if we added axes, we may have fewer extruders now
+							}
 						}
 					}
 				}
@@ -3304,7 +3308,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (badDrive)
 			{
-				reply.copy("Invalid drive number");
+				reply.copy("Invalid driver number");
 				result = GCodeResult::error;
 			}
 			else
@@ -4107,16 +4111,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 906: // Set/report Motor currents
 	case 913: // Set/report motor current percent
+		// Note that we no longer wait for movement to stop. This is so that we can use these commands in the M911 power fail script.
 		{
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
 					platform.SetMotorCurrent(axis, gb.GetFValue(), code == 913);
 					seen = true;
 				}
@@ -4124,11 +4125,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (gb.Seen(extrudeLetter))
 			{
-				if (!LockMovementAndWaitForStandstill(gb))
-				{
-					return false;
-				}
-
 				float eVals[MaxExtruders];
 				size_t eCount = numExtruders;
 				gb.GetFloatArray(eVals, eCount, true);
@@ -4312,8 +4308,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					long t = modulesToUpdate[i];
 					if (t < 0 || (unsigned long)t >= NumFirmwareUpdateModules)
 					{
-						platform.MessageF(ErrorMessage, "Invalid module number '%ld'\n", t);
+						reply.printf("Invalid module number '%ld'\n", t);
 						firmwareUpdateModuleMap = 0;
+						result = GCodeResult::error;
 						break;
 					}
 					firmwareUpdateModuleMap |= (1u << (unsigned int)t);
@@ -4321,7 +4318,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				firmwareUpdateModuleMap = (1u << 0);			// no modules specified, so update module 0 to match old behaviour
+				firmwareUpdateModuleMap = (1u << 0);		// no modules specified, so update module 0 to match old behaviour
 			}
 
 			if (firmwareUpdateModuleMap == 0)
@@ -4331,15 +4328,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
 #ifdef DUET_NG
-			if (!FirmwareUpdater::CheckFirmwareUpdatePrerequisites(firmwareUpdateModuleMap))
+			if (!FirmwareUpdater::CheckFirmwareUpdatePrerequisites(firmwareUpdateModuleMap, reply))
 			{
 				firmwareUpdateModuleMap = 0;
+				result = GCodeResult::error;
 				break;
 			}
 #endif
-			if ((firmwareUpdateModuleMap & 1) != 0 && !platform.CheckFirmwareUpdatePrerequisites())
+			if ((firmwareUpdateModuleMap & 1) != 0 && !platform.CheckFirmwareUpdatePrerequisites(reply))
 			{
 				firmwareUpdateModuleMap = 0;
+				result = GCodeResult::error;
 				break;
 			}
 		}

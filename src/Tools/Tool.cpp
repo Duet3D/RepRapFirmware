@@ -169,7 +169,7 @@ void Tool::Print(StringRef& reply)
 	{
 		if ((xMapping & (1u << xi)) != 0)
 		{
-			reply.catf("%c%c", sep, GCodes::axisLetters[xi]);
+			reply.catf("%c%c", sep, reprap.GetGCodes().GetAxisLetters()[xi]);
 			sep = ',';
 		}
 	}
@@ -180,7 +180,7 @@ void Tool::Print(StringRef& reply)
 	{
 		if ((yMapping & (1u << yi)) != 0)
 		{
-			reply.catf("%c%c", sep, GCodes::axisLetters[yi]);
+			reply.catf("%c%c", sep, reprap.GetGCodes().GetAxisLetters()[yi]);
 			sep = ',';
 		}
 	}

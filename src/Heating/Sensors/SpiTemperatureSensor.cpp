@@ -23,7 +23,7 @@ void SpiTemperatureSensor::InitSpi()
 	lastReadingTime = millis();
 }
 
-// Send and receive 1 to 4 bytes of data and return the result as a single 32-bit word
+// Send and receive 1 to 8 bytes of data and return the result as a single 32-bit word
 TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[], size_t nbytes, uint32_t& rslt) const
 {
 	if (!sspi_acquire())
@@ -36,7 +36,7 @@ TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[],
 	sspi_select_device(&device);
 	delayMicroseconds(1);
 
-	uint8_t rawBytes[4];
+	uint8_t rawBytes[8];
 	spi_status_t sts = sspi_transceive_packet(dataOut, rawBytes, nbytes);
 
 	delayMicroseconds(1);

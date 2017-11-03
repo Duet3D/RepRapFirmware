@@ -51,6 +51,7 @@ public:
 
 	const char* Buffer() const;
 	bool IsIdle() const;
+	bool IsCompletelyIdle() const;
 	bool IsReady() const;								// Return true if a gcode is ready but hasn't been started yet
 	bool IsExecuting() const;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f);							// Set the G Code executed (or not)
@@ -159,6 +160,11 @@ inline const char* GCodeBuffer::Buffer() const
 inline bool GCodeBuffer::IsIdle() const
 {
 	return bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing;
+}
+
+inline bool GCodeBuffer::IsCompletelyIdle() const
+{
+	return GetState() == GCodeState::normal && IsIdle();
 }
 
 inline bool GCodeBuffer::IsReady() const

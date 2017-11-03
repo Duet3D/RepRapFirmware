@@ -39,7 +39,7 @@ const uint8_t Cr0ReadMask = 0b10111101;			// bits 1 and 6 auto clear, so ignore 
 // CR1:
 //  Reserved=0
 //  AVGSEL=010	4 samples averaged, takes about 80ms
-//  TCTYPE=0011	K type thermocouple (should preferably be configurable)
+//  TCTYPE=0011	K type thermocouple
 const uint8_t DefaultCr1 = 0b00100000;			// the thermocouple type needs to be or'd in
 const uint8_t Cr1ReadMask = 0b01111111;			// ignore the reserved bits
 

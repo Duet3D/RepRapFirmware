@@ -24,22 +24,22 @@ namespace FirmwareUpdater
 
 	// Check that the prerequisites are satisfied.
 	// Return true if yes, else print a message and return false.
-	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap)
+	bool CheckFirmwareUpdatePrerequisites(uint8_t moduleMap, StringRef& reply)
 	{
 #ifdef DUET_WIFI
 		if ((moduleMap & (1 << WifiExternalFirmwareModule)) != 0 && (moduleMap & ((1 << WifiFirmwareModule) | (1 << WifiFilesModule))) != 0)
 		{
-			reprap.GetPlatform().Message(ErrorMessage, "Invalid combination of firmware update modules\n");
+			reply.copy("Invalid combination of firmware update modules");
 			return false;
 		}
 		if ((moduleMap & (1 << WifiFirmwareModule)) != 0 && !reprap.GetPlatform().GetMassStorage()->FileExists(SYS_DIR, WIFI_FIRMWARE_FILE))
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "File %s not found\n", WIFI_FIRMWARE_FILE);
+			reply.printf("File %s not found", WIFI_FIRMWARE_FILE);
 			return false;
 		}
 		if ((moduleMap & (1 << WifiFilesModule)) != 0 && !reprap.GetPlatform().GetMassStorage()->FileExists(SYS_DIR, WIFI_WEB_FILE))
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "File %s not found\n", WIFI_WEB_FILE);
+			reply.printf("File %s not found", WIFI_WEB_FILE);
 			return false;
 		}
 #endif

@@ -33,7 +33,7 @@ bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef
 		bool seen = false;
 		for (size_t axis = 0; axis < CoreXYU_AXES; ++axis)
 		{
-			if (gb.Seen(GCodes::axisLetters[axis]))
+			if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
 			{
 				axisFactors[axis] = gb.GetFValue();
 				seen = true;
@@ -44,7 +44,7 @@ bool CoreXYUKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef
 			reply.printf("Printer mode is %s with axis factors", GetName(false));
 			for (size_t axis = 0; axis < CoreXYU_AXES; ++axis)
 			{
-				reply.catf(" %c:%f", GCodes::axisLetters[axis], (double)axisFactors[axis]);
+				reply.catf(" %c:%f", reprap.GetGCodes().GetAxisLetters()[axis], (double)axisFactors[axis]);
 			}
 		}
 		return seen;

@@ -44,8 +44,8 @@ constexpr float ROOM_TEMPERATURE = 21.0;				// Celsius
 
 // Timeouts
 constexpr uint32_t LongTime = 300000;					// Milliseconds (5 minutes)
-constexpr uint32_t MinimumWarningInterval = 4000;		// Milliseconds
 constexpr uint32_t FanCheckInterval = 500;				// Milliseconds
+constexpr uint32_t MinimumWarningInterval = 4000;		// Milliseconds, must be at least as long as FanCheckInterval
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds

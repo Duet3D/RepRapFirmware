@@ -6,10 +6,17 @@
  */
 
 #include "TMC2660.h"
+#include "RepRap.h"
+#include "Movement/Move.h"
 #include "sam/drivers/pdc/pdc.h"
 #include "sam/drivers/usart/usart.h"
 
 const float MaximumMotorCurrent = 2400.0;
+const uint32_t DefaultMicrosteppingShift = 4;				// x16 microstepping
+const bool DefaultInterpolation = true;						// interpolation enabled
+const int DefaultStallDetectThreshold = 1;
+const bool DefaultStallDetectFiltered = false;
+const unsigned int DefaultMinimumStepsPerSecond = 200;		// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC2660 datasheet
 
 static size_t numTmc2660Drivers;
 
@@ -22,9 +29,6 @@ const Pin DriversMisoPin = 21;								// PA22
 const Pin DriversSclkPin = 23;								// PA23
 
 const int ChopperControlRegisterMode = 999;					// mode passed to get/set microstepping to indicate we want the chopper control register
-
-#define USART_TMC_DRV		USART1
-#define ID_USART_TMC_DRV	ID_USART1
 
 const uint32_t DriversSpiClockFrequency = 4000000;			// 4MHz SPI clock
 const int StallGuardThreshold = 1;							// Range is -64..63. Zero seems to be too sensitive. Higher values reduce sensitivity of stall detection.
@@ -145,25 +149,28 @@ const uint32_t defaultSmartEnReg =
 class TmcDriverState
 {
 public:
-	void Init(uint32_t p_pin);
+	void Init(uint32_t p_axisNumber, uint32_t p_pin);
+	void SetAxisNumber(size_t p_axisNumber);
 	void WriteAll();
 	void SetChopConf(uint32_t newVal);
 	void SetMicrostepping(uint32_t shift, bool interpolate);
 	void SetCurrent(float current);
 	void Enable(bool en);
-	void UpdateRegister(unsigned int reg);
-	void SetStallThreshold(int sgThreshold);
-	void SetStallFilter(bool sgFilter);
+	void SetStallDetectThreshold(int sgThreshold);
+	void SetStallDetectFilter(bool sgFilter);
+	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond);
 	void SetCoolStep(uint16_t coolStepConfig);
-	void AppendStallConfig(StringRef& reply);
+	void AppendStallConfig(StringRef& reply) const;
 
-	void Poll();															// Temporary function until we use interrupts to poll the drivers continuously
+	void TransferDone() __attribute__ ((hot));				// called by the ISR when the SPI transfer has completed
+	void StartTransfer() __attribute__ ((hot));				// called to start a transfer
 
 	unsigned int GetMicrostepping(int mode, bool& interpolation) const;		// Get microstepping or chopper control register
-	uint32_t ReadStatus() const;
+	uint32_t ReadLiveStatus() const;
+	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep);
 
 private:
-	static void SetupDMA(uint32_t val);						// Set up the PDC to send a register and receive the status
+	static void SetupDMA(uint32_t outVal) __attribute__ ((hot));	// Set up the PDC to send a register and receive the status
 
 	uint32_t registers[5];									// the values we want the TMC2660 writable registers to have
 
@@ -174,114 +181,79 @@ private:
 	static constexpr unsigned int DriveConfig = 3;			// read register select, sense voltage high/low sensitivity
 	static constexpr unsigned int SmartEnable = 4;			// coolstep configuration
 
-	uint32_t lastReadValue;									// the status word that we read most recently
 	uint32_t pin;											// the pin number that drives the chip select pin of this driver
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state
-	uint32_t registersToUpdate;								// bitmap of register values that have been updated but not yet sent to the driver chip
+	uint32_t registersToUpdate;								// bitmap of register values that need to be sent to the driver chip
+	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
+	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
+	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
 	static constexpr uint32_t UpdateAllRegisters = (1u << ARRAY_SIZE(registers)) - 1;	// bitmap for all registers
+
+	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
+	volatile uint32_t accumulatedStatus;
 };
+
+// State structures for all drivers
+static TmcDriverState driverStates[MaxSmartDrivers];
 
 // PDC address for the USART
 static Pdc * const usartPdc = usart_get_pdc_base(USART_TMC_DRV);
 
 // Words to send and receive driver SPI data from/to
-static uint32_t spiDataOut = 0;
-static uint32_t spiDataIn = 0;
+volatile static uint32_t spiDataOut = 0;					// volatile because we care about when it is written
+volatile static uint32_t spiDataIn = 0;						// volatile because the PDC writes it
+
+// Variables used by the ISR
+static TmcDriverState * volatile currentDriver = nullptr;	// volatile because the ISR changes it
 
 // Set up the PDC to send a register and receive the status
-/*static*/ inline void TmcDriverState::SetupDMA(uint32_t val)
+/*static*/ inline void TmcDriverState::SetupDMA(uint32_t outVal)
 {
-	// Ensure the PDC is disabled
-	pdc_disable_transfer(usartPdc, PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);
+	// Faster code, not using the ASF
+	usartPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);			// disable the PDC
 
 	// SPI sends data MSB first, but the firmware uses little-endian mode, so we need to reverse the byte order
-	spiDataOut = cpu_to_be32(val << 8);
+	spiDataOut = cpu_to_be32(outVal << 8);
 
-	pdc_packet_t pdc_spi_packet;
-	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(&spiDataOut);
-	pdc_spi_packet.ul_size = 3;
-	pdc_tx_init(usartPdc, &pdc_spi_packet, nullptr);
+	usartPdc->PERIPH_TPR = reinterpret_cast<uint32_t>(&spiDataOut);
+	usartPdc->PERIPH_TCR = 3;
 
-	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(&spiDataIn);
-	pdc_spi_packet.ul_size = 3;
-	pdc_rx_init(usartPdc, &pdc_spi_packet, nullptr);
+	usartPdc->PERIPH_RPR = reinterpret_cast<uint32_t>(&spiDataIn);
+	usartPdc->PERIPH_RCR = 3;
 
-	pdc_enable_transfer(usartPdc, PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);
+	usartPdc->PERIPH_PTCR = (PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);			// enable the PDC
 }
 
-// Initialise the state of the driver.
-void TmcDriverState::Init(uint32_t p_pin)
+// Initialise the state of the driver and its CS pin
+void TmcDriverState::Init(uint32_t p_axisNumber, uint32_t p_pin)
 pre(!driversPowered)
 {
+	axisNumber = p_axisNumber;
+	pin = p_pin;
+	pinMode(pin, OUTPUT_HIGH);
 	registers[DriveControl] = defaultDrvCtrlReg;
 	configuredChopConfReg = defaultChopConfReg;
 	registers[ChopperControl] = configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK;		// disable driver at startup
 	registers[SmartEnable] = defaultSmartEnReg;
 	registers[StallGuardConfig] = defaultSgscConfReg;
 	registers[DriveConfig] = defaultDrvConfReg;
-	pin = p_pin;
 	registersToUpdate = UpdateAllRegisters;
-	// No point in calling WriteAll() here because the drivers may not be powered up yet
+	accumulatedStatus = lastReadStatus = 0;
+	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);
+	SetStallDetectThreshold(DefaultStallDetectThreshold);
+	SetStallDetectFilter(DefaultStallDetectFiltered);
+	SetStallMinimumStepsPerSecond(DefaultMinimumStepsPerSecond);
 }
 
-// Send an SPI control string. The drivers need 20 bits. We send and receive 24 because the USART only supports 5 to 9 bit transfers.
-// If the drivers are not powered up, don't attempt a transaction, and return 0xFFFFFFFF
-void TmcDriverState::UpdateRegister(unsigned int reg)
+inline void TmcDriverState::SetAxisNumber(size_t p_axisNumber)
 {
-	if (driversPowered)
-	{
-#if 1
-		// Code to use the PDC, ready for continuous interrupt-driven polling of all drivers
-		USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
-		digitalWrite(pin, LOW);								// set CS low
-		SetupDMA(registers[reg]);							// set up the PDC
-		USART_TMC_DRV->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
-
-		// Wait for the transfer to complete
-		for (int j = 0; (USART_TMC_DRV->US_CSR & (US_CSR_ENDRX | US_CSR_ENDTX)) != (US_CSR_ENDRX | US_CSR_ENDTX) && j < 10000; ++j)
-		{
-		}
-
-		// Finish the transfer
-		digitalWrite(pin, HIGH);							// set CS high again
-		lastReadValue = be32_to_cpu(spiDataIn) >> 12;
-		registersToUpdate &= ~(1u << reg);
-#else
-		// Code that doesn't use the PDC
-		USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
-		digitalWrite(pin, LOW);								// set CS low
-		delayMicroseconds(1);								// allow some CS low setup time
-		USART_TMC_DRV->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
-		uint32_t dataOut = registers[reg];
-		uint32_t dataIn = 0;
-		for (int i = 0; i < 3; ++i)
-		{
-			USART_TMC_DRV->US_THR = (dataOut >> 16) & 0x000000FFu;
-			dataOut <<= 8;
-			dataIn <<= 8;
-			for (int j = 0; j < 10000 && (USART_TMC_DRV->US_CSR & (US_CSR_RXRDY | US_CSR_TXRDY)) != (US_CSR_RXRDY | US_CSR_TXRDY); ++j)
-			{
-				// nothing
-			}
-			dataIn |= USART_TMC_DRV->US_RHR & 0x000000FF;
-		}
-		delayMicroseconds(1);
-		digitalWrite(pin, HIGH);							// set CS high again
-		USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS;	// reset and disable transmitter and receiver
-		delayMicroseconds(1);								// ensure it stays high for long enough before the next write
-		lastReadValue = dataIn >> 4;
-#endif
-	}
+	axisNumber = p_axisNumber;
 }
 
 // Write all registers. This is called when the drivers are known to be powered up.
-void TmcDriverState::WriteAll()
+inline void TmcDriverState::WriteAll()
 {
-	UpdateRegister(ChopperControl);
-	UpdateRegister(StallGuardConfig);
-	UpdateRegister(DriveConfig);
-	UpdateRegister(DriveControl);
-	UpdateRegister(SmartEnable);
+	registersToUpdate = UpdateAllRegisters;
 }
 
 // Set the chopper control register
@@ -291,11 +263,12 @@ void TmcDriverState::SetChopConf(uint32_t newVal)
 	Enable((registers[ChopperControl] & TMC_CHOPCONF_TOFF_MASK) != 0);		// send the new value, keeping the current Enable status
 }
 
-// Set the microstepping and microstep interpolation
+// Set the microstepping and microstep interpolation. The desired microstepping is (1 << shift).
 void TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate)
 {
+	microstepShiftFactor = shift;
 	registers[DriveControl] &= ~TMC_DRVCTRL_MRES_MASK;
-	registers[DriveControl] |= (shift << TMC_DRVCTRL_MRES_SHIFT) & TMC_DRVCTRL_MRES_MASK;
+	registers[DriveControl] |= ((8u - shift) << TMC_DRVCTRL_MRES_SHIFT) & TMC_DRVCTRL_MRES_MASK;
 	if (interpolate)
 	{
 		registers[DriveControl] |= TMC_DRVCTRL_INTPOL;
@@ -327,19 +300,29 @@ void TmcDriverState::Enable(bool en)
 }
 
 // Read the status
-uint32_t TmcDriverState::ReadStatus() const
+uint32_t TmcDriverState::ReadLiveStatus() const
 {
-	return lastReadValue & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+	return lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
 }
 
-void TmcDriverState::SetStallThreshold(int sgThreshold)
+// Read the status
+uint32_t TmcDriverState::ReadAccumulatedStatus(uint32_t bitsToKeep)
+{
+	const irqflags_t flags = cpu_irq_save();
+	const uint32_t status = accumulatedStatus;
+	accumulatedStatus &= bitsToKeep;
+	cpu_irq_restore(flags);
+	return status & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB | TMC_RR_STST);
+}
+
+void TmcDriverState::SetStallDetectThreshold(int sgThreshold)
 {
 	const uint32_t sgVal = ((uint32_t)constrain<int>(sgThreshold, -64, 63)) & 127;
 	registers[StallGuardConfig] = (registers[StallGuardConfig] & ~TMC_SGCSCONF_SGT_MASK) | (sgVal << TMC_SGCSCONF_SGT_SHIFT);
 	registersToUpdate |= 1u << StallGuardConfig;
 }
 
-void TmcDriverState::SetStallFilter(bool sgFilter)
+void TmcDriverState::SetStallDetectFilter(bool sgFilter)
 {
 	if (sgFilter)
 	{
@@ -352,13 +335,18 @@ void TmcDriverState::SetStallFilter(bool sgFilter)
 	registersToUpdate |= 1u << StallGuardConfig;
 }
 
+void TmcDriverState::SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond)
+{
+	maxStallStepInterval = DDA::stepClockRate/max<unsigned int>(stepsPerSecond, 1);
+}
+
 void TmcDriverState::SetCoolStep(uint16_t coolStepConfig)
 {
 	registers[SmartEnable] = TMC_REG_SMARTEN | coolStepConfig;
 	registersToUpdate |= 1u << SmartEnable;
 }
 
-void TmcDriverState::AppendStallConfig(StringRef& reply)
+void TmcDriverState::AppendStallConfig(StringRef& reply) const
 {
 	const bool filtered = ((registers[StallGuardConfig] & TMC_SGCSCONF_SGT_SFILT) != 0);
 	int threshold = (int)((registers[StallGuardConfig] & TMC_SGCSCONF_SGT_MASK) >> TMC_SGCSCONF_SGT_SHIFT);
@@ -366,7 +354,8 @@ void TmcDriverState::AppendStallConfig(StringRef& reply)
 	{
 		threshold -= 128;
 	}
-	reply.catf("stall threshold %d, filter %s, coolstep %" PRIx32, threshold, ((filtered) ? "on" : "off"), registers[SmartEnable] & 0xFFFF);
+	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 ", coolstep %" PRIx32,
+				threshold, ((filtered) ? "on" : "off"), DDA::stepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
 }
 
 // Get microstepping or chopper control register
@@ -379,33 +368,89 @@ unsigned int TmcDriverState::GetMicrostepping(int mode, bool& interpolation) con
 	}
 	else
 	{
-		const uint32_t mresBits = (registers[DriveControl] & TMC_DRVCTRL_MRES_MASK) >> TMC_DRVCTRL_MRES_SHIFT;
-		return 256 >> mresBits;
+		return 1u << microstepShiftFactor;
 	}
 }
 
-// Temporary function until we use interrupts to poll the drivers continuously
-void TmcDriverState::Poll()
+// This is called by the ISR when the SPI transfer has completed
+inline void TmcDriverState::TransferDone()
 {
-	if (registersToUpdate != 0)
+	fastDigitalWriteHigh(pin);								// set the CS pin high for the driver we just polled
+	uint32_t status = be32_to_cpu(spiDataIn) >> 12;			// get the status
+	if ((status & TMC_RR_SG) != 0)
 	{
-		for (unsigned int reg = 0; reg < 5; ++reg)
+		// Stall status is unreliable at low motor speeds, so remove the status bit if the motor is moving slowly
+		const uint32_t interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+		if (interval == 0 || interval > maxStallStepInterval)
 		{
-			if ((registersToUpdate & (1u << reg)) != 0)
-			{
-				UpdateRegister(reg);
-				break;
-			}
+			status &= ~TMC_RR_SG;
 		}
+	}
+	lastReadStatus = status;
+	accumulatedStatus |= status;
+}
+
+// This is called from the ISR or elsewhere to start a new SPI transfer. Inlined for ISR speed.
+inline void TmcDriverState::StartTransfer()
+{
+	currentDriver = this;
+
+	// Find which register to send. The common case is when no registers need to be updated.
+	uint32_t regVal;
+	if (registersToUpdate == 0)
+	{
+		regVal = registers[SmartEnable];
 	}
 	else
 	{
-		// We need to send a command in order to retrieve the up-to-date status
-		UpdateRegister(SmartEnable);
+		size_t regNum = 0;
+		uint32_t mask = 1;
+		do
+		{
+			if ((registersToUpdate & mask) != 0)
+			{
+				break;
+			}
+			++regNum;
+			mask <<= 1;
+		} while (regNum < 4);
+		registersToUpdate &= ~mask;
+		regVal = registers[regNum];
 	}
+
+	// Kick off a transfer for that register
+	USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
+	fastDigitalWriteLow(pin);							// set CS low
+	SetupDMA(regVal);									// set up the PDC
+	USART_TMC_DRV->US_IER = US_IER_ENDRX;				// enable end-of-transfer interrupt
+	USART_TMC_DRV->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
 }
 
-static TmcDriverState driverStates[DRIVES];
+// ISR for the USART
+void USART_TMC_DRV_Handler(void) __attribute__ ((hot));
+
+void USART_TMC_DRV_Handler(void)
+{
+	TmcDriverState *driver = currentDriver;				// capture volatile variable
+	driver->TransferDone();								// tidy up after the transfer we just completed
+
+	if (driversPowered)
+	{
+		// Power is still good, so send/receive to/from the next driver
+		++driver;										// advance to the next driver
+		if (driver == driverStates + numTmc2660Drivers)
+		{
+			driver = driverStates;
+		}
+		driver->StartTransfer();
+	}
+	else
+	{
+		// Driver power is down, so stop polling
+		USART_TMC_DRV->US_IDR = US_IDR_ENDRX;
+		currentDriver = nullptr;						// signal that we are not waiting for an interrupt
+	}
+}
 
 //--------------------------- Public interface ---------------------------------
 
@@ -415,39 +460,18 @@ namespace SmartDrivers
 	// It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
 	void Init(const Pin driverSelectPins[DRIVES], size_t numTmcDrivers)
 	{
-		numTmc2660Drivers = numTmcDrivers;
+		numTmc2660Drivers = min<size_t>(numTmcDrivers, MaxSmartDrivers);
 
 		// Make sure the ENN pins are high
 		pinMode(GlobalTmcEnablePin, OUTPUT_HIGH);
 
-		// Set up the SPI pins
-
-#ifdef DUET_NG
 		// The pins are already set up for SPI in the pins table
 		ConfigurePin(GetPinDescription(DriversMosiPin));
 		ConfigurePin(GetPinDescription(DriversMisoPin));
 		ConfigurePin(GetPinDescription(DriversSclkPin));
-#else
-		// Pins AD0 and AD7 may have already be set up as an ADC pin by the Arduino core, so undo that here or we won't get a clock output
-		ADC->ADC_CHDR = (1 << 7);
-
-		const PinDescription& pin2 = GetPinDescription(DriversMosiPin);
-		pio_configure(pin2.pPort, PIO_PERIPH_A, pin2.ulPin, PIO_DEFAULT);
-		const PinDescription& pin3 = GetPinDescription(DriversMisoPin);
-		pio_configure(pin3.pPort, PIO_PERIPH_A, pin3.ulPin, PIO_DEFAULT);
-		const PinDescription& pin1 = GetPinDescription(DriversSclkPin);
-		pio_configure(pin1.pPort, PIO_PERIPH_A, pin1.ulPin, PIO_DEFAULT);
-#endif
 
 		// Enable the clock to the USART
 		pmc_enable_periph_clk(ID_USART_TMC_DRV);
-
-		// Set up the CS pins and set them all high
-		// When this becomes the standard code, we must set up the STEP and DIR pins here too.
-		for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
-		{
-			pinMode(driverSelectPins[drive], OUTPUT_HIGH);
-		}
 
 		// Set USART_EXT_DRV in SPI mode, with data changing on the falling edge of the clock and captured on the rising edge
 		USART_TMC_DRV->US_IDR = ~0u;
@@ -458,10 +482,10 @@ namespace SmartDrivers
 						| US_MR_CHMODE_NORMAL
 						| US_MR_CPOL
 						| US_MR_CLKO;
-		USART_TMC_DRV->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;				// set SPI clock frequency
+		USART_TMC_DRV->US_BRGR = VARIANT_MCK/DriversSpiClockFrequency;		// set SPI clock frequency
 		USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 
-		// We need a few microseconds of delay here for the USART to sort itself out,
+		// We need a few microseconds of delay here for the USART to sort itself out before we send any data,
 		// otherwise the processor generates two short reset pulses on its own NRST pin, and resets itself.
 		// 2016-07-07: removed this delay, because we no longer send commands to the TMC2660 drivers immediately.
 		//delay(10);
@@ -469,7 +493,15 @@ namespace SmartDrivers
 		driversPowered = false;
 		for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
 		{
-			driverStates[drive].Init(driverSelectPins[drive]);
+			driverStates[drive].Init(drive, driverSelectPins[drive]);		// axes are mapped straight through to drivers initially
+		}
+	}
+
+	void SetAxisNumber(size_t drive, uint32_t axisNumber)
+	{
+		if (drive < numTmc2660Drivers)
+		{
+			driverStates[drive].SetAxisNumber(axisNumber);
 		}
 	}
 
@@ -489,9 +521,14 @@ namespace SmartDrivers
 		}
 	}
 
-	uint32_t GetStatus(size_t drive)
+	uint32_t GetLiveStatus(size_t drive)
 	{
-		return (drive < numTmc2660Drivers) ? driverStates[drive].ReadStatus() : 0;
+		return (drive < numTmc2660Drivers) ? driverStates[drive].ReadLiveStatus() : 0;
+	}
+
+	uint32_t GetAccumulatedStatus(size_t drive, uint32_t bitsToKeep)
+	{
+		return (drive < numTmc2660Drivers) ? driverStates[drive].ReadAccumulatedStatus(bitsToKeep) : 0;
 	}
 
 	// Set microstepping or chopper control register
@@ -506,15 +543,15 @@ namespace SmartDrivers
 			}
 			else if (microsteps > 0 && (mode == 0 || mode == 1))
 			{
-				// Set the microstepping. We need to determine how many bits left to shift the desired microstepping to reach 256.
+				// Set the microstepping. We need to determine how many bits right to shift the desired microstepping to reach 1.
 				unsigned int shift = 0;
 				unsigned int uSteps = (unsigned int)microsteps;
-				while (uSteps < 256)
+				while (uSteps > 1)
 				{
-					uSteps <<= 1;
+					uSteps >>= 1;
 					++shift;
 				}
-				if (uSteps == 256)
+				if (shift <= 8)
 				{
 					driverStates[drive].SetMicrostepping(shift, mode != 0);
 					return true;
@@ -538,18 +575,27 @@ namespace SmartDrivers
 	{
 		const bool wasPowered = driversPowered;
 		driversPowered = powered;
-		if (powered && !wasPowered)
+		if (powered)
 		{
-			// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
-			digitalWrite(GlobalTmcEnablePin, LOW);
-			delayMicroseconds(10);
-
-			for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
+			if (!wasPowered)
 			{
-				driverStates[drive].WriteAll();
+				// Power to the drivers has been provided or restored, so we need to enable and re-initialise them
+				digitalWrite(GlobalTmcEnablePin, LOW);
+				delayMicroseconds(10);
+
+				for (size_t drive = 0; drive < numTmc2660Drivers; ++drive)
+				{
+					driverStates[drive].WriteAll();
+				}
+			}
+			if (currentDriver == nullptr && numTmc2660Drivers != 0)
+			{
+				// Kick off the first transfer
+				NVIC_EnableIRQ(USART_TMC_DRV_IRQn);
+				driverStates[0].StartTransfer();
 			}
 		}
-		else if (!powered && wasPowered)
+		else if (wasPowered)
 		{
 			digitalWrite(GlobalTmcEnablePin, HIGH);			// disable the drivers
 		}
@@ -559,7 +605,7 @@ namespace SmartDrivers
 	{
 		if (drive < numTmc2660Drivers)
 		{
-			driverStates[drive].SetStallThreshold(sgThreshold);
+			driverStates[drive].SetStallDetectThreshold(sgThreshold);
 		}
 	}
 
@@ -567,7 +613,15 @@ namespace SmartDrivers
 	{
 		if (drive < numTmc2660Drivers)
 		{
-			driverStates[drive].SetStallFilter(sgFilter);
+			driverStates[drive].SetStallDetectFilter(sgFilter);
+		}
+	}
+
+	void SetStallMinimumStepsPerSecond(size_t drive, unsigned int stepsPerSecond)
+	{
+		if (drive < numTmc2660Drivers)
+		{
+			driverStates[drive].SetStallMinimumStepsPerSecond(stepsPerSecond);
 		}
 	}
 
@@ -584,15 +638,6 @@ namespace SmartDrivers
 		if (drive < numTmc2660Drivers)
 		{
 			driverStates[drive].AppendStallConfig(reply);
-		}
-	}
-
-	// Temporary function, until we use interrupts to poll drivers continuously
-	void Poll(size_t drive)
-	{
-		if (driversPowered && drive < numTmc2660Drivers)
-		{
-			driverStates[drive].Poll();
 		}
 	}
 

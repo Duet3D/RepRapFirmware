@@ -196,7 +196,7 @@ void DDA::DebugPrint() const
 	{
 		if (pddm[axis] != nullptr)
 		{
-			pddm[axis]->DebugPrint(reprap.GetGCodes().axisLetters[axis], isDeltaMovement);
+			pddm[axis]->DebugPrint(reprap.GetGCodes().GetAxisLetters()[axis], isDeltaMovement);
 		}
 	}
 	for (size_t i = numAxes; i < DRIVES; ++i)
@@ -1212,7 +1212,7 @@ void DDA::CheckEndstops(Platform& platform)
 			reprap.GetGCodes().MoveStoppedByZProbe();
 			return;
 
-		case EndStopHit::lowNear:
+		case EndStopHit::nearStop:
 			ReduceHomingSpeed();
 			break;
 
@@ -1234,7 +1234,7 @@ void DDA::CheckEndstops(Platform& platform)
 			}
 			break;
 
-		case EndStopHit::lowNear:
+		case EndStopHit::nearStop:
 		case EndStopHit::noStop:
 			if (probeTriggered)
 			{
@@ -1283,7 +1283,7 @@ void DDA::CheckEndstops(Platform& platform)
 				}
 				break;
 
-			case EndStopHit::lowNear:
+			case EndStopHit::nearStop:
 				// Only reduce homing speed if there are no more axes to be homed. This allows us to home X and Y simultaneously.
 				if (endStopsToCheck == MakeBitmap<AxesBitmap>(drive))
 				{

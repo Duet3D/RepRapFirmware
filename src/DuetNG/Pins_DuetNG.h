@@ -37,9 +37,12 @@ const size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define SUPPORT_IOBITS		1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR	1					// set nonzero to support DHT temperature/humidity sensors
 
+#define USE_CACHE			1					// set nonzero to enable the cache
+
 // The physical capabilities of the machine
 
 const size_t DRIVES = 12;						// The maximum number of drives supported by the electronics
+const size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
 constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
@@ -180,7 +183,7 @@ constexpr Pin SamCsPin = 11;				// SPI NPCS pin, input from WiFi module
 
 // Timer allocation (no network timer on DuetNG)
 // TC0 channel 0 is used for FAN2
-// TC0 channel 1 is currently unused (may use ift for a heater or a fan)
+// TC0 channel 1 is currently unused (may use it for a heater or a fan)
 // TC0 channel 2 is available for us to use
 #define STEP_TC				(TC0)
 #define STEP_TC_CHAN		(2)

@@ -74,7 +74,7 @@ public:
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration);	// Limit the speed an acceleration of this move
 
 	int32_t GetStepsTaken(size_t drive) const;
-	float GetProportionDone() const;								// Return the proportion of extrusion for the complete multi-segment move already done
+	float GetProportionDone() const;										// Return the proportion of extrusion for the complete multi-segment move already done
 
 	void MoveAborted();
 
@@ -86,9 +86,13 @@ public:
 	IoBits_t GetIoBits() const { return ioBits; }
 #endif
 
+#if HAS_SMART_DRIVERS
+	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
+#endif
+
 	void DebugPrint() const;
 
-	static constexpr uint32_t stepClockRate = VARIANT_MCK/128;			// the frequency of the clock used for stepper pulse timing (see Platform::InitialiseInterrupts)
+	static constexpr uint32_t stepClockRate = VARIANT_MCK/128;				// the frequency of the clock used for stepper pulse timing (see Platform::InitialiseInterrupts)
 	static constexpr uint64_t stepClockRateSquared = (uint64_t)stepClockRate * stepClockRate;
 
 	// Note on the following constant:
@@ -213,5 +217,16 @@ inline void DDA::SetDriveCoordinate(int32_t a, size_t drive)
 	endPoint[drive] = a;
 	endCoordinatesValid = false;
 }
+
+#if HAS_SMART_DRIVERS
+
+// Get the current full step interval for this axis or extruder
+inline uint32_t DDA::GetStepInterval(size_t axis, uint32_t microstepShift) const
+{
+	const DriveMovement * const dm = pddm[axis];
+	return (dm != nullptr) ? dm->GetStepInterval(microstepShift) : 0;
+}
+
+#endif
 
 #endif /* DDA_H_ */

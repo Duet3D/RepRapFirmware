@@ -215,17 +215,18 @@ const uint32_t NvicPriorityWatchdog = 0;		// watchdog has highest priority (SAM4
 #endif
 
 const uint32_t NvicPriorityUart = 1;			// UART is next to avoid character loss
-const uint32_t NvicPrioritySystick = 2;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
-const uint32_t NvicPriorityPins = 3;			// priority for GPIO pin interrupts - filament sensors must be higher than step
-const uint32_t NvicPriorityStep = 4;			// step interrupt is next highest, it can preempt most other interrupts
-const uint32_t NvicPriorityUSB = 5;				// USB interrupt
+const uint32_t NvicPriorityDriversUsart = 2;	// USART used to control and monitor the TMC2660 drivers
+const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
+const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
+const uint32_t NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts
+const uint32_t NvicPriorityUSB = 6;				// USB interrupt
 
 #if HAS_LWIP_NETWORKING
-const uint32_t NvicPriorityNetworkTick = 5;		// priority for network tick interrupt
-const uint32_t NvicPriorityEthernet = 5;		// priority for Ethernet interface
+const uint32_t NvicPriorityNetworkTick = 7;		// priority for network tick interrupt
+const uint32_t NvicPriorityEthernet = 7;		// priority for Ethernet interface
 #endif
 
-const uint32_t NvicPrioritySpi = 6;				// SPI used for network transfers on Duet WiFi/Duet vEthernet
-const uint32_t NvicPriorityTwi = 7;				// TWI used to read endstop and other inputs on the DueXn
+const uint32_t NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+const uint32_t NvicPriorityTwi = 8;				// TWI is used to read endstop and other inputs on the DueXn
 
 #endif

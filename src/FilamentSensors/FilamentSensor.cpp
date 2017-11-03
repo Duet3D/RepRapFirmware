@@ -104,7 +104,7 @@ bool FilamentSensor::ConfigurePin(GCodeBuffer& gb, StringRef& reply, bool& seen)
 			GCodes& gCodes = reprap.GetGCodes();
 			const float extrusionCommanded = (float)reprap.GetMove().GetAccumulatedExtrusion(extruder)/reprap.GetPlatform().DriveStepsPerUnit(extruder + gCodes.GetTotalAxes());
 																													// get and clear the Move extrusion commanded
-			if (reprap.GetPrintMonitor().IsPrinting() && !gCodes.IsPausing() && !gCodes.IsResuming() && !gCodes.IsPaused())
+			if (gCodes.IsReallyPrinting())
 			{
 				const FilamentSensorStatus fstat = filamentSensors[extruder]->Check(full, extrusionCommanded);
 				if (full && fstat != FilamentSensorStatus::ok && extrusionCommanded > 0.0)

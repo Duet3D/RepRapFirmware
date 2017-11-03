@@ -46,6 +46,8 @@ enum class DMState : uint8_t
 class DriveMovement
 {
 public:
+	friend class DDA;
+
 	DriveMovement(DriveMovement *next);
 
 	bool CalcNextStepTimeCartesian(const DDA &dda, bool live) __attribute__ ((hot));
@@ -57,6 +59,10 @@ public:
 	void DebugPrint(char c, bool withDelta) const;
 	int32_t GetNetStepsLeft() const;
 	int32_t GetNetStepsTaken() const;
+
+#if HAS_SMART_DRIVERS
+	uint32_t GetStepInterval(uint32_t microstepShift) const;	// Get the current full step interval for this axis or extruder
+#endif
 
 	static void InitialAllocate(unsigned int num);
 	static int NumFree() { return numFree; }
@@ -73,7 +79,6 @@ private:
 	static int numFree;
 	static int minFree;
 
-public:
 	// Parameters common to Cartesian, delta and extruder moves
 
 	// The following only need to be stored per-drive if we are supporting pressure advance
@@ -222,5 +227,17 @@ inline void DriveMovement::Release(DriveMovement *item)
 	freeList = item;
 	++numFree;
 }
+
+#if HAS_SMART_DRIVERS
+
+// Get the current full step interval for this axis or extruder
+inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const
+{
+	return ((nextStep >> microstepShift) != 0)		// if at least 1 full step done
+		? stepInterval << microstepShift			// return the interval between steps converted to full steps
+			: 0;
+}
+
+#endif
 
 #endif /* DRIVEMOVEMENT_H_ */

@@ -119,6 +119,10 @@ public:
 
 	bool WriteResumeSettings(FileStore *f) const;									// Write settings for resuming the print
 
+#if HAS_SMART_DRIVERS
+	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const;			// Get the current step interval for this axis or extruder
+#endif
+
 	static int32_t MotorEndPointToMachine(size_t drive, float coord);				// Convert a single motor position to number of steps
 	static float MotorEndpointToPosition(int32_t endpoint, size_t drive);			// Convert number of motor steps to motor position
 
@@ -230,5 +234,17 @@ inline void Move::Interrupt()
 		} while (currentDda->Step());
 	}
 }
+
+#if HAS_SMART_DRIVERS
+
+// Get the current step interval for this axis or extruder, or 0 if it is not moving
+// This is called from the stepper drivers SPI interface ISR
+inline uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const
+{
+	const DDA * const cdda = currentDda;		// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetStepInterval(axis, microstepShift) : 0;
+}
+
+#endif
 
 #endif /* MOVE_H_ */

@@ -1775,7 +1775,7 @@ bool RepRap::WriteToolParameters(FileStore *f) const
 			{
 				if (IsBitSet(axesProbed, axis))
 				{
-					scratchString.catf(" %c%.2f", GCodes::axisLetters[axis], (double)(t->GetOffset(axis)));
+					scratchString.catf(" %c%.2f", gCodes->GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
 				}
 			}
 			scratchString.cat('\n');
