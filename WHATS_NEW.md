@@ -5,7 +5,7 @@ Version 1.20beta6
 =================
 
 Upgrade notes:
-- If you are using a Duet to control a RepRapPro Ormerod 2, Huxley Duo or Mendel printer or any other printer that uses the Z probe to do X homing, you need to add line M574 X1 S2 to config.g. For an Ormerod 1, add M574 X2 S2.
+- If you are using a Duet to control a RepRapPro Ormerod, Huxley Duo or Mendel 3 printer or any other printer that uses the Z probe to do X homing, you need to add line M574 X1 S2 to config.g.
 - If you are using a Duet 06 or 085 and you don't already set the P parameter in your G31 command, add P400 to that command to get the same behaviour as before.
 
 New features:
