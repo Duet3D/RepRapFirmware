@@ -7,6 +7,7 @@ Version 1.20beta6
 Upgrade notes:
 - If you are using a Duet to control a RepRapPro Ormerod, Huxley Duo or Mendel 3 printer or any other printer that uses the Z probe to do X homing, you need to add line M574 X1 S2 to config.g.
 - If you are using a Duet 06 or 085 and you don't already set the P parameter in your G31 command, add P400 to that command to get the same behaviour as before.
+- If you are using PT100 sensors, make sure you don't have any additional parameters in your M305 commands for those heaters left over from when you were using thermistors. In particular, the R parameter now configures the reference resistor value on the PT100 interface board, and must be omitted or set to 400 when using the Duet3D PT100 daughter board.
 
 New features:
 - Implemented M915 motor load monitoring configuration. Only R0 and R1 actions are implemented at present. See https://duet3d.com/wiki/Stall_detection_and_sensorless_homing.
