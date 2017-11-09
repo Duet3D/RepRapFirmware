@@ -86,7 +86,7 @@ FileWriteBuffer *MassStorage::AllocateWriteBuffer()
 		return nullptr;
 	}
 
-	FileWriteBuffer *buffer = freeWriteBuffers;
+	FileWriteBuffer * const buffer = freeWriteBuffers;
 	freeWriteBuffers = buffer->Next();
 	buffer->SetNext(nullptr);
 	return buffer;
@@ -224,9 +224,9 @@ const char* MassStorage::GetMonthName(const uint8_t month)
 // Delete a file or directory
 bool MassStorage::Delete(const char* directory, const char* fileName, bool silent)
 {
-	const char* location = (directory != nullptr)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-								: fileName;
+	const char* const location = (directory != nullptr)
+									? platform->GetMassStorage()->CombineName(directory, fileName)
+									: fileName;
 	if (f_unlink(location) != FR_OK)
 	{
 		if (!silent)
@@ -241,7 +241,7 @@ bool MassStorage::Delete(const char* directory, const char* fileName, bool silen
 // Create a new directory
 bool MassStorage::MakeDirectory(const char *parentDir, const char *dirName)
 {
-	const char* location = platform->GetMassStorage()->CombineName(parentDir, dirName);
+	const char* const location = platform->GetMassStorage()->CombineName(parentDir, dirName);
 	if (f_mkdir(location) != FR_OK)
 	{
 		platform->MessageF(ErrorMessage, "Failed to create directory %s\n", location);
@@ -288,9 +288,9 @@ bool MassStorage::FileExists(const char *file) const
 
 bool MassStorage::FileExists(const char *directory, const char *fileName) const
 {
-	const char *location = (directory != nullptr)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-							: fileName;
+	const char * const location = (directory != nullptr)
+									? platform->GetMassStorage()->CombineName(directory, fileName)
+									: fileName;
 	return FileExists(location);
 }
 
@@ -310,9 +310,9 @@ bool MassStorage::DirectoryExists(const char* directory, const char* subDirector
 // Return the last modified time of a file, or zero if failure
 time_t MassStorage::GetLastModifiedTime(const char* directory, const char *fileName) const
 {
-	const char *location = (directory != nullptr)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-							: fileName;
+	const char * const location = (directory != nullptr)
+									? platform->GetMassStorage()->CombineName(directory, fileName)
+									: fileName;
 	FILINFO fil;
 	fil.lfname = nullptr;
 	if (f_stat(location, &fil) == FR_OK)
@@ -324,9 +324,9 @@ time_t MassStorage::GetLastModifiedTime(const char* directory, const char *fileN
 
 bool MassStorage::SetLastModifiedTime(const char* directory, const char *fileName, time_t time)
 {
-	const char *location = (directory != nullptr)
-							? platform->GetMassStorage()->CombineName(directory, fileName)
-							: fileName;
+	const char * const location = (directory != nullptr)
+									? platform->GetMassStorage()->CombineName(directory, fileName)
+									: fileName;
 	const struct tm * const timeInfo = gmtime(&time);
 	FILINFO fno;
     fno.fdate = (WORD)(((timeInfo->tm_year - 80) * 512U) | (timeInfo->tm_mon + 1) * 32U | timeInfo->tm_mday);

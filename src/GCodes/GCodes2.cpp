@@ -294,7 +294,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		{
 			const bool wasPaused = isPaused;			// isPaused gets cleared by CancelPrint
-			StopPrint(&gb == fileGCode);				// if this is normal end-of-print commanded by the file, deleted the resurrect.g file
+			StopPrint(&gb == fileGCode);				// if this is normal end-of-print commanded by the file, delete the resurrect.g file
 
 			// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
 			if (wasPaused && code == 0 && AllAxesAreHomed() && DoFileMacro(gb, CANCEL_G, false))
@@ -443,11 +443,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			OutputBuffer *fileResponse;
 			const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
-			const char* dir = (gb.Seen('P')) ? gb.GetString() : platform.GetGCodeDir();
+			String<FILENAME_LENGTH> dir;
+			if (gb.Seen('P'))
+			{
+				gb.GetPossiblyQuotedString(dir.GetRef());
+			}
+			else
+			{
+				dir.GetRef().copy(platform.GetGCodeDir());
+			}
 
 			if (sparam == 2)
 			{
-				fileResponse = reprap.GetFilesResponse(dir, true);		// Send the file list in JSON format
+				fileResponse = reprap.GetFilesResponse(dir.Pointer(), true);		// Send the file list in JSON format
 				fileResponse->cat('\n');
 			}
 			else
@@ -469,7 +477,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 				bool encapsulateList = ((&gb != serialGCode && &gb != telnetGCode) || platform.Emulating() != marlin);
 				FileInfo fileInfo;
-				if (platform.GetMassStorage()->FindFirst(dir, fileInfo))
+				if (platform.GetMassStorage()->FindFirst(dir.Pointer(), fileInfo))
 				{
 					// iterate through all entries and append each file name
 					do {
@@ -537,12 +545,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			const char* filename = gb.GetUnprecedentedString();
-			if (filename != nullptr)
+			String<FILENAME_LENGTH> filename;
+			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				if (QueueFileToPrint(filename, reply))
+				if (QueueFileToPrint(filename.Pointer(), reply))
 				{
-					reprap.GetPrintMonitor().StartingPrint(filename);
+					reprap.GetPrintMonitor().StartingPrint(filename.Pointer());
 					if (platform.Emulating() == marlin && (&gb == serialGCode || &gb == telnetGCode))
 					{
 						reply.copy("File opened\nFile selected");
@@ -550,7 +558,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					else
 					{
 						// Command came from web interface or PanelDue, or not emulating Marlin, so send a nicer response
-						reply.printf("File %s selected for printing", filename);
+						reply.printf("File %s selected for printing", filename.Pointer());
 					}
 
 					if (code == 32)
@@ -562,6 +570,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					result = GCodeResult::error;
 				}
+			}
+			else
+			{
+				reply.copy("Filename expected");
+				result = GCodeResult::error;
 			}
 		}
 		break;
@@ -697,19 +710,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 28: // Write to file
 		{
-			const char* const str = gb.GetUnprecedentedString();
-			if (str != nullptr)
+			String<FILENAME_LENGTH> filename;
+			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				const bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), str, 0, false, 0);
+				const bool ok = OpenFileToWrite(gb, platform.GetGCodeDir(), filename.Pointer(), 0, false, 0);
 				if (ok)
 				{
-					reply.printf("Writing to file: %s", str);
+					reply.printf("Writing to file: %s", filename.Pointer());
 				}
 				else
 				{
-					reply.printf("Can't open file %s for writing.", str);
+					reply.printf("Can't open file %s for writing.", filename.Pointer());
 					result = GCodeResult::error;
 				}
+			}
+			else
+			{
+				reply.copy("Filename expected");
+				result = GCodeResult::error;
 			}
 		}
 		break;
@@ -720,10 +738,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 30:	// Delete file
 		{
-			const char *filename = gb.GetUnprecedentedString();
-			if (filename != nullptr)
+			String<FILENAME_LENGTH> filename;
+			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename, false);;
+				platform.GetMassStorage()->Delete(platform.GetGCodeDir(), filename.Pointer(), false);
+			}
+			else
+			{
+				reply.copy("Filename expected");
+				result = GCodeResult::error;
 			}
 		}
 		break;
@@ -736,9 +759,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			return false;
 		}
 		{
-			const char* filename = gb.GetUnprecedentedString(true);	// get filename, or nullptr if none provided
+			String<FILENAME_LENGTH> filename;
+			const bool gotFilename = gb.GetUnprecedentedString(filename.GetRef());
 			OutputBuffer *fileInfoResponse;
-			bool done = reprap.GetPrintMonitor().GetFileInfoResponse(filename, fileInfoResponse);
+			const bool done = reprap.GetPrintMonitor().GetFileInfoResponse((gotFilename) ? filename.Pointer() : nullptr, fileInfoResponse);
 			if (done)
 			{
 				fileInfoResponse->cat('\n');
@@ -835,15 +859,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		if (fileBeingHashed == nullptr)
 		{
 			// See if we can open the file and start hashing
-			const char* filename = gb.GetUnprecedentedString(true);
-			if (StartHash(filename))
+			String<FILENAME_LENGTH> filename;
+			if (gb.GetUnprecedentedString(filename.GetRef()))
 			{
-				// Hashing is now in progress...
-				result = GCodeResult::notFinished;
+				if (StartHash(filename.Pointer()))
+				{
+					// Hashing is now in progress...
+					result = GCodeResult::notFinished;
+				}
+				else
+				{
+					reply.printf("Cannot open file: %s", filename.Pointer());
+					result = GCodeResult::error;
+				}
 			}
 			else
 			{
-				reply.printf("Cannot open file: %s", filename);
+				reply.copy("Filename expected");
 				result = GCodeResult::error;
 			}
 		}
@@ -973,7 +1005,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 98: // Call Macro/Subprogram
 		if (gb.Seen('P'))
 		{
-			DoFileMacro(gb, gb.GetString(), true);
+			String<FILENAME_LENGTH> filename;
+			gb.GetPossiblyQuotedString(filename.GetRef());
+			DoFileMacro(gb, filename.Pointer(), true);
 		}
 		break;
 
@@ -1254,8 +1288,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 117:	// Display message
 		{
-			const char *msg = gb.GetUnprecedentedString(true);
-			reprap.SetMessage((msg == nullptr) ? "" : msg);
+			String<FILENAME_LENGTH> msg;
+			gb.GetUnprecedentedString(msg.GetRef());
+			reprap.SetMessage(msg.Pointer());
 		}
 		break;
 
@@ -1301,72 +1336,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 140: // Set bed temperature
-		{
-			Heat& heat = reprap.GetHeat();
-			int8_t bedHeater;
-			if (gb.Seen('H'))
-			{
-				bedHeater = gb.GetIValue();
-				if (bedHeater < 0)
-				{
-					// Make sure we stay within reasonable boundaries...
-					bedHeater = -1;
-				}
-				else if (bedHeater >= (int)Heaters)
-				{
-					reply.printf("Invalid heater number '%d'", bedHeater);
-					result = GCodeResult::error;
-					break;
-				}
-				heat.SetBedHeater(bedHeater);
-				platform.UpdateConfiguredHeaters();
-
-				if (bedHeater < 0)
-				{
-					// Stop here if the hot bed has been disabled
-					break;
-				}
-			}
-			else
-			{
-				bedHeater = heat.GetBedHeater();
-				if (bedHeater < 0)
-				{
-					reply.copy("Hot bed is not present");
-					result = GCodeResult::error;
-					break;
-				}
-			}
-
-			if (gb.Seen('S'))
-			{
-				const float temperature = gb.GetFValue();
-				if (temperature < NEARLY_ABS_ZERO)
-				{
-					heat.SwitchOff(bedHeater);
-				}
-				else
-				{
-					heat.SetActiveTemperature(bedHeater, temperature);
-					heat.Activate(bedHeater);
-				}
-			}
-			if (gb.Seen('R'))
-			{
-				heat.SetStandbyTemperature(bedHeater, gb.GetFValue());
-			}
-		}
-		break;
-
+	case 140: // Bed temperature
 	case 141: // Chamber temperature
 		{
 			Heat& heat = reprap.GetHeat();
 			bool seen = false;
+
+			// See if the heater number is being set
 			if (gb.Seen('H'))
 			{
 				seen = true;
-
 				int heater = gb.GetIValue();
 				if (heater < 0)
 				{
@@ -1374,23 +1353,35 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else if (heater >= (int)Heaters)
 				{
-					reply.printf("Bad heater number '%d'", heater);
+					reply.printf("Invalid heater number '%d'", heater);
 					result = GCodeResult::error;
 					break;
 				}
-				else
+
+				if (code == 141)
 				{
 					heat.SetChamberHeater(heater);
-					platform.UpdateConfiguredHeaters();
 				}
+				else
+				{
+					heat.SetBedHeater(heater);
+				}
+				platform.UpdateConfiguredHeaters();
 			}
 
+			const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater() : heat.GetBedHeater();
+			const char* heaterName = (code == 141) ? "chamber" : "bed";
+
+			// Active temperature
 			if (gb.Seen('S'))
 			{
 				seen = true;
-
-				const int8_t currentHeater = heat.GetChamberHeater();
-				if (currentHeater != -1)
+				if (currentHeater < 0)
+				{
+					reply.printf("No %s heater has been configured", heaterName);
+					result = GCodeResult::error;
+				}
+				else
 				{
 					const float temperature = gb.GetFValue();
 					if (temperature < NEARLY_ABS_ZERO)
@@ -1403,23 +1394,32 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						heat.Activate(currentHeater);
 					}
 				}
+			}
+
+			if (gb.Seen('R'))
+			{
+				seen = true;
+				if (currentHeater < 0)
+				{
+					reply.printf("No %s heater has been configured", heaterName);
+					result = GCodeResult::error;
+				}
 				else
 				{
-					reply.copy("No chamber heater has been configured");
-					result = GCodeResult::error;
+					heat.SetStandbyTemperature(currentHeater, gb.GetFValue());
 				}
 			}
 
 			if (!seen)
 			{
-				const int8_t currentHeater = reprap.GetHeat().GetChamberHeater();
-				if (currentHeater != -1)
+				if (currentHeater < 0)
 				{
-					reply.printf("Chamber heater %d is currently at %.1f" DEGREE_SYMBOL "C", currentHeater, (double)reprap.GetHeat().GetTemperature(currentHeater));
+					reply.printf("No %s heater has been configured", heaterName);
 				}
 				else
 				{
-					reply.copy("No chamber heater has been configured");
+					reply.printf("%c%s heater %d is currently at %.1f" DEGREE_SYMBOL "C",
+						toupper(heaterName[0]), heaterName + 1, currentHeater, (double)reprap.GetHeat().GetTemperature(currentHeater));
 				}
 			}
 		}
@@ -2360,12 +2360,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 540: // Set/report MAC address
 		if (gb.Seen('P'))
 		{
-			SetMACAddress(gb);
+			uint8_t mac[6];
+			if (gb.GetMacAddress(mac))
+			{
+				platform.SetMACAddress(mac);
+			}
+			else
+			{
+				reply.copy("Bad MAC address");
+				result = GCodeResult::error;
+			}
 		}
 		else
 		{
-			const byte* mac = platform.MACAddress();
-			reply.printf("MAC: %x:%x:%x:%x:%x:%x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+			const uint8_t *mac = platform.MACAddress();
+			reply.printf("MAC: %02x:%02x:%02x:%02x:%02x:%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		}
 		break;
 
@@ -2620,17 +2629,25 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			folder = platform.GetWebDir();
 			defaultFile = INDEX_PAGE_FILE;
 		}
-		const char* filename = (gb.Seen('P') ? gb.GetString() : defaultFile);
-		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
-		const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
-		const bool ok = OpenFileToWrite(gb, folder, filename, size, true, crc32);
-		if (ok)
+		String<FILENAME_LENGTH> filename;
+		if (gb.Seen('P'))
 		{
-			reply.printf("Writing to file: %s", filename);
+			gb.GetPossiblyQuotedString(filename.GetRef());
 		}
 		else
 		{
-			reply.printf("Can't open file %s for writing.", filename);
+			filename.GetRef().copy(defaultFile);
+		}
+		const FilePosition size = (gb.Seen('S') ? (FilePosition)gb.GetIValue() : 0);
+		const uint32_t crc32 = (gb.Seen('C') ? gb.GetUIValue() : 0);
+		const bool ok = OpenFileToWrite(gb, folder, filename.Pointer(), size, true, crc32);
+		if (ok)
+		{
+			reply.printf("Writing to file: %s", filename.Pointer());
+		}
+		else
+		{
+			reply.printf("Can't open file %s for writing.", filename.Pointer());
 			result = GCodeResult::error;
 		}
 	}
@@ -3926,7 +3943,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 752: // Start 3D scan
 		if (gb.Seen('P'))
 		{
-			const char *file = gb.GetString();
+			String<FILENAME_LENGTH> file;
+			gb.GetPossiblyQuotedString(file.GetRef());
 			if (gb.Seen('S'))
 			{
 				const int sParam = gb.GetIValue();
@@ -3934,7 +3952,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					if (reprap.GetScanner().IsRegistered())
 					{
-						result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file, sParam));
+						result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.Pointer(), sParam));
 					}
 					else
 					{
@@ -4066,8 +4084,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 
 				// Set date
-				const char * const dateString = gb.GetString();
-				if (strptime(dateString, "%Y-%m-%d", &timeInfo) == nullptr)
+				String<12> dateString;
+				gb.GetPossiblyQuotedString(dateString.GetRef());
+				if (strptime(dateString.Pointer(), "%Y-%m-%d", &timeInfo) == nullptr)
 				{
 					reply.copy("Invalid date format");
 					result = GCodeResult::error;
@@ -4080,8 +4099,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 
 				// Set time
-				const char * const timeString = gb.GetString();
-				if (strptime(timeString, "%H:%M:%S", &timeInfo) == nullptr)
+				String<12> timeString;
+				gb.GetPossiblyQuotedString(timeString.GetRef());
+				if (strptime(timeString.Pointer(), "%H:%M:%S", &timeInfo) == nullptr)
 				{
 					reply.copy("Invalid time format");
 					result = GCodeResult::error;
@@ -4112,14 +4132,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 906: // Set/report Motor currents
 	case 913: // Set/report motor current percent
-		// Note that we no longer wait for movement to stop. This is so that we can use these commands in the M911 power fail script.
+#if HAS_SMART_DRIVERS
+	case 917: // Set/report standstill motor current percentage
+#endif
+		// Note that we no longer wait for movement to stop. This is so that we can use these commands (in particular, M913) in the M911 power fail script.
 		{
 			bool seen = false;
 			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
-					platform.SetMotorCurrent(axis, gb.GetFValue(), code == 913);
+					platform.SetMotorCurrent(axis, gb.GetFValue(), code);
 					seen = true;
 				}
 			}
@@ -4132,7 +4155,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				// 2014-09-29 DC42: we no longer insist that the user supplies values for all possible extruder drives
 				for (size_t e = 0; e < eCount; e++)
 				{
-					platform.SetMotorCurrent(numTotalAxes + e, eVals[e], code == 913);
+					platform.SetMotorCurrent(numTotalAxes + e, eVals[e], code);
 				}
 				seen = true;
 			}
@@ -4149,15 +4172,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (!seen)
 			{
-				reply.copy((code == 913) ? "Motor current % of normal - " : "Motor current (mA) - ");
+				reply.copy(	(code == 913) ? "Motor current % of normal - "
+#if HAS_SMART_DRIVERS
+								: (code == 917) ? "Motor standstill current % of normal - "
+#endif
+									: "Motor current (mA) - "
+						);
 				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
-					reply.catf("%c:%d, ", axisLetters[axis], (int)platform.GetMotorCurrent(axis, code == 913));
+					reply.catf("%c:%d, ", axisLetters[axis], (int)platform.GetMotorCurrent(axis, code));
 				}
 				reply.cat("E");
 				for (size_t extruder = 0; extruder < numExtruders; extruder++)
 				{
-					reply.catf(":%d", (int)platform.GetMotorCurrent(extruder + numTotalAxes, code == 913));
+					reply.catf(":%d", (int)platform.GetMotorCurrent(extruder + numTotalAxes, code));
 				}
 				if (code == 906)
 				{
@@ -4372,9 +4400,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		if (result != GCodeResult::notFinished)
 		{
 			reprap.EmergencyStop();			// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
-			uint16_t reason = (gb.Seen('P') && StringStartsWith(gb.GetString(), "ERASE"))
-											? (uint16_t)SoftwareResetReason::erase
-											: (uint16_t)SoftwareResetReason::user;
+			bool doErase;
+			if (gb.Seen('P'))
+			{
+				String<8> eraseString;
+				gb.GetPossiblyQuotedString(eraseString.GetRef());
+				doErase = StringStartsWith(eraseString.Pointer(), "ERASE");
+			}
+			else
+			{
+				doErase = false;
+			}
+			const uint16_t reason = (doErase)
+									? (uint16_t)SoftwareResetReason::erase
+									: (uint16_t)SoftwareResetReason::user;
 			platform.SoftwareReset(reason);			// doesn't return
 		}
 		break;

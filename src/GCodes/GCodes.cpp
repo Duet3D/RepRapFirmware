@@ -630,26 +630,29 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 
 	case GCodeState::stopping:		// MO after executing stop.g if present
 	case GCodeState::sleeping:		// M1 after executing sleep.g if present
-		// Deselect the active tool and turn off all heaters, unless parameter Hn was used with n > 0
-		if (!gb.Seen('H') || gb.GetIValue() <= 0)
+		if (simulationMode == 0)
 		{
-			Tool* tool = reprap.GetCurrentTool();
-			if (tool != nullptr)
+			// Deselect the active tool and turn off all heaters, unless parameter Hn was used with n > 0
+			if (!gb.Seen('H') || gb.GetIValue() <= 0)
 			{
-				reprap.StandbyTool(tool->Number());
+				Tool* tool = reprap.GetCurrentTool();
+				if (tool != nullptr)
+				{
+					reprap.StandbyTool(tool->Number());
+				}
+				reprap.GetHeat().SwitchOffAll();
 			}
-			reprap.GetHeat().SwitchOffAll();
-		}
 
-		// chrishamm 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
-		// I think M1 is sufficient for this purpose. Leave M0 for a normal reset.
-		if (gb.GetState() == GCodeState::sleeping)
-		{
-			DisableDrives();
-		}
-		else
-		{
-			platform.SetDriversIdle();
+			// chrishamm 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
+			// I think M1 is sufficient for this purpose. Leave M0 for a normal reset.
+			if (gb.GetState() == GCodeState::sleeping)
+			{
+				DisableDrives();
+			}
+			else
+			{
+				platform.SetDriversIdle();
+			}
 		}
 		gb.SetState(GCodeState::normal);
 		break;
@@ -3374,42 +3377,6 @@ void GCodes::DisableDrives()
 		platform.DisableDrive(drive);
 	}
 	SetAllAxesNotHomed();
-}
-
-void GCodes::SetMACAddress(GCodeBuffer& gb)
-{
-	uint8_t mac[6];
-	const char* ipString = gb.GetString();
-	uint8_t sp = 0;
-	uint8_t spp = 0;
-	uint8_t ipp = 0;
-	while (ipString[sp])
-	{
-		if (ipString[sp] == ':')
-		{
-			mac[ipp] = strtoul(&ipString[spp], nullptr, 16);
-			ipp++;
-			if (ipp > 5)
-			{
-				break;
-			}
-			sp++;
-			spp = sp;
-		}
-		else
-		{
-			sp++;
-		}
-	}
-	if (ipp == 5)
-	{
-		mac[ipp] = strtoul(&ipString[spp], nullptr, 16);
-		platform.SetMACAddress(mac);
-	}
-	else
-	{
-		platform.MessageF(ErrorMessage, "Dud MAC address: %s\n", gb.Buffer());
-	}
 }
 
 bool GCodes::ChangeMicrostepping(size_t drive, int microsteps, int mode) const

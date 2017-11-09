@@ -67,21 +67,15 @@ bool HttpResponder::Spin()
 	case ResponderState::reading:
 		{
 			bool readSomething = false;
-			for (;;)
+			char c;
+			while (skt->ReadChar(c))
 			{
-				char c;
-				if (skt->ReadChar(c))
+				if (CharFromClient(c))
 				{
-					if (CharFromClient(c))
-					{
-						return true;
-					}
-					readSomething = true;
+					timer = millis();		// restart the timeout
+					return true;
 				}
-				else
-				{
-					break;
-				}
+				readSomething = true;
 			}
 
 			// Here when we were not able to read a character but we didn't receive a finished message
@@ -522,7 +516,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 	}
 	else if (StringEquals(request, "delete") && GetKeyValue("name") != nullptr)
 	{
-		bool ok = GetPlatform().GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
+		const bool ok = GetPlatform().GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
@@ -565,17 +559,22 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		bool success = false;
 		if (oldVal != nullptr && newVal != nullptr)
 		{
-			success = GetPlatform().GetMassStorage()->Rename(oldVal, newVal);
+			MassStorage * const ms = GetPlatform().GetMassStorage();
+			if (StringEquals(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
+			{
+				ms->Delete(nullptr, newVal, true);
+			}
+			success = ms->Rename(oldVal, newVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
 	else if (StringEquals(request, "mkdir"))
 	{
-		const char* dirVal = GetKeyValue("dir");
+		const char* const dirVal = GetKeyValue("dir");
 		bool success = false;
 		if (dirVal != nullptr)
 		{
-			success = (GetPlatform().GetMassStorage()->MakeDirectory(dirVal));
+			success = GetPlatform().GetMassStorage()->MakeDirectory(dirVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
@@ -1171,6 +1170,16 @@ void HttpResponder::CancelUpload()
 		}
 	}
 	NetworkResponder::CancelUpload();
+}
+
+// This overrides the version in class NetworkResponder
+void HttpResponder::SendData()
+{
+	NetworkResponder::SendData();
+	if (responderState == ResponderState::reading)
+	{
+		timer = millis();				// restart the timer
+	}
 }
 
 void HttpResponder::Diagnostics(MessageType mt) const

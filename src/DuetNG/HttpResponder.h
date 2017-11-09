@@ -28,6 +28,7 @@ public:
 protected:
 	void ConnectionLost() override;
 	void CancelUpload() override;
+	void SendData() override;
 
 private:
 	static const size_t MaxHttpSessions = 8;			// maximum number of simultaneous HTTP sessions

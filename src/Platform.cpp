@@ -498,6 +498,9 @@ void Platform::Init()
 
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
+#if HAS_SMART_DRIVERS
+		motorStandstillCurrentFraction[drive] = 1.0;
+#endif
 		driverState[drive] = DriverStatus::disabled;
 
 		// Enable pullup resistors on endstop inputs here if necessary.
@@ -937,7 +940,7 @@ bool Platform::CheckFirmwareUpdatePrerequisites(StringRef& reply)
 	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
-#if (SAM4S || SAM4E)
+#if SAM4E || SAM4S
 						IRAM_ADDR + IRAM_SIZE
 #else
 						IRAM1_ADDR + IRAM1_SIZE
@@ -984,7 +987,7 @@ void Platform::UpdateFirmware()
 	uint32_t data32[IFLASH_PAGE_SIZE/4];
 	char* const data = reinterpret_cast<char *>(data32);
 
-#if (SAM4S || SAM4E)
+#if SAM4E || SAM4S
 	// The EWP command is not supported for non-8KByte sectors in the SAM4 series.
 	// So we have to unlock and erase the complete 64Kb sector first.
 	flash_unlock(IAP_FLASH_START, IAP_FLASH_END, nullptr, nullptr);
@@ -1126,7 +1129,7 @@ void Platform::UpdateFirmware()
 	static const char filename[] = "0:/sys/" IAP_FIRMWARE_FILE;
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_FLASH_START);
 	if (topOfStack + sizeof(filename) <=
-#if (SAM4S || SAM4E)
+#if SAM4E || SAM4S
 						IRAM_ADDR + IRAM_SIZE
 #else
 						IRAM1_ADDR + IRAM1_SIZE
@@ -2578,37 +2581,48 @@ void Platform::SetDriversIdle()
 }
 
 // Set the current for a drive. Current is in mA.
-void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, bool isPercent)
+void Platform::SetDriverCurrent(size_t driver, float currentOrPercent, int code)
 {
 	if (driver < DRIVES)
 	{
-		if (isPercent)
+		switch (code)
 		{
-			motorCurrentFraction[driver] = 0.01 * currentOrPercent;
-		}
-		else
-		{
+		case 906:
 			motorCurrents[driver] = currentOrPercent;
+			break;
+
+		case 913:
+			motorCurrentFraction[driver] = 0.01 * currentOrPercent;
+			break;
+
+#if HAS_SMART_DRIVERS
+		case 917:
+			motorStandstillCurrentFraction[driver] = 0.01 * currentOrPercent;
+			break;
+#endif
+		default:
+			break;
 		}
+
 		UpdateMotorCurrent(driver);
 	}
 }
 
 // Set the current for all drivers on an axis or extruder. Current is in mA.
-void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, bool isPercent)
+void Platform::SetMotorCurrent(size_t drive, float currentOrPercent, int code)
 {
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
 		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 		{
-			SetDriverCurrent(axisDrivers[drive].driverNumbers[i], currentOrPercent, isPercent);
+			SetDriverCurrent(axisDrivers[drive].driverNumbers[i], currentOrPercent, code);
 		}
 
 	}
 	else if (drive < DRIVES)
 	{
-		SetDriverCurrent(extruderDrivers[drive - numAxes], currentOrPercent, isPercent);
+		SetDriverCurrent(extruderDrivers[drive - numAxes], currentOrPercent, code);
 	}
 }
 
@@ -2680,7 +2694,7 @@ void Platform::UpdateMotorCurrent(size_t driver)
 
 // Get the configured motor current for a drive.
 // Currently we don't allow multiple motors on a single axis to have different currents, so we can just return the current for the first one.
-float Platform::GetMotorCurrent(size_t drive, bool isPercent) const
+float Platform::GetMotorCurrent(size_t drive, int code) const
 {
 	if (drive < DRIVES)
 	{
@@ -2688,7 +2702,21 @@ float Platform::GetMotorCurrent(size_t drive, bool isPercent) const
 		const uint8_t driver = (drive < numAxes) ? axisDrivers[drive].driverNumbers[0] : extruderDrivers[drive - numAxes];
 		if (driver < DRIVES)
 		{
-			return (isPercent) ? motorCurrentFraction[driver] * 100.0 : motorCurrents[driver];
+			switch (code)
+			{
+			case 906:
+				return motorCurrents[driver];
+
+			case 913:
+				return motorCurrentFraction[driver] * 100.0;
+
+#if HAS_SMART_DRIVERS
+			case 917:
+				return motorStandstillCurrentFraction[driver] * 100.0;
+#endif
+			default:
+				break;
+			}
 		}
 	}
 	return 0.0;

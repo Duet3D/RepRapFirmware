@@ -523,23 +523,6 @@ const void GCodeBuffer::GetLongArray(long l[], size_t& returnedLength)
 	}
 }
 
-// Get a string after a G Code letter found by a call to Seen().
-// It will be the whole of the rest of the GCode string, so strings should always be the last parameter.
-// Use the other overload of GetString to get strings that may not be the last parameter, or may be quoted.
-const char* GCodeBuffer::GetString()
-{
-	if (readPointer >= 0)
-	{
-		commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
-		const char* const result = &gcodeBuffer[readPointer + 1];
-		readPointer = -1;
-		return result;
-	}
-
-	INTERNAL_ERROR;
-	return "";
-}
-
 // Get and copy a quoted string returning true if successful
 bool GCodeBuffer::GetQuotedString(const StringRef& str)
 {
@@ -547,43 +530,46 @@ bool GCodeBuffer::GetQuotedString(const StringRef& str)
 	if (readPointer >= 0)
 	{
 		++readPointer;				// skip the character that introduced the string
-		if (gcodeBuffer[readPointer] == '"')
-		{
-			++readPointer;
-			for (;;)
-			{
-				char c = gcodeBuffer[readPointer++];
-				if (c < ' ')
-				{
-					return false;
-				}
-				if (c == '"')
-				{
-					if (gcodeBuffer[readPointer++] != '"')
-					{
-						return true;
-					}
-				}
-				else if (c == '\'')
-				{
-					if (isalpha(gcodeBuffer[readPointer]))
-					{
-						// Single quote before an alphabetic character forces that character to lower case
-						c = tolower(gcodeBuffer[readPointer++]);
-					}
-					else if (gcodeBuffer[readPointer] == c)
-					{
-						// Two single quotes are used to represent one
-						++readPointer;
-					}
-				}
-				str.cat(c);
-			}
-		}
-		return false;
+		return gcodeBuffer[readPointer] == '"' && InternalGetQuotedString(str);
 	}
 
 	INTERNAL_ERROR;
+	return false;
+}
+
+// Given that the current character is double-quote, fetch the quoted string
+bool GCodeBuffer::InternalGetQuotedString(const StringRef& str)
+{
+	++readPointer;
+	for (;;)
+	{
+		char c = gcodeBuffer[readPointer++];
+		if (c < ' ')
+		{
+			return false;
+		}
+		if (c == '"')
+		{
+			if (gcodeBuffer[readPointer++] != '"')
+			{
+				return true;
+			}
+		}
+		else if (c == '\'')
+		{
+			if (isalpha(gcodeBuffer[readPointer]))
+			{
+				// Single quote before an alphabetic character forces that character to lower case
+				c = tolower(gcodeBuffer[readPointer++]);
+			}
+			else if (gcodeBuffer[readPointer] == c)
+			{
+				// Two single quotes are used to represent one
+				++readPointer;
+			}
+		}
+		str.cat(c);
+	}
 	return false;
 }
 
@@ -592,54 +578,51 @@ bool GCodeBuffer::GetPossiblyQuotedString(const StringRef& str)
 {
 	if (readPointer >= 0)
 	{
-		if (gcodeBuffer[readPointer + 1] == '"')
-		{
-			return GetQuotedString(str);
-		}
-
-		commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
-		str.Clear();
-		for (;;)
-		{
-			++readPointer;
-			const char c = gcodeBuffer[readPointer];
-			if (c < ' ')
-			{
-				break;
-			}
-			str.cat(c);
-		}
-		str.StripTrailingSpaces();
-		return !str.IsEmpty();
+		++readPointer;
+		return InternalGetPossiblyQuotedString(str);
 	}
 
 	INTERNAL_ERROR;
 	return false;
 }
 
-// This returns a pointer to the end of the buffer where a string starts.
+// Get and copy a string which may or may not be quoted, starting at readPointer
+bool GCodeBuffer::InternalGetPossiblyQuotedString(const StringRef& str)
+{
+	str.Clear();
+	if (gcodeBuffer[readPointer] == '"')
+	{
+		return InternalGetQuotedString(str);
+	}
+
+	commandEnd = gcodeLineEnd;				// the string is the remainder of the line of gcode
+	for (;;)
+	{
+		const char c = gcodeBuffer[readPointer++];
+		if (c < ' ')
+		{
+			break;
+		}
+		str.cat(c);
+	}
+	str.StripTrailingSpaces();
+	return !str.IsEmpty();
+}
+
+// This returns a string comprising the rest of the line, excluding any comment
 // It is provided for legacy use, in particular in the M23
 // command that sets the name of a file to be printed.  In
 // preference use GetString() which requires the string to have
 // been preceded by a tag letter.
-// If no string was provided, it produces an error message if the string was not optional, and returns nullptr.
-const char* GCodeBuffer::GetUnprecedentedString(bool optional)
+bool GCodeBuffer::GetUnprecedentedString(const StringRef& str)
 {
-	commandEnd = gcodeLineEnd;					// the string is the remainder of the line
-	size_t i;
+	readPointer = parameterStart;
 	char c;
-	for (i = parameterStart; i < commandEnd && ((c = gcodeBuffer[i]) == ' ' || c == '\t'); ++i) { }
-
-	if (i == commandEnd)
+	while ((unsigned int)readPointer < commandEnd && ((c = gcodeBuffer[readPointer]) == ' ' || c == '\t'))
 	{
-		if (!optional)
-		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "%c%d: String expected but not seen.\n", commandLetter, commandNumber);
-		}
-		return nullptr;
+		++readPointer;	// skip leading spaces
 	}
-
-	return &gcodeBuffer[i];
+	return InternalGetPossiblyQuotedString(str);
 }
 
 // Get an int32 after a G Code letter
@@ -802,6 +785,44 @@ bool GCodeBuffer::GetIPAddress(uint32_t& ip)
 	return ok;
 }
 
+// Get a MAX address sextet after a key letter
+bool GCodeBuffer::GetMacAddress(uint8_t mac[6])
+{
+	if (readPointer < 0)
+	{
+		INTERNAL_ERROR;
+		return false;
+	}
+
+	const char* p = &gcodeBuffer[readPointer + 1];
+	unsigned int n = 0;
+	for (;;)
+	{
+		char *pp;
+		const unsigned long v = strtoul(p, &pp, 16);
+		if (pp == p || v > 255)
+		{
+			readPointer = -1;
+			return false;
+		}
+		mac[n] = (uint8_t)v;
+		++n;
+		p = pp;
+		if (*p != ':')
+		{
+			break;
+		}
+		if (n == 6)
+		{
+			readPointer = -1;
+			return false;
+		}
+		++p;
+	}
+	readPointer = -1;
+	return n == 6;
+}
+
 // Get the original machine state before we pushed anything
 GCodeMachineState& GCodeBuffer::OriginalMachineState() const
 {
@@ -880,6 +901,12 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled)
 			ms->messageCancelled = cancelled;
 		}
 	}
+}
+
+// Return true if we can queue gcodes from this source
+bool GCodeBuffer::CanQueueCodes() const
+{
+	return queueCodes || machineState->doingFileMacro;	// return true if we queue commands form this source or we are executing a macro
 }
 
 // End

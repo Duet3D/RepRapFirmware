@@ -145,7 +145,7 @@ private:
 	uint32_t fastLoop, slowLoop;
 	uint32_t lastTime;
 
-	uint16_t debug;
+	uint32_t debug;
 	bool stopped;
 	bool active;
 	bool resetting;

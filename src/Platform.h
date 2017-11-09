@@ -403,8 +403,8 @@ public:
 	void DisableDrive(size_t drive);
 	void DisableAllDrives();
 	void SetDriversIdle();
-	void SetMotorCurrent(size_t drive, float current, bool isPercent);
-	float GetMotorCurrent(size_t drive, bool isPercent) const;
+	void SetMotorCurrent(size_t drive, float current, int code);
+	float GetMotorCurrent(size_t drive, int code) const;
 	void SetIdleCurrentFactor(float f);
 	float GetIdleCurrentFactor() const
 		{ return idleCurrentFactor; }
@@ -686,7 +686,7 @@ private:
 
 	// DRIVES
 
-	void SetDriverCurrent(size_t driver, float current, bool isPercent);
+	void SetDriverCurrent(size_t driver, float current, int code);
 	void UpdateMotorCurrent(size_t driver);
 	void SetDriverDirection(uint8_t driver, bool direction)
 	pre(driver < DRIVES);
@@ -706,6 +706,9 @@ private:
 	float pressureAdvance[MaxExtruders];
 	float motorCurrents[DRIVES];					// the normal motor current for each stepper driver
 	float motorCurrentFraction[DRIVES];				// the percentages of normal motor current that each driver is set to
+#if HAS_SMART_DRIVERS
+	float motorStandstillCurrentFraction[DRIVES];
+#endif
 	AxisDriversConfig axisDrivers[MaxAxes];			// the driver numbers assigned to each axis
 	uint8_t extruderDrivers[MaxExtruders];			// the driver number assigned to each extruder
 	uint32_t driveDriverBits[2 * DRIVES];			// the bitmap of driver port bits for each axis or extruder, followed by the raw versions

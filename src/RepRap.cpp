@@ -310,11 +310,11 @@ void RepRap::SetDebug(Module m, bool enable)
 {
 	if (enable)
 	{
-		debug |= (1 << m);
+		debug |= (1u << m);
 	}
 	else
 	{
-		debug &= ~(1 << m);
+		debug &= ~(1u << m);
 	}
 	PrintDebug();
 }
@@ -326,30 +326,24 @@ void RepRap::SetDebug(bool enable)
 
 void RepRap::PrintDebug()
 {
-	if (debug != 0)
+	platform->Message(GenericMessage, "Debugging enabled for modules:");
+	for (size_t i = 0; i < numModules; i++)
 	{
-		platform->Message(GenericMessage, "Debugging enabled for modules:");
-		for (size_t i = 0; i < numModules; i++)
+		if ((debug & (1u << i)) != 0)
 		{
-			if ((debug & (1 << i)) != 0)
-			{
-				platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
-			}
+			platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
 		}
-		platform->Message(GenericMessage, "\nDebugging disabled for modules:");
-		for (size_t i = 0; i < numModules; i++)
-		{
-			if ((debug & (1 << i)) == 0)
-			{
-				platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
-			}
-		}
-		platform->Message(GenericMessage, "\n");
 	}
-	else
+
+	platform->Message(GenericMessage, "\nDebugging disabled for modules:");
+	for (size_t i = 0; i < numModules; i++)
 	{
-		platform->Message(GenericMessage, "Debugging disabled\n");
+		if ((debug & (1u << i)) == 0)
+		{
+			platform->MessageF(GenericMessage, " %s(%u)", moduleName[i], i);
+		}
 	}
+	platform->Message(GenericMessage, "\n");
 }
 
 // Add a tool.
@@ -629,9 +623,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 		ch = '[';
 		for (size_t axis = 0; axis < numAxes; axis++)
 		{
-			// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs by 999.9 to prevent JSON parsing errors.
+			// Coordinates may be NaNs, for example when delta or SCARA homing fails. Replace any NaNs or infinities by 9999.9 to prevent JSON parsing errors.
 			const float coord = liveCoordinates[axis];
-			response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 999.9 : coord));
+			response->catf("%c%.3f", ch, (double)((std::isnan(coord) || std::isinf(coord)) ? 9999.9 : coord));
 			ch = ',';
 		}
 	}

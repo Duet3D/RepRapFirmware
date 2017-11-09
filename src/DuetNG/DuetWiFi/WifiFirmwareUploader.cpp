@@ -586,7 +586,7 @@ void WifiFirmwareUploader::Spin()
 			}
 			uploadPort.begin(baud);
 			uploadPort.setInterruptPriority(1);				// we are going to move data at seriously high speeds
-			Network::ResetWiFiForUpload(false);
+			reprap.GetNetwork().ResetWiFiForUpload(false);
 			lastAttemptTime = lastResetTime = millis();
 			state = UploadState::connecting;
 		}

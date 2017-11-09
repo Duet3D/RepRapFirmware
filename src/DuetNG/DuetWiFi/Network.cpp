@@ -103,7 +103,7 @@ static inline void DisableEspInterrupt()
 // WiFi interface class
 
 Network::Network(Platform& p) : platform(p), nextResponderToPoll(nullptr), uploader(nullptr), currentSocket(0), ftpDataPort(0),
-		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
+		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false), serialRunning(false),
 		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0)
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
@@ -358,7 +358,7 @@ void Network::Start()
 	delay(50);
 
 	// Release the reset on the ESP8266
-	digitalWrite(EspResetPin, HIGH);
+	StartWiFi();
 
 	// Give it time to sample GPIO0 and GPIO15
 	// GPIO0 has to be held high for sufficient time:
@@ -1380,6 +1380,15 @@ void Network::SpiInterrupt()
 	}
 }
 
+// Start the ESP
+void Network::StartWiFi()
+{
+	digitalWrite(EspResetPin, HIGH);
+	ConfigurePin(g_APinDescription[APINS_UART1]);				// connect the pins to UART1
+	Serial1.begin(115200);										// initialise the UART, to receive debug info
+	serialRunning = true;
+}
+
 // Reset the ESP8266 and leave held in reset
 void Network::ResetWiFi()
 {
@@ -1387,6 +1396,12 @@ void Network::ResetWiFi()
 	pinMode(APIN_UART1_TXD, INPUT_PULLUP);						// just enable pullups on TxD and RxD pins for now to avoid floating pins
 	pinMode(APIN_UART1_RXD, INPUT_PULLUP);
 	currentMode = WiFiState::disabled;
+
+	if (serialRunning)
+	{
+		Serial1.end();
+		serialRunning = false;
+	}
 }
 
 // Reset the ESP8266 to take commands from the UART or from external input. The caller must wait for the reset to complete after calling this.
@@ -1397,6 +1412,12 @@ void Network::ResetWiFi()
 // 0		0		1		SD card boot (not used in on Duet)
 void Network::ResetWiFiForUpload(bool external)
 {
+	if (serialRunning)
+	{
+		Serial1.end();
+		serialRunning = false;
+	}
+
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 

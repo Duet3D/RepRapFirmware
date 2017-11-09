@@ -819,38 +819,39 @@ void FtpResponder::ChangeDirectory(const char *newDirectory)
 		{
 			SafeStrncpy(combinedPath, newDirectory, ARRAY_SIZE(combinedPath));
 		}
-		else							// Relative path
+		else if (StringEquals(newDirectory, "."))
 		{
-			if (StringEquals(newDirectory, ".."))	// Go up
+			SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
+		}
+		else if (StringEquals(newDirectory, ".."))	// Go up
+		{
+			// Check if we're already at the root directory
+			if (StringEquals(currentDirectory, "/"))
 			{
-				// Check if we're already at the root directory
-				if (StringEquals(currentDirectory, "/"))
-				{
-					outBuf->copy("550 Failed to change directory.\r\n");
-					Commit(responderState);
-					return;
-				}
+				outBuf->copy("550 Failed to change directory.\r\n");
+				Commit(responderState);
+				return;
+			}
 
-				// No - find the parent directory
-				SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
-				for(int i = strlen(combinedPath) - 2; i >= 0; i--)
-				{
-					if (combinedPath[i] == '/')
-					{
-						combinedPath[i + 1] = 0;
-						break;
-					}
-				}
-			}
-			else									// Go to child directory
+			// No - find the parent directory
+			SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
+			for(int i = strlen(combinedPath) - 2; i >= 0; i--)
 			{
-				SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
-				if (!StringEndsWith(combinedPath, "/") && strlen(combinedPath) > 1)
+				if (combinedPath[i] == '/')
 				{
-					SafeStrncat(combinedPath, "/", ARRAY_SIZE(combinedPath));
+					combinedPath[i + 1] = 0;
+					break;
 				}
-				SafeStrncat(combinedPath, newDirectory, ARRAY_SIZE(combinedPath));
 			}
+		}
+		else									// Go to child directory
+		{
+			SafeStrncpy(combinedPath, currentDirectory, ARRAY_SIZE(combinedPath));
+			if (!StringEndsWith(combinedPath, "/") && strlen(combinedPath) > 1)
+			{
+				SafeStrncat(combinedPath, "/", ARRAY_SIZE(combinedPath));
+			}
+			SafeStrncat(combinedPath, newDirectory, ARRAY_SIZE(combinedPath));
 		}
 
 		// Make sure the new path does not end with a slash, else FatFs won't be able to see the directory

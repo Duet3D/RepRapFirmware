@@ -378,7 +378,7 @@ bool ProtocolInterpreter::StartUpload(FileStore *file, const char *fileName)
 	if (file != nullptr)
 	{
 		fileBeingUploaded.Set(file);
-		strncpy(filenameBeingUploaded, fileName, ARRAY_SIZE(filenameBeingUploaded));
+		SafeStrncpy(filenameBeingUploaded, fileName, ARRAY_SIZE(filenameBeingUploaded));
 		filenameBeingUploaded[ARRAY_UPB(filenameBeingUploaded)] = 0;
 
 		uploadState = uploadOK;
@@ -617,7 +617,7 @@ void Webserver::HttpInterpreter::DoFastUpload()
 
 		// Grab a copy of the filename and finish this upload
 		char filename[FILENAME_LENGTH];
-		strncpy(filename, filenameBeingUploaded, FILENAME_LENGTH);
+		SafeStrncpy(filename, filenameBeingUploaded, FILENAME_LENGTH);
 		FinishUpload(postFileLength);
 
 		// Update the file timestamp if it was specified before
@@ -825,7 +825,7 @@ void Webserver::HttpInterpreter::SendJsonResponse(const char* command)
 		{
 			const char *configPath = platform->GetMassStorage()->CombineName(platform->GetSysDir(), platform->GetConfigFile());
 			char fileName[FILENAME_LENGTH];
-			strncpy(fileName, configPath, FILENAME_LENGTH);
+			SafeStrncpy(fileName, configPath, FILENAME_LENGTH);
 
 			SendFile(fileName, false);
 			return;
@@ -978,7 +978,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 	}
 	else if (StringEquals(request, "delete") && GetKeyValue("name") != nullptr)
 	{
-		bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
+		const bool ok = platform->GetMassStorage()->Delete(FS_PREFIX, GetKeyValue("name"));
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEquals(request, "filelist") && GetKeyValue("dir") != nullptr)
@@ -1011,7 +1011,7 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 			if (nameVal != nullptr)
 			{
 				// Regular rr_fileinfo?name=xxx call
-				strncpy(filenameBeingProcessed, nameVal, ARRAY_SIZE(filenameBeingProcessed));
+				SafeStrncpy(filenameBeingProcessed, nameVal, ARRAY_SIZE(filenameBeingProcessed));
 				filenameBeingProcessed[ARRAY_UPB(filenameBeingProcessed)] = 0;
 			}
 			else
@@ -1031,17 +1031,22 @@ void Webserver::HttpInterpreter::GetJsonResponse(const char* request, OutputBuff
 		bool success = false;
 		if (oldVal != nullptr && newVal != nullptr)
 		{
-			success = platform->GetMassStorage()->Rename(oldVal, newVal);
+			MassStorage * const ms = platform->GetMassStorage();
+			if (StringEquals(GetKeyValue("deleteexisting"), "yes") && ms->FileExists(oldVal) && ms->FileExists(newVal))
+			{
+				ms->Delete(nullptr, newVal, true);
+			}
+			success = ms->Rename(oldVal, newVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
 	else if (StringEquals(request, "mkdir"))
 	{
-		const char* dirVal = GetKeyValue("dir");
+		const char* const dirVal = GetKeyValue("dir");
 		bool success = false;
 		if (dirVal != nullptr)
 		{
-			success = (platform->GetMassStorage()->MakeDirectory(dirVal));
+			success = platform->GetMassStorage()->MakeDirectory(dirVal);
 		}
 		response->printf("{\"err\":%d}", (success) ? 0 : 1);
 	}
@@ -2121,7 +2126,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 				if (filename[0] != '/')
 				{
 					const char *temp = platform->GetMassStorage()->CombineName(currentDir, filename);
-					strncpy(filename, temp, FILENAME_LENGTH);
+					SafeStrncpy(filename, temp, FILENAME_LENGTH);
 					filename[FILENAME_LENGTH - 1] = 0;
 				}
 
@@ -2138,7 +2143,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				// Copy origin path to temp oldFilename and read new path
 				char oldFilename[FILENAME_LENGTH];
-				strncpy(oldFilename, filename, FILENAME_LENGTH);
+				SafeStrncpy(oldFilename, filename, FILENAME_LENGTH);
 				oldFilename[FILENAME_LENGTH - 1] = 0;
 				ReadFilename(4);
 
@@ -2387,41 +2392,42 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		/* Prepare the new directory path */
 		if (newDirectory[0] == '/') // absolute path
 		{
-			strncpy(combinedPath, newDirectory, FILENAME_LENGTH);
+			SafeStrncpy(combinedPath, newDirectory, FILENAME_LENGTH);
 			combinedPath[FILENAME_LENGTH - 1] = 0;
 		}
-		else // relative path
+		else if (StringEquals(newDirectory, "."))
 		{
-			if (StringEquals(newDirectory, "..")) // go up
+			SafeStrncpy(combinedPath, currentDir, ARRAY_SIZE(combinedPath));
+		}
+		else if (StringEquals(newDirectory, "..")) // go up
+		{
+			if (StringEquals(currentDir, "/"))
 			{
-				if (StringEquals(currentDir, "/"))
+				// we're already at the root, so we can't go up any more
+				SendReply(550, "Failed to change directory.");
+				return;
+			}
+			else
+			{
+				SafeStrncpy(combinedPath, currentDir, FILENAME_LENGTH);
+				for(int i=strlen(combinedPath) -2; i>=0; i--)
 				{
-					// we're already at the root, so we can't go up any more
-					SendReply(550, "Failed to change directory.");
-					return;
-				}
-				else
-				{
-					strncpy(combinedPath, currentDir, FILENAME_LENGTH);
-					for(int i=strlen(combinedPath) -2; i>=0; i--)
+					if (combinedPath[i] == '/')
 					{
-						if (combinedPath[i] == '/')
-						{
-							combinedPath[i +1] = 0;
-							break;
-						}
+						combinedPath[i +1] = 0;
+						break;
 					}
 				}
 			}
-			else // go to child directory
+		}
+		else // go to child directory
+		{
+			SafeStrncpy(combinedPath, currentDir, FILENAME_LENGTH);
+			if (strlen(currentDir) > 1)
 			{
-				strncpy(combinedPath, currentDir, FILENAME_LENGTH);
-				if (strlen(currentDir) > 1)
-				{
-					strncat(combinedPath, "/", FILENAME_LENGTH - strlen(combinedPath) - 1);
-				}
-				strncat(combinedPath, newDirectory, FILENAME_LENGTH - strlen(combinedPath) - 1);
+				SafeStrncat(combinedPath, "/", FILENAME_LENGTH);
 			}
+			SafeStrncat(combinedPath, newDirectory, FILENAME_LENGTH);
 		}
 
 		/* Make sure the new path does not end with a '/', because FatFs won't see the directory otherwise */
@@ -2433,7 +2439,7 @@ void Webserver::FtpInterpreter::ChangeDirectory(const char *newDirectory)
 		/* Verify path and change it */
 		if (platform->GetMassStorage()->DirectoryExists(combinedPath))
 		{
-			strncpy(currentDir, combinedPath, FILENAME_LENGTH);
+			SafeStrncpy(currentDir, combinedPath, FILENAME_LENGTH);
 			SendReply(250, "Directory successfully changed.");
 		}
 		else

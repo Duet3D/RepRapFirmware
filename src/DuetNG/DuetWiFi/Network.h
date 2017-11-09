@@ -74,8 +74,9 @@ public:
 	// The remaining functions are specific to the WiFi version
 	WifiFirmwareUploader& GetWifiUploader() { return *uploader; }
 
+	void StartWiFi();
 	void ResetWiFi();
-	static void ResetWiFiForUpload(bool external);
+	void ResetWiFiForUpload(bool external);
 
 	const char *GetWiFiServerVersion() const { return wiFiServerVersion; }
 
@@ -146,6 +147,7 @@ private:
 	WiFiState requestedMode;
 	WiFiState currentMode;
 	bool activated;
+	bool serialRunning;
 	volatile bool espStatusChanged;
 
 	uint8_t ipAddress[4];

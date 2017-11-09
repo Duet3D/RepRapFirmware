@@ -46,7 +46,7 @@ protected:
 	// States machine control. Not all derived classes use all states.
 	enum class ResponderState
 	{
-		free,											// ready to be allocated
+		free = 0,										// ready to be allocated
 		reading,										// ready to receive data
 		sending,										// sending data
 		uploading,										// uploading a file to SD card
