@@ -630,6 +630,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 						// We executed M23 to set the file offset, which normally means that we are executing resurrect.g.
 						// We need to copy the absolute/relative and volumetric extrusion flags over
 						fileGCode->OriginalMachineState().drivesRelative = gb.MachineState().drivesRelative;
+						fileGCode->OriginalMachineState().feedrate = gb.MachineState().feedrate;
 						fileGCode->OriginalMachineState().volumetricExtrusion = gb.MachineState().volumetricExtrusion;
 						fileToPrint.Seek(fileOffsetToPrint);
 						moveFractionToSkip = moveFractionToStartAt;
@@ -3488,11 +3489,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				if (ok)
 				{
 					SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+					ok = gb.Seen('I') && gb.GetIPAddress(config.ip);
 				}
-			}
-			if (ok && gb.Seen('I'))
-			{
-				ok = gb.GetIPAddress(config.ip);
 			}
 			if (ok && gb.Seen('J'))
 			{
@@ -3513,7 +3511,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				reply.copy("Bad parameter");
+				reply.copy("Bad or missing parameter");
 				result = GCodeResult::error;
 			}
 		}
@@ -4476,6 +4474,12 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 														: DefaultToolChangeParam;
 			gb.SetState(GCodeState::toolChange0);
 			return true;							// proceeding with state machine, so don't unlock or send a reply
+		}
+		else
+		{
+			// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware.
+			// So make sure the tool heaters are on.
+			reprap.SelectTool(toolNum, simulationMode != 0);
 		}
 	}
 	else

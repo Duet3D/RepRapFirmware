@@ -370,24 +370,48 @@ const char* ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap 
 // Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
 bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const
 {
-	// If crosstalk causes the axis mkotor concerned to affect other axes then must terminate the entire move
+	// If crosstalk causes the axis motor concerned to affect other axes then must terminate the entire move
 	return (axis == X_AXIS && (crosstalk[0] != 0.0 || crosstalk[1] != 0.0))
 		|| (axis == Y_AXIS && crosstalk[2] != 0.0);
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-//TODO this doesn't appear to take account of the crosstalk factors yet
 void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const
 {
-	const float hitPoint = (axis == 0)
-							? ((highEnd) ? thetaLimits[1] : thetaLimits[0])						// proximal joint homing switch
-							  : (axis == 1)
-								? ((highEnd) ? psiLimits[1] : psiLimits[0])	// distal joint homing switch
-								  : (highEnd)
-									? reprap.GetPlatform().AxisMaximum(axis)					// other axis (e.g. Z) high end homing switch
-									  : reprap.GetPlatform().AxisMinimum(axis);					// other axis (e.g. Z) low end homing switch
-	dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+	switch (axis)
+	{
+	case X_AXIS:	// proximal joint homing switch
+		{
+			const float hitPoint = (highEnd) ? thetaLimits[1] : thetaLimits[0];
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
+		break;
+
+	case Y_AXIS:	// distal joint homing switch
+		{
+			const float hitPoint = ((highEnd) ? psiLimits[1] : psiLimits[0])
+									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[0])/stepsPerMm[X_AXIS]);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
+		break;
+
+	case Z_AXIS:	// Z axis homing switch
+		{
+			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis))
+									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[1])/stepsPerMm[X_AXIS])
+									- ((dda.DriveCoordinates()[Y_AXIS] * crosstalk[2])/stepsPerMm[Y_AXIS]);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
+		break;
+
+	default:		// Additional axis
+		{
+			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
+		break;
+	}
 }
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.

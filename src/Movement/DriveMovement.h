@@ -81,25 +81,28 @@ private:
 
 	// Parameters common to Cartesian, delta and extruder moves
 
-	// The following only need to be stored per-drive if we are supporting pressure advance
-	uint64_t twoDistanceToStopTimesCsquaredDivA;
-	uint32_t startSpeedTimesCdivA;
-	int32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;		// this one can be negative
-	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
+	DriveMovement *nextDM;								// link to next DM that needs a step
 
-	// These values don't depend on how the move is executed, so are set by Init()
-	uint32_t totalSteps;								// total number of steps for this move
-	uint8_t drive;										// the drive that this DM controls
 	DMState state;										// whether this is active or not
-	bool direction;										// true=forwards, false=backwards
+	uint8_t drive;										// the drive that this DM controls
+	uint8_t microstepShift : 4,							// log2 of the microstepping factor
+			direction : 1,								// true=forwards, false=backwards
+			fullCurrent : 1;							// true if the drivers are set to the full current, false if they are set to the standstill current
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
+
+	uint32_t totalSteps;								// total number of steps for this move
 
 	// These values change as the step is executed
 	uint32_t nextStep;									// number of steps already done
 	uint32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
-	DriveMovement *nextDM;								// link to next DM that needs a step
+
+	// The following only need to be stored per-drive if we are supporting pressure advance
+	uint64_t twoDistanceToStopTimesCsquaredDivA;
+	uint32_t startSpeedTimesCdivA;
+	int32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;		// this one can be negative
+	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union MoveParams

@@ -50,7 +50,8 @@ enum Module : uint8_t
 	modulePortControl = 11,
 	moduleDuetExpansion = 12,
 	moduleFilamentSensors = 13,
-	numModules = 14,				// make this one greater than the last module number
+	moduleWiFi = 14,
+	numModules = 15,				// make this one greater than the last module number
 	noModule = 15
 };
 
@@ -210,7 +211,7 @@ typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
-#if SAM4S || SAM4E
+#if SAM4E || SAM4S
 const uint32_t NvicPriorityWatchdog = 0;		// watchdog has highest priority (SAM4 only)
 #endif
 
