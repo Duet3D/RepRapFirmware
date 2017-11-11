@@ -1,6 +1,29 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20beta7
+=================
+
+Upgrade notes:
+- Recommended DuetWiFiServer.bin version is 1.20beta8
+- Recommended DuetWebControl version is 1.19.3
+- If you have a SCARA printer with nonzero crosstalk parameters (C parameters in the M669 command), you may need to adjust the crosstalk values
+
+New features:
+- String parameters (e.g. filenames) can optionally be enclosed in double quote characters, in all GCode commands for which double quote characters are not compulsory
+- Added deleteexisting=yes option in http move command
+- When a T command is sent and the current tool does not change, the firmware now makes sure that the tool heaters are turned on, in case they had been turned off explicitly e.g. due to upgrading WiFi firmware
+- SCARA kinematics crosstalk parameters now relate the movement units, not the number of motor steps
+- When executing macros, non-movement commands are now synchronised to movement commands even if they are not normally synchronised for that GCode command source
+
+Bug fixes
+- The determination of whether a print is in the process of pausing did not take account of all possible gcode sources
+- M0 and M1 commands no longer turn off heaters and drives when in simulation mode
+- SCARA printer homing didn't take account of the crosstalk parameters
+- M589 with an S parameter now flags an error if there is no I (IP address) parameter
+- When resuming a print, the initial feed rate wasn't being passed to the SD card GCode source
+- The FTP responder now supports the "CWD ." command
+
 Version 1.20beta6
 =================
 
