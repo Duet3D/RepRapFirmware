@@ -1,6 +1,31 @@
 Summary of important changes in recent versions
 ===============================================
 
+
+Version 1.20beta8
+=================
+
+Upgrade notes:
+- Recommended DuetWiFiServer.bin version is 1.20beta9
+- Recommended DuetWebControl version is 1.19.3
+- See also the notes for earlier 1.20beta versions
+
+New features:
+- T R1 activates the tool that was active at the last pause
+- M915 R2 and R3 actions are now implemented
+- Extruder heater PWM values are now compensated for supply voltage
+- Duet WiFi only: M587 and M589 without parameters now report the IP addresses etc. as well as the SSID (needs DuetWiFiServer 1.20beta9)
+- When sensorless homing is used on a CoreXY printer, both X and Y motors are monitored for stalling when homing X or Y. Similarly for CoreXYU (both X and Y or U and V are monitored).
+- When using a segmented kinematics such as SCARA, or when long moves are segmented due to mesh bed compensation, segmented moves can be paused between segments
+- New debughing module 14 added to report debugging message from the WiFi module to USB. Use M111 S1 P14 to activate it.
+- Under voltage and over voltage events are now logged
+- Overheating drivers are now logged
+- M81 power off commands are now logged
+
+Bug fixes:
+- Workaround for SX1509B chip problem: if an analog write was performed to a pin on an SX1509B device, subsequent digital writes and pinMode calls didn't work
+- When a print was resumed after power failure, the ampunt of extrusion while the partial move was completed was incorrect
+
 Version 1.20beta7
 =================
 
