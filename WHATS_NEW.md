@@ -24,7 +24,7 @@ New features:
 
 Bug fixes:
 - Workaround for SX1509B chip problem: if an analog write was performed to a pin on an SX1509B device, subsequent digital writes and pinMode calls didn't work
-- When a print was resumed after power failure, the ampunt of extrusion while the partial move was completed was incorrect
+- When a print was resumed after power failure, the amount of extrusion during the initial partial move was incorrect
 
 Version 1.20beta7
 =================
