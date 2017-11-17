@@ -17,7 +17,8 @@ New features:
 - Duet WiFi only: M587 and M589 without parameters now report the IP addresses etc. as well as the SSID (needs DuetWiFiServer 1.20beta9)
 - When sensorless homing is used on a CoreXY printer, both X and Y motors are monitored for stalling when homing X or Y. Similarly for CoreXYU (both X and Y or U and V are monitored).
 - When using a segmented kinematics such as SCARA, or when long moves are segmented due to mesh bed compensation, segmented moves can be paused between segments
-- New debughing module 14 added to report debugging message from the WiFi module to USB. Use M111 S1 P14 to activate it.
+- M562 with no parameters now clears all heater faults
+- New debugging module 14 added to report debugging message from the WiFi module to USB. Use M111 S1 P14 to activate it.
 - Under voltage and over voltage events are now logged
 - Overheating drivers are now logged
 - M81 power off commands are now logged
