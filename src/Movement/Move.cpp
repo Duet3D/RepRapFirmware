@@ -397,7 +397,9 @@ bool Move::PausePrint(RestorePoint& rp)
 	// So on return we need to signal one of the following to GCodes:
 	// 1. We have skipped some moves in the queue. Pass back the file address of the first move we have skipped, the feed rate at the start of that move
 	//    and the iobits at the start of that move, and return true.
-	// 2. All moves in the queue need to be executed. Also any move held by GCodes needs to be completed it is it not the first segment. Return false.
+	// 2. All moves in the queue need to be executed. Also any move held by GCodes needs to be completed it is it not the first segment.
+	//    Update the restore point with the coordinates and iobits as at the end of the previous move and return false.
+	//    The extruder position, file position and feed rate are not filled in.
 	//
 	// In general, we can pause after a move if it is the last segment and its end speed is slow enough.
 	// We can pause before a move if it is the first segment in that move.
@@ -432,12 +434,7 @@ bool Move::PausePrint(RestorePoint& rp)
 
 	cpu_irq_enable();
 
-	if (ddaRingAddPointer == savedDdaRingAddPointer)
-	{
-		return false;									// we can't skip any moves
-	}
-
-	// We are going to skip some moves. Get the end coordinate of the previous move.
+	// We may be going to skip some moves. Get the end coordinate of the previous move.
 	DDA * const prevDda = ddaRingAddPointer->GetPrevious();
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -447,14 +444,21 @@ bool Move::PausePrint(RestorePoint& rp)
 
 	InverseAxisAndBedTransform(rp.moveCoords, prevDda->GetXAxes(), prevDda->GetYAxes());	// we assume that xAxes hasn't changed between the moves
 
-	dda = ddaRingAddPointer;
-	rp.feedRate = dda->GetRequestedSpeed();
-	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
-	rp.filePos = dda->GetFilePosition();
+	rp.proportionDone = ddaRingAddPointer->GetProportionDone(false);	// get the proportion of the current multi-segment move that has been completed
 
 #if SUPPORT_IOBITS
 	rp.ioBits = dda->GetIoBits();
 #endif
+
+	if (ddaRingAddPointer == savedDdaRingAddPointer)
+	{
+		return false;									// we can't skip any moves
+	}
+
+	dda = ddaRingAddPointer;
+	rp.feedRate = dda->GetRequestedSpeed();
+	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
+	rp.filePos = dda->GetFilePosition();
 
 	// Free the DDAs for the moves we are going to skip
 	do
@@ -467,6 +471,8 @@ bool Move::PausePrint(RestorePoint& rp)
 
 	return true;
 }
+
+#if HAS_VOLTAGE_MONITOR
 
 // Pause the print immediately, returning true if we were able to skip or abort any moves and setting up to the move we aborted
 bool Move::LowPowerPause(RestorePoint& rp)
@@ -514,7 +520,7 @@ bool Move::LowPowerPause(RestorePoint& rp)
 	rp.feedRate = dda->GetRequestedSpeed();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
-	rp.proportionDone = dda->GetProportionDone();		// store how much of the complete multi-segment move's extrusion has been done
+	rp.proportionDone = dda->GetProportionDone(abortedMove);	// store how much of the complete multi-segment move's extrusion has been done
 
 #if SUPPORT_IOBITS
 	rp.ioBits = dda->GetIoBits();
@@ -541,6 +547,8 @@ bool Move::LowPowerPause(RestorePoint& rp)
 
 	return true;
 }
+
+#endif
 
 #if 0
 // For debugging

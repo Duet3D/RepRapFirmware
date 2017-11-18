@@ -139,7 +139,7 @@ Tool * Tool::freelist = nullptr;
 	}
 }
 
-void Tool::Print(StringRef& reply)
+void Tool::Print(StringRef& reply) const
 {
 	reply.printf("Tool %d - ", myNumber);
 	if (!StringEquals(name, ""))
@@ -301,35 +301,25 @@ bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const
 	return true;
 }
 
-void Tool::Activate(Tool* currentlyActive)
+void Tool::Activate()
 {
-	if (state != ToolState::active)
+	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		if (currentlyActive != nullptr && currentlyActive != this)
-		{
-			currentlyActive->Standby();
-		}
-		for (size_t heater = 0; heater < heaterCount; heater++)
-		{
-			reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
-			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-			reprap.GetHeat().Activate(heaters[heater]);
-		}
-		state = ToolState::active;
+		reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
+		reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+		reprap.GetHeat().Activate(heaters[heater]);
 	}
+	state = ToolState::active;
 }
 
 void Tool::Standby()
 {
-	if (state != ToolState::standby)
+	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		for (size_t heater = 0; heater < heaterCount; heater++)
-		{
-			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
-			reprap.GetHeat().Standby(heaters[heater], this);
-		}
-		state = ToolState::standby;
+		reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+		reprap.GetHeat().Standby(heaters[heater], this);
 	}
+	state = ToolState::standby;
 }
 
 void Tool::SetVariables(const float* standby, const float* active)

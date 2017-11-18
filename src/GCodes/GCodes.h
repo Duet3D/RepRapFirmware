@@ -107,6 +107,7 @@ public:
 		float feedRate;													// feed rate of this move
 		float virtualExtruderPosition;									// the virtual extruder position at the start of this move
 		FilePosition filePos;											// offset in the file being printed at the start of reading this move
+		float proportionLeft;											// what proportion of the entire move remains after this segment
 		AxesBitmap xAxes;												// axes that X is mapped to
 		AxesBitmap yAxes;												// axes that Y is mapped to
 		EndstopChecks endStopsToCheck;									// endstops to check
@@ -114,7 +115,6 @@ public:
 		IoBits_t ioBits;												// I/O bits to set/clear at the start of this move
 #endif
 		uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
-		uint8_t proportionRemaining;									// what proportion of the entire move remains after this segment
 
 		uint8_t isFirmwareRetraction : 1;								// true if this is a firmware retraction/un-retraction move
 		uint8_t usePressureAdvance : 1;									// true if we want to us extruder pressure advance, if there is any extrusion
@@ -185,7 +185,11 @@ public:
 #if HAS_VOLTAGE_MONITOR
 	bool LowVoltagePause();
 	bool LowVoltageResume();
-	bool AutoResumeAfterShutdown();
+#endif
+
+#if HAS_SMART_DRIVERS
+	bool PauseOnStall(DriversBitmap stalledDrivers);
+	bool ReHomeOnStall(DriversBitmap stalledDrivers);
 #endif
 
 	const char *GetAxisLetters() const { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
@@ -193,7 +197,7 @@ public:
 private:
 	GCodes(const GCodes&);												// private copy constructor to prevent copying
 
-	enum class CannedMoveType : uint8_t { none, relative, absolute };
+	enum class HeaterFaultState : uint8_t { noFault, pausePending, timing, stopping, stopped };
 
 	// Resources that can be locked.
 	// To avoid deadlock, if you need multiple resources then you must lock them in increasing numerical order.
@@ -231,6 +235,7 @@ private:
 	bool DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinated) __attribute__((hot));	// Execute a straight move returning true if an error was written to 'reply'
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise)						// Execute an arc move returning true if it was badly-formed
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
+	void FinaliseMove(const GCodeBuffer& gb);							// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 
 	GCodeResult DoDwell(GCodeBuffer& gb);								// Wait for a bit
 	GCodeResult DoDwellTime(GCodeBuffer& gb, uint32_t dwellMillis);		// Really wait for a bit
@@ -278,10 +283,15 @@ private:
 	void ListTriggers(StringRef reply, TriggerInputsBitmap mask);		// Append a list of trigger inputs to a message
 	void CheckTriggers();												// Check for and execute triggers
 	void CheckFilament();												// Check for and respond to filament errors
+	void CheckHeaterFault();											// Check for and respond to a heater fault, returning true if we should exit
 	void DoEmergencyStop();												// Execute an emergency stop
 
-	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, ...) __attribute__ ((format (printf, 4, 5)));	// Pause the print
-	pre(resourceOwners[movementResource] = &gb);
+	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)	// Pause the print
+		pre(resourceOwners[movementResource] = &gb);
+
+#if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
+	bool DoEmergencyPause();											// Do an emergency pause following loss of power or a motor stall
+#endif
 
 	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
 	void SaveFanSpeeds();												// Save the speeds of all fans
@@ -338,10 +348,7 @@ private:
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
 
-	uint8_t moveFractionToStartAt;				// how much of the next move was printed before the power failure
-	uint8_t moveFractionToSkip;
-
-	#if HAS_VOLTAGE_MONITOR
+#if HAS_VOLTAGE_MONITOR
 	bool isPowerFailPaused;						// true if the print was paused automatically because of a power failure
 	char *powerFailScript;						// the commands run when there is a power failure
 #endif
@@ -353,6 +360,12 @@ private:
 	RawMove moveBuffer;							// Move details to pass to Move class
 	unsigned int segmentsLeft;					// The number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;					// The total number of segments left in the complete move
+
+	unsigned int segmentsLeftToStartAt;
+	float moveFractionToStartAt;				// how much of the next move was printed before the power failure
+	float moveFractionToSkip;
+	float firstSegmentFractionToSkip;
+
 	float arcCentre[MaxAxes];
 	float arcRadius;
 	float arcCurrentAngle;
@@ -448,6 +461,11 @@ private:
 	float spindleMaxRpm;
 	float laserMaxPower;
 
+	// Heater fault handler
+	HeaterFaultState heaterFaultState;			// whether there is a heater fault and what we have done about it so far
+	uint32_t heaterFaultTime;					// when the heater fault occurred
+	uint32_t heaterFaultTimeout;				// how long we wait for the user to fix it before turning everything off
+
 	// Misc
 	uint32_t longWait;							// Timer for things that happen occasionally (seconds)
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
@@ -459,7 +477,9 @@ private:
 	bool displayDeltaNotHomedWarning;			// True if we need to display a 'attempt to move before homing on a delta printer' message
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
 
+	// Standard macro filenames
 	static constexpr const char* BED_EQUATION_G = "bed.g";
+	static constexpr const char* PAUSE_G = "pause.g";
 	static constexpr const char* RESUME_G = "resume.g";
 	static constexpr const char* CANCEL_G = "cancel.g";
 	static constexpr const char* STOP_G = "stop.g";
@@ -467,14 +487,14 @@ private:
 	static constexpr const char* CONFIG_OVERRIDE_G = "config-override.g";
 	static constexpr const char* DEPLOYPROBE_G = "deployprobe.g";
 	static constexpr const char* RETRACTPROBE_G = "retractprobe.g";
-	static constexpr const char* PAUSE_G = "pause.g";
-	static constexpr const char* HOME_ALL_G = "homeall.g";
-	static constexpr const char* HOME_DELTA_G = "homedelta.g";
 	static constexpr const char* DefaultHeightMapFile = "heightmap.csv";
 	static constexpr const char* LOAD_FILAMENT_G = "load.g";
 	static constexpr const char* UNLOAD_FILAMENT_G = "unload.g";
 	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
 	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
+#if HAS_SMART_DRIVERS
+	static constexpr const char* REHOME_G = "rehome.g";
+#endif
 
 	static constexpr const float MinServoPulseWidth = 544.0, MaxServoPulseWidth = 2400.0;
 	static const uint16_t ServoRefreshFrequency = 50;

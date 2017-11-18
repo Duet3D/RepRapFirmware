@@ -74,7 +74,8 @@ public:
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration);	// Limit the speed an acceleration of this move
 
 	int32_t GetStepsTaken(size_t drive) const;
-	float GetProportionDone() const;										// Return the proportion of extrusion for the complete multi-segment move already done
+
+	float GetProportionDone(bool moveWasAborted) const;				// Return the proportion of extrusion for the complete multi-segment move already done
 
 	void MoveAborted();
 
@@ -146,8 +147,7 @@ private:
 	DDA *prev;								// The previous one in the ring
 
 	volatile DDAState state;				// What state this DDA is in
-	uint8_t proportionRemaining;			// What proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
-											// - we use a uint8_t instead of a float to save space because it only affects the extrusion amount, so ~0.4% error is acceptable
+
 	union
 	{
 		struct
@@ -196,6 +196,8 @@ private:
 	// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 	uint32_t clocksNeeded;					// in clocks
 	uint32_t moveStartTime;					// clock count at which the move was started
+
+	float proportionLeft;					// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
 
 #if SUPPORT_IOBITS
 	IoBits_t ioBits;						// port state required during this move

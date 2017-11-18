@@ -36,6 +36,7 @@ private:
 
 	// Misc variables:
 	uint32_t _clkX;
+	uint16_t pwmPins;						// bitmap of pins configured as PWM output pins
 
 	// Read Functions:
 	uint8_t readByte(uint8_t registerAddress);
@@ -50,6 +51,7 @@ private:
 	void writeBytes(uint8_t firstRegisterAddress, uint8_t * writeArray, uint8_t length);
 	void setBitsInWord(uint8_t registerAddress, uint16_t bits);
 	void clearBitsInWord(uint8_t registerAddress, uint16_t bits);
+	void analogWriteMultiple(uint16_t pins, uint8_t pwm);
 
 	// Helper functions:
 
@@ -76,10 +78,10 @@ public:
 	//		- address: should be the 7-bit address of the SX1509. This should be
 	//		 one of four values - 0x3E, 0x3F, 0x70, 0x71 - all depending on what the
 	//		 ADDR0 and ADDR1 pins are set to. This variable is required.
-	// Output: Returns a 1 if communication is successful, 0 on error.
+	// Output: Returns true if communication is successful, false on error.
 	// -----------------------------------------------------------------------------
-	uint8_t begin(uint8_t address);
-	
+	bool begin(uint8_t address);
+
 	// -----------------------------------------------------------------------------
 	// reset(): This function resets the SX1509. A software
 	//		reset writes a 0x12 then 0x34 to the REG_RESET as outlined in the
@@ -97,7 +99,7 @@ public:
 	//		 inOut parameter. They do what they say!
 	// -----------------------------------------------------------------------------
 	void pinMode(uint8_t pin, PinMode inOut);
-	
+
 	// pinModeMultiple(uint16_t pins, PinMode inOut): This function sets several of the SX1509's 16
 	//		outputs to either an INPUT or OUTPUT.
 	//
@@ -130,12 +132,13 @@ public:
 	//		This function returns true if HIGH, false if LOW
 	// -----------------------------------------------------------------------------
 	bool digitalRead(uint8_t pin);
-	
+
 	// -----------------------------------------------------------------------------
 	// digitalReadAll(): This function reads all 16 pins.
 	// -----------------------------------------------------------------------------
 	uint16_t digitalReadAll();
 
+#if 0	// unused
 	// -----------------------------------------------------------------------------
 	// ledDriverInit(uint8_t pin, bool log): This function initializes LED
 	//		driving on a pin. It must be called if you want to use the pwm or blink
@@ -148,7 +151,8 @@ public:
 	//			- currently log sets both bank A and B to the same mode
 	// -----------------------------------------------------------------------------
 	void ledDriverInit(uint8_t pin, bool log, bool openDrain);
-	
+#endif
+
 	// -----------------------------------------------------------------------------
 	// ledDriverInitMultiple(uint16_t pins, bool log): This function initializes LED
 	//		driving on a pin. It must be called if you want to use the pwm or blink
@@ -174,7 +178,9 @@ public:
 	//	Note: ledDriverInit should be called on the pin before calling this.
 	// -----------------------------------------------------------------------------
 	void analogWrite(uint8_t pin, uint8_t iOn);
-	
+
+#if 0	// these functions are not used
+
 	// -----------------------------------------------------------------------------
 	// setupBlink(uint8_t pin, uint8_t tOn, uint8_t tOff, uint8_t offIntensity, uint8_t tRise, uint8_t
 	//		tFall):  blink performs both the blink and breath LED driver functions.
@@ -352,6 +358,8 @@ public:
 	// -----------------------------------------------------------------------------
 	void debounceKeypad(uint8_t time, uint8_t numRows, uint8_t numCols);
 
+#endif
+
 	// -----------------------------------------------------------------------------
 	// enableInterrupt(uint8_t pin, uint8_t riseFall): This function sets up an interrupt
 	//		on a pin. Interrupts can occur on all SX1509 pins, and can be generated
@@ -370,7 +378,7 @@ public:
 	//		pull-up/down resistors! Do that before (or after).
 	// -----------------------------------------------------------------------------
 	void enableInterrupt(uint8_t pin, uint8_t riseFall);
-	
+
 	// -----------------------------------------------------------------------------
 	// enableInterruptMultiple(uint16_t pins, uint8_t riseFall): This function sets up an interrupt
 	//		on a pin. Interrupts can occur on all SX1509 pins, and can be generated

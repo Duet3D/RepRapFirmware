@@ -63,7 +63,7 @@ public:
 	const float* GetMix() const;
 	float MaxFeedrate() const;
 	float InstantDv() const;
-	void Print(StringRef& reply);
+	void Print(StringRef& reply) const;
 	AxesBitmap GetXAxisMap() const { return xMapping; }
 	AxesBitmap GetYAxisMap() const { return yMapping; }
 	FansBitmap GetFanMapping() const { return fanMapping; }
@@ -75,7 +75,7 @@ public:
 	friend class RepRap;
 
 protected:
-	void Activate(Tool* currentlyActive);
+	void Activate();
 	void Standby();
 	void FlagTemperatureFault(int8_t dudHeater);
 	void ClearTemperatureFault(int8_t wasDudHeater);

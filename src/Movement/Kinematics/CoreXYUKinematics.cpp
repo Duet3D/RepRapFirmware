@@ -9,10 +9,6 @@
 #include "GCodes/GCodes.h"
 #include "Movement/DDA.h"
 
-const size_t CoreXYU_AXES = 5;
-const size_t U_AXIS = 3;			// X2
-const size_t V_AXIS = 4;			// Y2
-
 CoreXYUKinematics::CoreXYUKinematics() : CoreBaseKinematics(KinematicsType::coreXYU)
 {
 }

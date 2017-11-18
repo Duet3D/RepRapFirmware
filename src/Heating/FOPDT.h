@@ -35,12 +35,13 @@ class FopDt
 public:
 	FopDt();
 
-	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, bool pUsePid);
+	bool SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float voltage, bool pUsePid);
 
 	float GetGain() const { return gain; }
 	float GetTimeConstant() const { return timeConstant; }
 	float GetDeadTime() const { return deadTime; }
 	float GetMaxPwm() const { return maxPwm; }
+	float GetVoltage() const { return standardVoltage; }
 	bool UsePid() const { return usePid; }
 	bool IsEnabled() const { return enabled; }
 	bool ArePidParametersOverridden() const { return pidParametersOverridden; }
@@ -61,6 +62,7 @@ private:
 	float timeConstant;
 	float deadTime;
 	float maxPwm;
+	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown
 	bool enabled;
 	bool usePid;
 	bool pidParametersOverridden;

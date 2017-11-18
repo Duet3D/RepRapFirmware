@@ -110,8 +110,13 @@ void GCodes::Init()
 	retractSpeed = unRetractSpeed = DefaultRetractSpeed * SecondsToMinutes;
 	isRetracted = false;
 	lastAuxStatusReportType = -1;						// no status reports requested yet
+
 	spindleMaxRpm = DefaultMaxSpindleRpm;
 	laserMaxPower = DefaultMaxLaserPower;
+
+	heaterFaultState = HeaterFaultState::noFault;
+	heaterFaultTime = 0;
+	heaterFaultTimeout = DefaultHeaterFaultTimeout;
 
 #if SUPPORT_SCANNER
 	reprap.GetScanner().SetGCodeBuffer(serialGCode);
@@ -260,6 +265,7 @@ void GCodes::Spin()
 	}
 
 	CheckTriggers();
+	CheckHeaterFault();
 	CheckFilament();
 
 	// Get the GCodeBuffer that we want to process a command from. Give priority to auto-pause.
@@ -583,6 +589,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
 			moveBuffer.virtualExtruderPosition = pauseRestorePoint.virtualExtruderPosition;
 			fileGCode->MachineState().feedrate = pauseRestorePoint.feedRate;
+			moveFractionToSkip = pauseRestorePoint.proportionDone;
 			isPaused = false;
 			reply.copy("Printing resumed");
 			platform.Message(LogMessage, "Printing resumed\n");
@@ -640,7 +647,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 				{
 					reprap.StandbyTool(tool->Number());
 				}
-				reprap.GetHeat().SwitchOffAll();
+				reprap.GetHeat().SwitchOffAll(true);
 			}
 
 			// chrishamm 2014-18-10: Although RRP says M0 is supposed to turn off all drives and heaters,
@@ -1203,7 +1210,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			SaveResumeInfo(true);												// create the resume file so that we can resume after power down
+			SaveResumeInfo(true);											// create the resume file so that we can resume after power down
 			platform.Message(LoggedGenericMessage, "Print auto-paused due to low voltage\n");
 			gb.SetState(GCodeState::normal);
 		}
@@ -1419,7 +1426,8 @@ void GCodes::CheckFilament()
 		&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
 	   )
 	{
-		DoPause(*autoPauseGCode, PauseReason::filament, "Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
+		scratchString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
+		DoPause(*autoPauseGCode, PauseReason::filament, scratchString.Pointer());
 		lastFilamentError = FilamentSensorStatus::ok;
 	}
 }
@@ -1443,7 +1451,7 @@ void GCodes::DoEmergencyStop()
 }
 
 // Pause the print. Before calling this, check that we are doing a file print that isn't already paused and get the movement lock.
-void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, ...)
+void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg)
 {
 	if (&gb == fileGCode)
 	{
@@ -1464,13 +1472,10 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, ...)
 		else if (segmentsLeft != 0 && moveBuffer.canPauseBefore)
 		{
 			// We were not able to skip any moves, however we can skip the move that is waiting
-			ToolOffsetInverseTransform(moveBuffer.initialCoords, currentUserPosition);
-			pauseRestorePoint.feedRate = moveBuffer.feedRate;
 			pauseRestorePoint.virtualExtruderPosition = moveBuffer.virtualExtruderPosition;
 			pauseRestorePoint.filePos = moveBuffer.filePos;
-#if SUPPORT_IOBITS
-			pauseRestorePoint.ioBits = moveBuffer.ioBits;
-#endif
+			pauseRestorePoint.feedRate = moveBuffer.feedRate;
+			ToolOffsetInverseTransform(pauseRestorePoint.moveCoords, currentUserPosition);	// transform the returned coordinates to user coordinates
 			ClearMove();
 		}
 		else
@@ -1511,6 +1516,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, ...)
 	}
 
 	SaveFanSpeeds();
+	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+
 	if (simulationMode == 0)
 	{
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
@@ -1521,11 +1528,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, ...)
 
 	if (msg != nullptr)
 	{
-		va_list vargs;
-		va_start(vargs, msg);
-		scratchString.vprintf(msg, vargs);
-		va_end(vargs);
-		platform.SendAlert(GenericMessage, scratchString.Pointer(), "Printing paused", 1, 0.0, 0);
+		platform.SendAlert(GenericMessage, msg, "Printing paused", 1, 0.0, 0);
 	}
 }
 
@@ -1580,6 +1583,69 @@ bool GCodes::IsReallyPrinting() const
 	return reprap.GetPrintMonitor().IsPrinting() && IsRunning();
 }
 
+#if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
+
+// Do an emergency pause following loss of power or a motor stall returning true if successful, false if needs to be retried
+bool GCodes::DoEmergencyPause()
+{
+	if (!autoPauseGCode->IsCompletelyIdle())
+	{
+		return false;							// we can't pause if the auto pause thread is busy already
+	}
+
+	// Save the resume info, stop movement immediately and run the low voltage pause script to lift the nozzle etc.
+	GrabMovement(*autoPauseGCode);
+
+	const bool movesSkipped = reprap.GetMove().LowPowerPause(pauseRestorePoint);
+	if (movesSkipped)
+	{
+		// The PausePrint call has filled in the restore point with machine coordinates
+		ToolOffsetInverseTransform(pauseRestorePoint.moveCoords, currentUserPosition);	// transform the returned coordinates to user coordinates
+		ClearMove();
+	}
+	else if (segmentsLeft != 0 && moveBuffer.filePos != noFilePosition)
+	{
+		// We were not able to skip any moves, however we can skip the remaining segments of this current move
+		ToolOffsetInverseTransform(moveBuffer.initialCoords, currentUserPosition);
+		pauseRestorePoint.feedRate = moveBuffer.feedRate;
+		pauseRestorePoint.virtualExtruderPosition = moveBuffer.virtualExtruderPosition;
+		pauseRestorePoint.filePos = moveBuffer.filePos;
+		pauseRestorePoint.proportionDone = (float)(totalSegments - segmentsLeft)/(float)totalSegments;
+#if SUPPORT_IOBITS
+		pauseRestorePoint.ioBits = moveBuffer.ioBits;
+#endif
+		ClearMove();
+	}
+	else
+	{
+		// We were not able to skip any moves, and if there is a move waiting then we can't skip that one either
+		pauseRestorePoint.feedRate = fileGCode->MachineState().feedrate;
+		pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
+
+		// TODO: when we use RTOS there is a possible race condition in the following,
+		// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
+		pauseRestorePoint.filePos = fileGCode->GetFilePosition(fileInput->BytesCached());
+		pauseRestorePoint.proportionDone = 0.0;
+#if SUPPORT_IOBITS
+		pauseRestorePoint.ioBits = moveBuffer.ioBits;
+#endif
+	}
+
+	// Replace the paused machine coordinates by user coordinates, which we updated earlier
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		pauseRestorePoint.moveCoords[axis] = currentUserPosition[axis];
+	}
+
+	SaveFanSpeeds();
+	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+	isPaused = true;
+
+	return true;
+}
+
+#endif
+
 #if HAS_VOLTAGE_MONITOR
 
 // Try to pause the current SD card print, returning true if successful, false if needs to be called again
@@ -1590,7 +1656,7 @@ bool GCodes::LowVoltagePause()
 		return true;								// ignore the low voltage indication
 	}
 
-	reprap.GetHeat().SuspendHeaters(true);			// turn heaters off to conserve power for the motors to execute the pause
+	reprap.GetHeat().SuspendHeaters(true);			// turn the heaters off to conserve power for the motors to execute the pause
 	if (IsResuming())
 	{
 		// This is an unlucky situation, because the resume macro is probably being run, which will probably lower the head back on to the print.
@@ -1613,56 +1679,10 @@ bool GCodes::LowVoltagePause()
 
 	if (reprap.GetPrintMonitor().IsPrinting())
 	{
-		if (!autoPauseGCode->IsCompletelyIdle())
+		if (!DoEmergencyPause())
 		{
-			return false;							// we can't pause if the auto pause thread is busy already
+			return false;
 		}
-
-		// Save the resume info, stop movement immediately and run the low voltage pause script to lift the nozzle etc.
-		GrabMovement(*autoPauseGCode);
-
-		const bool movesSkipped = reprap.GetMove().LowPowerPause(pauseRestorePoint);
-		if (movesSkipped)
-		{
-			// The PausePrint call has filled in the restore point with machine coordinates
-			ToolOffsetInverseTransform(pauseRestorePoint.moveCoords, currentUserPosition);	// transform the returned coordinates to user coordinates
-			ClearMove();
-		}
-		else if (segmentsLeft != 0 && moveBuffer.filePos != noFilePosition)
-		{
-			// We were not able to skip any moves, however we can skip the remaining segments of this current move
-			ToolOffsetInverseTransform(moveBuffer.initialCoords, currentUserPosition);
-			pauseRestorePoint.feedRate = moveBuffer.feedRate;
-			pauseRestorePoint.virtualExtruderPosition = moveBuffer.virtualExtruderPosition;
-			pauseRestorePoint.filePos = moveBuffer.filePos;
-			pauseRestorePoint.proportionDone = (float)(totalSegments - segmentsLeft)/(float)totalSegments;
-#if SUPPORT_IOBITS
-			pauseRestorePoint.ioBits = moveBuffer.ioBits;
-#endif
-			ClearMove();
-		}
-		else
-		{
-			// We were not able to skip any moves, and if there is a move waiting then we can't skip that one either
-			pauseRestorePoint.feedRate = fileGCode->MachineState().feedrate;
-			pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
-
-			// TODO: when we use RTOS there is a possible race condition in the following,
-			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-			pauseRestorePoint.filePos = fileGCode->GetFilePosition(fileInput->BytesCached());
-			pauseRestorePoint.proportionDone = 0.0;
-#if SUPPORT_IOBITS
-			pauseRestorePoint.ioBits = moveBuffer.ioBits;
-#endif
-		}
-
-		// Replace the paused machine coordinates by user coordinates, which we updated earlier
-		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-		{
-			pauseRestorePoint.moveCoords[axis] = currentUserPosition[axis];
-		}
-
-		SaveFanSpeeds();
 
 		// Run the auto-pause script
 		if (powerFailScript != nullptr)
@@ -1670,7 +1690,6 @@ bool GCodes::LowVoltagePause()
 			autoPauseGCode->Put(powerFailScript);
 		}
 		autoPauseGCode->SetState(GCodeState::powerFailPausing1);
-		isPaused = true;
 		isPowerFailPaused = true;
 
 		// Don't do any more here, we want the auto pause thread to run as soon as possible
@@ -1683,22 +1702,60 @@ bool GCodes::LowVoltagePause()
 // If the pause was short enough, resume automatically.
 bool GCodes::LowVoltageResume()
 {
-	reprap.GetHeat().SuspendHeaters(false);			// turn heaters off to conserve power for the motors to execute the pause
+	reprap.GetHeat().SuspendHeaters(false);			// turn the heaters on again
 	if (isPaused && isPowerFailPaused)
 	{
+		isPowerFailPaused = false;					// pretend it's a normal pause
 		// Run resurrect.g automatically
 		//TODO qq;
-		platform.Message(LoggedGenericMessage, "Print auto-resumed\n");
+		//platform.Message(LoggedGenericMessage, "Print auto-resumed\n");
 	}
 	return true;
 }
 
-// Permit printing to be resumed after it has been suspended
-bool GCodes::AutoResumeAfterShutdown()
+#endif
+
+#if HAS_SMART_DRIVERS
+
+// Pause the print because the specified driver has reported a stall
+bool GCodes::PauseOnStall(DriversBitmap stalledDrivers)
 {
-	// Currently we don't do anything here
+	if (!IsReallyPrinting())
+	{
+		return true;								// if not printing, acknowledge it but take no action
+	}
+	if (!autoPauseGCode->IsCompletelyIdle())
+	{
+		return false;								// can't handle it yet
+	}
+	if (!LockMovement(*autoPauseGCode))
+	{
+		return false;
+	}
+
+	scratchString.printf("Stall detected on driver(s)");
+	ListDrivers(scratchString, stalledDrivers);
+	DoPause(*autoPauseGCode, PauseReason::stall, scratchString.Pointer());
 	return true;
 }
+
+// Re-home and resume the print because the specified driver has reported a stall
+bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers)
+{
+	if (!IsReallyPrinting())
+	{
+		return true;								// if not printing, acknowledge it but take no action
+	}
+	if (!DoEmergencyPause())
+	{
+		return false;								// can't handle it yet
+	}
+
+	autoPauseGCode->SetState(GCodeState::resuming1); // set up to resume after rehoming
+	DoFileMacro(*autoPauseGCode, REHOME_G, true);	// run the SD card rehome-and-resume script
+	return true;
+}
+
 #endif
 
 void GCodes::SaveResumeInfo(bool wasPowerFailure)
@@ -1989,12 +2046,9 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinate
 	moveBuffer.isCoordinated = isCoordinated;
 	moveBuffer.endStopsToCheck = 0;
 	moveBuffer.moveType = 0;
-	doingArcMove = false;
 	moveBuffer.xAxes = reprap.GetCurrentXAxes();
 	moveBuffer.yAxes = reprap.GetCurrentYAxes();
 	moveBuffer.usePressureAdvance = false;
-	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
-	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;
 	axesToSenseLength = 0;
 
 	// Check to see if the move is a 'homing' move that endstops are checked on.
@@ -2059,9 +2113,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinate
 			return true;
 		}
 	}
-
-	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
-	moveBuffer.canPauseBefore = true;
 
 	// Check for 'R' parameter to move relative to a restore point
 	int rParam = (moveBuffer.moveType == 0 && gb.Seen('R')) ? gb.GetIValue() : 0;
@@ -2192,11 +2243,12 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, StringRef& reply, bool isCoordinate
 		}
 	}
 
-	segmentsLeft = totalSegments;
+	doingArcMove = false;
+	FinaliseMove(gb);
 	return false;
 }
 
-// Execute an arc move returning true if it was badly-formed
+// Execute an arc move, returning true if it was badly-formed
 // We already have the movement lock and the last move has gone
 // Currently, we do not process new babystepping when executing an arc move
 bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
@@ -2256,13 +2308,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	// Set up default move parameters
 	moveBuffer.endStopsToCheck = 0;
 	moveBuffer.moveType = 0;
-	moveBuffer.canPauseAfter = moveBuffer.canPauseBefore = true;
 	moveBuffer.xAxes = reprap.GetCurrentXAxes();
 	moveBuffer.yAxes = reprap.GetCurrentYAxes();
-	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;
-	moveBuffer.endStopsToCheck = 0;
 	moveBuffer.isCoordinated = true;
-	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
 	// The I and J parameters are always relative to present position.
@@ -2299,12 +2347,43 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	{
 		arcAngleIncrement = -arcAngleIncrement;
 	}
-	doingArcMove = true;
 
-	segmentsLeft = totalSegments;		// must do this last for RTOS
+	doingArcMove = true;
+	FinaliseMove(gb);
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
 //				arcRadius, arcCurrentAngle * RadiansToDegrees, arcAngleIncrement * RadiansToDegrees, segmentsLeft);
 	return false;
+}
+
+// Adjust the move parameters to account for segmentation and/or  part of the move having been done already
+void GCodes::FinaliseMove(const GCodeBuffer& gb)
+{
+	moveBuffer.canPauseAfter = (moveBuffer.endStopsToCheck == 0);
+	moveBuffer.canPauseBefore = true;
+	moveBuffer.filePos = (&gb == fileGCode) ? gb.GetFilePosition(fileInput->BytesCached()) : noFilePosition;
+	moveBuffer.virtualExtruderPosition = virtualExtruderPosition;
+
+	if (totalSegments > 1)
+	{
+		for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+		{
+			moveBuffer.coords[drive] /= totalSegments;							// change the extrusion to extrusion per segment
+		}
+
+		if (moveFractionToSkip != 0.0)
+		{
+			const float fseg = floor(totalSegments * moveFractionToSkip);		// round down to the start of a move
+			segmentsLeftToStartAt = totalSegments - (unsigned int)fseg;
+			firstSegmentFractionToSkip = (moveFractionToSkip * totalSegments) - fseg;
+			segmentsLeft = totalSegments;										// do this last, ready for RTOS
+			return;
+		}
+	}
+
+	segmentsLeftToStartAt = totalSegments;
+	firstSegmentFractionToSkip = moveFractionToSkip;
+
+	segmentsLeft = totalSegments;												// do this last, ready for RTOS
 }
 
 // The Move class calls this function to find what to do next.
@@ -2320,16 +2399,20 @@ bool GCodes::ReadMove(RawMove& m)
 	if (segmentsLeft == 1)
 	{
 		// If there is just 1 segment left, it doesn't matter if it is an arc move or not, just move to the end position
+		if (segmentsLeftToStartAt == 1 && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
+		{
+			// Reduce the extrusion by the amount to be skipped
+			for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+			{
+				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
+			}
+		}
+		m.proportionLeft = 0.0;
 		ClearMove();
-		m.proportionRemaining = 0;
 	}
 	else
 	{
 		// This move needs to be divided into 2 or more segments
-		m.canPauseAfter = false;							// we can only do a controlled pause pause after the final segment
-		moveBuffer.canPauseBefore = false;					// we can't do a controlled pause before any of the remaining segments
-		m.proportionRemaining = (uint8_t)min<unsigned int>((((totalSegments - segmentsLeft - 1) * 256) + (totalSegments/2))/totalSegments, 255);
-
 		// Do the axes
 		if (doingArcMove)
 		{
@@ -2359,20 +2442,23 @@ bool GCodes::ReadMove(RawMove& m)
 			m.coords[drive] = moveBuffer.initialCoords[drive];
 		}
 
-		// Do the extruders
-		for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
-		{
-			const float extrusionToDo = moveBuffer.coords[drive]/segmentsLeft;
-			m.coords[drive] = extrusionToDo;
-			moveBuffer.coords[drive] -= extrusionToDo;
-		}
-
-		--segmentsLeft;
-		if ((unsigned int)moveFractionToSkip + (unsigned int)m.proportionRemaining > 256)
+		if (segmentsLeftToStartAt < segmentsLeft)
 		{
 			// We are resuming a print part way through a move and we printed this segment already
+			--segmentsLeft;
 			return false;
 		}
+		if (segmentsLeftToStartAt == segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
+		{
+			// Reduce the extrusion by the amount to be skipped
+			for (size_t drive = numTotalAxes; drive < DRIVES; ++drive)
+			{
+				m.coords[drive] *= (1.0 - firstSegmentFractionToSkip);
+			}
+		}
+		--segmentsLeft;
+
+		m.proportionLeft = (float)segmentsLeft/(float)totalSegments;
 	}
 
 	return true;
@@ -2385,7 +2471,7 @@ void GCodes::ClearMove()
 	moveBuffer.endStopsToCheck = 0;
 	moveBuffer.moveType = 0;
 	moveBuffer.isFirmwareRetraction = false;
-	moveFractionToSkip = 0;
+	moveFractionToSkip = 0.0;
 }
 
 // Run a file macro. Prior to calling this, 'state' must be set to the state we want to enter when the macro has been completed.
@@ -3059,7 +3145,7 @@ bool GCodes::QueueFileToPrint(const char* fileName, StringRef& reply)
 
 		fileToPrint.Set(f);
 		fileOffsetToPrint = 0;
-		moveFractionToStartAt = 0;
+		moveFractionToStartAt = 0.0;
 		return true;
 	}
 
@@ -4466,12 +4552,59 @@ const char* GCodes::GetMachineModeString() const
 	}
 }
 
-// Respond to a heater fault. The heater has already been turned off and its status set to 'fault' when this is called.
+// Respond to a heater fault. The heater has already been turned off and its status set to 'fault' when this is called from the Heat module.
+// The Heat module will generate an appropriate error message, so on need to do that here.
 void GCodes::HandleHeaterFault(int heater)
 {
-	if (IsReallyPrinting())
+	if (heaterFaultState == HeaterFaultState::noFault && fileGCode->OriginalMachineState().fileState.IsLive())
 	{
-		DoPause(*autoPauseGCode, PauseReason::heaterFault, "Fault on heater %d", heater);
+		heaterFaultState = HeaterFaultState::pausePending;
+		heaterFaultTime = millis();
+	}
+}
+
+// Check for and respond to a heater fault, returning true if we should exit
+void GCodes::CheckHeaterFault()
+{
+	switch (heaterFaultState)
+	{
+	case HeaterFaultState::noFault:
+	default:
+		break;
+
+	case HeaterFaultState::pausePending:
+		if (   IsReallyPrinting()
+			&& autoPauseGCode->IsCompletelyIdle()
+			&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
+		   )
+		{
+			reprap.GetHeat().SwitchOffAll(false);						// turn off all extruder heaters
+			DoPause(*autoPauseGCode, PauseReason::heaterFault, "Heater fault");
+			heaterFaultState = HeaterFaultState::timing;
+		}
+		else if (IsPausing() || IsPaused())
+		{
+			heaterFaultState = HeaterFaultState::timing;
+		}
+		// no break
+
+	case HeaterFaultState::timing:
+		if (millis() - heaterFaultTime >= heaterFaultTimeout)
+		{
+			StopPrint(false);
+			reprap.GetHeat().SwitchOffAll(true);
+			reprap.GetPlatform().MessageF(ErrorMessage, "Shutting down due to un-cleared heater fault after %lu seconds\n", heaterFaultTimeout/1000);
+			heaterFaultState = HeaterFaultState::stopping;
+		}
+		break;
+
+	case HeaterFaultState::stopping:
+		if (millis() - heaterFaultTime >= 2000)			// wait 2 seconds for the message to be picked up by DWC and PanelDue
+		{
+			reprap.GetPlatform().SetAtxPower(false);
+			heaterFaultState = HeaterFaultState::stopped;
+		}
+		break;
 	}
 }
 

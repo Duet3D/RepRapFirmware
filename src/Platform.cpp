@@ -568,7 +568,8 @@ void Platform::Init()
 		}
 	}
 
-	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadDrivers = stalledDrivers = previousStalledDrivers = 0;
+	temperatureShutdownDrivers = temperatureWarningDrivers = shortToGroundDrivers = openLoadDrivers = stalledDrivers = 0;
+	stalledDriversToLog = stalledDriversToPause = stalledDriversToRehome = 0;
 	onBoardDriversFanRunning = offBoardDriversFanRunning = false;
 	autoSaveEnabled = false;
 	autoSaveState = AutoSaveState::starting;
@@ -662,7 +663,7 @@ void Platform::Init()
 	AnalogInEnableChannel(vInMonitorAdcChannel, true);
 	currentVin = highestVin = 0;
 	lowestVin = 9999;
-	numUnderVoltageEvents = numOverVoltageEvents = 0;
+	numUnderVoltageEvents = previousUnderVoltageEvents = numOverVoltageEvents = previousOverVoltageEvents = 0;
 #endif
 
 	// Clear the spare pin configuration
@@ -1385,7 +1386,7 @@ void Platform::Spin()
 		}
 		else
 		{
-			// Poll one TMC2660 for temperature warning or temperature shutdown
+			// Check one TMC2660 for temperature warning or temperature shutdown
 			if (enableValues[nextDriveToPoll] >= 0)				// don't poll driver if it is flagged "no poll"
 			{
 				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(nextDriveToPoll, 0);
@@ -1425,10 +1426,47 @@ void Platform::Spin()
 				}
 				if ((stat & TMC_RR_SG) != 0)
 				{
+					if ((stalledDrivers & mask) == 0)
+					{
+						// This stall is new and we are printing, so check whether we need to perform some action in response to the stall
+						if ((rehomeOnStallDrivers & mask) != 0)
+						{
+							stalledDriversToRehome |= mask;
+						}
+						else if ((pauseOnStallDrivers & mask) != 0)
+						{
+							stalledDriversToPause |= mask;
+						}
+						else if ((logOnStallDrivers & mask) != 0)
+						{
+							stalledDriversToLog |= mask;
+						}
+					}
 					stalledDrivers |= mask;
 				}
-				// We don't clear any stalled driver bits here because a stall may be transient
+				else
+				{
+					stalledDrivers &= ~mask;
+				}
 			}
+
+			// Action any pause or rehome actions due to motor stalls. This may have to be done more than once.
+			if (stalledDriversToRehome != 0)
+			{
+				if (reprap.GetGCodes().ReHomeOnStall(stalledDriversToRehome))
+				{
+					stalledDriversToRehome = 0;
+				}
+			}
+			else if (stalledDriversToPause != 0)
+			{
+				if (reprap.GetGCodes().PauseOnStall(stalledDriversToPause))
+				{
+					stalledDriversToPause = 0;
+				}
+			}
+
+			// Advance drive number ready for next time
 			++nextDriveToPoll;
 			if (nextDriveToPoll == numSmartDrivers)
 			{
@@ -1489,27 +1527,31 @@ void Platform::Spin()
 			}
 
 			// Check for stalled drivers that need to be reported and logged
-			const DriversBitmap currentStalledDrivers = stalledDrivers & logOnStallDrivers;
-			DriversBitmap newStalledDrivers = currentStalledDrivers & ~previousStalledDrivers;
-			if (newStalledDrivers != 0 && reprap.GetGCodes().IsReallyPrinting())
+			if (stalledDriversToLog != 0 && reprap.GetGCodes().IsReallyPrinting())
 			{
-				// Report the newly-stalled drivers
 				scratchString.Clear();
-				for (unsigned int driver = 0; newStalledDrivers != 0; ++driver)
-				{
-					if ((newStalledDrivers & 1) != 0)
-					{
-						scratchString.catf(" %u", driver);
-					}
-					newStalledDrivers >>= 1;
-				}
+				ListDrivers(scratchString, stalledDriversToLog);
+				stalledDriversToLog = 0;
 				float liveCoordinates[DRIVES];
 				reprap.GetMove().LiveCoordinates(liveCoordinates, reprap.GetCurrentXAxes(), reprap.GetCurrentYAxes());
-				MessageF(WarningMessage, "Driver(s)%s stalled at Z height %.1f", scratchString.Pointer(), (double)liveCoordinates[Z_AXIS]);
+				MessageF(WarningMessage, "Driver(s)%s stalled at Z height %.2f", scratchString.Pointer(), (double)liveCoordinates[Z_AXIS]);
 				reported = true;
 			}
-			previousStalledDrivers = currentStalledDrivers;
-			stalledDrivers = 0;
+#endif
+
+#if HAS_VOLTAGE_MONITOR
+			if (numOverVoltageEvents != previousOverVoltageEvents)
+			{
+				MessageF(WarningMessage, "VIN over-voltage event (%.1fV)", (double)GetCurrentPowerVoltage());
+				previousOverVoltageEvents = numOverVoltageEvents;
+				reported = true;
+			}
+			if (numUnderVoltageEvents != previousUnderVoltageEvents)
+			{
+				MessageF(WarningMessage, "VIN under-voltage event (%.1fV)", (double)GetCurrentPowerVoltage());
+				previousUnderVoltageEvents = numUnderVoltageEvents;
+				reported = true;
+			}
 #endif
 
 #ifdef DUET_NG
@@ -1569,7 +1611,7 @@ void Platform::Spin()
 	// Flush the log file it it is time. This may take some time, so do it last.
 	if (logger != nullptr)
 	{
-		logger->Flush();
+		logger->Flush(false);
 	}
 
 	ClassReport(longWait);
@@ -1592,9 +1634,28 @@ void Platform::ReportDrivers(DriversBitmap whichDrivers, const char* text, bool&
 			}
 			whichDrivers >>= 1;
 		}
-		MessageF(GenericMessage, "%s\n", scratchString.Pointer());
+		MessageF(WarningMessage, "%s\n", scratchString.Pointer());
 		reported = true;
 	}
+}
+
+// Return true if any motor driving this axis or extruder is stalled
+bool Platform::AnyMotorStalled(size_t drive) const
+{
+	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
+	if (drive < numAxes)
+	{
+		for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
+		{
+			if ((SmartDrivers::GetLiveStatus(axisDrivers[drive].driverNumbers[i]) & TMC_RR_SG) != 0)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	return (SmartDrivers::GetLiveStatus(extruderDrivers[drive - numAxes]) & TMC_RR_SG) != 0;
 }
 
 #endif
@@ -2278,7 +2339,7 @@ void Platform::SetHeater(size_t heater, float power)
 {
 	if (heatOnPins[heater] != NoPin)
 	{
-		const uint16_t freq = (reprap.GetHeat().UseSlowPwm(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
+		const uint16_t freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
 		const float pwm =
 #if ACTIVE_LOW_HEAT_ON
 			1.0 - power;
@@ -2341,12 +2402,40 @@ EndStopHit Platform::Stopped(size_t drive) const
 
 #if HAS_SMART_DRIVERS
 			case EndStopInputType::motorStall:
-				for (size_t i = 0; i < axisDrivers[drive].numDrivers; ++i)
 				{
-					if ((SmartDrivers::GetLiveStatus(axisDrivers[drive].driverNumbers[i]) & TMC_RR_SG) != 0)
+					bool motorIsStalled;
+					switch (reprap.GetMove().GetKinematics().GetKinematicsType())
 					{
-						return (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit : EndStopHit::lowHit;
+					case KinematicsType::coreXY:
+						// Both X and Y motors are involved in homing X or Y
+						motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
+											? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Y_AXIS)
+												: AnyMotorStalled(drive);
+						break;
+
+					case KinematicsType::coreXYU:
+						// Both X and Y motors are involved in homing X or Y, and both U and V motors are involved in homing U
+						motorIsStalled = (drive == X_AXIS || drive == Y_AXIS)
+											? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Y_AXIS)
+												: (drive == U_AXIS)
+													? AnyMotorStalled(U_AXIS) || AnyMotorStalled(V_AXIS)
+														: AnyMotorStalled(drive);
+						break;
+
+					case KinematicsType::coreXZ:
+						// Both X and Z motors are involved in homing X or Z
+						motorIsStalled = (drive == X_AXIS || drive == Z_AXIS)
+											? AnyMotorStalled(X_AXIS) || AnyMotorStalled(Z_AXIS)
+												: AnyMotorStalled(drive);
+						break;
+
+					default:
+						motorIsStalled = AnyMotorStalled(drive);
+						break;
 					}
+					return (!motorIsStalled) ? EndStopHit::noStop
+							: (endStopPos[drive] == EndStopPosition::highEndStop) ? EndStopHit::highHit
+								: EndStopHit::lowHit;
 				}
 				break;
 #endif
@@ -3396,9 +3485,14 @@ bool Platform::AtxPower() const
 
 void Platform::SetAtxPower(bool on)
 {
+	if (!on && logger != nullptr)
+	{
+		logger->LogMessage(realTime, "Power off commanded");
+		logger->Flush(true);
+		// We don't call logger->Stop() here because we don't now whether turning ofrf the power will work
+	}
 	IoPort::WriteDigital(ATX_POWER_PIN, on);
 }
-
 
 void Platform::SetPressureAdvance(size_t extruder, float factor)
 {
@@ -3810,6 +3904,11 @@ void Platform::GetPowerVoltages(float& minV, float& currV, float& maxV) const
 	minV = AdcReadingToPowerVoltage(lowestVin);
 	currV = AdcReadingToPowerVoltage(currentVin);
 	maxV = AdcReadingToPowerVoltage(highestVin);
+}
+
+float Platform::GetCurrentPowerVoltage() const
+{
+	return AdcReadingToPowerVoltage(currentVin);
 }
 
 #endif

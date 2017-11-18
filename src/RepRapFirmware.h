@@ -31,6 +31,7 @@ Licence: GPL
 #include "Core.h"
 #include "Configuration.h"
 #include "Pins.h"
+
 #include "Libraries/General/StringRef.h"
 
 // Module numbers and names, used for diagnostics and debug
@@ -109,6 +110,8 @@ bool StringEquals(const char* s1, const char* s2);
 int StringContains(const char* string, const char* match);
 void SafeStrncpy(char *dst, const char *src, size_t length) pre(length != 0);
 void SafeStrncat(char *dst, const char *src, size_t length) pre(length != 0);
+
+void ListDrivers(const StringRef& str, DriversBitmap drivers);
 
 // Macro to assign an array from an initialiser list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
@@ -194,6 +197,8 @@ extern StringRef scratchString;
 // Common definitions used by more than one module
 const size_t XYZ_AXES = 3;										// The number of Cartesian axes
 const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
+const size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine
+const size_t U_AXIS = 3, V_AXIS = 4;							// The indices of the U and V motors in a CoreXYU machine (needed by Platform)
 
 // Common conversion factors
 const float MinutesToSeconds = 60.0;
@@ -211,11 +216,7 @@ typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
-#if SAM4E || SAM4S
-const uint32_t NvicPriorityWatchdog = 0;		// watchdog has highest priority (SAM4 only)
-#endif
-
-const uint32_t NvicPriorityUart = 1;			// UART is next to avoid character loss
+const uint32_t NvicPriorityUart = 1;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const uint32_t NvicPriorityDriversUsart = 2;	// USART used to control and monitor the TMC2660 drivers
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
 const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step

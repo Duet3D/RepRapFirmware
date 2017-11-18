@@ -348,7 +348,8 @@ bool DDA::Init(GCodes::RawMove &nextMove, bool doMotorMapping)
 	isPrintingMove = xyMoving && extruding;
 	usePressureAdvance = nextMove.usePressureAdvance;
 	virtualExtruderPosition = nextMove.virtualExtruderPosition;
-	proportionRemaining = nextMove.proportionRemaining;
+	proportionLeft = nextMove.proportionLeft;
+
 	hadLookaheadUnderrun = false;
 	isLeadscrewAdjustmentMove = false;
 	goingSlow = false;
@@ -1529,18 +1530,18 @@ void DDA::MoveAborted()
 	state = completed;
 }
 
-// Return the approximate (to within 1%) proportion of extrusion for the complete multi-segment move that remains to be done.
+// Return the proportion of extrusion for the complete multi-segment move that has already been done.
 // The move was either not started or was aborted.
-float DDA::GetProportionDone() const
+float DDA::GetProportionDone(bool moveWasAborted) const
 {
 	// Get the proportion of extrusion already done at the start of this segment
-	unsigned int proportionDone = (filePos != noFilePosition && filePos == prev->filePos)
-									? 256 - prev->proportionRemaining
-										: 0;
-	if (state == completed)
+	float proportionDone = (filePos != noFilePosition && filePos == prev->filePos)
+									? 1.0 - prev->proportionLeft
+										: 0.0;
+	if (moveWasAborted)
 	{
 		// The move was aborted, so subtract how much was done
-		const unsigned int proportionDoneAtEnd = 256 - proportionRemaining;
+		const float proportionDoneAtEnd = 1.0 - proportionLeft;
 		if (proportionDoneAtEnd > proportionDone)
 		{
 			int32_t taken = 0, left = 0;
@@ -1554,13 +1555,13 @@ float DDA::GetProportionDone() const
 				}
 			}
 			const int32_t total = taken + left;
-			if (total > 0)								// if the move has net extrusion
+			if (total > 0)										// if the move has net extrusion
 			{
 				proportionDone += (((proportionDoneAtEnd - proportionDone) * taken) + (total/2)) / total;
 			}
 		}
 	}
-	return (float)proportionDone/256.0;
+	return proportionDone;
 }
 
 // Reduce the speed of this move to the indicated speed.

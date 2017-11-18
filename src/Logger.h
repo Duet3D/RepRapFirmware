@@ -22,7 +22,7 @@ public:
 	void Stop(time_t time);
 	void LogMessage(time_t time, const char *message);
 	void LogMessage(time_t time, OutputBuffer *buf);
-	void Flush();
+	void Flush(bool forced);
 	bool IsActive() const { return logFile.IsLive(); }
 
 private:

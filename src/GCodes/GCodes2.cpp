@@ -19,6 +19,7 @@
 #include "RepRap.h"
 #include "Tools/Tool.h"
 #include "FilamentSensors/FilamentSensor.h"
+#include "Libraries/General/IP4String.h"
 #include "Version.h"
 
 #if SUPPORT_IOBITS
@@ -88,13 +89,13 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 
 	switch (code)
 	{
-	case 0: // There are no rapid moves...
+	case 0: // Rapid move
 	case 1: // Ordinary move
-		if (!LockMovement(gb))
+		if (segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
 		{
 			return false;
 		}
-		if (segmentsLeft != 0)
+		if (!LockMovement(gb))
 		{
 			return false;
 		}
@@ -107,11 +108,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, StringRef& reply)
 	case 2: // Clockwise arc
 	case 3: // Anti clockwise arc
 		// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
-		if (!LockMovement(gb))
+		if (segmentsLeft != 0)			// do this check first to avoid locking movement unnecessarily
 		{
 			return false;
 		}
-		if (segmentsLeft != 0)
+		if (!LockMovement(gb))
 		{
 			return false;
 		}
@@ -691,7 +692,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			fileOffsetToPrint = (FilePosition)gb.GetUIValue();
 			if (gb.Seen('P'))
 			{
-				moveFractionToStartAt = (uint8_t)constrain<unsigned long>(lrintf(gb.GetFValue()), 0, 255);
+				moveFractionToStartAt = constrain<float>(gb.GetFValue(), 0.0, 1.0);
 			}
 		}
 		break;
@@ -891,32 +892,54 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		if (gb.Seen('P'))
 		{
 			const LogicalPin logicalPin = gb.GetIValue();
-			Pin pin;
-			bool invert;
-			if (platform.GetFirmwarePin(logicalPin, PinAccess::pwm, pin, invert))
+			if (gb.Seen('S'))
 			{
-				if (gb.Seen('S'))
+				float val = gb.GetFValue();
+				if (val > 1.0)
 				{
-					float val = gb.GetFValue();
-					if (val > 1.0)
-					{
-						val /= 255.0;
-					}
-					val = constrain<float>(val, 0.0, 1.0);
+					val /= 255.0;
+				}
+				val = constrain<float>(val, 0.0, 1.0);
+
+				// The SX1509B I/O expander chip doesn't seem to work if you set PWM mode and then set digital output mode.
+				// This cases a problem if M42 is used to write to some pins and then M670 is used to set up the G1 P parameter port mapping.
+				// The first part of the fix for this is to not select PWM mode if we don't need to.
+				bool usePwm;
+				uint16_t freq;
+				if (gb.Seen('F'))
+				{
+					freq = constrain<int32_t>(gb.GetIValue(), 1, 65536);
+					usePwm = true;
+				}
+				else
+				{
+					freq = DefaultPinWritePwmFreq;
+					usePwm = (val != 0.0 && val != 1.0);
+				}
+
+				Pin pin;
+				bool invert;
+				if (platform.GetFirmwarePin(logicalPin, (usePwm) ? PinAccess::pwm : PinAccess::write, pin, invert))
+				{
 					if (invert)
 					{
 						val = 1.0 - val;
 					}
 
-					const uint16_t freq = (gb.Seen('F')) ? (uint16_t)constrain<int32_t>(gb.GetIValue(), 1, 65536) : DefaultPinWritePwmFreq;
-					IoPort::WriteAnalog(pin, val, freq);
+					if (usePwm)
+					{
+						IoPort::WriteAnalog(pin, val, freq);
+					}
+					else
+					{
+						IoPort::WriteDigital(pin, val == 1.0);
+					}
 				}
-				// Ignore the command if no S parameter provided
-			}
-			else
-			{
-				reply.printf("Logical pin %d is not available for writing", logicalPin);
-				result = GCodeResult::error;
+				else
+				{
+					reply.printf("Logical pin %d is not available for writing", logicalPin);
+					result = GCodeResult::error;
+				}
 			}
 		}
 		break;
@@ -2014,7 +2037,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				float gain = model.GetGain(),
 					tc = model.GetTimeConstant(),
 					td = model.GetDeadTime(),
-					maxPwm = model.GetMaxPwm();
+					maxPwm = model.GetMaxPwm(),
+					voltage = model.GetVoltage();
 				int32_t dontUsePid = model.UsePid() ? 0 : 1;
 
 				gb.TryGetFValue('A', gain, seen);
@@ -2022,10 +2046,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				gb.TryGetFValue('D', td, seen);
 				gb.TryGetIValue('B', dontUsePid, seen);
 				gb.TryGetFValue('S', maxPwm, seen);
+				gb.TryGetFValue('V', voltage, seen);
 
 				if (seen)
 				{
-					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, dontUsePid == 0))
+					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage, dontUsePid == 0))
 					{
 						reply.copy("Error: bad model parameters");
 					}
@@ -2036,11 +2061,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					const char* mode = (!model.UsePid()) ? "bang-bang"
-										: (model.ArePidParametersOverridden()) ? "custom PID"
-											: "PID";
-					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, mode: %s",
-							heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), mode);
+					const char* const mode = (!model.UsePid()) ? "bang-bang"
+												: (model.ArePidParametersOverridden()) ? "custom PID"
+													: "PID";
+					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode: %s",
+							heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
 					if (model.UsePid())
 					{
 						// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
@@ -2672,6 +2697,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				result = GCodeResult::error;
 			}
 		}
+		else
+		{
+			// Clear all heater faults
+			for (int heater = 0; heater < (int)Heaters; ++heater)
+			{
+				reprap.ClearTemperatureFault(heater);
+			}
+		}
+		heaterFaultState = HeaterFaultState::noFault;
 		break;
 
 	case 563: // Define tool
@@ -3518,47 +3552,38 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		else
 		{
 			// List remembered networks
-			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with newline terminator, plus an extra null
-			uint32_t buffer[NumDwords(declaredBufferLength + 1)];
-			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkListSsids, 0, 0, nullptr, 0, buffer, declaredBufferLength);
+			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;	// enough for all the remembered SSID data
+			uint32_t buffer[NumDwords(declaredBufferLength)];
+			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, declaredBufferLength);
 			if (rslt >= 0)
 			{
-				char* const cbuf = reinterpret_cast<char *>(buffer);
-				cbuf[declaredBufferLength] = 0;						// ensure null terminated
-
-				// DuetWiFiServer 1.19beta7 and later include the SSID used in access point mode at the start
-				char *bufp = strchr(cbuf, '\n');
-				if (bufp == nullptr)
+				OutputBuffer *response = nullptr;
+				size_t offset = ReducedWirelessConfigurationDataSize;		// skip own SSID details
+				while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
 				{
-					bufp = cbuf;			// must be an old version of DuetWiFiServer
-				}
-				else
-				{
-					++bufp;					// slip the first entry
-				}
-
-				// If there is a trailing newline, remove it
-				{
-					const size_t len = strlen(bufp);
-					if (len != 0 && bufp[len - 1] == '\n')
+					WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
+					if (wp->ssid[0] != 0)
 					{
-						bufp[len - 1] = 0;
+						if (response == nullptr)
+						{
+							if (!OutputBuffer::Allocate(response))
+							{
+								return false;		// try again later
+							}
+							response->copy("Remembered networks:");
+						}
+						wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
+						response->catf("\n%s IP=%s GW=%s NM=%s", wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
 					}
+					offset += ReducedWirelessConfigurationDataSize;
 				}
 
-				if (strlen(bufp) == 0)
+				if (response == nullptr)
 				{
 					reply.copy("No remembered networks");
 				}
 				else
 				{
-					OutputBuffer *response;
-					if (!OutputBuffer::Allocate(response))
-					{
-						return false;		// try again later
-					}
-					response->copy("Remembered networks:\n");
-					response->cat(bufp);
 					HandleReply(gb, false, response);
 					return true;
 				}
@@ -3633,10 +3658,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 							ok = gb.GetIPAddress(config.ip);
 							config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
 						}
-					}
-					else
-					{
-						ok = false;
+						else
+						{
+							ok = false;
+						}
 					}
 				}
 			}
@@ -3657,23 +3682,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * (SsidLength + 1) + 1;	// enough for all the remembered SSIDs with null terminator, plus an extra null
-			uint32_t buffer[NumDwords(declaredBufferLength + 1)];
-			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkListSsids, 0, 0, nullptr, 0, buffer, declaredBufferLength);
+			uint32_t buffer[NumDwords(ReducedWirelessConfigurationDataSize)];
+			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, ReducedWirelessConfigurationDataSize);
 			if (rslt >= 0)
 			{
-				char* const cbuf = reinterpret_cast<char *>(buffer);
-				cbuf[declaredBufferLength] = 0;						// ensure null terminated
-				char *p = strchr(cbuf, '\n');
-				if (p != nullptr)
+				WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(buffer);
+				if (wp->ssid[0] == 0)
 				{
-					*p = 0;
+					reply.copy("Own SSID not configured");
 				}
-				reply.printf("Own SSID: %s", (cbuf[0] == 0) ? "not configured" : cbuf);
+				else
+				{
+					wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
+					reply.printf("Own SSID: %s IP=%s GW=%s NM=%s",  wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+				}
 			}
 			else
 			{
-				reply.copy("Failed to remove SSID from remembered list");
+				reply.copy("Failed to retrieve own SSID data");
 				result = GCodeResult::error;
 			}
 		}
@@ -4319,7 +4345,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			return false;
 		}
-		reprap.GetHeat().SwitchOffAll();					// turn all heaters off because the main loop may get suspended
+		reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off because the main loop may get suspended
 		DisableDrives();									// all motors off
 
 		if (firmwareUpdateModuleMap == 0)					// have we worked out which modules to update?
@@ -4453,16 +4479,26 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		return true;			// when running M502 we don't execute T commands
 	}
 
+	bool seen = false;
+	int toolNum;
 	if (gb.HasCommandNumber())
+	{
+		seen = true;
+		toolNum = gb.GetCommandNumber();
+		toolNum += gb.GetToolNumberAdjust();
+	}
+	else if (gb.Seen('R') && gb.GetIValue() == 1)
+	{
+		seen = true;
+		toolNum = pauseRestorePoint.toolNumber;
+	}
+
+	if (seen)
 	{
 		if (!LockMovementAndWaitForStandstill(gb))
 		{
 			return false;
 		}
-
-		// See if the tool can be changed
-		int toolNum = gb.GetCommandNumber();
-		toolNum += gb.GetToolNumberAdjust();
 
 		const Tool * const oldTool = reprap.GetCurrentTool();
 		// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
@@ -4477,7 +4513,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		else
 		{
-			// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware.
+			// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared.
 			// So make sure the tool heaters are on.
 			reprap.SelectTool(toolNum, simulationMode != 0);
 		}

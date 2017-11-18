@@ -78,14 +78,14 @@ bool PortControl::Configure(GCodeBuffer& gb, StringRef& reply)
 		gb.GetLongArray(portNumbers, numPorts);
 		for (size_t i = 0; i < numPorts; ++i)
 		{
-			long pnum = portNumbers[i];
+			const long pnum = portNumbers[i];
 			if (pnum < 0 || pnum > HighestLogicalPin)
 			{
 				reply.printf("Port number %ld out of range", pnum);
 				return true;
 			}
 			IoPort& pm = portMap[i];
-			if (!pm.Set(pnum, PinAccess::write))
+			if (!pm.Set((LogicalPin)pnum, PinAccess::write))
 			{
 				reply.printf("Port number %ld is not available", pnum);
 				return true;

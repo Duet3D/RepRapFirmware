@@ -71,7 +71,7 @@ public:
 	float GetTargetTemperature(int8_t heater) const;			// Get the target temperature
 	HeaterStatus GetStatus(int8_t heater) const;				// Get the off/standby/active status
 	void SwitchOff(int8_t heater);								// Turn off a specific heater
-	void SwitchOffAll();										// Turn all heaters off
+	void SwitchOffAll(bool includingChamberAndBed);				// Turn all heaters off
 	void ResetFault(int8_t heater);								// Reset a heater fault - only call this if you know what you are doing
 	bool AllHeatersAtSetTemperatures(bool includingBed) const;	// Is everything at temperature within tolerance?
 	bool HeaterAtSetTemperature(int8_t heater, bool waitWhenCooling) const;	// Is a specific heater at temperature within tolerance?
@@ -80,7 +80,7 @@ public:
 	float GetAveragePWM(size_t heater) const					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < Heaters);
 
-	bool UseSlowPwm(int8_t heater) const;						// Queried by the Platform class
+	bool IsBedOrChamberHeater(int8_t heater) const;						// Queried by the Platform class
 
 	uint32_t GetLastSampleTime(size_t heater) const
 	pre(heater < Heaters);
@@ -96,7 +96,7 @@ public:
 	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
 	pre(heater < Heaters);
 
-	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, bool usePid) // Set the heater process model
+	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid) // Set the heater process model
 	pre(heater < Heaters);
 
 	void GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
@@ -187,9 +187,9 @@ inline const FopDt& Heat::GetHeaterModel(size_t heater) const
 }
 
 // Set the heater process model
-inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, bool usePid)
+inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid)
 {
-	return pids[heater]->SetModel(gain, tc, td, maxPwm, usePid);
+	return pids[heater]->SetModel(gain, tc, td, maxPwm, voltage, usePid);
 }
 
 // Is the heater enabled?

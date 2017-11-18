@@ -147,7 +147,6 @@ private:
 	WiFiState requestedMode;
 	WiFiState currentMode;
 	bool activated;
-	bool serialRunning;
 	volatile bool espStatusChanged;
 
 	uint8_t ipAddress[4];
@@ -165,6 +164,11 @@ private:
 	unsigned int responseTimeoutCount;
 
 	char wiFiServerVersion[16];
+
+	// For processing debug messages from the WiFi module
+	bool serialRunning;
+	bool debugPrintPending;
+	String<100> debugMessageBuffer;
 };
 
 #endif

@@ -103,8 +103,8 @@ static inline void DisableEspInterrupt()
 // WiFi interface class
 
 Network::Network(Platform& p) : platform(p), nextResponderToPoll(nullptr), uploader(nullptr), currentSocket(0), ftpDataPort(0),
-		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false), serialRunning(false),
-		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0)
+		state(NetworkState::disabled), requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
+		espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false)
 {
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
@@ -476,7 +476,6 @@ void Network::Spin(bool full)
 		{
 			if (espStatusChanged && digitalRead(EspTransferRequestPin))
 			{
-				Platform::softwareResetDebugInfo = 1;
 				if (reprap.Debug(moduleNetwork))
 				{
 					debugPrintf("ESP reported status change\n");
@@ -489,7 +488,6 @@ void Network::Spin(bool full)
 					 && currentMode != WiFiState::autoReconnecting
 					)
 			{
-				Platform::softwareResetDebugInfo = 2;
 				// Tell the wifi module to change mode
 				int32_t rslt = ResponseUnknownError;
 				if (currentMode != WiFiState::idle)
@@ -518,7 +516,6 @@ void Network::Spin(bool full)
 			}
 			else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
-				Platform::softwareResetDebugInfo = 3;
 				// Find the next socket to poll
 				const size_t startingSocket = currentSocket;
 				do
@@ -553,22 +550,11 @@ void Network::Spin(bool full)
 						{
 							nr = responders;		// 'responders' can't be null at this point
 						}
-						Platform::softwareResetDebugInfo = 4;
 						doneSomething = nr->Spin();
 						nr = nr->GetNext();
 					} while (!doneSomething && nr != nextResponderToPoll);
 					nextResponderToPoll = nr;
 				}
-			}
-		}
-		else if (currentMode == requestedMode && (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint))
-		{
-			Platform::softwareResetDebugInfo = 5;
-			sockets[currentSocket].Poll(full);
-			++currentSocket;
-			if (currentSocket == NumTcpSockets)
-			{
-				currentSocket = 0;
 			}
 		}
 		break;
@@ -614,9 +600,40 @@ void Network::Spin(bool full)
 		break;
 	}
 
-	Platform::softwareResetDebugInfo = 0;
+	// Check for debug info received from the WiFi module
+	if (serialRunning)
+	{
+		while (!debugPrintPending && Serial1.available() != 0)
+		{
+			const char c = (char)Serial1.read();
+			if (c == '\n')
+			{
+				debugPrintPending = true;
+			}
+			else if (c != '\r')
+			{
+				const size_t len = debugMessageBuffer.cat(c);
+				if (len == debugMessageBuffer.MaxLength())
+				{
+					debugPrintPending = true;
+				}
+			}
+		}
+	}
+
 	if (full)
 	{
+		// Check for debug info received from the WiFi module
+		if (debugPrintPending)
+		{
+			if (reprap.Debug(moduleWiFi))
+			{
+				debugPrintf("WiFi: %s\n", debugMessageBuffer.Pointer());
+			}
+			debugMessageBuffer.Clear();
+			debugPrintPending = false;
+		}
+
 		platform.ClassReport(longWait);
 	}
 }
@@ -1385,8 +1402,10 @@ void Network::StartWiFi()
 {
 	digitalWrite(EspResetPin, HIGH);
 	ConfigurePin(g_APinDescription[APINS_UART1]);				// connect the pins to UART1
-	Serial1.begin(115200);										// initialise the UART, to receive debug info
+	Serial1.begin(WiFiBaudRate);								// initialise the UART, to receive debug info
+	debugMessageBuffer.Clear();
 	serialRunning = true;
+	debugPrintPending = false;
 }
 
 // Reset the ESP8266 and leave held in reset

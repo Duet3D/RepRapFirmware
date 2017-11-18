@@ -543,6 +543,7 @@ public:
 #if HAS_VOLTAGE_MONITOR
 	// Power in voltage
 	void GetPowerVoltages(float& minV, float& currV, float& maxV) const;
+	float GetCurrentPowerVoltage() const;
 	bool IsPowerOk() const;
 	void DisableAutoSave();
 	void EnableAutoSave(float saveVoltage, float resumeVoltage);
@@ -602,6 +603,7 @@ private:
 
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(DriversBitmap whichDrivers, const char* text, bool& reported);
+	bool AnyMotorStalled(size_t drive) const pre(drive < DRIVES);
 #endif
 
 	// These are the structures used to hold our non-volatile data.
@@ -720,7 +722,7 @@ private:
 	size_t numSmartDrivers;						// the number of TMC2660 drivers we have, the remaining are simple enable/step/dir drivers
 	DriversBitmap logOnStallDrivers, pauseOnStallDrivers, rehomeOnStallDrivers;
 	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers, openLoadDrivers, stalledDrivers;
-	DriversBitmap previousStalledDrivers;
+	DriversBitmap stalledDriversToLog, stalledDriversToPause, stalledDriversToRehome;
 	uint8_t nextDriveToPoll;
 	bool driversPowered;
 	bool onBoardDriversFanRunning;						// true if a fan is running to cool the on-board drivers
@@ -858,8 +860,8 @@ private:
 	AnalogChannelNumber vInMonitorAdcChannel;
 	volatile uint16_t currentVin, highestVin, lowestVin;
 	uint16_t autoPauseReading, autoResumeReading;
-	uint32_t numUnderVoltageEvents;
-	volatile uint32_t numOverVoltageEvents;
+	uint32_t numUnderVoltageEvents, previousUnderVoltageEvents;
+	volatile uint32_t numOverVoltageEvents, previousOverVoltageEvents;
 	bool autoSaveEnabled;
 
 	enum class AutoSaveState : uint8_t

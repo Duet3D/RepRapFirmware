@@ -185,7 +185,7 @@ const char *moduleName[] =
 	"PortControl",
 	"DuetExpansion",
 	"FilamentSensors",
-	"?",
+	"WiFi",
 	"none"
 };
 
@@ -287,6 +287,19 @@ void SafeStrncat(char *dst, const char *src, size_t length)
 	const size_t index = strlen(dst);
 	strncat(dst + index, src, length - index);
 	dst[length - 1] = 0;
+}
+
+// Append a list of driver numbers to a string, with a space before each one
+void ListDrivers(const StringRef& str, DriversBitmap drivers)
+{
+	for (unsigned int d = 0; drivers != 0; ++d)
+	{
+		if ((drivers & 1) != 0)
+		{
+			scratchString.catf(" %u", d);
+		}
+		drivers >>= 1;
+	}
 }
 
 // End

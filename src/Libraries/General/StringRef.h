@@ -60,11 +60,25 @@ public:
 	const char *Pointer() const { return storage; }
 	char& operator[](size_t index) { return storage[index]; }
 	char operator[](size_t index) const { return storage[index]; }
+	size_t MaxLength() const { return Len; }
 
-	void Clear() const { storage[0] = 0; }
+	void Clear() { storage[0] = 0; }
+	size_t cat(char c);
 
 private:
 	char storage[Len + 1];
 };
+
+// Append a character if it will fit and return the new length
+template<size_t Len> size_t String<Len>::cat(char c)
+{
+	size_t length = strlen();
+	if (length + 1 < Len)
+	{
+		storage[length++] = c;
+		storage[length] = 0;
+	}
+	return length;
+}
 
 #endif /* STRINGREF_H_ */

@@ -308,13 +308,16 @@ void RepRap::EmergencyStop()
 
 void RepRap::SetDebug(Module m, bool enable)
 {
-	if (enable)
+	if (m < numModules)
 	{
-		debug |= (1u << m);
-	}
-	else
-	{
-		debug &= ~(1u << m);
+		if (enable)
+		{
+			debug |= (1u << m);
+		}
+		else
+		{
+			debug &= ~(1u << m);
+		}
 	}
 	PrintDebug();
 }
@@ -404,35 +407,27 @@ void RepRap::DeleteTool(Tool* tool)
 	platform->UpdateConfiguredHeaters();
 }
 
+// Select the specified tool, putting the existing current tool into standby
 void RepRap::SelectTool(int toolNumber, bool simulating)
 {
-	Tool* tool = toolList;
-
-	while(tool != nullptr)
+	Tool* const newTool = GetTool(toolNumber);
+	if (!simulating)
 	{
-		if (tool->Number() == toolNumber)
+		if (currentTool != nullptr && currentTool != newTool)
 		{
-			if (!simulating)
-			{
-				tool->Activate(currentTool);
-			}
-			currentTool = tool;
-			return;
+			currentTool->Standby();
 		}
-		tool = tool->Next();
+		if (newTool != nullptr)
+		{
+			newTool->Activate();
+		}
 	}
-
-	// Selecting a non-existent tool is valid.  It sets them all to standby.
-	if (currentTool != nullptr && !simulating)
-	{
-		StandbyTool(currentTool->Number());
-	}
-	currentTool = nullptr;
+	currentTool = newTool;
 }
 
 void RepRap::PrintTool(int toolNumber, StringRef& reply) const
 {
-	Tool* tool = GetTool(toolNumber);
+	const Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
 	{
 		tool->Print(reply);
@@ -445,7 +440,7 @@ void RepRap::PrintTool(int toolNumber, StringRef& reply) const
 
 void RepRap::StandbyTool(int toolNumber)
 {
-	Tool* tool = GetTool(toolNumber);
+	Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
 	{
 		tool->Standby();
@@ -474,6 +469,12 @@ Tool* RepRap::GetTool(int toolNumber) const
 	return nullptr; // Not an error
 }
 
+// Return the current tool number, or -1 if no tool selected
+int RepRap::GetCurrentToolNumber() const
+{
+	return (currentTool == nullptr) ? -1 : currentTool->Number();
+}
+
 // Get the current tool, or failing that the default tool. May return nullptr if we can't
 // Called when a M104 or M109 command doesn't specify a tool number.
 Tool* RepRap::GetCurrentOrDefaultTool() const
@@ -497,9 +498,9 @@ void RepRap::SetToolVariables(int toolNumber, const float* standbyTemperatures, 
 
 bool RepRap::IsHeaterAssignedToTool(int8_t heater) const
 {
-	for(Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 	{
-		for(size_t i = 0; i < tool->HeaterCount(); i++)
+		for (size_t i = 0; i < tool->HeaterCount(); i++)
 		{
 			if (tool->Heater(i) == heater)
 			{
@@ -631,8 +632,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 	}
 
 	// Current tool number
-	const int toolNumber = (currentTool == nullptr) ? -1 : currentTool->Number();
-	response->catf("]},\"currentTool\":%d", toolNumber);
+	response->catf("]},\"currentTool\":%d", GetCurrentToolNumber());
 
 	// Output notifications
 	{
@@ -1313,8 +1313,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 	response->catf(",\"babystep\":%.03f", (double)(gCodes->GetBabyStepOffset()));
 
 	// Send the current tool number
-	const int toolNumber = (currentTool == nullptr) ? 0 : currentTool->Number();
-	response->catf(",\"tool\":%d", toolNumber);
+	response->catf(",\"tool\":%d", GetCurrentToolNumber());
 
 	// Send the Z probe value
 	const int v0 = platform->GetZProbeReading();

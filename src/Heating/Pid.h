@@ -66,7 +66,7 @@ public:
 	const FopDt& GetModel() const					// Get the process model
 		{ return model; }
 
-	bool SetModel(float gain, float tc, float td, float maxPwm, bool usePid);	// Set the process model
+	bool SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid);	// Set the process model
 
 	bool IsHeaterEnabled() const					// Is this heater enabled?
 		{ return model.IsEnabled(); }

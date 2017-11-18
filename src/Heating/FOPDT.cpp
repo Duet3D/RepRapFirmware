@@ -14,13 +14,13 @@ extern StringRef scratchString;
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt()
-	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0),
+	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
 	  enabled(false), usePid(true), pidParametersOverridden(false)
 {
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, bool pUsePid)
+bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float voltage, bool pUsePid)
 {
 	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
 	{
@@ -37,6 +37,7 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float t
 		timeConstant = ptc;
 		deadTime = pdt;
 		maxPwm = pMaxPwm;
+		standardVoltage = voltage;
 		usePid = pUsePid;
 		enabled = true;
 		CalcPidConstants();
@@ -69,7 +70,8 @@ void FopDt::SetM301PidParameters(const M301PidParameters& pp)
 // Write the model parameters to file returning true if no error
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const
 {
-	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f B%d\n", heater, (double)gain, (double)timeConstant, (double)deadTime, (double)maxPwm, (usePid) ? 0 : 1);
+	scratchString.printf("M307 H%u A%.1f C%.1f D%.1f S%.2f V%.1f B%d\n",
+							heater, (double)gain, (double)timeConstant, (double)deadTime, (double)maxPwm, (double)standardVoltage, (usePid) ? 0 : 1);
 	bool ok = f->Write(scratchString.Pointer());
 	if (ok && pidParametersOverridden)
 	{

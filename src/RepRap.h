@@ -59,6 +59,7 @@ public:
 	void SelectTool(int toolNumber, bool simulating);
 	void StandbyTool(int toolNumber);
 	Tool* GetCurrentTool() const;
+	int GetCurrentToolNumber() const;
 	Tool* GetTool(int toolNumber) const;
 	Tool* GetCurrentOrDefaultTool() const;
 	const Tool* GetFirstTool() const { return toolList; }				// Return the lowest-numbered tool
