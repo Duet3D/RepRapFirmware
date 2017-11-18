@@ -8,20 +8,22 @@ Version 1.20beta8
 Upgrade notes:
 - Recommended DuetWiFiServer.bin version is 1.20beta9
 - Recommended DuetWebControl version is 1.19.3
+- The compensation of extruder power for supply voltage will only take effect after you re-run tuning on your extruder heater(s) and save the resulting heater model
 - See also the notes for earlier 1.20beta versions
 
 New features:
 - T R1 activates the tool that was active at the last pause
 - M915 R2 and R3 actions are now implemented
-- Extruder heater PWM values are now compensated for supply voltage
+- Duet WiFi and Duet Ethernet: Extruder heater PWM values are now compensated for supply voltage
 - Duet WiFi only: M587 and M589 without parameters now report the IP addresses etc. as well as the SSID (needs DuetWiFiServer 1.20beta9)
 - When sensorless homing is used on a CoreXY printer, both X and Y motors are monitored for stalling when homing X or Y. Similarly for CoreXYU (both X and Y or U and V are monitored).
 - When using a segmented kinematics such as SCARA, or when long moves are segmented due to mesh bed compensation, segmented moves can be paused between segments
 - M562 with no parameters now clears all heater faults
-- New debugging module 14 added to report debugging message from the WiFi module to USB. Use M111 S1 P14 to activate it.
+- New debugging module 14 added to report debugging message from the WiFi module to USB. Use M111 S1 P14 to activate it. Needs DuetWiFiServer 1.20beta9.
 - Under voltage and over voltage events are now logged
 - Overheating drivers are now logged
 - M81 power off commands are now logged
+- When a T command is sent and the current tool does not change, the firmware now makes sure that the tool heaters are turned on, in case they had been turned off explicitly e.g. due to upgrading WiFi firmware. This was supposed to be implemented in beta 7 but was not working.
 
 Bug fixes:
 - Workaround for SX1509B chip problem: if an analog write was performed to a pin on an SX1509B device, subsequent digital writes and pinMode calls didn't work
