@@ -3523,8 +3523,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				if (ok)
 				{
 					SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-					ok = gb.Seen('I') && gb.GetIPAddress(config.ip);
 				}
+			}
+			if (ok && gb.Seen('I'))
+			{
+				gb.GetIPAddress(config.ip);
 			}
 			if (ok && gb.Seen('J'))
 			{
