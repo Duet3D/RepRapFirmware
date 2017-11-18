@@ -6,7 +6,7 @@ Version 1.20beta8
 =================
 
 Upgrade notes:
-- Recommended DuetWiFiServer.bin version is 1.20beta9
+- Recommended DuetWiFiServer.bin version is 1.20beta9. I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
 - Recommended DuetWebControl version is 1.19.3
 - The compensation of extruder power for supply voltage will only take effect after you re-run tuning on your extruder heater(s) and save the resulting heater model
 - See also the notes for earlier 1.20beta versions
