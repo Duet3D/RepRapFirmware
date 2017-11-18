@@ -20,6 +20,7 @@ New features:
 - When using a segmented kinematics such as SCARA, or when long moves are segmented due to mesh bed compensation, segmented moves can be paused between segments
 - M562 with no parameters now clears all heater faults
 - New debugging module 14 added to report debugging message from the WiFi module to USB. Use M111 S1 P14 to activate it. Needs DuetWiFiServer 1.20beta9.
+- When a heater fault occurs, the print is now paused and all heaters are turned off except bed amnd chamber heaters. After a timeout period (currently fixed at 10 minutes), the print is cancelled, all remaining heaters are turned off, and the firmware attempts to turn the power off as if M81 had been received.
 - Under voltage and over voltage events are now logged
 - Overheating drivers are now logged
 - M81 power off commands are now logged
