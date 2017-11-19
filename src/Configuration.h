@@ -84,12 +84,17 @@ constexpr float DefaultHotEndHeaterGain = 340.0;
 constexpr float DefaultHotEndHeaterTimeConstant = 140.0;
 constexpr float DefaultHotEndHeaterDeadTime = 5.5;
 
-constexpr int8_t DefaultBedHeater = 0;
-constexpr int8_t DefaultChamberHeater = -1;
+constexpr size_t NumBedHeaters = 1;
+constexpr size_t NumChamberHeaters = 2;
+constexpr int8_t DefaultBedHeaters[NumBedHeaters] = { 0 };
+constexpr int8_t DefaultChamberHeaters[NumChamberHeaters] = { -1, -1 };
+
 constexpr int8_t DefaultE0Heater = 1;					// Index of the default first extruder heater
 
 constexpr unsigned int FirstVirtualHeater = 100;		// the heater number at which virtual heaters start
 constexpr unsigned int MaxVirtualHeaters = 10;			// the number of virtual heaters supported
+
+constexpr unsigned int FirstExtraHeaterProtection = 100;	// Index of the first extra heater protection item
 
 // These parameters are about right for a typical PCB bed heater that maxes out at 110C
 constexpr float DefaultBedHeaterGain = 90.0;

@@ -1246,12 +1246,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 116: // Wait for set temperatures
 		{
 			bool seen = false;
-			if (gb.Seen('P'))
+			if (!cancelWait && gb.Seen('P'))
 			{
 				// Wait for the heaters associated with the specified tool to be ready
 				int toolNumber = gb.GetIValue();
 				toolNumber += gb.GetToolNumberAdjust();
-				if (!cancelWait && !ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber), true))
+				if (!ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber), true))
 				{
 					CheckReportDue(gb, reply);				// check whether we need to send a temperature or status report
 					isWaiting = true;
@@ -1260,34 +1260,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 			}
 
-			if (gb.Seen('H'))
+			if (!cancelWait && gb.Seen('H'))
 			{
 				// Wait for specified heaters to be ready
 				long heaters[Heaters];
 				size_t heaterCount = Heaters;
 				gb.GetLongArray(heaters, heaterCount);
-				if (!cancelWait)
-				{
-					for (size_t i=0; i<heaterCount; i++)
-					{
-						if (!reprap.GetHeat().HeaterAtSetTemperature(heaters[i], true))
-						{
-							CheckReportDue(gb, reply);		// check whether we need to send a temperature or status report
-							isWaiting = true;
-							return false;
-						}
-					}
-				}
-				seen = true;
-			}
 
-			if (gb.Seen('C'))
-			{
-				// Wait for chamber heater to be ready
-				const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater();
-				if (chamberHeater != -1)
+				for (size_t i = 0; i < heaterCount; i++)
 				{
-					if (!cancelWait && !reprap.GetHeat().HeaterAtSetTemperature(chamberHeater, true))
+					if (!reprap.GetHeat().HeaterAtSetTemperature(heaters[i], true))
 					{
 						CheckReportDue(gb, reply);			// check whether we need to send a temperature or status report
 						isWaiting = true;
@@ -1297,7 +1279,48 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 			}
 
-			// Wait for all heaters to be ready
+			if (!cancelWait && gb.Seen('C'))
+			{
+				// Wait for specified chamber(s) to be ready
+				long chamberIndices[NumChamberHeaters];
+				size_t chamberCount = NumChamberHeaters;
+				gb.GetLongArray(chamberIndices, chamberCount);
+
+				if (chamberCount == 0)
+				{
+					// If no values are specified, wait for all chamber heaters
+					for (size_t i = 0; i < NumChamberHeaters; i++)
+					{
+						const int8_t heater = reprap.GetHeat().GetChamberHeater(i);
+						if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true))
+						{
+							CheckReportDue(gb, reply);		// check whether we need to send a temperature or status report
+							isWaiting = true;
+							return false;
+						}
+					}
+				}
+				else
+				{
+					// Otherwise wait only for the specified chamber heaters
+					for (size_t i = 0; i < chamberCount; i++)
+					{
+						if (chamberIndices[i] >= 0 && chamberIndices[i] < (int)NumChamberHeaters)
+						{
+							const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
+							if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true))
+							{
+								CheckReportDue(gb, reply);	// check whether we need to send a temperature or status report
+								isWaiting = true;
+								return false;
+							}
+						}
+					}
+				}
+				seen = true;
+			}
+
+			// Wait for all heaters except chamber(s) to be ready
 			if (!seen && !cancelWait && !reprap.GetHeat().AllHeatersAtSetTemperatures(true))
 			{
 				CheckReportDue(gb, reply);					// check whether we need to send a temperature or status report
@@ -1366,6 +1389,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			Heat& heat = reprap.GetHeat();
 			bool seen = false;
 
+			// Check if the heater index is passed
+			int index = gb.Seen('P') ? gb.GetIValue() : 0;
+			if (index < 0 || index >= (int)((code == 140) ? NumBedHeaters : NumChamberHeaters))
+			{
+				reply.printf("Invalid heater index '%d'", index);
+				result = GCodeResult::error;
+				break;
+			}
+
 			// See if the heater number is being set
 			if (gb.Seen('H'))
 			{
@@ -1384,16 +1416,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 				if (code == 141)
 				{
-					heat.SetChamberHeater(heater);
+					heat.SetChamberHeater(index, heater);
 				}
 				else
 				{
-					heat.SetBedHeater(heater);
+					heat.SetBedHeater(index, heater);
 				}
 				platform.UpdateConfiguredHeaters();
 			}
 
-			const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater() : heat.GetBedHeater();
+			const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
 			const char* heaterName = (code == 141) ? "chamber" : "bed";
 
 			// Active temperature
@@ -1402,7 +1434,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 				if (currentHeater < 0)
 				{
-					reply.printf("No %s heater has been configured", heaterName);
+					reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 					result = GCodeResult::error;
 				}
 				else
@@ -1425,7 +1457,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 				if (currentHeater < 0)
 				{
-					reply.printf("No %s heater has been configured", heaterName);
+					reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 					result = GCodeResult::error;
 				}
 				else
@@ -1438,48 +1470,32 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				if (currentHeater < 0)
 				{
-					reply.printf("No %s heater has been configured", heaterName);
+					reply.printf("No %s heater has been configuredt for slot %d", heaterName, index);
 				}
 				else
 				{
-					reply.printf("%c%s heater %d is currently at %.1f" DEGREE_SYMBOL "C",
-						toupper(heaterName[0]), heaterName + 1, currentHeater, (double)reprap.GetHeat().GetTemperature(currentHeater));
+					reply.printf("%c%s heater %d (slot %d) is currently at %.1f" DEGREE_SYMBOL "C",
+						toupper(heaterName[0]), heaterName + 1, currentHeater, index, (double)reprap.GetHeat().GetTemperature(currentHeater));
 				}
 			}
 		}
 		break;
 
-	case 143: // Set temperature limit
-		{
-			const int heater = (gb.Seen('H')) ? gb.GetIValue() : 1;		// default to extruder 1 if no heater number provided
-			if (heater < 0 || heater >= (int)Heaters)
-			{
-				reply.printf("Invalid heater number '%d'", heater);
-				result = GCodeResult::error;
-			}
-			else if (gb.Seen('S'))
-			{
-				const float limit = gb.GetFValue();
-				if (limit > BAD_LOW_TEMPERATURE && limit < BAD_ERROR_TEMPERATURE)
-				{
-					reprap.GetHeat().SetTemperatureLimit(heater, limit);
-				}
-				else
-				{
-					reply.copy("Invalid temperature limit");
-					result = GCodeResult::error;
-				}
-			}
-			else
-			{
-				reply.printf("Temperature limit for heater %d is %.1f" DEGREE_SYMBOL "C", heater, (double)reprap.GetHeat().GetTemperatureLimit(heater));
-			}
-		}
+	case 143: // Configure heater protection
+		result = GetGCodeResultFromError(SetHeaterProtection(gb, reply));
 		break;
 
 	case 144: // Set bed to standby
 		{
-			const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
+			int index = gb.Seen('P') ? gb.GetIValue() : 0;
+			if (index < 0 || index >= (int)NumBedHeaters)
+			{
+				reply.printf("Invalid bed heater index '%d'", index);
+				result = GCodeResult::error;
+				break;
+			}
+
+			const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 			if (bedHeater >= 0)
 			{
 				reprap.GetHeat().Standby(bedHeater, nullptr);
@@ -1490,7 +1506,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 190: // Set bed temperature and wait
 	case 191: // Set chamber temperature and wait
 		{
-			const int8_t heater = (code == 191) ? reprap.GetHeat().GetChamberHeater() : reprap.GetHeat().GetBedHeater();
+			// Check if the heater index is passed
+			int index = gb.Seen('P') ? gb.GetIValue() : 0;
+			if (index < 0 || index >= (int)((code == 190) ? NumBedHeaters : NumChamberHeaters))
+			{
+				reply.printf("Invalid heater index '%d'", index);
+				result = GCodeResult::error;
+				break;
+			}
+
+			const int8_t heater = (code == 191) ? reprap.GetHeat().GetChamberHeater(index) : reprap.GetHeat().GetBedHeater(index);
 			if (heater >= 0)
 			{
 				float temperature;
@@ -1985,17 +2010,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			const int heater = gb.GetIValue();
 			const float temperature = (gb.Seen('S')) ? gb.GetFValue()
-										: heater == reprap.GetHeat().GetBedHeater() ? 75.0
-										: heater == reprap.GetHeat().GetChamberHeater() ? 50.0
+										: reprap.GetHeat().IsBedHeater(heater) ? 75.0
+										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
 										: 200.0;
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
 			if (heater < 0 || heater >= (int)Heaters)
 			{
 				reply.copy("Bad heater number in M303 command");
 			}
-			else if (temperature >= reprap.GetHeat().GetTemperatureLimit(heater))
+			else if (reprap.GetHeat().CheckHeater(heater))
 			{
-				reply.copy("Target temperature must be below temperature limit for this heater");
+				reply.copy("Heater is not ready to perform PID auto-tuning");
 			}
 			else if (maxPwm < 0.1 || maxPwm > 1.0)
 			{
@@ -2014,7 +2039,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 304: // Set/report heated bed PID values
 		{
-			const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
+			int index = gb.Seen('P') ? gb.GetIValue() : 0;
+			if (index < 0 || index >= (int)NumBedHeaters)
+			{
+				reply.printf("Invalid bed heater index '%d'", index);
+				result = GCodeResult::error;
+				break;
+			}
+
+			const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 			if (bedHeater >= 0)
 			{
 				SetPidParameters(gb, bedHeater, reply);
@@ -2040,6 +2073,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					maxPwm = model.GetMaxPwm(),
 					voltage = model.GetVoltage();
 				int32_t dontUsePid = model.UsePid() ? 0 : 1;
+				int32_t inversionParameter = 0;
 
 				gb.TryGetFValue('A', gain, seen);
 				gb.TryGetFValue('C', tc, seen);
@@ -2047,13 +2081,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				gb.TryGetIValue('B', dontUsePid, seen);
 				gb.TryGetFValue('S', maxPwm, seen);
 				gb.TryGetFValue('V', voltage, seen);
+				gb.TryGetIValue('I', inversionParameter, seen);
 
 				if (seen)
 				{
-					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage, dontUsePid == 0))
+					const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
+					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl))
 					{
 						reply.copy("Error: bad model parameters");
 					}
+
+					const bool invertedPwmSignal = (inversionParameter == 2 || inversionParameter == 3);
+					reprap.GetHeat().SetHeaterSignalInverted(heater, invertedPwmSignal);
 				}
 				else if (!model.IsEnabled())
 				{
@@ -2061,11 +2100,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					const char* const mode = (!model.UsePid()) ? "bang-bang"
-												: (model.ArePidParametersOverridden()) ? "custom PID"
-													: "PID";
-					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode: %s",
-							heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
+					const char* mode = (!model.UsePid()) ? "bang-bang"
+										: (model.ArePidParametersOverridden()) ? "custom PID"
+											: "PID";
+					const bool pwmSignalInverted = reprap.GetHeat().IsHeaterSignalInverted(heater);
+					const char* inverted = model.IsInverted()
+											? (pwmSignalInverted ? "PWM signal and temperature control" : "temperature control")
+											: (pwmSignalInverted ? "PWM signal" : "no");
+
+					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage: %.1f, mode: %s inverted: %s",
+							heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode, inverted);
 					if (model.UsePid())
 					{
 						// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
@@ -2868,12 +2912,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (heater >= 0 && heater < (int)Heaters)
 			{
 				float maxTempExcursion, maxFaultTime;
-				reprap.GetHeat().GetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
+				reprap.GetHeat().GetFaultDetectionParameters(heater, maxTempExcursion, maxFaultTime);
 				gb.TryGetFValue('P', maxFaultTime, seen);
 				gb.TryGetFValue('T', maxTempExcursion, seen);
 				if (seen)
 				{
-					reprap.GetHeat().SetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
+					reprap.GetHeat().SetFaultDetectionParameters(heater, maxTempExcursion, maxFaultTime);
 				}
 				else
 				{
@@ -3456,8 +3500,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				moveBuffer.canPauseBefore = true;
 
 				// Decide which way and how far to go
-				const float axisLength = platform.AxisMaximum(axis) - platform.AxisMinimum(axis) + 5.0;
-				moveBuffer.coords[axis] = (gb.Seen('S') && gb.GetIValue() == 1) ? axisLength * -1.0 : axisLength;
+				if (gb.Seen('R'))
+				{
+					// Use relative probing radius if the R parameter is present
+					moveBuffer.coords[axis] += gb.GetFValue();
+				}
+				else
+				{
+					// Move to axis minimum if S1 is passed or to the axis maximum otherwise
+					moveBuffer.coords[axis] = (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(axis) : platform.AxisMaximum(axis);
+				}
 
 				// Zero every extruder drive
 				for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
@@ -3477,7 +3529,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				// Kick off new movement
 				segmentsLeft = 1;
 				gb.SetState(GCodeState::probingToolOffset);
-				break;
 			}
 		}
 		break;

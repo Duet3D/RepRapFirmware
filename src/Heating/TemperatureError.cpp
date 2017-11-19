@@ -16,7 +16,6 @@ const char* TemperatureErrorString(TemperatureError err)
 	case TemperatureError::shortToVcc:		return "sensor short to Vcc";
 	case TemperatureError::shortToGround:	return "sensor short to ground";
 	case TemperatureError::openCircuit:		return "sensor open circuit";
-	case TemperatureError::tooHigh:			return "temperature above limit";
 	case TemperatureError::timeout:			return "sensor timeout";
 	case TemperatureError::ioError:			return "sensor I/O error";
 	case TemperatureError::hardwareError:	return "sensor hardware error";

@@ -19,6 +19,8 @@ Licence: GPL
 ****************************************************************************************************/
 
 #include "Heat.h"
+#include "HeaterProtection.h"
+#include "Pins.h"
 #include "Platform.h"
 #include "RepRap.h"
 #include "Sensors/TemperatureSensor.h"
@@ -28,8 +30,16 @@ Licence: GPL
 #endif
 
 Heat::Heat(Platform& p)
-	: platform(p), active(false), coldExtrude(false), bedHeater(DefaultBedHeater), chamberHeater(DefaultChamberHeater), heaterBeingTuned(-1), lastHeaterTuned(-1)
+	: platform(p), active(false), coldExtrude(false), heaterBeingTuned(-1), lastHeaterTuned(-1)
 {
+	ARRAY_INIT(bedHeaters, DefaultBedHeaters);
+	ARRAY_INIT(chamberHeaters, DefaultChamberHeaters);
+
+	for (size_t index : ARRAY_INDICES(heaterProtections))
+	{
+		heaterProtections[index] = new HeaterProtection(index);
+	}
+
 	for (size_t heater : ARRAY_INDICES(pids))
 	{
 		pids[heater] = new PID(platform, heater);
@@ -43,56 +53,52 @@ void Heat::ResetHeaterModels()
 	{
 		if (pids[heater]->IsHeaterEnabled())
 		{
-			if ((int)heater == DefaultBedHeater || (int)heater == DefaultChamberHeater)
+			if (IsBedHeater(heater) || IsChamberHeater(heater))
 			{
-				pids[heater]->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, 0.0, false);
+				pids[heater]->SetModel(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, 1.0, 0.0, false, false);
 			}
 			else
 			{
-				pids[heater]->SetModel(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, 1.0, 0.0, true);
+				pids[heater]->SetModel(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, 1.0, 0.0, true, false);
 			}
 		}
 	}
 }
 
-void Heat::SetBedHeater(int8_t heater)
-{
-	if (bedHeater >= 0)
-	{
-		pids[bedHeater]->SwitchOff();
-	}
-	bedHeater = heater;
-}
-
-void Heat::SetChamberHeater(int8_t heater)
-{
-	if (chamberHeater >= 0)
-	{
-		pids[chamberHeater]->SwitchOff();
-	}
-	chamberHeater = heater;
-}
-
 void Heat::Init()
 {
-	// Set up the real heaters and the corresponding PIDs
-	for (size_t heater = 0; heater < Heaters; ++heater)
+	// Initialise the heater protection items first
+	for (size_t index : ARRAY_INDICES(heaterProtections))
+	{
+		HeaterProtection *prot = heaterProtections[index];
+
+		const float tempLimit = (IsBedHeater(index) || IsChamberHeater(index)) ? DefaultBedTemperatureLimit : DefaultExtruderTemperatureLimit;
+		prot->Init(tempLimit);
+
+		if (index < Heaters)
+		{
+			pids[index]->SetHeaterProtection(prot);
+		}
+	}
+
+	// Then set up the real heaters and the corresponding PIDs
+	for (size_t heater : ARRAY_INDICES(pids))
 	{
 		heaterSensors[heater] = nullptr;			// no temperature sensor assigned yet
-		if ((int)heater == DefaultBedHeater || (int)heater == DefaultChamberHeater)
+		if (IsBedHeater(heater) || IsChamberHeater(heater))
 		{
-			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, DefaultBedTemperatureLimit, false);
+			pids[heater]->Init(DefaultBedHeaterGain, DefaultBedHeaterTimeConstant, DefaultBedHeaterDeadTime, false, false);
 		}
 #if defined(DUET_06_085)
 		else if (heater == Heaters - 1)
 		{
 			// On the Duet 085, the heater 6 pin is also the fan 1 pin. By default we support fan 1, so disable heater 6.
-			pids[heater]->Init(-1.0, -1.0, -1.0, DefaultExtruderTemperatureLimit, true);
+			pids[heater]->Init(-1.0, -1.0, -1.0, true, false);
 		}
 #endif
 		else
 		{
-			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, DefaultExtruderTemperatureLimit, true);
+			pids[heater]->Init(DefaultHotEndHeaterGain, DefaultHotEndHeaterTimeConstant, DefaultHotEndHeaterDeadTime, true, false);
 		}
 		lastStandbyTools[heater] = nullptr;
 	}
@@ -138,7 +144,7 @@ void Heat::Spin()
 		if (now - lastTime >= platform.HeatSampleInterval())
 		{
 			lastTime = now;
-			for (size_t heater=0; heater < Heaters; heater++)
+			for (size_t heater = 0; heater < Heaters; heater++)
 			{
 				pids[heater]->Spin();
 			}
@@ -161,7 +167,18 @@ void Heat::Spin()
 
 void Heat::Diagnostics(MessageType mtype)
 {
-	platform.MessageF(mtype, "=== Heat ===\nBed heater = %d, chamber heater = %d\n", bedHeater, chamberHeater);
+	platform.Message(mtype, "=== Heat ===\nBed heaters =");
+	for (int8_t bedHeater : bedHeaters)
+	{
+		platform.MessageF(mtype, " %d", bedHeater);
+	}
+	platform.Message(mtype, ", chamberHeaters =");
+	for (int8_t chamberHeater : chamberHeaters)
+	{
+		platform.MessageF(mtype, " %d", chamberHeater);
+	}
+	platform.Message(mtype, "\n");
+
 	for (size_t heater : ARRAY_INDICES(pids))
 	{
 		if (pids[heater]->Active())
@@ -175,7 +192,7 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed) const
 {
 	for (size_t heater : ARRAY_INDICES(pids))
 	{
-		if (!HeaterAtSetTemperature(heater, true) && (includingBed || (int)heater != bedHeater))
+		if (!HeaterAtSetTemperature(heater, true) && (includingBed || !IsBedHeater(heater)))
 		{
 			return false;
 		}
@@ -213,6 +230,50 @@ Heat::HeaterStatus Heat::GetStatus(int8_t heater) const
 						: HS_standby;
 }
 
+void Heat::SetBedHeater(size_t index, int8_t heater)
+{
+	const size_t bedHeater = bedHeaters[index];
+	if (bedHeater >= 0)
+	{
+		pids[bedHeater]->SwitchOff();
+	}
+	bedHeaters[index] = heater;
+}
+
+bool Heat::IsBedHeater(int8_t heater) const
+{
+	for (int8_t bedHeater : bedHeaters)
+	{
+		if (heater == bedHeater)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void Heat::SetChamberHeater(size_t index, int8_t heater)
+{
+	const size_t chamberHeater = chamberHeaters[heater];
+	if (chamberHeater >= 0)
+	{
+		pids[chamberHeater]->SwitchOff();
+	}
+	chamberHeaters[index] = heater;
+}
+
+bool Heat::IsChamberHeater(int8_t heater) const
+{
+	for (int8_t chamberHeater : chamberHeaters)
+	{
+		if (heater == chamberHeater)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void Heat::SetActiveTemperature(int8_t heater, float t)
 {
 	if (heater >= 0 && heater < (int)Heaters)
@@ -239,17 +300,44 @@ float Heat::GetStandbyTemperature(int8_t heater) const
 	return (heater >= 0 && heater < (int)Heaters) ? pids[heater]->GetStandbyTemperature() : ABS_ZERO;
 }
 
-void Heat::SetTemperatureLimit(int8_t heater, float t)
+float Heat::GetHighestTemperatureLimit(int8_t heater) const
 {
+	float limit = BAD_ERROR_TEMPERATURE;
 	if (heater >= 0 && heater < (int)Heaters)
 	{
-		pids[heater]->SetTemperatureLimit(t);
+		for (const HeaterProtection *prot : heaterProtections)
+		{
+			if (prot->GetSupervisedHeater() == heater && prot->GetTrigger() == HeaterProtectionTrigger::TemperatureExceeded)
+			{
+				const float t = prot->GetTemperatureLimit();
+				if (limit == BAD_ERROR_TEMPERATURE || t > limit)
+				{
+					limit = t;
+				}
+			}
+		}
 	}
+	return limit;
 }
 
-float Heat::GetTemperatureLimit(int8_t heater) const
+float Heat::GetLowestTemperatureLimit(int8_t heater) const
 {
-	return (heater >= 0 && heater < (int)Heaters) ? pids[heater]->GetTemperatureLimit() : ABS_ZERO;
+	float limit = ABS_ZERO;
+	if (heater >= 0 && heater < (int)Heaters)
+	{
+		for (const HeaterProtection *prot : heaterProtections)
+		{
+			if (prot->GetSupervisedHeater() == heater && prot->GetTrigger() == HeaterProtectionTrigger::TemperatureTooLow)
+			{
+				const float t = prot->GetTemperatureLimit();
+				if (limit == ABS_ZERO || t < limit)
+				{
+					limit = t;
+				}
+			}
+		}
+	}
+	return limit;
 }
 
 // Get the current temperature of a heater
@@ -288,7 +376,7 @@ void Heat::SwitchOffAll(bool includingChamberAndBed)
 {
 	for (int heater = 0; heater < (int)Heaters; ++heater)
 	{
-		if (includingChamberAndBed || (heater != bedHeater && heater != chamberHeater))
+		if (includingChamberAndBed || !IsBedOrChamberHeater(heater))
 		{
 			pids[heater]->SwitchOff();
 		}
@@ -324,7 +412,7 @@ uint32_t Heat::GetLastSampleTime(size_t heater) const
 
 bool Heat::IsBedOrChamberHeater(int8_t heater) const
 {
-	return heater == bedHeater || heater == chamberHeater;
+	return IsBedHeater(heater) || IsChamberHeater(heater);
 }
 
 // Auto tune a PID
@@ -364,11 +452,11 @@ void Heat::GetAutoTuneStatus(StringRef& reply) const
 float Heat::GetHighestTemperatureLimit() const
 {
 	float limit = ABS_ZERO;
-	for (size_t h : ARRAY_INDICES(pids))
+	for (HeaterProtection *prot : heaterProtections)
 	{
-		if (h < reprap.GetToolHeatersInUse() || (int)h == bedHeater || (int)h == chamberHeater)
+		if (prot->GetHeater() >= 0 && prot->GetTrigger() == HeaterProtectionTrigger::TemperatureExceeded)
 		{
-			const float t = pids[h]->GetTemperatureLimit();
+			const float t = prot->GetTemperatureLimit();
 			if (t > limit)
 			{
 				limit = t;
@@ -475,6 +563,61 @@ const char *Heat::GetHeaterName(size_t heater) const
 	return (spp == nullptr || *spp == nullptr) ? nullptr : (*spp)->GetHeaterName();
 }
 
+// Return the protection parameters of the given index
+HeaterProtection& Heat::AccessHeaterProtection(size_t index) const
+{
+	if (index >= FirstExtraHeaterProtection && index < FirstExtraHeaterProtection + NumExtraHeaterProtections)
+	{
+		return *heaterProtections[index + Heaters - FirstExtraHeaterProtection];
+	}
+	return *heaterProtections[index];
+}
+
+
+
+// Updates the PIDs and HeaterProtection items after a heater change
+void Heat::UpdateHeaterProtection()
+{
+	// Reassign the first mapped heater protection item of each PID where applicable
+	// and rebuild the linked list of heater protection elements per heater
+	for (size_t heater : ARRAY_INDICES(pids))
+	{
+		// Rebuild linked lists
+		HeaterProtection *firstProtectionItem = nullptr;
+		HeaterProtection *lastElementInList = nullptr;
+		for (HeaterProtection *prot : heaterProtections)
+		{
+			if (prot->GetHeater() == (int)heater)
+			{
+				if (firstProtectionItem == nullptr)
+				{
+					firstProtectionItem = prot;
+					prot->SetNext(nullptr);
+				}
+				else if (lastElementInList == nullptr)
+				{
+					firstProtectionItem->SetNext(prot);
+					lastElementInList = prot;
+				}
+				else
+				{
+					lastElementInList->SetNext(prot);
+					lastElementInList = prot;
+				}
+			}
+		}
+
+		// Update reference to the first item so that we can achieve better performance
+		pids[heater]->SetHeaterProtection(firstProtectionItem);
+	}
+}
+
+// Check if the heater is able to operate
+bool Heat::CheckHeater(size_t heater)
+{
+	return !pids[heater]->FaultOccurred() && pids[heater]->CheckProtection();
+}
+
 // Get the temperature of a real or virtual heater
 float Heat::GetTemperature(size_t heater, TemperatureError& err)
 {
@@ -519,13 +662,21 @@ bool Heat::WriteBedAndChamberTempSettings(FileStore *f) const
 {
 	char bufSpace[100];
 	StringRef buf(bufSpace, ARRAY_SIZE(bufSpace));
-	if (bedHeater >= 0 && pids[bedHeater]->Active() && !pids[bedHeater]->SwitchedOff())
+	for (size_t index : ARRAY_INDICES(bedHeaters))
 	{
-		buf.printf("M140 S%.1f\n", (double)GetActiveTemperature(bedHeater));
+		const int8_t bedHeater = bedHeaters[index];
+		if (bedHeater >= 0 && pids[bedHeater]->Active() && !pids[bedHeater]->SwitchedOff())
+		{
+			buf.printf("M140 P%u S%.1f\n", index, (double)GetActiveTemperature(bedHeater));
+		}
 	}
-	if (chamberHeater >= 0 && pids[chamberHeater]->Active() && !pids[chamberHeater]->SwitchedOff())
+	for (size_t index : ARRAY_INDICES(chamberHeaters))
 	{
-		buf.printf("M141 S%.1f\n", (double)GetActiveTemperature(chamberHeater));
+		const int8_t chamberHeater = chamberHeaters[index];
+		if (chamberHeater >= 0 && pids[chamberHeater]->Active() && !pids[chamberHeater]->SwitchedOff())
+		{
+			buf.printf("M141 P%u S%.1f\n", index, (double)GetActiveTemperature(chamberHeater));
+		}
 	}
 	return (buf.Length() == 0) || f->Write(buf.Pointer());
 }

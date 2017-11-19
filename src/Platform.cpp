@@ -581,7 +581,21 @@ void Platform::Init()
 	ARRAY_INIT(heatOnPins, HEAT_ON_PINS);
 	ARRAY_INIT(spiTempSenseCsPins, SpiTempSensorCsPins);
 
-	configuredHeaters = (DefaultBedHeater >= 0) ? (1 << DefaultBedHeater) : 0;
+	configuredHeaters = 0;
+	for (int8_t bedHeater : DefaultBedHeaters)
+	{
+		if (bedHeater >= 0)
+		{
+			configuredHeaters |= (1 << bedHeater);
+		}
+	}
+	for (int8_t chamberHeater : DefaultChamberHeaters)
+	{
+		if (chamberHeater >= 0)
+		{
+			configuredHeaters |= (1 << chamberHeater);
+		}
+	}
 	heatSampleTicks = HEAT_SAMPLE_TIME * SecondsToMillis;
 
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
@@ -801,17 +815,20 @@ int Platform::GetZProbeSecondaryValues(int& v1, int& v2)
 // Get our best estimate of the Z probe temperature
 float Platform::GetZProbeTemperature()
 {
-	const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
-	if (bedHeater >= 0)
+	for (size_t i = 0; i < NumBedHeaters; i++)
 	{
-		TemperatureError err;
-		const float temp = reprap.GetHeat().GetTemperature(bedHeater, err);
-		if (err == TemperatureError::success)
+		const int8_t bedHeater = reprap.GetHeat().GetBedHeater(i);
+		if (bedHeater >= 0)
 		{
-			return temp;
+			TemperatureError err;
+			const float temp = reprap.GetHeat().GetTemperature(bedHeater, err);
+			if (err == TemperatureError::success)
+			{
+				return temp;
+			}
 		}
 	}
-	return 25.0;							// assume 25C if we can't read he bed temperature
+	return 25.0;							// assume 25C if we can't read the bed temperature
 }
 
 float Platform::ZProbeStopHeight()
@@ -2354,18 +2371,24 @@ void Platform::UpdateConfiguredHeaters()
 {
 	configuredHeaters = 0;
 
-	// Check bed heater
-	const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
-	if (bedHeater >= 0)
+	// Check bed heaters
+	for (size_t i = 0; i < NumBedHeaters; i++)
 	{
-		configuredHeaters |= (1 << bedHeater);
+		const int8_t bedHeater = reprap.GetHeat().GetBedHeater(i);
+		if (bedHeater >= 0)
+		{
+			configuredHeaters |= (1 << bedHeater);
+		}
 	}
 
-	// Check chamber heater
-	const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater();
-	if (chamberHeater >= 0)
+	// Check chamber heaters
+	for (size_t i = 0; i < NumChamberHeaters; i++)
 	{
-		configuredHeaters |= (1 << chamberHeater);
+		const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater(i);
+		if (chamberHeater >= 0)
+		{
+			configuredHeaters |= (1 << chamberHeater);
+		}
 	}
 
 	// Check tool heaters
@@ -3058,8 +3081,23 @@ void Platform::InitFans()
 		// Fan 1 on the Duet 0.8.5 shares its control pin with heater 6. Set it full on to make sure the heater (if present) is off.
 		fans[1].SetValue(1.0);												// set it full on
 #else
-		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed heater
-		fans[1].SetHeatersMonitored(((1 << Heaters) - 1) & ~(1 << DefaultBedHeater));
+		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed and chamber heaters
+		uint16_t bedAndChamberHeaterMask = 0;
+		for (uint8_t bedHeater : DefaultBedHeaters)
+		{
+			if (bedHeater >= 0)
+			{
+				bedAndChamberHeaterMask |= (1 << bedHeater);
+			}
+		}
+		for (uint8_t chamberHeater : DefaultChamberHeaters)
+		{
+			if (chamberHeater >= 0)
+			{
+				bedAndChamberHeaterMask |= (1 << chamberHeater);
+			}
+		}
+		fans[1].SetHeatersMonitored(((1 << Heaters) - 1) & ~bedAndChamberHeaterMask);
 		fans[1].SetValue(1.0);												// set it full on
 #endif
 	}

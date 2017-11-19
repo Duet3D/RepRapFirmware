@@ -30,6 +30,7 @@ Licence: GPL
 #include "MessageType.h"
 
 class TemperatureSensor;
+class HeaterProtection;
 class GCodeBuffer;
 
 class Heat
@@ -47,24 +48,24 @@ public:
 	bool ColdExtrude() const;									// Is cold extrusion allowed?
 	void AllowColdExtrude(bool b);								// Allow or deny cold extrusion
 
-	int8_t GetBedHeater() const									// Get hot bed heater number
-	post(-1 <= result; result < Heaters);
+	int8_t GetBedHeater(size_t index) const						// Get a hot bed heater number
+	pre(index < NumBedHeaters);
+	void SetBedHeater(size_t index, int8_t heater)				// Set a hot bed heater number
+	pre(index < NumBedHeaters; -1 <= heater; heater < Heaters);
+	bool IsBedHeater(int8_t heater) const;						// Check if this heater is a bed heater
 
-	void SetBedHeater(int8_t heater)							// Set hot bed heater number
-	pre(-1 <= heater; heater < Heaters);
-
-	int8_t GetChamberHeater() const								// Get chamber heater number
-	post(-1 <= result; result < Heaters);
-
-	void SetChamberHeater(int8_t heater)						// Set chamber heater number
-	pre(-1 <= heater; heater < Heaters);
+	int8_t GetChamberHeater(size_t index) const					// Get a chamber heater number
+	pre(index < NumChamberHeaters);
+	void SetChamberHeater(size_t index, int8_t heater)			// Set a chamber heater number
+	pre(index < NumChamberHeaters; -1 <= heater; heater < Heaters);
+	bool IsChamberHeater(int8_t heater) const;					// Check if this heater is a chamber heater
 
 	void SetActiveTemperature(int8_t heater, float t);
 	float GetActiveTemperature(int8_t heater) const;
 	void SetStandbyTemperature(int8_t heater, float t);
 	float GetStandbyTemperature(int8_t heater) const;
-	void SetTemperatureLimit(int8_t heater, float t);
-	float GetTemperatureLimit(int8_t heater) const;
+	float GetHighestTemperatureLimit(int8_t heater) const;
+	float GetLowestTemperatureLimit(int8_t heater) const;
 	void Activate(int8_t heater);								// Turn on a heater
 	void Standby(int8_t heater, const Tool* tool);				// Set a heater to standby
 	float GetTemperature(int8_t heater) const;					// Get the temperature of a heater
@@ -96,13 +97,19 @@ public:
 	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
 	pre(heater < Heaters);
 
-	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid) // Set the heater process model
+	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted) // Set the heater process model
 	pre(heater < Heaters);
 
-	void GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
+	bool IsHeaterSignalInverted(size_t heater)					// Set PWM signal inversion
 	pre(heater < Heaters);
 
-	void SetHeaterProtection(size_t heater, float maxTempExcursion, float maxFaultTime)
+	void SetHeaterSignalInverted(size_t heater, bool IsInverted)	// Set PWM signal inversion
+	pre(heater < Heaters);
+
+	void GetFaultDetectionParameters(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
+	pre(heater < Heaters);
+
+	void SetFaultDetectionParameters(size_t heater, float maxTempExcursion, float maxFaultTime)
 	pre(heater < Heaters);
 
 	bool IsHeaterEnabled(size_t heater) const					// Is this heater enabled?
@@ -120,6 +127,12 @@ public:
 	bool ConfigureHeaterSensor(size_t heater, unsigned int mcode, GCodeBuffer& gb, StringRef& reply, bool& error);	// Configure the temperature sensor for a channel
 	const char *GetHeaterName(size_t heater) const;				// Get the name of a heater, or nullptr if it hasn't been named
 
+	HeaterProtection& AccessHeaterProtection(size_t index) const;	// Return the protection parameters of the given index
+	void UpdateHeaterProtection();								// Updates the PIDs and HeaterProtection items when a heater is remapped
+
+	bool CheckHeater(size_t heater)								// Check if the heater is able to operate
+	pre(heater < Heaters);
+
 	float GetTemperature(size_t heater, TemperatureError& err); // Result is in degrees Celsius
 
 	const Tool* GetLastStandbyTool(int heater) const
@@ -136,10 +149,13 @@ public:
 
 private:
 	Heat(const Heat&);											// Private copy constructor to prevent copying
+
 	TemperatureSensor **GetSensor(size_t heater);				// Get a pointer to the temperature sensor entry
 	TemperatureSensor * const *GetSensor(size_t heater) const;	// Get a pointer to the temperature sensor entry
 
 	Platform& platform;											// The instance of the RepRap hardware class
+
+	HeaterProtection *heaterProtections[Heaters + NumExtraHeaterProtections];	// Heater protection instances to guarantee legal heater temperature ranges
 
 	PID* pids[Heaters];											// A PID controller for each heater
 	const Tool* lastStandbyTools[Heaters];						// The last tool that caused the corresponding heater to be set to standby
@@ -152,8 +168,8 @@ private:
 
 	bool active;												// Are we active?
 	bool coldExtrude;											// Is cold extrusion allowed?
-	int8_t bedHeater;											// Index of the hot bed heater to use or -1 if none is available
-	int8_t chamberHeater;										// Index of the chamber heater to use or -1 if none is available
+	int8_t bedHeaters[NumBedHeaters];							// Indices of the hot bed heaters to use or -1 if none is available
+	int8_t chamberHeaters[NumChamberHeaters];					// Indices of the chamber heaters to use or -1 if none is available
 	int8_t heaterBeingTuned;									// which PID is currently being tuned
 	int8_t lastHeaterTuned;										// which PID we last finished tuning
 };
@@ -170,14 +186,14 @@ inline void Heat::AllowColdExtrude(bool b)
 	coldExtrude = b;
 }
 
-inline int8_t Heat::GetBedHeater() const
+inline int8_t Heat::GetBedHeater(size_t index) const
 {
-	return bedHeater;
+	return bedHeaters[index];
 }
 
-inline int8_t Heat::GetChamberHeater() const
+inline int8_t Heat::GetChamberHeater(size_t index) const
 {
-	return chamberHeater;
+	return chamberHeaters[index];
 }
 
 // Get the process model for the specified heater
@@ -187,9 +203,19 @@ inline const FopDt& Heat::GetHeaterModel(size_t heater) const
 }
 
 // Set the heater process model
-inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid)
+inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted)
 {
-	return pids[heater]->SetModel(gain, tc, td, maxPwm, voltage, usePid);
+	return pids[heater]->SetModel(gain, tc, td, maxPwm, voltage, usePid, inverted);
+}
+
+inline bool Heat::IsHeaterSignalInverted(size_t heater)
+{
+	return pids[heater]->IsHeaterSignalInverted();
+}
+
+inline void Heat::SetHeaterSignalInverted(size_t heater, bool IsInverted)
+{
+	pids[heater]->SetHeaterSignalInverted(IsInverted);
 }
 
 // Is the heater enabled?
@@ -198,14 +224,14 @@ inline bool Heat::IsHeaterEnabled(size_t heater) const
 	return pids[heater]->IsHeaterEnabled();
 }
 
-inline void Heat::GetHeaterProtection(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
+inline void Heat::GetFaultDetectionParameters(size_t heater, float& maxTempExcursion, float& maxFaultTime) const
 {
-	pids[heater]->GetHeaterProtection(maxTempExcursion, maxFaultTime);
+	pids[heater]->GetFaultDetectionParameters(maxTempExcursion, maxFaultTime);
 }
 
-inline void Heat::SetHeaterProtection(size_t heater, float maxTempExcursion, float maxFaultTime)
+inline void Heat::SetFaultDetectionParameters(size_t heater, float maxTempExcursion, float maxFaultTime)
 {
-	pids[heater]->SetHeaterProtection(maxTempExcursion, maxFaultTime);
+	pids[heater]->SetFaultDetectionParameters(maxTempExcursion, maxFaultTime);
 }
 
 #endif

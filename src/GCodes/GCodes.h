@@ -258,6 +258,7 @@ private:
 	void FinishWrite(GCodeBuffer& gb);									// Finish writing to the file and respond
 	bool SendConfigToLine();											// Deal with M503
 	GCodeResult OffsetAxes(GCodeBuffer& gb);							// Set offsets - deprecated, use G10
+	bool SetHeaterProtection(GCodeBuffer &gb, StringRef &reply);		// Configure heater protection (M143). Returns true if an error occurred
 	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
 	GCodeResult SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);	// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
 	bool ManageTool(GCodeBuffer& gb, StringRef& reply);					// Create a new tool definition, returning true if an error was reported
