@@ -1,6 +1,28 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20beta10
+==================
+
+Upgrade notes:
+- Recommended DuetWiFiServer.bin version is 1.20beta10. I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
+- Recommended DuetWebControl version is 1.19.3
+- The compensation of extruder power for supply voltage will only take effect after you re-run tuning on your extruder heater(s) and save the resulting heater model
+- See also the notes for earlier 1.20beta versions
+
+New features:
+- Heater fault timeout to cancelling print is now configurable (M570 S parameter, in minutes)
+- Filament monitor always updates calibration accumulators during a print even if not in calibration mode
+- Added CoreXYUV kinematics
+- Added Z probe types 7 (switch connected to Z endstop) and 8 (as type 5 without any filtering, for faster response)
+
+Bug fixes:
+- Semicolons inside quoted strings were still stripped out from some gcode sources
+- Giving silly numbers of microsteps in M350 messed up the steps/mm
+- High microstepping and high acceleration on deltas led to poor timing in deceleration phase and high MaxReps
+- The commands in tool change macro files were sometimes not fully executed before the next action
+- Speed limits in CoreXYU kinematics were not correct for the U axis
+- Avoid a possible race condition in the TMC SPI ISR
 
 Version 1.20beta8
 =================
