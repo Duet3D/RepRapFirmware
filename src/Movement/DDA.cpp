@@ -977,7 +977,7 @@ void DDA::Prepare(uint8_t simMode)
 			// This code assumes that the previous move in the DDA ring is the previously-executed move, because it fetches the X and Y end coordinates from that move.
 			// Therefore the Move code must not store a new move in that entry until this one has been prepared! (It took me ages to track this down.)
 			// Ideally we would store the initial X and Y coordinates in the DDA, but we need to be economical with memory in the Duet 06/085 build.
-			cKc = (int32_t)(directionVector[Z_AXIS] * DriveMovement::Kc);
+			cKc = lrintf(directionVector[Z_AXIS] * DriveMovement::Kc);
 			params.a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
 			params.initialX = prev->GetEndCoordinate(X_AXIS, false);
 			params.initialY = prev->GetEndCoordinate(Y_AXIS, false);
@@ -990,11 +990,11 @@ void DDA::Prepare(uint8_t simMode)
 		const float accelStopTime = (topSpeed - startSpeed)/acceleration;
 		const float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
 
-		params.startSpeedTimesCdivA = (uint32_t)((startSpeed * stepClockRate)/acceleration);
-		params.topSpeedTimesCdivA = (uint32_t)((topSpeed * stepClockRate)/acceleration);
-		params.decelStartClocks = (uint32_t)(decelStartTime * stepClockRate);
+		params.startSpeedTimesCdivA = (uint32_t)lrintf((startSpeed * stepClockRate)/acceleration);
+		params.topSpeedTimesCdivA = (uint32_t)lrintf((topSpeed * stepClockRate)/acceleration);
+		params.decelStartClocks = (uint32_t)lrintf(decelStartTime * stepClockRate);
 		params.topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivA + params.decelStartClocks;
-		params.accelClocksMinusAccelDistanceTimesCdivTopSpeed = (uint32_t)((accelStopTime - (accelDistance/topSpeed)) * stepClockRate);
+		params.accelClocksMinusAccelDistanceTimesCdivTopSpeed = (uint32_t)lrintf((accelStopTime - (accelDistance/topSpeed)) * stepClockRate);
 		params.compFactor = 1.0 - startSpeed/topSpeed;
 
 		firstDM = nullptr;

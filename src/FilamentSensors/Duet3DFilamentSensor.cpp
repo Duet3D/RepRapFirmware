@@ -343,31 +343,30 @@ FilamentSensorStatus Duet3DFilamentSensor::CheckFilament(float amountCommanded, 
 			}
 		}
 	}
+
+	// Update the calibration accumulators, even if the user hasn't asked to do calibration
+	const float ratio = accumulatedRevsMeasured/amountCommanded;
+	if (calibrationStarted)
+	{
+		if (ratio < minMovementRatio)
+		{
+			minMovementRatio = ratio;
+		}
+		if (ratio > maxMovementRatio)
+		{
+			maxMovementRatio = ratio;
+		}
+		totalExtrusionCommanded += amountCommanded;
+		totalRevsMeasured += accumulatedRevsMeasured;
+	}
 	else
 	{
-		// Tolerance < 0.0 means do calibration
-		const float ratio = accumulatedRevsMeasured/amountCommanded;
-		if (calibrationStarted)
-		{
-			if (ratio < minMovementRatio)
-			{
-				minMovementRatio = ratio;
-			}
-			if (ratio > maxMovementRatio)
-			{
-				maxMovementRatio = ratio;
-			}
-			totalExtrusionCommanded += amountCommanded;
-			totalRevsMeasured += accumulatedRevsMeasured;
-		}
-		else
-		{
-			minMovementRatio = maxMovementRatio = ratio;
-			totalExtrusionCommanded = amountCommanded;
-			totalRevsMeasured = accumulatedRevsMeasured;
-			calibrationStarted = true;
-		}
+		minMovementRatio = maxMovementRatio = ratio;
+		totalExtrusionCommanded = amountCommanded;
+		totalRevsMeasured = accumulatedRevsMeasured;
+		calibrationStarted = true;
 	}
+
 	accumulatedExtrusionCommanded -= amountCommanded;
 	extrusionCommandedAtLastMeasurement = accumulatedRevsMeasured = 0.0;
 

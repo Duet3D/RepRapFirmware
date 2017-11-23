@@ -195,21 +195,22 @@ template<typename BitmapType> BitmapType LongArrayToBitMap(const long *arr, size
 extern StringRef scratchString;
 
 // Common definitions used by more than one module
-const size_t XYZ_AXES = 3;										// The number of Cartesian axes
-const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
-const size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine
-const size_t U_AXIS = 3, V_AXIS = 4;							// The indices of the U and V motors in a CoreXYU machine (needed by Platform)
+constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
+constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
+constexpr size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine (there is a hidden V axis)
+constexpr size_t CoreXYUV_AXES = 5;									// The number of axes in a CoreXYUV machine
+constexpr size_t U_AXIS = 3, V_AXIS = 4;							// The indices of the U and V motors in a CoreXYU machine (needed by Platform)
 
 // Common conversion factors
-const float MinutesToSeconds = 60.0;
-const float SecondsToMinutes = 1.0/MinutesToSeconds;
-const float SecondsToMillis = 1000.0;
-const float MillisToSeconds = 0.001;
-const float InchToMm = 25.4;
-const float DegreesToRadians = PI/180.0;
-const float RadiansToDegrees = 180.0/PI;
+constexpr float MinutesToSeconds = 60.0;
+constexpr float SecondsToMinutes = 1.0/MinutesToSeconds;
+constexpr float SecondsToMillis = 1000.0;
+constexpr float MillisToSeconds = 0.001;
+constexpr float InchToMm = 25.4;
+constexpr float DegreesToRadians = PI/180.0;
+constexpr float RadiansToDegrees = 180.0/PI;
 
-#define DEGREE_SYMBOL	"\xC2\xB0"								// degree-symbol encoding in UTF8
+#define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 
 // Type of an offset in a file
 typedef uint32_t FilePosition;

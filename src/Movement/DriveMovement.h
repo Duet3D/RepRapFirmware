@@ -127,7 +127,7 @@ private:
 			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
 			int32_t minusAaPlusBbTimesKs;
-			uint32_t twoCsquaredTimesMmPerStepDivAK;	// this could be stored in the DDA if all towers use the same steps/mm
+			uint64_t twoCsquaredTimesMmPerStepDivA;		// this could be stored in the DDA if all towers use the same steps/mm
 
 			// The following depend on how the move is executed, so they must be set up in Prepare()
 			uint32_t accelStopDsK;
@@ -136,10 +136,10 @@ private:
 		} delta;
 	} mp;
 
-	static const uint32_t NoStepTime = 0xFFFFFFFF;		// value to indicate that no further steps are needed when calculating the next step time
-	static const uint32_t K1 = 1024;					// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors
-	static const uint32_t K2 = 512;						// a power of 2 used in delta calculations to reduce rounding errors (but too large makes things worse)
-	static const int32_t Kc = 1024 * 1024;				// a power of 2 for scaling the Z movement fraction
+	static constexpr uint32_t NoStepTime = 0xFFFFFFFF;	// value to indicate that no further steps are needed when calculating the next step time
+	static constexpr uint32_t K1 = 1024;				// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors
+	static constexpr uint32_t K2 = 512;					// a power of 2 used in delta calculations to reduce rounding errors (but too large makes things worse)
+	static constexpr int32_t Kc = 1024 * 1024;			// a power of 2 for scaling the Z movement fraction
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.

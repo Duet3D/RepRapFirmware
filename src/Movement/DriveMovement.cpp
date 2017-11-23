@@ -65,7 +65,7 @@ void DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	startSpeedTimesCdivA = params.startSpeedTimesCdivA;
 
 	// Constant speed phase parameters
-	mp.cart.mmPerStepTimesCdivtopSpeed = (uint32_t)(((float)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));
+	mp.cart.mmPerStepTimesCdivtopSpeed = lrintf(((float)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));
 	accelClocksMinusAccelDistanceTimesCdivTopSpeed = params.accelClocksMinusAccelDistanceTimesCdivTopSpeed;
 
 	// Deceleration phase parameters
@@ -98,10 +98,9 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
 	const float dSquaredMinusAsquaredMinusBsquared = params.diagonalSquared - fsquare(A) - fsquare(B);
 	const float h0MinusZ0 = sqrtf(dSquaredMinusAsquaredMinusBsquared);
-	mp.delta.hmz0sK = (int32_t)(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
-	mp.delta.minusAaPlusBbTimesKs = -(int32_t)(aAplusbB * stepsPerMm * DriveMovement::K2);
-	mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared =
-			(int64_t)(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
+	mp.delta.hmz0sK = lrintf(h0MinusZ0 * stepsPerMm * DriveMovement::K2);
+	mp.delta.minusAaPlusBbTimesKs = -lrintf(aAplusbB * stepsPerMm * DriveMovement::K2);
+	mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared = llrintf(dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm * DriveMovement::K2));
 
 	// Calculate the distance at which we need to reverse direction.
 	if (params.a2plusb2 <= 0.0)
@@ -151,14 +150,14 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 		}
 	}
 
-	mp.delta.twoCsquaredTimesMmPerStepDivAK = (uint32_t)((float)DDA::stepClockRateSquared/(stepsPerMm * dda.acceleration * (K2/2)));
+	mp.delta.twoCsquaredTimesMmPerStepDivA = llrintf((double)(2 * DDA::stepClockRateSquared)/((double)stepsPerMm * (double)dda.acceleration));
 
 	// Acceleration phase parameters
-	mp.delta.accelStopDsK = (uint32_t)(dda.accelDistance * stepsPerMm * K2);
+	mp.delta.accelStopDsK = lrintf(dda.accelDistance * stepsPerMm * K2);
 	startSpeedTimesCdivA = params.startSpeedTimesCdivA;
 
 	// Constant speed phase parameters
-	mp.delta.mmPerStepTimesCdivtopSpeedK = (uint32_t)(((float)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));
+	mp.delta.mmPerStepTimesCdivtopSpeedK = lrintf(((float)DDA::stepClockRate * K1)/(stepsPerMm * dda.topSpeed));
 	accelClocksMinusAccelDistanceTimesCdivTopSpeed = params.accelClocksMinusAccelDistanceTimesCdivTopSpeed;
 
 	// Deceleration phase parameters
@@ -171,10 +170,9 @@ void DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params)
 	}
 	else
 	{
-		mp.delta.decelStartDsK = (uint32_t)(params.decelStartDistance * stepsPerMm * K2);
+		mp.delta.decelStartDsK = lrintf(params.decelStartDistance * stepsPerMm * K2);
 		topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivAPlusDecelStartClocks;
-		const uint64_t initialDecelSpeedTimesCdivASquared = isquare64(params.topSpeedTimesCdivA);
-		twoDistanceToStopTimesCsquaredDivA = initialDecelSpeedTimesCdivASquared + (uint64_t)((params.decelStartDistance * (DDA::stepClockRateSquared * 2))/dda.acceleration);
+		twoDistanceToStopTimesCsquaredDivA = isquare64(params.topSpeedTimesCdivA) + llrintf((params.decelStartDistance * (DDA::stepClockRateSquared * 2))/dda.acceleration);
 	}
 }
 
@@ -183,11 +181,11 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 {
 	const float dv = dda.directionVector[drive];
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dv);
-	mp.cart.twoCsquaredTimesMmPerStepDivA = (uint64_t)(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
+	mp.cart.twoCsquaredTimesMmPerStepDivA = llrintf(((float)DDA::stepClockRate * (float)DDA::stepClockRate)/(stepsPerMm * dda.acceleration)) * 2;
 
 	// Calculate the pressure advance parameter
 	const float compensationTime = (doCompensation && dv > 0.0) ? reprap.GetPlatform().GetPressureAdvance(drive - reprap.GetGCodes().GetTotalAxes()) : 0.0;
-	const uint32_t compensationClocks = (uint32_t)(compensationTime * DDA::stepClockRate);
+	const uint32_t compensationClocks = lrintf(compensationTime * DDA::stepClockRate);
 
 	// Calculate the net total step count to allow for compensation. It may be negative.
 	// Note that we add totalSteps in floating point mode, to round the number of steps down consistently
@@ -222,7 +220,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, bo
 		const uint64_t initialDecelSpeedTimesCdivASquared = isquare64(initialDecelSpeedTimesCdivA);
 		topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivAPlusDecelStartClocks - compensationClocks;
 		twoDistanceToStopTimesCsquaredDivA =
-			initialDecelSpeedTimesCdivASquared + (uint64_t)(((params.decelStartDistance + accelCompensationDistance) * (DDA::stepClockRateSquared * 2))/dda.acceleration);
+			initialDecelSpeedTimesCdivASquared + llrintf(((params.decelStartDistance + accelCompensationDistance) * (DDA::stepClockRateSquared * 2))/dda.acceleration);
 
 		// Calculate the move distance to the point of zero speed, where reverse motion starts
 		const float initialDecelSpeed = dda.topSpeed - dda.acceleration * compensationTime;
@@ -273,9 +271,9 @@ void DriveMovement::DebugPrint(char c, bool isDeltaMovement) const
 		if (isDeltaMovement)
 		{
 			debugPrintf("hmz0sK=%" PRIi32 " minusAaPlusBbTimesKs=%" PRIi32 " dSquaredMinusAsquaredMinusBsquared=%" PRId64 "\n"
-						"2c2mmsdak=%" PRIu32 " asdsk=%" PRIu32 " dsdsk=%" PRIu32 " mmstcdts=%" PRIu32 "\n",
+						"2c2mmsda=%" PRIu64 " asdsk=%" PRIu32 " dsdsk=%" PRIu32 " mmstcdts=%" PRIu32 "\n",
 						mp.delta.hmz0sK, mp.delta.minusAaPlusBbTimesKs, mp.delta.dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared,
-						mp.delta.twoCsquaredTimesMmPerStepDivAK, mp.delta.accelStopDsK, mp.delta.decelStartDsK, mp.delta.mmPerStepTimesCdivtopSpeedK
+						mp.delta.twoCsquaredTimesMmPerStepDivA, mp.delta.accelStopDsK, mp.delta.decelStartDsK, mp.delta.mmPerStepTimesCdivtopSpeedK
 						);
 		}
 		else
@@ -456,7 +454,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	if ((uint32_t)dsK < mp.delta.accelStopDsK)
 	{
 		// Acceleration phase
-		nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + ((uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK)) - startSpeedTimesCdivA;
+		nextStepTime = isqrt64(isquare64(startSpeedTimesCdivA) + (mp.delta.twoCsquaredTimesMmPerStepDivA * (uint32_t)dsK)/K2) - startSpeedTimesCdivA;
 	}
 	else if ((uint32_t)dsK < mp.delta.decelStartDsK)
 	{
@@ -465,7 +463,7 @@ pre(nextStep < totalSteps; stepsTillRecalc == 0)
 	}
 	else
 	{
-		const uint64_t temp = (uint64_t)mp.delta.twoCsquaredTimesMmPerStepDivAK * (uint32_t)dsK;
+		const uint64_t temp = (mp.delta.twoCsquaredTimesMmPerStepDivA * (uint32_t)dsK)/K2;
 		// Because of possible rounding error when the end speed is zero or very small, we need to check that the square root will work OK
 		nextStepTime = (temp < twoDistanceToStopTimesCsquaredDivA)
 						? topSpeedTimesCdivAPlusDecelStartClocks - isqrt64(twoDistanceToStopTimesCsquaredDivA - temp)

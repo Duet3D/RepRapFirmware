@@ -2860,30 +2860,39 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		}
 		break;
 
-	case 570: // Set/report heater timeout
-		if (gb.Seen('H'))
+	case 570: // Set/report heater monitoring
 		{
-			const int heater = gb.GetIValue();
 			bool seen = false;
-			if (heater >= 0 && heater < (int)Heaters)
+			if (gb.Seen('S'))
 			{
-				float maxTempExcursion, maxFaultTime;
-				reprap.GetHeat().GetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
-				gb.TryGetFValue('P', maxFaultTime, seen);
-				gb.TryGetFValue('T', maxTempExcursion, seen);
-				if (seen)
-				{
-					reprap.GetHeat().SetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
-				}
-				else
-				{
-					reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heater, (double)maxTempExcursion, (double)maxFaultTime);
-				}
+				seen = true;
+				heaterFaultTimeout = gb.GetUIValue() * (60 * 1000);
 			}
-		}
-		else if (gb.Seen('S'))
-		{
-			reply.copy("M570 S parameter is no longer required or supported");
+			if (gb.Seen('H'))
+			{
+				const int heater = gb.GetIValue();
+				if (heater >= 0 && heater < (int)Heaters)
+				{
+					bool seenValue = false;
+					float maxTempExcursion, maxFaultTime;
+					reprap.GetHeat().GetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
+					gb.TryGetFValue('P', maxFaultTime, seenValue);
+					gb.TryGetFValue('T', maxTempExcursion, seenValue);
+					if (seenValue)
+					{
+						reprap.GetHeat().SetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
+					}
+					else if (!seen)
+					{
+						reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heater, (double)maxTempExcursion, (double)maxFaultTime);
+					}
+				}
+				seen = true;
+			}
+			if (!seen)
+			{
+				reply.printf("Print will be terminated if a heater fault is not reset within %" PRIu32 " minutes", heaterFaultTimeout/(60 * 1000));
+			}
 		}
 		break;
 

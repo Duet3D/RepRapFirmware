@@ -735,6 +735,7 @@ void Platform::InitZProbe()
 		break;
 
 	case 5:
+	case 8:
 	default:
 		AnalogInEnableChannel(zProbeAdcChannel, false);
 		pinMode(zProbePin, INPUT_PULLUP);
@@ -747,6 +748,13 @@ void Platform::InitZProbe()
 		pinMode(endStopPins[E0_AXIS + 1], INPUT);
 		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
 		break;
+
+	case 7:
+		AnalogInEnableChannel(zProbeAdcChannel, false);
+		pinMode(zProbePin, INPUT_PULLUP);
+		pinMode(endStopPins[Z_AXIS], INPUT);
+		pinMode(zProbeModulationPin, OUTPUT_LOW);		// we now set the modulation output high during probing only when using probe types 4 and higher
+		break;
 	}
 }
 
@@ -755,7 +763,7 @@ void Platform::InitZProbe()
 int Platform::GetZProbeReading() const
 {
 	int zProbeVal = 0;			// initialised to avoid spurious compiler warning
-	if (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid())
+	if (zProbeType == 8 || (zProbeOnFilter.IsValid() && zProbeOffFilter.IsValid()))
 	{
 		switch (zProbeType)
 		{
@@ -764,6 +772,7 @@ int Platform::GetZProbeReading() const
 		case 4:		// Switch connected to E0 endstop input
 		case 5:		// Switch connected to Z probe input
 		case 6:		// Switch connected to E1 endstop input
+		case 7:		// Switch connected to Z endstop input
 			zProbeVal = (int) ((zProbeOnFilter.GetSum() + zProbeOffFilter.GetSum()) / (8 * Z_PROBE_AVERAGE_READINGS));
 			break;
 
@@ -771,6 +780,10 @@ int Platform::GetZProbeReading() const
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
 			zProbeVal = (int) (((int32_t) zProbeOnFilter.GetSum() - (int32_t) zProbeOffFilter.GetSum()) / (int)(4 * Z_PROBE_AVERAGE_READINGS));
+			break;
+
+		case 8:		// Switch connected to Z probe input, no filtering
+			zProbeVal = GetRawZProbeReading()/4;
 			break;
 
 		default:
@@ -837,7 +850,7 @@ float Platform::GetZProbeTravelSpeed() const
 
 void Platform::SetZProbeType(int pt)
 {
-	zProbeType = (pt >= 0 && pt <= 6) ? pt : 0;
+	zProbeType = (pt >= 0 && pt <= 8) ? pt : 0;
 	InitZProbe();
 }
 
@@ -857,11 +870,13 @@ const ZProbeParameters& Platform::GetZProbeParameters(int32_t probeType) const
 	case 1:
 	case 2:
 	case 5:
+	case 8:
 		return irZProbeParameters;
 	case 3:
 		return alternateZProbeParameters;
 	case 4:
 	case 6:
+	case 7:
 	default:
 		return switchZProbeParameters;
 	}
@@ -874,6 +889,7 @@ void Platform::SetZProbeParameters(int32_t probeType, const ZProbeParameters& pa
 	case 1:
 	case 2:
 	case 5:
+	case 8:
 		irZProbeParameters = params;
 		break;
 
@@ -883,6 +899,7 @@ void Platform::SetZProbeParameters(int32_t probeType, const ZProbeParameters& pa
 
 	case 4:
 	case 6:
+	case 7:
 	default:
 		switchZProbeParameters = params;
 		break;
@@ -2257,18 +2274,36 @@ void Platform::DiagnosticTest(int d)
 
 	case (int)DiagnosticTestType::TimeSquareRoot:		// Show the square root calculation time. The displayed value is subject to interrupts.
 		{
-			const uint32_t num1 = 0x7265ac3d;
-			const uint32_t now1 = Platform::GetInterruptClocks();
-			const uint32_t num1a = isqrt64((uint64_t)num1 * num1);
-			const uint32_t tim1 = Platform::GetInterruptClocks() - now1;
+			uint32_t tim1 = 0;
+			bool ok1 = true;
+			for (uint32_t i = 0; i < 100; ++i)
+			{
+				const uint32_t num1 = 0x7265ac3d + i;
+				const uint32_t now1 = Platform::GetInterruptClocks();
+				const uint32_t num1a = isqrt64((uint64_t)num1 * num1);
+				tim1 += Platform::GetInterruptClocks() - now1;
+				if (num1a != num1)
+				{
+					ok1 = false;
+				}
+			}
 
-			const uint32_t num2 = 0x0000a4c5;
-			const uint32_t now2 = Platform::GetInterruptClocks();
-			const uint32_t num2a = isqrt64((uint64_t)num2 * num2);
-			const uint32_t tim2 = Platform::GetInterruptClocks() - now2;
-			MessageF(GenericMessage, "Square roots: 64-bit %.1fus %s, 32-bit %.1fus %s\n",
-					(double)(tim1 * 1000000)/DDA::stepClockRate, (num1a == num1) ? "ok" : "ERROR",
-							(double)(tim2 * 1000000)/DDA::stepClockRate, (num2a == num2) ? "ok" : "ERROR");
+			uint32_t tim2 = 0;
+			bool ok2 = true;
+			for (uint32_t i = 0; i < 100; ++i)
+			{
+				const uint32_t num2 = 0x0000a4c5 + i;
+				const uint32_t now2 = Platform::GetInterruptClocks();
+				const uint32_t num2a = isqrt64((uint64_t)num2 * num2);
+				tim2 += Platform::GetInterruptClocks() - now2;
+				if (num2a != num2)
+				{
+					ok2 = false;
+				}
+			}
+			MessageF(GenericMessage, "Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s\n",
+					(double)(tim1 * 10000)/DDA::stepClockRate, (ok1) ? "ok" : "ERROR",
+							(double)(tim2 * 10000)/DDA::stepClockRate, (ok2) ? "ok" : "ERROR");
 		}
 		break;
 
@@ -2853,6 +2888,7 @@ bool Platform::SetDriverMicrostepping(size_t driver, int microsteps, int mode)
 // Set the microstepping, returning true if successful. All drivers for the same axis must use the same microstepping.
 bool Platform::SetMicrostepping(size_t drive, int microsteps, int mode)
 {
+	// Check that it is a valid microstepping number
 	const size_t numAxes = reprap.GetGCodes().GetTotalAxes();
 	if (drive < numAxes)
 	{
@@ -2958,7 +2994,7 @@ void Platform::SetDriverStepTiming(size_t driver, float microseconds)
 	}
 	else
 	{
-		const uint32_t clocks = (uint32_t)(((float)DDA::stepClockRate * microseconds/1000000.0) + 0.99);	// convert microseconds to step clocks, rounding up
+		const uint32_t clocks = (uint32_t)(((float)DDA::stepClockRate * microseconds * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
 		if (clocks > slowDriverStepPulseClocks)
 		{
 			slowDriverStepPulseClocks = clocks;
