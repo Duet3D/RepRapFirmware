@@ -1,6 +1,0 @@
-DuetWiFiFirmware 1.15 release notes
-===================================
-1. If you are upgrading from a previous releases other than a 1.15 release candidate, then if you have any M301 commands in your config.g file, you should double the I parameters and halve the D parameters in those commands. This is because of a long-standing bug in previous releases of RepRapFirmware which has been corrected in this release.
-2. This release includes a heater control auto tuning feature. See https://duet3d.com/wiki/Tuning_the_heater_temperature_control for how to use it. This feature is still somewhat experimental and will be refined in a future release.
-3. The temperature monitoring is much more strict compared to previous releases, to better detect situations such as a thermistor or heater cartridge falling out of the heater block, which can pose a fire risk if not detected. If you have a paricularly strong or weak heater, you may get false alarms. The simplest way to avoid this is to run auto tuning so that the firmware can build a more accurate model of normal behaviour.
-4. DuetWebControl-1.12.zip is by Christian Hammacher and is provided here for your convenence. His master repository is at https://github.com/chrishamm/DuetWebControl.

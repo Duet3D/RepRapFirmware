@@ -5,7 +5,7 @@
 
 # define FIRMWARE_NAME "RepRapFirmware for Duet WiFi"
 # define DEFAULT_BOARD_TYPE BoardType::DuetWiFi_10
-const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module
+constexpr size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual upload to WiFi module
 # define IAP_FIRMWARE_FILE	"DuetWiFiFirmware.bin"
 # define WIFI_FIRMWARE_FILE	"DuetWiFiServer.bin"
 # define WIFI_WEB_FILE		"DuetWebControl.bin"
@@ -15,7 +15,7 @@ const size_t NumFirmwareUpdateModules = 4;		// 3 modules, plus one for manual up
 # define FIRMWARE_NAME "RepRapFirmware for Duet Ethernet"
 # define DEFAULT_BOARD_TYPE BoardType::DuetEthernet_10
 # define IAP_FIRMWARE_FILE	"DuetEthernetFirmware.bin"
-const size_t NumFirmwareUpdateModules = 1;		// 1 module
+constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 #else
 # error Firmware name not defined
@@ -29,20 +29,20 @@ const size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define HAS_VOLTAGE_MONITOR		1
 #define ACTIVE_LOW_HEAT_ON		1
 
-#define IAP_UPDATE_FILE		"iap4e.bin"			// using the same IAP file for both Duet WiFi and Duet Ethernet
+#define IAP_UPDATE_FILE		"iap4e.bin"				// using the same IAP file for both Duet WiFi and Duet Ethernet
 
-#define SUPPORT_INKJET		0					// set nonzero to support inkjet control
-#define SUPPORT_ROLAND		0					// set nonzero to support Roland mill
-#define SUPPORT_SCANNER		1					// set zero to disable support for FreeLSS scanners
-#define SUPPORT_IOBITS		1					// set to support P parameter in G0/G1 commands
-#define SUPPORT_DHT_SENSOR	1					// set nonzero to support DHT temperature/humidity sensors
+#define SUPPORT_INKJET		0						// set nonzero to support inkjet control
+#define SUPPORT_ROLAND		0						// set nonzero to support Roland mill
+#define SUPPORT_SCANNER		1						// set zero to disable support for FreeLSS scanners
+#define SUPPORT_IOBITS		1						// set to support P parameter in G0/G1 commands
+#define SUPPORT_DHT_SENSOR	1						// set nonzero to support DHT temperature/humidity sensors
 
-#define USE_CACHE			1					// set nonzero to enable the cache
+#define USE_CACHE			1						// set nonzero to enable the cache
 
 // The physical capabilities of the machine
 
-const size_t DRIVES = 12;						// The maximum number of drives supported by the electronics
-const size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
+constexpr size_t DRIVES = 12;						// The maximum number of drives supported by the electronics
+constexpr size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 #define DRIVES_(a,b,c,d,e,f,g,h,i,j,k,l) { a,b,c,d,e,f,g,h,i,j,k,l }
 
 constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
@@ -141,6 +141,7 @@ constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = {53, NoPin};
 constexpr Pin SdWriteProtectPins[NumSdCards] = {NoPin, NoPin};
 constexpr Pin SdSpiCSPins[1] = {56};
+constexpr uint32_t ExpectedSdCardSpeed = 20000000;
 
 #if SUPPORT_INKJET
 // Inkjet control pins
@@ -164,7 +165,7 @@ constexpr Pin ROLAND_RTS_PIN = xx;											// Expansion pin 12, PA13_RXD1
 // This is the mapping from logical pins 60+ to firmware pin numbers
 constexpr Pin SpecialPinMap[] =
 {
-	24, 97, 98, 99														// We allow CS5-CS8 to be used because few users need >4 thermocouples or RTDs
+	24, 97, 98, 99															// We allow CS5-CS8 to be used because few users need >4 thermocouples or RTDs
 };
 constexpr Pin DueX5GpioPinMap[] = { 211, 210, 209, 208 };					// Pins 100-103 map to GPIO 1-4 on DueX5
 // We also allow pins 120-135 to be used if there is an additional SX1509B expander

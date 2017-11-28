@@ -1344,7 +1344,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				platform.DiagnosticTest(val);
+				result = GetGCodeResultFromError(platform.DiagnosticTest(gb, reply, val));
 			}
 		}
 		break;
@@ -1563,7 +1563,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 201: // Set/print axis accelerations
 		{
 			bool seen = false;
-			for (size_t axis = 0; axis < numVisibleAxes; axis++)
+			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
@@ -1587,7 +1587,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.printf("Accelerations: ");
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
 					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.Acceleration(axis) / distanceScale));
 				}
@@ -1605,7 +1605,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 203: // Set/print maximum feedrates
 		{
 			bool seen = false;
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
@@ -1629,7 +1629,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			if (!seen)
 			{
 				reply.copy("Maximum feedrates: ");
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
 					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.MaxFeedrate(axis) / (distanceScale * SecondsToMinutes)));
 				}
@@ -1716,7 +1716,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			bool setMin = (gb.Seen('S') ? (gb.GetIValue() == 1) : false);
 			bool seen = false;
-			for (size_t axis = 0; axis < numVisibleAxes; axis++)
+			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
@@ -1737,7 +1737,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				reply.copy("Axis limits ");
 				char sep = '-';
-				for (size_t axis = 0; axis < numVisibleAxes; axis++)
+				for (size_t axis = 0; axis < numTotalAxes; axis++)
 				{
 					reply.catf("%c %c: %.1f min, %.1f max", sep, axisLetters[axis], (double)platform.AxisMinimum(axis), (double)platform.AxisMaximum(axis));
 					sep = ',';
@@ -2726,7 +2726,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 566: // Set/print maximum jerk speeds
 		{
 			bool seen = false;
-			for (size_t axis = 0; axis < numVisibleAxes; axis++)
+			for (size_t axis = 0; axis < numTotalAxes; axis++)
 			{
 				if (gb.Seen(axisLetters[axis]))
 				{
@@ -2749,7 +2749,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			else if (!seen)
 			{
 				reply.copy("Maximum jerk rates: ");
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				for (size_t axis = 0; axis < numTotalAxes; ++axis)
 				{
 					reply.catf("%c: %.1f, ", axisLetters[axis], (double)(platform.ConfiguredInstantDv(axis) / (distanceScale * SecondsToMinutes)));
 				}
@@ -3277,7 +3277,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 584: // Set axis/extruder to stepper driver(s) mapping
-		if (!LockMovementAndWaitForStandstill(gb))	// we also rely on this to retrieve the current motor positions to moveBuffer
+		if (!LockMovementAndWaitForStandstill(gb))				// we also rely on this to retrieve the current motor positions to moveBuffer
 		{
 			return false;
 		}
@@ -3334,8 +3334,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 								moveBuffer.coords[numTotalAxes] = 0.0;		// user has defined a new axis, so set its position
 								currentUserPosition[numTotalAxes] = 0.0;	// set its requested user position too in case it is visible
 								++numTotalAxes;
+								numVisibleAxes = numTotalAxes;				// assume any new axes are visible unless there is a P parameter
 							}
-							numVisibleAxes = numTotalAxes;					// assume all axes are visible unless there is a P parameter
 							reprap.GetMove().SetNewPosition(moveBuffer.coords, true);	// tell the Move system where any new axes are
 							platform.SetAxisDriversConfig(drive, config);
 							if (numTotalAxes + numExtruders > DRIVES)
@@ -4188,7 +4188,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				float eVals[MaxExtruders];
 				size_t eCount = numExtruders;
 				gb.GetFloatArray(eVals, eCount, true);
-				// 2014-09-29 DC42: we no longer insist that the user supplies values for all possible extruder drives
 				for (size_t e = 0; e < eCount; e++)
 				{
 					platform.SetMotorCurrent(numTotalAxes + e, eVals[e], code);

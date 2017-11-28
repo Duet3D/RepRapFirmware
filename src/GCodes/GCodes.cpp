@@ -1433,8 +1433,9 @@ void GCodes::CheckFilament()
 		&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
 	   )
 	{
-		scratchString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
-		DoPause(*autoPauseGCode, PauseReason::filament, scratchString.Pointer());
+		String<100> filamentErrorString;
+		filamentErrorString.GetRef().printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
+		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.Pointer());
 		lastFilamentError = FilamentSensorStatus::ok;
 	}
 }
@@ -1740,9 +1741,10 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers)
 		return false;
 	}
 
-	scratchString.printf("Stall detected on driver(s)");
-	ListDrivers(scratchString, stalledDrivers);
-	DoPause(*autoPauseGCode, PauseReason::stall, scratchString.Pointer());
+	String<100> stallErrorString;
+	stallErrorString.GetRef().printf("Stall detected on driver(s)");
+	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
+	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.Pointer());
 	return true;
 }
 

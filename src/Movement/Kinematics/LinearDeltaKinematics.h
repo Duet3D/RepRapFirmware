@@ -11,10 +11,10 @@
 #include "RepRapFirmware.h"
 #include "Kinematics.h"
 
-const size_t DELTA_AXES = 3;
-const size_t A_AXIS = 0;
-const size_t B_AXIS = 1;
-const size_t C_AXIS = 2;
+constexpr size_t DELTA_AXES = 3;
+constexpr size_t DELTA_A_AXIS = 0;
+constexpr size_t DELTA_B_AXIS = 1;
+constexpr size_t DELTA_C_AXIS = 2;
 
 // Class to hold the parameter for a delta machine.
 class LinearDeltaKinematics : public Kinematics
@@ -88,6 +88,7 @@ private:
 	float Xbc, Xca, Xab, Ybc, Yca, Yab;
 	float coreFa, coreFb, coreFc;
     float Q, Q2, D2;
+
     bool doneAutoCalibration;							// True if we have done auto calibration
 };
 

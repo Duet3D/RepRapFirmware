@@ -50,7 +50,6 @@ constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr uint32_t DriverCoolingTimeout = 4000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds
 
-
 // FanCheckInterval must be lower than MinimumWarningInterval to avoid giving driver over temperature warnings too soon when thermostatic control of electronics cooling fans is used
 static_assert(FanCheckInterval < MinimumWarningInterval, "FanCheckInterval too large");
 
@@ -136,26 +135,28 @@ constexpr unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency fo
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
 constexpr size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
-constexpr size_t MaxDeltaCalibrationPoints = 32;		// Should a power of 2 for speed
+constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 #elif SAM3XA
 constexpr size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 at 20mm intervals
 constexpr size_t MaxXGridPoints = 21;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
-constexpr size_t MaxDeltaCalibrationPoints = 32;		// Should a power of 2 for speed
+constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
 #else
 # error
 #endif
 
-const float DefaultGridSpacing = 20.0;				// Default bed probing grid spacing in mm
+const float DefaultGridSpacing = 20.0;					// Default bed probing grid spacing in mm
 
 static_assert(MaxProbePoints <= MaxGridProbePoints, "MaxProbePoints must be <= MaxGridProbePoints");
-static_assert(MaxDeltaCalibrationPoints <= MaxProbePoints, "MaxDeltaCalibrationPoints must be <= MaxProbePoints");
+static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxDeltaCalibrationPoints must be <= MaxProbePoints");
 
+// Z probing
 constexpr float DEFAULT_Z_DIVE = 5.0;					// Millimetres
 constexpr float DEFAULT_PROBE_SPEED = 2.0;				// Default Z probing speed mm/sec
 constexpr float DEFAULT_TRAVEL_SPEED = 100.0;			// Default speed for travel to probe points
 constexpr float ZProbeMaxAcceleration = 250.0;			// Maximum Z acceleration to use at the start of a probing move
 constexpr size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
+constexpr uint32_t ProbingSpeedReductionFactor = 3;		// The factor by which we reduce the Z probing speed when we get a 'near' indication
 
 constexpr float TRIANGLE_ZERO = -0.001;					// Millimetres
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres

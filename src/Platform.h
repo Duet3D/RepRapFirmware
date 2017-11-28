@@ -1,21 +1,11 @@
 /****************************************************************************************************
 
-RepRapFirmware - Platform: RepRapPro Ormerod with Duet controller
+RepRapFirmware - Platform
 
 Platform contains all the code and definitions to deal with machine-dependent things such as control
 pins, bed area, number of extruders, tolerable accelerations and speeds and so on.
 
-No definitions that are system-independent should go in here.  Put them in Configuration.h.  Note that
-the lengths of arrays such as DRIVES (see below) are defined here, so any array initialiser that depends on those
-lengths, for example:
-
-#define DRIVES 4
-.
-.
-.
-#define DRIVE_RELATIVE_MODES {false, false, false, true}
-
-also needs to go here.
+No definitions that are system-independent should go in here.  Put them in Configuration.h.
 
 -----------------------------------------------------------------------------------------------------
 
@@ -60,16 +50,10 @@ Licence: GPL
 # include "Microstepping.h"
 #endif
 
-const bool FORWARDS = true;
-const bool BACKWARDS = !FORWARDS;
+constexpr bool FORWARDS = true;
+constexpr bool BACKWARDS = !FORWARDS;
 
 /**************************************************************************************************/
-
-// Some constants
-#define TIME_TO_REPRAP 1.0e6 		// Convert seconds to the units used by the machine (usually microseconds)
-#define TIME_FROM_REPRAP 1.0e-6 	// Convert the units used by the machine (usually microseconds) to seconds
-
-#define DEGREE_SYMBOL	"\xC2\xB0"	// Unicode degree-symbol as UTF8
 
 #if SUPPORT_INKJET
 
@@ -93,24 +77,24 @@ const float AXIS_MAXIMA[MaxAxes] = AXES_(230.0, 210.0, 200.0, 0.0, 0.0, 0.0, 0.0
 
 // Z PROBE
 
-const float Z_PROBE_STOP_HEIGHT = 0.7;							// Millimetres
-const unsigned int Z_PROBE_AVERAGE_READINGS = 8;				// We average this number of readings with IR on, and the same number with IR off
-const int Z_PROBE_AD_VALUE = 500;								// Default for the Z probe - should be overwritten by experiment
+constexpr float Z_PROBE_STOP_HEIGHT = 0.7;						// Millimetres
+constexpr unsigned int Z_PROBE_AVERAGE_READINGS = 8;			// We average this number of readings with IR on, and the same number with IR off
+constexpr int Z_PROBE_AD_VALUE = 500;							// Default for the Z probe - should be overwritten by experiment
 
 // HEATERS - The bed is assumed to be the at index 0
 
 // Define the number of temperature readings we average for each thermistor. This should be a power of 2 and at least 4 ^ AD_OVERSAMPLE_BITS.
 // Keep THERMISTOR_AVERAGE_READINGS * NUM_HEATERS * 2ms no greater than HEAT_SAMPLE_TIME or the PIDs won't work well.
-const unsigned int ThermistorAverageReadings = 32;
+constexpr unsigned int ThermistorAverageReadings = 32;
 
-const uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
+constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in milliseconds between successive temp samples by Pid::Spin() permitted for a temp sensor
 
 /****************************************************************************************************/
 
 // File handling
 
-const size_t MAX_FILES = 10;					// Must be large enough to handle the max number of simultaneous web requests + files being printed
-const size_t FILE_BUFFER_SIZE = 256;
+constexpr size_t MAX_FILES = 10;					// Must be large enough to handle the max number of simultaneous web requests + files being printed
+constexpr size_t FILE_BUFFER_SIZE = 256;
 
 /****************************************************************************************************/
 
@@ -170,6 +154,7 @@ enum class SoftwareResetReason : uint16_t
 	NMI = 0x20,
 	hardFault = 0x30,				// most exceptions get escalated to a hard fault
 	stuckInSpin = 0x40,				// we got stuck in a Spin() function for too long
+	wdtFault = 0x50,				// secondary watchdog
 	otherFault = 0x70,
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
 	inLwipSpin = 0x2000,			// we got stuck in a call to LWIP for too long
@@ -179,18 +164,20 @@ enum class SoftwareResetReason : uint16_t
 // Enumeration to describe various tests we do in response to the M122 command
 enum class DiagnosticTestType : int
 {
+	PrintTestReport = 1,			// run some tests and report the processor ID
+
+	PrintMoves = 100,				// print summary of recent moves (only if recording moves was enabled in firmware)
+#ifdef DUET_NG
+	PrintExpanderStatus = 101,		// print DueXn expander status
+#endif
+	TimeSquareRoot = 102,			// do a timing test on the square root function
+
 	TestWatchdog = 1001,			// test that we get a watchdog reset if the tick interrupt stops
 	TestSpinLockup = 1002,			// test that we get a software reset if a Spin() function takes too long
 	TestSerialBlock = 1003,			// test what happens when we write a blocking message via debugPrintf()
 	DivideByZero = 1004,			// do an integer divide by zero to test exception handling
 	UnalignedMemoryAccess = 1005,	// do an unaligned memory access to test exception handling
-	BusFault = 1006,				// generate a bus fault
-
-	PrintMoves = 100,				// print summary of recent moves
-#ifdef DUET_NG
-	PrintExpanderStatus = 101,		// print DueXn expander status
-#endif
-	TimeSquareRoot = 102			// do a timing test on the square root function
+	BusFault = 1006					// generate a bus fault
 };
 
 /***************************************************************************************************************/
@@ -313,7 +300,7 @@ public:
 	Compatibility Emulating() const;
 	void SetEmulating(Compatibility c);
 	void Diagnostics(MessageType mtype);
-	void DiagnosticTest(int d);
+	bool DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d);
 	void ClassReport(uint32_t &lastTime);  			// Called on Spin() return to check everything's live.
 	void LogError(ErrorCode e) { errorCodeBits |= (uint32_t)e; }
 
@@ -606,6 +593,10 @@ private:
 	bool AnyMotorStalled(size_t drive) const pre(drive < DRIVES);
 #endif
 
+#if SAM4E || SAM4S || SAME70
+	void PrintUniqueId(MessageType mtype);
+#endif
+
 	// These are the structures used to hold our non-volatile data.
 	// The SAM3X and SAM4E don't have EEPROM so we save the data to flash. This unfortunately means that it gets cleared
 	// every time we reprogram the firmware via bossa, but it can be retained when firmware updates are performed
@@ -650,7 +641,7 @@ private:
 		}
 	};
 
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in SAM4 user signature area");
 #else
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");

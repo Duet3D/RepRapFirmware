@@ -222,9 +222,29 @@ extern "C"
 	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
 	        " mrseq r0, msp                                             \n"
 	        " mrsne r0, psp                                             \n"
-	        " ldr r2, handler2_address_const                            \n"
+	        " ldr r2, handler_hf_address_const                          \n"
 	        " bx r2                                                     \n"
-	        " handler2_address_const: .word hardFaultDispatcher         \n"
+	        " handler_hf_address_const: .word hardFaultDispatcher       \n"
+	    );
+	}
+
+	void wdtFaultDispatcher(const uint32_t *pulFaultStackAddress)
+	{
+	    reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::wdtFault, pulFaultStackAddress + 5);
+	}
+
+	void WDT_Handler() __attribute__((naked));
+	void WDT_Handler()
+	{
+	    __asm volatile
+	    (
+	        " tst lr, #4                                                \n"		/* test bit 2 of the EXC_RETURN in LR to determine which stack was in use */
+	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
+	        " mrseq r0, msp                                             \n"
+	        " mrsne r0, psp                                             \n"
+	        " ldr r2, handler_wdt_address_const                         \n"
+	        " bx r2                                                     \n"
+	        " handler_wdt_address_const: .word wdtFaultDispatcher       \n"
 	    );
 	}
 
@@ -243,17 +263,17 @@ extern "C"
 	        " ite eq                                                    \n"		/* load the appropriate stack pointer into R0 */
 	        " mrseq r0, msp                                             \n"
 	        " mrsne r0, psp                                             \n"
-	        " ldr r2, handler4_address_const                            \n"
+	        " ldr r2, handler_oflt_address_const                        \n"
 	        " bx r2                                                     \n"
-	        " handler4_address_const: .word otherFaultDispatcher        \n"
+	        " handler_oflt_address_const: .word otherFaultDispatcher    \n"
 	    );
 	}
 
 	// We could set up the following fault handlers to retrieve the program counter in the same way as for a Hard Fault,
 	// however these exceptions are unlikely to occur, so for now we just report the exception type.
-	// 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
 	void NMI_Handler        () { reprap.GetPlatform().SoftwareReset((uint16_t)SoftwareResetReason::NMI); }
 
+	// 2017-05-25: A user is getting 'otherFault' reports, so now we do a stack dump for those too.
 	void SVC_Handler		() __attribute__ ((alias("OtherFault_Handler")));
 	void DebugMon_Handler   () __attribute__ ((alias("OtherFault_Handler")));
 	void PendSV_Handler		() __attribute__ ((alias("OtherFault_Handler")));
@@ -1158,10 +1178,14 @@ void Platform::UpdateFirmware()
 	}
 
 #ifdef DUET_NG
-	IoPort::WriteDigital(Z_PROBE_MOD_PIN, false);		// turn the DIAG LED off
+	IoPort::WriteDigital(Z_PROBE_MOD_PIN, false);	// turn the DIAG LED off
 #endif
 
 	wdt_restart(WDT);								// kick the watchdog one last time
+
+#if SAM4E || SAME70
+	rswdt_restart(RSWDT);							// kick the secondary watchdog
+#endif
 
 	// Modify vector table location
 	__DSB();
@@ -1740,6 +1764,10 @@ void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 {
 	wdt_restart(WDT);							// kick the watchdog
 
+#if SAM4E || SAME70
+	rswdt_restart(RSWDT);						// kick the secondary watchdog
+#endif
+
 	DisableCache();								// disable the cache, it seems to upset flash memory access
 
 	if (reason == (uint16_t)SoftwareResetReason::erase)
@@ -1856,13 +1884,18 @@ static void FanInterrupt(void*)
 
 void Platform::InitialiseInterrupts()
 {
+#if SAM4E || SAM7E
+	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);			// set priority for watchdog interrupts
+#endif
+
 	// Set the tick interrupt to the highest priority. We need to to monitor the heaters and kick the watchdog.
-	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);	// set priority for tick interrupts
+	NVIC_SetPriority(SysTick_IRQn, NvicPrioritySystick);		// set priority for tick interrupts
 
 #if SAM4E || SAM4S
-	NVIC_SetPriority(UART0_IRQn, NvicPriorityUart);			// set priority for UART interrupt - must be higher than step interrupt
+	NVIC_SetPriority(UART0_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
+	NVIC_SetPriority(UART1_IRQn, NvicPriorityWiFiUart);			// set priority for WiFi UART interrupt
 #else
-	NVIC_SetPriority(UART_IRQn, NvicPriorityUart);			// set priority for UART interrupt - must be higher than step interrupt
+	NVIC_SetPriority(UART_IRQn, NvicPriorityPanelDueUart);		// set priority for UART interrupt
 #endif
 
 #if HAS_SMART_DRIVERS
@@ -1933,6 +1966,13 @@ void Platform::InitialiseInterrupts()
 	const uint16_t timeout = 32768/128;												// set watchdog timeout to 1 second (max allowed value is 4095 = 16 seconds)
 	wdt_init(WDT, WDT_MR_WDRSTEN, timeout, timeout);								// reset the processor on a watchdog fault
 
+#if SAM4E || SAME70
+	// The RSWDT must be initialised *after* the main WDT
+	const uint16_t rsTimeout = 16384/128;											// set secondary watchdog timeout to 0.5 second (max allowed value is 4095 = 16 seconds)
+	rswdt_init(RSWDT, RSWDT_MR_WDFIEN, rsTimeout, rsTimeout);						// generate an interrupt on a watchdog fault
+	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog interrupt
+#endif
+
 	active = true;							// this enables the tick interrupt, which keeps the watchdog happy
 }
 
@@ -1942,9 +1982,87 @@ void Platform::InitialiseInterrupts()
 //extern "C" uint32_t longestWriteWaitTime, shortestWriteWaitTime, longestReadWaitTime, shortestReadWaitTime;
 //extern uint32_t maxRead, maxWrite;
 
+#if SAM4E || SAM4S || SAME70
+
+// Print the unique processor ID
+void Platform::PrintUniqueId(MessageType mtype)
+{
+	uint32_t idBuf[5];
+	DisableCache();
+	cpu_irq_disable();
+	const uint32_t rc = flash_read_unique_id(idBuf, 4);
+	cpu_irq_enable();
+	EnableCache();
+	if (rc == 0)
+	{
+		// Put the checksum at the end
+		idBuf[4] = idBuf[0] ^ idBuf[1] ^ idBuf[2] ^ idBuf[3];
+
+		// We are only going to print 30 5-bit characters = 128 data bits + 22 checksum bits. So compress the 32 checksum bits into 22.
+		idBuf[4] ^= (idBuf[4] >> 10);
+
+		// Print the unique ID and checksum as 30 base5 alphanumeric digits
+		char digits[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
+		char *digitPtr = digits;
+		for (size_t i = 0; i < 30; ++i)
+		{
+			if ((i % 5) == 0 && i != 0)
+			{
+				*digitPtr++ = '-';
+			}
+			const size_t index = (i * 5) / 32;
+			const size_t shift = (i * 5) % 32;
+			uint32_t val = idBuf[index] >> shift;
+			if (shift > 32 - 5)
+			{
+				// We need some bits from the next dword too
+				val |= idBuf[index + 1] << (32 - shift);
+			}
+			val &= 31;
+			char c;
+			if (val < 10)
+			{
+				c = val + '0';
+			}
+			else
+			{
+				c = val + ('A' - 10);
+				// We have 26 letters in the usual A-Z alphabet and we only need 22 of them plus 0-9.
+				// So avoid using letters C, E, I and O which are easily mistaken for G, F, 1 and 0.
+				if (c >= 'C')
+				{
+					++c;
+				}
+				if (c >= 'E')
+				{
+					++c;
+				}
+				if (c >= 'I')
+				{
+					++c;
+				}
+				if (c >= 'O')
+				{
+					++c;
+				}
+			}
+			*digitPtr++ = c;
+		}
+		*digitPtr = 0;
+		MessageF(mtype, "Board ID: %s\n", digits);
+	}
+}
+
+#endif
+
 // Return diagnostic information
 void Platform::Diagnostics(MessageType mtype)
 {
+#if SAM4E && USE_CACHE
+	// Get the cache statistics before we start messing around with the cache
+	const uint32_t cacheCount = cmcc_get_monitor_cnt(CMCC);
+#endif
+
 	Message(mtype, "=== Platform ===\n");
 
 	// Print the firmware version and board type
@@ -1960,79 +2078,8 @@ void Platform::Diagnostics(MessageType mtype)
 
 	Message(mtype, "\n");
 
-#if SAM4E && USE_CACHE
-	// Get the cache statistics before we start messing around with the cache
-	const uint32_t cacheCount = cmcc_get_monitor_cnt(CMCC);
-#endif
-
 #if SAM4E || SAM4S
-	// Print the unique ID
-	{
-		uint32_t idBuf[5];
-		DisableCache();
-		cpu_irq_disable();
-		const uint32_t rc = flash_read_unique_id(idBuf, 4);
-		cpu_irq_enable();
-		EnableCache();
-		if (rc == 0)
-		{
-			// Put the checksum at the end
-			idBuf[4] = idBuf[0] ^ idBuf[1] ^ idBuf[2] ^ idBuf[3];
-
-			// We are only going to print 30 5-bit characters = 128 data bits + 22 checksum bits. So compress the 32 checksum bits into 22.
-			idBuf[4] ^= (idBuf[4] >> 10);
-
-			// Print the unique ID and checksum as 30 base5 alphanumeric digits
-			char digits[30 + 5 + 1];			// 30 characters, 5 separators, 1 null terminator
-			char *digitPtr = digits;
-			for (size_t i = 0; i < 30; ++i)
-			{
-				if ((i % 5) == 0 && i != 0)
-				{
-					*digitPtr++ = '-';
-				}
-				const size_t index = (i * 5) / 32;
-				const size_t shift = (i * 5) % 32;
-				uint32_t val = idBuf[index] >> shift;
-				if (shift > 32 - 5)
-				{
-					// We need some bits from the next dword too
-					val |= idBuf[index + 1] << (32 - shift);
-				}
-				val &= 31;
-				char c;
-				if (val < 10)
-				{
-					c = val + '0';
-				}
-				else
-				{
-					c = val + ('A' - 10);
-					// We have 26 letters in the usual A-Z alphabet and we only need 22 of them.
-					// So avoid using letters C, E, I and O which are easily mistaken for G, F, 1 and 0.
-					if (c >= 'C')
-					{
-						++c;
-					}
-					if (c >= 'E')
-					{
-						++c;
-					}
-					if (c >= 'I')
-					{
-						++c;
-					}
-					if (c >= 'O')
-					{
-						++c;
-					}
-				}
-				*digitPtr++ = c;
-			}
-			*digitPtr = 0;
-			MessageF(mtype, "Board ID: %s\n", digits);
-		}
-	}
+	PrintUniqueId(mtype);
 #endif
 
 	// Print memory stats and error codes to USB and copy them to the current webserver reply
@@ -2073,7 +2120,7 @@ void Platform::Diagnostics(MessageType mtype)
 		memset(srdBuf, 0, sizeof(srdBuf));
 		int slot = -1;
 
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 		// Work around bug in ASF flash library: flash_read_user_signature calls a RAMFUNC without disabling interrupts first.
 		// This caused a crash (watchdog timeout) sometimes if we run M122 while a print is in progress
 		DisableCache();
@@ -2103,8 +2150,9 @@ void Platform::Diagnostics(MessageType mtype)
 											: (reason == (uint32_t)SoftwareResetReason::NMI) ? "NMI"
 												: (reason == (uint32_t)SoftwareResetReason::hardFault) ? "Hard fault"
 													: (reason == (uint32_t)SoftwareResetReason::stuckInSpin) ? "Stuck in spin loop"
-														: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
-															: "Unknown";
+														: (reason == (uint32_t)SoftwareResetReason::wdtFault) ? "Watchdog timeout"
+															: (reason == (uint32_t)SoftwareResetReason::otherFault) ? "Other fault"
+																: "Unknown";
 			MessageF(mtype, "%s, spinning module %s, available RAM %" PRIu32 " bytes (slot %d)\n",
 					reasonText, moduleName[srdBuf[slot].resetReason & 0x0F], srdBuf[slot].neverUsedRam, slot);
 			// Our format buffer is only 256 characters long, so the next 2 lines must be written separately
@@ -2143,7 +2191,7 @@ void Platform::Diagnostics(MessageType mtype)
 
 	// Show the HSMCI CD pin and speed
 #if HAS_HIGH_SPEED_SD
-	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed()/1000000.0));
+	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed() * 0.000001));
 #else
 	MessageF(mtype, "SD card 0 %s\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"));
 #endif
@@ -2165,14 +2213,10 @@ void Platform::Diagnostics(MessageType mtype)
 		(double)AdcReadingToPowerVoltage(lowestVin), (double)AdcReadingToPowerVoltage(currentVin), (double)AdcReadingToPowerVoltage(highestVin),
 				numUnderVoltageEvents, numOverVoltageEvents);
 	lowestVin = highestVin = currentVin;
+#endif
 
+#if HAS_SMART_DRIVERS
 	// Show the motor stall status
-	if (expansionBoard == ExpansionBoardType::DueX2 || expansionBoard == ExpansionBoardType::DueX5)
-	{
-		const bool stalled = digitalRead(DueX_SG);
-		MessageF(mtype, "Expansion motor(s) stall indication: %s\n", (stalled) ? "yes" : "no");
-	}
-
 	for (size_t drive = 0; drive < numSmartDrivers; ++drive)
 	{
 		const uint32_t stat = SmartDrivers::GetLiveStatus(drive);
@@ -2187,6 +2231,14 @@ void Platform::Diagnostics(MessageType mtype)
 							: (stat & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB))
 							  ? "" : " ok"
 				);
+	}
+#endif
+
+#ifdef DUET_NG
+	if (expansionBoard == ExpansionBoardType::DueX2 || expansionBoard == ExpansionBoardType::DueX5)
+	{
+		const bool stalled = digitalRead(DueX_SG);
+		MessageF(mtype, "Expansion motor(s) stall indication: %s\n", (stalled) ? "yes" : "no");
 	}
 #endif
 
@@ -2230,14 +2282,141 @@ void Platform::Diagnostics(MessageType mtype)
 #endif
 }
 
-void Platform::DiagnosticTest(int d)
+bool Platform::DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d)
 {
 	static const uint32_t dummy[2] = { 0, 0 };
 
 	switch (d)
 	{
+	case (int)DiagnosticTestType::PrintTestReport:
+		{
+			const MessageType mtype = gb.GetResponseMessageType();
+			bool testFailed = false;
+
+			// Check the SD card detect and speed
+			if (!sd_mmc_card_detected(0))
+			{
+				Message(AddError(mtype), "SD card 0 not detected\n");
+				testFailed = true;
+			}
+#if HAS_HIGH_SPEED_SD
+			else if (hsmci_get_speed() != ExpectedSdCardSpeed)
+			{
+				MessageF(AddError(mtype), "SD card speed %.2fMbytes/sec is unexpected\n", (double)((float)hsmci_get_speed() * 0.000001));
+				testFailed = true;
+			}
+#endif
+			else
+			{
+				Message(mtype, "SD card interface OK\n");
+			}
+
+#if HAS_CPU_TEMP_SENSOR
+			// Check the MCU temperature
+			{
+				float tempMinMax[2];
+				size_t numTemps = 2;
+				bool seen = false;
+				if (gb.TryGetFloatArray('T', numTemps, tempMinMax, reply, seen, false))
+				{
+					return true;
+				}
+				if (!seen)
+				{
+					reply.copy("Missing T parameter");
+					return true;
+				}
+
+				const float currentMcuTemperature = AdcReadingToCpuTemperature(cpuTemperatureFilter.GetSum());
+				if (currentMcuTemperature < tempMinMax[0])
+				{
+					MessageF(AddError(mtype), "MCU temperature %.1f is lower than expected\n", (double)currentMcuTemperature);
+					testFailed = true;
+				}
+				else if (currentMcuTemperature > tempMinMax[1])
+				{
+					MessageF(AddError(mtype), "MCU temperature %.1f is higher than expected\n", (double)currentMcuTemperature);
+					testFailed = true;
+				}
+				else
+				{
+					Message(mtype, "MCU temperature reading OK\n");
+				}
+			}
+#endif
+
+#if HAS_VOLTAGE_MONITOR
+			// Check the supply voltage
+			{
+				float voltageMinMax[2];
+				size_t numVoltages = 2;
+				bool seen = false;
+				if (gb.TryGetFloatArray('V', numVoltages, voltageMinMax, reply, seen, false))
+				{
+					return true;
+				}
+				if (!seen)
+				{
+					reply.copy("Missing V parameter");
+					return true;
+				}
+
+				const float voltage = AdcReadingToPowerVoltage(currentVin);
+				if (voltage < voltageMinMax[0])
+				{
+					MessageF(AddError(mtype), "Voltage reading %.1f is lower than expected\n", (double)voltage);
+					testFailed = true;
+				}
+				else if (voltage > voltageMinMax[1])
+				{
+					MessageF(AddError(mtype), "Voltage reading %.1f is higher than expected\n", (double)voltage);
+					testFailed = true;
+				}
+				else
+				{
+					Message(mtype, "Voltage reading OK\n");
+				}
+			}
+
+			// Check the stepper driver status
+			bool driversOK = true;
+			for (size_t driver = 0; driver < numSmartDrivers; ++driver)
+			{
+				const uint32_t stat = SmartDrivers::GetAccumulatedStatus(driver, 0xFFFFFFFF);
+				if ((stat & (TMC_RR_OT || TMC_RR_OTPW)) != 0)
+				{
+					MessageF(AddError(mtype), "Driver %u reports over temperature\n", driver);
+					driversOK = false;
+				}
+				if ((stat & TMC_RR_S2G) != 0)
+				{
+					MessageF(AddError(mtype), "Driver %u reports short-to-ground\n", driver);
+					driversOK = false;
+				}
+			}
+			if (driversOK)
+			{
+				Message(mtype, "Driver status OK\n");
+			}
+			else
+			{
+				testFailed = true;
+			}
+#endif
+
+			Message(mtype, (testFailed) ? "***** ONE OR MORE CHECKS FAILED *****\n" : "All checks passed\n");
+
+#if SAM4E || SAM4S || SAME70
+			if (!testFailed)
+			{
+				PrintUniqueId(mtype);
+			}
+#endif
+		}
+		break;
+
 	case (int)DiagnosticTestType::TestWatchdog:
-		SysTick ->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);	// disable the system tick interrupt so that we get a watchdog timeout reset
+		SysTick->CTRL &= ~(SysTick_CTRL_TICKINT_Msk);	// disable the system tick interrupt so that we get a watchdog timeout reset
 		break;
 
 	case (int)DiagnosticTestType::TestSpinLockup:
@@ -2259,7 +2438,7 @@ void Platform::DiagnosticTest(int d)
 
 	case (int)DiagnosticTestType::BusFault:
 		// Read from the "Undefined (Abort)" area
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 		(void)RepRap::ReadDword(reinterpret_cast<const char*>(0x20800000));
 #elif SAM3XA
 		(void)RepRap::ReadDword(reinterpret_cast<const char*>(0x20200000));
@@ -2301,7 +2480,7 @@ void Platform::DiagnosticTest(int d)
 					ok2 = false;
 				}
 			}
-			MessageF(GenericMessage, "Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s\n",
+			reply.printf("Square roots: 62-bit %.2fus %s, 32-bit %.2fus %s\n",
 					(double)(tim1 * 10000)/DDA::stepClockRate, (ok1) ? "ok" : "ERROR",
 							(double)(tim2 * 10000)/DDA::stepClockRate, (ok2) ? "ok" : "ERROR");
 		}
@@ -2309,13 +2488,15 @@ void Platform::DiagnosticTest(int d)
 
 #ifdef DUET_NG
 	case (int)DiagnosticTestType::PrintExpanderStatus:
-		MessageF(GenericMessage, "Expander status %04X\n", DuetExpansion::DiagnosticRead());
+		reply.printf("Expander status %04X\n", DuetExpansion::DiagnosticRead());
 		break;
 #endif
 
 	default:
 		break;
 	}
+
+	return false;
 }
 
 extern "C" uint32_t _estack;		// this is defined in the linker script
@@ -4240,6 +4421,10 @@ void STEP_TC_HANDLER()
 
 void Platform::Tick()
 {
+#if SAM4E || SAME70
+	rswdt_restart(RSWDT);							// kick the secondary watchdog (the primary one is kicked in CoreNG)
+#endif
+
 	if (tickState != 0)
 	{
 #if HAS_VOLTAGE_MONITOR

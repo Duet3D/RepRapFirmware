@@ -116,6 +116,9 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 // Macro to assign an array from an initialiser list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
 
+// UTF8 code for the degree-symbol
+#define DEGREE_SYMBOL	"\xC2\xB0"	// Unicode degree-symbol as UTF8
+
 // Classes to facilitate range-based for loops that iterate from 0 up to just below a limit
 template<class T> class SimpleRangeIterator
 {
@@ -217,11 +220,16 @@ typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
-const uint32_t NvicPriorityUart = 1;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+#if SAM4E || SAME70
+const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
+#endif
+
+const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const uint32_t NvicPriorityDriversUsart = 2;	// USART used to control and monitor the TMC2660 drivers
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
 const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const uint32_t NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts
+const uint32_t NvicPriorityWiFiUart = 6;		// UART used to receive debug data from the WiFi module
 const uint32_t NvicPriorityUSB = 6;				// USB interrupt
 
 #if HAS_LWIP_NETWORKING

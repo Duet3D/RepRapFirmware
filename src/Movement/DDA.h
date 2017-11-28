@@ -196,6 +196,9 @@ private:
 	// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 	uint32_t clocksNeeded;					// in clocks
 	uint32_t moveStartTime;					// clock count at which the move was started
+	uint32_t startSpeedTimesCdivA;			// the number of clocks it would have taken t reach the start speed form rest
+	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
+	int32_t extraAccelerationClocks;		// the additional number of clocks needed because we started the move at less than topSpeed. Negative after ReduceHomingSpeed has been called.
 
 	float proportionLeft;					// what proportion of the extrusion in the G1 or G0 move of which this is a part remains to be done after this segment is complete
 
