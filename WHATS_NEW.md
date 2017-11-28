@@ -1,9 +1,30 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20beta11
+==================
+Upgrade notes:
+- Recommended DuetWiFiServer.bin version is 1.20beta10. I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
+- Recommended DuetWebControl version is 1.19.3
+- See also the notes for earlier 1.20beta versions
+
+New features:
+- Added Hangprinter kinematics. Auto calibration is not expected to work yet.
+- Added M122 P1 command for use in the Duet test procedure
+- Changed a path to a file in the linker command line to work around an intermittent Eclipse bug
+- DuetWiFi/Duet Ethernet: the secondary hardware watchdog is now enabled and generates an interrupt, so that if interrupts are enabled at the time then a crash dump can be saved. If this fails then the primary watchdog will reset the processor as before.
+
+Bug fixes:
+- Fixed issues caused by insufficient RAM (stack running into heap) by freeing up additional RAM in the movement structures
+- Fixed occasional hang in USB ISR
+- M201/203/208/566 commands now allow parameters for invisible axes to be set
+- If a M584 command does not include the P parameter, the number of visible axes is only set to the number of total axes if new axes are created in the command
+- Reverted to rounding down in step time calculations, because the change to round to nearest may have contributed to issues seen by some users of 1.20beta10
+- Set correct priority for interrupt from the UART used to receive debug info from the WiFi module
+- When a filament error occurred, the message displayed was one of the lines written to resurrect.g instead of the type of filament error. Similarly if the print was paused due to a motor stall.
+
 Version 1.20beta10
 ==================
-
 Upgrade notes:
 - Recommended DuetWiFiServer.bin version is 1.20beta10. I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
 - Recommended DuetWebControl version is 1.19.3
