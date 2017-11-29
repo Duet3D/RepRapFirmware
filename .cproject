@@ -7,7 +7,7 @@
 					<stringMacro name="LinkFlags2" type="VALUE_TEXT" value="-Wl,--end-group -lm -gcc"/>
 					<stringMacro name="LinkFlags1" type="VALUE_TEXT" value="-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group"/>
 					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreNG"/>
-					<stringMacro name="GccPath" type="VALUE_TEXT" value="C:\Program Files (x86)\GNU Tools ARM Embedded\6 2017-q2-update\bin"/>
+					<stringMacro name="GccPath" type="VALUE_TEXT" value="/home/christian/duet-dc42/gcc-arm-none-eabi-6-2017-q2-update/bin"/>
 				</macros>
 				<externalSettings/>
 				<extensions>
@@ -26,7 +26,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.1742191832" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${GccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.1660769040" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.223860525" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.13059261" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.13059261" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.163742171" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.230262206" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -105,12 +105,13 @@
 									<listOptionValue builtIn="false" value="DUET_06_085"/>
 									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
 								</option>
+								<option id="gnu.cpp.compiler.option.dialect.std.668239478" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.948285998" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/RADDS|src/Duet/Lwip/lwip/test|src/DuetNG" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/SAME70|src/Alligator|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/DuetNG|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -122,7 +123,7 @@
 					<stringMacro name="LinkFlags2" type="VALUE_TEXT" value="-Wl,--end-group -lm -gcc"/>
 					<stringMacro name="LinkFlags1" type="VALUE_TEXT" value="-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group"/>
 					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreNG"/>
-					<stringMacro name="GccPath" type="VALUE_TEXT" value="C:\Program Files (x86)\GNU Tools ARM Embedded\6 2017-q2-update\bin"/>
+					<stringMacro name="GccPath" type="VALUE_TEXT" value="/home/christian/duet-dc42/gcc-arm-none-eabi-6-2017-q2-update/bin"/>
 				</macros>
 				<externalSettings/>
 				<extensions>
@@ -141,7 +142,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.1491883811" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${GccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.353555591" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.857793524" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1026937542" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1026937542" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.1415072364" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.769576359" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -227,7 +228,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Alligator|src/RADDS|src/DuetNG/DuetEthernet|src/Duet" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/SAME70|src/Alligator|src/DuetNG/DuetEthernet|src/Duet|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -239,7 +240,7 @@
 					<stringMacro name="LinkFlags2" type="VALUE_TEXT" value="-Wl,--end-group -lm -gcc"/>
 					<stringMacro name="LinkFlags1" type="VALUE_TEXT" value="-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group"/>
 					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreNG"/>
-					<stringMacro name="GccPath" type="VALUE_TEXT" value="C:\Program Files (x86)\GNU Tools ARM Embedded\6 2017-q2-update\bin"/>
+					<stringMacro name="GccPath" type="VALUE_TEXT" value="/home/christian/duet-dc42/gcc-arm-none-eabi-6-2017-q2-update/bin"/>
 				</macros>
 				<externalSettings/>
 				<extensions>
@@ -258,7 +259,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.2092504710" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${GccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.1606498191" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.342355349" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1336978387" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1336978387" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.863511428" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.664007272" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -337,7 +338,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Alligator|src/Webserver|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/DuetNG|src/Duet" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/SAME70|src/Alligator|src/Webserver|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/Duet|src/DuetNG" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -349,7 +350,7 @@
 					<stringMacro name="LinkFlags2" type="VALUE_TEXT" value="-Wl,--end-group -lm -gcc"/>
 					<stringMacro name="LinkFlags1" type="VALUE_TEXT" value="-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group"/>
 					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreNG"/>
-					<stringMacro name="GccPath" type="VALUE_TEXT" value="C:\Program Files (x86)\GNU Tools ARM Embedded\6 2017-q2-update\bin"/>
+					<stringMacro name="GccPath" type="VALUE_TEXT" value="/home/christian/duet-dc42/gcc-arm-none-eabi-6-2017-q2-update/bin"/>
 				</macros>
 				<externalSettings/>
 				<extensions>
@@ -368,7 +369,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.1965306885" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${GccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.444696517" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.252007317" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.310136248" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.310136248" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.2020291169" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1429050288" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -477,7 +478,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Alligator|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Ethernet3|src/DuetNG/DuetEthernet/Ethernet3/examples|src/RADDS|src/DuetNG/DuetWiFi|src/Duet" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/SAME70|src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Ethernet3|src/DuetNG/DuetWiFi|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/Duet|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG/DuetEthernet/Ethernet3/examples|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/Alligator|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -489,7 +490,7 @@
 					<stringMacro name="LinkFlags2" type="VALUE_TEXT" value="-Wl,--end-group -lm -gcc"/>
 					<stringMacro name="LinkFlags1" type="VALUE_TEXT" value="-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry=Reset_Handler -Wl,--unresolved-symbols=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group"/>
 					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreNG"/>
-					<stringMacro name="GccPath" type="VALUE_TEXT" value="C:\Program Files (x86)\GNU Tools ARM Embedded\6 2017-q2-update\bin"/>
+					<stringMacro name="GccPath" type="VALUE_TEXT" value="/home/christian/duet-dc42/gcc-arm-none-eabi-6-2017-q2-update/bin"/>
 				</macros>
 				<externalSettings/>
 				<extensions>
@@ -508,7 +509,7 @@
 							<option id="cdt.managedbuild.option.gnu.cross.path.645044151" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${GccPath}" valueType="string"/>
 							<option id="cdt.managedbuild.option.gnu.cross.prefix.629438941" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.878309876" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
-							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.56178753" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.56178753" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
 							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.384615201" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1769413014" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -598,7 +599,148 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Duet/MCP4461|src/Alligator/Lwip/lwip/src/core/ipv6|src/Alligator/Lwip/lwip/src/include/ipv6|src/Alligator/Lwip/lwip/test|src/Duet/Lwip/lwip/src/core/ipv6|src/RADDS|src/Duet/Lwip/lwip/test|src/DuetNG" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/SAME70|src/Duet/Lwip/lwip/src/core/ipv6|src/Duet/Lwip/lwip/test|src/DuetNG|src/Alligator/Lwip/lwip/src/include/ipv6|src/Alligator/Lwip/lwip/test|src/Duet/MCP4461|src/Alligator/Lwip/lwip/src/core/ipv6|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+					</sourceEntries>
+				</configuration>
+			</storageModule>
+			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
+		</cconfiguration>
+		<cconfiguration id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366" moduleId="org.eclipse.cdt.core.settings" name="SAME70">
+				<macros>
+					<stringMacro name="CoreName" type="VALUE_TEXT" value="CoreNG"/>
+					<stringMacro name="GccPath" type="VALUE_TEXT" value="/home/christian/duet-dc42/gcc-arm-none-eabi-6-2017-q2-update/bin"/>
+				</macros>
+				<externalSettings/>
+				<extensions>
+					<extension id="org.eclipse.cdt.core.ELF" point="org.eclipse.cdt.core.BinaryParser"/>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GCCErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GASErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.GLDErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+				</extensions>
+			</storageModule>
+			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+				<configuration artifactExtension="elf" artifactName="SAME70Firmware" buildArtefactType="org.eclipse.cdt.build.core.buildArtefactType.exe" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=org.eclipse.cdt.build.core.buildArtefactType.exe,org.eclipse.cdt.build.core.buildType=org.eclipse.cdt.build.core.buildType.release" cleanCommand="rm -rf" description="" id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366" name="SAME70" parent="cdt.managedbuild.config.gnu.cross.exe.release" postannouncebuildStep="Generating binary file" postbuildStep="arm-none-eabi-objcopy -O binary ${workspace_loc:/${ProjName}/${ConfigName}}/SAME70Firmware.elf ${workspace_loc:/${ProjName}/${ConfigName}}/SAME70Firmware.bin">
+					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366." name="/" resourcePath="">
+						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.1139837060" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release">
+							<option id="cdt.managedbuild.option.gnu.cross.path.232298757" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path" useByScannerDiscovery="false" value="${GccPath}" valueType="string"/>
+							<option id="cdt.managedbuild.option.gnu.cross.prefix.129562550" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix" useByScannerDiscovery="false" value="arm-none-eabi-" valueType="string"/>
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1459282571" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
+							<builder buildPath="${workspace_loc:/RepRapFirmware}/Release" id="cdt.managedbuild.builder.gnu.cross.1057113285" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.builder.gnu.cross"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.605884142" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler">
+								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1140801581" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
+							</tool>
+							<tool commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${INPUTS}" id="cdt.managedbuild.tool.gnu.cross.c.compiler.1875744361" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler">
+								<option defaultValue="gnu.c.optimization.level.most" id="gnu.c.compiler.option.optimization.level.1166546312" name="Optimization Level" superClass="gnu.c.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.c.optimization.level.more" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.debugging.level.1210384110" name="Debug Level" superClass="gnu.c.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.default" valueType="enumerated"/>
+								<option id="gnu.c.compiler.option.misc.verbose.1543189960" name="Verbose (-v)" superClass="gnu.c.compiler.option.misc.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.misc.other.1960405405" name="Other flags" superClass="gnu.c.compiler.option.misc.other" useByScannerDiscovery="false" value="-c -std=gnu99 -mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -ffunction-sections -fdata-sections -nostdlib -Wdouble-promotion -fsingle-precision-constant" valueType="string"/>
+								<option id="gnu.c.compiler.option.include.paths.1998541680" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/cores/arduino}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Storage}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/clock}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/components/ethernet_phy/ksz8081rna}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/hsmci}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/gmac}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/pmc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/rstc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/rtc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/cmsis/same70/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/header_files}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/preprocessor}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/thirdparty/CMSIS/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/same70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/SAME70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/SAME70/Lwip/src/include}&quot;"/>
+								</option>
+								<option id="gnu.c.compiler.option.preprocessor.def.symbols.1538513469" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__SAME70Q21__"/>
+									<listOptionValue builtIn="false" value="CORE_NG"/>
+								</option>
+								<option id="gnu.c.compiler.option.dialect.std.675410838" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
+								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1934314229" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
+							</tool>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.1827697991" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.768696560" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver"/>
+							<tool command="gcc" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT}  ${LINK_FLAGS_1} &quot;${workspace_loc:/${CoreName}/SAM4E8E/cores/arduino/syscalls.o}&quot; ${INPUTS} ${LINK_FLAGS_2}" id="cdt.managedbuild.tool.gnu.cross.cpp.linker.696564119" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker">
+								<option id="gnu.cpp.link.option.nostdlibs.1090326863" name="No startup or default libs (-nostdlib)" superClass="gnu.cpp.link.option.nostdlibs" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.link.option.paths.1081775688" name="Library search path (-L)" superClass="gnu.cpp.link.option.paths" useByScannerDiscovery="false" valueType="libPaths">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/SAME70/}&quot;"/>
+								</option>
+								<option id="gnu.cpp.link.option.libs.24469676" name="Libraries (-l)" superClass="gnu.cpp.link.option.libs" useByScannerDiscovery="false" valueType="libs">
+									<listOptionValue builtIn="false" value="${CoreName}"/>
+								</option>
+								<option id="gnu.cpp.link.option.flags.697048579" name="Linker flags" superClass="gnu.cpp.link.option.flags" useByScannerDiscovery="false" value="-Os -Wl,--gc-sections -Wl,--fatal-warnings -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -T${workspace_loc:/${CoreName}/variants/same70/linker_scripts/gcc/flash.ld} -Wl,-Map,${workspace_loc:/${ProjName}/${ConfigName}}/${BuildArtifactFileBaseName}.map" valueType="string"/>
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.linker.input.1644909726" superClass="cdt.managedbuild.tool.gnu.cpp.linker.input">
+									<additionalInput kind="additionalinputdependency" paths="$(USER_OBJS)"/>
+									<additionalInput kind="additionalinput" paths="$(LIBS)"/>
+								</inputType>
+							</tool>
+							<tool command="g++" id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1593871654" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler">
+								<option id="gnu.cpp.compiler.option.optimization.level.12083037" name="Optimization Level" superClass="gnu.cpp.compiler.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.more" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.debugging.level.1377731020" name="Debug Level" superClass="gnu.cpp.compiler.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.default" valueType="enumerated"/>
+								<option id="gnu.cpp.compiler.option.other.verbose.492573123" name="Verbose (-v)" superClass="gnu.cpp.compiler.option.other.verbose" useByScannerDiscovery="false" value="false" valueType="boolean"/>
+								<option id="gnu.cpp.compiler.option.other.other.884708504" name="Other flags" superClass="gnu.cpp.compiler.option.other.other" useByScannerDiscovery="false" value="-c -std=gnu++11 -mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -ffunction-sections -fdata-sections -fno-threadsafe-statics -fno-rtti -fno-exceptions -nostdlib -Wdouble-promotion -fsingle-precision-constant" valueType="string"/>
+								<option id="gnu.cpp.compiler.option.include.paths.1532899594" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/cores/arduino}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Flash}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/SharedSpi}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Storage}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/libraries/Wire}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/clock}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/common/services/ioport}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/drivers/gmac}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/services/flash_efc}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/cmsis/same70/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/header_files}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/sam/utils/preprocessor}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/asf/thirdparty/CMSIS/Include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${CoreName}/variants/same70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/SAME70}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/SAME70/Lwip/src/include}&quot;"/>
+								</option>
+								<option id="gnu.cpp.compiler.option.preprocessor.def.1046973355" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="__SAME70Q21__"/>
+									<listOptionValue builtIn="false" value="CORE_NG"/>
+									<listOptionValue builtIn="false" value="_XOPEN_SOURCE"/>
+								</option>
+								<option id="gnu.cpp.compiler.option.dialect.std.2119862869" name="Language standard" superClass="gnu.cpp.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.cpp.compiler.dialect.default" valueType="enumerated"/>
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.310513869" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+					<folderInfo id="cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366.src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer" name="/" resourcePath="src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer">
+						<toolChain id="cdt.managedbuild.toolchain.gnu.cross.exe.release.1868548456" name="Cross GCC" superClass="cdt.managedbuild.toolchain.gnu.cross.exe.release" unusedChildren="">
+							<option id="cdt.managedbuild.option.gnu.cross.path.1965306885.313001552.1040164617" name="Path" superClass="cdt.managedbuild.option.gnu.cross.path.1965306885"/>
+							<option id="cdt.managedbuild.option.gnu.cross.prefix.444696517.1953934546.1227689785" name="Prefix" superClass="cdt.managedbuild.option.gnu.cross.prefix.444696517"/>
+							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.targetPlatform.gnu.cross.1835182207" isAbstract="false" osList="all" superClass="cdt.managedbuild.targetPlatform.gnu.cross"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.compiler.1892682275" name="Cross GCC Compiler" superClass="cdt.managedbuild.tool.gnu.cross.c.compiler.1875744361">
+								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.877734354" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
+							</tool>
+							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.compiler.562016228" name="Cross G++ Compiler" superClass="cdt.managedbuild.tool.gnu.cross.cpp.compiler.1593871654">
+								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.743548786" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
+							</tool>
+							<tool id="cdt.managedbuild.tool.gnu.cross.c.linker.2125321764" name="Cross GCC Linker" superClass="cdt.managedbuild.tool.gnu.cross.c.linker.1827697991"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.cpp.linker.2031592068" name="Cross G++ Linker" superClass="cdt.managedbuild.tool.gnu.cross.cpp.linker.696564119"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.archiver.756467354" name="Cross GCC Archiver" superClass="cdt.managedbuild.tool.gnu.cross.archiver.768696560"/>
+							<tool id="cdt.managedbuild.tool.gnu.cross.assembler.331109876" name="Cross GCC Assembler" superClass="cdt.managedbuild.tool.gnu.cross.assembler.605884142">
+								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.736615297" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
+							</tool>
+						</toolChain>
+					</folderInfo>
+					<sourceEntries>
+						<entry excluding="src/SAME70/Lwip/doc|src/SAME70/Lwip/src/apps/tftp|src/SAME70/Lwip/src/apps/sntp|src/SAME70/Lwip/src/apps/snmp|src/SAME70/Lwip/src/apps/mqtt|src/SAME70/Lwip/src/apps/lwiperf|src/SAME70/Lwip/src/apps/httpd|src/SAME70/Lwip/src/netif/ppp|src/SAME70/Lwip/test|src/DuetNG/DuetWiFi|src/Duet|src/DuetNG/DuetEthernet/Wiznet/Internet/SNTP|src/DuetNG|src/DuetNG/DuetEthernet/Wiznet/Internet/DNS|src/DuetNG/DuetEthernet/Wiznet/Application|src/DuetNG/DuetEthernet/Wiznet/Internet/MQTT|src/Alligator|src/DuetNG/DuetEthernet/Wiznet/Internet/TFTP|src/DuetNG/DuetEthernet/Ethernet3|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPServer|src/DuetNG/DuetEthernet/Ethernet3/examples|src/DuetNG/DuetEthernet/Wiznet/Internet/FTPClient|src/DuetNG/DuetEthernet/Wiznet/Internet/httpServer|src/DuetNG/DuetEthernet/Wiznet/Internet/SNMP|src/RADDS" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -613,7 +755,13 @@
 		<configuration configurationName="Alligator">
 			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
 		</configuration>
+		<configuration configurationName="Multiple configurations">
+			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
+		</configuration>
 		<configuration configurationName="DuetEthernet"/>
+		<configuration configurationName="SAME70">
+			<resource resourceType="PROJECT" workspacePath="/RepRapFirmware"/>
+		</configuration>
 		<configuration configurationName="RADDS"/>
 		<configuration configurationName="DuetWiFi"/>
 		<configuration configurationName="Duet085"/>

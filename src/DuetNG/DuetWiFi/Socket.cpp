@@ -185,6 +185,7 @@ void Socket::Poll(bool full)
 			if (state != SocketState::waitingForResponder)
 			{
 				whenConnected = millis();
+				state = SocketState::waitingForResponder;
 			}
 			if (network.FindResponder(this, localPort))
 			{

@@ -117,7 +117,9 @@ const size_t FILE_BUFFER_SIZE = 256;
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(DUET_NG) && defined(DUET_WIFI)
+#if defined(__SAME70Q21__)
+	SAME70_XPLD = 1
+#elif defined(DUET_NG) && defined(DUET_WIFI)
 	DuetWiFi_10 = 1
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	DuetEthernet_10 = 1
@@ -650,7 +652,7 @@ private:
 		}
 	};
 
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= 512, "Can't fit software reset data in SAM4 user signature area");
 #else
 	static_assert(SoftwareResetData::numberOfSlots * sizeof(SoftwareResetData) <= FLASH_DATA_LENGTH, "NVData too large");
@@ -1183,6 +1185,9 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // Calculate the step bit for a driver. This doesn't need to be fast.
 /*static*/ inline uint32_t Platform::CalcDriverBitmap(size_t driver)
 {
+#if defined(__SAME70Q21__)
+	return 0;
+#else
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
 #if defined(DUET_NG)
 	return pinDesc.ulPin;
@@ -1195,6 +1200,7 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 #else
 # error Unknown board
 #endif
+#endif
 }
 
 // Set the specified step pins high and all other step pins low
@@ -1202,7 +1208,9 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
 /*static*/ inline void Platform::StepDriversHigh(uint32_t driverMap)
 {
-#if defined(DUET_NG)
+#if defined(__SAME70Q21__)
+	// TBD
+#elif defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
@@ -1227,7 +1235,9 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // We rely on only those port bits that are step pins being set in the PIO_OWSR register of each port
 /*static*/ inline void Platform::StepDriversLow()
 {
-#if defined(DUET_NG)
+#if defined(__SAME70Q21__)
+	// TODO
+#elif defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;

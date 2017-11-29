@@ -19,6 +19,7 @@
 const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
 const char * const ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
 
+
 Network::Network(Platform& p)
 	: platform(p), nextResponderToPoll(nullptr), lastTickMillis(0),
 	  state(NetworkState::disabled), activated(false)

@@ -36,7 +36,7 @@
 #include "RepRap.h"
 #include "Tools/Tool.h"
 
-#ifdef DUET_NG
+#if HAS_WIFI_NETWORKING
 #include "FirmwareUpdater.h"
 #endif
 
@@ -599,7 +599,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case GCodeState::flashing1:
-#ifdef DUET_NG
+#if HAS_WIFI_NETWORKING
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())
 		{
@@ -3807,7 +3807,7 @@ bool GCodes::SetHeaterProtection(GCodeBuffer& gb, StringRef& reply)
 			}
 
 			reply.printf("Temperature protection item %d is configured for heater %d and supervises heater %d to %s if the temperature %s %.1f" DEGREE_SYMBOL "C",
-					index, item.GetHeater(), item.GetSupervisedHeater(), actionString, triggerString, item.GetTemperatureLimit());
+					index, item.GetHeater(), item.GetSupervisedHeater(), actionString, triggerString, (double)item.GetTemperatureLimit());
 		}
 	}
 

@@ -26,7 +26,7 @@
 # include "PortControl.h"
 #endif
 
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(__SAME70Q21__)
 # include "FirmwareUpdater.h"
 #endif
 
@@ -2480,7 +2480,55 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			bool seen = false;
 
-#ifdef DUET_WIFI
+#if HAS_MULITPLE_NETWORK_INTERFACES
+			const int interface = (gb.Seen('I') ? gb.GetIValue() : 0);
+
+			if (reprap.GetNetwork().IsWiFiInterface(interface))
+			{
+				if (gb.Seen('S')) // Has the user turned the network on or off?
+				{
+					const int enableValue = gb.GetIValue();
+					seen = true;
+
+					char ssidBuffer[SsidLength + 1];
+					StringRef ssid(ssidBuffer, ARRAY_SIZE(ssidBuffer));
+					if (gb.Seen('P') && !gb.GetQuotedString(ssid))
+					{
+						reply.copy("Bad or missing SSID");
+						result = GCodeResult::error;
+					}
+					else
+					{
+						reprap.GetNetwork().EnableWiFi(enableValue, ssid, reply);
+					}
+				}
+			}
+			else
+			{
+				if (gb.Seen('P'))
+				{
+					seen = true;
+					uint8_t eth[4];
+					if (gb.GetIPAddress(eth))
+					{
+						platform.SetIPAddress(eth);
+					}
+					else
+					{
+						reply.copy("Bad IP address");
+						result = GCodeResult::error;
+						break;
+					}
+				}
+
+				// Process this one last in case the IP address is changed and the network enabled in the same command
+				if (gb.Seen('S')) // Has the user turned the network on or off?
+				{
+					seen = true;
+					reprap.GetNetwork().EnableEthernet(gb.GetIValue(), reply);
+				}
+			}
+#elif HAS_WIFI_NETWORKING
 			if (gb.Seen('S')) // Has the user turned the network on or off?
 			{
 				const int enableValue = gb.GetIValue();
@@ -2525,7 +2573,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (!seen)
 			{
+#if HAS_MULITPLE_NETWORK_INTERFACES
+				result = GetGCodeResultFromError(reprap.GetNetwork().GetNetworkState(interface, reply));
+#else
 				result = GetGCodeResultFromError(reprap.GetNetwork().GetNetworkState(reply));
+#endif
 			}
 		}
 		break;
@@ -3534,6 +3586,34 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case 586: // Configure network protocols
+#if HAS_MULITPLE_NETWORK_INTERFACES
+		{
+			const int interface = (gb.Seen('I') ? gb.GetIValue() : 0);
+
+			if (gb.Seen('P'))
+			{
+				const int protocol = gb.GetIValue();
+				if (gb.Seen('S'))
+				{
+					const bool enable = (gb.GetIValue() == 1);
+					if (enable)
+					{
+						const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
+						const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
+						reprap.GetNetwork().EnableProtocol(interface, protocol, port, secure, reply);
+					}
+					else
+					{
+						reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
+					}
+				}
+				break;
+			}
+
+			// Default to reporting current protocols if P or S parameter missing
+			reprap.GetNetwork().ReportProtocols(interface, reply);
+		}
+#else
 		if (gb.Seen('P'))
 		{
 			const int protocol = gb.GetIValue();
@@ -3556,207 +3636,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 		// Default to reporting current protocols if P or S parameter missing
 		reprap.GetNetwork().ReportProtocols(reply);
+#endif
 		break;
 
-#ifdef DUET_WIFI
+#if HAS_WIFI_NETWORKING
 	case 587:	// Add WiFi network or list remembered networks
-		if (gb.Seen('S'))
-		{
-			WirelessConfigurationData config;
-			memset(&config, 0, sizeof(config));
-			String<ARRAY_SIZE(config.ssid)> ssid;
-			bool ok = gb.GetQuotedString(ssid.GetRef());
-			if (ok)
-			{
-				SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
-				String<ARRAY_SIZE(config.password)> password;
-				ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
-				if (ok)
-				{
-					SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-				}
-			}
-			if (ok && gb.Seen('I'))
-			{
-				gb.GetIPAddress(config.ip);
-			}
-			if (ok && gb.Seen('J'))
-			{
-				ok = gb.GetIPAddress(config.gateway);
-			}
-			if (ok && gb.Seen('K'))
-			{
-				ok = gb.GetIPAddress(config.netmask);
-			}
-			if (ok)
-			{
-				const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkAddSsid, 0, 0, &config, sizeof(config), nullptr, 0);
-				if (rslt != ResponseEmpty)
-				{
-					reply.copy("Failed to add SSID to remembered list");
-					result = GCodeResult::error;
-				}
-			}
-			else
-			{
-				reply.copy("Bad or missing parameter");
-				result = GCodeResult::error;
-			}
-		}
-		else
-		{
-			// List remembered networks
-			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;	// enough for all the remembered SSID data
-			uint32_t buffer[NumDwords(declaredBufferLength)];
-			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, declaredBufferLength);
-			if (rslt >= 0)
-			{
-				OutputBuffer *response = nullptr;
-				size_t offset = ReducedWirelessConfigurationDataSize;		// skip own SSID details
-				while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
-				{
-					WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
-					if (wp->ssid[0] != 0)
-					{
-						if (response == nullptr)
-						{
-							if (!OutputBuffer::Allocate(response))
-							{
-								return false;		// try again later
-							}
-							response->copy("Remembered networks:");
-						}
-						wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-						response->catf("\n%s IP=%s GW=%s NM=%s", wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
-					}
-					offset += ReducedWirelessConfigurationDataSize;
-				}
-
-				if (response == nullptr)
-				{
-					reply.copy("No remembered networks");
-				}
-				else
-				{
-					HandleReply(gb, false, response);
-					return true;
-				}
-			}
-			else
-			{
-				reply.copy("Failed to retrieve network list");
-				result = GCodeResult::error;
-			}
-		}
-		break;
-
 	case 588:	// Forget WiFi network
-		if (gb.Seen('S'))
-		{
-			String<SsidLength> ssidText;
-			if (gb.GetQuotedString(ssidText.GetRef()))
-			{
-				if (strcmp(ssidText.c_str(), "*") == 0)
-				{
-					const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
-					if (rslt != ResponseEmpty)
-					{
-						reply.copy("Failed to reset the WiFi module to factory settings");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
-					memcpy(ssid32, ssidText.c_str(), SsidLength);
-					const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
-					if (rslt != ResponseEmpty)
-					{
-						reply.copy("Failed to remove SSID from remembered list");
-						result = GCodeResult::error;
-					}
-				}
-			}
-			else
-			{
-				reply.copy("Bad parameter");
-				result = GCodeResult::error;
-			}
-		}
-		break;
-
 	case 589:	// Configure access point
-		if (gb.Seen('S'))
-		{
-			WirelessConfigurationData config;
-			memset(&config, 0, sizeof(config));
-			String<SsidLength> ssid;
-			bool ok = gb.GetQuotedString(ssid.GetRef());
-			if (ok)
-			{
-				if (strcmp(ssid.c_str(), "*") == 0)
-				{
-					// Delete the access point details
-					memset(&config, 0xFF, sizeof(config));
-				}
-				else
-				{
-					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
-					String<ARRAY_SIZE(config.password)> password;
-					ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
-					if (ok)
-					{
-						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-						if (gb.Seen('I'))
-						{
-							ok = gb.GetIPAddress(config.ip);
-							config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
-						}
-						else
-						{
-							ok = false;
-						}
-					}
-				}
-			}
-			if (ok)
-			{
-				const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
-				if (rslt != ResponseEmpty)
-				{
-					reply.copy("Failed to configure access point parameters");
-					result = GCodeResult::error;
-				}
-			}
-			else
-			{
-				reply.copy("Bad or missing parameter");
-				result = GCodeResult::error;
-			}
-		}
-		else
-		{
-			uint32_t buffer[NumDwords(ReducedWirelessConfigurationDataSize)];
-			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, ReducedWirelessConfigurationDataSize);
-			if (rslt >= 0)
-			{
-				WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(buffer);
-				if (wp->ssid[0] == 0)
-				{
-					reply.copy("Own SSID not configured");
-				}
-				else
-				{
-					wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-					reply.printf("Own SSID: %s IP=%s GW=%s NM=%s",  wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
-				}
-			}
-			else
-			{
-				reply.copy("Failed to retrieve own SSID data");
-				result = GCodeResult::error;
-			}
-		}
+		result = GetGCodeResultFromError(reprap.GetNetwork().HandleWiFiCode(code, gb, reply));
 		break;
 #endif
 
@@ -4434,7 +4321,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 
 			// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
-#ifdef DUET_NG
+#if HAS_WIFI_NETWORKING
 			if (!FirmwareUpdater::CheckFirmwareUpdatePrerequisites(firmwareUpdateModuleMap, reply))
 			{
 				firmwareUpdateModuleMap = 0;

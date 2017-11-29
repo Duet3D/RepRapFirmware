@@ -5,6 +5,7 @@
  ****************************************************************************************************/
 
 #include "Network.h"
+#include "GCodes/GCodeBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
 #include "HttpResponder.h"
@@ -796,6 +797,208 @@ int Network::EnableState() const
 			: (requestedMode == WiFiState::connected) ? 1
 				: (requestedMode == WiFiState::runningAsAccessPoint) ? 2
 						: -1;
+}
+
+bool Network::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply)
+{
+	switch (mcode)
+	{
+	case 587:	// Add WiFi network or list remembered networks
+		if (gb.Seen('S'))
+		{
+			WirelessConfigurationData config;
+			memset(&config, 0, sizeof(config));
+			String<ARRAY_SIZE(config.ssid)> ssid;
+			bool ok = gb.GetQuotedString(ssid.GetRef());
+			if (ok)
+			{
+				SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
+				String<ARRAY_SIZE(config.password)> password;
+				ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
+				if (ok)
+				{
+					SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+				}
+			}
+			if (ok && gb.Seen('I'))
+			{
+				gb.GetIPAddress(config.ip);
+			}
+			if (ok && gb.Seen('J'))
+			{
+				ok = gb.GetIPAddress(config.gateway);
+			}
+			if (ok && gb.Seen('K'))
+			{
+				ok = gb.GetIPAddress(config.netmask);
+			}
+			if (ok)
+			{
+				const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, &config, sizeof(config), nullptr, 0);
+				if (rslt != ResponseEmpty)
+				{
+					reply.copy("Failed to add SSID to remembered list");
+					return true;
+				}
+			}
+			else
+			{
+				reply.copy("Bad or missing parameter");
+				return true;
+			}
+		}
+		else
+		{
+			// List remembered networks
+			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;	// enough for all the remembered SSID data
+			uint32_t buffer[NumDwords(declaredBufferLength)];
+			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, declaredBufferLength);
+			if (rslt >= 0)
+			{
+				OutputBuffer *response = nullptr;
+				size_t offset = ReducedWirelessConfigurationDataSize;		// skip own SSID details
+				while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
+				{
+					WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
+					if (wp->ssid[0] != 0)
+					{
+						if (response == nullptr)
+						{
+							if (!OutputBuffer::Allocate(response))
+							{
+								return false;		// try again later
+							}
+							response->copy("Remembered networks:");
+						}
+						wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
+						response->catf("\n%s IP=%s GW=%s NM=%s", wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+					}
+					offset += ReducedWirelessConfigurationDataSize;
+				}
+
+				if (response == nullptr)
+				{
+					reply.copy("No remembered networks");
+				}
+			}
+			else
+			{
+				reply.copy("Failed to retrieve network list");
+				return true;
+			}
+		}
+		break;
+
+	case 588:	// Forget WiFi network
+		if (gb.Seen('S'))
+		{
+			String<SsidLength> ssidText;
+			if (gb.GetQuotedString(ssidText.GetRef()))
+			{
+				if (strcmp(ssidText.c_str(), "*") == 0)
+				{
+					const int32_t rslt = SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
+					if (rslt != ResponseEmpty)
+					{
+						reply.copy("Failed to reset the WiFi module to factory settings");
+						return true;
+					}
+				}
+				else
+				{
+					uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
+					memcpy(ssid32, ssidText.c_str(), SsidLength);
+					const int32_t rslt = SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
+					if (rslt != ResponseEmpty)
+					{
+						reply.copy("Failed to remove SSID from remembered list");
+						return true;
+					}
+				}
+			}
+			else
+			{
+				reply.copy("Bad parameter");
+				return true;
+			}
+		}
+		break;
+
+	case 589:	// Configure access point
+		if (gb.Seen('S'))
+		{
+			WirelessConfigurationData config;
+			memset(&config, 0, sizeof(config));
+			String<SsidLength> ssid;
+			bool ok = gb.GetQuotedString(ssid.GetRef());
+			if (ok)
+			{
+				if (strcmp(ssid.c_str(), "*") == 0)
+				{
+					// Delete the access point details
+					memset(&config, 0xFF, sizeof(config));
+				}
+				else
+				{
+					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
+					String<ARRAY_SIZE(config.password)> password;
+					ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
+					if (ok)
+					{
+						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+						if (gb.Seen('I'))
+						{
+							ok = gb.GetIPAddress(config.ip);
+							config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
+						}
+						else
+						{
+							ok = false;
+						}
+					}
+				}
+			}
+			if (ok)
+			{
+				const int32_t rslt = SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
+				if (rslt != ResponseEmpty)
+				{
+					reply.copy("Failed to configure access point parameters");
+					return true;
+				}
+			}
+			else
+			{
+				reply.copy("Bad or missing parameter");
+				return true;
+			}
+		}
+		else
+		{
+			uint32_t buffer[NumDwords(ReducedWirelessConfigurationDataSize)];
+			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, ReducedWirelessConfigurationDataSize);
+			if (rslt >= 0)
+			{
+				WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(buffer);
+				if (wp->ssid[0] == 0)
+				{
+					reply.copy("Own SSID not configured");
+				}
+				else
+				{
+					wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
+					reply.printf("Own SSID: %s IP=%s GW=%s NM=%s",  wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+				}
+			}
+			else
+			{
+				reply.copy("Failed to retrieve own SSID data");
+				return true;
+			}
+		}
+		break;
+	}
+	return false;
 }
 
 // Translate the wifi state to text.

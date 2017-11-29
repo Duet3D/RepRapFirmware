@@ -23,6 +23,11 @@ const size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
+#if defined(DUET_ETHERNET)
+#define HAS_WIFI_NETWORKING		0
+#else
+#define HAS_WIFI_NETWORKING		1
+#endif
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 #define HAS_SMART_DRIVERS		1

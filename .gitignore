@@ -5,3 +5,9 @@
 !Release/*/*/*.bin
 *~
 *orig
+/DuetWiFi/
+/DuetEthernet/
+/RADDS/
+/Duet085/
+/Alligator/
+/SAME70/

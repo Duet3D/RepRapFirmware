@@ -87,7 +87,7 @@ class PortControl;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 typedef double floatc_t;					// type of matrix element used for calibration
 #else
 // We are more memory-constrained on the SAM3X
@@ -216,7 +216,11 @@ typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
-const uint32_t NvicPriorityUart = 1;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
+#if SAM4E || SAM4S || SAME70
+const uint32_t NvicPriorityWatchdog = 0;		// watchdog has highest priority (SAM4 and SAME70 only)
+#endif
+
+const uint32_t NvicPriorityUart = 1;			// UART is next to avoid character loss
 const uint32_t NvicPriorityDriversUsart = 2;	// USART used to control and monitor the TMC2660 drivers
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
 const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step

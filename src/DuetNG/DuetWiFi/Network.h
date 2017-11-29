@@ -39,6 +39,8 @@ private:
 class Network
 {
 public:
+	friend class Socket;
+
 	Network(Platform& p);
 
 	void Init();
@@ -54,6 +56,7 @@ public:
 	void ReportProtocols(StringRef& reply) const;
 
 	void Enable(int mode, const StringRef& ssid, StringRef& reply);			// enable or disable the network
+	bool HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef& reply);
 	bool GetNetworkState(StringRef& reply);
 	int EnableState() const;
 
@@ -79,13 +82,6 @@ public:
 	void ResetWiFiForUpload(bool external);
 
 	const char *GetWiFiServerVersion() const { return wiFiServerVersion; }
-
-	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength);
-
-	template<class T> int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, Receiver<T>& recvr)
-	{
-		return SendCommand(cmd, socket, flags, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
-	}
 
 	const char* TranslateNetworkState() const;
 	static const char* TranslateWiFiState(WiFiState w);
@@ -120,6 +116,13 @@ private:
 	void SetIPAddress(const uint8_t ipAddress[], const uint8_t netmask[], const uint8_t gateway[]);
 
 	void SetupSpi();
+
+	int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength);
+
+	template<class T> int32_t SendCommand(NetworkCommand cmd, SocketNumber socket, uint8_t flags, const void *dataOut, size_t dataOutLength, Receiver<T>& recvr)
+	{
+		return SendCommand(cmd, socket, flags, dataOut, dataOutLength, recvr.DmaPointer(), recvr.Size());
+	}
 
 	void SendListenCommand(Port port, Protocol protocol, unsigned int maxConnections);
 	void GetNewStatus();

@@ -137,7 +137,7 @@ constexpr unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency fo
 //     Using single-precision maths and up to 9-factor calibration: (9 + 5) * 4 bytes per point
 //     Using double-precision maths and up to 9-factor calibration: (9 + 5) * 8 bytes per point
 //   So 32 points using double precision arithmetic need 3584 bytes of stack space.
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
 constexpr size_t MaxXGridPoints = 41;					// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
@@ -179,7 +179,7 @@ constexpr size_t FILENAME_LENGTH = 100;
 constexpr size_t MaxHeaterNameLength = 20;				// Maximum number of characters in a heater name
 
 // Output buffer lengths
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 constexpr uint16_t OUTPUT_BUFFER_SIZE = 256;			// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 32;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 1;			// Number of reserved output buffers after long responses. Must be enough for an HTTP header

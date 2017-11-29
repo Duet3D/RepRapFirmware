@@ -46,7 +46,7 @@
 #ifndef CONF_EMAC_H_INCLUDED
 #define CONF_EMAC_H_INCLUDED
 
-#include "Arduino.h"
+#include "Core.h"
 
 /** EMAC PHY address */
 #define BOARD_EMAC_PHY_ADDR  2

@@ -1,8 +1,46 @@
 eclipse.preferences.version=1
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/LINK_FLAGS_1/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/LINK_FLAGS_1/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/LINK_FLAGS_1/value=-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry\=Reset_Handler -Wl,--unresolved-symbols\=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/LINK_FLAGS_2/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/LINK_FLAGS_2/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/LINK_FLAGS_2/value=-Wl,--end-group -lm -gcc
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/PATH/delimiter=\:
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/PATH/operation=replace
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/PATH/value=${GccPath}\:/home/christian/.bin\:/usr/local/sbin\:/usr/local/bin\:/usr/bin\:/opt/android-sdk/emulator\:/opt/android-sdk/platform-tools\:/opt/android-sdk/tools\:/opt/android-sdk/tools/bin\:/usr/lib/jvm/default/bin\:/usr/bin/site_perl\:/usr/bin/vendor_perl\:/usr/bin/core_perl
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/append=true
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1027429289/appendContributed=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/LINK_FLAGS_1/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/LINK_FLAGS_1/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/LINK_FLAGS_1/value=-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry\=Reset_Handler -Wl,--unresolved-symbols\=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/LINK_FLAGS_2/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/LINK_FLAGS_2/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/LINK_FLAGS_2/value=-Wl,--end-group -lm -gcc
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/PATH/delimiter=\:
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/PATH/operation=replace
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/PATH/value=${GccPath}\:/home/christian/.bin\:/usr/local/sbin\:/usr/local/bin\:/usr/bin\:/opt/android-sdk/emulator\:/opt/android-sdk/platform-tools\:/opt/android-sdk/tools\:/opt/android-sdk/tools/bin\:/usr/lib/jvm/default/bin\:/usr/bin/site_perl\:/usr/bin/vendor_perl\:/usr/bin/core_perl
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/append=true
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.1745168887/appendContributed=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/LINK_FLAGS_1/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/LINK_FLAGS_1/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/LINK_FLAGS_1/value=-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry\=Reset_Handler -Wl,--unresolved-symbols\=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/LINK_FLAGS_2/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/LINK_FLAGS_2/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/LINK_FLAGS_2/value=-Wl,--end-group -lm -gcc
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/PATH/delimiter=\:
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/PATH/operation=replace
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/PATH/value=${GccPath}\:/home/christian/.bin\:/usr/local/sbin\:/usr/local/bin\:/usr/bin\:/opt/android-sdk/emulator\:/opt/android-sdk/platform-tools\:/opt/android-sdk/tools\:/opt/android-sdk/tools/bin\:/usr/lib/jvm/default/bin\:/usr/bin/site_perl\:/usr/bin/vendor_perl\:/usr/bin/core_perl
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/append=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290.274082366/appendContributed=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/LINK_FLAGS_1/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/LINK_FLAGS_1/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/LINK_FLAGS_1/value=-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry\=Reset_Handler -Wl,--unresolved-symbols\=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/LINK_FLAGS_2/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/LINK_FLAGS_2/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/LINK_FLAGS_2/value=-Wl,--end-group -lm -gcc
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/PATH/delimiter=\:
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/PATH/operation=replace
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/PATH/value=${GccPath}\:/home/christian/.bin\:/usr/local/sbin\:/usr/local/bin\:/usr/bin\:/opt/android-sdk/emulator\:/opt/android-sdk/platform-tools\:/opt/android-sdk/tools\:/opt/android-sdk/tools/bin\:/usr/lib/jvm/default/bin\:/usr/bin/site_perl\:/usr/bin/vendor_perl\:/usr/bin/core_perl
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/append=true
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.1275216290/appendContributed=true
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.286403080/LINK_FLAGS_1/delimiter=;
@@ -13,8 +51,26 @@ environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.9764
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.286403080/LINK_FLAGS_2/value=-Wl,--end-group -lm -gcc
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.286403080/append=true
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451.286403080/appendContributed=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/LINK_FLAGS_1/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/LINK_FLAGS_1/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/LINK_FLAGS_1/value=-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry\=Reset_Handler -Wl,--unresolved-symbols\=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/LINK_FLAGS_2/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/LINK_FLAGS_2/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/LINK_FLAGS_2/value=-Wl,--end-group -lm -gcc
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/PATH/delimiter=\:
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/PATH/operation=replace
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/PATH/value=${GccPath}\:/home/christian/.bin\:/usr/local/sbin\:/usr/local/bin\:/usr/bin\:/opt/android-sdk/emulator\:/opt/android-sdk/platform-tools\:/opt/android-sdk/tools\:/opt/android-sdk/tools/bin\:/usr/lib/jvm/default/bin\:/usr/bin/site_perl\:/usr/bin/vendor_perl\:/usr/bin/core_perl
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/append=true
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850.241502451/appendContributed=true
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/LINK_FLAGS_1/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/LINK_FLAGS_1/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/LINK_FLAGS_1/value=-mthumb -Wl,--cref -Wl,--check-sections -Wl,--gc-sections -Wl,--entry\=Reset_Handler -Wl,--unresolved-symbols\=report-all -Wl,--warn-common -Wl,--warn-section-align -Wl,--warn-unresolved-symbols -Wl,--start-group
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/LINK_FLAGS_2/delimiter=;
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/LINK_FLAGS_2/operation=append
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/LINK_FLAGS_2/value=-Wl,--end-group -lm -gcc
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/PATH/delimiter=\:
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/PATH/operation=replace
+environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/PATH/value=${GccPath}\:/home/christian/.bin\:/usr/local/sbin\:/usr/local/bin\:/usr/bin\:/opt/android-sdk/emulator\:/opt/android-sdk/platform-tools\:/opt/android-sdk/tools\:/opt/android-sdk/tools/bin\:/usr/lib/jvm/default/bin\:/usr/bin/site_perl\:/usr/bin/vendor_perl\:/usr/bin/core_perl
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/append=true
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201.976458850/appendContributed=true
 environment/project/cdt.managedbuild.config.gnu.cross.exe.release.516195201/LINK_FLAGS_1/delimiter=;
