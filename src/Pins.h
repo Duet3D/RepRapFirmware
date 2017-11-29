@@ -17,6 +17,8 @@
 # elif defined(__SAME70Q21__)
 #  define PLATFORM SAME70
 #  define P_INCLUDE_FILE "SAME70/Pins_SAME70.h"
+# elif defined(__SAM4S8C__)
+#  define PLATFORM DuetM
 # else
 #  error Unknown platform
 # endif

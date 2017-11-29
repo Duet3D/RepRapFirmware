@@ -33,12 +33,12 @@ bool CoreBaseKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRe
 				seen = true;
 			}
 		}
-		if (!seen && !gb.Seen('S'))
+		if (!seen && !gb.Seen('K'))
 		{
-			reply.printf("Printer mode is %s with axis factors", GetName());
+			reply.printf("Kinematics is %s with axis factors", GetName());
 			for (size_t axis = 0; axis < XYZ_AXES; ++axis)
 			{
-				reply.catf(" %c:%f", reprap.GetGCodes().GetAxisLetters()[axis], (double)axisFactors[axis]);
+				reply.catf(" %c:%.3f", reprap.GetGCodes().GetAxisLetters()[axis], (double)axisFactors[axis]);
 			}
 		}
 		return seen;

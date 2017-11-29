@@ -27,7 +27,7 @@ const unsigned int NumDms = DdaRingLength * 8;						// suitable for e.g. a delta
 #else
 // We are more memory-constrained on the SAM3X
 const unsigned int DdaRingLength = 20;
-const unsigned int NumDms = DdaRingLength * 5;						// suitable for e.g. a delta + 1-input hot end
+const unsigned int NumDms = DdaRingLength * 5;						// suitable for e.g. a delta + 2-input hot end
 #endif
 
 /**

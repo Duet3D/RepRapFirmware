@@ -30,8 +30,18 @@ const Pin DriversSclkPin = 23;								// PA23
 
 const int ChopperControlRegisterMode = 999;					// mode passed to get/set microstepping to indicate we want the chopper control register
 
-const uint32_t DriversSpiClockFrequency = 4000000;			// 4MHz SPI clock
-const int StallGuardThreshold = 1;							// Range is -64..63. Zero seems to be too sensitive. Higher values reduce sensitivity of stall detection.
+// The SPI clock speed is a compromise:
+// - too high and polling the driver chips take too much of the CPU time
+// - too low and we won't detect stalls quickly enough
+// With a 4MHz SPI clock:
+// - polling the drivers makes calculations take 13.5% longer, so it is taking about 12% of the CPU time
+// - we poll all 10 drivers in about 80us
+// With a 2MHz SPI clock:
+// - polling the drivers makes calculations take 8.3% longer, so it is taking about 7.7% of the CPU time
+// - we poll all 10 drivers in about 170us
+const uint32_t DriversSpiClockFrequency = 2000000;			// 2MHz SPI clock
+
+const int DefaultStallGuardThreshold = 1;					// Range is -64..63. Zero seems to be too sensitive. Higher values reduce sensitivity of stall detection.
 
 // TMC2660 register addresses
 const uint32_t TMC_REG_DRVCTRL = 0;
@@ -123,7 +133,7 @@ const uint32_t defaultChopConfReg =
 // StallGuard configuration register
 const uint32_t defaultSgscConfReg =
 	  TMC_REG_SGCSCONF
-	| TMC_SGCSCONF_SGT(StallGuardThreshold);
+	| TMC_SGCSCONF_SGT(DefaultStallGuardThreshold);
 
 // Driver configuration register
 const uint32_t defaultDrvConfReg =
@@ -419,37 +429,40 @@ inline void TmcDriverState::StartTransfer()
 	}
 
 	// Kick off a transfer for that register
+	irqflags_t flags = cpu_irq_save();					// avoid race condition
 	USART_TMC_DRV->US_CR = US_CR_RSTRX | US_CR_RSTTX;	// reset transmitter and receiver
 	fastDigitalWriteLow(pin);							// set CS low
 	SetupDMA(regVal);									// set up the PDC
 	USART_TMC_DRV->US_IER = US_IER_ENDRX;				// enable end-of-transfer interrupt
 	USART_TMC_DRV->US_CR = US_CR_RXEN | US_CR_TXEN;		// enable transmitter and receiver
+	cpu_irq_restore(flags);
 }
 
 // ISR for the USART
-void USART_TMC_DRV_Handler(void) __attribute__ ((hot));
+extern "C" void USART_TMC_DRV_Handler(void) __attribute__ ((hot));
 
 void USART_TMC_DRV_Handler(void)
 {
 	TmcDriverState *driver = currentDriver;				// capture volatile variable
-	driver->TransferDone();								// tidy up after the transfer we just completed
-
-	if (driversPowered)
+	if (driver != nullptr)
 	{
-		// Power is still good, so send/receive to/from the next driver
-		++driver;										// advance to the next driver
-		if (driver == driverStates + numTmc2660Drivers)
+		driver->TransferDone();							// tidy up after the transfer we just completed
+		if (driversPowered)
 		{
-			driver = driverStates;
+			// Power is still good, so send/receive to/from the next driver
+			++driver;									// advance to the next driver
+			if (driver == driverStates + numTmc2660Drivers)
+			{
+				driver = driverStates;
+			}
+			driver->StartTransfer();
+			return;
 		}
-		driver->StartTransfer();
 	}
-	else
-	{
-		// Driver power is down, so stop polling
-		USART_TMC_DRV->US_IDR = US_IDR_ENDRX;
-		currentDriver = nullptr;						// signal that we are not waiting for an interrupt
-	}
+
+	// Driver power is down or there is no current driver, so stop polling
+	USART_TMC_DRV->US_IDR = US_IDR_ENDRX;
+	currentDriver = nullptr;							// signal that we are not waiting for an interrupt
 }
 
 //--------------------------- Public interface ---------------------------------
@@ -546,12 +559,12 @@ namespace SmartDrivers
 				// Set the microstepping. We need to determine how many bits right to shift the desired microstepping to reach 1.
 				unsigned int shift = 0;
 				unsigned int uSteps = (unsigned int)microsteps;
-				while (uSteps > 1)
+				while ((uSteps & 1) == 0)
 				{
 					uSteps >>= 1;
 					++shift;
 				}
-				if (shift <= 8)
+				if (uSteps == 1 && shift <= 8)
 				{
 					driverStates[drive].SetMicrostepping(shift, mode != 0);
 					return true;

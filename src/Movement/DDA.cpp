@@ -188,10 +188,11 @@ void DDA::DebugPrint() const
 
 	debugPrintf(" d=%f", (double)totalDistance);
 	DebugPrintVector(" vec", directionVector, 5);
-	debugPrintf("\na=%f reqv=%f topv=%f startv=%f endv=%f\n"
-				"daccel=%f ddecel=%f cks=%" PRIu32 "\n",
-				(double)acceleration, (double)requestedSpeed, (double)topSpeed, (double)startSpeed, (double)endSpeed,
-				(double)accelDistance, (double)decelDistance, clocksNeeded);
+	debugPrintf("\n"
+				"a=%f reqv=%f topv=%f startv=%f endv=%f daccel=%f ddecel=%f\n"
+				"cks=%" PRIu32 " sstcda=%" PRIu32 " tstcdapdsc=%" PRIu32 " exac=%" PRIi32 "\n",
+				(double)acceleration, (double)requestedSpeed, (double)topSpeed, (double)startSpeed, (double)endSpeed, (double)accelDistance, (double)decelDistance,
+				clocksNeeded, startSpeedTimesCdivA, topSpeedTimesCdivAPlusDecelStartClocks, extraAccelerationClocks);
 	for (size_t axis = 0; axis < numAxes; ++axis)
 	{
 		if (pddm[axis] != nullptr)
@@ -977,7 +978,7 @@ void DDA::Prepare(uint8_t simMode)
 			// This code assumes that the previous move in the DDA ring is the previously-executed move, because it fetches the X and Y end coordinates from that move.
 			// Therefore the Move code must not store a new move in that entry until this one has been prepared! (It took me ages to track this down.)
 			// Ideally we would store the initial X and Y coordinates in the DDA, but we need to be economical with memory in the Duet 06/085 build.
-			cKc = (int32_t)(directionVector[Z_AXIS] * DriveMovement::Kc);
+			cKc = roundS32(directionVector[Z_AXIS] * DriveMovement::Kc);
 			params.a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
 			params.initialX = prev->GetEndCoordinate(X_AXIS, false);
 			params.initialY = prev->GetEndCoordinate(Y_AXIS, false);
@@ -990,12 +991,11 @@ void DDA::Prepare(uint8_t simMode)
 		const float accelStopTime = (topSpeed - startSpeed)/acceleration;
 		const float decelStartTime = accelStopTime + (params.decelStartDistance - accelDistance)/topSpeed;
 
-		params.startSpeedTimesCdivA = (uint32_t)((startSpeed * stepClockRate)/acceleration);
-		params.topSpeedTimesCdivA = (uint32_t)((topSpeed * stepClockRate)/acceleration);
-		params.decelStartClocks = (uint32_t)(decelStartTime * stepClockRate);
-		params.topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivA + params.decelStartClocks;
-		params.accelClocksMinusAccelDistanceTimesCdivTopSpeed = (uint32_t)((accelStopTime - (accelDistance/topSpeed)) * stepClockRate);
-		params.compFactor = 1.0 - startSpeed/topSpeed;
+		startSpeedTimesCdivA = (uint32_t)roundU32((startSpeed * stepClockRate)/acceleration);
+		params.topSpeedTimesCdivA = (uint32_t)roundU32((topSpeed * stepClockRate)/acceleration);
+		topSpeedTimesCdivAPlusDecelStartClocks = params.topSpeedTimesCdivA + (uint32_t)roundU32(decelStartTime * stepClockRate);
+		extraAccelerationClocks = roundS32((accelStopTime - (accelDistance/topSpeed)) * stepClockRate);
+		params.compFactor = (topSpeed - startSpeed)/topSpeed;
 
 		firstDM = nullptr;
 
@@ -1572,25 +1572,27 @@ void DDA::ReduceHomingSpeed()
 	if (!goingSlow)
 	{
 		goingSlow = true;
-		const float factor = 3.0;				// the factor by which we are reducing the speed
-		topSpeed /= factor;
+
+		topSpeed *= (1.0/ProbingSpeedReductionFactor);
+
+		// Adjust extraAccelerationClocks so that step timing will be correct in the steady speed phase at the new speed
+		const uint32_t clocksSoFar = Platform::GetInterruptClocks() - moveStartTime;
+		extraAccelerationClocks = (extraAccelerationClocks * (int32_t)ProbingSpeedReductionFactor) - ((int32_t)clocksSoFar * (int32_t)(ProbingSpeedReductionFactor - 1));
+
+		// We also need to adjust the total clocks needed, to prevent step errors being recorded
+		if (clocksSoFar < clocksNeeded)
+		{
+			clocksNeeded += (clocksNeeded - clocksSoFar) * (ProbingSpeedReductionFactor - 1u);
+		}
+
+		// Adjust the speed in the DMs
 		for (size_t drive = 0; drive < DRIVES; ++drive)
 		{
 			DriveMovement* const pdm = pddm[drive];
 			if (pdm != nullptr && pdm->state == DMState::moving)
 			{
-				pdm->ReduceSpeed(*this, factor);
-				RemoveDM(pdm->drive);
-				InsertDM(pdm);
+				pdm->ReduceSpeed(*this, ProbingSpeedReductionFactor);
 			}
-		}
-
-		// We also need to adjust the total clocks needed, to prevent step errors being recorded
-		const uint32_t clocksSoFar = Platform::GetInterruptClocks() - moveStartTime;
-		if (clocksSoFar < clocksNeeded)
-		{
-			const uint32_t clocksLeft = clocksNeeded - clocksSoFar;
-			clocksNeeded += (uint32_t)(clocksLeft * (factor - 1.0));
 		}
 	}
 }

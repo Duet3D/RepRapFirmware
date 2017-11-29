@@ -53,7 +53,6 @@ enum class GCodeInputState
 {
 	idle,
 	doingCode,
-	inComment,
 	doingMCode,
 	doingMCode1,
 	doingMCode11,
@@ -68,7 +67,7 @@ enum class GCodeInputState
 class RegularGCodeInput : public GCodeInput
 {
 public:
-	RegularGCodeInput(bool removeComments);
+	RegularGCodeInput();
 
 	void Reset() override;
 	size_t BytesCached() const override;				// How many bytes have been cached?
@@ -81,7 +80,6 @@ public:
 	size_t BufferSpaceLeft() const;						// How much space do we have left?
 
 private:
-	bool stripComments;
 	GCodeInputState state;
 
 protected:
@@ -95,7 +93,7 @@ protected:
 class FileGCodeInput : public RegularGCodeInput
 {
 public:
-	FileGCodeInput() : RegularGCodeInput(false), lastFile(nullptr) { }
+	FileGCodeInput() : RegularGCodeInput(), lastFile(nullptr) { }
 
 	void Reset() override;								// This should be called when the associated file is being closed
 	void Reset(const FileData &file);					// Should be called when a specific G-code or macro file is closed outside the reading context

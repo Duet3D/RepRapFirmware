@@ -36,7 +36,7 @@ const size_t MaxSmartDrivers = 10;				// The maximum number of smart drivers
 constexpr size_t Heaters = 8;						// The number of heaters in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c,d,e,f,g,h }
 
-const size_t NumExtraHeaterProtections = 16;		// The number of extra heater protection instances
+constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 9;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES
@@ -119,6 +119,7 @@ constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { 32, NoPin };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { NoPin };
+constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 
 #if SUPPORT_INKJET
 // Inkjet control pins

@@ -107,7 +107,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 
 	// Build a N x 2, 3 or 4 matrix of derivatives with respect to the leadscrew adjustments
 	// See the wxMaxima documents for the maths involved
-	FixedMatrix<floatc_t, MaxDeltaCalibrationPoints, MaxLeadscrews> derivativeMatrix;
+	FixedMatrix<floatc_t, MaxCalibrationPoints, MaxLeadscrews> derivativeMatrix;
 	floatc_t initialSumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{
@@ -236,7 +236,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 	}
 
 	// Calculate and display the residuals, also check for errors
-	floatc_t residuals[MaxDeltaCalibrationPoints];
+	floatc_t residuals[MaxCalibrationPoints];
 	floatc_t sumOfSquares = 0.0;
 	for (size_t i = 0; i < numPoints; ++i)
 	{

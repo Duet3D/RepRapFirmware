@@ -32,7 +32,7 @@ const char *ScaraKinematics::GetName(bool forStatusReport) const
 	return "Scara";
 }
 
-// Calculate theta, psi and the new arm mode form a target position.
+// Calculate theta, psi and the new arm mode from a target position.
 // If the position is not reachable because it is out of radius limits, set theta and psi to NaN and return false.
 // Otherwise set theta and psi to the required values and return true if they are in range.
 bool ScaraKinematics::CalculateThetaAndPsi(const float machinePos[], bool isCoordinated, float& theta, float& psi, bool& armMode) const
@@ -189,9 +189,9 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& 
 		{
 			Recalc();
 		}
-		else
+		else if (!gb.Seen('K'))
 		{
-			reply.printf("Printer mode is Scara with proximal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL
+			reply.printf("Kinematics is Scara with proximal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL
 							", distal arm %.2fmm range %.1f to %.1f" DEGREE_SYMBOL ", crosstalk %.1f:%.1f:%.1f, bed origin (%.1f, %.1f), segments/sec %d, min. segment length %.2f",
 							(double)proximalArmLength, (double)thetaLimits[0], (double)thetaLimits[1],
 							(double)distalArmLength, (double)psiLimits[0], (double)psiLimits[1],

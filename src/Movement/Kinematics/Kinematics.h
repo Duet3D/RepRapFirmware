@@ -28,6 +28,7 @@ enum class KinematicsType : uint8_t
 	coreXYU,
 	hangprinter,
 	polar,
+	coreXYUV,
 
 	unknown				// this one must be last!
 };

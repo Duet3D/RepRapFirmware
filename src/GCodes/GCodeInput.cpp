@@ -63,8 +63,8 @@ size_t StreamGCodeInput::BytesCached() const
 
 // Dynamic G-code input class for caching codes from software-defined sources
 
-RegularGCodeInput::RegularGCodeInput(bool removeComments): stripComments(removeComments),
-	state(GCodeInputState::idle), buffer(reinterpret_cast<char * const>(buf32)), writingPointer(0), readingPointer(0)
+RegularGCodeInput::RegularGCodeInput()
+	: state(GCodeInputState::idle), buffer(reinterpret_cast<char * const>(buf32)), writingPointer(0), readingPointer(0)
 {
 }
 
@@ -115,17 +115,7 @@ void RegularGCodeInput::Put(MessageType mtype, const char c)
 			state = (c == 'M') ? GCodeInputState::doingMCode : GCodeInputState::doingCode;
 			break;
 
-
 		case GCodeInputState::doingCode:
-			if (stripComments && c == ';')
-			{
-				// ignore comments if possible
-				state = GCodeInputState::inComment;
-				break;
-			}
-			// no break
-
-		case GCodeInputState::inComment:
 			if (c == 0 || c == '\r' || c == '\n')
 			{
 				state = GCodeInputState::idle;
@@ -159,12 +149,12 @@ void RegularGCodeInput::Put(MessageType mtype, const char c)
 				Reset();
 				return;
 			}
-
 			state = GCodeInputState::doingCode;
 			break;
 
 		case GCodeInputState::doingMCode122:
-			if (c <= ' ' || c == ';')
+			// Only execute M122 here if there is no parameter
+			if (c < ' ' || c == ';')
 			{
 				// Diagnostics requested - report them now
 				// Only send the report to the appropriate channel, because if we send it as a generic message instead then it gets truncated.
@@ -174,17 +164,15 @@ void RegularGCodeInput::Put(MessageType mtype, const char c)
 				Reset();
 				return;
 			}
+			state = GCodeInputState::doingCode;
 			break;
 	}
 
 	// Feed another character into the buffer
-	if (state != GCodeInputState::inComment)
+	buffer[writingPointer++] = c;
+	if (writingPointer == GCodeInputBufferSize)
 	{
-		buffer[writingPointer++] = c;
-		if (writingPointer == GCodeInputBufferSize)
-		{
-			writingPointer = 0;
-		}
+		writingPointer = 0;
 	}
 }
 

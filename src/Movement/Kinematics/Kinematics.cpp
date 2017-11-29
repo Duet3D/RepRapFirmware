@@ -5,16 +5,19 @@
  *      Author: David
  */
 
-#include <Movement/Kinematics/LinearDeltaKinematics.h>
+#include "LinearDeltaKinematics.h"
 #include "Kinematics.h"
 #include "CartesianKinematics.h"
 #include "CoreXYKinematics.h"
 #include "CoreXZKinematics.h"
 #include "ScaraKinematics.h"
 #include "CoreXYUKinematics.h"
+#include "HangprinterKinematics.h"
 #include "PolarKinematics.h"
+#include "CoreXYUVKinematics.h"
 #include "RepRap.h"
 #include "Platform.h"
+#include "GCodes/GCodeBuffer.h"
 
 const char *Kinematics::HomeAllFileName = "homeall.g";
 const char * const Kinematics::StandardHomingFileNames[] = AXES_("homex.g", "homey.g", "homez.g", "homeu.g", "homev.g", "homew.g", "homea.g", "homeb.g", "homec.g");
@@ -31,7 +34,10 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, StringRef& reply
 {
 	if (mCode == 669)
 	{
-		reply.printf("Current kinematics is %s", GetName());
+		if (!gb.Seen('K'))
+		{
+			reply.printf("Kinematics is %s", GetName());
+		}
 	}
 	else
 	{
@@ -140,8 +146,12 @@ const char* Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alrea
 		return new ScaraKinematics();
 	case KinematicsType::coreXYU:
 		return new CoreXYUKinematics();
+	case KinematicsType::hangprinter:
+		return new HangprinterKinematics();
 	case KinematicsType::polar:
 		return new PolarKinematics();
+	case KinematicsType::coreXYUV:
+		return new CoreXYUVKinematics();
 	}
 }
 

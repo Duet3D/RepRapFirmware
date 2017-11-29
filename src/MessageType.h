@@ -38,4 +38,9 @@ enum MessageType : uint16_t
 	NetworkInfoMessage = UsbMessage | LcdMessage | LogMessage			 	// A message that conveys information about the state of the network interface
 };
 
+inline MessageType AddError(MessageType mt)
+{
+	return (MessageType)(mt | ErrorMessageFlag);
+}
+
 #endif /* MESSAGETYPE_H_ */

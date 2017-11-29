@@ -37,7 +37,7 @@
 #include "Tools/Tool.h"
 
 #if HAS_WIFI_NETWORKING
-#include "FirmwareUpdater.h"
+# include "FirmwareUpdater.h"
 #endif
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
@@ -49,8 +49,8 @@ GCodes::GCodes(Platform& p) :
 #endif
 	isFlashing(false), fileBeingHashed(nullptr), lastWarningMillis(0)
 {
-	httpInput = new RegularGCodeInput(true);
-	telnetInput = new RegularGCodeInput(true);
+	httpInput = new RegularGCodeInput;
+	telnetInput = new RegularGCodeInput;
 	fileInput = new FileGCodeInput();
 	serialInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 	auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
@@ -463,61 +463,68 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 
 	case GCodeState::toolChange1:		// Release the old tool (if any), then run tpre for the new tool
 	case GCodeState::m109ToolChange1:	// Release the old tool (if any), then run tpre for the new tool
+		if (LockMovementAndWaitForStandstill(gb))		// wait for tfree.g to finish executing
 		{
 			const Tool * const oldTool = reprap.GetCurrentTool();
 			if (oldTool != nullptr)
 			{
 				reprap.StandbyTool(oldTool->Number());
 			}
-		}
-		gb.AdvanceState();
-		if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
-		{
-			scratchString.printf("tpre%d.g", gb.MachineState().newToolNumber);
-			DoFileMacro(gb, scratchString.Pointer(), false);
+			gb.AdvanceState();
+			if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
+			{
+				scratchString.printf("tpre%d.g", gb.MachineState().newToolNumber);
+				DoFileMacro(gb, scratchString.Pointer(), false);
+			}
 		}
 		break;
 
 	case GCodeState::toolChange2:		// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
 	case GCodeState::m109ToolChange2:	// Select the new tool (even if it doesn't exist - that just deselects all tools) and run tpost
-		reprap.SelectTool(gb.MachineState().newToolNumber, simulationMode != 0);
-		GetCurrentUserPosition();									// get the actual position of the new tool
-
-		gb.AdvanceState();
-		if (AllAxesAreHomed())
+		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
-			if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && (gb.MachineState().toolChangeParam & TPostBit) != 0)
+			reprap.SelectTool(gb.MachineState().newToolNumber, simulationMode != 0);
+			GetCurrentUserPosition();									// get the actual position of the new tool
+
+			gb.AdvanceState();
+			if (AllAxesAreHomed())
 			{
-				scratchString.printf("tpost%d.g", gb.MachineState().newToolNumber);
-				DoFileMacro(gb, scratchString.Pointer(), false);
+				if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && (gb.MachineState().toolChangeParam & TPostBit) != 0)
+				{
+					scratchString.printf("tpost%d.g", gb.MachineState().newToolNumber);
+					DoFileMacro(gb, scratchString.Pointer(), false);
+				}
 			}
 		}
 		break;
 
 	case GCodeState::toolChangeComplete:
 	case GCodeState::m109ToolChangeComplete:
-		// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
-		currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
-		gb.MachineState().feedrate = toolChangeRestorePoint.feedRate;
-		// We don't restore the default fan speed in case the user wants to use a different one for the new tool
-		doingToolChange = false;
+		if (LockMovementAndWaitForStandstill(gb))		// wait for tpost.g to finish executing
+		{
+			// Restore the original Z axis user position, so that different tool Z offsets work even if the first move after the tool change doesn't have a Z coordinate
+			currentUserPosition[Z_AXIS] = toolChangeRestorePoint.moveCoords[Z_AXIS];
+			gb.MachineState().feedrate = toolChangeRestorePoint.feedRate;
+			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
+			doingToolChange = false;
 
-		if (gb.GetState() == GCodeState::toolChangeComplete)
-		{
-			gb.SetState(GCodeState::normal);
-		}
-		else
-		{
-			UnlockAll(gb);									// allow movement again
-			if (cancelWait || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling))
+			if (gb.GetState() == GCodeState::toolChangeComplete)
 			{
-				cancelWait = isWaiting = false;
 				gb.SetState(GCodeState::normal);
 			}
 			else
 			{
-				CheckReportDue(gb, reply);
-				isWaiting = true;
+				UnlockAll(gb);									// allow movement again
+				if (cancelWait || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling))
+				{
+					cancelWait = isWaiting = false;
+					gb.SetState(GCodeState::normal);
+				}
+				else
+				{
+					CheckReportDue(gb, reply);
+					isWaiting = true;
+				}
 			}
 		}
 		break;
@@ -1427,8 +1434,9 @@ void GCodes::CheckFilament()
 		&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
 	   )
 	{
-		scratchString.printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
-		DoPause(*autoPauseGCode, PauseReason::filament, scratchString.Pointer());
+		String<100> filamentErrorString;
+		filamentErrorString.GetRef().printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
+		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.Pointer());
 		lastFilamentError = FilamentSensorStatus::ok;
 	}
 }
@@ -1734,9 +1742,10 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers)
 		return false;
 	}
 
-	scratchString.printf("Stall detected on driver(s)");
-	ListDrivers(scratchString, stalledDrivers);
-	DoPause(*autoPauseGCode, PauseReason::stall, scratchString.Pointer());
+	String<100> stallErrorString;
+	stallErrorString.GetRef().printf("Stall detected on driver(s)");
+	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
+	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.Pointer());
 	return true;
 }
 
@@ -3469,16 +3478,12 @@ void GCodes::DisableDrives()
 bool GCodes::ChangeMicrostepping(size_t drive, int microsteps, int mode) const
 {
 	bool dummy;
-	unsigned int oldSteps = platform.GetMicrostepping(drive, mode, dummy);
-	bool success = platform.SetMicrostepping(drive, microsteps, mode);
+	const unsigned int oldSteps = platform.GetMicrostepping(drive, mode, dummy);
+	const bool success = platform.SetMicrostepping(drive, microsteps, mode);
 	if (success && mode <= 1)							// modes higher than 1 are used for special functions
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate
-		float stepsPerMm = platform.DriveStepsPerUnit(drive);
-		if (stepsPerMm > 0)
-		{
-			platform.SetDriveStepsPerUnit(drive, stepsPerMm * (float)microsteps / (float)oldSteps);
-		}
+		platform.SetDriveStepsPerUnit(drive, platform.DriveStepsPerUnit(drive) * (float)microsteps / (float)oldSteps);
 	}
 	return success;
 }

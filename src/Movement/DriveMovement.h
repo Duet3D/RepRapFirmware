@@ -12,16 +12,87 @@
 
 class LinearDeltaKinematics;
 
+#define ROUND_TO_NEAREST	(0)			// 1 for round to nearest (as used in 1.20beta10), 0 for round down (as used prior to 1.20beta10)
+
+// Rounding functions, to improve code clarity. Also allows a quick switch between round-to-nearest and round down in the movement code.
+inline uint32_t roundU32(float f)
+{
+#if ROUND_TO_NEAREST
+	return (uint32_t)lrintf(f);
+#else
+	return (uint32_t)f;
+#endif
+}
+
+inline uint32_t roundU32(double d)
+{
+#if ROUND_TO_NEAREST
+	return lrint(d);
+#else
+	return (uint32_t)d;
+#endif
+}
+
+inline int32_t roundS32(float f)
+{
+#if ROUND_TO_NEAREST
+	return lrintf(f);
+#else
+	return (int32_t)f;
+#endif
+}
+
+inline int32_t roundS32(double d)
+{
+#if ROUND_TO_NEAREST
+	return lrint(d);
+#else
+	return (int32_t)d;
+#endif
+}
+
+inline uint64_t roundU64(float f)
+{
+#if ROUND_TO_NEAREST
+	return (uint64_t)llrintf(f);
+#else
+	return (uint64_t)f;
+#endif
+}
+
+inline uint64_t roundU64(double d)
+{
+#if ROUND_TO_NEAREST
+	return (uint64_t)llrint(d);
+#else
+	return (uint64_t)d;
+#endif
+}
+
+inline int64_t roundS64(float f)
+{
+#if ROUND_TO_NEAREST
+	return llrintf(f);
+#else
+	return (int64_t)f;
+#endif
+}
+
+inline int64_t roundS64(double d)
+{
+#if ROUND_TO_NEAREST
+	return llrint(d);
+#else
+	return (int64_t)d;
+#endif
+}
+
 // Struct for passing parameters to the DriveMovement Prepare methods
 struct PrepParams
 {
 	// Parameters used for all types of motion
 	float decelStartDistance;
-	uint32_t startSpeedTimesCdivA;
 	uint32_t topSpeedTimesCdivA;
-	uint32_t decelStartClocks;
-	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
-	uint32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;
 
 	// Parameters used only for extruders
 	float compFactor;
@@ -55,7 +126,7 @@ public:
 	void PrepareCartesianAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
 	void PrepareDeltaAxis(const DDA& dda, const PrepParams& params) __attribute__ ((hot));
 	void PrepareExtruder(const DDA& dda, const PrepParams& params, bool doCompensation) __attribute__ ((hot));
-	void ReduceSpeed(const DDA& dda, float inverseSpeedFactor);
+	void ReduceSpeed(const DDA& dda, uint32_t inverseSpeedFactor);
 	void DebugPrint(char c, bool withDelta) const;
 	int32_t GetNetStepsLeft() const;
 	int32_t GetNetStepsTaken() const;
@@ -100,9 +171,6 @@ private:
 
 	// The following only need to be stored per-drive if we are supporting pressure advance
 	uint64_t twoDistanceToStopTimesCsquaredDivA;
-	uint32_t startSpeedTimesCdivA;
-	int32_t accelClocksMinusAccelDistanceTimesCdivTopSpeed;		// this one can be negative
-	uint32_t topSpeedTimesCdivAPlusDecelStartClocks;
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union MoveParams
@@ -113,33 +181,33 @@ private:
 			uint64_t twoCsquaredTimesMmPerStepDivA;		// 2 * clock^2 * mmPerStepInHyperCuboidSpace / acceleration
 
 			// The following depend on how the move is executed, so they must be set up in Prepare()
+			int64_t fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA;		// this one can be negative
 			uint32_t accelStopStep;						// the first step number at which we are no longer accelerating
 			uint32_t decelStartStep;					// the first step number at which we are decelerating
-			uint32_t mmPerStepTimesCdivtopSpeed;		// mmPerStepInHyperCuboidSpace * clock / topSpeed
-
-			// The following only need to be stored per-drive if we are supporting pressure advance
-			int64_t fourMaxStepDistanceMinusTwoDistanceToStopTimesCsquaredDivA;		// this one can be negative
+			uint32_t mmPerStepTimesCKdivtopSpeed;		// mmPerStepInHyperCuboidSpace * clock / topSpeed
+			uint32_t compensationClocks;				// the pressure advance time in clocks
+			uint32_t accelCompensationClocks;			// compensationClocks * (1 - startSpeed/topSpeed)
 		} cart;
 
 		struct DeltaParameters							// Parameters for delta movement
 		{
 			// The following don't depend on how the move is executed, so they can be set up in Init
+			uint64_t twoCsquaredTimesMmPerStepDivA;		// this could be stored in the DDA if all towers use the same steps/mm
 			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
 			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
 			int32_t minusAaPlusBbTimesKs;
-			uint32_t twoCsquaredTimesMmPerStepDivAK;	// this could be stored in the DDA if all towers use the same steps/mm
 
 			// The following depend on how the move is executed, so they must be set up in Prepare()
 			uint32_t accelStopDsK;
 			uint32_t decelStartDsK;
-			uint32_t mmPerStepTimesCdivtopSpeedK;
+			uint32_t mmPerStepTimesCKdivtopSpeed;
 		} delta;
 	} mp;
 
-	static const uint32_t NoStepTime = 0xFFFFFFFF;		// value to indicate that no further steps are needed when calculating the next step time
-	static const uint32_t K1 = 1024;					// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors
-	static const uint32_t K2 = 512;						// a power of 2 used in delta calculations to reduce rounding errors (but too large makes things worse)
-	static const int32_t Kc = 1024 * 1024;				// a power of 2 for scaling the Z movement fraction
+	static constexpr uint32_t NoStepTime = 0xFFFFFFFF;	// value to indicate that no further steps are needed when calculating the next step time
+	static constexpr uint32_t K1 = 1024;				// a power of 2 used to multiply the value mmPerStepTimesCdivtopSpeed to reduce rounding errors
+	static constexpr uint32_t K2 = 512;					// a power of 2 used in delta calculations to reduce rounding errors (but too large makes things worse)
+	static constexpr int32_t Kc = 1024 * 1024;			// a power of 2 for scaling the Z movement fraction
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.

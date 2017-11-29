@@ -116,6 +116,9 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers);
 // Macro to assign an array from an initialiser list
 #define ARRAY_INIT(_dest, _init) static_assert(sizeof(_dest) == sizeof(_init), "Incompatible array types"); memcpy(_dest, _init, sizeof(_init));
 
+// UTF8 code for the degree-symbol
+#define DEGREE_SYMBOL	"\xC2\xB0"	// Unicode degree-symbol as UTF8
+
 // Classes to facilitate range-based for loops that iterate from 0 up to just below a limit
 template<class T> class SimpleRangeIterator
 {
@@ -195,36 +198,38 @@ template<typename BitmapType> BitmapType LongArrayToBitMap(const long *arr, size
 extern StringRef scratchString;
 
 // Common definitions used by more than one module
-const size_t XYZ_AXES = 3;										// The number of Cartesian axes
-const size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
-const size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine
-const size_t U_AXIS = 3, V_AXIS = 4;							// The indices of the U and V motors in a CoreXYU machine (needed by Platform)
+constexpr size_t XYZ_AXES = 3;										// The number of Cartesian axes
+constexpr size_t X_AXIS = 0, Y_AXIS = 1, Z_AXIS = 2, E0_AXIS = 3;	// The indices of the Cartesian axes in drive arrays
+constexpr size_t CoreXYU_AXES = 5;									// The number of axes in a CoreXYU machine (there is a hidden V axis)
+constexpr size_t CoreXYUV_AXES = 5;									// The number of axes in a CoreXYUV machine
+constexpr size_t U_AXIS = 3, V_AXIS = 4;							// The indices of the U and V motors in a CoreXYU machine (needed by Platform)
 
 // Common conversion factors
-const float MinutesToSeconds = 60.0;
-const float SecondsToMinutes = 1.0/MinutesToSeconds;
-const float SecondsToMillis = 1000.0;
-const float MillisToSeconds = 0.001;
-const float InchToMm = 25.4;
-const float DegreesToRadians = PI/180.0;
-const float RadiansToDegrees = 180.0/PI;
+constexpr float MinutesToSeconds = 60.0;
+constexpr float SecondsToMinutes = 1.0/MinutesToSeconds;
+constexpr float SecondsToMillis = 1000.0;
+constexpr float MillisToSeconds = 0.001;
+constexpr float InchToMm = 25.4;
+constexpr float DegreesToRadians = PI/180.0;
+constexpr float RadiansToDegrees = 180.0/PI;
 
-#define DEGREE_SYMBOL	"\xC2\xB0"								// degree-symbol encoding in UTF8
+#define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 
 // Type of an offset in a file
 typedef uint32_t FilePosition;
 const FilePosition noFilePosition = 0xFFFFFFFF;
 
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 15 is the lowest.
-#if SAM4E || SAM4S || SAME70
-const uint32_t NvicPriorityWatchdog = 0;		// watchdog has highest priority (SAM4 and SAME70 only)
+#if SAM4E || SAME70
+const uint32_t NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 #endif
 
-const uint32_t NvicPriorityUart = 1;			// UART is next to avoid character loss
+const uint32_t NvicPriorityPanelDueUart = 1;	// UART is highest to avoid character loss (it has only a 1-character receive buffer)
 const uint32_t NvicPriorityDriversUsart = 2;	// USART used to control and monitor the TMC2660 drivers
 const uint32_t NvicPrioritySystick = 3;			// systick kicks the watchdog and starts the ADC conversions, so must be quite high
 const uint32_t NvicPriorityPins = 4;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const uint32_t NvicPriorityStep = 5;			// step interrupt is next highest, it can preempt most other interrupts
+const uint32_t NvicPriorityWiFiUart = 6;		// UART used to receive debug data from the WiFi module
 const uint32_t NvicPriorityUSB = 6;				// USB interrupt
 
 #if HAS_LWIP_NETWORKING
