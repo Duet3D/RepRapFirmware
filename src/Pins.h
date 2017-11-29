@@ -14,6 +14,8 @@
 #  endif
 # elif defined(__SAM4E8E__)
 #  define PLATFORM DuetNG
+# elif defined(__SAM4S8C__)
+#  define PLATFORM DuetM
 # else
 #  error Unknown platform
 # endif

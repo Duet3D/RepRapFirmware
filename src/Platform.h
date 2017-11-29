@@ -105,6 +105,8 @@ enum class BoardType : uint8_t
 	DuetWiFi_10 = 1
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	DuetEthernet_10 = 1
+#elif defined(DUET_M)
+	DuetM_10 = 1,
 #elif defined(DUET_06_085)
 	Duet_06 = 1,
 	Duet_07 = 2,
@@ -1173,6 +1175,8 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 // The bitmaps are organised like this:
 // Duet WiFi:
 //	All step pins are on port D, so the bitmap is just the map of bits in port D.
+// Duet M:
+//	All step pins are on port C, so the bitmap is just the map of bits in port C.
 // Duet 0.6 and 0.8.5:
 //	Step pins are PA0, PC7,9,11,14,25,29 and PD0,3.
 //	The PC and PD bit numbers don't overlap, so we use their actual positions.
@@ -1188,6 +1192,8 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 	const PinDescription& pinDesc = g_APinDescription[STEP_PINS[driver]];
 #if defined(DUET_NG)
+	return pinDesc.ulPin;
+#elif defined(DUET_M)
 	return pinDesc.ulPin;
 #elif defined(DUET_06_085)
 	return (pinDesc.pPort == PIOA) ? pinDesc.ulPin << 1 : pinDesc.ulPin;
@@ -1207,6 +1213,8 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = driverMap;				// on Duet WiFi all step pins are on port D
+#elif defined(DUET_M)
+	PIOC->PIO_ODSR = driverMap;				// on Duet M all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = driverMap;
 	PIOC->PIO_ODSR = driverMap;
@@ -1232,6 +1240,8 @@ inline OutputBuffer *Platform::GetAuxGCodeReply()
 {
 #if defined(DUET_NG)
 	PIOD->PIO_ODSR = 0;						// on Duet WiFi all step pins are on port D
+#elif defined(DUET_M)
+	PIOC->PIO_ODSR = 0;						// on Duet M all step pins are on port C
 #elif defined(DUET_06_085)
 	PIOD->PIO_ODSR = 0;
 	PIOC->PIO_ODSR = 0;

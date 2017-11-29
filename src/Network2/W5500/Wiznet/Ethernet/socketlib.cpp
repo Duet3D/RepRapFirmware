@@ -53,7 +53,7 @@
 //! THE POSSIBILITY OF SUCH DAMAGE.
 //
 //*****************************************************************************
-#include <socketlib.h>
+#include <Network2/W5500/Wiznet/Ethernet/socketlib.h>
 
 //#define _SOCKET_DEBUG_
 

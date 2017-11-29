@@ -9,10 +9,10 @@ Separated out from Platform.h by dc42 and extended by chrishamm
 #ifndef NETWORK_H
 #define NETWORK_H
 
+#include <Network2/ESP8266/Socket.h>
 #include "NetworkDefs.h"
 #include "RepRapFirmware.h"
 #include "MessageType.h"
-#include "Socket.h"
 #include "MessageFormats.h"
 
 class NetworkResponder;

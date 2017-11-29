@@ -50,8 +50,7 @@ namespace FirmwareUpdater
 	{
 #ifdef DUET_WIFI
 		return reprap.GetNetwork().GetWifiUploader().IsReady();
-#endif
-#ifdef DUET_ETHERNET
+#else
 		return true;
 #endif
 	}

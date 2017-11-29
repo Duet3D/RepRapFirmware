@@ -52,8 +52,8 @@
 //
 //*****************************************************************************
 
-#include "w5500.h"
-#include "WizSpi.h"
+#include <Network2/W5500/Wiznet/Ethernet/W5500/w5500.h>
+#include <Network2/W5500/Wiznet/Ethernet/WizSpi.h>
 
 #define _W5500_SPI_VDM_OP_          0x00
 #define _W5500_SPI_FDM_OP_LEN1_     0x01

@@ -4,13 +4,13 @@
 
  ****************************************************************************************************/
 
-#include "Network.h"
+#include <Network2/ESP8266/Network.h>
+#include <Network2/ESP8266/WifiFirmwareUploader.h>
 #include "Platform.h"
 #include "RepRap.h"
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
-#include "WifiFirmwareUploader.h"
 #include "Libraries/General/IP4String.h"
 
 // Define exactly one of the following as 1, the other as zero

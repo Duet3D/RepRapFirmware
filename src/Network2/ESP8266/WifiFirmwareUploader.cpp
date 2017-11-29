@@ -5,9 +5,8 @@
  *      Author: David
  */
 
-#include "WifiFirmwareUploader.h"
-
-#include "Network.h"
+#include <Network2/ESP8266/Network.h>
+#include <Network2/ESP8266/WifiFirmwareUploader.h>
 #include "Platform.h"
 #include "RepRap.h"
 #include "Storage/FileStore.h"

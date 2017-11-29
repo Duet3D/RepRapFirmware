@@ -48,9 +48,9 @@
 #ifndef  _W5500_H_
 #define  _W5500_H_
 
+#include <Network2/W5500/Wiznet/Ethernet/wizchip_conf.h>
 #include <cstdint>
 #include <cstddef>
-#include "../wizchip_conf.h"
 #include "spi/spi.h"
 
 // The following functions are defined in Network.cpp and used by this module

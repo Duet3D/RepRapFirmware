@@ -35,8 +35,8 @@
 #include "RepRap.h"
 #include "Tools/Tool.h"
 
-#ifdef DUET_NG
-#include "FirmwareUpdater.h"
+#if defined(DUET_NG) || defined(DUET_M)
+# include "FirmwareUpdater.h"
 #endif
 
 const size_t gcodeReplyLength = 2048;			// long enough to pass back a reasonable number of files in response to M20
@@ -605,7 +605,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case GCodeState::flashing1:
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(DUET_M)
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())
 		{

@@ -85,7 +85,7 @@
 #ifndef _SOCKET_H_
 #define _SOCKET_H_
 
-#include "Wiznet/Ethernet/wizchip_conf.h"
+#include <Network2/W5500/Wiznet/Ethernet/wizchip_conf.h>
 
 #define SOCKET                uint8_t  ///< SOCKET type define for legacy driver
 

@@ -5,15 +5,15 @@
  *      Author: David
  */
 
-#include "Network.h"
+#include <Network2/W5500/Network.h>
+#include <Network2/W5500/Wiznet/Ethernet/wizchip_conf.h>
+#include <Network2/W5500/Wiznet/Internet/DHCP/dhcp.h>
 #include "NetworkBuffer.h"
 #include "Platform.h"
 #include "RepRap.h"
 #include "HttpResponder.h"
 #include "FtpResponder.h"
 #include "TelnetResponder.h"
-#include "wizchip_conf.h"
-#include "Wiznet/Internet/DHCP/dhcp.h"
 #include "Libraries/General/IP4String.h"
 
 const Port DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
@@ -41,7 +41,7 @@ Network::Network(Platform& p)
 void Network::Init()
 {
 	// Ensure that the W5500 chip is in the reset state
-	pinMode(EspResetPin, OUTPUT_LOW);
+	pinMode(W5500ResetPin, OUTPUT_LOW);
 	longWait = millis();
 	lastTickMillis = millis();
 
@@ -224,9 +224,9 @@ bool Network::GetNetworkState(StringRef& reply)
 void Network::Start()
 {
 	SetIPAddress(platform.GetIPAddress(), platform.NetMask(), platform.GateWay());
-	pinMode(EspResetPin, OUTPUT_LOW);
+	pinMode(W5500ResetPin, OUTPUT_LOW);
 	delayMicroseconds(550);						// W550 reset pulse must be at least 500us long
-	IoPort::WriteDigital(EspResetPin, HIGH);	// raise /Reset pin
+	IoPort::WriteDigital(W5500ResetPin, HIGH);	// raise /Reset pin
 	delay(55);									// W5500 needs 50ms to start up
 
 #ifdef USE_3K_BUFFERS
@@ -258,7 +258,7 @@ void Network::Stop()
 		{
 			DHCP_stop();
 		}
-		digitalWrite(EspResetPin, LOW);			// put the W5500 back into reset
+		digitalWrite(W5500ResetPin, LOW);		// put the W5500 back into reset
 		state = NetworkState::disabled;
 	}
 }

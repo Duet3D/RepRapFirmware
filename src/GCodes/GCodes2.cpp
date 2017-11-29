@@ -26,7 +26,7 @@
 # include "PortControl.h"
 #endif
 
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(DUET_M)
 # include "FirmwareUpdater.h"
 #endif
 
@@ -4391,7 +4391,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 
 			// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(DUET_M)
 			if (!FirmwareUpdater::CheckFirmwareUpdatePrerequisites(firmwareUpdateModuleMap, reply))
 			{
 				firmwareUpdateModuleMap = 0;

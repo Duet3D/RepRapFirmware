@@ -487,7 +487,9 @@ void Platform::Init()
 	PIOA->PIO_OWDR = 0xFFFFFFFF;
 	PIOB->PIO_OWDR = 0xFFFFFFFF;
 	PIOC->PIO_OWDR = 0xFFFFFFFF;
+#ifdef PIOD
 	PIOD->PIO_OWDR = 0xFFFFFFFF;
+#endif
 #ifdef PIOE
 	PIOE->PIO_OWDR = 0xFFFFFFFF;
 #endif
@@ -1158,7 +1160,9 @@ void Platform::UpdateFirmware()
 	PIOA->PIO_IDR = 0xFFFFFFFF;
 	PIOB->PIO_IDR = 0xFFFFFFFF;
 	PIOC->PIO_IDR = 0xFFFFFFFF;
+#ifdef PIOD
 	PIOD->PIO_IDR = 0xFFFFFFFF;
+#endif
 #ifdef ID_PIOE
 	PIOE->PIO_IDR = 0xFFFFFFFF;
 #endif
@@ -2377,7 +2381,9 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d)
 					Message(mtype, "Voltage reading OK\n");
 				}
 			}
+#endif
 
+#if HAS_SMART_DRIVERS
 			// Check the stepper driver status
 			bool driversOK = true;
 			for (size_t driver = 0; driver < numSmartDrivers; ++driver)
@@ -2403,7 +2409,6 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d)
 				testFailed = true;
 			}
 #endif
-
 			Message(mtype, (testFailed) ? "***** ONE OR MORE CHECKS FAILED *****\n" : "All checks passed\n");
 
 #if SAM4E || SAM4S || SAME70
@@ -3706,7 +3711,7 @@ void Platform::SetAtxPower(bool on)
 	{
 		logger->LogMessage(realTime, "Power off commanded");
 		logger->Flush(true);
-		// We don't call logger->Stop() here because we don't now whether turning ofrf the power will work
+		// We don't call logger->Stop() here because we don't now whether turning off the power will work
 	}
 	IoPort::WriteDigital(ATX_POWER_PIN, on);
 }
@@ -3799,6 +3804,8 @@ void Platform::SetBoardType(BoardType bt)
 		board = BoardType::DuetWiFi_10;
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 		board = BoardType::DuetEthernet_10;
+#elif defined(DUET_M)
+		board = BoardType::DuetM_10;
 #elif defined(DUET_06_085)
 		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
 		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
@@ -3836,6 +3843,8 @@ const char* Platform::GetElectronicsString() const
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0";
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	case BoardType::DuetEthernet_10:		return "Duet Ethernet 1.0";
+#elif defined(DUET_M)
+	case BoardType::DuetM_10:				return "unnamed board 1.0";
 #elif defined(DUET_06_085)
 	case BoardType::Duet_06:				return "Duet 0.6";
 	case BoardType::Duet_07:				return "Duet 0.7";
@@ -3860,6 +3869,8 @@ const char* Platform::GetBoardString() const
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
 #elif defined(DUET_NG) && defined(DUET_ETHERNET)
 	case BoardType::DuetEthernet_10:		return "duetethernet10";
+#elif defined(DUET_M)
+	case BoardType::DuetM_10:				return "unnamedboard10";
 #elif defined(DUET_06_085)
 	case BoardType::Duet_06:				return "duet06";
 	case BoardType::Duet_07:				return "duet07";
@@ -4438,11 +4449,14 @@ void Platform::Tick()
 		{
 			lowestVin = currentVin;
 		}
+
+# if HAS_SMART_DRIVERS
 		if (driversPowered && currentVin > driverOverVoltageAdcReading)
 		{
 			SmartDrivers::SetDriversPowered(false);
 			// We deliberately do not clear driversPowered here or increase the over voltage event count - we let the spin loop handle that
 		}
+# endif
 #endif
 	}
 

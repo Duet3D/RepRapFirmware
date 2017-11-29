@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "WizSpi.h"
+#include <Network2/W5500/Wiznet/Ethernet/WizSpi.h>
 #include "variant.h"
 #include "Pins.h"
 
@@ -278,7 +278,7 @@ namespace WizSpi
 	void AssertSS()
 	{
 		spi_set_peripheral_chip_select_value(SPI, spi_get_pcs(SpiPeripheralChannelId));
-		digitalWrite(SamCsPin, LOW);
+		digitalWrite(W5500SsPin, LOW);
 		(void)SPI->SPI_RDR;						// clear receive register
 	}
 
@@ -286,7 +286,7 @@ namespace WizSpi
 	void ReleaseSS()
 	{
 		waitForTxEmpty();
-		digitalWrite(SamCsPin, HIGH);
+		digitalWrite(W5500SsPin, HIGH);
 	}
 
 	// Send the 3-byte address and control bits. On return there may be data still being received.

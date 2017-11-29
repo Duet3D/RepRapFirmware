@@ -49,8 +49,8 @@
 //
 //*****************************************************************************
 
-#include <socketlib.h>
-#include "dhcp.h"
+#include <Network2/W5500/Wiznet/Ethernet/socketlib.h>
+#include <Network2/W5500/Wiznet/Internet/DHCP/dhcp.h>
 #include <cstring>
 
 /* If you want to display debug & processing message, Define _DHCP_DEBUG_ in dhcp.h */

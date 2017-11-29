@@ -5,10 +5,10 @@
  *      Author: David
  */
 
-#include "Socket.h"
+#include <Network2/ESP8266/Network.h>
+#include <Network2/ESP8266/Socket.h>
 #include "NetworkBuffer.h"
 #include "RepRap.h"
-#include "Network.h"
 
 const uint32_t FindResponderTimeout = 2000;			// how long we wait for a responder to become available
 const unsigned int MaxBuffersPerSocket = 4;

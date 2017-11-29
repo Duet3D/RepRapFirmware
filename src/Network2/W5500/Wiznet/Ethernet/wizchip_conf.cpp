@@ -50,10 +50,10 @@
 //*****************************************************************************/
 //A20140501 : for use the type - ptrdiff_t
 
+#include <Network2/W5500/Wiznet/Ethernet/wizchip_conf.h>
+#include <Network2/W5500/Wiznet/Ethernet/WizSpi.h>
 #include <cstddef>
 #include <cstring>
-#include "wizchip_conf.h"
-#include "WizSpi.h"
 
 /**
  * @\ref WIZCHIP instance data

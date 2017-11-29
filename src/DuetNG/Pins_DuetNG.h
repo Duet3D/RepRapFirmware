@@ -175,12 +175,22 @@ constexpr int HighestLogicalPin = 135;										// highest logical pin number on
 constexpr uint32_t IAP_FLASH_START = 0x00470000;
 constexpr uint32_t IAP_FLASH_END = 0x0047FFFF;		// we allow a full 64K on the SAM4
 
+#if defined(DUET_WIFI)
+
 // Duet pin numbers to control the WiFi interface
 constexpr Pin EspResetPin = 100;			// Low on this in holds the WiFi module in reset (ESP_RESET)
 constexpr Pin EspEnablePin = 101;			// High to enable the WiFi module, low to power it down (ESP_CH_PD)
 constexpr Pin EspTransferRequestPin = 95;	// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
 constexpr Pin SamTfrReadyPin = 94;			// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
 constexpr Pin SamCsPin = 11;				// SPI NPCS pin, input from WiFi module
+
+#elif defined(DUET_ETHERNET)
+
+// Duet pin numbers to control the W5500 interface
+constexpr Pin W5500ResetPin = 100;			// Low on this in holds the W5500 module in reset (ESP_RESET)
+constexpr Pin W5500SsPin = 11;				// SPI NPCS pin, input from W5500 module
+
+#endif
 
 // Timer allocation (no network timer on DuetNG)
 // TC0 channel 0 is used for FAN2

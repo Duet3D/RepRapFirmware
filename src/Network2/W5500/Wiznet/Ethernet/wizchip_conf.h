@@ -99,7 +99,7 @@
 
 typedef   uint8_t   iodata_t;
 
-#include "W5500/w5500.h"
+#include <Network2/W5500/Wiznet/Ethernet/W5500/w5500.h>
 
 #ifndef _WIZCHIP_IO_MODE_
    #error "Undefined _WIZCHIP_IO_MODE_. You should define it !!!"

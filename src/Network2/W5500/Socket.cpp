@@ -5,12 +5,11 @@
  *      Author: David
  */
 
-#include "Socket.h"
-
+#include <Network2/W5500/Network.h>
+#include <Network2/W5500/Socket.h>
+#include <Network2/W5500/Wiznet/Ethernet/socketlib.h>
 #include "NetworkBuffer.h"
-#include "Network.h"
 #include "RepRap.h"
-#include "socketlib.h"
 
 //***************************************************************************************************
 // Socket class
