@@ -11,7 +11,7 @@
 #include "RepRapFirmware.h"
 
 
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 const size_t NumFileWriteBuffers = 2;					// Number of write buffers
 const size_t FileWriteBufLen = 8192;					// Size of each write buffer
 #else

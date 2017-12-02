@@ -333,9 +333,10 @@ void Tool::SetVariables(const float* standby, const float* active)
 		}
 		else
 		{
-			const float temperatureLimit = reprap.GetHeat().GetTemperatureLimit(heaters[heater]);
+			const float minTemperatureLimit = reprap.GetHeat().GetLowestTemperatureLimit(heaters[heater]);
+			const float maxTemperatureLimit = reprap.GetHeat().GetHighestTemperatureLimit(heaters[heater]);
 			const Tool * const currentTool = reprap.GetCurrentTool();
-			if (active[heater] < temperatureLimit)
+			if (active[heater] > minTemperatureLimit && active[heater] < maxTemperatureLimit)
 			{
 				activeTemperatures[heater] = active[heater];
 
@@ -344,7 +345,7 @@ void Tool::SetVariables(const float* standby, const float* active)
 					reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
 				}
 			}
-			if (standby[heater] < temperatureLimit)
+			if (standby[heater] > minTemperatureLimit && standby[heater] < maxTemperatureLimit)
 			{
 				standbyTemperatures[heater] = standby[heater];
 				const Tool *lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heaters[heater]);
@@ -389,10 +390,9 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 		}
 	}
 
-	const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		if (heaters[heater] != bedHeater && heaters[heater] >= numHeaters)
+		if (!reprap.GetHeat().IsBedHeater(heaters[heater]) && !reprap.GetHeat().IsChamberHeater(heaters[heater]) && heaters[heater] >= numHeaters)
 		{
 			numHeaters = heaters[heater] + 1;
 		}

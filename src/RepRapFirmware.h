@@ -87,7 +87,7 @@ class PortControl;
 #endif
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
-#if SAM4E || SAM4S
+#if SAM4E || SAM4S || SAME70
 typedef double floatc_t;					// type of matrix element used for calibration
 #else
 // We are more memory-constrained on the SAM3X

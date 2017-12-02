@@ -102,7 +102,12 @@ public:
 	// the calculation can just be managed in time at speeds of 15000mm/min (step interval 50us), but not at 20000mm/min (step interval 37.5us).
 	// Therefore, where the step interval falls below 60us, we don't calculate on every step.
 	// Note: the above measurements were taken some time ago, before some firmware optimisations.
-#if SAM4E || SAM4S
+#if SAME70
+	// The system clock of the SAME70 is running at 150MHz. Use the same defaults as for the SAM4E for now.
+	static constexpr int32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr int32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
+	static constexpr uint32_t minInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks
+#elif SAM4E || SAM4S
 	static constexpr int32_t MinCalcIntervalDelta = (40 * stepClockRate)/1000000; 		// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr int32_t MinCalcIntervalCartesian = (40 * stepClockRate)/1000000;	// same as delta for now, but could be lower
 	static constexpr uint32_t minInterruptInterval = 6;									// about 6us minimum interval between interrupts, in step clocks

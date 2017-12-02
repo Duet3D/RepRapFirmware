@@ -18,7 +18,6 @@ enum class TemperatureError : uint8_t
 	shortToVcc,
 	shortToGround,
 	openCircuit,
-	tooHigh,
 	timeout,
 	ioError,
 	hardwareError,

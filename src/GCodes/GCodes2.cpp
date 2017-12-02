@@ -7,13 +7,13 @@
  *  This file contains the code to see what G, M or T command we have and start processing it.
  */
 
+#include "Network.h"
 #include "GCodes.h"
 
 #include "GCodeBuffer.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
 #include "Movement/Move.h"
-#include "Network.h"
 #include "Scanner.h"
 #include "PrintMonitor.h"
 #include "RepRap.h"
@@ -26,7 +26,7 @@
 # include "PortControl.h"
 #endif
 
-#if defined(DUET_NG) || defined(DUET_M)
+#if defined(DUET_NG) || defined(DUET_M) || defined(__SAME70Q21__)
 # include "FirmwareUpdater.h"
 #endif
 
@@ -1246,12 +1246,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 116: // Wait for set temperatures
 		{
 			bool seen = false;
-			if (gb.Seen('P'))
+			if (!cancelWait && gb.Seen('P'))
 			{
 				// Wait for the heaters associated with the specified tool to be ready
 				int toolNumber = gb.GetIValue();
 				toolNumber += gb.GetToolNumberAdjust();
-				if (!cancelWait && !ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber), true))
+				if (!ToolHeatersAtSetTemperatures(reprap.GetTool(toolNumber), true))
 				{
 					CheckReportDue(gb, reply);				// check whether we need to send a temperature or status report
 					isWaiting = true;
@@ -1260,34 +1260,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 			}
 
-			if (gb.Seen('H'))
+			if (!cancelWait && gb.Seen('H'))
 			{
 				// Wait for specified heaters to be ready
 				long heaters[Heaters];
 				size_t heaterCount = Heaters;
 				gb.GetLongArray(heaters, heaterCount);
-				if (!cancelWait)
-				{
-					for (size_t i=0; i<heaterCount; i++)
-					{
-						if (!reprap.GetHeat().HeaterAtSetTemperature(heaters[i], true))
-						{
-							CheckReportDue(gb, reply);		// check whether we need to send a temperature or status report
-							isWaiting = true;
-							return false;
-						}
-					}
-				}
-				seen = true;
-			}
 
-			if (gb.Seen('C'))
-			{
-				// Wait for chamber heater to be ready
-				const int8_t chamberHeater = reprap.GetHeat().GetChamberHeater();
-				if (chamberHeater != -1)
+				for (size_t i = 0; i < heaterCount; i++)
 				{
-					if (!cancelWait && !reprap.GetHeat().HeaterAtSetTemperature(chamberHeater, true))
+					if (!reprap.GetHeat().HeaterAtSetTemperature(heaters[i], true))
 					{
 						CheckReportDue(gb, reply);			// check whether we need to send a temperature or status report
 						isWaiting = true;
@@ -1297,7 +1279,48 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 			}
 
-			// Wait for all heaters to be ready
+			if (!cancelWait && gb.Seen('C'))
+			{
+				// Wait for specified chamber(s) to be ready
+				long chamberIndices[NumChamberHeaters];
+				size_t chamberCount = NumChamberHeaters;
+				gb.GetLongArray(chamberIndices, chamberCount);
+
+				if (chamberCount == 0)
+				{
+					// If no values are specified, wait for all chamber heaters
+					for (size_t i = 0; i < NumChamberHeaters; i++)
+					{
+						const int8_t heater = reprap.GetHeat().GetChamberHeater(i);
+						if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true))
+						{
+							CheckReportDue(gb, reply);		// check whether we need to send a temperature or status report
+							isWaiting = true;
+							return false;
+						}
+					}
+				}
+				else
+				{
+					// Otherwise wait only for the specified chamber heaters
+					for (size_t i = 0; i < chamberCount; i++)
+					{
+						if (chamberIndices[i] >= 0 && chamberIndices[i] < (int)NumChamberHeaters)
+						{
+							const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
+							if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true))
+							{
+								CheckReportDue(gb, reply);	// check whether we need to send a temperature or status report
+								isWaiting = true;
+								return false;
+							}
+						}
+					}
+				}
+				seen = true;
+			}
+
+			// Wait for all heaters except chamber(s) to be ready
 			if (!seen && !cancelWait && !reprap.GetHeat().AllHeatersAtSetTemperatures(true))
 			{
 				CheckReportDue(gb, reply);					// check whether we need to send a temperature or status report
@@ -1366,6 +1389,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			Heat& heat = reprap.GetHeat();
 			bool seen = false;
 
+			// Check if the heater index is passed
+			int index = gb.Seen('P') ? gb.GetIValue() : 0;
+			if (index < 0 || index >= (int)((code == 140) ? NumBedHeaters : NumChamberHeaters))
+			{
+				reply.printf("Invalid heater index '%d'", index);
+				result = GCodeResult::error;
+				break;
+			}
+
 			// See if the heater number is being set
 			if (gb.Seen('H'))
 			{
@@ -1384,16 +1416,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 				if (code == 141)
 				{
-					heat.SetChamberHeater(heater);
+					heat.SetChamberHeater(index, heater);
 				}
 				else
 				{
-					heat.SetBedHeater(heater);
+					heat.SetBedHeater(index, heater);
 				}
 				platform.UpdateConfiguredHeaters();
 			}
 
-			const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater() : heat.GetBedHeater();
+			const int8_t currentHeater = (code == 141) ? heat.GetChamberHeater(index) : heat.GetBedHeater(index);
 			const char* heaterName = (code == 141) ? "chamber" : "bed";
 
 			// Active temperature
@@ -1402,7 +1434,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 				if (currentHeater < 0)
 				{
-					reply.printf("No %s heater has been configured", heaterName);
+					reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 					result = GCodeResult::error;
 				}
 				else
@@ -1425,7 +1457,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				seen = true;
 				if (currentHeater < 0)
 				{
-					reply.printf("No %s heater has been configured", heaterName);
+					reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 					result = GCodeResult::error;
 				}
 				else
@@ -1438,48 +1470,32 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			{
 				if (currentHeater < 0)
 				{
-					reply.printf("No %s heater has been configured", heaterName);
+					reply.printf("No %s heater has been configuredt for slot %d", heaterName, index);
 				}
 				else
 				{
-					reply.printf("%c%s heater %d is currently at %.1f" DEGREE_SYMBOL "C",
-						toupper(heaterName[0]), heaterName + 1, currentHeater, (double)reprap.GetHeat().GetTemperature(currentHeater));
+					reply.printf("%c%s heater %d (slot %d) is currently at %.1f" DEGREE_SYMBOL "C",
+						toupper(heaterName[0]), heaterName + 1, currentHeater, index, (double)reprap.GetHeat().GetTemperature(currentHeater));
 				}
 			}
 		}
 		break;
 
-	case 143: // Set temperature limit
-		{
-			const int heater = (gb.Seen('H')) ? gb.GetIValue() : 1;		// default to extruder 1 if no heater number provided
-			if (heater < 0 || heater >= (int)Heaters)
-			{
-				reply.printf("Invalid heater number '%d'", heater);
-				result = GCodeResult::error;
-			}
-			else if (gb.Seen('S'))
-			{
-				const float limit = gb.GetFValue();
-				if (limit > BAD_LOW_TEMPERATURE && limit < BAD_ERROR_TEMPERATURE)
-				{
-					reprap.GetHeat().SetTemperatureLimit(heater, limit);
-				}
-				else
-				{
-					reply.copy("Invalid temperature limit");
-					result = GCodeResult::error;
-				}
-			}
-			else
-			{
-				reply.printf("Temperature limit for heater %d is %.1f" DEGREE_SYMBOL "C", heater, (double)reprap.GetHeat().GetTemperatureLimit(heater));
-			}
-		}
+	case 143: // Configure heater protection
+		result = GetGCodeResultFromError(SetHeaterProtection(gb, reply));
 		break;
 
 	case 144: // Set bed to standby
 		{
-			const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
+			int index = gb.Seen('P') ? gb.GetIValue() : 0;
+			if (index < 0 || index >= (int)NumBedHeaters)
+			{
+				reply.printf("Invalid bed heater index '%d'", index);
+				result = GCodeResult::error;
+				break;
+			}
+
+			const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 			if (bedHeater >= 0)
 			{
 				reprap.GetHeat().Standby(bedHeater, nullptr);
@@ -1490,7 +1506,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 	case 190: // Set bed temperature and wait
 	case 191: // Set chamber temperature and wait
 		{
-			const int8_t heater = (code == 191) ? reprap.GetHeat().GetChamberHeater() : reprap.GetHeat().GetBedHeater();
+			// Check if the heater index is passed
+			int index = gb.Seen('P') ? gb.GetIValue() : 0;
+			if (index < 0 || index >= (int)((code == 190) ? NumBedHeaters : NumChamberHeaters))
+			{
+				reply.printf("Invalid heater index '%d'", index);
+				result = GCodeResult::error;
+				break;
+			}
+
+			const int8_t heater = (code == 191) ? reprap.GetHeat().GetChamberHeater(index) : reprap.GetHeat().GetBedHeater(index);
 			if (heater >= 0)
 			{
 				float temperature;
@@ -1985,17 +2010,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			const int heater = gb.GetIValue();
 			const float temperature = (gb.Seen('S')) ? gb.GetFValue()
-										: heater == reprap.GetHeat().GetBedHeater() ? 75.0
-										: heater == reprap.GetHeat().GetChamberHeater() ? 50.0
+										: reprap.GetHeat().IsBedHeater(heater) ? 75.0
+										: reprap.GetHeat().IsChamberHeater(heater) ? 50.0
 										: 200.0;
 			const float maxPwm = (gb.Seen('P')) ? gb.GetFValue() : reprap.GetHeat().GetHeaterModel(heater).GetMaxPwm();
 			if (heater < 0 || heater >= (int)Heaters)
 			{
 				reply.copy("Bad heater number in M303 command");
 			}
-			else if (temperature >= reprap.GetHeat().GetTemperatureLimit(heater))
+			else if (reprap.GetHeat().CheckHeater(heater))
 			{
-				reply.copy("Target temperature must be below temperature limit for this heater");
+				reply.copy("Heater is not ready to perform PID auto-tuning");
 			}
 			else if (maxPwm < 0.1 || maxPwm > 1.0)
 			{
@@ -2014,7 +2039,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 	case 304: // Set/report heated bed PID values
 		{
-			const int8_t bedHeater = reprap.GetHeat().GetBedHeater();
+			int index = gb.Seen('P') ? gb.GetIValue() : 0;
+			if (index < 0 || index >= (int)NumBedHeaters)
+			{
+				reply.printf("Invalid bed heater index '%d'", index);
+				result = GCodeResult::error;
+				break;
+			}
+
+			const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 			if (bedHeater >= 0)
 			{
 				SetPidParameters(gb, bedHeater, reply);
@@ -2040,6 +2073,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 					maxPwm = model.GetMaxPwm(),
 					voltage = model.GetVoltage();
 				int32_t dontUsePid = model.UsePid() ? 0 : 1;
+				int32_t inversionParameter = 0;
 
 				gb.TryGetFValue('A', gain, seen);
 				gb.TryGetFValue('C', tc, seen);
@@ -2047,13 +2081,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				gb.TryGetIValue('B', dontUsePid, seen);
 				gb.TryGetFValue('S', maxPwm, seen);
 				gb.TryGetFValue('V', voltage, seen);
+				gb.TryGetIValue('I', inversionParameter, seen);
 
 				if (seen)
 				{
-					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage, dontUsePid == 0))
+					const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
+					if (!reprap.GetHeat().SetHeaterModel(heater, gain, tc, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl))
 					{
 						reply.copy("Error: bad model parameters");
 					}
+
+					const bool invertedPwmSignal = (inversionParameter == 2 || inversionParameter == 3);
+					reprap.GetHeat().SetHeaterSignalInverted(heater, invertedPwmSignal);
 				}
 				else if (!model.IsEnabled())
 				{
@@ -2061,11 +2100,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				}
 				else
 				{
-					const char* const mode = (!model.UsePid()) ? "bang-bang"
-												: (model.ArePidParametersOverridden()) ? "custom PID"
-													: "PID";
-					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage %.1f, mode: %s",
-							heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
+					const char* mode = (!model.UsePid()) ? "bang-bang"
+										: (model.ArePidParametersOverridden()) ? "custom PID"
+											: "PID";
+					const bool pwmSignalInverted = reprap.GetHeat().IsHeaterSignalInverted(heater);
+					const char* inverted = model.IsInverted()
+											? (pwmSignalInverted ? "PWM signal and temperature control" : "temperature control")
+											: (pwmSignalInverted ? "PWM signal" : "no");
+
+					reply.printf("Heater %u model: gain %.1f, time constant %.1f, dead time %.1f, max PWM %.2f, calibration voltage: %.1f, mode: %s inverted: %s",
+							heater, (double)model.GetGain(), (double)model.GetTimeConstant(), (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode, inverted);
 					if (model.UsePid())
 					{
 						// When reporting the PID parameters, we scale them by 255 for compatibility with older firmware and other firmware
@@ -2436,7 +2480,55 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 		{
 			bool seen = false;
 
-#ifdef DUET_WIFI
+#if HAS_MULTIPLE_NETWORK_INTERFACES
+			const int interface = (gb.Seen('I') ? gb.GetIValue() : 0);
+
+			if (reprap.GetNetwork().IsWiFiInterface(interface))
+			{
+				if (gb.Seen('S')) // Has the user turned the network on or off?
+				{
+					const int enableValue = gb.GetIValue();
+					seen = true;
+
+					char ssidBuffer[SsidLength + 1];
+					StringRef ssid(ssidBuffer, ARRAY_SIZE(ssidBuffer));
+					if (gb.Seen('P') && !gb.GetQuotedString(ssid))
+					{
+						reply.copy("Bad or missing SSID");
+						result = GCodeResult::error;
+					}
+					else
+					{
+						reprap.GetNetwork().EnableWiFi(enableValue, ssid, reply);
+					}
+				}
+			}
+			else
+			{
+				if (gb.Seen('P'))
+				{
+					seen = true;
+					uint8_t eth[4];
+					if (gb.GetIPAddress(eth))
+					{
+						platform.SetIPAddress(eth);
+					}
+					else
+					{
+						reply.copy("Bad IP address");
+						result = GCodeResult::error;
+						break;
+					}
+				}
+
+				// Process this one last in case the IP address is changed and the network enabled in the same command
+				if (gb.Seen('S')) // Has the user turned the network on or off?
+				{
+					seen = true;
+					reprap.GetNetwork().EnableEthernet(gb.GetIValue(), reply);
+				}
+			}
+#elif HAS_WIFI_NETWORKING
 			if (gb.Seen('S')) // Has the user turned the network on or off?
 			{
 				const int enableValue = gb.GetIValue();
@@ -2481,7 +2573,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 			if (!seen)
 			{
+#if HAS_MULTIPLE_NETWORK_INTERFACES
+				result = GetGCodeResultFromError(reprap.GetNetwork().GetNetworkState(interface, reply));
+#else
 				result = GetGCodeResultFromError(reprap.GetNetwork().GetNetworkState(reply));
+#endif
 			}
 		}
 		break;
@@ -2875,12 +2971,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				{
 					bool seenValue = false;
 					float maxTempExcursion, maxFaultTime;
-					reprap.GetHeat().GetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
+					reprap.GetHeat().GetFaultDetectionParameters(heater, maxTempExcursion, maxFaultTime);
 					gb.TryGetFValue('P', maxFaultTime, seenValue);
 					gb.TryGetFValue('T', maxTempExcursion, seenValue);
 					if (seenValue)
 					{
-						reprap.GetHeat().SetHeaterProtection(heater, maxTempExcursion, maxFaultTime);
+						reprap.GetHeat().SetFaultDetectionParameters(heater, maxTempExcursion, maxFaultTime);
 					}
 					else if (!seen)
 					{
@@ -3465,8 +3561,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				moveBuffer.canPauseBefore = true;
 
 				// Decide which way and how far to go
-				const float axisLength = platform.AxisMaximum(axis) - platform.AxisMinimum(axis) + 5.0;
-				moveBuffer.coords[axis] = (gb.Seen('S') && gb.GetIValue() == 1) ? axisLength * -1.0 : axisLength;
+				if (gb.Seen('R'))
+				{
+					// Use relative probing radius if the R parameter is present
+					moveBuffer.coords[axis] += gb.GetFValue();
+				}
+				else
+				{
+					// Move to axis minimum if S1 is passed or to the axis maximum otherwise
+					moveBuffer.coords[axis] = (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(axis) : platform.AxisMaximum(axis);
+				}
 
 				// Zero every extruder drive
 				for (size_t drive = numTotalAxes; drive < DRIVES; drive++)
@@ -3486,12 +3590,39 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 				// Kick off new movement
 				segmentsLeft = 1;
 				gb.SetState(GCodeState::probingToolOffset);
-				break;
 			}
 		}
 		break;
 
 	case 586: // Configure network protocols
+#if HAS_MULTIPLE_NETWORK_INTERFACES
+		{
+			const int interface = (gb.Seen('I') ? gb.GetIValue() : 0);
+
+			if (gb.Seen('P'))
+			{
+				const int protocol = gb.GetIValue();
+				if (gb.Seen('S'))
+				{
+					const bool enable = (gb.GetIValue() == 1);
+					if (enable)
+					{
+						const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
+						const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
+						reprap.GetNetwork().EnableProtocol(interface, protocol, port, secure, reply);
+					}
+					else
+					{
+						reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
+					}
+				}
+				break;
+			}
+
+			// Default to reporting current protocols if P or S parameter missing
+			reprap.GetNetwork().ReportProtocols(interface, reply);
+		}
+#else
 		if (gb.Seen('P'))
 		{
 			const int protocol = gb.GetIValue();
@@ -3514,207 +3645,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 
 		// Default to reporting current protocols if P or S parameter missing
 		reprap.GetNetwork().ReportProtocols(reply);
+#endif
 		break;
 
-#ifdef DUET_WIFI
+#if HAS_WIFI_NETWORKING
 	case 587:	// Add WiFi network or list remembered networks
-		if (gb.Seen('S'))
-		{
-			WirelessConfigurationData config;
-			memset(&config, 0, sizeof(config));
-			String<ARRAY_SIZE(config.ssid)> ssid;
-			bool ok = gb.GetQuotedString(ssid.GetRef());
-			if (ok)
-			{
-				SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
-				String<ARRAY_SIZE(config.password)> password;
-				ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
-				if (ok)
-				{
-					SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-				}
-			}
-			if (ok && gb.Seen('I'))
-			{
-				gb.GetIPAddress(config.ip);
-			}
-			if (ok && gb.Seen('J'))
-			{
-				ok = gb.GetIPAddress(config.gateway);
-			}
-			if (ok && gb.Seen('K'))
-			{
-				ok = gb.GetIPAddress(config.netmask);
-			}
-			if (ok)
-			{
-				const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkAddSsid, 0, 0, &config, sizeof(config), nullptr, 0);
-				if (rslt != ResponseEmpty)
-				{
-					reply.copy("Failed to add SSID to remembered list");
-					result = GCodeResult::error;
-				}
-			}
-			else
-			{
-				reply.copy("Bad or missing parameter");
-				result = GCodeResult::error;
-			}
-		}
-		else
-		{
-			// List remembered networks
-			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;	// enough for all the remembered SSID data
-			uint32_t buffer[NumDwords(declaredBufferLength)];
-			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, declaredBufferLength);
-			if (rslt >= 0)
-			{
-				OutputBuffer *response = nullptr;
-				size_t offset = ReducedWirelessConfigurationDataSize;		// skip own SSID details
-				while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
-				{
-					WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
-					if (wp->ssid[0] != 0)
-					{
-						if (response == nullptr)
-						{
-							if (!OutputBuffer::Allocate(response))
-							{
-								return false;		// try again later
-							}
-							response->copy("Remembered networks:");
-						}
-						wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-						response->catf("\n%s IP=%s GW=%s NM=%s", wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
-					}
-					offset += ReducedWirelessConfigurationDataSize;
-				}
-
-				if (response == nullptr)
-				{
-					reply.copy("No remembered networks");
-				}
-				else
-				{
-					HandleReply(gb, false, response);
-					return true;
-				}
-			}
-			else
-			{
-				reply.copy("Failed to retrieve network list");
-				result = GCodeResult::error;
-			}
-		}
-		break;
-
 	case 588:	// Forget WiFi network
-		if (gb.Seen('S'))
-		{
-			String<SsidLength> ssidText;
-			if (gb.GetQuotedString(ssidText.GetRef()))
-			{
-				if (strcmp(ssidText.c_str(), "*") == 0)
-				{
-					const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
-					if (rslt != ResponseEmpty)
-					{
-						reply.copy("Failed to reset the WiFi module to factory settings");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
-					memcpy(ssid32, ssidText.c_str(), SsidLength);
-					const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
-					if (rslt != ResponseEmpty)
-					{
-						reply.copy("Failed to remove SSID from remembered list");
-						result = GCodeResult::error;
-					}
-				}
-			}
-			else
-			{
-				reply.copy("Bad parameter");
-				result = GCodeResult::error;
-			}
-		}
-		break;
-
 	case 589:	// Configure access point
-		if (gb.Seen('S'))
-		{
-			WirelessConfigurationData config;
-			memset(&config, 0, sizeof(config));
-			String<SsidLength> ssid;
-			bool ok = gb.GetQuotedString(ssid.GetRef());
-			if (ok)
-			{
-				if (strcmp(ssid.c_str(), "*") == 0)
-				{
-					// Delete the access point details
-					memset(&config, 0xFF, sizeof(config));
-				}
-				else
-				{
-					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
-					String<ARRAY_SIZE(config.password)> password;
-					ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
-					if (ok)
-					{
-						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-						if (gb.Seen('I'))
-						{
-							ok = gb.GetIPAddress(config.ip);
-							config.channel = (gb.Seen('C')) ? gb.GetIValue() : 0;
-						}
-						else
-						{
-							ok = false;
-						}
-					}
-				}
-			}
-			if (ok)
-			{
-				const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
-				if (rslt != ResponseEmpty)
-				{
-					reply.copy("Failed to configure access point parameters");
-					result = GCodeResult::error;
-				}
-			}
-			else
-			{
-				reply.copy("Bad or missing parameter");
-				result = GCodeResult::error;
-			}
-		}
-		else
-		{
-			uint32_t buffer[NumDwords(ReducedWirelessConfigurationDataSize)];
-			const int32_t rslt = reprap.GetNetwork().SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, ReducedWirelessConfigurationDataSize);
-			if (rslt >= 0)
-			{
-				WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(buffer);
-				if (wp->ssid[0] == 0)
-				{
-					reply.copy("Own SSID not configured");
-				}
-				else
-				{
-					wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-					reply.printf("Own SSID: %s IP=%s GW=%s NM=%s",  wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
-				}
-			}
-			else
-			{
-				reply.copy("Failed to retrieve own SSID data");
-				result = GCodeResult::error;
-			}
-		}
+		result = GetGCodeResultFromError(reprap.GetNetwork().HandleWiFiCode(code, gb, reply));
 		break;
 #endif
 
@@ -4391,7 +4329,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, StringRef& reply)
 			}
 
 			// Check prerequisites of all modules to be updated, if any are not met then don't update any of them
-#if defined(DUET_NG) || defined(DUET_M)
+#if HAS_WIFI_NETWORKING
 			if (!FirmwareUpdater::CheckFirmwareUpdatePrerequisites(firmwareUpdateModuleMap, reply))
 			{
 				firmwareUpdateModuleMap = 0;

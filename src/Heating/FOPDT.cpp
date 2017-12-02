@@ -15,12 +15,12 @@ extern StringRef scratchString;
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt()
 	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
-	  enabled(false), usePid(true), pidParametersOverridden(false)
+	  enabled(false), usePid(true), inverted(false), pidParametersOverridden(false)
 {
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float voltage, bool pUsePid)
+bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted)
 {
 	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
 	{
@@ -37,8 +37,9 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float t
 		timeConstant = ptc;
 		deadTime = pdt;
 		maxPwm = pMaxPwm;
-		standardVoltage = voltage;
+		standardVoltage = pVoltage;
 		usePid = pUsePid;
+		inverted = pInverted;
 		enabled = true;
 		CalcPidConstants();
 		return true;

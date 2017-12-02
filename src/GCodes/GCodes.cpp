@@ -28,6 +28,7 @@
 #include "GCodeBuffer.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
+#include "Heating/HeaterProtection.h"
 #include "Platform.h"
 #include "Movement/Move.h"
 #include "Scanner.h"
@@ -35,7 +36,7 @@
 #include "RepRap.h"
 #include "Tools/Tool.h"
 
-#if defined(DUET_NG) || defined(DUET_M)
+#if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
 #endif
 
@@ -382,7 +383,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 						// went (i.e. the difference between our start and end positions) and if we need to
 						// incorporate any correction factors. That's why we only need to set the final tool
 						// offset to this value in order to finish the tool probing.
-						currentTool->SetOffset(axis, (currentUserPosition[axis] - toolChangeRestorePoint.moveCoords[axis]) + gb.GetFValue(), true);
+						currentTool->SetOffset(axis, (toolChangeRestorePoint.moveCoords[axis] - currentUserPosition[axis]) + gb.GetFValue(), true);
 						break;
 					}
 				}
@@ -605,7 +606,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		break;
 
 	case GCodeState::flashing1:
-#if defined(DUET_NG) || defined(DUET_M)
+#if HAS_WIFI_NETWORKING
 		// Update additional modules before the main firmware
 		if (FirmwareUpdater::IsReady())
 		{
@@ -3688,6 +3689,136 @@ void GCodes::HandleReply(GCodeBuffer& gb, bool error, OutputBuffer *reply)
 	}
 }
 
+// Configure heater protection (M143). Returns true if an error occurred
+bool GCodes::SetHeaterProtection(GCodeBuffer& gb, StringRef& reply)
+{
+	const int index = (gb.Seen('P'))
+						? gb.GetIValue()
+						: (gb.Seen('H')) ? gb.GetIValue() : 1;		// default to extruder 1 if no heater number provided
+	if ((index < 0 || index >= (int)Heaters) && (index < (int)FirstExtraHeaterProtection || index >= (int)(FirstExtraHeaterProtection + NumExtraHeaterProtections)))
+	{
+		reply.printf("Invalid heater protection item '%d'", index);
+		return true;
+	}
+
+	HeaterProtection &item = reprap.GetHeat().AccessHeaterProtection(index);
+
+	// Set heater to control
+	bool seen = false;
+	if (gb.Seen('P') && gb.Seen('H'))
+	{
+		const int heater = gb.GetIValue();
+		if (heater > (int)Heaters)									// allow negative values to disable heater protection
+		{
+			reply.printf("Invalid heater number '%d'", heater);
+			return true;
+		}
+
+		seen = true;
+		item.SetHeater(heater);
+	}
+
+	// Set heater to supervise
+	if (gb.Seen('X'))
+	{
+		const int heater = gb.GetIValue();
+		if ((heater < 0 || heater > (int)Heaters) && (heater < (int)FirstVirtualHeater || heater >= (int)(FirstVirtualHeater + MaxVirtualHeaters)))
+		{
+			reply.printf("Invalid heater number '%d'", heater);
+			return true;
+		}
+
+		seen = true;
+		item.SetSupervisedHeater(heater);
+	}
+
+	// Set trigger action
+	if (gb.Seen('A'))
+	{
+		const int action = gb.GetIValue();
+		if (action < 0 || action > (int)MaxHeaterProtectionAction)
+		{
+			reply.printf("Invalid heater protection action '%d'", action);
+		}
+
+		seen = true;
+		item.SetAction(static_cast<HeaterProtectionAction>(action));
+	}
+
+	// Set trigger condition
+	if (gb.Seen('C'))
+	{
+		const int trigger = gb.GetIValue();
+		if (trigger < 0 || trigger > (int)MaxHeaterProtectionTrigger)
+		{
+			reply.printf("Invalid heater protection trigger '%d'", trigger);
+		}
+
+		seen = true;
+		item.SetTrigger(static_cast<HeaterProtectionTrigger>(trigger));
+	}
+
+	// Set temperature limit
+	if (gb.Seen('S'))
+	{
+		const float limit = gb.GetFValue();
+		if (limit <= BAD_LOW_TEMPERATURE || limit >= BAD_ERROR_TEMPERATURE)
+		{
+			reply.copy("Invalid temperature limit");
+			return true;
+		}
+
+		seen = true;
+		item.SetTemperatureLimit(limit);
+	}
+
+	// Report current parameters
+	if (!seen)
+	{
+		if (item.GetHeater() < 0)
+		{
+			reply.printf("Temperature protection item %d is not configured", index);
+		}
+		else
+		{
+			const char *actionString, *triggerString;
+			switch (item.GetAction())
+			{
+			case HeaterProtectionAction::GenerateFault:
+				actionString = "generate a heater fault";
+				break;
+			case HeaterProtectionAction::PermanentSwitchOff:
+				actionString = "permanently switch off";
+				break;
+			case HeaterProtectionAction::TemporarySwitchOff:
+				actionString = "temporarily switch off";
+				break;
+			default:
+				actionString = "(undefined)";
+				break;
+			}
+
+			switch (item.GetTrigger())
+			{
+			case HeaterProtectionTrigger::TemperatureExceeded:
+				triggerString = "exceeds";
+				break;
+			case HeaterProtectionTrigger::TemperatureTooLow:
+				triggerString = "falls below";
+				break;
+			default:
+				triggerString = "(undefined)";
+				break;
+			}
+
+			reply.printf("Temperature protection item %d is configured for heater %d and supervises heater %d to %s if the temperature %s %.1f" DEGREE_SYMBOL "C",
+					index, item.GetHeater(), item.GetSupervisedHeater(), actionString, triggerString, (double)item.GetTemperatureLimit());
+		}
+	}
+
+	return false;
+}
+
 // Set PID parameters (M301 or M304 command). 'heater' is the default heater number to use.
 void GCodes::SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply)
 {
@@ -4363,13 +4494,13 @@ void GCodes::GenerateTemperatureReport(StringRef& reply) const
 		}
 	}
 
-	const int bedHeater = heat.GetBedHeater();
+	const int bedHeater = (NumBedHeaters > 0) ? heat.GetBedHeater(0) : -1;				// default to first heated bed
 	if (bedHeater >= 0)
 	{
 		reply.catf(" B:%.1f /%.1f", (double)heat.GetTemperature(bedHeater), (double)heat.GetTargetTemperature(bedHeater));
 	}
 
-	const int chamberHeater = heat.GetChamberHeater();
+	const int chamberHeater = (NumChamberHeaters > 0) ? heat.GetChamberHeater(0) : -1;	// default to first chamber heater
 	if (chamberHeater >= 0)
 	{
 		reply.catf(" C:%.1f /%.1f", (double)heat.GetTemperature(chamberHeater), (double)heat.GetTargetTemperature(chamberHeater));

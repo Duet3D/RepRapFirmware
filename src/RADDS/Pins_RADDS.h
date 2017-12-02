@@ -5,6 +5,7 @@
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
+#define HAS_WIFI_NETWORKING		0
 #define HAS_CPU_TEMP_SENSOR		0				// enabling the CPU temperature sensor disables Due pin 13 due to bug in SAM3X
 #define HAS_HIGH_SPEED_SD		0
 #define HAS_SMART_DRIVERS		0
@@ -37,6 +38,8 @@ const size_t DRIVES = 9;
 // The number of heaters in the machine
 // 0 is the heated bed even if there isn't one.
 const size_t Heaters = 4;
+
+const size_t NumExtraHeaterProtections = 4;		// The number of extra heater protection instances
 
 // Initialization macro used in statements needing to initialize values in arrays of size HEATERS.  E.g.,
 // defaultPidKis[HEATERS] = {HEATERS_(5.0, 0.1, 0.1, 0.1, 0.1, 0.1)};

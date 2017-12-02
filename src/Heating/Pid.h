@@ -16,6 +16,8 @@
 #include "FOPDT.h"
 #include "TemperatureError.h"
 
+class HeaterProtection;
+
 class PID
 {
 	enum class HeaterMode : uint8_t
@@ -39,20 +41,22 @@ class PID
 public:
 
 	PID(Platform& p, int8_t h);
-	void Init(float pGain, float pTc, float pTd, float tempLimit, bool usePid);	// (Re)Set everything to start
+	void Init(float pGain, float pTc, float pTd, bool usePid, bool inverted);	// (Re)Set everything to start
 	void Reset();
 	void Spin();									// Called in a tight loop to keep things running
 	void SetActiveTemperature(float t);
 	float GetActiveTemperature() const;
 	void SetStandbyTemperature(float t);
 	float GetStandbyTemperature() const;
-	void SetTemperatureLimit(float t);
-	float GetTemperatureLimit() const;
+	void SetHeaterProtection(HeaterProtection *h);
+	float GetHighestTemperatureLimit() const;		// Get the highest temperature limit
+	float GetLowestTemperatureLimit() const;		// Get the lowest temperature limit
 	void Activate();								// Switch from idle to active
 	void Standby();									// Switch from active to idle
 	bool Active() const;							// Are we active?
 	void SwitchOff();								// Not even standby - all heater power off
 	bool SwitchedOff() const;						// Are we switched off?
+	bool CheckProtection() const;					// Check heater protection elements and return true if everything is good
 	bool FaultOccurred() const;						// Has a heater fault occurred?
 	void ResetFault();								// Reset a fault condition - only call this if you know what you are doing
 	float GetTemperature() const;					// Get the current temperature
@@ -66,15 +70,20 @@ public:
 	const FopDt& GetModel() const					// Get the process model
 		{ return model; }
 
-	bool SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid);	// Set the process model
+	bool SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted);	// Set the process model
+
+	bool IsHeaterSignalInverted() const				// Is the PWM output signal inverted?
+		{ return invertPwmSignal; }
+	void SetHeaterSignalInverted(bool inverted)		// Set PWM output signal inversion
+		{ invertPwmSignal = inverted; }
 
 	bool IsHeaterEnabled() const					// Is this heater enabled?
 		{ return model.IsEnabled(); }
 
-	void GetHeaterProtection(float& pMaxTempExcursion, float& pMaxFaultTime) const
+	void GetFaultDetectionParameters(float& pMaxTempExcursion, float& pMaxFaultTime) const
 		{ pMaxTempExcursion = maxTempExcursion; pMaxFaultTime = maxHeatingFaultTime; }
 
-	void SetHeaterProtection(float pMaxTempExcursion, float pMaxFaultTime)
+	void SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime)
 		{ maxTempExcursion = pMaxTempExcursion; maxHeatingFaultTime = pMaxFaultTime; }
 
 	void SetM301PidParameters(const M301PidParameters& params)
@@ -99,9 +108,9 @@ private:
 	float GetExpectedHeatingRate() const;			// Get the minimum heating rate we expect
 
 	Platform& platform;								// The instance of the class that is the RepRap hardware
+	HeaterProtection *heaterProtection;				// The first element of assigned heater protection items
 	float activeTemperature;						// The required active temperature
 	float standbyTemperature;						// The required standby temperature
-	float temperatureLimit;							// The maximum allowed temperature for this heater
 	float maxTempExcursion;							// The maximum temperature excursion permitted while maintaining the setpoint
 	float maxHeatingFaultTime;						// How long a heater fault is permitted to persist before a heater fault is raised
 	float temperature;								// The current temperature
@@ -119,6 +128,7 @@ private:
 	int8_t heater;									// The index of our heater
 	uint8_t previousTemperaturesGood;				// Bitmap indicating which previous temperature were good readings
 	HeaterMode mode;								// Current state of the heater
+	bool invertPwmSignal;							// Invert the final PWM output signal (same behaviour as with HEAT_ON in earlier firmware versions)
 	bool active;									// Are we active or standby?
 	bool tuned;										// True if tuning was successful
 #if HAS_VOLTAGE_MONITOR
@@ -159,16 +169,6 @@ inline float PID::GetActiveTemperature() const
 inline float PID::GetStandbyTemperature() const
 {
 	return standbyTemperature;
-}
-
-inline void PID::SetTemperatureLimit(float t)
-{
-	temperatureLimit = t;
-}
-
-inline float PID::GetTemperatureLimit() const
-{
-	return temperatureLimit;
 }
 
 inline float PID::GetTemperature() const

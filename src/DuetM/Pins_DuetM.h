@@ -15,6 +15,7 @@ constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 
 // Features definition
 #define HAS_LWIP_NETWORKING		0
+#define HAS_WIFI_NETWORKING		0
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 #define HAS_SMART_DRIVERS		0					// TEMPORARY!!!
@@ -37,6 +38,8 @@ constexpr size_t DRIVES = 7;						// The maximum number of drives supported by t
 
 constexpr size_t Heaters = 4;						// The number of heaters/thermistors in the machine; 0 is the heated bed even if there isn't one
 #define HEATERS_(a,b,c,d,e,f,g,h) { a,b,c }
+
+constexpr size_t NumExtraHeaterProtections = 8;		// The number of extra heater protection instances
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 6;						// The maximum number of movement axes in the machine, usually just X, Y and Z, <= DRIVES

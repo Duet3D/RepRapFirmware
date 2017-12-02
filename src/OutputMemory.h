@@ -151,5 +151,3 @@ class OutputStack
 };
 
 #endif /* OUTPUTMEMORY_H_ */
-
-// vim: ts=4:sw=4
