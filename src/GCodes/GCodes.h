@@ -244,8 +244,11 @@ private:
 	void SetBedEquationWithProbe(int sParam, StringRef& reply);			// Probes a series of points and sets the bed equation
 	GCodeResult SetPrintZProbe(GCodeBuffer& gb, StringRef& reply);		// Either return the probe value, or set its threshold
 	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, StringRef& reply);	// Deal with a G10
-
 	GCodeResult SetPositions(GCodeBuffer& gb);							// Deal with a G92
+	GCodeResult DoDriveMapping(GCodeBuffer& gb, StringRef& reply);		// Deal with a M584
+	GCodeResult ProbeTool(GCodeBuffer& gb, StringRef& reply);			// Deal with a M585
+	GCodeResult SetDateTime(GCodeBuffer& gb, StringRef& reply);			// Deal with a M905
+
 	bool LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, int moveType); // Set up the extrusion and feed rate of a move for the Move class
 
 	bool Push(GCodeBuffer& gb);											// Push feedrate etc on the stack
@@ -262,7 +265,7 @@ private:
 	void SetPidParameters(GCodeBuffer& gb, int heater, StringRef& reply); // Set the P/I/D parameters for a heater
 	GCodeResult SetHeaterParameters(GCodeBuffer& gb, StringRef& reply);	// Set the thermistor and ADC parameters for a heater, returning true if an error occurs
 	bool ManageTool(GCodeBuffer& gb, StringRef& reply);					// Create a new tool definition, returning true if an error was reported
-	void SetToolHeaters(Tool *tool, float temperature);					// Set all a tool's heaters to the temperature, for M104
+	void SetToolHeaters(Tool *tool, float temperature, bool both);		// Set all a tool's heaters to the temperature, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling) const; // Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(StringRef& reply) const;				// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const;	// Generate a M408 response
@@ -297,10 +300,13 @@ private:
 	void SetMappedFanSpeed();											// Set the speeds of fans mapped for the current tool
 	void SaveFanSpeeds();												// Save the speeds of all fans
 
-	bool DefineGrid(GCodeBuffer& gb, StringRef &reply);					// Define the probing grid, returning true if error
+	GCodeResult SetOrReportZProbe(GCodeBuffer& gb, StringRef &reply);	// Handle M558
+	GCodeResult DefineGrid(GCodeBuffer& gb, StringRef &reply);			// Define the probing grid, returning true if error
 	bool LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Load the height map from file
 	bool SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const;		// Save the height map to file
 	GCodeResult ProbeGrid(GCodeBuffer& gb, StringRef& reply);			// Start probing the grid, returning true if we didn't because of an error
+	GCodeResult CheckOrConfigureTrigger(GCodeBuffer& gb, StringRef& reply, int code);	// Handle M581 and M582
+	GCodeResult UpdateFirmware(GCodeBuffer& gb, StringRef &reply);		// Handle M997
 
 	bool WriteConfigOverrideFile(StringRef& reply, const char *fileName) const; // Write the config-override file
 	void CopyConfigFinalValues(GCodeBuffer& gb);						// Copy the feed rate etc. from the daemon to the input channels

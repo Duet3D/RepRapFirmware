@@ -1,9 +1,9 @@
-#include "Network.h"
 #include "RepRap.h"
 
 #include "Movement/Move.h"
 #include "GCodes/GCodes.h"
 #include "Heating/Heat.h"
+#include "Network.h"
 #include "Platform.h"
 #include "Scanner.h"
 #include "PrintMonitor.h"
@@ -57,7 +57,8 @@ extern "C" void hsmciIdle()
 
 RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0), activeExtruders(0),
 	activeToolHeaters(0), ticksInSpinState(0), spinningModule(noModule), debug(0), stopped(false),
-	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0)
+	active(false), resetting(false), processingConfig(true), beepFrequency(0), beepDuration(0),
+	displayMessageBox(false), boxSeq(0)
 {
 	OutputBuffer::Init();
 	platform = new Platform();
@@ -81,7 +82,6 @@ RepRap::RepRap() : toolList(nullptr), currentTool(nullptr), lastWarningMillis(0)
 	SetPassword(DEFAULT_PASSWORD);
 	SetName(DEFAULT_NAME);
 	message[0] = 0;
-	displayMessageBox = false;
 }
 
 void RepRap::Init()
@@ -438,12 +438,15 @@ void RepRap::PrintTool(int toolNumber, StringRef& reply) const
 	}
 }
 
-void RepRap::StandbyTool(int toolNumber)
+void RepRap::StandbyTool(int toolNumber, bool simulating)
 {
 	Tool* const tool = GetTool(toolNumber);
 	if (tool != nullptr)
 	{
-		tool->Standby();
+		if (!simulating)
+		{
+			tool->Standby();
+		}
   		if (currentTool == tool)
 		{
 			currentTool = nullptr;
@@ -532,11 +535,11 @@ void RepRap::Tick()
 		if (ticksInSpinState >= MaxTicksInSpinState)	// if we stall for 20 seconds, save diagnostic data and reset
 		{
 			resetting = true;
-			for(size_t i = 0; i < Heaters; i++)
+			for (size_t i = 0; i < Heaters; i++)
 			{
 				platform->SetHeater(i, 0.0);
 			}
-			for(size_t i = 0; i < DRIVES; i++)
+			for (size_t i = 0; i < DRIVES; i++)
 			{
 				platform->DisableDrive(i);
 				// We can't set motor currents to 0 here because that requires interrupts to be working, and we are in an ISR
@@ -680,7 +683,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source)
 				response->EncodeString(boxMessage, ARRAY_SIZE(boxMessage), false);
 				response->cat(",\"title\":");
 				response->EncodeString(boxTitle, ARRAY_SIZE(boxTitle), false);
-				response->catf(",\"mode\":%d,\"timeout\":%.1f,\"controls\":%" PRIu32 "}", boxMode, (double)timeLeft, boxControls);
+				response->catf(",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%" PRIu32 "}", boxMode, boxSeq, (double)timeLeft, boxControls);
 			}
 			response->cat("}");
 		}
@@ -1381,7 +1384,8 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq)
 
 	if (displayMessageBox)
 	{
-		response->catf(",\"msgBox.mode\":%d,\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "", boxMode, (double)timeLeft, boxControls);
+		response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%" PRIu32 "",
+						boxMode, boxSeq, (double)timeLeft, boxControls);
 		response->cat(",\"msgBox.msg\":");
 		response->EncodeString(boxMessage, ARRAY_SIZE(boxMessage), false);
 		response->cat(",\"msgBox.title\":");
@@ -1608,6 +1612,7 @@ void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeou
 	boxTimeout = round(max<float>(timeout, 0.0) * 1000.0);
 	boxControls = controls;
 	displayMessageBox = true;
+	++boxSeq;
 }
 
 // Clear pending message box

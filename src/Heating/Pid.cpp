@@ -45,14 +45,14 @@ PID::PID(Platform& p, int8_t h) : platform(p), heater(h), mode(HeaterMode::off),
 
 inline void PID::SetHeater(float power) const
 {
-	platform.SetHeater(heater, invertPwmSignal ? (1.0 - power) : power);
+	platform.SetHeater(heater, invertPwmSignal ? (1.0 - power) : power, model.GetPwmFrequency());
 }
 
 void PID::Init(float pGain, float pTc, float pTd, bool usePid, bool inverted)
 {
 	maxTempExcursion = DefaultMaxTempExcursion;
 	maxHeatingFaultTime = DefaultMaxHeatingFaultTime;
-	model.SetParameters(pGain, pTc, pTd, 1.0, GetHighestTemperatureLimit(), 0.0, usePid, inverted);
+	model.SetParameters(pGain, pTc, pTd, 1.0, GetHighestTemperatureLimit(), 0.0, usePid, inverted, 0);
 	Reset();
 
 	if (model.IsEnabled())
@@ -85,10 +85,10 @@ void PID::Reset()
 }
 
 // Set the process model
-bool PID::SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted)
+bool PID::SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq)
 {
 	const float temperatureLimit = GetHighestTemperatureLimit();
-	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, temperatureLimit, voltage, usePid, inverted);
+	const bool rslt = model.SetParameters(gain, tc, td, maxPwm, temperatureLimit, voltage, usePid, inverted, pwmFreq);
 	if (rslt)
 	{
 #if defined(DUET_06_085)
@@ -935,7 +935,7 @@ void PID::CalculateModel()
 #else
 						0.0,
 #endif
-		true, false);
+		true, false, model.GetPwmFrequency());
 	if (tuned)
 	{
 		platform.MessageF(LoggedGenericMessage,

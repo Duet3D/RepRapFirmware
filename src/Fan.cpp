@@ -63,7 +63,7 @@ bool Fan::Configure(unsigned int mcode, int fanNum, GCodeBuffer& gb, StringRef& 
 		if (gb.Seen('F'))										// Set PWM frequency
 		{
 			seen = true;
-			freq = (uint16_t)constrain<int>(gb.GetIValue(), 1, 65535);
+			freq = (PwmFrequency)constrain<int>(gb.GetIValue(), 1, 65535);
 			lastPwm = -1.0;										// force the PWM to be updated
 			Refresh();
 		}
@@ -193,7 +193,7 @@ void Fan::SetHardwarePwm(float pwmVal)
 	}
 }
 
-void Fan::SetHeatersMonitored(uint16_t h)
+void Fan::SetHeatersMonitored(HeatersMonitoredBitmap h)
 {
 	heatersMonitored = h;
 	Refresh();
@@ -300,12 +300,13 @@ void Fan::Refresh()
 	lastVal = reqVal;
 }
 
-void Fan::Check()
+bool Fan::Check()
 {
 	if (heatersMonitored != 0 || blipping)
 	{
 		Refresh();
 	}
+	return heatersMonitored != 0 && lastVal != 0.0;
 }
 
 void Fan::Disable()

@@ -73,7 +73,7 @@ private:
 	// Create a filament sensor returning null if not a valid sensor type
 	static FilamentSensor *Create(int type);
 
-	static void InterruptEntry(void *param);
+	static void InterruptEntry(CallbackParameter param);
 
 	static FilamentSensor *filamentSensors[MaxExtruders];
 

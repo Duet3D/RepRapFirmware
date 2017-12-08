@@ -31,7 +31,7 @@ void Logger::Start(time_t time, const StringRef& filename)
 	if (!inLogger)
 	{
 		Lock loggerLock(inLogger);
-		FileStore * const f = reprap.GetPlatform().GetFileStore(SYS_DIR, filename.Pointer(), OpenMode::append);
+		FileStore * const f = reprap.GetPlatform().OpenFile(SYS_DIR, filename.Pointer(), OpenMode::append);
 		if (f != nullptr)
 		{
 			logFile.Set(f);

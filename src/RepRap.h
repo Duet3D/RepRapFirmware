@@ -57,7 +57,7 @@ public:
 	void AddTool(Tool* t);
 	void DeleteTool(Tool* t);
 	void SelectTool(int toolNumber, bool simulating);
-	void StandbyTool(int toolNumber);
+	void StandbyTool(int toolNumber, bool simulating);
 	Tool* GetCurrentTool() const;
 	int GetCurrentToolNumber() const;
 	Tool* GetTool(int toolNumber) const;
@@ -158,9 +158,11 @@ private:
 	int beepFrequency, beepDuration;
 	char message[MESSAGE_LENGTH + 1];
 
+	// Message box data
 	bool displayMessageBox;
 	char boxMessage[MESSAGE_LENGTH + 1], boxTitle[MESSAGE_LENGTH + 1];
 	int boxMode;
+	uint32_t boxSeq;
 	uint32_t boxTimer, boxTimeout;
 	AxesBitmap boxControls;
 };

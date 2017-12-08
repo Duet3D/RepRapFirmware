@@ -285,7 +285,7 @@ void Scanner::ProcessCommand()
 		if (uploadFilename != nullptr)
 		{
 			uploadBytesLeft = uploadSize;
-			fileBeingUploaded = platform.GetFileStore(SCANS_DIRECTORY, uploadFilename, OpenMode::write);
+			fileBeingUploaded = platform.OpenFile(SCANS_DIRECTORY, uploadFilename, OpenMode::write);
 			if (fileBeingUploaded != nullptr)
 			{
 				SetState(ScannerState::Uploading);

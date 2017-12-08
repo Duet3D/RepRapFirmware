@@ -90,7 +90,7 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength)
 }
 #endif
 
-static void EspTransferRequestIsr(void*)
+static void EspTransferRequestIsr(CallbackParameter)
 {
 	wifiInterface->EspRequestsTransfer();
 }
@@ -839,7 +839,7 @@ void WiFiInterface::SetIPAddress(const uint8_t p_ipAddress[], const uint8_t p_ne
 	memcpy(gateway, p_gateway, sizeof(gateway));
 }
 
-bool WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply)
+GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply, OutputBuffer*& longReply)
 {
 	switch (mcode)
 	{
@@ -857,6 +857,11 @@ bool WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply)
 				ok = gb.Seen('P') && gb.GetQuotedString(password.GetRef());
 				if (ok)
 				{
+					if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+					{
+						reply.copy("WiFi password must be at least 8 characters");
+						return GCodeResult::error;
+					}
 					SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 				}
 			}
@@ -875,16 +880,18 @@ bool WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply)
 			if (ok)
 			{
 				const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, &config, sizeof(config), nullptr, 0);
-				if (rslt != ResponseEmpty)
+				if (rslt == ResponseEmpty)
+				{
+					return GCodeResult::ok;
+				}
+				else
 				{
 					reply.copy("Failed to add SSID to remembered list");
-					return true;
 				}
 			}
 			else
 			{
 				reply.copy("Bad or missing parameter");
-				return true;
 			}
 		}
 		else
@@ -895,39 +902,36 @@ bool WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply)
 			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, declaredBufferLength);
 			if (rslt >= 0)
 			{
-				OutputBuffer *response = nullptr;
 				size_t offset = ReducedWirelessConfigurationDataSize;		// skip own SSID details
 				while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
 				{
 					WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
 					if (wp->ssid[0] != 0)
 					{
-						if (response == nullptr)
+						if (longReply == nullptr)
 						{
-							if (!OutputBuffer::Allocate(response))
+							if (!OutputBuffer::Allocate(longReply))
 							{
-								return false;		// try again later
+								return GCodeResult::notFinished;			// try again later
 							}
-							response->copy("Remembered networks:");
+							longReply->copy("Remembered networks:");
 						}
 						wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-						response->catf("\n%s IP=%s GW=%s NM=%s", wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+						longReply->catf("\n%s IP=%s GW=%s NM=%s", wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
 					}
 					offset += ReducedWirelessConfigurationDataSize;
 				}
 
-				if (response == nullptr)
+				if (longReply == nullptr)
 				{
 					reply.copy("No remembered networks");
 				}
+				return GCodeResult::ok;
 			}
-			else
-			{
-				reply.copy("Failed to retrieve network list");
-				return true;
-			}
+
+			reply.copy("Failed to retrieve network list");
 		}
-		break;
+		return GCodeResult::error;
 
 	case 588:	// Forget WiFi network
 		if (gb.Seen('S'))
@@ -938,35 +942,35 @@ bool WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply)
 				if (strcmp(ssidText.c_str(), "*") == 0)
 				{
 					const int32_t rslt = SendCommand(NetworkCommand::networkFactoryReset, 0, 0, nullptr, 0, nullptr, 0);
-					if (rslt != ResponseEmpty)
+					if (rslt == ResponseEmpty)
 					{
-						reply.copy("Failed to reset the WiFi module to factory settings");
-						return true;
+						return GCodeResult::ok;
 					}
+
+					reply.copy("Failed to reset the WiFi module to factory settings");
+					return GCodeResult::error;
 				}
-				else
+
+				uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
+				memcpy(ssid32, ssidText.c_str(), SsidLength);
+				const int32_t rslt = SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
+				if (rslt == ResponseEmpty)
 				{
-					uint32_t ssid32[NumDwords(SsidLength)];				// need a dword-aligned buffer for SendCommand
-					memcpy(ssid32, ssidText.c_str(), SsidLength);
-					const int32_t rslt = SendCommand(NetworkCommand::networkDeleteSsid, 0, 0, ssid32, SsidLength, nullptr, 0);
-					if (rslt != ResponseEmpty)
-					{
-						reply.copy("Failed to remove SSID from remembered list");
-						return true;
-					}
+					return GCodeResult::ok;
 				}
-			}
-			else
-			{
-				reply.copy("Bad parameter");
-				return true;
+
+				reply.copy("Failed to remove SSID from remembered list");
+				return GCodeResult::error;
 			}
 		}
-		break;
+
+		reply.copy("Bad or missing parameter");
+		return GCodeResult::error;
 
 	case 589:	// Configure access point
 		if (gb.Seen('S'))
 		{
+			// Configure access point parameters
 			WirelessConfigurationData config;
 			memset(&config, 0, sizeof(config));
 			String<SsidLength> ssid;
@@ -1001,20 +1005,21 @@ bool WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply)
 			if (ok)
 			{
 				const int32_t rslt = SendCommand(NetworkCommand::networkConfigureAccessPoint, 0, 0, &config, sizeof(config), nullptr, 0);
-				if (rslt != ResponseEmpty)
+				if (rslt == ResponseEmpty)
 				{
-					reply.copy("Failed to configure access point parameters");
-					return true;
+					return GCodeResult::ok;
 				}
+
+				reply.copy("Failed to configure access point parameters");
 			}
 			else
 			{
 				reply.copy("Bad or missing parameter");
-				return true;
 			}
 		}
 		else
 		{
+			// Report access point parameters
 			uint32_t buffer[NumDwords(ReducedWirelessConfigurationDataSize)];
 			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, nullptr, 0, buffer, ReducedWirelessConfigurationDataSize);
 			if (rslt >= 0)
@@ -1027,18 +1032,20 @@ bool WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply)
 				else
 				{
 					wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-					reply.printf("Own SSID: %s IP=%s GW=%s NM=%s",  wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+					reply.printf("Own SSID: %s IP=%s GW=%s NM=%s", wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+					return GCodeResult::ok;
 				}
 			}
 			else
 			{
 				reply.copy("Failed to retrieve own SSID data");
-				return true;
 			}
 		}
-		break;
+		return GCodeResult::error;
+
+	default:	// should not happen
+		return GCodeResult::error;
 	}
-	return false;
 }
 
 // Set the DHCP hostname

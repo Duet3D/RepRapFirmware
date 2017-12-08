@@ -70,7 +70,7 @@ public:
 	const FopDt& GetModel() const					// Get the process model
 		{ return model; }
 
-	bool SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted);	// Set the process model
+	bool SetModel(float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq);	// Set the process model
 
 	bool IsHeaterSignalInverted() const				// Is the PWM output signal inverted?
 		{ return invertPwmSignal; }

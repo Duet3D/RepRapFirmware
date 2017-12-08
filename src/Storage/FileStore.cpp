@@ -8,8 +8,9 @@
 
 uint32_t FileStore::longestWriteTime = 0;
 
-FileStore::FileStore(Platform* p) : platform(p), writeBuffer(nullptr)
+FileStore::FileStore() : writeBuffer(nullptr)
 {
+	Init();
 }
 
 void FileStore::Init()
@@ -21,13 +22,27 @@ void FileStore::Init()
 }
 
 // Invalidate the file if it uses the specified FATFS object
-void FileStore::Invalidate(const FATFS *fs)
+bool FileStore::Invalidate(const FATFS *fs, bool doClose)
 {
 	if (file.fs == fs)
 	{
-		Init();
-		file.fs = nullptr;
+		if (doClose)
+		{
+			(void)ForceClose();
+		}
+		else
+		{
+			file.fs = nullptr;
+			if (writeBuffer != nullptr)
+			{
+				reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
+				writeBuffer = nullptr;
+			}
+			Init();
+		}
+		return true;
 	}
+	return false;
 }
 
 // Return true if the file is open on the specified file system
@@ -41,7 +56,7 @@ bool FileStore::IsOpenOn(const FATFS *fs) const
 bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 {
 	const char* const location = (directory != nullptr)
-									? platform->GetMassStorage()->CombineName(directory, fileName)
+									? reprap.GetPlatform().GetMassStorage()->CombineName(directory, fileName)
 										: fileName;
 	writing = (mode == OpenMode::write || mode == OpenMode::append);
 
@@ -64,10 +79,9 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 				}
 
 				filePath[i] = 0;
-				if (!platform->GetMassStorage()->DirectoryExists(filePath.Pointer()) && !platform->GetMassStorage()->MakeDirectory(filePath.Pointer()))
+				if (!reprap.GetPlatform().GetMassStorage()->DirectoryExists(filePath.Pointer()) && !reprap.GetPlatform().GetMassStorage()->MakeDirectory(filePath.Pointer()))
 				{
-					platform->MessageF(ErrorMessage, "Failed to create directory %s while trying to open file %s\n",
-							filePath.Pointer(), location);
+					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to create directory %s while trying to open file %s\n", filePath.Pointer(), location);
 					return false;
 				}
 				filePath[i] = '/';
@@ -75,7 +89,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		}
 
 		// Also try to allocate a write buffer so we can perform faster writes
-		writeBuffer = platform->GetMassStorage()->AllocateWriteBuffer();
+		writeBuffer = reprap.GetPlatform().GetMassStorage()->AllocateWriteBuffer();
 	}
 
 	const FRESULT openReturn = f_open(&file, location,
@@ -88,7 +102,7 @@ bool FileStore::Open(const char* directory, const char* fileName, OpenMode mode)
 		// It is up to the caller to report an error if necessary.
 		if (reprap.Debug(modulePlatform))
 		{
-			platform->MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
+			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open %s to %s, error code %d\n", location, (writing) ? "write" : "read", openReturn);
 		}
 		return false;
 	}
@@ -102,12 +116,14 @@ void FileStore::Duplicate()
 {
 	if (!inUse)
 	{
-		platform->Message(ErrorMessage, "Attempt to dup a non-open file.\n");
-		return;
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to dup a non-open file.\n");
 	}
-	irqflags_t flags = cpu_irq_save();
-	++openCount;
-	cpu_irq_restore(flags);
+	else
+	{
+		irqflags_t flags = cpu_irq_save();
+		++openCount;
+		cpu_irq_restore(flags);
+	}
 }
 
 // This may be called from an ISR, in which case we need to defer the close
@@ -135,7 +151,7 @@ bool FileStore::Close()
 
 	if (!inUse)
 	{
-		platform->Message(ErrorMessage, "Attempt to close a non-open file.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to close a non-open file.\n");
 		return false;
 	}
 
@@ -149,6 +165,11 @@ bool FileStore::Close()
 		return true;
 	}
 
+	return ForceClose();
+}
+
+bool FileStore::ForceClose()
+{
 	bool ok = true;
 	if (writing)
 	{
@@ -157,7 +178,7 @@ bool FileStore::Close()
 
 	if (writeBuffer != nullptr)
 	{
-		platform->GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
+		reprap.GetPlatform().GetMassStorage()->ReleaseWriteBuffer(writeBuffer);
 		writeBuffer = nullptr;
 	}
 
@@ -165,6 +186,7 @@ bool FileStore::Close()
 	inUse = false;
 	writing = false;
 	closeRequested = false;
+	openCount = 0;
 	return ok && fr == FR_OK;
 }
 
@@ -172,7 +194,7 @@ bool FileStore::Seek(FilePosition pos)
 {
 	if (!inUse)
 	{
-		platform->Message(ErrorMessage, "Attempt to seek on a non-open file.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to seek on a non-open file.\n");
 		return false;
 	}
 	FRESULT fr = f_lseek(&file, pos);
@@ -195,7 +217,7 @@ FilePosition FileStore::Length() const
 {
 	if (!inUse)
 	{
-		platform->Message(ErrorMessage, "Attempt to size non-open file.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to size non-open file.\n");
 		return 0;
 	}
 
@@ -213,7 +235,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 {
 	if (!inUse)
 	{
-		platform->Message(ErrorMessage, "Attempt to read from a non-open file.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to read from a non-open file.\n");
 		return -1;
 	}
 
@@ -221,7 +243,7 @@ int FileStore::Read(char* extBuf, size_t nBytes)
 	FRESULT readStatus = f_read(&file, extBuf, nBytes, &bytes_read);
 	if (readStatus != FR_OK)
 	{
-		platform->Message(ErrorMessage, "Cannot read file.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Cannot read file.\n");
 		return -1;
 	}
 	return (int)bytes_read;
@@ -288,7 +310,7 @@ bool FileStore::Write(const char *s, size_t len)
 {
 	if (!inUse)
 	{
-		platform->Message(ErrorMessage, "Attempt to write block to a non-open file.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to write block to a non-open file.\n");
 		return false;
 	}
 
@@ -323,7 +345,7 @@ bool FileStore::Write(const char *s, size_t len)
 
 	if ((writeStatus != FR_OK) || (totalBytesWritten != len))
 	{
-		platform->Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
 		return false;
 	}
 	return true;
@@ -333,7 +355,7 @@ bool FileStore::Flush()
 {
 	if (!inUse)
 	{
-		platform->Message(ErrorMessage, "Attempt to flush a non-open file.\n");
+		reprap.GetPlatform().Message(ErrorMessage, "Attempt to flush a non-open file.\n");
 		return false;
 	}
 
@@ -348,7 +370,7 @@ bool FileStore::Flush()
 
 			if ((writeStatus != FR_OK) || (bytesToWrite != bytesWritten))
 			{
-				platform->Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
+				reprap.GetPlatform().Message(ErrorMessage, "Failed to write to file. Drive may be full.\n");
 				return false;
 			}
 		}

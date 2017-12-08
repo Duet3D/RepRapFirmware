@@ -137,7 +137,8 @@ const uint32_t defaultSgscConfReg =
 
 // Driver configuration register
 const uint32_t defaultDrvConfReg =
-	TMC_REG_DRVCONF
+	  TMC_REG_DRVCONF
+	| TMC_DRVCONF_RDSEL_1				// read SG register in status
 	| TMC_DRVCONF_VSENSE				// use high sensitivity range
 	| TMC_DRVCONF_TS2G_0P8				// fast short-to-ground detection
 	| 0;
@@ -170,7 +171,8 @@ public:
 	void SetStallDetectFilter(bool sgFilter);
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond);
 	void SetCoolStep(uint16_t coolStepConfig);
-	void AppendStallConfig(StringRef& reply) const;
+	void AppendStallConfig(const StringRef& reply) const;
+	void AppendDriverStatus(const StringRef& reply);
 
 	void TransferDone() __attribute__ ((hot));				// called by the ISR when the SPI transfer has completed
 	void StartTransfer() __attribute__ ((hot));				// called to start a transfer
@@ -180,6 +182,12 @@ public:
 	uint32_t ReadAccumulatedStatus(uint32_t bitsToKeep);
 
 private:
+	void ResetLoadRegisters()
+	{
+		minSgLoadRegister = 1023;
+		maxSgLoadRegister = 0;
+	}
+
 	static void SetupDMA(uint32_t outVal) __attribute__ ((hot));	// Set up the PDC to send a register and receive the status
 
 	uint32_t registers[5];									// the values we want the TMC2660 writable registers to have
@@ -197,7 +205,10 @@ private:
 	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
 	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	uint32_t maxStallStepInterval;							// maximum interval between full steps to take any notice of stall detection
-	static constexpr uint32_t UpdateAllRegisters = (1u << ARRAY_SIZE(registers)) - 1;	// bitmap for all registers
+	uint32_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
+	uint32_t maxSgLoadRegister;								// the maximum value of the StallGuard bits we read
+
+	static constexpr uint32_t UpdateAllRegisters = (1u << ARRAY_SIZE(registers)) - 1;	// bitmap in registersToUpdate for all registers
 
 	volatile uint32_t lastReadStatus;						// the status word that we read most recently, updated by the ISR
 	volatile uint32_t accumulatedStatus;
@@ -249,6 +260,7 @@ pre(!driversPowered)
 	registers[DriveConfig] = defaultDrvConfReg;
 	registersToUpdate = UpdateAllRegisters;
 	accumulatedStatus = lastReadStatus = 0;
+	ResetLoadRegisters();
 	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);
 	SetStallDetectThreshold(DefaultStallDetectThreshold);
 	SetStallDetectFilter(DefaultStallDetectFiltered);
@@ -356,7 +368,7 @@ void TmcDriverState::SetCoolStep(uint16_t coolStepConfig)
 	registersToUpdate |= 1u << SmartEnable;
 }
 
-void TmcDriverState::AppendStallConfig(StringRef& reply) const
+void TmcDriverState::AppendStallConfig(const StringRef& reply) const
 {
 	const bool filtered = ((registers[StallGuardConfig] & TMC_SGCSCONF_SGT_SFILT) != 0);
 	int threshold = (int)((registers[StallGuardConfig] & TMC_SGCSCONF_SGT_MASK) >> TMC_SGCSCONF_SGT_SHIFT);
@@ -366,6 +378,31 @@ void TmcDriverState::AppendStallConfig(StringRef& reply) const
 	}
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 ", coolstep %" PRIx32,
 				threshold, ((filtered) ? "on" : "off"), DDA::stepClockRate/maxStallStepInterval, registers[SmartEnable] & 0xFFFF);
+}
+
+// Append the driver status to a string, and reset the min/max load values
+void TmcDriverState::AppendDriverStatus(const StringRef& reply)
+{
+	reply.catf("%s%s%s%s%s%s, SG min/max ",
+				(lastReadStatus & TMC_RR_SG) ? " stalled" : "",
+				(lastReadStatus & TMC_RR_OT) ? " temperature-shutdown!"
+					: (lastReadStatus & TMC_RR_OTPW) ? " temperature-warning" : "",
+				(lastReadStatus & TMC_RR_S2G) ? " short-to-ground" : "",
+				((lastReadStatus & TMC_RR_OLA) && !(lastReadStatus & TMC_RR_STST)) ? " open-load-A" : "",
+				((lastReadStatus & TMC_RR_OLB) && !(lastReadStatus & TMC_RR_STST)) ? " open-load-B" : "",
+				(lastReadStatus & TMC_RR_STST) ? " standstill"
+					: (lastReadStatus & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB))
+					  ? "" : " ok"
+			  );
+	if (minSgLoadRegister <= maxSgLoadRegister)
+	{
+		reply.catf("%" PRIu32 "/%" PRIu32, minSgLoadRegister, maxSgLoadRegister);
+	}
+	else
+	{
+		reply.cat("not available");
+	}
+	ResetLoadRegisters();
 }
 
 // Get microstepping or chopper control register
@@ -387,13 +424,21 @@ inline void TmcDriverState::TransferDone()
 {
 	fastDigitalWriteHigh(pin);								// set the CS pin high for the driver we just polled
 	uint32_t status = be32_to_cpu(spiDataIn) >> 12;			// get the status
-	if ((status & TMC_RR_SG) != 0)
+	const uint32_t interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
+	if (interval == 0 || interval > maxStallStepInterval)	// if the motor speed is too low to get reliable stall indication
 	{
-		// Stall status is unreliable at low motor speeds, so remove the status bit if the motor is moving slowly
-		const uint32_t interval = reprap.GetMove().GetStepInterval(axisNumber, microstepShiftFactor);		// get the full step interval
-		if (interval == 0 || interval > maxStallStepInterval)
+		status &= ~TMC_RR_SG;								// remove the stall status bit
+	}
+	else
+	{
+		const uint32_t sgLoad = (status >> TMC_RR_SG_LOAD_SHIFT) & 1023;	// get the StallGuard load register
+		if (sgLoad < minSgLoadRegister)
 		{
-			status &= ~TMC_RR_SG;
+			minSgLoadRegister = sgLoad;
+		}
+		if (sgLoad > maxSgLoadRegister)
+		{
+			maxSgLoadRegister = sgLoad;
 		}
 	}
 	lastReadStatus = status;
@@ -646,11 +691,19 @@ namespace SmartDrivers
 		}
 	}
 
-	void AppendStallConfig(size_t drive, StringRef& reply)
+	void AppendStallConfig(size_t drive, const StringRef& reply)
 	{
 		if (drive < numTmc2660Drivers)
 		{
 			driverStates[drive].AppendStallConfig(reply);
+		}
+	}
+
+	void AppendDriverStatus(size_t drive, const StringRef& reply)
+	{
+		if (drive < numTmc2660Drivers)
+		{
+			driverStates[drive].AppendDriverStatus(reply);
 		}
 	}
 

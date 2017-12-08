@@ -662,7 +662,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 			char nameBuf[FILENAME_LENGTH + 1];
 			strcpy(nameBuf, nameOfFileToSend);
 			strcat(nameBuf, ".gz");
-			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameBuf, OpenMode::read);
+			fileToSend = platform->OpenFile(platform->GetWebDir(), nameBuf, OpenMode::read);
 			if (fileToSend != nullptr)
 			{
 				zip = true;
@@ -672,14 +672,14 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 		// If that failed, try to open the normal version of the file
 		if (fileToSend == nullptr)
 		{
-			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
+			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
 		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
-			fileToSend = platform->GetFileStore(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
+			fileToSend = platform->OpenFile(platform->GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		if (fileToSend == nullptr)
@@ -691,7 +691,7 @@ void Webserver::HttpInterpreter::SendFile(const char* nameOfFileToSend, bool isW
 	}
 	else
 	{
-		fileToSend = platform->GetFileStore(FS_PREFIX, nameOfFileToSend, OpenMode::read);
+		fileToSend = platform->OpenFile(FS_PREFIX, nameOfFileToSend, OpenMode::read);
 		if (fileToSend == nullptr)
 		{
 			RejectMessage("not found", 404);
@@ -1565,7 +1565,7 @@ bool Webserver::HttpInterpreter::ProcessMessage()
 				}
 
 				// Start a new file upload
-				FileStore *file = platform->GetFileStore(FS_PREFIX, filename, OpenMode::write);
+				FileStore *file = platform->OpenFile(FS_PREFIX, filename, OpenMode::write);
 				if (!StartUpload(file, filename))
 				{
 					return RejectMessage("could not start file upload");
@@ -2253,7 +2253,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				ReadFilename(4);
 
-				FileStore *file = platform->GetFileStore(currentDir, filename, OpenMode::write);
+				FileStore *file = platform->OpenFile(currentDir, filename, OpenMode::write);
 				if (StartUpload(file, filename))
 				{
 					SendReply(150, "OK to send data.");
@@ -2271,7 +2271,7 @@ void Webserver::FtpInterpreter::ProcessLine()
 			{
 				ReadFilename(4);
 
-				FileStore *file = platform->GetFileStore(currentDir, filename, OpenMode::read);
+				FileStore *file = platform->OpenFile(currentDir, filename, OpenMode::read);
 				if (file == nullptr)
 				{
 					SendReply(550, "Failed to open file.");

@@ -708,7 +708,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 			char nameBuf[FILENAME_LENGTH + 1];
 			strcpy(nameBuf, nameOfFileToSend);
 			strcat(nameBuf, ".gz");
-			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameBuf, OpenMode::read);
+			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameBuf, OpenMode::read);
 			if (fileToSend != nullptr)
 			{
 				zip = true;
@@ -718,14 +718,14 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 		// If that failed, try to open the normal version of the file
 		if (fileToSend == nullptr)
 		{
-			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
+			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		// If we still couldn't find the file and it was an HTML file, return the 404 error page
 		if (fileToSend == nullptr && (StringEndsWith(nameOfFileToSend, ".html") || StringEndsWith(nameOfFileToSend, ".htm")))
 		{
 			nameOfFileToSend = FOUR04_PAGE_FILE;
-			fileToSend = GetPlatform().GetFileStore(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
+			fileToSend = GetPlatform().OpenFile(GetPlatform().GetWebDir(), nameOfFileToSend, OpenMode::read);
 		}
 
 		if (fileToSend == nullptr)
@@ -737,7 +737,7 @@ void HttpResponder::SendFile(const char* nameOfFileToSend, bool isWebFile)
 	}
 	else
 	{
-		fileToSend = GetPlatform().GetFileStore(FS_PREFIX, nameOfFileToSend, OpenMode::read);
+		fileToSend = GetPlatform().OpenFile(FS_PREFIX, nameOfFileToSend, OpenMode::read);
 		if (fileToSend == nullptr)
 		{
 			RejectMessage("not found", 404);
@@ -1022,7 +1022,7 @@ void HttpResponder::ProcessMessage()
 				}
 
 				// Start a new file upload
-				FileStore *file = GetPlatform().GetFileStore(FS_PREFIX, filename, OpenMode::write);
+				FileStore *file = GetPlatform().OpenFile(FS_PREFIX, filename, OpenMode::write);
 				if (file == nullptr)
 				{
 					RejectMessage("could not create file");

@@ -288,7 +288,7 @@ bool PrintMonitor::GetFileInfo(const char *directory, const char *fileName, GCod
 			return true;
 		}
 
-		fileBeingParsed = platform.GetFileStore(directory, fileName, OpenMode::read);
+		fileBeingParsed = platform.OpenFile(directory, fileName, OpenMode::read);
 		if (fileBeingParsed == nullptr)
 		{
 			// Something went wrong - we cannot open it

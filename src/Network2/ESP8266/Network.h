@@ -9,11 +9,12 @@ Separated out from Platform.h by dc42 and extended by chrishamm
 #ifndef NETWORK_H
 #define NETWORK_H
 
-#include <Network2/ESP8266/Socket.h>
+#include "ESP8266/Socket.h"
 #include "NetworkDefs.h"
 #include "RepRapFirmware.h"
 #include "MessageType.h"
 #include "MessageFormats.h"
+#include "GCodes/GCodeResult.h"
 
 class NetworkResponder;
 class HttpResponder;
@@ -56,7 +57,7 @@ public:
 	void ReportProtocols(StringRef& reply) const;
 
 	void Enable(int mode, const StringRef& ssid, StringRef& reply);			// enable or disable the network
-	bool HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef& reply);
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef& reply, OutputBuffer*& longReply);
 	bool GetNetworkState(StringRef& reply);
 	int EnableState() const;
 

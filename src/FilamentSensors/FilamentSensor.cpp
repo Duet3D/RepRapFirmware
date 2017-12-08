@@ -89,9 +89,9 @@ bool FilamentSensor::ConfigurePin(GCodeBuffer& gb, StringRef& reply, bool& seen)
 }
 
 // ISR
-/*static*/ void FilamentSensor::InterruptEntry(void *param)
+/*static*/ void FilamentSensor::InterruptEntry(CallbackParameter param)
 {
-	static_cast<FilamentSensor*>(param)->Interrupt();
+	static_cast<FilamentSensor*>(param.vp)->Interrupt();
 }
 
 /*static*/ void FilamentSensor::Spin(bool full)

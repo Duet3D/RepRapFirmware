@@ -19,12 +19,12 @@
 
  ****************************************************************************************************/
 
-#include "Network.h"
 #include "Platform.h"
 
 #include "Heating/Heat.h"
 #include "Movement/DDA.h"
 #include "Movement/Move.h"
+#include "Network.h"
 #include "PrintMonitor.h"
 #include "FilamentSensors/FilamentSensor.h"
 #include "RepRap.h"
@@ -39,11 +39,11 @@
 
 #include "sd_mmc.h"
 
-#if HAS_SMART_DRIVERS
+#ifdef DUET_NG
 # include "TMC2660.h"
 #endif
 
-#ifdef DUET_NG
+#if HAS_WIFI_NETWORKING
 # include "FirmwareUpdater.h"
 #endif
 
@@ -63,6 +63,7 @@ extern "C" char *sbrk(int i);
 
 inline void EnableCache()
 {
+	cmcc_invalidate_all(CMCC);
 	cmcc_enable(CMCC);
 }
 
@@ -316,7 +317,7 @@ Platform::Platform() :
 		nextDriveToPoll(0),
 		onBoardDriversFanRunning(false), offBoardDriversFanRunning(false), onBoardDriversFanStartMillis(0), offBoardDriversFanStartMillis(0),
 #endif
-		lastFanCheckTime(0), auxGCodeReply(nullptr), fileStructureInitialised(false), tickState(0), debugCode(0), lastWarningMillis(0)
+		lastFanCheckTime(0), auxGCodeReply(nullptr), tickState(0), debugCode(0), lastWarningMillis(0)
 {
 	// Output
 	auxOutput = new OutputStack();
@@ -327,11 +328,6 @@ Platform::Platform() :
 
 	// Files
 	massStorage = new MassStorage(this);
-
-	for (size_t i = 0; i < MAX_FILES; i++)
-	{
-		files[i] = new FileStore(this);
-	}
 }
 
 //*******************************************************************************************************************
@@ -340,6 +336,7 @@ void Platform::Init()
 {
 	// Deal with power first
 	pinMode(ATX_POWER_PIN, OUTPUT_LOW);
+	deferredPowerDown = false;
 
 	SetBoardType(BoardType::Auto);
 
@@ -410,20 +407,19 @@ void Platform::Init()
 	// File management
 	massStorage->Init();
 
-	for (size_t file = 0; file < MAX_FILES; file++)
-	{
-		files[file]->Init();
-	}
-
-	fileStructureInitialised = true;
-
 #if defined(DUET_06_085)
+	// Motor current setting on Duet 0.6 and 0.8.5
 	mcpDuet.begin();							// only call begin once in the entire execution, this begins the I2C comms on that channel for all objects
 	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
+	ARRAY_INIT(potWipes, POT_WIPES);
+	senseResistor = SENSE_RESISTOR;
+	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
+	stepperDacVoltageRange = STEPPER_DAC_VOLTAGE_RANGE;
+	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
 #endif
 
 #if defined(__ALLIGATOR__)
-	pinMode(EthernetPhyResetPin,INPUT);													 // Init Ethernet Phy Reset Pin
+	pinMode(EthernetPhyResetPin, INPUT);													// Init Ethernet Phy Reset Pin
 	// Alligator Init DAC for motor current vref
 	ARRAY_INIT(spiDacCS, SPI_DAC_CS);
 	dacAlligator.Init(spiDacCS[0]);
@@ -449,15 +445,6 @@ void Platform::Init()
 	ARRAY_INIT(driveStepsPerUnit, DRIVE_STEPS_PER_UNIT);
 	ARRAY_INIT(instantDvs, INSTANT_DVS);
 	maxPrintingAcceleration = maxTravelAcceleration = 10000.0;
-
-#if defined(DUET_06_085)
-	// Motor current setting on Duet 0.6 and 0.8.5
-	ARRAY_INIT(potWipes, POT_WIPES);
-	senseResistor = SENSE_RESISTOR;
-	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-	stepperDacVoltageRange = STEPPER_DAC_VOLTAGE_RANGE;
-	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
-#endif
 
 	// Z PROBE
 	zProbeType = 0;								// default is to use no Z probe
@@ -711,26 +698,6 @@ void Platform::Init()
 	InitialiseInterrupts();		// also sets 'active' to true
 }
 
-void Platform::InvalidateFiles(const FATFS *fs)
-{
-	for (size_t i = 0; i < MAX_FILES; i++)
-	{
-		files[i]->Invalidate(fs);
-	}
-}
-
-bool Platform::AnyFileOpen(const FATFS *fs) const
-{
-	for (size_t i = 0; i < MAX_FILES; i++)
-	{
-		if (files[i]->IsOpenOn(fs))
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
 void Platform::SetZProbeDefaults()
 {
 	switchZProbeParameters.Init(0.0);
@@ -744,7 +711,7 @@ void Platform::InitZProbe()
 	zProbeOffFilter.Init(0);
 
 #ifdef DUET_06_085
-	zProbeModulationPin = (board == BoardType::Duet_07 || board == BoardType::Duet_085) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN;
+	zProbeModulationPin = (board == BoardType::Duet_07 || board == BoardType::Duet_085) ? Z_PROBE_MOD_PIN07 : Z_PROBE_MOD_PIN06;
 #else
 	zProbeModulationPin = Z_PROBE_MOD_PIN;
 #endif
@@ -987,21 +954,22 @@ bool Platform::HomingZWithProbe() const
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
 bool Platform::CheckFirmwareUpdatePrerequisites(StringRef& reply)
 {
-	FileStore * const firmwareFile = GetFileStore(GetSysDir(), IAP_FIRMWARE_FILE, OpenMode::read);
+	FileStore * const firmwareFile = OpenFile(GetSysDir(), IAP_FIRMWARE_FILE, OpenMode::read);
 	if (firmwareFile == nullptr)
 	{
 		reply.printf("Firmware binary \"%s\" not found", IAP_FIRMWARE_FILE);
 		return false;
 	}
 
+	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
 	uint32_t firstDword;
 	bool ok = firmwareFile->Read(reinterpret_cast<char*>(&firstDword), sizeof(firstDword)) == (int)sizeof(firstDword);
 	firmwareFile->Close();
 	if (!ok || firstDword !=
-#if SAM4E || SAM4S || SAME70
-						IRAM_ADDR + IRAM_SIZE
-#else
+#if SAM3XA
 						IRAM1_ADDR + IRAM1_SIZE
+#else
+						IRAM_ADDR + IRAM_SIZE
 #endif
 			)
 	{
@@ -1021,7 +989,7 @@ bool Platform::CheckFirmwareUpdatePrerequisites(StringRef& reply)
 // Update the firmware. Prerequisites should be checked before calling this.
 void Platform::UpdateFirmware()
 {
-	FileStore * const iapFile = GetFileStore(GetSysDir(), IAP_UPDATE_FILE, OpenMode::read);
+	FileStore * const iapFile = OpenFile(GetSysDir(), IAP_UPDATE_FILE, OpenMode::read);
 	if (iapFile == nullptr)
 	{
 		MessageF(FirmwareUpdateMessage, "IAP not found\n");
@@ -1189,17 +1157,17 @@ void Platform::UpdateFirmware()
 	static const char filename[] = "0:/sys/" IAP_FIRMWARE_FILE;
 	const uint32_t topOfStack = *reinterpret_cast<uint32_t *>(IAP_FLASH_START);
 	if (topOfStack + sizeof(filename) <=
-#if SAM4E || SAM4S || SAME70
-						IRAM_ADDR + IRAM_SIZE
-#else
+#if SAM3XA
 						IRAM1_ADDR + IRAM1_SIZE
+#else
+						IRAM_ADDR + IRAM_SIZE
 #endif
 	   )
 	{
 		memcpy(reinterpret_cast<char*>(topOfStack), filename, sizeof(filename));
 	}
 
-#ifdef DUET_NG
+#if defined(DUET_NG) || defined(DUET_M)
 	IoPort::WriteDigital(Z_PROBE_MOD_PIN, false);	// turn the DIAG LED off
 #endif
 
@@ -1247,15 +1215,7 @@ void Platform::SendAuxMessage(const char* msg)
 void Platform::Exit()
 {
 	StopLogging();
-
-	// Close all files
-	for (FileStore*& f : files)
-	{
-		while (f->inUse)
-		{
-			f->Close();
-		}
-	}
+	massStorage->CloseAllFiles();
 
 	// Release the aux output stack (should release the others too!)
 	while (auxGCodeReply != nullptr)
@@ -1402,17 +1362,11 @@ bool Platform::FlushMessages()
 void Platform::Spin()
 {
 	if (!active)
-		return;
-
-	// Check if any files are supposed to be closed
-	for (size_t i = 0; i < MAX_FILES; i++)
 	{
-		if (files[i]->closeRequested)
-		{
-			// We cannot do this in ISRs, so do it here
-			files[i]->Close();
-		}
+		return;
 	}
+
+	massStorage->Spin();
 
 	// Try to flush messages to serial ports
 	(void)FlushMessages();
@@ -1567,9 +1521,18 @@ void Platform::Spin()
 	if (now - lastFanCheckTime >= FanCheckInterval)
 	{
 		lastFanCheckTime = now;
+		bool thermostaticFanRunning = false;
 		for (size_t fan = 0; fan < NUM_FANS; ++fan)
 		{
-			fans[fan].Check();
+			if (fans[fan].Check())
+			{
+				thermostaticFanRunning = true;
+			}
+		}
+
+		if (deferredPowerDown && !thermostaticFanRunning)
+		{
+			AtxPowerOff(false);
 		}
 
 		// Check whether it is time to report any faults (do this after checking fans in case driver cooling fans are turned on)
@@ -1791,6 +1754,7 @@ float Platform::AdcReadingToCpuTemperature(uint32_t adcVal) const
 // Perform a software reset. 'stk' points to the program counter on the stack if the cause is an exception, otherwise it is nullptr.
 void Platform::SoftwareReset(uint16_t reason, const uint32_t *stk)
 {
+	cpu_irq_disable();							// disable interrupts before we call any flash functions. We don't enable them again.
 	wdt_restart(WDT);							// kick the watchdog
 
 #if SAM4E || SAME70
@@ -1899,7 +1863,7 @@ void NETWORK_TC_HANDLER()
 
 #endif
 
-static void FanInterrupt(void*)
+static void FanInterrupt(CallbackParameter)
 {
 	++fanInterruptCount;
 	if (fanInterruptCount == fanMaxInterruptCount)
@@ -2034,11 +1998,11 @@ void Platform::InitialiseInterrupts()
 void Platform::PrintUniqueId(MessageType mtype)
 {
 	uint32_t idBuf[5];
+	const irqflags_t flags = cpu_irq_save();
 	DisableCache();
-	cpu_irq_disable();
 	const uint32_t rc = flash_read_unique_id(idBuf, 4);
-	cpu_irq_enable();
 	EnableCache();
+	cpu_irq_restore(flags);
 	if (rc == 0)
 	{
 		// Put the checksum at the end
@@ -2171,11 +2135,11 @@ void Platform::Diagnostics(MessageType mtype)
 #if SAM4E || SAM4S || SAME70
 		// Work around bug in ASF flash library: flash_read_user_signature calls a RAMFUNC without disabling interrupts first.
 		// This caused a crash (watchdog timeout) sometimes if we run M122 while a print is in progress
-		DisableCache();
 		const irqflags_t flags = cpu_irq_save();
+		DisableCache();
 		const uint32_t rc = flash_read_user_signature(reinterpret_cast<uint32_t*>(srdBuf), sizeof(srdBuf)/sizeof(uint32_t));
-		cpu_irq_restore(flags);
 		EnableCache();
+		cpu_irq_restore(flags);
 
 		if (rc == FLASH_RC_OK)
 #else
@@ -2212,7 +2176,7 @@ void Platform::Diagnostics(MessageType mtype)
 				scratchString.Clear();
 				for (size_t i = 0; i < ARRAY_SIZE(srdBuf[slot].stack); ++i)
 				{
-					scratchString.catf(" %08" PRIx32 "", srdBuf[slot].stack[i]);
+					scratchString.catf(" %08" PRIx32, srdBuf[slot].stack[i]);
 				}
 				MessageF(mtype, "Stack:%s\n", scratchString.Pointer());
 			}
@@ -2227,21 +2191,13 @@ void Platform::Diagnostics(MessageType mtype)
 	MessageF(mtype, "Error status: %" PRIu32 "\n", errorCodeBits);
 
 	// Show the number of free entries in the file table
-	unsigned int numFreeFiles = 0;
-	for (size_t i = 0; i < MAX_FILES; i++)
-	{
-		if (!files[i]->inUse)
-		{
-			++numFreeFiles;
-		}
-	}
-	MessageF(mtype, "Free file entries: %u\n", numFreeFiles);
+	MessageF(mtype, "Free file entries: %u\n", massStorage->GetNumFreeFiles());
 
 	// Show the HSMCI CD pin and speed
 #if HAS_HIGH_SPEED_SD
-	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed() * 0.000001));
+	MessageF(mtype, "SD card 0 %s, interface speed: %.1fMBytes/sec\n", (massStorage->IsCardDetected(0) ? "detected" : "not detected"), (double)((float)hsmci_get_speed() * 0.000001));
 #else
-	MessageF(mtype, "SD card 0 %s\n", (sd_mmc_card_detected(0) ? "detected" : "not detected"));
+	MessageF(mtype, "SD card 0 %s\n", (massStorage->IsCardDetected(0) ? "detected" : "not detected"));
 #endif
 
 	// Show the longest SD card write time
@@ -2267,18 +2223,9 @@ void Platform::Diagnostics(MessageType mtype)
 	// Show the motor stall status
 	for (size_t drive = 0; drive < numSmartDrivers; ++drive)
 	{
-		const uint32_t stat = SmartDrivers::GetLiveStatus(drive);
-		MessageF(mtype, "Driver %d:%s%s%s%s%s%s\n", drive,
-						(stat & TMC_RR_SG) ? " stalled" : "",
-						(stat & TMC_RR_OT) ? " temperature-shutdown!"
-							: (stat & TMC_RR_OTPW) ? " temperature-warning" : "",
-						(stat & TMC_RR_S2G) ? " short-to-ground" : "",
-						((stat & TMC_RR_OLA) && !(stat & TMC_RR_STST)) ? " open-load-A" : "",
-						((stat & TMC_RR_OLB) && !(stat & TMC_RR_STST)) ? " open-load-B" : "",
-						(stat & TMC_RR_STST) ? " standstill"
-							: (stat & (TMC_RR_SG | TMC_RR_OT | TMC_RR_OTPW | TMC_RR_S2G | TMC_RR_OLA | TMC_RR_OLB))
-							  ? "" : " ok"
-				);
+		String<100> driverStatus;
+		SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
+		MessageF(mtype, "Driver %u:%s\n", drive, driverStatus.c_str());
 	}
 #endif
 
@@ -2342,7 +2289,7 @@ bool Platform::DiagnosticTest(GCodeBuffer& gb, StringRef& reply, int d)
 			bool testFailed = false;
 
 			// Check the SD card detect and speed
-			if (!sd_mmc_card_detected(0))
+			if (!massStorage->IsCardDetected(0))
 			{
 				Message(AddError(mtype), "SD card 0 not detected\n");
 				testFailed = true;
@@ -2604,11 +2551,14 @@ void Platform::DriverCoolingFansOn(uint32_t driverChannelsMonitored)
 #endif
 
 // Power is a fraction in [0,1]
-void Platform::SetHeater(size_t heater, float power)
+void Platform::SetHeater(size_t heater, float power, PwmFrequency freq)
 {
 	if (heatOnPins[heater] != NoPin)
 	{
-		const uint16_t freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;
+		if (freq == 0)
+		{
+			freq = (reprap.GetHeat().IsBedOrChamberHeater(heater)) ? SlowHeaterPwmFreq : NormalHeaterPwmFreq;	// use sefault PWM frequency
+		}
 		const float pwm =
 #if ACTIVE_LOW_HEAT_ON
 			1.0 - power;
@@ -2812,9 +2762,12 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 	}
 
 	scratchString.printf("M208 S%d", sParam);
-	for (size_t axis = 0; axis < MaxAxes && IsBitSet(axesProbed, axis); ++axis)
+	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
-		scratchString.catf(" %c%.2f", reprap.GetGCodes().GetAxisLetters()[axis], (double)limits[axis]);
+		if (IsBitSet(axesProbed, axis))
+		{
+			scratchString.catf(" %c%.2f", reprap.GetGCodes().GetAxisLetters()[axis], (double)limits[axis]);
+		}
 	}
 	scratchString.cat('\n');
 	return f->Write(scratchString.Pointer());
@@ -3335,22 +3288,22 @@ void Platform::InitFans()
 		fans[1].SetValue(1.0);												// set it full on
 #else
 		// Set fan 1 to be thermostatic by default, monitoring all heaters except the default bed and chamber heaters
-		uint16_t bedAndChamberHeaterMask = 0;
+		Fan::HeatersMonitoredBitmap bedAndChamberHeaterMask = 0;
 		for (uint8_t bedHeater : DefaultBedHeaters)
 		{
 			if (bedHeater >= 0)
 			{
-				bedAndChamberHeaterMask |= (1 << bedHeater);
+				SetBit(bedAndChamberHeaterMask, bedHeater);
 			}
 		}
 		for (uint8_t chamberHeater : DefaultChamberHeaters)
 		{
 			if (chamberHeater >= 0)
 			{
-				bedAndChamberHeaterMask |= (1 << chamberHeater);
+				SetBit(bedAndChamberHeaterMask, chamberHeater);
 			}
 		}
-		fans[1].SetHeatersMonitored(((1 << Heaters) - 1) & ~bedAndChamberHeaterMask);
+		fans[1].SetHeatersMonitored(LowestNBits<Fan::HeatersMonitoredBitmap>(Heaters) & ~bedAndChamberHeaterMask);
 		fans[1].SetValue(1.0);												// set it full on
 #endif
 	}
@@ -3383,32 +3336,6 @@ void Platform::GetEndStopConfiguration(size_t axis, EndStopPosition& esType, End
 }
 
 //-----------------------------------------------------------------------------------------------------
-
-FileStore* Platform::GetFileStore(const char* directory, const char* fileName, OpenMode mode)
-{
-	if (!fileStructureInitialised)
-	{
-		return nullptr;
-	}
-
-	for (size_t i = 0; i < MAX_FILES; i++)
-	{
-		if (!files[i]->inUse)
-		{
-			if (files[i]->Open(directory, fileName, mode))
-			{
-				files[i]->inUse = true;
-				return files[i];
-			}
-			else
-			{
-				return nullptr;
-			}
-		}
-	}
-	Message(ErrorMessage, "Max open file count exceeded.\n");
-	return nullptr;
-}
 
 void Platform::AppendAuxReply(const char *msg)
 {
@@ -3691,16 +3618,14 @@ void Platform::Message(MessageType type, const char *message)
 // sParam = 3 As for 2 but also display a Cancel button
 void Platform::SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls)
 {
-	switch (mt)
+	if ((mt & (HttpMessage | LcdMessage)) != 0)
 	{
-	case HttpMessage:
-	case LcdMessage:
-	case GenericMessage:
-		// Make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
-		reprap.SetAlert(message, title, sParam, tParam, controls);
-		break;
+		reprap.SetAlert(message, title, sParam, tParam, controls);		// make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
+	}
 
-	default:
+	mt = (MessageType)(mt & (UsbMessage | TelnetMessage));
+	if (mt != 0)
+	{
 		if (strlen(title) > 0)
 		{
 			MessageF(mt, "- %s -\n", title);
@@ -3714,7 +3639,6 @@ void Platform::SendAlert(MessageType mt, const char *message, const char *title,
 		{
 			Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
 		}
-		break;
 	}
 }
 
@@ -3774,15 +3698,26 @@ bool Platform::AtxPower() const
 	return IoPort::ReadPin(ATX_POWER_PIN);
 }
 
-void Platform::SetAtxPower(bool on)
+void Platform::AtxPowerOn()
 {
-	if (!on && logger != nullptr)
+	deferredPowerDown = false;
+	IoPort::WriteDigital(ATX_POWER_PIN, true);
+}
+
+void Platform::AtxPowerOff(bool defer)
+{
+	deferredPowerDown = defer;
+	if (!defer)
 	{
-		logger->LogMessage(realTime, "Power off commanded");
-		logger->Flush(true);
-		// We don't call logger->Stop() here because we don't now whether turning off the power will work
+		deferredPowerDown = false;
+		if (logger != nullptr)
+		{
+			logger->LogMessage(realTime, "Power off commanded");
+			logger->Flush(true);
+			// We don't call logger->Stop() here because we don't now whether turning off the power will work
+		}
+		IoPort::WriteDigital(ATX_POWER_PIN, false);
 	}
-	IoPort::WriteDigital(ATX_POWER_PIN, on);
 }
 
 void Platform::SetPressureAdvance(size_t extruder, float factor)

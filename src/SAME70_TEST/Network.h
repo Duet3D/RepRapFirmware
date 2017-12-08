@@ -12,7 +12,7 @@
 #include "RepRapFirmware.h"
 #include "MessageFormats.h"
 #include "MessageType.h"
-
+#include "GCodes/GCodeResult.h"
 
 const int EthernetInterfaceIndex = 0;
 const int WiFiInterfaceIndex = 1;
@@ -54,7 +54,7 @@ public:
 
 	// WiFi interfaces
 	void EnableWiFi(int mode, const StringRef& ssid, StringRef& reply);
-	bool HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef& reply);
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef& reply, OutputBuffer*& longReply);
 	WifiFirmwareUploader& GetWifiUploader();
 	void ResetWiFiForUpload(bool external);
 

@@ -124,7 +124,7 @@ uint32_t lastPulseTime;
 volatile uint8_t numPulses;
 uint32_t pulses[41];			// 1 start bit + 40 data bits
 
-void DhtDataTransition(void *param)
+void DhtDataTransition(CallbackParameter)
 {
 	const uint32_t now = micros();
 	if (digitalRead(DhtDataPin) == HIGH)

@@ -91,13 +91,6 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 
 /****************************************************************************************************/
 
-// File handling
-
-constexpr size_t MAX_FILES = 10;					// Must be large enough to handle the max number of simultaneous web requests + files being printed
-constexpr size_t FILE_BUFFER_SIZE = 256;
-
-/****************************************************************************************************/
-
 enum class BoardType : uint8_t
 {
 	Auto = 0,
@@ -310,7 +303,8 @@ public:
 
 	void SoftwareReset(uint16_t reason, const uint32_t *stk = nullptr);
 	bool AtxPower() const;
-	void SetAtxPower(bool on);
+	void AtxPowerOn();
+	void AtxPowerOff(bool defer);
 	void SetBoardType(BoardType bt);
 	const char* GetElectronicsString() const;
 	const char* GetBoardString() const;
@@ -360,15 +354,14 @@ public:
 	friend class FileStore;
 
 	MassStorage* GetMassStorage() const;
-	FileStore* GetFileStore(const char* directory, const char* fileName, OpenMode mode);
+	FileStore* OpenFile(const char* directory, const char* fileName, OpenMode mode) { return massStorage->OpenFile(directory, fileName, mode); }
+
 	const char* GetWebDir() const; 					// Where the html etc files are
 	const char* GetGCodeDir() const; 				// Where the gcodes are
 	const char* GetSysDir() const;  				// Where the system files are
 	const char* GetMacroDir() const;				// Where the user-defined macros are
 	const char* GetConfigFile() const; 				// Where the configuration is stored (in the system dir).
 	const char* GetDefaultFile() const;				// Where the default configuration is stored (in the system dir).
-	void InvalidateFiles(const FATFS *fs);			// Called to invalidate files when the SD card is removed
-	bool AnyFileOpen(const FATFS *fs) const;		// Returns true if any files are open on the SD card
 
 	// Message output (see MessageType for further details)
 
@@ -485,7 +478,7 @@ public:
 		return thermistorFilters[channel];
 	}
 
-	void SetHeater(size_t heater, float power)				// power is a fraction in [0,1]
+	void SetHeater(size_t heater, float power, PwmFrequency freq = 0)	// power is a fraction in [0,1]
 	pre(heater < Heaters);
 
 	uint32_t HeatSampleInterval() const;
@@ -804,8 +797,6 @@ private:
 	// Files
 
 	MassStorage* massStorage;
-	FileStore* files[MAX_FILES];
-	bool fileStructureInitialised;
   
 	// Data used by the tick interrupt handler
 
@@ -878,6 +869,9 @@ private:
 	float extrusionAncilliaryPwmValue;
 	PwmPort extrusionAncilliaryPwmPort;
 	PwmPort spindleForwardPort, spindleReversePort, laserPort;
+
+	// Power on/off
+	bool deferredPowerDown;
 
 	// Direct pin manipulation
 	int8_t logicalPinModes[HighestLogicalPin + 1];		// what mode each logical pin is set to - would ideally be class PinMode not int8_t

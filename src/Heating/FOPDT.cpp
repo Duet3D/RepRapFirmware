@@ -14,13 +14,13 @@ extern StringRef scratchString;
 // Heater 6 on the Duet 0.8.5 is disabled by default at startup so that we can use fan 2.
 // Set up sensible defaults here in case the user enables the heater without specifying values for all the parameters.
 FopDt::FopDt()
-	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0),
+	: gain(DefaultHotEndHeaterGain), timeConstant(DefaultHotEndHeaterTimeConstant), deadTime(DefaultHotEndHeaterDeadTime), maxPwm(1.0), standardVoltage(0.0), pwmFreq(0),
 	  enabled(false), usePid(true), inverted(false), pidParametersOverridden(false)
 {
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted)
+bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted, PwmFrequency pPwmFreq)
 {
 	if (pg == -1.0 && ptc == -1.0 && pdt == -1.0)
 	{
@@ -41,6 +41,7 @@ bool FopDt::SetParameters(float pg, float ptc, float pdt, float pMaxPwm, float t
 		usePid = pUsePid;
 		inverted = pInverted;
 		enabled = true;
+		pwmFreq = pPwmFreq;
 		CalcPidConstants();
 		return true;
 	}
@@ -117,12 +118,11 @@ void FopDt::CalcPidConstants()
 {
 	const float timeFrac = deadTime/timeConstant;
 	loadChangeParams.kP = 0.7/(gain * timeFrac);
-//	loadChangeParams.recipTi = 1.0/(deadTime * 2.0);										// Ti = 2 * deadTime (this is what we used in version 1.15c)
 	loadChangeParams.recipTi = (1.0/1.14)/(powf(timeConstant, 0.25) * powf(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
 	loadChangeParams.tD = deadTime * 0.7;
 
 	setpointChangeParams.kP = 0.7/(gain * timeFrac);
-	setpointChangeParams.recipTi = 1.0/timeConstant;										// Ti = time constant
+	setpointChangeParams.recipTi = 1.0/(powf(timeConstant, 0.5) * powf(deadTime, 0.5));			// Ti = timeConstant^0.5 * deadTime^0.5
 	setpointChangeParams.tD = deadTime * 0.7;
 
 	pidParametersOverridden = false;

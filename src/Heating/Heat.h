@@ -97,7 +97,7 @@ public:
 	const FopDt& GetHeaterModel(size_t heater) const			// Get the process model for the specified heater
 	pre(heater < Heaters);
 
-	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted) // Set the heater process model
+	bool SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq) // Set the heater process model
 	pre(heater < Heaters);
 
 	bool IsHeaterSignalInverted(size_t heater)					// Set PWM signal inversion
@@ -203,9 +203,9 @@ inline const FopDt& Heat::GetHeaterModel(size_t heater) const
 }
 
 // Set the heater process model
-inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted)
+inline bool Heat::SetHeaterModel(size_t heater, float gain, float tc, float td, float maxPwm, float voltage, bool usePid, bool inverted, PwmFrequency pwmFreq)
 {
-	return pids[heater]->SetModel(gain, tc, td, maxPwm, voltage, usePid, inverted);
+	return pids[heater]->SetModel(gain, tc, td, maxPwm, voltage, usePid, inverted, pwmFreq);
 }
 
 inline bool Heat::IsHeaterSignalInverted(size_t heater)

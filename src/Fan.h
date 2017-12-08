@@ -15,6 +15,8 @@ class GCodeBuffer;
 class Fan
 {
 public:
+	typedef uint32_t HeatersMonitoredBitmap;				// needs to be wide enough for 8 real heaters + 10 virtual heaters
+
 	// Set or report the parameters for this fan
 	// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 106 or 107)
 	// then search for parameters used to configure the fan. If any are found, perform appropriate actions and return true.
@@ -27,13 +29,12 @@ public:
 
 	void Init(Pin p_pin, bool hwInverted);
 	void SetValue(float speed);
-	void SetHeatersMonitored(uint16_t h);
-	void Check();
+	void SetHeatersMonitored(HeatersMonitoredBitmap h);
+	bool Check();											// update the fan PWM returning true if it is a thermostatic fan that is on
 	void Disable();
-	bool WriteSettings(FileStore *f, size_t fanNum) const;		// Save the settings of this fan if it isn't thermostatic
+	bool WriteSettings(FileStore *f, size_t fanNum) const;	// save the settings of this fan if it isn't thermostatic
 
 private:
-	typedef uint32_t HeatersMonitoredBitmap;				// needs to be wide enough for 8 real heaters + 10 virtual heaters
 
 	float val;
 	float lastVal;
@@ -43,7 +44,7 @@ private:
 	uint32_t blipTime;						// in milliseconds
 	uint32_t blipStartTime;
 	HeatersMonitoredBitmap heatersMonitored;
-	uint16_t freq;
+	PwmFrequency freq;
 	Pin pin;
 	bool inverted;
 	bool hardwareInverted;

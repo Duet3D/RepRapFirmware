@@ -99,10 +99,10 @@ void Network::EnableWiFi(int mode, const StringRef& ssid, StringRef& reply)
 	wifiInterface->Enable(mode, ssid, reply);
 }
 
-bool Network::HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef& reply)
+GCodeResult Network::HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply, OutputBuffer*& longReply)
 {
 	WiFiInterface *wifiInterface = static_cast<WiFiInterface *>(interfaces[WiFiInterfaceIndex]);
-	return wifiInterface->HandleWiFiCode(mcode, gb, reply);
+	return wifiInterface->HandleWiFiCode(mcode, gb, reply, longReply);
 }
 
 WifiFirmwareUploader& Network::GetWifiUploader()

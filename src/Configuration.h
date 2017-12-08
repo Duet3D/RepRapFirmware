@@ -125,7 +125,7 @@ constexpr unsigned int NumTmcDriversSenseChannels = 2;	// Sensors 1001..1002 are
 // PWM frequencies
 constexpr unsigned int SlowHeaterPwmFreq = 10;			// slow PWM frequency for bed and chamber heaters, compatible with DC/AC SSRs
 constexpr unsigned int NormalHeaterPwmFreq = 250;		// normal PWM frequency used for hot ends
-constexpr unsigned int DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
+constexpr PwmFrequency DefaultFanPwmFreq = 250;			// increase to 25kHz using M106 command to meet Intel 4-wire PWM fan specification
 constexpr unsigned int DefaultPinWritePwmFreq = 500;	// default PWM frequency for M42 pin writes and extrusion ancillary PWM
 
 // Default Z probe values
@@ -154,6 +154,9 @@ const float DefaultGridSpacing = 20.0;					// Default bed probing grid spacing i
 
 static_assert(MaxProbePoints <= MaxGridProbePoints, "MaxProbePoints must be <= MaxGridProbePoints");
 static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxDeltaCalibrationPoints must be <= MaxProbePoints");
+
+// SD card
+constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
 
 // Z probing
 constexpr float DEFAULT_Z_DIVE = 5.0;					// Millimetres
@@ -214,6 +217,11 @@ constexpr unsigned int MaxStackDepth = 5;				// Maximum depth of stack
 // CNC and laser support
 constexpr float DefaultMaxSpindleRpm = 10000;			// Default spindle RPM at full PWM
 constexpr float DefaultMaxLaserPower = 255.0;			// Power setting in M3 command for full power
+
+// File handling
+
+constexpr size_t MAX_FILES = 10;					// Must be large enough to handle the max number of simultaneous web requests + files being printed
+constexpr size_t FILE_BUFFER_SIZE = 256;
 
 // Webserver stuff
 

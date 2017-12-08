@@ -348,7 +348,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for standstill and fetch the current position
 		{
 			// Check whether we made any G1 S3 moves and need to set the axis limits
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			for (size_t axis = 0; axis < numTotalAxes; ++axis)
 			{
 				if (IsBitSet<AxesBitmap>(axesToSenseLength, axis))
 				{
@@ -468,7 +468,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			const Tool * const oldTool = reprap.GetCurrentTool();
 			if (oldTool != nullptr)
 			{
-				reprap.StandbyTool(oldTool->Number());
+				reprap.StandbyTool(oldTool->Number(), simulationMode != 0);
 			}
 			gb.AdvanceState();
 			if (reprap.GetTool(gb.MachineState().newToolNumber) != nullptr && AllAxesAreHomed() && (gb.MachineState().toolChangeParam & TPreBit) != 0)
@@ -484,7 +484,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
 			reprap.SelectTool(gb.MachineState().newToolNumber, simulationMode != 0);
-			GetCurrentUserPosition();									// get the actual position of the new tool
+			GetCurrentUserPosition();					// get the actual position of the new tool
 
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
@@ -514,18 +514,22 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 			}
 			else
 			{
-				UnlockAll(gb);									// allow movement again
-				if (cancelWait || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling))
-				{
-					cancelWait = isWaiting = false;
-					gb.SetState(GCodeState::normal);
-				}
-				else
-				{
-					CheckReportDue(gb, reply);
-					isWaiting = true;
-				}
+				UnlockAll(gb);							// allow movement again
+				gb.AdvanceState();
 			}
+		}
+		break;
+
+	case GCodeState::m109WaitForTemperature:
+		if (cancelWait || simulationMode != 0 || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.MachineState().waitWhileCooling))
+		{
+			cancelWait = isWaiting = false;
+			gb.SetState(GCodeState::normal);
+		}
+		else
+		{
+			CheckReportDue(gb, reply);
+			isWaiting = true;
 		}
 		break;
 
@@ -653,7 +657,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, StringRef& reply)
 				Tool* tool = reprap.GetCurrentTool();
 				if (tool != nullptr)
 				{
-					reprap.StandbyTool(tool->Number());
+					reprap.StandbyTool(tool->Number(), simulationMode != 0);
 				}
 				reprap.GetHeat().SwitchOffAll(true);
 			}
@@ -1438,6 +1442,7 @@ void GCodes::CheckFilament()
 		filamentErrorString.GetRef().printf("Extruder %u reports %s", lastFilamentErrorExtruder, FilamentSensor::GetErrorMessage(lastFilamentError));
 		DoPause(*autoPauseGCode, PauseReason::filament, filamentErrorString.Pointer());
 		lastFilamentError = FilamentSensorStatus::ok;
+		platform.Message(LogMessage, filamentErrorString.c_str());
 	}
 }
 
@@ -1746,6 +1751,7 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers)
 	stallErrorString.GetRef().printf("Stall detected on driver(s)");
 	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
 	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.Pointer());
+	platform.Message(LogMessage, stallErrorString.c_str());
 	return true;
 }
 
@@ -1773,7 +1779,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure)
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
 	if (printingFilename != nullptr)
 	{
-		FileStore * const f = platform.GetFileStore(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, OpenMode::write);
+		FileStore * const f = platform.OpenFile(platform.GetSysDir(), RESUME_AFTER_POWER_FAIL_G, OpenMode::write);
 		if (f == nullptr)
 		{
 			platform.MessageF(ErrorMessage, "Failed to create file %s", RESUME_AFTER_POWER_FAIL_G);
@@ -2488,7 +2494,7 @@ void GCodes::ClearMove()
 // Return true if the file was found or it wasn't and we were asked to report that fact.
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning)
 {
-	FileStore * const f = platform.GetFileStore(platform.GetSysDir(), fileName, OpenMode::read);
+	FileStore * const f = platform.OpenFile(platform.GetSysDir(), fileName, OpenMode::read);
 	if (f == nullptr)
 	{
 		if (reportMissing)
@@ -2524,77 +2530,6 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb)
 		gb.PopState();
 		gb.Init();
 	}
-}
-
-// This handles G92. Return true if completed, false if it needs to be called again.
-GCodeResult GCodes::SetPositions(GCodeBuffer& gb)
-{
-	// Don't wait for the machine to stop if only extruder drives are being reset.
-	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
-	AxesBitmap axesIncluded = 0;
-	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-	{
-		if (gb.Seen(axisLetters[axis]))
-		{
-			const float axisValue = gb.GetFValue();
-			if (axesIncluded == 0)
-			{
-				if (!LockMovementAndWaitForStandstill(gb))	// lock movement and get current coordinates
-				{
-					return GCodeResult::notFinished;
-				}
-			}
-			SetBit(axesIncluded, axis);
-			currentUserPosition[axis] = axisValue * distanceScale;
-		}
-	}
-
-	// Handle any E parameter in the G92 command
-	if (gb.Seen(extrudeLetter))
-	{
-		virtualExtruderPosition = gb.GetFValue() * distanceScale;
-	}
-
-	if (axesIncluded != 0)
-	{
-		ToolOffsetTransform(currentUserPosition, moveBuffer.coords);
-		if (reprap.GetMove().GetKinematics().LimitPosition(moveBuffer.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
-		{
-			ToolOffsetInverseTransform(moveBuffer.coords, currentUserPosition);		// make sure the limits are reflected in the user position
-		}
-		reprap.GetMove().SetNewPosition(moveBuffer.coords, true);
-		axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
-
-#if SUPPORT_ROLAND
-		if (reprap.GetRoland()->Active())
-		{
-			for(size_t axis = 0; axis < AXES; axis++)
-			{
-				if (!reprap.GetRoland()->ProcessG92(moveBuffer[axis], axis))
-				{
-					return GCodeResult::notFinished;
-				}
-			}
-		}
-#endif
-	}
-
-	return GCodeResult::ok;
-}
-
-// Offset the axes by the X, Y, and Z amounts in the M code in gb. The actual movement occurs on the next move command.
-// It's not clear from the description in the reprap.org wiki whether offsets are cumulative or not. We assume they are.
-GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb)
-{
-	for (size_t drive = 0; drive < numVisibleAxes; drive++)
-	{
-		if (gb.Seen(axisLetters[drive]))
-		{
-			axisOffsets[drive] += gb.GetFValue() * distanceScale;
-		}
-	}
-
-	return GCodeResult::ok;
 }
 
 // Home one or more of the axes
@@ -2727,156 +2662,6 @@ void GCodes::DoManualProbe(GCodeBuffer& gb)
 	}
 }
 
-// Set or print the Z probe. Called by G31.
-// Note that G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
-GCodeResult GCodes::SetPrintZProbe(GCodeBuffer& gb, StringRef& reply)
-{
-	int32_t zProbeType = 0;
-	bool seenT = false;
-	gb.TryGetIValue('T',zProbeType, seenT);
-	if (zProbeType == 0)
-	{
-		zProbeType = platform.GetZProbeType();
-	}
-	ZProbeParameters params = platform.GetZProbeParameters(zProbeType);
-	bool seen = false;
-	gb.TryGetFValue(axisLetters[X_AXIS], params.xOffset, seen);
-	gb.TryGetFValue(axisLetters[Y_AXIS], params.yOffset, seen);
-	gb.TryGetFValue(axisLetters[Z_AXIS], params.height, seen);
-	gb.TryGetIValue('P', params.adcValue, seen);
-
-	if (gb.Seen('C'))
-	{
-		params.temperatureCoefficient = gb.GetFValue();
-		seen = true;
-		if (gb.Seen('S'))
-		{
-			params.calibTemperature = gb.GetFValue();
-		}
-		else
-		{
-			// Use the current bed temperature as the calibration temperature if no value was provided
-			params.calibTemperature = platform.GetZProbeTemperature();
-		}
-	}
-
-	if (seen)
-	{
-		if (!LockMovementAndWaitForStandstill(gb))
-		{
-			return GCodeResult::notFinished;
-		}
-		platform.SetZProbeParameters(zProbeType, params);
-	}
-	else if (seenT)
-	{
-		// Don't bother printing temperature coefficient and calibration temperature because we will probably remove them soon
-		reply.printf("Threshold %" PRIi32 ", trigger height %.2f, offsets X%.1f Y%.1f", params.adcValue, (double)params.height, (double)params.xOffset, (double)params.yOffset);
-	}
-	else
-	{
-		const int v0 = platform.GetZProbeReading();
-		int v1, v2;
-		switch (platform.GetZProbeSecondaryValues(v1, v2))
-		{
-		case 1:
-			reply.printf("%d (%d)", v0, v1);
-			break;
-		case 2:
-			reply.printf("%d (%d, %d)", v0, v1, v2);
-			break;
-		default:
-			reply.printf("%d", v0);
-			break;
-		}
-	}
-	return GCodeResult::ok;
-}
-
-// Define the probing grid, returning true if error
-// Called when we see an M557 command with no P parameter
-bool GCodes::DefineGrid(GCodeBuffer& gb, StringRef &reply)
-{
-	bool seenX = false, seenY = false, seenR = false, seenS = false;
-	float xValues[2];
-	float yValues[2];
-	float spacings[2] = { DefaultGridSpacing, DefaultGridSpacing };
-
-	if (gb.TryGetFloatArray('X', 2, xValues, reply, seenX, false))
-	{
-		return true;
-	}
-	if (gb.TryGetFloatArray('Y', 2, yValues, reply, seenY, false))
-	{
-		return true;
-	}
-	if (gb.TryGetFloatArray('S', 2, spacings, reply, seenS, true))
-	{
-		return true;
-	}
-
-	float radius = -1.0;
-	gb.TryGetFValue('R', radius, seenR);
-
-	if (!seenX && !seenY && !seenR && !seenS)
-	{
-		// Just print the existing grid parameters
-		if (defaultGrid.IsValid())
-		{
-			reply.copy("Grid: ");
-			defaultGrid.PrintParameters(reply);
-		}
-		else
-		{
-			reply.copy("Grid is not defined");
-		}
-		return false;
-	}
-
-	if (seenX != seenY)
-	{
-		reply.copy("specify both or neither of X and Y in M577");
-		return true;
-	}
-
-	if (!seenX && !seenR)
-	{
-		// Must have given just the S parameter
-		reply.copy("specify at least radius or X,Y ranges in M577");
-		return true;
-	}
-
-	if (!seenX)
-	{
-		if (radius > 0)
-		{
-			const float effectiveXRadius = floorf((radius - 0.1)/spacings[0]) * spacings[0];
-			xValues[0] = -effectiveXRadius;
-			xValues[1] =  effectiveXRadius + 0.1;
-
-			const float effectiveYRadius = floorf((radius - 0.1)/spacings[1]) * spacings[1];
-			yValues[0] = -effectiveYRadius;
-			yValues[1] =  effectiveYRadius + 0.1;
-		}
-		else
-		{
-			reply.copy("M577 radius must be positive unless X and Y are specified");
-			return true;
-		}
-	}
-
-	if (defaultGrid.Set(xValues, yValues, radius, spacings))
-	{
-		return false;
-	}
-
-	const float xRange = (seenX) ? xValues[1] - xValues[0] : 2 * radius;
-	const float yRange = (seenX) ? yValues[1] - yValues[0] : 2 * radius;
-	reply.copy("bad grid definition: ");
-	defaultGrid.PrintError(xRange, yRange, reply);
-	return true;
-}
-
 // Start probing the grid, returning true if we didn't because of an error.
 // Prior to calling this the movement system must be locked.
 GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, StringRef& reply)
@@ -2919,7 +2704,7 @@ bool GCodes::LoadHeightMap(GCodeBuffer& gb, StringRef& reply) const
 		heightMapFileName.GetRef().copy(DefaultHeightMapFile);
 	}
 
-	FileStore * const f = platform.GetFileStore(platform.GetSysDir(), heightMapFileName.c_str(), OpenMode::read);
+	FileStore * const f = platform.OpenFile(platform.GetSysDir(), heightMapFileName.c_str(), OpenMode::read);
 	if (f == nullptr)
 	{
 		reply.printf("Height map file %s not found", heightMapFileName.c_str());
@@ -2955,7 +2740,7 @@ bool GCodes::SaveHeightMap(GCodeBuffer& gb, StringRef& reply) const
 		heightMapFileName.GetRef().copy(DefaultHeightMapFile);
 	}
 
-	FileStore * const f = platform.GetFileStore(platform.GetSysDir(), heightMapFileName.c_str(), OpenMode::write);
+	FileStore * const f = platform.OpenFile(platform.GetSysDir(), heightMapFileName.c_str(), OpenMode::write);
 	bool err;
 	if (f == nullptr)
 	{
@@ -3023,7 +2808,7 @@ void GCodes::GetCurrentCoordinates(StringRef& s) const
 
 bool GCodes::OpenFileToWrite(GCodeBuffer& gb, const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32)
 {
-	fileBeingWritten = platform.GetFileStore(directory, fileName, OpenMode::write);
+	fileBeingWritten = platform.OpenFile(directory, fileName, OpenMode::write);
 	eofStringCounter = 0;
 	fileSize = size;
 	if (fileBeingWritten == nullptr)
@@ -3138,7 +2923,7 @@ void GCodes::WriteGCodeToFile(GCodeBuffer& gb)
 // If successful return true, else write an error message to reply and return false
 bool GCodes::QueueFileToPrint(const char* fileName, StringRef& reply)
 {
-	FileStore * const f = platform.GetFileStore(platform.GetGCodeDir(), fileName, OpenMode::read);
+	FileStore * const f = platform.OpenFile(platform.GetGCodeDir(), fileName, OpenMode::read);
 	if (f != nullptr)
 	{
 		fileGCode->SetToolNumberAdjust(0);								// clear tool number adjustment
@@ -3419,7 +3204,7 @@ bool GCodes::ManageTool(GCodeBuffer& gb, StringRef& reply)
 
 	if ((xMap & yMap) != 0)
 	{
-		reply.copy("Cannot map bith X and Y to the aame axis");
+		reply.copy("Cannot map both X and Y to the same axis");
 		return true;
 	}
 
@@ -3904,7 +3689,7 @@ GCodeResult GCodes::SetHeaterParameters(GCodeBuffer& gb, StringRef& reply)
 	return GCodeResult::ok;
 }
 
-void GCodes::SetToolHeaters(Tool *tool, float temperature)
+void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both)
 {
 	if (tool == nullptr)
 	{
@@ -3918,10 +3703,8 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature)
 	for (size_t h = 0; h < tool->HeaterCount(); h++)
 	{
 		active[h] = temperature;
-		if (tool->GetState() == ToolState::standby)
+		if (both)
 		{
-			// Using M104 to set the temperature of a tool that is on standby.
-			// Cura uses M104 to preheat the next tool shortly before a tool change, so set the standby temperature too in this case.
 			standby[h] = temperature;
 		}
 	}
@@ -4376,7 +4159,7 @@ void GCodes::ListTriggers(StringRef reply, TriggerInputsBitmap mask)
 bool GCodes::StartHash(const char* filename)
 {
 	// Get a FileStore object
-	fileBeingHashed = platform.GetFileStore(FS_PREFIX, filename, OpenMode::read);
+	fileBeingHashed = platform.OpenFile(FS_PREFIX, filename, OpenMode::read);
 	if (fileBeingHashed == nullptr)
 	{
 		return false;
@@ -4435,7 +4218,7 @@ void GCodes::SetAllAxesNotHomed()
 // Write the config-override file returning true if an error occurred
 bool GCodes::WriteConfigOverrideFile(StringRef& reply, const char *fileName) const
 {
-	FileStore * const f = platform.GetFileStore(platform.GetSysDir(), fileName, OpenMode::write);
+	FileStore * const f = platform.OpenFile(platform.GetSysDir(), fileName, OpenMode::write);
 	if (f == nullptr)
 	{
 		reply.printf("Failed to create file %s", fileName);
@@ -4737,7 +4520,7 @@ void GCodes::CheckHeaterFault()
 	case HeaterFaultState::stopping:
 		if (millis() - heaterFaultTime >= 2000)			// wait 2 seconds for the message to be picked up by DWC and PanelDue
 		{
-			reprap.GetPlatform().SetAtxPower(false);
+			reprap.GetPlatform().AtxPowerOff(false);
 			heaterFaultState = HeaterFaultState::stopped;
 		}
 		break;

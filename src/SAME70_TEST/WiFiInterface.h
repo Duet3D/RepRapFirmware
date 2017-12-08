@@ -14,6 +14,7 @@
 #include "MessageFormats.h"
 #include "NetworkInterface.h"
 #include "WiFiSocket.h"
+#include "GCodes/GCodeResult.h"
 
 class WifiFirmwareUploader;
 
@@ -54,7 +55,7 @@ public:
 	bool GetNetworkState(StringRef& reply) override;
 	int EnableState() const override;
 
-	bool HandleWiFiCode(int mcode, GCodeBuffer& gb, StringRef &reply);
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer &gb, StringRef& reply, OutputBuffer*& longReply);
 
 	void SetHostname(const char *hostname);
 

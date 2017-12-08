@@ -717,7 +717,7 @@ void WifiFirmwareUploader::Spin()
 void WifiFirmwareUploader::SendUpdateFile(const char *file, const char *dir, uint32_t address)
 {
 	Platform& platform = reprap.GetPlatform();
-	uploadFile = platform.GetFileStore(dir, file, OpenMode::read);
+	uploadFile = platform.OpenFile(dir, file, OpenMode::read);
 	if (uploadFile == nullptr)
 	{
 		platform.MessageF(FirmwareUpdateMessage, "Failed to open file %s\n", file);

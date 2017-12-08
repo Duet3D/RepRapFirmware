@@ -713,7 +713,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "STOR"))
 		{
 			const char *filename = GetParameter("STOR");
-			FileStore *file = GetPlatform().GetFileStore(currentDirectory, filename, OpenMode::write);
+			FileStore *file = GetPlatform().OpenFile(currentDirectory, filename, OpenMode::write);
 			if (file != nullptr)
 			{
 				StartUpload(file, filename);
@@ -731,7 +731,7 @@ void FtpResponder::ProcessLine()
 		else if (StringStartsWith(clientMessage, "RETR"))
 		{
 			const char *filename = GetParameter("RETR");
-			fileBeingSent = GetPlatform().GetFileStore(currentDirectory, filename, OpenMode::read);
+			fileBeingSent = GetPlatform().OpenFile(currentDirectory, filename, OpenMode::read);
 			if (fileBeingSent != nullptr)
 			{
 				outBuf->printf("150 Opening data connection for %s (%lu bytes).\r\n", filename, fileBeingSent->Length());
