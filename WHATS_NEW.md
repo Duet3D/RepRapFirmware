@@ -1,6 +1,32 @@
 Summary of important changes in recent versions
 ===============================================
 
+Version 1.20RC1
+===============
+Upgrade notes:
+- Recommended DuetWiFiServer.bin version is 1.20beta10. I recommend you install it twice because the first installation often leaves the WiFi not working. So after installing it the first time, send M997 S1 to install it again from the DuetWiFiServer.bin file that has been left on the SD card.
+- Recommended DuetWebControl version is 1.19.3
+- See also the notes for earlier 1.20beta versions
+
+New features:
+- M109 and M104 commands now set both the active and the standby temperatures of the tool.
+- M109 now only selects a tool if no tool was selected
+- Filament errors are now logged
+- M587 now checks that the password is either empty or is at least 8 characters long
+- M122 now includes the minimum and maximum StallGuard registers for each driver seen since the last M122 command
+- M307 now accepts an F parameter to allow the PWM frequency to be set. Caution: do not use excessively high PWM frequencies, especially with the bed heater, because you may overheat the mosfets.
+- The calculation of PID parameters from the heater model has been changed to provide faster heating and less risk of undershoot
+- The M81 command now accepts an optional S1 parameter, which defers the power down until al thermostatic fans have stopped
+- SD card detection is now working properly (Duet WiFi/Ethernet only)
+- A file that is open on the SD card can no longer be deleted
+
+Bug fixes:
+- M109 commands could cause unwanted head movement when no tool change was required
+- If a filament error occurred more than one, the print would be paused each time but a message box would only be displayed the first time
+- If a new request arrived but no responder was available, there was no timeout waiting for a responder (thanks chrishamm)
+- Z probe types 5 and 8 didn't work on Duet 085
+- M500 didn't save axis lengths found by G1 S3
+
 Version 1.20beta11
 ==================
 Upgrade notes:
